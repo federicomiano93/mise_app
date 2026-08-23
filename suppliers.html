@@ -98,11 +98,20 @@
      taken out. See .scroll-with-bar in style.css; it is the same shape .home-scroll
      already uses for the sign-out row. -->
 <div class="scroll-area scroll-with-bar">
+  <!-- ⚠️ `reg-page` IS THE GUTTER EVERY OTHER PAGE GETS FOR FREE. .scroll-area's own
+       horizontal padding is var(--app-gutter), which is 0 on a phone — the other three
+       pages that use it wrap their content in .content { padding: 14px 16px }, and this
+       one never did. Measured on Federico's phone at 390px: the view switch, the add
+       button and every supplier row started at 0px while Orders started at 16px.
+       ⚠️ BOTH children need it, the error line included: a message that says the list
+       failed to load must not itself be jammed against the screen edge.
+       ⚠️ NOT the footer below — it is a sibling on purpose and spans the full width. -->
+
   <!-- A live listener that fails leaves an EMPTY list, and an empty list here reads
        as "this bakery has no suppliers" — which is the wrong thing to believe while
        standing in front of a delivery. Filled by registry-main.js. -->
-  <p class="orders-status error" id="registry-error" role="status" hidden></p>
-  <div id="registry-host"></div>
+  <p class="orders-status error reg-page" id="registry-error" role="status" hidden></p>
+  <div id="registry-host" class="reg-page"></div>
 
   <!-- ⚠️ A BOTTOM BAR, NOT A GEAR IN THE HEADER, and the reason is the title. This
        page is called «Fornitori e ingredienti»: a third icon button up there takes

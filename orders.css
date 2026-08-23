@@ -972,6 +972,17 @@ input.ing-stock {
    the old management lists, moved out from behind the gear onto a page of their own.
    Only the rows differ, because here a row DRILLS IN instead of carrying its
    actions at the right-hand end. */
+/* The gutter this page never had. .scroll-area gives its children only
+   var(--app-gutter) horizontally — 0 on a phone, by design, so that adding the
+   tablet cap could not move a single phone — and every other page that uses it puts
+   its content inside .content { padding: 14px 16px }. suppliers.html has no tab
+   sections, so nothing did: measured 0px on the view switch, the add button and every
+   row, against 16px on Orders, since the page was born on 22 Aug 2026.
+   ⚠️ Same values as .content, not new ones. ⚠️ On a tablet this ADDS to the gutter,
+   which is right: the gutter centres the column, these 16px are the air inside it. */
+.reg-page { padding-inline: 16px; }
+#registry-host.reg-page { padding-top: 14px; }
+
 .reg-list-host { display: flex; flex-direction: column; }
 
 /* A .mgmt-item that is itself the button. A <button> resets font and alignment, so
