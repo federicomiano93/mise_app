@@ -240,7 +240,35 @@ test('⚠️ the retired label is gone from the code AND from both dictionaries'
   assert.doesNotMatch(read('js/i18n.js'), /'orders\.allergensAndNutrition':/);
 });
 
-// ── 5. Precached, or an offline install gets nothing ─────────────────────────
+// ── 5. A class nothing styles is a bare browser control ──────────────────────
+
+test('⚠️ every class this screen writes is defined in a stylesheet it loads', () => {
+  // ⚠️⚠️ FOUND BY LOOKING AT A SCREENSHOT, and it had shipped: `.mgmt-btn` is defined
+  // in NO stylesheet, so «Leggilo e spunta le caselle» had rendered as a bare grey
+  // browser rectangle since v1.64.0 on 22 Aug. Nothing warns — same silence as an
+  // undefined custom property (tests/css-tokens.test.mjs), one level up.
+  //
+  // ⚠️ SCOPED TO THE THREE FILES THIS RELEASE OWNS, deliberately. Across the whole app
+  // there are ~47 unstyled class names and most are legitimate hooks — structural
+  // wrappers that carry no styling on purpose. Sorting those out is its own piece of
+  // work, and a guard that has to carry a 45-name allowlist is a guard people widen.
+  const sheets = readdirSync(ROOT).filter(n => n.endsWith('.css'));
+  const defined = new Set();
+  for (const s of sheets) {
+    for (const m of read(s).replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/\.(-?[_a-zA-Z][\w-]*)/g)) defined.add(m[1]);
+  }
+  const offenders = [];
+  for (const file of ['js/orders/ingredient-form.js', 'js/orders/registry-settings.js', 'js/orders/registry.js']) {
+    for (const m of codeOf(read(file)).matchAll(/\bclass: '([^'${}]+)'/g)) {
+      for (const cls of m[1].split(/\s+/).filter(Boolean)) {
+        if (!defined.has(cls)) offenders.push(`${file}: .${cls}`);
+      }
+    }
+  }
+  assert.deepEqual(offenders, [], 'these render as unstyled browser defaults, silently');
+});
+
+// ── 6. Precached, or an offline install gets nothing ─────────────────────────
 
 test('⚠️⚠️ EVERY module a precached page STATICALLY needs is precached too', () => {
   // ⚠️ DERIVED, NOT A HAND-WRITTEN LIST. Three tests in v1.65.0 carried hand-written

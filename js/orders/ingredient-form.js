@@ -364,7 +364,12 @@ function allergenBlock(item, panels) {
   }
 
   const suggestBtn = el('button', {
-    class: 'mgmt-btn alg-pack-btn', type: 'button', text: t('orders.pack.suggest'),
+    // ⚠️ `.mgmt-btn` IS DEFINED IN NO STYLESHEET, and never was — this button has
+    // rendered as a bare grey browser rectangle since v1.64.0 shipped it on 22 Aug.
+    // Verified against a clean `main` worktree before blaming this release: main does
+    // it too. `.btn-secondary` is the name this app already gives a secondary action,
+    // and it is in orders.css, which this page loads. Nothing was designed.
+    class: 'btn-secondary alg-pack-btn', type: 'button', text: t('orders.pack.suggest'),
     onclick: suggest,
   });
 

@@ -1380,7 +1380,9 @@ a.home-reminder {
   background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px;
 }
 .alg-pack-text { width: 100%; min-height: 92px; resize: vertical; font-size: 15px; line-height: 1.4; }
-.alg-pack-btn { align-self: flex-start; }
+/* ⚠️ 44px, because .btn-secondary's 12px padding gives 43 with this font size, and
+   this button is one tap away from the 52 tick boxes that are held to the same floor. */
+.alg-pack-btn { align-self: flex-start; min-height: 44px; }
 .alg-pack-result:empty { display: none; }
 .alg-pack-result { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
 /* ⚠️ THE EVIDENCE. The pasted text is re-drawn with the recognised words marked
