@@ -272,7 +272,10 @@ function guidedPanel(recipe, app, getTarget) {
     panel.appendChild(el('button', {
       class: 'cat-guided-go cat-guided-go--resume', type: 'button',
       onclick: () => app.resumeGuided(recipe),
-    }, [`Resume the guided mix — ${progressText(session.stepIndex, normalizeSteps(session.snapshot.steps).length).toLowerCase()}`]));
+    }, [t('cat.resumeGuidedMix', {
+      progress: progressText(session.stepIndex,
+        normalizeSteps(session.snapshot.steps).length, { inline: true }),
+    })]));
   }
 
   panel.appendChild(el('button', {
@@ -399,8 +402,8 @@ export function renderDetail({ recipe, app }) {
     const ok = await app.confirm({
       title: warning ? t('cat.thatIsAVery') : t('cat.calculateRecipe'),
       message: warning
-        ? `${warning}\n\nCalculate ${recipe.name} for ${readable}?`
-        : `Calculate ${recipe.name} for ${readable}?`,
+        ? `${warning}\n\n${t('cat.calculateFor', { recipe: recipe.name, amount: readable })}`
+        : t('cat.calculateFor', { recipe: recipe.name, amount: readable }),
       okLabel: t('ui.calculate'),
       cancelLabel: t('ui.cancel'),
     });

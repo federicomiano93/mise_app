@@ -399,7 +399,10 @@ async function offerResume() {
   const total = normalizeSteps(saved.snapshot.steps).length;
   const ok = await confirmDialog({
     title: t('cat.carryOnMixing'),
-    message: `You were part-way through “${saved.snapshot.name || recipe.name}” — ${progressText(saved.stepIndex, total).toLowerCase()}.`,
+    message: t('cat.partWayThrough', {
+      name: saved.snapshot.name || recipe.name,
+      progress: progressText(saved.stepIndex, total, { inline: true }),
+    }),
     okLabel: t('cat.carryOn'), cancelLabel: t('cat.notNow'),
   });
   // "Not now" KEEPS the session: it answers where to go next, never whether the
@@ -483,7 +486,7 @@ const app = {
       ]);
     } catch (e) { linked = false; }
 
-    const base = `Delete “${recipe.name || 'this recipe'}”? This cannot be undone.`;
+    const base = t('cat.deleteRecipeQ', { name: recipe.name || t('cat.thisRecipe') });
     const message = linked
       ? base + t('cat.itWasImportedInto')
       : base;
@@ -504,7 +507,7 @@ const app = {
     }
     const skipped = nonWeighableLabels(recipe);
     const warn = skipped.length
-      ? `\n\nNote: ${skipped.join(', ')} use a unit the Calculator can’t scale (it works in grams only) and won’t be imported.`
+      ? `\n\n${t('cat.nonScalableNote', { n: skipped.length, list: skipped.join(', ') })}`
       : '';
     const ok = await confirmDialog({
       title: t('cat.importIntoCalculator2'),
@@ -517,8 +520,8 @@ const app = {
       const { action } = await importRecipeIntoCalculator(recipe);
       bumpUsage(recipe.id);
       toast(action === 'updated'
-        ? `“${recipe.name}” updated in the Calculator.`
-        : `“${recipe.name}” added to the Calculator.`);
+        ? t('cat.updatedInCalculator', { name: recipe.name })
+        : t('cat.addedToCalculator', { name: recipe.name }));
     } catch (err) {
       console.error('Import into Calculator failed:', err);
       toast(t('cat.importFailedCheckYour'));

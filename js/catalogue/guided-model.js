@@ -277,10 +277,9 @@ export function overdueText(endsAt, nowMs) {
   if (!(late > 0)) return '';
   const mins = Math.floor(late / 60000);
   if (mins < 1) return t('cat.timeIsUpJust');
-  if (mins === 1) return t('cat.timeWasUp1');
-  if (mins < 60) return `Time was up ${mins} minutes ago.`;
+  if (mins < 60) return t('cat.timeWasUpMinutes', { n: mins });
   const hours = Math.floor(mins / 60);
-  return hours === 1 ? t('cat.timeWasUpOver') : `Time was up over ${hours} hours ago.`;
+  return t('cat.timeWasUpHours', { n: hours });
 }
 
 // ── Picking up an interrupted run ─────────────────────────────────────────────
@@ -317,9 +316,14 @@ export function isResumable(saved, nowMs) {
 
 // "Step 4 of 9" — the one line the resume offer leads with, so the answer to
 // "where was I?" is on screen before any decision is asked for.
-export function progressText(stepIndex, total) {
+// ⚠️ TWO FORMS, AND THE CALLER SAYS WHICH. Three screens drop this sentence into
+// the middle of another one and used .toLowerCase() to do it — reshaping a
+// translated phrase, which works in Italian by luck and is exactly the habit that
+// breaks on the next language. The dictionary holds both cases instead.
+export function progressText(stepIndex, total, { inline = false } = {}) {
   const i = Number(stepIndex);
   const n = Number(total);
   if (!Number.isFinite(i) || !Number.isFinite(n) || n <= 0) return '';
-  return `Step ${Math.min(Math.max(i + 1, 1), n)} of ${n}`;
+  return t(inline ? 'cat.progress.inline' : 'cat.progress',
+    { i: Math.min(Math.max(i + 1, 1), n), n });
 }

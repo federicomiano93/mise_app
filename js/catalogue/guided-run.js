@@ -481,7 +481,9 @@ export function renderRun({ recipe, targetGrams, app, resume = null }) {
     if (finished) return true;
     const ok = await app.confirm({
       title: t('cat.leaveTheGuidedMix'),
-      message: `You are on ${progressText(index, steps.length).toLowerCase()}. It will be waiting where you left it.`,
+      message: t('cat.youAreOn', {
+        progress: progressText(index, steps.length, { inline: true }),
+      }),
       okLabel: t('ui.leave'),
       cancelLabel: t('ui.cancel'),
     });

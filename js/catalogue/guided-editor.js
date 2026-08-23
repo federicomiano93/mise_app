@@ -182,7 +182,7 @@ export function renderGuidedEditor({ recipe, app }) {
     if (busy) return;
     busy = true;
     const ok = await app.confirm({
-      title: t('cat.removeThisStep'), message: `Step ${i + 1} will be removed from the procedure.`,
+      title: t('cat.removeThisStep'), message: t('cat.stepWillBeRemoved', { n: i + 1 }),
       okLabel: t('ui.remove'), danger: true,
       cancelLabel: t('ui.cancel'),
     });
@@ -195,7 +195,7 @@ export function renderGuidedEditor({ recipe, app }) {
 
   function add() {
     if (steps.length >= MAX_STEPS) {
-      app.toast(`A procedure can hold ${MAX_STEPS} steps.`);
+      app.toast(t('cat.procedureCanHold', { n: MAX_STEPS }));
       return;
     }
     steps.push({ text: '', rows: [], seconds: 0, speed: '' });
@@ -212,7 +212,10 @@ export function renderGuidedEditor({ recipe, app }) {
     list.replaceChildren(...steps.map(stepCard));
     paintMissed();
     summary.textContent = steps.length
-      ? `${steps.length} step${steps.length === 1 ? '' : 's'} · ${formatDuration(steps.reduce((s, x) => s + x.seconds, 0))} of timers`
+      ? t('cat.stepsAndTimers', {
+        n: steps.length,
+        duration: formatDuration(steps.reduce((s, x) => s + x.seconds, 0)),
+      })
       : t('cat.noStepsYet');
   }
 
@@ -248,8 +251,8 @@ export function renderGuidedEditor({ recipe, app }) {
     const ok = await app.confirm({
       title: t('cat.saveTheProcedure'),
       message: clean.length
-        ? `Save ${clean.length} step${clean.length === 1 ? '' : 's'} for “${recipe.name}”?`
-        : `“${recipe.name}” will have no guided procedure.`,
+        ? t('cat.saveStepsFor', { n: clean.length, name: recipe.name })
+        : t('cat.noProcedureFor', { name: recipe.name }),
       okLabel: t('ui.save'),
       cancelLabel: t('ui.cancel'),
     });

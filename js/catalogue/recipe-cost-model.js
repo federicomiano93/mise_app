@@ -176,5 +176,5 @@ export function partialCostText(result) {
   if (!result || !result.partial) return '';
   const n = result.unpriced.length;
   if (!n) return t('cat.partOfThisRecipe');
-  return `${n} ${n === 1 ? 'ingredient is' : 'ingredients are'} not priced yet — this cost is partial`;
+  return t('cat.notPricedYet', { n });
 }

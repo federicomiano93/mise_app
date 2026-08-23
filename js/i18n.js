@@ -1066,8 +1066,53 @@ const DICTIONARIES = Object.freeze({
     'cat.addStep': '+ Add step',
     'cat.noLongerInThe': 'No longer in the recipe',
     'cat.timeIsUpJust': 'Time is up — just now.',
-    'cat.timeWasUp1': 'Time was up 1 minute ago.',
-    'cat.timeWasUpOver': 'Time was up over an hour ago.',
+    // ⚠️ ADDED 23 Aug 2026 — the Catalogue's last English, and six of these were
+    // plurals built by hand out of a ternary, which is English's rule written into
+    // the code. Intl chooses the form now, in whatever language the phrase came from.
+    'cat.progress': 'Step {i} of {n}',
+    // ⚠️ TWO FORMS, NOT ONE FORM AND .toLowerCase(). Three call sites lower-cased the
+    // sentence above to drop it into the middle of another one. That is reshaping a
+    // translated word — it happens to work for Italian and is the kind of thing that
+    // silently stops working for the next language. Same reasoning, and the same
+    // answer, as orders.per100G beside its lower-case twin in js/market.js.
+    'cat.progress.inline': 'step {i} of {n}',
+    'cat.resumeGuidedMix': 'Resume the guided mix — {progress}',
+    'cat.calculateFor': 'Calculate {recipe} for {amount}?',
+    'cat.partWayThrough': 'You were part-way through “{name}” — {progress}.',
+    'cat.deleteRecipeQ': 'Delete “{name}”? This cannot be undone.',
+    'cat.thisRecipe': 'this recipe',
+    'cat.recipeWord': 'recipe',
+    'cat.nonScalableNote': {
+      one: 'Note: {list} uses a unit the Calculator can’t scale (it works in grams only) and won’t be imported.',
+      other: 'Note: {list} use a unit the Calculator can’t scale (it works in grams only) and won’t be imported.',
+    },
+    'cat.updatedInCalculator': '“{name}” updated in the Calculator.',
+    'cat.addedToCalculator': '“{name}” added to the Calculator.',
+    'cat.couldNotSaveRecipe': 'Couldn’t save “{name}” — check your connection.',
+    'cat.stepWillBeRemoved': 'Step {n} will be removed from the procedure.',
+    'cat.procedureCanHold': 'A procedure can hold {n} steps.',
+    'cat.stepsAndTimers': {
+      one: '{n} step · {duration} of timers',
+      other: '{n} steps · {duration} of timers',
+    },
+    'cat.saveStepsFor': {
+      one: 'Save {n} step for “{name}”?',
+      other: 'Save {n} steps for “{name}”?',
+    },
+    'cat.noProcedureFor': '“{name}” will have no guided procedure.',
+    'cat.timeWasUpMinutes': {
+      one: 'Time was up 1 minute ago.',
+      other: 'Time was up {n} minutes ago.',
+    },
+    'cat.timeWasUpHours': {
+      one: 'Time was up over an hour ago.',
+      other: 'Time was up over {n} hours ago.',
+    },
+    'cat.youAreOn': 'You are on {progress}. It will be waiting where you left it.',
+    'cat.notPricedYet': {
+      one: '{n} ingredient is not priced yet — this cost is partial',
+      other: '{n} ingredients are not priced yet — this cost is partial',
+    },
     'cat.timeIsUp': 'Time is up.',
     'cat.startTheTimer': 'Start the timer',
     'cat.skipTheTimer': 'Skip the timer',
@@ -2725,8 +2770,45 @@ const DICTIONARIES = Object.freeze({
     'cat.addStep': '+ Aggiungi passaggio',
     'cat.noLongerInThe': 'Non è più nella ricetta',
     'cat.timeIsUpJust': 'Tempo scaduto — proprio ora.',
-    'cat.timeWasUp1': 'Il tempo è scaduto 1 minuto fa.',
-    'cat.timeWasUpOver': 'Il tempo è scaduto più di un’ora fa.',
+    'cat.progress': 'Passo {i} di {n}',
+    'cat.progress.inline': 'passo {i} di {n}',
+    'cat.resumeGuidedMix': 'Riprendi l’impasto guidato — {progress}',
+    'cat.calculateFor': 'Calcolare {recipe} per {amount}?',
+    'cat.partWayThrough': 'Eri a metà di “{name}” — {progress}.',
+    'cat.deleteRecipeQ': 'Eliminare “{name}”? Non si può annullare.',
+    'cat.thisRecipe': 'questa ricetta',
+    'cat.recipeWord': 'ricetta',
+    'cat.nonScalableNote': {
+      one: 'Nota: {list} usa un’unità che il Calcolatore non sa scalare (lavora solo in grammi) e non verrà importato.',
+      other: 'Nota: {list} usano un’unità che il Calcolatore non sa scalare (lavora solo in grammi) e non verranno importati.',
+    },
+    'cat.updatedInCalculator': '“{name}” aggiornata nel Calcolatore.',
+    'cat.addedToCalculator': '“{name}” aggiunta al Calcolatore.',
+    'cat.couldNotSaveRecipe': 'Non è stato possibile salvare “{name}” — controlla la connessione.',
+    'cat.stepWillBeRemoved': 'Il passo {n} verrà tolto dalla procedura.',
+    'cat.procedureCanHold': 'Una procedura può contenere {n} passi.',
+    'cat.stepsAndTimers': {
+      one: '{n} passo · {duration} di timer',
+      other: '{n} passi · {duration} di timer',
+    },
+    'cat.saveStepsFor': {
+      one: 'Salvare {n} passo per “{name}”?',
+      other: 'Salvare {n} passi per “{name}”?',
+    },
+    'cat.noProcedureFor': '“{name}” non avrà nessuna procedura guidata.',
+    'cat.timeWasUpMinutes': {
+      one: 'Il tempo è scaduto 1 minuto fa.',
+      other: 'Il tempo è scaduto {n} minuti fa.',
+    },
+    'cat.timeWasUpHours': {
+      one: 'Il tempo è scaduto più di un’ora fa.',
+      other: 'Il tempo è scaduto più di {n} ore fa.',
+    },
+    'cat.youAreOn': 'Sei al {progress}. Ti aspetterà dove l’hai lasciato.',
+    'cat.notPricedYet': {
+      one: '{n} ingrediente non ha ancora un prezzo — questo costo è parziale',
+      other: '{n} ingredienti non hanno ancora un prezzo — questo costo è parziale',
+    },
     'cat.timeIsUp': 'Tempo scaduto.',
     'cat.startTheTimer': 'Avvia il timer',
     'cat.skipTheTimer': 'Salta il timer',
