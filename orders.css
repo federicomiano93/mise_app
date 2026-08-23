@@ -1314,6 +1314,20 @@ a.home-reminder {
    The only form in this app whose contents can put somebody in hospital, so the
    STATE is the first thing on it: an ingredient nobody has declared blocks every
    label it is used in, and that has to read as a job rather than as a blank. */
+/* ── The two switches (suppliers.html → Impostazioni) ─────────────────────────
+   ⚠️ WRITTEN BECAUSE THE SCREENSHOT SHOWED A WALL OF TEXT. Two .mgmt-field blocks
+   as siblings have no space between them anywhere in this app, and here each one is
+   a switch followed by a four-line explanation — so the first note ran straight into
+   the second switch and the whole screen read as one paragraph with tick boxes in it.
+   20px is the value the panel already uses to separate blocks
+   (.mgmt-field + .mgmt-section-title), not a new number.
+   ⚠️ SCOPED to this screen: the Orders settings panel has the same shape and is not
+   part of this release — moving it would be a change nobody has measured.
+   ⚠️ AND 44px, because an 18px checkbox gives a ~24px row. One of these two turns off
+   the allergen screens for the whole venue. */
+.reg-settings .mgmt-field + .mgmt-field { margin-top: 20px; }
+.reg-settings .mgmt-toggle { min-height: 44px; }
+
 .alg-block { gap: 10px; }
 
 /* ── A folding section of the ingredient card ─────────────────────────────────

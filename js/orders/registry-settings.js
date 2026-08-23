@@ -30,7 +30,7 @@ import { reportFailure } from './mgmt-ui.js';
 // panels  — { allergens, nutrition } as they stand right now
 // onSet(key, on) — throws one switch; resolves when the server has agreed
 export function buildRegistrySettings({ panels, onSet }) {
-  const content = el('div', { class: 'mgmt-scroll' });
+  const content = el('div', { class: 'mgmt-scroll reg-settings' });
   let current = { ...panels };
 
   content.appendChild(el('h3', { class: 'mgmt-section-title', text: t('orders.settings.ingredientCard') }));
