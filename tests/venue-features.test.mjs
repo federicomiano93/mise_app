@@ -1,7 +1,17 @@
-// Routing probe: pins the default-ON direction documented at the top of
-// js/venue-features.js — `!== false` means a location document that has never
-// heard of these keys, one that failed to load, and one carrying a corrupt
-// value all answer ON. Only the literal boolean `false` turns a panel off.
+// ⚠️⚠️ THE DIRECTION IS THE SAFETY ARGUMENT, AND THIS IS WHERE IT IS PINNED.
+// js/venue-features.js reads both switches as `!== false`, so a location document
+// that has never heard of these keys, one that failed to load, and one carrying a
+// corrupt value ALL ANSWER ON. Only the literal boolean `false` turns a panel off.
+//
+// Written the other way round — `=== true` — a venue would lose its allergen panels
+// the moment its document was incomplete, unread or malformed, and nothing on any
+// screen would say why: the section would simply not be drawn. Allergens are the one
+// part of this app that can send somebody to hospital, so an accident must fail
+// towards showing them. `showStock` runs the same direction; `recipePhoto` runs the
+// OPPOSITE one, deliberately, because it spends money.
+//
+// These four tests were proved able to fail before they were trusted: inverting the
+// comparison in js/venue-features.js turns them red.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
