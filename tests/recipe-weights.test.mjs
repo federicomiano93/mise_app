@@ -48,7 +48,12 @@ test('⚠️⚠️ the editor only recomputes the loss once a PERSON has typed',
   // shows a derived cooked weight and the stored percentage, and assigns neither.
   assert.match(EDITOR, /if \(!weighed\) \{[\s\S]*?cookedFromLossPct\(before, working\.lossPct\)/,
     'an unweighed recipe must DERIVE its cooked box from the stored percentage');
-  const derivedBranch = EDITOR.slice(EDITOR.indexOf('if (!weighed) {'), EDITOR.indexOf('const { pct, problem }'));
+  // Forward from the branch, and proved non-empty — see the note on the null branch
+  // below for what an unanchored indexOf() costs.
+  const derivedStart = EDITOR.indexOf('if (!weighed) {');
+  assert.ok(derivedStart !== -1, 'the derived branch must exist to be guarded');
+  const derivedBranch = EDITOR.slice(derivedStart, EDITOR.indexOf('const { pct, problem }', derivedStart));
+  assert.ok(derivedBranch.length > 20, 'the slice must actually contain the branch');
   assert.ok(!/working\.lossPct\s*=/.test(derivedBranch),
     'and that branch must never ASSIGN lossPct — deriving a number and writing it back '
     + 'is how opening a recipe would silently change what it costs');
@@ -63,7 +68,14 @@ test('⚠️ an unanswered pair leaves the stored loss alone', () => {
   // zero: zero would declare «this recipe loses nothing».
   assert.match(EDITOR, /if \(pct === null\) \{[\s\S]*?t\('cat\.lossNotYet'\)/,
     'a null percentage must say so rather than being stored');
-  const nullBranch = EDITOR.slice(EDITOR.indexOf('if (pct === null) {'), EDITOR.indexOf('} else {'));
+  // ⚠️ SEARCH FORWARD FROM THE BRANCH, NOT FROM THE TOP OF THE FILE. The first draft
+  // used indexOf('} else {') with no offset, which found an earlier one, produced an
+  // EMPTY slice and passed on anything. A mutation is what exposed it: the suite going
+  // red is not the same as this guard firing.
+  const nullStart = EDITOR.indexOf('if (pct === null) {');
+  assert.ok(nullStart !== -1, 'the null branch must exist to be guarded');
+  const nullBranch = EDITOR.slice(nullStart, EDITOR.indexOf('} else {', nullStart));
+  assert.ok(nullBranch.length > 20, 'the slice must actually contain the branch');
   assert.ok(!/working\.lossPct\s*=/.test(nullBranch),
     'and it must not write anything into lossPct');
 });
