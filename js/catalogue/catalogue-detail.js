@@ -18,6 +18,9 @@ import {
 import { costRecipe, partialCostText } from './recipe-cost-model.js';
 import { recipeAllergens, canLabel, incompleteText, ALLERGEN_REASON_TEXT } from './recipe-allergen-model.js';
 import { allergenLabel } from '../allergen-model.js';
+// Whether this venue tracks allergens at all. From js/ root: Orders sets the switch
+// and the Catalogue obeys it, so the judgement lives in one file for both.
+import { allergensOn } from '../venue-features.js';
 import { formatRate } from '../price-model.js';
 import { hasProcedure, normalizeSteps, unassignedRows, progressText, formatDuration } from './guided-model.js';
 
@@ -96,6 +99,22 @@ function costPanel(recipe) {
 // anything is missing this refuses to present a list at all and shows the JOB
 // instead.
 function allergenPanel(recipe, app) {
+  // ⚠️⚠️ THE WHOLE CARD GOES WHEN THE VENUE HAS ALLERGENS SWITCHED OFF, AND WITH IT
+  // THE ONLY WAY TO A LABEL — `app.openLabel` is called from inside this panel and
+  // nowhere else, so the label cannot be reached by accident. That is deliberate
+  // rather than convenient: a printed food label with no allergen line is worse than
+  // no label at all, and a venue that has told the app it does not track allergens
+  // cannot be allowed to produce one.
+  //
+  // ⚠️ AND IT IS READ HERE, ON EVERY BUILD, not captured once. refreshCost() rebuilds
+  // this panel on every snapshot, so a switch thrown on another phone arrives with
+  // the next one.
+  if (!allergensOn(currentSession().location)) {
+    const off = el('div', { class: 'cat-alg-panel' });
+    off.hidden = true;
+    return off;
+  }
+
   const result = recipeAllergens(recipe, {
     ingredients: getIngredients(),
     recipes: getRecipesById(),

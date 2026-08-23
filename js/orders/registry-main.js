@@ -9,10 +9,11 @@
 // js/orders/ and imports nothing from another feature's folder.
 
 import { t } from '../i18n.js';
+import { onSession } from '../firebase.js';
 import { withPrices } from '../price-model.js';
 import { buildRegistry } from './registry.js';
 import {
-  COLLECTIONS, watchCollection, watchIngredientPrices,
+  COLLECTIONS, watchCollection, watchIngredientPrices, canManageHere,
   saveDoc, createDoc, removeDoc, saveIngredientWithPrice, getPriceHistory,
 } from './firebase-orders.js';
 
@@ -52,6 +53,30 @@ const screen = buildRegistry(
 );
 
 host?.appendChild(screen.node);
+
+// ── The bottom bar ───────────────────────────────────────────────────────────
+//
+// ⚠️⚠️ THE BUTTON CARRIES THE PERMISSION, AND THE BAR ONLY FOLLOWS IT. Hiding the
+// BAR on a role is the trap v1.62.0 cost a release to: the catalogue's bar was gated
+// on canManage while a photo switch was the only thing in it, and the day the allergen
+// sheet moved in it would have been walled off from the counter staff it is written
+// for. So the rule here is «no visible button ⇒ no bar», derived rather than typed —
+// add a button that everybody may use and the bar comes back on its own.
+//
+// ⚠️ AND IT WAITS FOR THE SESSION. canManageHere() reads the session, which arrives a
+// moment AFTER this module runs; asked once at load it answers «no» for everybody and
+// the owner never sees the gear. onSession fires immediately with what is known and
+// again when the location opens.
+const footerEl = document.getElementById('registry-footer');
+const settingsBtn = document.getElementById('registry-settings-btn');
+
+settingsBtn?.addEventListener('click', () => screen.openSettings());
+
+onSession(() => {
+  if (!footerEl || !settingsBtn) return;
+  settingsBtn.hidden = !canManageHere();
+  footerEl.hidden = ![...footerEl.children].some(child => !child.hidden);
+});
 
 // ⚠️ THE ERROR IS SAID OUT LOUD. A listener that fails silently leaves an empty
 // list, and an empty list on this screen reads as «this bakery has no suppliers» —

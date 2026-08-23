@@ -520,9 +520,12 @@ const DICTIONARIES = Object.freeze({
     'orders.priceHistory': 'Price history',
     'orders.cerealsContainingGluten': 'Cereals containing gluten',
     'orders.theRest': 'The rest',
-    'orders.noNutritionYet': 'No nutrition yet.',
-    'orders.nutritionComplete': 'Nutrition complete.',
-    'orders.allergensAndNutrition': 'Allergens and nutrition',
+    'orders.noNutritionYet': 'Nothing yet',
+    'orders.nutritionComplete': 'Complete',
+    // ⚠️ orders.allergensAndNutrition («Allergens and nutrition») was retired here: the
+    // two are separate folding sections now, each named by its own heading, so one
+    // label covering both would name neither.
+    'orders.declaredShort': 'declared',
     'orders.copyThisFromThe': 'Copy this from the supplier’s specification, not from memory. “Traces” is what the supplier declares — it cannot know about your own kitchen.',
     'orders.iHaveCheckedThe': 'I have checked the supplier’s specification',
     // ── The pack's own ingredient list ──────────────────────────────────────
@@ -1400,7 +1403,11 @@ const DICTIONARIES = Object.freeze({
     'orders.allergen.checkedOn': 'Checked {date} — {what}. {note}',
     'orders.allergen.checkedNoDate': 'Checked — {what}. {note}',
     'orders.allergen.containsNone': 'contains none of the 14',
-    'orders.nutritionStillEmpty': 'Nutrition: {n} of {total} still empty.',
+    // ⚠️ THE THREE NUTRITION STATES ARE CHIPS NOW, NOT SENTENCES. They used to be
+    // tacked onto the end of the ALLERGEN status line («Checked 2026-08-21 — Milk.
+    // Nutrition: 3 of 13 still empty.»); nutrition has its own folding section since
+    // v1.67.0, so they sit on its header and have to be short enough to.
+    'orders.nutritionStillEmpty': '{n} of {total} empty',
     'past.olderRecordsKept': {
       one: 'Older records are kept — this screen shows the last day.',
       other: 'Older records are kept — this screen shows the last {n} days.',
@@ -1471,6 +1478,20 @@ const DICTIONARIES = Object.freeze({
     'orders.section.price': 'Price',
     'orders.section.orderScreen': 'The order screen',
     'orders.section.howSent': 'How orders may be sent',
+    // ── An ingredient's record, in four sections ────────────────────────────
+    'orders.section.productData': 'Product details',
+    'orders.section.allergens': 'Allergens',
+    'orders.section.nutrition': 'Nutrition',
+    // ── …and the two switches that decide whether the last two exist ────────
+    'orders.settings.ingredientCard': 'The ingredient card',
+    'orders.settings.cardNote': 'What every product’s record asks for. It applies to the whole venue, not just this phone, and takes effect on the next screen you open.',
+    'orders.settings.showAllergens': 'Track allergens',
+    'orders.settings.showAllergensNote': 'Off: no allergen boxes on a product, no allergen card on a recipe, no allergen sheet — and no labels, because a food label without its allergen line is worse than none. Nothing already declared is deleted.',
+    'orders.settings.showNutrition': 'Track nutrition',
+    'orders.settings.showNutritionNote': 'The per-100 g figures on a product, and the nutrition half of a label. Nothing already typed is deleted.',
+    'orders.settings.offTitle': 'Turn allergens off?',
+    'orders.settings.offBody': 'The allergen boxes, the allergen card on every recipe, the allergen sheet and the labels all disappear for everybody in this venue. Nothing is deleted — switching it back on brings every declaration back exactly as it is.',
+    'orders.settings.turnOff': 'Turn off',
     'ui.history': "History",
     // ⚠️ ui.allIngredients («All ingredients») was retired here: both view switches now
     // reuse the plain ui.ingredients that already existed. Federico, on the screen:
@@ -1641,6 +1662,7 @@ const DICTIONARIES = Object.freeze({
     'label.whatItShows': 'What the label shows',
     'label.blocked': 'No label can be made',
     'label.blocked.noWeights': 'This recipe has no ingredients with a weight.',
+    'label.blocked.allergensOff': 'This venue does not track allergens, so the app cannot make a label. Turn allergens back on in Suppliers & ingredients → Settings.',
     'label.blocked.notDeclared': {
       one: '{n} ingredient is not declared. The recipe screen lists them.',
       other: '{n} ingredients are not declared. The recipe screen lists them.',
@@ -2039,9 +2061,9 @@ const DICTIONARIES = Object.freeze({
     'orders.priceHistory': 'Storico prezzi',
     'orders.cerealsContainingGluten': 'Cereali contenenti glutine',
     'orders.theRest': 'Il resto',
-    'orders.noNutritionYet': 'Ancora nessun valore nutrizionale.',
-    'orders.nutritionComplete': 'Valori nutrizionali completi.',
-    'orders.allergensAndNutrition': 'Allergeni e valori nutrizionali',
+    'orders.noNutritionYet': 'Ancora nessuno',
+    'orders.nutritionComplete': 'Completi',
+    'orders.declaredShort': 'dichiarato',
     'orders.copyThisFromThe': 'Copia questi dati dalla scheda tecnica del fornitore, non a memoria. “Tracce” è ciò che dichiara il fornitore — non può sapere niente della tua cucina.',
     'orders.iHaveCheckedThe': 'Ho controllato la scheda tecnica del fornitore',
     'orders.pack.label': 'L’elenco ingredienti stampato sulla confezione',
@@ -2835,7 +2857,7 @@ const DICTIONARIES = Object.freeze({
     'orders.allergen.checkedOn': 'Verificato il {date} — {what}. {note}',
     'orders.allergen.checkedNoDate': 'Verificato — {what}. {note}',
     'orders.allergen.containsNone': 'non contiene nessuno dei 14',
-    'orders.nutritionStillEmpty': 'Valori nutrizionali: {n} di {total} ancora da compilare.',
+    'orders.nutritionStillEmpty': '{n} di {total} da compilare',
     'past.olderRecordsKept': {
       one: 'I record più vecchi restano — questa schermata mostra l’ultimo giorno.',
       other: 'I record più vecchi restano — questa schermata mostra gli ultimi {n} giorni.',
@@ -2895,6 +2917,20 @@ const DICTIONARIES = Object.freeze({
     'orders.section.price': 'Prezzo',
     'orders.section.orderScreen': 'La schermata dell’ordine',
     'orders.section.howSent': 'Come si mandano gli ordini',
+    // ── La scheda di un prodotto, in quattro sezioni ────────────────────────
+    'orders.section.productData': 'Dati prodotto',
+    'orders.section.allergens': 'Allergeni',
+    'orders.section.nutrition': 'Valori nutrizionali',
+    // ── …e i due interruttori che decidono se le ultime due esistono ────────
+    'orders.settings.ingredientCard': 'La scheda ingrediente',
+    'orders.settings.cardNote': 'Cosa chiede la scheda di ogni prodotto. Vale per tutto il locale, non solo per questo telefono, e ha effetto dalla prossima schermata che apri.',
+    'orders.settings.showAllergens': 'Gestisci gli allergeni',
+    'orders.settings.showAllergensNote': 'Se lo spegni: niente caselle degli allergeni sul prodotto, niente riquadro allergeni sulla ricetta, niente scheda allergeni — e niente etichette, perché un’etichetta alimentare senza la riga degli allergeni è peggio di nessuna etichetta. Non viene cancellato niente di quello che hai già dichiarato.',
+    'orders.settings.showNutrition': 'Gestisci i valori nutrizionali',
+    'orders.settings.showNutritionNote': 'I valori per 100 g sul prodotto e la metà nutrizionale dell’etichetta. Non viene cancellato niente di quello che hai già scritto.',
+    'orders.settings.offTitle': 'Spegnere gli allergeni?',
+    'orders.settings.offBody': 'Spariscono le caselle degli allergeni, il riquadro allergeni su ogni ricetta, la scheda allergeni e le etichette, per tutti quelli che lavorano qui. Non viene cancellato niente — riaccendendolo torna ogni dichiarazione esattamente com’è.',
+    'orders.settings.turnOff': 'Spegni',
     'ui.history': "Storico",
     'ui.orderPlaced': "Ordine fatto…",
     'ui.clearQuantities': "Azzera le quantità…",
@@ -3035,6 +3071,7 @@ const DICTIONARIES = Object.freeze({
     'label.whatItShows': 'Cosa mostra l’etichetta',
     'label.blocked': 'Non si può fare nessuna etichetta',
     'label.blocked.noWeights': 'Questa ricetta non ha ingredienti con un peso.',
+    'label.blocked.allergensOff': 'Questo locale non gestisce gli allergeni, quindi l’app non può fare un’etichetta. Riaccendili in Fornitori e ingredienti → Impostazioni.',
     'label.blocked.notDeclared': {
       one: '{n} ingrediente non è dichiarato. La schermata della ricetta li elenca.',
       other: '{n} ingredienti non sono dichiarati. La schermata della ricetta li elenca.',

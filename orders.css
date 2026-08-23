@@ -1314,7 +1314,56 @@ a.home-reminder {
    The only form in this app whose contents can put somebody in hospital, so the
    STATE is the first thing on it: an ingredient nobody has declared blocks every
    label it is used in, and that has to read as a job rather than as a blank. */
-.alg-block { gap: 8px; }
+.alg-block { gap: 10px; }
+
+/* ── A folding section of the ingredient card ─────────────────────────────────
+   Federico, 23 Aug 2026: «i dati e prezzo restano visibili sempre, invece il resto
+   rendilo una casella che quando clicchi si apre». Two of these — allergens and
+   nutrition — and between them they are three quarters of the scroll.
+
+   ⚠️ COPIED FROM .cat-alg-panel / .cat-alg-head / .cat-alg-body IN catalogue.css,
+   NOT DESIGNED. That is the app's one fold and this is the same control doing the
+   same job; the values are the same values, read through this stylesheet's own token
+   aliases. Written out rather than shared because catalogue.css is not loaded on
+   suppliers.html — the same reason .cat-footer exists beside .recipe-footer. The
+   v1.62.0 lesson: finish the copy.
+   ⚠️ NO TOP PADDING ON THE CARD: the head absorbs it, so the whole top of the card
+   is the tap target rather than just its 12px of text. */
+.mgmt-fold {
+  padding: 0 14px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+.mgmt-fold-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  width: 100%; min-height: 44px; padding: 12px 0;
+  border: 0; background: none; cursor: pointer;
+  font: inherit; color: inherit; text-align: left;
+}
+.mgmt-fold-head:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.mgmt-fold-label {
+  font-family: var(--font-mono); font-size: 11px; font-weight: 600;
+  letter-spacing: 0.1em; text-transform: uppercase; color: var(--text3);
+}
+/* The chevron turns to point down while it is open — the only moving part. */
+.mgmt-fold-chev { color: var(--text3); font-size: 18px; line-height: 1; transition: transform .15s ease; }
+.mgmt-fold-head--open .mgmt-fold-chev { transform: rotate(90deg); }
+/* The folded half. It gets the breathing room the head used to provide, so opening
+   the card does not make the first line collide with the state word. */
+.mgmt-fold-body { padding-top: 2px; }
+
+/* ⚠️ THE STATE IS A WORD, NEVER A COLOUR ALONE (P18) — and it stays OUTSIDE the fold
+   with the status line below it, because on this screen the ANSWER is never behind a
+   tap. Pushed right so a long section title cannot squeeze it. */
+.alg-head-state {
+  margin-left: auto;
+  font-family: var(--font-mono); font-size: 11px; font-weight: 700;
+  letter-spacing: 0.06em; text-transform: uppercase; color: var(--text3);
+}
+.alg-head-state--warn { color: var(--warn); }
+.alg-head-state--ok { color: var(--brand); }
+
 .alg-status {
   margin: 0; padding: 10px 12px; border-radius: var(--radius-sm);
   font-size: 13px; line-height: 1.45; font-weight: 600;
