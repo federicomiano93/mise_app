@@ -125,7 +125,13 @@ const CHILD = /\}\s*,\s*'([A-Z][a-z][^']*)'\s*\)/g;
 // 📌 Naming `field(` rather than "any helper" is deliberate: a pattern that matched
 // every `foo('Bar'` would fire on document ids, class names and CSS values, and a
 // guard that cries wolf gets an exception added to it until it guards nothing.
+// ⚠️ THE EIGHTH SHAPE, 23 Aug 2026: the SAME helper, called with a BACKTICK.
+// `field(\`Selling price, including VAT (${CURRENCY})\`, …)` on the Food Cost editor
+// walked past this pattern for a month because it only knew the quoted form — the
+// interpolation is what made somebody reach for a template literal, and that is exactly
+// the label most likely to need one.
 const ARG = /(?:field\(\s*)'([A-Z][a-z][^']*)'/g;
+const ARG_TEMPLATE = /(?:field\(\s*)`([^`]*)`/g;
 const MESSAGE = /message:\s*(?:'([A-Z][a-z][^']*)'|`([^`]*)`)/g;
 
 test('⚠️ no English is written straight into a screen — it all goes through the dictionary', () => {
@@ -160,6 +166,13 @@ test('⚠️ no English is written straight into a screen — it all goes throug
         if (KNOWN_DEBT.has(where)) continue;
         found.push(`${where}:${i + 1}  field('${phrase}')`);
       }
+      for (const m of line.matchAll(ARG_TEMPLATE)) {
+        const phrase = prose(m[1]);
+        if (!/[A-Z][a-z]/.test(phrase)) continue;      // nothing but values and symbols
+        if (SAFE.has(phrase.toLowerCase())) continue;
+        if (KNOWN_DEBT.has(where)) continue;
+        found.push(`${where}:${i + 1}  field(\`${phrase}\`)`);
+      }
       for (const m of line.matchAll(MESSAGE)) {
         const phrase = m[1] !== undefined ? m[1] : prose(m[2]);
         if (!/[A-Z][a-z]/.test(phrase)) continue;      // nothing but values and symbols
@@ -191,6 +204,14 @@ test('the scan actually finds this shape when it is there', () => {
 test('the scan finds a label passed as an argument', () => {
   const sample = `field('Brand', brand),`;
   assert.deepEqual([...sample.matchAll(ARG)].map(m => m[1]), ['Brand']);
+});
+
+test('…and finds it when the label is a template literal', () => {
+  const sample = 'field(`Selling price, including VAT (${CURRENCY})`, priceInput,';
+  assert.deepEqual([...sample.matchAll(ARG_TEMPLATE)].map(m => prose(m[1])),
+    ['Selling price, including VAT ()']);
+  const translated = "field(t('fc.sellingPriceVat', { currency: CURRENCY }), priceInput,";
+  assert.deepEqual([...translated.matchAll(ARG_TEMPLATE)], [], 'a t() call is not a literal');
 });
 
 test('the scan finds a dialog QUESTION, quoted or interpolated', () => {
