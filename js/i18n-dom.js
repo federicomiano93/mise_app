@@ -14,13 +14,22 @@
 // splash-init.js does: a heading that changes language a moment after the screen
 // appears is worse than one that never changes at all.
 
-import { t, onLanguageChange } from './i18n.js';
+import { t, currentLanguage, onLanguageChange } from './i18n.js';
 
 // Every element carrying data-i18n gets its text replaced. An element may also
 // carry data-i18n-attr="placeholder" (or any attribute name) to have that
 // attribute translated instead of the text — a placeholder is read by exactly
 // the same person as the label above it.
 export function applyStaticText(root = document) {
+  // ⚠️ THE PAGE HAS TO SAY WHAT LANGUAGE IT IS IN, and every one of them said `lang="en"`
+  // in the markup and never changed it. That attribute is not decoration: a screen reader
+  // chooses its pronunciation rules from it, so on an Italian venue every Italian
+  // sentence in this app was read out with English pronunciation — which is close to
+  // unintelligible, and completely invisible to anybody looking at the screen.
+  // Set here rather than in js/i18n.js because this is the file that owns the document.
+  if (typeof document !== 'undefined' && document.documentElement) {
+    document.documentElement.lang = currentLanguage();
+  }
   for (const el of root.querySelectorAll('[data-i18n]')) {
     const key = el.getAttribute('data-i18n');
     if (!key) continue;

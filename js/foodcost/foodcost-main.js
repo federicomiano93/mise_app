@@ -64,7 +64,7 @@ function openProduct(product) {
   activeList = null;
   currentProduct = product;
   leaveGuard = null;
-  setHeader({ title: product ? (product.name || 'Product') : t('fc.newProduct'), sub: t('fc.foodCost'), back: true });
+  setHeader({ title: product ? (product.name || t('fc.productWord')) : t('fc.newProduct'), sub: t('fc.foodCost'), back: true });
   activeEditor = renderEditor({ product, app });
   swap(activeEditor.root);
 }
@@ -74,7 +74,7 @@ async function openHistory(product) {
   view = 'history';
   activeEditor = null;
   leaveGuard = null;
-  setHeader({ title: t('fc.marginHistory'), sub: product.name || 'Product', back: true });
+  setHeader({ title: t('fc.marginHistory'), sub: product.name || t('fc.productWord'), back: true });
 
   const body = el('div', { class: 'fc-view' }, [el('p', { class: 'fc-empty', text: t('fc.loading') })]);
   swap(body);

@@ -68,12 +68,10 @@ export function renderPending(container, list, { onPlaced, onToday, onDiscard, n
   if (!list.length) return;
 
   list.forEach(({ supplier, day, itemCount }) => {
-    const items = t('orders.itemsCount', { n: itemCount });
-
     container.appendChild(el('div', { class: 'pending-banner' }, [
       el('div', { class: 'pending-main' }, [
         el('span', { class: 'pending-title', text: t('orders.notPlacedFor', { supplier: supplier.name }) }),
-        el('span', { class: 'pending-sub', text: t('orders.typedWhen', { items, when: dayWhen(day, now) }) }),
+        el('span', { class: 'pending-sub', text: t('orders.typedWhen', { n: itemCount, when: dayWhen(day, now) }) }),
       ]),
       el('div', { class: 'pending-actions' }, [
         el('button', {

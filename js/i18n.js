@@ -462,7 +462,15 @@ const DICTIONARIES = Object.freeze({
     // an untranslated sentence, which is worse than either language alone.
     'orders.sendDay': 'Send {day}',
     'orders.notPlacedFor': '{supplier} — order not placed',
-    'orders.typedWhen': '{items} typed {when}',
+    // ⚠️ ONE SENTENCE, NOT TWO NESTED. It was `t('orders.typedWhen', { items: t(
+    // 'orders.itemsCount', { n }) })` — a count phrase dropped into a sentence whose
+    // PARTICIPLE has to agree with it. English does not notice; Italian read «1 voce
+    // scritte» on the Orders screen, which is simply wrong. Seen in a screenshot after
+    // every check had passed.
+    'orders.typedWhen': {
+      one: '{n} item typed {when}',
+      other: '{n} items typed {when}',
+    },
     'orders.placedWhen': 'Placed {when}',
     'orders.updateOrderFor': 'Update {supplier}’s order {day}?',
     'orders.deleteOrderFor': 'Delete {supplier}’s order {day}?\n\nIt is removed from History for good and cannot be recovered. The suggested order quantities learn from these records, so they will change.',
@@ -2278,7 +2286,10 @@ const DICTIONARIES = Object.freeze({
 
     'orders.sendDay': 'Manda {day}',
     'orders.notPlacedFor': '{supplier} — ordine non effettuato',
-    'orders.typedWhen': '{items} scritte {when}',
+    'orders.typedWhen': {
+      one: '{n} voce scritta {when}',
+      other: '{n} voci scritte {when}',
+    },
     'orders.placedWhen': 'Effettuato {when}',
     'orders.updateOrderFor': 'Aggiornare l’ordine di {supplier} {day}?',
     'orders.deleteOrderFor': 'Eliminare l’ordine di {supplier} {day}?\n\nSparisce dallo Storico per sempre e non si può recuperare. Le quantità suggerite imparano da questi registri, quindi cambieranno.',
