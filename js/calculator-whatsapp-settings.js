@@ -638,7 +638,7 @@ function byHandField(target, added) {
     // same thing on two lines. Said out loud — silently ignoring the tap reads as a
     // broken button.
     if (added.has(name)) {
-      warning.textContent = `“${name}” is already in this message.`;
+      warning.textContent = t('calc.alreadyInMessage', { name });
       warning.hidden = false;
       return;
     }

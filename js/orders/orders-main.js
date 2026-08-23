@@ -9,7 +9,7 @@
 // on, so an order left unmarked overnight is filed under the day it was written,
 // not under today.
 
-import { t } from '../i18n.js';
+import { t, joinList } from '../i18n.js';
 // ⚠️ createDoc / removeDoc / saveIngredientWithPrice / getPriceHistory LEFT WITH THE
 // RECORDS. This page no longer creates, deletes or prices anything — it reads the
 // two collections to draw an order. js/orders/registry-main.js holds those calls now.
@@ -946,10 +946,11 @@ function renderRequestCard() {
 }
 
 // "A", "A and B", "A, B and C".
-function listNames(names) {
-  if (names.length <= 1) return names[0] || '';
-  return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
-}
+//
+// ⚠️ THE JOINER IS A WORD, and it was ' and ' written into the code here. The one
+// copy now lives in js/i18n.js beside the dictionary, because the Calculator needs
+// the same grammar and a feature may not import from another feature's folder.
+const listNames = joinList;
 
 // Sending is the moment the order actually leaves, so it is the moment to ask —
 // forgetting to tap "Order placed" afterwards is exactly what left orders

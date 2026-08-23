@@ -11,6 +11,7 @@
 // honest. If it ever disappears, this should go with it.
 
 import { workDayIndex } from './log-model.js';
+import { t } from './i18n.js';
 
 // A row's identity: the client it belongs to plus the product. The same product
 // ordered by two clients is two independent numbers.
@@ -121,16 +122,17 @@ export function prefillFromLogs(entries, logs, latestOf, { nowMs, window } = {})
 // one thing somebody checking them before sending needs to know. And since the window
 // is now a SETTING, the sentence has to follow it — a fixed sentence would start
 // lying the moment the setting was changed, which is worse than saying nothing.
-const WINDOW_WORDS = {
-  both: 'yesterday or today',
-  today: 'today',
-  yesterday: 'yesterday',
+// ⚠️ KEYS, NOT WORDS. This is a module-level constant, evaluated at first import —
+// before any venue is open — so a t() here would be frozen in the language the page
+// loaded in. The v1.57.0 rule; the lookup lives in prefillNote() below.
+const WINDOW_KEYS = {
+  both: 'calc.prefill.window.both',
+  today: 'calc.prefill.window.today',
+  yesterday: 'calc.prefill.window.yesterday',
 };
 
 export function prefillNote(filledCount, window) {
-  const when = WINDOW_WORDS[window] || WINDOW_WORDS.both;
-  if (!filledCount) return `Nothing logged for these clients ${when} — type the quantities.`;
-  return filledCount === 1
-    ? `One quantity filled in from what you logged ${when} — check it before sending.`
-    : `${filledCount} quantities filled in from what you logged ${when} — check them before sending.`;
+  const when = t(WINDOW_KEYS[window] || WINDOW_KEYS.both);
+  if (!filledCount) return t('calc.prefill.nothingLogged', { when });
+  return t('calc.prefill.filled', { n: filledCount, when });
 }

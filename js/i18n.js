@@ -1260,6 +1260,50 @@ const DICTIONARIES = Object.freeze({
     'calc.noWhatsappListsOr': 'No WhatsApp lists or clients yet. Add one in Settings → WhatsApp.',
     'calc.thisListHasNo': 'This list has no clients yet. Add some in Settings → WhatsApp.',
     'calc.sendOrder': 'Send order',
+    // ⚠️ ADDED 23 Aug 2026 — the client-ordering screens, written straight into the
+    // code. Four of them built an English plural by hand, which is English's rule
+    // written into a ternary and cannot be translated by moving either half.
+    'calc.co.ordersChanged': {
+      one: '{n} order has CHANGED since you used it',
+      other: '{n} orders have CHANGED since you used them',
+    },
+    'calc.co.ordersReceived': {
+      one: '{n} order received from your clients',
+      other: '{n} orders received from your clients',
+    },
+    'calc.co.justNow': 'just now',
+    'calc.co.minAgo': '{n} min ago',
+    'calc.co.hoursAgo': { one: '{n} hour ago', other: '{n} hours ago' },
+    'calc.co.showOlder': 'Show older orders (before the last {n} days)',
+    'calc.co.arrivedLate': 'This arrived after {cutoff}, the deadline for that day. You can still use it — but it came in late.',
+    'calc.co.clientGone': '{client} is no longer in your address book, so there are no fields to fill in.',
+    'calc.co.thisClient': 'This client',
+    'calc.co.allLocked': {
+      one: '{names} has already been confirmed, so the quantities are locked. Tap Edit on the tab first, then put the order in.',
+      other: '{names} have already been confirmed, so the quantities are locked. Tap Edit on the tab first, then put the order in.',
+    },
+    'calc.co.someLocked': {
+      one: '{names} is confirmed and will be left alone.',
+      other: '{names} are confirmed and will be left alone.',
+    },
+    'calc.co.putOrderIn': 'Put {client}’s order in the calculator?',
+    'calc.co.closeOrdersAt': 'Close orders at {time} the day before? Every client sees this straight away.',
+    'calc.prefill.window.both': 'yesterday or today',
+    'calc.prefill.window.today': 'today',
+    'calc.prefill.window.yesterday': 'yesterday',
+    'calc.prefill.nothingLogged': 'Nothing logged for these clients {when} — type the quantities.',
+    'calc.prefill.filled': {
+      one: 'One quantity filled in from what you logged {when} — check it before sending.',
+      other: '{n} quantities filled in from what you logged {when} — check them before sending.',
+    },
+    'calc.shareText': 'Hello {client}, you can send your order to {from} here: {link}',
+    'calc.us': 'us',
+    'calc.linkCopiedFor': 'The ordering link for {client} is copied. Paste it into a message.',
+    'calc.copyThisLinkFor': 'Copy this link and send it to {client}:\n\n{link}',
+    'calc.clientCanSendOrders': '{client} can send orders straight into the app. Anyone with the link can order as this client, so send it to them and no one else.',
+    'calc.replaceLinkWarning': '{client}’s current link will stop working immediately, including on a phone that is using it right now. Use “Copy link” instead if you only want to send it again.',
+    'calc.stopClientOrdering': 'Stop {client} sending orders through the app? Their link will stop working. Orders they have already sent are kept.',
+    'calc.alreadyInMessage': '“{name}” is already in this message.',
     'calc.untitledList': 'Untitled list',
     'calc.unnamedClient': 'Unnamed client',
     'calc.noOrdersToShare': 'No orders to share',
@@ -1432,6 +1476,10 @@ const DICTIONARIES = Object.freeze({
     // them, and a fifth copy is a fifth thing to translate.
     'ui.back': 'Back',
     'ui.send': 'Send',
+    // ⚠️ THE JOINER IS A WORD TOO. `names.join(' and ')` and listNames() both wrote
+    // English grammar into the code, in three places.
+    'ui.listPair': '{a} and {b}',
+    'aria.recipe': 'Recipe',
     'ui.cancel': 'Cancel',
     'ui.delete': 'Delete',
     // ⚠️ THE BUTTON WORDS THE DIALOGS USE. They were written straight into 30-odd
@@ -2873,6 +2921,47 @@ const DICTIONARIES = Object.freeze({
     'calc.noWhatsappListsOr': 'Ancora nessuna lista WhatsApp né cliente. Aggiungine una in Impostazioni → WhatsApp.',
     'calc.thisListHasNo': 'Questa lista non ha ancora clienti. Aggiungine in Impostazioni → WhatsApp.',
     'calc.sendOrder': 'Manda l’ordine',
+    'calc.co.ordersChanged': {
+      one: '{n} ordine è CAMBIATO da quando l’hai usato',
+      other: '{n} ordini sono CAMBIATI da quando li hai usati',
+    },
+    'calc.co.ordersReceived': {
+      one: '{n} ordine ricevuto dai tuoi clienti',
+      other: '{n} ordini ricevuti dai tuoi clienti',
+    },
+    'calc.co.justNow': 'adesso',
+    'calc.co.minAgo': '{n} min fa',
+    'calc.co.hoursAgo': { one: '{n} ora fa', other: '{n} ore fa' },
+    'calc.co.showOlder': 'Mostra gli ordini più vecchi (prima degli ultimi {n} giorni)',
+    'calc.co.arrivedLate': 'È arrivato dopo le {cutoff}, il termine per quel giorno. Puoi usarlo lo stesso — ma è arrivato in ritardo.',
+    'calc.co.clientGone': '{client} non è più nella tua rubrica, quindi non ci sono campi da riempire.',
+    'calc.co.thisClient': 'Questo cliente',
+    'calc.co.allLocked': {
+      one: '{names} è già stato confermato, quindi le quantità sono bloccate. Tocca Modifica sulla scheda, poi inserisci l’ordine.',
+      other: '{names} sono già stati confermati, quindi le quantità sono bloccate. Tocca Modifica sulla scheda, poi inserisci l’ordine.',
+    },
+    'calc.co.someLocked': {
+      one: '{names} è confermato e resterà com’è.',
+      other: '{names} sono confermati e resteranno come sono.',
+    },
+    'calc.co.putOrderIn': 'Inserire l’ordine di {client} nel calcolatore?',
+    'calc.co.closeOrdersAt': 'Chiudere gli ordini alle {time} del giorno prima? Tutti i clienti lo vedono subito.',
+    'calc.prefill.window.both': 'ieri o oggi',
+    'calc.prefill.window.today': 'oggi',
+    'calc.prefill.window.yesterday': 'ieri',
+    'calc.prefill.nothingLogged': 'Niente registrato per questi clienti {when} — scrivi tu le quantità.',
+    'calc.prefill.filled': {
+      one: 'Una quantità inserita da quello che hai registrato {when} — controllala prima di mandare.',
+      other: '{n} quantità inserite da quello che hai registrato {when} — controllale prima di mandare.',
+    },
+    'calc.shareText': 'Ciao {client}, puoi mandare il tuo ordine a {from} qui: {link}',
+    'calc.us': 'noi',
+    'calc.linkCopiedFor': 'Il link per ordinare di {client} è copiato. Incollalo in un messaggio.',
+    'calc.copyThisLinkFor': 'Copia questo link e mandalo a {client}:\n\n{link}',
+    'calc.clientCanSendOrders': '{client} può mandare gli ordini direttamente nell’app. Chiunque abbia il link può ordinare come questo cliente, quindi mandalo solo a lui.',
+    'calc.replaceLinkWarning': 'Il link attuale di {client} smetterà di funzionare subito, anche su un telefono che lo sta usando in questo momento. Usa “Copia il link” se vuoi solo rimandarglielo.',
+    'calc.stopClientOrdering': 'Impedire a {client} di mandare ordini attraverso l’app? Il suo link smetterà di funzionare. Gli ordini che ha già mandato restano.',
+    'calc.alreadyInMessage': '“{name}” è già in questo messaggio.',
     'calc.untitledList': 'Lista senza nome',
     'calc.unnamedClient': 'Cliente senza nome',
     'calc.noOrdersToShare': 'Nessun ordine da condividere',
@@ -3012,6 +3101,8 @@ const DICTIONARIES = Object.freeze({
     'ui.home': "Home",
     'ui.back': 'Indietro',
     'ui.send': 'Manda',
+    'ui.listPair': '{a} e {b}',
+    'aria.recipe': 'Ricetta',
     'ui.cancel': 'Annulla',
     'ui.delete': 'Elimina',
     'ui.discard': 'Scarta',
@@ -3419,6 +3510,22 @@ export function interfaceLanguage(location) {
 export function languageFromTag(tag) {
   const base = String(tag || '').toLowerCase().split('-')[0];
   return LANGUAGES.includes(base) ? base : DEFAULT_LANGUAGE;
+}
+
+// "A, B and C" — and the joiner is a WORD, which is the whole reason this lives here.
+//
+// ⚠️ IT WAS WRITTEN INTO THE CODE IN THREE PLACES, twice as `names.join(' and ')` and
+// once inside the Orders screen's own listNames(). Italian says «e», and a joiner is
+// invisible to every scan in this project: it is one word inside a template literal,
+// with no capital letter to catch the eye.
+//
+// ⚠️ IT LIVES HERE RATHER THAN IN EITHER FEATURE because the two callers are the
+// Calculator and Orders, and a feature may never import from another feature's folder.
+// A copy of a sentence is a nuisance; a copy of the grammar is the thing that drifts.
+export function joinList(names) {
+  const list = (names || []).filter(Boolean);
+  if (list.length <= 1) return list[0] || '';
+  return t('ui.listPair', { a: list.slice(0, -1).join(', '), b: list[list.length - 1] });
 }
 
 // The tag to hand Intl for dates and numbers.

@@ -340,8 +340,8 @@ async function loadOrderingAccounts() {
 // bakery. It was "The Italian Club" for everybody, which was fine while there was
 // exactly one venue and is a defect the moment there are two.
 function shareText(client, link) {
-  const from = currentSession().name || 'us';
-  return `Hello ${client.name}, you can send your order to ${from} here: ${link}`;
+  const from = currentSession().name || t('calc.us');
+  return t('calc.shareText', { client: client.name, from, link });
 }
 
 // ⚠️ THE CLIPBOARD IS RACED AGAINST A CLOCK, AND THIS IS NOT BELT-AND-BRACES.
@@ -367,8 +367,8 @@ async function copyLink(client, link) {
     copied = false;
   }
   await alertDialog(copied
-    ? `The ordering link for ${client.name} is copied. Paste it into a message.`
-    : `Copy this link and send it to ${client.name}:\n\n${link}`);
+    ? t('calc.linkCopiedFor', { client: client.name })
+    : t('calc.copyThisLinkFor', { client: client.name, link }));
 }
 
 function orderingLinkField(client) {
@@ -393,7 +393,7 @@ function orderingLinkField(client) {
   // have allowed — a screen that refuses what the rules permit is its own bug.
   const canManage = currentSession().canManage === true;
   field.appendChild(el('p', { class: 'cp-hint' }, account
-    ? `${client.name} can send orders straight into the app. Anyone with the link can order as this client, so send it to them and no one else.`
+    ? t('calc.clientCanSendOrders', { client: client.name })
     : canManage
       ? t('calc.createALinkAnd')
       : t('calc.thisClientCannotOrder')));
@@ -419,7 +419,7 @@ function orderingLinkField(client) {
     // link stops working the moment it is replaced, so it is spelled out.
     if (account && !(await confirmDialog({
       title: t('calc.replaceThisLink'),
-      message: `${client.name}’s current link will stop working immediately, including on a phone that is using it right now. Use “Copy link” instead if you only want to send it again.`,
+      message: t('calc.replaceLinkWarning', { client: client.name }),
       okLabel: t('ui.replace'),
       cancelLabel: t('ui.cancel'),
       danger: true,
@@ -449,7 +449,7 @@ function orderingLinkField(client) {
     const revoke = el('button', { class: 'cp-link-revoke', type: 'button' }, t('calc.turnOffOrdering'));
     revoke.addEventListener('click', async () => {
       if (!(await confirmDialog({
-        message: `Stop ${client.name} sending orders through the app? Their link will stop working. Orders they have already sent are kept.`,
+        message: t('calc.stopClientOrdering', { client: client.name }),
         okLabel: t('calc.turnOff'),
         cancelLabel: t('ui.cancel'),
         danger: true,
@@ -505,7 +505,7 @@ function productCard(client, product, pi) {
   // Recipe. A product whose recipe was deleted is re-homed onto the first one, so the
   // select always shows something real rather than an empty box.
   const recipes = getRecipes(working);
-  const recipeSel = el('select', { class: 'cp-prod-dough', 'aria-label': 'Recipe' });
+  const recipeSel = el('select', { class: 'cp-prod-dough', 'aria-label': t('aria.recipe') });
   for (const r of recipes) recipeSel.appendChild(el('option', { value: r.id }, r.name));
   const known = recipes.some(r => r.id === product.recipeId);
   if (!known && recipes[0]) product.recipeId = recipes[0].id;
