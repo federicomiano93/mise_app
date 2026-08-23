@@ -95,7 +95,7 @@
        translucent circle, and Federico spotted exactly that the last time it
        happened. .home-up-btn only adjusts what this header needs. -->
   <button id="home-up-btn" class="overlay-back-btn home-up-btn" type="button"
-          aria-label="All my businesses" hidden>
+          data-i18n="aria.allMyBusinesses" data-i18n-attr="aria-label" aria-label="All my businesses" hidden>
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
   </button>
   <div>
@@ -117,7 +117,7 @@
        Empty (and hidden) when no order is due or it has already shown today. -->
   <div id="home-reminder"></div>
 
-  <nav class="home-grid" aria-label="Main sections">
+  <nav class="home-grid" data-i18n="aria.mainSections" data-i18n-attr="aria-label" aria-label="Main sections">
 
     <a class="home-card" href="calculator.html" data-section="calculator">
       <span class="home-card-icon" aria-hidden="true">

@@ -290,6 +290,32 @@ const DICTIONARIES = Object.freeze({
     'section.pastries.sub': 'The seven weekday proving lists',
     'section.foodcost.sub': 'Prices, margins and labels',
 
+    // ── What each page calls itself in the browser tab ───────────────────────
+    // ⚠️ THE INSTALLED APP'S NAME IS NOT HERE, and deliberately. That comes from
+    // manifest.json, which a phone reads once WHEN THE APP IS INSTALLED and never
+    // again — it cannot be per-language, and changing it costs a re-install by hand
+    // on every phone (v1.56.1, v1.58.1). These are the page titles, which follow the
+    // reader like everything else drawn on screen.
+    'title.calculator': 'Dough calculator — Misé',
+    'title.catalogue': 'Recipe catalogue — Misé',
+    'title.foodcost': 'Food cost — Misé',
+    'title.orders': 'Orders — Misé',
+    'title.pastries': 'Pastries — Misé',
+    'title.suppliers': 'Suppliers & ingredients — Misé',
+
+    // ── What a screen reader says, which nothing on screen shows ─────────────
+    // ⚠️ INVISIBLE, AND THEREFORE THE LAST THING ANYBODY NOTICES. Every icon button
+    // in this app carries an aria-label and every one of them was English: somebody
+    // using VoiceOver in Italian heard «Back», «Home», «Main sections» on every
+    // screen. No screenshot can show this and no measurement can find it.
+    'aria.mainSections': 'Main sections',
+    'aria.ordersSections': 'Orders sections',
+    'aria.orderView': 'Order view',
+    'aria.dayOfWeek': 'Day of the week',
+    'aria.allMyBusinesses': 'All my businesses',
+    'aria.editThisDay': 'Edit this day',
+    'aria.editRecipe': 'Edit recipe',
+
     // ── The app's own customers ─────────────────────────────────────────────
     'bz.title': 'Customer businesses',
     'bz.new': 'New business',
@@ -1349,6 +1375,7 @@ const DICTIONARIES = Object.freeze({
     // `ui.` rather than in a feature namespace because four features already want
     // them, and a fifth copy is a fifth thing to translate.
     'ui.back': 'Back',
+    'ui.send': 'Send',
     'ui.cancel': 'Cancel',
     'ui.delete': 'Delete',
     // ⚠️ THE BUTTON WORDS THE DIALOGS USE. They were written straight into 30-odd
@@ -1922,6 +1949,21 @@ const DICTIONARIES = Object.freeze({
     'section.catalogue.sub': 'Ricette, scalatura e impasto guidato',
     'section.pastries.sub': 'Le sette liste di lievitazione della settimana',
     'section.foodcost.sub': 'Prezzi, margini ed etichette',
+
+    'title.calculator': 'Calcolatore impasti — Misé',
+    'title.catalogue': 'Ricettario — Misé',
+    'title.foodcost': 'Food cost — Misé',
+    'title.orders': 'Ordini — Misé',
+    'title.pastries': 'Paste — Misé',
+    'title.suppliers': 'Fornitori e ingredienti — Misé',
+
+    'aria.mainSections': 'Sezioni principali',
+    'aria.ordersSections': 'Sezioni degli ordini',
+    'aria.orderView': 'Vista dell’ordine',
+    'aria.dayOfWeek': 'Giorno della settimana',
+    'aria.allMyBusinesses': 'Tutte le mie attività',
+    'aria.editThisDay': 'Modifica questo giorno',
+    'aria.editRecipe': 'Modifica ricetta',
 
     'bz.title': 'Attività dei clienti',
     'bz.new': 'Nuova attività',
@@ -2860,6 +2902,7 @@ const DICTIONARIES = Object.freeze({
 
     'ui.home': "Home",
     'ui.back': 'Indietro',
+    'ui.send': 'Manda',
     'ui.cancel': 'Annulla',
     'ui.delete': 'Elimina',
     'ui.discard': 'Scarta',
