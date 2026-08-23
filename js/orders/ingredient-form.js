@@ -30,9 +30,30 @@ import {
 // by the labels screen, so the judgement lives in one place for all three.
 import {
   ALLERGENS, ALLERGEN_GROUPS, NUTRIENTS,
-  allergenLabel, allergenState, checkedAt, isDeclared,
+  allergenState, checkedAt, isDeclared,
   missingNutrients, buildAllergenFields,
 } from '../allergen-model.js';
+// ⚠️⚠️ THE FOOD WORDS ON THIS FORM FOLLOW THE VENUE'S COUNTRY, NEVER THE SCREEN, and
+// that is Federico's decision of 23 Aug 2026: «gli allergeni ed etichette devono essere
+// nella lingua dello stato in cui opera l'app».
+//
+// The reason is sharper than consistency. This form is where somebody DECIDES what a
+// label will say, so the words here have to be the words that will be printed — a
+// person cannot check their own work against a label that renames everything. It is
+// also the law that decides them (Retained Reg. 1169/2011 Art. 15), and a law does not
+// consult a preference. So `allergenName` / `allergenGroupName` / `nutrientName`, asked
+// in the OUTPUT language, replace the fixed English `allergenLabel` used until now.
+//
+// ⚠️ THE CONTROLS AROUND THEM STAY INTERFACE TEXT — «ha», «tracce», «Non ancora
+// verificato». They name no food: they tell the person what to tap, and an employee who
+// reads no English gains nothing from English instructions. The same line js/market.js
+// already drew for INGREDIENT_NAMES_NOTE.
+//
+// ⚠️ AND THIS FILE IS THEREFORE A LABEL FILE. tests/i18n-label-separation.test.mjs says
+// so by walking the app rather than trusting a list: anything asking market.js for a
+// label word is named there and may never touch currentLanguage/setLanguage.
+import { outputLanguage, allergenName, allergenGroupName, nutrientName } from '../market.js';
+import { currentSession } from '../firebase.js';
 // Reading the pack's own ingredient list. PURE, and also from js/ ROOT: the
 // vocabulary it walks is the same one a label is built from, so a second copy is
 // the copy that quietly disagrees about what is in somebody's food.
@@ -220,29 +241,52 @@ function priceHistoryBlock(item, actions) {
 function allergenBlock(item, panels) {
   const boxes = new Map();   // code -> { contains, may }
 
+  // ⚠️ READ WHEN THE FORM IS DRAWN, NEVER AT MODULE LOAD. A module is evaluated once,
+  // at first import — before a venue is open — so a country read up there would be
+  // `null` for ever and every name would fall back to English. That defect was in
+  // fourteen places on 21 Aug (v1.57.0), and here it would silently un-translate the
+  // one screen that must not be guessed at.
+  //
+  // ⚠️ null IS A REAL ANSWER AND IT IS THE SAFE ONE. An unknown country gives no
+  // language, and allergenName() then returns the canonical English — never a blank.
+  // An empty name in a list of allergens is the most dangerous thing this form could
+  // draw, because the row still LOOKS complete.
+  const lang = outputLanguage(currentSession().location);
+
   function tickRow(code) {
     const contains = el('input', { type: 'checkbox' });
     const may = el('input', { type: 'checkbox' });
     contains.checked = (item?.allergens || []).includes(code);
     may.checked = (item?.mayContain || []).includes(code);
     boxes.set(code, { contains, may });
+    // ⚠️ THE NAME IS THE LABEL'S WORD; THE TWO COLUMNS AND THEIR TOOLTIPS ARE NOT.
+    // «has» and «traces» were hardcoded English until now, on a screen that has spoken
+    // Italian since v1.57.0 — so this is an i18n fix as well as a country one.
     return el('div', { class: 'alg-row' }, [
-      el('span', { class: 'alg-name', text: allergenLabel(code) }),
-      el('label', { class: 'day-check alg-tick', title: `Contains ${allergenLabel(code)}` },
-        [contains, el('span', { text: 'has' })]),
-      el('label', { class: 'day-check alg-tick alg-tick--may', title: `May contain traces of ${allergenLabel(code)}` },
-        [may, el('span', { text: 'traces' })]),
+      el('span', { class: 'alg-name', text: allergenName(code, lang) }),
+      el('label', {
+        class: 'day-check alg-tick',
+        title: t('orders.allergen.containsTip', { name: allergenName(code, lang) }),
+      }, [contains, el('span', { text: t('orders.allergen.has') })]),
+      el('label', {
+        class: 'day-check alg-tick alg-tick--may',
+        title: t('orders.allergen.tracesTip', { name: allergenName(code, lang) }),
+      }, [may, el('span', { text: t('orders.allergen.traces') })]),
     ]);
   }
 
   // The two groups the law makes us name individually get their own heading, so
   // 26 boxes read as a structured list rather than a wall of ticks.
-  const GROUP_TITLE = { gluten: t('orders.cerealsContainingGluten'), nuts: 'Nuts' };
+  //
+  // ⚠️ THE HEADINGS ARE FOOD WORDS TOO, AND THEY WERE THE VISIBLE MISMATCH. «Cereals
+  // containing gluten» came from the interface dictionary and «Nuts» was written in
+  // English by hand, so an Italian screen showed «CEREALI CONTENENTI GLUTINE» over rows
+  // reading «Wheat», «Rye». Both now come from the country, together.
   const sections = [];
   for (const group of ALLERGEN_GROUPS) {
     const codes = ALLERGENS.filter(a => a.group === group).map(a => a.code);
     if (codes.length > 1) {
-      sections.push(el('p', { class: 'alg-group', text: GROUP_TITLE[group] || group }));
+      sections.push(el('p', { class: 'alg-group', text: allergenGroupName(group, lang) || group }));
       codes.forEach(code => sections.push(tickRow(code)));
     }
   }
@@ -262,8 +306,11 @@ function allergenBlock(item, panels) {
       value: item?.nutrition && item.nutrition[n.key] != null ? String(item.nutrition[n.key]) : '',
     });
     nutrients.set(n.key, input);
+    // ⚠️ THE NUTRIENT NAMES ARE LABEL WORDS AS MUCH AS THE ALLERGENS ARE: «Energia»,
+    // «di cui acidi grassi saturi» are printed on the declaration, so they follow the
+    // country. The UNIT does not — kJ, g and kcal are the same symbols in both.
     nutritionGrid.appendChild(el('label', { class: 'alg-nut-field' }, [
-      el('span', { class: 'alg-nut-label', text: `${n.label} (${n.unit})` }),
+      el('span', { class: 'alg-nut-label', text: `${nutrientName(n, lang)} (${n.unit})` }),
       input,
     ]));
   }
@@ -318,7 +365,7 @@ function allergenBlock(item, panels) {
       if (m.from > at) marked.appendChild(el('span', { text: text.slice(at, m.from) }));
       marked.appendChild(el('mark', {
         class: 'alg-pack-hit' + (m.traces ? ' alg-pack-hit--traces' : ''),
-        title: allergenLabel(m.code),
+        title: allergenName(m.code, lang),
         text: text.slice(m.from, m.to),
       }));
       at = m.to;
@@ -346,7 +393,7 @@ function allergenBlock(item, panels) {
     // was told.
     for (const q of out.questions) {
       const word = text.slice(q.from, q.to);
-      const names = q.could.map(allergenLabel).filter(Boolean).join(' / ');
+      const names = q.could.map(code => allergenName(code, lang)).filter(Boolean).join(' / ');
       // ⚠️ A CATEGORY IS ITS OWN QUESTION, and it is the one the pack itself
       // raises: «può contenere tracce di FRUTTA A GUSCIO» is a real warning that
       // this app has no box for, because the law wants the specific nut. Left in
@@ -438,7 +485,7 @@ function allergenBlock(item, panels) {
     const when = (checkedAt(draft) || '').slice(0, 10);
     const what = state === 'none'
       ? t('orders.allergen.containsNone')
-      : draft.allergens.map(allergenLabel).join(', ');
+      : draft.allergens.map(code => allergenName(code, lang)).join(', ');
     // ⚠️ TWO WHOLE SENTENCES, not one with a hole in it. The date is optional, and
     // «Checked 2026-08-21 — …» / «Verificato il 2026-08-21 — …» differ by more than
     // the gap: Italian needs «il» before the date and English needs nothing.

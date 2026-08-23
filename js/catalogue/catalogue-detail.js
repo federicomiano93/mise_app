@@ -17,7 +17,13 @@ import {
 } from './catalogue-store.js';
 import { costRecipe, partialCostText } from './recipe-cost-model.js';
 import { recipeAllergens, canLabel, incompleteText, ALLERGEN_REASON_TEXT } from './recipe-allergen-model.js';
-import { allergenLabel } from '../allergen-model.js';
+// ⚠️⚠️ WHAT A RECIPE CONTAINS IS NAMED IN THE VENUE'S COUNTRY'S LANGUAGE, NOT THE
+// SCREEN'S (Federico, 23 Aug 2026). This card is read by whoever is asked «are there
+// nuts in this?» and it must agree, word for word, with the label the same recipe
+// prints — one of the two saying «Hazelnut» and the other «Nocciole» is how somebody
+// stops trusting either. The words AROUND the list («may contain», «not declared»)
+// stay interface text: they address the reader, not the consumer.
+import { outputLanguage, allergenName } from '../market.js';
 // Whether this venue tracks allergens at all. From js/ root: Orders sets the switch
 // and the Catalogue obeys it, so the judgement lives in one file for both.
 import { allergensOn } from '../venue-features.js';
@@ -120,6 +126,12 @@ function allergenPanel(recipe, app) {
     recipes: getRecipesById(),
   });
 
+  // ⚠️ READ HERE, WHEN THE CARD IS BUILT — never at module load, where no venue is open
+  // yet and every name would freeze as English (the v1.57.0 defect). An unknown country
+  // gives null, and allergenName() then returns the canonical English rather than a
+  // blank: a missing name in a list of allergens still LOOKS like a complete answer.
+  const lang = outputLanguage(currentSession().location);
+
   const panel = el('div', { class: 'cat-alg-panel' });
 
   // ⚠️⚠️ THE CARD FOLDS SHUT, AND WHAT STAYS OUTSIDE THE FOLD IS THE WHOLE DESIGN.
@@ -175,7 +187,7 @@ function allergenPanel(recipe, app) {
     // What IS known so far, marked as explicitly NOT an answer.
     if (result.allergens.length) {
       body.appendChild(el('p', { class: 'cat-alg-sofar',
-        text: t('cat.alg.soFar', { list: result.allergens.map(allergenLabel).join(', ') }) }));
+        text: t('cat.alg.soFar', { list: result.allergens.map(c => allergenName(c, lang)).join(', ') }) }));
     }
     return panel;
   }
@@ -185,12 +197,15 @@ function allergenPanel(recipe, app) {
   // at the counter needs in the moment they are asked; putting it behind a tap means
   // a rushed answer given without opening it.
   panel.appendChild(el('p', { class: 'cat-alg-list', text: result.allergens.length
-    ? result.allergens.map(allergenLabel).join(', ')
+    ? result.allergens.map(c => allergenName(c, lang)).join(', ')
+    // ⚠️ «None of the 14» STAYS INTERFACE TEXT, deliberately. It names no food — it is a
+    // sentence about this recipe, addressed to the person reading the screen. The label
+    // has its own wording for the same fact, chosen by the country, in market.js.
     : t('cat.noneOfThe14') }));
   panel.appendChild(body);
   if (result.mayContain.length) {
     body.appendChild(el('p', { class: 'cat-alg-traces',
-      text: t('cat.alg.mayContain', { list: result.mayContain.map(allergenLabel).join(', ') }) }));
+      text: t('cat.alg.mayContain', { list: result.mayContain.map(c => allergenName(c, lang)).join(', ') }) }));
   }
   // ⚠️ THE SENTENCE THAT MUST NOT BE DROPPED. The app gathers what it was told;
   // it cannot know what happened on the bench this morning, and a screen that
