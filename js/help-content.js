@@ -73,6 +73,12 @@ export const HELP = {
       'help.suppliersEverythingYouBuy',
       'help.suppliersAllergensLiveHere',
       'help.suppliersPasteThePack',
+      // ⚠️ THE SWITCH IS NAMED HERE BECAUSE ITS EFFECT IS INVISIBLE FROM THE SCREEN
+      // IT CHANGES. Somebody who finds a recipe with no allergen card, or an
+      // ingredient with no tick boxes, has no way of knowing a setting did that —
+      // and the setting lives on a different page from four of the five screens it
+      // hides. This is the one place that can say so before they go looking.
+      'help.suppliersTurnThemOff',
     ],
   },
 
