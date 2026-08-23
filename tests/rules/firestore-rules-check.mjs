@@ -765,6 +765,36 @@ async function neighbours() {
     wholeWrite('locations/main/recipes/r1',
       { bakery: 'main', name: 'Focaccia', ingredients: [], costPerKg: 3.2 }));
 
+  // ── The two weighings the loss is worked out from ──
+  // ⚠️ They do NOT replace lossPct — that is still the field every reader uses. They
+  // are stored so reopening the editor can show the numbers somebody typed.
+  await expectAllowed('a recipe may record the dough before and after the oven', () =>
+    wholeWrite('locations/main/recipes/r1', {
+      bakery: 'main', name: 'Focaccia', ingredients: [], lossPct: 20,
+      rawGrams: 1000, cookedGrams: 800,
+    }));
+  // ⚠️ THE CASE THAT BREAKS EVERY PHONE IF IT IS WRONG. Rules reach every device the
+  // instant they deploy; code arrives one device at a time. A phone still on the old
+  // build sends neither weight and must keep saving.
+  await expectAllowed('…and a phone that has not updated yet, sending neither, still saves', () =>
+    wholeWrite('locations/main/recipes/r1',
+      { bakery: 'main', name: 'Focaccia', ingredients: [], lossPct: 20 }));
+  await expectAllowed('one weight without the other is still legal', () =>
+    wholeWrite('locations/main/recipes/r1',
+      { bakery: 'main', name: 'Focaccia', ingredients: [], rawGrams: 1000 }));
+  await expectDenied('a weight sent as text', () =>
+    wholeWrite('locations/main/recipes/r1',
+      { bakery: 'main', name: 'Focaccia', ingredients: [], rawGrams: '1000' }));
+  await expectDenied('a negative raw weight', () =>
+    wholeWrite('locations/main/recipes/r1',
+      { bakery: 'main', name: 'Focaccia', ingredients: [], rawGrams: -1 }));
+  await expectDenied('a negative cooked weight', () =>
+    wholeWrite('locations/main/recipes/r1',
+      { bakery: 'main', name: 'Focaccia', ingredients: [], cookedGrams: -1 }));
+  await expectDenied('a runaway weight', () =>
+    wholeWrite('locations/main/recipes/r1',
+      { bakery: 'main', name: 'Focaccia', ingredients: [], cookedGrams: 10000001 }));
+
   // ── The guided mixing procedure ──
   // A step's own fields are NOT checked and cannot be (rules cannot look inside a
   // list) — js/catalogue/guided-model.js owns that. Only the list itself is.

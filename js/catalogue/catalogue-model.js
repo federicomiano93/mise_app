@@ -130,6 +130,14 @@ export function normalizeCatalogueRecipe(raw) {
   // The closing message shown at the end of a guided mix, carried through on the
   // same terms and for the same reason: absent rather than empty.
   if (typeof raw.endNote === 'string' && raw.endNote.trim()) out.endNote = raw.endNote;
+  // The two weighings the loss is worked out FROM. Absent rather than 0 on the same
+  // terms and for the same reason as the two above: every recipe written before this
+  // existed has a lossPct and no weights, and must stay byte-identical until somebody
+  // actually puts a scale under the dough.
+  const rawG = normalizeWeight(raw.rawGrams);
+  const cookedG = normalizeWeight(raw.cookedGrams);
+  if (rawG > 0) out.rawGrams = rawG;
+  if (cookedG > 0) out.cookedGrams = cookedG;
   return out;
 }
 
@@ -147,6 +155,61 @@ export function normalizeLossPct(raw) {
   const n = Number(raw);
   if (!Number.isFinite(n) || n <= 0) return 0;
   return Math.min(n, MAX_LOSS_PCT);
+}
+
+// ── The two weighings the loss is worked out FROM ────────────────────────────
+//
+// A percentage is a number nobody has: it has to be worked out from a dough weighed
+// before the oven and the same dough weighed after. Asking for the percentage is why
+// the field sat at 0 on every recipe, and a 0 there is what makes a baked product look
+// cheaper than it is. So the editor asks for the two weights and does the arithmetic.
+//
+// ⚠️ WHAT IS STORED IS STILL `lossPct`. The cost model, the label, Food Cost and the
+// recipe screen all read that field and none of them changes. The weights are kept
+// beside it only so reopening the editor can show the numbers somebody typed.
+
+// A bound, not a judgement: it exists to stop a runaway value reaching the database,
+// the same reason the ingredient list is capped at 300 rows. Ten tonnes of dough.
+export const MAX_WEIGHT_G = 10000000;
+
+export function normalizeWeight(raw) {
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  return Math.min(n, MAX_WEIGHT_G);
+}
+
+// (raw − cooked) / raw, as a percentage.
+//
+// ⚠️ THE WHOLE DECISION LIVES HERE, NOT IN THE VIEW, so a test can reach it — the same
+// reason rowState() was moved out of the allergen sheet. `pct: null` is NOT zero: zero
+// is "nothing is lost", null is "these two numbers do not answer the question", and the
+// editor must keep the recipe's stored loss in that case rather than overwrite it.
+export function weightLoss(rawGrams, cookedGrams) {
+  const before = normalizeWeight(rawGrams);
+  const after = normalizeWeight(cookedGrams);
+  if (before <= 0 || after <= 0) return { pct: null, problem: null };
+  // ⚠️ Nothing gains weight in an oven. Answering 0 here would quietly turn a typo into
+  // "this recipe loses nothing", which is the exact direction that makes a product look
+  // cheaper than it is.
+  if (after > before) return { pct: null, problem: 'cookedHeavier' };
+  // Rounded to a tenth so the number SHOWN is the number STORED — 8380 g down to 7374 g
+  // is 12.005%, and a screen saying 12% while the database holds 12.005 is a screen
+  // nobody can reconcile.
+  const exact = Math.round(((before - after) / before) * 1000) / 10;
+  const pct = normalizeLossPct(exact);
+  // ⚠️ Capped at 99 like every other route to this field, and the view says so: a cooked
+  // weight of almost nothing is a typo far more often than it is a recipe.
+  return { pct, problem: exact > MAX_LOSS_PCT ? 'capped' : null };
+}
+
+// The other direction, and it is FOR DISPLAY ONLY. A recipe written before this feature
+// has a stored lossPct and no weights; showing the cooked box empty would read as "we do
+// not know", when in fact somebody did say. So the box shows what that percentage means
+// against today's total — and ⚠️ NOTHING WRITES IT BACK unless a person edits a box.
+export function cookedFromLossPct(rawGrams, pct) {
+  const before = normalizeWeight(rawGrams);
+  if (before <= 0) return 0;
+  return Math.round(before * (1 - normalizeLossPct(pct) / 100));
 }
 
 // A list of catalogue recipes, dropping junk entries.

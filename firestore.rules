@@ -1377,7 +1377,8 @@ service cloud.firestore {
         allow read: if member(lid)
           && (sectionOn(lid, 'catalogue') || sectionOn(lid, 'foodcost'));
         allow create, update: if canUse(lid, 'catalogue')
-          && request.resource.data.keys().hasOnly(['bakery', 'name', 'ingredients', 'lossPct', 'steps', 'endNote'])
+          && request.resource.data.keys().hasOnly(['bakery', 'name', 'ingredients', 'lossPct', 'steps', 'endNote',
+                                                   'rawGrams', 'cookedGrams'])
           && stampedFor(lid)
           && request.resource.data.name is string
           && request.resource.data.name.size() > 0
@@ -1391,6 +1392,27 @@ service cloud.firestore {
               || (request.resource.data.lossPct is number
                   && request.resource.data.lossPct >= 0
                   && request.resource.data.lossPct <= 99))
+          // The two weighings that lossPct is now worked out FROM: the dough before the
+          // oven and the same dough after. ⚠️ THEY DO NOT REPLACE lossPct — that is
+          // still the field every reader uses (the cost model, the label, Food Cost) —
+          // they are kept so reopening the editor can show the numbers somebody typed.
+          //
+          // ⚠️ OPTIONAL IN BOTH DIRECTIONS, for the reason written at the top of this
+          // block: a phone still on the previous version sends neither and must keep
+          // saving, and a phone on the new one sends both and must not be refused.
+          //
+          // ⚠️ BOUNDED, NOT JUDGED. Ten tonnes — the cap exists to stop a runaway value
+          // reaching the database, the same reason the ingredient list is capped at 300.
+          // The RATIO between the two is what matters and the client computes it; a rule
+          // cannot check arithmetic it would have to redo.
+          && (!('rawGrams' in request.resource.data)
+              || (request.resource.data.rawGrams is number
+                  && request.resource.data.rawGrams >= 0
+                  && request.resource.data.rawGrams <= 10000000))
+          && (!('cookedGrams' in request.resource.data)
+              || (request.resource.data.cookedGrams is number
+                  && request.resource.data.cookedGrams >= 0
+                  && request.resource.data.cookedGrams <= 10000000))
           // The guided mixing procedure: an ordered list of steps, each naming the
           // rows to add, how long to run, and at what speed. ⚠️ A STEP'S CONTENTS
           // ARE NOT VALIDATED HERE AND CANNOT BE — same list limitation as the
