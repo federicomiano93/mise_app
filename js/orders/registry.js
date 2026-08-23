@@ -38,6 +38,11 @@ import { ingredientLabel } from './archive.js';
 import { formatPricePerUnit } from '../price-model.js';
 import { allergenState } from '../allergen-model.js';
 import { buildIngredientForm } from './ingredient-form.js';
+// ⚠️ A FEATURE SWITCH, NOT A ROLE GATE, and the difference is why this may sit in a
+// file that is forbidden to ask canManageHere(). It answers «does this venue track
+// allergens at all», which is the same answer for everybody standing in the building.
+import { ingredientPanels, setIngredientPanel } from './firebase-features.js';
+import { buildRegistrySettings } from './registry-settings.js';
 import {
   BACK_ICON, field, formActions, makeDayChecks, checkedDays, mgmtRow, reportFailure,
 } from './mgmt-ui.js';
@@ -257,7 +262,13 @@ export function buildRegistry(data, actions) {
     // ⚠️ A WORD, NEVER A COLOUR ALONE (P18, and the v1.63.0 rule). «Not declared»
     // and «contains none of the 14» look identical as an empty allergen list, and
     // only the verification stamp tells them apart.
-    if (allergenState(item) === 'unknown') {
+    //
+    // ⚠️ AND IT GOES WITH THE FEATURE. A venue that does not track allergens must not
+    // be told that sixty-seven of its products are «non dichiarato» — that is a job
+    // list for work it has decided not to do, pointing at a form it can no longer
+    // open. Read per row rather than captured per paint: the switch can be thrown
+    // while this screen is open.
+    if (ingredientPanels().allergens && allergenState(item) === 'unknown') {
       row.querySelector('.mgmt-item-main').appendChild(
         el('span', { class: 'reg-flag', text: t('orders.notDeclaredShort') }));
     }
@@ -390,6 +401,29 @@ export function buildRegistry(data, actions) {
     });
   }
 
+  // ── The two switches ────────────────────────────────────────────────────────
+  //
+  // ⚠️ REACHED FROM THE GEAR IN THE PAGE HEADER, which registry-main.js hides from
+  // anybody who is not an owner or a manager — and the server refuses the change
+  // regardless of what this page draws (P2).
+  //
+  // ⚠️ IT LIVES ON THIS SCREEN AND NOT IN THE CATALOGUE'S SETTINGS, though the
+  // catalogue is where most of what it hides is READ. A venue can have Orders and no
+  // Catalogue — the restaurant does, today — and putting the switch there would leave
+  // that venue with the allergen form and no way to switch it off. This is also where
+  // Federico asked for it: «il settings degli ingredienti».
+  function openSettings() {
+    push(() => overlay(t('ui.settings'), buildRegistrySettings({
+      panels: ingredientPanels(),
+      onSet: async (key, on) => {
+        await setIngredientPanel(key, on);
+        // The rows behind the overlay carry the «non dichiarato» flag, so they are
+        // wrong the moment the switch moves.
+        paintList();
+      },
+    })));
+  }
+
   // ── The overlay stack ───────────────────────────────────────────────────────
   function overlay(title, body) {
     return el('div', { class: 'mgmt-overlay' }, [
@@ -441,7 +475,7 @@ export function buildRegistry(data, actions) {
   }
 
   paintList();
-  return { node, refresh };
+  return { node, refresh, openSettings };
 }
 
 const CHEVRON_SVG =

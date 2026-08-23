@@ -26,6 +26,10 @@ import { confirmDialog } from './confirm-dialog.js';
 // The session, for the venue's own document: its country decides what language a
 // label is printed in. Imported from js/ root, not from a feature folder.
 import { currentSession, onSession } from '../firebase.js';
+// Whether this venue tracks allergens at all — the switch lives in Orders
+// («Fornitori e ingredienti» → Impostazioni) and every screen that shows an allergen
+// obeys it. From js/ root, so both halves of the app read one answer.
+import { allergensOn } from '../venue-features.js';
 
 const screen = document.getElementById('catScreen');
 const titleEl = document.getElementById('catTitle');
@@ -97,6 +101,17 @@ function setHeader({ title, sub, back, add, edit = false, footer = false }) {
   // from an employee regardless (functions/onboarding.js), proved with a second
   // account in v1.60.0.
   settingsBtn.hidden = currentSession().canManage !== true;
+  // ⚠️⚠️ AND THE ALLERGEN BUTTON FOLLOWS THE VENUE, NOT THE PERSON. This is the other
+  // half of the switch in «Fornitori e ingredienti» → Impostazioni: a venue that does
+  // not track allergens must not be offered a sheet that would list every recipe as
+  // «non dichiarato» about data nobody there can reach any more.
+  //
+  // ⚠️ IT IS NOT A ROLE GATE AND MUST NEVER BECOME ONE. Everybody in a venue that DOES
+  // track allergens keeps this button, employees first — see the note above.
+  allergensBtn.hidden = !allergensOn(currentSession().location);
+  // With one of the two gone the bar can be empty, and an empty bar is a grey strip
+  // that does nothing. Derived, never typed: add a third button and it comes back.
+  if (footer) footerEl.hidden = ![...footerEl.children].some(child => !child.hidden);
 }
 
 function swap(node) {

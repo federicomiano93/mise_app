@@ -37,6 +37,9 @@ import {
 // vocabulary it walks is the same one a label is built from, so a second copy is
 // the copy that quietly disagrees about what is in somebody's food.
 import { readPackIngredients } from '../allergen-match.js';
+// Which of the two optional panels this venue uses. ⚠️ A VENUE-WIDE DISPLAY SWITCH,
+// never a role and never a data switch — see the note on allergenBlock below.
+import { ingredientPanels } from './firebase-features.js';
 
 // ── The price block ───────────────────────────────────────────────────────────
 // One number and a unit. The rate is typed rather than derived from a pack
@@ -206,7 +209,15 @@ function priceHistoryBlock(item, actions) {
 // an ingredient as verified, then correcting a spelling would declare it
 // allergen-free — and that declaration is the one thing here that can put
 // somebody in hospital. It has to be somebody saying so, on purpose.
-function allergenBlock(item) {
+//
+// ⚠️⚠️ EVERYTHING IS BUILT EVEN WHEN IT IS NOT SHOWN, AND THAT IS THE PROPERTY THAT
+// MAKES THE SWITCHES SAFE. `panels` decides what goes into the DOM; the tick boxes,
+// the nutrition inputs and the pack text are created from the stored ingredient
+// either way, so read() hands back exactly what was there and an ordinary rename
+// saves it untouched. Skipping the build would make a display switch into a data
+// switch: opening a product on a venue that has allergens turned off and correcting
+// its brand would silently erase every allergen it declares.
+function allergenBlock(item, panels) {
   const boxes = new Map();   // code -> { contains, may }
 
   function tickRow(code) {
@@ -353,7 +364,12 @@ function allergenBlock(item) {
   }
 
   const suggestBtn = el('button', {
-    class: 'mgmt-btn alg-pack-btn', type: 'button', text: t('orders.pack.suggest'),
+    // ⚠️ `.mgmt-btn` IS DEFINED IN NO STYLESHEET, and never was — this button has
+    // rendered as a bare grey browser rectangle since v1.64.0 shipped it on 22 Aug.
+    // Verified against a clean `main` worktree before blaming this release: main does
+    // it too. `.btn-secondary` is the name this app already gives a secondary action,
+    // and it is in orders.css, which this page loads. Nothing was designed.
+    class: 'btn-secondary alg-pack-btn', type: 'button', text: t('orders.pack.suggest'),
     onclick: suggest,
   });
 
@@ -375,22 +391,47 @@ function allergenBlock(item) {
     });
   }
 
+  // The word on the folded header, and the word on the nutrition one. Set by
+  // refresh() below; empty until then.
+  const algHeadState = el('span', { class: 'alg-head-state' });
+  const nutHeadState = el('span', { class: 'alg-head-state' });
+
   // The live line at the top: which of the three states this ingredient is in.
   // ⚠️ It says "not checked" in the app's warning colour on purpose — an
   // ingredient nobody has declared blocks every label it appears in, and that
   // has to look like a job rather than a blank.
+  //
+  // ⚠️⚠️ THE STATUS LINE STAYS OUTSIDE THE FOLD, THE TICK BOXES GO INSIDE IT. That
+  // split is the whole design of the fold, and it is the same rule the recipe's own
+  // allergen card follows (v1.60.0): the ANSWER is never behind a tap, only the JOB
+  // is. Somebody asked «are there nuts in this?» reads it without touching anything.
   function refresh() {
     const draft = read();
     const state = allergenState(draft);
     const missing = missingNutrients({ nutrition: draft.nutrition });
-    const nutritionNote = missing.length === NUTRIENTS.length
+    // ⚠️ IT MOVED OUT OF THE ALLERGEN SENTENCE AND ONTO ITS OWN HEADER. Nutrition is
+    // its own section now, so leaving its note inside «Verificato il … —» would be
+    // one section reporting another's state — and the two can disagree the moment
+    // nutrition is switched off.
+    nutHeadState.textContent = missing.length === NUTRIENTS.length
       ? t('orders.noNutritionYet')
       : (missing.length
         ? t('orders.nutritionStillEmpty', { n: missing.length, total: NUTRIENTS.length })
         : t('orders.nutritionComplete'));
+    nutHeadState.className = 'alg-head-state' + (missing.length ? '' : ' alg-head-state--ok');
 
+    algHeadState.textContent = state === 'unknown'
+      ? t('orders.notDeclaredShort')
+      : t('orders.declaredShort');
+    algHeadState.className = 'alg-head-state'
+      + (state === 'unknown' ? ' alg-head-state--warn' : ' alg-head-state--ok');
+
+    // ⚠️ `note: ''` AND THEN TRIMMED. The three sentences end in «{note}», which used
+    // to carry the nutrition line; the placeholder is kept rather than removed
+    // because the same three phrases are pinned by the i18n suites, and an empty one
+    // simply leaves a trailing space.
     if (state === 'unknown') {
-      status.textContent = t('orders.allergen.notCheckedYet', { note: nutritionNote });
+      status.textContent = t('orders.allergen.notCheckedYet', { note: '' }).trim();
       status.className = 'alg-status alg-status--unknown';
       return;
     }
@@ -401,9 +442,9 @@ function allergenBlock(item) {
     // ⚠️ TWO WHOLE SENTENCES, not one with a hole in it. The date is optional, and
     // «Checked 2026-08-21 — …» / «Verificato il 2026-08-21 — …» differ by more than
     // the gap: Italian needs «il» before the date and English needs nothing.
-    status.textContent = when
-      ? t('orders.allergen.checkedOn', { date: when, what, note: nutritionNote })
-      : t('orders.allergen.checkedNoDate', { what, note: nutritionNote });
+    status.textContent = (when
+      ? t('orders.allergen.checkedOn', { date: when, what, note: '' })
+      : t('orders.allergen.checkedNoDate', { what, note: '' })).trim();
     status.className = 'alg-status alg-status--ok';
   }
 
@@ -415,27 +456,78 @@ function allergenBlock(item) {
   checked.addEventListener('change', refresh);
   refresh();
 
-  const root = el('div', { class: 'mgmt-field alg-block' }, [
-    el('span', { class: 'mgmt-field-label', text: t('orders.allergensAndNutrition') }),
-    status,
-    el('p', { class: 'notif-note', text: t('orders.copyThisFromThe') }),
-    // ⚠️ THE PACK BOX SITS ABOVE THE 52 TICK BOXES, not below them. It is the
-    // fast way to fill them in; below, it would be the thing you find after
-    // doing the job by hand.
-    el('div', { class: 'alg-pack' }, [
-      el('span', { class: 'mgmt-field-label', text: t('orders.pack.label') }),
-      el('p', { class: 'notif-note', text: t('orders.pack.help') }),
-      packBox,
-      suggestBtn,
-      packResult,
-    ]),
-    el('div', { class: 'alg-list' }, sections),
-    el('label', { class: 'day-check alg-checked' }, [checked, el('span', { text: t('orders.iHaveCheckedThe') })]),
-    el('p', { class: 'mgmt-field-label alg-nut-title', text: t('orders.per100G') }),
-    nutritionGrid,
-  ]);
+  const root = el('div', { class: 'mgmt-field alg-block' });
+
+  // ⚠️ FEDERICO'S INSTRUCTION READ LITERALLY: «i dati e prezzo restano visibili sempre,
+  // invece il resto rendilo una casella che quando clicchi si apre». His four
+  // screenshots are the argument — the record was four screens of scrolling, and the
+  // two longest parts of it are the two nobody looks at while correcting a brand.
+  //
+  // ⚠️ CLOSED ON EVERY OPEN, deliberately not remembered. Same as the recipe's card:
+  // remembering it open would quietly undo the change on the screen it was made for.
+  if (panels.allergens) {
+    root.appendChild(fold({
+      title: t('orders.section.allergens'),
+      state: algHeadState,
+      // The answer, and the caveat that qualifies it. Outside the fold.
+      above: [status],
+      body: [
+        el('p', { class: 'notif-note', text: t('orders.copyThisFromThe') }),
+        // ⚠️ THE PACK BOX SITS ABOVE THE 52 TICK BOXES, not below them. It is the
+        // fast way to fill them in; below, it would be the thing you find after
+        // doing the job by hand.
+        el('div', { class: 'alg-pack' }, [
+          el('span', { class: 'mgmt-field-label', text: t('orders.pack.label') }),
+          el('p', { class: 'notif-note', text: t('orders.pack.help') }),
+          packBox,
+          suggestBtn,
+          packResult,
+        ]),
+        el('div', { class: 'alg-list' }, sections),
+        el('label', { class: 'day-check alg-checked' }, [checked, el('span', { text: t('orders.iHaveCheckedThe') })]),
+      ],
+    }));
+  }
+
+  if (panels.nutrition) {
+    root.appendChild(fold({
+      title: t('orders.section.nutrition'),
+      state: nutHeadState,
+      above: [],
+      body: [
+        el('p', { class: 'mgmt-field-label alg-nut-title', text: t('orders.per100G') }),
+        nutritionGrid,
+      ],
+    }));
+  }
 
   return { root, read };
+}
+
+// One collapsible section: a head that is the whole tap target, whatever must stay
+// readable without opening it, then the half that folds.
+//
+// ⚠️ THE SAME SHAPE js/catalogue/catalogue-detail.js USES, on purpose — one fold
+// pattern in one app. It is written out again rather than imported because the
+// Catalogue's copy lives in another feature's folder and this app does not let one
+// feature import another's (see the project's hygiene rules); the STYLES are the
+// borrowed half, copied name for name into orders.css.
+function fold({ title, state, above, body }) {
+  const inner = el('div', { class: 'mgmt-fold-body', hidden: 'hidden' }, body);
+  const btn = el('button', {
+    type: 'button', class: 'mgmt-fold-head', 'aria-expanded': 'false',
+    onClick: () => {
+      const open = inner.hidden;
+      inner.hidden = !open;
+      btn.setAttribute('aria-expanded', String(open));
+      btn.classList.toggle('mgmt-fold-head--open', open);
+    },
+  }, [
+    el('span', { class: 'mgmt-fold-label', text: title }),
+    state,
+    el('span', { class: 'mgmt-fold-chev', 'aria-hidden': 'true', text: '›' }),
+  ]);
+  return el('div', { class: 'mgmt-fold' }, [btn, ...above, inner]);
 }
 
 // ── The form ──────────────────────────────────────────────────────────────────
@@ -482,7 +574,10 @@ export function buildIngredientForm({ item, suppliers, preset, actions, onDone, 
   // of the ingredient document was for.
   const mayPrice = canManageHere();
   const price = mayPrice ? priceBlock(item, actions) : null;
-  const allergens = allergenBlock(item);
+  // ⚠️ NOT A ROLE, A VENUE. Everybody in the building gets the same answer here: it
+  // says whether this business tracks allergens and nutrition at all, and the two
+  // switches behind it live one screen away (js/orders/registry-settings.js).
+  const allergens = allergenBlock(item, ingredientPanels());
 
   const save = el('button', { type: 'button', class: 'btn-primary', onClick: async () => {
     // The supplier is no longer required — only the name is.
@@ -532,6 +627,13 @@ export function buildIngredientForm({ item, suppliers, preset, actions, onDone, 
     // «Impostazioni» and something had to name the form. The form now has a header
     // of its own that says «Modifica ingrediente», so the h2 said it a second time,
     // 40px below the first. Seen in a screenshot, not in a measurement.
+    //
+    // ⚠️ THE HEADING IS NOT A SECOND NAME FOR THE FORM — it is the first of four
+    // sections, and the price block below already carries the matching one. Without
+    // it the six fields would be the only unnamed part of a screen where everything
+    // else is named, which is what makes «Prezzo» look like the start of the record
+    // rather than its second half.
+    el('h3', { class: 'mgmt-section-title', text: t('orders.section.productData') }),
     field(t('orders.field.name'), name),
     field(t('orders.field.supplier'), supplierSelect),
     field(t('orders.field.brand'), brand),

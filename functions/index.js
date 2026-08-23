@@ -318,7 +318,7 @@ export const notifyOrderRequest = onDocumentCreated(
 export {
   createWorkspace, listWorkspaces, reissueOwnerLink, deleteWorkspace,
   createJoinCode, redeemJoinCode, setMemberRole, setMemberName,
-  setLocationLanguage, setRecipePhoto,
+  setLocationLanguage, setRecipePhoto, setIngredientPanels,
 } from './onboarding.js';
 
 // Reading a photographed recipe. ⚠️ THE ONLY FUNCTION HERE THAT HOLDS A REAL

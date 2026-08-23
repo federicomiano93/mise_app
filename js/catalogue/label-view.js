@@ -20,6 +20,7 @@ import {
   canPrintLabel, outputLanguage, labelWord, allergenName, nutrientName,
   labelLanguageNote, ingredientNamesNote, noCountryReason,
 } from '../market.js';
+import { allergensOn } from '../venue-features.js';
 
 const SHOW_LABELS = Object.freeze({
   allergens: 'Allergens',
@@ -82,6 +83,21 @@ export function renderLabel({ recipe, ingredients, recipesById, location, initia
 
   function paint() {
     paintSwitch();
+
+    // ⚠️⚠️ NO ALLERGENS, NO LABEL. A venue can switch allergen tracking off
+    // («Fornitori e ingredienti» → Impostazioni), and when it has, the way here is
+    // already gone: the button lives inside the recipe's allergen card and that card
+    // is not drawn. This is the belt to that brace, and it is on this file rather
+    // than only on the door because of what this screen produces — a printed label
+    // with no allergen line is worse than no label at all, and the next door
+    // somebody adds will not remember to check.
+    if (!allergensOn(location)) {
+      body.replaceChildren(el('div', { class: 'lab-blocked' }, [
+        el('p', { class: 'lab-blocked-title', text: t('label.blocked') }),
+        el('p', { class: 'lab-blocked-text', text: t('label.blocked.allergensOff') }),
+      ]));
+      return;
+    }
 
     // ⚠️⚠️ NO COUNTRY, NO LABEL — AND DELIBERATELY NOT A FALLBACK TO ENGLISH.
     // Every venue in production today is in the UK, so English would be right for

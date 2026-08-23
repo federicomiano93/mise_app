@@ -843,3 +843,64 @@ export const setRecipePhoto = onCall(CALL, async (request) => {
   await db().doc(`locations/${locationId}`).set({ recipePhoto: enabled }, { merge: true });
   return { recipePhoto: enabled };
 });
+
+
+// Which of the two optional panels this venue uses on an ingredient's record.
+//
+// ⚠️⚠️ THE OPPOSITE DEFAULT TO setRecipePhoto ABOVE, AND THE REASON IS SAFETY, NOT
+// SYMMETRY. The photo reader spends money, so its absence must mean OFF. These hide
+// the allergen screens, so their absence must mean ON: a venue that has never heard
+// of the keys, a document that failed to load, a corrupt value — all three have to
+// leave the allergen card exactly where it was. The app reads them as `!== false`
+// (js/venue-features.js); this only ever writes a real boolean, so the two can
+// never disagree about what a missing key means.
+//
+// ⚠️ ONE CALL, BOTH FIELDS, EACH OPTIONAL. The screen throws one switch at a time
+// and sends only that one — a call carrying both would let a stale screen put the
+// other one back to whatever it was showing when it was drawn.
+//
+// ⚠️ AND NOTHING IS DELETED. This writes two booleans onto the LOCATION document;
+// every tick, verification stamp and nutrition figure lives on the ingredient
+// documents and is not touched by any path in this function.
+export const setIngredientPanels = onCall(CALL, async (request) => {
+  const uid = requireAuth(request);
+  const { locationId, showAllergens, showNutrition } = request.data || {};
+
+  if (typeof locationId !== 'string' || !locationId) {
+    throw new HttpsError('invalid-argument', 'Which location?');
+  }
+
+  // Built field by field rather than spread from the request: `undefined` is not a
+  // value Firestore will store, and a spread would also carry through anything else
+  // the caller happened to put in the payload — onto the one document holding
+  // `sections` and `country`.
+  const patch = {};
+  if (showAllergens !== undefined) {
+    if (typeof showAllergens !== 'boolean') {
+      throw new HttpsError('invalid-argument', 'On or off?');
+    }
+    patch.showAllergens = showAllergens;
+  }
+  if (showNutrition !== undefined) {
+    if (typeof showNutrition !== 'boolean') {
+      throw new HttpsError('invalid-argument', 'On or off?');
+    }
+    patch.showNutrition = showNutrition;
+  }
+  // ⚠️ AN EMPTY PATCH IS REFUSED, NOT QUIETLY ACCEPTED. `set({}, {merge:true})`
+  // succeeds and changes nothing, so a screen that sent the wrong field name would
+  // report success and show the switch moving back on the next page load.
+  if (!Object.keys(patch).length) {
+    throw new HttpsError('invalid-argument', 'Nothing to change.');
+  }
+
+  const access = await accessValue(uid, locationId);
+  if (access !== 'owner' && access !== 'manager') {
+    throw new HttpsError('permission-denied', 'Only an owner or a manager can change that.');
+  }
+
+  // merge, never a whole write: this document also holds the venue's name, its
+  // sections and its country, and a whole write here would erase all three.
+  await db().doc(`locations/${locationId}`).set(patch, { merge: true });
+  return patch;
+});
