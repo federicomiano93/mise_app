@@ -512,16 +512,49 @@ select.qty-select:focus { outline: none; border-color: var(--crust); background:
   display: flex;
   gap: 10px;
   padding: 10px 16px calc(10px + var(--safe-bot));
-  /* The bar keeps its full-width surface and border — it is the bottom edge of the
+  /* The bar keeps its full-width ground and border — it is the bottom edge of the
      app — while its buttons line up with the content column above them. */
   padding-inline: max(16px, var(--app-gutter));
-  background: var(--surface);
+  /* ⚠️⚠️ THE BAR IS THE PAGE'S OWN GROUND, NOT A RAISED SURFACE, AND THIS PAIR WAS
+     INVERTED HERE UNTIL v1.70.0. Federico photographed it on «Fornitori e ingredienti»:
+     a pale #FFFDF7 band across a #F4EDE0 page, with the button barely distinguishable
+     from it. It is the SAME defect v1.62.0 identified and fixed — but that release
+     fixed .cat-footer only, and .recipe-footer (Calculator, Orders, Fornitori) kept the
+     old pairing for another day.
+     ⚠️ MEASURED, NOT ASSUMED: .cat-footer and .pas-footer both read bar rgb(244,237,224)
+     / button rgb(255,253,247); this one read the two the other way round on all three of
+     its pages. Nothing was designed — the values are the ones the other two already use. */
+  background: var(--bg);
   border-top: 1px solid var(--border);
   flex-shrink: 0;
 }
+/* ── A short page must not leave the bar floating in the middle of it ─────────
+   Federico's photograph, 23 Aug 2026: «Fornitori» with ONE supplier, the bar halfway
+   down and a quarter of a page of nothing under it. Measured afterwards on all three
+   pages that carry this bar — Fornitori, Ordini and the Calculator — and all three do
+   it whenever their list is short.
+
+   ⚠️ THE BAR STAYS INSIDE THE SCROLL AREA, and that is deliberate rather than lazy: it
+   is what makes it scroll away behind an open form instead of leaving a Settings button
+   hovering over somebody's Save. catalogue.html, which pins its bar outside, has to hide
+   it per screen for exactly that reason. So the bar is PUSHED DOWN, not taken out.
+
+   ⚠️ NOTHING WAS INVENTED: .home-scroll already does this for the sign-out row — a
+   column flex scroller, children that refuse to shrink, `margin-top: auto` on the one
+   that belongs at the bottom.
+   ⚠️ `> * { flex-shrink: 0 }` IS LOAD-BEARING. In a column flex container children
+   shrink to fit rather than overflowing, so without it a long list would be squashed
+   instead of scrolled. That is the same sentence .home-scroll's own comment carries.
+   ⚠️ OPT-IN PER PAGE. The class is on the three pages whose last child IS the bar and
+   which have been measured; `.scroll-area` is shared with screens that have no bar at
+   all, and turning all of them into flex columns is a change nobody has looked at. */
+.scroll-with-bar { display: flex; flex-direction: column; }
+.scroll-with-bar > * { flex-shrink: 0; }
+.scroll-with-bar > .recipe-footer { margin-top: auto; }
+
 .recipe-footer-btn {
   flex: 1;
-  background: var(--surface2);
+  background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   color: var(--text);

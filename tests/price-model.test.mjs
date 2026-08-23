@@ -8,8 +8,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
+import { setCurrency, currentCurrency } from '../js/currency.js';
 import {
-  CURRENCY, PRICE_UNITS, PRICE_FIELDS,
+  PRICE_UNITS, PRICE_FIELDS,
   roundTo, positiveNumber, isPriceUnit,
   normalizePrice, pricePerKg, costState, isCostable, costReasonText,
   formatMoney, formatRate, formatPricePerUnit,
@@ -122,12 +123,59 @@ test('priced by the piece without a piece weight says exactly what is missing', 
 
 // ── Formatting ───────────────────────────────────────────────────────────────
 
-test('money is shown in pounds, to the penny', () => {
-  assert.equal(CURRENCY, '£');
+test('money is shown to the penny, in whatever the venue counts in', () => {
+  // The fallback, which is what every screen shows before a venue is open.
+  assert.equal(currentCurrency(), '£');
   assert.equal(formatMoney(180), '£180.00');
   assert.equal(formatMoney(7.2), '£7.20');
   assert.equal(formatMoney(0), '£0.00');
   assert.equal(formatMoney('nonsense'), '£0.00');
+});
+
+// ⚠️⚠️ THE ONE THAT WOULD HAVE CAUGHT THE DEFECT FEDERICO PHOTOGRAPHED. The currency
+// used to be `const CURRENCY = '£'` in price-model.js, so an Italian bakery's ten
+// prices — typed in euros — were shown as pounds on every row and in every form.
+// Reading it INSIDE the formatter is the whole fix, and this is what pins it: if
+// anybody ever hoists it back to a module constant, the second half fails.
+test('⚠️ the currency is read when money is FORMATTED, not when the module loads', () => {
+  try {
+    setCurrency('€');
+    assert.equal(formatMoney(6.5), '€6.50', 'formatMoney must follow the venue');
+    assert.equal(formatRate(0.0035), '€0.0035', 'so must a rate, decimals and all');
+    assert.equal(formatPricePerUnit({ priceUnit: 'kg', pricePerUnit: 6.5 }), '€6.50 / kg');
+    // And back, in the same process: nothing may have been captured on first import.
+    setCurrency('£');
+    assert.equal(formatMoney(6.5), '£6.50', 'it must change back — nothing is frozen');
+  } finally {
+    setCurrency('£');
+  }
+});
+
+// ⚠️ NOTHING CONVERTS. The symbol is a label on a number that is never touched — the
+// property that made this change safe to ship against ten real prices in production.
+test('⚠️⚠️ changing the currency changes the SYMBOL and never the number', () => {
+  try {
+    setCurrency('£');
+    const pounds = formatMoney(6.5);
+    setCurrency('€');
+    const euros = formatMoney(6.5);
+    assert.equal(pounds.replace('£', ''), euros.replace('€', ''),
+      'the digits must be identical — a conversion here would silently restate every price');
+  } finally {
+    setCurrency('£');
+  }
+});
+
+test('a corrupt or missing currency falls back rather than blanking the price', () => {
+  try {
+    for (const bad of [null, undefined, '', 0, {}, []]) {
+      setCurrency(bad);
+      assert.equal(currentCurrency(), '£', `${JSON.stringify(bad)} must fall back`);
+      assert.equal(formatMoney(1), '£1.00');
+    }
+  } finally {
+    setCurrency('£');
+  }
 });
 
 test('a rate keeps the decimals it needs, and never fewer than two', () => {

@@ -578,16 +578,14 @@ const DICTIONARIES = Object.freeze({
     'orders.deliveryDaysWhenThey': 'Delivery days — when they deliver',
     'orders.orderDaysWhenYou': 'Order days — when you place the order',
     'orders.phoneWhatsappDigitsOnly': 'Phone (WhatsApp, digits only)',
-    'orders.thePriceOfOne': 'The price of ONE KILO, not of the pack — a 25 kg sack at £180 is 7.20.',
-    'orders.thePriceOfOne2': 'The price of ONE LITRE, not of the container — a 5 l tin at £30 is 6.00.',
-    'orders.thePriceOfOne3': 'The price of ONE PIECE, not of the box — a box of 100 at £3.50 is 0.035.',
-    'orders.noPrice2': '— No price —',
+    'orders.noPrice2': 'None',
     'orders.weightOfOnePiece': 'Weight of one piece (kg)',
     'orders.neededOnlyToUse': 'Needed only to use this in a recipe written in grams — one egg is about 0.055, a vanilla pod about 0.0035.',
     'orders.howItIsBought': 'How it is bought',
     'orders.loading': 'Loading…',
     'orders.noPriceRecordedYet': 'No price recorded yet.',
     'orders.priceHistory': 'Price history',
+    'orders.showThem': 'Show them',
     // ⚠️ 'orders.cerealsContainingGluten' WAS RETIRED ON 23 Aug 2026 AND MUST NOT COME
     // BACK. It named an allergen category — a food word — from the INTERFACE
     // dictionary, so an Italian screen printed «CEREALI CONTENENTI GLUTINE» above rows
@@ -609,15 +607,8 @@ const DICTIONARIES = Object.freeze({
     'orders.pack.label': 'The ingredient list printed on the pack',
     'orders.pack.help': 'Type or paste it exactly as it is printed. The app looks for allergen words and ticks the boxes below for you — you still check them and confirm.',
     'orders.pack.placeholder': 'e.g. Wheat flour, water, butter (milk), salt, malted barley flour. May contain traces of nuts.',
-    'orders.pack.suggest': 'Read it and tick the boxes',
-    'orders.pack.nothingTyped': 'Nothing typed yet — write out what the pack says first.',
-    'orders.pack.ticked': {
-      one: 'Ticked {n} box. The words it recognised are highlighted above — check what is left in grey.',
-      other: 'Ticked {n} boxes. The words it recognised are highlighted above — check what is left in grey.',
-    },
     // ⚠️ RECOGNISING NOTHING MUST BE SAID OUT LOUD. Silence here reads as "this pack
     // contains nothing", which is the single worst thing this feature could say.
-    'orders.pack.alreadyTicked': 'Everything it recognised was already ticked. The words are highlighted above — check what is left in grey.',
     'orders.pack.recognisedNothing': 'It recognised no allergen words in this text. That does NOT mean there are none — read the pack yourself and tick what it says.',
     'orders.pack.questionWhich': '“{word}” could be {options} — the pack does not say which. Tick it yourself if you know.',
     'orders.pack.questionVague': '“{word}” could hide an allergen. Ask the supplier what is in it.',
@@ -725,7 +716,10 @@ const DICTIONARIES = Object.freeze({
     // ⚠️ The NUMBER keeps its decimal point in both languages: these boxes are
     // <input type="number">, which refuses a comma. Only «e.g.» is translated.
     'orders.eg.packWeight': 'e.g. 2.27kg',
-    'orders.eg.rate': 'e.g. 7.20',
+    'orders.eg.ratePerKg': 'e.g. 7.20 (one kilo)',
+    'orders.exVatNote': 'Prices are net of VAT.',
+    'orders.eg.ratePerLitre': 'e.g. 6.00 (one litre)',
+    'orders.eg.ratePerPiece': 'e.g. 0.035 (one piece)',
     'orders.eg.pieceWeight': 'e.g. 0.055',
     'orders.ingredientsCount': { one: '{n} ingredient', other: '{n} ingredients' },
 
@@ -749,10 +743,10 @@ const DICTIONARIES = Object.freeze({
     'orders.failed.deactivate': 'Could not deactivate “{name}”. Check your network and try again.',
     'orders.failed.activate': 'Could not reactivate “{name}”. Check your network and try again.',
     'orders.failed.load': 'Could not load the price history for “{name}”. Check your network and try again.',
-    'orders.pricePerKg': 'Price per kg ({currency}, excluding VAT)',
-    'orders.pricePerLitre': 'Price per litre ({currency}, excluding VAT)',
-    'orders.pricePerPiece': 'Price per piece ({currency}, excluding VAT)',
-    'orders.priceGeneric': 'Price ({currency}, excluding VAT)',
+    'orders.pricePerKg': 'Price per kg ({currency})',
+    'orders.pricePerLitre': 'Price per litre ({currency})',
+    'orders.pricePerPiece': 'Price per piece ({currency})',
+    'orders.priceGeneric': 'Price ({currency})',
     // The two "start again" dialogs. Surfaced by widening the scan to `message:` —
     // okLabel and cancelLabel were already covered, so these two asked their question
     // in English and offered their answers in Italian.
@@ -1623,7 +1617,7 @@ const DICTIONARIES = Object.freeze({
     // ⚠️ This one was not even a key — PRICE_UNIT_LABELS carried the bare words
     // 'by the piece' beside two t() calls, so two thirds of the same list translated
     // and the third did not.
-    'price.byPiece': 'by the piece',
+    'price.byPiece': 'by piece',
     // ⚠️ Eight of these nine sat in COST_REASON_TEXT as bare English beside ONE t()
     // call — the same list, one line translated and eight not. Each names one thing
     // to go and do, so they read as the end of «this row could not be costed: …».
@@ -1733,6 +1727,25 @@ const DICTIONARIES = Object.freeze({
     // ── An ingredient's record, in four sections ────────────────────────────
     'orders.section.productData': 'Product details',
     'orders.section.allergens': 'Allergens',
+    'orders.section.packList': 'Ingredient list',
+    'orders.pack.filledIn': 'filled in',
+    'orders.pack.toFillIn': 'to fill in',
+    // ⚠️⚠️ IT SAYS THE VERIFICATION IS GONE, BECAUSE IT IS. The app changed {n} box on
+    // an ingredient somebody had signed off, so the old date no longer describes what
+    // is ticked — the tick that says «I checked this» is cleared and must be given
+    // again. An earlier wording said only «verify it again» while the code quietly
+    // kept the stamp: a warning the code does not enforce is worse than none here.
+    'orders.pack.proposedAfterCheck': {
+      one: 'The verification has lapsed: the app changed {n} box from the ingredient list. Check the allergens and tick «I have checked…» again.',
+      other: 'The verification has lapsed: the app changed {n} boxes from the ingredient list. Check the allergens and tick «I have checked…» again.',
+    },
+    // The same lapse, once the app has withdrawn its own ticks again — there is no
+    // number left to name, and the verification stays gone until somebody confirms.
+    'orders.pack.checkVoided': 'The verification has lapsed: the app changed the boxes from the ingredient list. Check the allergens and tick «I have checked…» again.',
+    'orders.pack.proposedTicks': {
+      one: 'The app has ticked {n} box from the ingredient list. Open Allergens and check it.',
+      other: 'The app has ticked {n} boxes from the ingredient list. Open Allergens and check them.',
+    },
     'orders.section.nutrition': 'Nutrition',
     // ── …and the two switches that decide whether the last two exist ────────
     'orders.settings.ingredientCard': 'The ingredient card',
@@ -1778,6 +1791,14 @@ const DICTIONARIES = Object.freeze({
     'help.suppliersAllergensLiveHere': 'Allergens belong to the PRODUCT, not to the recipe — so declaring milk on your butter answers for every recipe that uses that butter.',
     'help.suppliersPasteThePack': 'Paste the ingredient list printed on the pack and the app ticks the allergen boxes for you. It only ever suggests: the product stays undeclared until you tick “I have checked this” yourself.',
     'help.suppliersTurnThemOff': 'Settings, at the bottom, decides whether this venue uses allergens and nutrition at all. Turning allergens off hides them everywhere — the recipes and the labels too — and deletes nothing.',
+    // The three sections of one ingredient's record. What is true of the FEATURE is
+    // explained here; what is true of THIS product stays on the screen.
+    'help.packWhenItCannotTell': 'When the pack does not say which one — «nuts», «cereals», «lecithin» — nothing is ticked and the screen says so under the box. Ask the supplier which.',
+    'help.allergensNameTheSpecific': 'Name the specific cereal and the specific nut: the law wants «wheat», not «cereals», and «hazelnut» is no use to somebody who can eat almonds.',
+    'help.allergensUntilYouTick': 'Until «I have checked the supplier spec» is ticked and saved, this ingredient blocks every label it is used in. That is the safety rule working, not a fault.',
+    'help.nutritionComesFromThePack': 'The seven values per 100 g, copied from the table printed on the pack.',
+    'help.nutritionZeroIsAnAnswer': '0 is a real value and an empty box is not: leave it empty when the pack does not say, rather than typing a zero.',
+    'help.nutritionItIsWhatThe': 'It is what the supplier declared, not a calculation — so a label can be checked against the pack it came from.',
     'help.foodCost': 'Food cost',
     'help.whatAProductCosts': 'What a product costs to make, and what it earns.',
     'help.typeTheSellingPrice': 'Type the selling price as it is on the label, WITH VAT. The app works the cost out on the price without VAT.',
@@ -2005,8 +2026,8 @@ const DICTIONARIES = Object.freeze({
     'people.noNameYet': '(no name yet)',
     'people.you': ' · you',
     'people.noEmailParen': '(no email)',
-    'price.byWeight': 'by weight (kg)',
-    'price.byVolume': 'by volume (litres)',
+    'price.byWeight': 'by kg',
+    'price.byVolume': 'by litre',
     'price.none': 'No price yet',
     'price.needPieceWeight': 'Add the weight of one piece to use this in a recipe',
 
@@ -2381,16 +2402,14 @@ const DICTIONARIES = Object.freeze({
     'orders.deliveryDaysWhenThey': 'Giorni di consegna — quando consegnano',
     'orders.orderDaysWhenYou': 'Giorni d’ordine — quando fai l’ordine',
     'orders.phoneWhatsappDigitsOnly': 'Telefono (WhatsApp, solo cifre)',
-    'orders.thePriceOfOne': 'Il prezzo di UN CHILO, non della confezione — un sacco da 25 kg a 180£ fa 7,20.',
-    'orders.thePriceOfOne2': 'Il prezzo di UN LITRO, non del contenitore — una latta da 5 l a 30£ fa 6,00.',
-    'orders.thePriceOfOne3': 'Il prezzo di UN PEZZO, non della scatola — una scatola da 100 a 3,50£ fa 0,035.',
-    'orders.noPrice2': '— Nessun prezzo —',
+    'orders.noPrice2': 'Nessuno',
     'orders.weightOfOnePiece': 'Peso di un pezzo (kg)',
     'orders.neededOnlyToUse': 'Serve solo per usarlo in una ricetta scritta in grammi — un uovo è circa 0,055, una bacca di vaniglia circa 0,0035.',
     'orders.howItIsBought': 'Come si acquista',
     'orders.loading': 'Caricamento…',
     'orders.noPriceRecordedYet': 'Ancora nessun prezzo registrato.',
     'orders.priceHistory': 'Storico prezzi',
+    'orders.showThem': 'Mostrali',
     'orders.theRest': 'Il resto',
     'orders.noNutritionYet': 'Ancora nessuno',
     'orders.nutritionComplete': 'Completi',
@@ -2400,13 +2419,6 @@ const DICTIONARIES = Object.freeze({
     'orders.pack.label': 'L’elenco ingredienti stampato sulla confezione',
     'orders.pack.help': 'Scrivilo o incollalo esattamente come è stampato. L’app cerca le parole degli allergeni e spunta le caselle qui sotto al posto tuo — tu le controlli e confermi.',
     'orders.pack.placeholder': 'es. Farina di GRANO tenero, acqua, BURRO, sale, farina di malto d’ORZO. Può contenere tracce di FRUTTA A GUSCIO.',
-    'orders.pack.suggest': 'Leggilo e spunta le caselle',
-    'orders.pack.nothingTyped': 'Non hai ancora scritto niente — riporta prima quello che dice la confezione.',
-    'orders.pack.ticked': {
-      one: 'Spuntata {n} casella. Le parole riconosciute sono evidenziate qui sopra — controlla quello che resta in grigio.',
-      other: 'Spuntate {n} caselle. Le parole riconosciute sono evidenziate qui sopra — controlla quello che resta in grigio.',
-    },
-    'orders.pack.alreadyTicked': 'Tutto quello che ha riconosciuto era già spuntato. Le parole sono evidenziate qui sopra — controlla quello che resta in grigio.',
     'orders.pack.recognisedNothing': 'Non ha riconosciuto nessuna parola di allergene in questo testo. Questo NON vuol dire che non ce ne siano — leggi tu la confezione e spunta quello che dice.',
     'orders.pack.questionWhich': '«{word}» potrebbe essere {options} — la confezione non dice quale. Spuntalo tu se lo sai.',
     'orders.pack.questionVague': '«{word}» potrebbe nascondere un allergene. Chiedi al fornitore cosa contiene.',
@@ -2495,7 +2507,10 @@ const DICTIONARIES = Object.freeze({
     'orders.registry.loadFailed': 'Non è stato possibile caricare i fornitori. Controlla la connessione e riprova.',
     'orders.registry.whichList': 'Quale elenco mostrare',
     'orders.eg.packWeight': 'es. 2.27kg',
-    'orders.eg.rate': 'es. 7.20',
+    'orders.eg.ratePerKg': 'es. 7.20 (un chilo)',
+    'orders.exVatNote': 'I prezzi sono al netto dell’IVA.',
+    'orders.eg.ratePerLitre': 'es. 6.00 (un litro)',
+    'orders.eg.ratePerPiece': 'es. 0.035 (un pezzo)',
     'orders.eg.pieceWeight': 'es. 0.055',
     'orders.ingredientsCount': { one: '{n} ingrediente', other: '{n} ingredienti' },
 
@@ -2515,10 +2530,10 @@ const DICTIONARIES = Object.freeze({
     'orders.failed.deactivate': 'Non è stato possibile sospendere «{name}». Controlla la connessione e riprova.',
     'orders.failed.activate': 'Non è stato possibile riattivare «{name}». Controlla la connessione e riprova.',
     'orders.failed.load': 'Non è stato possibile caricare lo storico prezzi di «{name}». Controlla la connessione e riprova.',
-    'orders.pricePerKg': 'Prezzo al kg ({currency}, IVA esclusa)',
-    'orders.pricePerLitre': 'Prezzo al litro ({currency}, IVA esclusa)',
-    'orders.pricePerPiece': 'Prezzo al pezzo ({currency}, IVA esclusa)',
-    'orders.priceGeneric': 'Prezzo ({currency}, IVA esclusa)',
+    'orders.pricePerKg': 'Prezzo al kg ({currency})',
+    'orders.pricePerLitre': 'Prezzo al litro ({currency})',
+    'orders.pricePerPiece': 'Prezzo al pezzo ({currency})',
+    'orders.priceGeneric': 'Prezzo ({currency})',
     'orders.nSuppliers': { one: '{n} fornitore', other: '{n} fornitori' },
     'orders.clearConfirm': 'Azzerare tutto quello che hai scritto per {who}?\n\nLe giacenze restano. Gli ordini già registrati nello Storico non vengono toccati.',
     'orders.discardTitle': 'Scartare l’ordine di {name}',
@@ -3315,7 +3330,7 @@ const DICTIONARIES = Object.freeze({
     'ui.recipe': 'Ricetta',
     'ui.note': 'Nota',
     'ui.ingredients': 'Ingredienti',
-    'price.byPiece': 'a pezzo',
+    'price.byPiece': 'al pezzo',
     'cat.cost.noAmount': 'nessuna quantità',
     'cat.cost.notLinked': 'non collegato a un ingrediente',
     'cat.cost.missingIngredient': 'collegato a un ingrediente che non esiste più',
@@ -3399,6 +3414,18 @@ const DICTIONARIES = Object.freeze({
     // ── La scheda di un prodotto, in quattro sezioni ────────────────────────
     'orders.section.productData': 'Dati prodotto',
     'orders.section.allergens': 'Allergeni',
+    'orders.section.packList': 'Elenco ingredienti',
+    'orders.pack.filledIn': 'compilato',
+    'orders.pack.toFillIn': 'da compilare',
+    'orders.pack.proposedAfterCheck': {
+      one: 'La verifica è decaduta: l’app ha cambiato {n} casella leggendo l’elenco. Controlla gli allergeni e spunta di nuovo «Ho controllato…».',
+      other: 'La verifica è decaduta: l’app ha cambiato {n} caselle leggendo l’elenco. Controlla gli allergeni e spunta di nuovo «Ho controllato…».',
+    },
+    'orders.pack.checkVoided': 'La verifica è decaduta: l’app ha cambiato le caselle leggendo l’elenco. Controlla gli allergeni e spunta di nuovo «Ho controllato…».',
+    'orders.pack.proposedTicks': {
+      one: 'L’app ha spuntato {n} casella leggendo l’elenco ingredienti. Apri Allergeni e controllala.',
+      other: 'L’app ha spuntato {n} caselle leggendo l’elenco ingredienti. Apri Allergeni e controllale.',
+    },
     'orders.section.nutrition': 'Valori nutrizionali',
     // ── …e i due interruttori che decidono se le ultime due esistono ────────
     'orders.settings.ingredientCard': 'La scheda ingrediente',
@@ -3440,6 +3467,12 @@ const DICTIONARIES = Object.freeze({
     'help.suppliersAllergensLiveHere': 'Gli allergeni stanno sul PRODOTTO, non sulla ricetta — quindi dichiarare il latte sul tuo burro risponde per ogni ricetta che usa quel burro.',
     'help.suppliersPasteThePack': 'Incolla l’elenco ingredienti stampato sulla confezione e l’app spunta le caselle degli allergeni al posto tuo. Propone soltanto: il prodotto resta non dichiarato finché non metti tu la spunta «ho verificato».',
     'help.suppliersTurnThemOff': 'Impostazioni, in fondo, decide se questo locale usa gli allergeni e i valori nutrizionali. Spegnendo gli allergeni spariscono ovunque — anche dalle ricette e dalle etichette — e non viene cancellato niente.',
+    'help.packWhenItCannotTell': 'Quando la confezione non dice quale — «frutta a guscio», «cereali», «lecitina» — non viene spuntato niente e la schermata te lo scrive sotto il riquadro. Chiedi al fornitore quale.',
+    'help.allergensNameTheSpecific': 'Indica il cereale preciso e il frutto a guscio preciso: la legge vuole «grano», non «cereali», e «nocciole» non serve a chi può mangiare le mandorle.',
+    'help.allergensUntilYouTick': 'Finché non spunti «Ho controllato la scheda tecnica del fornitore» e salvi, questo ingrediente blocca ogni etichetta in cui è usato. È la regola di sicurezza che funziona, non un guasto.',
+    'help.nutritionComesFromThePack': 'I sette valori per 100 g, copiati dalla tabella stampata sulla confezione.',
+    'help.nutritionZeroIsAnAnswer': 'Lo 0 è un valore vero, una casella vuota no: quando la confezione non lo dice, lasciala vuota invece di scrivere zero.',
+    'help.nutritionItIsWhatThe': 'È quello che ha dichiarato il fornitore, non un calcolo — così un’etichetta si può sempre confrontare con la confezione da cui viene.',
     'help.foodCost': 'Food cost',
     'help.whatAProductCosts': 'Quanto costa produrre un prodotto, e quanto rende.',
     'help.typeTheSellingPrice': 'Scrivi il prezzo di vendita com’è sull’etichetta, CON l’IVA. L’app calcola il costo sul prezzo senza IVA.',
@@ -3622,8 +3655,8 @@ const DICTIONARIES = Object.freeze({
     'people.noNameYet': '(ancora senza nome)',
     'people.you': ' · tu',
     'people.noEmailParen': '(nessuna email)',
-    'price.byWeight': 'a peso (kg)',
-    'price.byVolume': 'a volume (litri)',
+    'price.byWeight': 'al kg',
+    'price.byVolume': 'al litro',
     'price.none': 'Ancora nessun prezzo',
     'price.needPieceWeight': 'Aggiungi il peso di un pezzo per usarlo in una ricetta',
 

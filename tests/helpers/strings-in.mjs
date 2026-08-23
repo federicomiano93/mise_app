@@ -18,6 +18,16 @@
 // Naive about a quote inside a comment inside a string, deliberately: this app has no
 // such line, and a parser that handles it would be one nobody can read.
 export function stringsIn(line) {
+  // ⚠️⚠️ ONE LINE, AND HANDING IT A WHOLE FILE USED TO ANSWER `[]` IN SILENCE. The
+  // first test written against it did exactly that: most source files open with a
+  // `//` comment, so the guard below returned nothing, the caller found no offenders
+  // and a brand-new check passed while looking at nothing at all (23 Aug 2026).
+  // A helper that cannot do a job must SAY so — the same rule this project applies to
+  // mutation probes that match nothing.
+  if (typeof line !== 'string') throw new TypeError('stringsIn needs a string');
+  if (line.includes('\n')) {
+    throw new Error('stringsIn takes ONE line — split the file first, or it silently reads nothing');
+  }
   if (/^\s*(\/\/|\*|\/\*)/.test(line)) return [];
   const out = [];
   let i = 0;

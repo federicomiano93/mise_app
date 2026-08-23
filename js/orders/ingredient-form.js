@@ -21,10 +21,21 @@ import { canManageHere } from './firebase-orders.js';
 import { NO_SUPPLIER_ID } from './no-supplier.js';
 import { field, formActions, reportFailure, shortDate } from './mgmt-ui.js';
 import {
-  CURRENCY, PRICE_UNITS, priceUnitLabel,
+  PRICE_UNITS, priceUnitLabel,
   pricePatch, priceChanged, priceRecord, pricePerKg,
   formatPricePerUnit, formatRate, costReasonText,
 } from '../price-model.js';
+// ⚠️ THE CURRENCY FOLLOWS THE VENUE'S COUNTRY, and it is read inside priceBlock()
+// rather than up here — the venue is not open when this module is evaluated. See
+// js/currency.js and currencyOf() in js/market.js.
+import { currentCurrency } from '../currency.js';
+// ⚠️ THE APP'S ONE «?», not a second one. This overlay is built long after the page
+// has loaded, so it asks the module to fill the hosts it has just created.
+// ⚠️ It pulls in js/confirm-dialog.js, which is the identical twin of this folder's
+// own copy (both pinned byte-for-byte by tests/copie-allineate.test.mjs). Two copies
+// of the same dialog on one page is the price of the rule that forbids a feature
+// folder from importing another's — and it is a smaller price than a second «?».
+import { mountHelpButtons } from '../help-button.js';
 // ⚠️ From js/ ROOT, not from a feature folder — see the header of that file. What
 // an ingredient declares is typed HERE, in Orders, and read by the catalogue and
 // by the labels screen, so the judgement lives in one place for all three.
@@ -57,7 +68,7 @@ import { currentSession } from '../firebase.js';
 // Reading the pack's own ingredient list. PURE, and also from js/ ROOT: the
 // vocabulary it walks is the same one a label is built from, so a second copy is
 // the copy that quietly disagrees about what is in somebody's food.
-import { readPackIngredients } from '../allergen-match.js';
+import { readPackIngredients, reconcileTicks, tickKey } from '../allergen-match.js';
 // Which of the two optional panels this venue uses. ⚠️ A VENUE-WIDE DISPLAY SWITCH,
 // never a role and never a data switch — see the note on allergenBlock below.
 import { ingredientPanels } from './firebase-features.js';
@@ -79,20 +90,31 @@ function priceBlock(item, actions) {
   // freezes in the app's starting language whatever the venue says. That defect was
   // in fourteen places on 21 Aug (v1.57.0); this is the shape that avoids it.
   const RATE_LABEL = Object.freeze({
-    kg: t('orders.pricePerKg', { currency: CURRENCY }),
-    l: t('orders.pricePerLitre', { currency: CURRENCY }),
-    pcs: t('orders.pricePerPiece', { currency: CURRENCY }),
+    kg: t('orders.pricePerKg', { currency: currentCurrency() }),
+    l: t('orders.pricePerLitre', { currency: currentCurrency() }),
+    pcs: t('orders.pricePerPiece', { currency: currentCurrency() }),
   });
 
-  // The worked example under the box. It exists to pre-empt the ONE mistake this
-  // form cannot detect: the invoice total typed where the rate belongs. 180 and
-  // 7.20 are both perfectly valid numbers, so nothing can reject the wrong one —
-  // it just makes every recipe using that ingredient cost twenty-five times too
-  // much, on a screen where the answer is a percentage nobody can eyeball.
+  // The worked example, which now lives INSIDE the box as its placeholder.
+  //
+  // Federico, 23 Aug 2026: «togli la scritta… fallo visivamente coerente». It used to
+  // be three lines of prose under the field, and with the two price boxes now side by
+  // side there is no room for a sentence under either of them.
+  //
+  // ⚠️⚠️ IT SHRANK; IT DID NOT GO. It exists to pre-empt the ONE mistake this form
+  // cannot detect — the invoice total typed where the rate belongs. 180 and 7.20 are
+  // both perfectly valid numbers, so nothing can reject the wrong one; it simply makes
+  // every recipe using that ingredient cost twenty-five times too much, on a screen
+  // whose answer is a percentage nobody can check by eye. So the shortest form that
+  // still says it — the unit, in brackets — goes where the number is typed.
+  //
+  // ⚠️ AND IT CARRIES NO CURRENCY. The old wording spelled out «a 25 kg sack at £180»,
+  // which was the last hardcoded pound sign in the dictionary and printed sterling on
+  // an Italian bakery. An example needs the UNIT to make its point, never the money.
   const RATE_HINT = Object.freeze({
-    kg: t('orders.thePriceOfOne'),
-    l: t('orders.thePriceOfOne2'),
-    pcs: t('orders.thePriceOfOne3'),
+    kg: t('orders.eg.ratePerKg'),
+    l: t('orders.eg.ratePerLitre'),
+    pcs: t('orders.eg.ratePerPiece'),
   });
 
   const unitSelect = el('select', { class: 'mgmt-input' });
@@ -111,15 +133,19 @@ function priceBlock(item, actions) {
     type: 'number', class: 'mgmt-input', min: '0', step: 'any',
     inputmode: 'decimal', value: value ?? '', placeholder,
   });
-  // ⚠️ THE NUMBER KEEPS ITS DECIMAL POINT IN BOTH LANGUAGES. Only «e.g.» is
-  // translated: the box is <input type="number">, which does not accept a comma, so
-  // an example written «7,20» would be an instruction to type something the field
+  // ⚠️ THE NUMBER KEEPS ITS DECIMAL POINT IN BOTH LANGUAGES. Only the words around it
+  // are translated: the box is <input type="number">, which does not accept a comma,
+  // so an example written «7,20» would be an instruction to type something the field
   // then refuses.
-  const rate = money(item?.pricePerUnit, t('orders.eg.rate'));
+  //
+  // ⚠️ The placeholder is EMPTY here and filled by refresh() below, because it now
+  // depends on the purchase unit — «(un chilo)» is wrong the moment somebody picks
+  // pieces, and a stale example is worse than none on the one field that cannot be
+  // checked for what it is a price OF.
+  const rate = money(item?.pricePerUnit, '');
   const pieceWeight = money(item?.unitWeightKg, t('orders.eg.pieceWeight'));
 
   const rateLabel = el('span', { class: 'mgmt-field-label' });
-  const rateHint = el('p', { class: 'notif-note' });
   // Two lines, not one. A per-piece price can be perfectly complete as a PRICE
   // and still be unusable in a recipe written in grams, and a summary that only
   // showed "£2.10 / each" would look finished while the ingredient silently
@@ -149,9 +175,10 @@ function priceBlock(item, actions) {
   function refresh() {
     const unit = unitSelect.value;
     pieceField.hidden = unit !== 'pcs';
-    rateLabel.textContent = RATE_LABEL[unit] || t('orders.priceGeneric', { currency: CURRENCY });
-    rateHint.textContent = RATE_HINT[unit] || '';
-    rateHint.hidden = !RATE_HINT[unit];
+    rateLabel.textContent = RATE_LABEL[unit] || t('orders.priceGeneric', { currency: currentCurrency() });
+    // ⚠️ The example follows the UNIT, and an unknown unit gets none. «(un chilo)»
+    // left showing while somebody is pricing by the piece is worse than no example.
+    rate.placeholder = RATE_HINT[unit] || '';
 
     const draft = pricePatch(read(), null);
     if (draft.pricePerUnit === null) {
@@ -179,10 +206,27 @@ function priceBlock(item, actions) {
   });
   refresh();
 
-  const node = el('div', {}, [
-    el('h3', { class: 'mgmt-section-title', text: t('orders.section.price') }),
+  // ⚠️ THE TWO PRICE BOXES SHARE A ROW. Federico, 23 Aug 2026: «come si acquista e
+  // Prezzo al kg si potrebbero mettere uno accanto all'altro in modo tale che occupa
+  // meno spazio». They belong together — the unit is what the rate is a rate OF — and
+  // as two stacked full-width fields they were half the height of the price section.
+  //
+  // ⚠️ THE GRID IS NOT A NEW VALUE. `repeat(2, minmax(0, 1fr))` with an 8px gap is
+  // .alg-nutrition, three sections further down THIS SAME FORM. The v1.62.0 rule:
+  // finish the copy rather than design a second answer.
+  const pricePair = el('div', { class: 'mgmt-pair' }, [
     field(t('orders.howItIsBought'), unitSelect),
-    el('label', { class: 'mgmt-field' }, [rateLabel, rate, rateHint]),
+    el('label', { class: 'mgmt-field' }, [rateLabel, rate]),
+  ]);
+
+  const node = el('div', {}, [
+    // ⚠️ «Peso di un pezzo» STAYS FULL WIDTH. It appears only when the unit is
+    // `pcs`, and a column that comes and goes would make the row above it jump.
+    pricePair,
+    // Said ONCE, under the pair, instead of four times inside four labels that no
+    // longer have room for it. ⚠️ It may not be dropped: entering the gross figure
+    // inflates every recipe cost by the VAT rate and nothing on any screen looks wrong.
+    el('p', { class: 'notif-note', text: t('orders.exVatNote') }),
     pieceField,
     summary,
     item ? priceHistoryBlock(item, actions) : null,
@@ -215,12 +259,29 @@ function priceHistoryBlock(item, actions) {
       });
     } catch (err) {
       button.disabled = false;
-      button.textContent = t('orders.priceHistory');
+      button.textContent = t('orders.showThem');
       await reportFailure('load', item.name, err);
     }
-  } }, t('orders.priceHistory'));
+  } }, t('orders.showThem'));
 
-  return el('div', { class: 'mgmt-field' }, [button, list]);
+  // ⚠️ IT IS A FIELD NOW, NOT A BARE LINK. Federico, 23 Aug 2026: «metti storico prezzi
+  // con lo stesso font di come si acquista e Prezzo al kg, fallo visivamente coerente».
+  // It was the only thing in the price section with no label of its own, so it read as
+  // a stray link rather than as part of the record. `.mgmt-field-label` is the same
+  // 12px the two labels above it use — the class, not a copy of its values.
+  //
+  // ⚠️ IT STILL LOADS ONLY WHEN TAPPED. Naming it does not fetch it: this is a separate
+  // database read per ingredient, and somebody opening the form to fix a spelling must
+  // not pay for it (P14).
+  // ⚠️ `.mgmt-history` EXISTS TO PULL THE BUTTON LEFT, and it is defined in orders.css.
+  // A <button> stretched by the column centres its own text, so «Mostrali» sat in the
+  // middle under a left-aligned label — the one thing in the section not lining up with
+  // everything else, in the very release asked to make it «visivamente coerente».
+  return el('div', { class: 'mgmt-field mgmt-history' }, [
+    el('span', { class: 'mgmt-field-label', text: t('orders.priceHistory') }),
+    button,
+    list,
+  ]);
 }
 
 // ── Allergens and nutrition ───────────────────────────────────────────────────
@@ -317,14 +378,22 @@ function allergenBlock(item, panels) {
 
   // ── The pack's own ingredient list, and what the app makes of it ────────────
   //
-  // ⚠️⚠️ IT PROPOSES, IT NEVER DECLARES. Reading the pack pre-ticks the boxes
-  // above and nothing else: `allergensCheckedAt` is untouched, so until somebody
-  // presses the verification tick the ingredient still reads 'unknown' and still
-  // blocks every label. A wrong suggestion costs a correction, never a false
-  // declaration — that is what makes offering one safe at all.
+  // ⚠️⚠️ IT PROPOSES, IT NEVER DECLARES. Reading the pack pre-ticks the boxes and
+  // nothing else: `allergensCheckedAt` is untouched, so until somebody presses the
+  // verification tick the ingredient still reads 'unknown' and still blocks every
+  // label. A wrong suggestion costs a correction, never a false declaration — that is
+  // what makes offering one safe at all, and it is unchanged by everything below.
   //
-  // ⚠️ AND IT NEVER UNTICKS. Somebody who ticked a box by hand knows something
-  // the pack does not say; a machine must not take it away.
+  // ⚠️⚠️ IT RUNS BY ITSELF NOW. Federico, 23 Aug 2026: «quando compilo l'elenco degli
+  // ingredienti in automatico gli allergeni se li contiene». The button is gone.
+  //
+  // ⚠️⚠️ AND THAT IS WHY THE TICKS HAVE OWNERS. «Only ever tick, never untick» was the
+  // right rule for a button you pressed at the END. Re-reading on every keystroke, it
+  // becomes a way to invent a declaration: «latte» ticks MILK, and correcting it to
+  // «latte di mandorla» would leave the milk behind for ever. So the app may take back
+  // ONLY what the app put there, and a box a person has moved is untouchable in both
+  // directions. The judgement lives in reconcileTicks() — pure, and tested, because
+  // nothing on this screen can show that it holds.
   const packBox = el('textarea', {
     class: 'mgmt-input alg-pack-text', rows: '4',
     placeholder: t('orders.pack.placeholder'),
@@ -333,59 +402,91 @@ function allergenBlock(item, panels) {
   packBox.value = item?.packIngredients || '';
   const packResult = el('div', { class: 'alg-pack-result' });
 
-  function suggest() {
+  // Which ticks the app put there and may take back. ⚠️ IT STARTS EMPTY EVEN WHEN THE
+  // INGREDIENT ARRIVES FULLY DECLARED — everything already stored belongs to whoever
+  // stored it, so opening a saved product and typing can never lose a declaration.
+  let appOwned = new Set();
+  // Which ticks a person has moved, either way. Never proposed or withdrawn again.
+  const humanTouched = new Set();
+  // How many the app is currently proposing, so the folded header can say so.
+  let proposedCount = 0;
+  // ⚠️⚠️ SET THE MOMENT THE APP MOVES A BOX ON A RECORD SOMEBODY HAD ALREADY VERIFIED,
+  // and it is the whole reason an automatic proposal cannot declare anything.
+  //
+  // The stamp is what makes ticks a DECLARATION. Without this, an ingredient verified
+  // on 20 August whose pack text the app then reads keeps that date — so a box the app
+  // ticked by itself is saved as «verified on 20 August», by a person who never saw it.
+  // Proved against the emulator database before it was written: the saved document came
+  // back `[gluten-wheat, milk]` with the seed's own stamp still on it.
+  //
+  // ⚠️ The screen ALREADY said «verificalo di nuovo». The code did not make it true, and
+  // a warning the code does not enforce is the most dangerous kind on this screen.
+  let stampVoided = false;
+
+  // Move the boxes to whatever the pure model says they should be, and report how
+  // many changed. Nothing here decides anything: reconcileTicks owns the rules.
+  function applyTicks(proposal) {
+    const current = { contains: [], may: [] };
+    for (const [code, pair] of boxes) {
+      if (pair.contains.checked) current.contains.push(code);
+      if (pair.may.checked) current.may.push(code);
+    }
+    const next = reconcileTicks({ proposal, current, appOwned, humanTouched });
+    appOwned = next.appOwned;
+    const wantContains = new Set(next.contains);
+    const wantMay = new Set(next.may);
+    for (const [code, pair] of boxes) {
+      pair.contains.checked = wantContains.has(code);
+      pair.may.checked = wantMay.has(code);
+    }
+    // ⚠️⚠️ THE APP CHANGED THE DECLARATION, SO THE VERIFICATION IS NO LONGER ABOUT IT.
+    // Both directions count: a tick the app ADDED was never checked by anybody, and a
+    // tick it TOOK BACK means the stamp now covers a list that no longer exists. The
+    // person confirms again — and when they do, read() stamps TODAY, not the old date.
+    if ((next.added || next.removed) && checked.checked) {
+      checked.checked = false;
+      stampVoided = true;
+    }
+    proposedCount = appOwned.size;
+    refresh();
+    return next.added;
+  }
+
+  // ⚠️⚠️ `touchBoxes: false` IS FOR THE FIRST DRAW, AND IT IS A SAFETY RULE, NOT A
+  // nicety. A saved ingredient can perfectly well hold pack text that says «latte» and
+  // a milk box somebody deliberately UNTICKED — a supplier's correction, a reformulated
+  // product. Re-running the matcher on open would silently put that tick back every
+  // single time the record was looked at, and nothing on screen would say why. So
+  // opening a product only ever SHOWS what the text says; the boxes move when the text
+  // does, which is exactly what Federico asked for: «quando compilo l'elenco».
+  function suggest({ touchBoxes = true } = {}) {
     packResult.replaceChildren();
     const text = packBox.value;
     const out = readPackIngredients(text);
 
     if (!out.hasText) {
-      packResult.appendChild(el('p', { class: 'alg-pack-note', text: t('orders.pack.nothingTyped') }));
-      return;
+      // ⚠️ AND THE APP'S OWN TICKS GO WITH THE TEXT. Clearing the box must clear what
+      // the box put there, or emptying it would leave a declaration nobody can trace
+      // to anything. A person's ticks stay, as always.
+      if (touchBoxes) applyTicks({ allergens: [], mayContain: [] });
+      return;   // an empty box needs no commentary: the header already says «da compilare»
     }
 
-    let added = 0;
-    for (const code of out.allergens) {
-      const pair = boxes.get(code);
-      if (pair && !pair.contains.checked) { pair.contains.checked = true; added += 1; }
-    }
-    for (const code of out.mayContain) {
-      const pair = boxes.get(code);
-      if (pair && !pair.may.checked && !pair.contains.checked) { pair.may.checked = true; added += 1; }
-    }
-    refresh();
+    if (touchBoxes) applyTicks(out);
 
-    // ⚠️ THE EVIDENCE, NOT JUST THE VERDICT. Re-drawing the pasted text with the
-    // recognised words marked turns «did it find everything?» — which nobody can
-    // answer — into «is there anything left in the grey worth checking?», which
-    // anybody can. An extractor that cannot point at its reasons cannot be
-    // checked by the person legally responsible for the answer.
-    const marked = el('p', { class: 'alg-pack-marked' });
-    let at = 0;
-    for (const m of out.matches) {
-      if (m.from > at) marked.appendChild(el('span', { text: text.slice(at, m.from) }));
-      marked.appendChild(el('mark', {
-        class: 'alg-pack-hit' + (m.traces ? ' alg-pack-hit--traces' : ''),
-        title: allergenName(m.code, lang),
-        text: text.slice(m.from, m.to),
+    // ⚠️ RECOGNISING NOTHING IS AN ANSWER AND MUST LOOK LIKE ONE, so this one line
+    // stays on the screen. Silence here would be read as «this pack contains nothing»,
+    // which is the single worst thing this feature could say — and it is a statement
+    // about THIS pack, not an explanation of the feature, so a «?» is the wrong place
+    // for it. What DID go into the sheet is the running commentary that used to sit
+    // beside it: «ticked 1 box», «already ticked», and the re-drawn copy of the text
+    // with the recognised words marked. How many boxes moved is said once, outside
+    // the fold, by `proposedNote` — where it is read even with this section shut.
+    if (!out.recognisedAnything) {
+      packResult.appendChild(el('p', {
+        class: 'alg-pack-note', text: t('orders.pack.recognisedNothing'),
       }));
-      at = m.to;
     }
-    if (at < text.length) marked.appendChild(el('span', { text: text.slice(at) }));
-    packResult.appendChild(marked);
-
-    packResult.appendChild(el('p', {
-      class: 'alg-pack-note',
-      text: out.recognisedAnything
-        // ⚠️ «Ticked 0 boxes» READS AS A FAILURE and is not one — it is what you
-        // get every time you read the same pack twice, or correct a typo. Found
-        // by looking at a screenshot: the words were plainly highlighted above
-        // and the sentence underneath said nothing had happened.
-        ? (added ? t('orders.pack.ticked', { n: added }) : t('orders.pack.alreadyTicked'))
-        // ⚠️ RECOGNISING NOTHING IS AN ANSWER AND MUST LOOK LIKE ONE. Silence here
-        // would be read as «this pack contains nothing», which is the single
-        // worst thing this feature could say.
-        : t('orders.pack.recognisedNothing'),
-    }));
 
     // ⚠️ WHAT IT CANNOT ANSWER IS ASKED, NEVER GUESSED. An Italian pack very often
     // prints only «emulsionante: lecitine» — soya, sunflower or egg, and the pack
@@ -405,20 +506,31 @@ function allergenBlock(item, panels) {
       else line = t('orders.pack.questionVague', { word });
       packResult.appendChild(el('p', { class: 'alg-pack-question', text: line }));
     }
-
-    // The rule the whole screen rests on, restated where the temptation is.
-    packResult.appendChild(el('p', { class: 'alg-pack-note alg-pack-warn', text: t('orders.pack.stillYours') }));
+    // ⚠️ «Questo spunta solo le caselle, niente è dichiarato finché…» USED TO CLOSE
+    // THIS BLOCK and is now the last line of the «?» sheet. It is true of every
+    // product on every day, which is the test for what may be hidden; the questions
+    // above it are true of this pack alone, which is why they may not be.
   }
 
-  const suggestBtn = el('button', {
-    // ⚠️ `.mgmt-btn` IS DEFINED IN NO STYLESHEET, and never was — this button has
-    // rendered as a bare grey browser rectangle since v1.64.0 shipped it on 22 Aug.
-    // Verified against a clean `main` worktree before blaming this release: main does
-    // it too. `.btn-secondary` is the name this app already gives a secondary action,
-    // and it is in orders.css, which this page loads. Nothing was designed.
-    class: 'btn-secondary alg-pack-btn', type: 'button', text: t('orders.pack.suggest'),
-    onclick: suggest,
-  });
+  // ⚠️ THE BUTTON IS GONE. «Leggilo e spunta le caselle» was the whole interaction;
+  // now typing IS the interaction, and `orders.pack.suggest` is retired with a test
+  // forbidding its return — a button that still existed would leave people believing
+  // nothing happens until they press it.
+  //
+  // ⚠️ RUN ON A PAUSE, NOT ON A KEYSTROKE. The matcher walks the whole vocabulary and
+  // the evidence panel redraws the pasted text; doing that per character would make
+  // the box stutter under somebody's thumb. 450ms is long enough to be a pause in
+  // typing and short enough to feel immediate after a paste.
+  //
+  // ⚠️ AND IMMEDIATELY ON `change`, which is what a paste and leaving the box both
+  // raise — a person who types and taps straight to the ticks must not race the timer.
+  let pending = null;
+  const scheduleSuggest = () => {
+    clearTimeout(pending);
+    pending = setTimeout(suggest, 450);
+  };
+  packBox.addEventListener('input', scheduleSuggest);
+  packBox.addEventListener('change', () => { clearTimeout(pending); suggest(); });
 
   function read() {
     const contains = [];
@@ -431,17 +543,26 @@ function allergenBlock(item, panels) {
     for (const [key, input] of nutrients) nutrition[key] = input.value === '' ? null : input.value;
     // ⚠️ The stamp is KEPT when it exists, so re-saving does not silently move
     // the verification date and make a two-year-old check look like today's.
-    const stamp = checked.checked ? (checkedAt(item) || new Date().toISOString()) : '';
+    //
+    // ⚠️⚠️ UNLESS THE APP MOVED A BOX SINCE (`stampVoided`). Then the old date belongs
+    // to a different list of allergens, and re-using it would date a brand-new
+    // declaration to before it existed. A fresh confirmation is stamped TODAY.
+    const previous = stampVoided ? null : checkedAt(item);
+    const stamp = checked.checked ? (previous || new Date().toISOString()) : '';
     return buildAllergenFields({
       allergens: contains, mayContain: may, checkedAt: stamp, nutrition,
       packIngredients: packBox.value,
     });
   }
 
-  // The word on the folded header, and the word on the nutrition one. Set by
-  // refresh() below; empty until then.
+  // The word on each folded header. Set by refresh() below; empty until then.
   const algHeadState = el('span', { class: 'alg-head-state' });
   const nutHeadState = el('span', { class: 'alg-head-state' });
+  const packHeadState = el('span', { class: 'alg-head-state' });
+  // ⚠️ THE LINE THAT TELLS SOMEBODY THE APP HAS TOUCHED THEIR TICK BOXES. It sits
+  // OUTSIDE the allergen fold, because the fold is shut when the proposal lands and a
+  // change nobody is told about is the worst thing an automatic feature can do here.
+  const proposedNote = el('p', { class: 'alg-proposed', hidden: 'hidden' });
 
   // The live line at the top: which of the three states this ingredient is in.
   // ⚠️ It says "not checked" in the app's warning colour on purpose — an
@@ -473,6 +594,39 @@ function allergenBlock(item, panels) {
     algHeadState.className = 'alg-head-state'
       + (state === 'unknown' ? ' alg-head-state--warn' : ' alg-head-state--ok');
 
+    // ⚠️ NEUTRAL WHEN FILLED, NEVER GREEN. Green on this screen means «checked»; an
+    // ingredient list somebody has typed is raw material for that decision, not the
+    // decision. Saying «da compilare» in the warning colour is right, though: an empty
+    // list is the job that is not done.
+    const hasPack = packBox.value.trim().length > 0;
+    packHeadState.textContent = hasPack ? t('orders.pack.filledIn') : t('orders.pack.toFillIn');
+    packHeadState.className = 'alg-head-state' + (hasPack ? '' : ' alg-head-state--warn');
+
+    // ⚠️⚠️ IT SHOWS WHENEVER THE APP OWNS A TICK, AND THE FIRST VERSION OF THIS LINE
+    // HID IT ON A VERIFIED INGREDIENT. That was wrong, and driving the form is what
+    // found it: the reasoning was «the tick is on, so a person has accepted the
+    // proposal» — but the tick was on BEFORE the app proposed anything. On an
+    // ingredient somebody had already signed off, the app could quietly add or withdraw
+    // an allergen and the screen would say «Verificato il …» as if nothing had moved.
+    //
+    // ⚠️ AND A VERIFIED ONE GETS THE STRONGER SENTENCE, because that is the worse case:
+    // the declaration on record no longer matches what a person checked.
+    //
+    // ⚠️⚠️ AND IT KEEPS SPEAKING AFTER THE APP WITHDRAWS ITS OWN TICKS. A lapsed
+    // verification does not come back when the text changes again, so a note tied only
+    // to `proposedCount` would vanish and leave «Non ancora verificato» standing on the
+    // screen with nothing to explain it.
+    proposedNote.hidden = proposedCount === 0 && !stampVoided;
+    if (proposedCount) {
+      proposedNote.textContent = t(
+        stampVoided ? 'orders.pack.proposedAfterCheck' : 'orders.pack.proposedTicks',
+        { n: proposedCount });
+    } else if (stampVoided) {
+      proposedNote.textContent = t('orders.pack.checkVoided');
+    } else {
+      proposedNote.textContent = '';
+    }
+
     // ⚠️ `note: ''` AND THEN TRIMMED. The three sentences end in «{note}», which used
     // to carry the nutrition line; the placeholder is kept rather than removed
     // because the same three phrases are pinned by the i18n suites, and an empty one
@@ -495,13 +649,28 @@ function allergenBlock(item, panels) {
     status.className = 'alg-status alg-status--ok';
   }
 
-  [...boxes.values()].forEach(p => {
-    p.contains.addEventListener('change', refresh);
-    p.may.addEventListener('change', refresh);
-  });
+  // ⚠️⚠️ A TICK A PERSON MOVES BECOMES THEIRS, AND THE APP NEVER TOUCHES IT AGAIN.
+  // Both directions matter. Ticking something the pack does not print is knowledge the
+  // app does not have; UNticking a suggestion is a correction, and without recording
+  // it the very next keystroke would put the suggestion straight back and the person
+  // could not win. Dropping it from `appOwned` at the same time is what stops the app
+  // later "taking back" a box that is no longer its to take.
+  for (const [code, pair] of boxes) {
+    for (const column of ['contains', 'may']) {
+      pair[column].addEventListener('change', () => {
+        const key = tickKey(code, column);
+        humanTouched.add(key);
+        appOwned.delete(key);
+        refresh();
+      });
+    }
+  }
   nutrients.forEach(input => input.addEventListener('input', refresh));
   checked.addEventListener('change', refresh);
   refresh();
+  // ⚠️ SHOWS, NEVER TOUCHES. The first draw only marks up whatever text is stored —
+  // see the note on suggest() for why re-ticking on open would erase a correction.
+  suggest({ touchBoxes: false });
 
   const root = el('div', { class: 'mgmt-field alg-block' });
 
@@ -513,23 +682,52 @@ function allergenBlock(item, panels) {
   // ⚠️ CLOSED ON EVERY OPEN, deliberately not remembered. Same as the recipe's card:
   // remembering it open would quietly undo the change on the screen it was made for.
   if (panels.allergens) {
+    // ⚠️⚠️ THE PACK'S OWN LIST IS ITS OWN SECTION NOW, AND IT COMES FIRST. Federico,
+    // 23 Aug 2026: «l'elenco degli ingredienti mettilo separato dagli allergeni,
+    // mettilo sopra gli allergeni». It used to live inside the allergen fold, which
+    // put the fast way to do the job behind the job itself.
+    //
+    // ⚠️ IT IS THE SAME SWITCH. The list exists to declare allergens and nothing else,
+    // so a venue that has turned allergens off must not be left with an orphan box
+    // feeding a feature that is not there — the v1.67.0 decision, unchanged.
+    //
+    // ⚠️ AND ITS STATE WORD IS DELIBERATELY NOT GREEN. On this screen green means
+    // «somebody has verified this»; having typed the list is not a declaration, so a
+    // filled box is stated plainly and left neutral.
+    // ⚠️⚠️ THE INSTRUCTIONS ARE NOT HERE ANY MORE, THEY ARE BEHIND THE «?». Federico,
+    // 23 Aug 2026, looking at this section on his phone: «le trovo troppo
+    // confusionarie, c'è scritto troppo, l'elenco ingredienti deve avere solo il
+    // riquadro dove scrivo gli ingredienti… tutte le spiegazioni le toglierei e le
+    // metterei dentro ? cliccabile accanto». Three sentences, a re-drawn copy of what
+    // he had just typed and two more paragraphs stood between him and a text box.
+    //
+    // ⚠️ WHAT STAYED IS THE DIVIDING LINE, AND IT IS THE SAFETY ONE: a sentence that
+    // is the same on every product is an explanation and belongs in the sheet; a
+    // sentence about THIS product — «the pack says frutta a guscio and nothing could
+    // be ticked» — is a finding, and a finding behind a «?» is a finding nobody reads.
+    root.appendChild(fold({
+      title: t('orders.section.packList'),
+      state: packHeadState,
+      help: 'pack-list',
+      above: [],
+      body: [
+        el('div', { class: 'alg-pack' }, [
+          packBox,
+          packResult,
+        ]),
+      ],
+    }));
+
     root.appendChild(fold({
       title: t('orders.section.allergens'),
       state: algHeadState,
+      help: 'allergens',
       // The answer, and the caveat that qualifies it. Outside the fold.
-      above: [status],
+      // ⚠️ `proposed` JOINS THEM, and it has to be out here: the app now ticks boxes
+      // by itself while this fold is SHUT, so without a word on the outside nobody
+      // would ever learn that anything had happened.
+      above: [status, proposedNote],
       body: [
-        el('p', { class: 'notif-note', text: t('orders.copyThisFromThe') }),
-        // ⚠️ THE PACK BOX SITS ABOVE THE 52 TICK BOXES, not below them. It is the
-        // fast way to fill them in; below, it would be the thing you find after
-        // doing the job by hand.
-        el('div', { class: 'alg-pack' }, [
-          el('span', { class: 'mgmt-field-label', text: t('orders.pack.label') }),
-          el('p', { class: 'notif-note', text: t('orders.pack.help') }),
-          packBox,
-          suggestBtn,
-          packResult,
-        ]),
         el('div', { class: 'alg-list' }, sections),
         el('label', { class: 'day-check alg-checked' }, [checked, el('span', { text: t('orders.iHaveCheckedThe') })]),
       ],
@@ -540,6 +738,7 @@ function allergenBlock(item, panels) {
     root.appendChild(fold({
       title: t('orders.section.nutrition'),
       state: nutHeadState,
+      help: 'nutrition',
       above: [],
       body: [
         el('p', { class: 'mgmt-field-label alg-nut-title', text: t('orders.per100G') }),
@@ -547,6 +746,10 @@ function allergenBlock(item, panels) {
       ],
     }));
   }
+
+  // ⚠️ THE «?» BUTTONS ARE FILLED LAST, once every host this form builds exists. The
+  // module's own pass runs at page load, long before this overlay is created.
+  mountHelpButtons(root);
 
   return { root, read };
 }
@@ -559,7 +762,29 @@ function allergenBlock(item, panels) {
 // Catalogue's copy lives in another feature's folder and this app does not let one
 // feature import another's (see the project's hygiene rules); the STYLES are the
 // borrowed half, copied name for name into orders.css.
-function fold({ title, state, above, body }) {
+// The same card, with nothing to fold. Federico, 23 Aug 2026: «i dati prodotto siano
+// separati dal Prezzo, la separazione deve essere evidente».
+//
+// ⚠️⚠️ WHY IT WAS INVISIBLE, AND WHY THIS IS THE FIX RATHER THAN A NEW DESIGN. The two
+// halves that are always open were a bare `<h3>` over a flat list of fields, while the
+// two that fold are bordered cards. So the parts of the record you always see were the
+// only parts with no edge at all, and «Prezzo» read as the continuation of «Dati
+// prodotto» rather than as its own thing. Giving them the SAME card the folds already
+// have is what makes the boundary obvious — and it invents no border, no radius, no
+// colour and no spacing. The v1.62.0 lesson: finish the copy.
+//
+// ⚠️ AN <h3>, NOT A BUTTON. There is nothing behind it to open, and a tap target that
+// does nothing is worse than no tap target: it teaches somebody the card is closed.
+function section({ title, body }) {
+  return el('div', { class: 'mgmt-fold' }, [
+    el('h3', { class: 'mgmt-fold-head mgmt-fold-head--static' }, [
+      el('span', { class: 'mgmt-fold-label', text: title }),
+    ]),
+    el('div', { class: 'mgmt-fold-body' }, body),
+  ]);
+}
+
+function fold({ title, state, above, body, help }) {
   const inner = el('div', { class: 'mgmt-fold-body', hidden: 'hidden' }, body);
   const btn = el('button', {
     type: 'button', class: 'mgmt-fold-head', 'aria-expanded': 'false',
@@ -574,7 +799,27 @@ function fold({ title, state, above, body }) {
     state,
     el('span', { class: 'mgmt-fold-chev', 'aria-hidden': 'true', text: '›' }),
   ]);
-  return el('div', { class: 'mgmt-fold' }, [btn, ...above, inner]);
+  // ⚠️⚠️ THE «?» CANNOT GO INSIDE THE HEAD, AND THAT IS NOT A STYLE PREFERENCE: the
+  // head IS a <button>, and a button may not contain another button. So the head and
+  // the «?» become a ROW, and the row carries the frame — the identical shape this app
+  // already uses for a card with a delete icon on it (PR #31). Getting this wrong
+  // renders as a button inside a button: the inner one is unreachable, and tapping
+  // near it folds the section instead of explaining it.
+  //
+  // ⚠️ THE HOST IS EMPTY HERE. js/help-button.js fills any `[data-help]` it is pointed
+  // at, and mountHelpButtons() is exported for exactly this — content built after the
+  // page has loaded. The page says WHERE the button goes; that module says what it is.
+  if (!help) return el('div', { class: 'mgmt-fold' }, [btn, ...above, inner]);
+  // ⚠️ NO `help-host` CLASS HERE. The header hosts on the four pages carry it, but it
+  // is defined in no stylesheet at all — mountHelpButtons() looks for `[data-help]`,
+  // never for that class. Copying it would have added a fourth undefined class to a
+  // project that has already shipped three. Caught by the guard that reads every class
+  // this screen writes against the stylesheets it loads.
+  const row = el('div', { class: 'mgmt-fold-head-row' }, [
+    btn,
+    el('span', { class: 'mgmt-fold-help', 'data-help': help }),
+  ]);
+  return el('div', { class: 'mgmt-fold' }, [row, ...above, inner]);
 }
 
 // ── The form ──────────────────────────────────────────────────────────────────
@@ -680,14 +925,21 @@ export function buildIngredientForm({ item, suppliers, preset, actions, onDone, 
     // it the six fields would be the only unnamed part of a screen where everything
     // else is named, which is what makes «Prezzo» look like the start of the record
     // rather than its second half.
-    el('h3', { class: 'mgmt-section-title', text: t('orders.section.productData') }),
-    field(t('orders.field.name'), name),
-    field(t('orders.field.supplier'), supplierSelect),
-    field(t('orders.field.brand'), brand),
-    field(t('orders.field.weight'), weight),
-    field(t('orders.field.category'), category),
-    field(t('orders.orderUnit'), unit),
-    ...(price ? [price.node] : []),
+    section({
+      title: t('orders.section.productData'),
+      body: [
+        field(t('orders.field.name'), name),
+        field(t('orders.field.supplier'), supplierSelect),
+        field(t('orders.field.brand'), brand),
+        field(t('orders.field.weight'), weight),
+        field(t('orders.field.category'), category),
+        field(t('orders.orderUnit'), unit),
+      ],
+    }),
+    // ⚠️ STILL DRAWN ONLY FOR SOMEBODY WHO MAY SEE MONEY — the card wraps the price,
+    // it does not grant it. An employee's form has no price section at all, not an
+    // empty one, because an empty card labelled «Prezzo» advertises what it withholds.
+    ...(price ? [section({ title: t('orders.section.price'), body: [price.node] })] : []),
     allergens.root,
     formActions(save, onCancel),
   ]);

@@ -20,6 +20,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { SECTIONS } from '../js/sections.js';
+import { _dictionaries } from '../js/i18n.js';
 
 const root = new URL('../', import.meta.url);
 const read = (name) => readFileSync(new URL(name, root), 'utf8');
@@ -32,6 +33,7 @@ const REGISTRY = read('js/orders/registry.js');
 const FORM = read('js/orders/ingredient-form.js');
 const MGMT = read('js/orders/management.js');
 const SW = read('sw.js');
+const ORDERS_CSS = read('orders.css');
 
 // ── 1. The access story ──────────────────────────────────────────────────────
 
@@ -75,6 +77,43 @@ test('the one Delete gate, and the one price gate, are still where they were', (
     'an employee gets NO price block at all — not a disabled one');
 });
 
+// ── 1b. The price section Federico asked to fit one screen ───────────────────
+//
+// ⚠️⚠️ EVERY CLASS THIS SECTION USES MUST BE DEFINED SOMEWHERE. `.mgmt-btn` is defined
+// in NO stylesheet and never was, so «Leggilo e spunta le caselle» was a bare grey
+// browser rectangle from 22 August until v1.67.0 noticed. Nothing warns about an
+// undefined class — it is as silent as an undefined custom property, one level up.
+test('the two price fields share a row, and the classes doing it exist', () => {
+  const code = codeOf(FORM);
+  assert.match(code, /class: 'mgmt-pair'/,
+    'Federico: «come si acquista e Prezzo al kg… uno accanto all’altro»');
+  assert.match(ORDERS_CSS, /\.mgmt-pair \{[^}]*grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\)/,
+    '.mgmt-pair must be DEFINED, and with the same two-column values .alg-nutrition '
+    + 'already uses three sections down the same form — no new number was chosen');
+  assert.match(ORDERS_CSS, /\.mgmt-pair \.mgmt-input \{[^}]*min-width:\s*0/,
+    'without min-width:0 a <select> sizes to its widest option and shoves the other '
+    + 'column off — the flex/grid trap this project has paid for once already');
+  assert.match(ORDERS_CSS, /\.mgmt-history > \.mgmt-link \{[^}]*align-self:\s*flex-start/,
+    'and «Mostrali» must line up left with everything else in the card');
+  assert.match(code, /class: 'mgmt-field mgmt-history'/,
+    'the rule above needs the class actually on the element');
+});
+
+// ⚠️ «IVA esclusa» CANNOT GO. Typing the invoice total where the rate belongs makes
+// every recipe using that ingredient cost twenty-five times too much, and nothing on
+// any screen would look wrong. It moved, it was not dropped — once, under the pair,
+// because it is true of both boxes.
+test('⚠️ the ex-VAT warning survives, once, under the pair', () => {
+  const code = codeOf(FORM);
+  assert.match(code, /t\('orders\.exVatNote'\)/, 'the note must still be shown');
+  assert.equal((code.match(/orders\.exVatNote/g) || []).length, 1,
+    'and exactly once — it applies to both boxes, so twice is noise');
+  for (const dict of Object.values(_dictionaries)) {
+    assert.ok(!/[£€$]/.test(dict['orders.exVatNote'] || ''),
+      'the note carries no currency symbol of its own — the venue’s country decides it');
+  }
+});
+
 // ── 2. The safety rule the whole allergen feature rests on ───────────────────
 
 test('⚠️⚠️ the form still never writes the verification stamp', () => {
@@ -85,16 +124,184 @@ test('⚠️⚠️ the form still never writes the verification stamp', () => {
   assert.doesNotMatch(code, /allergensCheckedAt/,
     'nothing in the ingredient form may set the stamp: a suggestion must stay inert '
     + 'until a person ticks «I have checked this»');
-  assert.match(code, /checked\.checked \? \(checkedAt\(item\) \|\| new Date\(\)/,
+  assert.match(code, /const stamp = checked\.checked \? \(previous \|\| new Date\(\)/,
     'the stamp comes from the tick box, and an existing one is kept rather than moved');
 });
 
-test('the pack reader still only ever ADDS a tick', () => {
+// ⚠️⚠️ AND THE HOLE THAT LEFT, WHICH WAS FOUND BY LOOKING AT A SCREENSHOT AND THEN
+// PROVED AGAINST THE EMULATOR DATABASE BEFORE A LINE WAS WRITTEN.
+//
+// «The form never writes the stamp» is not the same as «the app cannot declare». On an
+// ingredient somebody verified on 20 August, the app read the pack text, ticked MILK by
+// itself, and Save kept the 20 August stamp — so the saved document read
+// `[gluten-wheat, milk]`, verified, by a person who never saw the milk. The one thing
+// this whole feature promises is that a proposal is inert; that made it a declaration.
+//
+// The rule now: THE APP MOVING A BOX CLEARS THE TICK THAT MEANS «I checked this».
+// Both directions — an added tick was never checked, and a withdrawn one means the
+// stamp describes a list that no longer exists.
+test('⚠️⚠️ a box the app moves clears the verification, in both directions', () => {
   const code = codeOf(FORM);
-  assert.match(code, /!pair\.contains\.checked\)\s*\{\s*pair\.contains\.checked = true/,
-    'a box already ticked by a person must never be untouched by the matcher');
-  assert.doesNotMatch(code, /\.checked = false/,
-    'nothing in this form may UNtick an allergen box');
+  assert.match(code, /if \(\(next\.added \|\| next\.removed\) && checked\.checked\) \{[\s\S]{0,120}?checked\.checked = false;[\s\S]{0,120}?stampVoided = true;/,
+    'when reconcileTicks reports it moved anything on a verified record, the tick box '
+    + 'must be cleared — an unenforced «verify it again» warning is worse than none');
+  // ⚠️ AND THE OLD DATE MUST NOT COME BACK WITH THE NEXT CONFIRMATION. Re-using it
+  // would date a declaration made today to before the allergen was in it.
+  assert.match(code, /const previous = stampVoided \? null : checkedAt\(item\);/,
+    'a confirmation after a lapse is stamped TODAY, never with the superseded date');
+});
+
+// ⚠️ THE PERSON HAS TO BE TOLD, AND KEEP BEING TOLD. The ticks land inside a fold that
+// is shut, so the line lives outside it — and it must survive the app withdrawing its
+// own ticks again, or the screen would show «Non ancora verificato» with nothing left
+// on it to explain why the verification went.
+test('⚠️ the lapse is announced outside the fold, and does not vanish', () => {
+  const code = codeOf(FORM);
+  assert.match(code, /proposedNote\.hidden = proposedCount === 0 && !stampVoided;/,
+    'the note must outlive the proposal that caused the lapse');
+  assert.match(code, /stampVoided \? 'orders\.pack\.proposedAfterCheck' : 'orders\.pack\.proposedTicks'/,
+    'the stronger sentence follows the LAPSE, not the tick box — which this very '
+    + 'change now clears, so a note keyed on checked.checked could never appear again');
+  assert.match(code, /t\('orders\.pack\.checkVoided'\)/,
+    'and there is a wording for a lapse with no proposal left to count');
+  assert.match(code, /above: \[status, proposedNote\]/,
+    'both of them stay OUTSIDE the fold — the v1.60.0 rule');
+});
+
+// ⚠️⚠️ THIS RULE CHANGED IN v1.70.0, AND THE OLD ONE IS WRITTEN DOWN HERE BECAUSE
+// DELETING IT WOULD LOOK LIKE A SAFETY CHECK BEING DROPPED.
+//
+// It used to read «the pack reader only ever ADDS a tick», and that was right while
+// suggesting was a BUTTON you pressed once, at the end: a box the app added could only
+// be something you then checked, and unticking anything would have overruled a person.
+//
+// Federico asked for it to run by itself as the list is typed, and that inverts the
+// danger. «latte» ticks MILK; correcting it to «latte di mandorla» leaves the milk
+// behind for ever — a declaration the automation invented, that nobody typed and
+// nothing on screen explains. Never-untick would now be the UNSAFE rule.
+//
+// The rule that replaces it is one sentence: THE APP MAY TAKE BACK ONLY WHAT THE APP
+// PUT THERE. Its logic is pure and lives in reconcileTicks (tests/allergen-match);
+// what this file pins is that the FORM obeys it rather than deciding for itself.
+test('⚠️⚠️ the form never decides tick ownership itself — it asks the pure model', () => {
+  const code = codeOf(FORM);
+  assert.match(code, /reconcileTicks\(\{[\s\S]{0,200}?appOwned[\s\S]{0,200}?humanTouched/,
+    'the boxes must be moved by reconcileTicks, with both ownership sets handed in');
+  // ⚠️ AND THE CALL MUST EXIST AT ALL. A guard on the shape of a call is satisfied by
+  // deleting the call (the v1.68.0 lesson), which here would leave the app ticking
+  // boxes with no rule about taking them back.
+  assert.equal((code.match(/reconcileTicks\(/g) || []).length, 1,
+    'exactly one place may reconcile the ticks');
+});
+
+test('⚠️⚠️ a box a PERSON moves becomes untouchable, in both directions', () => {
+  const code = codeOf(FORM);
+  const listener = code.slice(code.indexOf('for (const column of'));
+  assert.ok(listener.length > 100, 'the slice must actually hold the listener');
+  assert.match(listener, /humanTouched\.add\(key\)/,
+    'moving a box must record that a person did it');
+  assert.match(listener, /appOwned\.delete\(key\)/,
+    'and must take it out of what the app may later withdraw — without this the next '
+    + 'keystroke puts a cleared suggestion straight back and the person cannot win');
+  // Both columns, not just «has»: a trace somebody ticked by hand is a declaration too.
+  assert.match(code, /\['contains', 'may'\]/);
+});
+
+// ⚠️⚠️ OPENING A RECORD MUST NOT MOVE A SINGLE BOX. A saved ingredient can hold pack
+// text saying «latte» and a milk box somebody deliberately UNTICKED. Re-running the
+// matcher on open would put that tick back every time the record was looked at, in
+// silence. Federico asked for it «quando compilo l'elenco» — when the list is typed.
+test('⚠️⚠️ the first draw shows what the text says and ticks nothing', () => {
+  const code = codeOf(FORM);
+  assert.match(code, /suggest\(\{ touchBoxes: false \}\)/,
+    'the initial call must be the read-only one');
+  // ⚠️ THE SHAPE CHANGED IN v1.70.0 AND THE PROPERTY DID NOT. It used to read
+  // `const added = touchBoxes ? applyTicks(out) : null`, because the count was printed
+  // in a line under the box; that line moved into the «?» sheet, so nothing needs the
+  // number here any more (it is said once, outside the fold, by proposedNote).
+  // What must stay true is that `touchBoxes` gates EVERY call that moves a box.
+  assert.match(code, /if \(touchBoxes\) applyTicks\(out\);/,
+    'and touchBoxes must actually gate the only place boxes are moved');
+  const calls = [...code.matchAll(/applyTicks\(/g)].length;
+  assert.equal(calls, 3, `applyTicks is called ${calls} times; each must be inside a `
+    + 'touchBoxes gate — the definition, the empty-box path and the matched path');
+  for (const m of code.matchAll(/^(.*)applyTicks\(/gm)) {
+    if (m[1].includes('function ')) continue;      // the definition itself
+    assert.match(m[1], /touchBoxes/,
+      `a call to applyTicks with no touchBoxes gate on its line: «${m[1].trim()}»`);
+  }
+});
+
+// The button is gone; typing is the interaction. A button left behind would teach
+// people that nothing happens until they press it.
+// ── The «?» beside each section, and what may NOT go behind it ───────────────
+//
+// ⚠️⚠️ EVERY ASSERTION BELOW EXISTS BECAUSE A MUTATION SURVIVED WITHOUT IT. Seven of
+// fourteen probes came back green on the first run: the explanations could come back
+// onto the screen, the findings could be deleted, the «?» could be nested inside the
+// head button, and nothing was left to fill the buttons in. «The suite went red» was
+// never the question — these are the guards, and they did not exist.
+test('⚠️ the «?» is a SIBLING of the head, never inside it', () => {
+  const code = codeOf(FORM);
+  // A button may not contain a button: nested, the «?» is unreachable and tapping near
+  // it folds the section instead of explaining it.
+  assert.match(code, /const row = el\('div', \{ class: 'mgmt-fold-head-row' \}, \[\s*\n\s*btn,\s*\n\s*el\('span', \{ class: 'mgmt-fold-help', 'data-help': help \}\),/,
+    'the row holds the head and the «?» side by side');
+  const btnBlock = code.slice(code.indexOf("const btn = el('button'"), code.indexOf('const row ='));
+  assert.ok(btnBlock.length > 100, 'the slice must actually hold the head button');
+  assert.doesNotMatch(btnBlock, /data-help/,
+    'the head button must not contain the help host — a button inside a button');
+});
+
+test('⚠️ the help buttons are actually mounted, or every «?» is an empty span', () => {
+  const code = codeOf(FORM);
+  assert.match(code, /mountHelpButtons\(root\);/,
+    'this overlay is built after page load, so it must ask for its own buttons — '
+    + 'without the call the hosts stay empty and nothing on screen looks broken');
+  assert.match(code, /import \{ mountHelpButtons \} from '\.\.\/help-button\.js';/);
+  // Three sections, three sheets, and each id must exist in help-content.js.
+  const ids = [...code.matchAll(/help: '([a-z-]+)'/g)].map(m => m[1]);
+  assert.deepEqual(ids, ['pack-list', 'allergens', 'nutrition'],
+    'the three folding sections each carry their own sheet');
+});
+
+// ⚠️⚠️ WHAT MAY NOT GO BEHIND THE «?». The rule Federico's request resolves to: a
+// sentence true of every product is an explanation and may be hidden; a sentence about
+// THIS product is a finding and may not. A mutation deleted the findings and every
+// test stayed green — on the one screen in this app that can send somebody to hospital.
+test('⚠️⚠️ the findings about THIS pack stay on the screen', () => {
+  const code = codeOf(FORM);
+  assert.match(code, /packResult\.appendChild\(el\('p', \{ class: 'alg-pack-question', text: line \}\)\);/,
+    'the «the pack says frutta a guscio, nothing was ticked» line must be drawn — '
+    + 'behind a «?» nobody would ever see the one moment the app goes quiet');
+  assert.match(code, /if \(!out\.recognisedAnything\) \{[\s\S]{0,200}?orders\.pack\.recognisedNothing/,
+    'recognising nothing is an answer and must look like one: silence there reads as '
+    + '«this pack contains nothing», the worst thing this feature could say');
+});
+
+// ⚠️ AND WHAT MUST NOT COME BACK. The instructions are in the sheet now; a paragraph
+// re-added here is how the section fills up again one line at a time.
+test('⚠️ the section holds the box and the findings, not the instructions', () => {
+  const code = codeOf(FORM);
+  const packSection = code.slice(code.indexOf("t('orders.section.packList')"),
+    code.indexOf("t('orders.section.allergens')"));
+  assert.ok(packSection.length > 100, 'the slice must actually hold the pack section');
+  for (const key of ['orders.pack.help', 'orders.pack.stillYours']) {
+    assert.ok(!packSection.includes(key),
+      `${key} belongs in the «?» sheet, not on the screen — Federico: «c'è scritto troppo»`);
+  }
+  // The intros above the other two panels went the same way.
+  assert.ok(!code.includes("text: t('orders.copyThisFromThe')"),
+    'the allergen panel intro is in its sheet now');
+});
+
+test('the «read it and tick the boxes» button is gone, and typing runs it', () => {
+  const code = codeOf(FORM);
+  assert.doesNotMatch(code, /orders\.pack\.suggest/,
+    'the key is retired — see tests/i18n for the ban on its return');
+  assert.match(code, /packBox\.addEventListener\('input'/);
+  assert.match(code, /packBox\.addEventListener\('change'/,
+    'a paste and leaving the box must not have to wait for the timer');
 });
 
 // ── 3. The move actually happened, and left nothing behind ───────────────────
@@ -304,4 +511,45 @@ test('the retired subtitles are gone from the markup AND from both dictionaries'
       assert.ok(!read(page).includes(dead), `${page} still points at ${dead}`);
     }
   }
+});
+
+// ── The purchase-unit picker has half a row, and a <select> lies about it ─────
+//
+// ⚠️⚠️ A NATIVE <select> TRUNCATES WITHOUT REPORTING AN OVERFLOW. That is the v1.66.0
+// lesson and it caught this release too: putting «Come si acquista» and «Prezzo» side
+// by side halved the picker, and at 320px it rendered «— Nessun prezzo` with the last
+// characters eaten by the native arrow. Every measurement passed — scrollWidth equals
+// clientWidth on a clipped <select> — and only a screenshot showed it.
+//
+// MEASURED IN THE REAL BROWSER, 23 Aug 2026, Manrope 15px at 320px:
+//   the column is 125.3px · padding 24 · border 3 · the native arrow ~20
+//   → 78.7px of room for the text
+// «— Nessun prezzo —» wanted 132.1 and «a volume (litri)» 99.1. Both were clipped.
+// The words were shortened rather than the column widened, because «a volume (litri)»
+// was already the widest thing in a 78.7px box and no ratio makes that fit honestly.
+//
+// This guard is a character budget, which is a proxy — but a proxy that fires. Manrope
+// 15px averages ~7.2px per character, so 11 characters is ~79px: the whole budget.
+test('⚠️ the purchase-unit words fit a half-width select at 320px', () => {
+  const dict = _dictionaries();
+  const KEYS = ['orders.noPrice2', 'price.byWeight', 'price.byVolume', 'price.byPiece'];
+  const BUDGET = 11;
+  const tooLong = [];
+  for (const lang of ['en', 'it']) {
+    for (const key of KEYS) {
+      const word = dict[lang][key];
+      assert.ok(typeof word === 'string' && word.length > 0, `${lang} ${key} is missing`);
+      if (word.length > BUDGET) tooLong.push(`${lang} ${key} = «${word}» (${word.length} chars)`);
+    }
+  }
+  assert.deepEqual(tooLong, [],
+    `these would be silently truncated in the picker at 320px — a <select> reports no `
+    + `overflow, so nothing but a screenshot would show it`);
+});
+
+// Proof the budget can fire, using the exact wording it was written to catch.
+test('and that budget would have caught the wording it replaced', () => {
+  const before = ['— Nessun prezzo —', 'a volume (litri)', 'by volume (litres)'];
+  assert.deepEqual(before.filter(w => w.length <= 11), [],
+    'the retired words must all exceed the budget, or the budget proves nothing');
 });

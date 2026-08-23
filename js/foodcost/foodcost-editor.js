@@ -16,7 +16,11 @@ import {
   VAT_RATES, SELLING_MODES, costProduct, blockerText, statusFor,
   snapshotWorthTaking, productSnapshot, normalizeProduct,
 } from './foodcost-model.js';
-import { CURRENCY, formatRate, formatMoney, pricePerKg } from '../price-model.js';
+import { formatRate, formatMoney, pricePerKg } from '../price-model.js';
+// ⚠️ READ WHERE THE FIELD IS DRAWN, never at module load: the venue — and therefore
+// its country, and therefore its currency — arrives with the session, after every
+// module has been evaluated. See js/currency.js.
+import { currentCurrency } from '../currency.js';
 import { costRecipe } from '../catalogue/recipe-cost-model.js';
 
 const TRASH_SVG =
@@ -340,7 +344,7 @@ export function renderEditor({ product, app }) {
     el('h2', { class: 'fc-section', text: t('fc.howItIsSold') }),
     field(t('fc.sold'), modeSelect),
     piecesField,
-    field(t('fc.sellingPriceVat', { currency: CURRENCY }), priceInput,
+    field(t('fc.sellingPriceVat', { currency: currentCurrency() }), priceInput,
       t('fc.thePriceOnThe')),
     field(t('fc.vatRate'), vatSelect),
     vatOther,
