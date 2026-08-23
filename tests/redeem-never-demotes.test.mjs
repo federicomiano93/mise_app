@@ -61,6 +61,13 @@ test('redeemJoinCode refuses a code for a location the caller is already in', ()
     'redeemJoinCode no longer asks whether the caller is already a member — a staff code would overwrite an owner');
   assert.match(BODY, /status: 'already-member'/,
     'the refusal has lost its name, so the app can no longer tell it from a bad code');
+  // ⚠️ THE COMPARISON ITSELF, because a source check cannot see an inverted one.
+  // membershipIn returns false for "not a member" and the VALUE otherwise, so the
+  // refusal must fire on `!== false`. Written `=== false` it would refuse every
+  // genuine new starter and let every existing member through — the exact opposite
+  // of this guard, with every other check in this file still passing.
+  assert.match(BODY, /membershipIn\([\s\S]{0,80}\) !== false\) \{/,
+    'the membership comparison is not `!== false` — an inverted one refuses the new starter and admits the member');
 });
 
 // ⚠️ THE READ MUST BE INSIDE THE TRANSACTION. accessValue() fetches for itself, so
