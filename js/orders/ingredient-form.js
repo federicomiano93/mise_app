@@ -21,10 +21,14 @@ import { canManageHere } from './firebase-orders.js';
 import { NO_SUPPLIER_ID } from './no-supplier.js';
 import { field, formActions, reportFailure, shortDate } from './mgmt-ui.js';
 import {
-  CURRENCY, PRICE_UNITS, priceUnitLabel,
+  PRICE_UNITS, priceUnitLabel,
   pricePatch, priceChanged, priceRecord, pricePerKg,
   formatPricePerUnit, formatRate, costReasonText,
 } from '../price-model.js';
+// ⚠️ THE CURRENCY FOLLOWS THE VENUE'S COUNTRY, and it is read inside priceBlock()
+// rather than up here — the venue is not open when this module is evaluated. See
+// js/currency.js and currencyOf() in js/market.js.
+import { currentCurrency } from '../currency.js';
 // ⚠️ From js/ ROOT, not from a feature folder — see the header of that file. What
 // an ingredient declares is typed HERE, in Orders, and read by the catalogue and
 // by the labels screen, so the judgement lives in one place for all three.
@@ -79,20 +83,31 @@ function priceBlock(item, actions) {
   // freezes in the app's starting language whatever the venue says. That defect was
   // in fourteen places on 21 Aug (v1.57.0); this is the shape that avoids it.
   const RATE_LABEL = Object.freeze({
-    kg: t('orders.pricePerKg', { currency: CURRENCY }),
-    l: t('orders.pricePerLitre', { currency: CURRENCY }),
-    pcs: t('orders.pricePerPiece', { currency: CURRENCY }),
+    kg: t('orders.pricePerKg', { currency: currentCurrency() }),
+    l: t('orders.pricePerLitre', { currency: currentCurrency() }),
+    pcs: t('orders.pricePerPiece', { currency: currentCurrency() }),
   });
 
-  // The worked example under the box. It exists to pre-empt the ONE mistake this
-  // form cannot detect: the invoice total typed where the rate belongs. 180 and
-  // 7.20 are both perfectly valid numbers, so nothing can reject the wrong one —
-  // it just makes every recipe using that ingredient cost twenty-five times too
-  // much, on a screen where the answer is a percentage nobody can eyeball.
+  // The worked example, which now lives INSIDE the box as its placeholder.
+  //
+  // Federico, 23 Aug 2026: «togli la scritta… fallo visivamente coerente». It used to
+  // be three lines of prose under the field, and with the two price boxes now side by
+  // side there is no room for a sentence under either of them.
+  //
+  // ⚠️⚠️ IT SHRANK; IT DID NOT GO. It exists to pre-empt the ONE mistake this form
+  // cannot detect — the invoice total typed where the rate belongs. 180 and 7.20 are
+  // both perfectly valid numbers, so nothing can reject the wrong one; it simply makes
+  // every recipe using that ingredient cost twenty-five times too much, on a screen
+  // whose answer is a percentage nobody can check by eye. So the shortest form that
+  // still says it — the unit, in brackets — goes where the number is typed.
+  //
+  // ⚠️ AND IT CARRIES NO CURRENCY. The old wording spelled out «a 25 kg sack at £180»,
+  // which was the last hardcoded pound sign in the dictionary and printed sterling on
+  // an Italian bakery. An example needs the UNIT to make its point, never the money.
   const RATE_HINT = Object.freeze({
-    kg: t('orders.thePriceOfOne'),
-    l: t('orders.thePriceOfOne2'),
-    pcs: t('orders.thePriceOfOne3'),
+    kg: t('orders.eg.ratePerKg'),
+    l: t('orders.eg.ratePerLitre'),
+    pcs: t('orders.eg.ratePerPiece'),
   });
 
   const unitSelect = el('select', { class: 'mgmt-input' });
@@ -111,15 +126,19 @@ function priceBlock(item, actions) {
     type: 'number', class: 'mgmt-input', min: '0', step: 'any',
     inputmode: 'decimal', value: value ?? '', placeholder,
   });
-  // ⚠️ THE NUMBER KEEPS ITS DECIMAL POINT IN BOTH LANGUAGES. Only «e.g.» is
-  // translated: the box is <input type="number">, which does not accept a comma, so
-  // an example written «7,20» would be an instruction to type something the field
+  // ⚠️ THE NUMBER KEEPS ITS DECIMAL POINT IN BOTH LANGUAGES. Only the words around it
+  // are translated: the box is <input type="number">, which does not accept a comma,
+  // so an example written «7,20» would be an instruction to type something the field
   // then refuses.
-  const rate = money(item?.pricePerUnit, t('orders.eg.rate'));
+  //
+  // ⚠️ The placeholder is EMPTY here and filled by refresh() below, because it now
+  // depends on the purchase unit — «(un chilo)» is wrong the moment somebody picks
+  // pieces, and a stale example is worse than none on the one field that cannot be
+  // checked for what it is a price OF.
+  const rate = money(item?.pricePerUnit, '');
   const pieceWeight = money(item?.unitWeightKg, t('orders.eg.pieceWeight'));
 
   const rateLabel = el('span', { class: 'mgmt-field-label' });
-  const rateHint = el('p', { class: 'notif-note' });
   // Two lines, not one. A per-piece price can be perfectly complete as a PRICE
   // and still be unusable in a recipe written in grams, and a summary that only
   // showed "£2.10 / each" would look finished while the ingredient silently
@@ -149,9 +168,10 @@ function priceBlock(item, actions) {
   function refresh() {
     const unit = unitSelect.value;
     pieceField.hidden = unit !== 'pcs';
-    rateLabel.textContent = RATE_LABEL[unit] || t('orders.priceGeneric', { currency: CURRENCY });
-    rateHint.textContent = RATE_HINT[unit] || '';
-    rateHint.hidden = !RATE_HINT[unit];
+    rateLabel.textContent = RATE_LABEL[unit] || t('orders.priceGeneric', { currency: currentCurrency() });
+    // ⚠️ The example follows the UNIT, and an unknown unit gets none. «(un chilo)»
+    // left showing while somebody is pricing by the piece is worse than no example.
+    rate.placeholder = RATE_HINT[unit] || '';
 
     const draft = pricePatch(read(), null);
     if (draft.pricePerUnit === null) {
@@ -179,10 +199,27 @@ function priceBlock(item, actions) {
   });
   refresh();
 
-  const node = el('div', {}, [
-    el('h3', { class: 'mgmt-section-title', text: t('orders.section.price') }),
+  // ⚠️ THE TWO PRICE BOXES SHARE A ROW. Federico, 23 Aug 2026: «come si acquista e
+  // Prezzo al kg si potrebbero mettere uno accanto all'altro in modo tale che occupa
+  // meno spazio». They belong together — the unit is what the rate is a rate OF — and
+  // as two stacked full-width fields they were half the height of the price section.
+  //
+  // ⚠️ THE GRID IS NOT A NEW VALUE. `repeat(2, minmax(0, 1fr))` with an 8px gap is
+  // .alg-nutrition, three sections further down THIS SAME FORM. The v1.62.0 rule:
+  // finish the copy rather than design a second answer.
+  const pricePair = el('div', { class: 'mgmt-pair' }, [
     field(t('orders.howItIsBought'), unitSelect),
-    el('label', { class: 'mgmt-field' }, [rateLabel, rate, rateHint]),
+    el('label', { class: 'mgmt-field' }, [rateLabel, rate]),
+  ]);
+
+  const node = el('div', {}, [
+    // ⚠️ «Peso di un pezzo» STAYS FULL WIDTH. It appears only when the unit is
+    // `pcs`, and a column that comes and goes would make the row above it jump.
+    pricePair,
+    // Said ONCE, under the pair, instead of four times inside four labels that no
+    // longer have room for it. ⚠️ It may not be dropped: entering the gross figure
+    // inflates every recipe cost by the VAT rate and nothing on any screen looks wrong.
+    el('p', { class: 'notif-note', text: t('orders.exVatNote') }),
     pieceField,
     summary,
     item ? priceHistoryBlock(item, actions) : null,
@@ -215,12 +252,25 @@ function priceHistoryBlock(item, actions) {
       });
     } catch (err) {
       button.disabled = false;
-      button.textContent = t('orders.priceHistory');
+      button.textContent = t('orders.showThem');
       await reportFailure('load', item.name, err);
     }
-  } }, t('orders.priceHistory'));
+  } }, t('orders.showThem'));
 
-  return el('div', { class: 'mgmt-field' }, [button, list]);
+  // ⚠️ IT IS A FIELD NOW, NOT A BARE LINK. Federico, 23 Aug 2026: «metti storico prezzi
+  // con lo stesso font di come si acquista e Prezzo al kg, fallo visivamente coerente».
+  // It was the only thing in the price section with no label of its own, so it read as
+  // a stray link rather than as part of the record. `.mgmt-field-label` is the same
+  // 12px the two labels above it use — the class, not a copy of its values.
+  //
+  // ⚠️ IT STILL LOADS ONLY WHEN TAPPED. Naming it does not fetch it: this is a separate
+  // database read per ingredient, and somebody opening the form to fix a spelling must
+  // not pay for it (P14).
+  return el('div', { class: 'mgmt-field' }, [
+    el('span', { class: 'mgmt-field-label', text: t('orders.priceHistory') }),
+    button,
+    list,
+  ]);
 }
 
 // ── Allergens and nutrition ───────────────────────────────────────────────────
@@ -559,6 +609,28 @@ function allergenBlock(item, panels) {
 // Catalogue's copy lives in another feature's folder and this app does not let one
 // feature import another's (see the project's hygiene rules); the STYLES are the
 // borrowed half, copied name for name into orders.css.
+// The same card, with nothing to fold. Federico, 23 Aug 2026: «i dati prodotto siano
+// separati dal Prezzo, la separazione deve essere evidente».
+//
+// ⚠️⚠️ WHY IT WAS INVISIBLE, AND WHY THIS IS THE FIX RATHER THAN A NEW DESIGN. The two
+// halves that are always open were a bare `<h3>` over a flat list of fields, while the
+// two that fold are bordered cards. So the parts of the record you always see were the
+// only parts with no edge at all, and «Prezzo» read as the continuation of «Dati
+// prodotto» rather than as its own thing. Giving them the SAME card the folds already
+// have is what makes the boundary obvious — and it invents no border, no radius, no
+// colour and no spacing. The v1.62.0 lesson: finish the copy.
+//
+// ⚠️ AN <h3>, NOT A BUTTON. There is nothing behind it to open, and a tap target that
+// does nothing is worse than no tap target: it teaches somebody the card is closed.
+function section({ title, body }) {
+  return el('div', { class: 'mgmt-fold' }, [
+    el('h3', { class: 'mgmt-fold-head mgmt-fold-head--static' }, [
+      el('span', { class: 'mgmt-fold-label', text: title }),
+    ]),
+    el('div', { class: 'mgmt-fold-body' }, body),
+  ]);
+}
+
 function fold({ title, state, above, body }) {
   const inner = el('div', { class: 'mgmt-fold-body', hidden: 'hidden' }, body);
   const btn = el('button', {
@@ -680,14 +752,21 @@ export function buildIngredientForm({ item, suppliers, preset, actions, onDone, 
     // it the six fields would be the only unnamed part of a screen where everything
     // else is named, which is what makes «Prezzo» look like the start of the record
     // rather than its second half.
-    el('h3', { class: 'mgmt-section-title', text: t('orders.section.productData') }),
-    field(t('orders.field.name'), name),
-    field(t('orders.field.supplier'), supplierSelect),
-    field(t('orders.field.brand'), brand),
-    field(t('orders.field.weight'), weight),
-    field(t('orders.field.category'), category),
-    field(t('orders.orderUnit'), unit),
-    ...(price ? [price.node] : []),
+    section({
+      title: t('orders.section.productData'),
+      body: [
+        field(t('orders.field.name'), name),
+        field(t('orders.field.supplier'), supplierSelect),
+        field(t('orders.field.brand'), brand),
+        field(t('orders.field.weight'), weight),
+        field(t('orders.field.category'), category),
+        field(t('orders.orderUnit'), unit),
+      ],
+    }),
+    // ⚠️ STILL DRAWN ONLY FOR SOMEBODY WHO MAY SEE MONEY — the card wraps the price,
+    // it does not grant it. An employee's form has no price section at all, not an
+    // empty one, because an empty card labelled «Prezzo» advertises what it withholds.
+    ...(price ? [section({ title: t('orders.section.price'), body: [price.node] })] : []),
     allergens.root,
     formActions(save, onCancel),
   ]);

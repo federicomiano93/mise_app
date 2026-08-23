@@ -19,6 +19,8 @@ import {
   nutrientWordIt,
   allergenGroupName,
   allergenGroupCodes,
+  currencyOf,
+  CURRENCY_COUNTRIES,
 } from '../js/market.js';
 import { ALLERGEN_CODES, ALLERGEN_GROUPS, NUTRIENT_KEYS, allergenLabel } from '../js/allergen-model.js';
 import { _dictionaries } from '../js/i18n.js';
@@ -424,5 +426,53 @@ test('both country phrases exist in both dictionaries', () => {
       assert.ok(typeof phrase === 'string' && phrase.length > 1,
         `${key} is missing from ${lang} — a screen would print the key itself`);
     }
+  }
+});
+
+// ── What the money is counted in ─────────────────────────────────────────────
+//
+// Federico, 23 Aug 2026, looking at Panificio Miano on his own phone: every price
+// said «£». The venue is in Italy and the ten prices in it were typed in euros, so
+// the app was mislabelling money it had been given correctly.
+
+test('⚠️ the currency follows the COUNTRY — euros in Italy, pounds in the UK', () => {
+  assert.equal(currencyOf({ country: 'IT' }), '€');
+  assert.equal(currencyOf({ country: 'GB' }), '£');
+});
+
+// ⚠️⚠️ THE INTERFACE LANGUAGE MUST NOT REACH THIS ANSWER. An English-speaking
+// employee at an Italian bakery switches the app to English and the flour still costs
+// euros. The venue's own `language` field is present in all four cases below and must
+// change nothing at all — if it ever does, this fails in both directions at once.
+test('⚠️⚠️ the app\u2019s language cannot move the currency', () => {
+  assert.equal(currencyOf({ country: 'IT', language: 'en' }), '€',
+    'an Italian venue read in English is still counted in euros');
+  assert.equal(currencyOf({ country: 'IT', language: 'it' }), '€');
+  assert.equal(currencyOf({ country: 'GB', language: 'it' }), '£',
+    'a UK venue read in Italian is still counted in pounds');
+  assert.equal(currencyOf({ country: 'GB', language: 'en' }), '£');
+});
+
+// ⚠️ A COUNTRY ADDED WITHOUT A CURRENCY WOULD PRINT POUNDS IN SILENCE, because
+// js/currency.js falls back rather than blanking the price line — the right choice
+// for money and the wrong one to rely on. This is the check that makes the fallback
+// unreachable for any country the app actually claims to support.
+test('⚠️ every country the app supports has a currency of its own', () => {
+  assert.deepEqual([...CURRENCY_COUNTRIES].sort(), [...COUNTRIES].sort(),
+    'COUNTRIES and the currency table must hold exactly the same countries');
+  for (const country of COUNTRIES) {
+    const symbol = currencyOf({ country });
+    assert.ok(typeof symbol === 'string' && symbol.length > 0,
+      `${country} has no currency — it would silently fall back to pounds`);
+  }
+});
+
+// The same direction as outputLanguage(): the model says "I do not know" rather than
+// guessing. What the APP does with that null is a separate decision, written down in
+// js/currency.js — and it deliberately differs from the label's, because a mislabelled
+// price computes correctly while a mislabelled allergen does not.
+test('an unknown country has no currency, and says so', () => {
+  for (const location of [null, undefined, {}, { country: 'FR' }, { country: '' }]) {
+    assert.equal(currencyOf(location), null);
   }
 });

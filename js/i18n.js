@@ -578,9 +578,6 @@ const DICTIONARIES = Object.freeze({
     'orders.deliveryDaysWhenThey': 'Delivery days — when they deliver',
     'orders.orderDaysWhenYou': 'Order days — when you place the order',
     'orders.phoneWhatsappDigitsOnly': 'Phone (WhatsApp, digits only)',
-    'orders.thePriceOfOne': 'The price of ONE KILO, not of the pack — a 25 kg sack at £180 is 7.20.',
-    'orders.thePriceOfOne2': 'The price of ONE LITRE, not of the container — a 5 l tin at £30 is 6.00.',
-    'orders.thePriceOfOne3': 'The price of ONE PIECE, not of the box — a box of 100 at £3.50 is 0.035.',
     'orders.noPrice2': '— No price —',
     'orders.weightOfOnePiece': 'Weight of one piece (kg)',
     'orders.neededOnlyToUse': 'Needed only to use this in a recipe written in grams — one egg is about 0.055, a vanilla pod about 0.0035.',
@@ -588,6 +585,7 @@ const DICTIONARIES = Object.freeze({
     'orders.loading': 'Loading…',
     'orders.noPriceRecordedYet': 'No price recorded yet.',
     'orders.priceHistory': 'Price history',
+    'orders.showThem': 'Show them',
     // ⚠️ 'orders.cerealsContainingGluten' WAS RETIRED ON 23 Aug 2026 AND MUST NOT COME
     // BACK. It named an allergen category — a food word — from the INTERFACE
     // dictionary, so an Italian screen printed «CEREALI CONTENENTI GLUTINE» above rows
@@ -725,7 +723,10 @@ const DICTIONARIES = Object.freeze({
     // ⚠️ The NUMBER keeps its decimal point in both languages: these boxes are
     // <input type="number">, which refuses a comma. Only «e.g.» is translated.
     'orders.eg.packWeight': 'e.g. 2.27kg',
-    'orders.eg.rate': 'e.g. 7.20',
+    'orders.eg.ratePerKg': 'e.g. 7.20 (one kilo)',
+    'orders.exVatNote': 'Prices are net of VAT.',
+    'orders.eg.ratePerLitre': 'e.g. 6.00 (one litre)',
+    'orders.eg.ratePerPiece': 'e.g. 0.035 (one piece)',
     'orders.eg.pieceWeight': 'e.g. 0.055',
     'orders.ingredientsCount': { one: '{n} ingredient', other: '{n} ingredients' },
 
@@ -749,10 +750,10 @@ const DICTIONARIES = Object.freeze({
     'orders.failed.deactivate': 'Could not deactivate “{name}”. Check your network and try again.',
     'orders.failed.activate': 'Could not reactivate “{name}”. Check your network and try again.',
     'orders.failed.load': 'Could not load the price history for “{name}”. Check your network and try again.',
-    'orders.pricePerKg': 'Price per kg ({currency}, excluding VAT)',
-    'orders.pricePerLitre': 'Price per litre ({currency}, excluding VAT)',
-    'orders.pricePerPiece': 'Price per piece ({currency}, excluding VAT)',
-    'orders.priceGeneric': 'Price ({currency}, excluding VAT)',
+    'orders.pricePerKg': 'Price per kg ({currency})',
+    'orders.pricePerLitre': 'Price per litre ({currency})',
+    'orders.pricePerPiece': 'Price per piece ({currency})',
+    'orders.priceGeneric': 'Price ({currency})',
     // The two "start again" dialogs. Surfaced by widening the scan to `message:` —
     // okLabel and cancelLabel were already covered, so these two asked their question
     // in English and offered their answers in Italian.
@@ -2381,9 +2382,6 @@ const DICTIONARIES = Object.freeze({
     'orders.deliveryDaysWhenThey': 'Giorni di consegna — quando consegnano',
     'orders.orderDaysWhenYou': 'Giorni d’ordine — quando fai l’ordine',
     'orders.phoneWhatsappDigitsOnly': 'Telefono (WhatsApp, solo cifre)',
-    'orders.thePriceOfOne': 'Il prezzo di UN CHILO, non della confezione — un sacco da 25 kg a 180£ fa 7,20.',
-    'orders.thePriceOfOne2': 'Il prezzo di UN LITRO, non del contenitore — una latta da 5 l a 30£ fa 6,00.',
-    'orders.thePriceOfOne3': 'Il prezzo di UN PEZZO, non della scatola — una scatola da 100 a 3,50£ fa 0,035.',
     'orders.noPrice2': '— Nessun prezzo —',
     'orders.weightOfOnePiece': 'Peso di un pezzo (kg)',
     'orders.neededOnlyToUse': 'Serve solo per usarlo in una ricetta scritta in grammi — un uovo è circa 0,055, una bacca di vaniglia circa 0,0035.',
@@ -2391,6 +2389,7 @@ const DICTIONARIES = Object.freeze({
     'orders.loading': 'Caricamento…',
     'orders.noPriceRecordedYet': 'Ancora nessun prezzo registrato.',
     'orders.priceHistory': 'Storico prezzi',
+    'orders.showThem': 'Mostrali',
     'orders.theRest': 'Il resto',
     'orders.noNutritionYet': 'Ancora nessuno',
     'orders.nutritionComplete': 'Completi',
@@ -2495,7 +2494,10 @@ const DICTIONARIES = Object.freeze({
     'orders.registry.loadFailed': 'Non è stato possibile caricare i fornitori. Controlla la connessione e riprova.',
     'orders.registry.whichList': 'Quale elenco mostrare',
     'orders.eg.packWeight': 'es. 2.27kg',
-    'orders.eg.rate': 'es. 7.20',
+    'orders.eg.ratePerKg': 'es. 7.20 (un chilo)',
+    'orders.exVatNote': 'I prezzi sono al netto dell’IVA.',
+    'orders.eg.ratePerLitre': 'es. 6.00 (un litro)',
+    'orders.eg.ratePerPiece': 'es. 0.035 (un pezzo)',
     'orders.eg.pieceWeight': 'es. 0.055',
     'orders.ingredientsCount': { one: '{n} ingrediente', other: '{n} ingredienti' },
 
@@ -2515,10 +2517,10 @@ const DICTIONARIES = Object.freeze({
     'orders.failed.deactivate': 'Non è stato possibile sospendere «{name}». Controlla la connessione e riprova.',
     'orders.failed.activate': 'Non è stato possibile riattivare «{name}». Controlla la connessione e riprova.',
     'orders.failed.load': 'Non è stato possibile caricare lo storico prezzi di «{name}». Controlla la connessione e riprova.',
-    'orders.pricePerKg': 'Prezzo al kg ({currency}, IVA esclusa)',
-    'orders.pricePerLitre': 'Prezzo al litro ({currency}, IVA esclusa)',
-    'orders.pricePerPiece': 'Prezzo al pezzo ({currency}, IVA esclusa)',
-    'orders.priceGeneric': 'Prezzo ({currency}, IVA esclusa)',
+    'orders.pricePerKg': 'Prezzo al kg ({currency})',
+    'orders.pricePerLitre': 'Prezzo al litro ({currency})',
+    'orders.pricePerPiece': 'Prezzo al pezzo ({currency})',
+    'orders.priceGeneric': 'Prezzo ({currency})',
     'orders.nSuppliers': { one: '{n} fornitore', other: '{n} fornitori' },
     'orders.clearConfirm': 'Azzerare tutto quello che hai scritto per {who}?\n\nLe giacenze restano. Gli ordini già registrati nello Storico non vengono toccati.',
     'orders.discardTitle': 'Scartare l’ordine di {name}',

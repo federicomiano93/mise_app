@@ -55,12 +55,21 @@
 // `pricePerUnit` already held exactly this rate, so every price entered before
 // the change opens showing the right number and nothing had to be migrated.
 
-// The one place the currency is written. The business is in the UK — its bank
-// holidays come from gov.uk and its phone numbers start +44 — so prices are in
-// pounds. Everything that shows money goes through the formatters below.
 import { t } from './i18n.js';
-
-export const CURRENCY = '£';
+// ⚠️⚠️ THE CURRENCY IS NO LONGER A CONSTANT IN THIS FILE, AND THAT IS THE POINT.
+// It used to be `export const CURRENCY = '£'`, written when every venue was in the
+// UK — and it printed pounds on an Italian bakery whose ten prices were typed in
+// euros. It now follows the venue's COUNTRY (js/market.js currencyOf), and the
+// session sets it when a location opens.
+//
+// ⚠️ SO IT IS READ INSIDE EACH FUNCTION BELOW, NEVER ONCE UP HERE. A module is
+// evaluated at first import, before any venue is open; a value captured at this level
+// would freeze the fallback into every price on the page. It is the v1.57.0 defect,
+// and money is the one place where being quietly wrong looks exactly like being right.
+//
+// ⚠️ NOTHING HERE CONVERTS. Only the symbol changes; every stored number is used as
+// typed. See js/currency.js.
+import { currentCurrency } from './currency.js';
 
 // What a price can be quoted PER. Deliberately three, and deliberately not the
 // same list as the recipe units (catalogue-model.js): this is how something is
@@ -213,7 +222,7 @@ export function costReasonText(ingredient) {
 // An amount of money: always two decimals, always the currency in front.
 export function formatMoney(value) {
   const n = Number(value);
-  return `${CURRENCY}${(Number.isFinite(n) ? n : 0).toFixed(MONEY_DECIMALS)}`;
+  return `${currentCurrency()}${(Number.isFinite(n) ? n : 0).toFixed(MONEY_DECIMALS)}`;
 }
 
 // A RATE (price per unit). Always at least the two decimals money is read in, and
@@ -230,7 +239,7 @@ export function formatRate(value) {
   const padded = n.toFixed(RATE_DECIMALS);
   const trimmed = padded.replace(/0+$/, '');
   const decimals = Math.max(MONEY_DECIMALS, trimmed.split('.')[1].length);
-  return `${CURRENCY}${n.toFixed(decimals)}`;
+  return `${currentCurrency()}${n.toFixed(decimals)}`;
 }
 
 // "£7.20 / kg" — the headline number on the ingredient row. Empty when unknown, so

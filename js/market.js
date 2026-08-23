@@ -64,6 +64,39 @@ export function canPrintLabel(location) {
   return countryOf(location) !== null;
 }
 
+// ── What the money is counted in ─────────────────────────────────────────────
+//
+// ⚠️⚠️ THE CURRENCY FOLLOWS THE COUNTRY, NOT THE INTERFACE LANGUAGE, and that is
+// Federico's decision of 23 Aug 2026 — his own rule from the day before, applied to
+// money: a fact about the world follows the country, a preference follows the screen.
+// What a sack of flour costs does not change because somebody switches the app to
+// English, so an English-speaking employee at an Italian bakery must still read «€».
+//
+// ⚠️ IT IS A LABEL FOR A NUMBER, NEVER A CONVERSION. Nothing anywhere multiplies by
+// a rate: 6.50 stays 6.50 and only the symbol in front of it changes. A venue's
+// prices are typed in the money of the place it buys in, which is the money of the
+// country it sells in.
+//
+// One entry per country, and a test asserts that COUNTRIES and this table hold the
+// same keys — so a third country cannot be added and quietly print pounds.
+const CURRENCY_BY_COUNTRY = Object.freeze({ GB: '£', IT: '€' });
+
+// ⚠️ null FOR AN UNKNOWN COUNTRY, exactly like outputLanguage() — but what the app
+// then DOES with the null points the other way, and the difference is worth stating.
+// A label in the wrong language is non-compliant, so there the answer is to print
+// nothing. A price in the wrong SYMBOL is only mislabelled: the number is stored and
+// used unchanged, so no cost, margin or order is wrong because of it. js/currency.js
+// therefore falls back to the app's historical '£' rather than showing a bare number,
+// which would read as a broken screen.
+export function currencyOf(location) {
+  const country = countryOf(location);
+  return country ? CURRENCY_BY_COUNTRY[country] : null;
+}
+
+// Exported for the test that pins the two lists together. Not for drawing with:
+// a screen wants currencyOf(location), which answers for the venue that is open.
+export const CURRENCY_COUNTRIES = Object.freeze(Object.keys(CURRENCY_BY_COUNTRY));
+
 // ── The label's own vocabulary ───────────────────────────────────────────────
 //
 // ⚠️ ONLY WHAT GOES ON A LABEL LIVES HERE. This is not the app's translation

@@ -20,6 +20,12 @@
 //   - side-effect `import './firebase.js'` for init → js/app.js
 
 import { setLanguage, interfaceLanguage } from './i18n.js';
+// ⚠️ TWO IMPORTS, TWO DIFFERENT QUESTIONS — see the pair of calls in openLocation().
+// currencyOf reads the venue's COUNTRY; interfaceLanguage above reads its LANGUAGE.
+// Both are tiny and import nothing heavy, which is why they may sit in this file at
+// all: every page loads it before anything else.
+import { currencyOf } from './market.js';
+import { setCurrency } from './currency.js';
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
 import {
   getAuth,
@@ -367,6 +373,19 @@ async function enterLocation(locationId, options, user) {
   // ⚠️ IT DOES NOT TOUCH A LABEL. That follows `country` (js/market.js), which is
   // a different field for a different reason: the law, not a preference.
   setLanguage(interfaceLanguage(location));
+
+  // ⚠️⚠️ AND THE MONEY FOLLOWS THE COUNTRY, NOT THE LINE ABOVE. These two are
+  // adjacent and they look alike, which is exactly why this warning is here: they
+  // read DIFFERENT fields on purpose. `language` is what the staff prefer to read;
+  // `country` is where the food is sold and therefore what it is paid for in. An
+  // English-speaking employee at an Italian bakery switches the app to English and
+  // the prices must still say «€» — a sack of flour does not change price because
+  // somebody changed language. Federico's decision, 23 Aug 2026, and his own rule
+  // from the day before: a fact about the world follows the country, a preference
+  // follows the screen.
+  //
+  // ⚠️ Nothing is converted anywhere — only the symbol changes. See js/currency.js.
+  setCurrency(currencyOf(location));
 
   setSession({
     status: 'ready', user, locationId, location, options,
