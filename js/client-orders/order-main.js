@@ -12,6 +12,12 @@
 
 import { outputLanguage } from '../market.js';
 import { t, setLanguage, DEFAULT_LANGUAGE } from '../i18n.js';
+// ⚠️ IMPORTED FOR ITS SIDE EFFECT, WHICH IS THE POINT. It rewrites every element
+// carrying data-i18n — here, the tab title and the two lines in order.html's markup
+// — and re-runs on every setLanguage(). Without it this page's browser tab said
+// «Send your order» to an Italian client for the whole session, because nothing on
+// this page ever touched document.title.
+import '../i18n-dom.js';
 import {
   setLocation, signInWithToken, onUser, currentUid, readGrant, readMenu, readOrder, writeOrder,
   readCutoff,

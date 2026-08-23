@@ -316,6 +316,39 @@ const DICTIONARIES = Object.freeze({
     'aria.editThisDay': 'Edit this day',
     'aria.editRecipe': 'Edit recipe',
 
+    // ── The install guide ────────────────────────────────────────────────────
+    // ⚠️ THE WHOLE PAGE WAS ENGLISH — every word of it — because it is the one page
+    // reached BEFORE signing in, so no venue is open and nothing was setting a
+    // language. It follows the PHONE (navigator.language), which is the only fact
+    // available here and is also the right one: these steps name buttons in the
+    // phone's OWN menus, and a phone set to Italian shows «Condividi», not «Share».
+    'ig.pageTitle': 'Install Misé',
+    'ig.installTheApp': 'Install the app',
+    'ig.whichDevice': 'Which device are you using?',
+    'ig.device.ios': 'iPhone / iPad',
+    'ig.device.android': 'Android',
+    'ig.device.desktop': 'Computer',
+    'ig.yourDevice': 'your device',
+    'ig.changeDevice': '← Change device',
+    'ig.qrAlt': 'QR code to open the Misé app',
+    'ig.qrCaption': 'Or scan this with your phone camera to open the app',
+    'ig.safari.title': 'Open this page in Safari to install.',
+    'ig.safari.body': 'On iPhone the app can only be added to the Home Screen from Safari — other browsers (like Chrome) cannot install it.',
+    'ig.safari.how': 'Tap the ••• menu and choose “Open in Safari”, or copy the link and paste it in Safari.',
+    'ig.copyLink': 'Copy link',
+    'ig.ios.1': 'Open the link in Safari (it must be Safari).',
+    'ig.ios.2': 'Tap the Share button (the square with an up arrow).',
+    'ig.ios.3': 'Scroll down and tap “Add to Home Screen”.',
+    'ig.ios.4': 'Tap “Add” — the app icon appears on your home screen.',
+    'ig.android.1': 'Open the link in Chrome.',
+    'ig.android.2': 'Tap the “Install app” button if it appears, or the ⋮ menu (top right).',
+    'ig.android.3': 'Tap “Install app” / “Add to Home screen”.',
+    'ig.android.4': 'Confirm — the app icon appears.',
+    'ig.desktop.1': 'Open the link in Chrome or Edge.',
+    'ig.desktop.2': 'Click the install icon in the address bar (a small screen with a ⊕), or the menu → “Install Misé”.',
+    'ig.desktop.3': 'Confirm — it opens in its own window and gets a shortcut.',
+    'ig.note': 'You only do this once per device. After that, just tap the app icon — like any other app.',
+
     // ── The app's own customers ─────────────────────────────────────────────
     'bz.title': 'Customer businesses',
     'bz.new': 'New business',
@@ -1747,6 +1780,12 @@ const DICTIONARIES = Object.freeze({
 
     // ── The CLIENT's own ordering page ─────────────────────────────────────
     // ⚠️ IT FOLLOWS THE COUNTRY, NOT THE INTERFACE SETTING — see order-main.js.
+    // ⚠️ THE BROWSER TAB AND THE STATE BEFORE THE LINK IS READ. The two sentences
+    // below are the only words on order.html written into the markup; everything
+    // else the client sees is built by order-main.js. They stayed English for every
+    // client of every venue until 23 Aug 2026.
+    'co.pageTitle': 'Send your order',
+    'co.openTheLinkSent': 'Open the ordering link the bakery sent you.',
     'co.youCanChangeYour': 'You can change your order until the bakery starts making it.',
     'co.thisLinkIsIncomplete': 'This link is incomplete',
     'co.askTheBakeryTo': 'Ask the bakery to send you your ordering link again.',
@@ -1964,6 +2003,36 @@ const DICTIONARIES = Object.freeze({
     'aria.allMyBusinesses': 'Tutte le mie attività',
     'aria.editThisDay': 'Modifica questo giorno',
     'aria.editRecipe': 'Modifica ricetta',
+
+    // ⚠️ I NOMI DEI PULSANTI SONO QUELLI CHE IL TELEFONO MOSTRA DAVVERO in italiano
+    // («Condividi», «Aggiungi alla schermata Home»): la guida segue la lingua del
+    // telefono, quindi le due cose sono d’accordo per costruzione.
+    'ig.pageTitle': 'Installa Misé',
+    'ig.installTheApp': 'Installa l’app',
+    'ig.whichDevice': 'Che dispositivo stai usando?',
+    'ig.device.ios': 'iPhone / iPad',
+    'ig.device.android': 'Android',
+    'ig.device.desktop': 'Computer',
+    'ig.yourDevice': 'il tuo',
+    'ig.changeDevice': '← Cambia dispositivo',
+    'ig.qrAlt': 'Codice QR per aprire l’app Misé',
+    'ig.qrCaption': 'Oppure inquadra questo con la fotocamera del telefono per aprire l’app',
+    'ig.safari.title': 'Apri questa pagina in Safari per installare.',
+    'ig.safari.body': 'Su iPhone l’app si può aggiungere alla schermata Home solo da Safari — gli altri browser (come Chrome) non riescono a installarla.',
+    'ig.safari.how': 'Tocca il menu ••• e scegli “Apri in Safari”, oppure copia il link e incollalo in Safari.',
+    'ig.copyLink': 'Copia il link',
+    'ig.ios.1': 'Apri il link in Safari (dev’essere Safari).',
+    'ig.ios.2': 'Tocca il pulsante Condividi (il quadrato con la freccia in su).',
+    'ig.ios.3': 'Scorri in basso e tocca “Aggiungi alla schermata Home”.',
+    'ig.ios.4': 'Tocca “Aggiungi” — l’icona dell’app compare nella schermata Home.',
+    'ig.android.1': 'Apri il link in Chrome.',
+    'ig.android.2': 'Tocca il pulsante “Installa app” se compare, oppure il menu ⋮ (in alto a destra).',
+    'ig.android.3': 'Tocca “Installa app” / “Aggiungi a schermata Home”.',
+    'ig.android.4': 'Conferma — l’icona dell’app compare.',
+    'ig.desktop.1': 'Apri il link in Chrome o Edge.',
+    'ig.desktop.2': 'Clicca l’icona di installazione nella barra degli indirizzi (un piccolo schermo con un ⊕), oppure il menu → “Installa Misé”.',
+    'ig.desktop.3': 'Conferma — si apre in una finestra sua e ottiene un collegamento.',
+    'ig.note': 'Lo fai una volta sola per dispositivo. Dopo, tocchi l’icona dell’app — come qualsiasi altra app.',
 
     'bz.title': 'Attività dei clienti',
     'bz.new': 'Nuova attività',
@@ -3188,6 +3257,8 @@ const DICTIONARIES = Object.freeze({
     'label.blocked.noCountry': 'Non si può ancora fare nessuna etichetta: nessuno ha detto in che paese vende questa attività, ed è quello a decidere in che lingua l’etichetta va stampata. Il titolare può impostarlo quando crea l’attività.',
 
 
+    'co.pageTitle': 'Manda il tuo ordine',
+    'co.openTheLinkSent': 'Apri il link per ordinare che ti ha mandato il panificio.',
     'co.youCanChangeYour': 'Puoi modificare il tuo ordine finché il panificio non comincia a farlo.',
     'co.thisLinkIsIncomplete': 'Questo link è incompleto',
     'co.askTheBakeryTo': 'Chiedi al panificio di rimandarti il tuo link per ordinare.',
