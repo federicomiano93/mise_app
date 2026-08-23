@@ -315,6 +315,9 @@ const DICTIONARIES = Object.freeze({
     'aria.allMyBusinesses': 'All my businesses',
     'aria.editThisDay': 'Edit this day',
     'aria.editRecipe': 'Edit recipe',
+    'aria.whichIngredients': 'Which ingredients to show',
+    'aria.whichSuppliers': 'Which suppliers to show',
+    'aria.ingredientsFrom': 'Ingredients from {supplier}',
 
     // ── The install guide ────────────────────────────────────────────────────
     // ⚠️ THE WHOLE PAGE WAS ENGLISH — every word of it — because it is the one page
@@ -639,6 +642,26 @@ const DICTIONARIES = Object.freeze({
     'orders.notYet': 'Not yet',
     'orders.nothingLeftToRecord': 'Nothing left to record — those rows are already placed or empty.',
     'orders.tryAgain': 'Try again.',
+    // ⚠️ ADDED 23 Aug 2026. Every one of these was written straight into the code, so
+    // the Orders screen — the one somebody works on all day — answered in English on
+    // an Italian venue. None of the four i18n suites looks at a template literal
+    // handed to setStatus() or built into a confirm message.
+    'orders.markPlacedFor': 'Mark {names} as placed? The order goes to History and the rows are cleared.',
+    'orders.alreadyRecordedThatDay': '{names} already has an order recorded for that day — these items will be ADDED to it.',
+    'orders.notRecordedRowsStillThere': '{names} — NOT recorded, the rows are still there.',
+    'orders.andSaved': '{names} saved.',
+    'orders.orderSavedToHistory': '{names} — order saved to history ✓',
+    'orders.savedButNotCleared': '{name} — order saved to History, but the rows could not be cleared. Reload the page; do NOT record it again.',
+    'orders.quantitiesClearedFor': 'Quantities cleared for {n} suppliers ✓',
+    'orders.checkExtraDigit': 'Check it is not an extra digit.',
+    'orders.liveConnectionLost': 'Lost the live connection for {what}. What you see may be out of date — reload the page.',
+    // ⚠️ A REAL PLURAL. It was `${days} day${days === 1 ? '' : 's'}` — English's rule
+    // written into the code, which cannot be translated by moving either half.
+    'orders.noOrdersInTheLast': {
+      one: 'No orders in the last day.',
+      other: 'No orders in the last {n} days.',
+    },
+    'orders.weekOf': 'Week of {day}',
     'orders.orderPlaced': 'Order placed',
     'orders.noQuantitiesTypedYet': 'No quantities typed yet. Add them first.',
     'orders.recordTheseOrders': 'Record these orders',
@@ -2003,6 +2026,9 @@ const DICTIONARIES = Object.freeze({
     'aria.allMyBusinesses': 'Tutte le mie attività',
     'aria.editThisDay': 'Modifica questo giorno',
     'aria.editRecipe': 'Modifica ricetta',
+    'aria.whichIngredients': 'Quali ingredienti mostrare',
+    'aria.whichSuppliers': 'Quali fornitori mostrare',
+    'aria.ingredientsFrom': 'Ingredienti di {supplier}',
 
     // ⚠️ I NOMI DEI PULSANTI SONO QUELLI CHE IL TELEFONO MOSTRA DAVVERO in italiano
     // («Condividi», «Aggiungi alla schermata Home»): la guida segue la lingua del
@@ -2260,6 +2286,20 @@ const DICTIONARIES = Object.freeze({
     'orders.notYet': 'Non ancora',
     'orders.nothingLeftToRecord': 'Non resta niente da registrare — quelle righe sono già fatte o vuote.',
     'orders.tryAgain': 'Riprova.',
+    'orders.markPlacedFor': 'Segnare {names} come fatto? L’ordine va nello Storico e le righe si azzerano.',
+    'orders.alreadyRecordedThatDay': '{names} ha già un ordine registrato per quel giorno — questi articoli ci verranno AGGIUNTI.',
+    'orders.notRecordedRowsStillThere': '{names} — NON registrato, le righe sono ancora lì.',
+    'orders.andSaved': '{names} salvato.',
+    'orders.orderSavedToHistory': '{names} — ordine salvato nello storico ✓',
+    'orders.savedButNotCleared': '{name} — ordine salvato nello Storico, ma non è stato possibile azzerare le righe. Ricarica la pagina; NON registrarlo di nuovo.',
+    'orders.quantitiesClearedFor': 'Quantità azzerate per {n} fornitori ✓',
+    'orders.checkExtraDigit': 'Controlla che non ci sia una cifra di troppo.',
+    'orders.liveConnectionLost': 'Persa la connessione dal vivo per {what}. Quello che vedi potrebbe non essere aggiornato — ricarica la pagina.',
+    'orders.noOrdersInTheLast': {
+      one: 'Nessun ordine nell’ultimo giorno.',
+      other: 'Nessun ordine negli ultimi {n} giorni.',
+    },
+    'orders.weekOf': 'Settimana del {day}',
     'orders.orderPlaced': 'Ordine fatto',
     'orders.noQuantitiesTypedYet': 'Ancora nessuna quantità inserita. Aggiungile prima.',
     'orders.recordTheseOrders': 'Registra questi ordini',

@@ -101,7 +101,7 @@ export function renderHistory(container, history, suppliers, ingredients, callba
   // gone" with a lone button under it.
   if (!recent.length) {
     foot.appendChild(el('p', { class: 'history-empty', text:
-      `No orders in the last ${dayCount(options.historyDays)}.` }));
+      t('orders.noOrdersInTheLast', { n: Number(options.historyDays) }) }));
   }
   foot.appendChild(olderButton(older, appendDay, foot));
   container.appendChild(foot);
@@ -240,10 +240,6 @@ function buildLegacyCard(record, supById, ingById, callbacks) {
 
 // "1 day" / "15 days" — a window of one is a legal setting, and "the last 1 days"
 // reads like a bug to the person who typed it.
-function dayCount(days) {
-  return `${days} day${days === 1 ? '' : 's'}`;
-}
-
 function collapsibleHead(title, meta, body) {
   const chevron = el('span', { class: 'supplier-chevron' }, '▸');
   const head = el('button', { type: 'button', class: 'supplier-head', 'aria-expanded': 'false' }, [

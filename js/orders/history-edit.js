@@ -26,8 +26,8 @@ const TRASH_ICON =
 // name to show — it names its week instead.
 export function recordTitle(record) {
   return isLegacyRecord(record)
-    ? `Week of ${spellDay(recordDate(record))}`
-    : record.supplierName || 'Order';
+    ? t('orders.weekOf', { day: spellDay(recordDate(record)) })
+    : record.supplierName || t('ui.order');
 }
 
 // record: a history document; ingredients: the full list (for names and units);
