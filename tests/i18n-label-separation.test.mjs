@@ -164,6 +164,50 @@ test('the label language comes from the country, and every label word is asked i
   }
 });
 
+// ⚠️⚠️ AND THE HALF THE TEST ABOVE CANNOT SEE: A CALL THAT IS DELETED PASSES IT.
+//
+// «every food word is asked in lang» says nothing about a food word that stopped being
+// asked for at all. Four mutations proved it on 23 Aug 2026 — printing the raw code
+// instead of its name, and the English `n.label` instead of the nutrient's — and all
+// four went green. On an English venue nothing would look wrong; on an Italian one, one
+// entry in a list of allergens would be in the wrong language, which reads as a
+// different substance rather than as a bug.
+//
+// So the number of places each screen names a food is pinned. An exact count is
+// deliberate and it is meant to be edited: adding a name should make somebody read this
+// comment, and removing one should make them say why.
+const FOOD_WORD_SITES = {
+  // the tick row's name · its two tooltips · the pack marker · the «which of these?»
+  // question · the status line = 6 allergen names, plus the two group headings (one
+  // call, both groups) and the eight nutrient rows (one call, all eight).
+  'js/orders/ingredient-form.js': { allergenName: 6, allergenGroupName: 1, nutrientName: 1 },
+  // what it contains · what it may contain · what is known so far
+  'js/catalogue/catalogue-detail.js': { allergenName: 3 },
+};
+
+test('every place these screens name a food still names it', () => {
+  for (const [file, expected] of Object.entries(FOOD_WORD_SITES)) {
+    const src = codeOf(read(file));
+    for (const [fn, count] of Object.entries(expected)) {
+      const found = [...src.matchAll(new RegExp(`\\b${fn}\\s*\\(`, 'g'))].length;
+      assert.equal(found, count,
+        `${file} calls ${fn}() ${found} times, expected ${count} — a deleted call is a food `
+        + 'named in the wrong language on an Italian venue, and nothing else here can see it');
+    }
+  }
+});
+
+// ⚠️ AND THE SPECIFIC WRONG ANSWER, BANNED BY NAME. NUTRIENTS carries an English
+// `label` for the model to use; a screen reaching for it prints «Energy» on an Italian
+// declaration. It is one character shorter than the right call, which is how it gets
+// written.
+test('no screen prints a nutrient’s English label', () => {
+  for (const file of Object.keys(FOOD_WORD_SITES)) {
+    assert.doesNotMatch(codeOf(read(file)), /\bn\.label\b/,
+      `${file} must name nutrients with nutrientName(n, lang) — n.label is always English`);
+  }
+});
+
 // ⚠️⚠️ THE OTHER HALF, AND IT IS THE ONE A REFACTOR BREAKS SILENTLY: the fixed-English
 // allergenLabel() must not come back to a screen. It is the right function for the model
 // — it IS the canonical name — and the wrong one for anything drawn, because it answers
