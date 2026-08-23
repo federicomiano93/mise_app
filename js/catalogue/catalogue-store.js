@@ -14,6 +14,7 @@
 import { t } from '../i18n.js';
 import {
   normalizeCatalogueRecipe, normalizeCatalogueRecipes, isScaledEntryFresh, normalizeLossPct,
+  normalizeWeight,
 } from './catalogue-model.js';
 import { withRowIds, normalizeSteps, normalizeEndNote } from './guided-model.js';
 import {
@@ -230,6 +231,18 @@ export function saveRecipe(recipe) {
     // document and the finish screen would keep showing a message just deleted.
     endNote: normalizeEndNote(recipe.endNote),
   };
+  // ⚠️ THE TWO WEIGHINGS ARE WRITTEN ONLY WHEN SOMEBODY HAS ACTUALLY TYPED THEM, and
+  // that is the whole safety of this feature. Every recipe written before it has a
+  // lossPct and no weights; the editor DERIVES a cooked weight for display from that
+  // percentage, and if this line wrote it back, opening a recipe to fix a typo in the
+  // flour would rewrite the number that decides what every product built on it costs.
+  // Absent rather than 0, on the same terms as `steps` and `endNote` above.
+  const rawG = normalizeWeight(recipe.rawGrams);
+  const cookedG = normalizeWeight(recipe.cookedGrams);
+  if (rawG > 0 && cookedG > 0) {
+    data.rawGrams = rawG;
+    data.cookedGrams = cookedG;
+  }
   const id = recipe.id || newRecipeId();
   const prev = recipes.find(r => r.id === id) || null;
   upsertLocal({ id, ...data });

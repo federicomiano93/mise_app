@@ -12,6 +12,7 @@ import { el } from './dom.js';
 import {
   findInvalidRecipe, unitOf, CATALOGUE_UNITS, isWeighableUnit, weighableTotalGrams,
   linkOf, normalizeLossPct, MAX_LOSS_PCT,
+  normalizeWeight, weightLoss, cookedFromLossPct,
 } from './catalogue-model.js';
 import { openLinkPicker } from './ingredient-picker.js';
 import { pricePerKg, formatRate } from '../price-model.js';
@@ -58,6 +59,9 @@ export function renderEditor({ recipe, draft, allRecipes, app }) {
         // keeping every other field is the kind of loss nobody notices until the
         // costing is wrong.
         lossPct: normalizeLossPct(draft.lossPct),
+        // Carried for the same reason, and only when the draft really has them.
+        ...(normalizeWeight(draft.rawGrams) > 0 ? { rawGrams: normalizeWeight(draft.rawGrams) } : {}),
+        ...(normalizeWeight(draft.cookedGrams) > 0 ? { cookedGrams: normalizeWeight(draft.cookedGrams) } : {}),
       }
       : { id: null, name: '', ingredients: [{ label: '', grams: '', unit: 'g' }], lossPct: 0 };
 
@@ -97,10 +101,16 @@ export function renderEditor({ recipe, draft, allRecipes, app }) {
   const totalEl = el('span', { class: 'cat-edit-total-num' });
   const totalNote = el('span', { class: 'cat-edit-total-note' });
 
+  // ⚠️ THE TOTAL SITS IN THE SAME CELL SHAPE AS THE AMOUNTS ABOVE IT, frameless. The
+  // row shares .cat-ing-editrow's grid, so once the amount and the unit moved into one
+  // cell the total had to follow — otherwise «Totale 8380 g» stops lining up with the
+  // column of numbers it is the sum of, which is the one thing it exists to do.
   const totalRow = el('div', { class: 'cat-ing-editrow cat-edit-total' }, [
     el('span', { class: 'cat-edit-total-label', text: t('cat.total') }),
-    totalEl,
-    el('span', { class: 'cat-edit-total-unit', text: 'g' }),
+    el('div', { class: 'cat-amount cat-amount--plain' }, [
+      totalEl,
+      el('span', { class: 'cat-edit-total-unit', text: 'g' }),
+    ]),
   ]);
 
   // The weight the recipe actually adds up to, live as it is typed. Its absence is
@@ -116,6 +126,9 @@ export function renderEditor({ recipe, draft, allRecipes, app }) {
     totalNote.textContent = skipped ? t('cat.notWeighed', { n: skipped }) : '';
     totalNote.hidden = !skipped;
     countEl.textContent = String(working.ingredients.length);
+    // ⚠️ The raw-dough box follows this total until somebody overrides it, so it is
+    // refreshed from here — the one function that already runs on every keystroke.
+    refreshLoss();
   }
 
   function renderIngredientRows() {
@@ -154,7 +167,17 @@ export function renderEditor({ recipe, draft, allRecipes, app }) {
       // target takes its width from the ingredient NAME, which is the one thing that
       // has to stay readable. Under it there is room to say what it points at.
       rowsContainer.appendChild(el('div', { class: 'cat-ing-editgroup' }, [
-        el('div', { class: 'cat-ing-editrow' }, [labelInput, gramsInput, unitSelect, delIcon]),
+        // ⚠️ THE AMOUNT AND THE UNIT SHARE ONE FRAME, and that is a deliberate shape.
+        // Federico: «lo spazio dove scrivere la quantità e la tipologia devono essere
+        // ben distinte, adesso sono tutte unite» — all three fields were borderless, so
+        // «250 g» read as printed text rather than two controls. ⚠️ ONE border pair, not
+        // two: two separate frames cost ~24px more and start truncating the ingredient
+        // NAME at 320px, which is the one thing on this row that has to stay readable.
+        el('div', { class: 'cat-ing-editrow' }, [
+          labelInput,
+          el('div', { class: 'cat-amount' }, [gramsInput, unitSelect]),
+          delIcon,
+        ]),
         linkRow(ing, idx),
       ]));
     });
@@ -289,24 +312,109 @@ export function renderEditor({ recipe, draft, allRecipes, app }) {
     return app.confirm({ title: t('cat.discardChanges'), message: t('cat.youHaveUnsavedChanges'), okLabel: t('ui.discard'), danger: true, cancelLabel: t('ui.cancel') });
   });
 
-  // How much weight this recipe loses on the way to being finished — evaporation in
-  // the oven, mostly. It is the divisor of the cost per kilo: a dough that goes in
-  // at 1000 g and comes out at 800 g costs 25% more per kilo than its ingredients
-  // suggest, and leaving this at 0 is what makes a baked product look cheaper than
-  // it is. Optional, and 0 for every recipe written before it existed.
-  const lossInput = el('input', {
-    id: 'catRecipeLoss', class: 'cat-loss-input', type: 'number',
-    min: '0', max: String(MAX_LOSS_PCT), step: 'any', inputmode: 'decimal',
-    placeholder: '0', value: working.lossPct || '',
-    'aria-label': t('cat.weightLostWhileCooking'),
-    oninput: (e) => { working.lossPct = normalizeLossPct(e.target.value); markDirty(); },
+  // ── What the dough weighs before the oven, and after ────────────────────────
+  //
+  // The loss is the divisor of the cost per kilo: a dough that goes in at 1000 g and
+  // comes out at 800 g costs 25% more per kilo than its ingredients suggest, and a 0
+  // here is what makes a baked product look cheaper than it is. This used to ask for
+  // the PERCENTAGE — a number nobody has, because it has to be worked out from two
+  // weighings — so it stayed 0 on every recipe. Now it asks for the two weights.
+  //
+  // ⚠️⚠️ THE TWO STATES, AND THEY ARE THE WHOLE SAFETY OF THIS SCREEN.
+  //   untouched — nobody has typed in a weight box. The percentage stays EXACTLY the
+  //     stored lossPct whatever else is edited; crudo shows the live total and cotto is
+  //     DERIVED from that percentage for display. Nothing is written back, so a recipe
+  //     opened to fix a typo comes out of the database byte-identical.
+  //   touched — a person has typed. The percentage is computed from the boxes, crudo
+  //     stops following the total, and all three are saved.
+  // Without the split, correcting 10 g of flour would silently move the number that
+  // decides what every product built on this recipe costs.
+  let weighed = normalizeWeight(working.rawGrams) > 0 && normalizeWeight(working.cookedGrams) > 0;
+  // Only true once the PERSON edits a box — not when the app fills one in.
+  let rawTyped = weighed;
+
+  const rawInput = el('input', {
+    id: 'catRecipeRaw', class: 'cat-loss-input', type: 'number',
+    min: '0', step: 'any', inputmode: 'decimal', placeholder: '0',
+    // ⚠️ ITS STORED VALUE, AT BUILD TIME. refreshLoss() below only rewrites this box
+    // while it is still following the recipe total, so a recipe that HAS been weighed
+    // would otherwise open with an empty box and the number simply gone from the screen.
+    value: normalizeWeight(working.rawGrams) > 0 ? String(Math.round(normalizeWeight(working.rawGrams))) : '',
+    'aria-label': t('cat.rawDoughWeight'),
+    oninput: (e) => {
+      rawTyped = String(e.target.value).trim() !== '';
+      // ⚠️ Clearing the box hands it back to the recipe total. That is the way back
+      // from an override, and it needs no extra control on a screen this long.
+      working.rawGrams = normalizeWeight(e.target.value);
+      weighed = true;
+      markDirty(); refreshLoss();
+    },
   });
+  const cookedInput = el('input', {
+    id: 'catRecipeCooked', class: 'cat-loss-input', type: 'number',
+    min: '0', step: 'any', inputmode: 'decimal', placeholder: '0',
+    // Same, and for the same reason: the derived value below is only for a recipe
+    // nobody has weighed.
+    value: normalizeWeight(working.cookedGrams) > 0 ? String(Math.round(normalizeWeight(working.cookedGrams))) : '',
+    'aria-label': t('cat.cookedDoughWeight'),
+    oninput: (e) => {
+      working.cookedGrams = normalizeWeight(e.target.value);
+      weighed = true;
+      markDirty(); refreshLoss();
+    },
+  });
+  const lossOut = el('p', { class: 'cat-loss-out' });
+  const lossWarn = el('p', { class: 'cat-loss-warn' });
+
+  // The number the boxes currently mean, and what the screen says about it.
+  function refreshLoss() {
+    const total = weighableTotalGrams(working);
+    // Crudo follows the recipe until somebody overrides it.
+    if (!rawTyped) {
+      working.rawGrams = total;
+      rawInput.value = total ? String(Math.round(total)) : '';
+    }
+    const before = normalizeWeight(working.rawGrams);
+
+    if (!weighed) {
+      // ⚠️ DERIVED FOR DISPLAY, NEVER WRITTEN BACK. The recipe already has an answer;
+      // showing an empty box would read as «nobody has said», which is a different
+      // statement and a false one.
+      const shown = cookedFromLossPct(before, working.lossPct);
+      cookedInput.value = shown ? String(shown) : '';
+      lossOut.textContent = t('cat.lossIs', { pct: String(working.lossPct) });
+      lossWarn.hidden = true;
+      return;
+    }
+
+    const { pct, problem } = weightLoss(before, working.cookedGrams);
+    if (pct === null) {
+      // ⚠️ NOT ZERO. Two numbers that do not answer the question must leave the stored
+      // loss alone — zeroing it would quietly declare «this recipe loses nothing».
+      lossOut.textContent = t('cat.lossNotYet');
+    } else {
+      working.lossPct = pct;
+      lossOut.textContent = t('cat.lossIs', { pct: String(pct) });
+    }
+    lossWarn.textContent = problem === 'cookedHeavier' ? t('cat.lossCookedHeavier')
+      : problem === 'capped' ? t('cat.lossCapped', { max: String(MAX_LOSS_PCT) })
+        : '';
+    lossWarn.hidden = !problem;
+  }
 
   const lossField = el('div', { class: 'cat-loss-field' }, [
-    el('label', { class: 'cat-loss-label', for: 'catRecipeLoss', text: t('cat.weightLostWhileCooking2') }),
-    el('div', { class: 'cat-loss-row' }, [lossInput, el('span', { class: 'cat-loss-unit', text: '%' })]),
-    el('p', { class: 'cat-loss-note', text:
-      t('cat.leaveAt0If') }),
+    el('div', { class: 'cat-loss-pair' }, [
+      el('label', { class: 'cat-loss-cell' }, [
+        el('span', { class: 'cat-loss-label', text: t('cat.rawDoughWeight') }),
+        el('span', { class: 'cat-loss-row' }, [rawInput, el('span', { class: 'cat-loss-unit', text: 'g' })]),
+      ]),
+      el('label', { class: 'cat-loss-cell' }, [
+        el('span', { class: 'cat-loss-label', text: t('cat.cookedDoughWeight') }),
+        el('span', { class: 'cat-loss-row' }, [cookedInput, el('span', { class: 'cat-loss-unit', text: 'g' })]),
+      ]),
+    ]),
+    lossOut,
+    lossWarn,
   ]);
 
   const addRowBtn = el('button', {

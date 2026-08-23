@@ -25,6 +25,11 @@ import {
   isWeighableUnit,
   weighableTotalGrams,
   nonWeighableLabels,
+  weightLoss,
+  cookedFromLossPct,
+  normalizeWeight,
+  MAX_LOSS_PCT,
+  MAX_WEIGHT_G,
 } from '../js/catalogue/catalogue-model.js';
 
 const FOCACCIA = {
@@ -384,4 +389,99 @@ test('scaleCatalogue: the scaling itself was never wrong — it reproduces the s
   assert.equal(rows.reduce((a, b) => a + b, 0), 17500000); // and they sum EXACTLY
   // And the amount actually intended scales cleanly too.
   assert.equal(scaleCatalogue(CROISSANT, 17500).reduce((a, b) => a + b, 0), 17500);
+});
+
+// ── The oven loss, worked out from two weighings ─────────────────────────────
+//
+// ⚠️ WHY THIS MATTERS MORE THAN IT LOOKS: lossPct is the DIVISOR of the price per
+// kilo. A recipe that goes in at 1000 g and comes out at 800 g costs 25% more per kilo
+// than its ingredients suggest, and a 0 there makes every baked product look cheaper
+// than it is. The field asked for a percentage — a number nobody has — so it stayed 0.
+
+test('two weighings become a percentage', () => {
+  assert.equal(weightLoss(1000, 800).pct, 20);
+  assert.equal(weightLoss(8380, 7374).pct, 12);      // rounded to a tenth: 12.005 → 12
+  assert.equal(weightLoss(1000, 1000).pct, 0);       // nothing lost IS an answer
+  assert.equal(weightLoss(1000, 800).problem, null);
+});
+
+test('⚠️ the number SHOWN is the number STORED — rounded to a tenth', () => {
+  // 12.005% displayed as 12% while 12.005 sits in the database is a screen nobody can
+  // reconcile against the figure it is supposed to explain.
+  const { pct } = weightLoss(8380, 7373);
+  assert.equal(pct, 12.0);
+  assert.equal(Math.round(pct * 10) / 10, pct, 'never more than one decimal');
+  assert.equal(weightLoss(3000, 2555).pct, 14.8);
+});
+
+test('⚠️⚠️ nothing gains weight in an oven, and that is NOT answered with zero', () => {
+  // Zero would quietly turn a typo into «this recipe loses nothing» — the exact
+  // direction that makes a product look cheaper than it is.
+  const out = weightLoss(800, 1000);
+  assert.equal(out.pct, null);
+  assert.equal(out.problem, 'cookedHeavier');
+});
+
+test('⚠️⚠️ a cooked weight of almost nothing is capped at 99, and says so', () => {
+  // 100 would divide the price per kilo by zero and make every product built on this
+  // recipe cost Infinity. The cap is load-bearing, and the screen has to admit it
+  // rather than silently storing something other than what was typed.
+  const out = weightLoss(8380, 1);
+  assert.equal(out.pct, MAX_LOSS_PCT);
+  assert.equal(out.problem, 'capped');
+  assert.ok(out.pct < 100);
+});
+
+test('⚠️ an unanswered pair is null, which is NOT zero', () => {
+  // null means «these two numbers do not answer the question», and the editor must
+  // leave the recipe's stored loss alone. Zero would overwrite it with «loses nothing».
+  for (const [a, b] of [[0, 0], [1000, 0], [0, 800], ['', ''], [1000, ''], [null, null],
+    ['abc', 'def'], [-5, 800], [1000, -5], [undefined, undefined]]) {
+    const out = weightLoss(a, b);
+    assert.equal(out.pct, null, `weightLoss(${JSON.stringify(a)}, ${JSON.stringify(b)})`);
+    assert.equal(out.problem, null, 'an empty pair is not a MISTAKE, it is just unanswered');
+  }
+});
+
+test('junk in, no throw and no NaN out', () => {
+  for (const junk of [NaN, Infinity, -Infinity, {}, [], 'x', null, undefined]) {
+    assert.equal(normalizeWeight(junk), 0);
+    const out = weightLoss(junk, junk);
+    assert.equal(out.pct, null);
+  }
+  assert.equal(normalizeWeight(1e12), MAX_WEIGHT_G, 'bounded, so a runaway never reaches the database');
+  assert.equal(normalizeWeight('850'), 850, 'a string from an input box is a number');
+});
+
+test('the cooked weight derived from a stored percentage round-trips', () => {
+  // This is what a recipe written before the feature shows: it has a lossPct and no
+  // weights, and the box must display what that percentage MEANS — then read back as
+  // the same percentage, or opening the editor would appear to change the recipe.
+  for (const [total, pct] of [[1000, 20], [8380, 12], [2500, 7.5], [900, 0], [4000, 33.3]]) {
+    const cooked = cookedFromLossPct(total, pct);
+    assert.equal(weightLoss(total, cooked).pct, pct, `${total} g at ${pct}%`);
+  }
+});
+
+test('a derived cooked weight is junk-safe too', () => {
+  assert.equal(cookedFromLossPct(0, 20), 0);
+  assert.equal(cookedFromLossPct('abc', 20), 0);
+  assert.equal(cookedFromLossPct(1000, 'abc'), 1000, 'an unreadable loss means none lost');
+  assert.equal(cookedFromLossPct(1000, 150), 10, 'capped at 99, so never zero and never negative');
+  assert.ok(cookedFromLossPct(1000, 99) > 0, 'the cap keeps the divisor above zero');
+});
+
+test('⚠️ the weights are absent, not zero, on a recipe nobody has weighed', () => {
+  // Same rule as `steps` and `endNote`: every recipe written before this existed must
+  // stay byte-identical until somebody actually puts a scale under the dough.
+  const plain = normalizeCatalogueRecipe({ id: 'r', name: 'Bread', ingredients: [], lossPct: 12 });
+  assert.ok(!('rawGrams' in plain), 'no rawGrams key at all');
+  assert.ok(!('cookedGrams' in plain), 'no cookedGrams key at all');
+  assert.equal(plain.lossPct, 12, 'and its stored loss is untouched');
+
+  const weighed = normalizeCatalogueRecipe({
+    id: 'r', name: 'Bread', ingredients: [], lossPct: 20, rawGrams: 1000, cookedGrams: 800,
+  });
+  assert.equal(weighed.rawGrams, 1000);
+  assert.equal(weighed.cookedGrams, 800);
 });
