@@ -1396,24 +1396,6 @@ a.home-reminder {
 .alg-status--unknown { background: var(--warn-bg); border: 1px solid var(--warn-border); color: var(--warn); }
 .alg-status--ok { background: var(--accent-light); border: 1px solid var(--border); color: var(--brand); }
 
-/* ── «Fornitori e ingredienti»: the bar goes to the bottom on a short list ─────
-   Federico's photograph, 23 Aug 2026: the Fornitori tab with ONE supplier, and the
-   «Impostazioni» bar floating in the middle of the screen with a quarter of a page of
-   nothing beneath it. The bar is the last child of the scroll area — deliberately, so
-   that opening a product's form pushes it out of the way instead of leaving a Settings
-   button hovering over somebody's Save. So it is PUSHED DOWN rather than taken out.
-
-   ⚠️ NOTHING WAS INVENTED: this is exactly what .home-scroll does for the sign-out row,
-   three screens away in this same stylesheet — a column flex scroller, children that
-   refuse to shrink, and `margin-top: auto` on the one that belongs at the bottom.
-   ⚠️ `> * { flex-shrink: 0 }` IS LOAD-BEARING. In a column flex container children
-   shrink to fit instead of overflowing, so without it a long ingredient list would be
-   squashed rather than scrolled — the comment on .home-scroll says the same thing, and
-   it is the reason that rule exists there. */
-.registry-scroll { display: flex; flex-direction: column; }
-.registry-scroll > * { flex-shrink: 0; }
-.registry-scroll > .recipe-footer { margin-top: auto; }
-
 /* ⚠️⚠️ THE APP HAS TOUCHED YOUR TICK BOXES, AND YOU CANNOT SEE IT HAPPEN. Since the
    suggestion became automatic the boxes move while the Allergeni card is SHUT, so this
    line sits OUTSIDE that fold and says so in words. It is the app's warning colour,

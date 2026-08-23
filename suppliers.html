@@ -90,14 +90,14 @@
   <span class="help-host" data-help="suppliers"></span>
 </header>
 
-<!-- ⚠️ `registry-scroll` MAKES THE BOTTOM BAR SIT AT THE BOTTOM WHEN THE LIST IS SHORT.
+<!-- ⚠️ `scroll-with-bar` MAKES THE BOTTOM BAR SIT AT THE BOTTOM WHEN THE LIST IS SHORT.
      Federico photographed the Fornitori tab with one supplier: the bar floated in the
      middle of the screen with a quarter of a page of nothing under it. The bar is
      inside the scroller on purpose — that is what makes it disappear behind a form
      instead of hovering over somebody's Save button — so it is pushed down rather than
-     taken out. See .registry-scroll in orders.css; it is the same shape .home-scroll
+     taken out. See .scroll-with-bar in style.css; it is the same shape .home-scroll
      already uses for the sign-out row. -->
-<div class="scroll-area registry-scroll">
+<div class="scroll-area scroll-with-bar">
   <!-- A live listener that fails leaves an EMPTY list, and an empty list here reads
        as "this bakery has no suppliers" — which is the wrong thing to believe while
        standing in front of a delivery. Filled by registry-main.js. -->

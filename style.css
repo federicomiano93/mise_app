@@ -528,6 +528,30 @@ select.qty-select:focus { outline: none; border-color: var(--crust); background:
   border-top: 1px solid var(--border);
   flex-shrink: 0;
 }
+/* ── A short page must not leave the bar floating in the middle of it ─────────
+   Federico's photograph, 23 Aug 2026: «Fornitori» with ONE supplier, the bar halfway
+   down and a quarter of a page of nothing under it. Measured afterwards on all three
+   pages that carry this bar — Fornitori, Ordini and the Calculator — and all three do
+   it whenever their list is short.
+
+   ⚠️ THE BAR STAYS INSIDE THE SCROLL AREA, and that is deliberate rather than lazy: it
+   is what makes it scroll away behind an open form instead of leaving a Settings button
+   hovering over somebody's Save. catalogue.html, which pins its bar outside, has to hide
+   it per screen for exactly that reason. So the bar is PUSHED DOWN, not taken out.
+
+   ⚠️ NOTHING WAS INVENTED: .home-scroll already does this for the sign-out row — a
+   column flex scroller, children that refuse to shrink, `margin-top: auto` on the one
+   that belongs at the bottom.
+   ⚠️ `> * { flex-shrink: 0 }` IS LOAD-BEARING. In a column flex container children
+   shrink to fit rather than overflowing, so without it a long list would be squashed
+   instead of scrolled. That is the same sentence .home-scroll's own comment carries.
+   ⚠️ OPT-IN PER PAGE. The class is on the three pages whose last child IS the bar and
+   which have been measured; `.scroll-area` is shared with screens that have no bar at
+   all, and turning all of them into flex columns is a change nobody has looked at. */
+.scroll-with-bar { display: flex; flex-direction: column; }
+.scroll-with-bar > * { flex-shrink: 0; }
+.scroll-with-bar > .recipe-footer { margin-top: auto; }
+
 .recipe-footer-btn {
   flex: 1;
   background: var(--surface);
