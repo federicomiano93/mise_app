@@ -1737,10 +1737,18 @@ const DICTIONARIES = Object.freeze({
     'orders.section.packList': 'Ingredient list',
     'orders.pack.filledIn': 'filled in',
     'orders.pack.toFillIn': 'to fill in',
+    // ⚠️⚠️ IT SAYS THE VERIFICATION IS GONE, BECAUSE IT IS. The app changed {n} box on
+    // an ingredient somebody had signed off, so the old date no longer describes what
+    // is ticked — the tick that says «I checked this» is cleared and must be given
+    // again. An earlier wording said only «verify it again» while the code quietly
+    // kept the stamp: a warning the code does not enforce is worse than none here.
     'orders.pack.proposedAfterCheck': {
-      one: 'This ingredient was verified BEFORE the app changed {n} box from the ingredient list. Open Allergens and verify it again.',
-      other: 'This ingredient was verified BEFORE the app changed {n} boxes from the ingredient list. Open Allergens and verify it again.',
+      one: 'The verification has lapsed: the app changed {n} box from the ingredient list. Check the allergens and tick «I have checked…» again.',
+      other: 'The verification has lapsed: the app changed {n} boxes from the ingredient list. Check the allergens and tick «I have checked…» again.',
     },
+    // The same lapse, once the app has withdrawn its own ticks again — there is no
+    // number left to name, and the verification stays gone until somebody confirms.
+    'orders.pack.checkVoided': 'The verification has lapsed: the app changed the boxes from the ingredient list. Check the allergens and tick «I have checked…» again.',
     'orders.pack.proposedTicks': {
       one: 'The app has ticked {n} box from the ingredient list. Open Allergens and check it.',
       other: 'The app has ticked {n} boxes from the ingredient list. Open Allergens and check them.',
@@ -3416,9 +3424,10 @@ const DICTIONARIES = Object.freeze({
     'orders.pack.filledIn': 'compilato',
     'orders.pack.toFillIn': 'da compilare',
     'orders.pack.proposedAfterCheck': {
-      one: 'Questo ingrediente era stato verificato PRIMA che l’app cambiasse {n} casella leggendo l’elenco. Apri Allergeni e verificalo di nuovo.',
-      other: 'Questo ingrediente era stato verificato PRIMA che l’app cambiasse {n} caselle leggendo l’elenco. Apri Allergeni e verificalo di nuovo.',
+      one: 'La verifica è decaduta: l’app ha cambiato {n} casella leggendo l’elenco. Controlla gli allergeni e spunta di nuovo «Ho controllato…».',
+      other: 'La verifica è decaduta: l’app ha cambiato {n} caselle leggendo l’elenco. Controlla gli allergeni e spunta di nuovo «Ho controllato…».',
     },
+    'orders.pack.checkVoided': 'La verifica è decaduta: l’app ha cambiato le caselle leggendo l’elenco. Controlla gli allergeni e spunta di nuovo «Ho controllato…».',
     'orders.pack.proposedTicks': {
       one: 'L’app ha spuntato {n} casella leggendo l’elenco ingredienti. Apri Allergeni e controllala.',
       other: 'L’app ha spuntato {n} caselle leggendo l’elenco ingredienti. Apri Allergeni e controllale.',

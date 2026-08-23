@@ -1501,6 +1501,11 @@ a.home-reminder {
 /* The <select> and the <input> are 100% of their column; without this the select
    sizes to its widest option instead of to the space it has been given. */
 .mgmt-pair .mgmt-input { width: 100%; min-width: 0; }
+/* The price-history field. Its control is a text button, and a button stretched by the
+   flex column centres its own label — so «Mostrali» floated in the middle while every
+   label and input in the same card started at the left edge. Shrink it to its text and
+   pin it left; nothing else about the link changes. */
+.mgmt-history > .mgmt-link { align-self: flex-start; }
 .alg-nut-field { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .alg-nut-label { font-size: 11px; color: var(--text2); line-height: 1.3; }
 .alg-num { width: 100%; font-variant-numeric: tabular-nums; }

@@ -266,7 +266,11 @@ function priceHistoryBlock(item, actions) {
   // ⚠️ IT STILL LOADS ONLY WHEN TAPPED. Naming it does not fetch it: this is a separate
   // database read per ingredient, and somebody opening the form to fix a spelling must
   // not pay for it (P14).
-  return el('div', { class: 'mgmt-field' }, [
+  // ⚠️ `.mgmt-history` EXISTS TO PULL THE BUTTON LEFT, and it is defined in orders.css.
+  // A <button> stretched by the column centres its own text, so «Mostrali» sat in the
+  // middle under a left-aligned label — the one thing in the section not lining up with
+  // everything else, in the very release asked to make it «visivamente coerente».
+  return el('div', { class: 'mgmt-field mgmt-history' }, [
     el('span', { class: 'mgmt-field-label', text: t('orders.priceHistory') }),
     button,
     list,
@@ -399,6 +403,18 @@ function allergenBlock(item, panels) {
   const humanTouched = new Set();
   // How many the app is currently proposing, so the folded header can say so.
   let proposedCount = 0;
+  // ⚠️⚠️ SET THE MOMENT THE APP MOVES A BOX ON A RECORD SOMEBODY HAD ALREADY VERIFIED,
+  // and it is the whole reason an automatic proposal cannot declare anything.
+  //
+  // The stamp is what makes ticks a DECLARATION. Without this, an ingredient verified
+  // on 20 August whose pack text the app then reads keeps that date — so a box the app
+  // ticked by itself is saved as «verified on 20 August», by a person who never saw it.
+  // Proved against the emulator database before it was written: the saved document came
+  // back `[gluten-wheat, milk]` with the seed's own stamp still on it.
+  //
+  // ⚠️ The screen ALREADY said «verificalo di nuovo». The code did not make it true, and
+  // a warning the code does not enforce is the most dangerous kind on this screen.
+  let stampVoided = false;
 
   // Move the boxes to whatever the pure model says they should be, and report how
   // many changed. Nothing here decides anything: reconcileTicks owns the rules.
@@ -415,6 +431,14 @@ function allergenBlock(item, panels) {
     for (const [code, pair] of boxes) {
       pair.contains.checked = wantContains.has(code);
       pair.may.checked = wantMay.has(code);
+    }
+    // ⚠️⚠️ THE APP CHANGED THE DECLARATION, SO THE VERIFICATION IS NO LONGER ABOUT IT.
+    // Both directions count: a tick the app ADDED was never checked by anybody, and a
+    // tick it TOOK BACK means the stamp now covers a list that no longer exists. The
+    // person confirms again — and when they do, read() stamps TODAY, not the old date.
+    if ((next.added || next.removed) && checked.checked) {
+      checked.checked = false;
+      stampVoided = true;
     }
     proposedCount = appOwned.size;
     refresh();
@@ -535,7 +559,12 @@ function allergenBlock(item, panels) {
     for (const [key, input] of nutrients) nutrition[key] = input.value === '' ? null : input.value;
     // ⚠️ The stamp is KEPT when it exists, so re-saving does not silently move
     // the verification date and make a two-year-old check look like today's.
-    const stamp = checked.checked ? (checkedAt(item) || new Date().toISOString()) : '';
+    //
+    // ⚠️⚠️ UNLESS THE APP MOVED A BOX SINCE (`stampVoided`). Then the old date belongs
+    // to a different list of allergens, and re-using it would date a brand-new
+    // declaration to before it existed. A fresh confirmation is stamped TODAY.
+    const previous = stampVoided ? null : checkedAt(item);
+    const stamp = checked.checked ? (previous || new Date().toISOString()) : '';
     return buildAllergenFields({
       allergens: contains, mayContain: may, checkedAt: stamp, nutrition,
       packIngredients: packBox.value,
@@ -598,11 +627,21 @@ function allergenBlock(item, panels) {
     //
     // ⚠️ AND A VERIFIED ONE GETS THE STRONGER SENTENCE, because that is the worse case:
     // the declaration on record no longer matches what a person checked.
-    proposedNote.hidden = proposedCount === 0;
-    proposedNote.textContent = proposedCount
-      ? t(checked.checked ? 'orders.pack.proposedAfterCheck' : 'orders.pack.proposedTicks',
-        { n: proposedCount })
-      : '';
+    //
+    // ⚠️⚠️ AND IT KEEPS SPEAKING AFTER THE APP WITHDRAWS ITS OWN TICKS. A lapsed
+    // verification does not come back when the text changes again, so a note tied only
+    // to `proposedCount` would vanish and leave «Non ancora verificato» standing on the
+    // screen with nothing to explain it.
+    proposedNote.hidden = proposedCount === 0 && !stampVoided;
+    if (proposedCount) {
+      proposedNote.textContent = t(
+        stampVoided ? 'orders.pack.proposedAfterCheck' : 'orders.pack.proposedTicks',
+        { n: proposedCount });
+    } else if (stampVoided) {
+      proposedNote.textContent = t('orders.pack.checkVoided');
+    } else {
+      proposedNote.textContent = '';
+    }
 
     // ⚠️ `note: ''` AND THEN TRIMMED. The three sentences end in «{note}», which used
     // to carry the nutrition line; the placeholder is kept rather than removed

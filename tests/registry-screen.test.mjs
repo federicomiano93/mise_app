@@ -33,6 +33,7 @@ const REGISTRY = read('js/orders/registry.js');
 const FORM = read('js/orders/ingredient-form.js');
 const MGMT = read('js/orders/management.js');
 const SW = read('sw.js');
+const ORDERS_CSS = read('orders.css');
 
 // ── 1. The access story ──────────────────────────────────────────────────────
 
@@ -76,6 +77,43 @@ test('the one Delete gate, and the one price gate, are still where they were', (
     'an employee gets NO price block at all — not a disabled one');
 });
 
+// ── 1b. The price section Federico asked to fit one screen ───────────────────
+//
+// ⚠️⚠️ EVERY CLASS THIS SECTION USES MUST BE DEFINED SOMEWHERE. `.mgmt-btn` is defined
+// in NO stylesheet and never was, so «Leggilo e spunta le caselle» was a bare grey
+// browser rectangle from 22 August until v1.67.0 noticed. Nothing warns about an
+// undefined class — it is as silent as an undefined custom property, one level up.
+test('the two price fields share a row, and the classes doing it exist', () => {
+  const code = codeOf(FORM);
+  assert.match(code, /class: 'mgmt-pair'/,
+    'Federico: «come si acquista e Prezzo al kg… uno accanto all’altro»');
+  assert.match(ORDERS_CSS, /\.mgmt-pair \{[^}]*grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\)/,
+    '.mgmt-pair must be DEFINED, and with the same two-column values .alg-nutrition '
+    + 'already uses three sections down the same form — no new number was chosen');
+  assert.match(ORDERS_CSS, /\.mgmt-pair \.mgmt-input \{[^}]*min-width:\s*0/,
+    'without min-width:0 a <select> sizes to its widest option and shoves the other '
+    + 'column off — the flex/grid trap this project has paid for once already');
+  assert.match(ORDERS_CSS, /\.mgmt-history > \.mgmt-link \{[^}]*align-self:\s*flex-start/,
+    'and «Mostrali» must line up left with everything else in the card');
+  assert.match(code, /class: 'mgmt-field mgmt-history'/,
+    'the rule above needs the class actually on the element');
+});
+
+// ⚠️ «IVA esclusa» CANNOT GO. Typing the invoice total where the rate belongs makes
+// every recipe using that ingredient cost twenty-five times too much, and nothing on
+// any screen would look wrong. It moved, it was not dropped — once, under the pair,
+// because it is true of both boxes.
+test('⚠️ the ex-VAT warning survives, once, under the pair', () => {
+  const code = codeOf(FORM);
+  assert.match(code, /t\('orders\.exVatNote'\)/, 'the note must still be shown');
+  assert.equal((code.match(/orders\.exVatNote/g) || []).length, 1,
+    'and exactly once — it applies to both boxes, so twice is noise');
+  for (const dict of Object.values(_dictionaries)) {
+    assert.ok(!/[£€$]/.test(dict['orders.exVatNote'] || ''),
+      'the note carries no currency symbol of its own — the venue’s country decides it');
+  }
+});
+
 // ── 2. The safety rule the whole allergen feature rests on ───────────────────
 
 test('⚠️⚠️ the form still never writes the verification stamp', () => {
@@ -86,8 +124,48 @@ test('⚠️⚠️ the form still never writes the verification stamp', () => {
   assert.doesNotMatch(code, /allergensCheckedAt/,
     'nothing in the ingredient form may set the stamp: a suggestion must stay inert '
     + 'until a person ticks «I have checked this»');
-  assert.match(code, /checked\.checked \? \(checkedAt\(item\) \|\| new Date\(\)/,
+  assert.match(code, /const stamp = checked\.checked \? \(previous \|\| new Date\(\)/,
     'the stamp comes from the tick box, and an existing one is kept rather than moved');
+});
+
+// ⚠️⚠️ AND THE HOLE THAT LEFT, WHICH WAS FOUND BY LOOKING AT A SCREENSHOT AND THEN
+// PROVED AGAINST THE EMULATOR DATABASE BEFORE A LINE WAS WRITTEN.
+//
+// «The form never writes the stamp» is not the same as «the app cannot declare». On an
+// ingredient somebody verified on 20 August, the app read the pack text, ticked MILK by
+// itself, and Save kept the 20 August stamp — so the saved document read
+// `[gluten-wheat, milk]`, verified, by a person who never saw the milk. The one thing
+// this whole feature promises is that a proposal is inert; that made it a declaration.
+//
+// The rule now: THE APP MOVING A BOX CLEARS THE TICK THAT MEANS «I checked this».
+// Both directions — an added tick was never checked, and a withdrawn one means the
+// stamp describes a list that no longer exists.
+test('⚠️⚠️ a box the app moves clears the verification, in both directions', () => {
+  const code = codeOf(FORM);
+  assert.match(code, /if \(\(next\.added \|\| next\.removed\) && checked\.checked\) \{[\s\S]{0,120}?checked\.checked = false;[\s\S]{0,120}?stampVoided = true;/,
+    'when reconcileTicks reports it moved anything on a verified record, the tick box '
+    + 'must be cleared — an unenforced «verify it again» warning is worse than none');
+  // ⚠️ AND THE OLD DATE MUST NOT COME BACK WITH THE NEXT CONFIRMATION. Re-using it
+  // would date a declaration made today to before the allergen was in it.
+  assert.match(code, /const previous = stampVoided \? null : checkedAt\(item\);/,
+    'a confirmation after a lapse is stamped TODAY, never with the superseded date');
+});
+
+// ⚠️ THE PERSON HAS TO BE TOLD, AND KEEP BEING TOLD. The ticks land inside a fold that
+// is shut, so the line lives outside it — and it must survive the app withdrawing its
+// own ticks again, or the screen would show «Non ancora verificato» with nothing left
+// on it to explain why the verification went.
+test('⚠️ the lapse is announced outside the fold, and does not vanish', () => {
+  const code = codeOf(FORM);
+  assert.match(code, /proposedNote\.hidden = proposedCount === 0 && !stampVoided;/,
+    'the note must outlive the proposal that caused the lapse');
+  assert.match(code, /stampVoided \? 'orders\.pack\.proposedAfterCheck' : 'orders\.pack\.proposedTicks'/,
+    'the stronger sentence follows the LAPSE, not the tick box — which this very '
+    + 'change now clears, so a note keyed on checked.checked could never appear again');
+  assert.match(code, /t\('orders\.pack\.checkVoided'\)/,
+    'and there is a wording for a lapse with no proposal left to count');
+  assert.match(code, /above: \[status, proposedNote\]/,
+    'both of them stay OUTSIDE the fold — the v1.60.0 rule');
 });
 
 // ⚠️⚠️ THIS RULE CHANGED IN v1.70.0, AND THE OLD ONE IS WRITTEN DOWN HERE BECAUSE
