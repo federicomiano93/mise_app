@@ -11,7 +11,7 @@
 // ONE irreversible action. Everything else in this file is drawn for everybody, which
 // is the deliberate design of the records screen (see registry.js).
 
-import { t } from '../i18n.js';
+import { t, localeTag } from '../i18n.js';
 import { el } from './dom.js';
 import { canManageHere } from './firebase-orders.js';
 import { confirmDialog, alertDialog } from './confirm-dialog.js';
@@ -124,5 +124,5 @@ export function mgmtRow(name, meta, active, onEdit, onToggle, onDelete) {
 export function shortDate(iso) {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return String(iso || '');
-  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+  return d.toLocaleDateString(localeTag(), { day: 'numeric', month: 'short', year: 'numeric' });
 }

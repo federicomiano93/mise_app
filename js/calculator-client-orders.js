@@ -13,7 +13,7 @@
 //   2. a field that already holds a different number, before it is overwritten;
 //   3. a tab that has been confirmed, whose fields are locked and will not move.
 
-import { t } from './i18n.js';
+import { t, localeTag } from './i18n.js';
 import { el } from './calculator-render.js';
 import { confirmDialog, alertDialog } from './confirm-dialog.js';
 import { getConfig } from './calculator-config-store.js';
@@ -65,7 +65,7 @@ function dayLabel(iso) {
   const today = new Date();
   const days = Math.round(
     (date - new Date(today.getFullYear(), today.getMonth(), today.getDate())) / 86400000);
-  const full = date.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
+  const full = date.toLocaleDateString(localeTag(), { weekday: 'long', day: 'numeric', month: 'long' });
   if (days === 0) return `Today · ${full}`;
   if (days === 1) return `Tomorrow · ${full}`;
   return full;
@@ -81,7 +81,7 @@ function arrivedLabel(order) {
   if (minutes < 60) return `${minutes} min ago`;
   const hours = Math.round(minutes / 60);
   if (hours < 24) return `${hours} ${hours === 1 ? 'hour' : 'hours'} ago`;
-  return new Date(at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+  return new Date(at).toLocaleDateString(localeTag(), { day: 'numeric', month: 'short' });
 }
 
 // Soonest delivery first, and within a day the client who has been waiting longest.

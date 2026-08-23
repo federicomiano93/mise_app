@@ -6,7 +6,7 @@
 // and tested. This file's job is that a busy person in a shop can send tomorrow's
 // order in fifteen seconds without being taught anything.
 
-import { t } from '../i18n.js';
+import { t, localeTag } from '../i18n.js';
 import { el } from './dom.js';
 
 const MAX_LINE_QTY = 100000;
@@ -19,7 +19,7 @@ export function dayLabel(iso, nowMs) {
   const today = new Date(nowMs);
   const days = Math.round(
     (date - new Date(today.getFullYear(), today.getMonth(), today.getDate())) / 86400000);
-  const full = date.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
+  const full = date.toLocaleDateString(localeTag(), { weekday: 'long', day: 'numeric', month: 'long' });
   if (days === 0) return `Today — ${full}`;
   if (days === 1) return `Tomorrow — ${full}`;
   return full;

@@ -14,7 +14,8 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import {
   LANGUAGES, DEFAULT_LANGUAGE, DATA_WORDS,
-  setLanguage, currentLanguage, interfaceLanguage, languageFromTag, t, translate, _dictionaries,
+  setLanguage, currentLanguage, interfaceLanguage, languageFromTag, localeTag,
+  t, translate, _dictionaries,
 } from '../js/i18n.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -247,6 +248,48 @@ test('the plural form is chosen by Intl, in the language the phrase came from', 
   assert.equal(translate(dicts, 'it', 'x.n', { n: 2 }), 'molti');
   // Found in English because Italian lacks it → counted by English's rules.
   assert.equal(translate({ en: dicts.en, it: {} }, 'it', 'x.n', { n: 1 }), 'one');
+});
+
+// ── A date is written in the language on screen ─────────────────────────────
+//
+// ⚠️⚠️ FIVE CALL SITES HARDCODED 'en-GB' AND PRINTED «Wednesday 5 August» ON AN
+// ITALIAN SCREEN — the Calculator's client orders, the CLIENT's own ordering page,
+// Food Cost and the Orders records. js/workspace-row.js had already been fixed and
+// its comment says so; nobody looked for the others, and no i18n suite could,
+// because a locale tag is not a phrase and never appears in the dictionary.
+//
+// ⚠️ Intl.NumberFormat('en-GB') IS DELIBERATELY NOT INCLUDED. Those calls pass
+// useGrouping:false and maximumFractionDigits:0, so they emit bare digits and the
+// locale changes nothing. Forbidding them would be a rule with no reason behind it,
+// which is the kind somebody later switches off.
+test('⚠️ no date is formatted in a language nobody chose', () => {
+  const offenders = [];
+  for (const [name, src] of sourceFiles()) {
+    src.split(/\r?\n/).forEach((line, i) => {
+      if (/^\s*(\/\/|\*)/.test(line)) return;
+      if (/\btoLocale(Date|Time)?String\s*\(\s*'[a-z]{2}-[A-Z]{2}'/.test(line)) {
+        offenders.push(`${name}:${i + 1}`);
+      }
+    });
+  }
+  assert.deepEqual(offenders, [],
+    'pass localeTag() — a hardcoded locale prints an English weekday and month on an '
+    + 'Italian screen, and no dictionary check can see it');
+});
+
+test('the scan finds a hardcoded locale when there is one', () => {
+  const sample = "  return d.toLocaleDateString('en-GB', { day: 'numeric' });";
+  assert.match(sample, /\btoLocale(Date|Time)?String\s*\(\s*'[a-z]{2}-[A-Z]{2}'/);
+  assert.doesNotMatch("  return d.toLocaleDateString(localeTag(), { day: 'numeric' });",
+    /\btoLocale(Date|Time)?String\s*\(\s*'[a-z]{2}-[A-Z]{2}'/);
+});
+
+test('localeTag answers a real tag for every language, and English for the unknown', () => {
+  for (const lang of LANGUAGES) {
+    assert.match(localeTag(lang), /^[a-z]{2}-[A-Z]{2}$/, lang);
+  }
+  assert.equal(localeTag('it'), 'it-IT');
+  assert.equal(localeTag('de'), 'en-GB');
 });
 
 // ── Helpers ─────────────────────────────────────────────────────────────────

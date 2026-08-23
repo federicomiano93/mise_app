@@ -8,7 +8,7 @@
 // js/ root (price-model.js and the recipe cost maths), which both features already
 // share for the same reason.
 
-import { t, onLanguageChange } from '../i18n.js';
+import { t, localeTag, onLanguageChange } from '../i18n.js';
 import {
   initFoodCost, getProducts, tables, saveProduct, deleteProduct, setSyncErrorHandler,
   getRecipes, getIngredients,
@@ -113,7 +113,7 @@ async function openHistory(product) {
 function shortDate(iso) {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return String(iso || '');
-  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+  return d.toLocaleDateString(localeTag(), { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
 async function handleBack() {
