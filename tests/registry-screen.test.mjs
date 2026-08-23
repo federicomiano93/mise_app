@@ -234,6 +234,67 @@ test('⚠️⚠️ the first draw shows what the text says and ticks nothing', (
 
 // The button is gone; typing is the interaction. A button left behind would teach
 // people that nothing happens until they press it.
+// ── The «?» beside each section, and what may NOT go behind it ───────────────
+//
+// ⚠️⚠️ EVERY ASSERTION BELOW EXISTS BECAUSE A MUTATION SURVIVED WITHOUT IT. Seven of
+// fourteen probes came back green on the first run: the explanations could come back
+// onto the screen, the findings could be deleted, the «?» could be nested inside the
+// head button, and nothing was left to fill the buttons in. «The suite went red» was
+// never the question — these are the guards, and they did not exist.
+test('⚠️ the «?» is a SIBLING of the head, never inside it', () => {
+  const code = codeOf(FORM);
+  // A button may not contain a button: nested, the «?» is unreachable and tapping near
+  // it folds the section instead of explaining it.
+  assert.match(code, /const row = el\('div', \{ class: 'mgmt-fold-head-row' \}, \[\s*\n\s*btn,\s*\n\s*el\('span', \{ class: 'mgmt-fold-help', 'data-help': help \}\),/,
+    'the row holds the head and the «?» side by side');
+  const btnBlock = code.slice(code.indexOf("const btn = el('button'"), code.indexOf('const row ='));
+  assert.ok(btnBlock.length > 100, 'the slice must actually hold the head button');
+  assert.doesNotMatch(btnBlock, /data-help/,
+    'the head button must not contain the help host — a button inside a button');
+});
+
+test('⚠️ the help buttons are actually mounted, or every «?» is an empty span', () => {
+  const code = codeOf(FORM);
+  assert.match(code, /mountHelpButtons\(root\);/,
+    'this overlay is built after page load, so it must ask for its own buttons — '
+    + 'without the call the hosts stay empty and nothing on screen looks broken');
+  assert.match(code, /import \{ mountHelpButtons \} from '\.\.\/help-button\.js';/);
+  // Three sections, three sheets, and each id must exist in help-content.js.
+  const ids = [...code.matchAll(/help: '([a-z-]+)'/g)].map(m => m[1]);
+  assert.deepEqual(ids, ['pack-list', 'allergens', 'nutrition'],
+    'the three folding sections each carry their own sheet');
+});
+
+// ⚠️⚠️ WHAT MAY NOT GO BEHIND THE «?». The rule Federico's request resolves to: a
+// sentence true of every product is an explanation and may be hidden; a sentence about
+// THIS product is a finding and may not. A mutation deleted the findings and every
+// test stayed green — on the one screen in this app that can send somebody to hospital.
+test('⚠️⚠️ the findings about THIS pack stay on the screen', () => {
+  const code = codeOf(FORM);
+  assert.match(code, /packResult\.appendChild\(el\('p', \{ class: 'alg-pack-question', text: line \}\)\);/,
+    'the «the pack says frutta a guscio, nothing was ticked» line must be drawn — '
+    + 'behind a «?» nobody would ever see the one moment the app goes quiet');
+  assert.match(code, /if \(!out\.recognisedAnything\) \{[\s\S]{0,200}?orders\.pack\.recognisedNothing/,
+    'recognising nothing is an answer and must look like one: silence there reads as '
+    + '«this pack contains nothing», the worst thing this feature could say');
+});
+
+// ⚠️ AND WHAT MUST NOT COME BACK. The instructions are in the sheet now; a paragraph
+// re-added here is how the section fills up again one line at a time.
+test('⚠️ the section holds the box and the findings, not the instructions', () => {
+  const code = codeOf(FORM);
+  const packSection = code.slice(code.indexOf("t('orders.section.packList')"),
+    code.indexOf("t('orders.section.allergens')"));
+  assert.ok(packSection.length > 100, 'the slice must actually hold the pack section');
+  for (const key of ['orders.pack.help', 'orders.pack.stillYours']) {
+    assert.ok(!packSection.includes(key),
+      `${key} belongs in the «?» sheet, not on the screen — Federico: «c'è scritto troppo»`);
+  }
+  // The intros above the other two panels went the same way.
+  assert.ok(!code.includes("text: t('orders.copyThisFromThe')"),
+    'the allergen panel intro is in its sheet now');
+});
+
 test('the «read it and tick the boxes» button is gone, and typing runs it', () => {
   const code = codeOf(FORM);
   assert.doesNotMatch(code, /orders\.pack\.suggest/,

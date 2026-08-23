@@ -149,4 +149,25 @@ test('⚠️ suppliers.html pads BOTH its children, the error line included', ()
   assert.ok(footer, 'the bottom bar must still be there');
   assert.ok(!footer[1].includes('reg-page'),
     'the bar spans the screen on purpose — padding it would inset its own ground');
+  // ⚠️ AND THE TOP OF THE LIST NEEDS AIR TOO. A mutation deleted this and every test
+  // stayed green: the view switch went back to touching the header. It is `.content`'s
+  // own 14px, and it is on the host alone — the error line sits above it and brings
+  // its own spacing when it is shown at all.
+  assert.match(read('orders.css'), /#registry-host\.reg-page \{[^}]*padding-top:\s*14px/,
+    'the list must start 14px below the header, as .content does on every other page');
+});
+
+// ⚠️ THE STATE WORD IS THE ANSWER OF A SHUT SECTION, AND IT MAY NOT BREAK IN HALF.
+// Once the «?» joined the head row, «DA COMPILARE» split across two lines at 320px.
+// Between a section NAME wrapping and its ANSWER wrapping, the name gives way.
+// A mutation removed the rule and nothing noticed.
+test('⚠️ the state word never wraps, whatever else has to', () => {
+  const css = read('orders.css');
+  const at = css.indexOf('\n.alg-head-state {');
+  assert.ok(at > 0, '.alg-head-state must be defined');
+  const block = css.slice(at, css.indexOf('}', at));
+  assert.match(block, /white-space:\s*nowrap/,
+    '«DA COMPILARE» broke over two lines at 320px once the «?» shared the row');
+  assert.match(block, /flex-shrink:\s*0/,
+    'and it must not be squeezed instead — nowrap alone would let it overflow');
 });
