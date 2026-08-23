@@ -72,7 +72,7 @@ const DRAWS_A_SCREEN = [
 // THING, and the first version of this file treated them as one.
 //
 //   labelWord / allergenName / nutrientName  build what a label SAYS
-//   canPrintLabel / outputLanguage / countryName  answer questions ABOUT it
+//   canPrintLabel / outputLanguage / countryOf  answer questions ABOUT it
 //
 // Only the first group makes a file a label file. The second is safe to ask from
 // anywhere, and one screen has to: js/staff/language.js exists to TELL somebody

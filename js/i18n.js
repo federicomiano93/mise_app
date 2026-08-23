@@ -1661,8 +1661,9 @@ const DICTIONARIES = Object.freeze({
     // language on screen, so there it is «inglese», not «English».
     'language.en.inSentence': 'English',
     'language.it.inSentence': 'Italian',
-    // ⚠️ AND SO IS A COUNTRY'S NAME. countryName() in js/market.js stays English
-    // because it belongs to the label side; this is the interface's own copy.
+    // ⚠️ AND SO IS A COUNTRY'S NAME. js/market.js used to carry its own English
+    // copy (countryName); it was deleted on 23 Aug 2026 once its last caller moved
+    // here, because a name nobody translates is a name that reaches a screen.
     'country.GB': 'the United Kingdom',
     'country.IT': 'Italy',
     // ⚠️ THE WHOLE PREPOSITIONAL PHRASE, ONE PER COUNTRY. Italian takes the
@@ -1694,6 +1695,27 @@ const DICTIONARIES = Object.freeze({
     'label.copy': 'Copy the text',
     'label.copied': 'Copied',
     'label.copyFailed': 'Could not copy — select the text above instead',
+    // ⚠️ THE THREE BUTTONS ABOVE THE LABEL. They are interface — they say what to
+    // tap, not what is in the food — so they follow the screen. They lived in a
+    // module-level SHOW_LABELS constant in js/catalogue/label-view.js, which is the
+    // v1.57.0 shape exactly: resolved once, before any venue is open. The constant
+    // now carries these KEYS and the lookup happens when the switch is painted.
+    'label.shows.allergens': 'Allergens',
+    'label.shows.nutrition': 'Nutrition',
+    'label.shows.both': 'Both',
+    // What the card is headed when the recipe has no name yet.
+    'label.untitled': 'Recipe',
+    // ⚠️ MOVED OUT OF js/market.js ON 23 Aug 2026, WHERE THEY WERE FIXED ENGLISH.
+    // All three are addressed to the person MAKING the label, never to the customer
+    // reading it, so they follow the interface — and market.js may not import this
+    // dictionary at all, which is why they had to move rather than be wrapped.
+    //
+    // ⚠️ {country} IS THE WHOLE PREPOSITIONAL PHRASE (`country.GB.in`), not the bare
+    // name: Italian takes the article for one and not the other. Same shape as
+    // `lang.labels`, which says the same thing on the language screen.
+    'label.languageNote': 'This label is produced in {language} because this business sells {country}.',
+    'label.ingredientNamesNote': 'The ingredient names are the ones you typed — the app does not translate them.',
+    'label.blocked.noCountry': 'No label can be made yet: nobody has said which country this business sells in, and that decides the language the label must be printed in. The owner can set it when the business is created.',
 
 
     // ── The CLIENT's own ordering page ─────────────────────────────────────
@@ -3110,6 +3132,17 @@ const DICTIONARIES = Object.freeze({
     'label.copy': 'Copia il testo',
     'label.copied': 'Copiato',
     'label.copyFailed': 'Copia non riuscita — seleziona il testo qui sopra',
+    // ⚠️ «Nutrizione» e non «Valori nutrizionali»: i tre pulsanti sono in fila e a
+    // 320px il secondo andrebbe a capo da solo, lasciando la fila sbilanciata. La
+    // parola dell’ETICHETTA resta «Valori nutrizionali» (js/market.js) — quello è
+    // il titolo della tabella, questo è un pulsante.
+    'label.shows.allergens': 'Allergeni',
+    'label.shows.nutrition': 'Nutrizione',
+    'label.shows.both': 'Entrambi',
+    'label.untitled': 'Ricetta',
+    'label.languageNote': 'Questa etichetta è prodotta in {language} perché questa attività vende {country}.',
+    'label.ingredientNamesNote': 'I nomi degli ingredienti sono quelli che hai scritto tu — l’app non li traduce.',
+    'label.blocked.noCountry': 'Non si può ancora fare nessuna etichetta: nessuno ha detto in che paese vende questa attività, ed è quello a decidere in che lingua l’etichetta va stampata. Il titolare può impostarlo quando crea l’attività.',
 
 
     'co.youCanChangeYour': 'Puoi modificare il tuo ordine finché il panificio non comincia a farlo.',

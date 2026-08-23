@@ -17,15 +17,20 @@ import { el } from './dom.js';
 import { buildLabel, ingredientLine, containsLine, LABEL_SHOWS } from './recipe-label-model.js';
 import { NUTRIENTS } from '../allergen-model.js';
 import {
-  canPrintLabel, outputLanguage, labelWord, allergenName, nutrientName,
-  labelLanguageNote, ingredientNamesNote, noCountryReason,
+  canPrintLabel, countryOf, outputLanguage, labelWord, allergenName, nutrientName,
 } from '../market.js';
 import { allergensOn } from '../venue-features.js';
 
-const SHOW_LABELS = Object.freeze({
-  allergens: 'Allergens',
-  nutrition: 'Nutrition',
-  both: 'Both',
+// ⚠️ KEYS, NOT WORDS, AND THE DIFFERENCE IS WHEN. This constant is evaluated when
+// the module is first imported — before any venue is open — so a t() here would
+// answer in the default language and keep that answer for the life of the page.
+// That is the v1.57.0 defect, and it is what these three buttons had: «Allergens ·
+// Nutrition · Both», in English, on a venue set to Italian. The lookup lives in
+// paintSwitch(), which runs on every paint.
+const SHOW_KEYS = Object.freeze({
+  allergens: 'label.shows.allergens',
+  nutrition: 'label.shows.nutrition',
+  both: 'label.shows.both',
 });
 
 // `location` is the venue's own document — its country decides what language the
@@ -64,7 +69,7 @@ export function renderLabel({ recipe, ingredients, recipesById, location, initia
   const buttons = new Map();
   for (const key of LABEL_SHOWS) {
     const btn = el('button', {
-      class: 'lab-switch-btn', type: 'button', text: SHOW_LABELS[key],
+      class: 'lab-switch-btn', type: 'button',
       onclick: () => { shows = key; paint(); if (onShowsChange) onShowsChange(key); },
     });
     buttons.set(key, btn);
@@ -76,6 +81,7 @@ export function renderLabel({ recipe, ingredients, recipesById, location, initia
   function paintSwitch() {
     for (const [key, btn] of buttons) {
       const on = key === shows;
+      btn.textContent = t(SHOW_KEYS[key]);
       btn.classList.toggle('lab-switch-btn--on', on);
       btn.setAttribute('aria-pressed', on ? 'true' : 'false');
     }
@@ -108,7 +114,7 @@ export function renderLabel({ recipe, ingredients, recipesById, location, initia
     if (!canPrintLabel(location)) {
       body.replaceChildren(el('div', { class: 'lab-blocked' }, [
         el('p', { class: 'lab-blocked-title', text: t('label.blocked') }),
-        el('p', { class: 'lab-blocked-text', text: noCountryReason() }),
+        el('p', { class: 'lab-blocked-text', text: t('label.blocked.noCountry') }),
       ]));
       return;
     }
@@ -133,7 +139,7 @@ export function renderLabel({ recipe, ingredients, recipesById, location, initia
     }
 
     const card = el('div', { class: 'lab-card' });
-    card.appendChild(el('p', { class: 'lab-name', text: label.name || 'Recipe' }));
+    card.appendChild(el('p', { class: 'lab-name', text: label.name || t('label.untitled') }));
 
     if (shows !== 'nutrition') {
       // ⚠️ THE ALLERGENS ARE EMPHASISED INSIDE THE LIST, not only summarised
@@ -199,10 +205,23 @@ export function renderLabel({ recipe, ingredients, recipesById, location, initia
   // by hand in Orders and are NOT translated: an Italian venue must type Italian
   // names, or the label reads "Contiene: Wheat" — half translated, which is worse
   // than either language whole. Saying so is the only honest option available.
+  //
+  // ⚠️⚠️ BOTH LINES ARE THE INTERFACE'S, AND UNTIL 23 Aug 2026 BOTH WERE FIXED
+  // ENGLISH — they were built in js/market.js, which cannot import the dictionary.
+  // So on a venue set to Italian the label came out correctly in Italian with two
+  // English sentences underneath explaining why. Moving them here is what lets them
+  // follow the reader while every word ON the label still follows the country.
+  //
+  // ⚠️ THE NAMES INSIDE THE SENTENCE COME FROM THE DICTIONARY TOO — «italiano», «in
+  // Italia» — never from market.js. This is the mistake js/staff/language.js already
+  // made and fixed: an Italian sentence with English words dropped into it.
   function languageNote() {
     return el('div', { class: 'lab-language' }, [
-      el('p', { class: 'lab-language-line', text: labelLanguageNote(location) }),
-      el('p', { class: 'lab-language-line', text: ingredientNamesNote(location) }),
+      el('p', { class: 'lab-language-line', text: t('label.languageNote', {
+        language: t(`language.${lang}.inSentence`),
+        country: t(`country.${countryOf(location)}.in`),
+      }) }),
+      el('p', { class: 'lab-language-line', text: t('label.ingredientNamesNote') }),
     ]);
   }
 
