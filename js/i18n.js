@@ -518,7 +518,14 @@ const DICTIONARIES = Object.freeze({
     'orders.loading': 'Loading…',
     'orders.noPriceRecordedYet': 'No price recorded yet.',
     'orders.priceHistory': 'Price history',
-    'orders.cerealsContainingGluten': 'Cereals containing gluten',
+    // ⚠️ 'orders.cerealsContainingGluten' WAS RETIRED ON 23 Aug 2026 AND MUST NOT COME
+    // BACK. It named an allergen category — a food word — from the INTERFACE
+    // dictionary, so an Italian screen printed «CEREALI CONTENENTI GLUTINE» above rows
+    // reading «Wheat», «Rye». The heading now comes from allergenGroupName() in
+    // js/market.js, chosen by the venue's country like the label it has to match.
+    // A key with this name existing here at all is the wire that lets somebody
+    // re-translate an allergen heading by preference; a test forbids it.
+    // ⚠️ 'orders.theRest' STAYS: «the other twelve categories» names no food.
     'orders.theRest': 'The rest',
     'orders.noNutritionYet': 'Nothing yet',
     'orders.nutritionComplete': 'Complete',
@@ -1403,6 +1410,18 @@ const DICTIONARIES = Object.freeze({
     'orders.allergen.checkedOn': 'Checked {date} — {what}. {note}',
     'orders.allergen.checkedNoDate': 'Checked — {what}. {note}',
     'orders.allergen.containsNone': 'contains none of the 14',
+    // ⚠️ THE TWO COLUMNS AND THEIR TOOLTIPS ARE INTERFACE TEXT, AND {name} IS NOT.
+    // The allergen's NAME comes from js/market.js in the venue's country's language,
+    // because it has to match the printed label; these four words only tell the person
+    // what they are ticking, so they follow the screen. Both halves meet inside one
+    // string on purpose: an Italian employee in an English bakery reads «Contiene
+    // Wheat», and that is right — the instruction is hers, the food word is the label's.
+    // ⚠️ All four were hardcoded English until 23 Aug 2026, on a screen that has spoken
+    // Italian since v1.57.0. No i18n suite saw them: they were string literals.
+    'orders.allergen.has': 'has',
+    'orders.allergen.traces': 'traces',
+    'orders.allergen.containsTip': 'Contains {name}',
+    'orders.allergen.tracesTip': 'May contain traces of {name}',
     // ⚠️ THE THREE NUTRITION STATES ARE CHIPS NOW, NOT SENTENCES. They used to be
     // tacked onto the end of the ALLERGEN status line («Checked 2026-08-21 — Milk.
     // Nutrition: 3 of 13 still empty.»); nutrition has its own folding section since
@@ -2060,7 +2079,6 @@ const DICTIONARIES = Object.freeze({
     'orders.loading': 'Caricamento…',
     'orders.noPriceRecordedYet': 'Ancora nessun prezzo registrato.',
     'orders.priceHistory': 'Storico prezzi',
-    'orders.cerealsContainingGluten': 'Cereali contenenti glutine',
     'orders.theRest': 'Il resto',
     'orders.noNutritionYet': 'Ancora nessuno',
     'orders.nutritionComplete': 'Completi',
@@ -2858,6 +2876,13 @@ const DICTIONARIES = Object.freeze({
     'orders.allergen.checkedOn': 'Verificato il {date} — {what}. {note}',
     'orders.allergen.checkedNoDate': 'Verificato — {what}. {note}',
     'orders.allergen.containsNone': 'non contiene nessuno dei 14',
+    // ⚠️ «ha» e «tracce» sono le due colonne: sono istruzioni, non nomi di cibo.
+    // Il nome dell'allergene dentro {name} arriva da js/market.js nella lingua del
+    // PAESE, perché deve coincidere con l'etichetta stampata.
+    'orders.allergen.has': 'ha',
+    'orders.allergen.traces': 'tracce',
+    'orders.allergen.containsTip': 'Contiene {name}',
+    'orders.allergen.tracesTip': 'Può contenere tracce di {name}',
     'orders.nutritionStillEmpty': '{n} di {total} da compilare',
     'past.olderRecordsKept': {
       one: 'I record più vecchi restano — questa schermata mostra l’ultimo giorno.',

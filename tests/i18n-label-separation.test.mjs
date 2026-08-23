@@ -42,6 +42,30 @@ const LABEL_FILES = [
   // is held to the stricter invariant instead: no currentLanguage, no
   // setLanguage, no interfaceLanguage anywhere in it.
   'js/catalogue/allergen-sheet.js',
+  // ⚠️⚠️ ADDED 23 Aug 2026, ON FEDERICO'S DECISION: «gli allergeni ed etichette devono
+  // essere nella lingua dello stato in cui opera l'app». The two screens where an
+  // allergen is DECLARED and where a recipe's allergens are READ used the fixed English
+  // allergenLabel() until now, so an Italian venue would have ticked «Wheat» and printed
+  // «Grano» — the same fact under two names, on the pair of screens that must agree.
+  //
+  // ⚠️ THEY ARE NOT LABELS, AND THAT IS THE POINT OF NAMING THEM HERE. A form is not a
+  // legal document; but it is where somebody DECIDES what the legal document will say,
+  // and a person cannot check their own work against a label that renames everything.
+  // So the food words are the label's and the controls around them are the screen's —
+  // which is precisely the mixture this file exists to police rather than forbid.
+  'js/orders/ingredient-form.js',
+  'js/catalogue/catalogue-detail.js',
+];
+
+// ⚠️ EVERY LABEL FILE THAT DRAWS A SCREEN ASSIGNS THE LANGUAGE ONCE, FROM THE COUNTRY,
+// AND ASKS EVERY FOOD WORD IN IT. Without the second half a file could hold `lang`
+// correctly and still pass currentLanguage() to one forgotten call — which on an
+// Italian venue is one allergen silently named in English, on a list where every other
+// entry is Italian and the odd one out therefore reads as a different substance.
+const DRAWS_A_SCREEN = [
+  'js/catalogue/label-view.js',
+  'js/orders/ingredient-form.js',
+  'js/catalogue/catalogue-detail.js',
 ];
 
 // ⚠️⚠️ ASKING FOR A LABEL'S WORDS AND ASKING ABOUT A LABEL ARE NOT THE SAME
@@ -61,7 +85,13 @@ const LABEL_FILES = [
 // ⚠️ THIS IS A SHARPENING, NOT A LOOSENING, and the difference matters: the
 // guard fired on my own screen and the answer was to say precisely what is
 // forbidden, never to make the check quieter so the code could pass.
-const LABEL_WORD_CALLS = /\b(labelWord|allergenName|nutrientName)\s*\(/;
+//
+// ⚠️ allergenGroupName WAS MISSING FROM THIS LIST UNTIL 23 Aug 2026, and it names a
+// food as much as the other three do — «Cereals containing gluten», «Frutta a guscio».
+// A file could have built an allergen heading out of the country's words without ever
+// being called a label file. Both files that use it were already named above, so
+// closing the hole cost nothing; it was open, which is the part worth recording.
+const LABEL_WORD_CALLS = /\b(labelWord|allergenName|allergenGroupName|nutrientName)\s*\(/;
 
 // ⚠️⚠️ THE BAN IS TOTAL WHERE IT COSTS NOTHING, AND SHARPER WHERE IT DOES NOT.
 //
@@ -105,17 +135,104 @@ test('no label file can reach the interface language', () => {
 // for. Without this the file could import t() and quietly pass currentLanguage()
 // under another name.
 test('the label language comes from the country, and every label word is asked in it', () => {
-  const src = codeOf(read('js/catalogue/label-view.js'));
-  assert.match(src, /const lang = outputLanguage\(location\);/,
-    'the label language is derived from the venue’s country, once');
+  for (const file of DRAWS_A_SCREEN) {
+    const src = codeOf(read(file));
+    // ⚠️ ASSIGNED FROM outputLanguage(), AND INSIDE A FUNCTION. The argument differs by
+    // file — the label screen is handed a location, the other two ask the session — so
+    // the shape is pinned, not the exact call. What may NOT vary is where it comes from.
+    assert.match(src, /\bconst lang = outputLanguage\(/,
+      `${file} must derive the food words' language from the venue’s COUNTRY`);
 
-  const calls = [...src.matchAll(/\b(labelWord|allergenName|nutrientName)\s*\(([^)]*)\)/g)];
-  assert.ok(calls.length >= 5, 'the label is built from label words');
-  for (const call of calls) {
-    const args = call[2].split(',').map(a => a.trim());
-    assert.equal(args[args.length - 1], 'lang',
-      `${call[1]}(${call[2]}) must be asked in the LABEL's language, not the screen's`);
+    // ⚠️⚠️ AND NOT AT MODULE LOAD. A module is evaluated once, at first import, before
+    // any venue is open — so a `lang` up there is null for the life of the page and
+    // every name silently falls back to English. That is the v1.57.0 defect, and here
+    // it would un-translate the one screen that can put somebody in hospital, in a way
+    // no test asserting «a name is present» could ever see.
+    for (const line of src.split('\n')) {
+      if (!/\bconst lang = outputLanguage\(/.test(line)) continue;
+      assert.match(line, /^\s+const lang/,
+        `${file} reads the country at module load — it must be read when the screen is drawn`);
+    }
+
+    const calls = [...src.matchAll(/\b(labelWord|allergenName|allergenGroupName|nutrientName)\s*\(([^)]*)\)/g)];
+    assert.ok(calls.length >= 3, `${file} is on this list because it builds food words`);
+    for (const call of calls) {
+      const args = call[2].split(',').map(a => a.trim());
+      assert.equal(args[args.length - 1], 'lang',
+        `${file}: ${call[1]}(${call[2]}) must be asked in the LABEL's language, not the screen's`);
+    }
   }
+});
+
+// ⚠️⚠️ AND THE HALF THE TEST ABOVE CANNOT SEE: A CALL THAT IS DELETED PASSES IT.
+//
+// «every food word is asked in lang» says nothing about a food word that stopped being
+// asked for at all. Four mutations proved it on 23 Aug 2026 — printing the raw code
+// instead of its name, and the English `n.label` instead of the nutrient's — and all
+// four went green. On an English venue nothing would look wrong; on an Italian one, one
+// entry in a list of allergens would be in the wrong language, which reads as a
+// different substance rather than as a bug.
+//
+// So the number of places each screen names a food is pinned. An exact count is
+// deliberate and it is meant to be edited: adding a name should make somebody read this
+// comment, and removing one should make them say why.
+const FOOD_WORD_SITES = {
+  // the tick row's name · its two tooltips · the pack marker · the «which of these?»
+  // question · the status line = 6 allergen names, plus the two group headings (one
+  // call, both groups) and the eight nutrient rows (one call, all eight).
+  'js/orders/ingredient-form.js': { allergenName: 6, allergenGroupName: 1, nutrientName: 1 },
+  // what it contains · what it may contain · what is known so far
+  'js/catalogue/catalogue-detail.js': { allergenName: 3 },
+};
+
+test('every place these screens name a food still names it', () => {
+  for (const [file, expected] of Object.entries(FOOD_WORD_SITES)) {
+    const src = codeOf(read(file));
+    for (const [fn, count] of Object.entries(expected)) {
+      const found = [...src.matchAll(new RegExp(`\\b${fn}\\s*\\(`, 'g'))].length;
+      assert.equal(found, count,
+        `${file} calls ${fn}() ${found} times, expected ${count} — a deleted call is a food `
+        + 'named in the wrong language on an Italian venue, and nothing else here can see it');
+    }
+  }
+});
+
+// ⚠️ AND THE SPECIFIC WRONG ANSWER, BANNED BY NAME. NUTRIENTS carries an English
+// `label` for the model to use; a screen reaching for it prints «Energy» on an Italian
+// declaration. It is one character shorter than the right call, which is how it gets
+// written.
+test('no screen prints a nutrient’s English label', () => {
+  for (const file of Object.keys(FOOD_WORD_SITES)) {
+    assert.doesNotMatch(codeOf(read(file)), /\bn\.label\b/,
+      `${file} must name nutrients with nutrientName(n, lang) — n.label is always English`);
+  }
+});
+
+// ⚠️⚠️ THE OTHER HALF, AND IT IS THE ONE A REFACTOR BREAKS SILENTLY: the fixed-English
+// allergenLabel() must not come back to a screen. It is the right function for the model
+// — it IS the canonical name — and the wrong one for anything drawn, because it answers
+// the same whatever country the venue is in. Both files below called it until 23 Aug
+// 2026 and nothing was red: an English name on an English screen looks perfect, and the
+// venue that proves it wrong does not exist yet.
+test('no screen names an allergen in fixed English', () => {
+  for (const file of ['js/orders/ingredient-form.js', 'js/catalogue/catalogue-detail.js']) {
+    const src = codeOf(read(file));
+    assert.doesNotMatch(src, /\ballergenLabel\s*\(/,
+      `${file} must name allergens through market.js, in the venue's country's language`);
+    assert.doesNotMatch(src, /\ballergenLabel\b/,
+      `${file} must not even import allergenLabel — an unused import is next week's call site`);
+  }
+});
+
+// ⚠️ AND THE RETIRED KEY MUST STAY RETIRED. «Cereals containing gluten» lived in the
+// INTERFACE dictionary and headed the tick rows, so an Italian screen showed an Italian
+// heading over English allergen names — the mismatch Federico saw in his own screenshot.
+// A key of that name existing at all is the wire that lets somebody translate a food
+// word by preference again.
+test('an allergen heading cannot be translated by preference', () => {
+  assert.doesNotMatch(read('js/i18n.js').replace(/^\s*\/\/.*$/gm, ''),
+    /'orders\.cerealsContainingGluten'\s*:/,
+    'allergen group headings come from the country (allergenGroupName), never from t()');
 });
 
 // The other direction. i18n.js reaching into market.js would be the same wire
