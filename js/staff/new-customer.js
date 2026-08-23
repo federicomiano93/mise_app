@@ -269,7 +269,8 @@ export function openNewCustomer({ onClose, host, ownerKind } = {}) {
     const where = country === 'IT' ? t('help.italyLabelsInItalian') : t('help.theUnitedKingdomLabels');
     const ok = await confirmDialog({
       title: forSelf ? t('help.createThisBusiness') : t('help.createThisCustomer'),
-      message: `${typed}\n\nSells in: ${where}.\nSections: ${bought.join(', ')}.\n\n`
+      message: `${typed}\n\n${t('nc.sellsIn', { where })}\n`
+        + `${t('nc.sectionsLine', { list: bought.join(', ') })}\n\n`
         + (forSelf
           ? t('help.itWillBeCreated')
           : t('help.whoeverOpensTheLink')),
@@ -308,11 +309,11 @@ export function openNewCustomer({ onClose, host, ownerKind } = {}) {
     form.textContent = '';
     result.textContent = '';
     result.append(
-      el('p', { class: 'people-hint', text: `${made.name} is ready, and it is yours.` }),
+      el('p', { class: 'people-hint', text: t('nc.readyAndYours', { name: made.name }) }),
       el('p', { class: 'people-note', text:
         t('help.youAreItsOwner') }),
       el('button', {
-        class: 'btn-primary people-save', type: 'button', text: 'Open my businesses',
+        class: 'btn-primary people-save', type: 'button', text: t('nc.openMyBusinesses'),
         // ⚠️ A RELOAD, not a redraw. Membership is read ONCE, when the session
         // starts, so a brand-new location is invisible to a page that is already
         // running — the same reason redeeming a code reloads (js/auth-gate.js).
@@ -328,7 +329,7 @@ export function openNewCustomer({ onClose, host, ownerKind } = {}) {
     result.textContent = '';
 
     result.append(
-      el('p', { class: 'people-hint', text: `${made.name} is ready.` }),
+      el('p', { class: 'people-hint', text: t('nc.ready', { name: made.name }) }),
       // ⚠️ THE LINK IS ALWAYS ON SCREEN AS TEXT, whatever the clipboard did. A
       // screen that only offered "Copied!" would leave nothing at all behind on
       // the phones where the clipboard silently refuses.
@@ -336,7 +337,7 @@ export function openNewCustomer({ onClose, host, ownerKind } = {}) {
       // expiresInWords returns "7 days left", so it is phrased as a thing the
       // link HAS, not a thing it does — "expires 7 days left" is not English.
       el('p', { class: 'people-note', text:
-        `The link works once and has ${expiresInWords({ expiresAt: made.expiresAt })}.`
+        t('nc.linkWorksOnce', { expiry: expiresInWords({ expiresAt: made.expiresAt }) })
         + t('help.itIsNotStored') }),
     );
 
@@ -345,8 +346,8 @@ export function openNewCustomer({ onClose, host, ownerKind } = {}) {
       const copied = await copyToClipboard(made.link);
       handedOver = true;
       await alertDialog(copied
-        ? `The link for ${made.name} is copied. Paste it into a message to them.`
-        : `Copy this link and send it to ${made.name}:\n\n${made.link}`);
+        ? t('nc.linkCopiedFor', { name: made.name })
+        : t('nc.copyThisLinkFor', { name: made.name, link: made.link }));
     });
 
     const share = el('button', { type: 'button', class: 'btn-secondary people-save', text: t('help.sendOnWhatsapp') });
@@ -355,7 +356,7 @@ export function openNewCustomer({ onClose, host, ownerKind } = {}) {
       sendOnWhatsApp(t('nc.link.message', { name: made.name, link: made.link }));
     });
 
-    const done = el('button', { type: 'button', class: 'btn-secondary people-save', text: 'Done' });
+    const done = el('button', { type: 'button', class: 'btn-secondary people-save', text: t('people.done') });
     done.addEventListener('click', leave);
 
     result.append(copy, share, done);

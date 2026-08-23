@@ -75,7 +75,7 @@ export function nameProblem(value, which) {
 export function passwordProblem(value, email) {
   if (typeof value !== 'string' || !value) return t('help.chooseAPassword');
   if (value.length < MIN_PASSWORD_LENGTH) {
-    return `Make it at least ${MIN_PASSWORD_LENGTH} characters — length is what keeps it safe.`;
+    return t('help.passwordTooShort', { n: MIN_PASSWORD_LENGTH });
   }
 
   const lower = value.toLowerCase();

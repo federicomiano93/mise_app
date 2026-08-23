@@ -63,7 +63,7 @@ function build(id) {
   button.className = 'help-btn';
   // The label names the SCREEN, so a screen reader announces "What is Food cost?"
   // rather than a bare question mark repeated on every page.
-  button.setAttribute('aria-label', `What is ${helpTitle(id)}?`);
+  button.setAttribute('aria-label', t('aria.whatIs', { screen: helpTitle(id) }));
   button.append(questionIcon());
   button.addEventListener('click', () => showHelp(id));
   return button;

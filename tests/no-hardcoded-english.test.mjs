@@ -56,18 +56,14 @@ const EXEMPT = new Set(['i18n.js', 'i18n-dom.js', 'push-model.js']);
 // asking a confirmation question in English. The four Orders and five records strings
 // the same widening found were FIXED rather than listed, because they are in the files
 // that PR owned — a debt entry for a file you are already editing is just a dodge.
-const KNOWN_DEBT = new Set([
-  'catalogue/catalogue-detail.js', 'catalogue/catalogue-editor.js',
-  'catalogue/ingredient-picker.js', 'catalogue/guided-editor.js',
-  'staff/new-customer.js', 'foodcost/foodcost-editor.js',
-  'pastries/pastries-editor.js', 'pastries/pastries-day.js',
-  'js/log-model.js',
-  // Surfaced by the `message:` shape, 22 Aug 2026 — a confirm dialog asking in
-  // English on an Italian phone. Each needs an Italian sentence somebody actually
-  // reads, and nine written in one sitting is how a half-translated app happens.
-  'js/calculator-settings.js', 'catalogue/catalogue-main.js', 'catalogue/guided-run.js',
-  'pastries/pastries-logs.js', 'pastries/pastries-main.js',
-]);
+// ⚠️⚠️ EMPTIED 23 Aug 2026, AND THAT IS THE POINT OF THE RELEASE IT BELONGS TO.
+// Fourteen files sat here for a month, each one a screen that stayed English on an
+// Italian phone. Federico opened Panificio Miano — his first venue with country IT
+// and language it — and said so.
+//
+// ⚠️ IT MAY ONLY EVER SHRINK, and it is empty now, which means the next literal
+// added anywhere in the app fails. Do not put a file back: fix the string.
+const KNOWN_DEBT = new Set([]);
 
 function jsFiles(dir) {
   return readdirSync(dir).flatMap(name => {

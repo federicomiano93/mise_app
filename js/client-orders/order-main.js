@@ -59,7 +59,7 @@ let bakeryName = FALLBACK_NAME;
 let cutoff = '';
 
 const cutoffNote = () => (cutoff
-  ? `Orders for a day close at ${cutoff} the day before. You can change your order until then.`
+  ? t('co.cutoffNote', { time: cutoff })
   : t('co.youCanChangeYour'));
 
 function show(node) {
@@ -228,7 +228,7 @@ async function openFor(uid) {
   const dates = orderableDates(Date.now(), cutoff);
   if (!dates.length) {
     message(t('co.orderingIsClosedFor'),
-      `Orders for a day close at ${cutoff} the day before. Please try again later.`);
+      t('co.cutoffClosed', { time: cutoff }));
     return;
   }
 

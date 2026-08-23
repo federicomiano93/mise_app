@@ -98,8 +98,11 @@ async function openHistory(product) {
   body.replaceChildren(
     ...entries.map(entry => el('div', { class: 'fc-hist-row' }, [
       el('span', { class: 'fc-hist-pct', text: `${entry.foodCostPct}%` }),
-      el('span', { class: 'fc-hist-detail', text:
-        `${formatRate(entry.unitCost)} cost  ·  ${formatMoney(entry.sellingPrice)} at ${entry.vatRate}% VAT` }),
+      el('span', { class: 'fc-hist-detail', text: t('fc.histDetail', {
+        cost: formatRate(entry.unitCost),
+        price: formatMoney(entry.sellingPrice),
+        vat: entry.vatRate,
+      }) }),
       el('span', { class: 'fc-hist-when', text: shortDate(entry.recordedAt) }),
     ])),
     // ⚠️ SAID OUT LOUD, because the gap is invisible otherwise. A point exists only

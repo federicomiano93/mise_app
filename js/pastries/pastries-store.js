@@ -15,8 +15,10 @@
 // key it does not explicitly keep, so this data cannot follow someone from one
 // location into another.
 
+import { t } from '../i18n.js';
 import {
   normalizeDays, normalizeDay, daysFromCache, cleanNote, setQuantityAt, WEEKDAYS,
+  weekdayLabel,
 } from './pastries-model.js';
 import { watchPastryDays, savePastryDay } from './firebase-pastries.js';
 
@@ -128,7 +130,7 @@ export function saveDay(day, items, note) {
   savePastryDay(day, clean.items, clean.note).catch(err => {
     console.warn('Pastry day did not sync to Firestore:', err);
     applyLocal(day, previous);
-    if (onSyncError) onSyncError(`Couldn’t save ${day} — check your connection.`);
+    if (onSyncError) onSyncError(t('past.couldNotSaveDay', { day: weekdayLabel(day) }));
   });
 }
 

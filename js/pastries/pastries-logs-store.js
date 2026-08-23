@@ -19,6 +19,7 @@ import {
   normalizeLogs, sortLogs, buildLog, isLogVisible,
 } from './pastries-log-model.js';
 import { confirmedDaysFrom } from './pastries-lock.js';
+import { weekdayLabel } from './pastries-model.js';
 import {
   watchPastryLogs, watchPastryLogsForDate, confirmPastryLog, deletePastryLog, getPastryLog,
 } from './firebase-pastries.js';
@@ -135,7 +136,7 @@ export async function confirmDay(day, items, note, nowMs = Date.now()) {
     return saved;
   } catch (err) {
     console.warn('Pastry record did not save:', err);
-    if (onError) onError(`Couldn’t record ${day} — check your connection.`);
+    if (onError) onError(t('past.couldNotRecord', { day: weekdayLabel(day) }));
     return null;
   }
 }

@@ -67,9 +67,13 @@ export function renderEditor({ product, app }) {
       el('span', { class: 'fc-answer-value', text: `${result.foodCostPct}%` }),
     ]));
 
-    const unit = working.sellingMode === 'weight' ? 'per kg' : 'per piece';
-    answer.appendChild(el('p', { class: 'fc-answer-basis', text:
-      `${formatRate(result.unitCost)} to make ${unit}  ·  ${formatMoney(result.netUnitPrice)} net  ·  ${formatMoney(result.margin)} margin` }));
+    const unit = t(working.sellingMode === 'weight' ? 'fc.perKg' : 'fc.perPiece');
+    answer.appendChild(el('p', { class: 'fc-answer-basis', text: t('fc.answerBasis', {
+      cost: formatRate(result.unitCost),
+      unit,
+      net: formatMoney(result.netUnitPrice),
+      margin: formatMoney(result.margin),
+    }) }));
 
     if (status) answer.appendChild(el('p', { class: 'fc-answer-status', text: t(STATUS_TEXT[status]) }));
 
@@ -289,7 +293,7 @@ export function renderEditor({ product, app }) {
     busy = true;
     const ok = await app.confirm({
       title: t('fc.deleteProduct'),
-      message: `Delete “${product.name || 'this product'}”? This cannot be undone, and its margin history goes with it.`,
+      message: t('fc.deleteProductQ', { name: product.name || t('fc.thisProduct') }),
       okLabel: t('ui.delete'), danger: true,
       cancelLabel: t('ui.cancel'),
     });
@@ -319,14 +323,14 @@ export function renderEditor({ product, app }) {
   const root = el('div', { class: 'fc-view fc-editor' }, [
     answer,
 
-    field('Name', nameInput),
+    field(t('fc.name'), nameInput),
 
     el('h2', { class: 'fc-section', text: t('fc.madeOf') }),
     componentRows,
     el('button', { class: 'fc-add-row', type: 'button', text: t('fc.addRecipe'),
       onclick: () => { working.components.push({ recipeId: '', qtyKg: 0 }); markDirty(); repaint(); } }),
 
-    el('h2', { class: 'fc-section', text: 'Packaging' }),
+    el('h2', { class: 'fc-section', text: t('fc.packaging') }),
     packagingRows,
     el('button', { class: 'fc-add-row', type: 'button', text: t('fc.addPackaging'),
       onclick: () => { working.packaging.push({ ingredientId: '', qtyPcs: 0 }); markDirty(); repaint(); } }),
@@ -334,9 +338,9 @@ export function renderEditor({ product, app }) {
       t('fc.boxesBagsRibbonAnything') }),
 
     el('h2', { class: 'fc-section', text: t('fc.howItIsSold') }),
-    field('Sold', modeSelect),
+    field(t('fc.sold'), modeSelect),
     piecesField,
-    field(`Selling price, including VAT (${CURRENCY})`, priceInput,
+    field(t('fc.sellingPriceVat', { currency: CURRENCY }), priceInput,
       t('fc.thePriceOnThe')),
     field(t('fc.vatRate'), vatSelect),
     vatOther,
@@ -344,7 +348,7 @@ export function renderEditor({ product, app }) {
       t('fc.theShareOfThe')),
 
     el('div', { class: 'fc-actions' }, [
-      el('button', { class: 'fc-save', type: 'button', text: 'Save', onclick: onSave }),
+      el('button', { class: 'fc-save', type: 'button', text: t('ui.save'), onclick: onSave }),
       historyBtn,
       // ⚠️ Owner only. Deleting a product takes its margin history with it, and
       // that history cannot be rebuilt — a snapshot exists only where somebody

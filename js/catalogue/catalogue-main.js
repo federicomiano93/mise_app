@@ -511,7 +511,7 @@ const app = {
       : '';
     const ok = await confirmDialog({
       title: t('cat.importIntoCalculator2'),
-      message: `Copy “${recipe.name}” into the Calculator? You can then tweak it there without changing the catalogue.${warn}`,
+      message: `${t('cat.copyIntoCalculator', { name: recipe.name })}${warn}`,
       okLabel: t('ui.import'),
       cancelLabel: t('ui.cancel'),
     });
