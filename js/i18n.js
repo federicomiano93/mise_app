@@ -197,6 +197,10 @@ const DICTIONARIES = Object.freeze({
     'join.checking': 'Checking…',
     'join.checkingCode': 'Checking your code…',
     'join.badCode': 'That code does not work. Ask for a new one.',
+    // ⚠️ NOT A FAULT WITH THE CODE, AND IT MUST NOT SOUND LIKE ONE. This is what
+    // an owner sees on opening an invitation to their own business — which is how
+    // anybody checks that one works before sending it.
+    'join.alreadyMember': 'You are already in this business. A code cannot change what you can do here.',
     'join.shapeHint': 'Enter your six-digit code, or open the link you were sent.',
 
     // How long an invitation has left. ⚠️ SELF-CONTAINED PHRASES, because the
@@ -2120,6 +2124,7 @@ const DICTIONARIES = Object.freeze({
     'join.checking': 'Controllo…',
     'join.checkingCode': 'Controllo del codice…',
     'join.badCode': 'Questo codice non funziona. Chiedine uno nuovo.',
+    'join.alreadyMember': 'Sei già dentro questa attività. Un codice non può cambiare cosa puoi fare qui.',
     'join.shapeHint': 'Inserisci il codice di sei cifre, oppure apri il link che ti hanno mandato.',
 
     'join.expires.expired': 'scaduto',

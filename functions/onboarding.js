@@ -95,17 +95,28 @@ function requireAuth(request) {
 // same shape, three files that must be changed together.
 const ACCESS_VALUES = [true, 'manager', 'owner'];
 
+// The same question asked of a users/{uid} document somebody is already holding.
+//
+// ⚠️ IT EXISTS SO redeemJoinCode CAN ASK IT INSIDE ITS TRANSACTION. A read that
+// does not go through tx.get() is not part of the transaction at all, so
+// accessValue() below — which fetches for itself — cannot be reused there. The
+// only other way was to write the ACCESS_VALUES check out a second time, and the
+// comment on that list says exactly what another copy costs: the mistake it makes
+// is a lockout, not a demotion.
+export function membershipIn(userData, locationId) {
+  const locations = userData && userData.locations;
+  if (!locations || typeof locations !== 'object') return false;
+  const value = locations[locationId];
+  return ACCESS_VALUES.includes(value) ? value : false;
+}
+
 // ⚠️ EXPORTED SINCE 22 Aug 2026 so functions/recipe-photo.js can ask the same
 // question rather than writing a FOURTH copy of it. The comment above lists the
 // three places that must already agree; a fourth would be the one nobody
 // remembers to update, and the mistake it makes is a lockout, not a demotion.
 export async function accessValue(uid, locationId) {
   const snap = await db().doc(`users/${uid}`).get();
-  if (!snap.exists) return false;
-  const locations = snap.data().locations;
-  if (!locations || typeof locations !== 'object') return false;
-  const value = locations[locationId];
-  return ACCESS_VALUES.includes(value) ? value : false;
+  return membershipIn(snap.exists ? snap.data() : null, locationId);
 }
 
 async function requireOwner(uid, locationId) {
@@ -608,6 +619,32 @@ export const redeemJoinCode = onCall(CALL, async (request) => {
     }
 
     const { locationId, role, title } = doc;
+
+    // ⚠️⚠️ A CODE MAY NOT LOWER SOMEBODY WHO IS ALREADY IN, AND THE WORST CASE IS
+    // THE OWNER'S OWN. The membership write below is a set() with merge, so it
+    // OVERWRITES users/{uid}.locations[locationId] with whatever the code says. An
+    // owner who opened a staff invitation to their own business — to check it
+    // worked before sending it, which is exactly what Federico did on 24 Aug 2026 —
+    // would have been written down as an employee of the place they own, in one tap.
+    //
+    // ⚠️ AND THE APP COULD NOT HAVE UNDONE IT. setMemberRole refuses to demote the
+    // LAST owner, precisely so a location can never be left with nobody who can
+    // invite, promote or delete. That guard lives in that function, and this path
+    // walked straight past it: the only way back would have been the Firebase
+    // console, which is the thing this whole file exists to stop needing.
+    //
+    // ⚠️ REFUSED, NOT QUIETLY IGNORED — and the code is NOT spent. Being told is the
+    // difference between "the app is broken" and "this invitation is not for me".
+    // Leaving usedAt unwritten matters as much: whoever opened it to check is not
+    // the person it was minted for, and a code burnt by a look is another one to
+    // mint and re-send. Roles are changed from "Who can get in", which is the one
+    // path that has the last-owner guard on it.
+    const userRef = db().doc(`users/${uid}`);
+    const userSnap = await tx.get(userRef);
+    if (membershipIn(userSnap.exists ? userSnap.data() : null, locationId) !== false) {
+      return { ok: false, status: 'already-member' };
+    }
+
     const value = membershipValue(role);
     // ⚠️ Re-checked here rather than trusted from the stored document. Codes
     // written before titles existed have none at all, and one written by a future
@@ -619,8 +656,7 @@ export const redeemJoinCode = onCall(CALL, async (request) => {
 
     // Both writes in one transaction. users/{uid} is the TRUTH — it is what the
     // rules read. The members roster below is for the screen only.
-    tx.set(db().doc(`users/${uid}`),
-      { locations: { [locationId]: value } }, { merge: true });
+    tx.set(userRef, { locations: { [locationId]: value } }, { merge: true });
     tx.set(db().doc(`locations/${locationId}/members/${uid}`), {
       bakery: locationId,
       email: (request.auth.token && request.auth.token.email) || '',
@@ -639,6 +675,18 @@ export const redeemJoinCode = onCall(CALL, async (request) => {
 
   if (!result.ok) {
     logger.info('Redeem refused', { uid, reason: result.status });
+    // ⚠️ THE ONE REFUSAL THAT TRAVELS WITH A REASON THE APP CAN READ. Every other
+    // one is deliberately indistinguishable — see redeemFailureText — because
+    // telling somebody "that code has expired" confirms the code EXISTED, which is
+    // the signal a search is looking for. This one confirms nothing they do not
+    // already have: it is only ever sent to an account that is ALREADY a member of
+    // the location the code names, and it says so about that account, not about the
+    // code. The reason is what lets the app answer in the language on screen
+    // instead of the English this function has no dictionary to avoid.
+    if (result.status === 'already-member') {
+      throw new HttpsError('failed-precondition',
+        redeemFailureText('already-member'), { reason: 'already-member' });
+    }
     throw new HttpsError('permission-denied', redeemFailureText(result.status));
   }
 
