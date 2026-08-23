@@ -30,6 +30,7 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { _dictionaries } from '../js/i18n.js';
+import { stringsIn } from './helpers/strings-in.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -77,34 +78,6 @@ function jsFiles(dir, out = []) {
     const full = join(dir, name);
     if (statSync(full).isDirectory()) jsFiles(full, out);
     else if (name.endsWith('.js')) out.push(full);
-  }
-  return out;
-}
-
-// Walk the line once and yield the text inside each string literal, stopping dead at a
-// comment. Same helper as tests/english-text.test.mjs, and for the same reason: a regex
-// over the whole line cannot tell a sentence from a developer's aside about one.
-export function stringsIn(line) {
-  if (/^\s*(\/\/|\*|\/\*)/.test(line)) return [];
-  const out = [];
-  let i = 0;
-  while (i < line.length) {
-    const c = line[i];
-    if (c === '/' && (line[i + 1] === '/' || line[i + 1] === '*')) break;
-    if (c === "'" || c === '"' || c === '`') {
-      const quote = c;
-      let j = i + 1;
-      let text = '';
-      while (j < line.length && line[j] !== quote) {
-        if (line[j] === '\\') { text += line[j + 1] || ''; j += 2; continue; }
-        text += line[j];
-        j += 1;
-      }
-      out.push(text);
-      i = j + 1;
-      continue;
-    }
-    i += 1;
   }
   return out;
 }

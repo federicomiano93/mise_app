@@ -22,6 +22,7 @@ import {
 } from '../js/market.js';
 import { ALLERGEN_CODES, ALLERGEN_GROUPS, NUTRIENT_KEYS, allergenLabel } from '../js/allergen-model.js';
 import { _dictionaries } from '../js/i18n.js';
+import { stringsIn } from './helpers/strings-in.mjs';
 
 // ── The unknown country ─────────────────────────────────────────────────────
 
@@ -272,17 +273,41 @@ test('the copied text is in the same language as the label on screen', () => {
 // translated them where they stood. These tests pin the new arrangement, because
 // the obvious "fix" is to move a word back and nothing would go red.
 
+// ⚠️⚠️ THE FIRST VERSION OF THIS CHECK GUARDED NOTHING, and it is worth recording
+// because it looked exactly right. It used `/['"`]([^'"`]{25,})['"`]/` to find long
+// string literals — which instead pairs the CLOSING quote of one string with the
+// OPENING quote of the next, so every "match" was the CODE in between. It reported
+// sixteen hits on this file, fifteen of them fragments like «},\n});\n\nexport
+// function labelWord(key, lang) {», and never once looked at a real string. A
+// deliberate English sentence added to js/market.js sailed straight past it.
+//
+// Caught by mutation-testing the file that owns the guard — the v1.60.1 rule, which
+// is the only reason it was found at all.
 test('js/market.js holds words, never sentences', () => {
-  const src = read('js/market.js')
-    .replace(/\/\*[\s\S]*?\*\//g, '')
-    .split('\n').filter(l => !/^\s*\/\//.test(l)).join('\n');
   const sentences = [];
-  for (const m of src.matchAll(/['"`]([^'"`]{25,})['"`]/g)) {
-    if (/\b(the|this|that|because|and|is|are|not|you|which|when)\b/i.test(m[1])) sentences.push(m[1]);
-  }
+  read('js/market.js').split(/\r?\n/).forEach((line, i) => {
+    for (const literal of stringsIn(line)) {
+      if (literal.length < 25) continue;
+      if (/\b(the|this|that|because|and|is|are|not|you|which|when)\b/i.test(literal)) {
+        sentences.push(`js/market.js:${i + 1}  ${literal.slice(0, 80)}`);
+      }
+    }
+  });
   assert.deepEqual(sentences, [],
     'these are read by a person and cannot be translated from here — market.js may not '
     + 'import the dictionary, so a sentence in it is a sentence stuck in English');
+});
+
+// ⚠️ AND THE CHECK ITSELF IS PROVED TO FIRE, because the version it replaces could not.
+test('that check can actually see a sentence in a file', () => {
+  const line = "export const NOTE = 'This label is produced in the language of the country.';";
+  const hits = stringsIn(line).filter(s => s.length >= 25
+    && /\b(the|this|that|because|and|is|are|not|you|which|when)\b/i.test(s));
+  assert.equal(hits.length, 1, 'the scan must see a real string literal');
+  // …and must NOT see the code between two strings, which is how it failed before.
+  const twoStrings = "  const a = 'GB'; const somethingVeryLongIndeed = 'IT';";
+  assert.deepEqual(stringsIn(twoStrings), ['GB', 'IT'],
+    'a quote must pair with its own closing quote, never with the next string’s opening one');
 });
 
 // ⚠️ AND THE HALF A "no sentences" CHECK CANNOT SEE: the sentences must exist
