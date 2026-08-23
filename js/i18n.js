@@ -607,7 +607,6 @@ const DICTIONARIES = Object.freeze({
     'orders.pack.label': 'The ingredient list printed on the pack',
     'orders.pack.help': 'Type or paste it exactly as it is printed. The app looks for allergen words and ticks the boxes below for you — you still check them and confirm.',
     'orders.pack.placeholder': 'e.g. Wheat flour, water, butter (milk), salt, malted barley flour. May contain traces of nuts.',
-    'orders.pack.suggest': 'Read it and tick the boxes',
     'orders.pack.nothingTyped': 'Nothing typed yet — write out what the pack says first.',
     'orders.pack.ticked': {
       one: 'Ticked {n} box. The words it recognised are highlighted above — check what is left in grey.',
@@ -616,6 +615,7 @@ const DICTIONARIES = Object.freeze({
     // ⚠️ RECOGNISING NOTHING MUST BE SAID OUT LOUD. Silence here reads as "this pack
     // contains nothing", which is the single worst thing this feature could say.
     'orders.pack.alreadyTicked': 'Everything it recognised was already ticked. The words are highlighted above — check what is left in grey.',
+    'orders.pack.whatItReads': 'This is what the app reads in the list below.',
     'orders.pack.recognisedNothing': 'It recognised no allergen words in this text. That does NOT mean there are none — read the pack yourself and tick what it says.',
     'orders.pack.questionWhich': '“{word}” could be {options} — the pack does not say which. Tick it yourself if you know.',
     'orders.pack.questionVague': '“{word}” could hide an allergen. Ask the supplier what is in it.',
@@ -1734,6 +1734,13 @@ const DICTIONARIES = Object.freeze({
     // ── An ingredient's record, in four sections ────────────────────────────
     'orders.section.productData': 'Product details',
     'orders.section.allergens': 'Allergens',
+    'orders.section.packList': 'Ingredient list',
+    'orders.pack.filledIn': 'filled in',
+    'orders.pack.toFillIn': 'to fill in',
+    'orders.pack.proposedTicks': {
+      one: 'The app has ticked {n} box from the ingredient list. Open Allergens and check it.',
+      other: 'The app has ticked {n} boxes from the ingredient list. Open Allergens and check them.',
+    },
     'orders.section.nutrition': 'Nutrition',
     // ── …and the two switches that decide whether the last two exist ────────
     'orders.settings.ingredientCard': 'The ingredient card',
@@ -2399,13 +2406,13 @@ const DICTIONARIES = Object.freeze({
     'orders.pack.label': 'L’elenco ingredienti stampato sulla confezione',
     'orders.pack.help': 'Scrivilo o incollalo esattamente come è stampato. L’app cerca le parole degli allergeni e spunta le caselle qui sotto al posto tuo — tu le controlli e confermi.',
     'orders.pack.placeholder': 'es. Farina di GRANO tenero, acqua, BURRO, sale, farina di malto d’ORZO. Può contenere tracce di FRUTTA A GUSCIO.',
-    'orders.pack.suggest': 'Leggilo e spunta le caselle',
     'orders.pack.nothingTyped': 'Non hai ancora scritto niente — riporta prima quello che dice la confezione.',
     'orders.pack.ticked': {
       one: 'Spuntata {n} casella. Le parole riconosciute sono evidenziate qui sopra — controlla quello che resta in grigio.',
       other: 'Spuntate {n} caselle. Le parole riconosciute sono evidenziate qui sopra — controlla quello che resta in grigio.',
     },
     'orders.pack.alreadyTicked': 'Tutto quello che ha riconosciuto era già spuntato. Le parole sono evidenziate qui sopra — controlla quello che resta in grigio.',
+    'orders.pack.whatItReads': 'Ecco cosa legge l’app nell’elenco qui sotto.',
     'orders.pack.recognisedNothing': 'Non ha riconosciuto nessuna parola di allergene in questo testo. Questo NON vuol dire che non ce ne siano — leggi tu la confezione e spunta quello che dice.',
     'orders.pack.questionWhich': '«{word}» potrebbe essere {options} — la confezione non dice quale. Spuntalo tu se lo sai.',
     'orders.pack.questionVague': '«{word}» potrebbe nascondere un allergene. Chiedi al fornitore cosa contiene.',
@@ -3401,6 +3408,13 @@ const DICTIONARIES = Object.freeze({
     // ── La scheda di un prodotto, in quattro sezioni ────────────────────────
     'orders.section.productData': 'Dati prodotto',
     'orders.section.allergens': 'Allergeni',
+    'orders.section.packList': 'Elenco ingredienti',
+    'orders.pack.filledIn': 'compilato',
+    'orders.pack.toFillIn': 'da compilare',
+    'orders.pack.proposedTicks': {
+      one: 'L’app ha spuntato {n} casella leggendo l’elenco ingredienti. Apri Allergeni e controllala.',
+      other: 'L’app ha spuntato {n} caselle leggendo l’elenco ingredienti. Apri Allergeni e controllale.',
+    },
     'orders.section.nutrition': 'Valori nutrizionali',
     // ── …e i due interruttori che decidono se le ultime due esistono ────────
     'orders.settings.ingredientCard': 'La scheda ingrediente',

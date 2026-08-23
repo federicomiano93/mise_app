@@ -1396,9 +1396,22 @@ a.home-reminder {
 .alg-status--unknown { background: var(--warn-bg); border: 1px solid var(--warn-border); color: var(--warn); }
 .alg-status--ok { background: var(--accent-light); border: 1px solid var(--border); color: var(--brand); }
 
+/* ⚠️⚠️ THE APP HAS TOUCHED YOUR TICK BOXES, AND YOU CANNOT SEE IT HAPPEN. Since the
+   suggestion became automatic the boxes move while the Allergeni card is SHUT, so this
+   line sits OUTSIDE that fold and says so in words. It is the app's warning colour,
+   not its green: a proposal is something still to check, never something settled.
+   Values are .alg-status--unknown's, which is the same statement one card down. */
+.alg-proposed {
+  margin: 0; padding: 10px 12px; border-radius: var(--radius-sm);
+  font-size: 13px; line-height: 1.45; font-weight: 600;
+  background: var(--warn-bg); border: 1px solid var(--warn-border); color: var(--warn);
+}
+.alg-proposed[hidden] { display: none; }
+
 /* ── The pack's own ingredient list ─────────────────────────────────────────
-   Sits ABOVE the 52 tick boxes: it is the fast way to fill them in, and below
-   them it would be the thing you find after doing the job by hand. */
+   Its own section since v1.70.0, and ABOVE the allergens (Federico, 23 Aug 2026).
+   It is the fast way to fill the 52 boxes in; inside the allergen card it was the
+   thing you found only after doing the job by hand. */
 .alg-pack {
   display: flex; flex-direction: column; gap: 6px;
   margin-top: 10px; padding: 12px;

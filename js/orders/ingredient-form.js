@@ -61,7 +61,7 @@ import { currentSession } from '../firebase.js';
 // Reading the pack's own ingredient list. PURE, and also from js/ ROOT: the
 // vocabulary it walks is the same one a label is built from, so a second copy is
 // the copy that quietly disagrees about what is in somebody's food.
-import { readPackIngredients } from '../allergen-match.js';
+import { readPackIngredients, reconcileTicks, tickKey } from '../allergen-match.js';
 // Which of the two optional panels this venue uses. ⚠️ A VENUE-WIDE DISPLAY SWITCH,
 // never a role and never a data switch — see the note on allergenBlock below.
 import { ingredientPanels } from './firebase-features.js';
@@ -367,14 +367,22 @@ function allergenBlock(item, panels) {
 
   // ── The pack's own ingredient list, and what the app makes of it ────────────
   //
-  // ⚠️⚠️ IT PROPOSES, IT NEVER DECLARES. Reading the pack pre-ticks the boxes
-  // above and nothing else: `allergensCheckedAt` is untouched, so until somebody
-  // presses the verification tick the ingredient still reads 'unknown' and still
-  // blocks every label. A wrong suggestion costs a correction, never a false
-  // declaration — that is what makes offering one safe at all.
+  // ⚠️⚠️ IT PROPOSES, IT NEVER DECLARES. Reading the pack pre-ticks the boxes and
+  // nothing else: `allergensCheckedAt` is untouched, so until somebody presses the
+  // verification tick the ingredient still reads 'unknown' and still blocks every
+  // label. A wrong suggestion costs a correction, never a false declaration — that is
+  // what makes offering one safe at all, and it is unchanged by everything below.
   //
-  // ⚠️ AND IT NEVER UNTICKS. Somebody who ticked a box by hand knows something
-  // the pack does not say; a machine must not take it away.
+  // ⚠️⚠️ IT RUNS BY ITSELF NOW. Federico, 23 Aug 2026: «quando compilo l'elenco degli
+  // ingredienti in automatico gli allergeni se li contiene». The button is gone.
+  //
+  // ⚠️⚠️ AND THAT IS WHY THE TICKS HAVE OWNERS. «Only ever tick, never untick» was the
+  // right rule for a button you pressed at the END. Re-reading on every keystroke, it
+  // becomes a way to invent a declaration: «latte» ticks MILK, and correcting it to
+  // «latte di mandorla» would leave the milk behind for ever. So the app may take back
+  // ONLY what the app put there, and a box a person has moved is untouchable in both
+  // directions. The judgement lives in reconcileTicks() — pure, and tested, because
+  // nothing on this screen can show that it holds.
   const packBox = el('textarea', {
     class: 'mgmt-input alg-pack-text', rows: '4',
     placeholder: t('orders.pack.placeholder'),
@@ -383,26 +391,58 @@ function allergenBlock(item, panels) {
   packBox.value = item?.packIngredients || '';
   const packResult = el('div', { class: 'alg-pack-result' });
 
-  function suggest() {
+  // Which ticks the app put there and may take back. ⚠️ IT STARTS EMPTY EVEN WHEN THE
+  // INGREDIENT ARRIVES FULLY DECLARED — everything already stored belongs to whoever
+  // stored it, so opening a saved product and typing can never lose a declaration.
+  let appOwned = new Set();
+  // Which ticks a person has moved, either way. Never proposed or withdrawn again.
+  const humanTouched = new Set();
+  // How many the app is currently proposing, so the folded header can say so.
+  let proposedCount = 0;
+
+  // Move the boxes to whatever the pure model says they should be, and report how
+  // many changed. Nothing here decides anything: reconcileTicks owns the rules.
+  function applyTicks(proposal) {
+    const current = { contains: [], may: [] };
+    for (const [code, pair] of boxes) {
+      if (pair.contains.checked) current.contains.push(code);
+      if (pair.may.checked) current.may.push(code);
+    }
+    const next = reconcileTicks({ proposal, current, appOwned, humanTouched });
+    appOwned = next.appOwned;
+    const wantContains = new Set(next.contains);
+    const wantMay = new Set(next.may);
+    for (const [code, pair] of boxes) {
+      pair.contains.checked = wantContains.has(code);
+      pair.may.checked = wantMay.has(code);
+    }
+    proposedCount = appOwned.size;
+    refresh();
+    return next.added;
+  }
+
+  // ⚠️⚠️ `touchBoxes: false` IS FOR THE FIRST DRAW, AND IT IS A SAFETY RULE, NOT A
+  // nicety. A saved ingredient can perfectly well hold pack text that says «latte» and
+  // a milk box somebody deliberately UNTICKED — a supplier's correction, a reformulated
+  // product. Re-running the matcher on open would silently put that tick back every
+  // single time the record was looked at, and nothing on screen would say why. So
+  // opening a product only ever SHOWS what the text says; the boxes move when the text
+  // does, which is exactly what Federico asked for: «quando compilo l'elenco».
+  function suggest({ touchBoxes = true } = {}) {
     packResult.replaceChildren();
     const text = packBox.value;
     const out = readPackIngredients(text);
 
     if (!out.hasText) {
       packResult.appendChild(el('p', { class: 'alg-pack-note', text: t('orders.pack.nothingTyped') }));
+      // ⚠️ AND THE APP'S OWN TICKS GO WITH THE TEXT. Clearing the box must clear what
+      // the box put there, or emptying it would leave a declaration nobody can trace
+      // to anything. A person's ticks stay, as always.
+      if (touchBoxes) applyTicks({ allergens: [], mayContain: [] });
       return;
     }
 
-    let added = 0;
-    for (const code of out.allergens) {
-      const pair = boxes.get(code);
-      if (pair && !pair.contains.checked) { pair.contains.checked = true; added += 1; }
-    }
-    for (const code of out.mayContain) {
-      const pair = boxes.get(code);
-      if (pair && !pair.may.checked && !pair.contains.checked) { pair.may.checked = true; added += 1; }
-    }
-    refresh();
+    const added = touchBoxes ? applyTicks(out) : null;
 
     // ⚠️ THE EVIDENCE, NOT JUST THE VERDICT. Re-drawing the pasted text with the
     // recognised words marked turns «did it find everything?» — which nobody can
@@ -430,7 +470,11 @@ function allergenBlock(item, panels) {
         // get every time you read the same pack twice, or correct a typo. Found
         // by looking at a screenshot: the words were plainly highlighted above
         // and the sentence underneath said nothing had happened.
-        ? (added ? t('orders.pack.ticked', { n: added }) : t('orders.pack.alreadyTicked'))
+        //
+        // ⚠️ `added === null` is the FIRST DRAW, where no box was touched at all.
+        // Saying «already ticked» there would claim something the app has not done.
+        ? (added === null ? t('orders.pack.whatItReads')
+          : (added ? t('orders.pack.ticked', { n: added }) : t('orders.pack.alreadyTicked')))
         // ⚠️ RECOGNISING NOTHING IS AN ANSWER AND MUST LOOK LIKE ONE. Silence here
         // would be read as «this pack contains nothing», which is the single
         // worst thing this feature could say.
@@ -460,15 +504,25 @@ function allergenBlock(item, panels) {
     packResult.appendChild(el('p', { class: 'alg-pack-note alg-pack-warn', text: t('orders.pack.stillYours') }));
   }
 
-  const suggestBtn = el('button', {
-    // ⚠️ `.mgmt-btn` IS DEFINED IN NO STYLESHEET, and never was — this button has
-    // rendered as a bare grey browser rectangle since v1.64.0 shipped it on 22 Aug.
-    // Verified against a clean `main` worktree before blaming this release: main does
-    // it too. `.btn-secondary` is the name this app already gives a secondary action,
-    // and it is in orders.css, which this page loads. Nothing was designed.
-    class: 'btn-secondary alg-pack-btn', type: 'button', text: t('orders.pack.suggest'),
-    onclick: suggest,
-  });
+  // ⚠️ THE BUTTON IS GONE. «Leggilo e spunta le caselle» was the whole interaction;
+  // now typing IS the interaction, and `orders.pack.suggest` is retired with a test
+  // forbidding its return — a button that still existed would leave people believing
+  // nothing happens until they press it.
+  //
+  // ⚠️ RUN ON A PAUSE, NOT ON A KEYSTROKE. The matcher walks the whole vocabulary and
+  // the evidence panel redraws the pasted text; doing that per character would make
+  // the box stutter under somebody's thumb. 450ms is long enough to be a pause in
+  // typing and short enough to feel immediate after a paste.
+  //
+  // ⚠️ AND IMMEDIATELY ON `change`, which is what a paste and leaving the box both
+  // raise — a person who types and taps straight to the ticks must not race the timer.
+  let pending = null;
+  const scheduleSuggest = () => {
+    clearTimeout(pending);
+    pending = setTimeout(suggest, 450);
+  };
+  packBox.addEventListener('input', scheduleSuggest);
+  packBox.addEventListener('change', () => { clearTimeout(pending); suggest(); });
 
   function read() {
     const contains = [];
@@ -488,10 +542,14 @@ function allergenBlock(item, panels) {
     });
   }
 
-  // The word on the folded header, and the word on the nutrition one. Set by
-  // refresh() below; empty until then.
+  // The word on each folded header. Set by refresh() below; empty until then.
   const algHeadState = el('span', { class: 'alg-head-state' });
   const nutHeadState = el('span', { class: 'alg-head-state' });
+  const packHeadState = el('span', { class: 'alg-head-state' });
+  // ⚠️ THE LINE THAT TELLS SOMEBODY THE APP HAS TOUCHED THEIR TICK BOXES. It sits
+  // OUTSIDE the allergen fold, because the fold is shut when the proposal lands and a
+  // change nobody is told about is the worst thing an automatic feature can do here.
+  const proposedNote = el('p', { class: 'alg-proposed', hidden: 'hidden' });
 
   // The live line at the top: which of the three states this ingredient is in.
   // ⚠️ It says "not checked" in the app's warning colour on purpose — an
@@ -523,6 +581,23 @@ function allergenBlock(item, panels) {
     algHeadState.className = 'alg-head-state'
       + (state === 'unknown' ? ' alg-head-state--warn' : ' alg-head-state--ok');
 
+    // ⚠️ NEUTRAL WHEN FILLED, NEVER GREEN. Green on this screen means «checked»; an
+    // ingredient list somebody has typed is raw material for that decision, not the
+    // decision. Saying «da compilare» in the warning colour is right, though: an empty
+    // list is the job that is not done.
+    const hasPack = packBox.value.trim().length > 0;
+    packHeadState.textContent = hasPack ? t('orders.pack.filledIn') : t('orders.pack.toFillIn');
+    packHeadState.className = 'alg-head-state' + (hasPack ? '' : ' alg-head-state--warn');
+
+    // ⚠️ ONLY WHILE THERE IS SOMETHING UNCONFIRMED TO REPORT. Once the verification
+    // tick is on, the proposal has been accepted by a person and saying it was the
+    // app's would undercut a declaration somebody has taken responsibility for.
+    const proposals = checked.checked ? 0 : proposedCount;
+    proposedNote.hidden = proposals === 0;
+    proposedNote.textContent = proposals
+      ? t('orders.pack.proposedTicks', { n: proposals })
+      : '';
+
     // ⚠️ `note: ''` AND THEN TRIMMED. The three sentences end in «{note}», which used
     // to carry the nutrition line; the placeholder is kept rather than removed
     // because the same three phrases are pinned by the i18n suites, and an empty one
@@ -545,13 +620,28 @@ function allergenBlock(item, panels) {
     status.className = 'alg-status alg-status--ok';
   }
 
-  [...boxes.values()].forEach(p => {
-    p.contains.addEventListener('change', refresh);
-    p.may.addEventListener('change', refresh);
-  });
+  // ⚠️⚠️ A TICK A PERSON MOVES BECOMES THEIRS, AND THE APP NEVER TOUCHES IT AGAIN.
+  // Both directions matter. Ticking something the pack does not print is knowledge the
+  // app does not have; UNticking a suggestion is a correction, and without recording
+  // it the very next keystroke would put the suggestion straight back and the person
+  // could not win. Dropping it from `appOwned` at the same time is what stops the app
+  // later "taking back" a box that is no longer its to take.
+  for (const [code, pair] of boxes) {
+    for (const column of ['contains', 'may']) {
+      pair[column].addEventListener('change', () => {
+        const key = tickKey(code, column);
+        humanTouched.add(key);
+        appOwned.delete(key);
+        refresh();
+      });
+    }
+  }
   nutrients.forEach(input => input.addEventListener('input', refresh));
   checked.addEventListener('change', refresh);
   refresh();
+  // ⚠️ SHOWS, NEVER TOUCHES. The first draw only marks up whatever text is stored —
+  // see the note on suggest() for why re-ticking on open would erase a correction.
+  suggest({ touchBoxes: false });
 
   const root = el('div', { class: 'mgmt-field alg-block' });
 
@@ -563,23 +653,41 @@ function allergenBlock(item, panels) {
   // ⚠️ CLOSED ON EVERY OPEN, deliberately not remembered. Same as the recipe's card:
   // remembering it open would quietly undo the change on the screen it was made for.
   if (panels.allergens) {
+    // ⚠️⚠️ THE PACK'S OWN LIST IS ITS OWN SECTION NOW, AND IT COMES FIRST. Federico,
+    // 23 Aug 2026: «l'elenco degli ingredienti mettilo separato dagli allergeni,
+    // mettilo sopra gli allergeni». It used to live inside the allergen fold, which
+    // put the fast way to do the job behind the job itself.
+    //
+    // ⚠️ IT IS THE SAME SWITCH. The list exists to declare allergens and nothing else,
+    // so a venue that has turned allergens off must not be left with an orphan box
+    // feeding a feature that is not there — the v1.67.0 decision, unchanged.
+    //
+    // ⚠️ AND ITS STATE WORD IS DELIBERATELY NOT GREEN. On this screen green means
+    // «somebody has verified this»; having typed the list is not a declaration, so a
+    // filled box is stated plainly and left neutral.
+    root.appendChild(fold({
+      title: t('orders.section.packList'),
+      state: packHeadState,
+      above: [],
+      body: [
+        el('p', { class: 'notif-note', text: t('orders.pack.help') }),
+        el('div', { class: 'alg-pack' }, [
+          packBox,
+          packResult,
+        ]),
+      ],
+    }));
+
     root.appendChild(fold({
       title: t('orders.section.allergens'),
       state: algHeadState,
       // The answer, and the caveat that qualifies it. Outside the fold.
-      above: [status],
+      // ⚠️ `proposed` JOINS THEM, and it has to be out here: the app now ticks boxes
+      // by itself while this fold is SHUT, so without a word on the outside nobody
+      // would ever learn that anything had happened.
+      above: [status, proposedNote],
       body: [
         el('p', { class: 'notif-note', text: t('orders.copyThisFromThe') }),
-        // ⚠️ THE PACK BOX SITS ABOVE THE 52 TICK BOXES, not below them. It is the
-        // fast way to fill them in; below, it would be the thing you find after
-        // doing the job by hand.
-        el('div', { class: 'alg-pack' }, [
-          el('span', { class: 'mgmt-field-label', text: t('orders.pack.label') }),
-          el('p', { class: 'notif-note', text: t('orders.pack.help') }),
-          packBox,
-          suggestBtn,
-          packResult,
-        ]),
         el('div', { class: 'alg-list' }, sections),
         el('label', { class: 'day-check alg-checked' }, [checked, el('span', { text: t('orders.iHaveCheckedThe') })]),
       ],

@@ -22,6 +22,93 @@
 import { TERMS, NEGATIVE_PHRASES, REMAPS, AMBIGUOUS, TRACES_MARKERS } from './allergen-terms.js';
 import { normalizeAllergens } from './allergen-model.js';
 
+// ── Who put each tick there ──────────────────────────────────────────────────
+//
+// ⚠️⚠️ THIS EXISTS BECAUSE THE SUGGESTION BECAME AUTOMATIC, AND THAT CHANGES WHAT
+// SAFE MEANS. While it was a button you pressed at the end, "only ever tick, never
+// untick" was right: you had finished typing, and a box the app added could only be
+// something you then checked. Re-running on every keystroke breaks that. Type «latte»
+// and MILK is ticked; correct it to «latte di mandorla» and the milk is gone from the
+// text — but the tick would stay. **The automation would have created a false
+// declaration that nobody typed and nobody can see.**
+//
+// So each box now has an owner, and the rule is one sentence:
+//
+//     THE APP MAY TAKE BACK ONLY WHAT THE APP PUT THERE.
+//
+// Four consequences, and every one of them is a test:
+//
+//   · a box a PERSON moved — ticked or unticked, either column — is never touched
+//     again. That covers both "I know something the pack does not say" and "no, that
+//     is wrong"; without the second the app would re-tick what somebody just cleared
+//     and argue with them for ever.
+//   · a box the APP ticked, which the text no longer supports, is taken back.
+//   · every tick loaded from the stored ingredient counts as the PERSON's, so opening
+//     a saved product and typing can never lose a declaration somebody made.
+//   · `may` never duplicates `contains`.
+//
+// ⚠️ AND NOTHING HERE WRITES A STAMP, exactly as before. js/allergen-model.js makes
+// ticks without `allergensCheckedAt` read 'unknown' whatever they say, so everything
+// this function does is still inert until a person confirms it.
+
+export const tickKey = (code, column) => `${column}:${code}`;
+
+/**
+ * Work out the tick boxes after a change to the pack text.
+ *
+ * proposal      { allergens, mayContain } — what readPackIngredients() just read
+ * current       { contains, may } — the codes ticked right now
+ * appOwned      Set of tickKey() the app itself ticked and may take back
+ * humanTouched  Set of tickKey() a person has moved; untouchable
+ */
+export function reconcileTicks({ proposal, current, appOwned, humanTouched } = {}) {
+  const owned = new Set(appOwned || []);
+  const touched = new Set(humanTouched || []);
+  const want = {
+    contains: new Set((proposal && proposal.allergens) || []),
+    may: new Set((proposal && proposal.mayContain) || []),
+  };
+  const out = {
+    contains: new Set((current && current.contains) || []),
+    may: new Set((current && current.may) || []),
+  };
+  let added = 0;
+  let removed = 0;
+
+  for (const column of ['contains', 'may']) {
+    // Take back what the app put there and the text no longer says.
+    // ⚠️ `owned.has` is the whole guard: a tick that is not the app's is skipped here
+    // before anything else is considered.
+    for (const code of [...out[column]]) {
+      const key = tickKey(code, column);
+      if (!owned.has(key)) continue;
+      if (want[column].has(code)) continue;
+      out[column].delete(code);
+      owned.delete(key);
+      removed += 1;
+    }
+    // Propose what the text says and nobody has ruled on.
+    for (const code of want[column]) {
+      const key = tickKey(code, column);
+      if (touched.has(key)) continue;
+      if (out[column].has(code)) continue;
+      out[column].add(code);
+      owned.add(key);
+      added += 1;
+    }
+  }
+
+  // ⚠️ A CODE IN `contains` IS NOT ALSO A TRACE. buildAllergenFields strips it on save
+  // anyway; doing it here stops the screen ticking a box the save would then drop.
+  for (const code of [...out.may]) {
+    if (!out.contains.has(code)) continue;
+    out.may.delete(code);
+    owned.delete(tickKey(code, 'may'));
+  }
+
+  return { contains: [...out.contains], may: [...out.may], appOwned: owned, added, removed };
+}
+
 // ── Normalising, WITHOUT losing where each character came from ───────────────
 //
 // The map is the whole point: a match found at normalised index n has to be

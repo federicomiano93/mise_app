@@ -14,7 +14,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readPackIngredients, splitTraces, normaliseWithMap } from '../js/allergen-match.js';
+import { readPackIngredients, splitTraces, normaliseWithMap, reconcileTicks, tickKey } from '../js/allergen-match.js';
 import { TERMS, NEGATIVE_PHRASES, REMAPS, AMBIGUOUS } from '../js/allergen-terms.js';
 import { ALLERGEN_CODES } from '../js/allergen-model.js';
 
@@ -422,4 +422,133 @@ test('the English markers work on their own too', () => {
   assert.ok(out.allergens.includes('gluten-wheat'));
   assert.ok(out.mayContain.includes('nuts-hazelnut'));
   assert.ok(!out.allergens.includes('nuts-hazelnut'));
+});
+
+// ── Who owns each tick, once the suggestion runs by itself ───────────────────
+//
+// ⚠️⚠️ THE WHOLE REASON THIS SECTION EXISTS. While suggesting was a button you
+// pressed at the end, "only ever tick, never untick" was safe. Re-running on every
+// keystroke is not: «latte» ticks MILK, and correcting it to «latte di mandorla»
+// leaves the milk behind. That is a false declaration the automation invented, on the
+// one screen in this app that can send somebody to hospital.
+//
+// The rule under all of it: THE APP MAY TAKE BACK ONLY WHAT THE APP PUT THERE.
+
+const noTicks = () => ({ contains: [], may: [] });
+
+test('it ticks what the pack says, and remembers that it was the one who did', () => {
+  const out = reconcileTicks({
+    proposal: { allergens: ['milk'], mayContain: ['nuts-hazelnut'] },
+    current: noTicks(), appOwned: new Set(), humanTouched: new Set(),
+  });
+  assert.deepEqual(out.contains, ['milk']);
+  assert.deepEqual(out.may, ['nuts-hazelnut']);
+  assert.equal(out.added, 2);
+  assert.equal(out.removed, 0);
+  assert.ok(out.appOwned.has(tickKey('milk', 'contains')));
+  assert.ok(out.appOwned.has(tickKey('nuts-hazelnut', 'may')));
+});
+
+// ⚠️⚠️ THE CASE THE WHOLE DESIGN IS FOR. Without this the app would declare milk in
+// an almond-milk product for ever, and nothing on screen would say why.
+test('⚠️⚠️ «latte» then «latte di mandorla»: the app takes its own tick back', () => {
+  const first = reconcileTicks({
+    proposal: readPackIngredients('latte'),
+    current: noTicks(), appOwned: new Set(), humanTouched: new Set(),
+  });
+  assert.ok(first.contains.includes('milk'), 'the first read must tick milk');
+
+  const second = reconcileTicks({
+    proposal: readPackIngredients('latte di mandorla'),
+    current: { contains: first.contains, may: first.may },
+    appOwned: first.appOwned, humanTouched: new Set(),
+  });
+  assert.equal(second.contains.includes('milk'), false,
+    'the text no longer says milk, and the app put that tick there');
+  assert.ok(second.contains.includes('nuts-almond'), 'and almonds are what it does say');
+  assert.equal(second.removed, 1);
+});
+
+// ⚠️ A PERSON KNOWS THINGS THE PACK DOES NOT PRINT — a supplier's e-mail, a phone
+// call, the line the factory also runs. Taking that away because a word changed is
+// the app overruling somebody who is legally responsible for the answer.
+test('⚠️ a tick a PERSON made survives any change to the text', () => {
+  const out = reconcileTicks({
+    proposal: readPackIngredients('farina di grano tenero'),
+    current: { contains: ['celery'], may: [] },
+    appOwned: new Set(),                       // nobody's but the person's
+    humanTouched: new Set([tickKey('celery', 'contains')]),
+  });
+  assert.ok(out.contains.includes('celery'), 'a hand-made declaration is untouchable');
+  assert.equal(out.removed, 0);
+});
+
+// ⚠️ AND THE OTHER DIRECTION, which is the one that would make the app unusable:
+// clearing a wrong suggestion has to STICK. Without this the next keystroke puts it
+// straight back and the person cannot win.
+test('⚠️ a suggestion a person CLEARS is never proposed again', () => {
+  const first = reconcileTicks({
+    proposal: readPackIngredients('latte'),
+    current: noTicks(), appOwned: new Set(), humanTouched: new Set(),
+  });
+  assert.ok(first.contains.includes('milk'));
+
+  // The person unticks it: the form drops it from appOwned and records the touch.
+  const owned = new Set(first.appOwned);
+  owned.delete(tickKey('milk', 'contains'));
+
+  const second = reconcileTicks({
+    proposal: readPackIngredients('latte'),          // the text still says milk
+    current: { contains: [], may: [] },
+    appOwned: owned,
+    humanTouched: new Set([tickKey('milk', 'contains')]),
+  });
+  assert.equal(second.contains.includes('milk'), false, 'it must not come back');
+  assert.equal(second.added, 0);
+});
+
+// ⚠️⚠️ OPENING A SAVED PRODUCT AND TYPING MUST NOT LOSE A DECLARATION. Everything
+// already stored arrives with an EMPTY appOwned, so by construction none of it can be
+// taken back — this is the test that says so out loud.
+test('⚠️⚠️ ticks loaded from the stored ingredient are the person\u2019s, always', () => {
+  const stored = { contains: ['eggs', 'milk'], may: ['sesame'] };
+  const out = reconcileTicks({
+    proposal: readPackIngredients('zucchero, acqua'),   // says none of them
+    current: stored, appOwned: new Set(), humanTouched: new Set(),
+  });
+  assert.deepEqual([...out.contains].sort(), ['eggs', 'milk']);
+  assert.deepEqual(out.may, ['sesame']);
+  assert.equal(out.removed, 0);
+});
+
+test('a trace is dropped when the same allergen is declared outright', () => {
+  const out = reconcileTicks({
+    proposal: { allergens: ['milk'], mayContain: ['milk'] },
+    current: noTicks(), appOwned: new Set(), humanTouched: new Set(),
+  });
+  assert.deepEqual(out.contains, ['milk']);
+  assert.deepEqual(out.may, [], 'buildAllergenFields would strip it on save anyway');
+});
+
+test('an empty pack proposes nothing and removes nothing a person made', () => {
+  const out = reconcileTicks({
+    proposal: readPackIngredients(''),
+    current: { contains: ['fish'], may: [] },
+    appOwned: new Set(), humanTouched: new Set(),
+  });
+  assert.deepEqual(out.contains, ['fish']);
+  assert.equal(out.added, 0);
+  assert.equal(out.removed, 0);
+});
+
+// ⚠️ THE PROPERTY THAT MAKES ALL OF THE ABOVE INERT, restated where the ticks are
+// decided: nothing in this file stamps anything, so every proposal still reads
+// 'unknown' and still blocks every label until a person confirms it.
+test('⚠️ reconciling ticks never produces a verification stamp', () => {
+  const out = reconcileTicks({
+    proposal: readPackIngredients('latte, uova, farina di grano'),
+    current: noTicks(), appOwned: new Set(), humanTouched: new Set(),
+  });
+  assert.equal('checkedAt' in out, false);
+  assert.equal('allergensCheckedAt' in out, false);
 });

@@ -89,12 +89,66 @@ test('⚠️⚠️ the form still never writes the verification stamp', () => {
     'the stamp comes from the tick box, and an existing one is kept rather than moved');
 });
 
-test('the pack reader still only ever ADDS a tick', () => {
+// ⚠️⚠️ THIS RULE CHANGED IN v1.70.0, AND THE OLD ONE IS WRITTEN DOWN HERE BECAUSE
+// DELETING IT WOULD LOOK LIKE A SAFETY CHECK BEING DROPPED.
+//
+// It used to read «the pack reader only ever ADDS a tick», and that was right while
+// suggesting was a BUTTON you pressed once, at the end: a box the app added could only
+// be something you then checked, and unticking anything would have overruled a person.
+//
+// Federico asked for it to run by itself as the list is typed, and that inverts the
+// danger. «latte» ticks MILK; correcting it to «latte di mandorla» leaves the milk
+// behind for ever — a declaration the automation invented, that nobody typed and
+// nothing on screen explains. Never-untick would now be the UNSAFE rule.
+//
+// The rule that replaces it is one sentence: THE APP MAY TAKE BACK ONLY WHAT THE APP
+// PUT THERE. Its logic is pure and lives in reconcileTicks (tests/allergen-match);
+// what this file pins is that the FORM obeys it rather than deciding for itself.
+test('⚠️⚠️ the form never decides tick ownership itself — it asks the pure model', () => {
   const code = codeOf(FORM);
-  assert.match(code, /!pair\.contains\.checked\)\s*\{\s*pair\.contains\.checked = true/,
-    'a box already ticked by a person must never be untouched by the matcher');
-  assert.doesNotMatch(code, /\.checked = false/,
-    'nothing in this form may UNtick an allergen box');
+  assert.match(code, /reconcileTicks\(\{[\s\S]{0,200}?appOwned[\s\S]{0,200}?humanTouched/,
+    'the boxes must be moved by reconcileTicks, with both ownership sets handed in');
+  // ⚠️ AND THE CALL MUST EXIST AT ALL. A guard on the shape of a call is satisfied by
+  // deleting the call (the v1.68.0 lesson), which here would leave the app ticking
+  // boxes with no rule about taking them back.
+  assert.equal((code.match(/reconcileTicks\(/g) || []).length, 1,
+    'exactly one place may reconcile the ticks');
+});
+
+test('⚠️⚠️ a box a PERSON moves becomes untouchable, in both directions', () => {
+  const code = codeOf(FORM);
+  const listener = code.slice(code.indexOf('for (const column of'));
+  assert.ok(listener.length > 100, 'the slice must actually hold the listener');
+  assert.match(listener, /humanTouched\.add\(key\)/,
+    'moving a box must record that a person did it');
+  assert.match(listener, /appOwned\.delete\(key\)/,
+    'and must take it out of what the app may later withdraw — without this the next '
+    + 'keystroke puts a cleared suggestion straight back and the person cannot win');
+  // Both columns, not just «has»: a trace somebody ticked by hand is a declaration too.
+  assert.match(code, /\['contains', 'may'\]/);
+});
+
+// ⚠️⚠️ OPENING A RECORD MUST NOT MOVE A SINGLE BOX. A saved ingredient can hold pack
+// text saying «latte» and a milk box somebody deliberately UNTICKED. Re-running the
+// matcher on open would put that tick back every time the record was looked at, in
+// silence. Federico asked for it «quando compilo l'elenco» — when the list is typed.
+test('⚠️⚠️ the first draw shows what the text says and ticks nothing', () => {
+  const code = codeOf(FORM);
+  assert.match(code, /suggest\(\{ touchBoxes: false \}\)/,
+    'the initial call must be the read-only one');
+  assert.match(code, /const added = touchBoxes \? applyTicks\(out\) : null/,
+    'and touchBoxes must actually gate the only place boxes are moved');
+});
+
+// The button is gone; typing is the interaction. A button left behind would teach
+// people that nothing happens until they press it.
+test('the «read it and tick the boxes» button is gone, and typing runs it', () => {
+  const code = codeOf(FORM);
+  assert.doesNotMatch(code, /orders\.pack\.suggest/,
+    'the key is retired — see tests/i18n for the ban on its return');
+  assert.match(code, /packBox\.addEventListener\('input'/);
+  assert.match(code, /packBox\.addEventListener\('change'/,
+    'a paste and leaving the box must not have to wait for the timer');
 });
 
 // ── 3. The move actually happened, and left nothing behind ───────────────────

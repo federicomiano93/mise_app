@@ -307,3 +307,39 @@ function sourceFiles() {
   walk(join(ROOT, 'js'));
   return out;
 }
+
+// ── Keys retired in v1.70.0, and why each may not come back ──────────────────
+//
+// ⚠️ A RETIRED KEY IS NOT A TIDYING-UP JOB. Each of these named a control or a
+// sentence that no longer exists, and re-adding one would quietly restore the thing it
+// belonged to — a button that does nothing, or a pound sign on an Italian bakery.
+test('⚠️ the keys this release retired stay retired', () => {
+  const dict = readFileSync(join(ROOT, 'js/i18n.js'), 'utf8').replace(/^\s*\/\/.*$/gm, '');
+  const RETIRED = {
+    // The three long price warnings. They were the ONLY hardcoded currency symbols in
+    // the dictionary — «a 25 kg sack at £180» — so on Panificio Miano the app spelled
+    // out an example in sterling. The warning survives as the box's own placeholder,
+    // per unit, with no money in it at all.
+    'orders.thePriceOfOne': 'it wrote a pound sign into a sentence',
+    'orders.thePriceOfOne2': 'it wrote a pound sign into a sentence',
+    'orders.thePriceOfOne3': 'it wrote a pound sign into a sentence',
+    // The single placeholder became one per purchase unit: «(un chilo)» is wrong the
+    // moment somebody prices by the piece, and a stale example on THIS field is what
+    // makes a recipe cost twenty-five times too much.
+    'orders.eg.rate': 'the example now follows the purchase unit',
+    // «Leggilo e spunta le caselle». There is no button: typing runs the matcher. A
+    // button left in the dictionary is a button somebody puts back on the screen.
+    'orders.pack.suggest': 'the suggestion is automatic now',
+  };
+  for (const [key, why] of Object.entries(RETIRED)) {
+    assert.doesNotMatch(dict, new RegExp(`'${key.replace(/\./g, '\.')}'\s*:`),
+      `${key} was retired because ${why}`);
+  }
+});
+
+// Proof the ban can fire: a key that IS still there must be found by the same shape.
+test('and that ban would notice a key that is still present', () => {
+  const dict = readFileSync(join(ROOT, 'js/i18n.js'), 'utf8').replace(/^\s*\/\/.*$/gm, '');
+  assert.match(dict, /'orders\.pack\.ticked'\s*:/,
+    'the live key must match the pattern the ban uses, or the ban proves nothing');
+});

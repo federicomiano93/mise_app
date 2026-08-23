@@ -201,12 +201,33 @@ test('the allergen button is hidden by the VENUE, never by the person', () => {
 
 test('⚠️ the status line stays OUTSIDE the fold, the tick boxes go inside', () => {
   const call = FORM.slice(FORM.indexOf('if (panels.allergens) {'), FORM.indexOf('if (panels.nutrition) {'));
-  assert.ok(call.includes('above: [status]'),
-    'somebody asked «are there nuts in this?» must read the answer without tapping');
+  // ⚠️ `proposedNote` JOINED IT IN v1.70.0 AND BELONGS ON THE SAME SIDE OF THE FOLD.
+  // The app now ticks boxes by itself while this card is SHUT, so the line saying it
+  // has done so has to be readable without opening anything — the same rule as the
+  // status itself, for the same reason.
+  assert.ok(call.includes('above: [status, proposedNote]'),
+    'somebody asked «are there nuts in this?» must read the answer without tapping, '
+    + 'and must be told when the app has moved a tick box');
   assert.ok(call.includes("el('div', { class: 'alg-list' }, sections)") && call.includes('body: ['),
     'the 52 tick boxes are the JOB, and the job is what folds');
-  const bodyAt = call.indexOf('body: [');
-  assert.ok(call.indexOf('above: [status]') < bodyAt, 'and the answer comes first');
+  const bodyAt = call.lastIndexOf('body: [');
+  assert.ok(call.indexOf('above: [status, proposedNote]') < bodyAt, 'and the answer comes first');
+});
+
+// ⚠️⚠️ THE PACK'S LIST IS ITS OWN SECTION, AND IT COMES FIRST. Federico, 23 Aug 2026:
+// «l'elenco degli ingredienti mettilo separato dagli allergeni, mettilo sopra». It used
+// to sit INSIDE the allergen fold, which put the fast way to do the job behind the job.
+test('⚠️ the pack’s ingredient list is its own section, ABOVE the allergens', () => {
+  const call = FORM.slice(FORM.indexOf('if (panels.allergens) {'), FORM.indexOf('if (panels.nutrition) {'));
+  const packAt = call.indexOf("t('orders.section.packList')");
+  const algAt = call.indexOf("t('orders.section.allergens')");
+  assert.ok(packAt > 0, 'the ingredient list must have a section of its own');
+  assert.ok(algAt > 0, 'and the allergens must still have theirs');
+  assert.ok(packAt < algAt, 'the list comes first — it is how the tick boxes get filled');
+  // ⚠️ ONE SWITCH, NOT TWO. The list exists only to declare allergens, so a venue that
+  // turned them off must not keep an orphan box feeding a feature that is not there.
+  assert.ok(packAt > call.indexOf('if (panels.allergens) {'),
+    'both sections live behind the same venue switch (the v1.67.0 decision)');
 });
 
 test('both folds open CLOSED, every time', () => {
