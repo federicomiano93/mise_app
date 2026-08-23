@@ -578,7 +578,7 @@ const DICTIONARIES = Object.freeze({
     'orders.deliveryDaysWhenThey': 'Delivery days — when they deliver',
     'orders.orderDaysWhenYou': 'Order days — when you place the order',
     'orders.phoneWhatsappDigitsOnly': 'Phone (WhatsApp, digits only)',
-    'orders.noPrice2': '— No price —',
+    'orders.noPrice2': 'None',
     'orders.weightOfOnePiece': 'Weight of one piece (kg)',
     'orders.neededOnlyToUse': 'Needed only to use this in a recipe written in grams — one egg is about 0.055, a vanilla pod about 0.0035.',
     'orders.howItIsBought': 'How it is bought',
@@ -1624,7 +1624,7 @@ const DICTIONARIES = Object.freeze({
     // ⚠️ This one was not even a key — PRICE_UNIT_LABELS carried the bare words
     // 'by the piece' beside two t() calls, so two thirds of the same list translated
     // and the third did not.
-    'price.byPiece': 'by the piece',
+    'price.byPiece': 'by piece',
     // ⚠️ Eight of these nine sat in COST_REASON_TEXT as bare English beside ONE t()
     // call — the same list, one line translated and eight not. Each names one thing
     // to go and do, so they read as the end of «this row could not be costed: …».
@@ -1737,6 +1737,10 @@ const DICTIONARIES = Object.freeze({
     'orders.section.packList': 'Ingredient list',
     'orders.pack.filledIn': 'filled in',
     'orders.pack.toFillIn': 'to fill in',
+    'orders.pack.proposedAfterCheck': {
+      one: 'This ingredient was verified BEFORE the app changed {n} box from the ingredient list. Open Allergens and verify it again.',
+      other: 'This ingredient was verified BEFORE the app changed {n} boxes from the ingredient list. Open Allergens and verify it again.',
+    },
     'orders.pack.proposedTicks': {
       one: 'The app has ticked {n} box from the ingredient list. Open Allergens and check it.',
       other: 'The app has ticked {n} boxes from the ingredient list. Open Allergens and check them.',
@@ -2013,8 +2017,8 @@ const DICTIONARIES = Object.freeze({
     'people.noNameYet': '(no name yet)',
     'people.you': ' · you',
     'people.noEmailParen': '(no email)',
-    'price.byWeight': 'by weight (kg)',
-    'price.byVolume': 'by volume (litres)',
+    'price.byWeight': 'by kg',
+    'price.byVolume': 'by litre',
     'price.none': 'No price yet',
     'price.needPieceWeight': 'Add the weight of one piece to use this in a recipe',
 
@@ -2389,7 +2393,7 @@ const DICTIONARIES = Object.freeze({
     'orders.deliveryDaysWhenThey': 'Giorni di consegna — quando consegnano',
     'orders.orderDaysWhenYou': 'Giorni d’ordine — quando fai l’ordine',
     'orders.phoneWhatsappDigitsOnly': 'Telefono (WhatsApp, solo cifre)',
-    'orders.noPrice2': '— Nessun prezzo —',
+    'orders.noPrice2': 'Nessuno',
     'orders.weightOfOnePiece': 'Peso di un pezzo (kg)',
     'orders.neededOnlyToUse': 'Serve solo per usarlo in una ricetta scritta in grammi — un uovo è circa 0,055, una bacca di vaniglia circa 0,0035.',
     'orders.howItIsBought': 'Come si acquista',
@@ -3324,7 +3328,7 @@ const DICTIONARIES = Object.freeze({
     'ui.recipe': 'Ricetta',
     'ui.note': 'Nota',
     'ui.ingredients': 'Ingredienti',
-    'price.byPiece': 'a pezzo',
+    'price.byPiece': 'al pezzo',
     'cat.cost.noAmount': 'nessuna quantità',
     'cat.cost.notLinked': 'non collegato a un ingrediente',
     'cat.cost.missingIngredient': 'collegato a un ingrediente che non esiste più',
@@ -3411,6 +3415,10 @@ const DICTIONARIES = Object.freeze({
     'orders.section.packList': 'Elenco ingredienti',
     'orders.pack.filledIn': 'compilato',
     'orders.pack.toFillIn': 'da compilare',
+    'orders.pack.proposedAfterCheck': {
+      one: 'Questo ingrediente era stato verificato PRIMA che l’app cambiasse {n} casella leggendo l’elenco. Apri Allergeni e verificalo di nuovo.',
+      other: 'Questo ingrediente era stato verificato PRIMA che l’app cambiasse {n} caselle leggendo l’elenco. Apri Allergeni e verificalo di nuovo.',
+    },
     'orders.pack.proposedTicks': {
       one: 'L’app ha spuntato {n} casella leggendo l’elenco ingredienti. Apri Allergeni e controllala.',
       other: 'L’app ha spuntato {n} caselle leggendo l’elenco ingredienti. Apri Allergeni e controllale.',
@@ -3638,8 +3646,8 @@ const DICTIONARIES = Object.freeze({
     'people.noNameYet': '(ancora senza nome)',
     'people.you': ' · tu',
     'people.noEmailParen': '(nessuna email)',
-    'price.byWeight': 'a peso (kg)',
-    'price.byVolume': 'a volume (litri)',
+    'price.byWeight': 'al kg',
+    'price.byVolume': 'al litro',
     'price.none': 'Ancora nessun prezzo',
     'price.needPieceWeight': 'Aggiungi il peso di un pezzo per usarlo in una ricetta',
 

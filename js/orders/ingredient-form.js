@@ -589,13 +589,19 @@ function allergenBlock(item, panels) {
     packHeadState.textContent = hasPack ? t('orders.pack.filledIn') : t('orders.pack.toFillIn');
     packHeadState.className = 'alg-head-state' + (hasPack ? '' : ' alg-head-state--warn');
 
-    // ⚠️ ONLY WHILE THERE IS SOMETHING UNCONFIRMED TO REPORT. Once the verification
-    // tick is on, the proposal has been accepted by a person and saying it was the
-    // app's would undercut a declaration somebody has taken responsibility for.
-    const proposals = checked.checked ? 0 : proposedCount;
-    proposedNote.hidden = proposals === 0;
-    proposedNote.textContent = proposals
-      ? t('orders.pack.proposedTicks', { n: proposals })
+    // ⚠️⚠️ IT SHOWS WHENEVER THE APP OWNS A TICK, AND THE FIRST VERSION OF THIS LINE
+    // HID IT ON A VERIFIED INGREDIENT. That was wrong, and driving the form is what
+    // found it: the reasoning was «the tick is on, so a person has accepted the
+    // proposal» — but the tick was on BEFORE the app proposed anything. On an
+    // ingredient somebody had already signed off, the app could quietly add or withdraw
+    // an allergen and the screen would say «Verificato il …» as if nothing had moved.
+    //
+    // ⚠️ AND A VERIFIED ONE GETS THE STRONGER SENTENCE, because that is the worse case:
+    // the declaration on record no longer matches what a person checked.
+    proposedNote.hidden = proposedCount === 0;
+    proposedNote.textContent = proposedCount
+      ? t(checked.checked ? 'orders.pack.proposedAfterCheck' : 'orders.pack.proposedTicks',
+        { n: proposedCount })
       : '';
 
     // ⚠️ `note: ''` AND THEN TRIMMED. The three sentences end in «{note}», which used

@@ -512,16 +512,25 @@ select.qty-select:focus { outline: none; border-color: var(--crust); background:
   display: flex;
   gap: 10px;
   padding: 10px 16px calc(10px + var(--safe-bot));
-  /* The bar keeps its full-width surface and border — it is the bottom edge of the
+  /* The bar keeps its full-width ground and border — it is the bottom edge of the
      app — while its buttons line up with the content column above them. */
   padding-inline: max(16px, var(--app-gutter));
-  background: var(--surface);
+  /* ⚠️⚠️ THE BAR IS THE PAGE'S OWN GROUND, NOT A RAISED SURFACE, AND THIS PAIR WAS
+     INVERTED HERE UNTIL v1.70.0. Federico photographed it on «Fornitori e ingredienti»:
+     a pale #FFFDF7 band across a #F4EDE0 page, with the button barely distinguishable
+     from it. It is the SAME defect v1.62.0 identified and fixed — but that release
+     fixed .cat-footer only, and .recipe-footer (Calculator, Orders, Fornitori) kept the
+     old pairing for another day.
+     ⚠️ MEASURED, NOT ASSUMED: .cat-footer and .pas-footer both read bar rgb(244,237,224)
+     / button rgb(255,253,247); this one read the two the other way round on all three of
+     its pages. Nothing was designed — the values are the ones the other two already use. */
+  background: var(--bg);
   border-top: 1px solid var(--border);
   flex-shrink: 0;
 }
 .recipe-footer-btn {
   flex: 1;
-  background: var(--surface2);
+  background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   color: var(--text);

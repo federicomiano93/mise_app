@@ -20,6 +20,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { SECTIONS } from '../js/sections.js';
+import { _dictionaries } from '../js/i18n.js';
 
 const root = new URL('../', import.meta.url);
 const read = (name) => readFileSync(new URL(name, root), 'utf8');
@@ -358,4 +359,45 @@ test('the retired subtitles are gone from the markup AND from both dictionaries'
       assert.ok(!read(page).includes(dead), `${page} still points at ${dead}`);
     }
   }
+});
+
+// ── The purchase-unit picker has half a row, and a <select> lies about it ─────
+//
+// ⚠️⚠️ A NATIVE <select> TRUNCATES WITHOUT REPORTING AN OVERFLOW. That is the v1.66.0
+// lesson and it caught this release too: putting «Come si acquista» and «Prezzo» side
+// by side halved the picker, and at 320px it rendered «— Nessun prezzo` with the last
+// characters eaten by the native arrow. Every measurement passed — scrollWidth equals
+// clientWidth on a clipped <select> — and only a screenshot showed it.
+//
+// MEASURED IN THE REAL BROWSER, 23 Aug 2026, Manrope 15px at 320px:
+//   the column is 125.3px · padding 24 · border 3 · the native arrow ~20
+//   → 78.7px of room for the text
+// «— Nessun prezzo —» wanted 132.1 and «a volume (litri)» 99.1. Both were clipped.
+// The words were shortened rather than the column widened, because «a volume (litri)»
+// was already the widest thing in a 78.7px box and no ratio makes that fit honestly.
+//
+// This guard is a character budget, which is a proxy — but a proxy that fires. Manrope
+// 15px averages ~7.2px per character, so 11 characters is ~79px: the whole budget.
+test('⚠️ the purchase-unit words fit a half-width select at 320px', () => {
+  const dict = _dictionaries();
+  const KEYS = ['orders.noPrice2', 'price.byWeight', 'price.byVolume', 'price.byPiece'];
+  const BUDGET = 11;
+  const tooLong = [];
+  for (const lang of ['en', 'it']) {
+    for (const key of KEYS) {
+      const word = dict[lang][key];
+      assert.ok(typeof word === 'string' && word.length > 0, `${lang} ${key} is missing`);
+      if (word.length > BUDGET) tooLong.push(`${lang} ${key} = «${word}» (${word.length} chars)`);
+    }
+  }
+  assert.deepEqual(tooLong, [],
+    `these would be silently truncated in the picker at 320px — a <select> reports no `
+    + `overflow, so nothing but a screenshot would show it`);
+});
+
+// Proof the budget can fire, using the exact wording it was written to catch.
+test('and that budget would have caught the wording it replaced', () => {
+  const before = ['— Nessun prezzo —', 'a volume (litri)', 'by volume (litres)'];
+  assert.deepEqual(before.filter(w => w.length <= 11), [],
+    'the retired words must all exceed the budget, or the budget proves nothing');
 });
