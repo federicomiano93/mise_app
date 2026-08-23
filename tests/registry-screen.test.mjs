@@ -20,6 +20,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { SECTIONS } from '../js/sections.js';
+import { SECTIONS as HELP_SECTIONS } from '../js/help-content.js';
 import { _dictionaries } from '../js/i18n.js';
 
 const root = new URL('../', import.meta.url);
@@ -108,7 +109,7 @@ test('⚠️ the ex-VAT warning survives, once, under the pair', () => {
   assert.match(code, /t\('orders\.exVatNote'\)/, 'the note must still be shown');
   assert.equal((code.match(/orders\.exVatNote/g) || []).length, 1,
     'and exactly once — it applies to both boxes, so twice is noise');
-  for (const dict of Object.values(_dictionaries)) {
+  for (const dict of Object.values(_dictionaries())) {
     assert.ok(!/[£€$]/.test(dict['orders.exVatNote'] || ''),
       'the note carries no currency symbol of its own — the venue’s country decides it');
   }
@@ -263,6 +264,15 @@ test('⚠️ the help buttons are actually mounted, or every «?» is an empty s
   const ids = [...code.matchAll(/help: '([a-z-]+)'/g)].map(m => m[1]);
   assert.deepEqual(ids, ['pack-list', 'allergens', 'nutrition'],
     'the three folding sections each carry their own sheet');
+  // ⚠️ AND NOT JUST NAMED — REAL. `ids` is a hand-written list, so deleting an
+  // entry from HELP in help-content.js (mutation M8: the 'pack-list' entry was
+  // removed) left this list unchanged and the test green, while the «?» on the
+  // pack section would mount an EMPTY sheet. Asking the dictionary itself closes
+  // that hole — a removed entry now fails here, not silently on the app.
+  for (const id of ids) {
+    assert.ok(HELP_SECTIONS.includes(id),
+      `help-content.js has no entry for '${id}' — the «?» would open an empty sheet`);
+  }
 });
 
 // ⚠️⚠️ WHAT MAY NOT GO BEHIND THE «?». The rule Federico's request resolves to: a
@@ -283,11 +293,20 @@ test('⚠️⚠️ the findings about THIS pack stay on the screen', () => {
 // re-added here is how the section fills up again one line at a time.
 test('⚠️ the section holds the box and the findings, not the instructions', () => {
   const code = codeOf(FORM);
-  const packSection = code.slice(code.indexOf("t('orders.section.packList')"),
-    code.indexOf("t('orders.section.allergens')"));
-  assert.ok(packSection.length > 100, 'the slice must actually hold the pack section');
+  // ⚠️⚠️ THE WHOLE FILE, NOT A SLICE, AND THAT IS THE WHOLE POINT OF THIS GUARD.
+  // It was written as a slice of the pack section and every slice ever tried has had
+  // a way in behind it. The fold() object literal alone missed suggest(), which is
+  // where packResult is actually filled — mutation M5b walked straight through it.
+  // Widened to start at `function suggest(`, it then missed the DECLARATIONS above:
+  // packBox and packResult are built ~60 lines earlier, so a paragraph declared
+  // there and merely referenced inside the fold body is on the screen with neither
+  // key inside the slice. That was demonstrated, with the suite green.
+  // There is no correct boundary, because a paragraph can be built anywhere in the
+  // file and appended anywhere else. These two keys have NO legitimate use in this
+  // file at all — they live in the «?» sheet — so the honest assertion is that they
+  // do not appear in it, full stop. Same shape as the sibling check below.
   for (const key of ['orders.pack.help', 'orders.pack.stillYours']) {
-    assert.ok(!packSection.includes(key),
+    assert.ok(!code.includes(key),
       `${key} belongs in the «?» sheet, not on the screen — Federico: «c'è scritto troppo»`);
   }
   // The intros above the other two panels went the same way.
