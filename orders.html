@@ -62,7 +62,7 @@
 <link rel="stylesheet" href="auth.css">
 <link rel="stylesheet" href="style.css">
 <link rel="stylesheet" href="orders.css">
-<title>Orders — Misé</title>
+<title data-i18n="title.orders">Orders — Misé</title>
 </head>
 <body data-section="orders">
 <!-- Sign-in cover. It is HERE, in the markup, so it is opaque from the first
@@ -73,7 +73,7 @@
 
 
 <header class="orders-header">
-  <a class="orders-icon-btn" href="index.html" aria-label="Back">
+  <a class="orders-icon-btn" href="index.html" data-i18n="ui.back" data-i18n-attr="aria-label" aria-label="Back">
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
   </a>
   <div class="orders-header-title">
@@ -99,7 +99,7 @@
      you are waiting for. History moved to the bottom bar beside Settings — the same
      move, for the same reason, that "Order lists" made in v1.31.1: an alarm and a
      door are two different things, and a door belongs where the rare actions live. -->
-<nav class="tab-bar" aria-label="Orders sections">
+<nav class="tab-bar" data-i18n="aria.ordersSections" data-i18n-attr="aria-label" aria-label="Orders sections">
   <button class="tab active" id="tab-order-btn" data-i18n="ui.order">Order</button>
   <button class="tab" id="tab-deliveries-btn" data-i18n="orders.deliveries.tab">Incoming</button>
 </nav>
@@ -150,7 +150,7 @@
          typing 4 on Bacon in the flat list is typing 4 in Brakes' order — there is
          no second list to keep in step. "By supplier" is the default and the choice
          is remembered in localStorage. -->
-    <div class="view-switch" id="order-view-switch" role="tablist" aria-label="Order view" hidden>
+    <div class="view-switch" id="order-view-switch" role="tablist" data-i18n="aria.orderView" data-i18n-attr="aria-label" aria-label="Order view" hidden>
       <button class="view-switch-btn active" id="view-by-supplier" type="button" role="tab" aria-selected="true" data-i18n="orders.bySupplier">By supplier</button>
       <button class="view-switch-btn" id="view-all-ingredients" type="button" role="tab" aria-selected="false" data-i18n="ui.ingredients">Ingredients</button>
     </div>
@@ -179,7 +179,7 @@
        EDITOR inside it uses .hist-edit-list, which is in that list and should be. -->
   <div class="history-overlay" id="history-overlay" hidden>
     <header class="orders-header">
-      <button class="orders-icon-btn" id="history-back-btn" type="button" aria-label="Back"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
+      <button class="orders-icon-btn" id="history-back-btn" type="button" data-i18n="ui.back" data-i18n-attr="aria-label" aria-label="Back"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
       <h1 data-i18n="ui.history">History</h1>
     </header>
     <div class="scroll-area">

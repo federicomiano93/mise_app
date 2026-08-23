@@ -55,7 +55,7 @@ export function mountIngredientList(container, ctx) {
     onClick: () => ctx.onFilter?.(true),
   });
   const filterSwitch = el('div', {
-    class: 'view-switch ing-filter', role: 'radiogroup', 'aria-label': 'Which ingredients to show',
+    class: 'view-switch ing-filter', role: 'radiogroup', 'aria-label': t('aria.whichIngredients'),
   }, [allBtn, orderBtn]);
 
   const count = el('p', { class: 'ing-count' });

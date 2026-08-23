@@ -13,19 +13,16 @@ import {
   COUNTRIES,
   countryOf,
   outputLanguage,
-  countryName,
   canPrintLabel,
   labelWord,
   allergenWordIt,
   nutrientWordIt,
-  labelLanguageNote,
-  ingredientNamesNote,
-  noCountryReason,
   allergenGroupName,
   allergenGroupCodes,
 } from '../js/market.js';
 import { ALLERGEN_CODES, ALLERGEN_GROUPS, NUTRIENT_KEYS, allergenLabel } from '../js/allergen-model.js';
 import { _dictionaries } from '../js/i18n.js';
+import { stringsIn } from './helpers/strings-in.mjs';
 
 // ── The unknown country ─────────────────────────────────────────────────────
 
@@ -42,18 +39,24 @@ test('an unknown country produces NO label, and never quietly an English one', (
   }
 });
 
+// ⚠️ THE SENTENCE MOVED, THE PROPERTY DID NOT. It used to be noCountryReason() in
+// js/market.js, in fixed English; it is `label.blocked.noCountry` in the dictionary
+// since 23 Aug 2026, because it is addressed to whoever is holding the phone. What
+// it must SAY is unchanged and is still asserted — in both languages, which the
+// English-only version could not be.
 test('and it says what to do about it rather than what is broken', () => {
-  const reason = noCountryReason();
-  assert.match(reason, /which country/, 'it names the missing fact');
-  assert.match(reason, /owner/, 'and who can supply it');
-  assert.doesNotMatch(reason, /error|invalid|failed/i, 'a missing setting is not a fault');
+  const dict = _dictionaries();
+  const en = dict.en['label.blocked.noCountry'];
+  assert.match(en, /which country/, 'it names the missing fact');
+  assert.match(en, /owner/, 'and who can supply it');
+  for (const lang of ['en', 'it']) {
+    const reason = dict[lang]['label.blocked.noCountry'];
+    assert.ok(reason && reason.length > 40, `${lang} has no reason to show`);
+    assert.doesNotMatch(reason, /error|invalid|failed|errore|non valido/i,
+      'a missing setting is not a fault');
+  }
 });
 
-test('a location with no country says nothing about a language at all', () => {
-  assert.equal(labelLanguageNote({}), '');
-  assert.equal(ingredientNamesNote({}), '');
-  assert.equal(countryName({}), '');
-});
 
 // ── The two countries ───────────────────────────────────────────────────────
 
@@ -76,13 +79,11 @@ test('the language comes from the LOCATION and from nothing else', () => {
   const uk = { country: 'GB', language: 'it', name: 'The Italian Club Bakery' };
   assert.equal(outputLanguage(uk), 'en',
     'an Italian interface must not change what the label prints');
-  assert.match(labelLanguageNote(uk), /produced in English/);
-  assert.match(labelLanguageNote(uk), /United Kingdom/);
+  assert.equal(countryOf(uk), 'GB');
 
   const italy = { country: 'IT', language: 'en' };
   assert.equal(outputLanguage(italy), 'it');
-  assert.match(labelLanguageNote(italy), /produced in Italian/);
-  assert.match(labelLanguageNote(italy), /Italy/);
+  assert.equal(countryOf(italy), 'IT');
 });
 
 // ── The words ───────────────────────────────────────────────────────────────
@@ -183,21 +184,9 @@ test('salt is salt, and saturates say what they are of', () => {
 // "Contiene: Wheat" — half translated, which is worse than either language alone.
 // Saying so on the screen is the only honest option available.
 test('the screen admits it cannot translate the ingredient names', () => {
-  assert.match(ingredientNamesNote({ country: 'GB' }), /does not translate/);
-  assert.match(ingredientNamesNote({ country: 'IT' }), /does not translate/);
-});
-
-// ⚠️ BOTH NOTES ARE INTERFACE TEXT, AND THE SCREENSHOT IS WHAT PROVED IT. The
-// second one returned the OUTPUT language at first, so the explanatory block came
-// out half English and half Italian — one paragraph, two languages, which reads
-// as a mistake because it is one. Both are addressed to the person MAKING the
-// label, never to the consumer reading it.
-test('the two notes are in the same language as each other', () => {
-  for (const country of ['GB', 'IT']) {
-    const location = { country };
-    assert.match(labelLanguageNote(location), /^This label is produced/, country);
-    assert.match(ingredientNamesNote(location), /^The ingredient names/, country);
-  }
+  const dict = _dictionaries();
+  assert.match(dict.en['label.ingredientNamesNote'], /does not translate/);
+  assert.match(dict.it['label.ingredientNamesNote'], /non li traduce/);
 });
 
 // ── The two halves have to agree ────────────────────────────────────────────
@@ -274,6 +263,102 @@ test('the copied text is in the same language as the label on screen', () => {
   assert.match(copy, /nutrientName\(n, lang\)/);
   assert.doesNotMatch(copy, /'Ingredients: '|'Typical values|'May contain:/,
     'no English left hard-coded in the copied label');
+});
+
+// ── The screen AROUND the label follows the reader ───────────────────────────
+//
+// ⚠️⚠️ THREE SENTENCES AND THREE BUTTONS SAT IN FIXED ENGLISH UNTIL 23 Aug 2026,
+// on the one screen a venue in Italy uses to produce a legal document. They were
+// in js/market.js — which may not import the dictionary — so nothing could have
+// translated them where they stood. These tests pin the new arrangement, because
+// the obvious "fix" is to move a word back and nothing would go red.
+
+// ⚠️⚠️ THE FIRST VERSION OF THIS CHECK GUARDED NOTHING, and it is worth recording
+// because it looked exactly right. It used `/['"`]([^'"`]{25,})['"`]/` to find long
+// string literals — which instead pairs the CLOSING quote of one string with the
+// OPENING quote of the next, so every "match" was the CODE in between. It reported
+// sixteen hits on this file, fifteen of them fragments like «},\n});\n\nexport
+// function labelWord(key, lang) {», and never once looked at a real string. A
+// deliberate English sentence added to js/market.js sailed straight past it.
+//
+// Caught by mutation-testing the file that owns the guard — the v1.60.1 rule, which
+// is the only reason it was found at all.
+test('js/market.js holds words, never sentences', () => {
+  const sentences = [];
+  read('js/market.js').split(/\r?\n/).forEach((line, i) => {
+    for (const literal of stringsIn(line)) {
+      if (literal.length < 25) continue;
+      if (/\b(the|this|that|because|and|is|are|not|you|which|when)\b/i.test(literal)) {
+        sentences.push(`js/market.js:${i + 1}  ${literal.slice(0, 80)}`);
+      }
+    }
+  });
+  assert.deepEqual(sentences, [],
+    'these are read by a person and cannot be translated from here — market.js may not '
+    + 'import the dictionary, so a sentence in it is a sentence stuck in English');
+});
+
+// ⚠️ AND THE CHECK ITSELF IS PROVED TO FIRE, because the version it replaces could not.
+test('that check can actually see a sentence in a file', () => {
+  const line = "export const NOTE = 'This label is produced in the language of the country.';";
+  const hits = stringsIn(line).filter(s => s.length >= 25
+    && /\b(the|this|that|because|and|is|are|not|you|which|when)\b/i.test(s));
+  assert.equal(hits.length, 1, 'the scan must see a real string literal');
+  // …and must NOT see the code between two strings, which is how it failed before.
+  const twoStrings = "  const a = 'GB'; const somethingVeryLongIndeed = 'IT';";
+  assert.deepEqual(stringsIn(twoStrings), ['GB', 'IT'],
+    'a quote must pair with its own closing quote, never with the next string’s opening one');
+});
+
+// ⚠️ AND THE HALF A "no sentences" CHECK CANNOT SEE: the sentences must exist
+// SOMEWHERE. Deleting them satisfies the test above perfectly — the same hole that
+// let four food-word mutations through on 23 Aug 2026. Both are still shown, both
+// still come from the dictionary, and both exist in both languages.
+test('the label screen still explains itself, from the dictionary, in both languages', () => {
+  const view = read('js/catalogue/label-view.js');
+  assert.match(view, /text: t\('label\.languageNote', \{/,
+    'the sentence saying which language the label is in must still be drawn');
+  assert.match(view, /text: t\('label\.ingredientNamesNote'\)/,
+    'and the one admitting the app does not translate ingredient names');
+  const dict = _dictionaries();
+  for (const key of ['label.languageNote', 'label.ingredientNamesNote', 'label.blocked.noCountry',
+    'label.shows.allergens', 'label.shows.nutrition', 'label.shows.both', 'label.untitled']) {
+    for (const lang of ['en', 'it']) {
+      assert.ok(dict[lang][key] && dict[lang][key].length > 1, `${key} is missing from ${lang}`);
+    }
+    assert.notEqual(dict.en[key], dict.it[key], `${key} looks copied rather than translated`);
+  }
+});
+
+// ⚠️⚠️ THE SLOT THAT COULD RE-WIRE THE TWO LANGUAGES. The sentence names the label's
+// language inside interface prose, so it interpolates `lang` — which is
+// outputLanguage(location), the COUNTRY. Filling it from currentLanguage() would make
+// the screen claim, in Italian, that an English label is in Italian: a false statement
+// about a legal document, printed next to it.
+test('the sentence names the label’s OWN language, taken from the country', () => {
+  const view = read('js/catalogue/label-view.js');
+  const start = view.indexOf("t('label.languageNote'");
+  const call = view.slice(start, start + 240);
+  assert.match(call, /language: t\(`language\.\$\{lang\}\.inSentence`\)/,
+    'the language named is the LABEL’s — `lang` comes from outputLanguage()');
+  assert.match(call, /country: t\(`country\.\$\{countryOf\(location\)\}\.in`\)/,
+    'and the country is the venue’s, phrased by the interface');
+});
+
+// ⚠️ THE BUTTONS CARRY KEYS BECAUSE THE CONSTANT IS EVALUATED AT MODULE LOAD — the
+// v1.57.0 rule. tests/frozen-phrases.test.mjs would catch a t() put back up there;
+// this catches the other direction, a plain English word put back.
+test('the three buttons above the label carry keys, not words', () => {
+  const view = read('js/catalogue/label-view.js');
+  const start = view.indexOf('const SHOW_KEYS');
+  const block = view.slice(start, view.indexOf('});', start));
+  assert.ok(start !== -1 && block.length > 40, 'SHOW_KEYS must exist and be non-empty');
+  for (const shows of ['allergens', 'nutrition', 'both']) {
+    assert.match(block, new RegExp(`${shows}: 'label\\.shows\\.${shows}'`),
+      `${shows} must be a key — a word here is frozen in the language the page loaded in`);
+  }
+  assert.match(view, /btn\.textContent = t\(SHOW_KEYS\[key\]\)/,
+    'and the lookup happens when the switch is painted, not when the module loads');
 });
 
 // ── The fourteen groups, for the law card on the allergen sheet ──────────────

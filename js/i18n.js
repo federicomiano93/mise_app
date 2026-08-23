@@ -290,6 +290,68 @@ const DICTIONARIES = Object.freeze({
     'section.pastries.sub': 'The seven weekday proving lists',
     'section.foodcost.sub': 'Prices, margins and labels',
 
+    // ── What each page calls itself in the browser tab ───────────────────────
+    // ⚠️ THE INSTALLED APP'S NAME IS NOT HERE, and deliberately. That comes from
+    // manifest.json, which a phone reads once WHEN THE APP IS INSTALLED and never
+    // again — it cannot be per-language, and changing it costs a re-install by hand
+    // on every phone (v1.56.1, v1.58.1). These are the page titles, which follow the
+    // reader like everything else drawn on screen.
+    'title.calculator': 'Dough calculator — Misé',
+    'title.catalogue': 'Recipe catalogue — Misé',
+    'title.foodcost': 'Food cost — Misé',
+    'title.orders': 'Orders — Misé',
+    'title.pastries': 'Pastries — Misé',
+    'title.suppliers': 'Suppliers & ingredients — Misé',
+
+    // ── What a screen reader says, which nothing on screen shows ─────────────
+    // ⚠️ INVISIBLE, AND THEREFORE THE LAST THING ANYBODY NOTICES. Every icon button
+    // in this app carries an aria-label and every one of them was English: somebody
+    // using VoiceOver in Italian heard «Back», «Home», «Main sections» on every
+    // screen. No screenshot can show this and no measurement can find it.
+    'aria.mainSections': 'Main sections',
+    'aria.ordersSections': 'Orders sections',
+    'aria.orderView': 'Order view',
+    'aria.dayOfWeek': 'Day of the week',
+    'aria.allMyBusinesses': 'All my businesses',
+    'aria.editThisDay': 'Edit this day',
+    'aria.editRecipe': 'Edit recipe',
+    'aria.whichIngredients': 'Which ingredients to show',
+    'aria.whichSuppliers': 'Which suppliers to show',
+    'aria.ingredientsFrom': 'Ingredients from {supplier}',
+
+    // ── The install guide ────────────────────────────────────────────────────
+    // ⚠️ THE WHOLE PAGE WAS ENGLISH — every word of it — because it is the one page
+    // reached BEFORE signing in, so no venue is open and nothing was setting a
+    // language. It follows the PHONE (navigator.language), which is the only fact
+    // available here and is also the right one: these steps name buttons in the
+    // phone's OWN menus, and a phone set to Italian shows «Condividi», not «Share».
+    'ig.pageTitle': 'Install Misé',
+    'ig.installTheApp': 'Install the app',
+    'ig.whichDevice': 'Which device are you using?',
+    'ig.device.ios': 'iPhone / iPad',
+    'ig.device.android': 'Android',
+    'ig.device.desktop': 'Computer',
+    'ig.yourDevice': 'your device',
+    'ig.changeDevice': '← Change device',
+    'ig.qrAlt': 'QR code to open the Misé app',
+    'ig.qrCaption': 'Or scan this with your phone camera to open the app',
+    'ig.safari.title': 'Open this page in Safari to install.',
+    'ig.safari.body': 'On iPhone the app can only be added to the Home Screen from Safari — other browsers (like Chrome) cannot install it.',
+    'ig.safari.how': 'Tap the ••• menu and choose “Open in Safari”, or copy the link and paste it in Safari.',
+    'ig.copyLink': 'Copy link',
+    'ig.ios.1': 'Open the link in Safari (it must be Safari).',
+    'ig.ios.2': 'Tap the Share button (the square with an up arrow).',
+    'ig.ios.3': 'Scroll down and tap “Add to Home Screen”.',
+    'ig.ios.4': 'Tap “Add” — the app icon appears on your home screen.',
+    'ig.android.1': 'Open the link in Chrome.',
+    'ig.android.2': 'Tap the “Install app” button if it appears, or the ⋮ menu (top right).',
+    'ig.android.3': 'Tap “Install app” / “Add to Home screen”.',
+    'ig.android.4': 'Confirm — the app icon appears.',
+    'ig.desktop.1': 'Open the link in Chrome or Edge.',
+    'ig.desktop.2': 'Click the install icon in the address bar (a small screen with a ⊕), or the menu → “Install Misé”.',
+    'ig.desktop.3': 'Confirm — it opens in its own window and gets a shortcut.',
+    'ig.note': 'You only do this once per device. After that, just tap the app icon — like any other app.',
+
     // ── The app's own customers ─────────────────────────────────────────────
     'bz.title': 'Customer businesses',
     'bz.new': 'New business',
@@ -400,7 +462,15 @@ const DICTIONARIES = Object.freeze({
     // an untranslated sentence, which is worse than either language alone.
     'orders.sendDay': 'Send {day}',
     'orders.notPlacedFor': '{supplier} — order not placed',
-    'orders.typedWhen': '{items} typed {when}',
+    // ⚠️ ONE SENTENCE, NOT TWO NESTED. It was `t('orders.typedWhen', { items: t(
+    // 'orders.itemsCount', { n }) })` — a count phrase dropped into a sentence whose
+    // PARTICIPLE has to agree with it. English does not notice; Italian read «1 voce
+    // scritte» on the Orders screen, which is simply wrong. Seen in a screenshot after
+    // every check had passed.
+    'orders.typedWhen': {
+      one: '{n} item typed {when}',
+      other: '{n} items typed {when}',
+    },
     'orders.placedWhen': 'Placed {when}',
     'orders.updateOrderFor': 'Update {supplier}’s order {day}?',
     'orders.deleteOrderFor': 'Delete {supplier}’s order {day}?\n\nIt is removed from History for good and cannot be recovered. The suggested order quantities learn from these records, so they will change.',
@@ -580,6 +650,26 @@ const DICTIONARIES = Object.freeze({
     'orders.notYet': 'Not yet',
     'orders.nothingLeftToRecord': 'Nothing left to record — those rows are already placed or empty.',
     'orders.tryAgain': 'Try again.',
+    // ⚠️ ADDED 23 Aug 2026. Every one of these was written straight into the code, so
+    // the Orders screen — the one somebody works on all day — answered in English on
+    // an Italian venue. None of the four i18n suites looks at a template literal
+    // handed to setStatus() or built into a confirm message.
+    'orders.markPlacedFor': 'Mark {names} as placed? The order goes to History and the rows are cleared.',
+    'orders.alreadyRecordedThatDay': '{names} already has an order recorded for that day — these items will be ADDED to it.',
+    'orders.notRecordedRowsStillThere': '{names} — NOT recorded, the rows are still there.',
+    'orders.andSaved': '{names} saved.',
+    'orders.orderSavedToHistory': '{names} — order saved to history ✓',
+    'orders.savedButNotCleared': '{name} — order saved to History, but the rows could not be cleared. Reload the page; do NOT record it again.',
+    'orders.quantitiesClearedFor': 'Quantities cleared for {n} suppliers ✓',
+    'orders.checkExtraDigit': 'Check it is not an extra digit.',
+    'orders.liveConnectionLost': 'Lost the live connection for {what}. What you see may be out of date — reload the page.',
+    // ⚠️ A REAL PLURAL. It was `${days} day${days === 1 ? '' : 's'}` — English's rule
+    // written into the code, which cannot be translated by moving either half.
+    'orders.noOrdersInTheLast': {
+      one: 'No orders in the last day.',
+      other: 'No orders in the last {n} days.',
+    },
+    'orders.weekOf': 'Week of {day}',
     'orders.orderPlaced': 'Order placed',
     'orders.noQuantitiesTypedYet': 'No quantities typed yet. Add them first.',
     'orders.recordTheseOrders': 'Record these orders',
@@ -984,8 +1074,54 @@ const DICTIONARIES = Object.freeze({
     'cat.addStep': '+ Add step',
     'cat.noLongerInThe': 'No longer in the recipe',
     'cat.timeIsUpJust': 'Time is up — just now.',
-    'cat.timeWasUp1': 'Time was up 1 minute ago.',
-    'cat.timeWasUpOver': 'Time was up over an hour ago.',
+    // ⚠️ ADDED 23 Aug 2026 — the Catalogue's last English, and six of these were
+    // plurals built by hand out of a ternary, which is English's rule written into
+    // the code. Intl chooses the form now, in whatever language the phrase came from.
+    'cat.progress': 'Step {i} of {n}',
+    // ⚠️ TWO FORMS, NOT ONE FORM AND .toLowerCase(). Three call sites lower-cased the
+    // sentence above to drop it into the middle of another one. That is reshaping a
+    // translated word — it happens to work for Italian and is the kind of thing that
+    // silently stops working for the next language. Same reasoning, and the same
+    // answer, as orders.per100G beside its lower-case twin in js/market.js.
+    'cat.progress.inline': 'step {i} of {n}',
+    'cat.resumeGuidedMix': 'Resume the guided mix — {progress}',
+    'cat.calculateFor': 'Calculate {recipe} for {amount}?',
+    'cat.copyIntoCalculator': 'Copy “{name}” into the Calculator? You can then tweak it there without changing the catalogue.',
+    'cat.partWayThrough': 'You were part-way through “{name}” — {progress}.',
+    'cat.deleteRecipeQ': 'Delete “{name}”? This cannot be undone.',
+    'cat.thisRecipe': 'this recipe',
+    'cat.recipeWord': 'recipe',
+    'cat.nonScalableNote': {
+      one: 'Note: {list} uses a unit the Calculator can’t scale (it works in grams only) and won’t be imported.',
+      other: 'Note: {list} use a unit the Calculator can’t scale (it works in grams only) and won’t be imported.',
+    },
+    'cat.updatedInCalculator': '“{name}” updated in the Calculator.',
+    'cat.addedToCalculator': '“{name}” added to the Calculator.',
+    'cat.couldNotSaveRecipe': 'Couldn’t save “{name}” — check your connection.',
+    'cat.stepWillBeRemoved': 'Step {n} will be removed from the procedure.',
+    'cat.procedureCanHold': 'A procedure can hold {n} steps.',
+    'cat.stepsAndTimers': {
+      one: '{n} step · {duration} of timers',
+      other: '{n} steps · {duration} of timers',
+    },
+    'cat.saveStepsFor': {
+      one: 'Save {n} step for “{name}”?',
+      other: 'Save {n} steps for “{name}”?',
+    },
+    'cat.noProcedureFor': '“{name}” will have no guided procedure.',
+    'cat.timeWasUpMinutes': {
+      one: 'Time was up 1 minute ago.',
+      other: 'Time was up {n} minutes ago.',
+    },
+    'cat.timeWasUpHours': {
+      one: 'Time was up over an hour ago.',
+      other: 'Time was up over {n} hours ago.',
+    },
+    'cat.youAreOn': 'You are on {progress}. It will be waiting where you left it.',
+    'cat.notPricedYet': {
+      one: '{n} ingredient is not priced yet — this cost is partial',
+      other: '{n} ingredients are not priced yet — this cost is partial',
+    },
     'cat.timeIsUp': 'Time is up.',
     'cat.startTheTimer': 'Start the timer',
     'cat.skipTheTimer': 'Skip the timer',
@@ -1034,6 +1170,10 @@ const DICTIONARIES = Object.freeze({
     'fc.piecesPerBatch': 'Pieces per batch',
     'fc.howManyFinishedPieces': 'How many finished pieces one batch of the recipes above makes.',
     'fc.sellingPriceIncludingVat': 'Selling price including VAT',
+    'fc.name': 'Name',
+    'fc.packaging': 'Packaging',
+    'fc.sold': 'Sold',
+    'fc.sellingPriceVat': 'Selling price, including VAT ({currency})',
     'fc.anotherRate': 'Another rate…',
     'fc.anotherVatRateAs': 'Another VAT rate, as a percentage',
     'fc.foodCostTargetAs': 'Food cost target, as a percentage',
@@ -1178,6 +1318,50 @@ const DICTIONARIES = Object.freeze({
     'calc.noWhatsappListsOr': 'No WhatsApp lists or clients yet. Add one in Settings → WhatsApp.',
     'calc.thisListHasNo': 'This list has no clients yet. Add some in Settings → WhatsApp.',
     'calc.sendOrder': 'Send order',
+    // ⚠️ ADDED 23 Aug 2026 — the client-ordering screens, written straight into the
+    // code. Four of them built an English plural by hand, which is English's rule
+    // written into a ternary and cannot be translated by moving either half.
+    'calc.co.ordersChanged': {
+      one: '{n} order has CHANGED since you used it',
+      other: '{n} orders have CHANGED since you used them',
+    },
+    'calc.co.ordersReceived': {
+      one: '{n} order received from your clients',
+      other: '{n} orders received from your clients',
+    },
+    'calc.co.justNow': 'just now',
+    'calc.co.minAgo': '{n} min ago',
+    'calc.co.hoursAgo': { one: '{n} hour ago', other: '{n} hours ago' },
+    'calc.co.showOlder': 'Show older orders (before the last {n} days)',
+    'calc.co.arrivedLate': 'This arrived after {cutoff}, the deadline for that day. You can still use it — but it came in late.',
+    'calc.co.clientGone': '{client} is no longer in your address book, so there are no fields to fill in.',
+    'calc.co.thisClient': 'This client',
+    'calc.co.allLocked': {
+      one: '{names} has already been confirmed, so the quantities are locked. Tap Edit on the tab first, then put the order in.',
+      other: '{names} have already been confirmed, so the quantities are locked. Tap Edit on the tab first, then put the order in.',
+    },
+    'calc.co.someLocked': {
+      one: '{names} is confirmed and will be left alone.',
+      other: '{names} are confirmed and will be left alone.',
+    },
+    'calc.co.putOrderIn': 'Put {client}’s order in the calculator?',
+    'calc.co.closeOrdersAt': 'Close orders at {time} the day before? Every client sees this straight away.',
+    'calc.prefill.window.both': 'yesterday or today',
+    'calc.prefill.window.today': 'today',
+    'calc.prefill.window.yesterday': 'yesterday',
+    'calc.prefill.nothingLogged': 'Nothing logged for these clients {when} — type the quantities.',
+    'calc.prefill.filled': {
+      one: 'One quantity filled in from what you logged {when} — check it before sending.',
+      other: '{n} quantities filled in from what you logged {when} — check them before sending.',
+    },
+    'calc.shareText': 'Hello {client}, you can send your order to {from} here: {link}',
+    'calc.us': 'us',
+    'calc.linkCopiedFor': 'The ordering link for {client} is copied. Paste it into a message.',
+    'calc.copyThisLinkFor': 'Copy this link and send it to {client}:\n\n{link}',
+    'calc.clientCanSendOrders': '{client} can send orders straight into the app. Anyone with the link can order as this client, so send it to them and no one else.',
+    'calc.replaceLinkWarning': '{client}’s current link will stop working immediately, including on a phone that is using it right now. Use “Copy link” instead if you only want to send it again.',
+    'calc.stopClientOrdering': 'Stop {client} sending orders through the app? Their link will stop working. Orders they have already sent are kept.',
+    'calc.alreadyInMessage': '“{name}” is already in this message.',
     'calc.untitledList': 'Untitled list',
     'calc.unnamedClient': 'Unnamed client',
     'calc.noOrdersToShare': 'No orders to share',
@@ -1330,6 +1514,50 @@ const DICTIONARIES = Object.freeze({
     'past.confirm': 'Confirm',
     'past.records': 'Records',
     'past.thisRow': 'this row',
+    // ⚠️ ADDED 23 Aug 2026. Six of these named a WEEKDAY straight out of the data —
+    // `Edit ${day}?` — which is the document id, not a word for a person. Every one
+    // goes through weekdayLabel() now, exactly as the rest of this screen already did.
+    'past.newQuantityFor': 'New quantity for {name}',
+    'past.confirmNewQuantityFor': 'Confirm the new quantity for {name}',
+    'past.hint.typeANumber': 'type a number',
+    'past.hint.sameAsNow': 'same as now',
+    'past.hint.atLeastOne': 'must be at least 1',
+    'past.hint.tooMany': 'too many',
+    'past.onListTwice': '{name} is on this list twice.',
+    'past.howMany': 'How many {name}?',
+    'past.mostItCanHold': '{n} is the most this can hold.',
+    'past.pastryPlaceholder': 'Pastry',
+    'past.couldNotRecord': 'Couldn’t record {day} — check your connection.',
+    'past.removeRecordFor': 'Remove the record for {day}, {date}',
+    'past.removeRecordForQ': 'Remove the record for {day}, {date}? This cannot be undone.',
+    'past.editDayQ': 'Edit {day}?',
+    'past.alreadyRecordedTonight': '{day} is already recorded for tonight. Edit these quantities?',
+    'past.keepAsRecord': 'Keep this list as a record for {day}?',
+    'past.nothingToProveRecord': '{day} has nothing to prove. Record that?',
+    'past.tonightsRecordReplaced': 'Tonight’s record for {day} will be replaced.',
+    'past.willShowAsDone': '{day} will show as done. You can still change it — it will ask first.',
+    'past.couldNotSaveDay': 'Couldn’t save {day} — check your connection.',
+    'fc.perKg': 'per kg',
+    'fc.perPiece': 'per piece',
+    'fc.answerBasis': '{cost} to make {unit}  ·  {net} net  ·  {margin} margin',
+    'fc.deleteProductQ': 'Delete “{name}”? This cannot be undone, and its margin history goes with it.',
+    'fc.thisProduct': 'this product',
+    'fc.productWord': 'product',
+    'fc.histDetail': '{cost} cost  ·  {price} at {vat}% VAT',
+    'fc.couldNotSaveProduct': 'Couldn’t save “{name}” — check your connection.',
+    'nc.sellsIn': 'Sells in: {where}.',
+    'nc.linkWorksOnce': 'The link works once and has {expiry}.',
+    'nc.sectionsLine': 'Sections: {list}.',
+    'nc.readyAndYours': '{name} is ready, and it is yours.',
+    'nc.ready': '{name} is ready.',
+    'nc.openMyBusinesses': 'Open my businesses',
+    'nc.linkCopiedFor': 'The link for {name} is copied. Paste it into a message to them.',
+    'nc.copyThisLinkFor': 'Copy this link and send it to {name}:\n\n{link}',
+    'co.cutoffNote': 'Orders for a day close at {time} the day before. You can change your order until then.',
+    'co.cutoffClosed': 'Orders for a day close at {time} the day before. Please try again later.',
+    'help.noOrdersInLastDays': 'No orders in the last {n} days. Older ones are still kept — nothing is ever deleted.',
+    'help.passwordTooShort': 'Make it at least {n} characters — length is what keeps it safe.',
+    'aria.whatIs': 'What is {screen}?',
     'past.nothingToProveFor': 'Nothing to prove for {day} yet.',
     'past.removeRowFrom': 'Remove {name} from {day}?',
     'past.saveDay': 'Save {day}?',
@@ -1349,6 +1577,11 @@ const DICTIONARIES = Object.freeze({
     // `ui.` rather than in a feature namespace because four features already want
     // them, and a fifth copy is a fifth thing to translate.
     'ui.back': 'Back',
+    'ui.send': 'Send',
+    // ⚠️ THE JOINER IS A WORD TOO. `names.join(' and ')` and listNames() both wrote
+    // English grammar into the code, in three places.
+    'ui.listPair': '{a} and {b}',
+    'aria.recipe': 'Recipe',
     'ui.cancel': 'Cancel',
     'ui.delete': 'Delete',
     // ⚠️ THE BUTTON WORDS THE DIALOGS USE. They were written straight into 30-odd
@@ -1661,8 +1894,9 @@ const DICTIONARIES = Object.freeze({
     // language on screen, so there it is «inglese», not «English».
     'language.en.inSentence': 'English',
     'language.it.inSentence': 'Italian',
-    // ⚠️ AND SO IS A COUNTRY'S NAME. countryName() in js/market.js stays English
-    // because it belongs to the label side; this is the interface's own copy.
+    // ⚠️ AND SO IS A COUNTRY'S NAME. js/market.js used to carry its own English
+    // copy (countryName); it was deleted on 23 Aug 2026 once its last caller moved
+    // here, because a name nobody translates is a name that reaches a screen.
     'country.GB': 'the United Kingdom',
     'country.IT': 'Italy',
     // ⚠️ THE WHOLE PREPOSITIONAL PHRASE, ONE PER COUNTRY. Italian takes the
@@ -1694,10 +1928,37 @@ const DICTIONARIES = Object.freeze({
     'label.copy': 'Copy the text',
     'label.copied': 'Copied',
     'label.copyFailed': 'Could not copy — select the text above instead',
+    // ⚠️ THE THREE BUTTONS ABOVE THE LABEL. They are interface — they say what to
+    // tap, not what is in the food — so they follow the screen. They lived in a
+    // module-level SHOW_LABELS constant in js/catalogue/label-view.js, which is the
+    // v1.57.0 shape exactly: resolved once, before any venue is open. The constant
+    // now carries these KEYS and the lookup happens when the switch is painted.
+    'label.shows.allergens': 'Allergens',
+    'label.shows.nutrition': 'Nutrition',
+    'label.shows.both': 'Both',
+    // What the card is headed when the recipe has no name yet.
+    'label.untitled': 'Recipe',
+    // ⚠️ MOVED OUT OF js/market.js ON 23 Aug 2026, WHERE THEY WERE FIXED ENGLISH.
+    // All three are addressed to the person MAKING the label, never to the customer
+    // reading it, so they follow the interface — and market.js may not import this
+    // dictionary at all, which is why they had to move rather than be wrapped.
+    //
+    // ⚠️ {country} IS THE WHOLE PREPOSITIONAL PHRASE (`country.GB.in`), not the bare
+    // name: Italian takes the article for one and not the other. Same shape as
+    // `lang.labels`, which says the same thing on the language screen.
+    'label.languageNote': 'This label is produced in {language} because this business sells {country}.',
+    'label.ingredientNamesNote': 'The ingredient names are the ones you typed — the app does not translate them.',
+    'label.blocked.noCountry': 'No label can be made yet: nobody has said which country this business sells in, and that decides the language the label must be printed in. The owner can set it when the business is created.',
 
 
     // ── The CLIENT's own ordering page ─────────────────────────────────────
     // ⚠️ IT FOLLOWS THE COUNTRY, NOT THE INTERFACE SETTING — see order-main.js.
+    // ⚠️ THE BROWSER TAB AND THE STATE BEFORE THE LINK IS READ. The two sentences
+    // below are the only words on order.html written into the markup; everything
+    // else the client sees is built by order-main.js. They stayed English for every
+    // client of every venue until 23 Aug 2026.
+    'co.pageTitle': 'Send your order',
+    'co.openTheLinkSent': 'Open the ordering link the bakery sent you.',
     'co.youCanChangeYour': 'You can change your order until the bakery starts making it.',
     'co.thisLinkIsIncomplete': 'This link is incomplete',
     'co.askTheBakeryTo': 'Ask the bakery to send you your ordering link again.',
@@ -1901,6 +2162,54 @@ const DICTIONARIES = Object.freeze({
     'section.pastries.sub': 'Le sette liste di lievitazione della settimana',
     'section.foodcost.sub': 'Prezzi, margini ed etichette',
 
+    'title.calculator': 'Calcolatore impasti — Misé',
+    'title.catalogue': 'Ricettario — Misé',
+    'title.foodcost': 'Food cost — Misé',
+    'title.orders': 'Ordini — Misé',
+    'title.pastries': 'Paste — Misé',
+    'title.suppliers': 'Fornitori e ingredienti — Misé',
+
+    'aria.mainSections': 'Sezioni principali',
+    'aria.ordersSections': 'Sezioni degli ordini',
+    'aria.orderView': 'Vista dell’ordine',
+    'aria.dayOfWeek': 'Giorno della settimana',
+    'aria.allMyBusinesses': 'Tutte le mie attività',
+    'aria.editThisDay': 'Modifica questo giorno',
+    'aria.editRecipe': 'Modifica ricetta',
+    'aria.whichIngredients': 'Quali ingredienti mostrare',
+    'aria.whichSuppliers': 'Quali fornitori mostrare',
+    'aria.ingredientsFrom': 'Ingredienti di {supplier}',
+
+    // ⚠️ I NOMI DEI PULSANTI SONO QUELLI CHE IL TELEFONO MOSTRA DAVVERO in italiano
+    // («Condividi», «Aggiungi alla schermata Home»): la guida segue la lingua del
+    // telefono, quindi le due cose sono d’accordo per costruzione.
+    'ig.pageTitle': 'Installa Misé',
+    'ig.installTheApp': 'Installa l’app',
+    'ig.whichDevice': 'Che dispositivo stai usando?',
+    'ig.device.ios': 'iPhone / iPad',
+    'ig.device.android': 'Android',
+    'ig.device.desktop': 'Computer',
+    'ig.yourDevice': 'il tuo',
+    'ig.changeDevice': '← Cambia dispositivo',
+    'ig.qrAlt': 'Codice QR per aprire l’app Misé',
+    'ig.qrCaption': 'Oppure inquadra questo con la fotocamera del telefono per aprire l’app',
+    'ig.safari.title': 'Apri questa pagina in Safari per installare.',
+    'ig.safari.body': 'Su iPhone l’app si può aggiungere alla schermata Home solo da Safari — gli altri browser (come Chrome) non riescono a installarla.',
+    'ig.safari.how': 'Tocca il menu ••• e scegli “Apri in Safari”, oppure copia il link e incollalo in Safari.',
+    'ig.copyLink': 'Copia il link',
+    'ig.ios.1': 'Apri il link in Safari (dev’essere Safari).',
+    'ig.ios.2': 'Tocca il pulsante Condividi (il quadrato con la freccia in su).',
+    'ig.ios.3': 'Scorri in basso e tocca “Aggiungi alla schermata Home”.',
+    'ig.ios.4': 'Tocca “Aggiungi” — l’icona dell’app compare nella schermata Home.',
+    'ig.android.1': 'Apri il link in Chrome.',
+    'ig.android.2': 'Tocca il pulsante “Installa app” se compare, oppure il menu ⋮ (in alto a destra).',
+    'ig.android.3': 'Tocca “Installa app” / “Aggiungi a schermata Home”.',
+    'ig.android.4': 'Conferma — l’icona dell’app compare.',
+    'ig.desktop.1': 'Apri il link in Chrome o Edge.',
+    'ig.desktop.2': 'Clicca l’icona di installazione nella barra degli indirizzi (un piccolo schermo con un ⊕), oppure il menu → “Installa Misé”.',
+    'ig.desktop.3': 'Conferma — si apre in una finestra sua e ottiene un collegamento.',
+    'ig.note': 'Lo fai una volta sola per dispositivo. Dopo, tocchi l’icona dell’app — come qualsiasi altra app.',
+
     'bz.title': 'Attività dei clienti',
     'bz.new': 'Nuova attività',
     'bz.hint': 'I tuoi locali non sono qui — stanno dietro a “Le mie attività”.',
@@ -1977,7 +2286,10 @@ const DICTIONARIES = Object.freeze({
 
     'orders.sendDay': 'Manda {day}',
     'orders.notPlacedFor': '{supplier} — ordine non effettuato',
-    'orders.typedWhen': '{items} scritte {when}',
+    'orders.typedWhen': {
+      one: '{n} voce scritta {when}',
+      other: '{n} voci scritte {when}',
+    },
     'orders.placedWhen': 'Effettuato {when}',
     'orders.updateOrderFor': 'Aggiornare l’ordine di {supplier} {day}?',
     'orders.deleteOrderFor': 'Eliminare l’ordine di {supplier} {day}?\n\nSparisce dallo Storico per sempre e non si può recuperare. Le quantità suggerite imparano da questi registri, quindi cambieranno.',
@@ -2127,6 +2439,20 @@ const DICTIONARIES = Object.freeze({
     'orders.notYet': 'Non ancora',
     'orders.nothingLeftToRecord': 'Non resta niente da registrare — quelle righe sono già fatte o vuote.',
     'orders.tryAgain': 'Riprova.',
+    'orders.markPlacedFor': 'Segnare {names} come fatto? L’ordine va nello Storico e le righe si azzerano.',
+    'orders.alreadyRecordedThatDay': '{names} ha già un ordine registrato per quel giorno — questi articoli ci verranno AGGIUNTI.',
+    'orders.notRecordedRowsStillThere': '{names} — NON registrato, le righe sono ancora lì.',
+    'orders.andSaved': '{names} salvato.',
+    'orders.orderSavedToHistory': '{names} — ordine salvato nello storico ✓',
+    'orders.savedButNotCleared': '{name} — ordine salvato nello Storico, ma non è stato possibile azzerare le righe. Ricarica la pagina; NON registrarlo di nuovo.',
+    'orders.quantitiesClearedFor': 'Quantità azzerate per {n} fornitori ✓',
+    'orders.checkExtraDigit': 'Controlla che non ci sia una cifra di troppo.',
+    'orders.liveConnectionLost': 'Persa la connessione dal vivo per {what}. Quello che vedi potrebbe non essere aggiornato — ricarica la pagina.',
+    'orders.noOrdersInTheLast': {
+      one: 'Nessun ordine nell’ultimo giorno.',
+      other: 'Nessun ordine negli ultimi {n} giorni.',
+    },
+    'orders.weekOf': 'Settimana del {day}',
     'orders.orderPlaced': 'Ordine fatto',
     'orders.noQuantitiesTypedYet': 'Ancora nessuna quantità inserita. Aggiungile prima.',
     'orders.recordTheseOrders': 'Registra questi ordini',
@@ -2504,8 +2830,46 @@ const DICTIONARIES = Object.freeze({
     'cat.addStep': '+ Aggiungi passaggio',
     'cat.noLongerInThe': 'Non è più nella ricetta',
     'cat.timeIsUpJust': 'Tempo scaduto — proprio ora.',
-    'cat.timeWasUp1': 'Il tempo è scaduto 1 minuto fa.',
-    'cat.timeWasUpOver': 'Il tempo è scaduto più di un’ora fa.',
+    'cat.progress': 'Passo {i} di {n}',
+    'cat.progress.inline': 'passo {i} di {n}',
+    'cat.resumeGuidedMix': 'Riprendi l’impasto guidato — {progress}',
+    'cat.calculateFor': 'Calcolare {recipe} per {amount}?',
+    'cat.copyIntoCalculator': 'Copiare “{name}” nel Calcolatore? Poi la puoi ritoccare lì senza cambiare il ricettario.',
+    'cat.partWayThrough': 'Eri a metà di “{name}” — {progress}.',
+    'cat.deleteRecipeQ': 'Eliminare “{name}”? Non si può annullare.',
+    'cat.thisRecipe': 'questa ricetta',
+    'cat.recipeWord': 'ricetta',
+    'cat.nonScalableNote': {
+      one: 'Nota: {list} usa un’unità che il Calcolatore non sa scalare (lavora solo in grammi) e non verrà importato.',
+      other: 'Nota: {list} usano un’unità che il Calcolatore non sa scalare (lavora solo in grammi) e non verranno importati.',
+    },
+    'cat.updatedInCalculator': '“{name}” aggiornata nel Calcolatore.',
+    'cat.addedToCalculator': '“{name}” aggiunta al Calcolatore.',
+    'cat.couldNotSaveRecipe': 'Non è stato possibile salvare “{name}” — controlla la connessione.',
+    'cat.stepWillBeRemoved': 'Il passo {n} verrà tolto dalla procedura.',
+    'cat.procedureCanHold': 'Una procedura può contenere {n} passi.',
+    'cat.stepsAndTimers': {
+      one: '{n} passo · {duration} di timer',
+      other: '{n} passi · {duration} di timer',
+    },
+    'cat.saveStepsFor': {
+      one: 'Salvare {n} passo per “{name}”?',
+      other: 'Salvare {n} passi per “{name}”?',
+    },
+    'cat.noProcedureFor': '“{name}” non avrà nessuna procedura guidata.',
+    'cat.timeWasUpMinutes': {
+      one: 'Il tempo è scaduto 1 minuto fa.',
+      other: 'Il tempo è scaduto {n} minuti fa.',
+    },
+    'cat.timeWasUpHours': {
+      one: 'Il tempo è scaduto più di un’ora fa.',
+      other: 'Il tempo è scaduto più di {n} ore fa.',
+    },
+    'cat.youAreOn': 'Sei al {progress}. Ti aspetterà dove l’hai lasciato.',
+    'cat.notPricedYet': {
+      one: '{n} ingrediente non ha ancora un prezzo — questo costo è parziale',
+      other: '{n} ingredienti non hanno ancora un prezzo — questo costo è parziale',
+    },
     'cat.timeIsUp': 'Tempo scaduto.',
     'cat.startTheTimer': 'Avvia il timer',
     'cat.skipTheTimer': 'Salta il timer',
@@ -2574,6 +2938,10 @@ const DICTIONARIES = Object.freeze({
     'fc.piecesPerBatch': 'Pezzi per infornata',
     'fc.howManyFinishedPieces': 'Quanti pezzi finiti fa un’infornata delle ricette qui sopra.',
     'fc.sellingPriceIncludingVat': 'Prezzo di vendita IVA inclusa',
+    'fc.name': 'Nome',
+    'fc.packaging': 'Imballaggio',
+    'fc.sold': 'Venduto',
+    'fc.sellingPriceVat': 'Prezzo di vendita, IVA inclusa ({currency})',
     'fc.anotherRate': 'Un’altra aliquota…',
     'fc.anotherVatRateAs': 'Un’altra aliquota IVA, in percentuale',
     'fc.foodCostTargetAs': 'Obiettivo di food cost, in percentuale',
@@ -2700,6 +3068,47 @@ const DICTIONARIES = Object.freeze({
     'calc.noWhatsappListsOr': 'Ancora nessuna lista WhatsApp né cliente. Aggiungine una in Impostazioni → WhatsApp.',
     'calc.thisListHasNo': 'Questa lista non ha ancora clienti. Aggiungine in Impostazioni → WhatsApp.',
     'calc.sendOrder': 'Manda l’ordine',
+    'calc.co.ordersChanged': {
+      one: '{n} ordine è CAMBIATO da quando l’hai usato',
+      other: '{n} ordini sono CAMBIATI da quando li hai usati',
+    },
+    'calc.co.ordersReceived': {
+      one: '{n} ordine ricevuto dai tuoi clienti',
+      other: '{n} ordini ricevuti dai tuoi clienti',
+    },
+    'calc.co.justNow': 'adesso',
+    'calc.co.minAgo': '{n} min fa',
+    'calc.co.hoursAgo': { one: '{n} ora fa', other: '{n} ore fa' },
+    'calc.co.showOlder': 'Mostra gli ordini più vecchi (prima degli ultimi {n} giorni)',
+    'calc.co.arrivedLate': 'È arrivato dopo le {cutoff}, il termine per quel giorno. Puoi usarlo lo stesso — ma è arrivato in ritardo.',
+    'calc.co.clientGone': '{client} non è più nella tua rubrica, quindi non ci sono campi da riempire.',
+    'calc.co.thisClient': 'Questo cliente',
+    'calc.co.allLocked': {
+      one: '{names} è già stato confermato, quindi le quantità sono bloccate. Tocca Modifica sulla scheda, poi inserisci l’ordine.',
+      other: '{names} sono già stati confermati, quindi le quantità sono bloccate. Tocca Modifica sulla scheda, poi inserisci l’ordine.',
+    },
+    'calc.co.someLocked': {
+      one: '{names} è confermato e resterà com’è.',
+      other: '{names} sono confermati e resteranno come sono.',
+    },
+    'calc.co.putOrderIn': 'Inserire l’ordine di {client} nel calcolatore?',
+    'calc.co.closeOrdersAt': 'Chiudere gli ordini alle {time} del giorno prima? Tutti i clienti lo vedono subito.',
+    'calc.prefill.window.both': 'ieri o oggi',
+    'calc.prefill.window.today': 'oggi',
+    'calc.prefill.window.yesterday': 'ieri',
+    'calc.prefill.nothingLogged': 'Niente registrato per questi clienti {when} — scrivi tu le quantità.',
+    'calc.prefill.filled': {
+      one: 'Una quantità inserita da quello che hai registrato {when} — controllala prima di mandare.',
+      other: '{n} quantità inserite da quello che hai registrato {when} — controllale prima di mandare.',
+    },
+    'calc.shareText': 'Ciao {client}, puoi mandare il tuo ordine a {from} qui: {link}',
+    'calc.us': 'noi',
+    'calc.linkCopiedFor': 'Il link per ordinare di {client} è copiato. Incollalo in un messaggio.',
+    'calc.copyThisLinkFor': 'Copia questo link e mandalo a {client}:\n\n{link}',
+    'calc.clientCanSendOrders': '{client} può mandare gli ordini direttamente nell’app. Chiunque abbia il link può ordinare come questo cliente, quindi mandalo solo a lui.',
+    'calc.replaceLinkWarning': 'Il link attuale di {client} smetterà di funzionare subito, anche su un telefono che lo sta usando in questo momento. Usa “Copia il link” se vuoi solo rimandarglielo.',
+    'calc.stopClientOrdering': 'Impedire a {client} di mandare ordini attraverso l’app? Il suo link smetterà di funzionare. Gli ordini che ha già mandato restano.',
+    'calc.alreadyInMessage': '“{name}” è già in questo messaggio.',
     'calc.untitledList': 'Lista senza nome',
     'calc.unnamedClient': 'Cliente senza nome',
     'calc.noOrdersToShare': 'Nessun ordine da condividere',
@@ -2823,6 +3232,47 @@ const DICTIONARIES = Object.freeze({
     'past.confirm': 'Conferma',
     'past.records': 'Registri',
     'past.thisRow': 'questa riga',
+    'past.newQuantityFor': 'Nuova quantità per {name}',
+    'past.confirmNewQuantityFor': 'Conferma la nuova quantità per {name}',
+    'past.hint.typeANumber': 'scrivi un numero',
+    'past.hint.sameAsNow': 'come adesso',
+    'past.hint.atLeastOne': 'almeno 1',
+    'past.hint.tooMany': 'troppi',
+    'past.onListTwice': '{name} è due volte in questa lista.',
+    'past.howMany': 'Quanti {name}?',
+    'past.mostItCanHold': '{n} è il massimo che può contenere.',
+    'past.pastryPlaceholder': 'Pasta',
+    'past.couldNotRecord': 'Non è stato possibile registrare {day} — controlla la connessione.',
+    'past.removeRecordFor': 'Togli la registrazione di {day}, {date}',
+    'past.removeRecordForQ': 'Togliere la registrazione di {day}, {date}? Non si può annullare.',
+    'past.editDayQ': 'Modificare {day}?',
+    'past.alreadyRecordedTonight': '{day} è già registrato per stanotte. Modificare queste quantità?',
+    'past.keepAsRecord': 'Tenere questa lista come registrazione di {day}?',
+    'past.nothingToProveRecord': '{day} non ha niente da far lievitare. Registrare così?',
+    'past.tonightsRecordReplaced': 'La registrazione di stanotte per {day} verrà sostituita.',
+    'past.willShowAsDone': '{day} risulterà fatto. Puoi ancora cambiarlo — te lo chiederà prima.',
+    'past.couldNotSaveDay': 'Non è stato possibile salvare {day} — controlla la connessione.',
+    'fc.perKg': 'al kg',
+    'fc.perPiece': 'al pezzo',
+    'fc.answerBasis': '{cost} per farlo {unit}  ·  {net} netto  ·  {margin} di margine',
+    'fc.deleteProductQ': 'Eliminare “{name}”? Non si può annullare, e se ne va anche lo storico del margine.',
+    'fc.thisProduct': 'questo prodotto',
+    'fc.productWord': 'prodotto',
+    'fc.histDetail': '{cost} di costo  ·  {price} con IVA al {vat}%',
+    'fc.couldNotSaveProduct': 'Non è stato possibile salvare “{name}” — controlla la connessione.',
+    'nc.sellsIn': 'Vende: {where}.',
+    'nc.linkWorksOnce': 'Il link funziona una volta sola e ha {expiry}.',
+    'nc.sectionsLine': 'Sezioni: {list}.',
+    'nc.readyAndYours': '{name} è pronto, ed è tuo.',
+    'nc.ready': '{name} è pronto.',
+    'nc.openMyBusinesses': 'Apri le mie attività',
+    'nc.linkCopiedFor': 'Il link per {name} è copiato. Incollalo in un messaggio da mandargli.',
+    'nc.copyThisLinkFor': 'Copia questo link e mandalo a {name}:\n\n{link}',
+    'co.cutoffNote': 'Gli ordini di un giorno chiudono alle {time} del giorno prima. Puoi modificare il tuo ordine fino ad allora.',
+    'co.cutoffClosed': 'Gli ordini di un giorno chiudono alle {time} del giorno prima. Riprova più tardi.',
+    'help.noOrdersInLastDays': 'Nessun ordine negli ultimi {n} giorni. I più vecchi sono comunque conservati — non si cancella mai niente.',
+    'help.passwordTooShort': 'Falla di almeno {n} caratteri — è la lunghezza che la rende sicura.',
+    'aria.whatIs': 'Che cos’è {screen}?',
     'past.nothingToProveFor': 'Ancora niente da mettere per {day}.',
     'past.removeRowFrom': 'Vuoi togliere {name} da {day}?',
     'past.saveDay': 'Vuoi salvare {day}?',
@@ -2838,6 +3288,9 @@ const DICTIONARIES = Object.freeze({
 
     'ui.home': "Home",
     'ui.back': 'Indietro',
+    'ui.send': 'Manda',
+    'ui.listPair': '{a} e {b}',
+    'aria.recipe': 'Ricetta',
     'ui.cancel': 'Annulla',
     'ui.delete': 'Elimina',
     'ui.discard': 'Scarta',
@@ -3110,8 +3563,21 @@ const DICTIONARIES = Object.freeze({
     'label.copy': 'Copia il testo',
     'label.copied': 'Copiato',
     'label.copyFailed': 'Copia non riuscita — seleziona il testo qui sopra',
+    // ⚠️ «Nutrizione» e non «Valori nutrizionali»: i tre pulsanti sono in fila e a
+    // 320px il secondo andrebbe a capo da solo, lasciando la fila sbilanciata. La
+    // parola dell’ETICHETTA resta «Valori nutrizionali» (js/market.js) — quello è
+    // il titolo della tabella, questo è un pulsante.
+    'label.shows.allergens': 'Allergeni',
+    'label.shows.nutrition': 'Nutrizione',
+    'label.shows.both': 'Entrambi',
+    'label.untitled': 'Ricetta',
+    'label.languageNote': 'Questa etichetta è prodotta in {language} perché questa attività vende {country}.',
+    'label.ingredientNamesNote': 'I nomi degli ingredienti sono quelli che hai scritto tu — l’app non li traduce.',
+    'label.blocked.noCountry': 'Non si può ancora fare nessuna etichetta: nessuno ha detto in che paese vende questa attività, ed è quello a decidere in che lingua l’etichetta va stampata. Il titolare può impostarlo quando crea l’attività.',
 
 
+    'co.pageTitle': 'Manda il tuo ordine',
+    'co.openTheLinkSent': 'Apri il link per ordinare che ti ha mandato il panificio.',
     'co.youCanChangeYour': 'Puoi modificare il tuo ordine finché il panificio non comincia a farlo.',
     'co.thisLinkIsIncomplete': 'Questo link è incompleto',
     'co.askTheBakeryTo': 'Chiedi al panificio di rimandarti il tuo link per ordinare.',
@@ -3232,6 +3698,22 @@ export function interfaceLanguage(location) {
 export function languageFromTag(tag) {
   const base = String(tag || '').toLowerCase().split('-')[0];
   return LANGUAGES.includes(base) ? base : DEFAULT_LANGUAGE;
+}
+
+// "A, B and C" — and the joiner is a WORD, which is the whole reason this lives here.
+//
+// ⚠️ IT WAS WRITTEN INTO THE CODE IN THREE PLACES, twice as `names.join(' and ')` and
+// once inside the Orders screen's own listNames(). Italian says «e», and a joiner is
+// invisible to every scan in this project: it is one word inside a template literal,
+// with no capital letter to catch the eye.
+//
+// ⚠️ IT LIVES HERE RATHER THAN IN EITHER FEATURE because the two callers are the
+// Calculator and Orders, and a feature may never import from another feature's folder.
+// A copy of a sentence is a nuisance; a copy of the grammar is the thing that drifts.
+export function joinList(names) {
+  const list = (names || []).filter(Boolean);
+  if (list.length <= 1) return list[0] || '';
+  return t('ui.listPair', { a: list.slice(0, -1).join(', '), b: list[list.length - 1] });
 }
 
 // The tag to hand Intl for dates and numbers.

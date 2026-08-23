@@ -13,7 +13,7 @@
 //   2. a field that already holds a different number, before it is overwritten;
 //   3. a tab that has been confirmed, whose fields are locked and will not move.
 
-import { t } from './i18n.js';
+import { t, localeTag, joinList } from './i18n.js';
 import { el } from './calculator-render.js';
 import { confirmDialog, alertDialog } from './confirm-dialog.js';
 import { getConfig } from './calculator-config-store.js';
@@ -65,7 +65,7 @@ function dayLabel(iso) {
   const today = new Date();
   const days = Math.round(
     (date - new Date(today.getFullYear(), today.getMonth(), today.getDate())) / 86400000);
-  const full = date.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
+  const full = date.toLocaleDateString(localeTag(), { weekday: 'long', day: 'numeric', month: 'long' });
   if (days === 0) return `Today · ${full}`;
   if (days === 1) return `Tomorrow · ${full}`;
   return full;
@@ -77,11 +77,11 @@ function arrivedLabel(order) {
   const at = Date.parse(order && order.updatedAt);
   if (!Number.isFinite(at)) return '';
   const minutes = Math.round((Date.now() - at) / 60000);
-  if (minutes < 1) return 'just now';
-  if (minutes < 60) return `${minutes} min ago`;
+  if (minutes < 1) return t('calc.co.justNow');
+  if (minutes < 60) return t('calc.co.minAgo', { n: minutes });
   const hours = Math.round(minutes / 60);
-  if (hours < 24) return `${hours} ${hours === 1 ? 'hour' : 'hours'} ago`;
-  return new Date(at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+  if (hours < 24) return t('calc.co.hoursAgo', { n: hours });
+  return new Date(at).toLocaleDateString(localeTag(), { day: 'numeric', month: 'short' });
 }
 
 // Soonest delivery first, and within a day the client who has been waiting longest.
@@ -112,8 +112,8 @@ function paintBanner() {
 
   const changed = waiting.filter(orderChangedSinceApplied).length;
   const label = changed
-    ? `${changed} ${changed === 1 ? 'order has' : 'orders have'} CHANGED since you used ${changed === 1 ? 'it' : 'them'}`
-    : `${waiting.length} ${waiting.length === 1 ? 'order' : 'orders'} received from your clients`;
+    ? t('calc.co.ordersChanged', { n: changed })
+    : t('calc.co.ordersReceived', { n: waiting.length });
 
   const button = el('button', {
     class: `co-banner${changed ? ' co-banner--changed' : ''}`,
@@ -237,7 +237,7 @@ function renderHistory(content) {
   // is that older orders are still there, and a promise with no way to act on it is
   // worse than no promise. Widening is one more read of at most 200 documents.
   const more = el('button', { class: 'co-older', type: 'button' },
-    `Show older orders (before the last ${HISTORY_WINDOW_DAYS * windowsBack} days)`);
+    t('calc.co.showOlder', { n: HISTORY_WINDOW_DAYS * windowsBack }));
   more.addEventListener('click', () => {
     windowsBack += 1;
     pastState = 'idle';
@@ -332,7 +332,7 @@ function orderCard(order) {
   // that from a hole into a thing the bakery can decide about.
   if (arrivedLate(order, cutoff)) {
     card.appendChild(el('p', { class: 'co-card-note co-card-note--warn' },
-      `This arrived after ${cutoff}, the deadline for that day. You can still use it — but it came in late.`));
+      t('calc.co.arrivedLate', { cutoff })));
   }
 
   // ⚠️ THE LOUDEST THING ON THE CARD, because it is the one that bakes the wrong
@@ -389,7 +389,7 @@ async function applyOrder(order, button) {
   const client = getClientById(config, order.clientId);
   if (!client) {
     await alertDialog(
-      `${order.clientName || 'This client'} is no longer in your address book, so there are no fields to fill in.`);
+      t('calc.co.clientGone', { client: order.clientName || t('calc.co.thisClient') }));
     return;
   }
 
@@ -407,7 +407,7 @@ async function applyOrder(order, button) {
   const locked = [...new Set(targets.filter(t => t.locked).map(t => t.recipeName))];
   if (locked.length === targets.length) {
     await alertDialog(
-      `${locked.join(' and ')} ${locked.length === 1 ? 'has' : 'have'} already been confirmed, so the quantities are locked. Tap Edit on the tab first, then put the order in.`);
+      t('calc.co.allLocked', { n: locked.length, names: joinList(locked) }));
     return;
   }
 
@@ -420,12 +420,11 @@ async function applyOrder(order, button) {
     parts.push(clashes.map(t => `  ${t.productName}: ${t.current} → ${t.next}`).join('\n'));
   }
   if (locked.length) {
-    parts.push(`${locked.join(' and ')} ${locked.length === 1 ? 'is' : 'are'} confirmed and will be left alone.`);
+    parts.push(t('calc.co.someLocked', { n: locked.length, names: joinList(locked) }));
   }
 
-  const message = parts.length
-    ? `${parts.join('\n\n')}\n\nPut ${client.name}’s order in the calculator?`
-    : `Put ${client.name}’s order in the calculator?`;
+  const ask = t('calc.co.putOrderIn', { client: client.name });
+  const message = parts.length ? `${parts.join('\n\n')}\n\n${ask}` : ask;
 
   if (!(await confirmDialog({
     title: clashes.length ? t('calc.thisWillReplaceWhat') : undefined,
@@ -496,7 +495,7 @@ function renderCutoffSettings() {
     }
     if (!(await confirmDialog({
       message: wanted
-        ? `Close orders at ${wanted} the day before? Every client sees this straight away.`
+        ? t('calc.co.closeOrdersAt', { time: wanted })
         : t('calc.removeTheDeadlineClients'),
       okLabel: t('ui.save'),
       cancelLabel: t('ui.cancel'),

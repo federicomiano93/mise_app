@@ -62,18 +62,27 @@
 <link rel="icon" type="image/png" href="icons/icon-192.png">
 <link rel="stylesheet" href="tokens.css">
 <link rel="stylesheet" href="order.css">
-<title>Send your order</title>
+<title data-i18n="co.pageTitle">Send your order</title>
 </head>
 <body>
 <!--
   The page is built entirely from JavaScript, so this is the state before the link has
   been read. It is deliberately not "Loading…": if the script never arrives, "Loading"
   is a lie that never resolves, while this sentence is still true and still useful.
+
+  ⚠️ THE ENGLISH STAYS IN THE MARKUP AND IS NOT REPLACED BY A KEY — the rule
+  js/i18n-dom.js states about itself. If the script never arrives this is what the
+  client reads, and English is a better failure than a row of dotted identifiers.
+  ⚠️ AND IT CANNOT BE TRANSLATED BEFORE THE LINK IS READ, because the language of
+  this page comes from the BAKERY'S COUNTRY (order-main.js) and nothing here knows
+  which bakery it is yet. Once the menu loads, setLanguage() runs and i18n-dom.js
+  rewrites these two lines and the tab title — by which time order-main.js has
+  usually replaced them anyway. The title is the one that lasts.
 -->
 <div id="order-root">
   <div class="co-message">
-    <h1 class="co-message-title">Send your order</h1>
-    <p class="co-message-body">Open the ordering link the bakery sent you.</p>
+    <h1 class="co-message-title" data-i18n="co.pageTitle">Send your order</h1>
+    <p class="co-message-body" data-i18n="co.openTheLinkSent">Open the ordering link the bakery sent you.</p>
   </div>
 </div>
 

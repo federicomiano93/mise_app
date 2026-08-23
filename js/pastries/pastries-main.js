@@ -115,8 +115,8 @@ function lockedFor(day) {
 async function requestEdit(day) {
   if (!lockedFor(day)) return true;
   const ok = await confirmDialog({
-    title: `Edit ${day}?`,
-    message: `${day} is already recorded for tonight. Edit these quantities?`,
+    title: t('past.editDayQ', { day: weekdayLabel(day) }),
+    message: t('past.alreadyRecordedTonight', { day: weekdayLabel(day) }),
     okLabel: t('ui.edit'),
     cancelLabel: t('ui.cancel'),
   });
@@ -271,15 +271,15 @@ async function confirmToday(day, items, note) {
   const existing = await tonightsRecord(day);
 
   const base = list.length
-    ? `Keep this list as a record for ${day}?`
-    : `${day} has nothing to prove. Record that?`;
+    ? t('past.keepAsRecord', { day: weekdayLabel(day) })
+    : t('past.nothingToProveRecord', { day: weekdayLabel(day) });
   // Naming the replacement out loud, so a second Confirm is never a surprise —
   // and, for a first one, saying what confirming now DOES, since it ticks the
   // day off. Deliberately not "kept for 15 days" any more: records are kept for
   // good, and 15 days is only how far back this screen shows.
   const message = existing
-    ? `${base}\n\nTonight’s record for ${day} will be replaced.`
-    : `${base}\n\n${day} will show as done. You can still change it — it will ask first.`;
+    ? `${base}\n\n${t('past.tonightsRecordReplaced', { day: weekdayLabel(day) })}`
+    : `${base}\n\n${t('past.willShowAsDone', { day: weekdayLabel(day) })}`;
 
   const ok = await confirmDialog({
     title: t('past.confirmDay', { day: weekdayLabel(day) }),

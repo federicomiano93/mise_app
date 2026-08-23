@@ -30,7 +30,7 @@ export const HELP = {
   },
 
   calculator: {
-    title: 'Calculator',
+    title: 'section.calculator',
     lines: [
       'help.typeHowManyPieces',
       'help.confirmSavesTheSheet',
@@ -59,7 +59,7 @@ export const HELP = {
   },
 
   orders: {
-    title: 'Orders',
+    title: 'section.orders',
     lines: [
       'help.whatToBuySupplier',
       'help.orderPlacedRecordsIt',
@@ -92,7 +92,7 @@ export const HELP = {
   },
 
   pastries: {
-    title: 'Pastries',
+    title: 'section.pastries',
     lines: [
       'help.whatToPutOut',
       'help.confirmKeepsARecord',

@@ -425,6 +425,77 @@ export async function seedDemoWorld() {
     ],
   });
 
+  // ── An ITALIAN venue, which this seed has never had ────────────────────────
+  //
+  // ⚠️⚠️ NOT ONE DRIVEN CHECK IN THIS PROJECT HAD EVER OPENED A VENUE WHOSE COUNTRY
+  // IS `IT` AND WHOSE LANGUAGE IS `it`, and that is exactly why ~190 English strings
+  // survived four i18n suites and a full translation release. `bakery` above is
+  // country GB, so every screen it draws is correct in English whatever the code
+  // does; the two languages can only disagree where somebody looks at a venue that
+  // needs the other one.
+  //
+  // ⚠️ IT IS A REAL VENUE, NOT A FIXTURE. Federico created «Panificio Miano» in
+  // production on 23 Aug 2026 (loc-e015733e55e7, country IT, language it), opened it
+  // on his phone, and found the app still speaking English. This is that venue,
+  // seeded so the same walk can be done here.
+  //
+  // ⚠️ IT CARRIES A COPY OF THE BAKERY'S DATA, deliberately. A venue with no recipes,
+  // no suppliers and no pastries draws empty states, and an empty state has almost no
+  // words in it — the checks would pass by having nothing to be wrong about.
+  await seedAll('panificio-miano');
+  await seedDoc('locations/panificio-miano', {
+    name: 'Panificio Miano', country: 'IT', language: 'it', recipePhoto: false,
+  });
+  await seedDoc('locations/panificio-miano/config/calculator',
+    { bakery: 'panificio-miano', configRev: 1, clients: [], recipes: [] });
+  await seedDoc('locations/panificio-miano/recipes/CAT_1', {
+    bakery: 'panificio-miano', name: 'Pane di Miano', lossPct: 12,
+    ingredients: [
+      { label: 'Farina 0', grams: 1000, kind: 'ingredient', refId: 'ING_FARINA' },
+      { label: 'Acqua', grams: 650, kind: 'ingredient', refId: 'ING_ACQUA' },
+      { label: 'Sale', grams: 20 },
+      // Unweighable on purpose: the <select> that rendered «to tast» in v1.66.0.
+      { label: 'Malto', unit: 'to taste' },
+    ],
+  });
+  // Declared, so the ALLERGEN card and the LABEL can both be looked at in Italian —
+  // the screens where a food word must follow the country and the chrome around it
+  // must follow the screen. On this venue those two answers are the same, which is
+  // why the UK venue has to be driven beside it.
+  await seedDoc('locations/panificio-miano/ingredients/ING_FARINA', {
+    bakery: 'panificio-miano', name: 'Farina 0', supplierId: 'SUP_MODERN',
+    category: 'Flour', unit: '', active: true,
+    allergens: ['gluten-wheat'], mayContain: ['nuts-hazelnut'],
+    allergensCheckedAt: '2026-08-20T09:00:00.000Z',
+    nutrition: { kj: 1450, kcal: 342, fat: 1.2, saturates: 0.2, carbs: 71, sugars: 1.5, protein: 11, salt: 0 },
+  });
+  await seedDoc('locations/panificio-miano/ingredients/ING_ACQUA', {
+    bakery: 'panificio-miano', name: 'Acqua', supplierId: 'SUP_MODERN',
+    category: 'Other', unit: '', active: true,
+    allergens: [], mayContain: [], allergensCheckedAt: '2026-08-20T09:00:00.000Z',
+    nutrition: { kj: 0, kcal: 0, fat: 0, saturates: 0, carbs: 0, sugars: 0, protein: 0, salt: 0 },
+  });
+  // Undeclared, so «non dichiarato» has something to sit on.
+  await seedDoc('locations/panificio-miano/ingredients/ING_LIEVITO', {
+    bakery: 'panificio-miano', name: 'Lievito di birra', supplierId: 'SUP_MODERN',
+    category: 'Other', unit: '', active: true,
+  });
+  // ⚠️ A SECOND RECIPE, EVERY ROW LINKED, so the LABEL can be reached at all. The one
+  // above deliberately carries two unlinked rows — which is the state every real recipe
+  // is in — and the app then REFUSES to make a label. Correct behaviour, and it means a
+  // driver that only seeds that recipe can never look at the label it is testing.
+  await seedDoc('locations/panificio-miano/recipes/CAT_LABEL', {
+    bakery: 'panificio-miano', name: 'Pane semplice', lossPct: 12,
+    ingredients: [
+      { label: 'Farina 0', grams: 1000, kind: 'ingredient', refId: 'ING_FARINA' },
+      { label: 'Acqua', grams: 650, kind: 'ingredient', refId: 'ING_ACQUA' },
+    ],
+  });
+  await seedDoc('locations/panificio-miano/pastries/Tuesday', {
+    bakery: 'panificio-miano', day: 'Tuesday', updatedAt: '2026-08-20T20:00:00.000Z',
+    items: [{ name: 'Cornetti', qty: 24 }, { name: 'Bomboloni', qty: 10 }],
+  });
+
   // ⚠️ Every section a venue does NOT use has to be listed false, new ones
   // included: sectionOn() defaults to TRUE for a missing key, so a section added
   // to the app after a location document was written switches itself on. That is
@@ -456,8 +527,16 @@ export async function seedDemoWorld() {
   // `true` is ordinary staff. Both are seeded for the same location on purpose —
   // the roles are only ever visible by comparing two accounts side by side, and
   // `true` is also exactly what every account in production says today.
-  const clubUid = await seedAccount('club@club.test', DEMO_PASSWORD, { bakery: 'owner' });
+  // ⚠️ THE SAME ACCOUNT OWNS BOTH VENUES, which is production's shape and is also
+  // what makes the two languages comparable: one sign-in, two venues, and the app
+  // must speak English in one and Italian in the other without anything else moving.
+  const clubUid = await seedAccount('club@club.test', DEMO_PASSWORD,
+    { bakery: 'owner', 'panificio-miano': 'owner' });
   const staffUid = await seedAccount('staff@club.test', DEMO_PASSWORD, { bakery: true });
+  // ⚠️ ONE VENUE AND NOT AN APP ADMIN, so signing in OPENS IT instead of landing on the
+  // Misé hub. That is what makes an Italian venue drivable without crossing a hub every
+  // time — and the hub is where a driver silently reads the wrong screen (v1.65.1).
+  await seedAccount('miano@club.test', DEMO_PASSWORD, { 'panificio-miano': 'owner' });
   // The third role, so "Who can get in" can be looked at with all three on screen
   // — which is the only way to see whether the pills read as a choice.
   const mgrUid = await seedAccount('manager@club.test', DEMO_PASSWORD, { bakery: 'manager' });

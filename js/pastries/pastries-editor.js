@@ -17,10 +17,10 @@ const PLUS_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" wi
 // What to say when a save is blocked. Plain sentences, naming the pastry where
 // there is one — "invalid input" tells nobody what to do next.
 function problemMessage(problem, name) {
-  if (problem === 'duplicate') return `${name} is on this list twice.`;
-  if (problem === 'no-qty') return `How many ${name}?`;
+  if (problem === 'duplicate') return t('past.onListTwice', { name });
+  if (problem === 'no-qty') return t('past.howMany', { name });
   if (problem === 'too-long') return t('past.thatNameIsToo');
-  if (problem === 'qty-too-big') return `${MAX_QTY} is the most this can hold.`;
+  if (problem === 'qty-too-big') return t('past.mostItCanHold', { n: MAX_QTY });
   if (problem === 'too-many') return t('past.thatIsMorePastries');
   return t('past.thatCannotBeSaved');
 }
@@ -73,7 +73,7 @@ export function renderEditor({ day, items, note, allDays, app }) {
         class: 'pas-name',
         type: 'text',
         value: row.name,
-        placeholder: 'Pastry',
+        placeholder: t('past.pastryPlaceholder'),
         maxlength: String(MAX_NAME_LENGTH),
         list: 'pas-name-options',
         autocomplete: 'off',
@@ -243,7 +243,7 @@ export function renderEditor({ day, items, note, allDays, app }) {
       noteInput,
     ]),
     el('div', { class: 'pas-editor-actions' }, [
-      el('button', { class: 'pas-save-btn', type: 'button', text: 'Save', onclick: onSave }),
+      el('button', { class: 'pas-save-btn', type: 'button', text: t('ui.save'), onclick: onSave }),
     ]),
   ]);
 }

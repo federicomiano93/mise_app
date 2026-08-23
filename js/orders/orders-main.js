@@ -9,7 +9,7 @@
 // on, so an order left unmarked overnight is filed under the day it was written,
 // not under today.
 
-import { t } from '../i18n.js';
+import { t, joinList } from '../i18n.js';
 // ⚠️ createDoc / removeDoc / saveIngredientWithPrice / getPriceHistory LEFT WITH THE
 // RECORDS. This page no longer creates, deletes or prices anything — it reads the
 // two collections to draw an order. js/orders/registry-main.js holds those calls now.
@@ -946,10 +946,11 @@ function renderRequestCard() {
 }
 
 // "A", "A and B", "A, B and C".
-function listNames(names) {
-  if (names.length <= 1) return names[0] || '';
-  return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
-}
+//
+// ⚠️ THE JOINER IS A WORD, and it was ' and ' written into the code here. The one
+// copy now lives in js/i18n.js beside the dictionary, because the Calculator needs
+// the same grammar and a feature may not import from another feature's folder.
+const listNames = joinList;
 
 // Sending is the moment the order actually leaves, so it is the moment to ask —
 // forgetting to tap "Order placed" afterwards is exactly what left orders
@@ -983,10 +984,10 @@ async function recordSuppliers(supplierIds, { title, okLabel, cancelLabel = 'Can
   const alreadyRecorded = suppliers.filter(s =>
     state.history.some(h => h.id === historyDocId(dayForSupplier(s.id), s.id)));
 
-  let message = `Mark ${names} as placed? The order goes to History and the rows are cleared.`;
+  let message = t('orders.markPlacedFor', { names });
   if (alreadyRecorded.length) {
     const already = listNames(alreadyRecorded.map(s => s.name));
-    message += `\n\n${already} already has an order recorded for that day — these items will be ADDED to it.`;
+    message += `\n\n${t('orders.alreadyRecordedThatDay', { names: already })}`;
   }
 
   const ok = await confirmDialog({ title, message, okLabel, cancelLabel });
@@ -1008,13 +1009,13 @@ async function recordSuppliers(supplierIds, { title, okLabel, cancelLabel = 'Can
   // so the summary now leads with what went wrong.
   if (failed.length) {
     setStatus(
-      `${listNames(failed)} — NOT recorded, the rows are still there. ` +
-      (saved.length ? `${listNames(saved)} saved.` : t('orders.tryAgain')),
+      `${t('orders.notRecordedRowsStillThere', { names: listNames(failed) })} ` +
+      (saved.length ? t('orders.andSaved', { names: listNames(saved) }) : t('orders.tryAgain')),
       'error',
     );
     return;
   }
-  if (saved.length) setStatus(`${listNames(saved)} — order saved to history ✓`, 'ok', 5000);
+  if (saved.length) setStatus(t('orders.orderSavedToHistory', { names: listNames(saved) }), 'ok', 5000);
 }
 
 // ── Order placed for several suppliers at once ────────────────────────────────
@@ -1157,11 +1158,11 @@ async function placeOrder(supplierId, { confirm = true, date: pinnedDate } = {})
 
   try {
     await clearSupplier(supplierId, ingredients);
-    setStatus(`${supplier.name} — order saved to history ✓`, 'ok', 5000);
+    setStatus(t('orders.orderSavedToHistory', { names: supplier.name }), 'ok', 5000);
   } catch (err) {
     console.error('Clearing the draft after archiving failed:', err);
     setStatus(
-      `${supplier.name} — order saved to History, but the rows could not be cleared. Reload the page; do NOT record it again.`,
+      t('orders.savedButNotCleared', { name: supplier.name }),
       'warn',
     );
   }
@@ -1240,7 +1241,7 @@ async function clearQuantitiesFor(supplierIds) {
     await clearQuantities(ids, ingredients);
     setStatus(ids.length === 1
       ? t('orders.quantitiesCleared')
-      : `Quantities cleared for ${ids.length} suppliers ✓`, 'ok', 4000);
+      : t('orders.quantitiesClearedFor', { n: ids.length }), 'ok', 4000);
     return true;
   } catch (err) {
     console.error('Clearing quantities failed:', err);
@@ -1335,7 +1336,7 @@ function unusualWarning(rows) {
   const head = rows.length === 1
     ? t('orders.thisQuantityIsMuch')
     : t('orders.theseQuantitiesAreMuch');
-  return `${head}\n${lines.join('\n')}\n\nCheck it is not an extra digit.`;
+  return `${head}\n${lines.join('\n')}\n\n${t('orders.checkExtraDigit')}`;
 }
 
 // ── Reminders (today's orders / an order left from an earlier day) ────────────
@@ -1533,7 +1534,7 @@ function setStatus(text, kind, autoHideMs) {
 // a suggestion. No auto-hide, for the same reason.
 function liveDataLost(what) {
   return () => setStatus(
-    `Lost the live connection for ${what}. What you see may be out of date — reload the page.`,
+    t('orders.liveConnectionLost', { what }),
     'error',
   );
 }

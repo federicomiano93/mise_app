@@ -120,6 +120,6 @@ export function linesLabel(order) {
 // older» or to stop looking.
 export function emptyWords(days, everReceived) {
   return everReceived
-    ? `No orders in the last ${days} days. Older ones are still kept — nothing is ever deleted.`
+    ? t('help.noOrdersInLastDays', { n: days })
     : t('help.noClientHasSent');
 }

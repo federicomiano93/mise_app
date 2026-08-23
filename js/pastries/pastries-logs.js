@@ -9,6 +9,7 @@
 import { t } from '../i18n.js';
 import { el } from './dom.js';
 import { LOG_VISIBLE_DAYS } from './pastries-log-model.js';
+import { weekdayLabel } from './pastries-model.js';
 
 const TRASH_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>';
 
@@ -53,11 +54,11 @@ export function renderLogs({ logs, app }) {
         class: 'pas-del-icon',
         type: 'button',
         icon: TRASH_SVG,
-        'aria-label': `Remove the record for ${log.day}, ${spellDate(log.date)}`,
+        'aria-label': t('past.removeRecordFor', { day: weekdayLabel(log.day), date: spellDate(log.date) }),
         onclick: async () => {
           const ok = await app.confirm({
             title: t('past.removeThisRecord'),
-            message: `Remove the record for ${log.day}, ${spellDate(log.date)}? This cannot be undone.`,
+            message: t('past.removeRecordForQ', { day: weekdayLabel(log.day), date: spellDate(log.date) }),
             okLabel: t('ui.remove'),
             cancelLabel: t('ui.cancel'),
             danger: true,

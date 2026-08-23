@@ -407,8 +407,8 @@ export function dayLabel(log, nowMs) {
   // fall back to the literal stored choice rather than inventing a wrong date.
   if (createdAtMs <= 0 || !Number.isFinite(Number(nowMs))) {
     return forDay === 'tomorrow'
-      ? { text: 'Tomorrow', tone: 'tomorrow' }
-      : { text: 'Today', tone: 'today' };
+      ? { text: t('ui.tomorrow'), tone: 'tomorrow' }
+      : { text: t('ui.today'), tone: 'today' };
   }
 
   const today = workDayIndex(nowMs);

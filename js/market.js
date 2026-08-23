@@ -39,11 +39,6 @@ import { ALLERGENS, allergenLabel } from './allergen-model.js';
 
 export const COUNTRIES = Object.freeze(['GB', 'IT']);
 
-const COUNTRY_NAMES = Object.freeze({
-  GB: 'the United Kingdom',
-  IT: 'Italy',
-});
-
 // The language a label is printed in, per country. One entry per country, so a
 // country cannot be added without somebody deciding this.
 const OUTPUT_LANGUAGE = Object.freeze({ GB: 'en', IT: 'it' });
@@ -62,11 +57,6 @@ export function countryOf(location) {
 export function outputLanguage(location) {
   const country = countryOf(location);
   return country ? OUTPUT_LANGUAGE[country] : null;
-}
-
-export function countryName(location) {
-  const country = countryOf(location);
-  return country ? COUNTRY_NAMES[country] : '';
 }
 
 // The one question every label screen must ask before it draws anything.
@@ -225,44 +215,30 @@ export function nutrientName(nutrient, lang) {
   return nutrient.label;
 }
 
-// ── What the label screen has to say about itself ────────────────────────────
-
-// ⚠️ THE SCREEN DECLARES WHAT IT IS PRODUCING AND WHY, and it is not a footnote.
-// Somebody printing a label in an English bakery while reading an Italian
-// interface has to be able to see, without asking, that the label is in English
-// on purpose.
-export function labelLanguageNote(location) {
-  const country = countryOf(location);
-  if (!country) return '';
-  const language = country === 'IT' ? 'Italian' : 'English';
-  return `This label is produced in ${language} because this business sells in ${COUNTRY_NAMES[country]}.`;
-}
-
-// ⚠️ AND WHAT THE APP CANNOT DO, SAID IN THE SAME BREATH. The ingredient names on
-// a label are typed by hand, in Orders. The app does not translate them and must
-// not pretend to: an Italian venue has to type Italian ingredient names, or the
-// label reads "Contiene: Wheat" — half translated, which is worse than either
-// language on its own.
+// ── What the label screen SAYS ABOUT ITSELF LIVES IN THE DICTIONARY ──────────
 //
-// ⚠️ IT IS INTERFACE TEXT, SO IT DOES NOT FOLLOW THE COUNTRY. This returned the
-// OUTPUT language at first, and the screenshot showed why that was wrong: the
-// explanatory block came out with its first line in English and its second in
-// Italian, because labelLanguageNote() beside it is interface text and this one
-// was not. Both are addressed to the person MAKING the label, never to the
-// consumer reading it — so both are in the language the staff read, which today
-// is English everywhere and becomes the interface setting when that ships.
-export const INGREDIENT_NAMES_NOTE =
-  'The ingredient names are the ones you typed — the app does not translate them.';
-
-export function ingredientNamesNote(location) {
-  return canPrintLabel(location) ? INGREDIENT_NAMES_NOTE : '';
-}
-
-// What to say INSTEAD of a label when the country is not known. It names the fix
-// rather than the fault: somebody reading this can do nothing about a missing
-// field, and everything about telling whoever set the business up.
-export function noCountryReason() {
-  return 'No label can be made yet: nobody has said which country this business sells in, '
-    + 'and that decides the language the label must be printed in. The owner can set it '
-    + 'when the business is created.';
-}
+// ⚠️⚠️ THREE SENTENCES USED TO BE WRITTEN OUT HERE, IN ENGLISH, AND THEY WERE THE
+// WHOLE REASON THIS FILE HELD ANY PROSE AT ALL. They left on 23 Aug 2026:
+//
+//   labelLanguageNote()   "This label is produced in Italian because this
+//                          business sells in Italy."
+//   INGREDIENT_NAMES_NOTE "The ingredient names are the ones you typed…"
+//   noCountryReason()     "No label can be made yet: nobody has said which
+//                          country this business sells in…"
+//
+// ⚠️ EVERY ONE OF THEM IS INTERFACE TEXT — the file said so itself, in the comment
+// above the second one — and interface text belongs to the READER, so on an
+// Italian venue all three were the wrong language. They are now
+// `label.languageNote` / `label.ingredientNamesNote` / `label.blocked.noCountry`
+// in js/i18n.js, built by js/catalogue/label-view.js, which may hold both halves.
+//
+// ⚠️ AND THE REASON THEY COULD NOT SIMPLY BE WRAPPED IN t() WHERE THEY STOOD:
+// tests/i18n-label-separation.test.mjs forbids this file from importing the
+// dictionary AT ALL, and correctly — it builds what a label SAYS and nothing
+// else, so it has no reason to know what is on screen. A file with no prose in it
+// cannot leak the interface into a label by accident.
+//
+// COUNTRY_NAMES and countryName() went with them: their only caller was
+// labelLanguageNote(), and the interface keeps its own copy of a country's name
+// (`country.GB` / `country.GB.in` in js/i18n.js) precisely so the two cannot drift
+// into each other.

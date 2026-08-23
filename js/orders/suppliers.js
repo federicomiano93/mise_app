@@ -108,7 +108,7 @@ export function mountSupplierList(container, ctx) {
     onClick: () => setFilter(true),
   });
   const filterSwitch = el('div', {
-    class: 'view-switch ing-filter', role: 'radiogroup', 'aria-label': 'Which suppliers to show',
+    class: 'view-switch ing-filter', role: 'radiogroup', 'aria-label': t('aria.whichSuppliers'),
   }, [allBtn, orderingBtn]);
 
   function setFilter(active) {
@@ -210,7 +210,7 @@ function buildSupplierRow(supplier, data, ctx) {
   const view = el('button', {
     type: 'button',
     class: 'supplier-row-view',
-    'aria-label': `Ingredients from ${supplier.name}`,
+    'aria-label': t('aria.ingredientsFrom', { supplier: supplier.name }),
     icon: LIST_SVG,
     onClick: () => ctx.onView?.(supplier.id),
   });

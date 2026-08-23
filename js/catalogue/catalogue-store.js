@@ -249,7 +249,7 @@ export function saveRecipe(recipe) {
   saveRecipeDoc(id, data).catch(err => {
     console.warn('Recipe did not sync to Firestore:', err);
     if (prev) upsertLocal(prev); else removeLocal(id);
-    if (onSyncError) onSyncError(`Couldn’t save “${recipe.name || 'recipe'}” — check your connection.`);
+    if (onSyncError) onSyncError(t('cat.couldNotSaveRecipe', { name: recipe.name || t('cat.recipeWord') }));
   });
   return id;
 }

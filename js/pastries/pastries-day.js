@@ -44,7 +44,7 @@ export function renderDay({ day, items, note, locked = false, app }) {
 
   const noteText = el('p', { class: 'pas-note-body' });
   const noteBlock = el('div', { class: 'pas-note' }, [
-    el('span', { class: 'pas-note-label', text: 'Note' }),
+    el('span', { class: 'pas-note-label', text: t('ui.note') }),
     noteText,
   ]);
 
@@ -80,7 +80,7 @@ export function renderDay({ day, items, note, locked = false, app }) {
       inputmode: 'numeric',
       placeholder: '0',
       value: typed.get(key) ?? '',
-      'aria-label': `New quantity for ${item.name}`,
+      'aria-label': t('past.newQuantityFor', { name: item.name }),
       oninput: (e) => {
         typed.set(key, e.target.value);
         refreshTick();
@@ -98,7 +98,7 @@ export function renderDay({ day, items, note, locked = false, app }) {
       type: 'button',
       hidden: true,
       icon: TICK_SVG,
-      'aria-label': `Confirm the new quantity for ${item.name}`,
+      'aria-label': t('past.confirmNewQuantityFor', { name: item.name }),
       onclick: commit,
     });
 
@@ -118,10 +118,10 @@ export function renderDay({ day, items, note, locked = false, app }) {
       // already there, or when it is not a number this list can hold.
       const usable = n !== null && n > 0 && n <= MAX_QTY && n !== item.qty;
       tick.hidden = !usable;
-      if (n === null) hint.textContent = 'type a number';
-      else if (n === item.qty) hint.textContent = 'same as now';
-      else if (n <= 0) hint.textContent = 'must be at least 1';
-      else if (n > MAX_QTY) hint.textContent = 'too many';
+      if (n === null) hint.textContent = t('past.hint.typeANumber');
+      else if (n === item.qty) hint.textContent = t('past.hint.sameAsNow');
+      else if (n <= 0) hint.textContent = t('past.hint.atLeastOne');
+      else if (n > MAX_QTY) hint.textContent = t('past.hint.tooMany');
       else hint.textContent = '';
     }
 

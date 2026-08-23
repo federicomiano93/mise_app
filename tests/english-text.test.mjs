@@ -19,6 +19,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { _dictionaries } from '../js/i18n.js';
+import { stringsIn } from './helpers/strings-in.mjs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, relative } from 'node:path';
 
@@ -58,30 +59,6 @@ const FILES = everyJsFile(JS).map(f => ({ path: relative(ROOT, f), text: readFil
 //
 // So this walks the line once, yields the text inside each string literal, and
 // stops dead at // or /*. Small enough to read, and exact where a regex guesses.
-function stringsIn(line) {
-  if (/^\s*(\/\/|\*|\/\*)/.test(line)) return [];   // a whole comment line
-  const out = [];
-  let i = 0;
-  while (i < line.length) {
-    const c = line[i];
-    if (c === '/' && (line[i + 1] === '/' || line[i + 1] === '*')) break;
-    if (c === "'" || c === '"' || c === '`') {
-      const quote = c;
-      let j = i + 1;
-      let text = '';
-      while (j < line.length && line[j] !== quote) {
-        if (line[j] === '\\') { text += line[j + 1] || ''; j += 2; continue; }
-        text += line[j];
-        j += 1;
-      }
-      out.push(text);
-      i = j + 1;
-      continue;
-    }
-    i += 1;
-  }
-  return out;
-}
 
 // ⚠️ THE CONSOLE IS THE DEVELOPER'S CHANNEL, NEVER A SCREEN. `console.warn('Could
 // not watch tonight's confirmations:')` is a sentence written for whoever is

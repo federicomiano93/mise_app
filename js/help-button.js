@@ -14,7 +14,7 @@
 // inherits the focus trap, Escape, the backdrop and the screen-reader naming that
 // dialog already has, and there is no second component to keep in step.
 
-import { t } from './i18n.js';
+import { t, onLanguageChange } from './i18n.js';
 import { alertDialog } from './confirm-dialog.js';
 import { helpText, helpTitle, helpFor } from './help-content.js';
 
@@ -61,13 +61,34 @@ function build(id) {
   const button = document.createElement('button');
   button.type = 'button';
   button.className = 'help-btn';
-  // The label names the SCREEN, so a screen reader announces "What is Food cost?"
-  // rather than a bare question mark repeated on every page.
-  button.setAttribute('aria-label', `What is ${helpTitle(id)}?`);
+  button.dataset.helpFor = id;
+  label(button, id);
   button.append(questionIcon());
   button.addEventListener('click', () => showHelp(id));
   return button;
 }
+
+// The label names the SCREEN, so a screen reader announces «Che cos’è il Food cost?»
+// rather than a bare question mark repeated on every page.
+function label(button, id) {
+  button.setAttribute('aria-label', t('aria.whatIs', { screen: helpTitle(id) }));
+}
+
+// ⚠️⚠️ AND AGAIN WHENEVER THE LANGUAGE CHANGES, which is the v1.57.0 defect in the one
+// place nothing on screen can show it. mountHelpButtons() runs when this module is
+// first imported — BEFORE any venue is open, so before the app knows what language it
+// speaks — and an attribute set then is never redrawn by anything. On an Italian venue
+// every «?» in the app announced itself as «What is Misé?», «What is Calculator?».
+//
+// ⚠️ IT SURVIVED BECAUSE IT IS INVISIBLE. An aria-label is read by a screen reader and
+// by nothing else: no screenshot shows it, no measurement finds it, and the sheet the
+// button OPENS was always correct because that text is looked up when it is tapped.
+// Found by driving the app on a real Italian venue and reading the attributes.
+onLanguageChange(() => {
+  document.querySelectorAll('.help-btn[data-help-for]').forEach(button => {
+    label(button, button.dataset.helpFor);
+  });
+});
 
 // Fill every host on the page. Called on load, and exported so a screen that builds
 // its header later can ask for its own button when it is ready.

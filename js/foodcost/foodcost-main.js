@@ -8,7 +8,7 @@
 // js/ root (price-model.js and the recipe cost maths), which both features already
 // share for the same reason.
 
-import { t, onLanguageChange } from '../i18n.js';
+import { t, localeTag, onLanguageChange } from '../i18n.js';
 import {
   initFoodCost, getProducts, tables, saveProduct, deleteProduct, setSyncErrorHandler,
   getRecipes, getIngredients,
@@ -64,7 +64,7 @@ function openProduct(product) {
   activeList = null;
   currentProduct = product;
   leaveGuard = null;
-  setHeader({ title: product ? (product.name || 'Product') : t('fc.newProduct'), sub: t('fc.foodCost'), back: true });
+  setHeader({ title: product ? (product.name || t('fc.productWord')) : t('fc.newProduct'), sub: t('fc.foodCost'), back: true });
   activeEditor = renderEditor({ product, app });
   swap(activeEditor.root);
 }
@@ -74,7 +74,7 @@ async function openHistory(product) {
   view = 'history';
   activeEditor = null;
   leaveGuard = null;
-  setHeader({ title: t('fc.marginHistory'), sub: product.name || 'Product', back: true });
+  setHeader({ title: t('fc.marginHistory'), sub: product.name || t('fc.productWord'), back: true });
 
   const body = el('div', { class: 'fc-view' }, [el('p', { class: 'fc-empty', text: t('fc.loading') })]);
   swap(body);
@@ -98,8 +98,11 @@ async function openHistory(product) {
   body.replaceChildren(
     ...entries.map(entry => el('div', { class: 'fc-hist-row' }, [
       el('span', { class: 'fc-hist-pct', text: `${entry.foodCostPct}%` }),
-      el('span', { class: 'fc-hist-detail', text:
-        `${formatRate(entry.unitCost)} cost  ·  ${formatMoney(entry.sellingPrice)} at ${entry.vatRate}% VAT` }),
+      el('span', { class: 'fc-hist-detail', text: t('fc.histDetail', {
+        cost: formatRate(entry.unitCost),
+        price: formatMoney(entry.sellingPrice),
+        vat: entry.vatRate,
+      }) }),
       el('span', { class: 'fc-hist-when', text: shortDate(entry.recordedAt) }),
     ])),
     // ⚠️ SAID OUT LOUD, because the gap is invisible otherwise. A point exists only
@@ -113,7 +116,7 @@ async function openHistory(product) {
 function shortDate(iso) {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return String(iso || '');
-  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+  return d.toLocaleDateString(localeTag(), { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
 async function handleBack() {
