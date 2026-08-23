@@ -134,7 +134,11 @@ const DICTIONARIES = Object.freeze({
     // ⚠️ IT NAMES THE VENUE. A message that says only "open this link" is what
     // every scam sent over WhatsApp looks like; the person has to be able to tell
     // before tapping that this is where they work.
-    'people.link.message': 'Hi! Here is your way in to {venue}. Open this link, choose your own password, and you are in: {link}',
+    // ⚠️ IT NAMES THE ORDER, AND THE ORDER IS A CONSTRAINT RATHER THAN ADVICE. The
+    // code travels in the URL fragment and an installed app always starts from its own
+    // start_url with no fragment on it — so "install it first" would lose the
+    // invitation. Open the link, join, and the app offers the guide on the other side.
+    'people.link.message': 'Hi! Here is your way in to {venue}. Open this link and choose your own password; once you are in, the app will show you how to add it to your phone: {link}',
     'people.link.copied': 'The link is copied. Paste it into a message to them.',
     'people.link.manual': 'Copy this link and send it to them:\n\n{link}',
 
@@ -1603,6 +1607,16 @@ const DICTIONARIES = Object.freeze({
     'ui.remove': 'Remove',
     'ui.create': 'Create',
     'ui.whatsNew': 'What’s new',
+    // ⚠️ SAID ONCE, TO SOMEBODY WHO HAS JUST BEEN LET IN, AND TO NOBODY ELSE. It
+    // opens with «You are in» on purpose: they have finished the thing they were
+    // sent to do, and this is an offer, not another step. The three reasons are the
+    // three they can actually feel — full screen, one tap, and it still works when
+    // the signal does not.
+    'install.hint.title': 'Add the app to your phone',
+    'install.hint.body': 'You are in — but the app is running inside your browser. Add it to your home screen and it opens like any other app: full screen, one tap, and it keeps working when the signal does not.',
+    'install.hint.ok': 'Show me how',
+    'install.hint.later': 'Not now',
+
     'install.stale.title': 'Re-install this app',
     // ⚠️ SAYS WHAT TO DO, NOT WHAT IS WRONG. «Your manifest is out of date» means nothing
     // to a baker; the three steps do. And it says outright that nothing is lost, because
@@ -2071,7 +2085,7 @@ const DICTIONARIES = Object.freeze({
 
     'people.link.intro': 'Manda questo link alla persona. Funziona una volta sola, e quando lo apre sceglie da sé la sua email e la sua password.',
     'people.link.joinsAs': 'Entra come {role} · {expires}',
-    'people.link.message': 'Ciao! Ecco il tuo accesso a {venue}. Apri questo link, scegli la tua password ed entri: {link}',
+    'people.link.message': 'Ciao! Ecco il tuo accesso a {venue}. Apri questo link e scegli la tua password; una volta dentro, l’app ti spiega come aggiungerla al telefono: {link}',
     'people.link.copied': 'Link copiato. Incollalo in un messaggio per la persona.',
     'people.link.manual': 'Copia questo link e mandalo alla persona:\n\n{link}',
 
@@ -3326,6 +3340,11 @@ const DICTIONARIES = Object.freeze({
     'ui.remove': 'Rimuovi',
     'ui.create': 'Crea',
     'ui.whatsNew': 'Novità',
+    'install.hint.title': 'Aggiungi l’app al telefono',
+    'install.hint.body': 'Sei dentro — ma l’app sta girando dentro il browser. Aggiungila alla schermata Home e si apre come tutte le altre app: a tutto schermo, con un tocco, e continua a funzionare anche quando manca la linea.',
+    'install.hint.ok': 'Come si fa',
+    'install.hint.later': 'Non ora',
+
     'install.stale.title': 'Reinstalla questa app',
     'install.stale.body': 'Questa app è stata aggiunta alla schermata Home tempo fa, e una parte di come funziona viene decisa in quel momento — un aggiornamento non può cambiarla.\n\nPer rimetterla in pari:\n1. Tieni premuta l’icona dell’app e scegli Disinstalla\n2. Riapri l’indirizzo nel browser\n3. Menu ⋮ → Installa app\n\nNon perdi niente: il tuo lavoro è salvato online, non dentro l’app. E se l’installazione non riesce, continua pure a usarla dal browser — funziona uguale.',
     'ui.confirm': 'Conferma',

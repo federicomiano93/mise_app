@@ -16,6 +16,7 @@
 // phone. The cover is in the HTML from the start and is only ever REMOVED.
 
 import { t, setLanguage, languageFromTag } from './i18n.js';
+import { markJustJoined } from './install-hint.js';
 import { onSession, signIn, signUp, sendReset, chooseLocation, signOutNow,
          enterMyBusinesses, backToHub } from './firebase.js';
 import { normalizeTyped } from './join-code.js';
@@ -237,14 +238,19 @@ function signInScreen({ note = '' } = {}) {
   form.append(emailLabel, email, passLabel, password, submit, status, forgot);
   card.append(form);
 
-  // How to install the app — the ONE place it is reachable from.
+  // How to install the app.
   //
-  // The guide (install-guide.html) is a standalone page with no link anywhere in
-  // the app, so the only way to reach it is to remember the address. In practice
-  // that means the link people get sent is the APP's, and whoever receives it lands
-  // on exactly this screen: signed out, with no hint that instructions exist and no
-  // idea they are supposed to "Add to Home Screen" first. An <a>, not a button:
-  // it navigates, and the browser should treat it as such (P18).
+  // The guide (install-guide.html) is a standalone page with no link in the app's
+  // own navigation, so the only ways to it are the two screens somebody can arrive
+  // on from outside. In practice the link people get sent is the APP's, and whoever
+  // receives it lands here: signed out, with no hint that instructions exist and no
+  // idea they are supposed to "Add to Home Screen" first. An <a>, not a button: it
+  // navigates, and the browser should treat it as such (P18).
+  //
+  // ⚠️ THIS WAS THE ONLY ONE UNTIL 24 Aug 2026, and it missed the person it was for.
+  // Somebody arriving on an INVITATION never sees this screen — the link takes them
+  // straight to the join form — so joinScreen() now carries the same link, and the
+  // Home offers the guide once after they are in (js/install-hint.js).
   // ⚠️ THE ONLY WAY IN FOR SOMEBODY WHO HAS NEVER BEEN HERE. Without this link
   // a new employee holding a valid code has nowhere to type it: the form above
   // asks for a password they do not have yet, and the guide explains installing,
@@ -420,6 +426,20 @@ function joinScreen({ needsAccount, prefill = '' }) {
   });
   card.append(signInInstead);
 
+  // ⚠️⚠️ HOW TO INSTALL THE APP, ON THE ONE SCREEN THAT NEEDED IT MOST AND NEVER HAD
+  // IT. install-guide.html was reachable from exactly one place — the sign-in screen —
+  // and whoever arrives by invitation NEVER SEES THAT SCREEN: the link takes them
+  // straight here. So the guide existed for the new employee and was structurally out
+  // of their reach, which is the same "a screen nobody could reach" mistake that kept
+  // the guide itself unseen for weeks (v1.19.0), one door further in.
+  //
+  // ⚠️ AND IT IS A LINK, NOT AN INSTRUCTION. Reading it now costs them the form they
+  // are halfway through; the guide is where they will be sent AFTER joining anyway
+  // (js/install-hint-boot.js). This is here for the person who wants to look first.
+  const guide = el('a', 'auth-link auth-guide-link', t('auth.installGuide'));
+  guide.href = 'install-guide.html';
+  card.append(guide);
+
   const back = el('button', 'auth-link', t('auth.back'));
   back.type = 'button';
   back.addEventListener('click', () => {
@@ -487,6 +507,11 @@ function joinScreen({ needsAccount, prefill = '' }) {
       // and the functions client is a chunk nobody needs until they are joining.
       const { redeemJoinCode } = await import('./staff/firebase-staff.js');
       await redeemJoinCode(typed, kind, firstName.value, lastName.value);
+      // ⚠️ WRITTEN BEFORE THE RELOAD, because the reload is what ends this page. The
+      // Home picks it up on the other side and offers the guide once
+      // (js/install-hint.js). It is a flag rather than a redirect: somebody handed a
+      // way in should land in the app they were given, not in a page of instructions.
+      markJustJoined(localStorage);
       forgetInvite();
       // Everything downstream reads the membership once, at sign-in, so the
       // honest way to pick up a brand-new one is to start again.
