@@ -177,10 +177,16 @@ test('the label language comes from the country, and every label word is asked i
 // deliberate and it is meant to be edited: adding a name should make somebody read this
 // comment, and removing one should make them say why.
 const FOOD_WORD_SITES = {
-  // the tick row's name · its two tooltips · the pack marker · the «which of these?»
-  // question · the status line = 6 allergen names, plus the two group headings (one
-  // call, both groups) and the eight nutrient rows (one call, all eight).
-  'js/orders/ingredient-form.js': { allergenName: 6, allergenGroupName: 1, nutrientName: 1 },
+  // the tick row's name · its two tooltips · the «which of these?» question · the
+  // status line = 5 allergen names, plus the two group headings (one call, both
+  // groups) and the eight nutrient rows (one call, all eight).
+  //
+  // ⚠️ WAS 6 UNTIL v1.70.0, AND THE SIXTH WENT ON PURPOSE. It titled each highlighted
+  // word in the re-drawn copy of the pack text, and that whole copy left the screen
+  // when the explanations moved behind the «?» (Federico: «c'è scritto troppo»). It is
+  // not a food this screen still names and then names wrongly — it is a food this
+  // screen no longer prints at all. The five that remain are the ones a person reads.
+  'js/orders/ingredient-form.js': { allergenName: 5, allergenGroupName: 1, nutrientName: 1 },
   // what it contains · what it may contain · what is known so far
   'js/catalogue/catalogue-detail.js': { allergenName: 3 },
 };

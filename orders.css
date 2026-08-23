@@ -1367,6 +1367,33 @@ a.home-reminder {
   font: inherit; color: inherit; text-align: left;
 }
 .mgmt-fold-head:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+/* ⚠️ THE ROW EXISTS BECAUSE A BUTTON MAY NOT CONTAIN A BUTTON. The head is the tap
+   target for folding; the «?» beside it opens the explanation. Two controls, so two
+   buttons, so a row that holds them — the same shape this app already uses for a card
+   with its own delete icon (PR #31). The head keeps the whole width it had. */
+.mgmt-fold-head-row { display: flex; align-items: center; gap: 4px; }
+.mgmt-fold-head-row .mgmt-fold-head { flex: 1; min-width: 0; }
+/* ⚠️ 8px INSIDE A HEAD THAT NOW SHARES ITS ROW, measured rather than chosen: at 320px
+   «ELENCO INGREDIENTI» wants 139px and had 115, so the «?» costs it 24. Eight of those
+   come back here (two gaps), and 8px is the spacing this form already uses — .mgmt-pair
+   and .alg-list both. The title still wraps at 320px and the head is 52px there instead
+   of 44; at 390 and 430 it is 44 exactly, unchanged. Left wrapping ON PURPOSE: the
+   alternative is truncating a section name, and this is the screen where a truncated
+   word is how «Noci del Brasile» becomes «Noci». */
+.mgmt-fold-head-row .mgmt-fold-head { gap: 8px; }
+.mgmt-fold-help { display: flex; align-items: center; flex-shrink: 0; }
+/* .help-btn is drawn for the green header (white rim on brand). Here it sits on the
+   card's own ground, so it borrows the page's ink and border — exactly what
+   .home-header .help-btn already does for the Home. No new colour, and 32px rather
+   than 36 so the «?» cannot make the head taller than its own 44px tap target. */
+.mgmt-fold-help .help-btn {
+  width: 32px;
+  height: 32px;
+  background: var(--surface);
+  border-color: var(--border);
+  color: var(--text2);
+}
+.mgmt-fold-help .help-btn:focus-visible { outline-color: var(--accent); }
 /* The heading of a card that has nothing to fold — «Dati prodotto», «Prezzo». Same
    card, same label, no chevron and no tap target: there is nothing behind it to open,
    and a control that does nothing teaches somebody the card is closed.
@@ -1396,6 +1423,13 @@ a.home-reminder {
   margin-left: auto;
   font-family: var(--font-mono); font-size: 11px; font-weight: 700;
   letter-spacing: 0.06em; text-transform: uppercase; color: var(--text3);
+  /* ⚠️ THE STATE IS THE ANSWER AND IT MAY NOT BREAK IN HALF. «DA COMPILARE» split
+     across two lines at 320px once the «?» joined the row — measured, not guessed.
+     Between a section NAME on two lines and its ANSWER on two lines, the name gives
+     way: the whole design of these folds is that somebody reads the state without
+     opening anything (v1.60.0). Truncation is not on the table on this screen. */
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 .alg-head-state--warn { color: var(--warn); }
 .alg-head-state--ok { color: var(--brand); }

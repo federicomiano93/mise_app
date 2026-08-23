@@ -330,16 +330,32 @@ test('⚠️ the keys this release retired stay retired', () => {
     // «Leggilo e spunta le caselle». There is no button: typing runs the matcher. A
     // button left in the dictionary is a button somebody puts back on the screen.
     'orders.pack.suggest': 'the suggestion is automatic now',
+    // The running commentary under the box, retired when the explanations moved behind
+    // the «?» (Federico: «c'è scritto troppo»). All four described the re-drawn copy of
+    // the pack text — «highlighted above», «check what is left in grey» — and that copy
+    // is not on the screen any more, so each of them would now point at nothing.
+    // ⚠️ How many boxes the app moved is still said, once, OUTSIDE the fold, by
+    // orders.pack.proposedTicks. That is the sentence that must never go.
+    'orders.pack.whatItReads': 'it described a highlighted copy that no longer exists',
+    'orders.pack.ticked': 'it described a highlighted copy that no longer exists',
+    'orders.pack.alreadyTicked': 'it described a highlighted copy that no longer exists',
+    'orders.pack.nothingTyped': 'an empty box needs no sentence: the header says «da compilare»',
   };
   for (const [key, why] of Object.entries(RETIRED)) {
-    assert.doesNotMatch(dict, new RegExp(`'${key.replace(/\./g, '\.')}'\s*:`),
-      `${key} was retired because ${why}`);
+    // ⚠️ THE ESCAPES HAVE TO SURVIVE THE STRING. Written `'${key.replace(/\./g, '\.')}'\s*:`
+    // in a plain template literal, `\.` is just `.` and `\s` is just the letter s — so
+    // the pattern was «'orders.pack.suggest's*:» with every dot a wildcard. It happened
+    // to work; it was not what it said. Build it from an escaped key and a real \s.
+    const pattern = new RegExp(`'${key.replace(/\./g, '\\.')}'\\s*:`);
+    assert.doesNotMatch(dict, pattern, `${key} was retired because ${why}`);
   }
 });
 
 // Proof the ban can fire: a key that IS still there must be found by the same shape.
+// ⚠️ It must name a key this release KEEPS. It used to name orders.pack.ticked, which
+// v1.70.0 then retired — so the proof went red the moment the ban became true.
 test('and that ban would notice a key that is still present', () => {
   const dict = readFileSync(join(ROOT, 'js/i18n.js'), 'utf8').replace(/^\s*\/\/.*$/gm, '');
-  assert.match(dict, /'orders\.pack\.ticked'\s*:/,
+  assert.match(dict, new RegExp(`'${'orders.pack.help'.replace(/\./g, '\\.')}'\\s*:`),
     'the live key must match the pattern the ban uses, or the ban proves nothing');
 });

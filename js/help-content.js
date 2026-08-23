@@ -82,6 +82,47 @@ export const HELP = {
     ],
   },
 
+  // ── The three folding sections of one ingredient's record ──────────────────
+  //
+  // ⚠️ NOT A SCREEN, AND THAT IS NEW. Everything above explains a page; these three
+  // explain a SECTION of the ingredient card, because Federico looked at it on his
+  // phone and said «le trovo troppo confusionarie, c'è scritto troppo… tutte le
+  // spiegazioni le toglierei e le metterei dentro ? cliccabile accanto». The
+  // machinery did not have to change: `mountHelpButtons(root)` was already exported
+  // for content built after load, which is exactly what that overlay is.
+  //
+  // ⚠️ WHAT DID NOT MOVE IN HERE: anything that is true of THIS product rather than
+  // of the feature. «The pack says frutta a guscio, a whole family, so nothing was
+  // ticked — ask the supplier which» stays on the screen. It is not an explanation,
+  // it is the one moment the app goes quiet and needs a person; behind a «?» nobody
+  // would ever see it.
+  'pack-list': {
+    title: 'orders.section.packList',
+    lines: [
+      'orders.pack.help',
+      'help.packWhenItCannotTell',
+      'orders.pack.stillYours',
+    ],
+  },
+
+  allergens: {
+    title: 'orders.section.allergens',
+    lines: [
+      'orders.copyThisFromThe',
+      'help.allergensNameTheSpecific',
+      'help.allergensUntilYouTick',
+    ],
+  },
+
+  nutrition: {
+    title: 'orders.section.nutrition',
+    lines: [
+      'help.nutritionComesFromThePack',
+      'help.nutritionZeroIsAnAnswer',
+      'help.nutritionItIsWhatThe',
+    ],
+  },
+
   foodcost: {
     title: 'help.foodCost',
     lines: [

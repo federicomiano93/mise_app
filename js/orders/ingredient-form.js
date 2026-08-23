@@ -29,6 +29,13 @@ import {
 // rather than up here — the venue is not open when this module is evaluated. See
 // js/currency.js and currencyOf() in js/market.js.
 import { currentCurrency } from '../currency.js';
+// ⚠️ THE APP'S ONE «?», not a second one. This overlay is built long after the page
+// has loaded, so it asks the module to fill the hosts it has just created.
+// ⚠️ It pulls in js/confirm-dialog.js, which is the identical twin of this folder's
+// own copy (both pinned byte-for-byte by tests/copie-allineate.test.mjs). Two copies
+// of the same dialog on one page is the price of the rule that forbids a feature
+// folder from importing another's — and it is a smaller price than a second «?».
+import { mountHelpButtons } from '../help-button.js';
 // ⚠️ From js/ ROOT, not from a feature folder — see the header of that file. What
 // an ingredient declares is typed HERE, in Orders, and read by the catalogue and
 // by the labels screen, so the judgement lives in one place for all three.
@@ -458,52 +465,28 @@ function allergenBlock(item, panels) {
     const out = readPackIngredients(text);
 
     if (!out.hasText) {
-      packResult.appendChild(el('p', { class: 'alg-pack-note', text: t('orders.pack.nothingTyped') }));
       // ⚠️ AND THE APP'S OWN TICKS GO WITH THE TEXT. Clearing the box must clear what
       // the box put there, or emptying it would leave a declaration nobody can trace
       // to anything. A person's ticks stay, as always.
       if (touchBoxes) applyTicks({ allergens: [], mayContain: [] });
-      return;
+      return;   // an empty box needs no commentary: the header already says «da compilare»
     }
 
-    const added = touchBoxes ? applyTicks(out) : null;
+    if (touchBoxes) applyTicks(out);
 
-    // ⚠️ THE EVIDENCE, NOT JUST THE VERDICT. Re-drawing the pasted text with the
-    // recognised words marked turns «did it find everything?» — which nobody can
-    // answer — into «is there anything left in the grey worth checking?», which
-    // anybody can. An extractor that cannot point at its reasons cannot be
-    // checked by the person legally responsible for the answer.
-    const marked = el('p', { class: 'alg-pack-marked' });
-    let at = 0;
-    for (const m of out.matches) {
-      if (m.from > at) marked.appendChild(el('span', { text: text.slice(at, m.from) }));
-      marked.appendChild(el('mark', {
-        class: 'alg-pack-hit' + (m.traces ? ' alg-pack-hit--traces' : ''),
-        title: allergenName(m.code, lang),
-        text: text.slice(m.from, m.to),
+    // ⚠️ RECOGNISING NOTHING IS AN ANSWER AND MUST LOOK LIKE ONE, so this one line
+    // stays on the screen. Silence here would be read as «this pack contains nothing»,
+    // which is the single worst thing this feature could say — and it is a statement
+    // about THIS pack, not an explanation of the feature, so a «?» is the wrong place
+    // for it. What DID go into the sheet is the running commentary that used to sit
+    // beside it: «ticked 1 box», «already ticked», and the re-drawn copy of the text
+    // with the recognised words marked. How many boxes moved is said once, outside
+    // the fold, by `proposedNote` — where it is read even with this section shut.
+    if (!out.recognisedAnything) {
+      packResult.appendChild(el('p', {
+        class: 'alg-pack-note', text: t('orders.pack.recognisedNothing'),
       }));
-      at = m.to;
     }
-    if (at < text.length) marked.appendChild(el('span', { text: text.slice(at) }));
-    packResult.appendChild(marked);
-
-    packResult.appendChild(el('p', {
-      class: 'alg-pack-note',
-      text: out.recognisedAnything
-        // ⚠️ «Ticked 0 boxes» READS AS A FAILURE and is not one — it is what you
-        // get every time you read the same pack twice, or correct a typo. Found
-        // by looking at a screenshot: the words were plainly highlighted above
-        // and the sentence underneath said nothing had happened.
-        //
-        // ⚠️ `added === null` is the FIRST DRAW, where no box was touched at all.
-        // Saying «already ticked» there would claim something the app has not done.
-        ? (added === null ? t('orders.pack.whatItReads')
-          : (added ? t('orders.pack.ticked', { n: added }) : t('orders.pack.alreadyTicked')))
-        // ⚠️ RECOGNISING NOTHING IS AN ANSWER AND MUST LOOK LIKE ONE. Silence here
-        // would be read as «this pack contains nothing», which is the single
-        // worst thing this feature could say.
-        : t('orders.pack.recognisedNothing'),
-    }));
 
     // ⚠️ WHAT IT CANNOT ANSWER IS ASKED, NEVER GUESSED. An Italian pack very often
     // prints only «emulsionante: lecitine» — soya, sunflower or egg, and the pack
@@ -523,9 +506,10 @@ function allergenBlock(item, panels) {
       else line = t('orders.pack.questionVague', { word });
       packResult.appendChild(el('p', { class: 'alg-pack-question', text: line }));
     }
-
-    // The rule the whole screen rests on, restated where the temptation is.
-    packResult.appendChild(el('p', { class: 'alg-pack-note alg-pack-warn', text: t('orders.pack.stillYours') }));
+    // ⚠️ «Questo spunta solo le caselle, niente è dichiarato finché…» USED TO CLOSE
+    // THIS BLOCK and is now the last line of the «?» sheet. It is true of every
+    // product on every day, which is the test for what may be hidden; the questions
+    // above it are true of this pack alone, which is why they may not be.
   }
 
   // ⚠️ THE BUTTON IS GONE. «Leggilo e spunta le caselle» was the whole interaction;
@@ -710,12 +694,23 @@ function allergenBlock(item, panels) {
     // ⚠️ AND ITS STATE WORD IS DELIBERATELY NOT GREEN. On this screen green means
     // «somebody has verified this»; having typed the list is not a declaration, so a
     // filled box is stated plainly and left neutral.
+    // ⚠️⚠️ THE INSTRUCTIONS ARE NOT HERE ANY MORE, THEY ARE BEHIND THE «?». Federico,
+    // 23 Aug 2026, looking at this section on his phone: «le trovo troppo
+    // confusionarie, c'è scritto troppo, l'elenco ingredienti deve avere solo il
+    // riquadro dove scrivo gli ingredienti… tutte le spiegazioni le toglierei e le
+    // metterei dentro ? cliccabile accanto». Three sentences, a re-drawn copy of what
+    // he had just typed and two more paragraphs stood between him and a text box.
+    //
+    // ⚠️ WHAT STAYED IS THE DIVIDING LINE, AND IT IS THE SAFETY ONE: a sentence that
+    // is the same on every product is an explanation and belongs in the sheet; a
+    // sentence about THIS product — «the pack says frutta a guscio and nothing could
+    // be ticked» — is a finding, and a finding behind a «?» is a finding nobody reads.
     root.appendChild(fold({
       title: t('orders.section.packList'),
       state: packHeadState,
+      help: 'pack-list',
       above: [],
       body: [
-        el('p', { class: 'notif-note', text: t('orders.pack.help') }),
         el('div', { class: 'alg-pack' }, [
           packBox,
           packResult,
@@ -726,13 +721,13 @@ function allergenBlock(item, panels) {
     root.appendChild(fold({
       title: t('orders.section.allergens'),
       state: algHeadState,
+      help: 'allergens',
       // The answer, and the caveat that qualifies it. Outside the fold.
       // ⚠️ `proposed` JOINS THEM, and it has to be out here: the app now ticks boxes
       // by itself while this fold is SHUT, so without a word on the outside nobody
       // would ever learn that anything had happened.
       above: [status, proposedNote],
       body: [
-        el('p', { class: 'notif-note', text: t('orders.copyThisFromThe') }),
         el('div', { class: 'alg-list' }, sections),
         el('label', { class: 'day-check alg-checked' }, [checked, el('span', { text: t('orders.iHaveCheckedThe') })]),
       ],
@@ -743,6 +738,7 @@ function allergenBlock(item, panels) {
     root.appendChild(fold({
       title: t('orders.section.nutrition'),
       state: nutHeadState,
+      help: 'nutrition',
       above: [],
       body: [
         el('p', { class: 'mgmt-field-label alg-nut-title', text: t('orders.per100G') }),
@@ -750,6 +746,10 @@ function allergenBlock(item, panels) {
       ],
     }));
   }
+
+  // ⚠️ THE «?» BUTTONS ARE FILLED LAST, once every host this form builds exists. The
+  // module's own pass runs at page load, long before this overlay is created.
+  mountHelpButtons(root);
 
   return { root, read };
 }
@@ -784,7 +784,7 @@ function section({ title, body }) {
   ]);
 }
 
-function fold({ title, state, above, body }) {
+function fold({ title, state, above, body, help }) {
   const inner = el('div', { class: 'mgmt-fold-body', hidden: 'hidden' }, body);
   const btn = el('button', {
     type: 'button', class: 'mgmt-fold-head', 'aria-expanded': 'false',
@@ -799,7 +799,27 @@ function fold({ title, state, above, body }) {
     state,
     el('span', { class: 'mgmt-fold-chev', 'aria-hidden': 'true', text: '›' }),
   ]);
-  return el('div', { class: 'mgmt-fold' }, [btn, ...above, inner]);
+  // ⚠️⚠️ THE «?» CANNOT GO INSIDE THE HEAD, AND THAT IS NOT A STYLE PREFERENCE: the
+  // head IS a <button>, and a button may not contain another button. So the head and
+  // the «?» become a ROW, and the row carries the frame — the identical shape this app
+  // already uses for a card with a delete icon on it (PR #31). Getting this wrong
+  // renders as a button inside a button: the inner one is unreachable, and tapping
+  // near it folds the section instead of explaining it.
+  //
+  // ⚠️ THE HOST IS EMPTY HERE. js/help-button.js fills any `[data-help]` it is pointed
+  // at, and mountHelpButtons() is exported for exactly this — content built after the
+  // page has loaded. The page says WHERE the button goes; that module says what it is.
+  if (!help) return el('div', { class: 'mgmt-fold' }, [btn, ...above, inner]);
+  // ⚠️ NO `help-host` CLASS HERE. The header hosts on the four pages carry it, but it
+  // is defined in no stylesheet at all — mountHelpButtons() looks for `[data-help]`,
+  // never for that class. Copying it would have added a fourth undefined class to a
+  // project that has already shipped three. Caught by the guard that reads every class
+  // this screen writes against the stylesheets it loads.
+  const row = el('div', { class: 'mgmt-fold-head-row' }, [
+    btn,
+    el('span', { class: 'mgmt-fold-help', 'data-help': help }),
+  ]);
+  return el('div', { class: 'mgmt-fold' }, [row, ...above, inner]);
 }
 
 // ── The form ──────────────────────────────────────────────────────────────────

@@ -215,8 +215,21 @@ test('⚠️⚠️ the first draw shows what the text says and ticks nothing', (
   const code = codeOf(FORM);
   assert.match(code, /suggest\(\{ touchBoxes: false \}\)/,
     'the initial call must be the read-only one');
-  assert.match(code, /const added = touchBoxes \? applyTicks\(out\) : null/,
+  // ⚠️ THE SHAPE CHANGED IN v1.70.0 AND THE PROPERTY DID NOT. It used to read
+  // `const added = touchBoxes ? applyTicks(out) : null`, because the count was printed
+  // in a line under the box; that line moved into the «?» sheet, so nothing needs the
+  // number here any more (it is said once, outside the fold, by proposedNote).
+  // What must stay true is that `touchBoxes` gates EVERY call that moves a box.
+  assert.match(code, /if \(touchBoxes\) applyTicks\(out\);/,
     'and touchBoxes must actually gate the only place boxes are moved');
+  const calls = [...code.matchAll(/applyTicks\(/g)].length;
+  assert.equal(calls, 3, `applyTicks is called ${calls} times; each must be inside a `
+    + 'touchBoxes gate — the definition, the empty-box path and the matched path');
+  for (const m of code.matchAll(/^(.*)applyTicks\(/gm)) {
+    if (m[1].includes('function ')) continue;      // the definition itself
+    assert.match(m[1], /touchBoxes/,
+      `a call to applyTicks with no touchBoxes gate on its line: «${m[1].trim()}»`);
+  }
 });
 
 // The button is gone; typing is the interaction. A button left behind would teach
