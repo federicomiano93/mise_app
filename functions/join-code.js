@@ -152,10 +152,14 @@ export function retryAfterMs(record, now = Date.now()) {
 
 // ── What the person is told ──────────────────────────────────────────────────
 
-// ⚠️ EVERY REFUSAL SOUNDS THE SAME EXCEPT THE RATE LIMIT, and that is deliberate.
-// Telling somebody "that code has expired" confirms the code EXISTED, which is
-// exactly the signal a search wants. The rate limit is the one exception because
-// it says nothing about any code — only about how often this account has asked.
+// ⚠️ EVERY REFUSAL SOUNDS THE SAME EXCEPT TWO, and that is deliberate. Telling
+// somebody "that code has expired" confirms the code EXISTED, which is exactly
+// the signal a search wants.
+//
+// The two exceptions each say something about the ACCOUNT asking, never about the
+// code: the rate limit reports how often this account has tried, and
+// 'already-member' is only ever reached by an account that is already inside the
+// location the code names — so it tells them a fact they are living in.
 //
 // ⚠️ THIS ONE STAYS IN ENGLISH AND MUST. It is thrown by the server (three call
 // sites in functions/onboarding.js), and the server has no dictionary — this file
@@ -168,6 +172,14 @@ export function redeemFailureText(status, retryMs = 0) {
   if (status === 'rate-limited') {
     const mins = Math.max(1, Math.ceil(retryMs / 60000));
     return `Too many tries. Wait ${mins} minute${mins === 1 ? '' : 's'} and try again.`;
+  }
+  // ⚠️ A CODE MAY NOT CHANGE WHAT SOMEBODY ALREADY IN CAN DO, and this sentence
+  // says so rather than pretending the code was faulty. redeemJoinCode refuses
+  // before writing anything, because the write it would otherwise do OVERWRITES
+  // the membership — a staff code opened by the owner of that business used to
+  // make them an employee of it.
+  if (status === 'already-member') {
+    return 'You are already in this business. A code cannot change what you can do here.';
   }
   return 'That code does not work. Ask for a new one.';
 }

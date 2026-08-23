@@ -495,8 +495,21 @@ function joinScreen({ needsAccount, prefill = '' }) {
       // A refused code arrives as the function's own message; anything from the
       // sign-up half arrives as a Firebase auth code.
       const fromAuth = err && typeof err.code === 'string' && err.code.startsWith('auth/');
+      // ⚠️ THE ONE REFUSAL THE SERVER NAMES, AND THE ONLY ONE THIS SCREEN CAN SAY
+      // IN THE LANGUAGE ON SCREEN. js/join-code.js is copied byte for byte into
+      // functions/, so the server has no dictionary and every other refusal arrives
+      // as English and is shown as it came (see the note in that file). This one
+      // arrives with a reason beside the words, so the words can be ours.
+      const alreadyMember = err && err.details && err.details.reason === 'already-member';
       setStatus(fromAuth ? messageFor(err)
+        : alreadyMember ? t('join.alreadyMember')
         : (err && err.message) || t('join.badCode'));
+      // ⚠️ AND THE INVITATION IS DROPPED, because no amount of retrying can change
+      // the answer. Left in place it is offered again on the next page and every
+      // page after it — a question with one possible reply, asked for the life of
+      // the window. The code itself is untouched on the server and still works for
+      // the person it was minted for.
+      if (alreadyMember) forgetInvite();
       // ⚠️ ONE refusal has a way forward, so it gets one. Every other failure here
       // is answered by trying again on this same screen; this one cannot be, because
       // the account already exists and no amount of retyping will create it.
