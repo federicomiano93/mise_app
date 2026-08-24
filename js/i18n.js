@@ -974,6 +974,10 @@ const DICTIONARIES = Object.freeze({
     'cat.total': 'Total',
     'cat.ingredient': 'Ingredient',
     'cat.ingredients': 'Ingredients',
+    // The headings on the recipe screen's cards. ⚠️ They name a part of the SCREEN, not
+    // a food, so they follow the interface language like every other instruction.
+    'cat.section.batch': 'Batch weight',
+    'cat.section.procedure': 'Procedure',
     'cat.amount': 'Amount',
     'cat.unit': 'Unit',
     'cat.removeIngredient': 'Remove ingredient',
@@ -2816,6 +2820,8 @@ const DICTIONARIES = Object.freeze({
     'cat.total': 'Totale',
     'cat.ingredient': 'Ingrediente',
     'cat.ingredients': 'Ingredienti',
+    'cat.section.batch': 'Peso impasto',
+    'cat.section.procedure': 'Procedimento',
     'cat.amount': 'Quantità',
     'cat.unit': 'Unità',
     'cat.removeIngredient': 'Togli l’ingrediente',

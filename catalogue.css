@@ -504,6 +504,38 @@ body.cat-zoom-lock { overflow: hidden; }
 
 /* The cost panel on the recipe screen. The number and its caveat are one block:
    a partial cost shown without its note is the one way this screen can mislead. */
+/* ── One card shape for every block on the recipe screen ─────────────────────
+   Federico, 24 Aug 2026: «dividi tutte le funzioni in riquadri… così che ogni funzione
+   si distingua bene». Two of the five blocks had an edge and three floated.
+   ⚠ THE VALUES ARE .cat-alg-panel's, NOT NEW ONES. That card is the shape this screen
+   already uses; these are the same padding, border, radius and surface read through the
+   same tokens. Its class names are not reused because they are named for ALLERGENS, and
+   a cost card wearing .cat-alg-panel is a name that lies about what it holds.
+   ⚠ NO TOP PADDING ON THE CARD: the head carries it, so the card's whole top edge is
+   part of the heading rather than a 12px band of nothing. */
+.cat-sec {
+  margin-top: 14px;
+  padding: 0 14px 12px;
+  border: 1px solid var(--cat-border);
+  border-radius: var(--cat-radius);
+  background: var(--cat-surface);
+}
+/* An <h3>, so the screen has a real outline for a screen reader. Its own margin is
+   removed: the padding above already places it. */
+.cat-sec-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  margin: 0; padding: 12px 0 8px;
+}
+.cat-sec-label {
+  font-size: .74rem; text-transform: uppercase; letter-spacing: .06em;
+  color: var(--cat-text-2); font-family: var(--cat-font-mono); font-weight: 400;
+}
+/* ⚠ THE BLOCKS INSIDE KEEP THEIR OWN SPACING EXCEPT THE FIRST MARGIN, which would
+   otherwise push every card's content away from its own heading. */
+.cat-sec-body > :first-child { margin-top: 0; }
+.cat-sec-body .cat-guided-panel { margin-top: 0; }
+.cat-sec-body .cat-weight-panel { margin-top: 0; }
+
 .cat-cost-panel {
   margin-top: 14px;
   padding: 12px 14px;

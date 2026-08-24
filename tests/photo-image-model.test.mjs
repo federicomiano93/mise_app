@@ -336,10 +336,17 @@ test('⚠️ the batch-weight box sits directly under the recipe, above the cost
   // nine-line allergen card. Order is the whole change, so order is what is pinned.
   const detail = codeOf(read('js/catalogue/catalogue-detail.js'));
   const row = detail.slice(detail.indexOf("class: 'cat-detail-top'"));
-  const order = ['ingList', 'weightPanel', 'costHost', 'guidedHost'].map(n => row.indexOf(n));
+  // ⚠️ THE NAMES CHANGED ON 24 Aug 2026 WHEN EACH BLOCK GAINED A CARD, and the ORDER is
+  // still the whole point: the batch box after the recipe and before the cost.
+  const order = ["catSection(t('cat.ingredients')", 'batchCard', 'costHost', 'guidedCard']
+    .map(n => row.indexOf(n));
   assert.ok(order.every(i => i !== -1), 'the detail top no longer holds all four');
   assert.deepEqual([...order].sort((a, b) => a - b), order,
     'the weight box must come after the recipe and before the cost card');
+  // ⚠️ AND THE CARD GOES WITH THE PANEL. A recipe of pieces and «to taste» has nothing
+  // to scale, and a headed card standing empty reads as something broken.
+  assert.match(detail, /batchCard\.hidden = weightPanel\.hidden;/,
+    'the batch card must hide itself exactly when its panel does');
 });
 
 test('⚠️ the allergen card folds, and what stays OUTSIDE the fold is the safety rule', () => {
@@ -441,11 +448,22 @@ test('⚠⚠ a data update must not delete the allergen card from an open recipe
   const detail = codeOf(read('js/catalogue/catalogue-detail.js'));
   const fn = detail.slice(detail.indexOf('refreshCost(latest)'), detail.indexOf('refreshCost(latest)') + 700);
   assert.ok(fn.length > 40, 'refreshCost is gone');
-  assert.match(fn, /allergenPanel\(/,
-    'refreshCost must rebuild the allergen card, or the next update deletes it');
-  // Both cards, in the same call, in the order the first render uses.
-  assert.match(fn, /replaceChildren\(costPanel\([^)]*\), *allergens\)/,
-    'refreshCost must put BOTH cards back');
+
+  // ⚠️⚠️ STRONGER SINCE 24 Aug 2026: it is no longer enough that this call happens to
+  // list both cards. ONE function builds the host's children, and BOTH the first render
+  // and every refresh go through it — so the two cannot diverge at all, rather than
+  // being checked for having diverged.
+  assert.match(detail, /const costHostChildren = \(r\) => \[costPanel\(r\), allergenPanel\(r, app\)\];/,
+    'the children of the host are listed in exactly one place');
+  assert.match(detail, /const costHost = el\('div', \{ class: 'cat-cost-host' \}, costHostChildren\(recipe\)\);/,
+    'the first render must go through it');
+  assert.match(fn, /costHost\.replaceChildren\(\.\.\.children\);/,
+    'and so must every refresh');
+  assert.match(fn, /const children = costHostChildren\(fresh\);/,
+    'with the FRESH recipe, or a price arrives and the card still shows the old one');
+  // And nothing may rebuild that host by listing cards by hand again.
+  assert.ok(!/replaceChildren\(costPanel\(/.test(detail),
+    '⚠️ listing the cards at the call site is exactly how this defect happened');
   // And the reader must not have the card shut under them mid-read.
   assert.match(fn, /aria-expanded/, 'the open state is not carried across the rebuild');
 });

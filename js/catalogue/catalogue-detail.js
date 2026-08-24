@@ -27,7 +27,14 @@ import { outputLanguage, allergenName } from '../market.js';
 // Whether this venue tracks allergens at all. From js/ root: Orders sets the switch
 // and the Catalogue obeys it, so the judgement lives in one file for both.
 import { allergensOn } from '../venue-features.js';
-import { formatRate } from '../price-model.js';
+// ⚠️ formatMoney AND NOT formatRate, and it is one identifier with a reason.
+// Federico, 24 Aug 2026: «nella casella costo voglio solo il costo al kg con due numeri
+// decimali dopo il punto». formatRate prints two to FOUR decimals so that a gelatine
+// leaf at 3.5p does not read as £0.00 — right for a rate per PIECE, and a kilo of a
+// recipe costing under a penny is not a real case. formatRate itself is untouched: it
+// has eleven call sites across Orders, Food Cost and this feature's own ingredient
+// rates, and widening it for one screen would move all eleven.
+import { formatMoney } from '../price-model.js';
 import { hasProcedure, normalizeSteps, unassignedRows, progressText, formatDuration } from './guided-model.js';
 
 const IMPORT_SVG =
@@ -71,6 +78,13 @@ function costPanel(recipe) {
     // Nothing linked at all: say what to do, once, quietly — and only when the
     // recipe has rows worth linking, so a brand-new empty recipe stays silent.
     if (!result.unpriced.length) { panel.hidden = true; return panel; }
+    // ⚠️ THE HEADING IS DRAWN HERE TOO, and it was not until 24 Aug 2026. Every other
+    // block on this screen now carries one, so a single unheaded box saying «no cost
+    // yet» read as something half-built rather than as the cost card with nothing in
+    // it. Seen in a screenshot; no measurement asks about a missing heading.
+    panel.appendChild(el('div', { class: 'cat-cost-head' }, [
+      el('span', { class: 'cat-cost-label', text: t('cat.cost') }),
+    ]));
     panel.appendChild(el('p', { class: 'cat-cost-none', text:
       t('cat.noCostYetLink') }));
     return panel;
@@ -78,7 +92,7 @@ function costPanel(recipe) {
 
   panel.appendChild(el('div', { class: 'cat-cost-head' }, [
     el('span', { class: 'cat-cost-label', text: t('cat.cost') }),
-    el('span', { class: 'cat-cost-value', text: `${formatRate(result.pricePerKg)} / kg` }),
+    el('span', { class: 'cat-cost-value', text: `${formatMoney(result.pricePerKg)} / kg` }),
   ]));
 
   // The weight it was worked out over, said plainly, because it is NOT the recipe
@@ -413,8 +427,12 @@ export function renderDetail({ recipe, app }) {
     renderRows();
   }
 
+  // ⚠️ NO VISIBLE LABEL INSIDE THE CARD ANY MORE, and the card's own heading is why.
+  // Seen in a screenshot after the cards landed: «PESO IMPASTO» and «PESO TOTALE
+  // IMPASTO» sat one above the other, two headings saying the same thing. The input
+  // keeps its accessible name through aria-label, so nothing is lost to a screen
+  // reader — what goes is the repetition, not the label.
   const weightPanel = el('div', { class: 'cat-weight-panel' }, [
-    el('label', { for: 'catGrams', text: t('cat.totalDoughWeight') }),
     el('div', { class: 'cat-weight-input' }, [
       el('div', { class: 'cat-field' }, [gramsInput, el('span', { class: 'unit', text: 'g' })]),
       calcBtn,
@@ -468,7 +486,15 @@ export function renderDetail({ recipe, app }) {
   // the fold and are reached only by scrolling — never competing with the recipe.
   // The cost panel is REPLACED in place when new data arrives, never the whole
   // view: rebuilding the view would throw away a scaled batch the user is reading.
-  const costHost = el('div', { class: 'cat-cost-host' }, [costPanel(recipe), allergenPanel(recipe, app)]);
+  // ⚠️⚠️ ONE FUNCTION FEEDS BOTH THE FIRST BUILD AND EVERY REFRESH, AND THAT IS THE
+  // WHOLE POINT OF IT EXISTING. This host holds TWO cards, and refreshCost() below
+  // replaces its children on every price snapshot. On 11 August it was given ONE —
+  // `replaceChildren(costPanel(...))` — and the allergen card was silently deleted from
+  // an open screen, on the only screen in this app that can send somebody to hospital.
+  // It stayed that way for eleven days (v1.60.1). Two call sites that each list the
+  // children can diverge; one function cannot.
+  const costHostChildren = (r) => [costPanel(r), allergenPanel(r, app)];
+  const costHost = el('div', { class: 'cat-cost-host' }, costHostChildren(recipe));
 
   // The batch weight is read at the moment Start is tapped, not captured here:
   // choosing a weight and then starting the mix is one gesture, and a panel built
@@ -476,6 +502,33 @@ export function renderDetail({ recipe, app }) {
   const guidedHost = el('div', { class: 'cat-guided-host' },
     [guidedPanel(recipe, app, () => displayTarget)]);
 
+  // ⚠️ ONE CARD SHAPE FOR EVERY BLOCK ON THIS SCREEN. Federico, 24 Aug 2026: «dividi
+  // tutte le funzioni in riquadri come hai fatto nella scheda del prodotto fornitore
+  // così che ogni funzione si distingua bene». Until now two of the five blocks had an
+  // edge and three floated on the page, so the screen read as one long thing.
+  //
+  // ⚠️ A STATIC HEAD, NOT A FOLD. The ingredient-card's folds hide a JOB; every block
+  // here is an ANSWER — what is in it, what it weighs, what it costs, how it is made —
+  // and an answer behind a tap is an answer nobody reads. That is the same rule the
+  // allergen card follows by keeping its state word outside its fold.
+  //
+  // ⚠️ AND THE HEAD IS AN <h3>, NEVER A BUTTON: there is nothing behind it to open, and
+  // a tap target that does nothing teaches somebody the card is closed. Copied from
+  // section() in js/orders/ingredient-form.js, which is itself a copy of this file's
+  // own .cat-alg-* card — one fold pattern in one app.
+  const catSection = (title, children) => el('div', { class: 'cat-sec' }, [
+    el('h3', { class: 'cat-sec-head' }, [el('span', { class: 'cat-sec-label', text: title })]),
+    el('div', { class: 'cat-sec-body' }, children),
+  ]);
+
+  const batchCard = catSection(t('cat.section.batch'), [weightPanel]);
+  batchCard.hidden = weightPanel.hidden;
+  const guidedCard = catSection(t('cat.section.procedure'), [guidedHost]);
+
+  // ⚠️ THE COST AND ALLERGEN CARDS ARE **NOT** WRAPPED. Both already carry a head and a
+  // frame of their own, and the allergen one carries a STATE WORD in that head; putting
+  // either inside another card gives it two heads. It is also the one card on this
+  // screen that has already cost a live defect, and this release does not touch it.
   const root = el('div', { class: 'cat-view' }, [
     // ⚠️ THE WEIGHT BOX SITS DIRECTLY UNDER THE RECIPE, and it did not until now.
     // Federico, 23 Aug 2026, from a photograph of Brioche on his own phone: scaling
@@ -485,10 +538,13 @@ export function renderDetail({ recipe, app }) {
     // replaced in place, and the guided panel reads the weight through a closure
     // rather than off the DOM.
     el('div', { class: 'cat-detail-top' }, [
-      ingList,
-      weightPanel,
+      catSection(t('cat.ingredients'), [ingList]),
+      // ⚠️ THE WHOLE CARD GOES WHEN THE PANEL DOES. A recipe of pieces and «to taste»
+      // has nothing to scale by weight, and a headed card standing empty reads as
+      // something broken rather than as something that does not apply.
+      batchCard,
       costHost,
-      guidedHost,
+      guidedCard,
     ]),
     el('div', { class: 'cat-detail-bottom' }, [
       importBtn,
@@ -535,9 +591,11 @@ export function renderDetail({ recipe, app }) {
       // class and the body's hidden attribute cannot drift apart.
       const openBefore = costHost.querySelector('.cat-alg-toggle')
         ?.getAttribute('aria-expanded') === 'true';
-      const allergens = allergenPanel(fresh, app);
-      costHost.replaceChildren(costPanel(fresh), allergens);
-      if (openBefore) allergens.querySelector('.cat-alg-toggle')?.click();
+      // ⚠️ THE SAME FUNCTION THAT BUILT THEM. Listing the children here as well is how
+      // the v1.60.1 defect happened: this call said one card and the host held two.
+      const children = costHostChildren(fresh);
+      costHost.replaceChildren(...children);
+      if (openBefore) costHost.querySelector('.cat-alg-toggle')?.click();
     },
   };
 }
