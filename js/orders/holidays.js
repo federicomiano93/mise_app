@@ -66,6 +66,10 @@ let ukHolidays = loadFromCache() || UK_FALLBACK.slice();
 // questions is how a caller comes to be right about one country and wrong about the
 // other — see nextHoliday() below, which walks two years and would otherwise hand
 // back Britain's whole list twice.
+//
+// ⚠️ THAT IS TRUE OF calendarFor(), NOT OF refreshHolidays(), which answers the
+// whole UK list for a GB venue because its only consumer is a console count of what
+// was downloaded.
 const CALENDAR = Object.freeze({
   GB: (year) => ukHolidays.filter(d => String(d).startsWith(`${year}-`)),
   IT: (year) => italianHolidays(year),
@@ -81,9 +85,15 @@ const CALENDAR = Object.freeze({
 // ⚠️ Checked in production on 24 Aug 2026 before choosing this direction: all three
 // live venues carry a country (bakery GB, restaurant GB, Panificio Miano IT), so
 // nobody loses a calendar they have today.
+// ⚠️ hasOwnProperty, NOT `CALENDAR[country]`. A plain object answers 'constructor'
+// and 'toString' from its prototype, so a country of either name would hand back a
+// function and throw instead of answering "no calendar". Unreachable today —
+// countryOf() only ever yields 'GB', 'IT' or null — but the whole point of this
+// function is that an unrecognised country is answered, never crashed on.
 function calendarFor(country, year) {
-  const build = CALENDAR[country];
-  return build ? build(year) : [];
+  const known = typeof country === 'string'
+    && Object.prototype.hasOwnProperty.call(CALENDAR, country);
+  return known ? CALENDAR[country](year) : [];
 }
 
 function yearOf(isoDate) {

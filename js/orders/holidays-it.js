@@ -120,11 +120,21 @@ export function italianHolidays(year) {
   // calendar in this app looks for "the next one", and the UK list arrives sorted
   // from gov.uk. Two calendars that disagree about their own order is the kind of
   // difference that shows up as one screen behaving oddly a year later.
-  const sorted = Object.freeze(dates.sort());
+  //
+  // ⚠️⚠️ AND DE-DUPLICATED, BECAUSE TWO OF THE TWELVE CAN LAND ON THE SAME DAY.
+  // Easter falls on 25 April roughly three times a century — 1886, 1943, and next in
+  // 2038 — which is also the Festa della Liberazione. Twelve rules, eleven days. A
+  // list holding the date twice answers every question correctly today, so this is
+  // not a live defect; it is one waiting for whoever first prints the list out.
+  const sorted = Object.freeze([...new Set(dates)].sort());
   byYear.set(y, sorted);
   return sorted;
 }
 
 // Exported for the test that counts them. Twelve is a fact about Italian law, not
 // an implementation detail, and a change to it should have to be deliberate.
+//
+// ⚠️ IT COUNTS THE RULES, NOT THE DAYS, and in most years those are the same number.
+// In a year where Easter lands on 25 April the twelve rules name eleven distinct
+// days — see the de-duplication above.
 export const ITALIAN_HOLIDAY_COUNT = FIXED.length + 2;

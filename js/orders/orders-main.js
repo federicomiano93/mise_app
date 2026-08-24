@@ -15,7 +15,7 @@ import { t, joinList } from '../i18n.js';
 // two collections to draw an order. js/orders/registry-main.js holds those calls now.
 import {
   watchCollection, watchDoc, saveDoc, COLLECTIONS,
-  watchIngredientPrices, canManageHere,
+  watchIngredientPrices, canManageHere, authReady,
 } from './firebase-orders.js';
 import { withPrices } from '../price-model.js';
 import { currentSession } from '../firebase.js';
@@ -1774,7 +1774,18 @@ async function init() {
   // are substituted when they land on a weekend, and one-offs are proclaimed — so it
   // is downloaded from gov.uk and cached. Italy's twelve are set by law and never
   // move, so they are worked out on the phone and this call returns at once.
-  refreshHolidays(venueCountry())
+  //
+  // ⚠️⚠️ IT WAITS FOR THE VENUE TO BE OPEN, AND THAT WAIT IS THE WHOLE POINT OF THE
+  // LINE. init() runs at module load and has no await above here, so asking
+  // venueCountry() directly answers null — no venue is open yet — and the call would
+  // take the "not GB" branch and never fetch anything, for anybody. Nothing would
+  // look wrong: the British venues would go on reading the copy already saved on the
+  // phone, until it ran out some time next year, in silence. `authReady` resolves
+  // only once a LOCATION is open, not merely once somebody is signed in.
+  //
+  // ⚠️ .then, NOT await: the rest of init() must not queue behind the network.
+  authReady
+    .then(() => refreshHolidays(venueCountry()))
     .then(list => { console.log(`Holidays loaded: ${list.length} dates`); showAlerts(); });
 
   watchOrdersConfig();

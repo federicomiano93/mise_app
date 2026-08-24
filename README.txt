@@ -75,7 +75,8 @@ The main ones — each feature folder holds more.
 │       ├── preview.js · supplier-picker.js  ← preview and send
 │       ├── management.js   ← management panel (add/edit/delete)
 │       ├── suggestions.js  ← par-level order suggestion engine
-│       ├── bank-holidays.js ← gov.uk UK bank-holiday calendar (cached)
+│       ├── holidays.js  ← the venue COUNTRY's public holidays: UK fetched from gov.uk
+│       │                 and cached, Italy worked out (js/orders/holidays-it.js)
 │       └── notifications.js ← client-side alerts + browser notifications
 ├── scripts/                ← one-off maintenance (the move to per-venue folders)
 ├── tests/                  ← node --test suites + the Firestore rules checks

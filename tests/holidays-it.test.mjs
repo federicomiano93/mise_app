@@ -148,3 +148,26 @@ test('⚠️ the cached list cannot be edited by whoever receives it', () => {
   assert.throws(() => holidays.push('2026-07-04'), TypeError);
   assert.equal(italianHolidays(2026).length, 12);
 });
+
+// ⚠️⚠️ TWO OF THE TWELVE CAN BE THE SAME DAY, roughly three times a century. Easter
+// next falls on 25 April in 2038, which is also the Festa della Liberazione — so the
+// twelve rules name eleven distinct days. Every question the app asks answers
+// correctly either way, which is exactly why a duplicate would sit there unnoticed
+// until somebody first printed the list out.
+test('⚠️⚠️ a day named by two rules appears once, not twice', () => {
+  assert.equal(easterSunday(2038), '2038-04-25', 'Easter and Liberazione collide');
+  const holidays = italianHolidays(2038);
+  assert.deepEqual(holidays, [...new Set(holidays)], 'no date appears twice');
+  assert.equal(holidays.length, 11, 'twelve rules, eleven days');
+  assert.equal(ITALIAN_HOLIDAY_COUNT, 12, 'the constant counts the RULES');
+
+  // The same in 1943, the previous time it happened.
+  assert.equal(easterSunday(1943), '1943-04-25');
+  assert.equal(italianHolidays(1943).length, 11);
+});
+
+test('an ordinary year still has all twelve as distinct days', () => {
+  for (const year of [2025, 2026, 2027, 2030]) {
+    assert.equal(italianHolidays(year).length, ITALIAN_HOLIDAY_COUNT, `${year}`);
+  }
+});

@@ -67,7 +67,13 @@ test('⚠️ the UK substitutes a weekend holiday and Italy does not', () => {
 // are shut. Checked against production first: all three live venues carry a country,
 // so this silence costs nobody a calendar they have today.
 test('⚠️⚠️ an unknown country gets no holidays at all, never the UK list', () => {
-  for (const country of [null, undefined, '', 'FR', 'gb', 'uk', 0, {}]) {
+  // ⚠️ 'constructor' AND 'toString' ARE IN THIS LIST ON PURPOSE. A plain object
+  // answers those from its prototype, so a lookup written `CALENDAR[country]`
+  // hands back a function and THROWS rather than answering "no calendar".
+  // Unreachable through the app, and the point of this function is that an
+  // unrecognised country is answered, never crashed on.
+  for (const country of [null, undefined, '', 'FR', 'gb', 'uk', 0, {},
+    'constructor', 'toString', 'hasOwnProperty', '__proto__']) {
     assert.equal(isHoliday('2026-12-25', country), false,
       `${JSON.stringify(country)} must not inherit a calendar`);
     assert.equal(nextHoliday(new Date(2026, 5, 1), country), null);
@@ -197,6 +203,38 @@ test('⚠️ the Orders screen hands the country to the alert renderer', () => {
   assert.ok(body.includes('venueCountry()'), 'and it hands over the venue country');
   assert.match(src, /refreshHolidays\(venueCountry\(\)\)/,
     'and so must the calendar refresh, or a UK venue fetches nothing');
+});
+
+// ⚠️⚠️ AND THE REFRESH MUST WAIT FOR THE VENUE TO BE OPEN. This is the defect a
+// code review caught in the first draft of this fix, and neither the test suite nor
+// four driven runs could see it: init() runs at module load with no await above the
+// call, so venueCountry() answered null, the "not GB" branch was taken, and gov.uk
+// was never fetched again — by anybody. Nothing looked wrong, because the British
+// venues carried on reading the copy already cached on the phone; it would simply
+// have gone quiet some time in 2027, on a screen whose job is to warn.
+//
+// ⚠️ THE GUARD ABOVE PASSED THROUGHOUT. It pins the SHAPE of the call — the right
+// argument, spelled right — and a call can be shaped perfectly and made at the wrong
+// moment. That is this project's own lesson one level over, and it is why this one
+// asks WHEN instead of WHAT.
+test('⚠️⚠️ the calendar refresh waits for a venue to be open', () => {
+  const src = codeOf(read('js/orders/orders-main.js'));
+  const call = src.indexOf('refreshHolidays(venueCountry())');
+  assert.ok(call > 0, 'the slice must not be empty');
+
+  // Everything from the start of the statement up to the call.
+  const statement = src.slice(src.lastIndexOf(';', call) + 1, call);
+  assert.match(statement, /authReady/,
+    'refreshHolidays must be chained off authReady, which resolves only once a '
+    + 'LOCATION is open — not merely once somebody is signed in');
+
+  // ⚠️ And it must be the REAL one. `authReady` is js/firebase.js `sessionReady`
+  // re-exported by the Orders data layer; a local `const authReady = Promise.resolve()`
+  // would satisfy the line above and wait for nothing at all.
+  const imports = src.slice(0, src.indexOf('const state') > 0
+    ? src.indexOf('const state') : 4000);
+  assert.match(imports, /authReady[\s\S]{0,120}?from '\.\/firebase-orders\.js'/,
+    'authReady must be imported from the Orders data layer, not invented locally');
 });
 
 // ⚠️⚠️ AND IT HAS TO SURVIVE A REDRAW. Closing or reopening a notice re-enters
