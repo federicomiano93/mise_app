@@ -2067,3 +2067,71 @@ body.hide-stock .ingredient-list .ing-fields { justify-content: center; }
   border-radius: var(--radius);
   font-size: .88rem; line-height: 1.45; color: var(--text2);
 }
+
+/* ── The confirmation screen: what is about to be recorded ──────────────────
+   js/orders/place-confirm.js. A .preview-overlay like the tick-lists, so it is
+   already in BUSY_SELECTORS and a compulsory update cannot reload the page out
+   from under corrections that have been typed but not yet recorded.
+
+   ⚠️ NOTHING HERE IS A NEW LOOK. The row is the shape of .req-item (name left,
+   number right), the number box is the app's own input.ing-qty, and the odd-
+   quantity colour is --danger, the SAME colour the row hint uses on the order
+   screen — the two must never disagree about what counts as odd. */
+.pc-lead {
+  margin: 0 0 12px;
+  font-size: 13px;
+  color: var(--text2);
+}
+/* Shown only while some row is actually odd. A warning that is always there is a
+   warning nobody reads. */
+.pc-warn {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  background: var(--warn-bg);
+  border: 1px solid var(--warn-border);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--warn);
+}
+.pc-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 56px;
+  padding: var(--space-2) 14px;
+  margin-bottom: 6px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.pc-row-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.pc-row-name { font-size: 15px; color: var(--text); }
+.pc-row-notes { display: flex; flex-wrap: wrap; gap: 8px; }
+.pc-row-input { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+/* ⚠️ NARROWER THAN THE ORDER SCREEN'S 96px, AND IT HAS TO BE: there the box owns
+   the row, here it shares it with the ingredient's name. Still 42px tall, so the
+   tap target does not shrink with it. */
+.pc-row-input input.ing-qty { width: 72px; }
+.pc-row-input input.pc-qty--unusual { border-color: var(--danger); }
+.pc-asked,
+.pc-unusual {
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  font-weight: 600;
+}
+.pc-asked { color: var(--text3); }
+.pc-unusual { color: var(--danger); }
+.pc-note {
+  margin: 12px 0 0;
+  font-size: 12px;
+  color: var(--text3);
+  line-height: 1.45;
+}
+/* A second order to the same supplier on the same day ADDS to the first. It sits
+   under that supplier's heading, not at the foot with the general notes. */
+.pc-note--adds {
+  margin: 0 0 8px;
+  color: var(--crust-ink);
+  font-weight: 600;
+}
