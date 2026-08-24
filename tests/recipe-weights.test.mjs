@@ -203,6 +203,28 @@ test('the percentage input is gone, and its dictionary keys with it', () => {
 
 // ── 5. The row: two frames, one row, and the width to do it was bought ───────
 
+// ⚠️⚠️ THE BODY OF ONE RULE, AND NOTHING PAST ITS CLOSING BRACE. Written after two
+// guards in this very file survived a mutation: `/\.sel \{[\s\S]*?border: 1.5px/` is
+// non-greedy, so when the declaration is deleted it simply keeps scanning into the NEXT
+// rule and finds the same words there. catalogue.css has four other `appearance` lines
+// and dozens of `border: 1.5px solid var(--cat-border)`. Same family as the v1.66.0
+// slice that used indexOf() with no offset: a check that cannot fail is worse than none.
+function ruleBody(source, selector) {
+  // ⚠️ NORMALISED TO LF FIRST. This tree is mixed: sw.js is CRLF, files written this
+  // month are LF, and a multi-line selector written with \n matches nothing in a CRLF
+  // file — silently, which is how probes in this project have "passed" while touching
+  // nothing at all.
+  const css = source.split('\r\n').join('\n');
+  const at = css.indexOf(`${selector} {`);
+  assert.notEqual(at, -1, `the rule «${selector}» must exist to be guarded`);
+  const open = css.indexOf('{', at);
+  const close = css.indexOf('}', open);
+  assert.notEqual(close, -1, `the rule «${selector}» is not closed`);
+  const body = css.slice(open + 1, close);
+  assert.ok(body.trim().length > 5, `the slice for «${selector}» must not be empty`);
+  return body;
+}
+
 test('⚠️ the amount and the unit are two framed cells, and the total matches them', () => {
   assert.match(EDITOR, /el\('div', \{ class: 'cat-amount' \}, \[\s*gramsInput,[\s\S]*?class: 'cat-unit-cell' \}, \[\s*unitSelect,/,
     'the unit gets a cell of its own, because that cell is what carries its frame '
@@ -212,7 +234,8 @@ test('⚠️ the amount and the unit are two framed cells, and the total matches
     + 'stops lining up with the column of numbers it is the sum of');
 
   const css = read('catalogue.css');
-  assert.match(css, /\.cat-ing-editrow \.cat-amount \.cat-grm,\s*\.cat-ing-editrow \.cat-amount \.cat-unit-cell \{[\s\S]*?border: 1\.5px solid var\(--cat-border\)/,
+  assert.match(ruleBody(css, '.cat-ing-editrow .cat-amount .cat-grm,\n.cat-ing-editrow .cat-amount .cat-unit-cell'),
+    /border: 1\.5px solid var\(--cat-border\)/,
     'both frames reuse the border this file already defines, not a new one');
   assert.match(css, /\.cat-amount--plain > \* \{ border: 1\.5px solid transparent; \}/,
     '⚠️ the Total keeps the SAME frame, invisible, so its number stays in the column '
@@ -223,10 +246,11 @@ test('⚠️ the amount and the unit are two framed cells, and the total matches
 
 test('⚠️⚠️ the native dropdown arrow is stripped, and the room it took is given back', () => {
   const css = read('catalogue.css');
-  assert.match(css, /\.cat-ing-editrow \.cat-amount \.cat-unit \{[\s\S]*?appearance: none;/,
+  const unit = ruleBody(css, '.cat-ing-editrow .cat-amount .cat-unit');
+  assert.match(unit, /appearance: none;/,
     'Chromium reserves ~16px for its own arrow, and that width is what pays for the '
     + 'second frame — v1.66.0 refused two frames on a measurement taken WITH it there');
-  assert.match(css, /\.cat-ing-editrow \.cat-amount \.cat-unit \{[\s\S]*?padding-right: 11px;/,
+  assert.match(unit, /padding-right: 11px;/,
     '⚠️ the chevron needs its room reserved: a <select> runs its longest option under '
     + 'anything overlapping it WITHOUT reporting an overflow («to tast», v1.66.0)');
   // ⚠️ SCOPED, NOT POSITIONAL. The Total row reuses .cat-amount with a plain <span> in
@@ -242,9 +266,10 @@ test('⚠️⚠️ the native dropdown arrow is stripped, and the room it took i
   // ⚠️ 44px ON THE FIELDS THEMSELVES. min-height on a frame sizes the BORDER box, so
   // the tappable child comes out short — measured at 42px on the first draft of this
   // very change, which is the same trap v1.66.0 recorded and then fell into again.
-  assert.match(css, /\.cat-ing-editrow \.cat-amount \.cat-unit \{[\s\S]*?min-height: 44px;/,
+  assert.match(unit, /min-height: 44px;/,
     'the select itself must clear the tap floor, not the cell around it');
-  assert.match(css, /\.cat-ing-editrow \.cat-amount \.cat-grm \{[\s\S]*?padding: 10px 8px 10px 5px;/,
+  assert.match(ruleBody(css, '.cat-ing-editrow .cat-amount .cat-grm'),
+    /padding: 10px 8px 10px 5px;/,
     'and the amount box keeps its own padding in one declaration');
 });
 
