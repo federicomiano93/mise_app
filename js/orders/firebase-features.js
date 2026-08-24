@@ -40,11 +40,24 @@ const override = {};
 
 // What this venue shows on an ingredient's record. A live read, so a screen may call
 // it on every paint.
+//
+// ⚠️⚠️ `packPhoto` POINTS THE OPPOSITE WAY TO THE OTHER TWO, AND THE DIRECTION IS THE
+// WHOLE ARGUMENT. allergensOn()/nutritionOn() read `!== false`, so a venue that has
+// never heard of them, a document that failed to load and a corrupt value all answer
+// ON — because the opposite would quietly remove the part of this app that can send
+// somebody to hospital. This one reads `=== true`, because it SPENDS MONEY per tap on
+// an account nobody in the venue owns, and a venue that has never heard of it must
+// never find it already running. Same direction, and same reason, as `recipePhoto`.
+//
+// ⚠️ AND ONLY A LITERAL `true` COUNTS. A stray string, a 1, a corrupt value: all off.
 export function ingredientPanels() {
   const location = currentSession().location;
   return {
     allergens: 'showAllergens' in override ? override.showAllergens : allergensOn(location),
     nutrition: 'showNutrition' in override ? override.showNutrition : nutritionOn(location),
+    packPhoto: 'packPhoto' in override
+      ? override.packPhoto
+      : !!location && location.packPhoto === true,
   };
 }
 
@@ -59,5 +72,21 @@ export async function setIngredientPanel(key, on) {
   // Only after the server has agreed. Setting it first would leave the screen
   // showing a change the venue never got.
   override[key] = on;
+  return on;
+}
+
+// Throw the pack-photo switch.
+//
+// ⚠️ ITS OWN CALLABLE, NOT setIngredientPanels. That one writes two fields whose
+// absence means YES; this writes one whose absence means NO, and it is the only switch
+// on this page that costs money. Keeping them apart is what stops a future «send them
+// together» tidy-up from giving the two directions one code path.
+export async function setPackPhoto(on) {
+  await sessionReady;
+  const locationId = currentLocationId();
+  await httpsCallable(functions, 'setPackPhoto')({ locationId, enabled: on });
+  // Only after the server has agreed. Setting it first would leave the screen showing
+  // a change the venue never got — and, here, offering a button that will be refused.
+  override.packPhoto = on;
   return on;
 }

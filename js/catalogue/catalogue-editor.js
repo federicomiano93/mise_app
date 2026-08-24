@@ -12,7 +12,7 @@ import { el } from './dom.js';
 import {
   findInvalidRecipe, unitOf, CATALOGUE_UNITS, isWeighableUnit, weighableTotalGrams,
   linkOf, normalizeLossPct, MAX_LOSS_PCT,
-  normalizeWeight, weightLoss, cookedFromLossPct,
+  normalizeWeight, weightLoss,
 } from './catalogue-model.js';
 import { openLinkPicker } from './ingredient-picker.js';
 import { pricePerKg, formatRate } from '../price-model.js';
@@ -149,9 +149,40 @@ export function renderEditor({ recipe, draft, allRecipes, app }) {
       // editor and the scaling/import logic can never drift apart.
       const unitSelect = el('select', {
         class: 'cat-unit', 'aria-label': t('cat.unit'),
-        onchange: (e) => { ing.unit = e.target.value; markDirty(); updateTotal(); },
+        onchange: (e) => { ing.unit = e.target.value; paintAmount(); markDirty(); updateTotal(); },
       }, CATALOGUE_UNITS.map(u => el('option', { value: u }, u)));
       unitSelect.value = unitOf(ing);
+      // ⚠️ THE CELL IS HELD IN A VARIABLE because its shape changes with the unit —
+      // see paintAmount() below, built after the cell it paints.
+      const amountCell = el('div', { class: 'cat-amount' }, [
+        gramsInput,
+        // ⚠️ THE CHEVRON IS A SIBLING OF THE SELECT INSIDE ITS OWN CELL, not a
+        // child of it: a <select> renders only <option>s, so anything put inside is
+        // silently dropped. The cell is what carries the frame and the position.
+        el('span', { class: 'cat-unit-cell' }, [
+          unitSelect,
+          el('span', { class: 'cat-unit-chev', 'aria-hidden': 'true', text: '›' }),
+        ]),
+      ]);
+      // ⚠️⚠️ «to taste» IS THE ONE UNIT THAT CARRIES NO NUMBER, and the model has said so
+      // since it was written: scaleRecipe() returns null for that unit and for no other,
+      // and the read-only recipe screen prints no amount beside it. Only this editor
+      // still drew a «0» there — a number that means nothing, sitting in the box that
+      // forces the unit beside it to be wide enough for the longest word in the list.
+      // Federico, 24 Aug 2026: «la casella dei g può essere anche più piccola della
+      // quantità, non serve che sia più grande addirittura». It could not be, while
+      // «to taste» had to fit next to a number.
+      //
+      // ⚠️ THE STORED AMOUNT IS HIDDEN, NEVER CLEARED. Switching to «to taste» and back
+      // to «g» has to give the number back, and nothing counts it meanwhile:
+      // ingredientGrams() is 0 for every unit that is not weighable, so hiding it
+      // cannot move a total, a cost or a label.
+      function paintAmount() {
+        const noQty = unitOf(ing) === 'to taste';
+        gramsInput.hidden = noQty;
+        amountCell.classList.toggle('cat-amount--noqty', noQty);
+      }
+      paintAmount();
       const delIcon = el('button', {
         class: 'cat-del-icon', type: 'button', 'aria-label': t('cat.removeIngredient'), icon: TRASH_SVG,
         onclick: () => {
@@ -167,17 +198,21 @@ export function renderEditor({ recipe, draft, allRecipes, app }) {
       // target takes its width from the ingredient NAME, which is the one thing that
       // has to stay readable. Under it there is room to say what it points at.
       rowsContainer.appendChild(el('div', { class: 'cat-ing-editgroup' }, [
-        // ⚠️ THE AMOUNT AND THE UNIT SHARE ONE FRAME, and that is a deliberate shape.
-        // Federico: «lo spazio dove scrivere la quantità e la tipologia devono essere
-        // ben distinte, adesso sono tutte unite» — all three fields were borderless, so
-        // «250 g» read as printed text rather than two controls. ⚠️ ONE border pair, not
-        // two: two separate frames cost ~24px more and start truncating the ingredient
-        // NAME at 320px, which is the one thing on this row that has to stay readable.
-        el('div', { class: 'cat-ing-editrow' }, [
-          labelInput,
-          el('div', { class: 'cat-amount' }, [gramsInput, unitSelect]),
-          delIcon,
-        ]),
+        // ⚠️ TWO FRAMES, ONE ROW, and the width to do it was BOUGHT, not found.
+        // Federico, 23 Aug: «lo spazio dove scrivere la quantità e la tipologia devono
+        // essere ben distinte» — answered then with a single frame divided down the
+        // middle, because two frames measured ~24px more and started truncating the
+        // ingredient NAME at 320px. Looking at it again on 24 Aug: «separa la casella
+        // della quantità con quella del tipo di gr o kg (fallo che si capisce che è un
+        // menù a tendina)», and «fai in modo di farlo tutto in una riga».
+        //
+        // ⚠️⚠️ WHAT PAID FOR IT IS THE NATIVE ARROW. `appearance: none` on the select
+        // gives back the ~16px Chromium reserves for its own dropdown arrow, and the
+        // `›` we draw instead is both narrower and — the actual request — visible. The
+        // measurement that refused two frames was taken WITH that arrow still there;
+        // re-measuring in the wrong order is how the same decision gets re-litigated
+        // with the wrong number.
+        el('div', { class: 'cat-ing-editrow' }, [labelInput, amountCell, delIcon]),
         linkRow(ing, idx),
       ]));
     });
@@ -240,8 +275,14 @@ export function renderEditor({ recipe, draft, allRecipes, app }) {
     if (!ingredient) return t('cat.anIngredientThatNo');
     const rate = pricePerKg(ingredient);
     const supplier = (app.suppliers()[ingredient.supplierId] || {}).name || '';
-    return ['→ ' + (ingredient.name || 'Ingredient'), supplier,
-      rate === null ? 'no price yet' : `${formatRate(rate)} / kg`]
+    // ⚠️ SEEN ON A SCREENSHOT OF AN ITALIAN VENUE, 24 Aug 2026: this line read
+    // «→ Farina 0 · Brava Fresh · no price yet» under an Italian heading. The key has
+    // existed in both languages all along and its own sibling, ingredient-picker.js,
+    // has always used it — this call site simply wrote the English out.
+    // ⚠️ NO GUARD COULD SEE IT: nothing-stays-english skips an all-lowercase string
+    // with no punctuation, because that is exactly the shape of a CSS class list.
+    return ['→ ' + (ingredient.name || t('cat.ingredient')), supplier,
+      rate === null ? t('cat.noPriceYet') : `${formatRate(rate)} / kg`]
       .filter(Boolean).join('  ·  ');
   }
 
@@ -322,20 +363,36 @@ export function renderEditor({ recipe, draft, allRecipes, app }) {
   //
   // ⚠️⚠️ THE TWO STATES, AND THEY ARE THE WHOLE SAFETY OF THIS SCREEN.
   //   untouched — nobody has typed in a weight box. The percentage stays EXACTLY the
-  //     stored lossPct whatever else is edited; crudo shows the live total and cotto is
-  //     DERIVED from that percentage for display. Nothing is written back, so a recipe
-  //     opened to fix a typo comes out of the database byte-identical.
+  //     stored lossPct whatever else is edited; crudo shows the live total and cotto
+  //     stays EMPTY. Nothing is written back, so a recipe opened to fix a typo comes
+  //     out of the database byte-identical.
   //   touched — a person has typed. The percentage is computed from the boxes, crudo
   //     stops following the total, and all three are saved.
   // Without the split, correcting 10 g of flour would silently move the number that
   // decides what every product built on this recipe costs.
+  //
+  // ⚠️⚠️ CRUDO IS FILLED IN AND COTTO IS NOT, AND THE ASYMMETRY IS THE POINT — it
+  // looks like an oversight and a future reader will want to "finish" it. Crudo is
+  // derived from something TRUE and live: the recipe's own ingredient total, which is
+  // on the screen above it. Cotto would be derived from a percentage nobody measured,
+  // and until 24 Aug 2026 it was: cookedFromLossPct(total, lossPct). With lossPct 0 —
+  // every one of the twelve real recipes — that put the RAW total in the cooked box,
+  // so the screen read «weighed, and it loses nothing». Federico, looking at it:
+  // «la casella del impasto cotto deve essere vuota di default». An empty box says
+  // «nobody has weighed this», which is the truth, and the stored percentage is still
+  // printed underneath so nothing is hidden.
   let weighed = normalizeWeight(working.rawGrams) > 0 && normalizeWeight(working.cookedGrams) > 0;
   // Only true once the PERSON edits a box — not when the app fills one in.
   let rawTyped = weighed;
 
+  // ⚠️⚠️ «—» AND NOT «0», ON BOTH BOXES. Found by looking at a screenshot after every
+  // measurement had passed: with the cooked box emptied, its grey `0` placeholder sat
+  // there on every recipe — a weaker version of the exact claim this change removes,
+  // since an empty box here means «nobody has weighed this» and never «it weighed
+  // nothing». Neither box's emptiness is a zero, so neither may look like one.
   const rawInput = el('input', {
     id: 'catRecipeRaw', class: 'cat-loss-input', type: 'number',
-    min: '0', step: 'any', inputmode: 'decimal', placeholder: '0',
+    min: '0', step: 'any', inputmode: 'decimal', placeholder: '—',
     // ⚠️ ITS STORED VALUE, AT BUILD TIME. refreshLoss() below only rewrites this box
     // while it is still following the recipe total, so a recipe that HAS been weighed
     // would otherwise open with an empty box and the number simply gone from the screen.
@@ -352,9 +409,10 @@ export function renderEditor({ recipe, draft, allRecipes, app }) {
   });
   const cookedInput = el('input', {
     id: 'catRecipeCooked', class: 'cat-loss-input', type: 'number',
-    min: '0', step: 'any', inputmode: 'decimal', placeholder: '0',
-    // Same, and for the same reason: the derived value below is only for a recipe
-    // nobody has weighed.
+    min: '0', step: 'any', inputmode: 'decimal', placeholder: '—',
+    // ⚠️ ITS STORED VALUE, AND NOW THAT IS THE ONLY THING THAT EVER FILLS IT. A recipe
+    // somebody HAS weighed opens showing what they weighed; every other recipe opens
+    // empty, because empty is what «nobody has weighed this» looks like.
     value: normalizeWeight(working.cookedGrams) > 0 ? String(Math.round(normalizeWeight(working.cookedGrams))) : '',
     'aria-label': t('cat.cookedDoughWeight'),
     oninput: (e) => {
@@ -365,6 +423,19 @@ export function renderEditor({ recipe, draft, allRecipes, app }) {
   });
   const lossOut = el('p', { class: 'cat-loss-out' });
   const lossWarn = el('p', { class: 'cat-loss-warn' });
+
+  // What the screen says when the two boxes do not answer the question — on open, and
+  // again the moment somebody fills in one of the pair and not the other.
+  //
+  // ⚠️⚠️ A STORED 0 IS «NOBODY HAS SAID», NOT «MEASURED ZERO», and the document cannot
+  // tell the two apart: lossPct is absent-or-zero on every recipe written before the
+  // two weighings existed. So a 0 gets no percentage sentence at all. Printing «loses
+  // 0%» is precisely the false statement this change exists to remove — and it is the
+  // false one that costs money, because a loss of zero makes every baked product's cost
+  // per kilo too low.
+  function storedLossText(pct) {
+    return pct > 0 ? t('cat.lossStored', { pct: String(pct) }) : t('cat.lossNotYet');
+  }
 
   // The number the boxes currently mean, and what the screen says about it.
   function refreshLoss() {
@@ -377,12 +448,10 @@ export function renderEditor({ recipe, draft, allRecipes, app }) {
     const before = normalizeWeight(working.rawGrams);
 
     if (!weighed) {
-      // ⚠️ DERIVED FOR DISPLAY, NEVER WRITTEN BACK. The recipe already has an answer;
-      // showing an empty box would read as «nobody has said», which is a different
-      // statement and a false one.
-      const shown = cookedFromLossPct(before, working.lossPct);
-      cookedInput.value = shown ? String(shown) : '';
-      lossOut.textContent = t('cat.lossIs', { pct: String(working.lossPct) });
+      // ⚠️ EMPTY, AND NOTHING IS WRITTEN BACK. See the note at the top of this block
+      // for why nothing is derived into it any more.
+      cookedInput.value = '';
+      lossOut.textContent = storedLossText(working.lossPct);
       lossWarn.hidden = true;
       return;
     }
@@ -391,7 +460,9 @@ export function renderEditor({ recipe, draft, allRecipes, app }) {
     if (pct === null) {
       // ⚠️ NOT ZERO. Two numbers that do not answer the question must leave the stored
       // loss alone — zeroing it would quietly declare «this recipe loses nothing».
-      lossOut.textContent = t('cat.lossNotYet');
+      // ⚠️ And they must not hide it either: half-filling the pair used to print «weigh
+      // the cooked dough» over a recipe that already carried a real percentage.
+      lossOut.textContent = storedLossText(working.lossPct);
     } else {
       working.lossPct = pct;
       lossOut.textContent = t('cat.lossIs', { pct: String(pct) });

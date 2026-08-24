@@ -412,13 +412,16 @@ export function sectionOn(locationDoc, name) {
   return sections[name] !== false;
 }
 
-async function chargeTo(store, path, count, limit, now) {
+// ⚠️ EXPORTED FOR functions/pack-photo-model.js, WHICH IS WHAT KEEPS THE BUDGET ONE
+// BUDGET. That file charges the same two documents through this same function; copying
+// the arithmetic across is how a second, invisible allowance appears.
+export async function chargeTo(store, path, count, limit, now) {
   const result = chargeImages(await store.limit(path), now, count, limit);
   if (!result.blocked) await store.saveLimit(path, result.next);
   return result;
 }
 
-function limitError(key, result, who) {
+export function limitError(key, result, who) {
   const hours = Math.max(1, Math.round(result.retryMs / (60 * 60 * 1000)));
   return {
     code: 'resource-exhausted',
@@ -429,7 +432,7 @@ function limitError(key, result, who) {
   };
 }
 
-function usageOf(message) {
+export function usageOf(message) {
   const u = (message && message.usage) || {};
   return { inputTokens: u.input_tokens, outputTokens: u.output_tokens };
 }
