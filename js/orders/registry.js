@@ -41,7 +41,8 @@ import { buildIngredientForm } from './ingredient-form.js';
 // ⚠️ A FEATURE SWITCH, NOT A ROLE GATE, and the difference is why this may sit in a
 // file that is forbidden to ask canManageHere(). It answers «does this venue track
 // allergens at all», which is the same answer for everybody standing in the building.
-import { ingredientPanels, setIngredientPanel } from './firebase-features.js';
+import { ingredientPanels, setIngredientPanel, setPackPhoto } from './firebase-features.js';
+import { renderPackPhotoCapture } from './photo-capture.js';
 import { buildRegistrySettings } from './registry-settings.js';
 import {
   BACK_ICON, field, formActions, makeDayChecks, checkedDays, mgmtRow, reportFailure,
@@ -392,12 +393,49 @@ export function buildRegistry(data, actions) {
           item,
           suppliers: data.suppliers(),
           preset: presetSupplierId,
-          actions,
+          // ⚠️ THE PHOTO SCREEN IS HANDED IN AS AN ACTION, not imported by the form.
+          // The form then knows nothing about overlays and this file stays the only
+          // one that navigates — the same seam saveIngredient and priceHistory use.
+          actions: { ...actions, capturePackPhoto, packPhotoOn: () => ingredientPanels().packPhoto },
           onDone: pop,
           onCancel: pop,
         }),
       ]);
       return overlay(item ? t('orders.editIngredient') : t('orders.newIngredient'), body);
+    });
+  }
+
+  // ── Photograph the packet ───────────────────────────────────────────────────
+  //
+  // Resolves with { text, notes } once the reader has answered, or null if the person
+  // backed out. ⚠️ IT ALWAYS RESOLVES: a promise handed to a form and never settled
+  // leaves the button that opened it disabled for the life of that form.
+  //
+  // ⚠️⚠️ THE FORM STAYS MOUNTED UNDERNEATH, UNTOUCHED, and that is the whole reason
+  // this is an overlay rather than a swap. The Catalogue's copy of this feature needs a
+  // one-shot «come back to the editor» marker, a leave-guard drop and a «replace what
+  // you typed?» dialog — all of it because its swap() DESTROYS the editor. Here
+  // refresh() explicitly leaves a .mgmt-form alone, so backing out returns to the form
+  // with every character still in it. None of that machinery is copied.
+  function capturePackPhoto() {
+    return new Promise((resolve) => {
+      let settled = false;
+      const settle = (value) => {
+        if (settled) return;
+        settled = true;
+        pop();
+        resolve(value);
+      };
+      push(() => {
+        const { root } = renderPackPhotoCapture({
+          onText: (text, notes) => settle({ text, notes }),
+        });
+        return overlay(
+          t('orders.pack.photo.title'),
+          el('div', { class: 'mgmt-scroll' }, [root]),
+          () => settle(null),
+        );
+      });
     });
   }
 
@@ -416,7 +454,12 @@ export function buildRegistry(data, actions) {
     push(() => overlay(t('ui.settings'), buildRegistrySettings({
       panels: ingredientPanels(),
       onSet: async (key, on) => {
-        await setIngredientPanel(key, on);
+        // ⚠️ TWO CALLABLES, ROUTED BY KEY. setIngredientPanels writes two fields whose
+        // absence means YES; setPackPhoto writes one whose absence means NO, because it
+        // spends money. Sending the third through the first would put a money switch on
+        // the safety switch's code path, where a missing value reads as ON.
+        if (key === 'packPhoto') await setPackPhoto(on);
+        else await setIngredientPanel(key, on);
         // The rows behind the overlay carry the «non dichiarato» flag, so they are
         // wrong the moment the switch moves.
         paintList();
@@ -425,10 +468,15 @@ export function buildRegistry(data, actions) {
   }
 
   // ── The overlay stack ───────────────────────────────────────────────────────
-  function overlay(title, body) {
+  // `onBack` defaults to pop. It is a parameter because ONE caller has to know that
+  // its screen was left WITHOUT an answer: capturePackPhoto() below hands a promise to
+  // the form it came from, and a Back that only popped would leave that promise pending
+  // for ever — with the button that opened it disabled for the life of the form, and
+  // nothing on screen saying why.
+  function overlay(title, body, onBack = pop) {
     return el('div', { class: 'mgmt-overlay' }, [
       el('header', { class: 'orders-header' }, [
-        el('button', { type: 'button', class: 'orders-icon-btn', 'aria-label': t('ui.back'), icon: BACK_ICON, onClick: pop }),
+        el('button', { type: 'button', class: 'orders-icon-btn', 'aria-label': t('ui.back'), icon: BACK_ICON, onClick: onBack }),
         el('div', { class: 'orders-header-title' }, [el('h1', { text: title })]),
         // Keeps the title centred: the back button on the left needs a counterweight.
         el('span', { style: { width: '36px', flexShrink: '0' } }),

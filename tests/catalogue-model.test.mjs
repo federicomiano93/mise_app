@@ -26,7 +26,6 @@ import {
   weighableTotalGrams,
   nonWeighableLabels,
   weightLoss,
-  cookedFromLossPct,
   normalizeWeight,
   MAX_LOSS_PCT,
   MAX_WEIGHT_G,
@@ -453,23 +452,12 @@ test('junk in, no throw and no NaN out', () => {
   assert.equal(normalizeWeight('850'), 850, 'a string from an input box is a number');
 });
 
-test('the cooked weight derived from a stored percentage round-trips', () => {
-  // This is what a recipe written before the feature shows: it has a lossPct and no
-  // weights, and the box must display what that percentage MEANS — then read back as
-  // the same percentage, or opening the editor would appear to change the recipe.
-  for (const [total, pct] of [[1000, 20], [8380, 12], [2500, 7.5], [900, 0], [4000, 33.3]]) {
-    const cooked = cookedFromLossPct(total, pct);
-    assert.equal(weightLoss(total, cooked).pct, pct, `${total} g at ${pct}%`);
-  }
-});
-
-test('a derived cooked weight is junk-safe too', () => {
-  assert.equal(cookedFromLossPct(0, 20), 0);
-  assert.equal(cookedFromLossPct('abc', 20), 0);
-  assert.equal(cookedFromLossPct(1000, 'abc'), 1000, 'an unreadable loss means none lost');
-  assert.equal(cookedFromLossPct(1000, 150), 10, 'capped at 99, so never zero and never negative');
-  assert.ok(cookedFromLossPct(1000, 99) > 0, 'the cap keeps the divisor above zero');
-});
+// 📌 THE TWO TESTS THAT STOOD HERE WENT WITH THE FUNCTION THEY TESTED, 24 Aug 2026.
+// They proved that a cooked weight worked out from a stored percentage read back as
+// that same percentage — arithmetic that was correct and a screen that was not: at
+// lossPct 0, which is every recipe written before the two weighings existed, it handed
+// back the raw total, and the editor put it in the cooked box. «Weighed, and it loses
+// nothing.» The box is empty now; that it stays empty is guarded in recipe-weights.
 
 test('⚠️ the weights are absent, not zero, on a recipe nobody has weighed', () => {
   // Same rule as `steps` and `endNote`: every recipe written before this existed must

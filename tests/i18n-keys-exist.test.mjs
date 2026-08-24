@@ -38,11 +38,19 @@ const KNOWN = _dictionaries()[DEFAULT_LANGUAGE];
 // of an identifier — and only ever with a LITERAL first argument.
 const CALL = /(^|[^A-Za-z0-9_$.])t\(\s*(?:'([^'\\]+)'|`([^`$\\]+)`)/gm;
 
+// ⚠️ A COMMENT IS NOT A CALL SITE. A header explaining why a key was retired names
+// that key, and this guard then demanded it back — which is the SAME family as the
+// three guards that passed on their own comments (24 Aug 2026), read the other way
+// round: there prose made a guard succeed, here it makes one fail. Judge the CODE.
+// ⚠️ Only whole-line `//` comments are stripped: a line that STARTS with `//` cannot
+// also be a call, whereas eating `/* */` could swallow a real one inside a string.
+const codeOf = (src) => src.replace(/^[ \t]*\/\/.*$/gm, '');
+
 // A key built at run time — `role.${choice}` — cannot be checked from here, and
 // the tables that hold those keys are checked by the screens' own tests.
 function keysAskedIn(src) {
   const found = new Set();
-  for (const m of src.matchAll(CALL)) found.add(m[2] || m[3]);
+  for (const m of codeOf(src).matchAll(CALL)) found.add(m[2] || m[3]);
   return found;
 }
 
@@ -90,4 +98,18 @@ test('the scan actually finds the app’s phrases', () => {
   assert.ok(asked.has('people.title'), 'the screen title is asked for by name');
   // A real dynamic key must NOT be mistaken for a literal one.
   assert.ok(![...asked].some(k => k.includes('${')), 'a template hole is not a key');
+});
+
+// ⚠️ AND THE COMMENT-STRIPPER MUST NOT EAT THE CODE. A stripper that blanked
+// everything would make this guard report a clean app for ever — the same failure
+// as a regex that matches nothing, one layer down.
+test('a key named only in a comment is not a key the app asks for', () => {
+  const src = [
+    "// this line explains that t('cat.retiredOnPurpose') was removed",
+    "  // and so does this one, indented",
+    "const real = t('people.title');",
+  ].join('\n');
+  const asked = keysAskedIn(src);
+  assert.deepEqual([...asked], ['people.title'],
+    'the call survives the strip and the two comments do not become demands');
 });

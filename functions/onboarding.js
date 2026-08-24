@@ -893,6 +893,39 @@ export const setRecipePhoto = onCall(CALL, async (request) => {
 });
 
 
+// Reading the ingredient list off a PACKET, on «Fornitori e ingredienti».
+//
+// ⚠️⚠️ A SECOND SWITCH AND NOT A SECOND USE OF THE FIRST — Federico's decision when
+// asked directly, 24 Aug 2026. The two readers share one price and one daily budget;
+// what they do not share is consent, so the pack reader can be on while the recipe
+// reader stays off.
+//
+// ⚠️ AND IT IS A SEPARATE CALLABLE, not an extra argument to setRecipePhoto. That one
+// is deployed and live; widening a shipped signature means a phone on the old build
+// and a function on the new one have to agree about a field neither was written for.
+// ⚠️ ONE FIELD, WITH MERGE, NEVER A SPREAD: this document also holds the venue's name,
+// its sections and its country.
+export const setPackPhoto = onCall(CALL, async (request) => {
+  const uid = requireAuth(request);
+  const { locationId, enabled } = request.data || {};
+
+  if (typeof locationId !== 'string' || !locationId) {
+    throw new HttpsError('invalid-argument', 'Which location?');
+  }
+  if (typeof enabled !== 'boolean') {
+    throw new HttpsError('invalid-argument', 'On or off?');
+  }
+
+  const access = await accessValue(uid, locationId);
+  if (access !== 'owner' && access !== 'manager') {
+    throw new HttpsError('permission-denied', 'Only an owner or a manager can change that.');
+  }
+
+  await db().doc(`locations/${locationId}`).set({ packPhoto: enabled }, { merge: true });
+  return { packPhoto: enabled };
+});
+
+
 // Which of the two optional panels this venue uses on an ingredient's record.
 //
 // ⚠️⚠️ THE OPPOSITE DEFAULT TO setRecipePhoto ABOVE, AND THE REASON IS SAFETY, NOT

@@ -145,7 +145,12 @@ test('⚠️ a callable missing from index.js is not deployed at all', () => {
 
 test('⚠️⚠️ all five places ask, and the label is one of them', () => {
   const places = [
-    ['js/orders/ingredient-form.js', FORM, /allergenBlock\(item, ingredientPanels\(\)\)/],
+    // ⚠️ THE THIRD ARGUMENT ARRIVED ON 24 Aug 2026 and the reason is worth keeping: this
+    // function is declared at MODULE level, so it closes over nothing the form
+    // destructured. The camera button added inside it referred to `actions` and threw
+    // ReferenceError the instant a product was opened — with 1843 tests green, because
+    // no test executes this file. Only driving the screen showed it.
+    ['js/orders/ingredient-form.js', FORM, /allergenBlock\(item, ingredientPanels\(\), actions\)/],
     ['js/orders/registry.js', REGISTRY, /ingredientPanels\(\)\.allergens && allergenState\(item\)/],
     ['js/catalogue/catalogue-detail.js', DETAIL, /if \(!allergensOn\(currentSession\(\)\.location\)\)/],
     ['js/catalogue/catalogue-main.js', CAT_MAIN, /allergensBtn\.hidden = !allergensOn\(/],
@@ -279,7 +284,14 @@ test('⚠️ every class this screen writes is defined in a stylesheet it loads'
     for (const m of read(s).replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/\.(-?[_a-zA-Z][\w-]*)/g)) defined.add(m[1]);
   }
   const offenders = [];
-  for (const file of ['js/orders/ingredient-form.js', 'js/orders/registry-settings.js', 'js/orders/registry.js']) {
+  // ⚠️ js/orders/photo-capture.js JOINED THE LIST ON 24 Aug 2026, and it is exactly the
+  // file this guard exists for: it is a COPY of a Catalogue screen, and every `cat-*`
+  // name in the original is defined in catalogue.css — which suppliers.html does not
+  // load. Copied unrenamed, four buttons would have been bare grey rectangles with no
+  // error anywhere. A guard scoped to the files a release owns has to gain the release's
+  // new file, or it guards the wrong three.
+  for (const file of ['js/orders/ingredient-form.js', 'js/orders/registry-settings.js',
+    'js/orders/registry.js', 'js/orders/photo-capture.js']) {
     for (const m of codeOf(read(file)).matchAll(/\bclass: '([^'${}]+)'/g)) {
       for (const cls of m[1].split(/\s+/).filter(Boolean)) {
         if (!defined.has(cls)) offenders.push(`${file}: .${cls}`);
