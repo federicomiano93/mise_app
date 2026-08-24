@@ -453,7 +453,12 @@ test('⚠⚠ a data update must not delete the allergen card from an open recipe
   // list both cards. ONE function builds the host's children, and BOTH the first render
   // and every refresh go through it — so the two cannot diverge at all, rather than
   // being checked for having diverged.
-  assert.match(detail, /const costHostChildren = \(r\) => \[costPanel\(r\), allergenPanel\(r, app\)\];/,
+  // ⚠️ THREE CARDS SINCE 24 Aug 2026 — the declaration joined them. What is pinned is
+  // not the number: it is that ONE function lists them and both call sites use it, so
+  // the count can never diverge between the first render and a refresh. The declaration
+  // has to be in here too, or a recipe whose last ingredient was declared on another
+  // phone would keep saying it cannot be labelled until the screen was reopened.
+  assert.match(detail, /const costHostChildren = \(r\) => \[costPanel\(r\), allergenPanel\(r, app\), declarationPanel\(r, app\)\];/,
     'the children of the host are listed in exactly one place');
   assert.match(detail, /const costHost = el\('div', \{ class: 'cat-cost-host' \}, costHostChildren\(recipe\)\);/,
     'the first render must go through it');

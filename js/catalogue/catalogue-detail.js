@@ -17,13 +17,19 @@ import {
 } from './catalogue-store.js';
 import { costRecipe, partialCostText } from './recipe-cost-model.js';
 import { recipeAllergens, canLabel, incompleteText, ALLERGEN_REASON_TEXT } from './recipe-allergen-model.js';
+// The declaration this screen now shows. ⚠️ NO NEW ARITHMETIC: buildLabel already
+// flattens sub-recipes, sums duplicates, sorts DESCENDING BY WEIGHT (which is the law,
+// not a presentation choice) and marks the allergen-bearing rows.
+import {
+  buildLabel, containsLine, mayContainLine, declarationText,
+} from './recipe-label-model.js';
 // ⚠️⚠️ WHAT A RECIPE CONTAINS IS NAMED IN THE VENUE'S COUNTRY'S LANGUAGE, NOT THE
 // SCREEN'S (Federico, 23 Aug 2026). This card is read by whoever is asked «are there
 // nuts in this?» and it must agree, word for word, with the label the same recipe
 // prints — one of the two saying «Hazelnut» and the other «Nocciole» is how somebody
 // stops trusting either. The words AROUND the list («may contain», «not declared»)
 // stay interface text: they address the reader, not the consumer.
-import { outputLanguage, allergenName } from '../market.js';
+import { outputLanguage, allergenName, labelWord } from '../market.js';
 // Whether this venue tracks allergens at all. From js/ root: Orders sets the switch
 // and the Catalogue obeys it, so the judgement lives in one file for both.
 import { allergensOn } from '../venue-features.js';
@@ -35,6 +41,11 @@ import { allergensOn } from '../venue-features.js';
 // has eleven call sites across Orders, Food Cost and this feature's own ingredient
 // rates, and widening it for one screen would move all eleven.
 import { formatMoney } from '../price-model.js';
+// ⚠️ From js/ ROOT since 24 Aug 2026. It used to live in js/staff/, and a feature may
+// not import from another feature's folder — making a fifth copy of the raced clipboard
+// write to satisfy a rule whose whole purpose is to stop copies would be the wrong
+// reading of it.
+import { copyToClipboard, sendOnWhatsApp, sendByEmail } from '../share.js';
 import { hasProcedure, normalizeSteps, unassignedRows, progressText, formatDuration } from './guided-model.js';
 
 const IMPORT_SVG =
@@ -107,6 +118,101 @@ function costPanel(recipe) {
   const note = partialCostText(result);
   if (note) panel.appendChild(el('p', { class: 'cat-cost-partial', text: note }));
 
+  return panel;
+}
+
+// ── The ingredient declaration, on the recipe screen ─────────────────────────
+//
+// Federico, 24 Aug 2026: «aggiungi l'elenco ingredienti che si compila in automatico
+// ordinando gli ingredienti in ordine decrescente, evidenziando in grassetto gli
+// allergeni; la devo poter inviare tramite diverse opzioni di invio (WhatsApp, email,
+// ecc.) oppure copiare».
+//
+// ⚠️ NOTHING HERE IS NEW ARITHMETIC. flattenIngredients() has sorted descending by
+// weight, flattened sub-recipes and summed duplicates since v1.38.0, and buildLabel()
+// has marked the allergen-bearing rows since then too. What was missing is that it sat
+// behind «Crea etichetta», inside a folded card. This puts it on the screen.
+//
+// ⚠️⚠️ A SECTION, NEVER A FOLD. A declaration behind a tap is a declaration nobody
+// reads — the same argument the allergen card's answer already wins.
+function declarationPanel(recipe, app) {
+  const location = currentSession().location;
+  const panel = el('div', { class: 'cat-decl' });
+
+  // ⚠️ ASKED FIRST, BEFORE ANYTHING IS COMPUTED. A venue that has switched allergens
+  // off must not be offered a declaration about data it can no longer reach — the same
+  // refusal, in the same order, as label-view.js.
+  if (!allergensOn(location)) { panel.hidden = true; return panel; }
+
+  const lang = outputLanguage(location);
+  const label = buildLabel(recipe, { ingredients: getIngredients(), recipes: getRecipesById() });
+
+  panel.appendChild(el('div', { class: 'cat-sec-head' }, [
+    el('span', { class: 'cat-sec-label', text: t('cat.decl.title') }),
+  ]));
+
+  if (!label.ok) {
+    // ⚠️ ONE LINE, POINTING AT THE CARD THAT ALREADY EXPLAINS IT, and NO send buttons
+    // at all. A half declaration must never be sendable: a list that silently omits the
+    // rows nobody has declared is worse than no list, because it looks complete.
+    panel.appendChild(el('p', { class: 'cat-decl-blocked', text: t('cat.decl.blocked') }));
+    return panel;
+  }
+
+  // ⚠️ THE ALLERGEN IS EMPHASISED INSIDE THE LIST, which is what the regulation asks
+  // for — not only summarised underneath. Same bold-and-underline as .lab-ing--allergen
+  // on the label screen: the same fact must not look like two different things.
+  const list = el('p', { class: 'cat-decl-list' });
+  label.ingredients.forEach((item, i) => {
+    if (i) list.appendChild(document.createTextNode(', '));
+    list.appendChild(el('span', {
+      class: item.emphasise ? 'cat-decl-ing cat-decl-ing--allergen' : 'cat-decl-ing',
+      text: item.name,
+    }));
+  });
+  list.appendChild(document.createTextNode('.'));
+  panel.appendChild(el('p', { class: 'cat-decl-lead', text: `${labelWord('ingredients', lang)}:` }));
+  panel.appendChild(list);
+
+  const contains = containsLine(label, lang);
+  if (contains) panel.appendChild(el('p', { class: 'cat-decl-contains', text: contains }));
+  const traces = mayContainLine(label, lang);
+  if (traces) panel.appendChild(el('p', { class: 'cat-decl-traces', text: traces }));
+
+  // ⚠️ THE CAVEAT TRAVELS WITH THE TEXT, and it is interface language: it addresses the
+  // person holding the phone, not the consumer reading a packet.
+  panel.appendChild(el('p', { class: 'cat-decl-caveat', text: t('cat.decl.caveat') }));
+
+  // ⚠️⚠️ WHAT IS SENT IS THE LABEL'S OWN TEXT, in the COUNTRY's language, built by the
+  // one builder the label screen uses. Nutrition is left out of a message: some mail
+  // clients silently drop a body past ~2000 characters and the table is most of it.
+  const text = () => declarationText(label, lang, { withNutrition: false });
+  const status = el('span', { class: 'cat-decl-status' });
+
+  const copyBtn = el('button', {
+    class: 'cat-decl-btn', type: 'button',
+    onclick: async () => {
+      status.textContent = await copyToClipboard(text())
+        ? t('label.copied') : t('label.copyFailed');
+    },
+  }, [t('label.copy')]);
+
+  const waBtn = el('button', {
+    class: 'cat-decl-btn', type: 'button',
+    onclick: () => sendOnWhatsApp(text()),
+  }, [t('cat.decl.whatsapp')]);
+
+  const mailBtn = el('button', {
+    class: 'cat-decl-btn', type: 'button',
+    onclick: () => sendByEmail(recipe.name, text()),
+  }, [t('cat.decl.email')]);
+
+  panel.appendChild(el('div', { class: 'cat-decl-send' }, [copyBtn, waBtn, mailBtn]));
+  // ⚠️ mailto OPENS THE MAIL APP, IT DOES NOT SEND, and the screen has to say so —
+  // believing a declaration has gone out when it is sitting in a draft is the one way
+  // this row can mislead.
+  panel.appendChild(el('p', { class: 'cat-decl-mailnote', text: t('cat.decl.mailNote') }));
+  panel.appendChild(status);
   return panel;
 }
 
@@ -493,7 +599,12 @@ export function renderDetail({ recipe, app }) {
   // an open screen, on the only screen in this app that can send somebody to hospital.
   // It stayed that way for eleven days (v1.60.1). Two call sites that each list the
   // children can diverge; one function cannot.
-  const costHostChildren = (r) => [costPanel(r), allergenPanel(r, app)];
+  // ⚠️ THE DECLARATION JOINS THE HOST RATHER THAN STANDING OUTSIDE IT, and that is the
+  // whole reason costHostChildren exists: it is rebuilt whenever a price or an
+  // ingredient snapshot arrives, exactly like the two cards beside it. Left outside, a
+  // recipe whose last ingredient was declared on another phone would keep saying it
+  // cannot be labelled until this screen was closed and reopened.
+  const costHostChildren = (r) => [costPanel(r), allergenPanel(r, app), declarationPanel(r, app)];
   const costHost = el('div', { class: 'cat-cost-host' }, costHostChildren(recipe));
 
   // The batch weight is read at the moment Start is tapped, not captured here:
