@@ -3,8 +3,14 @@
 // Computes three alerts and shows them as in-app banners; when the user grants
 // permission, it also raises a browser notification while the app is open:
 //   1. Place the order — a supplier's ORDER day is today (primary reminder)
-//   2. Bank holiday ahead — plan orders up to a week before
-//   3. Delivery conflict — an upcoming bank holiday falls on a supplier's delivery day
+//   2. Public holiday ahead — plan orders up to a week before
+//   3. Delivery conflict — an upcoming holiday falls on a supplier's delivery day
+//
+// ⚠️⚠️ THE CALENDAR IS THE VENUE'S COUNTRY'S, AND IT IS PASSED IN. Until 24 Aug 2026
+// there was only one calendar, Britain's, and an Italian bakery was told about the
+// August bank holiday while Ferragosto went unmentioned. `country` now travels with
+// every call rather than being read from a session here, so this file stays pure and
+// so that a caller which forgets it gets silence instead of the wrong country.
 //
 // Order timing is a fixed weekday model (per Federico): each supplier has its own
 // order days (the days he places the order) and delivery days. No "days-before"
@@ -14,7 +20,7 @@
 
 import { t } from '../i18n.js';
 import { el } from './dom.js';
-import { isBankHoliday } from './bank-holidays.js';
+import { isHoliday } from './holidays.js';
 import {
   visibleAlerts, hiddenAlerts, pruneDismissed, withDismissed, reopenAll,
   readDismissed, writeDismissed,
@@ -36,8 +42,8 @@ function toISODate(date) {
   return `${y}-${m}-${d}`;
 }
 
-// Bank-holiday ISO dates within the next `days` days (from tomorrow).
-function upcomingHolidays(from, days) {
+// Public-holiday ISO dates within the next `days` days (from tomorrow).
+function upcomingHolidays(from, days, country) {
   const result = [];
   const start = new Date(from);
   start.setHours(0, 0, 0, 0);
@@ -45,21 +51,21 @@ function upcomingHolidays(from, days) {
     const d = new Date(start);
     d.setDate(d.getDate() + i);
     const iso = toISODate(d);
-    if (isBankHoliday(iso)) result.push(iso);
+    if (isHoliday(iso, country)) result.push(iso);
   }
   return result;
 }
 
-// The first bank holiday within the next `days` days (from tomorrow), as
+// The first public holiday within the next `days` days (from tomorrow), as
 // { iso, days }, or null. Gives an exact "in N days" countdown for the banner.
-function nextHolidayWithin(from, days) {
+function nextHolidayWithin(from, days, country) {
   const start = new Date(from);
   start.setHours(0, 0, 0, 0);
   for (let i = 1; i <= days; i++) {
     const d = new Date(start);
     d.setDate(d.getDate() + i);
     const iso = toISODate(d);
-    if (isBankHoliday(iso)) return { iso, days: i };
+    if (isHoliday(iso, country)) return { iso, days: i };
   }
   return null;
 }
@@ -80,7 +86,11 @@ function nextDeliveryLabel(supplier, now) {
   return '';
 }
 
-export function computeAlerts(suppliers, now = new Date()) {
+// ⚠️ `country` DEFAULTS TO null, WHICH MEANS "NO CALENDAR AT ALL". js/home-orders-badge.js
+// calls this without one on purpose — it reads only the `order` alert, which is about
+// weekdays and knows nothing about holidays. Any future caller that wants the calendar
+// has to say which country's, and that is the point of the default.
+export function computeAlerts(suppliers, now = new Date(), country = null) {
   const alerts = [];
   const active = (suppliers || []).filter(s => s.active !== false);
   const todayWd = WEEKDAYS[now.getDay()];
@@ -105,22 +115,27 @@ export function computeAlerts(suppliers, now = new Date()) {
     });
   }
 
-  // 2. Bank holiday ahead — warn up to 7 days before so orders can be planned.
-  const holiday = nextHolidayWithin(now, 7);
+  // 2. Public holiday ahead — warn up to 7 days before so orders can be planned.
+  const holiday = nextHolidayWithin(now, 7, country);
   if (holiday) {
     // ⚠️ "tomorrow" IS ITS OWN SENTENCE, not the n === 1 branch of a plural. English
     // and Italian both have a word for it, and pouring it into a count reads as
     // "in 1 day". The remaining case goes through the dictionary's plural forms
     // rather than a ternary, which is the project's i18n rule: a language whose
     // plural works differently says so in its own entry.
+    // ⚠️⚠️ AND THE SENTENCE NO LONGER NAMES A COUNTRY — Federico's decision, 24 Aug
+    // 2026. It used to read «è festivo nel Regno Unito», which was the defect made
+    // visible; but naming Italy instead would only move it, because a person reading
+    // their own venue's screen already knows which country they are standing in. The
+    // calendar decides WHICH days appear; the sentence just says a day is coming.
     const text = holiday.days === 1
-      ? t('orders.alert.bankHolidayTomorrow', { date: holiday.iso })
-      : t('orders.alert.bankHolidayInDays', { n: holiday.days, date: holiday.iso });
+      ? t('orders.alert.holidayTomorrow', { date: holiday.iso })
+      : t('orders.alert.holidayInDays', { n: holiday.days, date: holiday.iso });
     alerts.push({ kind: 'holiday', key: `bh-${holiday.iso}`, text });
   }
 
   // 3. Delivery conflict — an upcoming holiday lands on a supplier's delivery day.
-  upcomingHolidays(now, CONFLICT_WINDOW_DAYS).forEach(iso => {
+  upcomingHolidays(now, CONFLICT_WINDOW_DAYS, country).forEach(iso => {
     const dayIndex = new Date(`${iso}T00:00:00`).getDay();
     // ⚠️ TWO USES OF THE SAME WEEKDAY, AND ONLY ONE OF THEM IS A WORD. `wd` is the
     // STORED value compared against the supplier's deliveryDays and must stay
@@ -218,7 +233,7 @@ function renderPill(count, onReopen) {
 // Render the alert banners into `container`, and raise browser notifications for
 // new alerts. The "Enable notifications" control lives in Settings (see
 // renderNotificationSettings), not here — it must not clutter the main Order screen.
-export function renderAlerts(container, suppliers, now = new Date()) {
+export function renderAlerts(container, suppliers, now = new Date(), country = null) {
   if (!container) return;
   container.textContent = '';
 
@@ -228,7 +243,7 @@ export function renderAlerts(container, suppliers, now = new Date()) {
   // also knows which of today's orders are already placed and ticks them off —
   // something this function cannot do, as it never sees the history. What is left
   // here is the informational holiday / delivery-clash alerts.
-  const alerts = computeAlerts(suppliers, now).filter(a => a.kind !== 'order');
+  const alerts = computeAlerts(suppliers, now, country).filter(a => a.kind !== 'order');
 
   // ⚠️⚠️ PRUNED AGAINST THE DATE, NEVER AGAINST THIS PAINT'S ALERTS. The first
   // paint happens before the suppliers have arrived, so "the alerts right now" is not
@@ -240,13 +255,18 @@ export function renderAlerts(container, suppliers, now = new Date()) {
   const shown = visibleAlerts(alerts, dismissed);
   const hidden = hiddenAlerts(alerts, dismissed);
 
+  // ⚠️⚠️ THE COUNTRY HAS TO TRAVEL THROUGH BOTH OF THESE. They re-enter this same
+  // function, so dropping the fourth argument would leave the venue with the right
+  // calendar until the first time somebody closed a notice — and then, silently,
+  // with no calendar at all. It would look like "closing one closed them all",
+  // which is not a bug anybody would think to attribute to the country.
   const close = (key) => {
     writeDismissed(storage(), withDismissed(readDismissed(storage()), key));
-    renderAlerts(container, suppliers, now);
+    renderAlerts(container, suppliers, now, country);
   };
   const reopen = () => {
     writeDismissed(storage(), reopenAll());
-    renderAlerts(container, suppliers, now);
+    renderAlerts(container, suppliers, now, country);
   };
 
   shown.forEach(a => container.appendChild(renderAlert(a, close)));

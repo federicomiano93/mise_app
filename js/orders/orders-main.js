@@ -40,7 +40,8 @@ import {
 import { renderUntold } from './untold-view.js';
 import { buildManagement, isAdmin } from './management.js';
 import { computeSuggestion, isUnusualQuantity } from './suggestions.js';
-import { refreshBankHolidays } from './bank-holidays.js';
+import { refreshHolidays } from './holidays.js';
+import { countryOf } from '../market.js';
 import { renderAlerts } from './notifications.js';
 import { routesFor } from './send-routes.js';
 import { confirmDialog } from './confirm-dialog.js';
@@ -684,8 +685,21 @@ function openHistoryEditor(record) {
   document.body.appendChild(overlay);
 }
 
+// Which country's public holidays this venue keeps — 'GB', 'IT', or null when no
+// venue is open or its document never loaded (js/market.js decides, and answers null
+// rather than guessing).
+//
+// ⚠️⚠️ READ INSIDE THE FUNCTION, NEVER AT MODULE LOAD. This module is evaluated at
+// first import, which happens before the session has opened a venue, so a
+// `const COUNTRY = …` at the top of this file would be null for the life of the page
+// — every venue silently losing its calendar. It is the v1.57.0 defect exactly, and
+// the one this fix would be most likely to reintroduce.
+function venueCountry() {
+  return countryOf(currentSession().location);
+}
+
 function showAlerts() {
-  renderAlerts(document.getElementById('orders-alerts'), state.suppliers);
+  renderAlerts(document.getElementById('orders-alerts'), state.suppliers, new Date(), venueCountry());
 }
 
 // ── Send order (WhatsApp selection screen) ────────────────────────────────────
@@ -1753,9 +1767,15 @@ async function init() {
   // internally, so they attach as soon as the (persisted) anonymous session is
   // ready and then stream live. init never blocks, so the page never sits waiting.
 
-  // Refresh the official UK bank-holiday calendar (cached for offline; used by
-  // the alerts). Fire-and-forget — failure falls back to the cached list.
-  refreshBankHolidays().then(list => { console.log(`Bank holidays loaded: ${list.length} dates`); showAlerts(); });
+  // Refresh this venue's public-holiday calendar (used by the alerts).
+  // Fire-and-forget — failure falls back to the cached list.
+  //
+  // ⚠️ ONLY A UK VENUE ACTUALLY FETCHES ANYTHING. Britain's calendar moves — dates
+  // are substituted when they land on a weekend, and one-offs are proclaimed — so it
+  // is downloaded from gov.uk and cached. Italy's twelve are set by law and never
+  // move, so they are worked out on the phone and this call returns at once.
+  refreshHolidays(venueCountry())
+    .then(list => { console.log(`Holidays loaded: ${list.length} dates`); showAlerts(); });
 
   watchOrdersConfig();
 

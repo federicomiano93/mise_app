@@ -3,11 +3,15 @@
 // behind the in-app banners; the rendering/browser-notification parts are not
 // tested here (they need a real browser).
 //
-// Note on imports: notifications.js pulls in bank-holidays.js, which on load
-// tries to read the browser cache. In Node there is no localStorage, but that
-// read is wrapped in try/catch, so the module quietly falls back to its built-in
-// holiday list (which includes 2025-12-25 ... 2026-12-28). The tests below rely
-// on that fixed fallback list, choosing dates around Christmas 2026.
+// Note on imports: notifications.js pulls in holidays.js, which on load tries to
+// read the browser cache. In Node there is no localStorage, but that read is wrapped
+// in try/catch, so the module quietly falls back to its built-in UK list (which
+// includes 2025-12-25 ... 2026-12-28). The GB tests below rely on that fixed
+// fallback list; the Italian calendar needs no fixture, being worked out.
+//
+// ⚠️ EVERY CALL THAT EXPECTS A HOLIDAY NOTICE NOW PASSES A COUNTRY. Since 24 Aug 2026
+// computeAlerts takes one, and with none it builds no calendar at all — so a test
+// that forgot it would quietly assert nothing.
 //
 // Weekdays are derived in-test from the same dates (not hard-coded), so the
 // assertions hold on any machine/CI timezone.
@@ -15,6 +19,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { computeAlerts, isReminderDue } from '../js/orders/notifications.js';
+import { setLanguage } from '../js/i18n.js';
 
 const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const weekdayOf = (date) => WEEKDAYS[date.getDay()];
@@ -95,27 +100,92 @@ test('inactive suppliers are ignored', () => {
   assert.deepEqual(computeAlerts(suppliers, QUIET_NOW), []);
 });
 
-test('warns about a bank holiday in the coming week, with a day countdown', () => {
+test('warns about a public holiday in the coming week, with a day countdown', () => {
   // Monday 21 Dec 2026: Christmas Day (25 Dec, in the fallback list) is 4 days away.
   // No suppliers, so the holiday notice is the only alert.
   const now = new Date(2026, 11, 21);
-  const alerts = computeAlerts([], now);
+  const alerts = computeAlerts([], now, 'GB');
   assert.equal(alerts.length, 1);
   assert.equal(alerts[0].kind, 'holiday');
   assert.match(alerts[0].text, /2026-12-25/);
   assert.match(alerts[0].text, /in 4 days/);
 });
 
-test('warns about a delivery day that clashes with an upcoming bank holiday', () => {
+// ⚠️⚠️ THE DEFECT, AS FEDERICO SAW IT ON HIS OWN PHONE, 24 Aug 2026. Panificio Miano
+// is in Italy and the app announced Britain's late summer bank holiday to it. On
+// 24 August the UK has one in 7 days and Italy has none within the week — so the two
+// countries give OPPOSITE answers on the same date, which is what makes this the
+// assertion worth having. Reading only the Italian half would pass on code that had
+// simply been switched from one hard-wired country to the other.
+test('⚠️⚠️ an Italian venue is not told about a UK bank holiday', () => {
+  const now = new Date(2026, 7, 24); // Monday 24 August 2026
+
+  const uk = computeAlerts([], now, 'GB').find(a => a.kind === 'holiday');
+  assert.ok(uk, 'the UK venue still gets its late summer bank holiday');
+  assert.match(uk.text, /2026-08-31/);
+
+  assert.deepEqual(computeAlerts([], now, 'IT'), [],
+    'an Italian venue hears nothing about a British bank holiday');
+});
+
+// ⚠️ And the other half of the same fix: the day Italy actually shuts. Ferragosto
+// went unmentioned for the whole life of the feature.
+test('⚠️ an Italian venue IS told about Ferragosto, and a UK venue is not', () => {
+  const now = new Date(2026, 7, 11); // Tuesday 11 August 2026 — Ferragosto is 4 days off
+
+  const it = computeAlerts([], now, 'IT').find(a => a.kind === 'holiday');
+  assert.ok(it, 'expected a Ferragosto notice');
+  assert.match(it.text, /2026-08-15/);
+
+  assert.equal(computeAlerts([], now, 'GB').find(a => a.kind === 'holiday'), undefined);
+});
+
+// ⚠️⚠️ THE SENTENCE MUST NOT NAME A COUNTRY — Federico's decision, 24 Aug 2026. It
+// used to read «è festivo nel Regno Unito», and naming Italy instead would only move
+// the defect. Checked in BOTH languages, because the English and the Italian entry
+// are two separate strings and only one of them was ever read on his phone.
+test('⚠️⚠️ the holiday sentence names no country, in either language', () => {
+  const now = new Date(2026, 11, 21);
+  const forbidden = /Regno Unito|United Kingdom|\bUK\b|\bGB\b|Italia\b|\bItaly\b/;
+  for (const lang of ['en', 'it']) {
+    setLanguage(lang);
+    const text = computeAlerts([], now, 'GB').find(a => a.kind === 'holiday').text;
+    assert.ok(!forbidden.test(text), `${lang}: the notice must not name a country — got "${text}"`);
+  }
+  setLanguage('en');
+});
+
+// ⚠️ NO COUNTRY MEANS NO CALENDAR, never Britain's by default. js/home-orders-badge.js
+// calls computeAlerts with no country on purpose (it reads only the `order` alert),
+// so this is the behaviour that keeps that call honest.
+test('⚠️ with no country there is no holiday notice at all', () => {
+  const now = new Date(2026, 11, 21); // Christmas is 4 days away in both calendars
+  assert.deepEqual(computeAlerts([], now), []);
+  assert.deepEqual(computeAlerts([], now, null), []);
+});
+
+test('warns about a delivery day that clashes with an upcoming public holiday', () => {
   // 15 Dec 2026: Christmas Day (25 Dec) is within the 14-day conflict window.
   const now = new Date(2026, 11, 15);
   const christmasWeekday = weekdayOf(new Date(2026, 11, 25));
   const suppliers = [{ id: 's1', name: 'ACME', active: true, deliveryDays: [christmasWeekday] }];
-  const alerts = computeAlerts(suppliers, now);
+  const alerts = computeAlerts(suppliers, now, 'GB');
   const conflict = alerts.find(a => a.kind === 'conflict');
   assert.ok(conflict, 'expected a conflict alert');
   assert.match(conflict.text, /ACME/);
   assert.match(conflict.text, /2026-12-25/);
+});
+
+// ⚠️ The conflict notice reads the same calendar as the countdown does. A version
+// that fixed only the "holiday ahead" banner would still tell an Italian bakery its
+// supplier's delivery clashed with a British bank holiday.
+test('⚠️ the delivery-clash notice follows the country too', () => {
+  const now = new Date(2026, 7, 24); // 31 Aug is a UK bank holiday, and nothing in Italy
+  const weekday = weekdayOf(new Date(2026, 7, 31));
+  const suppliers = [{ id: 's1', name: 'ACME', active: true, deliveryDays: [weekday] }];
+
+  assert.ok(computeAlerts(suppliers, now, 'GB').some(a => a.kind === 'conflict'));
+  assert.ok(!computeAlerts(suppliers, now, 'IT').some(a => a.kind === 'conflict'));
 });
 
 test('a missing supplier list produces no alerts (and never throws)', () => {
