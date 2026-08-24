@@ -380,9 +380,20 @@ export function batchWarning(targetGrams, baseGrams) {
   const tooBig = base > 0 && target / base > MAX_SANE_MULTIPLE;
   if (!tooHeavy && !tooBig) return null;
 
-  const parts = [t('cat.thatIs') + formatWeight(target) + ' of dough'];
-  if (base > 0) parts.push('— ' + trim(target / base) + t('cat.theRecipeAsWritten') + formatWeight(base) + ')');
-  return parts.join(' ') + '. Check the amount before calculating.';
+  // ⚠️⚠️ ONE KEY PER WHOLE SENTENCE, NEVER THREE FRAGMENTS GLUED TOGETHER. This warning
+  // used to be built as `t('cat.thatIs') + weight + ' of dough'` … `+ '. Check the
+  // amount before calculating.'`, so on an Italian venue it read «Sono 175 kg of dough
+  // — 10× la ricetta come è scritta (17,5 kg). Check the amount before calculating.»
+  // Live on main, on a screen Federico had already asked to be in Italian (v1.69.0).
+  // ⚠️ A fragment key cannot be translated: the two halves of «of dough» sit on
+  // opposite sides of the number in some languages, and a translator handed «That is »
+  // has nothing to translate. It is the project's R4 rule, and the reason the two
+  // fragment keys are retired here rather than mended.
+  return base > 0
+    ? t('cat.batchWarningVsRecipe', {
+      weight: formatWeight(target), times: trim(target / base), base: formatWeight(base),
+    })
+    : t('cat.batchWarning', { weight: formatWeight(target) });
 }
 
 // ── Persisted "scaled batch" freshness ─────────────────────────────────────────

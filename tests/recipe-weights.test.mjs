@@ -201,22 +201,90 @@ test('the percentage input is gone, and its dictionary keys with it', () => {
   }
 });
 
-// ── 5. The row: one frame around the amount and its unit ─────────────────────
+// ── 5. The row: two frames, one row, and the width to do it was bought ───────
 
-test('⚠️ the amount and the unit sit in ONE wrapper, and the total matches it', () => {
-  assert.match(EDITOR, /el\('div', \{ class: 'cat-amount' \}, \[gramsInput, unitSelect\]\)/,
-    'one frame around both — two separate ones cost ~24px and truncate the ingredient '
-    + 'name at 320px');
+// ⚠️⚠️ THE BODY OF ONE RULE, AND NOTHING PAST ITS CLOSING BRACE. Written after two
+// guards in this very file survived a mutation: `/\.sel \{[\s\S]*?border: 1.5px/` is
+// non-greedy, so when the declaration is deleted it simply keeps scanning into the NEXT
+// rule and finds the same words there. catalogue.css has four other `appearance` lines
+// and dozens of `border: 1.5px solid var(--cat-border)`. Same family as the v1.66.0
+// slice that used indexOf() with no offset: a check that cannot fail is worse than none.
+function ruleBody(source, selector) {
+  // ⚠️ NORMALISED TO LF FIRST. This tree is mixed: sw.js is CRLF, files written this
+  // month are LF, and a multi-line selector written with \n matches nothing in a CRLF
+  // file — silently, which is how probes in this project have "passed" while touching
+  // nothing at all.
+  const css = source.split('\r\n').join('\n');
+  const at = css.indexOf(`${selector} {`);
+  assert.notEqual(at, -1, `the rule «${selector}» must exist to be guarded`);
+  const open = css.indexOf('{', at);
+  const close = css.indexOf('}', open);
+  assert.notEqual(close, -1, `the rule «${selector}» is not closed`);
+  const body = css.slice(open + 1, close);
+  assert.ok(body.trim().length > 5, `the slice for «${selector}» must not be empty`);
+  return body;
+}
+
+test('⚠️ the amount and the unit are two framed cells, and the total matches them', () => {
+  assert.match(EDITOR, /el\('div', \{ class: 'cat-amount' \}, \[\s*gramsInput,[\s\S]*?class: 'cat-unit-cell' \}, \[\s*unitSelect,/,
+    'the unit gets a cell of its own, because that cell is what carries its frame '
+    + 'and positions the chevron');
   assert.match(EDITOR, /class: 'cat-amount cat-amount--plain'/,
     'the Total shares the row grid, so it needs the same cell shape or «Totale 8380 g» '
     + 'stops lining up with the column of numbers it is the sum of');
+
   const css = read('catalogue.css');
-  assert.match(css, /\.cat-amount \{[\s\S]*?border: 1\.5px solid var\(--cat-border\)/,
-    'the frame reuses the border this file already defines, not a new one');
-  assert.match(css, /\.cat-amount:focus-within \{ border-color: var\(--cat-accent\); \}/,
-    'colour only — the row already draws a ring and :has() cannot suppress it');
+  assert.match(ruleBody(css, '.cat-ing-editrow .cat-amount .cat-grm,\n.cat-ing-editrow .cat-amount .cat-unit-cell'),
+    /border: 1\.5px solid var\(--cat-border\)/,
+    'both frames reuse the border this file already defines, not a new one');
+  assert.match(css, /\.cat-amount--plain > \* \{ border: 1\.5px solid transparent; \}/,
+    '⚠️ the Total keeps the SAME frame, invisible, so its number stays in the column '
+    + 'of numbers by construction rather than by two paddings agreeing');
   assert.ok(!/\.cat-amount:focus-within \{[^}]*box-shadow/.test(css),
     'a second ring inside the first would be noise');
+});
+
+test('⚠️⚠️ the native dropdown arrow is stripped, and the room it took is given back', () => {
+  const css = read('catalogue.css');
+  const unit = ruleBody(css, '.cat-ing-editrow .cat-amount .cat-unit');
+  assert.match(unit, /appearance: none;/,
+    'Chromium reserves ~16px for its own arrow, and that width is what pays for the '
+    + 'second frame — v1.66.0 refused two frames on a measurement taken WITH it there');
+  assert.match(unit, /padding-right: 11px;/,
+    '⚠️ the chevron needs its room reserved: a <select> runs its longest option under '
+    + 'anything overlapping it WITHOUT reporting an overflow («to tast», v1.66.0)');
+  // ⚠️ SCOPED, NOT POSITIONAL. The Total row reuses .cat-amount with a plain <span> in
+  // the unit slot; a chevron anchored by child position would grow an arrow there and
+  // shift the column of numbers.
+  assert.match(css, /\.cat-unit-chev \{[\s\S]*?position: absolute;/,
+    'the chevron is positioned inside the unit cell');
+  assert.ok(!/\.cat-amount\s*>\s*:(nth-child|last-child)/.test(css),
+    'nothing on this row may be selected by its position among its siblings');
+  assert.match(EDITOR, /class: 'cat-unit-chev', 'aria-hidden': 'true'/,
+    'it is decoration — a screen reader already announces the select');
+
+  // ⚠️ 44px ON THE FIELDS THEMSELVES. min-height on a frame sizes the BORDER box, so
+  // the tappable child comes out short — measured at 42px on the first draft of this
+  // very change, which is the same trap v1.66.0 recorded and then fell into again.
+  assert.match(unit, /min-height: 44px;/,
+    'the select itself must clear the tap floor, not the cell around it');
+  assert.match(ruleBody(css, '.cat-ing-editrow .cat-amount .cat-grm'),
+    /padding: 10px 8px 10px 5px;/,
+    'and the amount box keeps its own padding in one declaration');
+});
+
+test('⚠️ no <select> in this app strips its arrow without drawing one', () => {
+  // foodcost.css stripped `appearance` and reserved 30px for a background-image that
+  // was never set — those selects have had NO arrow at all on a live screen. Found
+  // while doing the same thing deliberately here; a reserved gap with nothing in it is
+  // the CSS version of a guard that guards nothing.
+  for (const sheet of ['catalogue.css', 'foodcost.css', 'style.css', 'orders.css', 'order.css']) {
+    const css = read(sheet);
+    if (!/appearance:\s*none/.test(css)) continue;
+    assert.ok(!/background-repeat:\s*no-repeat;\s*background-position:[^;]*;\s*\}/.test(css),
+      `${sheet} positions a background image it never sets — 30px of reserved room and `
+      + 'no arrow in it');
+  }
 });
 
 test('the cache version moved, or no phone will ever fetch any of this', () => {
@@ -225,4 +293,149 @@ test('the cache version moved, or no phone will ever fetch any of this', () => {
   assert.ok(m, 'sw.js must name a cache version');
   assert.ok(Number(m[1]) >= 330, `still on v${m[1]} — a changed cached file without a bump `
     + 'is the one failure in this project that does not self-heal');
+});
+
+// ── 6. The unit box is the SMALLER of the two, and «to taste» carries no number ──
+
+// Federico, 24 Aug 2026, looking at the row on his phone: «la casella dei g può essere
+// anche più piccola della quantità, non serve che sia più grande addirittura».
+//
+// ⚠️⚠️ IT COULD NOT BE, AND THE REASON IS ONE WORD. The unit column was the wider of
+// the two because the longest of the twelve labels — «to taste» — had to fit beside a
+// number, and a <select> clips its longest option WITHOUT reporting an overflow
+// (v1.66.0, «to tast»). The way out was not a smaller font or a shorter word: it was
+// that the model has ALWAYS said a «to taste» row has no quantity — scaleRecipe()
+// returns null for that unit and for no other — and only this editor still drew a «0».
+
+const cssNumber = (body, name) => {
+  const m = new RegExp(`${name}:\\s*([\\d.]+)rem`).exec(body);
+  assert.ok(m, `${name} must be declared as a rem value on .cat-amount`);
+  return Number(m[1]);
+};
+
+test('⚠️ the unit column is NARROWER than the amount column', () => {
+  const body = ruleBody(read('catalogue.css'), '.cat-amount');
+  const qty = cssNumber(body, '--qty-w');
+  const unit = cssNumber(body, '--unit-w');
+  assert.ok(qty > unit, `the amount box must be the wider of the two — found ${qty}rem `
+    + `against ${unit}rem, which is the thing Federico asked to change`);
+  // ⚠️ AND THE UNIT COLUMN HAS A FLOOR, MEASURED IN THE REAL FONT ON THE REAL SCREEN:
+  // «pinch» is 36.92px at 14.4px Manrope, and the cell spends 18px before any text
+  // (5px padding + 2px frame + the 11px the chevron sits in). Below that the longest
+  // label that still shares a row with a number starts being clipped — in silence,
+  // which is the whole danger.
+  assert.ok(unit * 16 - 18 >= 36.92, `${unit}rem leaves ${(unit * 16 - 18).toFixed(2)}px `
+    + 'for «pinch», which needs 36.92 — and a <select> clips without saying so');
+  assert.match(body, /grid-template-columns: var\(--qty-w\) var\(--unit-w\)/,
+    'the two columns must READ the two names, or the numbers above guard nothing');
+});
+
+test('⚠️⚠️ a «to taste» row is one cell exactly as wide as the two it replaces', () => {
+  const css = read('catalogue.css');
+  const noqty = ruleBody(css, '.cat-amount--noqty');
+  // The width is DERIVED, never a third number kept in step by hand — the shape of the
+  // v1.66.0 defect where the Total drifted 2px because one padding said 8 and the
+  // other 6. If the block ever stopped matching, the bin and the right-hand edge would
+  // zig-zag from row to row and the Total would leave the column of numbers it sums.
+  assert.match(noqty, /calc\(var\(--qty-w\) \+ var\(--unit-w\) \+ (\d+)px\)/,
+    'the single column must be computed from the same two names plus the gap');
+  const gapInCalc = /\+ (\d+)px\)/.exec(noqty)[1];
+  const gap = /gap:\s*(\d+)px/.exec(ruleBody(css, '.cat-amount'))[1];
+  assert.equal(gapInCalc, gap,
+    'and the gap it adds back must be the gap the two columns actually leave between them');
+});
+
+test('⚠️⚠️ the number box is hidden for «to taste» and for nothing else', () => {
+  // ⚠️ THROUGH unitOf(), NOT ing.unit. Every recipe written before units existed has no
+  // unit field at all, and unitOf() answers «g» for those — reading ing.unit directly
+  // would compare undefined and quietly work, until a row carried a value nobody expected.
+  assert.match(EDITOR, /const noQty = unitOf\(ing\) === 'to taste';/,
+    'the one unit the model itself treats as having no quantity, asked for by name');
+  assert.match(EDITOR, /gramsInput\.hidden = noQty;/, 'the box goes');
+  assert.match(EDITOR, /amountCell\.classList\.toggle\('cat-amount--noqty', noQty\)/,
+    'and the cell beside it takes the room');
+
+  // ⚠️ HIDDEN, NEVER CLEARED. Switching to «to taste» and back must give the number
+  // back; nothing counts it meanwhile, because ingredientGrams() is 0 for every unit
+  // that is not weighable. A paint that wrote to the value would destroy real data on
+  // a mis-tap, and the screen would look exactly the same either way.
+  const at = EDITOR.indexOf('function paintAmount()');
+  assert.notEqual(at, -1, 'paintAmount must exist to be guarded');
+  const close = EDITOR.indexOf('\n      }', at);
+  assert.notEqual(close, -1, 'paintAmount must be closed');
+  const bodyOfPaint = EDITOR.slice(at, close);
+  assert.ok(bodyOfPaint.length > 60, 'the slice for paintAmount must not be empty');
+  assert.ok(!/ing\.grams\s*=/.test(bodyOfPaint) && !/\.value\s*=/.test(bodyOfPaint),
+    'painting the row must never write to the amount it is hiding');
+
+  // ⚠️ TWICE, AND BOTH ARE NEEDED. Called only on change, a row that ARRIVES as «to
+  // taste» keeps its meaningless 0; called only at build, changing the unit does
+  // nothing until the screen is redrawn.
+  // ⚠️ NAMED ONE BY ONE, NOT COUNTED. A count of «paintAmount()» is satisfied by the
+  // DEFINITION plus a single call — `function paintAmount() {` contains the very string
+  // being counted — so removing the build call would have left the count at 2 and this
+  // guard green. The same shape as every other count that guards nothing.
+  assert.match(EDITOR, /ing\.unit = e\.target\.value; paintAmount\(\);/,
+    'on change it must run AFTER the new unit has been stored, or it reads the old one');
+  // ⚠️ \s* ON BOTH SIDES: this tree is CRLF, so a bare \n after the `;` matches nothing.
+  assert.match(EDITOR, /\n\s*paintAmount\(\);\s*\n/,
+    'and once when the row is BUILT, or a row that arrives as «to taste» keeps its '
+    + 'meaningless 0 until somebody happens to change the unit');
+});
+
+test('⚠️ an Italian warning that used to finish in English', () => {
+  // Live on main until 24 Aug 2026: «Sono 175 kg of dough — 10× la ricetta come è
+  // scritta (17,5 kg). Check the amount before calculating.» Three fragments glued
+  // together, two of them keys and two of them raw English.
+  assert.ok(!/of dough|Check the amount before calculating/.test(MODEL),
+    'no English may be concatenated onto a translated sentence');
+  const i18n = codeOf(read('js/i18n.js'));
+  for (const dead of ["'cat.thatIs'", "'cat.theRecipeAsWritten'"]) {
+    assert.ok(!i18n.includes(dead),
+      `${dead} is a FRAGMENT key — it was retired, not mended: a translator handed `
+      + '«That is » has nothing to translate, and those words sit on the other side of '
+      + 'the number in some languages');
+  }
+  assert.match(MODEL, /t\('cat\.batchWarningVsRecipe', \{[\s\S]{0,140}weight:/,
+    'one key carries the whole sentence, with the numbers as holes in it');
+  const en = _dictionaries().en;
+  const it = _dictionaries().it;
+  for (const key of ['cat.batchWarning', 'cat.batchWarningVsRecipe']) {
+    assert.ok(en[key] && it[key], `${key} must exist in both languages`);
+    assert.ok(!/of dough/.test(it[key]), `${key} in Italian must not carry English`);
+  }
+  for (const hole of ['{weight}', '{times}', '{base}']) {
+    assert.ok(en['cat.batchWarningVsRecipe'].includes(hole)
+      && it['cat.batchWarningVsRecipe'].includes(hole),
+    `both languages must keep the ${hole} hole, or the number vanishes from one of them`);
+  }
+});
+
+test('⚠️ the ingredient name keeps its autocomplete, however tight the row gets', () => {
+  // ⚠️⚠️ 17px OF THAT BOX BELONGS TO THE DATALIST PICKER, and the tempting way to win
+  // it back is to drop `list=`. Measured on the real screen: removing the attribute in
+  // the debugger takes the input's reported content from 115px to 98 and un-truncates
+  // «Strong flour» at 320px. It would also take away the suggestion list that makes an
+  // ingredient name match the one Orders knows — which is what links a row to a price
+  // and to an allergen. Four CSS ways of hiding the indicator were tried on the live
+  // element and all four changed nothing, so the space is simply not for sale.
+  assert.match(EDITOR, /list: 'cat-ingredient-names'/,
+    'the name field must keep its datalist: 17px of width is not worth an ingredient '
+    + 'nobody can link');
+  assert.match(read('catalogue.css'), /17px OF THIS BOX IS SPENT ON A BUTTON/,
+    'and the reason it is not reclaimed stays written down where the width is decided, '
+    + 'or the next person measures it all over again');
+});
+
+test('⚠️ «no price yet» under an ingredient row is a key, not English', () => {
+  // Seen on a SCREENSHOT of an Italian venue, under an Italian heading:
+  // «→ Farina 0 · Brava Fresh · no price yet». The key has existed in both languages
+  // all along and ingredient-picker.js has always used it.
+  // ⚠️ NO GUARD COULD SEE IT: nothing-stays-english skips an all-lowercase string with
+  // no punctuation, because that is exactly the shape of a CSS class list.
+  assert.ok(!/'no price yet'/.test(EDITOR), 'the editor must not write the English out');
+  assert.match(EDITOR, /rate === null \? t\('cat\.noPriceYet'\)/,
+    'it asks the dictionary, like its sibling ingredient-picker.js always has');
+  assert.match(codeOf(read('js/catalogue/ingredient-picker.js')), /t\('cat\.noPriceYet'\)/,
+    'and the sibling still does, so the two screens cannot disagree');
 });

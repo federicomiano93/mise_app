@@ -149,9 +149,40 @@ export function renderEditor({ recipe, draft, allRecipes, app }) {
       // editor and the scaling/import logic can never drift apart.
       const unitSelect = el('select', {
         class: 'cat-unit', 'aria-label': t('cat.unit'),
-        onchange: (e) => { ing.unit = e.target.value; markDirty(); updateTotal(); },
+        onchange: (e) => { ing.unit = e.target.value; paintAmount(); markDirty(); updateTotal(); },
       }, CATALOGUE_UNITS.map(u => el('option', { value: u }, u)));
       unitSelect.value = unitOf(ing);
+      // ⚠️ THE CELL IS HELD IN A VARIABLE because its shape changes with the unit —
+      // see paintAmount() below, built after the cell it paints.
+      const amountCell = el('div', { class: 'cat-amount' }, [
+        gramsInput,
+        // ⚠️ THE CHEVRON IS A SIBLING OF THE SELECT INSIDE ITS OWN CELL, not a
+        // child of it: a <select> renders only <option>s, so anything put inside is
+        // silently dropped. The cell is what carries the frame and the position.
+        el('span', { class: 'cat-unit-cell' }, [
+          unitSelect,
+          el('span', { class: 'cat-unit-chev', 'aria-hidden': 'true', text: '›' }),
+        ]),
+      ]);
+      // ⚠️⚠️ «to taste» IS THE ONE UNIT THAT CARRIES NO NUMBER, and the model has said so
+      // since it was written: scaleRecipe() returns null for that unit and for no other,
+      // and the read-only recipe screen prints no amount beside it. Only this editor
+      // still drew a «0» there — a number that means nothing, sitting in the box that
+      // forces the unit beside it to be wide enough for the longest word in the list.
+      // Federico, 24 Aug 2026: «la casella dei g può essere anche più piccola della
+      // quantità, non serve che sia più grande addirittura». It could not be, while
+      // «to taste» had to fit next to a number.
+      //
+      // ⚠️ THE STORED AMOUNT IS HIDDEN, NEVER CLEARED. Switching to «to taste» and back
+      // to «g» has to give the number back, and nothing counts it meanwhile:
+      // ingredientGrams() is 0 for every unit that is not weighable, so hiding it
+      // cannot move a total, a cost or a label.
+      function paintAmount() {
+        const noQty = unitOf(ing) === 'to taste';
+        gramsInput.hidden = noQty;
+        amountCell.classList.toggle('cat-amount--noqty', noQty);
+      }
+      paintAmount();
       const delIcon = el('button', {
         class: 'cat-del-icon', type: 'button', 'aria-label': t('cat.removeIngredient'), icon: TRASH_SVG,
         onclick: () => {
@@ -167,17 +198,21 @@ export function renderEditor({ recipe, draft, allRecipes, app }) {
       // target takes its width from the ingredient NAME, which is the one thing that
       // has to stay readable. Under it there is room to say what it points at.
       rowsContainer.appendChild(el('div', { class: 'cat-ing-editgroup' }, [
-        // ⚠️ THE AMOUNT AND THE UNIT SHARE ONE FRAME, and that is a deliberate shape.
-        // Federico: «lo spazio dove scrivere la quantità e la tipologia devono essere
-        // ben distinte, adesso sono tutte unite» — all three fields were borderless, so
-        // «250 g» read as printed text rather than two controls. ⚠️ ONE border pair, not
-        // two: two separate frames cost ~24px more and start truncating the ingredient
-        // NAME at 320px, which is the one thing on this row that has to stay readable.
-        el('div', { class: 'cat-ing-editrow' }, [
-          labelInput,
-          el('div', { class: 'cat-amount' }, [gramsInput, unitSelect]),
-          delIcon,
-        ]),
+        // ⚠️ TWO FRAMES, ONE ROW, and the width to do it was BOUGHT, not found.
+        // Federico, 23 Aug: «lo spazio dove scrivere la quantità e la tipologia devono
+        // essere ben distinte» — answered then with a single frame divided down the
+        // middle, because two frames measured ~24px more and started truncating the
+        // ingredient NAME at 320px. Looking at it again on 24 Aug: «separa la casella
+        // della quantità con quella del tipo di gr o kg (fallo che si capisce che è un
+        // menù a tendina)», and «fai in modo di farlo tutto in una riga».
+        //
+        // ⚠️⚠️ WHAT PAID FOR IT IS THE NATIVE ARROW. `appearance: none` on the select
+        // gives back the ~16px Chromium reserves for its own dropdown arrow, and the
+        // `›` we draw instead is both narrower and — the actual request — visible. The
+        // measurement that refused two frames was taken WITH that arrow still there;
+        // re-measuring in the wrong order is how the same decision gets re-litigated
+        // with the wrong number.
+        el('div', { class: 'cat-ing-editrow' }, [labelInput, amountCell, delIcon]),
         linkRow(ing, idx),
       ]));
     });
@@ -240,8 +275,14 @@ export function renderEditor({ recipe, draft, allRecipes, app }) {
     if (!ingredient) return t('cat.anIngredientThatNo');
     const rate = pricePerKg(ingredient);
     const supplier = (app.suppliers()[ingredient.supplierId] || {}).name || '';
-    return ['→ ' + (ingredient.name || 'Ingredient'), supplier,
-      rate === null ? 'no price yet' : `${formatRate(rate)} / kg`]
+    // ⚠️ SEEN ON A SCREENSHOT OF AN ITALIAN VENUE, 24 Aug 2026: this line read
+    // «→ Farina 0 · Brava Fresh · no price yet» under an Italian heading. The key has
+    // existed in both languages all along and its own sibling, ingredient-picker.js,
+    // has always used it — this call site simply wrote the English out.
+    // ⚠️ NO GUARD COULD SEE IT: nothing-stays-english skips an all-lowercase string
+    // with no punctuation, because that is exactly the shape of a CSS class list.
+    return ['→ ' + (ingredient.name || t('cat.ingredient')), supplier,
+      rate === null ? t('cat.noPriceYet') : `${formatRate(rate)} / kg`]
       .filter(Boolean).join('  ·  ');
   }
 
@@ -344,9 +385,14 @@ export function renderEditor({ recipe, draft, allRecipes, app }) {
   // Only true once the PERSON edits a box — not when the app fills one in.
   let rawTyped = weighed;
 
+  // ⚠️⚠️ «—» AND NOT «0», ON BOTH BOXES. Found by looking at a screenshot after every
+  // measurement had passed: with the cooked box emptied, its grey `0` placeholder sat
+  // there on every recipe — a weaker version of the exact claim this change removes,
+  // since an empty box here means «nobody has weighed this» and never «it weighed
+  // nothing». Neither box's emptiness is a zero, so neither may look like one.
   const rawInput = el('input', {
     id: 'catRecipeRaw', class: 'cat-loss-input', type: 'number',
-    min: '0', step: 'any', inputmode: 'decimal', placeholder: '0',
+    min: '0', step: 'any', inputmode: 'decimal', placeholder: '—',
     // ⚠️ ITS STORED VALUE, AT BUILD TIME. refreshLoss() below only rewrites this box
     // while it is still following the recipe total, so a recipe that HAS been weighed
     // would otherwise open with an empty box and the number simply gone from the screen.
@@ -363,7 +409,7 @@ export function renderEditor({ recipe, draft, allRecipes, app }) {
   });
   const cookedInput = el('input', {
     id: 'catRecipeCooked', class: 'cat-loss-input', type: 'number',
-    min: '0', step: 'any', inputmode: 'decimal', placeholder: '0',
+    min: '0', step: 'any', inputmode: 'decimal', placeholder: '—',
     // ⚠️ ITS STORED VALUE, AND NOW THAT IS THE ONLY THING THAT EVER FILLS IT. A recipe
     // somebody HAS weighed opens showing what they weighed; every other recipe opens
     // empty, because empty is what «nobody has weighed this» looks like.
