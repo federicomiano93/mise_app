@@ -1689,6 +1689,16 @@ a.home-reminder {
    that is a separate, app-wide question for Federico, exactly like --text-4's
    3.6:1. Not fixed unilaterally here; only this new line was chosen properly. */
 .req-item--done .req-item-name { color: var(--text2); }
+/* ⚠️⚠️ WHAT WAS ACTUALLY BOUGHT. Not the warn colour of the line above it: that
+   one says "this has moved, look again", this one states a fact that is already
+   settled — the order that happened. The accent, so it reads as information and
+   not as a second alarm. */
+.req-item-ordered {
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent);
+}
 .req-item-changed {
   font-family: 'DM Mono', monospace;
   font-size: 11px;
@@ -2135,3 +2145,46 @@ body.hide-stock .ingredient-list .ing-fields { justify-content: center; }
   color: var(--crust-ink);
   font-weight: 600;
 }
+
+/* ── What nobody has been told about ──────────────────────────────────
+   js/orders/untold-view.js. Two states, and the difference between them is whether
+   the app can still help.
+
+   ⚠️ NOTHING NEW WAS DESIGNED. The additions wear the warn tint the "still to
+   re-order" banner already uses — same shape, same weight, same question ("this
+   needs doing"). What has ALREADY been ordered wears the error tint, because it is
+   the one thing on this screen the app cannot put right. */
+.untold-banner {
+  width: 100%;
+  text-align: left;
+  background: var(--warn-bg);
+  border-color: var(--warn-border);
+  color: var(--warn);
+  font-weight: 600;
+  cursor: pointer;
+}
+.untold-banner:not(button) { cursor: default; }
+.untold-text { flex: 1; min-width: 0; }
+.untold-chevron { display: flex; align-items: center; flex-shrink: 0; }
+
+/* ⚠️⚠️ THE ONE THE APP CANNOT UNDO. It has already been said down a telephone, so
+   this block states what happened and who to ring — it never offers a way to
+   "fix" it, because there is not one. */
+.untold-ordered {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  margin-bottom: 10px;
+  border-radius: var(--radius-sm);
+  background: var(--error-bg);
+  border: 1px solid var(--error-border);
+  color: var(--error);
+  font-size: 13px;
+}
+.untold-ordered-title { font-weight: 700; }
+.untold-ordered-line { font-family: 'DM Mono', monospace; font-size: 12px; }
+.untold-ordered-note { font-size: 12px; line-height: 1.4; }
+
+/* Quiet on purpose: it is the way to put things right, not the day's work. */
+.untold-resend { width: 100%; margin-bottom: 10px; }

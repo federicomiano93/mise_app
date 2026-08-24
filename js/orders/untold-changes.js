@@ -16,7 +16,7 @@
 // and as isDelivered() in deliveries.js. It goes quiet only for the two reasons
 // that mean the job is done: the list was sent again, or the order was recorded.
 
-import { wholeNumber as num } from './archive.js';
+import { wholeNumber as num, ingredientsOf, ingredientLabel, historyDocId } from './archive.js';
 
 // What today's sent lists asked for, for ONE supplier → { ingredientId: qty }.
 //
@@ -72,6 +72,80 @@ export function confirmedEntries(entries, supplierIngredients, quantities) {
   (supplierIngredients || []).forEach(ing => {
     if (!ing || !ing.id) return;
     out[ing.id] = { ...(out[ing.id] || {}), qty: num(quantities?.[ing.id]) };
+  });
+  return out;
+}
+
+// What today's recorded orders hold, for ONE supplier → { ingredientId: qty }.
+//
+// ⚠️ ONE RECORD PER DAY PER SUPPLIER, and a second order the same day is MERGED into
+// it (archive.js mergeArchives), so this is the day's TOTAL for that supplier. For the
+// question being asked here — "has anybody been told about this?" — the total is
+// exactly the right answer.
+export function orderedToday(history, supplierId, today) {
+  const id = historyDocId(today, supplierId);
+  const record = (history || []).find(r => r && r.id === id);
+  return record?.quantities || {};
+}
+
+// ⚠️⚠️ THE QUESTION: does the shared order hold more than anybody has been told about?
+//
+// Orders has ONE shared order per venue, live on every phone, and two ways for it to
+// leave the building — a frozen list sent to whoever orders, and a recorded order.
+// Both are photographs. So somebody can add to the order after both were taken, and
+// the person who would BUY it has no way to know.
+//
+// For each ingredient: `told` is the most any of today's sent lists asked for,
+// `ordered` is what today's record holds, `live` is what the shared order says now.
+// Anything above the larger of the two has been seen by nobody.
+//
+// ⚠️ THE GATE IS WHAT KEEPS THIS QUIET. The question is only asked for suppliers that
+// today have EITHER a sent list OR a recorded order. Before that, an order being
+// typed is simply an order being typed — everything in it is "untold" and saying so
+// would be an alarm that is always on, which is an alarm nobody reads.
+//
+// ⚠️ AND IT GOES QUIET BY ITSELF, for the two reasons that mean the job is done:
+// sending the list again raises `told`, and recording the order raises `ordered` AND
+// clears the rows. Never because time passed, and never because somebody dismissed
+// it — there is nothing to dismiss.
+export function untoldChanges({
+  suppliers, ingredients, entries, requests, history, today,
+} = {}) {
+  const out = [];
+  (suppliers || []).forEach(supplier => {
+    if (!supplier || !supplier.id) return;
+    const asked = askedToday(requests, supplier.id, today);
+    const ordered = orderedToday(history, supplier.id, today);
+    if (!Object.keys(asked).length && !Object.keys(ordered).length) return;
+
+    const rows = ingredientsOf(supplier.id, ingredients).map(ing => {
+      const live = num(entries?.[ing.id]?.qty);
+      const told = num(asked[ing.id]);
+      const done = num(ordered[ing.id]);
+      const extra = live - Math.max(told, done);
+      if (extra <= 0) return null;
+      // ⚠️⚠️ `alreadyOrdered` IS THE ONE THE APP CANNOT PUT RIGHT. Everything else is
+      // an addition somebody still has time to act on; this one has already been
+      // said down a telephone, so it is separated here and shown differently — the
+      // app must say what happened and who to ring, never pretend it can fix it.
+      return {
+        id: ing.id,
+        name: ingredientLabel(ing),
+        live, told, ordered: done, extra,
+        alreadyOrdered: done > 0,
+      };
+    }).filter(Boolean);
+
+    if (rows.length) {
+      out.push({
+        supplierId: supplier.id,
+        supplierName: supplier.name || '',
+        rows,
+        // Split once, here, so no screen has to work it out again and get it wrong.
+        added: rows.filter(r => !r.alreadyOrdered),
+        afterOrdering: rows.filter(r => r.alreadyOrdered),
+      });
+    }
   });
   return out;
 }

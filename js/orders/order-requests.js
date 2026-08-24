@@ -118,21 +118,48 @@ export function buildRequestListScreen(requests, callbacks) {
 
 // ── One list, open ───────────────────────────────────────────────────────────
 
-function itemRow(item, { differsTo, onToggle }) {
+function itemRow(item, { differsTo, orderedQty, onToggle }) {
   const box = el('input', { type: 'checkbox' });
   box.checked = item.done;
   box.addEventListener('change', () => onToggle(item.id, box.checked, box));
 
   const lines = [el('span', { class: 'req-item-name', text: item.name })];
 
-  // ⚠️ THE PRICE OF FREEZING THE LIST, PAID OUT LOUD. Recording an order writes
-  // what is in the SHARED order today, not what was sent yesterday — so somebody
-  // reading "4" here and tapping "Order placed" can record 6. The line has to say
-  // so, on the line, where the number is being read.
+  // ⚠️ THE PRICE OF FREEZING THE LIST, PAID OUT LOUD. This list is a photograph;
+  // the shared order carries on moving underneath it. So the number here and the
+  // number somebody is about to buy can differ, and the line has to say so — on the
+  // line, where the number is being read.
+  //
+  // ⚠️ WHAT THIS USED TO SAY WAS THAT TAPPING "Order placed" WHILE READING 4 COULD
+  // RECORD 6. That is no longer true: since the confirmation screen
+  // (js/orders/place-confirm.js) an order is what the person placing it confirmed,
+  // and they are shown every number before it is written. The warning below is now
+  // about the two documents disagreeing, not about recording something unseen.
+  // ⚠️⚠️ AND IT IS SILENCED ONCE THAT ROW HAS BEEN ORDERED. Recording an order CLEARS
+  // the rows, so on a row already bought this line always reads "now in the list: 0"
+  // — literally true, and read as an alarm about the leftovers of a job already
+  // done, right beside the line saying how much was actually bought. Anything typed
+  // AFTER the order is not lost by silencing it: that is exactly what the banner on
+  // the Orders screen exists to say (js/orders/untold-changes.js), and it says it
+  // where the work is rather than on a list somebody may never open again.
   if (differsTo !== undefined) {
     lines.push(el('span', {
       class: 'req-item-changed',
       text: t('orders.request.nowInList', { n: differsTo }),
+    }));
+  }
+
+  // ⚠️⚠️ WHAT WAS ACTUALLY BOUGHT, WHEN IT IS NOT WHAT WAS ASKED FOR. Whoever sent
+  // this list could otherwise only find out by asking somebody — and the rule is
+  // that the order is whatever the person who placed it confirmed, so THIS is the
+  // number that turned into food, not the frozen one beside it.
+  //
+  // ⚠️ `undefined` MEANS "NOTHING RECORDED YET", which is a different statement from
+  // "none was bought". A row still waiting must say nothing at all.
+  if (orderedQty !== undefined && orderedQty !== item.qty) {
+    lines.push(el('span', {
+      class: 'req-item-ordered',
+      text: t('orders.untold.ordered', { n: orderedQty }),
     }));
   }
 
@@ -146,9 +173,15 @@ function itemRow(item, { differsTo, onToggle }) {
 // request: one document. options: { ingredientsById, entries, canManage }.
 // callbacks: { onBack, onToggle, onFinish, onDelete, onPlaced }.
 export function buildRequestScreen(request, options, callbacks) {
-  const { ingredientsById = {}, entries = {}, canManage = false } = options || {};
+  const { ingredientsById = {}, entries = {}, orderedById = {},
+    canManage = false } = options || {};
   const groups = groupRequest(request, ingredientsById);
-  const differences = liveDifference(request, entries);
+  // ⚠️ A ROW THAT HAS BEEN ORDERED IS NOT ASKED "has the shared order moved?" — see
+  // the note above itemRow. Filtered here, once, so the count that decides the
+  // sentence above the rows cannot disagree with the marks on the rows themselves.
+  const differences = Object.fromEntries(
+    Object.entries(liveDifference(request, entries))
+      .filter(([id]) => orderedById[id] === undefined));
   const scroll = el('div', { class: 'preview-scroll' });
 
   scroll.appendChild(el('div', { class: 'req-head' }, [
@@ -181,6 +214,7 @@ export function buildRequestScreen(request, options, callbacks) {
       ]),
       ...group.items.map(item => itemRow(item, {
         differsTo: differences[item.id],
+        orderedQty: orderedById[item.id],
         onToggle: callbacks.onToggle,
       })),
       // ⚠️ THE HAND-OFF TO THE ROAD EVERYBODY ALREADY WALKS. Recording the order
