@@ -14,6 +14,7 @@
 // shows «Condividi», not «Share». js/auth-gate.js does exactly the same thing one
 // screen earlier.
 import { t, setLanguage, languageFromTag } from './i18n.js';
+import { copyToClipboard } from './share.js';
 // Imported for its side effect: it rewrites every element carrying data-i18n and
 // re-runs on setLanguage(). All of this page's words are in the markup.
 import './i18n-dom.js';
@@ -64,13 +65,14 @@ setLanguage(languageFromTag(navigator.language));
     if (notice) notice.hidden = false;
     const copyBtn = document.getElementById('copy-link-btn');
     if (copyBtn) {
+      // ⚠️ RACED, NOT AWAITED FOREVER, and by the one helper that owns the clock.
+      // navigator.clipboard.writeText() can sit there and never settle — the page losing
+      // focus is enough — and this button is the LAST WAY OUT for somebody who opened
+      // an invitation in Chrome on an iPhone: it hands them the address to paste into
+      // Safari. A promise with no timeout here is a person who cannot install the app.
       copyBtn.addEventListener('click', async () => {
-        try {
-          await navigator.clipboard.writeText(location.href);
-          copyBtn.textContent = t('help.linkCopiedNowPaste');
-        } catch (e) {
-          copyBtn.textContent = t('help.copyFailedLongPress');
-        }
+        copyBtn.textContent = await copyToClipboard(location.href)
+          ? t('help.linkCopiedNowPaste') : t('help.copyFailedLongPress');
       });
     }
   }

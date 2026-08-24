@@ -19,7 +19,9 @@ import { t } from '../i18n.js';
 import { el } from './dom.js';
 import { confirmDialog, alertDialog } from './confirm-dialog.js';
 import { createWorkspace, callFailureText } from './firebase-staff.js';
-import { copyToClipboard, sendOnWhatsApp } from '../share.js';
+import { copyToClipboard } from '../share.js';
+import { chooseHowToSend } from '../send-sheet.js';
+import { SEND_PATHS, svgElement } from '../send-icon.js';
 import { joinLinkFor, expiresInWords } from '../join-link.js';
 
 const BACK_ICON = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>';
@@ -350,10 +352,13 @@ export function openNewCustomer({ onClose, host, ownerKind } = {}) {
         : t('nc.copyThisLinkFor', { name: made.name, link: made.link }));
     });
 
-    const share = el('button', { type: 'button', class: 'btn-secondary people-save', text: t('help.sendOnWhatsapp') });
+    // ⚠️ ONE ARROW, AND THE CHOICE BEHIND IT (24 Aug 2026) — see js/send-sheet.js.
+    const share = el('button', { type: 'button', class: 'btn-secondary people-save' },
+      [svgElement(SEND_PATHS, 18), el('span', {}, t('ui.send'))]);
     share.addEventListener('click', () => {
       handedOver = true;
-      sendOnWhatsApp(t('nc.link.message', { name: made.name, link: made.link }));
+      chooseHowToSend({ subject: made.name,
+        text: t('nc.link.message', { name: made.name, link: made.link }) });
     });
 
     const done = el('button', { type: 'button', class: 'btn-secondary people-save', text: t('people.done') });

@@ -460,6 +460,17 @@ body.cat-zoom-lock { overflow: hidden; }
   cursor: pointer;
 }
 .cat-decl-btn:focus-visible { outline: 2px solid var(--cat-accent); outline-offset: 2px; }
+/* ⚠️ AN ICON BESIDE A WORD IS A FLEX ROW, ALWAYS. An <svg> in normal flow is an
+   inline box, so it rests on the TEXT BASELINE — about 2px below the centre line — and
+   this project has already shipped a bell sitting 2px high because a test proved the
+   icon existed and nothing measured where it sat (PR #31). The wrapper <span> the
+   label lives in needs it too, which is why the rule reaches the button's children. */
+.cat-decl-send-btn {
+  display: flex; align-items: center; justify-content: center; gap: 7px;
+  background: var(--cat-brand); border-color: var(--cat-brand); color: var(--cat-brand-ink);
+}
+.cat-decl-send-btn > * { display: flex; align-items: center; }
+.cat-decl-send-btn:active { transform: scale(.97); }
 .cat-decl-mailnote { margin: 8px 0 0; font-size: .75rem; color: var(--cat-text-2); }
 .cat-decl-status { display: block; margin-top: 6px; font-size: .8rem; color: var(--cat-text-2); }
 
@@ -1059,6 +1070,22 @@ body.cat-zoom-lock { overflow: hidden; }
 .lab-caveat-title { margin: 0 0 4px; font-weight: 700; color: var(--cat-crust-ink); }
 .lab-caveat p { margin: 0; }
 .lab-copy { margin-top: 12px; }
+/* Copy, and the same send arrow every other screen carries. The status line sits under
+   both, not inside either, so a «Copied» never changes the width of a button. */
+.lab-copy-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 12px; }
+.lab-copy-row .lab-copy { flex: 1 1 8rem; margin-top: 0; }
+.lab-send {
+  flex: 1 1 8rem; margin-top: 0;
+  /* ⚠️ justify-content: center, NOT the space-between .cat-alg-sheet-btn defaults to:
+     that rule is written for a full-width row with a chevron at its far end, and here
+     the icon and its word belong together. And a flex row, because an <svg> in normal
+     flow sits on the text baseline (PR #31). */
+  justify-content: center; gap: 7px;
+  background: var(--cat-brand); border-color: var(--cat-brand); color: var(--cat-brand-ink);
+}
+.lab-send > * { display: flex; align-items: center; }
+.lab-send:hover { border-color: var(--cat-brand); }
+.lab-send:active { transform: scale(.97); }
 .lab-copy-status { font-size: .8rem; font-weight: 400; color: var(--cat-text-2); }
 
 /* ── Reading a recipe from a photograph ────────────────────────────────────

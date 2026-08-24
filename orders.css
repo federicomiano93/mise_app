@@ -1890,34 +1890,13 @@ a.home-reminder {
   }
 }
 
-/* ── "How should this order go?" ─────────────────────────────────────────────
-   Reuses .app-dialog, so it inherits the focus trap, Escape and the screen-reader
-   naming rather than growing a second dialog nobody maintains. */
-.send-routes { display: flex; flex-direction: column; gap: 8px; margin: 4px 0 8px; }
-.send-route {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  width: 100%;
-  text-align: left;
-  /* ⚠️ 56px, WELL PAST THE 44px FLOOR. Four targets stacked in a dialog on a
-     320px phone, and a mis-tap here does not cost a keystroke: it sends a real
-     order down a road nobody chose. */
-  min-height: 56px;
-  padding: 10px 12px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--surface);
-  color: var(--text);
-}
-.send-route:active { background: var(--accent-light); }
-.send-route-icon { display: flex; align-items: center; color: var(--accent); flex-shrink: 0; }
-.send-route-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.send-route-name { font-size: 15px; font-weight: 600; }
-/* The sentence that says what a road actually costs: one message per supplier,
-   and who cannot be reached. It has to be readable, so it is not --text-4 (which
-   measures 3.6:1 and is an open accessibility item). */
-.send-route-note { font-size: 12px; color: var(--text3); }
+/* ⚠️ «How should this order go?» MOVED TO tokens.css ON 24 Aug 2026, and it had to.
+   The same sheet is now opened from the Catalogue, the Calculator and «Who can get in»,
+   and catalogue.html loads neither this stylesheet nor style.css. ⚠️⚠️ It also had to
+   change two variable names on the way: --accent and --text3 are defined in STYLE.CSS,
+   which the Catalogue does not load either, so the icon and the note would have arrived
+   with no colour at all and nothing would have said so — the fourth silent-CSS defect
+   this project has paid for. */
 
 /* ── Settings: which roads an employee may take ──────────────────────────────*/
 .send-setting-row {

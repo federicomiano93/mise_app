@@ -13,6 +13,9 @@
 // label.
 
 import { t } from '../i18n.js';
+import { copyToClipboard } from '../share.js';
+import { chooseHowToSend } from '../send-sheet.js';
+import { SEND_PATHS, svgElement } from '../send-icon.js';
 import { el } from './dom.js';
 import {
   buildLabel, ingredientLine, containsLine, declarationText, LABEL_SHOWS,
@@ -235,38 +238,37 @@ export function renderLabel({ recipe, ingredients, recipesById, location, initia
   }
 
   // Copying the plain text is the one thing that works whatever gets printed in
-  // the end, and it costs nothing to offer now that printing is undecided.
+  // the end, and it costs nothing to offer now that printing is undecided. Beside it,
+  // the same send arrow every other screen carries.
+  //
+  // ⚠️⚠️ WHAT IS COPIED AND WHAT IS SENT IS THE LABEL'S OWN TEXT, built by the model
+  // and not here. The recipe card offers the identical text, and three screens each
+  // assembling it is three texts that can come to disagree about what is in somebody's
+  // food. declarationText() is the one builder, and it is pinned line for line.
+  //
+  // ⚠️ IT FOLLOWS THE VENUE'S COUNTRY, NOT THE SCREEN. A copy in English pasted onto
+  // Italian packaging is the defect that rule exists to prevent, arriving through the
+  // one door nobody thought of.
   function copyRow(label) {
     const status = el('span', { class: 'lab-copy-status' });
-    const btn = el('button', {
+    const text = () => declarationText(label, lang);
+    const copy = el('button', {
       class: 'cat-alg-sheet-btn lab-copy', type: 'button',
       onclick: async () => {
-        // ⚠️⚠️ BUILT BY THE MODEL, NOT HERE, SINCE 24 Aug 2026. The recipe card now
-        // offers the same text by WhatsApp and by email; three screens each assembling
-        // it is three texts that can come to disagree about what is in somebody's food.
-        // declarationText() is the one builder, and it is pinned line for line.
-        //
-        // ⚠️ THE COPIED TEXT IS THE LABEL. Whatever gets printed in the end comes from
-        // here, so it follows the same language — a copy in English pasted onto Italian
-        // packaging is the defect that rule exists to prevent, arriving through the one
-        // door nobody thought of.
-        const text = declarationText(label, lang);
-        try {
-          // ⚠️ RACED, NOT AWAITED FOREVER. navigator.clipboard.writeText can hang
-          // indefinitely when the page is not focused — it did exactly that on the
-          // client-ordering link in v251, leaving the button dead and the person
-          // told nothing.
-          await Promise.race([
-            navigator.clipboard.writeText(text),
-            new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 2000)),
-          ]);
-          status.textContent = t('label.copied');
-        } catch (e) {
-          status.textContent = t('label.copyFailed');
-        }
+        // ⚠️ RACED, NOT AWAITED FOREVER — and by the one helper that owns the clock.
+        // navigator.clipboard.writeText can hang indefinitely when the page is not
+        // focused; it did exactly that on the client-ordering link in v251, leaving the
+        // button dead and the person told nothing.
+        status.textContent = await copyToClipboard(text())
+          ? t('label.copied') : t('label.copyFailed');
       },
-    }, [t('label.copy'), status]);
-    return btn;
+    }, [t('label.copy')]);
+    const send = el('button', {
+      class: 'cat-alg-sheet-btn lab-send', type: 'button',
+      'aria-label': t('ui.send'),
+      onclick: () => chooseHowToSend({ subject: label.name || '', text: text() }),
+    }, [svgElement(SEND_PATHS, 18), el('span', {}, t('ui.send'))]);
+    return el('div', { class: 'lab-copy-row' }, [copy, send, status]);
   }
 
   paint();

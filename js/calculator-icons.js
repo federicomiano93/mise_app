@@ -15,6 +15,8 @@
 // stroked, 2px, round caps and joins — so an icon lifted from here and one from
 // there sit side by side without looking like two different sets.
 
+import { SEND_PATHS } from './send-icon.js';
+
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
 // Each entry is the list of <path> shapes that make the icon.
@@ -23,7 +25,12 @@ const PATHS = {
   clock: ['M12 22a10 10 0 100-20 10 10 0 000 20z', 'M12 6v6l4 2'],
   calendar: ['M5 4h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V6a2 2 0 012-2z', 'M16 2v4M8 2v4M3 10h18'],
   pencil: ['M12 20h9', 'M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4 12.5-12.5z'],
-  send: ['M22 2L11 13', 'M22 2l-7 20-4-9-9-4 20-7z'],
+  // ⚠️⚠️ NOT A PAPER PLANE ANY MORE, AND THAT IS THE WHOLE POINT. This entry held
+  // the plane Federico rejected on 14 Aug 2026 («questa non mi piace») and NOTHING EVER
+  // CALLED IT — the plane on screen was a hand-copy of the same path in calculator.html.
+  // It is now the arrow he chose, read from the one place that defines it, so
+  // icon('send') and every other send control in the app draw the same shape.
+  send: SEND_PATHS,
   chevronRight: ['M9 18l6-6-6-6'],                                // mirrors the shared back arrow
   chevronLeft: ['M15 18l-6-6 6-6'],
 };

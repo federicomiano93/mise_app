@@ -1,7 +1,7 @@
 import './firebase.js';
 import { t } from './i18n.js';
 import {
-  calc, copyRecipe, shareRecipeWA, buildDivisorBox,
+  calc, copyRecipe, sendRecipe, buildDivisorBox,
   restoreRevealed, clearRevealed, restoreLock, clearLock, getLock,
 } from './calc.js';
 import { saveDay, editTab, renderLog } from './log.js';
@@ -293,7 +293,7 @@ function wireRecipe(recipe) {
   const copyBtn = document.getElementById(id + '-copy-btn');
   if (copyBtn) copyBtn.addEventListener('click', () => copyRecipe(id));
   const waBtn = document.getElementById(id + '-wa-recipe-btn');
-  if (waBtn) waBtn.addEventListener('click', () => shareRecipeWA(id));
+  if (waBtn) waBtn.addEventListener('click', () => sendRecipe(id));
   const resetBtn = document.querySelector('#tab-' + id + ' .reset-btn');
   if (resetBtn) resetBtn.addEventListener('click', () => resetTab(id));
 }
