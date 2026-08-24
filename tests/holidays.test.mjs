@@ -14,7 +14,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { isHoliday, nextHoliday, isHolidayWithinNextDays } from '../js/orders/holidays.js';
+import {
+  isHoliday, nextHoliday, isHolidayWithinNextDays, refreshHolidays,
+} from '../js/orders/holidays.js';
 import { COUNTRIES } from '../js/market.js';
 
 const root = new URL('../', import.meta.url);
@@ -233,4 +235,32 @@ test('both new modules are precached, or an offline phone 404s on them', () => {
   assert.ok(sw.includes("'./js/orders/holidays.js'"));
   assert.ok(sw.includes("'./js/orders/holidays-it.js'"));
   assert.ok(!sw.includes("'./js/orders/bank-holidays.js'"), 'the renamed file must go');
+});
+
+// ── The fetch, and who it is for ─────────────────────────────────────────────
+
+// ⚠️⚠️ AN ITALIAN VENUE NEVER GOES TO gov.uk. Its twelve are worked out on the
+// phone, so the call must return before any network is touched — and the calendar
+// it would download is the one this whole fix exists to stop it being shown. Proved
+// by making fetch itself an error: if the guard goes, this is a real request.
+test('⚠️⚠️ an Italian venue never goes to gov.uk', async () => {
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = () => { throw new Error('the Italian calendar must not be fetched'); };
+  try {
+    const list = await refreshHolidays('IT');
+    assert.equal(list.length, 12, 'it answers the Italian calendar, without a network call');
+    assert.ok(list.includes(`${new Date().getFullYear()}-08-15`), 'Ferragosto is in it');
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+});
+
+test('a venue with no country fetches nothing and has nothing', async () => {
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = () => { throw new Error('no country, no calendar, no request'); };
+  try {
+    assert.deepEqual(await refreshHolidays(null), []);
+  } finally {
+    globalThis.fetch = realFetch;
+  }
 });
