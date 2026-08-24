@@ -18,7 +18,7 @@ import {
   watchMembers, createJoinCode, setMemberRole, setMemberName, callFailureText,
 } from './firebase-staff.js';
 import { joinLinkFor, expiresInWords } from '../join-link.js';
-import { copyToClipboard, sendOnWhatsApp } from './share.js';
+import { copyToClipboard, sendOnWhatsApp } from '../share.js';
 import {
   ROLE_CHOICES, personLabel, personLabelInSentence, choiceKey,
   choiceLabel, choiceLabelInSentence,

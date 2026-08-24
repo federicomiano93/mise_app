@@ -257,14 +257,34 @@ test('the label screen refuses when the country is unknown, and follows it when 
 // clipboard, so an English copy pasted onto Italian packaging is the whole defect
 // this release prevents, arriving through the one door nobody thought of.
 test('the copied text is in the same language as the label on screen', () => {
-  const view = read('js/catalogue/label-view.js');
-  const start = view.indexOf('const lines = [label.name');
-  const copy = view.slice(start, start + 700);
-  assert.match(copy, /labelWord\('ingredients', lang\)/);
-  assert.match(copy, /containsLine\(label, lang\)/);
-  assert.match(copy, /nutrientName\(n, lang\)/);
-  assert.doesNotMatch(copy, /'Ingredients: '|'Typical values|'May contain:/,
+  // ⚠️ THE TEXT MOVED INTO THE MODEL ON 24 Aug 2026 — declarationText() — because the
+  // recipe card now offers the same words by WhatsApp and by email, and three screens
+  // each assembling them is three texts that can disagree about what is in somebody's
+  // food. So the language rule is checked where the text is BUILT.
+  const model = read('js/catalogue/recipe-label-model.js');
+  const start = model.indexOf('export function declarationText(');
+  assert.notEqual(start, -1, 'declarationText must exist to be guarded');
+  const body = model.slice(start, model.indexOf('\n}', start));
+  // ⚠️ PROVE THE SLICE IS REAL. The version of this test that stood here sliced from an
+  // indexOf that had become -1, which silently handed the whole file to the assertions.
+  assert.ok(body.length > 200, 'the slice must actually contain the function');
+
+  assert.match(body, /labelWord\('ingredients', lang\)/);
+  assert.match(body, /containsLine\(label, lang\)/);
+  assert.match(body, /mayContainLine\(label, lang\)/);
+  assert.match(body, /nutrientName\(n, lang\)/);
+  assert.doesNotMatch(body, /'Ingredients: '|'Typical values|'May contain:/,
     'no English left hard-coded in the copied label');
+
+  // And every screen that hands this text to somebody goes through it, rather than
+  // assembling its own.
+  for (const file of ['js/catalogue/label-view.js', 'js/catalogue/catalogue-detail.js']) {
+    const src = read(file);
+    assert.match(src, /declarationText\(label, lang/,
+      `${file} must build the text with the one builder`);
+    assert.doesNotMatch(src, /const lines = \[label\.name/,
+      `${file} must not assemble a second version of it`);
+  }
 });
 
 // ── The screen AROUND the label follows the reader ───────────────────────────

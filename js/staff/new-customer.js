@@ -19,7 +19,7 @@ import { t } from '../i18n.js';
 import { el } from './dom.js';
 import { confirmDialog, alertDialog } from './confirm-dialog.js';
 import { createWorkspace, callFailureText } from './firebase-staff.js';
-import { copyToClipboard, sendOnWhatsApp } from './share.js';
+import { copyToClipboard, sendOnWhatsApp } from '../share.js';
 import { joinLinkFor, expiresInWords } from '../join-link.js';
 
 const BACK_ICON = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>';

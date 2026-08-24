@@ -20,7 +20,7 @@ import { t } from '../i18n.js';
 import { el } from './dom.js';
 import { confirmDialog, alertDialog } from './confirm-dialog.js';
 import { listWorkspaces, reissueOwnerLink, deleteWorkspace, callFailureText } from './firebase-staff.js';
-import { copyToClipboard } from './share.js';
+import { copyToClipboard } from '../share.js';
 import { joinLinkFor, expiresInWords } from '../join-link.js';
 import {
   isStranded, statusWords, sectionSummary, createdWords, createdWordsInLine,

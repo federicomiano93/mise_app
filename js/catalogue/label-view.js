@@ -14,7 +14,9 @@
 
 import { t } from '../i18n.js';
 import { el } from './dom.js';
-import { buildLabel, ingredientLine, containsLine, LABEL_SHOWS } from './recipe-label-model.js';
+import {
+  buildLabel, ingredientLine, containsLine, declarationText, LABEL_SHOWS,
+} from './recipe-label-model.js';
 import { NUTRIENTS } from '../allergen-model.js';
 import {
   canPrintLabel, countryOf, outputLanguage, labelWord, allergenName, nutrientName,
@@ -239,27 +241,23 @@ export function renderLabel({ recipe, ingredients, recipesById, location, initia
     const btn = el('button', {
       class: 'cat-alg-sheet-btn lab-copy', type: 'button',
       onclick: async () => {
-        // ⚠️ THE COPIED TEXT IS THE LABEL. Whatever gets printed in the end comes
-        // from here, so it follows the same language — a copy in English pasted
-        // onto Italian packaging is the whole defect this release prevents,
-        // arriving through the one door nobody thought of.
-        const lines = [label.name, `${labelWord('ingredients', lang)}: ${ingredientLine(label)}.`];
-        const contains = containsLine(label, lang);
-        if (contains) lines.push(contains);
-        if (label.mayContain.length) {
-          lines.push(`${labelWord('mayContain', lang)}: ${label.mayContain.map(c => allergenName(c, lang)).join(', ')}`);
-        }
-        if (label.nutrition) {
-          lines.push(`${labelWord('typicalValues', lang)} ${labelWord('per100g', lang)}:`);
-          NUTRIENTS.forEach(n => lines.push(`  ${nutrientName(n, lang)}: ${label.nutrition[n.key]} ${n.unit}`));
-        }
+        // ⚠️⚠️ BUILT BY THE MODEL, NOT HERE, SINCE 24 Aug 2026. The recipe card now
+        // offers the same text by WhatsApp and by email; three screens each assembling
+        // it is three texts that can come to disagree about what is in somebody's food.
+        // declarationText() is the one builder, and it is pinned line for line.
+        //
+        // ⚠️ THE COPIED TEXT IS THE LABEL. Whatever gets printed in the end comes from
+        // here, so it follows the same language — a copy in English pasted onto Italian
+        // packaging is the defect that rule exists to prevent, arriving through the one
+        // door nobody thought of.
+        const text = declarationText(label, lang);
         try {
           // ⚠️ RACED, NOT AWAITED FOREVER. navigator.clipboard.writeText can hang
           // indefinitely when the page is not focused — it did exactly that on the
           // client-ordering link in v251, leaving the button dead and the person
           // told nothing.
           await Promise.race([
-            navigator.clipboard.writeText(lines.join('\n')),
+            navigator.clipboard.writeText(text),
             new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 2000)),
           ]);
           status.textContent = t('label.copied');

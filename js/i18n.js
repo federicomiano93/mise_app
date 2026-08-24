@@ -978,6 +978,19 @@ const DICTIONARIES = Object.freeze({
     // a food, so they follow the interface language like every other instruction.
     'cat.section.batch': 'Batch weight',
     'cat.section.procedure': 'Procedure',
+    // ⚠️ THE CARD'S TITLE AND ITS BUTTONS ARE INTERFACE TEXT — they tell somebody what
+    // to tap. The DECLARATION inside it is not: every food word there comes from
+    // js/market.js in the language of the venue's COUNTRY, because that is the law.
+    'cat.decl.title': 'Ingredient declaration',
+    'cat.decl.blocked': 'Not ready yet — some ingredients are still to be declared. The allergen card above says which.',
+    'cat.decl.caveat': 'A draft for you to check. The app knows what it was told: it cannot know about a last-minute substitution or a supplier who changed their recipe.',
+    // ⚠️ ONE WORD, not label.copy's «Copy the text». Three buttons share a row on a
+    // phone and the longer phrase wrapped to two lines while the other two did not —
+    // seen in a screenshot, the same kind of fix as v1.71.0's «Come si fa».
+    'cat.decl.copy': 'Copy',
+    'cat.decl.whatsapp': 'WhatsApp',
+    'cat.decl.email': 'Email',
+    'cat.decl.mailNote': 'WhatsApp and Email open the app with the text ready — they do not send it.',
     'cat.amount': 'Amount',
     'cat.unit': 'Unit',
     'cat.removeIngredient': 'Remove ingredient',
@@ -2822,6 +2835,13 @@ const DICTIONARIES = Object.freeze({
     'cat.ingredients': 'Ingredienti',
     'cat.section.batch': 'Peso impasto',
     'cat.section.procedure': 'Procedimento',
+    'cat.decl.title': 'Dichiarazione ingredienti',
+    'cat.decl.blocked': 'Non ancora pronta — alcuni ingredienti sono da dichiarare. La casella allergeni qui sopra dice quali.',
+    'cat.decl.caveat': 'Una bozza da controllare. L’app sa quello che le è stato detto: non può sapere di una sostituzione dell’ultimo minuto o di un fornitore che ha cambiato ricetta.',
+    'cat.decl.copy': 'Copia',
+    'cat.decl.whatsapp': 'WhatsApp',
+    'cat.decl.email': 'Email',
+    'cat.decl.mailNote': 'WhatsApp ed Email aprono l’app con il testo già pronto — non lo inviano.',
     'cat.amount': 'Quantità',
     'cat.unit': 'Unità',
     'cat.removeIngredient': 'Togli l’ingrediente',

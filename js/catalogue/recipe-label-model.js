@@ -17,12 +17,12 @@ import { MAX_RECIPE_DEPTH } from './recipe-cost-model.js';
 import { recipeAllergens, canLabel } from './recipe-allergen-model.js';
 import {
   normalizeAllergens, normalizeMayContain, normalizeNutrition, hasFullNutrition,
-  NUTRIENT_KEYS,
+  NUTRIENT_KEYS, NUTRIENTS,
 } from '../allergen-model.js';
 // ⚠️ From js/ ROOT, like allergen-model.js above it and for the same reason: what
 // language a label is printed in is decided by the venue's country, and that
 // judgement must be the same one for every screen that prints one.
-import { allergenName, labelWord } from '../market.js';
+import { allergenName, labelWord, nutrientName } from '../market.js';
 
 function lookup(table, id) {
   if (!table || !id) return null;
@@ -216,4 +216,40 @@ export function ingredientLine(label) {
 export function containsLine(label, lang = 'en') {
   if (!label || !label.ok || !label.allergens.length) return '';
   return `${labelWord('contains', lang)}: ${label.allergens.map(c => allergenName(c, lang)).join(', ')}`;
+}
+
+// "May contain: Nuts" — the traces line. ⚠️ NEVER MERGED INTO `contains`: a warning
+// that something MIGHT be present is a different statement from a declaration that it
+// IS, and the law treats them differently.
+export function mayContainLine(label, lang = 'en') {
+  if (!label || !label.ok || !label.mayContain.length) return '';
+  return `${labelWord('mayContain', lang)}: ${label.mayContain.map(c => allergenName(c, lang)).join(', ')}`;
+}
+
+// ── The whole declaration, as plain text ─────────────────────────────────────
+//
+// ⚠️⚠️ ONE BUILDER, USED BY EVERY SCREEN THAT HANDS THIS TEXT TO SOMEBODY. It was
+// written inline inside label-view.js's copy button; the recipe card now offers the
+// same text by WhatsApp and by email, and three places each assembling it is three
+// texts that can disagree about what is in somebody's food.
+//
+// ⚠️ THE LANGUAGE IS THE VENUE'S COUNTRY'S, never a preference — see js/market.js. A
+// copy in English pasted onto Italian packaging is the defect this rule exists to
+// prevent, and it would arrive through whichever door nobody thought of.
+//
+// `withNutrition` is false for a message: some mail clients silently drop a body past
+// about 2000 characters, and the nutrition table is most of the length. The label
+// screen's own copy button passes true.
+export function declarationText(label, lang = 'en', { withNutrition = true } = {}) {
+  if (!label || !label.ok) return '';
+  const lines = [label.name, `${labelWord('ingredients', lang)}: ${ingredientLine(label)}.`];
+  const contains = containsLine(label, lang);
+  if (contains) lines.push(contains);
+  const traces = mayContainLine(label, lang);
+  if (traces) lines.push(traces);
+  if (withNutrition && label.nutrition) {
+    lines.push(`${labelWord('typicalValues', lang)} ${labelWord('per100g', lang)}:`);
+    NUTRIENTS.forEach(n => lines.push(`  ${nutrientName(n, lang)}: ${label.nutrition[n.key]} ${n.unit}`));
+  }
+  return lines.join('\n');
 }
