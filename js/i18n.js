@@ -964,6 +964,9 @@ const DICTIONARIES = Object.freeze({
     'cat.cookedDoughWeight': 'Cooked dough',
     'cat.lossIs': 'Weight lost in the oven: {pct}%',
     'cat.lossNotYet': 'Weight lost in the oven: weigh the baked dough to work it out',
+    // ⚠️ ONLY EVER SHOWN FOR A PERCENTAGE ABOVE ZERO. A stored 0 means nobody has said,
+    // and gets cat.lossNotYet above — see storedLossText() in catalogue-editor.js.
+    'cat.lossStored': 'Weight lost in the oven: {pct}% — weigh the dough to work it out again',
     'cat.lossCookedHeavier': 'The cooked dough cannot weigh more than the raw dough.',
     'cat.lossCapped': 'Stored as {max}% — a full loss would make the cost per kilo infinite.',
     'cat.searchARecipe': 'Search a recipe…',
@@ -2759,6 +2762,7 @@ const DICTIONARIES = Object.freeze({
     'cat.cookedDoughWeight': 'Impasto cotto',
     'cat.lossIs': 'Calo peso in cottura: {pct}%',
     'cat.lossNotYet': 'Calo peso in cottura: pesa l’impasto cotto per saperlo',
+    'cat.lossStored': 'Calo peso in cottura: {pct}% — ripesa l’impasto per aggiornarlo',
     'cat.lossCookedHeavier': 'L’impasto cotto non può pesare più del crudo.',
     'cat.lossCapped': 'Salvato come {max}% — un calo totale renderebbe infinito il costo al chilo.',
     'cat.searchARecipe': 'Cerca una ricetta…',
