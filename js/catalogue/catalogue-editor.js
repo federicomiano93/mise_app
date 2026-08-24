@@ -361,9 +361,14 @@ export function renderEditor({ recipe, draft, allRecipes, app }) {
   // Only true once the PERSON edits a box — not when the app fills one in.
   let rawTyped = weighed;
 
+  // ⚠️⚠️ «—» AND NOT «0», ON BOTH BOXES. Found by looking at a screenshot after every
+  // measurement had passed: with the cooked box emptied, its grey `0` placeholder sat
+  // there on every recipe — a weaker version of the exact claim this change removes,
+  // since an empty box here means «nobody has weighed this» and never «it weighed
+  // nothing». Neither box's emptiness is a zero, so neither may look like one.
   const rawInput = el('input', {
     id: 'catRecipeRaw', class: 'cat-loss-input', type: 'number',
-    min: '0', step: 'any', inputmode: 'decimal', placeholder: '0',
+    min: '0', step: 'any', inputmode: 'decimal', placeholder: '—',
     // ⚠️ ITS STORED VALUE, AT BUILD TIME. refreshLoss() below only rewrites this box
     // while it is still following the recipe total, so a recipe that HAS been weighed
     // would otherwise open with an empty box and the number simply gone from the screen.
@@ -380,7 +385,7 @@ export function renderEditor({ recipe, draft, allRecipes, app }) {
   });
   const cookedInput = el('input', {
     id: 'catRecipeCooked', class: 'cat-loss-input', type: 'number',
-    min: '0', step: 'any', inputmode: 'decimal', placeholder: '0',
+    min: '0', step: 'any', inputmode: 'decimal', placeholder: '—',
     // ⚠️ ITS STORED VALUE, AND NOW THAT IS THE ONLY THING THAT EVER FILLS IT. A recipe
     // somebody HAS weighed opens showing what they weighed; every other recipe opens
     // empty, because empty is what «nobody has weighed this» looks like.
