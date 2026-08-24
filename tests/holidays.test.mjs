@@ -18,6 +18,7 @@ import {
   isHoliday, nextHoliday, isHolidayWithinNextDays, refreshHolidays,
 } from '../js/orders/holidays.js';
 import { COUNTRIES } from '../js/market.js';
+import { _dictionaries } from '../js/i18n.js';
 
 const root = new URL('../', import.meta.url);
 const read = (name) => readFileSync(new URL(name, root), 'utf8');
@@ -301,4 +302,43 @@ test('a venue with no country fetches nothing and has nothing', async () => {
   } finally {
     globalThis.fetch = realFetch;
   }
+});
+
+// ── No sentence about a holiday names a country ──────────────────────────────
+
+// ⚠️⚠️ WRITTEN AFTER THE ALERTS WERE ALREADY FIXED AND ONE SENTENCE WAS NOT.
+// `orders.alert.*` stopped naming a country on 24 Aug 2026; `orders.getAnAlertWhen`
+// — the paragraph in Settings that DESCRIBES those alerts — still said «una
+// festività nel Regno Unito» / "a UK bank holiday", and went live saying it. It was
+// found by sweeping the deployed site for the words, not by any test here.
+//
+// ⚠️ SO THIS IS A RULE, NOT A LIST: every dictionary value that talks about a
+// holiday, in either language, is forbidden from naming a country. A guard written
+// as "these three keys must not say Regno Unito" would have closed the three keys
+// and missed the fourth, exactly as happened.
+//
+// ⚠️ AND IT IS SCOPED TO HOLIDAY SENTENCES ON PURPOSE. `country.GB` is «Regno
+// Unito» and must stay that way — it is the venue's country in Settings, where
+// naming the country is the entire job.
+test('⚠️⚠️ no phrase about a holiday names a country, in either language', () => {
+  const HOLIDAY = /festiv|holiday/i;
+  const COUNTRY = /Regno Unito|United Kingdom|\bUK\b|\bGB\b|\bItalia\b|\bItaly\b|britann|british/i;
+
+  const offenders = [];
+  for (const [lang, dict] of Object.entries(_dictionaries())) {
+    for (const [key, value] of Object.entries(dict)) {
+      // A plural entry is an object of forms; check every one of them.
+      const texts = typeof value === 'string' ? [value]
+        : (value && typeof value === 'object' ? Object.values(value) : []);
+      for (const text of texts) {
+        if (typeof text !== 'string') continue;
+        if (HOLIDAY.test(text) && COUNTRY.test(text)) {
+          offenders.push(`${lang} ${key}: ${text.slice(0, 120)}`);
+        }
+      }
+    }
+  }
+  assert.deepEqual(offenders, [],
+    'a sentence about holidays may not name a country — which days appear is decided '
+    + "by the venue's country in js/orders/holidays.js, and the reader is standing in it");
 });
