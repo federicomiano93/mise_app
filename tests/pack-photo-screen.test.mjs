@@ -207,6 +207,38 @@ test('⚠️ the location is read at CALL time, never captured while rendering',
     'and it is not passed in from the screen');
 });
 
+test('⚠️⚠️ EVERY file that calls a Cloud Function points at the emulator on localhost', () => {
+  // Found by a mutation, and nothing in this repo pinned it — for either reader.
+  // js/firebase.js sends Firestore and Auth to the emulator on localhost; it sends
+  // FUNCTIONS nowhere. Without this line in each caller, testing on 127.0.0.1 calls the
+  // REAL DEPLOYED FUNCTION and spends REAL MONEY, on a page whose own console says
+  // «LOCAL EMULATOR mode — production data is NOT touched».
+  const callers = [
+    'js/orders/firebase-photo.js',
+    'js/catalogue/firebase-photo.js',
+    'js/orders/firebase-features.js',
+    'js/staff/firebase-staff.js',
+  ];
+  for (const file of callers) {
+    const src = codeOf(read(file));
+    if (!/httpsCallable\(/.test(src)) continue;
+    assert.match(src, /if \(isLocalEmulator\) connectFunctionsEmulator\(functions, '127\.0\.0\.1', 5001\);/,
+      `${file} calls a Cloud Function and would call the DEPLOYED one from localhost`);
+  }
+});
+
+test('⚠️ the settings toggle reads its state THROUGH the key map', () => {
+  // A mutation put the if/else chain back and the guard on `const FIELD = {` stayed
+  // green: the constant was still declared, just unused. Pin the USE, not the presence
+  // — «the suite went red» is not «this guard fired», and neither is «the word is
+  // still in the file».
+  assert.match(SETTINGS, /cb\.checked = !!current\[FIELD\[key\]\];/,
+    'with three switches, `key === \'showAllergens\' ? a : b` files the third under the second');
+  assert.match(SETTINGS, /current\[FIELD\[key\]\] = wanted;/,
+    'and the write has to go through it too, or the box springs back on the next paint');
+  assert.ok(!/key === 'showAllergens' \?/.test(SETTINGS), 'the chain must be gone, not merely bypassed');
+});
+
 test('⚠️ the busy marker is set and cleared in a finally', () => {
   assert.match(CAPTURE, /root\.classList\.add\('alg-photo-busy'\)/);
   assert.match(CAPTURE, /finally \{[\s\S]*?root\.classList\.remove\('alg-photo-busy'\)/,
