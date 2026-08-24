@@ -63,7 +63,14 @@ export function buildManagement(data, actions) {
     content.textContent = '';
     const boss = canManageHere();
 
-    section('orders.section.orderScreen', [buildStockToggle(), buildHistoryDaysField()]);
+    // ⚠️ HISTORY IS FIRST, AND IT IS A DOOR AMONG SETTINGS. Federico moved it in here
+    // from the bottom bar on 24 Aug 2026, where it was taking a third of the bar every
+    // day for a screen consulted rarely. The field that says how far back it draws
+    // belongs with it and nowhere else.
+    if (actions.openHistory) {
+      section('ui.history', [buildHistoryDoor(), buildHistoryDaysField()]);
+    }
+    section('orders.section.orderScreen', [buildStockToggle()]);
     if (boss) section('orders.weekStart.title', [buildWeekStart()]);
     if (boss) section('orders.section.howSent', [buildSendRoutes()]);
 
@@ -74,9 +81,35 @@ export function buildManagement(data, actions) {
 
   // One heading and its fields, so a section cannot end up with a title and nothing
   // under it — or fields under somebody else's title.
+  //
+  // ⚠️⚠️ A CARD WITH A BORDER SINCE 24 Aug 2026 (Federico: «dentro impostazioni dividi
+  // visivamente bene tutte le diverse impostazioni perché al momento sono messe tutte
+  // insieme ed è molto confusionario»). It was a heading and then loose fields, all
+  // siblings, so nothing on the screen said where one group ended.
+  //
+  // ⚠️ NOTHING WAS DESIGNED. .mgmt-fold / .mgmt-fold-head--static / .mgmt-fold-body are
+  // the card the ingredient record has used since v1.67.0, and .mgmt-fold-label and the
+  // old .mgmt-section-title are already the same 11px uppercase mono in --text3 — so
+  // the words did not move, only the frame around them arrived.
   function section(titleKey, fields) {
-    content.appendChild(el('h3', { class: 'mgmt-section-title', text: t(titleKey) }));
-    fields.filter(Boolean).forEach(f => content.appendChild(f));
+    const inner = fields.filter(Boolean);
+    if (!inner.length) return;
+    content.appendChild(el('div', { class: 'mgmt-fold' }, [
+      el('h3', { class: 'mgmt-fold-head mgmt-fold-head--static' }, [
+        el('span', { class: 'mgmt-fold-label', text: t(titleKey) }),
+      ]),
+      el('div', { class: 'mgmt-fold-body' }, inner),
+    ]));
+  }
+
+  // The way into History, drawn as the row it is rather than as a setting.
+  function buildHistoryDoor() {
+    return el('button', {
+      type: 'button', class: 'mgmt-door', onClick: () => actions.openHistory(),
+    }, [
+      el('span', { class: 'mgmt-door-text', text: t('orders.settings.openHistory') }),
+      el('span', { class: 'mgmt-door-chevron', 'aria-hidden': 'true', text: '›' }),
+    ]);
   }
 
   // Show or hide the Stock box on every order row, for EVERY phone (it is stored in

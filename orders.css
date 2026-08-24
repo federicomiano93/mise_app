@@ -1748,28 +1748,6 @@ a.home-reminder {
 }
 .req-delete-btn svg { flex-shrink: 0; }
 
-/* The banner at the top of Orders: N lists waiting. */
-.req-banner {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  width: 100%;
-  padding: 12px 14px;
-  margin-bottom: 10px;
-  background: var(--brand);
-  border: none;
-  border-radius: var(--radius-sm);
-  color: var(--on-brand);
-  font-family: 'Manrope', sans-serif;
-  font-size: 14px;
-  font-weight: 600;
-  text-align: left;
-  cursor: pointer;
-  transition: transform 60ms ease;
-}
-.req-banner:active { transform: scale(.97); }
-.req-banner-chevron { margin-left: auto; flex-shrink: 0; display: flex; }
-
 /* ── History, now a screen of its own ────────────────────────────────────────
    Opened from the bottom bar rather than the tab bar (14 Aug 2026): it is a
    reference, consulted rarely, and it was taking half the tab bar every day.
@@ -2188,3 +2166,146 @@ body.hide-stock .ingredient-list .ing-fields { justify-content: center; }
 
 /* Quiet on purpose: it is the way to put things right, not the day's work. */
 .untold-resend { width: 100%; margin-bottom: 10px; }
+
+/* ── The order, in one box ───────────────────────────────────────────
+   Federico, 24 Aug 2026. The two tabs, the two views and the suppliers under them
+   are one job, and the screen never said so.
+
+   ⚠️⚠️ THE PHONE LOSES NO ROW WIDTH, AND THAT IS ARITHMETIC, NOT HOPE. A row used
+   to sit 16px from the screen edge (.content's own padding, on a phone where
+   --app-gutter is 0). It now sits 8px of box margin + 1px of border + 8px of inner
+   padding = 17px. One pixel, on the screen where the ingredient name is already
+   17px short (see the v1.72.0 note). Anything more generous would have cost real
+   width on a 320px phone.
+
+   ⚠️ NO `overflow: hidden` ON THE BOX. It would make the box its own scroll
+   container and the sticky head below would stop sticking — silently, and only on a
+   list long enough to scroll, which is the only case it exists for. */
+.order-box {
+  margin: 0 0 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.order-box > .content { padding: 12px 8px 14px; }
+
+/* ⚠️⚠️ STICKY, BECAUSE IT USED TO BE OUTSIDE THE SCROLLER. The tab bar sat above
+   .scroll-area and stayed put for free; inside the box it would scroll away, and
+   changing view half way down a long list would mean scrolling back to the top.
+   ⚠️ AN OPAQUE GROUND IS PART OF THE MECHANISM, not decoration — rows would
+   otherwise slide visibly underneath it. */
+.order-box-head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  border-radius: var(--radius) var(--radius) 0 0;
+}
+/* ⚠️ THE TAB BAR'S OWN GUTTER IS FOR A FULL-WIDTH BAR AND IS WRONG IN HERE. It
+   carries `padding-inline: max(16px, var(--app-gutter))` so that, outside the box, it
+   lines up with the content column on a tablet. The box already answers for that. */
+.order-box-head .tab-bar { padding: 10px 8px 8px; padding-inline: 8px; }
+.order-box-head .view-switch { margin: 0 8px 10px; }
+
+/* ── A calendar notice you have read ───────────────────────────────────
+   ⚠️ THE CLOSE BUTTON IS A SIBLING OF THE TEXT, AND THE FRAME BELONGS TO THE ROW.
+   A button cannot nest inside a button; this is the rule PR #31 wrote down. */
+.alert-banner { display: flex; align-items: flex-start; gap: 8px; }
+.alert-body { flex: 1; min-width: 0; }
+.alert-close {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* 32px, not 44px: it sits INSIDE a banner 10px tall in padding, and a 44px target
+     would set the height of every notice on the screen. It is also the one control
+     here whose mis-tap costs nothing — the pill puts it straight back. */
+  width: 32px;
+  height: 32px;
+  margin: -4px -4px -4px 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  opacity: 0.7;
+  cursor: pointer;
+}
+.alert-close:hover { opacity: 1; }
+.alert-close:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; border-radius: var(--radius-sm); }
+
+/* What is left once every notice has been put away. Small on purpose: its whole job
+   is to take almost no room while still proving the notices are there. */
+.alert-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 4px 12px;
+  margin-bottom: 10px;
+  border-radius: var(--radius-pill);
+  background: var(--warn-bg);
+  border: 1px solid var(--warn-border);
+  color: var(--warn);
+  cursor: pointer;
+}
+.alert-pill-icon { display: flex; align-items: center; }
+.alert-pill-count {
+  font-family: 'DM Mono', monospace;
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── The order lists, smaller ───────────────────────────────────────
+   ⚠️ 48px, NOT 64px — and not below 44px, which is the floor for anything a thumb
+   has to hit. What was made quieter is the SIZE; the colour swap that announces a
+   waiting list is untouched, because that is the half that does the work. */
+.requests-card { min-height: 48px; padding: 8px 14px; }
+.requests-card-icon svg { width: 20px; height: 20px; }
+
+/* ── One button in the bottom bar ───────────────────────────────────
+   .recipe-footer-btn is `flex: 1`, which is right for two or three buttons and wrong
+   for one: alone it would stretch the full width of the screen and stop reading as a
+   button at all. */
+#orders-footer { justify-content: center; }
+#orders-footer .recipe-footer-btn { flex: 0 1 240px; }
+
+/* ⚠️⚠️ THE ONE THING THE CARD SHAPE DOES NOT BRING WITH IT: THE GAP. .mgmt-fold
+   is used inside .mgmt-form, which is a flex column with `gap: 14px`; .mgmt-scroll is
+   not, so dropped straight in the cards would touch each other and read as one long
+   box — the very thing the border was added to stop.
+   ⚠️ SCOPED TO THIS PANEL. .reg-settings on suppliers.html has its own spacing rule
+   and is deliberately not touched. */
+.mgmt-scroll > .mgmt-fold + .mgmt-fold { margin-top: 12px; }
+
+/* A destination among settings: History. A row, not a switch — it goes somewhere. */
+.mgmt-door {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.mgmt-door-text { font-size: 15px; }
+.mgmt-door-chevron { color: var(--text3); font-size: 20px; line-height: 1; }
+.mgmt-door:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+
+/* ⚠️⚠️ THE ONE BLOCK THAT KEEPS THE TOP OF THIS SCREEN OFF THE PHONE'S EDGES.
+   .scroll-area has no horizontal padding on a phone — --app-gutter is 0 there, on
+   purpose, so that no phone lost a pixel when tablets got their centred column — so
+   every block inside brings its own. The 8px here plus the 8px inside .order-box's
+   panels plus its 1px border comes to 17px, which is the 16px every row had before
+   this screen was rearranged, to within a pixel. */
+.orders-column { padding-inline: max(8px, var(--app-gutter)); }
+/* The notices and the status line sit at the app's usual 16px, not the box's 8px:
+   they are prose, and prose against a screen edge reads as a mistake. */
+.orders-column > .orders-status,
+.orders-column > #orders-alerts { padding-inline: 8px; }

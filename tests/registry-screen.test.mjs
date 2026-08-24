@@ -55,12 +55,18 @@ test('⚠️ the Home card rides the same section, so the two cards live and die
 });
 
 test('⚠️⚠️ nothing on the way IN reads a role — only Delete is gated, inside', () => {
-  // The two doors, in the markup.
-  for (const [name, src] of [['index.html', read('index.html')], ['orders.html', read('orders.html')]]) {
+  // ⚠️⚠️ ONE DOOR NOW, NOT TWO, and losing the second one was deliberate: Federico
+  // asked for the Orders bottom bar to hold Settings alone (24 Aug 2026). The bar's
+  // «Fornitori» button was always the SECOND door — "for somebody already standing
+  // here mid-order", as its own comment said — and the FIRST, the card on the Home,
+  // is untouched. What this test is really about survives whole: the way in carries
+  // no role, because the allergen form is behind it.
+  {
+    const src = read('index.html');
     const door = src.match(/<a[^>]*href="suppliers\.html"[^>]*>/);
-    assert.ok(door, `${name} must carry a door to suppliers.html`);
+    assert.ok(door, 'index.html must carry a door to suppliers.html');
     assert.doesNotMatch(door[0], /hidden/,
-      `${name}: the door must not start hidden — the allergen form is behind it`);
+      'index.html: the door must not start hidden — the allergen form is behind it');
   }
   // And the screen itself. It may ask canManageHere() nowhere: the ONE gate lives in
   // mgmtRow (Delete) and in the ingredient form (the price), and a second place to
@@ -458,14 +464,22 @@ test('⚠️ the card you tap and the screen you land on carry the SAME name', (
     + 'confusion one screen along');
 });
 
-test('⚠️⚠️ the Orders bottom bar keeps the SHORT label', () => {
-  const bar = read('orders.html').match(/<a[^>]*id="suppliers-footer-btn"[\s\S]*?<\/a>/);
-  assert.ok(bar, 'orders.html must still carry the second door');
-  assert.match(bar[0], /data-i18n="section\.suppliers"/,
-    'three buttons share a 320px phone here and this bar has already shipped a broken '
-    + 'release from a tab that wrapped by 3px — «Fornitori e ingredienti» would wrap it. '
-    + 'Inside Orders the context is given and the button has an icon; the Home card has '
-    + 'nothing but its words');
+// ⚠️⚠️ THE ORDERS BOTTOM BAR NO LONGER CARRIES A DOOR TO SUPPLIERS AT ALL
+// (Federico, 24 Aug 2026: «elimina fornitori tra storico e impostazioni»). The label
+// this test used to pin — the SHORT key, because three buttons shared a 320px phone
+// and this bar once shipped a broken release from a tab that wrapped by 3px — has no
+// button left to sit on. What replaces it is the rule that the bar cannot come back
+// crowded without somebody deciding to: it holds exactly one button.
+test('⚠️⚠️ the Orders bottom bar holds ONE button, and no door to suppliers', () => {
+  const page = read('orders.html');
+  // The bar holds a button and nothing nested, so the first closing div is its own.
+  const bar = page.match(/<div class="recipe-footer"[\s\S]*?<\/div>/);
+  assert.ok(bar, 'orders.html must still have a bottom bar');
+  const buttons = bar[0].match(/<(?:button|a)[^>]*class="recipe-footer-btn"/g) || [];
+  assert.equal(buttons.length, 1, 'one button: Settings');
+  assert.match(bar[0], /id="settings-footer-btn"/);
+  assert.ok(!/id="suppliers-footer-btn"/.test(page),
+    'the second door left with the bar — the Home card is the one that remains');
 });
 
 test('⚠️ the two view switches say the SAME word, and it is the plain one', () => {
