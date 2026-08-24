@@ -202,15 +202,14 @@ export function weightLoss(rawGrams, cookedGrams) {
   return { pct, problem: exact > MAX_LOSS_PCT ? 'capped' : null };
 }
 
-// The other direction, and it is FOR DISPLAY ONLY. A recipe written before this feature
-// has a stored lossPct and no weights; showing the cooked box empty would read as "we do
-// not know", when in fact somebody did say. So the box shows what that percentage means
-// against today's total — and ⚠️ NOTHING WRITES IT BACK unless a person edits a box.
-export function cookedFromLossPct(rawGrams, pct) {
-  const before = normalizeWeight(rawGrams);
-  if (before <= 0) return 0;
-  return Math.round(before * (1 - normalizeLossPct(pct) / 100));
-}
+// ⚠️ THE OTHER DIRECTION USED TO LIVE HERE — cookedFromLossPct(rawGrams, pct), which
+// worked out what a stored percentage MEANT against today's total and put it in the
+// cooked box. It was deleted on 24 Aug 2026 and must not come back: with lossPct 0, and
+// that is every recipe written before the two weighings existed, it returned the raw
+// total, so the screen showed a cooked weight identical to the raw one and read as
+// «weighed, and it loses nothing». The editor now leaves the box EMPTY and prints the
+// stored percentage underneath instead. Nothing else ever needed this: the cost model
+// and the label both divide by lossPct, never by a cooked weight.
 
 // A list of catalogue recipes, dropping junk entries.
 export function normalizeCatalogueRecipes(list) {
@@ -381,9 +380,20 @@ export function batchWarning(targetGrams, baseGrams) {
   const tooBig = base > 0 && target / base > MAX_SANE_MULTIPLE;
   if (!tooHeavy && !tooBig) return null;
 
-  const parts = [t('cat.thatIs') + formatWeight(target) + ' of dough'];
-  if (base > 0) parts.push('— ' + trim(target / base) + t('cat.theRecipeAsWritten') + formatWeight(base) + ')');
-  return parts.join(' ') + '. Check the amount before calculating.';
+  // ⚠️⚠️ ONE KEY PER WHOLE SENTENCE, NEVER THREE FRAGMENTS GLUED TOGETHER. This warning
+  // used to be built as `t('cat.thatIs') + weight + ' of dough'` … `+ '. Check the
+  // amount before calculating.'`, so on an Italian venue it read «Sono 175 kg of dough
+  // — 10× la ricetta come è scritta (17,5 kg). Check the amount before calculating.»
+  // Live on main, on a screen Federico had already asked to be in Italian (v1.69.0).
+  // ⚠️ A fragment key cannot be translated: the two halves of «of dough» sit on
+  // opposite sides of the number in some languages, and a translator handed «That is »
+  // has nothing to translate. It is the project's R4 rule, and the reason the two
+  // fragment keys are retired here rather than mended.
+  return base > 0
+    ? t('cat.batchWarningVsRecipe', {
+      weight: formatWeight(target), times: trim(target / base), base: formatWeight(base),
+    })
+    : t('cat.batchWarning', { weight: formatWeight(target) });
 }
 
 // ── Persisted "scaled batch" freshness ─────────────────────────────────────────

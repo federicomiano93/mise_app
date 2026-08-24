@@ -203,8 +203,22 @@ body {
 .fc-input:focus { outline: none; border-color: var(--fc-accent); }
 .fc-invalid { border-color: var(--fc-danger); }
 .fc-number { font-variant-numeric: tabular-nums; }
-/* A native select needs its own arrow back once appearance is stripped. */
-.fc-select, select.fc-input { padding-right: 30px; background-repeat: no-repeat; background-position: right 10px center; }
+/* ⚠️⚠️ THESE SELECTS HAD NO ARROW AT ALL, ON A LIVE SCREEN, AND NOTHING SAID SO.
+   The rule that stood here read «a native select needs its own arrow back once
+   appearance is stripped», then reserved 30px and positioned a `background-image`
+   THAT WAS NEVER SET — a gap with nothing in it, since v1.27.0. Found on 24 Aug 2026
+   while deliberately stripping the arrow on the recipe row, where the replacement was
+   actually drawn.
+   The answer here is to stop stripping it: `appearance: none` is worth having on a
+   text INPUT (it removes iOS's inner shadow) and costs a select the one mark that says
+   it opens. Every other select in this app keeps the native arrow beside an author
+   border — .extra-unit-select and .divisor-select in style.css, .mgmt-input in
+   orders.css — so this is finishing the copy, not designing anything. */
+select.fc-input, .fc-select {
+  -webkit-appearance: auto;
+  appearance: auto;
+  padding-right: 8px;
+}
 
 /* ── Composition lines ─────────────────────────────────────────────────────
    The chooser takes the width, the quantity is sized for three digits, and what
