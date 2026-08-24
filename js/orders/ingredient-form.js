@@ -72,6 +72,9 @@ import { readPackIngredients, reconcileTicks, tickKey } from '../allergen-match.
 // Which of the two optional panels this venue uses. ⚠️ A VENUE-WIDE DISPLAY SWITCH,
 // never a role and never a data switch — see the note on allergenBlock below.
 import { ingredientPanels } from './firebase-features.js';
+import { confirmDialog, alertDialog } from './confirm-dialog.js';
+
+const CAMERA_ICON = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>';
 
 // ── The price block ───────────────────────────────────────────────────────────
 // One number and a unit. The rate is typed rather than derived from a pack
@@ -532,6 +535,65 @@ function allergenBlock(item, panels) {
   packBox.addEventListener('input', scheduleSuggest);
   packBox.addEventListener('change', () => { clearTimeout(pending); suggest(); });
 
+  // ── Photograph the packet instead of typing it ──────────────────────────────
+  //
+  // Federico, 24 Aug 2026: «voglio la possibilità di fotografare gli ingredienti del
+  // prodotto e l'app me li trascrive in automatico». 67 products, and the list on the
+  // back of a packet is the longest thing anybody has to type in this app.
+  //
+  // ⚠️ DRAWN ONLY WHEN THE SWITCH IS ON, and `packPhotoOn` is a FUNCTION, not a value:
+  // the flag can be thrown on another phone, or on the settings screen behind this one,
+  // and a value read at build time would be stale for the life of the form.
+  //
+  // ⚠️⚠️ IT FILLS THE BOX AND NOTHING ELSE. Whatever comes back goes through the same
+  // suggest() a typed character does, so the ticks it moves are the ticks typing would
+  // have moved, `reconcileTicks` still refuses to touch a box a person has set, and
+  // NOTHING here writes `allergensCheckedAt`. A misread costs a correction.
+  const photoBtn = el('button', {
+    type: 'button', class: 'btn-secondary alg-pack-photo', icon: CAMERA_ICON,
+  }, [el('span', { text: t('orders.pack.photo.fill') })]);
+  photoBtn.hidden = typeof actions.packPhotoOn !== 'function' || !actions.packPhotoOn();
+  photoBtn.addEventListener('click', async () => {
+    if (photoBtn.disabled) return;
+    photoBtn.disabled = true;
+    try {
+      const answer = await actions.capturePackPhoto();
+      // Backed out. Nothing was read and nothing is said — the box is as it was.
+      if (!answer || !answer.text) return;
+
+      if (packBox.value.trim()) {
+        // ⚠️ REPLACE OR KEEP, AND DELIBERATELY NO «ADD TO THE END». Two ingredient
+        // lists run together are ONE product's list as far as the matcher is
+        // concerned, and it would then propose the allergens of both — on a record
+        // that names one product. Both answers offered here are safe: nothing is
+        // saved either way, and both are visible before anybody presses Save.
+        const ok = await confirmDialog({
+          title: t('orders.pack.photo.replaceTitle'),
+          message: t('orders.pack.photo.replaceBody'),
+          okLabel: t('orders.pack.photo.replaceOk'),
+          cancelLabel: t('orders.pack.photo.keepMine'),
+        });
+        if (!ok) return;
+      }
+
+      packBox.value = answer.text;
+      // ⚠️ suggest() DIRECTLY, and the pending timer cleared first: a synthetic input
+      // event would only start the 450ms debounce again, and the boxes would move a
+      // moment after the person had already started reading them.
+      clearTimeout(pending);
+      suggest();
+
+      // ⚠️ SAID NOW, NOT AT SAVE TIME. buildAllergenFields truncates at 4000 in
+      // silence, which is the wrong moment to discover that the end of a long list
+      // is missing.
+      if (answer.notes && answer.notes.truncated) {
+        await alertDialog(t('orders.pack.photo.truncated'));
+      }
+    } finally {
+      photoBtn.disabled = false;
+    }
+  });
+
   function read() {
     const contains = [];
     const may = [];
@@ -710,8 +772,12 @@ function allergenBlock(item, panels) {
       state: packHeadState,
       help: 'pack-list',
       above: [],
+      // ⚠️ THE CAMERA IS INSIDE THE FOLD, NOT IN `above:`. What goes outside a fold on
+      // this card is the ANSWER — the state word and the status line — and this is the
+      // JOB. The job folds; that rule is what makes the record one screen long.
       body: [
         el('div', { class: 'alg-pack' }, [
+          photoBtn,
           packBox,
           packResult,
         ]),

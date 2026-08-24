@@ -2018,3 +2018,73 @@ body.hide-stock .ingredient-list .ing-fields { justify-content: center; }
 .requests-card--waiting .requests-card-icon,
 .requests-card--waiting .requests-card-sub { color: var(--crust-ink); }
 .requests-card--waiting .requests-card-sub { font-weight: 600; }
+
+/* ── Photographing a packet's ingredient list ──────────────────────────────────
+   ⚠️ COPIED FROM .cat-photo-* IN catalogue.css, NOT DESIGNED. Same control doing the
+   same job on another page; the values are the same values, read through this
+   stylesheet's own token names. Written out rather than shared because catalogue.css
+   is not loaded on suppliers.html — copying the class NAMES instead would have shipped
+   four bare grey browser rectangles with no error anywhere, which is the `.mgmt-btn`
+   failure this project has shipped twice. The v1.62.0 lesson: finish the copy. */
+.alg-photo-lead {
+  margin: 0 0 14px; font-size: .95rem; line-height: 1.45; color: var(--text2);
+}
+.alg-photo-strip {
+  display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 12px;
+}
+.alg-photo-thumb {
+  position: relative; width: 96px; height: 96px; flex-shrink: 0;
+  border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden;
+  background: var(--surface);
+}
+.alg-photo-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+/* The bin is its own button, so it cannot live inside another one. 32px because it
+   sits over a 96px thumbnail; the thumbnail itself is not tappable. */
+.alg-photo-remove {
+  position: absolute; top: 4px; right: 4px;
+  display: flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px; padding: 0;
+  border: none; border-radius: 999px; cursor: pointer;
+  background: rgba(0, 0, 0, .55); color: #fff;
+}
+.alg-photo-remove svg { width: 16px; height: 16px; }
+.alg-photo-remove:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Icon and label on one flex row. ⚠️ An SVG in a span is an inline box and would sit
+   on the text BASELINE, about 2px low — the most common alignment defect in this app,
+   and invisible to review. */
+.alg-photo-add,
+.alg-photo-read,
+.alg-pack-photo {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  width: 100%; min-height: 44px;
+}
+.alg-photo-add, .alg-photo-read { margin-top: 10px; }
+/* The camera on the ingredient card sits ABOVE the box it fills, so its margin is
+   below it, not above. */
+.alg-pack-photo { margin-bottom: 10px; }
+.alg-photo-add svg,
+.alg-pack-photo svg { width: 20px; height: 20px; flex-shrink: 0; }
+.alg-photo-add[disabled],
+.alg-photo-read[disabled],
+.alg-pack-photo[disabled] { opacity: .55; cursor: default; }
+
+/* The file picker is driven by the button above it and is never seen. */
+.alg-photo-input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+
+.alg-photo-status {
+  margin: 10px 0 0; min-height: 1.2em; font-size: .9rem; line-height: 1.4;
+  color: var(--text2);
+}
+.alg-photo-status--bad { color: var(--danger); }
+.alg-photo-status--busy { color: var(--text2); }
+
+/* ⚠️ NOT styled as a footnote. What lands in the box was read by a machine, and a
+   misread ingredient word is an allergen the matcher will not propose. */
+.alg-photo-note {
+  margin: 18px 0 0; padding: 12px 14px;
+  padding-inline: max(14px, var(--app-gutter));
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: .88rem; line-height: 1.45; color: var(--text2);
+}

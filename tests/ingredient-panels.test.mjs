@@ -279,7 +279,14 @@ test('⚠️ every class this screen writes is defined in a stylesheet it loads'
     for (const m of read(s).replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/\.(-?[_a-zA-Z][\w-]*)/g)) defined.add(m[1]);
   }
   const offenders = [];
-  for (const file of ['js/orders/ingredient-form.js', 'js/orders/registry-settings.js', 'js/orders/registry.js']) {
+  // ⚠️ js/orders/photo-capture.js JOINED THE LIST ON 24 Aug 2026, and it is exactly the
+  // file this guard exists for: it is a COPY of a Catalogue screen, and every `cat-*`
+  // name in the original is defined in catalogue.css — which suppliers.html does not
+  // load. Copied unrenamed, four buttons would have been bare grey rectangles with no
+  // error anywhere. A guard scoped to the files a release owns has to gain the release's
+  // new file, or it guards the wrong three.
+  for (const file of ['js/orders/ingredient-form.js', 'js/orders/registry-settings.js',
+    'js/orders/registry.js', 'js/orders/photo-capture.js']) {
     for (const m of codeOf(read(file)).matchAll(/\bclass: '([^'${}]+)'/g)) {
       for (const cls of m[1].split(/\s+/).filter(Boolean)) {
         if (!defined.has(cls)) offenders.push(`${file}: .${cls}`);
