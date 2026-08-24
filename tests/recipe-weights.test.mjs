@@ -371,10 +371,55 @@ test('⚠️⚠️ the number box is hidden for «to taste» and for nothing els
   // ⚠️ TWICE, AND BOTH ARE NEEDED. Called only on change, a row that ARRIVES as «to
   // taste» keeps its meaningless 0; called only at build, changing the unit does
   // nothing until the screen is redrawn.
-  const calls = EDITOR.split('paintAmount()').length - 1;
-  assert.ok(calls >= 2, 'paintAmount must run when the row is built AND when the unit '
-    + `changes — found ${calls} call site(s)`);
+  // ⚠️ NAMED ONE BY ONE, NOT COUNTED. A count of «paintAmount()» is satisfied by the
+  // DEFINITION plus a single call — `function paintAmount() {` contains the very string
+  // being counted — so removing the build call would have left the count at 2 and this
+  // guard green. The same shape as every other count that guards nothing.
   assert.match(EDITOR, /ing\.unit = e\.target\.value; paintAmount\(\);/,
-    'and on change it must run AFTER the new unit has been stored, or it reads the old one');
+    'on change it must run AFTER the new unit has been stored, or it reads the old one');
+  // ⚠️ \s* ON BOTH SIDES: this tree is CRLF, so a bare \n after the `;` matches nothing.
+  assert.match(EDITOR, /\n\s*paintAmount\(\);\s*\n/,
+    'and once when the row is BUILT, or a row that arrives as «to taste» keeps its '
+    + 'meaningless 0 until somebody happens to change the unit');
 });
 
+test('⚠️ an Italian warning that used to finish in English', () => {
+  // Live on main until 24 Aug 2026: «Sono 175 kg of dough — 10× la ricetta come è
+  // scritta (17,5 kg). Check the amount before calculating.» Three fragments glued
+  // together, two of them keys and two of them raw English.
+  assert.ok(!/of dough|Check the amount before calculating/.test(MODEL),
+    'no English may be concatenated onto a translated sentence');
+  const i18n = codeOf(read('js/i18n.js'));
+  for (const dead of ["'cat.thatIs'", "'cat.theRecipeAsWritten'"]) {
+    assert.ok(!i18n.includes(dead),
+      `${dead} is a FRAGMENT key — it was retired, not mended: a translator handed `
+      + '«That is » has nothing to translate, and those words sit on the other side of '
+      + 'the number in some languages');
+  }
+  assert.match(MODEL, /t\('cat\.batchWarningVsRecipe', \{[\s\S]{0,140}weight:/,
+    'one key carries the whole sentence, with the numbers as holes in it');
+  const en = _dictionaries().en;
+  const it = _dictionaries().it;
+  for (const key of ['cat.batchWarning', 'cat.batchWarningVsRecipe']) {
+    assert.ok(en[key] && it[key], `${key} must exist in both languages`);
+    assert.ok(!/of dough/.test(it[key]), `${key} in Italian must not carry English`);
+  }
+  for (const hole of ['{weight}', '{times}', '{base}']) {
+    assert.ok(en['cat.batchWarningVsRecipe'].includes(hole)
+      && it['cat.batchWarningVsRecipe'].includes(hole),
+    `both languages must keep the ${hole} hole, or the number vanishes from one of them`);
+  }
+});
+
+test('⚠️ «no price yet» under an ingredient row is a key, not English', () => {
+  // Seen on a SCREENSHOT of an Italian venue, under an Italian heading:
+  // «→ Farina 0 · Brava Fresh · no price yet». The key has existed in both languages
+  // all along and ingredient-picker.js has always used it.
+  // ⚠️ NO GUARD COULD SEE IT: nothing-stays-english skips an all-lowercase string with
+  // no punctuation, because that is exactly the shape of a CSS class list.
+  assert.ok(!/'no price yet'/.test(EDITOR), 'the editor must not write the English out');
+  assert.match(EDITOR, /rate === null \? t\('cat\.noPriceYet'\)/,
+    'it asks the dictionary, like its sibling ingredient-picker.js always has');
+  assert.match(codeOf(read('js/catalogue/ingredient-picker.js')), /t\('cat\.noPriceYet'\)/,
+    'and the sibling still does, so the two screens cannot disagree');
+});

@@ -275,8 +275,14 @@ export function renderEditor({ recipe, draft, allRecipes, app }) {
     if (!ingredient) return t('cat.anIngredientThatNo');
     const rate = pricePerKg(ingredient);
     const supplier = (app.suppliers()[ingredient.supplierId] || {}).name || '';
-    return ['→ ' + (ingredient.name || 'Ingredient'), supplier,
-      rate === null ? 'no price yet' : `${formatRate(rate)} / kg`]
+    // ⚠️ SEEN ON A SCREENSHOT OF AN ITALIAN VENUE, 24 Aug 2026: this line read
+    // «→ Farina 0 · Brava Fresh · no price yet» under an Italian heading. The key has
+    // existed in both languages all along and its own sibling, ingredient-picker.js,
+    // has always used it — this call site simply wrote the English out.
+    // ⚠️ NO GUARD COULD SEE IT: nothing-stays-english skips an all-lowercase string
+    // with no punctuation, because that is exactly the shape of a CSS class list.
+    return ['→ ' + (ingredient.name || t('cat.ingredient')), supplier,
+      rate === null ? t('cat.noPriceYet') : `${formatRate(rate)} / kg`]
       .filter(Boolean).join('  ·  ');
   }
 
