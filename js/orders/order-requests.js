@@ -135,6 +135,13 @@ function itemRow(item, { differsTo, orderedQty, onToggle }) {
   // (js/orders/place-confirm.js) an order is what the person placing it confirmed,
   // and they are shown every number before it is written. The warning below is now
   // about the two documents disagreeing, not about recording something unseen.
+  // ⚠️⚠️ AND IT IS SILENCED ONCE THAT ROW HAS BEEN ORDERED. Recording an order CLEARS
+  // the rows, so on a row already bought this line always reads "now in the list: 0"
+  // — literally true, and read as an alarm about the leftovers of a job already
+  // done, right beside the line saying how much was actually bought. Anything typed
+  // AFTER the order is not lost by silencing it: that is exactly what the banner on
+  // the Orders screen exists to say (js/orders/untold-changes.js), and it says it
+  // where the work is rather than on a list somebody may never open again.
   if (differsTo !== undefined) {
     lines.push(el('span', {
       class: 'req-item-changed',
@@ -169,7 +176,12 @@ export function buildRequestScreen(request, options, callbacks) {
   const { ingredientsById = {}, entries = {}, orderedById = {},
     canManage = false } = options || {};
   const groups = groupRequest(request, ingredientsById);
-  const differences = liveDifference(request, entries);
+  // ⚠️ A ROW THAT HAS BEEN ORDERED IS NOT ASKED "has the shared order moved?" — see
+  // the note above itemRow. Filtered here, once, so the count that decides the
+  // sentence above the rows cannot disagree with the marks on the rows themselves.
+  const differences = Object.fromEntries(
+    Object.entries(liveDifference(request, entries))
+      .filter(([id]) => orderedById[id] === undefined));
   const scroll = el('div', { class: 'preview-scroll' });
 
   scroll.appendChild(el('div', { class: 'req-head' }, [

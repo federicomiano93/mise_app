@@ -218,6 +218,19 @@ test('the sent list is told what was actually ordered', () => {
     'and says so only when the two disagree');
 });
 
+// ⚠️⚠️ RECORDING AN ORDER CLEARS THE ROWS, so on a row already bought the old
+// "now in the list" mark always reads 0 — literally true, and read as an alarm about
+// the leftovers of a job already done, right beside the line saying how much was
+// actually bought. Found by looking at the row on a real screen, after every
+// measurement had passed.
+test('⚠️⚠️ a row that has been ordered is not also asked whether the order moved', () => {
+  const fn = REQ.slice(REQ.indexOf('const differences = '));
+  const decl = fn.slice(0, fn.indexOf(';'));
+  assert.ok(decl.length > 40, 'the slice must not be empty');
+  assert.ok(decl.includes('orderedById[id] === undefined'),
+    'the two lines would otherwise contradict each other on the same row');
+});
+
 test('the new modules are precached, or an offline phone 404s on them', () => {
   const sw = read('sw.js');
   ['js/orders/untold-changes.js', 'js/orders/untold-view.js']
