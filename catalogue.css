@@ -377,6 +377,21 @@ body.cat-zoom-lock { overflow: hidden; }
    two rings at once would be noise. Matches .cat-loss-input:focus. */
 .cat-ing-editrow .cat-amount .cat-grm:focus,
 .cat-ing-editrow .cat-amount .cat-unit-cell:focus-within { border-color: var(--cat-accent); }
+/* ⚠️⚠️ 17px OF THIS BOX IS SPENT ON A BUTTON NO FINGER CAN REACH, AND CSS CANNOT GET
+   IT BACK. The name carries `list="cat-ingredient-names"` for autocomplete, and Chrome
+   reserves room inside an input[list] for a picker indicator it only DRAWS on hover —
+   dead space on a phone, for ever. Measured at 320px: «Strong flour» is 86.48px of text
+   in a 90px text area, so it fits; the browser reports the content as 115 and draws
+   «Strong …» anyway. Removing the `list` attribute in the debugger drops 115 to 98 and
+   names the culprit exactly.
+   ⚠️ FOUR WAYS OF HIDING IT WERE TRIED ON THE LIVE ELEMENT AND ALL FOUR CHANGED NOTHING
+   — ::-webkit-calendar-picker-indicator with display:none and with width:0,
+   ::-webkit-list-button, and appearance:none. The reservation is the ATTRIBUTE's, not a
+   paintable pseudo-element's. So this is written down rather than fixed: the only ways
+   out cost the autocomplete or add a focus/blur attribute dance to the one control
+   every ingredient is typed into, and neither is worth it for 17px.
+   📌 The name still truncates at 320px. It truncates 6px LESS than on main, and at
+   375px and above it fits on both. */
 .cat-ing-editrow .cat-lbl { font-family: var(--cat-font); text-overflow: ellipsis; }
 .cat-ing-editrow .cat-grm { font-family: var(--cat-font-mono); font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
 /* .9rem, not the row's .98rem: the longest option ("to taste") must fit the column

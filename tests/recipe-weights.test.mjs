@@ -411,6 +411,22 @@ test('⚠️ an Italian warning that used to finish in English', () => {
   }
 });
 
+test('⚠️ the ingredient name keeps its autocomplete, however tight the row gets', () => {
+  // ⚠️⚠️ 17px OF THAT BOX BELONGS TO THE DATALIST PICKER, and the tempting way to win
+  // it back is to drop `list=`. Measured on the real screen: removing the attribute in
+  // the debugger takes the input's reported content from 115px to 98 and un-truncates
+  // «Strong flour» at 320px. It would also take away the suggestion list that makes an
+  // ingredient name match the one Orders knows — which is what links a row to a price
+  // and to an allergen. Four CSS ways of hiding the indicator were tried on the live
+  // element and all four changed nothing, so the space is simply not for sale.
+  assert.match(EDITOR, /list: 'cat-ingredient-names'/,
+    'the name field must keep its datalist: 17px of width is not worth an ingredient '
+    + 'nobody can link');
+  assert.match(read('catalogue.css'), /17px OF THIS BOX IS SPENT ON A BUTTON/,
+    'and the reason it is not reclaimed stays written down where the width is decided, '
+    + 'or the next person measures it all over again');
+});
+
 test('⚠️ «no price yet» under an ingredient row is a key, not English', () => {
   // Seen on a SCREENSHOT of an Italian venue, under an Italian heading:
   // «→ Farina 0 · Brava Fresh · no price yet». The key has existed in both languages
