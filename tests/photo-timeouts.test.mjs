@@ -54,3 +54,37 @@ test('⚠️ the SDK is not left to retry on its own', () => {
   // function that started them.
   assert.match(codeOf('functions/recipe-photo.js'), /maxRetries:\s*1/);
 });
+
+// ── The second reader, on the second page ────────────────────────────────────
+//
+// ⚠️ THE PAIR IS PER READER, NOT PER APP. functions/pack-photo.js takes its
+// timeoutSeconds from the SHARED PHOTO_CALL, so the server half cannot drift; the
+// phone's half is its own number in its own file and can.
+
+test('⚠️ the pack reader shares the function\'s clock, and does not restate it', () => {
+  const shell = codeOf('functions/pack-photo.js');
+  assert.match(shell, /import \{ ANTHROPIC_KEY, PHOTO_CALL \} from '\.\/recipe-photo\.js';/,
+    'one options object, so timeoutSeconds is declared once for both readers');
+  assert.ok(!/timeoutSeconds/.test(shell),
+    'restating it here is how the two would come to disagree');
+});
+
+test('⚠️ the pack reader\'s phone waits at least as long as the function may run', () => {
+  const seconds = Number(/timeoutSeconds:\s*(\d+)/.exec(codeOf('functions/recipe-photo.js'))[1]);
+  const client = codeOf('js/orders/firebase-photo.js');
+  const clientMs = Number(/CLIENT_TIMEOUT_MS = (\d+)/.exec(client)[1]);
+  assert.ok(seconds > 0 && clientMs > 0, 'both must actually be declared');
+  assert.ok(clientMs >= seconds * 1000,
+    `the phone gives up after ${clientMs}ms while the function may run ${seconds}s`);
+  assert.match(client, /httpsCallable\([^)]*'readPackIngredientsFromPhotos'[^)]*,\s*\{[\s\S]*?timeout:/,
+    'and it must be given one at all: the 70s default is shorter than the function');
+});
+
+test('⚠️ the pack reader\'s SDK gets less time than the function, and one retry', () => {
+  const shell = codeOf('functions/pack-photo.js');
+  const seconds = Number(/timeoutSeconds:\s*(\d+)/.exec(codeOf('functions/recipe-photo.js'))[1]);
+  const sdkMs = Number(/timeout:\s*([\d_]+)/.exec(shell)[1].replace(/_/g, ''));
+  assert.ok(sdkMs < seconds * 1000, `the SDK waits ${sdkMs}ms inside a ${seconds}s function`);
+  assert.match(shell, /maxRetries:\s*1/,
+    'the default is three full PAID attempts, each able to outlive the function');
+});
