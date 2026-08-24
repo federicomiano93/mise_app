@@ -94,35 +94,69 @@
   <button class="orders-icon-btn" id="orders-wa-btn" type="button" data-i18n="ui.send" data-i18n-attr="aria-label" aria-label="Send"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M8 7l4-4 4 4"/><path d="M4 15v4a2 2 0 002 2h12a2 2 0 002-2v-4"/></svg></button>
 </header>
 
-<!-- ⚠️ HISTORY IS NOT UP HERE ANY MORE. It is a reference, consulted rarely, and it
-     was taking half the bar every day for it; what belongs in that half is the thing
-     you are waiting for. History moved to the bottom bar beside Settings — the same
-     move, for the same reason, that "Order lists" made in v1.31.1: an alarm and a
-     door are two different things, and a door belongs where the rare actions live. -->
-<nav class="tab-bar" data-i18n="aria.ordersSections" data-i18n-attr="aria-label" aria-label="Orders sections">
-  <button class="tab active" id="tab-order-btn" data-i18n="ui.order">Order</button>
-  <button class="tab" id="tab-deliveries-btn" data-i18n="orders.deliveries.tab">Incoming</button>
-</nav>
-
 <div class="scroll-area scroll-with-bar">
 
-  <!-- ORDER -->
-  <section class="content active" id="tab-order">
-    <!-- Action feedback only (e.g. "Order saved ✓"): starts empty/hidden. The
-         connection state is NOT shown here anymore — see #orders-offline below. -->
-    <p class="orders-status" id="orders-status" hidden></p>
-    <!-- The two reminders own their containers: #orders-alerts is wiped and
-         rebuilt on every suppliers snapshot (renderAlerts), which would take
-         these with it. #orders-pending comes first — it is the only one asking
-         for an action. -->
-    <!-- "N order lists to place" — somebody prepared an order and sent it here.
-         First, above the day's own reminders: it is work another person is
-         waiting on, and it names a person rather than a calendar.
-         ⚠️ IT IS AN ALARM AND NOT THE DOORWAY. It hides itself the moment nothing
-         needs attention, so the way IN lives in the bottom bar and is always
-         there — the exact defect that cost v1.31.1, where the tap that finished
-         the job removed the only entrance. -->
-    <div id="orders-requests"></div>
+  <!-- ⚠️⚠️ THE COLUMN THAT KEEPS EVERYTHING OFF THE SCREEN EDGE. On a phone
+       .scroll-area has NO horizontal padding of its own (--app-gutter is 0 there, so
+       that no phone lost a pixel when tablets got their column in v1.56.0) — every
+       block inside has always brought its own. These three do not: the status line
+       and the notices are bare containers, and the box needs a MARGIN rather than
+       padding so its border sits inside the screen.
+       ⚠️ tests/screen-gutter.test.mjs is what caught this, on the first run after the
+       restructure. It is the guard written for the v1.70.0 defect — rows flush against
+       both edges of the phone — and it works. -->
+  <div class="orders-column">
+
+  <!-- Action feedback only (e.g. "Order saved ✓"): starts empty/hidden. The
+       connection state is NOT shown here — see #orders-offline below. -->
+  <p class="orders-status" id="orders-status" hidden></p>
+
+  <!-- ⚠️⚠️ THE CALENDAR NOTICES, AT THE TOP AND CLOSEABLE (Federico, 24 Aug 2026).
+       A coming holiday is something to READ ONCE, so it can be put away — and it
+       comes back on its own when the holiday is a DIFFERENT one, because every alert
+       carries a stable key.
+       ⚠️ NOTHING ELSE ON THIS SCREEN CAN BE CLOSED. Everything below is WORK, and a
+       closeable piece of work is one somebody can close by mistake and never see
+       again. -->
+  <div id="orders-alerts" hidden></div>
+
+  <!-- ⚠️⚠️ ONE BOX, SO IT READS AS ONE JOB (Federico, 24 Aug 2026). The two tabs,
+       the two views and the suppliers under them are all the same piece of work, and
+       until now nothing on the screen said so — ten blocks in a column, all looking
+       alike.
+       ⚠️⚠️ THE HEAD IS STICKY, AND IT HAS TO BE MADE SO. The tab bar used to sit
+       OUTSIDE .scroll-area, which is the only reason it stayed put; inside the box
+       it would scroll away, and changing view half way down a long list would mean
+       scrolling back to the top to do it. -->
+  <div class="order-box">
+    <div class="order-box-head">
+      <!-- ⚠️ TWO TABS, AND HISTORY IS STILL NOT ONE OF THEM. It is a reference,
+           consulted rarely, and it was taking half this bar every day for it; what
+           belongs in that half is the thing you are waiting for. -->
+      <nav class="tab-bar" data-i18n="aria.ordersSections" data-i18n-attr="aria-label" aria-label="Orders sections">
+        <button class="tab active" id="tab-order-btn" data-i18n="ui.order">Order</button>
+        <button class="tab" id="tab-deliveries-btn" data-i18n="orders.deliveries.tab">Incoming</button>
+      </nav>
+      <!-- Two windows onto the SAME order. Quantities are stored per ingredient, so
+           typing 4 on Bacon in the flat list is typing 4 in Brakes' order — there is
+           no second list to keep in step. "By supplier" is the default and the choice
+           is remembered in localStorage.
+           ⚠️⚠️ IT LIVES IN THE HEAD NOW, SO IT NO LONGER HIDES ITSELF BY BEING
+           INSIDE THE ORDER PANEL. One function decides whether it is shown — see
+           refreshViewSwitch() — and it has to answer for BOTH conditions: the
+           Incoming tab, and a venue with no suppliers yet. -->
+        <div class="view-switch" id="order-view-switch" role="tablist" data-i18n="aria.orderView" data-i18n-attr="aria-label" aria-label="Order view" hidden>
+        <button class="view-switch-btn active" id="view-by-supplier" type="button" role="tab" aria-selected="true" data-i18n="orders.bySupplier">By supplier</button>
+        <button class="view-switch-btn" id="view-all-ingredients" type="button" role="tab" aria-selected="false" data-i18n="ui.ingredients">Ingredients</button>
+      </div>
+    </div>
+
+    <!-- ORDER -->
+    <section class="content active" id="tab-order">
+    <!-- Each reminder owns its own container: they are painted by different
+         functions on different snapshots, and one shared container would mean every
+         paint wiped the others. #orders-pending comes first — it is the only one
+         asking for an action. -->
     <!-- ⚠️ WHAT NEVER ARRIVED, AT THE TOP OF THE SCREEN WHERE THE ORDER IS TYPED.
          The answer to "so I do not forget to order them" is not a list on a screen
          nobody opens; it is a line where the work already happens. It goes quiet by
@@ -144,7 +178,6 @@
     <div id="orders-untold" hidden></div>
     <div id="orders-pending"></div>
     <div id="orders-today"></div>
-    <div id="orders-alerts"></div>
     <!-- The per-supplier "Order placed" lives on each supplier card, so recording
          Salvo's Monday order cannot wipe the quantities already typed for the
          supplier you order on Thursday. The button below does NOT bring back the
@@ -157,10 +190,6 @@
          typing 4 on Bacon in the flat list is typing 4 in Brakes' order — there is
          no second list to keep in step. "By supplier" is the default and the choice
          is remembered in localStorage. -->
-    <div class="view-switch" id="order-view-switch" role="tablist" data-i18n="aria.orderView" data-i18n-attr="aria-label" aria-label="Order view" hidden>
-      <button class="view-switch-btn active" id="view-by-supplier" type="button" role="tab" aria-selected="true" data-i18n="orders.bySupplier">By supplier</button>
-      <button class="view-switch-btn" id="view-all-ingredients" type="button" role="tab" aria-selected="false" data-i18n="ui.ingredients">Ingredients</button>
-    </div>
     <div id="suppliers-list"></div>
     <button class="btn-primary" id="place-all-btn" type="button" hidden data-i18n="ui.orderPlaced">Order placed…</button>
     <!-- Start the order again. Shows from ONE supplier up, unlike the button above:
@@ -175,11 +204,13 @@
        this list when somebody says it turned up, and never on its own. Deducing it
        would drop an order off the day it was due, so the one that NEVER came would
        be the only one nobody ever sees. -->
-  <section class="content" id="tab-deliveries">
-    <div id="deliveries-list"></div>
-  </section>
+    <section class="content" id="tab-deliveries">
+      <div id="deliveries-list"></div>
+    </section>
+  </div>
+  </div>
 
-  <!-- HISTORY — reached from the bottom bar, not from the tab bar.
+  <!-- HISTORY — reached from Settings, not from the tab bar.
        ⚠️ Deliberately NOT .preview-overlay: that class is in BUSY_SELECTORS and
        would postpone a COMPULSORY update for as long as this stayed open. Nothing
        is lost by a reload here, so nothing here may hold an update back. The record
@@ -196,44 +227,25 @@
     </div>
   </div>
 
-  <!-- ⚠️ THE ORDER LISTS GET A BOX OF THEIR OWN, ABOVE THE ROW (Federico, 14 Aug 2026).
-       It is the only thing down here that carries WORK SOMEBODY ELSE IS WAITING ON, and
-       a button identical to Settings said the opposite. White while there is nothing,
-       and coloured the moment a list arrives — the colour IS the signal, and unlike the
-       banner at the top it does not go quiet when the alarm does.
-       ⚠️ Shown only to whoever runs the place: canManage() already means owner, manager
-       AND head chef, because a head chef holds the manager role. Nothing new to teach. -->
+  <!-- ⚠️⚠️ THE ORDER LISTS, AT THE FOOT AND SMALL (Federico, 24 Aug 2026). White and
+       low while there is nothing, coloured the moment a list arrives — the colour IS
+       the signal.
+       ⚠️⚠️ AND IT IS NOW SHOWN TO EVERYBODY, which had to change in the same breath
+       as removing the green banner at the top. That banner was the only sight an
+       ORDINARY EMPLOYEE had of the lists — this card was manager-only — so taking it
+       away without opening the card would have left whoever SENDS a list with no way
+       of ever seeing one. The rules already let anybody in the venue read them.
+       ⚠️ On 14 Aug this card was deliberately made BIGGER, after v1.31.1: the tap that
+       finished the last list removed the only door. It is smaller now, on Federico's
+       word — but it is still ALWAYS THERE, which is the half that mattered. -->
   <div class="requests-card-host" id="requests-card-host" hidden></div>
 
-  <!-- Settings footer (mirrors the Calculator's bottom bar for a consistent app) -->
-  <div class="recipe-footer">
-    <!-- ⚠️ THE PERMANENT WAY IN to the order lists somebody sent. The banner at
-         the top is an ALARM and goes quiet once everything is done; without this
-         the tap that finishes the last list would remove the only door to the
-         lists — which is exactly the defect v1.31.1 had to hotfix for the client
-         orders. Two footer buttons where there was one: measured at 320px. -->
-
-    <!-- ⚠️ THREE FOOTER BUTTONS WHERE THERE WERE TWO. This bar has already cost this
-         project once: a tab that wrapped by 3px shipped a broken release. Measured at
-         320/375/390px before merging — see the PR.
-         ⚠️ AND RE-MEASURED WITH THE NEW LABELS, because "three fits" was proved with
-         DIFFERENT WORDS: «Fornitori» / «Suppliers» is longer than what used to sit
-         here, and it is the label — not the count — that wraps a bar. -->
-    <button class="recipe-footer-btn" id="history-footer-btn" type="button"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 106 5.3L3 8"/><path d="M12 7v5l4 2"/></svg><span data-i18n="ui.history">History</span></button>
-    <!-- ⚠️ A LINK, NOT A BUTTON, and it leaves this page. The records are a page of
-         their own now (suppliers.html) and the Home has its own card for them; this
-         is the second door, for somebody already standing here mid-order who needs
-         to add a supplier. Nothing is lost by leaving: the draft autosaves on every
-         keystroke.
-         ⚠️ AND IT CARRIES NO ROLE GATE — see the card in index.html.
-         ⚠️⚠️ ITS LABEL IS THE SHORT KEY ON PURPOSE, AND A TEST PINS IT. The Home card
-         and the screen itself say «Fornitori e ingredienti»; here that would be a
-         23-character label in one of THREE columns on a 320px phone, and this bar
-         has already shipped a broken release from a tab that wrapped by 3px (see
-         the comment above). Inside Orders the context is already given and the
-         button has an icon — the Home card has nothing but its words. Do not
-         "unify" the two. -->
-    <a class="recipe-footer-btn" id="suppliers-footer-btn" href="suppliers.html"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l1.5-4A1 1 0 0 1 5.45 4h13.1a1 1 0 0 1 .95.68L21 9"/><path d="M3 9h18v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/><path d="M9 13h6"/></svg><span data-i18n="section.suppliers">Suppliers</span></a>
+  <!-- ⚠️⚠️ ONE BUTTON, CENTRED (Federico, 24 Aug 2026). History moved INSIDE
+       Settings, and «Fornitori» left altogether — it was the SECOND door to
+       suppliers.html and the first, the card on the Home, is untouched.
+       ⚠️ The bar is DERIVED from its children (see registry-main.js): no visible
+       button, no bar. Never typed by hand. -->
+  <div class="recipe-footer" id="orders-footer">
     <button class="recipe-footer-btn" id="settings-footer-btn" type="button"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg><span data-i18n="ui.settings">Settings</span></button>
   </div>
 

@@ -15,6 +15,10 @@
 import { t } from '../i18n.js';
 import { el } from './dom.js';
 import { isBankHoliday } from './bank-holidays.js';
+import {
+  visibleAlerts, hiddenAlerts, pruneDismissed, withDismissed, reopenAll,
+  readDismissed, writeDismissed,
+} from './alert-dismissal.js';
 
 // Static SVG (same 24×24 stroked convention as BACK_ICON in management.js) — an
 // emoji bell renders as a different picture on every OS and ignores currentColor.
@@ -162,14 +166,53 @@ export function maybeNotify(alerts) {
 
 // Build one banner. A grouped alert (with items[]) renders a title + numbered list;
 // a plain alert renders its text. Both use the same .alert-banner colouring by kind.
-function renderAlert(a) {
-  if (Array.isArray(a.items) && a.items.length) {
-    return el('div', { class: `alert-banner ${a.kind}` }, [
+//
+// ⚠️ THE CLOSE BUTTON IS A SIBLING OF THE TEXT, NEVER INSIDE IT. A button cannot
+// nest inside a button, and the frame belongs to the ROW — the rule this project
+// wrote down in PR #31 after a delete icon ended its card 41px short of everything
+// below it.
+function renderAlert(a, onClose) {
+  const body = (Array.isArray(a.items) && a.items.length)
+    ? el('div', { class: 'alert-body' }, [
       el('div', { class: 'alert-title', text: a.title || '' }),
       el('ol', { class: 'alert-list' }, a.items.map(t => el('li', { text: t }))),
-    ]);
-  }
-  return el('div', { class: `alert-banner ${a.kind}`, text: a.text });
+    ])
+    : el('div', { class: 'alert-body', text: a.text });
+
+  if (!onClose) return el('div', { class: `alert-banner ${a.kind}` }, [body]);
+
+  return el('div', { class: `alert-banner ${a.kind}` }, [
+    body,
+    el('button', {
+      type: 'button', class: 'alert-close',
+      'aria-label': t('orders.alert.close'),
+      onClick: () => onClose(a.key),
+      icon: CLOSE_ICON,
+    }),
+  ]);
+}
+
+const CLOSE_ICON =
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>';
+
+const BELL_SMALL =
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M8 2v4M16 2v4M3 10h18"/></svg>';
+
+// What is left when every calendar notice has been read and put away: a pill that
+// says how many there were and opens them all again.
+//
+// ⚠️ IT IS NOT A BANNER MADE SMALL. It carries no wording of its own beyond a
+// count, because its whole job is to take up almost nothing while still proving the
+// notices are there — the thing a person needs after reading them once.
+function renderPill(count, onReopen) {
+  return el('button', {
+    type: 'button', class: 'alert-pill',
+    'aria-label': t('orders.alert.reopen'),
+    onClick: () => onReopen(),
+  }, [
+    el('span', { class: 'alert-pill-icon', 'aria-hidden': 'true', icon: BELL_SMALL }),
+    el('span', { class: 'alert-pill-count', text: String(count) }),
+  ]);
 }
 
 // Render the alert banners into `container`, and raise browser notifications for
@@ -186,8 +229,40 @@ export function renderAlerts(container, suppliers, now = new Date()) {
   // something this function cannot do, as it never sees the history. What is left
   // here is the informational holiday / delivery-clash alerts.
   const alerts = computeAlerts(suppliers, now).filter(a => a.kind !== 'order');
-  alerts.forEach(a => container.appendChild(renderAlert(a)));
+
+  // ⚠️⚠️ PRUNED AGAINST THE DATE, NEVER AGAINST THIS PAINT'S ALERTS. The first
+  // paint happens before the suppliers have arrived, so "the alerts right now" is not
+  // the same list as "the alerts" — and a key pruned then reopened a notice somebody
+  // had put away. Found by reloading the real app.
+  const dismissed = pruneDismissed(readDismissed(storage()), toISODate(now));
+  writeDismissed(storage(), dismissed);
+
+  const shown = visibleAlerts(alerts, dismissed);
+  const hidden = hiddenAlerts(alerts, dismissed);
+
+  const close = (key) => {
+    writeDismissed(storage(), withDismissed(readDismissed(storage()), key));
+    renderAlerts(container, suppliers, now);
+  };
+  const reopen = () => {
+    writeDismissed(storage(), reopenAll());
+    renderAlerts(container, suppliers, now);
+  };
+
+  shown.forEach(a => container.appendChild(renderAlert(a, close)));
+  // ⚠️ ONLY WHEN THERE IS NOTHING LEFT OPEN. A pill beside a banner would be two
+  // controls for one fact, and the second would be the one nobody understands.
+  if (!shown.length && hidden.length) container.appendChild(renderPill(hidden.length, reopen));
+
+  container.hidden = !shown.length && !hidden.length;
   maybeNotify(alerts);
+}
+
+// ⚠️ READ THROUGH A FUNCTION, NOT CAPTURED AT MODULE LOAD. A private browsing
+// window can throw on the very first touch of localStorage, and this module is
+// imported by the Home badge too — a throw up here would take that down with it.
+function storage() {
+  try { return window.localStorage; } catch { return null; }
 }
 
 // Render the "Enable notifications" control + status into a settings container

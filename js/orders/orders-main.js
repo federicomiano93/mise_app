@@ -446,9 +446,27 @@ function renderEmptyState(container) {
 }
 
 // ── The two order views ───────────────────────────────────────────────────────
+
+// ⚠️⚠️ ONE PLACE WRITES THIS, AND IT HAS TO ANSWER FOR BOTH REASONS. The switch used
+// to live INSIDE the order panel, so the Incoming tab hid it for free just by hiding
+// its own panel. In the box's sticky head it is a sibling of both panels and would
+// sit there on Incoming, offering to switch a list that is not on screen.
+//
+// ⚠️ Two functions writing the same `hidden` is how the two conditions come to
+// disagree — one of them always wins last, and which one depends on the order the
+// snapshots happen to arrive in.
+let hasSomethingToOrder = false;
+
 function setViewSwitchVisible(visible) {
+  hasSomethingToOrder = visible;
+  refreshViewSwitch();
+}
+
+function refreshViewSwitch() {
   const sw = document.getElementById('order-view-switch');
-  if (sw) sw.hidden = !visible;
+  if (!sw) return;
+  const onOrderTab = document.getElementById('tab-order')?.classList.contains('active') === true;
+  sw.hidden = !(onOrderTab && hasSomethingToOrder);
 }
 
 function setView(view) {
@@ -919,47 +937,24 @@ async function deleteRequest(id) {
   }
 }
 
-// The banner at the top of Orders. Only what is still to do — a signal that stays
-// lit after the job is one people learn to stop seeing (the v1.31.1 lesson).
-function renderRequestBanner() {
-  const host = document.getElementById('orders-requests');
-  if (!host) return;
-  host.textContent = '';
-  const waiting = waitingRequests(state.requests);
-  if (!waiting.length) return;
-
-  host.appendChild(el('button', {
-    type: 'button', class: 'req-banner', onClick: openRequestList,
-  }, [
-    el('span', { text: t('orders.request.waiting', { n: waiting.length }) }),
-    el('span', {
-      class: 'req-banner-chevron', 'aria-hidden': 'true',
-      icon: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>',
-    }),
-  ]));
-}
-
-// The permanent way in, above the bottom row.
+// The one door to the order lists, at the foot of the screen.
 //
-// ⚠️ ONLY FOR WHOEVER RUNS THE PLACE (Federico, 14 Aug 2026). canManage() ALREADY means
-// owner, manager AND head chef — a head chef holds the `manager` role, so there is no
-// fourth level to invent and nothing for the three places that read a membership value
-// to learn. Inventing one is how somebody gets locked out rather than demoted (v268).
+// ⚠️⚠️ AND IT IS SHOWN TO EVERYBODY SINCE 24 Aug 2026, which had to change in the same
+// breath as removing the green banner that used to sit at the top. That banner carried
+// no role gate, so it was the ONLY sight an ordinary employee had of the lists —
+// removing it while this card stayed manager-only would have left the very people who
+// SEND a list with no way of ever seeing one. The rules already let anybody in the
+// venue read them; hiding this was only ever hiding the door, never the room.
 //
-// ⚠️ AND IT HIDES THE DOOR, NOT THE ROOM. The rules still let anybody in the venue READ
-// the lists, and that is right: it is an EMPLOYEE who sends them, and whoever sent one
-// has every reason to check it again. Saying so plainly beats pretending this is a lock.
-//
-// ⚠️ WHITE UNTIL SOMETHING ARRIVES, THEN COLOURED. Unlike the banner at the top — which
-// is an alarm and correctly goes quiet once nothing needs attention — this is the door,
-// and the colour is what makes it findable without reading it. The v1.31.1 defect was
-// the tap that finished the job removing the only entrance.
+// ⚠️ WHITE UNTIL SOMETHING ARRIVES, THEN COLOURED, and that is the half that does the
+// work. v1.31.1 was the tap that finished the last list removing the only entrance —
+// so this is always here, whether or not anything is waiting. Federico asked for it
+// SMALLER on 24 Aug; smaller is a size, not a disappearance.
 function renderRequestCard() {
   const host = document.getElementById('requests-card-host');
   if (!host) return;
   host.textContent = '';
-  host.hidden = !canManageHere();
-  if (host.hidden) return;
+  host.hidden = false;
 
   const waiting = waitingRequests(state.requests).length;
   host.appendChild(el('button', {
@@ -1598,6 +1593,20 @@ function openManagement() {
     },
     {
       onClose: () => { mgmt.overlay.remove(); mgmt = null; },
+      // ⚠️ HISTORY IS A DESTINATION, NOT A SETTING, and it is passed in rather than
+      // reached for: management.js knows nothing about this page's markup, and the
+      // overlay it opens sits at a higher z-index than the panel, so the panel stays
+      // underneath and Back returns to it.
+      //
+      // ⚠️⚠️ IT IS AN ACTION, NOT DATA, AND THE FIRST VERSION PUT IT IN THE WRONG
+      // OBJECT. buildManagement(data, actions) reads it as actions.openHistory, and
+      // the panel skips the whole section when it is missing — so History simply was
+      // not there, in silence, with every test green. Only opening the screen showed
+      // it.
+      openHistory: () => {
+        const overlay = document.getElementById('history-overlay');
+        if (overlay) overlay.hidden = false;
+      },
       // Takes a PATCH, not one flag: config/orders now holds two settings and saveDoc
       // merges, so writing `{ showStock }` alone would leave historyDays untouched —
       // but only as long as every caller keeps passing just what it changed.
@@ -1623,6 +1632,8 @@ function setupTabs() {
         document.getElementById(t.btn)?.classList.toggle('active', t.btn === btn);
         document.getElementById(t.panel)?.classList.toggle('active', t.panel === panel);
       });
+      // The switch belongs to the Order panel even though it now sits above both.
+      refreshViewSwitch();
     });
   });
 }
@@ -1716,25 +1727,24 @@ async function init() {
     else settingsBtn.hidden = true;
   }
 
-  // The always-there door to the order lists. Not gated on there being any: an
-  // empty screen that says "nobody has sent one yet, here is how" teaches the
-  // feature, whereas a button that comes and goes teaches nothing and cannot be
-  // found on purpose.
-  document.getElementById('requests-footer-btn')?.addEventListener('click', openRequestList);
+  // ⚠️ THE BAR IS DERIVED FROM ITS CHILDREN, never typed: no visible button, no bar.
+  // The same rule, and the same three lines, as suppliers.html (registry-main.js).
+  // It matters more now than it did with three buttons — the bar is one button wide,
+  // so the day something hides it there is nothing left to look at.
+  const footerEl = document.getElementById('orders-footer');
+  if (footerEl) footerEl.hidden = ![...footerEl.children].some(child => !child.hidden);
 
-  // History, now a screen of its own rather than a tab.
+  // ⚠️ HISTORY OPENS FROM INSIDE SETTINGS SINCE 24 Aug 2026 (Federico), not from the
+  // bottom bar. It kept a third of a bar every day for a screen consulted rarely.
   //
   // ⚠️ SHOWN AND HIDDEN WITH THE `hidden` ATTRIBUTE, which tokens.css forces to
   // `display: none !important`. Without that !important a class on this element
   // would beat the attribute and the screen would be painted while every script
   // believed it was gone — the exact defect that shipped an empty green bar in
   // v190, and the reason the app-wide rule exists.
-  const historyOverlay = document.getElementById('history-overlay');
-  document.getElementById('history-footer-btn')?.addEventListener('click', () => {
-    if (historyOverlay) historyOverlay.hidden = false;
-  });
   document.getElementById('history-back-btn')?.addEventListener('click', () => {
-    if (historyOverlay) historyOverlay.hidden = true;
+    const overlay = document.getElementById('history-overlay');
+    if (overlay) overlay.hidden = true;
   });
 
   setupOfflineIndicator();
@@ -1782,7 +1792,6 @@ async function init() {
   // are stored rather than held in the page.
   watchOrderRequests(list => {
     state.requests = list;
-    renderRequestBanner();
     renderRequestCard();
     // ⚠️ AND THE UNTOLD BANNER, because sending the list again is one of the two
     // things that answers it. Without this it would keep saying "you have added
