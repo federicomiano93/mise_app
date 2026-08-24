@@ -30,7 +30,10 @@ import { readRecipe, toolDefinition, promptText } from './recipe-photo-model.js'
 const REGION = 'us-central1';
 const db = () => getFirestore();
 
-const ANTHROPIC_KEY = defineSecret('ANTHROPIC_API_KEY');
+// ⚠️ EXPORTED FOR functions/pack-photo.js. One secret binding, one place it is
+// named. A second defineSecret() with the same name works and is a second thing to
+// keep in step with the console.
+export const ANTHROPIC_KEY = defineSecret('ANTHROPIC_API_KEY');
 
 // ⚠️ ITS OWN OPTIONS OBJECT, NOT THE SHARED `CALL` IN onboarding.js. Attaching a
 // secret there would attach it to all nine door functions: every one of them would
@@ -40,7 +43,9 @@ const ANTHROPIC_KEY = defineSecret('ANTHROPIC_API_KEY');
 // ⚠️ timeoutSeconds MUST STAY >= the client's own timeout in
 // js/catalogue/firebase-photo.js, or the phone abandons a call that is still
 // running and has already been paid for. tests/photo-timeouts.test.mjs pins the pair.
-const PHOTO_CALL = {
+// ⚠️ EXPORTED, AND SHARED WITH functions/pack-photo.js. maxInstances is therefore
+// 10 EACH and not 10 between them — stated here because the number reads like a total.
+export const PHOTO_CALL = {
   region: REGION,
   secrets: [ANTHROPIC_KEY],
   timeoutSeconds: 120,

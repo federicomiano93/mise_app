@@ -248,7 +248,12 @@ test('⚠️ "nothing readable" comes back as an ANSWER, not an error', async ()
 // ── the shell's wiring, which nothing can load ───────────────────────────────
 
 test('⚠️ the callable is re-exported from index.js, or it is not deployed at all', () => {
-  assert.match(read('functions/index.js'),
+  // ⚠️⚠️ codeOf(), NOT read(). Until 24 Aug 2026 this read the raw file, so commenting
+  // the export out — `// export {…}` — left it green: the regex matched the comment.
+  // Found by mutating the sibling guard for the pack reader, which had inherited it.
+  const index = codeOf('functions/index.js');
+  assert.ok(index.includes('export {'), 'the comment stripper must leave the code behind');
+  assert.match(index,
     /export \{ readRecipeFromPhotos \} from '\.\/recipe-photo\.js'/,
     'missing here, the app gets a generic "internal" that looks like a broken function');
 });

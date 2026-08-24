@@ -318,10 +318,12 @@ export const notifyOrderRequest = onDocumentCreated(
 export {
   createWorkspace, listWorkspaces, reissueOwnerLink, deleteWorkspace,
   createJoinCode, redeemJoinCode, setMemberRole, setMemberName,
-  setLocationLanguage, setRecipePhoto, setIngredientPanels,
+  setLocationLanguage, setRecipePhoto, setPackPhoto, setIngredientPanels,
 } from './onboarding.js';
 
-// Reading a photographed recipe. ⚠️ THE ONLY FUNCTION HERE THAT HOLDS A REAL
-// SECRET AND SPENDS MONEY PER CALL — it carries its own options object with the
-// secret and a maxInstances ceiling, deliberately not the shared one.
+// Reading a photographed recipe, and reading a photographed PACKET.
+// ⚠️ THE ONLY FUNCTIONS HERE THAT HOLD A REAL SECRET AND SPEND MONEY PER CALL — they
+// share one options object with the secret and a maxInstances ceiling, deliberately
+// not the shared `CALL`. They also share one daily allowance per person and per venue.
 export { readRecipeFromPhotos } from './recipe-photo.js';
+export { readPackIngredientsFromPhotos } from './pack-photo.js';
