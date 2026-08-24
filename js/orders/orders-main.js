@@ -1377,10 +1377,13 @@ function openPlaceConfirm(items, { title, okLabel }) {
 // One supplier. Resolves to that supplier's confirmed quantities, or null.
 async function askToConfirmPlacement(supplier, date) {
   const already = state.history.some(h => h.id === historyDocId(date, supplier.id));
+  // ⚠️ THE HEADER DOES NOT NAME THE SUPPLIER, AND THAT WAS MEASURED. "Add to Brava
+  // Fresh's order" wrapped to THREE lines at 320px — and the name is already on
+  // screen, in the group heading, with the day beside it. A header that repeats what
+  // the first line of the body says, and wraps to do it, costs a third of a small
+  // phone for nothing.
   const result = await openPlaceConfirm([{ supplier, date }], {
-    title: already
-      ? t('orders.addToOrderOf', { supplier: supplier.name })
-      : t('orders.orderPlacedTitle', { supplier: supplier.name }),
+    title: already ? t('orders.confirm.addTitle') : t('orders.orderPlaced'),
     okLabel: already ? t('orders.addToIt') : t('orders.orderPlaced'),
   });
   return result ? (result[supplier.id] || null) : null;

@@ -482,8 +482,6 @@ const DICTIONARIES = Object.freeze({
     'orders.placedWhen': 'Placed {when}',
     'orders.updateOrderFor': 'Update {supplier}’s order {day}?',
     'orders.deleteOrderFor': 'Delete {supplier}’s order {day}?\n\nIt is removed from History for good and cannot be recovered. The suggested order quantities learn from these records, so they will change.',
-    'orders.addToOrderOf': 'Add to {supplier}’s order',
-    'orders.orderPlacedTitle': '{supplier} — order placed',
     'co.alreadySentFor': 'You have already sent an order for {day}. Sending again replaces it.',
     'co.ordersClosedFor': 'Orders for {day} have closed. Please choose another day.',
     'co.sendEmptyFor': 'Send an order with nothing in it for {day}?',
@@ -721,6 +719,7 @@ const DICTIONARIES = Object.freeze({
     // what the person placing the order confirms — not what the shared order happens
     // to say at the instant the button is tapped.
     'orders.confirm.aboutToRecord': 'This is what will be recorded:',
+    'orders.confirm.addTitle': 'Add to the order',
     'orders.confirm.asked': 'asked: {n}',
     'orders.confirm.usually': 'usually about {n}',
     'orders.confirm.addsToExisting': 'An order for {supplier} is already recorded {when} — these amounts will be ADDED to it.',
@@ -2418,8 +2417,6 @@ const DICTIONARIES = Object.freeze({
     'orders.placedWhen': 'Effettuato {when}',
     'orders.updateOrderFor': 'Aggiornare l’ordine di {supplier} {day}?',
     'orders.deleteOrderFor': 'Eliminare l’ordine di {supplier} {day}?\n\nSparisce dallo Storico per sempre e non si può recuperare. Le quantità suggerite imparano da questi registri, quindi cambieranno.',
-    'orders.addToOrderOf': 'Aggiungi all’ordine di {supplier}',
-    'orders.orderPlacedTitle': '{supplier} — ordine effettuato',
     'co.alreadySentFor': 'Hai già mandato un ordine {day}. Mandandolo di nuovo sostituisci il precedente.',
     'co.ordersClosedFor': 'Gli ordini {day} sono chiusi. Scegli un altro giorno.',
     'co.sendEmptyFor': 'Mandare un ordine vuoto {day}?',
@@ -2612,6 +2609,7 @@ const DICTIONARIES = Object.freeze({
 
     // ⚠️ LA SCHERMATA DI CONFERMA (js/orders/place-confirm.js).
     'orders.confirm.aboutToRecord': 'Sta per essere registrato:',
+    'orders.confirm.addTitle': 'Aggiungi all’ordine',
     'orders.confirm.asked': 'chiesti: {n}',
     'orders.confirm.usually': 'di solito circa {n}',
     'orders.confirm.addsToExisting': 'Per {supplier} c’è già un ordine registrato {when} — queste quantità ci verranno AGGIUNTE.',

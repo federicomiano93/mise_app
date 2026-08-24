@@ -199,7 +199,7 @@ test('every new phrase exists in BOTH languages', () => {
   const keys = [
     'orders.confirm.aboutToRecord', 'orders.confirm.asked', 'orders.confirm.usually',
     'orders.confirm.addsToExisting', 'orders.confirm.sendFirst', 'orders.confirm.allZero',
-    'orders.confirm.noneRecorded',
+    'orders.confirm.noneRecorded', 'orders.confirm.addTitle',
   ];
   const dicts = Object.entries(_dictionaries());
   assert.ok(dicts.length >= 2, 'there are at least two languages to check');
@@ -218,6 +218,10 @@ test('the dialog’s own sentences are gone from both dictionaries', () => {
     'orders.alreadyRecordedFor', 'orders.recordOrderFor', 'orders.markPlacedFor',
     'orders.alreadyRecordedThatDay', 'orders.thisQuantityIsMuch',
     'orders.theseQuantitiesAreMuch',
+    // ⚠ THE TWO TITLES THAT NAMED THE SUPPLIER. Measured at 320px, "Add to Brava
+    // Fresh's order" wrapped to THREE lines in the header — and the body already
+    // names the supplier on its first line, with the day beside it.
+    'orders.orderPlacedTitle', 'orders.addToOrderOf',
     // The dialog's "Not yet" cancel label. The screen's way out is the Back arrow
     // every other full-screen overlay in this app uses.
     'orders.notYet',
