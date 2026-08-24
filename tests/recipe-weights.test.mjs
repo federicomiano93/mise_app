@@ -294,3 +294,87 @@ test('the cache version moved, or no phone will ever fetch any of this', () => {
   assert.ok(Number(m[1]) >= 330, `still on v${m[1]} — a changed cached file without a bump `
     + 'is the one failure in this project that does not self-heal');
 });
+
+// ── 6. The unit box is the SMALLER of the two, and «to taste» carries no number ──
+
+// Federico, 24 Aug 2026, looking at the row on his phone: «la casella dei g può essere
+// anche più piccola della quantità, non serve che sia più grande addirittura».
+//
+// ⚠️⚠️ IT COULD NOT BE, AND THE REASON IS ONE WORD. The unit column was the wider of
+// the two because the longest of the twelve labels — «to taste» — had to fit beside a
+// number, and a <select> clips its longest option WITHOUT reporting an overflow
+// (v1.66.0, «to tast»). The way out was not a smaller font or a shorter word: it was
+// that the model has ALWAYS said a «to taste» row has no quantity — scaleRecipe()
+// returns null for that unit and for no other — and only this editor still drew a «0».
+
+const cssNumber = (body, name) => {
+  const m = new RegExp(`${name}:\\s*([\\d.]+)rem`).exec(body);
+  assert.ok(m, `${name} must be declared as a rem value on .cat-amount`);
+  return Number(m[1]);
+};
+
+test('⚠️ the unit column is NARROWER than the amount column', () => {
+  const body = ruleBody(read('catalogue.css'), '.cat-amount');
+  const qty = cssNumber(body, '--qty-w');
+  const unit = cssNumber(body, '--unit-w');
+  assert.ok(qty > unit, `the amount box must be the wider of the two — found ${qty}rem `
+    + `against ${unit}rem, which is the thing Federico asked to change`);
+  // ⚠️ AND THE UNIT COLUMN HAS A FLOOR, MEASURED IN THE REAL FONT ON THE REAL SCREEN:
+  // «pinch» is 36.92px at 14.4px Manrope, and the cell spends 18px before any text
+  // (5px padding + 2px frame + the 11px the chevron sits in). Below that the longest
+  // label that still shares a row with a number starts being clipped — in silence,
+  // which is the whole danger.
+  assert.ok(unit * 16 - 18 >= 36.92, `${unit}rem leaves ${(unit * 16 - 18).toFixed(2)}px `
+    + 'for «pinch», which needs 36.92 — and a <select> clips without saying so');
+  assert.match(body, /grid-template-columns: var\(--qty-w\) var\(--unit-w\)/,
+    'the two columns must READ the two names, or the numbers above guard nothing');
+});
+
+test('⚠️⚠️ a «to taste» row is one cell exactly as wide as the two it replaces', () => {
+  const css = read('catalogue.css');
+  const noqty = ruleBody(css, '.cat-amount--noqty');
+  // The width is DERIVED, never a third number kept in step by hand — the shape of the
+  // v1.66.0 defect where the Total drifted 2px because one padding said 8 and the
+  // other 6. If the block ever stopped matching, the bin and the right-hand edge would
+  // zig-zag from row to row and the Total would leave the column of numbers it sums.
+  assert.match(noqty, /calc\(var\(--qty-w\) \+ var\(--unit-w\) \+ (\d+)px\)/,
+    'the single column must be computed from the same two names plus the gap');
+  const gapInCalc = /\+ (\d+)px\)/.exec(noqty)[1];
+  const gap = /gap:\s*(\d+)px/.exec(ruleBody(css, '.cat-amount'))[1];
+  assert.equal(gapInCalc, gap,
+    'and the gap it adds back must be the gap the two columns actually leave between them');
+});
+
+test('⚠️⚠️ the number box is hidden for «to taste» and for nothing else', () => {
+  // ⚠️ THROUGH unitOf(), NOT ing.unit. Every recipe written before units existed has no
+  // unit field at all, and unitOf() answers «g» for those — reading ing.unit directly
+  // would compare undefined and quietly work, until a row carried a value nobody expected.
+  assert.match(EDITOR, /const noQty = unitOf\(ing\) === 'to taste';/,
+    'the one unit the model itself treats as having no quantity, asked for by name');
+  assert.match(EDITOR, /gramsInput\.hidden = noQty;/, 'the box goes');
+  assert.match(EDITOR, /amountCell\.classList\.toggle\('cat-amount--noqty', noQty\)/,
+    'and the cell beside it takes the room');
+
+  // ⚠️ HIDDEN, NEVER CLEARED. Switching to «to taste» and back must give the number
+  // back; nothing counts it meanwhile, because ingredientGrams() is 0 for every unit
+  // that is not weighable. A paint that wrote to the value would destroy real data on
+  // a mis-tap, and the screen would look exactly the same either way.
+  const at = EDITOR.indexOf('function paintAmount()');
+  assert.notEqual(at, -1, 'paintAmount must exist to be guarded');
+  const close = EDITOR.indexOf('\n      }', at);
+  assert.notEqual(close, -1, 'paintAmount must be closed');
+  const bodyOfPaint = EDITOR.slice(at, close);
+  assert.ok(bodyOfPaint.length > 60, 'the slice for paintAmount must not be empty');
+  assert.ok(!/ing\.grams\s*=/.test(bodyOfPaint) && !/\.value\s*=/.test(bodyOfPaint),
+    'painting the row must never write to the amount it is hiding');
+
+  // ⚠️ TWICE, AND BOTH ARE NEEDED. Called only on change, a row that ARRIVES as «to
+  // taste» keeps its meaningless 0; called only at build, changing the unit does
+  // nothing until the screen is redrawn.
+  const calls = EDITOR.split('paintAmount()').length - 1;
+  assert.ok(calls >= 2, 'paintAmount must run when the row is built AND when the unit '
+    + `changes — found ${calls} call site(s)`);
+  assert.match(EDITOR, /ing\.unit = e\.target\.value; paintAmount\(\);/,
+    'and on change it must run AFTER the new unit has been stored, or it reads the old one');
+});
+

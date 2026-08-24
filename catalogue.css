@@ -276,13 +276,23 @@ body.cat-zoom-lock { overflow: hidden; }
      Both columns stay FIXED rather than `auto`, because the Total row reuses this same
      cell with a plain «g» in it: an auto column would size to that one character and
      the sum would stop lining up with the column of numbers it is the sum of. */
-  /* ⚠️⚠️ 3.7 + 0.25 + 4.65 = 8.6rem, WHICH IS EXACTLY THE 3.6 + 5 THIS REPLACES.
-     Measured, not arranged: every pixel this pair takes comes straight out of the
-     ingredient NAME, which at 320px has 83.6px for text that wants 86.5 and truncates
-     there on `main` TODAY. Holding the total identical is what makes «two frames now
-     fit» a fact rather than a hope — verified against a clean main worktree served
-     alongside at 320/375/390/430, name room 83.8 vs 83.6. */
-  grid-template-columns: 3.7rem 4.65rem;
+  /* ⚠️⚠️ THE UNIT IS NOW THE NARROWER OF THE TWO, AND «to taste» IS WHY IT COULD NOT BE
+     BEFORE. Federico, 24 Aug 2026: «la casella dei g può essere anche più piccola della
+     quantità, non serve che sia più grande addirittura». The column was 4.65rem for one
+     reason — the longest of the twelve labels had to fit beside a number — and a
+     <select> clips its longest option WITHOUT reporting an overflow (v1.66.0, «to
+     tast»), so that width could not simply be taken back.
+     ⚠️ MEASURED IN THE SELECT'S OWN FONT (14.4px Manrope) ON THE REAL SCREEN AT 320px,
+     because canvas text metrics are the only thing that sees a clipped <select>:
+       to taste 52.10  ·  pinch 36.92  ·  tbsp 30.30  ·  pcs 24.06  ·  tsp 21.85
+     The cell spends 18px before any text: 5px of its own left padding, 2px of frame and
+     the 11px the chevron sits in. «to taste» leaves the row on the line below, so the
+     floor is `pinch`: 36.92 + 18 = 54.92, and 3.7rem (59.2px) leaves it 4.28px of slack
+     — THE SAME SLACK «to taste» has in today's 4.65rem, not a new tolerance invented
+     here. */
+  --qty-w: 4.35rem;
+  --unit-w: 3.7rem;
+  grid-template-columns: var(--qty-w) var(--unit-w);
   /* The two frames must not touch, or they read as one control with a thick line. */
   gap: 4px;
   /* ⚠️ 44px, measured. The two halves are separate tap targets and each frame is what
@@ -290,6 +300,14 @@ body.cat-zoom-lock { overflow: hidden; }
   min-height: 44px;
   align-items: stretch;
 }
+/* ⚠️⚠️ ONE CELL, AND IT IS EXACTLY AS WIDE AS THE TWO IT REPLACES — by construction,
+   not by a third number kept in step by hand. `to taste` is the one unit the model
+   itself says carries no quantity (scaleRecipe returns null for it and for no other),
+   so the editor stops drawing a «0» beside it; and with that number gone the longest
+   label no longer has to share a row with it. The block keeps its width so the bin and
+   the right-hand edge stay in column on every row, and so the Total below still lands
+   under the numbers it sums. */
+.cat-amount--noqty { grid-template-columns: calc(var(--qty-w) + var(--unit-w) + 4px); }
 /* ⚠️ THE FRAME IS ON EACH CELL NOW, NOT AROUND THE PAIR. Same border, same radius,
    same surface as before — what changed is how many there are.
    ⚠️⚠️ 44px HERE AND NOWHERE ELSE. The first draft also gave the select inside the unit

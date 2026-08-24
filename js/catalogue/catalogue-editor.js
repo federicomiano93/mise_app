@@ -149,9 +149,40 @@ export function renderEditor({ recipe, draft, allRecipes, app }) {
       // editor and the scaling/import logic can never drift apart.
       const unitSelect = el('select', {
         class: 'cat-unit', 'aria-label': t('cat.unit'),
-        onchange: (e) => { ing.unit = e.target.value; markDirty(); updateTotal(); },
+        onchange: (e) => { ing.unit = e.target.value; paintAmount(); markDirty(); updateTotal(); },
       }, CATALOGUE_UNITS.map(u => el('option', { value: u }, u)));
       unitSelect.value = unitOf(ing);
+      // ⚠️ THE CELL IS HELD IN A VARIABLE because its shape changes with the unit —
+      // see paintAmount() below, built after the cell it paints.
+      const amountCell = el('div', { class: 'cat-amount' }, [
+        gramsInput,
+        // ⚠️ THE CHEVRON IS A SIBLING OF THE SELECT INSIDE ITS OWN CELL, not a
+        // child of it: a <select> renders only <option>s, so anything put inside is
+        // silently dropped. The cell is what carries the frame and the position.
+        el('span', { class: 'cat-unit-cell' }, [
+          unitSelect,
+          el('span', { class: 'cat-unit-chev', 'aria-hidden': 'true', text: '›' }),
+        ]),
+      ]);
+      // ⚠️⚠️ «to taste» IS THE ONE UNIT THAT CARRIES NO NUMBER, and the model has said so
+      // since it was written: scaleRecipe() returns null for that unit and for no other,
+      // and the read-only recipe screen prints no amount beside it. Only this editor
+      // still drew a «0» there — a number that means nothing, sitting in the box that
+      // forces the unit beside it to be wide enough for the longest word in the list.
+      // Federico, 24 Aug 2026: «la casella dei g può essere anche più piccola della
+      // quantità, non serve che sia più grande addirittura». It could not be, while
+      // «to taste» had to fit next to a number.
+      //
+      // ⚠️ THE STORED AMOUNT IS HIDDEN, NEVER CLEARED. Switching to «to taste» and back
+      // to «g» has to give the number back, and nothing counts it meanwhile:
+      // ingredientGrams() is 0 for every unit that is not weighable, so hiding it
+      // cannot move a total, a cost or a label.
+      function paintAmount() {
+        const noQty = unitOf(ing) === 'to taste';
+        gramsInput.hidden = noQty;
+        amountCell.classList.toggle('cat-amount--noqty', noQty);
+      }
+      paintAmount();
       const delIcon = el('button', {
         class: 'cat-del-icon', type: 'button', 'aria-label': t('cat.removeIngredient'), icon: TRASH_SVG,
         onclick: () => {
@@ -181,20 +212,7 @@ export function renderEditor({ recipe, draft, allRecipes, app }) {
         // measurement that refused two frames was taken WITH that arrow still there;
         // re-measuring in the wrong order is how the same decision gets re-litigated
         // with the wrong number.
-        el('div', { class: 'cat-ing-editrow' }, [
-          labelInput,
-          el('div', { class: 'cat-amount' }, [
-            gramsInput,
-            // ⚠️ THE CHEVRON IS A SIBLING OF THE SELECT INSIDE ITS OWN CELL, not a
-            // child of it: a <select> renders only <option>s, so anything put inside is
-            // silently dropped. The cell is what carries the frame and the position.
-            el('span', { class: 'cat-unit-cell' }, [
-              unitSelect,
-              el('span', { class: 'cat-unit-chev', 'aria-hidden': 'true', text: '›' }),
-            ]),
-          ]),
-          delIcon,
-        ]),
+        el('div', { class: 'cat-ing-editrow' }, [labelInput, amountCell, delIcon]),
         linkRow(ing, idx),
       ]));
     });
