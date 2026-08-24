@@ -293,7 +293,13 @@ test('⚠️⚠️ nothing in this path writes the verification stamp', () => {
 // ── 6. The shell's wiring, which no test can execute ─────────────────────────
 
 test('⚠️ the callable is exported from index.js, or it is simply not deployed', () => {
-  assert.match(read('functions/index.js'),
+  // ⚠️⚠️ codeOf(), NOT read(). A mutation commented the export out — `// export {…}` —
+  // and this passed, because the regex matched the commented line. The identical hole
+  // was sitting in tests/recipe-photo-handler.test.mjs for the recipe reader and was
+  // fixed in the same commit. Third time today that a guard here read a comment.
+  const index = codeOf(read('functions/index.js'));
+  assert.ok(index.includes('export {'), 'the comment stripper must leave the code behind');
+  assert.match(index,
     /export \{ readPackIngredientsFromPhotos \} from '\.\/pack-photo\.js';/,
     'a callable missing from that list fails as the client\'s generic «internal», '
     + 'which says nothing and looks exactly like a broken function');
