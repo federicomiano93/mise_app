@@ -57,26 +57,53 @@ export function buildRegistrySettings({ panels, onSet }) {
     confirmOff: null,
   }));
 
+  // ⚠️⚠️ THE THIRD SWITCH IS THE ONLY ONE ON THIS PAGE THAT SPENDS MONEY, and it is
+  // therefore the only one that asks on the way IN rather than on the way out. The two
+  // above hide something that already exists; this one starts paying a reading service
+  // a few pence per photograph, on an account nobody in the venue owns. Federico's
+  // decision, 24 Aug 2026, asked directly: a switch of its own, separate from the
+  // recipe reader's, so one can be on while the other is off.
+  //
+  // ⚠️ IT DEFAULTS OFF, which is the opposite of the two above, and the reason is the
+  // same one in reverse: a venue that has never heard of it must never find it already
+  // running. js/orders/firebase-features.js reads it as `=== true`.
+  content.appendChild(toggle({
+    key: 'packPhoto',
+    label: t('orders.settings.packPhoto'),
+    note: t('orders.settings.packPhotoNote'),
+    confirmOff: null,
+    confirmOn: {
+      title: t('orders.settings.packPhotoOnTitle'),
+      message: t('orders.settings.packPhotoOnBody'),
+      okLabel: t('orders.settings.packPhotoTurnOn'),
+    },
+  }));
+
   // One switch: a checkbox row, the same shape the Orders settings panel uses for
   // «Mostra la casella scorte». Applied on the tap — there is nothing to lose by
   // getting it wrong and one more tap undoes it.
-  function toggle({ key, label, note, confirmOff }) {
+  // ⚠️ `current` IS KEYED BY THE SWITCH, not read through an if/else on its name. With
+  // two switches the chain was fine; with three, `key === 'showAllergens' ? … : …`
+  // silently files the third one under the second.
+  const FIELD = { showAllergens: 'allergens', showNutrition: 'nutrition', packPhoto: 'packPhoto' };
+
+  function toggle({ key, label, note, confirmOff, confirmOn = null }) {
     const cb = el('input', { type: 'checkbox' });
-    cb.checked = key === 'showAllergens' ? current.allergens : current.nutrition;
+    cb.checked = !!current[FIELD[key]];
 
     cb.addEventListener('change', async () => {
       const wanted = cb.checked;
-      if (!wanted && confirmOff) {
-        const ok = await confirmDialog({ ...confirmOff, cancelLabel: t('ui.cancel') });
+      const ask = wanted ? confirmOn : confirmOff;
+      if (ask) {
+        const ok = await confirmDialog({ ...ask, cancelLabel: t('ui.cancel') });
         // ⚠️ PUT THE BOX BACK. A refused confirmation must leave the switch showing
-        // what is actually stored, not what was tapped.
-        if (!ok) { cb.checked = true; return; }
+        // what is actually stored, not what was tapped — in BOTH directions.
+        if (!ok) { cb.checked = !wanted; return; }
       }
       cb.disabled = true;
       try {
         await onSet(key, wanted);
-        if (key === 'showAllergens') current.allergens = wanted;
-        else current.nutrition = wanted;
+        current[FIELD[key]] = wanted;
       } catch (err) {
         cb.checked = !wanted;          // back to what is actually stored
         await reportFailure('save', label, err);

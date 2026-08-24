@@ -295,7 +295,11 @@ export async function seedDemoWorld() {
   // driven check about the LABEL was measuring the refusal rather than the label.
   // Federico's real venues are in the UK; the seed now says so, and the Italian
   // one below is what makes the two languages testable against each other.
-  await seedDoc('locations/bakery', { name: 'The Italian Club Bakery', country: 'GB' });
+  // ⚠️ packPhoto: true ON THIS VENUE ONLY, so the camera on an ingredient's record can
+  // be driven at all — the switch is OFF unless a document literally says true, because
+  // it spends money. locations/trattoria-rosa deliberately says nothing, which is the
+  // negative case: Orders is on there and the camera must still be absent.
+  await seedDoc('locations/bakery', { name: 'The Italian Club Bakery', country: 'GB', packPhoto: true });
   await seedDoc('locations/bakery/config/calculator',
     { bakery: 'bakery', configRev: 1, clients: [], recipes: [] });
   await seedDoc('locations/bakery/recipes/CAT_1',

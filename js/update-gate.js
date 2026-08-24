@@ -39,6 +39,12 @@ export const MAX_ATTEMPTS = 2;
 export const BUSY_SELECTORS = Object.freeze([
   '.app-dialog-backdrop',       // a confirm/alert dialog is open
   '.mgmt-form',                 // adding or editing a supplier / ingredient
+  // ⚠️ A PACK BEING READ FROM A PHOTOGRAPH. Like the recipe reader it is work that has
+  // ALREADY COST MONEY by the time it is on screen, and a reload would throw it away
+  // with the allowance already spent. Added anyway although .mgmt-form is usually
+  // mounted underneath: the marker is what states the reason, and the form is not
+  // guaranteed to be there in some future caller.
+  '.alg-photo-busy',            // reading a packet from a photograph — already paid for
   '.hist-edit-list',            // correcting a recorded order
   '.cat-editor',                // writing a recipe
   '.guided-edit',               // writing a mixing procedure
