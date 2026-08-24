@@ -78,6 +78,13 @@ function costPanel(recipe) {
     // Nothing linked at all: say what to do, once, quietly — and only when the
     // recipe has rows worth linking, so a brand-new empty recipe stays silent.
     if (!result.unpriced.length) { panel.hidden = true; return panel; }
+    // ⚠️ THE HEADING IS DRAWN HERE TOO, and it was not until 24 Aug 2026. Every other
+    // block on this screen now carries one, so a single unheaded box saying «no cost
+    // yet» read as something half-built rather than as the cost card with nothing in
+    // it. Seen in a screenshot; no measurement asks about a missing heading.
+    panel.appendChild(el('div', { class: 'cat-cost-head' }, [
+      el('span', { class: 'cat-cost-label', text: t('cat.cost') }),
+    ]));
     panel.appendChild(el('p', { class: 'cat-cost-none', text:
       t('cat.noCostYetLink') }));
     return panel;
@@ -420,8 +427,12 @@ export function renderDetail({ recipe, app }) {
     renderRows();
   }
 
+  // ⚠️ NO VISIBLE LABEL INSIDE THE CARD ANY MORE, and the card's own heading is why.
+  // Seen in a screenshot after the cards landed: «PESO IMPASTO» and «PESO TOTALE
+  // IMPASTO» sat one above the other, two headings saying the same thing. The input
+  // keeps its accessible name through aria-label, so nothing is lost to a screen
+  // reader — what goes is the repetition, not the label.
   const weightPanel = el('div', { class: 'cat-weight-panel' }, [
-    el('label', { for: 'catGrams', text: t('cat.totalDoughWeight') }),
     el('div', { class: 'cat-weight-input' }, [
       el('div', { class: 'cat-field' }, [gramsInput, el('span', { class: 'unit', text: 'g' })]),
       calcBtn,
