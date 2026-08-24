@@ -17,6 +17,9 @@
 // deleting is a small low-key icon, never competing with Save (P20).
 
 import { t } from './i18n.js';
+import { copyToClipboard } from './share.js';
+import { chooseHowToSend } from './send-sheet.js';
+import { SEND_PATHS, svgElement } from './send-icon.js';
 import { getConfig, saveConfig } from './calculator-config-store.js';
 import {
   WEIGHT_MIN, WEIGHT_MAX, cloneConfig, isExtraDoughEnabled, getTabProducts, isInDivisor,
@@ -353,19 +356,13 @@ function shareText(client, link) {
 //
 // Whatever happens, this function ends with the link on screen: copied if the
 // clipboard took it, spelled out if it did not.
-const CLIPBOARD_WAIT_MS = 2000;
+// ⚠️ THE FOURTH COPY OF THE RACE IS GONE. js/share.js was extracted to stop this
+// very duplication and this file was named in its header as one of the copies; it now
+// calls it. The dialog afterwards is this screen's own — what changes is only who
+// holds the two-second clock.
 
 async function copyLink(client, link) {
-  let copied = false;
-  try {
-    copied = await Promise.race([
-      navigator.clipboard.writeText(link).then(() => true),
-      new Promise(resolve => setTimeout(() => resolve(false), CLIPBOARD_WAIT_MS)),
-    ]);
-  } catch (err) {
-    // Refused outright (an old browser, a denied permission, an insecure origin).
-    copied = false;
-  }
+  const copied = await copyToClipboard(link);
   await alertDialog(copied
     ? t('calc.linkCopiedFor', { client: client.name })
     : t('calc.copyThisLinkFor', { client: client.name, link }));
@@ -403,11 +400,15 @@ function orderingLinkField(client) {
     copy.addEventListener('click', () => copyLink(client, link));
     field.appendChild(copy);
 
-    const share = el('a', {
-      class: 'cp-add-prod cp-link-share',
-      href: `https://wa.me/?text=${encodeURIComponent(shareText(client, link))}`,
-      target: '_blank', rel: 'noopener',
-    }, t('calc.sendOnWhatsapp'));
+    // ⚠️ ONE ARROW, AND THE CHOICE BEHIND IT. This was an <a> straight to wa.me with
+    // no recipient — so the destination was already «whoever you pick» — and Federico
+    // asked on 24 Aug 2026 for the same send arrow, and the same question, everywhere.
+    // A <button> rather than a link, because it no longer HAS a href to follow.
+    const share = el('button', { class: 'cp-add-prod cp-link-share', type: 'button' },
+      [svgElement(SEND_PATHS, 18), el('span', {}, t('ui.send'))]);
+    share.addEventListener('click', () => chooseHowToSend({
+      subject: client.name, text: shareText(client, link),
+    }));
     field.appendChild(share);
   }
 

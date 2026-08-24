@@ -1,4 +1,4 @@
-const CACHE_NAME = 'theitalianclub-v341';
+const CACHE_NAME = 'theitalianclub-v342';
 // Firebase SDK modules (loaded from gstatic) are cached SEPARATELY from CACHE_NAME
 // so they survive the cache-version bump that happens on every deploy — otherwise
 // the offline SDK would be wiped each release until the next online load. The name
@@ -102,6 +102,8 @@ const ASSETS = [
   // missing — the one failure this list exists to prevent, and the one that does
   // not repair itself on the next load.
   './js/share.js',
+  './js/send-icon.js',
+  './js/send-sheet.js',
   // people.js IS listed: "Who can get in" belongs to the OWNER OF EVERY CUSTOMER'S
   // venue, not to whoever runs this app. The files above are its dependencies.
   './js/staff/people.js',

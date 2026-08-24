@@ -14,7 +14,7 @@ import { readFileSync } from 'node:fs';
 import {
   buildLabel, declarationText, ingredientLine, containsLine, mayContainLine,
 } from '../js/catalogue/recipe-label-model.js';
-import { setLanguage, currentLanguage } from '../js/i18n.js';
+import { setLanguage, currentLanguage, _dictionaries } from '../js/i18n.js';
 import { outputLanguage } from '../js/market.js';
 
 const root = new URL('../', import.meta.url);
@@ -221,9 +221,18 @@ test('⚠️ mailto opens the mail app and the screen says it does not send', ()
   assert.match(SHARE, /mailto:\?subject=\$\{encodeURIComponent\(subject\)\}&body=\$\{encodeURIComponent\(body\)\}/,
     'BOTH parts encoded: an ingredient list is full of commas, brackets, percent signs '
     + 'and accents, and a raw & would end the body and start a parameter');
-  assert.match(DETAIL, /cat\.decl\.mailNote/,
-    'letting somebody believe a declaration has gone out when it is sitting in a draft '
-    + 'is worse than not offering it');
+  // ⚠️ THE WARNING MOVED WITH THE CHOICE, 24 Aug 2026. The two named buttons became
+  // one arrow, and the sheet behind it says «it opens your mail app — it does not send
+  // it» UNDER THE EMAIL ROAD ITSELF, which is where it is read at the moment it matters.
+  // A note under the row was read before the choice rather than with it.
+  const sheet = readFileSync(new URL('../js/send-sheet.js', import.meta.url), 'utf8');
+  assert.match(sheet, /note: 'send\.emailOpensApp'/,
+    'the email road must carry the sentence that says it does not send');
+  const dicts = _dictionaries();
+  for (const lang of ['en', 'it']) {
+    assert.ok(dicts[lang]['send.emailOpensApp'],
+      `send.emailOpensApp is missing in ${lang}`);
+  }
 });
 
 test('⚠️ no navigator.share, here or anywhere', () => {

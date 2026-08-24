@@ -162,10 +162,13 @@
   --slate:       #5A6B7A;
   --slate-press: #44525E;
 
-  /* WhatsApp's own brand green. A third party's colour: it is named here so
-     it stops being copied by hand, but the restyle does not get to change it. */
-  --whatsapp:       #25D366;
-  --whatsapp-press: #1DA851;
+  /* ⚠️ WhatsApp's own brand green USED TO BE NAMED HERE, and nothing paints with it any
+     more. It coloured three buttons — the recipe share, the order modal, and a `.log-wa-btn`
+     that no markup or JavaScript had referenced for months. On 24 Aug 2026 all three
+     became «send» buttons that ASK which road to take, and a third party's brand colour
+     on a control with more than one destination names exactly one of them. The two
+     values are removed rather than left defined-and-unused: a token nothing paints with
+     is a token somebody paints with by accident. */
 
   /* ── Elevation ───────────────────────────────────────────────────────── */
   --shadow: 0 1px 2px rgba(27,33,20,.06), 0 8px 24px rgba(27,33,20,.07);
@@ -783,3 +786,46 @@
   text-align: center;
   font-variant-numeric: tabular-nums;
 }
+
+/* ── "How do you want to send it?" — app-wide ──────────────────────────────────
+   Reuses .app-dialog, so it inherits the backdrop, the sizing and the screen-reader
+   naming rather than growing a second dialog nobody maintains.
+
+   ⚠️⚠️ IT LIVES HERE, NOT IN orders.css, AND THE REASON IS A DEFECT AVOIDED. It was
+   written for Orders in v1.55.0 and Federico asked on 24 Aug 2026 for the same send
+   arrow — and the same question behind it — on every screen. catalogue.html loads only
+   tokens.css, auth.css and catalogue.css: moving the rules as they stood would have
+   carried `var(--accent)` and `var(--text3)`, both of which are defined in STYLE.CSS.
+   The icon and the note would have rendered with NO COLOUR, on the one screen this app
+   has that can send somebody to hospital, and nothing anywhere would have warned. Three
+   undefined custom properties and one undefined class name have already shipped in this
+   project for exactly this reason. The names below are the canonical ones tokens.css
+   defines itself. */
+.send-routes { display: flex; flex-direction: column; gap: 8px; margin: 4px 0 8px; }
+.send-route {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  text-align: left;
+  /* ⚠️ 56px, WELL PAST THE 44px FLOOR. Targets stacked in a dialog on a 320px phone,
+     and a mis-tap here does not cost a keystroke: it sends something real down a road
+     nobody chose. */
+  min-height: 56px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  font-family: inherit;
+  cursor: pointer;
+}
+.send-route:active { background: var(--accent-light); }
+.send-route:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 2px; }
+.send-route-icon { display: flex; align-items: center; color: var(--brand); flex-shrink: 0; }
+.send-route-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.send-route-name { font-size: 15px; font-weight: 600; }
+/* The sentence that says what a road actually costs — one message per supplier, who
+   cannot be reached, or that mailto only OPENS the mail app. It has to be readable, so
+   it is not --text-4 (which measures 3.6:1 and is an open accessibility item). */
+.send-route-note { font-size: 12px; color: var(--text-3); }

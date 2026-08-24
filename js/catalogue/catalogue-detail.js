@@ -45,7 +45,9 @@ import { formatMoney } from '../price-model.js';
 // not import from another feature's folder — making a fifth copy of the raced clipboard
 // write to satisfy a rule whose whole purpose is to stop copies would be the wrong
 // reading of it.
-import { copyToClipboard, sendOnWhatsApp, sendByEmail } from '../share.js';
+import { copyToClipboard } from '../share.js';
+import { chooseHowToSend } from '../send-sheet.js';
+import { SEND_PATHS, svgElement } from '../send-icon.js';
 import { hasProcedure, normalizeSteps, unassignedRows, progressText, formatDuration } from './guided-model.js';
 
 const IMPORT_SVG =
@@ -201,21 +203,24 @@ function declarationPanel(recipe, app) {
     },
   }, [t('cat.decl.copy')]);
 
-  const waBtn = el('button', {
-    class: 'cat-decl-btn', type: 'button',
-    onclick: () => sendOnWhatsApp(text()),
-  }, [t('cat.decl.whatsapp')]);
+  // ⚠️⚠️ ONE ARROW WHERE THERE WERE TWO NAMED BUTTONS. Federico, 24 Aug 2026, looking
+  // at this card on his phone: «togli la casella whatsapp e email e metti una freccia
+  // per inviare che poi mi fa scegliere come inviarlo». The choice did not disappear —
+  // it moved behind the arrow, into the sheet every other screen in the app now opens.
+  //
+  // ⚠️ COPY STAYS A BUTTON OF ITS OWN, deliberately: he asked for WhatsApp and Email to
+  // go, not for copying to go, and copying is not sending.
+  const sendBtn = el('button', {
+    class: 'cat-decl-btn cat-decl-send-btn', type: 'button',
+    'aria-label': t('ui.send'),
+    onclick: () => chooseHowToSend({ subject: recipe.name, text: text() }),
+  }, [svgElement(SEND_PATHS, 18), el('span', {}, t('ui.send'))]);
 
-  const mailBtn = el('button', {
-    class: 'cat-decl-btn', type: 'button',
-    onclick: () => sendByEmail(recipe.name, text()),
-  }, [t('cat.decl.email')]);
-
-  panel.appendChild(el('div', { class: 'cat-decl-send' }, [copyBtn, waBtn, mailBtn]));
-  // ⚠️ mailto OPENS THE MAIL APP, IT DOES NOT SEND, and the screen has to say so —
-  // believing a declaration has gone out when it is sitting in a draft is the one way
-  // this row can mislead.
-  panel.appendChild(el('p', { class: 'cat-decl-mailnote', text: t('cat.decl.mailNote') }));
+  panel.appendChild(el('div', { class: 'cat-decl-send' }, [copyBtn, sendBtn]));
+  // ⚠️ mailto OPENS THE MAIL APP, IT DOES NOT SEND. The sheet says so under the Email
+  // road itself, which is where it is read at the moment it matters — believing a
+  // declaration has gone out when it is sitting in a draft is the one way this can
+  // mislead, and a note down here was read before the choice rather than with it.
   panel.appendChild(status);
   return panel;
 }

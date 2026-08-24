@@ -474,15 +474,18 @@ select.qty-select:focus { outline: none; border-color: var(--crust); background:
 
 .copy-row { display: flex; gap: 10px; align-items: center; margin: 12px 0 4px; }
 .copy-row .copy-btn { flex: 1; margin: 0; }
-/* The mockup paints this button brand green. Left in WhatsApp's own green, for
-   consistency: the app has three "send on WhatsApp" buttons (here, the order
-   modal and the log) and recolouring only the one the mockup happens to show
-   would make three identical actions look like three different ones. */
-.copy-wa-btn {
+/* ⚠⚠ BRAND GREEN AT LAST, AND FOR THE REASON THE OLD COMMENT GAVE. It said: the app
+   has three «send on WhatsApp» buttons and recolouring only the one the mockup shows
+   would make three identical actions look like three different ones. That held while
+   all three went to WhatsApp and nowhere else. Since 24 Aug 2026 this one opens the
+   sheet that ASKS which road to take, so WhatsApp's own green would name a destination
+   the button no longer commits to — and the class is renamed with it, because a
+   WhatsApp name on a control that is not about WhatsApp is the next reader's trap. */
+.copy-send-btn {
   width: 46px;
   height: 46px;
   flex-shrink: 0;
-  background: var(--whatsapp);
+  background: var(--brand);
   color: var(--on-brand);
   border: none;
   border-radius: var(--radius-sm);
@@ -491,7 +494,8 @@ select.qty-select:focus { outline: none; border-color: var(--crust); background:
   justify-content: center;
   cursor: pointer;
 }
-.copy-wa-btn:active { background: var(--whatsapp-press); }
+.copy-send-btn:active { background: var(--brand-press); transform: scale(.97); }
+.copy-send-btn:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 2px; }
 .copy-btn {
   width: 100%;
   margin: 12px 0 4px;
@@ -1646,7 +1650,7 @@ input.cp-prod-weight {
 .loaf-modal-send {
   flex: 2;
   padding: 13px;
-  background: var(--whatsapp);
+  background: var(--brand);
   border: none;
   border-radius: var(--radius-sm);
   font-family: 'Manrope', sans-serif;
@@ -1695,18 +1699,9 @@ input.cp-prod-weight {
 }
 /* Delete sits at the far right (low-key, separated from History/Edit on the left). */
 .log-delete-btn { margin-left: auto; }
-.log-wa-btn {
-  flex: 1;
-  padding: 9px 10px;
-  background: var(--whatsapp);
-  border: none;
-  border-radius: var(--radius-sm);
-  font-family: 'Manrope', sans-serif;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--on-brand);
-  cursor: pointer;
-}
+/* ⚠️ .log-wa-btn WAS HERE AND NOTHING HAS REFERENCED IT FOR MONTHS — no markup,
+   no JavaScript. It was found while removing WhatsApp's brand colour from the
+   send buttons, and it was the third and last holder of it. */
 .log-edit-btn, .log-delete-btn {
   padding: 9px 14px;
   border-radius: var(--radius-sm);

@@ -37,7 +37,7 @@ export function buildSendScreen(suppliers, ingredientsBySupplier, entries, callb
     // ⚠️ "Send", not "Send on WhatsApp". The button no longer names one road: it
     // asks which of the open ones to take, and goes straight there when only one
     // is open — a question with a single answer is a tap wasted on every order.
-    actionLabel: t('orders.send.button'),
+    actionLabel: t('ui.send'),
     emptyText: t('orders.noItemsInThis'),
     format,
     // A message goes to one chat: who it is for is a decision, not a default.

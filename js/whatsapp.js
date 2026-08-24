@@ -13,6 +13,7 @@
 // colliding with the calculator's own quantity fields living in the same document.
 
 import { t } from './i18n.js';
+import { chooseHowToSend } from './send-sheet.js';
 import { getConfig } from './calculator-config-store.js';
 import { getWhatsappLists, getWhatsappClients, resolveListClients, resolveDirectClient, getOrderPrefillWindow } from './calculator-config.js';
 import { el } from './calculator-render.js';
@@ -214,11 +215,18 @@ export function sendWithLoaves() {
   openWhoPicker(sections);
 }
 
-// Build the message and hand it to WhatsApp. `multi` decides whether each section is
-// headed by its client's name — see buildOrderMessage for why it is not derived.
+// Build the message and ask which road it takes. `multi` decides whether each section
+// is headed by its client's name — see buildOrderMessage for why it is not derived.
+//
+// ⚠️ IT USED TO GO STRAIGHT TO WhatsApp, with no recipient — so the destination was
+// already «whoever you pick», and asking adds a road rather than changing the errand.
+// The modal closes FIRST, as it always did: both roads open a new window, and on a
+// phone that leaves the app entirely.
 function sendSections(sections, multi, title) {
   closeLoafModal();
-  window.open(whatsappUrl(buildOrderMessage(title || selectedTitle, sections, multi)), '_blank');
+  const text = buildOrderMessage(title || selectedTitle, sections, multi);
+  if (!text) return;
+  chooseHowToSend({ subject: title || selectedTitle || '', text });
 }
 
 // ── "Who is this for?" ────────────────────────────────────────────────────────

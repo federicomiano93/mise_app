@@ -10,6 +10,8 @@
 // stays visible AND editable — the recipe sheet and the log are independent.
 
 import { t } from './i18n.js';
+import { copyToClipboard } from './share.js';
+import { chooseHowToSend } from './send-sheet.js';
 import {
   computeRecipeTarget, getTabProducts, doughExtraGrams, isExtraDoughEnabled,
   getDivisorProducts, divisorTotal, splitDough, DIVISOR_MAX,
@@ -274,15 +276,27 @@ function recipeTextFor(id) {
   return buildRecipeText(model.name, model.rows, model.totalG);
 }
 
-export function copyRecipe(id) {
+// ⚠⚠ THE LAST UNRACED CLIPBOARD WRITE IN THE APP, until 24 Aug 2026.
+// navigator.clipboard.writeText() can sit there and never settle — the page losing
+// focus is enough — and this one was awaited on its own, so the button would have
+// stayed saying «Copy the recipe» for ever with no error anywhere. Every other copy in
+// the app already goes through copyToClipboard(), which races it against a 2s clock;
+// this one is now the same, and it SAYS SO when the clock wins rather than pretending.
+export async function copyRecipe(id) {
   const btn = document.getElementById(id + '-copy-btn');
-  navigator.clipboard.writeText(recipeTextFor(id)).then(() => {
-    if (!btn) return;
-    btn.textContent = t('calc.copied');
-    setTimeout(() => { btn.textContent = t('calc.copyRecipe'); }, 2000);
-  });
+  const ok = await copyToClipboard(recipeTextFor(id));
+  if (!btn) return;
+  btn.textContent = ok ? t('calc.copied') : t('label.copyFailed');
+  setTimeout(() => { btn.textContent = t('calc.copyRecipe'); }, 2000);
 }
 
-export function shareRecipeWA(id) {
-  window.open('https://wa.me/?text=' + encodeURIComponent(recipeTextFor(id)), '_blank');
+// ⚠️ IT ASKS WHICH ROAD, RATHER THAN NAMING ONE. It opened wa.me with no recipient —
+// so the destination was already «whoever you pick» — and Federico asked on 24 Aug 2026
+// for one send arrow everywhere, with the choice behind it. The name goes with the
+// change: nothing about this is WhatsApp any more.
+export function sendRecipe(id) {
+  const text = recipeTextFor(id);
+  if (!text) return;
+  const model = lastRecipe[id];
+  return chooseHowToSend({ subject: (model && model.name) || '', text });
 }

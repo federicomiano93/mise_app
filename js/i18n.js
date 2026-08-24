@@ -817,7 +817,6 @@ const DICTIONARIES = Object.freeze({
     'orders.weekStart.title': 'The working week',
     'orders.weekStart.hint': 'Which day the week starts on. It decides what “this week” means on Incoming.',
     // ── How an order leaves the app ─────────────────────────────────────────
-    'orders.send.button': 'Send',
     'orders.send.howTitle': 'How should this order go?',
     'orders.send.route.manager': 'To whoever runs the place, in the app',
     'orders.send.route.whatsapp': 'WhatsApp — I choose the chat',
@@ -870,7 +869,10 @@ const DICTIONARIES = Object.freeze({
     'orders.request.progress': '{done} of {total}',
     'orders.request.allOrdered': 'All ordered',
     'orders.request.none': 'Nobody has sent an order list yet.',
-    'orders.request.noneHint': 'Type an order, tap the WhatsApp button at the top, then “Send to the manager”.',
+    // ⚠️ IT SENT SOMEBODY LOOKING FOR A BUTTON THAT HAS NOT EXISTED SINCE v1.55.0. The
+    // header carries a send ARROW offering four roads; the WhatsApp button it names was
+    // replaced the day the arrow was chosen, and this sentence was not.
+    'orders.request.noneHint': 'Type an order, tap the Send arrow at the top, then “Send to the manager”.',
     'orders.request.noneWaiting': 'Every list sent has been ordered.',
     'orders.request.noneInWindow': {
       one: 'No lists in the last day',
@@ -988,9 +990,6 @@ const DICTIONARIES = Object.freeze({
     // phone and the longer phrase wrapped to two lines while the other two did not —
     // seen in a screenshot, the same kind of fix as v1.71.0's «Come si fa».
     'cat.decl.copy': 'Copy',
-    'cat.decl.whatsapp': 'WhatsApp',
-    'cat.decl.email': 'Email',
-    'cat.decl.mailNote': 'WhatsApp and Email open the app with the text ready — they do not send it.',
     'cat.amount': 'Amount',
     'cat.unit': 'Unit',
     'cat.removeIngredient': 'Remove ingredient',
@@ -1432,7 +1431,6 @@ const DICTIONARIES = Object.freeze({
     'calc.orOneClient': 'Or one client',
     'calc.extraDough2': 'Extra dough',
     'calc.extraDoughUnit': 'Extra dough unit',
-    'calc.shareViaWhatsapp': 'Share via WhatsApp',
     'calc.resetAllFields2': 'Reset all fields',
     'calc.loading': 'Loading…',
     'calc.fetchingTheRecipesSaved': 'Fetching the recipes saved for this venue.',
@@ -1454,7 +1452,6 @@ const DICTIONARIES = Object.freeze({
     'calc.createALinkAnd': 'Create a link and send it to this client. They will see only their own products, and can order without a password.',
     'calc.thisClientCannotOrder': 'This client cannot order through the app yet. The owner or a manager can set that up.',
     'calc.copyLink': 'Copy link',
-    'calc.sendOnWhatsapp': 'Send on WhatsApp',
     'calc.replaceWithANew': 'Replace with a new link',
     'calc.createOrderingLink': '+ Create ordering link',
     'calc.replaceThisLink': 'Replace this link?',
@@ -1639,7 +1636,25 @@ const DICTIONARIES = Object.freeze({
     // `ui.` rather than in a feature namespace because four features already want
     // them, and a fifth copy is a fifth thing to translate.
     'ui.back': 'Back',
+    // ⚠️ ONE WORD FOR ONE ACTION. The app had TWO — `ui.send` said «Manda» in Italian
+    // and `orders.send.button` said «Invia», for the same button on different screens.
+    // «Manda» is the one that stays: it is what the app says in twelve other places
+    // («Manda l'ordine», «Manda al manager», «Manda su WhatsApp»), and «Invia» was the
+    // single outlier. orders.send.button is retired rather than left as a second name.
     'ui.send': 'Send',
+    // ── "How do you want to send it?" — the sheet behind every send arrow ──────
+    // ⚠️ `send.` AND NOT `orders.send.`: this is asked from the Catalogue, the
+    // Calculator and «Who can get in» too, and a key named after the one feature that
+    // happened to need it first is the next reader's trap.
+    // ⚠️ SIX KEYS RETIRED ON 24 Aug 2026, and every one of them named WhatsApp or
+    // a button that no longer exists: cat.decl.whatsapp / .email / .mailNote,
+    // help.sendOnWhatsapp, calc.sendOnWhatsapp, calc.shareViaWhatsapp. The screens
+    // they belonged to now carry ONE send arrow and ask which road behind it, so a
+    // key that names a destination is a key that would put the old promise back.
+    'send.how': 'How do you want to send it?',
+    'send.whatsapp': 'WhatsApp — I choose the chat',
+    'send.email': 'Email',
+    'send.emailOpensApp': 'It opens your mail app with the text ready — it does not send it.',
     // ⚠️ THE JOINER IS A WORD TOO. `names.join(' and ')` and listNames() both wrote
     // English grammar into the code, in three places.
     'ui.listPair': '{a} and {b}',
@@ -1977,7 +1992,6 @@ const DICTIONARIES = Object.freeze({
     'help.youAreItsOwner': 'You are its owner. It will be in your list of businesses.',
     'help.itIsNotStored': ' It is not stored anywhere and cannot be shown again.',
     'help.copyTheLink': 'Copy the link',
-    'help.sendOnWhatsapp': 'Send on WhatsApp',
     'nc.country.help': 'This decides the language its allergen labels are printed in, and it cannot be worked out later. The law asks for a label in the language of the country where the food is sold.',
 
 
@@ -2672,7 +2686,6 @@ const DICTIONARIES = Object.freeze({
     'orders.weekStart.title': 'La settimana lavorativa',
     'orders.weekStart.hint': 'Da che giorno inizia la settimana. Decide cosa vuol dire «questa settimana» in In arrivo.',
     // ── Come esce un ordine dall'app ────────────────────────────────────────
-    'orders.send.button': 'Invia',
     'orders.send.howTitle': 'Come mandiamo quest’ordine?',
     'orders.send.route.manager': 'A chi gestisce il locale, dentro l’app',
     'orders.send.route.whatsapp': 'WhatsApp — scelgo io la chat',
@@ -2723,7 +2736,7 @@ const DICTIONARIES = Object.freeze({
     'orders.request.progress': '{done} su {total}',
     'orders.request.allOrdered': 'Tutto ordinato',
     'orders.request.none': 'Nessuno ha ancora mandato una lista d’ordine.',
-    'orders.request.noneHint': 'Scrivi un ordine, tocca il tasto WhatsApp in alto, poi “Manda al manager”.',
+    'orders.request.noneHint': 'Scrivi un ordine, tocca la freccia Manda in alto, poi “Manda al manager”.',
     'orders.request.noneWaiting': 'Tutte le liste mandate sono state ordinate.',
     'orders.request.noneInWindow': {
       one: 'Nessuna lista nell’ultimo giorno',
@@ -2839,9 +2852,6 @@ const DICTIONARIES = Object.freeze({
     'cat.decl.blocked': 'Non ancora pronta — alcuni ingredienti sono da dichiarare. La casella allergeni qui sopra dice quali.',
     'cat.decl.caveat': 'Una bozza da controllare. L’app sa quello che le è stato detto: non può sapere di una sostituzione dell’ultimo minuto o di un fornitore che ha cambiato ricetta.',
     'cat.decl.copy': 'Copia',
-    'cat.decl.whatsapp': 'WhatsApp',
-    'cat.decl.email': 'Email',
-    'cat.decl.mailNote': 'WhatsApp ed Email aprono l’app con il testo già pronto — non lo inviano.',
     'cat.amount': 'Quantità',
     'cat.unit': 'Unità',
     'cat.removeIngredient': 'Togli l’ingrediente',
@@ -3261,7 +3271,6 @@ const DICTIONARIES = Object.freeze({
     'calc.orOneClient': 'Oppure un solo cliente',
     'calc.extraDough2': 'Impasto extra',
     'calc.extraDoughUnit': 'Unità dell’impasto extra',
-    'calc.shareViaWhatsapp': 'Condividi su WhatsApp',
     'calc.resetAllFields2': 'Azzera tutti i campi',
     'calc.loading': 'Caricamento…',
     'calc.fetchingTheRecipesSaved': 'Sto recuperando le ricette salvate per questo locale.',
@@ -3283,7 +3292,6 @@ const DICTIONARIES = Object.freeze({
     'calc.createALinkAnd': 'Crea un link e mandalo a questo cliente. Vedrà solo i suoi prodotti, e potrà ordinare senza password.',
     'calc.thisClientCannotOrder': 'Questo cliente non può ancora ordinare dall’app. Il titolare o un responsabile può abilitarlo.',
     'calc.copyLink': 'Copia il link',
-    'calc.sendOnWhatsapp': 'Manda su WhatsApp',
     'calc.replaceWithANew': 'Sostituisci con un nuovo link',
     'calc.createOrderingLink': '+ Crea il link per ordinare',
     'calc.replaceThisLink': 'Vuoi sostituire questo link?',
@@ -3433,6 +3441,10 @@ const DICTIONARIES = Object.freeze({
     'ui.home': "Home",
     'ui.back': 'Indietro',
     'ui.send': 'Manda',
+    'send.how': 'Come vuoi mandarlo?',
+    'send.whatsapp': 'WhatsApp — scelgo io la chat',
+    'send.email': 'Email',
+    'send.emailOpensApp': 'Apre la tua app di posta con il testo già pronto — non lo manda.',
     'ui.listPair': '{a} e {b}',
     'aria.recipe': 'Ricetta',
     'ui.cancel': 'Annulla',
@@ -3698,7 +3710,6 @@ const DICTIONARIES = Object.freeze({
     'help.youAreItsOwner': 'Ne sei il titolare. Sarà nel tuo elenco di attività.',
     'help.itIsNotStored': ' Non viene salvato da nessuna parte e non può essere mostrato di nuovo.',
     'help.copyTheLink': 'Copia il link',
-    'help.sendOnWhatsapp': 'Manda su WhatsApp',
     'nc.country.help': 'Decide la lingua in cui vengono stampate le sue etichette allergeni, e non si può ricavare dopo. La legge chiede un’etichetta nella lingua del paese in cui il cibo si vende.',
 
 

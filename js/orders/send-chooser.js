@@ -11,12 +11,19 @@ import { el } from './dom.js';
 import { alertDialog } from './confirm-dialog.js';
 import { buildOrderMessage, whatsappUrl } from './order-text.js';
 import { routesFor, routeAvailableFor, unreachable } from './send-routes.js';
+import { WHATSAPP_PATHS, EMAIL_PATHS, svgFrom } from '../send-icon.js';
 
+// ⚠️ THE TWO SHARED GLYPHS COME FROM js/send-icon.js SINCE 24 Aug 2026, because the
+// same speech bubble and the same envelope are now drawn by the sheet every OTHER
+// screen opens (js/send-sheet.js). Two copies of a glyph are two glyphs waiting to
+// disagree, and this project already keeps a whole test for that class of drift.
+// The other two are this screen's own: nothing outside Orders has a manager to send to,
+// or a supplier with a number of their own.
 const ICONS = {
   manager: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l2 2 4-4"/><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M8 2v4M16 2v4"/></svg>',
-  whatsapp: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"/></svg>',
-  whatsappSupplier: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"/><path d="M12 8v5M9.5 10.5L12 8l2.5 2.5"/></svg>',
-  email: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M22 6l-10 7L2 6"/></svg>',
+  whatsapp: svgFrom(WHATSAPP_PATHS, 22),
+  whatsappSupplier: svgFrom([...WHATSAPP_PATHS, 'M12 8v5M9.5 10.5L12 8l2.5 2.5'], 22),
+  email: svgFrom(EMAIL_PATHS, 22),
 };
 
 // The two that address one supplier each.

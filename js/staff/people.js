@@ -18,7 +18,9 @@ import {
   watchMembers, createJoinCode, setMemberRole, setMemberName, callFailureText,
 } from './firebase-staff.js';
 import { joinLinkFor, expiresInWords } from '../join-link.js';
-import { copyToClipboard, sendOnWhatsApp } from '../share.js';
+import { copyToClipboard } from '../share.js';
+import { chooseHowToSend } from '../send-sheet.js';
+import { SEND_PATHS, svgElement } from '../send-icon.js';
 import {
   ROLE_CHOICES, personLabel, personLabelInSentence, choiceKey,
   choiceLabel, choiceLabelInSentence,
@@ -374,15 +376,19 @@ export function openPeople(session) {
         expires: expiresInWords(pending),
       }) }));
 
-    // WhatsApp first, because it is the errand: this exists so an owner can add
+    // Sending first, because it is the errand: this exists so an owner can add
     // somebody without them being in the room.
+    // ⚠️ ONE ARROW, AND THE CHOICE BEHIND IT (24 Aug 2026). It said «Send on WhatsApp»
+    // and went straight there with no recipient — so the destination was already
+    // «whoever you pick», and asking adds a road rather than changing the errand.
     const wa = el('button', { type: 'button', class: 'btn-primary people-add' },
-      t('help.sendOnWhatsapp'));
+      [svgElement(SEND_PATHS, 18), el('span', {}, t('ui.send'))]);
     wa.addEventListener('click', () => {
       // ⚠️ THE MESSAGE NAMES THE VENUE. "Open this link" and nothing else is what
       // every scam sent over WhatsApp looks like; the person has to be able to
       // tell, before tapping, that this is the place they work.
-      sendOnWhatsApp(t('people.link.message', { venue: venueName, link }));
+      chooseHowToSend({ subject: venueName,
+        text: t('people.link.message', { venue: venueName, link }) });
     });
     codeBox.appendChild(wa);
 
