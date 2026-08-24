@@ -34,11 +34,15 @@ import { renderHistory as renderHistoryView } from './history.js';
 import { renderDeliveries, renderReorderBanner, renderOwedBanner } from './deliveries-view.js';
 import { buildHistoryEditor } from './history-edit.js';
 import { buildPlaceConfirm } from './place-confirm.js';
-import { askedToday, confirmedEntries } from './untold-changes.js';
+import {
+  askedToday, confirmedEntries, untoldChanges, orderedToday,
+} from './untold-changes.js';
+import { renderUntold } from './untold-view.js';
 import { buildManagement, isAdmin } from './management.js';
 import { computeSuggestion, isUnusualQuantity } from './suggestions.js';
 import { refreshBankHolidays } from './bank-holidays.js';
 import { renderAlerts } from './notifications.js';
+import { routesFor } from './send-routes.js';
 import { confirmDialog } from './confirm-dialog.js';
 import { todayISO, dayPhrase, daySpoken, localDayOf, dayLabel } from './day.js';
 import {
@@ -58,7 +62,7 @@ import {
   deleteOrderRequest, getOwnMemberRow, getRosterOnce, getAwayDaysOnce,
 } from './firebase-orders.js';
 import {
-  buildOrderRequest, senderName, waitingRequests, remainingIds, isRequestDone,
+  buildOrderRequest, senderName, waitingRequests, remainingIds, isRequestDone, supplierIdsOf,
 } from './order-request-model.js';
 import { awayUids, nobodyWillBeTold, awayNames } from '../away-model.js';
 import {
@@ -825,6 +829,24 @@ function findRequest(id) {
 // ⚠️ REBUILT FROM state ON EVERY SNAPSHOT, never patched in place. Two people can
 // be working the same list at once, and a screen that only redrew the row somebody
 // tapped here would quietly disagree with the database about every other row.
+// What today's records hold for every supplier this list names, flattened to one
+// map the screen can look a row up in.
+//
+// ⚠️ THE LIST'S OWN DAY, not today. A list opened tomorrow must still be read
+// against the orders that answered it, or it would quietly report that nothing was
+// ever bought.
+//
+// ⚠️ AND THE DAY'S TOTAL, because a second order to the same supplier is MERGED into
+// the same record (archive.js mergeArchives). "How much was bought" is the honest
+// answer to what the row is asking.
+function orderedForRequest(request) {
+  const out = {};
+  supplierIdsOf(request).forEach(supplierId => {
+    Object.assign(out, orderedToday(state.history, supplierId, request.date));
+  });
+  return out;
+}
+
 function renderOpenRequest() {
   if (!openRequestId) { requestView?.remove(); requestView = null; return; }
   const request = findRequest(openRequestId);
@@ -840,6 +862,12 @@ function renderOpenRequest() {
   const next = buildRequestScreen(request, {
     ingredientsById: indexById(orderIngredients()),
     entries: state.entries,
+    // ⚠️ WHAT WAS ACTUALLY BOUGHT, beside what was asked for. The person who sent
+    // the list can otherwise only find out by asking. The two documents are joined
+    // by {day, supplier} rather than by a stored link: adding a `requestId` to a
+    // history record would be REFUSED by firestore.rules as it stands (a closed key
+    // list), and it can be deduced from fields both documents already carry.
+    orderedById: orderedForRequest(request),
     canManage: currentSession().canManage === true,
   }, {
     onBack: () => { openRequestId = null; renderOpenRequest(); },
@@ -1414,6 +1442,47 @@ function renderReminders() {
     onToday: keepAsToday,
     onDiscard: discardPending,
   });
+
+  renderUntoldChanges();
+}
+
+// ⚠️⚠️ WHAT NOBODY HAS BEEN TOLD ABOUT. The shared order is live on every phone, and
+// both the sent list and the recorded order are only photographs of it — so a
+// quantity can sit here that neither the person who orders nor the supplier has ever
+// seen. The rule is pure and lives in js/orders/untold-changes.js; this only asks it
+// and hands the answer to the screen.
+//
+// ⚠️ IT NEEDS THE INGREDIENTS TOO. Without them every supplier looks empty and the
+// answer would be a confident, permanent silence — the worst possible failure for
+// this particular question.
+function renderUntoldChanges() {
+  const host = document.getElementById('orders-untold');
+  if (!host) return;
+  if (!state.loaded.suppliers || !state.loaded.ingredients) {
+    host.hidden = true;
+    return;
+  }
+
+  const canManage = canManageHere();
+  renderUntold(
+    host,
+    untoldChanges({
+      suppliers: orderSupplierList(),
+      ingredients: orderIngredients(),
+      entries: state.entries,
+      requests: state.requests,
+      history: state.history,
+      today: todayISO(),
+    }),
+    {
+      canManage,
+      // ⚠️ A BUTTON THAT CANNOT WORK IS WORSE THAN NO BUTTON. An employee whose
+      // venue has the "send to the manager" road switched off has nowhere to send
+      // the list, so the offer would be a dead end.
+      canResend: routesFor(ordersConfig.sendSettings, { canManage }).includes('manager'),
+    },
+    { onOpen: expandSupplier, onResend: openSendScreen },
+  );
 }
 
 // Look for an order typed on an earlier day and never placed — ONCE per page
@@ -1715,6 +1784,10 @@ async function init() {
     state.requests = list;
     renderRequestBanner();
     renderRequestCard();
+    // ⚠️ AND THE UNTOLD BANNER, because sending the list again is one of the two
+    // things that answers it. Without this it would keep saying "you have added
+    // something" for the rest of the day to somebody who had just sent it.
+    renderUntoldChanges();
     // ⚠️ renderRequestList, NOT openRequestList: the latter resets the "show
     // older" choice, so a snapshot arriving while somebody was looking at the
     // older lists would fold them away under their thumb.

@@ -720,6 +720,19 @@ const DICTIONARIES = Object.freeze({
     // to say at the instant the button is tapped.
     'orders.confirm.aboutToRecord': 'This is what will be recorded:',
     'orders.confirm.addTitle': 'Add to the order',
+
+    // ⚠️ NOTHING ADDED TO THE SHARED ORDER STAYS UNKNOWN TO WHOEVER BUYS IT.
+    // js/orders/untold-changes.js. One rule, said to the two people who can act.
+    'orders.untold.changed': {
+      one: '{supplier}: the order changed since it was last sent — 1 addition',
+      other: '{supplier}: the order changed since it was last sent — {n} additions',
+    },
+    'orders.untold.resend': 'Send the list again',
+    'orders.untold.alreadyTitle': 'This was already ordered',
+    'orders.untold.alreadyLine': '{name} — {ordered} ordered, {live} now in the order',
+    'orders.untold.callSupplier': 'If more is really needed, ring the supplier — the app cannot undo a phone call.',
+    'orders.untold.asked': 'asked: {n}',
+    'orders.untold.ordered': 'ordered: {n}',
     'orders.confirm.asked': 'asked: {n}',
     'orders.confirm.usually': 'usually about {n}',
     'orders.confirm.addsToExisting': 'An order for {supplier} is already recorded {when} — these amounts will be ADDED to it.',
@@ -2610,6 +2623,18 @@ const DICTIONARIES = Object.freeze({
     // ⚠️ LA SCHERMATA DI CONFERMA (js/orders/place-confirm.js).
     'orders.confirm.aboutToRecord': 'Sta per essere registrato:',
     'orders.confirm.addTitle': 'Aggiungi all’ordine',
+
+    // ⚠️ NIENTE DI AGGIUNTO ALL’ORDINE CONDIVISO RESTA SCONOSCIUTO A CHI COMPRA.
+    'orders.untold.changed': {
+      one: '{supplier}: l’ordine è cambiato dopo l’ultimo invio — 1 aggiunta',
+      other: '{supplier}: l’ordine è cambiato dopo l’ultimo invio — {n} aggiunte',
+    },
+    'orders.untold.resend': 'Rimanda la lista',
+    'orders.untold.alreadyTitle': 'Era già stato ordinato',
+    'orders.untold.alreadyLine': '{name} — ordinati {ordered}, adesso in lista {live}',
+    'orders.untold.callSupplier': 'Se ne servono davvero, richiama il fornitore — l’app non può disdire una telefonata.',
+    'orders.untold.asked': 'chiesti: {n}',
+    'orders.untold.ordered': 'ordinati: {n}',
     'orders.confirm.asked': 'chiesti: {n}',
     'orders.confirm.usually': 'di solito circa {n}',
     'orders.confirm.addsToExisting': 'Per {supplier} c’è già un ordine registrato {when} — queste quantità ci verranno AGGIUNTE.',
