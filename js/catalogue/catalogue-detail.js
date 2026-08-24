@@ -29,7 +29,7 @@ import {
 // prints — one of the two saying «Hazelnut» and the other «Nocciole» is how somebody
 // stops trusting either. The words AROUND the list («may contain», «not declared»)
 // stay interface text: they address the reader, not the consumer.
-import { outputLanguage, allergenName, labelWord } from '../market.js';
+import { outputLanguage, allergenName } from '../market.js';
 // Whether this venue tracks allergens at all. From js/ root: Orders sets the switch
 // and the Catalogue obeys it, so the judgement lives in one file for both.
 import { allergensOn } from '../venue-features.js';
@@ -171,7 +171,11 @@ function declarationPanel(recipe, app) {
     }));
   });
   list.appendChild(document.createTextNode('.'));
-  panel.appendChild(el('p', { class: 'cat-decl-lead', text: `${labelWord('ingredients', lang)}:` }));
+  // ⚠️ NO «Ingredienti:» LINE ON SCREEN, and it is not an omission. The card's own
+  // heading already says what this is, and the two stacked read as one heading repeated
+  // — the same duplication the batch-weight card had, seen in the same screenshot. The
+  // SENT text still carries it, because there the law asks for it: declarationText()
+  // writes «Ingredienti: …» at the top. The label screen shows the list unprefixed too.
   panel.appendChild(list);
 
   const contains = containsLine(label, lang);
@@ -195,7 +199,7 @@ function declarationPanel(recipe, app) {
       status.textContent = await copyToClipboard(text())
         ? t('label.copied') : t('label.copyFailed');
     },
-  }, [t('label.copy')]);
+  }, [t('cat.decl.copy')]);
 
   const waBtn = el('button', {
     class: 'cat-decl-btn', type: 'button',
