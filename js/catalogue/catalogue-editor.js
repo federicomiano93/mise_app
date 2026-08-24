@@ -167,15 +167,32 @@ export function renderEditor({ recipe, draft, allRecipes, app }) {
       // target takes its width from the ingredient NAME, which is the one thing that
       // has to stay readable. Under it there is room to say what it points at.
       rowsContainer.appendChild(el('div', { class: 'cat-ing-editgroup' }, [
-        // ⚠️ THE AMOUNT AND THE UNIT SHARE ONE FRAME, and that is a deliberate shape.
-        // Federico: «lo spazio dove scrivere la quantità e la tipologia devono essere
-        // ben distinte, adesso sono tutte unite» — all three fields were borderless, so
-        // «250 g» read as printed text rather than two controls. ⚠️ ONE border pair, not
-        // two: two separate frames cost ~24px more and start truncating the ingredient
-        // NAME at 320px, which is the one thing on this row that has to stay readable.
+        // ⚠️ TWO FRAMES, ONE ROW, and the width to do it was BOUGHT, not found.
+        // Federico, 23 Aug: «lo spazio dove scrivere la quantità e la tipologia devono
+        // essere ben distinte» — answered then with a single frame divided down the
+        // middle, because two frames measured ~24px more and started truncating the
+        // ingredient NAME at 320px. Looking at it again on 24 Aug: «separa la casella
+        // della quantità con quella del tipo di gr o kg (fallo che si capisce che è un
+        // menù a tendina)», and «fai in modo di farlo tutto in una riga».
+        //
+        // ⚠️⚠️ WHAT PAID FOR IT IS THE NATIVE ARROW. `appearance: none` on the select
+        // gives back the ~16px Chromium reserves for its own dropdown arrow, and the
+        // `›` we draw instead is both narrower and — the actual request — visible. The
+        // measurement that refused two frames was taken WITH that arrow still there;
+        // re-measuring in the wrong order is how the same decision gets re-litigated
+        // with the wrong number.
         el('div', { class: 'cat-ing-editrow' }, [
           labelInput,
-          el('div', { class: 'cat-amount' }, [gramsInput, unitSelect]),
+          el('div', { class: 'cat-amount' }, [
+            gramsInput,
+            // ⚠️ THE CHEVRON IS A SIBLING OF THE SELECT INSIDE ITS OWN CELL, not a
+            // child of it: a <select> renders only <option>s, so anything put inside is
+            // silently dropped. The cell is what carries the frame and the position.
+            el('span', { class: 'cat-unit-cell' }, [
+              unitSelect,
+              el('span', { class: 'cat-unit-chev', 'aria-hidden': 'true', text: '›' }),
+            ]),
+          ]),
           delIcon,
         ]),
         linkRow(ing, idx),

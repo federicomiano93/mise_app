@@ -255,58 +255,110 @@ body.cat-zoom-lock { overflow: hidden; }
   min-width: 0; width: 100%; padding: 11px 4px; border: 0; background: transparent;
   outline: none; color: var(--cat-text); font-size: .98rem;
 }
-/* ⚠️ THE AMOUNT AND ITS UNIT IN ONE FRAME. All three fields used to be borderless, so
-   «250 g» read as printed text and nobody could tell what was tappable. NOTHING HERE
-   IS INVENTED: the border, the radius and the surface are the ones .cat-loss-input and
-   .guided-edit-text already use in this same file — the v1.62.0 lesson, where a copy
-   with its two colours inverted shipped a white band. One frame, not two: two would
-   cost ~24px and start truncating the ingredient NAME at 320px.
+/* ⚠️ THE AMOUNT AND ITS UNIT ARE TWO FRAMES ON ONE ROW. All three fields used to be
+   borderless, so «250 g» read as printed text and nobody could tell what was tappable;
+   v1.66.0 answered that with ONE frame split by a divider, because two measured ~24px
+   more and started truncating the ingredient NAME at 320px. Federico, 24 Aug 2026:
+   «separa la casella della quantità con quella del tipo di gr o kg (fallo che si
+   capisce che è un menù a tendina)» and «fai in modo di farlo tutto in una riga».
+   NOTHING HERE IS INVENTED: the border, the radius and the surface are the ones
+   .cat-loss-input and .guided-edit-text already use in this same file — the v1.62.0
+   lesson, where a copy with its two colours inverted shipped a white band.
    The ingredient name stays deliberately unframed — framing it too is what would cost
    the width that keeps it readable. */
 .cat-amount {
   display: grid;
-  /* ⚠️ BOTH COLUMNS FIXED, and the second is the 4.6rem the unit column already had —
-     measured to hold «to taste», the longest option, without the native select
-     clipping it. Fixed rather than `auto` because the Total row uses this same cell
-     with a plain «g» in it: an auto column would size to that one character and the
-     sum would stop lining up with the column of numbers it is the sum of. */
-  /* ⚠️ 5.3rem, MEASURED, NOT THE 4.6rem THE OLD UNIT COLUMN HAD. That width was proved
-     against a borderless cell with no padding; inside the frame the native select also
-     has to fit its own dropdown arrow, and «to taste» — the longest of the twelve
-     options — came out rendered as «to tast». A screenshot caught it: a native select
-     truncates without ever reporting an overflow, so no scrollWidth check can see it. */
-  /* ⚠️ 5rem is the SMALLEST that still holds «to taste» plus the native arrow —
-     measured at 75.1px of content against 80px of column. Every tenth of a rem here
-     comes straight out of the ingredient NAME, which at 320px is already the tightest
-     thing on the row: main gives that name 84px of room for text that needs 86.5, so
-     it truncates there TODAY, before this change. These two columns are trimmed to
-     hand all of that back. */
-  grid-template-columns: 3.6rem 5rem;
-  /* ⚠️ 44px, measured. The two halves are separate tap targets and the frame is what
-     now defines their height — at the padding alone they came out 41px. */
+  /* ⚠️⚠️ REMEASURED AFTER STRIPPING THE NATIVE ARROW, WHICH IS THE ONLY REASON TWO
+     FRAMES FIT. v1.66.0's 5rem was «the smallest that holds "to taste" PLUS the native
+     arrow» — 75.1px of content in 80px of column. `appearance: none` below hands that
+     arrow's ~16px back, and the `›` we draw costs ~11px of it, so the unit cell needs
+     less room than it did even with a frame of its own now around it.
+     Both columns stay FIXED rather than `auto`, because the Total row reuses this same
+     cell with a plain «g» in it: an auto column would size to that one character and
+     the sum would stop lining up with the column of numbers it is the sum of. */
+  /* ⚠️⚠️ 3.7 + 0.25 + 4.65 = 8.6rem, WHICH IS EXACTLY THE 3.6 + 5 THIS REPLACES.
+     Measured, not arranged: every pixel this pair takes comes straight out of the
+     ingredient NAME, which at 320px has 83.6px for text that wants 86.5 and truncates
+     there on `main` TODAY. Holding the total identical is what makes «two frames now
+     fit» a fact rather than a hope — verified against a clean main worktree served
+     alongside at 320/375/390/430, name room 83.8 vs 83.6. */
+  grid-template-columns: 3.7rem 4.65rem;
+  /* The two frames must not touch, or they read as one control with a thick line. */
+  gap: 4px;
+  /* ⚠️ 44px, measured. The two halves are separate tap targets and each frame is what
+     defines its own height — at the padding alone they came out 41px. */
   min-height: 44px;
   align-items: stretch;
+}
+/* ⚠️ THE FRAME IS ON EACH CELL NOW, NOT AROUND THE PAIR. Same border, same radius,
+   same surface as before — what changed is how many there are.
+   ⚠️⚠️ 44px HERE AND NOWHERE ELSE. The first draft also gave the select inside the unit
+   cell its own min-height AND the cell its own vertical padding, so the row grew from
+   55px to 75px — twenty pixels each, twelve ingredients, and every measurement passed
+   because the script asked for the SELECT's height and got its honest 44. Only the
+   screenshot showed it. Measure what CHANGED, not what you set out to protect. */
+.cat-ing-editrow .cat-amount .cat-grm,
+.cat-ing-editrow .cat-amount .cat-unit-cell {
   border: 1.5px solid var(--cat-border);
   border-radius: var(--radius-sm);
   background: var(--cat-surface);
+  min-height: 44px;
+}
+.cat-ing-editrow .cat-amount .cat-grm {
+  padding: 10px 8px 10px 5px;
+}
+/* The cell owns the position and the frame; the select stretches to fill it, and the
+   chevron sits on top of the room reserved for it. `overflow: hidden` keeps a long
+   option inside the radius. No vertical padding here — the select brings its own. */
+.cat-ing-editrow .cat-amount .cat-unit-cell {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  padding: 0 0 0 5px;
   overflow: hidden;
 }
-/* The divider IS the frame's own line, continued inward — so there is no second
-   colour to choose and the two halves can never disagree. */
-.cat-ing-editrow .cat-amount .cat-unit { border-left: 1.5px solid var(--cat-border); }
-/* ⚠️ 44px ON THE FIELDS THEMSELVES, not on the frame. min-height on .cat-amount sizes
-   the BORDER box, so the tappable child came out 41px — measured. These two are
-   separate tap targets and each has to clear the floor on its own. */
-.cat-ing-editrow .cat-amount .cat-grm,
+/* ⚠️⚠️ `appearance: none` IS WHAT PAYS FOR THE SECOND FRAME, and it is also the
+   request: Chromium's own arrow is ~16px of reserved width for a mark barely visible
+   on a phone. `padding-right` is the room the `›` sits in — take it away and the
+   longest option runs under the chevron, which a <select> does WITHOUT ever reporting
+   an overflow (the v1.66.0 «to tast» lesson: no scrollWidth check can see it). */
 .cat-ing-editrow .cat-amount .cat-unit {
-  min-height: 44px; padding-top: 10px; padding-bottom: 10px;
+  appearance: none;
+  -webkit-appearance: none;
+  padding-left: 0;
+  /* ⚠️ 11px IS THE ROOM THE CHEVRON SITS IN, AND IT IS THE FLOOR. Chromium's own arrow
+     reserved ~16px; the `›` is a narrower glyph and needs less. Take any more away and
+     «to taste» runs under it — which a <select> does WITHOUT reporting an overflow, so
+     no scrollWidth check and no eye at a glance will see it (v1.66.0, «to tast»). */
+  padding-right: 11px;
+  padding-top: 0;
+  padding-bottom: 0;
+  /* ⚠️⚠️ 44px ON THE FIELD ITSELF, NOT ON ITS FRAME — the v1.66.0 rule, and this branch
+     walked straight back into it: with the height only on the cell, the border box was
+     44 and the SELECT inside it came out 42. Measured. What a finger hits is the
+     select, not the 1.5px of border around it, so the cell is 47 and the target is 44.
+     The row ends 1px taller than main and that is the whole price. */
+  min-height: 44px;
 }
-.cat-ing-editrow .cat-amount .cat-grm { padding-right: 8px; }
-.cat-ing-editrow .cat-amount .cat-unit { padding-left: 5px; padding-right: 0; }
+/* ⚠️ SCOPED TO .cat-unit, NEVER TO «the second child». The Total row reuses .cat-amount
+   with a plain <span> in that slot — anchored by position it would grow an arrow, and
+   the column of numbers it is the sum of would shift. Same `›` the folding cards use
+   (.cat-alg-toggle .chev), so no glyph and no asset was chosen. */
+.cat-unit-chev {
+  position: absolute;
+  right: 3px;
+  top: 50%;
+  transform: translateY(-50%) rotate(90deg);
+  pointer-events: none;
+  font-size: 15px;
+  line-height: 1;
+  color: var(--cat-text-2);
+}
 /* ⚠️ COLOUR ONLY, NO SECOND RING. The row already draws an inset focus ring and
    :has() is off the table in this project (v1.21.1), so it cannot be suppressed —
    two rings at once would be noise. Matches .cat-loss-input:focus. */
-.cat-amount:focus-within { border-color: var(--cat-accent); }
+.cat-ing-editrow .cat-amount .cat-grm:focus,
+.cat-ing-editrow .cat-amount .cat-unit-cell:focus-within { border-color: var(--cat-accent); }
 .cat-ing-editrow .cat-lbl { font-family: var(--cat-font); text-overflow: ellipsis; }
 .cat-ing-editrow .cat-grm { font-family: var(--cat-font-mono); font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
 /* .9rem, not the row's .98rem: the longest option ("to taste") must fit the column
@@ -325,8 +377,14 @@ body.cat-zoom-lock { overflow: hidden; }
      of difference is enough to take the sum out of the column of numbers it sums. */
   background: var(--cat-surface-2); border-top: 2px solid var(--cat-border); padding: 13px 6px 13px 14px;
 }
-/* Same geometry as a real amount cell, no box: the total is read, not typed. */
-.cat-amount--plain { border-color: transparent; background: none; }
+/* Same geometry as a real amount cell, no box: the total is read, not typed.
+   ⚠️⚠️ THE TRANSPARENT BORDER IS THE ALIGNMENT, AND IT IS DELIBERATELY NOT ARITHMETIC.
+   Each amount cell above now carries its own 1.5px frame, so its text sits 1.5px
+   further in than a bare span's would. Rather than adding 1.5 to two paddings by hand —
+   which is the shape of the v1.66.0 defect where the Total drifted by 2px because one
+   padding said 8 and the other 6 — the Total's cells carry the SAME border, invisible.
+   Set the frame's width once and both stay aligned by construction. */
+.cat-amount--plain > * { border: 1.5px solid transparent; }
 .cat-amount--plain .cat-edit-total-unit { padding-left: 6px; }
 .cat-edit-total-label { font-weight: 700; font-size: .98rem; }
 .cat-edit-total-num { font-family: var(--cat-font-mono); font-weight: 700; font-size: .98rem; text-align: right; color: var(--cat-brand-2); font-variant-numeric: tabular-nums; padding-right: 8px; }

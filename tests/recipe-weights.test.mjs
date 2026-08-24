@@ -201,22 +201,65 @@ test('the percentage input is gone, and its dictionary keys with it', () => {
   }
 });
 
-// ── 5. The row: one frame around the amount and its unit ─────────────────────
+// ── 5. The row: two frames, one row, and the width to do it was bought ───────
 
-test('⚠️ the amount and the unit sit in ONE wrapper, and the total matches it', () => {
-  assert.match(EDITOR, /el\('div', \{ class: 'cat-amount' \}, \[gramsInput, unitSelect\]\)/,
-    'one frame around both — two separate ones cost ~24px and truncate the ingredient '
-    + 'name at 320px');
+test('⚠️ the amount and the unit are two framed cells, and the total matches them', () => {
+  assert.match(EDITOR, /el\('div', \{ class: 'cat-amount' \}, \[\s*gramsInput,[\s\S]*?class: 'cat-unit-cell' \}, \[\s*unitSelect,/,
+    'the unit gets a cell of its own, because that cell is what carries its frame '
+    + 'and positions the chevron');
   assert.match(EDITOR, /class: 'cat-amount cat-amount--plain'/,
     'the Total shares the row grid, so it needs the same cell shape or «Totale 8380 g» '
     + 'stops lining up with the column of numbers it is the sum of');
+
   const css = read('catalogue.css');
-  assert.match(css, /\.cat-amount \{[\s\S]*?border: 1\.5px solid var\(--cat-border\)/,
-    'the frame reuses the border this file already defines, not a new one');
-  assert.match(css, /\.cat-amount:focus-within \{ border-color: var\(--cat-accent\); \}/,
-    'colour only — the row already draws a ring and :has() cannot suppress it');
+  assert.match(css, /\.cat-ing-editrow \.cat-amount \.cat-grm,\s*\.cat-ing-editrow \.cat-amount \.cat-unit-cell \{[\s\S]*?border: 1\.5px solid var\(--cat-border\)/,
+    'both frames reuse the border this file already defines, not a new one');
+  assert.match(css, /\.cat-amount--plain > \* \{ border: 1\.5px solid transparent; \}/,
+    '⚠️ the Total keeps the SAME frame, invisible, so its number stays in the column '
+    + 'of numbers by construction rather than by two paddings agreeing');
   assert.ok(!/\.cat-amount:focus-within \{[^}]*box-shadow/.test(css),
     'a second ring inside the first would be noise');
+});
+
+test('⚠️⚠️ the native dropdown arrow is stripped, and the room it took is given back', () => {
+  const css = read('catalogue.css');
+  assert.match(css, /\.cat-ing-editrow \.cat-amount \.cat-unit \{[\s\S]*?appearance: none;/,
+    'Chromium reserves ~16px for its own arrow, and that width is what pays for the '
+    + 'second frame — v1.66.0 refused two frames on a measurement taken WITH it there');
+  assert.match(css, /\.cat-ing-editrow \.cat-amount \.cat-unit \{[\s\S]*?padding-right: 11px;/,
+    '⚠️ the chevron needs its room reserved: a <select> runs its longest option under '
+    + 'anything overlapping it WITHOUT reporting an overflow («to tast», v1.66.0)');
+  // ⚠️ SCOPED, NOT POSITIONAL. The Total row reuses .cat-amount with a plain <span> in
+  // the unit slot; a chevron anchored by child position would grow an arrow there and
+  // shift the column of numbers.
+  assert.match(css, /\.cat-unit-chev \{[\s\S]*?position: absolute;/,
+    'the chevron is positioned inside the unit cell');
+  assert.ok(!/\.cat-amount\s*>\s*:(nth-child|last-child)/.test(css),
+    'nothing on this row may be selected by its position among its siblings');
+  assert.match(EDITOR, /class: 'cat-unit-chev', 'aria-hidden': 'true'/,
+    'it is decoration — a screen reader already announces the select');
+
+  // ⚠️ 44px ON THE FIELDS THEMSELVES. min-height on a frame sizes the BORDER box, so
+  // the tappable child comes out short — measured at 42px on the first draft of this
+  // very change, which is the same trap v1.66.0 recorded and then fell into again.
+  assert.match(css, /\.cat-ing-editrow \.cat-amount \.cat-unit \{[\s\S]*?min-height: 44px;/,
+    'the select itself must clear the tap floor, not the cell around it');
+  assert.match(css, /\.cat-ing-editrow \.cat-amount \.cat-grm \{[\s\S]*?padding: 10px 8px 10px 5px;/,
+    'and the amount box keeps its own padding in one declaration');
+});
+
+test('⚠️ no <select> in this app strips its arrow without drawing one', () => {
+  // foodcost.css stripped `appearance` and reserved 30px for a background-image that
+  // was never set — those selects have had NO arrow at all on a live screen. Found
+  // while doing the same thing deliberately here; a reserved gap with nothing in it is
+  // the CSS version of a guard that guards nothing.
+  for (const sheet of ['catalogue.css', 'foodcost.css', 'style.css', 'orders.css', 'order.css']) {
+    const css = read(sheet);
+    if (!/appearance:\s*none/.test(css)) continue;
+    assert.ok(!/background-repeat:\s*no-repeat;\s*background-position:[^;]*;\s*\}/.test(css),
+      `${sheet} positions a background image it never sets — 30px of reserved room and `
+      + 'no arrow in it');
+  }
 });
 
 test('the cache version moved, or no phone will ever fetch any of this', () => {
