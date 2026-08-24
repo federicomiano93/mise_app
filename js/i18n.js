@@ -668,7 +668,12 @@ const DICTIONARIES = Object.freeze({
     'orders.orderToPlaceToday': 'Order to place today',
     'orders.ordersToPlaceToday': 'Orders to place today',
     'orders.thisDeviceDoesNot': 'This device does not support notifications.',
-    'orders.getAnAlertWhen': 'Get an alert when an order is due (on a supplier’s order day), when a UK bank holiday is coming up, or when a holiday clashes with a supplier delivery day. Note: alerts only show while the app is open.',
+    // ⚠️ THIS SENTENCE DESCRIBES THE ALERTS, SO IT HAS TO AGREE WITH THEM. It said
+    // "a UK bank holiday" until 24 Aug 2026 — left behind when the alerts themselves
+    // stopped naming a country, and found by sweeping the LIVE site for the words
+    // rather than by any test. On an Italian venue it explained a feature the app
+    // does not have.
+    'orders.getAnAlertWhen': 'Get an alert when an order is due (on a supplier’s order day), when a public holiday is coming up, or when a holiday clashes with a supplier delivery day. Note: alerts only show while the app is open.',
     'orders.notificationsAreOnFor': ' Notifications are on for this device.',
     'orders.notificationsAreBlockedTurn': 'Notifications are blocked. Turn them on for this app in your browser/site settings, then reload.',
     'orders.enableNotifications': ' Enable notifications',
@@ -2590,7 +2595,7 @@ const DICTIONARIES = Object.freeze({
     'orders.orderToPlaceToday': 'Ordine da fare oggi',
     'orders.ordersToPlaceToday': 'Ordini da fare oggi',
     'orders.thisDeviceDoesNot': 'Questo dispositivo non supporta le notifiche.',
-    'orders.getAnAlertWhen': 'Ricevi un avviso quando un ordine è previsto (nel giorno d’ordine di un fornitore), quando si avvicina una festività nel Regno Unito, o quando una festività cade in un giorno di consegna. Nota: gli avvisi compaiono solo con l’app aperta.',
+    'orders.getAnAlertWhen': 'Ricevi un avviso quando un ordine è previsto (nel giorno d’ordine di un fornitore), quando si avvicina una festività, o quando una festività cade in un giorno di consegna. Nota: gli avvisi compaiono solo con l’app aperta.',
     'orders.notificationsAreOnFor': ' Le notifiche sono attive su questo dispositivo.',
     'orders.notificationsAreBlockedTurn': 'Le notifiche sono bloccate. Attivale per questa app nelle impostazioni del browser, poi ricarica.',
     'orders.enableNotifications': ' Attiva le notifiche',
