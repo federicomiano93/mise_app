@@ -302,7 +302,11 @@ function priceHistoryBlock(item, actions) {
 // saves it untouched. Skipping the build would make a display switch into a data
 // switch: opening a product on a venue that has allergens turned off and correcting
 // its brand would silently erase every allergen it declares.
-function allergenBlock(item, panels) {
+// ⚠️ `actions` IS A PARAMETER, NOT A CLOSURE. This function is declared at module
+// level, outside buildIngredientForm, so it sees nothing the form destructured — the
+// camera button below referred to `actions` and threw ReferenceError the instant a
+// product was opened, with 1843 tests green. Only opening the screen showed it.
+function allergenBlock(item, panels, actions = {}) {
   const boxes = new Map();   // code -> { contains, may }
 
   // ⚠️ READ WHEN THE FORM IS DRAWN, NEVER AT MODULE LOAD. A module is evaluated once,
@@ -935,7 +939,7 @@ export function buildIngredientForm({ item, suppliers, preset, actions, onDone, 
   // ⚠️ NOT A ROLE, A VENUE. Everybody in the building gets the same answer here: it
   // says whether this business tracks allergens and nutrition at all, and the two
   // switches behind it live one screen away (js/orders/registry-settings.js).
-  const allergens = allergenBlock(item, ingredientPanels());
+  const allergens = allergenBlock(item, ingredientPanels(), actions);
 
   const save = el('button', { type: 'button', class: 'btn-primary', onClick: async () => {
     // The supplier is no longer required — only the name is.

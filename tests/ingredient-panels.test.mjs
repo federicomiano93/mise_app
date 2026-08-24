@@ -145,7 +145,12 @@ test('⚠️ a callable missing from index.js is not deployed at all', () => {
 
 test('⚠️⚠️ all five places ask, and the label is one of them', () => {
   const places = [
-    ['js/orders/ingredient-form.js', FORM, /allergenBlock\(item, ingredientPanels\(\)\)/],
+    // ⚠️ THE THIRD ARGUMENT ARRIVED ON 24 Aug 2026 and the reason is worth keeping: this
+    // function is declared at MODULE level, so it closes over nothing the form
+    // destructured. The camera button added inside it referred to `actions` and threw
+    // ReferenceError the instant a product was opened — with 1843 tests green, because
+    // no test executes this file. Only driving the screen showed it.
+    ['js/orders/ingredient-form.js', FORM, /allergenBlock\(item, ingredientPanels\(\), actions\)/],
     ['js/orders/registry.js', REGISTRY, /ingredientPanels\(\)\.allergens && allergenState\(item\)/],
     ['js/catalogue/catalogue-detail.js', DETAIL, /if \(!allergensOn\(currentSession\(\)\.location\)\)/],
     ['js/catalogue/catalogue-main.js', CAT_MAIN, /allergensBtn\.hidden = !allergensOn\(/],
