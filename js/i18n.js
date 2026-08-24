@@ -1823,12 +1823,20 @@ const DICTIONARIES = Object.freeze({
     // ⚠️ WHOLE SENTENCES, not fragments. The day and the date sit inside them because
     // Italian needs «il» before a weekday and English needs «on» — a rule that cannot
     // live in code that glues pieces together.
-    'orders.alert.bankHolidayTomorrow': 'UK bank holiday tomorrow ({date}). Plan your orders ahead.',
-    'orders.alert.bankHolidayInDays': {
-      one: 'UK bank holiday in {n} day ({date}). Plan your orders ahead.',
-      other: 'UK bank holiday in {n} days ({date}). Plan your orders ahead.',
+    // ⚠️⚠️ THE SENTENCE NAMES NO COUNTRY, and that is Federico's decision of 24 Aug
+    // 2026, not a shortening. It used to say "UK bank holiday" — which was the
+    // defect showing through the words on an Italian venue — and the fix is not to
+    // say "Italian holiday" instead: the person reading it is standing in the
+    // country in question and does not need telling which one it is. Which days
+    // appear is decided by the venue's country in js/orders/holidays.js; the
+    // sentence only says one is coming. ⚠️ The key was renamed with the words: a key
+    // still called bankHoliday would be the next person's reason to put Britain back.
+    'orders.alert.holidayTomorrow': 'Public holiday tomorrow ({date}). Plan your orders ahead.',
+    'orders.alert.holidayInDays': {
+      one: 'Public holiday in {n} day ({date}). Plan your orders ahead.',
+      other: 'Public holiday in {n} days ({date}). Plan your orders ahead.',
     },
-    'orders.alert.deliveryClash': 'Heads up: {supplier} delivers on {day}, but {date} is a bank holiday — check the delivery.',
+    'orders.alert.deliveryClash': 'Heads up: {supplier} delivers on {day}, but {date} is a public holiday — check the delivery.',
     'orders.mute.orderRequests': 'Do not buzz this phone about order lists',
     'orders.mute.stillShown': 'The list still appears in the app — this only silences the alert.',
     'orders.field.stock': 'Stock',
@@ -3580,10 +3588,10 @@ const DICTIONARIES = Object.freeze({
     'orders.filter.ordering': 'Da ordinare ({n})',
     'orders.suggestedN': 'Suggerito: {n}',
     'orders.muchMoreThanUsual': 'Molto più del solito (circa {n})',
-    'orders.alert.bankHolidayTomorrow': 'Domani è festivo nel Regno Unito ({date}). Organizza gli ordini in anticipo.',
-    'orders.alert.bankHolidayInDays': {
-      one: 'Fra {n} giorno è festivo nel Regno Unito ({date}). Organizza gli ordini in anticipo.',
-      other: 'Fra {n} giorni è festivo nel Regno Unito ({date}). Organizza gli ordini in anticipo.',
+    'orders.alert.holidayTomorrow': 'Domani è festivo ({date}). Organizza gli ordini in anticipo.',
+    'orders.alert.holidayInDays': {
+      one: 'Fra {n} giorno è festivo ({date}). Organizza gli ordini in anticipo.',
+      other: 'Fra {n} giorni è festivo ({date}). Organizza gli ordini in anticipo.',
     },
     'orders.alert.deliveryClash': 'Attenzione: {supplier} consegna il {day}, ma {date} è festivo — verifica la consegna.',
     'orders.mute.orderRequests': 'Non far suonare questo telefono per le liste d’ordine',

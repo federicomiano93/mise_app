@@ -8,8 +8,8 @@
 //
 // Best-effort and lightweight: on Home load, the suppliers plus TODAY's orders only
 // (a one-day query, never the whole archive — see getHistoryForDay), then the pure
-// computeAlerts (reused from the Orders feature) runs against the cached bank-holiday
-// list. Nothing shows offline or on any error.
+// computeAlerts (reused from the Orders feature) runs over them. Nothing shows
+// offline or on any error.
 //
 // Home is the shared landing screen — the ONE sanctioned place a feature signal
 // may surface outside its own folder (see the modularity note in the project docs).
@@ -49,6 +49,10 @@ async function showOrdersHome() {
 
     // Only the primary "place the order" alert drives the Home — holiday/conflict
     // notices are informational and stay on the Orders page.
+    //
+    // ⚠️ SO NO COUNTRY IS PASSED, AND NO CALENDAR IS BUILT. The `order` alert is
+    // about which weekday it is and knows nothing about holidays; passing one here
+    // would only make this screen compute a calendar it then throws away.
     const orderAlert = computeAlerts(stillToOrder).find(a => a.kind === 'order');
     if (!orderAlert) return;
 
