@@ -202,15 +202,14 @@ export function weightLoss(rawGrams, cookedGrams) {
   return { pct, problem: exact > MAX_LOSS_PCT ? 'capped' : null };
 }
 
-// The other direction, and it is FOR DISPLAY ONLY. A recipe written before this feature
-// has a stored lossPct and no weights; showing the cooked box empty would read as "we do
-// not know", when in fact somebody did say. So the box shows what that percentage means
-// against today's total — and ⚠️ NOTHING WRITES IT BACK unless a person edits a box.
-export function cookedFromLossPct(rawGrams, pct) {
-  const before = normalizeWeight(rawGrams);
-  if (before <= 0) return 0;
-  return Math.round(before * (1 - normalizeLossPct(pct) / 100));
-}
+// ⚠️ THE OTHER DIRECTION USED TO LIVE HERE — cookedFromLossPct(rawGrams, pct), which
+// worked out what a stored percentage MEANT against today's total and put it in the
+// cooked box. It was deleted on 24 Aug 2026 and must not come back: with lossPct 0, and
+// that is every recipe written before the two weighings existed, it returned the raw
+// total, so the screen showed a cooked weight identical to the raw one and read as
+// «weighed, and it loses nothing». The editor now leaves the box EMPTY and prints the
+// stored percentage underneath instead. Nothing else ever needed this: the cost model
+// and the label both divide by lossPct, never by a cooked weight.
 
 // A list of catalogue recipes, dropping junk entries.
 export function normalizeCatalogueRecipes(list) {

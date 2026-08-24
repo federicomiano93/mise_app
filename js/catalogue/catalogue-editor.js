@@ -12,7 +12,7 @@ import { el } from './dom.js';
 import {
   findInvalidRecipe, unitOf, CATALOGUE_UNITS, isWeighableUnit, weighableTotalGrams,
   linkOf, normalizeLossPct, MAX_LOSS_PCT,
-  normalizeWeight, weightLoss, cookedFromLossPct,
+  normalizeWeight, weightLoss,
 } from './catalogue-model.js';
 import { openLinkPicker } from './ingredient-picker.js';
 import { pricePerKg, formatRate } from '../price-model.js';
@@ -322,13 +322,24 @@ export function renderEditor({ recipe, draft, allRecipes, app }) {
   //
   // ⚠️⚠️ THE TWO STATES, AND THEY ARE THE WHOLE SAFETY OF THIS SCREEN.
   //   untouched — nobody has typed in a weight box. The percentage stays EXACTLY the
-  //     stored lossPct whatever else is edited; crudo shows the live total and cotto is
-  //     DERIVED from that percentage for display. Nothing is written back, so a recipe
-  //     opened to fix a typo comes out of the database byte-identical.
+  //     stored lossPct whatever else is edited; crudo shows the live total and cotto
+  //     stays EMPTY. Nothing is written back, so a recipe opened to fix a typo comes
+  //     out of the database byte-identical.
   //   touched — a person has typed. The percentage is computed from the boxes, crudo
   //     stops following the total, and all three are saved.
   // Without the split, correcting 10 g of flour would silently move the number that
   // decides what every product built on this recipe costs.
+  //
+  // ⚠️⚠️ CRUDO IS FILLED IN AND COTTO IS NOT, AND THE ASYMMETRY IS THE POINT — it
+  // looks like an oversight and a future reader will want to "finish" it. Crudo is
+  // derived from something TRUE and live: the recipe's own ingredient total, which is
+  // on the screen above it. Cotto would be derived from a percentage nobody measured,
+  // and until 24 Aug 2026 it was: cookedFromLossPct(total, lossPct). With lossPct 0 —
+  // every one of the twelve real recipes — that put the RAW total in the cooked box,
+  // so the screen read «weighed, and it loses nothing». Federico, looking at it:
+  // «la casella del impasto cotto deve essere vuota di default». An empty box says
+  // «nobody has weighed this», which is the truth, and the stored percentage is still
+  // printed underneath so nothing is hidden.
   let weighed = normalizeWeight(working.rawGrams) > 0 && normalizeWeight(working.cookedGrams) > 0;
   // Only true once the PERSON edits a box — not when the app fills one in.
   let rawTyped = weighed;
@@ -353,8 +364,9 @@ export function renderEditor({ recipe, draft, allRecipes, app }) {
   const cookedInput = el('input', {
     id: 'catRecipeCooked', class: 'cat-loss-input', type: 'number',
     min: '0', step: 'any', inputmode: 'decimal', placeholder: '0',
-    // Same, and for the same reason: the derived value below is only for a recipe
-    // nobody has weighed.
+    // ⚠️ ITS STORED VALUE, AND NOW THAT IS THE ONLY THING THAT EVER FILLS IT. A recipe
+    // somebody HAS weighed opens showing what they weighed; every other recipe opens
+    // empty, because empty is what «nobody has weighed this» looks like.
     value: normalizeWeight(working.cookedGrams) > 0 ? String(Math.round(normalizeWeight(working.cookedGrams))) : '',
     'aria-label': t('cat.cookedDoughWeight'),
     oninput: (e) => {
@@ -365,6 +377,19 @@ export function renderEditor({ recipe, draft, allRecipes, app }) {
   });
   const lossOut = el('p', { class: 'cat-loss-out' });
   const lossWarn = el('p', { class: 'cat-loss-warn' });
+
+  // What the screen says when the two boxes do not answer the question — on open, and
+  // again the moment somebody fills in one of the pair and not the other.
+  //
+  // ⚠️⚠️ A STORED 0 IS «NOBODY HAS SAID», NOT «MEASURED ZERO», and the document cannot
+  // tell the two apart: lossPct is absent-or-zero on every recipe written before the
+  // two weighings existed. So a 0 gets no percentage sentence at all. Printing «loses
+  // 0%» is precisely the false statement this change exists to remove — and it is the
+  // false one that costs money, because a loss of zero makes every baked product's cost
+  // per kilo too low.
+  function storedLossText(pct) {
+    return pct > 0 ? t('cat.lossStored', { pct: String(pct) }) : t('cat.lossNotYet');
+  }
 
   // The number the boxes currently mean, and what the screen says about it.
   function refreshLoss() {
@@ -377,12 +402,10 @@ export function renderEditor({ recipe, draft, allRecipes, app }) {
     const before = normalizeWeight(working.rawGrams);
 
     if (!weighed) {
-      // ⚠️ DERIVED FOR DISPLAY, NEVER WRITTEN BACK. The recipe already has an answer;
-      // showing an empty box would read as «nobody has said», which is a different
-      // statement and a false one.
-      const shown = cookedFromLossPct(before, working.lossPct);
-      cookedInput.value = shown ? String(shown) : '';
-      lossOut.textContent = t('cat.lossIs', { pct: String(working.lossPct) });
+      // ⚠️ EMPTY, AND NOTHING IS WRITTEN BACK. See the note at the top of this block
+      // for why nothing is derived into it any more.
+      cookedInput.value = '';
+      lossOut.textContent = storedLossText(working.lossPct);
       lossWarn.hidden = true;
       return;
     }
@@ -391,7 +414,9 @@ export function renderEditor({ recipe, draft, allRecipes, app }) {
     if (pct === null) {
       // ⚠️ NOT ZERO. Two numbers that do not answer the question must leave the stored
       // loss alone — zeroing it would quietly declare «this recipe loses nothing».
-      lossOut.textContent = t('cat.lossNotYet');
+      // ⚠️ And they must not hide it either: half-filling the pair used to print «weigh
+      // the cooked dough» over a recipe that already carried a real percentage.
+      lossOut.textContent = storedLossText(working.lossPct);
     } else {
       working.lossPct = pct;
       lossOut.textContent = t('cat.lossIs', { pct: String(pct) });

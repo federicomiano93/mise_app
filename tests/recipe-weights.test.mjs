@@ -5,14 +5,15 @@
 // reveals: A RECIPE SOMEBODY ONLY OPENS MUST COME OUT OF THE DATABASE UNCHANGED.
 //
 // Every recipe written before this feature has a stored `lossPct` and no weights. The
-// editor DERIVES a cooked weight from that percentage so the box is not blank — and if
-// anything wrote that derived number back, opening a recipe to fix a typo in the flour
+// editor leaves the cooked box EMPTY for those and prints the stored percentage under
+// it — and if anything wrote a number back, opening a recipe to fix a typo in the flour
 // would move the number that decides what every product built on it costs. The split
-// between "derived for display" and "typed by a person" is the whole safety of it.
+// between "shown" and "typed by a person" is the whole safety of it.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
+import { _dictionaries } from '../js/i18n.js';
 
 const root = new URL('../', import.meta.url);
 const read = (name) => readFileSync(new URL(name, root), 'utf8');
@@ -44,14 +45,15 @@ test('⚠️ the store still lists every field BY HAND, and now lists these two'
 });
 
 test('⚠️⚠️ the editor only recomputes the loss once a PERSON has typed', () => {
-  // `weighed` is false for a recipe nobody has weighed. While it is false the screen
-  // shows a derived cooked weight and the stored percentage, and assigns neither.
-  assert.match(EDITOR, /if \(!weighed\) \{[\s\S]*?cookedFromLossPct\(before, working\.lossPct\)/,
-    'an unweighed recipe must DERIVE its cooked box from the stored percentage');
+  // `weighed` is false for a recipe nobody has weighed. While it is false the cooked
+  // box stays EMPTY and the stored percentage is printed underneath, and neither the
+  // percentage nor the weights are assigned.
+  assert.match(EDITOR, /if \(!weighed\) \{[\s\S]*?cookedInput\.value = '';/,
+    'an unweighed recipe must leave its cooked box empty');
   // Forward from the branch, and proved non-empty — see the note on the null branch
   // below for what an unanchored indexOf() costs.
   const derivedStart = EDITOR.indexOf('if (!weighed) {');
-  assert.ok(derivedStart !== -1, 'the derived branch must exist to be guarded');
+  assert.ok(derivedStart !== -1, 'the unweighed branch must exist to be guarded');
   const derivedBranch = EDITOR.slice(derivedStart, EDITOR.indexOf('const { pct, problem }', derivedStart));
   assert.ok(derivedBranch.length > 20, 'the slice must actually contain the branch');
   assert.ok(!/working\.lossPct\s*=/.test(derivedBranch),
@@ -63,11 +65,61 @@ test('⚠️⚠️ the editor only recomputes the loss once a PERSON has typed',
     'typing in either box is what flips it');
 });
 
+// ⚠️⚠️ REPO-WIDE, NOT FILE-SCOPED, AND THAT IS THE POINT. Deleting a call satisfies
+// every «is it shaped right?» check by having nothing left to check — the v1.68.0
+// lesson, four mutations over. This asks the opposite question: is it GONE, everywhere.
+test('⚠️⚠️ nothing derives a cooked weight from a stored percentage, anywhere', () => {
+  const offenders = [];
+  const walk = (dir) => {
+    for (const entry of readdirSync(new URL(dir, root), { withFileTypes: true })) {
+      if (entry.isDirectory()) { walk(`${dir}${entry.name}/`); continue; }
+      if (!entry.name.endsWith('.js')) continue;
+      // ⚠️ codeOf(), NOT read(). catalogue-model.js carries a comment that names this
+      // function to say it must never come back — and a check that reads comments would
+      // fail on the very note explaining why it is gone. Same family as the v1.64.0 live
+      // check that grepped a whole file for `allergensCheckedAt` and found the sentence
+      // saying it is never written.
+      if (codeOf(read(`${dir}${entry.name}`)).includes('cookedFromLossPct')) {
+        offenders.push(`${dir}${entry.name}`);
+      }
+    }
+  };
+  walk('js/');
+  assert.deepEqual(offenders, [],
+    'cookedFromLossPct returned the RAW total whenever lossPct was 0 — which is every '
+    + 'recipe written before the two weighings existed — so the cooked box showed a '
+    + 'number identical to the raw one and read as «weighed, and it loses nothing»');
+});
+
+test('⚠️ a half-filled pair still shows the percentage the recipe already carries', () => {
+  // Typing only the raw weight flips `weighed`, so the screen leaves the branch above
+  // and lands on pct === null. Until 24 Aug 2026 that printed «weigh the cooked dough
+  // to work it out» OVER a recipe that already had a real stored percentage — true
+  // about the boxes, and a lie about the recipe.
+  assert.match(EDITOR, /function storedLossText\(pct\) \{[\s\S]*?pct > 0 \? t\('cat\.lossStored'/,
+    'a stored percentage above zero is named');
+  assert.match(EDITOR, /function storedLossText\(pct\) \{[\s\S]*?: t\('cat\.lossNotYet'\)/,
+    '⚠️ and a stored 0 is NOT: the document cannot tell «nobody has said» from '
+    + '«measured zero», and printing «loses 0%» is the false one that costs money');
+  const nullStart = EDITOR.indexOf('if (pct === null) {');
+  const nullBranch = EDITOR.slice(nullStart, EDITOR.indexOf('} else {', nullStart));
+  assert.ok(nullBranch.length > 20, 'the slice must actually contain the branch');
+  assert.match(nullBranch, /storedLossText\(working\.lossPct\)/,
+    'the half-filled branch must go through it too, or it hides a real percentage');
+
+  const dicts = _dictionaries();
+  for (const [lang, dict] of Object.entries(dicts)) {
+    assert.ok(dict['cat.lossStored'], `cat.lossStored is missing in ${lang}`);
+    assert.match(dict['cat.lossStored'], /\{pct\}/, `${lang} must carry the number`);
+  }
+});
+
 test('⚠️ an unanswered pair leaves the stored loss alone', () => {
   // weightLoss() returns pct: null for an empty or impossible pair, and null is NOT
   // zero: zero would declare «this recipe loses nothing».
-  assert.match(EDITOR, /if \(pct === null\) \{[\s\S]*?t\('cat\.lossNotYet'\)/,
-    'a null percentage must say so rather than being stored');
+  assert.match(EDITOR, /if \(pct === null\) \{[\s\S]*?storedLossText\(working\.lossPct\)/,
+    'a null percentage must say so rather than being stored — and storedLossText is '
+    + 'what decides whether «so» is «0%» or «nobody has weighed it»');
   // ⚠️ SEARCH FORWARD FROM THE BRANCH, NOT FROM THE TOP OF THE FILE. The first draft
   // used indexOf('} else {') with no offset, which found an earlier one, produced an
   // EMPTY slice and passed on anything. A mutation is what exposed it: the suite going
