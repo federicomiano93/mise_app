@@ -33,8 +33,10 @@ import { buildSupplierPicker } from './supplier-picker.js';
 import { renderHistory as renderHistoryView } from './history.js';
 import { renderDeliveries, renderReorderBanner, renderOwedBanner } from './deliveries-view.js';
 import { buildHistoryEditor } from './history-edit.js';
+import { buildPlaceConfirm } from './place-confirm.js';
+import { askedToday, confirmedEntries } from './untold-changes.js';
 import { buildManagement, isAdmin } from './management.js';
-import { computeSuggestion, unusualQuantities } from './suggestions.js';
+import { computeSuggestion, isUnusualQuantity } from './suggestions.js';
 import { refreshBankHolidays } from './bank-holidays.js';
 import { renderAlerts } from './notifications.js';
 import { confirmDialog } from './confirm-dialog.js';
@@ -42,7 +44,9 @@ import { todayISO, dayPhrase, daySpoken, localDayOf, dayLabel } from './day.js';
 import {
   buildOrderMessage, whatsappUrl, itemsFromQuantities, indexById,
 } from './order-text.js';
-import { historyDocId, ingredientsOf, supplierHasItems } from './archive.js';
+import {
+  historyDocId, ingredientsOf, supplierHasItems, ingredientLabel, wholeNumber,
+} from './archive.js';
 import { todayOrders, pendingSuppliers } from './reminders.js';
 import { renderTodayOrders, renderPending } from './reminder-view.js';
 import { resolveSuppliers, orderSuppliers } from './no-supplier.js';
@@ -959,14 +963,14 @@ function offerToRecordSent(supplierIds) {
   return recordSuppliers(supplierIds, {
     title: t('orders.orderSent'),
     okLabel: t('orders.markAsPlaced'),
-    cancelLabel: t('orders.notYet'),
   });
 }
 
-// Record several suppliers' orders behind ONE confirmation. Shared by the prompt
-// that follows a WhatsApp send and by the "Order placed" screen, so both spell out
-// the same consequences and both add to an existing same-day record the same way.
-async function recordSuppliers(supplierIds, { title, okLabel, cancelLabel = 'Cancel' }) {
+// Record several suppliers' orders behind ONE confirmation screen. Shared by the
+// prompt that follows a send and by the "Order placed" screen, so both show the
+// same rows, both allow the same corrections, and both add to an existing same-day
+// record the same way.
+async function recordSuppliers(supplierIds, { title, okLabel }) {
   const ingredients = orderIngredients();
   const suppliers = supplierIds
     .map(findOrderSupplier)
@@ -980,25 +984,31 @@ async function recordSuppliers(supplierIds, { title, okLabel, cancelLabel = 'Can
     return;
   }
 
-  const names = listNames(suppliers.map(s => s.name));
-  const alreadyRecorded = suppliers.filter(s =>
-    state.history.some(h => h.id === historyDocId(dayForSupplier(s.id), s.id)));
-
-  let message = t('orders.markPlacedFor', { names });
-  if (alreadyRecorded.length) {
-    const already = listNames(alreadyRecorded.map(s => s.name));
-    message += `\n\n${t('orders.alreadyRecordedThatDay', { names: already })}`;
-  }
-
-  const ok = await confirmDialog({ title, message, okLabel, cancelLabel });
-  if (!ok) return;
+  // ⚠️ THE SAME SCREEN AS ONE SUPPLIER, LISTED BY SUPPLIER. Two roads to recording
+  // an order are two places the rule can drift apart, and the rule here is the
+  // whole point: what gets recorded is what the person tapping confirms.
+  const confirmed = await openPlaceConfirm(
+    suppliers.map(supplier => ({ supplier, date: dayForSupplier(supplier.id) })),
+    { title, okLabel },
+  );
+  if (!confirmed) return;
 
   // Sequentially: each archive writes and then clears its own rows, and the draft
   // is one shared document — overlapping writes would race on it.
   const saved = [];
   const failed = [];
+  const skipped = [];
   for (const supplier of suppliers) {
-    const done = await placeOrder(supplier.id, { confirm: false });
+    // Every one of this supplier's rows was set to 0 on the confirmation screen:
+    // that is "not this one", not a failure. Recording it would write an empty
+    // order, which archive.js refuses anyway — but silently, and a silent skip is
+    // indistinguishable from a bug.
+    const quantities = confirmed[supplier.id];
+    if (!quantities || !Object.keys(quantities).length) {
+      skipped.push(supplier.name);
+      continue;
+    }
+    const done = await placeOrder(supplier.id, { confirm: false, quantities });
     (done ? saved : failed).push(supplier.name);
   }
 
@@ -1013,6 +1023,10 @@ async function recordSuppliers(supplierIds, { title, okLabel, cancelLabel = 'Can
       (saved.length ? t('orders.andSaved', { names: listNames(saved) }) : t('orders.tryAgain')),
       'error',
     );
+    return;
+  }
+  if (skipped.length && !saved.length) {
+    setStatus(t('orders.confirm.noneRecorded', { names: listNames(skipped) }), 'warn', 5000);
     return;
   }
   if (saved.length) setStatus(t('orders.orderSavedToHistory', { names: listNames(saved) }), 'ok', 5000);
@@ -1052,7 +1066,6 @@ function openPlaceAllScreen() {
       recordSuppliers(rows.map(r => r.id), {
         title: t('orders.recordTheseOrders'),
         okLabel: t('orders.orderPlaced'),
-        cancelLabel: t('orders.notYet'),
       });
     },
   });
@@ -1097,7 +1110,7 @@ function forgetSupplierLocally(supplierId) {
 // because state.days[supplierId] is restamped to today by any keystroke on that
 // supplier's rows — so reading it here would file a "Placed yesterday" order under
 // TODAY, which is precisely the mistake this whole feature exists to prevent.
-async function placeOrder(supplierId, { confirm = true, date: pinnedDate } = {}) {
+async function placeOrder(supplierId, { confirm = true, date: pinnedDate, quantities = null } = {}) {
   const supplier = findOrderSupplier(supplierId);
   if (!supplier) return false;
   const ingredients = orderIngredients();
@@ -1119,8 +1132,22 @@ async function placeOrder(supplierId, { confirm = true, date: pinnedDate } = {})
   }
 
   const date = pinnedDate || dayForSupplier(supplierId);
-  if (confirm && !await confirmPlacement(supplier, date)) return false;
-  if (placing.has(supplierId)) return false; // the dialog was open a while — re-check
+
+  // ⚠️⚠️ WHAT IS RECORDED IS WHAT WAS CONFIRMED, NOT WHAT THE SHARED ORDER SAYS
+  // NOW. The order is live on every phone in the building, so between reading it
+  // and tapping this button somebody else can have changed a number. Federico's
+  // rule, 24 Aug 2026: the order is what the person who places it confirms.
+  //
+  // `quantities` arrives either from the confirmation screen below or from
+  // recordSuppliers, which shows the same screen once for several suppliers. It is
+  // null only for the paths that deliberately do not ask (the unfinished-order
+  // banner answering "placed yesterday" about an order that already went out).
+  let confirmed = quantities;
+  if (confirm) {
+    confirmed = await askToConfirmPlacement(supplier, date);
+    if (!confirmed) return false;
+  }
+  if (placing.has(supplierId)) return false; // the screen was open a while — re-check
 
   placing.add(supplierId);
   disablePlaceButton(supplierId);
@@ -1131,7 +1158,7 @@ async function placeOrder(supplierId, { confirm = true, date: pinnedDate } = {})
     // lost when the next snapshot arrives.
     await flushDraftSave();
     await archiveSupplier({
-      supplier, ingredients, entries: state.entries, date,
+      supplier, ingredients, entries: entriesToRecord(supplierId, ingredients, confirmed), date,
     });
   } catch (err) {
     console.error('Archiving order failed:', err);
@@ -1289,28 +1316,74 @@ function disablePlaceButton(supplierId) {
   if (btn) btn.disabled = true;
 }
 
-function confirmPlacement(supplier, date) {
-  const when = dayPhrase(date);
+// ── What is about to be recorded ─────────────────────────────────────────────
+
+// The entries to hand the archive. The rule itself is pure and lives in
+// js/orders/untold-changes.js, where it can be proved; this only supplies the
+// supplier's slice, filtered by the SAME lens buildSupplierArchive uses.
+//
+// `confirmed` is null only for the paths that deliberately do not ask, and then
+// the shared order is recorded as it stands — which is right: nobody was shown
+// anything to disagree with.
+function entriesToRecord(supplierId, ingredients, confirmed) {
+  if (!confirmed) return state.entries;
+  return confirmedEntries(state.entries, ingredientsOf(supplierId, ingredients), confirmed);
+}
+
+// The usual amount for a row whose quantity looks like a typing mistake, else
+// null. ⚠️ THE SAME LENS THE ROW HINT USES (js/orders/ingredients.js), so the
+// confirmation can never warn about a row that showed no warning.
+function usualFor(id, qty) {
+  const result = suggestFor(id, 0);
+  return result?.active && isUnusualQuantity(qty, result.par) ? result.par : null;
+}
+
+// The confirmation screen, for one supplier or for several. Resolves to
+// { [supplierId]: { [ingredientId]: qty } }, or null when it was backed out of.
+function openPlaceConfirm(items, { title, okLabel }) {
+  const ingredients = orderIngredients();
+  const groups = items.map(({ supplier, date }) => {
+    // What today's sent lists asked for, so whoever confirms can see where their
+    // number differs from what they were asked for. `undefined` for a row no list
+    // carried — which is not the same as a list asking for none of it.
+    const asked = askedToday(state.requests, supplier.id, date);
+    return {
+      supplierId: supplier.id,
+      supplierName: supplier.name,
+      when: dayPhrase(date),
+      already: state.history.some(h => h.id === historyDocId(date, supplier.id)),
+      rows: ingredientsOf(supplier.id, ingredients)
+        .map(ing => ({
+          id: ing.id,
+          name: ingredientLabel(ing),
+          unit: ing.unit || '',
+          qty: wholeNumber(state.entries[ing.id]?.qty),
+          asked: asked[ing.id],
+        }))
+        .filter(row => row.qty > 0)
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    };
+  });
+
+  return new Promise(resolve => {
+    const overlay = buildPlaceConfirm({ title, okLabel, groups, usualFor }, {
+      onBack: () => { overlay.remove(); resolve(null); },
+      onConfirm: result => { overlay.remove(); resolve(result); },
+    });
+    document.body.appendChild(overlay);
+  });
+}
+
+// One supplier. Resolves to that supplier's confirmed quantities, or null.
+async function askToConfirmPlacement(supplier, date) {
   const already = state.history.some(h => h.id === historyDocId(date, supplier.id));
-
-  const base = already
-    ? t('orders.alreadyRecordedFor', { supplier: supplier.name, when })
-    : t('orders.recordOrderFor', { supplier: supplier.name, when });
-
-  const odd = unusualRowsFor(supplier.id);
-
-  return confirmDialog({
+  const result = await openPlaceConfirm([{ supplier, date }], {
     title: already
       ? t('orders.addToOrderOf', { supplier: supplier.name })
       : t('orders.orderPlacedTitle', { supplier: supplier.name }),
-    message: odd.length ? `${unusualWarning(odd)}\n\n${base}` : base,
     okLabel: already ? t('orders.addToIt') : t('orders.orderPlaced'),
-    cancelLabel: t('ui.cancel'),
-    // Recording is what turns the rows into an order, and this is the last screen
-    // before it. A red button on a quantity worth a second look is the difference
-    // between catching an extra digit and phoning a supplier to unpick it.
-    danger: odd.length > 0,
   });
+  return result ? (result[supplier.id] || null) : null;
 }
 
 // The suggestion engine bound to the history currently in memory. ONE definition,
@@ -1318,25 +1391,6 @@ function confirmPlacement(supplier, date) {
 // number a row shows and the number the confirmation quotes are the same number.
 function suggestFor(id, stock) {
   return computeSuggestion(id, stock, state.history);
-}
-
-// The rows of this supplier's order that look like a typing mistake. One lens for
-// the row hint and for the confirmation: they must never disagree about what counts
-// as odd, or the dialog would warn about a row showing no warning.
-function unusualRowsFor(supplierId) {
-  return unusualQuantities(
-    ingredientsOf(supplierId, orderIngredients()),
-    state.entries,
-    suggestFor,
-  );
-}
-
-function unusualWarning(rows) {
-  const lines = rows.map(r => `• ${r.name}: ${r.qty} (usually about ${r.usual})`);
-  const head = rows.length === 1
-    ? t('orders.thisQuantityIsMuch')
-    : t('orders.theseQuantitiesAreMuch');
-  return `${head}\n${lines.join('\n')}\n\n${t('orders.checkExtraDigit')}`;
 }
 
 // ── Reminders (today's orders / an order left from an earlier day) ────────────

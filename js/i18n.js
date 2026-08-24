@@ -482,8 +482,6 @@ const DICTIONARIES = Object.freeze({
     'orders.placedWhen': 'Placed {when}',
     'orders.updateOrderFor': 'Update {supplier}’s order {day}?',
     'orders.deleteOrderFor': 'Delete {supplier}’s order {day}?\n\nIt is removed from History for good and cannot be recovered. The suggested order quantities learn from these records, so they will change.',
-    'orders.alreadyRecordedFor': 'An order for {supplier} is already recorded {when}. These items will be ADDED to it.\n\nSend the order on WhatsApp first — recording it clears the rows.',
-    'orders.recordOrderFor': 'Record {supplier}’s order {when}?\n\nSend the order on WhatsApp first — recording it clears the rows.',
     'orders.addToOrderOf': 'Add to {supplier}’s order',
     'orders.orderPlacedTitle': '{supplier} — order placed',
     'co.alreadySentFor': 'You have already sent an order for {day}. Sending again replaces it.',
@@ -686,15 +684,12 @@ const DICTIONARIES = Object.freeze({
     'orders.couldNotDeleteThe': 'Could not delete the order — check your network and try again.',
     'orders.orderSent': 'Order sent',
     'orders.markAsPlaced': 'Mark as placed',
-    'orders.notYet': 'Not yet',
     'orders.nothingLeftToRecord': 'Nothing left to record — those rows are already placed or empty.',
     'orders.tryAgain': 'Try again.',
     // ⚠️ ADDED 23 Aug 2026. Every one of these was written straight into the code, so
     // the Orders screen — the one somebody works on all day — answered in English on
     // an Italian venue. None of the four i18n suites looks at a template literal
     // handed to setStatus() or built into a confirm message.
-    'orders.markPlacedFor': 'Mark {names} as placed? The order goes to History and the rows are cleared.',
-    'orders.alreadyRecordedThatDay': '{names} already has an order recorded for that day — these items will be ADDED to it.',
     'orders.notRecordedRowsStillThere': '{names} — NOT recorded, the rows are still there.',
     'orders.andSaved': '{names} saved.',
     'orders.orderSavedToHistory': '{names} — order saved to history ✓',
@@ -721,8 +716,17 @@ const DICTIONARIES = Object.freeze({
     'orders.couldNotClearThem': 'Could not clear them — reload the page to see what is really saved.',
     'orders.nothingTypedYet': 'Nothing typed yet.',
     'orders.addToIt': 'Add to it',
-    'orders.thisQuantityIsMuch': 'This quantity is much higher than usual:',
-    'orders.theseQuantitiesAreMuch': 'These quantities are much higher than usual:',
+
+    // ⚠️ THE CONFIRMATION SCREEN (js/orders/place-confirm.js). What is recorded is
+    // what the person placing the order confirms — not what the shared order happens
+    // to say at the instant the button is tapped.
+    'orders.confirm.aboutToRecord': 'This is what will be recorded:',
+    'orders.confirm.asked': 'asked: {n}',
+    'orders.confirm.usually': 'usually about {n}',
+    'orders.confirm.addsToExisting': 'An order for {supplier} is already recorded {when} — these amounts will be ADDED to it.',
+    'orders.confirm.sendFirst': 'Send the order to the supplier first — recording it clears the rows.',
+    'orders.confirm.allZero': 'Every quantity is 0, so there is nothing to record. Go back to change them, or leave this screen.',
+    'orders.confirm.noneRecorded': 'Nothing was recorded for {names} — every quantity was 0.',
     'orders.couldNotUpdateThe2': 'Could not update the order’s day — check your network and try again.',
     'orders.couldNotDiscardThe': 'Could not discard the order — check your network and try again.',
     'orders.couldNotSaveThe2': 'Could not save the order — check your network. Keep this page open.',
@@ -2414,8 +2418,6 @@ const DICTIONARIES = Object.freeze({
     'orders.placedWhen': 'Effettuato {when}',
     'orders.updateOrderFor': 'Aggiornare l’ordine di {supplier} {day}?',
     'orders.deleteOrderFor': 'Eliminare l’ordine di {supplier} {day}?\n\nSparisce dallo Storico per sempre e non si può recuperare. Le quantità suggerite imparano da questi registri, quindi cambieranno.',
-    'orders.alreadyRecordedFor': 'Per {supplier} c’è già un ordine registrato {when}. Queste voci verranno AGGIUNTE a quello.\n\nManda prima l’ordine su WhatsApp — registrarlo pulisce le righe.',
-    'orders.recordOrderFor': 'Registrare l’ordine di {supplier} {when}?\n\nManda prima l’ordine su WhatsApp — registrarlo pulisce le righe.',
     'orders.addToOrderOf': 'Aggiungi all’ordine di {supplier}',
     'orders.orderPlacedTitle': '{supplier} — ordine effettuato',
     'co.alreadySentFor': 'Hai già mandato un ordine {day}. Mandandolo di nuovo sostituisci il precedente.',
@@ -2581,11 +2583,8 @@ const DICTIONARIES = Object.freeze({
     'orders.couldNotDeleteThe': 'Non è stato possibile eliminare l’ordine — controlla la rete e riprova.',
     'orders.orderSent': 'Ordine mandato',
     'orders.markAsPlaced': 'Segna come fatto',
-    'orders.notYet': 'Non ancora',
     'orders.nothingLeftToRecord': 'Non resta niente da registrare — quelle righe sono già fatte o vuote.',
     'orders.tryAgain': 'Riprova.',
-    'orders.markPlacedFor': 'Segnare {names} come fatto? L’ordine va nello Storico e le righe si azzerano.',
-    'orders.alreadyRecordedThatDay': '{names} ha già un ordine registrato per quel giorno — questi articoli ci verranno AGGIUNTI.',
     'orders.notRecordedRowsStillThere': '{names} — NON registrato, le righe sono ancora lì.',
     'orders.andSaved': '{names} salvato.',
     'orders.orderSavedToHistory': '{names} — ordine salvato nello storico ✓',
@@ -2610,8 +2609,15 @@ const DICTIONARIES = Object.freeze({
     'orders.couldNotClearThem': 'Non è stato possibile azzerarle — ricarica la pagina per vedere cosa è davvero salvato.',
     'orders.nothingTypedYet': 'Ancora niente inserito.',
     'orders.addToIt': 'Aggiungi',
-    'orders.thisQuantityIsMuch': 'Questa quantità è molto più alta del solito:',
-    'orders.theseQuantitiesAreMuch': 'Queste quantità sono molto più alte del solito:',
+
+    // ⚠️ LA SCHERMATA DI CONFERMA (js/orders/place-confirm.js).
+    'orders.confirm.aboutToRecord': 'Sta per essere registrato:',
+    'orders.confirm.asked': 'chiesti: {n}',
+    'orders.confirm.usually': 'di solito circa {n}',
+    'orders.confirm.addsToExisting': 'Per {supplier} c’è già un ordine registrato {when} — queste quantità ci verranno AGGIUNTE.',
+    'orders.confirm.sendFirst': 'Manda prima l’ordine al fornitore — registrarlo azzera le righe.',
+    'orders.confirm.allZero': 'Tutte le quantità sono a 0, quindi non c’è niente da registrare. Torna indietro per cambiarle, oppure esci da questa schermata.',
+    'orders.confirm.noneRecorded': 'Per {names} non è stato registrato niente — tutte le quantità erano a 0.',
     'orders.couldNotUpdateThe2': 'Non è stato possibile aggiornare il giorno dell’ordine — controlla la rete e riprova.',
     'orders.couldNotDiscardThe': 'Non è stato possibile scartare l’ordine — controlla la rete e riprova.',
     'orders.couldNotSaveThe2': 'Non è stato possibile salvare l’ordine — controlla la rete. Tieni aperta questa pagina.',
