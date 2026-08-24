@@ -183,6 +183,40 @@ test('⚠️ the declaration is rebuilt with the cost and allergen cards, not on
     + 'phone would keep saying it cannot be labelled until the screen was reopened');
 });
 
+test('⚠️⚠️ the card asks the COUNTRY for its language, and cannot be given one', () => {
+  // Found by a mutation: `const lang = 'en'` inside the panel passed every check in
+  // this repo. tests/i18n-label-separation.test.mjs forbids this file from touching
+  // currentLanguage — and a hardcoded literal is not currentLanguage, so nothing saw it.
+  // The consequence is an English declaration printed onto Italian packaging.
+  const start = DETAIL.indexOf('function declarationPanel(');
+  const body = DETAIL.slice(start, DETAIL.indexOf('\nfunction allergenPanel(', start));
+  assert.ok(body.length > 500, 'the slice must actually contain the panel');
+  assert.match(body, /const lang = outputLanguage\(location\);/,
+    'the output language comes from the venue\'s country and from nowhere else');
+  assert.ok(!/lang = '[a-z]{2}'|lang = "[a-z]{2}"/.test(body),
+    'and it may never be a literal');
+});
+
+test('⚠️ a message leaves the nutrition table out, at the call site too', () => {
+  // The model can do both; which one this screen asks for is the part that decides
+  // whether a mail client silently drops the end of somebody's allergen list.
+  const start = DETAIL.indexOf('function declarationPanel(');
+  const body = DETAIL.slice(start, DETAIL.indexOf('\nfunction allergenPanel(', start));
+  assert.match(body, /declarationText\(label, lang, \{ withNutrition: false \}\)/,
+    'some mail clients drop a body past about 2000 characters, and the table is most '
+    + 'of the length — the allergen half must not be what gets cut');
+});
+
+test('⚠️ the cost per kilo prints exactly two decimals', () => {
+  // Federico asked for it by name: «solo il costo al kg con due numeri decimali dopo
+  // il punto». Nothing pinned it, and a mutation put formatRate — two to FOUR — back.
+  assert.match(DETAIL, /text: `\$\{formatMoney\(result\.pricePerKg\)\} \/ kg`/,
+    'formatMoney is fixed at two; formatRate stretches to four for a rate per PIECE');
+  assert.ok(!/formatRate/.test(DETAIL),
+    '⚠️ and formatRate must not come back into this file at all — it is untouched '
+    + 'elsewhere precisely so this screen could change alone');
+});
+
 test('⚠️ mailto opens the mail app and the screen says it does not send', () => {
   assert.match(SHARE, /mailto:\?subject=\$\{encodeURIComponent\(subject\)\}&body=\$\{encodeURIComponent\(body\)\}/,
     'BOTH parts encoded: an ingredient list is full of commas, brackets, percent signs '
