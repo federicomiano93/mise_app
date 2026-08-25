@@ -55,11 +55,28 @@ service cloud.firestore {
     // lands; the accounts that should hold owner powers get them from a backfill
     // that turns their `true` into 'owner'. js/sections.js reads the same value
     // the same way, and js/roles.js turns it into a role.
+    //
+    // ⚠️ ONE get(), NOT exists() + get(), AND THE REASON IS MEASURED. Firestore
+    // allows 10 document ACCESSES per rule evaluation and counts CALLS, not
+    // distinct documents: asking for the same document twice costs two. Proved
+    // against the emulator — 5 documents read twice each (10 calls) passes, 6
+    // read twice each (12 calls) is refused, exactly like 11 different
+    // documents. So the pair below cost 2 where 1 does the same work, on every
+    // gated operation, and every one of those calls is BILLED as a read.
+    //
+    // Dropping exists() is safe because get() on a document that is not there
+    // returns null rather than raising — also measured, not assumed.
+    //
+    // ⚠️ The ternary is load-bearing. A `let` is bound before the return runs,
+    // so without the signedIn() guard this would build a path from a null uid on
+    // every unauthenticated request. tests/rules-read-budget.test.mjs pins the
+    // shape so nobody restores the pair while adding a field.
     function member(lid) {
-      return signedIn()
-        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
-        && get(/databases/$(database)/documents/users/$(request.auth.uid))
-             .data.get('locations', {}).get(lid, false) in [true, 'manager', 'owner'];
+      let u = signedIn()
+        ? get(/databases/$(database)/documents/users/$(request.auth.uid))
+        : null;
+      return u != null
+        && u.data.get('locations', {}).get(lid, false) in [true, 'manager', 'owner'];
     }
 
     // ── Which parts of the app a location uses ────────────────────────────
@@ -68,10 +85,14 @@ service cloud.firestore {
     // not a boundary between locations (a location only ever sees its own
     // data either way) — it decides which screens a location was set up with,
     // and a forgotten field must not empty the app of a business that is working.
+    //
+    // ⚠️ ONE get() here too, for the reason spelled out on member() above. No
+    // guard is needed: this path is built from `lid`, which every rule that
+    // calls it has already matched, so it can never be null. A missing document
+    // gives null, which keeps every section ON — the same answer !exists() gave.
     function sectionOn(lid, name) {
-      return !exists(/databases/$(database)/documents/locations/$(lid))
-        || get(/databases/$(database)/documents/locations/$(lid))
-             .data.get('sections', {}).get(name, true) != false;
+      let l = get(/databases/$(database)/documents/locations/$(lid));
+      return l == null || l.data.get('sections', {}).get(name, true) != false;
     }
 
     function canUse(lid, section) {
@@ -99,11 +120,11 @@ service cloud.firestore {
     // back from the API afterwards — a trailing space is invisible in the
     // console, and that has already cost this project half an hour once.
     //
-    // The exists() guard makes this safe to call on its own. It is not strictly
-    // needed while every call site goes through canUse() first (&& short-circuits,
-    // so member() has already proved the document is there), but a helper that
-    // errors depending on where it is called from is a trap for the next person.
-    // Firestore charges one access per document per evaluation, so it is free.
+    // It carries no exists() guard, and does not need one: every call site goes
+    // through canUse() first, and && short-circuits, so member() has already
+    // fetched this document. A second get() would not be free — Firestore counts
+    // CALLS, not documents (see member()) — so the guard would cost a billed read
+    // to defend against a call that does not exist.
     // ⚠️ IT DOES NOT USE THE `.get('roles', {}).get(...)` SHAPE member() USES ONE
     // SCREEN UP, and the difference is not style. Calling .get() on the `{}`
     // DEFAULT is an evaluation error, not a miss — the rule throws instead of
@@ -115,28 +136,30 @@ service cloud.firestore {
     // `locations`; it is left alone because it fails towards deny, which is the
     // safe direction there.)
     //
-    // Asking `is map` as well is what makes a corrupt `roles` resolve to 'staff'
-    // instead of throwing, which is exactly what js/roles.js does with the same
-    // input. The two must agree, so they agree here too.
-    // ⚠️⚠️ THIS READS users/{uid} EXACTLY ONCE, AND THAT IS THE WHOLE REASON IT
-    // IS SHAPED LIKE THIS. The obvious version — canUse(lid, section) && a
-    // roleIn(lid) helper that fetches the document itself — is correct, readable,
-    // and DOES NOT WORK. Firestore allows 10 document accesses per request, and
-    // when an `allow` evaluates FALSE the engine carries on to the next matching
-    // rule and evaluates again, so every access is paid TWICE: member()'s
-    // exists+get, sectionOn()'s exists+get and roleIn()'s get come to 5, and 5
-    // doubled is the limit exactly.
+    // ⚠️⚠️ THE READ BUDGET, MEASURED — because a wrong version of this note sat
+    // here for months and read as an emergency. Firestore allows 10 document
+    // ACCESSES and counts CALLS, not distinct documents; the budget is PER RULE
+    // EVALUATION, and it is NOT shared across the several rules that may match
+    // one request. All three facts were proved against the emulator, and the
+    // third refutes the claim this comment used to make (that a rule answering
+    // FALSE makes the next one pay again, so every access counts twice): two
+    // matching rules costing 10 accesses each — 20 in total — both evaluate
+    // fine.
     //
-    // The failure is vicious because it is invisible from the owner's side: the
-    // owner's rule returns TRUE, evaluation stops at the first pass, and the
-    // budget is never exceeded. Only a STAFF member — the one person this whole
-    // change exists for — pushes it to a second pass, and what they get is not a
-    // clean refusal but an evaluation error. It denies, so the app behaves
-    // correctly by accident, and nothing anywhere says why.
+    // So a gated rule costs member 1 + sectionOn 1 + roleIn 1 = 3 of 10, with
+    // seven spare. Before the one-get() rewrite it was 5 of 10 — comfortable,
+    // never the cliff edge the old note described.
     //
-    // Found by a check that insists a denial is an ANSWER and not a crash
-    // (expectDeniedCleanly), after three wrong hypotheses. Do not "tidy" this
-    // back into two helpers: it reads worse and works.
+    // What the count is NOT is free: every one of these calls is billed as a
+    // document read, on every gated operation, for ever. That is why the shape
+    // below reads users/{uid} once and not twice, and it is reason enough on its
+    // own.
+    //
+    // ⚠️ Before adding a read to a rule that reaches here, add it, run
+    // `npm run test:rules:emulated`, and LOOK. Do not reason about it — and note
+    // that the suite cannot see this for you: a budget crash and a refusal are
+    // both 403, so a ruleset that has run out of reads still reports every test
+    // as passing. tests/rules-read-budget.test.mjs counts the calls instead.
     function roleIn(lid) {
       return get(/databases/$(database)/documents/users/$(request.auth.uid))
                .data.get('locations', {}).get(lid, false);
@@ -218,11 +241,17 @@ service cloud.firestore {
     //
     // A missing document, a missing field or an empty value all mean "no client at
     // all" — the same deny-by-default as membership, for the same reason.
+    //
+    // ⚠️ ONE get(), same as member() and sectionOn(). The signedIn() guard is new
+    // and is not decoration: the path is built from request.auth.uid, and a `let`
+    // binds before the return runs, so an unauthenticated request would otherwise
+    // build a path from null. A missing account gives null, which becomes '' —
+    // the same "no client at all" the exists() branch produced.
     function orderClientOf(lid) {
-      return exists(/databases/$(database)/documents/locations/$(lid)/client-accounts/$(request.auth.uid))
+      let a = signedIn()
         ? get(/databases/$(database)/documents/locations/$(lid)/client-accounts/$(request.auth.uid))
-            .data.get('clientId', '')
-        : '';
+        : null;
+      return a == null ? '' : a.data.get('clientId', '');
     }
 
     function isOrderClient(lid, clientId) {
