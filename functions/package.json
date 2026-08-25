@@ -14,5 +14,9 @@
     "@anthropic-ai/sdk": "^0.120.0",
     "firebase-admin": "13.6.0",
     "firebase-functions": "6.5.0"
+  },
+  "//overrides": "uuid is forced to the patched 11.1.1 for EVERY package that asks for it. Nothing here depends on uuid directly: it arrives three levels down under firebase-admin, and gaxios/google-gax/teeny-request each pin ^9, which is the range GHSA flags (missing buffer bounds check in v3/v5/v6 when a buf is passed). Those three call ONLY uuid.v4() and pass no buf, so the flaw was never reachable here — this removes a standing alert, it does not close a hole. Upgrading firebase-admin does NOT help: the newest release still carries the same chain. Verified before shipping: all three libraries resolve 11.1.1, return valid v4 ids and load without error. Drop this override once Google's libraries stop asking for uuid 9.",
+  "overrides": {
+    "uuid": "^11.1.1"
   }
 }
