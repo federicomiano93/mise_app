@@ -71,6 +71,30 @@ service cloud.firestore {
     // so without the signedIn() guard this would build a path from a null uid on
     // every unauthenticated request. tests/rules-read-budget.test.mjs pins the
     // shape so nobody restores the pair while adding a field.
+    //
+    // ⚠️⚠️ THIS DEPLOYS WITH A WARNING, AND THE WARNING IS EXPECTED. Every
+    // `firebase deploy --only firestore:rules` prints TWO of these — one for the
+    // ternary here, one for the identical shape in orderClientOf():
+    //
+    //     [W] <line>:11 - Invalid type. Received one of [null]. Expected one of [map].
+    //
+    // The compiler's type checker sees that the ternary can yield null and that
+    // `.data` is read further down; it does not follow the `u != null` guard
+    // standing between the two. The line numbers move whenever this file does,
+    // so match the warning by its MESSAGE and by these two functions, not by a
+    // number.
+    //
+    // ⚠️ IT WAS NOT TAKEN ON TRUST. The LIVE ruleset was tested through the Rules
+    // API (projects.rulesets.test), which runs Google's own engine against
+    // simulated requests, on 25 Aug 2026: a member reads — ALLOW; the owner
+    // reads — ALLOW; a signed-in account with NO users document, which is
+    // exactly the null the warning is about — DENY; a member of another location
+    // — DENY; no sign-in at all — DENY. Five of five.
+    //
+    // So: two benign warnings, for ever. ⚠️ A THIRD warning, or one of these two
+    // moving to a line that is not one of these two ternaries, is NEW and has
+    // not been checked by anybody. Do not wave it through on the strength of
+    // this note.
     function member(lid) {
       let u = signedIn()
         ? get(/databases/$(database)/documents/users/$(request.auth.uid))
@@ -247,6 +271,10 @@ service cloud.firestore {
     // binds before the return runs, so an unauthenticated request would otherwise
     // build a path from null. A missing account gives null, which becomes '' —
     // the same "no client at all" the exists() branch produced.
+    //
+    // ⚠️ This ternary is the SECOND of the two expected deploy warnings. The note
+    // on member() says which they are, what was tested against the live ruleset,
+    // and when a warning here should stop being ignored.
     function orderClientOf(lid) {
       let a = signedIn()
         ? get(/databases/$(database)/documents/locations/$(lid)/client-accounts/$(request.auth.uid))
