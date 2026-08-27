@@ -1,4 +1,4 @@
-const CACHE_NAME = 'theitalianclub-v347';
+const CACHE_NAME = 'theitalianclub-v348';
 // Firebase SDK modules (loaded from gstatic) are cached SEPARATELY from CACHE_NAME
 // so they survive the cache-version bump that happens on every deploy — otherwise
 // the offline SDK would be wiped each release until the next online load. The name
@@ -256,20 +256,70 @@ const ASSETS = [
   './icons/icon-512.png'
 ];
 
+// ⚠️⚠️ THE PRECACHE IS ALL-OR-NOTHING, AND IT IS NOW THE CODE THAT SAYS SO.
+// Until this version the install used Promise.allSettled and reported success with a
+// hole in the cache, while three separate notes in this project asserted the opposite
+// — and one of them was USED as a rule: v1.65.1 read an installed cache as 191 of 192
+// and dismissed it with "a real failure gives an EMPTY cache". It does not; 191 of 192
+// is exactly the shape of one failed asset. The verdict there was right and the
+// criterion behind it was not.
+//
+// ⚠️ WHAT A HOLE ACTUALLY COSTS, STATED HONESTLY, BECAUSE THE TRADE BELOW DEPENDS ON
+// IT. The fetch handler is cache-first WITH a background put, so a file missing from
+// the cache is fetched from the network and written in — a hole heals the first time
+// that screen is opened ONLINE. It is fatal only to a phone that goes offline before
+// ever touching that file. What is NOT recoverable is the moment of the swap:
+// activate() deletes every cache that is not this one, so a partial worker destroys
+// the last COMPLETE copy on its way in.
+//
+// ⚠️ THE RETRY IS WHAT MAKES STRICTNESS AFFORDABLE, and it guards a failure this
+// project has observed rather than imagined: 208 requests leave in one burst, and
+// GitHub Pages has answered 503 to one file of such a burst and 200 five times on
+// retry (v1.63.0). Failing on the first refusal would turn an ordinary throttle into
+// a release nobody receives.
+//
+// ⚠️⚠️ AND THE PRICE OF STRICTNESS, WHICH IS REAL AND MUST NOT BE LOST: a phone that
+// can never complete the precache stops receiving updates ENTIRELY AND SILENTLY —
+// js/sw-update.js announces an update only from the 'installed' state, so a rejected
+// install shows no banner and triggers no compulsory-update gate. That phone runs old
+// code against rules that deployed instantly, which is the very thing the gate exists
+// to prevent. Two things stand between that and a release: the test that every ASSETS
+// entry EXISTS (a mistyped path being the likeliest permanent cause), and this
+// project's post-deploy sweep, which already asks the live site for all 208 files.
+// ⚠️ NEITHER covers a device-specific failure — nobody has yet confirmed an update
+// landing on a real iPhone under this code.
+//
+// cache: 'reload' bypasses the browser's HTTP cache (GitHub Pages serves
+// ~10-minute max-age), so a brand-new worker can never precache stale copies.
+const PRECACHE_ATTEMPTS = 3;
+
+async function precache() {
+  const cache = await caches.open(CACHE_NAME);
+  let pending = ASSETS;
+  for (let attempt = 1; attempt <= PRECACHE_ATTEMPTS && pending.length; attempt++) {
+    // Back off before a retry, never before the first attempt: a throttle that is
+    // answered immediately is simply the same burst again.
+    if (attempt > 1) await new Promise(done => setTimeout(done, 400 * (attempt - 1)));
+    const results = await Promise.allSettled(pending.map(url =>
+      cache.add(new Request(url, { cache: 'reload' }))
+    ));
+    pending = pending.filter((url, i) => results[i].status === 'rejected');
+  }
+  if (pending.length) {
+    // This message is the ONLY diagnosis a failed install produces — nothing else in
+    // the app reports one — so it names the files rather than only counting them.
+    throw new Error(
+      `precache incomplete: ${pending.length} of ${ASSETS.length} assets failed — ` +
+      pending.slice(0, 5).join(', ') + (pending.length > 5 ? ', …' : '')
+    );
+  }
+}
+
 self.addEventListener('install', e => {
-  // Cache assets one-by-one — if one fails, installation still succeeds.
-  // cache: 'reload' bypasses the browser's HTTP cache (GitHub Pages serves
-  // ~10-minute max-age), so a brand-new worker can never precache stale copies.
   // NO skipWaiting() here: the new worker must WAIT so js/sw-update.js can show
   // the update banner; it activates when the user taps it (skipWaiting message
   // below) or when the app is next opened with no pages left from the old one.
-  e.waitUntil(
-    caches.open(CACHE_NAME).then(cache =>
-      Promise.allSettled(ASSETS.map(url =>
-        cache.add(new Request(url, { cache: 'reload' }))
-      ))
-    )
-  );
+  e.waitUntil(precache());
 });
 
 self.addEventListener('activate', e => {
