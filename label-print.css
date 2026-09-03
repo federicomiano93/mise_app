@@ -1,0 +1,146 @@
+/*
+  label-print.css — the label as a piece of paper, on screen and on the printer.
+
+  ⚠️⚠️ THE SHEET IS BLACK ON WHITE, AND THAT IS NOT AN AESTHETIC CHOICE SO IT DOES
+  NOT ASK tokens.css. A thermal label printer is monochrome: it burns a dot or it
+  does not. There is no cream, no brand green and no grey on a label — asking the
+  design system for a colour here would produce a preview that cannot be printed and
+  a print that does not match it. Everything else on this page still consumes the
+  shared tokens; the sheet is paper.
+
+  ⚠️ NOTHING VARIABLE LIVES HERE. The label's width, height, margin and font size all
+  come from label-template-model.js through el()'s `style` prop (the CSSOM), because
+  the page CSP is `style-src 'self'` and an inline style="" attribute is refused.
+  This file holds only what never changes.
+*/
+
+/* ── The sheet ───────────────────────────────────────────────────────────────
+   Sized in millimetres by label-print.js. box-sizing: border-box so the margin the
+   model reserved is INSIDE the paper, which is what a printer means by a margin.
+
+   ⚠️ overflow: hidden IS LOAD-BEARING AND IT IS NOT COSMETIC. The paper cannot
+   grow, so text that does not fit must be CLIPPED rather than allowed to stretch
+   the box — otherwise the browser silently resizes the sheet and nothing, on screen
+   or in code, can tell that the label overflowed. label-print.js reads scrollHeight
+   against clientHeight to detect exactly that, and then refuses to print. */
+.lab-sheet {
+  box-sizing: border-box;
+  overflow: hidden;
+  background: #fff;
+  color: #000;
+  font-family: var(--font-round);
+  /* ⚠️ A long ingredient name must break inside itself rather than push the block
+     off the paper. The fit estimate in label-template-model.js assumes exactly this
+     behaviour, so the two have to agree. */
+  overflow-wrap: anywhere;
+}
+
+.lab-sheet-block { margin: 0; }
+
+.lab-sheet-name { font-weight: 700; }
+
+/* ⚠️ THE EMPHASIS IS THE REGULATION'S, NOT A HIGHLIGHT. The allergen has to stand
+   out inside the ingredient list. Bold AND underlined, because a thermal print at
+   1.7 mm loses a lot of the difference between weights, and an allergen that is
+   merely a little darker than its neighbours is an allergen nobody sees. */
+.lab-sheet-ing--allergen {
+  font-weight: 800;
+  text-decoration: underline;
+  text-underline-offset: 0.12em;
+}
+
+.lab-sheet-contains { font-weight: 700; }
+
+/* ── The preview, on screen ──────────────────────────────────────────────────
+   The same node, at the same millimetre size, so what is on the phone is what comes
+   out of the printer. The frame and the shadow belong to the SCREEN, never to the
+   sheet — they are how a reader can tell where the paper ends. */
+.lab-preview {
+  display: flex;
+  justify-content: center;
+  /* ⚠️⚠️ flex-start, AND IT IS LOAD-BEARING. A flex container's default is
+     `align-items: stretch`, which STRETCHES the sheet to the container's height and
+     overrides the exact millimetres label-print.js set on it. The paper then is not
+     the paper: a 25 × 20 mm label drew 25 mm wide and 51 mm tall, and it looked
+     right at 76 × 51 only because that happened to be the height the container had
+     anyway. Found by setting a custom size and MEASURING, never by looking. */
+  align-items: flex-start;
+  margin-bottom: 14px;
+  /* A 102 mm sheet is wider than a phone. It scrolls sideways in its own box rather
+     than making the whole page scroll. */
+  overflow-x: auto;
+}
+
+.lab-preview .lab-sheet {
+  flex: none;
+  border: 1px solid var(--cat-border);
+  border-radius: 2px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, .12);
+}
+
+.lab-preview-note {
+  margin: 0 0 12px;
+  font-size: .78rem;
+  color: var(--cat-text-2);
+  text-align: center;
+}
+
+/* The label does not fit and printing is refused. Warning colours, because this is
+   the one thing on the screen a person has to act on. */
+.lab-nofit {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--cat-warn-bg);
+  color: var(--cat-warn);
+  font-size: .86rem;
+  line-height: 1.45;
+}
+
+/* ── The printing ────────────────────────────────────────────────────────────
+
+   ⚠️ ONE PRESET, ONE NAMED PAGE. CSS named pages let the three sizes a venue is
+   likely to have live in this static file, so nothing has to build a stylesheet at
+   runtime — which the CSP would make awkward and which would put the paper size, of
+   all things, in the one output nobody sees before it is already printed.
+
+   ⚠️ A CUSTOM SIZE FALLS THROUGH TO `size: auto` BELOW, ON PURPOSE. There the
+   printer driver's own stock decides, which is what the driver has to be set to in
+   any case — see the setup note in the plan. Better the driver's real answer than a
+   number this app guessed. */
+@page { size: auto; margin: 0; }
+@page p76x51  { size: 76mm 51mm;  margin: 0; }
+@page p57x32  { size: 57mm 32mm;  margin: 0; }
+@page p102x76 { size: 102mm 76mm; margin: 0; }
+
+.lab-print { display: none; }
+.lab-print--p76x51 .lab-sheet  { page: p76x51; }
+.lab-print--p57x32 .lab-sheet  { page: p57x32; }
+.lab-print--p102x76 .lab-sheet { page: p102x76; }
+
+@media print {
+  /* ⚠️ ONE RULE, AND IT IS DERIVED RATHER THAN LISTED. #labelPrint is a direct child
+     of <body>, so everything else on the page — the header, the screen, the bottom
+     bar, the toast, and the sign-in cover that must never be printed — is hidden by
+     the same selector, and a header added next year is hidden by it too. A list of
+     class names here would go stale silently, on an output nobody previews. */
+  body > *:not(#labelPrint) { display: none !important; }
+
+  body { margin: 0; background: #fff; }
+
+  .lab-print { display: block; }
+
+  /* Nothing from the screen follows the sheet onto the paper. */
+  .lab-print .lab-sheet {
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  /* ⚠️ The emphasis on an allergen is not decoration and must survive a printer set
+     to save ink. This is the one place in the app that asks for that. */
+  .lab-sheet-ing--allergen {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}

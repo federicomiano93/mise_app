@@ -1178,6 +1178,61 @@ body.cat-zoom-lock { overflow: hidden; }
 .lab-send:hover { border-color: var(--cat-brand); }
 .lab-send:active { transform: scale(.97); }
 .lab-copy-status { font-size: .8rem; font-weight: 400; color: var(--cat-text-2); }
+/* Print, on its own line above Copy and Send.
+   ⚠️ flex-basis 100% RATHER THAN A SECOND ROW IN THE MARKUP: the row already wraps, so
+   one line of CSS gives Print the whole first line and leaves the existing row — a
+   screen Federico has already reviewed — untouched.
+   ⚠️ And a flex row with align-items:center on the button AND on its children, because
+   an <svg> in normal flow sits on the text baseline, about 2px low. It is the commonest
+   alignment bug in this app (PR #31). */
+.lab-copy-row .lab-print-btn {
+  flex: 1 1 100%; margin-top: 0;
+  justify-content: center; gap: 7px;
+  background: var(--cat-brand); border-color: var(--cat-brand); color: var(--cat-brand-ink);
+}
+.lab-print-btn > * { display: flex; align-items: center; }
+.lab-print-btn:hover { border-color: var(--cat-brand); }
+.lab-print-btn:active { transform: scale(.97); }
+/* ⚠️ DISABLED HAS TO LOOK DISABLED. This button is switched off whenever the label does
+   not fit the paper or the device cannot reach a printer, and the sentence saying why is
+   right above it — a button that still looks pressable makes that sentence read as a
+   complaint rather than as the reason. */
+.lab-print-btn:disabled {
+  background: var(--cat-surface-2); border-color: var(--cat-border);
+  color: var(--cat-text-3); cursor: not-allowed; transform: none;
+}
+
+/* ── Label printing, inside catalogue Settings ──────────────────────────────
+   ⚠️ The size presets REUSE .lab-switch / .lab-switch-btn, the segmented control the
+   label screen already has. One component, two screens: a second set of segmented
+   buttons is a second set of paddings and focus rings to keep in step. */
+.lab-settings-h {
+  margin: 22px 0 0; font-family: var(--cat-font-round); font-size: 1.05rem;
+  font-weight: 700; color: var(--cat-text);
+}
+.lab-settings-label {
+  margin: 12px 0 6px; font-size: .78rem; font-family: var(--cat-font-mono);
+  letter-spacing: .08em; text-transform: uppercase; color: var(--cat-text-2);
+}
+.lab-size-switch { flex-wrap: wrap; }
+.lab-size-custom { display: flex; gap: 10px; margin-bottom: 12px; }
+.lab-size-field { flex: 1; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.lab-size-field-name { font-size: .78rem; color: var(--cat-text-2); }
+/* ⚠️ A flex row on the row AND on its two children: an inline box would sit the
+   state pill on the text baseline, about 2px low. The commonest bug in this app. */
+.lab-settings-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.lab-settings-row > * { display: flex; align-items: center; }
+.lab-settings-row-name { font-weight: 600; color: var(--cat-text); }
+.lab-settings-row-state {
+  flex: none; padding: 2px 9px; border-radius: 999px;
+  background: var(--cat-surface-2); border: 1px solid var(--cat-border);
+  font-size: .74rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+  color: var(--cat-text-2);
+}
+.lab-settings-row--on .lab-settings-row-state {
+  background: var(--cat-brand); border-color: var(--cat-brand); color: var(--cat-brand-ink);
+}
+.lab-settings-setup { margin-top: 14px; }
 
 /* ── Reading a recipe from a photograph ────────────────────────────────────
    The only screen in this app that needs the network, so it says what it is

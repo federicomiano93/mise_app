@@ -1127,6 +1127,60 @@ async function configAndLogs() {
     wholeWrite(`${A}/orders-history/whatever-i-like`, {
       bakery: 'main', weekStart: '2026-07-06', quantities: {}, stock: {},
     }));
+
+  // ── config/labels: the paper a venue prints food labels on ────────────────
+  //
+  // ⚠️ ITS OWN BLOCK IN THE RULES, BESIDE match /config/{doc} rather than inside
+  // it. Rules are ADDITIVE, so this grant sits alongside the shared one; folding
+  // these keys into that document's whitelist would have tied a CATALOGUE setting
+  // to the calculator section, which is what that rule's ternary falls back to.
+  await expectAllowed('labels: the profile the settings screen saves', () =>
+    mergeWrite(`${A}/config/labels`, {
+      bakery: 'main', widthMm: 76, heightMm: 51, marginMm: 2.5,
+      baseFontMm: 2.6, dpi: 203, printerLanguage: 'os', showDate: false,
+    }));
+
+  // ⚠️ OPTIONAL IN BOTH DIRECTIONS, like every config field: rules reach every
+  // phone the instant they deploy while code arrives one device at a time.
+  await expectAllowed('labels: a phone that only knows about the paper size', () =>
+    mergeWrite(`${A}/config/labels`, { bakery: 'main', widthMm: 102, heightMm: 76 }));
+
+  // ⚠️ A 0 mm LABEL IS NOT A SMALLER ANSWER, IT IS NO LABEL — and it would be drawn
+  // as an empty rectangle with no error anywhere. The app refuses it too, but the
+  // app can be an old build on somebody's phone.
+  await expectDenied('labels: a paper size of zero',
+    () => mergeWrite(`${A}/config/labels`, { bakery: 'main', widthMm: 0, heightMm: 51 }));
+  await expectDenied('labels: a paper size bigger than any label printer',
+    () => mergeWrite(`${A}/config/labels`, { bakery: 'main', widthMm: 5000, heightMm: 51 }));
+  await expectDenied('labels: a size sent as a string',
+    () => mergeWrite(`${A}/config/labels`, { bakery: 'main', widthMm: '76' }));
+
+  // ⚠️ dpi and printerLanguage are validated NOW even though nothing reads them
+  // yet: they are what raw printing will send, and having them in the rules means
+  // that work needs no rules deploy.
+  await expectDenied('labels: a printer resolution nobody supports',
+    () => mergeWrite(`${A}/config/labels`, { bakery: 'main', dpi: 600 }));
+  await expectDenied('labels: a printer language this app cannot speak',
+    () => mergeWrite(`${A}/config/labels`, { bakery: 'main', printerLanguage: 'escpos' }));
+  await expectDenied('labels: a key nobody put in the whitelist',
+    () => mergeWrite(`${A}/config/labels`, { bakery: 'main', logoUrl: 'http://example.test/x.png' }));
+
+  // ⚠️ CHOOSING THE PAPER IS A DECISION ABOUT HOW THE PLACE WORKS, so it belongs to
+  // whoever runs it. SAM's membership is a plain `true` — the shape of every
+  // production document — which makes him an employee.
+  await expectDenied('labels: an employee cannot change the paper the venue prints on',
+    () => mergeWrite(`${A}/config/labels`, { bakery: 'main', widthMm: 57, heightMm: 32 }, asAccount(SAM)));
+
+  // ⚠️ …BUT HE MUST BE ABLE TO READ IT, or he could not print a label at all — and
+  // printing one is exactly the counter job this feature exists for.
+  // (Declared locally, like every other reader in this file.)
+  const readAs = (who, path) => () => fetch(`${FS}/${path}`, { headers: asAccount(who) });
+  await expectAllowed('labels: an employee CAN read it, or no label could be printed',
+    readAs(SAM, `${A}/config/labels`));
+
+  // Turning a setting off is a write. Nothing deletes a settings document.
+  await expectDenied('labels: the profile cannot be deleted',
+    () => deleteWrite(`${A}/config/labels`));
 }
 
 // ── Run ──────────────────────────────────────────────────────────────────────

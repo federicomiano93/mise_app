@@ -45,6 +45,8 @@ const INGREDIENTS = 'ingredients';
 // every ingredient to work at all — see js/price-model.js and firestore.rules.
 const INGREDIENT_PRICES = 'ingredient-prices';
 const SUPPLIERS = 'suppliers';
+const CONFIG = 'config';
+const LABELS_DOC = 'labels';
 
 // Resolves once a location is OPEN — not merely once someone is signed in.
 // It no longer needs its own timeout: a sign-in that cannot complete is now a
@@ -131,6 +133,44 @@ export async function watchSuppliers(onChange, onError) {
     snap => onChange(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
     err => { console.warn('watchSuppliers failed:', err); if (onError) onError(err); },
   );
+}
+
+// ── The label profile ────────────────────────────────────────────────────────
+//
+// locations/{lid}/config/labels — the paper, the printer and which optional blocks
+// a venue prints. One small document.
+//
+// ⚠️ WATCHED RATHER THAN READ ONCE, and what that does and does not buy is worth
+// being exact about: it keeps the store current, so a size changed on the office
+// computer is right the next time somebody opens the label screen, and it is right
+// immediately on a Settings screen that is already open. It does NOT repaint a label
+// screen somebody is standing in front of — nothing subscribes it — and claiming
+// otherwise would be the kind of comment that sends the next person hunting for a
+// bug that was never written.
+//
+// ⚠️ IT IS config/labels AND NOT A FIELD ON locations/{lid}, deliberately. That
+// document is `allow write: if false` for every client, so a field there would need
+// a Cloud Function — which is the right price for a venue SWITCH (showAllergens) and
+// the wrong one for configuration. This is the same shape as config/orders.
+//
+// ⚠️ AND A MISSING DOCUMENT IS NOT AN ERROR. No venue has one until somebody opens
+// Settings; normalizeLabelProfile(null) answers with the defaults, which is why this
+// emits null rather than refusing.
+export async function watchLabelConfig(onChange, onError) {
+  await authReady;
+  return onSnapshot(
+    doc(db, pathFor(CONFIG), LABELS_DOC),
+    snap => onChange(snap.exists() ? snap.data() : null),
+    err => { console.warn('watchLabelConfig failed:', err); if (onError) onError(err); },
+  );
+}
+
+// ⚠️ merge: true, NEVER a whole write. Two people can have Settings open, and a
+// whole-document write would take the other one's paper size with it. The rules
+// see the FULL MERGED document, so a field this build does not know about survives.
+export async function saveLabelConfig(patch) {
+  await authReady;
+  return setDoc(doc(db, pathFor(CONFIG), LABELS_DOC), withBakery(patch), { merge: true });
 }
 
 // Create or merge a recipe document at a known id (id is generated client-side).

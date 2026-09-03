@@ -55,6 +55,13 @@ const LABEL_FILES = [
   // which is precisely the mixture this file exists to police rather than forbid.
   'js/orders/ingredient-form.js',
   'js/catalogue/catalogue-detail.js',
+  // ⚠️ ADDED with label printing. It lays a label out on a piece of paper, and to do
+  // that it has to build the words it is laying out — the «Ingredients:» prefix and
+  // the two allergen lines. So it names foods, and it belongs here.
+  //
+  // ⚠️ IT IS ALSO A MODEL_ONLY FILE, which is the stricter half: it draws no screen,
+  // so it has no interface words to keep and no reason to hold the dictionary at all.
+  'js/catalogue/label-template-model.js',
 ];
 
 // ⚠️ EVERY LABEL FILE THAT DRAWS A SCREEN ASSIGNS THE LANGUAGE ONCE, FROM THE COUNTRY,
@@ -107,7 +114,11 @@ const LABEL_WORD_CALLS = /\b(labelWord|allergenName|allergenGroupName|nutrientNa
 //   the label's words are chosen by outputLanguage(location) — the country
 //   currentLanguage() and setLanguage() are the two ways the INTERFACE could get
 //   into a label, and neither may appear in any label file at all.
-const MODEL_ONLY = ['js/market.js', 'js/catalogue/recipe-label-model.js'];
+const MODEL_ONLY = [
+  'js/market.js',
+  'js/catalogue/recipe-label-model.js',
+  'js/catalogue/label-template-model.js',
+];
 
 test('the label MODEL files do not import the interface language at all', () => {
   for (const file of MODEL_ONLY) {
