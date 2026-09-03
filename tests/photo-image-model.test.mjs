@@ -219,10 +219,23 @@ test('⚠️ every class the CATALOGUE uses is one this page actually defines', 
   // ⚠️ EVERY FILE IN THE FEATURE, not just the one that was wrong. Scanning a
   // single file caught the defect that prompted this check and would have missed the
   // identical one two files away — `.btn-primary` was in catalogue-list.js too.
-  // catalogue.html loads tokens.css, auth.css and catalogue.css and NOT style.css, so
-  // every `.recipe-*` and `.mgmt-*` class the rest of the app uses is silently dead
-  // here: an unstyled bar, a bare grey button, and no error anywhere.
-  const css = read('catalogue.css') + read('tokens.css') + read('auth.css');
+  // catalogue.html does NOT load style.css, so every `.recipe-*` and `.mgmt-*` class
+  // the rest of the app uses is silently dead here: an unstyled bar, a bare grey
+  // button, and no error anywhere.
+  //
+  // ⚠️⚠️ THE SHEETS ARE READ OUT OF THE PAGE, NOT LISTED HERE, AND THAT CHANGED THE
+  // DAY THE PAGE GAINED A FOURTH. The list used to be typed — tokens, auth,
+  // catalogue — and the moment label-print.css was linked, four classes it defines
+  // were reported as styling nothing. The instrument was wrong, not the code, which
+  // is the fourth time in this file's own history; and the tempting fix, adding the
+  // four names to HANDLES below, would have switched the check off for them for ever.
+  // Deriving the list from the <link> tags makes the test true by construction and
+  // means the NEXT stylesheet needs no edit here at all.
+  const page = read('catalogue.html');
+  const sheets = [...page.matchAll(/<link[^>]+rel="stylesheet"[^>]+href="([^"]+)"/g)].map(m => m[1]);
+  assert.ok(sheets.includes('catalogue.css'),
+    'the <link> scan found no catalogue.css — the page changed shape and this test is reading nothing');
+  const css = sheets.map(read).join('\n');
   const used = new Set();
   for (const file of readdirSync(new URL('../js/catalogue/', import.meta.url))) {
     if (!file.endsWith('.js')) continue;
