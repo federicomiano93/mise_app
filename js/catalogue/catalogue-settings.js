@@ -13,7 +13,9 @@
 
 import { t, onLanguageChange } from '../i18n.js';
 import { el } from './dom.js';
-import { LABEL_SIZES, normalizeLabelProfile } from './label-template-model.js';
+import {
+  LABEL_SIZES, PRINTER_LANGUAGES, DPI_CHOICES, normalizeLabelProfile,
+} from './label-template-model.js';
 
 export function renderSettings({ photoOn, onTogglePhoto, labelProfile, onSaveLabel }) {
   const root = el('div', { class: 'cat-view' });
@@ -54,10 +56,13 @@ export function renderSettings({ photoOn, onTogglePhoto, labelProfile, onSaveLab
 
   // ── Label printing ──────────────────────────────────────────────────────────
   //
-  // ⚠️ THE PAPER ONLY. The printer's dots-per-inch and its command language are
-  // already in the stored document and in the rules, deliberately, but they are NOT
-  // on this screen: nothing reads them until raw printing exists, and a control that
-  // changes nothing is a control somebody sets wrongly and then trusts.
+  // The paper, the printer, and — only for a printer driven in its own language —
+  // its resolution.
+  //
+  // ⚠️ THE PRINTER AND THE RESOLUTION ARRIVED WITH ZPL AND NOT BEFORE IT. Both were
+  // in the stored document and in the rules from the first release, deliberately,
+  // but off this screen while nothing read them: a control that changes nothing is
+  // one somebody sets wrongly and then trusts. Keep that rule for the next field.
   //
   // ⚠️ AND THE SIZE IS THE ONE THING HERE THAT CAN PRINT SOMETHING WRONG WITHOUT
   // LOOKING WRONG. A label laid out for 102 mm and printed on 76 mm paper loses its
@@ -127,6 +132,40 @@ export function renderSettings({ photoOn, onTogglePhoto, labelProfile, onSaveLab
   widthInput.addEventListener('change', readCustom);
   heightInput.addEventListener('change', readCustom);
 
+  // ── Which printer, and at what resolution ─────────────────────────────────
+  //
+  // ⚠️ THESE ARRIVED WITH THE ZEBRA'S OWN LANGUAGE AND NOT BEFORE IT. They were in
+  // the stored document and in the rules from the first release, deliberately, but
+  // OFF this screen — a control that changes nothing is one somebody sets wrongly
+  // and then trusts. Now they change something.
+  const printerLabel = el('p', { class: 'lab-settings-label' });
+  const printerSwitch = el('div', { class: 'lab-switch lab-size-switch', role: 'group' });
+  const printerButtons = new Map();
+  for (const language of PRINTER_LANGUAGES) {
+    const btn = el('button', {
+      class: 'lab-switch-btn', type: 'button',
+      onclick: () => save({ printerLanguage: language }),
+    });
+    printerButtons.set(language, btn);
+    printerSwitch.appendChild(btn);
+  }
+  const printerNote = el('p', { class: 'cat-settings-note' });
+
+  const dpiLabel = el('p', { class: 'lab-settings-label' });
+  const dpiSwitch = el('div', { class: 'lab-switch lab-size-switch', role: 'group' });
+  const dpiButtons = new Map();
+  for (const dpi of DPI_CHOICES) {
+    const btn = el('button', {
+      class: 'lab-switch-btn', type: 'button',
+      // Numbers, not a phrase — «203 dpi» is the same in every language.
+      text: `${dpi} dpi`,
+      onclick: () => save({ dpi }),
+    });
+    dpiButtons.set(dpi, btn);
+    dpiSwitch.appendChild(btn);
+  }
+  const dpiNote = el('p', { class: 'cat-settings-note' });
+
   const dateLabel = el('span', { class: 'lab-settings-row-name' });
   const dateState = el('span', { class: 'lab-settings-row-state' });
   const dateRow = el('button', {
@@ -172,6 +211,30 @@ export function renderSettings({ photoOn, onTogglePhoto, labelProfile, onSaveLab
     if (document.activeElement !== heightInput) heightInput.value = String(profile.heightMm);
     widthWrap.firstChild.textContent = t('label.settings.width');
     heightWrap.firstChild.textContent = t('label.settings.height');
+
+    printerLabel.textContent = t('label.settings.printer');
+    for (const [language, btn] of printerButtons) {
+      const on = language === profile.printerLanguage;
+      btn.textContent = t(`label.settings.printer.${language}`);
+      btn.classList.toggle('lab-switch-btn--on', on);
+      btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+    }
+    printerNote.textContent = t('label.settings.printerNote');
+
+    // ⚠️ THE RESOLUTION ONLY MATTERS TO A PRINTER DRIVEN IN ITS OWN LANGUAGE. Through
+    // the print dialog the driver owns it, and offering the choice there would invite
+    // somebody to set a number that changes nothing and then believe it did.
+    const rawPrinter = profile.printerLanguage === 'zpl';
+    dpiLabel.hidden = !rawPrinter;
+    dpiSwitch.hidden = !rawPrinter;
+    dpiNote.hidden = !rawPrinter;
+    dpiLabel.textContent = t('label.settings.dpi');
+    for (const [dpi, btn] of dpiButtons) {
+      const on = dpi === profile.dpi;
+      btn.classList.toggle('lab-switch-btn--on', on);
+      btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+    }
+    dpiNote.textContent = t('label.settings.dpiNote');
 
     dateLabel.textContent = t('label.settings.showDate');
     dateState.textContent = profile.showDate ? t('cat.photo.on') : t('cat.photo.off');
@@ -222,6 +285,8 @@ export function renderSettings({ photoOn, onTogglePhoto, labelProfile, onSaveLab
   root.append(
     row, note,
     labelHead, sizeLabel, sizeSwitch, customRow,
+    printerLabel, printerSwitch, printerNote,
+    dpiLabel, dpiSwitch, dpiNote,
     dateRow, dateNote, setupNote, labelError,
   );
   return { root, refresh: paint };

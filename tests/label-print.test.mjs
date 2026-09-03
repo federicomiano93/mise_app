@@ -14,8 +14,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { availableTransports, transportById, TRANSPORTS } from '../js/catalogue/print-transports.js';
-import { LABEL_SIZES } from '../js/catalogue/label-template-model.js';
+import {
+  availableTransports, transportById, TRANSPORTS, roadsFor, whyNoRoad,
+} from '../js/catalogue/print-transports.js';
+import { LABEL_SIZES, resolveLabel, DEFAULT_PROFILE } from '../js/catalogue/label-template-model.js';
 
 const read = f => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8');
 // Comments are stripped before anything is matched: this project writes its warnings
@@ -234,3 +236,59 @@ test('⚠️ the width is measured more than once, because a scrollbar changes i
   const src = codeOf(read('js/catalogue/label-print.js'));
   assert.match(src, /for \(let pass = 0; pass < 3; pass\+\+\)/);
 });
+
+// ── Which roads a venue's PRINTER leaves open ────────────────────────────────
+
+test('⚠️ a road the venue s printer cannot read is not offered', () => {
+  // Handing somebody with an ordinary printer a page of ^XA codes teaches them the
+  // app is broken. Handing a Zebra a rasterised page wastes the reason to own one.
+  const os = resolveLabel(sample(), DEFAULT_PROFILE, {}, 'en');
+  const zpl = resolveLabel(sample(), { ...DEFAULT_PROFILE, printerLanguage: 'zpl' }, {}, 'en');
+  // Under Node neither road is AVAILABLE, so this pins the filter itself rather than
+  // the environment: no html road is ever offered to a ZPL venue, and vice versa.
+  assert.deepEqual(roadsFor(os).filter(r => r.renderer === 'zpl'), []);
+  assert.deepEqual(roadsFor(zpl).filter(r => r.renderer === 'html'), []);
+});
+
+test('⚠️⚠️ «will not fit» and «no printer here» are told apart', () => {
+  // One is about the label and one is about the device in your hand. Telling
+  // somebody the wrong one sends them to buy bigger labels when the answer was
+  // «walk to the computer», or the reverse.
+  const long = sample({
+    ingredients: Array.from({ length: 90 }, (_, i) => ({
+      id: `i${i}`, name: `Ingrediente numero ${i}`, grams: 10, allergens: [], emphasise: false,
+    })),
+  });
+  const tooBig = resolveLabel(long, { ...DEFAULT_PROFILE, printerLanguage: 'zpl' }, {}, 'it');
+  assert.equal(whyNoRoad(tooBig), 'too-big-for-printer');
+
+  // A short label on a ZPL venue has no road here only because Node has no
+  // clipboard — which is the OTHER reason, and it must say so.
+  const short = resolveLabel(sample(), { ...DEFAULT_PROFILE, printerLanguage: 'zpl' }, {}, 'it');
+  assert.equal(whyNoRoad(short), 'no-device');
+});
+
+test('the screen asks roadsFor(), not the raw list', () => {
+  // availableTransports() knows what the DEVICE can do; only roadsFor() also knows
+  // what the venue's printer can read.
+  const src = codeOf(read('js/catalogue/label-view.js'));
+  assert.match(src, /const roads = roadsFor\(resolved\)/);
+  assert.doesNotMatch(src, /availableTransports\(\)/);
+});
+
+test('⚠️ a road that hands something over says it did', () => {
+  // The print dialog is its own receipt — it appears. A copy to the clipboard looks
+  // exactly like a button that did nothing.
+  const src = codeOf(read('js/catalogue/label-view.js'));
+  assert.match(src, /label\.print\.zplCopied/);
+  assert.match(src, /await road\.send\(/);
+});
+
+function sample(over = {}) {
+  return {
+    ok: true, reason: null, shows: 'allergens', name: 'Pane',
+    ingredients: [{ id: 'f', name: 'Farina', grams: 100, allergens: [], emphasise: true }],
+    allergens: ['gluten-wheat'], mayContain: [], nutrition: null, nutritionMissing: false,
+    ...over,
+  };
+}

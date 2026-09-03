@@ -22,7 +22,7 @@ import {
 } from './recipe-label-model.js';
 import { resolveLabel, sizeIdFor, DEFAULT_PROFILE } from './label-template-model.js';
 import { fitSheet, fitPreviewWidth } from './label-print.js';
-import { availableTransports } from './print-transports.js';
+import { roadsFor, whyNoRoad } from './print-transports.js';
 import { NUTRIENTS } from '../allergen-model.js';
 import {
   canPrintLabel, countryOf, outputLanguage, labelWord, allergenName, nutrientName,
@@ -270,14 +270,23 @@ export function renderLabel({
       // sentence: one is «this phone cannot reach a printer», which is about the
       // device, and the other is «this will not fit on your paper», which is about
       // the label. Telling somebody the wrong one sends them to fix the wrong thing.
-      const roads = availableTransports();
+      // ⚠️ THE VENUE'S PRINTER DECIDES, NOT ONLY THE DEVICE. A road whose language
+      // this printer cannot read is not a road — offering it is how somebody ends up
+      // with a page of ^XA codes on a sheet of A4.
+      const roads = roadsFor(resolved);
       noFit.hidden = fitted.fits && roads.length > 0;
+      const tooBig = t('label.print.tooBig', {
+        w: fmtMm(resolved.widthMm), h: fmtMm(resolved.heightMm),
+      });
       if (fitted.measured && !fitted.fits) {
-        noFit.textContent = t('label.print.tooBig', {
-          w: fmtMm(resolved.widthMm), h: fmtMm(resolved.heightMm),
-        });
+        noFit.textContent = tooBig;
       } else if (!roads.length) {
-        noFit.textContent = t('label.print.noRoad');
+        // ⚠️ THE ZPL PATH HAS ITS OWN «DOES NOT FIT», and it is not the browser's.
+        // It has no browser to measure with, so its estimate can refuse a label the
+        // screen was happy to draw — and saying «this device cannot reach a printer»
+        // then would send somebody to the wrong computer instead of to bigger labels.
+        noFit.textContent = whyNoRoad(resolved) === 'too-big-for-printer'
+          ? tooBig : t('label.print.noRoad');
       }
 
       // ⚠️ THE BUTTON IS DISABLED, NOT HIDDEN. A missing button is a feature somebody
@@ -285,10 +294,21 @@ export function renderLabel({
       // answer. And it is the MEASUREMENT that disables it, never the estimate — and
       // never an answer from a node nothing could measure.
       actions.printBtn.disabled = !fitted.measured || !fitted.fits || !roads.length;
-      actions.printBtn.onclick = () => {
+      // ⚠️ THE BUTTON SAYS WHAT IT WILL DO. On a Zebra it copies ZPL rather than
+      // opening a print dialog, and a button labelled «Stampa» that silently copies
+      // is a button nobody trusts twice.
+      actions.printBtn.lastChild.textContent = roads.length ? t(roads[0].labelKey) : t('label.print');
+      actions.printBtn.onclick = async () => {
         const road = roads[0];
         if (!road || !fitted.measured || !fitted.fits) return;
-        road.send({ resolved, sizeId: sizeIdFor(profile), fontMm: fitted.fontMm });
+        const done = await road.send({ resolved, sizeId: sizeIdFor(profile), fontMm: fitted.fontMm });
+        // ⚠️ A ROAD THAT HANDS SOMETHING OVER HAS TO SAY IT DID. The print dialog is
+        // its own receipt — it appears — but a copy to the clipboard looks exactly
+        // like a button that did nothing.
+        if (road.renderer === 'zpl') {
+          actions.status.textContent = (done && done.ok)
+            ? t('label.print.zplCopied') : t('label.copyFailed');
+        }
       };
     };
     measure();
@@ -382,6 +402,7 @@ export function renderLabel({
     return {
       root: el('div', { class: 'lab-copy-row' }, [printBtn, copy, send, status]),
       printBtn,
+      status,
     };
   }
 
