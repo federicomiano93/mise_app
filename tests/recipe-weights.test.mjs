@@ -26,6 +26,19 @@ const STORE = codeOf(read('js/catalogue/catalogue-store.js'));
 const MODEL = codeOf(read('js/catalogue/catalogue-model.js'));
 const RULES = read('firestore.rules');
 
+// The `match /recipes/{id}` block, to its real end.
+//
+// ⚠️ NOT A FIXED NUMBER OF CHARACTERS. Both tests below used to slice 3000 characters
+// from the start of the block, and the day the whitelist gained a comment the slice
+// stopped short of the field validations — so the assertions failed about rules that
+// were perfectly correct. An instrument measured in characters goes wrong the moment
+// somebody explains something.
+function recipesRules() {
+  const start = RULES.indexOf('match /recipes/{id}');
+  const next = RULES.indexOf('match /', start + 10);
+  return RULES.slice(start, next === -1 ? RULES.length : next);
+}
+
 // ── 1. Nothing is written back unless a person typed it ──────────────────────
 
 test('⚠️⚠️ the store writes the weights ONLY when both have real values', () => {
@@ -164,9 +177,15 @@ test('the model refuses a cooked weight heavier than the raw one', () => {
 test('⚠️⚠️ the rules whitelist carries both new keys', () => {
   // A recipe carries a CLOSED key list. One key the rules do not know refuses the
   // WHOLE save — not just the field — with a permission error nothing explains.
-  const block = RULES.slice(RULES.indexOf('match /recipes/{id}'), RULES.indexOf('match /recipes/{id}') + 3000);
-  assert.match(block, /hasOnly\(\['bakery', 'name', 'ingredients', 'lossPct', 'steps', 'endNote',\s*'rawGrams', 'cookedGrams'\]\)/,
-    'both weights must be in the recipe whitelist');
+  const block = recipesRules();
+  // ⚠️ THE TWO KEYS, NOT THE WHOLE LIST. This used to pin the whitelist character for
+  // character and broke the day a later release added two more fields to it — a red
+  // test about something that was perfectly correct. What this test is named for is
+  // that the WEIGHINGS are in the list; the list itself is allowed to grow.
+  const hasOnly = block.slice(block.indexOf('hasOnly(['), block.indexOf('])', block.indexOf('hasOnly([')));
+  for (const key of ['bakery', 'name', 'ingredients', 'lossPct', 'rawGrams', 'cookedGrams']) {
+    assert.ok(hasOnly.includes(`'${key}'`), `${key} must be in the recipe whitelist`);
+  }
   for (const key of ['rawGrams', 'cookedGrams']) {
     assert.match(block, new RegExp(`!\\('${key}' in request\\.resource\\.data\\)`),
       `${key} must be OPTIONAL: rules reach every phone the instant they deploy while `
@@ -438,4 +457,62 @@ test('⚠️ «no price yet» under an ingredient row is a key, not English', ()
     'it asks the dictionary, like its sibling ingredient-picker.js always has');
   assert.match(codeOf(read('js/catalogue/ingredient-picker.js')), /t\('cat\.noPriceYet'\)/,
     'and the sibling still does, so the two screens cannot disagree');
+});
+
+// ── The two fields a FULL label needs ────────────────────────────────────────
+//
+// ⚠️ Added with the full-label work. They live in this file because they are the
+// same shape as the two weighings above and fail the same way: a key the rules do
+// not know refuses the WHOLE save, not just the field.
+
+test('⚠️⚠️ the net weight and the shelf life are in the whitelist, and optional', () => {
+  const block = recipesRules();
+  const hasOnly = block.slice(block.indexOf('hasOnly(['), block.indexOf('])', block.indexOf('hasOnly([')));
+  // ⚠️ PLAIN STRING COMPARISON, NOT A BUILT REGEX. The first version built the
+  // pattern from a template literal and the backslashes did not survive being
+  // written to disk — `\(` inside a template literal is just `(`, which opened a
+  // capture group instead of matching a bracket, so the check was quietly asking for
+  // something the rules never say. It failed loudly, which is luck; the same slip in
+  // a doesNotMatch would have passed for ever.
+  for (const key of ['netWeightG', 'shelfLifeDays']) {
+    assert.ok(hasOnly.includes(`'${key}'`), `${key} must be in the recipe whitelist`);
+    assert.ok(block.includes(`!('${key}' in request.resource.data)`),
+      `${key} must be OPTIONAL in both directions, like every field here`);
+    assert.ok(block.includes(`request.resource.data.${key} is number`),
+      `${key} must be typed as a number by the rules, not only by the app`);
+  }
+  // ⚠️ TEN YEARS. A mistyped phone number would otherwise become a shelf life.
+  assert.match(block, /shelfLifeDays <= 3650/);
+});
+
+test('⚠️⚠️ a recipe with no shelf life stays WITHOUT one — absent is not zero', async () => {
+  // Zero days means «today». Printing today's date as a use-by on food that keeps
+  // for a week is a safety statement nobody made, so a missing value must survive
+  // every round trip as missing.
+  const { normalizeCatalogueRecipe, normalizeShelfLifeDays } = await import('../js/catalogue/catalogue-model.js');
+  const bare = normalizeCatalogueRecipe({ id: 'r', name: 'Bread', ingredients: [] });
+  assert.ok(!('shelfLifeDays' in bare), 'a recipe nobody has told must not gain the key');
+  assert.ok(!('netWeightG' in bare), 'nor a weight nobody weighed');
+
+  assert.equal(normalizeShelfLifeDays(undefined), null);
+  assert.equal(normalizeShelfLifeDays(null), null);
+  assert.equal(normalizeShelfLifeDays(''), null);
+  assert.equal(normalizeShelfLifeDays('   '), null);
+  // ⚠️ A BOOLEAN IS NOT A NUMBER OF DAYS: Number(true) is 1.
+  assert.equal(normalizeShelfLifeDays(true), null);
+  assert.equal(normalizeShelfLifeDays(-1), null);
+  assert.equal(normalizeShelfLifeDays(99999), null);
+  // But a real zero, typed on purpose, is «today» and is kept.
+  assert.equal(normalizeShelfLifeDays(0), 0);
+  assert.equal(normalizeShelfLifeDays('7'), 7);
+  assert.equal(normalizeCatalogueRecipe({ id: 'r', name: 'B', ingredients: [], shelfLifeDays: 0 }).shelfLifeDays, 0);
+});
+
+test('⚠️ the two label fields appear only for a venue that prints them', () => {
+  // A control that changes nothing is one somebody sets wrongly and then trusts —
+  // the same rule the printer resolution follows.
+  const src = readFileSync(new URL('../js/catalogue/catalogue-editor.js', import.meta.url), 'utf8');
+  assert.match(src, /const wantsWeight = labelProfile\.showWeight === true/);
+  assert.match(src, /const wantsShelfLife = labelProfile\.showDate === true/);
+  assert.match(src, /labelField\.hidden = !wantsWeight && !wantsShelfLife/);
 });

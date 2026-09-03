@@ -14,7 +14,7 @@
 import { t, onLanguageChange } from '../i18n.js';
 import { el } from './dom.js';
 import {
-  LABEL_SIZES, PRINTER_LANGUAGES, DPI_CHOICES, normalizeLabelProfile,
+  LABEL_SIZES, PRINTER_LANGUAGES, DPI_CHOICES, DATE_KINDS, normalizeLabelProfile,
 } from './label-template-model.js';
 
 export function renderSettings({ photoOn, onTogglePhoto, labelProfile, onSaveLabel }) {
@@ -166,6 +166,116 @@ export function renderSettings({ photoOn, onTogglePhoto, labelProfile, onSaveLab
   }
   const dpiNote = el('p', { class: 'cat-settings-note' });
 
+
+  // ── What else goes on the label ────────────────────────────────────────────
+  //
+  // ⚠️ THE WHOLE SECTION IS FOR FOOD SOLD SOMEWHERE ELSE. Over a venue's own counter
+  // the name and the ingredients with the allergens emphasised are what the law asks
+  // for; everything here is what a pack travelling to another shop or a market has
+  // to carry as well. It says so on the screen, once, so nobody switches these on
+  // believing they were missing something.
+  const fullHead = el('h2', { class: 'lab-settings-h' });
+  const fullNote = el('p', { class: 'cat-settings-note' });
+
+  // One switch row, built the same way three times.
+  const switchRow = (key) => {
+    const name = el('span', { class: 'lab-settings-row-name' });
+    const state = el('span', { class: 'lab-settings-row-state' });
+    const row = el('button', {
+      class: 'cat-alg-sheet-btn lab-settings-row', type: 'button',
+      onclick: () => save({ [key]: !profile[key] }),
+    }, [name, state]);
+    return { key, row, name, state };
+  };
+  const weightSwitch = switchRow('showWeight');
+  const storageSwitch = switchRow('showStorage');
+  const businessSwitch = switchRow('showBusiness');
+
+  // ⚠️ A FREE-TYPED LINE IS SAVED WHEN THE FIELD IS LEFT, never on every keystroke —
+  // the same reason as the custom paper size, and here it also means a half-typed
+  // address never reaches a label.
+  const textField = (key, labelKey, placeholderKey) => {
+    const input = el('input', {
+      type: 'text', maxlength: '200',
+      placeholder: placeholderKey ? t(placeholderKey) : '',
+      class: 'lab-text-input',
+      onchange: (e) => save({ [key]: String(e.target.value || '').trim() }),
+    });
+    const name = el('span', { class: 'lab-size-field-name' });
+    const wrap = el('label', { class: 'lab-size-field lab-text-field' }, [
+      name, el('span', { class: 'cat-field' }, [input]),
+    ]);
+    return { key, labelKey, placeholderKey, input, name, wrap };
+  };
+  const storageText = textField('storageText', 'label.settings.storageText', 'label.settings.storagePlaceholder');
+  const businessName = textField('businessName', 'label.settings.businessName');
+  const businessAddress = textField('businessAddress', 'label.settings.businessAddress');
+  const businessNote = el('p', { class: 'cat-settings-note' });
+
+  // ⚠️⚠️ WHICH DATE, AND IT IS THE ONE CHOICE ON THIS SCREEN THAT CAN HARM SOMEBODY.
+  // «Use by» is a safety statement; «best before» is about quality. The note under it
+  // says so in words, because the two are a single tap apart and the consequences are
+  // thrown-away food on one side and unsafe food on the other.
+  const dateKindLabel = el('p', { class: 'lab-settings-label' });
+  const dateKindSwitch = el('div', { class: 'lab-switch lab-size-switch', role: 'group' });
+  const dateKindButtons = new Map();
+  for (const kind of DATE_KINDS) {
+    const btn = el('button', {
+      class: 'lab-switch-btn', type: 'button',
+      onclick: () => save({ dateKind: kind }),
+    });
+    dateKindButtons.set(kind, btn);
+    dateKindSwitch.appendChild(btn);
+  }
+  const dateKindNote = el('p', { class: 'cat-settings-note' });
+
+  function paintFull() {
+    fullHead.textContent = t('label.settings.full');
+    fullNote.textContent = t('label.settings.fullNote');
+
+    for (const s of [weightSwitch, storageSwitch, businessSwitch]) {
+      s.name.textContent = t(`label.settings.${s.key}`);
+      s.state.textContent = profile[s.key] ? t('cat.photo.on') : t('cat.photo.off');
+      s.row.classList.toggle('lab-settings-row--on', !!profile[s.key]);
+    }
+
+    for (const f of [storageText, businessName, businessAddress]) {
+      f.name.textContent = t(f.labelKey);
+      if (f.placeholderKey) f.input.placeholder = t(f.placeholderKey);
+      // ⚠️ NOT WHILE SOMEBODY IS TYPING IN IT — writing .value under a focused caret
+      // moves it to the end mid-word.
+      if (document.activeElement !== f.input) f.input.value = profile[f.key] || '';
+    }
+    // A box is shown only when the block that prints it is on: a control that changes
+    // nothing is one somebody fills in and then trusts.
+    storageText.wrap.hidden = !profile.showStorage;
+    businessName.wrap.hidden = !profile.showBusiness;
+    businessAddress.wrap.hidden = !profile.showBusiness;
+    businessNote.hidden = !profile.showBusiness;
+    businessNote.textContent = t('label.settings.businessNote');
+
+    // ⚠️ AND THE SCREEN SAYS WHEN A SWITCH HAS NOTHING BEHIND IT. The label leaves
+    // the line out — correctly — but from here that is indistinguishable from a
+    // setting that did not save.
+    const empty = (profile.showStorage && !profile.storageText)
+      || (profile.showBusiness && !profile.businessName && !profile.businessAddress);
+    emptyHint.hidden = !empty;
+    emptyHint.textContent = t('label.settings.emptyBlock');
+
+    dateKindLabel.hidden = !profile.showDate;
+    dateKindSwitch.hidden = !profile.showDate;
+    dateKindNote.hidden = !profile.showDate;
+    dateKindLabel.textContent = t('label.settings.dateKind');
+    dateKindNote.textContent = t('label.settings.dateKindNote');
+    for (const [kind, btn] of dateKindButtons) {
+      const on = kind === profile.dateKind;
+      btn.textContent = t(`label.settings.dateKind.${kind}`);
+      btn.classList.toggle('lab-switch-btn--on', on);
+      btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+    }
+  }
+  const emptyHint = el('p', { class: 'lab-nofit' });
+
   const dateLabel = el('span', { class: 'lab-settings-row-name' });
   const dateState = el('span', { class: 'lab-settings-row-state' });
   const dateRow = el('button', {
@@ -241,6 +351,7 @@ export function renderSettings({ photoOn, onTogglePhoto, labelProfile, onSaveLab
     dateRow.classList.toggle('lab-settings-row--on', profile.showDate);
     dateNote.textContent = t('label.settings.showDateNote');
     setupNote.textContent = t('label.settings.setup');
+    paintFull();
   }
   paintLabel();
   labelError.hidden = true;
@@ -287,7 +398,14 @@ export function renderSettings({ photoOn, onTogglePhoto, labelProfile, onSaveLab
     labelHead, sizeLabel, sizeSwitch, customRow,
     printerLabel, printerSwitch, printerNote,
     dpiLabel, dpiSwitch, dpiNote,
-    dateRow, dateNote, setupNote, labelError,
+    dateRow, dateNote,
+    dateKindLabel, dateKindSwitch, dateKindNote,
+    fullHead, fullNote,
+    weightSwitch.row,
+    storageSwitch.row, storageText.wrap,
+    businessSwitch.row, businessName.wrap, businessAddress.wrap, businessNote,
+    emptyHint,
+    setupNote, labelError,
   );
   return { root, refresh: paint };
 }

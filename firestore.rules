@@ -1042,7 +1042,12 @@ service cloud.firestore {
           && request.resource.data.keys().hasOnly([
                'bakery',
                'widthMm', 'heightMm', 'marginMm', 'baseFontMm',
-               'dpi', 'printerLanguage', 'showDate'
+               'dpi', 'printerLanguage', 'showDate',
+               // The venue-wide half of a full label. Every one of these is OFF or
+               // empty until somebody fills it in, so a venue that sells over its
+               // own counter is untouched by their existence.
+               'showWeight', 'showStorage', 'showBusiness',
+               'dateKind', 'storageText', 'businessName', 'businessAddress'
              ])
           // ⚠️ THE BOUNDS ARE THE APP'S OWN, REPEATED HERE ON PURPOSE. A 0 mm label
           // is drawn as an empty rectangle with no error anywhere, and the app that
@@ -1073,7 +1078,27 @@ service cloud.firestore {
           && (!('printerLanguage' in request.resource.data)
               || request.resource.data.printerLanguage in ['os', 'zpl'])
           && (!('showDate' in request.resource.data)
-              || request.resource.data.showDate is bool);
+              || request.resource.data.showDate is bool)
+          && (!('showWeight' in request.resource.data)
+              || request.resource.data.showWeight is bool)
+          && (!('showStorage' in request.resource.data)
+              || request.resource.data.showStorage is bool)
+          && (!('showBusiness' in request.resource.data)
+              || request.resource.data.showBusiness is bool)
+          // ⚠️ A CLOSED SET. «Use by» is a SAFETY statement and «best before» a
+          // quality one; a value the app has never heard of has no business reaching
+          // the database in the first place.
+          && (!('dateKind' in request.resource.data)
+              || request.resource.data.dateKind in ['useBy', 'bestBefore'])
+          && (!('storageText' in request.resource.data)
+              || (request.resource.data.storageText is string
+                  && request.resource.data.storageText.size() <= 200))
+          && (!('businessName' in request.resource.data)
+              || (request.resource.data.businessName is string
+                  && request.resource.data.businessName.size() <= 200))
+          && (!('businessAddress' in request.resource.data)
+              || (request.resource.data.businessAddress is string
+                  && request.resource.data.businessAddress.size() <= 200));
 
         // Nothing deletes a settings document. Turning a setting off is a write.
         allow delete: if false;
@@ -1604,7 +1629,13 @@ service cloud.firestore {
           && (sectionOn(lid, 'catalogue') || sectionOn(lid, 'foodcost'));
         allow create, update: if canUse(lid, 'catalogue')
           && request.resource.data.keys().hasOnly(['bakery', 'name', 'ingredients', 'lossPct', 'steps', 'endNote',
-                                                   'rawGrams', 'cookedGrams'])
+                                                   'rawGrams', 'cookedGrams',
+                                                   // What a FULL food label needs and a PPDS one does not:
+                                                   // how much of the finished food is in one pack, and how
+                                                   // long it keeps. Optional in both directions like every
+                                                   // field here — rules reach every phone the instant they
+                                                   // deploy while code arrives one device at a time.
+                                                   'netWeightG', 'shelfLifeDays'])
           && stampedFor(lid)
           && request.resource.data.name is string
           && request.resource.data.name.size() > 0
@@ -1657,7 +1688,18 @@ service cloud.firestore {
           // Optional is not unchecked: when present it is still a bounded string.
           && (!('endNote' in request.resource.data)
               || (request.resource.data.endNote is string
-                  && request.resource.data.endNote.size() <= 300));
+                  && request.resource.data.endNote.size() <= 300))
+          && (!('netWeightG' in request.resource.data)
+              || (request.resource.data.netWeightG is number
+                  && request.resource.data.netWeightG > 0
+                  && request.resource.data.netWeightG <= 10000000))
+          // ⚠️ TEN YEARS, AND THE CEILING IS NOT DECORATION. A mistyped phone number
+          // would otherwise become a shelf life, and the app that would have refused
+          // it can be an old build on somebody's phone.
+          && (!('shelfLifeDays' in request.resource.data)
+              || (request.resource.data.shelfLifeDays is number
+                  && request.resource.data.shelfLifeDays >= 0
+                  && request.resource.data.shelfLifeDays <= 3650));
         // OWNER ONLY. A recipe is the business. It also carries the guided
         // procedure, the allergen links and whatever Food Cost products point
         // at it, none of which say so from the delete button.

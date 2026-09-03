@@ -20,7 +20,10 @@ import { el } from './dom.js';
 import {
   buildLabel, ingredientLine, containsLine, declarationText, LABEL_SHOWS,
 } from './recipe-label-model.js';
-import { resolveLabel, sizeIdFor, DEFAULT_PROFILE } from './label-template-model.js';
+import {
+  resolveLabel, sizeIdFor, DEFAULT_PROFILE, useByDate, dateText,
+} from './label-template-model.js';
+import { normalizeShelfLifeDays } from './catalogue-model.js';
 import { fitSheet, fitPreviewWidth } from './label-print.js';
 import { roadsFor, whyNoRoad } from './print-transports.js';
 import { NUTRIENTS } from '../allergen-model.js';
@@ -229,7 +232,20 @@ export function renderLabel({
     // from the print is two labels that drift apart, and the one that drifts is the
     // one nobody looks at until it is stuck on food.
     const profile = getProfile();
-    const resolved = resolveLabel(label, profile, {}, lang);
+
+    // ⚠️ THE DATE IS WORKED OUT FROM TODAY, EVERY TIME THIS SCREEN PAINTS. The recipe
+    // knows how long the food keeps; only the morning knows when it was made. A date
+    // stored on the recipe would be yesterday's the moment somebody came in.
+    //
+    // ⚠️ AND A RECIPE WITH NO SHELF LIFE PRODUCES NO DATE AT ALL — never today's.
+    // useByDate() refuses a missing one rather than reading it as zero days, which
+    // would print today as a USE BY on food that keeps for a week.
+    const due = useByDate(normalizeShelfLifeDays(recipe && recipe.shelfLifeDays));
+    const extras = {
+      netWeightG: recipe && recipe.netWeightG,
+      dateText: due ? dateText(due, lang) : '',
+    };
+    const resolved = resolveLabel(label, profile, extras, lang);
 
     // ⚠️ NO PAPER IS NOT NO SCREEN (P17). buildLabel() has already said this recipe
     // can be declared, so resolveLabel() refusing means something upstream changed

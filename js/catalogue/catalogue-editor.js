@@ -12,7 +12,7 @@ import { el } from './dom.js';
 import {
   findInvalidRecipe, unitOf, CATALOGUE_UNITS, isWeighableUnit, weighableTotalGrams,
   linkOf, normalizeLossPct, MAX_LOSS_PCT,
-  normalizeWeight, weightLoss,
+  normalizeWeight, weightLoss, normalizeShelfLifeDays,
 } from './catalogue-model.js';
 import { openLinkPicker } from './ingredient-picker.js';
 import { pricePerKg, formatRate } from '../price-model.js';
@@ -34,7 +34,7 @@ const CAMERA_ICON = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
 // Delete button would appear — and calling it would delete `undefined` — and
 // line 1 below would read `.ingredients` off something that might not have any.
 // Keeping `recipe` null is what makes all four correct without touching them.
-export function renderEditor({ recipe, draft, allRecipes, app }) {
+export function renderEditor({ recipe, draft, allRecipes, app, getLabelProfile = () => ({}) }) {
   // Working copy — nothing touches the stored recipe until Save.
   // ⚠️ ...i, NOT a hand-listed set of fields. This copy and cleanWorking() below
   // both rebuild every row, so any field named in neither is dropped on save —
@@ -62,6 +62,12 @@ export function renderEditor({ recipe, draft, allRecipes, app }) {
         // Carried for the same reason, and only when the draft really has them.
         ...(normalizeWeight(draft.rawGrams) > 0 ? { rawGrams: normalizeWeight(draft.rawGrams) } : {}),
         ...(normalizeWeight(draft.cookedGrams) > 0 ? { cookedGrams: normalizeWeight(draft.cookedGrams) } : {}),
+        // ⚠️ ABSENT RATHER THAN 0, on the same terms as the two weighings above: a
+        // recipe nobody has given a net weight or a shelf life must stay without
+        // them, because 0 days would print today's date as a use-by.
+        ...(normalizeWeight(draft.netWeightG) > 0 ? { netWeightG: normalizeWeight(draft.netWeightG) } : {}),
+        ...(normalizeShelfLifeDays(draft.shelfLifeDays) !== null
+          ? { shelfLifeDays: normalizeShelfLifeDays(draft.shelfLifeDays) } : {}),
       }
       : { id: null, name: '', ingredients: [{ label: '', grams: '', unit: 'g' }], lossPct: 0 };
 
@@ -488,6 +494,59 @@ export function renderEditor({ recipe, draft, allRecipes, app }) {
     lossWarn,
   ]);
 
+
+  // ── What a FULL label needs, and a PPDS one does not ───────────────────────
+  //
+  // ⚠️⚠️ SHOWN ONLY WHEN THE VENUE PRINTS THEM. A venue selling over its own counter
+  // needs neither, and two boxes nobody can explain on a screen everybody uses is
+  // exactly the clutter this project keeps having to remove. It is the same rule the
+  // printer resolution follows: a control that changes nothing is one somebody sets
+  // wrongly and then trusts.
+  const labelProfile = getLabelProfile();
+  const wantsWeight = labelProfile.showWeight === true;
+  const wantsShelfLife = labelProfile.showDate === true;
+
+  const netInput = el('input', {
+    id: 'catRecipeNetWeight', class: 'cat-loss-input', type: 'number',
+    min: '0', step: 'any', inputmode: 'decimal', placeholder: '—',
+    value: normalizeWeight(working.netWeightG) > 0 ? String(Math.round(normalizeWeight(working.netWeightG))) : '',
+    'aria-label': t('cat.netWeight'),
+    oninput: (e) => { working.netWeightG = normalizeWeight(e.target.value); markDirty(); },
+  });
+
+  const shelfInput = el('input', {
+    id: 'catRecipeShelfLife', class: 'cat-loss-input', type: 'number',
+    min: '0', step: '1', inputmode: 'numeric', placeholder: '—',
+    // ⚠️ EMPTY IS «NOBODY HAS SAID», AND IT IS NOT ZERO. Zero days means «today», and
+    // printing today's date as a use-by on food that keeps a week is a safety
+    // statement nobody made. normalizeShelfLifeDays() answers null for an empty box
+    // and the field is then left OFF the document entirely.
+    value: normalizeShelfLifeDays(working.shelfLifeDays) !== null
+      ? String(normalizeShelfLifeDays(working.shelfLifeDays)) : '',
+    'aria-label': t('cat.shelfLife'),
+    oninput: (e) => {
+      const days = normalizeShelfLifeDays(e.target.value);
+      if (days === null) delete working.shelfLifeDays;
+      else working.shelfLifeDays = days;
+      markDirty();
+    },
+  });
+
+  const labelField = el('div', { class: 'cat-loss-field' }, [
+    el('div', { class: 'cat-loss-pair' }, [
+      wantsWeight ? el('label', { class: 'cat-loss-cell' }, [
+        el('span', { class: 'cat-loss-label', text: t('cat.netWeight') }),
+        el('span', { class: 'cat-loss-row' }, [netInput, el('span', { class: 'cat-loss-unit', text: 'g' })]),
+      ]) : null,
+      wantsShelfLife ? el('label', { class: 'cat-loss-cell' }, [
+        el('span', { class: 'cat-loss-label', text: t('cat.shelfLife') }),
+        el('span', { class: 'cat-loss-row' }, [shelfInput, el('span', { class: 'cat-loss-unit', text: t('cat.days') })]),
+      ]) : null,
+    ]),
+    el('p', { class: 'cat-loss-out', text: t('cat.labelFieldsNote') }),
+  ]);
+  labelField.hidden = !wantsWeight && !wantsShelfLife;
+
   const addRowBtn = el('button', {
     class: 'cat-add-row', type: 'button', text: t('cat.addIngredient'),
     onclick: () => { working.ingredients.push({ label: '', grams: '', unit: 'g' }); markDirty(); renderIngredientRows(); if (showErrors) validateUI(); },
@@ -552,6 +611,7 @@ export function renderEditor({ recipe, draft, allRecipes, app }) {
     totalNote,
     addRowBtn,
     lossField,
+    labelField,
     actions,
   ]);
 }

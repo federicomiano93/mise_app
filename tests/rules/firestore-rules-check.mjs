@@ -1182,6 +1182,58 @@ async function configAndLogs() {
   await expectDenied('labels: the profile cannot be deleted',
     () => deleteWrite(`${A}/config/labels`));
 
+  // ── The venue-wide half of a FULL label ───────────────────────────────────
+  await expectAllowed('labels: the full-label settings the screen saves', () =>
+    mergeWrite(`${A}/config/labels`, {
+      bakery: 'main', showWeight: true, showStorage: true, showBusiness: true,
+      dateKind: 'bestBefore', storageText: 'Keep refrigerated below 5C',
+      businessName: 'A Bakery', businessAddress: '1 High Street',
+    }));
+
+  // ⚠️ «Use by» is a SAFETY statement and «best before» a quality one. A third value
+  // has no business reaching the database: the app would fall back to the stricter
+  // of the two, and a fallback nobody chose is not an answer.
+  await expectDenied('labels: a kind of date nobody recognises',
+    () => mergeWrite(`${A}/config/labels`, { bakery: 'main', dateKind: 'whenever' }));
+  await expectDenied('labels: a switch sent as a word',
+    () => mergeWrite(`${A}/config/labels`, { bakery: 'main', showWeight: 'yes' }));
+  await expectDenied('labels: an address longer than a label',
+    () => mergeWrite(`${A}/config/labels`, { bakery: 'main', businessAddress: 'x'.repeat(201) }));
+
+  // ── The per-recipe half ───────────────────────────────────────────────────
+  //
+  // ⚠️ A KEY THE RULES DO NOT KNOW REFUSES THE WHOLE SAVE, not just the field — a
+  // permission error with nothing on screen explaining it. These two arrived with
+  // the full label and the whitelist had to grow for them.
+  await expectAllowed('recipes: a recipe with a net weight and a shelf life', () =>
+    wholeWrite(`${A}/recipes/R_FULL`, {
+      bakery: 'main', name: 'Pane', ingredients: [], netWeightG: 500, shelfLifeDays: 3,
+    }));
+
+  // ⚠️ OPTIONAL IN BOTH DIRECTIONS: every recipe written before these existed sends
+  // neither, and must keep saving.
+  await expectAllowed('recipes: …and one that has never heard of either', () =>
+    wholeWrite(`${A}/recipes/R_PLAIN`, { bakery: 'main', name: 'Pane', ingredients: [] }));
+
+  // ⚠️ TEN YEARS. A mistyped phone number would otherwise become a shelf life, and
+  // the app that would have refused it can be an old build on somebody's phone.
+  await expectDenied('recipes: a shelf life of two hundred years',
+    () => wholeWrite(`${A}/recipes/R_BAD`, {
+      bakery: 'main', name: 'Pane', ingredients: [], shelfLifeDays: 73000,
+    }));
+  await expectDenied('recipes: a negative shelf life',
+    () => wholeWrite(`${A}/recipes/R_BAD`, {
+      bakery: 'main', name: 'Pane', ingredients: [], shelfLifeDays: -1,
+    }));
+  await expectDenied('recipes: a shelf life sent as a word',
+    () => wholeWrite(`${A}/recipes/R_BAD`, {
+      bakery: 'main', name: 'Pane', ingredients: [], shelfLifeDays: 'a week',
+    }));
+  await expectDenied('recipes: a net weight of zero, which is not a pack',
+    () => wholeWrite(`${A}/recipes/R_BAD`, {
+      bakery: 'main', name: 'Pane', ingredients: [], netWeightG: 0,
+    }));
+
   // ── The print queue ───────────────────────────────────────────────────────
   //
   // ⚠️ THE TRANSITIONS ARE THE POINT. Two agents running at once both see a queued
