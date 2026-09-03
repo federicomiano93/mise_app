@@ -78,9 +78,45 @@ const zplClipboard = {
   },
 };
 
-// ⚠️ ORDER IS OFFER ORDER. The first available one is what the button does when
-// there is only one road worth showing.
-export const TRANSPORTS = Object.freeze([osPrint, zplClipboard]);
+// The shop computer, through a queue in the database.
+//
+// ⚠️⚠️ THIS IS THE ONLY ROAD A PHONE HAS TO A PRINTER ON A CABLE. No browser on any
+// phone can reach a printer attached to a different machine — that is a fact about
+// phones, not a gap in this app — so the label is written to Firestore and a small
+// program on the computer the printer is plugged into takes it and prints it.
+//
+// ⚠️ IT IS OFFERED ONLY WHILE THAT COMPUTER IS ANSWERING. A queue nobody is
+// listening to is a tap that appears to work and produces nothing until somebody
+// walks over and finds the machine switched off. The heartbeat is what makes the
+// difference between «printing» and «nothing happened», and the screen says which
+// BEFORE anybody taps.
+//
+// ⚠️ AND IT CAN ONLY EVER CONFIRM «SENT», NEVER «PRINTED». Raw bytes to a printer
+// come back with nothing. Every word this road puts on screen has to respect that.
+const agentQueue = {
+  id: 'agent',
+  labelKey: 'label.print.viaAgent',
+  renderer: 'zpl',
+  available: () => true,          // gated by the venue's printer + the heartbeat, in roadsFor()
+  needsPrinterReady: true,
+  send: async (payload) => {
+    const zpl = toZpl(payload.resolved, { copies: payload.copies || 1 });
+    if (!zpl) return { ok: false, reason: 'nothing-to-print' };
+    if (typeof payload.queue !== 'function') return { ok: false, reason: 'no-queue' };
+    try {
+      await payload.queue(zpl, payload.copies || 1);
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, reason: 'queue-failed', error: err };
+    }
+  },
+};
+
+// ⚠️ ORDER IS OFFER ORDER. The first available one is what the button does, so the
+// agent comes before the clipboard: when the shop computer is listening, queueing
+// the job is what somebody wants — copying ZPL by hand is the fallback for proving
+// a printer, not the daily road.
+export const TRANSPORTS = Object.freeze([agentQueue, osPrint, zplClipboard]);
 
 // ⚠️ THE VENUE'S PRINTER DECIDES WHICH ROADS EXIST, NOT ONLY THE DEVICE. A road
 // whose renderer the venue's printer cannot read is not a road; offering it is how
@@ -89,9 +125,12 @@ export const TRANSPORTS = Object.freeze([osPrint, zplClipboard]);
 // ⚠️ AND A ZPL ROAD IS REFUSED OUTRIGHT WHEN THE LABEL WOULD NOT FIT. The HTML path
 // has a browser to measure it; this one has only an estimate, so the refusal has to
 // happen before anything is sent rather than being noticed on the paper.
-export function roadsFor(resolved) {
+export function roadsFor(resolved, { printerReady = false } = {}) {
   const wants = (resolved && resolved.printerLanguage) || 'os';
   return availableTransports().filter((road) => {
+    // ⚠️ A ROAD THAT NEEDS THE SHOP COMPUTER IS NOT A ROAD WHILE IT IS SILENT.
+    // Queueing into a queue nobody is reading is a tap that looks like it worked.
+    if (road.needsPrinterReady && !printerReady) return false;
     if (road.renderer === 'zpl') return wants === 'zpl' && zplFits(resolved);
     return wants !== 'zpl';
   });
@@ -116,13 +155,14 @@ export function transportById(id) {
 // to fix completely different things.
 //
 //   'too-big-for-printer'  the label will not fit the paper this printer holds
-//   'no-device'            this device cannot reach a printer at all
+//   'no-device'            nothing on this device, and no listening computer,
+//                          can reach a printer at all
 //
 // ⚠️ THE FIRST IS ABOUT THE LABEL AND THE SECOND IS ABOUT THE PHONE IN YOUR HAND.
 // Telling somebody the wrong one sends them to buy bigger labels when the real
 // answer was «walk to the computer», or the reverse.
-export function whyNoRoad(resolved) {
-  if (roadsFor(resolved).length) return null;
+export function whyNoRoad(resolved, context = {}) {
+  if (roadsFor(resolved, context).length) return null;
   const wants = (resolved && resolved.printerLanguage) || 'os';
   if (wants === 'zpl' && !zplFits(resolved)) return 'too-big-for-printer';
   return 'no-device';

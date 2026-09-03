@@ -1079,6 +1079,111 @@ service cloud.firestore {
         allow delete: if false;
       }
 
+      // ── The print queue ───────────────────────────────────────────────────
+      // A label somebody tapped Print on, waiting for the agent on the shop
+      // computer to take it. This is the ONLY way a phone can reach a printer
+      // attached to a different machine — no browser can do it directly.
+      //
+      // ⚠️ CREATING A JOB IS canUse, NOT canManage. The person at the counter
+      // printing an allergen label is exactly who this exists for; gating it on
+      // whoever runs the place would take the feature away from its own audience,
+      // which is the mistake the catalogue's bottom bar already made once.
+      match /print-jobs/{id} {
+        allow read: if canUse(lid, 'catalogue');
+
+        allow create: if canUse(lid, 'catalogue')
+          && stampedFor(lid)
+          && request.resource.data.keys().hasOnly([
+               'bakery', 'status', 'payload', 'copies', 'createdAt', 'createdBy'
+             ])
+          // ⚠️ A JOB IS BORN QUEUED. Creating one already «claimed» would let a
+          // device park a job nothing will ever pick up.
+          && request.resource.data.status == 'queued'
+          // ⚠️ AND IN YOUR OWN NAME. Not security — every member may print — but it
+          // is what makes the queue readable when two people are asking why nothing
+          // came out.
+          && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.payload is string
+          && request.resource.data.payload.size() > 0
+          // The app refuses a bigger one too; the app can be an old build.
+          && request.resource.data.payload.size() <= 20000
+          && request.resource.data.copies is number
+          && request.resource.data.copies >= 1
+          && request.resource.data.copies <= 99
+          && request.resource.data.createdAt is string
+          && request.resource.data.createdAt.size() <= 40;
+
+        // ⚠️⚠️ THE TRANSITIONS ARE ENFORCED HERE, NOT ONLY IN THE AGENT. Two agents
+        // running at once is the whole reason: both see a queued job, both try to
+        // take it, and only the one whose write lands on a document still saying
+        // «queued» succeeds. Without this rule they would both print it.
+        //
+        // ⚠️ AND A CLAIMED JOB CAN NEVER GO BACK TO QUEUED. If the agent died
+        // mid-print the paper may already be out; re-queueing prints it twice.
+        allow update: if canUse(lid, 'catalogue')
+          && stampedFor(lid)
+          && request.resource.data.keys().hasOnly([
+               'bakery', 'status', 'payload', 'copies', 'createdAt', 'createdBy',
+               'claimedBy', 'claimedAt', 'error'
+             ])
+          // What the job SAYS is fixed the moment it is created. An update that
+          // could rewrite the payload would let one device change what another
+          // device's label prints, between the tap and the paper.
+          && request.resource.data.payload == resource.data.payload
+          && request.resource.data.copies == resource.data.copies
+          && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.createdBy == resource.data.createdBy
+          && (
+            (resource.data.status == 'queued'
+              && request.resource.data.status == 'claimed'
+              && request.resource.data.claimedBy == request.auth.uid)
+            || (resource.data.status == 'claimed'
+              && request.resource.data.status in ['done', 'failed'])
+          )
+          && (!('claimedAt' in request.resource.data)
+              || (request.resource.data.claimedAt is string
+                  && request.resource.data.claimedAt.size() <= 40))
+          && (!('error' in request.resource.data)
+              || (request.resource.data.error is string
+                  && request.resource.data.error.size() <= 500));
+
+        // ⚠️ ANY MEMBER MAY DELETE, and that is deliberate: the agent has to clear
+        // what it printed, and it signs in as an ordinary employee. The worst a
+        // deletion can do is stop a label printing, which the person can see and
+        // ask for again — unlike the collections where a delete destroys a record.
+        allow delete: if canUse(lid, 'catalogue');
+      }
+
+      // ── Is the shop computer listening? ───────────────────────────────────
+      // One document per running agent, rewritten every few minutes. The label
+      // screen reads it to say «printer ready» or «the shop computer is not
+      // answering» BEFORE anybody taps Print — a phone that is left to guess is
+      // the failure P17 is about.
+      //
+      // ⚠️ AN EMPLOYEE CAN WRITE A HEARTBEAT, because the agent IS one. The worst
+      // that buys is a screen that says a printer is ready when it is not, and the
+      // job then simply waits — the same outcome as no heartbeat at all, reached
+      // by a more elaborate route. Worth writing down rather than pretending the
+      // check is stronger than it is.
+      match /print-agents/{agentId} {
+        allow read: if canUse(lid, 'catalogue');
+
+        allow create, update: if canUse(lid, 'catalogue')
+          && stampedFor(lid)
+          && request.resource.data.keys().hasOnly(['bakery', 'lastSeenAt', 'printer', 'version'])
+          && request.resource.data.lastSeenAt is string
+          && request.resource.data.lastSeenAt.size() <= 40
+          && (!('printer' in request.resource.data)
+              || (request.resource.data.printer is string
+                  && request.resource.data.printer.size() <= 200))
+          && (!('version' in request.resource.data)
+              || (request.resource.data.version is string
+                  && request.resource.data.version.size() <= 40));
+
+        // Retiring a computer is a decision about the place, not a tidy-up.
+        allow delete: if canManage(lid, 'catalogue');
+      }
+
       match /config/{doc} {
         allow read: if member(lid)
           && sectionOn(lid, doc == 'orders' ? 'orders' : 'calculator');

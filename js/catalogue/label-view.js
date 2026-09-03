@@ -74,6 +74,11 @@ export function renderLabel({
   // catalogue-main.js: the paper size is a venue setting somebody may change on
   // another device while this page is loaded.
   getProfile = () => DEFAULT_PROFILE,
+  // ⚠️ GETTERS, both. Whether a shop computer is answering is a statement about
+  // right now, and the paper is a setting somebody may change on another device.
+  // Neither may be frozen when this screen was built.
+  isPrinterReady = () => false,
+  onQueue = null,
 }) {
   const tables = { ingredients, recipes: recipesById };
   let shows = LABEL_SHOWS.includes(initialShows) ? initialShows : 'both';
@@ -266,28 +271,40 @@ export function renderLabel({
         { w: fmtMm(resolved.widthMm), h: fmtMm(resolved.heightMm) },
       );
 
-      // ⚠️ NO ROAD IS NOT THE SAME REFUSAL AS NO ROOM, and they must not share a
-      // sentence: one is «this phone cannot reach a printer», which is about the
-      // device, and the other is «this will not fit on your paper», which is about
-      // the label. Telling somebody the wrong one sends them to fix the wrong thing.
-      // ⚠️ THE VENUE'S PRINTER DECIDES, NOT ONLY THE DEVICE. A road whose language
-      // this printer cannot read is not a road — offering it is how somebody ends up
-      // with a page of ^XA codes on a sheet of A4.
-      const roads = roadsFor(resolved);
-      noFit.hidden = fitted.fits && roads.length > 0;
+      // ⚠️ FOUR REASONS, FOUR SENTENCES, IN THIS ORDER. «It will not fit» sends
+      // somebody to buy bigger labels; «the shop computer is not answering» sends
+      // them to switch it on; «this device cannot reach a printer» sends them to a
+      // computer that can. One sentence for all of them sends most people to the
+      // wrong place.
+      //
+      // ⚠️ AND THE VENUE'S PRINTER DECIDES WHICH ROADS EXIST, not only the device: a
+      // road whose language this printer cannot read is how somebody ends up with a
+      // page of ^XA codes on a sheet of A4.
+      const printerReady = isPrinterReady() === true;
+      const roads = roadsFor(resolved, { printerReady });
+
+      // ⚠️⚠️ THE «NOT ANSWERING» LINE IS SHOWN EVEN WHEN A FALLBACK ROAD EXISTS, and
+      // this is the part driving the app found. With the shop computer switched off,
+      // a venue set to Zebra fell back in silence to «copy the printer code» — a
+      // perfectly working button that is useless on a phone, offered INSTEAD of the
+      // sentence explaining what had actually happened. A fallback may replace the
+      // road; it may not replace the explanation.
       const tooBig = t('label.print.tooBig', {
         w: fmtMm(resolved.widthMm), h: fmtMm(resolved.heightMm),
       });
-      if (fitted.measured && !fitted.fits) {
-        noFit.textContent = tooBig;
-      } else if (!roads.length) {
-        // ⚠️ THE ZPL PATH HAS ITS OWN «DOES NOT FIT», and it is not the browser's.
-        // It has no browser to measure with, so its estimate can refuse a label the
-        // screen was happy to draw — and saying «this device cannot reach a printer»
-        // then would send somebody to the wrong computer instead of to bigger labels.
-        noFit.textContent = whyNoRoad(resolved) === 'too-big-for-printer'
-          ? tooBig : t('label.print.noRoad');
-      }
+      // ⚠️ THE ZPL PATH HAS ITS OWN «DOES NOT FIT», and it is not the browser's: it
+      // has no browser to measure with, so its estimate can refuse a label the screen
+      // was happy to draw.
+      const why = whyNoRoad(resolved, { printerReady });
+      let message = null;
+      if (fitted.measured && !fitted.fits) message = tooBig;
+      else if (why === 'too-big-for-printer') message = tooBig;
+      else if (resolved.printerLanguage === 'zpl' && !printerReady) {
+        message = t('label.print.printerOffline');
+      } else if (!roads.length) message = t('label.print.noRoad');
+
+      noFit.hidden = !message;
+      if (message) noFit.textContent = message;
 
       // ⚠️ THE BUTTON IS DISABLED, NOT HIDDEN. A missing button is a feature somebody
       // goes looking for; a disabled one beside the sentence explaining it is an
@@ -301,11 +318,33 @@ export function renderLabel({
       actions.printBtn.onclick = async () => {
         const road = roads[0];
         if (!road || !fitted.measured || !fitted.fits) return;
-        const done = await road.send({ resolved, sizeId: sizeIdFor(profile), fontMm: fitted.fontMm });
+        // ⚠️ THE BUTTON GOES DEAD WHILE THE JOB IS IN FLIGHT. Queueing is a network
+        // round trip; two taps is two labels, and the second one is the one nobody
+        // wanted.
+        actions.printBtn.disabled = true;
+        actions.status.textContent = '';
+        let done = null;
+        try {
+          done = await road.send({
+            resolved,
+            sizeId: sizeIdFor(profile),
+            fontMm: fitted.fontMm,
+            queue: onQueue,
+          });
+        } finally {
+          actions.printBtn.disabled = false;
+        }
         // ⚠️ A ROAD THAT HANDS SOMETHING OVER HAS TO SAY IT DID. The print dialog is
-        // its own receipt — it appears — but a copy to the clipboard looks exactly
-        // like a button that did nothing.
-        if (road.renderer === 'zpl') {
+        // its own receipt — it appears — but a copy to the clipboard, and a job put
+        // in a queue, both look exactly like a button that did nothing.
+        //
+        // ⚠️⚠️ AND THE AGENT ROAD SAYS «SENT», NEVER «PRINTED». Raw bytes to a
+        // printer come back with nothing at all, so the app cannot know the paper
+        // came out and must not imply that it does.
+        if (road.id === 'agent') {
+          actions.status.textContent = (done && done.ok)
+            ? t('label.print.queued') : t('label.print.queueFailed');
+        } else if (road.renderer === 'zpl') {
           actions.status.textContent = (done && done.ok)
             ? t('label.print.zplCopied') : t('label.copyFailed');
         }

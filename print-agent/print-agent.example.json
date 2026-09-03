@@ -1,0 +1,17 @@
+{
+  "_readme": "Copy this to %LOCALAPPDATA%\\Mise\\print-agent.json and fill it in. NEVER save it inside this repository: GitHub Pages serves everything in here, so a password saved beside the code would be published on the web the moment somebody committed it.",
+
+  "email": "printer@your-venue.example",
+  "password": "the password of the dedicated printing account",
+
+  "_locationId": "The venue this computer prints for. It is the id in the Firebase console under `locations`, e.g. `bakery` — not the name on screen.",
+  "locationId": "bakery",
+
+  "_printer_share": "mode 'share' is a printer plugged into THIS computer. Share it in Windows first, then put the share's full name here. Raw bytes are copied to the share, which bypasses the driver's rendering — that is the whole point, because a driver would print the ZPL codes as text instead of the label.",
+  "printer": {
+    "mode": "share",
+    "target": "\\\\THIS-PC\\ZEBRA"
+  },
+
+  "_printer_tcp": "mode 'tcp' is a printer with its own address on the network. Replace the whole `printer` block above with this one: { \"mode\": \"tcp\", \"host\": \"192.168.1.50\", \"port\": 9100 }"
+}

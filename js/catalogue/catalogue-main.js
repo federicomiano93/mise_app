@@ -8,6 +8,7 @@ import { t, onLanguageChange } from '../i18n.js';
 import {
   initCatalogue, getRecipes, getUsage, bumpUsage, saveRecipe, deleteRecipe, setSyncErrorHandler,
   getIngredients, getSuppliers, getRecipesById, getLabelProfile, saveLabelProfile,
+  printerReady, queueLabelJob,
 } from './catalogue-store.js';
 import { renderList } from './catalogue-list.js';
 import { renderAllergenSheet } from './allergen-sheet.js';
@@ -181,6 +182,10 @@ function openLabel(recipe) {
     // it paints rather than hold whatever was true when it opened — the same shape
     // as photoOn below, for the same reason.
     getProfile: () => getLabelProfile(),
+    // ⚠️ A GETTER for the same reason: a shop computer can be switched on or off
+    // while this page is open, and the answer must be asked when it is needed.
+    isPrinterReady: () => printerReady(),
+    onQueue: (payload, copies) => queueLabelJob(payload, copies),
     // Remembered for the session only: which of the three somebody wants is a
     // property of the job they are doing this morning, not of the recipe.
     onShowsChange: (value) => { labelShows = value; },
