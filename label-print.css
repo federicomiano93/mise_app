@@ -58,6 +58,13 @@
 .lab-preview {
   display: flex;
   justify-content: center;
+  /* ⚠️⚠️ flex-start, AND IT IS LOAD-BEARING. A flex container's default is
+     `align-items: stretch`, which STRETCHES the sheet to the container's height and
+     overrides the exact millimetres label-print.js set on it. The paper then is not
+     the paper: a 25 × 20 mm label drew 25 mm wide and 51 mm tall, and it looked
+     right at 76 × 51 only because that happened to be the height the container had
+     anyway. Found by setting a custom size and MEASURING, never by looking. */
+  align-items: flex-start;
   margin-bottom: 14px;
   /* A 102 mm sheet is wider than a phone. It scrolls sideways in its own box rather
      than making the whole page scroll. */

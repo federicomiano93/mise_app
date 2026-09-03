@@ -161,8 +161,28 @@ test('⚠️⚠️ the Print button obeys the MEASUREMENT, never the estimate', 
   // text. fitSheet() renders it and asks the browser. Wiring the button to the guess
   // would let an overflowing label print.
   const src = codeOf(read('js/catalogue/label-view.js'));
-  assert.match(src, /printBtn\.disabled\s*=\s*!fitted\.fits/);
+  assert.match(src, /printBtn\.disabled\s*=\s*!fitted\.measured\s*\|\|\s*!fitted\.fits/);
   assert.doesNotMatch(src, /printBtn\.disabled\s*=\s*!resolved\.fits/);
+});
+
+test('⚠️⚠️ an UNMEASURED sheet does not read as one that fits', () => {
+  // The screen is built before the router appends it, and a detached node reports
+  // every width as zero — which reads as fitting, for every label ever made. This
+  // shipped for about an hour: the Print button went live on a measurement that had
+  // never happened. fitSheet() now says whether it could measure at all, and the
+  // screen asks again once it is mounted.
+  const print = codeOf(read('js/catalogue/label-print.js'));
+  assert.match(print, /const measured = host\.isConnected && host\.clientWidth > 0/);
+  assert.match(print, /if \(!measured\) return \{[^}]*fits: false, measured: false/);
+
+  const view = codeOf(read('js/catalogue/label-view.js'));
+  assert.match(view, /return \{ root, mounted:/, 'the screen must expose a way to be measured again');
+
+  const main = codeOf(read('js/catalogue/catalogue-main.js'));
+  const swapped = main.indexOf('swap(labelView.root)');
+  const mounted = main.indexOf('labelView.mounted()');
+  assert.ok(swapped !== -1 && mounted !== -1, 'the router no longer mounts the label the way this test reads');
+  assert.ok(swapped < mounted, 'mounted() must run AFTER swap(), or it measures a detached node again');
 });
 
 test('⚠️ the sheet is measured only after it is in the document', () => {
@@ -181,4 +201,36 @@ test('⚠️ «no printer» and «will not fit» are different sentences', () =>
   const src = codeOf(read('js/catalogue/label-view.js'));
   assert.match(src, /label\.print\.noRoad/);
   assert.match(src, /label\.print\.tooBig/);
+});
+
+test('⚠️⚠️ the preview does not STRETCH the sheet — the paper keeps its own height', () => {
+  // A flex container defaults to `align-items: stretch`, which overrides the exact
+  // millimetres label-print.js sets on the sheet. A 25 x 20 mm label drew 25 mm wide
+  // and 51 mm tall, and it looked perfect at 76 x 51 only because that happened to be
+  // the height the container had anyway. Found by setting a custom size and
+  // MEASURING; no amount of looking at the default size would have shown it.
+  const css = read('label-print.css').replace(/\/\*[\s\S]*?\*\//g, '');
+  const block = css.slice(css.indexOf('.lab-preview {'), css.indexOf('}', css.indexOf('.lab-preview {')));
+  assert.match(block, /display:\s*flex/, 'the preview is no longer the flex box this test is about');
+  assert.match(block, /align-items:\s*flex-start/,
+    'without this the container stretches the sheet and the printed paper size is not the previewed one');
+});
+
+test('⚠️ a scaled preview closes overflow on BOTH axes', () => {
+  // The stylesheet only sets overflow-x, and CSS then computes overflow-y as `auto`
+  // rather than `visible` — so the box grew a vertical scrollbar for a sheet whose
+  // layout height is unchanged while its painted height has been scaled down, and it
+  // clipped the sheet's own right edge.
+  const src = codeOf(read('js/catalogue/label-print.js'));
+  assert.match(src, /host\.style\.overflowY = 'hidden'/);
+  assert.match(src, /host\.style\.overflowX = 'hidden'/);
+});
+
+test('⚠️ the width is measured more than once, because a scrollbar changes it', () => {
+  // Setting the sheet's height decides whether the page needs a vertical scrollbar,
+  // and that scrollbar takes ~16px off the width just measured. One pass answered
+  // 235px, the scrollbar arrived, the column became 219, and the sheet stayed 16px
+  // too wide with its left edge off-screen.
+  const src = codeOf(read('js/catalogue/label-print.js'));
+  assert.match(src, /for \(let pass = 0; pass < 3; pass\+\+\)/);
 });

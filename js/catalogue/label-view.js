@@ -21,7 +21,7 @@ import {
   buildLabel, ingredientLine, containsLine, declarationText, LABEL_SHOWS,
 } from './recipe-label-model.js';
 import { resolveLabel, sizeIdFor, DEFAULT_PROFILE } from './label-template-model.js';
-import { fitSheet } from './label-print.js';
+import { fitSheet, fitPreviewWidth } from './label-print.js';
 import { availableTransports } from './print-transports.js';
 import { NUTRIENTS } from '../allergen-model.js';
 import {
@@ -81,6 +81,8 @@ export function renderLabel({
 
   const body = el('div', { class: 'lab-body' });
   const root = el('div', { class: 'cat-view lab-view' });
+  // Set by paint(), re-run by mounted(). See the note where it is assigned.
+  let measure = null;
 
   // ── The switch ──────────────────────────────────────────────────────────────
   const switcher = el('div', { class: 'lab-switch', role: 'group', 'aria-label': t('label.whatItShows') });
@@ -223,6 +225,17 @@ export function renderLabel({
     // one nobody looks at until it is stuck on food.
     const profile = getProfile();
     const resolved = resolveLabel(label, profile, {}, lang);
+
+    // ⚠️ NO PAPER IS NOT NO SCREEN (P17). buildLabel() has already said this recipe
+    // can be declared, so resolveLabel() refusing means something upstream changed
+    // shape — and the right answer is the screen this file had before printing
+    // existed, not a blank page. The card, the caveat, Copy and Send still work,
+    // because copying the text is what works when nothing else does.
+    if (!resolved.ok) {
+      body.replaceChildren(card, languageNote(), caveat(), copyRow(label).root);
+      return;
+    }
+
     const preview = el('div', { class: 'lab-preview' });
     const previewNote = el('p', { class: 'lab-preview-note' });
     const noFit = el('p', { class: 'lab-nofit' });
@@ -235,35 +248,50 @@ export function renderLabel({
     // «it fits» about everything. The estimate that chose the starting size ran
     // under Node, where nothing can measure text at all — this is the real answer,
     // and it is the one the Print button obeys.
-    const fitted = fitSheet(preview, resolved);
+    // ⚠️⚠️ THE MEASUREMENT LIVES IN ITS OWN FUNCTION SO IT CAN BE RUN AGAIN, AND
+    // THAT IS NOT TIDINESS. paint() is called once from inside renderLabel(), BEFORE
+    // the router has appended `root` to the page — and a detached node reports every
+    // width as zero, which reads as «it fits» for every label ever made. So this runs
+    // now (harmlessly, refusing to print because nothing could be measured) and again
+    // from mounted(), where the numbers are real.
+    measure = () => {
+      const fitted = fitSheet(preview, resolved);
 
-    previewNote.textContent = t('label.preview.actualSize', {
-      w: fmtMm(resolved.widthMm), h: fmtMm(resolved.heightMm),
-    });
+      // ⚠️ MEASURED FIRST, SCALED SECOND — see fitPreviewWidth(). And the sentence
+      // underneath follows what actually happened: «actual size» is a claim, and on
+      // a phone too narrow to hold 76 mm it would be a false one.
+      const shownAt = fitted.measured ? fitPreviewWidth(preview, fitted.sheet) : 1;
+      previewNote.textContent = t(
+        shownAt < 1 ? 'label.preview.scaled' : 'label.preview.actualSize',
+        { w: fmtMm(resolved.widthMm), h: fmtMm(resolved.heightMm) },
+      );
 
-    // ⚠️ NO ROAD IS NOT THE SAME REFUSAL AS NO ROOM, and they must not share a
-    // sentence: one is «this phone cannot reach a printer», which is about the
-    // device, and the other is «this will not fit on your paper», which is about
-    // the label. Telling somebody the wrong one sends them to fix the wrong thing.
-    const roads = availableTransports();
-    noFit.hidden = fitted.fits && roads.length > 0;
-    if (!fitted.fits) {
-      noFit.textContent = t('label.print.tooBig', {
-        w: fmtMm(resolved.widthMm), h: fmtMm(resolved.heightMm),
-      });
-    } else if (!roads.length) {
-      noFit.textContent = t('label.print.noRoad');
-    }
+      // ⚠️ NO ROAD IS NOT THE SAME REFUSAL AS NO ROOM, and they must not share a
+      // sentence: one is «this phone cannot reach a printer», which is about the
+      // device, and the other is «this will not fit on your paper», which is about
+      // the label. Telling somebody the wrong one sends them to fix the wrong thing.
+      const roads = availableTransports();
+      noFit.hidden = fitted.fits && roads.length > 0;
+      if (fitted.measured && !fitted.fits) {
+        noFit.textContent = t('label.print.tooBig', {
+          w: fmtMm(resolved.widthMm), h: fmtMm(resolved.heightMm),
+        });
+      } else if (!roads.length) {
+        noFit.textContent = t('label.print.noRoad');
+      }
 
-    // ⚠️ THE BUTTON IS DISABLED, NOT HIDDEN. A missing button is a feature somebody
-    // goes looking for; a disabled one beside the sentence explaining it is an
-    // answer. And it is the MEASUREMENT that disables it, never the estimate.
-    actions.printBtn.disabled = !fitted.fits || !roads.length;
-    actions.printBtn.onclick = () => {
-      const road = roads[0];
-      if (!road) return;
-      road.send({ resolved, sizeId: sizeIdFor(profile), fontMm: fitted.fontMm });
+      // ⚠️ THE BUTTON IS DISABLED, NOT HIDDEN. A missing button is a feature somebody
+      // goes looking for; a disabled one beside the sentence explaining it is an
+      // answer. And it is the MEASUREMENT that disables it, never the estimate — and
+      // never an answer from a node nothing could measure.
+      actions.printBtn.disabled = !fitted.measured || !fitted.fits || !roads.length;
+      actions.printBtn.onclick = () => {
+        const road = roads[0];
+        if (!road || !fitted.measured || !fitted.fits) return;
+        road.send({ resolved, sizeId: sizeIdFor(profile), fontMm: fitted.fontMm });
+      };
     };
+    measure();
   }
 
   // Millimetres as somebody writes them: «76», not «76.0», and «76.5» when it is.
@@ -358,5 +386,8 @@ export function renderLabel({
   }
 
   paint();
-  return { root };
+  // ⚠️ THE ROUTER MUST CALL THIS AFTER swap(). Until the node is in the document
+  // nothing about it can be measured, and this screen refuses to print rather than
+  // print on an answer it never got. catalogue-main.js openLabel() calls it.
+  return { root, mounted: () => { if (measure) measure(); } };
 }

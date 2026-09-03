@@ -107,11 +107,22 @@ export function renderSettings({ photoOn, onTogglePhoto, labelProfile, onSaveLab
   // ⚠️ ON change, NOT ON input. `input` fires on every keystroke, so typing «102»
   // would save 1, then 10, then 102 — three writes, and the first two are label
   // sizes this venue never chose. `change` fires when the field is left.
+  //
+  // ⚠️⚠️ AND THE TWO FIELDS ARE ONE DECISION, SO THEY ARE ONE WRITE. A width and a
+  // height typed one after the other produced two saves, and while both were in
+  // flight the store briefly held the FIRST one's server answer — a size nobody had
+  // asked for. It converges, and a person moving between screens at human speed
+  // never sees it; a label screen opened inside that window paints the old paper and
+  // does not repaint, which is exactly the kind of thing that gets printed. One
+  // write cannot be half-applied.
+  const SETTLE_MS = 350;
+  let pendingSize = null;
   const readCustom = () => {
     const w = Number(widthInput.value);
     const h = Number(heightInput.value);
     if (!Number.isFinite(w) || !Number.isFinite(h)) return;
-    save({ widthMm: w, heightMm: h });
+    clearTimeout(pendingSize);
+    pendingSize = setTimeout(() => save({ widthMm: w, heightMm: h }), SETTLE_MS);
   };
   widthInput.addEventListener('change', readCustom);
   heightInput.addEventListener('change', readCustom);
@@ -171,23 +182,39 @@ export function renderSettings({ photoOn, onTogglePhoto, labelProfile, onSaveLab
   paintLabel();
   labelError.hidden = true;
 
+  // ⚠️⚠️ THE WRITES ARE PUT IN A QUEUE, AND THIS IS A REAL DEFECT THAT DRIVING THE
+  // APP FOUND. Two saves fired close together are two independent setDoc(merge)
+  // calls with no ordering guarantee between them: typing a width and then a height
+  // saved `{width: 25, height: 51}` and `{width: 25, height: 20}`, the second landed
+  // first, and the first put the OLD height back. On screen the width had changed
+  // and the height had not, with nothing anywhere saying why — and the thing left
+  // wrong was the size of a printed food label.
+  //
+  // Chaining them makes the last change a person made the last one written, which is
+  // the only order that can be explained to somebody watching the screen.
+  let queue = Promise.resolve();
+
   // ⚠️ THE SCREEN CHANGES FIRST AND IS PUT BACK IF THE DATABASE REFUSES. The store
   // rolls its own copy back too; this is the half a person can see. A size that
   // looks saved and was not is a label that prints wrong tomorrow.
-  async function save(patch) {
+  function save(patch) {
     const before = profile;
     profile = normalizeLabelProfile({ ...profile, ...patch });
     labelError.hidden = true;
     paintLabel();
-    if (!onSaveLabel) return;
-    try {
-      await onSaveLabel(patch);
-    } catch (err) {
-      profile = before;
-      paintLabel();
-      labelError.hidden = false;
-      labelError.textContent = t('label.settings.saveFailed');
-    }
+    if (!onSaveLabel) return queue;
+    queue = queue
+      // ⚠️ .catch BEFORE the next write, never after: one rejected save must not
+      // take the queue down with it and silently stop every later change.
+      .catch(() => {})
+      .then(() => onSaveLabel(patch))
+      .catch(() => {
+        profile = before;
+        paintLabel();
+        labelError.hidden = false;
+        labelError.textContent = t('label.settings.saveFailed');
+      });
+    return queue;
   }
 
   onLanguageChange(() => { if (root.isConnected) paintLabel(); });

@@ -165,7 +165,8 @@ function openLabel(recipe) {
   currentRecipe = recipe;
   leaveGuard = null;
   setHeader({ title: recipe.name || t('cat.label'), sub: t('cat.label'), back: true, add: false });
-  swap(renderLabel({
+  // ⚠️ HELD, NOT INLINED: mounted() below is what makes the fit measurement real.
+  const labelView = renderLabel({
     recipe,
     ingredients: getIngredients(),
     recipesById: getRecipesById(),
@@ -183,7 +184,12 @@ function openLabel(recipe) {
     // Remembered for the session only: which of the three somebody wants is a
     // property of the job they are doing this morning, not of the recipe.
     onShowsChange: (value) => { labelShows = value; },
-  }).root);
+  });
+  swap(labelView.root);
+  // ⚠️ AFTER swap(), NEVER BEFORE. The label measures itself against the paper it
+  // is drawn on, and a node that is not in the document measures zero — which reads
+  // as «it fits» for every label there is.
+  labelView.mounted();
 }
 
 // Every recipe's allergens on one screen, plus the work list. Read-only, so it
