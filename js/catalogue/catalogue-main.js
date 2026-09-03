@@ -249,7 +249,12 @@ function openEditor(recipe, draft) {
     title: recipe ? t('cat.editRecipe') : t('cat.newRecipe'),
     sub: t('cat.recipeCatalogue'), back: true, add: false,
   });
-  swap(renderEditor({ recipe, draft, allRecipes: getRecipes(), app }));
+  swap(renderEditor({
+    recipe, draft, allRecipes: getRecipes(), app,
+    // ⚠️ A GETTER, read when the editor is built: the two label fields appear only
+    // for a venue that actually prints them, and that switch lives in Settings.
+    getLabelProfile: () => getLabelProfile(),
+  }));
 }
 
 // Is the photograph reader switched on for this venue?

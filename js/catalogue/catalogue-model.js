@@ -138,7 +138,33 @@ export function normalizeCatalogueRecipe(raw) {
   const cookedG = normalizeWeight(raw.cookedGrams);
   if (rawG > 0) out.rawGrams = rawG;
   if (cookedG > 0) out.cookedGrams = cookedG;
+  // What a full label needs and a PPDS one does not: how much of the finished food
+  // is in one pack, and how long it keeps. Absent rather than 0 on exactly the same
+  // terms as the two weighings above — every recipe written before these existed
+  // must stay byte-identical until somebody actually fills them in.
+  //
+  // ⚠️ AND ABSENT IS NOT ZERO HERE EITHER, which matters more than it does above: a
+  // shelf life of 0 means «today», and printing today's date as a USE BY on food
+  // that keeps for a week is a safety statement nobody made. label-template-model.js
+  // refuses a missing one for the same reason; this is what keeps it missing.
+  const netG = normalizeWeight(raw.netWeightG);
+  if (netG > 0) out.netWeightG = netG;
+  const shelf = normalizeShelfLifeDays(raw.shelfLifeDays);
+  if (shelf !== null) out.shelfLifeDays = shelf;
   return out;
+}
+
+// How many days the finished food keeps. `null` means nobody has said — which is
+// NOT the same as 0, and the difference is a date printed on somebody's food.
+//
+// ⚠️ A BOOLEAN IS NOT A NUMBER OF DAYS. Number(true) is 1, which would turn a
+// corrupt flag into «keeps for one day» on a product that keeps for a year.
+export function normalizeShelfLifeDays(raw) {
+  if (typeof raw !== 'number' && typeof raw !== 'string') return null;
+  if (typeof raw === 'string' && !raw.trim()) return null;
+  const n = Math.floor(Number(raw));
+  if (!Number.isFinite(n) || n < 0 || n > MAX_SHELF_LIFE_DAYS) return null;
+  return n;
 }
 
 // How much weight this recipe loses on the way to being finished — evaporation in
@@ -171,6 +197,10 @@ export function normalizeLossPct(raw) {
 // A bound, not a judgement: it exists to stop a runaway value reaching the database,
 // the same reason the ingredient list is capped at 300 rows. Ten tonnes of dough.
 export const MAX_WEIGHT_G = 10000000;
+
+// Ten years. Long enough for anything a bakery sells, and short enough that a
+// mistyped phone number cannot become a shelf life.
+export const MAX_SHELF_LIFE_DAYS = 3650;
 
 export function normalizeWeight(raw) {
   const n = Number(raw);

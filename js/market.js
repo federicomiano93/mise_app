@@ -113,6 +113,14 @@ const LABEL_WORDS = Object.freeze({
     typicalValues: 'Typical values',
     per100g: 'per 100 g',
     noneOfThe14: 'None of the 14',
+    // ⚠️ THE FULL-LABEL PARTICULARS. «Use by» is a SAFETY statement and «best
+    // before» a quality one, and the two are not interchangeable in either language
+    // — which is exactly why they are two entries here rather than one with a
+    // qualifier somebody could translate away.
+    netWeight: 'Net weight',
+    useBy: 'Use by',
+    bestBefore: 'Best before',
+    storage: 'Storage',
   },
   it: {
     contains: 'Contiene',
@@ -122,6 +130,10 @@ const LABEL_WORDS = Object.freeze({
     typicalValues: 'Valori medi',
     per100g: 'per 100 g',
     noneOfThe14: 'Nessuno dei 14',
+    netWeight: 'Peso netto',
+    useBy: 'Da consumarsi entro il',
+    bestBefore: 'Da consumarsi preferibilmente entro il',
+    storage: 'Conservazione',
   },
 });
 

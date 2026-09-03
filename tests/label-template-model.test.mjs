@@ -18,6 +18,7 @@ import {
   resolveLabel, normalizeLabelProfile, minFontMm, sizeIdFor, blockText,
   DEFAULT_PROFILE, LABEL_SIZES, DEFAULT_SIZE_ID, BLOCK_ROLES,
   PRINTER_LANGUAGES, DPI_CHOICES,
+  netWeightText, useByDate, dateText as dateTextOf, DATE_KINDS,
 } from '../js/catalogue/label-template-model.js';
 
 const ing = (name, emphasise = false) => ({ id: name, name, grams: 100, allergens: [], emphasise });
@@ -156,11 +157,130 @@ test('the label words follow the language it is asked in, which is the country s
   assert.match(it.blocks.find(b => b.role === 'contains').text, /^Contiene: /);
 });
 
-test('the date is printed only when one is given for this batch', () => {
-  const without = resolveLabel(label(), DEFAULT_PROFILE, {}, 'en');
-  assert.ok(!without.blocks.some(b => b.role === 'date'));
-  const withDate = resolveLabel(label(), DEFAULT_PROFILE, { dateText: 'Use by 12/09/2026' }, 'en');
-  assert.equal(withDate.blocks.at(-1).text, 'Use by 12/09/2026');
+test('⚠️ the date needs BOTH the switch and a date for this batch', () => {
+  // The switch says «this venue prints a date»; the date itself belongs to the
+  // morning. Either one alone prints nothing, which is the point of both.
+  const dated = { ...DEFAULT_PROFILE, showDate: true };
+  assert.ok(!resolveLabel(label(), DEFAULT_PROFILE, { dateText: '12/09/2026' }, 'en')
+    .blocks.some(b => b.role === 'date'), 'no switch, no date');
+  assert.ok(!resolveLabel(label(), dated, {}, 'en')
+    .blocks.some(b => b.role === 'date'), 'no date, no line');
+  const both = resolveLabel(label(), dated, { dateText: '12/09/2026' }, 'en');
+  assert.equal(both.blocks.find(b => b.role === 'date').text, 'Use by 12/09/2026');
+});
+
+test('⚠️⚠️ «use by» and «best before» are not interchangeable, in either language', () => {
+  // One is a SAFETY statement and one is about quality. A quality date read as a
+  // safety one wastes food; a safety date read as a quality one is somebody eating
+  // something they should not have.
+  const useBy = { ...DEFAULT_PROFILE, showDate: true, dateKind: 'useBy' };
+  const best = { ...DEFAULT_PROFILE, showDate: true, dateKind: 'bestBefore' };
+  const line = (p, lang) => resolveLabel(label(), p, { dateText: '12/09/2026' }, lang)
+    .blocks.find(b => b.role === 'date').text;
+  assert.equal(line(useBy, 'en'), 'Use by 12/09/2026');
+  assert.equal(line(best, 'en'), 'Best before 12/09/2026');
+  assert.equal(line(useBy, 'it'), 'Da consumarsi entro il 12/09/2026');
+  assert.equal(line(best, 'it'), 'Da consumarsi preferibilmente entro il 12/09/2026');
+  // And the stricter one is what an unset venue would get, if it ever switched the
+  // block on without choosing.
+  assert.equal(normalizeLabelProfile({}).dateKind, 'useBy');
+  assert.equal(normalizeLabelProfile({ dateKind: 'whenever' }).dateKind, 'useBy');
+});
+
+// ── The particulars a full label carries ─────────────────────────────────────
+
+test('⚠️⚠️ EVERY full-label block is off and empty until somebody switches it on', () => {
+  // This is what let the whole thing ship without asking anybody a question: a venue
+  // that sells over its own counter needs the PPDS minimum, and its labels come out
+  // byte-identical to the day before.
+  const plain = resolveLabel(label(), DEFAULT_PROFILE, {
+    netWeightG: 500, dateText: '12/09/2026',
+  }, 'en');
+  assert.deepEqual(plain.blocks.map(b => b.role), ['name', 'ingredients', 'contains']);
+  for (const key of ['showWeight', 'showDate', 'showStorage', 'showBusiness']) {
+    assert.equal(DEFAULT_PROFILE[key], false, `${key} must default to off`);
+    assert.equal(normalizeLabelProfile({ [key]: 'yes' })[key], false, `${key} must need a real true`);
+    assert.equal(normalizeLabelProfile({ [key]: 1 })[key], false);
+    assert.equal(normalizeLabelProfile({ [key]: true })[key], true);
+  }
+});
+
+test('⚠️⚠️ a block switched on with nothing behind it prints NOTHING, not a heading', () => {
+  // «Peso netto:» followed by nothing is a mandatory particular that LOOKS declared
+  // and is not — worse than its absence. The switch says «print this if you have
+  // it», never «print this heading».
+  const all = {
+    ...DEFAULT_PROFILE,
+    showWeight: true, showDate: true, showStorage: true, showBusiness: true,
+  };
+  const out = resolveLabel(label(), all, {}, 'en');
+  assert.deepEqual(out.blocks.map(b => b.role), ['name', 'ingredients', 'contains']);
+});
+
+test('the full label reads in the order a label is read in', () => {
+  const all = {
+    ...DEFAULT_PROFILE,
+    showWeight: true, showDate: true, showStorage: true, showBusiness: true,
+    storageText: 'Keep refrigerated', businessName: 'A Bakery', businessAddress: '1 High Street',
+  };
+  const out = resolveLabel(label({ mayContain: ['nuts-almond'] }), all, {
+    netWeightG: 500, dateText: '12/09/2026',
+  }, 'en');
+  assert.deepEqual(out.blocks.map(b => b.role),
+    ['name', 'ingredients', 'contains', 'mayContain', 'netWeight', 'date', 'storage', 'business']);
+  for (const role of out.blocks.map(b => b.role)) assert.ok(BLOCK_ROLES.includes(role));
+});
+
+test('⚠️ the name and the address are ONE block — a name with no address identifies nobody', () => {
+  const of = (over) => {
+    const out = resolveLabel(label(), { ...DEFAULT_PROFILE, showBusiness: true, ...over }, {}, 'en')
+      .blocks.find(b => b.role === 'business');
+    return out ? out.text : null;
+  };
+  assert.equal(of({ businessName: 'A Bakery', businessAddress: '1 High Street' }), 'A Bakery, 1 High Street');
+  // Half of it is still more than none on a label somebody has to trace back.
+  assert.equal(of({ businessName: 'A Bakery' }), 'A Bakery');
+  assert.equal(of({ businessAddress: '1 High Street' }), '1 High Street');
+  assert.equal(of({}), null);
+});
+
+test('⚠️⚠️ the weight is written the way the COUNTRY writes numbers', () => {
+  // «1.2 kg» in Italy is «1,2 kg», and a decimal point read as a thousands separator
+  // is a label claiming a thousand times the weight.
+  assert.equal(netWeightText(500, 'en'), '500 g');
+  assert.equal(netWeightText(500, 'it'), '500 g');
+  assert.equal(netWeightText(1200, 'en'), '1.2 kg');
+  assert.equal(netWeightText(1200, 'it'), '1,2 kg');
+  assert.equal(netWeightText(1000, 'en'), '1 kg');
+  assert.equal(netWeightText(2500, 'it'), '2,5 kg');
+});
+
+test('a weight nobody weighed prints nothing at all', () => {
+  for (const bad of [0, -1, null, undefined, 'heavy', NaN]) {
+    assert.equal(netWeightText(bad, 'en'), '', `${JSON.stringify(bad)} should print nothing`);
+  }
+  const out = resolveLabel(label(), { ...DEFAULT_PROFILE, showWeight: true }, { netWeightG: 0 }, 'en');
+  assert.ok(!out.blocks.some(b => b.role === 'netWeight'));
+});
+
+test('⚠️ the date is worked out from the day it is PRINTED, never stored on a recipe', () => {
+  // A recipe knows how long the food keeps; only the morning knows when it was made.
+  const made = new Date('2026-09-03T08:00:00.000Z');
+  assert.equal(dateTextOf(useByDate(3, made), 'en'), '06/09/2026');
+  assert.equal(dateTextOf(useByDate(0, made), 'en'), '03/09/2026');
+  assert.equal(dateTextOf(useByDate(365, made), 'en'), '03/09/2027');
+  // A shelf life nobody set is not a date.
+  for (const bad of [null, undefined, -1, 'soon', NaN, 99999]) {
+    assert.equal(useByDate(bad, made), null, `${JSON.stringify(bad)} is not a shelf life`);
+  }
+});
+
+test('⚠️ the date is written the way the COUNTRY writes dates, four-digit year', () => {
+  const d = new Date('2026-09-03T08:00:00.000Z');
+  assert.equal(dateTextOf(d, 'en'), '03/09/2026');
+  assert.equal(dateTextOf(d, 'it'), '03/09/2026');
+  assert.equal(dateTextOf(null, 'en'), '');
+  assert.equal(dateTextOf(new Date('nonsense'), 'en'), '');
 });
 
 test('the measured text is what is actually drawn, separators included', () => {

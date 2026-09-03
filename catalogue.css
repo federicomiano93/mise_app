@@ -1405,3 +1405,12 @@ body.cat-zoom-lock { overflow: hidden; }
   line-height: 1.45;
   color: var(--cat-text-2);
 }
+
+/* A free-typed line on the label settings — an address, how to keep it. The .cat-field
+   wrapper is shared with the number boxes, which set a bold monospace face for figures;
+   words need the ordinary one. */
+.lab-text-field { flex: 1 1 100%; }
+.lab-text-input {
+  font-family: var(--cat-font) !important;
+  font-weight: 500 !important;
+}

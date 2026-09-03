@@ -69,13 +69,25 @@ const BLOCK_SCALE = Object.freeze({
   ingredients: 1,
   contains: 1.05,
   mayContain: 0.9,
-  date: 0.9,
+  // ⚠️ THE NET QUANTITY AND THE DATE ARE NOT FOOTNOTES. Both are mandatory
+  // particulars on a full label and both are things a person actually looks for, so
+  // neither is set smaller than the ingredient list. Only the address is, because
+  // nobody reads it at arm's length and it is the longest thing on the label.
+  netWeight: 1,
+  date: 1,
+  storage: 0.9,
+  business: 0.82,
 });
 
-// The order is the reading order and it is not a preference: the name says what the
-// food is, the list says what is in it, and the two allergen lines summarise the
-// list underneath it. `date` sits last because it is the only optional one.
-export const BLOCK_ROLES = Object.freeze(['name', 'ingredients', 'contains', 'mayContain', 'date']);
+// ⚠️ THE ORDER IS THE ONE A LABEL IS READ IN, AND IT IS NOT A PREFERENCE. The name
+// says what the food is, the list says what is in it, the two allergen lines
+// summarise that list, and then come the particulars a full label carries: how much
+// of it there is, until when, how to keep it, and who made it. Anybody adding a
+// block puts it where it BELONGS in that reading, not at the end.
+export const BLOCK_ROLES = Object.freeze([
+  'name', 'ingredients', 'contains', 'mayContain',
+  'netWeight', 'date', 'storage', 'business',
+]);
 
 // ── The profile ──────────────────────────────────────────────────────────────
 //
@@ -93,8 +105,35 @@ export const DEFAULT_PROFILE = Object.freeze({
   baseFontMm: 2.6,
   dpi: 203,
   printerLanguage: 'os',
+  // ⚠️⚠️ EVERY ONE OF THE FULL-LABEL BLOCKS IS OFF, AND EMPTY, BY DEFAULT. That is
+  // what let this ship without asking anybody a question: a venue that sells only
+  // over its own counter needs the PPDS minimum — the name and the ingredients with
+  // the allergens emphasised — and its labels come out byte-identical to the day
+  // before. Nothing here changes a label until somebody switches it on.
   showDate: false,
+  showWeight: false,
+  showStorage: false,
+  showBusiness: false,
+  // ⚠️ «Use by» is a SAFETY statement and «best before» is a quality one. The
+  // default is the stricter of the two on purpose: a quality date read as a safety
+  // one wastes food, and a safety date read as a quality one is somebody eating
+  // something they should not have. The settings screen explains the difference
+  // rather than leaving it to be guessed.
+  dateKind: 'useBy',
+  storageText: '',
+  businessName: '',
+  businessAddress: '',
 });
+
+export const DATE_KINDS = Object.freeze(['useBy', 'bestBefore']);
+
+// The longest a free-typed line may be. Generous, and bounded: these end up in a
+// Firestore document and on a piece of paper, and neither wants a novel.
+const MAX_TEXT = 200;
+
+function text(value, max = MAX_TEXT) {
+  return typeof value === 'string' ? value.trim().slice(0, max) : '';
+}
 
 export const PRINTER_LANGUAGES = Object.freeze(['os', 'zpl']);
 export const DPI_CHOICES = Object.freeze([203, 300]);
@@ -124,7 +163,68 @@ export function normalizeLabelProfile(doc) {
     // FALSE — a shelf life nobody chose — so it stays off until somebody switches it
     // on. The allergen blocks take the opposite direction, above.
     showDate: !!(doc && doc.showDate === true),
+    // ⚠️ === true FOR ALL FOUR, like showDate and for the same reason: these blocks
+    // can print something FALSE — a weight nobody weighed, an address that has
+    // moved — so they stay off until somebody says otherwise. That is the OPPOSITE
+    // direction from the allergen switches, which default ON because their failure
+    // is somebody in hospital rather than a wrong line on a sticker.
+    showWeight: !!(doc && doc.showWeight === true),
+    showStorage: !!(doc && doc.showStorage === true),
+    showBusiness: !!(doc && doc.showBusiness === true),
+    dateKind: DATE_KINDS.includes(doc && doc.dateKind) ? doc.dateKind : d.dateKind,
+    storageText: text(doc && doc.storageText),
+    businessName: text(doc && doc.businessName),
+    businessAddress: text(doc && doc.businessAddress),
   };
+}
+
+// ── How much of it there is ──────────────────────────────────────────────────
+//
+// ⚠️ THE NUMBER FORMAT FOLLOWS THE COUNTRY, NOT THE SCREEN, exactly as the words do.
+// «1.2 kg» in Italy is «1,2 kg», and a decimal point read as a thousands separator
+// is a label claiming a thousand times the weight. The locale table is local because
+// this file may not import the dictionary — see tests/i18n-label-separation.
+const LOCALE = Object.freeze({ en: 'en-GB', it: 'it-IT' });
+
+export function netWeightText(grams, lang = 'en') {
+  const g = Number(grams);
+  if (!Number.isFinite(g) || g <= 0) return '';
+  const locale = LOCALE[lang] || LOCALE.en;
+  // Under a kilo it is grams and whole numbers; above it, kilos to one decimal —
+  // which is how a scale reads and how a label is written.
+  if (g < 1000) return `${new Intl.NumberFormat(locale).format(Math.round(g))} g`;
+  const kg = Math.round(g / 100) / 10;
+  return `${new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(kg)} kg`;
+}
+
+// ── Until when ───────────────────────────────────────────────────────────────
+//
+// ⚠️ THE DATE IS WORKED OUT FROM THE DAY IT IS PRINTED, never stored on the recipe.
+// A recipe knows how long the food keeps; only the morning knows when it was made.
+export function useByDate(shelfLifeDays, madeOn = new Date()) {
+  // ⚠️⚠️ A SHELF LIFE NOBODY SET IS NOT ZERO DAYS. `Number(null)` is 0 and `Number('')`
+  // is 0, so the first version answered TODAY for a recipe that had never been given
+  // one — printing today's date as a USE BY, which is a safety statement about food
+  // that may keep for a week. Caught by a test, and it is the reason this check comes
+  // before the arithmetic rather than after it.
+  if (typeof shelfLifeDays !== 'number' && typeof shelfLifeDays !== 'string') return null;
+  if (typeof shelfLifeDays === 'string' && !shelfLifeDays.trim()) return null;
+  const days = Math.floor(Number(shelfLifeDays));
+  if (!Number.isFinite(days) || days < 0 || days > 3650) return null;
+  const base = madeOn instanceof Date ? madeOn : new Date(madeOn);
+  if (Number.isNaN(base.getTime())) return null;
+  const out = new Date(base.getTime());
+  out.setDate(out.getDate() + days);
+  return out;
+}
+
+export function dateText(date, lang = 'en') {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return '';
+  const locale = LOCALE[lang] || LOCALE.en;
+  // ⚠️ DAY / MONTH / YEAR, ALL NUMERIC, AND FOUR-DIGIT. Both countries this app
+  // sells in read dates that way round; a month name would have to be translated
+  // and a two-digit year is ambiguous on food that keeps for a year.
+  return new Intl.DateTimeFormat(locale, { day: '2-digit', month: '2-digit', year: 'numeric' }).format(date);
 }
 
 // Which named page a size maps to, so label-print.css can carry a static @page rule
@@ -152,7 +252,7 @@ export function minFontMm(profile) {
 // the allergens inside it have to be emphasised WHERE THEY APPEAR. The regulation
 // asks for the allergen to stand out inside the list, not only to be summarised
 // underneath, and a single string cannot say which words those are.
-function blocksFor(label, lang, extras) {
+function blocksFor(label, lang, extras, profile) {
   const out = [];
   if (label.name) out.push({ role: 'name', text: label.name, parts: null, prefix: '' });
 
@@ -169,10 +269,42 @@ function blocksFor(label, lang, extras) {
   const traces = mayContainLine(label, lang);
   if (traces) out.push({ role: 'mayContain', text: traces, parts: null, prefix: '' });
 
-  // The date is typed at print time and stored nowhere: it belongs to the batch being
-  // labelled this morning, not to the recipe.
-  if (extras && extras.dateText) {
-    out.push({ role: 'date', text: String(extras.dateText), parts: null, prefix: '' });
+  // ── The particulars a FULL label carries ──────────────────────────────────
+  //
+  // ⚠️⚠️ EVERY ONE OF THESE IS SKIPPED WHEN IT HAS NOTHING TO SAY, and that is not
+  // tidiness. A block switched on with no value behind it would print «Peso netto:»
+  // followed by nothing — a mandatory particular that LOOKS declared and is not,
+  // which is worse than its absence. The switch says «print this if you have it»,
+  // never «print this heading».
+  const p = profile;
+
+  if (p.showWeight) {
+    const weight = netWeightText(extras && extras.netWeightG, lang);
+    if (weight) out.push({ role: 'netWeight', text: `${labelWord('netWeight', lang)}: ${weight}`, parts: null, prefix: '' });
+  }
+
+  // The date belongs to the batch being labelled this morning, not to the recipe —
+  // the recipe knows only how LONG the food keeps. Worked out at print time.
+  if (p.showDate && extras && extras.dateText) {
+    out.push({
+      role: 'date',
+      text: `${labelWord(p.dateKind, lang)} ${extras.dateText}`,
+      parts: null, prefix: '',
+    });
+  }
+
+  if (p.showStorage && p.storageText) {
+    out.push({ role: 'storage', text: `${labelWord('storage', lang)}: ${p.storageText}`, parts: null, prefix: '' });
+  }
+
+  // ⚠️ THE NAME AND THE ADDRESS ARE ONE BLOCK, because the law asks for the business
+  // that can be held responsible — a name with no address does not identify anybody.
+  // With only one of the two filled in, this prints what there is rather than
+  // refusing: half an address is still more than none on a label somebody has to
+  // trace back.
+  if (p.showBusiness) {
+    const who = [p.businessName, p.businessAddress].filter(Boolean).join(', ');
+    if (who) out.push({ role: 'business', text: who, parts: null, prefix: '' });
   }
 
   return out;
@@ -261,7 +393,7 @@ export function resolveLabel(label, profile = DEFAULT_PROFILE, extras = {}, lang
   if (!label || !label.ok) return { ok: false, reason: 'not-ok' };
 
   const p = normalizeLabelProfile(profile);
-  const blocks = blocksFor(label, lang, extras);
+  const blocks = blocksFor(label, lang, extras, p);
   if (!blocks.length) return { ok: false, reason: 'no-blocks' };
 
   const innerW = Math.max(1, p.widthMm - p.marginMm * 2);
