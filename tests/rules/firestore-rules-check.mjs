@@ -1181,6 +1181,81 @@ async function configAndLogs() {
   // Turning a setting off is a write. Nothing deletes a settings document.
   await expectDenied('labels: the profile cannot be deleted',
     () => deleteWrite(`${A}/config/labels`));
+
+  // ── The print queue ───────────────────────────────────────────────────────
+  //
+  // ⚠️ THE TRANSITIONS ARE THE POINT. Two agents running at once both see a queued
+  // job and both try to take it; only the one whose write lands on a document still
+  // saying «queued» may win, or the label prints twice.
+  const job = (over = {}) => ({
+    bakery: 'main', status: 'queued', payload: '^XA^CI28^FDPane^FS^XZ', copies: 1,
+    createdAt: '2026-09-03T10:00:00.000Z', createdBy: ALICE.uid, ...over,
+  });
+
+  await expectAllowed('queue: the counter can put a label in the queue', () =>
+    wholeWrite(`${A}/print-jobs/J1`, job()));
+
+  // ⚠️ CREATING A JOB IS canUse, NOT canManage — printing a label at the counter is
+  // exactly who this exists for. SAM is a plain employee.
+  await expectAllowed('queue: an EMPLOYEE can print, which is the whole point', () =>
+    wholeWrite(`${A}/print-jobs/J_SAM`, job({ createdBy: SAM.uid }), asAccount(SAM)));
+
+  await expectDenied('queue: a job created in somebody else s name',
+    () => wholeWrite(`${A}/print-jobs/J_FAKE`, job({ createdBy: SAM.uid })));
+  await expectDenied('queue: a job that is born already claimed',
+    () => wholeWrite(`${A}/print-jobs/J_BORN`, job({ status: 'claimed' })));
+  await expectDenied('queue: an empty job — a sheet of blank paper',
+    () => wholeWrite(`${A}/print-jobs/J_EMPTY`, job({ payload: '' })));
+  await expectDenied('queue: a runaway job',
+    () => wholeWrite(`${A}/print-jobs/J_HUGE`, job({ payload: 'x'.repeat(20001) })));
+  await expectDenied('queue: a whole roll of copies from one tap',
+    () => wholeWrite(`${A}/print-jobs/J_MANY`, job({ copies: 5000 })));
+  await expectDenied('queue: a key nobody put in the whitelist',
+    () => wholeWrite(`${A}/print-jobs/J_EXTRA`, { ...job(), printerIp: '10.0.0.5' }));
+
+  // Claiming it.
+  await expectAllowed('queue: an agent claims a waiting job', () =>
+    mergeWrite(`${A}/print-jobs/J1`, {
+      status: 'claimed', claimedBy: ALICE.uid, claimedAt: '2026-09-03T10:00:05.000Z',
+    }));
+  await expectDenied('queue: …and a SECOND agent cannot claim the same one',
+    () => mergeWrite(`${A}/print-jobs/J1`, {
+      status: 'claimed', claimedBy: SAM.uid, claimedAt: '2026-09-03T10:00:06.000Z',
+    }, asAccount(SAM)));
+
+  // ⚠️⚠️ THE ONE THAT PREVENTS A LABEL PRINTING TWICE.
+  await expectDenied('queue: a claimed job can never go back to the queue',
+    () => mergeWrite(`${A}/print-jobs/J1`, { status: 'queued' }));
+
+  // ⚠️ AND THE ONE THAT PREVENTS A LABEL SAYING SOMETHING ELSE. An update that could
+  // rewrite the payload would let one device change what another device's label
+  // prints, between the tap and the paper.
+  await expectDenied('queue: what a job SAYS cannot be rewritten after it is queued',
+    () => mergeWrite(`${A}/print-jobs/J1`, { payload: '^XA^FDsomething else^FS^XZ' }));
+  await expectDenied('queue: nor who asked for it',
+    () => mergeWrite(`${A}/print-jobs/J1`, { createdBy: SAM.uid }));
+
+  await expectAllowed('queue: the agent reports it printed', () =>
+    mergeWrite(`${A}/print-jobs/J1`, { status: 'done' }));
+  await expectDenied('queue: a finished job cannot be reopened',
+    () => mergeWrite(`${A}/print-jobs/J1`, { status: 'claimed' }));
+
+  await expectAllowed('queue: a printed job is cleared away', () =>
+    deleteWrite(`${A}/print-jobs/J1`));
+
+  // ── The heartbeat ─────────────────────────────────────────────────────────
+  await expectAllowed('agent: the shop computer says it is listening', () =>
+    wholeWrite(`${A}/print-agents/PC1`, {
+      bakery: 'main', lastSeenAt: '2026-09-03T10:00:00.000Z',
+      printer: 'ZDesigner ZD620', version: '1.0.0',
+    }, asAccount(SAM)));
+  await expectDenied('agent: a heartbeat with no time on it',
+    () => wholeWrite(`${A}/print-agents/PC2`, { bakery: 'main', lastSeenAt: 12345 }));
+  await expectAllowed('agent: an employee CAN read whether the printer is there',
+    readAs(SAM, `${A}/print-agents/PC1`));
+  await expectDenied('agent: retiring a computer belongs to whoever runs the place',
+    () => deleteWrite(`${A}/print-agents/PC1`, asAccount(SAM)));
+  await expectAllowed('agent: …and the owner can', () => deleteWrite(`${A}/print-agents/PC1`));
 }
 
 // ── Run ──────────────────────────────────────────────────────────────────────

@@ -29,3 +29,10 @@ ui-debug.log
 
 # Local notes split out of the (gitignored) CLAUDE.md — same rules apply: never committed.
 STORICO-DEPLOY.md
+
+# ⚠️ THE PRINT AGENT'S CREDENTIALS. They belong in %LOCALAPPDATA%\Mise\, never in
+# here — everything in this repository is served by GitHub Pages, so a password
+# committed beside the code would be published on the web. print-agent/README.md
+# says so and tests/print-agent.test.mjs fails if the file ever appears; this line
+# is the third belt, because the cost of the mistake is somebody else's database.
+print-agent/print-agent.json

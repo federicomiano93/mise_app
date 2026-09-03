@@ -23,11 +23,16 @@ import {
   watchSuppliers,
   watchLabelConfig,
   saveLabelConfig,
+  watchPrintAgents,
+  queuePrintJob,
   saveRecipeDoc,
   removeRecipeDoc,
   newRecipeId,
 } from './firebase-catalogue.js';
 import { normalizeLabelProfile } from './label-template-model.js';
+import { buildJob, printerPresence } from '../print-queue-model.js';
+import { currentSession } from '../firebase.js';
+import { currentLocationId } from '../location.js';
 
 const CACHE_KEY = 'catalogue-recipes';
 const USAGE_KEY = 'catalogue-usage';
@@ -44,6 +49,11 @@ let recipes = readCache();
 let ingredients = readIngredientCache();
 let suppliers = readJsonMap(SUPPLIERS_KEY);
 let labelConfig = readJson(LABEL_CONFIG_KEY);
+// ⚠️ NOT CACHED TO localStorage, deliberately, unlike everything else here. A
+// heartbeat is a statement about RIGHT NOW; a remembered one would tell a phone
+// that opened offline that the shop computer is listening, which is the one
+// thing this value exists to answer honestly.
+let printAgents = [];
 let usage = readUsage();
 let scaled = readScaled();
 let notify = null;         // called with the new recipe list whenever it changes
@@ -133,7 +143,49 @@ export function initCatalogue(onUpdate, onError) {
     () => {},
   ).catch(() => {});
 
+  // Which shop computers are listening for print jobs. Quiet on failure, like the
+  // two above: a venue that has never run an agent has no documents here, and
+  // «nothing is listening» is the right answer for it rather than an error.
+  watchPrintAgents(
+    remote => {
+      printAgents = Array.isArray(remote) ? remote : [];
+      if (notify) notify(recipes);
+    },
+    () => { printAgents = []; },
+  ).catch(() => { printAgents = []; });
+
   return recipes;
+}
+
+// ── The print queue ──────────────────────────────────────────────────────────
+
+// Is a computer with a printer answering right now? Asked at paint time, never
+// remembered — see the note where printAgents is declared.
+export function printerReady() {
+  return printerPresence(printAgents, Date.now()).ready;
+}
+
+// Put a label in the queue for that computer to print.
+//
+// ⚠️ NOT LOCAL-FIRST, and it is the one write here that must not be. Everything else
+// in this store belongs to the venue and can wait for the network; a print job is a
+// request to a machine in another room, and pretending it was queued when it was not
+// is somebody standing at a printer that will never move. It throws, and the screen
+// says so.
+export async function queueLabelJob(payload, copies = 1) {
+  // ⚠️ THE LOCATION IS READ HERE, AT CALL TIME. buildJob() refuses a job with no
+  // venue, which is what makes «print before a location is open» impossible rather
+  // than merely unlikely — and the data layer stamps the same value again, because
+  // the rules check the field against the folder the document lands in.
+  const job = buildJob({
+    payload,
+    copies,
+    createdBy: currentSession().user && currentSession().user.uid,
+    bakery: currentLocationId(),
+    now: Date.now(),
+  });
+  if (!job) throw new Error('nothing to print');
+  return queuePrintJob(job);
 }
 
 // ── The label profile ────────────────────────────────────────────────────────

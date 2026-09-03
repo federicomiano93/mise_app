@@ -16,6 +16,7 @@
 // and is allowed; everything fixed lives in label-print.css.
 
 import { el } from './dom.js';
+import { emphasised } from './label-template-model.js';
 
 const HOST_ID = 'labelPrint';
 
@@ -64,9 +65,15 @@ export function buildSheet(resolved, fontMm = resolved.fontMm) {
       // regulation asks for — not only summarised on the line underneath.
       if (block.prefix) node.appendChild(document.createTextNode(block.prefix));
       block.parts.forEach((part, j) => {
+        // ⚠️⚠️ THE PREVIEW SHOWS THE EMPHASIS THE PRINTER CAN ACTUALLY PRODUCE.
+        // A Zebra driven by ZPL has no bold inside a wrapped paragraph, so it
+        // emphasises by CAPITALS — and a preview showing bold where the paper will
+        // show capitals is exactly the drift this file exists to prevent. The mode
+        // comes from the venue's printer, decided once in label-template-model.js.
+        const caps = resolved.emphasis === 'caps';
         node.appendChild(el('span', {
-          class: part.emphasise ? 'lab-sheet-ing lab-sheet-ing--allergen' : 'lab-sheet-ing',
-          text: part.text,
+          class: (part.emphasise && !caps) ? 'lab-sheet-ing lab-sheet-ing--allergen' : 'lab-sheet-ing',
+          text: part.emphasise ? emphasised(part.text, resolved.emphasis) : part.text,
         }));
         if (j < block.parts.length - 1) node.appendChild(document.createTextNode(', '));
       });

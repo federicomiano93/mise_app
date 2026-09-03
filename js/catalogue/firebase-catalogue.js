@@ -27,6 +27,7 @@ import {
   deleteDoc,
   onSnapshot,
   runTransaction,
+  addDoc,
 } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
 // Reuse the default app if firebase.js already created it; otherwise create it.
@@ -47,6 +48,8 @@ const INGREDIENT_PRICES = 'ingredient-prices';
 const SUPPLIERS = 'suppliers';
 const CONFIG = 'config';
 const LABELS_DOC = 'labels';
+const PRINT_JOBS = 'print-jobs';
+const PRINT_AGENTS = 'print-agents';
 
 // Resolves once a location is OPEN — not merely once someone is signed in.
 // It no longer needs its own timeout: a sign-in that cannot complete is now a
@@ -171,6 +174,40 @@ export async function watchLabelConfig(onChange, onError) {
 export async function saveLabelConfig(patch) {
   await authReady;
   return setDoc(doc(db, pathFor(CONFIG), LABELS_DOC), withBakery(patch), { merge: true });
+}
+
+// ── The print queue ──────────────────────────────────────────────────────────
+//
+// ⚠️ IT LIVES IN THIS FILE RATHER THAN ITS OWN, and that is a deliberate departure
+// from the plan. A separate data layer would mean a FOURTH copy of the Firebase
+// init boilerplate — getApps/getApp/initializeApp, the emulator switch, sessionReady
+// — and every copy is a place the emulator wiring can be forgotten, which is a
+// mistake this project has already made three times. One more collection in the
+// catalogue's own data layer is cheaper than one more copy of that.
+
+// A label somebody tapped Print on, waiting for the agent on the shop computer.
+// The job is built by js/print-queue-model.js so the app and the rules describe the
+// same document.
+export async function queuePrintJob(job) {
+  await authReady;
+  return addDoc(collection(db, pathFor(PRINT_JOBS)), withBakery(job));
+}
+
+// Which computers are listening, so the screen can say «printer ready» BEFORE
+// anybody taps rather than leaving them to guess (P17).
+//
+// COST (P14): one listener over a collection with one document in it — a venue has
+// one shop computer — attached only while the catalogue page is open, like the
+// recipes and the ingredients above. Quiet on failure: a venue that has never run
+// an agent has no documents here, and «no printer listening» is the right answer
+// for it rather than an error.
+export async function watchPrintAgents(onChange, onError) {
+  await authReady;
+  return onSnapshot(
+    collection(db, pathFor(PRINT_AGENTS)),
+    snap => onChange(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
+    err => { console.warn('watchPrintAgents failed:', err); if (onError) onError(err); },
+  );
 }
 
 // Create or merge a recipe document at a known id (id is generated client-side).

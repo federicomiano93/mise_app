@@ -180,9 +180,15 @@ function blocksFor(label, lang, extras) {
 
 // The whole of a block as one run of text, for measuring. The separators are the
 // ones the printed block actually uses, so the estimate measures what is drawn.
-export function blockText(block) {
+// ⚠️ THE EMPHASIS IS APPLIED HERE TOO, and it is not cosmetic in a fit estimate:
+// CAPITALS ARE WIDER. Measuring «Farina 0» and printing «FARINA 0» is measuring a
+// shorter label than the one that comes out — on a declaration whose whole job is to
+// make the allergens stand out, so the widest words are exactly the emphasised ones.
+export function blockText(block, emphasis = 'bold') {
   if (block.parts) {
-    return (block.prefix || '') + block.parts.map(p => p.text).join(', ') + '.';
+    return (block.prefix || '')
+      + block.parts.map(p => (p.emphasise ? emphasised(p.text, emphasis) : p.text)).join(', ')
+      + '.';
   }
   return block.text || '';
 }
@@ -226,11 +232,11 @@ function linesFor(text, fontMm, widthMm) {
   return lines;
 }
 
-function heightAt(blocks, baseFontMm, widthMm) {
+function heightAt(blocks, baseFontMm, widthMm, emphasis) {
   let total = 0;
   blocks.forEach((block, i) => {
     const font = baseFontMm * (BLOCK_SCALE[block.role] || 1);
-    total += linesFor(blockText(block), font, widthMm) * font * LINE_HEIGHT;
+    total += linesFor(blockText(block, emphasis), font, widthMm) * font * LINE_HEIGHT;
     if (i < blocks.length - 1) total += font * BLOCK_GAP_EM;
   });
   return total;
@@ -261,15 +267,16 @@ export function resolveLabel(label, profile = DEFAULT_PROFILE, extras = {}, lang
   const innerW = Math.max(1, p.widthMm - p.marginMm * 2);
   const innerH = Math.max(1, p.heightMm - p.marginMm * 2);
   const floor = minFontMm(p);
+  const emphasis = emphasisFor(p);
 
   // Never START above what the venue asked for: a label that fits at the chosen size
   // is printed at the chosen size, and only one that does not gets shrunk.
   let font = Math.max(p.baseFontMm, floor);
-  let fits = heightAt(blocks, font, innerW) <= innerH;
+  let fits = heightAt(blocks, font, innerW, emphasis) <= innerH;
 
   while (!fits && round2(font - STEP_MM) >= floor) {
     font = round2(font - STEP_MM);
-    fits = heightAt(blocks, font, innerW) <= innerH;
+    fits = heightAt(blocks, font, innerW, emphasis) <= innerH;
   }
 
   return {
@@ -285,7 +292,33 @@ export function resolveLabel(label, profile = DEFAULT_PROFILE, extras = {}, lang
     scale: BLOCK_SCALE,
     lineHeight: LINE_HEIGHT,
     blockGapEm: BLOCK_GAP_EM,
+    // ⚠️⚠️ HOW AN ALLERGEN IS MADE TO STAND OUT, AND IT DEPENDS ON THE PRINTER.
+    // See emphasisFor(): a thermal printer driven by ZPL has no bold inside a
+    // wrapped paragraph, so it emphasises by CAPITALS instead. The preview obeys
+    // this too — the whole design of this feature is that what is on screen is what
+    // comes out of the printer, and a preview showing bold where the paper will
+    // show capitals is the drift that rule exists to prevent.
+    emphasis,
+    dpi: p.dpi,
+    printerLanguage: p.printerLanguage,
   };
+}
+
+// ⚠️ CAPITALS ARE NOT A LESSER EMPHASIS, THEY ARE A DIFFERENT ONE. The regulation
+// asks for the allergen to be distinguished from the rest of the list "by means of
+// the typeset — for example by font, style or background colour"; capitals are one
+// of the accepted ways and the one a monochrome thermal printer can actually do.
+// ingredientLine() in recipe-label-model.js has always used capitals for the same
+// reason, on the plain-text copy, so this is the app's existing answer rather than a
+// new one.
+export function emphasisFor(profile) {
+  return normalizeLabelProfile(profile).printerLanguage === 'zpl' ? 'caps' : 'bold';
+}
+
+// The one place a word is put into its emphasised form, so the screen and the
+// printer cannot disagree about what that form is.
+export function emphasised(text, emphasis) {
+  return emphasis === 'caps' ? String(text).toUpperCase() : String(text);
 }
 
 function round2(n) {
