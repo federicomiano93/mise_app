@@ -1015,6 +1015,70 @@ service cloud.firestore {
       //
       // Sizes are generous — they exist to stop a runaway document, not to
       // second-guess a bakery that grows.
+      // ── The label profile ─────────────────────────────────────────────────
+      // The paper a venue prints food labels on, the printer it prints them with,
+      // and which optional blocks appear. One small document.
+      //
+      // ⚠️⚠️ ITS OWN BLOCK, ABOVE THE GENERAL ONE, AND THAT IS DELIBERATE. Rules are
+      // ADDITIVE: a request is allowed if ANY matching rule allows it, so this grant
+      // sits beside `match /config/{doc}` rather than inside it. Folding these keys
+      // into that document's shared whitelist would have tied a Catalogue setting to
+      // the CALCULATOR section — which is what that rule's ternary falls back to —
+      // and a venue with a catalogue and no calculator could not have read its own
+      // paper size.
+      //
+      // ⚠️ WRITING IS canManage, READING IS EVERY MEMBER WITH THE SECTION. The person
+      // at the counter printing a label has to know what size paper to print on;
+      // choosing that size is a decision about how the place works.
+      //
+      // ⚠️ EVERY FIELD IS OPTIONAL IN BOTH DIRECTIONS, like every other config field
+      // here: rules reach every phone the instant they deploy, while code arrives one
+      // device at a time. Required, a phone on the previous build could not save.
+      match /config/labels {
+        allow read: if member(lid) && sectionOn(lid, 'catalogue');
+
+        allow create, update: if canManage(lid, 'catalogue')
+          && stampedFor(lid)
+          && request.resource.data.keys().hasOnly([
+               'bakery',
+               'widthMm', 'heightMm', 'marginMm', 'baseFontMm',
+               'dpi', 'printerLanguage', 'showDate'
+             ])
+          // ⚠️ THE BOUNDS ARE THE APP'S OWN, REPEATED HERE ON PURPOSE. A 0 mm label
+          // is drawn as an empty rectangle with no error anywhere, and the app that
+          // would have refused it can be an old build on somebody's phone.
+          && (!('widthMm' in request.resource.data)
+              || (request.resource.data.widthMm is number
+                  && request.resource.data.widthMm >= 20
+                  && request.resource.data.widthMm <= 300))
+          && (!('heightMm' in request.resource.data)
+              || (request.resource.data.heightMm is number
+                  && request.resource.data.heightMm >= 20
+                  && request.resource.data.heightMm <= 300))
+          && (!('marginMm' in request.resource.data)
+              || (request.resource.data.marginMm is number
+                  && request.resource.data.marginMm >= 0
+                  && request.resource.data.marginMm <= 20))
+          // ⚠️ THE FONT FLOOR IS NOT ENFORCED HERE, and that is not an oversight.
+          // The legal minimum depends on the label's AREA (1.2 mm of x-height, or
+          // 0.9 mm under 80 cm²), and a rule cannot work that out across two fields
+          // without being wrong on one of them. label-template-model.js owns that
+          // judgement and never renders below it whatever this document says.
+          && (!('baseFontMm' in request.resource.data)
+              || (request.resource.data.baseFontMm is number
+                  && request.resource.data.baseFontMm >= 1
+                  && request.resource.data.baseFontMm <= 20))
+          && (!('dpi' in request.resource.data)
+              || request.resource.data.dpi in [203, 300])
+          && (!('printerLanguage' in request.resource.data)
+              || request.resource.data.printerLanguage in ['os', 'zpl'])
+          && (!('showDate' in request.resource.data)
+              || request.resource.data.showDate is bool);
+
+        // Nothing deletes a settings document. Turning a setting off is a write.
+        allow delete: if false;
+      }
+
       match /config/{doc} {
         allow read: if member(lid)
           && sectionOn(lid, doc == 'orders' ? 'orders' : 'calculator');

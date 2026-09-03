@@ -20,6 +20,9 @@ import { el } from './dom.js';
 import {
   buildLabel, ingredientLine, containsLine, declarationText, LABEL_SHOWS,
 } from './recipe-label-model.js';
+import { resolveLabel, sizeIdFor, DEFAULT_PROFILE } from './label-template-model.js';
+import { fitSheet } from './label-print.js';
+import { availableTransports } from './print-transports.js';
 import { NUTRIENTS } from '../allergen-model.js';
 import {
   canPrintLabel, countryOf, outputLanguage, labelWord, allergenName, nutrientName,
@@ -37,6 +40,10 @@ const SHOW_KEYS = Object.freeze({
   nutrition: 'label.shows.nutrition',
   both: 'label.shows.both',
 });
+
+// A printer. Inline SVG like every other icon in this app — never an emoji, which
+// is a font and draws a different picture on every operating system.
+const PRINT_ICON = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v8H6z"/></svg>';
 
 // `location` is the venue's own document — its country decides what language the
 // label is PRINTED in. It is not a preference and no screen may override it; see
@@ -61,7 +68,13 @@ const SHOW_KEYS = Object.freeze({
 // js/market.js and js/catalogue/recipe-label-model.js keep the total ban: they
 // have no chrome, so it costs them nothing.
 
-export function renderLabel({ recipe, ingredients, recipesById, location, initialShows = 'both', onShowsChange }) {
+export function renderLabel({
+  recipe, ingredients, recipesById, location, initialShows = 'both', onShowsChange,
+  // ⚠️ A GETTER, read at paint time, for the same reason photoOn is one in
+  // catalogue-main.js: the paper size is a venue setting somebody may change on
+  // another device while this page is loaded.
+  getProfile = () => DEFAULT_PROFILE,
+}) {
   const tables = { ingredients, recipes: recipesById };
   let shows = LABEL_SHOWS.includes(initialShows) ? initialShows : 'both';
   const lang = outputLanguage(location);
@@ -198,7 +211,64 @@ export function renderLabel({ recipe, ingredients, recipesById, location, initia
       }
     }
 
-    body.replaceChildren(card, languageNote(), caveat(), copyRow(label));
+    // ── The paper, at its real size ─────────────────────────────────────────
+    //
+    // ⚠️ ABOVE THE READABLE CARD, NOT INSTEAD OF IT. They answer two questions and
+    // both get asked: the preview says «this is what will come out of the printer»,
+    // the card below says «this is the same thing, big enough to read and to copy».
+    //
+    // ⚠️ AND IT IS THE SAME NODE THE PRINTER GETS, built by the same function at the
+    // same millimetre size (js/catalogue/label-print.js). A preview drawn separately
+    // from the print is two labels that drift apart, and the one that drifts is the
+    // one nobody looks at until it is stuck on food.
+    const profile = getProfile();
+    const resolved = resolveLabel(label, profile, {}, lang);
+    const preview = el('div', { class: 'lab-preview' });
+    const previewNote = el('p', { class: 'lab-preview-note' });
+    const noFit = el('p', { class: 'lab-nofit' });
+    const actions = copyRow(label);
+
+    body.replaceChildren(preview, previewNote, noFit, card, languageNote(), caveat(), actions.root);
+
+    // ⚠️⚠️ MEASURED ONLY NOW, BECAUSE ONLY NOW IS IT IN THE DOCUMENT. Every width and
+    // height a detached node reports is zero, and a fit check against zero says
+    // «it fits» about everything. The estimate that chose the starting size ran
+    // under Node, where nothing can measure text at all — this is the real answer,
+    // and it is the one the Print button obeys.
+    const fitted = fitSheet(preview, resolved);
+
+    previewNote.textContent = t('label.preview.actualSize', {
+      w: fmtMm(resolved.widthMm), h: fmtMm(resolved.heightMm),
+    });
+
+    // ⚠️ NO ROAD IS NOT THE SAME REFUSAL AS NO ROOM, and they must not share a
+    // sentence: one is «this phone cannot reach a printer», which is about the
+    // device, and the other is «this will not fit on your paper», which is about
+    // the label. Telling somebody the wrong one sends them to fix the wrong thing.
+    const roads = availableTransports();
+    noFit.hidden = fitted.fits && roads.length > 0;
+    if (!fitted.fits) {
+      noFit.textContent = t('label.print.tooBig', {
+        w: fmtMm(resolved.widthMm), h: fmtMm(resolved.heightMm),
+      });
+    } else if (!roads.length) {
+      noFit.textContent = t('label.print.noRoad');
+    }
+
+    // ⚠️ THE BUTTON IS DISABLED, NOT HIDDEN. A missing button is a feature somebody
+    // goes looking for; a disabled one beside the sentence explaining it is an
+    // answer. And it is the MEASUREMENT that disables it, never the estimate.
+    actions.printBtn.disabled = !fitted.fits || !roads.length;
+    actions.printBtn.onclick = () => {
+      const road = roads[0];
+      if (!road) return;
+      road.send({ resolved, sizeId: sizeIdFor(profile), fontMm: fitted.fontMm });
+    };
+  }
+
+  // Millimetres as somebody writes them: «76», not «76.0», and «76.5» when it is.
+  function fmtMm(n) {
+    return String(Math.round(n * 10) / 10);
   }
 
   // ⚠️ IMMEDIATELY UNDER THE CARD, NOT AT THE END OF A SCROLL. Somebody printing
@@ -252,6 +322,19 @@ export function renderLabel({ recipe, ingredients, recipesById, location, initia
   function copyRow(label) {
     const status = el('span', { class: 'lab-copy-status' });
     const text = () => declarationText(label, lang);
+
+    // ⚠️ FIRST IN THE ROW, because it is now what this screen is for. Copy and Send
+    // were the whole of it while printing was undecided; they stay because they are
+    // the only thing that works when there is no printer in the room.
+    //
+    // ⚠️ NO onclick HERE. paint() assigns it after the sheet has been MEASURED, and
+    // disables the button when the label does not fit or this device has no way to
+    // reach a printer. A button wired up before the measurement is a button that can
+    // print an overflowing label.
+    const printBtn = el('button', {
+      class: 'cat-alg-sheet-btn lab-print-btn', type: 'button', icon: PRINT_ICON,
+    }, [el('span', {}, t('label.print'))]);
+
     const copy = el('button', {
       class: 'cat-alg-sheet-btn lab-copy', type: 'button',
       onclick: async () => {
@@ -268,7 +351,10 @@ export function renderLabel({ recipe, ingredients, recipesById, location, initia
       'aria-label': t('ui.send'),
       onclick: () => chooseHowToSend({ subject: label.name || '', text: text() }),
     }, [svgElement(SEND_PATHS, 18), el('span', {}, t('ui.send'))]);
-    return el('div', { class: 'lab-copy-row' }, [copy, send, status]);
+    return {
+      root: el('div', { class: 'lab-copy-row' }, [printBtn, copy, send, status]),
+      printBtn,
+    };
   }
 
   paint();

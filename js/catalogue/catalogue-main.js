@@ -7,7 +7,7 @@
 import { t, onLanguageChange } from '../i18n.js';
 import {
   initCatalogue, getRecipes, getUsage, bumpUsage, saveRecipe, deleteRecipe, setSyncErrorHandler,
-  getIngredients, getSuppliers, getRecipesById,
+  getIngredients, getSuppliers, getRecipesById, getLabelProfile, saveLabelProfile,
 } from './catalogue-store.js';
 import { renderList } from './catalogue-list.js';
 import { renderAllergenSheet } from './allergen-sheet.js';
@@ -175,6 +175,11 @@ function openLabel(recipe) {
     // phone must reach this screen without a reload.
     location: currentSession().location,
     initialShows: labelShows,
+    // ⚠️ A GETTER, not the profile itself. What paper this venue prints on is a
+    // setting a manager can change on another device, and the screen must ask when
+    // it paints rather than hold whatever was true when it opened — the same shape
+    // as photoOn below, for the same reason.
+    getProfile: () => getLabelProfile(),
     // Remembered for the session only: which of the three somebody wants is a
     // property of the job they are doing this morning, not of the recipe.
     onShowsChange: (value) => { labelShows = value; },
@@ -301,7 +306,18 @@ function showSettings() {
   activeSheet = null;
   leaveGuard = null;
   setHeader({ title: t('ui.settings'), sub: t('cat.recipeCatalogue'), back: true, add: false });
-  activeSettings = renderSettings({ photoOn: photoIsOn(), onTogglePhoto: togglePhoto });
+  activeSettings = renderSettings({
+    photoOn: photoIsOn(),
+    onTogglePhoto: togglePhoto,
+    // ⚠️ THE VALUE, not a getter, and the difference is deliberate: this screen is
+    // where the profile is EDITED, so it owns a working copy for as long as it is
+    // open. Re-reading the store under a half-typed size is how a field fights the
+    // person filling it in.
+    labelProfile: getLabelProfile(),
+    // The store is local-first and rolls its own copy back on a rejection; the
+    // screen rolls back what a person can see. Both, because they are two copies.
+    onSaveLabel: patch => saveLabelProfile(patch),
+  });
   swap(activeSettings.root);
 }
 

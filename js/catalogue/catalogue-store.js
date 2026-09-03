@@ -21,20 +21,29 @@ import {
   watchRecipes,
   watchIngredients,
   watchSuppliers,
+  watchLabelConfig,
+  saveLabelConfig,
   saveRecipeDoc,
   removeRecipeDoc,
   newRecipeId,
 } from './firebase-catalogue.js';
+import { normalizeLabelProfile } from './label-template-model.js';
 
 const CACHE_KEY = 'catalogue-recipes';
 const USAGE_KEY = 'catalogue-usage';
 const SCALED_KEY = 'catalogue-scaled';
 const INGREDIENTS_KEY = 'catalogue-ingredients';
 const SUPPLIERS_KEY = 'catalogue-suppliers';
+// ⚠️ CACHED LIKE EVERYTHING ELSE HERE, and for a reason particular to this one: a
+// label is printed at the counter, and a phone that has lost the network must still
+// know what size paper this venue uses. Without the cache the label would silently
+// fall back to the default stock and print at the wrong size.
+const LABEL_CONFIG_KEY = 'catalogue-label-config';
 
 let recipes = readCache();
 let ingredients = readIngredientCache();
 let suppliers = readJsonMap(SUPPLIERS_KEY);
+let labelConfig = readJson(LABEL_CONFIG_KEY);
 let usage = readUsage();
 let scaled = readScaled();
 let notify = null;         // called with the new recipe list whenever it changes
@@ -112,7 +121,47 @@ export function initCatalogue(onUpdate, onError) {
     () => {},
   ).catch(() => {});
 
+  // The label profile — one small document. Quiet on failure like the two above:
+  // a venue that has never opened label Settings has no document at all, and the
+  // defaults are the right answer for it.
+  watchLabelConfig(
+    remote => {
+      labelConfig = remote;
+      writeJson(LABEL_CONFIG_KEY, remote);
+      if (notify) notify(recipes);
+    },
+    () => {},
+  ).catch(() => {});
+
   return recipes;
+}
+
+// ── The label profile ────────────────────────────────────────────────────────
+
+// ⚠️ NORMALIZED ON EVERY READ, never stored normalized. What comes back from
+// Firestore is whatever was written — by this build, by an older one, or by a hand
+// in the console — and label-template-model.js is the one place that decides what a
+// missing or corrupt field means.
+export function getLabelProfile() {
+  return normalizeLabelProfile(labelConfig);
+}
+
+// Local-first, like every other write here: the screen changes at once and the
+// Firestore write follows. ⚠️ ON REJECTION THE LOCAL CHANGE IS PUT BACK, because a
+// paper size the database refused but the screen kept is a label that prints wrong
+// with nothing anywhere saying why.
+export async function saveLabelProfile(patch) {
+  const before = labelConfig;
+  labelConfig = { ...(labelConfig || {}), ...patch };
+  writeJson(LABEL_CONFIG_KEY, labelConfig);
+  try {
+    await saveLabelConfig(patch);
+  } catch (err) {
+    labelConfig = before;
+    writeJson(LABEL_CONFIG_KEY, before);
+    throw err;
+  }
+  return getLabelProfile();
 }
 
 // ── Ingredient prices (read-only, owned by Orders) ────────────────────────────
@@ -132,6 +181,31 @@ function readJsonMap(key) {
 function writeJsonMap(key, list) {
   try {
     localStorage.setItem(key, JSON.stringify(list));
+  } catch (e) {
+    // Storage full/unavailable — the in-memory copy still works this session.
+  }
+}
+
+// One stored object rather than a list indexed by id — the label profile is a
+// single document, not a collection.
+//
+// ⚠️ DECLARATIONS FOR THE SAME REASON AS THE NOTE BELOW: `let labelConfig =
+// readJson(...)` runs at the top of the module, before this line is reached.
+function readJson(key) {
+  try {
+    const raw = localStorage.getItem(key);
+    if (raw) return JSON.parse(raw);
+  } catch (e) {
+    // Corrupt/unavailable cache — the listener will fill it in, and until it does
+    // the model answers with its defaults, which is the safe stock.
+  }
+  return null;
+}
+
+function writeJson(key, value) {
+  try {
+    if (value === null || value === undefined) localStorage.removeItem(key);
+    else localStorage.setItem(key, JSON.stringify(value));
   } catch (e) {
     // Storage full/unavailable — the in-memory copy still works this session.
   }
