@@ -89,7 +89,21 @@ export const scheduleTimerPush = onDocumentCreated(
       return;
     }
 
-    await getFunctions().taskQueue(QUEUE, REGION).enqueue(
+    // ⚠️⚠️ THE REGION GOES IN THE NAME, NEVER IN THE SECOND ARGUMENT. That second
+    // parameter is not the region — it is the canonical id of an EXTENSION, and
+    // firebase-admin turns a string there into `ext-<that string>-<function>`. So
+    // `taskQueue(QUEUE, REGION)` booked every alarm onto a queue called
+    // `ext-us-central1-sendTimerPush`, which has never existed in this project:
+    // the enqueue 404s, the job is never scheduled, and NOTHING EVER RINGS. That
+    // is the whole of "notifications are live and nobody has ever received one" —
+    // it was never a phone, a permission or a token. True of firebase-admin 13 and
+    // 14 alike, so it had been broken since the day it was written.
+    //
+    // The full resource name is the form that states the region and gets parsed as
+    // one (utils.parseResourceName). Passing the bare name would also work today,
+    // because the library's default location happens to equal REGION — an accident
+    // this must not be built on.
+    await getFunctions().taskQueue(`locations/${REGION}/functions/${QUEUE}`).enqueue(
       { lid: event.params.lid, id: event.params.id },
       { scheduleTime: new Date(timer.fireAt) },
     );
