@@ -29,10 +29,20 @@ const read = (abs) => readFileSync(abs, 'utf8');
 const asPosix = (abs) => relative(ROOT, abs).split(sep).join('/');
 
 // Everything the browser can load: the app's own modules and the pages. Anything
-// under node_modules, .git or the vendored library is not ours to police.
+// under node_modules or the vendored library is not ours to police.
+//
+// ⚠️ EVERY DOT-DIRECTORY IS SKIPPED, NOT JUST .git — and that is the point, not
+// tidiness. This walk starts at the repo root and reads whatever it finds, so it
+// also reads a git WORKTREE checked out under .claude/worktrees/ (this project's
+// own tooling makes them) and any tool's cache under .firebase/. A worktree
+// sitting on a pre-upgrade branch carries an older js/firebase.js, and the guard
+// below would then report "two versions of the SDK" and name files that are in no
+// deployment at all — a red build about nothing, costing the next person the
+// search. A guard that cries wolf gets deleted, which is worse than not having it.
 function everySourceFile(dir) {
   return readdirSync(dir).flatMap((entry) => {
-    if (['node_modules', '.git', 'vendor', 'icons', 'fonts'].includes(entry)) return [];
+    if (entry.startsWith('.')) return [];
+    if (['node_modules', 'vendor', 'icons', 'fonts'].includes(entry)) return [];
     const abs = join(dir, entry);
     if (statSync(abs).isDirectory()) return everySourceFile(abs);
     return /\.(js|html|mjs)$/.test(entry) ? [abs] : [];
@@ -40,18 +50,26 @@ function everySourceFile(dir) {
 }
 
 // A full URL, so a bare "/firebasejs/" path guard in sw.js is not mistaken for one.
-const SDK_URL = /https:\/\/www\.gstatic\.com\/firebasejs\/(\d+\.\d+\.\d+)\/firebase-[a-z-]+\.js/g;
+const SDK_URL = /https:\/\/www\.gstatic\.com\/firebasejs\/(\d+\.\d+\.\d+)\/(firebase-[a-z-]+\.js)/g;
 
-function everySdkReference() {
+function collectSdkReferences() {
   const found = [];
   for (const abs of everySourceFile(ROOT)) {
     const file = asPosix(abs);
-    // This test file quotes the URL shape in its own regex; it is not a loader.
+    // ⚠️ BELT AND BRACES, AND NOT WHAT PROTECTS THIS FILE TODAY. The pattern above
+    // is written with escaped separators, so the source of this file cannot match
+    // it — remove this line and nothing breaks. It is here for the day somebody
+    // writes a real example URL in a comment while explaining the guard.
     if (file === 'tests/firebase-sdk-version.test.mjs') continue;
-    for (const m of read(abs).matchAll(SDK_URL)) found.push({ file, version: m[1] });
+    for (const m of read(abs).matchAll(SDK_URL)) found.push({ file, version: m[1], module: m[2] });
   }
   return found;
 }
+
+// The walk reads every source file in the repo and cannot change within one run,
+// so it is done once however many tests below ask for it.
+let refsMemo = null;
+const everySdkReference = () => (refsMemo ??= collectSdkReferences());
 
 test('every Firebase SDK URL in the app names the same version', () => {
   const refs = everySdkReference();
@@ -102,14 +120,22 @@ test('the service worker names its SDK cache after the version it actually loads
 
 // The template must teach the same thing as the real file (P7). It is not loaded
 // by the app, so nothing else would ever notice it going stale.
-test('firebase.example.js is on the same SDK version as firebase.js', () => {
-  const versionsIn = (file) =>
-    [...new Set([...read(join(ROOT, file)).matchAll(SDK_URL)].map((m) => m[1]))];
+//
+// ⚠️ THE VERSION IS ALREADY COVERED by the first test, which polices every source
+// file and does not exempt the template. What is NOT covered anywhere else is
+// WHICH MODULES the two files load: an SDK upgrade that adds or drops one leaves
+// the template teaching a set-up the app no longer has, and every version
+// assertion in this file still passes.
+test('firebase.example.js loads the same SDK modules as firebase.js', () => {
+  const modulesIn = (file) =>
+    [...new Set([...read(join(ROOT, file)).matchAll(SDK_URL)].map((m) => m[2]))].sort();
 
-  const real = versionsIn('js/firebase.js');
-  const example = versionsIn('js/firebase.example.js');
+  const real = modulesIn('js/firebase.js');
+  const example = modulesIn('js/firebase.example.js');
 
+  assert.ok(real.length > 0, 'js/firebase.js no longer loads the SDK from gstatic');
   assert.deepEqual(example, real,
-    'js/firebase.example.js is the file somebody copies to set this project up. ' +
-    'Left behind, it teaches an SDK version the app no longer uses.');
+    'js/firebase.example.js is the file somebody copies to set this project up (P7). ' +
+    'It must name the same SDK modules as the real one, or it teaches a set-up that ' +
+    'no longer boots.');
 });
