@@ -210,3 +210,36 @@ test('install does NOT skipWaiting by itself, or the update banner never appears
   await install(w);
   assert.equal(w.record.skipWaiting, 0);
 });
+
+// ── The counts written in the prose ──────────────────────────────────────────
+//
+// ⚠️ THIS PROJECT'S OWN RULE MAKES THESE NUMBERS LOAD-BEARING: "a count that is
+// one short is not a diagnosis — diff the list, never compare a number." The
+// number is what somebody reaches for first anyway, when a phone reports a
+// partial cache at 3am, and a file that states two different counts a few
+// hundred lines apart makes the count useless as evidence at exactly the moment
+// it is wanted. sw.js said both 214 and 208 after the SDK upgrade: the new line
+// counted, the two older ones were left where they were written.
+//
+// Numbers here are pinned to ASSETS itself, so the next person to add a cached
+// file cannot leave the prose behind. Historical counts are deliberately NOT
+// written in this shape ("207 of 208", "v1.63.0") — a fact about a past release
+// stays true and must not be rewritten to match today.
+test('every precache count sw.js states in prose is the real one', () => {
+  const assets = [...loadWorker().read('ASSETS')];
+
+  const claims = [
+    ...[...SW.matchAll(/(\d+)-file precache/g)],
+    ...[...SW.matchAll(/all (\d+) files/g)],
+  ];
+
+  // A guard on the guard: the comments explain the all-or-nothing precache by
+  // its size, so finding none means they were reworded and this must be re-read.
+  assert.ok(claims.length >= 2,
+    `expected sw.js to state the precache size, found ${claims.length} such claims`);
+
+  const wrong = claims.map((m) => m[1]).filter((n) => Number(n) !== assets.length);
+  assert.deepEqual(wrong, [],
+    `ASSETS holds ${assets.length} entries. A comment claiming another number is worse ` +
+    'than none: this project diagnoses a partial precache by comparing counts first.');
+});
