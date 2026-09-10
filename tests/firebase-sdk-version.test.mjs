@@ -139,3 +139,62 @@ test('firebase.example.js loads the same SDK modules as firebase.js', () => {
     'It must name the same SDK modules as the real one, or it teaches a set-up that ' +
     'no longer boots.');
 });
+
+// ── Does that version actually exist? ────────────────────────────────────────
+//
+// ⚠️⚠️ THE CHECKS ABOVE POLICE AGREEMENT, NOT TRUTH, and agreement is the easy
+// half. An upgrade here is a find-and-replace: every URL moves together, this
+// file goes green, SDK_CACHE is renamed to match, both required CI jobs pass and
+// the deploy ships — and if gstatic does not serve that version, every module
+// 404s and the app is a WHITE SCREEN for everybody, installed phones included.
+//
+// It is not hypothetical and it is not rare. npm and gstatic are not the same
+// release: 12.19.0 was published on npm on 9 Sep 2026 and every one of its
+// modules still 404s on gstatic (re-checked while writing this, and proved by
+// moving the whole app onto it: the three checks above stayed green, because a
+// find-and-replace is perfectly consistent, and only this one went red).
+// Reading a version number off npm and pasting it in is the obvious way to do
+// this job, and it would have served a blank app.
+//
+// So this asks gstatic, once per module the app actually loads.
+//
+// ⚠️ A NETWORK FAILURE IS NOT A 404, AND MUST NOT READ LIKE ONE. fetch THROWS
+// when there is no route to the host — offline, a dead DNS, a corporate proxy —
+// and returns a response with a status when the host answered. Only the second
+// is evidence about the version. So a throw (after retries) SKIPS, loudly, and a
+// status is asserted. CI always has a network, so this is a real gate there; on
+// a laptop on a train it declines to have an opinion instead of inventing one.
+const probeStatus = async (url) => {
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    try {
+      const res = await fetch(url, { method: 'HEAD', signal: AbortSignal.timeout(10_000) });
+      return res.status;
+    } catch {
+      if (attempt === 3) return null;
+      await new Promise((r) => setTimeout(r, attempt * 400));
+    }
+  }
+  return null;
+};
+
+test('⚠️ gstatic actually serves the SDK version the app asks for', async (t) => {
+  const refs = everySdkReference();
+  const urls = [...new Set(refs.map((r) =>
+    `https://www.gstatic.com/firebasejs/${r.version}/${r.module}`))].sort();
+
+  assert.ok(urls.length > 0, 'no SDK modules found to probe — the pattern has drifted');
+
+  const results = await Promise.all(urls.map(async (url) => ({ url, status: await probeStatus(url) })));
+
+  if (results.every((r) => r.status === null)) {
+    t.skip('no network: gstatic could not be reached at all, so this proves nothing ' +
+      'about the version. Re-run online before shipping an SDK upgrade.');
+    return;
+  }
+
+  const missing = results.filter((r) => r.status !== null && r.status !== 200);
+  assert.deepEqual(missing.map((r) => `${r.status} ${r.url}`), [],
+    'gstatic does not serve these modules. A version can exist on npm days or weeks ' +
+    'before gstatic mirrors it, and shipping one it does not have serves a blank app ' +
+    'to every phone. Probe the range one version at a time and pick one that answers 200.');
+});
