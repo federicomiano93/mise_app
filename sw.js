@@ -294,7 +294,7 @@ const ASSETS = [
 // the last COMPLETE copy on its way in.
 //
 // ⚠️ THE RETRY IS WHAT MAKES STRICTNESS AFFORDABLE, and it guards a failure this
-// project has observed rather than imagined: 208 requests leave in one burst, and
+// project has observed rather than imagined: the whole list leaves in one burst, and
 // GitHub Pages has answered 503 to one file of such a burst and 200 five times on
 // retry (v1.63.0). Failing on the first refusal would turn an ordinary throttle into
 // a release nobody receives.
@@ -306,7 +306,7 @@ const ASSETS = [
 // code against rules that deployed instantly, which is the very thing the gate exists
 // to prevent. Two things stand between that and a release: the test that every ASSETS
 // entry EXISTS (a mistyped path being the likeliest permanent cause), and this
-// project's post-deploy sweep, which already asks the live site for all 208 files.
+// project's post-deploy sweep, which already asks the live site for all 214 files.
 // ⚠️ NEITHER covers a device-specific failure — nobody has yet confirmed an update
 // landing on a real iPhone under this code.
 //
