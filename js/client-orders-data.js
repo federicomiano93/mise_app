@@ -21,14 +21,14 @@ import {
 import { getClients } from './calculator-config.js';
 import {
   getApps, getApp, initializeApp, deleteApp,
-} from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+} from 'https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js';
 import {
   getAuth, createUserWithEmailAndPassword, signOut, connectAuthEmulator,
-} from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
+} from 'https://www.gstatic.com/firebasejs/12.18.0/firebase-auth.js';
 import {
   getFirestore, collection, doc, getDocs, getDoc, setDoc, deleteDoc,
   onSnapshot, query, where, updateDoc, orderBy, limit,
-} from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+} from 'https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js';
 import { MAX_HISTORY_READ } from './client-order-history.js';
 
 const app = getApps().length ? getApp() : initializeApp(firebaseConfig);

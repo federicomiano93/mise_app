@@ -1,9 +1,24 @@
-const CACHE_NAME = 'theitalianclub-v352';
+const CACHE_NAME = 'theitalianclub-v353';
 // Firebase SDK modules (loaded from gstatic) are cached SEPARATELY from CACHE_NAME
 // so they survive the cache-version bump that happens on every deploy — otherwise
 // the offline SDK would be wiped each release until the next online load. The name
 // carries the pinned SDK version; bumping the SDK orphans the old cache for cleanup.
-const SDK_CACHE = 'firebase-sdk-10-12-0';
+//
+// ⚠️ CHANGING THIS NAME COSTS ONE OFFLINE-CAPABLE LAUNCH, AND THE PRICE IS PAID
+// ONCE PER SDK UPGRADE. activate() deletes every cache that is neither CACHE_NAME
+// nor this one, so renaming it throws the old modules away — and the new ones are
+// NOT precached (they are cross-origin; a gstatic hiccup would fail the whole
+// all-or-nothing install and stop the phone updating at all). They arrive through
+// the fetch handler below, on the first load that has a network.
+// So between activate() and that first load, a phone that is OFFLINE cannot boot:
+// the code asks for 12.18.0 and nothing has it. In practice the window is very
+// small — activate() only happens after a successful 214-file precache, i.e.
+// online, and tapping the update banner reloads the page immediately — but it is
+// not zero, and it is the reason to bump the SDK deliberately rather than often.
+// Leaving the name unchanged would close the window and cost ~1 MB of dead
+// modules kept for ever instead; that trade was considered and rejected, because
+// a cache whose name lies about its contents is worse than 1 MB.
+const SDK_CACHE = 'firebase-sdk-12-18-0';
 const ASSETS = [
   './',
   './index.html',
