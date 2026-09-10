@@ -18,6 +18,32 @@ const CACHE_NAME = 'theitalianclub-v353';
 // Leaving the name unchanged would close the window and cost ~1 MB of dead
 // modules kept for ever instead; that trade was considered and rejected, because
 // a cache whose name lies about its contents is worse than 1 MB.
+//
+// ⚠️ THE SECOND COST OF AN SDK CHANGE, AND IT IS NOT THE CACHE: FOR ABOUT ONE
+// SECOND, ONE PAGE CAN HOLD BOTH VERSIONS. A page opened before the update has
+// the old modules evaluated in its module map. Tapping the update banner calls
+// skipWaiting(), activate() claims the page, and js/sw-update.js waits
+// RELOAD_GRACE_MS (1000ms, so a debounced draft autosave can finish) before
+// reloading. During that second the page is already served by the NEW cache, so
+// a tap that triggers a lazy import of a module the page has not loaded yet —
+// js/staff/firebase-staff.js is the live example, and it names three gstatic
+// URLs of its own — pulls the NEW SDK in beside the old one. That is the
+// "Service firestore is not available" failure this project's version test
+// exists to prevent, arriving by a route no test can see.
+// It is self-healing: the reload lands a moment later and the page is whole. It
+// is written down because it is invisible, it is new (this is the first release
+// in which the SDK version has ever moved), and the obvious "fix" — reloading
+// instantly — would go back to eating the autosave that grace window is for.
+//
+// ⚠️ WHAT WAS FEARED AND MEASURED FALSE: that SDK 12 would raise the browser
+// floor and stop the app booting on an old kitchen tablet. It does not, because
+// the floor was already there. firebase-app.js at 10.12.0 ALREADY shipped
+// optional chaining, so every page has required a 2020-era browser (Safari 13.1
+// / iOS 13.4 / Chrome 80) for as long as this app has existed; 12.18.0 adds
+// nullish coalescing, which needs exactly the same browsers. No device that
+// could run the app before this upgrade is locked out by it. What DID grow is
+// the cold download: firestore went 426 KB -> 668 KB, paid once, into this
+// cache.
 const SDK_CACHE = 'firebase-sdk-12-18-0';
 const ASSETS = [
   './',
