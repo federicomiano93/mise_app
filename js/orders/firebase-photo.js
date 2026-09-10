@@ -15,10 +15,10 @@
 
 import { sessionReady, isLocalEmulator } from '../firebase.js';
 import { currentLocationId } from '../location.js';
-import { initializeApp, getApps, getApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+import { initializeApp, getApps, getApp } from 'https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js';
 import {
   getFunctions, httpsCallable, connectFunctionsEmulator,
-} from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-functions.js';
+} from 'https://www.gstatic.com/firebasejs/12.18.0/firebase-functions.js';
 import { firebaseConfig } from '../firebase.js';
 
 const app = getApps().length ? getApp() : initializeApp(firebaseConfig);

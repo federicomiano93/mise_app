@@ -24,13 +24,13 @@ import { firebaseConfig, isLocalEmulator } from '../firebase.js';
 import { linkEmailFor } from '../client-order-model.js';
 import {
   initializeApp,
-} from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+} from 'https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js';
 import {
   getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut, connectAuthEmulator,
-} from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
+} from 'https://www.gstatic.com/firebasejs/12.18.0/firebase-auth.js';
 import {
   getFirestore, doc, getDoc, setDoc, connectFirestoreEmulator,
-} from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+} from 'https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js';
 
 const app = initializeApp(firebaseConfig, 'client-orders');
 const auth = getAuth(app);

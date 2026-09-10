@@ -11,11 +11,11 @@
 
 import { t } from './i18n.js';
 import { getApps, getApp, initializeApp }
-  from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+  from 'https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js';
 import { getMessaging, getToken, deleteToken }
-  from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging.js';
+  from 'https://www.gstatic.com/firebasejs/12.18.0/firebase-messaging.js';
 import { getFirestore, doc, setDoc, deleteDoc, updateDoc }
-  from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+  from 'https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js';
 // ⚠️ IMPORTING firebase.js FOR ITS SIDE EFFECT MATTERS, not only for these names:
 // it is the ONE place Firestore is started, offline cache included, and an ES
 // module's imports run before its own body — so it always wins the race to

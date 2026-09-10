@@ -19,7 +19,7 @@
 //   - saveCalculatorConfig(config)    → js/calculator-config-store.js
 //   - side-effect `import './firebase.js'` for init → js/app.js
 
-import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js';
 import {
   getAuth,
   onAuthStateChanged,
@@ -28,7 +28,7 @@ import {
   signOut,
   sendPasswordResetEmail,
   connectAuthEmulator,
-} from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
+} from 'https://www.gstatic.com/firebasejs/12.18.0/firebase-auth.js';
 import {
   getFirestore,
   initializeFirestore,
@@ -45,11 +45,11 @@ import {
   where,
   limit,
   connectFirestoreEmulator,
-} from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+} from 'https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js';
 import {
   initializeAppCheck,
   ReCaptchaV3Provider,
-} from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app-check.js';
+} from 'https://www.gstatic.com/firebasejs/12.18.0/firebase-app-check.js';
 import {
   currentLocationId,
   pathFor,
