@@ -11,9 +11,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+      # ⚠️ 22 IS NOT A PREFERENCE, IT IS THE VERSION THE SERVER RUNS. Every
+      # deployed function is on nodejs22 and `functions/package.json` says
+      # `"engines": { "node": "22" }`, so a CI on anything else tests the code on
+      # a runtime nobody uses. It was on 20 until 10 Sep 2026 — by then out of
+      # support since April, and the `npm ci` in the deploy job below was warning
+      # EBADENGINE on every run. Move all three jobs together, and move them when
+      # `functions/package.json` moves, not before.
       - uses: actions/setup-node@v5
         with:
-          node-version: '20'
+          node-version: '22'
       # No install step: the suite is pure Node with zero dependencies, run by the
       # built-in test runner (`node --test`, see package.json).
       - run: npm test
@@ -28,7 +35,7 @@ jobs:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
         with:
-          node-version: '20'
+          node-version: '22'
       # The Firestore emulator is a Java program. 21 is the current LTS and the
       # version this was verified on locally.
       - uses: actions/setup-java@v5
@@ -92,7 +99,7 @@ jobs:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
         with:
-          node-version: '20'
+          node-version: '22'
 
       # ⚠️ THE TRUST IS PINNED TO THIS REPOSITORY, on Google's side, in TWO
       # PLACES. Both must name it or the exchange fails:
@@ -133,13 +140,27 @@ jobs:
         working-directory: functions
 
       # ⚠️ `--audit-level=high` ON PURPOSE, AND THIS IS A JUDGEMENT WORTH RE-READING.
-      # The install carries 8 MODERATE advisories, every one of them the same
-      # `uuid` buffer-bounds issue reached through Google's own dependency chain
-      # inside firebase-admin. There is no fixed version — the newest release has
-      # the same class — and nothing here ever calls uuid. Failing on moderate
-      # would make this job permanently red for something nobody can fix, which
-      # teaches people to ignore it. A HIGH or CRITICAL still stops the deploy.
-      # Revisit when firebase-admin ships a clean tree.
+      #
+      # ⚠️ THE REASON IT WAS FIRST WRITTEN IS GONE, AND THE LEVEL STAYS ANYWAY.
+      # It was set to `high` because the install then carried 8 MODERATE advisories,
+      # all the same unreachable `uuid` issue inside Google's own chain, with no
+      # fixed version — a permanently red job teaches people to ignore it. On
+      # 10 Sep 2026 firebase-functions went 6.5.0 → 7.3.2 and firebase-admin
+      # 13.6.0 → 14.3.0, and the tree is now CLEAN: `npm audit` reports 0.
+      #
+      # So `moderate` is finally reachable — and it is still not what this job
+      # wants, for a reason that has nothing to do with how clean the tree is.
+      # THIS JOB DEPLOYS THE FUNCTIONS; GITHUB PAGES DEPLOYS THE APP, in its own
+      # workflow this file cannot see. A blocked deploy here therefore does not
+      # stop a release — it ships the app WITHOUT the server half, which is
+      # exactly the split that went unnoticed for hours on 13 Aug 2026. Paying
+      # that price for a moderate advisory nobody can act on before Monday is a
+      # bad trade; Dependabot already reports every moderate, which is how the
+      # `qs` chain closed in the commit before this one was found in the first
+      # place — a nightly failure nobody had to be looking for.
+      #
+      # A HIGH or CRITICAL still stops the deploy. Raise the level to `moderate`
+      # only together with a way to hold BOTH halves back, never on its own.
       - name: Vulnerability check (P11)
         run: npm audit --audit-level=high
         working-directory: functions
