@@ -18,6 +18,12 @@ jobs:
       # support since April, and the `npm ci` in the deploy job below was warning
       # EBADENGINE on every run. Move all three jobs together, and move them when
       # `functions/package.json` moves, not before.
+      #
+      # ⚠️ AND THAT INSTRUCTION IS NOW ENFORCED, because a comment is not a
+      # fastener: tests/functions-runtime.test.mjs fails if any `node-version:`
+      # here stops matching functions/package.json. It has to be, since the same
+      # file goes red six months before a decommission and tells somebody to raise
+      # package.json — at which point nothing else would make these lines follow.
       - uses: actions/setup-node@v5
         with:
           node-version: '22'
