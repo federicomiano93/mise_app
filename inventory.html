@@ -106,14 +106,16 @@
 
 <main class="inv-screen" id="invScreen"></main>
 
-<!-- The one action that ends the month lives in a bottom bar, never in the header
+<!-- The two things you do WITH the month, rather than to a product in it: read
+     what it cost, and close it. They live in a bottom bar, never in the header
      (CLAUDE.md, "Bottom footer"). ⚠️ A BAR IS CHROME AND CARRIES NO PERMISSION;
-     the button decides for itself — it is hidden on the product screen and it
-     changes meaning when the month is closed.
+     each button decides for itself — both are hidden on the other screens, and the
+     second changes meaning when the month is closed.
      ⚠️ THE TWO FILL-IN ACTIONS ARE NOT HERE. They belong to the list (they change
-     what is in it), they are used once each per month, and three buttons sharing a
+     what is in it), they are used once each per month, and four buttons sharing a
      320px bar would wrap every one of their labels. -->
 <div class="inv-footer" id="invFooter">
+  <button class="inv-footer-btn" id="invCost" type="button" data-i18n="inv.seeCost">What it cost</button>
   <button class="inv-footer-btn inv-footer-btn-main" id="invClose" type="button" data-i18n="inv.closeMonth">Close the month</button>
 </div>
 

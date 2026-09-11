@@ -14,6 +14,8 @@ import {
 } from './inventory-store.js';
 import { renderList } from './inventory-list.js';
 import { renderDetail } from './inventory-detail.js';
+import { renderUsage } from './inventory-usage.js';
+import { monthCost, packKgFor, packPrice } from './inventory-value.js';
 import {
   monthKey, previousMonth, nextMonth, isClosed, isMonthId, consumption,
 } from './inventory-model.js';
@@ -29,6 +31,7 @@ const monthLabel = document.getElementById('invMonth');
 const prevBtn = document.getElementById('invPrev');
 const nextBtn = document.getElementById('invNext');
 const footer = document.getElementById('invFooter');
+const costBtn = document.getElementById('invCost');
 const closeBtn = document.getElementById('invClose');
 
 // ⚠️ THE MONTH ON SCREEN IS READ FROM THE URL, NOT KEPT IN A VARIABLE ALONE. A
@@ -120,8 +123,36 @@ function openIngredient(ingredient) {
     locale: localeTag(),
     readOnly: readOnly(),
     onCount: (map, id, value) => { setCount(map, id, value); },
+    closed: readOnly(),
   });
   swap(activeDetail.root);
+  paintStrip();
+  paintFooter();
+}
+
+// Everything countable in this venue, in one place: the list, the close dialog
+// and the cost screen all have to agree about what "a product" is.
+function countableIngredients() {
+  return getIngredients().filter(i => i && i.active !== false && String(i.name || '').trim());
+}
+
+// What the month cost, worked out from what is on screen right now.
+function costOfMonth() {
+  return monthCost({
+    month: getMonth(),
+    ingredients: countableIngredients(),
+    consumptionOf: (ingredient) => consumption(getMonth(), ingredient.id).used,
+    closed: readOnly(),
+  });
+}
+
+function showUsage() {
+  view = 'usage';
+  activeList = null;
+  activeDetail = null;
+  setHeader({ title: t('inv.costTitle'), sub: monthName(openMonthId), back: true });
+  const { root } = renderUsage({ cost: costOfMonth(), locale: localeTag(), month: getMonth() });
+  swap(root);
   paintStrip();
   paintFooter();
 }
@@ -197,7 +228,7 @@ async function handleClose() {
     return;
   }
 
-  const countable = getIngredients().filter(i => i && i.active !== false && String(i.name || '').trim());
+  const countable = countableIngredients();
   const missing = countable.filter(i => !consumption(getMonth(), i.id).counted).length;
 
   const ok = await confirmDialog({
@@ -210,17 +241,29 @@ async function handleClose() {
   });
   if (!ok) return;
 
+  // ⚠️ WHAT IS FROZEN IS EVERYTHING THE MONTH'S COST DEPENDS ON BUT DOES NOT OWN:
+  // the label (so a product deleted next spring is still readable here), what one
+  // unit cost, and how many kilos a pack held. Without the last two, reopening
+  // this screen next year would recompute September at next year's prices and
+  // quietly disagree with itself.
   const names = {};
+  const unitPrice = {};
+  const packKg = {};
+  const openMonth = getMonth();
   countable.forEach(i => {
     names[i.id] = [i.name, i.weight].filter(Boolean).join(' ').trim();
+    const price = packPrice(openMonth, i, false);
+    if (price !== null) unitPrice[i.id] = price;
+    const kg = packKgFor(openMonth, i);
+    if (kg !== null) packKg[i.id] = kg;
   });
-  const opened = await closeMonth({ names, pricePerKg: {} });
+  const opened = await closeMonth({ names, unitPrice, packKg });
   toast(opened ? t('inv.closedAndOpened', { month: monthName(opened) }) : t('inv.closed'));
   showList();
 }
 
 function handleBack() {
-  if (view === 'detail') { showList(); return; }
+  if (view === 'detail' || view === 'usage') { showList(); return; }
   location.href = 'index.html';
 }
 
@@ -233,6 +276,7 @@ function toast(msg) {
 }
 
 backBtn.addEventListener('click', handleBack);
+costBtn.addEventListener('click', showUsage);
 prevBtn.addEventListener('click', () => goToMonth(previousMonth(openMonthId)));
 nextBtn.addEventListener('click', () => goToMonth(nextMonth(openMonthId)));
 closeBtn.addEventListener('click', handleClose);

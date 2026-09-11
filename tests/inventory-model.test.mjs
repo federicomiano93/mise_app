@@ -268,7 +268,7 @@ test('the payload carries exactly the keys the rules allow, and no id', () => {
   const doc = toDocument(month());
   assert.deepEqual(Object.keys(doc).sort(), [
     'closedAt', 'closing', 'createdAt', 'month', 'names',
-    'opening', 'packKg', 'pricePerKg', 'purchased', 'updatedAt',
+    'opening', 'packKg', 'purchased', 'unitPrice', 'updatedAt',
   ]);
   assert.equal('id' in doc, false);
   assert.equal('bakery' in doc, false, 'the data layer stamps bakery, not the model');

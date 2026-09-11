@@ -218,12 +218,14 @@ export async function closeMonth(frozen, nowIso = new Date().toISOString()) {
     closedAt: nowIso,
     updatedAt: nowIso,
     names: frozen && frozen.names ? frozen.names : {},
-    pricePerKg: frozen && frozen.pricePerKg ? frozen.pricePerKg : {},
+    unitPrice: frozen && frozen.unitPrice ? frozen.unitPrice : {},
+    packKg: frozen && frozen.packKg ? frozen.packKg : month.packKg,
   };
   await saveMonthFields(monthId, patch);
   month.closedAt = nowIso;
   month.names = patch.names;
-  month.pricePerKg = patch.pricePerKg;
+  month.unitPrice = patch.unitPrice;
+  month.packKg = patch.packKg;
   cacheMonth();
   announce();
   return next ? next.month : null;

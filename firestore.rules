@@ -1841,10 +1841,14 @@ service cloud.firestore {
       //
       //   opening / purchased / closing  the three counts the month is made of
       //   packKg                         how many kg one pack is, carried forward
-      //   names / pricePerKg             frozen when the month is closed, so a
+      //   names / unitPrice              frozen when the month is closed, so a
       //                                  deleted ingredient is still readable and
       //                                  a price changed later cannot restate
-      //                                  what an already-closed month was worth
+      //                                  what an already-closed month was worth.
+      //                                  ⚠️ unitPrice is what ONE COUNTED UNIT
+      //                                  cost — a sack, a case, a piece — not a
+      //                                  rate per kilo, so it is right for a
+      //                                  product priced by the piece too
       //
       // ⚠️ EVERY FIELD IS OPTIONAL IN BOTH DIRECTIONS except `month`. Rules reach
       // every phone the instant they deploy while code arrives one device at a
@@ -1860,7 +1864,7 @@ service cloud.firestore {
           && request.resource.data.keys().hasOnly([
                'bakery', 'month',
                'opening', 'purchased', 'closing', 'packKg',
-               'names', 'pricePerKg',
+               'names', 'unitPrice',
                'closedAt', 'createdAt', 'updatedAt'
              ])
           && request.resource.data.month is string
@@ -1880,9 +1884,9 @@ service cloud.firestore {
           && (!('names' in request.resource.data)
               || (request.resource.data.names is map
                   && request.resource.data.names.size() <= 500))
-          && (!('pricePerKg' in request.resource.data)
-              || (request.resource.data.pricePerKg is map
-                  && request.resource.data.pricePerKg.size() <= 500))
+          && (!('unitPrice' in request.resource.data)
+              || (request.resource.data.unitPrice is map
+                  && request.resource.data.unitPrice.size() <= 500))
           // An EMPTY string is a real value here: it is what "this month is open
           // again" is written as, so a length check alone is the right one.
           && (!('closedAt' in request.resource.data)

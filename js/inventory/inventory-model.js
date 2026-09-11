@@ -100,7 +100,7 @@ export function readCount(value) {
 // The maps a month document carries. Listed once, here, because the store, the
 // rules and the tests all have to agree on them.
 export const COUNT_MAPS = Object.freeze(['opening', 'purchased', 'closing', 'packKg']);
-export const FROZEN_MAPS = Object.freeze(['names', 'pricePerKg']);
+export const FROZEN_MAPS = Object.freeze(['names', 'unitPrice']);
 
 function cleanCounts(raw) {
   const out = {};
@@ -139,7 +139,7 @@ export function normalizeMonth(raw, fallbackId = null) {
     closing: cleanCounts(source.closing),
     packKg: cleanCounts(source.packKg),
     names: cleanNames(source.names),
-    pricePerKg: cleanCounts(source.pricePerKg),
+    unitPrice: cleanCounts(source.unitPrice),
     closedAt: typeof source.closedAt === 'string' ? source.closedAt : '',
     createdAt: typeof source.createdAt === 'string' ? source.createdAt : '',
     updatedAt: typeof source.updatedAt === 'string' ? source.updatedAt : '',
@@ -211,7 +211,7 @@ export function carryOver(previous, monthId, nowIso = '') {
     closing: {},
     packKg: prev ? { ...prev.packKg } : {},
     names: {},
-    pricePerKg: {},
+    unitPrice: {},
     closedAt: '',
     createdAt: typeof nowIso === 'string' ? nowIso : '',
     updatedAt: typeof nowIso === 'string' ? nowIso : '',
@@ -231,7 +231,7 @@ export function toDocument(month) {
     closing: m.closing,
     packKg: m.packKg,
     names: m.names,
-    pricePerKg: m.pricePerKg,
+    unitPrice: m.unitPrice,
     closedAt: m.closedAt,
     createdAt: m.createdAt,
     updatedAt: m.updatedAt,

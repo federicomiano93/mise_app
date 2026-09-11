@@ -2715,7 +2715,7 @@ async function stocktake() {
   const month = (over = {}) => ({
     bakery: 'main', month: '2026-09',
     opening: { flour: 3 }, purchased: { flour: 12 }, closing: { flour: 4 },
-    packKg: { flour: 25 }, names: {}, pricePerKg: {},
+    packKg: { flour: 25 }, names: {}, unitPrice: {},
     closedAt: '', createdAt: '2026-09-01T08:00:00.000Z',
     updatedAt: '2026-09-30T18:00:00.000Z', ...over,
   });
