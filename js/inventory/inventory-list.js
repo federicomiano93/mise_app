@@ -52,11 +52,19 @@ function num(value, locale) {
   return new Intl.NumberFormat(locale, { maximumFractionDigits: 3 }).format(value);
 }
 
-export function renderList({ month, ingredients, locale, onOpen, onCount, readOnly }) {
+export function renderList({ month, ingredients, locale, onOpen, onCount, onCarry, onPurchases, readOnly }) {
   const state = { query: '', onlyTodo: false };
 
   const summary = el('div', { class: 'inv-summary' });
   const rows = el('div', { class: 'inv-list' });
+
+  // The two things the app can fill in for you, once each per month. They sit
+  // with the list because they change what is in it — and NOT in the bottom bar,
+  // which belongs to the one action that ends the month.
+  const actions = readOnly ? null : el('div', { class: 'inv-actions' }, [
+    el('button', { class: 'inv-action', type: 'button', text: t('inv.carryShort'), onclick: onCarry }),
+    el('button', { class: 'inv-action', type: 'button', text: t('inv.purchasesShort'), onclick: onPurchases }),
+  ]);
 
   const search = el('input', {
     class: 'inv-search',
@@ -81,6 +89,7 @@ export function renderList({ month, ingredients, locale, onOpen, onCount, readOn
 
   const root = el('div', { class: 'inv-view' }, [
     summary,
+    actions,
     el('div', { class: 'inv-tools' }, [search, todoToggle]),
     rows,
   ]);

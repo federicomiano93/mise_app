@@ -27,9 +27,12 @@ import {
   collection,
   doc,
   getDoc,
+  getDocs,
   setDoc,
   onSnapshot,
   deleteField,
+  query,
+  where,
 } from 'https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js';
 
 const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
@@ -37,6 +40,8 @@ export const db = getFirestore(app);
 
 const MONTHS = 'inventory';
 const INGREDIENTS = 'ingredients';
+// The orders already placed. Read to PROPOSE what was bought — never written to.
+const HISTORY = 'orders-history';
 // What each ingredient COSTS. A separate collection, because Orders must read
 // every ingredient to work at all — see js/price-model.js and firestore.rules.
 const INGREDIENT_PRICES = 'ingredient-prices';
@@ -98,6 +103,30 @@ export async function saveMonthFields(monthId, patch, clearPaths = []) {
     payload[map] = { ...(payload[map] || {}), [id]: deleteField() };
   }
   return setDoc(monthRef(monthId), payload, { merge: true });
+}
+
+// Every order placed inside one month, read ONCE — never watched.
+//
+// ⚠️ BOUNDED BY A RANGE ON `date`, NOT BY THE DOCUMENT ID. The ids look like
+// `2026-09-04_salvo`, so a key range reads tempting; Firestore refuses a
+// descending scan by key, and this project has lost a release to that twice. An
+// inequality on ONE field plus nothing else needs no composite index.
+//
+// ⚠️ AND IT THEREFORE MISSES THE RETIRED WEEKLY RECORD, which has `weekStart`
+// instead of `date`. That is the right answer, not a gap: that document merges
+// every supplier of one July week into a single map and belongs to no month.
+//
+// ⚠️ READING IT NEEDS THE ORDERS SECTION. A venue that does not use Orders is
+// refused here, which is why the caller treats a failure as "nothing to propose"
+// and falls back to typing the purchases by hand.
+export async function getOrdersInMonth(from, to) {
+  await authReady;
+  const snap = await getDocs(query(
+    collection(db, pathFor(HISTORY)),
+    where('date', '>=', from),
+    where('date', '<', to),
+  ));
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
 }
 
 // ⚠️ NOTHING IS EMITTED UNTIL THE INGREDIENTS HAVE ARRIVED. The prices snapshot

@@ -160,6 +160,26 @@ body {
 .inv-summary-value { margin: 4px 0 0; font-size: 1.3rem; font-weight: 600; font-variant-numeric: tabular-nums; }
 .inv-summary-note { margin: 6px 0 0; font-size: .74rem; color: var(--inv-text-2); }
 
+/* ── The two things the app can fill in for you ────────────────────────────
+   Quiet by design: each is pressed once a month at most, and neither may
+   compete with the count boxes below, which are the job. */
+.inv-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.inv-action {
+  flex: 1 1 140px;
+  min-width: 0;
+  min-height: 40px;
+  padding: 8px 12px;
+  border: 1px dashed var(--inv-border);
+  border-radius: var(--inv-radius-sm);
+  background: none;
+  color: var(--inv-text-2);
+  font-family: var(--inv-font);
+  font-size: .82rem;
+  cursor: pointer;
+}
+.inv-action:active { transform: scale(.97); }
+.inv-action:focus-visible { outline: 2px solid var(--inv-accent); outline-offset: 2px; }
+
 /* ── Search and filter ─────────────────────────────────────────────────────
    One row: the field takes what is left, the filter keeps its own width. They
    wrap onto two lines rather than squeezing the field below readable. */

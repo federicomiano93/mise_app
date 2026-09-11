@@ -106,12 +106,14 @@
 
 <main class="inv-screen" id="invScreen"></main>
 
-<!-- Secondary and global actions live in a bottom bar, never in the header
+<!-- The one action that ends the month lives in a bottom bar, never in the header
      (CLAUDE.md, "Bottom footer"). ⚠️ A BAR IS CHROME AND CARRIES NO PERMISSION;
-     each button decides for itself — here both are hidden on the product screen
-     and one of them changes meaning when the month is closed. -->
+     the button decides for itself — it is hidden on the product screen and it
+     changes meaning when the month is closed.
+     ⚠️ THE TWO FILL-IN ACTIONS ARE NOT HERE. They belong to the list (they change
+     what is in it), they are used once each per month, and three buttons sharing a
+     320px bar would wrap every one of their labels. -->
 <div class="inv-footer" id="invFooter">
-  <button class="inv-footer-btn" id="invCarry" type="button" data-i18n="inv.carryShort">Carry forward</button>
   <button class="inv-footer-btn inv-footer-btn-main" id="invClose" type="button" data-i18n="inv.closeMonth">Close the month</button>
 </div>
 

@@ -21,10 +21,12 @@
 import { t } from '../i18n.js';
 import { currentLocationId } from '../location.js';
 import {
-  normalizeMonth, carryOver, toDocument, readCount, isMonthId, nextMonth, COUNT_MAPS,
+  normalizeMonth, carryOver, toDocument, readCount, isMonthId, nextMonth,
+  monthBounds, COUNT_MAPS,
 } from './inventory-model.js';
+import { purchasesInMonth } from './inventory-purchases.js';
 import {
-  watchMonth, watchIngredients, getMonthOnce, saveMonthFields,
+  watchMonth, watchIngredients, getMonthOnce, getOrdersInMonth, saveMonthFields,
 } from './firebase-inventory.js';
 
 // How long after the last keystroke the count is sent. Long enough that typing
@@ -225,6 +227,58 @@ export async function closeMonth(frozen, nowIso = new Date().toISOString()) {
   cacheMonth();
   announce();
   return next ? next.month : null;
+}
+
+// What the orders already recorded say was bought this month.
+//
+// ⚠️ IT READS, IT DOES NOT WRITE. Nothing moves until applyPurchases() is called,
+// so the screen can say what would change and let somebody refuse it.
+// ⚠️ A FAILURE IS AN EMPTY PROPOSAL, NOT AN ERROR. The orders collection belongs
+// to another section and a venue may not use it at all; the honest answer there is
+// "nothing to propose, type it yourself", which is exactly what the screen already
+// supports.
+export async function readProposedPurchases() {
+  if (!monthId) return { totals: {}, orders: 0, products: 0, failed: false };
+  const bounds = monthBounds(monthId);
+  if (!bounds) return { totals: {}, orders: 0, products: 0, failed: false };
+  try {
+    const records = await getOrdersInMonth(bounds.from, bounds.to);
+    return { ...purchasesInMonth(records, monthId), failed: false };
+  } catch (err) {
+    console.warn('Could not read the orders of this month:', err);
+    return { totals: {}, orders: 0, products: 0, failed: true };
+  }
+}
+
+// Put a proposal into the month's `purchased` figures.
+//
+// ⚠️ IT REPLACES THE WHOLE MAP, clearing what the orders no longer account for —
+// a figure left behind from a previous proposal would otherwise sit there for ever
+// with nothing to explain it. The dialog says so before this runs.
+export function applyPurchases(totals) {
+  if (!month || !totals) return 0;
+  const wanted = {};
+  for (const [id, value] of Object.entries(totals)) {
+    const n = readCount(value);
+    if (n !== null && n > 0) wanted[id] = n;
+  }
+  Object.keys(month.purchased).forEach(id => {
+    if (!(id in wanted)) {
+      delete month.purchased[id];
+      if (pending.purchased) delete pending.purchased[id];
+      cleared.add(`purchased.${id}`);
+    }
+  });
+  Object.entries(wanted).forEach(([id, n]) => {
+    month.purchased[id] = n;
+    pending.purchased = { ...(pending.purchased || {}), [id]: n };
+    cleared.delete(`purchased.${id}`);
+  });
+
+  cacheMonth();
+  scheduleSave();
+  announce();
+  return Object.keys(wanted).length;
 }
 
 // Unfreeze a month that was closed too early.

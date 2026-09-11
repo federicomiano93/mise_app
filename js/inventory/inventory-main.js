@@ -9,7 +9,8 @@
 import { t, localeTag, onLanguageChange } from '../i18n.js';
 import {
   initInventory, getMonth, getMonthId, getIngredients, setCount, closeMonth,
-  reopenMonth, pullOpeningFromPrevious, flush, setSyncErrorHandler,
+  reopenMonth, pullOpeningFromPrevious, readProposedPurchases, applyPurchases,
+  flush, setSyncErrorHandler,
 } from './inventory-store.js';
 import { renderList } from './inventory-list.js';
 import { renderDetail } from './inventory-detail.js';
@@ -28,7 +29,6 @@ const monthLabel = document.getElementById('invMonth');
 const prevBtn = document.getElementById('invPrev');
 const nextBtn = document.getElementById('invNext');
 const footer = document.getElementById('invFooter');
-const carryBtn = document.getElementById('invCarry');
 const closeBtn = document.getElementById('invClose');
 
 // ⚠️ THE MONTH ON SCREEN IS READ FROM THE URL, NOT KEPT IN A VARIABLE ALONE. A
@@ -80,9 +80,6 @@ function paintFooter() {
   const closed = readOnly();
   closeBtn.textContent = closed ? t('inv.reopenMonth') : t('inv.closeMonth');
   closeBtn.classList.toggle('inv-footer-btn-quiet', closed);
-  // Carrying last month's closing counts forward is only ever useful while the
-  // month is open and something is still missing an opening.
-  carryBtn.hidden = closed;
   footer.hidden = view !== 'list';
 }
 
@@ -101,6 +98,8 @@ function showList() {
     readOnly: readOnly(),
     onOpen: openIngredient,
     onCount: (id, value) => { setCount('closing', id, value); },
+    onCarry: handleCarry,
+    onPurchases: handlePurchases,
   });
   swap(activeList.root);
   paintStrip();
@@ -146,6 +145,36 @@ async function handleCarry() {
   if (!ok) return;
   const moved = await pullOpeningFromPrevious(previous);
   toast(moved ? t('inv.carriedOver', { n: moved }) : t('inv.nothingToCarry'));
+}
+
+// Fill in what was bought from the orders already recorded this month.
+//
+// ⚠️ THE DIALOG SAYS WHAT THIS CANNOT KNOW, and that sentence is the point of the
+// whole feature being a PROPOSAL. The app records what was ORDERED; it knows what
+// did not turn up only where somebody ticked it missing on the delivery. So a
+// supplier who quietly short-delivers makes this number too high, and a too-high
+// "bought" makes the consumption too high by exactly as much. Every row stays
+// editable afterwards, which is the answer — but only if the person knows to look.
+async function handlePurchases() {
+  const found = await readProposedPurchases();
+  if (found.failed) { toast(t('inv.purchasesFailed')); return; }
+  if (!found.orders) { toast(t('inv.purchasesNone', { month: monthName(openMonthId) })); return; }
+
+  // ⚠️ ONE COUNT IN THE SENTENCE, AND IT IS THE ONE THAT INFLECTS. A message
+  // carrying two numbers cannot agree with both: the first version of this said
+  // "2 orders covering 1 products", which is the kind of thing that makes an app
+  // look machine-written. The sentence names the products it will fill in, and
+  // says it replaces hand-typed figures without counting them — always true,
+  // always grammatical.
+  const ok = await confirmDialog({
+    title: t('inv.purchasesTitle'),
+    message: t('inv.purchasesMessage', { month: monthName(openMonthId), n: found.products }),
+    okLabel: t('inv.purchasesOk'),
+    cancelLabel: t('ui.cancel'),
+  });
+  if (!ok) return;
+  const filled = applyPurchases(found.totals);
+  toast(t('inv.purchasesFilled', { n: filled }));
 }
 
 // Freeze the month, and open the next one with these counts as its opening.
@@ -206,7 +235,6 @@ function toast(msg) {
 backBtn.addEventListener('click', handleBack);
 prevBtn.addEventListener('click', () => goToMonth(previousMonth(openMonthId)));
 nextBtn.addEventListener('click', () => goToMonth(nextMonth(openMonthId)));
-carryBtn.addEventListener('click', handleCarry);
 closeBtn.addEventListener('click', handleClose);
 setSyncErrorHandler(msg => toast(msg));
 
