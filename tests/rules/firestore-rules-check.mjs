@@ -2699,9 +2699,117 @@ async function awayDays() {
   await expectAllowed('deleting your own', () => deleteWrite(`${L}/away/${SAM.uid}`, asAccount(SAM)));
 }
 
+
+// ── The monthly stocktake ────────────────────────────────────────────────────
+// A new collection on an OLD gate: it rides on 'foodcost', so the interesting
+// checks are the two the shortcut has to survive — an ordinary employee is
+// refused (it is money), and a venue that does not use Food Cost has no stocktake
+// either. Everything else is the shape of the month document itself.
+async function stocktake() {
+  await wipe();
+  await seedAccess();
+
+  const L = 'locations/main';
+  const M = `${L}/inventory`;
+  const readAs = (who, path) => () => fetch(`${FS}/${path}`, { headers: asAccount(who) });
+  const month = (over = {}) => ({
+    bakery: 'main', month: '2026-09',
+    opening: { flour: 3 }, purchased: { flour: 12 }, closing: { flour: 4 },
+    packKg: { flour: 25 }, names: {}, pricePerKg: {},
+    closedAt: '', createdAt: '2026-09-01T08:00:00.000Z',
+    updatedAt: '2026-09-30T18:00:00.000Z', ...over,
+  });
+
+  // ── The writes the app actually makes ──
+  await expectAllowed('the owner opens a month', () => wholeWrite(`${M}/2026-09`, month()));
+  await expectAllowed('the manager runs the place, so she counts too',
+    () => wholeWrite(`${M}/2026-10`, month({ month: '2026-10' }), asAccount(MAYA)));
+  // The real shape of typing a number: a MERGE of one map, never the whole
+  // document, so two phones counting at once cannot undo each other.
+  await expectAllowed('one count is a merge of one map', () =>
+    mergeWrite(`${M}/2026-09`, {
+      bakery: 'main', month: '2026-09', closing: { flour: 5 },
+      updatedAt: '2026-09-30T18:05:00.000Z',
+    }));
+  // ⚠️ AND THE SHAPE OF EMPTYING A BOX, which a merge cannot express as a value:
+  // the path goes in the mask and not in the body. Without this the number would
+  // stay in the database and the row would come back counted.
+  await expectAllowed('emptying a count box deletes the entry', () =>
+    clearWrite(`${M}/2026-09`, { bakery: 'main', month: '2026-09' }, ['closing.flour']));
+  await expectAllowed('a month is closed by stamping it',
+    () => mergeWrite(`${M}/2026-09`, { bakery: 'main', month: '2026-09', closedAt: '2026-10-01T09:00:00.000Z' }));
+  // ⚠️ AN EMPTY closedAt IS A REAL VALUE — it is how a month closed by mistake is
+  // reopened. A rule that demanded a non-empty string would make that impossible.
+  await expectAllowed('…and reopened by emptying the stamp',
+    () => mergeWrite(`${M}/2026-09`, { bakery: 'main', month: '2026-09', closedAt: '' }));
+  await expectAllowed('a month with nothing counted yet is still a month',
+    () => wholeWrite(`${M}/2026-08`, { bakery: 'main', month: '2026-08' }));
+
+  // ── The id, and the field that must agree with it ──
+  await expectDenied('a document id that is not a month',
+    () => wholeWrite(`${M}/september`, month({ month: 'september' })));
+  await expectDenied('a thirteenth month',
+    () => wholeWrite(`${M}/2026-13`, month({ month: '2026-13' })));
+  await expectDenied('a month written without its leading zero',
+    () => wholeWrite(`${M}/2026-9`, month({ month: '2026-9' })));
+  await expectDenied('a whole date where a month belongs',
+    () => wholeWrite(`${M}/2026-09-30`, month({ month: '2026-09-30' })));
+  await expectDenied('a month whose field disagrees with its own id',
+    () => wholeWrite(`${M}/2026-09`, month({ month: '2026-08' })));
+  await expectDenied('a month with no month field at all',
+    () => wholeWrite(`${M}/2026-07`, { bakery: 'main', closing: { flour: 1 } }));
+
+  // ── The shape of the document ──
+  await expectDenied('a field nobody validated',
+    () => wholeWrite(`${M}/2026-09`, month({ notes: 'counted with Gigi' })));
+  await expectDenied('a count map that is not a map',
+    () => wholeWrite(`${M}/2026-09`, month({ closing: 'four sacks' })));
+  await expectDenied('a list of counts instead of a map',
+    () => wholeWrite(`${M}/2026-09`, month({ opening: [1, 2, 3] })));
+  await expectDenied('a closing stamp that is not text',
+    () => wholeWrite(`${M}/2026-09`, month({ closedAt: true })));
+  await expectDenied('a month stamped for another venue',
+    () => wholeWrite(`${M}/2026-09`, month({ bakery: 'trattoria-x' })));
+
+  // ── Who may see it ──
+  // ⚠️ THE CHECK THE WHOLE SHORTCUT RESTS ON. The stocktake says what the business
+  // consumed and what it cost; an ordinary employee is refused here exactly as
+  // they are refused Food Cost, and this is what proves the shared gate holds.
+  await expectDenied('an ordinary employee cannot read the stocktake',
+    readAs(SAM, `${M}/2026-09`));
+  await expectDenied('…nor write one',
+    () => mergeWrite(`${M}/2026-09`, { bakery: 'main', month: '2026-09', closing: { flour: 9 } }, asAccount(SAM)));
+  await expectDenied('a signed-out stranger reads nothing',
+    () => fetch(`${FS}/${M}/2026-09`, { headers: noAuth() }));
+  await expectDenied('a venue without Food Cost has no stocktake either',
+    readAs(BOB, 'locations/trattoria-x/inventory/2026-09'));
+  await expectDenied('…and cannot write one', () =>
+    wholeWrite('locations/trattoria-x/inventory/2026-09',
+      { bakery: 'trattoria-x', month: '2026-09' }, asAccount(BOB)));
+  await expectDenied('reading another location\'s stocktake',
+    readAs(ALICE, 'locations/trattoria-x/inventory/2026-09'));
+
+  // ── Nobody deletes a month ──
+  // The next month's opening figures were copied out of this one, so removing it
+  // would take away the only record of where they came from. A month closed by
+  // mistake is reopened, never deleted.
+  await expectDenied('the owner cannot delete a month', () => deleteWrite(`${M}/2026-09`));
+  await expectDenied('nor can the manager', () => deleteWrite(`${M}/2026-09`, asAccount(MAYA)));
+
+  // The stocktake counts Orders' ingredients and prices them from Food Cost's
+  // prices, so both have to stay readable from here.
+  await seedDoc(`${L}/ingredients/flour`, { bakery: 'main', name: 'Farina 00', active: true });
+  await seedDoc(`${L}/ingredient-prices/flour`, { bakery: 'main', priceUnit: 'kg', pricePerUnit: 0.72 });
+  await expectAllowed('the stocktake may read the ingredients it counts',
+    readAs(ALICE, `${L}/ingredients/flour`));
+  await expectAllowed('…and the prices it values them at',
+    readAs(ALICE, `${L}/ingredient-prices/flour`));
+}
+
 for (const scenario of [suppliers, ingredients, ingredientPrices, drafts, history, neighbours,
                         locationTree, isolation, configAndLogs, pastries, pastryLogs,
-                        products, clientOrders, orderRequests, awayDays, pushNotifications,
+                        products, stocktake, clientOrders, orderRequests, awayDays,
+                        pushNotifications,
                         roles, onboardingCollections]) {
   await scenario();
 }

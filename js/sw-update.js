@@ -128,7 +128,7 @@ function applyUpdate(reg, button) {
 // compulsory gate (js/update-gate.js) follows it, so nothing is lost if a bar is
 // missed here. What IS lost is the one route to a screen while the banner is up —
 // which for the catalogue's Settings is the only route there is.
-const BOTTOM_BARS = ['.cat-footer', '.pas-footer', '.recipe-footer'];
+const BOTTOM_BARS = ['.cat-footer', '.pas-footer', '.recipe-footer', '.inv-footer'];
 
 function bottomBarHeight() {
   let tallest = 0;
