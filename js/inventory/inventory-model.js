@@ -150,6 +150,52 @@ export function isClosed(month) {
   return !!(month && typeof month.closedAt === 'string' && month.closedAt !== '');
 }
 
+// Everything countable in this venue: a product still in use, with a name. Written
+// once, here, because the list, the progress figure, the close dialog and the cost
+// screen all have to agree about what "a product" is.
+export function countableProducts(ingredients) {
+  return (Array.isArray(ingredients) ? ingredients : [])
+    .filter(i => i && i.active !== false && String(i.name || '').trim());
+}
+
+// The products a month is ABOUT — which for a CLOSED month is not the same
+// question as "what does this venue sell today".
+//
+// ⚠️⚠️ A CLOSED MONTH IS A RECORD, AND A RECORD MAY NOT LOSE ROWS. Delete a product
+// next spring and, read from the live list, September would quietly stop naming it
+// and its cost would drop out of September's total — while the screen promises that
+// the month's figures no longer change. So a closed month is read from what was
+// frozen into it (`names`) plus, belt and braces, every id that carries a count:
+// a row somebody counted cannot vanish, whatever became of the frozen list.
+//
+// ⚠️ AND THE LABEL IS THE FROZEN ONE. A product renamed afterwards keeps, inside
+// that month, the name it was counted under.
+export function productsOfMonth(month, ingredients) {
+  const live = countableProducts(ingredients);
+  if (!isClosed(month)) return live;
+
+  const names = (month && month.names) || {};
+  const ids = new Set(Object.keys(names));
+  // Only the three maps that hold a COUNT. `packKg` is a setting carried forward
+  // from month to month, so a product that has one but was never counted is not a
+  // row of this month.
+  ['opening', 'purchased', 'closing'].forEach(map => {
+    Object.keys((month && month[map]) || {}).forEach(id => ids.add(id));
+  });
+  // Closed with nothing recorded in it at all — there is nothing to read it from,
+  // so the live list is more honest than an empty screen.
+  if (!ids.size) return live;
+
+  const byId = new Map(live.map(i => [i.id, i]));
+  return [...ids].map(id => {
+    const known = byId.get(id) || {};
+    const frozen = names[id];
+    // The frozen label already carries the pack text, so the live `weight` is
+    // dropped rather than printed twice.
+    return frozen ? { ...known, id, name: frozen, weight: '' } : { ...known, id };
+  });
+}
+
 // One ingredient's line of the month.
 //
 //   opening   what was on the shelf when the month began  (null = nobody said)

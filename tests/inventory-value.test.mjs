@@ -10,7 +10,7 @@ import assert from 'node:assert/strict';
 
 import {
   parsePackSize, packKgFor, packPrice, valueBlocker, lineValue, monthCost,
-  NO_PRICE, NO_PACK,
+  NO_PRICE, NO_PACK, NO_FROZEN_PRICE,
 } from '../js/inventory/inventory-value.js';
 
 const byKg = (over = {}) => ({ id: 'flour', name: 'Flour', weight: '25kg', priceUnit: 'kg', pricePerUnit: 0.8, ...over });
@@ -200,4 +200,68 @@ test('pennies add up without float dust', () => {
     closed: false,
   });
   assert.equal(out.total, 0.3);
+});
+
+// ── A closed month is frozen, and «frozen» has to mean it ────────────────────
+//
+// ⚠️⚠️ THE DEFECT THESE PIN, BECAUSE IT SHIPPED AND WAS CAUGHT BY A REVIEW AND NOT
+// BY A TEST: a closed month fell back to TODAY'S price when the frozen figure was
+// missing, and to TODAY'S pack text when the frozen weight was. So a price typed in
+// November, or a pack size corrected in the spring, silently changed what September
+// had cost — while the screen said «this month is closed: its figures no longer
+// change». A number business decisions are made on is not allowed to move.
+
+test('⚠️⚠️ a closed month with no frozen price has NO cost — it does not borrow the price of today', () => {
+  const closed = { packKg: { flour: 25 }, unitPrice: {} };
+  assert.equal(packPrice(closed, byKg(), true), null,
+    'the 0.80/kg on the product record belongs to today, not to the month that was closed');
+  assert.equal(packPrice(closed, byKg(), false), 20, 'and an OPEN month still uses it');
+});
+
+test('⚠️ nor does a closed month read the live pack text', () => {
+  // The pack text is free text on the product record. Correcting «sacco» to «25kg»
+  // next spring must not hand every closed month a cost it never had.
+  const closed = { packKg: {}, unitPrice: { flour: 12.5 } };
+  assert.equal(packKgFor(closed, byKg(), true), null);
+  assert.equal(packKgFor(closed, byKg(), false), 25);
+  // The price is frozen, so the row is still worth what it was worth: the frozen
+  // figure is per COUNTED UNIT and needs no weight to be useful.
+  assert.equal(packPrice(closed, byKg(), true), 12.5);
+});
+
+test('⚠️ a closed month with nothing frozen says what happened, not what to do', () => {
+  // "no price entered" would send somebody to enter one and change nothing.
+  const closed = { packKg: {}, unitPrice: {} };
+  assert.equal(valueBlocker(closed, byKg(), true), NO_FROZEN_PRICE,
+    'the product still has a price and a readable pack — neither belongs to this month');
+  assert.equal(valueBlocker(closed, byKg({ weight: 'sacco' }), false), NO_PACK,
+    'while an open month names the job that would fix it');
+  assert.deepEqual(lineValue(closed, byKg(), 3, true), { value: null, blocker: NO_FROZEN_PRICE });
+});
+
+test('a closed month that froze everything values every row', () => {
+  const closed = { packKg: { flour: 25 }, unitPrice: { flour: 12.5, box: 0.11 } };
+  assert.equal(valueBlocker(closed, byKg(), true), null);
+  assert.deepEqual(lineValue(closed, byKg(), 2, true), { value: 25, blocker: null });
+  assert.deepEqual(lineValue(closed, byPiece(), 100, true), { value: 11, blocker: null });
+});
+
+test('⚠️ a product DELETED after the close still costs what it cost', () => {
+  // It reaches this file as the frozen label and its id, with no price and no pack
+  // text of its own — everything the row needs was written into the month.
+  const gone = { id: 'flour', name: 'Flour 25kg', weight: '' };
+  const closed = { packKg: { flour: 25 }, unitPrice: { flour: 12.5 } };
+  const out = monthCost({
+    month: closed,
+    ingredients: [gone],
+    consumptionOf: () => 4,
+    closed: true,
+  });
+  assert.equal(out.total, 50);
+  assert.equal(out.withoutValue, 0);
+});
+
+test('a frozen price of zero is not a price', () => {
+  // Nothing is free, and a 0 in that map is the shape a half-written close leaves.
+  assert.equal(packPrice({ unitPrice: { flour: 0 } }, byKg(), true), null);
 });

@@ -1352,9 +1352,15 @@ const DICTIONARIES = Object.freeze({
     'inv.costCaveat': 'It rests on the prices entered in the app and on the count somebody made. It is a good estimate of what the shelves gave up, not an accounting record.',
     'inv.noPriceYet': 'no price entered',
     'inv.noPackYet': 'pack weight unknown',
+    // ⚠️ NOT A JOB, A FACT. In a closed month nothing can be fixed: a price entered
+    // today belongs to today, and saying "no price entered" would send somebody to
+    // enter one and change nothing.
+    'inv.noFrozenPrice': 'no price recorded when the month closed',
     'inv.packKgLabel': 'How many kg one pack is',
     'inv.packKnown': 'One pack is read as {kg} kg.',
     'inv.packKnownPriced': 'One pack is read as {kg} kg, and costs about {price}.',
+    'inv.packFrozen': 'One of these was worth about {price} when the month was closed.',
+    'inv.packNotFrozen': 'Nothing was recorded about what this cost when the month was closed, so it has no value here. A price entered today belongs to today.',
     'inv.packUnreadable': 'No weight can be read from “{text}”. Write the kilos in and this product gets a cost.',
     'inv.packUnknown': 'This product has no pack size. Write the kilos in and it gets a cost.',
     'inv.packByPiece': 'Priced by the piece, about {price} each — no weight needed.',
@@ -1370,6 +1376,10 @@ const DICTIONARIES = Object.freeze({
     'inv.carryOk': 'Carry forward',
     'inv.carriedOver': { one: '{n} opening figure carried forward.', other: '{n} opening figures carried forward.' },
     'inv.nothingToCarry': 'There is nothing to carry forward from that month.',
+    // ⚠️ A DIFFERENT SENTENCE FROM THE ONE ABOVE, ON PURPOSE. "That month is empty"
+    // and "I could not read it" look identical on a phone and mean opposite things,
+    // and this screen is used where there is no signal.
+    'inv.carryFailed': 'Could not read that month — check the connection and try again.',
     'inv.closeMonth': 'Close the month',
     'inv.closeTitle': 'Close the month?',
     'inv.closeMessage': 'The figures for {month} stay as they are, and the next month opens with what is on the shelves today. You can reopen it if you need to.',
@@ -3365,9 +3375,12 @@ const DICTIONARIES = Object.freeze({
     'inv.costCaveat': 'Si basa sui prezzi inseriti nell’app e sul conteggio che hai fatto. È una buona stima di quello che è uscito dal magazzino, non un documento contabile.',
     'inv.noPriceYet': 'prezzo non inserito',
     'inv.noPackYet': 'peso della confezione sconosciuto',
+    'inv.noFrozenPrice': 'nessun prezzo registrato alla chiusura',
     'inv.packKgLabel': 'Quanti kg pesa una confezione',
     'inv.packKnown': 'Una confezione risulta di {kg} kg.',
     'inv.packKnownPriced': 'Una confezione risulta di {kg} kg e costa circa {price}.',
+    'inv.packFrozen': 'Alla chiusura del mese una di queste valeva circa {price}.',
+    'inv.packNotFrozen': 'Alla chiusura del mese non risultava quanto costava, quindi qui non ha un valore. Un prezzo inserito oggi vale da oggi.',
     'inv.packUnreadable': 'Da «{text}» non riesco a capire il peso. Scrivi i chili e questo prodotto avrà un valore.',
     'inv.packUnknown': 'Questo prodotto non ha un formato. Scrivi i chili e avrà un valore.',
     'inv.packByPiece': 'Prezzo a pezzo, circa {price} l’uno — non serve il peso.',
@@ -3383,6 +3396,7 @@ const DICTIONARIES = Object.freeze({
     'inv.carryOk': 'Porta avanti',
     'inv.carriedOver': { one: '{n} rimanenza iniziale portata avanti.', other: '{n} rimanenze iniziali portate avanti.' },
     'inv.nothingToCarry': 'Da quel mese non c’è niente da portare avanti.',
+    'inv.carryFailed': 'Non riesco a leggere quel mese — controlla la connessione e riprova.',
     'inv.closeMonth': 'Chiudi il mese',
     'inv.closeTitle': 'Chiudere il mese?',
     'inv.closeMessage': 'I numeri di {month} restano come sono e il mese dopo si apre con quello che c’è oggi sugli scaffali. Puoi sempre riaprirlo.',

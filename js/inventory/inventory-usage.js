@@ -10,9 +10,13 @@
 
 import { t } from '../i18n.js';
 import { el } from './dom.js';
-import { formatTotal, NO_PRICE, NO_PACK } from './inventory-value.js';
+import { formatTotal, NO_PRICE, NO_PACK, NO_FROZEN_PRICE } from './inventory-value.js';
 
-const BLOCKER_TEXT = { [NO_PRICE]: 'inv.noPriceYet', [NO_PACK]: 'inv.noPackYet' };
+const BLOCKER_TEXT = {
+  [NO_PRICE]: 'inv.noPriceYet',
+  [NO_PACK]: 'inv.noPackYet',
+  [NO_FROZEN_PRICE]: 'inv.noFrozenPrice',
+};
 
 function num(value, locale) {
   if (value === null || value === undefined) return '—';
@@ -27,9 +31,13 @@ export function renderUsage({ cost, locale, month }) {
     el('p', { class: 'inv-summary-value', text: formatTotal(total) }),
     el('p', {
       class: 'inv-summary-note',
+      // ⚠️ `n` IS WHAT INFLECTS THE SENTENCE, and the one that belongs in it differs
+      // between the two. The partial one ends on "of which {n} have no value", so
+      // its number is the unvalued rows; the plain one has only `counted` to agree
+      // with, and passing no `n` at all left one product reading «1 prodotti».
       text: withoutValue
         ? t('inv.costBasisPartial', { counted, n: withoutValue })
-        : t('inv.costBasis', { counted }),
+        : t('inv.costBasis', { counted, n: counted }),
     }),
   ]);
 
@@ -51,7 +59,7 @@ export function renderUsage({ cost, locale, month }) {
         el('span', {
           class: 'inv-row-sub',
           text: blocker
-            ? `${num(used, locale)} ${unit} · ${t(BLOCKER_TEXT[blocker])}`
+            ? `${num(used, locale)} ${unit} · ${t(BLOCKER_TEXT[blocker] || 'inv.noPriceYet')}`
             : `${num(used, locale)} ${unit}`,
         }),
       ]),

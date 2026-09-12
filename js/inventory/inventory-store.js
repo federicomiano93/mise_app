@@ -11,7 +11,11 @@
 // delete a number somebody has just walked across a storeroom to read, which is
 // the one thing this screen must never do. Instead the count stays on screen and
 // in the local cache, the failure is said out loud, and the unsent change is kept
-// in `pending` so the next save carries it too.
+// in the outbox so the next save carries it too.
+//
+// ⚠️ WHICH IS WHY NOTHING THE SCREEN DOES WAITS FOR A SERVER. A Firestore write
+// does not settle until it reaches one, and with the app's offline cache that can
+// be hours — see settled() below. The count is safe long before it is confirmed.
 //
 // ⚠️ FUNCTION DECLARATIONS, NOT const ARROWS, for anything called from the
 // initialisation below: a declaration is hoisted, a const arrow throws "Cannot
@@ -22,16 +26,23 @@ import { t } from '../i18n.js';
 import { currentLocationId } from '../location.js';
 import {
   normalizeMonth, carryOver, toDocument, readCount, isMonthId, nextMonth,
-  monthBounds, COUNT_MAPS,
+  monthBounds, COUNT_MAPS, isClosed,
 } from './inventory-model.js';
+import {
+  EMPTY_OUTBOX, stage, stageMany, hasWork, take, confirm, restore, applyOver,
+} from './inventory-outbox.js';
 import { purchasesInMonth } from './inventory-purchases.js';
 import {
   watchMonth, watchIngredients, getMonthOnce, getOrdersInMonth, saveMonthFields,
+  authReady,
 } from './firebase-inventory.js';
 
 // How long after the last keystroke the count is sent. Long enough that typing
 // "12" is one write and not two, short enough that putting the phone down saves.
 const SAVE_DELAY_MS = 700;
+
+// The longest the SCREEN may wait for a write before carrying on regardless.
+const SETTLE_MS = 1200;
 
 // ⚠️ THE VENUE IS IN THE KEY. One phone can hold two businesses, and a cache key
 // of "the month" alone would show The Italian Club's counts under Panificio
@@ -59,18 +70,59 @@ function writeJson(key, value) {
   }
 }
 
+function wait(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function deadlineFromNow(ms = SETTLE_MS) {
+  return Date.now() + ms;
+}
+
+// Wait for a write to be SAFE, not for it to be CONFIRMED.
+//
+// ⚠️⚠️ A FIRESTORE WRITE DOES NOT SETTLE UNTIL IT REACHES THE SERVER. Under the
+// app's offline cache (persistentLocalCache, js/firebase.js) a write made with no
+// signal is already durable — it is in the browser's own database and the SDK
+// sends it when there is signal — but its promise simply never settles. Anything
+// the SCREEN waits on must therefore wait against a clock as well.
+//
+// ⚠️ WITHOUT THIS, THE TWO MOST IMPORTANT BUTTONS ON THIS SCREEN DO NOTHING AT
+// ALL, SILENTLY — closing a month and changing month both awaited a write — in
+// the one place this feature is ever used: a storeroom with no signal.
+// ⚠️ ONE DEADLINE FOR A WHOLE SEQUENCE, not one per write, so closing a month
+// answers within a second and a bit rather than once per step.
+function settled(promise, deadline) {
+  return Promise.race([promise, wait(Math.max(0, deadline - Date.now()))]);
+}
+
+// A write whose confirmation nobody is waiting for: it reports a failure and
+// never rejects, so it cannot become an unhandled rejection either.
+function queued(promise) {
+  return Promise.resolve(promise).catch(err => {
+    console.warn('The stocktake did not reach Firestore:', err);
+    reportSyncFailure();
+  });
+}
+
+function reportSyncFailure() {
+  if (onSyncError) onSyncError(t('inv.notSavedYet'));
+}
+
 let monthId = null;
 let month = null;
 let ingredients = [];
 let notify = null;
 let onSyncError = null;
 
-// What has changed since the last write reached Firestore. `pending` holds the
-// maps and their new values; `cleared` holds the dotted paths of boxes that were
-// emptied, which a merge cannot express as a value.
-let pending = {};
-let cleared = new Set();
+// What has been typed here and has not reached Firestore yet
+// (js/inventory/inventory-outbox.js holds the whole reasoning).
+let outbox = EMPTY_OUTBOX;
 let saveTimer = null;
+// The write currently in the air, if any. Exactly one at a time.
+let sending = null;
+// Whether Firestore has answered at all yet. Until it has, the local copy is the
+// only thing there is; afterwards it is a mirror.
+let remoteArrived = false;
 
 export function getMonth() { return month; }
 export function getMonthId() { return monthId; }
@@ -81,7 +133,9 @@ export function setSyncErrorHandler(fn) {
 }
 
 function cacheMonth() {
-  if (month) writeJson(cacheKey(month.id), toDocument(month));
+  // ⚠️ NOT BEFORE THE VENUE IS KNOWN: the key names it, so a write made while the
+  // session is still opening would file the counts under a key nothing ever reads.
+  if (month && currentLocationId()) writeJson(cacheKey(month.id), toDocument(month));
 }
 
 function announce() {
@@ -93,16 +147,26 @@ export function initInventory(id, onUpdate, onError) {
   notify = typeof onUpdate === 'function' ? onUpdate : null;
   if (!monthId) return null;
 
-  month = normalizeMonth(readJson(cacheKey(monthId), null), monthId)
-    || normalizeMonth({ month: monthId });
+  // An empty month of the right shape, so the screen can paint before anything
+  // has arrived from anywhere.
+  month = normalizeMonth({ month: monthId });
+
+  // ⚠️⚠️ THE LOCAL COPY IS READ ONLY ONCE THE VENUE IS OPEN, AND THE WAIT IS THE
+  // WHOLE POINT. This module is loaded before sign-in has finished, so
+  // currentLocationId() is still null at this line — reading here looked for
+  // `inventory-none-2026-09` while every write of the evening went to
+  // `inventory-loc-abc-2026-09`. The safety copy was written faithfully and never
+  // read once.
+  authReady.then(hydrateFromCache).catch(() => {});
 
   watchMonth(
     monthId,
     remote => {
+      remoteArrived = true;
       // A remote change never discards what has not been sent yet: the local
-      // values for still-pending boxes are laid back over the incoming document.
+      // values for still-unsent boxes are laid back over the incoming document.
       const merged = normalizeMonth(remote, monthId) || normalizeMonth({ month: monthId });
-      applyPendingOver(merged);
+      applyOver(outbox, merged, COUNT_MAPS);
       month = merged;
       cacheMonth();
       announce();
@@ -121,33 +185,35 @@ export function initInventory(id, onUpdate, onError) {
   return month;
 }
 
-function applyPendingOver(target) {
-  for (const [map, values] of Object.entries(pending)) {
-    if (!COUNT_MAPS.includes(map)) continue;
-    Object.assign(target[map], values);
-  }
-  for (const path of cleared) {
-    const [map, id] = path.split('.');
-    if (COUNT_MAPS.includes(map)) delete target[map][id];
-  }
+// The counts this phone saved last time, put back on screen.
+//
+// ⚠️ IT NEVER OVERWRITES SOMETHING NEWER. Firestore may already have answered, or
+// a number may already have been typed; in both cases the cache is the stale copy
+// and is left where it is.
+function hydrateFromCache() {
+  if (!monthId || remoteArrived || hasWork(outbox)) return;
+  const cached = normalizeMonth(readJson(cacheKey(monthId), null), monthId);
+  if (!cached) return;
+  month = cached;
+  announce();
 }
 
 // Change one box. `value` is whatever was typed; an empty one CLEARS the entry
 // rather than storing a zero (js/inventory/inventory-model.js says why at length).
+//
+// ⚠️⚠️ A CLOSED MONTH REFUSES EVERY CHANGE, AND THIS IS THE ONLY PLACE THAT CAN
+// GUARANTEE IT. The screen disables the boxes, but the screen is built before
+// Firestore says whether the month is closed, and the rules cannot tell a count
+// apart from the write that reopens the month. «Closed» is a promise the app makes
+// about figures other people read: it is kept here, not by a disabled attribute.
 export function setCount(map, ingredientId, value) {
   if (!month || !COUNT_MAPS.includes(map) || !ingredientId) return;
+  if (isClosed(month)) return;
   const n = readCount(value);
-  const path = `${map}.${ingredientId}`;
 
-  if (n === null) {
-    delete month[map][ingredientId];
-    if (pending[map]) delete pending[map][ingredientId];
-    cleared.add(path);
-  } else {
-    month[map][ingredientId] = n;
-    pending[map] = { ...(pending[map] || {}), [ingredientId]: n };
-    cleared.delete(path);
-  }
+  if (n === null) delete month[map][ingredientId];
+  else month[map][ingredientId] = n;
+  outbox = stage(outbox, map, ingredientId, n);
 
   cacheMonth();
   scheduleSave();
@@ -156,39 +222,50 @@ export function setCount(map, ingredientId, value) {
 
 function scheduleSave() {
   clearTimeout(saveTimer);
-  saveTimer = setTimeout(flush, SAVE_DELAY_MS);
+  saveTimer = setTimeout(() => { flush(); }, SAVE_DELAY_MS);
 }
 
 // Send everything that has changed. Kept as ONE write so a count and a cleared
 // box beside it can never half-land.
+//
+// ⚠️ EXACTLY ONE WRITE IN THE AIR AT A TIME. With two, the second's success would
+// confirm the first one's values as landed as well — and a failed first write
+// would then never be sent again.
 export function flush() {
   clearTimeout(saveTimer);
   if (!month || !monthId) return Promise.resolve();
-  const keys = Object.keys(pending).filter(map => Object.keys(pending[map]).length);
-  if (!keys.length && !cleared.size) return Promise.resolve();
+  if (sending) return sending.then(() => flush());
+  if (!hasWork(outbox)) return Promise.resolve();
+
+  const taken = take(outbox);
+  outbox = taken.outbox;
 
   const patch = { month: monthId, updatedAt: new Date().toISOString() };
   if (!month.createdAt) {
     month.createdAt = patch.updatedAt;
     patch.createdAt = patch.updatedAt;
   }
-  keys.forEach(map => { patch[map] = { ...pending[map] }; });
-  const clearPaths = [...cleared];
+  for (const [map, values] of Object.entries(taken.values)) patch[map] = { ...values };
 
-  // Taken out BEFORE the write, and put back only if it fails: an edit made while
-  // the write is in flight must not be wiped by its success.
-  const sent = pending;
-  pending = {};
-  cleared = new Set();
+  sending = saveMonthFields(monthId, patch, taken.clear).then(
+    () => { outbox = confirm(outbox); },
+    err => {
+      console.warn('The stocktake did not reach Firestore:', err);
+      outbox = restore(outbox);
+      reportSyncFailure();
+    },
+  ).finally(() => { sending = null; });
+  return sending;
+}
 
-  return saveMonthFields(monthId, patch, clearPaths).catch(err => {
-    console.warn('The stocktake did not reach Firestore:', err);
-    for (const [map, values] of Object.entries(sent)) {
-      pending[map] = { ...values, ...(pending[map] || {}) };
-    }
-    clearPaths.forEach(path => cleared.add(path));
-    if (onSyncError) onSyncError(t('inv.notSavedYet'));
-  });
+// Send what is waiting and answer within the bound, whatever the network is doing.
+//
+// ⚠️ FOR THE CALLER THAT IS ABOUT TO TAKE THE PAGE AWAY — changing month reloads
+// it. flush() answers when the WRITE does, which with no signal is never, so
+// chaining a navigation onto it makes the month arrows dead buttons. The count is
+// safe either way: it is in the browser's own database and in the local copy.
+export function flushBeforeLeaving() {
+  return settled(flush(), deadlineFromNow());
 }
 
 // Close the month: stamp it, freeze what it was worth, and open the next one with
@@ -198,19 +275,23 @@ export function flush() {
 // round and the second fails, September is closed and October does not exist —
 // and October's openings are then gone, because they only ever existed as
 // September's closings. This order fails towards "closed nothing, lost nothing".
+// ⚠️ IT IS THE ORDER OF SENDING THAT MATTERS, NOT OF CONFIRMING. Offline neither
+// write is confirmed at all; the SDK holds them in the order they were made and
+// sends them in that order when there is signal.
 export async function closeMonth(frozen, nowIso = new Date().toISOString()) {
   if (!month || !monthId) return null;
-  await flush();
+  const deadline = deadlineFromNow();
+  await settled(flush(), deadline);
 
   const next = carryOver(month, nextMonth(monthId), nowIso);
   if (next) {
-    await saveMonthFields(next.month, {
+    await settled(queued(saveMonthFields(next.month, {
       month: next.month,
       opening: next.opening,
       packKg: next.packKg,
       createdAt: nowIso,
       updatedAt: nowIso,
-    });
+    })), deadline);
   }
 
   const patch = {
@@ -221,7 +302,7 @@ export async function closeMonth(frozen, nowIso = new Date().toISOString()) {
     unitPrice: frozen && frozen.unitPrice ? frozen.unitPrice : {},
     packKg: frozen && frozen.packKg ? frozen.packKg : month.packKg,
   };
-  await saveMonthFields(monthId, patch);
+  await settled(queued(saveMonthFields(monthId, patch)), deadline);
   month.closedAt = nowIso;
   month.names = patch.names;
   month.unitPrice = patch.unitPrice;
@@ -258,24 +339,17 @@ export async function readProposedPurchases() {
 // a figure left behind from a previous proposal would otherwise sit there for ever
 // with nothing to explain it. The dialog says so before this runs.
 export function applyPurchases(totals) {
-  if (!month || !totals) return 0;
+  if (!month || !totals || isClosed(month)) return 0;
   const wanted = {};
   for (const [id, value] of Object.entries(totals)) {
     const n = readCount(value);
     if (n !== null && n > 0) wanted[id] = n;
   }
-  Object.keys(month.purchased).forEach(id => {
-    if (!(id in wanted)) {
-      delete month.purchased[id];
-      if (pending.purchased) delete pending.purchased[id];
-      cleared.add(`purchased.${id}`);
-    }
-  });
-  Object.entries(wanted).forEach(([id, n]) => {
-    month.purchased[id] = n;
-    pending.purchased = { ...(pending.purchased || {}), [id]: n };
-    cleared.delete(`purchased.${id}`);
-  });
+  const gone = Object.keys(month.purchased).filter(id => !(id in wanted));
+
+  gone.forEach(id => { delete month.purchased[id]; });
+  Object.entries(wanted).forEach(([id, n]) => { month.purchased[id] = n; });
+  outbox = stageMany(outbox, 'purchased', wanted, gone);
 
   cacheMonth();
   scheduleSave();
@@ -291,7 +365,10 @@ export function applyPurchases(totals) {
 // has to be said to whoever presses this, and the dialog says it.
 export async function reopenMonth(nowIso = new Date().toISOString()) {
   if (!month || !monthId) return;
-  await saveMonthFields(monthId, { month: monthId, closedAt: '', updatedAt: nowIso });
+  await settled(
+    queued(saveMonthFields(monthId, { month: monthId, closedAt: '', updatedAt: nowIso })),
+    deadlineFromNow(),
+  );
   month.closedAt = '';
   cacheMonth();
   announce();
@@ -300,17 +377,28 @@ export async function reopenMonth(nowIso = new Date().toISOString()) {
 // Copy a previous month's closing counts into this month's opening — the button
 // offered when a month is opened before the one before it was closed, and the
 // repair when an earlier month is corrected later.
+//
+// Three different answers, and they must stay three: a number of figures moved,
+// `0` for "that month has nothing", and `null` for "I could not read it".
 export async function pullOpeningFromPrevious(previousId) {
-  if (!month || !isMonthId(previousId)) return 0;
-  const previous = await getMonthOnce(previousId);
+  if (!month || !isMonthId(previousId) || isClosed(month)) return 0;
+  let previous = null;
+  try {
+    previous = await getMonthOnce(previousId);
+  } catch (err) {
+    // ⚠️ A FAILED READ IS NOT AN EMPTY MONTH. On screen the two look identical
+    // and mean opposite things — "there is nothing to carry" and "I could not
+    // look" — and this is the one screen used where there is no signal.
+    console.warn('Could not read the previous month:', err);
+    return null;
+  }
   const seed = carryOver(previous, month.id);
   const opening = seed ? seed.opening : {};
   const count = Object.keys(opening).length;
   if (!count) return 0;
 
   month.opening = { ...month.opening, ...opening };
-  pending.opening = { ...(pending.opening || {}), ...opening };
-  Object.keys(opening).forEach(id => cleared.delete(`opening.${id}`));
+  outbox = stageMany(outbox, 'opening', opening);
   cacheMonth();
   scheduleSave();
   announce();

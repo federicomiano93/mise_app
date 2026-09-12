@@ -12,6 +12,16 @@
 // belongs to the row; the name is the button and the box is the input, side by
 // side inside it. Same lesson, same shape, as the delete icon in the WhatsApp
 // entry card (PR #31).
+//
+// ⚠️⚠️ AND THE RULE THAT COST THIS SCREEN A RELEASE: A COUNT BEING TYPED MUST
+// NEVER REBUILD THE LIST. Every box change runs setCount → the store saves and
+// announces → refresh() — synchronously, inside the `change` handler, which fires
+// the instant a finger leaves one box for the next. Rebuilding there destroys the
+// box being reached for: the tap lands on a node that no longer exists and the
+// keyboard closes. Sixty-seven times, on the one screen somebody spends an hour on.
+// So refresh() UPDATES the rows in place and only rebuilds when the set of rows
+// itself has changed — which a count never does. js/inventory/inventory-detail.js
+// documents and avoids the same trap; this file used to do the opposite.
 
 import { t } from '../i18n.js';
 import { el } from './dom.js';
@@ -56,6 +66,14 @@ export function renderList({ month, ingredients, locale, onOpen, onCount, onCarr
   const state = { query: '', onlyTodo: false };
 
   const summary = el('div', { class: 'inv-summary' });
+  const summaryLabel = el('p', { class: 'inv-summary-label', text: t('inv.counted') });
+  const summaryValue = el('p', { class: 'inv-summary-value' });
+  const summaryNote = el('p', {
+    class: 'inv-summary-note',
+    text: readOnly ? t('inv.monthClosedNote') : t('inv.emptyIsNotZero'),
+  });
+  summary.append(summaryLabel, summaryValue, summaryNote);
+
   const rows = el('div', { class: 'inv-list' });
 
   // The two things the app can fill in for you, once each per month. They sit
@@ -74,7 +92,7 @@ export function renderList({ month, ingredients, locale, onOpen, onCount, onCarr
     'data-i18n-attr': 'placeholder',
     placeholder: t('inv.searchProducts'),
     'aria-label': t('inv.searchProducts'),
-    oninput: (e) => { state.query = e.target.value; paintRows(); },
+    oninput: (e) => { state.query = e.target.value; buildRows(); },
   });
 
   const todoToggle = el('button', {
@@ -83,7 +101,7 @@ export function renderList({ month, ingredients, locale, onOpen, onCount, onCarr
       state.onlyTodo = !state.onlyTodo;
       todoToggle.setAttribute('aria-pressed', String(state.onlyTodo));
       todoToggle.classList.toggle('on', state.onlyTodo);
-      paintRows();
+      buildRows();
     },
   }, [el('span', { text: t('inv.stillToCount') })]);
 
@@ -95,32 +113,37 @@ export function renderList({ month, ingredients, locale, onOpen, onCount, onCarr
   ]);
 
   let current = { month, ingredients };
+  // The rows that are in the document right now: id → its parts, in render order.
+  // What is rendered is a FACT about the DOM, never recomputed from the data — the
+  // whole point is that a count leaves it alone.
+  let rendered = [];
+  let nodes = new Map();
+
+  // Everything the search matches, whether counted or not. This — not what is
+  // VISIBLE — decides whether the list has to be rebuilt: the "still to count"
+  // filter must not drop a row the moment its number is typed, or it drops it
+  // under the finger reaching for the next one.
+  function matching() {
+    return current.ingredients.filter(i => matches(i, state.query));
+  }
 
   function visible() {
-    return current.ingredients
-      .filter(i => i && i.active !== false && String(i.name || '').trim())
-      .filter(i => matches(i, state.query))
-      .filter(i => !state.onlyTodo || !consumption(current.month, i.id).counted);
+    return matching().filter(i => !state.onlyTodo || !consumption(current.month, i.id).counted);
   }
 
   function paintSummary() {
-    const countable = current.ingredients.filter(i => i && i.active !== false && String(i.name || '').trim());
-    const progress = progressOf(current.month, countable.map(i => i.id));
-    summary.replaceChildren(
-      el('p', { class: 'inv-summary-label', text: t('inv.counted') }),
-      el('p', {
-        class: 'inv-summary-value',
-        text: t('inv.countedOf', { counted: progress.counted, total: progress.total }),
-      }),
-      el('p', {
-        class: 'inv-summary-note',
-        text: readOnly ? t('inv.monthClosedNote') : t('inv.emptyIsNotZero'),
-      }),
-    );
+    const progress = progressOf(current.month, current.ingredients.map(i => i.id));
+    summaryValue.textContent = t('inv.countedOf', {
+      counted: progress.counted, total: progress.total,
+    });
   }
 
-  function paintRows() {
+  // The rows, from scratch. Only ever on mount, on a search, on the filter, and
+  // when the products themselves have changed.
+  function buildRows() {
     const list = visible();
+    nodes = new Map();
+    rendered = [];
     rows.replaceChildren();
 
     if (!list.length) {
@@ -154,22 +177,29 @@ export function renderList({ month, ingredients, locale, onOpen, onCount, onCarr
       });
   }
 
+  // What the row says underneath the name: the two numbers the answer is made of,
+  // and the answer. A row nobody has counted says so in words instead — it is not
+  // a zero, and the screen must never let it look like one.
+  function subText(line) {
+    if (line.counted && line.hasOpening) {
+      return t('inv.hadBoughtUsed', {
+        had: num(line.opening, locale),
+        bought: num(line.purchased, locale),
+        used: num(line.used, locale),
+      });
+    }
+    return line.counted ? t('inv.noOpeningYet') : t('inv.notCountedYet');
+  }
+
   function row(ingredient) {
     const line = consumption(current.month, ingredient.id);
     const name = labelOf(ingredient);
 
-    // What the row says underneath the name: the two numbers the answer is made
-    // of, and the answer. A row nobody has counted says so in words instead —
-    // it is not a zero, and the screen must never let it look like one.
-    const sub = line.counted && line.hasOpening
-      ? t('inv.hadBoughtUsed', {
-        had: num(line.opening, locale),
-        bought: num(line.purchased, locale),
-        used: num(line.used, locale),
-      })
-      : line.counted
-        ? t('inv.noOpeningYet')
-        : t('inv.notCountedYet');
+    const nameEl = el('span', { class: 'inv-row-name', text: name });
+    const subEl = el('span', {
+      class: 'inv-row-sub' + (line.counted ? '' : ' todo'),
+      text: subText(line),
+    });
 
     const box = el('input', {
       // text + inputmode, never type="number": a numeric field refuses the comma
@@ -183,30 +213,86 @@ export function renderList({ month, ingredients, locale, onOpen, onCount, onCarr
       onchange: (e) => onCount(ingredient.id, e.target.value),
     });
 
-    return el('div', {
+    const node = el('div', {
       class: 'inv-row' + (line.counted ? ' counted' : ''),
     }, [
       el('button', {
         class: 'inv-row-open', type: 'button',
         'aria-label': t('inv.openProduct', { name }),
         onclick: () => onOpen(ingredient),
-      }, [
-        el('span', { class: 'inv-row-name', text: name }),
-        el('span', { class: 'inv-row-sub' + (line.counted ? '' : ' todo'), text: sub }),
-      ]),
+      }, [nameEl, subEl]),
       el('div', { class: 'inv-row-count' }, [
         box,
         el('span', { class: 'inv-row-unit', text: ingredient.unit || t('inv.packsShort') }),
       ]),
     ]);
+
+    // ⚠️ THE CATEGORY IS REMEMBERED, because it is what the row was FILED under and
+    // in-place updates cannot move a row between headings. See structureChanged().
+    nodes.set(ingredient.id, { node, nameEl, subEl, box, category: categoryOf(ingredient) });
+    rendered.push(ingredient.id);
+    return node;
+  }
+
+  // The same rows, told what changed. Nothing is created, moved or removed.
+  //
+  // ⚠️ THE BOX BEING TYPED INTO IS LEFT ALONE. Writing a value into the focused
+  // input would move the caret to the end mid-number; and "3," on its way to "3,5"
+  // is not yet a number the store can canonicalise.
+  function updateRows() {
+    const byId = new Map(current.ingredients.map(i => [i.id, i]));
+    for (const id of rendered) {
+      const parts = nodes.get(id);
+      if (!parts) continue;
+      const ingredient = byId.get(id);
+      const line = consumption(current.month, id);
+
+      if (ingredient) {
+        const name = labelOf(ingredient);
+        if (parts.nameEl.textContent !== name) parts.nameEl.textContent = name;
+      }
+      const sub = subText(line);
+      if (parts.subEl.textContent !== sub) parts.subEl.textContent = sub;
+      parts.subEl.classList.toggle('todo', !line.counted);
+      parts.node.classList.toggle('counted', line.counted);
+
+      if (document.activeElement !== parts.box) {
+        const text = line.closing === null ? '' : num(line.closing, locale);
+        if (parts.box.value !== text) parts.box.value = text;
+      }
+    }
+  }
+
+  // Whether the LIST has changed, as opposed to the numbers in it.
+  //
+  // ⚠️ A COUNT CAN NEVER MAKE THIS TRUE, and that is what makes it safe to trust.
+  // Two questions only: is there a row on screen whose product is gone, and is
+  // there a product that should be on screen and is not. With the "still to count"
+  // filter on, a row that has just been counted is neither — it stays where it is,
+  // marked counted, until the next search, filter tap or reload. Dropping it the
+  // instant its number was typed is precisely what took the next box away from
+  // under the finger.
+  // ⚠️ AND A THIRD QUESTION, WHICH A COUNT ALSO CANNOT CHANGE: has a row's CATEGORY
+  // moved? The products arrive from Firestore a moment after the first paint, so the
+  // first rows are drawn with nothing to file them under — and a closed month, whose
+  // rows come from the frozen list rather than from a search, kept every one of them
+  // under «No category» for ever, because in-place updates cannot move a row between
+  // headings. Seen on a phone-sized window; no unit test was looking at headings.
+  function structureChanged() {
+    const rows = matching();
+    const matched = new Set(rows.map(i => i.id));
+    if (rendered.some(id => !matched.has(id))) return true;
+    if (rows.some(i => nodes.has(i.id) && nodes.get(i.id).category !== categoryOf(i))) return true;
+    return visible().some(i => !nodes.has(i.id));
   }
 
   function refresh(nextMonth, nextIngredients) {
     current = { month: nextMonth, ingredients: nextIngredients };
     paintSummary();
-    paintRows();
+    if (structureChanged()) buildRows(); else updateRows();
   }
 
-  refresh(month, ingredients);
+  paintSummary();
+  buildRows();
   return { root, refresh };
 }

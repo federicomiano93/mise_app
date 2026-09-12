@@ -72,10 +72,16 @@ export function parsePackSize(text) {
 
 // The pack weight this month is using: what somebody typed in beats what the
 // text says, and the month carries it forward so it is typed once ever.
-export function packKgFor(month, ingredient) {
+//
+// ⚠️ A CLOSED MONTH READS ONLY WHAT WAS FROZEN INTO IT. The pack text is free text
+// on the live product record — correct a typo in it next spring ("sacco" →
+// "25kg") and every closed month would quietly gain a cost it never had. What a
+// closed month has no frozen weight for has no cost, for ever.
+export function packKgFor(month, ingredient, closed = false) {
   const id = ingredient && ingredient.id;
   const stored = month && month.packKg ? Number(month.packKg[id]) : NaN;
   if (Number.isFinite(stored) && stored > 0) return round3(stored);
+  if (closed) return null;
   return parsePackSize(ingredient && ingredient.weight);
 }
 
@@ -91,12 +97,18 @@ export function packKgFor(month, ingredient) {
 // That is what makes it right for a product priced by the piece as well as one
 // priced by weight — there is nothing left to multiply on the way out, and so
 // nothing that can disagree with the pack weight stored beside it.
+// ⚠️⚠️ AND THE FROZEN FIGURE IS THE ONLY ONE A CLOSED MONTH MAY USE — no falling
+// back to today's price when it is missing. A fallback is what made the word
+// "closed" a promise the code did not keep: the screen says «this month is closed:
+// its figures no longer change» while a price entered in November would have
+// changed what September cost. A product with no frozen price has NO cost in that
+// month, the row says so, and the total says how many such rows there are.
 export function packPrice(month, ingredient, closed) {
   const id = ingredient && ingredient.id;
 
-  if (closed && month && month.unitPrice) {
-    const frozen = Number(month.unitPrice[id]);
-    if (Number.isFinite(frozen) && frozen > 0) return round3(frozen);
+  if (closed) {
+    const frozen = Number(month && month.unitPrice ? month.unitPrice[id] : NaN);
+    return Number.isFinite(frozen) && frozen > 0 ? round3(frozen) : null;
   }
 
   if (ingredient && ingredient.priceUnit === 'pcs') {
@@ -112,10 +124,19 @@ export function packPrice(month, ingredient, closed) {
 
 // Why a row has no money beside it, so the screen can say which of the two jobs
 // would fix it. `null` means it has one.
+//
+// ⚠️ THE THIRD ONE IS NOT A JOB, IT IS A FACT. In a closed month nothing can be
+// fixed: the figures were frozen on the day, and a price typed now belongs to now.
+// Saying "no price entered" there would send somebody to enter one and change
+// nothing, which is worse than saying what actually happened.
 export const NO_PRICE = 'no-price';
 export const NO_PACK = 'no-pack';
+export const NO_FROZEN_PRICE = 'no-frozen-price';
 
-export function valueBlocker(month, ingredient) {
+export function valueBlocker(month, ingredient, closed = false) {
+  if (closed) {
+    return packPrice(month, ingredient, true) === null ? NO_FROZEN_PRICE : null;
+  }
   if (ingredient && ingredient.priceUnit === 'pcs') {
     const each = Number(ingredient.pricePerUnit);
     return Number.isFinite(each) && each > 0 ? null : NO_PRICE;
@@ -132,7 +153,7 @@ export function valueBlocker(month, ingredient) {
 export function lineValue(month, ingredient, used, closed) {
   if (used === null || used === undefined) return { value: null, blocker: null };
   const price = packPrice(month, ingredient, closed);
-  if (price === null) return { value: null, blocker: valueBlocker(month, ingredient) };
+  if (price === null) return { value: null, blocker: valueBlocker(month, ingredient, closed) };
   return { value: round3(used * price), blocker: null };
 }
 

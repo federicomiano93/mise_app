@@ -13,6 +13,7 @@ import {
   MONTH_PATTERN, isMonthId, monthKey, shiftMonth, previousMonth, nextMonth,
   monthBounds, readCount, COUNT_MAPS, FROZEN_MAPS, normalizeMonth, isClosed,
   consumption, progressOf, carryOver, toDocument,
+  countableProducts, productsOfMonth,
 } from '../js/inventory/inventory-model.js';
 
 const FLOUR = 'flour';
@@ -277,4 +278,68 @@ test('the payload carries exactly the keys the rules allow, and no id', () => {
 test('there is nothing to write for a month that does not exist', () => {
   assert.equal(toDocument(null), null);
   assert.equal(toDocument({ month: 'junk' }), null);
+});
+
+// ── Which products a month is about ──────────────────────────────────────────
+//
+// ⚠️⚠️ THE DEFECT THESE PIN: every screen read its rows from the LIVE ingredient
+// list, closed months included. Delete a product next spring and September stopped
+// naming it — and its cost dropped out of September's total — while the screen
+// promised that a closed month's figures no longer change. A closed month is a
+// record, and a record may not lose rows.
+
+const active = (over = {}) => ({ id: 'flour', name: 'Flour', weight: '25kg', ...over });
+
+test('an OPEN month is about what the venue sells today', () => {
+  const live = [
+    active(),
+    active({ id: 'salt', name: 'Salt' }),
+    active({ id: 'old', name: 'Retired', active: false }),
+    active({ id: 'blank', name: '   ' }),
+    null,
+  ];
+  const out = productsOfMonth({ closedAt: '' }, live);
+  assert.deepEqual(out.map(i => i.id), ['flour', 'salt'],
+    'a product out of use, one with no name and a hole in the list are not rows');
+  assert.deepEqual(countableProducts(live).map(i => i.id), ['flour', 'salt']);
+  assert.deepEqual(countableProducts(null), [], 'nothing at all is no rows, not a crash');
+});
+
+test('⚠️ a CLOSED month is about what was frozen into it', () => {
+  const month = {
+    closedAt: '2026-10-01T09:00:00.000Z',
+    names: { flour: 'Flour 25kg', salt: 'Salt 1kg' },
+    closing: { flour: 2 },
+  };
+  // Only one of the two still exists, and a third has been added since.
+  const live = [active({ id: 'flour', name: 'Farina rinominata' }), active({ id: 'new', name: 'New' })];
+  const out = productsOfMonth(month, live);
+  assert.deepEqual(out.map(i => i.id).sort(), ['flour', 'salt'],
+    'the deleted one is still a row; the one added afterwards is not');
+  const byId = new Map(out.map(i => [i.id, i]));
+  assert.equal(byId.get('flour').name, 'Flour 25kg',
+    'a product renamed after the close keeps, inside that month, the name it was counted under');
+  assert.equal(byId.get('flour').weight, '',
+    'and the frozen label already carries the pack text, so it is not printed twice');
+  assert.equal(byId.get('salt').name, 'Salt 1kg');
+});
+
+test('⚠️ a counted row cannot vanish, even if the frozen list never named it', () => {
+  // Belt and braces: a close whose `names` write failed, or a month closed by an
+  // older version. The counts are in the document and are what somebody walked the
+  // shelves for.
+  const month = { closedAt: 'yes', names: {}, closing: { ghost: 3 }, opening: { older: 1 } };
+  const out = productsOfMonth(month, [active({ id: 'flour' })]);
+  assert.deepEqual(out.map(i => i.id).sort(), ['ghost', 'older']);
+});
+
+test('a pack weight alone does not make a product a row of the month', () => {
+  // packKg is a setting carried from month to month, not a count.
+  const month = { closedAt: 'yes', names: { flour: 'Flour' }, packKg: { flour: 25, salt: 1 } };
+  assert.deepEqual(productsOfMonth(month, []).map(i => i.id), ['flour']);
+});
+
+test('a month closed with nothing recorded at all shows the live list, not a blank screen', () => {
+  const live = [active()];
+  assert.deepEqual(productsOfMonth({ closedAt: 'yes', names: {} }, live).map(i => i.id), ['flour']);
 });

@@ -10,7 +10,7 @@ import { t, localeTag, onLanguageChange } from '../i18n.js';
 import {
   initInventory, getMonth, getMonthId, getIngredients, setCount, closeMonth,
   reopenMonth, pullOpeningFromPrevious, readProposedPurchases, applyPurchases,
-  flush, setSyncErrorHandler,
+  flush, flushBeforeLeaving, setSyncErrorHandler,
 } from './inventory-store.js';
 import { renderList } from './inventory-list.js';
 import { renderDetail } from './inventory-detail.js';
@@ -18,6 +18,7 @@ import { renderUsage } from './inventory-usage.js';
 import { monthCost, packKgFor, packPrice } from './inventory-value.js';
 import {
   monthKey, previousMonth, nextMonth, isClosed, isMonthId, consumption,
+  productsOfMonth,
 } from './inventory-model.js';
 import { confirmDialog } from './confirm-dialog.js';
 
@@ -44,6 +45,14 @@ let openMonthId = isMonthId(requested) ? requested : monthKey();
 let view = 'list';
 let activeList = null;
 let activeDetail = null;
+// Which product the detail screen is showing, so it can be built again if the month
+// turns out to be closed while it is open.
+let activeIngredient = null;
+// ⚠️ WHAT THE SCREEN WAS BUILT FOR. «Closed» is decided when a screen is built — it
+// disables every box, hides the two fill-in actions and changes the note — and the
+// month's own state arrives from Firestore AFTER the first paint. See the update
+// callback at the bottom: when this answer changes, the screen is built again.
+let builtClosed = false;
 
 function monthName(id) {
   const [year, month] = id.split('-').map(Number);
@@ -89,6 +98,8 @@ function paintFooter() {
 function showList() {
   view = 'list';
   activeDetail = null;
+  activeIngredient = null;
+  builtClosed = readOnly();
   setHeader({
     title: t('section.inventory'),
     sub: readOnly() ? t('inv.monthClosed') : t('inv.monthOpen'),
@@ -96,7 +107,7 @@ function showList() {
   });
   activeList = renderList({
     month: getMonth(),
-    ingredients: getIngredients(),
+    ingredients: products(),
     locale: localeTag(),
     readOnly: readOnly(),
     onOpen: openIngredient,
@@ -112,6 +123,8 @@ function showList() {
 function openIngredient(ingredient) {
   view = 'detail';
   activeList = null;
+  activeIngredient = ingredient;
+  builtClosed = readOnly();
   setHeader({
     title: [ingredient.name, ingredient.weight].filter(Boolean).join(' ') || t('inv.unnamedProduct'),
     sub: monthName(openMonthId),
@@ -130,17 +143,20 @@ function openIngredient(ingredient) {
   paintFooter();
 }
 
-// Everything countable in this venue, in one place: the list, the close dialog
-// and the cost screen all have to agree about what "a product" is.
-function countableIngredients() {
-  return getIngredients().filter(i => i && i.active !== false && String(i.name || '').trim());
+// The rows this month is about — which, once it is closed, is what was frozen into
+// it rather than what the venue sells today (js/inventory/inventory-model.js says
+// why at length). The list, the progress figure, the close dialog and the cost
+// screen all read it from here, so they cannot disagree.
+function products() {
+  return productsOfMonth(getMonth(), getIngredients());
 }
 
-// What the month cost, worked out from what is on screen right now.
+// What the month cost. For an open month that is worked out from today's prices;
+// for a closed one, only from what the close froze.
 function costOfMonth() {
   return monthCost({
     month: getMonth(),
-    ingredients: countableIngredients(),
+    ingredients: products(),
     consumptionOf: (ingredient) => consumption(getMonth(), ingredient.id).used,
     closed: readOnly(),
   });
@@ -150,6 +166,8 @@ function showUsage() {
   view = 'usage';
   activeList = null;
   activeDetail = null;
+  activeIngredient = null;
+  builtClosed = readOnly();
   setHeader({ title: t('inv.costTitle'), sub: monthName(openMonthId), back: true });
   const { root } = renderUsage({ cost: costOfMonth(), locale: localeTag(), month: getMonth() });
   swap(root);
@@ -162,7 +180,12 @@ function goToMonth(id) {
   // A full reload rather than re-wiring the listeners by hand: the month is in the
   // URL, so this is the same path a reload takes, and there is exactly one way the
   // page can be in.
-  flush().finally(() => { location.search = `?month=${id}`; });
+  //
+  // ⚠️ flushBeforeLeaving(), NEVER flush(). flush() answers when the write reaches
+  // Firestore, which with no signal is never — so chaining the navigation onto it
+  // made this arrow a dead button in a storeroom. Found by pressing it with the
+  // network switched off, after the store's own waits had already been fixed.
+  flushBeforeLeaving().finally(() => { location.search = `?month=${id}`; });
 }
 
 async function handleCarry() {
@@ -175,6 +198,10 @@ async function handleCarry() {
   });
   if (!ok) return;
   const moved = await pullOpeningFromPrevious(previous);
+  // ⚠️ THREE ANSWERS, NOT TWO. "That month has nothing in it" and "I could not read
+  // it" look the same on screen and mean opposite things — and this screen is used
+  // where there is no signal, so the second is not a rare case.
+  if (moved === null) { toast(t('inv.carryFailed')); return; }
   toast(moved ? t('inv.carriedOver', { n: moved }) : t('inv.nothingToCarry'));
 }
 
@@ -228,7 +255,7 @@ async function handleClose() {
     return;
   }
 
-  const countable = countableIngredients();
+  const countable = products();
   const missing = countable.filter(i => !consumption(getMonth(), i.id).counted).length;
 
   const ok = await confirmDialog({
@@ -254,7 +281,7 @@ async function handleClose() {
     names[i.id] = [i.name, i.weight].filter(Boolean).join(' ').trim();
     const price = packPrice(openMonth, i, false);
     if (price !== null) unitPrice[i.id] = price;
-    const kg = packKgFor(openMonth, i);
+    const kg = packKgFor(openMonth, i, false);
     if (kg !== null) packKg[i.id] = kg;
   });
   const opened = await closeMonth({ names, unitPrice, packKg });
@@ -290,8 +317,21 @@ window.addEventListener('pagehide', () => { flush(); });
 initInventory(
   openMonthId,
   () => {
+    // ⚠️⚠️ A MONTH'S OWN STATE ARRIVES AFTER THE FIRST PAINT, and until v1.79.0 the
+    // screen never took it in: a CLOSED month was drawn as open — count boxes
+    // somebody could type into, the two fill-in actions offered, the note saying an
+    // empty box means "not counted yet" — while the footer button alone said
+    // «Reopen». Typing there changed the figures of a month the screen promises no
+    // longer change. Only the footer was repainted, because only the footer asked.
+    // So when that answer changes, the screen is BUILT AGAIN, not merely refreshed.
+    if (readOnly() !== builtClosed) {
+      if (view === 'detail' && activeIngredient) openIngredient(activeIngredient);
+      else if (view === 'usage') showUsage();
+      else showList();
+      return;
+    }
     if (view === 'list' && activeList) {
-      activeList.refresh(getMonth(), getIngredients());
+      activeList.refresh(getMonth(), products());
       paintFooter();
     }
     if (view === 'detail' && activeDetail) activeDetail.refresh(getMonth());

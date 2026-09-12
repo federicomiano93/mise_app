@@ -13,7 +13,8 @@ import { t } from '../i18n.js';
 import { el } from './dom.js';
 import { consumption } from './inventory-model.js';
 import {
-  parsePackSize, packKgFor, packPrice, lineValue, formatTotal, NO_PRICE, NO_PACK,
+  parsePackSize, packKgFor, packPrice, lineValue, formatTotal,
+  NO_PRICE, NO_PACK, NO_FROZEN_PRICE,
 } from './inventory-value.js';
 
 const FIELDS = [
@@ -22,7 +23,11 @@ const FIELDS = [
   { map: 'closing', label: 'inv.closingCount', hint: 'inv.closingHint' },
 ];
 
-const BLOCKER_TEXT = { [NO_PRICE]: 'inv.noPriceYet', [NO_PACK]: 'inv.noPackYet' };
+const BLOCKER_TEXT = {
+  [NO_PRICE]: 'inv.noPriceYet',
+  [NO_PACK]: 'inv.noPackYet',
+  [NO_FROZEN_PRICE]: 'inv.noFrozenPrice',
+};
 
 function num(value, locale) {
   if (value === null || value === undefined) return '—';
@@ -83,8 +88,19 @@ export function renderDetail({ month, ingredient, locale, onCount, readOnly, clo
   }
 
   function paintPackNote() {
-    const kg = packKgFor(current, ingredient);
+    const kg = packKgFor(current, ingredient, closed);
     const price = packPrice(current, ingredient, closed);
+    // ⚠️ A CLOSED MONTH IS NOT A JOB LIST. Its figures are frozen and its boxes are
+    // disabled, so "write the kilos in and this product gets a cost" would be an
+    // instruction nobody can follow. It says what was recorded at the time instead
+    // — and if nothing was, it says that, because entering a price today cannot
+    // change what September cost.
+    if (closed) {
+      packNote.textContent = price === null
+        ? t('inv.packNotFrozen')
+        : t('inv.packFrozen', { price: formatTotal(price) });
+      return;
+    }
     if (ingredient.priceUnit === 'pcs') {
       packNote.textContent = price === null ? t('inv.packByPieceNoPrice') : t('inv.packByPiece', { price: formatTotal(price) });
       return;
@@ -136,7 +152,9 @@ export function renderDetail({ month, ingredient, locale, onCount, readOnly, clo
     class: 'inv-input', type: 'text', inputmode: 'decimal',
     autocomplete: 'off', id: 'inv-packKg',
     value: stored === null || stored === undefined ? '' : num(stored, locale),
-    placeholder: parsed === null ? '' : num(parsed, locale),
+    // No suggestion on a closed month: it would offer a weight the month will
+    // never use, in a box that cannot be typed into.
+    placeholder: closed || parsed === null ? '' : num(parsed, locale),
     disabled: readOnly ? 'disabled' : null,
     onchange: (e) => { onCount('packKg', ingredient.id, e.target.value); },
   });

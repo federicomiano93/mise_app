@@ -13,7 +13,11 @@
 // js/inventory/ imports nothing from js/orders/ or js/foodcost/, so the feature
 // stays liftable (CLAUDE.md, "Modular by feature").
 
-import { firebaseConfig, sessionReady, currentSession } from '../firebase.js';
+// ⚠️ NO ROLE IS READ HERE, ON PURPOSE. The whole page rides the Food Cost gate
+// (inventory.html, data-section="foodcost"), so every account that can open this
+// screen may already run it — a second, UX-only check inside would be a control
+// this feature does not have, dressed as one it does.
+import { firebaseConfig, sessionReady } from '../firebase.js';
 import { currentLocationId, pathFor } from '../location.js';
 import { withPrices } from '../price-model.js';
 import { isMonthId } from './inventory-model.js';
@@ -90,17 +94,21 @@ export async function getMonthOnce(monthId) {
 // ⚠️ WHICH IS EXACTLY WHY CLEARING A BOX NEEDS deleteField(). A merge never
 // removes a key, so emptying a count box would leave the old number in the
 // database and the row would come back counted on the next load — the one bug
-// that would make somebody stop trusting the screen. `clearPaths` carries the
-// dotted paths ('closing.flour') of the boxes that were emptied, and they travel
-// in the SAME write as the rest, so a count and its neighbour's deletion can
-// never half-land.
-export async function saveMonthFields(monthId, patch, clearPaths = []) {
+// that would make somebody stop trusting the screen. `clear` names the boxes that
+// were emptied, as `{ closing: { flour: true } }`, and they travel in the SAME
+// write as the rest, so a count and its neighbour's deletion can never half-land.
+//
+// ⚠️ A NESTED MAP, NEVER A DOTTED 'closing.flour' STRING. An ingredient id is a
+// Firestore document id and may legally contain a dot, and splitting on it would
+// delete the wrong key — or nothing at all — without a sound.
+export async function saveMonthFields(monthId, patch, clear = {}) {
   await authReady;
   const payload = withBakery({ ...patch });
-  for (const path of clearPaths) {
-    const [map, id] = String(path).split('.');
-    if (!map || !id) continue;
-    payload[map] = { ...(payload[map] || {}), [id]: deleteField() };
+  for (const [map, ids] of Object.entries(clear)) {
+    if (!map || !ids || typeof ids !== 'object') continue;
+    const removals = {};
+    for (const id of Object.keys(ids)) removals[id] = deleteField();
+    payload[map] = { ...(payload[map] || {}), ...removals };
   }
   return setDoc(monthRef(monthId), payload, { merge: true });
 }
@@ -153,14 +161,4 @@ export async function watchIngredients(onChange, onError) {
     () => { prices = {}; emit(); },
   );
   return () => { stopIngredients(); stopPrices(); };
-}
-
-// Whether this session may run this place.
-//
-// ⚠️ UX ONLY (P2). The rules decide, and they read users/{uid} themselves rather
-// than trusting anything this page says. The whole screen is behind the Food Cost
-// gate already, so this exists for the one control inside it that closes a month —
-// an act that freezes figures other people will read.
-export function canManageHere() {
-  return currentSession().canManage === true;
 }
