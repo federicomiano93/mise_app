@@ -79,8 +79,11 @@ export function renderList({ month, ingredients, locale, onOpen, onCount, onCarr
   // The two things the app can fill in for you, once each per month. They sit
   // with the list because they change what is in it — and NOT in the bottom bar,
   // which belongs to the one action that ends the month.
+  // ⚠️ «Carry forward» is left out when no handler is given: it reads LAST month, which
+  // is closed by then, and an employee may not read a closed month (firestore.rules
+  // stocktakeMayRead) — so for them it would be a button that can only fail.
   const actions = readOnly ? null : el('div', { class: 'inv-actions' }, [
-    el('button', { class: 'inv-action', type: 'button', text: t('inv.carryShort'), onclick: onCarry }),
+    onCarry ? el('button', { class: 'inv-action', type: 'button', text: t('inv.carryShort'), onclick: onCarry }) : null,
     el('button', { class: 'inv-action', type: 'button', text: t('inv.purchasesShort'), onclick: onPurchases }),
   ]);
 

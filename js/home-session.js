@@ -17,8 +17,8 @@
 
 import { t } from './i18n.js';
 import { onSession, openVenuePicker } from './firebase.js';
-import { sectionsFor, hasLevelAbove } from './sections.js';
-import { cardVisibleTo } from './home-cards.js';
+import { allowedSections, hasLevelAbove } from './sections.js';
+import { cardVisibleTo, orderedCardIds } from './home-cards.js';
 import { refreshAway, wireAwayReminder } from './home-away.js';
 
 const logoutHost = document.getElementById('session-logout-host');
@@ -29,20 +29,30 @@ const SVG_NS = 'http://www.w3.org/2000/svg';
 // Hide the cards this location does not use. The cards are static HTML with a
 // data-section, so this only ever REMOVES — a location with everything on gets
 // the markup exactly as written.
-function filterCards({ location, role, canManage }) {
-  // ⚠️ THE ROLE NARROWS THIS TOO, so a card is not drawn for a screen the person
-  // would be refused on. It is still only courtesy — the rules refuse the data
-  // itself — but a card that opens onto permission errors teaches people the app
-  // is broken rather than that they lack the permission.
-  const allowed = sectionsFor(location, role);
+function filterCards({ location, canManage }) {
+  // The parts of the app this VENUE has — the same for everybody in it.
+  const allowed = allowedSections(location);
   document.querySelectorAll('.home-card[data-section]').forEach(card => {
     if (allowed[card.dataset.section] === false) card.remove();
-    // ⚠️ A THIRD, PURELY VISUAL LAYER: the cards the venue chose to hide from its
-    // employees (js/home-cards.js). It can only remove more, never bring back a
-    // card either check above removed — and it never removes one from an owner, a
-    // manager or a head chef.
+    // ⚠️ AND WHAT THIS PERSON IS SHOWN, decided per CARD by js/home-cards.js — which,
+    // since Food cost and Stocktake became switchable (13 Sep 2026), is also where
+    // «an employee does not see the money» lives: those two are hidden from employees
+    // until the venue shows them. It never removes a card from an owner, a manager or
+    // a head chef. ⚠️ So EVERY card must carry a data-card; a test walks the Home to
+    // say so, because a card without one would be shown to everybody.
     else if (!cardVisibleTo(location, canManage, card.dataset.card)) card.remove();
   });
+}
+
+// The venue's order (js/home-cards.js), applied by moving the cards the Home still
+// shows. Moving a node keeps its listeners and its badge.
+function orderCards(location) {
+  const grid = document.querySelector('.home-grid');
+  if (!grid) return;
+  const cards = [...grid.querySelectorAll('.home-card[data-card]')];
+  const byId = new Map(cards.map(card => [card.dataset.card, card]));
+  orderedCardIds(location, cards.map(card => card.dataset.card))
+    .forEach(id => grid.appendChild(byId.get(id)));
 }
 
 // The gear, built as nodes — the same drawing as the Settings button at the bottom
@@ -119,6 +129,7 @@ onSession(session => {
   if (session.status !== 'ready') return;
   currentSessionForStrip = session;
   filterCards(session);
+  orderCards(session.location);
   // After the filter, so a card the venue removed is never listened to.
   wireAwayReminder();
   refreshAway();

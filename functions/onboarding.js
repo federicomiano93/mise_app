@@ -33,7 +33,7 @@ import {
   MAX_ATTEMPTS_PER_HOUR, ATTEMPT_WINDOW_MS,
   isWellFormed, codeStatus, isRateLimited, retryAfterMs, redeemFailureText,
 } from './join-code.js';
-import { HIDEABLE_IDS } from './home-cards.js';
+import { HIDEABLE_IDS, OPT_IN_IDS, isValidOrder } from './home-cards.js';
 
 const REGION = 'us-central1';
 
@@ -1031,6 +1031,43 @@ export const setStaffCard = onCall(CALL, async (request) => {
   // merge, never a whole write — the same document holds the venue's name, its
   // sections and its country. And a merge of a nested map merges KEY BY KEY, so the
   // other cards' answers stay where they are.
-  await db().doc(`locations/${locationId}`).set({ staffHiddenCards: { [card]: hidden } }, { merge: true });
+  // ⚠️⚠️ A MONEY CARD IS STORED THE OTHER WAY ROUND. Food cost and Stocktake are hidden
+  // from employees unless SHOWN (functions/home-cards.js), so for them the switch writes
+  // `staffShownCards` — and firestore.rules reads that same field to decide whether an
+  // employee may read the accounts at all. Everything else writes `staffHiddenCards`.
+  if (OPT_IN_IDS.includes(card)) {
+    await db().doc(`locations/${locationId}`).set({ staffShownCards: { [card]: !hidden } }, { merge: true });
+  } else {
+    await db().doc(`locations/${locationId}`).set({ staffHiddenCards: { [card]: hidden } }, { merge: true });
+  }
   return { card, hidden };
+});
+
+// ── The order of the Home's cards, for the whole venue ───────────────────────
+//
+// Federico, 13 Sep 2026: «devo poter cambiare l'ordine trascinandole» — for everybody in
+// the venue, decided by whoever runs it.
+//
+// ⚠️ THE WHOLE LIST IN ONE WRITE, NOT A MERGE OF ITS PARTS. An order is one fact: two
+// halves of two different drags merged together would be an order nobody chose. So the
+// field is replaced whole (an array value under merge:true replaces the array) — and
+// still merged into the DOCUMENT, which holds the venue's name, sections and country.
+export const setHomeCardOrder = onCall(CALL, async (request) => {
+  const uid = requireAuth(request);
+  const { locationId, order } = request.data || {};
+
+  if (typeof locationId !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(locationId)) {
+    throw new HttpsError('invalid-argument', 'Which location?');
+  }
+  if (!isValidOrder(order)) {
+    throw new HttpsError('invalid-argument', 'Which order?');
+  }
+
+  const access = await accessValue(uid, locationId);
+  if (access !== 'owner' && access !== 'manager') {
+    throw new HttpsError('permission-denied', 'Only an owner or a manager can change that.');
+  }
+
+  await db().doc(`locations/${locationId}`).set({ homeCardOrder: [...order] }, { merge: true });
+  return { order };
 });

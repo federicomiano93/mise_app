@@ -22,7 +22,7 @@ import { onSession, signIn, signUp, sendReset, chooseLocation, signOutNow,
 import { normalizeTyped } from './join-code.js';
 import { kindOfTyped, readJoinToken, codeShapeHint } from './join-link.js';
 import { nameProblem, passwordProblem, MIN_PASSWORD_LENGTH } from './credentials.js';
-import { isSectionAllowedFor } from './sections.js';
+import { isSectionAllowed, isSectionAllowedFor } from './sections.js';
 import { cardVisibleTo } from './home-cards.js';
 
 const HOME = 'index.html';
@@ -859,7 +859,13 @@ function render(session) {
       // typing the address is all it would take. The rules refuse the DATA
       // regardless — this is what stops the screen sitting there collecting
       // permission errors instead of saying nothing at all.
-      if (pageSection && !isSectionAllowedFor(session.location, session.role, pageSection)) {
+      // ⚠️ A PAGE THAT NAMES ITS CARD IS JUDGED BY THE CARD. The role-only rule for Food
+      // cost (js/sections.js ROLE_ONLY) is the default the card now carries itself —
+      // hidden from employees until the venue shows it — so asking the section by role
+      // as well would send away an employee the venue chose to let in.
+      if (pageSection && (pageCard
+        ? !isSectionAllowed(session.location, pageSection)
+        : !isSectionAllowedFor(session.location, session.role, pageSection))) {
         location.replace(HOME);
         return;
       }

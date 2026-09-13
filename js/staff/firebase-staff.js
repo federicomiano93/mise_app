@@ -176,6 +176,15 @@ export async function setStaffCard(locationId, card, hidden) {
   return res.data;
 }
 
+// The order of the Home's cards, for everybody in this venue (js/home-cards.js).
+//
+// ⚠️ sessionReady, like the call above: made from inside an open venue.
+export async function setHomeCardOrder(locationId, order) {
+  await sessionReady;
+  const res = await call('setHomeCardOrder')({ locationId, order });
+  return res.data;
+}
+
 // `title` names the manager level — 'manager' or 'head-chef'. It is a LABEL and
 // grants nothing; the server clears it whenever the level is not manager.
 export async function setMemberRole(uid, role, title = null) {

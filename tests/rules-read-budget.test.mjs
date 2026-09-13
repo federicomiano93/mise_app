@@ -86,7 +86,7 @@ const costOf = name => accessesIn(bodyOf(name)).length;
 
 // The helpers that read documents. Each cost is pinned individually, so a
 // regression names the function it happened in instead of a total that moved.
-const HELPERS = { member: 1, sectionOn: 1, roleIn: 1, orderClientOf: 1 };
+const HELPERS = { member: 1, sectionOn: 1, roleIn: 1, orderClientOf: 1, cardAccess: 2 };
 
 test('the helpers this test is about still exist, so it cannot pass by finding nothing', () => {
   for (const name of Object.keys(HELPERS)) {
@@ -102,6 +102,23 @@ test('the access parser reads a whole interpolated path, not a stub', () => {
   assert.equal(paths.length, 1);
   assert.match(paths[0], /^\/databases\/\$\(database\)\/documents\/users\/\$\(request\.auth\.uid\)$/,
     `parsed "${paths[0]}" — expected the complete users/{uid} path`);
+});
+
+test('⚠️ a money card\'s gate costs two reads — users and locations, each once — and never more', () => {
+  // cardAccess() binds users/{uid} and locations/{lid} once and reuses them; the two
+  // stocktake helpers call it ONCE each. Written as canManage() || (canUse() && …) the
+  // employee's path would have cost 6.
+  const paths = accessesIn(bodyOf('cardAccess')).map(a => a.path);
+  assert.deepEqual(paths.sort(), [
+    '/databases/$(database)/documents/locations/$(lid)',
+    '/databases/$(database)/documents/users/$(request.auth.uid)',
+  ]);
+  for (const name of ['stocktakeMayRead', 'stocktakeMayWrite']) {
+    const body = bodyOf(name);
+    assert.ok(body, `firestore.rules has no function ${name}()`);
+    assert.equal(accessesIn(body).length, 0, `${name}() must not read a document of its own`);
+    assert.equal((body.match(/\bcardAccess\(/g) || []).length, 1, `${name}() must ask cardAccess() exactly once`);
+  }
 });
 
 test('every document-reading helper costs exactly one read', () => {

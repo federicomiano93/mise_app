@@ -9,7 +9,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
-  STAFF_CARDS, HIDEABLE_IDS, HIDDEN_FIELD, isHiddenForStaff, cardVisibleTo, mayBeTold,
+  STAFF_CARDS, HIDEABLE_IDS, OPT_IN_IDS, HIDDEN_FIELD, SHOWN_FIELD, ORDER_FIELD,
+  isHiddenForStaff, cardVisibleTo, mayBeTold, cleanOrder, isValidOrder, orderedCardIds,
 } from '../js/home-cards.js';
 import { PUSH_KINDS, cardForKind, targetPage } from '../js/push-model.js';
 
@@ -22,13 +23,18 @@ const PAGE_OF = Object.freeze({
   orders: 'orders.html',
   suppliers: 'suppliers.html',
   pastries: 'pastries.html',
+  foodcost: 'foodcost.html',
+  inventory: 'inventory.html',
 });
+
+// The work, as opposed to the money: visible to employees unless hidden.
+const EVERYDAY = HIDEABLE_IDS.filter(id => !OPT_IN_IDS.includes(id));
 
 // ── 1. The judgement ─────────────────────────────────────────────────────────
 
-test('a venue that has never heard of the field hides nothing', () => {
+test('a venue that has never heard of the field hides no everyday card', () => {
   for (const doc of [null, undefined, {}, { name: 'Bakery' }, 'corrupt', 42]) {
-    for (const id of HIDEABLE_IDS) {
+    for (const id of EVERYDAY) {
       assert.equal(isHiddenForStaff(doc, id), false, `${JSON.stringify(doc)} hid ${id}`);
     }
   }
@@ -51,7 +57,7 @@ test('a corrupt map hides nothing', () => {
 
 test('hiding one card hides that card and no other', () => {
   const doc = { [HIDDEN_FIELD]: { orders: true } };
-  for (const id of HIDEABLE_IDS) {
+  for (const id of EVERYDAY) {
     assert.equal(isHiddenForStaff(doc, id), id === 'orders', id);
   }
   // ⚠️ Suppliers shares the `orders` SECTION — and must not share its switch.
@@ -74,17 +80,37 @@ test('only a literal canManage === true passes the switch', () => {
 });
 
 test('a card with no id, or one this layer does not know, is never hidden', () => {
-  const doc = { [HIDDEN_FIELD]: { foodcost: true, inventory: true, toString: true } };
-  for (const id of [undefined, '', 'foodcost', 'inventory', 'toString', '__proto__']) {
+  const doc = { [HIDDEN_FIELD]: { toString: true }, [SHOWN_FIELD]: {} };
+  for (const id of [undefined, '', 'toString', '__proto__', 'nothing']) {
     assert.equal(cardVisibleTo(doc, false, id), true, String(id));
   }
-  assert.ok(!HIDEABLE_IDS.includes('foodcost') && !HIDEABLE_IDS.includes('inventory'),
-    'an employee never sees Food cost or Stocktake, so there is nothing to hide');
 });
 
-test('the ids are exactly the five cards an employee can be shown', () => {
-  assert.deepEqual([...HIDEABLE_IDS], ['calculator', 'catalogue', 'orders', 'suppliers', 'pastries']);
+test('the ids are the seven Home cards, and the two money cards are the opt-in ones', () => {
+  assert.deepEqual([...HIDEABLE_IDS],
+    ['calculator', 'catalogue', 'orders', 'suppliers', 'pastries', 'foodcost', 'inventory']);
+  assert.deepEqual([...OPT_IN_IDS], ['foodcost', 'inventory']);
   assert.ok(Object.isFrozen(STAFF_CARDS) && STAFF_CARDS.every(Object.isFrozen));
+});
+
+test('⚠️⚠️ a money card is HIDDEN from employees until the venue shows it — and only a literal true shows it', () => {
+  for (const doc of [null, undefined, {}, { name: 'Bakery' }, 'corrupt']) {
+    for (const id of OPT_IN_IDS) {
+      assert.equal(isHiddenForStaff(doc, id), true, `${JSON.stringify(doc)} showed ${id}`);
+    }
+  }
+  for (const value of [false, 'true', 1, null, {}, []]) {
+    assert.equal(cardVisibleTo({ [SHOWN_FIELD]: { foodcost: value } }, false, 'foodcost'), false, JSON.stringify(value));
+  }
+  assert.equal(cardVisibleTo({ [SHOWN_FIELD]: { foodcost: true } }, false, 'foodcost'), true);
+  assert.equal(cardVisibleTo({ [SHOWN_FIELD]: { foodcost: true } }, false, 'inventory'), false,
+    'showing Food cost does not show the Stocktake');
+});
+
+test('⚠️ the two maps do not cross: «hidden» cannot touch a money card, nor «shown» an everyday one', () => {
+  assert.equal(isHiddenForStaff({ [HIDDEN_FIELD]: { foodcost: false } }, 'foodcost'), true,
+    'a false in the hidden map is not a way to show the accounts');
+  assert.equal(isHiddenForStaff({ [SHOWN_FIELD]: { pastries: false } }, 'pastries'), false);
 });
 
 // ── 2. The markup agrees ─────────────────────────────────────────────────────
@@ -98,10 +124,11 @@ test('every hideable card carries its id on the Home, exactly once, on the right
     assert.match(tags[0], new RegExp(`data-section="${card.section}"`),
       `${card.id}: the card's section and the list's section disagree`);
   }
-  for (const page of ['foodcost.html', 'inventory.html']) {
-    const tag = home.match(new RegExp(`<a class="home-card" href="${page.replace('.', '\\.')}"[^>]*>`));
-    assert.ok(tag && !/data-card=/.test(tag[0]), `${page} is not hideable and must carry no data-card`);
-  }
+  // ⚠️ EVERY card, because a card without one is judged by nobody: the Home would show it
+  // to everybody, the money cards included.
+  const tags = home.match(/<a class="home-card"[^>]*>/g) || [];
+  assert.equal(tags.length, HIDEABLE_IDS.length, 'one card on the Home per id, and no other');
+  for (const tag of tags) assert.match(tag, /\bdata-card="/, `${tag} carries no data-card`);
 });
 
 test('⚠️ every hideable page declares its card on <body>, or an address typed by hand walks past', () => {
@@ -124,7 +151,7 @@ const CALLABLE = (() => {
 
 test('⚠️⚠️ the server refuses cards by the app\'s own list, not a second one', () => {
   // functions/home-cards.js is a byte copy of js/home-cards.js (tests/copie-allineate.test.mjs).
-  assert.match(ONBOARDING, /import \{ HIDEABLE_IDS \} from '\.\/home-cards\.js';/);
+  assert.match(ONBOARDING, /import \{ HIDEABLE_IDS, OPT_IN_IDS, isValidOrder \} from '\.\/home-cards\.js';/);
   assert.doesNotMatch(ONBOARDING, /STAFF_CARD_IDS/, 'a hand-kept second list is the one that drifts');
 });
 
@@ -154,7 +181,7 @@ test('⚠️ a callable missing from index.js is not deployed at all', () => {
 
 test('the Home filters on the card, and passes the session\'s canManage', () => {
   const src = withoutComments(read('js/home-session.js'));
-  assert.match(src, /import \{ cardVisibleTo \} from '\.\/home-cards\.js';/);
+  assert.match(src, /import \{ cardVisibleTo, orderedCardIds \} from '\.\/home-cards\.js';/);
   assert.match(src, /cardVisibleTo\(location, canManage, card\.dataset\.card\)/);
   assert.match(src, /filterCards\(session\);/);
 });
@@ -177,21 +204,26 @@ test('⚠️ the page gate asks too, after the section check and before the page
 
 test('the screen lists only the cards the venue has, and writes only after the server agrees', () => {
   const src = withoutComments(read('js/staff/home-cards-screen.js'));
-  assert.match(src, /sectionsFor\(session\.location, 'staff'\)/);
+  assert.match(src, /const venueSections = allowedSections\(session\.location\);/);
+  assert.match(src, /STAFF_CARDS\.filter\(card => venueSections\[card\.section\] === true\)/);
   const call = src.indexOf('await setStaffCard(');
   const remember = src.indexOf('override[card.id] = hide');
   assert.ok(call > 0 && remember > call,
     'remembering the switch before the server agrees shows a change the venue never got');
 });
 
-test('⚠️ every hide asks first — and showing never does', () => {
-  // Federico, 13 Sep 2026: «tutte le impostazioni quando le vuoi nascondere devono chiedere conferma».
+test('⚠️ every hide asks first; showing asks only for a money card', () => {
+  // Federico, 13 Sep 2026: «tutte le impostazioni quando le vuoi nascondere devono chiedere
+  // conferma» — and showing Food cost or the Stocktake gives employees the accounts.
   const src = withoutComments(read('js/staff/home-cards-screen.js'));
-  const ask = src.search(/if \(hide\) \{[\s\S]{0,400}?const ok = await confirmDialog\(/);
-  assert.ok(ask > 0, 'hiding any card must ask');
-  assert.ok(ask < src.indexOf('await setStaffCard('), 'and it must come before the save');
-  assert.equal((src.match(/confirmDialog\(/g) || []).length, 1,
-    'one dialog, inside the hide branch — showing a card again never asks');
+  const q = src.slice(src.indexOf('function questionFor('), src.indexOf('export function openHomeCards('));
+  assert.match(q, /if \(hide\) \{[\s\S]*?danger: true,\s*\};\s*\}/, 'hiding any card asks, as a danger');
+  assert.match(q, /if \(card\.optIn\) \{\s*return \{\s*title: t\('homeCards\.show\.title'/, 'showing a money card asks');
+  assert.match(q, /return null;\s*\}\s*$/, 'showing an everyday card back asks nothing');
+  const toggle = src.slice(src.indexOf('async function toggle('));
+  const ask = toggle.search(/const ask = questionFor\(card, hide\);\s*if \(ask\) \{\s*const ok = await confirmDialog\(/);
+  assert.ok(ask > 0 && ask < toggle.indexOf('await setStaffCard('), 'asked before the save');
+  assert.equal((src.match(/confirmDialog\(/g) || []).length, 1, 'one dialog, built from the question');
 });
 
 test('the dialog names the allergen sheet on the Catalogue, and notifications where there are any', () => {
@@ -226,7 +258,7 @@ test('the callable refuses a location id that could never name a folder', () => 
 });
 
 test('⚠️ the Home filter reads canManage by that name, not another flag under it', () => {
-  assert.match(read('js/home-session.js'), /function filterCards\(\{ location, role, canManage \}\)/,
+  assert.match(read('js/home-session.js'), /function filterCards\(\{ location, canManage \}\)/,
     '`isOwner: canManage` would still match every other check and take the cards away from managers');
 });
 
@@ -349,4 +381,102 @@ test('a switch that is ON still looks and feels tappable', () => {
   const css = read('tokens.css');
   assert.match(css, /\.people-pill--switch\.people-pill--on\s*\{[^}]*cursor:\s*pointer/);
   assert.match(css, /\.people-pill--switch\.people-pill--on:active\s*\{[^}]*scale\(\.97\)/);
+});
+
+// ── 7. The order, and the money cards (13 Sep 2026) ──────────────────────────
+//
+// Federico: «devo poter cambiare l'ordine trascinandole» (for the whole venue), and
+// «voglio poter decidere tutto dall'app tutte le card che ci sono nella home».
+
+test('⚠️ a saved order keeps known ids once each and drops everything else', () => {
+  assert.deepEqual(cleanOrder(['orders', 'orders', 'nope', 7, null, 'calculator']), ['orders', 'calculator']);
+  for (const bad of [null, undefined, 'orders', {}, 42]) assert.deepEqual(cleanOrder(bad), []);
+});
+
+test('the server accepts only a clean, non-empty list of known ids', () => {
+  assert.equal(isValidOrder(['pastries', 'orders']), true);
+  assert.equal(isValidOrder([...HIDEABLE_IDS]), true);
+  for (const bad of [[], ['orders', 'orders'], ['orders', 'nope'], 'orders', null, [...HIDEABLE_IDS, 'calculator'], [1]]) {
+    assert.equal(isValidOrder(bad), false, JSON.stringify(bad));
+  }
+});
+
+test('⚠️⚠️ the Home follows the saved order, and a card the order does not name keeps its place after it', () => {
+  const markup = ['calculator', 'catalogue', 'orders', 'suppliers', 'pastries'];
+  assert.deepEqual(orderedCardIds({}, markup), markup, 'no order: the markup order');
+  assert.deepEqual(orderedCardIds(null, markup), markup);
+  assert.deepEqual(orderedCardIds({ [ORDER_FIELD]: ['pastries', 'orders'] }, markup),
+    ['pastries', 'orders', 'calculator', 'catalogue', 'suppliers']);
+  assert.deepEqual(orderedCardIds({ [ORDER_FIELD]: ['foodcost', 'orders'] }, ['calculator', 'orders']),
+    ['orders', 'calculator'], 'a card the Home does not show is simply not there');
+  assert.deepEqual(orderedCardIds({ [ORDER_FIELD]: 'corrupt' }, markup), markup);
+});
+
+const ONBOARDING_ORDER = (() => {
+  const start = ONBOARDING.indexOf('export const setHomeCardOrder');
+  assert.ok(start > 0, 'functions/onboarding.js must export setHomeCardOrder');
+  const next = ONBOARDING.indexOf('export const', start + 10);
+  return withoutComments(next === -1 ? ONBOARDING.slice(start) : ONBOARDING.slice(start, next));
+})();
+
+test('⚠️ setHomeCardOrder refuses a bad list and an employee, and checks the role before it writes', () => {
+  assert.match(ONBOARDING_ORDER, /if \(!isValidOrder\(order\)\) \{\s*throw new HttpsError\('invalid-argument'/);
+  assert.match(ONBOARDING_ORDER, /!\/\^\[A-Za-z0-9\]\[A-Za-z0-9_-\]\{0,63\}\$\/\.test\(locationId\)/);
+  const role = ONBOARDING_ORDER.indexOf("access !== 'owner' && access !== 'manager'");
+  assert.ok(role > 0 && role < ONBOARDING_ORDER.indexOf('.set('), 'the role is checked before the write');
+  assert.match(ONBOARDING_ORDER, /\.set\(\{ homeCardOrder: \[\.\.\.order\] \}, \{ merge: true \}\)/,
+    'the whole list, merged into the document');
+  assert.match(read('functions/index.js'), /\bsetHomeCardOrder\b/, 'a callable missing from index.js is never deployed');
+  assert.match(ONBOARDING, /import \{ HIDEABLE_IDS, OPT_IN_IDS, isValidOrder \} from '\.\/home-cards\.js';/);
+});
+
+test('⚠️⚠️ setStaffCard writes a money card as SHOWN, into the field the rules read', () => {
+  assert.match(CALLABLE,
+    /if \(OPT_IN_IDS\.includes\(card\)\) \{\s*await db\(\)\.doc\(`locations\/\$\{locationId\}`\)\.set\(\{ staffShownCards: \{ \[card\]: !hidden \} \}, \{ merge: true \}\);/);
+  assert.match(read('firestore.rules'), /l\.data\.get\('staffShownCards', \{\}\)\.get\(card, false\) == true/,
+    'the rules read the same field, with the same «only true» meaning');
+});
+
+test('the Home applies the order after filtering, by moving the cards it still shows', () => {
+  const src = withoutComments(read('js/home-session.js'));
+  assert.match(src, /orderedCardIds\(location, cards\.map\(card => card\.dataset\.card\)\)/);
+  assert.ok(src.indexOf('filterCards(session);') < src.indexOf('orderCards(session.location);'));
+  assert.match(src, /const allowed = allowedSections\(location\);/,
+    'the venue decides the sections; the card, not the role, decides the money');
+});
+
+test('⚠️ a page that names its card is judged by the card, so a shown employee is not sent away', () => {
+  assert.match(read('js/auth-gate.js'),
+    /if \(pageSection && \(pageCard\s*\? !isSectionAllowed\(session\.location, pageSection\)\s*: !isSectionAllowedFor\(session\.location, session\.role, pageSection\)\)\)/);
+});
+
+test('⚠️ the order is dragged with a hold on touch, never from the switch, and saved only once the server agrees', () => {
+  const src = withoutComments(read('js/staff/home-cards-screen.js'));
+  assert.match(src, /import Sortable from '\.\.\/vendor\/sortable\.esm\.js';/);
+  assert.match(src, /delay: 200,\s*delayOnTouchOnly: true,/);
+  assert.match(src, /filter: '\.people-pill',\s*preventOnFilter: false,/);
+  const save = src.slice(src.indexOf('async function saveOrder('), src.indexOf('function moveWithKeys('));
+  assert.ok(save.indexOf('await setHomeCardOrder(') < save.indexOf('orderOverride = next;'));
+  assert.match(save, /catch \(err\) \{[\s\S]*order = previous;\s*paint\(\);/, 'a failed save puts the order back');
+});
+
+test('the order can be changed without a pointer: the grip moves its row with the arrow keys', () => {
+  const src = withoutComments(read('js/staff/home-cards-screen.js'));
+  assert.match(src, /onKeydown: \(event\) => moveWithKeys\(card\.id, event\)/);
+  assert.match(src, /if \(event\.key !== 'ArrowUp' && event\.key !== 'ArrowDown'\) return;/);
+  assert.match(read('tokens.css'), /\.home-cards-grip\s*\{[^}]*width:\s*44px;[^}]*height:\s*44px;/);
+});
+
+test('⚠️⚠️ the Stocktake shows an employee no money and no end of month', () => {
+  const main = withoutComments(read('js/inventory/inventory-main.js'));
+  assert.match(main, /let mayManage = false;/, 'nothing that is money is drawn before the session is known');
+  assert.match(main, /costBtn\.hidden = !mayManage;\s*closeBtn\.hidden = !mayManage;/);
+  assert.match(main, /onCarry: mayManage \? handleCarry : null,/);
+  assert.match(main, /money: mayManage,/);
+  assert.match(main, /function showUsage\(\) \{\s*if \(!mayManage\) \{ showList\(\); return; \}/);
+  assert.match(main, /async function handleClose\(\) \{\s*if \(!mayManage\) return;/);
+  assert.match(main, /const next = currentSession\(\)\.canManage === true;/);
+  const detail = withoutComments(read('js/inventory/inventory-detail.js'));
+  assert.match(detail, /if \(money\) \{\s*const \{ value, blocker \} = lineValue\(/);
+  assert.match(detail, /const packField = !money \|\| ingredient\.priceUnit === 'pcs' \? null/);
 });

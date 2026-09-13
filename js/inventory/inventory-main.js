@@ -21,6 +21,7 @@ import {
   productsOfMonth,
 } from './inventory-model.js';
 import { confirmDialog } from './confirm-dialog.js';
+import { sessionReady, currentSession } from '../firebase.js';
 
 const screen = document.getElementById('invScreen');
 const titleEl = document.getElementById('invTitle');
@@ -53,6 +54,12 @@ let activeIngredient = null;
 // month's own state arrives from Firestore AFTER the first paint. See the update
 // callback at the bottom: when this answer changes, the screen is built again.
 let builtClosed = false;
+// ⚠️ WHO IS LOOKING. Since 13 Sep 2026 a venue may show this screen to its EMPLOYEES,
+// who COUNT and see no money (Federico's choice): no value, no pack weight, no «what it
+// cost», no closing or reopening, no carrying last month forward. FALSE until the
+// session says otherwise, so nothing that is money is ever drawn before it is known —
+// and firestore.rules refuses an employee all of it regardless (stocktakeMayRead/Write).
+let mayManage = false;
 
 function monthName(id) {
   const [year, month] = id.split('-').map(Number);
@@ -85,14 +92,19 @@ function paintStrip() {
   // Nothing ahead of the current month: a month that has not happened has nothing
   // on its shelves to count.
   nextBtn.disabled = openMonthId >= monthKey();
-  strip.hidden = view !== 'list';
+  // The month arrows stay on the «cannot open this month» notice too: they are the
+  // way to a month that can be.
+  strip.hidden = view !== 'list' && view !== 'unavailable';
 }
 
 function paintFooter() {
   const closed = readOnly();
   closeBtn.textContent = closed ? t('inv.reopenMonth') : t('inv.closeMonth');
   closeBtn.classList.toggle('inv-footer-btn-quiet', closed);
-  footer.hidden = view !== 'list';
+  // Both buttons are money or the end of a month: neither is an employee's.
+  costBtn.hidden = !mayManage;
+  closeBtn.hidden = !mayManage;
+  footer.hidden = view !== 'list' || !mayManage;
 }
 
 function showList() {
@@ -112,7 +124,7 @@ function showList() {
     readOnly: readOnly(),
     onOpen: openIngredient,
     onCount: (id, value) => { setCount('closing', id, value); },
-    onCarry: handleCarry,
+    onCarry: mayManage ? handleCarry : null,
     onPurchases: handlePurchases,
   });
   swap(activeList.root);
@@ -137,6 +149,7 @@ function openIngredient(ingredient) {
     readOnly: readOnly(),
     onCount: (map, id, value) => { setCount(map, id, value); },
     closed: readOnly(),
+    money: mayManage,
   });
   swap(activeDetail.root);
   paintStrip();
@@ -163,6 +176,7 @@ function costOfMonth() {
 }
 
 function showUsage() {
+  if (!mayManage) { showList(); return; }
   view = 'usage';
   activeList = null;
   activeDetail = null;
@@ -189,6 +203,7 @@ function goToMonth(id) {
 }
 
 async function handleCarry() {
+  if (!mayManage) return;
   const previous = previousMonth(openMonthId);
   const ok = await confirmDialog({
     title: t('inv.carryTitle'),
@@ -242,6 +257,7 @@ async function handlePurchases() {
 // (the `names` trick orders-history already uses), and a price changed next
 // spring must not restate what last September was worth.
 async function handleClose() {
+  if (!mayManage) return;
   if (readOnly()) {
     const ok = await confirmDialog({
       title: t('inv.reopenTitle'),
@@ -289,6 +305,25 @@ async function handleClose() {
   showList();
 }
 
+// What an employee sees where a month cannot be read for them — which the rules decide:
+// a closed month, or one still carrying frozen prices, is not theirs.
+function showUnavailable() {
+  view = 'unavailable';
+  activeList = null;
+  activeDetail = null;
+  activeIngredient = null;
+  setHeader({ title: t('section.inventory'), sub: monthName(openMonthId), back: false });
+  const note = document.createElement('p');
+  note.className = 'inv-note';
+  note.textContent = t('inv.staffMonthUnavailable');
+  const wrap = document.createElement('div');
+  wrap.className = 'inv-view';
+  wrap.appendChild(note);
+  swap(wrap);
+  paintStrip();
+  paintFooter();
+}
+
 function handleBack() {
   if (view === 'detail' || view === 'usage') { showList(); return; }
   location.href = 'index.html';
@@ -317,6 +352,8 @@ window.addEventListener('pagehide', () => { flush(); });
 initInventory(
   openMonthId,
   () => {
+    // The month arrived after all: whatever the notice said, the list is back.
+    if (view === 'unavailable') { showList(); return; }
     // ⚠️⚠️ A MONTH'S OWN STATE ARRIVES AFTER THE FIRST PAINT, and until v1.79.0 the
     // screen never took it in: a CLOSED month was drawn as open — count boxes
     // somebody could type into, the two fill-in actions offered, the note saying an
@@ -336,8 +373,27 @@ initInventory(
     }
     if (view === 'detail' && activeDetail) activeDetail.refresh(getMonth());
   },
-  () => toast(t('inv.liveSyncInterrupted')),
+  // ⚠️ FOR AN EMPLOYEE A REFUSED MONTH IS THE ANSWER, NOT A HICCUP: the rules keep a
+  // closed month from them, and «live sync interrupted» over an empty list would read
+  // as a broken app. Asked after the session, because who is looking arrives with it.
+  () => {
+    sessionReady.then(() => {
+      if (mayManage) toast(t('inv.liveSyncInterrupted'));
+      else showUnavailable();
+    });
+  },
 );
+
+// ⚠️ WHO IS LOOKING ARRIVES WITH THE SESSION, after the first paint — and when it
+// changes the answer, the screen is BUILT AGAIN, the same way a month's closed state is.
+sessionReady.then(() => {
+  const next = currentSession().canManage === true;
+  if (next === mayManage) return;
+  mayManage = next;
+  if (view === 'detail' && activeIngredient) openIngredient(activeIngredient);
+  else if (view === 'usage') showUsage();
+  else if (view === 'list') showList();
+});
 
 // ⚠️ AND AGAIN WHEN THE LANGUAGE ARRIVES. This screen is built once, at load,
 // while the venue's language arrives later with the session — without this the

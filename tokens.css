@@ -760,6 +760,29 @@
 .people-pill--switch.people-pill--on { cursor: pointer; }
 .people-pill--switch.people-pill--on:active { transform: scale(.97); }
 
+/* The Home cards screen's rows can be dragged into a new order (js/staff/home-cards-
+   screen.js). The grip says so, is a 44px target like every control on that screen,
+   and is a real button: with a keyboard it moves its row with the arrow keys. The row
+   itself does not wrap, so the grip, the name and the switch stay on one line. */
+.home-cards-row { flex-wrap: nowrap; }
+.home-cards-grip {
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  margin-left: calc(-1 * var(--space-2));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: none;
+  border: 0;
+  border-radius: var(--radius-sm);
+  color: var(--text-3);
+  cursor: grab;
+  touch-action: none;
+}
+.home-cards-grip:focus-visible { outline: 3px solid var(--accent-2); outline-offset: 2px; }
+
 /* Editing a name in the row rather than in a pop-up: the browser's prompt() is
    the grey system box this app removed in PR #28, and confirm-dialog.js is
    byte-identical across six copies and only asks yes or no. */
