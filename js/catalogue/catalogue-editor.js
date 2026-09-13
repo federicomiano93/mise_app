@@ -459,7 +459,6 @@ export function renderEditor({ recipe, draft, allRecipes, app, getLabelProfile =
     datalist,
     el('label', { for: 'catRecipeName', text: t('cat.recipeName') }),
     nameInput,
-    photoBtn,
     el('div', { class: 'cat-ing-head' }, [
       el('label', { class: 'cat-ing-head-label', text: t('cat.ingredients') }),
       countEl,
@@ -469,5 +468,10 @@ export function renderEditor({ recipe, draft, allRecipes, app, getLabelProfile =
     addRowBtn,
     labelField,
     actions,
+    // ⚠️ LAST, UNDER SAVE. Federico, 13 Sep 2026: «il compila da una foto mettilo sotto
+    // alla fine della pagina». It sat under the name, between the one field every recipe
+    // starts from and the ingredients it is typed into — in the way of the job it is an
+    // alternative to. On a new recipe there is no Delete, so it is directly under Save.
+    photoBtn,
   ]);
 }

@@ -1392,8 +1392,9 @@ body.cat-zoom-lock { overflow: hidden; }
 
 /* "Fill this in from a photo", offered only on a NEW recipe and only when the venue
    has the reader switched on. Quiet, like the import button it borrows from: it is an
-   alternative to typing, not the main action of the screen. */
-.cat-photo-fill { margin: 10px 0 4px; }
+   alternative to typing, not the main action of the screen. Since 13 Sep 2026 it is
+   the last thing on the page, under Save — so it keeps a gap above and none below. */
+.cat-photo-fill { margin: 12px 0 0; }
 
 /* The line under the switch that says what it costs. Quiet, like every other note
    on this page — it explains, it does not warn. */

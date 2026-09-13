@@ -318,6 +318,22 @@ test('⚠️ the photo reader is offered only while ADDING a recipe, never while
   assert.match(editor, /dirty/, 'the editor must ask before replacing what has been typed');
 });
 
+test('⚠️ «Compila da una foto» is the LAST thing on the new-recipe form, under Save', () => {
+  // Federico, 13 Sep 2026: «il compila da una foto mettilo sotto alla fine della
+  // pagina». Nothing breaks when it drifts back under the name — only somebody looking
+  // at the screen would know — so the order is what is pinned.
+  const editor = codeOf(read('js/catalogue/catalogue-editor.js'));
+  const view = editor.slice(editor.indexOf("el('div', { class: 'cat-view cat-editor' }"));
+  assert.ok(view.length > 100, 'the form\'s own element list is gone');
+  const end = view.indexOf(']);');
+  const list = view.slice(0, end);
+  const at = name => list.search(new RegExp(`^\\s*${name},\\s*$`, 'm'));
+  assert.notEqual(at('actions'), -1, 'Save is no longer in the form');
+  assert.notEqual(at('photoBtn'), -1, 'the photo button is no longer in the form');
+  assert.ok(at('photoBtn') > at('actions'), 'the photo button must come after Save');
+  assert.ok(at('photoBtn') > at('nameInput'), 'and not sit under the name any more');
+});
+
 test('⚠️ the way back out of the photo screen is a ONE-SHOT marker', () => {
   // Left set, it would send every later Back into a new editor — the trap the
   // sessionStorage flag behind "Back to Misé" (v275) is consumed on read to avoid.
