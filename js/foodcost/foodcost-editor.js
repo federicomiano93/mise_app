@@ -120,7 +120,17 @@ export function renderEditor({ product, app }) {
       class: 'fc-input fc-qty', type: 'number', min: '0', step: 'any',
       inputmode: 'decimal', placeholder: '0', value: entry[qtyKey] || '',
       'aria-label': isRecipe ? 'Kilos' : 'Pieces',
-      oninput: e => { entry[qtyKey] = Number(e.target.value) || 0; markDirty(); repaint(); },
+      // ⚠️ NOT repaint(). That rebuilds every row — THIS BOX INCLUDED — so the finger lost
+      // the box after one digit and «1.7» could not be typed at all. Found driving the
+      // screen on 13 Sep 2026. A quantity changes two things, and only those are
+      // refreshed: this line's cost and the answer at the top. (`note` is declared below;
+      // the handler only ever runs after it exists.)
+      oninput: e => {
+        entry[qtyKey] = Number(e.target.value) || 0;
+        markDirty();
+        note.textContent = lineNote(entry, kind);
+        paintAnswer();
+      },
     });
 
     const remove = el('button', {
