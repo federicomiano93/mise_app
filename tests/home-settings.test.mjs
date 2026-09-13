@@ -79,6 +79,15 @@ test('⚠️⚠️ the holiday row holds its place from the first paint, so no r
     'the real row replaces the placeholder in place; a prepend is what pushed the list down');
 });
 
+test('⚠️ the sentence under a Settings row is in the same typeface as its title', () => {
+  // Both spans live inside a <button>, which takes the SYSTEM font unless the rule names one.
+  const css = read('style.css');
+  const family = name => (css.match(new RegExp(`\\.${name}\\s*\\{[^}]*font-family:\\s*([^;]+);`)) || [])[1];
+  assert.ok(family('settings-menu-title'), '.settings-menu-title names its family');
+  assert.equal(family('settings-menu-sub'), family('settings-menu-title'),
+    'a row whose two lines are set in two different typefaces reads as broken');
+});
+
 test('the Settings screen is precached', () => {
   assert.match(read('sw.js'), /'\.\/js\/home-settings\.js'/);
 });
