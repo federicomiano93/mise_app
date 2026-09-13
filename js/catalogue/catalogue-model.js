@@ -283,7 +283,7 @@ export function normalizeSearchText(value) {
 
 // The things a recipe row can be linked to, filtered by what was typed.
 //
-//   { ingredients: [{ id, name, supplierName, pricePerKg }], recipes: [{ id, name }] }
+//   { ingredients: [{ id, name, weight, supplierName, ingredient }], recipes: [{ id, name }] }
 //
 // Ingredients first, because they are what almost every row is. Deactivated ones
 // are left out — they are not orderable, so building a live cost on one would be

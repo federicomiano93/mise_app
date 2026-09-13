@@ -105,19 +105,20 @@ export function initCatalogue(onUpdate, onError) {
     err => { if (onError) onError(err); },
   ).catch(err => { console.error('Catalogue live sync failed to start:', err); if (onError) onError(err); });
 
-  // The ingredient list, for costing. A failure here is DELIBERATELY quiet: it is
-  // Orders' collection, a venue may not use Orders at all, and the worst outcome is
-  // that every row reads "not priced yet" — which is exactly what the screen says
-  // anyway when nothing is linked. Shouting about it would put an alarm on the
-  // recipe screen of a venue that has no ingredients and never wanted any.
+  // The ingredient list: what a recipe row links to, and the allergens it declares.
+  // No prices since 13 Sep 2026 — see watchIngredients(). A failure here is
+  // DELIBERATELY quiet: it is Orders' collection, a venue may not use Orders at all,
+  // and the worst outcome is that every linked row reads as not declared — which is
+  // what the screen says anyway when nothing is linked. Shouting about it would put an
+  // alarm on the recipe screen of a venue that has no ingredients and never wanted any.
   watchIngredients(
     remote => {
       ingredients = indexById(remote);
       writeIngredientCache(remote);
       if (notify) notify(recipes);
     },
-    err => { console.warn('Ingredient prices unavailable:', err); },
-  ).catch(err => { console.warn('Ingredient prices unavailable:', err); });
+    err => { console.warn('Ingredients unavailable:', err); },
+  ).catch(err => { console.warn('Ingredients unavailable:', err); });
 
   // Supplier NAMES only, and only so the chooser can tell two similar articles
   // apart. Quiet on failure for the same reason as the ingredients.
@@ -215,9 +216,10 @@ export async function saveLabelProfile(patch) {
   return getLabelProfile();
 }
 
-// ── Ingredient prices (read-only, owned by Orders) ────────────────────────────
-// Mirrored to localStorage like the recipes, so a recipe opened offline still
-// shows its cost instead of silently reading as unpriced.
+// ── Ingredients and suppliers (read-only, owned by Orders) ────────────────────
+// Mirrored to localStorage like the recipes, so a recipe opened offline still shows
+// its links and its allergens instead of silently reading as undeclared. No prices:
+// the catalogue stopped reading them on 13 Sep 2026.
 
 function readJsonMap(key) {
   try {
@@ -285,7 +287,7 @@ function indexById(list) {
   return out;
 }
 
-// { id: ingredient } — what the cost model looks rows up in.
+// { id: ingredient } — what the allergen and label models look rows up in.
 export function getIngredients() {
   return ingredients;
 }

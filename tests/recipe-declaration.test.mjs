@@ -207,14 +207,13 @@ test('⚠️ a message leaves the nutrition table out, at the call site too', ()
     + 'of the length — the allergen half must not be what gets cut');
 });
 
-test('⚠️ the cost per kilo prints exactly two decimals', () => {
-  // Federico asked for it by name: «solo il costo al kg con due numeri decimali dopo
-  // il punto». Nothing pinned it, and a mutation put formatRate — two to FOUR — back.
-  assert.match(DETAIL, /text: `\$\{formatMoney\(result\.pricePerKg\)\} \/ kg`/,
-    'formatMoney is fixed at two; formatRate stretches to four for a rate per PIECE');
-  assert.ok(!/formatRate/.test(DETAIL),
-    '⚠️ and formatRate must not come back into this file at all — it is untouched '
-    + 'elsewhere precisely so this screen could change alone');
+test('⚠️ the recipe screen formats no money at all', () => {
+  // It printed the cost per kilo with two decimals from 24 Aug 2026 (Federico: «solo il
+  // costo al kg con due numeri decimali»). On 13 Sep 2026 he took the cost off this
+  // screen altogether — without the oven loss and the ingredients added later it is
+  // not a real cost — and Food cost is where it is read now.
+  // tests/catalogue-no-money.test.mjs holds the rest of the rule.
+  assert.ok(!/formatMoney|formatRate/.test(DETAIL), 'no money is formatted on the recipe screen');
 });
 
 test('⚠️ mailto opens the mail app and the screen says it does not send', () => {

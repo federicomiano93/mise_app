@@ -14,7 +14,6 @@
 import { t } from '../i18n.js';
 import { el } from './dom.js';
 import { linkOptions } from './catalogue-model.js';
-import { pricePerKg, formatRate } from '../price-model.js';
 
 const BACK_ICON = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>';
 
@@ -56,14 +55,11 @@ export function openLinkPicker({ ingredients, recipes, suppliers, excludeRecipeI
       if (options.ingredients.length) {
         list.appendChild(el('div', { class: 'cat-pick-head', text: t('cat.ingredients') }));
         options.ingredients.forEach(opt => {
-          // Name · weight · supplier · what a kilo costs — the four things that tell
-          // two similar-looking articles apart. "No price yet" is said out loud
-          // rather than left blank: linking to an unpriced ingredient is allowed,
-          // and the row should not look like it will produce a cost.
-          const rate = pricePerKg(opt.ingredient);
-          const meta = [opt.weight, opt.supplierName,
-            rate === null ? t('cat.noPriceYet') : `${formatRate(rate)} / kg`]
-            .filter(Boolean).join('  ·  ');
+          // Name · weight · supplier — what tells two similar-looking articles apart.
+          // ⚠️ NO PRICE SINCE 13 SEP 2026: the catalogue shows no money at all (a cost
+          // is real only in Food cost, where the oven loss and the rest of the product
+          // are known), and it no longer even loads the prices.
+          const meta = [opt.weight, opt.supplierName].filter(Boolean).join('  ·  ');
           list.appendChild(row(opt.name, meta,
             () => close({ kind: 'ingredient', refId: opt.id, name: opt.name })));
         });

@@ -498,7 +498,7 @@ const app = {
     return saved && saved.recipeId === recipeId ? saved : null;
   },
   // Live getters, not snapshots: the editor is open while the ingredient listener
-  // is still streaming in, so a price corrected in Orders reaches an open recipe
+  // is still streaming in, so an ingredient renamed in Orders reaches an open recipe
   // without a reload — and a chooser opened before the first snapshot is not stuck
   // showing an empty list for as long as the screen stays open.
   ingredients: getIngredients,
@@ -581,11 +581,11 @@ initCatalogue(
     // The offer needs the recipes to have arrived — a session is only worth
     // resuming if its recipe is still in the catalogue.
     if (view === 'list') offerResume();
-    // A recipe on screen recomputes its cost whenever anything it depends on
-    // arrives — the ingredient prices (still streaming in on a cold open), or the
-    // recipe itself edited on another phone. The freshest copy wins; if it has
-    // been deleted elsewhere, the one already on screen is kept rather than
-    // blanking the panel under the reader.
+    // A recipe on screen rebuilds its cards whenever anything they depend on
+    // arrives — the ingredients and their allergens (still streaming in on a cold
+    // open), or the recipe itself edited on another phone. The freshest copy wins; if
+    // it has been deleted elsewhere, the one already on screen is kept rather than
+    // blanking the cards under the reader.
     if (view === 'detail' && activeDetail && currentRecipe) {
       const latest = getRecipes().find(r => r.id === currentRecipe.id) || currentRecipe;
       activeDetail.refreshCost(latest);

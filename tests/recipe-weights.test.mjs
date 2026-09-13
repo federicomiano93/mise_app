@@ -472,17 +472,18 @@ test('⚠️ the ingredient name keeps its autocomplete, however tight the row g
     + 'or the next person measures it all over again');
 });
 
-test('⚠️ «no price yet» under an ingredient row is a key, not English', () => {
-  // Seen on a SCREENSHOT of an Italian venue, under an Italian heading:
-  // «→ Farina 0 · Brava Fresh · no price yet». The key has existed in both languages
-  // all along and ingredient-picker.js has always used it.
-  // ⚠️ NO GUARD COULD SEE IT: nothing-stays-english skips an all-lowercase string with
-  // no punctuation, because that is exactly the shape of a CSS class list.
-  assert.ok(!/'no price yet'/.test(EDITOR), 'the editor must not write the English out');
-  assert.match(EDITOR, /rate === null \? t\('cat\.noPriceYet'\)/,
-    'it asks the dictionary, like its sibling ingredient-picker.js always has');
-  assert.match(codeOf(read('js/catalogue/ingredient-picker.js')), /t\('cat\.noPriceYet'\)/,
-    'and the sibling still does, so the two screens cannot disagree');
+test('⚠️ a linked row and the chooser show no price, and name a sub-recipe in the dictionary', () => {
+  // Until 13 Sep 2026 both printed «£x / kg» or «no price yet» — and once, on an Italian
+  // venue, the English words. Federico took money off the catalogue: a cost is read in
+  // Food cost, where the oven loss and the rest of the product are known.
+  const picker = codeOf(read('js/catalogue/ingredient-picker.js'));
+  for (const [name, src] of [['the editor', EDITOR], ['the chooser', picker]]) {
+    assert.ok(!/noPriceYet|no price yet|\/ kg`/.test(src), `${name} prints no price`);
+  }
+  // ⚠️ «· recipe» was English written into the link line; nothing-stays-english skips an
+  // all-lowercase word with no punctuation, so no guard could see it.
+  assert.ok(!/·\s+recipe`/.test(EDITOR), 'the sub-recipe word must come from the dictionary');
+  assert.match(EDITOR, /\$\{t\('cat\.recipe'\)\}/);
 });
 
 // ── The two fields a FULL label needs ────────────────────────────────────────

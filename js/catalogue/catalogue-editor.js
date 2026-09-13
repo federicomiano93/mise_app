@@ -14,7 +14,6 @@ import {
   linkOf, normalizeWeight, normalizeShelfLifeDays,
 } from './catalogue-model.js';
 import { openLinkPicker } from './ingredient-picker.js';
-import { pricePerKg, formatRate } from '../price-model.js';
 
 // Whole grams, no thousands separator — the same reading as the recipe view.
 const nf = new Intl.NumberFormat('en-GB', { maximumFractionDigits: 0, useGrouping: false });
@@ -256,30 +255,27 @@ export function renderEditor({ recipe, draft, allRecipes, app, getLabelProfile =
     return button;
   }
 
-  // "→ Flour · Supplier · £2.00 / kg", or an invitation when there is no link.
-  // The price is shown here because it is the number the cost is built from, and
-  // seeing it beside the row is what catches a link to the wrong article.
+  // "→ Flour 0 · 25 kg · Supplier", or an invitation when there is no link.
+  //
+  // ⚠️ NO PRICE SINCE 13 SEP 2026. Federico: a recipe's cost on its own is not real — it
+  // knows neither its oven loss nor what is added to the product later — so the
+  // catalogue shows no money anywhere, and Food cost is where a cost is read. What still
+  // catches a link to the wrong article is the pack weight and the supplier.
   function linkText(ing) {
     const link = linkOf(ing);
     if (!link) return t('cat.linkToAnIngredient');
 
     if (link.kind === 'recipe') {
       const sub = app.allRecipes().find(r => r.id === link.refId);
-      return sub ? `→ ${sub.name}  ·  recipe` : t('cat.aRecipeThatNo');
+      // ⚠️ «recipe» used to be English written into the code, on an Italian venue too.
+      return sub ? `→ ${sub.name}  ·  ${t('cat.recipe')}` : t('cat.aRecipeThatNo');
     }
 
     const ingredient = app.ingredients()[link.refId];
     if (!ingredient) return t('cat.anIngredientThatNo');
-    const rate = pricePerKg(ingredient);
     const supplier = (app.suppliers()[ingredient.supplierId] || {}).name || '';
-    // ⚠️ SEEN ON A SCREENSHOT OF AN ITALIAN VENUE, 24 Aug 2026: this line read
-    // «→ Farina 0 · Brava Fresh · no price yet» under an Italian heading. The key has
-    // existed in both languages all along and its own sibling, ingredient-picker.js,
-    // has always used it — this call site simply wrote the English out.
-    // ⚠️ NO GUARD COULD SEE IT: nothing-stays-english skips an all-lowercase string
-    // with no punctuation, because that is exactly the shape of a CSS class list.
-    return ['→ ' + (ingredient.name || t('cat.ingredient')), supplier,
-      rate === null ? t('cat.noPriceYet') : `${formatRate(rate)} / kg`]
+    const weight = String(ingredient.weight || '').trim();
+    return ['→ ' + (ingredient.name || t('cat.ingredient')), weight, supplier]
       .filter(Boolean).join('  ·  ');
   }
 

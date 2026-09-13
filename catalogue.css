@@ -586,21 +586,6 @@ body.cat-zoom-lock { overflow: hidden; }
 .cat-sec-body .cat-guided-panel { margin-top: 0; }
 .cat-sec-body .cat-weight-panel { margin-top: 0; }
 
-.cat-cost-panel {
-  margin-top: 14px;
-  padding: 12px 14px;
-  border: 1px solid var(--cat-border);
-  border-radius: var(--cat-radius);
-  background: var(--cat-surface);
-}
-.cat-cost-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
-.cat-cost-label { font-size: .74rem; text-transform: uppercase; letter-spacing: .06em; color: var(--cat-text-2); font-family: var(--cat-font-mono); }
-.cat-cost-value { font-size: 1.25rem; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--cat-text); }
-.cat-cost-basis { margin-top: 4px; font-size: .74rem; color: var(--cat-text-2); font-family: var(--cat-font-mono); }
-/* Amber, not red: a partial cost is unfinished, not wrong. */
-.cat-cost-partial { margin-top: 8px; font-size: .78rem; color: var(--warn); }
-.cat-cost-none { font-size: .78rem; color: var(--cat-text-2); }
-
 /* ── The link chooser ──────────────────────────────────────────────────────
    A full-screen overlay following the app's header spec: Back on the LEFT, title
    CENTRED, a spacer on the right so the title cannot be pushed off centre. */
