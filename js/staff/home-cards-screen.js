@@ -112,12 +112,19 @@ export function openHomeCards(session) {
     // reader is thrown to the top of the page after every single switch.
     const pillId = `home-cards-pill-${card.id}`;
     const hadFocus = document.activeElement?.id === pillId;
-    // ⚠️ ASKED ON THE WAY OUT, NEVER ON THE WAY IN, and only for the Catalogue.
-    if (hide && card.id === 'catalogue') {
+    // ⚠️ EVERY HIDE ASKS FIRST; SHOWING NEVER DOES. Federico, 13 Sep 2026: «tutte le
+    // impostazioni quando le vuoi nascondere devono chiedere conferma». Hiding takes the
+    // card off the employees' Home, out of their address bar and out of their
+    // notifications, so the dialog says all three that apply. The Catalogue adds why it
+    // matters most: the allergen sheet is behind it.
+    if (hide) {
+      const lines = [t('homeCards.hide.body')];
+      if (card.id === 'catalogue') lines.push(t('homeCards.catalogue.body'));
+      if (card.employeePush) lines.push(t('homeCards.hide.push'));
       const ok = await confirmDialog({
-        title: t('homeCards.catalogue.title'),
-        message: t('homeCards.catalogue.body'),
-        okLabel: t('homeCards.catalogue.ok'),
+        title: t('homeCards.hide.title', { card: t(card.labelKey) }),
+        message: lines.join('\n\n'),
+        okLabel: t('homeCards.hide.ok'),
         cancelLabel: t('ui.cancel'),
         danger: true,
       });

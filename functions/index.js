@@ -29,9 +29,10 @@ import { logger } from 'firebase-functions';
 import {
   isSchedulable, isStillDue, skipReason,
   timerNotification, orderNotification, orderRequestNotification,
-  notificationTag, targetPage,
+  notificationTag, targetPage, cardForKind,
 } from './push-model.js';
 import { isAway } from './away-model.js';
+import { isHiddenForStaff, cardVisibleTo } from './home-cards.js';
 
 initializeApp();
 
@@ -148,6 +149,14 @@ export const sendTimerPush = onTaskDispatched(
       return;
     }
 
+    // ⚠️ A TIMER ON A CARD THE VENUE HID FROM THIS EMPLOYEE STAYS QUIET — it may have
+    // been started before the card was hidden. See uidsPastHiddenCard.
+    const allowed = await uidsPastHiddenCard(lid, 'timer', [timer.uid]);
+    if (allowed && !allowed.has(timer.uid)) {
+      logger.info('Alarm not sent', { id, reason: 'its card is hidden from this employee' });
+      return;
+    }
+
     await sendTo(timer.token, timerNotification(timer), {
       tag: notificationTag('timer', id),
       url: targetPage('timer'),
@@ -188,11 +197,21 @@ export const notifyClientOrder = onDocumentCreated(
       return;
     }
 
+    // ⚠️ AND A CALCULATOR CARD HIDDEN FROM EMPLOYEES SILENCES THIS FOR THEM. The order
+    // opens calculator.html; an employee who may not use that card is not buzzed about
+    // it. The ORDER is untouched, exactly as for a holiday.
+    const allowed = await uidsPastHiddenCard(lid, 'order', targets.map(d => d.data().uid));
+    const told = allowed ? targets.filter(d => allowed.has(d.data().uid)) : targets;
+    if (!told.length) {
+      logger.info('An order arrived, but its card is hidden from everybody left to tell', { lid });
+      return;
+    }
+
     const message = orderNotification(order);
     const tag = notificationTag('order', event.params.id);
     // Sent one at a time so a single dead registration is dropped by itself
     // rather than failing the batch for every phone that is fine.
-    const results = await Promise.all(targets.map(d => sendTo(d.id, message, {
+    const results = await Promise.all(told.map(d => sendTo(d.id, message, {
       tag, url: targetPage('order'), path: d.ref.path,
     })));
     logger.info('Order notification', { lid, sent: results.filter(Boolean).length, of: results.length });
@@ -246,6 +265,53 @@ async function awaySet(lid) {
     logger.warn('Could not read who is away; everybody will be notified', { lid });
     return new Set();
   }
+}
+
+// Which of these people may still be told about a notification of `kind`, given the
+// Home cards the venue hides from its employees — or `null` when the card is not
+// hidden at all, which means everybody may.
+//
+// Federico, 13 Sep 2026: «se le nascondo i dipendenti non ricevono le notifiche perche'
+// vuol dire che non voglio che usino quella scheda». The judgement is
+// functions/home-cards.js (a byte copy of the app's), so the phone that hides the card
+// and the server that silences it cannot disagree about what hidden means.
+//
+// ⚠️ NOTHING HIDDEN, NO EXTRA READS BEYOND ONE. The venue document is read once; only if
+// the card IS hidden is anybody's role read, once per person (P14).
+//
+// ⚠️ THE TWO FAILED READS FALL IN OPPOSITE DIRECTIONS, EACH THE ONE ITS MODEL NAMES.
+// The venue unreadable → nothing counts as hidden → phones ring (home-cards.js: the
+// default is VISIBLE). A role unreadable while the card IS hidden → that person is not
+// known to run the place → not told (roles.js: power nobody granted does not exist; and
+// managersAmong below takes the same direction). Either way the order or the timer
+// itself is untouched.
+//
+// ⚠️ NOT USED FOR ORDER LISTS: they reach only whoever runs the place, and those people
+// see every card whatever is hidden.
+async function uidsPastHiddenCard(lid, kind, uids) {
+  const card = cardForKind(kind);
+  const db = getFirestore();
+  let location = null;
+  try {
+    const snap = await db.doc(`locations/${lid}`).get();
+    location = snap.exists ? snap.data() : null;
+  } catch (err) {
+    logger.warn('Could not read the hidden Home cards; nobody is silenced by them', { lid });
+    return null;
+  }
+  if (!isHiddenForStaff(location, card)) return null;
+
+  const allowed = new Set();
+  await Promise.all([...new Set(uids.filter(Boolean))].map(async uid => {
+    try {
+      const snap = await db.doc(`users/${uid}`).get();
+      const access = snap.exists ? (snap.data().locations || {})[lid] : undefined;
+      if (cardVisibleTo(location, access === 'owner' || access === 'manager', card)) allowed.add(uid);
+    } catch (err) {
+      logger.warn('Could not read a role; that phone is not told about a hidden card', { uid });
+    }
+  }));
+  return allowed;
 }
 
 // ⚠️ ONLY THE PEOPLE IT WAS ADDRESSED TO. Every other notification in this app

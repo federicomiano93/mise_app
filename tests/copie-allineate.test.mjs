@@ -179,6 +179,32 @@ test('the server and the app share ONE holiday model, byte for byte', () => {
   );
 });
 
+// ⚠️ THE FOURTH COPY: which Home cards a venue hides from its employees. The app hides
+// the card and the server silences its notifications (functions/index.js
+// uidsPastHiddenCard) and refuses a card id it does not know (setStaffCard). If the
+// two disagree, an employee is buzzed about a card they cannot open — and, as with
+// push-model, nothing on a phone ever loads the server's copy to reveal it.
+test('the server and the app share ONE home-cards model, byte for byte', () => {
+  const reference = read('js/home-cards.js');
+  const copy = read('functions/home-cards.js');
+  const diff = firstDifference(reference, copy);
+  assert.equal(
+    diff,
+    null,
+    diff &&
+      `functions/home-cards.js has drifted from js/home-cards.js at line ${diff.line}.\n` +
+        `  js/home-cards.js:        ${diff.expected}\n` +
+        `  functions/home-cards.js: ${diff.actual}\n` +
+        'Copy the file across. The app hides the card and the server silences its ' +
+        'notifications — if they disagree, an employee is buzzed about a card they cannot open.',
+  );
+});
+
+test('the home-cards model has no imports, so the copy can BE a copy', () => {
+  const imports = read('js/home-cards.js').split('\n').filter(l => /^import\s/.test(l.trim()));
+  assert.deepEqual(imports, [], 'a deploy uploads only functions/, so an import would be missing in the cloud');
+});
+
 test('the holiday model has no imports, so the copy can BE a copy', () => {
   const source = read('js/away-model.js');
   const imports = source.split('\n').filter(l => /^import\s/.test(l.trim()));

@@ -11,6 +11,7 @@ import { readFileSync } from 'node:fs';
 import {
   STAFF_CARDS, HIDEABLE_IDS, HIDDEN_FIELD, isHiddenForStaff, cardVisibleTo,
 } from '../js/home-cards.js';
+import { PUSH_KINDS, cardForKind, targetPage } from '../js/push-model.js';
 
 const read = p => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
 const withoutComments = src => src.split('\n').filter(l => !l.trim().startsWith('//')).join('\n');
@@ -121,12 +122,10 @@ const CALLABLE = (() => {
   return withoutComments(next === -1 ? ONBOARDING.slice(start) : ONBOARDING.slice(start, next));
 })();
 
-test('⚠️⚠️ the server\'s list and the app\'s list are the same list', () => {
-  const m = ONBOARDING.match(/const STAFF_CARD_IDS = Object\.freeze\(\[([^\]]*)\]\)/);
-  assert.ok(m, 'functions/onboarding.js must declare STAFF_CARD_IDS');
-  const ids = [...m[1].matchAll(/'([^']+)'/g)].map(x => x[1]);
-  assert.deepEqual(ids, [...HIDEABLE_IDS],
-    'a deploy uploads only functions/, so its copy can drift — and a drifted id is a switch the server refuses');
+test('⚠️⚠️ the server refuses cards by the app\'s own list, not a second one', () => {
+  // functions/home-cards.js is a byte copy of js/home-cards.js (tests/copie-allineate.test.mjs).
+  assert.match(ONBOARDING, /import \{ HIDEABLE_IDS \} from '\.\/home-cards\.js';/);
+  assert.doesNotMatch(ONBOARDING, /STAFF_CARD_IDS/, 'a hand-kept second list is the one that drifts');
 });
 
 test('the callable writes one key of the field the app reads, by merge, with no spread', () => {
@@ -140,7 +139,7 @@ test('the callable writes one key of the field the app reads, by merge, with no 
 });
 
 test('the callable refuses an unknown card, a non-boolean, and an employee', () => {
-  assert.match(CALLABLE, /!STAFF_CARD_IDS\.includes\(card\)[\s\S]{0,80}invalid-argument/);
+  assert.match(CALLABLE, /!HIDEABLE_IDS\.includes\(card\)[\s\S]{0,80}invalid-argument/);
   assert.match(CALLABLE, /typeof hidden !== 'boolean'[\s\S]{0,80}invalid-argument/);
   assert.match(CALLABLE, /requireAuth\(request\)/);
   assert.match(CALLABLE, /access !== 'owner' && access !== 'manager'[\s\S]{0,160}permission-denied/,
@@ -185,11 +184,20 @@ test('the screen lists only the cards the venue has, and writes only after the s
     'remembering the switch before the server agrees shows a change the venue never got');
 });
 
-test('⚠️ hiding the Catalogue asks first — the allergen sheet is behind it', () => {
+test('⚠️ every hide asks first — and showing never does', () => {
+  // Federico, 13 Sep 2026: «tutte le impostazioni quando le vuoi nascondere devono chiedere conferma».
   const src = withoutComments(read('js/staff/home-cards-screen.js'));
-  const ask = src.search(/if \(hide && card\.id === 'catalogue'\) \{\s*const ok = await confirmDialog\(/);
-  assert.ok(ask > 0, 'the confirmation must guard hiding the Catalogue');
+  const ask = src.search(/if \(hide\) \{[\s\S]{0,400}?const ok = await confirmDialog\(/);
+  assert.ok(ask > 0, 'hiding any card must ask');
   assert.ok(ask < src.indexOf('await setStaffCard('), 'and it must come before the save');
+  assert.equal((src.match(/confirmDialog\(/g) || []).length, 1,
+    'one dialog, inside the hide branch — showing a card again never asks');
+});
+
+test('the dialog names the allergen sheet on the Catalogue, and notifications where there are any', () => {
+  const src = withoutComments(read('js/staff/home-cards-screen.js'));
+  assert.match(src, /if \(card\.id === 'catalogue'\) lines\.push\(t\('homeCards\.catalogue\.body'\)\);/);
+  assert.match(src, /if \(card\.employeePush\) lines\.push\(t\('homeCards\.hide\.push'\)\);/);
 });
 
 test('the client call waits for the venue, like every call made inside one', () => {
@@ -234,6 +242,78 @@ test('after a save, focus goes back to the switch that was tapped', () => {
   const src = withoutComments(read('js/staff/home-cards-screen.js'));
   assert.match(src, /const hadFocus = document\.activeElement\?\.id === pillId;/);
   assert.match(src, /paint\(\);\s*if \(hadFocus\) list\.querySelector\(`#\$\{pillId\}`\)\?\.focus\(\);/);
+});
+
+// ── 6. Hidden means silent, for employees ────────────────────────────────────
+//
+// Federico, 13 Sep 2026: «se le nascondo i dipendenti non ricevono le notifiche perche'
+// vuol dire che non voglio che usino quella scheda».
+
+test('⚠️ every notification kind belongs to the card whose page it opens', () => {
+  for (const kind of PUSH_KINDS) {
+    const card = cardForKind(kind);
+    assert.ok(HIDEABLE_IDS.includes(card), `${kind} → ${card} is not a card this app can hide`);
+    assert.equal(targetPage(kind), `./${PAGE_OF[card]}`, `${kind} opens a page that is not its card's`);
+  }
+});
+
+test('employeePush is true exactly for the cards an employee can be notified about', () => {
+  // A client order goes to every phone; a timer to whoever set it; an order list only to
+  // whoever runs the place (managersAmong), so an employee has nothing to silence there.
+  const reachesEmployees = { order: true, timer: true, orderRequest: false };
+  for (const kind of PUSH_KINDS) {
+    const card = STAFF_CARDS.find(c => c.id === cardForKind(kind));
+    assert.equal(card.employeePush, reachesEmployees[kind], `${kind} → ${card.id}`);
+  }
+  for (const card of STAFF_CARDS.filter(c => !PUSH_KINDS.some(k => cardForKind(k) === c.id))) {
+    assert.equal(card.employeePush, false, `${card.id} receives no notification at all`);
+  }
+});
+
+const INDEX = read('functions/index.js');
+function serverFn(head) {
+  const start = INDEX.indexOf(head);
+  assert.ok(start >= 0, `${head} not found in functions/index.js`);
+  const ends = [INDEX.indexOf('\nexport const', start + 10), INDEX.indexOf('\nasync function', start + 10)]
+    .filter(i => i > 0);
+  return withoutComments(INDEX.slice(start, ends.length ? Math.min(...ends) : undefined));
+}
+const HELPER = serverFn('async function uidsPastHiddenCard(');
+
+test('⚠️⚠️ the server judges «hidden» with the app\'s own model', () => {
+  assert.match(INDEX, /import \{ isHiddenForStaff, cardVisibleTo \} from '\.\/home-cards\.js';/);
+  assert.match(HELPER, /const card = cardForKind\(kind\);/);
+  assert.match(HELPER, /cardVisibleTo\(location, access === 'owner' \|\| access === 'manager', card\)/,
+    'owners, managers and head chefs are told whatever is hidden');
+});
+
+test('nothing hidden: one read, and nobody silenced', () => {
+  const gate = HELPER.indexOf('if (!isHiddenForStaff(location, card)) return null;');
+  assert.ok(gate > 0 && gate < HELPER.indexOf('users/'), 'no role is read unless the card IS hidden (P14)');
+});
+
+test('⚠️ a venue that cannot be read silences nobody; a role that cannot be read is not told', () => {
+  assert.match(HELPER,
+    /catch \(err\) \{\s*logger\.warn\('Could not read the hidden Home cards[^']*', \{ lid \}\);\s*return null;/);
+  const roleCatch = HELPER.slice(HELPER.lastIndexOf('catch (err)'));
+  assert.doesNotMatch(roleCatch, /allowed\.add/, 'an unreadable role must not be told about a hidden card');
+});
+
+test('⚠️ a client order is not sent to an employee whose Calculator card is hidden', () => {
+  const fn = serverFn('export const notifyClientOrder');
+  const gate = fn.indexOf("await uidsPastHiddenCard(lid, 'order', targets.map(d => d.data().uid))");
+  assert.ok(gate > fn.indexOf('awaySet(lid)') && gate < fn.indexOf('sendTo('),
+    'after the holiday filter, before anything is sent');
+  assert.match(fn, /const told = allowed \? targets\.filter\(d => allowed\.has\(d\.data\(\)\.uid\)\) : targets;/,
+    'the phones told are the ones the card check let through');
+  assert.match(fn, /told\.map\(d => sendTo\(/, 'and the send goes to the filtered phones, not all of them');
+});
+
+test('⚠️ a timer is not sent to an employee whose Catalogue card is hidden', () => {
+  const fn = serverFn('export const sendTimerPush');
+  const gate = fn.indexOf("await uidsPastHiddenCard(lid, 'timer', [timer.uid])");
+  assert.ok(gate > 0 && gate < fn.indexOf('sendTo('), 'checked before the send');
+  assert.match(fn, /if \(allowed && !allowed\.has\(timer\.uid\)\) \{[\s\S]{0,140}return;/);
 });
 
 test('a switch that is ON still looks and feels tappable', () => {

@@ -33,6 +33,7 @@ import {
   MAX_ATTEMPTS_PER_HOUR, ATTEMPT_WINDOW_MS,
   isWellFormed, codeStatus, isRateLimited, retryAfterMs, redeemFailureText,
 } from './join-code.js';
+import { HIDEABLE_IDS } from './home-cards.js';
 
 const REGION = 'us-central1';
 
@@ -993,11 +994,11 @@ export const setIngredientPanels = onCall(CALL, async (request) => {
 // EMPLOYEES — both his choices, and both in js/home-cards.js, which is where the app
 // reads what this writes.
 //
-// ⚠️ A COPY OF HIDEABLE_IDS IN js/home-cards.js. A deploy uploads only functions/, so
-// this file cannot import that one; tests/home-cards.test.mjs pins the two lists equal.
-// An id missing here is a switch the server refuses; an id missing THERE is a card
-// the app never hides.
-const STAFF_CARD_IDS = Object.freeze(['calculator', 'catalogue', 'orders', 'suppliers', 'pastries']);
+// ⚠️ THE CARD IDS COME FROM functions/home-cards.js, a byte-for-byte copy of
+// js/home-cards.js pinned by tests/copie-allineate.test.mjs — the very list the app
+// hides by, so the server can never accept a card the app does not know or refuse one
+// it does. (A hand-kept second list until the notifications needed the whole judgement
+// on this side too.)
 
 // ⚠️ IT TOUCHES NO ACCESS. `sections`, users/{uid} and the rules are exactly as they
 // were: this is a display switch, and an employee who types a hidden page's address
@@ -1015,7 +1016,7 @@ export const setStaffCard = onCall(CALL, async (request) => {
   if (typeof locationId !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(locationId)) {
     throw new HttpsError('invalid-argument', 'Which location?');
   }
-  if (typeof card !== 'string' || !STAFF_CARD_IDS.includes(card)) {
+  if (typeof card !== 'string' || !HIDEABLE_IDS.includes(card)) {
     throw new HttpsError('invalid-argument', 'Which card?');
   }
   if (typeof hidden !== 'boolean') {
