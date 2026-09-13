@@ -13,7 +13,7 @@ import { t } from '../i18n.js';
 import { canManageHere } from './firebase-foodcost.js';
 import { el } from './dom.js';
 import {
-  vatRatesFor, SELLING_MODES, costProduct, blockerText, statusFor,
+  vatRatesFor, vatSelection, SELLING_MODES, costProduct, blockerText, statusFor,
   snapshotWorthTaking, productSnapshot, normalizeProduct,
 } from './foodcost-model.js';
 import { formatRate, formatMoney, pricePerKg } from '../price-model.js';
@@ -319,13 +319,21 @@ export function renderEditor({ product, app }) {
   // applies to a bakery product is a question for an accountant, not for this app.
   // ⚠️ ASKED HERE, WHERE THE MENU IS DRAWN: the venue — and so its country — arrives
   // with the session, after every module has loaded (the js/currency.js rule).
-  const vatChoices = vatRatesFor(app.country());
-  const vatRates = vatChoices.map(choice => choice.rate);
+  const country = app.country();
+  const vatChoices = vatRatesFor(country);
   const vatSelect = el('select', {
     id: 'fcVat', class: 'fc-input', 'aria-label': t('fc.vatRate'),
     onchange: e => {
       const value = e.target.value;
-      working.vatRate = value === 'other' ? working.vatRate : (value === '' ? null : Number(value));
+      if (value === 'other') {
+        // ⚠️ THE BOX SHOWS THE RATE THAT WILL BE SAVED. Found by the code review of the
+        // Italian rates: going back to «another rate» after picking one from the menu left
+        // the box on its OLD number while Save stored the one just picked — a VAT rate on
+        // screen that was not the one in the margin.
+        vatOther.value = working.vatRate === null ? '' : String(working.vatRate);
+      } else {
+        working.vatRate = value === '' ? null : Number(value);
+      }
       vatOther.hidden = value !== 'other';
       markDirty();
       repaint();
@@ -338,16 +346,13 @@ export function renderEditor({ product, app }) {
   ]);
   const vatOther = numberInput('fcVatOther', t('fc.anotherVatRateAs'),
     null, v => { working.vatRate = v; });
-  vatOther.hidden = true;
   // ⚠️ A stored rate this country's list does not offer — a product saved at 20% before
-  // the venue had Italian choices — goes in the free field, UNCHANGED.
-  if (working.vatRate !== null && !vatRates.includes(working.vatRate)) {
-    vatSelect.value = 'other';
-    vatOther.value = String(working.vatRate);
-    vatOther.hidden = false;
-  } else if (working.vatRate !== null) {
-    vatSelect.value = String(working.vatRate);
-  }
+  // the venue had Italian choices — goes in the free field, UNCHANGED. The decision is
+  // vatSelection()'s, where a test runs it for both countries.
+  const initialVat = vatSelection(working.vatRate, country);
+  vatSelect.value = initialVat.select;
+  vatOther.value = initialVat.other;
+  vatOther.hidden = initialVat.select !== 'other';
 
   const targetInput = numberInput('fcTarget', t('fc.foodCostTargetAs'),
     working.foodCostTarget, v => { working.foodCostTarget = v; });

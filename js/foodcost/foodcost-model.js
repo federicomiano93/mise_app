@@ -57,6 +57,22 @@ export function vatRatesFor(country) {
     : VAT_RATES_BY_COUNTRY.GB;
 }
 
+// Which entry of the VAT menu a stored rate selects, and what the free field shows:
+//
+//   { select: '' | 'other' | '<rate>', other: '' | '<rate>' }
+//
+// ⚠️ A RATE THE COUNTRY'S LIST DOES NOT OFFER GOES IN THE FREE FIELD, UNCHANGED — a
+// product saved at 20% on an Italian venue opens on «another rate» with 20 in it, and
+// keeps costing at 20 until somebody picks otherwise. Selecting a menu value that does
+// not exist would instead leave the menu looking blank over a rate still in force.
+export function vatSelection(rate, country) {
+  const value = zeroOrMore(rate);
+  if (value === null) return { select: '', other: '' };
+  return vatRatesFor(country).some(choice => choice.rate === value)
+    ? { select: String(value), other: '' }
+    : { select: 'other', other: String(value) };
+}
+
 // How the product is sold. There is no default: a product with neither cannot be
 // costed, and it says so, rather than being silently treated as one of them.
 export const SELLING_MODES = Object.freeze(['piece', 'weight']);

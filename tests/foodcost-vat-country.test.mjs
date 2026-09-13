@@ -7,7 +7,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { vatRatesFor, VAT_RATES_BY_COUNTRY } from '../js/foodcost/foodcost-model.js';
+import { vatRatesFor, vatSelection, VAT_RATES_BY_COUNTRY } from '../js/foodcost/foodcost-model.js';
 import { COUNTRIES } from '../js/market.js';
 import { _dictionaries } from '../js/i18n.js';
 
@@ -48,15 +48,36 @@ test('every choice has words in both languages, with its rate in them', () => {
   }
 });
 
-test('⚠️ the editor asks the venue\'s country where it draws the menu, and keeps a rate it does not list', () => {
+test('⚠️⚠️ a stored rate the country does not list opens in the free field, unchanged', () => {
+  // The products Panificio Miano saved before it had Italian choices.
+  assert.deepEqual(vatSelection(20, 'IT'), { select: 'other', other: '20' });
+  assert.deepEqual(vatSelection(0, 'IT'), { select: 'other', other: '0' },
+    '⚠️ 0 is a real rate, not «nothing chosen»');
+  assert.deepEqual(vatSelection(22, 'GB'), { select: 'other', other: '22' });
+  assert.deepEqual(vatSelection(17.5, 'GB'), { select: 'other', other: '17.5' });
+});
+
+test('a listed rate selects its menu entry, and nothing chosen selects nothing', () => {
+  assert.deepEqual(vatSelection(22, 'IT'), { select: '22', other: '' });
+  assert.deepEqual(vatSelection(4, 'IT'), { select: '4', other: '' });
+  assert.deepEqual(vatSelection(0, 'GB'), { select: '0', other: '' });
+  assert.deepEqual(vatSelection(20, null), { select: '20', other: '' }, 'an unknown country reads the UK list');
+  for (const none of [null, undefined, '', -1, 'abc']) {
+    assert.deepEqual(vatSelection(none, 'IT'), { select: '', other: '' }, String(none));
+  }
+});
+
+test('⚠️ the editor asks the venue\'s country where it draws the menu, and opens it through vatSelection', () => {
   const editor = read('js/foodcost/foodcost-editor.js');
-  assert.match(editor, /const vatChoices = vatRatesFor\(app\.country\(\)\);/,
+  assert.match(editor, /const country = app\.country\(\);\s*const vatChoices = vatRatesFor\(country\);/,
     'the menu comes from the country — and inside renderEditor, not at module load, '
     + 'where no venue is open yet');
   assert.ok(editor.indexOf('const vatChoices') > editor.indexOf('export function renderEditor('));
   assert.match(editor, /t\(choice\.key, \{ rate: String\(choice\.rate\) \}\)/, 'the words come from the dictionary');
-  assert.match(editor, /if \(working\.vatRate !== null && !vatRates\.includes\(working\.vatRate\)\) \{\s*vatSelect\.value = 'other';\s*vatOther\.value = String\(working\.vatRate\);/,
-    '⚠️ a product saved at 20% on an Italian venue shows 20 in the free field — never silently re-rated');
+  assert.match(editor, /const initialVat = vatSelection\(working\.vatRate, country\);\s*vatSelect\.value = initialVat\.select;\s*vatOther\.value = initialVat\.other;\s*vatOther\.hidden = initialVat\.select !== 'other';/,
+    '⚠️ the menu and the free field open from the rule the tests above run');
+  assert.match(editor, /if \(value === 'other'\) \{\s*vatOther\.value = working\.vatRate === null \? '' : String\(working\.vatRate\);\s*\} else \{\s*working\.vatRate = value === '' \? null : Number\(value\);/,
+    '⚠️ going back to «another rate» shows the rate that will be SAVED, never the box\'s old number');
   assert.ok(!/VAT_RATES\b(?!_BY)/.test(editor), 'the old UK-only list is gone');
 
   assert.match(read('js/foodcost/firebase-foodcost.js'),
