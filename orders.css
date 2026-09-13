@@ -1273,6 +1273,18 @@ button.home-reminder {
   transition: transform 60ms ease;
 }
 button.home-reminder:active { transform: scale(.99); }
+/* ⚠️ THE HOME'S CARDS ARE LINKS, AND ON AN iPHONE A LONG PRESS ON A LINK OPENS SAFARI'S
+   OWN PREVIEW — «Open / Add to Reading List / Copy Link / Share» — on top of the app.
+   Federico found it on his own phone, 13 Sep 2026: «non mi piace». These are the app's
+   buttons, not web pages anybody wants to share, so the callout and the text selection
+   a long press starts are switched off, exactly as .drill-reorder already does for the
+   Calculator's draggable rows. A tap still opens the card. */
+.home-card,
+a.home-reminder {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
 a.home-reminder {
   display: block;
   text-decoration: none;
