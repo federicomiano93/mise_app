@@ -11,8 +11,9 @@ import { t } from '../i18n.js';
 import { normalizeProduct, normalizeProducts } from './foodcost-model.js';
 import {
   watchProducts, watchRecipes, watchIngredients,
-  saveProductWithSnapshot, removeProduct, newProductId,
+  saveProductWithSnapshot, removeProduct, newProductId, saveRecipeLoss,
 } from './firebase-foodcost.js';
+import { restoreAfterRefusal } from './foodcost-weighing.js';
 
 const PRODUCTS_KEY = 'foodcost-products';
 const RECIPES_KEY = 'foodcost-recipes';
@@ -122,8 +123,9 @@ function removeLocal(id) {
 // The FIELDS ARE LISTED BY HAND because this object becomes the Firestore
 // document, and the rules whitelist exactly these — spreading the product would
 // send `id` as a field and have every save refused.
-export function saveProduct(product, snapshot) {
+export function saveProduct(product, snapshot, lossPatches) {
   const id = product.id || newProductId();
+  saveRecipeLosses(lossPatches);
   const data = {
     name: product.name,
     components: product.components || [],
@@ -148,6 +150,34 @@ export function saveProduct(product, snapshot) {
     if (onSyncError) onSyncError(t('fc.couldNotSaveProduct', { name: product.name || t('fc.productWord') }));
   });
   return id;
+}
+
+// The weighings typed on a product's recipe lines, LOCAL-FIRST like the product.
+//
+// ⚠️ ONE WRITE PER RECIPE, AND NOT INSIDE THE PRODUCT'S BATCH. The recipe rule and the
+// product rule each spend reads, and a batch shares ONE read budget across every write
+// in it; a product with several recipes would reach the ceiling and refuse the whole
+// save. Kept apart, a refused weighing costs only itself and says so by name.
+function saveRecipeLosses(patches) {
+  for (const [id, patch] of Object.entries(patches || {})) {
+    const prev = recipes[id];
+    if (!prev) continue;
+    recipes = { ...recipes, [id]: { ...prev, ...patch } };
+    writeJson(RECIPES_KEY, Object.values(recipes));
+    if (notify) notify();
+    saveRecipeLoss(id, patch).catch(err => {
+      console.warn('Recipe loss did not sync to Firestore:', err);
+      // Put back only what this write changed, and only if nothing newer has landed on
+      // top of it — the rule is restoreAfterRefusal()'s, where a test runs it.
+      const restored = restoreAfterRefusal(recipes[id], prev, patch);
+      if (restored) {
+        recipes = { ...recipes, [id]: restored };
+        writeJson(RECIPES_KEY, Object.values(recipes));
+        if (notify) notify();
+      }
+      if (onSyncError) onSyncError(t('fc.couldNotSaveLoss', { name: prev.name || '' }));
+    });
+  }
 }
 
 export function deleteProduct(id) {

@@ -231,6 +231,21 @@ select.fc-input, .fc-select {
 .fc-qty { width: 4.6rem; flex-shrink: 0; text-align: right; }
 .fc-line-unit { font-size: .8rem; color: var(--fc-text-2); flex-shrink: 0; }
 .fc-line-note { margin: 6px 0 0; font-size: .72rem; color: var(--fc-text-2); font-family: var(--fc-font-mono); }
+/* The dough weighed before the oven and after, under a recipe line — moved here from
+   the recipe editor on 13 Sep 2026. Two boxes side by side, as they were there; the
+   answer under them reads as a statement, not as a footnote. */
+.fc-weigh { margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--fc-border); }
+.fc-weigh-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.fc-weigh-cell { display: block; min-width: 0; }
+.fc-weigh-label { display: block; font-size: .72rem; color: var(--fc-text-2); margin-bottom: 4px; }
+.fc-weigh-row { display: flex; align-items: center; gap: 6px; }
+.fc-weigh-row .fc-input { min-width: 0; }
+.fc-weigh-unit { font-size: .8rem; color: var(--fc-text-2); flex: none; }
+.fc-weigh-out { margin: 6px 0 0; font-size: .78rem; color: var(--fc-text); }
+.fc-weigh-warn { margin: 4px 0 0; font-size: .74rem; color: var(--fc-danger); }
+.fc-weigh-shared { margin-top: 4px; }
+.fc-weigh-warn[hidden],
+.fc-weigh-shared[hidden] { display: none; }
 .fc-del-icon {
   width: 32px;
   height: 32px;

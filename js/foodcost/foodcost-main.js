@@ -3,10 +3,11 @@
 // confirm dialog and toast, and the live subscriptions.
 //
 // Feature-local only: it reads the catalogue's recipes and Orders' ingredients as
-// Firestore COLLECTIONS, through its own data layer — js/foodcost/ imports nothing
-// from js/catalogue/ or js/orders/, except the two shared, non-feature modules in
-// js/ root (price-model.js and the recipe cost maths), which both features already
-// share for the same reason.
+// Firestore COLLECTIONS, through its own data layer, and writes nothing of theirs but
+// a recipe's oven loss. js/foodcost/ imports no screen and no data layer from
+// js/catalogue/ or js/orders/ — only pure models: price-model.js in js/ root, and the
+// catalogue's recipe-cost-model.js and catalogue-model.js, because a copy of a
+// CALCULATION is worse than a crossing.
 
 import { t, localeTag, onLanguageChange } from '../i18n.js';
 import {
@@ -15,7 +16,7 @@ import {
 } from './foodcost-store.js';
 import { renderList } from './foodcost-list.js';
 import { renderEditor } from './foodcost-editor.js';
-import { getProductHistory } from './firebase-foodcost.js';
+import { getProductHistory, canWriteRecipes } from './firebase-foodcost.js';
 import { confirmDialog } from './confirm-dialog.js';
 import { el } from './dom.js';
 import { costRecipe } from '../catalogue/recipe-cost-model.js';
@@ -147,6 +148,11 @@ const app = {
   saveProduct,
   deleteProduct,
   tables,
+  // Every product, so a recipe line can say how many OTHERS a weighing typed on it
+  // changes — the loss belongs to the recipe, not to the product it was typed on.
+  products: getProducts,
+  // Whether a recipe line may offer the two weighing boxes at all — see canWriteRecipes().
+  canWeigh: canWriteRecipes,
   setLeaveGuard: (fn) => { leaveGuard = fn; },
 
   // The recipes a component can point at, named with what they cost so the wrong
@@ -156,7 +162,7 @@ const app = {
       .filter(r => r && String(r.name || '').trim())
       .map(r => {
         const costed = costRecipe(r, tables());
-        const rate = costed.pricePerKg === null ? 'not priced' : `${formatRate(costed.pricePerKg)} / kg`;
+        const rate = costed.pricePerKg === null ? t('fc.notPriced') : `${formatRate(costed.pricePerKg)} / kg`;
         return { id: r.id, label: `${r.name} — ${rate}` };
       })
       .sort((a, b) => a.label.localeCompare(b.label));
@@ -170,9 +176,9 @@ const app = {
       .map(i => {
         const each = i.priceUnit === 'pcs' ? Number(i.pricePerUnit) : null;
         const perKg = pricePerKg(i);
-        const note = each ? `${formatRate(each)} each`
-          : perKg !== null ? 'priced by weight'
-            : 'not priced';
+        const note = each ? t('fc.priceEach', { price: formatRate(each) })
+          : perKg !== null ? t('fc.pricedByWeight')
+            : t('fc.notPriced');
         return { id: i.id, label: `${i.name} — ${note}` };
       })
       .sort((a, b) => a.label.localeCompare(b.label));

@@ -1044,19 +1044,6 @@ const DICTIONARIES = Object.freeze({
     'cat.recipeAdded': 'Recipe added.',
     'cat.discardChanges': 'Discard changes?',
     'cat.youHaveUnsavedChanges': 'You have unsaved changes. Discard them?',
-    // ⚠️ THE FIELD STOPPED ASKING FOR A PERCENTAGE. cat.weightLostWhileCooking,
-    // …WhileCooking2 and cat.leaveAt0If were retired with it: a percentage is a number
-    // nobody has — it has to be worked out from two weighings — which is why the box
-    // sat at 0 on every recipe and made every baked product look cheaper than it is.
-    'cat.rawDoughWeight': 'Raw dough',
-    'cat.cookedDoughWeight': 'Cooked dough',
-    'cat.lossIs': 'Weight lost in the oven: {pct}%',
-    'cat.lossNotYet': 'Weight lost in the oven: weigh the baked dough to work it out',
-    // ⚠️ ONLY EVER SHOWN FOR A PERCENTAGE ABOVE ZERO. A stored 0 means nobody has said,
-    // and gets cat.lossNotYet above — see storedLossText() in catalogue-editor.js.
-    'cat.lossStored': 'Weight lost in the oven: {pct}% — weigh the dough to work it out again',
-    'cat.lossCookedHeavier': 'The cooked dough cannot weigh more than the raw dough.',
-    'cat.lossCapped': 'Stored as {max}% — a full loss would make the cost per kilo infinite.',
     'cat.searchARecipe': 'Search a recipe…',
     'cat.searchARecipeBy': 'Search a recipe by name',
     'cat.noRecipeMatchesYour': 'No recipe matches your search.',
@@ -1254,6 +1241,27 @@ const DICTIONARIES = Object.freeze({
     'fc.removePackagingItem': 'Remove packaging item',
     'fc.thisRecipeNoLonger': 'This recipe no longer exists',
     'fc.thisRecipeIsNot': 'This recipe is not priced yet',
+    // ⚠️ THE OVEN LOSS MOVED HERE FROM THE RECIPE EDITOR on 13 Sep 2026, keys and all
+    // (they were cat.rawDoughWeight … cat.lossCapped). Still two weighings and never a
+    // percentage: a percentage is a number nobody has, which is why the old box sat at 0
+    // on every recipe and made every baked product look cheaper than it is.
+    'fc.rawDough': 'Raw dough',
+    'fc.cookedDough': 'Cooked dough',
+    'fc.lossIs': 'Weight lost in the oven: {pct}%',
+    'fc.lossNotYet': 'Weight lost in the oven: weigh the baked dough to work it out',
+    // ⚠️ ONLY EVER SHOWN FOR A PERCENTAGE ABOVE ZERO. A stored 0 means nobody has said,
+    // and gets fc.lossNotYet above — see readWeighing() in foodcost-weighing.js.
+    'fc.lossStored': 'Weight lost in the oven: {pct}% — weigh the dough to work it out again',
+    'fc.lossCookedHeavier': 'The cooked dough cannot weigh more than the raw dough.',
+    'fc.lossCapped': 'Stored as {max}% — a full loss would make the cost per kilo infinite.',
+    'fc.lossSharedWith': {
+      one: 'The loss belongs to the recipe: it changes {n} other product too.',
+      other: 'The loss belongs to the recipe: it changes {n} other products too.',
+    },
+    // ⚠️ NOT «check your connection». Offline, a write waits rather than fails; this
+    // shows only when the database REFUSED it — a recipe deleted meanwhile, or no right
+    // to write recipes — so blaming the network would send somebody to fix the wrong thing.
+    'fc.couldNotSaveLoss': 'The oven loss of “{name}” was not saved — the recipe keeps the one it had.',
     'fc.thisItemNoLonger': 'This item no longer exists',
     'fc.pricedByWeightSet': 'Priced by weight — set it up as a per-piece price in Orders to count it here',
     'fc.choose': '— Choose —',
@@ -1268,6 +1276,20 @@ const DICTIONARIES = Object.freeze({
     'fc.sold': 'Sold',
     'fc.sellingPriceVat': 'Selling price, including VAT ({currency})',
     'fc.anotherRate': 'Another rate…',
+    // ⚠️ Until 13 Sep 2026 these were written into foodcost-editor.js and foodcost-main.js
+    // in English, so an Italian venue read «20% — standard» and «not priced» in its menus.
+    // The RATES are still the UK's three — only their words are translated here.
+    'fc.vat.standard': '20% — standard',
+    'fc.vat.reduced': '5% — reduced',
+    'fc.vat.zero': '0% — zero-rated',
+    'fc.notPriced': 'not priced',
+    'fc.pricedByWeight': 'priced by weight',
+    'fc.priceEach': '{price} each',
+    'fc.partlyPriced': 'partly priced',
+    'fc.aria.recipe': 'Recipe',
+    'fc.aria.packagingItem': 'Packaging item',
+    'fc.aria.kilos': 'Kilos',
+    'fc.aria.pieces': 'Pieces',
     'fc.anotherVatRateAs': 'Another VAT rate, as a percentage',
     'fc.foodCostTargetAs': 'Food cost target, as a percentage',
     'fc.pleaseEnterAProduct': 'Please enter a product name.',
@@ -2142,7 +2164,7 @@ const DICTIONARIES = Object.freeze({
 
     // ── Choosing which Home cards the employees see ────────────────────────
     'homeCards.title': 'Home cards',
-    'homeCards.intro': 'Choose which cards the people who work here see on the Home.',
+    'homeCards.intro': 'Choose which cards the people who work here see, and the order the Home shows them in.',
     'homeCards.managersSeeAll': 'Owners, managers and head chefs always see every card, so your own Home does not change. Hiding a card deletes nothing, and showing it again brings it straight back.',
     'homeCards.applies': 'Employees see the change the next time they open the app. The notifications of a hidden card stop for them at once.',
     'homeCards.shown': 'Visible',
@@ -3104,13 +3126,6 @@ const DICTIONARIES = Object.freeze({
     'cat.recipeAdded': 'Ricetta aggiunta.',
     'cat.discardChanges': 'Vuoi scartare le modifiche?',
     'cat.youHaveUnsavedChanges': 'Hai modifiche non salvate. Vuoi scartarle?',
-    'cat.rawDoughWeight': 'Impasto crudo',
-    'cat.cookedDoughWeight': 'Impasto cotto',
-    'cat.lossIs': 'Calo peso in cottura: {pct}%',
-    'cat.lossNotYet': 'Calo peso in cottura: pesa l’impasto cotto per saperlo',
-    'cat.lossStored': 'Calo peso in cottura: {pct}% — ripesa l’impasto per aggiornarlo',
-    'cat.lossCookedHeavier': 'L’impasto cotto non può pesare più del crudo.',
-    'cat.lossCapped': 'Salvato come {max}% — un calo totale renderebbe infinito il costo al chilo.',
     'cat.searchARecipe': 'Cerca una ricetta…',
     'cat.searchARecipeBy': 'Cerca una ricetta per nome',
     'cat.noRecipeMatchesYour': 'Nessuna ricetta corrisponde alla ricerca.',
@@ -3313,6 +3328,18 @@ const DICTIONARIES = Object.freeze({
     'fc.removePackagingItem': 'Togli l’imballaggio',
     'fc.thisRecipeNoLonger': 'Questa ricetta non esiste più',
     'fc.thisRecipeIsNot': 'Questa ricetta non ha ancora un prezzo',
+    'fc.rawDough': 'Impasto crudo',
+    'fc.cookedDough': 'Impasto cotto',
+    'fc.lossIs': 'Calo peso in cottura: {pct}%',
+    'fc.lossNotYet': 'Calo peso in cottura: pesa l’impasto cotto per saperlo',
+    'fc.lossStored': 'Calo peso in cottura: {pct}% — ripesa l’impasto per aggiornarlo',
+    'fc.lossCookedHeavier': 'L’impasto cotto non può pesare più del crudo.',
+    'fc.lossCapped': 'Salvato come {max}% — un calo totale renderebbe infinito il costo al chilo.',
+    'fc.lossSharedWith': {
+      one: 'Il calo vale per la ricetta: cambia anche {n} altro prodotto.',
+      other: 'Il calo vale per la ricetta: cambia anche altri {n} prodotti.',
+    },
+    'fc.couldNotSaveLoss': 'Il calo peso di “{name}” non è stato salvato — la ricetta tiene quello che aveva.',
     'fc.thisItemNoLonger': 'Questa voce non esiste più',
     'fc.pricedByWeightSet': 'Prezzo a peso — impostalo come prezzo al pezzo negli Ordini per contarlo qui',
     'fc.choose': '— Scegli —',
@@ -3327,6 +3354,17 @@ const DICTIONARIES = Object.freeze({
     'fc.sold': 'Venduto',
     'fc.sellingPriceVat': 'Prezzo di vendita, IVA inclusa ({currency})',
     'fc.anotherRate': 'Un’altra aliquota…',
+    'fc.vat.standard': '20% — ordinaria',
+    'fc.vat.reduced': '5% — ridotta',
+    'fc.vat.zero': '0% — aliquota zero',
+    'fc.notPriced': 'senza prezzo',
+    'fc.pricedByWeight': 'prezzo a peso',
+    'fc.priceEach': '{price} l’uno',
+    'fc.partlyPriced': 'prezzo parziale',
+    'fc.aria.recipe': 'Ricetta',
+    'fc.aria.packagingItem': 'Voce di imballaggio',
+    'fc.aria.kilos': 'Chili',
+    'fc.aria.pieces': 'Pezzi',
     'fc.anotherVatRateAs': 'Un’altra aliquota IVA, in percentuale',
     'fc.foodCostTargetAs': 'Obiettivo di food cost, in percentuale',
     'fc.pleaseEnterAProduct': 'Inserisci il nome del prodotto.',
@@ -4037,7 +4075,7 @@ const DICTIONARIES = Object.freeze({
     'lang.labels.noCountry': 'Questa attività non ha un paese impostato, quindi non può produrre nessuna etichetta allergeni. Il paese decide la lingua dell’etichetta, e non è una cosa che l’app possa indovinare.',
 
     'homeCards.title': 'Schede della Home',
-    'homeCards.intro': 'Scegli quali schede vedono sulla Home le persone che lavorano qui.',
+    'homeCards.intro': 'Scegli quali schede vedono le persone che lavorano qui, e in che ordine compaiono sulla Home.',
     'homeCards.managersSeeAll': 'Titolare, manager e chef di cucina vedono sempre tutte le schede, quindi la tua Home non cambia. Nascondere una scheda non cancella niente, e mostrarla di nuovo la fa ricomparire subito.',
     'homeCards.applies': 'I dipendenti vedono il cambiamento la prossima volta che aprono l’app. Le notifiche di una scheda nascosta smettono subito di arrivargli.',
     'homeCards.shown': 'Visibile',
