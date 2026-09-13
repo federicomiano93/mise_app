@@ -557,7 +557,9 @@ export function renderEditor({ recipe, draft, allRecipes, app, getLabelProfile =
     // ⚠️ Owner only, same as the detail screen. Staff may still edit and save.
     recipe && canManageHere() ? el('button', { class: 'cat-del-btn', type: 'button', onclick: onDelete }, [
       el('span', { icon: TRASH_SVG, 'aria-hidden': 'true' }),
-      'Delete',
+      // ⚠️ SEEN ON A SCREENSHOT OF AN ITALIAN VENUE, 13 Sep 2026: «Salva» beside
+      // «Delete». The detail screen's own button has always used this key.
+      t('cat.deleteRecipe'),
     ]) : null,
   ]);
 
