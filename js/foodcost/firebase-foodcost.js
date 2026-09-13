@@ -20,6 +20,7 @@
 import { firebaseConfig, sessionReady, currentSession } from '../firebase.js';
 import { currentLocationId, pathFor } from '../location.js';
 import { withPrices } from '../price-model.js';
+import { countryOf } from '../market.js';
 import {
   getApps,
   getApp,
@@ -162,6 +163,13 @@ export async function saveRecipeLoss(id, patch) {
 // landed. Same default as the rules: a section nobody switched off is on.
 export function canWriteRecipes() {
   return currentSession().sections?.catalogue === true;
+}
+
+// The country the open venue sells in — which decides the VAT choices a product offers.
+// null for a country the app does not know; foodcost-model.js vatRatesFor() decides
+// what that means.
+export function venueCountry() {
+  return countryOf(currentSession().location);
 }
 
 export async function removeProduct(id) {

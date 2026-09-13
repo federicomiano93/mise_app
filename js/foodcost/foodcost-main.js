@@ -16,7 +16,7 @@ import {
 } from './foodcost-store.js';
 import { renderList } from './foodcost-list.js';
 import { renderEditor } from './foodcost-editor.js';
-import { getProductHistory, canWriteRecipes } from './firebase-foodcost.js';
+import { getProductHistory, canWriteRecipes, venueCountry } from './firebase-foodcost.js';
 import { confirmDialog } from './confirm-dialog.js';
 import { el } from './dom.js';
 import { costRecipe } from '../catalogue/recipe-cost-model.js';
@@ -153,6 +153,8 @@ const app = {
   products: getProducts,
   // Whether a recipe line may offer the two weighing boxes at all — see canWriteRecipes().
   canWeigh: canWriteRecipes,
+  // The venue's country, which decides the VAT choices a product offers.
+  country: venueCountry,
   setLeaveGuard: (fn) => { leaveGuard = fn; },
 
   // The recipes a component can point at, named with what they cost so the wrong

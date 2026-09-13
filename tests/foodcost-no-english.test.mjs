@@ -25,9 +25,11 @@ test('⚠️ no English phrase is written into the Food cost screens any more', 
 
 test('every key they ask for exists in both languages, and the Italian is Italian', () => {
   const { en, it } = _dictionaries();
-  const keys = ['fc.vat.standard', 'fc.vat.reduced', 'fc.vat.zero', 'fc.notPriced', 'fc.pricedByWeight',
+  const keys = ['fc.vat.standard', 'fc.vat.reduced', 'fc.vat.minimum', 'fc.vat.zero', 'fc.notPriced', 'fc.pricedByWeight',
     'fc.priceEach', 'fc.partlyPriced', 'fc.aria.recipe', 'fc.aria.packagingItem', 'fc.aria.kilos', 'fc.aria.pieces'];
-  const used = read('js/foodcost/foodcost-editor.js') + read('js/foodcost/foodcost-main.js');
+  // The VAT words are named in the model's per-country table, the rest in the two screens.
+  const used = read('js/foodcost/foodcost-editor.js') + read('js/foodcost/foodcost-main.js')
+    + read('js/foodcost/foodcost-model.js');
   for (const key of keys) {
     assert.ok(used.includes(`'${key}'`), `${key} must actually be asked for`);
     assert.ok(en[key] && it[key], `${key} must exist in both languages`);
