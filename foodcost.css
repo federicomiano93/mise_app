@@ -180,8 +180,13 @@ body {
    selling price exists. The same frame as the answer without its coloured edge: a cost
    is not good or bad on its own, only against a price. */
 .fc-prodcost { padding: 12px 14px; border: 1px solid var(--fc-border); border-radius: var(--fc-radius); background: var(--fc-surface); }
-.fc-prodcost-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
-.fc-prodcost-value { display: flex; align-items: baseline; gap: 6px; }
+/* ⚠️ SEEN ON A 296px SCREENSHOT BEFORE IT SHIPPED: «PRODUCTION COST» broke over two
+   lines and «per kg» / «infornata intera» were split in half beside the number. Neither
+   the label nor the unit may break; when the two do not fit side by side, the whole
+   value drops to its own line under the label instead. */
+.fc-prodcost-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; column-gap: 12px; row-gap: 2px; }
+.fc-prodcost-head .fc-answer-label { white-space: nowrap; }
+.fc-prodcost-value { display: flex; align-items: baseline; gap: 6px; white-space: nowrap; }
 .fc-prodcost-num { font-size: 1.3rem; font-weight: 600; font-variant-numeric: tabular-nums; }
 .fc-prodcost-unit { font-size: .78rem; color: var(--fc-text-2); }
 
