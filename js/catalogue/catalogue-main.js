@@ -26,7 +26,7 @@ import { normalizeSteps, progressText } from './guided-model.js';
 import { confirmDialog } from './confirm-dialog.js';
 // The session, for the venue's own document: its country decides what language a
 // label is printed in. Imported from js/ root, not from a feature folder.
-import { currentSession, onSession } from '../firebase.js';
+import { currentSession, onSession, sessionReady } from '../firebase.js';
 // Whether this venue tracks allergens at all — the switch lives in Orders
 // («Fornitori e ingredienti» → Impostazioni) and every screen that shows an allergen
 // obeys it. From js/ root, so both halves of the app read one answer.
@@ -639,12 +639,17 @@ onSession((s) => {
   if (s.status !== 'ready' || paintedWithSession) return;
   paintedWithSession = true;
   if (view === 'list') showList();
-  // ⚠️ AN OPEN RECIPE NEEDS IT TOO, since 13 Sep 2026: its «Apri nel Food cost» card is
-  // drawn only for whoever may open Food cost, and before the session there is nobody to
-  // ask — so a recipe opened in that moment would never get its card. Rebuilding the
-  // host's cards is safe: they hold no input, and a scaled batch lives outside them.
+  // ⚠️ AN OPEN RECIPE IS REBUILT WHOLE, since 13 Sep 2026. Two things on it are decided by
+  // the session — the «Apri nel Food cost» card (whoever may open Food cost) and the
+  // owner's «Elimina ricetta» — and a recipe opened before the session drew neither.
+  // Refreshing only the cards brought the first back and left the second missing (found
+  // by the code review). Rebuilding is safe: the screen holds no input, and a scaled
+  // batch is kept per recipe outside it.
   else if (view === 'detail' && activeDetail && currentRecipe) {
-    activeDetail.refreshCost(getRecipes().find(r => r.id === currentRecipe.id) || currentRecipe);
+    const latest = getRecipes().find(r => r.id === currentRecipe.id) || currentRecipe;
+    currentRecipe = latest;
+    activeDetail = renderDetail({ recipe: latest, app });
+    swap(activeDetail.root);
   }
   // ⚠️ THE ALLERGEN SHEET NEEDS THIS TOO, and it is the one screen where being
   // early is worse than being wrong quietly: its top card names the allergens the
@@ -654,6 +659,9 @@ onSession((s) => {
   else if (view === 'allergens' && activeSheet) {
     activeSheet.refresh(getRecipes(), getIngredients(), getRecipesById());
   }
+  // Back from Food cost waits for the session before it reopens the recipe — see
+  // openWantedRecipe(). It does nothing when no recipe was named.
+  openWantedRecipe();
 });
 
 onLanguageChange(() => {
@@ -682,6 +690,11 @@ const WANTED_RECIPE_WAIT_MS = 5000;
 
 function openWantedRecipe() {
   if (!wantedRecipeId) return;
+  // ⚠️ NOT BEFORE THE SESSION. The recipe is usually already in the phone's copy at page
+  // load, and a recipe screen built before the session knows nobody's role: an owner's
+  // «Elimina ricetta» was simply never drawn (found by the code review). onSession asks
+  // again the moment the session is ready.
+  if (currentSession().status !== 'ready') return;
   // Only over the list it would have opened from — never over a screen somebody has
   // since chosen for themselves.
   if (view !== 'list') { forgetWantedRecipe(); return; }
@@ -701,5 +714,8 @@ function forgetWantedRecipe() {
 showList();
 if (wantedRecipeId) {
   openWantedRecipe();
-  setTimeout(forgetWantedRecipe, WANTED_RECIPE_WAIT_MS);
+  // ⚠️ COUNTED FROM THE SESSION, not from the page load: the recipe is not opened before
+  // the session (see openWantedRecipe), and a sign-in slower than the wait would otherwise
+  // forget the recipe before it was ever allowed to open.
+  sessionReady.then(() => setTimeout(forgetWantedRecipe, WANTED_RECIPE_WAIT_MS));
 }

@@ -50,6 +50,7 @@ let leaveGuard = null;
 let fromRecipe = recipeIdFromHash(window.location.hash);
 let listFilter = null;       // a recipe id while the list is narrowed to its products
 let entryEditor = false;     // true while the product on screen is the one the recipe opened
+let draftRecipeId = null;    // the recipe a NEW product came from, while it may still give way
 let recipeLinkSettled = false;
 let recipeLinkDeadlinePassed = false;
 const RECIPE_LINK_WAIT_MS = 1200;
@@ -80,6 +81,7 @@ function showList() {
   currentProduct = null;
   leaveGuard = null;
   entryEditor = false;
+  draftRecipeId = null;
   // ⚠️ Narrowed, the list has Back (to the recipe) where it otherwise has Home.
   setHeader({ title: t('fc.foodCost'), sub: t('fc.productsAndMargins'), back: !!listFilter });
   activeList = renderList({
@@ -101,6 +103,7 @@ function filterTitle(recipeId) {
 
 function openProduct(product, draft = null) {
   view = 'editor';
+  draftRecipeId = null;
   activeList = null;
   currentProduct = product;
   leaveGuard = null;
@@ -140,11 +143,27 @@ function settleRecipeLink() {
   if (using.length === 1) { openProduct(using[0]); entryEditor = true; return; }
   if (using.length > 1) { listFilter = id; showList(); return; }
   const draft = draftFromRecipe(getRecipes()[id]);
-  if (draft) { openProduct(null, draft); entryEditor = true; return; }
+  if (draft) { openProduct(null, draft); entryEditor = true; draftRecipeId = id; return; }
   // A recipe nobody can find — deleted, or still not here at the deadline: the plain
   // list, whose Back is Home. There is no recipe to pretend to return to.
   fromRecipe = null;
   showList();
+}
+
+// ⚠️⚠️ A NEW PRODUCT OPENED ON A LIST THAT HAD NOT ARRIVED CHANGES ITS MIND. Found by the
+// code review: on a slow first open the deadline can pass before the products do, or the
+// phone's copy can predate a product made on another phone — and the page would offer a
+// new product for a recipe that already has one. Saved, that is a DUPLICATE with a margin
+// history of its own. So while that new product is exactly as it arrived (nothing typed,
+// no Save under way), every data update asks again, and the real product wins.
+function reconsiderDraft() {
+  if (!draftRecipeId || view !== 'editor' || !activeEditor || !activeEditor.isUntouched()) return false;
+  const id = draftRecipeId;
+  const using = productsUsingRecipe(getProducts(), id);
+  if (!using.length) return false;
+  if (using.length === 1) { openProduct(using[0]); entryEditor = true; }
+  else { listFilter = id; showList(); }
+  return true;
 }
 
 // The address is spent once it has been read: a reload, or coming back to this page
@@ -220,7 +239,9 @@ async function handleBack() {
   // it opened, or the narrowed list. The unsaved-edits question above has already been
   // asked, so nothing typed is lost on the way.
   if (fromRecipe && (view === 'loading' || (view === 'editor' && entryEditor) || (view === 'list' && listFilter))) {
-    window.location.href = recipeHref(fromRecipe);
+    // ⚠️ replace(), NOT href: Back must not ADD a page to the phone's history, or the
+    // system back gesture walks forward into Food cost again — two more pages per trip.
+    window.location.replace(recipeHref(fromRecipe));
     return;
   }
   showList();
@@ -288,6 +309,7 @@ initFoodCost(
   () => {
     // While a recipe's link is still being decided, every arrival is a chance to decide.
     if (fromRecipe && !recipeLinkSettled) { settleRecipeLink(); return; }
+    if (reconsiderDraft()) return;
     if (view === 'list' && activeList) activeList.refresh(listedProducts(), tables());
     // A product on screen picks up the recipes and prices as they arrive, and any
     // change made on another phone, without losing the edit in progress.

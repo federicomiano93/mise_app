@@ -162,8 +162,51 @@ test('⚠️ Back from the first screen a recipe opened returns to that recipe',
   const back = main.slice(main.indexOf('async function handleBack()'), main.indexOf('function toast('));
   assert.ok(back.indexOf('await leaveGuard()') < back.indexOf('recipeHref(fromRecipe)'),
     'unsaved edits are asked about BEFORE leaving for the recipe');
-  assert.match(back, /window\.location\.href = recipeHref\(fromRecipe\);/);
+  // ⚠️ replace, never href: an added history entry sends the phone's back gesture forward
+  // into Food cost again (found by the code review).
+  assert.match(back, /window\.location\.replace\(recipeHref\(fromRecipe\)\);/);
+  assert.doesNotMatch(back, /location\.href\s*=/);
   assert.match(main, /renderEditor\(\{ product, draft, app \}\)/);
+});
+
+// ── What the code review found ───────────────────────────────────────────────
+
+test('⚠️⚠️ a new product opened too early gives way to the real one — while untouched', () => {
+  // On a slow first open the deadline can pass before the products arrive, or the phone's
+  // copy can predate a product made elsewhere. Saved, that new product is a DUPLICATE.
+  const main = codeOf(read('js/foodcost/foodcost-main.js'));
+  const fn = main.slice(main.indexOf('function reconsiderDraft()'), main.indexOf('function clearAddress()'));
+  assert.ok(fn.length > 50, 'reconsiderDraft is gone');
+  assert.match(fn, /!activeEditor\.isUntouched\(\)/, 'only while nothing has been typed — never over somebody\'s work');
+  assert.match(fn, /productsUsingRecipe\(getProducts\(\), id\)/);
+  assert.match(main, /if \(reconsiderDraft\(\)\) return;/, 'asked on every data update');
+  assert.match(main, /openProduct\(null, draft\); entryEditor = true; draftRecipeId = id;/);
+  const editor = codeOf(read('js/foodcost/foodcost-editor.js'));
+  assert.match(editor, /isUntouched: \(\) => !touched && !busy,/, 'a Save under way is not untouched');
+  assert.match(editor, /const markDirty = \(\) => \{ dirty = true; touched = true; \};/);
+});
+
+test('⚠️ Back from Food cost really reopens the recipe, and only once the session knows the role', () => {
+  // Deleting either call left every other test green while Back silently landed on the list.
+  const main = codeOf(read('js/catalogue/catalogue-main.js'));
+  const init = main.slice(main.indexOf('initCatalogue('), main.indexOf('initCatalogue(') + 300);
+  assert.match(init, /openWantedRecipe\(\);/, 'recipes arriving later must still open it');
+  const handler = main.slice(main.indexOf('onSession((s) =>'), main.indexOf('onLanguageChange('));
+  assert.match(handler, /openWantedRecipe\(\);/, 'the session landing must open it');
+  const fn = main.slice(main.indexOf('function openWantedRecipe()'), main.indexOf('function forgetWantedRecipe()'));
+  const gate = fn.indexOf("currentSession().status !== 'ready'");
+  assert.ok(gate !== -1 && gate < fn.indexOf('openDetail('),
+    'never before the session: a recipe built then draws no «Elimina ricetta» for its owner');
+  assert.match(handler, /activeDetail = renderDetail\(\{ recipe: latest, app \}\);/,
+    'a recipe opened before the session is rebuilt WHOLE — its buttons, not only its cards');
+  assert.match(main, /sessionReady\.then\(\(\) => setTimeout\(forgetWantedRecipe, WANTED_RECIPE_WAIT_MS\)\)/,
+    'the give-up clock starts when the session does, or a slow sign-in forgets the recipe');
+});
+
+test('the chooser\'s Back is named in the venue\'s language', () => {
+  const picker = codeOf(read('js/catalogue/ingredient-picker.js'));
+  assert.doesNotMatch(picker, /'aria-label': 'Back'/);
+  assert.match(picker, /'aria-label': t\('ui\.back'\)/);
 });
 
 // Comments stripped before every source check — a guard that fires on its own warning

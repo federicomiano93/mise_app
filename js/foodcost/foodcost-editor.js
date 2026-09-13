@@ -55,7 +55,11 @@ export function renderEditor({ product, draft = null, app }) {
   let dirty = false;
   let busy = false;
   let showErrors = false;
-  const markDirty = () => { dirty = true; };
+  // ⚠️ `touched` NEVER GOES BACK TO false, unlike `dirty` (which Save clears). The page
+  // asks it whether a product opened from a recipe is still exactly as it arrived — see
+  // isUntouched() at the bottom, and foodcost-main.js.
+  let touched = false;
+  const markDirty = () => { dirty = true; touched = true; };
 
   // ── The oven loss of each recipe on this product ───────────────────────────
   //
@@ -556,6 +560,8 @@ export function renderEditor({ product, draft = null, app }) {
 
   return {
     root,
+    // Still exactly as it arrived: nothing typed ever, and no Save under way.
+    isUntouched: () => !touched && !busy,
     // ⚠️ WITHOUT THIS THE CHOOSERS ARE BUILT ONCE, FROM WHATEVER HAD ARRIVED.
     // The recipe and ingredient listeners are still in flight while this screen is
     // being opened — on a cold start, offline, or a slow network — so "+ Add

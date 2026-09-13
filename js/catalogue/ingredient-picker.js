@@ -86,7 +86,7 @@ export function openLinkPicker({ ingredients, recipes, suppliers, excludeRecipeI
 
     const overlay = el('div', { class: 'cat-pick-overlay' }, [
       el('header', { class: 'cat-header cat-pick-header' }, [
-        el('button', { class: 'cat-icon-btn', type: 'button', 'aria-label': 'Back',
+        el('button', { class: 'cat-icon-btn', type: 'button', 'aria-label': t('ui.back'),
           icon: BACK_ICON, onclick: () => close(undefined) }),
         el('div', { class: 'cat-pick-title' }, [el('h1', { text: t('cat.linkTo') })]),
         el('span', { class: 'cat-pick-spacer' }),
