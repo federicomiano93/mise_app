@@ -13,10 +13,11 @@ import { t } from '../i18n.js';
 import { canManageHere } from './firebase-foodcost.js';
 import { el } from './dom.js';
 import {
-  vatRatesFor, vatSelection, SELLING_MODES, costProduct, productionCost, blockerText, statusFor,
-  snapshotWorthTaking, productSnapshot, normalizeProduct,
+  vatRatesFor, vatSelection, costProduct, productionCost, blockerText,
+  snapshotWorthTaking, productSnapshot, normalizeProduct, suggestedGrossPrice,
 } from './foodcost-model.js';
-import { formatRate, formatMoney, pricePerKg } from '../price-model.js';
+import { formatRate, formatMoney } from '../price-model.js';
+import { openVatGuide } from './vat-guide-view.js';
 // ⚠️ READ WHERE THE FIELD IS DRAWN, never at module load: the venue — and therefore
 // its country, and therefore its currency — arrives with the session, after every
 // module has been evaluated. See js/currency.js.
@@ -29,6 +30,11 @@ import {
 
 const TRASH_SVG =
   '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>';
+
+// An open book: «read which products take which rate». Stroked, 24×24, currentColor —
+// the app's icon rule (inline SVG, never an emoji).
+const GUIDE_SVG =
+  '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4h6a4 4 0 0 1 4 4v12a3 3 0 0 0-3-3H2z"/><path d="M22 4h-6a4 4 0 0 0-4 4v12a3 3 0 0 1 3-3h7z"/></svg>';
 
 // Keys, resolved at draw time — see js/calculator-render.js.
 const STATUS_TEXT = { green: 'fc.onTarget', amber: 'fc.slightlyOverTarget', red: 'fc.overTarget' };
@@ -203,8 +209,10 @@ export function renderEditor({ product, draft = null, app }) {
   const answer = el('div', { class: 'fc-answer' });
 
   function paintAnswer() {
+    const tables = liveTables();
     paintProductionCost();
-    const result = costProduct(working, liveTables());
+    paintSuggestion(tables);
+    const result = costProduct(working, tables);
     answer.replaceChildren();
 
     if (result.foodCostPct === null) {
@@ -310,10 +318,12 @@ export function renderEditor({ product, draft = null, app }) {
     if (kind === 'recipe') {
       const recipe = tables.recipes[entry.recipeId];
       if (!recipe) return entry.recipeId ? t('fc.thisRecipeNoLonger') : '';
+      // ⚠️ NO MONEY UNDER A RECIPE LINE. Federico, 13 Sep 2026: «nella sezione "composto
+      // da" non mostrare il prezzo». What stays is what a person must ACT on — a recipe
+      // with no price, or only part of one — because a silent gap is a cost too low.
       const costed = costRecipe(recipe, tables);
       if (costed.pricePerKg === null) return t('fc.thisRecipeIsNot');
-      const line = (Number(entry.qtyKg) || 0) * costed.pricePerKg;
-      return `${formatRate(costed.pricePerKg)} / kg  ·  ${formatMoney(line)}${costed.partial ? `  ·  ${t('fc.partlyPriced')}` : ''}`;
+      return costed.partial ? t('fc.thisRecipePartlyPriced') : '';
     }
     const ingredient = tables.ingredients[entry.ingredientId];
     if (!ingredient) return entry.ingredientId ? t('fc.thisItemNoLonger') : '';
@@ -403,6 +413,81 @@ export function renderEditor({ product, draft = null, app }) {
   vatSelect.value = initialVat.select;
   vatOther.value = initialVat.other;
   vatOther.hidden = initialVat.select !== 'other';
+
+  // «Which products take which VAT rate», beside the menu. Federico, 13 Sep 2026:
+  // «accanto alla casella aliquota iva mettimi un tasto che apre una lista».
+  const guideBtn = el('button', {
+    class: 'fc-guide-btn', type: 'button', icon: GUIDE_SVG,
+    'aria-label': t('fc.vatGuide.open'), title: t('fc.vatGuide.open'),
+    onclick: () => openVatGuide({ country, currentRate: working.vatRate, onUse: applyVat, returnFocus: guideBtn }),
+  });
+
+  // A rate chosen in the guide goes through the SAME rule the menu opens with: a rate the
+  // country's menu does not offer — Italy's 5% — lands in «another rate», unchanged.
+  function applyVat(rate) {
+    const selection = vatSelection(rate, country);
+    working.vatRate = Number(rate);
+    vatSelect.value = selection.select;
+    vatOther.value = selection.other;
+    vatOther.hidden = selection.select !== 'other';
+    markDirty();
+    repaint();
+  }
+
+  const vatField = el('div', { class: 'fc-field' }, [
+    el('label', { class: 'fc-label', for: 'fcVat', text: t('fc.vatRate') }),
+    el('div', { class: 'fc-vat-row' }, [vatSelect, guideBtn]),
+  ]);
+
+  // ── The price to sell it at ────────────────────────────────────────────────
+  //
+  // Federico, 13 Sep 2026: with the cost known, type the VAT and the food cost you want,
+  // and the app says what to sell it at — on the SAME screen as the food cost of the price
+  // typed (his choice, over a switch between two modes).
+  const suggestion = el('div', { class: 'fc-suggest-price', tabindex: '-1', 'aria-live': 'polite' });
+
+  function paintSuggestion(tables) {
+    const cost = productionCost(working, tables);
+    suggestion.replaceChildren();
+    // Nothing to suggest until the product has a cost per piece or per kilo.
+    suggestion.hidden = cost.unitCost === null;
+    if (cost.unitCost === null) return;
+
+    const price = suggestedGrossPrice({ unitCost: cost.unitCost, vatRate: working.vatRate, targetPct: working.foodCostTarget });
+    if (price === null) {
+      suggestion.appendChild(el('p', { class: 'fc-note', text: t('fc.suggestedPriceNeeds') }));
+      return;
+    }
+    suggestion.appendChild(el('div', { class: 'fc-prodcost-head' }, [
+      el('span', { class: 'fc-answer-label', text: t('fc.suggestedPrice') }),
+      el('span', { class: 'fc-prodcost-value' }, [
+        el('span', { class: 'fc-prodcost-num', text: formatMoney(price) }),
+        el('span', { class: 'fc-prodcost-unit', text: t(cost.unit === 'kg' ? 'fc.perKg' : 'fc.perPiece') }),
+      ]),
+    ]));
+    suggestion.appendChild(el('p', { class: 'fc-answer-basis', text: t('fc.suggestedPriceBasis', {
+      vat: String(working.vatRate), target: String(working.foodCostTarget),
+    }) }));
+    // ⚠️ THE SAME RULE AS THE COST ABOVE: a partly priced product costs more than it says,
+    // so the price that would hit the target is HIGHER than this one — say so.
+    if (cost.partial) suggestion.appendChild(el('p', { class: 'fc-answer-partial', text: t('fc.suggestedPricePartial') }));
+
+    const inUse = working.sellingPrice !== null && Math.abs(working.sellingPrice - price) < 0.005;
+    suggestion.appendChild(inUse
+      ? el('p', { class: 'fc-note', text: t('fc.suggestedPriceInUse') })
+      : el('button', {
+        class: 'fc-use-price', type: 'button', text: t('fc.useThisPrice'),
+        onclick: () => {
+          working.sellingPrice = price;
+          priceInput.value = String(price);
+          markDirty();
+          repaint();
+          // The button has just gone (the price is now in use): keep the focus in the box
+          // that says so, not lost to the page.
+          try { suggestion.focus({ preventScroll: true }); } catch (e) { /* best-effort */ }
+        },
+      }));
+  }
 
   const targetInput = numberInput('fcTarget', t('fc.foodCostTargetAs'),
     working.foodCostTarget, v => { working.foodCostTarget = v; });
@@ -537,12 +622,15 @@ export function renderEditor({ product, draft = null, app }) {
     el('h2', { class: 'fc-section', text: t('fc.howItIsSold') }),
     field(t('fc.sold'), modeSelect),
     piecesField,
-    field(t('fc.sellingPriceVat', { currency: currentCurrency() }), priceInput,
-      t('fc.thePriceOnThe')),
-    field(t('fc.vatRate'), vatSelect),
+    // ⚠️ IN THE ORDER THE SUM IS DONE: the VAT and the target first, then the price —
+    // with, under it, the price those two suggest (13 Sep 2026).
+    vatField,
     vatOther,
     field(t('fc.foodCostTarget'), targetInput,
       t('fc.theShareOfThe')),
+    field(t('fc.sellingPriceVat', { currency: currentCurrency() }), priceInput,
+      t('fc.thePriceOnThe')),
+    suggestion,
 
     el('div', { class: 'fc-actions' }, [
       el('button', { class: 'fc-save', type: 'button', text: t('ui.save'), onclick: onSave }),

@@ -20,7 +20,6 @@ import { getProductHistory, canWriteRecipes, venueCountry, authReady } from './f
 import { confirmDialog } from './confirm-dialog.js';
 import { el } from './dom.js';
 import { productsUsingRecipe, draftFromRecipe } from './foodcost-model.js';
-import { costRecipe } from '../catalogue/recipe-cost-model.js';
 import { formatRate, formatMoney, pricePerKg } from '../price-model.js';
 // The address a recipe's «Apri nel Food cost» opens this page with, and the way back to
 // that recipe. From js/ root: the catalogue and Food cost share an address, never a folder.
@@ -272,16 +271,13 @@ const app = {
   country: venueCountry,
   setLeaveGuard: (fn) => { leaveGuard = fn; },
 
-  // The recipes a component can point at, named with what they cost so the wrong
-  // one is obvious at the moment of choosing.
+  // The recipes a component can point at, by NAME ONLY.
+  // ⚠️ NO PRICE IN THE CHOOSER. Federico, 13 Sep 2026: «nella sezione "composto da" non
+  // mostrare il prezzo». What the product costs is read in «Costo di produzione», once.
   recipeOptions() {
     return Object.values(getRecipes())
       .filter(r => r && String(r.name || '').trim())
-      .map(r => {
-        const costed = costRecipe(r, tables());
-        const rate = costed.pricePerKg === null ? t('fc.notPriced') : `${formatRate(costed.pricePerKg)} / kg`;
-        return { id: r.id, label: `${r.name} — ${rate}` };
-      })
+      .map(r => ({ id: r.id, label: String(r.name).trim() }))
       .sort((a, b) => a.label.localeCompare(b.label));
   },
 

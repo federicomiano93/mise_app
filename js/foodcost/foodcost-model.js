@@ -355,6 +355,28 @@ export function costProduct(product, tables = {}) {
   };
 }
 
+// The selling price, WITH VAT, at which this product's food cost would be exactly its
+// target — or null when the cost, the VAT rate or the target is missing.
+//
+// Federico, 13 Sep 2026: besides «I have the price, what is my food cost?», the screen
+// should answer «I know what it costs and the food cost I want: what do I sell it at?».
+// Both on one screen (his choice), from the same numbers.
+//
+// ⚠️ ROUNDED UP TO THE CENT, NEVER TO THE NEAREST. Rounding down by half a cent would
+// put the real food cost a hair ABOVE the target the price was asked for — a price
+// suggested to hit a target must hit it.
+// ⚠️ A VAT RATE OF 0 IS A REAL ANSWER (zeroOrMore), exactly as in netPrice().
+export function suggestedGrossPrice({ unitCost, vatRate, targetPct } = {}) {
+  const cost = positiveNumber(unitCost);
+  const rate = zeroOrMore(vatRate);
+  const target = positiveNumber(targetPct);
+  if (cost === null || rate === null || target === null || target > 100) return null;
+  const gross = cost / (target / 100) * (1 + rate / 100);
+  // The epsilon keeps a price that is already a whole number of cents from being pushed
+  // up by floating-point dust (2.4000000000000004 must stay 2.40).
+  return Math.ceil(roundTo(gross * 100, 6) - 1e-9) / 100;
+}
+
 // green / amber / red against the product's own target, or null when it has none —
 // a product with no target is not failing, it simply has nothing to be measured
 // against, and colouring it would be inventing a standard nobody set.

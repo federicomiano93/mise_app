@@ -62,6 +62,10 @@ const LABEL_FILES = [
   // ⚠️ IT IS ALSO A MODEL_ONLY FILE, which is the stricter half: it draws no screen,
   // so it has no interface words to keep and no reason to hold the dictionary at all.
   'js/catalogue/label-template-model.js',
+  // ⚠️ ADDED 13 Sep 2026 with the Food cost VAT guide. It names foods («pane», «bread»,
+  // «confectionery») and quotes each country's law in that country's language, so it is
+  // held to the same rule: nothing in it may reach the interface language.
+  'js/foodcost/vat-guide.js',
 ];
 
 // ⚠️ EVERY LABEL FILE THAT DRAWS A SCREEN ASSIGNS THE LANGUAGE ONCE, FROM THE COUNTRY,
@@ -118,6 +122,7 @@ const MODEL_ONLY = [
   'js/market.js',
   'js/catalogue/recipe-label-model.js',
   'js/catalogue/label-template-model.js',
+  'js/foodcost/vat-guide.js',
 ];
 
 test('the label MODEL files do not import the interface language at all', () => {
