@@ -283,6 +283,51 @@ select.fc-input, .fc-select {
 .fc-del-icon:hover { color: var(--fc-danger); }
 .fc-del-icon:focus-visible { outline: 2px solid var(--fc-accent); outline-offset: 2px; }
 
+/* ── «Composto da» as ONE card (13 Sep 2026) ───────────────────────────────
+   Federico: «impasto crudo e cotto va alla fine del riquadro bianco della sezione
+   "composto da"». The lines, the add button and — last — the weighings, in one frame. */
+.fc-madeof { display: flex; flex-direction: column; gap: 10px; padding: 10px; border: 1px solid var(--fc-border); border-radius: var(--fc-radius); background: var(--fc-surface); }
+.fc-madeof .fc-line { border: 0; border-bottom: 1px solid var(--fc-border); border-radius: 0; padding: 4px 2px 10px; }
+.fc-madeof .fc-add-row { background: var(--fc-surface); }
+.fc-weighs:empty { display: none; }
+.fc-weighs .fc-weigh:first-child { margin-top: 0; }
+.fc-weigh-title { margin: 0 0 6px; font-size: .78rem; font-weight: 600; color: var(--fc-text); }
+/* The name of what a line points at is a button: tapping it opens the chooser. It takes
+   the width; the quantity, the unit and the bin keep theirs. */
+.fc-line-name {
+  flex: 1;
+  min-width: 0;
+  min-height: 44px;
+  padding: 0 10px;
+  display: flex;
+  align-items: center;
+  border: 1.5px solid var(--fc-border);
+  border-radius: var(--radius-sm);
+  background: var(--fc-surface);
+  color: var(--fc-text);
+  font-family: var(--fc-font);
+  font-size: .92rem;
+  text-align: left;
+  cursor: pointer;
+}
+.fc-line-name span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fc-line-name:focus-visible { outline: 2px solid var(--fc-accent); outline-offset: 2px; }
+.fc-line-name.missing { color: var(--fc-danger); }
+/* The unit of an ingredient line: three short choices, so a narrow select. */
+.fc-line-row .fc-line-unit-select { flex: none; width: 6.5rem; }
+/* The amount sits on its own row under the name: at 296px a name, a quantity, a unit and
+   a bin on one line left the NAME — the one thing that must stay readable — 44px wide. */
+.fc-line-qtyrow { margin-top: 6px; }
+/* The name field's suggestion list sits under the field, in the flow. */
+.fc-field .pick-suggest { margin-top: 2px; }
+.fc-name-note { margin: 0; font-size: .78rem; color: var(--fc-warn); }
+.fc-name-note:empty { display: none; }
+/* What one pack holds: a number and its unit, on one row. */
+.fc-pack-row { display: flex; align-items: center; gap: 8px; }
+.fc-pack-row .fc-number { flex: 1; min-width: 0; }
+.fc-pack-row .fc-select { width: 6.5rem; flex-shrink: 0; }
+.fc-registry-link { align-self: flex-start; }
+
 /* ── Actions. Save is prominent, Delete is low-key (P20). ─────────────────── */
 .fc-actions { display: flex; flex-direction: column; gap: 10px; margin-top: 18px; }
 .fc-save {

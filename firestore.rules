@@ -664,9 +664,15 @@ service cloud.firestore {
 
         allow create, update: if canUse(lid, 'orders')
           && stampedFor(lid)
+          // ⚠️ 13 Sep 2026: an item may be PACKAGING (a box, a tray, a label) rather than
+          // food. Absent means food — every item written before this — and the value is
+          // closed, because the Catalogue and Food cost decide what to offer by it.
+          && (!('kind' in request.resource.data)
+              || request.resource.data.kind == null
+              || request.resource.data.kind in ['ingredient', 'packaging'])
           && request.resource.data.keys().hasOnly([
                'bakery', 'name', 'supplierId', 'brand', 'weight',
-               'category', 'unit', 'active',
+               'category', 'unit', 'active', 'kind',
                'priceUnit', 'pricePerUnit', 'packPrice', 'packSize',
                'unitWeightKg', 'priceUpdatedAt',
                'allergens', 'mayContain', 'allergensCheckedAt', 'nutrition',
@@ -1809,11 +1815,15 @@ service cloud.firestore {
       match /products/{id} {
         allow read: if cardAccess(lid, 'foodcost', 'foodcost') != 'none';
 
+        // ⚠️ 13 Sep 2026: a product may be sold BY THE PACK (packSize + packUnit), may have
+        // ingredients on its component lines (not validated here, like every line), and
+        // carries `model` — see the guard at the end of this rule.
         allow create, update: if cardAccess(lid, 'foodcost', 'foodcost') != 'none'
           && stampedFor(lid)
           && request.resource.data.keys().hasOnly([
                'bakery', 'name', 'components', 'packaging', 'sellingMode',
-               'piecesPerBatch', 'sellingPrice', 'vatRate', 'foodCostTarget'
+               'piecesPerBatch', 'packSize', 'packUnit', 'sellingPrice', 'vatRate',
+               'foodCostTarget', 'model'
              ])
           && request.resource.data.name is string
           && request.resource.data.name.size() > 0
@@ -1826,11 +1836,31 @@ service cloud.firestore {
                   && request.resource.data.packaging.size() <= 100))
           && (!('sellingMode' in request.resource.data)
               || request.resource.data.sellingMode == null
-              || request.resource.data.sellingMode in ['piece', 'weight'])
+              || request.resource.data.sellingMode in ['piece', 'weight', 'pack'])
           && (!('piecesPerBatch' in request.resource.data)
               || request.resource.data.piecesPerBatch == null
               || (request.resource.data.piecesPerBatch is number
                   && request.resource.data.piecesPerBatch > 0))
+          && (!('packSize' in request.resource.data)
+              || request.resource.data.packSize == null
+              || (request.resource.data.packSize is number
+                  && request.resource.data.packSize > 0
+                  && request.resource.data.packSize <= 1000000))
+          && (!('packUnit' in request.resource.data)
+              || request.resource.data.packUnit == null
+              || request.resource.data.packUnit in ['g', 'kg', 'pcs'])
+          && (!('model' in request.resource.data)
+              || (request.resource.data.model is int
+                  && request.resource.data.model >= 1
+                  && request.resource.data.model <= 100))
+          // ⚠️⚠️ THE OLD-PHONE GUARD, AND IT COSTS NO READ. A product is written WHOLE, so a
+          // phone still on the version before ingredient lines and packs would save it back
+          // without them and delete them in silence. Once a product carries `model`, a save
+          // must carry at least the same: the old phone is refused («could not save») and
+          // the product survives. A product nobody has saved since stays writable by all.
+          && (resource == null
+              || !('model' in resource.data)
+              || request.resource.data.get('model', 0) >= resource.data.model)
           && (!('sellingPrice' in request.resource.data)
               || request.resource.data.sellingPrice == null
               || (request.resource.data.sellingPrice is number
@@ -1884,7 +1914,7 @@ service cloud.firestore {
             && request.resource.data.vatRate is number
             && request.resource.data.vatRate >= 0
             && request.resource.data.vatRate <= 100
-            && request.resource.data.sellingMode in ['piece', 'weight']
+            && request.resource.data.sellingMode in ['piece', 'weight', 'pack']
             && request.resource.data.frozenPrices is map
             && request.resource.data.frozenPrices.size() <= 500;
 

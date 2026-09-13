@@ -7,9 +7,16 @@
 //   Catalogue turns that into what a RECIPE costs per kilo
 //   here      turns that into what a PRODUCT costs, and what it earns
 //
-// A product is a batch: some kilos of one or more recipes, plus packaging counted
-// in pieces. It is sold either BY THE PIECE (so the batch is divided by how many
-// come out of it) or BY WEIGHT (so the cost per kilo is the answer directly).
+// A product is a BATCH: some kilos of one or more recipes, and ingredients added
+// straight to it (Federico, 13 Sep 2026: a cream cornetto is «la ricetta cornetto, la
+// ricetta crema e l'ingrediente zucchero a velo»). It is sold BY THE PIECE (the batch is
+// divided by how many come out of it), BY WEIGHT (the cost per kilo is the answer
+// directly) or BY THE PACK (a pack holds so many grams, or so many pieces).
+//
+// ⚠️ PACKAGING IS COUNTED PER UNIT SOLD, NOT PER BATCH — one bag per piece, one tray and
+// one label per pack, so much film per kilo. Federico, 13 Sep 2026: «per pezzo o
+// confezione ma togli infornata non ha senso». Counted in production that day before
+// the change: 3 products, none with a packaging line, so no stored number changed meaning.
 //
 // ⚠️ THE SELLING PRICE IS TYPED GROSS — with VAT, the number on the label, the one
 // a person can check against the till. The food cost is worked out on the NET
@@ -73,9 +80,21 @@ export function vatSelection(rate, country) {
     : { select: 'other', other: String(value) };
 }
 
-// How the product is sold. There is no default: a product with neither cannot be
+// How the product is sold. There is no default: a product with none cannot be
 // costed, and it says so, rather than being silently treated as one of them.
-export const SELLING_MODES = Object.freeze(['piece', 'weight']);
+export const SELLING_MODES = Object.freeze(['piece', 'weight', 'pack']);
+
+// What one pack holds: a weight, or a number of pieces.
+export const PACK_UNITS = Object.freeze(['g', 'kg', 'pcs']);
+
+// The amount of an ingredient added straight to a product.
+export const LINE_UNITS = Object.freeze(['g', 'kg', 'pcs']);
+
+// ⚠️⚠️ THE SHAPE OF A PRODUCT, WRITTEN ON IT, AND firestore.rules READS IT. A product is
+// saved WHOLE, so a phone still on the version before ingredient lines and packs would
+// save it back without them — deleting them in silence. The rules refuse a save that
+// does not carry this over a product that does. Raise it only with a rules change.
+export const PRODUCT_MODEL = 2;
 
 // The traffic light. Green up to the target, amber up to a tenth above it, red
 // beyond. RELATIVE rather than a fixed number of points, so a 12% target and a 35%
@@ -91,6 +110,7 @@ export const BLOCKER_TEXT = Object.freeze({
   'no-components': 'fc.addAtLeastOne',
   'no-selling-mode': 'fc.chooseWhetherThisIs',
   'no-pieces': 'fc.sayHowManyPieces',
+  'no-pack-size': 'fc.sayWhatAPackHolds',
   'no-vat': 'fc.chooseTheVatRate',
   'no-price': 'fc.enterTheSellingPrice',
   'no-recipe-cost': 'fc.theRecipesInThis',
@@ -117,14 +137,29 @@ export function isSellingMode(mode) {
 
 // ── Normalisation (junk-safe: never throws, never yields NaN) ─────────────────
 
+// A line of what the product is made of: a RECIPE, in kilos per batch — the shape every
+// product has had since the start, kept exactly so it is written back unchanged — or an
+// INGREDIENT added straight to it, in grams, kilos or pieces per batch.
 function normalizeComponent(raw) {
   if (!raw || typeof raw !== 'object') return null;
+  if (raw.kind === 'ingredient') {
+    const ingredientId = raw.ingredientId != null ? String(raw.ingredientId).trim() : '';
+    if (!ingredientId) return null;
+    const qty = Number(raw.qty);
+    return {
+      kind: 'ingredient',
+      ingredientId,
+      qty: Number.isFinite(qty) && qty >= 0 ? qty : 0,
+      unit: LINE_UNITS.includes(raw.unit) ? raw.unit : 'g',
+    };
+  }
   const recipeId = raw.recipeId != null ? String(raw.recipeId).trim() : '';
   if (!recipeId) return null;
   const qtyKg = Number(raw.qtyKg);
   return { recipeId, qtyKg: Number.isFinite(qtyKg) && qtyKg >= 0 ? qtyKg : 0 };
 }
 
+// One packaging item, in pieces PER UNIT SOLD.
 function normalizePackaging(raw) {
   if (!raw || typeof raw !== 'object') return null;
   const ingredientId = raw.ingredientId != null ? String(raw.ingredientId).trim() : '';
@@ -136,6 +171,10 @@ function normalizePackaging(raw) {
 // A product from arbitrary (Firestore) input. Missing values stay missing — null,
 // not 0 — because "no VAT rate chosen" and "zero-rated" are different answers and
 // only one of them can be costed.
+//
+// ⚠️ EVERY FIELD A PRODUCT CARRIES MUST BE NAMED HERE. The store normalises before it
+// caches and the editor copies from the result, so a field left out is dropped by THIS
+// version of the app on its own next save — not only by an old phone.
 export function normalizeProduct(raw) {
   if (!raw || typeof raw !== 'object') return null;
   return {
@@ -145,9 +184,12 @@ export function normalizeProduct(raw) {
     packaging: (Array.isArray(raw.packaging) ? raw.packaging : []).map(normalizePackaging).filter(Boolean),
     sellingMode: isSellingMode(raw.sellingMode) ? raw.sellingMode : null,
     piecesPerBatch: positiveNumber(raw.piecesPerBatch),
+    packSize: positiveNumber(raw.packSize),
+    packUnit: PACK_UNITS.includes(raw.packUnit) ? raw.packUnit : null,
     sellingPrice: positiveNumber(raw.sellingPrice),
     vatRate: zeroOrMore(raw.vatRate),
     foodCostTarget: positiveNumber(raw.foodCostTarget),
+    model: Number.isInteger(raw.model) && raw.model > 0 ? raw.model : null,
   };
 }
 
@@ -167,15 +209,47 @@ export function netPrice(gross, vatRate) {
   return roundTo(price / (1 + rate / 100), 4);
 }
 
-// What one batch costs, and what it weighs.
+// What an ingredient added straight to a product costs, and weighs, for one batch:
+//
+//   { cost, kg, reason }   — cost null, and a reason, when it cannot be costed
+//
+// ⚠️ AN UNPRICED LINE ADDS NO WEIGHT EITHER, the same rule as an unpriced recipe: a
+// product would otherwise look heavier and cheaper per kilo than it is.
+// ⚠️ A LINE IN PIECES NEEDS A PRICE PER PIECE — or, bought by the kilo, what one piece
+// weighs. «3 pieces» of something bought by weight means nothing without it.
+// ⚠️ A PIECE WITH NO KNOWN WEIGHT ADDS ITS COST AND NO WEIGHT: a decoration bought by the
+// piece is costed exactly, and only a product sold by the kilo is a touch lighter for it.
+export function ingredientLineCost(line, ingredient) {
+  const ing = ingredient || {};
+  const qty = Number(line && line.qty) || 0;
+  const pieceKg = positiveNumber(ing.unitWeightKg);
+
+  if (line && line.unit === 'pcs') {
+    const each = ing.priceUnit === 'pcs' ? positiveNumber(ing.pricePerUnit) : null;
+    if (each !== null) {
+      return { cost: roundTo(qty * each, 4), kg: pieceKg === null ? 0 : roundTo(qty * pieceKg, 6), reason: null };
+    }
+    const rate = ingredientPricePerKg(ing);
+    if (rate !== null && pieceKg !== null) {
+      return { cost: roundTo(qty * pieceKg * rate, 4), kg: roundTo(qty * pieceKg, 6), reason: null };
+    }
+    return { cost: null, kg: 0, reason: positiveNumber(ing.pricePerUnit) === null ? 'no-ingredient-price' : 'no-piece-price' };
+  }
+
+  const kg = line && line.unit === 'kg' ? qty : qty / 1000;
+  const rate = ingredientPricePerKg(ing);
+  if (rate === null) {
+    const pricedByPiece = ing.priceUnit === 'pcs' && positiveNumber(ing.pricePerUnit) !== null;
+    return { cost: null, kg: 0, reason: pricedByPiece ? 'no-piece-weight' : 'no-ingredient-price' };
+  }
+  return { cost: roundTo(kg * rate, 4), kg: roundTo(kg, 6), reason: null };
+}
+
+// What one batch costs, and what it weighs — its RECIPES and INGREDIENTS. Packaging is
+// not in it: it is counted per unit sold (packagingPerUnit below).
 //
 // Returns { cost, kg, partial, rows } — `rows` explains each line, so the screen
-// can say WHICH recipe has no price rather than only that something has none.
-//
-// ⚠️ PACKAGING ADDS COST BUT NOT WEIGHT. A box is not part of what is sold by the
-// kilo, and counting it would make a product look heavier and cheaper per kilo
-// than it is. Packaging is also costed only when the ingredient is bought BY THE
-// PIECE, because "3 boxes" of something priced per kilo means nothing.
+// can say WHICH line has no price rather than only that something has none.
 export function batchTotals(product, tables = {}) {
   const p = normalizeProduct(product) || { components: [], packaging: [] };
   const recipesById = tables.recipes || {};
@@ -185,6 +259,25 @@ export function batchTotals(product, tables = {}) {
   const rows = [];
 
   p.components.forEach(component => {
+    if (component.kind === 'ingredient') {
+      const ingredient = lookup(tables.ingredients, component.ingredientId);
+      if (!ingredient) {
+        partial = true;
+        rows.push({ kind: 'ingredient', id: component.ingredientId, name: '', qty: component.qty, unit: component.unit, cost: null, reason: 'missing-ingredient' });
+        return;
+      }
+      const line = ingredientLineCost(component, ingredient);
+      if (line.cost === null) {
+        partial = true;
+        rows.push({ kind: 'ingredient', id: component.ingredientId, name: ingredient.name || '', qty: component.qty, unit: component.unit, cost: null, reason: line.reason });
+        return;
+      }
+      cost += line.cost;
+      kg += line.kg;
+      rows.push({ kind: 'ingredient', id: component.ingredientId, name: ingredient.name || '', qty: component.qty, unit: component.unit, cost: line.cost, reason: null });
+      return;
+    }
+
     const recipe = lookup(recipesById, component.recipeId);
     if (!recipe) {
       partial = true;
@@ -206,6 +299,22 @@ export function batchTotals(product, tables = {}) {
     rows.push({ kind: 'recipe', id: component.recipeId, name: recipe.name, qty: component.qtyKg, cost: lineCost, reason: null });
   });
 
+  return { cost: roundTo(cost, 4), kg: roundTo(kg, 4), partial, rows };
+}
+
+// What the packaging of ONE UNIT SOLD costs — one piece, one pack or one kilo.
+//
+//   { cost, partial, rows }
+//
+// ⚠️ PACKAGING ADDS COST BUT NOT WEIGHT. A box is not part of what is sold by the kilo.
+// ⚠️ ONLY WHAT IS BOUGHT BY THE PIECE, because «3 boxes» of something priced per kilo
+// means nothing — left out and named, never guessed at.
+export function packagingPerUnit(product, tables = {}) {
+  const p = normalizeProduct(product) || { packaging: [] };
+  let cost = 0;
+  let partial = false;
+  const rows = [];
+
   p.packaging.forEach(item => {
     const ingredient = lookup(tables.ingredients, item.ingredientId);
     if (!ingredient) {
@@ -213,7 +322,6 @@ export function batchTotals(product, tables = {}) {
       rows.push({ kind: 'packaging', id: item.ingredientId, name: '', qty: item.qtyPcs, cost: null, reason: 'missing-ingredient' });
       return;
     }
-    // Priced per piece, or it cannot be counted in pieces.
     const each = ingredient.priceUnit === 'pcs' ? positiveNumber(ingredient.pricePerUnit) : null;
     if (each === null) {
       partial = true;
@@ -225,7 +333,7 @@ export function batchTotals(product, tables = {}) {
     rows.push({ kind: 'packaging', id: item.ingredientId, name: ingredient.name || '', qty: item.qtyPcs, cost: lineCost, reason: null });
   });
 
-  return { cost: roundTo(cost, 4), kg: roundTo(kg, 4), partial, rows };
+  return { cost: roundTo(cost, 4), partial, rows };
 }
 
 function lookup(table, id) {
@@ -234,39 +342,77 @@ function lookup(table, id) {
   return Object.prototype.hasOwnProperty.call(table, id) ? table[id] : null;
 }
 
-// What one piece (or one kilo) costs to make — or null when the batch cannot be divided
-// yet: no cost at all, no way of selling chosen, or no pieces said for a piece product.
-//
-// ⚠️ THE ONE PLACE THIS DIVISION IS DONE. costProduct() below asks here too, so the cost
-// shown on its own and the cost inside the food cost % can never be two numbers.
-function unitCostOf(p, batch) {
-  if (!p || !(batch.cost > 0)) return null;
-  if (p.sellingMode === 'piece' && p.piecesPerBatch !== null) return roundTo(batch.cost / p.piecesPerBatch, 4);
-  if (p.sellingMode === 'weight' && batch.kg > 0) return roundTo(batch.cost / batch.kg, 4);
+// Sold by weight, or by a pack that holds a weight — the two that divide by kilos.
+function byWeight(p) {
+  return p.sellingMode === 'weight'
+    || (p.sellingMode === 'pack' && p.packSize !== null && (p.packUnit === 'g' || p.packUnit === 'kg'));
+}
+
+// How many units of sale one batch makes — pieces, kilos or packs — or null while it
+// cannot be known: no way of selling chosen, no pieces said, no pack size, no weight.
+export function unitsPerBatch(product, batch) {
+  const p = product && product.components ? product : normalizeProduct(product);
+  if (!p) return null;
+  const kg = batch && batch.kg > 0 ? batch.kg : null;
+  if (p.sellingMode === 'piece') return p.piecesPerBatch;
+  if (p.sellingMode === 'weight') return kg;
+  if (p.sellingMode === 'pack') {
+    if (p.packSize === null || !p.packUnit) return null;
+    if (p.packUnit === 'pcs') return p.piecesPerBatch === null ? null : p.piecesPerBatch / p.packSize;
+    const packKg = p.packUnit === 'g' ? p.packSize / 1000 : p.packSize;
+    return kg === null ? null : kg / packKg;
+  }
   return null;
+}
+
+// One unit's share of an amount spent on the whole batch — or null when the batch cannot
+// be divided yet. ⚠️ THE ONE PLACE THIS DIVISION IS DONE: the materials use it, and so
+// will anything else a batch costs (the labour), so no two figures on the screen can be
+// divided by two different numbers.
+function perUnitOf(p, batch, amount) {
+  const units = unitsPerBatch(p, batch);
+  return units > 0 ? amount / units : null;
+}
+
+// What one unit sold costs to make: its share of the batch, plus its own packaging.
+function unitCostOf(p, batch, packaging) {
+  if (!p || !(batch.cost > 0)) return null;
+  const share = perUnitOf(p, batch, batch.cost);
+  if (share === null) return null;
+  return roundTo(share + (packaging ? packaging.cost : 0), 4);
+}
+
+function unitOf(p) {
+  return p.sellingMode === 'weight' ? 'kg' : p.sellingMode === 'pack' ? 'pack' : 'piece';
 }
 
 // What making this product costs, BEFORE anybody has said what it sells for.
 //
-//   { batchCost, unitCost, unit, partial, batch }
+//   { batchCost, unitCost, unit, partial, batch, packaging }
 //
 // Federico, 13 Sep 2026: the cost of a product belongs in Food cost, and it has to be
 // readable as soon as the recipe and its kilos are in — not only once a selling price
 // and a VAT rate have been typed, which is when costProduct() below starts answering.
 //
 // `batchCost` is null when no line has a cost at all (never 0: a product that reads as
-// costing nothing is the one wrong answer this screen must not give). `unit` is 'piece'
-// or 'kg' exactly when `unitCost` is a number.
+// costing nothing is the one wrong answer this screen must not give). It is the batch's
+// recipes and ingredients, plus the packaging of every unit it makes once that number is
+// known. `unit` is 'piece', 'kg' or 'pack' exactly when `unitCost` is a number.
 export function productionCost(product, tables = {}) {
   const p = normalizeProduct(product);
   const batch = batchTotals(p, tables);
-  const unitCost = unitCostOf(p, batch);
+  const packaging = packagingPerUnit(p, tables);
+  const units = p ? unitsPerBatch(p, batch) : null;
+  const unitCost = unitCostOf(p, batch, packaging);
   return {
-    batchCost: batch.cost > 0 ? batch.cost : null,
+    batchCost: batch.cost > 0 ? roundTo(batch.cost + (units > 0 ? packaging.cost * units : 0), 4) : null,
     unitCost,
-    unit: unitCost === null ? null : p.sellingMode === 'piece' ? 'piece' : 'kg',
-    partial: batch.partial,
+    unit: unitCost === null ? null : unitOf(p),
+    // ⚠️ Packaging that cannot yet be multiplied out — no way of selling said — is missing
+    // from the batch figure, so the batch figure is too LOW, and says so.
+    partial: batch.partial || packaging.partial || (packaging.rows.length > 0 && !(units > 0)),
     batch,
+    packaging,
   };
 }
 
@@ -298,14 +444,14 @@ export function draftFromRecipe(recipe) {
     name: String(recipe.name ?? '').trim(),
     components: [{ recipeId, qtyKg: 0 }],
     packaging: [],
-    sellingMode: null, piecesPerBatch: null, sellingPrice: null,
+    sellingMode: null, piecesPerBatch: null, packSize: null, packUnit: null, sellingPrice: null,
     vatRate: null, foodCostTarget: null,
   };
 }
 
 // The whole answer for one product.
 //
-//   { unitCost, netUnitPrice, foodCostPct, margin, status, partial, blockers, batch }
+//   { unitCost, netUnitPrice, foodCostPct, margin, status, partial, blockers, batch, packaging }
 //
 // foodCostPct is null whenever anything needed is missing, and `blockers` says
 // what. It is never guessed and never shown as 0 — a food cost of nothing would be
@@ -313,28 +459,34 @@ export function draftFromRecipe(recipe) {
 export function costProduct(product, tables = {}) {
   const p = normalizeProduct(product);
   const batch = batchTotals(p, tables);
+  const packaging = packagingPerUnit(p, tables);
   const blockers = [];
 
   if (!p || !p.components.length) blockers.push('no-components');
   if (p && !p.sellingMode) blockers.push('no-selling-mode');
   if (p && p.sellingMode === 'piece' && p.piecesPerBatch === null) blockers.push('no-pieces');
+  if (p && p.sellingMode === 'pack') {
+    if (p.packSize === null || !p.packUnit) blockers.push('no-pack-size');
+    else if (p.packUnit === 'pcs' && p.piecesPerBatch === null) blockers.push('no-pieces');
+  }
   if (p && p.vatRate === null) blockers.push('no-vat');
   if (p && p.sellingPrice === null) blockers.push('no-price');
 
   // A batch of nothing cannot be divided. Reported as its own reason rather than
   // folded into "no components": the components may be there and simply unpriced.
   if (p && p.components.length && batch.cost <= 0) blockers.push('no-recipe-cost');
-  if (p && p.sellingMode === 'weight' && batch.kg <= 0) blockers.push('no-weight');
+  if (p && byWeight(p) && batch.kg <= 0) blockers.push('no-weight');
 
   const base = {
     unitCost: null, netUnitPrice: null, foodCostPct: null, margin: null,
-    status: null, partial: batch.partial, blockers, batch,
+    status: null, partial: batch.partial || packaging.partial, blockers, batch, packaging,
   };
   if (blockers.length) return base;
 
   // The blockers above guarantee a number here — and it is the same division the
   // production cost on its own uses.
-  const unitCost = unitCostOf(p, batch);
+  const unitCost = unitCostOf(p, batch, packaging);
+  if (unitCost === null) return { ...base, blockers: ['no-recipe-cost'] };
 
   const netUnitPrice = netPrice(p.sellingPrice, p.vatRate);
   if (netUnitPrice === null || netUnitPrice <= 0) {
@@ -348,7 +500,7 @@ export function costProduct(product, tables = {}) {
     unitCost,
     netUnitPrice,
     foodCostPct,
-    // What one piece (or one kilo) actually leaves behind, in pounds. The
+    // What one piece (or one kilo, or one pack) actually leaves behind. The
     // percentage is the comparable number; this is the one that pays the rent.
     margin: roundTo(netUnitPrice - unitCost, 4),
     status: statusFor(foodCostPct, p.foodCostTarget),
@@ -435,6 +587,7 @@ export function snapshotWorthTaking(before, after) {
   if (a.vatRate !== b.vatRate) return true;             // it changes the net price
   if (a.sellingMode !== b.sellingMode) return true;
   if (a.piecesPerBatch !== b.piecesPerBatch) return true;
+  if (a.packSize !== b.packSize || a.packUnit !== b.packUnit) return true;
   return compositionKey(a) !== compositionKey(b);
 }
 
@@ -443,7 +596,9 @@ export function snapshotWorthTaking(before, after) {
 // nobody means anything by it.
 function compositionKey(product) {
   const parts = [
-    ...product.components.map(c => `r:${c.recipeId}:${c.qtyKg}`),
+    ...product.components.map(c => (c.kind === 'ingredient'
+      ? `i:${c.ingredientId}:${c.qty}:${c.unit}`
+      : `r:${c.recipeId}:${c.qtyKg}`)),
     ...product.packaging.map(p => `p:${p.ingredientId}:${p.qtyPcs}`),
   ];
   return parts.sort().join('|');
@@ -470,12 +625,21 @@ export function productSnapshot(product, result, nowIso, tables = {}) {
 }
 
 // What every ingredient this product depends on cost at this moment, flattened to
-// { ingredientId: pricePerKg }. Recipes are walked so an ingredient two levels down
-// is captured too — otherwise the frozen record could not explain a change that
-// came from inside a sub-recipe.
+// { ingredientId: pricePerKg } — or the price of one piece, for what is bought by the
+// piece. Recipes are walked so an ingredient two levels down is captured too —
+// otherwise the frozen record could not explain a change that came from inside a
+// sub-recipe.
 function frozenPricesFor(product, tables) {
   const out = {};
   const seen = new Set();
+
+  const freezeIngredient = id => {
+    const ingredient = lookup(tables.ingredients, id);
+    const rate = ingredientPricePerKg(ingredient);
+    if (rate !== null) { out[id] = rate; return; }
+    const each = ingredient && ingredient.priceUnit === 'pcs' ? positiveNumber(ingredient.pricePerUnit) : null;
+    if (each !== null) out[id] = each;
+  };
 
   const walkRecipe = (recipeId, depth) => {
     if (depth > 4 || seen.has(recipeId)) return;
@@ -491,7 +655,10 @@ function frozenPricesFor(product, tables) {
     });
   };
 
-  (product.components || []).forEach(c => walkRecipe(c.recipeId, 1));
+  (product.components || []).forEach(c => {
+    if (c.kind === 'ingredient') freezeIngredient(c.ingredientId);
+    else walkRecipe(c.recipeId, 1);
+  });
   (product.packaging || []).forEach(item => {
     const ingredient = lookup(tables.ingredients, item.ingredientId);
     const each = ingredient && ingredient.priceUnit === 'pcs' ? positiveNumber(ingredient.pricePerUnit) : null;

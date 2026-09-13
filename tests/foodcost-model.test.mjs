@@ -11,7 +11,7 @@ import assert from 'node:assert/strict';
 import {
   vatRatesFor, SELLING_MODES, AMBER_MULTIPLIER, BLOCKER_TEXT,
   zeroOrMore, isSellingMode, normalizeProduct, normalizeProducts,
-  netPrice, batchTotals, costProduct, statusFor, sortByMargin,
+  netPrice, batchTotals, packagingPerUnit, costProduct, statusFor, sortByMargin,
   snapshotWorthTaking, productSnapshot,
 } from '../js/foodcost/foodcost-model.js';
 
@@ -86,21 +86,35 @@ test('a batch costs the sum of its recipes, and weighs what they weigh', () => {
   assert.equal(out.partial, false);
 });
 
+test('⚠️ packaging is counted PER UNIT SOLD: it adds to each piece, not to the batch', () => {
+  // Federico, 13 Sep 2026: «per pezzo o confezione ma togli infornata non ha senso».
+  // One box per piece: £0.32 of dough + £0.12 of box. The batch itself is untouched.
+  const boxed = product({ packaging: [{ ingredientId: 'BOX', qtyPcs: 1 }] });
+  assert.equal(batchTotals(boxed, TABLES).cost, 32, 'the batch holds recipes and ingredients only');
+  assert.equal(packagingPerUnit(boxed, TABLES).cost, 0.12);
+  assert.equal(costProduct(boxed, TABLES).unitCost, 0.44);
+});
+
 test('packaging adds cost but NOT weight', () => {
   // A box is not part of what is sold by the kilo. Counting it would make the
   // product look heavier and cheaper per kilo than it is.
   const out = batchTotals(product({ packaging: [{ ingredientId: 'BOX', qtyPcs: 100 }] }), TABLES);
-  assert.equal(out.cost, 44);   // 32 + 100 × £0.12
   assert.equal(out.kg, 10, 'the boxes must not add weight');
+  const byWeight = costProduct(product({
+    sellingMode: 'weight', sellingPrice: 12, piecesPerBatch: null, packaging: [{ ingredientId: 'BOX', qtyPcs: 1 }],
+  }), TABLES);
+  assert.equal(byWeight.unitCost, 3.32, '£3.20 a kilo of dough, plus one box for every kilo sold');
 });
 
 test('packaging priced by weight cannot be counted in pieces', () => {
   // "3 bags" of something bought per kilo means nothing, so it is left out and
   // named rather than guessed at.
-  const out = batchTotals(product({ packaging: [{ ingredientId: 'BAGS', qtyPcs: 100 }] }), TABLES);
-  assert.equal(out.cost, 32);
+  const out = packagingPerUnit(product({ packaging: [{ ingredientId: 'BAGS', qtyPcs: 1 }] }), TABLES);
+  assert.equal(out.cost, 0);
   assert.equal(out.partial, true);
   assert.equal(out.rows.at(-1).reason, 'no-piece-price');
+  assert.equal(costProduct(product({ packaging: [{ ingredientId: 'BAGS', qtyPcs: 1 }] }), TABLES).partial, true,
+    'and the answer says it is too low');
 });
 
 test('an unpriced recipe is left out of the cost and named', () => {
@@ -188,6 +202,7 @@ test('each blocker names one thing to go and do', () => {
     [{ components: [] }, 'no-components'],
     [{ sellingMode: null }, 'no-selling-mode'],
     [{ sellingMode: 'piece', piecesPerBatch: null }, 'no-pieces'],
+    [{ sellingMode: 'pack', packSize: null, packUnit: null }, 'no-pack-size'],
     [{ vatRate: null }, 'no-vat'],
     [{ sellingPrice: null }, 'no-price'],
   ];
@@ -275,6 +290,9 @@ test('missing values stay missing, never become zero', () => {
   assert.equal(out.vatRate, null);
   assert.equal(out.sellingPrice, null);
   assert.equal(out.sellingMode, null);
+  assert.equal(out.packSize, null);
+  assert.equal(out.packUnit, null);
+  assert.equal(out.model, null);
   assert.deepEqual(out.components, []);
 });
 
@@ -291,8 +309,9 @@ test('junk rows are dropped rather than producing NaN', () => {
   assert.deepEqual(out.components, [{ recipeId: 'A', qtyKg: 0 }]);
   assert.deepEqual(out.packaging, [{ ingredientId: 'B', qtyPcs: 0 }]);
   assert.equal(out.sellingMode, null);
-  assert.deepEqual([...SELLING_MODES], ['piece', 'weight']);
+  assert.deepEqual([...SELLING_MODES], ['piece', 'weight', 'pack']);
   assert.equal(isSellingMode('piece'), true);
+  assert.equal(isSellingMode('pack'), true);
   assert.equal(isSellingMode('pezzo'), false);
 });
 

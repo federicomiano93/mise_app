@@ -21,6 +21,8 @@ import { confirmDialog } from './confirm-dialog.js';
 import { el } from './dom.js';
 import { productsUsingRecipe, draftFromRecipe } from './foodcost-model.js';
 import { formatRate, formatMoney, pricePerKg } from '../price-model.js';
+// Food or packaging? From js/ root, where the registry that files it asks the same question.
+import { isPackaging } from '../ingredient-kind.js';
 // The address a recipe's «Apri nel Food cost» opens this page with, and the way back to
 // that recipe. From js/ root: the catalogue and Food cost share an address, never a folder.
 import { recipeIdFromHash, recipeHref } from '../recipe-link.js';
@@ -281,20 +283,32 @@ const app = {
       .sort((a, b) => a.label.localeCompare(b.label));
   },
 
-  // Packaging can only be counted in pieces, so anything priced another way is
-  // shown but flagged — hiding it would look like the item had been deleted.
+  // The ingredients a product can have added straight to it — never packaging, which has
+  // its own section. By name, with the pack weight that tells two similar ones apart, and
+  // ⚠️ NO PRICE: «nella sezione "composto da" non mostrare il prezzo».
+  ingredientOptions() {
+    return Object.values(getIngredients())
+      .filter(i => i && i.active !== false && !isPackaging(i) && String(i.name || '').trim())
+      .map(i => ({ id: i.id, name: String(i.name).trim(), meta: String(i.weight || '').trim() }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  },
+
+  // The packaging a product can use: the items filed as PACKAGING in «Fornitori e
+  // ingredienti» (Federico, 13 Sep 2026: «la voce imballaggio deve puntare ad imballaggio»).
+  // Packaging is counted in pieces, so anything priced another way is shown but flagged —
+  // hiding it would look like the item had been deleted.
   packagingOptions() {
     return Object.values(getIngredients())
-      .filter(i => i && i.active !== false && String(i.name || '').trim())
+      .filter(i => i && i.active !== false && isPackaging(i) && String(i.name || '').trim())
       .map(i => {
         const each = i.priceUnit === 'pcs' ? Number(i.pricePerUnit) : null;
         const perKg = pricePerKg(i);
         const note = each ? t('fc.priceEach', { price: formatRate(each) })
           : perKg !== null ? t('fc.pricedByWeight')
             : t('fc.notPriced');
-        return { id: i.id, label: `${i.name} — ${note}` };
+        return { id: i.id, name: String(i.name).trim(), meta: note };
       })
-      .sort((a, b) => a.label.localeCompare(b.label));
+      .sort((a, b) => a.name.localeCompare(b.name));
   },
 };
 

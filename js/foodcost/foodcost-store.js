@@ -8,7 +8,7 @@
 // best-effort, and a REJECTED write is rolled back and surfaced.
 
 import { t } from '../i18n.js';
-import { normalizeProduct, normalizeProducts } from './foodcost-model.js';
+import { normalizeProduct, normalizeProducts, PRODUCT_MODEL } from './foodcost-model.js';
 import {
   watchProducts, watchRecipes, watchIngredients,
   saveProductWithSnapshot, removeProduct, newProductId, saveRecipeLoss,
@@ -143,9 +143,18 @@ export function saveProduct(product, snapshot, lossPatches) {
     packaging: product.packaging || [],
     sellingMode: product.sellingMode ?? null,
     piecesPerBatch: product.piecesPerBatch ?? null,
+    // «A confezione» (13 Sep 2026): what one pack holds, and in what unit.
+    packSize: product.packSize ?? null,
+    packUnit: product.packUnit ?? null,
     sellingPrice: product.sellingPrice ?? null,
     vatRate: product.vatRate ?? null,
     foodCostTarget: product.foodCostTarget ?? null,
+    // ⚠️⚠️ WHICH SHAPE OF PRODUCT THIS IS, AND THE RULES READ IT. A product is written
+    // WHOLE, so a phone still on the previous version would save it back without the
+    // fields it does not know — ingredient lines, the pack — and delete them in silence.
+    // firestore.rules refuses a save without `model` over a product that has one, so that
+    // phone gets «could not save» instead of quietly destroying the product.
+    model: PRODUCT_MODEL,
   };
   const prev = products.find(p => p.id === id) || null;
 
