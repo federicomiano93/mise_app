@@ -9,7 +9,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  VAT_RATES, SELLING_MODES, AMBER_MULTIPLIER, BLOCKER_TEXT,
+  vatRatesFor, SELLING_MODES, AMBER_MULTIPLIER, BLOCKER_TEXT,
   zeroOrMore, isSellingMode, normalizeProduct, normalizeProducts,
   netPrice, batchTotals, costProduct, statusFor, sortByMargin,
   snapshotWorthTaking, productSnapshot,
@@ -67,7 +67,7 @@ test('zero-rated is a real answer, and leaves the price alone', () => {
   assert.equal(zeroOrMore(''), null);
   assert.equal(zeroOrMore(null), null);
   assert.equal(zeroOrMore(-1), null);
-  assert.deepEqual([...VAT_RATES], [20, 5, 0]);
+  assert.deepEqual(vatRatesFor('GB').map(choice => choice.rate), [20, 5, 0]);
 });
 
 test('a missing price or rate produces no net price at all', () => {

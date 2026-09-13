@@ -20,15 +20,42 @@ import { t } from '../i18n.js';
 import { pricePerKg as ingredientPricePerKg, roundTo, positiveNumber } from '../price-model.js';
 import { costRecipe } from '../catalogue/recipe-cost-model.js';
 
-// UK rates: standard, reduced, zero. Not a closed list — a free field sits beside
-// the choices, because the rate that applies to a bakery product is a question for
-// an accountant, not for this file.
+// The VAT rates offered as CHOICES, per country. Federico, 13 Sep 2026: «dammi aliquota
+// iva per quelle italiane». Not a closed list — a free field sits beside the choices,
+// because the rate that applies to a bakery product is a question for an accountant,
+// not for this file.
 //
-// ⚠️ ZERO IS A REAL, COMMON ANSWER HERE, not a missing one. Most bread and cakes
-// sold to take away are zero-rated in the UK, while the same thing eaten in is
-// standard-rated — which is exactly why the rate lives on each PRODUCT. Anything
-// that treats 0 as "not filled in" will refuse to cost the bakery's main line.
-export const VAT_RATES = Object.freeze([20, 5, 0]);
+// ⚠️ THE COUNTRY IS THE VENUE'S (js/market.js countryOf), NEVER THE INTERFACE LANGUAGE:
+// an Italian bakery run in English still charges Italian IVA — the same rule the
+// currency follows.
+// ⚠️ ZERO IS A REAL, COMMON ANSWER IN THE UK, not a missing one. Most bread and cakes
+// sold to take away are zero-rated there, while the same thing eaten in is standard-
+// rated — which is exactly why the rate lives on each PRODUCT. Anything that treats 0
+// as "not filled in" will refuse to cost the bakery's main line.
+// ⚠️ A RATE ALREADY STORED THAT IS NOT IN ITS COUNTRY'S LIST IS NEVER CHANGED: the editor
+// shows it in the «another rate» field. A product saved at 20% stays at 20%.
+export const VAT_RATES_BY_COUNTRY = Object.freeze({
+  GB: Object.freeze([
+    Object.freeze({ rate: 20, key: 'fc.vat.standard' }),
+    Object.freeze({ rate: 5, key: 'fc.vat.reduced' }),
+    Object.freeze({ rate: 0, key: 'fc.vat.zero' }),
+  ]),
+  IT: Object.freeze([
+    Object.freeze({ rate: 22, key: 'fc.vat.standard' }),
+    Object.freeze({ rate: 10, key: 'fc.vat.reduced' }),
+    Object.freeze({ rate: 4, key: 'fc.vat.minimum' }),
+  ]),
+});
+
+// The choices for a venue's country. ⚠️ An unknown country gets the UK's — the app's
+// historical list, and the direction js/currency.js falls back in. Unlike a label, a
+// wrong CHOICE cannot produce a wrong number: the rate stored is whatever is picked or
+// typed, and the free field is always there, so it costs a tap and never a margin.
+export function vatRatesFor(country) {
+  return Object.prototype.hasOwnProperty.call(VAT_RATES_BY_COUNTRY, country)
+    ? VAT_RATES_BY_COUNTRY[country]
+    : VAT_RATES_BY_COUNTRY.GB;
+}
 
 // How the product is sold. There is no default: a product with neither cannot be
 // costed, and it says so, rather than being silently treated as one of them.

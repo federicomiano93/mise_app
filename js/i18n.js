@@ -1278,10 +1278,12 @@ const DICTIONARIES = Object.freeze({
     'fc.anotherRate': 'Another rate…',
     // ⚠️ Until 13 Sep 2026 these were written into foodcost-editor.js and foodcost-main.js
     // in English, so an Italian venue read «20% — standard» and «not priced» in its menus.
-    // The RATES are still the UK's three — only their words are translated here.
-    'fc.vat.standard': '20% — standard',
-    'fc.vat.reduced': '5% — reduced',
-    'fc.vat.zero': '0% — zero-rated',
+    // ⚠️ THE RATES ARE NOT HERE: they follow the venue's COUNTRY (VAT_RATES_BY_COUNTRY in
+    // foodcost-model.js), and {rate} is filled in from that table.
+    'fc.vat.standard': '{rate}% — standard',
+    'fc.vat.reduced': '{rate}% — reduced',
+    'fc.vat.minimum': '{rate}% — super-reduced',
+    'fc.vat.zero': '{rate}% — zero-rated',
     'fc.notPriced': 'not priced',
     'fc.pricedByWeight': 'priced by weight',
     'fc.priceEach': '{price} each',
@@ -3354,9 +3356,10 @@ const DICTIONARIES = Object.freeze({
     'fc.sold': 'Venduto',
     'fc.sellingPriceVat': 'Prezzo di vendita, IVA inclusa ({currency})',
     'fc.anotherRate': 'Un’altra aliquota…',
-    'fc.vat.standard': '20% — ordinaria',
-    'fc.vat.reduced': '5% — ridotta',
-    'fc.vat.zero': '0% — aliquota zero',
+    'fc.vat.standard': '{rate}% — ordinaria',
+    'fc.vat.reduced': '{rate}% — ridotta',
+    'fc.vat.minimum': '{rate}% — minima',
+    'fc.vat.zero': '{rate}% — aliquota zero',
     'fc.notPriced': 'senza prezzo',
     'fc.pricedByWeight': 'prezzo a peso',
     'fc.priceEach': '{price} l’uno',

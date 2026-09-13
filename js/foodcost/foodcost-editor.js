@@ -13,7 +13,7 @@ import { t } from '../i18n.js';
 import { canManageHere } from './firebase-foodcost.js';
 import { el } from './dom.js';
 import {
-  VAT_RATES, SELLING_MODES, costProduct, blockerText, statusFor,
+  vatRatesFor, SELLING_MODES, costProduct, blockerText, statusFor,
   snapshotWorthTaking, productSnapshot, normalizeProduct,
 } from './foodcost-model.js';
 import { formatRate, formatMoney, pricePerKg } from '../price-model.js';
@@ -315,8 +315,12 @@ export function renderEditor({ product, app }) {
   const priceInput = numberInput('fcPrice', t('fc.sellingPriceIncludingVat'),
     working.sellingPrice, v => { working.sellingPrice = v; });
 
-  // A dropdown of the UK rates plus a free field, because which rate applies to a
-  // bakery product is a question for an accountant, not for this app.
+  // A dropdown of the venue's COUNTRY's rates plus a free field, because which rate
+  // applies to a bakery product is a question for an accountant, not for this app.
+  // ⚠️ ASKED HERE, WHERE THE MENU IS DRAWN: the venue — and so its country — arrives
+  // with the session, after every module has loaded (the js/currency.js rule).
+  const vatChoices = vatRatesFor(app.country());
+  const vatRates = vatChoices.map(choice => choice.rate);
   const vatSelect = el('select', {
     id: 'fcVat', class: 'fc-input', 'aria-label': t('fc.vatRate'),
     onchange: e => {
@@ -328,14 +332,16 @@ export function renderEditor({ product, app }) {
     },
   }, [
     el('option', { value: '' }, t('fc.choose')),
-    ...VAT_RATES.map(rate => el('option', { value: String(rate) },
-      t(rate === 20 ? 'fc.vat.standard' : rate === 5 ? 'fc.vat.reduced' : 'fc.vat.zero'))),
+    ...vatChoices.map(choice => el('option', { value: String(choice.rate) },
+      t(choice.key, { rate: String(choice.rate) }))),
     el('option', { value: 'other' }, t('fc.anotherRate')),
   ]);
   const vatOther = numberInput('fcVatOther', t('fc.anotherVatRateAs'),
     null, v => { working.vatRate = v; });
   vatOther.hidden = true;
-  if (working.vatRate !== null && !VAT_RATES.includes(working.vatRate)) {
+  // ⚠️ A stored rate this country's list does not offer — a product saved at 20% before
+  // the venue had Italian choices — goes in the free field, UNCHANGED.
+  if (working.vatRate !== null && !vatRates.includes(working.vatRate)) {
     vatSelect.value = 'other';
     vatOther.value = String(working.vatRate);
     vatOther.hidden = false;
