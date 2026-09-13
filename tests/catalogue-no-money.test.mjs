@@ -46,6 +46,14 @@ test('⚠️⚠️ the catalogue does not even READ the prices', () => {
   const layer = codeOf(read('js/catalogue/firebase-catalogue.js'));
   assert.doesNotMatch(layer, /ingredient-prices|INGREDIENT_PRICES|withPrices/,
     'the catalogue is listening to the price collection again');
+  // ⚠️ AND NOT THE LEGACY PRICE FIELDS some ingredient documents still carry (they drain
+  // out only as each ingredient is saved again). Found by driving the app: one was in the
+  // catalogue's localStorage copy after the price listener had gone.
+  assert.match(layer, /import \{ PRICE_FIELDS \} from '\.\.\/price-model\.js';/,
+    'the list of price fields comes from the one place that defines it');
+  assert.match(layer, /snap => onChange\(snap\.docs\.map\(d => withoutPrice\(\{ id: d\.id, \.\.\.d\.data\(\) \}\)\)\)/,
+    'every ingredient passes through withoutPrice before the catalogue sees it');
+  assert.match(layer, /PRICE_FIELDS\.forEach\(key => \{ delete out\[key\]; \}\);/);
 });
 
 test('the words only the cost card used are gone from both languages', () => {

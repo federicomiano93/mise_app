@@ -12,6 +12,7 @@
 
 import { firebaseConfig, sessionReady, currentSession } from '../firebase.js';
 import { currentLocationId, pathFor } from '../location.js';
+import { PRICE_FIELDS } from '../price-model.js';
 import {
   getApps,
   getApp,
@@ -104,9 +105,21 @@ export async function watchIngredients(onChange, onError) {
   await authReady;
   return onSnapshot(
     collection(db, pathFor(INGREDIENTS)),
-    snap => onChange(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
+    snap => onChange(snap.docs.map(d => withoutPrice({ id: d.id, ...d.data() }))),
     err => { console.error('watchIngredients failed:', err); if (onError) onError(err); },
   );
+}
+
+// ⚠️ AND NOT THE OLD PRICE FIELDS ON THE INGREDIENT ITSELF. Prices entered before v270
+// were written onto the ingredient document, and they drain out only as each ingredient
+// is saved again (js/price-model.js, PRICE_FIELDS) — so some documents still carry one.
+// Nothing in the catalogue reads them; dropping them here is what keeps its local copy,
+// on every phone that opens it, free of prices too. Found by driving the app: a seeded
+// legacy ingredient's price was sitting in localStorage after the listener had gone.
+function withoutPrice(ingredient) {
+  const out = { ...ingredient };
+  PRICE_FIELDS.forEach(key => { delete out[key]; });
+  return out;
 }
 
 // The supplier names, so the chooser can tell two similar articles apart. Six
