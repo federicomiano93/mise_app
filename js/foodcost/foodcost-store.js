@@ -13,6 +13,7 @@ import {
   watchProducts, watchRecipes, watchIngredients,
   saveProductWithSnapshot, removeProduct, newProductId, saveRecipeLoss,
 } from './firebase-foodcost.js';
+import { restoreAfterRefusal } from './foodcost-weighing.js';
 
 const PRODUCTS_KEY = 'foodcost-products';
 const RECIPES_KEY = 'foodcost-recipes';
@@ -151,8 +152,6 @@ export function saveProduct(product, snapshot, lossPatches) {
   return id;
 }
 
-const LOSS_FIELDS = ['lossPct', 'rawGrams', 'cookedGrams'];
-
 // The weighings typed on a product's recipe lines, LOCAL-FIRST like the product.
 //
 // ⚠️ ONE WRITE PER RECIPE, AND NOT INSIDE THE PRODUCT'S BATCH. The recipe rule and the
@@ -168,13 +167,10 @@ function saveRecipeLosses(patches) {
     if (notify) notify();
     saveRecipeLoss(id, patch).catch(err => {
       console.warn('Recipe loss did not sync to Firestore:', err);
-      // ⚠️ PUT BACK ONLY WHAT THIS WRITE CHANGED, AND ONLY IF NOTHING NEWER HAS LANDED
-      // ON TOP OF IT — the recipes listener may already have delivered somebody else's
-      // weighing, and rolling back over that would lose it.
-      const now = recipes[id];
-      if (now && LOSS_FIELDS.every(k => now[k] === patch[k])) {
-        const restored = { ...now };
-        LOSS_FIELDS.forEach(k => { if (k in prev) restored[k] = prev[k]; else delete restored[k]; });
+      // Put back only what this write changed, and only if nothing newer has landed on
+      // top of it — the rule is restoreAfterRefusal()'s, where a test runs it.
+      const restored = restoreAfterRefusal(recipes[id], prev, patch);
+      if (restored) {
         recipes = { ...recipes, [id]: restored };
         writeJson(RECIPES_KEY, Object.values(recipes));
         if (notify) notify();

@@ -1258,7 +1258,10 @@ const DICTIONARIES = Object.freeze({
       one: 'The loss belongs to the recipe: it changes {n} other product too.',
       other: 'The loss belongs to the recipe: it changes {n} other products too.',
     },
-    'fc.couldNotSaveLoss': 'Couldn’t save the oven loss of “{name}” — check your connection.',
+    // ⚠️ NOT «check your connection». Offline, a write waits rather than fails; this
+    // shows only when the database REFUSED it — a recipe deleted meanwhile, or no right
+    // to write recipes — so blaming the network would send somebody to fix the wrong thing.
+    'fc.couldNotSaveLoss': 'The oven loss of “{name}” was not saved — the recipe keeps the one it had.',
     'fc.thisItemNoLonger': 'This item no longer exists',
     'fc.pricedByWeightSet': 'Priced by weight — set it up as a per-piece price in Orders to count it here',
     'fc.choose': '— Choose —',
@@ -3322,7 +3325,7 @@ const DICTIONARIES = Object.freeze({
       one: 'Il calo vale per la ricetta: cambia anche {n} altro prodotto.',
       other: 'Il calo vale per la ricetta: cambia anche altri {n} prodotti.',
     },
-    'fc.couldNotSaveLoss': 'Non è stato possibile salvare il calo peso di “{name}” — controlla la connessione.',
+    'fc.couldNotSaveLoss': 'Il calo peso di “{name}” non è stato salvato — la ricetta tiene quello che aveva.',
     'fc.thisItemNoLonger': 'Questa voce non esiste più',
     'fc.pricedByWeightSet': 'Prezzo a peso — impostalo come prezzo al pezzo negli Ordini per contarlo qui',
     'fc.choose': '— Scegli —',

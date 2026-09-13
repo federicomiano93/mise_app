@@ -2864,6 +2864,12 @@ async function staffCards() {
     () => createWrite(`${L}/ingredients/flour/prices`,
       { ...stamp, recordedAt: '2026-09-13', priceUnit: 'kg', pricePerUnit: 9, supplierId: '', source: 'manual' }, asAccount(SAM)));
   await expectDenied('⚠️ showing Food cost does not show the Stocktake', readAs(SAM, `${M}/2026-09`));
+  // ⚠️ SINCE 13 SEP 2026 THE OVEN LOSS IS WEIGHED ON A PRODUCT'S RECIPE LINE, so an
+  // employee this venue has shown Food cost to reaches the two boxes — and Save must
+  // land. It is the catalogue's rule that decides, in the shape Food cost sends.
+  await seedDoc(`${L}/recipes/R1`, { ...stamp, name: 'Focaccia', ingredients: [], lossPct: 12 });
+  await expectAllowed('⚠️ a shown employee can save a weighing onto the recipe', () =>
+    mergeWrite(`${L}/recipes/R1`, { ...stamp, lossPct: 20, rawGrams: 1000, cookedGrams: 800 }, asAccount(SAM)));
 
   // ── Only the Stocktake shown: COUNTS, and no money ──
   await showMain({ inventory: true });
@@ -2940,6 +2946,12 @@ async function staffCards() {
   });
   await expectDenied('a venue without Food cost gives an employee no product', readAs(BOB, 'locations/trattoria-x/products/P1'));
   await expectDenied('…and no stocktake', readAs(BOB, 'locations/trattoria-x/inventory/2026-09'));
+  // ⚠️ AND WITH THE CATALOGUE OFF, A RECIPE IS NOT WRITABLE — which is why a Food cost
+  // product on such a venue offers no weighing boxes (canWriteRecipes in the app).
+  await seedDoc('locations/trattoria-x/recipes/R1', { bakery: 'trattoria-x', name: 'Pane', ingredients: [], lossPct: 12 });
+  await expectDenied('⚠️ a venue with the catalogue off refuses a weighing on its recipe', () =>
+    mergeWrite('locations/trattoria-x/recipes/R1',
+      { bakery: 'trattoria-x', lossPct: 20, rawGrams: 1000, cookedGrams: 800 }, asAccount(BOB)));
 
   // ── One venue's choice reaches nobody in another ──
   await showMain({ foodcost: true, inventory: true });

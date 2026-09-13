@@ -10,8 +10,12 @@
 //
 // It also READS two collections it does not own: `recipes` (the catalogue's, to
 // cost the components) and `ingredients` (Orders', for packaging). That is a
-// shared COLLECTION, not a shared module — js/foodcost/ imports nothing from
-// js/catalogue/ or js/orders/, so the feature stays liftable.
+// shared COLLECTION, not a shared module.
+// ⚠️ AND SINCE 13 SEP 2026 IT WRITES THREE FIELDS OF A RECIPE: the oven loss, weighed on
+// a product's recipe line (saveRecipeLoss below). Nothing else of a recipe is ever
+// written from here. The only modules this feature takes from js/catalogue/ are the
+// pure MODELS — recipe-cost-model.js and catalogue-model.js — never a screen or a
+// data layer, so it stays liftable.
 
 import { firebaseConfig, sessionReady, currentSession } from '../firebase.js';
 import { currentLocationId, pathFor } from '../location.js';
@@ -147,6 +151,17 @@ export async function saveRecipeLoss(id, patch) {
     rawGrams: patch.rawGrams,
     cookedGrams: patch.cookedGrams,
   }));
+}
+
+// Whether this session may write a recipe at all.
+//
+// ⚠️ UX ONLY (P2): the rules decide. It exists because a venue can have Food cost ON and
+// the catalogue OFF — then its recipes are readable here (the rules let Food cost read
+// them) but not writable (writing is the catalogue's), and two weighing boxes whose
+// Save is always refused would still record a margin point for a loss that never
+// landed. Same default as the rules: a section nobody switched off is on.
+export function canWriteRecipes() {
+  return currentSession().sections?.catalogue === true;
 }
 
 export async function removeProduct(id) {

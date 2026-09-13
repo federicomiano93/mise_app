@@ -93,6 +93,34 @@ test('⚠️⚠️ the Food cost product is where they are typed, and Save hands
     'the answer at the top is worked out WITH the weighing being typed, not after Save');
 });
 
+test('⚠️⚠️ saving a product really hands every weighing to the database', () => {
+  // Found by the code review: every other guard here sits in the editor or in the write
+  // itself, so deleting the one line that connects them left the suite green — the
+  // screen showed the new cost, Save recorded a margin point with it, and the recipe
+  // never received the loss.
+  const store = codeOf(read('js/foodcost/foodcost-store.js'));
+  const at = store.indexOf('export function saveProduct(');
+  assert.notEqual(at, -1, 'saveProduct must exist to be guarded');
+  const save = store.slice(at, store.indexOf('\n}', at));
+  assert.match(save, /saveRecipeLosses\(lossPatches\);/, 'the product save must write the weighings');
+  const lossAt = store.indexOf('function saveRecipeLosses(');
+  assert.notEqual(lossAt, -1, 'saveRecipeLosses must exist to be guarded');
+  const losses = store.slice(lossAt, store.indexOf('export function deleteProduct', lossAt));
+  assert.match(losses, /for \(const \[id, patch\] of Object\.entries\(patches \|\| \{\}\)\)/, 'one write per recipe');
+  assert.match(losses, /saveRecipeLoss\(id, patch\)\.catch\(/, 'each one reaches the data layer');
+  assert.match(losses, /restoreAfterRefusal\(recipes\[id\], prev, patch\)/,
+    'a refusal goes back through the rule the tests run');
+  assert.match(losses, /onSyncError\(t\('fc\.couldNotSaveLoss'/, 'and is said out loud');
+});
+
+test('⚠️ no weighing boxes where the database would refuse their Save', () => {
+  assert.match(FC_EDITOR, /if \(!id \|\| !app\.tables\(\)\.recipes\[id\] \|\| !app\.canWeigh\(\)\) return null;/,
+    'a venue with the catalogue off can READ its recipes in Food cost but not write them');
+  assert.match(FC_DATA, /export function canWriteRecipes\(\) \{\s*return currentSession\(\)\.sections\?\.catalogue === true;/,
+    'the catalogue section, as the session narrowed it — the same default as the rules');
+  assert.match(codeOf(read('js/foodcost/foodcost-main.js')), /canWeigh: canWriteRecipes,/);
+});
+
 test('⚠️⚠️ Food cost writes three fields and the stamp onto the recipe, never the whole of it', () => {
   const at = FC_DATA.indexOf('export async function saveRecipeLoss(');
   assert.notEqual(at, -1, 'saveRecipeLoss must exist to be guarded');

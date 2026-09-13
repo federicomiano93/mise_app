@@ -85,7 +85,9 @@ export function renderEditor({ product, app }) {
 
   function weighBlock(entry) {
     const id = entry.recipeId;
-    if (!id || !app.tables().recipes[id]) return null;
+    // ⚠️ NO BOXES WHERE THEIR SAVE WOULD BE REFUSED: a venue with the catalogue switched
+    // off can read its recipes here but not write them (canWriteRecipes() says why).
+    if (!id || !app.tables().recipes[id] || !app.canWeigh()) return null;
     const box = (label, onType) => el('input', {
       class: 'fc-input fc-number', type: 'number', min: '0', step: 'any',
       inputmode: 'decimal', placeholder: '—', 'aria-label': label,

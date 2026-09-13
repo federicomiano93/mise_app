@@ -12,7 +12,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   startWeighing, typeRaw, typeCooked, readWeighing, withWeighings, weighingPatches,
-  otherProductsUsing,
+  otherProductsUsing, restoreAfterRefusal,
 } from '../js/foodcost/foodcost-weighing.js';
 
 // 600 + 400 = 1000 g of weighable dough, plus a row with no weight that must not count.
@@ -170,6 +170,33 @@ test('the screen costs with the typed weighing, without touching the stored tabl
   assert.equal(withWeighings(tables, {}), tables, 'no weighing, no copy');
   assert.equal(withWeighings(tables, { nope: { lossPct: 5 } }).recipes.nope, undefined,
     'a patch for a recipe that is not there invents nothing');
+});
+
+// ── 4. When the database refuses ─────────────────────────────────────────────
+
+test('⚠️ a refused weighing puts back exactly what the recipe had', () => {
+  const prev = recipe({ lossPct: 12 });
+  const patch = { lossPct: 20, rawGrams: 1000, cookedGrams: 800 };
+  const restored = restoreAfterRefusal({ ...prev, ...patch }, prev, patch);
+  assert.equal(restored.lossPct, 12);
+  assert.ok(!('rawGrams' in restored) && !('cookedGrams' in restored),
+    '⚠️ a weight the recipe never had is REMOVED, not left behind and not set to 0');
+  assert.equal(restored.name, 'Focaccia', 'the rest of the recipe is untouched');
+
+  const weighed = recipe({ lossPct: 5, rawGrams: 900, cookedGrams: 855 });
+  assert.deepEqual(
+    (({ lossPct, rawGrams, cookedGrams }) => ({ lossPct, rawGrams, cookedGrams }))(
+      restoreAfterRefusal({ ...weighed, ...patch }, weighed, patch)),
+    { lossPct: 5, rawGrams: 900, cookedGrams: 855 });
+});
+
+test('⚠️⚠️ …but never over a newer weighing that has landed since', () => {
+  const prev = recipe({ lossPct: 12 });
+  const patch = { lossPct: 20, rawGrams: 1000, cookedGrams: 800 };
+  const newer = { ...prev, lossPct: 25, rawGrams: 1000, cookedGrams: 750 };
+  assert.equal(restoreAfterRefusal(newer, prev, patch), null,
+    'somebody else\'s real number must not be thrown away to put an older one back');
+  assert.equal(restoreAfterRefusal(null, prev, patch), null, 'a recipe gone meanwhile is left gone');
 });
 
 test('the note counts the OTHER products a recipe\'s loss changes', () => {

@@ -143,6 +143,27 @@ export function weighingPatches(recipes, states, recipeIds) {
   return out;
 }
 
+// What a recipe must look like again after the database REFUSED a weighing — or null,
+// when it must be left as it is.
+//
+// ⚠️ ONLY IF NOTHING NEWER HAS LANDED. The recipes listener may already have delivered
+// somebody else's weighing by the time the refusal arrives, and rolling back over it
+// would throw a real number away to put an older one back.
+// ⚠️ A FIELD THE RECIPE DID NOT HAVE BEFORE IS REMOVED, never set to 0: an absent
+// rawGrams means «never weighed», and a 0 would be a claim somebody weighed nothing.
+const LOSS_FIELDS = Object.freeze(['lossPct', 'rawGrams', 'cookedGrams']);
+
+export function restoreAfterRefusal(now, prev, patch) {
+  if (!now || !prev || !patch) return null;
+  if (!LOSS_FIELDS.every(k => now[k] === patch[k])) return null;
+  const restored = { ...now };
+  for (const k of LOSS_FIELDS) {
+    if (Object.prototype.hasOwnProperty.call(prev, k)) restored[k] = prev[k];
+    else delete restored[k];
+  }
+  return restored;
+}
+
 // How many OTHER products use a recipe — the ones a weighing typed here changes too,
 // without anybody opening them. Said on screen, because the loss belongs to the recipe.
 export function otherProductsUsing(products, recipeId, productId) {
