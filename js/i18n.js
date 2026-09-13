@@ -2148,6 +2148,11 @@ const DICTIONARIES = Object.freeze({
     'homeCards.catalogue.body': 'Employees will no longer be able to open the allergen sheet from the Home, and whoever answers customers’ questions about allergens at the counter needs it.',
     'homeCards.catalogue.ok': 'Hide it',
 
+    // ── The Home's Settings screen: one sentence under each row ────────────
+    'settings.away.sub': 'Your phone stops ringing while you are away.',
+    'settings.people.sub': 'Invite people and choose what each of them can do.',
+    'settings.switch.sub': 'Open another of your locations.',
+
 
     // ⚠️ THE NAME OF A LANGUAGE INSIDE A SENTENCE IS INTERFACE TEXT. The choice
     // list names each language in ITSELF («Italiano»), because that is the word
@@ -4023,6 +4028,10 @@ const DICTIONARIES = Object.freeze({
     'homeCards.catalogue.title': 'Nascondere il Ricettario?',
     'homeCards.catalogue.body': 'I dipendenti non potranno più aprire dalla Home la scheda allergeni, che serve a chi al banco risponde alle domande dei clienti sugli allergeni.',
     'homeCards.catalogue.ok': 'Nascondi',
+
+    'settings.away.sub': 'Il telefono smette di suonare mentre sei via.',
+    'settings.people.sub': 'Invita persone e scegli cosa può fare ognuno.',
+    'settings.switch.sub': 'Apri un altro dei tuoi locali.',
 
 
     'language.en.inSentence': 'inglese',

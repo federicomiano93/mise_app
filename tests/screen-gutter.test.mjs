@@ -42,7 +42,7 @@ const GUTTER = ['content', 'home-grid', 'install-host', 'requests-card-host',
 const EXEMPT = {
   'index.html': {
     'home-reminder': 'the card it holds aligns itself with the grid above (a.home-reminder)',
-    'session-logout-host': 'holds .session-logout, which is `margin: 28px auto` — centred, not full width',
+    'session-logout-host': 'holds the Settings bar, a .recipe-footer that pads itself, and — only while somebody is on holiday — a .session-logout notice, which is `margin: 28px auto`, centred',
   },
   'calculator.html': {
     'recipe-tabs': 'holds the recipe panels, and every one of them IS a .content',

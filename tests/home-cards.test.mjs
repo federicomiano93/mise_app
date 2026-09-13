@@ -161,9 +161,10 @@ test('the Home filters on the card, and passes the session\'s canManage', () => 
 });
 
 test('⚠️ the button is drawn only for somebody who can manage the venue', () => {
-  const src = withoutComments(read('js/home-session.js'));
+  // Since 13 Sep 2026 it is a row of the Home's Settings screen, not a line under the cards.
+  const src = withoutComments(read('js/home-settings.js'));
   assert.match(src,
-    /if \(session\.canManage\) \{\s*logoutHost\.append\(button\(t\('homeCards\.title'\)[\s\S]{0,200}openHomeCards\(session\)/);
+    /if \(session\.canManage\) \{\s*scroll\.append\(item\(t\('homeCards\.title'\)[\s\S]{0,200}openHomeCards\(session\)/);
 });
 
 test('⚠️ the page gate asks too, after the section check and before the page is shown', () => {
