@@ -175,6 +175,15 @@ body {
    on the screen that must never be missed. */
 .fc-answer-partial { margin: 8px 0 0; font-size: .78rem; color: var(--fc-warn); }
 .fc-answer-none { margin: 0; font-size: .95rem; font-weight: 600; color: var(--fc-text-2); }
+
+/* What the product costs to make, above the answer (13 Sep 2026). Readable before a
+   selling price exists. The same frame as the answer without its coloured edge: a cost
+   is not good or bad on its own, only against a price. */
+.fc-prodcost { padding: 12px 14px; border: 1px solid var(--fc-border); border-radius: var(--fc-radius); background: var(--fc-surface); }
+.fc-prodcost-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.fc-prodcost-value { display: flex; align-items: baseline; gap: 6px; }
+.fc-prodcost-num { font-size: 1.3rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+.fc-prodcost-unit { font-size: .78rem; color: var(--fc-text-2); }
 .fc-blockers { margin: 8px 0 0; padding-left: 18px; font-size: .78rem; color: var(--fc-text-2); }
 .fc-blockers li { margin-top: 3px; }
 

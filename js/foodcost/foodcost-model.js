@@ -234,6 +234,42 @@ function lookup(table, id) {
   return Object.prototype.hasOwnProperty.call(table, id) ? table[id] : null;
 }
 
+// What one piece (or one kilo) costs to make — or null when the batch cannot be divided
+// yet: no cost at all, no way of selling chosen, or no pieces said for a piece product.
+//
+// ⚠️ THE ONE PLACE THIS DIVISION IS DONE. costProduct() below asks here too, so the cost
+// shown on its own and the cost inside the food cost % can never be two numbers.
+function unitCostOf(p, batch) {
+  if (!p || !(batch.cost > 0)) return null;
+  if (p.sellingMode === 'piece' && p.piecesPerBatch !== null) return roundTo(batch.cost / p.piecesPerBatch, 4);
+  if (p.sellingMode === 'weight' && batch.kg > 0) return roundTo(batch.cost / batch.kg, 4);
+  return null;
+}
+
+// What making this product costs, BEFORE anybody has said what it sells for.
+//
+//   { batchCost, unitCost, unit, partial, batch }
+//
+// Federico, 13 Sep 2026: the cost of a product belongs in Food cost, and it has to be
+// readable as soon as the recipe and its kilos are in — not only once a selling price
+// and a VAT rate have been typed, which is when costProduct() below starts answering.
+//
+// `batchCost` is null when no line has a cost at all (never 0: a product that reads as
+// costing nothing is the one wrong answer this screen must not give). `unit` is 'piece'
+// or 'kg' exactly when `unitCost` is a number.
+export function productionCost(product, tables = {}) {
+  const p = normalizeProduct(product);
+  const batch = batchTotals(p, tables);
+  const unitCost = unitCostOf(p, batch);
+  return {
+    batchCost: batch.cost > 0 ? batch.cost : null,
+    unitCost,
+    unit: unitCost === null ? null : p.sellingMode === 'piece' ? 'piece' : 'kg',
+    partial: batch.partial,
+    batch,
+  };
+}
+
 // The whole answer for one product.
 //
 //   { unitCost, netUnitPrice, foodCostPct, margin, status, partial, blockers, batch }
@@ -263,9 +299,9 @@ export function costProduct(product, tables = {}) {
   };
   if (blockers.length) return base;
 
-  const unitCost = p.sellingMode === 'piece'
-    ? roundTo(batch.cost / p.piecesPerBatch, 4)
-    : roundTo(batch.cost / batch.kg, 4);
+  // The blockers above guarantee a number here — and it is the same division the
+  // production cost on its own uses.
+  const unitCost = unitCostOf(p, batch);
 
   const netUnitPrice = netPrice(p.sellingPrice, p.vatRate);
   if (netUnitPrice === null || netUnitPrice <= 0) {

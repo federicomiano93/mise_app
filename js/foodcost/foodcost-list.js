@@ -55,9 +55,11 @@ function row(product, result, onOpen) {
   // What is still missing, or what it earns. Either way ONE line, so every card is
   // the same height and the list stays scannable.
   const sub = costed
+    // ⚠️ «cost» and «margin» were English written into the code, on an Italian venue
+    // too — no dictionary could reach them. Keys since 13 Sep 2026.
     ? [result.status ? t(STATUS_TEXT[result.status]) : t('fc.noTargetSet'),
-       `${formatRate(result.unitCost)} cost`,
-       `${formatMoney(result.margin)} margin`].join('  ·  ')
+       t('fc.listCost', { cost: formatRate(result.unitCost) }),
+       t('fc.listMargin', { margin: formatMoney(result.margin) })].join('  ·  ')
     : (result.blockers.length ? blockerText(result.blockers[0]) : t('fc.notCostedYet'));
 
   return el('button', {
