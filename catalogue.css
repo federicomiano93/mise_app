@@ -584,102 +584,19 @@ body.cat-zoom-lock { overflow: hidden; }
    not do the screen's job. */
 .cat-fc-note { margin: 0 0 10px; font-size: .84rem; line-height: 1.45; color: var(--cat-text-2); }
 
-/* The little list under a recipe row's name while it is typed (13 Sep 2026): catalogue
-   ingredients to link the row to. ⚠️ In the flow of the framed list, under its own row —
-   it pushes the rows below down rather than floating over a phone's keyboard, and the
-   frame (overflow: hidden) would clip anything that floated. ⚠️ 44px rows: it is tapped. */
-.cat-suggest {
-  margin: 0 6px 6px 8px;
-  border: 1px solid var(--cat-border);
-  border-radius: 10px;
-  background: var(--cat-surface);
-  overflow: hidden;
-}
-.cat-suggest-row {
-  display: flex; align-items: center; gap: 8px;
-  min-height: 44px; padding: 6px 10px;
-  border-top: 1px solid var(--cat-border);
-  cursor: pointer;
-}
-.cat-suggest-row:first-child { border-top: 0; }
-.cat-suggest-row.active, .cat-suggest-row:hover { background: var(--cat-surface-2); }
-.cat-suggest-text { display: flex; flex-direction: column; flex: 1; min-width: 0; }
-.cat-suggest-name,
-.cat-suggest-meta { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.cat-suggest-name { font-size: .92rem; font-weight: 600; color: var(--cat-text); }
-.cat-suggest-meta { font-family: var(--cat-font-mono); font-size: .72rem; color: var(--cat-text-2); }
-/* The tick on the row's current link. A flex box, or the SVG rests on a text baseline. */
-.cat-suggest-check { flex: none; display: flex; align-items: center; color: var(--brand); }
-.cat-suggest-all { justify-content: center; font-size: .86rem; font-weight: 600; color: var(--cat-text-2); }
+/* The little list under a recipe row's name, and the full link chooser: their look moved
+   to tokens.css (.pick-suggest*, .pick-*) on 13 Sep 2026, when Food cost needed the same
+   two. What stays here is where the list sits in THIS page's framed ingredient list, and
+   the chooser's header, which wears the catalogue's own. */
+.cat-ing-editgroup .pick-suggest { margin: 0 6px 6px 8px; }
 
-/* ── The link chooser ──────────────────────────────────────────────────────
-   A full-screen overlay following the app's header spec: Back on the LEFT, title
-   CENTRED, a spacer on the right so the title cannot be pushed off centre. */
-.cat-pick-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 60;
-  display: flex;
-  flex-direction: column;
-  background: var(--cat-ground);
-}
+/* ── The link chooser's header ─────────────────────────────────────────────
+   The app's header spec: Back on the LEFT, title CENTRED, a spacer on the right so the
+   title cannot be pushed off centre. */
 .cat-pick-header { flex-shrink: 0; display: flex; align-items: center; }
 .cat-pick-title { flex: 1; min-width: 0; text-align: center; }
 .cat-pick-title h1 { font-size: 18px; font-weight: 600; letter-spacing: -0.3px; }
-.cat-pick-spacer { width: 36px; flex-shrink: 0; }
-.cat-pick-body { flex: 1; min-height: 0; overflow-y: auto; padding: 12px 14px calc(20px + env(safe-area-inset-bottom)); padding-inline: max(14px, var(--app-gutter)); }
-
-.cat-pick-search {
-  width: 100%;
-  min-height: 44px;
-  padding: 11px 12px;
-  border: 1.5px solid var(--cat-border);
-  border-radius: var(--radius-sm);
-  background: var(--cat-surface);
-  color: var(--cat-text);
-  font-family: var(--cat-font);
-  font-size: 1rem;
-}
-.cat-pick-search:focus { outline: none; border-color: var(--cat-accent); }
-
-.cat-pick-unlink {
-  display: block;
-  width: 100%;
-  margin-top: 10px;
-  padding: 10px;
-  border: 1px solid var(--cat-border);
-  border-radius: var(--radius-sm);
-  background: none;
-  color: var(--cat-danger);
-  font-family: var(--cat-font);
-  font-size: .88rem;
-  cursor: pointer;
-}
-
-.cat-pick-list { margin-top: 12px; }
-.cat-pick-head {
-  padding: 12px 2px 6px;
-  font-family: var(--cat-font-mono);
-  font-size: .7rem;
-  text-transform: uppercase;
-  letter-spacing: .06em;
-  color: var(--cat-text-2);
-}
-.cat-pick-row {
-  display: block;
-  width: 100%;
-  text-align: left;
-  padding: 11px 2px;
-  border: 0;
-  border-top: 1px solid var(--cat-border);
-  background: none;
-  cursor: pointer;
-}
-.cat-pick-row:active { background: var(--cat-surface-2); }
-.cat-pick-row:focus-visible { outline: 2px solid var(--cat-accent); outline-offset: -2px; }
-.cat-pick-name { display: block; font-size: .95rem; color: var(--cat-text); }
-.cat-pick-meta { display: block; margin-top: 3px; font-family: var(--cat-font-mono); font-size: .72rem; color: var(--cat-text-2); }
-.cat-pick-empty { padding: 24px 2px; text-align: center; font-size: .85rem; color: var(--cat-text-2); }
+.cat-pick-spacer { width: 36px; flex-shrink: 0; display: flex; align-items: center; }
 /* ═══════════════════════════════════════════════════════════════════════════
    GUIDED MIXING
    A screen someone stands in front of with their hands in dough. Everything

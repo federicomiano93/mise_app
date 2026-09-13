@@ -21,6 +21,10 @@ const SCREENS = [
   'js/catalogue/catalogue-list.js',
   'js/catalogue/allergen-sheet.js',
   'js/catalogue/label-view.js',
+  // ⚠️ SHARED since 13 Sep 2026 and drawn inside the catalogue: they take their words from
+  // the caller and must never format a price of their own.
+  'js/pick-suggest.js',
+  'js/pick-screen.js',
 ];
 
 test('⚠️ no catalogue screen computes or formats money', () => {

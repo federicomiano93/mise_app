@@ -1,21 +1,13 @@
 // ingredient-picker.js — the full-screen chooser that links a recipe row to a
 // real ingredient (or to another recipe).
 //
-// A full-screen overlay with a search box, not a dropdown: there are 65 ingredients
-// and hundreds of recipes, and a <select> long enough to hold them is unusable on a
-// phone. It follows the app's drill-in pattern and its header spec — Back on the
-// LEFT, title CENTRED, nothing on the right.
-//
-// ⚠️ It deliberately does NOT use the class `.preview-overlay`: that name is in
-// BUSY_SELECTORS (js/update-gate.js) and would postpone a compulsory update for as
-// long as this stayed open. Nothing here can be lost by closing it, so nothing here
-// may hold an update back.
+// ⚠️ THE CHOOSER ITSELF IS SHARED since 13 Sep 2026 (js/pick-screen.js), because Food cost
+// needs the same one. This file is the catalogue's half: what can be linked (linkOptions(),
+// catalogue-model.js, tested), what each row says, and the catalogue's words and header.
 
 import { t } from '../i18n.js';
-import { el } from './dom.js';
+import { openPickScreen } from '../pick-screen.js';
 import { linkOptions } from './catalogue-model.js';
-
-const BACK_ICON = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>';
 
 // Open the picker. Resolves with { kind, refId, name } when something is chosen,
 // with null when the link is removed, and with undefined when it is dismissed —
@@ -24,89 +16,39 @@ const BACK_ICON = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" w
 // `initialQuery` opens it already searching — «Vedi tutti» under a row's suggestion list
 // hands over what was typed, so nobody has to type it twice.
 export function openLinkPicker({ ingredients, recipes, suppliers, excludeRecipeId, hasLink, initialQuery = '' }) {
-  return new Promise(resolve => {
-    let query = String(initialQuery ?? '');
-
-    const list = el('div', { class: 'cat-pick-list' });
-
-    const search = el('input', {
-      class: 'cat-pick-search', type: 'search', placeholder: t('cat.searchAnIngredient'),
-      'aria-label': t('cat.searchAnIngredient'), value: query,
-      oninput: e => { query = e.target.value; paint(); },
-    });
-
-    function close(value) {
-      document.removeEventListener('keydown', onKey);
-      overlay.remove();
-      resolve(value);
-    }
-
-    // Escape dismisses — the same answer as Back, never "remove the link".
-    function onKey(e) { if (e.key === 'Escape') close(undefined); }
-
-    function row(main, meta, onPick) {
-      return el('button', { class: 'cat-pick-row', type: 'button', onclick: onPick }, [
-        el('span', { class: 'cat-pick-name', text: main }),
-        meta ? el('span', { class: 'cat-pick-meta', text: meta }) : null,
-      ]);
-    }
-
-    function paint() {
+  return openPickScreen({
+    title: t('cat.linkTo'),
+    backLabel: t('ui.back'),
+    searchLabel: t('cat.searchAnIngredient'),
+    initialQuery,
+    chrome: { header: 'cat-header cat-pick-header', slot: 'cat-pick-spacer', title: 'cat-pick-title', icon: 'cat-icon-btn' },
+    // Only offered when there IS a link: a "remove" on a row that has none does nothing.
+    topAction: hasLink ? { label: t('cat.removeTheLink'), value: null } : null,
+    sections: query => {
       const options = linkOptions({ ingredients, recipes, suppliers, query, excludeRecipeId });
-      list.replaceChildren();
-
-      if (options.ingredients.length) {
-        list.appendChild(el('div', { class: 'cat-pick-head', text: t('cat.ingredients') }));
-        options.ingredients.forEach(opt => {
+      return [
+        {
+          heading: t('cat.ingredients'),
           // Name · weight · supplier — what tells two similar-looking articles apart.
           // ⚠️ NO PRICE SINCE 13 SEP 2026: the catalogue shows no money at all (a cost
           // is real only in Food cost, where the oven loss and the rest of the product
           // are known), and it no longer even loads the prices.
-          const meta = [opt.weight, opt.supplierName].filter(Boolean).join('  ·  ');
-          list.appendChild(row(opt.name, meta,
-            () => close({ kind: 'ingredient', refId: opt.id, name: opt.name })));
-        });
-      }
-
-      if (options.recipes.length) {
-        list.appendChild(el('div', { class: 'cat-pick-head', text: t('ui.recipes') }));
-        options.recipes.forEach(opt => {
+          items: options.ingredients.map(opt => ({
+            name: opt.name,
+            meta: [opt.weight, opt.supplierName].filter(Boolean).join('  ·  '),
+            value: { kind: 'ingredient', refId: opt.id, name: opt.name },
+          })),
+        },
+        {
+          heading: t('ui.recipes'),
           // ⚠️ Was the English word 'Recipe' written into the code, on an Italian venue too.
-          list.appendChild(row(opt.name, t('cat.recipe'),
-            () => close({ kind: 'recipe', refId: opt.id, name: opt.name })));
-        });
-      }
-
-      if (!options.ingredients.length && !options.recipes.length) {
-        list.appendChild(el('p', { class: 'cat-pick-empty', text: query
-          ? t('cat.nothingMatchesYourSearch')
-          : t('cat.noIngredientsYetAdd') }));
-      }
-    }
-
-    const overlay = el('div', { class: 'cat-pick-overlay' }, [
-      el('header', { class: 'cat-header cat-pick-header' }, [
-        el('button', { class: 'cat-icon-btn', type: 'button', 'aria-label': t('ui.back'),
-          icon: BACK_ICON, onclick: () => close(undefined) }),
-        el('div', { class: 'cat-pick-title' }, [el('h1', { text: t('cat.linkTo') })]),
-        el('span', { class: 'cat-pick-spacer' }),
-      ]),
-      el('div', { class: 'cat-pick-body' }, [
-        search,
-        // Only offered when there IS a link. A "remove" on a row that has none is a
-        // button that does nothing, and it sits exactly where the first result will
-        // appear a moment later.
-        hasLink
-          ? el('button', { class: 'cat-pick-unlink', type: 'button', text: t('cat.removeTheLink'),
-            onclick: () => close(null) })
-          : null,
-        list,
-      ]),
-    ]);
-
-    paint();
-    document.addEventListener('keydown', onKey);
-    document.body.appendChild(overlay);
-    try { search.focus({ preventScroll: true }); } catch (e) { /* focus is best-effort */ }
+          items: options.recipes.map(opt => ({
+            name: opt.name, meta: t('cat.recipe'),
+            value: { kind: 'recipe', refId: opt.id, name: opt.name },
+          })),
+        },
+      ];
+    },
+    emptyText: query => (query ? t('cat.nothingMatchesYourSearch') : t('cat.noIngredientsYetAdd')),
   });
 }

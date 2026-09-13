@@ -858,3 +858,115 @@
    cannot be reached, or that mailto only OPENS the mail app. It has to be readable, so
    it is not --text-4 (which measures 3.6:1 and is an open accessibility item). */
 .send-route-note { font-size: 12px; color: var(--text-3); }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   PICKING — the list under a field while it is typed (js/pick-suggest.js) and the
+   full-screen search chooser (js/pick-screen.js). SHARED by the Catalogue and Food cost
+   since 13 Sep 2026; the values are the ones the catalogue's own copies carried, so
+   nothing here is a new look. Each page places the list and dresses the header itself.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ⚠️ In the flow, under its own field — it pushes what is below down rather than floating
+   over a phone's keyboard. ⚠️ 44px rows: it is tapped. */
+.pick-suggest {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  overflow: hidden;
+}
+.pick-suggest-row {
+  display: flex; align-items: center; gap: 8px;
+  min-height: 44px; padding: 6px 10px;
+  border-top: 1px solid var(--border);
+  cursor: pointer;
+}
+.pick-suggest-row:first-child { border-top: 0; }
+.pick-suggest-row.active, .pick-suggest-row:hover { background: var(--surface-2); }
+.pick-suggest-text { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.pick-suggest-name,
+.pick-suggest-meta { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pick-suggest-name { font-size: .92rem; font-weight: 600; color: var(--text); }
+.pick-suggest-meta { font-family: var(--font-mono); font-size: .72rem; color: var(--text-2); }
+/* The tick on the current pick. A flex box, or the SVG rests on a text baseline. */
+.pick-suggest-check { flex: none; display: flex; align-items: center; color: var(--brand); }
+.pick-suggest-all { justify-content: center; font-size: .86rem; font-weight: 600; color: var(--text-2); }
+
+/* The chooser: a positioning shell, a header the calling page dresses, a capped body. */
+.pick-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+}
+.pick-body { flex: 1; min-height: 0; overflow-y: auto; padding: 12px 14px calc(20px + env(safe-area-inset-bottom)); padding-inline: max(14px, var(--app-gutter)); }
+.pick-search {
+  width: 100%;
+  min-height: 44px;
+  padding: 11px 12px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 1rem;
+}
+.pick-search:focus { outline: none; border-color: var(--accent-2); }
+.pick-top-action {
+  display: block;
+  width: 100%;
+  margin-top: 10px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--danger);
+  font-family: var(--font);
+  font-size: .88rem;
+  cursor: pointer;
+}
+.pick-list { margin-top: 12px; }
+.pick-head {
+  padding: 12px 2px 6px;
+  font-family: var(--font-mono);
+  font-size: .7rem;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--text-2);
+}
+.pick-row {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 11px 2px;
+  border: 0;
+  border-top: 1px solid var(--border);
+  background: none;
+  cursor: pointer;
+}
+.pick-row:active { background: var(--surface-2); }
+.pick-row:focus-visible { outline: 2px solid var(--accent-2); outline-offset: -2px; }
+.pick-name { display: block; font-size: .95rem; color: var(--text); }
+.pick-meta { display: block; margin-top: 3px; font-family: var(--font-mono); font-size: .72rem; color: var(--text-2); }
+.pick-empty { padding: 24px 2px; text-align: center; font-size: .85rem; color: var(--text-2); }
+/* The action at the end of the list («create it», when nothing matches). A dashed frame,
+   like every other «add» in the app: it makes something new rather than choosing. */
+.pick-extra {
+  display: block;
+  width: 100%;
+  margin-top: 12px;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-2);
+  font-family: var(--font);
+  font-size: .9rem;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+.pick-extra:active { transform: scale(.97); }
+.pick-extra:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 2px; }

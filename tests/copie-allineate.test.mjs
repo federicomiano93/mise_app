@@ -282,6 +282,14 @@ const DOM_SNAPSHOT = [
     // answerable by reading four files.
     why: 'the catalogue copy with a client-ordering header',
   },
+  {
+    file: 'js/dom.js',
+    sha256: '0fe18894c47fe0884b54c5d9eb653b67802876d1b4ee979f677bf2c00e5f3c1f',
+    // Added 13 Sep 2026 for the two screens SHARED by the Catalogue and Food cost
+    // (js/pick-suggest.js, js/pick-screen.js), which live in js/ root and may not reach
+    // into a feature folder for el(). The catalogue copy with a header saying so.
+    why: 'the catalogue copy with a js/-root header, for the shared pickers',
+  },
 ];
 
 test(`the ${DOM_SNAPSHOT.length} copies of dom.js differ only as photographed`, () => {

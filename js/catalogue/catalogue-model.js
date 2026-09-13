@@ -313,7 +313,9 @@ export function linkOptions({ ingredients, recipes, suppliers, query, excludeRec
   const supplierName = id => (suppliers && (suppliers[id] || {}).name) || '';
 
   const ingredientList = Object.values(ingredients || {})
-    .filter(ing => ing && ing.active !== false)
+    // ⚠️ PACKAGING IS NOT AN INGREDIENT (13 Sep 2026): a box filed under «Imballaggi» in
+    // Fornitori e ingredienti has no allergens to declare and no place in a recipe.
+    .filter(ing => ing && ing.active !== false && ing.kind !== 'packaging')
     .map(ing => ({
       id: ing.id,
       name: String(ing.name || '').trim(),

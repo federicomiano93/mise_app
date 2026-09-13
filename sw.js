@@ -12,7 +12,7 @@ const CACHE_NAME = 'theitalianclub-v361';
 // the fetch handler below, on the first load that has a network.
 // So between activate() and that first load, a phone that is OFFLINE cannot boot:
 // the code asks for 12.18.0 and nothing has it. In practice the window is very
-// small — activate() only happens after a successful 238-file precache, i.e.
+// small — activate() only happens after a successful 241-file precache, i.e.
 // online, and tapping the update banner reloads the page immediately — but it is
 // not zero, and it is the reason to bump the SDK deliberately rather than often.
 // Leaving the name unchanged would close the window and cost ~1 MB of dead
@@ -92,6 +92,12 @@ const ASSETS = [
   // catalogue.html and foodcost.html import it at load, so offline without it neither
   // page would open at all.
   './js/recipe-link.js',
+  // The suggestion list under a field and the full-screen search chooser, SHARED by the
+  // Catalogue and Food cost since 13 Sep 2026, with their own copy of el(). Both pages
+  // import them at load, so offline without them neither form would open.
+  './js/dom.js',
+  './js/pick-suggest.js',
+  './js/pick-screen.js',
   './js/photo-model.js',
   // ⚠️ A NEW FILE, AND THE ONE FAILURE THAT DOES NOT HEAL ITSELF. An installed
   // phone that goes offline after a deploy finds a file the new HTML asks for and
@@ -366,7 +372,7 @@ const ASSETS = [
 // code against rules that deployed instantly, which is the very thing the gate exists
 // to prevent. Two things stand between that and a release: the test that every ASSETS
 // entry EXISTS (a mistyped path being the likeliest permanent cause), and this
-// project's post-deploy sweep, which already asks the live site for all 238 files.
+// project's post-deploy sweep, which already asks the live site for all 241 files.
 // ⚠️ NEITHER covers a device-specific failure — nobody has yet confirmed an update
 // landing on a real iPhone under this code.
 //

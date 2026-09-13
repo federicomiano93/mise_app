@@ -10,7 +10,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
-import { suggestLinks, applyLink, SUGGEST_MIN_CHARS, SUGGEST_LIMIT } from '../js/catalogue/catalogue-model.js';
+import { suggestLinks, applyLink, linkOptions, SUGGEST_MIN_CHARS, SUGGEST_LIMIT } from '../js/catalogue/catalogue-model.js';
 
 const read = rel => readFileSync(new URL(`../${rel}`, import.meta.url), 'utf8');
 
@@ -161,17 +161,50 @@ test('⚠️ every link in the form goes through applyLink — no second way of 
 });
 
 test('⚠️ the list never chooses by itself, and a tap is not lost to the keyboard', () => {
-  const suggest = codeOf(read('js/catalogue/ingredient-suggest.js'));
+  // ⚠️ The list is SHARED since 13 Sep 2026 (Food cost uses it under a product's name), so
+  // its behaviour is pinned where it lives, and the catalogue is pinned to use it.
+  const suggest = codeOf(read('js/pick-suggest.js'));
   assert.match(suggest, /input\.addEventListener\('blur', close\);/, 'leaving the field only closes it');
   assert.match(suggest, /list\.addEventListener\('pointerdown', e => e\.preventDefault\(\)\);/,
     'without it the blur closes the list before the tap lands');
   assert.match(suggest, /e\.key === 'Enter' && active >= 0/, 'Enter chooses only a row the arrows highlighted');
   const onPickCalls = suggest.match(/onPick\(/g) || [];
-  assert.equal(onPickCalls.length, 1, 'one way to a link: choose()');
+  assert.equal(onPickCalls.length, 1, 'one way to a pick: choose()');
+  assert.match(codeOf(read('js/catalogue/ingredient-suggest.js')), /return attachSuggestions\(input, \{/,
+    'the catalogue draws its list through the shared one, not a copy of it');
+  assert.match(codeOf(read('js/catalogue/ingredient-picker.js')), /return openPickScreen\(\{/,
+    'and its chooser through the shared chooser');
+});
+
+test('⚠️ the shared chooser tells «dismissed» apart from a choice, and holds no update back', () => {
+  const screen = codeOf(read('js/pick-screen.js'));
+  assert.match(screen, /function onKey\(e\) \{ if \(e\.key === 'Escape'\) close\(undefined\); \}/, 'Escape is the same answer as Back');
+  assert.match(screen, /onclick: \(\) => close\(undefined\)/, 'Back resolves undefined, never null');
+  assert.doesNotMatch(screen, /preview-overlay/, 'not a busy marker: closing it loses nothing');
+  for (const file of ['js/pick-screen.js', 'js/pick-suggest.js']) {
+    assert.doesNotMatch(read(file), /from '\.\/i18n\.js'|from '\.\.\//, `${file} has no words and reaches no feature folder`);
+  }
 });
 
 test('it is in the precache, or the recipe form breaks offline', () => {
-  assert.match(read('sw.js'), /'\.\/js\/catalogue\/ingredient-suggest\.js'/);
+  const sw = read('sw.js');
+  for (const file of ['js/catalogue/ingredient-suggest.js', 'js/pick-suggest.js', 'js/pick-screen.js', 'js/dom.js']) {
+    assert.ok(sw.includes(`'./${file}'`), `${file} must be precached`);
+  }
+});
+
+test('⚠️ packaging is never offered as a recipe ingredient', () => {
+  // An item filed under «Imballaggi» in Fornitori e ingredienti is a box, not food: linked
+  // to a recipe row it would read as an ingredient with no allergens declared.
+  const ingredients = {
+    ...INGREDIENTS,
+    BOX: { id: 'BOX', name: 'Burro box', kind: 'packaging', supplierId: 'S1' },
+  };
+  const all = linkOptions({ ingredients, recipes: [], suppliers: SUPPLIERS, query: '' }).ingredients.map(i => i.id);
+  assert.ok(!all.includes('BOX'), 'the chooser leaves packaging out');
+  assert.ok(all.includes('B1'), 'and still lists the real ingredients');
+  assert.ok(!names(suggestLinks({ ingredients, recipes: [], query: 'burro' })).includes('Burro box'),
+    'so does the list under the name');
 });
 
 // Comments stripped before every source check — a guard that fires on its own warning
