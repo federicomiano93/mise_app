@@ -162,7 +162,7 @@ const app = {
       .filter(r => r && String(r.name || '').trim())
       .map(r => {
         const costed = costRecipe(r, tables());
-        const rate = costed.pricePerKg === null ? 'not priced' : `${formatRate(costed.pricePerKg)} / kg`;
+        const rate = costed.pricePerKg === null ? t('fc.notPriced') : `${formatRate(costed.pricePerKg)} / kg`;
         return { id: r.id, label: `${r.name} — ${rate}` };
       })
       .sort((a, b) => a.label.localeCompare(b.label));
@@ -176,9 +176,9 @@ const app = {
       .map(i => {
         const each = i.priceUnit === 'pcs' ? Number(i.pricePerUnit) : null;
         const perKg = pricePerKg(i);
-        const note = each ? `${formatRate(each)} each`
-          : perKg !== null ? 'priced by weight'
-            : 'not priced';
+        const note = each ? t('fc.priceEach', { price: formatRate(each) })
+          : perKg !== null ? t('fc.pricedByWeight')
+            : t('fc.notPriced');
         return { id: i.id, label: `${i.name} — ${note}` };
       })
       .sort((a, b) => a.label.localeCompare(b.label));

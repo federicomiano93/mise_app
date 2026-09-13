@@ -214,7 +214,7 @@ export function renderEditor({ product, app }) {
     const qtyKey = isRecipe ? 'qtyKg' : 'qtyPcs';
 
     const select = el('select', {
-      class: 'fc-input fc-select', 'aria-label': isRecipe ? 'Recipe' : 'Packaging item',
+      class: 'fc-input fc-select', 'aria-label': isRecipe ? t('fc.aria.recipe') : t('fc.aria.packagingItem'),
       onchange: e => { entry[idKey] = e.target.value; markDirty(); repaint(); },
     }, [
       el('option', { value: '' }, isRecipe ? t('fc.chooseARecipe') : t('fc.chooseAnItem')),
@@ -225,7 +225,7 @@ export function renderEditor({ product, app }) {
     const qty = el('input', {
       class: 'fc-input fc-qty', type: 'number', min: '0', step: 'any',
       inputmode: 'decimal', placeholder: '0', value: entry[qtyKey] || '',
-      'aria-label': isRecipe ? 'Kilos' : 'Pieces',
+      'aria-label': isRecipe ? t('fc.aria.kilos') : t('fc.aria.pieces'),
       // ⚠️ NOT repaint(). That rebuilds every row — THIS BOX INCLUDED — so the finger lost
       // the box after one digit and «1.7» could not be typed at all. Found driving the
       // screen on 13 Sep 2026. A quantity changes two things, and only those are
@@ -263,7 +263,7 @@ export function renderEditor({ product, app }) {
       const costed = costRecipe(recipe, tables);
       if (costed.pricePerKg === null) return t('fc.thisRecipeIsNot');
       const line = (Number(entry.qtyKg) || 0) * costed.pricePerKg;
-      return `${formatRate(costed.pricePerKg)} / kg  ·  ${formatMoney(line)}${costed.partial ? '  ·  partly priced' : ''}`;
+      return `${formatRate(costed.pricePerKg)} / kg  ·  ${formatMoney(line)}${costed.partial ? `  ·  ${t('fc.partlyPriced')}` : ''}`;
     }
     const ingredient = tables.ingredients[entry.ingredientId];
     if (!ingredient) return entry.ingredientId ? t('fc.thisItemNoLonger') : '';
@@ -273,7 +273,7 @@ export function renderEditor({ product, app }) {
       return t('fc.pricedByWeightSet');
     }
     const each = Number(ingredient.pricePerUnit) || 0;
-    return `${formatRate(each)} each  ·  ${formatMoney((Number(entry.qtyPcs) || 0) * each)}`;
+    return `${t('fc.priceEach', { price: formatRate(each) })}  ·  ${formatMoney((Number(entry.qtyPcs) || 0) * each)}`;
   }
 
   function repaintLines() {
@@ -329,7 +329,7 @@ export function renderEditor({ product, app }) {
   }, [
     el('option', { value: '' }, t('fc.choose')),
     ...VAT_RATES.map(rate => el('option', { value: String(rate) },
-      rate === 20 ? '20% — standard' : rate === 5 ? '5% — reduced' : '0% — zero-rated')),
+      t(rate === 20 ? 'fc.vat.standard' : rate === 5 ? 'fc.vat.reduced' : 'fc.vat.zero'))),
     el('option', { value: 'other' }, t('fc.anotherRate')),
   ]);
   const vatOther = numberInput('fcVatOther', t('fc.anotherVatRateAs'),
