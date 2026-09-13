@@ -12,7 +12,7 @@
 
 import { firebaseConfig, sessionReady, currentSession } from '../firebase.js';
 import { currentLocationId, pathFor } from '../location.js';
-import { withPrices } from '../price-model.js';
+import { PRICE_FIELDS } from '../price-model.js';
 import {
   getApps,
   getApp,
@@ -36,15 +36,13 @@ export const db = getFirestore(app);
 
 const RECIPES = 'recipes';
 // Orders owns this collection and is the only place it is written; the catalogue
-// READS it so a recipe row can be linked to a real ingredient and costed. The rules
-// were widened to allow exactly that (canReadIngredients) and nothing more.
+// READS it so a recipe row can be linked to a real ingredient and its allergens read.
+// ⚠️ NOT its price: that lives in a collection of its own which the catalogue stopped
+// reading on 13 Sep 2026 (see watchIngredients below).
 //
 // This is a shared COLLECTION, not a shared module — js/catalogue/ still imports
 // nothing from js/orders/, so the feature stays liftable.
 const INGREDIENTS = 'ingredients';
-// What each ingredient COSTS. A separate collection, because Orders must read
-// every ingredient to work at all — see js/price-model.js and firestore.rules.
-const INGREDIENT_PRICES = 'ingredient-prices';
 const SUPPLIERS = 'suppliers';
 const CONFIG = 'config';
 const LABELS_DOC = 'labels';
@@ -83,48 +81,45 @@ export async function watchRecipes(onChange, onError) {
   );
 }
 
-// Subscribe to the ingredient list in real time, so a price corrected in Orders
-// shows up in an open recipe without a reload.
+// Subscribe to the ingredient list in real time: what a recipe row links to, and the
+// allergen declarations the recipe screen, the allergen sheet and the label read — so
+// a declaration made in Orders reaches an open recipe without a reload.
 //
 // COST (P14): one listener over ~65 documents, attached only while the catalogue
 // page is open — the same discipline as watchRecipes above, and the reason neither
 // is attached at app boot.
 //
 // A venue that does not use Orders still resolves this listener; the rules simply
-// return nothing readable and the catalogue shows every row as unpriced, which is
-// the honest answer for a venue that keeps no ingredient list.
-// ⚠️ TWO COLLECTIONS, ONE ANSWER. The price moved off the ingredient document
-// (js/price-model.js says why), so what this screen needs is the two merged.
+// return nothing readable, which is the honest answer for a venue that keeps no
+// ingredient list.
 //
-// ⚠️ AND THE PRICE HALF FAILS QUIETLY, ON PURPOSE. An employee is refused that
-// collection by the rules, and the refusal IS the feature working — not an error
-// to report. Every screen here already knows what an unpriced ingredient looks
-// like, because most ingredients have never had a price, so the result is "not
-// priced yet" rather than a broken screen.
-//
-// ⚠️ NOTHING IS EMITTED UNTIL THE INGREDIENTS THEMSELVES HAVE ARRIVED. The prices
-// snapshot can land first, and emitting then would paint an empty list for a
-// frame — the same shape as the bug where every ingredient flashed as an orphan
-// before the suppliers arrived.
+// ⚠️⚠️ NO PRICES, SINCE 13 SEP 2026. This used to open a second listener on
+// `ingredient-prices` and merge the two, for a cost card on the recipe screen.
+// Federico removed that card: a recipe on its own knows neither its oven loss nor the
+// ingredients added to the product later, so its figure was not a real cost, and the
+// cost of a product is now read only in Food cost. With nothing in the catalogue
+// showing a price, reading them would cost one read per priced ingredient on every
+// open for nothing — and would leave the prices cached on every phone that opens the
+// catalogue. tests/catalogue-no-money.test.mjs keeps them out.
 export async function watchIngredients(onChange, onError) {
   await authReady;
-  let ingredients = null;
-  let prices = {};
-  const emit = () => { if (ingredients) onChange(withPrices(ingredients, prices)); };
-
-  const stopIngredients = onSnapshot(
+  return onSnapshot(
     collection(db, pathFor(INGREDIENTS)),
-    snap => { ingredients = snap.docs.map(d => ({ id: d.id, ...d.data() })); emit(); },
+    snap => onChange(snap.docs.map(d => withoutPrice({ id: d.id, ...d.data() }))),
     err => { console.error('watchIngredients failed:', err); if (onError) onError(err); },
   );
+}
 
-  const stopPrices = onSnapshot(
-    collection(db, pathFor(INGREDIENT_PRICES)),
-    snap => { prices = {}; snap.forEach(d => { prices[d.id] = d.data(); }); emit(); },
-    () => { prices = {}; emit(); },
-  );
-
-  return () => { stopIngredients(); stopPrices(); };
+// ⚠️ AND NOT THE OLD PRICE FIELDS ON THE INGREDIENT ITSELF. Prices entered before v270
+// were written onto the ingredient document, and they drain out only as each ingredient
+// is saved again (js/price-model.js, PRICE_FIELDS) — so some documents still carry one.
+// Nothing in the catalogue reads them; dropping them here is what keeps its local copy,
+// on every phone that opens it, free of prices too. Found by driving the app: a seeded
+// legacy ingredient's price was sitting in localStorage after the listener had gone.
+function withoutPrice(ingredient) {
+  const out = { ...ingredient };
+  PRICE_FIELDS.forEach(key => { delete out[key]; });
+  return out;
 }
 
 // The supplier names, so the chooser can tell two similar articles apart. Six

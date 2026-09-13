@@ -456,33 +456,31 @@ test('⚠️ an Italian warning that used to finish in English', () => {
   }
 });
 
-test('⚠️ the ingredient name keeps its autocomplete, however tight the row gets', () => {
-  // ⚠️⚠️ 17px OF THAT BOX BELONGS TO THE DATALIST PICKER, and the tempting way to win
-  // it back is to drop `list=`. Measured on the real screen: removing the attribute in
-  // the debugger takes the input's reported content from 115px to 98 and un-truncates
-  // «Strong flour» at 320px. It would also take away the suggestion list that makes an
-  // ingredient name match the one Orders knows — which is what links a row to a price
-  // and to an allergen. Four CSS ways of hiding the indicator were tried on the live
-  // element and all four changed nothing, so the space is simply not for sale.
-  assert.match(EDITOR, /list: 'cat-ingredient-names'/,
-    'the name field must keep its datalist: 17px of width is not worth an ingredient '
-    + 'nobody can link');
-  assert.match(read('catalogue.css'), /17px OF THIS BOX IS SPENT ON A BUTTON/,
-    'and the reason it is not reclaimed stays written down where the width is decided, '
-    + 'or the next person measures it all over again');
+test('⚠️ the ingredient name carries the catalogue\'s suggestion list, not the browser\'s', () => {
+  // Until 13 Sep 2026 the field carried a native <datalist> of names used in other
+  // recipes, and this test forbade removing it, believing it was what linked a row to a
+  // price and an allergen. It never linked anything: it filled in text. Federico then
+  // asked for a list that DOES link (tests/link-suggestions.test.mjs); two lists at once
+  // cannot work on a phone, so the datalist went — and with it the 17px picker button
+  // Chrome reserves inside every input[list], which no CSS could reclaim.
+  assert.doesNotMatch(EDITOR, /list: 'cat-ingredient-names'/, 'the native list is back on the name field');
+  assert.match(EDITOR, /attachLinkSuggestions\(labelInput,/, 'and the field has the linking list instead');
+  assert.match(read('catalogue.css'), /THE 17px CHROME RESERVED/,
+    'the width it gave back stays written down where the width is decided');
 });
 
-test('⚠️ «no price yet» under an ingredient row is a key, not English', () => {
-  // Seen on a SCREENSHOT of an Italian venue, under an Italian heading:
-  // «→ Farina 0 · Brava Fresh · no price yet». The key has existed in both languages
-  // all along and ingredient-picker.js has always used it.
-  // ⚠️ NO GUARD COULD SEE IT: nothing-stays-english skips an all-lowercase string with
-  // no punctuation, because that is exactly the shape of a CSS class list.
-  assert.ok(!/'no price yet'/.test(EDITOR), 'the editor must not write the English out');
-  assert.match(EDITOR, /rate === null \? t\('cat\.noPriceYet'\)/,
-    'it asks the dictionary, like its sibling ingredient-picker.js always has');
-  assert.match(codeOf(read('js/catalogue/ingredient-picker.js')), /t\('cat\.noPriceYet'\)/,
-    'and the sibling still does, so the two screens cannot disagree');
+test('⚠️ a linked row and the chooser show no price, and name a sub-recipe in the dictionary', () => {
+  // Until 13 Sep 2026 both printed «£x / kg» or «no price yet» — and once, on an Italian
+  // venue, the English words. Federico took money off the catalogue: a cost is read in
+  // Food cost, where the oven loss and the rest of the product are known.
+  const picker = codeOf(read('js/catalogue/ingredient-picker.js'));
+  for (const [name, src] of [['the editor', EDITOR], ['the chooser', picker]]) {
+    assert.ok(!/noPriceYet|no price yet|\/ kg`/.test(src), `${name} prints no price`);
+  }
+  // ⚠️ «· recipe» was English written into the link line; nothing-stays-english skips an
+  // all-lowercase word with no punctuation, so no guard could see it.
+  assert.ok(!/·\s+recipe`/.test(EDITOR), 'the sub-recipe word must come from the dictionary');
+  assert.match(EDITOR, /\$\{t\('cat\.recipe'\)\}/);
 });
 
 // ── The two fields a FULL label needs ────────────────────────────────────────

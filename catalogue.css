@@ -377,21 +377,16 @@ body.cat-zoom-lock { overflow: hidden; }
    two rings at once would be noise. Matches .cat-loss-input:focus. */
 .cat-ing-editrow .cat-amount .cat-grm:focus,
 .cat-ing-editrow .cat-amount .cat-unit-cell:focus-within { border-color: var(--cat-accent); }
-/* ⚠️⚠️ 17px OF THIS BOX IS SPENT ON A BUTTON NO FINGER CAN REACH, AND CSS CANNOT GET
-   IT BACK. The name carries `list="cat-ingredient-names"` for autocomplete, and Chrome
-   reserves room inside an input[list] for a picker indicator it only DRAWS on hover —
-   dead space on a phone, for ever. Measured at 320px: «Strong flour» is 86.48px of text
-   in a 90px text area, so it fits; the browser reports the content as 115 and draws
-   «Strong …» anyway. Removing the `list` attribute in the debugger drops 115 to 98 and
-   names the culprit exactly.
-   ⚠️ FOUR WAYS OF HIDING IT WERE TRIED ON THE LIVE ELEMENT AND ALL FOUR CHANGED NOTHING
-   — ::-webkit-calendar-picker-indicator with display:none and with width:0,
-   ::-webkit-list-button, and appearance:none. The reservation is the ATTRIBUTE's, not a
-   paintable pseudo-element's. So this is written down rather than fixed: the only ways
-   out cost the autocomplete or add a focus/blur attribute dance to the one control
-   every ingredient is typed into, and neither is worth it for 17px.
-   📌 The name still truncates at 320px. It truncates 6px LESS than on main, and at
-   375px and above it fits on both. */
+/* ⚠️ THE 17px CHROME RESERVED INSIDE THIS BOX CAME BACK ON 13 SEP 2026. The name used to
+   carry `list="cat-ingredient-names"` (a native <datalist>), and Chrome reserves room
+   inside every input[list] for a picker indicator it only draws on hover — dead space on
+   a phone that no CSS could reclaim: ::-webkit-calendar-picker-indicator, ::-webkit-
+   list-button and appearance:none were all tried on the live element and changed
+   nothing. The datalist went when Federico asked for a list that LINKS the row to a
+   catalogue ingredient (js/catalogue/ingredient-suggest.js), because two suggestion
+   lists at once cannot work on a phone.
+   ⚠️ Never put a `list` attribute back on this field: it would stack the browser's list
+   on top of that one AND take the 17px again. */
 .cat-ing-editrow .cat-lbl { font-family: var(--cat-font); text-overflow: ellipsis; }
 .cat-ing-editrow .cat-grm { font-family: var(--cat-font-mono); font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
 /* .9rem, not the row's .98rem: the longest option ("to taste") must fit the column
@@ -500,8 +495,6 @@ body.cat-zoom-lock { overflow: hidden; }
    as a footnote the way the old hint did. */
 .cat-loss-out { margin-top: 10px; font-size: .86rem; color: var(--cat-text); }
 
-/* The cost panel on the recipe screen. The number and its caveat are one block:
-   a partial cost shown without its note is the one way this screen can mislead. */
 /* ── One card shape for every block on the recipe screen ─────────────────────
    Federico, 24 Aug 2026: «dividi tutte le funzioni in riquadri… così che ogni funzione
    si distingua bene». Two of the five blocks had an edge and three floated.
@@ -586,20 +579,38 @@ body.cat-zoom-lock { overflow: hidden; }
 .cat-sec-body .cat-guided-panel { margin-top: 0; }
 .cat-sec-body .cat-weight-panel { margin-top: 0; }
 
-.cat-cost-panel {
-  margin-top: 14px;
-  padding: 12px 14px;
+/* Food cost, one tap away (13 Sep 2026) — a .cat-sec standing where the cost card stood.
+   The button is .cat-import-btn, this screen's quiet button: it leads somewhere, it does
+   not do the screen's job. */
+.cat-fc-note { margin: 0 0 10px; font-size: .84rem; line-height: 1.45; color: var(--cat-text-2); }
+
+/* The little list under a recipe row's name while it is typed (13 Sep 2026): catalogue
+   ingredients to link the row to. ⚠️ In the flow of the framed list, under its own row —
+   it pushes the rows below down rather than floating over a phone's keyboard, and the
+   frame (overflow: hidden) would clip anything that floated. ⚠️ 44px rows: it is tapped. */
+.cat-suggest {
+  margin: 0 6px 6px 8px;
   border: 1px solid var(--cat-border);
-  border-radius: var(--cat-radius);
+  border-radius: 10px;
   background: var(--cat-surface);
+  overflow: hidden;
 }
-.cat-cost-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
-.cat-cost-label { font-size: .74rem; text-transform: uppercase; letter-spacing: .06em; color: var(--cat-text-2); font-family: var(--cat-font-mono); }
-.cat-cost-value { font-size: 1.25rem; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--cat-text); }
-.cat-cost-basis { margin-top: 4px; font-size: .74rem; color: var(--cat-text-2); font-family: var(--cat-font-mono); }
-/* Amber, not red: a partial cost is unfinished, not wrong. */
-.cat-cost-partial { margin-top: 8px; font-size: .78rem; color: var(--warn); }
-.cat-cost-none { font-size: .78rem; color: var(--cat-text-2); }
+.cat-suggest-row {
+  display: flex; align-items: center; gap: 8px;
+  min-height: 44px; padding: 6px 10px;
+  border-top: 1px solid var(--cat-border);
+  cursor: pointer;
+}
+.cat-suggest-row:first-child { border-top: 0; }
+.cat-suggest-row.active, .cat-suggest-row:hover { background: var(--cat-surface-2); }
+.cat-suggest-text { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.cat-suggest-name,
+.cat-suggest-meta { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cat-suggest-name { font-size: .92rem; font-weight: 600; color: var(--cat-text); }
+.cat-suggest-meta { font-family: var(--cat-font-mono); font-size: .72rem; color: var(--cat-text-2); }
+/* The tick on the row's current link. A flex box, or the SVG rests on a text baseline. */
+.cat-suggest-check { flex: none; display: flex; align-items: center; color: var(--brand); }
+.cat-suggest-all { justify-content: center; font-size: .86rem; font-weight: 600; color: var(--cat-text-2); }
 
 /* ── The link chooser ──────────────────────────────────────────────────────
    A full-screen overlay following the app's header spec: Back on the LEFT, title
@@ -1392,8 +1403,9 @@ body.cat-zoom-lock { overflow: hidden; }
 
 /* "Fill this in from a photo", offered only on a NEW recipe and only when the venue
    has the reader switched on. Quiet, like the import button it borrows from: it is an
-   alternative to typing, not the main action of the screen. */
-.cat-photo-fill { margin: 10px 0 4px; }
+   alternative to typing, not the main action of the screen. Since 13 Sep 2026 it is
+   the last thing on the page, under Save — so it keeps a gap above and none below. */
+.cat-photo-fill { margin: 12px 0 0; }
 
 /* The line under the switch that says what it costs. Quiet, like every other note
    on this page — it explains, it does not warn. */

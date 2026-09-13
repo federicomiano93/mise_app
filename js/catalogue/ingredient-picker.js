@@ -14,22 +14,24 @@
 import { t } from '../i18n.js';
 import { el } from './dom.js';
 import { linkOptions } from './catalogue-model.js';
-import { pricePerKg, formatRate } from '../price-model.js';
 
 const BACK_ICON = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>';
 
 // Open the picker. Resolves with { kind, refId, name } when something is chosen,
 // with null when the link is removed, and with undefined when it is dismissed —
 // three different answers, because "cancel" must not silently clear a link.
-export function openLinkPicker({ ingredients, recipes, suppliers, excludeRecipeId, hasLink }) {
+//
+// `initialQuery` opens it already searching — «Vedi tutti» under a row's suggestion list
+// hands over what was typed, so nobody has to type it twice.
+export function openLinkPicker({ ingredients, recipes, suppliers, excludeRecipeId, hasLink, initialQuery = '' }) {
   return new Promise(resolve => {
-    let query = '';
+    let query = String(initialQuery ?? '');
 
     const list = el('div', { class: 'cat-pick-list' });
 
     const search = el('input', {
       class: 'cat-pick-search', type: 'search', placeholder: t('cat.searchAnIngredient'),
-      'aria-label': t('cat.searchAnIngredient'),
+      'aria-label': t('cat.searchAnIngredient'), value: query,
       oninput: e => { query = e.target.value; paint(); },
     });
 
@@ -56,14 +58,11 @@ export function openLinkPicker({ ingredients, recipes, suppliers, excludeRecipeI
       if (options.ingredients.length) {
         list.appendChild(el('div', { class: 'cat-pick-head', text: t('cat.ingredients') }));
         options.ingredients.forEach(opt => {
-          // Name · weight · supplier · what a kilo costs — the four things that tell
-          // two similar-looking articles apart. "No price yet" is said out loud
-          // rather than left blank: linking to an unpriced ingredient is allowed,
-          // and the row should not look like it will produce a cost.
-          const rate = pricePerKg(opt.ingredient);
-          const meta = [opt.weight, opt.supplierName,
-            rate === null ? t('cat.noPriceYet') : `${formatRate(rate)} / kg`]
-            .filter(Boolean).join('  ·  ');
+          // Name · weight · supplier — what tells two similar-looking articles apart.
+          // ⚠️ NO PRICE SINCE 13 SEP 2026: the catalogue shows no money at all (a cost
+          // is real only in Food cost, where the oven loss and the rest of the product
+          // are known), and it no longer even loads the prices.
+          const meta = [opt.weight, opt.supplierName].filter(Boolean).join('  ·  ');
           list.appendChild(row(opt.name, meta,
             () => close({ kind: 'ingredient', refId: opt.id, name: opt.name })));
         });
@@ -72,7 +71,8 @@ export function openLinkPicker({ ingredients, recipes, suppliers, excludeRecipeI
       if (options.recipes.length) {
         list.appendChild(el('div', { class: 'cat-pick-head', text: t('ui.recipes') }));
         options.recipes.forEach(opt => {
-          list.appendChild(row(opt.name, 'Recipe',
+          // ⚠️ Was the English word 'Recipe' written into the code, on an Italian venue too.
+          list.appendChild(row(opt.name, t('cat.recipe'),
             () => close({ kind: 'recipe', refId: opt.id, name: opt.name })));
         });
       }
@@ -86,7 +86,7 @@ export function openLinkPicker({ ingredients, recipes, suppliers, excludeRecipeI
 
     const overlay = el('div', { class: 'cat-pick-overlay' }, [
       el('header', { class: 'cat-header cat-pick-header' }, [
-        el('button', { class: 'cat-icon-btn', type: 'button', 'aria-label': 'Back',
+        el('button', { class: 'cat-icon-btn', type: 'button', 'aria-label': t('ui.back'),
           icon: BACK_ICON, onclick: () => close(undefined) }),
         el('div', { class: 'cat-pick-title' }, [el('h1', { text: t('cat.linkTo') })]),
         el('span', { class: 'cat-pick-spacer' }),

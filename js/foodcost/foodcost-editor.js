@@ -13,7 +13,7 @@ import { t } from '../i18n.js';
 import { canManageHere } from './firebase-foodcost.js';
 import { el } from './dom.js';
 import {
-  vatRatesFor, vatSelection, SELLING_MODES, costProduct, blockerText, statusFor,
+  vatRatesFor, vatSelection, SELLING_MODES, costProduct, productionCost, blockerText, statusFor,
   snapshotWorthTaking, productSnapshot, normalizeProduct,
 } from './foodcost-model.js';
 import { formatRate, formatMoney, pricePerKg } from '../price-model.js';
@@ -33,20 +33,33 @@ const TRASH_SVG =
 // Keys, resolved at draw time — see js/calculator-render.js.
 const STATUS_TEXT = { green: 'fc.onTarget', amber: 'fc.slightlyOverTarget', red: 'fc.overTarget' };
 
-export function renderEditor({ product, app }) {
+// `draft` is a NEW product nobody has typed yet — built by draftFromRecipe() when a
+// recipe's «Apri nel Food cost» finds no product using it.
+//
+// ⚠️ `product` STAYS null FOR IT, exactly as for «+ Add product»: the title, the toast,
+// the absent Delete and the absent margin history all key off `product`, and a draft is
+// none of those. And it opens NOT dirty — nobody has typed anything, so leaving at once
+// asks nothing and saves nothing.
+export function renderEditor({ product, draft = null, app }) {
   // A working COPY. Nothing reaches the stored product until Save.
   const working = product
     ? JSON.parse(JSON.stringify(normalizeProduct(product)))
-    : {
-      id: null, name: '', components: [], packaging: [],
-      sellingMode: null, piecesPerBatch: null, sellingPrice: null,
-      vatRate: null, foodCostTarget: null,
-    };
+    : draft && normalizeProduct(draft)
+      ? JSON.parse(JSON.stringify({ ...normalizeProduct(draft), id: null }))
+      : {
+        id: null, name: '', components: [], packaging: [],
+        sellingMode: null, piecesPerBatch: null, sellingPrice: null,
+        vatRate: null, foodCostTarget: null,
+      };
 
   let dirty = false;
   let busy = false;
   let showErrors = false;
-  const markDirty = () => { dirty = true; };
+  // ⚠️ `touched` NEVER GOES BACK TO false, unlike `dirty` (which Save clears). The page
+  // asks it whether a product opened from a recipe is still exactly as it arrived — see
+  // isUntouched() at the bottom, and foodcost-main.js.
+  let touched = false;
+  const markDirty = () => { dirty = true; touched = true; };
 
   // ── The oven loss of each recipe on this product ───────────────────────────
   //
@@ -150,10 +163,47 @@ export function renderEditor({ product, app }) {
     paintAnswer();
   }
 
+  // ── What it costs to make, on its own ──────────────────────────────────────
+  //
+  // Federico, 13 Sep 2026: «inserisci il costo prodotto in food cost». Until now it was
+  // readable only inside the food cost sentence, and only once a selling price and a
+  // VAT rate were in — so a product being built showed no cost at all. It is also the
+  // only place a product's cost is shown now: the recipe screen stopped showing one,
+  // because a recipe on its own knows neither its oven loss nor what is added later.
+  //
+  // ⚠️ NO TRAFFIC-LIGHT EDGE: a cost is neither good nor bad until there is a price.
+  const prodCost = el('div', { class: 'fc-prodcost' });
+
+  function paintProductionCost() {
+    const cost = productionCost(working, liveTables());
+    prodCost.replaceChildren();
+    // Nothing costed yet: no box at all, never «€0.00», which reads as free.
+    prodCost.hidden = cost.batchCost === null;
+    if (cost.batchCost === null) return;
+
+    const perUnit = cost.unitCost !== null;
+    prodCost.appendChild(el('div', { class: 'fc-prodcost-head' }, [
+      el('span', { class: 'fc-answer-label', text: t('fc.productionCost') }),
+      el('span', { class: 'fc-prodcost-value' }, [
+        el('span', { class: 'fc-prodcost-num', text: perUnit ? formatRate(cost.unitCost) : formatMoney(cost.batchCost) }),
+        el('span', { class: 'fc-prodcost-unit', text: perUnit
+          ? t(cost.unit === 'kg' ? 'fc.perKg' : 'fc.perPiece')
+          : t('fc.wholeBatchWord') }),
+      ]),
+    ]));
+    if (perUnit) {
+      prodCost.appendChild(el('p', { class: 'fc-answer-basis', text: t('fc.wholeBatch', { cost: formatMoney(cost.batchCost) }) }));
+    }
+    // ⚠️ THE SAME RULE AS THE ANSWER BELOW: a partial cost is always too LOW, so it may
+    // never be shown without saying so.
+    if (cost.partial) prodCost.appendChild(el('p', { class: 'fc-answer-partial', text: t('fc.costPartial') }));
+  }
+
   // ── The answer, live ───────────────────────────────────────────────────────
   const answer = el('div', { class: 'fc-answer' });
 
   function paintAnswer() {
+    paintProductionCost();
     const result = costProduct(working, liveTables());
     answer.replaceChildren();
 
@@ -467,6 +517,7 @@ export function renderEditor({ product, app }) {
   repaint();
 
   const root = el('div', { class: 'fc-view fc-editor' }, [
+    prodCost,
     answer,
 
     field(t('fc.name'), nameInput),
@@ -509,6 +560,8 @@ export function renderEditor({ product, app }) {
 
   return {
     root,
+    // Still exactly as it arrived: nothing typed ever, and no Save under way.
+    isUntouched: () => !touched && !busy,
     // ⚠️ WITHOUT THIS THE CHOOSERS ARE BUILT ONCE, FROM WHATEVER HAD ARRIVED.
     // The recipe and ingredient listeners are still in flight while this screen is
     // being opened — on a cold start, offline, or a slow network — so "+ Add

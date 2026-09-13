@@ -15,7 +15,6 @@ import {
 import {
   getScaledTarget, setScaledTarget, clearScaledTarget, getIngredients, getRecipesById,
 } from './catalogue-store.js';
-import { costRecipe, partialCostText } from './recipe-cost-model.js';
 import { recipeAllergens, canLabel, incompleteText, ALLERGEN_REASON_TEXT } from './recipe-allergen-model.js';
 // The declaration this screen now shows. ⚠️ NO NEW ARITHMETIC: buildLabel already
 // flattens sub-recipes, sums duplicates, sorts DESCENDING BY WEIGHT (which is the law,
@@ -33,14 +32,6 @@ import { outputLanguage, allergenName } from '../market.js';
 // Whether this venue tracks allergens at all. From js/ root: Orders sets the switch
 // and the Catalogue obeys it, so the judgement lives in one file for both.
 import { allergensOn } from '../venue-features.js';
-// ⚠️ formatMoney AND NOT formatRate, and it is one identifier with a reason.
-// Federico, 24 Aug 2026: «nella casella costo voglio solo il costo al kg con due numeri
-// decimali dopo il punto». formatRate prints two to FOUR decimals so that a gelatine
-// leaf at 3.5p does not read as £0.00 — right for a rate per PIECE, and a kilo of a
-// recipe costing under a penny is not a real case. formatRate itself is untouched: it
-// has eleven call sites across Orders, Food Cost and this feature's own ingredient
-// rates, and widening it for one screen would move all eleven.
-import { formatMoney } from '../price-model.js';
 // ⚠️ From js/ ROOT since 24 Aug 2026. It used to live in js/staff/, and a feature may
 // not import from another feature's folder — making a fifth copy of the raced clipboard
 // write to satisfy a rule whose whole purpose is to stop copies would be the wrong
@@ -71,56 +62,66 @@ const amountEl = ({ num, unit }) => el('span', { class: 'cat-ing-amt' }, [
   el('span', { class: 'cat-ing-unit', text: unit }),
 ]);
 
-// What a kilo of this recipe costs, from the prices entered in Orders.
+// ⚠️⚠️ NO COST CARD, SINCE 13 SEP 2026. This screen used to show what a kilo of the
+// recipe costs. Federico: «togli il costo del prodotto dalla scheda ricetta perché non
+// scrivendo il calo peso ed ulteriori ingredienti che si aggiungono in un secondo
+// momento alla ricetta, il costo non è reale». A product's cost is read in Food cost,
+// where both are known; tests/catalogue-no-money.test.mjs keeps money off this screen.
+
+// ⚠️ ONE CARD SHAPE FOR EVERY BLOCK ON THIS SCREEN. Federico, 24 Aug 2026: «dividi
+// tutte le funzioni in riquadri come hai fatto nella scheda del prodotto fornitore
+// così che ogni funzione si distingua bene». Until then two of the five blocks had an
+// edge and three floated on the page, so the screen read as one long thing.
 //
-// ⚠️ THE NUMBER AND ITS CAVEAT ARE ONE ELEMENT, NEVER TWO. If some rows are not
-// linked, the figure is the cost per kilo OF THE LINKED ROWS — a real, useful,
-// PARTIAL answer — and showing it without the note beside it is the one way this
-// screen can mislead: a food cost that reads complete and is too low.
+// ⚠️ A STATIC HEAD, NOT A FOLD. The ingredient-card's folds hide a JOB; every block
+// here is an ANSWER — what is in it, what it weighs, how it is made — and an answer
+// behind a tap is an answer nobody reads. That is the same rule the allergen card
+// follows by keeping its state word outside its fold.
 //
-// The whole panel is hidden when nothing at all is linked, rather than showing
-// "£0.00" or an empty box on the hundreds of recipes nobody has linked yet.
-function costPanel(recipe) {
-  const result = costRecipe(recipe, {
-    ingredients: getIngredients(),
-    recipes: getRecipesById(),
-  });
+// ⚠️ AND THE HEAD IS AN <h3>, NEVER A BUTTON: there is nothing behind it to open, and
+// a tap target that does nothing teaches somebody the card is closed. Copied from
+// section() in js/orders/ingredient-form.js, which is itself a copy of this file's
+// own .cat-alg-* card — one fold pattern in one app.
+//
+// ⚠️ A FUNCTION DECLARATION AT MODULE LEVEL since 13 Sep 2026. It was a const inside
+// renderDetail, declared AFTER the host that now holds the Food cost card — and a const
+// reached before its line is a "Cannot access before initialization" that blanks the
+// recipe screen.
+function catSection(title, children) {
+  return el('div', { class: 'cat-sec' }, [
+    el('h3', { class: 'cat-sec-head' }, [el('span', { class: 'cat-sec-label', text: title })]),
+    el('div', { class: 'cat-sec-body' }, children),
+  ]);
+}
 
-  const panel = el('div', { class: 'cat-cost-panel' });
-  if (result.pricePerKg === null) {
-    // Nothing linked at all: say what to do, once, quietly — and only when the
-    // recipe has rows worth linking, so a brand-new empty recipe stays silent.
-    if (!result.unpriced.length) { panel.hidden = true; return panel; }
-    // ⚠️ THE HEADING IS DRAWN HERE TOO, and it was not until 24 Aug 2026. Every other
-    // block on this screen now carries one, so a single unheaded box saying «no cost
-    // yet» read as something half-built rather than as the cost card with nothing in
-    // it. Seen in a screenshot; no measurement asks about a missing heading.
-    panel.appendChild(el('div', { class: 'cat-cost-head' }, [
-      el('span', { class: 'cat-cost-label', text: t('cat.cost') }),
-    ]));
-    panel.appendChild(el('p', { class: 'cat-cost-none', text:
-      t('cat.noCostYetLink') }));
-    return panel;
-  }
+const FOODCOST_SVG =
+  '<svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>';
 
-  panel.appendChild(el('div', { class: 'cat-cost-head' }, [
-    el('span', { class: 'cat-cost-label', text: t('cat.cost') }),
-    el('span', { class: 'cat-cost-value', text: `${formatMoney(result.pricePerKg)} / kg` }),
-  ]));
-
-  // The weight it was worked out over, said plainly, because it is NOT the recipe
-  // total whenever a row is unlinked — and a reader comparing the two numbers
-  // deserves to know why they differ rather than doubting both.
-  const over = result.lossPct > 0
-    ? t('cat.costOverLoss', { yield: formatWeight(result.yieldGrams), pct: result.lossPct,
-      from: formatWeight(result.costedGrams) })
-    : t('cat.costOver', { yield: formatWeight(result.yieldGrams) });
-  panel.appendChild(el('p', { class: 'cat-cost-basis', text: over }));
-
-  const note = partialCostText(result);
-  if (note) panel.appendChild(el('p', { class: 'cat-cost-partial', text: note }));
-
-  return panel;
+// ── Food cost, one tap away ──────────────────────────────────────────────────
+//
+// Federico, 13 Sep 2026: «aggiungi un tasto nella scheda ricetta che mi porta
+// direttamente alla sua scheda food cost corrispondente». It stands where the cost card
+// stood — his choice — because that is where somebody used to look for what a recipe
+// costs. Food cost decides what opens: the product using this recipe, the list of them,
+// or a new one (js/foodcost/foodcost-main.js).
+//
+// ⚠️ ONLY FOR WHOEVER THE FOOD COST PAGE WILL LET IN (app.mayOpenFoodCost — the auth
+// gate's own rule, js/recipe-link.js). For anybody else it is not drawn at all: a button
+// leading to a page that sends you straight back Home is worse than no button.
+// ⚠️ ASKED ON EVERY BUILD: the session arrives after the first paint, and refreshCost()
+// rebuilds this card when it does.
+function foodCostPanel(recipe, app) {
+  if (!app.mayOpenFoodCost || !app.mayOpenFoodCost()) return null;
+  return catSection(t('cat.fc.title'), [
+    el('p', { class: 'cat-fc-note', text: t('cat.fc.note') }),
+    el('button', {
+      class: 'cat-import-btn', type: 'button',
+      onclick: () => app.openFoodCost(recipe),
+    }, [
+      el('span', { icon: FOODCOST_SVG, 'aria-hidden': 'true' }),
+      t('cat.fc.open'),
+    ]),
+  ]);
 }
 
 // ── The ingredient declaration, on the recipe screen ─────────────────────────
@@ -227,12 +228,10 @@ function declarationPanel(recipe, app) {
 
 // What this recipe contains, for somebody at the counter being asked.
 //
-// ⚠️ IT IS THE COST PANEL'S TWIN AND ITS OPPOSITE. The panel above shows a
-// PARTIAL number with "3 ingredients are not priced yet" beside it, because a
-// slightly-too-low price is still a useful answer. Here a partial list is the
-// dangerous one — the unlinked row could be the one with the hazelnuts — so when
-// anything is missing this refuses to present a list at all and shows the JOB
-// instead.
+// ⚠️ A PARTIAL LIST IS THE DANGEROUS ONE. A slightly-too-low cost (Food cost shows one,
+// with "not priced yet" beside it) is still a useful answer; a partial allergen list is
+// not — the unlinked row could be the one with the hazelnuts — so when anything is
+// missing this refuses to present a list at all and shows the JOB instead.
 function allergenPanel(recipe, app) {
   // ⚠️⚠️ THE WHOLE CARD GOES WHEN THE VENUE HAS ALLERGENS SWITCHED OFF, AND WITH IT
   // THE ONLY WAY TO A LABEL — `app.openLabel` is called from inside this panel and
@@ -295,8 +294,8 @@ function allergenPanel(recipe, app) {
   };
 
   if (!canLabel(result)) {
-    // A brand-new empty recipe stays silent, like the cost panel does: there is
-    // nothing to declare and nothing to go and fix.
+    // A brand-new empty recipe stays silent: there is nothing to declare and nothing
+    // to go and fix.
     if (!result.gaps.length) { panel.hidden = true; return panel; }
 
     panel.appendChild(head(el('span', { class: 'cat-alg-blocked', text: t('cat.alg.notDeclared') })));
@@ -599,21 +598,26 @@ export function renderDetail({ recipe, app }) {
   // here. The recipe + weight panel are wrapped in .cat-detail-top, which is made
   // at least a screenful tall (CSS min-height), so Import/Delete always land BELOW
   // the fold and are reached only by scrolling — never competing with the recipe.
-  // The cost panel is REPLACED in place when new data arrives, never the whole
+  // The cards in this host are REPLACED in place when new data arrives, never the whole
   // view: rebuilding the view would throw away a scaled batch the user is reading.
   // ⚠️⚠️ ONE FUNCTION FEEDS BOTH THE FIRST BUILD AND EVERY REFRESH, AND THAT IS THE
-  // WHOLE POINT OF IT EXISTING. This host holds TWO cards, and refreshCost() below
-  // replaces its children on every price snapshot. On 11 August it was given ONE —
+  // WHOLE POINT OF IT EXISTING. This host holds several cards, and refreshCost() below
+  // replaces its children on every data snapshot. On 11 August it was given ONE —
   // `replaceChildren(costPanel(...))` — and the allergen card was silently deleted from
   // an open screen, on the only screen in this app that can send somebody to hospital.
   // It stayed that way for eleven days (v1.60.1). Two call sites that each list the
   // children can diverge; one function cannot.
   // ⚠️ THE DECLARATION JOINS THE HOST RATHER THAN STANDING OUTSIDE IT, and that is the
-  // whole reason costHostChildren exists: it is rebuilt whenever a price or an
-  // ingredient snapshot arrives, exactly like the two cards beside it. Left outside, a
-  // recipe whose last ingredient was declared on another phone would keep saying it
-  // cannot be labelled until this screen was closed and reopened.
-  const costHostChildren = (r) => [costPanel(r), allergenPanel(r, app), declarationPanel(r, app)];
+  // whole reason costHostChildren exists: it is rebuilt whenever an ingredient or
+  // recipe snapshot arrives, exactly like the card beside it. Left outside, a recipe
+  // whose last ingredient was declared on another phone would keep saying it cannot be
+  // labelled until this screen was closed and reopened.
+  // ⚠️ The host and refreshCost() keep their names from when the first card was the
+  // cost card (removed 13 Sep 2026): what they guard — one list, rebuilt — is unchanged.
+  // ⚠️ THE FOOD COST CARD COMES FIRST, where the cost card stood (Federico's choice), and
+  // it is null for whoever cannot open Food cost — so the list is FILTERED:
+  // replaceChildren(null) would print the word «null» on the screen.
+  const costHostChildren = (r) => [foodCostPanel(r, app), allergenPanel(r, app), declarationPanel(r, app)].filter(Boolean);
   const costHost = el('div', { class: 'cat-cost-host' }, costHostChildren(recipe));
 
   // The batch weight is read at the moment Start is tapped, not captured here:
@@ -622,41 +626,22 @@ export function renderDetail({ recipe, app }) {
   const guidedHost = el('div', { class: 'cat-guided-host' },
     [guidedPanel(recipe, app, () => displayTarget)]);
 
-  // ⚠️ ONE CARD SHAPE FOR EVERY BLOCK ON THIS SCREEN. Federico, 24 Aug 2026: «dividi
-  // tutte le funzioni in riquadri come hai fatto nella scheda del prodotto fornitore
-  // così che ogni funzione si distingua bene». Until now two of the five blocks had an
-  // edge and three floated on the page, so the screen read as one long thing.
-  //
-  // ⚠️ A STATIC HEAD, NOT A FOLD. The ingredient-card's folds hide a JOB; every block
-  // here is an ANSWER — what is in it, what it weighs, what it costs, how it is made —
-  // and an answer behind a tap is an answer nobody reads. That is the same rule the
-  // allergen card follows by keeping its state word outside its fold.
-  //
-  // ⚠️ AND THE HEAD IS AN <h3>, NEVER A BUTTON: there is nothing behind it to open, and
-  // a tap target that does nothing teaches somebody the card is closed. Copied from
-  // section() in js/orders/ingredient-form.js, which is itself a copy of this file's
-  // own .cat-alg-* card — one fold pattern in one app.
-  const catSection = (title, children) => el('div', { class: 'cat-sec' }, [
-    el('h3', { class: 'cat-sec-head' }, [el('span', { class: 'cat-sec-label', text: title })]),
-    el('div', { class: 'cat-sec-body' }, children),
-  ]);
-
+  // Every block below is a catSection() — see its note at the top of this file.
   const batchCard = catSection(t('cat.section.batch'), [weightPanel]);
   batchCard.hidden = weightPanel.hidden;
   const guidedCard = catSection(t('cat.section.procedure'), [guidedHost]);
 
-  // ⚠️ THE COST AND ALLERGEN CARDS ARE **NOT** WRAPPED. Both already carry a head and a
-  // frame of their own, and the allergen one carries a STATE WORD in that head; putting
-  // either inside another card gives it two heads. It is also the one card on this
-  // screen that has already cost a live defect, and this release does not touch it.
+  // ⚠️ THE ALLERGEN CARD IS **NOT** WRAPPED. It already carries a head and a frame of
+  // its own, with a STATE WORD in that head; putting it inside another card gives it
+  // two heads. It is also the one card on this screen that has already cost a live
+  // defect.
   const root = el('div', { class: 'cat-view' }, [
-    // ⚠️ THE WEIGHT BOX SITS DIRECTLY UNDER THE RECIPE, and it did not until now.
-    // Federico, 23 Aug 2026, from a photograph of Brioche on his own phone: scaling
-    // the batch is the thing this screen is opened FOR, and it was below the cost
-    // card and a nine-line allergen card — two cards and a scroll away from the
-    // ingredients it rewrites. Nothing depends on the order: the cost panel is
-    // replaced in place, and the guided panel reads the weight through a closure
-    // rather than off the DOM.
+    // ⚠️ THE WEIGHT BOX SITS DIRECTLY UNDER THE RECIPE, and it did not until 23 Aug.
+    // Federico, from a photograph of Brioche on his own phone: scaling the batch is
+    // the thing this screen is opened FOR, and it was below a cost card and a
+    // nine-line allergen card — two cards and a scroll away from the ingredients it
+    // rewrites. Nothing depends on the order: the host's cards are replaced in place,
+    // and the guided panel reads the weight through a closure rather than off the DOM.
     el('div', { class: 'cat-detail-top' }, [
       catSection(t('cat.ingredients'), [ingList]),
       // ⚠️ THE WHOLE CARD GOES WHEN THE PANEL DOES. A recipe of pieces and «to taste»
@@ -676,13 +661,12 @@ export function renderDetail({ recipe, app }) {
     ]),
   ]);
 
-  // ⚠️ WITHOUT THIS THE COST IS COMPUTED ONCE AND NEVER AGAIN. The ingredient
-  // listener is still in flight while this screen is being opened — on a cold start,
-  // offline, or simply a slow network — so the first paint can legitimately find no
-  // prices at all. Computed once, the panel would say "no cost yet" for as long as
-  // the screen stayed open, and the only way to see the real number would be to
-  // leave and come back. It also keeps a price corrected in Orders, or the recipe
-  // edited on another phone, from being a stale figure on an open screen.
+  // ⚠️ WITHOUT THIS THE CARDS ARE BUILT ONCE AND NEVER AGAIN. The ingredient listener
+  // is still in flight while this screen is being opened — on a cold start, offline,
+  // or simply a slow network — so the first paint can legitimately find no ingredients
+  // at all. Built once, the allergen card would say "not declared" for as long as the
+  // screen stayed open. It also keeps a declaration made in Orders, or the recipe
+  // edited on another phone, from being stale on an open screen.
   return {
     root,
     // ⚠️⚠️ THIS REBUILDS BOTH CARDS, AND THE ALLERGEN ONE IS WHY. It used to be

@@ -2,19 +2,20 @@
 //
 // Clones the safe editing pattern from js/recipes.js: work on a COPY, explicit
 // confirm-gated Save, required-field validation before saving (jump + highlight),
-// low-key Delete with a confirm, discard protection for unsaved edits, and an
-// ingredient-name autocomplete built from the other recipes. Persists per document
-// to recipes/{id} via the store (not into config).
+// low-key Delete with a confirm, discard protection for unsaved edits, and — under each
+// ingredient name as it is typed — a short list of catalogue ingredients to link the row
+// to (ingredient-suggest.js). Persists per document to recipes/{id} via the store (not
+// into config).
 
 import { t } from '../i18n.js';
 import { canManageHere } from './firebase-catalogue.js';
 import { el } from './dom.js';
 import {
   findInvalidRecipe, unitOf, CATALOGUE_UNITS, isWeighableUnit, weighableTotalGrams,
-  linkOf, normalizeWeight, normalizeShelfLifeDays,
+  linkOf, applyLink, normalizeWeight, normalizeShelfLifeDays,
 } from './catalogue-model.js';
 import { openLinkPicker } from './ingredient-picker.js';
-import { pricePerKg, formatRate } from '../price-model.js';
+import { attachLinkSuggestions } from './ingredient-suggest.js';
 
 // Whole grams, no thousands separator — the same reading as the recipe view.
 const nf = new Intl.NumberFormat('en-GB', { maximumFractionDigits: 0, useGrouping: false });
@@ -73,17 +74,6 @@ export function renderEditor({ recipe, draft, allRecipes, app, getLabelProfile =
   let busy = false; // guards against re-entrant Save/Delete while a confirm is open
   const markDirty = () => { dirty = true; };
 
-  // Autocomplete pool: distinct ingredient names across the catalogue.
-  const names = new Set();
-  for (const r of allRecipes) {
-    for (const ing of (r.ingredients || [])) {
-      const n = String(ing.label || '').trim();
-      if (n) names.add(n);
-    }
-  }
-  const datalist = el('datalist', { id: 'cat-ingredient-names' },
-    [...names].sort((a, b) => a.localeCompare(b)).map(n => el('option', { value: n })));
-
   const nameInput = el('input', {
     id: 'catRecipeName',
     class: 'cat-name-input', type: 'text', placeholder: t('cat.recipeName'), value: working.name,
@@ -133,8 +123,20 @@ export function renderEditor({ recipe, draft, allRecipes, app, getLabelProfile =
     working.ingredients.forEach((ing, idx) => {
       const labelInput = el('input', {
         class: 'cat-lbl', type: 'text', placeholder: t('cat.ingredient'), value: ing.label,
-        list: 'cat-ingredient-names', 'aria-label': t('cat.ingredientName'),
+        'aria-label': t('cat.ingredientName'),
         oninput: (e) => { ing.label = e.target.value; markDirty(); updateTotal(); if (showErrors) validateUI(); },
+      });
+      // Under the name, while it is typed: catalogue ingredients to link THIS row to.
+      // ⚠️ A tap links the row and leaves the name exactly as typed (applyLink), then
+      // moves on to the amount — the next thing a person fills in. ingredient-suggest.js.
+      const suggest = attachLinkSuggestions(labelInput, {
+        options: () => ({
+          ingredients: app.ingredients(), recipes: app.allRecipes(), suppliers: app.suppliers(),
+          excludeRecipeId: working.id,
+        }),
+        linked: () => linkOf(working.ingredients[idx]),
+        onPick: (chosen) => { linkTo(idx, chosen); focusAmount(idx); },
+        onSeeAll: (query) => pickFromChooser(idx, query),
       });
       const gramsInput = el('input', {
         class: 'cat-grm', type: 'number', min: '0', step: 'any', inputmode: 'decimal',
@@ -210,6 +212,7 @@ export function renderEditor({ recipe, draft, allRecipes, app, getLabelProfile =
         // re-measuring in the wrong order is how the same decision gets re-litigated
         // with the wrong number.
         el('div', { class: 'cat-ing-editrow' }, [labelInput, amountCell, delIcon]),
+        suggest.node,
         linkRow(ing, idx),
       ]));
     });
@@ -225,61 +228,67 @@ export function renderEditor({ recipe, draft, allRecipes, app, getLabelProfile =
     const link = linkOf(ing);
     const button = el('button', {
       class: 'cat-ing-link' + (link ? ' linked' : ''), type: 'button',
-      onclick: async () => {
-        const chosen = await openLinkPicker({
-          ingredients: app.ingredients(),
-          recipes: app.allRecipes(),
-          suppliers: app.suppliers(),
-          excludeRecipeId: working.id,
-          hasLink: !!linkOf(working.ingredients[idx]),
-        });
-        if (chosen === undefined) return;              // dismissed: change nothing
-
-        const row = working.ingredients[idx];
-        if (chosen === null) {
-          delete row.kind;
-          delete row.refId;
-        } else {
-          row.kind = chosen.kind;
-          row.refId = chosen.refId;
-          // Pre-fill the name only when the row has none. An existing label is the
-          // wording somebody chose for THIS recipe ("strong flour" for an article
-          // filed as "Flour T55"), and overwriting it would undo that every time
-          // the link is corrected.
-          if (!String(row.label || '').trim()) row.label = chosen.name;
-        }
-        markDirty();
-        renderIngredientRows();
-        if (showErrors) validateUI();
-      },
+      onclick: () => pickFromChooser(idx),
     }, linkText(ing));
     return button;
   }
 
-  // "→ Flour · Supplier · £2.00 / kg", or an invitation when there is no link.
-  // The price is shown here because it is the number the cost is built from, and
-  // seeing it beside the row is what catches a link to the wrong article.
+  // The full-screen chooser — already searching what was typed, when «See all» under a
+  // row's suggestion list opened it.
+  async function pickFromChooser(idx, initialQuery = '') {
+    const chosen = await openLinkPicker({
+      ingredients: app.ingredients(),
+      recipes: app.allRecipes(),
+      suppliers: app.suppliers(),
+      excludeRecipeId: working.id,
+      hasLink: !!linkOf(working.ingredients[idx]),
+      initialQuery,
+    });
+    if (chosen === undefined) return;              // dismissed: change nothing
+    linkTo(idx, chosen);
+  }
+
+  // Link row `idx` to what was chosen; null removes the link.
+  // ⚠️ applyLink() IS THE ONE PLACE A ROW'S LINK IS WRITTEN, and it never overwrites a
+  // name somebody typed: that wording is chosen for THIS recipe ("strong flour" for an
+  // article filed as "Flour T55"), and Federico writes it himself on purpose.
+  function linkTo(idx, chosen) {
+    applyLink(working.ingredients[idx], chosen);
+    markDirty();
+    renderIngredientRows();
+    if (showErrors) validateUI();
+  }
+
+  // After a link from the suggestion list, on to that row's amount. The rows were just
+  // rebuilt, so the field is looked up afresh; a «to taste» row has no amount to go to.
+  function focusAmount(idx) {
+    const group = rowsContainer.querySelectorAll('.cat-ing-editgroup')[idx];
+    const amount = group && group.querySelector('.cat-grm');
+    if (!amount || amount.hidden) return;
+    try { amount.focus(); } catch (e) { /* focus is best-effort */ }
+  }
+
+  // "→ Flour 0 · 25 kg · Supplier", or an invitation when there is no link.
+  //
+  // ⚠️ NO PRICE SINCE 13 SEP 2026. Federico: a recipe's cost on its own is not real — it
+  // knows neither its oven loss nor what is added to the product later — so the
+  // catalogue shows no money anywhere, and Food cost is where a cost is read. What still
+  // catches a link to the wrong article is the pack weight and the supplier.
   function linkText(ing) {
     const link = linkOf(ing);
     if (!link) return t('cat.linkToAnIngredient');
 
     if (link.kind === 'recipe') {
       const sub = app.allRecipes().find(r => r.id === link.refId);
-      return sub ? `→ ${sub.name}  ·  recipe` : t('cat.aRecipeThatNo');
+      // ⚠️ «recipe» used to be English written into the code, on an Italian venue too.
+      return sub ? `→ ${sub.name}  ·  ${t('cat.recipe')}` : t('cat.aRecipeThatNo');
     }
 
     const ingredient = app.ingredients()[link.refId];
     if (!ingredient) return t('cat.anIngredientThatNo');
-    const rate = pricePerKg(ingredient);
     const supplier = (app.suppliers()[ingredient.supplierId] || {}).name || '';
-    // ⚠️ SEEN ON A SCREENSHOT OF AN ITALIAN VENUE, 24 Aug 2026: this line read
-    // «→ Farina 0 · Brava Fresh · no price yet» under an Italian heading. The key has
-    // existed in both languages all along and its own sibling, ingredient-picker.js,
-    // has always used it — this call site simply wrote the English out.
-    // ⚠️ NO GUARD COULD SEE IT: nothing-stays-english skips an all-lowercase string
-    // with no punctuation, because that is exactly the shape of a CSS class list.
-    return ['→ ' + (ingredient.name || t('cat.ingredient')), supplier,
-      rate === null ? t('cat.noPriceYet') : `${formatRate(rate)} / kg`]
+    const weight = String(ingredient.weight || '').trim();
+    return ['→ ' + (ingredient.name || t('cat.ingredient')), weight, supplier]
       .filter(Boolean).join('  ·  ');
   }
 
@@ -456,10 +465,8 @@ export function renderEditor({ recipe, draft, allRecipes, app, getLabelProfile =
     : null;
 
   return el('div', { class: 'cat-view cat-editor' }, [
-    datalist,
     el('label', { for: 'catRecipeName', text: t('cat.recipeName') }),
     nameInput,
-    photoBtn,
     el('div', { class: 'cat-ing-head' }, [
       el('label', { class: 'cat-ing-head-label', text: t('cat.ingredients') }),
       countEl,
@@ -469,5 +476,10 @@ export function renderEditor({ recipe, draft, allRecipes, app, getLabelProfile =
     addRowBtn,
     labelField,
     actions,
+    // ⚠️ LAST, UNDER SAVE. Federico, 13 Sep 2026: «il compila da una foto mettilo sotto
+    // alla fine della pagina». It sat under the name, between the one field every recipe
+    // starts from and the ingredients it is typed into — in the way of the job it is an
+    // alternative to. On a new recipe there is no Delete, so it is directly under Save.
+    photoBtn,
   ]);
 }

@@ -352,12 +352,12 @@ export async function seedDemoWorld() {
     allergens: [], mayContain: [],
     allergensCheckedAt: '2026-08-01T09:00:00.000Z',
   });
-  // ⚠️ AND THEY ARE PRICED, OR THE COST CARD CANNOT EXIST. Costing reads
+  // ⚠️ AND THEY ARE PRICED, OR FOOD COST HAS NOTHING TO SHOW. Costing reads
   // `locations/{lid}/ingredient-prices/{ingredientId}` — a PARALLEL collection, not a
   // field on the ingredient (v270, so an employee cannot read what the business pays).
-  // With no document there, `costRecipe` returns nothing and `.cat-cost-panel` renders
-  // the "no cost yet" state — which means the recipe screen's LAYOUT, the very thing
-  // Federico complained about, could not be measured with a real cost card on it.
+  // With no document there, `costRecipe` returns nothing and a Food cost product built
+  // on these recipes shows no production cost at all. (The recipe screen's own cost card
+  // was removed on 13 Sep 2026; the catalogue no longer reads prices.)
   await seedDoc('locations/bakery/ingredient-prices/ING_FLOUR_DECL', {
     bakery: 'bakery', priceUnit: 'kg', pricePerUnit: 1.15,
     priceUpdatedAt: '2026-08-01T09:00:00.000Z',
@@ -639,7 +639,7 @@ if (import.meta.url === pathToFileURL(process.argv[1]).href) {
   locations/bakery — The Italian Club Bakery, every section
     2 suppliers  (SUP_LEGACY has notifyHoursBefore and NO orderDays)
     5 ingredients (ING_LEGACY has no brand/weight; 2 are allergen-declared)
-    2 ingredient-prices (so a recipe can show a real cost, not "no cost yet")
+    2 ingredient-prices (so a Food cost product can show a real production cost)
     5 recipes — one per state the allergen sheet can show:
       CAT_1 empty          = nothing yet
       CAT_2 typed rows     = NOT DECLARED

@@ -318,6 +318,22 @@ test('⚠️ the photo reader is offered only while ADDING a recipe, never while
   assert.match(editor, /dirty/, 'the editor must ask before replacing what has been typed');
 });
 
+test('⚠️ «Compila da una foto» is the LAST thing on the new-recipe form, under Save', () => {
+  // Federico, 13 Sep 2026: «il compila da una foto mettilo sotto alla fine della
+  // pagina». Nothing breaks when it drifts back under the name — only somebody looking
+  // at the screen would know — so the order is what is pinned.
+  const editor = codeOf(read('js/catalogue/catalogue-editor.js'));
+  const view = editor.slice(editor.indexOf("el('div', { class: 'cat-view cat-editor' }"));
+  assert.ok(view.length > 100, 'the form\'s own element list is gone');
+  const end = view.indexOf(']);');
+  const list = view.slice(0, end);
+  const at = name => list.search(new RegExp(`^\\s*${name},\\s*$`, 'm'));
+  assert.notEqual(at('actions'), -1, 'Save is no longer in the form');
+  assert.notEqual(at('photoBtn'), -1, 'the photo button is no longer in the form');
+  assert.ok(at('photoBtn') > at('actions'), 'the photo button must come after Save');
+  assert.ok(at('photoBtn') > at('nameInput'), 'and not sit under the name any more');
+});
+
 test('⚠️ the way back out of the photo screen is a ONE-SHOT marker', () => {
   // Left set, it would send every later Back into a new editor — the trap the
   // sessionStorage flag behind "Back to Misé" (v275) is consumed on read to avoid.
@@ -471,7 +487,11 @@ test('⚠⚠ a data update must not delete the allergen card from an open recipe
   // the count can never diverge between the first render and a refresh. The declaration
   // has to be in here too, or a recipe whose last ingredient was declared on another
   // phone would keep saying it cannot be labelled until the screen was reopened.
-  assert.match(detail, /const costHostChildren = \(r\) => \[costPanel\(r\), allergenPanel\(r, app\), declarationPanel\(r, app\)\];/,
+  // ⚠️ The cost card left on 13 Sep 2026 (the catalogue shows no money) and the Food cost
+  // card took its place; the host keeps its name because what it guards — ONE list of
+  // rebuilt cards — did not change. `.filter(Boolean)` because the Food cost card is
+  // null for whoever cannot open Food cost.
+  assert.match(detail, /const costHostChildren = \(r\) => \[foodCostPanel\(r, app\), allergenPanel\(r, app\), declarationPanel\(r, app\)\]\.filter\(Boolean\);/,
     'the children of the host are listed in exactly one place');
   assert.match(detail, /const costHost = el\('div', \{ class: 'cat-cost-host' \}, costHostChildren\(recipe\)\);/,
     'the first render must go through it');
