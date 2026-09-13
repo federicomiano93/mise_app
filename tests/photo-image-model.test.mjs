@@ -487,9 +487,11 @@ test('⚠⚠ a data update must not delete the allergen card from an open recipe
   // the count can never diverge between the first render and a refresh. The declaration
   // has to be in here too, or a recipe whose last ingredient was declared on another
   // phone would keep saying it cannot be labelled until the screen was reopened.
-  // ⚠️ The cost card left on 13 Sep 2026 (the catalogue shows no money); the host keeps
-  // its name because what it guards — ONE list of rebuilt cards — did not change.
-  assert.match(detail, /const costHostChildren = \(r\) => \[allergenPanel\(r, app\), declarationPanel\(r, app\)\];/,
+  // ⚠️ The cost card left on 13 Sep 2026 (the catalogue shows no money) and the Food cost
+  // card took its place; the host keeps its name because what it guards — ONE list of
+  // rebuilt cards — did not change. `.filter(Boolean)` because the Food cost card is
+  // null for whoever cannot open Food cost.
+  assert.match(detail, /const costHostChildren = \(r\) => \[foodCostPanel\(r, app\), allergenPanel\(r, app\), declarationPanel\(r, app\)\]\.filter\(Boolean\);/,
     'the children of the host are listed in exactly one place');
   assert.match(detail, /const costHost = el\('div', \{ class: 'cat-cost-host' \}, costHostChildren\(recipe\)\);/,
     'the first render must go through it');

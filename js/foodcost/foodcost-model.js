@@ -270,6 +270,39 @@ export function productionCost(product, tables = {}) {
   };
 }
 
+// ── Opened from a recipe ─────────────────────────────────────────────────────
+//
+// Federico, 13 Sep 2026: a recipe's «Apri nel Food cost» opens its product — the one
+// that uses it, the list of them when there are several, a new one when there is none.
+
+// The products with this recipe on one of their lines, as they were given (so the
+// screen opens the very object the store holds, not a copy of it).
+export function productsUsingRecipe(products, recipeId) {
+  const id = recipeId == null ? '' : String(recipeId).trim();
+  if (!id || !Array.isArray(products)) return [];
+  return products.filter(raw => {
+    const p = normalizeProduct(raw);
+    return !!p && p.components.some(c => c.recipeId === id);
+  });
+}
+
+// A NEW product for a recipe no product uses yet: the recipe's name and the recipe on
+// its first line — and nothing a person has not said. ⚠️ No kilos, no way of selling,
+// no price, no VAT: a real-looking value nobody typed is one somebody saves and trusts.
+export function draftFromRecipe(recipe) {
+  if (!recipe || typeof recipe !== 'object') return null;
+  const recipeId = recipe.id == null ? '' : String(recipe.id).trim();
+  if (!recipeId) return null;
+  return {
+    id: null,
+    name: String(recipe.name ?? '').trim(),
+    components: [{ recipeId, qtyKg: 0 }],
+    packaging: [],
+    sellingMode: null, piecesPerBatch: null, sellingPrice: null,
+    vatRate: null, foodCostTarget: null,
+  };
+}
+
 // The whole answer for one product.
 //
 //   { unitCost, netUnitPrice, foodCostPct, margin, status, partial, blockers, batch }

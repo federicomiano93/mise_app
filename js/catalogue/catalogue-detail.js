@@ -68,6 +68,62 @@ const amountEl = ({ num, unit }) => el('span', { class: 'cat-ing-amt' }, [
 // momento alla ricetta, il costo non è reale». A product's cost is read in Food cost,
 // where both are known; tests/catalogue-no-money.test.mjs keeps money off this screen.
 
+// ⚠️ ONE CARD SHAPE FOR EVERY BLOCK ON THIS SCREEN. Federico, 24 Aug 2026: «dividi
+// tutte le funzioni in riquadri come hai fatto nella scheda del prodotto fornitore
+// così che ogni funzione si distingua bene». Until then two of the five blocks had an
+// edge and three floated on the page, so the screen read as one long thing.
+//
+// ⚠️ A STATIC HEAD, NOT A FOLD. The ingredient-card's folds hide a JOB; every block
+// here is an ANSWER — what is in it, what it weighs, how it is made — and an answer
+// behind a tap is an answer nobody reads. That is the same rule the allergen card
+// follows by keeping its state word outside its fold.
+//
+// ⚠️ AND THE HEAD IS AN <h3>, NEVER A BUTTON: there is nothing behind it to open, and
+// a tap target that does nothing teaches somebody the card is closed. Copied from
+// section() in js/orders/ingredient-form.js, which is itself a copy of this file's
+// own .cat-alg-* card — one fold pattern in one app.
+//
+// ⚠️ A FUNCTION DECLARATION AT MODULE LEVEL since 13 Sep 2026. It was a const inside
+// renderDetail, declared AFTER the host that now holds the Food cost card — and a const
+// reached before its line is a "Cannot access before initialization" that blanks the
+// recipe screen.
+function catSection(title, children) {
+  return el('div', { class: 'cat-sec' }, [
+    el('h3', { class: 'cat-sec-head' }, [el('span', { class: 'cat-sec-label', text: title })]),
+    el('div', { class: 'cat-sec-body' }, children),
+  ]);
+}
+
+const FOODCOST_SVG =
+  '<svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>';
+
+// ── Food cost, one tap away ──────────────────────────────────────────────────
+//
+// Federico, 13 Sep 2026: «aggiungi un tasto nella scheda ricetta che mi porta
+// direttamente alla sua scheda food cost corrispondente». It stands where the cost card
+// stood — his choice — because that is where somebody used to look for what a recipe
+// costs. Food cost decides what opens: the product using this recipe, the list of them,
+// or a new one (js/foodcost/foodcost-main.js).
+//
+// ⚠️ ONLY FOR WHOEVER THE FOOD COST PAGE WILL LET IN (app.mayOpenFoodCost — the auth
+// gate's own rule, js/recipe-link.js). For anybody else it is not drawn at all: a button
+// leading to a page that sends you straight back Home is worse than no button.
+// ⚠️ ASKED ON EVERY BUILD: the session arrives after the first paint, and refreshCost()
+// rebuilds this card when it does.
+function foodCostPanel(recipe, app) {
+  if (!app.mayOpenFoodCost || !app.mayOpenFoodCost()) return null;
+  return catSection(t('cat.fc.title'), [
+    el('p', { class: 'cat-fc-note', text: t('cat.fc.note') }),
+    el('button', {
+      class: 'cat-import-btn', type: 'button',
+      onclick: () => app.openFoodCost(recipe),
+    }, [
+      el('span', { icon: FOODCOST_SVG, 'aria-hidden': 'true' }),
+      t('cat.fc.open'),
+    ]),
+  ]);
+}
+
 // ── The ingredient declaration, on the recipe screen ─────────────────────────
 //
 // Federico, 24 Aug 2026: «aggiungi l'elenco ingredienti che si compila in automatico
@@ -558,7 +614,10 @@ export function renderDetail({ recipe, app }) {
   // labelled until this screen was closed and reopened.
   // ⚠️ The host and refreshCost() keep their names from when the first card was the
   // cost card (removed 13 Sep 2026): what they guard — one list, rebuilt — is unchanged.
-  const costHostChildren = (r) => [allergenPanel(r, app), declarationPanel(r, app)];
+  // ⚠️ THE FOOD COST CARD COMES FIRST, where the cost card stood (Federico's choice), and
+  // it is null for whoever cannot open Food cost — so the list is FILTERED:
+  // replaceChildren(null) would print the word «null» on the screen.
+  const costHostChildren = (r) => [foodCostPanel(r, app), allergenPanel(r, app), declarationPanel(r, app)].filter(Boolean);
   const costHost = el('div', { class: 'cat-cost-host' }, costHostChildren(recipe));
 
   // The batch weight is read at the moment Start is tapped, not captured here:
@@ -567,25 +626,7 @@ export function renderDetail({ recipe, app }) {
   const guidedHost = el('div', { class: 'cat-guided-host' },
     [guidedPanel(recipe, app, () => displayTarget)]);
 
-  // ⚠️ ONE CARD SHAPE FOR EVERY BLOCK ON THIS SCREEN. Federico, 24 Aug 2026: «dividi
-  // tutte le funzioni in riquadri come hai fatto nella scheda del prodotto fornitore
-  // così che ogni funzione si distingua bene». Until now two of the five blocks had an
-  // edge and three floated on the page, so the screen read as one long thing.
-  //
-  // ⚠️ A STATIC HEAD, NOT A FOLD. The ingredient-card's folds hide a JOB; every block
-  // here is an ANSWER — what is in it, what it weighs, what it costs, how it is made —
-  // and an answer behind a tap is an answer nobody reads. That is the same rule the
-  // allergen card follows by keeping its state word outside its fold.
-  //
-  // ⚠️ AND THE HEAD IS AN <h3>, NEVER A BUTTON: there is nothing behind it to open, and
-  // a tap target that does nothing teaches somebody the card is closed. Copied from
-  // section() in js/orders/ingredient-form.js, which is itself a copy of this file's
-  // own .cat-alg-* card — one fold pattern in one app.
-  const catSection = (title, children) => el('div', { class: 'cat-sec' }, [
-    el('h3', { class: 'cat-sec-head' }, [el('span', { class: 'cat-sec-label', text: title })]),
-    el('div', { class: 'cat-sec-body' }, children),
-  ]);
-
+  // Every block below is a catSection() — see its note at the top of this file.
   const batchCard = catSection(t('cat.section.batch'), [weightPanel]);
   batchCard.hidden = weightPanel.hidden;
   const guidedCard = catSection(t('cat.section.procedure'), [guidedHost]);

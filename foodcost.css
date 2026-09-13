@@ -184,6 +184,11 @@ body {
 .fc-prodcost-value { display: flex; align-items: baseline; gap: 6px; }
 .fc-prodcost-num { font-size: 1.3rem; font-weight: 600; font-variant-numeric: tabular-nums; }
 .fc-prodcost-unit { font-size: .78rem; color: var(--fc-text-2); }
+
+/* The list narrowed to one recipe's products, when that recipe opened this page and
+   more than one product uses it (13 Sep 2026): what it shows, and the way to all. */
+.fc-filter { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.fc-filter-title { margin: 0; font-size: .9rem; font-weight: 600; color: var(--fc-text); overflow-wrap: anywhere; }
 .fc-blockers { margin: 8px 0 0; padding-left: 18px; font-size: .78rem; color: var(--fc-text-2); }
 .fc-blockers li { margin-top: 3px; }
 

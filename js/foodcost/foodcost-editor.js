@@ -33,15 +33,24 @@ const TRASH_SVG =
 // Keys, resolved at draw time — see js/calculator-render.js.
 const STATUS_TEXT = { green: 'fc.onTarget', amber: 'fc.slightlyOverTarget', red: 'fc.overTarget' };
 
-export function renderEditor({ product, app }) {
+// `draft` is a NEW product nobody has typed yet — built by draftFromRecipe() when a
+// recipe's «Apri nel Food cost» finds no product using it.
+//
+// ⚠️ `product` STAYS null FOR IT, exactly as for «+ Add product»: the title, the toast,
+// the absent Delete and the absent margin history all key off `product`, and a draft is
+// none of those. And it opens NOT dirty — nobody has typed anything, so leaving at once
+// asks nothing and saves nothing.
+export function renderEditor({ product, draft = null, app }) {
   // A working COPY. Nothing reaches the stored product until Save.
   const working = product
     ? JSON.parse(JSON.stringify(normalizeProduct(product)))
-    : {
-      id: null, name: '', components: [], packaging: [],
-      sellingMode: null, piecesPerBatch: null, sellingPrice: null,
-      vatRate: null, foodCostTarget: null,
-    };
+    : draft && normalizeProduct(draft)
+      ? JSON.parse(JSON.stringify({ ...normalizeProduct(draft), id: null }))
+      : {
+        id: null, name: '', components: [], packaging: [],
+        sellingMode: null, piecesPerBatch: null, sellingPrice: null,
+        vatRate: null, foodCostTarget: null,
+      };
 
   let dirty = false;
   let busy = false;

@@ -31,6 +31,9 @@ import { currentSession, onSession } from '../firebase.js';
 // («Fornitori e ingredienti» → Impostazioni) and every screen that shows an allergen
 // obeys it. From js/ root, so both halves of the app read one answer.
 import { allergensOn } from '../venue-features.js';
+// The way to a recipe's Food cost product, and the one judgement of who may take it.
+// From js/ root: the catalogue and Food cost share an address, never a folder.
+import { mayOpenFoodCost, foodCostHref, recipeIdFromHash } from '../recipe-link.js';
 
 const screen = document.getElementById('catScreen');
 const titleEl = document.getElementById('catTitle');
@@ -504,6 +507,11 @@ const app = {
   ingredients: getIngredients,
   suppliers: getSuppliers,
   allRecipes: getRecipes,
+  // The recipe screen's «Apri nel Food cost»: whether to draw it, and where it goes.
+  // ⚠️ ASKED OF THE SESSION EACH TIME, never captured: the session arrives after the
+  // first paint, and a manager can show Food cost to employees from another phone.
+  mayOpenFoodCost: () => { const s = currentSession(); return mayOpenFoodCost(s.location, s.canManage); },
+  openFoodCost: (recipe) => { if (recipe && recipe.id) window.location.href = foodCostHref(recipe.id); },
   // Delete a catalogue recipe with a strong confirm, warning first if the recipe
   // was imported into the Calculator (the two are independent copies — deleting
   // here never touches the Calculator). The link check is raced with a short
@@ -577,6 +585,8 @@ setSyncErrorHandler((msg) => toast(msg));
 // tell the user their view may be stale.
 initCatalogue(
   () => {
+    // Back from Food cost names a recipe that may arrive only now — see openWantedRecipe().
+    openWantedRecipe();
     if (view === 'list' && activeList) activeList.refresh(getRecipes(), getUsage());
     // The offer needs the recipes to have arrived — a session is only worth
     // resuming if its recipe is still in the catalogue.
@@ -629,6 +639,13 @@ onSession((s) => {
   if (s.status !== 'ready' || paintedWithSession) return;
   paintedWithSession = true;
   if (view === 'list') showList();
+  // ⚠️ AN OPEN RECIPE NEEDS IT TOO, since 13 Sep 2026: its «Apri nel Food cost» card is
+  // drawn only for whoever may open Food cost, and before the session there is nobody to
+  // ask — so a recipe opened in that moment would never get its card. Rebuilding the
+  // host's cards is safe: they hold no input, and a scaled batch lives outside them.
+  else if (view === 'detail' && activeDetail && currentRecipe) {
+    activeDetail.refreshCost(getRecipes().find(r => r.id === currentRecipe.id) || currentRecipe);
+  }
   // ⚠️ THE ALLERGEN SHEET NEEDS THIS TOO, and it is the one screen where being
   // early is worse than being wrong quietly: its top card names the allergens the
   // law requires in the venue's COUNTRY, and before the session lands there is no
@@ -650,4 +667,39 @@ onLanguageChange(() => {
   }
 });
 
+// ── Back from Food cost ──────────────────────────────────────────────────────
+//
+// A recipe's «Apri nel Food cost» leaves this page, and Food cost's Back returns to that
+// recipe as catalogue.html#recipe=<id> (js/recipe-link.js) — one level up, where the tap
+// came from, not the top of the list.
+//
+// ⚠️ ONE-SHOT: the address is spent the moment it is used, so a reload or a later Back
+// never reopens the recipe. ⚠️ AND IT GIVES UP: a recipe that is not here within a few
+// seconds — deleted on another phone, or a slow first open — leaves the list where it
+// is, rather than jumping onto the screen long after somebody started something else.
+let wantedRecipeId = recipeIdFromHash(window.location.hash);
+const WANTED_RECIPE_WAIT_MS = 5000;
+
+function openWantedRecipe() {
+  if (!wantedRecipeId) return;
+  // Only over the list it would have opened from — never over a screen somebody has
+  // since chosen for themselves.
+  if (view !== 'list') { forgetWantedRecipe(); return; }
+  const recipe = getRecipes().find(r => r.id === wantedRecipeId);
+  if (!recipe) return;   // not arrived yet: the next data update asks again
+  forgetWantedRecipe();
+  openDetail(recipe);
+}
+
+function forgetWantedRecipe() {
+  wantedRecipeId = null;
+  try {
+    history.replaceState(null, '', window.location.pathname + window.location.search);
+  } catch (e) { /* best-effort: at worst a reload opens the recipe again */ }
+}
+
 showList();
+if (wantedRecipeId) {
+  openWantedRecipe();
+  setTimeout(forgetWantedRecipe, WANTED_RECIPE_WAIT_MS);
+}

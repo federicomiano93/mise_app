@@ -70,12 +70,22 @@ export function setSyncErrorHandler(fn) {
   onSyncError = typeof fn === 'function' ? fn : null;
 }
 
+// Whether the products and the recipes have come from the listeners yet, rather than
+// only from this phone's local copy. ⚠️ Asked by the page before it decides anything a
+// wrong answer would show — «no product uses this recipe» decided on a copy that has not
+// arrived is the difference between opening a product and offering a new one.
+let liveProducts = false;
+let liveRecipes = false;
+export function hasLiveProducts() { return liveProducts; }
+export function hasLiveRecipes() { return liveRecipes; }
+
 export function initFoodCost(onUpdate, onError) {
   notify = typeof onUpdate === 'function' ? onUpdate : null;
 
   watchProducts(
     remote => {
       products = normalizeProducts(remote);
+      liveProducts = true;
       writeJson(PRODUCTS_KEY, remote);
       if (notify) notify();
     },
@@ -86,6 +96,7 @@ export function initFoodCost(onUpdate, onError) {
   // other sections, and a venue may legitimately not use them.
   watchRecipes(remote => {
     recipes = indexById(remote);
+    liveRecipes = true;
     writeJson(RECIPES_KEY, remote);
     if (notify) notify();
   }, () => {}).catch(() => {});

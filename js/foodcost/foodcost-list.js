@@ -12,10 +12,17 @@ import { formatRate, formatMoney } from '../price-model.js';
 // Keys, resolved at draw time — see js/calculator-render.js.
 const STATUS_TEXT = { green: 'fc.onTarget', amber: 'fc.slightlyOver', red: 'fc.overTarget' };
 
-export function renderList({ products, tables, onOpen, onAdd }) {
+// `filter` — { title, onShowAll } — is set when the page was opened from a recipe that
+// more than one product uses (Federico's choice, 13 Sep 2026): the caller passes only
+// those products, and this says so on screen and offers the way back to all of them.
+export function renderList({ products, tables, onOpen, onAdd, filter = null }) {
   const rows = el('div', { class: 'fc-list' });
 
   const root = el('div', { class: 'fc-view' }, [
+    filter ? el('div', { class: 'fc-filter' }, [
+      el('p', { class: 'fc-filter-title', text: filter.title }),
+      el('button', { class: 'fc-link', type: 'button', text: t('fc.showAll'), onclick: filter.onShowAll }),
+    ]) : null,
     el('button', { class: 'fc-add', type: 'button', text: t('fc.addProduct'), onclick: onAdd }),
     rows,
   ]);
