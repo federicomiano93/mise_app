@@ -15,6 +15,7 @@
 import { t } from './i18n.js';
 import { onSession, signOutNow, switchLocation, forgetLocation, openVenuePicker } from './firebase.js';
 import { sectionsFor, hasLevelAbove } from './sections.js';
+import { cardVisibleTo } from './home-cards.js';
 import { confirmDialog } from './confirm-dialog.js';
 
 const logoutHost = document.getElementById('session-logout-host');
@@ -32,7 +33,7 @@ function button(label, className, onClick) {
 // Hide the cards this location does not use. The cards are static HTML with a
 // data-section, so this only ever REMOVES — a location with everything on gets
 // the markup exactly as written.
-function filterCards(location, role) {
+function filterCards({ location, role, canManage }) {
   // ⚠️ THE ROLE NARROWS THIS TOO, so a card is not drawn for a screen the person
   // would be refused on. It is still only courtesy — the rules refuse the data
   // itself — but a card that opens onto permission errors teaches people the app
@@ -40,6 +41,11 @@ function filterCards(location, role) {
   const allowed = sectionsFor(location, role);
   document.querySelectorAll('.home-card[data-section]').forEach(card => {
     if (allowed[card.dataset.section] === false) card.remove();
+    // ⚠️ A THIRD, PURELY VISUAL LAYER: the cards the venue chose to hide from its
+    // employees (js/home-cards.js). It can only remove more, never bring back a
+    // card either check above removed — and it never removes one from an owner, a
+    // manager or a head chef.
+    else if (!cardVisibleTo(location, canManage, card.dataset.card)) card.remove();
   });
 }
 
@@ -99,6 +105,16 @@ function renderSessionActions(session) {
     logoutHost.append(button(t('lang.title'), 'session-logout', async () => {
       const { openLanguage } = await import('./staff/language.js');
       openLanguage(session);
+    }));
+  }
+
+  // ⚠️ OWNER AND MANAGER, which includes a head chef — Federico's rule for who decides
+  // which cards the employees see. HOME ONLY, on his word: this strip is the one place
+  // the choice lives. The server refuses everybody else too (setStaffCard).
+  if (session.canManage) {
+    logoutHost.append(button(t('homeCards.title'), 'session-logout', async () => {
+      const { openHomeCards } = await import('./staff/home-cards-screen.js');
+      openHomeCards(session);
     }));
   }
 
@@ -171,7 +187,7 @@ let currentSessionForStrip = null;
 onSession(session => {
   if (session.status !== 'ready') return;
   currentSessionForStrip = session;
-  filterCards(session.location, session.role);
+  filterCards(session);
   renderUpArrow(session);
   renderSessionActions(session);
 });

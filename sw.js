@@ -1,4 +1,4 @@
-const CACHE_NAME = 'theitalianclub-v354';
+const CACHE_NAME = 'theitalianclub-v355';
 // Firebase SDK modules (loaded from gstatic) are cached SEPARATELY from CACHE_NAME
 // so they survive the cache-version bump that happens on every deploy — otherwise
 // the offline SDK would be wiped each release until the next online load. The name
@@ -12,7 +12,7 @@ const CACHE_NAME = 'theitalianclub-v354';
 // the fetch handler below, on the first load that has a network.
 // So between activate() and that first load, a phone that is OFFLINE cannot boot:
 // the code asks for 12.18.0 and nothing has it. In practice the window is very
-// small — activate() only happens after a successful 228-file precache, i.e.
+// small — activate() only happens after a successful 230-file precache, i.e.
 // online, and tapping the update banner reloads the page immediately — but it is
 // not zero, and it is the reason to bump the SDK deliberately rather than often.
 // Leaving the name unchanged would close the window and cost ~1 MB of dead
@@ -85,6 +85,9 @@ const ASSETS = [
   './js/allergen-terms.js',
   './js/allergen-match.js',
   './js/venue-features.js',
+  // ⚠️ js/auth-gate.js IMPORTS IT, and every page loads that — so a phone missing it
+  // offline would fail to boot any screen at all, not merely lose a card.
+  './js/home-cards.js',
   './js/photo-model.js',
   // ⚠️ A NEW FILE, AND THE ONE FAILURE THAT DOES NOT HEAL ITSELF. An installed
   // phone that goes offline after a deploy finds a file the new HTML asks for and
@@ -149,6 +152,7 @@ const ASSETS = [
   // venue, not to whoever runs this app. The files above are its dependencies.
   './js/staff/people.js',
   './js/staff/language.js',
+  './js/staff/home-cards-screen.js',
   // ⚠️ js/staff/businesses.js, js/staff/new-customer.js AND js/workspace-row.js ARE
   // DELIBERATELY ABSENT FROM THIS LIST. They are the app owner's own back office —
   // one person, on one phone — and the server refuses them to everybody else, so
@@ -349,7 +353,7 @@ const ASSETS = [
 // code against rules that deployed instantly, which is the very thing the gate exists
 // to prevent. Two things stand between that and a release: the test that every ASSETS
 // entry EXISTS (a mistyped path being the likeliest permanent cause), and this
-// project's post-deploy sweep, which already asks the live site for all 228 files.
+// project's post-deploy sweep, which already asks the live site for all 230 files.
 // ⚠️ NEITHER covers a device-specific failure — nobody has yet confirmed an update
 // landing on a real iPhone under this code.
 //

@@ -2134,6 +2134,20 @@ const DICTIONARIES = Object.freeze({
     'lang.labels': 'Allergen labels are not affected: they are printed in {language}, because this business sells {country}. The law asks for a label in the language of the country where the food is sold.',
     'lang.labels.noCountry': 'This business has no country set, so it cannot print an allergen label at all. The country decides the label’s language, and it is not something the app may guess.',
 
+    // ── Choosing which Home cards the employees see ────────────────────────
+    'homeCards.title': 'Home cards',
+    'homeCards.intro': 'Choose which cards the people who work here see on the Home.',
+    'homeCards.managersSeeAll': 'Owners, managers and head chefs always see every card, so your own Home does not change. A hidden card is only hidden: nothing is switched off or deleted, and showing it again brings it straight back.',
+    'homeCards.applies': 'Employees see the change the next time they open the app.',
+    'homeCards.shown': 'Visible',
+    'homeCards.hidden': 'Hidden',
+    'homeCards.saving': 'Saving…',
+    'homeCards.err.save': 'Could not save the change. Check your connection and try again.',
+    'homeCards.none': 'This business has no cards to choose from.',
+    'homeCards.catalogue.title': 'Hide the recipe catalogue?',
+    'homeCards.catalogue.body': 'Employees will no longer reach the allergen sheet from the Home. Whoever answers customers’ questions about allergens at the counter needs it.',
+    'homeCards.catalogue.ok': 'Hide it',
+
 
     // ⚠️ THE NAME OF A LANGUAGE INSIDE A SENTENCE IS INTERFACE TEXT. The choice
     // list names each language in ITSELF («Italiano»), because that is the word
@@ -3996,6 +4010,19 @@ const DICTIONARIES = Object.freeze({
     'lang.err.save': 'Non è stato possibile cambiare la lingua. Controlla la connessione e riprova.',
     'lang.labels': 'Le etichette allergeni non cambiano: sono prodotte in {language}, perché questa attività vende {country}. La legge chiede un’etichetta nella lingua del paese in cui il cibo si vende.',
     'lang.labels.noCountry': 'Questa attività non ha un paese impostato, quindi non può produrre nessuna etichetta allergeni. Il paese decide la lingua dell’etichetta, e non è una cosa che l’app possa indovinare.',
+
+    'homeCards.title': 'Schede della Home',
+    'homeCards.intro': 'Scegli quali schede vedono sulla Home le persone che lavorano qui.',
+    'homeCards.managersSeeAll': 'Titolare, manager e head chef vedono sempre tutte le schede, quindi la tua Home non cambia. Una scheda nascosta è solo nascosta: non si spegne né si cancella niente, e mostrarla di nuovo la fa ricomparire subito.',
+    'homeCards.applies': 'I dipendenti vedono il cambiamento la prossima volta che aprono l’app.',
+    'homeCards.shown': 'Visibile',
+    'homeCards.hidden': 'Nascosta',
+    'homeCards.saving': 'Salvataggio…',
+    'homeCards.err.save': 'Non è stato possibile salvare la modifica. Controlla la connessione e riprova.',
+    'homeCards.none': 'Questa attività non ha schede da scegliere.',
+    'homeCards.catalogue.title': 'Nascondere il catalogo ricette?',
+    'homeCards.catalogue.body': 'I dipendenti non raggiungeranno più dalla Home la scheda allergeni. A chi risponde al banco alle domande dei clienti sugli allergeni serve.',
+    'homeCards.catalogue.ok': 'Nascondi',
 
 
     'language.en.inSentence': 'inglese',
