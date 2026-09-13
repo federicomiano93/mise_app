@@ -154,6 +154,21 @@ export function normalizeCatalogueRecipe(raw) {
   return out;
 }
 
+// The two label fields exactly as the catalogue store WRITES them: a real number, or
+// `null` for «nobody has said» — which the data layer turns into a removal, because the
+// rules refuse a stored null and a merge that simply leaves a key out keeps the old one.
+//
+// ⚠️ THIS IS WHAT A RECIPE SAVE HAD BEEN MISSING SINCE v1.76.0. The editor let you type
+// the net weight and the shelf life, the rules accepted them, the label read them — and
+// the store's hand-listed document never carried them, so every Save threw both away.
+export function labelFieldsOf(recipe) {
+  const netG = normalizeWeight(recipe && recipe.netWeightG);
+  return {
+    netWeightG: netG > 0 ? netG : null,
+    shelfLifeDays: normalizeShelfLifeDays(recipe && recipe.shelfLifeDays),
+  };
+}
+
 // How many days the finished food keeps. `null` means nobody has said — which is
 // NOT the same as 0, and the difference is a date printed on somebody's food.
 //

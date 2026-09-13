@@ -13,7 +13,7 @@
 
 import { t } from '../i18n.js';
 import {
-  normalizeCatalogueRecipe, normalizeCatalogueRecipes, isScaledEntryFresh,
+  normalizeCatalogueRecipe, normalizeCatalogueRecipes, isScaledEntryFresh, labelFieldsOf,
 } from './catalogue-model.js';
 import { withRowIds, normalizeSteps, normalizeEndNote } from './guided-model.js';
 import {
@@ -331,8 +331,8 @@ function removeLocal(id) {
 export function saveRecipe(recipe) {
   // ⚠️ THE FIELDS ARE LISTED BY HAND HERE ON PURPOSE, unlike the editor's
   // cleanWorking() which spreads. This object becomes the Firestore DOCUMENT, and
-  // the rules whitelist exactly bakery/name/ingredients/lossPct — spreading the
-  // recipe would send `id` as a field and every save would be refused.
+  // the rules whitelist its keys by name — spreading the recipe would send `id` as a
+  // field and every save would be refused.
   //
   // The cost of that is this list has to be kept up to date: a field the model
   // carries and this line does not is dropped on every save, silently — EXCEPT the
@@ -356,6 +356,10 @@ export function saveRecipe(recipe) {
     // written even when empty, or clearing it would leave the old text in the
     // document and the finish screen would keep showing a message just deleted.
     endNote: normalizeEndNote(recipe.endNote),
+    // The label's net weight and shelf life — a number, or null for an emptied box, which
+    // saveRecipeDoc() sends as a removal. ⚠️ Missing from this list until 13 Sep 2026, so
+    // both were typed on the editor and thrown away by every Save.
+    ...labelFieldsOf(recipe),
   };
   // ⚠️⚠️ THE OVEN LOSS IS NOT WRITTEN FROM HERE ANY MORE — lossPct, rawGrams and
   // cookedGrams. Federico, 13 Sep 2026: the dough is weighed raw and cooked on a
