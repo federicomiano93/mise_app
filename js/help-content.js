@@ -140,6 +140,17 @@ export const HELP = {
       'help.unlikeTheCalculatorA',
     ],
   },
+
+  inventory: {
+    title: 'section.inventory',
+    lines: [
+      'help.stocktake',
+      // ⚠️ SECOND, NOT LAST, because it is the one thing somebody using this
+      // screen can get wrong without noticing: an empty box is not a zero.
+      'help.stocktakeEmpty',
+      'help.stocktakeClose',
+    ],
+  },
 };
 
 export const SECTIONS = Object.keys(HELP);

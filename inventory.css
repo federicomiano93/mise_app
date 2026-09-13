@@ -1,0 +1,447 @@
+/* inventory.css — the monthly stocktake.
+   Every value comes from tokens.css, the app's one source of colour, type,
+   spacing, radius and shadow (CLAUDE.md, "UI consistency"). Nothing here defines
+   a colour of its own; the local --inv-* names are aliases onto the shared
+   tokens, the same shape foodcost.css and catalogue.css use. */
+:root {
+  --inv-ground:    var(--bg);
+  --inv-surface:   var(--surface);
+  --inv-surface-2: var(--surface-2);
+  --inv-brand:     var(--brand);
+  --inv-brand-ink: var(--on-brand);
+  --inv-accent:    var(--accent-2);
+  --inv-text:      var(--text);
+  --inv-text-2:    var(--text-2);
+  --inv-text-3:    var(--text-3);
+  --inv-border:    var(--border);
+  --inv-warn:      var(--warn);
+  --inv-warn-bg:   var(--warn-bg);
+  --inv-danger:    var(--danger);
+  --inv-radius:    var(--radius);
+  --inv-radius-sm: var(--radius-sm);
+  --inv-font:      var(--font);
+  --inv-font-mono: var(--font-mono);
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: var(--inv-font);
+  color: var(--inv-text);
+  background: var(--inv-ground);
+  /* The app shell is pinned: green to the top edge, and the page itself cannot be
+     dragged. Only .inv-screen scrolls — see the min-height note there. */
+  position: fixed;
+  inset: 0;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  overscroll-behavior: none;
+}
+
+/* ── Header ────────────────────────────────────────────────────────────────
+   Back on the LEFT, title CENTRED, a matching slot on the right so the title
+   cannot drift off centre when one side is empty (CLAUDE.md, header spec). */
+.inv-header {
+  flex-shrink: 0;
+  display: grid;
+  grid-template-columns: 44px 1fr 44px;
+  align-items: center;
+  gap: 8px;
+  padding: calc(10px + env(safe-area-inset-top)) 12px 10px;
+  padding-inline: max(12px, var(--app-gutter));
+  background: var(--inv-brand);
+  color: var(--inv-brand-ink);
+}
+.inv-header-slot { display: flex; align-items: center; justify-content: center; }
+.inv-icon-btn {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  /* ⚠️ --rim-border, NOT --rim: a name defined nowhere makes the whole
+     declaration invalid and the browser drops it in silence, leaving this button
+     the only one in the app with no rim. It has happened here before. */
+  border: 1.5px solid var(--rim-border);
+  background: var(--rim-bg);
+  color: inherit;
+  cursor: pointer;
+}
+.inv-icon-btn:hover { background: var(--rim-bg-hover); }
+.inv-icon-btn:active { background: var(--rim-bg-active); }
+/* The app's green focus ring is invisible on the green header, so the ring here
+   is the on-brand ink instead. */
+.inv-icon-btn:focus-visible { outline: 2px solid var(--inv-brand-ink); outline-offset: 2px; }
+.inv-icon-btn[hidden] { display: none; }
+.inv-header-title { min-width: 0; text-align: center; }
+.inv-header-title h1 { margin: 0; font-size: 18px; font-weight: 600; letter-spacing: -0.3px; }
+.inv-header-title p { margin: 2px 0 0; font-size: 11px; opacity: .8; font-family: var(--inv-font-mono); }
+
+/* ── The month strip ───────────────────────────────────────────────────────
+   Directly under the header and never scrolled away: which month is being
+   counted is the one fact on this screen that must never be in doubt. */
+.inv-strip {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  padding-inline: max(12px, var(--app-gutter));
+  background: var(--inv-surface);
+  border-bottom: 1px solid var(--inv-border);
+}
+.inv-strip-btn {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 1px solid var(--inv-border);
+  background: var(--inv-surface);
+  color: var(--inv-text);
+  cursor: pointer;
+}
+.inv-strip-btn:active { transform: scale(.97); }
+.inv-strip-btn:focus-visible { outline: 2px solid var(--inv-accent); outline-offset: 2px; }
+.inv-strip-btn:disabled { opacity: .35; cursor: default; }
+.inv-strip-month {
+  flex: 1;
+  text-align: center;
+  font-size: 1rem;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+/* min-height:0 is load-bearing: as a flex child without it, iOS miscomputes the
+   height and momentum scrolling freezes or snaps to the top. */
+.inv-screen {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 14px 14px calc(24px + env(safe-area-inset-bottom));
+}
+
+/* Same cap and centring as .fc-view, .cat-view and .pas-view. */
+.inv-view {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: var(--app-max-width);
+  margin: 0 auto;
+  width: 100%;
+}
+.inv-view:focus { outline: none; }
+.inv-empty { text-align: center; color: var(--inv-text-3); font-size: .88rem; padding: 28px 8px; }
+.inv-note { font-size: .74rem; color: var(--inv-text-2); margin: 0; }
+
+/* ── How far through the count you are ─────────────────────────────────────
+   The only question somebody halfway down a storeroom is asking. */
+.inv-summary {
+  padding: 14px;
+  border: 1px solid var(--inv-border);
+  border-left-width: 4px;
+  border-left-color: var(--inv-brand);
+  border-radius: var(--inv-radius);
+  background: var(--inv-surface);
+}
+.inv-summary-label {
+  margin: 0;
+  font-size: .72rem;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--inv-text-2);
+  font-family: var(--inv-font-mono);
+}
+.inv-summary-value { margin: 4px 0 0; font-size: 1.3rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+.inv-summary-note { margin: 6px 0 0; font-size: .74rem; color: var(--inv-text-2); }
+
+/* ── The two things the app can fill in for you ────────────────────────────
+   Quiet by design: each is pressed once a month at most, and neither may
+   compete with the count boxes below, which are the job. */
+.inv-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.inv-action {
+  flex: 1 1 140px;
+  min-width: 0;
+  min-height: 40px;
+  padding: 8px 12px;
+  border: 1px dashed var(--inv-border);
+  border-radius: var(--inv-radius-sm);
+  background: none;
+  color: var(--inv-text-2);
+  font-family: var(--inv-font);
+  font-size: .82rem;
+  cursor: pointer;
+}
+.inv-action:active { transform: scale(.97); }
+.inv-action:focus-visible { outline: 2px solid var(--inv-accent); outline-offset: 2px; }
+
+/* ── Search and filter ─────────────────────────────────────────────────────
+   One row: the field takes what is left, the filter keeps its own width. They
+   wrap onto two lines rather than squeezing the field below readable. */
+.inv-tools { display: flex; flex-wrap: wrap; gap: 8px; }
+.inv-search {
+  flex: 1 1 180px;
+  /* ⚠️ A flex item's default min-width is AUTO, not 0, so a long placeholder can
+     push this field wider than its row and the filter beside it off the screen.
+     This project has lost an afternoon to exactly that. */
+  min-width: 0;
+  height: 44px;
+  padding: 0 12px;
+  border: 1.5px solid var(--inv-border);
+  border-radius: var(--inv-radius-sm);
+  background: var(--inv-surface);
+  color: var(--inv-text);
+  font-family: var(--inv-font);
+  font-size: 15px;
+  -webkit-appearance: none;
+}
+.inv-search:focus-visible { outline: 2px solid var(--inv-accent); outline-offset: 1px; }
+.inv-filter {
+  flex: 0 0 auto;
+  height: 44px;
+  padding: 0 14px;
+  border: 1.5px solid var(--inv-border);
+  border-radius: var(--radius-pill);
+  background: var(--inv-surface);
+  color: var(--inv-text-2);
+  font-family: var(--inv-font);
+  font-size: .84rem;
+  cursor: pointer;
+}
+.inv-filter.on {
+  background: var(--inv-brand);
+  border-color: var(--inv-brand);
+  color: var(--inv-brand-ink);
+}
+.inv-filter:active { transform: scale(.97); }
+.inv-filter:focus-visible { outline: 2px solid var(--inv-accent); outline-offset: 2px; }
+
+/* ── The list ──────────────────────────────────────────────────────────────
+   Grouped the way a storeroom is walked: everything in the dry store, then
+   everything in the fridge. */
+.inv-list { display: flex; flex-direction: column; gap: 8px; }
+.inv-group {
+  margin: 10px 0 0;
+  font-size: .72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  /* ⚠️ --text-2, not --text-4: at this size --text-4 measures 3.6:1 on the page
+     ground, under the 4.5:1 small text needs (a known open item elsewhere in the
+     app — not repeated here). */
+  color: var(--inv-text-2);
+}
+
+/* ⚠️ THE FRAME BELONGS TO THE ROW, NOT TO THE BUTTON INSIDE IT. A button cannot
+   contain an input, so the tappable name and the count box are siblings; if the
+   border sat on the button the row would end short of the box and the right edge
+   of the list would zig-zag (the lesson of PR #31). */
+.inv-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px 8px 12px;
+  border: 1px solid var(--inv-border);
+  border-radius: var(--inv-radius);
+  background: var(--inv-surface);
+}
+.inv-row.counted { border-left: 3px solid var(--inv-brand); padding-left: 10px; }
+.inv-row-open {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  padding: 4px 0;
+  border: none;
+  background: none;
+  text-align: left;
+  font-family: var(--inv-font);
+  cursor: pointer;
+}
+.inv-row-open:focus-visible { outline: 2px solid var(--inv-accent); outline-offset: 2px; }
+.inv-row-name {
+  font-size: .94rem;
+  font-weight: 600;
+  color: var(--inv-text);
+  /* One line, cut with an ellipsis: a wrapped name pushes the count box down and
+     the rows stop lining up. */
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.inv-row-sub { font-size: .72rem; color: var(--inv-text-2); font-family: var(--inv-font-mono); }
+.inv-row-sub.todo { color: var(--inv-text-3); }
+
+.inv-row-count { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.inv-count {
+  width: 72px;
+  height: 44px;
+  padding: 0 8px;
+  border: 1.5px solid var(--inv-border);
+  border-radius: var(--inv-radius-sm);
+  background: var(--inv-surface);
+  color: var(--inv-text);
+  font-family: var(--inv-font);
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  -webkit-appearance: none;
+}
+.inv-count:focus-visible { outline: 2px solid var(--inv-accent); outline-offset: 1px; }
+.inv-count:disabled { background: var(--inv-surface-2); color: var(--inv-text-3); }
+.inv-row-unit {
+  font-size: .7rem;
+  color: var(--inv-text-2);
+  font-family: var(--inv-font-mono);
+  max-width: 56px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── What the month cost ───────────────────────────────────────────────────
+   Most expensive first. The rows that could not be valued sit at the bottom,
+   faded but never hidden: a total that silently leaves things out is a total
+   somebody will believe. */
+.inv-cost-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--inv-border);
+  border-radius: var(--inv-radius);
+  background: var(--inv-surface);
+}
+.inv-cost-row.unvalued { border-style: dashed; }
+.inv-cost-main { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 3px; }
+.inv-cost-value {
+  flex-shrink: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.inv-cost-value.none { color: var(--inv-text-3); font-weight: 400; }
+
+/* ── One product's three numbers ───────────────────────────────────────────
+   The answer sits at the top, because it is the reason the screen exists and
+   every box below changes it. */
+.inv-answer {
+  padding: 14px;
+  border: 1px solid var(--inv-border);
+  border-left-width: 4px;
+  border-left-color: var(--inv-brand);
+  border-radius: var(--inv-radius);
+  background: var(--inv-surface);
+}
+.inv-answer.unknown { border-left-color: var(--inv-border); }
+.inv-answer.impossible { border-left-color: var(--inv-warn); background: var(--inv-warn-bg); }
+.inv-answer-label {
+  margin: 0;
+  font-size: .72rem;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--inv-text-2);
+  font-family: var(--inv-font-mono);
+}
+.inv-answer-value { margin: 4px 0 0; font-size: 1.6rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+.inv-answer-basis { margin: 6px 0 0; font-size: .74rem; color: var(--inv-text-2); font-family: var(--inv-font-mono); }
+.inv-answer-why { margin: 6px 0 0; font-size: .8rem; color: var(--inv-text-2); }
+.inv-answer-warn { margin: 8px 0 0; font-size: .78rem; font-weight: 600; color: var(--inv-warn); }
+.inv-answer-money { margin: 4px 0 0; font-size: 1rem; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--inv-text); }
+
+.inv-field { display: flex; flex-direction: column; gap: 6px; }
+.inv-label { font-size: .78rem; color: var(--inv-text-2); font-weight: 500; }
+.inv-input {
+  width: 100%;
+  height: 44px;
+  padding: 0 12px;
+  border: 1.5px solid var(--inv-border);
+  border-radius: var(--inv-radius-sm);
+  background: var(--inv-surface);
+  color: var(--inv-text);
+  font-family: var(--inv-font);
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+  -webkit-appearance: none;
+}
+.inv-input:focus-visible { outline: 2px solid var(--inv-accent); outline-offset: 1px; }
+.inv-input:disabled { background: var(--inv-surface-2); color: var(--inv-text-3); }
+.inv-hint { margin: 0; font-size: .72rem; color: var(--inv-text-3); }
+
+/* ── Bottom bar ────────────────────────────────────────────────────────────
+   ⚠️ THE BAR IS var(--bg) AND THE BUTTONS ARE var(--surface) — inverted, the bar
+   paints a pale band across the foot of the screen. Pinned by
+   tests/bottom-bar.test.mjs, which exists because it shipped the wrong way round. */
+.inv-footer {
+  flex-shrink: 0;
+  display: flex;
+  gap: 8px;
+  padding: 8px 12px calc(8px + env(safe-area-inset-bottom));
+  padding-inline: max(12px, var(--app-gutter));
+  background: var(--inv-ground);
+  border-top: 1px solid var(--inv-border);
+}
+.inv-footer[hidden] { display: none; }
+.inv-footer-btn {
+  flex: 1;
+  min-width: 0;
+  min-height: 44px;
+  padding: 8px 10px;
+  border: 1px solid var(--inv-border);
+  border-radius: var(--inv-radius-sm);
+  background: var(--inv-surface);
+  color: var(--inv-text);
+  font-family: var(--inv-font);
+  font-size: .84rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+.inv-footer-btn:active { transform: scale(.97); }
+.inv-footer-btn:focus-visible { outline: 2px solid var(--inv-accent); outline-offset: 2px; }
+.inv-footer-btn[hidden] { display: none; }
+.inv-footer-btn-main {
+  background: var(--inv-brand);
+  border-color: var(--inv-brand);
+  color: var(--inv-brand-ink);
+  font-weight: 600;
+}
+/* Reopening a closed month is a repair, not the thing this bar is for, so it
+   stops looking like the primary action the moment it becomes one (P20). */
+.inv-footer-btn-quiet.inv-footer-btn-main {
+  background: var(--inv-surface);
+  border-color: var(--inv-border);
+  color: var(--inv-text-2);
+  font-weight: 500;
+}
+
+/* ── Toast ─────────────────────────────────────────────────────────────────
+   Above the bottom bar, so a message never lands under the one control the
+   screen is waiting for. */
+.inv-toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(76px + env(safe-area-inset-bottom));
+  transform: translateX(-50%) translateY(8px);
+  max-width: min(92vw, var(--app-max-width));
+  padding: 10px 14px;
+  border-radius: var(--radius-pill);
+  background: var(--slate);
+  color: var(--on-brand);
+  font-size: .84rem;
+  text-align: center;
+  box-shadow: var(--shadow);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .18s ease, transform .18s ease;
+  z-index: 9000;
+}
+.inv-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }

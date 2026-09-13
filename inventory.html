@@ -1,0 +1,134 @@
+<!--
+  MISÉ PWA — Stocktake
+  The end-of-month count. What was on the shelves when the month opened, what
+  came in during it, what is there now — and therefore what was used. The list of
+  things to count IS the ingredient list from Suppliers & ingredients; nothing is
+  ever retyped here.
+  ⚠️ data-section="foodcost", the same name as the Food cost page, and that is the
+  whole access story: this screen says what the business consumed and what it was
+  worth, which is the information Food cost is already gated on (owner and manager
+  only, js/sections.js ROLE_ONLY). No new section name had to be invented, so no
+  venue document, onboarding list or rules helper changes.
+  All logic lives in js/inventory/* (loaded via inventory-main.js).
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<!--
+  CSP bootstrap. A <meta> Content-Security-Policy cannot be loosened at runtime
+  (multiple policies combine by intersection), so to allow the LOCAL Firebase
+  emulator on localhost WITHOUT touching the live site's policy, the meta is
+  emitted here. On the live domain the string is byte-identical to the production
+  policy; on localhost only, connect-src additionally allows the Auth (9099) and
+  Firestore (8080) and Functions (5001) emulators. This inline script runs before
+  any CSP is in effect (only <meta charset> precedes it) and before any network
+  request.
+-->
+<script>
+(function () {
+  var local = ['localhost', '127.0.0.1', '::1', '[::1]'].indexOf(location.hostname) !== -1;
+  var emu = local
+    ? ' http://localhost:8080 http://localhost:9099 http://localhost:5001 http://127.0.0.1:8080 http://127.0.0.1:9099 http://127.0.0.1:5001'
+    : '';
+  document.write(
+    '<meta http-equiv="Content-Security-Policy" content="' +
+    "default-src 'self'; " +
+    "script-src 'self' https://www.gstatic.com https://www.google.com; " +
+    "connect-src 'self' https://www.gstatic.com https://www.google.com https://*.googleapis.com https://*.firebaseio.com https://firestore.googleapis.com https://us-central1-bakery-app-ebf90.cloudfunctions.net" + emu + "; " +
+    "frame-src 'self' https://www.google.com; " +
+    "img-src 'self' data:; " +
+    "style-src 'self'; " +
+    "font-src 'self'; " +
+    "base-uri 'self'; " +
+    "form-action 'self'" +
+    '">'
+  );
+})();
+</script>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="description" content="Stocktake — what was on the shelves, what came in, and what was used this month.">
+<meta name="theme-color" content="#2D5016">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Misé">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="icon" type="image/png" href="icons/icon-192.png">
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="auth.css">
+<link rel="stylesheet" href="inventory.css">
+<title data-i18n="title.inventory">Stocktake — Misé</title>
+</head>
+<body data-section="foodcost">
+<!-- Sign-in cover. It is HERE, in the markup, so it is opaque from the first
+     paint: the app must never flash a location's data at whoever is holding the
+     phone. js/auth-gate.js fills it in and removes it once a location is open.
+
+     ⚠️ NOTHING BETWEEN THE TAGS. auth.css styles `.auth-gate:empty` as the page
+     background and the non-empty one as the green sign-in screen, so a newline or
+     a comment in here brings back the full-green flash on every navigation. -->
+<div id="auth-gate" class="auth-gate"></div>
+
+<!-- Three fixed tracks (left slot · title · right slot) so the title is TRULY
+     centred: only one button of each slot is ever visible, and an empty slot must
+     still hold its column or the title drifts off-centre. -->
+<header class="inv-header">
+  <span class="inv-header-slot">
+    <a class="inv-icon-btn" id="invHome" href="index.html" data-i18n="ui.back" data-i18n-attr="aria-label" aria-label="Back">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+    </a>
+    <button class="inv-icon-btn" id="invBack" data-i18n="ui.back" data-i18n-attr="aria-label" aria-label="Back" hidden>
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+    </button>
+  </span>
+  <div class="inv-header-title">
+    <h1 id="invTitle" data-i18n="section.inventory">Stocktake</h1>
+    <p id="invSub" data-i18n="inv.monthOpen">Open</p>
+  </div>
+  <span class="inv-header-slot" data-help="inventory"></span>
+</header>
+
+<!-- Which month is being counted. A strip of its own, under the header and above
+     the scroller, because it is the one thing on this screen that must never be
+     in doubt: the count is typed at the start of October FOR September, and a
+     number in the wrong month is worse than no number. -->
+<div class="inv-strip" id="invStrip">
+  <button class="inv-strip-btn" id="invPrev" type="button" data-i18n="inv.previousMonth" data-i18n-attr="aria-label" aria-label="Previous month">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+  </button>
+  <span class="inv-strip-month" id="invMonth"></span>
+  <button class="inv-strip-btn" id="invNext" type="button" data-i18n="inv.nextMonth" data-i18n-attr="aria-label" aria-label="Next month">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+  </button>
+</div>
+
+<main class="inv-screen" id="invScreen"></main>
+
+<!-- The two things you do WITH the month, rather than to a product in it: read
+     what it cost, and close it. They live in a bottom bar, never in the header
+     (CLAUDE.md, "Bottom footer"). ⚠️ A BAR IS CHROME AND CARRIES NO PERMISSION;
+     each button decides for itself — both are hidden on the other screens, and the
+     second changes meaning when the month is closed.
+     ⚠️ THE TWO FILL-IN ACTIONS ARE NOT HERE. They belong to the list (they change
+     what is in it), they are used once each per month, and four buttons sharing a
+     320px bar would wrap every one of their labels. -->
+<div class="inv-footer" id="invFooter">
+  <button class="inv-footer-btn" id="invCost" type="button" data-i18n="inv.seeCost">What it cost</button>
+  <button class="inv-footer-btn inv-footer-btn-main" id="invClose" type="button" data-i18n="inv.closeMonth">Close the month</button>
+</div>
+
+<!-- The confirm dialog is built on demand by js/inventory/confirm-dialog.js (the
+     shared .app-dialog-* component), so no static markup is needed. -->
+
+<div class="inv-toast" id="invToast"></div>
+
+<script type="module" src="js/i18n-dom.js"></script>
+<script type="module" src="js/auth-gate.js"></script>
+<script type="module" src="js/sw-update.js"></script>
+<script type="module" src="js/idle-reset.js"></script>
+<script type="module" src="js/inventory/inventory-main.js"></script>
+<script type="module" src="js/help-button.js"></script>
+</body>
+</html>

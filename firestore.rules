@@ -1820,6 +1820,93 @@ service cloud.firestore {
         }
       }
 
+      // ── The monthly stocktake ───────────────────────────────────────────
+      //
+      // ONE DOCUMENT PER MONTH, the id being the month itself ('2026-09'), and
+      // the id is pinned to the `month` field inside it — the same shape, and the
+      // same reason, as pastry-logs below: a document that disagrees with its own
+      // name is a record nobody can trust.
+      //
+      // ⚠️ GATED ON 'foodcost', NOT ON A SECTION OF ITS OWN. What this collection
+      // holds is what the business consumed and what that was worth, which is the
+      // information Food Cost is already the gate for. Riding on it means owner
+      // and manager only (js/sections.js ROLE_ONLY), no new section name to add to
+      // js/sections.js, functions/onboarding.js and every venue document, and no
+      // extra document read here — canManage() is 3 of the 10 this ruleset may
+      // spend per evaluation.
+      //
+      // ⚠️ FLAT MAPS KEYED BY INGREDIENT ID, never a list of objects. These rules
+      // cannot look inside a list, so a nested shape could only ever be checked
+      // for being a list at all; as maps, each one gets a type and a size.
+      //
+      //   opening / purchased / closing  the three counts the month is made of
+      //   packKg                         how many kg one pack is, carried forward
+      //   names / unitPrice              frozen when the month is closed, so a
+      //                                  deleted ingredient is still readable and
+      //                                  a price changed later cannot restate
+      //                                  what an already-closed month was worth.
+      //                                  ⚠️ unitPrice is what ONE COUNTED UNIT
+      //                                  cost — a sack, a case, a piece — not a
+      //                                  rate per kilo, so it is right for a
+      //                                  product priced by the piece too
+      //
+      // ⚠️ EVERY FIELD IS OPTIONAL IN BOTH DIRECTIONS except `month`. Rules reach
+      // every phone the instant they deploy while code arrives one device at a
+      // time; required, they would refuse a write from a phone still on the
+      // previous version, and forbidden they would refuse one from a phone already
+      // on the new one.
+      match /inventory/{monthId} {
+        allow read: if canManage(lid, 'foodcost');
+
+        allow create, update: if canManage(lid, 'foodcost')
+          && stampedFor(lid)
+          && monthId.matches('^[0-9]{4}-(0[1-9]|1[0-2])$')
+          && request.resource.data.keys().hasOnly([
+               'bakery', 'month',
+               'opening', 'purchased', 'closing', 'packKg',
+               'names', 'unitPrice',
+               'closedAt', 'createdAt', 'updatedAt'
+             ])
+          && request.resource.data.month is string
+          && request.resource.data.month == monthId
+          && (!('opening' in request.resource.data)
+              || (request.resource.data.opening is map
+                  && request.resource.data.opening.size() <= 500))
+          && (!('purchased' in request.resource.data)
+              || (request.resource.data.purchased is map
+                  && request.resource.data.purchased.size() <= 500))
+          && (!('closing' in request.resource.data)
+              || (request.resource.data.closing is map
+                  && request.resource.data.closing.size() <= 500))
+          && (!('packKg' in request.resource.data)
+              || (request.resource.data.packKg is map
+                  && request.resource.data.packKg.size() <= 500))
+          && (!('names' in request.resource.data)
+              || (request.resource.data.names is map
+                  && request.resource.data.names.size() <= 500))
+          && (!('unitPrice' in request.resource.data)
+              || (request.resource.data.unitPrice is map
+                  && request.resource.data.unitPrice.size() <= 500))
+          // An EMPTY string is a real value here: it is what "this month is open
+          // again" is written as, so a length check alone is the right one.
+          && (!('closedAt' in request.resource.data)
+              || (request.resource.data.closedAt is string
+                  && request.resource.data.closedAt.size() <= 64))
+          && (!('createdAt' in request.resource.data)
+              || (request.resource.data.createdAt is string
+                  && request.resource.data.createdAt.size() <= 64))
+          && (!('updatedAt' in request.resource.data)
+              || (request.resource.data.updatedAt is string
+                  && request.resource.data.updatedAt.size() <= 64));
+
+        // ⚠️ NO DELETE, BY ANYBODY. A month of stock figures is a record the
+        // business decides things on, and the next month's opening counts were
+        // copied out of it — a tap that removed one would take away the only
+        // evidence of where those openings came from. A month closed by mistake
+        // is REOPENED (closedAt back to ''), never deleted.
+        allow delete: if false;
+      }
+
       // ── Pastries to prove ───────────────────────────────────────────────
       // SEVEN documents, for ever: one per weekday, the id being the
       // capitalised English weekday name — the same vocabulary

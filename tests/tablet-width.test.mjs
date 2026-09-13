@@ -77,11 +77,15 @@ const MUST_BE_CAPPED = [
   '.pas-header',
   '.pas-footer',
   '.fc-header',
+  '.inv-header',
+  '.inv-strip',
+  '.inv-footer',
   '.people-scroll',
   // Toasts: shrink-to-fit, so a short one is small anyway — but a long message was
   // free to run to 90vw, i.e. 1229px on an iPad Pro.
   '.cat-toast',
   '.fc-toast',
+  '.inv-toast',
   '.pas-toast',
 ];
 
@@ -91,6 +95,7 @@ const EXEMPT = new Map([
   ['.cat-screen', 'wraps .cat-view, which is capped'],
   ['.pas-screen', 'wraps .pas-view, which is capped'],
   ['.fc-screen', 'wraps .fc-view, which is capped'],
+  ['.inv-screen', 'wraps .inv-view, which is capped'],
   ['.recipe-scroll', 'wraps .recipe-content, which is capped'],
   ['.auth-gate', 'wraps .auth-card, capped at 360px'],
   ['.app-dialog-backdrop', 'wraps .app-dialog, capped at 480px'],

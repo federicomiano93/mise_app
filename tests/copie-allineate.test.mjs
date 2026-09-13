@@ -7,9 +7,15 @@
 // of four passed CI without a word. That is what this file exists to stop.
 //
 // Two things are pinned:
-//   1. the four confirm-dialog.js copies are the same file, full stop;
-//   2. the three dom.js copies are ALREADY different, on purpose, so their current
+//   1. every confirm-dialog.js copy is the same file, full stop;
+//   2. the dom.js copies are ALREADY different, on purpose, so their current
 //      difference is photographed and only a NEW difference fails.
+//
+// ⚠️ HOW MANY COPIES THERE ARE IS NEVER TYPED INTO A SENTENCE. It was, in six
+// places, and by the time a seventh folder arrived those sentences said four,
+// five and six — three different numbers for the same two lists, in the file
+// whose whole job is noticing when copies disagree. Every count below is read
+// from the list itself.
 //
 // ⚠️ Line endings are normalised to LF before anything is compared. This repo is
 // edited on Windows with core.autocrlf=true, so the working tree holds CRLF while
@@ -44,11 +50,11 @@ function firstDifference(a, b) {
 }
 
 // ---------------------------------------------------------------------------
-// 1. confirm-dialog.js — four copies, one file
+// 1. confirm-dialog.js — one file, however many copies
 // ---------------------------------------------------------------------------
 
 // THE styled confirm/alert dialog (CLAUDE.md, "Confirmations: ONE dialog"). It is
-// copied rather than imported so a feature stays extractable; the six copies must
+// copied rather than imported so a feature stays extractable; the copies must
 // stay identical, because a fix to the focus trap or the z-index that reaches only
 // some of them leaves the others quietly broken.
 const REFERENCE_DIALOG = 'js/confirm-dialog.js';
@@ -59,9 +65,10 @@ const DIALOG_COPIES = [
   'js/foodcost/confirm-dialog.js',
   'js/client-orders/confirm-dialog.js',
   'js/staff/confirm-dialog.js',
+  'js/inventory/confirm-dialog.js',
 ];
 
-test('the six copies of confirm-dialog.js are the same file', () => {
+test(`the ${DIALOG_COPIES.length} copies of confirm-dialog.js are the same file`, () => {
   const reference = read(REFERENCE_DIALOG);
 
   for (const copy of DIALOG_COPIES) {
@@ -74,8 +81,8 @@ test('the six copies of confirm-dialog.js are the same file', () => {
         `${copy} has drifted from ${REFERENCE_DIALOG} at line ${diff.line}.\n` +
           `  ${REFERENCE_DIALOG}: ${diff.expected}\n` +
           `  ${copy}: ${diff.actual}\n` +
-          'Apply the change to ALL SIX copies: js/, js/orders/, js/catalogue/, ' +
-          'js/pastries/, js/foodcost/, js/client-orders/.',
+          `Apply the change to ALL ${DIALOG_COPIES.length} copies: ` +
+          `${REFERENCE_DIALOG}, ${DIALOG_COPIES.join(', ')}.`,
     );
   }
 });
@@ -182,7 +189,7 @@ test('the holiday model has no imports, so the copy can BE a copy', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 2. dom.js — five copies, already different on purpose
+// 2. dom.js — every copy already different on purpose
 // ---------------------------------------------------------------------------
 
 // These were never identical, so demanding equality would fail on day one
@@ -222,6 +229,15 @@ const DOM_SNAPSHOT = [
     why: 'the catalogue copy with a Food Cost header',
   },
   {
+    file: 'js/inventory/dom.js',
+    sha256: '87390d375dc3246d851a5f8b3a5c049b7199a5b96ff6915e93c9ede8c08cf7a1',
+    // Copied from the Food Cost copy (itself the catalogue's), with a header
+    // naming the stocktake screen. No groupBy: the stocktake groups its rows by
+    // category through its own list code, which needs the ingredients themselves
+    // rather than a map of arrays.
+    why: 'the catalogue copy with a Stocktake header',
+  },
+  {
     file: 'js/staff/dom.js',
     sha256: '0eb18ed08c4e6bcbb657a87e3879d8882b460fae7c28c9114a1ce7e6b17c36ec',
     // Copied from the catalogue's copy like the three below it: no groupBy, same
@@ -242,22 +258,23 @@ const DOM_SNAPSHOT = [
   },
 ];
 
-test('the five copies of dom.js differ only as photographed', () => {
+test(`the ${DOM_SNAPSHOT.length} copies of dom.js differ only as photographed`, () => {
   for (const { file, sha256: expected, why } of DOM_SNAPSHOT) {
     assert.equal(
       sha256(read(file)),
       expected,
-      `${file} has changed. It is one of four copies of dom.js, photographed here as: ${why}.\n` +
-        'If the change is intended, ask FIRST whether the other three copies need it too ' +
-        '(js/orders/dom.js, js/catalogue/dom.js, js/pastries/dom.js, js/foodcost/dom.js), ' +
+      `${file} has changed. It is one of ${DOM_SNAPSHOT.length} copies of dom.js, ` +
+        `photographed here as: ${why}.\n` +
+        'If the change is intended, ask FIRST whether the other copies need it too ' +
+        `(${DOM_SNAPSHOT.map(c => c.file).filter(f => f !== file).join(', ')}), ` +
         'then update the hash above.',
     );
   }
 });
 
 // The snapshot above catches "a copy changed", but not the failure it exists for:
-// fixing el() in four copies out of five updates four hashes and leaves the last
-// behind, looking deliberate. el() is the code all five actually share, so it is
+// fixing el() in every copy but one updates those hashes and leaves the last one
+// behind, looking deliberate. el() is the code they all actually share, so it is
 // compared directly.
 function elFunction(source) {
   const lines = source.split('\n');
@@ -268,7 +285,7 @@ function elFunction(source) {
   return lines.slice(start, end + 1).join('\n');
 }
 
-test('el() is the same code in all six copies of dom.js', () => {
+test(`el() is the same code in all ${DOM_SNAPSHOT.length} copies of dom.js`, () => {
   const [reference, ...rest] = DOM_SNAPSHOT.map(({ file }) => ({ file, el: elFunction(read(file)) }));
 
   for (const copy of rest) {

@@ -206,6 +206,29 @@
       <span class="home-card-sub" data-i18n="ui.productsMargins">Products &amp; margins</span>
     </a>
 
+    <!-- ⚠️ data-section="foodcost", THE SAME NAME AS THE CARD ABOVE, and that is
+         the whole access story — the same shortcut suppliers.html takes with
+         "orders" (see the note there). This screen says what the business
+         consumed and what it was worth, which is exactly the information Food
+         cost is already gated on: owner and manager only, ROLE_ONLY in
+         js/sections.js. So no new section name had to be invented, and nothing in
+         js/sections.js, functions/onboarding.js, js/staff/new-customer.js or the
+         rules needed a new name propagated into it.
+         ⚠️ THE CONSEQUENCE, WRITTEN DOWN: switching Food cost off for a venue
+         switches this off too, and an employee cannot help with the counting.
+         Both follow from the gate being shared, and both are deliberate. -->
+    <a class="home-card" href="inventory.html" data-section="foodcost">
+      <span class="home-card-icon" aria-hidden="true">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="8" y="3" width="8" height="7" rx="1"/>
+          <rect x="3" y="14" width="8" height="7" rx="1"/>
+          <rect x="13" y="14" width="8" height="7" rx="1"/>
+        </svg>
+      </span>
+      <span class="home-card-title" data-i18n="section.inventory">Stocktake</span>
+      <span class="home-card-sub" data-i18n="ui.endOfMonthCount">End-of-month count</span>
+    </a>
+
   </nav>
   <div id="install-host" class="install-host"></div>
 
