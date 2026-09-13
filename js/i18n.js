@@ -520,6 +520,12 @@ const DICTIONARIES = Object.freeze({
     'away.backTitle': 'Back already?',
     'away.backMessage': 'Your holiday runs to {day}. Ending it now turns your notifications back on.',
     'away.back': 'I am back',
+    // The Home's holiday band, and the once-a-day reminder whose job is catching a
+    // holiday somebody forgot to switch off.
+    'away.band.body': 'Your phone is not alerting you. Tap here if you are already back.',
+    'away.reminder.title': 'You are on holiday',
+    'away.reminder.body': 'Until {day} your phone does not alert you. If you are already back, say so now and your notifications start again.',
+    'away.reminder.continue': 'Continue',
     'away.badDate': 'That date cannot be used. Pick a day from today onwards, within a year.',
     'away.saveFailed': 'Not saved — check the connection and try again.',
     // ⚠️ THE WARNING THAT MAKES THE WHOLE FEATURE SAFE.
@@ -2134,6 +2140,27 @@ const DICTIONARIES = Object.freeze({
     'lang.labels': 'Allergen labels are not affected: they are printed in {language}, because this business sells {country}. The law asks for a label in the language of the country where the food is sold.',
     'lang.labels.noCountry': 'This business has no country set, so it cannot print an allergen label at all. The country decides the label’s language, and it is not something the app may guess.',
 
+    // ── Choosing which Home cards the employees see ────────────────────────
+    'homeCards.title': 'Home cards',
+    'homeCards.intro': 'Choose which cards the people who work here see on the Home.',
+    'homeCards.managersSeeAll': 'Owners, managers and head chefs always see every card, so your own Home does not change. Hiding a card deletes nothing, and showing it again brings it straight back.',
+    'homeCards.applies': 'Employees see the change the next time they open the app. The notifications of a hidden card stop for them at once.',
+    'homeCards.shown': 'Visible',
+    'homeCards.hidden': 'Hidden',
+    'homeCards.saving': 'Saving…',
+    'homeCards.err.save': 'Could not save the change. Check your connection and try again.',
+    'homeCards.none': 'This business has no cards to choose from.',
+    'homeCards.hide.title': 'Hide «{card}» from employees?',
+    'homeCards.hide.body': 'They will no longer see it on the Home or be able to open it. Owners, managers and head chefs still see it, and nothing is deleted.',
+    'homeCards.hide.push': 'They will not receive its notifications either.',
+    'homeCards.hide.ok': 'Hide it',
+    'homeCards.catalogue.body': 'The allergen sheet is behind it, and whoever answers customers’ questions about allergens at the counter needs it.',
+
+    // ── The Home's Settings screen: one sentence under each row ────────────
+    'settings.away.sub': 'Your phone stops ringing while you are away.',
+    'settings.people.sub': 'Invite people and choose what each of them can do.',
+    'settings.switch.sub': 'Open another of your locations.',
+
 
     // ⚠️ THE NAME OF A LANGUAGE INSIDE A SENTENCE IS INTERFACE TEXT. The choice
     // list names each language in ITSELF («Italiano»), because that is the word
@@ -2617,6 +2644,10 @@ const DICTIONARIES = Object.freeze({
     'away.backTitle': 'Già tornato?',
     'away.backMessage': 'Le tue ferie arrivano al {day}. Chiuderle adesso riaccende le notifiche.',
     'away.back': 'Sono tornato',
+    'away.band.body': 'Il telefono non ti avvisa. Tocca qui se sei già tornato.',
+    'away.reminder.title': 'Sei in ferie',
+    'away.reminder.body': 'Fino al {day} il telefono non ti avvisa. Se sei già tornato, dillo adesso e le notifiche ripartono.',
+    'away.reminder.continue': 'Continua',
     'away.badDate': 'Quella data non si può usare. Scegli un giorno da oggi in avanti, entro un anno.',
     'away.saveFailed': 'Non salvato — controlla la connessione e riprova.',
     'away.nobodyTitle': 'Non verrà avvisato nessuno',
@@ -3996,6 +4027,25 @@ const DICTIONARIES = Object.freeze({
     'lang.err.save': 'Non è stato possibile cambiare la lingua. Controlla la connessione e riprova.',
     'lang.labels': 'Le etichette allergeni non cambiano: sono prodotte in {language}, perché questa attività vende {country}. La legge chiede un’etichetta nella lingua del paese in cui il cibo si vende.',
     'lang.labels.noCountry': 'Questa attività non ha un paese impostato, quindi non può produrre nessuna etichetta allergeni. Il paese decide la lingua dell’etichetta, e non è una cosa che l’app possa indovinare.',
+
+    'homeCards.title': 'Schede della Home',
+    'homeCards.intro': 'Scegli quali schede vedono sulla Home le persone che lavorano qui.',
+    'homeCards.managersSeeAll': 'Titolare, manager e chef di cucina vedono sempre tutte le schede, quindi la tua Home non cambia. Nascondere una scheda non cancella niente, e mostrarla di nuovo la fa ricomparire subito.',
+    'homeCards.applies': 'I dipendenti vedono il cambiamento la prossima volta che aprono l’app. Le notifiche di una scheda nascosta smettono subito di arrivargli.',
+    'homeCards.shown': 'Visibile',
+    'homeCards.hidden': 'Nascosta',
+    'homeCards.saving': 'Salvataggio…',
+    'homeCards.err.save': 'Non è stato possibile salvare la modifica. Controlla la connessione e riprova.',
+    'homeCards.none': 'Questa attività non ha schede da scegliere.',
+    'homeCards.hide.title': 'Nascondere «{card}» ai dipendenti?',
+    'homeCards.hide.body': 'Non la vedranno più sulla Home e non potranno aprirla. Titolare, manager e chef di cucina continuano a vederla, e non si cancella niente.',
+    'homeCards.hide.push': 'E non riceveranno più le sue notifiche.',
+    'homeCards.hide.ok': 'Nascondi',
+    'homeCards.catalogue.body': 'Lì dentro c’è la scheda allergeni, che serve a chi al banco risponde alle domande dei clienti sugli allergeni.',
+
+    'settings.away.sub': 'Il telefono smette di suonare mentre sei via.',
+    'settings.people.sub': 'Invita persone e scegli cosa può fare ognuno.',
+    'settings.switch.sub': 'Apri un altro dei tuoi locali.',
 
 
     'language.en.inSentence': 'inglese',

@@ -82,7 +82,7 @@ for (const name of ['createWorkspace', 'listWorkspaces', 'reissueOwnerLink']) {
 
 // ── Inside a location: wait for the LOCATION ─────────────────────────────────
 
-for (const name of ['createJoinCode', 'setMemberRole', 'setMemberName']) {
+for (const name of ['createJoinCode', 'setMemberRole', 'setMemberName', 'setStaffCard']) {
   test(`${name} still waits for a location to be open`, () => {
     const body = code(name);
     assert.ok(body.includes('await sessionReady'),

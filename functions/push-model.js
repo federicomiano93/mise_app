@@ -215,6 +215,16 @@ export function targetPage(kind) {
   return './catalogue.html';
 }
 
+// The Home card that page belongs to (js/home-cards.js ids). A card a venue hides from
+// its employees silences, for them, every notification that would open it — Federico,
+// 13 Sep 2026: hiding a card means he does not want them using it. Same three answers
+// as targetPage() above, in the same order, and a test holds the two together.
+export function cardForKind(kind) {
+  if (kind === 'order') return 'calculator';
+  if (kind === 'orderRequest') return 'orders';
+  return 'catalogue';
+}
+
 // One notification per thing, so a re-delivery REPLACES rather than stacking
 // three copies of the same alarm on the lock screen.
 export function notificationTag(kind, id) {

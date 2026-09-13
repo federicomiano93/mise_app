@@ -609,7 +609,14 @@ select.qty-select:focus { outline: none; border-color: var(--crust); background:
 }
 .settings-menu-btn:active { background: var(--surface2); }
 .settings-menu-title { font-size: 16px; font-weight: 700; color: var(--text); font-family: 'Manrope', sans-serif; }
-.settings-menu-sub { font-size: 13px; color: var(--text2); }
+/* ⚠️ THE FAMILY IS NAMED, NOT INHERITED: these spans sit inside a <button>, and a button
+   takes the SYSTEM font from the browser's own stylesheet unless told otherwise. The
+   title always said Manrope; the sentence under it did not, and rendered in the system
+   sans on the Calculator's Settings and the Home's alike. Found on a screenshot. */
+.settings-menu-sub { font-size: 13px; color: var(--text2); font-family: 'Manrope', sans-serif; }
+/* The Home's Settings: the holiday row reads in the warning colour while somebody IS
+   away — the same signal the bottom of the Home gives (.session-logout.session-away). */
+.settings-menu-btn--away .settings-menu-title { color: var(--warn); }
 
 /* Tappable "drill-in" row: the recipe picker and the client list both use it to
    let the user pick one item to edit, instead of showing everything at once. */

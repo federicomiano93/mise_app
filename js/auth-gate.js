@@ -23,6 +23,7 @@ import { normalizeTyped } from './join-code.js';
 import { kindOfTyped, readJoinToken, codeShapeHint } from './join-link.js';
 import { nameProblem, passwordProblem, MIN_PASSWORD_LENGTH } from './credentials.js';
 import { isSectionAllowedFor } from './sections.js';
+import { cardVisibleTo } from './home-cards.js';
 
 const HOME = 'index.html';
 
@@ -83,6 +84,10 @@ function forgetInvite() {
 // Which section this page belongs to. Pages set it on the <body>; a page with no
 // section (the Home itself) is never gated by section, only by sign-in.
 const pageSection = document.body.dataset.section || '';
+
+// Which Home card leads to this page (js/home-cards.js). Not the section: two cards
+// share `orders`, and a venue may hide one of them from its employees and not the other.
+const pageCard = document.body.dataset.card || '';
 
 // Firebase's error codes, in words that tell you what to DO about it. The codes
 // are deliberately vague about which of email/password was wrong (so an attacker
@@ -855,6 +860,14 @@ function render(session) {
       // regardless — this is what stops the screen sitting there collecting
       // permission errors instead of saying nothing at all.
       if (pageSection && !isSectionAllowedFor(session.location, session.role, pageSection)) {
+        location.replace(HOME);
+        return;
+      }
+      // ⚠️ AND A CARD THE VENUE HID FROM ITS EMPLOYEES, for the same reason: a hidden
+      // card that an address typed by hand walks straight past is not hidden. This one
+      // is NOT backed by the rules and is not meant to be — it is a display choice, not
+      // a permission (js/home-cards.js). Owners, managers and head chefs pass always.
+      if (pageCard && !cardVisibleTo(session.location, session.canManage, pageCard)) {
         location.replace(HOME);
         return;
       }

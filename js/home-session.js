@@ -9,30 +9,27 @@
 //      anyway; this is so nobody taps into a screen that will only ever show
 //      permission errors.
 //
-// Log out sits here too, deliberately quiet next to the location name (P20:
-// a destructive action never competes with the thing you actually came to do).
+// ⚠️ THE BOTTOM OF THE HOME IS ONE BUTTON, «Settings». Federico, 13 Sep 2026: «io
+// metterei solo un tasto settings perche' senno' diventano troppe scritte in fondo alla
+// pagina». Holiday, App language, Home cards, Who can get in, Switch location and Log
+// out are rows of js/home-settings.js now, each behind exactly the gate it had here.
+// A holiday is shown at the TOP instead, and reminded once a day (js/home-away.js).
 
 import { t } from './i18n.js';
-import { onSession, signOutNow, switchLocation, forgetLocation, openVenuePicker } from './firebase.js';
+import { onSession, openVenuePicker } from './firebase.js';
 import { sectionsFor, hasLevelAbove } from './sections.js';
-import { confirmDialog } from './confirm-dialog.js';
+import { cardVisibleTo } from './home-cards.js';
+import { refreshAway, wireAwayReminder } from './home-away.js';
 
 const logoutHost = document.getElementById('session-logout-host');
 const upBtn = document.getElementById('home-up-btn');
 
-function button(label, className, onClick) {
-  const node = document.createElement('button');
-  node.type = 'button';
-  node.className = className;
-  node.textContent = label;
-  node.addEventListener('click', onClick);
-  return node;
-}
+const SVG_NS = 'http://www.w3.org/2000/svg';
 
 // Hide the cards this location does not use. The cards are static HTML with a
 // data-section, so this only ever REMOVES — a location with everything on gets
 // the markup exactly as written.
-function filterCards(location, role) {
+function filterCards({ location, role, canManage }) {
   // ⚠️ THE ROLE NARROWS THIS TOO, so a card is not drawn for a screen the person
   // would be refused on. It is still only courtesy — the rules refuse the data
   // itself — but a card that opens onto permission errors teaches people the app
@@ -40,109 +37,59 @@ function filterCards(location, role) {
   const allowed = sectionsFor(location, role);
   document.querySelectorAll('.home-card[data-section]').forEach(card => {
     if (allowed[card.dataset.section] === false) card.remove();
+    // ⚠️ A THIRD, PURELY VISUAL LAYER: the cards the venue chose to hide from its
+    // employees (js/home-cards.js). It can only remove more, never bring back a
+    // card either check above removed — and it never removes one from an owner, a
+    // manager or a head chef.
+    else if (!cardVisibleTo(location, canManage, card.dataset.card)) card.remove();
   });
 }
 
-// The bottom of the Home, after the cards, in quiet type. Both actions here are
-// rare and neither is what anyone opened the app to do — the location's name
-// says where you are from the green header, which is the part that has to be
-// seen without looking for it.
+// The gear, built as nodes — the same drawing as the Settings button at the bottom
+// of Orders, so the app has one picture for «Settings».
+function gearIcon() {
+  const svg = document.createElementNS(SVG_NS, 'svg');
+  const attrs = {
+    viewBox: '0 0 24 24', width: '20', height: '20', fill: 'none', stroke: 'currentColor',
+    'stroke-width': '2', 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true',
+  };
+  for (const [k, v] of Object.entries(attrs)) svg.setAttribute(k, v);
+  const circle = document.createElementNS(SVG_NS, 'circle');
+  circle.setAttribute('cx', '12');
+  circle.setAttribute('cy', '12');
+  circle.setAttribute('r', '3');
+  const path = document.createElementNS(SVG_NS, 'path');
+  path.setAttribute('d', 'M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z');
+  svg.append(circle, path);
+  return svg;
+}
+
+// The bottom of the Home, after the cards: the app's bottom-bar button, «Settings».
+//
+// ⚠️ "Back to Misé" and "Businesses" are deliberately NOT behind it either. The header
+// arrow steps up to them (renderUpArrow below) — this bar belongs to ONE customer's
+// venue, and the app's own customer list is not a drawer inside it.
 function renderSessionActions(session) {
   if (!logoutHost) return;
   logoutHost.textContent = '';
 
-  const options = session.options || [];
+  const label = document.createElement('span');
+  label.textContent = t('ui.settings');
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'recipe-footer-btn';
+  btn.append(gearIcon(), label);
+  btn.addEventListener('click', async () => {
+    const { openHomeSettings } = await import('./home-settings.js');
+    openHomeSettings(session);
+  });
 
-  // ⚠️ "Back to Misé" HAS LEFT THIS STRIP. The back arrow at the top-left of the
-  // header does that job now, in the place this app puts every other way up, and
-  // two doors to the same floor — one at the top and one at the bottom — are the
-  // muddle Federico spotted here in the first place. The strip is also the wrong
-  // place for it in practice: with five cards the Home scrolls, so anything down
-  // here is below the edge of the screen until you look for it.
-  //
-  // ⚠️ "Switch location" STAYS for somebody with venues but no back office, and it
-  // is not a leftover. With exactly two venues it jumps STRAIGHT to the other one
-  // in a single tap, while the arrow steps up to the picker and costs two — two
-  // different errands, "take me to the other one" and "show me everything". With
-  // three it already only opens the picker, so nothing is lost by having both.
-  if (!session.isAppAdmin && options.length > 1) {
-    logoutHost.append(button(t('home.switch'), 'session-logout', async () => {
-      const other = options.filter(id => id !== session.locationId);
-      const names = session.optionNames || {};
-      const cleared = t('home.switch.cleared');
-      // One other location is unambiguous, so name it and go straight there.
-      // More than one and the app cannot pick for you: forget the remembered
-      // location so the reload comes back to the picker.
-      const ok = await confirmDialog({
-        title: t('home.switch.title'),
-        message: other.length === 1
-          ? `${t('home.switch.toOne', { other: names[other[0]] || other[0], here: session.name })}\n\n${cleared}`
-          : `${t('home.switch.toMany')}\n\n${cleared}`,
-        okLabel: t('home.switch.ok'),
-        cancelLabel: t('ui.cancel'),
-      });
-      if (!ok) return;
-      if (other.length === 1) switchLocation(other[0]);
-      else forgetLocation();
-    }));
-  }
-
-  // ⚠️ OWNERS ONLY, and it lives here with Switch location and Log out rather
-  // than as a card. It is a rare, administrative errand — nobody opens the app
-  // to manage staff — so it belongs in the quiet strip at the bottom, not
-  // competing with the work (P20). Drawing it for staff would be an invitation
-  // to a screen where every button is refused.
-  // ⚠️ OWNER AND MANAGER — which includes a head chef, who holds 'manager'.
-  // Federico's rule: everybody else uses the app's language and cannot change it.
-  // Drawn above "Who can get in" because a manager reaches this and not that.
-  if (session.canManage) {
-    logoutHost.append(button(t('lang.title'), 'session-logout', async () => {
-      const { openLanguage } = await import('./staff/language.js');
-      openLanguage(session);
-    }));
-  }
-
-  if (session.isOwner) {
-    logoutHost.append(button(t('people.title'), 'session-logout', async () => {
-      const { openPeople } = await import('./staff/people.js');
-      // The whole session: the screen needs the venue's NAME as well as who is
-      // looking, because a WhatsApp invitation that does not say where it lets
-      // somebody in reads exactly like a scam.
-      openPeople(session);
-    }));
-  }
-
-  // ⚠️ "Businesses" IS DELIBERATELY NOT HERE ANY MORE. It moved to the Misé home
-  // screen, above every venue (js/auth-gate.js hubScreen). This strip belongs to
-  // ONE customer's venue — the header above it says that venue's name — and the
-  // app's own customer list is not a drawer inside it. "Back to Misé" above is
-  // how an administrator reaches it. Putting it back here would restore the
-  // three-scopes-in-one-list problem Federico spotted on his own phone.
-
-  // ⚠️ IT SITS BESIDE LOG OUT BECAUSE IT IS A FACT ABOUT THE PERSON, not about
-  // the venue — the same reason Log out is here and not in the green header. It
-  // is added asynchronously (it has to read the person's own holiday first), so
-  // it appends itself when it arrives rather than holding the strip up.
-  //
-  // ⚠️ AND IT IS OFFERED TO EVERYBODY, not only to managers. An employee's phone
-  // rings too — for a client's order — and being told "you may not go on holiday"
-  // by an app is absurd. Who it SILENCES is decided by who would have been
-  // notified, which is the server's job.
-  import('./away-screen.js')
-    .then(({ buildAwayButton }) => buildAwayButton())
-    .then(btn => { if (btn && logoutHost.isConnected) logoutHost.prepend(btn); })
-    .catch(err => console.warn('The holiday button is not available:', err));
-
-  logoutHost.append(button(t('auth.logOut'), 'session-logout', async () => {
-    const ok = await confirmDialog({
-      title: t('auth.logOut.title'),
-      message: t('auth.logOut.message'),
-      okLabel: t('auth.logOut'),
-      cancelLabel: t('ui.cancel'),
-      danger: true,
-    });
-    if (ok) signOutNow();
-  }));
+  const bar = document.createElement('div');
+  bar.className = 'recipe-footer';
+  bar.appendChild(btn);
+  logoutHost.appendChild(bar);
+  // ⚠️ AND NOTHING ELSE, EVER — not even a holiday (Federico: «voglio solo un tasto
+  // impostazioni»). Being away is a band at the TOP of the Home: js/home-away.js.
 }
 
 // The way up, in the header. Revealed rather than built, so it can appear the moment
@@ -171,14 +118,17 @@ let currentSessionForStrip = null;
 onSession(session => {
   if (session.status !== 'ready') return;
   currentSessionForStrip = session;
-  filterCards(session.location, session.role);
+  filterCards(session);
+  // After the filter, so a card the venue removed is never listened to.
+  wireAwayReminder();
+  refreshAway();
   renderUpArrow(session);
   renderSessionActions(session);
 });
 
-// ⚠️ THE BUTTON IS REBUILT, NOT PATCHED, when the holiday changes. Its words are
-// derived from the stored date, so editing the label by hand is how a screen ends
-// up saying "On holiday until Friday" about a holiday that was just cancelled.
+// ⚠️ THE BAND IS RE-READ, NOT PATCHED, when the holiday changes. Its words are derived
+// from the stored date, so editing the label by hand is how a screen ends up saying
+// "On holiday until Friday" about a holiday that was just cancelled.
 window.addEventListener('away-changed', () => {
-  if (currentSessionForStrip) renderSessionActions(currentSessionForStrip);
+  if (currentSessionForStrip) refreshAway();
 });

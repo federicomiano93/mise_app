@@ -33,6 +33,7 @@ import {
   MAX_ATTEMPTS_PER_HOUR, ATTEMPT_WINDOW_MS,
   isWellFormed, codeStatus, isRateLimited, retryAfterMs, redeemFailureText,
 } from './join-code.js';
+import { HIDEABLE_IDS } from './home-cards.js';
 
 const REGION = 'us-central1';
 
@@ -984,4 +985,52 @@ export const setIngredientPanels = onCall(CALL, async (request) => {
   // sections and its country, and a whole write here would erase all three.
   await db().doc(`locations/${locationId}`).set(patch, { merge: true });
   return patch;
+});
+
+// ── Which Home cards an ordinary employee is shown ───────────────────────────
+//
+// Federico, 13 Sep 2026: an owner, a manager or a head chef decides which Home cards
+// the venue's employees see, without the Firebase console. HIDE ONLY, and ONLY FOR
+// EMPLOYEES — both his choices, and both in js/home-cards.js, which is where the app
+// reads what this writes.
+//
+// ⚠️ THE CARD IDS COME FROM functions/home-cards.js, a byte-for-byte copy of
+// js/home-cards.js pinned by tests/copie-allineate.test.mjs — the very list the app
+// hides by, so the server can never accept a card the app does not know or refuse one
+// it does. (A hand-kept second list until the notifications needed the whole judgement
+// on this side too.)
+
+// ⚠️ IT TOUCHES NO ACCESS. `sections`, users/{uid} and the rules are exactly as they
+// were: this is a display switch, and an employee who types a hidden page's address
+// is sent Home by the app, not refused by the database.
+//
+// ⚠️ ONE CARD PER CALL, and a merge into the map rather than a write of the whole
+// map. A screen drawn before somebody else's change must not put the other cards back
+// to whatever it was showing.
+export const setStaffCard = onCall(CALL, async (request) => {
+  const uid = requireAuth(request);
+  const { locationId, card, hidden } = request.data || {};
+
+  // The same shape requireOwner() accepts: an id that could never name a real folder
+  // is refused before a document path is built from it.
+  if (typeof locationId !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(locationId)) {
+    throw new HttpsError('invalid-argument', 'Which location?');
+  }
+  if (typeof card !== 'string' || !HIDEABLE_IDS.includes(card)) {
+    throw new HttpsError('invalid-argument', 'Which card?');
+  }
+  if (typeof hidden !== 'boolean') {
+    throw new HttpsError('invalid-argument', 'Shown or hidden?');
+  }
+
+  const access = await accessValue(uid, locationId);
+  if (access !== 'owner' && access !== 'manager') {
+    throw new HttpsError('permission-denied', 'Only an owner or a manager can change that.');
+  }
+
+  // merge, never a whole write — the same document holds the venue's name, its
+  // sections and its country. And a merge of a nested map merges KEY BY KEY, so the
+  // other cards' answers stay where they are.
+  await db().doc(`locations/${locationId}`).set({ staffHiddenCards: { [card]: hidden } }, { merge: true });
+  return { card, hidden };
 });

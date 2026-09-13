@@ -1254,6 +1254,25 @@ input.ing-stock {
    that opens Orders, reusing the .alert-banner.order colours. The host is hidden
    when empty so it leaves no gap on days with nothing to place. */
 #home-reminder:empty { display: none; }
+/* The holiday band beside it (js/home-away.js) is a BUTTON — tapping it asks «back
+   already?» rather than going somewhere — so it needs a button's resets to sit exactly
+   where the link sits: the full column width, left-aligned text, the page's own font. */
+button.home-reminder {
+  display: block;
+  width: calc(100% - 32px);
+  margin: 16px 16px 0;
+  text-align: left;
+  /* ⚠️ THE FAMILY FROM THE PAGE, THE SIZE FROM .alert-banner. `font: inherit` here reset
+     the size to the page's 16px, which outranks .alert-banner's 13px on specificity —
+     and the band read a size larger than the order reminder right under it. Found on
+     a screenshot, then measured equal. */
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.4;
+  cursor: pointer;
+  transition: transform 60ms ease;
+}
+button.home-reminder:active { transform: scale(.99); }
 a.home-reminder {
   display: block;
   text-decoration: none;

@@ -166,6 +166,16 @@ export async function setLocationLanguage(locationId, language) {
   return res.data;
 }
 
+// Show or hide one Home card for this venue's ordinary employees (js/home-cards.js).
+//
+// ⚠️ sessionReady, for the same reason as the call above: it is made from inside an
+// open venue, and on signedInReady it could fire before one is open.
+export async function setStaffCard(locationId, card, hidden) {
+  await sessionReady;
+  const res = await call('setStaffCard')({ locationId, card, hidden });
+  return res.data;
+}
+
 // `title` names the manager level — 'manager' or 'head-chef'. It is a LABEL and
 // grants nothing; the server clears it whenever the level is not manager.
 export async function setMemberRole(uid, role, title = null) {

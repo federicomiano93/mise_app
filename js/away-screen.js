@@ -1,8 +1,8 @@
-// away-screen.js — the "I am on holiday" control on the Home.
+// away-screen.js — the "I am on holiday" control, and everything that reads or ends it.
 //
-// It lives in the Home's quiet bottom strip, beside Log out, because it is a fact
-// about the PERSON rather than about the venue — the same reason Log out is there
-// and not in the header.
+// It lives in the Home's Settings screen, beside Log out, because it is a fact about
+// the PERSON rather than about the venue. The Home's band and its once-a-day reminder
+// (js/home-away.js) read and end the same holiday through the exports below.
 //
 // ⚠️ THE DATE PICKER IS THE PLATFORM'S OWN (`<input type="date">`), on purpose
 // (P19). A hand-rolled calendar is one of the things this project's rules name as
@@ -10,10 +10,11 @@
 // every person already knows how to use — including its language and its idea of
 // which day a week starts on.
 
-import { t } from './i18n.js';
+import { t, localeTag } from './i18n.js';
 import { confirmDialog } from './confirm-dialog.js';
 import { currentSession } from './firebase.js';
 import { buildAwayDoc, isAway, maxAwayDate, toISODate } from './away-model.js';
+import { dayFromISO } from './away-reminder.js';
 import { getAwayDaysOnce, saveAwayDay } from './orders/firebase-orders.js';
 
 function el(tag, className, text) {
@@ -55,8 +56,9 @@ async function askUntil(current) {
   return ok ? input.value : null;
 }
 
-// The strip entry. Returns the button, or null when there is nobody to be.
-export async function buildAwayButton() {
+// This person's holiday right now: `{ uid, mine, away }`, or null when nobody is signed
+// in to have one.
+export async function readMyAway() {
   const { user } = currentSession();
   if (!user?.uid) return null;
 
@@ -71,30 +73,55 @@ export async function buildAwayButton() {
     // works — it simply starts from nothing.
     console.warn('Could not read your own holiday:', err);
   }
+  return { uid: user.uid, mine, away: isAway(mine, Date.now()) };
+}
 
-  const away = isAway(mine, Date.now());
+// «16 September» / «16 settembre», in the language the screen speaks. The stored
+// 2026-09-16 is for machines; until 13 Sep 2026 people were shown exactly that.
+export function awayDayLabel(until) {
+  const day = dayFromISO(until);
+  return day ? day.toLocaleDateString(localeTag(), { day: 'numeric', month: 'long' }) : String(until || '');
+}
+
+// Ending a holiday early, asked once.
+//
+// ⚠️ COMING BACK IS ONE TAP AND IS NOT A DESTRUCTIVE ACT — no danger red, no warning.
+// The whole point is that it ends easily and by itself.
+export async function askComeBack(state) {
+  if (!state?.away) return;
+  const back = await confirmDialog({
+    title: t('away.backTitle'),
+    message: t('away.backMessage', { day: awayDayLabel(state.mine.until) }),
+    okLabel: t('away.back'),
+    cancelLabel: t('ui.cancel'),
+  });
+  if (back) await comeBack(state.uid);
+}
+
+// ⚠️ ASKS NOTHING — its callers already have: askComeBack above, or the once-a-day
+// reminder in js/home-away.js whose own button says «I am back».
+export async function comeBack(uid) {
+  await write(uid, '');
+}
+
+// The Settings row. Returns the button, or null when there is nobody to be.
+export async function buildAwayButton() {
+  const state = await readMyAway();
+  if (!state) return null;
+
   const btn = document.createElement('button');
   btn.type = 'button';
-  btn.className = 'session-logout' + (away ? ' session-away' : '');
-  btn.textContent = away ? t('away.onUntil', { day: mine.until }) : t('away.title');
+  btn.className = 'session-logout' + (state.away ? ' session-away' : '');
+  btn.textContent = state.away ? t('away.onUntil', { day: awayDayLabel(state.mine.until) }) : t('away.title');
 
   btn.addEventListener('click', async () => {
-    if (away) {
-      // ⚠️ COMING BACK IS ONE TAP AND IS NOT A DESTRUCTIVE ACT — no danger red,
-      // no warning. The whole point is that it ends easily and by itself.
-      const back = await confirmDialog({
-        title: t('away.backTitle'),
-        message: t('away.backMessage', { day: mine.until }),
-        okLabel: t('away.back'),
-        cancelLabel: t('ui.cancel'),
-      });
-      if (!back) return;
-      await write(user.uid, '');
+    if (state.away) {
+      await askComeBack(state);
       return;
     }
     const until = await askUntil('');
     if (!until) return;
-    await write(user.uid, until);
+    await write(state.uid, until);
   });
 
   return btn;

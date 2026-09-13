@@ -754,6 +754,12 @@
 
 .people-pill--on:active { transform: none; }
 
+/* A pill that is a SWITCH, not a choice already made (js/staff/home-cards-screen.js).
+   Its ON state is the one people tap to turn it off, so it must keep the pointer and
+   the press feedback the role pill above deliberately drops. */
+.people-pill--switch.people-pill--on { cursor: pointer; }
+.people-pill--switch.people-pill--on:active { transform: scale(.97); }
+
 /* Editing a name in the row rather than in a pop-up: the browser's prompt() is
    the grey system box this app removed in PR #28, and confirm-dialog.js is
    byte-identical across six copies and only asks yes or no. */
