@@ -1262,7 +1262,13 @@ button.home-reminder {
   width: calc(100% - 32px);
   margin: 16px 16px 0;
   text-align: left;
-  font: inherit;
+  /* ⚠️ THE FAMILY FROM THE PAGE, THE SIZE FROM .alert-banner. `font: inherit` here reset
+     the size to the page's 16px, which outranks .alert-banner's 13px on specificity —
+     and the band read a size larger than the order reminder right under it. Found on
+     a screenshot, then measured equal. */
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.4;
   cursor: pointer;
   transition: transform 60ms ease;
 }
