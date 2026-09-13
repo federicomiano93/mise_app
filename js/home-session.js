@@ -13,11 +13,13 @@
 // metterei solo un tasto settings perche' senno' diventano troppe scritte in fondo alla
 // pagina». Holiday, App language, Home cards, Who can get in, Switch location and Log
 // out are rows of js/home-settings.js now, each behind exactly the gate it had here.
+// A holiday is shown at the TOP instead, and reminded once a day (js/home-away.js).
 
 import { t } from './i18n.js';
 import { onSession, openVenuePicker } from './firebase.js';
 import { sectionsFor, hasLevelAbove } from './sections.js';
 import { cardVisibleTo } from './home-cards.js';
+import { refreshAway, wireAwayReminder } from './home-away.js';
 
 const logoutHost = document.getElementById('session-logout-host');
 const upBtn = document.getElementById('home-up-btn');
@@ -62,10 +64,6 @@ function gearIcon() {
   return svg;
 }
 
-// Which drawing of the strip is the current one — a holiday answer that arrives after
-// the strip was drawn again must not add a second notice.
-let stripSeq = 0;
-
 // The bottom of the Home, after the cards: the app's bottom-bar button, «Settings».
 //
 // ⚠️ "Back to Misé" and "Businesses" are deliberately NOT behind it either. The header
@@ -74,7 +72,6 @@ let stripSeq = 0;
 function renderSessionActions(session) {
   if (!logoutHost) return;
   logoutHost.textContent = '';
-  const drawn = ++stripSeq;
 
   const label = document.createElement('span');
   label.textContent = t('ui.settings');
@@ -91,16 +88,8 @@ function renderSessionActions(session) {
   bar.className = 'recipe-footer';
   bar.appendChild(btn);
   logoutHost.appendChild(bar);
-
-  // ⚠️ THE ONE THING THAT STAYS ON THE HOME: BEING ON HOLIDAY. A phone that has gone
-  // quiet has to SAY so where it is seen every day — somebody who forgot they set it
-  // would otherwise miss every order until they happened to open Settings. So the
-  // notice is drawn above the bar while it is true, and nothing is drawn while it is
-  // not. Its button is js/away-screen.js's own: tapping it is how one comes back.
-  import('./away-screen.js')
-    .then(({ buildAwayButton }) => buildAwayButton())
-    .then(b => { if (b && drawn === stripSeq && b.classList.contains('session-away') && logoutHost.isConnected) logoutHost.prepend(b); })
-    .catch(err => console.warn('The holiday notice is not available:', err));
+  // ⚠️ AND NOTHING ELSE, EVER — not even a holiday (Federico: «voglio solo un tasto
+  // impostazioni»). Being away is a band at the TOP of the Home: js/home-away.js.
 }
 
 // The way up, in the header. Revealed rather than built, so it can appear the moment
@@ -130,13 +119,16 @@ onSession(session => {
   if (session.status !== 'ready') return;
   currentSessionForStrip = session;
   filterCards(session);
+  // After the filter, so a card the venue removed is never listened to.
+  wireAwayReminder();
+  refreshAway();
   renderUpArrow(session);
   renderSessionActions(session);
 });
 
-// ⚠️ THE NOTICE IS REBUILT, NOT PATCHED, when the holiday changes. Its words are
-// derived from the stored date, so editing the label by hand is how a screen ends
-// up saying "On holiday until Friday" about a holiday that was just cancelled.
+// ⚠️ THE BAND IS RE-READ, NOT PATCHED, when the holiday changes. Its words are derived
+// from the stored date, so editing the label by hand is how a screen ends up saying
+// "On holiday until Friday" about a holiday that was just cancelled.
 window.addEventListener('away-changed', () => {
-  if (currentSessionForStrip) renderSessionActions(currentSessionForStrip);
+  if (currentSessionForStrip) refreshAway();
 });

@@ -39,10 +39,11 @@ test('the Settings button is the app\'s bottom-bar button, icon and label in a r
   assert.match(strip, /import\('\.\/home-settings\.js'\)[\s\S]{0,80}openHomeSettings\(session\)/);
 });
 
-test('⚠️ the holiday notice stays on the Home only while somebody IS on holiday', () => {
+test('⚠️ the bottom of the Home never carries the holiday — that is a band at the top', () => {
+  // Federico, 13 Sep 2026: «voglio solo un tasto impostazioni».
   const strip = bodyOf(HOME, 'renderSessionActions');
-  assert.match(strip, /b\.classList\.contains\('session-away'\)[\s\S]{0,80}logoutHost\.prepend\(b\)/,
-    'a person whose phone has gone quiet must be able to see it without opening a menu');
+  assert.doesNotMatch(strip, /away-screen|session-away|buildAwayButton/);
+  assert.match(HOME, /import \{ refreshAway, wireAwayReminder \} from '\.\/home-away\.js';/);
 });
 
 test('⚠️⚠️ every row keeps exactly the gate it had under the cards', () => {

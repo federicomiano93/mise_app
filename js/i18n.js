@@ -520,6 +520,12 @@ const DICTIONARIES = Object.freeze({
     'away.backTitle': 'Back already?',
     'away.backMessage': 'Your holiday runs to {day}. Ending it now turns your notifications back on.',
     'away.back': 'I am back',
+    // The Home's holiday band, and the once-a-day reminder whose job is catching a
+    // holiday somebody forgot to switch off.
+    'away.band.body': 'Your phone is not alerting you. Tap here if you are already back.',
+    'away.reminder.title': 'You are on holiday',
+    'away.reminder.body': 'Until {day} your phone does not alert you. If you are already back, say so now and your notifications start again.',
+    'away.reminder.continue': 'Continue',
     'away.badDate': 'That date cannot be used. Pick a day from today onwards, within a year.',
     'away.saveFailed': 'Not saved — check the connection and try again.',
     // ⚠️ THE WARNING THAT MAKES THE WHOLE FEATURE SAFE.
@@ -2638,6 +2644,10 @@ const DICTIONARIES = Object.freeze({
     'away.backTitle': 'Già tornato?',
     'away.backMessage': 'Le tue ferie arrivano al {day}. Chiuderle adesso riaccende le notifiche.',
     'away.back': 'Sono tornato',
+    'away.band.body': 'Il telefono non ti avvisa. Tocca qui se sei già tornato.',
+    'away.reminder.title': 'Sei in ferie',
+    'away.reminder.body': 'Fino al {day} il telefono non ti avvisa. Se sei già tornato, dillo adesso e le notifiche ripartono.',
+    'away.reminder.continue': 'Continua',
     'away.badDate': 'Quella data non si può usare. Scegli un giorno da oggi in avanti, entro un anno.',
     'away.saveFailed': 'Non salvato — controlla la connessione e riprova.',
     'away.nobodyTitle': 'Non verrà avvisato nessuno',
