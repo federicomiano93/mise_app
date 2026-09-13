@@ -150,7 +150,9 @@ test('⚠️ Save writes only for recipes still on the product, still existing, 
   const states = {
     foc: typeCooked(startWeighing(recipes.foc), '800'),
     bri: typeCooked(startWeighing(recipes.bri), '400'),        // typed, then its line removed
-    gone: typeCooked(startWeighing(recipe()), '800'),           // its recipe was deleted
+    // Its recipe was deleted. Both boxes typed, so the pair alone WOULD make a patch —
+    // only the «still exists» rule stops it.
+    gone: typeCooked(typeRaw(startWeighing(recipe()), '1000'), '800'),
     same: typeCooked(startWeighing(recipes.same), '800'),       // retyped, unchanged
   };
   const patches = weighingPatches(recipes, states, ['foc', 'same', 'gone', '']);
