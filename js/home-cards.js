@@ -71,3 +71,26 @@ export function cardVisibleTo(locationDoc, canManage, cardId) {
   if (!cardId) return true;
   return !isHiddenForStaff(locationDoc, cardId);
 }
+
+// Of these people, who may still be told about something that opens this card?
+// `null` when the card is not hidden at all — everybody may, and nobody's role needs
+// reading. Otherwise the Set of uids who may.
+//
+// `accessByUid` maps a uid to its membership VALUE for this venue (users/{uid}.locations
+// .<lid>: `true` | 'manager' | 'owner'). ⚠️ A UID ABSENT FROM IT — its role could not be
+// read — IS NOT KNOWN TO RUN THE PLACE, and is not told: power nobody granted does not
+// exist (js/roles.js). A head chef holds 'manager', so they are told.
+//
+// ⚠️ IT LIVES HERE, PURE, SO IT CAN BE RUN BY A TEST. The server (functions/index.js)
+// only reads the two documents and hands them over; the decision it used to make
+// inline could be broken five ways with every text-reading test still green.
+export function mayBeTold(locationDoc, cardId, uids, accessByUid) {
+  if (!isHiddenForStaff(locationDoc, cardId)) return null;
+  const told = new Set();
+  for (const uid of Array.isArray(uids) ? uids : []) {
+    if (!uid || typeof uid !== 'string') continue;
+    const access = accessByUid && typeof accessByUid.get === 'function' ? accessByUid.get(uid) : undefined;
+    if (cardVisibleTo(locationDoc, access === 'owner' || access === 'manager', cardId)) told.add(uid);
+  }
+  return told;
+}

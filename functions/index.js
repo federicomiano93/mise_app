@@ -32,7 +32,7 @@ import {
   notificationTag, targetPage, cardForKind,
 } from './push-model.js';
 import { isAway } from './away-model.js';
-import { isHiddenForStaff, cardVisibleTo } from './home-cards.js';
+import { isHiddenForStaff, mayBeTold } from './home-cards.js';
 
 initializeApp();
 
@@ -301,17 +301,19 @@ async function uidsPastHiddenCard(lid, kind, uids) {
   }
   if (!isHiddenForStaff(location, card)) return null;
 
-  const allowed = new Set();
+  // Each person's membership value for THIS venue, read once. An unreadable one is simply
+  // left out, and mayBeTold() reads an absent role as «not known to run the place».
+  const accessByUid = new Map();
   await Promise.all([...new Set(uids.filter(Boolean))].map(async uid => {
     try {
       const snap = await db.doc(`users/${uid}`).get();
-      const access = snap.exists ? (snap.data().locations || {})[lid] : undefined;
-      if (cardVisibleTo(location, access === 'owner' || access === 'manager', card)) allowed.add(uid);
+      if (snap.exists) accessByUid.set(uid, (snap.data().locations || {})[lid]);
     } catch (err) {
       logger.warn('Could not read a role; that phone is not told about a hidden card', { uid });
     }
   }));
-  return allowed;
+  // ⚠️ THE DECISION IS NOT MADE HERE — it is functions/home-cards.js, which a test RUNS.
+  return mayBeTold(location, card, uids, accessByUid);
 }
 
 // ⚠️ ONLY THE PEOPLE IT WAS ADDRESSED TO. Every other notification in this app

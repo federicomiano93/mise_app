@@ -9,10 +9,9 @@
 // hides Pastries and goes back to a Home that still shows Pastries would reasonably
 // conclude the switch is broken. The sentence is beside the switches, not in a help page.
 //
-// ⚠️ A TAP SAVES AT ONCE, like the ingredient-card switches in js/orders/registry-
-// settings.js: nothing is lost by getting it wrong, and one more tap undoes it. The
-// one exception asks first — hiding the Catalogue — because the allergen sheet behind
-// it is what counter staff use to answer a customer, and that is worth a sentence.
+// ⚠️ SHOWING A CARD SAVES AT ONCE; HIDING ONE ASKS FIRST (Federico, 13 Sep 2026), because
+// hiding also silences the card's notifications for employees. The Catalogue's dialog
+// adds the allergen sheet, which counter staff use to answer a customer.
 
 import { el } from './dom.js';
 import { confirmDialog, alertDialog } from './confirm-dialog.js';

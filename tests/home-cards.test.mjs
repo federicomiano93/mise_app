@@ -9,7 +9,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
-  STAFF_CARDS, HIDEABLE_IDS, HIDDEN_FIELD, isHiddenForStaff, cardVisibleTo,
+  STAFF_CARDS, HIDEABLE_IDS, HIDDEN_FIELD, isHiddenForStaff, cardVisibleTo, mayBeTold,
 } from '../js/home-cards.js';
 import { PUSH_KINDS, cardForKind, targetPage } from '../js/push-model.js';
 
@@ -280,11 +280,35 @@ function serverFn(head) {
 }
 const HELPER = serverFn('async function uidsPastHiddenCard(');
 
-test('⚠️⚠️ the server judges «hidden» with the app\'s own model', () => {
-  assert.match(INDEX, /import \{ isHiddenForStaff, cardVisibleTo \} from '\.\/home-cards\.js';/);
+// The decision, RUN — the server hands mayBeTold() the two documents it read.
+test('⚠️⚠️ mayBeTold: nothing hidden means everybody, and no role is needed', () => {
+  for (const doc of [null, {}, { [HIDDEN_FIELD]: { orders: true } }, { [HIDDEN_FIELD]: { calculator: false } }]) {
+    assert.equal(mayBeTold(doc, 'calculator', ['a', 'b'], new Map()), null, JSON.stringify(doc));
+  }
+});
+
+test('⚠️⚠️ mayBeTold: a hidden card silences employees and nobody else', () => {
+  const doc = { [HIDDEN_FIELD]: { calculator: true } };
+  const access = new Map([['emp', true], ['mgr', 'manager'], ['own', 'owner'], ['typo', 'manager ']]);
+  const told = mayBeTold(doc, 'calculator', ['emp', 'mgr', 'own', 'typo', 'unread'], access);
+  assert.deepEqual([...told].sort(), ['mgr', 'own'],
+    'owner and manager (a head chef holds manager) are told; an employee, a corrupt role and an unreadable one are not');
+});
+
+test('mayBeTold: no uid, a non-string uid and a missing map tell nobody and do not throw', () => {
+  const doc = { [HIDDEN_FIELD]: { catalogue: true } };
+  assert.deepEqual([...mayBeTold(doc, 'catalogue', ['', null, undefined, 42], new Map([['42', 'owner']]))], []);
+  assert.deepEqual([...mayBeTold(doc, 'catalogue', ['x'], undefined)], []);
+  assert.deepEqual([...mayBeTold(doc, 'catalogue', 'x', new Map())], []);
+});
+
+test('⚠️⚠️ the server hands the decision to the app\'s own model, and reads the role for THIS venue', () => {
+  assert.match(INDEX, /import \{ isHiddenForStaff, mayBeTold \} from '\.\/home-cards\.js';/);
   assert.match(HELPER, /const card = cardForKind\(kind\);/);
-  assert.match(HELPER, /cardVisibleTo\(location, access === 'owner' \|\| access === 'manager', card\)/,
-    'owners, managers and head chefs are told whatever is hidden');
+  assert.match(HELPER, /accessByUid\.set\(uid, \(snap\.data\(\)\.locations \|\| \{\}\)\[lid\]\)/,
+    'the membership value of THIS venue — another key would silence its managers');
+  assert.match(HELPER, /return mayBeTold\(location, card, uids, accessByUid\);\s*\}\s*$/,
+    'the helper must END by returning the model\'s answer, not one of its own');
 });
 
 test('nothing hidden: one read, and nobody silenced', () => {
@@ -295,8 +319,8 @@ test('nothing hidden: one read, and nobody silenced', () => {
 test('⚠️ a venue that cannot be read silences nobody; a role that cannot be read is not told', () => {
   assert.match(HELPER,
     /catch \(err\) \{\s*logger\.warn\('Could not read the hidden Home cards[^']*', \{ lid \}\);\s*return null;/);
-  const roleCatch = HELPER.slice(HELPER.lastIndexOf('catch (err)'));
-  assert.doesNotMatch(roleCatch, /allowed\.add/, 'an unreadable role must not be told about a hidden card');
+  const roleCatch = HELPER.slice(HELPER.lastIndexOf('catch (err)'), HELPER.indexOf('return mayBeTold('));
+  assert.doesNotMatch(roleCatch, /accessByUid\.set/, 'an unreadable role must be left out, never guessed');
 });
 
 test('⚠️ a client order is not sent to an employee whose Calculator card is hidden', () => {
@@ -307,12 +331,15 @@ test('⚠️ a client order is not sent to an employee whose Calculator card is 
   assert.match(fn, /const told = allowed \? targets\.filter\(d => allowed\.has\(d\.data\(\)\.uid\)\) : targets;/,
     'the phones told are the ones the card check let through');
   assert.match(fn, /told\.map\(d => sendTo\(/, 'and the send goes to the filtered phones, not all of them');
+  assert.match(fn, /if \(!told\.length\) \{\s*logger\.info\([^)]*\);\s*return;/,
+    'it stops only when NOBODY is left — flipped, an order would reach no phone whenever somebody could be told');
 });
 
 test('⚠️ a timer is not sent to an employee whose Catalogue card is hidden', () => {
   const fn = serverFn('export const sendTimerPush');
   const gate = fn.indexOf("await uidsPastHiddenCard(lid, 'timer', [timer.uid])");
   assert.ok(gate > 0 && gate < fn.indexOf('sendTo('), 'checked before the send');
+  assert.ok(gate > fn.indexOf('isStillDue('), 'and after isStillDue, so a cancelled timer costs no extra read');
   assert.match(fn, /if \(allowed && !allowed\.has\(timer\.uid\)\) \{[\s\S]{0,140}return;/);
 });
 
