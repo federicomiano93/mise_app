@@ -455,9 +455,33 @@ test('⚠️ the order is dragged with a hold on touch, never from the switch, a
   assert.match(src, /import Sortable from '\.\.\/vendor\/sortable\.esm\.js';/);
   assert.match(src, /delay: 200,\s*delayOnTouchOnly: true,/);
   assert.match(src, /filter: '\.people-pill',\s*preventOnFilter: false,/);
-  const save = src.slice(src.indexOf('async function saveOrder('), src.indexOf('function moveWithKeys('));
+  const save = src.slice(src.indexOf('function saveOrder('), src.indexOf('function moveWithKeys('));
   assert.ok(save.indexOf('await setHomeCardOrder(') < save.indexOf('orderOverride = next;'));
-  assert.match(save, /catch \(err\) \{[\s\S]*order = previous;\s*paint\(\);/, 'a failed save puts the order back');
+  assert.match(save, /catch \(err\) \{[\s\S]*order = confirmedOrder;[\s\S]*paint\(\);/, 'a failed save puts the agreed order back');
+});
+
+test('⚠️ order saves run one at a time, and only the newest is sent', () => {
+  // Code review of 819cadc: overlapping saves stored whichever finished last.
+  const src = withoutComments(read('js/staff/home-cards-screen.js'));
+  const save = src.slice(src.indexOf('function saveOrder('), src.indexOf('function moveWithKeys('));
+  assert.match(save, /chain = chain\.then\(async \(\) => \{\s*if \(latest !== next\) return;/);
+  assert.match(save, /catch \(err\) \{\s*if \(latest !== next\) return;/, 'a stale failure must not undo a newer order');
+  assert.match(save, /if \(toggling\) \{ paint\(\); return; \}/, 'no order change while a switch is saving');
+  assert.match(src, /if \(toggling\) for \(const b of list\.querySelectorAll\('button'\)\) b\.disabled = true;/);
+});
+
+test('⚠️⚠️ an employee may GET one month but never LIST the months', () => {
+  // Code review of 819cadc: `allow read` let an employee's query return closed months with prices.
+  const rules = read('firestore.rules');
+  const block = rules.slice(rules.indexOf('match /inventory/{monthId} {'), rules.indexOf('allow delete: if false;', rules.indexOf('match /inventory/{monthId} {')));
+  assert.match(block, /allow get: if stocktakeMayRead\(lid\);/);
+  assert.match(block, /allow list: if cardAccess\(lid, 'foodcost', 'inventory'\) == 'manage';/);
+  assert.doesNotMatch(block, /allow read:/, 'a combined read rule is exactly the leak');
+});
+
+test('⚠️ a refused month keeps its notice when anything else changes', () => {
+  const main = withoutComments(read('js/inventory/inventory-main.js'));
+  assert.match(main, /\(\) => \{\s*if \(view === 'unavailable'\) return;/);
 });
 
 test('the order can be changed without a pointer: the grip moves its row with the arrow keys', () => {

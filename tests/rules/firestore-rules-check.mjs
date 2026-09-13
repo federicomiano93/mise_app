@@ -2888,6 +2888,31 @@ async function staffCards() {
     mergeWrite(`${M}/2026-07`, { ...stamp, month: '2026-07', closing: { flour: 4 } }, asAccount(SAM)));
   await expectDenied('⚠️⚠️ counting gives no price: an ingredient\'s cost stays refused', readAs(SAM, `${L}/ingredient-prices/flour`));
   await expectDenied('…and so does Food cost', readAs(SAM, `${L}/products/P1`));
+
+  // ⚠️⚠️ A QUERY IS NOT A READ OF ONE MONTH. Found by the code review of 819cadc: with
+  // `allow read`, an employee's LIST of the collection came back with every closed month
+  // and its frozen prices, while every single-month read above was refused.
+  const listAs = who => () => fetch(`${FS}/${M}`, { headers: asAccount(who) });
+  const queryAs = who => () => fetch(`${FS}/${L}:runQuery`, {
+    method: 'POST',
+    headers: { ...asAccount(who), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ structuredQuery: {
+      from: [{ collectionId: 'inventory' }],
+      where: { fieldFilter: { field: { fieldPath: 'month' }, op: 'EQUAL', value: { stringValue: '2026-08' } } },
+    } }),
+  });
+  await expectDenied('⚠️⚠️ an employee cannot LIST the months — that is how closed prices would leak', listAs(SAM));
+  await expectDenied('⚠️⚠️ …nor query for a closed one', queryAs(SAM));
+  await expectAllowed('the manager still lists them', listAs(MAYA));
+  await expectAllowed('…and queries them', queryAs(MAYA));
+  await expectDenied('an employee cannot open a month carrying an empty close stamp', () =>
+    wholeWrite(`${M}/2026-12`, { ...stamp, month: '2026-12', closedAt: '' }, asAccount(SAM)));
+  await expectDenied('…nor an empty price map', () =>
+    wholeWrite(`${M}/2026-12`, { ...stamp, month: '2026-12', unitPrice: {} }, asAccount(SAM)));
+  await expectDenied('…nor names', () =>
+    wholeWrite(`${M}/2026-12`, { ...stamp, month: '2026-12', names: { flour: 'Farina' } }, asAccount(SAM)));
+  await expectDenied('⚠️ a whole write that would drop the pack weights is refused', () =>
+    wholeWrite(`${M}/2026-09`, { ...stamp, month: '2026-09', closing: { flour: 1 } }, asAccount(SAM)));
   await expectAllowed('the manager still reads the closed month', readAs(MAYA, `${M}/2026-08`));
   await expectAllowed('…and still closes one', () =>
     mergeWrite(`${M}/2026-09`, { ...stamp, month: '2026-09', closedAt: '2026-10-01T09:00:00.000Z' }, asAccount(MAYA)));

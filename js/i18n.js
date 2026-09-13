@@ -2162,7 +2162,7 @@ const DICTIONARIES = Object.freeze({
     'homeCards.move': 'Move «{card}»',
     'homeCards.moveHint': 'Hold a card and drag it to change the order on everybody’s Home. With a keyboard, use the up and down arrows.',
     'homeCards.err.order': 'Could not save the new order. Check your connection and try again.',
-    'inv.staffMonthUnavailable': 'This month cannot be opened here. Once a month is closed, only owners and managers see it.',
+    'inv.staffMonthUnavailable': 'This month cannot be opened here: it is closed, or the Stocktake is no longer shown to employees. Owners and managers still see it.',
 
     // ── The Home's Settings screen: one sentence under each row ────────────
     'settings.away.sub': 'Your phone stops ringing while you are away.',
@@ -4057,7 +4057,7 @@ const DICTIONARIES = Object.freeze({
     'homeCards.move': 'Sposta «{card}»',
     'homeCards.moveHint': 'Tieni premuta una scheda e trascinala per cambiare l’ordine sulla Home di tutti. Con la tastiera usa le frecce su e giù.',
     'homeCards.err.order': 'Non è stato possibile salvare il nuovo ordine. Controlla la connessione e riprova.',
-    'inv.staffMonthUnavailable': 'Questo mese non si può aprire qui. Quando un mese è chiuso, lo vedono solo titolare e manager.',
+    'inv.staffMonthUnavailable': 'Questo mese non si può aprire qui: è chiuso, oppure il Magazzino non è più visibile ai dipendenti. Titolare e manager lo vedono comunque.',
 
     'settings.away.sub': 'Il telefono smette di suonare mentre sei via.',
     'settings.people.sub': 'Invita persone e scegli cosa può fare ognuno.',

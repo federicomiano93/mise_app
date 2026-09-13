@@ -221,7 +221,9 @@ service cloud.firestore {
     // switch is not only a card on a Home: it is this. An employee may use them only
     // where the venue SHOWED them — `locations/{lid}.staffShownCards.<card> == true`,
     // written by functions/onboarding.js setStaffCard and read by js/home-cards.js
-    // with the same meaning. Only a literal `true` shows; anything else is 'none'.
+    // with the same meaning. Only a literal `true` shows. Anything else refuses — as
+    // 'none', or, for a document shaped unlike ours, as an evaluation error, which
+    // Firestore answers with the same refusal.
     //
     // It answers 'manage' (owner or manager, exactly canManage), 'staff' (an employee
     // of a venue that showed this card) or 'none'.
@@ -1930,7 +1932,14 @@ service cloud.firestore {
       // unpriced months and the three count maps, and nothing that is money or that
       // closes a month. Owners and managers keep everything below, unchanged.
       match /inventory/{monthId} {
-        allow read: if stocktakeMayRead(lid);
+        // ⚠️⚠️ ONE MONTH AND A QUERY ARE TWO DIFFERENT QUESTIONS. `allow read` answers
+        // both, and in a query `resource` is not the stored month stocktakeMayRead() means
+        // to judge: the code review of 819cadc proved that an employee's collection query
+        // returned every CLOSED month, frozen prices included, while the single read of
+        // the same month was refused. So an employee may GET one month; LISTING months is
+        // for whoever runs the place. The app itself only ever gets one month at a time.
+        allow get: if stocktakeMayRead(lid);
+        allow list: if cardAccess(lid, 'foodcost', 'inventory') == 'manage';
 
         allow create, update: if stocktakeMayWrite(lid)
           && stampedFor(lid)

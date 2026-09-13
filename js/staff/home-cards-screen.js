@@ -81,6 +81,9 @@ export function openHomeCards(session) {
   const byId = new Map(available.map(card => [card.id, card]));
   const availableIds = available.map(card => card.id);
   let order = orderedCardIds(orderOverride ? { homeCardOrder: orderOverride } : session.location, availableIds);
+  // While a switch is being saved every button is disabled; a repaint for the order must
+  // not quietly enable them again.
+  let toggling = false;
 
   const overlay = el('div', { class: 'people-overlay' }, [
     el('header', { class: 'orders-header' }, [
@@ -154,6 +157,7 @@ export function openHomeCards(session) {
         ]),
       ]));
     }
+    if (toggling) for (const b of list.querySelectorAll('button')) b.disabled = true;
   }
 
   async function toggle(card, shown) {
@@ -169,6 +173,7 @@ export function openHomeCards(session) {
       if (!ok) return;
     }
     status.textContent = t('homeCards.saving');
+    toggling = true;
     for (const b of list.querySelectorAll('button')) b.disabled = true;
     try {
       await setStaffCard(session.locationId, card.id, hide);
@@ -180,6 +185,7 @@ export function openHomeCards(session) {
       status.textContent = '';
       await alertDialog(t('homeCards.err.save'));
     }
+    toggling = false;
     // Repainted from what is stored either way — a failed save puts the switch back.
     paint();
     if (hadFocus) list.querySelector(`#${pillId}`)?.focus();
@@ -191,25 +197,45 @@ export function openHomeCards(session) {
     return [...list.querySelectorAll('.home-cards-row')].map(row => row.dataset.card);
   }
 
+  // The order the server last agreed to — where a failed save goes back to.
+  let confirmedOrder = order;
+  // ⚠️ SAVES RUN ONE AT A TIME, AND ONLY THE NEWEST IS SENT. Four quick arrow presses used
+  // to send four overlapping calls: whichever FINISHED last was what got stored, and one
+  // that failed put the screen back over a later one that had succeeded (code review of
+  // 819cadc). Now each save waits its turn, and a save that is no longer the newest when
+  // its turn comes is skipped — the fourth order is the one the venue gets.
+  let latest = order;
+  let chain = Promise.resolve();
+
   // ⚠️ THE WHOLE LIST, AFTER THE SERVER AGREES — and back where it was if it does not,
   // so the screen never shows an order the venue did not get.
-  async function saveOrder(next, focusId) {
+  function saveOrder(next, focusId) {
+    // A drag while a switch is saving: put the rows back, change nothing.
+    if (toggling) { paint(); return; }
     if (next.join() === order.join()) return;
-    const previous = order;
     order = next;
+    latest = next;
     paint();
     if (focusId) list.querySelector(`#home-cards-grip-${focusId}`)?.focus();
     status.textContent = t('homeCards.saving');
-    try {
-      await setHomeCardOrder(session.locationId, next);
-      orderOverride = next;
-      status.textContent = '';
-    } catch (err) {
-      status.textContent = '';
-      order = previous;
-      paint();
-      await alertDialog(t('homeCards.err.order'));
-    }
+    chain = chain.then(async () => {
+      if (latest !== next) return;
+      try {
+        await setHomeCardOrder(session.locationId, next);
+        confirmedOrder = next;
+        orderOverride = next;
+        if (latest === next) status.textContent = '';
+      } catch (err) {
+        if (latest !== next) return;
+        status.textContent = '';
+        const focused = document.activeElement?.closest?.('.home-cards-row')?.dataset.card;
+        order = confirmedOrder;
+        latest = confirmedOrder;
+        paint();
+        if (focused) list.querySelector(`#home-cards-grip-${focused}`)?.focus();
+        await alertDialog(t('homeCards.err.order'));
+      }
+    });
   }
 
   function moveWithKeys(id, event) {

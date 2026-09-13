@@ -352,8 +352,12 @@ window.addEventListener('pagehide', () => { flush(); });
 initInventory(
   openMonthId,
   () => {
-    // The month arrived after all: whatever the notice said, the list is back.
-    if (view === 'unavailable') { showList(); return; }
+    // ⚠️ THE NOTICE STAYS. This callback also fires for every ingredient that changes and
+    // for a price read that failed, so rebuilding the list from here put an empty «open»
+    // month with typable boxes over a month the rules had refused — and every number
+    // typed there was refused too (code review of 819cadc). A refused month does not
+    // come back without a reload.
+    if (view === 'unavailable') return;
     // ⚠️⚠️ A MONTH'S OWN STATE ARRIVES AFTER THE FIRST PAINT, and until v1.79.0 the
     // screen never took it in: a CLOSED month was drawn as open — count boxes
     // somebody could type into, the two fill-in actions offered, the note saying an
