@@ -34,7 +34,11 @@ function num(value, locale) {
   return new Intl.NumberFormat(locale, { maximumFractionDigits: 3 }).format(value);
 }
 
-export function renderDetail({ month, ingredient, locale, onCount, readOnly, closed }) {
+// ⚠️ `money` IS FALSE FOR AN EMPLOYEE (Federico, 13 Sep 2026: they count, they see no
+// money). Then this screen draws no value, no price in the pack note, and no pack-weight
+// box — the weight is what turns a count into money, and firestore.rules refuses an
+// employee's write to it anyway.
+export function renderDetail({ month, ingredient, locale, onCount, readOnly, closed, money = true }) {
   const answer = el('div', { class: 'inv-answer' });
   const packNote = el('p', { class: 'inv-hint' });
 
@@ -75,10 +79,12 @@ export function renderDetail({ month, ingredient, locale, onCount, readOnly, clo
       // What that consumption cost, when the app has both halves of the sum. A row
       // it cannot value says which of the two jobs would fix it, rather than
       // showing a blank nobody can act on.
-      const { value, blocker } = lineValue(current, ingredient, line.used, closed);
-      children.push(value === null
-        ? el('p', { class: 'inv-answer-why', text: t(BLOCKER_TEXT[blocker] || 'inv.noPriceYet') })
-        : el('p', { class: 'inv-answer-money', text: formatTotal(value) }));
+      if (money) {
+        const { value, blocker } = lineValue(current, ingredient, line.used, closed);
+        children.push(value === null
+          ? el('p', { class: 'inv-answer-why', text: t(BLOCKER_TEXT[blocker] || 'inv.noPriceYet') })
+          : el('p', { class: 'inv-answer-money', text: formatTotal(value) }));
+      }
       if (line.used < 0) {
         children.push(el('p', { class: 'inv-answer-warn', text: t('inv.moreThanPossible') }));
       }
@@ -159,7 +165,7 @@ export function renderDetail({ month, ingredient, locale, onCount, readOnly, clo
     onchange: (e) => { onCount('packKg', ingredient.id, e.target.value); },
   });
 
-  const packField = ingredient.priceUnit === 'pcs' ? null : el('div', { class: 'inv-field' }, [
+  const packField = !money || ingredient.priceUnit === 'pcs' ? null : el('div', { class: 'inv-field' }, [
     el('label', { class: 'inv-label', for: 'inv-packKg', text: t('inv.packKgLabel') }),
     packInput,
     packNote,
@@ -169,12 +175,12 @@ export function renderDetail({ month, ingredient, locale, onCount, readOnly, clo
     answer,
     ...fields,
     packField,
-    ingredient.priceUnit === 'pcs' ? packNote : null,
+    money && ingredient.priceUnit === 'pcs' ? packNote : null,
     el('p', { class: 'inv-note', text: t('inv.emptyIsNotZero') }),
   ]);
 
   paintAnswer();
-  paintPackNote();
+  if (money) paintPackNote();
 
   // The month changes underneath this screen whenever a save lands or another
   // phone writes. Only the answer and the pack note are repainted: rewriting the
@@ -182,7 +188,7 @@ export function renderDetail({ month, ingredient, locale, onCount, readOnly, clo
   function refresh(nextMonth) {
     current = nextMonth;
     paintAnswer();
-    paintPackNote();
+    if (money) paintPackNote();
   }
 
   return { root, refresh };

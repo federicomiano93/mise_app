@@ -409,7 +409,7 @@ export {
   createWorkspace, listWorkspaces, reissueOwnerLink, deleteWorkspace,
   createJoinCode, redeemJoinCode, setMemberRole, setMemberName,
   setLocationLanguage, setRecipePhoto, setPackPhoto, setIngredientPanels,
-  setStaffCard,
+  setStaffCard, setHomeCardOrder,
 } from './onboarding.js';
 
 // Reading a photographed recipe, and reading a photographed PACKET.

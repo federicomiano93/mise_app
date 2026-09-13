@@ -2806,9 +2806,140 @@ async function stocktake() {
     readAs(ALICE, `${L}/ingredient-prices/flour`));
 }
 
+// ── The money cards a venue may SHOW its employees (13 Sep 2026) ─────────────
+// Federico: every Home card is decided from the app, Food cost and the Stocktake
+// included. Shown Food cost is the whole screen; a shown Stocktake is COUNTS ONLY —
+// open, unpriced months, the three count maps, nothing that is money and nothing that
+// closes a month. Nothing shown is exactly the world the stocktake() and roles()
+// scenarios above already prove.
+async function staffCards() {
+  await wipe();
+  await seedAccess();
+
+  const L = 'locations/main';
+  const M = `${L}/inventory`;
+  const stamp = { bakery: 'main' };
+  const readAs = (who, path) => () => fetch(`${FS}/${path}`, { headers: asAccount(who) });
+  const showMain = shown => seedDoc(L, { name: 'The Italian Club Bakery', staffShownCards: shown });
+
+  await seedDoc(`${L}/products/P1`, { ...stamp, name: 'P1' });
+  await seedDoc(`${L}/products/P1/snapshots/S1`, { ...stamp, recordedAt: '2026-09-01' });
+  await seedDoc(`${L}/ingredient-prices/flour`, { ...stamp, priceUnit: 'kg', pricePerUnit: 0.72 });
+  await seedDoc(`${L}/ingredients/flour/prices/H1`,
+    { ...stamp, recordedAt: '2026-09-01', priceUnit: 'kg', pricePerUnit: 0.72 });
+  await seedDoc(`${M}/2026-09`, { ...stamp, month: '2026-09', closing: { flour: 2 }, packKg: { flour: 25 }, closedAt: '' });
+  await seedDoc(`${M}/2026-08`,
+    { ...stamp, month: '2026-08', closing: { flour: 3 }, unitPrice: { flour: 18 }, closedAt: '2026-09-01T09:00:00.000Z' });
+  // Closed by mistake and reopened: open again, but still carrying what a sack cost.
+  await seedDoc(`${M}/2026-07`, { ...stamp, month: '2026-07', closing: { flour: 1 }, unitPrice: { flour: 17 }, closedAt: '' });
+
+  // ── Only Food cost shown ──
+  await showMain({ foodcost: true });
+  await expectAllowed('a shown employee reads a Food Cost product', readAs(SAM, `${L}/products/P1`));
+  await expectAllowed('…and its margin history', readAs(SAM, `${L}/products/P1/snapshots/S1`));
+  await expectAllowed('…and what an ingredient costs', readAs(SAM, `${L}/ingredient-prices/flour`));
+  await expectAllowed('…and the price history', readAs(SAM, `${L}/ingredients/flour/prices/H1`));
+  await expectAllowed('…and writes a product', () =>
+    mergeWrite(`${L}/products/P2`, { ...stamp, name: 'P2' }, asAccount(SAM)));
+  await expectAllowed('…and records a margin snapshot', () =>
+    createWrite(`${L}/products/P1/snapshots`, {
+      ...stamp, recordedAt: '2026-09-13', unitCost: 1.2, foodCostPct: 30, sellingPrice: 4,
+      vatRate: 10, sellingMode: 'piece', frozenPrices: { flour: 0.72 },
+    }, asAccount(SAM)));
+  await expectDenied('⚠️ but deleting a product stays with whoever runs the place',
+    () => deleteWrite(`${L}/products/P1`, asAccount(SAM)));
+  await expectDenied('⚠️ and a price is still written only by whoever runs the place',
+    () => mergeWrite(`${L}/ingredient-prices/flour`, { ...stamp, priceUnit: 'kg', pricePerUnit: 9 }, asAccount(SAM)));
+  await expectDenied('…nor added to the price history',
+    () => createWrite(`${L}/ingredients/flour/prices`,
+      { ...stamp, recordedAt: '2026-09-13', priceUnit: 'kg', pricePerUnit: 9, supplierId: '', source: 'manual' }, asAccount(SAM)));
+  await expectDenied('⚠️ showing Food cost does not show the Stocktake', readAs(SAM, `${M}/2026-09`));
+
+  // ── Only the Stocktake shown: COUNTS, and no money ──
+  await showMain({ inventory: true });
+  await expectAllowed('a shown employee reads the open month', readAs(SAM, `${M}/2026-09`));
+  check('…and a month nobody has opened yet answers «not there», not «refused»',
+    (await readAs(SAM, `${M}/2026-10`)()).status === 404);
+  await expectAllowed('…types a count', () =>
+    mergeWrite(`${M}/2026-09`, { ...stamp, month: '2026-09', closing: { flour: 5 }, updatedAt: '2026-09-30T18:00:00.000Z' }, asAccount(SAM)));
+  await expectAllowed('…empties a count box', () =>
+    clearWrite(`${M}/2026-09`, { ...stamp, month: '2026-09' }, ['closing.flour'], asAccount(SAM)));
+  await expectAllowed('…fills in what was bought', () =>
+    mergeWrite(`${M}/2026-09`, { ...stamp, month: '2026-09', purchased: { flour: 12 } }, asAccount(SAM)));
+  await expectAllowed('…and opens a new month with counts in it', () =>
+    wholeWrite(`${M}/2026-10`, { ...stamp, month: '2026-10', closing: { flour: 1 }, createdAt: '2026-10-01T08:00:00.000Z', updatedAt: '2026-10-01T08:00:00.000Z' }, asAccount(SAM)));
+  await expectDenied('⚠️ an employee cannot close a month', () =>
+    mergeWrite(`${M}/2026-09`, { ...stamp, month: '2026-09', closedAt: '2026-10-01T09:00:00.000Z' }, asAccount(SAM)));
+  await expectDenied('⚠️ …nor write a frozen price', () =>
+    mergeWrite(`${M}/2026-09`, { ...stamp, month: '2026-09', unitPrice: { flour: 1 } }, asAccount(SAM)));
+  await expectDenied('…nor the frozen names', () =>
+    mergeWrite(`${M}/2026-09`, { ...stamp, month: '2026-09', names: { flour: 'Farina' } }, asAccount(SAM)));
+  await expectDenied('⚠️ …nor a pack weight, which is what turns a count into money', () =>
+    mergeWrite(`${M}/2026-09`, { ...stamp, month: '2026-09', packKg: { flour: 1 } }, asAccount(SAM)));
+  await expectDenied('…nor open a month that already carries a pack weight', () =>
+    wholeWrite(`${M}/2026-11`, { ...stamp, month: '2026-11', packKg: { flour: 25 } }, asAccount(SAM)));
+  await expectDenied('⚠️ a closed month is not an employee\'s to read', readAs(SAM, `${M}/2026-08`));
+  await expectDenied('…nor to write', () =>
+    mergeWrite(`${M}/2026-08`, { ...stamp, month: '2026-08', closing: { flour: 9 } }, asAccount(SAM)));
+  await expectDenied('⚠️ …and nor to REOPEN', () =>
+    mergeWrite(`${M}/2026-08`, { ...stamp, month: '2026-08', closedAt: '' }, asAccount(SAM)));
+  await expectDenied('⚠️ a reopened month still carrying frozen prices is not theirs either', readAs(SAM, `${M}/2026-07`));
+  await expectDenied('…nor writable by them', () =>
+    mergeWrite(`${M}/2026-07`, { ...stamp, month: '2026-07', closing: { flour: 4 } }, asAccount(SAM)));
+  await expectDenied('⚠️⚠️ counting gives no price: an ingredient\'s cost stays refused', readAs(SAM, `${L}/ingredient-prices/flour`));
+  await expectDenied('…and so does Food cost', readAs(SAM, `${L}/products/P1`));
+
+  // ⚠️⚠️ A QUERY IS NOT A READ OF ONE MONTH. Found by the code review of 819cadc: with
+  // `allow read`, an employee's LIST of the collection came back with every closed month
+  // and its frozen prices, while every single-month read above was refused.
+  const listAs = who => () => fetch(`${FS}/${M}`, { headers: asAccount(who) });
+  const queryAs = who => () => fetch(`${FS}/${L}:runQuery`, {
+    method: 'POST',
+    headers: { ...asAccount(who), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ structuredQuery: {
+      from: [{ collectionId: 'inventory' }],
+      where: { fieldFilter: { field: { fieldPath: 'month' }, op: 'EQUAL', value: { stringValue: '2026-08' } } },
+    } }),
+  });
+  await expectDenied('⚠️⚠️ an employee cannot LIST the months — that is how closed prices would leak', listAs(SAM));
+  await expectDenied('⚠️⚠️ …nor query for a closed one', queryAs(SAM));
+  await expectAllowed('the manager still lists them', listAs(MAYA));
+  await expectAllowed('…and queries them', queryAs(MAYA));
+  await expectDenied('an employee cannot open a month carrying an empty close stamp', () =>
+    wholeWrite(`${M}/2026-12`, { ...stamp, month: '2026-12', closedAt: '' }, asAccount(SAM)));
+  await expectDenied('…nor an empty price map', () =>
+    wholeWrite(`${M}/2026-12`, { ...stamp, month: '2026-12', unitPrice: {} }, asAccount(SAM)));
+  await expectDenied('…nor names', () =>
+    wholeWrite(`${M}/2026-12`, { ...stamp, month: '2026-12', names: { flour: 'Farina' } }, asAccount(SAM)));
+  await expectDenied('⚠️ a whole write that would drop the pack weights is refused', () =>
+    wholeWrite(`${M}/2026-09`, { ...stamp, month: '2026-09', closing: { flour: 1 } }, asAccount(SAM)));
+  await expectAllowed('the manager still reads the closed month', readAs(MAYA, `${M}/2026-08`));
+  await expectAllowed('…and still closes one', () =>
+    mergeWrite(`${M}/2026-09`, { ...stamp, month: '2026-09', closedAt: '2026-10-01T09:00:00.000Z' }, asAccount(MAYA)));
+
+  // ── A value that only looks like «shown» shows nothing ──
+  await showMain({ inventory: 'true', foodcost: 1 });
+  await expectDenied('a string "true" does not show the Stocktake', readAs(SAM, `${M}/2026-10`));
+  await expectDenied('a 1 does not show Food cost', readAs(SAM, `${L}/products/P1`));
+
+  // ── A venue without Food cost shows neither, whatever it says ──
+  await seedDoc('locations/trattoria-x', {
+    name: 'Trattoria X',
+    sections: { orders: true, calculator: false, catalogue: false, pastries: false, foodcost: false },
+    staffShownCards: { foodcost: true, inventory: true },
+  });
+  await expectDenied('a venue without Food cost gives an employee no product', readAs(BOB, 'locations/trattoria-x/products/P1'));
+  await expectDenied('…and no stocktake', readAs(BOB, 'locations/trattoria-x/inventory/2026-09'));
+
+  // ── One venue's choice reaches nobody in another ──
+  await showMain({ foodcost: true, inventory: true });
+  await expectDenied('another venue\'s employee reads nothing here', readAs(BOB, `${L}/products/P1`));
+  await expectDenied('…and counts nothing here', readAs(BOB, `${M}/2026-10`));
+}
+
 for (const scenario of [suppliers, ingredients, ingredientPrices, drafts, history, neighbours,
                         locationTree, isolation, configAndLogs, pastries, pastryLogs,
-                        products, stocktake, clientOrders, orderRequests, awayDays,
+                        products, stocktake, staffCards, clientOrders, orderRequests, awayDays,
                         pushNotifications,
                         roles, onboardingCollections]) {
   await scenario();
