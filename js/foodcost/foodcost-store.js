@@ -11,7 +11,7 @@ import { t } from '../i18n.js';
 import { normalizeProduct, normalizeProducts } from './foodcost-model.js';
 import {
   watchProducts, watchRecipes, watchIngredients,
-  saveProductWithSnapshot, removeProduct, newProductId,
+  saveProductWithSnapshot, removeProduct, newProductId, saveRecipeLoss,
 } from './firebase-foodcost.js';
 
 const PRODUCTS_KEY = 'foodcost-products';
@@ -122,8 +122,9 @@ function removeLocal(id) {
 // The FIELDS ARE LISTED BY HAND because this object becomes the Firestore
 // document, and the rules whitelist exactly these — spreading the product would
 // send `id` as a field and have every save refused.
-export function saveProduct(product, snapshot) {
+export function saveProduct(product, snapshot, lossPatches) {
   const id = product.id || newProductId();
+  saveRecipeLosses(lossPatches);
   const data = {
     name: product.name,
     components: product.components || [],
@@ -148,6 +149,39 @@ export function saveProduct(product, snapshot) {
     if (onSyncError) onSyncError(t('fc.couldNotSaveProduct', { name: product.name || t('fc.productWord') }));
   });
   return id;
+}
+
+const LOSS_FIELDS = ['lossPct', 'rawGrams', 'cookedGrams'];
+
+// The weighings typed on a product's recipe lines, LOCAL-FIRST like the product.
+//
+// ⚠️ ONE WRITE PER RECIPE, AND NOT INSIDE THE PRODUCT'S BATCH. The recipe rule and the
+// product rule each spend reads, and a batch shares ONE read budget across every write
+// in it; a product with several recipes would reach the ceiling and refuse the whole
+// save. Kept apart, a refused weighing costs only itself and says so by name.
+function saveRecipeLosses(patches) {
+  for (const [id, patch] of Object.entries(patches || {})) {
+    const prev = recipes[id];
+    if (!prev) continue;
+    recipes = { ...recipes, [id]: { ...prev, ...patch } };
+    writeJson(RECIPES_KEY, Object.values(recipes));
+    if (notify) notify();
+    saveRecipeLoss(id, patch).catch(err => {
+      console.warn('Recipe loss did not sync to Firestore:', err);
+      // ⚠️ PUT BACK ONLY WHAT THIS WRITE CHANGED, AND ONLY IF NOTHING NEWER HAS LANDED
+      // ON TOP OF IT — the recipes listener may already have delivered somebody else's
+      // weighing, and rolling back over that would lose it.
+      const now = recipes[id];
+      if (now && LOSS_FIELDS.every(k => now[k] === patch[k])) {
+        const restored = { ...now };
+        LOSS_FIELDS.forEach(k => { if (k in prev) restored[k] = prev[k]; else delete restored[k]; });
+        recipes = { ...recipes, [id]: restored };
+        writeJson(RECIPES_KEY, Object.values(recipes));
+        if (notify) notify();
+      }
+      if (onSyncError) onSyncError(t('fc.couldNotSaveLoss', { name: prev.name || '' }));
+    });
+  }
 }
 
 export function deleteProduct(id) {

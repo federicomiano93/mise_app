@@ -13,8 +13,7 @@
 
 import { t } from '../i18n.js';
 import {
-  normalizeCatalogueRecipe, normalizeCatalogueRecipes, isScaledEntryFresh, normalizeLossPct,
-  normalizeWeight,
+  normalizeCatalogueRecipe, normalizeCatalogueRecipes, isScaledEntryFresh,
 } from './catalogue-model.js';
 import { withRowIds, normalizeSteps, normalizeEndNote } from './guided-model.js';
 import {
@@ -333,9 +332,9 @@ export function saveRecipe(recipe) {
   // the rules whitelist exactly bakery/name/ingredients/lossPct — spreading the
   // recipe would send `id` as a field and every save would be refused.
   //
-  // The cost of that is this list has to be kept up to date: lossPct was added
-  // here in the same commit that added it to the model, because a field the model
-  // carries and this line does not is dropped on every save, silently.
+  // The cost of that is this list has to be kept up to date: a field the model
+  // carries and this line does not is dropped on every save, silently — EXCEPT the
+  // three below, which are left out on purpose.
   // ⚠️ SAVE IS THE ONE PLACE ROW IDS ARE MINTED. Any row that has never had one
   // gets one now, so a guided mixing step written today still points at the right
   // ingredient in a year — through a rename, and through rows being inserted
@@ -346,7 +345,6 @@ export function saveRecipe(recipe) {
   const data = {
     name: recipe.name,
     ingredients,
-    lossPct: normalizeLossPct(recipe.lossPct),
     // The mixing procedure. Written even when EMPTY, deliberately: setDoc runs
     // with merge:true, which never deletes a field it is not sent, so omitting it
     // would leave the old steps in the document and the screen would go on
@@ -357,21 +355,21 @@ export function saveRecipe(recipe) {
     // document and the finish screen would keep showing a message just deleted.
     endNote: normalizeEndNote(recipe.endNote),
   };
-  // ⚠️ THE TWO WEIGHINGS ARE WRITTEN ONLY WHEN SOMEBODY HAS ACTUALLY TYPED THEM, and
-  // that is the whole safety of this feature. Every recipe written before it has a
-  // lossPct and no weights; the editor DERIVES a cooked weight for display from that
-  // percentage, and if this line wrote it back, opening a recipe to fix a typo in the
-  // flour would rewrite the number that decides what every product built on it costs.
-  // Absent rather than 0, on the same terms as `steps` and `endNote` above.
-  const rawG = normalizeWeight(recipe.rawGrams);
-  const cookedG = normalizeWeight(recipe.cookedGrams);
-  if (rawG > 0 && cookedG > 0) {
-    data.rawGrams = rawG;
-    data.cookedGrams = cookedG;
-  }
+  // ⚠️⚠️ THE OVEN LOSS IS NOT WRITTEN FROM HERE ANY MORE — lossPct, rawGrams and
+  // cookedGrams. Federico, 13 Sep 2026: the dough is weighed raw and cooked on a
+  // product's recipe line in Food cost (js/foodcost/foodcost-weighing.js), and this
+  // editor no longer shows the boxes.
+  // ⚠️ LEAVING THEM OUT IS WHAT PROTECTS THAT WEIGHING. saveRecipeDoc() MERGES, so a
+  // field this object does not send is a field it cannot put back: a recipe opened
+  // here before somebody weighed it in Food cost, and saved after, keeps the new
+  // number. Sending the copy this screen read would silently undo it.
   const id = recipe.id || newRecipeId();
   const prev = recipes.find(r => r.id === id) || null;
-  upsertLocal({ id, ...data });
+  // …and the list on screen keeps them too, for the same reason: the write leaves the
+  // document's loss alone, so the local copy must not drop it until the next snapshot.
+  const kept = {};
+  if (prev) ['lossPct', 'rawGrams', 'cookedGrams'].forEach(k => { if (prev[k] !== undefined) kept[k] = prev[k]; });
+  upsertLocal({ ...kept, id, ...data });
   saveRecipeDoc(id, data).catch(err => {
     console.warn('Recipe did not sync to Firestore:', err);
     if (prev) upsertLocal(prev); else removeLocal(id);

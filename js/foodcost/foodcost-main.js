@@ -147,6 +147,9 @@ const app = {
   saveProduct,
   deleteProduct,
   tables,
+  // Every product, so a recipe line can say how many OTHERS a weighing typed on it
+  // changes — the loss belongs to the recipe, not to the product it was typed on.
+  products: getProducts,
   setLeaveGuard: (fn) => { leaveGuard = fn; },
 
   // The recipes a component can point at, named with what they cost so the wrong

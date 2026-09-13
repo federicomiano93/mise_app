@@ -11,8 +11,7 @@ import { canManageHere } from './firebase-catalogue.js';
 import { el } from './dom.js';
 import {
   findInvalidRecipe, unitOf, CATALOGUE_UNITS, isWeighableUnit, weighableTotalGrams,
-  linkOf, normalizeLossPct, MAX_LOSS_PCT,
-  normalizeWeight, weightLoss, normalizeShelfLifeDays,
+  linkOf, normalizeWeight, normalizeShelfLifeDays,
 } from './catalogue-model.js';
 import { openLinkPicker } from './ingredient-picker.js';
 import { pricePerKg, formatRate } from '../price-model.js';
@@ -53,23 +52,18 @@ export function renderEditor({ recipe, draft, allRecipes, app, getLabelProfile =
         ingredients: (Array.isArray(draft.ingredients) && draft.ingredients.length
           ? draft.ingredients
           : [{ label: '', grams: '', unit: 'g' }]).map(i => ({ ...i, unit: unitOf(i) })),
-        // ⚠️ CARRIED, NOT ZEROED. A draft used to come only from a photograph, which
-        // never reads a cooking loss, so 0 was always right. It now also carries a
-        // form somebody backed out of — and silently resetting a typed 12% while
-        // keeping every other field is the kind of loss nobody notices until the
-        // costing is wrong.
-        lossPct: normalizeLossPct(draft.lossPct),
-        // Carried for the same reason, and only when the draft really has them.
-        ...(normalizeWeight(draft.rawGrams) > 0 ? { rawGrams: normalizeWeight(draft.rawGrams) } : {}),
-        ...(normalizeWeight(draft.cookedGrams) > 0 ? { cookedGrams: normalizeWeight(draft.cookedGrams) } : {}),
-        // ⚠️ ABSENT RATHER THAN 0, on the same terms as the two weighings above: a
-        // recipe nobody has given a net weight or a shelf life must stay without
-        // them, because 0 days would print today's date as a use-by.
+        // ⚠️ NO OVEN LOSS HERE, AND THAT IS NOT AN OVERSIGHT. Since 13 Sep 2026 the dough
+        // is weighed raw and cooked on a product's recipe line in Food cost, and the
+        // catalogue store no longer writes the loss at all — a value carried on a draft
+        // would be thrown away on Save while looking kept.
+        // ⚠️ ABSENT RATHER THAN 0: a recipe nobody has given a net weight or a shelf
+        // life must stay without them, because 0 days would print today's date as a
+        // use-by.
         ...(normalizeWeight(draft.netWeightG) > 0 ? { netWeightG: normalizeWeight(draft.netWeightG) } : {}),
         ...(normalizeShelfLifeDays(draft.shelfLifeDays) !== null
           ? { shelfLifeDays: normalizeShelfLifeDays(draft.shelfLifeDays) } : {}),
       }
-      : { id: null, name: '', ingredients: [{ label: '', grams: '', unit: 'g' }], lossPct: 0 };
+      : { id: null, name: '', ingredients: [{ label: '', grams: '', unit: 'g' }] };
 
   // ⚠️ A DRAFT STARTS DIRTY. It is unsaved work that somebody has already paid for
   // — leaving it with `dirty` false means Back walks away in silence and the read
@@ -132,9 +126,6 @@ export function renderEditor({ recipe, draft, allRecipes, app, getLabelProfile =
     totalNote.textContent = skipped ? t('cat.notWeighed', { n: skipped }) : '';
     totalNote.hidden = !skipped;
     countEl.textContent = String(working.ingredients.length);
-    // ⚠️ The raw-dough box follows this total until somebody overrides it, so it is
-    // refreshed from here — the one function that already runs on every keystroke.
-    refreshLoss();
   }
 
   function renderIngredientRows() {
@@ -359,142 +350,6 @@ export function renderEditor({ recipe, draft, allRecipes, app, getLabelProfile =
     return app.confirm({ title: t('cat.discardChanges'), message: t('cat.youHaveUnsavedChanges'), okLabel: t('ui.discard'), danger: true, cancelLabel: t('ui.cancel') });
   });
 
-  // ── What the dough weighs before the oven, and after ────────────────────────
-  //
-  // The loss is the divisor of the cost per kilo: a dough that goes in at 1000 g and
-  // comes out at 800 g costs 25% more per kilo than its ingredients suggest, and a 0
-  // here is what makes a baked product look cheaper than it is. This used to ask for
-  // the PERCENTAGE — a number nobody has, because it has to be worked out from two
-  // weighings — so it stayed 0 on every recipe. Now it asks for the two weights.
-  //
-  // ⚠️⚠️ THE TWO STATES, AND THEY ARE THE WHOLE SAFETY OF THIS SCREEN.
-  //   untouched — nobody has typed in a weight box. The percentage stays EXACTLY the
-  //     stored lossPct whatever else is edited; crudo shows the live total and cotto
-  //     stays EMPTY. Nothing is written back, so a recipe opened to fix a typo comes
-  //     out of the database byte-identical.
-  //   touched — a person has typed. The percentage is computed from the boxes, crudo
-  //     stops following the total, and all three are saved.
-  // Without the split, correcting 10 g of flour would silently move the number that
-  // decides what every product built on this recipe costs.
-  //
-  // ⚠️⚠️ CRUDO IS FILLED IN AND COTTO IS NOT, AND THE ASYMMETRY IS THE POINT — it
-  // looks like an oversight and a future reader will want to "finish" it. Crudo is
-  // derived from something TRUE and live: the recipe's own ingredient total, which is
-  // on the screen above it. Cotto would be derived from a percentage nobody measured,
-  // and until 24 Aug 2026 it was: cookedFromLossPct(total, lossPct). With lossPct 0 —
-  // every one of the twelve real recipes — that put the RAW total in the cooked box,
-  // so the screen read «weighed, and it loses nothing». Federico, looking at it:
-  // «la casella del impasto cotto deve essere vuota di default». An empty box says
-  // «nobody has weighed this», which is the truth, and the stored percentage is still
-  // printed underneath so nothing is hidden.
-  let weighed = normalizeWeight(working.rawGrams) > 0 && normalizeWeight(working.cookedGrams) > 0;
-  // Only true once the PERSON edits a box — not when the app fills one in.
-  let rawTyped = weighed;
-
-  // ⚠️⚠️ «—» AND NOT «0», ON BOTH BOXES. Found by looking at a screenshot after every
-  // measurement had passed: with the cooked box emptied, its grey `0` placeholder sat
-  // there on every recipe — a weaker version of the exact claim this change removes,
-  // since an empty box here means «nobody has weighed this» and never «it weighed
-  // nothing». Neither box's emptiness is a zero, so neither may look like one.
-  const rawInput = el('input', {
-    id: 'catRecipeRaw', class: 'cat-loss-input', type: 'number',
-    min: '0', step: 'any', inputmode: 'decimal', placeholder: '—',
-    // ⚠️ ITS STORED VALUE, AT BUILD TIME. refreshLoss() below only rewrites this box
-    // while it is still following the recipe total, so a recipe that HAS been weighed
-    // would otherwise open with an empty box and the number simply gone from the screen.
-    value: normalizeWeight(working.rawGrams) > 0 ? String(Math.round(normalizeWeight(working.rawGrams))) : '',
-    'aria-label': t('cat.rawDoughWeight'),
-    oninput: (e) => {
-      rawTyped = String(e.target.value).trim() !== '';
-      // ⚠️ Clearing the box hands it back to the recipe total. That is the way back
-      // from an override, and it needs no extra control on a screen this long.
-      working.rawGrams = normalizeWeight(e.target.value);
-      weighed = true;
-      markDirty(); refreshLoss();
-    },
-  });
-  const cookedInput = el('input', {
-    id: 'catRecipeCooked', class: 'cat-loss-input', type: 'number',
-    min: '0', step: 'any', inputmode: 'decimal', placeholder: '—',
-    // ⚠️ ITS STORED VALUE, AND NOW THAT IS THE ONLY THING THAT EVER FILLS IT. A recipe
-    // somebody HAS weighed opens showing what they weighed; every other recipe opens
-    // empty, because empty is what «nobody has weighed this» looks like.
-    value: normalizeWeight(working.cookedGrams) > 0 ? String(Math.round(normalizeWeight(working.cookedGrams))) : '',
-    'aria-label': t('cat.cookedDoughWeight'),
-    oninput: (e) => {
-      working.cookedGrams = normalizeWeight(e.target.value);
-      weighed = true;
-      markDirty(); refreshLoss();
-    },
-  });
-  const lossOut = el('p', { class: 'cat-loss-out' });
-  const lossWarn = el('p', { class: 'cat-loss-warn' });
-
-  // What the screen says when the two boxes do not answer the question — on open, and
-  // again the moment somebody fills in one of the pair and not the other.
-  //
-  // ⚠️⚠️ A STORED 0 IS «NOBODY HAS SAID», NOT «MEASURED ZERO», and the document cannot
-  // tell the two apart: lossPct is absent-or-zero on every recipe written before the
-  // two weighings existed. So a 0 gets no percentage sentence at all. Printing «loses
-  // 0%» is precisely the false statement this change exists to remove — and it is the
-  // false one that costs money, because a loss of zero makes every baked product's cost
-  // per kilo too low.
-  function storedLossText(pct) {
-    return pct > 0 ? t('cat.lossStored', { pct: String(pct) }) : t('cat.lossNotYet');
-  }
-
-  // The number the boxes currently mean, and what the screen says about it.
-  function refreshLoss() {
-    const total = weighableTotalGrams(working);
-    // Crudo follows the recipe until somebody overrides it.
-    if (!rawTyped) {
-      working.rawGrams = total;
-      rawInput.value = total ? String(Math.round(total)) : '';
-    }
-    const before = normalizeWeight(working.rawGrams);
-
-    if (!weighed) {
-      // ⚠️ EMPTY, AND NOTHING IS WRITTEN BACK. See the note at the top of this block
-      // for why nothing is derived into it any more.
-      cookedInput.value = '';
-      lossOut.textContent = storedLossText(working.lossPct);
-      lossWarn.hidden = true;
-      return;
-    }
-
-    const { pct, problem } = weightLoss(before, working.cookedGrams);
-    if (pct === null) {
-      // ⚠️ NOT ZERO. Two numbers that do not answer the question must leave the stored
-      // loss alone — zeroing it would quietly declare «this recipe loses nothing».
-      // ⚠️ And they must not hide it either: half-filling the pair used to print «weigh
-      // the cooked dough» over a recipe that already carried a real percentage.
-      lossOut.textContent = storedLossText(working.lossPct);
-    } else {
-      working.lossPct = pct;
-      lossOut.textContent = t('cat.lossIs', { pct: String(pct) });
-    }
-    lossWarn.textContent = problem === 'cookedHeavier' ? t('cat.lossCookedHeavier')
-      : problem === 'capped' ? t('cat.lossCapped', { max: String(MAX_LOSS_PCT) })
-        : '';
-    lossWarn.hidden = !problem;
-  }
-
-  const lossField = el('div', { class: 'cat-loss-field' }, [
-    el('div', { class: 'cat-loss-pair' }, [
-      el('label', { class: 'cat-loss-cell' }, [
-        el('span', { class: 'cat-loss-label', text: t('cat.rawDoughWeight') }),
-        el('span', { class: 'cat-loss-row' }, [rawInput, el('span', { class: 'cat-loss-unit', text: 'g' })]),
-      ]),
-      el('label', { class: 'cat-loss-cell' }, [
-        el('span', { class: 'cat-loss-label', text: t('cat.cookedDoughWeight') }),
-        el('span', { class: 'cat-loss-row' }, [cookedInput, el('span', { class: 'cat-loss-unit', text: 'g' })]),
-      ]),
-    ]),
-    lossOut,
-    lossWarn,
-  ]);
-
-
   // ── What a FULL label needs, and a PPDS one does not ───────────────────────
   //
   // ⚠️⚠️ SHOWN ONLY WHEN THE VENUE PRINTS THEM. A venue selling over its own counter
@@ -612,7 +467,6 @@ export function renderEditor({ recipe, draft, allRecipes, app, getLabelProfile =
     rowsContainer,
     totalNote,
     addRowBtn,
-    lossField,
     labelField,
     actions,
   ]);

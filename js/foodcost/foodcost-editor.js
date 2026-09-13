@@ -22,6 +22,10 @@ import { formatRate, formatMoney, pricePerKg } from '../price-model.js';
 // module has been evaluated. See js/currency.js.
 import { currentCurrency } from '../currency.js';
 import { costRecipe } from '../catalogue/recipe-cost-model.js';
+import {
+  startWeighing, typeRaw, typeCooked, readWeighing, withWeighings, weighingPatches,
+  otherProductsUsing,
+} from './foodcost-weighing.js';
 
 const TRASH_SVG =
   '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>';
@@ -44,11 +48,111 @@ export function renderEditor({ product, app }) {
   let showErrors = false;
   const markDirty = () => { dirty = true; };
 
+  // ── The oven loss of each recipe on this product ───────────────────────────
+  //
+  // Federico, 13 Sep 2026: the dough is weighed raw and cooked HERE, no longer in the
+  // recipe editor — and the number belongs to the RECIPE, so it is written there
+  // (foodcost-weighing.js says why, and holds every rule).
+  //
+  // ⚠️ HELD OUTSIDE THE DOM, PER RECIPE ID. This screen rebuilds its rows whenever a
+  // line changes, and two lines may carry the same recipe; keeping the typing here is
+  // what makes a rebuild lose nothing and the two lines agree.
+  const weighings = {};
+  let weighViews = [];
+  let lineNotes = [];
+
+  function weighingOf(recipeId) {
+    // An untouched line is read again from the recipe every time, so a weighing saved
+    // on another phone shows up here; only a line a person has typed on is kept.
+    if (!weighings[recipeId] || !weighings[recipeId].touched) {
+      weighings[recipeId] = startWeighing(app.tables().recipes[recipeId]);
+    }
+    return weighings[recipeId];
+  }
+
+  // What Save would write onto the recipes, right now.
+  function currentPatches() {
+    return weighingPatches(app.tables().recipes, weighings,
+      working.components.map(c => c.recipeId));
+  }
+
+  // ⚠️ EVERY NUMBER ON THIS SCREEN COMES FROM HERE: the stored recipes with the weighings
+  // typed on this product laid over them. Reading app.tables() directly would keep
+  // showing the old cost per kilo until after Save.
+  function liveTables() {
+    return withWeighings(app.tables(), currentPatches());
+  }
+
+  function weighBlock(entry) {
+    const id = entry.recipeId;
+    if (!id || !app.tables().recipes[id]) return null;
+    const box = (label, onType) => el('input', {
+      class: 'fc-input fc-number', type: 'number', min: '0', step: 'any',
+      inputmode: 'decimal', placeholder: '—', 'aria-label': label,
+      oninput: e => { weighings[id] = onType(weighingOf(id), e.target.value); markDirty(); refreshLive(); },
+    });
+    const rawInput = box(t('fc.rawDough'), typeRaw);
+    const cookedInput = box(t('fc.cookedDough'), typeCooked);
+    const out = el('p', { class: 'fc-weigh-out' });
+    const warn = el('p', { class: 'fc-weigh-warn' });
+    const shared = el('p', { class: 'fc-note fc-weigh-shared' });
+    weighViews.push({ id, rawInput, cookedInput, out, warn, shared });
+
+    const cell = (label, input) => el('label', { class: 'fc-weigh-cell' }, [
+      el('span', { class: 'fc-weigh-label', text: label }),
+      el('span', { class: 'fc-weigh-row' }, [input, el('span', { class: 'fc-weigh-unit', text: 'g' })]),
+    ]);
+    return el('div', { class: 'fc-weigh' }, [
+      el('div', { class: 'fc-weigh-pair' }, [
+        cell(t('fc.rawDough'), rawInput),
+        cell(t('fc.cookedDough'), cookedInput),
+      ]),
+      out, warn, shared,
+    ]);
+  }
+
+  function paintWeighViews() {
+    const recipes = app.tables().recipes;
+    const focused = document.activeElement;
+    for (const view of weighViews) {
+      const recipe = recipes[view.id];
+      if (!recipe) continue;
+      const state = weighingOf(view.id);
+      const shown = readWeighing(recipe, state);
+      // ⚠️ NEVER REWRITE THE BOX UNDER THE FINGER: «12.» is a number half-typed, and
+      // putting the parsed 12 back would eat the decimal point.
+      if (focused !== view.rawInput) {
+        view.rawInput.value = state.rawTyped ? (state.raw > 0 ? String(state.raw) : '') : shown.rawShown;
+      }
+      if (focused !== view.cookedInput) {
+        view.cookedInput.value = state.weighed && state.cooked > 0 ? String(state.cooked) : '';
+      }
+      view.out.textContent = t(shown.message.key, shown.message.params);
+      view.warn.textContent = shown.warning ? t(shown.warning.key, shown.warning.params) : '';
+      view.warn.hidden = !shown.warning;
+      // ⚠️ SAID THE MOMENT IT BECOMES TRUE: the loss belongs to the recipe, so a
+      // weighing typed on this product changes every other product built on it, and
+      // nobody opening those would know why their cost moved.
+      const others = shown.patch ? otherProductsUsing(app.products(), view.id, working.id) : 0;
+      view.shared.textContent = others ? t('fc.lossSharedWith', { n: others }) : '';
+      view.shared.hidden = !others;
+    }
+  }
+
+  // After a keystroke in a weighing: every figure that depends on it, and nothing that
+  // holds an input — rebuilding the rows here would take the box from under the finger.
+  function refreshLive() {
+    const tables = liveTables();
+    for (const { note, entry, kind } of lineNotes) note.textContent = lineNote(entry, kind, tables);
+    paintWeighViews();
+    paintAnswer();
+  }
+
   // ── The answer, live ───────────────────────────────────────────────────────
   const answer = el('div', { class: 'fc-answer' });
 
   function paintAnswer() {
-    const result = costProduct(working, app.tables());
+    const result = costProduct(working, liveTables());
     answer.replaceChildren();
 
     if (result.foodCostPct === null) {
@@ -141,23 +245,25 @@ export function renderEditor({ product, app }) {
 
     // What this line costs, under it — the number that shows WHICH line is heavy.
     const note = el('p', { class: 'fc-line-note', text: lineNote(entry, kind) });
+    lineNotes.push({ note, entry, kind });
 
     return el('div', { class: 'fc-line' }, [
       el('div', { class: 'fc-line-row' }, [select, qty, el('span', { class: 'fc-line-unit', text: isRecipe ? 'kg' : 'pcs' }), remove]),
       note,
+      isRecipe ? weighBlock(entry) : null,
     ]);
   }
 
-  function lineNote(entry, kind) {
+  function lineNote(entry, kind, tables = liveTables()) {
     if (kind === 'recipe') {
-      const recipe = app.tables().recipes[entry.recipeId];
+      const recipe = tables.recipes[entry.recipeId];
       if (!recipe) return entry.recipeId ? t('fc.thisRecipeNoLonger') : '';
-      const costed = costRecipe(recipe, app.tables());
+      const costed = costRecipe(recipe, tables);
       if (costed.pricePerKg === null) return t('fc.thisRecipeIsNot');
       const line = (Number(entry.qtyKg) || 0) * costed.pricePerKg;
       return `${formatRate(costed.pricePerKg)} / kg  ·  ${formatMoney(line)}${costed.partial ? '  ·  partly priced' : ''}`;
     }
-    const ingredient = app.tables().ingredients[entry.ingredientId];
+    const ingredient = tables.ingredients[entry.ingredientId];
     if (!ingredient) return entry.ingredientId ? t('fc.thisItemNoLonger') : '';
     if (ingredient.priceUnit !== 'pcs') {
       // Counted in pieces, so it has to be BOUGHT by the piece. Said plainly
@@ -169,6 +275,8 @@ export function renderEditor({ product, app }) {
   }
 
   function repaintLines() {
+    weighViews = [];
+    lineNotes = [];
     componentRows.replaceChildren();
     working.components.forEach((entry, index) => {
       componentRows.appendChild(lineRow({ list: working.components, index, entry, kind: 'recipe' }));
@@ -177,6 +285,7 @@ export function renderEditor({ product, app }) {
     working.packaging.forEach((entry, index) => {
       packagingRows.appendChild(lineRow({ list: working.packaging, index, entry, kind: 'packaging' }));
     });
+    paintWeighViews();
   }
 
   // ── How it is sold ─────────────────────────────────────────────────────────
@@ -288,16 +397,26 @@ export function renderEditor({ product, app }) {
     if (!ok) { busy = false; return; }
 
     const clean = { ...working, name: String(working.name).trim() };
+    // The weighings typed on this product's recipe lines, which Save writes onto the
+    // RECIPES — and the tables the answer is worked out from, with them in.
+    const patches = weighingPatches(app.tables().recipes, weighings,
+      clean.components.map(c => c.recipeId));
+    const live = withWeighings(app.tables(), patches);
     // A margin is recorded only when the PRICE or the COMPOSITION changed, and only
     // when there is a real answer to record. Renaming a product records nothing —
     // a history of non-events cannot answer "when did this change?".
-    const result = costProduct(clean, app.tables());
-    const snapshot = result.foodCostPct !== null && snapshotWorthTaking(product, clean)
-      ? productSnapshot(clean, result, new Date().toISOString(), app.tables())
+    // ⚠️ A WEIGHING COUNTS AS A CHANGE: it is typed on this very screen, on purpose,
+    // and it moves what this product costs. The OTHER products using the same recipe
+    // record no point — the same gap as an ingredient price drifting, and written down
+    // in foodcost-model.js for the same reason.
+    const result = costProduct(clean, live);
+    const worthRecording = snapshotWorthTaking(product, clean) || Object.keys(patches).length > 0;
+    const snapshot = result.foodCostPct !== null && worthRecording
+      ? productSnapshot(clean, result, new Date().toISOString(), live)
       : null;
 
     dirty = false;
-    app.saveProduct(clean, snapshot);
+    app.saveProduct(clean, snapshot, patches);
     app.toast(product ? t('fc.productSaved') : t('fc.productAdded'));
     app.showList();
   }
@@ -390,8 +509,12 @@ export function renderEditor({ product, app }) {
     refreshData() {
       const typing = componentRows.contains(document.activeElement)
         || packagingRows.contains(document.activeElement);
-      if (!typing) repaintLines();
-      paintAnswer();
+      if (!typing) {
+        repaintLines();
+        paintAnswer();
+      } else {
+        refreshLive();
+      }
     },
   };
 }

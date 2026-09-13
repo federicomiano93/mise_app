@@ -1,14 +1,13 @@
 // The oven loss, worked out from two weighings instead of typed as a percentage.
 //
-// ⚠️⚠️ WHAT THESE GUARD IS NOT THE ARITHMETIC — that is in catalogue-model.test.mjs.
-// It is the one property nothing on screen can show and no amount of using the app
-// reveals: A RECIPE SOMEBODY ONLY OPENS MUST COME OUT OF THE DATABASE UNCHANGED.
+// ⚠️⚠️ WHAT THESE GUARD IS NOT THE ARITHMETIC — that is in catalogue-model.test.mjs,
+// and the two-state rules of the boxes are RUN in foodcost-weighing.test.mjs. It is
+// the one property nothing on screen can show: A RECIPE SOMEBODY ONLY OPENS MUST COME
+// OUT OF THE DATABASE UNCHANGED.
 //
-// Every recipe written before this feature has a stored `lossPct` and no weights. The
-// editor leaves the cooked box EMPTY for those and prints the stored percentage under
-// it — and if anything wrote a number back, opening a recipe to fix a typo in the flour
-// would move the number that decides what every product built on it costs. The split
-// between "shown" and "typed by a person" is the whole safety of it.
+// ⚠️ SINCE 13 SEP 2026 THE TWO BOXES ARE NOT IN THE RECIPE EDITOR. Federico: «togli dalla
+// scheda ricetta il peso crudo e cotto e aggiungilo nella scheda del food cost» — typed
+// on a product's recipe line, stored on the recipe exactly as before.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -24,6 +23,8 @@ const codeOf = (src) => src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*
 const EDITOR = codeOf(read('js/catalogue/catalogue-editor.js'));
 const STORE = codeOf(read('js/catalogue/catalogue-store.js'));
 const MODEL = codeOf(read('js/catalogue/catalogue-model.js'));
+const FC_EDITOR = codeOf(read('js/foodcost/foodcost-editor.js'));
+const FC_DATA = codeOf(read('js/foodcost/firebase-foodcost.js'));
 const RULES = read('firestore.rules');
 
 // The `match /recipes/{id}` block, to its real end.
@@ -41,41 +42,65 @@ function recipesRules() {
 
 // ── 1. Nothing is written back unless a person typed it ──────────────────────
 
-test('⚠️⚠️ the store writes the weights ONLY when both have real values', () => {
-  assert.match(STORE, /if \(rawG > 0 && cookedG > 0\) \{\s*data\.rawGrams = rawG;\s*data\.cookedGrams = cookedG;/,
-    'a half-filled pair must write neither: one weight alone cannot make a percentage, '
-    + 'and storing it would make the next reader think the recipe had been weighed');
+// The catalogue's save, from the object it builds to the write it makes.
+function storeSave() {
+  const start = STORE.indexOf('export function saveRecipe(');
+  assert.notEqual(start, -1, 'saveRecipe must exist to be guarded');
+  const end = STORE.indexOf('saveRecipeDoc(id, data)', start);
+  assert.notEqual(end, -1, 'and it must still write through saveRecipeDoc');
+  return STORE.slice(start, end);
+}
+
+test('⚠️⚠️ the catalogue no longer writes the loss, so it cannot undo a weighing typed in Food cost', () => {
+  // saveRecipeDoc MERGES. A recipe opened in the catalogue BEFORE somebody weighed it
+  // in Food cost, and saved AFTER, would put the stale copy's loss back if this object
+  // carried it — and nobody would ever see the number change back.
+  const save = storeSave();
+  const data = save.slice(save.indexOf('const data = {'), save.indexOf('const id = recipe.id'));
+  assert.ok(data.length > 20, 'the slice must actually contain the document');
+  for (const key of ['lossPct', 'rawGrams', 'cookedGrams']) {
+    assert.ok(!data.includes(key), `the catalogue's document must not carry ${key}`);
+  }
+  assert.match(save, /\['lossPct', 'rawGrams', 'cookedGrams'\]\.forEach\(k => \{ if \(prev\[k\] !== undefined\) kept\[k\] = prev\[k\]; \}\);/,
+    'and the list on screen keeps the loss it had, rather than dropping it until the next snapshot');
+  assert.match(save, /upsertLocal\(\{ \.\.\.kept, id, \.\.\.data \}\)/);
 });
 
-test('⚠️ the store still lists every field BY HAND, and now lists these two', () => {
-  // Its own comment is the warning: a field the model carries and this list does not
-  // is dropped on every save, silently. And a field the rules do not know refuses the
-  // WHOLE save with a permission error nothing on screen can explain.
-  assert.match(STORE, /const data = \{[\s\S]*?lossPct: normalizeLossPct\(recipe\.lossPct\)/,
-    'lossPct is still what the document stores — the weights do not replace it');
-  assert.ok(!/\.\.\.recipe/.test(STORE.slice(STORE.indexOf('const data = {'), STORE.indexOf('const id = recipe.id'))),
+test('⚠️ the store still lists every field BY HAND', () => {
+  // Its own comment is the warning: a field the rules do not know refuses the WHOLE save
+  // with a permission error nothing on screen can explain.
+  const save = storeSave();
+  assert.ok(!/\.\.\.recipe/.test(save.slice(save.indexOf('const data = {'), save.indexOf('const id = recipe.id'))),
     'the document must never be built by spreading the recipe: `id` would go with it');
 });
 
-test('⚠️⚠️ the editor only recomputes the loss once a PERSON has typed', () => {
-  // `weighed` is false for a recipe nobody has weighed. While it is false the cooked
-  // box stays EMPTY and the stored percentage is printed underneath, and neither the
-  // percentage nor the weights are assigned.
-  assert.match(EDITOR, /if \(!weighed\) \{[\s\S]*?cookedInput\.value = '';/,
-    'an unweighed recipe must leave its cooked box empty');
-  // Forward from the branch, and proved non-empty — see the note on the null branch
-  // below for what an unanchored indexOf() costs.
-  const derivedStart = EDITOR.indexOf('if (!weighed) {');
-  assert.ok(derivedStart !== -1, 'the unweighed branch must exist to be guarded');
-  const derivedBranch = EDITOR.slice(derivedStart, EDITOR.indexOf('const { pct, problem }', derivedStart));
-  assert.ok(derivedBranch.length > 20, 'the slice must actually contain the branch');
-  assert.ok(!/working\.lossPct\s*=/.test(derivedBranch),
-    'and that branch must never ASSIGN lossPct — deriving a number and writing it back '
-    + 'is how opening a recipe would silently change what it costs');
-  assert.ok(!/working\.(raw|cooked)Grams\s*=/.test(derivedBranch),
-    'nor may it invent the weights it is only displaying');
-  assert.match(EDITOR, /weighed = true;/,
-    'typing in either box is what flips it');
+test('⚠️ the recipe editor no longer asks for the two weighings, nor touches the loss', () => {
+  for (const gone of ['catRecipeRaw', 'catRecipeCooked', 'weightLoss', 'refreshLoss', 'MAX_LOSS_PCT']) {
+    assert.ok(!EDITOR.includes(gone), `${gone} left the recipe editor with the boxes`);
+  }
+  assert.ok(!/(lossPct|rawGrams|cookedGrams)\s*[:=]/.test(EDITOR),
+    'nothing in the recipe editor may set the loss any more — not even carried on a draft, '
+    + 'because the catalogue store no longer writes it and a value here would only mislead');
+});
+
+test('⚠️⚠️ the Food cost product is where they are typed, and Save hands them over', () => {
+  assert.match(FC_EDITOR, /box\(t\('fc\.rawDough'\), typeRaw\)/, 'the raw box types through the pure model');
+  assert.match(FC_EDITOR, /box\(t\('fc\.cookedDough'\), typeCooked\)/, 'and so does the cooked one');
+  assert.match(FC_EDITOR, /const patches = weighingPatches\(app\.tables\(\)\.recipes, weighings,\s*clean\.components\.map\(c => c\.recipeId\)\);/,
+    'Save asks the model which recipes to write — only those on the product, only real changes');
+  assert.match(FC_EDITOR, /app\.saveProduct\(clean, snapshot, patches\);/);
+  assert.match(FC_EDITOR, /const result = costProduct\(working, liveTables\(\)\);/,
+    'the answer at the top is worked out WITH the weighing being typed, not after Save');
+});
+
+test('⚠️⚠️ Food cost writes three fields and the stamp onto the recipe, never the whole of it', () => {
+  const at = FC_DATA.indexOf('export async function saveRecipeLoss(');
+  assert.notEqual(at, -1, 'saveRecipeLoss must exist to be guarded');
+  const body = FC_DATA.slice(at, FC_DATA.indexOf('\n}', at));
+  assert.match(body, /updateDoc\(doc\(db, pathFor\(RECIPES\), id\), withBakery\(\{\s*lossPct: patch\.lossPct,\s*rawGrams: patch\.rawGrams,\s*cookedGrams: patch\.cookedGrams,\s*\}\)\)/,
+    'updateDoc, so a deleted recipe fails instead of coming back nameless; three fields, so '
+    + 'the catalogue\'s name, rows and steps are never written from a stale copy');
+  assert.ok(!/setDoc/.test(body), 'not a setDoc');
 });
 
 // ⚠️⚠️ REPO-WIDE, NOT FILE-SCOPED, AND THAT IS THE POINT. Deleting a call satisfies
@@ -104,55 +129,23 @@ test('⚠️⚠️ nothing derives a cooked weight from a stored percentage, any
     + 'number identical to the raw one and read as «weighed, and it loses nothing»');
 });
 
-test('⚠️ a half-filled pair still shows the percentage the recipe already carries', () => {
-  // Typing only the raw weight flips `weighed`, so the screen leaves the branch above
-  // and lands on pct === null. Until 24 Aug 2026 that printed «weigh the cooked dough
-  // to work it out» OVER a recipe that already had a real stored percentage — true
-  // about the boxes, and a lie about the recipe.
-  assert.match(EDITOR, /function storedLossText\(pct\) \{[\s\S]*?pct > 0 \? t\('cat\.lossStored'/,
-    'a stored percentage above zero is named');
-  assert.match(EDITOR, /function storedLossText\(pct\) \{[\s\S]*?: t\('cat\.lossNotYet'\)/,
-    '⚠️ and a stored 0 is NOT: the document cannot tell «nobody has said» from '
-    + '«measured zero», and printing «loses 0%» is the false one that costs money');
-  const nullStart = EDITOR.indexOf('if (pct === null) {');
-  const nullBranch = EDITOR.slice(nullStart, EDITOR.indexOf('} else {', nullStart));
-  assert.ok(nullBranch.length > 20, 'the slice must actually contain the branch');
-  assert.match(nullBranch, /storedLossText\(working\.lossPct\)/,
-    'the half-filled branch must go through it too, or it hides a real percentage');
-
+test('⚠️ the sentences the boxes speak exist in both languages, with their numbers', () => {
+  // The rules that pick them are RUN in foodcost-weighing.test.mjs; this makes sure what
+  // they pick is there to be said, number and all.
   const dicts = _dictionaries();
   for (const [lang, dict] of Object.entries(dicts)) {
-    assert.ok(dict['cat.lossStored'], `cat.lossStored is missing in ${lang}`);
-    assert.match(dict['cat.lossStored'], /\{pct\}/, `${lang} must carry the number`);
+    for (const key of ['fc.rawDough', 'fc.cookedDough', 'fc.lossNotYet', 'fc.lossCookedHeavier']) {
+      assert.ok(dict[key], `${key} is missing in ${lang}`);
+    }
+    for (const key of ['fc.lossIs', 'fc.lossStored']) {
+      assert.match(dict[key], /\{pct\}/, `${key} in ${lang} must carry the number`);
+    }
+    assert.match(dict['fc.lossCapped'], /\{max\}/, `fc.lossCapped in ${lang} must carry the cap`);
+    assert.match(dict['fc.couldNotSaveLoss'], /\{name\}/, `fc.couldNotSaveLoss in ${lang} must name the recipe`);
+    for (const form of ['one', 'other']) {
+      assert.match(dict['fc.lossSharedWith'][form], /\{n\}/, `fc.lossSharedWith.${form} in ${lang}`);
+    }
   }
-});
-
-test('⚠️ an unanswered pair leaves the stored loss alone', () => {
-  // weightLoss() returns pct: null for an empty or impossible pair, and null is NOT
-  // zero: zero would declare «this recipe loses nothing».
-  assert.match(EDITOR, /if \(pct === null\) \{[\s\S]*?storedLossText\(working\.lossPct\)/,
-    'a null percentage must say so rather than being stored — and storedLossText is '
-    + 'what decides whether «so» is «0%» or «nobody has weighed it»');
-  // ⚠️ SEARCH FORWARD FROM THE BRANCH, NOT FROM THE TOP OF THE FILE. The first draft
-  // used indexOf('} else {') with no offset, which found an earlier one, produced an
-  // EMPTY slice and passed on anything. A mutation is what exposed it: the suite going
-  // red is not the same as this guard firing.
-  const nullStart = EDITOR.indexOf('if (pct === null) {');
-  assert.ok(nullStart !== -1, 'the null branch must exist to be guarded');
-  const nullBranch = EDITOR.slice(nullStart, EDITOR.indexOf('} else {', nullStart));
-  assert.ok(nullBranch.length > 20, 'the slice must actually contain the branch');
-  assert.ok(!/working\.lossPct\s*=/.test(nullBranch),
-    'and it must not write anything into lossPct');
-});
-
-test('the raw box follows the recipe total until somebody overrides it', () => {
-  assert.match(EDITOR, /if \(!rawTyped\) \{[\s\S]*?working\.rawGrams = total;/,
-    'untyped, it mirrors the live total');
-  assert.match(EDITOR, /rawTyped = String\(e\.target\.value\)\.trim\(\) !== '';/,
-    'clearing the box hands it back to the total — the way out of an override');
-  assert.match(EDITOR, /countEl\.textContent = String\(working\.ingredients\.length\);\s*refreshLoss\(\);/,
-    'and it is refreshed from updateTotal(), the one function that already runs on '
-    + 'every keystroke');
 });
 
 // ── 2. The cap that keeps the cost per kilo finite ───────────────────────────
@@ -207,16 +200,21 @@ test('⚠️ the photo reader still may not invent either key', () => {
 
 // ── 4. The screen stopped asking for a percentage ────────────────────────────
 
-test('the percentage input is gone, and its dictionary keys with it', () => {
+test('the percentage input is gone, and the recipe editor\'s dictionary keys with it', () => {
   assert.ok(!EDITOR.includes('catRecipeLoss'),
     'the percentage box is replaced by the two weighings');
   const i18n = codeOf(read('js/i18n.js'));
-  for (const dead of ['cat.weightLostWhileCooking', 'cat.leaveAt0If']) {
-    assert.ok(!i18n.includes(dead), `${dead} was retired — remove it, do not leave it`);
+  for (const dead of ['cat.weightLostWhileCooking', 'cat.leaveAt0If',
+    // Moved to fc.* with the boxes on 13 Sep 2026, not copied: two names for one sentence
+    // is how the two drift apart.
+    'cat.rawDoughWeight', 'cat.cookedDoughWeight', 'cat.lossIs', 'cat.lossNotYet',
+    'cat.lossStored', 'cat.lossCookedHeavier', 'cat.lossCapped']) {
+    assert.ok(!i18n.includes(`'${dead}'`), `${dead} was retired — remove it, do not leave it`);
     assert.ok(!EDITOR.includes(dead), `and the editor must not still ask for ${dead}`);
   }
-  for (const key of ['cat.rawDoughWeight', 'cat.cookedDoughWeight', 'cat.lossIs']) {
-    assert.ok(EDITOR.includes(key), `the editor must use ${key}`);
+  const weighing = codeOf(read('js/foodcost/foodcost-weighing.js'));
+  for (const key of ['fc.lossIs', 'fc.lossStored', 'fc.lossNotYet', 'fc.lossCookedHeavier', 'fc.lossCapped']) {
+    assert.ok(weighing.includes(`'${key}'`), `the weighing model must speak ${key}`);
   }
 });
 

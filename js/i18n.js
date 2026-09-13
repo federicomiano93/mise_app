@@ -1044,19 +1044,6 @@ const DICTIONARIES = Object.freeze({
     'cat.recipeAdded': 'Recipe added.',
     'cat.discardChanges': 'Discard changes?',
     'cat.youHaveUnsavedChanges': 'You have unsaved changes. Discard them?',
-    // ⚠️ THE FIELD STOPPED ASKING FOR A PERCENTAGE. cat.weightLostWhileCooking,
-    // …WhileCooking2 and cat.leaveAt0If were retired with it: a percentage is a number
-    // nobody has — it has to be worked out from two weighings — which is why the box
-    // sat at 0 on every recipe and made every baked product look cheaper than it is.
-    'cat.rawDoughWeight': 'Raw dough',
-    'cat.cookedDoughWeight': 'Cooked dough',
-    'cat.lossIs': 'Weight lost in the oven: {pct}%',
-    'cat.lossNotYet': 'Weight lost in the oven: weigh the baked dough to work it out',
-    // ⚠️ ONLY EVER SHOWN FOR A PERCENTAGE ABOVE ZERO. A stored 0 means nobody has said,
-    // and gets cat.lossNotYet above — see storedLossText() in catalogue-editor.js.
-    'cat.lossStored': 'Weight lost in the oven: {pct}% — weigh the dough to work it out again',
-    'cat.lossCookedHeavier': 'The cooked dough cannot weigh more than the raw dough.',
-    'cat.lossCapped': 'Stored as {max}% — a full loss would make the cost per kilo infinite.',
     'cat.searchARecipe': 'Search a recipe…',
     'cat.searchARecipeBy': 'Search a recipe by name',
     'cat.noRecipeMatchesYour': 'No recipe matches your search.',
@@ -1254,6 +1241,24 @@ const DICTIONARIES = Object.freeze({
     'fc.removePackagingItem': 'Remove packaging item',
     'fc.thisRecipeNoLonger': 'This recipe no longer exists',
     'fc.thisRecipeIsNot': 'This recipe is not priced yet',
+    // ⚠️ THE OVEN LOSS MOVED HERE FROM THE RECIPE EDITOR on 13 Sep 2026, keys and all
+    // (they were cat.rawDoughWeight … cat.lossCapped). Still two weighings and never a
+    // percentage: a percentage is a number nobody has, which is why the old box sat at 0
+    // on every recipe and made every baked product look cheaper than it is.
+    'fc.rawDough': 'Raw dough',
+    'fc.cookedDough': 'Cooked dough',
+    'fc.lossIs': 'Weight lost in the oven: {pct}%',
+    'fc.lossNotYet': 'Weight lost in the oven: weigh the baked dough to work it out',
+    // ⚠️ ONLY EVER SHOWN FOR A PERCENTAGE ABOVE ZERO. A stored 0 means nobody has said,
+    // and gets fc.lossNotYet above — see readWeighing() in foodcost-weighing.js.
+    'fc.lossStored': 'Weight lost in the oven: {pct}% — weigh the dough to work it out again',
+    'fc.lossCookedHeavier': 'The cooked dough cannot weigh more than the raw dough.',
+    'fc.lossCapped': 'Stored as {max}% — a full loss would make the cost per kilo infinite.',
+    'fc.lossSharedWith': {
+      one: 'The loss belongs to the recipe: it changes {n} other product too.',
+      other: 'The loss belongs to the recipe: it changes {n} other products too.',
+    },
+    'fc.couldNotSaveLoss': 'Couldn’t save the oven loss of “{name}” — check your connection.',
     'fc.thisItemNoLonger': 'This item no longer exists',
     'fc.pricedByWeightSet': 'Priced by weight — set it up as a per-piece price in Orders to count it here',
     'fc.choose': '— Choose —',
@@ -3104,13 +3109,6 @@ const DICTIONARIES = Object.freeze({
     'cat.recipeAdded': 'Ricetta aggiunta.',
     'cat.discardChanges': 'Vuoi scartare le modifiche?',
     'cat.youHaveUnsavedChanges': 'Hai modifiche non salvate. Vuoi scartarle?',
-    'cat.rawDoughWeight': 'Impasto crudo',
-    'cat.cookedDoughWeight': 'Impasto cotto',
-    'cat.lossIs': 'Calo peso in cottura: {pct}%',
-    'cat.lossNotYet': 'Calo peso in cottura: pesa l’impasto cotto per saperlo',
-    'cat.lossStored': 'Calo peso in cottura: {pct}% — ripesa l’impasto per aggiornarlo',
-    'cat.lossCookedHeavier': 'L’impasto cotto non può pesare più del crudo.',
-    'cat.lossCapped': 'Salvato come {max}% — un calo totale renderebbe infinito il costo al chilo.',
     'cat.searchARecipe': 'Cerca una ricetta…',
     'cat.searchARecipeBy': 'Cerca una ricetta per nome',
     'cat.noRecipeMatchesYour': 'Nessuna ricetta corrisponde alla ricerca.',
@@ -3313,6 +3311,18 @@ const DICTIONARIES = Object.freeze({
     'fc.removePackagingItem': 'Togli l’imballaggio',
     'fc.thisRecipeNoLonger': 'Questa ricetta non esiste più',
     'fc.thisRecipeIsNot': 'Questa ricetta non ha ancora un prezzo',
+    'fc.rawDough': 'Impasto crudo',
+    'fc.cookedDough': 'Impasto cotto',
+    'fc.lossIs': 'Calo peso in cottura: {pct}%',
+    'fc.lossNotYet': 'Calo peso in cottura: pesa l’impasto cotto per saperlo',
+    'fc.lossStored': 'Calo peso in cottura: {pct}% — ripesa l’impasto per aggiornarlo',
+    'fc.lossCookedHeavier': 'L’impasto cotto non può pesare più del crudo.',
+    'fc.lossCapped': 'Salvato come {max}% — un calo totale renderebbe infinito il costo al chilo.',
+    'fc.lossSharedWith': {
+      one: 'Il calo vale per la ricetta: cambia anche {n} altro prodotto.',
+      other: 'Il calo vale per la ricetta: cambia anche altri {n} prodotti.',
+    },
+    'fc.couldNotSaveLoss': 'Non è stato possibile salvare il calo peso di “{name}” — controlla la connessione.',
     'fc.thisItemNoLonger': 'Questa voce non esiste più',
     'fc.pricedByWeightSet': 'Prezzo a peso — impostalo come prezzo al pezzo negli Ordini per contarlo qui',
     'fc.choose': '— Scegli —',

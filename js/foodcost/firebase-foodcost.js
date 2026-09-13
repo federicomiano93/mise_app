@@ -27,6 +27,7 @@ import {
   doc,
   getDocs,
   setDoc,
+  updateDoc,
   deleteDoc,
   onSnapshot,
   writeBatch,
@@ -127,6 +128,25 @@ export async function saveProductWithSnapshot(id, data, snapshot) {
   if (snapshot) batch.set(doc(collection(ref, SNAPSHOTS)), withBakery(snapshot));
   await batch.commit();
   return ref.id;
+}
+
+// The oven loss a person weighed on a product's recipe line, written onto the RECIPE —
+// which is where it has always lived, and where the cost model and the label read it.
+//
+// ⚠️ THREE FIELDS, NEVER THE WHOLE RECIPE. This screen does not own the recipe: its
+// name, rows and steps are the catalogue's, and a whole write from a copy read minutes
+// ago would put back whatever the catalogue changed since.
+// ⚠️ updateDoc, NOT setDoc: a recipe deleted meanwhile must fail, not be re-created as
+// a nameless document.
+// ⚠️ `bakery` TRAVELS WITH IT because the rules judge the MERGED document and ask it to
+// name this location — the same stamp the catalogue sends on every save of a recipe.
+export async function saveRecipeLoss(id, patch) {
+  await authReady;
+  return updateDoc(doc(db, pathFor(RECIPES), id), withBakery({
+    lossPct: patch.lossPct,
+    rawGrams: patch.rawGrams,
+    cookedGrams: patch.cookedGrams,
+  }));
 }
 
 export async function removeProduct(id) {

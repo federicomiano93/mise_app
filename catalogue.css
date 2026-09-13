@@ -499,8 +499,6 @@ body.cat-zoom-lock { overflow: hidden; }
 /* The answer, and it is the point of the two boxes — so it reads as a statement, not
    as a footnote the way the old hint did. */
 .cat-loss-out { margin-top: 10px; font-size: .86rem; color: var(--cat-text); }
-.cat-loss-warn { margin-top: 4px; font-size: .78rem; color: var(--cat-danger); }
-.cat-loss-warn[hidden] { display: none; }
 
 /* The cost panel on the recipe screen. The number and its caveat are one block:
    a partial cost shown without its note is the one way this screen can mislead. */

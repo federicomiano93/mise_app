@@ -795,6 +795,16 @@ async function neighbours() {
     wholeWrite('locations/main/recipes/r1',
       { bakery: 'main', name: 'Focaccia', ingredients: [], cookedGrams: 10000001 }));
 
+  // ⚠️ THE SHAPE FOOD COST SENDS, since 13 Sep 2026: a weighing typed on a product's
+  // recipe line is written onto the recipe as THREE fields and the stamp — never the
+  // whole document, which belongs to the catalogue. The rules judge the MERGED result.
+  await expectAllowed('Food cost may write a weighing onto an existing recipe', () =>
+    mergeWrite('locations/main/recipes/r1',
+      { bakery: 'main', lossPct: 20, rawGrams: 1000, cookedGrams: 800 }));
+  await expectDenied('…but that shape cannot conjure a nameless recipe out of nothing', () =>
+    mergeWrite('locations/main/recipes/no-such-recipe',
+      { bakery: 'main', lossPct: 20, rawGrams: 1000, cookedGrams: 800 }));
+
   // ── The guided mixing procedure ──
   // A step's own fields are NOT checked and cannot be (rules cannot look inside a
   // list) — js/catalogue/guided-model.js owns that. Only the list itself is.
