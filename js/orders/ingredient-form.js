@@ -17,7 +17,7 @@
 
 import { t } from '../i18n.js';
 import { el } from './dom.js';
-import { canManageHere } from './firebase-orders.js';
+import { mayWritePrices } from './firebase-orders.js';
 import { NO_SUPPLIER_ID } from './no-supplier.js';
 import { field, formActions, reportFailure, shortDate } from './mgmt-ui.js';
 import {
@@ -934,7 +934,9 @@ export function buildIngredientForm({ item, suppliers, preset, actions, onDone, 
   // form has no price at all — not a disabled one — because a disabled field
   // still SHOWS the rate, and showing it is precisely what moving the price out
   // of the ingredient document was for.
-  const mayPrice = canManageHere();
+  // ⚠️ AND ONLY WHERE THE VENUE USES FOOD COST: a price the database would refuse
+  // takes the whole save down with it (see mayWritePrices).
+  const mayPrice = mayWritePrices();
   const price = mayPrice ? priceBlock(item, actions) : null;
   // ⚠️ NOT A ROLE, A VENUE. Everybody in the building gets the same answer here: it
   // says whether this business tracks allergens and nutrition at all, and the two

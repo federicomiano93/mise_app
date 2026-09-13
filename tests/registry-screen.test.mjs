@@ -78,8 +78,17 @@ test('⚠️⚠️ nothing on the way IN reads a role — only Delete is gated, 
 test('the one Delete gate, and the one price gate, are still where they were', () => {
   assert.match(codeOf(read('js/orders/mgmt-ui.js')), /if\s*\(\s*canManageHere\(\)\s*\)/,
     'mgmtRow must still draw Delete only for a manager or owner');
-  assert.match(codeOf(FORM), /const mayPrice = canManageHere\(\);/,
+  assert.match(codeOf(FORM), /const mayPrice = mayWritePrices\(\);/,
     'the ingredient form must still draw the price only for somebody who may see money');
+  // ⚠️ Found 13 Sep 2026: the role alone let an owner of a venue WITHOUT Food cost put
+  // a price write in the batch, and the rules refused the whole save.
+  assert.match(codeOf(read('js/orders/firebase-orders.js')),
+    /export function mayWritePrices\(\) \{\s*const session = currentSession\(\);\s*return session\.canManage === true && session\.sections\?\.foodcost === true;\s*\}/,
+    'a price is written only by whoever runs the place AND only where Food cost is on — the rules\' canManage(lid, \'foodcost\')');
+  const rules = read('firestore.rules');
+  const prices = rules.slice(rules.indexOf('match /ingredient-prices/{id}'), rules.indexOf('match /ingredients/{id}'));
+  assert.match(prices, /allow create, update: if canManage\(lid, 'foodcost'\)/,
+    'and the rule it mirrors is still canManage(lid, \'foodcost\') — change one, change both');
   assert.match(codeOf(FORM), /mayPrice \? priceBlock\(/,
     'an employee gets NO price block at all — not a disabled one');
 });

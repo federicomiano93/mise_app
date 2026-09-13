@@ -343,6 +343,22 @@ export function canManageHere() {
   return currentSession().canManage === true;
 }
 
+// Whether this session may WRITE what an ingredient costs.
+//
+// ⚠️ NOT canManageHere() ALONE, AND THE DIFFERENCE REFUSED EVERY SAVE. The rules grant
+// ingredient-prices to canManage(lid, 'foodcost') — the role AND the Food cost section.
+// An owner of a venue with Food cost switched off passed the role check, so the form
+// drew the price and saveIngredientWithPrice() put a price write in the batch; the
+// database refused that write, and a batch is all-or-nothing, so adding or renaming
+// ANY ingredient there failed with «check your network». Found 13 Sep 2026 driving
+// the registry as the owner of such a venue.
+// `sections` is the session's, already narrowed by the location AND the role
+// (js/sections.js sectionsFor), so a missing key reads the same way the rules do.
+export function mayWritePrices() {
+  const session = currentSession();
+  return session.canManage === true && session.sections?.foodcost === true;
+}
+
 // ── Order lists sent from one person to another ──────────────────────────────
 
 // How many lists the screen ever holds. ⚠️ A BOUNDED LIVE READ, and the bound is
