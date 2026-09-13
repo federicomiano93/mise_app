@@ -97,7 +97,7 @@ export function openHomeCards(session) {
             role: 'switch',
             'aria-checked': shown ? 'true' : 'false',
             'aria-labelledby': `${nameId} ${pillId}`,
-            class: `people-pill${shown ? ' people-pill--on' : ''}`,
+            class: `people-pill people-pill--switch${shown ? ' people-pill--on' : ''}`,
             onClick: () => toggle(card, shown),
           }, shown ? t('homeCards.shown') : t('homeCards.hidden')),
         ]),
@@ -107,6 +107,11 @@ export function openHomeCards(session) {
 
   async function toggle(card, shown) {
     const hide = shown;
+    // ⚠️ THE LIST IS REBUILT AFTER EVERY SAVE, so the button that had the focus no
+    // longer exists. Without putting it back, somebody on a keyboard or a screen
+    // reader is thrown to the top of the page after every single switch.
+    const pillId = `home-cards-pill-${card.id}`;
+    const hadFocus = document.activeElement?.id === pillId;
     // ⚠️ ASKED ON THE WAY OUT, NEVER ON THE WAY IN, and only for the Catalogue.
     if (hide && card.id === 'catalogue') {
       const ok = await confirmDialog({
@@ -132,6 +137,7 @@ export function openHomeCards(session) {
     }
     // Repainted from what is stored either way — a failed save puts the switch back.
     paint();
+    if (hadFocus) list.querySelector(`#${pillId}`)?.focus();
   }
 
   paint();

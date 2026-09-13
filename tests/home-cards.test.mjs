@@ -201,3 +201,44 @@ test('both new files are precached — auth-gate.js imports one of them on every
   assert.match(sw, /'\.\/js\/home-cards\.js'/);
   assert.match(sw, /'\.\/js\/staff\/home-cards-screen\.js'/);
 });
+
+// ── 5. What the code review found (13 Sep 2026) ──────────────────────────────
+
+test('⚠️⚠️ the callable checks the role BEFORE it writes', () => {
+  const role = CALLABLE.indexOf("access !== 'owner' && access !== 'manager'");
+  const write = CALLABLE.indexOf('.set(');
+  assert.ok(role > 0 && write > role,
+    'a write placed before the check would let an employee change what everybody sees — '
+    + 'and every other assertion here would still match');
+});
+
+test('the callable refuses a location id that could never name a folder', () => {
+  assert.match(CALLABLE, /!\/\^\[A-Za-z0-9\]\[A-Za-z0-9_-\]\{0,63\}\$\/\.test\(locationId\)/);
+});
+
+test('⚠️ the Home filter reads canManage by that name, not another flag under it', () => {
+  assert.match(read('js/home-session.js'), /function filterCards\(\{ location, role, canManage \}\)/,
+    '`isOwner: canManage` would still match every other check and take the cards away from managers');
+});
+
+test('⚠️ the «order to place today» banner is no door to a hidden Orders card', () => {
+  const src = withoutComments(read('js/home-orders-badge.js'));
+  assert.match(src, /import \{ cardVisibleTo \} from '\.\/home-cards\.js';/);
+  const guard = src.search(/if \(!cardVisibleTo\(session\.location, session\.canManage, 'orders'\)\) return;/);
+  assert.ok(guard > 0 && guard < src.indexOf('showOrdersHome();', guard),
+    'the guard must stop it before anything is read, painted or notified');
+});
+
+test('after a save, focus goes back to the switch that was tapped', () => {
+  const src = withoutComments(read('js/staff/home-cards-screen.js'));
+  assert.match(src, /const hadFocus = document\.activeElement\?\.id === pillId;/);
+  assert.match(src, /paint\(\);\s*if \(hadFocus\) list\.querySelector\(`#\$\{pillId\}`\)\?\.focus\(\);/);
+});
+
+test('a switch that is ON still looks and feels tappable', () => {
+  assert.match(read('js/staff/home-cards-screen.js'),
+    /class: `people-pill people-pill--switch\$\{shown \? ' people-pill--on' : ''\}`/);
+  const css = read('tokens.css');
+  assert.match(css, /\.people-pill--switch\.people-pill--on\s*\{[^}]*cursor:\s*pointer/);
+  assert.match(css, /\.people-pill--switch\.people-pill--on:active\s*\{[^}]*scale\(\.97\)/);
+});

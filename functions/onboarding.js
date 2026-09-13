@@ -1010,7 +1010,9 @@ export const setStaffCard = onCall(CALL, async (request) => {
   const uid = requireAuth(request);
   const { locationId, card, hidden } = request.data || {};
 
-  if (typeof locationId !== 'string' || !locationId) {
+  // The same shape requireOwner() accepts: an id that could never name a real folder
+  // is refused before a document path is built from it.
+  if (typeof locationId !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(locationId)) {
     throw new HttpsError('invalid-argument', 'Which location?');
   }
   if (typeof card !== 'string' || !STAFF_CARD_IDS.includes(card)) {

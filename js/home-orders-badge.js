@@ -21,6 +21,7 @@ import { computeAlerts, maybeNotify, isReminderDue } from './orders/notification
 import { suppliersStillToOrder } from './orders/reminders.js';
 import { onSession } from './firebase.js';
 import { isSectionAllowed } from './sections.js';
+import { cardVisibleTo } from './home-cards.js';
 
 // Per-device record of the last day the reminder was shown ('YYYY-MM-DD').
 const REMINDER_KEY = 'orders-reminder-date';
@@ -127,6 +128,12 @@ let started = false;
 onSession(session => {
   if (started || session.status !== 'ready') return;
   if (!isSectionAllowed(session.location, 'orders')) return;
+  // ⚠️ AND AN ORDERS CARD THE VENUE HID FROM THIS EMPLOYEE (js/home-cards.js). The
+  // banner and the browser notification are both DOORS to orders.html, and a door to
+  // a page the gate then bounces back from reads as a broken app. The badge needs no
+  // guard of its own — its card is already gone — but stopping here also spares the
+  // two reads nobody would see.
+  if (!cardVisibleTo(session.location, session.canManage, 'orders')) return;
   started = true;
   showOrdersHome();
 });

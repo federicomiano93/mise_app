@@ -2145,7 +2145,7 @@ const DICTIONARIES = Object.freeze({
     'homeCards.err.save': 'Could not save the change. Check your connection and try again.',
     'homeCards.none': 'This business has no cards to choose from.',
     'homeCards.catalogue.title': 'Hide the recipe catalogue?',
-    'homeCards.catalogue.body': 'Employees will no longer reach the allergen sheet from the Home. Whoever answers customers’ questions about allergens at the counter needs it.',
+    'homeCards.catalogue.body': 'Employees will no longer be able to open the allergen sheet from the Home, and whoever answers customers’ questions about allergens at the counter needs it.',
     'homeCards.catalogue.ok': 'Hide it',
 
 
@@ -4013,15 +4013,15 @@ const DICTIONARIES = Object.freeze({
 
     'homeCards.title': 'Schede della Home',
     'homeCards.intro': 'Scegli quali schede vedono sulla Home le persone che lavorano qui.',
-    'homeCards.managersSeeAll': 'Titolare, manager e head chef vedono sempre tutte le schede, quindi la tua Home non cambia. Una scheda nascosta è solo nascosta: non si spegne né si cancella niente, e mostrarla di nuovo la fa ricomparire subito.',
+    'homeCards.managersSeeAll': 'Titolare, manager e chef di cucina vedono sempre tutte le schede, quindi la tua Home non cambia. Una scheda nascosta è solo nascosta: non si spegne né si cancella niente, e mostrarla di nuovo la fa ricomparire subito.',
     'homeCards.applies': 'I dipendenti vedono il cambiamento la prossima volta che aprono l’app.',
     'homeCards.shown': 'Visibile',
     'homeCards.hidden': 'Nascosta',
     'homeCards.saving': 'Salvataggio…',
     'homeCards.err.save': 'Non è stato possibile salvare la modifica. Controlla la connessione e riprova.',
     'homeCards.none': 'Questa attività non ha schede da scegliere.',
-    'homeCards.catalogue.title': 'Nascondere il catalogo ricette?',
-    'homeCards.catalogue.body': 'I dipendenti non raggiungeranno più dalla Home la scheda allergeni. A chi risponde al banco alle domande dei clienti sugli allergeni serve.',
+    'homeCards.catalogue.title': 'Nascondere il Ricettario?',
+    'homeCards.catalogue.body': 'I dipendenti non potranno più aprire dalla Home la scheda allergeni, che serve a chi al banco risponde alle domande dei clienti sugli allergeni.',
     'homeCards.catalogue.ok': 'Nascondi',
 
 
