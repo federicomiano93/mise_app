@@ -17,6 +17,7 @@ const SCREENS = [
   'js/catalogue/catalogue-detail.js',
   'js/catalogue/catalogue-editor.js',
   'js/catalogue/ingredient-picker.js',
+  'js/catalogue/ingredient-suggest.js',
   'js/catalogue/catalogue-list.js',
   'js/catalogue/allergen-sheet.js',
   'js/catalogue/label-view.js',

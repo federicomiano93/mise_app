@@ -318,6 +318,85 @@ export function linkOptions({ ingredients, recipes, suppliers, query, excludeRec
   return { ingredients: ingredientList, recipes: recipeList };
 }
 
+// ── Suggesting a link while a row's name is typed ────────────────────────────
+//
+// Federico, 13 Sep 2026: «digito burro subito dopo mi si apre la piccola finestra dove
+// scelgo tra i burri che abbiamo a disposizione». What the little list under the name
+// offers, decided here where a test can run it (js/catalogue/ingredient-suggest.js only
+// draws it).
+
+export const SUGGEST_MIN_CHARS = 2;
+export const SUGGEST_LIMIT = 5;
+
+// How well a name answers what was typed: 0 it starts with it, 1 one of its words does,
+// 2 it is somewhere inside, -1 not at all. Both sides already normalised.
+function matchRank(name, q) {
+  const first = name.indexOf(q);
+  if (first === -1) return -1;
+  if (first === 0) return 0;
+  for (let at = first; at !== -1; at = name.indexOf(q, at + 1)) {
+    if (!/[a-z0-9]/.test(name[at - 1])) return 1;
+  }
+  return 2;
+}
+
+//   { items: [{ kind, refId, name, weight, supplierName, linked }], total }
+//
+// ⚠️ THE NAME ONLY, never the supplier or the pack weight the full chooser also searches.
+// This list answers a name being typed: «bra» must not bring up every product of a
+// supplier called Brava while somebody is writing «brace».
+// ⚠️ INGREDIENTS BEFORE RECIPES, whatever the ranking — they are what almost every row is
+// — and nothing below two characters, when a single letter matches half the catalogue.
+// `total` counts every match, so the screen can offer the rest.
+export function suggestLinks({
+  ingredients, recipes, suppliers, query, excludeRecipeId, linked = null, limit = SUGGEST_LIMIT,
+} = {}) {
+  const q = normalizeSearchText(query);
+  if (q.length < SUGGEST_MIN_CHARS) return { items: [], total: 0 };
+  const max = Number.isFinite(Number(limit)) && Number(limit) >= 1 ? Math.floor(Number(limit)) : SUGGEST_LIMIT;
+
+  // The same candidates as the full chooser: active ingredients, never this recipe.
+  const all = linkOptions({ ingredients, recipes, suppliers, query: '', excludeRecipeId });
+  const ranked = (list, kind) => list
+    .map(opt => ({ opt, rank: matchRank(normalizeSearchText(opt.name), q) }))
+    .filter(entry => entry.rank >= 0)
+    .sort((a, b) => a.rank - b.rank
+      || a.opt.name.localeCompare(b.opt.name) || String(a.opt.id).localeCompare(String(b.opt.id)))
+    .map(({ opt }) => ({
+      kind,
+      refId: opt.id,
+      name: opt.name,
+      weight: opt.weight || '',
+      supplierName: opt.supplierName || '',
+      linked: !!linked && linked.kind === kind && linked.refId === opt.id,
+    }));
+
+  const every = [...ranked(all.ingredients, 'ingredient'), ...ranked(all.recipes, 'recipe')];
+  return { items: every.slice(0, max), total: every.length };
+}
+
+// Point a recipe row at what was chosen — `null` removes the link. The ONE place a row's
+// link is written: the suggestion list and the full chooser both come through here, so
+// the two cannot treat a row differently.
+//
+// ⚠️⚠️ WHAT WAS TYPED IS NEVER OVERWRITTEN. Federico, 13 Sep 2026: «il nome
+// dell'ingrediente lo scrivo io perché potrebbe essere diverso dall'ingrediente a cui è
+// collegato». The chosen name fills the row only when it has no name at all.
+export function applyLink(row, chosen) {
+  if (!row || typeof row !== 'object') return row;
+  if (chosen === null) {
+    delete row.kind;
+    delete row.refId;
+    return row;
+  }
+  const refId = chosen && chosen.refId != null ? String(chosen.refId).trim() : '';
+  if (!chosen || !ROW_KINDS.includes(chosen.kind) || !refId) return row;
+  row.kind = chosen.kind;
+  row.refId = refId;
+  if (!String(row.label ?? '').trim() && chosen.name) row.label = String(chosen.name);
+  return row;
+}
+
 // ── kg scaling (pure pro-rata "total" — the catalogue's only calc logic) ──────
 
 // Round an array of gram values so the displayed integers sum EXACTLY to

@@ -20,15 +20,18 @@ const BACK_ICON = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" w
 // Open the picker. Resolves with { kind, refId, name } when something is chosen,
 // with null when the link is removed, and with undefined when it is dismissed —
 // three different answers, because "cancel" must not silently clear a link.
-export function openLinkPicker({ ingredients, recipes, suppliers, excludeRecipeId, hasLink }) {
+//
+// `initialQuery` opens it already searching — «Vedi tutti» under a row's suggestion list
+// hands over what was typed, so nobody has to type it twice.
+export function openLinkPicker({ ingredients, recipes, suppliers, excludeRecipeId, hasLink, initialQuery = '' }) {
   return new Promise(resolve => {
-    let query = '';
+    let query = String(initialQuery ?? '');
 
     const list = el('div', { class: 'cat-pick-list' });
 
     const search = el('input', {
       class: 'cat-pick-search', type: 'search', placeholder: t('cat.searchAnIngredient'),
-      'aria-label': t('cat.searchAnIngredient'),
+      'aria-label': t('cat.searchAnIngredient'), value: query,
       oninput: e => { query = e.target.value; paint(); },
     });
 
@@ -68,7 +71,8 @@ export function openLinkPicker({ ingredients, recipes, suppliers, excludeRecipeI
       if (options.recipes.length) {
         list.appendChild(el('div', { class: 'cat-pick-head', text: t('ui.recipes') }));
         options.recipes.forEach(opt => {
-          list.appendChild(row(opt.name, 'Recipe',
+          // ⚠️ Was the English word 'Recipe' written into the code, on an Italian venue too.
+          list.appendChild(row(opt.name, t('cat.recipe'),
             () => close({ kind: 'recipe', refId: opt.id, name: opt.name })));
         });
       }
