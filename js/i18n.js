@@ -2142,7 +2142,7 @@ const DICTIONARIES = Object.freeze({
 
     // ── Choosing which Home cards the employees see ────────────────────────
     'homeCards.title': 'Home cards',
-    'homeCards.intro': 'Choose which cards the people who work here see on the Home.',
+    'homeCards.intro': 'Choose which cards the people who work here see, and the order the Home shows them in.',
     'homeCards.managersSeeAll': 'Owners, managers and head chefs always see every card, so your own Home does not change. Hiding a card deletes nothing, and showing it again brings it straight back.',
     'homeCards.applies': 'Employees see the change the next time they open the app. The notifications of a hidden card stop for them at once.',
     'homeCards.shown': 'Visible',
@@ -4037,7 +4037,7 @@ const DICTIONARIES = Object.freeze({
     'lang.labels.noCountry': 'Questa attività non ha un paese impostato, quindi non può produrre nessuna etichetta allergeni. Il paese decide la lingua dell’etichetta, e non è una cosa che l’app possa indovinare.',
 
     'homeCards.title': 'Schede della Home',
-    'homeCards.intro': 'Scegli quali schede vedono sulla Home le persone che lavorano qui.',
+    'homeCards.intro': 'Scegli quali schede vedono le persone che lavorano qui, e in che ordine compaiono sulla Home.',
     'homeCards.managersSeeAll': 'Titolare, manager e chef di cucina vedono sempre tutte le schede, quindi la tua Home non cambia. Nascondere una scheda non cancella niente, e mostrarla di nuovo la fa ricomparire subito.',
     'homeCards.applies': 'I dipendenti vedono il cambiamento la prossima volta che aprono l’app. Le notifiche di una scheda nascosta smettono subito di arrivargli.',
     'homeCards.shown': 'Visibile',
