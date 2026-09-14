@@ -57,6 +57,32 @@ test('an ingredient of exactly that name already on file is not offered again', 
   assert.equal(nameTaken(map, 'Burro salato'), false);
   assert.equal(nameTaken(null, 'Burro'), false);
   assert.equal(nameTaken({ x: null, y: {} }, 'Burro'), false);
+  // ⚠️ ONLY WHAT A ROW CAN BE LINKED TO (the code review of 14 Sep 2026): a switched-off
+  // ingredient or a box of the same name is not offered above, so it must not hide the
+  // create row either — that was a dead end with nothing on screen saying why.
+  assert.equal(nameTaken({ a: { name: 'Burro', active: false } }, 'Burro'), false);
+  assert.equal(nameTaken({ a: { name: 'Burro', kind: 'packaging' } }, 'Burro'), false);
+  assert.equal(nameTaken({ a: { name: 'Burro', kind: 'ingredient', active: true } }, 'Burro'), true);
+});
+
+test('⚠️⚠️ a recipe row is never linked to packaging, and the Catalogue\'s card offers no «Tipo»', () => {
+  const create = codeOf(read('js/catalogue/ingredient-create.js'));
+  assert.match(create, /presetKind: 'ingredient',\s*showKind: false,/);
+  assert.match(codeOf(read('js/ingredient-record-form.js')), /showKind \? field\(t\('orders\.field\.kind'\), kindSelect\) : null,/);
+  assert.match(codeOf(read('js/catalogue/catalogue-editor.js')),
+    /if \(!made \|\| !made\.id \|\| made\.kind === 'packaging' \|\| !working\.ingredients\[idx\]\) return;/,
+    'and even an item filed as packaging some other way is never linked');
+});
+
+test('the supplier card speaks the venue\'s language: weekday ticks and the phone example', () => {
+  const ui = codeOf(read('js/record-ui.js'));
+  assert.doesNotMatch(ui, /day\.slice\(0, 3\)/, '«Mon» on an Italian card was the stored key cut short');
+  assert.match(ui, /t\(`day\.weekdayShort\.\$\{WEEKDAY_INDEX\[day\]\}`\)/);
+  assert.match(ui, /WEEKDAY_INDEX = Object\.freeze\(\{ Sunday: 0, Monday: 1,/, 'counted like Date.getDay(), as the dictionary is');
+  assert.match(ui, /cb\.dataset\.day = day;/, 'the stored value stays the English key');
+  const { en, it } = _dictionaries();
+  for (let i = 0; i < 7; i++) assert.ok(en[`day.weekdayShort.${i}`] && it[`day.weekdayShort.${i}`]);
+  assert.match(codeOf(read('js/supplier-record-form.js')), /placeholder: t\('orders\.eg\.phone'\)/);
 });
 
 test('⚠️ the create row can be the ONLY row — nothing matching is exactly when it is wanted', () => {
@@ -79,7 +105,7 @@ test('⚠️⚠️ creating links the row, from the list and from the chooser al
   assert.match(editor, /mayCreate: app\.mayCreateIngredient\(\),/);
   assert.match(editor, /if \(chosen && chosen\.create\) \{ createAndLink\(idx, chosen\.create\); return; \}/,
     'a create answer must never reach linkTo() as if it were a link');
-  assert.match(editor, /if \(!made \|\| !made\.id \|\| !working\.ingredients\[idx\]\) return;\s*linkTo\(idx, \{ kind: 'ingredient', refId: made\.id, name: made\.name \}\);/,
+  assert.match(editor, /if \(!made \|\| !made\.id \|\| made\.kind === 'packaging' \|\| !working\.ingredients\[idx\]\) return;\s*linkTo\(idx, \{ kind: 'ingredient', refId: made\.id, name: made\.name \}\);/,
     'backing out links nothing; a save links the row through the one place links are written');
 });
 
@@ -92,7 +118,7 @@ test('⚠️⚠️ the Catalogue opens the same card, OVER the editor, and backi
   assert.match(create, /document\.body\.appendChild\(node\);/,
     'a layer on top: swapping the screen would destroy the recipe rows typed so far');
   assert.doesNotMatch(create, /\bswap\(|replaceChildren\(/);
-  assert.match(create, /saved = \{ id: newId, name: payload\.name \};/);
+  assert.match(create, /saved = \{ id: newId, name: payload\.name, kind: payload\.kind \};/);
   assert.match(create, /onCancel: \(\) => \{ saved = null; finish\(\); \},/);
   assert.match(create, /packPhotoOn: \(\) => false,/, 'the paid photograph stays where it is switched on');
   assert.doesNotMatch(create, /price-model\.js|recipe-cost-model\.js|formatRate|pricePerKg/,

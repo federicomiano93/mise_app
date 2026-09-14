@@ -12,7 +12,7 @@ const CACHE_NAME = 'theitalianclub-v361';
 // the fetch handler below, on the first load that has a network.
 // So between activate() and that first load, a phone that is OFFLINE cannot boot:
 // the code asks for 12.18.0 and nothing has it. In practice the window is very
-// small — activate() only happens after a successful 249-file precache, i.e.
+// small — activate() only happens after a successful 250-file precache, i.e.
 // online, and tapping the update banner reloads the page immediately — but it is
 // not zero, and it is the reason to bump the SDK deliberately rather than often.
 // Leaving the name unchanged would close the window and cost ~1 MB of dead
@@ -331,6 +331,8 @@ const ASSETS = [
   // and the screen that shows them — opened from the product editor.
   './js/foodcost/vat-guide.js',
   './js/foodcost/vat-guide-view.js',
+  // The numbers the rules accept on a product, checked before a save (14 Sep 2026).
+  './js/foodcost/product-limits.js',
   // The Food cost settings — the hourly labour cost (13 Sep 2026).
   './js/foodcost/foodcost-settings.js',
   // The monthly stocktake. A page of the Food Cost section (it carries
@@ -384,7 +386,7 @@ const ASSETS = [
 // code against rules that deployed instantly, which is the very thing the gate exists
 // to prevent. Two things stand between that and a release: the test that every ASSETS
 // entry EXISTS (a mistyped path being the likeliest permanent cause), and this
-// project's post-deploy sweep, which already asks the live site for all 249 files.
+// project's post-deploy sweep, which already asks the live site for all 250 files.
 // ⚠️ NEITHER covers a device-specific failure — nobody has yet confirmed an update
 // landing on a real iPhone under this code.
 //

@@ -22,7 +22,7 @@ import { field, formActions, makeDayChecks, checkedDays, reportFailure } from '.
 export function buildSupplierForm({ item, save, onDone, onCancel }) {
   const name = el('input', { type: 'text', class: 'mgmt-input', value: item?.name || '' });
   const category = el('input', { type: 'text', class: 'mgmt-input', value: item?.category || '' });
-  const phone = el('input', { type: 'tel', class: 'mgmt-input', value: item?.phone || '', placeholder: 'e.g. 447700900123' });
+  const phone = el('input', { type: 'tel', class: 'mgmt-input', value: item?.phone || '', placeholder: t('orders.eg.phone') });
   const email = el('input', { type: 'email', class: 'mgmt-input', value: item?.email || '' });
 
   const deliveryChecks = makeDayChecks(item?.deliveryDays);

@@ -62,10 +62,14 @@ export function attachLinkSuggestions(input, { options, linked, onPick, onSeeAll
   });
 }
 
-// Is there already an ingredient called exactly this (ignoring case and spaces at the ends)?
-// `ingredients` is the store's map by id, or a list.
+// Is there already an ingredient called exactly this (ignoring case and spaces at the ends)
+// among the ones a recipe row can be LINKED to — active, and food rather than packaging?
+// ⚠️ THE SAME SET linkOptions() offers. Counting a switched-off ingredient or a box here
+// withheld the «create» row while the list above offered nothing: a dead end with no reason
+// given (the code review of 14 Sep 2026). `ingredients` is the store's map by id, or a list.
 export function nameTaken(ingredients, name) {
   const wanted = String(name ?? '').trim().toLowerCase();
   return Object.values(ingredients || {})
-    .some(ing => String(ing?.name ?? '').trim().toLowerCase() === wanted);
+    .some(ing => ing && ing.active !== false && ing.kind !== 'packaging'
+      && String(ing.name ?? '').trim().toLowerCase() === wanted);
 }

@@ -19,6 +19,7 @@ import {
 } from './foodcost-model.js';
 import { formatRate, formatMoney } from '../price-model.js';
 import { openVatGuide } from './vat-guide-view.js';
+import { firstInvalidNumber } from './product-limits.js';
 // ⚠️ READ WHERE THE FIELD IS DRAWN, never at module load: the venue — and therefore
 // its country, and therefore its currency — arrives with the session, after every
 // module has been evaluated. See js/currency.js.
@@ -731,6 +732,7 @@ export function renderEditor({ product, draft = null, app }) {
       inputmode: 'decimal', placeholder: '0', 'aria-label': label,
       value: value === null || value === undefined ? '' : String(value),
       oninput: e => {
+        e.target.classList.remove('fc-invalid');
         const raw = e.target.value;
         set(raw === '' ? null : Number(raw));
         markDirty();
@@ -766,6 +768,17 @@ export function renderEditor({ product, draft = null, app }) {
   }
 
   // ── Save / delete ──────────────────────────────────────────────────────────
+  // Each number the rules range-check, with the box it is typed in and the words that name it.
+  const NUMBER_BOXES = {
+    piecesPerBatch: [piecesInput, 'fc.howManyPiecesCome'],
+    packSize: [packSizeInput, 'fc.packHoldsAs'],
+    labourMinutes: [labourMinutesInput, 'fc.labourMinutes'],
+    labourPeople: [labourPeopleInput, 'fc.labourPeople'],
+    sellingPrice: [priceInput, 'fc.sellingPriceIncludingVat'],
+    vatRate: [vatOther, 'fc.anotherVatRateAs'],
+    foodCostTarget: [targetInput, 'fc.foodCostTargetAs'],
+  };
+
   async function onSave() {
     if (busy) return;
     // The ONE required field. Everything else may be missing — the answer panel
@@ -775,6 +788,23 @@ export function renderEditor({ product, draft = null, app }) {
       validateUI();
       nameInput.focus();
       app.toast(t('fc.pleaseEnterAProduct'));
+      return;
+    }
+    // ⚠️⚠️ A NUMBER THE DATABASE WILL REFUSE STOPS THE SAVE HERE, WHILE THE WORK IS ON SCREEN
+    // (js/foodcost/product-limits.js). Past this point the save is local-first: the editor
+    // leaves, the refusal arrives later, and the rollback throws the product away.
+    // A value in a box that is not shown (pieces on a product sold by weight) means nothing,
+    // so it is cleared rather than asked about — nobody could find the box to correct it.
+    let invalid = firstInvalidNumber(working);
+    while (invalid && NUMBER_BOXES[invalid] && NUMBER_BOXES[invalid][0].closest('[hidden]')) {
+      working[invalid] = null;
+      invalid = firstInvalidNumber(working);
+    }
+    if (invalid) {
+      const [box, labelKey] = NUMBER_BOXES[invalid] || [null, null];
+      box?.classList.add('fc-invalid');
+      try { box?.focus(); } catch (e) { /* focus is best-effort */ }
+      app.toast(t('fc.checkNumber', { field: labelKey ? t(labelKey) : invalid }));
       return;
     }
 

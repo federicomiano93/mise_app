@@ -18,6 +18,9 @@ import { alertDialog } from './confirm-dialog.js';
 // this is data, not a phrase — a supplier's deliveryDays is matched against these
 // strings, so translating them stops a Monday supplier matching a Monday.
 export const WEEKDAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+// Where each stored day sits in the dictionary's `day.weekdayShort.N`, which counts like
+// Date.getDay(): Sunday is 0.
+const WEEKDAY_INDEX = Object.freeze({ Sunday: 0, Monday: 1, Tuesday: 2, Wednesday: 3, Thursday: 4, Friday: 5, Saturday: 6 });
 
 export function field(labelText, input) {
   return el('label', { class: 'mgmt-field' }, [el('span', { class: 'mgmt-field-label', text: labelText }), input]);
@@ -29,7 +32,9 @@ export function makeDayChecks(selectedDays) {
     const cb = el('input', { type: 'checkbox' });
     cb.checked = (selectedDays || []).includes(day);
     cb.dataset.day = day;
-    return el('label', { class: 'day-check' }, [cb, el('span', { text: day.slice(0, 3) })]);
+    // ⚠️ THE LABEL IS THE VENUE'S WORD, THE VALUE STAYS ENGLISH. «Mon» on an Italian card was
+    // the stored key cut short; the tick still carries the key in data-day.
+    return el('label', { class: 'day-check' }, [cb, el('span', { text: t(`day.weekdayShort.${WEEKDAY_INDEX[day]}`) })]);
   });
 }
 

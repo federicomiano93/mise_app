@@ -109,7 +109,9 @@ export const VAT_GUIDE_BY_COUNTRY = Object.freeze({
         'Soft drinks, fruit juices and bottled water',
         'Beer, cider, wine and spirits',
       ]) }),
-      Object.freeze({ rate: 5, items: Object.freeze([
+      // `none`: the group exists to SAY that nothing here takes this rate, so the guide
+      // offers no button to use it.
+      Object.freeze({ rate: 5, none: true, items: Object.freeze([
         'No food or drink sold in a bakery or café takes 5% today',
       ]) }),
       Object.freeze({ rate: 0, items: Object.freeze([

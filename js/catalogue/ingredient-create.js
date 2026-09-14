@@ -97,6 +97,10 @@ export function openIngredientCreate({ name, suppliers }) {
       item: null,
       presetName: name,
       presetKind: 'ingredient',
+      // ⚠️ NO «Tipo» MENU HERE. A recipe row may only be linked to FOOD (catalogue-model.js
+      // linkOptions): filed as packaging, the row would point at an item with no allergens and
+      // no way back to it from the chooser. Found by the code review of 14 Sep 2026.
+      showKind: false,
       suppliers: supplierList(suppliers),
       preset: null,
       // ⚠️ THE SAME TWO DECISIONS registry.js makes, from the same root answers.
@@ -105,7 +109,7 @@ export function openIngredientCreate({ name, suppliers }) {
       actions: {
         saveIngredient: async (id, payload, record, writePrice) => {
           const newId = await saveIngredientWithPrice(id, payload, record, writePrice);
-          saved = { id: newId, name: payload.name };
+          saved = { id: newId, name: payload.name, kind: payload.kind };
         },
         // A new ingredient has no history to show, and the card asks only for an existing one.
         priceHistory: async () => [],

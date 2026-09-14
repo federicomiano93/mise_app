@@ -50,7 +50,8 @@ export function openVatGuide({ country, currentRate = null, onUse, returnFocus =
         el('h2', { text: t('fc.vatGuide.rate', { rate: String(group.rate) }) }),
         inUse
           ? el('span', { class: 'fc-guide-inuse', text: t('fc.vatGuide.inUse') })
-          : el('button', {
+          // A rate the guide says nothing here takes offers no button to use it.
+          : group.none ? null : el('button', {
             class: 'fc-guide-use', type: 'button', text: t('fc.vatGuide.use', { rate: String(group.rate) }),
             onclick: () => { onUse?.(group.rate); close(); },
           }),

@@ -337,7 +337,7 @@ export function renderEditor({ recipe, draft, allRecipes, app, getLabelProfile =
   // Backing out of the card changes nothing.
   async function createAndLink(idx, name) {
     const made = await app.createIngredient(name);
-    if (!made || !made.id || !working.ingredients[idx]) return;
+    if (!made || !made.id || made.kind === 'packaging' || !working.ingredients[idx]) return;
     linkTo(idx, { kind: 'ingredient', refId: made.id, name: made.name });
     focusAmount(idx);
   }
@@ -416,6 +416,9 @@ export function renderEditor({ recipe, draft, allRecipes, app, getLabelProfile =
     const problem = findInvalidRecipe(clean);
     if (problem) {
       showErrors = true;
+      // ⚠️ OUT OF REORDER MODE FIRST: its rows have no name or amount box, so the one to fix
+      // could be neither highlighted nor reached.
+      if (reordering) setReordering(false);
       renderIngredientRows();
       validateUI();
       if (problem === 'name') nameInput.focus();
@@ -515,19 +518,21 @@ export function renderEditor({ recipe, draft, allRecipes, app, getLabelProfile =
   reorderHint.hidden = true;
   const reorderBtn = el('button', {
     class: 'cat-reorder-btn', type: 'button', text: t('cat.reorder'), 'aria-pressed': 'false',
-    onclick: () => {
-      reordering = !reordering;
-      reorderBtn.textContent = reordering ? t('cat.reorderDone') : t('cat.reorder');
-      reorderBtn.setAttribute('aria-pressed', String(reordering));
-      reorderHint.hidden = !reordering;
-      // No new row while reordering: it would be a row with nothing to drag by its name.
-      addRowBtn.hidden = reordering;
-      renderIngredientRows();
-      if (showErrors && !reordering) validateUI();
-      const first = rowsContainer.querySelector(reordering ? '.cat-reorder-grip' : '.cat-lbl');
-      try { first?.focus({ preventScroll: true }); } catch (e) { /* focus is best-effort */ }
-    },
+    onclick: () => setReordering(!reordering),
   });
+
+  function setReordering(on) {
+    reordering = on;
+    reorderBtn.textContent = reordering ? t('cat.reorderDone') : t('cat.reorder');
+    reorderBtn.setAttribute('aria-pressed', String(reordering));
+    reorderHint.hidden = !reordering;
+    // No new row while reordering: it would be a row with nothing to drag by its name.
+    addRowBtn.hidden = reordering;
+    renderIngredientRows();
+    if (showErrors && !reordering) validateUI();
+    const first = rowsContainer.querySelector(reordering ? '.cat-reorder-grip' : '.cat-lbl');
+    try { first?.focus({ preventScroll: true }); } catch (e) { /* focus is best-effort */ }
+  }
 
   const actions = el('div', { class: 'cat-editor-actions' }, [
     el('button', { class: 'cat-save-btn', type: 'button', text: t('ui.save'), onclick: onSave }),

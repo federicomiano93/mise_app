@@ -56,3 +56,12 @@ test('the words exist in both languages', () => {
   }
   assert.match(it['cat.moveRow'], /\{name\}/);
 });
+
+test('⚠️ Save with a row to fix leaves reorder mode first, so that row can be shown and reached', () => {
+  // The code review of 14 Sep 2026: the reorder rows have no name or amount box, so a Save
+  // refused in that mode redrew rows with nothing to highlight.
+  const editor = codeOf(read('js/catalogue/catalogue-editor.js'));
+  const save = editor.slice(editor.indexOf('async function onSave()'), editor.indexOf('async function onDelete()'));
+  assert.match(save, /if \(problem\) \{\s*showErrors = true;\s*if \(reordering\) setReordering\(false\);\s*renderIngredientRows\(\);/);
+  assert.match(editor, /onclick: \(\) => setReordering\(!reordering\),/, 'the button and the save share one way out');
+});

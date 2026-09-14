@@ -13,6 +13,7 @@ import { t } from '../i18n.js';
 import { el } from './dom.js';
 import { currentCurrency } from '../currency.js';
 import { positiveNumber } from '../price-model.js';
+import { labourRateAllowed } from './product-limits.js';
 
 const BACK_ICON = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>';
 
@@ -24,6 +25,7 @@ export function openFoodcostSettings({ rate = null, confirm, onSave, toast, retu
     id: 'fcLabourRate', class: 'fc-input fc-number', type: 'number', min: '0', step: 'any',
     inputmode: 'decimal', placeholder: '0', 'aria-label': t('fc.settings.labourRateAs'),
     value: stored === null ? '' : String(stored),
+    oninput: e => e.target.classList.remove('fc-invalid'),
   });
   const typed = () => positiveNumber(input.value);
   const changed = () => typed() !== stored;
@@ -50,6 +52,16 @@ export function openFoodcostSettings({ rate = null, confirm, onSave, toast, retu
 
   async function save() {
     if (busy) return;
+    // ⚠️ ASKED BEFORE «Save these changes?», NOT AFTER. A 0 used to clear the stored rate in
+    // silence (it reads as «no rate»), and a rate over the rules' ceiling said «Saved» and was
+    // then refused. An EMPTY box still clears the rate: that is a real answer.
+    const raw = String(input.value).trim();
+    if (raw !== '' && !labourRateAllowed(Number(raw))) {
+      input.classList.add('fc-invalid');
+      try { input.focus(); } catch (e) { /* focus is best-effort */ }
+      toast?.(t('fc.settings.rateOutOfRange'));
+      return;
+    }
     busy = true;
     const ok = await confirm({ title: t('fc.settings.saveQ'), message: t('fc.saveTheseChanges'), okLabel: t('ui.save'), cancelLabel: t('ui.cancel') });
     if (!ok) { busy = false; return; }

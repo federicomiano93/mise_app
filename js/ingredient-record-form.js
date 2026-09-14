@@ -915,6 +915,8 @@ function selectSupplier(select, { id, name }) {
 // presetName  — what a new one is called to start with (the Catalogue passes what was typed)
 // mayPrice    — may this person write a price here (mayWritePrices, js/record-data.js)
 // panels      — { allergens, nutrition }: which optional panels this venue uses
+// showKind    — false where only an INGREDIENT makes sense (a recipe row in the Catalogue):
+//               the «Tipo» menu is not drawn and the item is filed as the preset kind
 // actions     — { saveIngredient(id, payload, record, writePrice), priceHistory(id),
 //                 packPhotoOn(), capturePackPhoto(), createSupplier() → { id, name } | null }
 // onDone / onCancel — where the screen goes afterwards
@@ -925,7 +927,7 @@ function selectSupplier(select, { id, name }) {
 // to ask must not quietly remove the allergen card.
 export function buildIngredientForm({
   item, suppliers, preset, presetKind = null, presetName = '', mayPrice = false,
-  panels = { allergens: true, nutrition: true }, actions, onDone, onCancel,
+  panels = { allergens: true, nutrition: true }, showKind = true, actions, onDone, onCancel,
 }) {
   const name = el('input', { type: 'text', class: 'mgmt-input', value: item?.name || presetName || '' });
   // Food, or packaging? (13 Sep 2026.) A box, a tray or a label is bought, priced and
@@ -1065,7 +1067,7 @@ export function buildIngredientForm({
       title: t('orders.section.productData'),
       body: [
         field(t('orders.field.name'), name),
-        field(t('orders.field.kind'), kindSelect),
+        showKind ? field(t('orders.field.kind'), kindSelect) : null,
         field(t('orders.field.supplier'), supplierSelect),
         addSupplierBtn,
         field(t('orders.field.brand'), brand),
