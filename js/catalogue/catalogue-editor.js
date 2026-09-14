@@ -215,6 +215,9 @@ export function renderEditor({ recipe, draft, allRecipes, app, getLabelProfile =
         linked: () => linkOf(working.ingredients[idx]),
         onPick: (chosen) => { linkTo(idx, chosen); focusAmount(idx); },
         onSeeAll: (query) => pickFromChooser(idx, query),
+        // «+ Crea "…" come ingrediente» — only where this person may add records here.
+        mayCreate: () => app.mayCreateIngredient(),
+        onCreate: (name) => createAndLink(idx, name),
       });
       const gramsInput = el('input', {
         class: 'cat-grm', type: 'number', min: '0', step: 'any', inputmode: 'decimal',
@@ -321,9 +324,22 @@ export function renderEditor({ recipe, draft, allRecipes, app, getLabelProfile =
       excludeRecipeId: working.id,
       hasLink: !!linkOf(working.ingredients[idx]),
       initialQuery,
+      mayCreate: app.mayCreateIngredient(),
     });
     if (chosen === undefined) return;              // dismissed: change nothing
+    if (chosen && chosen.create) { createAndLink(idx, chosen.create); return; }
     linkTo(idx, chosen);
+  }
+
+  // A row whose ingredient is not in the records yet: the SAME card «Fornitori e ingredienti»
+  // uses opens above this editor, and the row is linked once it is saved. Everything typed
+  // in the recipe stays exactly where it was — the editor is never taken off the screen.
+  // Backing out of the card changes nothing.
+  async function createAndLink(idx, name) {
+    const made = await app.createIngredient(name);
+    if (!made || !made.id || !working.ingredients[idx]) return;
+    linkTo(idx, { kind: 'ingredient', refId: made.id, name: made.name });
+    focusAmount(idx);
   }
 
   // Link row `idx` to what was chosen; null removes the link.

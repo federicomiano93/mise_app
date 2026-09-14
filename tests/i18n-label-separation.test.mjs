@@ -53,7 +53,7 @@ const LABEL_FILES = [
   // and a person cannot check their own work against a label that renames everything.
   // So the food words are the label's and the controls around them are the screen's —
   // which is precisely the mixture this file exists to police rather than forbid.
-  'js/orders/ingredient-form.js',
+  'js/ingredient-record-form.js',
   'js/catalogue/catalogue-detail.js',
   // ⚠️ ADDED with label printing. It lays a label out on a piece of paper, and to do
   // that it has to build the words it is laying out — the «Ingredients:» prefix and
@@ -75,7 +75,7 @@ const LABEL_FILES = [
 // entry is Italian and the odd one out therefore reads as a different substance.
 const DRAWS_A_SCREEN = [
   'js/catalogue/label-view.js',
-  'js/orders/ingredient-form.js',
+  'js/ingredient-record-form.js',
   'js/catalogue/catalogue-detail.js',
 ];
 
@@ -202,7 +202,7 @@ const FOOD_WORD_SITES = {
   // when the explanations moved behind the «?» (Federico: «c'è scritto troppo»). It is
   // not a food this screen still names and then names wrongly — it is a food this
   // screen no longer prints at all. The five that remain are the ones a person reads.
-  'js/orders/ingredient-form.js': { allergenName: 5, allergenGroupName: 1, nutrientName: 1 },
+  'js/ingredient-record-form.js': { allergenName: 5, allergenGroupName: 1, nutrientName: 1 },
   // what it contains · what it may contain · what is known so far
   'js/catalogue/catalogue-detail.js': { allergenName: 3 },
 };
@@ -237,7 +237,7 @@ test('no screen prints a nutrient’s English label', () => {
 // 2026 and nothing was red: an English name on an English screen looks perfect, and the
 // venue that proves it wrong does not exist yet.
 test('no screen names an allergen in fixed English', () => {
-  for (const file of ['js/orders/ingredient-form.js', 'js/catalogue/catalogue-detail.js']) {
+  for (const file of ['js/ingredient-record-form.js', 'js/catalogue/catalogue-detail.js']) {
     const src = codeOf(read(file));
     assert.doesNotMatch(src, /\ballergenLabel\s*\(/,
       `${file} must name allergens through market.js, in the venue's country's language`);

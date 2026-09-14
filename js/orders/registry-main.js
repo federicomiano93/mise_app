@@ -14,7 +14,7 @@ import { withPrices } from '../price-model.js';
 import { buildRegistry } from './registry.js';
 import {
   COLLECTIONS, watchCollection, watchIngredientPrices, canManageHere,
-  saveDoc, createDoc, removeDoc, saveIngredientWithPrice, getPriceHistory,
+  saveDoc, removeDoc, saveIngredientWithPrice, saveSupplierRecord, getPriceHistory,
 } from './firebase-orders.js';
 
 const state = {
@@ -33,8 +33,9 @@ const screen = buildRegistry(
     ingredients: () => state.ingredients,
   },
   {
-    saveSupplier: (id, payload) =>
-      id ? saveDoc(COLLECTIONS.suppliers, id, payload) : createDoc(COLLECTIONS.suppliers, payload),
+    // Resolves with the supplier's id, new or not: «+ Nuovo fornitore» inside an ingredient's
+    // card selects the supplier it has just created.
+    saveSupplier: (id, payload) => saveSupplierRecord(id, payload),
     // One call for both create and update, because the ingredient and its price
     // record have to land together or not at all — see saveIngredientWithPrice.
     // `record` is null whenever the price did not actually move.

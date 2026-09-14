@@ -39,7 +39,12 @@ import { formatPricePerUnit } from '../price-model.js';
 import { allergenState } from '../allergen-model.js';
 // Food or packaging? From js/ root: Food cost and the Catalogue ask the same question.
 import { isPackaging } from '../ingredient-kind.js';
-import { buildIngredientForm } from './ingredient-form.js';
+// ⚠️ THE TWO CARDS LIVE IN js/ ROOT since 13 Sep 2026, because the Catalogue opens them too.
+// This screen still decides everything around them: the overlay, the navigation, and — for
+// the ingredient card — whether the price is drawn and which panels the venue uses.
+import { buildIngredientForm } from '../ingredient-record-form.js';
+import { buildSupplierForm } from '../supplier-record-form.js';
+import { mayWritePrices } from './firebase-orders.js';
 // ⚠️ A FEATURE SWITCH, NOT A ROLE GATE, and the difference is why this may sit in a
 // file that is forbidden to ask canManageHere(). It answers «does this venue track
 // allergens at all», which is the same answer for everybody standing in the building.
@@ -47,7 +52,7 @@ import { ingredientPanels, setIngredientPanel, setPackPhoto } from './firebase-f
 import { renderPackPhotoCapture } from './photo-capture.js';
 import { buildRegistrySettings } from './registry-settings.js';
 import {
-  BACK_ICON, field, formActions, makeDayChecks, checkedDays, mgmtRow, reportFailure,
+  BACK_ICON, mgmtRow,
 } from './mgmt-ui.js';
 
 // data:    { suppliers(): [], ingredients(): [] } — live getters
@@ -361,55 +366,30 @@ export function buildRegistry(data, actions) {
   }
 
   // ── The supplier's own form ─────────────────────────────────────────────────
-  function openSupplierForm(item) {
+  //   onSaved({ id, name }) — told once the supplier is stored (the ingredient card's
+  //                           «+ Nuovo fornitore» selects it)
+  //   onClosed()            — told when somebody backs out without saving
+  function openSupplierForm(item, { onSaved = null, onClosed = null } = {}) {
     push(() => {
-      const name = el('input', { type: 'text', class: 'mgmt-input', value: item?.name || '' });
-      const category = el('input', { type: 'text', class: 'mgmt-input', value: item?.category || '' });
-      const phone = el('input', { type: 'tel', class: 'mgmt-input', value: item?.phone || '', placeholder: 'e.g. 447700900123' });
-      const email = el('input', { type: 'email', class: 'mgmt-input', value: item?.email || '' });
-
-      const deliveryChecks = makeDayChecks(item?.deliveryDays);
-      const orderChecks = makeDayChecks(item?.orderDays);
-
-      const save = el('button', { type: 'button', class: 'btn-primary', onClick: async () => {
-        if (!name.value.trim()) { name.focus(); return; }
-        save.disabled = true;
-        const payload = {
-          name: name.value.trim(),
-          category: category.value.trim(),
-          phone: phone.value.trim(),
-          email: email.value.trim(),
-          deliveryDays: checkedDays(deliveryChecks),
-          orderDays: checkedDays(orderChecks),
-          active: item ? item.active !== false : true,
-        };
-        try { await actions.saveSupplier(item?.id || null, payload); pop(); }
-        catch (err) {
-          save.disabled = false;                       // let them try again
-          await reportFailure('save', payload.name, err);
-        }
-      } }, t('ui.save'));
-
+      const close = () => { pop(); onClosed?.(); };
       const body = el('div', { class: 'mgmt-scroll' }, [
-        el('div', { class: 'mgmt-form' }, [
-          field(t('orders.field.name'), name),
-          field(t('orders.field.category'), category),
-          el('div', { class: 'mgmt-field' }, [
-            el('span', { class: 'mgmt-field-label', text: t('orders.deliveryDaysWhenThey') }),
-            el('div', { class: 'day-checks' }, deliveryChecks),
-          ]),
-          el('div', { class: 'mgmt-field' }, [
-            el('span', { class: 'mgmt-field-label', text: t('orders.orderDaysWhenYou') }),
-            el('div', { class: 'day-checks' }, orderChecks),
-          ]),
-          field(t('orders.phoneWhatsappDigitsOnly'), phone),
-          field(t('orders.field.email'), email),
-          formActions(save, pop),
-        ]),
+        buildSupplierForm({
+          item,
+          save: actions.saveSupplier,
+          onDone: (saved) => { pop(); onSaved?.(saved); },
+          onCancel: close,
+        }),
       ]);
-
-      return overlay(item ? t('orders.editSupplier') : t('orders.newSupplier'), body);
+      return overlay(item ? t('orders.editSupplier') : t('orders.newSupplier'), body, close);
     });
+  }
+
+  // «+ Nuovo fornitore» from inside an ingredient's card. The supplier card opens ABOVE it,
+  // and the ingredient card stays mounted and untouched underneath — refresh() never redraws
+  // a .mgmt-form — so everything typed there is still there. Resolves with { id, name } once
+  // the supplier is saved, or with null if they backed out.
+  function createSupplier() {
+    return new Promise(resolve => openSupplierForm(null, { onSaved: resolve, onClosed: () => resolve(null) }));
   }
 
   // ── One ingredient's form ───────────────────────────────────────────────────
@@ -422,10 +402,15 @@ export function buildRegistry(data, actions) {
           suppliers: data.suppliers(),
           preset: presetSupplierId,
           presetKind,
+          // ⚠️ DECIDED HERE AND HANDED IN, since the card moved to js/ root: whether the
+          // price is drawn (the role AND Food cost — see mayWritePrices) and which panels
+          // this venue uses. The card itself reads neither.
+          mayPrice: mayWritePrices(),
+          panels: ingredientPanels(),
           // ⚠️ THE PHOTO SCREEN IS HANDED IN AS AN ACTION, not imported by the form.
           // The form then knows nothing about overlays and this file stays the only
           // one that navigates — the same seam saveIngredient and priceHistory use.
-          actions: { ...actions, capturePackPhoto, packPhotoOn: () => ingredientPanels().packPhoto },
+          actions: { ...actions, capturePackPhoto, packPhotoOn: () => ingredientPanels().packPhoto, createSupplier },
           onDone: pop,
           onCancel: pop,
         }),

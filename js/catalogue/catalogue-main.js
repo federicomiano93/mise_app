@@ -34,6 +34,10 @@ import { allergensOn } from '../venue-features.js';
 // The way to a recipe's Food cost product, and the one judgement of who may take it.
 // From js/ root: the catalogue and Food cost share an address, never a folder.
 import { mayOpenFoodCost, foodCostHref, recipeIdFromHash } from '../recipe-link.js';
+// Whether this person may add an ingredient to the records from here — the same answer the
+// records page itself gives. From js/ root: the records belong to Orders.
+import { mayEditRecords } from '../records.js';
+import { openIngredientCreate } from './ingredient-create.js';
 
 const screen = document.getElementById('catScreen');
 const titleEl = document.getElementById('catTitle');
@@ -512,6 +516,11 @@ const app = {
   // first paint, and a manager can show Food cost to employees from another phone.
   mayOpenFoodCost: () => { const s = currentSession(); return mayOpenFoodCost(s.location, s.canManage); },
   openFoodCost: (recipe) => { if (recipe && recipe.id) window.location.href = foodCostHref(recipe.id); },
+  // A recipe row's missing ingredient, added with the card «Fornitori e ingredienti» uses.
+  // Federico, 13 Sep 2026: «semplicemente apri una scheda ingrediente come in fornitori ed
+  // ingredienti». ⚠️ Asked of the session each time, like Food cost above.
+  mayCreateIngredient: () => { const s = currentSession(); return mayEditRecords(s.location, s.canManage); },
+  createIngredient: (name) => openIngredientCreate({ name, suppliers: getSuppliers() }),
   // Delete a catalogue recipe with a strong confirm, warning first if the recipe
   // was imported into the Calculator (the two are independent copies — deleting
   // here never touches the Calculator). The link check is raced with a short

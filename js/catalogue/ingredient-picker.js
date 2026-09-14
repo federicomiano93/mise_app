@@ -8,6 +8,7 @@
 import { t } from '../i18n.js';
 import { openPickScreen } from '../pick-screen.js';
 import { linkOptions } from './catalogue-model.js';
+import { nameTaken } from './ingredient-suggest.js';
 
 // Open the picker. Resolves with { kind, refId, name } when something is chosen,
 // with null when the link is removed, and with undefined when it is dismissed —
@@ -15,8 +16,16 @@ import { linkOptions } from './catalogue-model.js';
 //
 // `initialQuery` opens it already searching — «Vedi tutti» under a row's suggestion list
 // hands over what was typed, so nobody has to type it twice.
-export function openLinkPicker({ ingredients, recipes, suppliers, excludeRecipeId, hasLink, initialQuery = '' }) {
+//
+// `mayCreate` offers «+ Crea "…" come ingrediente» at the end of the list; choosing it
+// resolves with { create: name }, a fourth answer the caller turns into a new ingredient.
+export function openLinkPicker({ ingredients, recipes, suppliers, excludeRecipeId, hasLink, initialQuery = '', mayCreate = false }) {
   return openPickScreen({
+    extraAction: query => {
+      const name = String(query ?? '').trim();
+      if (!mayCreate || !name || nameTaken(ingredients, name)) return null;
+      return { label: t('cat.createIngredient', { name }), value: { create: name } };
+    },
     title: t('cat.linkTo'),
     backLabel: t('ui.back'),
     searchLabel: t('cat.searchAnIngredient'),

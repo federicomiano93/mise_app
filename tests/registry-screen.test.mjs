@@ -31,7 +31,7 @@ const codeOf = (src) => src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*
 
 const PAGE = read('suppliers.html');
 const REGISTRY = read('js/orders/registry.js');
-const FORM = read('js/orders/ingredient-form.js');
+const FORM = read('js/ingredient-record-form.js');
 const MGMT = read('js/orders/management.js');
 const SW = read('sw.js');
 const ORDERS_CSS = read('orders.css');
@@ -78,11 +78,17 @@ test('⚠️⚠️ nothing on the way IN reads a role — only Delete is gated, 
 test('the one Delete gate, and the one price gate, are still where they were', () => {
   assert.match(codeOf(read('js/orders/mgmt-ui.js')), /if\s*\(\s*canManageHere\(\)\s*\)/,
     'mgmtRow must still draw Delete only for a manager or owner');
-  assert.match(codeOf(FORM), /const mayPrice = mayWritePrices\(\);/,
-    'the ingredient form must still draw the price only for somebody who may see money');
+  // ⚠️ SINCE 13 Sep 2026 THE CARD IS TOLD, by each screen that opens it, and says NO when
+  // nobody tells it: a forgotten argument draws no price rather than a refused one.
+  assert.match(codeOf(FORM), /presetName = '', mayPrice = false,/,
+    'the ingredient form must draw the price only when told, and default to not drawing it');
+  for (const opener of ['js/orders/registry.js', 'js/catalogue/ingredient-create.js']) {
+    assert.match(codeOf(read(opener)), /mayPrice: mayWritePrices\(\),/,
+      `${opener} must decide the price with the one rule, mayWritePrices()`);
+  }
   // ⚠️ Found 13 Sep 2026: the role alone let an owner of a venue WITHOUT Food cost put
   // a price write in the batch, and the rules refused the whole save.
-  assert.match(codeOf(read('js/orders/firebase-orders.js')),
+  assert.match(codeOf(read('js/record-data.js')),
     /export function mayWritePrices\(\) \{\s*const session = currentSession\(\);\s*return session\.canManage === true && session\.sections\?\.foodcost === true;\s*\}/,
     'a price is written only by whoever runs the place AND only where Food cost is on — the rules\' canManage(lid, \'foodcost\')');
   const rules = read('firestore.rules');
@@ -274,7 +280,7 @@ test('⚠️ the help buttons are actually mounted, or every «?» is an empty s
   assert.match(code, /mountHelpButtons\(root\);/,
     'this overlay is built after page load, so it must ask for its own buttons — '
     + 'without the call the hosts stay empty and nothing on screen looks broken');
-  assert.match(code, /import \{ mountHelpButtons \} from '\.\.\/help-button\.js';/);
+  assert.match(code, /import \{ mountHelpButtons \} from '\.\/help-button\.js';/);
   // Three sections, three sheets, and each id must exist in help-content.js.
   const ids = [...code.matchAll(/help: '([a-z-]+)'/g)].map(m => m[1]);
   assert.deepEqual(ids, ['pack-list', 'allergens', 'nutrition'],
@@ -354,20 +360,29 @@ test('the settings panel kept the settings and gave up the records', () => {
   }
 });
 
-test('each moved piece has exactly one home, and one importer', () => {
-  const importers = (needle) => ['js/orders/registry.js', 'js/orders/registry-main.js',
-    'js/orders/management.js', 'js/orders/orders-main.js', 'js/orders/ingredient-form.js']
-    .filter(f => new RegExp(`from '\\./${needle}'`).test(read(f)));
-  assert.deepEqual(importers('ingredient-form.js'), ['js/orders/registry.js'],
-    'the ingredient form is reached from the records screen and nowhere else');
-  assert.deepEqual(importers('registry.js'), ['js/orders/registry-main.js']);
+test('each moved piece has exactly one home, and is opened by the two screens that need it', () => {
+  const files = ['js/orders/registry.js', 'js/orders/registry-main.js', 'js/orders/management.js',
+    'js/orders/orders-main.js', 'js/catalogue/catalogue-main.js', 'js/catalogue/catalogue-editor.js',
+    'js/catalogue/ingredient-create.js'];
+  const importers = (pattern) => files.filter(f => pattern.test(read(f)));
+  // ⚠️ Since 13 Sep 2026 the two cards live in js/ root: «Fornitori e ingredienti» opens them,
+  // and so does a recipe row in the Catalogue. Nobody else — a third caller would be a third
+  // place deciding the price and the panels.
+  assert.deepEqual(importers(/from '\.\.\/ingredient-record-form\.js'/),
+    ['js/orders/registry.js', 'js/catalogue/ingredient-create.js'],
+    'the ingredient card is reached from the records screen and from a recipe row, nowhere else');
+  assert.deepEqual(importers(/from '\.\.\/supplier-record-form\.js'/),
+    ['js/orders/registry.js', 'js/catalogue/ingredient-create.js']);
+  assert.throws(() => read('js/orders/ingredient-form.js'), /ENOENT/,
+    'the old copy is gone — two ingredient cards would be two places to fix an allergen rule');
+  assert.deepEqual(files.filter(f => /from '\.\/registry\.js'/.test(read(f))), ['js/orders/registry-main.js']);
 });
 
 test('⚠️ the page and its four modules are precached, or an offline install gets nothing', () => {
   // install() is all-or-nothing: one missing entry and NOTHING is cached for this
   // version. This is the single failure in this project that does not self-heal.
   for (const asset of ['./suppliers.html', './js/orders/registry.js', './js/orders/registry-main.js',
-    './js/orders/ingredient-form.js', './js/orders/mgmt-ui.js']) {
+    './js/ingredient-record-form.js', './js/orders/mgmt-ui.js']) {
     assert.ok(SW.includes(`'${asset}'`), `sw.js must precache ${asset}`);
   }
   // Every script the page loads has to be in there too — a new one added later would

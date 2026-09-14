@@ -890,6 +890,8 @@
 /* The tick on the current pick. A flex box, or the SVG rests on a text baseline. */
 .pick-suggest-check { flex: none; display: flex; align-items: center; color: var(--brand); }
 .pick-suggest-all { justify-content: center; font-size: .86rem; font-weight: 600; color: var(--text-2); }
+/* «+ Crea "…"» — an action, not a match, so it reads in the brand's colour. */
+.pick-suggest-extra { font-size: .86rem; font-weight: 600; color: var(--brand); }
 
 /* The chooser: a positioning shell, a header the calling page dresses, a capped body. */
 .pick-overlay {

@@ -1110,6 +1110,11 @@ input.ing-stock {
 .mgmt-form-actions { display: flex; gap: 10px; margin-top: 6px; }
 .mgmt-form-actions .btn-secondary { flex: 1; }
 .mgmt-form-actions .btn-primary { flex: 2; margin-top: 0; }
+/* «+ Nuovo fornitore» under an ingredient card's supplier menu: an action the size of its
+   words, at the left edge like everything else in the card — not a full-width bar. The 44px
+   is the finger target (P18), and centring the words in it is also what keeps them off the
+   menu above and the next label below: measured at 1px from the menu without it. */
+.mgmt-add-inline { display: inline-flex; align-items: center; min-height: 44px; }
 
 /* The confirmation dialog moved to the shared .app-dialog-* component
    (js/orders/confirm-dialog.js + tokens.css); .btn-danger went with it — the

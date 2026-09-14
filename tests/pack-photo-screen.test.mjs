@@ -22,7 +22,7 @@ const read = (name) => readFileSync(new URL(name, root), 'utf8');
 const codeOf = (src) => src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
 
 const CAPTURE = codeOf(read('js/orders/photo-capture.js'));
-const FORM = codeOf(read('js/orders/ingredient-form.js'));
+const FORM = codeOf(read('js/ingredient-record-form.js'));
 const REGISTRY = codeOf(read('js/orders/registry.js'));
 const FEATURES = codeOf(read('js/orders/firebase-features.js'));
 const SETTINGS = codeOf(read('js/orders/registry-settings.js'));

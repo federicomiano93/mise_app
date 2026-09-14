@@ -25,6 +25,9 @@ const SCREENS = [
   // the caller and must never format a price of their own.
   'js/pick-suggest.js',
   'js/pick-screen.js',
+  // ⚠️ Since 13 Sep 2026 a recipe row can add a missing ingredient with the records' own card.
+  // The price box inside that card is the CARD's; the catalogue's own code handles no money.
+  'js/catalogue/ingredient-create.js',
 ];
 
 test('⚠️ no catalogue screen computes or formats money', () => {

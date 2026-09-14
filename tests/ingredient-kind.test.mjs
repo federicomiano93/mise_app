@@ -29,7 +29,7 @@ test('the rules accept exactly the same two values', () => {
 });
 
 test('⚠️⚠️ the card files the kind, and packaging neither shows nor WRITES allergens', () => {
-  const form = codeOf(read('js/orders/ingredient-form.js'));
+  const form = codeOf(read('js/ingredient-record-form.js'));
   assert.match(form, /const startKind = item \? kindOf\(item\) : \(presetKind === 'packaging' \? 'packaging' : 'ingredient'\);/,
     'an existing item opens on its own kind; a new one on the list it was added from');
   assert.match(form, /kind: kindSelect\.value,/, 'the kind travels with the save');

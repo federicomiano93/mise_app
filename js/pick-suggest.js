@@ -31,8 +31,11 @@ let lists = 0;
 //                      keystroke, so data still arriving is offered as it lands
 //   onPick(value)    → an item was tapped (its `value`, whatever the caller put there)
 //   onSeeAll(typed)  → optional: offered as a last row when `total` is more than shown
+//   extra(typed)     → optional { label } for a last row that is not a match — «create it» —
+//                      or null when there is none to offer
+//   onExtra(typed)   → that row was tapped
 //   texts            → { list: 'label for a screen reader', seeAll: n => '…', linked: '…' }
-export function attachSuggestions(input, { suggest, onPick, onSeeAll = null, texts = {} }) {
+export function attachSuggestions(input, { suggest, onPick, onSeeAll = null, extra = null, onExtra = null, texts = {} }) {
   const listId = `pick-suggest-${++lists}`;
   const list = el('div', { class: 'pick-suggest', id: listId, role: 'listbox', 'aria-label': texts.list || null });
   list.hidden = true;
@@ -57,9 +60,13 @@ export function attachSuggestions(input, { suggest, onPick, onSeeAll = null, tex
   function paint() {
     const typed = input.value;
     const result = suggest(typed) || { items: [], total: 0 };
-    if (!result.items || !result.items.length) { close(); return; }
-    entries = result.items.map(item => ({ item }));
-    if (onSeeAll && result.total > result.items.length) entries.push({ seeAll: result.total, typed });
+    const items = result.items || [];
+    // ⚠️ THE «CREATE IT» ROW MAY BE THE ONLY ROW: nothing matching is exactly when it is wanted.
+    const extraRow = extra && onExtra ? extra(typed) : null;
+    if (!items.length && !extraRow) { close(); return; }
+    entries = items.map(item => ({ item }));
+    if (onSeeAll && result.total > items.length) entries.push({ seeAll: result.total, typed });
+    if (extraRow) entries.push({ extra: extraRow, typed });
     active = -1;
     list.replaceChildren(...entries.map(row));
     list.hidden = false;
@@ -69,6 +76,12 @@ export function attachSuggestions(input, { suggest, onPick, onSeeAll = null, tex
 
   function row(entry, index) {
     const id = `${listId}-${index}`;
+    if (entry.extra) {
+      return el('div', {
+        class: 'pick-suggest-row pick-suggest-extra', id, role: 'option', 'aria-selected': 'false',
+        onclick: () => choose(index), text: entry.extra.label,
+      });
+    }
     if (entry.seeAll) {
       return el('div', {
         class: 'pick-suggest-row pick-suggest-all', id, role: 'option', 'aria-selected': 'false',
@@ -95,6 +108,7 @@ export function attachSuggestions(input, { suggest, onPick, onSeeAll = null, tex
     const entry = entries[index];
     if (!entry) return;
     close();
+    if (entry.extra) { onExtra(entry.typed); return; }
     if (entry.seeAll) { onSeeAll(entry.typed); return; }
     onPick(entry.item.value);
   }

@@ -24,8 +24,19 @@ import { suggestLinks } from './catalogue-model.js';
 //   linked()         → the row's current { kind, refId }, or null
 //   onPick(chosen)   → { kind, refId, name } was tapped
 //   onSeeAll(query)  → open the full chooser with what was typed
-export function attachLinkSuggestions(input, { options, linked, onPick, onSeeAll }) {
+//   mayCreate()      → may this person add a missing ingredient here (asked at draw time)
+//   onCreate(name)   → «+ Crea "…" come ingrediente» was tapped
+export function attachLinkSuggestions(input, { options, linked, onPick, onSeeAll, mayCreate = () => false, onCreate = null }) {
   return attachSuggestions(input, {
+    // Federico, 13 Sep 2026: «se non c'è in anagrafica fammelo inserire direttamente dalla
+    // ricerca degli ingredienti». Offered under whatever was typed — never when an ingredient
+    // of exactly that name already exists, because then the row above it IS that ingredient.
+    extra: typed => {
+      const name = String(typed ?? '').trim();
+      if (!onCreate || !name || !mayCreate()) return null;
+      return nameTaken(options().ingredients, name) ? null : { label: t('cat.createIngredient', { name }) };
+    },
+    onExtra: typed => onCreate(String(typed ?? '').trim()),
     suggest: typed => {
       const result = suggestLinks({ ...options(), query: typed, linked: linked() });
       return {
@@ -49,4 +60,12 @@ export function attachLinkSuggestions(input, { options, linked, onPick, onSeeAll
       linked: t('cat.suggest.linked'),
     },
   });
+}
+
+// Is there already an ingredient called exactly this (ignoring case and spaces at the ends)?
+// `ingredients` is the store's map by id, or a list.
+export function nameTaken(ingredients, name) {
+  const wanted = String(name ?? '').trim().toLowerCase();
+  return Object.values(ingredients || {})
+    .some(ing => String(ing?.name ?? '').trim().toLowerCase() === wanted);
 }
