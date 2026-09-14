@@ -597,6 +597,51 @@ body.cat-zoom-lock { overflow: hidden; }
 .cat-pick-title { flex: 1; min-width: 0; text-align: center; }
 .cat-pick-title h1 { font-size: 18px; font-weight: 600; letter-spacing: -0.3px; }
 .cat-pick-spacer { width: 36px; flex-shrink: 0; display: flex; align-items: center; }
+
+/* ── Reordering the ingredients (13 Sep 2026) ──────────────────────────────
+   A mode, not a grip on every row: at 296px the row already holds a name, an amount, a
+   unit and a bin, and a fifth control would take its width from the NAME. While
+   reordering, each row is its grip and its name — nothing to type into, nothing to hit
+   by accident. The grip is the Home cards' own (.home-cards-grip, tokens.css). */
+.cat-ing-head { display: flex; align-items: center; gap: 8px; }
+.cat-reorder-btn {
+  margin-left: auto;
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--cat-border);
+  border-radius: 999px;
+  background: var(--cat-surface);
+  color: var(--cat-text);
+  font-family: var(--cat-font);
+  font-size: .82rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.cat-reorder-btn[hidden] { display: none; }
+.cat-reorder-btn:active { transform: scale(.97); }
+.cat-reorder-btn:focus-visible { outline: 2px solid var(--cat-accent); outline-offset: 2px; }
+.cat-reorder-hint { margin: 0 0 6px; font-size: .78rem; color: var(--cat-text-2); }
+.cat-reorder-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 8px 2px 2px;
+  border-bottom: 1px solid var(--cat-border);
+  background: var(--cat-surface);
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+.cat-reorder-row:last-child { border-bottom: 0; }
+/* The Home's grip pulls itself left into its row's padding; this row has 2px of it. */
+.cat-reorder-grip { margin-left: 0; }
+.cat-reorder-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .95rem; color: var(--cat-text); }
+.cat-reorder-amount { flex-shrink: 0; font-family: var(--cat-font-mono); font-size: .78rem; color: var(--cat-text-2); }
+/* The drag's three states — the values the Calculator's client list uses (style.css
+   .cp-sortable-*), which this page does not load. */
+.cat-sortable-ghost { opacity: 0.35; }
+.cat-sortable-chosen { box-shadow: var(--shadow-sheet); }
+.cat-sortable-drag { opacity: 0.95; background: var(--cat-surface-2); }
 /* ═══════════════════════════════════════════════════════════════════════════
    GUIDED MIXING
    A screen someone stands in front of with their hands in dough. Everything

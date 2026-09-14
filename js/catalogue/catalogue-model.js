@@ -414,6 +414,22 @@ export function applyLink(row, chosen) {
   return row;
 }
 
+// The rows in a new order: the one at `from` moved to `to`. Returns a NEW list holding the
+// SAME row objects — a row keeps its link and, above all, its `rid`, which is what a guided
+// mixing step points at, so reordering the ingredients never unhooks a step (13 Sep 2026:
+// «dammi la possibilità di spostare l'ordine degli ingredienti già compilati»).
+// An index outside the list, or a move to where it already is, gives the list back as it was.
+export function moveRow(list, from, to) {
+  const rows = Array.isArray(list) ? list.slice() : [];
+  const a = Math.trunc(Number(from));
+  const b = Math.trunc(Number(to));
+  if (!Number.isInteger(a) || !Number.isInteger(b) || a === b
+    || a < 0 || b < 0 || a >= rows.length || b >= rows.length) return rows;
+  const [row] = rows.splice(a, 1);
+  rows.splice(b, 0, row);
+  return rows;
+}
+
 // ── kg scaling (pure pro-rata "total" — the catalogue's only calc logic) ──────
 
 // Round an array of gram values so the displayed integers sum EXACTLY to

@@ -1809,6 +1809,12 @@ const DICTIONARIES = Object.freeze({
     'fc.packagingPer.kg': 'per kg',
     'fc.packagingPer.unit': 'per unit sold',
     'fc.packagingQtyFor': 'Quantity {per}',
+    // ── Reordering a recipe's ingredients (13 Sep 2026) ──
+    'cat.reorder': 'Reorder',
+    'cat.reorderDone': 'Done',
+    'cat.reorderHint': 'Hold an ingredient and drag it to its place. With a keyboard, use the up and down arrows.',
+    'cat.moveRow': 'Move «{name}»',
+    'cat.unnamedRow': '(no name)',
     // ── Labour (13 Sep 2026) ──
     'fc.labour': 'Work time',
     'fc.labourMinutes': 'Minutes of work for one batch',
@@ -3916,6 +3922,12 @@ const DICTIONARIES = Object.freeze({
     'fc.packagingPer.kg': 'per kg',
     'fc.packagingPer.unit': 'per unità venduta',
     'fc.packagingQtyFor': 'Quantità {per}',
+    // ── Riordinare gli ingredienti di una ricetta (13 set 2026) ──
+    'cat.reorder': 'Riordina',
+    'cat.reorderDone': 'Fine',
+    'cat.reorderHint': 'Tieni premuto un ingrediente e trascinalo al suo posto. Con la tastiera usa le frecce su e giù.',
+    'cat.moveRow': 'Sposta «{name}»',
+    'cat.unnamedRow': '(senza nome)',
     // ── Il lavoro (13 set 2026) ──
     'fc.labour': 'Tempo di lavoro',
     'fc.labourMinutes': 'Minuti di lavoro per un’infornata',
