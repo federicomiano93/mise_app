@@ -224,6 +224,16 @@ export function renderEditor({ product, draft = null, app }) {
     if (perUnit) {
       prodCost.appendChild(el('p', { class: 'fc-answer-basis', text: t('fc.wholeBatch', { cost: formatMoney(cost.batchCost) }) }));
     }
+    // The work, beside the materials — drawn only when there is a figure, which needs the
+    // hourly rate, which only whoever runs the place is ever sent.
+    if (cost.labourUnitCost !== null) {
+      prodCost.appendChild(el('p', { class: 'fc-answer-basis', text: t('fc.costSplit', {
+        materials: formatRate(cost.unitCost), labour: formatRate(cost.labourUnitCost),
+      }) }));
+      prodCost.appendChild(el('p', { class: 'fc-answer-basis', text: t('fc.costTotal', {
+        total: formatRate(cost.totalUnitCost), unit: t(UNIT_TEXT[cost.unit]),
+      }) }));
+    }
     // ⚠️ THE SAME RULE AS THE ANSWER BELOW: a partial cost is always too LOW, so it may
     // never be shown without saying so.
     if (cost.partial) prodCost.appendChild(el('p', { class: 'fc-answer-partial', text: t('fc.costPartial') }));
@@ -236,6 +246,10 @@ export function renderEditor({ product, draft = null, app }) {
     const tables = liveTables();
     paintProductionCost();
     paintSuggestion(tables);
+    // Minutes typed but no rate to turn them into money: say where the rate is set — and
+    // only to somebody who can set it; an employee is simply shown no labour money.
+    labourNote.textContent = working.labourMinutes > 0 && app.mayManage() && !(Number(tables.labourCostPerHour) > 0)
+      ? t('fc.labourSetRate') : '';
     const result = costProduct(working, tables);
     answer.replaceChildren();
 
@@ -267,6 +281,14 @@ export function renderEditor({ product, draft = null, app }) {
     }) }));
 
     if (status) answer.appendChild(el('p', { class: 'fc-answer-status', text: t(STATUS_TEXT[status]) }));
+
+    // ⚠️ BESIDE THE FOOD COST, NEVER INSIDE IT: the percentage above stays what the
+    // ingredients and packaging take; this says what the work takes, and everything.
+    if (result.labourPct !== null) {
+      answer.appendChild(el('p', { class: 'fc-answer-basis', text: t('fc.labourPctLine', {
+        labour: String(result.labourPct), total: String(result.totalCostPct),
+      }) }));
+    }
 
     // ⚠️ A PARTIAL COST MUST NEVER LOOK COMPLETE. If a recipe inside this product
     // is only partly priced, the percentage is real but too LOW — the one
@@ -567,6 +589,20 @@ export function renderEditor({ product, draft = null, app }) {
     el('p', { class: 'fc-note', text: t('fc.packHoldsNote') }),
   ]);
 
+  // ── The time it takes (13 Sep 2026) ─────────────────────────────────────────
+  //
+  // Federico: «nella sezione food cost dobbiamo aggiungere tempo di produzione della
+  // ricetta … il costo del lavoro orario e l'app mi dice quanto è il costo del lavoro».
+  // His choice: minutes and people ON THE PRODUCT, one hourly cost for the venue.
+  // ⚠️ THE MINUTES ARE NOT MONEY, so whoever edits the product sees them; what they COST
+  // is drawn only when the rate is known, which is only for whoever runs the place.
+  const labourMinutesInput = numberInput('fcLabourMinutes', t('fc.labourMinutes'),
+    working.labourMinutes, v => { working.labourMinutes = v; });
+  const labourPeopleInput = numberInput('fcLabourPeople', t('fc.labourPeople'),
+    working.labourPeople, v => { working.labourPeople = v; });
+  labourPeopleInput.placeholder = '1';
+  const labourNote = el('p', { class: 'fc-labour-note' });
+
   // ⚠️ GROSS, and the label says so. The number typed here is the one on the
   // label; the app takes the VAT out before working out the food cost.
   const priceInput = numberInput('fcPrice', t('fc.sellingPriceIncludingVat'),
@@ -822,6 +858,14 @@ export function renderEditor({ product, draft = null, app }) {
     packagingRows,
     el('button', { class: 'fc-add-row', type: 'button', text: t('fc.addPackaging'), onclick: () => addPackaging() }),
     el('p', { class: 'fc-note', text: t('fc.packagingPerNote') }),
+
+    el('h2', { class: 'fc-section', text: t('fc.labour') }),
+    el('div', { class: 'fc-labour-pair' }, [
+      field(t('fc.labourMinutes'), labourMinutesInput),
+      field(t('fc.labourPeople'), labourPeopleInput),
+    ]),
+    el('p', { class: 'fc-note', text: t('fc.labourNote') }),
+    labourNote,
 
     el('h2', { class: 'fc-section', text: t('fc.howItIsSold') }),
     field(t('fc.sold'), modeSelect),

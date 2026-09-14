@@ -206,3 +206,36 @@ export async function getProductHistory(productId, max = 30) {
 export function canManageHere() {
   return currentSession().canManage === true;
 }
+
+// ── What an hour of work costs this venue (13 Sep 2026) ──────────────────────
+//
+// Federico: «potremmo anche mettere una sezione dove io metto il costo del lavoro orario
+// e l'app mi dice quanto è il costo del lavoro per quella ricetta», and, asked who may
+// see it: ONLY whoever runs the place — it is a wage figure.
+//
+// ⚠️ ITS OWN DOCUMENT, locations/{lid}/foodcost-settings/main, readable and writable only
+// by canManage(lid, 'foodcost'). Not config/* (every member reads config) and not the
+// location document (every member reads that too, and only a Cloud Function writes it).
+const SETTINGS = 'foodcost-settings';
+const SETTINGS_DOC = 'main';
+
+// Watched ONLY for whoever may read it — an employee's listener would be refused, and a
+// refused listener is noise in the console and a wasted read. Resolves an unsubscribe.
+export async function watchFoodcostSettings(onChange) {
+  await authReady;
+  return onSnapshot(
+    doc(db, pathFor(SETTINGS), SETTINGS_DOC),
+    snap => onChange(snap.exists() ? snap.data() : null),
+    err => { console.warn('watchFoodcostSettings failed:', err); onChange(null); },
+  );
+}
+
+// The hourly labour cost, or null to clear it. A MERGE with the stamp, so a field added
+// to this document later is never wiped by an older screen saving the rate.
+export async function saveLabourCostPerHour(rate) {
+  await authReady;
+  return setDoc(doc(db, pathFor(SETTINGS), SETTINGS_DOC), withBakery({
+    labourCostPerHour: rate,
+    updatedAt: new Date().toISOString(),
+  }), { merge: true });
+}

@@ -1645,6 +1645,15 @@ async function products() {
     wholeWrite(`${P}/LEGACY`, product({ model: 2 })));
   await expectAllowed('a new product created with the model', () => createWrite(P, product({ model: 2 })));
 
+  // ── The time one batch takes (13 Sep 2026). Not money: the rate is elsewhere. ──
+  await expectAllowed('a product with the time one batch takes, and how many people', () =>
+    wholeWrite(`${P}/P1`, product({ model: 2, labourMinutes: 90, labourPeople: 2 })));
+  await expectAllowed('…or with the time cleared', () =>
+    wholeWrite(`${P}/P1`, product({ model: 2, labourMinutes: null, labourPeople: null })));
+  await expectDenied('work time of zero minutes', () => wholeWrite(`${P}/P1`, product({ model: 2, labourMinutes: 0 })));
+  await expectDenied('work time sent as text', () => wholeWrite(`${P}/P1`, product({ model: 2, labourMinutes: '90' })));
+  await expectDenied('nobody working on it', () => wholeWrite(`${P}/P1`, product({ model: 2, labourPeople: 0 })));
+
   await expectAllowed('a member may delete a product', () => deleteWrite(`${P}/P2`));
 
   // ── The margin history ──
@@ -2897,6 +2906,26 @@ async function staffCards() {
   await expectAllowed('…and the price history', readAs(SAM, `${L}/ingredients/flour/prices/H1`));
   await expectAllowed('…and writes a product', () =>
     mergeWrite(`${L}/products/P2`, { ...stamp, name: 'P2' }, asAccount(SAM)));
+  // ⚠️⚠️ BUT NOT WHAT AN HOUR OF WORK COSTS (13 Sep 2026). Federico: the hourly labour cost
+  // is for whoever runs the place, even where employees are shown the rest of Food cost.
+  await seedDoc(`${L}/foodcost-settings/main`, { ...stamp, labourCostPerHour: 14.5, updatedAt: '2026-09-13' });
+  await expectDenied('⚠️⚠️ a shown employee still cannot read the hourly labour cost', readAs(SAM, `${L}/foodcost-settings/main`));
+  await expectDenied('…nor change it', () =>
+    mergeWrite(`${L}/foodcost-settings/main`, { ...stamp, labourCostPerHour: 1 }, asAccount(SAM)));
+  await expectAllowed('the manager reads it', readAs(MAYA, `${L}/foodcost-settings/main`));
+  await expectAllowed('…and sets it', () =>
+    mergeWrite(`${L}/foodcost-settings/main`, { ...stamp, labourCostPerHour: 15, updatedAt: '2026-09-14' }, asAccount(MAYA)));
+  await expectAllowed('…or clears it', () =>
+    mergeWrite(`${L}/foodcost-settings/main`, { ...stamp, labourCostPerHour: null }, asAccount(MAYA)));
+  await expectDenied('a rate of zero', () =>
+    mergeWrite(`${L}/foodcost-settings/main`, { ...stamp, labourCostPerHour: 0 }, asAccount(MAYA)));
+  await expectDenied('a rate sent as text', () =>
+    mergeWrite(`${L}/foodcost-settings/main`, { ...stamp, labourCostPerHour: '15' }, asAccount(MAYA)));
+  await expectDenied('an unknown key in the settings', () =>
+    mergeWrite(`${L}/foodcost-settings/main`, { ...stamp, wages: 1 }, asAccount(MAYA)));
+  await expectDenied('a second settings document', () =>
+    mergeWrite(`${L}/foodcost-settings/other`, { ...stamp, labourCostPerHour: 15 }, asAccount(MAYA)));
+  await expectDenied('deleting the settings', () => deleteWrite(`${L}/foodcost-settings/main`, asAccount(MAYA)));
   await expectAllowed('…and records a margin snapshot', () =>
     createWrite(`${L}/products/P1/snapshots`, {
       ...stamp, recordedAt: '2026-09-13', unitCost: 1.2, foodCostPct: 30, sellingPrice: 4,

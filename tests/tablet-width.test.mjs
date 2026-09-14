@@ -77,6 +77,7 @@ const MUST_BE_CAPPED = [
   '.pas-header',
   '.pas-footer',
   '.fc-header',
+  '.fc-footer',
   '.inv-header',
   '.inv-strip',
   '.inv-footer',

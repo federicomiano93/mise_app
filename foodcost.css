@@ -328,6 +328,49 @@ select.fc-input, .fc-select {
 .fc-pack-row .fc-select { width: 6.5rem; flex-shrink: 0; }
 .fc-registry-link { align-self: flex-start; }
 
+/* The time one batch takes: minutes and people, side by side. */
+.fc-labour-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.fc-labour-pair .fc-field { min-width: 0; }
+.fc-labour-note { margin: 0; font-size: .78rem; color: var(--fc-text-2); }
+.fc-labour-note:empty { display: none; }
+
+/* ── Bottom bar (13 Sep 2026) ──────────────────────────────────────────────
+   The same pair .inv-footer and .cat-footer settled on (tests/bottom-bar.test.mjs): the
+   BAR is the page's own ground, the BUTTON the raised surface. */
+.fc-footer {
+  flex-shrink: 0;
+  display: flex;
+  gap: 8px;
+  padding: 8px 12px calc(8px + env(safe-area-inset-bottom));
+  padding-inline: max(12px, var(--app-gutter));
+  background: var(--fc-ground);
+  border-top: 1px solid var(--fc-border);
+}
+.fc-footer[hidden] { display: none; }
+.fc-footer-btn {
+  flex: 1;
+  min-width: 0;
+  min-height: 44px;
+  padding: 8px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px solid var(--fc-border);
+  border-radius: var(--radius-sm);
+  background: var(--fc-surface);
+  color: var(--fc-text);
+  font-family: var(--fc-font);
+  font-size: .84rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+/* An SVG beside a word is a flex row, or it rests on the text baseline (PR #31). */
+.fc-footer-btn span { display: flex; align-items: center; }
+.fc-footer-btn:active { transform: scale(.97); }
+.fc-footer-btn:focus-visible { outline: 2px solid var(--fc-accent); outline-offset: 2px; }
+.fc-footer-btn[hidden] { display: none; }
+
 /* ── Actions. Save is prominent, Delete is low-key (P20). ─────────────────── */
 .fc-actions { display: flex; flex-direction: column; gap: 10px; margin-top: 18px; }
 .fc-save {

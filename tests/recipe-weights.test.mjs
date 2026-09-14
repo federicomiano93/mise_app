@@ -123,7 +123,7 @@ test('⚠️⚠️ the Food cost product is where they are typed, and Save hands
   assert.match(FC_EDITOR, /const patches = weighingPatches\(app\.tables\(\)\.recipes, weighings,\s*clean\.components\.filter\(c => c\.recipeId\)\.map\(c => c\.recipeId\)\);/,
     'Save asks the model which recipes to write — only those on the product, only real changes');
   assert.match(FC_EDITOR, /app\.saveProduct\(clean, snapshot, patches\);/);
-  assert.match(FC_EDITOR, /const tables = liveTables\(\);\s*paintProductionCost\(\);\s*paintSuggestion\(tables\);\s*const result = costProduct\(working, tables\);/,
+  assert.match(FC_EDITOR, /const tables = liveTables\(\);\s*paintProductionCost\(\);\s*paintSuggestion\(tables\);[\s\S]{0,400}?const result = costProduct\(working, tables\);/,
     'the answer at the top — and the suggested price — are worked out WITH the weighing being typed, not after Save');
 });
 

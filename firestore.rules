@@ -1812,6 +1812,31 @@ service cloud.firestore {
       // ⚠️ SINCE 13 Sep 2026 A VENUE MAY SHOW FOOD COST TO ITS EMPLOYEES (cardAccess
       // above): then they read and write products and snapshots here — Federico chose
       // «tutto il Food cost». Deleting a product stays with whoever runs the place.
+      // ── What an hour of work costs this venue (13 Sep 2026) ──────────────
+      // ONE document, `main`. ⚠️ READ AND WRITTEN ONLY BY WHOEVER RUNS THE PLACE: it is a
+      // wage figure, and Federico chose that employees shown Food cost do NOT see it.
+      // Not config/* (every member reads config) and not locations/{lid} (every member
+      // reads that, and only a Cloud Function writes it). canManage costs 3 reads.
+      match /foodcost-settings/{settingsId} {
+        allow read: if settingsId == 'main' && canManage(lid, 'foodcost');
+
+        allow create, update: if settingsId == 'main'
+          && canManage(lid, 'foodcost')
+          && stampedFor(lid)
+          && request.resource.data.keys().hasOnly(['bakery', 'labourCostPerHour', 'updatedAt'])
+          && (!('labourCostPerHour' in request.resource.data)
+              || request.resource.data.labourCostPerHour == null
+              || (request.resource.data.labourCostPerHour is number
+                  && request.resource.data.labourCostPerHour > 0
+                  && request.resource.data.labourCostPerHour <= 10000))
+          && (!('updatedAt' in request.resource.data)
+              || (request.resource.data.updatedAt is string
+                  && request.resource.data.updatedAt.size() <= 64));
+
+        // Clearing the rate is a write of null; the document itself is never removed.
+        allow delete: if false;
+      }
+
       match /products/{id} {
         allow read: if cardAccess(lid, 'foodcost', 'foodcost') != 'none';
 
@@ -1823,7 +1848,7 @@ service cloud.firestore {
           && request.resource.data.keys().hasOnly([
                'bakery', 'name', 'components', 'packaging', 'sellingMode',
                'piecesPerBatch', 'packSize', 'packUnit', 'sellingPrice', 'vatRate',
-               'foodCostTarget', 'model'
+               'foodCostTarget', 'model', 'labourMinutes', 'labourPeople'
              ])
           && request.resource.data.name is string
           && request.resource.data.name.size() > 0
@@ -1853,6 +1878,16 @@ service cloud.firestore {
               || (request.resource.data.model is int
                   && request.resource.data.model >= 1
                   && request.resource.data.model <= 100))
+          && (!('labourMinutes' in request.resource.data)
+              || request.resource.data.labourMinutes == null
+              || (request.resource.data.labourMinutes is number
+                  && request.resource.data.labourMinutes > 0
+                  && request.resource.data.labourMinutes <= 100000))
+          && (!('labourPeople' in request.resource.data)
+              || request.resource.data.labourPeople == null
+              || (request.resource.data.labourPeople is number
+                  && request.resource.data.labourPeople > 0
+                  && request.resource.data.labourPeople <= 1000))
           // ⚠️⚠️ THE OLD-PHONE GUARD, AND IT COSTS NO READ. A product is written WHOLE, so a
           // phone still on the version before ingredient lines and packs would save it back
           // without them and delete them in silence. Once a product carries `model`, a save

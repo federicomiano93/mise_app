@@ -189,6 +189,10 @@ export function normalizeProduct(raw) {
     sellingPrice: positiveNumber(raw.sellingPrice),
     vatRate: zeroOrMore(raw.vatRate),
     foodCostTarget: positiveNumber(raw.foodCostTarget),
+    // How long one batch takes to make, and by how many people (13 Sep 2026). Missing
+    // stays missing: no time said is not «no time taken».
+    labourMinutes: positiveNumber(raw.labourMinutes),
+    labourPeople: positiveNumber(raw.labourPeople),
     model: Number.isInteger(raw.model) && raw.model > 0 ? raw.model : null,
   };
 }
@@ -382,6 +386,31 @@ function unitCostOf(p, batch, packaging) {
   return roundTo(share + (packaging ? packaging.cost : 0), 4);
 }
 
+// What the WORK on one batch costs: minutes × people × what an hour costs the venue — or
+// null while any of the three is missing. People left empty count as one.
+//
+// Federico, 13 Sep 2026: time on the PRODUCT, one hourly cost for the venue, and — asked
+// who may see it — only whoever runs the place. So `tables.labourCostPerHour` is simply
+// absent for anybody else, and every labour figure below is null for them.
+// ⚠️ LABOUR NEVER ENTERS THE FOOD COST %. Food cost is what the ingredients and packaging
+// take of the price, the number every kitchen compares; labour is shown beside it.
+export function labourBatchCost(product, tables = {}) {
+  const p = product && Array.isArray(product.components) && 'labourMinutes' in product ? product : normalizeProduct(product);
+  if (!p) return null;
+  const rate = positiveNumber(tables && tables.labourCostPerHour);
+  if (rate === null || p.labourMinutes === null) return null;
+  const people = p.labourPeople === null ? 1 : p.labourPeople;
+  return roundTo(p.labourMinutes / 60 * people * rate, 4);
+}
+
+// One unit's share of the labour — the same division as its share of the materials.
+function labourPerUnit(p, batch, tables) {
+  const labour = labourBatchCost(p, tables);
+  if (labour === null) return null;
+  const share = perUnitOf(p, batch, labour);
+  return share === null ? null : roundTo(share, 4);
+}
+
 function unitOf(p) {
   return p.sellingMode === 'weight' ? 'kg' : p.sellingMode === 'pack' ? 'pack' : 'piece';
 }
@@ -404,10 +433,15 @@ export function productionCost(product, tables = {}) {
   const packaging = packagingPerUnit(p, tables);
   const units = p ? unitsPerBatch(p, batch) : null;
   const unitCost = unitCostOf(p, batch, packaging);
+  const labourUnitCost = p ? labourPerUnit(p, batch, tables) : null;
   return {
     batchCost: batch.cost > 0 ? roundTo(batch.cost + (units > 0 ? packaging.cost * units : 0), 4) : null,
     unitCost,
     unit: unitCost === null ? null : unitOf(p),
+    // The work, beside the materials — never inside unitCost (see labourBatchCost).
+    labourBatchCost: p ? labourBatchCost(p, tables) : null,
+    labourUnitCost,
+    totalUnitCost: unitCost !== null && labourUnitCost !== null ? roundTo(unitCost + labourUnitCost, 4) : null,
     // ⚠️ Packaging that cannot yet be multiplied out — no way of selling said — is missing
     // from the batch figure, so the batch figure is too LOW, and says so.
     partial: batch.partial || packaging.partial || (packaging.rows.length > 0 && !(units > 0)),
@@ -449,6 +483,23 @@ export function draftFromRecipe(recipe) {
   };
 }
 
+// The labour half of the answer, beside the food cost — null throughout while the time or
+// the rate is missing. `labourPct` and `totalCostPct` are shares of the NET price, like
+// the food cost itself, so the three numbers can be read side by side.
+function labourAnswer(p, batch, tables, unitCost, netUnitPrice) {
+  const labourUnitCost = labourPerUnit(p, batch, tables);
+  if (labourUnitCost === null || unitCost === null || !(netUnitPrice > 0)) {
+    return { labourUnitCost, totalUnitCost: null, labourPct: null, totalCostPct: null };
+  }
+  const totalUnitCost = roundTo(unitCost + labourUnitCost, 4);
+  return {
+    labourUnitCost,
+    totalUnitCost,
+    labourPct: roundTo(labourUnitCost / netUnitPrice * 100, 2),
+    totalCostPct: roundTo(totalUnitCost / netUnitPrice * 100, 2),
+  };
+}
+
 // The whole answer for one product.
 //
 //   { unitCost, netUnitPrice, foodCostPct, margin, status, partial, blockers, batch, packaging }
@@ -480,6 +531,7 @@ export function costProduct(product, tables = {}) {
   const base = {
     unitCost: null, netUnitPrice: null, foodCostPct: null, margin: null,
     status: null, partial: batch.partial || packaging.partial, blockers, batch, packaging,
+    labourUnitCost: null, totalUnitCost: null, labourPct: null, totalCostPct: null,
   };
   if (blockers.length) return base;
 
@@ -504,6 +556,7 @@ export function costProduct(product, tables = {}) {
     // percentage is the comparable number; this is the one that pays the rent.
     margin: roundTo(netUnitPrice - unitCost, 4),
     status: statusFor(foodCostPct, p.foodCostTarget),
+    ...labourAnswer(p, batch, tables, unitCost, netUnitPrice),
   };
 }
 
