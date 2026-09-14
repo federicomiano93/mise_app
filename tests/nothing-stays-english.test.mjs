@@ -70,6 +70,12 @@ const EXEMPT = new Map([
   // It is not unguarded: tests/market.test.mjs asserts it holds words and never
   // sentences, which is a stricter rule than this one.
   ['js/market.js', 'it holds the LABEL words, keyed by country — market.test.mjs guards it'],
+  // ⚠️ THE VAT GUIDE'S ITEMS NAME FOODS, SO THEY FOLLOW THE COUNTRY, NOT THE SCREEN — the
+  // rule every food word in this app obeys since v1.68.0. The UK half is therefore English
+  // on purpose, and cannot live in the interface dictionary without being translated by
+  // preference. Guarded instead by foodcost-vat-guide.test.mjs: no i18n import, a source
+  // and a date for each country, every rate the menu offers.
+  ['js/foodcost/vat-guide.js', 'the VAT guide’s food words, keyed by country — foodcost-vat-guide.test.mjs guards it'],
 ]);
 
 function jsFiles(dir, out = []) {

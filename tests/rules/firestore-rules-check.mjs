@@ -285,6 +285,17 @@ async function ingredients() {
 
   await expectDenied('an unknown key on an ingredient',
     () => mergeWrite('locations/main/ingredients/ING_MODERN', { evil: 'x', bakery: 'main' }));
+  // ── Packaging is an item too (13 Sep 2026) ──
+  await expectAllowed('an item filed as packaging',
+    () => mergeWrite('locations/main/ingredients/ING_MODERN', { kind: 'packaging', bakery: 'main' }));
+  await expectAllowed('…and filed back as an ingredient',
+    () => mergeWrite('locations/main/ingredients/ING_MODERN', { kind: 'ingredient', bakery: 'main' }));
+  await expectAllowed('…or with the kind cleared', () =>
+    mergeWrite('locations/main/ingredients/ING_MODERN', { kind: null, bakery: 'main' }));
+  await expectDenied('a kind nobody writes',
+    () => mergeWrite('locations/main/ingredients/ING_MODERN', { kind: 'box', bakery: 'main' }));
+  await expectDenied('a kind sent as a number',
+    () => mergeWrite('locations/main/ingredients/ING_MODERN', { kind: 1, bakery: 'main' }));
   await expectDenied('an ingredient stamped with the wrong bakery',
     () => mergeWrite('locations/main/ingredients/ING_MODERN', { active: true, bakery: 'other' }));
   await expectDenied('a 5000-character ingredient name',
@@ -1600,6 +1611,49 @@ async function products() {
   await expectDenied('a product stamped for another location', () =>
     wholeWrite(`${P}/P1`, product({ bakery: 'trattoria-x' })));
 
+  // ── By the pack, ingredients on the lines, and the product model (13 Sep 2026) ──
+  await expectAllowed('sold by the pack, the pack holding a weight', () =>
+    wholeWrite(`${P}/P1`, product({ sellingMode: 'pack', packSize: 250, packUnit: 'g', model: 2 })));
+  await expectAllowed('sold by the pack, the pack holding pieces', () =>
+    wholeWrite(`${P}/P1`, product({ sellingMode: 'pack', packSize: 6, packUnit: 'pcs', model: 2 })));
+  await expectAllowed('an ingredient added straight to the product, beside its recipe', () =>
+    wholeWrite(`${P}/P1`, product({ model: 2, components: [
+      { recipeId: 'DOUGH', qtyKg: 10 }, { kind: 'ingredient', ingredientId: 'SUGAR', qty: 50, unit: 'g' },
+    ] })));
+  await expectDenied('a pack unit nobody writes', () =>
+    wholeWrite(`${P}/P1`, product({ sellingMode: 'pack', packSize: 250, packUnit: 'box', model: 2 })));
+  await expectDenied('a pack that holds nothing', () =>
+    wholeWrite(`${P}/P1`, product({ sellingMode: 'pack', packSize: 0, packUnit: 'g', model: 2 })));
+  await expectDenied('a pack size sent as text', () =>
+    wholeWrite(`${P}/P1`, product({ sellingMode: 'pack', packSize: '250', packUnit: 'g', model: 2 })));
+  await expectDenied('a product model sent as text', () => wholeWrite(`${P}/P1`, product({ model: '2' })));
+  await expectDenied('a product model of zero', () => wholeWrite(`${P}/P1`, product({ model: 0 })));
+
+  // ⚠️⚠️ THE OLD-PHONE GUARD. A product is written WHOLE; a phone on the version before
+  // ingredient lines and packs would save one back without them and delete them.
+  await seedDoc(`${P}/MODEL2`, product({ model: 2, sellingMode: 'pack', packSize: 250, packUnit: 'g' }));
+  await expectDenied('⚠️⚠️ an out-of-date phone saving a model-2 product WITHOUT the model', () =>
+    wholeWrite(`${P}/MODEL2`, product()));
+  await expectDenied('…nor saving it back as an older model', () =>
+    wholeWrite(`${P}/MODEL2`, product({ model: 1 })));
+  await expectAllowed('the current app saves it', () =>
+    wholeWrite(`${P}/MODEL2`, product({ model: 2, sellingMode: 'pack', packSize: 300, packUnit: 'g' })));
+  await seedDoc(`${P}/LEGACY`, product());
+  await expectAllowed('a product nobody has saved since stays writable by an old phone', () =>
+    wholeWrite(`${P}/LEGACY`, product({ sellingPrice: 1.3 })));
+  await expectAllowed('…and the current app brings it up to the model', () =>
+    wholeWrite(`${P}/LEGACY`, product({ model: 2 })));
+  await expectAllowed('a new product created with the model', () => createWrite(P, product({ model: 2 })));
+
+  // ── The time one batch takes (13 Sep 2026). Not money: the rate is elsewhere. ──
+  await expectAllowed('a product with the time one batch takes, and how many people', () =>
+    wholeWrite(`${P}/P1`, product({ model: 2, labourMinutes: 90, labourPeople: 2 })));
+  await expectAllowed('…or with the time cleared', () =>
+    wholeWrite(`${P}/P1`, product({ model: 2, labourMinutes: null, labourPeople: null })));
+  await expectDenied('work time of zero minutes', () => wholeWrite(`${P}/P1`, product({ model: 2, labourMinutes: 0 })));
+  await expectDenied('work time sent as text', () => wholeWrite(`${P}/P1`, product({ model: 2, labourMinutes: '90' })));
+  await expectDenied('nobody working on it', () => wholeWrite(`${P}/P1`, product({ model: 2, labourPeople: 0 })));
+
   await expectAllowed('a member may delete a product', () => deleteWrite(`${P}/P2`));
 
   // ── The margin history ──
@@ -1614,6 +1668,7 @@ async function products() {
   await expectAllowed('record a second one later', () =>
     createWrite(SNAPS, snap({ recordedAt: '2026-08-11T09:00:00.000Z', foodCostPct: 35 })));
   await expectAllowed('a zero-rated snapshot', () => createWrite(SNAPS, snap({ vatRate: 0 })));
+  await expectAllowed('a snapshot of a product sold by the pack', () => createWrite(SNAPS, snap({ sellingMode: 'pack' })));
   await expectAllowed('a product that costs nothing to make is still a valid point', () =>
     createWrite(SNAPS, snap({ unitCost: 0, foodCostPct: 0 })));
 
@@ -2851,6 +2906,26 @@ async function staffCards() {
   await expectAllowed('…and the price history', readAs(SAM, `${L}/ingredients/flour/prices/H1`));
   await expectAllowed('…and writes a product', () =>
     mergeWrite(`${L}/products/P2`, { ...stamp, name: 'P2' }, asAccount(SAM)));
+  // ⚠️⚠️ BUT NOT WHAT AN HOUR OF WORK COSTS (13 Sep 2026). Federico: the hourly labour cost
+  // is for whoever runs the place, even where employees are shown the rest of Food cost.
+  await seedDoc(`${L}/foodcost-settings/main`, { ...stamp, labourCostPerHour: 14.5, updatedAt: '2026-09-13' });
+  await expectDenied('⚠️⚠️ a shown employee still cannot read the hourly labour cost', readAs(SAM, `${L}/foodcost-settings/main`));
+  await expectDenied('…nor change it', () =>
+    mergeWrite(`${L}/foodcost-settings/main`, { ...stamp, labourCostPerHour: 1 }, asAccount(SAM)));
+  await expectAllowed('the manager reads it', readAs(MAYA, `${L}/foodcost-settings/main`));
+  await expectAllowed('…and sets it', () =>
+    mergeWrite(`${L}/foodcost-settings/main`, { ...stamp, labourCostPerHour: 15, updatedAt: '2026-09-14' }, asAccount(MAYA)));
+  await expectAllowed('…or clears it', () =>
+    mergeWrite(`${L}/foodcost-settings/main`, { ...stamp, labourCostPerHour: null }, asAccount(MAYA)));
+  await expectDenied('a rate of zero', () =>
+    mergeWrite(`${L}/foodcost-settings/main`, { ...stamp, labourCostPerHour: 0 }, asAccount(MAYA)));
+  await expectDenied('a rate sent as text', () =>
+    mergeWrite(`${L}/foodcost-settings/main`, { ...stamp, labourCostPerHour: '15' }, asAccount(MAYA)));
+  await expectDenied('an unknown key in the settings', () =>
+    mergeWrite(`${L}/foodcost-settings/main`, { ...stamp, wages: 1 }, asAccount(MAYA)));
+  await expectDenied('a second settings document', () =>
+    mergeWrite(`${L}/foodcost-settings/other`, { ...stamp, labourCostPerHour: 15 }, asAccount(MAYA)));
+  await expectDenied('deleting the settings', () => deleteWrite(`${L}/foodcost-settings/main`, asAccount(MAYA)));
   await expectAllowed('…and records a margin snapshot', () =>
     createWrite(`${L}/products/P1/snapshots`, {
       ...stamp, recordedAt: '2026-09-13', unitCost: 1.2, foodCostPct: 30, sellingPrice: 4,

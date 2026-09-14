@@ -24,7 +24,7 @@ const read = (name) => readFileSync(join(ROOT, name), 'utf8');
 // these tests forbid. Judge the CODE.
 const codeOf = (src) => src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
 
-const FORM = codeOf(read('js/orders/ingredient-form.js'));
+const FORM = codeOf(read('js/ingredient-record-form.js'));
 const REGISTRY = codeOf(read('js/orders/registry.js'));
 const DETAIL = codeOf(read('js/catalogue/catalogue-detail.js'));
 const CAT_MAIN = codeOf(read('js/catalogue/catalogue-main.js'));
@@ -150,7 +150,16 @@ test('⚠️⚠️ all five places ask, and the label is one of them', () => {
     // destructured. The camera button added inside it referred to `actions` and threw
     // ReferenceError the instant a product was opened — with 1843 tests green, because
     // no test executes this file. Only driving the screen showed it.
-    ['js/orders/ingredient-form.js', FORM, /allergenBlock\(item, ingredientPanels\(\), actions\)/],
+    // ⚠️ SINCE 13 Sep 2026 THE CARD IS HANDED ITS PANELS (it lives in js/ root and is opened
+    // by two screens), so the question is asked by each screen that opens it.
+    ['js/ingredient-record-form.js', FORM, /allergenBlock\(item, panels, actions\)/],
+    // ⚠️ Looked for INSIDE openIngredientForm: the settings screen further down passes the
+    // same words to its own switches, and a whole-file match went green with the card's gone.
+    ['js/orders/registry.js (opening the card)',
+      REGISTRY.slice(REGISTRY.indexOf('function openIngredientForm'), REGISTRY.indexOf('function capturePackPhoto')),
+      /panels: ingredientPanels\(\),/],
+    ['js/catalogue/ingredient-create.js', codeOf(read('js/catalogue/ingredient-create.js')),
+      /panels: \{ allergens: allergensOn\(location\), nutrition: nutritionOn\(location\), packPhoto: false \}/],
     ['js/orders/registry.js', REGISTRY, /ingredientPanels\(\)\.allergens && allergenState\(item\)/],
     ['js/catalogue/catalogue-detail.js', DETAIL, /if \(!allergensOn\(currentSession\(\)\.location\)\)/],
     ['js/catalogue/catalogue-main.js', CAT_MAIN, /allergensBtn\.hidden = !allergensOn\(/],
@@ -290,8 +299,10 @@ test('⚠️ every class this screen writes is defined in a stylesheet it loads'
   // load. Copied unrenamed, four buttons would have been bare grey rectangles with no
   // error anywhere. A guard scoped to the files a release owns has to gain the release's
   // new file, or it guards the wrong three.
-  for (const file of ['js/orders/ingredient-form.js', 'js/orders/registry-settings.js',
-    'js/orders/registry.js', 'js/orders/photo-capture.js']) {
+  for (const file of ['js/ingredient-record-form.js', 'js/orders/registry-settings.js',
+    'js/orders/registry.js', 'js/orders/photo-capture.js',
+    // The two shared cards and what they are built from (13 Sep 2026).
+    'js/supplier-record-form.js', 'js/record-ui.js', 'js/catalogue/ingredient-create.js']) {
     for (const m of codeOf(read(file)).matchAll(/\bclass: '([^'${}]+)'/g)) {
       for (const cls of m[1].split(/\s+/).filter(Boolean)) {
         if (!defined.has(cls)) offenders.push(`${file}: .${cls}`);

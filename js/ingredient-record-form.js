@@ -1,4 +1,4 @@
-// ingredient-form.js — one supplier product's whole record.
+// ingredient-record-form.js — one supplier product's whole record.
 //
 // Name, supplier, brand, pack weight, category and order unit; then what it COSTS
 // (for whoever may see money); then what is IN it — the fourteen allergens, the
@@ -7,7 +7,15 @@
 // It lived inside management.js, reached through a gear labelled «Settings». It is
 // not a setting: it is the record this bakery keeps about something it buys, and it
 // is the screen the whole allergen job happens on. It moved out with the rest of the
-// records (js/orders/registry.js) and is imported by that screen alone.
+// records (js/orders/registry.js).
+//
+// ⚠️ SHARED since 13 Sep 2026, and that is why it lives in js/ root (it was
+// js/orders/ingredient-form.js). The Catalogue opens this same card for a recipe row whose
+// ingredient is not in the records yet — Federico: «semplicemente apri una scheda
+// ingrediente come in fornitori ed ingredienti». So it imports nothing from a feature
+// folder, and the two things it used to ask Orders — may this person write a price, which
+// panels does this venue use — are HANDED IN by whoever opens it (js/orders/registry.js,
+// js/catalogue/ingredient-create.js), both taking the answer from the same root functions.
 //
 // ⚠️ NOTHING HERE IS HIDDEN BY ROLE EXCEPT THE PRICE, and that one is not really
 // hidden either — see mayPrice below. The allergen block is drawn for everybody,
@@ -15,27 +23,23 @@
 // and the person who gets asked «are there nuts in this?» is whoever is at the
 // counter (the v1.62.0 lesson — a gate on a container gates everything put inside).
 
-import { t } from '../i18n.js';
+import { t } from './i18n.js';
 import { el } from './dom.js';
-import { canManageHere } from './firebase-orders.js';
-import { NO_SUPPLIER_ID } from './no-supplier.js';
-import { field, formActions, reportFailure, shortDate } from './mgmt-ui.js';
+import { kindOf } from './ingredient-kind.js';
+import { NO_SUPPLIER_ID } from './records.js';
+import { field, formActions, reportFailure, shortDate } from './record-ui.js';
 import {
   PRICE_UNITS, priceUnitLabel,
   pricePatch, priceChanged, priceRecord, pricePerKg,
   formatPricePerUnit, formatRate, costReasonText,
-} from '../price-model.js';
+} from './price-model.js';
 // ⚠️ THE CURRENCY FOLLOWS THE VENUE'S COUNTRY, and it is read inside priceBlock()
 // rather than up here — the venue is not open when this module is evaluated. See
 // js/currency.js and currencyOf() in js/market.js.
-import { currentCurrency } from '../currency.js';
+import { currentCurrency } from './currency.js';
 // ⚠️ THE APP'S ONE «?», not a second one. This overlay is built long after the page
 // has loaded, so it asks the module to fill the hosts it has just created.
-// ⚠️ It pulls in js/confirm-dialog.js, which is the identical twin of this folder's
-// own copy (both pinned byte-for-byte by tests/copie-allineate.test.mjs). Two copies
-// of the same dialog on one page is the price of the rule that forbids a feature
-// folder from importing another's — and it is a smaller price than a second «?».
-import { mountHelpButtons } from '../help-button.js';
+import { mountHelpButtons } from './help-button.js';
 // ⚠️ From js/ ROOT, not from a feature folder — see the header of that file. What
 // an ingredient declares is typed HERE, in Orders, and read by the catalogue and
 // by the labels screen, so the judgement lives in one place for all three.
@@ -43,7 +47,7 @@ import {
   ALLERGENS, ALLERGEN_GROUPS, NUTRIENTS,
   allergenState, checkedAt, isDeclared,
   missingNutrients, buildAllergenFields,
-} from '../allergen-model.js';
+} from './allergen-model.js';
 // ⚠️⚠️ THE FOOD WORDS ON THIS FORM FOLLOW THE VENUE'S COUNTRY, NEVER THE SCREEN, and
 // that is Federico's decision of 23 Aug 2026: «gli allergeni ed etichette devono essere
 // nella lingua dello stato in cui opera l'app».
@@ -63,15 +67,12 @@ import {
 // ⚠️ AND THIS FILE IS THEREFORE A LABEL FILE. tests/i18n-label-separation.test.mjs says
 // so by walking the app rather than trusting a list: anything asking market.js for a
 // label word is named there and may never touch currentLanguage/setLanguage.
-import { outputLanguage, allergenName, allergenGroupName, nutrientName } from '../market.js';
-import { currentSession } from '../firebase.js';
+import { outputLanguage, allergenName, allergenGroupName, nutrientName } from './market.js';
+import { currentSession } from './firebase.js';
 // Reading the pack's own ingredient list. PURE, and also from js/ ROOT: the
 // vocabulary it walks is the same one a label is built from, so a second copy is
 // the copy that quietly disagrees about what is in somebody's food.
-import { readPackIngredients, reconcileTicks, tickKey } from '../allergen-match.js';
-// Which of the two optional panels this venue uses. ⚠️ A VENUE-WIDE DISPLAY SWITCH,
-// never a role and never a data switch — see the note on allergenBlock below.
-import { ingredientPanels } from './firebase-features.js';
+import { readPackIngredients, reconcileTicks, tickKey } from './allergen-match.js';
 import { confirmDialog, alertDialog } from './confirm-dialog.js';
 
 const CAMERA_ICON = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>';
@@ -83,7 +84,8 @@ const CAMERA_ICON = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
 // ("2.27kg"), and two boxes holding one fact drift apart.
 //
 // Returns { node, read() } so the form below can stay readable.
-function priceBlock(item, actions) {
+// `defaultUnit` is how a NEW item starts: packaging is bought by the piece.
+function priceBlock(item, actions, defaultUnit = null) {
   // What the price box is called, per purchase form. Spelled out per unit rather
   // than assembled from the unit code, because "Price per pcs" is not English and
   // the label is the only place the ex-VAT rule can be stated.
@@ -124,7 +126,7 @@ function priceBlock(item, actions) {
   unitSelect.appendChild(el('option', { value: '', text: t('orders.noPrice2') }));
   PRICE_UNITS.forEach(u => {
     const opt = el('option', { value: u, text: priceUnitLabel(u) });
-    if (item?.priceUnit === u) opt.selected = true;
+    if (item ? item.priceUnit === u : defaultUnit === u) opt.selected = true;
     unitSelect.appendChild(opt);
   });
 
@@ -892,15 +894,51 @@ function fold({ title, state, above, body, help }) {
   return el('div', { class: 'mgmt-fold' }, [row, ...above, inner]);
 }
 
+// Put a just-created supplier into the menu, in its alphabetical place after «no supplier»,
+// and select it. An id the menu already holds is only selected.
+function selectSupplier(select, { id, name }) {
+  let option = [...select.options].find(o => o.value === id);
+  if (!option) {
+    option = el('option', { value: id, text: name || id });
+    const after = [...select.options].slice(1).find(o => o.text.localeCompare(option.text) > 0);
+    select.insertBefore(option, after || null);
+  }
+  select.value = id;
+}
+
 // ── The form ──────────────────────────────────────────────────────────────────
 //
-// item      — the ingredient being edited, or null for a new one
-// suppliers — every supplier, for the picker
-// preset    — a supplier id to start on when adding from inside a supplier's screen
-// actions   — { saveIngredient(id, payload, record, writePrice), priceHistory(id) }
+// item        — the ingredient being edited, or null for a new one
+// suppliers   — every supplier, for the picker
+// preset      — a supplier id to start on when adding from inside a supplier's screen
+// presetKind  — 'packaging' when added from the packaging list
+// presetName  — what a new one is called to start with (the Catalogue passes what was typed)
+// mayPrice    — may this person write a price here (mayWritePrices, js/record-data.js)
+// panels      — { allergens, nutrition }: which optional panels this venue uses
+// showKind    — false where only an INGREDIENT makes sense (a recipe row in the Catalogue):
+//               the «Tipo» menu is not drawn and the item is filed as the preset kind
+// actions     — { saveIngredient(id, payload, record, writePrice), priceHistory(id),
+//                 packPhotoOn(), capturePackPhoto(), createSupplier() → { id, name } | null }
 // onDone / onCancel — where the screen goes afterwards
-export function buildIngredientForm({ item, suppliers, preset, actions, onDone, onCancel }) {
-  const name = el('input', { type: 'text', class: 'mgmt-input', value: item?.name || '' });
+//
+// ⚠️ THE TWO DEFAULTS POINT THE SAFE WAY. No `mayPrice` means no price drawn and none
+// written — never a price the database refuses together with the whole save. No `panels`
+// means both panels ON, the direction js/venue-features.js argues for: a caller that forgot
+// to ask must not quietly remove the allergen card.
+export function buildIngredientForm({
+  item, suppliers, preset, presetKind = null, presetName = '', mayPrice = false,
+  panels = { allergens: true, nutrition: true }, showKind = true, actions, onDone, onCancel,
+}) {
+  const name = el('input', { type: 'text', class: 'mgmt-input', value: item?.name || presetName || '' });
+  // Food, or packaging? (13 Sep 2026.) A box, a tray or a label is bought, priced and
+  // ordered like flour, so it is filed here too — and this is also how an item already in
+  // the list is moved between the two. A new one starts on the list it was added from.
+  const startKind = item ? kindOf(item) : (presetKind === 'packaging' ? 'packaging' : 'ingredient');
+  const kindSelect = el('select', { class: 'mgmt-input' }, [
+    el('option', { value: 'ingredient', text: t('orders.kind.ingredient') }),
+    el('option', { value: 'packaging', text: t('orders.kind.packaging') }),
+  ]);
+  kindSelect.value = startKind;
   const brand = el('input', { type: 'text', class: 'mgmt-input', value: item?.brand || '', placeholder: t('orders.eGGalbani') });
   const weight = el('input', { type: 'text', class: 'mgmt-input', value: item?.weight || '', placeholder: t('orders.eg.packWeight') });
   const category = el('input', { type: 'text', class: 'mgmt-input', value: item?.category || '' });
@@ -929,17 +967,44 @@ export function buildIngredientForm({ item, suppliers, preset, actions, onDone, 
     if (startOn === s.id) opt.selected = true;
     supplierSelect.appendChild(opt);
   });
+  // «+ Nuovo fornitore» — Federico, 13 Sep 2026: «quando scrivo un ingrediente e lo voglio
+  // associare ad un fornitore che non ho ancora inserito in anagrafica dammi la possibilità
+  // di inserirlo direttamente da lì». Drawn only when the caller can open a supplier card.
+  // ⚠️ THE NEW SUPPLIER IS PUT INTO THIS MENU BY HAND: the menu was filled when the card
+  // opened, and nothing redraws an open card — which is also what keeps everything typed.
+  const addSupplierBtn = typeof actions?.createSupplier === 'function'
+    ? el('button', { type: 'button', class: 'mgmt-link mgmt-add-inline', text: t('orders.addSupplierInline') })
+    : null;
+  addSupplierBtn?.addEventListener('click', async () => {
+    if (addSupplierBtn.disabled) return;
+    addSupplierBtn.disabled = true;
+    try {
+      const made = await actions.createSupplier();
+      if (made && made.id) selectSupplier(supplierSelect, made);
+    } finally {
+      addSupplierBtn.disabled = false;
+    }
+  });
 
   // ⚠️ THE PRICE IS ONLY DRAWN FOR SOMEBODY WHO MAY SEE MONEY. An employee's
   // form has no price at all — not a disabled one — because a disabled field
   // still SHOWS the rate, and showing it is precisely what moving the price out
   // of the ingredient document was for.
-  const mayPrice = canManageHere();
-  const price = mayPrice ? priceBlock(item, actions) : null;
+  // ⚠️ AND ONLY WHERE THE VENUE USES FOOD COST: a price the database would refuse
+  // takes the whole save down with it (see mayWritePrices, js/record-data.js).
+  // ⚠️ `mayPrice` IS HANDED IN — see the note on the defaults above.
+  const price = mayPrice ? priceBlock(item, actions, startKind === 'packaging' ? 'pcs' : null) : null;
   // ⚠️ NOT A ROLE, A VENUE. Everybody in the building gets the same answer here: it
   // says whether this business tracks allergens and nutrition at all, and the two
   // switches behind it live one screen away (js/orders/registry-settings.js).
-  const allergens = allergenBlock(item, ingredientPanels(), actions);
+  const allergens = allergenBlock(item, panels, actions);
+  // ⚠️ PACKAGING HAS NO ALLERGENS, so the block is HIDDEN for it — never removed, and
+  // never read on Save (below). An item filed as packaging by mistake and moved back
+  // finds its declaration exactly as it was, because the merge write never touched it.
+  const isBox = () => kindSelect.value === 'packaging';
+  const syncKind = () => { allergens.root.hidden = isBox(); };
+  kindSelect.addEventListener('change', syncKind);
+  syncKind();
 
   const save = el('button', { type: 'button', class: 'btn-primary', onClick: async () => {
     // The supplier is no longer required — only the name is.
@@ -962,8 +1027,11 @@ export function buildIngredientForm({ item, suppliers, preset, actions, onDone, 
       category: category.value.trim() || 'Other',
       unit: unit.value.trim(),
       active: item ? item.active !== false : true,
+      kind: kindSelect.value,
       ...patch,
-      ...allergens.read(),
+      // ⚠️ NOT READ FOR PACKAGING: the merge then leaves any declaration already stored
+      // exactly as it was, so filing an ingredient as packaging by mistake loses nothing.
+      ...(isBox() ? {} : allergens.read()),
     };
 
     // Record the price only when it is COMPLETE and actually different. Saving
@@ -999,7 +1067,9 @@ export function buildIngredientForm({ item, suppliers, preset, actions, onDone, 
       title: t('orders.section.productData'),
       body: [
         field(t('orders.field.name'), name),
+        showKind ? field(t('orders.field.kind'), kindSelect) : null,
         field(t('orders.field.supplier'), supplierSelect),
+        addSupplierBtn,
         field(t('orders.field.brand'), brand),
         field(t('orders.field.weight'), weight),
         field(t('orders.field.category'), category),

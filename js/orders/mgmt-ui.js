@@ -7,66 +7,25 @@
 // second copy of "how this app reports a failed write" is a second wording waiting
 // to drift. `field`, `mgmtRow` and the day checks are shared by the two forms.
 //
+// ⚠️ SINCE 13 Sep 2026 THE FORM PIECES LIVE IN js/record-ui.js, because the ingredient
+// card is also opened from the Catalogue, which may not import this folder. They are
+// re-exported below, so nothing in Orders had to change the way it imports them.
+//
 // ⚠️ NOTHING HERE READS A ROLE except mgmtRow, and it asks canManageHere() for the
 // ONE irreversible action. Everything else in this file is drawn for everybody, which
 // is the deliberate design of the records screen (see registry.js).
 
-import { t, localeTag } from '../i18n.js';
+import { t } from '../i18n.js';
 import { el } from './dom.js';
 import { canManageHere } from './firebase-orders.js';
-import { confirmDialog, alertDialog } from './confirm-dialog.js';
+import { confirmDialog } from './confirm-dialog.js';
+import { reportFailure } from '../record-ui.js';
 
-// The weekday keys as STORED on a supplier. ⚠️ English, and it must stay English:
-// this is data, not a phrase — a supplier's deliveryDays is matched against these
-// strings, so translating them stops a Monday supplier matching a Monday.
-export const WEEKDAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+export {
+  WEEKDAYS, field, makeDayChecks, checkedDays, formActions, reportFailure, shortDate,
+} from '../record-ui.js';
 
 export const BACK_ICON = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>';
-
-export function field(labelText, input) {
-  return el('label', { class: 'mgmt-field' }, [el('span', { class: 'mgmt-field-label', text: labelText }), input]);
-}
-
-// Build one weekday checkbox group (used for both delivery days and order days).
-export function makeDayChecks(selectedDays) {
-  return WEEKDAYS.map(day => {
-    const cb = el('input', { type: 'checkbox' });
-    cb.checked = (selectedDays || []).includes(day);
-    cb.dataset.day = day;
-    return el('label', { class: 'day-check' }, [cb, el('span', { text: day.slice(0, 3) })]);
-  });
-}
-
-export function checkedDays(checks) {
-  return checks.map(l => l.querySelector('input')).filter(c => c.checked).map(c => c.dataset.day);
-}
-
-export function formActions(saveBtn, onCancel) {
-  return el('div', { class: 'mgmt-form-actions' }, [
-    el('button', { type: 'button', class: 'btn-secondary', onClick: () => onCancel?.() }, t('ui.cancel')),
-    saveBtn,
-  ]);
-}
-
-// Report a failed write. Every write in this panel used to drop its promise, so a
-// rejection (network down, or a Firestore rule refusing the payload) left the
-// operator looking at an unchanged row with no idea anything had gone wrong.
-//
-// A dialog, not the Orders status line: these screens are full-screen overlays, so
-// #orders-status is BEHIND them and would never be read. alertDialog sits at
-// z-index 10000, above the overlay.
-//
-// ⚠️ `action` IS A KEY NOW, NOT A WORD. It used to be the English verb dropped into
-// an English sentence — «Could not save "Mozzarella"» — so a failed write on an
-// Italian screen answered in English. One whole sentence per verb, because the
-// grammar around it is not the same in the two languages.
-export async function reportFailure(actionKey, name, err) {
-  console.error(`${actionKey} failed:`, err);
-  await alertDialog(
-    t(`orders.failed.${actionKey}`, { name }),
-    { title: t('orders.notSaved') },
-  );
-}
 
 // A row with three actions: Edit, Deactivate/Activate (reversible), Delete
 // (permanent). Deactivate confirms only when hiding; Delete always confirms with
@@ -117,12 +76,4 @@ export function mgmtRow(name, meta, active, onEdit, onToggle, onDelete) {
     ]),
     el('div', { class: 'mgmt-item-actions' }, actions),
   ]);
-}
-
-// "10 Aug 2026" from an ISO stamp. Anything unreadable falls back to the raw
-// value rather than to "Invalid Date", which tells the reader nothing.
-export function shortDate(iso) {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return String(iso || '');
-  return d.toLocaleDateString(localeTag(), { day: 'numeric', month: 'short', year: 'numeric' });
 }

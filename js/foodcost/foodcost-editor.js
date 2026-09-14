@@ -13,15 +13,23 @@ import { t } from '../i18n.js';
 import { canManageHere } from './firebase-foodcost.js';
 import { el } from './dom.js';
 import {
-  vatRatesFor, vatSelection, SELLING_MODES, costProduct, productionCost, blockerText, statusFor,
-  snapshotWorthTaking, productSnapshot, normalizeProduct,
+  vatRatesFor, vatSelection, costProduct, productionCost, blockerText,
+  snapshotWorthTaking, productSnapshot, normalizeProduct, suggestedGrossPrice,
+  ingredientLineCost, productsUsingRecipe, LINE_UNITS, PACK_UNITS,
 } from './foodcost-model.js';
-import { formatRate, formatMoney, pricePerKg } from '../price-model.js';
+import { formatRate, formatMoney } from '../price-model.js';
+import { openVatGuide } from './vat-guide-view.js';
+import { firstInvalidNumber } from './product-limits.js';
 // ⚠️ READ WHERE THE FIELD IS DRAWN, never at module load: the venue — and therefore
 // its country, and therefore its currency — arrives with the session, after every
 // module has been evaluated. See js/currency.js.
 import { currentCurrency } from '../currency.js';
 import { costRecipe } from '../catalogue/recipe-cost-model.js';
+// Pure models only, like recipe-cost-model.js above: what a typed name matches, and how
+// search text is compared. The screens that SHOW the choices are shared, in js/ root.
+import { suggestLinks, normalizeSearchText } from '../catalogue/catalogue-model.js';
+import { attachSuggestions } from '../pick-suggest.js';
+import { openPickScreen } from '../pick-screen.js';
 import {
   startWeighing, typeRaw, typeCooked, readWeighing, withWeighings, weighingPatches,
   otherProductsUsing,
@@ -30,8 +38,25 @@ import {
 const TRASH_SVG =
   '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>';
 
+// An open book: «read which products take which rate». Stroked, 24×24, currentColor —
+// the app's icon rule (inline SVG, never an emoji).
+const GUIDE_SVG =
+  '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4h6a4 4 0 0 1 4 4v12a3 3 0 0 0-3-3H2z"/><path d="M22 4h-6a4 4 0 0 0-4 4v12a3 3 0 0 1 3-3h7z"/></svg>';
+
 // Keys, resolved at draw time — see js/calculator-render.js.
 const STATUS_TEXT = { green: 'fc.onTarget', amber: 'fc.slightlyOverTarget', red: 'fc.overTarget' };
+const UNIT_TEXT = { piece: 'fc.perPiece', kg: 'fc.perKg', pack: 'fc.perPack' };
+const PACKAGING_PER = { piece: 'fc.packagingPer.piece', pack: 'fc.packagingPer.pack', weight: 'fc.packagingPer.kg' };
+const LINE_REASON_TEXT = {
+  'no-ingredient-price': 'fc.ingredientNoPrice',
+  'no-piece-weight': 'fc.ingredientNoPieceWeight',
+  'no-piece-price': 'fc.ingredientNoPiecePrice',
+};
+
+// The unit word for a selling mode's figures: «per piece», «per kg», «per pack».
+function unitWord(mode) {
+  return t(UNIT_TEXT[mode === 'weight' ? 'kg' : mode === 'pack' ? 'pack' : 'piece']);
+}
 
 // `draft` is a NEW product nobody has typed yet — built by draftFromRecipe() when a
 // recipe's «Apri nel Food cost» finds no product using it.
@@ -48,7 +73,7 @@ export function renderEditor({ product, draft = null, app }) {
       ? JSON.parse(JSON.stringify({ ...normalizeProduct(draft), id: null }))
       : {
         id: null, name: '', components: [], packaging: [],
-        sellingMode: null, piecesPerBatch: null, sellingPrice: null,
+        sellingMode: null, piecesPerBatch: null, packSize: null, packUnit: null, sellingPrice: null,
         vatRate: null, foodCostTarget: null,
       };
 
@@ -61,11 +86,16 @@ export function renderEditor({ product, draft = null, app }) {
   let touched = false;
   const markDirty = () => { dirty = true; touched = true; };
 
+  // The recipes on this product. Ingredient lines have none.
+  const recipeIdsOn = components => components.filter(c => c.recipeId).map(c => c.recipeId);
+
   // ── The oven loss of each recipe on this product ───────────────────────────
   //
   // Federico, 13 Sep 2026: the dough is weighed raw and cooked HERE, no longer in the
   // recipe editor — and the number belongs to the RECIPE, so it is written there
-  // (foodcost-weighing.js says why, and holds every rule).
+  // (foodcost-weighing.js says why, and holds every rule). Since the same day the boxes
+  // sit at the END of «Composto da», one pair per recipe: «impasto crudo e cotto va alla
+  // fine del riquadro bianco della sezione "composto da"».
   //
   // ⚠️ HELD OUTSIDE THE DOM, PER RECIPE ID. This screen rebuilds its rows whenever a
   // line changes, and two lines may carry the same recipe; keeping the typing here is
@@ -85,8 +115,7 @@ export function renderEditor({ product, draft = null, app }) {
 
   // What Save would write onto the recipes, right now.
   function currentPatches() {
-    return weighingPatches(app.tables().recipes, weighings,
-      working.components.map(c => c.recipeId));
+    return weighingPatches(app.tables().recipes, weighings, recipeIdsOn(working.components));
   }
 
   // ⚠️ EVERY NUMBER ON THIS SCREEN COMES FROM HERE: the stored recipes with the weighings
@@ -96,8 +125,9 @@ export function renderEditor({ product, draft = null, app }) {
     return withWeighings(app.tables(), currentPatches());
   }
 
-  function weighBlock(entry) {
-    const id = entry.recipeId;
+  // One recipe's two weighings. `titled` names the recipe, when the product has more than
+  // one and the boxes would otherwise not say whose dough they are.
+  function weighBlock(id, titled) {
     // ⚠️ NO BOXES WHERE THEIR SAVE WOULD BE REFUSED: a venue with the catalogue switched
     // off can read its recipes here but not write them (canWriteRecipes() says why).
     if (!id || !app.tables().recipes[id] || !app.canWeigh()) return null;
@@ -118,6 +148,7 @@ export function renderEditor({ product, draft = null, app }) {
       el('span', { class: 'fc-weigh-row' }, [input, el('span', { class: 'fc-weigh-unit', text: 'g' })]),
     ]);
     return el('div', { class: 'fc-weigh' }, [
+      titled ? el('p', { class: 'fc-weigh-title', text: t('fc.weighFor', { name: app.tables().recipes[id].name || '' }) }) : null,
       el('div', { class: 'fc-weigh-pair' }, [
         cell(t('fc.rawDough'), rawInput),
         cell(t('fc.cookedDough'), cookedInput),
@@ -187,12 +218,22 @@ export function renderEditor({ product, draft = null, app }) {
       el('span', { class: 'fc-prodcost-value' }, [
         el('span', { class: 'fc-prodcost-num', text: perUnit ? formatRate(cost.unitCost) : formatMoney(cost.batchCost) }),
         el('span', { class: 'fc-prodcost-unit', text: perUnit
-          ? t(cost.unit === 'kg' ? 'fc.perKg' : 'fc.perPiece')
+          ? t(UNIT_TEXT[cost.unit])
           : t('fc.wholeBatchWord') }),
       ]),
     ]));
     if (perUnit) {
       prodCost.appendChild(el('p', { class: 'fc-answer-basis', text: t('fc.wholeBatch', { cost: formatMoney(cost.batchCost) }) }));
+    }
+    // The work, beside the materials — drawn only when there is a figure, which needs the
+    // hourly rate, which only whoever runs the place is ever sent.
+    if (cost.labourUnitCost !== null) {
+      prodCost.appendChild(el('p', { class: 'fc-answer-basis', text: t('fc.costSplit', {
+        materials: formatRate(cost.unitCost), labour: formatRate(cost.labourUnitCost),
+      }) }));
+      prodCost.appendChild(el('p', { class: 'fc-answer-basis', text: t('fc.costTotal', {
+        total: formatRate(cost.totalUnitCost), unit: t(UNIT_TEXT[cost.unit]),
+      }) }));
     }
     // ⚠️ THE SAME RULE AS THE ANSWER BELOW: a partial cost is always too LOW, so it may
     // never be shown without saying so.
@@ -203,8 +244,14 @@ export function renderEditor({ product, draft = null, app }) {
   const answer = el('div', { class: 'fc-answer' });
 
   function paintAnswer() {
+    const tables = liveTables();
     paintProductionCost();
-    const result = costProduct(working, liveTables());
+    paintSuggestion(tables);
+    // Minutes typed but no rate to turn them into money: say where the rate is set — and
+    // only to somebody who can set it; an employee is simply shown no labour money.
+    labourNote.textContent = working.labourMinutes > 0 && app.mayManage() && !(Number(tables.labourCostPerHour) > 0)
+      ? t('fc.labourSetRate') : '';
+    const result = costProduct(working, tables);
     answer.replaceChildren();
 
     if (result.foodCostPct === null) {
@@ -227,15 +274,22 @@ export function renderEditor({ product, draft = null, app }) {
       el('span', { class: 'fc-answer-value', text: `${result.foodCostPct}%` }),
     ]));
 
-    const unit = t(working.sellingMode === 'weight' ? 'fc.perKg' : 'fc.perPiece');
     answer.appendChild(el('p', { class: 'fc-answer-basis', text: t('fc.answerBasis', {
       cost: formatRate(result.unitCost),
-      unit,
+      unit: unitWord(working.sellingMode),
       net: formatMoney(result.netUnitPrice),
       margin: formatMoney(result.margin),
     }) }));
 
     if (status) answer.appendChild(el('p', { class: 'fc-answer-status', text: t(STATUS_TEXT[status]) }));
+
+    // ⚠️ BESIDE THE FOOD COST, NEVER INSIDE IT: the percentage above stays what the
+    // ingredients and packaging take; this says what the work takes, and everything.
+    if (result.labourPct !== null) {
+      answer.appendChild(el('p', { class: 'fc-answer-basis', text: t('fc.labourPctLine', {
+        labour: String(result.labourPct), total: String(result.totalCostPct),
+      }) }));
+    }
 
     // ⚠️ A PARTIAL COST MUST NEVER LOOK COMPLETE. If a recipe inside this product
     // is only partly priced, the percentage is real but too LOW — the one
@@ -252,34 +306,172 @@ export function renderEditor({ product, draft = null, app }) {
     value: working.name, 'aria-label': t('fc.productName'),
     oninput: e => { working.name = e.target.value; markDirty(); if (showErrors) validateUI(); },
   });
+  const nameNote = el('p', { class: 'fc-name-note', 'aria-live': 'polite' });
+
+  // Under the name, while it is typed: the recipes it matches. Federico, 13 Sep 2026:
+  // «quando scrivo il nome e quello che sto scrivendo corrisponde ad una ricetta che ho nel
+  // ricettario fammi uscire un suggerimento per la selezione veloce». A tap names the
+  // product after the recipe (his choice — the name can still be edited) and puts the
+  // recipe first in «Composto da».
+  // ⚠️ ONLY WHILE «COMPOSTO DA» IS EMPTY: renaming a product already made of something must
+  // not keep offering to rebuild it.
+  const nameSuggest = attachSuggestions(nameInput, {
+    suggest: typed => {
+      if (working.components.length) return { items: [], total: 0 };
+      const result = suggestLinks({ ingredients: {}, recipes: app.tables().recipes, query: typed });
+      return {
+        total: result.total,
+        items: result.items.map(item => ({ name: item.name, meta: '', linked: false, value: item.refId })),
+      };
+    },
+    onPick: recipeId => useRecipeForName(recipeId),
+    onSeeAll: async typed => {
+      const chosen = await pick('recipe', typed);
+      if (chosen) useRecipeForName(chosen.id);
+    },
+    texts: { list: t('fc.suggest.label'), seeAll: n => t('cat.suggest.seeAll', { n }) },
+  });
+
+  function useRecipeForName(recipeId) {
+    const recipe = app.tables().recipes[recipeId];
+    if (!recipe) return;
+    working.name = String(recipe.name || '').trim();
+    nameInput.value = working.name;
+    if (!working.components.some(c => c.recipeId === recipeId)) working.components.unshift({ recipeId, qtyKg: 0 });
+    // Said, never prevented: two products on one recipe is normal (a small and a large
+    // loaf), but making the same one twice by accident is what this catches.
+    const others = productsUsingRecipe((app.products() || []).filter(p => p && p.id !== working.id), recipeId).length;
+    nameNote.textContent = others ? t('fc.recipeAlreadyUsed', { n: others, name: working.name }) : '';
+    markDirty();
+    if (showErrors) validateUI();
+    repaint();
+    focusQty(componentRows, 0);
+  }
 
   // ── What it is made of ─────────────────────────────────────────────────────
+  //
+  // Federico, 13 Sep 2026: with nothing in it, the button adds a recipe; once there is one
+  // it adds «una ricetta o un ingrediente» — a cream cornetto is the cornetto recipe, the
+  // cream recipe, and icing sugar on top. The choice is a search screen, not a menu:
+  // there are too many ingredients for a <select> on a phone.
   const componentRows = el('div', { class: 'fc-rows' });
+  const weighRows = el('div', { class: 'fc-weighs' });
+  const addLineBtn = el('button', { class: 'fc-add-row', type: 'button', onclick: () => addLine() });
+  const madeOf = el('div', { class: 'fc-madeof' }, [componentRows, addLineBtn, weighRows]);
+
   const packagingRows = el('div', { class: 'fc-rows' });
+  const packagingQty = el('p', { class: 'fc-label' });
 
+  // The full-screen chooser, in this page's own header.
+  //   mode: 'recipe' | 'ingredient' | 'line' (recipes and ingredients) | 'packaging'
+  // Resolves { kind, id } or undefined.
+  function pick(mode, initialQuery = '') {
+    const titles = { recipe: 'fc.pickRecipe', ingredient: 'fc.pickIngredient', line: 'fc.pickRecipeOrIngredient', packaging: 'fc.pickPackaging' };
+    const both = mode === 'line';
+    return openPickScreen({
+      title: t(titles[mode]),
+      backLabel: t('ui.back'),
+      searchLabel: t('fc.searchPick'),
+      initialQuery,
+      chrome: { header: 'fc-header', slot: 'fc-header-slot', title: 'fc-header-title', icon: 'fc-icon-btn' },
+      sections: query => {
+        const q = normalizeSearchText(query);
+        const matches = name => !q || normalizeSearchText(name).includes(q);
+        const out = [];
+        if (mode === 'recipe' || both) {
+          out.push({
+            heading: both ? t('ui.recipes') : '',
+            items: app.recipeOptions().filter(o => matches(o.label))
+              .map(o => ({ name: o.label, meta: both ? t('fc.recipeWord') : '', value: { kind: 'recipe', id: o.id } })),
+          });
+        }
+        if (mode === 'ingredient' || both) {
+          out.push({
+            heading: both ? t('fc.ingredients') : '',
+            // ⚠️ NO PRICE: «nella sezione "composto da" non mostrare il prezzo».
+            items: app.ingredientOptions().filter(o => matches(o.name))
+              .map(o => ({ name: o.name, meta: o.meta, value: { kind: 'ingredient', id: o.id } })),
+          });
+        }
+        if (mode === 'packaging') {
+          out.push({
+            heading: '',
+            items: app.packagingOptions().filter(o => matches(o.name))
+              .map(o => ({ name: o.name, meta: o.meta, value: { kind: 'packaging', id: o.id } })),
+          });
+        }
+        return out;
+      },
+      emptyText: query => (query ? t('fc.nothingMatches') : mode === 'packaging' ? t('fc.noPackagingYet') : t('fc.noRecipesYet')),
+    });
+  }
+
+  async function addLine() {
+    const chosen = await pick(working.components.length ? 'line' : 'recipe');
+    if (!chosen) return;
+    working.components.push(chosen.kind === 'recipe'
+      ? { recipeId: chosen.id, qtyKg: 0 }
+      : { kind: 'ingredient', ingredientId: chosen.id, qty: 0, unit: 'g' });
+    markDirty();
+    repaint();
+    focusQty(componentRows, working.components.length - 1);
+  }
+
+  async function addPackaging() {
+    const chosen = await pick('packaging');
+    if (!chosen) return;
+    working.packaging.push({ ingredientId: chosen.id, qtyPcs: 0 });
+    markDirty();
+    repaint();
+    focusQty(packagingRows, working.packaging.length - 1);
+  }
+
+  // Point an existing line at something else of the same kind.
+  async function changeLine(list, index, kind) {
+    const chosen = await pick(kind);
+    if (!chosen) return;
+    const entry = list[index];
+    if (!entry) return;
+    if (kind === 'recipe') entry.recipeId = chosen.id;
+    else entry.ingredientId = chosen.id;
+    markDirty();
+    repaint();
+  }
+
+  // Straight to the amount of a line just added — the next thing a person fills in.
+  function focusQty(container, index) {
+    const line = container.querySelectorAll('.fc-line')[index];
+    const box = line && line.querySelector('.fc-qty');
+    try { if (box) box.focus(); } catch (e) { /* focus is best-effort */ }
+  }
+
+  function lineName(entry, kind) {
+    if (kind === 'recipe') {
+      const recipe = app.tables().recipes[entry.recipeId];
+      return recipe ? { text: String(recipe.name || '').trim(), missing: false } : { text: t('fc.thisRecipeNoLonger'), missing: true };
+    }
+    const item = app.tables().ingredients[entry.ingredientId];
+    return item ? { text: String(item.name || '').trim(), missing: false } : { text: t('fc.thisItemNoLonger'), missing: true };
+  }
+
+  //   kind: 'recipe' | 'ingredient' | 'packaging'
   function lineRow({ list, index, entry, kind }) {
-    const isRecipe = kind === 'recipe';
-    const options = isRecipe ? app.recipeOptions() : app.packagingOptions();
-    const idKey = isRecipe ? 'recipeId' : 'ingredientId';
-    const qtyKey = isRecipe ? 'qtyKg' : 'qtyPcs';
+    const name = lineName(entry, kind);
+    const nameBtn = el('button', {
+      class: 'fc-line-name' + (name.missing ? ' missing' : ''), type: 'button',
+      'aria-label': t('fc.aria.changeLine', { name: name.text }),
+      onclick: () => changeLine(list, index, kind),
+    }, [el('span', { text: name.text })]);
 
-    const select = el('select', {
-      class: 'fc-input fc-select', 'aria-label': isRecipe ? t('fc.aria.recipe') : t('fc.aria.packagingItem'),
-      onchange: e => { entry[idKey] = e.target.value; markDirty(); repaint(); },
-    }, [
-      el('option', { value: '' }, isRecipe ? t('fc.chooseARecipe') : t('fc.chooseAnItem')),
-      ...options.map(o => el('option', { value: o.id }, o.label)),
-    ]);
-    select.value = entry[idKey] || '';
-
+    const qtyKey = kind === 'recipe' ? 'qtyKg' : kind === 'ingredient' ? 'qty' : 'qtyPcs';
     const qty = el('input', {
       class: 'fc-input fc-qty', type: 'number', min: '0', step: 'any',
       inputmode: 'decimal', placeholder: '0', value: entry[qtyKey] || '',
-      'aria-label': isRecipe ? t('fc.aria.kilos') : t('fc.aria.pieces'),
+      'aria-label': kind === 'recipe' ? t('fc.aria.kilos') : kind === 'ingredient' ? t('fc.aria.quantity') : t('fc.aria.pieces'),
       // ⚠️ NOT repaint(). That rebuilds every row — THIS BOX INCLUDED — so the finger lost
       // the box after one digit and «1.7» could not be typed at all. Found driving the
       // screen on 13 Sep 2026. A quantity changes two things, and only those are
-      // refreshed: this line's cost and the answer at the top. (`note` is declared below;
+      // refreshed: this line's note and the answer at the top. (`note` is declared below;
       // the handler only ever runs after it exists.)
       oninput: e => {
         entry[qtyKey] = Number(e.target.value) || 0;
@@ -289,20 +481,33 @@ export function renderEditor({ product, draft = null, app }) {
       },
     });
 
+    // An ingredient is added in grams, kilos or pieces; a recipe is always kilos, and
+    // packaging always pieces per unit sold.
+    let unit;
+    if (kind === 'ingredient') {
+      unit = el('select', {
+        class: 'fc-input fc-select fc-line-unit-select', 'aria-label': t('fc.aria.unit'),
+        // ⚠️ Not repaint() either, for the same reason as the quantity box.
+        onchange: e => { entry.unit = e.target.value; markDirty(); note.textContent = lineNote(entry, kind); paintAnswer(); },
+      }, LINE_UNITS.map(u => el('option', { value: u }, u === 'pcs' ? t('fc.unit.pieces') : u)));
+      unit.value = entry.unit;
+    } else {
+      unit = el('span', { class: 'fc-line-unit', text: kind === 'recipe' ? 'kg' : t('fc.unit.pieces') });
+    }
+
     const remove = el('button', {
       class: 'fc-del-icon', type: 'button', icon: TRASH_SVG,
-      'aria-label': isRecipe ? t('fc.removeRecipe') : t('fc.removePackagingItem'),
+      'aria-label': kind === 'recipe' ? t('fc.removeRecipe') : kind === 'ingredient' ? t('fc.removeIngredient') : t('fc.removePackagingItem'),
       onclick: () => { list.splice(index, 1); markDirty(); repaint(); },
     });
 
-    // What this line costs, under it — the number that shows WHICH line is heavy.
     const note = el('p', { class: 'fc-line-note', text: lineNote(entry, kind) });
     lineNotes.push({ note, entry, kind });
 
     return el('div', { class: 'fc-line' }, [
-      el('div', { class: 'fc-line-row' }, [select, qty, el('span', { class: 'fc-line-unit', text: isRecipe ? 'kg' : 'pcs' }), remove]),
+      el('div', { class: 'fc-line-row' }, [nameBtn, remove]),
+      el('div', { class: 'fc-line-row fc-line-qtyrow' }, [qty, unit]),
       note,
-      isRecipe ? weighBlock(entry) : null,
     ]);
   }
 
@@ -310,13 +515,20 @@ export function renderEditor({ product, draft = null, app }) {
     if (kind === 'recipe') {
       const recipe = tables.recipes[entry.recipeId];
       if (!recipe) return entry.recipeId ? t('fc.thisRecipeNoLonger') : '';
+      // ⚠️ NO MONEY UNDER A RECIPE LINE. Federico, 13 Sep 2026: «nella sezione "composto
+      // da" non mostrare il prezzo». What stays is what a person must ACT on — a recipe
+      // with no price, or only part of one — because a silent gap is a cost too low.
       const costed = costRecipe(recipe, tables);
       if (costed.pricePerKg === null) return t('fc.thisRecipeIsNot');
-      const line = (Number(entry.qtyKg) || 0) * costed.pricePerKg;
-      return `${formatRate(costed.pricePerKg)} / kg  ·  ${formatMoney(line)}${costed.partial ? `  ·  ${t('fc.partlyPriced')}` : ''}`;
+      return costed.partial ? t('fc.thisRecipePartlyPriced') : '';
     }
     const ingredient = tables.ingredients[entry.ingredientId];
     if (!ingredient) return entry.ingredientId ? t('fc.thisItemNoLonger') : '';
+    if (kind === 'ingredient') {
+      // No money here either — only what stops the line from being costed.
+      const line = ingredientLineCost(entry, ingredient);
+      return line.reason ? t(LINE_REASON_TEXT[line.reason]) : '';
+    }
     if (ingredient.priceUnit !== 'pcs') {
       // Counted in pieces, so it has to be BOUGHT by the piece. Said plainly
       // rather than silently costing nothing.
@@ -329,14 +541,13 @@ export function renderEditor({ product, draft = null, app }) {
   function repaintLines() {
     weighViews = [];
     lineNotes = [];
-    componentRows.replaceChildren();
-    working.components.forEach((entry, index) => {
-      componentRows.appendChild(lineRow({ list: working.components, index, entry, kind: 'recipe' }));
-    });
-    packagingRows.replaceChildren();
-    working.packaging.forEach((entry, index) => {
-      packagingRows.appendChild(lineRow({ list: working.packaging, index, entry, kind: 'packaging' }));
-    });
+    componentRows.replaceChildren(...working.components.map((entry, index) =>
+      lineRow({ list: working.components, index, entry, kind: entry.kind === 'ingredient' ? 'ingredient' : 'recipe' })));
+    // One pair of weighings per RECIPE, however many lines carry it.
+    const recipeIds = [...new Set(recipeIdsOn(working.components))];
+    weighRows.replaceChildren(...recipeIds.map(id => weighBlock(id, recipeIds.length > 1)).filter(Boolean));
+    packagingRows.replaceChildren(...working.packaging.map((entry, index) =>
+      lineRow({ list: working.packaging, index, entry, kind: 'packaging' })));
     paintWeighViews();
   }
 
@@ -352,6 +563,7 @@ export function renderEditor({ product, draft = null, app }) {
     el('option', { value: '' }, t('fc.choose')),
     el('option', { value: 'piece' }, t('fc.byThePiece')),
     el('option', { value: 'weight' }, t('fc.byWeightPerKg')),
+    el('option', { value: 'pack' }, t('fc.byThePack')),
   ]);
   modeSelect.value = working.sellingMode || '';
 
@@ -359,6 +571,38 @@ export function renderEditor({ product, draft = null, app }) {
     working.piecesPerBatch, v => { working.piecesPerBatch = v; });
   const piecesField = field(t('fc.piecesPerBatch'), piecesInput,
     t('fc.howManyFinishedPieces'));
+
+  // «A confezione» (Federico, 13 Sep 2026): «sotto fammi inserire il peso e fammi scegliere
+  // il gr, kg ecc» — what one pack holds, as a weight or as a number of pieces.
+  const packSizeInput = numberInput('fcPackSize', t('fc.packHoldsAs'),
+    working.packSize, v => { working.packSize = v; });
+  const packUnitSelect = el('select', {
+    id: 'fcPackUnit', class: 'fc-input fc-select', 'aria-label': t('fc.aria.unit'),
+    onchange: e => { working.packUnit = e.target.value || null; markDirty(); repaint(); },
+  }, [
+    el('option', { value: '' }, t('fc.choose')),
+    ...PACK_UNITS.map(u => el('option', { value: u }, u === 'pcs' ? t('fc.unit.pieces') : u)),
+  ]);
+  packUnitSelect.value = working.packUnit || '';
+  const packField = el('div', { class: 'fc-field' }, [
+    el('label', { class: 'fc-label', for: 'fcPackSize', text: t('fc.packHolds') }),
+    el('div', { class: 'fc-pack-row' }, [packSizeInput, packUnitSelect]),
+    el('p', { class: 'fc-note', text: t('fc.packHoldsNote') }),
+  ]);
+
+  // ── The time it takes (13 Sep 2026) ─────────────────────────────────────────
+  //
+  // Federico: «nella sezione food cost dobbiamo aggiungere tempo di produzione della
+  // ricetta … il costo del lavoro orario e l'app mi dice quanto è il costo del lavoro».
+  // His choice: minutes and people ON THE PRODUCT, one hourly cost for the venue.
+  // ⚠️ THE MINUTES ARE NOT MONEY, so whoever edits the product sees them; what they COST
+  // is drawn only when the rate is known, which is only for whoever runs the place.
+  const labourMinutesInput = numberInput('fcLabourMinutes', t('fc.labourMinutes'),
+    working.labourMinutes, v => { working.labourMinutes = v; });
+  const labourPeopleInput = numberInput('fcLabourPeople', t('fc.labourPeople'),
+    working.labourPeople, v => { working.labourPeople = v; });
+  labourPeopleInput.placeholder = '1';
+  const labourNote = el('p', { class: 'fc-labour-note' });
 
   // ⚠️ GROSS, and the label says so. The number typed here is the one on the
   // label; the app takes the VAT out before working out the food cost.
@@ -404,6 +648,81 @@ export function renderEditor({ product, draft = null, app }) {
   vatOther.value = initialVat.other;
   vatOther.hidden = initialVat.select !== 'other';
 
+  // «Which products take which VAT rate», beside the menu. Federico, 13 Sep 2026:
+  // «accanto alla casella aliquota iva mettimi un tasto che apre una lista».
+  const guideBtn = el('button', {
+    class: 'fc-guide-btn', type: 'button', icon: GUIDE_SVG,
+    'aria-label': t('fc.vatGuide.open'), title: t('fc.vatGuide.open'),
+    onclick: () => openVatGuide({ country, currentRate: working.vatRate, onUse: applyVat, returnFocus: guideBtn }),
+  });
+
+  // A rate chosen in the guide goes through the SAME rule the menu opens with: a rate the
+  // country's menu does not offer — Italy's 5% — lands in «another rate», unchanged.
+  function applyVat(rate) {
+    const selection = vatSelection(rate, country);
+    working.vatRate = Number(rate);
+    vatSelect.value = selection.select;
+    vatOther.value = selection.other;
+    vatOther.hidden = selection.select !== 'other';
+    markDirty();
+    repaint();
+  }
+
+  const vatField = el('div', { class: 'fc-field' }, [
+    el('label', { class: 'fc-label', for: 'fcVat', text: t('fc.vatRate') }),
+    el('div', { class: 'fc-vat-row' }, [vatSelect, guideBtn]),
+  ]);
+
+  // ── The price to sell it at ────────────────────────────────────────────────
+  //
+  // Federico, 13 Sep 2026: with the cost known, type the VAT and the food cost you want,
+  // and the app says what to sell it at — on the SAME screen as the food cost of the price
+  // typed (his choice, over a switch between two modes).
+  const suggestion = el('div', { class: 'fc-suggest-price', tabindex: '-1', 'aria-live': 'polite' });
+
+  function paintSuggestion(tables) {
+    const cost = productionCost(working, tables);
+    suggestion.replaceChildren();
+    // Nothing to suggest until the product has a cost per piece, kilo or pack.
+    suggestion.hidden = cost.unitCost === null;
+    if (cost.unitCost === null) return;
+
+    const price = suggestedGrossPrice({ unitCost: cost.unitCost, vatRate: working.vatRate, targetPct: working.foodCostTarget });
+    if (price === null) {
+      suggestion.appendChild(el('p', { class: 'fc-note', text: t('fc.suggestedPriceNeeds') }));
+      return;
+    }
+    suggestion.appendChild(el('div', { class: 'fc-prodcost-head' }, [
+      el('span', { class: 'fc-answer-label', text: t('fc.suggestedPrice') }),
+      el('span', { class: 'fc-prodcost-value' }, [
+        el('span', { class: 'fc-prodcost-num', text: formatMoney(price) }),
+        el('span', { class: 'fc-prodcost-unit', text: t(UNIT_TEXT[cost.unit]) }),
+      ]),
+    ]));
+    suggestion.appendChild(el('p', { class: 'fc-answer-basis', text: t('fc.suggestedPriceBasis', {
+      vat: String(working.vatRate), target: String(working.foodCostTarget),
+    }) }));
+    // ⚠️ THE SAME RULE AS THE COST ABOVE: a partly priced product costs more than it says,
+    // so the price that would hit the target is HIGHER than this one — say so.
+    if (cost.partial) suggestion.appendChild(el('p', { class: 'fc-answer-partial', text: t('fc.suggestedPricePartial') }));
+
+    const inUse = working.sellingPrice !== null && Math.abs(working.sellingPrice - price) < 0.005;
+    suggestion.appendChild(inUse
+      ? el('p', { class: 'fc-note', text: t('fc.suggestedPriceInUse') })
+      : el('button', {
+        class: 'fc-use-price', type: 'button', text: t('fc.useThisPrice'),
+        onclick: () => {
+          working.sellingPrice = price;
+          priceInput.value = String(price);
+          markDirty();
+          repaint();
+          // The button has just gone (the price is now in use): keep the focus in the box
+          // that says so, not lost to the page.
+          try { suggestion.focus({ preventScroll: true }); } catch (e) { /* best-effort */ }
+        },
+      }));
+  }
+
   const targetInput = numberInput('fcTarget', t('fc.foodCostTargetAs'),
     working.foodCostTarget, v => { working.foodCostTarget = v; });
 
@@ -413,6 +732,7 @@ export function renderEditor({ product, draft = null, app }) {
       inputmode: 'decimal', placeholder: '0', 'aria-label': label,
       value: value === null || value === undefined ? '' : String(value),
       oninput: e => {
+        e.target.classList.remove('fc-invalid');
         const raw = e.target.value;
         set(raw === '' ? null : Number(raw));
         markDirty();
@@ -430,10 +750,15 @@ export function renderEditor({ product, draft = null, app }) {
   }
 
   function repaint() {
-    // The pieces field only exists for something sold by the piece; for something
-    // sold by weight it is not merely irrelevant, it is a number that would mean
-    // nothing and invite being filled in.
-    piecesField.hidden = working.sellingMode !== 'piece';
+    // The pieces field exists for what is sold by the piece, or by a pack counted in
+    // pieces; for anything else it is a number that would mean nothing and invite being
+    // filled in.
+    piecesField.hidden = !(working.sellingMode === 'piece'
+      || (working.sellingMode === 'pack' && working.packUnit === 'pcs'));
+    packField.hidden = working.sellingMode !== 'pack';
+    addLineBtn.textContent = working.components.length ? t('fc.addRecipeOrIngredient') : t('fc.addRecipe');
+    packagingQty.textContent = t('fc.packagingQtyFor', { per: t(PACKAGING_PER[working.sellingMode] || 'fc.packagingPer.unit') });
+    packagingQty.hidden = !working.packaging.length;
     repaintLines();
     paintAnswer();
   }
@@ -443,6 +768,17 @@ export function renderEditor({ product, draft = null, app }) {
   }
 
   // ── Save / delete ──────────────────────────────────────────────────────────
+  // Each number the rules range-check, with the box it is typed in and the words that name it.
+  const NUMBER_BOXES = {
+    piecesPerBatch: [piecesInput, 'fc.howManyPiecesCome'],
+    packSize: [packSizeInput, 'fc.packHoldsAs'],
+    labourMinutes: [labourMinutesInput, 'fc.labourMinutes'],
+    labourPeople: [labourPeopleInput, 'fc.labourPeople'],
+    sellingPrice: [priceInput, 'fc.sellingPriceIncludingVat'],
+    vatRate: [vatOther, 'fc.anotherVatRateAs'],
+    foodCostTarget: [targetInput, 'fc.foodCostTargetAs'],
+  };
+
   async function onSave() {
     if (busy) return;
     // The ONE required field. Everything else may be missing — the answer panel
@@ -454,6 +790,23 @@ export function renderEditor({ product, draft = null, app }) {
       app.toast(t('fc.pleaseEnterAProduct'));
       return;
     }
+    // ⚠️⚠️ A NUMBER THE DATABASE WILL REFUSE STOPS THE SAVE HERE, WHILE THE WORK IS ON SCREEN
+    // (js/foodcost/product-limits.js). Past this point the save is local-first: the editor
+    // leaves, the refusal arrives later, and the rollback throws the product away.
+    // A value in a box that is not shown (pieces on a product sold by weight) means nothing,
+    // so it is cleared rather than asked about — nobody could find the box to correct it.
+    let invalid = firstInvalidNumber(working);
+    while (invalid && NUMBER_BOXES[invalid] && NUMBER_BOXES[invalid][0].closest('[hidden]')) {
+      working[invalid] = null;
+      invalid = firstInvalidNumber(working);
+    }
+    if (invalid) {
+      const [box, labelKey] = NUMBER_BOXES[invalid] || [null, null];
+      box?.classList.add('fc-invalid');
+      try { box?.focus(); } catch (e) { /* focus is best-effort */ }
+      app.toast(t('fc.checkNumber', { field: labelKey ? t(labelKey) : invalid }));
+      return;
+    }
 
     busy = true;
     const ok = await app.confirm({ title: t('fc.saveProduct'), message: t('fc.saveTheseChanges'), okLabel: t('ui.save'), cancelLabel: t('ui.cancel') });
@@ -463,7 +816,7 @@ export function renderEditor({ product, draft = null, app }) {
     // The weighings typed on this product's recipe lines, which Save writes onto the
     // RECIPES — and the tables the answer is worked out from, with them in.
     const patches = weighingPatches(app.tables().recipes, weighings,
-      clean.components.map(c => c.recipeId));
+      clean.components.filter(c => c.recipeId).map(c => c.recipeId));
     const live = withWeighings(app.tables(), patches);
     // A margin is recorded only when the PRICE or the COMPOSITION changed, and only
     // when there is a real answer to record. Renaming a product records nothing —
@@ -520,29 +873,43 @@ export function renderEditor({ product, draft = null, app }) {
     prodCost,
     answer,
 
-    field(t('fc.name'), nameInput),
+    el('div', { class: 'fc-field' }, [
+      el('label', { class: 'fc-label', for: 'fcName', text: t('fc.name') }),
+      nameInput,
+      nameSuggest.node,
+      nameNote,
+    ]),
 
     el('h2', { class: 'fc-section', text: t('fc.madeOf') }),
-    componentRows,
-    el('button', { class: 'fc-add-row', type: 'button', text: t('fc.addRecipe'),
-      onclick: () => { working.components.push({ recipeId: '', qtyKg: 0 }); markDirty(); repaint(); } }),
+    madeOf,
 
     el('h2', { class: 'fc-section', text: t('fc.packaging') }),
+    packagingQty,
     packagingRows,
-    el('button', { class: 'fc-add-row', type: 'button', text: t('fc.addPackaging'),
-      onclick: () => { working.packaging.push({ ingredientId: '', qtyPcs: 0 }); markDirty(); repaint(); } }),
-    el('p', { class: 'fc-note', text:
-      t('fc.boxesBagsRibbonAnything') }),
+    el('button', { class: 'fc-add-row', type: 'button', text: t('fc.addPackaging'), onclick: () => addPackaging() }),
+    el('p', { class: 'fc-note', text: t('fc.packagingPerNote') }),
+
+    el('h2', { class: 'fc-section', text: t('fc.labour') }),
+    el('div', { class: 'fc-labour-pair' }, [
+      field(t('fc.labourMinutes'), labourMinutesInput),
+      field(t('fc.labourPeople'), labourPeopleInput),
+    ]),
+    el('p', { class: 'fc-note', text: t('fc.labourNote') }),
+    labourNote,
 
     el('h2', { class: 'fc-section', text: t('fc.howItIsSold') }),
     field(t('fc.sold'), modeSelect),
+    packField,
     piecesField,
-    field(t('fc.sellingPriceVat', { currency: currentCurrency() }), priceInput,
-      t('fc.thePriceOnThe')),
-    field(t('fc.vatRate'), vatSelect),
+    // ⚠️ IN THE ORDER THE SUM IS DONE: the VAT and the target first, then the price —
+    // with, under it, the price those two suggest (13 Sep 2026).
+    vatField,
     vatOther,
     field(t('fc.foodCostTarget'), targetInput,
       t('fc.theShareOfThe')),
+    field(t('fc.sellingPriceVat', { currency: currentCurrency() }), priceInput,
+      t('fc.thePriceOnThe')),
+    suggestion,
 
     el('div', { class: 'fc-actions' }, [
       el('button', { class: 'fc-save', type: 'button', text: t('ui.save'), onclick: onSave }),
@@ -562,18 +929,19 @@ export function renderEditor({ product, draft = null, app }) {
     root,
     // Still exactly as it arrived: nothing typed ever, and no Save under way.
     isUntouched: () => !touched && !busy,
-    // ⚠️ WITHOUT THIS THE CHOOSERS ARE BUILT ONCE, FROM WHATEVER HAD ARRIVED.
+    // ⚠️ WITHOUT THIS THE LINES ARE DRAWN ONCE, FROM WHATEVER HAD ARRIVED.
     // The recipe and ingredient listeners are still in flight while this screen is
-    // being opened — on a cold start, offline, or a slow network — so "+ Add
-    // recipe" could produce a menu with nothing in it, and it would STAY empty for
-    // as long as the screen was open. The only way to see the recipes would be to
-    // leave and come back.
+    // being opened — on a cold start, offline, or a slow network — so a line could name
+    // «this recipe no longer exists» for a recipe that is merely late, and it would STAY
+    // that way for as long as the screen was open.
     //
     // The rows are left alone while somebody is typing in one of them: rebuilding
-    // an input under the finger loses the focus and the half-typed number. The
-    // answer panel is always safe to repaint — it holds no input.
+    // an input under the finger loses the focus and the half-typed number — and that
+    // includes the weighings, which since 13 Sep 2026 sit in their own container at the
+    // end of the card. The answer panel is always safe to repaint — it holds no input.
     refreshData() {
       const typing = componentRows.contains(document.activeElement)
+        || weighRows.contains(document.activeElement)
         || packagingRows.contains(document.activeElement);
       if (!typing) {
         repaintLines();

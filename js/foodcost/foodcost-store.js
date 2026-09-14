@@ -8,11 +8,13 @@
 // best-effort, and a REJECTED write is rolled back and surfaced.
 
 import { t } from '../i18n.js';
-import { normalizeProduct, normalizeProducts } from './foodcost-model.js';
+import { normalizeProduct, normalizeProducts, PRODUCT_MODEL } from './foodcost-model.js';
 import {
   watchProducts, watchRecipes, watchIngredients,
   saveProductWithSnapshot, removeProduct, newProductId, saveRecipeLoss,
+  watchFoodcostSettings, saveLabourCostPerHour, canManageHere, authReady,
 } from './firebase-foodcost.js';
+import { positiveNumber } from '../price-model.js';
 import { restoreAfterRefusal } from './foodcost-weighing.js';
 
 const PRODUCTS_KEY = 'foodcost-products';
@@ -61,9 +63,15 @@ export function getProducts() { return products; }
 export function getRecipes() { return recipes; }
 export function getIngredients() { return ingredients; }
 
-// The two lookup tables, in the shape both cost models expect.
+// What an hour of work costs this venue — null until it arrives, and null for ever for
+// anybody who does not run the place (the listener is never started for them).
+let labourCostPerHour = null;
+export function getLabourCostPerHour() { return labourCostPerHour; }
+
+// The lookup tables, in the shape the cost models expect. The labour rate rides along so
+// every figure on the screen is worked out from one object.
 export function tables() {
-  return { recipes, ingredients };
+  return { recipes, ingredients, labourCostPerHour };
 }
 
 export function setSyncErrorHandler(fn) {
@@ -107,7 +115,34 @@ export function initFoodCost(onUpdate, onError) {
     if (notify) notify();
   }, () => {}).catch(() => {});
 
+  // ⚠️ THE HOURLY LABOUR COST IS WATCHED ONLY FOR WHOEVER RUNS THE PLACE, and only once
+  // the session says who that is. An employee's listener would be refused — noise and a
+  // wasted read — and the rate is a wage figure they are not meant to see. Not mirrored to
+  // localStorage either, so it never lingers on a shared phone.
+  authReady.then(() => {
+    if (!canManageHere()) return;
+    watchFoodcostSettings(settings => {
+      labourCostPerHour = positiveNumber(settings && settings.labourCostPerHour);
+      if (notify) notify();
+    }).catch(() => {});
+  });
+
   return products;
+}
+
+// Save the hourly labour cost (null clears it), LOCAL-FIRST like everything here: the
+// screen moves at once — offline too, where a write waits rather than fails — and a write
+// the database REFUSES puts the old number back and says so.
+export function saveLabourRate(rate) {
+  const prev = labourCostPerHour;
+  labourCostPerHour = positiveNumber(rate);
+  if (notify) notify();
+  saveLabourCostPerHour(labourCostPerHour).catch(err => {
+    console.warn('The hourly labour cost did not sync to Firestore:', err);
+    labourCostPerHour = prev;
+    if (notify) notify();
+    if (onSyncError) onSyncError(t('fc.settings.couldNotSave'));
+  });
 }
 
 function upsertLocal(product) {
@@ -143,9 +178,22 @@ export function saveProduct(product, snapshot, lossPatches) {
     packaging: product.packaging || [],
     sellingMode: product.sellingMode ?? null,
     piecesPerBatch: product.piecesPerBatch ?? null,
+    // «A confezione» (13 Sep 2026): what one pack holds, and in what unit.
+    packSize: product.packSize ?? null,
+    packUnit: product.packUnit ?? null,
     sellingPrice: product.sellingPrice ?? null,
     vatRate: product.vatRate ?? null,
     foodCostTarget: product.foodCostTarget ?? null,
+    // The time one batch takes, and by how many people (13 Sep 2026). Not money: the rate
+    // that turns it into money lives in foodcost-settings, which only managers read.
+    labourMinutes: product.labourMinutes ?? null,
+    labourPeople: product.labourPeople ?? null,
+    // ⚠️⚠️ WHICH SHAPE OF PRODUCT THIS IS, AND THE RULES READ IT. A product is written
+    // WHOLE, so a phone still on the previous version would save it back without the
+    // fields it does not know — ingredient lines, the pack — and delete them in silence.
+    // firestore.rules refuses a save without `model` over a product that has one, so that
+    // phone gets «could not save» instead of quietly destroying the product.
+    model: PRODUCT_MODEL,
   };
   const prev = products.find(p => p.id === id) || null;
 

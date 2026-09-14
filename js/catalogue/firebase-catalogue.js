@@ -28,6 +28,7 @@ import {
   onSnapshot,
   runTransaction,
   addDoc,
+  deleteField,
 } from 'https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js';
 
 // Reuse the default app if firebase.js already created it; otherwise create it.
@@ -205,10 +206,18 @@ export async function watchPrintAgents(onChange, onError) {
   );
 }
 
+// The recipe fields a person can EMPTY. A merge never deletes a key it is not sent, and
+// the rules refuse a stored null, so an emptied box travels as a removal.
+const CLEARABLE_RECIPE_FIELDS = ['netWeightG', 'shelfLifeDays'];
+
 // Create or merge a recipe document at a known id (id is generated client-side).
 export async function saveRecipeDoc(id, data) {
   await authReady;
-  return setDoc(doc(db, pathFor(RECIPES), id), withBakery(data), { merge: true });
+  const out = { ...data };
+  for (const key of CLEARABLE_RECIPE_FIELDS) {
+    if (key in out && out[key] === null) out[key] = deleteField();
+  }
+  return setDoc(doc(db, pathFor(RECIPES), id), withBakery(out), { merge: true });
 }
 
 // Delete a recipe document.

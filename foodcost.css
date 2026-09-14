@@ -250,6 +250,9 @@ select.fc-input, .fc-select {
 .fc-qty { width: 4.6rem; flex-shrink: 0; text-align: right; }
 .fc-line-unit { font-size: .8rem; color: var(--fc-text-2); flex-shrink: 0; }
 .fc-line-note { margin: 6px 0 0; font-size: .72rem; color: var(--fc-text-2); font-family: var(--fc-font-mono); }
+/* A recipe line with nothing to say (priced, and no money shown since 13 Sep 2026) takes
+   no room: an empty note would still leave its margin under the row. */
+.fc-line-note:empty { display: none; }
 /* The dough weighed before the oven and after, under a recipe line — moved here from
    the recipe editor on 13 Sep 2026. Two boxes side by side, as they were there; the
    answer under them reads as a statement, not as a footnote. */
@@ -279,6 +282,94 @@ select.fc-input, .fc-select {
 }
 .fc-del-icon:hover { color: var(--fc-danger); }
 .fc-del-icon:focus-visible { outline: 2px solid var(--fc-accent); outline-offset: 2px; }
+
+/* ── «Composto da» as ONE card (13 Sep 2026) ───────────────────────────────
+   Federico: «impasto crudo e cotto va alla fine del riquadro bianco della sezione
+   "composto da"». The lines, the add button and — last — the weighings, in one frame. */
+.fc-madeof { display: flex; flex-direction: column; gap: 10px; padding: 10px; border: 1px solid var(--fc-border); border-radius: var(--fc-radius); background: var(--fc-surface); }
+.fc-madeof .fc-line { border: 0; border-bottom: 1px solid var(--fc-border); border-radius: 0; padding: 4px 2px 10px; }
+.fc-madeof .fc-add-row { background: var(--fc-surface); }
+.fc-weighs:empty { display: none; }
+.fc-weighs .fc-weigh:first-child { margin-top: 0; }
+.fc-weigh-title { margin: 0 0 6px; font-size: .78rem; font-weight: 600; color: var(--fc-text); }
+/* The name of what a line points at is a button: tapping it opens the chooser. It takes
+   the width; the quantity, the unit and the bin keep theirs. */
+.fc-line-name {
+  flex: 1;
+  min-width: 0;
+  min-height: 44px;
+  padding: 0 10px;
+  display: flex;
+  align-items: center;
+  border: 1.5px solid var(--fc-border);
+  border-radius: var(--radius-sm);
+  background: var(--fc-surface);
+  color: var(--fc-text);
+  font-family: var(--fc-font);
+  font-size: .92rem;
+  text-align: left;
+  cursor: pointer;
+}
+.fc-line-name span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fc-line-name:focus-visible { outline: 2px solid var(--fc-accent); outline-offset: 2px; }
+.fc-line-name.missing { color: var(--fc-danger); }
+/* The unit of an ingredient line: three short choices, so a narrow select. */
+.fc-line-row .fc-line-unit-select { flex: none; width: 6.5rem; }
+/* The amount sits on its own row under the name: at 296px a name, a quantity, a unit and
+   a bin on one line left the NAME — the one thing that must stay readable — 44px wide. */
+.fc-line-qtyrow { margin-top: 6px; }
+/* The name field's suggestion list sits under the field, in the flow. */
+.fc-field .pick-suggest { margin-top: 2px; }
+.fc-name-note { margin: 0; font-size: .78rem; color: var(--fc-warn); }
+.fc-name-note:empty { display: none; }
+/* What one pack holds: a number and its unit, on one row. */
+.fc-pack-row { display: flex; align-items: center; gap: 8px; }
+.fc-pack-row .fc-number { flex: 1; min-width: 0; }
+.fc-pack-row .fc-select { width: 6.5rem; flex-shrink: 0; }
+.fc-registry-link { align-self: flex-start; }
+
+/* The time one batch takes: minutes and people, side by side. */
+.fc-labour-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.fc-labour-pair .fc-field { min-width: 0; }
+.fc-labour-note { margin: 0; font-size: .78rem; color: var(--fc-text-2); }
+.fc-labour-note:empty { display: none; }
+
+/* ── Bottom bar (13 Sep 2026) ──────────────────────────────────────────────
+   The same pair .inv-footer and .cat-footer settled on (tests/bottom-bar.test.mjs): the
+   BAR is the page's own ground, the BUTTON the raised surface. */
+.fc-footer {
+  flex-shrink: 0;
+  display: flex;
+  gap: 8px;
+  padding: 8px 12px calc(8px + env(safe-area-inset-bottom));
+  padding-inline: max(12px, var(--app-gutter));
+  background: var(--fc-ground);
+  border-top: 1px solid var(--fc-border);
+}
+.fc-footer[hidden] { display: none; }
+.fc-footer-btn {
+  flex: 1;
+  min-width: 0;
+  min-height: 44px;
+  padding: 8px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px solid var(--fc-border);
+  border-radius: var(--radius-sm);
+  background: var(--fc-surface);
+  color: var(--fc-text);
+  font-family: var(--fc-font);
+  font-size: .84rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+/* An SVG beside a word is a flex row, or it rests on the text baseline (PR #31). */
+.fc-footer-btn span { display: flex; align-items: center; }
+.fc-footer-btn:active { transform: scale(.97); }
+.fc-footer-btn:focus-visible { outline: 2px solid var(--fc-accent); outline-offset: 2px; }
+.fc-footer-btn[hidden] { display: none; }
 
 /* ── Actions. Save is prominent, Delete is low-key (P20). ─────────────────── */
 .fc-actions { display: flex; flex-direction: column; gap: 10px; margin-top: 18px; }
@@ -321,6 +412,95 @@ select.fc-input, .fc-select {
    the centre line — the most common alignment bug in this app (PR #31). The
    wrapper needs the flex row too, not just the button. */
 .fc-delete span { display: flex; align-items: center; }
+
+/* ── The suggested selling price (13 Sep 2026) ────────────────────────────────
+   Under the price, from the cost, the VAT and the target. Dashed like the add buttons:
+   it is a proposal, not the product's price, until «Use this price» makes it one. */
+.fc-suggest-price {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 14px;
+  border: 1px dashed var(--fc-border);
+  border-radius: var(--fc-radius);
+  background: var(--fc-surface);
+}
+.fc-suggest-price[hidden] { display: none; }
+.fc-suggest-price:focus { outline: none; }
+.fc-suggest-price .fc-answer-basis,
+.fc-suggest-price .fc-answer-partial { margin: 0; }
+.fc-use-price {
+  align-self: flex-start;
+  min-height: 44px;
+  padding: 0 16px;
+  border: 1.5px solid var(--fc-brand);
+  border-radius: var(--radius-sm);
+  background: var(--fc-surface);
+  color: var(--fc-brand);
+  font-family: var(--fc-font);
+  font-size: .9rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.fc-use-price:active { transform: scale(.97); }
+.fc-use-price:focus-visible { outline: 2px solid var(--fc-accent); outline-offset: 2px; }
+
+/* ── The VAT rate and the button beside it ─────────────────────────────────── */
+.fc-vat-row { display: flex; align-items: center; gap: 8px; }
+.fc-vat-row .fc-input { flex: 1; min-width: 0; }
+.fc-guide-btn {
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px solid var(--fc-border);
+  border-radius: var(--radius-sm);
+  background: var(--fc-surface);
+  color: var(--fc-text-2);
+  cursor: pointer;
+}
+.fc-guide-btn:active { transform: scale(.97); }
+.fc-guide-btn:focus-visible { outline: 2px solid var(--fc-accent); outline-offset: 2px; }
+
+/* ── The VAT guide, full screen over the product ────────────────────────────
+   The page's own header and scrolling area, so it reads as one more level down. */
+.fc-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  background: var(--fc-ground);
+}
+.fc-guide-disclaimer { margin: 0; padding: 10px 12px; border-radius: var(--radius-sm); background: var(--warn-bg); color: var(--fc-text); font-size: .8rem; }
+.fc-guide-rate { padding: 12px 14px; border: 1px solid var(--fc-border); border-radius: var(--fc-radius); background: var(--fc-surface); }
+.fc-guide-rate-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.fc-guide-rate-head h2,
+.fc-guide-notes-title { margin: 0; font-size: 1rem; font-weight: 600; color: var(--fc-text); font-variant-numeric: tabular-nums; }
+.fc-guide-use {
+  min-height: 44px;
+  padding: 0 14px;
+  flex-shrink: 0;
+  border: 1.5px solid var(--fc-brand);
+  border-radius: var(--radius-sm);
+  background: var(--fc-surface);
+  color: var(--fc-brand);
+  font-family: var(--fc-font);
+  font-size: .85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.fc-guide-use:active { transform: scale(.97); }
+.fc-guide-use:focus-visible { outline: 2px solid var(--fc-accent); outline-offset: 2px; }
+.fc-guide-inuse { flex-shrink: 0; font-size: .8rem; color: var(--fc-text-2); }
+.fc-guide-items { margin: 8px 0 0; padding-left: 18px; font-size: .86rem; color: var(--fc-text); }
+.fc-guide-items li { margin-top: 5px; }
+.fc-guide-sources { font-size: .74rem; color: var(--fc-text-2); }
+.fc-guide-sources p { margin: 0; }
+.fc-guide-sources ul { margin: 4px 0 0; padding-left: 18px; }
+.fc-guide-sources a { color: var(--crust-ink); overflow-wrap: anywhere; }
 
 /* ── Margin history ───────────────────────────────────────────────────────── */
 .fc-hist-row {

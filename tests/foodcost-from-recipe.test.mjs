@@ -204,9 +204,14 @@ test('⚠️ Back from Food cost really reopens the recipe, and only once the se
 });
 
 test('the chooser\'s Back is named in the venue\'s language', () => {
+  // ⚠️ The chooser is SHARED since 13 Sep 2026 (js/pick-screen.js): the catalogue hands it
+  // the word, and the shared screen puts that word — and no other — on its Back button.
   const picker = codeOf(read('js/catalogue/ingredient-picker.js'));
-  assert.doesNotMatch(picker, /'aria-label': 'Back'/);
-  assert.match(picker, /'aria-label': t\('ui\.back'\)/);
+  assert.doesNotMatch(picker, /'Back'/);
+  assert.match(picker, /backLabel: t\('ui\.back'\)/);
+  const screen = codeOf(read('js/pick-screen.js'));
+  assert.doesNotMatch(screen, /'aria-label': 'Back'/);
+  assert.match(screen, /'aria-label': backLabel/);
 });
 
 // Comments stripped before every source check — a guard that fires on its own warning

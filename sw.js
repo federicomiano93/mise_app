@@ -1,4 +1,4 @@
-const CACHE_NAME = 'theitalianclub-v360';
+const CACHE_NAME = 'theitalianclub-v361';
 // Firebase SDK modules (loaded from gstatic) are cached SEPARATELY from CACHE_NAME
 // so they survive the cache-version bump that happens on every deploy — otherwise
 // the offline SDK would be wiped each release until the next online load. The name
@@ -12,7 +12,7 @@ const CACHE_NAME = 'theitalianclub-v360';
 // the fetch handler below, on the first load that has a network.
 // So between activate() and that first load, a phone that is OFFLINE cannot boot:
 // the code asks for 12.18.0 and nothing has it. In practice the window is very
-// small — activate() only happens after a successful 236-file precache, i.e.
+// small — activate() only happens after a successful 250-file precache, i.e.
 // online, and tapping the update banner reloads the page immediately — but it is
 // not zero, and it is the reason to bump the SDK deliberately rather than often.
 // Leaving the name unchanged would close the window and cost ~1 MB of dead
@@ -92,6 +92,21 @@ const ASSETS = [
   // catalogue.html and foodcost.html import it at load, so offline without it neither
   // page would open at all.
   './js/recipe-link.js',
+  // The suggestion list under a field and the full-screen search chooser, SHARED by the
+  // Catalogue and Food cost since 13 Sep 2026, with their own copy of el(). Both pages
+  // import them at load, so offline without them neither form would open.
+  './js/dom.js',
+  './js/pick-suggest.js',
+  './js/pick-screen.js',
+  // The two record cards and what they share, opened from «Fornitori e ingredienti» and
+  // from a recipe row in the Catalogue (13 Sep 2026).
+  './js/records.js',
+  './js/record-ui.js',
+  './js/record-data.js',
+  './js/ingredient-record-form.js',
+  './js/supplier-record-form.js',
+  // Is an item food or packaging? Asked by the registry, the Catalogue and Food cost.
+  './js/ingredient-kind.js',
   './js/photo-model.js',
   // ⚠️ A NEW FILE, AND THE ONE FAILURE THAT DOES NOT HEAL ITSELF. An installed
   // phone that goes offline after a deploy finds a file the new HTML asks for and
@@ -242,7 +257,6 @@ const ASSETS = [
   './js/orders/firebase-features.js',
   './js/orders/firebase-photo.js',
   './js/orders/photo-capture.js',
-  './js/orders/ingredient-form.js',
   './js/orders/holidays.js',
   './js/orders/holidays-it.js',
   './js/orders/suggestions.js',
@@ -250,6 +264,7 @@ const ASSETS = [
   './catalogue.html',
   './catalogue.css',
   './label-print.css',
+  './records.css',
   './js/catalogue/confirm-dialog.js',
   './js/catalogue/dom.js',
   './js/catalogue/catalogue-model.js',
@@ -271,6 +286,7 @@ const ASSETS = [
   './js/print-queue-model.js',
   './js/catalogue/print-transports.js',
   './js/catalogue/ingredient-picker.js',
+  './js/catalogue/ingredient-create.js',
   './js/catalogue/ingredient-suggest.js',
   './js/catalogue/firebase-catalogue.js',
   './js/catalogue/catalogue-store.js',
@@ -311,6 +327,14 @@ const ASSETS = [
   './js/foodcost/foodcost-list.js',
   './js/foodcost/foodcost-editor.js',
   './js/foodcost/foodcost-weighing.js',
+  // «Which products take which VAT rate» (13 Sep 2026): the guide's words, per country,
+  // and the screen that shows them — opened from the product editor.
+  './js/foodcost/vat-guide.js',
+  './js/foodcost/vat-guide-view.js',
+  // The numbers the rules accept on a product, checked before a save (14 Sep 2026).
+  './js/foodcost/product-limits.js',
+  // The Food cost settings — the hourly labour cost (13 Sep 2026).
+  './js/foodcost/foodcost-settings.js',
   // The monthly stocktake. A page of the Food Cost section (it carries
   // data-section="foodcost"), but its own folder, because it owns its own
   // collection and imports nothing from js/foodcost/.
@@ -362,7 +386,7 @@ const ASSETS = [
 // code against rules that deployed instantly, which is the very thing the gate exists
 // to prevent. Two things stand between that and a release: the test that every ASSETS
 // entry EXISTS (a mistyped path being the likeliest permanent cause), and this
-// project's post-deploy sweep, which already asks the live site for all 236 files.
+// project's post-deploy sweep, which already asks the live site for all 250 files.
 // ⚠️ NEITHER covers a device-specific failure — nobody has yet confirmed an update
 // landing on a real iPhone under this code.
 //

@@ -72,11 +72,12 @@ const MUST_BE_CAPPED = [
   // which only catches a padded container that is also `position: fixed`. A comment
   // naming a guard that does not exist is how a real guard gets deleted later.
   '.cat-footer',
-  '.cat-pick-body',
+  '.pick-body',
   '.cat-ing-list--zoom',
   '.pas-header',
   '.pas-footer',
   '.fc-header',
+  '.fc-footer',
   '.inv-header',
   '.inv-strip',
   '.inv-footer',
@@ -118,7 +119,7 @@ const EXEMPT = new Map([
   ['.mgmt-overlay', 'a positioning shell; .mgmt-scroll carries the cap'],
   ['.history-overlay', 'a positioning shell; it uses .scroll-area inside'],
   ['.missing-overlay', 'a positioning shell; it uses .scroll-area inside'],
-  ['.cat-pick-overlay', 'a positioning shell; .cat-pick-body carries the cap'],
+  ['.pick-overlay', 'a positioning shell; .pick-body carries the cap'],
   ['.people-overlay', 'a positioning shell; .people-scroll carries the cap'],
   ['.log-overlay', 'a positioning shell; it uses .scroll-area inside'],
   ['#settings-overlay, #cp-overlay', 'positioning shells; they use .scroll-area inside'],

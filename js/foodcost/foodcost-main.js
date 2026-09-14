@@ -12,16 +12,18 @@
 import { t, localeTag, onLanguageChange } from '../i18n.js';
 import {
   initFoodCost, getProducts, tables, saveProduct, deleteProduct, setSyncErrorHandler,
-  getRecipes, getIngredients, hasLiveProducts, hasLiveRecipes,
+  getRecipes, getIngredients, hasLiveProducts, hasLiveRecipes, getLabourCostPerHour, saveLabourRate,
 } from './foodcost-store.js';
+import { openFoodcostSettings } from './foodcost-settings.js';
 import { renderList } from './foodcost-list.js';
 import { renderEditor } from './foodcost-editor.js';
-import { getProductHistory, canWriteRecipes, venueCountry, authReady } from './firebase-foodcost.js';
+import { getProductHistory, canWriteRecipes, venueCountry, authReady, canManageHere } from './firebase-foodcost.js';
 import { confirmDialog } from './confirm-dialog.js';
 import { el } from './dom.js';
 import { productsUsingRecipe, draftFromRecipe } from './foodcost-model.js';
-import { costRecipe } from '../catalogue/recipe-cost-model.js';
 import { formatRate, formatMoney, pricePerKg } from '../price-model.js';
+// Food or packaging? From js/ root, where the registry that files it asks the same question.
+import { isPackaging } from '../ingredient-kind.js';
 // The address a recipe's «Apri nel Food cost» opens this page with, and the way back to
 // that recipe. From js/ root: the catalogue and Food cost share an address, never a folder.
 import { recipeIdFromHash, recipeHref } from '../recipe-link.js';
@@ -31,6 +33,10 @@ const titleEl = document.getElementById('fcTitle');
 const subEl = document.getElementById('fcSub');
 const homeBtn = document.getElementById('fcHome');
 const backBtn = document.getElementById('fcBack');
+// The bottom bar and its one button, Settings (13 Sep 2026). The button carries its own
+// permission; the bar is shown only while a button in it is.
+const footerBar = document.getElementById('fcFooter');
+const settingsBtn = document.getElementById('fcSettings');
 
 let view = 'list';          // 'list' | 'editor' | 'history' | 'loading'
 let activeList = null;
@@ -60,6 +66,16 @@ function setHeader({ title, sub, back }) {
   subEl.textContent = sub;
   homeBtn.hidden = back;
   backBtn.hidden = !back;
+  paintFooter();
+}
+
+// The bottom bar. ⚠️ THE BUTTON CARRIES THE PERMISSION AND THE BAR CARRIES NONE (the
+// v1.62.0 rule): Settings holds the hourly labour cost, a wage figure, so it is for whoever
+// runs the place; the bar is drawn only while a button in it is — and only on the list, so
+// it never sits under a product somebody is editing.
+function paintFooter() {
+  settingsBtn.hidden = !canManageHere();
+  footerBar.hidden = view !== 'list' || settingsBtn.hidden;
 }
 
 function swap(node) {
@@ -270,39 +286,64 @@ const app = {
   canWeigh: canWriteRecipes,
   // The venue's country, which decides the VAT choices a product offers.
   country: venueCountry,
+  // Whether this person runs the place — who is told where the hourly labour cost is set.
+  mayManage: canManageHere,
   setLeaveGuard: (fn) => { leaveGuard = fn; },
 
-  // The recipes a component can point at, named with what they cost so the wrong
-  // one is obvious at the moment of choosing.
+  // The recipes a component can point at, by NAME ONLY.
+  // ⚠️ NO PRICE IN THE CHOOSER. Federico, 13 Sep 2026: «nella sezione "composto da" non
+  // mostrare il prezzo». What the product costs is read in «Costo di produzione», once.
   recipeOptions() {
     return Object.values(getRecipes())
       .filter(r => r && String(r.name || '').trim())
-      .map(r => {
-        const costed = costRecipe(r, tables());
-        const rate = costed.pricePerKg === null ? t('fc.notPriced') : `${formatRate(costed.pricePerKg)} / kg`;
-        return { id: r.id, label: `${r.name} — ${rate}` };
-      })
+      .map(r => ({ id: r.id, label: String(r.name).trim() }))
       .sort((a, b) => a.label.localeCompare(b.label));
   },
 
-  // Packaging can only be counted in pieces, so anything priced another way is
-  // shown but flagged — hiding it would look like the item had been deleted.
+  // The ingredients a product can have added straight to it — never packaging, which has
+  // its own section. By name, with the pack weight that tells two similar ones apart, and
+  // ⚠️ NO PRICE: «nella sezione "composto da" non mostrare il prezzo».
+  ingredientOptions() {
+    return Object.values(getIngredients())
+      .filter(i => i && i.active !== false && !isPackaging(i) && String(i.name || '').trim())
+      .map(i => ({ id: i.id, name: String(i.name).trim(), meta: String(i.weight || '').trim() }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  },
+
+  // The packaging a product can use: the items filed as PACKAGING in «Fornitori e
+  // ingredienti» (Federico, 13 Sep 2026: «la voce imballaggio deve puntare ad imballaggio»).
+  // Packaging is counted in pieces, so anything priced another way is shown but flagged —
+  // hiding it would look like the item had been deleted.
   packagingOptions() {
     return Object.values(getIngredients())
-      .filter(i => i && i.active !== false && String(i.name || '').trim())
+      .filter(i => i && i.active !== false && isPackaging(i) && String(i.name || '').trim())
       .map(i => {
         const each = i.priceUnit === 'pcs' ? Number(i.pricePerUnit) : null;
         const perKg = pricePerKg(i);
         const note = each ? t('fc.priceEach', { price: formatRate(each) })
           : perKg !== null ? t('fc.pricedByWeight')
             : t('fc.notPriced');
-        return { id: i.id, label: `${i.name} — ${note}` };
+        return { id: i.id, name: String(i.name).trim(), meta: note };
       })
-      .sort((a, b) => a.label.localeCompare(b.label));
+      .sort((a, b) => a.name.localeCompare(b.name));
   },
 };
 
 backBtn.addEventListener('click', handleBack);
+
+// Settings: the hourly labour cost. The button is hidden until the session says this
+// person runs the place, and the rules refuse anybody else whatever this page draws.
+settingsBtn.addEventListener('click', () => {
+  openFoodcostSettings({
+    rate: getLabourCostPerHour(),
+    confirm: confirmDialog,
+    onSave: saveLabourRate,
+    toast,
+    returnFocus: settingsBtn,
+  });
+});
+// Who is looking arrives with the session, after the first paint.
+authReady.then(paintFooter);
 setSyncErrorHandler(msg => toast(msg));
 
 initFoodCost(

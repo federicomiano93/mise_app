@@ -18,7 +18,11 @@
 
 import { t } from '../i18n.js';
 
-export const NO_SUPPLIER_ID = 'no-supplier';
+// ⚠️ THE ID ITSELF LIVES IN js/records.js since 13 Sep 2026: the ingredient card is shared
+// with the Catalogue, which may not import this folder, and a stored id must never exist in
+// two spellings.
+import { NO_SUPPLIER_ID } from '../records.js';
+export { NO_SUPPLIER_ID };
 
 // Frozen: it is handed to the same code that handles real suppliers, and a single
 // shared object that anything could quietly mutate would be a very confusing bug.

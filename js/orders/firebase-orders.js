@@ -15,7 +15,6 @@
 
 import { firebaseConfig, sessionReady, currentSession } from '../firebase.js';
 import { currentLocationId, pathFor } from '../location.js';
-import { splitPriceFields } from '../price-model.js';
 import {
   getApps,
   getApp,
@@ -34,7 +33,6 @@ import {
   deleteField,
   onSnapshot,
   runTransaction,
-  writeBatch,
   query,
   where,
   orderBy,
@@ -220,48 +218,11 @@ export async function removeDoc(name, id) {
 // path is composed from the ingredient's own document reference instead.
 const PRICES = 'prices';
 
-// Save an ingredient and, when its price actually changed, record that price —
-// as ONE atomic write.
-//
-// ⚠️ THE BATCH IS THE POINT. These are two documents in two different places, and
-// done as two writes the second can fail on its own: the ingredient would then
-// carry a price that the history has no record of, which is precisely the
-// question the history exists to answer. Either both land or neither does.
-//
-// `priceRecord` is null when nothing about the price moved — re-saving an
-// ingredient to fix a typo in its name must not plant a second identical entry,
-// or the history fills with non-events and "when did this go up?" stops being
-// answerable.
-//
-// A new ingredient gets its id here rather than from addDoc(): doc() on a
-// collection mints an id WITHOUT writing anything, which is what lets a brand-new
-// ingredient and its first price go in the same batch. Returns the id either way.
-// ⚠️ AND THE PRICE IS NOW A THIRD DOCUMENT, IN ITS OWN COLLECTION. splitPriceFields
-// separates the two halves; the ingredient keeps the price KEYS set to null so old
-// documents drain, and the rate itself goes beside it where an employee cannot
-// read it.
-//
-// ⚠️ `writePrice` IS FALSE FOR SOMEBODY WHO MAY NOT SEE MONEY, AND THAT IS NOT AN
-// OPTIMISATION. A batch is all-or-nothing: including a write to ingredient-prices
-// for an employee would have the DATABASE refuse the whole batch, so renaming an
-// ingredient — ordinary work — would fail with a permission error and no
-// explanation. They send no price, so none is written.
-export async function saveIngredientWithPrice(id, data, priceRecord, writePrice = true) {
-  await authReady;
-  const ingredients = collection(db, pathFor(COLLECTIONS.ingredients));
-  const ref = id ? doc(ingredients, id) : doc(ingredients);
-  const { ingredient, price } = splitPriceFields(data);
-
-  const batch = writeBatch(db);
-  batch.set(ref, withBakery(ingredient), { merge: true });
-  if (writePrice) {
-    const prices = collection(db, pathFor(COLLECTIONS.ingredientPrices));
-    batch.set(doc(prices, ref.id), withBakery(price), { merge: true });
-    if (priceRecord) batch.set(doc(collection(ref, PRICES)), withBakery(priceRecord));
-  }
-  await batch.commit();
-  return ref.id;
-}
+// ⚠️ SAVING AN INGREDIENT WITH ITS PRICE, SAVING A SUPPLIER, AND THE ONE RULE OF WHO MAY
+// WRITE A PRICE live in js/record-data.js since 13 Sep 2026: the two record cards are also
+// opened from the Catalogue, which may not import this folder. Re-exported, so every Orders
+// screen calls exactly what it called before.
+export { saveIngredientWithPrice, saveSupplierRecord, mayWritePrices } from '../record-data.js';
 
 // What every ingredient costs, as a map keyed by ingredient id.
 //

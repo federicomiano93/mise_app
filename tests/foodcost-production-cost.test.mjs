@@ -73,14 +73,23 @@ test('sold by weight: what a kilo costs', () => {
   assert.equal(out.batchCost, 32);
 });
 
-test('packaging adds to the cost of a piece, not to the weight of a kilo', () => {
-  const boxed = productionCost(product({ packaging: [{ ingredientId: 'BOX', qtyPcs: 100 }] }), TABLES);
-  assert.equal(boxed.batchCost, 44);
+test('packaging adds to the cost of each unit SOLD, and to the whole batch once the units are known', () => {
+  // One box per piece (Federico, 13 Sep 2026: packaging is per piece or per pack, never
+  // per batch): £0.32 + £0.12 a piece, and 100 boxes on the whole batch.
+  const boxed = productionCost(product({ packaging: [{ ingredientId: 'BOX', qtyPcs: 1 }] }), TABLES);
   assert.equal(boxed.unitCost, 0.44);
+  assert.equal(boxed.batchCost, 44);
   const byWeight = productionCost(product({
-    sellingMode: 'weight', piecesPerBatch: null, packaging: [{ ingredientId: 'BOX', qtyPcs: 100 }],
+    sellingMode: 'weight', piecesPerBatch: null, packaging: [{ ingredientId: 'BOX', qtyPcs: 1 }],
   }), TABLES);
-  assert.equal(byWeight.unitCost, 4.4, '£44 over the same 10 kg — the boxes weigh nothing here');
+  assert.equal(byWeight.unitCost, 3.32, 'one box per kilo sold — and the boxes weigh nothing here');
+  assert.equal(byWeight.batchCost, 33.2, '£32 of dough and 10 boxes for its 10 kilos');
+});
+
+test('⚠️ packaging that cannot be multiplied out yet leaves the batch figure too LOW, and says so', () => {
+  const out = productionCost(product({ sellingMode: null, packaging: [{ ingredientId: 'BOX', qtyPcs: 1 }] }), TABLES);
+  assert.equal(out.batchCost, 32, 'the dough alone');
+  assert.equal(out.partial, true, 'nobody has said how many units there are to box');
 });
 
 test('no way of selling chosen, or no pieces said: the batch alone, and no unit', () => {

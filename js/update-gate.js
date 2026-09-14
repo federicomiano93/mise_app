@@ -47,6 +47,12 @@ export const BUSY_SELECTORS = Object.freeze([
   '.alg-photo-busy',            // reading a packet from a photograph — already paid for
   '.hist-edit-list',            // correcting a recorded order
   '.cat-editor',                // writing a recipe
+  // ⚠️ A FOOD COST PRODUCT BEING WRITTEN. Added 13 Sep 2026: the product is saved WHOLE,
+  // and a reload in the middle of typing its lines, weighings and prices throws all of
+  // it away — the same reason the recipe editor above is here.
+  '.fc-editor',
+  // The hourly labour cost being typed (Food cost Settings): a reload drops the number.
+  '.fc-settings',
   '.guided-edit',               // writing a mixing procedure
   // ⚠️ A guided mix in progress. An update RELOADS the page, and doing that to
   // somebody standing at a mixer with a timer running is the worst moment this

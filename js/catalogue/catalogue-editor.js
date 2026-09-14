@@ -12,8 +12,11 @@ import { canManageHere } from './firebase-catalogue.js';
 import { el } from './dom.js';
 import {
   findInvalidRecipe, unitOf, CATALOGUE_UNITS, isWeighableUnit, weighableTotalGrams,
-  linkOf, applyLink, normalizeWeight, normalizeShelfLifeDays,
+  linkOf, applyLink, normalizeWeight, normalizeShelfLifeDays, moveRow,
 } from './catalogue-model.js';
+// Drag to reorder the rows — the library the Calculator's clients and the Home cards use,
+// vendored into the repo and precached (P19).
+import Sortable from '../vendor/sortable.esm.js';
 import { openLinkPicker } from './ingredient-picker.js';
 import { attachLinkSuggestions } from './ingredient-suggest.js';
 
@@ -116,10 +119,85 @@ export function renderEditor({ recipe, draft, allRecipes, app, getLabelProfile =
     totalNote.textContent = skipped ? t('cat.notWeighed', { n: skipped }) : '';
     totalNote.hidden = !skipped;
     countEl.textContent = String(working.ingredients.length);
+    // Nothing to put in order with a single row.
+    reorderBtn.hidden = working.ingredients.length < 2;
+  }
+
+  // ── Reordering the rows (13 Sep 2026) ───────────────────────────────────────
+  //
+  // Federico: «nella scheda ricetta dammi la possibilità di spostare l'ordine degli
+  // ingredienti già compilati».
+  // ⚠️ A MODE, NOT A GRIP ON EVERY ROW. At 296px a row already holds a name, an amount, a
+  // unit and a bin; a fifth control would take its width from the NAME. While reordering,
+  // each row is its grip, its name and its amount — nothing to type into, nothing to hit
+  // by accident while a finger is dragging.
+  // ⚠️ THE SAME ROW OBJECTS MOVE (moveRow), so a guided mixing step, which points at a row
+  // by its `rid`, still points at the right ingredient afterwards.
+  const GRIP_ICON = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg>';
+  let reordering = false;
+  let sortable = null;
+
+  function renderReorderRows() {
+    working.ingredients.forEach((ing, idx) => {
+      const name = String(ing.label || '').trim() || t('cat.unnamedRow');
+      const unit = unitOf(ing);
+      const qty = ing.grams === '' || ing.grams === undefined || unit === 'to taste' ? '' : String(ing.grams);
+      rowsContainer.appendChild(el('div', { class: 'cat-ing-editgroup cat-reorder-row' }, [
+        el('button', {
+          type: 'button', class: 'home-cards-grip cat-reorder-grip', icon: GRIP_ICON,
+          'aria-label': t('cat.moveRow', { name }), 'aria-describedby': 'catReorderHint',
+          onkeydown: (event) => moveWithKeys(idx, event),
+        }),
+        el('span', { class: 'cat-reorder-name', text: name }),
+        el('span', { class: 'cat-reorder-amount', text: [qty, unit].filter(Boolean).join(' ') }),
+      ]));
+    });
+    // ⚠️ HOLD TO DRAG ON A PHONE (200ms), so scrolling the recipe with a thumb never moves
+    // a row by accident — the rule the Home cards and the Calculator's clients follow.
+    if (working.ingredients.length > 1) {
+      sortable = Sortable.create(rowsContainer, {
+        animation: 150,
+        delay: 200,
+        delayOnTouchOnly: true,
+        draggable: '.cat-reorder-row',
+        ghostClass: 'cat-sortable-ghost',
+        chosenClass: 'cat-sortable-chosen',
+        dragClass: 'cat-sortable-drag',
+        onEnd: (evt) => moveTo(evt.oldDraggableIndex, evt.newDraggableIndex),
+      });
+    }
+  }
+
+  // Move a row in the WORKING COPY and redraw from it — the list on screen is always the
+  // model's, never whatever the drag left behind.
+  function moveTo(from, to, focusGrip = false) {
+    if (from === undefined || to === undefined || from === to) return;
+    working.ingredients = moveRow(working.ingredients, from, to);
+    markDirty();
+    renderIngredientRows();
+    // The rows were rebuilt: put the focus back on the grip that moved (P18).
+    if (focusGrip) rowsContainer.querySelectorAll('.cat-reorder-grip')[to]?.focus();
+  }
+
+  function moveWithKeys(idx, event) {
+    if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
+    event.preventDefault();
+    const to = event.key === 'ArrowUp' ? idx - 1 : idx + 1;
+    if (to < 0 || to >= working.ingredients.length) return;
+    moveTo(idx, to, true);
   }
 
   function renderIngredientRows() {
+    // ⚠️ THE OLD SORTABLE GOES FIRST: it holds the container, and a second instance on the
+    // same rows would move each of them twice.
+    sortable?.destroy();
+    sortable = null;
     rowsContainer.replaceChildren();
+    if (reordering) {
+      renderReorderRows();
+      updateTotal();
+      return;
+    }
     working.ingredients.forEach((ing, idx) => {
       const labelInput = el('input', {
         class: 'cat-lbl', type: 'text', placeholder: t('cat.ingredient'), value: ing.label,
@@ -137,6 +215,9 @@ export function renderEditor({ recipe, draft, allRecipes, app, getLabelProfile =
         linked: () => linkOf(working.ingredients[idx]),
         onPick: (chosen) => { linkTo(idx, chosen); focusAmount(idx); },
         onSeeAll: (query) => pickFromChooser(idx, query),
+        // «+ Crea "…" come ingrediente» — only where this person may add records here.
+        mayCreate: () => app.mayCreateIngredient(),
+        onCreate: (name) => createAndLink(idx, name),
       });
       const gramsInput = el('input', {
         class: 'cat-grm', type: 'number', min: '0', step: 'any', inputmode: 'decimal',
@@ -243,9 +324,22 @@ export function renderEditor({ recipe, draft, allRecipes, app, getLabelProfile =
       excludeRecipeId: working.id,
       hasLink: !!linkOf(working.ingredients[idx]),
       initialQuery,
+      mayCreate: app.mayCreateIngredient(),
     });
     if (chosen === undefined) return;              // dismissed: change nothing
+    if (chosen && chosen.create) { createAndLink(idx, chosen.create); return; }
     linkTo(idx, chosen);
+  }
+
+  // A row whose ingredient is not in the records yet: the SAME card «Fornitori e ingredienti»
+  // uses opens above this editor, and the row is linked once it is saved. Everything typed
+  // in the recipe stays exactly where it was — the editor is never taken off the screen.
+  // Backing out of the card changes nothing.
+  async function createAndLink(idx, name) {
+    const made = await app.createIngredient(name);
+    if (!made || !made.id || made.kind === 'packaging' || !working.ingredients[idx]) return;
+    linkTo(idx, { kind: 'ingredient', refId: made.id, name: made.name });
+    focusAmount(idx);
   }
 
   // Link row `idx` to what was chosen; null removes the link.
@@ -322,6 +416,9 @@ export function renderEditor({ recipe, draft, allRecipes, app, getLabelProfile =
     const problem = findInvalidRecipe(clean);
     if (problem) {
       showErrors = true;
+      // ⚠️ OUT OF REORDER MODE FIRST: its rows have no name or amount box, so the one to fix
+      // could be neither highlighted nor reached.
+      if (reordering) setReordering(false);
       renderIngredientRows();
       validateUI();
       if (problem === 'name') nameInput.focus();
@@ -416,6 +513,27 @@ export function renderEditor({ recipe, draft, allRecipes, app, getLabelProfile =
     onclick: () => { working.ingredients.push({ label: '', grams: '', unit: 'g' }); markDirty(); renderIngredientRows(); if (showErrors) validateUI(); },
   });
 
+  // «Riordina» / «Fine» beside the ingredients heading, and the one sentence that says how.
+  const reorderHint = el('p', { class: 'cat-reorder-hint', id: 'catReorderHint', text: t('cat.reorderHint') });
+  reorderHint.hidden = true;
+  const reorderBtn = el('button', {
+    class: 'cat-reorder-btn', type: 'button', text: t('cat.reorder'), 'aria-pressed': 'false',
+    onclick: () => setReordering(!reordering),
+  });
+
+  function setReordering(on) {
+    reordering = on;
+    reorderBtn.textContent = reordering ? t('cat.reorderDone') : t('cat.reorder');
+    reorderBtn.setAttribute('aria-pressed', String(reordering));
+    reorderHint.hidden = !reordering;
+    // No new row while reordering: it would be a row with nothing to drag by its name.
+    addRowBtn.hidden = reordering;
+    renderIngredientRows();
+    if (showErrors && !reordering) validateUI();
+    const first = rowsContainer.querySelector(reordering ? '.cat-reorder-grip' : '.cat-lbl');
+    try { first?.focus({ preventScroll: true }); } catch (e) { /* focus is best-effort */ }
+  }
+
   const actions = el('div', { class: 'cat-editor-actions' }, [
     el('button', { class: 'cat-save-btn', type: 'button', text: t('ui.save'), onclick: onSave }),
     // ⚠️ Owner only, same as the detail screen. Staff may still edit and save.
@@ -470,7 +588,9 @@ export function renderEditor({ recipe, draft, allRecipes, app, getLabelProfile =
     el('div', { class: 'cat-ing-head' }, [
       el('label', { class: 'cat-ing-head-label', text: t('cat.ingredients') }),
       countEl,
+      reorderBtn,
     ]),
+    reorderHint,
     rowsContainer,
     totalNote,
     addRowBtn,

@@ -154,6 +154,21 @@ export function normalizeCatalogueRecipe(raw) {
   return out;
 }
 
+// The two label fields exactly as the catalogue store WRITES them: a real number, or
+// `null` for «nobody has said» — which the data layer turns into a removal, because the
+// rules refuse a stored null and a merge that simply leaves a key out keeps the old one.
+//
+// ⚠️ THIS IS WHAT A RECIPE SAVE HAD BEEN MISSING SINCE v1.76.0. The editor let you type
+// the net weight and the shelf life, the rules accepted them, the label read them — and
+// the store's hand-listed document never carried them, so every Save threw both away.
+export function labelFieldsOf(recipe) {
+  const netG = normalizeWeight(recipe && recipe.netWeightG);
+  return {
+    netWeightG: netG > 0 ? netG : null,
+    shelfLifeDays: normalizeShelfLifeDays(recipe && recipe.shelfLifeDays),
+  };
+}
+
 // How many days the finished food keeps. `null` means nobody has said — which is
 // NOT the same as 0, and the difference is a date printed on somebody's food.
 //
@@ -298,7 +313,9 @@ export function linkOptions({ ingredients, recipes, suppliers, query, excludeRec
   const supplierName = id => (suppliers && (suppliers[id] || {}).name) || '';
 
   const ingredientList = Object.values(ingredients || {})
-    .filter(ing => ing && ing.active !== false)
+    // ⚠️ PACKAGING IS NOT AN INGREDIENT (13 Sep 2026): a box filed under «Imballaggi» in
+    // Fornitori e ingredienti has no allergens to declare and no place in a recipe.
+    .filter(ing => ing && ing.active !== false && ing.kind !== 'packaging')
     .map(ing => ({
       id: ing.id,
       name: String(ing.name || '').trim(),
@@ -395,6 +412,22 @@ export function applyLink(row, chosen) {
   row.refId = refId;
   if (!String(row.label ?? '').trim() && chosen.name) row.label = String(chosen.name);
   return row;
+}
+
+// The rows in a new order: the one at `from` moved to `to`. Returns a NEW list holding the
+// SAME row objects — a row keeps its link and, above all, its `rid`, which is what a guided
+// mixing step points at, so reordering the ingredients never unhooks a step (13 Sep 2026:
+// «dammi la possibilità di spostare l'ordine degli ingredienti già compilati»).
+// An index outside the list, or a move to where it already is, gives the list back as it was.
+export function moveRow(list, from, to) {
+  const rows = Array.isArray(list) ? list.slice() : [];
+  const a = Math.trunc(Number(from));
+  const b = Math.trunc(Number(to));
+  if (!Number.isInteger(a) || !Number.isInteger(b) || a === b
+    || a < 0 || b < 0 || a >= rows.length || b >= rows.length) return rows;
+  const [row] = rows.splice(a, 1);
+  rows.splice(b, 0, row);
+  return rows;
 }
 
 // ── kg scaling (pure pro-rata "total" — the catalogue's only calc logic) ──────

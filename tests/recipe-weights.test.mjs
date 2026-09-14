@@ -74,6 +74,40 @@ test('⚠️ the store still lists every field BY HAND', () => {
     'the document must never be built by spreading the recipe: `id` would go with it');
 });
 
+test('⚠️⚠️ the catalogue store WRITES the label fields the editor lets you type', () => {
+  // Found 13 Sep 2026: the editor had net weight and shelf life boxes, the rules
+  // accepted both, the label read both — and this document never carried them, so
+  // every Save threw away what had just been typed.
+  const save = storeSave();
+  const data = save.slice(save.indexOf('const data = {'), save.indexOf('const id = recipe.id'));
+  assert.match(data, /\.\.\.labelFieldsOf\(recipe\),/, 'the document must carry the label fields');
+  for (const key of ['netWeightG', 'shelfLifeDays']) {
+    assert.ok(EDITOR.includes(`working.${key}`), `the editor still edits ${key} (else this guard is about nothing)`);
+  }
+});
+
+test('⚠️ an emptied label box is REMOVED from the document, not left behind by the merge', () => {
+  const data = codeOf(read('js/catalogue/firebase-catalogue.js'));
+  assert.match(data, /const CLEARABLE_RECIPE_FIELDS = \['netWeightG', 'shelfLifeDays'\];/);
+  assert.match(data, /if \(key in out && out\[key\] === null\) out\[key\] = deleteField\(\);/,
+    'a null must travel as deleteField(): the rules refuse a stored null');
+  assert.match(data, /setDoc\(doc\(db, pathFor\(RECIPES\), id\), withBakery\(out\), \{ merge: true \}\)/,
+    'and the write must send the converted object, not the original');
+});
+
+test('labelFieldsOf: a number, or null for «nobody has said» — never 0 for a shelf life nobody typed', async () => {
+  const { labelFieldsOf } = await import('../js/catalogue/catalogue-model.js');
+  assert.deepEqual(labelFieldsOf({ netWeightG: 250, shelfLifeDays: 3 }), { netWeightG: 250, shelfLifeDays: 3 });
+  assert.deepEqual(labelFieldsOf({ netWeightG: '250', shelfLifeDays: '0' }), { netWeightG: 250, shelfLifeDays: 0 },
+    'a shelf life of 0 is a real answer («today») and must be kept');
+  assert.deepEqual(labelFieldsOf({}), { netWeightG: null, shelfLifeDays: null });
+  assert.deepEqual(labelFieldsOf({ netWeightG: 0, shelfLifeDays: '' }), { netWeightG: null, shelfLifeDays: null },
+    'an emptied box is a removal');
+  assert.deepEqual(labelFieldsOf({ netWeightG: -5, shelfLifeDays: true }), { netWeightG: null, shelfLifeDays: null },
+    'junk is not a number of grams or days');
+  assert.deepEqual(labelFieldsOf(null), { netWeightG: null, shelfLifeDays: null });
+});
+
 test('⚠️ the recipe editor no longer asks for the two weighings, nor touches the loss', () => {
   for (const gone of ['catRecipeRaw', 'catRecipeCooked', 'weightLoss', 'refreshLoss', 'MAX_LOSS_PCT']) {
     assert.ok(!EDITOR.includes(gone), `${gone} left the recipe editor with the boxes`);
@@ -86,11 +120,11 @@ test('⚠️ the recipe editor no longer asks for the two weighings, nor touches
 test('⚠️⚠️ the Food cost product is where they are typed, and Save hands them over', () => {
   assert.match(FC_EDITOR, /box\(t\('fc\.rawDough'\), typeRaw\)/, 'the raw box types through the pure model');
   assert.match(FC_EDITOR, /box\(t\('fc\.cookedDough'\), typeCooked\)/, 'and so does the cooked one');
-  assert.match(FC_EDITOR, /const patches = weighingPatches\(app\.tables\(\)\.recipes, weighings,\s*clean\.components\.map\(c => c\.recipeId\)\);/,
+  assert.match(FC_EDITOR, /const patches = weighingPatches\(app\.tables\(\)\.recipes, weighings,\s*clean\.components\.filter\(c => c\.recipeId\)\.map\(c => c\.recipeId\)\);/,
     'Save asks the model which recipes to write — only those on the product, only real changes');
   assert.match(FC_EDITOR, /app\.saveProduct\(clean, snapshot, patches\);/);
-  assert.match(FC_EDITOR, /const result = costProduct\(working, liveTables\(\)\);/,
-    'the answer at the top is worked out WITH the weighing being typed, not after Save');
+  assert.match(FC_EDITOR, /const tables = liveTables\(\);\s*paintProductionCost\(\);\s*paintSuggestion\(tables\);[\s\S]{0,400}?const result = costProduct\(working, tables\);/,
+    'the answer at the top — and the suggested price — are worked out WITH the weighing being typed, not after Save');
 });
 
 test('⚠️⚠️ saving a product really hands every weighing to the database', () => {

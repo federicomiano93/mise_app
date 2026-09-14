@@ -26,7 +26,8 @@ test('⚠️ no English phrase is written into the Food cost screens any more', 
 test('every key they ask for exists in both languages, and the Italian is Italian', () => {
   const { en, it } = _dictionaries();
   const keys = ['fc.vat.standard', 'fc.vat.reduced', 'fc.vat.minimum', 'fc.vat.zero', 'fc.notPriced', 'fc.pricedByWeight',
-    'fc.priceEach', 'fc.partlyPriced', 'fc.aria.recipe', 'fc.aria.packagingItem', 'fc.aria.kilos', 'fc.aria.pieces'];
+    'fc.priceEach', 'fc.thisRecipePartlyPriced', 'fc.aria.changeLine', 'fc.aria.quantity', 'fc.aria.kilos', 'fc.aria.pieces',
+    'fc.aria.unit', 'fc.unit.pieces'];
   // The VAT words are named in the model's per-country table, the rest in the two screens.
   const used = read('js/foodcost/foodcost-editor.js') + read('js/foodcost/foodcost-main.js')
     + read('js/foodcost/foodcost-model.js');
