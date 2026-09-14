@@ -20,7 +20,7 @@
 //
 // NAVIGATION — a stack, so Back is honest at every depth:
 //
-//   Fornitori · Tutti gli ingredienti     (the page itself)
+//   Ingredienti · Imballaggi · Fornitori     (the page itself)
 //     └─ one supplier: its record + everything it sells
 //          ├─ its form
 //          └─ one ingredient's form
@@ -37,6 +37,8 @@ import { NO_SUPPLIER_ID } from './no-supplier.js';
 import { ingredientLabel } from './archive.js';
 import { formatPricePerUnit } from '../price-model.js';
 import { allergenState } from '../allergen-model.js';
+// Food or packaging? From js/ root: Food cost and the Catalogue ask the same question.
+import { isPackaging } from '../ingredient-kind.js';
 import { buildIngredientForm } from './ingredient-form.js';
 // ⚠️ A FEATURE SWITCH, NOT A ROLE GATE, and the difference is why this may sit in a
 // file that is forbidden to ask canManageHere(). It answers «does this venue track
@@ -58,24 +60,23 @@ export function buildRegistry(data, actions) {
   // ingredienti». The backlog says why — 67 ingredients, 0 declared: this list IS the
   // work, the supplier list is the occasional errand.
   // ⚠️ THREE THINGS MOVE TOGETHER OR IT IS WORSE THAN NOT MOVING THEM: this default, the
-  // DOM order of the two buttons, and which one is built already `active`. paintChrome()
+  // DOM order of the buttons, and which one is built already `active`. paintChrome()
   // recomputes `active` from `tab` on every paint, so a default changed alone lights the
   // wrong tab on the FIRST FRAME — a flash on every open.
-  let tab = 'ingredients';        // which of the two lists is on screen
+  let tab = 'ingredients';        // 'ingredients' | 'packaging' | 'suppliers'
   let query = '';                 // the search text for that list
   // Everything above the page itself. Each entry is { view, overlay }; Back pops one.
   const stack = [];
 
   const listHost = el('div', { class: 'reg-list-host' });
 
-  // ── The two-way switch ──────────────────────────────────────────────────────
-  // A .view-switch, not a .tab-bar, and the same pair the Order tab already uses:
-  // these are two windows onto ONE set of records, not two different sections. It
-  // is also the only two-way control in this app already measured at 320px.
+  // ── The switch ──────────────────────────────────────────────────────────────
+  // A .view-switch, not a .tab-bar, and the same control the Order tab already uses:
+  // these are windows onto ONE set of records, not different sections.
   // ⚠️⚠️ THE WORDS ARE NOT PUT ON THESE BUTTONS HERE, and that is the whole point.
   // registry-main.js calls buildRegistry() at MODULE LOAD — before a venue is open, so
   // before the app knows which language it speaks. A t() on this line answers in the
-  // starting language and keeps that answer for the life of the page: the two labels
+  // starting language and keeps that answer for the life of the page: the labels
   // read «Suppliers · All ingredients» on an Italian screen, in the app's own words,
   // for as long as it stayed open. Caught by driving it, not by reading it.
   //
@@ -87,12 +88,25 @@ export function buildRegistry(data, actions) {
     type: 'button', class: 'view-switch-btn active', role: 'tab', 'aria-selected': 'true',
     onClick: () => setTab('ingredients'),
   });
+  // «Imballaggi» (Federico, 13 Sep 2026): «imballaggi è una sezione che deve essere
+  // aggiunta in fornitori ed ingredienti perché in questo momento non abbiamo da nessuna
+  // parte una sezione imballaggi». Beside the ingredients: the same kind of record, bought
+  // from the same suppliers, priced and ordered the same way.
+  const packagingBtn = el('button', {
+    type: 'button', class: 'view-switch-btn', role: 'tab', 'aria-selected': 'false',
+    onClick: () => setTab('packaging'),
+  });
   const suppliersBtn = el('button', {
     type: 'button', class: 'view-switch-btn', role: 'tab', 'aria-selected': 'false',
     onClick: () => setTab('suppliers'),
   });
   // ⚠️ Ingredients on the LEFT and lit, matching the `tab` default above.
-  const viewSwitch = el('div', { class: 'view-switch', role: 'tablist' }, [ingredientsBtn, suppliersBtn]);
+  const viewSwitch = el('div', { class: 'view-switch', role: 'tablist' }, [ingredientsBtn, packagingBtn, suppliersBtn]);
+
+  // An address can ask for the packaging list (suppliers.html#packaging) — Food cost's
+  // packaging chooser sends somebody here when there is nothing to choose yet. Applied
+  // before the first paint below, so the right tab is lit from the first frame.
+  if (typeof location !== 'undefined' && location.hash === '#packaging') tab = 'packaging';
 
   // MOUNTED ONCE, ROWS REPAINTED — the same arrangement as the supplier list and
   // the flat ingredient list on the Order tab. A live snapshot from another phone
@@ -115,19 +129,22 @@ export function buildRegistry(data, actions) {
     paintList();
   }
 
-  // Every word that is not a row: the two switch labels and the search placeholder.
+  // Every word that is not a row: the switch labels and the search placeholder.
   // Called from paintList(), so it runs again on every live snapshot AND after the
   // venue's language has arrived — see the note on the buttons above.
   function paintChrome() {
     suppliersBtn.textContent = t('orders.tab.suppliers');
+    packagingBtn.textContent = t('orders.tab.packaging');
     ingredientsBtn.textContent = t('ui.ingredients');
     viewSwitch.setAttribute('aria-label', t('orders.registry.whichList'));
-    [[suppliersBtn, tab === 'suppliers'], [ingredientsBtn, tab === 'ingredients']]
+    [[suppliersBtn, tab === 'suppliers'], [packagingBtn, tab === 'packaging'], [ingredientsBtn, tab === 'ingredients']]
       .forEach(([btn, on]) => {
         btn.classList.toggle('active', on);
         btn.setAttribute('aria-selected', String(on));
       });
-    const ph = tab === 'suppliers' ? t('orders.searchASupplier') : t('orders.searchAnIngredient');
+    const ph = tab === 'suppliers' ? t('orders.searchASupplier')
+      : tab === 'packaging' ? t('orders.searchPackaging')
+        : t('orders.searchAnIngredient');
     search.input.placeholder = ph;
     // buildSearchBox copies the placeholder into aria-label at build time, when there
     // was none — so a screen reader would announce an unlabelled field (P18).
@@ -136,12 +153,12 @@ export function buildRegistry(data, actions) {
 
   const node = el('div', {}, [viewSwitch, search.node, listHost]);
 
-  // ── The two lists ───────────────────────────────────────────────────────────
+  // ── The lists ───────────────────────────────────────────────────────────────
   function paintList() {
     paintChrome();
     listHost.replaceChildren();
     if (tab === 'suppliers') paintSuppliers();
-    else paintIngredients();
+    else paintItems(tab === 'packaging' ? 'packaging' : 'ingredient');
   }
 
   function matches(name) {
@@ -184,31 +201,38 @@ export function buildRegistry(data, actions) {
     listHost.appendChild(list);
   }
 
-  // Every ingredient, A–Z, whoever sells it. ⚠️ NOT A CONVENIENCE — it is the
-  // screen for going down a list of sixty-seven and declaring each one. Doing that
-  // supplier by supplier means remembering which ones are done.
-  function paintIngredients() {
+  // Every ingredient — or every piece of packaging — A–Z, whoever sells it. ⚠️ NOT A
+  // CONVENIENCE — it is the screen for going down a list of sixty-seven and declaring
+  // each one. Doing that supplier by supplier means remembering which ones are done.
+  //   kind: 'ingredient' | 'packaging'
+  function paintItems(kind) {
+    const packaging = kind === 'packaging';
     const supById = {};
     data.suppliers().forEach(s => { supById[s.id] = s.name; });
-    const all = data.ingredients().slice().sort((a, b) => a.name.localeCompare(b.name));
+    const all = data.ingredients().filter(i => isPackaging(i) === packaging)
+      .sort((a, b) => a.name.localeCompare(b.name));
     const visible = all.filter(i => matches(i.name));
 
     listHost.appendChild(el('button', {
       type: 'button', class: 'mgmt-add',
-      onClick: () => openIngredientForm(null, null),
-    }, t('orders.addIngredient')));
+      onClick: () => openIngredientForm(null, null, kind),
+    }, packaging ? t('orders.addPackaging') : t('orders.addIngredient')));
 
     if (!all.length) {
-      listHost.appendChild(el('p', { class: 'mgmt-empty', text: t('orders.noIngredientsYet') }));
+      listHost.appendChild(el('p', { class: 'mgmt-empty', text: packaging ? t('orders.noPackagingYet') : t('orders.noIngredientsYet') }));
       return;
     }
     if (!visible.length) {
-      listHost.appendChild(el('p', { class: 'mgmt-empty', text: t('orders.noIngredientMatchesYour') }));
+      listHost.appendChild(el('p', { class: 'mgmt-empty', text: packaging ? t('orders.noPackagingMatches') : t('orders.noIngredientMatchesYour') }));
       return;
     }
 
     const list = el('div', { class: 'mgmt-list' });
-    visible.forEach(i => list.appendChild(ingredientRow(i, supById[i.supplierId])));
+    // ⚠️ `?? ''`, NEVER undefined: undefined is what a supplier's OWN screen passes to mean
+    // «do not name the supplier». An item with no supplier (or a deleted one) matched no
+    // entry here, read as undefined, and was drawn as if on its supplier's screen — no
+    // «No supplier», and a «Packaging» tag on the packaging list. Found driving it.
+    visible.forEach(i => list.appendChild(ingredientRow(i, supById[i.supplierId] ?? '')));
     listHost.appendChild(list);
   }
 
@@ -253,6 +277,8 @@ export function buildRegistry(data, actions) {
   // is. Found by looking at a screenshot after 34 driven checks had passed.
   function ingredientRow(item, supplierName) {
     const meta = [
+      // On a supplier's own screen both kinds share one list, so packaging says so.
+      supplierName === undefined && isPackaging(item) ? t('orders.packagingTag') : null,
       supplierName === undefined ? null : (supplierName || t('orders.noSupplier')),
       item.brand,
       formatPricePerUnit(item) || null,
@@ -269,7 +295,8 @@ export function buildRegistry(data, actions) {
     // list for work it has decided not to do, pointing at a form it can no longer
     // open. Read per row rather than captured per paint: the switch can be thrown
     // while this screen is open.
-    if (ingredientPanels().allergens && allergenState(item) === 'unknown') {
+    // ⚠️ AND NEVER ON PACKAGING: a box has no allergens to declare.
+    if (!isPackaging(item) && ingredientPanels().allergens && allergenState(item) === 'unknown') {
       row.querySelector('.mgmt-item-main').appendChild(
         el('span', { class: 'reg-flag', text: t('orders.notDeclaredShort') }));
     }
@@ -386,13 +413,15 @@ export function buildRegistry(data, actions) {
   }
 
   // ── One ingredient's form ───────────────────────────────────────────────────
-  function openIngredientForm(item, presetSupplierId) {
+  //   presetKind: 'packaging' when added from the packaging list
+  function openIngredientForm(item, presetSupplierId, presetKind = null) {
     push(() => {
       const body = el('div', { class: 'mgmt-scroll' }, [
         buildIngredientForm({
           item,
           suppliers: data.suppliers(),
           preset: presetSupplierId,
+          presetKind,
           // ⚠️ THE PHOTO SCREEN IS HANDED IN AS AN ACTION, not imported by the form.
           // The form then knows nothing about overlays and this file stays the only
           // one that navigates — the same seam saveIngredient and priceHistory use.
@@ -401,7 +430,11 @@ export function buildRegistry(data, actions) {
           onCancel: pop,
         }),
       ]);
-      return overlay(item ? t('orders.editIngredient') : t('orders.newIngredient'), body);
+      const packaging = item ? isPackaging(item) : presetKind === 'packaging';
+      const title = packaging
+        ? (item ? t('orders.editPackaging') : t('orders.newPackaging'))
+        : (item ? t('orders.editIngredient') : t('orders.newIngredient'));
+      return overlay(title, body);
     });
   }
 

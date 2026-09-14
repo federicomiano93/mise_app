@@ -516,16 +516,29 @@ test('⚠️⚠️ the screen opens on the INGREDIENTS, and all three parts of t
   const code = codeOf(REGISTRY);
   assert.match(code, /let tab = 'ingredients';/,
     'the default list must be the ingredients');
-  assert.match(code, /role: 'tablist' \}, \[ingredientsBtn, suppliersBtn\]/,
+  // ⚠️ THREE BUTTONS SINCE 13 Sep 2026 — Ingredienti · Imballaggi · Fornitori. Packaging
+  // sits beside the ingredients because it is the same kind of record, bought the same way.
+  assert.match(code, /role: 'tablist' \}, \[ingredientsBtn, packagingBtn, suppliersBtn\]/,
     'the ingredients button must be built FIRST, so it sits on the left');
   const built = code.slice(0, code.indexOf('const viewSwitch'));
   const ing = built.indexOf('const ingredientsBtn');
+  const pack = built.indexOf('const packagingBtn');
   const sup = built.indexOf('const suppliersBtn');
-  assert.ok(ing !== -1 && sup !== -1, 'both buttons must exist');
-  assert.match(built.slice(ing, sup), /class: 'view-switch-btn active'[\s\S]*?'aria-selected': 'true'/,
+  assert.ok(ing !== -1 && pack !== -1 && sup !== -1, 'all three buttons must exist');
+  assert.match(built.slice(ing, pack), /class: 'view-switch-btn active'[\s\S]*?'aria-selected': 'true'/,
     'the ingredients button is the one built already lit, matching the default');
-  assert.doesNotMatch(built.slice(sup), /'aria-selected': 'true'/,
-    'and the suppliers button must NOT also claim to be selected');
+  assert.doesNotMatch(built.slice(pack), /'aria-selected': 'true'/,
+    'and neither of the other two may also claim to be selected');
+});
+
+test('⚠️ packaging has its own list, and the ingredients list no longer shows it', () => {
+  const code = codeOf(REGISTRY);
+  assert.match(code, /data\.ingredients\(\)\.filter\(i => isPackaging\(i\) === packaging\)/,
+    'each list keeps only its own kind');
+  assert.match(code, /if \(!isPackaging\(item\) && ingredientPanels\(\)\.allergens && allergenState\(item\) === 'unknown'\)/,
+    'a box is never flagged «not declared»: it has no allergens to declare');
+  assert.match(code, /packagingBtn\.textContent = t\('orders\.tab\.packaging'\)/, 'its label is taken at paint time');
+  assert.match(code, /location\.hash === '#packaging'/, 'Food cost can send somebody straight to it');
 });
 
 test('the Orders screen deliberately keeps «Per fornitore» first', () => {

@@ -18,6 +18,7 @@
 import { t } from '../i18n.js';
 import { el } from './dom.js';
 import { mayWritePrices } from './firebase-orders.js';
+import { kindOf } from '../ingredient-kind.js';
 import { NO_SUPPLIER_ID } from './no-supplier.js';
 import { field, formActions, reportFailure, shortDate } from './mgmt-ui.js';
 import {
@@ -83,7 +84,8 @@ const CAMERA_ICON = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
 // ("2.27kg"), and two boxes holding one fact drift apart.
 //
 // Returns { node, read() } so the form below can stay readable.
-function priceBlock(item, actions) {
+// `defaultUnit` is how a NEW item starts: packaging is bought by the piece.
+function priceBlock(item, actions, defaultUnit = null) {
   // What the price box is called, per purchase form. Spelled out per unit rather
   // than assembled from the unit code, because "Price per pcs" is not English and
   // the label is the only place the ex-VAT rule can be stated.
@@ -124,7 +126,7 @@ function priceBlock(item, actions) {
   unitSelect.appendChild(el('option', { value: '', text: t('orders.noPrice2') }));
   PRICE_UNITS.forEach(u => {
     const opt = el('option', { value: u, text: priceUnitLabel(u) });
-    if (item?.priceUnit === u) opt.selected = true;
+    if (item ? item.priceUnit === u : defaultUnit === u) opt.selected = true;
     unitSelect.appendChild(opt);
   });
 
@@ -899,8 +901,17 @@ function fold({ title, state, above, body, help }) {
 // preset    — a supplier id to start on when adding from inside a supplier's screen
 // actions   — { saveIngredient(id, payload, record, writePrice), priceHistory(id) }
 // onDone / onCancel — where the screen goes afterwards
-export function buildIngredientForm({ item, suppliers, preset, actions, onDone, onCancel }) {
+export function buildIngredientForm({ item, suppliers, preset, presetKind = null, actions, onDone, onCancel }) {
   const name = el('input', { type: 'text', class: 'mgmt-input', value: item?.name || '' });
+  // Food, or packaging? (13 Sep 2026.) A box, a tray or a label is bought, priced and
+  // ordered like flour, so it is filed here too — and this is also how an item already in
+  // the list is moved between the two. A new one starts on the list it was added from.
+  const startKind = item ? kindOf(item) : (presetKind === 'packaging' ? 'packaging' : 'ingredient');
+  const kindSelect = el('select', { class: 'mgmt-input' }, [
+    el('option', { value: 'ingredient', text: t('orders.kind.ingredient') }),
+    el('option', { value: 'packaging', text: t('orders.kind.packaging') }),
+  ]);
+  kindSelect.value = startKind;
   const brand = el('input', { type: 'text', class: 'mgmt-input', value: item?.brand || '', placeholder: t('orders.eGGalbani') });
   const weight = el('input', { type: 'text', class: 'mgmt-input', value: item?.weight || '', placeholder: t('orders.eg.packWeight') });
   const category = el('input', { type: 'text', class: 'mgmt-input', value: item?.category || '' });
@@ -937,11 +948,18 @@ export function buildIngredientForm({ item, suppliers, preset, actions, onDone, 
   // ⚠️ AND ONLY WHERE THE VENUE USES FOOD COST: a price the database would refuse
   // takes the whole save down with it (see mayWritePrices).
   const mayPrice = mayWritePrices();
-  const price = mayPrice ? priceBlock(item, actions) : null;
+  const price = mayPrice ? priceBlock(item, actions, startKind === 'packaging' ? 'pcs' : null) : null;
   // ⚠️ NOT A ROLE, A VENUE. Everybody in the building gets the same answer here: it
   // says whether this business tracks allergens and nutrition at all, and the two
   // switches behind it live one screen away (js/orders/registry-settings.js).
   const allergens = allergenBlock(item, ingredientPanels(), actions);
+  // ⚠️ PACKAGING HAS NO ALLERGENS, so the block is HIDDEN for it — never removed, and
+  // never read on Save (below). An item filed as packaging by mistake and moved back
+  // finds its declaration exactly as it was, because the merge write never touched it.
+  const isBox = () => kindSelect.value === 'packaging';
+  const syncKind = () => { allergens.root.hidden = isBox(); };
+  kindSelect.addEventListener('change', syncKind);
+  syncKind();
 
   const save = el('button', { type: 'button', class: 'btn-primary', onClick: async () => {
     // The supplier is no longer required — only the name is.
@@ -964,8 +982,11 @@ export function buildIngredientForm({ item, suppliers, preset, actions, onDone, 
       category: category.value.trim() || 'Other',
       unit: unit.value.trim(),
       active: item ? item.active !== false : true,
+      kind: kindSelect.value,
       ...patch,
-      ...allergens.read(),
+      // ⚠️ NOT READ FOR PACKAGING: the merge then leaves any declaration already stored
+      // exactly as it was, so filing an ingredient as packaging by mistake loses nothing.
+      ...(isBox() ? {} : allergens.read()),
     };
 
     // Record the price only when it is COMPLETE and actually different. Saving
@@ -1001,6 +1022,7 @@ export function buildIngredientForm({ item, suppliers, preset, actions, onDone, 
       title: t('orders.section.productData'),
       body: [
         field(t('orders.field.name'), name),
+        field(t('orders.field.kind'), kindSelect),
         field(t('orders.field.supplier'), supplierSelect),
         field(t('orders.field.brand'), brand),
         field(t('orders.field.weight'), weight),
