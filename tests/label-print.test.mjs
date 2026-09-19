@@ -167,6 +167,16 @@ test('⚠️ the allergen emphasis survives a printer set to save ink', () => {
     'bold alone is nearly invisible at 1.7 mm on a thermal print');
 });
 
+test('⚠️ the product name and the «Contains» line print bold', () => {
+  // `lab-sheet-${block.role}` builds these two class names at run time, so no file
+  // names them in full — and a dead-CSS search that looked for whole names deleted
+  // both rules twice on 19 Sep 2026 with every test green. The emphasis INSIDE the
+  // ingredient list is pinned above; these two lines of the label are pinned here.
+  const css = read('label-print.css').replace(/\/\*[\s\S]*?\*\//g, '');
+  assert.match(css, /\.lab-sheet-name\s*\{[^}]*font-weight:\s*700/);
+  assert.match(css, /\.lab-sheet-contains\s*\{[^}]*font-weight:\s*700/);
+});
+
 // ── The wiring on the screen ─────────────────────────────────────────────────
 
 test('⚠️⚠️ the Print button obeys the MEASUREMENT, never the estimate', () => {

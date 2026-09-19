@@ -553,7 +553,6 @@ body.cat-zoom-lock { overflow: hidden; }
 }
 .cat-decl-send-btn > * { display: flex; align-items: center; }
 .cat-decl-send-btn:active { transform: scale(.97); }
-.cat-decl-mailnote { margin: 8px 0 0; font-size: .75rem; color: var(--cat-text-2); }
 .cat-decl-status { display: block; margin-top: 6px; font-size: .8rem; color: var(--cat-text-2); }
 
 .cat-sec {
