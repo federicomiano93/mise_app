@@ -365,7 +365,6 @@ select.qty-select:focus { outline: none; border-color: var(--crust); background:
 .ing-row:last-child { border-bottom: none; }
 .ing-name { font-size: 20px; font-weight: 500; color: var(--text); }
 .ing-val { font-size: 22px; font-weight: 700; font-family: 'DM Mono', monospace; color: var(--text); }
-.ing-kg { display: none; }
 
 .ing-separator {
   border-top: 1px solid var(--border);
@@ -442,16 +441,6 @@ select.qty-select:focus { outline: none; border-color: var(--crust); background:
   border: 1.5px solid var(--border);
   border-radius: var(--radius-sm);
 }
-
-.summary-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 20px; }
-.summary-item {
-  background: var(--surface);
-  border-radius: var(--radius-sm);
-  padding: 14px 16px;
-}
-.summary-item .s-label { font-size: 11px; color: var(--text3); margin-bottom: 4px; font-family: 'DM Mono', monospace; text-transform: uppercase; }
-.summary-item .s-val { font-size: 26px; font-weight: 700; color: var(--accent); }
-.summary-item .s-unit { font-size: 13px; color: var(--text3); margin-left: 2px; }
 #s-div { font-size: 13px; line-height: 1.4; }
 
 /* Reset button — de-emphasised to a plain underlined label (P20: a destructive
@@ -640,22 +629,6 @@ select.qty-select:focus { outline: none; border-color: var(--crust); background:
 .drill-item:active { background: var(--surface2); }
 .drill-chevron { color: var(--accent); opacity: 0.6; font-size: 20px; flex-shrink: 0; display: inline-flex; align-items: center; }
 
-/* Recipe form footer: prominent Save (.cp-save-bottom) + a low-key Reset below it. */
-.recipe-reset-btn {
-  width: 100%;
-  margin-top: 10px;
-  padding: 12px;
-  background: var(--surface2);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  color: var(--text2);
-  font-family: 'Manrope', sans-serif;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-}
-.recipe-reset-btn:active { background: var(--border); }
-
 /* Client boxes reordered with SortableJS (long-press to grab, drag to reorder).
    No text-selection / iOS callout on long press. */
 .drill-reorder { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -675,7 +648,6 @@ select.qty-select:focus { outline: none; border-color: var(--crust); background:
   padding: 12px 14px;
   margin-bottom: 12px;
 }
-.cp-client-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
 .cp-client-name {
   flex: 1;
   min-width: 0;
@@ -688,23 +660,6 @@ select.qty-select:focus { outline: none; border-color: var(--crust); background:
   font-weight: 700;
   font-family: 'Manrope', sans-serif;
 }
-.cp-del-client, .cp-del-prod {
-  background: none;
-  border: none;
-  cursor: pointer;
-  font-size: 18px;
-  padding: 4px 6px;
-  flex-shrink: 0;
-  line-height: 1;
-}
-.cp-prod-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 0;
-  border-bottom: 1px solid var(--border);
-}
-.cp-prod-row:last-of-type { border-bottom: none; }
 .cp-prod-name {
   flex: 1;
   min-width: 0;
@@ -981,19 +936,6 @@ input.cp-prod-weight {
   width: 100%;
   margin-top: 4px;
 }
-.cp-del-client-btn {
-  margin-top: 22px;
-  width: 100%;
-  background: none;
-  border: 1px solid var(--danger);
-  border-radius: var(--radius-sm);
-  color: var(--danger);
-  font-size: 14px;
-  font-weight: 700;
-  padding: 12px;
-  cursor: pointer;
-}
-.cp-del-client-btn:active { background: color-mix(in srgb, var(--danger) 8%, transparent); }
 
 /* Name + small delete-icon row (client / group / product heading). */
 .cp-name-row { display: flex; align-items: center; gap: 8px; }
@@ -1107,8 +1049,6 @@ input.cp-prod-weight {
   border-radius: 999px;
   padding: 2px 8px;
 }
-/* Read-only product name in the Products view (not an input — no border/field look). */
-.cp-prod-ro-name { flex: 1; min-width: 0; font-size: 15px; font-weight: 700; color: var(--text); }
 .cp-prod-dough {
   flex: 1;
   min-width: 0;
@@ -1398,78 +1338,6 @@ input.cp-prod-weight {
    length. .recipe-scroll has no horizontal padding of its own; this is where it is. */
 .recipe-content { padding: 14px 16px; padding-inline: max(16px, var(--app-gutter)); }
 
-.recipe-card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 12px 14px;
-  margin-bottom: 10px;
-}
-.recipe-card-title {
-  font-size: 15px;
-  font-weight: 700;
-  color: var(--accent);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  font-family: 'Manrope', sans-serif;
-  padding-bottom: 8px;
-  margin-bottom: 4px;
-  border-bottom: 2px solid var(--accent-light);
-}
-.recipe-ing-row {
-  display: flex;
-  align-items: center;
-  padding: 7px 0;
-  border-bottom: 1px solid var(--border);
-  gap: 8px;
-}
-.recipe-ing-row:last-of-type { border-bottom: none; }
-.recipe-ing-name {
-  flex: 1;
-  font-size: 14px;
-  color: var(--text);
-}
-.recipe-ing-input {
-  width: 84px;
-  padding: 6px 8px;
-  border: 1.5px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--surface2);
-  color: var(--text);
-  font-size: 15px;
-  font-weight: 600;
-  font-family: 'DM Mono', monospace;
-  text-align: right;
-  -moz-appearance: textfield;
-  appearance: textfield;
-  transition: border-color 0.15s;
-}
-.recipe-ing-input:focus { outline: none; border-color: var(--accent); background: var(--surface); }
-.recipe-ing-input::-webkit-inner-spin-button,
-.recipe-ing-input::-webkit-outer-spin-button { -webkit-appearance: none; }
-.recipe-unit { font-size: 11px; color: var(--text3); font-family: 'DM Mono', monospace; width: 14px; }
-.recipe-total-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 9px 0 2px;
-  margin-top: 6px;
-  border-top: 1px solid var(--border);
-}
-.recipe-total-label {
-  font-size: 11px;
-  color: var(--text3);
-  font-family: 'DM Mono', monospace;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-}
-.recipe-total-val {
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--accent);
-  font-family: 'DM Mono', monospace;
-}
-
 /* Confirm & Save button — default (brioche/sourdough, inside result-card) */
 .confirm-btn {
   width: 100%;
@@ -1737,16 +1605,6 @@ input.cp-prod-weight {
   align-items: center;
   gap: 5px;
 }
-.log-pre {
-  font-family: monospace;
-  font-size: small;
-  background: var(--bg);
-  border-radius: var(--radius-sm);
-  padding: 10px;
-  white-space: pre-wrap;
-  color: var(--text);
-  margin-top: 6px;
-}
 
 /* ─────────────────────────────────────────────────────────────────────────────
    LOG REFACTOR (Block 1): footer Log button, log list cards, the Save-log modal,
@@ -1835,11 +1693,6 @@ body[data-section="calculator"] #settings-footer-btn { grid-column: 1 / -1; }
 .logedit-dough {
   font-size: 16px; font-weight: 700; color: var(--accent); text-transform: uppercase;
   letter-spacing: 0.05em; margin-bottom: 14px;
-}
-.logedit-occ-label { margin-top: 20px; }
-.logedit-occ-prod {
-  border-top: 1px solid var(--border); padding-top: 10px; margin-top: 10px; display: flex;
-  flex-direction: column; gap: 8px;
 }
 .loghist-info { display: flex; flex-direction: column; gap: 3px; text-align: left; }
 .loghist-kind { font-size: 14px; font-weight: 600; color: var(--text); }

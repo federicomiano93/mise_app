@@ -326,7 +326,6 @@ select.fc-input, .fc-select {
 .fc-pack-row { display: flex; align-items: center; gap: 8px; }
 .fc-pack-row .fc-number { flex: 1; min-width: 0; }
 .fc-pack-row .fc-select { width: 6.5rem; flex-shrink: 0; }
-.fc-registry-link { align-self: flex-start; }
 
 /* The time one batch takes: minutes and people, side by side. */
 .fc-labour-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
