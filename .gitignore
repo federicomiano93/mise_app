@@ -29,6 +29,7 @@ ui-debug.log
 
 # Local notes split out of the (gitignored) CLAUDE.md — same rules apply: never committed.
 STORICO-DEPLOY.md
+ARCHIVIO-BACKLOG.md
 
 # ⚠️ THE PRINT AGENT'S CREDENTIALS. They belong in %LOCALAPPDATA%\Mise\, never in
 # here — everything in this repository is served by GitHub Pages, so a password
