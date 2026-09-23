@@ -33,8 +33,14 @@ function fakeStore({ access = 'owner', location = { packPhoto: true }, limit = n
     saved,
     access: async (uid, lid) => { calls.push(`access:${uid}:${lid}`); return access; },
     location: async (lid) => { calls.push(`location:${lid}`); return location; },
-    limit: async (path) => { calls.push(`limit:${path}`); return saved[path] || limit; },
-    saveLimit: async (path, value) => { calls.push(`saveLimit:${path}`); saved[path] = value; },
+    // One read-decide-write, as the shell's transaction does it. The two call names
+    // are kept so the order checks below read the same as before.
+    charge: async (path, decide) => {
+      calls.push(`limit:${path}`);
+      const result = decide(saved[path] || limit);
+      if (!result.blocked) { calls.push(`saveLimit:${path}`); saved[path] = result.next; }
+      return result;
+    },
   };
 }
 const IMAGE = { data: 'QUJDRA==', mediaType: 'image/jpeg' };
@@ -323,7 +329,8 @@ test('⚠️ thinking is never disabled, and the effort is low', () => {
 });
 
 test('⚠️ the secret and the options object are the recipe reader\'s, not a second pair', () => {
-  assert.match(SHELL, /import \{ ANTHROPIC_KEY, PHOTO_CALL \} from '\.\/recipe-photo\.js';/,
+  // chargeAllowance rides along since 23 Sep 2026: one allowance, charged one way.
+  assert.match(SHELL, /import \{ ANTHROPIC_KEY, PHOTO_CALL(, chargeAllowance)? \} from '\.\/recipe-photo\.js';/,
     'one secret binding and one ceiling, named in one place');
   assert.ok(!/defineSecret/.test(SHELL), 'and not re-declared here');
 });

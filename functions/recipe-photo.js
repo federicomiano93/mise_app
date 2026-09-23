@@ -120,17 +120,26 @@ async function askAnthropic(images, apiKey) {
 // (firestore.rules member(), js/sections.js locationsOf(), onboarding.js
 // accessValue) and forgetting a value there is a LOCKOUT, not a demotion. A fourth
 // reading is the one nobody would remember to update.
+// ⚠️ EXPORTED FOR functions/pack-photo.js: one allowance, charged one way. The read
+// and the write are ONE transaction, so photos sent at the same instant queue on the
+// document instead of all reading "nothing used yet" (security audit, 23 Sep 2026).
+export function chargeAllowance(path, decide) {
+  const ref = db().doc(path);
+  return db().runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    const result = decide(snap.exists ? snap.data() : null);
+    if (!result.blocked) tx.set(ref, result.next);
+    return result;
+  });
+}
+
 const store = {
   access: accessValue,
   location: async (lid) => {
     const snap = await db().doc(`locations/${lid}`).get();
     return snap.exists ? snap.data() : null;
   },
-  limit: async (path) => {
-    const snap = await db().doc(path).get();
-    return snap.exists ? snap.data() : null;
-  },
-  saveLimit: async (path, value) => { await db().doc(path).set(value); },
+  charge: chargeAllowance,
 };
 
 export const readRecipeFromPhotos = onCall(PHOTO_CALL, async (request) => {

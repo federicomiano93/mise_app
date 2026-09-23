@@ -313,8 +313,9 @@ export function chargeImages(record, now, count, limit) {
 //                                 already lives in three files that must agree, and
 //                                 a fourth reading is a lockout waiting to happen.
 //   store.location(lid)         → the location document, or null
-//   store.limit(path)           → an allowance document, or null
-//   store.saveLimit(path, value)
+//   store.charge(path, decide)  → reads the allowance document (or null), returns
+//                                 decide(record) and, unless that says `blocked`,
+//                                 writes its `next` — ALL IN ONE TRANSACTION
 //   ask(images)                 → the reader's reply
 //   now                         → the clock, never read from in here
 //
@@ -415,10 +416,14 @@ export function sectionOn(locationDoc, name) {
 // ⚠️ EXPORTED FOR functions/pack-photo-model.js, WHICH IS WHAT KEEPS THE BUDGET ONE
 // BUDGET. That file charges the same two documents through this same function; copying
 // the arithmetic across is how a second, invisible allowance appears.
+//
+// ⚠️⚠️ ONE CALL, store.charge, AND NOT A READ FOLLOWED BY A WRITE (security audit,
+// 23 Sep 2026). It used to be store.limit() then store.saveLimit(): ten photos sent
+// at the same instant all read "nothing used yet" and all went through, so the daily
+// allowance held only for somebody who waited for each answer. store.charge reads,
+// asks chargeImages and writes inside ONE transaction, so parallel calls queue.
 export async function chargeTo(store, path, count, limit, now) {
-  const result = chargeImages(await store.limit(path), now, count, limit);
-  if (!result.blocked) await store.saveLimit(path, result.next);
-  return result;
+  return store.charge(path, record => chargeImages(record, now, count, limit));
 }
 
 export function limitError(key, result, who) {
