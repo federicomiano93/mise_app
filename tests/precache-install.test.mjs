@@ -83,7 +83,8 @@ function loadWorker({ fails = () => false, stale = () => false, existingCaches =
       const hashes = vm.runInContext('ASSET_HASHES', context);
       byAddress = new Map(Object.entries(hashes).map(([a, h]) => [abs(a), h]));
     }
-    return byAddress.get(address);
+    // A second ask goes out with ?fp=… to get past a stale CDN copy: same file.
+    return byAddress.get(address.split('?')[0]);
   };
   context = {
     self: {
@@ -310,20 +311,25 @@ test('every precache count sw.js states in prose is the real one', () => {
 // runs until the next release. For a minute after a deploy GitHub Pages can still
 // answer with the previous copy; stored under the new name, it would never be replaced.
 
-test('⚠⚠ a download that does not match its fingerprint is refused, and the install with it', async () => {
+test('⚠⚠ a stale copy from the CDN is asked for again past it, and the RIGHT one stored', async () => {
+  // Stale only at its own address: the second ask carries ?fp=… and gets the release's copy.
   const w = loadWorker({ stale: url => url.endsWith('/orders.css') });
-  await assert.rejects(install(w), err => {
-    assert.match(err.message, /precache incomplete/);
-    assert.match(err.message, /orders\.css/, 'the refusal names the file');
-    return true;
-  });
-  assert.ok(!w.record.added.includes(abs('./orders.css')), 'the stale copy must never be stored');
+  await install(w);
+  assert.ok(w.record.attempts.some(u => u.includes('/orders.css?fp=')), 'the file must be asked for again past the CDN');
+  const stored = w.stores.get(w.read('CACHE_NAME')).get(abs('./orders.css'));
+  assert.equal(await stored.text(), `asset:${abs('./orders.css')}?fp=${w.read('ASSET_HASHES')['./orders.css']}`,
+    'the copy stored must be the one that matched');
+  assert.equal(stored.headers.get('x-mise-hash'), w.read('ASSET_HASHES')['./orders.css']);
 });
 
-test('⚠ a stale copy served once is retried, and the right one stored', async () => {
-  const w = loadWorker({ stale: (url, attempt) => url.endsWith('/orders.css') && attempt === 1 });
+test('⚠⚠ a copy that NEVER matches is stored as received, so the phone keeps updating', async () => {
+  // An antivirus or a proxy rewriting every copy: refusing would fail every install for ever.
+  const w = loadWorker({ stale: url => url.includes('/orders.css') });
   await install(w);
-  assert.ok(w.record.added.includes(abs('./orders.css')));
+  const stored = w.stores.get(w.read('CACHE_NAME')).get(abs('./orders.css'));
+  assert.ok(stored, 'the install must complete');
+  assert.notEqual(stored.headers.get('x-mise-hash'), w.read('ASSET_HASHES')['./orders.css'],
+    'stored under the hash it really has, so the next release does not copy it forward');
 });
 
 test('every stored file carries its fingerprint, so the next update can recognise it', async () => {
@@ -420,7 +426,9 @@ test('on a local server the fingerprint is not checked — and everywhere else i
   const local = loadWorker({ hostname: '127.0.0.1', stale: url => url.endsWith('/orders.css') });
   await install(local);
   assert.ok(local.record.added.includes(abs('./orders.css')), 'a local server must still install');
+  assert.ok(!local.record.attempts.some(u => u.includes('?fp=')), 'and nothing is asked for twice');
 
   const live = loadWorker({ hostname: 'federicomiano93.github.io', stale: url => url.endsWith('/orders.css') });
-  await assert.rejects(install(live), /orders\.css/, 'the live site must never store a mismatched copy');
+  await install(live);
+  assert.ok(live.record.attempts.some(u => u.includes('/orders.css?fp=')), 'the live site checks, and asks again');
 });

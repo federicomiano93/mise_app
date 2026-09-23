@@ -1,4 +1,4 @@
-const CACHE_NAME = 'theitalianclub-v369';
+const CACHE_NAME = 'theitalianclub-v370';
 // Firebase SDK modules (loaded from gstatic) are cached SEPARATELY from CACHE_NAME
 // so they survive the cache-version bump that happens on every deploy — otherwise
 // the offline SDK would be wiped each release until the next online load. The name
@@ -415,7 +415,7 @@ const ASSET_HASHES = {
   "./js/photo-model.js": '67d1d83755bbd33a',
   "./js/market.js": '44718f135a2ed1fb',
   "./js/push-model.js": 'eaf3519a168d2316',
-  "./js/push.js": '263ad611457ff739',
+  "./js/push.js": 'afae0b76a614217c',
   "./js/client-order-model.js": '01afe2d8a045dbe8',
   "./js/client-order-history.js": '95f0c334ee12ce80',
   "./js/client-orders-data.js": '4e490005f9908359',
@@ -442,7 +442,7 @@ const ASSET_HASHES = {
   "./js/splash-init.js": '0982bbf1d8228eab',
   "./js/whats-new.js": '28a18a0146f90592',
   "./js/whats-new-boot.js": 'c4a88b96a1986d6a',
-  "./js/firebase.js": 'e169886a7812d53c',
+  "./js/firebase.js": '37c6713ec239b8a1',
   "./js/same-data.js": '11ff91c9b0192d20',
   "./js/location.js": '6aaf53615a8739d1',
   "./js/sections.js": 'abcfdecb2bd5766d',
@@ -454,7 +454,7 @@ const ASSET_HASHES = {
   "./js/credentials.js": '5d9eece15a3a969a',
   "./js/staff/dom.js": 'e700814a373b85e9',
   "./js/staff/confirm-dialog.js": '61a7f580f37c5ff8',
-  "./js/staff/firebase-staff.js": '52440b9f127469d3',
+  "./js/staff/firebase-staff.js": 'a0c0f14594c77ca1',
   "./js/share.js": 'ec8cbe05c9aa86ab',
   "./js/send-icon.js": '3690291475f44a99',
   "./js/send-sheet.js": '3774a0e7acf2ae9e',
@@ -490,7 +490,7 @@ const ASSET_HASHES = {
   "./js/calculator-settings.js": 'b60045ca853af659',
   "./js/calculator-whatsapp-settings.js": '6ea4ea7c70b52e01',
   "./js/vendor/sortable.esm.js": '824d48148fc5b469',
-  "./js/orders/boot.js": '47f36046a755ca91',
+  "./js/orders/boot.js": '0327e6ac5782867f',
   "./js/orders/confirm-dialog.js": '61a7f580f37c5ff8',
   "./js/orders/firebase-orders.js": 'f707cb2fa4796756',
   "./js/orders/orders-main.js": '0136cce01ae7f9f0',
@@ -531,7 +531,7 @@ const ASSET_HASHES = {
   "./js/orders/registry.js": '4eb1699bf090347d',
   "./js/orders/registry-main.js": 'bc5d53ff4290e1a4',
   "./js/orders/registry-settings.js": '0fccb7c64c8e25a8',
-  "./js/orders/firebase-features.js": '59720cf671a14c78',
+  "./js/orders/firebase-features.js": 'de89853130a11423',
   "./js/orders/firebase-photo.js": '39a66d803edc884c',
   "./js/orders/photo-capture.js": 'eea1f85f85b0f26a',
   "./js/orders/holidays.js": '93d9c22d24769c1c',
@@ -550,13 +550,13 @@ const ASSET_HASHES = {
   "./js/catalogue/allergen-sheet.js": '34f4ccbd41747f47',
   "./js/catalogue/photo-model.js": '437ecaf7df453145',
   "./js/catalogue/photo-capture.js": '575332d39e58288d',
-  "./js/catalogue/firebase-photo.js": '262dc65b76fffd9d',
+  "./js/catalogue/firebase-photo.js": 'a1ecd040521d9a5d',
   "./js/catalogue/recipe-label-model.js": '8790302faf981b5a',
   "./js/catalogue/label-view.js": '77e90c2e289a2457',
   "./js/catalogue/label-template-model.js": '480a35fa8bd788e3',
   "./js/catalogue/label-print.js": 'b01a3743eb4bccc8',
-  "./js/catalogue/label-zpl.js": '668018fe0f321b6d',
-  "./js/print-queue-model.js": '0b187ce4cf222d5a',
+  "./js/catalogue/label-zpl.js": '843e46ac6bb50597',
+  "./js/print-queue-model.js": '52602cad051dbba0',
   "./js/catalogue/print-transports.js": '088f68d76249710f',
   "./js/catalogue/ingredient-picker.js": '0126ae87ecda222b',
   "./js/catalogue/ingredient-create.js": '1a3665cef807e967',
@@ -665,8 +665,8 @@ const PRECACHE_ATTEMPTS = 3;
 // 2026). For a minute after a deploy GitHub Pages can still answer with the previous
 // copy of a file; stored under this worker's name, that copy would be served until the
 // next release, and — since files are no longer fetched again behind every request —
-// nothing would ever replace it. A mismatch is a failure like a 503: retried, and if it
-// persists the install is refused and the browser tries the whole update again later.
+// nothing would ever replace it. A mismatch is fetched once more past the CDN; see
+// cacheOne for why a copy that STILL does not match is stored rather than refused.
 const HASH_HEADER = 'x-mise-hash';
 
 // ⚠️ NOT CHECKED ON THIS COMPUTER, and only there. A Windows checkout serves its text
@@ -723,11 +723,26 @@ async function cacheOne(cache, donors, asset) {
       }
     }
   }
-  const res = await fetch(request);
+  let res = await fetch(request);
   if (!res.ok) throw new Error(`${asset}: HTTP ${res.status}`);
-  const got = await blobHash(res);
+  let got = await blobHash(res);
   if (VERIFY_FINGERPRINTS && want && got !== want) {
-    throw new Error(`${asset}: the server sent ${got}, this release is ${want}`);
+    // Most likely the CDN still holding the previous copy for a minute after a deploy.
+    // The same file asked for under an address it has never seen goes past it.
+    const again = await fetch(new Request(`${asset}${asset.includes('?') ? '&' : '?'}fp=${want}`, { cache: 'reload' }));
+    if (again.ok) {
+      const againHash = await blobHash(again);
+      if (againHash === want) { res = again; got = againHash; }
+    }
+  }
+  // ⚠️⚠️ A COPY THAT STILL DOES NOT MATCH IS STORED ANYWAY — NEVER REFUSED (code review,
+  // 23 Sep 2026). Refusing would fail the whole install, and a device whose bytes are
+  // changed on the way in (an antivirus rewriting HTML, a company proxy) would then fail
+  // EVERY install for ever: no banner, no compulsory update, nothing on screen — a phone
+  // that silently never updates again, which is worse than one mismatched file. It is
+  // stored under the hash it really has, so the next release will not copy it forward.
+  if (VERIFY_FINGERPRINTS && want && got !== want) {
+    console.warn(`${asset}: the server sent ${got}, this release is ${want} — stored as received`);
   }
   await cache.put(request, stamped(res, got));
 }
