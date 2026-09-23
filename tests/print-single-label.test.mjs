@@ -77,3 +77,16 @@ test('the agent checks the job BEFORE sending it, and marks a refused job failed
   assert.match(src.slice(checkAt, printAt), /finish\(app, session, job, false,/,
     'a refused job must be marked failed, or it would sit claimed for ever');
 });
+
+// ⚠️ A label for three loaves may ask for three copies; ^PQ99999 would run a whole roll
+// through the printer (code review, 23 Sep 2026).
+test('a label may ask for a few copies, never a roll', () => {
+  assert.equal(isSingleLabel('^XA^FDx^FS^PQ3^XZ'), true);
+  assert.equal(isSingleLabel('^XA^FDx^FS^PQ99^XZ'), true);
+  assert.equal(isSingleLabel('^XA^FDx^FS^PQ100^XZ'), false);
+  assert.equal(isSingleLabel('^XA^FDx^FS^PQ99999^XZ'), false);
+  assert.equal(isSingleLabel('^XA^FDx^FS^PQ2^PQ2^XZ'), false, 'one ^PQ per label');
+  assert.equal(isSingleLabel('^XA^FDx^FS^PQ^XZ'), false, 'a ^PQ with no number is not a count');
+  // And the app never makes one the agent would refuse.
+  assert.equal(isSingleLabel(zpl({}, {}, { copies: 5000 })), true);
+});

@@ -89,8 +89,16 @@ export function isSingleLabel(payload) {
   }
   if (commands.filter(c => c === 'XA').length !== 1) return false;
   if (commands.filter(c => c === 'XZ').length !== 1) return false;
-  return commands.every(c => LABEL_COMMANDS.includes(c));
+  if (!commands.every(c => LABEL_COMMANDS.includes(c))) return false;
+  // ⚠️ AND NO MORE COPIES THAN A JOB MAY ASK FOR (code review, 23 Sep 2026). ^PQ is on
+  // the list because a label for three loaves asks for three, but `^PQ99999` would run a
+  // whole roll through the printer. The same ceiling the rules put on `copies`.
+  const copies = [...text.matchAll(/\^PQ(\d*)/gi)].map(m => Number(m[1]));
+  return copies.length <= 1 && copies.every(n => Number.isInteger(n) && n >= 1 && n <= MAX_COPIES);
 }
+
+// The most copies one job may print: the ceiling firestore.rules puts on `copies`.
+export const MAX_COPIES = 99;
 
 function clampCopies(n) {
   const v = Math.floor(Number(n));

@@ -14,6 +14,7 @@
 // worth remembering the day the printer is replaced.
 
 import { blockText, emphasised } from './label-template-model.js';
+import { MAX_COPIES } from '../print-queue-model.js';
 
 // ── Dots ─────────────────────────────────────────────────────────────────────
 //
@@ -144,7 +145,9 @@ export function toZpl(resolved, { copies = 1 } = {}) {
 
   // ⚠️ ONE LABEL PER JOB UNLESS SOMEBODY ASKED FOR MORE. A ^PQ nobody chose is a
   // roll of stickers nobody wanted.
-  if (copies > 1) out.push(`^PQ${Math.min(Math.max(1, Math.floor(copies)), 999)}`);
+  // Capped at the print agent's own ceiling (js/print-queue-model.js MAX_COPIES): a job
+  // asking for more is refused by the agent, so it would never print at all.
+  if (copies > 1) out.push(`^PQ${Math.min(Math.max(1, Math.floor(copies)), MAX_COPIES)}`);
   out.push('^XZ');
 
   return out.join('\n') + '\n';
