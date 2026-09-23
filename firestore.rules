@@ -698,29 +698,26 @@ service cloud.firestore {
                   && request.resource.data.unit.size() <= 100))
           && (!('active' in request.resource.data)
               || request.resource.data.active is bool)
+          // ⚠️⚠️ THE PRICE KEYS MAY ONLY BE null HERE (security audit, 23 Sep 2026).
+          // What an ingredient costs lives in ingredient-prices/{id}, behind
+          // canManage(…, 'foodcost'), since 12 Aug 2026. These keys stay in the
+          // whitelist only so every save can write them null and drain the old values
+          // out — but while they also accepted a NUMBER, any employee could put a
+          // made-up price on an ingredient that had no ingredient-prices document,
+          // and the app used it. Production held no such value when this was
+          // tightened (checked 23 Sep), so no stored document becomes unwritable.
           && (!('priceUnit' in request.resource.data)
-              || request.resource.data.priceUnit == null
-              || request.resource.data.priceUnit in ['kg', 'l', 'pcs'])
+              || request.resource.data.priceUnit == null)
           && (!('pricePerUnit' in request.resource.data)
-              || request.resource.data.pricePerUnit == null
-              || (request.resource.data.pricePerUnit is number
-                  && request.resource.data.pricePerUnit > 0))
+              || request.resource.data.pricePerUnit == null)
           && (!('packPrice' in request.resource.data)
-              || request.resource.data.packPrice == null
-              || (request.resource.data.packPrice is number
-                  && request.resource.data.packPrice > 0))
+              || request.resource.data.packPrice == null)
           && (!('packSize' in request.resource.data)
-              || request.resource.data.packSize == null
-              || (request.resource.data.packSize is number
-                  && request.resource.data.packSize > 0))
+              || request.resource.data.packSize == null)
           && (!('unitWeightKg' in request.resource.data)
-              || request.resource.data.unitWeightKg == null
-              || (request.resource.data.unitWeightKg is number
-                  && request.resource.data.unitWeightKg > 0))
+              || request.resource.data.unitWeightKg == null)
           && (!('priceUpdatedAt' in request.resource.data)
-              || request.resource.data.priceUpdatedAt == null
-              || (request.resource.data.priceUpdatedAt is string
-                  && request.resource.data.priceUpdatedAt.size() <= 64))
+              || request.resource.data.priceUpdatedAt == null)
 
           // ── Allergens and nutrition ───────────────────────────────────
           // What this ingredient declares, so a product label can be built from

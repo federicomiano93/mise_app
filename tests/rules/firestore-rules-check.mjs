@@ -304,24 +304,31 @@ async function ingredients() {
     () => mergeWrite('locations/main/ingredients/ING_MODERN', { active: 'yes', bakery: 'main' }));
 
   // ── Prices on the ingredient ──
-  // The shape written today: a typed rate, and the two retired pack fields
-  // explicitly nulled so they drain off the documents that still carry them.
-  await expectAllowed('save an ingredient with a price', () =>
+  // ⚠️⚠️ NOT ANY MORE (security audit, 23 Sep 2026). What an ingredient costs has
+  // lived in ingredient-prices/{id}, behind canManage(…, 'foodcost'), since 12 Aug
+  // 2026. The keys stay in the whitelist so every save can write them null and drain
+  // the old values, but a NUMBER there let any employee who may edit ingredients put
+  // a made-up price on one with no price document — and the app used it. The phone
+  // still on pre-12-Aug code is refused; the compulsory update gate moves it on.
+  await expectDenied('a price written onto the ingredient itself', () =>
     mergeWrite('locations/main/ingredients/ING_MODERN', {
       priceUnit: 'kg', pricePerUnit: 7.2, packPrice: null, packSize: null,
       unitWeightKg: null, priceUpdatedAt: '2026-08-10T09:00:00.000Z', bakery: 'main',
     }));
-
-  // ⚠️ AND THE SHAPE A PHONE STILL ON THE OLD CODE WRITES. Rules reach every phone
-  // the instant they are deployed; code arrives per device. Refuse the pack fields
-  // and every save from an un-updated phone is rejected until it happens to update.
-  await expectAllowed('save an ingredient from a phone still sending the pack fields', () =>
+  await expectDenied('an employee putting a price on an ingredient', () =>
+    mergeWrite('locations/main/ingredients/ING_MODERN', { pricePerUnit: 0.01, bakery: 'main' },
+      asAccount(SAM)));
+  // The control: the same employee still saves the ingredient, so the refusal above
+  // is about the price and not about who is asking.
+  await expectAllowed('…while the same employee still saves the ingredient itself', () =>
+    mergeWrite('locations/main/ingredients/ING_MODERN', { active: true, pricePerUnit: null, bakery: 'main' },
+      asAccount(SAM)));
+  await expectDenied('the pack fields a phone on the old code still sends', () =>
     mergeWrite('locations/main/ingredients/ING_MODERN', {
       priceUnit: 'kg', pricePerUnit: 7.2, packPrice: 180, packSize: 25,
       unitWeightKg: null, priceUpdatedAt: '2026-08-10T09:00:00.000Z', bakery: 'main',
     }));
-
-  await expectAllowed('a per-piece price carries the weight of one piece', () =>
+  await expectDenied('a per-piece price on the ingredient', () =>
     mergeWrite('locations/main/ingredients/ING_MODERN', {
       priceUnit: 'pcs', pricePerUnit: 2.1, packPrice: null, packSize: null,
       unitWeightKg: 0.0035, priceUpdatedAt: '2026-08-10T09:00:00.000Z', bakery: 'main',
