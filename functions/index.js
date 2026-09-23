@@ -78,6 +78,23 @@ async function sendTo(token, { title, body }, { tag, url, path }) {
   }
 }
 
+// Is this device token registered, in this location, to this person?
+//
+// ⚠️ A FAILED READ OR A MALFORMED TOKEN ANSWERS NO. An alarm that stays quiet is the
+// safe direction here — the same one isStillDue() takes. The token is the document
+// id, so a value holding a slash would name a different document entirely.
+async function tokenBelongsTo(lid, token, uid) {
+  if (typeof token !== 'string' || !token || token.length > 4096 || token.includes('/')) return false;
+  if (typeof uid !== 'string' || !uid) return false;
+  try {
+    const snap = await getFirestore().doc(`locations/${lid}/fcm-tokens/${token}`).get();
+    return snap.exists && (snap.data() || {}).uid === uid;
+  } catch (err) {
+    logger.warn('Could not read the phone registration; the alarm stays quiet', { message: err && err.message });
+    return false;
+  }
+}
+
 // ── 1 + 2. A scheduled alarm ─────────────────────────────────────────────────
 
 // A phone wrote locations/{lid}/push-timers/{id}. Book the job for its instant.
@@ -154,6 +171,16 @@ export const sendTimerPush = onTaskDispatched(
     const allowed = await uidsPastHiddenCard(lid, 'timer', [timer.uid]);
     if (allowed && !allowed.has(timer.uid)) {
       logger.info('Alarm not sent', { id, reason: 'its card is hidden from this employee' });
+      return;
+    }
+
+    // ⚠️⚠️ THE PHONE MUST BE REGISTERED TO WHOEVER SET THE TIMER (security audit,
+    // 23 Sep 2026). The rules pin the timer's `uid` to its writer but cannot check its
+    // `token`, which is any string — so any member could aim a "timer" with any words
+    // at a colleague's phone. The token document is the one fact that ties a phone to
+    // a person, and only the device holding that token can have written it.
+    if (!await tokenBelongsTo(lid, timer.token, timer.uid)) {
+      logger.info('Alarm not sent', { id, reason: 'that phone is not registered to whoever set the timer' });
       return;
     }
 

@@ -118,11 +118,22 @@ export async function disablePush() {
     try { await deleteDoc(doc(db(), pathFor(TOKENS), token)); }
     catch (err) { console.warn('Could not unregister this phone:', err); }
   }
-  try { localStorage.removeItem(TOKEN_KEY); } catch (err) {}
+  try {
+    localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(TOKEN_UID_KEY);
+  } catch (err) {}
 }
 
 function storedToken() {
   try { return localStorage.getItem(TOKEN_KEY) || ''; } catch (err) { return ''; }
+}
+
+// WHO this phone's registration was written for. Cleared with the token on sign-out
+// (neither is in js/local-data.js KEEP_PREFIXES).
+const TOKEN_UID_KEY = 'push-token-uid';
+
+function storedTokenOwner() {
+  try { return localStorage.getItem(TOKEN_UID_KEY) || ''; } catch (err) { return ''; }
 }
 
 // The document id IS the token, so re-registering the same phone overwrites
@@ -140,7 +151,10 @@ async function rememberToken(token) {
   await setDoc(doc(db(), pathFor(TOKENS), token), {
     bakery: currentLocationId(), uid, updatedAt: Date.now(),
   });
-  try { localStorage.setItem(TOKEN_KEY, token); } catch (err) {}
+  try {
+    localStorage.setItem(TOKEN_KEY, token);
+    localStorage.setItem(TOKEN_UID_KEY, uid);
+  } catch (err) {}
 }
 
 // ── Scheduling one alarm ─────────────────────────────────────────────────────
@@ -165,6 +179,13 @@ export async function scheduleAlarm({ id, fireAt, title, body }) {
 
     const payload = buildTimerDoc({ uid, token, fireAt, title, body, nowMs: now });
     if (!isValidTimerDoc(payload, now)) return '';
+
+    // ⚠️ THE SERVER RINGS ONLY A PHONE REGISTERED TO WHOEVER SET THE TIMER (since the
+    // security audit of 23 Sep 2026). A shared phone can still hold the registration of
+    // the person before — a session that expired rather than signing out keeps it — so
+    // it is written again in this person's name first. One small write, and only when
+    // the name on it is not already theirs.
+    if (storedTokenOwner() !== uid) await rememberToken(token);
 
     await setDoc(doc(db(), pathFor(TIMERS), id),
       { bakery: currentLocationId(), ...payload });
