@@ -53,6 +53,9 @@ import {
   where,
   limit,
   connectFirestoreEmulator,
+  terminate,
+  clearIndexedDbPersistence,
+  waitForPendingWrites,
 } from 'https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js';
 import {
   initializeAppCheck,
@@ -67,7 +70,9 @@ import {
 } from './location.js';
 import { allowedSections, sectionsFor, pickStart, locationsOf } from './sections.js';
 import { roleOf, isOwner, canManage } from './roles.js';
-import { clearLocalData, shouldClearLocalData } from './local-data.js';
+import {
+  clearLocalData, shouldClearLocalData, offlineCacheVerdict, OFFLINE_CACHE_OWNER_KEY,
+} from './local-data.js';
 
 // ── Configuration (PUBLIC config, P1 — committed on purpose, see .gitignore) ──
 // Copied from firebase.example.js, whose "placeholders only" heading came with
@@ -143,6 +148,55 @@ function startFirestore() {
 }
 
 const db = startFirestore();
+
+// ── Clearing that cache ───────────────────────────────────────────────────────
+//
+// ⚠️⚠️ SIGNING OUT USED TO LEAVE IT ON THE PHONE (security audit, 23 Sep 2026). It holds
+// every document the app has read — a manager's ingredient prices included — and a
+// cache answers with no signal, where the rules are never asked: the next person on a
+// shared phone could read them. terminate() stops the client (every listener dies with
+// it), which is why EVERY caller reloads the page straight after.
+//
+// ⚠️ A FAILURE IS LOGGED, NOT THROWN. Another open tab of the app holds the database
+// and refuses the clear; the sign-out still has to happen.
+async function wipeOfflineCache() {
+  try {
+    await terminate(db);
+    await clearIndexedDbPersistence(db);
+  } catch (err) {
+    console.warn('Could not clear the offline copy of the data:', err?.message || err);
+  }
+}
+
+// Is something typed on this phone still waiting to reach the server? That waiting
+// copy lives in the same cache, so clearing it would throw the change away.
+// `true` after `ms` with nothing confirmed — usually: no signal.
+export async function changesStillWaiting(ms = 4000) {
+  let timer;
+  try {
+    const sent = await Promise.race([
+      waitForPendingWrites(db).then(() => true),
+      new Promise(resolve => { timer = setTimeout(() => resolve(false), ms); }),
+    ]);
+    return !sent;
+  } catch {
+    // A client that cannot answer has nothing it could still send.
+    return false;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function readCacheOwner() {
+  try { return localStorage.getItem(OFFLINE_CACHE_OWNER_KEY) || ''; } catch { return ''; }
+}
+
+function writeCacheOwner(uid) {
+  try {
+    if (uid) localStorage.setItem(OFFLINE_CACHE_OWNER_KEY, uid);
+    else localStorage.removeItem(OFFLINE_CACHE_OWNER_KEY);
+  } catch { /* private mode: the cache is memory-only there anyway */ }
+}
 
 // ── Local emulator switch (AUTOMATIC, by hostname) ────────────────────────────
 // On localhost / 127.0.0.1 the app talks to the LOCAL Firebase Emulator Suite, so
@@ -560,7 +614,13 @@ export function openVenuePicker() {
   location.reload();
 }
 
+// The FIRST answer about who is signed in is the one this page opened with — the only
+// moment nothing has been read yet. See offlineCacheVerdict in js/local-data.js.
+let bootAnswered = false;
+
 onAuthStateChanged(auth, user => {
+  const atBoot = !bootAnswered;
+  bootAnswered = true;
   if (!user) {
     userDocCache = null;
     appAdminCache = false;
@@ -587,6 +647,22 @@ onAuthStateChanged(auth, user => {
   // the form.
   if (user.isAnonymous) {
     signOut(auth).catch(err => console.error('Could not clear the old session:', err));
+    return;
+  }
+
+  // ⚠️⚠️ SOMEBODY ELSE'S DATA IN THE OFFLINE CACHE, AND THEY NEVER SIGNED OUT (security
+  // audit, 23 Sep 2026). A proper sign-out wipes it; an expired or revoked session
+  // does not pass through there. Cleared at BOOT, before a single read, and the page
+  // starts again clean. A different person signing in INSIDE a page is left alone
+  // until the next boot — a join replaces the account mid-page and must not be cut
+  // off half-way — and the owner recorded stays the previous one until then, so that
+  // next boot still knows.
+  const verdict = offlineCacheVerdict(readCacheOwner(), user.uid);
+  if (verdict === 'claim') writeCacheOwner(user.uid);
+  if (verdict === 'wipe' && atBoot) {
+    writeCacheOwner(user.uid);
+    clearLocalData();
+    wipeOfflineCache().then(() => location.reload());
     return;
   }
 
@@ -625,9 +701,15 @@ export function sendReset(email) {
 // Signing out wipes this device's cached copies of the location's data — the
 // recipes, settings and typed quantities kept locally so the app opens instantly.
 // Leaving them would show the next person the previous one's work.
+//
+// ⚠️ BOTH COPIES: localStorage, and Firestore's offline database, which until 23 Sep
+// 2026 was left behind. A change still waiting for signal is thrown away with it —
+// js/unsent-guard.js asks first, from every button that leads here.
 export async function signOutNow() {
   await signOut(auth);
   clearLocalData();
+  await wipeOfflineCache();
+  writeCacheOwner('');
   markHubPassed(false);
   try { localStorage.removeItem(ACTIVE_LOCATION_KEY); } catch { /* private mode */ }
   location.reload();
@@ -639,12 +721,15 @@ export async function signOutNow() {
 //     live Firestore listeners and in-memory state; unwinding them by hand is
 //     how a listener from the previous location survives and quietly repaints
 //     the screen with the wrong data. A reload cannot leave one behind.
-export function switchLocation(locationId) {
+//   * ⚠️ and since 23 Sep 2026 the offline database goes too, not only localStorage:
+//     the venue left behind is not the one being opened.
+export async function switchLocation(locationId) {
   if (!locationsOf(userDocCache).includes(locationId)) {
     throw new Error(`Not your location: ${locationId}`);
   }
   clearLocalData();
   rememberLocation(locationId);
+  await wipeOfflineCache();
   location.reload();
 }
 
@@ -654,9 +739,10 @@ export function switchLocation(locationId) {
 // exactly two the other one is unambiguous and switchLocation names it, but with
 // three the app cannot guess, and reloading WITHOUT forgetting simply reopens the
 // same location — a button that visibly does nothing.
-export function forgetLocation() {
+export async function forgetLocation() {
   clearLocalData();
   try { localStorage.removeItem(ACTIVE_LOCATION_KEY); } catch { /* private mode */ }
+  await wipeOfflineCache();
   location.reload();
 }
 

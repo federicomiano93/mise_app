@@ -16,6 +16,7 @@
 import { t } from './i18n.js';
 import { confirmDialog } from './confirm-dialog.js';
 import { signOutNow, switchLocation, forgetLocation } from './firebase.js';
+import { mayLeaveWithUnsent } from './unsent-guard.js';
 import { buildAwayButton } from './away-screen.js';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
@@ -132,6 +133,9 @@ export function openHomeSettings(session) {
           cancelLabel: t('ui.cancel'),
         });
         if (!ok) return;
+        // Switching clears this phone's offline copy, and a change still waiting for
+        // signal is waiting in it.
+        if (!await mayLeaveWithUnsent(confirmDialog)) return;
         if (other.length === 1) switchLocation(other[0]);
         else forgetLocation();
       }));
@@ -147,7 +151,7 @@ export function openHomeSettings(session) {
         cancelLabel: t('ui.cancel'),
         danger: true,
       });
-      if (ok) signOutNow();
+      if (ok && await mayLeaveWithUnsent(confirmDialog)) signOutNow();
     });
     scroll.append(logout);
   }

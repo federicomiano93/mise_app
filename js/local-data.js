@@ -17,6 +17,31 @@
 // Prefixes that must SURVIVE a session change, and why each one is here.
 import { t } from './i18n.js';
 
+// ── The OTHER copy: Firestore's own offline database ─────────────────────────
+//
+// ⚠️⚠️ THE KEYS ABOVE ARE ONLY HALF OF WHAT A PHONE KEEPS (security audit, 23 Sep 2026).
+// Firestore's offline cache (js/firebase.js) holds every document the app has read —
+// a manager's ingredient prices included — in IndexedDB, and clearing localStorage
+// never touched it. On a shared phone the next person could read them with no signal,
+// where the rules are not asked. js/firebase.js now wipes it on sign-out and on a
+// venue switch; this decides the one case those two cannot see: a DIFFERENT person
+// arriving without the previous one signing out (an expired or revoked session).
+export const OFFLINE_CACHE_OWNER_KEY = 'offline-cache-uid';
+
+// What to do with the offline copy for the account a page opened with.
+//   'claim' — nobody is recorded yet: record this account, keep the copy
+//   'keep'  — the copy is this account's own
+//   'wipe'  — the copy belongs to somebody else: clear it before anything is read
+// ⚠️ ASKED ONLY WHEN A PAGE BOOTS, never on a sign-in inside a page. A join that
+// creates an account replaces the person mid-page and then reloads by itself; wiping
+// in the middle of it could cut the invitation off half-way. The next boot is before
+// any read, so that is where the question is asked.
+export function offlineCacheVerdict(owner, uid) {
+  if (!uid) return 'keep';
+  if (!owner) return 'claim';
+  return owner === uid ? 'keep' : 'wipe';
+}
+
 export const KEEP_PREFIXES = Object.freeze([
   'firebase:',            // Firebase Auth's own session — clearing it logs you back out
   'firebaseLocalStorage', // ditto (SDK fallback storage)
@@ -24,6 +49,9 @@ export const KEEP_PREFIXES = Object.freeze([
   'whats-new-seen',       // about the app version you have seen, not about a location
   'lastHiddenAt',         // idle-reset timer
   'active-location',    // which location to open next — managed by the session itself
+  // WHOSE data the offline database copy holds (see offlineCacheVerdict below). It has
+  // to outlive a venue switch, or the next boot could not tell a new person from the old.
+  OFFLINE_CACHE_OWNER_KEY,
 ]);
 
 // Given every key currently in storage, which ones must go.

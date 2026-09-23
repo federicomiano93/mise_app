@@ -45,6 +45,9 @@ import {
   where,
   limit,
   connectFirestoreEmulator,
+  terminate,
+  clearIndexedDbPersistence,
+  waitForPendingWrites,
 } from 'https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js';
 import {
   initializeAppCheck,
@@ -58,7 +61,9 @@ import {
 } from './location.js';
 import { allowedSections, sectionsFor, pickStart, locationsOf } from './sections.js';
 import { roleOf, isOwner, canManage } from './roles.js';
-import { clearLocalData, shouldClearLocalData } from './local-data.js';
+import {
+  clearLocalData, shouldClearLocalData, offlineCacheVerdict, OFFLINE_CACHE_OWNER_KEY,
+} from './local-data.js';
 
 // ── Configuration (placeholders only — fill these in js/firebase.js) ──────────
 export const firebaseConfig = {
@@ -108,6 +113,42 @@ function startFirestore() {
 }
 
 const db = startFirestore();
+
+// ── Clearing that cache ─── (same as js/firebase.js; see the reasoning there)
+async function wipeOfflineCache() {
+  try {
+    await terminate(db);
+    await clearIndexedDbPersistence(db);
+  } catch (err) {
+    console.warn('Could not clear the offline copy of the data:', err?.message || err);
+  }
+}
+
+export async function changesStillWaiting(ms = 4000) {
+  let timer;
+  try {
+    const sent = await Promise.race([
+      waitForPendingWrites(db).then(() => true),
+      new Promise(resolve => { timer = setTimeout(() => resolve(false), ms); }),
+    ]);
+    return !sent;
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function readCacheOwner() {
+  try { return localStorage.getItem(OFFLINE_CACHE_OWNER_KEY) || ''; } catch { return ''; }
+}
+
+function writeCacheOwner(uid) {
+  try {
+    if (uid) localStorage.setItem(OFFLINE_CACHE_OWNER_KEY, uid);
+    else localStorage.removeItem(OFFLINE_CACHE_OWNER_KEY);
+  } catch { /* private mode */ }
+}
 
 // ── Local emulator switch (AUTOMATIC, by hostname) ────────────────────────────
 // On localhost / 127.0.0.1 the app talks to the LOCAL Firebase Emulator Suite, so
@@ -488,7 +529,12 @@ export function openVenuePicker() {
   location.reload();
 }
 
+// The FIRST answer about who is signed in is the one this page opened with.
+let bootAnswered = false;
+
 onAuthStateChanged(auth, user => {
+  const atBoot = !bootAnswered;
+  bootAnswered = true;
   if (!user) {
     userDocCache = null;
     appAdminCache = false;
@@ -520,6 +566,17 @@ onAuthStateChanged(auth, user => {
   // in it (P7 — the example must be complete, not merely illustrative).
   if (user.isAnonymous) {
     signOut(auth).catch(err => console.error('Could not clear the old session:', err));
+    return;
+  }
+
+  // Somebody else's data in the offline cache and they never signed out: cleared at
+  // BOOT, before any read (same as js/firebase.js; see the reasoning there).
+  const verdict = offlineCacheVerdict(readCacheOwner(), user.uid);
+  if (verdict === 'claim') writeCacheOwner(user.uid);
+  if (verdict === 'wipe' && atBoot) {
+    writeCacheOwner(user.uid);
+    clearLocalData();
+    wipeOfflineCache().then(() => location.reload());
     return;
   }
 
@@ -561,6 +618,8 @@ export function sendReset(email) {
 export async function signOutNow() {
   await signOut(auth);
   clearLocalData();
+  await wipeOfflineCache();
+  writeCacheOwner('');
   markHubPassed(false);
   try { localStorage.removeItem(ACTIVE_LOCATION_KEY); } catch { /* private mode */ }
   location.reload();
@@ -572,12 +631,13 @@ export async function signOutNow() {
 //     live Firestore listeners and in-memory state; unwinding them by hand is
 //     how a listener from the previous location survives and quietly repaints
 //     the screen with the wrong data. A reload cannot leave one behind.
-export function switchLocation(locationId) {
+export async function switchLocation(locationId) {
   if (!locationsOf(userDocCache).includes(locationId)) {
     throw new Error(`Not your location: ${locationId}`);
   }
   clearLocalData();
   rememberLocation(locationId);
+  await wipeOfflineCache();
   location.reload();
 }
 
@@ -587,9 +647,10 @@ export function switchLocation(locationId) {
 // exactly two the other one is unambiguous and switchLocation names it, but with
 // three the app cannot guess, and reloading WITHOUT forgetting simply reopens the
 // same location — a button that visibly does nothing.
-export function forgetLocation() {
+export async function forgetLocation() {
   clearLocalData();
   try { localStorage.removeItem(ACTIVE_LOCATION_KEY); } catch { /* private mode */ }
+  await wipeOfflineCache();
   location.reload();
 }
 

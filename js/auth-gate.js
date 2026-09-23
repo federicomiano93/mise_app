@@ -633,7 +633,11 @@ function hubScreen(session) {
       cancelLabel: t('ui.cancel'),
       danger: true,
     });
-    if (ok) signOutNow();
+    if (!ok) return;
+    // Signing out clears this phone's offline copy, where a change still waiting for
+    // signal is kept. Loaded on the tap, like the dialog.
+    const { mayLeaveWithUnsent } = await import('./unsent-guard.js');
+    if (await mayLeaveWithUnsent(confirmDialog)) signOutNow();
   });
   card.append(out);
 
@@ -728,7 +732,12 @@ function messageScreen(title, body, { account = '' } = {}) {
 
   const other = el('button', 'auth-link', t('auth.otherAccount'));
   other.type = 'button';
-  other.addEventListener('click', () => { signOutNow(); });
+  other.addEventListener('click', async () => {
+    const [{ confirmDialog }, { mayLeaveWithUnsent }] = await Promise.all([
+      import('./confirm-dialog.js'), import('./unsent-guard.js'),
+    ]);
+    if (await mayLeaveWithUnsent(confirmDialog)) signOutNow();
+  });
   card.append(other);
 
   return card;

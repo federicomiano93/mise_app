@@ -164,6 +164,12 @@ const DICTIONARIES = Object.freeze({
     'auth.logOut': 'Log out',
     'auth.logOut.title': 'Log out?',
     'auth.logOut.message': 'You will need your email and password to get back in.',
+    // Asked only when something typed on this phone is still waiting for signal:
+    // signing out or switching venue clears the copy it is waiting in.
+    'unsent.title': 'Not sent yet',
+    'unsent.message': 'Some changes made on this phone have not reached the server yet — usually because there is no signal. If you go on now, they will be lost.',
+    'unsent.leave': 'Go on anyway',
+    'unsent.stay': 'Stay',
 
     // ⚠️ FOUR FIREBASE CODES SHARE ONE SENTENCE ON PURPOSE. Saying which half was
     // wrong tells somebody guessing at the door that an email exists. Keeping one
@@ -2527,6 +2533,10 @@ const DICTIONARIES = Object.freeze({
     'auth.logOut': 'Esci',
     'auth.logOut.title': 'Vuoi uscire?',
     'auth.logOut.message': 'Per rientrare ti serviranno email e password.',
+    'unsent.title': 'Non ancora inviato',
+    'unsent.message': 'Alcune modifiche fatte su questo telefono non sono ancora arrivate al server, di solito perché manca la rete. Se continui adesso, andranno perse.',
+    'unsent.leave': 'Continua lo stesso',
+    'unsent.stay': 'Resta qui',
 
     // 📌 Come in inglese, una sola frase per quattro casi: dire quale metà è
     // sbagliata rivelerebbe a chi tenta la porta che quell’email esiste.

@@ -62,7 +62,9 @@ test('⚠️ Log out is for everybody, last, low-key, and asks first', () => {
   assert.match(SETTINGS, /\n {4}scroll\.append\(logout\);/, 'not inside any gate');
   assert.ok(SETTINGS.lastIndexOf('scroll.append(item(') < SETTINGS.indexOf('scroll.append(logout)'),
     'and after every row');
-  assert.match(SETTINGS, /danger: true,\s*\}\);\s*if \(ok\) signOutNow\(\);/);
+  // …and, since 23 Sep 2026, asks a second time only when something typed is still
+  // waiting for signal: signing out now clears the offline copy it waits in.
+  assert.match(SETTINGS, /danger: true,\s*\}\);\s*if \(ok && await mayLeaveWithUnsent\(confirmDialog\)\) signOutNow\(\);/);
 });
 
 test('the holiday row follows the holiday, and stops listening when the screen closes', () => {
