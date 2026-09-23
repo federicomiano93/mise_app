@@ -2151,6 +2151,16 @@ async function pushNotifications() {
   await expectDenied('deleting somebody else\'s registration', () =>
     deleteWrite(`${L}/fcm-tokens/${TOKEN_B}`));
 
+  // ⚠️⚠️ READ ONLY YOUR OWN (security audit, 23 Sep 2026). A token is the key to a
+  // phone: knowing one is enough to take its registration over or silence it.
+  await seedDoc(`${L}/fcm-tokens/${TOKEN_A}`, tokenDoc());
+  await expectAllowed('a phone may read its own registration',
+    readAs(ALICE, `${L}/fcm-tokens/${TOKEN_A}`));
+  await expectDenied('nobody may read a colleague\'s registration',
+    readAs(ALICE, `${L}/fcm-tokens/${TOKEN_B}`));
+  await expectDenied('nobody may list every phone in the venue',
+    readAs(ALICE, `${L}/fcm-tokens`));
+
   // ── A scheduled alarm ──
   await expectAllowed('a phone schedules an alarm for itself', () =>
     wholeWrite(`${L}/push-timers/t1`, timer()));
@@ -2186,6 +2196,13 @@ async function pushNotifications() {
     mergeWrite(`${L}/push-timers/t2`, { body: 'something else' }));
   await expectDenied('cancelling AND retiming in one write', () =>
     mergeWrite(`${L}/push-timers/t2`, { active: false, fireAt: Date.now() + 60000 }));
+
+  // ⚠️ A TIMER CARRIES ITS PHONE'S TOKEN, so a colleague's timers were a second way
+  // to learn one (security audit, 23 Sep 2026).
+  await seedDoc(`${L}/push-timers/bob-timer`, timer({ uid: BOB.uid, token: TOKEN_B }));
+  await expectAllowed('a phone may read its own alarm', readAs(ALICE, `${L}/push-timers/t1`));
+  await expectDenied('nobody may read a colleague\'s alarm', readAs(ALICE, `${L}/push-timers/bob-timer`));
+  await expectDenied('nobody may list every alarm in the venue', readAs(ALICE, `${L}/push-timers`));
 
   await seedDoc(`${L}/push-timers/other`, {
     bakery: 'main', uid: BOB.uid, token: TOKEN_B, fireAt: soon,

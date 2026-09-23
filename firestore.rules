@@ -2188,8 +2188,15 @@ service cloud.firestore {
       // token belonging to somebody else and quietly redirect this location's
       // alerts to another phone. The delete branch checks the STORED uid, because
       // a delete carries no request.resource.
+      // ⚠️⚠️ READ ONLY YOUR OWN (security audit, 23 Sep 2026). The token is the
+      // document id AND the key to a phone: whoever knows one can take over that
+      // phone's registration (the write below checks the NEW uid, which is what lets
+      // a shared phone change hands) or silence it with muteOrderRequests. Readable by
+      // every member, every token in the venue was one list away. The app never
+      // reads these documents — the server does, with the Admin SDK — so nothing is
+      // lost by closing them.
       match /fcm-tokens/{token} {
-        allow read: if member(lid);
+        allow read: if member(lid) && resource.data.uid == request.auth.uid;
         allow create, update: if member(lid)
           && stampedFor(lid)
           && request.resource.data.keys().hasOnly(['bakery', 'uid', 'updatedAt', 'muteOrderRequests'])
@@ -2259,8 +2266,10 @@ service cloud.firestore {
       // document an instant before sending; if cancelling deleted it, a read that
       // failed for any other reason would look identical to "cancelled" and the
       // two would be impossible to tell apart in a log.
+      // ⚠️ READ ONLY YOUR OWN, for the reason on fcm-tokens above: a timer carries its
+      // phone's token, so a colleague's timers were a second way to learn one.
       match /push-timers/{id} {
-        allow read: if member(lid);
+        allow read: if member(lid) && resource.data.uid == request.auth.uid;
         allow create: if member(lid)
           && stampedFor(lid)
           && request.resource.data.keys().hasOnly(
