@@ -37,6 +37,8 @@ import {
   collection,
   doc,
   getDoc,
+  getDocFromCache,
+  getDocFromServer,
   setDoc,
   deleteDoc,
   onSnapshot,
@@ -64,6 +66,7 @@ import { roleOf, isOwner, canManage } from './roles.js';
 import {
   clearLocalData, shouldClearLocalData, offlineCacheVerdict, OFFLINE_CACHE_OWNER_KEY,
 } from './local-data.js';
+import { sameData } from './same-data.js';
 
 // ── Configuration (placeholders only — fill these in js/firebase.js) ──────────
 export const firebaseConfig = {
@@ -334,7 +337,7 @@ async function readLocationNames(ids) {
   const names = {};
   await Promise.all((ids || []).map(async id => {
     try {
-      const snap = await getDoc(doc(db, locationDocPath(id)));
+      const { snap } = await readPreferCache(doc(db, locationDocPath(id)));
       names[id] = (snap.exists() && snap.data().name) || id;
     } catch {
       names[id] = id;
@@ -361,8 +364,10 @@ async function enterLocation(locationId, options, user) {
   setCurrentLocationId(locationId);
   let location = null;
   try {
-    const snap = await getDoc(doc(db, locationDocPath(locationId)));
+    const locationRef = doc(db, locationDocPath(locationId));
+    const { snap, cached } = await readPreferCache(locationRef);
     location = snap.exists() ? snap.data() : null;
+    if (cached) checkBehind([[locationRef, location]]);
   } catch (err) {
     // The folder can hold data before anyone writes its description document.
     // Missing description ≠ no access: sections default to all (js/sections.js).
@@ -405,29 +410,62 @@ async function enterLocation(locationId, options, user) {
 // the server and never trusts what is sent from here. ⚠️ EVERY UNCERTAIN ANSWER
 // IS "NO" — a refused read, a dropped connection, a missing document.
 // ⚠️ COST (P14): one read per SIGN-IN, not per app open.
-async function resolveAppAdmin(user) {
+async function readAppAdmin(user) {
   try {
-    const snap = await getDoc(doc(db, 'admins', user.uid));
-    appAdminCache = snap.exists();
+    return await readPreferCache(doc(db, 'admins', user.uid));
   } catch {
-    appAdminCache = false;
+    return null;
   }
+}
+
+// ── This phone first, the server behind ─── (same as js/firebase.js; the reasoning is there)
+async function readPreferCache(ref) {
+  try {
+    return { snap: await getDocFromCache(ref), cached: true };
+  } catch {
+    return { snap: await getDoc(ref), cached: false };
+  }
+}
+
+const REFRESH_KEY = 'session-refreshed-at';
+const REFRESH_BRAKE_MS = 30_000;
+
+function checkBehind(pairs) {
+  Promise.all(pairs.map(async ([ref, usedData]) => {
+    const fresh = await getDocFromServer(ref);
+    return sameData(fresh.exists() ? fresh.data() : null, usedData);
+  })).then((same) => {
+    if (same.every(Boolean)) return;
+    let last = 0;
+    try { last = Number(sessionStorage.getItem(REFRESH_KEY)) || 0; } catch { /* private mode */ }
+    if (Date.now() - last < REFRESH_BRAKE_MS) return;
+    try { sessionStorage.setItem(REFRESH_KEY, String(Date.now())); } catch { /* private mode */ }
+    location.reload();
+  }).catch(() => { /* offline, or refused: keep what the phone had */ });
 }
 
 // Which locations does this account have? The answer lives in users/{uid},
 // which the app can read but never write — so nobody can grant themselves access.
 async function resolveMembership(user) {
   setSession({ status: 'loading', user });
+  const userRef = doc(db, 'users', user.uid);
+  const adminRead = readAppAdmin(user);
+  let userRead;
   try {
-    const snap = await getDoc(doc(db, 'users', user.uid));
-    userDocCache = snap.exists() ? snap.data() : null;
+    userRead = await readPreferCache(userRef);
+    userDocCache = userRead.snap.exists() ? userRead.snap.data() : null;
   } catch (err) {
     console.error('Could not read the access document:', err);
     setSession({ status: 'error', user, error: 'network' });
     return;
   }
 
-  await resolveAppAdmin(user);
+  const admin = await adminRead;
+  appAdminCache = !!(admin && admin.snap.exists());
+  const behind = [];
+  if (userRead.cached) behind.push([userRef, userDocCache]);
+  if (admin && admin.cached) behind.push([doc(db, 'admins', user.uid), admin.snap.exists() ? admin.snap.data() : null]);
+  if (behind.length) checkBehind(behind);
 
   const pick = pickStart(userDocCache, {
     isAppAdmin: appAdminCache,

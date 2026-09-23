@@ -44,6 +44,8 @@ import {
   collection,
   doc,
   getDoc,
+  getDocFromCache,
+  getDocFromServer,
   setDoc,
   deleteDoc,
   onSnapshot,
@@ -73,6 +75,7 @@ import { roleOf, isOwner, canManage } from './roles.js';
 import {
   clearLocalData, shouldClearLocalData, offlineCacheVerdict, OFFLINE_CACHE_OWNER_KEY,
 } from './local-data.js';
+import { sameData } from './same-data.js';
 
 // ── Configuration (PUBLIC config, P1 — committed on purpose, see .gitignore) ──
 // Copied from firebase.example.js, whose "placeholders only" heading came with
@@ -377,11 +380,68 @@ function rememberLocation(id) {
 // ever have to choose between those, so the picker and the switch confirmation
 // use the real names from each location's own document. One small read each,
 // once per sign-in; an unreadable name falls back to the id rather than to blank.
+// ── Reading the session's own documents: this phone first, the server behind ──
+//
+// ⚠️⚠️ WHY (speed audit, 23 Sep 2026). Opening any page asked the SERVER, one question
+// after another, who this is (users/{uid}), whether they run the app (admins/{uid}) and
+// what the venue is (locations/{lid}) — and getDoc() waits for the server even when the
+// offline cache already holds the answer. On a 4G phone that was most of the second and
+// a half before any data appeared, paid on every page and every return to the app.
+//
+// Now each of them is answered from this phone's own copy when it has one, and the
+// server is asked straight after, behind the screen. If the server's answer differs —
+// a role changed, access removed, the venue's language switched — the page reloads,
+// and the cache it reloads from already holds the new answer.
+//
+// ⚠️ THIS IS NOT A SECURITY DECISION AND CANNOT BECOME ONE (P2). What a cached copy
+// decides is which screens to draw; every read and write is still judged by the rules
+// on the server, which never see this cache. And the copy is only ever this account's
+// own: js/local-data.js offlineCacheVerdict wipes somebody else's before a page reads.
+async function readPreferCache(ref) {
+  try {
+    return { snap: await getDocFromCache(ref), cached: true };
+  } catch {
+    // Not on this phone yet: the server, exactly as before.
+    return { snap: await getDoc(ref), cached: false };
+  }
+}
+
+// Ask the server what the cache answered, and start again if it disagrees.
+// ⚠️ A FAILURE IS SILENT: with no signal the cached answer is all there is, which is
+// exactly how the app behaved offline before this change.
+//
+// ⚠️ AT MOST ONE SUCH RELOAD EVERY 30 SECONDS. If the two copies ever compared unequal
+// for a reason that survives a reload — a field shape this comparison does not know —
+// the page would reload for ever, which is a broken app with nothing on screen to
+// explain it. The brake turns that into one extra reload and a line in the console.
+const REFRESH_KEY = 'session-refreshed-at';
+const REFRESH_BRAKE_MS = 30_000;
+
+function checkBehind(pairs) {
+  Promise.all(pairs.map(async ([ref, usedData]) => {
+    const fresh = await getDocFromServer(ref);
+    return sameData(fresh.exists() ? fresh.data() : null, usedData);
+  })).then((same) => {
+    if (same.every(Boolean)) return;
+    let last = 0;
+    try { last = Number(sessionStorage.getItem(REFRESH_KEY)) || 0; } catch { /* private mode */ }
+    if (Date.now() - last < REFRESH_BRAKE_MS) {
+      console.warn('The session still differs from the server after a reload; not reloading again.');
+      return;
+    }
+    try { sessionStorage.setItem(REFRESH_KEY, String(Date.now())); } catch { /* private mode */ }
+    console.info('The session changed on the server since this phone last looked — reloading.');
+    location.reload();
+  }).catch(() => { /* offline, or refused: keep what the phone had */ });
+}
+
 async function readLocationNames(ids) {
   const names = {};
   await Promise.all((ids || []).map(async id => {
     try {
-      const snap = await getDoc(doc(db, locationDocPath(id)));
+      // A name is a label on a button: the phone's copy is good enough, and a stale one
+      // is corrected by the next opening.
+      const { snap } = await readPreferCache(doc(db, locationDocPath(id)));
       names[id] = (snap.exists() && snap.data().name) || id;
     } catch {
       names[id] = id;
@@ -408,8 +468,11 @@ async function enterLocation(locationId, options, user) {
   setCurrentLocationId(locationId);
   let location = null;
   try {
-    const snap = await getDoc(doc(db, locationDocPath(locationId)));
+    // From this phone first, the server behind (see readPreferCache).
+    const locationRef = doc(db, locationDocPath(locationId));
+    const { snap, cached } = await readPreferCache(locationRef);
     location = snap.exists() ? snap.data() : null;
+    if (cached) checkBehind([[locationRef, location]]);
   } catch (err) {
     // The folder can hold data before anyone writes its description document.
     // Missing description ≠ no access: sections default to all (js/sections.js).
@@ -490,12 +553,14 @@ async function enterLocation(locationId, options, user) {
 //
 // ⚠️ COST (P14): one read per SIGN-IN, not per app open — it sits in the same
 // place as the membership read, which the session already makes exactly once.
-async function resolveAppAdmin(user) {
+//
+// ⚠️ It resolves to the read itself, so resolveMembership can run it BESIDE the
+// membership read rather than after it, and check both against the server behind.
+async function readAppAdmin(user) {
   try {
-    const snap = await getDoc(doc(db, 'admins', user.uid));
-    appAdminCache = snap.exists();
+    return await readPreferCache(doc(db, 'admins', user.uid));
   } catch {
-    appAdminCache = false;
+    return null;
   }
 }
 
@@ -503,16 +568,27 @@ async function resolveAppAdmin(user) {
 // which the app can read but never write — so nobody can grant themselves access.
 async function resolveMembership(user) {
   setSession({ status: 'loading', user });
+  const userRef = doc(db, 'users', user.uid);
+  // ⚠️ BOTH AT ONCE, and from this phone first (see readPreferCache). They used to be
+  // asked one after the other, each waiting for the server.
+  const adminRead = readAppAdmin(user);
+  let userRead;
   try {
-    const snap = await getDoc(doc(db, 'users', user.uid));
-    userDocCache = snap.exists() ? snap.data() : null;
+    userRead = await readPreferCache(userRef);
+    userDocCache = userRead.snap.exists() ? userRead.snap.data() : null;
   } catch (err) {
     console.error('Could not read the access document:', err);
     setSession({ status: 'error', user, error: 'network' });
     return;
   }
 
-  await resolveAppAdmin(user);
+  const admin = await adminRead;
+  // ⚠️ EVERY UNCERTAIN ANSWER IS "NO", as before: a refused or failed read is false.
+  appAdminCache = !!(admin && admin.snap.exists());
+  const behind = [];
+  if (userRead.cached) behind.push([userRef, userDocCache]);
+  if (admin && admin.cached) behind.push([doc(db, 'admins', user.uid), admin.snap.exists() ? admin.snap.data() : null]);
+  if (behind.length) checkBehind(behind);
 
   const pick = pickStart(userDocCache, {
     isAppAdmin: appAdminCache,
