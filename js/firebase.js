@@ -76,6 +76,7 @@ import {
   clearLocalData, shouldClearLocalData, offlineCacheVerdict, OFFLINE_CACHE_OWNER_KEY,
 } from './local-data.js';
 import { sameData } from './same-data.js';
+import { isBusy } from './update-gate.js';
 
 // ── Configuration (PUBLIC config, P1 — committed on purpose, see .gitignore) ──
 // Copied from firebase.example.js, whose "placeholders only" heading came with
@@ -162,13 +163,30 @@ const db = startFirestore();
 //
 // ⚠️ A FAILURE IS LOGGED, NOT THROWN. Another open tab of the app holds the database
 // and refuses the clear; the sign-out still has to happen.
+//
+// ⚠️ IT SAYS WHETHER IT WORKED, and the callers must listen (code review, 23 Sep 2026):
+// the record of whose data this is may only be cleared or rewritten after a clear that
+// SUCCEEDED, or a failed one would also switch off the boot check that retries it.
 async function wipeOfflineCache() {
   try {
     await terminate(db);
     await clearIndexedDbPersistence(db);
+    return true;
   } catch (err) {
     console.warn('Could not clear the offline copy of the data:', err?.message || err);
+    return false;
   }
+}
+
+// The boot check retries a failed clear on the next page — but only once per opening
+// of the app: a clear that keeps failing (another tab holding the database) must not
+// become a page that reloads for ever.
+const WIPE_FAILED_KEY = 'offline-wipe-failed';
+function wipeFailedThisOpening(uid) {
+  try { return sessionStorage.getItem(WIPE_FAILED_KEY) === uid; } catch { return false; }
+}
+function markWipeFailed(uid) {
+  try { sessionStorage.setItem(WIPE_FAILED_KEY, uid); } catch { /* private mode */ }
 }
 
 // Is something typed on this phone still waiting to reach the server? That waiting
@@ -376,10 +394,6 @@ function rememberLocation(id) {
   try { localStorage.setItem(ACTIVE_LOCATION_KEY, id); } catch { /* private mode */ }
 }
 
-// The location ids are database names ('main', 'trattoria-rosa'). Nobody should
-// ever have to choose between those, so the picker and the switch confirmation
-// use the real names from each location's own document. One small read each,
-// once per sign-in; an unreadable name falls back to the id rather than to blank.
 // ── Reading the session's own documents: this phone first, the server behind ──
 //
 // ⚠️⚠️ WHY (speed audit, 23 Sep 2026). Opening any page asked the SERVER, one question
@@ -397,13 +411,33 @@ function rememberLocation(id) {
 // decides is which screens to draw; every read and write is still judged by the rules
 // on the server, which never see this cache. And the copy is only ever this account's
 // own: js/local-data.js offlineCacheVerdict wipes somebody else's before a page reads.
-async function readPreferCache(ref) {
+//
+// ⚠️ A CACHED "THIS DOCUMENT DOES NOT EXIST" IS NOT AN ANSWER, unless `trustMissing`
+// says it is (code review, 23 Sep 2026). A new person's app reads users/{uid} at sign-up,
+// before the join code has made it exist, and the phone keeps that "nothing here".
+// Trusted after the join's reload, it drew "No location yet" — with a button on it that
+// signs them out. Only admins/{uid}, where missing is everybody's normal answer, trusts it.
+async function readPreferCache(ref, { trustMissing = false } = {}) {
   try {
-    return { snap: await getDocFromCache(ref), cached: true };
-  } catch {
-    // Not on this phone yet: the server, exactly as before.
-    return { snap: await getDoc(ref), cached: false };
-  }
+    const snap = await getDocFromCache(ref);
+    if (snap.exists() || trustMissing) return { snap, cached: true };
+  } catch { /* not on this phone yet */ }
+  // The server, exactly as before.
+  return { snap: await getDoc(ref), cached: false };
+}
+
+// A venue setting was just written by a Cloud Function — language, Home cards, the
+// photo and panel switches — and this phone's copy of the venue document knows nothing
+// about it: the server's write never passes through the phone's cache.
+//
+// ⚠️ READ FRESH BEFORE ANYTHING RELOADS OR PAINTS FROM IT (code review, 23 Sep 2026).
+// Without this the owner who switched to Italian was shown English again by the reload,
+// then a second reload a moment later — or none at all if the 30-second brake below had
+// just been spent, which reads exactly like a save that failed.
+export async function refreshVenueFromServer() {
+  const lid = currentLocationId();
+  if (!lid) return;
+  try { await getDocFromServer(doc(db, locationDocPath(lid))); } catch { /* offline: the check behind catches up */ }
 }
 
 // Ask the server what the cache answered, and start again if it disagrees.
@@ -431,10 +465,23 @@ function checkBehind(pairs) {
     }
     try { sessionStorage.setItem(REFRESH_KEY, String(Date.now())); } catch { /* private mode */ }
     console.info('The session changed on the server since this phone last looked — reloading.');
-    location.reload();
+    reloadWhenIdle();
   }).catch(() => { /* offline, or refused: keep what the phone had */ });
 }
 
+// ⚠️ NEVER UNDER SOMEBODY'S FINGERS (code review, 23 Sep 2026). On a slow signal the
+// server's answer can arrive after a form was opened, and a reload then would throw the
+// half-typed product away. The same test the compulsory update uses decides it
+// (js/update-gate.js isBusy): wait until nothing is open, then start again.
+function reloadWhenIdle() {
+  if (isBusy(document)) { setTimeout(reloadWhenIdle, 5000); return; }
+  location.reload();
+}
+
+// The location ids are database names ('main', 'trattoria-rosa'). Nobody should
+// ever have to choose between those, so the picker and the switch confirmation
+// use the real names from each location's own document. One small read each,
+// once per sign-in; an unreadable name falls back to the id rather than to blank.
 async function readLocationNames(ids) {
   const names = {};
   await Promise.all((ids || []).map(async id => {
@@ -558,7 +605,10 @@ async function enterLocation(locationId, options, user) {
 // membership read rather than after it, and check both against the server behind.
 async function readAppAdmin(user) {
   try {
-    return await readPreferCache(doc(db, 'admins', user.uid));
+    // Missing is the normal answer for everybody but the app's own administrator, so a
+    // cached "not there" is trusted here: asking the server would undo the speed-up for
+    // every account, and a brand-new administrator is corrected by the check behind.
+    return await readPreferCache(doc(db, 'admins', user.uid), { trustMissing: true });
   } catch {
     return null;
   }
@@ -733,12 +783,19 @@ onAuthStateChanged(auth, user => {
   // until the next boot — a join replaces the account mid-page and must not be cut
   // off half-way — and the owner recorded stays the previous one until then, so that
   // next boot still knows.
+  //
+  // ⚠️ THE NEW OWNER IS RECORDED ONLY AFTER A CLEAR THAT WORKED. A failed one keeps the
+  // previous owner on record, so the next opening of the app tries again; within this
+  // opening it is tried once, never in a loop.
   const verdict = offlineCacheVerdict(readCacheOwner(), user.uid);
   if (verdict === 'claim') writeCacheOwner(user.uid);
-  if (verdict === 'wipe' && atBoot) {
-    writeCacheOwner(user.uid);
+  if (verdict === 'wipe' && atBoot && !wipeFailedThisOpening(user.uid)) {
     clearLocalData();
-    wipeOfflineCache().then(() => location.reload());
+    wipeOfflineCache().then((cleared) => {
+      if (cleared) writeCacheOwner(user.uid);
+      else markWipeFailed(user.uid);
+      location.reload();
+    });
     return;
   }
 
@@ -784,8 +841,9 @@ export function sendReset(email) {
 export async function signOutNow() {
   await signOut(auth);
   clearLocalData();
-  await wipeOfflineCache();
-  writeCacheOwner('');
+  // Only a clear that worked forgets whose data this is: after a failed one the record
+  // stays, so the next person's first page catches it and tries again.
+  if (await wipeOfflineCache()) writeCacheOwner('');
   markHubPassed(false);
   try { localStorage.removeItem(ACTIVE_LOCATION_KEY); } catch { /* private mode */ }
   location.reload();

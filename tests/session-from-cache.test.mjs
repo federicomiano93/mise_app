@@ -73,10 +73,48 @@ for (const file of ['js/firebase.js', 'js/firebase.example.js']) {
     assert.match(body, /getDocFromServer\(ref\)/, 'the check must ask the SERVER, not the cache again');
     assert.match(body, /sameData\(/);
     assert.match(body, /Date\.now\(\) - last < REFRESH_BRAKE_MS/, 'without the brake a comparison mistake is an endless reload');
-    assert.match(body, /location\.reload\(\)/);
+    assert.match(body, /reloadWhenIdle\(\)/);
     assert.match(body, /\.catch\(/, 'offline, the check must fail quietly and keep the cached answer');
   });
+
+  test(`${file}: that reload never lands under somebody's fingers`, () => {
+    const body = between(src, 'function reloadWhenIdle', '\n}\n', file);
+    assert.match(body, /isBusy\(document\)/, 'a half-typed form must not be thrown away by a reload');
+    assert.match(body, /location\.reload\(\)/);
+  });
+
+  test(`${file}: a cached "does not exist" is asked again, except for admins`, () => {
+    const read = between(src, 'async function readPreferCache', '\n}\n', file);
+    assert.match(read, /if \(snap\.exists\(\) \|\| trustMissing\)/,
+      'a new person\'s missing membership, cached at sign-up, drew "No location yet" after joining');
+    const membership = between(src, 'async function resolveMembership', '\n}\n', file);
+    assert.match(membership, /readPreferCache\(userRef\)/, 'the membership must NOT trust a cached absence');
+    assert.match(src, /readPreferCache\(doc\(db, 'admins', user\.uid\), \{ trustMissing: true \}\)/);
+  });
+
+  test(`${file}: a venue setting written by the server is read back before anything uses it`, () => {
+    const body = between(src, 'export async function refreshVenueFromServer', '\n}\n', file);
+    assert.match(body, /getDocFromServer\(doc\(db, locationDocPath\(lid\)\)\)/);
+  });
 }
+
+test('every call that changes the venue document refreshes this phone\'s copy of it', () => {
+  const calls = [
+    ['js/staff/firebase-staff.js', ['setLocationLanguage', 'setStaffCard', 'setHomeCardOrder']],
+    ['js/orders/firebase-features.js', ['setIngredientPanels', 'setPackPhoto']],
+    ['js/catalogue/firebase-photo.js', ['setRecipePhoto']],
+  ];
+  for (const [file, names] of calls) {
+    const src = codeOf(read(file));
+    for (const name of names) {
+      const at = src.indexOf(`'${name}')`);
+      assert.ok(at !== -1, `${file} no longer calls ${name}`);
+      const after = src.slice(at, src.indexOf('\n}', at));
+      assert.match(after, /await refreshVenueFromServer\(\)/,
+        `${name}: without the refresh the owner is shown the old value, then reloaded`);
+    }
+  }
+});
 
 test('the comparison is precached, or an installed phone offline would boot nothing', () => {
   assert.match(read('sw.js'), /'\.\/js\/same-data\.js'/);

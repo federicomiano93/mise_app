@@ -74,7 +74,18 @@ for (const file of ['js/firebase.js', 'js/firebase.example.js']) {
     assert.ok(verdictAt !== -1, 'the owner of the offline copy is never asked');
     assert.ok(readAt > verdictAt, 'the question must come BEFORE the first read');
     assert.match(body, /verdict === 'wipe' && atBoot/, 'a join mid-page must not be cut off: boot only');
-    assert.match(body, /wipeOfflineCache\(\)\.then\(\(\) => location\.reload\(\)\)/);
+    // ⚠️ The new owner only after a clear that WORKED, and a failed one tried once per
+    // opening — never a page that reloads for ever (code review, 23 Sep 2026).
+    assert.match(body, /!wipeFailedThisOpening\(user\.uid\)/);
+    assert.match(body, /wipeOfflineCache\(\)\.then\(\(cleared\) => \{\s*if \(cleared\) writeCacheOwner\(user\.uid\);\s*else markWipeFailed\(user\.uid\);\s*location\.reload\(\);/);
+  });
+
+  test(`${file}: signing out forgets whose data this is only when the clear worked`, () => {
+    const body = between(src, 'export async function signOutNow', '\n}\n', file);
+    assert.match(body, /if \(await wipeOfflineCache\(\)\) writeCacheOwner\(''\);/);
+    const wipe = between(src, 'async function wipeOfflineCache', '\n}\n', file);
+    assert.match(wipe, /return true;/);
+    assert.match(wipe, /return false;/);
   });
 }
 

@@ -10,7 +10,7 @@
 // readable only by its own owner — without it, an owner could never list their
 // own staff.
 
-import { firebaseConfig, sessionReady, signedInReady, currentSession, isLocalEmulator }
+import { firebaseConfig, sessionReady, signedInReady, currentSession, isLocalEmulator, refreshVenueFromServer }
   from '../firebase.js';
 import { pathFor } from '../location.js';
 import { initializeApp, getApps, getApp } from 'https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js';
@@ -163,6 +163,9 @@ export async function setMemberName(uid, firstName, lastName) {
 export async function setLocationLanguage(locationId, language) {
   await sessionReady;
   const res = await call('setLocationLanguage')({ locationId, language });
+  // The venue document changed on the server; the phone's copy must hear of it before
+  // anything reloads or paints from it (js/firebase.js refreshVenueFromServer).
+  await refreshVenueFromServer();
   return res.data;
 }
 
@@ -173,6 +176,7 @@ export async function setLocationLanguage(locationId, language) {
 export async function setStaffCard(locationId, card, hidden) {
   await sessionReady;
   const res = await call('setStaffCard')({ locationId, card, hidden });
+  await refreshVenueFromServer();
   return res.data;
 }
 
@@ -182,6 +186,7 @@ export async function setStaffCard(locationId, card, hidden) {
 export async function setHomeCardOrder(locationId, order) {
   await sessionReady;
   const res = await call('setHomeCardOrder')({ locationId, order });
+  await refreshVenueFromServer();
   return res.data;
 }
 

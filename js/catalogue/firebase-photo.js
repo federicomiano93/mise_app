@@ -5,7 +5,7 @@
 // anybody holding the phone, so a key in the app would be a key on the internet.
 // See functions/recipe-photo.js.
 
-import { sessionReady, isLocalEmulator } from '../firebase.js';
+import { sessionReady, isLocalEmulator, refreshVenueFromServer } from '../firebase.js';
 import { currentLocationId } from '../location.js';
 import { initializeApp, getApps, getApp } from 'https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js';
 import {
@@ -77,5 +77,8 @@ export async function setPhotoEnabled(enabled) {
   await sessionReady;
   const locationId = currentLocationId();
   const res = await httpsCallable(functions, 'setRecipePhoto')({ locationId, enabled });
+  // The venue document changed on the server; the phone's copy must hear of it before
+  // anything reloads or paints from it (js/firebase.js refreshVenueFromServer).
+  await refreshVenueFromServer();
   return res.data;
 }

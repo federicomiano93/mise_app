@@ -67,6 +67,7 @@ import {
   clearLocalData, shouldClearLocalData, offlineCacheVerdict, OFFLINE_CACHE_OWNER_KEY,
 } from './local-data.js';
 import { sameData } from './same-data.js';
+import { isBusy } from './update-gate.js';
 
 // ── Configuration (placeholders only — fill these in js/firebase.js) ──────────
 export const firebaseConfig = {
@@ -122,9 +123,19 @@ async function wipeOfflineCache() {
   try {
     await terminate(db);
     await clearIndexedDbPersistence(db);
+    return true;
   } catch (err) {
     console.warn('Could not clear the offline copy of the data:', err?.message || err);
+    return false;
   }
+}
+
+const WIPE_FAILED_KEY = 'offline-wipe-failed';
+function wipeFailedThisOpening(uid) {
+  try { return sessionStorage.getItem(WIPE_FAILED_KEY) === uid; } catch { return false; }
+}
+function markWipeFailed(uid) {
+  try { sessionStorage.setItem(WIPE_FAILED_KEY, uid); } catch { /* private mode */ }
 }
 
 export async function changesStillWaiting(ms = 4000) {
@@ -412,19 +423,30 @@ async function enterLocation(locationId, options, user) {
 // ⚠️ COST (P14): one read per SIGN-IN, not per app open.
 async function readAppAdmin(user) {
   try {
-    return await readPreferCache(doc(db, 'admins', user.uid));
+    return await readPreferCache(doc(db, 'admins', user.uid), { trustMissing: true });
   } catch {
     return null;
   }
 }
 
 // ── This phone first, the server behind ─── (same as js/firebase.js; the reasoning is there)
-async function readPreferCache(ref) {
+async function readPreferCache(ref, { trustMissing = false } = {}) {
   try {
-    return { snap: await getDocFromCache(ref), cached: true };
-  } catch {
-    return { snap: await getDoc(ref), cached: false };
-  }
+    const snap = await getDocFromCache(ref);
+    if (snap.exists() || trustMissing) return { snap, cached: true };
+  } catch { /* not on this phone yet */ }
+  return { snap: await getDoc(ref), cached: false };
+}
+
+export async function refreshVenueFromServer() {
+  const lid = currentLocationId();
+  if (!lid) return;
+  try { await getDocFromServer(doc(db, locationDocPath(lid))); } catch { /* offline */ }
+}
+
+function reloadWhenIdle() {
+  if (isBusy(document)) { setTimeout(reloadWhenIdle, 5000); return; }
+  location.reload();
 }
 
 const REFRESH_KEY = 'session-refreshed-at';
@@ -440,7 +462,7 @@ function checkBehind(pairs) {
     try { last = Number(sessionStorage.getItem(REFRESH_KEY)) || 0; } catch { /* private mode */ }
     if (Date.now() - last < REFRESH_BRAKE_MS) return;
     try { sessionStorage.setItem(REFRESH_KEY, String(Date.now())); } catch { /* private mode */ }
-    location.reload();
+    reloadWhenIdle();
   }).catch(() => { /* offline, or refused: keep what the phone had */ });
 }
 
@@ -611,10 +633,13 @@ onAuthStateChanged(auth, user => {
   // BOOT, before any read (same as js/firebase.js; see the reasoning there).
   const verdict = offlineCacheVerdict(readCacheOwner(), user.uid);
   if (verdict === 'claim') writeCacheOwner(user.uid);
-  if (verdict === 'wipe' && atBoot) {
-    writeCacheOwner(user.uid);
+  if (verdict === 'wipe' && atBoot && !wipeFailedThisOpening(user.uid)) {
     clearLocalData();
-    wipeOfflineCache().then(() => location.reload());
+    wipeOfflineCache().then((cleared) => {
+      if (cleared) writeCacheOwner(user.uid);
+      else markWipeFailed(user.uid);
+      location.reload();
+    });
     return;
   }
 
@@ -656,8 +681,7 @@ export function sendReset(email) {
 export async function signOutNow() {
   await signOut(auth);
   clearLocalData();
-  await wipeOfflineCache();
-  writeCacheOwner('');
+  if (await wipeOfflineCache()) writeCacheOwner('');
   markHubPassed(false);
   try { localStorage.removeItem(ACTIVE_LOCATION_KEY); } catch { /* private mode */ }
   location.reload();

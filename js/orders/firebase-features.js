@@ -10,7 +10,7 @@
 // js/venue-features.js — PURE, importable by the Catalogue too, and the only place the
 // «default ON» direction is written down.
 
-import { firebaseConfig, sessionReady, isLocalEmulator, currentSession } from '../firebase.js';
+import { firebaseConfig, sessionReady, isLocalEmulator, currentSession, refreshVenueFromServer } from '../firebase.js';
 import { currentLocationId } from '../location.js';
 import { allergensOn, nutritionOn } from '../venue-features.js';
 import { initializeApp, getApps, getApp } from 'https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js';
@@ -69,6 +69,9 @@ export async function setIngredientPanel(key, on) {
   await sessionReady;
   const locationId = currentLocationId();
   await httpsCallable(functions, 'setIngredientPanels')({ locationId, [key]: on });
+  // The venue document changed on the server; the phone's copy must hear of it before
+  // anything reloads or paints from it (js/firebase.js refreshVenueFromServer).
+  await refreshVenueFromServer();
   // Only after the server has agreed. Setting it first would leave the screen
   // showing a change the venue never got.
   override[key] = on;
@@ -85,6 +88,7 @@ export async function setPackPhoto(on) {
   await sessionReady;
   const locationId = currentLocationId();
   await httpsCallable(functions, 'setPackPhoto')({ locationId, enabled: on });
+  await refreshVenueFromServer();
   // Only after the server has agreed. Setting it first would leave the screen showing
   // a change the venue never got — and, here, offering a button that will be refused.
   override.packPhoto = on;
