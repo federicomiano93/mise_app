@@ -421,6 +421,9 @@ service cloud.firestore {
                                  allow write: if false; }
     match /join-codes/{codeId} { allow read, write: if false; }
     match /rate-limits/{uid}   { allow read, write: if false; }
+    // Wrong six-digit guesses across EVERY account (functions/digits-guard.js). The
+    // default-deny block already refuses it; named here so nobody wonders.
+    match /rate-limits-global/{doc} { allow read, write: if false; }
 
     //   recipe-photo-limits/{uid} and recipe-photo-venue/{lid}
     //                     how many photographs an account, and a venue, have had
