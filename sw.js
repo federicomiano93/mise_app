@@ -669,6 +669,13 @@ const PRECACHE_ATTEMPTS = 3;
 // persists the install is refused and the browser tries the whole update again later.
 const HASH_HEADER = 'x-mise-hash';
 
+// ⚠️ NOT CHECKED ON THIS COMPUTER, and only there. A Windows checkout serves its text
+// files with CRLF line endings while GitHub serves the committed LF bytes, so on a local
+// server every text file would fail its fingerprint and no worker would ever install
+// (found by driving it, 23 Sep 2026). The hostnames are the same list js/firebase.js uses
+// to send the app to the emulators instead of production.
+const VERIFY_FINGERPRINTS = !['localhost', '127.0.0.1', '::1', '[::1]'].includes(self.location.hostname);
+
 // A body's git blob hash, the same one scripts/sw-hashes.mjs recorded: sha1 of
 // "blob <length>\0" followed by the bytes.
 async function blobHash(response) {
@@ -719,7 +726,9 @@ async function cacheOne(cache, donors, asset) {
   const res = await fetch(request);
   if (!res.ok) throw new Error(`${asset}: HTTP ${res.status}`);
   const got = await blobHash(res);
-  if (want && got !== want) throw new Error(`${asset}: the server sent ${got}, this release is ${want}`);
+  if (VERIFY_FINGERPRINTS && want && got !== want) {
+    throw new Error(`${asset}: the server sent ${got}, this release is ${want}`);
+  }
   await cache.put(request, stamped(res, got));
 }
 

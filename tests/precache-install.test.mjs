@@ -44,7 +44,7 @@ const SW = readFileSync(join(ROOT, 'sw.js'), 'utf8');
 const SW_URL = 'https://example.test/app/sw.js';
 const abs = asset => new URL(asset, SW_URL).href;
 
-function loadWorker({ fails = () => false, stale = () => false, existingCaches = [], donors = {} } = {}) {
+function loadWorker({ fails = () => false, stale = () => false, existingCaches = [], donors = {}, hostname = 'example.test' } = {}) {
   const listeners = new Map();
   const record = { puts: [], attempts: [], inits: [], opened: [], deleted: [], skipWaiting: 0 };
   const attemptsFor = new Map();
@@ -88,7 +88,7 @@ function loadWorker({ fails = () => false, stale = () => false, existingCaches =
   context = {
     self: {
       addEventListener: (type, fn) => listeners.set(type, fn),
-      location: { origin: 'https://example.test', href: SW_URL },
+      location: { origin: 'https://example.test', href: SW_URL, hostname },
       clients: { claim: () => Promise.resolve(), matchAll: () => Promise.resolve([]) },
       registration: { showNotification: () => Promise.resolve() },
       skipWaiting: () => { record.skipWaiting += 1; },
@@ -412,4 +412,15 @@ test('a precached path with a query string is not answered from the cache', asyn
 test('writes are never touched by the worker', async () => {
   const w = loadWorker();
   assert.equal(await serve(w, abs('./index.html'), 'POST'), null);
+});
+
+// ⚠️ On this computer a Windows checkout serves CRLF where GitHub serves LF, so every
+// text file would fail its fingerprint and no worker would ever install locally.
+test('on a local server the fingerprint is not checked — and everywhere else it is', async () => {
+  const local = loadWorker({ hostname: '127.0.0.1', stale: url => url.endsWith('/orders.css') });
+  await install(local);
+  assert.ok(local.record.added.includes(abs('./orders.css')), 'a local server must still install');
+
+  const live = loadWorker({ hostname: 'federicomiano93.github.io', stale: url => url.endsWith('/orders.css') });
+  await assert.rejects(install(live), /orders\.css/, 'the live site must never store a mismatched copy');
 });
