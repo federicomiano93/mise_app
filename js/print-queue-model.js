@@ -61,6 +61,37 @@ export function buildJob({ payload, copies = 1, createdBy, bakery, now }) {
   };
 }
 
+// ── Is it a label, and only a label? ─────────────────────────────────────────
+//
+// ⚠️⚠️ THE AGENT USED TO SEND WHATEVER THE QUEUE HELD (security audit, 23 Sep 2026).
+// Every member may queue a job, and a ZPL printer obeys more than labels: `~JR`
+// resets it, `^JUS` saves settings over the ones it was set up with, `^CC` changes
+// which character starts a command. So the agent now prints only a payload shaped
+// like the labels this app makes (js/catalogue/label-zpl.js): ONE ^XA … ^XZ, built
+// from the commands below and nothing else.
+//
+// ⚠️ NO TILDE ANYWHERE, AND THAT COSTS NO LABEL ANYTHING: label-zpl.js writes every
+// ^, ~ and _ in a product's text as its hex code, so a tilde in the job can only be
+// a control command. For the same reason every ^ in the job begins a command.
+export const LABEL_COMMANDS = Object.freeze([
+  'XA', 'XZ', 'CI', 'PW', 'LL', 'LH', 'LT', 'FO', 'A0', 'FB', 'FH', 'FD', 'FS', 'PQ',
+]);
+
+export function isSingleLabel(payload) {
+  if (typeof payload !== 'string' || payload.length > MAX_JOB_CHARS) return false;
+  const text = payload.trim();
+  if (!text.startsWith('^XA') || !text.endsWith('^XZ')) return false;
+  if (text.includes('~')) return false;
+  // Every command, read the way a printer reads it: case does not protect anything.
+  const commands = [];
+  for (let i = text.indexOf('^'); i !== -1; i = text.indexOf('^', i + 1)) {
+    commands.push(text.slice(i + 1, i + 3).toUpperCase());
+  }
+  if (commands.filter(c => c === 'XA').length !== 1) return false;
+  if (commands.filter(c => c === 'XZ').length !== 1) return false;
+  return commands.every(c => LABEL_COMMANDS.includes(c));
+}
+
 function clampCopies(n) {
   const v = Math.floor(Number(n));
   if (!Number.isFinite(v) || v < 1) return 1;
