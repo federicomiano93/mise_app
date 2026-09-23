@@ -596,6 +596,21 @@ export const redeemJoinCode = onCall(CALL, async (request) => {
   const kind = (request.data && request.data.kind) === 'link' ? 'link' : 'digits';
   const code = String((request.data && request.data.code) || '');
 
+  // ⚠️ A PAUSE IS ANSWERED BEFORE THE ACCOUNT IS CHARGED (code review, 23 Sep 2026).
+  // While six-digit codes are paused for everybody, a real person trying theirs would
+  // otherwise spend one of their five tries an hour on an answer that was never going
+  // to look at the code. This read is only the early answer; the transaction below
+  // asks again, and it is the one that holds under parallel calls.
+  if (kind === 'digits') {
+    const guardSnap = await db().doc(DIGITS_GUARD_DOC).get();
+    const guard = guardSnap.exists ? guardSnap.data() : null;
+    if (digitsPaused(guard, Date.now())) {
+      logger.info('Redeem refused', { uid, reason: 'digits-paused' });
+      throw new HttpsError('resource-exhausted',
+        redeemFailureText('digits-paused', pauseLeftMs(guard, Date.now())), { reason: 'digits-paused' });
+    }
+  }
+
   // Charged BEFORE the code is even looked at, so a malformed guess costs the
   // same as a well-formed one and the shape of a code cannot be probed for free.
   const limit = await chargeAttempt(uid);

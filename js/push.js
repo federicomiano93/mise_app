@@ -148,9 +148,13 @@ async function rememberToken(token) {
   if (previous && previous !== token) {
     try { await deleteDoc(doc(db(), pathFor(TOKENS), previous)); } catch (err) {}
   }
+  // ⚠️ MERGED, NEVER WRITTEN WHOLE (code review, 23 Sep 2026): the same document carries
+  // this phone's «do not buzz me about order lists», and a whole write — now made on the
+  // first timer of every phone that predates `push-token-uid` — would switch it off in
+  // silence while the switch on screen, which reads a local copy, still said «muted».
   await setDoc(doc(db(), pathFor(TOKENS), token), {
     bakery: currentLocationId(), uid, updatedAt: Date.now(),
-  });
+  }, { merge: true });
   try {
     localStorage.setItem(TOKEN_KEY, token);
     localStorage.setItem(TOKEN_UID_KEY, uid);

@@ -59,6 +59,14 @@ test('every wrong six-digit guess counts towards the app-wide limit, and a pause
   assert.match(body, /reason: 'digits-paused'/, 'the pause must travel with its reason so the app can say it');
 });
 
+test('a pause is answered BEFORE the account is charged one of its five tries', () => {
+  const body = between(ONBOARDING, 'export const redeemJoinCode', '\n});', 'functions/onboarding.js');
+  const peekAt = body.indexOf('db().doc(DIGITS_GUARD_DOC).get()');
+  const chargeAt = body.indexOf('await chargeAttempt(uid)');
+  assert.ok(peekAt !== -1 && chargeAt !== -1, 'the early answer or the charge is missing');
+  assert.ok(peekAt < chargeAt, 'a real person trying during a pause must not lose a try to it');
+});
+
 test('the app says the pause in the language on screen, in both languages', () => {
   const gate = codeOf(read('js/auth-gate.js'));
   assert.match(gate, /reason === 'digits-paused'/);
@@ -131,6 +139,10 @@ test('a shared phone is registered again in the name of whoever starts a timer',
   assert.match(body, /storedTokenOwner\(\) !== uid\) await rememberToken\(token\)/);
   assert.match(push, /localStorage\.setItem\(TOKEN_UID_KEY, uid\)/);
   assert.match(push, /localStorage\.removeItem\(TOKEN_UID_KEY\)/, 'turning notifications off must forget the owner too');
+  // ⚠️ MERGED: the same document carries «do not buzz me about order lists», and a whole
+  // write would switch it off in silence (code review, 23 Sep 2026).
+  const remember = between(read('js/push.js'), 'async function rememberToken', '\n}\n', 'js/push.js');
+  assert.match(remember, /updatedAt: Date\.now\(\),\s*\}, \{ merge: true \}\)/);
 });
 
 // ── 5. A client's name ───────────────────────────────────────────────────────
