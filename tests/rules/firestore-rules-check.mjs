@@ -1306,6 +1306,16 @@ async function configAndLogs() {
   await expectDenied('queue: a key nobody put in the whitelist',
     () => wholeWrite(`${A}/print-jobs/J_EXTRA`, { ...job(), printerIp: '10.0.0.5' }));
 
+  // ⚠️⚠️ A PRINTER OBEYS MORE THAN LABELS (security audit, 23 Sep 2026). In ZPL a ~ is
+  // a control command — ~JR resets the printer — and the app writes every ~ in a
+  // product's text as its hex code, so a real label never holds one.
+  await expectAllowed('queue: a real label, over several lines, as the app writes it',
+    () => wholeWrite(`${A}/print-jobs/J_LINES`, job({ payload: '^XA\n^CI28\n^FH\n^FDAroma _7E naturale^FS\n^XZ\n' })));
+  await expectDenied('queue: a printer reset instead of a label',
+    () => wholeWrite(`${A}/print-jobs/J_RESET`, job({ payload: '~JR' })));
+  await expectDenied('queue: a control command tucked inside a label, past a line break',
+    () => wholeWrite(`${A}/print-jobs/J_HIDDEN`, job({ payload: '^XA\n^FDPane^FS\n~JR\n^XZ' })));
+
   // Claiming it.
   await expectAllowed('queue: an agent claims a waiting job', () =>
     mergeWrite(`${A}/print-jobs/J1`, {

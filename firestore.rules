@@ -1207,6 +1207,12 @@ service cloud.firestore {
           && request.resource.data.payload.size() > 0
           // The app refuses a bigger one too; the app can be an old build.
           && request.resource.data.payload.size() <= 20000
+          // ⚠️ NO TILDE (security audit, 23 Sep 2026): in ZPL a ~ is a CONTROL command
+          // — ~JR resets the printer — and the app writes every ~ in a product's text
+          // as its hex code, so a real label never holds one. (?s) lets . cross the
+          // label's line breaks. The agent then checks the whole shape
+          // (js/print-queue-model.js isSingleLabel); this is the door's half of it.
+          && !request.resource.data.payload.matches('(?s).*~.*')
           && request.resource.data.copies is number
           && request.resource.data.copies >= 1
           && request.resource.data.copies <= 99
