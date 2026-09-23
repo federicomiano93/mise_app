@@ -205,6 +205,9 @@ const DICTIONARIES = Object.freeze({
     // an owner sees on opening an invitation to their own business — which is how
     // anybody checks that one works before sending it.
     'join.alreadyMember': 'You are already in this business. A code cannot change what you can do here.',
+    // ⚠️ NOT A FAULT WITH THIS CODE EITHER: too many wrong six-digit guesses across the
+    // whole app pause them for everybody (functions/digits-guard.js). A link still works.
+    'join.digitsPaused': 'Six-digit codes are paused for a while, for safety. Ask for an invitation link instead.',
     'join.shapeHint': 'Enter your six-digit code, or open the link you were sent.',
 
     // How long an invitation has left. ⚠️ SELF-CONTAINED PHRASES, because the
@@ -2556,6 +2559,7 @@ const DICTIONARIES = Object.freeze({
     'join.checkingCode': 'Controllo del codice…',
     'join.badCode': 'Questo codice non funziona. Chiedine uno nuovo.',
     'join.alreadyMember': 'Sei già dentro questa attività. Un codice non può cambiare cosa puoi fare qui.',
+    'join.digitsPaused': 'Per sicurezza i codici di sei cifre sono sospesi per un po’. Chiedi un link d’invito.',
     'join.shapeHint': 'Inserisci il codice di sei cifre, oppure apri il link che ti hanno mandato.',
 
     'join.expires.expired': 'scaduto',

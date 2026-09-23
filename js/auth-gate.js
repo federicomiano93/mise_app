@@ -531,8 +531,12 @@ function joinScreen({ needsAccount, prefill = '' }) {
       // as English and is shown as it came (see the note in that file). This one
       // arrives with a reason beside the words, so the words can be ours.
       const alreadyMember = err && err.details && err.details.reason === 'already-member';
+      // The second refusal that travels with a reason: six-digit codes paused for
+      // everybody after too many wrong guesses across the app. Nothing about THIS code.
+      const digitsPaused = err && err.details && err.details.reason === 'digits-paused';
       setStatus(fromAuth ? messageFor(err)
         : alreadyMember ? t('join.alreadyMember')
+        : digitsPaused ? t('join.digitsPaused')
         : (err && err.message) || t('join.badCode'));
       // ⚠️ AND THE INVITATION IS DROPPED, because no amount of retrying can change
       // the answer. Left in place it is offered again on the next page and every

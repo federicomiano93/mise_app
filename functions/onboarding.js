@@ -34,6 +34,7 @@ import {
   isWellFormed, codeStatus, isRateLimited, retryAfterMs, redeemFailureText,
 } from './join-code.js';
 import { HIDEABLE_IDS, OPT_IN_IDS, isValidOrder } from './home-cards.js';
+import { DIGITS_GUARD_DOC, digitsPaused, pauseLeftMs, withWrongGuess } from './digits-guard.js';
 
 const REGION = 'us-central1';
 
@@ -566,20 +567,28 @@ export const createJoinCode = onCall(CALL, async (request) => {
 // CALLER, not the code — a search would otherwise just move to the next guess.
 // The caller must therefore already be signed in, which also means Firebase
 // Auth's own sign-up limits sit in front of this.
+//
+// ⚠️⚠️ A TRANSACTION, AND UNTIL 23 SEP 2026 IT WAS NOT. It read the count and then
+// wrote it back, so fifty calls fired at the same instant all read "none yet" and
+// all went through: the limit held only for somebody polite enough to wait for each
+// answer. Inside a transaction the calls queue on the one document and each sees the
+// one before it.
 async function chargeAttempt(uid) {
   const ref = db().doc(`rate-limits/${uid}`);
-  const now = Date.now();
-  const snap = await ref.get();
-  const record = snap.exists ? snap.data() : null;
+  return db().runTransaction(async (tx) => {
+    const now = Date.now();
+    const snap = await tx.get(ref);
+    const record = snap.exists ? snap.data() : null;
 
-  if (isRateLimited(record, now)) {
-    return { blocked: true, retryMs: retryAfterMs(record, now) };
-  }
-  // Keep only what still matters, so the document cannot grow for ever.
-  const kept = (record && Array.isArray(record.attempts) ? record.attempts : [])
-    .filter(t => Number.isFinite(Number(t)) && now - Number(t) < ATTEMPT_WINDOW_MS);
-  await ref.set({ attempts: [...kept, now].slice(-MAX_ATTEMPTS_PER_HOUR * 2), updatedAt: now });
-  return { blocked: false };
+    if (isRateLimited(record, now)) {
+      return { blocked: true, retryMs: retryAfterMs(record, now) };
+    }
+    // Keep only what still matters, so the document cannot grow for ever.
+    const kept = (record && Array.isArray(record.attempts) ? record.attempts : [])
+      .filter(t => Number.isFinite(Number(t)) && now - Number(t) < ATTEMPT_WINDOW_MS);
+    tx.set(ref, { attempts: [...kept, now].slice(-MAX_ATTEMPTS_PER_HOUR * 2), updatedAt: now });
+    return { blocked: false };
+  });
 }
 
 export const redeemJoinCode = onCall(CALL, async (request) => {
@@ -601,14 +610,28 @@ export const redeemJoinCode = onCall(CALL, async (request) => {
   }
 
   const ref = db().doc(`join-codes/${codeId(code)}`);
+  // ⚠️ SIX DIGITS ONLY. A link is 32 random characters that no search reaches, so it
+  // is never counted and never paused — it is the way in that stays open while the
+  // short codes are paused (functions/digits-guard.js).
+  const guardRef = kind === 'digits' ? db().doc(DIGITS_GUARD_DOC) : null;
 
   // ⚠️ A TRANSACTION, because two phones redeeming the same code at the same
   // instant would otherwise both find it unused and both be let in. Single use
   // has to mean single use even when the two requests overlap.
   const result = await db().runTransaction(async (tx) => {
+    const now = Date.now();
+    // Every read before any write: a transaction refuses the other order.
+    const guardSnap = guardRef ? await tx.get(guardRef) : null;
+    const guard = guardSnap && guardSnap.exists ? guardSnap.data() : null;
+    // ⚠️ ASKED BEFORE THE CODE IS EVEN LOOKED UP. While paused, no guess reaches a
+    // code at all — not even to cost it one of its five lives.
+    if (guardRef && digitsPaused(guard, now)) {
+      return { ok: false, status: 'digits-paused', retryMs: pauseLeftMs(guard, now) };
+    }
+
     const snap = await tx.get(ref);
     const doc = snap.exists ? snap.data() : null;
-    const status = codeStatus(doc, Date.now());
+    const status = codeStatus(doc, now);
 
     if (status !== 'ok') {
       // A wrong guess against a code that EXISTS costs that code one of its five
@@ -616,6 +639,9 @@ export const redeemJoinCode = onCall(CALL, async (request) => {
       if (doc && status !== 'used') {
         tx.update(ref, { failedAttempts: FieldValue.increment(1) });
       }
+      // ⚠️ AND EVERY WRONG SIX-DIGIT GUESS, from any account, counts towards the one
+      // limit a search cannot multiply by signing up again.
+      if (guardRef) tx.set(guardRef, withWrongGuess(guard, now));
       return { ok: false, status };
     }
 
@@ -687,6 +713,13 @@ export const redeemJoinCode = onCall(CALL, async (request) => {
     if (result.status === 'already-member') {
       throw new HttpsError('failed-precondition',
         redeemFailureText('already-member'), { reason: 'already-member' });
+    }
+    // Sent with its reason for the same purpose as the one above: the words on the
+    // screen can then be the app's own, in the language on screen, and they say what
+    // to do next — ask for a link.
+    if (result.status === 'digits-paused') {
+      throw new HttpsError('resource-exhausted',
+        redeemFailureText('digits-paused', result.retryMs), { reason: 'digits-paused' });
     }
     throw new HttpsError('permission-denied', redeemFailureText(result.status));
   }

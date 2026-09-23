@@ -71,6 +71,9 @@ export const MAX_FAILED_ATTEMPTS = 5;
 // hour over a whole day is 120 guesses before the code expires anyway — to cover
 // a million you would need thousands of accounts, and Firebase Auth rate-limits
 // sign-ups on its own.
+// ⚠️ NOT ENOUGH ON ITS OWN, AND THE AUDIT OF 23 SEP 2026 SAID SO: throwaway accounts
+// multiply it, and parallel calls used to slip past it. The server now counts wrong
+// six-digit guesses across EVERY account too (functions/digits-guard.js).
 export const MAX_ATTEMPTS_PER_HOUR = 5;
 export const ATTEMPT_WINDOW_MS = HOUR;
 
@@ -152,11 +155,11 @@ export function retryAfterMs(record, now = Date.now()) {
 
 // ── What the person is told ──────────────────────────────────────────────────
 
-// ⚠️ EVERY REFUSAL SOUNDS THE SAME EXCEPT TWO, and that is deliberate. Telling
+// ⚠️ EVERY REFUSAL SOUNDS THE SAME EXCEPT THREE, and that is deliberate. Telling
 // somebody "that code has expired" confirms the code EXISTED, which is exactly
 // the signal a search wants.
 //
-// The two exceptions each say something about the ACCOUNT asking, never about the
+// Two of the exceptions say something about the ACCOUNT asking, never about the
 // code: the rate limit reports how often this account has tried, and
 // 'already-member' is only ever reached by an account that is already inside the
 // location the code names — so it tells them a fact they are living in.
@@ -180,6 +183,12 @@ export function redeemFailureText(status, retryMs = 0) {
   // make them an employee of it.
   if (status === 'already-member') {
     return 'You are already in this business. A code cannot change what you can do here.';
+  }
+  // ⚠️ A THIRD EXCEPTION, AND IT TOO SAYS NOTHING ABOUT ANY CODE: six-digit codes are
+  // paused for EVERYBODY after too many wrong guesses across the app
+  // (functions/digits-guard.js). It points at the one way in that stays open.
+  if (status === 'digits-paused') {
+    return 'Six-digit codes are paused for a while. Ask for an invitation link instead.';
   }
   return 'That code does not work. Ask for a new one.';
 }
