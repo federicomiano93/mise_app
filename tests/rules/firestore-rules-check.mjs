@@ -1162,6 +1162,19 @@ async function configAndLogs() {
   // it. Rules are ADDITIVE, so this grant sits alongside the shared one; folding
   // these keys into that document's whitelist would have tied a CATALOGUE setting
   // to the calculator section, which is what that rule's ternary falls back to.
+  //
+  // ⚠️⚠️ THE DOOR THE AUDIT OF 23 SEP 2026 FOUND — and it is open only BEFORE anybody
+  // has saved the labels, which is why these two come first. `match /config/{doc}`
+  // matches 'labels' too, and rules are additive: through it an employee with the
+  // Calculator could CREATE the label document with calculator keys, after which
+  // every save from the labels block failed its own whitelist and nothing could
+  // delete it. Once the document holds label keys, the generic whitelist refuses
+  // anyway — so a check placed after the first save passes for the wrong reason.
+  await expectDenied('labels: an employee cannot create it through the calculator\'s rule',
+    () => mergeWrite(`${A}/config/labels`, { bakery: 'main', configRev: 1 }, asAccount(SAM)));
+  await expectAllowed('…while the same employee still saves the calculator itself',
+    () => mergeWrite(`${A}/config/calculator`, { bakery: 'main', configRev: 1 }, asAccount(SAM)));
+
   await expectAllowed('labels: the profile the settings screen saves', () =>
     mergeWrite(`${A}/config/labels`, {
       bakery: 'main', widthMm: 76, heightMm: 51, marginMm: 2.5,

@@ -1306,7 +1306,14 @@ service cloud.firestore {
         // which is a refusal nobody can explain rather than a decision. This
         // ruleset has been at that ceiling before, and one extra get() has
         // produced exactly this before.
-        allow create, update: if (doc == 'orders'
+        // ⚠️⚠️ NEVER config/labels (security audit, 23 Sep 2026). `{doc}` matches
+        // 'labels' too, and rules are ADDITIVE: through this block an employee with
+        // the Calculator could write the label document with calculator keys, after
+        // which every save from the labels block below failed its own whitelist and
+        // nothing could delete it — the printer settings were lost until somebody
+        // opened the Firebase console. labels has its own block, and only that one.
+        allow create, update: if doc != 'labels'
+          && (doc == 'orders'
               ? canManage(lid, 'orders')
               : (member(lid) && sectionOn(lid, 'calculator')))
           && stampedFor(lid)
