@@ -754,34 +754,9 @@ export const setMemberRole = onCall(CALL, async (request) => {
       'A person is an owner, a manager, an employee, or gone.');
   }
 
-  // ⚠️ THE LAST OWNER CANNOT BE DEMOTED OR REMOVED, and this is not politeness.
-  // A location with no owner has nobody who can invite, nobody who can delete and
-  // nobody who can promote anyone — it would need the Firebase console to
-  // recover, which is the thing this whole file exists to stop needing. The check
-  // has to count the roster, so it happens before the write and inside no
-  // transaction it could race with; a second owner being demoted concurrently is
-  // survivable (the loser is told to try again by the read below).
-  if (role !== 'owner') {
-    const owners = await db().collection(`locations/${locationId}/members`)
-      .where('role', '==', 'owner').get();
-    const remaining = owners.docs.filter(d => d.id !== targetUid).length;
-    if (remaining === 0) {
-      throw new HttpsError('failed-precondition',
-        'This is the only owner. Make somebody else an owner first.');
-    }
-  }
-
   const memberRef = db().doc(`locations/${locationId}/members/${targetUid}`);
   const userRef = db().doc(`users/${targetUid}`);
-
-  if (role === null) {
-    await db().runTransaction(async (tx) => {
-      tx.set(userRef, { locations: { [locationId]: FieldValue.delete() } }, { merge: true });
-      tx.delete(memberRef);
-    });
-    logger.info('Member removed', { locationId, targetUid, by: uid });
-    return { removed: true };
-  }
+  const ownersQuery = db().collection(`locations/${locationId}/members`).where('role', '==', 'owner');
 
   // ⚠️ THE TITLE IS CLEARED WHENEVER THE LEVEL IS NOT MANAGER, and written as an
   // empty string rather than left alone. These documents are merge-written, so
@@ -790,11 +765,55 @@ export const setMemberRole = onCall(CALL, async (request) => {
   // may delete nothing. The screen is the only place anybody ever looks.
   const nextTitle = role === 'manager' ? (title || 'manager') : '';
 
-  await db().runTransaction(async (tx) => {
+  // ⚠️⚠️ THE CHECKS AND THE WRITE ARE ONE TRANSACTION (security audit, 23 Sep 2026).
+  // They used to be separate: two owners demoting each other at the same instant
+  // each counted the other as "still an owner" and both went through, leaving a
+  // location with nobody who can invite, delete or promote — recoverable only from
+  // the Firebase console, which is the thing this whole file exists to stop needing.
+  // Inside a transaction the second one is re-run after the first and sees it.
+  const outcome = await db().runTransaction(async (tx) => {
+    const [userSnap, memberSnap] = await Promise.all([tx.get(userRef), tx.get(memberRef)]);
+
+    // ⚠️ THE PERSON MUST ALREADY BE IN THIS LOCATION. Without this check an owner
+    // could write ANY account into their venue by its uid — a membership nobody
+    // accepted, handed out with no code, no link and no name on the roster. A roster
+    // row alone is accepted as well, so a row left behind by an old console edit can
+    // still be removed from the screen.
+    const inside = membershipIn(userSnap.exists ? userSnap.data() : null, locationId) !== false;
+    if (!inside && !memberSnap.exists) return { refused: 'not-member' };
+
+    // ⚠️ THE LAST OWNER CANNOT BE DEMOTED OR REMOVED, and this is not politeness.
+    // A location with no owner has nobody who can invite, nobody who can delete and
+    // nobody who can promote anyone.
+    if (role !== 'owner') {
+      const owners = await tx.get(ownersQuery);
+      const remaining = owners.docs.filter(d => d.id !== targetUid).length;
+      if (remaining === 0) return { refused: 'last-owner' };
+    }
+
+    if (role === null) {
+      tx.set(userRef, { locations: { [locationId]: FieldValue.delete() } }, { merge: true });
+      tx.delete(memberRef);
+      return { removed: true };
+    }
     tx.set(userRef,
       { locations: { [locationId]: membershipValue(role) } }, { merge: true });
     tx.set(memberRef, { role, title: nextTitle }, { merge: true });
+    return { role, title: nextTitle };
   });
+
+  if (outcome.refused === 'not-member') {
+    // The same words setMemberName uses for the same fact.
+    throw new HttpsError('not-found', 'That person is not in this location.');
+  }
+  if (outcome.refused === 'last-owner') {
+    throw new HttpsError('failed-precondition',
+      'This is the only owner. Make somebody else an owner first.');
+  }
+  if (outcome.removed) {
+    logger.info('Member removed', { locationId, targetUid, by: uid });
+    return { removed: true };
+  }
   logger.info('Member role changed', { locationId, targetUid, role, title: nextTitle, by: uid });
   return { role, title: nextTitle };
 });
