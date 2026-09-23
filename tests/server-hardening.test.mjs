@@ -132,3 +132,19 @@ test('a shared phone is registered again in the name of whoever starts a timer',
   assert.match(push, /localStorage\.setItem\(TOKEN_UID_KEY, uid\)/);
   assert.match(push, /localStorage\.removeItem\(TOKEN_UID_KEY\)/, 'turning notifications off must forget the owner too');
 });
+
+// ── 5. A client's name ───────────────────────────────────────────────────────
+
+test('a client order is named from the bakery address book, on the card and on the lock screen', () => {
+  const body = between(INDEX, 'export const notifyClientOrder', '\n);', 'functions/index.js');
+  const lookupAt = body.indexOf('clientNameInAddressBook(lid, order.clientId)');
+  const messageAt = body.indexOf('orderNotification(');
+  assert.ok(lookupAt !== -1 && messageAt > lookupAt,
+    'the notification must be built from the address-book name, looked up first');
+
+  const cards = codeOf(read('js/calculator-client-orders.js'));
+  assert.equal((cards.match(/\(client && client\.name\) \|\| order\.clientName/g) || []).length, 2,
+    'both order cards must prefer the bakery\'s own name for the client');
+  assert.doesNotMatch(cards, /order\.clientName \|\| \(client && client\.name\)/,
+    'the name the client typed is back in front of the bakery\'s own');
+});

@@ -95,6 +95,22 @@ async function tokenBelongsTo(lid, token, uid) {
   }
 }
 
+// The name the BAKERY keeps for a client, from its own address book
+// (config/calculator.clients). '' when the book, or the client, is not there — the
+// caller then falls back to what the order carries. One read per order (P14).
+async function clientNameInAddressBook(lid, clientId) {
+  if (typeof clientId !== 'string' || !clientId) return '';
+  try {
+    const snap = await getFirestore().doc(`locations/${lid}/config/calculator`).get();
+    const clients = snap.exists && Array.isArray((snap.data() || {}).clients) ? snap.data().clients : [];
+    const client = clients.find(c => c && c.id === clientId);
+    return client && typeof client.name === 'string' ? client.name.trim() : '';
+  } catch (err) {
+    logger.warn('Could not read the address book; the order\'s own name is used', { message: err && err.message });
+    return '';
+  }
+}
+
 // ── 1 + 2. A scheduled alarm ─────────────────────────────────────────────────
 
 // A phone wrote locations/{lid}/push-timers/{id}. Book the job for its instant.
@@ -234,7 +250,13 @@ export const notifyClientOrder = onDocumentCreated(
       return;
     }
 
-    const message = orderNotification(order);
+    // ⚠️ THE NAME IS THE BAKERY'S OWN, NOT THE ONE THE CLIENT TYPED (security audit,
+    // 23 Sep 2026). `clientName` on the order is written by the client's account, and
+    // the rules can only check its length — so one client could arrive on the lock
+    // screen as another. The address book is the bakery's; the order's own name is
+    // only the fallback for a client the book no longer has.
+    const bookName = await clientNameInAddressBook(lid, order.clientId);
+    const message = orderNotification(bookName ? { ...order, clientName: bookName } : order);
     const tag = notificationTag('order', event.params.id);
     // Sent one at a time so a single dead registration is dropped by itself
     // rather than failing the batch for every phone that is fine.
