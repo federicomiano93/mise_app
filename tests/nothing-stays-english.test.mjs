@@ -242,11 +242,34 @@ test('a phrase that IS in the dictionary passes, in either language', () => {
 // ⚠️ A SENTENCE NEEDS TWO WORDS; A BUTTON NEEDS ONE. «Edit» on the Calculator and on
 // the proving lists, «Confirmed», and the Calculator's «Orders» heading all read in
 // English on Panificio Miano until 25 Sep 2026, because every guard here asked for a
-// sentence. This one asks a narrower question: a capitalised word handed to el() AS
-// ITS TEXT — a child, or the `text:` prop — must be a dictionary phrase.
+// sentence. This one asks a narrower question about the places a person reads: a
+// capitalised word handed to el() AS ITS TEXT, and any literal given as `text`,
+// `title`, `placeholder`, `aria-label` or a dialog's words.
+//
+// ⚠️⚠️ «IT IS IN THE DICTIONARY» IS NOT ENOUGH HERE. `'aria-label': 'Back'` sat in
+// seven files and passed every check, because «Back» is the English of ui.back — so
+// it WAS in the dictionary, and was English for ever. In these positions a literal
+// may only be something that reads the same in every language («OK», «kg»), a
+// stored identifier, or the product's name. Anything else goes through t().
 //
 // The el() call is read WHOLE, across lines: the proving list's «Edit» sat three
 // lines below the el( that owned it.
+
+// What reads the same in both languages, and so may be written as it is.
+const NEUTRAL = (() => {
+  const dicts = _dictionaries();
+  const forms = lang => {
+    const out = new Set();
+    for (const v of Object.values(dicts[lang])) {
+      if (typeof v === 'string') out.add(v);
+      else if (v && typeof v === 'object') for (const f of Object.values(v)) out.add(f);
+    }
+    return out;
+  };
+  const it = forms('it');
+  return new Set([...forms('en')].filter(p => it.has(p)));
+})();
+const mayBeLiteral = word => NEUTRAL.has(word) || DATA.has(word) || BRAND.test(word);
 
 function elCalls(src) {
   const calls = [];
@@ -265,14 +288,22 @@ function elCalls(src) {
 export function englishWordsOnElements(rel, src) {
   const found = [];
   const code = src.replace(/^[ \t]*\/\/.*$/gm, '');
-  const WORD = /(?:[,[]\s*|\btext:\s*)'( ?[A-Z][a-z]{2,})'\s*(?=[\],)}])/g;
+  const lineAt = index => code.slice(0, index).split('\n').length;
+  // A capitalised word given to el() as a child.
+  const WORD = /[,[]\s*'( ?[A-Z][a-z]{2,})'\s*(?=[\],)])/g;
   for (const call of elCalls(code)) {
     for (const w of call.text.matchAll(WORD)) {
       const word = w[1].trim();
-      if (PHRASES.has(word) || DATA.has(word) || BRAND.test(word)) continue;
-      const line = code.slice(0, call.at + w.index).split('\n').length;
-      found.push(`${rel}:${line}  ${word}`);
+      if (!mayBeLiteral(word)) found.push(`${rel}:${lineAt(call.at + w.index)}  ${word}`);
     }
+  }
+  // Any capitalised literal in a property a person reads — el() or not. A dictionary
+  // key or a class list there is handed on, not read; a lowercase unit («min»,
+  // «mm») is the same in both languages, and a lowercase SENTENCE is the scan above's.
+  const READ = /(?:'aria-label'|\btext|\btitle|\bplaceholder|\bokLabel|\bcancelLabel)\s*:\s*'([^'\n]*[A-Z][^'\n]*)'/g;
+  for (const m of code.matchAll(READ)) {
+    const text = m[1].trim();
+    if (!mayBeLiteral(text) && !isNotProse(text)) found.push(`${rel}:${lineAt(m.index)}  ${text}`);
   }
   return found;
 }
@@ -296,6 +327,10 @@ test('the word scan finds the four that shipped, in the shapes they shipped in',
     "const doneMark = el('span', { class: 'pas-done-mark', icon: DONE_SVG }, ['Shelved']);",
     "const editBtn = el('button', {\n  class: 'pas-edit-btn',\n  onclick: () => go(),\n}, ['Tidy']);",
     "el('span', { class: 'x', text: 'Tidy' })",
+    // ⚠️ THE ONES THAT WERE «IN THE DICTIONARY»: English phrases, written by hand.
+    "  type: 'button', class: 'orders-icon-btn', 'aria-label': 'Back',",
+    "  const nameInput = el('input', { class: 'cp-prod-name', type: 'text', placeholder: 'Ingredient' });",
+    "  el('button', { class: 'log-hist-btn' }, [icon('clock', 16), ' History'])",
   ];
   for (const shape of shapes) {
     assert.equal(englishWordsOnElements('x.js', shape).length, 1, `missed: ${shape}`);
@@ -309,6 +344,9 @@ test('…and leaves alone keys, classes, identifiers and translated text', () =>
     "el('span', { class: 'Weird-Class' })",
     "el('p', { class: 'auth-title' }, 'Misé')",
     "el('div', { 'data-day': 'Monday' }, [el('b', {}, 'Monday')])",
+    "  type: 'button', class: 'orders-icon-btn', 'aria-label': t('ui.back'),",
+    "  { title: 'section.orders', body: 'help.ordersReceived' },",
+    "  el('span', { class: 'unit', text: 'min' })",
   ];
   for (const line of quiet) {
     assert.deepEqual(englishWordsOnElements('x.js', line), [], `false positive: ${line}`);
