@@ -22,14 +22,14 @@
 // value in the dictionary is a failure, wherever and however it is written.
 //
 // ⚠️ THE EXEMPTIONS ARE FEW AND EACH ONE STATES WHY. An exemption list is how a guard
-// dies; a list of four files with a reason each is a list somebody has to argue with.
+// dies; a short list of files with a reason each is a list somebody has to argue with.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { _dictionaries } from '../js/i18n.js';
+import { _dictionaries, DATA_WORDS } from '../js/i18n.js';
 import { stringsIn } from './helpers/strings-in.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -49,7 +49,7 @@ const PHRASES = (() => {
   return out;
 })();
 
-// ⚠️ FOUR FILES, AND NONE OF THEM COULD BE FIXED BY TRANSLATING IT.
+// ⚠️ A FEW FILES, AND NONE OF THEM COULD BE FIXED BY TRANSLATING IT.
 const EXEMPT = new Map([
   ['js/i18n.js', 'it IS the English — both dictionaries live in it'],
   ['js/i18n-dom.js', 'it writes the dictionary into the markup; its own strings are attribute names'],
@@ -76,6 +76,15 @@ const EXEMPT = new Map([
   // preference. Guarded instead by foodcost-vat-guide.test.mjs: no i18n import, a source
   // and a date for each country, every rate the menu offers.
   ['js/foodcost/vat-guide.js', 'the VAT guide’s food words, keyed by country — foodcost-vat-guide.test.mjs guards it'],
+  // ⚠️ THE WORDS THE MATCHER LOOKS FOR ON A SUPPLIER'S PACK, in both languages at once,
+  // because a pack printed in England can sit in an Italian kitchen. They are read by
+  // code against what somebody pasted, never shown — translating one would stop it
+  // matching. allergen-match.test.mjs guards what they find.
+  ['js/allergen-terms.js', 'the words matched ON A PACK, both languages at once — never shown'],
+  // ⚠️ PURE AND ZERO-IMPORT BY DESIGN, so it cannot reach t() at all. Its only words
+  // are the UK label's nutrition rows («of which sugars»), the English half of what
+  // js/market.js nutrientName() prints by COUNTRY — the same reason market.js is here.
+  ['js/allergen-model.js', 'the UK label’s nutrition row names, printed by country — pure, it cannot import t()'],
 ]);
 
 function jsFiles(dir, out = []) {
@@ -93,13 +102,27 @@ function jsFiles(dir, out = []) {
 // list is deliberately closed and boring: a cleverer test is one that argues with you.
 const FUNCTION_WORD = /\b(the|a|an|is|are|to|of|and|or|you|your|this|that|it|no|not|for|with|be|can|will|has|have|was|were|do|does|its|their|they|we|on|in|at|from|by|if|when|what|which|who|how|any|all|only|yet|still|been|make|made|ago|just|now|left|put|use|used)\b/i;
 
+// ⚠️ A CLASS LIST HAS A HYPHEN IN IT; AN ENGLISH SENTENCE USUALLY DOES NOT. The old
+// rule accepted any run of lowercase words, so «the order in progress» and «your
+// supplier» read as class lists and stayed English on an Italian venue for a month,
+// through six i18n suites. Every class list this app writes names at least one
+// `feature-part` class; no sentence it said did.
+const CLASS_LIST = /^[a-z-]+(\s+[a-z-]+)*$/;
+const isClassList = text => CLASS_LIST.test(text) && /[a-z]-[a-z]/.test(text) && !/[.!?,·—]/.test(text);
+
+// ⚠️ A STORED IDENTIFIER IS DATA, WHATEVER IT LOOKS LIKE. 'to taste' is saved on
+// recipe rows and compared across js/catalogue/; js/i18n.js DATA_WORDS is the one
+// list of such words, and a test there turns red if one is ever translated.
+const DATA = new Set(DATA_WORDS);
+
 // Things that are made of words but are not addressed to a person.
 function isNotProse(text) {
   return /^[.#[]/.test(text)                                   // a CSS selector
     || /^[a-z]+\.[a-zA-Z0-9.]+$/.test(text)                    // a dictionary key
     || /https?:|^\/|\.js$|\.css$|\.html$|\.png$/.test(text)    // a URL or a path
     || /^[MmLlCcZzHhVvAaSsQqTt][\d\s.,-]/.test(text)           // SVG path data
-    || (/^[a-z-]+(\s+[a-z-]+)*$/.test(text) && !/[.!?,·—]/.test(text)); // a class list
+    || DATA.has(text)                                          // a stored identifier
+    || isClassList(text);                                      // a class list
 }
 
 // ⚠️ A THROW IS THE DEVELOPER'S CHANNEL AND IT SPANS LINES. Skipping the line that
@@ -170,6 +193,11 @@ test('the scan finds a sentence whatever shape it is written in', () => {
     "  'aria-label': `Ingredients from ${supplier.name}`,",
     "  el('p', { text: 'This cannot be undone.' }),",
     "  const note = 'You only do this once per device.';",
+    // ⚠️ THE SHAPE THE OLD CLASS-LIST RULE LET THROUGH: all lowercase, no full stop.
+    // (The two real ones — «the order in progress», «your supplier» — are dictionary
+    // phrases now, so they would pass as translated; these stand in for them.)
+    "  }, liveDataLost('the lists in progress'));",
+    "  const FALLBACK_NAME = 'your usual supplier';",
   ];
   for (const shape of shapes) {
     assert.equal(englishProse('x.js', shape).length, 1, `missed: ${shape}`);
@@ -180,6 +208,10 @@ test('…and leaves alone everything that is not a sentence', () => {
   const quiet = [
     "  const cls = 'supplier-row-view';",
     "  el('div', { class: 'view-switch ing-filter' });",
+    // A class list with one plain-word modifier — still a class list.
+    "  el('p', { class: 'notif-status on' }, []);",
+    // A stored unit, compared rather than shown.
+    "  const noQty = unitOf(ing) === 'to taste';",
     "  document.querySelector('[data-os-btn=\"ios\"]');",
     "  console.warn('Recipe did not sync to Firestore:', err);",
     "  throw new Error('No location is open yet — it was read before sign-in.');",
