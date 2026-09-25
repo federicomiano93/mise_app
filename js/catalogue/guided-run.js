@@ -23,7 +23,7 @@ import {
   timerState, formatRemaining, formatDuration, overdueText, progressText,
   isResumable, RESUME_TTL_MS,
 } from './guided-model.js';
-import { unitOf } from './catalogue-model.js';
+import { unitOf, unitText } from './catalogue-model.js';
 import { unlockAlarm, startAlarm, stopAlarm, keepScreenAwake, releaseScreen, canKeepScreenAwake } from './guided-alarm.js';
 import { scheduleAlarm, cancelAlarm, pushSupport, enablePush, supportText } from '../push.js';
 
@@ -181,7 +181,7 @@ export function renderRun({ recipe, targetGrams, app, resume = null }) {
           el('span', { class: 'guided-ing-name', text: row.label }),
           el('span', { class: 'guided-ing-amt' }, [
             el('span', { class: 'guided-ing-num', text: row.amount === null ? '' : nf.format(row.amount) }),
-            el('span', { class: 'guided-ing-unit', text: row.amount === null && !row.missing ? 'to taste' : (row.missing ? '' : row.unit) }),
+            el('span', { class: 'guided-ing-unit', text: row.amount === null && !row.missing ? unitText('to taste') : (row.missing ? '' : unitText(row.unit)) }),
           ]),
         ]));
       }
@@ -248,7 +248,7 @@ export function renderRun({ recipe, targetGrams, app, resume = null }) {
 
     wrap.appendChild(el('button', { class: 'guided-go', type: 'button', onclick: next }, [
       el('span', { icon: CHECK_SVG, 'aria-hidden': 'true' }),
-      index >= steps.length - 1 ? t('cat.doneFinish') : 'Done',
+      index >= steps.length - 1 ? t('cat.doneFinish') : t('cat.stepDone'),
     ]));
     return wrap;
   }
@@ -286,7 +286,7 @@ export function renderRun({ recipe, targetGrams, app, resume = null }) {
           el('span', { class: 'guided-ing-name', text: row.label }),
           el('span', { class: 'guided-ing-amt' }, [
             el('span', { class: 'guided-ing-num', text: amount === null || amount === undefined ? '' : nf.format(amount) }),
-            el('span', { class: 'guided-ing-unit', text: amount === null ? 'to taste' : unitOf(row) }),
+            el('span', { class: 'guided-ing-unit', text: amount === null ? unitText('to taste') : unitText(unitOf(row)) }),
           ]),
         ]));
       }

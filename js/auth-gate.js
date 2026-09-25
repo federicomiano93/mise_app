@@ -805,7 +805,7 @@ async function offerInvite(session) {
   // ⚠️ IT NAMES THE ACCOUNT. On a shared kitchen phone the person tapping is not
   // always the person signed in, and a business added to the wrong account can
   // only be undone from the Firebase console.
-  const who = session.user?.email || 'this account';
+  const who = session.user?.email || t('invite.thisAccount');
   const add = await confirmDialog({
     title: t('invite.title'),
     message: t('invite.message', { who }),

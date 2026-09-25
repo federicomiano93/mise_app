@@ -150,7 +150,7 @@ export function closeScreen() {
 // now the door.
 function viewSwitch() {
   const row = el('div', { class: 'co-views' });
-  [['upcoming', t('calc.stillComing')], ['history', 'History']].forEach(([name, label]) => {
+  [['upcoming', t('calc.stillComing')], ['history', t('ui.history')]].forEach(([name, label]) => {
     const btn = el('button', {
       class: `co-view${view === name ? ' co-view--on' : ''}`,
       type: 'button',

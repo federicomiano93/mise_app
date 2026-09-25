@@ -81,11 +81,18 @@ export function mountIngredientList(container, ctx) {
 
     paintFilterSwitch(total, filtering);
 
+    // Four whole phrases, never a count with « in this order» glued on: Italian puts
+    // the words elsewhere, and a glued suffix stayed English on an Italian venue.
     const scope = filtering ? data.only.size : total;
-    const scopeText = filtering ? ' in this order' : '';
-    count.textContent = rows.length === scope
-      ? `${scope} ingredient${scope === 1 ? '' : 's'}${scopeText}`
-      : `${rows.length} of ${scope}${scopeText}`;
+    if (rows.length === scope) {
+      count.textContent = filtering
+        ? t('orders.ingredientCountInOrder', { n: scope })
+        : t('orders.ingredientCount', { n: scope });
+    } else {
+      count.textContent = filtering
+        ? t('orders.ingredientsShownInOrder', { shown: rows.length, n: scope })
+        : t('orders.ingredientsShown', { shown: rows.length, n: scope });
+    }
 
     listEl.replaceChildren();
 

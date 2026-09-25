@@ -22,6 +22,7 @@ import { suppliersStillToOrder } from './orders/reminders.js';
 import { onSession } from './firebase.js';
 import { isSectionAllowed } from './sections.js';
 import { cardVisibleTo } from './home-cards.js';
+import { t } from './i18n.js';
 
 // Per-device record of the last day the reminder was shown ('YYYY-MM-DD').
 const REMINDER_KEY = 'orders-reminder-date';
@@ -116,7 +117,7 @@ function paintBadge(count) {
   const badge = document.createElement('span');
   badge.className = 'home-card-badge';
   badge.textContent = String(count);
-  badge.setAttribute('aria-label', `${count} order${count === 1 ? '' : 's'} to place today`);
+  badge.setAttribute('aria-label', t('home.ordersToPlaceToday', { n: count }));
   card.appendChild(badge);
 }
 

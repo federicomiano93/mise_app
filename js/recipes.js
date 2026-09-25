@@ -151,7 +151,7 @@ async function saveRecipes() {
 
 // ── Level 0: the recipe list ───────────────────────────────────────────────────
 function renderRecipeList() {
-  titleEl().textContent = 'Recipes';
+  titleEl().textContent = t('ui.recipes');
   setHomeVisible(true);
   const content = contentEl();
   content.textContent = '';
@@ -160,7 +160,7 @@ function renderRecipeList() {
 
   recipes().forEach((r, ri) => {
     const ings = (r.ingredients || []).length;
-    const sub = t(LOGIC_LABELS[r.logic]) + '  ·  ' + ings + (ings === 1 ? ' ingredient' : ' ingredients')
+    const sub = t(LOGIC_LABELS[r.logic]) + '  ·  ' + t('calc.ingredientCount', { n: ings })
       + (r.visible !== false ? t('calc.shown') : t('calc.hidden'));
     const open = el('button', { class: 'drill-item wa-entry-open', type: 'button' }, [
       el('span', { class: 'wa-entry-text' }, [
@@ -338,7 +338,7 @@ function renderRecipeDetail(ri) {
 
 // One ingredient row: name (autocomplete) + grams + optional "leavening" radio + remove.
 function ingredientRow(recipe, ing, gi, listId, showLeaveningPicker) {
-  const nameInput = el('input', { class: 'cp-prod-name', type: 'text', value: ing.label || '', placeholder: 'Ingredient', list: listId });
+  const nameInput = el('input', { class: 'cp-prod-name', type: 'text', value: ing.label || '', placeholder: t('calc.ingredient'), list: listId });
   if (showErrors && isBlank(ing.label)) nameInput.classList.add('cp-invalid');
   // ⚠️ THE LEAVENING DROPDOWN HAS TO FOLLOW THIS FIELD AS IT IS TYPED, and the old
   // tick did not need to because it sat ON this row. Moving the picker into its

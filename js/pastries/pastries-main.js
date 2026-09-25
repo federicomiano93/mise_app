@@ -210,7 +210,7 @@ function showLogs() {
   screen.removeAttribute('aria-labelledby');
   setHeader({
     title: t('past.records'),
-    sub: `Last ${LOG_VISIBLE_DAYS} days`,
+    sub: t('past.lastNDays', { n: LOG_VISIBLE_DAYS }),
     back: true,
     edit: false,
   });
@@ -296,7 +296,7 @@ async function confirmToday(day, items, note) {
   // tonight — which is exactly what it should mean, right up until the list is
   // recorded again.
   setGrant(day, grantAfter('confirm'));
-  toast(`${day} recorded.`);
+  toast(t('past.dayRecorded', { day: weekdayLabel(day) }));
   // A confirm on THIS phone must tick the day off straight away. The
   // confirmations listener will say the same thing a moment later, but waiting
   // for it would leave the green button sitting there after the job is done.

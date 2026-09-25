@@ -54,6 +54,9 @@ export const DATA_WORDS = Object.freeze([
   'owner', 'manager', 'staff', 'head-chef',
   // stored on ingredients and products, and compared by firestore.rules
   'kg', 'l', 'pcs',
+  // stored on every recipe row (CATALOGUE_UNITS) and compared across js/catalogue/;
+  // what a person reads for them is asked of unitText(), never of these
+  'tsp', 'tbsp', 'pinch', 'to taste',
   // the country, which decides the LABEL language (js/market.js)
   'GB', 'IT',
   // the interface languages themselves
@@ -93,6 +96,7 @@ const DICTIONARIES = Object.freeze({
     // may perform on somebody else's — so the form that goes inside a phrase is
     // its own entry, and the translator decides what it looks like.
     'people.make': 'Make {role}',
+    'people.roleGroup': 'Role',
     // ⚠️ NO ROLE IN THESE TWO. 'Add {role}' worked while there was one button;
     // with two, English needs an article Italian does not take, and the role is
     // already stated by the note above them and by the result screen below.
@@ -246,6 +250,7 @@ const DICTIONARIES = Object.freeze({
     'invite.message': 'Add this business to {who}?',
     'invite.ok': 'Add it',
     'invite.cancel': 'Not now',
+    'invite.thisAccount': 'this account',
 
     // ── Who can get in ──────────────────────────────────────────────────────
     'people.title': 'Who can get in',
@@ -455,6 +460,7 @@ const DICTIONARIES = Object.freeze({
     // ⚠️ THE ORDER OF THE PIECES IS THE PHRASE. A language that puts the month
     // first says so here, instead of needing code that knows about it.
     'day.spelled': '{weekday} {d} {month} {year}',
+    'day.spelledNoYear': '{weekday} {d} {month}',
     'day.today': 'Today',
     'day.yesterday': 'Yesterday',
     'day.tomorrow': 'Tomorrow',
@@ -502,6 +508,23 @@ const DICTIONARIES = Object.freeze({
 
     // ── The Leavening box, and the choices that explain themselves ───────────
     'calc.leavening': 'Leavening',
+    'calc.productsHeading': 'Products',
+    'calc.ingredientCount': {
+      one: '{n} ingredient',
+      other: '{n} ingredients',
+    },
+    'calc.field.name': 'Name',
+    'calc.field.weight': 'Weight',
+    'calc.field.type': 'Type',
+    'calc.type.number': 'Number',
+    'calc.type.dropdown': 'Dropdown',
+    'calc.nothingOrdered': 'nothing ordered',
+    'calc.linesOrdered': {
+      one: '{n} line',
+      other: '{n} lines',
+    },
+    'calc.ingredient': 'Ingredient',
+    'calc.ordersSection': 'Orders',
     'calc.leaveningNone': 'Nothing rises in this recipe',
     'calc.unnamedIngredient': 'Unnamed ingredient',
     'calc.leaveningHint': 'Which ingredient makes the dough rise. Only this one is scaled by the percentage below.',
@@ -718,6 +741,26 @@ const DICTIONARIES = Object.freeze({
     'orders.quantitiesClearedFor': 'Quantities cleared for {n} suppliers ✓',
     'orders.checkExtraDigit': 'Check it is not an extra digit.',
     'orders.liveConnectionLost': 'Lost the live connection for {what}. What you see may be out of date — reload the page.',
+    'orders.showOlderOrders': 'Show older orders ({n})',
+    // What the live connection was lost FOR — a hole in the sentence above.
+    'orders.live.draft': 'the order in progress',
+    'orders.live.history': 'past orders',
+    'orders.live.requests': 'the order lists',
+    'orders.live.suppliers': 'suppliers',
+    'orders.live.ingredients': 'ingredients',
+    'orders.stockOnHandFor': '{name} stock on hand',
+    'orders.qtyToOrderFor': '{name} quantity to order',
+    'orders.qtyOrderedFor': '{name} quantity ordered',
+    'orders.ingredientCount': {
+      one: '{n} ingredient',
+      other: '{n} ingredients',
+    },
+    'orders.ingredientCountInOrder': {
+      one: '{n} ingredient in this order',
+      other: '{n} ingredients in this order',
+    },
+    'orders.ingredientsShown': '{shown} of {n}',
+    'orders.ingredientsShownInOrder': '{shown} of {n} in this order',
     // ⚠️ A REAL PLURAL. It was `${days} day${days === 1 ? '' : 's'}` — English's rule
     // written into the code, which cannot be translated by moving either half.
     'orders.noOrdersInTheLast': {
@@ -907,6 +950,18 @@ const DICTIONARIES = Object.freeze({
       one: '{n} order list to place',
       other: '{n} order lists to place',
     },
+    'home.ordersToPlaceToday': {
+      one: '{n} order to place today',
+      other: '{n} orders to place today',
+    },
+    'home.clientOrdersWaiting': {
+      one: '{n} client order waiting',
+      other: '{n} client orders waiting',
+    },
+    'home.clientOrdersChanged': {
+      one: '{n} client order has changed since you used it',
+      other: '{n} client orders have changed since you used them',
+    },
     'orders.request.from': 'From {who}',
     'orders.request.progress': '{done} of {total}',
     'orders.request.allOrdered': 'All ordered',
@@ -1040,6 +1095,14 @@ const DICTIONARIES = Object.freeze({
     'cat.decl.copy': 'Copy',
     'cat.amount': 'Amount',
     'cat.unit': 'Unit',
+    'cat.stepDone': 'Done',
+    // What a person READS for a stored recipe unit (js/catalogue/catalogue-model.js
+    // unitText). The stored values are DATA_WORDS and are never translated.
+    'cat.unitText.pcs': 'pcs',
+    'cat.unitText.tsp': 'tsp',
+    'cat.unitText.tbsp': 'tbsp',
+    'cat.unitText.pinch': 'pinch',
+    'cat.unitText.toTaste': 'to taste',
     'cat.removeIngredient': 'Remove ingredient',
     'cat.addIngredient': '+ Add ingredient',
     'cat.notWeighed': {
@@ -1443,6 +1506,12 @@ const DICTIONARIES = Object.freeze({
     'help.stocktakeClose': 'Closing the month freezes its figures and opens the next one with what is left on the shelves today, so you only ever write the opening figures once.',
     'past.tapThePencilTo': 'Tap the pencil to add.',
     'past.thatRowHasChanged': 'That row has changed — check the list.',
+    'past.confirmedMark': 'Confirmed',
+    'past.dayRecorded': '{day} recorded.',
+    'past.lastNDays': {
+      one: 'Last day',
+      other: 'Last {n} days',
+    },
     'past.thatNameIsToo': 'That name is too long.',
     'past.thatIsMorePastries': 'That is more pastries than one day can hold.',
     'past.thatCannotBeSaved': 'That cannot be saved yet.',
@@ -2440,6 +2509,7 @@ const DICTIONARIES = Object.freeze({
     'co.couldNotLoadYour': 'Could not load your products',
     'co.thisUsuallyMeansNo': 'This usually means no connection. Check it and try again.',
     'co.yourOrder': 'Your order',
+    'co.yourSupplier': 'your supplier',
     'co.orderingIsClosedFor': 'Ordering is closed for now',
     'co.sending': 'Sending…',
     'co.thisOrderHasChanged': 'This order has changed since you opened it. Reloading…',
@@ -2487,6 +2557,7 @@ const DICTIONARIES = Object.freeze({
     // a phrase is one entry with a hole and not two halves joined at the call
     // site. «Rendi responsabile», not «Fai responsabile».
     'people.make': 'Rendi {role}',
+    'people.roleGroup': 'Ruolo',
     'people.sendHow': 'Come vuoi mandarlo?',
     'people.add.link': 'Manda un link',
     'people.add.digits': 'Detta un codice',
@@ -2593,6 +2664,7 @@ const DICTIONARIES = Object.freeze({
     'invite.message': 'Vuoi aggiungere questa attività a {who}?',
     'invite.ok': 'Aggiungila',
     'invite.cancel': 'Non ora',
+    'invite.thisAccount': 'questo account',
 
     'people.title': 'Chi può entrare',
     'people.rename': 'Rinomina',
@@ -2743,6 +2815,7 @@ const DICTIONARIES = Object.freeze({
     'day.monthShort.6': 'lug', 'day.monthShort.7': 'ago', 'day.monthShort.8': 'set',
     'day.monthShort.9': 'ott', 'day.monthShort.10': 'nov', 'day.monthShort.11': 'dic',
     'day.spelled': '{weekday} {d} {month} {year}',
+    'day.spelledNoYear': '{weekday} {d} {month}',
     'day.today': 'Oggi',
     'day.yesterday': 'Ieri',
     'day.tomorrow': 'Domani',
@@ -2774,6 +2847,23 @@ const DICTIONARIES = Object.freeze({
     'co.clientAndDay': '{client} — {day}.',
 
     'calc.leavening': 'Lievito',
+    'calc.productsHeading': 'Prodotti',
+    'calc.ingredientCount': {
+      one: '{n} ingrediente',
+      other: '{n} ingredienti',
+    },
+    'calc.field.name': 'Nome',
+    'calc.field.weight': 'Peso',
+    'calc.field.type': 'Tipo',
+    'calc.type.number': 'Numero',
+    'calc.type.dropdown': 'Menu a tendina',
+    'calc.nothingOrdered': 'niente ordinato',
+    'calc.linesOrdered': {
+      one: '{n} riga',
+      other: '{n} righe',
+    },
+    'calc.ingredient': 'Ingrediente',
+    'calc.ordersSection': 'Ordini',
     'calc.leaveningNone': 'In questa ricetta non lievita niente',
     'calc.unnamedIngredient': 'Ingrediente senza nome',
     'calc.leaveningHint': 'Quale ingrediente fa lievitare l’impasto. Solo questo viene scalato dalla percentuale qui sotto.',
@@ -2943,6 +3033,26 @@ const DICTIONARIES = Object.freeze({
     'orders.quantitiesClearedFor': 'Quantità azzerate per {n} fornitori ✓',
     'orders.checkExtraDigit': 'Controlla che non ci sia una cifra di troppo.',
     'orders.liveConnectionLost': 'Persa la connessione dal vivo per {what}. Quello che vedi potrebbe non essere aggiornato — ricarica la pagina.',
+    'orders.showOlderOrders': 'Mostra gli ordini precedenti ({n})',
+    // What the live connection was lost FOR — a hole in the sentence above.
+    'orders.live.draft': 'l’ordine in corso',
+    'orders.live.history': 'gli ordini passati',
+    'orders.live.requests': 'le liste d’ordine',
+    'orders.live.suppliers': 'i fornitori',
+    'orders.live.ingredients': 'gli ingredienti',
+    'orders.stockOnHandFor': 'Giacenza di {name}',
+    'orders.qtyToOrderFor': 'Quantità da ordinare di {name}',
+    'orders.qtyOrderedFor': 'Quantità ordinata di {name}',
+    'orders.ingredientCount': {
+      one: '{n} ingrediente',
+      other: '{n} ingredienti',
+    },
+    'orders.ingredientCountInOrder': {
+      one: '{n} ingrediente in questo ordine',
+      other: '{n} ingredienti in questo ordine',
+    },
+    'orders.ingredientsShown': '{shown} di {n}',
+    'orders.ingredientsShownInOrder': '{shown} di {n} in questo ordine',
     'orders.noOrdersInTheLast': {
       one: 'Nessun ordine nell’ultimo giorno.',
       other: 'Nessun ordine negli ultimi {n} giorni.',
@@ -3105,6 +3215,18 @@ const DICTIONARIES = Object.freeze({
       one: '{n} lista d’ordine da fare',
       other: '{n} liste d’ordine da fare',
     },
+    'home.ordersToPlaceToday': {
+      one: '{n} ordine da fare oggi',
+      other: '{n} ordini da fare oggi',
+    },
+    'home.clientOrdersWaiting': {
+      one: '{n} ordine cliente in attesa',
+      other: '{n} ordini clienti in attesa',
+    },
+    'home.clientOrdersChanged': {
+      one: '{n} ordine cliente è cambiato da quando l’hai usato',
+      other: '{n} ordini clienti sono cambiati da quando li hai usati',
+    },
     'orders.request.from': 'Da {who}',
     'orders.request.progress': '{done} su {total}',
     'orders.request.allOrdered': 'Tutto ordinato',
@@ -3233,6 +3355,18 @@ const DICTIONARIES = Object.freeze({
     'cat.decl.copy': 'Copia',
     'cat.amount': 'Quantità',
     'cat.unit': 'Unità',
+    'cat.stepDone': 'Fatto',
+    // ⚠️ MEASURED IN THE EDITOR'S OWN FONT: the unit box leaves 41.2px for the word
+    // (catalogue.css --unit-w). «cucchiaino» is 72.6px and «cucchiaio» 64.0px — both
+    // showed as «cucch», a teaspoon and a tablespoon indistinguishable. No Italian pair
+    // that is readable AND tells them apart fits, so the spoons keep the abbreviations
+    // they have always shown until Federico chooses words (and maybe a wider box).
+    // «pizz.» is 30.8px; «pizzico» (46.8px) ran under the arrow.
+    'cat.unitText.pcs': 'pz',
+    'cat.unitText.tsp': 'tsp',
+    'cat.unitText.tbsp': 'tbsp',
+    'cat.unitText.pinch': 'pizz.',
+    'cat.unitText.toTaste': 'q.b.',
     'cat.removeIngredient': 'Togli l’ingrediente',
     'cat.addIngredient': '+ Aggiungi ingrediente',
     'cat.notWeighed': {
@@ -3423,6 +3557,13 @@ const DICTIONARIES = Object.freeze({
     'cat.partOfThisRecipe': 'Una parte di questa ricetta non ha ancora un prezzo',
     'past.tapThePencilTo': 'Tocca la matita per aggiungere.',
     'past.thatRowHasChanged': 'Quella riga è cambiata — controlla la lista.',
+    'past.confirmedMark': 'Confermato',
+    // Not «{day} registrato»: domenica is feminine, and the sentence must fit all seven.
+    'past.dayRecorded': 'Registrato: {day}.',
+    'past.lastNDays': {
+      one: 'Ultimo giorno',
+      other: 'Ultimi {n} giorni',
+    },
     'past.thatNameIsToo': 'Quel nome è troppo lungo.',
     'past.thatIsMorePastries': 'Sono più paste di quante ne possa contenere una giornata.',
     'past.thatCannotBeSaved': 'Non si può ancora salvare.',
@@ -4427,6 +4568,7 @@ const DICTIONARIES = Object.freeze({
     'co.couldNotLoadYour': 'Non è stato possibile caricare i tuoi prodotti',
     'co.thisUsuallyMeansNo': 'Di solito vuol dire che manca la connessione. Controllala e riprova.',
     'co.yourOrder': 'Il tuo ordine',
+    'co.yourSupplier': 'il tuo fornitore',
     'co.orderingIsClosedFor': 'Gli ordini sono chiusi per ora',
     'co.sending': 'Invio…',
     'co.thisOrderHasChanged': 'Questo ordine è cambiato da quando l’hai aperto. Ricarico…',

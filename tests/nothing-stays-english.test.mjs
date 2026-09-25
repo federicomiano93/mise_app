@@ -22,14 +22,14 @@
 // value in the dictionary is a failure, wherever and however it is written.
 //
 // ⚠️ THE EXEMPTIONS ARE FEW AND EACH ONE STATES WHY. An exemption list is how a guard
-// dies; a list of four files with a reason each is a list somebody has to argue with.
+// dies; a short list of files with a reason each is a list somebody has to argue with.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { _dictionaries } from '../js/i18n.js';
+import { _dictionaries, DATA_WORDS } from '../js/i18n.js';
 import { stringsIn } from './helpers/strings-in.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -49,7 +49,7 @@ const PHRASES = (() => {
   return out;
 })();
 
-// ⚠️ FOUR FILES, AND NONE OF THEM COULD BE FIXED BY TRANSLATING IT.
+// ⚠️ A FEW FILES, AND NONE OF THEM COULD BE FIXED BY TRANSLATING IT.
 const EXEMPT = new Map([
   ['js/i18n.js', 'it IS the English — both dictionaries live in it'],
   ['js/i18n-dom.js', 'it writes the dictionary into the markup; its own strings are attribute names'],
@@ -76,6 +76,15 @@ const EXEMPT = new Map([
   // preference. Guarded instead by foodcost-vat-guide.test.mjs: no i18n import, a source
   // and a date for each country, every rate the menu offers.
   ['js/foodcost/vat-guide.js', 'the VAT guide’s food words, keyed by country — foodcost-vat-guide.test.mjs guards it'],
+  // ⚠️ THE WORDS THE MATCHER LOOKS FOR ON A SUPPLIER'S PACK, in both languages at once,
+  // because a pack printed in England can sit in an Italian kitchen. They are read by
+  // code against what somebody pasted, never shown — translating one would stop it
+  // matching. allergen-match.test.mjs guards what they find.
+  ['js/allergen-terms.js', 'the words matched ON A PACK, both languages at once — never shown'],
+  // ⚠️ PURE AND ZERO-IMPORT BY DESIGN, so it cannot reach t() at all. Its only words
+  // are the UK label's nutrition rows («of which sugars»), the English half of what
+  // js/market.js nutrientName() prints by COUNTRY — the same reason market.js is here.
+  ['js/allergen-model.js', 'the UK label’s nutrition row names, printed by country — pure, it cannot import t()'],
 ]);
 
 function jsFiles(dir, out = []) {
@@ -93,13 +102,27 @@ function jsFiles(dir, out = []) {
 // list is deliberately closed and boring: a cleverer test is one that argues with you.
 const FUNCTION_WORD = /\b(the|a|an|is|are|to|of|and|or|you|your|this|that|it|no|not|for|with|be|can|will|has|have|was|were|do|does|its|their|they|we|on|in|at|from|by|if|when|what|which|who|how|any|all|only|yet|still|been|make|made|ago|just|now|left|put|use|used)\b/i;
 
+// ⚠️ A CLASS LIST HAS A HYPHEN IN IT; AN ENGLISH SENTENCE USUALLY DOES NOT. The old
+// rule accepted any run of lowercase words, so «the order in progress» and «your
+// supplier» read as class lists and stayed English on an Italian venue for a month,
+// through six i18n suites. Every class list this app writes names at least one
+// `feature-part` class; no sentence it said did.
+const CLASS_LIST = /^[a-z-]+(\s+[a-z-]+)*$/;
+const isClassList = text => CLASS_LIST.test(text) && /[a-z]-[a-z]/.test(text) && !/[.!?,·—]/.test(text);
+
+// ⚠️ A STORED IDENTIFIER IS DATA, WHATEVER IT LOOKS LIKE. 'to taste' is saved on
+// recipe rows and compared across js/catalogue/; js/i18n.js DATA_WORDS is the one
+// list of such words, and a test there turns red if one is ever translated.
+const DATA = new Set(DATA_WORDS);
+
 // Things that are made of words but are not addressed to a person.
 function isNotProse(text) {
   return /^[.#[]/.test(text)                                   // a CSS selector
     || /^[a-z]+\.[a-zA-Z0-9.]+$/.test(text)                    // a dictionary key
     || /https?:|^\/|\.js$|\.css$|\.html$|\.png$/.test(text)    // a URL or a path
     || /^[MmLlCcZzHhVvAaSsQqTt][\d\s.,-]/.test(text)           // SVG path data
-    || (/^[a-z-]+(\s+[a-z-]+)*$/.test(text) && !/[.!?,·—]/.test(text)); // a class list
+    || DATA.has(text)                                          // a stored identifier
+    || isClassList(text);                                      // a class list
 }
 
 // ⚠️ A THROW IS THE DEVELOPER'S CHANNEL AND IT SPANS LINES. Skipping the line that
@@ -170,6 +193,11 @@ test('the scan finds a sentence whatever shape it is written in', () => {
     "  'aria-label': `Ingredients from ${supplier.name}`,",
     "  el('p', { text: 'This cannot be undone.' }),",
     "  const note = 'You only do this once per device.';",
+    // ⚠️ THE SHAPE THE OLD CLASS-LIST RULE LET THROUGH: all lowercase, no full stop.
+    // (The two real ones — «the order in progress», «your supplier» — are dictionary
+    // phrases now, so they would pass as translated; these stand in for them.)
+    "  }, liveDataLost('the lists in progress'));",
+    "  const FALLBACK_NAME = 'your usual supplier';",
   ];
   for (const shape of shapes) {
     assert.equal(englishProse('x.js', shape).length, 1, `missed: ${shape}`);
@@ -180,6 +208,10 @@ test('…and leaves alone everything that is not a sentence', () => {
   const quiet = [
     "  const cls = 'supplier-row-view';",
     "  el('div', { class: 'view-switch ing-filter' });",
+    // A class list with one plain-word modifier — still a class list.
+    "  el('p', { class: 'notif-status on' }, []);",
+    // A stored unit, compared rather than shown.
+    "  const noQty = unitOf(ing) === 'to taste';",
     "  document.querySelector('[data-os-btn=\"ios\"]');",
     "  console.warn('Recipe did not sync to Firestore:', err);",
     "  throw new Error('No location is open yet — it was read before sign-in.');",
@@ -201,6 +233,134 @@ test('a phrase that IS in the dictionary passes, in either language', () => {
   assert.ok(en && it && en !== it, 'the fixture phrase must exist in both');
   assert.deepEqual(englishProse('x.js', `  const s = 'This cannot be undone.';`).length, 1,
     'a sentence outside the dictionary is caught');
+});
+
+// ---------------------------------------------------------------------------
+// One word on a button — which the sentence scan above cannot see
+// ---------------------------------------------------------------------------
+//
+// ⚠️ A SENTENCE NEEDS TWO WORDS; A BUTTON NEEDS ONE. «Edit» on the Calculator and on
+// the proving lists, «Confirmed», and the Calculator's «Orders» heading all read in
+// English on Panificio Miano until 25 Sep 2026, because every guard here asked for a
+// sentence. This one asks a narrower question about the places a person reads: a
+// capitalised word handed to el() AS ITS TEXT, and any literal given as `text`,
+// `title`, `placeholder`, `aria-label` or a dialog's words.
+//
+// ⚠️⚠️ «IT IS IN THE DICTIONARY» IS NOT ENOUGH HERE. `'aria-label': 'Back'` sat in
+// seven files and passed every check, because «Back» is the English of ui.back — so
+// it WAS in the dictionary, and was English for ever. In these positions a literal
+// may only be something that reads the same in every language («OK», «kg»), a
+// stored identifier, or the product's name. Anything else goes through t().
+//
+// The el() call is read WHOLE, across lines: the proving list's «Edit» sat three
+// lines below the el( that owned it.
+
+// What reads the same in both languages, and so may be written as it is.
+const NEUTRAL = (() => {
+  const dicts = _dictionaries();
+  const forms = lang => {
+    const out = new Set();
+    for (const v of Object.values(dicts[lang])) {
+      if (typeof v === 'string') out.add(v);
+      else if (v && typeof v === 'object') for (const f of Object.values(v)) out.add(f);
+    }
+    return out;
+  };
+  const it = forms('it');
+  return new Set([...forms('en')].filter(p => it.has(p)));
+})();
+const mayBeLiteral = word => NEUTRAL.has(word) || DATA.has(word) || BRAND.test(word);
+
+function elCalls(src) {
+  const calls = [];
+  const start = /\bel\(/g;
+  let m;
+  while ((m = start.exec(src))) {
+    let depth = 0;
+    for (let i = m.index + 2; i < src.length; i++) {
+      if (src[i] === '(') depth++;
+      else if (src[i] === ')') { depth--; if (depth === 0) { calls.push({ at: m.index, text: src.slice(m.index, i + 1) }); break; } }
+    }
+  }
+  return calls;
+}
+
+export function englishWordsOnElements(rel, src) {
+  const found = [];
+  const code = src.replace(/^[ \t]*\/\/.*$/gm, '');
+  const lineAt = index => code.slice(0, index).split('\n').length;
+  // A capitalised word given to el() as a child — or as either branch of a ternary
+  // child: «last ? t('cat.doneFinish') : 'Done'» hid the guided run's button.
+  const WORD = /[,[?:]\s*'( ?[A-Z][a-z]{2,})'\s*(?=[\],):])/g;
+  for (const call of elCalls(code)) {
+    for (const w of call.text.matchAll(WORD)) {
+      const word = w[1].trim();
+      if (!mayBeLiteral(word)) found.push(`${rel}:${lineAt(call.at + w.index)}  ${word}`);
+    }
+  }
+  // Any capitalised literal in a property a person reads — el() or not. A dictionary
+  // key or a class list there is handed on, not read; a lowercase unit («min»,
+  // «mm») is the same in both languages, and a lowercase SENTENCE is the scan above's.
+  const READ = /(?:'aria-label'|\btext|\btitle|\bplaceholder|\bokLabel|\bcancelLabel)\s*:\s*'([^'\n]*[A-Z][^'\n]*)'/g;
+  // …and the two ways of writing onto an element that exists already: «titleEl()
+  // .textContent = 'Recipes'» overwrote a translated title every time the list opened.
+  const WRITE = /(?:\.textContent\s*=\s*|setAttribute\(\s*'(?:aria-label|title|placeholder)'\s*,\s*)'([^'\n]*[A-Z][^'\n]*)'/g;
+  for (const m of [...code.matchAll(READ), ...code.matchAll(WRITE)]) {
+    const text = m[1].trim();
+    if (!mayBeLiteral(text) && !isNotProse(text)) found.push(`${rel}:${lineAt(m.index)}  ${text}`);
+  }
+  return found;
+}
+
+test('⚠️ no single English word is handed to el() as its text', () => {
+  const found = [];
+  for (const file of jsFiles(join(ROOT, 'js'))) {
+    const rel = file.slice(ROOT.length + 1).replace(/\\/g, '/');
+    if (EXEMPT.has(rel)) continue;
+    found.push(...englishWordsOnElements(rel, readFileSync(file, 'utf8')));
+  }
+  assert.deepEqual(found, [], 'give each a key in BOTH languages and pass it through t()');
+});
+
+// The four real words are dictionary phrases now, so they would pass as translated;
+// the SHAPES are theirs, the words stand in for them.
+test('the word scan finds the four that shipped, in the shapes they shipped in', () => {
+  const shapes = [
+    "content.appendChild(el('div', { class: 'section-label' }, 'Kneaded'));",
+    "el('button', { class: 'confirm-btn-primary is-edit', type: 'button' }, [icon('pencil', 16), ' Shelved'])",
+    "const doneMark = el('span', { class: 'pas-done-mark', icon: DONE_SVG }, ['Shelved']);",
+    "const editBtn = el('button', {\n  class: 'pas-edit-btn',\n  onclick: () => go(),\n}, ['Tidy']);",
+    "el('span', { class: 'x', text: 'Tidy' })",
+    // ⚠️ THE ONES THAT WERE «IN THE DICTIONARY»: English phrases, written by hand.
+    "  type: 'button', class: 'orders-icon-btn', 'aria-label': 'Back',",
+    "  const nameInput = el('input', { class: 'cp-prod-name', type: 'text', placeholder: 'Ingredient' });",
+    "  el('button', { class: 'log-hist-btn' }, [icon('clock', 16), ' History'])",
+    // The shapes code review found after that (25 Sep 2026): a ternary branch, and
+    // writing onto an element that already exists.
+    "  wrap.appendChild(el('button', { class: 'guided-go' }, [el('span', {}), last ? t('cat.doneFinish') : 'Kneaded']));",
+    "  el('button', { class: 'logday-choice' }, d === 'today' ? 'Shelved' : t('ui.tomorrow'));",
+    "  titleEl().textContent = 'Kneaded';",
+    "  node.setAttribute('aria-label', 'Shelved');",
+  ];
+  for (const shape of shapes) {
+    assert.equal(englishWordsOnElements('x.js', shape).length, 1, `missed: ${shape}`);
+  }
+});
+
+test('…and leaves alone keys, classes, identifiers and translated text', () => {
+  const quiet = [
+    "el('button', { class: 'btn', type: 'button' }, t('ui.edit'))",
+    "el('option', { value: 'kg' }, 'kg')",
+    "el('span', { class: 'Weird-Class' })",
+    "el('p', { class: 'auth-title' }, 'Misé')",
+    "el('div', { 'data-day': 'Monday' }, [el('b', {}, 'Monday')])",
+    "  type: 'button', class: 'orders-icon-btn', 'aria-label': t('ui.back'),",
+    "  { title: 'section.orders', body: 'help.ordersReceived' },",
+    "  el('span', { class: 'unit', text: 'min' })",
+  ];
+  for (const line of quiet) {
+    assert.deepEqual(englishWordsOnElements('x.js', line), [], `false positive: ${line}`);
+  }
 });
 
 test('the scan reads the app, not an empty folder', () => {

@@ -55,11 +55,11 @@ export function buildHistoryEditor(record, ingredients, actions) {
   const list = el('div', { class: 'hist-edit-list' }, rows.map(row => {
     const qtyInput = el('input', {
       type: 'number', class: 'ing-qty', min: '0', inputmode: 'numeric',
-      'aria-label': `${row.name} quantity ordered`,
+      'aria-label': t('orders.qtyOrderedFor', { name: row.name }),
     });
     const stockInput = el('input', {
       type: 'number', class: 'ing-stock', min: '0', inputmode: 'numeric',
-      'aria-label': `${row.name} stock on hand`,
+      'aria-label': t('orders.stockOnHandFor', { name: row.name }),
     });
     qtyInput.value = row.qty;
     stockInput.value = row.stock;
@@ -97,19 +97,29 @@ export function buildHistoryEditor(record, ingredients, actions) {
   ]);
 
   const saveBtn = el('button', {
-    type: 'button', class: 'orders-icon-btn hist-edit-save', 'aria-label': 'Save', onClick: save,
+    type: 'button', class: 'orders-icon-btn hist-edit-save', 'aria-label': t('ui.save'), onClick: save,
   }, t('ui.save'));
 
-  const overlay = el('div', { class: 'mgmt-overlay' }, [
+  // Opened only from History, so it carries .over-history (see orders.css).
+  // Its own status line: a save refused while this screen is open has to be said HERE
+  // — the page's line and History's are both underneath it.
+  const status = el('p', { class: 'orders-status', role: 'status' });
+  status.hidden = true;
+
+  const overlay = el('div', { class: 'mgmt-overlay over-history' }, [
     el('header', { class: 'orders-header' }, [
       el('button', {
-        type: 'button', class: 'orders-icon-btn', 'aria-label': 'Back',
+        type: 'button', class: 'orders-icon-btn', 'aria-label': t('ui.back'),
         icon: BACK_ICON, onClick: () => actions.onClose(),
       }),
       el('div', { class: 'orders-header-title' }, [el('h1', { text: t('orders.editOrder') })]),
       saveBtn,
     ]),
-    el('div', { class: 'mgmt-content' }, [
+    // .mgmt-scroll, like every sibling overlay: side margins, and a body that
+    // SCROLLS. It said .mgmt-content, which no stylesheet has ever defined — so the
+    // text touched both edges and a long order ran off the bottom of the screen.
+    el('div', { class: 'mgmt-scroll' }, [
+      status,
       el('p', { class: 'hist-edit-what', text:
         `${recordTitle(record)} · ${dayLabel(recordDate(record))}` }),
       rows.length ? list : el('p', { class: 'history-empty', text: t('orders.noItemsRecorded') }),

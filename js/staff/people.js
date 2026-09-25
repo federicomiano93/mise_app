@@ -94,7 +94,7 @@ export function openPeople(session) {
   const overlay = el('div', { class: 'people-overlay' }, [
     el('header', { class: 'orders-header' }, [
       el('button', {
-        type: 'button', class: 'orders-icon-btn', 'aria-label': 'Back',
+        type: 'button', class: 'orders-icon-btn', 'aria-label': t('ui.back'),
         icon: BACK_ICON, onClick: close,
       }),
       el('div', { class: 'orders-header-title' }, [el('h1', { text: t('people.title') })]),
@@ -120,7 +120,7 @@ export function openPeople(session) {
   // reason it is a title rather than a fourth role is in js/roles.js. The
   // confirmation below has to say so out loud, or four pills read as four levels.
   function rolePills(current, onPick) {
-    const wrap = el('div', { class: 'people-pills', role: 'group', 'aria-label': 'Role' });
+    const wrap = el('div', { class: 'people-pills', role: 'group', 'aria-label': t('people.roleGroup') });
     for (const choice of ROLE_CHOICES) {
       const chosen = choice.key === current;
       const pill = el('button', {

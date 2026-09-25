@@ -81,7 +81,7 @@ function render() {
   c.appendChild(el('div', { class: 'cp-label' }, t('calc.whenIsThisDough')));
   const dayChoices = el('div', { class: 'logday-choices' });
   for (const d of ['today', 'tomorrow']) {
-    const btn = el('button', { class: 'logday-choice' + (state.forDay === d ? ' selected' : ''), type: 'button' }, d === 'today' ? 'Today' : 'Tomorrow');
+    const btn = el('button', { class: 'logday-choice' + (state.forDay === d ? ' selected' : ''), type: 'button' }, d === 'today' ? t('ui.today') : t('ui.tomorrow'));
     btn.addEventListener('click', () => { state.forDay = d; render(); });
     dayChoices.appendChild(btn);
   }

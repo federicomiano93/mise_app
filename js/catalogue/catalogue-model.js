@@ -24,6 +24,23 @@ export const DEFAULT_UNIT = 'g';
 // Grams per one of each weighable unit; a unit absent here is not weighable.
 const UNIT_TO_GRAMS = { g: 1, kg: 1000, mg: 0.001, ml: 1, cl: 10, dl: 100, l: 1000 };
 
+// ⚠️ THE STORED UNIT IS AN IDENTIFIER; WHAT A PERSON READS IS THIS. 'to taste' and
+// 'pinch' are English words saved on every recipe row and compared all over this
+// folder, so they are DATA_WORDS in js/i18n.js and can never be translated in place.
+// An Italian venue read «to taste» beside its salt until the display asked here.
+// The metric symbols are the same in every language and pass through untouched.
+// Each key is written out whole so tests/i18n-keys-exist.test.mjs can see it.
+export function unitText(unit) {
+  switch (unit) {
+    case 'pcs': return t('cat.unitText.pcs');
+    case 'tsp': return t('cat.unitText.tsp');
+    case 'tbsp': return t('cat.unitText.tbsp');
+    case 'pinch': return t('cat.unitText.pinch');
+    case 'to taste': return t('cat.unitText.toTaste');
+    default: return unit;
+  }
+}
+
 // The ingredient's unit, defaulting to grams for legacy rows with no unit field.
 export function unitOf(ing) {
   const u = ing && ing.unit;

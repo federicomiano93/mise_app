@@ -123,7 +123,7 @@ function olderButton(older, appendDay, foot) {
       foot.remove();
       older.forEach(appendDay);
     },
-  }, [`Show older orders (${countRecords(older)})`]);
+  }, [t('orders.showOlderOrders', { n: countRecords(older) })]);
 }
 
 // The day heading, with a "Send all" beside it once there is more than one order to

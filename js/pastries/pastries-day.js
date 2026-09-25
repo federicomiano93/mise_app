@@ -217,13 +217,13 @@ export function renderDay({ day, items, note, locked = false, app }) {
   // Firestore snapshot, so a conditionally built control has no element to
   // reveal and appears at random. tokens.css forces [hidden] { display: none
   // !important }, which is what makes hiding reliable against these classes.
-  const doneMark = el('span', { class: 'pas-done-mark', icon: DONE_SVG }, ['Confirmed']);
+  const doneMark = el('span', { class: 'pas-done-mark', icon: DONE_SVG }, [t('past.confirmedMark')]);
   const editBtn = el('button', {
     class: 'pas-edit-btn',
     type: 'button',
     icon: PENCIL_SVG,
     onclick: () => app.requestEdit(day),
-  }, ['Edit']);
+  }, [t('ui.edit')]);
   const doneRow = el('div', { class: 'pas-done' }, [doneMark, editBtn]);
 
   function paintLock() {

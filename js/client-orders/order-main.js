@@ -40,10 +40,11 @@ const HOST = document.getElementById('order-root');
 // ⚠️ THE FALLBACK IS DELIBERATELY NAMELESS. A menu published before this change
 // carries no bakeryName, and putting a real venue's name here as a default would
 // tell one bakery's customer they are ordering from a different bakery — which is
-// exactly the defect being fixed. "your supplier" is vague and true; a wrong name
+// exactly the defect being fixed. «your supplier» is vague and true; a wrong name
 // is specific and false.
-const FALLBACK_NAME = 'your supplier';
-let bakeryName = FALLBACK_NAME;
+// ⚠️ EMPTY UNTIL THE PAGE KNOWS ITS LANGUAGE: the fallback is asked of t() in
+// openDay(), after setLanguage() — at module load it could only ever be English.
+let bakeryName = '';
 
 // ⚠️ WHEN ORDERS CLOSE IS THE BAKERY'S SETTING, READ FROM THE DATABASE, and the
 // sentence under the day picker is generated FROM the same value. A fixed sentence
@@ -207,10 +208,12 @@ async function openFor(uid) {
 
   const products = (menu && Array.isArray(menu.products) ? menu.products : [])
     .filter(p => p && p.id && p.name);
-  const clientName = String((menu && menu.clientName) || grant.clientName || t('co.yourOrder'));
+  // The name as published; the «Your order» fallback is asked for only after
+  // setLanguage() below, or an Italian client would read it — and save it — in English.
+  const publishedClientName = String((menu && menu.clientName) || grant.clientName || '');
   // Published with the menu; absent on every menu written before this change, and
-  // absent is what FALLBACK_NAME is for.
-  bakeryName = String((menu && menu.bakeryName) || '').trim() || FALLBACK_NAME;
+  // absent is what the nameless fallback in openDay() is for.
+  bakeryName = String((menu && menu.bakeryName) || '').trim();
 
   // ⚠️⚠️ THIS PAGE FOLLOWS THE COUNTRY, NEVER THE BAKERY'S INTERFACE SETTING, and
   // the distinction is the same one that governs an allergen label. Whoever is
@@ -224,6 +227,7 @@ async function openFor(uid) {
   // wrong language is only awkward, and refusing to draw it would leave a client
   // unable to order at all. Every menu published before today has no country.
   setLanguage(outputLanguage(menu) || DEFAULT_LANGUAGE);
+  const clientName = publishedClientName || t('co.yourOrder');
 
   const dates = orderableDates(Date.now(), cutoff);
   if (!dates.length) {
@@ -254,7 +258,7 @@ async function openDay(grant, clientName, products, dates, date) {
 
   const form = mountOrderForm(HOST, {
     clientName,
-    bakeryName: bakeryName,
+    bakeryName: bakeryName || t('co.yourSupplier'),
     products,
     dates,
     selectedDate: date,
