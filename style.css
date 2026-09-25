@@ -641,13 +641,6 @@ select.qty-select:focus { outline: none; border-color: var(--crust); background:
 .cp-field { margin-bottom: 14px; }
 .cp-label { display: block; font-size: 13px; color: var(--text2); margin-bottom: 6px; }
 
-.cp-client {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 12px 14px;
-  margin-bottom: 12px;
-}
 .cp-client-name {
   flex: 1;
   min-width: 0;
@@ -1266,14 +1259,15 @@ input.cp-prod-weight {
    the browser's default — a grey rectangle where every other screen has the round
    translucent circle. Federico spotted it immediately, because it was the one thing on
    that screen that did not look like the app.
-   The thirteen names below are left as they are rather than churned; new screens carry
-   the shared class and cannot be forgotten. */
+   The names below are left as they are rather than churned; new screens carry the
+   shared class and cannot be forgotten. (.products-back-btn and .ingredients-back-btn
+   went on 25 Sep 2026: no page or script writes them any more —
+   tests/css-classes.test.mjs.) */
 .overlay-back-btn,
 .recipe-back-btn,
 .settings-back-btn, .extra-back-btn, .divisor-back-btn, .logsettings-back-btn,
 .wa-back-btn, .cp-back-btn,
-.logview-back-btn, .logedit-back-btn, .logadd-back-btn, .loghistory-back-btn,
-.products-back-btn, .ingredients-back-btn {
+.logview-back-btn, .logedit-back-btn, .logadd-back-btn, .loghistory-back-btn {
   margin-right: auto;   /* everything after it groups at the right edge */
   width: 36px;
   height: 36px;
@@ -1337,23 +1331,6 @@ input.cp-prod-weight {
    anywhere: full-width lines on a tablet are the hardest thing to read at arm's
    length. .recipe-scroll has no horizontal padding of its own; this is where it is. */
 .recipe-content { padding: 14px 16px; padding-inline: max(16px, var(--app-gutter)); }
-
-/* Confirm & Save button — default (brioche/sourdough, inside result-card) */
-.confirm-btn {
-  width: 100%;
-  margin-top: 12px;
-  padding: 11px;
-  background: var(--surface);
-  border: 1px solid var(--accent);
-  border-radius: var(--radius-sm);
-  font-family: 'Manrope', sans-serif;
-  font-size: 13px;
-  color: var(--accent);
-  cursor: pointer;
-  letter-spacing: 0.02em;
-}
-.confirm-btn:active { background: var(--accent-light); }
-.confirm-btn:disabled { opacity: 0.6; cursor: default; }
 
 /* Confirm & Save button — prominent standalone (focaccia tab) */
 .confirm-btn-primary {
