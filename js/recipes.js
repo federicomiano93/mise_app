@@ -338,7 +338,7 @@ function renderRecipeDetail(ri) {
 
 // One ingredient row: name (autocomplete) + grams + optional "leavening" radio + remove.
 function ingredientRow(recipe, ing, gi, listId, showLeaveningPicker) {
-  const nameInput = el('input', { class: 'cp-prod-name', type: 'text', value: ing.label || '', placeholder: 'Ingredient', list: listId });
+  const nameInput = el('input', { class: 'cp-prod-name', type: 'text', value: ing.label || '', placeholder: t('calc.ingredient'), list: listId });
   if (showErrors && isBlank(ing.label)) nameInput.classList.add('cp-invalid');
   // ⚠️ THE LEAVENING DROPDOWN HAS TO FOLLOW THIS FIELD AS IT IS TYPED, and the old
   // tick did not need to because it sat ON this row. Moving the picker into its

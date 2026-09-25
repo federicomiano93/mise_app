@@ -57,7 +57,7 @@ export function openBusinesses({ host } = {}) {
   const overlay = el('div', { class: 'people-overlay' }, [
     el('header', { class: 'orders-header' }, [
       el('button', {
-        type: 'button', class: 'orders-icon-btn', 'aria-label': 'Back',
+        type: 'button', class: 'orders-icon-btn', 'aria-label': t('ui.back'),
         icon: BACK_ICON, onClick: () => overlay.remove(),
       }),
       // ⚠️ "Customer businesses". The bare word sat one letter away from "My

@@ -32,7 +32,7 @@ export function buildSupplierDetail(supplier, ctx) {
   const overlay = el('div', { class: 'supplier-detail' }, [
     el('header', { class: 'orders-header' }, [
       el('button', {
-        type: 'button', class: 'orders-icon-btn', 'aria-label': 'Back',
+        type: 'button', class: 'orders-icon-btn', 'aria-label': t('ui.back'),
         icon: BACK_ICON, onClick: () => ctx.onBack?.(),
       }),
       el('div', { class: 'orders-header-title' }, [el('h1', { text: supplier.name })]),

@@ -181,7 +181,7 @@ export function buildSupplierPicker(rows, options, callbacks) {
   const overlay = el('div', { class: 'preview-overlay' }, [
     el('header', { class: 'orders-header' }, [
       el('button', {
-        type: 'button', class: 'orders-icon-btn', 'aria-label': 'Back',
+        type: 'button', class: 'orders-icon-btn', 'aria-label': t('ui.back'),
         icon: BACK_ICON, onClick: () => callbacks.onBack(),
       }),
       el('div', { class: 'orders-header-title' }, [el('h1', { text: title })]),

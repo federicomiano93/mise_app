@@ -178,7 +178,7 @@ function logCard(log) {
   // log is edited from the calculator (Edit → Confirm), never here, so its Edit button
   // is omitted; only a hand-entered log ("+ Add log") shows it.
   const actions = el('div', { class: 'log-actions' });
-  const hist = el('button', { class: 'log-hist-btn', type: 'button', 'data-id': log.id, 'aria-label': t('calc.versionHistory') }, [icon('clock', 16), ' History']);
+  const hist = el('button', { class: 'log-hist-btn', type: 'button', 'data-id': log.id, 'aria-label': t('calc.versionHistory') }, [icon('clock', 16), t('ui.history')]);
   const del = el('button', { class: 'log-delete-btn', type: 'button', 'data-id': log.id, 'aria-label': t('calc.deleteLog') }, icon('trash', 16));
   actions.appendChild(hist);
   if (log.origin === 'manual') {

@@ -96,6 +96,7 @@ const DICTIONARIES = Object.freeze({
     // may perform on somebody else's — so the form that goes inside a phrase is
     // its own entry, and the translator decides what it looks like.
     'people.make': 'Make {role}',
+    'people.roleGroup': 'Role',
     // ⚠️ NO ROLE IN THESE TWO. 'Add {role}' worked while there was one button;
     // with two, English needs an article Italian does not take, and the role is
     // already stated by the note above them and by the result screen below.
@@ -507,6 +508,7 @@ const DICTIONARIES = Object.freeze({
 
     // ── The Leavening box, and the choices that explain themselves ───────────
     'calc.leavening': 'Leavening',
+    'calc.ingredient': 'Ingredient',
     'calc.ordersSection': 'Orders',
     'calc.leaveningNone': 'Nothing rises in this recipe',
     'calc.unnamedIngredient': 'Unnamed ingredient',
@@ -2538,6 +2540,7 @@ const DICTIONARIES = Object.freeze({
     // a phrase is one entry with a hole and not two halves joined at the call
     // site. «Rendi responsabile», not «Fai responsabile».
     'people.make': 'Rendi {role}',
+    'people.roleGroup': 'Ruolo',
     'people.sendHow': 'Come vuoi mandarlo?',
     'people.add.link': 'Manda un link',
     'people.add.digits': 'Detta un codice',
@@ -2827,6 +2830,7 @@ const DICTIONARIES = Object.freeze({
     'co.clientAndDay': '{client} — {day}.',
 
     'calc.leavening': 'Lievito',
+    'calc.ingredient': 'Ingrediente',
     'calc.ordersSection': 'Ordini',
     'calc.leaveningNone': 'In questa ricetta non lievita niente',
     'calc.unnamedIngredient': 'Ingrediente senza nome',

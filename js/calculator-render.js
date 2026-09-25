@@ -107,7 +107,7 @@ export function buildRecipePanel(recipe) {
 
   if (showsLeaveningKnob(recipe)) {
     const lev = (recipe.ingredients || []).find(i => i.key === recipe.leaveningKey);
-    const label = (lev ? lev.label : 'Leavening');
+    const label = (lev ? lev.label : t('calc.leavening'));
     const def = recipe.leaveningDefaultPct;
     const r = knobRange(def);
     const input = el('input', {

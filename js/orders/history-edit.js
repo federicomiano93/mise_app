@@ -97,13 +97,13 @@ export function buildHistoryEditor(record, ingredients, actions) {
   ]);
 
   const saveBtn = el('button', {
-    type: 'button', class: 'orders-icon-btn hist-edit-save', 'aria-label': 'Save', onClick: save,
+    type: 'button', class: 'orders-icon-btn hist-edit-save', 'aria-label': t('ui.save'), onClick: save,
   }, t('ui.save'));
 
   const overlay = el('div', { class: 'mgmt-overlay' }, [
     el('header', { class: 'orders-header' }, [
       el('button', {
-        type: 'button', class: 'orders-icon-btn', 'aria-label': 'Back',
+        type: 'button', class: 'orders-icon-btn', 'aria-label': t('ui.back'),
         icon: BACK_ICON, onClick: () => actions.onClose(),
       }),
       el('div', { class: 'orders-header-title' }, [el('h1', { text: t('orders.editOrder') })]),
