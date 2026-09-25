@@ -1661,11 +1661,24 @@ function setupTabs() {
 const DRAFT_SAVE_ERROR_KEY = 'orders.couldNotSaveThe2';
 
 let statusTimer = null;
+
+// ⚠️ SAY IT WHERE THE PERSON IS LOOKING. History is a fixed overlay over this page and
+// the past-order editor sits over History, so a message written to the page's own line
+// while either is open is written underneath them: a save refused in the editor said
+// nothing at all (code review, 25 Sep 2026). The topmost open surface's line wins.
+function statusElement() {
+  const onTopOfHistory = document.querySelector('.over-history .orders-status');
+  if (onTopOfHistory) return onTopOfHistory;
+  const history = document.getElementById('history-overlay');
+  if (history && !history.hidden) return document.getElementById('history-status');
+  return document.getElementById('orders-status');
+}
+
 // Set the status line. With autoHideMs, the line hides itself after that delay,
 // but ONLY if its text is still the same — so a later error / "order saved"
 // message set in the meantime is never wiped.
 function setStatus(text, kind, autoHideMs) {
-  const elStatus = document.getElementById('orders-status');
+  const elStatus = statusElement();
   if (!elStatus) return;
   clearTimeout(statusTimer);
   elStatus.hidden = false;
@@ -1700,8 +1713,9 @@ function liveDataLost(what) {
 // auto-hide above and for the same reason: whoever set a newer message — an error,
 // or "order saved to history ✓" — must never have it wiped by a stale clear.
 function clearStatusIf(text) {
-  const elStatus = document.getElementById('orders-status');
-  if (elStatus && elStatus.textContent === text) elStatus.hidden = true;
+  for (const elStatus of [document.getElementById('orders-status'), document.getElementById('history-status')]) {
+    if (elStatus && elStatus.textContent === text) elStatus.hidden = true;
+  }
 }
 
 // Bottom bar shown ONLY while the device is offline. There is no

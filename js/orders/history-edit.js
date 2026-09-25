@@ -101,6 +101,11 @@ export function buildHistoryEditor(record, ingredients, actions) {
   }, t('ui.save'));
 
   // Opened only from History, so it carries .over-history (see orders.css).
+  // Its own status line: a save refused while this screen is open has to be said HERE
+  // — the page's line and History's are both underneath it.
+  const status = el('p', { class: 'orders-status', role: 'status' });
+  status.hidden = true;
+
   const overlay = el('div', { class: 'mgmt-overlay over-history' }, [
     el('header', { class: 'orders-header' }, [
       el('button', {
@@ -114,6 +119,7 @@ export function buildHistoryEditor(record, ingredients, actions) {
     // SCROLLS. It said .mgmt-content, which no stylesheet has ever defined — so the
     // text touched both edges and a long order ran off the bottom of the screen.
     el('div', { class: 'mgmt-scroll' }, [
+      status,
       el('p', { class: 'hist-edit-what', text:
         `${recordTitle(record)} · ${dayLabel(recordDate(record))}` }),
       rows.length ? list : el('p', { class: 'history-empty', text: t('orders.noItemsRecorded') }),

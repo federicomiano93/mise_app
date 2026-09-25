@@ -226,6 +226,10 @@
     </header>
     <div class="scroll-area">
       <section class="content active" id="tab-history">
+        <!-- History's own status line: this overlay covers the page's, so a message
+             about something done from here is written here (js/orders/orders-main.js
+             statusElement). -->
+        <p class="orders-status" id="history-status" role="status" hidden></p>
         <div id="history-list"></div>
       </section>
     </div>

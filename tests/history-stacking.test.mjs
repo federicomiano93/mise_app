@@ -55,3 +55,18 @@ test('the History title is centred like every other Orders overlay', () => {
   assert.match(header, /<div class="orders-header-title"><h1 data-i18n="ui.history">/);
   assert.match(header, /class="overlay-home-spacer"/, 'a counterweight to Back');
 });
+
+// ⚠️ AND A MESSAGE ABOUT IT IS SAID ON TOP TOO. Once the editor was visible, its own
+// outcomes were not: they went to the page's status line, under History (code review,
+// 25 Sep 2026). A refused save left the editor open with no word at all.
+test('a status message goes to the topmost open surface: editor, then History, then the page', () => {
+  const main = read('js/orders/orders-main.js');
+  const fn = main.slice(main.indexOf('function statusElement()'), main.indexOf('function setStatus('));
+  const editorAt = fn.indexOf(".over-history .orders-status");
+  const historyAt = fn.indexOf("'history-status'");
+  const pageAt = fn.indexOf("'orders-status'");
+  assert.ok(editorAt > 0 && historyAt > editorAt && pageAt > historyAt, 'asked in that order');
+  assert.match(main, /function setStatus\(text, kind, autoHideMs\) \{\s*const elStatus = statusElement\(\);/);
+  assert.match(read('orders.html'), /<p class="orders-status" id="history-status" role="status" hidden><\/p>/);
+  assert.match(read('js/orders/history-edit.js'), /const status = el\('p', \{ class: 'orders-status', role: 'status' \}\);/);
+});
