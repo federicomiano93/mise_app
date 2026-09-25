@@ -235,6 +235,86 @@ test('a phrase that IS in the dictionary passes, in either language', () => {
     'a sentence outside the dictionary is caught');
 });
 
+// ---------------------------------------------------------------------------
+// One word on a button — which the sentence scan above cannot see
+// ---------------------------------------------------------------------------
+//
+// ⚠️ A SENTENCE NEEDS TWO WORDS; A BUTTON NEEDS ONE. «Edit» on the Calculator and on
+// the proving lists, «Confirmed», and the Calculator's «Orders» heading all read in
+// English on Panificio Miano until 25 Sep 2026, because every guard here asked for a
+// sentence. This one asks a narrower question: a capitalised word handed to el() AS
+// ITS TEXT — a child, or the `text:` prop — must be a dictionary phrase.
+//
+// The el() call is read WHOLE, across lines: the proving list's «Edit» sat three
+// lines below the el( that owned it.
+
+function elCalls(src) {
+  const calls = [];
+  const start = /\bel\(/g;
+  let m;
+  while ((m = start.exec(src))) {
+    let depth = 0;
+    for (let i = m.index + 2; i < src.length; i++) {
+      if (src[i] === '(') depth++;
+      else if (src[i] === ')') { depth--; if (depth === 0) { calls.push({ at: m.index, text: src.slice(m.index, i + 1) }); break; } }
+    }
+  }
+  return calls;
+}
+
+export function englishWordsOnElements(rel, src) {
+  const found = [];
+  const code = src.replace(/^[ \t]*\/\/.*$/gm, '');
+  const WORD = /(?:[,[]\s*|\btext:\s*)'( ?[A-Z][a-z]{2,})'\s*(?=[\],)}])/g;
+  for (const call of elCalls(code)) {
+    for (const w of call.text.matchAll(WORD)) {
+      const word = w[1].trim();
+      if (PHRASES.has(word) || DATA.has(word) || BRAND.test(word)) continue;
+      const line = code.slice(0, call.at + w.index).split('\n').length;
+      found.push(`${rel}:${line}  ${word}`);
+    }
+  }
+  return found;
+}
+
+test('⚠️ no single English word is handed to el() as its text', () => {
+  const found = [];
+  for (const file of jsFiles(join(ROOT, 'js'))) {
+    const rel = file.slice(ROOT.length + 1).replace(/\\/g, '/');
+    if (EXEMPT.has(rel)) continue;
+    found.push(...englishWordsOnElements(rel, readFileSync(file, 'utf8')));
+  }
+  assert.deepEqual(found, [], 'give each a key in BOTH languages and pass it through t()');
+});
+
+// The four real words are dictionary phrases now, so they would pass as translated;
+// the SHAPES are theirs, the words stand in for them.
+test('the word scan finds the four that shipped, in the shapes they shipped in', () => {
+  const shapes = [
+    "content.appendChild(el('div', { class: 'section-label' }, 'Kneaded'));",
+    "el('button', { class: 'confirm-btn-primary is-edit', type: 'button' }, [icon('pencil', 16), ' Shelved'])",
+    "const doneMark = el('span', { class: 'pas-done-mark', icon: DONE_SVG }, ['Shelved']);",
+    "const editBtn = el('button', {\n  class: 'pas-edit-btn',\n  onclick: () => go(),\n}, ['Tidy']);",
+    "el('span', { class: 'x', text: 'Tidy' })",
+  ];
+  for (const shape of shapes) {
+    assert.equal(englishWordsOnElements('x.js', shape).length, 1, `missed: ${shape}`);
+  }
+});
+
+test('…and leaves alone keys, classes, identifiers and translated text', () => {
+  const quiet = [
+    "el('button', { class: 'btn', type: 'button' }, t('ui.edit'))",
+    "el('option', { value: 'kg' }, 'kg')",
+    "el('span', { class: 'Weird-Class' })",
+    "el('p', { class: 'auth-title' }, 'Misé')",
+    "el('div', { 'data-day': 'Monday' }, [el('b', {}, 'Monday')])",
+  ];
+  for (const line of quiet) {
+    assert.deepEqual(englishWordsOnElements('x.js', line), [], `false positive: ${line}`);
+  }
+});
+
 test('the scan reads the app, not an empty folder', () => {
   const files = jsFiles(join(ROOT, 'js'));
   assert.ok(files.length > 80, `only ${files.length} files walked — the walk is broken`);
