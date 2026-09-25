@@ -208,7 +208,9 @@ async function openFor(uid) {
 
   const products = (menu && Array.isArray(menu.products) ? menu.products : [])
     .filter(p => p && p.id && p.name);
-  const clientName = String((menu && menu.clientName) || grant.clientName || t('co.yourOrder'));
+  // The name as published; the «Your order» fallback is asked for only after
+  // setLanguage() below, or an Italian client would read it — and save it — in English.
+  const publishedClientName = String((menu && menu.clientName) || grant.clientName || '');
   // Published with the menu; absent on every menu written before this change, and
   // absent is what the nameless fallback in openDay() is for.
   bakeryName = String((menu && menu.bakeryName) || '').trim();
@@ -225,6 +227,7 @@ async function openFor(uid) {
   // wrong language is only awkward, and refusing to draw it would leave a client
   // unable to order at all. Every menu published before today has no country.
   setLanguage(outputLanguage(menu) || DEFAULT_LANGUAGE);
+  const clientName = publishedClientName || t('co.yourOrder');
 
   const dates = orderableDates(Date.now(), cutoff);
   if (!dates.length) {

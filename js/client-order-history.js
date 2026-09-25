@@ -109,8 +109,8 @@ export function lineCount(order) {
 // The words under a day's client: "3 lines", and "nothing" when they asked for none.
 export function linesLabel(order) {
   const n = lineCount(order);
-  if (n === 0) return 'nothing ordered';
-  return `${n} ${n === 1 ? 'line' : 'lines'}`;
+  if (n === 0) return t('calc.nothingOrdered');
+  return t('calc.linesOrdered', { n });
 }
 
 // What the screen says when the window holds nothing.

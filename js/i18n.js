@@ -508,6 +508,21 @@ const DICTIONARIES = Object.freeze({
 
     // ── The Leavening box, and the choices that explain themselves ───────────
     'calc.leavening': 'Leavening',
+    'calc.productsHeading': 'Products',
+    'calc.ingredientCount': {
+      one: '{n} ingredient',
+      other: '{n} ingredients',
+    },
+    'calc.field.name': 'Name',
+    'calc.field.weight': 'Weight',
+    'calc.field.type': 'Type',
+    'calc.type.number': 'Number',
+    'calc.type.dropdown': 'Dropdown',
+    'calc.nothingOrdered': 'nothing ordered',
+    'calc.linesOrdered': {
+      one: '{n} line',
+      other: '{n} lines',
+    },
     'calc.ingredient': 'Ingredient',
     'calc.ordersSection': 'Orders',
     'calc.leaveningNone': 'Nothing rises in this recipe',
@@ -1079,6 +1094,7 @@ const DICTIONARIES = Object.freeze({
     'cat.decl.copy': 'Copy',
     'cat.amount': 'Amount',
     'cat.unit': 'Unit',
+    'cat.stepDone': 'Done',
     // What a person READS for a stored recipe unit (js/catalogue/catalogue-model.js
     // unitText). The stored values are DATA_WORDS and are never translated.
     'cat.unitText.pcs': 'pcs',
@@ -2830,6 +2846,21 @@ const DICTIONARIES = Object.freeze({
     'co.clientAndDay': '{client} — {day}.',
 
     'calc.leavening': 'Lievito',
+    'calc.productsHeading': 'Prodotti',
+    'calc.ingredientCount': {
+      one: '{n} ingrediente',
+      other: '{n} ingredienti',
+    },
+    'calc.field.name': 'Nome',
+    'calc.field.weight': 'Peso',
+    'calc.field.type': 'Tipo',
+    'calc.type.number': 'Numero',
+    'calc.type.dropdown': 'Menu a tendina',
+    'calc.nothingOrdered': 'niente ordinato',
+    'calc.linesOrdered': {
+      one: '{n} riga',
+      other: '{n} righe',
+    },
     'calc.ingredient': 'Ingrediente',
     'calc.ordersSection': 'Ordini',
     'calc.leaveningNone': 'In questa ricetta non lievita niente',
@@ -3322,10 +3353,17 @@ const DICTIONARIES = Object.freeze({
     'cat.decl.copy': 'Copia',
     'cat.amount': 'Quantità',
     'cat.unit': 'Unità',
+    'cat.stepDone': 'Fatto',
+    // ⚠️ MEASURED IN THE EDITOR'S OWN FONT: the unit box leaves 41.2px for the word
+    // (catalogue.css --unit-w). «cucchiaino» is 72.6px and «cucchiaio» 64.0px — both
+    // showed as «cucch», a teaspoon and a tablespoon indistinguishable. No Italian pair
+    // that is readable AND tells them apart fits, so the spoons keep the abbreviations
+    // they have always shown until Federico chooses words (and maybe a wider box).
+    // «pizz.» is 30.8px; «pizzico» (46.8px) ran under the arrow.
     'cat.unitText.pcs': 'pz',
-    'cat.unitText.tsp': 'cucchiaino',
-    'cat.unitText.tbsp': 'cucchiaio',
-    'cat.unitText.pinch': 'pizzico',
+    'cat.unitText.tsp': 'tsp',
+    'cat.unitText.tbsp': 'tbsp',
+    'cat.unitText.pinch': 'pizz.',
     'cat.unitText.toTaste': 'q.b.',
     'cat.removeIngredient': 'Togli l’ingrediente',
     'cat.addIngredient': '+ Aggiungi ingrediente',

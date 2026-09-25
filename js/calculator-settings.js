@@ -42,7 +42,10 @@ function recipeLabel(id) { const r = getRecipeById(getConfig(), id); return r ? 
 
 // How the quantity is entered on the calculator. 'kg' is not offered here (it is a
 // legacy widget tied to the old extra-dough product, no longer creatable).
-const TYPE_LABELS = { number: 'Number', dropdown: 'Dropdown' };
+// A function, not a table built at load: the venue's language arrives after that.
+function typeLabel(kind) {
+  return kind === 'dropdown' ? t('calc.type.dropdown') : t('calc.type.number');
+}
 
 let working = null;        // Clients editor: deep copy being edited
 let activeClient = null;   // null = the client list, an index = a client's detail
@@ -195,7 +198,7 @@ function deleteIcon(label, onDelete) {
 let clientSortable = null;
 
 function renderClientList() {
-  cpTitle().textContent = 'Clients';
+  cpTitle().textContent = t('ui.clients');
   setHomeVisible(true);
   const content = document.getElementById('cp-content');
   if (clientSortable) { clientSortable.destroy(); clientSortable = null; }
@@ -501,7 +504,7 @@ function productCard(client, product, pi) {
     nameInput.classList.remove('cp-invalid');
     markDirty();
   });
-  rows.push(fieldRow('Name', nameInput));
+  rows.push(fieldRow(t('calc.field.name'), nameInput));
 
   // Recipe. A product whose recipe was deleted is re-homed onto the first one, so the
   // select always shows something real rather than an empty box.
@@ -512,7 +515,7 @@ function productCard(client, product, pi) {
   if (!known && recipes[0]) product.recipeId = recipes[0].id;
   recipeSel.value = product.recipeId;
   recipeSel.addEventListener('change', () => { product.recipeId = recipeSel.value; markDirty(); });
-  rows.push(fieldRow('Recipe', recipeSel));
+  rows.push(fieldRow(t('ui.recipe'), recipeSel));
 
   // Weight.
   const weight = el('input', {
@@ -520,17 +523,17 @@ function productCard(client, product, pi) {
     step: '1', value: String(product.weight), inputmode: 'numeric', 'aria-label': t('calc.weightInGrams'),
   });
   weight.addEventListener('input', () => { product.weight = +weight.value || 0; markDirty(); });
-  rows.push(fieldRow('Weight', weight, 'g'));
+  rows.push(fieldRow(t('calc.field.weight'), weight, 'g'));
 
   if (product.kind === 'kg') {
     // Legacy kg product: quantity entered in kilograms; no type/crate options.
-    rows.push(fieldRow('Type', el('span', { class: 'cp-kg-note' }, 'kg')));
+    rows.push(fieldRow(t('calc.field.type'), el('span', { class: 'cp-kg-note' }, 'kg')));
   } else {
     const type = el('select', { class: 'cp-prod-dough', 'aria-label': t('calc.quantityType') });
-    for (const k of ['number', 'dropdown']) type.appendChild(el('option', { value: k }, TYPE_LABELS[k]));
+    for (const k of ['number', 'dropdown']) type.appendChild(el('option', { value: k }, typeLabel(k)));
     type.value = product.kind === 'dropdown' ? 'dropdown' : 'number';
     type.addEventListener('change', () => { product.kind = type.value; markDirty(); });
-    rows.push(fieldRow('Type', type));
+    rows.push(fieldRow(t('calc.field.type'), type));
 
     if (!product.crate || typeof product.crate !== 'object') product.crate = { show: false, perBox: 20 };
     const crateToggle = el('input', { type: 'checkbox' });
