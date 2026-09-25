@@ -1,4 +1,4 @@
-const CACHE_NAME = 'theitalianclub-v371';
+const CACHE_NAME = 'theitalianclub-v373';
 // Firebase SDK modules (loaded from gstatic) are cached SEPARATELY from CACHE_NAME
 // so they survive the cache-version bump that happens on every deploy — otherwise
 // the offline SDK would be wiped each release until the next online load. The name
@@ -447,7 +447,7 @@ const ASSET_HASHES = {
   "./js/location.js": '6aaf53615a8739d1',
   "./js/sections.js": 'abcfdecb2bd5766d',
   "./js/roles.js": '2b491770c4b6165b',
-  "./js/i18n.js": 'ee6e5f5f53c02b36',
+  "./js/i18n.js": '9bfe9943c94b2679',
   "./js/i18n-dom.js": 'a6d32c5bb1b56674',
   "./js/join-code.js": '5b89de65db5c102f',
   "./js/join-link.js": 'a90ea53c7ba51614',
@@ -486,8 +486,8 @@ const ASSET_HASHES = {
   "./js/calculator-config-store.js": '05b4d1f7b091fd60',
   "./js/calculator-order-prefill.js": '28c00f4fea7d43b7',
   "./js/calculator-order-text.js": '3eabd34a0df19321',
-  "./js/calculator-render.js": 'f67ce8cc04458439',
-  "./js/calculator-settings.js": 'b60045ca853af659',
+  "./js/calculator-render.js": '223e4878a3e75f8d',
+  "./js/calculator-settings.js": 'ad98f36d35b18a0b',
   "./js/calculator-whatsapp-settings.js": '6ea4ea7c70b52e01',
   "./js/vendor/sortable.esm.js": '824d48148fc5b469',
   "./js/orders/boot.js": '0327e6ac5782867f',
@@ -581,14 +581,14 @@ const ASSET_HASHES = {
   "./js/pastries/pastries-model.js": 'd162282f04d5287d',
   "./js/pastries/firebase-pastries.js": '83c0ea7262b9d62e',
   "./js/pastries/pastries-store.js": '4310bbde9d420416',
-  "./js/pastries/pastries-main.js": '3ac7b5b4f07a8baa',
-  "./js/pastries/pastries-strip.js": '6541f7fde8cf07d6',
-  "./js/pastries/pastries-day.js": 'b35e58afec5d655b',
+  "./js/pastries/pastries-main.js": 'd1ee8f95c4edf44a',
+  "./js/pastries/pastries-strip.js": 'f795f3d9970d98bf',
+  "./js/pastries/pastries-day.js": 'a2a8226412fc3075',
   "./js/pastries/pastries-editor.js": '4c9ab869e2445b1e',
   "./js/pastries/pastries-log-model.js": '6e3160b978365672',
   "./js/pastries/pastries-lock.js": 'adfbaeea4bd7c845',
   "./js/pastries/pastries-logs-store.js": '9a81fc94327027be',
-  "./js/pastries/pastries-logs.js": 'd9deab3da9b4664b',
+  "./js/pastries/pastries-logs.js": '8b7f3d6ddd4fbbac',
   "./foodcost.html": '1e615d571b18a29c',
   "./foodcost.css": 'fcb76b7b762465ea',
   "./js/foodcost/confirm-dialog.js": '61a7f580f37c5ff8',

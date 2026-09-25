@@ -683,7 +683,7 @@ function renderDivisorSettings() {
 }
 
 function renderDivisorTabChooser() {
-  setDivisorTitle('Divisor');
+  setDivisorTitle(t('ui.divisor'));
   setDivisorHomeVisible(true);
   const content = document.getElementById('divisor-content');
   content.textContent = '';

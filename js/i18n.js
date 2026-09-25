@@ -459,6 +459,7 @@ const DICTIONARIES = Object.freeze({
     // ⚠️ THE ORDER OF THE PIECES IS THE PHRASE. A language that puts the month
     // first says so here, instead of needing code that knows about it.
     'day.spelled': '{weekday} {d} {month} {year}',
+    'day.spelledNoYear': '{weekday} {d} {month}',
     'day.today': 'Today',
     'day.yesterday': 'Yesterday',
     'day.tomorrow': 'Tomorrow',
@@ -506,6 +507,7 @@ const DICTIONARIES = Object.freeze({
 
     // ── The Leavening box, and the choices that explain themselves ───────────
     'calc.leavening': 'Leavening',
+    'calc.ordersSection': 'Orders',
     'calc.leaveningNone': 'Nothing rises in this recipe',
     'calc.unnamedIngredient': 'Unnamed ingredient',
     'calc.leaveningHint': 'Which ingredient makes the dough rise. Only this one is scaled by the percentage below.',
@@ -1485,6 +1487,12 @@ const DICTIONARIES = Object.freeze({
     'help.stocktakeClose': 'Closing the month freezes its figures and opens the next one with what is left on the shelves today, so you only ever write the opening figures once.',
     'past.tapThePencilTo': 'Tap the pencil to add.',
     'past.thatRowHasChanged': 'That row has changed — check the list.',
+    'past.confirmedMark': 'Confirmed',
+    'past.dayRecorded': '{day} recorded.',
+    'past.lastNDays': {
+      one: 'Last day',
+      other: 'Last {n} days',
+    },
     'past.thatNameIsToo': 'That name is too long.',
     'past.thatIsMorePastries': 'That is more pastries than one day can hold.',
     'past.thatCannotBeSaved': 'That cannot be saved yet.',
@@ -2787,6 +2795,7 @@ const DICTIONARIES = Object.freeze({
     'day.monthShort.6': 'lug', 'day.monthShort.7': 'ago', 'day.monthShort.8': 'set',
     'day.monthShort.9': 'ott', 'day.monthShort.10': 'nov', 'day.monthShort.11': 'dic',
     'day.spelled': '{weekday} {d} {month} {year}',
+    'day.spelledNoYear': '{weekday} {d} {month}',
     'day.today': 'Oggi',
     'day.yesterday': 'Ieri',
     'day.tomorrow': 'Domani',
@@ -2818,6 +2827,7 @@ const DICTIONARIES = Object.freeze({
     'co.clientAndDay': '{client} — {day}.',
 
     'calc.leavening': 'Lievito',
+    'calc.ordersSection': 'Ordini',
     'calc.leaveningNone': 'In questa ricetta non lievita niente',
     'calc.unnamedIngredient': 'Ingrediente senza nome',
     'calc.leaveningHint': 'Quale ingrediente fa lievitare l’impasto. Solo questo viene scalato dalla percentuale qui sotto.',
@@ -3503,6 +3513,13 @@ const DICTIONARIES = Object.freeze({
     'cat.partOfThisRecipe': 'Una parte di questa ricetta non ha ancora un prezzo',
     'past.tapThePencilTo': 'Tocca la matita per aggiungere.',
     'past.thatRowHasChanged': 'Quella riga è cambiata — controlla la lista.',
+    'past.confirmedMark': 'Confermato',
+    // Not «{day} registrato»: domenica is feminine, and the sentence must fit all seven.
+    'past.dayRecorded': 'Registrato: {day}.',
+    'past.lastNDays': {
+      one: 'Ultimo giorno',
+      other: 'Ultimi {n} giorni',
+    },
     'past.thatNameIsToo': 'Quel nome è troppo lungo.',
     'past.thatIsMorePastries': 'Sono più paste di quante ne possa contenere una giornata.',
     'past.thatCannotBeSaved': 'Non si può ancora salvare.',

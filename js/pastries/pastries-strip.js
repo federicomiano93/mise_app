@@ -6,6 +6,7 @@
 // there would be nothing focused for them to move from — and would flicker.
 
 import { el } from './dom.js';
+import { onLanguageChange } from '../i18n.js';
 import { WEEKDAYS, weekdayLabel, weekdayShortLabel } from './pastries-model.js';
 
 // Render the strip into `host`. `openingDay` is the day the screen opened on
@@ -20,10 +21,6 @@ export function renderStrip({ host, active, openingDay, counts, onPick }) {
       type: 'button',
       role: 'tab',
       id: `pas-tab-${day}`,
-      // A screen reader announcing "Mon" seven times says nothing useful, so
-      // the full name is the accessible name and the abbreviation is only what
-      // is drawn.
-      'aria-label': day,
       'aria-selected': day === active ? 'true' : 'false',
       // Only the selected chip is in the tab order; the arrow keys move within
       // the strip. That is what makes a tablist one stop instead of seven.
@@ -32,12 +29,26 @@ export function renderStrip({ host, active, openingDay, counts, onPick }) {
       onclick: () => onPick(day),
       onkeydown: (e) => handleKey(e, i),
     }, [
-      el('span', { text: weekdayShortLabel(day), 'aria-hidden': 'true' }),
+      el('span', { class: 'pas-chip-label', 'aria-hidden': 'true' }),
       day === openingDay ? el('span', { class: 'pas-chip-dot', 'aria-hidden': 'true' }) : null,
     ]);
     chips.set(day, chip);
     host.appendChild(chip);
   });
+
+  // ⚠️ THE WORDS ARE PAINTED AGAIN WHEN THE LANGUAGE ARRIVES. The strip is built at
+  // module load, before the venue is open, so the first paint is always English —
+  // an Italian venue read «Mon Tue Wed» above an Italian screen until 25 Sep 2026.
+  // A screen reader announcing "Mon" seven times says nothing useful, so the full
+  // name is the accessible name and the abbreviation is only what is drawn.
+  function paintLabels() {
+    chips.forEach((chip, day) => {
+      chip.setAttribute('aria-label', weekdayLabel(day));
+      chip.querySelector('.pas-chip-label').textContent = weekdayShortLabel(day);
+    });
+  }
+  paintLabels();
+  onLanguageChange(paintLabels);
 
   function handleKey(e, index) {
     let next = null;
