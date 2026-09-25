@@ -100,7 +100,8 @@ export function buildHistoryEditor(record, ingredients, actions) {
     type: 'button', class: 'orders-icon-btn hist-edit-save', 'aria-label': t('ui.save'), onClick: save,
   }, t('ui.save'));
 
-  const overlay = el('div', { class: 'mgmt-overlay' }, [
+  // Opened only from History, so it carries .over-history (see orders.css).
+  const overlay = el('div', { class: 'mgmt-overlay over-history' }, [
     el('header', { class: 'orders-header' }, [
       el('button', {
         type: 'button', class: 'orders-icon-btn', 'aria-label': t('ui.back'),
@@ -109,7 +110,10 @@ export function buildHistoryEditor(record, ingredients, actions) {
       el('div', { class: 'orders-header-title' }, [el('h1', { text: t('orders.editOrder') })]),
       saveBtn,
     ]),
-    el('div', { class: 'mgmt-content' }, [
+    // .mgmt-scroll, like every sibling overlay: side margins, and a body that
+    // SCROLLS. It said .mgmt-content, which no stylesheet has ever defined — so the
+    // text touched both edges and a long order ran off the bottom of the screen.
+    el('div', { class: 'mgmt-scroll' }, [
       el('p', { class: 'hist-edit-what', text:
         `${recordTitle(record)} · ${dayLabel(recordDate(record))}` }),
       rows.length ? list : el('p', { class: 'history-empty', text: t('orders.noItemsRecorded') }),

@@ -654,6 +654,8 @@ function openSendDayScreen(date, records) {
     onBack: () => overlay.remove(),
     onConfirm: (selected, { grouped }) => { overlay.remove(); sendMessageFor(selected, { grouped }); },
   });
+  // Opened from History, so it must sit above it (orders.css .over-history).
+  overlay.classList.add('over-history');
   document.body.appendChild(overlay);
 }
 

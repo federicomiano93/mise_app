@@ -726,6 +726,7 @@ const DICTIONARIES = Object.freeze({
     'orders.quantitiesClearedFor': 'Quantities cleared for {n} suppliers ✓',
     'orders.checkExtraDigit': 'Check it is not an extra digit.',
     'orders.liveConnectionLost': 'Lost the live connection for {what}. What you see may be out of date — reload the page.',
+    'orders.showOlderOrders': 'Show older orders ({n})',
     // What the live connection was lost FOR — a hole in the sentence above.
     'orders.live.draft': 'the order in progress',
     'orders.live.history': 'past orders',
@@ -3001,6 +3002,7 @@ const DICTIONARIES = Object.freeze({
     'orders.quantitiesClearedFor': 'Quantità azzerate per {n} fornitori ✓',
     'orders.checkExtraDigit': 'Controlla che non ci sia una cifra di troppo.',
     'orders.liveConnectionLost': 'Persa la connessione dal vivo per {what}. Quello che vedi potrebbe non essere aggiornato — ricarica la pagina.',
+    'orders.showOlderOrders': 'Mostra gli ordini precedenti ({n})',
     // What the live connection was lost FOR — a hole in the sentence above.
     'orders.live.draft': 'l’ordine in corso',
     'orders.live.history': 'gli ordini passati',

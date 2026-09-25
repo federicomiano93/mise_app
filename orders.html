@@ -218,7 +218,11 @@
   <div class="history-overlay" id="history-overlay" hidden>
     <header class="orders-header">
       <button class="orders-icon-btn" id="history-back-btn" type="button" data-i18n="ui.back" data-i18n-attr="aria-label" aria-label="Back"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
-      <h1 data-i18n="ui.history">History</h1>
+      <!-- Title centred like every other Orders overlay: .orders-header-title takes the
+           middle, the spacer on the right weighs against Back. A bare h1 was pushed to
+           the right edge by the header's space-between. -->
+      <div class="orders-header-title"><h1 data-i18n="ui.history">History</h1></div>
+      <span class="overlay-home-spacer" aria-hidden="true"></span>
     </header>
     <div class="scroll-area">
       <section class="content active" id="tab-history">

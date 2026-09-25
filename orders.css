@@ -818,6 +818,13 @@ input.ing-stock {
   margin-bottom: 14px;
 }
 .hist-edit-list { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 4px 14px; }
+/* ⚠️ THE ROW IS NARROWER HERE THAN ON THE ORDER SCREEN: the card's own padding and
+   border sit inside the overlay's. At 296px that leaves 234px, and two 96px boxes
+   plus a unit («casse») plus the gaps asked for ~254 — the Stock box ran 18px past
+   the card's edge (measured 25 Sep 2026). 72px is the box width the place-confirm
+   rows already use; it leaves room for a unit of ~8 letters. */
+.hist-edit-list input.ing-qty,
+.hist-edit-list input.ing-stock { width: 72px; }
 .hist-edit-hint { font-size: 12px; color: var(--text3); margin-top: 10px; line-height: 1.5; }
 
 /* The only action in Orders that destroys data for good. Kept deliberately
@@ -1781,6 +1788,15 @@ a.home-reminder {
   flex-direction: column;
   background: var(--bg);
 }
+
+/* ⚠️⚠️ A SCREEN OPENED FROM HISTORY MUST SIT ABOVE IT. The order editor is a
+   .mgmt-overlay (650) and the send-the-day chooser a .preview-overlay (600): both
+   opened UNDERNEATH History's 900, so tapping the pencil on a past order appeared
+   to do nothing — from mid-August until 25 Sep 2026, found by driving the screen.
+   Raised only when opened from here, so their order everywhere else is untouched;
+   still below the update banner and the dialog, which must cover them. Declared
+   after both base rules on purpose: it ties them on specificity. */
+.over-history { z-index: 950; }
 
 /* A column flex child that must SCROLL rather than be squashed. Without
    min-height:0 a flex child refuses to shrink below its content and the scroll
