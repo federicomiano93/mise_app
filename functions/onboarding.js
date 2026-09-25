@@ -34,6 +34,7 @@ import {
   isWellFormed, codeStatus, isRateLimited, retryAfterMs, redeemFailureText,
 } from './join-code.js';
 import { HIDEABLE_IDS, OPT_IN_IDS, isValidOrder } from './home-cards.js';
+import { DIGITS_GUARD_DOC, digitsPaused, pauseLeftMs, withWrongGuess } from './digits-guard.js';
 
 const REGION = 'us-central1';
 
@@ -566,26 +567,49 @@ export const createJoinCode = onCall(CALL, async (request) => {
 // CALLER, not the code — a search would otherwise just move to the next guess.
 // The caller must therefore already be signed in, which also means Firebase
 // Auth's own sign-up limits sit in front of this.
+//
+// ⚠️⚠️ A TRANSACTION, AND UNTIL 23 SEP 2026 IT WAS NOT. It read the count and then
+// wrote it back, so fifty calls fired at the same instant all read "none yet" and
+// all went through: the limit held only for somebody polite enough to wait for each
+// answer. Inside a transaction the calls queue on the one document and each sees the
+// one before it.
 async function chargeAttempt(uid) {
   const ref = db().doc(`rate-limits/${uid}`);
-  const now = Date.now();
-  const snap = await ref.get();
-  const record = snap.exists ? snap.data() : null;
+  return db().runTransaction(async (tx) => {
+    const now = Date.now();
+    const snap = await tx.get(ref);
+    const record = snap.exists ? snap.data() : null;
 
-  if (isRateLimited(record, now)) {
-    return { blocked: true, retryMs: retryAfterMs(record, now) };
-  }
-  // Keep only what still matters, so the document cannot grow for ever.
-  const kept = (record && Array.isArray(record.attempts) ? record.attempts : [])
-    .filter(t => Number.isFinite(Number(t)) && now - Number(t) < ATTEMPT_WINDOW_MS);
-  await ref.set({ attempts: [...kept, now].slice(-MAX_ATTEMPTS_PER_HOUR * 2), updatedAt: now });
-  return { blocked: false };
+    if (isRateLimited(record, now)) {
+      return { blocked: true, retryMs: retryAfterMs(record, now) };
+    }
+    // Keep only what still matters, so the document cannot grow for ever.
+    const kept = (record && Array.isArray(record.attempts) ? record.attempts : [])
+      .filter(t => Number.isFinite(Number(t)) && now - Number(t) < ATTEMPT_WINDOW_MS);
+    tx.set(ref, { attempts: [...kept, now].slice(-MAX_ATTEMPTS_PER_HOUR * 2), updatedAt: now });
+    return { blocked: false };
+  });
 }
 
 export const redeemJoinCode = onCall(CALL, async (request) => {
   const uid = requireAuth(request);
   const kind = (request.data && request.data.kind) === 'link' ? 'link' : 'digits';
   const code = String((request.data && request.data.code) || '');
+
+  // ⚠️ A PAUSE IS ANSWERED BEFORE THE ACCOUNT IS CHARGED (code review, 23 Sep 2026).
+  // While six-digit codes are paused for everybody, a real person trying theirs would
+  // otherwise spend one of their five tries an hour on an answer that was never going
+  // to look at the code. This read is only the early answer; the transaction below
+  // asks again, and it is the one that holds under parallel calls.
+  if (kind === 'digits') {
+    const guardSnap = await db().doc(DIGITS_GUARD_DOC).get();
+    const guard = guardSnap.exists ? guardSnap.data() : null;
+    if (digitsPaused(guard, Date.now())) {
+      logger.info('Redeem refused', { uid, reason: 'digits-paused' });
+      throw new HttpsError('resource-exhausted',
+        redeemFailureText('digits-paused', pauseLeftMs(guard, Date.now())), { reason: 'digits-paused' });
+    }
+  }
 
   // Charged BEFORE the code is even looked at, so a malformed guess costs the
   // same as a well-formed one and the shape of a code cannot be probed for free.
@@ -601,14 +625,28 @@ export const redeemJoinCode = onCall(CALL, async (request) => {
   }
 
   const ref = db().doc(`join-codes/${codeId(code)}`);
+  // ⚠️ SIX DIGITS ONLY. A link is 32 random characters that no search reaches, so it
+  // is never counted and never paused — it is the way in that stays open while the
+  // short codes are paused (functions/digits-guard.js).
+  const guardRef = kind === 'digits' ? db().doc(DIGITS_GUARD_DOC) : null;
 
   // ⚠️ A TRANSACTION, because two phones redeeming the same code at the same
   // instant would otherwise both find it unused and both be let in. Single use
   // has to mean single use even when the two requests overlap.
   const result = await db().runTransaction(async (tx) => {
+    const now = Date.now();
+    // Every read before any write: a transaction refuses the other order.
+    const guardSnap = guardRef ? await tx.get(guardRef) : null;
+    const guard = guardSnap && guardSnap.exists ? guardSnap.data() : null;
+    // ⚠️ ASKED BEFORE THE CODE IS EVEN LOOKED UP. While paused, no guess reaches a
+    // code at all — not even to cost it one of its five lives.
+    if (guardRef && digitsPaused(guard, now)) {
+      return { ok: false, status: 'digits-paused', retryMs: pauseLeftMs(guard, now) };
+    }
+
     const snap = await tx.get(ref);
     const doc = snap.exists ? snap.data() : null;
-    const status = codeStatus(doc, Date.now());
+    const status = codeStatus(doc, now);
 
     if (status !== 'ok') {
       // A wrong guess against a code that EXISTS costs that code one of its five
@@ -616,6 +654,9 @@ export const redeemJoinCode = onCall(CALL, async (request) => {
       if (doc && status !== 'used') {
         tx.update(ref, { failedAttempts: FieldValue.increment(1) });
       }
+      // ⚠️ AND EVERY WRONG SIX-DIGIT GUESS, from any account, counts towards the one
+      // limit a search cannot multiply by signing up again.
+      if (guardRef) tx.set(guardRef, withWrongGuess(guard, now));
       return { ok: false, status };
     }
 
@@ -688,6 +729,13 @@ export const redeemJoinCode = onCall(CALL, async (request) => {
       throw new HttpsError('failed-precondition',
         redeemFailureText('already-member'), { reason: 'already-member' });
     }
+    // Sent with its reason for the same purpose as the one above: the words on the
+    // screen can then be the app's own, in the language on screen, and they say what
+    // to do next — ask for a link.
+    if (result.status === 'digits-paused') {
+      throw new HttpsError('resource-exhausted',
+        redeemFailureText('digits-paused', result.retryMs), { reason: 'digits-paused' });
+    }
     throw new HttpsError('permission-denied', redeemFailureText(result.status));
   }
 
@@ -721,34 +769,9 @@ export const setMemberRole = onCall(CALL, async (request) => {
       'A person is an owner, a manager, an employee, or gone.');
   }
 
-  // ⚠️ THE LAST OWNER CANNOT BE DEMOTED OR REMOVED, and this is not politeness.
-  // A location with no owner has nobody who can invite, nobody who can delete and
-  // nobody who can promote anyone — it would need the Firebase console to
-  // recover, which is the thing this whole file exists to stop needing. The check
-  // has to count the roster, so it happens before the write and inside no
-  // transaction it could race with; a second owner being demoted concurrently is
-  // survivable (the loser is told to try again by the read below).
-  if (role !== 'owner') {
-    const owners = await db().collection(`locations/${locationId}/members`)
-      .where('role', '==', 'owner').get();
-    const remaining = owners.docs.filter(d => d.id !== targetUid).length;
-    if (remaining === 0) {
-      throw new HttpsError('failed-precondition',
-        'This is the only owner. Make somebody else an owner first.');
-    }
-  }
-
   const memberRef = db().doc(`locations/${locationId}/members/${targetUid}`);
   const userRef = db().doc(`users/${targetUid}`);
-
-  if (role === null) {
-    await db().runTransaction(async (tx) => {
-      tx.set(userRef, { locations: { [locationId]: FieldValue.delete() } }, { merge: true });
-      tx.delete(memberRef);
-    });
-    logger.info('Member removed', { locationId, targetUid, by: uid });
-    return { removed: true };
-  }
+  const ownersQuery = db().collection(`locations/${locationId}/members`).where('role', '==', 'owner');
 
   // ⚠️ THE TITLE IS CLEARED WHENEVER THE LEVEL IS NOT MANAGER, and written as an
   // empty string rather than left alone. These documents are merge-written, so
@@ -757,11 +780,55 @@ export const setMemberRole = onCall(CALL, async (request) => {
   // may delete nothing. The screen is the only place anybody ever looks.
   const nextTitle = role === 'manager' ? (title || 'manager') : '';
 
-  await db().runTransaction(async (tx) => {
+  // ⚠️⚠️ THE CHECKS AND THE WRITE ARE ONE TRANSACTION (security audit, 23 Sep 2026).
+  // They used to be separate: two owners demoting each other at the same instant
+  // each counted the other as "still an owner" and both went through, leaving a
+  // location with nobody who can invite, delete or promote — recoverable only from
+  // the Firebase console, which is the thing this whole file exists to stop needing.
+  // Inside a transaction the second one is re-run after the first and sees it.
+  const outcome = await db().runTransaction(async (tx) => {
+    const [userSnap, memberSnap] = await Promise.all([tx.get(userRef), tx.get(memberRef)]);
+
+    // ⚠️ THE PERSON MUST ALREADY BE IN THIS LOCATION. Without this check an owner
+    // could write ANY account into their venue by its uid — a membership nobody
+    // accepted, handed out with no code, no link and no name on the roster. A roster
+    // row alone is accepted as well, so a row left behind by an old console edit can
+    // still be removed from the screen.
+    const inside = membershipIn(userSnap.exists ? userSnap.data() : null, locationId) !== false;
+    if (!inside && !memberSnap.exists) return { refused: 'not-member' };
+
+    // ⚠️ THE LAST OWNER CANNOT BE DEMOTED OR REMOVED, and this is not politeness.
+    // A location with no owner has nobody who can invite, nobody who can delete and
+    // nobody who can promote anyone.
+    if (role !== 'owner') {
+      const owners = await tx.get(ownersQuery);
+      const remaining = owners.docs.filter(d => d.id !== targetUid).length;
+      if (remaining === 0) return { refused: 'last-owner' };
+    }
+
+    if (role === null) {
+      tx.set(userRef, { locations: { [locationId]: FieldValue.delete() } }, { merge: true });
+      tx.delete(memberRef);
+      return { removed: true };
+    }
     tx.set(userRef,
       { locations: { [locationId]: membershipValue(role) } }, { merge: true });
     tx.set(memberRef, { role, title: nextTitle }, { merge: true });
+    return { role, title: nextTitle };
   });
+
+  if (outcome.refused === 'not-member') {
+    // The same words setMemberName uses for the same fact.
+    throw new HttpsError('not-found', 'That person is not in this location.');
+  }
+  if (outcome.refused === 'last-owner') {
+    throw new HttpsError('failed-precondition',
+      'This is the only owner. Make somebody else an owner first.');
+  }
+  if (outcome.removed) {
+    logger.info('Member removed', { locationId, targetUid, by: uid });
+    return { removed: true };
+  }
   logger.info('Member role changed', { locationId, targetUid, role, title: nextTitle, by: uid });
   return { role, title: nextTitle };
 });

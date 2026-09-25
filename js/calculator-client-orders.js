@@ -261,10 +261,13 @@ function historyCard(order) {
   };
   const rows = orderRows(order, liveNameOf);
 
+  // ⚠️ THE BAKERY'S OWN NAME FOR THE CLIENT FIRST (security audit, 23 Sep 2026): the
+  // order's `clientName` is typed by the client's account, so one client could appear
+  // as another. It stays the fallback for a client the address book no longer has.
   const card = el('div', { class: 'co-card co-card--past' }, [
     el('div', { class: 'co-card-head' }, [
       el('span', { class: 'co-card-client' },
-        order.clientName || (client && client.name) || 'Client'),
+        (client && client.name) || order.clientName || 'Client'),
       el('span', { class: 'co-card-when' }, linesLabel(order)),
     ]),
   ]);
@@ -318,7 +321,7 @@ function orderCard(order) {
 
   const card = el('div', { class: `co-card${changed ? ' co-card--changed' : ''}${used ? ' co-card--used' : ''}` }, [
     el('div', { class: 'co-card-head' }, [
-      el('span', { class: 'co-card-client' }, order.clientName || (client && client.name) || 'Client'),
+      el('span', { class: 'co-card-client' }, (client && client.name) || order.clientName || 'Client'),
       el('span', { class: 'co-card-when' }, dayLabel(order.date)),
     ]),
     el('p', { class: 'co-card-arrived' },

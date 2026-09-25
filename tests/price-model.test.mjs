@@ -416,6 +416,22 @@ test('a price for an ingredient that is not there is simply not used', () => {
   assert.equal(merged[0].pricePerUnit, undefined);
 });
 
+// ⚠️⚠️ THE HOLE THE SECURITY AUDIT OF 23 SEP 2026 FOUND. The ingredient document is
+// writable by any employee who may edit ingredients; a price on IT — left over, or
+// made up — became the price a manager's Food cost used whenever the ingredient had
+// no price document of its own. The rules now refuse anything but null there, and
+// this refuses to read one, so neither half leans on the other.
+test('a price sitting on the ingredient itself is never used', () => {
+  const planted = { id: 'I1', name: 'Flour', priceUnit: 'kg', pricePerUnit: 0.01, packPrice: 1, packSize: 100, unitWeightKg: 1, priceUpdatedAt: 'x' };
+  const [alone] = withPrices([planted], {});
+  for (const key of PRICE_FIELDS) assert.equal(alone[key], null, `${key} leaked through from the ingredient`);
+  assert.equal(alone.name, 'Flour', 'everything else on the ingredient survives');
+
+  const [priced] = withPrices([planted], { I1: { priceUnit: 'kg', pricePerUnit: 7.2 } });
+  assert.equal(priced.pricePerUnit, 7.2, 'the price document wins');
+  assert.equal(priced.packPrice, null, 'and nothing of the planted price is left beside it');
+});
+
 test('merging into nothing gives nothing', () => {
   assert.deepEqual(withPrices(null, { I1: { pricePerUnit: 1 } }), []);
   assert.deepEqual(withPrices(undefined, null), []);

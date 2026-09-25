@@ -365,10 +365,19 @@ export function splitPriceFields(data) {
 // because most ingredients have never had a price. The screens say "not priced
 // yet" and carry on, which is exactly the right thing for somebody who is not
 // allowed to know. No new failure mode, no error to handle.
+//
+// ⚠️⚠️ A PRICE SITTING ON THE INGREDIENT ITSELF IS NEVER USED (security audit, 23 Sep
+// 2026). Those keys are writable by any employee who may edit ingredients, so when an
+// ingredient had no price document the old value on it — or a made-up one — became
+// the price a manager's Food cost worked from. The rules now accept only null there;
+// this makes the app ignore them as well, so neither half depends on the other.
 export function withPrices(ingredients, prices) {
   const map = prices || {};
   return (ingredients || []).map(ing => {
-    const price = ing && map[ing.id];
-    return price ? { ...ing, ...price } : ing;
+    if (!ing) return ing;
+    const price = map[ing.id];
+    const clean = { ...ing };
+    PRICE_FIELDS.forEach(key => { if (key in clean) clean[key] = null; });
+    return price ? { ...clean, ...price } : clean;
   });
 }

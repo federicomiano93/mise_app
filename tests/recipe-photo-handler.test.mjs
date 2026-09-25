@@ -49,8 +49,12 @@ function fakeStore(seed = {}) {
       return [true, 'manager', 'owner'].includes(value) ? value : false;
     },
     location: async (lid) => docs.get(`locations/${lid}`) || null,
-    limit: async (path) => docs.get(path) || null,
-    saveLimit: async (path, value) => { docs.set(path, value); writes.push(path); },
+    // One read-decide-write, as the shell's transaction does it.
+    charge: async (path, decide) => {
+      const result = decide(docs.get(path) || null);
+      if (!result.blocked) { docs.set(path, result.next); writes.push(path); }
+      return result;
+    },
   };
 }
 

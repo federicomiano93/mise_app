@@ -44,6 +44,8 @@ import {
   collection,
   doc,
   getDoc,
+  getDocFromCache,
+  getDocFromServer,
   setDoc,
   deleteDoc,
   onSnapshot,
@@ -53,6 +55,9 @@ import {
   where,
   limit,
   connectFirestoreEmulator,
+  terminate,
+  clearIndexedDbPersistence,
+  waitForPendingWrites,
 } from 'https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js';
 import {
   initializeAppCheck,
@@ -67,7 +72,11 @@ import {
 } from './location.js';
 import { allowedSections, sectionsFor, pickStart, locationsOf } from './sections.js';
 import { roleOf, isOwner, canManage } from './roles.js';
-import { clearLocalData, shouldClearLocalData } from './local-data.js';
+import {
+  clearLocalData, shouldClearLocalData, offlineCacheVerdict, OFFLINE_CACHE_OWNER_KEY,
+} from './local-data.js';
+import { sameData } from './same-data.js';
+import { isBusy } from './update-gate.js';
 
 // ── Configuration (PUBLIC config, P1 — committed on purpose, see .gitignore) ──
 // Copied from firebase.example.js, whose "placeholders only" heading came with
@@ -143,6 +152,72 @@ function startFirestore() {
 }
 
 const db = startFirestore();
+
+// ── Clearing that cache ───────────────────────────────────────────────────────
+//
+// ⚠️⚠️ SIGNING OUT USED TO LEAVE IT ON THE PHONE (security audit, 23 Sep 2026). It holds
+// every document the app has read — a manager's ingredient prices included — and a
+// cache answers with no signal, where the rules are never asked: the next person on a
+// shared phone could read them. terminate() stops the client (every listener dies with
+// it), which is why EVERY caller reloads the page straight after.
+//
+// ⚠️ A FAILURE IS LOGGED, NOT THROWN. Another open tab of the app holds the database
+// and refuses the clear; the sign-out still has to happen.
+//
+// ⚠️ IT SAYS WHETHER IT WORKED, and the callers must listen (code review, 23 Sep 2026):
+// the record of whose data this is may only be cleared or rewritten after a clear that
+// SUCCEEDED, or a failed one would also switch off the boot check that retries it.
+async function wipeOfflineCache() {
+  try {
+    await terminate(db);
+    await clearIndexedDbPersistence(db);
+    return true;
+  } catch (err) {
+    console.warn('Could not clear the offline copy of the data:', err?.message || err);
+    return false;
+  }
+}
+
+// The boot check retries a failed clear on the next page — but only once per opening
+// of the app: a clear that keeps failing (another tab holding the database) must not
+// become a page that reloads for ever.
+const WIPE_FAILED_KEY = 'offline-wipe-failed';
+function wipeFailedThisOpening(uid) {
+  try { return sessionStorage.getItem(WIPE_FAILED_KEY) === uid; } catch { return false; }
+}
+function markWipeFailed(uid) {
+  try { sessionStorage.setItem(WIPE_FAILED_KEY, uid); } catch { /* private mode */ }
+}
+
+// Is something typed on this phone still waiting to reach the server? That waiting
+// copy lives in the same cache, so clearing it would throw the change away.
+// `true` after `ms` with nothing confirmed — usually: no signal.
+export async function changesStillWaiting(ms = 4000) {
+  let timer;
+  try {
+    const sent = await Promise.race([
+      waitForPendingWrites(db).then(() => true),
+      new Promise(resolve => { timer = setTimeout(() => resolve(false), ms); }),
+    ]);
+    return !sent;
+  } catch {
+    // A client that cannot answer has nothing it could still send.
+    return false;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function readCacheOwner() {
+  try { return localStorage.getItem(OFFLINE_CACHE_OWNER_KEY) || ''; } catch { return ''; }
+}
+
+function writeCacheOwner(uid) {
+  try {
+    if (uid) localStorage.setItem(OFFLINE_CACHE_OWNER_KEY, uid);
+    else localStorage.removeItem(OFFLINE_CACHE_OWNER_KEY);
+  } catch { /* private mode: the cache is memory-only there anyway */ }
+}
 
 // ── Local emulator switch (AUTOMATIC, by hostname) ────────────────────────────
 // On localhost / 127.0.0.1 the app talks to the LOCAL Firebase Emulator Suite, so
@@ -319,6 +394,90 @@ function rememberLocation(id) {
   try { localStorage.setItem(ACTIVE_LOCATION_KEY, id); } catch { /* private mode */ }
 }
 
+// ── Reading the session's own documents: this phone first, the server behind ──
+//
+// ⚠️⚠️ WHY (speed audit, 23 Sep 2026). Opening any page asked the SERVER, one question
+// after another, who this is (users/{uid}), whether they run the app (admins/{uid}) and
+// what the venue is (locations/{lid}) — and getDoc() waits for the server even when the
+// offline cache already holds the answer. On a 4G phone that was most of the second and
+// a half before any data appeared, paid on every page and every return to the app.
+//
+// Now each of them is answered from this phone's own copy when it has one, and the
+// server is asked straight after, behind the screen. If the server's answer differs —
+// a role changed, access removed, the venue's language switched — the page reloads,
+// and the cache it reloads from already holds the new answer.
+//
+// ⚠️ THIS IS NOT A SECURITY DECISION AND CANNOT BECOME ONE (P2). What a cached copy
+// decides is which screens to draw; every read and write is still judged by the rules
+// on the server, which never see this cache. And the copy is only ever this account's
+// own: js/local-data.js offlineCacheVerdict wipes somebody else's before a page reads.
+//
+// ⚠️ A CACHED "THIS DOCUMENT DOES NOT EXIST" IS NOT AN ANSWER, unless `trustMissing`
+// says it is (code review, 23 Sep 2026). A new person's app reads users/{uid} at sign-up,
+// before the join code has made it exist, and the phone keeps that "nothing here".
+// Trusted after the join's reload, it drew "No location yet" — with a button on it that
+// signs them out. Only admins/{uid}, where missing is everybody's normal answer, trusts it.
+async function readPreferCache(ref, { trustMissing = false } = {}) {
+  try {
+    const snap = await getDocFromCache(ref);
+    if (snap.exists() || trustMissing) return { snap, cached: true };
+  } catch { /* not on this phone yet */ }
+  // The server, exactly as before.
+  return { snap: await getDoc(ref), cached: false };
+}
+
+// A venue setting was just written by a Cloud Function — language, Home cards, the
+// photo and panel switches — and this phone's copy of the venue document knows nothing
+// about it: the server's write never passes through the phone's cache.
+//
+// ⚠️ READ FRESH BEFORE ANYTHING RELOADS OR PAINTS FROM IT (code review, 23 Sep 2026).
+// Without this the owner who switched to Italian was shown English again by the reload,
+// then a second reload a moment later — or none at all if the 30-second brake below had
+// just been spent, which reads exactly like a save that failed.
+export async function refreshVenueFromServer() {
+  const lid = currentLocationId();
+  if (!lid) return;
+  try { await getDocFromServer(doc(db, locationDocPath(lid))); } catch { /* offline: the check behind catches up */ }
+}
+
+// Ask the server what the cache answered, and start again if it disagrees.
+// ⚠️ A FAILURE IS SILENT: with no signal the cached answer is all there is, which is
+// exactly how the app behaved offline before this change.
+//
+// ⚠️ AT MOST ONE SUCH RELOAD EVERY 30 SECONDS. If the two copies ever compared unequal
+// for a reason that survives a reload — a field shape this comparison does not know —
+// the page would reload for ever, which is a broken app with nothing on screen to
+// explain it. The brake turns that into one extra reload and a line in the console.
+const REFRESH_KEY = 'session-refreshed-at';
+const REFRESH_BRAKE_MS = 30_000;
+
+function checkBehind(pairs) {
+  Promise.all(pairs.map(async ([ref, usedData]) => {
+    const fresh = await getDocFromServer(ref);
+    return sameData(fresh.exists() ? fresh.data() : null, usedData);
+  })).then((same) => {
+    if (same.every(Boolean)) return;
+    let last = 0;
+    try { last = Number(sessionStorage.getItem(REFRESH_KEY)) || 0; } catch { /* private mode */ }
+    if (Date.now() - last < REFRESH_BRAKE_MS) {
+      console.warn('The session still differs from the server after a reload; not reloading again.');
+      return;
+    }
+    try { sessionStorage.setItem(REFRESH_KEY, String(Date.now())); } catch { /* private mode */ }
+    console.info('The session changed on the server since this phone last looked — reloading.');
+    reloadWhenIdle();
+  }).catch(() => { /* offline, or refused: keep what the phone had */ });
+}
+
+// ⚠️ NEVER UNDER SOMEBODY'S FINGERS (code review, 23 Sep 2026). On a slow signal the
+// server's answer can arrive after a form was opened, and a reload then would throw the
+// half-typed product away. The same test the compulsory update uses decides it
+// (js/update-gate.js isBusy): wait until nothing is open, then start again.
+function reloadWhenIdle() {
+  if (isBusy(document)) { setTimeout(reloadWhenIdle, 5000); return; }
+  location.reload();
+}
+
 // The location ids are database names ('main', 'trattoria-rosa'). Nobody should
 // ever have to choose between those, so the picker and the switch confirmation
 // use the real names from each location's own document. One small read each,
@@ -327,7 +486,9 @@ async function readLocationNames(ids) {
   const names = {};
   await Promise.all((ids || []).map(async id => {
     try {
-      const snap = await getDoc(doc(db, locationDocPath(id)));
+      // A name is a label on a button: the phone's copy is good enough, and a stale one
+      // is corrected by the next opening.
+      const { snap } = await readPreferCache(doc(db, locationDocPath(id)));
       names[id] = (snap.exists() && snap.data().name) || id;
     } catch {
       names[id] = id;
@@ -354,8 +515,11 @@ async function enterLocation(locationId, options, user) {
   setCurrentLocationId(locationId);
   let location = null;
   try {
-    const snap = await getDoc(doc(db, locationDocPath(locationId)));
+    // From this phone first, the server behind (see readPreferCache).
+    const locationRef = doc(db, locationDocPath(locationId));
+    const { snap, cached } = await readPreferCache(locationRef);
     location = snap.exists() ? snap.data() : null;
+    if (cached) checkBehind([[locationRef, location]]);
   } catch (err) {
     // The folder can hold data before anyone writes its description document.
     // Missing description ≠ no access: sections default to all (js/sections.js).
@@ -436,12 +600,17 @@ async function enterLocation(locationId, options, user) {
 //
 // ⚠️ COST (P14): one read per SIGN-IN, not per app open — it sits in the same
 // place as the membership read, which the session already makes exactly once.
-async function resolveAppAdmin(user) {
+//
+// ⚠️ It resolves to the read itself, so resolveMembership can run it BESIDE the
+// membership read rather than after it, and check both against the server behind.
+async function readAppAdmin(user) {
   try {
-    const snap = await getDoc(doc(db, 'admins', user.uid));
-    appAdminCache = snap.exists();
+    // Missing is the normal answer for everybody but the app's own administrator, so a
+    // cached "not there" is trusted here: asking the server would undo the speed-up for
+    // every account, and a brand-new administrator is corrected by the check behind.
+    return await readPreferCache(doc(db, 'admins', user.uid), { trustMissing: true });
   } catch {
-    appAdminCache = false;
+    return null;
   }
 }
 
@@ -449,16 +618,27 @@ async function resolveAppAdmin(user) {
 // which the app can read but never write — so nobody can grant themselves access.
 async function resolveMembership(user) {
   setSession({ status: 'loading', user });
+  const userRef = doc(db, 'users', user.uid);
+  // ⚠️ BOTH AT ONCE, and from this phone first (see readPreferCache). They used to be
+  // asked one after the other, each waiting for the server.
+  const adminRead = readAppAdmin(user);
+  let userRead;
   try {
-    const snap = await getDoc(doc(db, 'users', user.uid));
-    userDocCache = snap.exists() ? snap.data() : null;
+    userRead = await readPreferCache(userRef);
+    userDocCache = userRead.snap.exists() ? userRead.snap.data() : null;
   } catch (err) {
     console.error('Could not read the access document:', err);
     setSession({ status: 'error', user, error: 'network' });
     return;
   }
 
-  await resolveAppAdmin(user);
+  const admin = await adminRead;
+  // ⚠️ EVERY UNCERTAIN ANSWER IS "NO", as before: a refused or failed read is false.
+  appAdminCache = !!(admin && admin.snap.exists());
+  const behind = [];
+  if (userRead.cached) behind.push([userRef, userDocCache]);
+  if (admin && admin.cached) behind.push([doc(db, 'admins', user.uid), admin.snap.exists() ? admin.snap.data() : null]);
+  if (behind.length) checkBehind(behind);
 
   const pick = pickStart(userDocCache, {
     isAppAdmin: appAdminCache,
@@ -560,7 +740,13 @@ export function openVenuePicker() {
   location.reload();
 }
 
+// The FIRST answer about who is signed in is the one this page opened with — the only
+// moment nothing has been read yet. See offlineCacheVerdict in js/local-data.js.
+let bootAnswered = false;
+
 onAuthStateChanged(auth, user => {
+  const atBoot = !bootAnswered;
+  bootAnswered = true;
   if (!user) {
     userDocCache = null;
     appAdminCache = false;
@@ -587,6 +773,29 @@ onAuthStateChanged(auth, user => {
   // the form.
   if (user.isAnonymous) {
     signOut(auth).catch(err => console.error('Could not clear the old session:', err));
+    return;
+  }
+
+  // ⚠️⚠️ SOMEBODY ELSE'S DATA IN THE OFFLINE CACHE, AND THEY NEVER SIGNED OUT (security
+  // audit, 23 Sep 2026). A proper sign-out wipes it; an expired or revoked session
+  // does not pass through there. Cleared at BOOT, before a single read, and the page
+  // starts again clean. A different person signing in INSIDE a page is left alone
+  // until the next boot — a join replaces the account mid-page and must not be cut
+  // off half-way — and the owner recorded stays the previous one until then, so that
+  // next boot still knows.
+  //
+  // ⚠️ THE NEW OWNER IS RECORDED ONLY AFTER A CLEAR THAT WORKED. A failed one keeps the
+  // previous owner on record, so the next opening of the app tries again; within this
+  // opening it is tried once, never in a loop.
+  const verdict = offlineCacheVerdict(readCacheOwner(), user.uid);
+  if (verdict === 'claim') writeCacheOwner(user.uid);
+  if (verdict === 'wipe' && atBoot && !wipeFailedThisOpening(user.uid)) {
+    clearLocalData();
+    wipeOfflineCache().then((cleared) => {
+      if (cleared) writeCacheOwner(user.uid);
+      else markWipeFailed(user.uid);
+      location.reload();
+    });
     return;
   }
 
@@ -625,9 +834,16 @@ export function sendReset(email) {
 // Signing out wipes this device's cached copies of the location's data — the
 // recipes, settings and typed quantities kept locally so the app opens instantly.
 // Leaving them would show the next person the previous one's work.
+//
+// ⚠️ BOTH COPIES: localStorage, and Firestore's offline database, which until 23 Sep
+// 2026 was left behind. A change still waiting for signal is thrown away with it —
+// js/unsent-guard.js asks first, from every button that leads here.
 export async function signOutNow() {
   await signOut(auth);
   clearLocalData();
+  // Only a clear that worked forgets whose data this is: after a failed one the record
+  // stays, so the next person's first page catches it and tries again.
+  if (await wipeOfflineCache()) writeCacheOwner('');
   markHubPassed(false);
   try { localStorage.removeItem(ACTIVE_LOCATION_KEY); } catch { /* private mode */ }
   location.reload();
@@ -639,12 +855,15 @@ export async function signOutNow() {
 //     live Firestore listeners and in-memory state; unwinding them by hand is
 //     how a listener from the previous location survives and quietly repaints
 //     the screen with the wrong data. A reload cannot leave one behind.
-export function switchLocation(locationId) {
+//   * ⚠️ and since 23 Sep 2026 the offline database goes too, not only localStorage:
+//     the venue left behind is not the one being opened.
+export async function switchLocation(locationId) {
   if (!locationsOf(userDocCache).includes(locationId)) {
     throw new Error(`Not your location: ${locationId}`);
   }
   clearLocalData();
   rememberLocation(locationId);
+  await wipeOfflineCache();
   location.reload();
 }
 
@@ -654,9 +873,10 @@ export function switchLocation(locationId) {
 // exactly two the other one is unambiguous and switchLocation names it, but with
 // three the app cannot guess, and reloading WITHOUT forgetting simply reopens the
 // same location — a button that visibly does nothing.
-export function forgetLocation() {
+export async function forgetLocation() {
   clearLocalData();
   try { localStorage.removeItem(ACTIVE_LOCATION_KEY); } catch { /* private mode */ }
+  await wipeOfflineCache();
   location.reload();
 }
 

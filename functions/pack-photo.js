@@ -20,7 +20,7 @@ import { getFirestore } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions';
 import Anthropic from '@anthropic-ai/sdk';
 import { accessValue } from './onboarding.js';
-import { ANTHROPIC_KEY, PHOTO_CALL } from './recipe-photo.js';
+import { ANTHROPIC_KEY, PHOTO_CALL, chargeAllowance } from './recipe-photo.js';
 import { readPackText, packToolDefinition, packPromptText } from './pack-photo-model.js';
 
 const db = () => getFirestore();
@@ -72,11 +72,9 @@ const store = {
     const snap = await db().doc(`locations/${lid}`).get();
     return snap.exists ? snap.data() : null;
   },
-  limit: async (path) => {
-    const snap = await db().doc(path).get();
-    return snap.exists ? snap.data() : null;
-  },
-  saveLimit: async (path, value) => { await db().doc(path).set(value); },
+  // The recipe reader's own charge, not a second copy of it: the two readers share
+  // one daily budget, and they must share the way it is charged.
+  charge: chargeAllowance,
 };
 
 // ⚠️ NAMED …FromPhotos, NOT readPackIngredients. That name is ALREADY EXPORTED by

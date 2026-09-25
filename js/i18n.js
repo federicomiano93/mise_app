@@ -164,6 +164,12 @@ const DICTIONARIES = Object.freeze({
     'auth.logOut': 'Log out',
     'auth.logOut.title': 'Log out?',
     'auth.logOut.message': 'You will need your email and password to get back in.',
+    // Asked only when something typed on this phone is still waiting for signal:
+    // signing out or switching venue clears the copy it is waiting in.
+    'unsent.title': 'Not sent yet',
+    'unsent.message': 'Some changes made on this phone have not reached the server yet — usually because there is no signal. If you go on now, they will be lost.',
+    'unsent.leave': 'Go on anyway',
+    'unsent.stay': 'Stay',
 
     // ⚠️ FOUR FIREBASE CODES SHARE ONE SENTENCE ON PURPOSE. Saying which half was
     // wrong tells somebody guessing at the door that an email exists. Keeping one
@@ -205,6 +211,9 @@ const DICTIONARIES = Object.freeze({
     // an owner sees on opening an invitation to their own business — which is how
     // anybody checks that one works before sending it.
     'join.alreadyMember': 'You are already in this business. A code cannot change what you can do here.',
+    // ⚠️ NOT A FAULT WITH THIS CODE EITHER: too many wrong six-digit guesses across the
+    // whole app pause them for everybody (functions/digits-guard.js). A link still works.
+    'join.digitsPaused': 'Six-digit codes are paused for a while, for safety. Ask for an invitation link instead.',
     'join.shapeHint': 'Enter your six-digit code, or open the link you were sent.',
 
     // How long an invitation has left. ⚠️ SELF-CONTAINED PHRASES, because the
@@ -2524,6 +2533,10 @@ const DICTIONARIES = Object.freeze({
     'auth.logOut': 'Esci',
     'auth.logOut.title': 'Vuoi uscire?',
     'auth.logOut.message': 'Per rientrare ti serviranno email e password.',
+    'unsent.title': 'Non ancora inviato',
+    'unsent.message': 'Alcune modifiche fatte su questo telefono non sono ancora arrivate al server, di solito perché manca la rete. Se continui adesso, andranno perse.',
+    'unsent.leave': 'Continua lo stesso',
+    'unsent.stay': 'Resta qui',
 
     // 📌 Come in inglese, una sola frase per quattro casi: dire quale metà è
     // sbagliata rivelerebbe a chi tenta la porta che quell’email esiste.
@@ -2556,6 +2569,7 @@ const DICTIONARIES = Object.freeze({
     'join.checkingCode': 'Controllo del codice…',
     'join.badCode': 'Questo codice non funziona. Chiedine uno nuovo.',
     'join.alreadyMember': 'Sei già dentro questa attività. Un codice non può cambiare cosa puoi fare qui.',
+    'join.digitsPaused': 'Per sicurezza i codici di sei cifre sono sospesi per un po’. Chiedi un link d’invito.',
     'join.shapeHint': 'Inserisci il codice di sei cifre, oppure apri il link che ti hanno mandato.',
 
     'join.expires.expired': 'scaduto',

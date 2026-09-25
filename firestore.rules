@@ -421,6 +421,9 @@ service cloud.firestore {
                                  allow write: if false; }
     match /join-codes/{codeId} { allow read, write: if false; }
     match /rate-limits/{uid}   { allow read, write: if false; }
+    // Wrong six-digit guesses across EVERY account (functions/digits-guard.js). The
+    // default-deny block already refuses it; named here so nobody wonders.
+    match /rate-limits-global/{doc} { allow read, write: if false; }
 
     //   recipe-photo-limits/{uid} and recipe-photo-venue/{lid}
     //                     how many photographs an account, and a venue, have had
@@ -698,29 +701,26 @@ service cloud.firestore {
                   && request.resource.data.unit.size() <= 100))
           && (!('active' in request.resource.data)
               || request.resource.data.active is bool)
+          // ⚠️⚠️ THE PRICE KEYS MAY ONLY BE null HERE (security audit, 23 Sep 2026).
+          // What an ingredient costs lives in ingredient-prices/{id}, behind
+          // canManage(…, 'foodcost'), since 12 Aug 2026. These keys stay in the
+          // whitelist only so every save can write them null and drain the old values
+          // out — but while they also accepted a NUMBER, any employee could put a
+          // made-up price on an ingredient that had no ingredient-prices document,
+          // and the app used it. Production held no such value when this was
+          // tightened (checked 23 Sep), so no stored document becomes unwritable.
           && (!('priceUnit' in request.resource.data)
-              || request.resource.data.priceUnit == null
-              || request.resource.data.priceUnit in ['kg', 'l', 'pcs'])
+              || request.resource.data.priceUnit == null)
           && (!('pricePerUnit' in request.resource.data)
-              || request.resource.data.pricePerUnit == null
-              || (request.resource.data.pricePerUnit is number
-                  && request.resource.data.pricePerUnit > 0))
+              || request.resource.data.pricePerUnit == null)
           && (!('packPrice' in request.resource.data)
-              || request.resource.data.packPrice == null
-              || (request.resource.data.packPrice is number
-                  && request.resource.data.packPrice > 0))
+              || request.resource.data.packPrice == null)
           && (!('packSize' in request.resource.data)
-              || request.resource.data.packSize == null
-              || (request.resource.data.packSize is number
-                  && request.resource.data.packSize > 0))
+              || request.resource.data.packSize == null)
           && (!('unitWeightKg' in request.resource.data)
-              || request.resource.data.unitWeightKg == null
-              || (request.resource.data.unitWeightKg is number
-                  && request.resource.data.unitWeightKg > 0))
+              || request.resource.data.unitWeightKg == null)
           && (!('priceUpdatedAt' in request.resource.data)
-              || request.resource.data.priceUpdatedAt == null
-              || (request.resource.data.priceUpdatedAt is string
-                  && request.resource.data.priceUpdatedAt.size() <= 64))
+              || request.resource.data.priceUpdatedAt == null)
 
           // ── Allergens and nutrition ───────────────────────────────────
           // What this ingredient declares, so a product label can be built from
@@ -1207,6 +1207,12 @@ service cloud.firestore {
           && request.resource.data.payload.size() > 0
           // The app refuses a bigger one too; the app can be an old build.
           && request.resource.data.payload.size() <= 20000
+          // ⚠️ NO TILDE (security audit, 23 Sep 2026): in ZPL a ~ is a CONTROL command
+          // — ~JR resets the printer — and the app writes every ~ in a product's text
+          // as its hex code, so a real label never holds one. (?s) lets . cross the
+          // label's line breaks. The agent then checks the whole shape
+          // (js/print-queue-model.js isSingleLabel); this is the door's half of it.
+          && !request.resource.data.payload.matches('(?s).*~.*')
           && request.resource.data.copies is number
           && request.resource.data.copies >= 1
           && request.resource.data.copies <= 99
@@ -1309,7 +1315,14 @@ service cloud.firestore {
         // which is a refusal nobody can explain rather than a decision. This
         // ruleset has been at that ceiling before, and one extra get() has
         // produced exactly this before.
-        allow create, update: if (doc == 'orders'
+        // ⚠️⚠️ NEVER config/labels (security audit, 23 Sep 2026). `{doc}` matches
+        // 'labels' too, and rules are ADDITIVE: through this block an employee with
+        // the Calculator could write the label document with calculator keys, after
+        // which every save from the labels block below failed its own whitelist and
+        // nothing could delete it — the printer settings were lost until somebody
+        // opened the Firebase console. labels has its own block, and only that one.
+        allow create, update: if doc != 'labels'
+          && (doc == 'orders'
               ? canManage(lid, 'orders')
               : (member(lid) && sectionOn(lid, 'calculator')))
           && stampedFor(lid)
@@ -2184,8 +2197,15 @@ service cloud.firestore {
       // token belonging to somebody else and quietly redirect this location's
       // alerts to another phone. The delete branch checks the STORED uid, because
       // a delete carries no request.resource.
+      // ⚠️⚠️ READ ONLY YOUR OWN (security audit, 23 Sep 2026). The token is the
+      // document id AND the key to a phone: whoever knows one can take over that
+      // phone's registration (the write below checks the NEW uid, which is what lets
+      // a shared phone change hands) or silence it with muteOrderRequests. Readable by
+      // every member, every token in the venue was one list away. The app never
+      // reads these documents — the server does, with the Admin SDK — so nothing is
+      // lost by closing them.
       match /fcm-tokens/{token} {
-        allow read: if member(lid);
+        allow read: if member(lid) && resource.data.uid == request.auth.uid;
         allow create, update: if member(lid)
           && stampedFor(lid)
           && request.resource.data.keys().hasOnly(['bakery', 'uid', 'updatedAt', 'muteOrderRequests'])
@@ -2255,8 +2275,10 @@ service cloud.firestore {
       // document an instant before sending; if cancelling deleted it, a read that
       // failed for any other reason would look identical to "cancelled" and the
       // two would be impossible to tell apart in a log.
+      // ⚠️ READ ONLY YOUR OWN, for the reason on fcm-tokens above: a timer carries its
+      // phone's token, so a colleague's timers were a second way to learn one.
       match /push-timers/{id} {
-        allow read: if member(lid);
+        allow read: if member(lid) && resource.data.uid == request.auth.uid;
         allow create: if member(lid)
           && stampedFor(lid)
           && request.resource.data.keys().hasOnly(

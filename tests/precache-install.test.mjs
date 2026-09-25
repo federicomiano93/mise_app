@@ -27,46 +27,100 @@ const SW = readFileSync(join(ROOT, 'sw.js'), 'utf8');
 
 // A service-worker global just complete enough to evaluate sw.js and run one handler.
 //
-// `fails(url, attempt)` decides which cache.add() calls reject. `attempt` is 1-based
-// PER URL, so a test can make one file fail once and then succeed — which is what a
-// throttled request actually does, and the case that decides whether strictness is
-// affordable at all.
-function loadWorker({ fails = () => false, existingCaches = [] } = {}) {
+// `fails(url, attempt)` decides which downloads reject. `attempt` is 1-based PER URL,
+// so a test can make one file fail once and then succeed — which is what a throttled
+// request actually does, and the case that decides whether strictness is affordable.
+//
+// ⚠️ THE FINGERPRINT CHECK IS STUBBED HERE, AND ONLY HERE. A downloaded body reads
+// `asset:<url>` and the stubbed SHA-1 answers with exactly the hash sw.js expects for
+// that url — so these tests are about the install's CONTROL FLOW. `stale(url)` makes a
+// download come back as a different body, which the stub answers with a wrong hash.
+// The real hashing is proved separately, against git itself, in
+// tests/sw-asset-hashes.test.mjs.
+//
+// `donors` seeds the caches an earlier release left: { cacheName: { asset: hash } }.
+// Where the harness pretends sw.js is served from, and a precached name as the browser
+// resolves it — caches key on the full address, never on './x'.
+const SW_URL = 'https://example.test/app/sw.js';
+const abs = asset => new URL(asset, SW_URL).href;
+
+function loadWorker({ fails = () => false, stale = () => false, existingCaches = [], donors = {}, hostname = 'example.test' } = {}) {
   const listeners = new Map();
-  const record = { added: [], attempts: [], inits: [], opened: [], deleted: [], skipWaiting: 0 };
+  const record = { puts: [], attempts: [], inits: [], opened: [], deleted: [], skipWaiting: 0 };
   const attemptsFor = new Map();
+  const stores = new Map();
+  let context;
 
-  const cache = {
-    add(request) {
-      const url = request.url;
-      const attempt = (attemptsFor.get(url) || 0) + 1;
-      attemptsFor.set(url, attempt);
-      record.attempts.push(url);
-      record.inits.push(request.init);
-      if (fails(url, attempt)) return Promise.reject(new TypeError('Failed to fetch ' + url));
-      record.added.push(url);
-      return Promise.resolve();
-    },
-    put: () => Promise.resolve(),
-    match: () => Promise.resolve(undefined),
+  const cacheNamed = (name) => {
+    if (!stores.has(name)) stores.set(name, new Map());
+    const store = stores.get(name);
+    return {
+      put(request, response) {
+        const url = typeof request === 'string' ? request : request.url;
+        record.puts.push([name, url]);
+        store.set(url, response);
+        return Promise.resolve();
+      },
+      match(request) {
+        const url = typeof request === 'string' ? request : request.url;
+        return Promise.resolve(store.get(url));
+      },
+      add() { throw new Error('the install must download through fetch, where the fingerprint is checked'); },
+    };
   };
+  for (const [name, files] of Object.entries(donors)) {
+    const cache = cacheNamed(name);
+    for (const [asset, hash] of Object.entries(files)) {
+      cache.put({ url: abs(asset) }, new Response(`donated:${asset}`, { headers: hash ? { 'x-mise-hash': hash } : {} }));
+    }
+  }
+  record.puts.length = 0;
 
-  const context = {
+  const toBytes = hex => Uint8Array.from(hex.padEnd(40, '0').match(/../g), h => parseInt(h, 16));
+  let byAddress = null;
+  const hashFor = (address) => {
+    if (!byAddress) {
+      const hashes = vm.runInContext('ASSET_HASHES', context);
+      byAddress = new Map(Object.entries(hashes).map(([a, h]) => [abs(a), h]));
+    }
+    // A second ask goes out with ?fp=… to get past a stale CDN copy: same file.
+    return byAddress.get(address.split('?')[0]);
+  };
+  context = {
     self: {
       addEventListener: (type, fn) => listeners.set(type, fn),
-      location: { origin: 'https://example.test' },
+      location: { origin: 'https://example.test', href: SW_URL, hostname },
       clients: { claim: () => Promise.resolve(), matchAll: () => Promise.resolve([]) },
       registration: { showNotification: () => Promise.resolve() },
       skipWaiting: () => { record.skipWaiting += 1; },
     },
     caches: {
-      open: name => { record.opened.push(name); return Promise.resolve(cache); },
-      keys: () => Promise.resolve(existingCaches.slice()),
+      open: name => { record.opened.push(name); return Promise.resolve(cacheNamed(name)); },
+      keys: () => Promise.resolve([...new Set([...existingCaches, ...Object.keys(donors)])]),
       delete: name => { record.deleted.push(name); return Promise.resolve(true); },
       match: () => Promise.resolve(undefined),
     },
-    Request: class { constructor(url, init) { this.url = url; this.init = init; } },
-    fetch: () => Promise.reject(new Error('the network is not part of this test')),
+    Request: class { constructor(url, init) { this.url = new URL(url, SW_URL).href; this.init = init; } },
+    fetch: (request) => {
+      const url = typeof request === 'string' ? request : request.url;
+      const attempt = (attemptsFor.get(url) || 0) + 1;
+      attemptsFor.set(url, attempt);
+      record.attempts.push(url);
+      record.inits.push(request.init);
+      if (fails(url, attempt)) return Promise.reject(new TypeError('Failed to fetch ' + url));
+      return Promise.resolve(new Response(stale(url, attempt) ? `stale:${url}` : `asset:${url}`, { status: 200 }));
+    },
+    crypto: {
+      subtle: {
+        async digest(algorithm, data) {
+          const text = new TextDecoder().decode(data);
+          const body = text.slice(text.indexOf('\0') + 1);
+          const hash = body.startsWith('asset:') ? hashFor(body.slice(6)) : null;
+          return toBytes(hash || 'ffffffffffffffff').buffer;
+        },
+      },
+    },
+    TextEncoder, Headers, Response,
     setTimeout,
     clearTimeout,
     console,
@@ -78,7 +132,12 @@ function loadWorker({ fails = () => false, existingCaches = [] } = {}) {
   // sw.js declares its constants with `const`, which is a lexical binding in the
   // context rather than a property of its global object — so it is read by evaluating
   // the name, not by reaching into the object.
-  return { record, listeners, read: expr => vm.runInContext(expr, context) };
+  const read = expr => vm.runInContext(expr, context);
+  // What landed in THIS worker's cache, in the order it landed.
+  Object.defineProperty(record, 'added', {
+    get: () => record.puts.filter(([name]) => name === read('CACHE_NAME')).map(([, url]) => url),
+  });
+  return { record, listeners, read, stores };
 }
 
 // Runs a handler and hands back the promise the browser would wait on.
@@ -105,7 +164,7 @@ test('when every asset caches, the install resolves and the cache holds all of t
   const w = loadWorker();
   const assets = w.read('ASSETS');
   await install(w);
-  assert.deepEqual([...w.record.added].sort(), [...assets].sort(),
+  assert.deepEqual([...w.record.added].sort(), [...assets].map(abs).sort(),
     'the precache must hold exactly the declared list');
 });
 
@@ -113,6 +172,7 @@ test('it fills the versioned cache, not some other one', async () => {
   const w = loadWorker();
   await install(w);
   assert.deepEqual(w.record.opened, [w.read('CACHE_NAME')]);
+  assert.ok(w.record.puts.every(([name]) => name === w.read('CACHE_NAME')));
 });
 
 test('every request bypasses the browser HTTP cache (cache: reload)', async () => {
@@ -141,7 +201,7 @@ test('⚠ a throttled asset does not cost the release: it is retried and succeed
   const w = loadWorker({ fails: (url, attempt) => url.endsWith('/orders.css') && attempt === 1 });
   const assets = w.read('ASSETS');
   await install(w);
-  assert.deepEqual([...w.record.added].sort(), [...assets].sort(),
+  assert.deepEqual([...w.record.added].sort(), [...assets].map(abs).sort(),
     'GitHub Pages has answered 503 to one file of a burst and 200 on retry');
 });
 
@@ -242,4 +302,133 @@ test('every precache count sw.js states in prose is the real one', () => {
   assert.deepEqual(wrong, [],
     `ASSETS holds ${assets.length} entries. A comment claiming another number is worse ` +
     'than none: this project diagnoses a partial precache by comparing counts first.');
+});
+
+// ── Fingerprints: only the release's own copy is stored ──────────────────────
+//
+// ⚠️⚠️ WHY THEY MATTER NOW (speed audit, 23 Sep 2026). A precached file is no longer
+// fetched again behind every request, so whatever the install stores IS what the phone
+// runs until the next release. For a minute after a deploy GitHub Pages can still
+// answer with the previous copy; stored under the new name, it would never be replaced.
+
+test('⚠⚠ a stale copy from the CDN is asked for again past it, and the RIGHT one stored', async () => {
+  // Stale only at its own address: the second ask carries ?fp=… and gets the release's copy.
+  const w = loadWorker({ stale: url => url.endsWith('/orders.css') });
+  await install(w);
+  assert.ok(w.record.attempts.some(u => u.includes('/orders.css?fp=')), 'the file must be asked for again past the CDN');
+  const stored = w.stores.get(w.read('CACHE_NAME')).get(abs('./orders.css'));
+  assert.equal(await stored.text(), `asset:${abs('./orders.css')}?fp=${w.read('ASSET_HASHES')['./orders.css']}`,
+    'the copy stored must be the one that matched');
+  assert.equal(stored.headers.get('x-mise-hash'), w.read('ASSET_HASHES')['./orders.css']);
+});
+
+test('⚠⚠ a copy that NEVER matches is stored as received, so the phone keeps updating', async () => {
+  // An antivirus or a proxy rewriting every copy: refusing would fail every install for ever.
+  const w = loadWorker({ stale: url => url.includes('/orders.css') });
+  await install(w);
+  const stored = w.stores.get(w.read('CACHE_NAME')).get(abs('./orders.css'));
+  assert.ok(stored, 'the install must complete');
+  assert.notEqual(stored.headers.get('x-mise-hash'), w.read('ASSET_HASHES')['./orders.css'],
+    'stored under the hash it really has, so the next release does not copy it forward');
+});
+
+test('every stored file carries its fingerprint, so the next update can recognise it', async () => {
+  const w = loadWorker();
+  await install(w);
+  const hashes = w.read('ASSET_HASHES');
+  const store = w.stores.get(w.read('CACHE_NAME'));
+  for (const asset of ['./', './index.html', './orders.css', './js/firebase.js']) {
+    assert.equal(store.get(abs(asset)).headers.get('x-mise-hash'), hashes[asset], asset);
+  }
+});
+
+// ── An update downloads only what changed ────────────────────────────────────
+
+test('⚠ an unchanged file is copied from the previous release, not downloaded', async () => {
+  const names = loadWorker();
+  const hashes = names.read('ASSET_HASHES');
+  const w = loadWorker({
+    donors: { 'theitalianclub-v1': { './index.html': hashes['./index.html'], './orders.css': 'deadbeefdeadbeef' } },
+  });
+  const assets = w.read('ASSETS');
+  await install(w);
+  assert.ok(!w.record.attempts.includes(abs('./index.html')), 'an unchanged file must not travel again');
+  assert.ok(w.record.attempts.includes(abs('./orders.css')), 'a CHANGED file must be downloaded');
+  assert.equal(w.record.attempts.length, assets.length - 1);
+  assert.deepEqual([...w.record.added].sort(), [...assets].map(abs).sort(), 'and the cache is still complete');
+});
+
+test('a copy made before fingerprints existed is downloaded again, never trusted', async () => {
+  const w = loadWorker({ donors: { 'theitalianclub-v1': { './index.html': null } } });
+  await install(w);
+  assert.ok(w.record.attempts.includes(abs('./index.html')));
+});
+
+test('the SDK cache is never used as a source: it holds other files under other rules', async () => {
+  const names = loadWorker();
+  const w = loadWorker({ donors: { [names.read('SDK_CACHE')]: { './index.html': names.read('ASSET_HASHES')['./index.html'] } } });
+  await install(w);
+  assert.ok(w.record.attempts.includes(abs('./index.html')));
+});
+
+// ── Serving ──────────────────────────────────────────────────────────────────
+
+// Dispatches a fetch event and hands back what the worker responded with (or null).
+async function serve(w, url, method = 'GET') {
+  const handler = w.listeners.get('fetch');
+  assert.ok(handler, 'sw.js must register a fetch handler');
+  let responded = null;
+  handler({ request: { url, method }, respondWith(p) { responded = p; } });
+  return responded ? await responded : null;
+}
+
+test('⚠⚠ a precached file is served from this worker\'s cache, with no network request at all', async () => {
+  const w = loadWorker();
+  await install(w);
+  const before = w.record.attempts.length;
+  const res = await serve(w, abs('./orders.css'));
+  assert.ok(res, 'the worker must answer');
+  assert.equal(await res.text(), `asset:${abs('./orders.css')}`);
+  assert.equal(w.record.attempts.length, before, 'no request may go to the network behind it');
+});
+
+test('a precached file missing from the cache (a hole) is fetched rather than failing', async () => {
+  const w = loadWorker();
+  const res = await serve(w, abs('./orders.css'));
+  assert.ok(res);
+  assert.ok(w.record.attempts.includes(abs('./orders.css')));
+});
+
+test('a file that is NOT precached goes to the network first: nothing versions it', async () => {
+  const w = loadWorker();
+  await install(w);
+  const before = w.record.attempts.length;
+  await serve(w, abs('./order.html'));
+  assert.equal(w.record.attempts.length, before + 1);
+});
+
+test('a precached path with a query string is not answered from the cache', async () => {
+  const w = loadWorker();
+  await install(w);
+  const before = w.record.attempts.length;
+  await serve(w, `${abs('./orders.css')}?v=2`);
+  assert.equal(w.record.attempts.length, before + 1);
+});
+
+test('writes are never touched by the worker', async () => {
+  const w = loadWorker();
+  assert.equal(await serve(w, abs('./index.html'), 'POST'), null);
+});
+
+// ⚠️ On this computer a Windows checkout serves CRLF where GitHub serves LF, so every
+// text file would fail its fingerprint and no worker would ever install locally.
+test('on a local server the fingerprint is not checked — and everywhere else it is', async () => {
+  const local = loadWorker({ hostname: '127.0.0.1', stale: url => url.endsWith('/orders.css') });
+  await install(local);
+  assert.ok(local.record.added.includes(abs('./orders.css')), 'a local server must still install');
+  assert.ok(!local.record.attempts.some(u => u.includes('?fp=')), 'and nothing is asked for twice');
+
+  const live = loadWorker({ hostname: 'federicomiano93.github.io', stale: url => url.endsWith('/orders.css') });
+  await install(live);
+  assert.ok(live.record.attempts.some(u => u.includes('/orders.css?fp=')), 'the live site checks, and asks again');
 });

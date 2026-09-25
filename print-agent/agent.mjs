@@ -35,7 +35,7 @@ import { spawn } from 'node:child_process';
 import net from 'node:net';
 
 import {
-  canMove, nextJob, expiredJobs, HEARTBEAT_MS,
+  canMove, nextJob, expiredJobs, isSingleLabel, HEARTBEAT_MS,
 } from '../js/print-queue-model.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -415,13 +415,22 @@ async function main() {
         busyUntil = Date.now() + BUSY_FOR_MS;
         if (await claim(app, session, job, session.uid)) {
           const when = new Date().toLocaleTimeString();
-          try {
-            await printJob(cfg, job.payload);
-            await finish(app, session, job, true);
-            console.log(`${when}  printed 1 label`);
-          } catch (err) {
-            await finish(app, session, job, false, err.message);
-            console.error(`${when}  FAILED: ${err.message}`);
+          // ⚠️⚠️ ONLY A LABEL REACHES THE PRINTER (security audit, 23 Sep 2026). Any
+          // member may queue a job, and the printer obeys setup commands as readily as
+          // labels. A job that is not one ^XA … ^XZ label made of the app's own
+          // commands is marked failed and never sent (js/print-queue-model.js).
+          if (!isSingleLabel(job.payload)) {
+            await finish(app, session, job, false, 'Refused: not a single label made by the app');
+            console.error(`${when}  REFUSED a job that is not a single label`);
+          } else {
+            try {
+              await printJob(cfg, job.payload);
+              await finish(app, session, job, true);
+              console.log(`${when}  printed 1 label`);
+            } catch (err) {
+              await finish(app, session, job, false, err.message);
+              console.error(`${when}  FAILED: ${err.message}`);
+            }
           }
         }
       }

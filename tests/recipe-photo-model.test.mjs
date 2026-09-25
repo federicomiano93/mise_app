@@ -384,7 +384,11 @@ function fakeStoreForSwitch(seed) {
     docs, writes,
     access: async () => docs.get('users/u1').locations.bakery,
     location: async (lid) => docs.get(`locations/${lid}`) || null,
-    limit: async () => null,
-    saveLimit: async (path, v) => { docs.set(path, v); writes.push(path); },
+    // One read-decide-write, as the shell's transaction does it.
+    charge: async (path, decide) => {
+      const result = decide(docs.get(path) || null);
+      if (!result.blocked) { docs.set(path, result.next); writes.push(path); }
+      return result;
+    },
   };
 }

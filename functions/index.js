@@ -78,6 +78,39 @@ async function sendTo(token, { title, body }, { tag, url, path }) {
   }
 }
 
+// Is this device token registered, in this location, to this person?
+//
+// ⚠️ A FAILED READ OR A MALFORMED TOKEN ANSWERS NO. An alarm that stays quiet is the
+// safe direction here — the same one isStillDue() takes. The token is the document
+// id, so a value holding a slash would name a different document entirely.
+async function tokenBelongsTo(lid, token, uid) {
+  if (typeof token !== 'string' || !token || token.length > 4096 || token.includes('/')) return false;
+  if (typeof uid !== 'string' || !uid) return false;
+  try {
+    const snap = await getFirestore().doc(`locations/${lid}/fcm-tokens/${token}`).get();
+    return snap.exists && (snap.data() || {}).uid === uid;
+  } catch (err) {
+    logger.warn('Could not read the phone registration; the alarm stays quiet', { message: err && err.message });
+    return false;
+  }
+}
+
+// The name the BAKERY keeps for a client, from its own address book
+// (config/calculator.clients). '' when the book, or the client, is not there — the
+// caller then falls back to what the order carries. One read per order (P14).
+async function clientNameInAddressBook(lid, clientId) {
+  if (typeof clientId !== 'string' || !clientId) return '';
+  try {
+    const snap = await getFirestore().doc(`locations/${lid}/config/calculator`).get();
+    const clients = snap.exists && Array.isArray((snap.data() || {}).clients) ? snap.data().clients : [];
+    const client = clients.find(c => c && c.id === clientId);
+    return client && typeof client.name === 'string' ? client.name.trim() : '';
+  } catch (err) {
+    logger.warn('Could not read the address book; the order\'s own name is used', { message: err && err.message });
+    return '';
+  }
+}
+
 // ── 1 + 2. A scheduled alarm ─────────────────────────────────────────────────
 
 // A phone wrote locations/{lid}/push-timers/{id}. Book the job for its instant.
@@ -157,6 +190,16 @@ export const sendTimerPush = onTaskDispatched(
       return;
     }
 
+    // ⚠️⚠️ THE PHONE MUST BE REGISTERED TO WHOEVER SET THE TIMER (security audit,
+    // 23 Sep 2026). The rules pin the timer's `uid` to its writer but cannot check its
+    // `token`, which is any string — so any member could aim a "timer" with any words
+    // at a colleague's phone. The token document is the one fact that ties a phone to
+    // a person, and only the device holding that token can have written it.
+    if (!await tokenBelongsTo(lid, timer.token, timer.uid)) {
+      logger.info('Alarm not sent', { id, reason: 'that phone is not registered to whoever set the timer' });
+      return;
+    }
+
     await sendTo(timer.token, timerNotification(timer), {
       tag: notificationTag('timer', id),
       url: targetPage('timer'),
@@ -207,7 +250,13 @@ export const notifyClientOrder = onDocumentCreated(
       return;
     }
 
-    const message = orderNotification(order);
+    // ⚠️ THE NAME IS THE BAKERY'S OWN, NOT THE ONE THE CLIENT TYPED (security audit,
+    // 23 Sep 2026). `clientName` on the order is written by the client's account, and
+    // the rules can only check its length — so one client could arrive on the lock
+    // screen as another. The address book is the bakery's; the order's own name is
+    // only the fallback for a client the book no longer has.
+    const bookName = await clientNameInAddressBook(lid, order.clientId);
+    const message = orderNotification(bookName ? { ...order, clientName: bookName } : order);
     const tag = notificationTag('order', event.params.id);
     // Sent one at a time so a single dead registration is dropped by itself
     // rather than failing the batch for every phone that is fine.

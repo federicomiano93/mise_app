@@ -304,24 +304,31 @@ async function ingredients() {
     () => mergeWrite('locations/main/ingredients/ING_MODERN', { active: 'yes', bakery: 'main' }));
 
   // ── Prices on the ingredient ──
-  // The shape written today: a typed rate, and the two retired pack fields
-  // explicitly nulled so they drain off the documents that still carry them.
-  await expectAllowed('save an ingredient with a price', () =>
+  // ⚠️⚠️ NOT ANY MORE (security audit, 23 Sep 2026). What an ingredient costs has
+  // lived in ingredient-prices/{id}, behind canManage(…, 'foodcost'), since 12 Aug
+  // 2026. The keys stay in the whitelist so every save can write them null and drain
+  // the old values, but a NUMBER there let any employee who may edit ingredients put
+  // a made-up price on one with no price document — and the app used it. The phone
+  // still on pre-12-Aug code is refused; the compulsory update gate moves it on.
+  await expectDenied('a price written onto the ingredient itself', () =>
     mergeWrite('locations/main/ingredients/ING_MODERN', {
       priceUnit: 'kg', pricePerUnit: 7.2, packPrice: null, packSize: null,
       unitWeightKg: null, priceUpdatedAt: '2026-08-10T09:00:00.000Z', bakery: 'main',
     }));
-
-  // ⚠️ AND THE SHAPE A PHONE STILL ON THE OLD CODE WRITES. Rules reach every phone
-  // the instant they are deployed; code arrives per device. Refuse the pack fields
-  // and every save from an un-updated phone is rejected until it happens to update.
-  await expectAllowed('save an ingredient from a phone still sending the pack fields', () =>
+  await expectDenied('an employee putting a price on an ingredient', () =>
+    mergeWrite('locations/main/ingredients/ING_MODERN', { pricePerUnit: 0.01, bakery: 'main' },
+      asAccount(SAM)));
+  // The control: the same employee still saves the ingredient, so the refusal above
+  // is about the price and not about who is asking.
+  await expectAllowed('…while the same employee still saves the ingredient itself', () =>
+    mergeWrite('locations/main/ingredients/ING_MODERN', { active: true, pricePerUnit: null, bakery: 'main' },
+      asAccount(SAM)));
+  await expectDenied('the pack fields a phone on the old code still sends', () =>
     mergeWrite('locations/main/ingredients/ING_MODERN', {
       priceUnit: 'kg', pricePerUnit: 7.2, packPrice: 180, packSize: 25,
       unitWeightKg: null, priceUpdatedAt: '2026-08-10T09:00:00.000Z', bakery: 'main',
     }));
-
-  await expectAllowed('a per-piece price carries the weight of one piece', () =>
+  await expectDenied('a per-piece price on the ingredient', () =>
     mergeWrite('locations/main/ingredients/ING_MODERN', {
       priceUnit: 'pcs', pricePerUnit: 2.1, packPrice: null, packSize: null,
       unitWeightKg: 0.0035, priceUpdatedAt: '2026-08-10T09:00:00.000Z', bakery: 'main',
@@ -1155,6 +1162,19 @@ async function configAndLogs() {
   // it. Rules are ADDITIVE, so this grant sits alongside the shared one; folding
   // these keys into that document's whitelist would have tied a CATALOGUE setting
   // to the calculator section, which is what that rule's ternary falls back to.
+  //
+  // ⚠️⚠️ THE DOOR THE AUDIT OF 23 SEP 2026 FOUND — and it is open only BEFORE anybody
+  // has saved the labels, which is why these two come first. `match /config/{doc}`
+  // matches 'labels' too, and rules are additive: through it an employee with the
+  // Calculator could CREATE the label document with calculator keys, after which
+  // every save from the labels block failed its own whitelist and nothing could
+  // delete it. Once the document holds label keys, the generic whitelist refuses
+  // anyway — so a check placed after the first save passes for the wrong reason.
+  await expectDenied('labels: an employee cannot create it through the calculator\'s rule',
+    () => mergeWrite(`${A}/config/labels`, { bakery: 'main', configRev: 1 }, asAccount(SAM)));
+  await expectAllowed('…while the same employee still saves the calculator itself',
+    () => mergeWrite(`${A}/config/calculator`, { bakery: 'main', configRev: 1 }, asAccount(SAM)));
+
   await expectAllowed('labels: the profile the settings screen saves', () =>
     mergeWrite(`${A}/config/labels`, {
       bakery: 'main', widthMm: 76, heightMm: 51, marginMm: 2.5,
@@ -1285,6 +1305,16 @@ async function configAndLogs() {
     () => wholeWrite(`${A}/print-jobs/J_MANY`, job({ copies: 5000 })));
   await expectDenied('queue: a key nobody put in the whitelist',
     () => wholeWrite(`${A}/print-jobs/J_EXTRA`, { ...job(), printerIp: '10.0.0.5' }));
+
+  // ⚠️⚠️ A PRINTER OBEYS MORE THAN LABELS (security audit, 23 Sep 2026). In ZPL a ~ is
+  // a control command — ~JR resets the printer — and the app writes every ~ in a
+  // product's text as its hex code, so a real label never holds one.
+  await expectAllowed('queue: a real label, over several lines, as the app writes it',
+    () => wholeWrite(`${A}/print-jobs/J_LINES`, job({ payload: '^XA\n^CI28\n^FH\n^FDAroma _7E naturale^FS\n^XZ\n' })));
+  await expectDenied('queue: a printer reset instead of a label',
+    () => wholeWrite(`${A}/print-jobs/J_RESET`, job({ payload: '~JR' })));
+  await expectDenied('queue: a control command tucked inside a label, past a line break',
+    () => wholeWrite(`${A}/print-jobs/J_HIDDEN`, job({ payload: '^XA\n^FDPane^FS\n~JR\n^XZ' })));
 
   // Claiming it.
   await expectAllowed('queue: an agent claims a waiting job', () =>
@@ -2131,6 +2161,16 @@ async function pushNotifications() {
   await expectDenied('deleting somebody else\'s registration', () =>
     deleteWrite(`${L}/fcm-tokens/${TOKEN_B}`));
 
+  // ⚠️⚠️ READ ONLY YOUR OWN (security audit, 23 Sep 2026). A token is the key to a
+  // phone: knowing one is enough to take its registration over or silence it.
+  await seedDoc(`${L}/fcm-tokens/${TOKEN_A}`, tokenDoc());
+  await expectAllowed('a phone may read its own registration',
+    readAs(ALICE, `${L}/fcm-tokens/${TOKEN_A}`));
+  await expectDenied('nobody may read a colleague\'s registration',
+    readAs(ALICE, `${L}/fcm-tokens/${TOKEN_B}`));
+  await expectDenied('nobody may list every phone in the venue',
+    readAs(ALICE, `${L}/fcm-tokens`));
+
   // ── A scheduled alarm ──
   await expectAllowed('a phone schedules an alarm for itself', () =>
     wholeWrite(`${L}/push-timers/t1`, timer()));
@@ -2166,6 +2206,13 @@ async function pushNotifications() {
     mergeWrite(`${L}/push-timers/t2`, { body: 'something else' }));
   await expectDenied('cancelling AND retiming in one write', () =>
     mergeWrite(`${L}/push-timers/t2`, { active: false, fireAt: Date.now() + 60000 }));
+
+  // ⚠️ A TIMER CARRIES ITS PHONE'S TOKEN, so a colleague's timers were a second way
+  // to learn one (security audit, 23 Sep 2026).
+  await seedDoc(`${L}/push-timers/bob-timer`, timer({ uid: BOB.uid, token: TOKEN_B }));
+  await expectAllowed('a phone may read its own alarm', readAs(ALICE, `${L}/push-timers/t1`));
+  await expectDenied('nobody may read a colleague\'s alarm', readAs(ALICE, `${L}/push-timers/bob-timer`));
+  await expectDenied('nobody may list every alarm in the venue', readAs(ALICE, `${L}/push-timers`));
 
   await seedDoc(`${L}/push-timers/other`, {
     bakery: 'main', uid: BOB.uid, token: TOKEN_B, fireAt: soon,

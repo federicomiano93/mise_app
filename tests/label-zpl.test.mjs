@@ -222,6 +222,6 @@ test('nothing is generated for a label that was never built', () => {
 test('one label per job unless somebody asked for more', () => {
   assert.ok(!/\^PQ/.test(toZpl(build())), 'a ^PQ nobody chose is a roll of stickers nobody wanted');
   assert.match(toZpl(build(), { copies: 12 }), /\^PQ12\n\^XZ/);
-  assert.match(toZpl(build(), { copies: 99999 }), /\^PQ999\n/, 'and it is capped');
+  assert.match(toZpl(build(), { copies: 99999 }), /\^PQ99\n/, 'and it is capped at what the print agent accepts');
   assert.ok(!/\^PQ/.test(toZpl(build(), { copies: 0 })));
 });

@@ -63,7 +63,8 @@ test('⚠️ the SDK is not left to retry on its own', () => {
 
 test('⚠️ the pack reader shares the function\'s clock, and does not restate it', () => {
   const shell = codeOf('functions/pack-photo.js');
-  assert.match(shell, /import \{ ANTHROPIC_KEY, PHOTO_CALL \} from '\.\/recipe-photo\.js';/,
+  // chargeAllowance rides along since 23 Sep 2026: one allowance, charged one way.
+  assert.match(shell, /import \{ ANTHROPIC_KEY, PHOTO_CALL(, chargeAllowance)? \} from '\.\/recipe-photo\.js';/,
     'one options object, so timeoutSeconds is declared once for both readers');
   assert.ok(!/timeoutSeconds/.test(shell),
     'restating it here is how the two would come to disagree');

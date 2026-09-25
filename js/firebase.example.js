@@ -37,6 +37,8 @@ import {
   collection,
   doc,
   getDoc,
+  getDocFromCache,
+  getDocFromServer,
   setDoc,
   deleteDoc,
   onSnapshot,
@@ -45,6 +47,9 @@ import {
   where,
   limit,
   connectFirestoreEmulator,
+  terminate,
+  clearIndexedDbPersistence,
+  waitForPendingWrites,
 } from 'https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js';
 import {
   initializeAppCheck,
@@ -58,7 +63,11 @@ import {
 } from './location.js';
 import { allowedSections, sectionsFor, pickStart, locationsOf } from './sections.js';
 import { roleOf, isOwner, canManage } from './roles.js';
-import { clearLocalData, shouldClearLocalData } from './local-data.js';
+import {
+  clearLocalData, shouldClearLocalData, offlineCacheVerdict, OFFLINE_CACHE_OWNER_KEY,
+} from './local-data.js';
+import { sameData } from './same-data.js';
+import { isBusy } from './update-gate.js';
 
 // ── Configuration (placeholders only — fill these in js/firebase.js) ──────────
 export const firebaseConfig = {
@@ -108,6 +117,52 @@ function startFirestore() {
 }
 
 const db = startFirestore();
+
+// ── Clearing that cache ─── (same as js/firebase.js; see the reasoning there)
+async function wipeOfflineCache() {
+  try {
+    await terminate(db);
+    await clearIndexedDbPersistence(db);
+    return true;
+  } catch (err) {
+    console.warn('Could not clear the offline copy of the data:', err?.message || err);
+    return false;
+  }
+}
+
+const WIPE_FAILED_KEY = 'offline-wipe-failed';
+function wipeFailedThisOpening(uid) {
+  try { return sessionStorage.getItem(WIPE_FAILED_KEY) === uid; } catch { return false; }
+}
+function markWipeFailed(uid) {
+  try { sessionStorage.setItem(WIPE_FAILED_KEY, uid); } catch { /* private mode */ }
+}
+
+export async function changesStillWaiting(ms = 4000) {
+  let timer;
+  try {
+    const sent = await Promise.race([
+      waitForPendingWrites(db).then(() => true),
+      new Promise(resolve => { timer = setTimeout(() => resolve(false), ms); }),
+    ]);
+    return !sent;
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function readCacheOwner() {
+  try { return localStorage.getItem(OFFLINE_CACHE_OWNER_KEY) || ''; } catch { return ''; }
+}
+
+function writeCacheOwner(uid) {
+  try {
+    if (uid) localStorage.setItem(OFFLINE_CACHE_OWNER_KEY, uid);
+    else localStorage.removeItem(OFFLINE_CACHE_OWNER_KEY);
+  } catch { /* private mode */ }
+}
 
 // ── Local emulator switch (AUTOMATIC, by hostname) ────────────────────────────
 // On localhost / 127.0.0.1 the app talks to the LOCAL Firebase Emulator Suite, so
@@ -293,7 +348,7 @@ async function readLocationNames(ids) {
   const names = {};
   await Promise.all((ids || []).map(async id => {
     try {
-      const snap = await getDoc(doc(db, locationDocPath(id)));
+      const { snap } = await readPreferCache(doc(db, locationDocPath(id)));
       names[id] = (snap.exists() && snap.data().name) || id;
     } catch {
       names[id] = id;
@@ -320,8 +375,10 @@ async function enterLocation(locationId, options, user) {
   setCurrentLocationId(locationId);
   let location = null;
   try {
-    const snap = await getDoc(doc(db, locationDocPath(locationId)));
+    const locationRef = doc(db, locationDocPath(locationId));
+    const { snap, cached } = await readPreferCache(locationRef);
     location = snap.exists() ? snap.data() : null;
+    if (cached) checkBehind([[locationRef, location]]);
   } catch (err) {
     // The folder can hold data before anyone writes its description document.
     // Missing description ≠ no access: sections default to all (js/sections.js).
@@ -364,29 +421,73 @@ async function enterLocation(locationId, options, user) {
 // the server and never trusts what is sent from here. ⚠️ EVERY UNCERTAIN ANSWER
 // IS "NO" — a refused read, a dropped connection, a missing document.
 // ⚠️ COST (P14): one read per SIGN-IN, not per app open.
-async function resolveAppAdmin(user) {
+async function readAppAdmin(user) {
   try {
-    const snap = await getDoc(doc(db, 'admins', user.uid));
-    appAdminCache = snap.exists();
+    return await readPreferCache(doc(db, 'admins', user.uid), { trustMissing: true });
   } catch {
-    appAdminCache = false;
+    return null;
   }
+}
+
+// ── This phone first, the server behind ─── (same as js/firebase.js; the reasoning is there)
+async function readPreferCache(ref, { trustMissing = false } = {}) {
+  try {
+    const snap = await getDocFromCache(ref);
+    if (snap.exists() || trustMissing) return { snap, cached: true };
+  } catch { /* not on this phone yet */ }
+  return { snap: await getDoc(ref), cached: false };
+}
+
+export async function refreshVenueFromServer() {
+  const lid = currentLocationId();
+  if (!lid) return;
+  try { await getDocFromServer(doc(db, locationDocPath(lid))); } catch { /* offline */ }
+}
+
+function reloadWhenIdle() {
+  if (isBusy(document)) { setTimeout(reloadWhenIdle, 5000); return; }
+  location.reload();
+}
+
+const REFRESH_KEY = 'session-refreshed-at';
+const REFRESH_BRAKE_MS = 30_000;
+
+function checkBehind(pairs) {
+  Promise.all(pairs.map(async ([ref, usedData]) => {
+    const fresh = await getDocFromServer(ref);
+    return sameData(fresh.exists() ? fresh.data() : null, usedData);
+  })).then((same) => {
+    if (same.every(Boolean)) return;
+    let last = 0;
+    try { last = Number(sessionStorage.getItem(REFRESH_KEY)) || 0; } catch { /* private mode */ }
+    if (Date.now() - last < REFRESH_BRAKE_MS) return;
+    try { sessionStorage.setItem(REFRESH_KEY, String(Date.now())); } catch { /* private mode */ }
+    reloadWhenIdle();
+  }).catch(() => { /* offline, or refused: keep what the phone had */ });
 }
 
 // Which locations does this account have? The answer lives in users/{uid},
 // which the app can read but never write — so nobody can grant themselves access.
 async function resolveMembership(user) {
   setSession({ status: 'loading', user });
+  const userRef = doc(db, 'users', user.uid);
+  const adminRead = readAppAdmin(user);
+  let userRead;
   try {
-    const snap = await getDoc(doc(db, 'users', user.uid));
-    userDocCache = snap.exists() ? snap.data() : null;
+    userRead = await readPreferCache(userRef);
+    userDocCache = userRead.snap.exists() ? userRead.snap.data() : null;
   } catch (err) {
     console.error('Could not read the access document:', err);
     setSession({ status: 'error', user, error: 'network' });
     return;
   }
 
-  await resolveAppAdmin(user);
+  const admin = await adminRead;
+  appAdminCache = !!(admin && admin.snap.exists());
+  const behind = [];
+  if (userRead.cached) behind.push([userRef, userDocCache]);
+  if (admin && admin.cached) behind.push([doc(db, 'admins', user.uid), admin.snap.exists() ? admin.snap.data() : null]);
+  if (behind.length) checkBehind(behind);
 
   const pick = pickStart(userDocCache, {
     isAppAdmin: appAdminCache,
@@ -488,7 +589,12 @@ export function openVenuePicker() {
   location.reload();
 }
 
+// The FIRST answer about who is signed in is the one this page opened with.
+let bootAnswered = false;
+
 onAuthStateChanged(auth, user => {
+  const atBoot = !bootAnswered;
+  bootAnswered = true;
   if (!user) {
     userDocCache = null;
     appAdminCache = false;
@@ -520,6 +626,20 @@ onAuthStateChanged(auth, user => {
   // in it (P7 — the example must be complete, not merely illustrative).
   if (user.isAnonymous) {
     signOut(auth).catch(err => console.error('Could not clear the old session:', err));
+    return;
+  }
+
+  // Somebody else's data in the offline cache and they never signed out: cleared at
+  // BOOT, before any read (same as js/firebase.js; see the reasoning there).
+  const verdict = offlineCacheVerdict(readCacheOwner(), user.uid);
+  if (verdict === 'claim') writeCacheOwner(user.uid);
+  if (verdict === 'wipe' && atBoot && !wipeFailedThisOpening(user.uid)) {
+    clearLocalData();
+    wipeOfflineCache().then((cleared) => {
+      if (cleared) writeCacheOwner(user.uid);
+      else markWipeFailed(user.uid);
+      location.reload();
+    });
     return;
   }
 
@@ -561,6 +681,7 @@ export function sendReset(email) {
 export async function signOutNow() {
   await signOut(auth);
   clearLocalData();
+  if (await wipeOfflineCache()) writeCacheOwner('');
   markHubPassed(false);
   try { localStorage.removeItem(ACTIVE_LOCATION_KEY); } catch { /* private mode */ }
   location.reload();
@@ -572,12 +693,13 @@ export async function signOutNow() {
 //     live Firestore listeners and in-memory state; unwinding them by hand is
 //     how a listener from the previous location survives and quietly repaints
 //     the screen with the wrong data. A reload cannot leave one behind.
-export function switchLocation(locationId) {
+export async function switchLocation(locationId) {
   if (!locationsOf(userDocCache).includes(locationId)) {
     throw new Error(`Not your location: ${locationId}`);
   }
   clearLocalData();
   rememberLocation(locationId);
+  await wipeOfflineCache();
   location.reload();
 }
 
@@ -587,9 +709,10 @@ export function switchLocation(locationId) {
 // exactly two the other one is unambiguous and switchLocation names it, but with
 // three the app cannot guess, and reloading WITHOUT forgetting simply reopens the
 // same location — a button that visibly does nothing.
-export function forgetLocation() {
+export async function forgetLocation() {
   clearLocalData();
   try { localStorage.removeItem(ACTIVE_LOCATION_KEY); } catch { /* private mode */ }
+  await wipeOfflineCache();
   location.reload();
 }
 
