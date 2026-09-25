@@ -1683,9 +1683,13 @@ function setStatus(text, kind, autoHideMs) {
 // and onSnapshot never resubscribes after an error, so it stays wrong until the
 // page is reloaded. That is why the message names the reload: it is the fix, not
 // a suggestion. No auto-hide, for the same reason.
+//
+// ⚠️ `what` IS A FUNCTION, asked only when the stream drops. init() subscribes at
+// module load, before the venue's language is known, so a phrase fetched then
+// would be English on an Italian venue — which is exactly what these names were.
 function liveDataLost(what) {
   return () => setStatus(
-    t('orders.liveConnectionLost', { what }),
+    t('orders.liveConnectionLost', { what: what() }),
     'error',
   );
 }
@@ -1807,12 +1811,12 @@ async function init() {
     // all. Found by driving the app; the model's own tests were green throughout,
     // because the comparison was right and nobody was asking it again.
     renderOpenRequest();
-  }, liveDataLost('the order in progress'));
+  }, liveDataLost(() => t('orders.live.draft')));
 
   watchCollection(COLLECTIONS.history, list => {
     applyHistory(list);
     renderReminders();
-  }, liveDataLost('past orders'));
+  }, liveDataLost(() => t('orders.live.history')));
 
   // ⚠️ A BOUNDED query, not watchCollection: this collection grows for ever and
   // nothing in this app deletes by itself, so an unbounded listener would read
@@ -1833,7 +1837,7 @@ async function init() {
     // older lists would fold them away under their thumb.
     if (requestListView) renderRequestList();
     renderOpenRequest();
-  }, liveDataLost('the order lists'));
+  }, liveDataLost(() => t('orders.live.requests')));
 
   // Suppliers and ingredients stay unbounded: they are a handful of documents and
   // every one of them is needed to draw the screen. Only history grows without end.
@@ -1852,7 +1856,7 @@ async function init() {
     showAlerts();
     renderReminders();
     checkPendingOnce();
-  }, liveDataLost('suppliers'));
+  }, liveDataLost(() => t('orders.live.suppliers')));
   // ⚠️ THE PRICES ARE A SECOND COLLECTION AND ARRIVE SEPARATELY. They moved off
   // the ingredient document because Orders reads every ingredient to work at all,
   // so a rate written there is a rate everybody can read (js/price-model.js).
@@ -1873,7 +1877,7 @@ async function init() {
     renderHistory();
     renderReminders();
     checkPendingOnce();
-  }, liveDataLost('ingredients'));
+  }, liveDataLost(() => t('orders.live.ingredients')));
 }
 
 init();

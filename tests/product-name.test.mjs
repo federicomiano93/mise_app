@@ -15,6 +15,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
+import { _dictionaries } from '../js/i18n.js';
 
 const ROOT = new URL('../', import.meta.url);
 const read = p => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
@@ -38,8 +39,12 @@ test('the client ordering page names no venue', () => {
   assert.ok(!src.includes('The Italian Club'), 'hardcoded venue name');
   // ⚠️ The fallback must be NAMELESS. A real venue's name as a default is the
   // same defect wearing a different hat: specific, and false for everybody else.
-  assert.ok(src.includes("FALLBACK_NAME = 'your supplier'"),
+  assert.ok(src.includes("bakeryName || t('co.yourSupplier')"),
     'the fallback must be vague and true, not specific and wrong');
+  // …and nameless in EVERY language, since it now lives in the dictionary.
+  const dicts = _dictionaries();
+  assert.equal(dicts.en['co.yourSupplier'], 'your supplier');
+  assert.equal(dicts.it['co.yourSupplier'], 'il tuo fornitore');
 });
 
 // ── The product name, where it belongs ───────────────────────────────────────

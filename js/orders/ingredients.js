@@ -87,11 +87,11 @@ export function buildRow(ing, supplier, suggest, entries, hooks, { meta = '' } =
 
   const stockInput = el('input', {
     type: 'number', class: 'ing-stock', min: '0', inputmode: 'numeric',
-    'aria-label': `${ing.name} stock on hand`,
+    'aria-label': t('orders.stockOnHandFor', { name: ing.name }),
   });
   const qtyInput = el('input', {
     type: 'number', class: 'ing-qty', min: '0', inputmode: 'numeric',
-    'aria-label': `${ing.name} quantity to order`,
+    'aria-label': t('orders.qtyToOrderFor', { name: ing.name }),
   });
   const hint = el('div', { class: 'ing-suggestion' });
 

@@ -13,7 +13,7 @@
 
 import { t } from '../i18n.js';
 import { el } from './dom.js';
-import { unitOf } from './catalogue-model.js';
+import { unitOf, unitText } from './catalogue-model.js';
 import {
   withRowIds, ridOf, normalizeSteps, normalizeSeconds, normalizeEndNote, unassignedRows,
   MAX_STEPS, MAX_STEP_TEXT, MAX_SPEED_TEXT, MAX_END_NOTE, formatDuration,
@@ -104,7 +104,7 @@ export function renderGuidedEditor({ recipe, app }) {
       picks.appendChild(el('label', { class: 'guided-edit-pick' }, [
         box,
         el('span', { class: 'guided-edit-pick-name', text: label }),
-        el('span', { class: 'guided-edit-pick-amt', text: `${nf.format(Number(row.grams) || 0)} ${unitOf(row)}` }),
+        el('span', { class: 'guided-edit-pick-amt', text: `${nf.format(Number(row.grams) || 0)} ${unitText(unitOf(row))}` }),
       ]));
     }
 

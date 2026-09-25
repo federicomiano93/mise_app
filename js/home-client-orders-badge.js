@@ -20,6 +20,7 @@ import { getUpcomingOrdersOnce } from './client-orders-data.js';
 import { isApplied, orderChangedSinceApplied } from './client-order-model.js';
 import { onSession } from './firebase.js';
 import { isSectionAllowed } from './sections.js';
+import { t } from './i18n.js';
 
 // The same rule the Calculator's banner uses: an order never used, or one changed
 // since it was. An order used and untouched since is DONE — a badge that stays lit
@@ -35,8 +36,8 @@ function paintBadge(count, changed) {
   badge.className = `home-card-badge${changed ? ' home-card-badge--alert' : ''}`;
   badge.textContent = String(count);
   badge.setAttribute('aria-label', changed
-    ? `${changed} client ${changed === 1 ? 'order has' : 'orders have'} changed since you used ${changed === 1 ? 'it' : 'them'}`
-    : `${count} client ${count === 1 ? 'order' : 'orders'} waiting`);
+    ? t('home.clientOrdersChanged', { n: changed })
+    : t('home.clientOrdersWaiting', { n: count }));
   card.appendChild(badge);
 }
 

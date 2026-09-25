@@ -11,7 +11,7 @@ import { t } from '../i18n.js';
 import { canManageHere } from './firebase-catalogue.js';
 import { el } from './dom.js';
 import {
-  findInvalidRecipe, unitOf, CATALOGUE_UNITS, isWeighableUnit, weighableTotalGrams,
+  findInvalidRecipe, unitOf, unitText, CATALOGUE_UNITS, isWeighableUnit, weighableTotalGrams,
   linkOf, applyLink, normalizeWeight, normalizeShelfLifeDays, moveRow,
 } from './catalogue-model.js';
 // Drag to reorder the rows — the library the Calculator's clients and the Home cards use,
@@ -230,7 +230,7 @@ export function renderEditor({ recipe, draft, allRecipes, app, getLabelProfile =
       const unitSelect = el('select', {
         class: 'cat-unit', 'aria-label': t('cat.unit'),
         onchange: (e) => { ing.unit = e.target.value; paintAmount(); markDirty(); updateTotal(); },
-      }, CATALOGUE_UNITS.map(u => el('option', { value: u }, u)));
+      }, CATALOGUE_UNITS.map(u => el('option', { value: u }, unitText(u))));
       unitSelect.value = unitOf(ing);
       // ⚠️ THE CELL IS HELD IN A VARIABLE because its shape changes with the unit —
       // see paintAmount() below, built after the cell it paints.

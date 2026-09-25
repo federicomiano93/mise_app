@@ -55,11 +55,11 @@ export function buildHistoryEditor(record, ingredients, actions) {
   const list = el('div', { class: 'hist-edit-list' }, rows.map(row => {
     const qtyInput = el('input', {
       type: 'number', class: 'ing-qty', min: '0', inputmode: 'numeric',
-      'aria-label': `${row.name} quantity ordered`,
+      'aria-label': t('orders.qtyOrderedFor', { name: row.name }),
     });
     const stockInput = el('input', {
       type: 'number', class: 'ing-stock', min: '0', inputmode: 'numeric',
-      'aria-label': `${row.name} stock on hand`,
+      'aria-label': t('orders.stockOnHandFor', { name: row.name }),
     });
     qtyInput.value = row.qty;
     stockInput.value = row.stock;

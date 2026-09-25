@@ -10,7 +10,7 @@ import { el } from './dom.js';
 import { currentSession } from '../firebase.js';
 import { isSectionAllowed } from '../sections.js';
 import {
-  scaleCatalogue, baseAmounts, weighableTotalGrams, unitOf, batchWarning, formatWeight,
+  scaleCatalogue, baseAmounts, weighableTotalGrams, unitOf, unitText, batchWarning, formatWeight,
 } from './catalogue-model.js';
 import {
   getScaledTarget, setScaledTarget, clearScaledTarget, getIngredients, getRecipesById,
@@ -56,7 +56,9 @@ const nf = new Intl.NumberFormat('en-GB', { maximumFractionDigits: 0, useGroupin
 // Split each amount into number + unit so they line up in two straight columns
 // (numbers right-aligned, units left-aligned) no matter how long the name is. A
 // 'to taste' row (value null) has no number and shows the phrase in the unit slot.
-const amountParts = (value, unit) => value === null ? { num: '', unit: 'to taste' } : { num: nf.format(value), unit };
+const amountParts = (value, unit) => value === null
+  ? { num: '', unit: unitText('to taste') }
+  : { num: nf.format(value), unit: unitText(unit) };
 const amountEl = ({ num, unit }) => el('span', { class: 'cat-ing-amt' }, [
   el('span', { class: 'cat-ing-num', text: num }),
   el('span', { class: 'cat-ing-unit', text: unit }),

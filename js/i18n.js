@@ -54,6 +54,9 @@ export const DATA_WORDS = Object.freeze([
   'owner', 'manager', 'staff', 'head-chef',
   // stored on ingredients and products, and compared by firestore.rules
   'kg', 'l', 'pcs',
+  // stored on every recipe row (CATALOGUE_UNITS) and compared across js/catalogue/;
+  // what a person reads for them is asked of unitText(), never of these
+  'tsp', 'tbsp', 'pinch', 'to taste',
   // the country, which decides the LABEL language (js/market.js)
   'GB', 'IT',
   // the interface languages themselves
@@ -246,6 +249,7 @@ const DICTIONARIES = Object.freeze({
     'invite.message': 'Add this business to {who}?',
     'invite.ok': 'Add it',
     'invite.cancel': 'Not now',
+    'invite.thisAccount': 'this account',
 
     // ── Who can get in ──────────────────────────────────────────────────────
     'people.title': 'Who can get in',
@@ -718,6 +722,25 @@ const DICTIONARIES = Object.freeze({
     'orders.quantitiesClearedFor': 'Quantities cleared for {n} suppliers ✓',
     'orders.checkExtraDigit': 'Check it is not an extra digit.',
     'orders.liveConnectionLost': 'Lost the live connection for {what}. What you see may be out of date — reload the page.',
+    // What the live connection was lost FOR — a hole in the sentence above.
+    'orders.live.draft': 'the order in progress',
+    'orders.live.history': 'past orders',
+    'orders.live.requests': 'the order lists',
+    'orders.live.suppliers': 'suppliers',
+    'orders.live.ingredients': 'ingredients',
+    'orders.stockOnHandFor': '{name} stock on hand',
+    'orders.qtyToOrderFor': '{name} quantity to order',
+    'orders.qtyOrderedFor': '{name} quantity ordered',
+    'orders.ingredientCount': {
+      one: '{n} ingredient',
+      other: '{n} ingredients',
+    },
+    'orders.ingredientCountInOrder': {
+      one: '{n} ingredient in this order',
+      other: '{n} ingredients in this order',
+    },
+    'orders.ingredientsShown': '{shown} of {n}',
+    'orders.ingredientsShownInOrder': '{shown} of {n} in this order',
     // ⚠️ A REAL PLURAL. It was `${days} day${days === 1 ? '' : 's'}` — English's rule
     // written into the code, which cannot be translated by moving either half.
     'orders.noOrdersInTheLast': {
@@ -907,6 +930,18 @@ const DICTIONARIES = Object.freeze({
       one: '{n} order list to place',
       other: '{n} order lists to place',
     },
+    'home.ordersToPlaceToday': {
+      one: '{n} order to place today',
+      other: '{n} orders to place today',
+    },
+    'home.clientOrdersWaiting': {
+      one: '{n} client order waiting',
+      other: '{n} client orders waiting',
+    },
+    'home.clientOrdersChanged': {
+      one: '{n} client order has changed since you used it',
+      other: '{n} client orders have changed since you used them',
+    },
     'orders.request.from': 'From {who}',
     'orders.request.progress': '{done} of {total}',
     'orders.request.allOrdered': 'All ordered',
@@ -1040,6 +1075,13 @@ const DICTIONARIES = Object.freeze({
     'cat.decl.copy': 'Copy',
     'cat.amount': 'Amount',
     'cat.unit': 'Unit',
+    // What a person READS for a stored recipe unit (js/catalogue/catalogue-model.js
+    // unitText). The stored values are DATA_WORDS and are never translated.
+    'cat.unitText.pcs': 'pcs',
+    'cat.unitText.tsp': 'tsp',
+    'cat.unitText.tbsp': 'tbsp',
+    'cat.unitText.pinch': 'pinch',
+    'cat.unitText.toTaste': 'to taste',
     'cat.removeIngredient': 'Remove ingredient',
     'cat.addIngredient': '+ Add ingredient',
     'cat.notWeighed': {
@@ -2440,6 +2482,7 @@ const DICTIONARIES = Object.freeze({
     'co.couldNotLoadYour': 'Could not load your products',
     'co.thisUsuallyMeansNo': 'This usually means no connection. Check it and try again.',
     'co.yourOrder': 'Your order',
+    'co.yourSupplier': 'your supplier',
     'co.orderingIsClosedFor': 'Ordering is closed for now',
     'co.sending': 'Sending…',
     'co.thisOrderHasChanged': 'This order has changed since you opened it. Reloading…',
@@ -2593,6 +2636,7 @@ const DICTIONARIES = Object.freeze({
     'invite.message': 'Vuoi aggiungere questa attività a {who}?',
     'invite.ok': 'Aggiungila',
     'invite.cancel': 'Non ora',
+    'invite.thisAccount': 'questo account',
 
     'people.title': 'Chi può entrare',
     'people.rename': 'Rinomina',
@@ -2943,6 +2987,25 @@ const DICTIONARIES = Object.freeze({
     'orders.quantitiesClearedFor': 'Quantità azzerate per {n} fornitori ✓',
     'orders.checkExtraDigit': 'Controlla che non ci sia una cifra di troppo.',
     'orders.liveConnectionLost': 'Persa la connessione dal vivo per {what}. Quello che vedi potrebbe non essere aggiornato — ricarica la pagina.',
+    // What the live connection was lost FOR — a hole in the sentence above.
+    'orders.live.draft': 'l’ordine in corso',
+    'orders.live.history': 'gli ordini passati',
+    'orders.live.requests': 'le liste d’ordine',
+    'orders.live.suppliers': 'i fornitori',
+    'orders.live.ingredients': 'gli ingredienti',
+    'orders.stockOnHandFor': 'Giacenza di {name}',
+    'orders.qtyToOrderFor': 'Quantità da ordinare di {name}',
+    'orders.qtyOrderedFor': 'Quantità ordinata di {name}',
+    'orders.ingredientCount': {
+      one: '{n} ingrediente',
+      other: '{n} ingredienti',
+    },
+    'orders.ingredientCountInOrder': {
+      one: '{n} ingrediente in questo ordine',
+      other: '{n} ingredienti in questo ordine',
+    },
+    'orders.ingredientsShown': '{shown} di {n}',
+    'orders.ingredientsShownInOrder': '{shown} di {n} in questo ordine',
     'orders.noOrdersInTheLast': {
       one: 'Nessun ordine nell’ultimo giorno.',
       other: 'Nessun ordine negli ultimi {n} giorni.',
@@ -3105,6 +3168,18 @@ const DICTIONARIES = Object.freeze({
       one: '{n} lista d’ordine da fare',
       other: '{n} liste d’ordine da fare',
     },
+    'home.ordersToPlaceToday': {
+      one: '{n} ordine da fare oggi',
+      other: '{n} ordini da fare oggi',
+    },
+    'home.clientOrdersWaiting': {
+      one: '{n} ordine cliente in attesa',
+      other: '{n} ordini clienti in attesa',
+    },
+    'home.clientOrdersChanged': {
+      one: '{n} ordine cliente è cambiato da quando l’hai usato',
+      other: '{n} ordini clienti sono cambiati da quando li hai usati',
+    },
     'orders.request.from': 'Da {who}',
     'orders.request.progress': '{done} su {total}',
     'orders.request.allOrdered': 'Tutto ordinato',
@@ -3233,6 +3308,11 @@ const DICTIONARIES = Object.freeze({
     'cat.decl.copy': 'Copia',
     'cat.amount': 'Quantità',
     'cat.unit': 'Unità',
+    'cat.unitText.pcs': 'pz',
+    'cat.unitText.tsp': 'cucchiaino',
+    'cat.unitText.tbsp': 'cucchiaio',
+    'cat.unitText.pinch': 'pizzico',
+    'cat.unitText.toTaste': 'q.b.',
     'cat.removeIngredient': 'Togli l’ingrediente',
     'cat.addIngredient': '+ Aggiungi ingrediente',
     'cat.notWeighed': {
@@ -4427,6 +4507,7 @@ const DICTIONARIES = Object.freeze({
     'co.couldNotLoadYour': 'Non è stato possibile caricare i tuoi prodotti',
     'co.thisUsuallyMeansNo': 'Di solito vuol dire che manca la connessione. Controllala e riprova.',
     'co.yourOrder': 'Il tuo ordine',
+    'co.yourSupplier': 'il tuo fornitore',
     'co.orderingIsClosedFor': 'Gli ordini sono chiusi per ora',
     'co.sending': 'Invio…',
     'co.thisOrderHasChanged': 'Questo ordine è cambiato da quando l’hai aperto. Ricarico…',
