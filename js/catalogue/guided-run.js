@@ -248,7 +248,7 @@ export function renderRun({ recipe, targetGrams, app, resume = null }) {
 
     wrap.appendChild(el('button', { class: 'guided-go', type: 'button', onclick: next }, [
       el('span', { icon: CHECK_SVG, 'aria-hidden': 'true' }),
-      index >= steps.length - 1 ? t('cat.doneFinish') : 'Done',
+      index >= steps.length - 1 ? t('cat.doneFinish') : t('cat.stepDone'),
     ]));
     return wrap;
   }

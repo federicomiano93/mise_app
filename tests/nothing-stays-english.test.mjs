@@ -289,8 +289,9 @@ export function englishWordsOnElements(rel, src) {
   const found = [];
   const code = src.replace(/^[ \t]*\/\/.*$/gm, '');
   const lineAt = index => code.slice(0, index).split('\n').length;
-  // A capitalised word given to el() as a child.
-  const WORD = /[,[]\s*'( ?[A-Z][a-z]{2,})'\s*(?=[\],)])/g;
+  // A capitalised word given to el() as a child — or as either branch of a ternary
+  // child: «last ? t('cat.doneFinish') : 'Done'» hid the guided run's button.
+  const WORD = /[,[?:]\s*'( ?[A-Z][a-z]{2,})'\s*(?=[\],):])/g;
   for (const call of elCalls(code)) {
     for (const w of call.text.matchAll(WORD)) {
       const word = w[1].trim();
@@ -301,7 +302,10 @@ export function englishWordsOnElements(rel, src) {
   // key or a class list there is handed on, not read; a lowercase unit («min»,
   // «mm») is the same in both languages, and a lowercase SENTENCE is the scan above's.
   const READ = /(?:'aria-label'|\btext|\btitle|\bplaceholder|\bokLabel|\bcancelLabel)\s*:\s*'([^'\n]*[A-Z][^'\n]*)'/g;
-  for (const m of code.matchAll(READ)) {
+  // …and the two ways of writing onto an element that exists already: «titleEl()
+  // .textContent = 'Recipes'» overwrote a translated title every time the list opened.
+  const WRITE = /(?:\.textContent\s*=\s*|setAttribute\(\s*'(?:aria-label|title|placeholder)'\s*,\s*)'([^'\n]*[A-Z][^'\n]*)'/g;
+  for (const m of [...code.matchAll(READ), ...code.matchAll(WRITE)]) {
     const text = m[1].trim();
     if (!mayBeLiteral(text) && !isNotProse(text)) found.push(`${rel}:${lineAt(m.index)}  ${text}`);
   }
@@ -331,6 +335,12 @@ test('the word scan finds the four that shipped, in the shapes they shipped in',
     "  type: 'button', class: 'orders-icon-btn', 'aria-label': 'Back',",
     "  const nameInput = el('input', { class: 'cp-prod-name', type: 'text', placeholder: 'Ingredient' });",
     "  el('button', { class: 'log-hist-btn' }, [icon('clock', 16), ' History'])",
+    // The shapes code review found after that (25 Sep 2026): a ternary branch, and
+    // writing onto an element that already exists.
+    "  wrap.appendChild(el('button', { class: 'guided-go' }, [el('span', {}), last ? t('cat.doneFinish') : 'Kneaded']));",
+    "  el('button', { class: 'logday-choice' }, d === 'today' ? 'Shelved' : t('ui.tomorrow'));",
+    "  titleEl().textContent = 'Kneaded';",
+    "  node.setAttribute('aria-label', 'Shelved');",
   ];
   for (const shape of shapes) {
     assert.equal(englishWordsOnElements('x.js', shape).length, 1, `missed: ${shape}`);

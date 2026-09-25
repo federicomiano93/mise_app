@@ -19,10 +19,26 @@ function inLanguage(lang, fn) {
 test('an Italian venue reads its units in Italian', () => {
   inLanguage('it', () => {
     assert.equal(unitText('to taste'), 'q.b.');
-    assert.equal(unitText('pinch'), 'pizzico');
+    assert.equal(unitText('pinch'), 'pizz.');
     assert.equal(unitText('pcs'), 'pz');
-    assert.equal(unitText('tsp'), 'cucchiaino');
-    assert.equal(unitText('tbsp'), 'cucchiaio');
+  });
+});
+
+// ⚠️⚠️ THE EDITOR'S UNIT BOX LEAVES 41.2px FOR THE WORD (catalogue.css --unit-w,
+// measured in its own 14.4px Manrope — a <select> clips without reporting it). The
+// first Italian labels, «cucchiaino» 72.6px and «cucchiaio» 64.0px, both showed as
+// «cucch»: a teaspoon and a tablespoon, three times apart, indistinguishable (code
+// review, 25 Sep 2026). Measured widths of what ships, so a longer word is a decision:
+//   q.b. 24.07 · pz 15.86 · pizz. 30.79 · tbsp 30.30 · tsp 21.85
+test('⚠️ every Italian unit label is one that was measured to fit the editor', () => {
+  const MEASURED = new Map([['q.b.', 24.07], ['pz', 15.86], ['pizz.', 30.79], ['tbsp', 30.30], ['tsp', 21.85]]);
+  inLanguage('it', () => {
+    for (const unit of CATALOGUE_UNITS.filter(u => /[a-z]{2}/.test(u) && !/^(mg|ml|cl|dl|kg)$/.test(u))) {
+      const label = unitText(unit);
+      assert.ok(MEASURED.has(label), `«${label}» (${unit}) was never measured against the 41.2px box`);
+      assert.ok(MEASURED.get(label) <= 41.2, `«${label}» does not fit`);
+    }
+    assert.notEqual(unitText('tsp'), unitText('tbsp'), 'the two spoons must read differently');
   });
 });
 
@@ -35,13 +51,6 @@ test('an English venue reads exactly what it always read', () => {
 test('the metric symbols are the same in every language', () => {
   inLanguage('it', () => {
     for (const unit of ['g', 'kg', 'mg', 'ml', 'cl', 'dl', 'l']) assert.equal(unitText(unit), unit);
-  });
-});
-
-test('every unit that is a word has its own phrase in Italian', () => {
-  inLanguage('it', () => {
-    const untranslated = CATALOGUE_UNITS.filter(u => /[a-z]{3}/.test(u) && unitText(u) === u);
-    assert.deepEqual(untranslated, [], 'a new word unit needs a cat.unitText key');
   });
 });
 
@@ -65,5 +74,8 @@ test('every screen that shows a recipe unit asks unitText', () => {
   assert.match(detail, /unit: unitText\(unit\)/);
   const run = read('js/catalogue/guided-run.js');
   assert.doesNotMatch(run, /\? 'to taste' :/, 'the guided run must not print the identifier');
+  // Both of its ingredient lists, asked positively: a deleted call must turn this red.
+  assert.match(run, /unitText\('to taste'\) : \(row\.missing \? '' : unitText\(row\.unit\)\)/);
+  assert.match(run, /amount === null \? unitText\('to taste'\) : unitText\(unitOf\(row\)\)/);
   assert.match(read('js/catalogue/guided-editor.js'), /unitText\(unitOf\(row\)\)/);
 });

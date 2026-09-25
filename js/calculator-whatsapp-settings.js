@@ -590,7 +590,7 @@ function renderProductPicker() {
 
   if (others.length) {
     content.appendChild(el('div', { class: 'send-picker-label' },
-      own.length ? t('calc.otherProducts') : 'Products'));
+      own.length ? t('calc.otherProducts') : t('calc.productsHeading')));
     content.appendChild(el('p', { class: 'extra-help' },
       t('calc.otherProducts.help')));
     others.forEach(p => content.appendChild(pickRow(p.name, () => addProduct(p))));

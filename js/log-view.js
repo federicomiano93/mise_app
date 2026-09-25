@@ -125,7 +125,7 @@ export function renderVersion(version, log) {
   const day = dayLabel(log, Date.now());
 
   frag.appendChild(el('div', { class: 'logview-head' }, [
-    el('span', { class: 'logview-dough' }, log ? log.dough : (v.sheet ? v.sheet.dough : 'Log')),
+    el('span', { class: 'logview-dough' }, log ? log.dough : (v.sheet ? v.sheet.dough : t('ui.log'))),
     el('span', { class: 'logday-badge ' + day.tone }, day.text),
   ]));
   const at = v.at || {};
