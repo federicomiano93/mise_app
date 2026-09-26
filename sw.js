@@ -794,26 +794,30 @@ self.addEventListener('fetch', e => {
   // are static, CORS-clean, immutable files — caching them in a SEPARATE, persistent
   // cache (SDK_CACHE, untouched by the per-deploy CACHE_NAME bump) lets the app boot
   // offline and start instantly on a slow network, with no SDK vendoring and no
-  // import rewriting; a version bump auto-refreshes it on the next online load.
-  // Everything else cross-origin — the live Firestore/Auth API, reCAPTCHA (also on
-  // gstatic, hence the /firebasejs/ path guard), the localhost emulator — is left
-  // untouched: re-issuing those through the SW could cause a transient
-  // auth/network-request-failed on the first anonymous sign-in.
+  // import rewriting. Everything else cross-origin — the live Firestore/Auth API,
+  // anything else on gstatic (hence the /firebasejs/ path guard), the localhost
+  // emulator — is left untouched: re-issuing those through the SW could cause a
+  // transient auth/network-request-failed on the first sign-in.
+  //
+  // ⚠️⚠️ A CACHED SDK MODULE IS SERVED AND NOTHING ELSE HAPPENS (speed audit, 26 Sep
+  // 2026). Every module used to be downloaded again BEHIND every page and written back
+  // into this cache — ~900 KB rewritten to the phone's storage on each screen change,
+  // competing with the page for the very disk the offline database reads from. It
+  // bought nothing: the version is in the ADDRESS (/firebasejs/12.18.0/…), so a file at
+  // one address never changes, and a new SDK version is a new address, fetched here on
+  // its first use.
   if (url.origin !== self.location.origin) {
     if (url.host === 'www.gstatic.com' && url.pathname.startsWith('/firebasejs/')) {
       e.respondWith(
         caches.open(SDK_CACHE).then(cache =>
-          cache.match(e.request).then(cached => {
-            const networkFetch = fetch(e.request).then(res => {
-              // Store only executable, CORS-clean module responses (not opaque/redirected).
-              if (res && res.status === 200 && !res.redirected &&
-                  (res.type === 'cors' || res.type === 'basic')) {
-                cache.put(e.request, res.clone()).catch(() => {});
-              }
-              return res;
-            }).catch(() => cached);
-            return cached || networkFetch;
-          })
+          cache.match(e.request).then(cached => cached || fetch(e.request).then(res => {
+            // Store only executable, CORS-clean module responses (not opaque/redirected).
+            if (res && res.status === 200 && !res.redirected &&
+                (res.type === 'cors' || res.type === 'basic')) {
+              cache.put(e.request, res.clone()).catch(() => {});
+            }
+            return res;
+          }))
         )
       );
     }

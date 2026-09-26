@@ -420,6 +420,28 @@ test('writes are never touched by the worker', async () => {
   assert.equal(await serve(w, abs('./index.html'), 'POST'), null);
 });
 
+// ⚠️ The SDK modules used to be downloaded again and rewritten to the phone's storage
+// behind EVERY page (~900 KB a screen change). The version is in their address, so a
+// cached one can never be out of date.
+const SDK_MODULE = 'https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js';
+
+test('⚠⚠ a cached Firebase SDK module is served from its cache, with no download behind it', async () => {
+  const sdkCache = loadWorker().read('SDK_CACHE');
+  const w = loadWorker({ donors: { [sdkCache]: { [SDK_MODULE]: null } } });
+  const res = await serve(w, SDK_MODULE);
+  assert.ok(res, 'the worker must answer');
+  assert.equal(await res.text(), `donated:${SDK_MODULE}`);
+  assert.ok(!w.record.attempts.includes(SDK_MODULE), 'no request may go to the network behind it');
+  assert.ok(!w.record.puts.some(([, url]) => url === SDK_MODULE), 'and nothing may be written back');
+});
+
+test('an SDK module not cached yet is downloaded — a new SDK version is a new address', async () => {
+  const w = loadWorker();
+  const res = await serve(w, SDK_MODULE);
+  assert.ok(res, 'the worker must answer');
+  assert.ok(w.record.attempts.includes(SDK_MODULE));
+});
+
 // ⚠️ On this computer a Windows checkout serves CRLF where GitHub serves LF, so every
 // text file would fail its fingerprint and no worker would ever install locally.
 test('on a local server the fingerprint is not checked — and everywhere else it is', async () => {
