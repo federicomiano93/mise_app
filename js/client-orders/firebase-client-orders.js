@@ -35,7 +35,8 @@ import {
 
 const app = initializeApp(firebaseConfig, 'client-orders');
 // initializeAuth rather than getAuth, for the reason given in js/firebase.js: on a
-// phone getAuth() starts the unused "Sign in with Google" machinery on every load.
+// phone (and in Safari) getAuth() starts the unused "Sign in with Google" machinery on
+// every load.
 // ⚠️ Same persistence list as getAuth(), in the same order — a client already signed
 // in through their link must stay signed in.
 const auth = initializeAuth(app, {

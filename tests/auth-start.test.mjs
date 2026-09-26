@@ -69,6 +69,17 @@ test('no file loads App Check (reCAPTCHA): removed by decision, 26 Sep 2026', ()
     'App Check is back: that is a decision (speed vs protection), and it also needs www.google.com back in every page\'s CSP');
 });
 
+test('⚠⚠ no Cloud Function enforces App Check: no phone sends a token any more', () => {
+  const dir = join(ROOT, 'functions');
+  const offenders = readdirSync(dir)
+    .filter(f => f.endsWith('.js'))
+    .filter(f => /enforceAppCheck\s*:\s*true|consumeAppCheckToken\s*:\s*true/.test(
+      readFileSync(join(dir, f), 'utf8').replace(/^\s*\/\/.*$/gm, '')))
+    .map(f => `functions/${f}`);
+  assert.deepEqual(offenders, [],
+    'enforcing App Check on a function would refuse every phone: the app sends no token since 26 Sep 2026');
+});
+
 test('no page\'s security policy still lets www.google.com run scripts or frames', () => {
   const pages = readdirSync(ROOT).filter(f => f.endsWith('.html'));
   const offenders = pages.filter(f => /Content-Security-Policy/.test(read(f)) && /www\.google\.com/.test(read(f)));

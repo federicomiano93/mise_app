@@ -1,6 +1,6 @@
 // The Home's splash lifts when the APP is ready, not when the slowest resource arrives
-// (speed audit, 23 Sep 2026). On the live site `load` waits for reCAPTCHA — 332 KB that
-// draws nothing — so the splash covered a Home that was already usable. Driven on the
+// (speed audit, 23 Sep 2026). On the live site `load` waited for reCAPTCHA (removed 26 Sep
+// 2026) — 332 KB that drew nothing — so the splash covered a Home that was already usable. Driven on the
 // emulator with one script held back 5 s: the splash lifted at ~1.0 s instead of the
 // 4 s safety timeout.
 

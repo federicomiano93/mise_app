@@ -112,9 +112,10 @@ export const VAPID_PUBLIC_KEY = 'BD2mUu9H_bxvaxiYdEYGmhFHA_kybZN84Oxzl5Y43Cuni6e
 // ── Initialization ────────────────────────────────────────────────────────────
 const app = initializeApp(firebaseConfig);
 
-// ⚠️ initializeAuth, NOT getAuth, AND THE DIFFERENCE IS A PHONE-ONLY COST (speed audit,
+// ⚠️ initializeAuth, NOT getAuth, AND THE DIFFERENCE IS PAID ON PHONES (speed audit,
 // 26 Sep 2026). getAuth() also installs the machinery for "Sign in with Google" pop-ups
-// and, on a MOBILE browser, starts it on every page before it answers who is signed in:
+// and, on a mobile browser or in Safari, starts it on every page before it answers who
+// is signed in:
 // it asks apis.google.com for a script, which this app's own security policy refuses —
 // wasted work and a console error on every screen, on phones only. The app signs in with
 // an email and a password and nothing else, so that machinery is simply left out.
@@ -279,6 +280,11 @@ if (isLocalhost) {
 // ⚠️⚠️ NEVER SWITCH APP CHECK "ENFORCED" IN THE FIREBASE CONSOLE WITHOUT PUTTING IT BACK
 // HERE FIRST. With no client sending a token, enforcing it on Firestore or Auth would
 // refuse every phone at once. Both services read UNENFORCED on 26 Sep 2026.
+//
+// ⚠️⚠️ AND THE SAME FOR AUTH'S OWN reCAPTCHA (Firebase console → Authentication →
+// Settings → reCAPTCHA). Switched on, the SDK would load www.google.com/recaptcha, which
+// every page's security policy now refuses: signing in, joining and resetting a password
+// would fail for everybody. It read OFF on 26 Sep 2026.
 
 // ── The session ───────────────────────────────────────────────────────────────
 // Who is signed in, and WHICH LOCATION they are working on. The app used to

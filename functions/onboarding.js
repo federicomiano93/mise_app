@@ -38,13 +38,13 @@ import { DIGITS_GUARD_DOC, digitsPaused, pauseLeftMs, withWrongGuess } from './d
 
 const REGION = 'us-central1';
 
-// ⚠️ App Check enforcement is deliberately NOT switched on here, and it is one
-// line away (`enforceAppCheck: true`). App Check is still in MONITOR mode for
-// this project and nobody has confirmed that real phones pass it — turning it on
-// for the one call that lets people in would stake the door on a subsystem this
-// project has never verified, and the failure would look exactly like a broken
-// app. It is the right strengthening once App Check is decided; it is not a
-// substitute for the limits in join-code.js, which stand on their own.
+// ⚠️⚠️ NEVER ADD `enforceAppCheck: true` HERE. Since 26 Sep 2026 the app sends no App
+// Check token at all — reCAPTCHA was removed from js/firebase.js for speed, by
+// Federico's decision — so enforcing it would refuse EVERY call below: joining,
+// creating a business, roles, the venue's language, the Home cards. Every test would
+// stay green and every phone would be locked out. Putting App Check back is a client
+// change first (js/firebase.js), and tests/auth-start.test.mjs pins this line. The
+// limits in join-code.js stand on their own and never relied on it.
 const CALL = { region: REGION };
 
 const db = () => getFirestore();
