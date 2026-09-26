@@ -52,12 +52,14 @@
 <!-- Open the connections to Google now, while the page is still loading its own
      files: otherwise each one starts only when Firebase first needs it, and on a
      phone opening the app after a pause that is a fresh handshake per server, one
-     after the other (sign-in token, account check, database). crossorigin, because
-     Firebase calls them without cookies and a connection opened with them would
-     not be reused. tests/preconnect.test.mjs keeps every Firebase page carrying all three. -->
+     after the other (sign-in token, account check, database). ⚠️ crossorigin on the
+     two Auth hosts and NOT on the database, and it is measured, not a slip: Auth calls
+     without cookies and Firestore with them, and a browser keeps the two kinds of
+     connection apart — a hint of the wrong kind warms a connection nothing uses.
+     tests/preconnect.test.mjs keeps every Firebase page carrying all three, each its kind. -->
 <link rel="preconnect" href="https://securetoken.googleapis.com" crossorigin>
 <link rel="preconnect" href="https://identitytoolkit.googleapis.com" crossorigin>
-<link rel="preconnect" href="https://firestore.googleapis.com" crossorigin>
+<link rel="preconnect" href="https://firestore.googleapis.com">
 <meta name="description" content="Supplier orders — plan and send ingredient orders.">
 <meta name="theme-color" content="#2D5016">
 <meta name="mobile-web-app-capable" content="yes">
