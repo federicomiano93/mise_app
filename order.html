@@ -50,6 +50,15 @@
 })();
 </script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<!-- Open the connections to Google now, while the page is still loading its own
+     files: otherwise each one starts only when Firebase first needs it, and on a
+     phone opening the app after a pause that is a fresh handshake per server, one
+     after the other (sign-in token, account check, database). crossorigin, because
+     Firebase calls them without cookies and a connection opened with them would
+     not be reused. tests/preconnect.test.mjs keeps every Firebase page carrying all three. -->
+<link rel="preconnect" href="https://securetoken.googleapis.com" crossorigin>
+<link rel="preconnect" href="https://identitytoolkit.googleapis.com" crossorigin>
+<link rel="preconnect" href="https://firestore.googleapis.com" crossorigin>
 <meta name="description" content="Send your order to your supplier.">
 <meta name="theme-color" content="#2E4A1B">
 <!--
