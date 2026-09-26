@@ -1,4 +1,4 @@
-const CACHE_NAME = 'theitalianclub-v379';
+const CACHE_NAME = 'theitalianclub-v381';
 // Firebase SDK modules (loaded from gstatic) are cached SEPARATELY from CACHE_NAME
 // so they survive the cache-version bump that happens on every deploy — otherwise
 // the offline SDK would be wiped each release until the next online load. The name
@@ -369,12 +369,12 @@ const ASSETS = [
 // hash (first 16 characters): the phone checks every download against it, and an update
 // copies a file whose hash has not changed out of the previous cache instead of fetching it.
 const ASSET_HASHES = {
-  "./": '3d7eef9f2ea742fb',
-  "./index.html": '3d7eef9f2ea742fb',
+  "./": 'f03777857201c662',
+  "./index.html": 'f03777857201c662',
   "./home.html": 'c08ad30f3a672010',
-  "./calculator.html": '2fcfe1dd4baad9a9',
-  "./orders.html": '8e1a71f76bd93f6c',
-  "./suppliers.html": '91a50d956e733cfa',
+  "./calculator.html": 'd6f80c2994095f43',
+  "./orders.html": '386152a9fb921fc6',
+  "./suppliers.html": 'f41ba8f9bef1ff98',
   "./install-guide.html": 'c57a55ccf379afaf',
   "./qr.png": '761a95e5bc25e2ba',
   "./js/install-guide.js": '17fcd0c0fec489c2',
@@ -442,7 +442,7 @@ const ASSET_HASHES = {
   "./js/splash-init.js": '0982bbf1d8228eab',
   "./js/whats-new.js": '28a18a0146f90592',
   "./js/whats-new-boot.js": 'c4a88b96a1986d6a',
-  "./js/firebase.js": 'e5f9d8dbee4f1115',
+  "./js/firebase.js": 'd2936961b85522a0',
   "./js/same-data.js": '11ff91c9b0192d20',
   "./js/location.js": '6aaf53615a8739d1',
   "./js/sections.js": 'abcfdecb2bd5766d',
@@ -538,7 +538,7 @@ const ASSET_HASHES = {
   "./js/orders/holidays-it.js": '7b57e4698b5f299f',
   "./js/orders/suggestions.js": '8705128fe510b5dd',
   "./js/orders/notifications.js": 'cee091e382e6c5b9',
-  "./catalogue.html": '500c34504d2a6667',
+  "./catalogue.html": '8ce90f0a732cb223',
   "./catalogue.css": 'ce5f4d7762756b6e',
   "./label-print.css": 'ffbcdf4e7a627a2d',
   "./records.css": '827433e06e923671',
@@ -563,7 +563,7 @@ const ASSET_HASHES = {
   "./js/catalogue/ingredient-suggest.js": '70f26e512587e448',
   "./js/catalogue/firebase-catalogue.js": '4a56f24592f377c5',
   "./js/catalogue/catalogue-store.js": '32d3ef5ccfb6da26',
-  "./js/catalogue/catalogue-main.js": '4902525e8e229df8',
+  "./js/catalogue/catalogue-main.js": 'e424dc39c0953d5b',
   "./js/catalogue/catalogue-list.js": '6a1719fe8545b8bc',
   "./js/catalogue/search-box.js": '188bbe833ccbde26',
   "./js/catalogue/catalogue-settings.js": 'd62804cee6d203c1',
@@ -574,7 +574,7 @@ const ASSET_HASHES = {
   "./js/catalogue/guided-run.js": 'cbda5cc9a7f31e91',
   "./js/catalogue/guided-editor.js": 'b93f216672607087',
   "./js/catalogue/import-to-calculator.js": '509d83f39384e106',
-  "./pastries.html": '5828d1d0ebfef40a',
+  "./pastries.html": '3a9da5cee8c1ac1a',
   "./pastries.css": '2dc974c4b926704f',
   "./js/pastries/confirm-dialog.js": '61a7f580f37c5ff8',
   "./js/pastries/dom.js": '84e0623e447bb7ab',
@@ -589,7 +589,7 @@ const ASSET_HASHES = {
   "./js/pastries/pastries-lock.js": 'adfbaeea4bd7c845',
   "./js/pastries/pastries-logs-store.js": '9a81fc94327027be',
   "./js/pastries/pastries-logs.js": '8b7f3d6ddd4fbbac',
-  "./foodcost.html": '837513e2a65231d6',
+  "./foodcost.html": '2f752f2f7db5741e',
   "./foodcost.css": 'fcb76b7b762465ea',
   "./js/foodcost/confirm-dialog.js": '61a7f580f37c5ff8',
   "./js/foodcost/dom.js": '911105da04a03481',
@@ -604,7 +604,7 @@ const ASSET_HASHES = {
   "./js/foodcost/vat-guide-view.js": '6211fb50316ad0da',
   "./js/foodcost/product-limits.js": 'd73e12634551ea98',
   "./js/foodcost/foodcost-settings.js": 'da7fc49ed1d7b254',
-  "./inventory.html": '5c1b6f76c0fdb858',
+  "./inventory.html": '5af40fcba268aee5',
   "./inventory.css": 'b4568a464e0ace00',
   "./js/inventory/confirm-dialog.js": '61a7f580f37c5ff8',
   "./js/inventory/dom.js": '5971dfbbb1e223ec',
