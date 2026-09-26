@@ -44,7 +44,10 @@ const SW = readFileSync(join(ROOT, 'sw.js'), 'utf8');
 const SW_URL = 'https://example.test/app/sw.js';
 const abs = asset => new URL(asset, SW_URL).href;
 
-function loadWorker({ fails = () => false, stale = () => false, existingCaches = [], donors = {}, hostname = 'example.test' } = {}) {
+// responseType: what the network's answers claim to be. Node builds every Response as
+// 'default'; a browser's cross-origin fetch answers 'cors', and the SDK branch of sw.js
+// stores only those — so without this the storing half of that branch never runs here.
+function loadWorker({ fails = () => false, stale = () => false, existingCaches = [], donors = {}, hostname = 'example.test', responseType = null } = {}) {
   const listeners = new Map();
   const record = { puts: [], attempts: [], inits: [], opened: [], deleted: [], skipWaiting: 0 };
   const attemptsFor = new Map();
@@ -108,7 +111,9 @@ function loadWorker({ fails = () => false, stale = () => false, existingCaches =
       record.attempts.push(url);
       record.inits.push(request.init);
       if (fails(url, attempt)) return Promise.reject(new TypeError('Failed to fetch ' + url));
-      return Promise.resolve(new Response(stale(url, attempt) ? `stale:${url}` : `asset:${url}`, { status: 200 }));
+      const res = new Response(stale(url, attempt) ? `stale:${url}` : `asset:${url}`, { status: 200 });
+      if (responseType) Object.defineProperty(res, 'type', { value: responseType });
+      return Promise.resolve(res);
     },
     crypto: {
       subtle: {
@@ -418,6 +423,46 @@ test('a precached path with a query string is not answered from the cache', asyn
 test('writes are never touched by the worker', async () => {
   const w = loadWorker();
   assert.equal(await serve(w, abs('./index.html'), 'POST'), null);
+});
+
+// ⚠️ The SDK modules used to be downloaded again and rewritten to the phone's storage
+// behind EVERY page (~900 KB a screen change). The version is in their address, so a
+// cached one can never be out of date.
+const SDK_MODULE = 'https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js';
+
+test('⚠⚠ a cached Firebase SDK module is served from its cache, with no download behind it', async () => {
+  const sdkCache = loadWorker().read('SDK_CACHE');
+  const w = loadWorker({ donors: { [sdkCache]: { [SDK_MODULE]: null } } });
+  const res = await serve(w, SDK_MODULE);
+  assert.ok(res, 'the worker must answer');
+  assert.equal(await res.text(), `donated:${SDK_MODULE}`);
+  assert.ok(!w.record.attempts.includes(SDK_MODULE), 'no request may go to the network behind it');
+  assert.ok(!w.record.puts.some(([, url]) => url === SDK_MODULE), 'and nothing may be written back');
+});
+
+test('an SDK module not cached yet is downloaded — a new SDK version is a new address', async () => {
+  const w = loadWorker();
+  const res = await serve(w, SDK_MODULE);
+  assert.ok(res, 'the worker must answer');
+  assert.ok(w.record.attempts.includes(SDK_MODULE));
+});
+
+// ⚠️ Nothing re-downloads a cached module any more, so this first download is the ONLY
+// moment it can be saved: miss it and the app stops opening offline after the next SDK
+// upgrade, with every other test green (code review, 26 Sep 2026).
+test('⚠⚠ an SDK module downloaded for the first time is SAVED in the SDK cache', async () => {
+  const w = loadWorker({ responseType: 'cors' });
+  await serve(w, SDK_MODULE);
+  await new Promise(r => setTimeout(r, 0));   // the save runs beside the answer
+  assert.ok(w.record.puts.some(([name, url]) => name === w.read('SDK_CACHE') && url === SDK_MODULE),
+    'the downloaded module must be stored in SDK_CACHE');
+});
+
+test('an opaque or redirected SDK answer is never saved: it could not run as a module', async () => {
+  const w = loadWorker({ responseType: 'opaque' });
+  await serve(w, SDK_MODULE);
+  await new Promise(r => setTimeout(r, 0));
+  assert.ok(!w.record.puts.some(([, url]) => url === SDK_MODULE));
 });
 
 // ⚠️ On this computer a Windows checkout serves CRLF where GitHub serves LF, so every

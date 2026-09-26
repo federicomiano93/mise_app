@@ -1,4 +1,4 @@
-const CACHE_NAME = 'theitalianclub-v378';
+const CACHE_NAME = 'theitalianclub-v381';
 // Firebase SDK modules (loaded from gstatic) are cached SEPARATELY from CACHE_NAME
 // so they survive the cache-version bump that happens on every deploy — otherwise
 // the offline SDK would be wiped each release until the next online load. The name
@@ -369,12 +369,12 @@ const ASSETS = [
 // hash (first 16 characters): the phone checks every download against it, and an update
 // copies a file whose hash has not changed out of the previous cache instead of fetching it.
 const ASSET_HASHES = {
-  "./": '7030115474b75a18',
-  "./index.html": '7030115474b75a18',
+  "./": 'f03777857201c662',
+  "./index.html": 'f03777857201c662',
   "./home.html": 'c08ad30f3a672010',
-  "./calculator.html": '525abff9376fb37f',
-  "./orders.html": 'a3a7670d28cd2790',
-  "./suppliers.html": '58da62f42b4df634',
+  "./calculator.html": 'd6f80c2994095f43',
+  "./orders.html": '386152a9fb921fc6',
+  "./suppliers.html": 'f41ba8f9bef1ff98',
   "./install-guide.html": 'c57a55ccf379afaf',
   "./qr.png": '761a95e5bc25e2ba',
   "./js/install-guide.js": '17fcd0c0fec489c2',
@@ -442,7 +442,7 @@ const ASSET_HASHES = {
   "./js/splash-init.js": '0982bbf1d8228eab',
   "./js/whats-new.js": '28a18a0146f90592',
   "./js/whats-new-boot.js": 'c4a88b96a1986d6a',
-  "./js/firebase.js": '37c6713ec239b8a1',
+  "./js/firebase.js": 'd2936961b85522a0',
   "./js/same-data.js": '11ff91c9b0192d20',
   "./js/location.js": '6aaf53615a8739d1',
   "./js/sections.js": 'abcfdecb2bd5766d',
@@ -490,7 +490,7 @@ const ASSET_HASHES = {
   "./js/calculator-settings.js": '434bd81fbfb026af',
   "./js/calculator-whatsapp-settings.js": 'd5c36f05c04bdbea',
   "./js/vendor/sortable.esm.js": '824d48148fc5b469',
-  "./js/orders/boot.js": '0327e6ac5782867f',
+  "./js/orders/boot.js": '53dba081d29270d8',
   "./js/orders/confirm-dialog.js": '61a7f580f37c5ff8',
   "./js/orders/firebase-orders.js": 'f707cb2fa4796756',
   "./js/orders/orders-main.js": 'bda9432dffaf1cd7',
@@ -538,7 +538,7 @@ const ASSET_HASHES = {
   "./js/orders/holidays-it.js": '7b57e4698b5f299f',
   "./js/orders/suggestions.js": '8705128fe510b5dd',
   "./js/orders/notifications.js": 'cee091e382e6c5b9',
-  "./catalogue.html": '1166c72921da90e2',
+  "./catalogue.html": '8ce90f0a732cb223',
   "./catalogue.css": 'ce5f4d7762756b6e',
   "./label-print.css": 'ffbcdf4e7a627a2d',
   "./records.css": '827433e06e923671',
@@ -561,9 +561,9 @@ const ASSET_HASHES = {
   "./js/catalogue/ingredient-picker.js": '0126ae87ecda222b',
   "./js/catalogue/ingredient-create.js": '1a3665cef807e967',
   "./js/catalogue/ingredient-suggest.js": '70f26e512587e448',
-  "./js/catalogue/firebase-catalogue.js": '99653dbee8b18a1a',
-  "./js/catalogue/catalogue-store.js": '893feefd93e45dd6',
-  "./js/catalogue/catalogue-main.js": '4902525e8e229df8',
+  "./js/catalogue/firebase-catalogue.js": '4a56f24592f377c5',
+  "./js/catalogue/catalogue-store.js": '32d3ef5ccfb6da26',
+  "./js/catalogue/catalogue-main.js": 'e424dc39c0953d5b',
   "./js/catalogue/catalogue-list.js": '6a1719fe8545b8bc',
   "./js/catalogue/search-box.js": '188bbe833ccbde26',
   "./js/catalogue/catalogue-settings.js": 'd62804cee6d203c1',
@@ -574,13 +574,13 @@ const ASSET_HASHES = {
   "./js/catalogue/guided-run.js": 'cbda5cc9a7f31e91',
   "./js/catalogue/guided-editor.js": 'b93f216672607087',
   "./js/catalogue/import-to-calculator.js": '509d83f39384e106',
-  "./pastries.html": '3df7643e5f0b5869',
+  "./pastries.html": '3a9da5cee8c1ac1a',
   "./pastries.css": '2dc974c4b926704f',
   "./js/pastries/confirm-dialog.js": '61a7f580f37c5ff8',
   "./js/pastries/dom.js": '84e0623e447bb7ab',
   "./js/pastries/pastries-model.js": 'd162282f04d5287d',
-  "./js/pastries/firebase-pastries.js": '83c0ea7262b9d62e',
-  "./js/pastries/pastries-store.js": '4310bbde9d420416',
+  "./js/pastries/firebase-pastries.js": 'b93e7234e6f4b2bc',
+  "./js/pastries/pastries-store.js": '07fcca1ec0717a80',
   "./js/pastries/pastries-main.js": 'd1ee8f95c4edf44a',
   "./js/pastries/pastries-strip.js": 'f795f3d9970d98bf',
   "./js/pastries/pastries-day.js": 'a2a8226412fc3075',
@@ -589,12 +589,12 @@ const ASSET_HASHES = {
   "./js/pastries/pastries-lock.js": 'adfbaeea4bd7c845',
   "./js/pastries/pastries-logs-store.js": '9a81fc94327027be',
   "./js/pastries/pastries-logs.js": '8b7f3d6ddd4fbbac',
-  "./foodcost.html": '1e615d571b18a29c',
+  "./foodcost.html": '2f752f2f7db5741e',
   "./foodcost.css": 'fcb76b7b762465ea',
   "./js/foodcost/confirm-dialog.js": '61a7f580f37c5ff8',
   "./js/foodcost/dom.js": '911105da04a03481',
   "./js/foodcost/foodcost-model.js": '866a698fd1777ac3',
-  "./js/foodcost/firebase-foodcost.js": '91bea6f653c17728',
+  "./js/foodcost/firebase-foodcost.js": '6e843c7f39d651c5',
   "./js/foodcost/foodcost-store.js": '784c7844dfd80044',
   "./js/foodcost/foodcost-main.js": 'f742039b86d90672',
   "./js/foodcost/foodcost-list.js": '40ab2b0e64cd28bc',
@@ -604,12 +604,12 @@ const ASSET_HASHES = {
   "./js/foodcost/vat-guide-view.js": '6211fb50316ad0da',
   "./js/foodcost/product-limits.js": 'd73e12634551ea98',
   "./js/foodcost/foodcost-settings.js": 'da7fc49ed1d7b254',
-  "./inventory.html": 'aa1c8064dd926b95',
+  "./inventory.html": '5af40fcba268aee5',
   "./inventory.css": 'b4568a464e0ace00',
   "./js/inventory/confirm-dialog.js": '61a7f580f37c5ff8',
   "./js/inventory/dom.js": '5971dfbbb1e223ec',
   "./js/inventory/inventory-model.js": '09eed83d8469a166',
-  "./js/inventory/firebase-inventory.js": '88da05d0396d3481',
+  "./js/inventory/firebase-inventory.js": '2c6f4d89e98ead35',
   "./js/inventory/inventory-outbox.js": '396a5be9a9069278',
   "./js/inventory/inventory-store.js": 'dba2ec7211f4f0fc',
   "./js/inventory/inventory-purchases.js": 'f9d2887ae16f7a73',
@@ -794,26 +794,30 @@ self.addEventListener('fetch', e => {
   // are static, CORS-clean, immutable files — caching them in a SEPARATE, persistent
   // cache (SDK_CACHE, untouched by the per-deploy CACHE_NAME bump) lets the app boot
   // offline and start instantly on a slow network, with no SDK vendoring and no
-  // import rewriting; a version bump auto-refreshes it on the next online load.
-  // Everything else cross-origin — the live Firestore/Auth API, reCAPTCHA (also on
-  // gstatic, hence the /firebasejs/ path guard), the localhost emulator — is left
-  // untouched: re-issuing those through the SW could cause a transient
-  // auth/network-request-failed on the first anonymous sign-in.
+  // import rewriting. Everything else cross-origin — the live Firestore/Auth API,
+  // anything else on gstatic (hence the /firebasejs/ path guard), the localhost
+  // emulator — is left untouched: re-issuing those through the SW could cause a
+  // transient auth/network-request-failed on the first sign-in.
+  //
+  // ⚠️⚠️ A CACHED SDK MODULE IS SERVED AND NOTHING ELSE HAPPENS (speed audit, 26 Sep
+  // 2026). Every module used to be downloaded again BEHIND every page and written back
+  // into this cache — ~900 KB rewritten to the phone's storage on each screen change,
+  // competing with the page for the very disk the offline database reads from. It
+  // bought nothing: the version is in the ADDRESS (/firebasejs/12.18.0/…), so a file at
+  // one address never changes, and a new SDK version is a new address, fetched here on
+  // its first use.
   if (url.origin !== self.location.origin) {
     if (url.host === 'www.gstatic.com' && url.pathname.startsWith('/firebasejs/')) {
       e.respondWith(
         caches.open(SDK_CACHE).then(cache =>
-          cache.match(e.request).then(cached => {
-            const networkFetch = fetch(e.request).then(res => {
-              // Store only executable, CORS-clean module responses (not opaque/redirected).
-              if (res && res.status === 200 && !res.redirected &&
-                  (res.type === 'cors' || res.type === 'basic')) {
-                cache.put(e.request, res.clone()).catch(() => {});
-              }
-              return res;
-            }).catch(() => cached);
-            return cached || networkFetch;
-          })
+          cache.match(e.request).then(cached => cached || fetch(e.request).then(res => {
+            // Store only executable, CORS-clean module responses (not opaque/redirected).
+            if (res && res.status === 200 && !res.redirected &&
+                (res.type === 'cors' || res.type === 'basic')) {
+              cache.put(e.request, res.clone()).catch(() => {});
+            }
+            return res;
+          }))
         )
       );
     }

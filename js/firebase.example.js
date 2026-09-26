@@ -21,7 +21,10 @@
 
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js';
 import {
-  getAuth,
+  initializeAuth,
+  indexedDBLocalPersistence,
+  browserLocalPersistence,
+  browserSessionPersistence,
   onAuthStateChanged,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
@@ -51,10 +54,6 @@ import {
   clearIndexedDbPersistence,
   waitForPendingWrites,
 } from 'https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js';
-import {
-  initializeAppCheck,
-  ReCaptchaV3Provider,
-} from 'https://www.gstatic.com/firebasejs/12.18.0/firebase-app-check.js';
 import {
   currentLocationId,
   pathFor,
@@ -90,7 +89,13 @@ export const VAPID_PUBLIC_KEY = '';
 
 // ── Initialization ────────────────────────────────────────────────────────────
 const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
+// initializeAuth, not getAuth: getAuth also starts the "Sign in with Google" pop-up
+// machinery on every mobile page load, which this email/password app never uses and
+// its security policy refuses. The persistence list is getAuth()'s own, in the same
+// order — a different one would sign every phone out.
+const auth = initializeAuth(app, {
+  persistence: [indexedDBLocalPersistence, browserLocalPersistence, browserSessionPersistence],
+});
 
 // ── Firestore, with the offline cache ON ─────────────────────────────────────
 // Without this, a write made while the connection is down is held in memory and
@@ -198,25 +203,11 @@ if (isLocalhost) {
   console.info('[Firebase] PRODUCTION mode.');
 }
 
-// ── App Check (reCAPTCHA v3) ──────────────────────────────────────────────────
-// Verifies that requests genuinely come from THIS app, so a script that merely
-// reuses the public web API key is rejected. Rolled out in MONITOR mode:
-// enforcement is toggled separately in the Firebase console, so today this only
-// emits tokens for metrics and blocks nothing. Skipped on localhost — local
-// testing uses the Firebase emulator (which ignores App Check) and reCAPTCHA is
-// unreliable there. Wrapped in try/catch so a reCAPTCHA hiccup never breaks boot.
-// The reCAPTCHA v3 SITE key is public config (P1), safe to commit, like the API
-// key above. Register the app in Firebase Console → App Check (reCAPTCHA v3).
-if (!isLocalhost) {
-  try {
-    initializeAppCheck(app, {
-      provider: new ReCaptchaV3Provider('YOUR_RECAPTCHA_V3_SITE_KEY'),
-      isTokenAutoRefreshEnabled: true,
-    });
-  } catch (err) {
-    console.error('App Check init failed:', err);
-  }
-}
+// ── No App Check, by decision (26 Sep 2026) ───────────────────────────────────
+// reCAPTCHA cost every page load and, in monitor mode, blocked nothing; the
+// Firestore rules are the lock (P2). ⚠️ Never switch App Check "enforced" in the
+// Firebase console without putting a provider back here first — with no client
+// sending a token, every phone would be refused at once.
 
 // ── The session ───────────────────────────────────────────────────────────────
 // Who is signed in, and WHICH LOCATION they are working on. The app used to

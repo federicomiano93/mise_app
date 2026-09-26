@@ -7,7 +7,7 @@
 //
 // Writes are per-day and LOCAL-FIRST: memory + cache + UI update immediately
 // (instant, offline-friendly), and the Firestore write is best-effort. If it is
-// REJECTED (rules, App Check, no network), the optimistic change is ROLLED BACK
+// REJECTED (rules, no network), the optimistic change is ROLLED BACK
 // and the failure is surfaced — a row that stays on screen after a failed save
 // is worse than no row at all, because it looks like the work is done.
 //

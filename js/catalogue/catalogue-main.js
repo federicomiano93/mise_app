@@ -589,6 +589,17 @@ settingsBtn.addEventListener('click', showSettings);
 // Surface background write failures (rolled back by the store) as a toast.
 setSyncErrorHandler((msg) => toast(msg));
 
+// The recipe named by Back from Food cost (see openWantedRecipe, further down).
+//
+// ⚠️⚠️ DECLARED HERE, BEFORE ANYTHING THAT CAN CALL openWantedRecipe(), and it must stay
+// here (27 Sep 2026). onSession() below answers AT ONCE when the session is already
+// ready — which happens whenever signing in finishes before this page's own files have,
+// more often since the sign-in got faster. Declared after it, the name did not exist
+// yet: the call threw, the rest of this file never ran, and the catalogue stayed broken
+// until a reload, with every later data update throwing the same error.
+let wantedRecipeId = recipeIdFromHash(window.location.hash);
+const WANTED_RECIPE_WAIT_MS = 5000;
+
 // Start the live sync; when the collection changes and the list is showing, refresh
 // its cards in place (without rebuilding the search box). If the live stream dies,
 // tell the user their view may be stale.
@@ -694,8 +705,7 @@ onLanguageChange(() => {
 // never reopens the recipe. ⚠️ AND IT GIVES UP: a recipe that is not here within a few
 // seconds — deleted on another phone, or a slow first open — leaves the list where it
 // is, rather than jumping onto the screen long after somebody started something else.
-let wantedRecipeId = recipeIdFromHash(window.location.hash);
-const WANTED_RECIPE_WAIT_MS = 5000;
+// (wantedRecipeId and WANTED_RECIPE_WAIT_MS are declared above initCatalogue — see there.)
 
 function openWantedRecipe() {
   if (!wantedRecipeId) return;

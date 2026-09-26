@@ -2,8 +2,7 @@
 //
 // Reuses the Firebase app and the SESSION established by js/firebase.js (the
 // single sanctioned cross-file bridge), so this screen shares the one signed-in
-// account, the one open location, and inherits the localhost emulator switch +
-// App Check.
+// account, the one open location, and inherits the localhost emulator switch.
 //
 // Collection: locations/{location}/pastries/{Weekday} — SEVEN documents, for
 // ever, one per weekday, with the id being the capitalised English weekday name

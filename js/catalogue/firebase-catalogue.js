@@ -3,7 +3,7 @@
 // Reuses the Firebase app and the SESSION established by js/firebase.js (the
 // single sanctioned cross-file bridge), so the catalogue shares the one
 // signed-in account, the one open location, and inherits the localhost
-// emulator switch + App Check.
+// emulator switch.
 //
 // Collection: locations/{location}/recipes/{id} — one document per recipe
 // (scales to 500+). Every document carries the location id in `bakery`, which

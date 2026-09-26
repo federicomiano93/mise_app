@@ -5,7 +5,7 @@
 // full-collection listener is attached only when the catalogue page initialises
 // (via initCatalogue), never at app boot. Writes are per-document and LOCAL-FIRST:
 // the in-memory list + cache + UI update immediately (instant, offline-friendly);
-// the Firestore write is best-effort and, if it is REJECTED (e.g. rules/App Check
+// the Firestore write is best-effort and, if it is REJECTED (e.g. a rules
 // denial), the optimistic change is rolled back and the error is surfaced.
 //
 // "Most used first" is driven by a LOCAL open-count map (per device, free, no
