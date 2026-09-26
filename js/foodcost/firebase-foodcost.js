@@ -2,7 +2,7 @@
 //
 // Reuses the Firebase app and the SESSION established by js/firebase.js (the one
 // sanctioned cross-file bridge), so this page shares the signed-in account, the
-// open location, the localhost emulator switch and App Check.
+// open location and the localhost emulator switch.
 //
 // Collections, all under the current location's folder (js/location.js):
 //   locations/{lid}/products/{id}                — a finished product

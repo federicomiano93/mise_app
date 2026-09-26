@@ -28,7 +28,10 @@ import { currencyOf } from './market.js';
 import { setCurrency } from './currency.js';
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js';
 import {
-  getAuth,
+  initializeAuth,
+  indexedDBLocalPersistence,
+  browserLocalPersistence,
+  browserSessionPersistence,
   onAuthStateChanged,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
@@ -59,10 +62,6 @@ import {
   clearIndexedDbPersistence,
   waitForPendingWrites,
 } from 'https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js';
-import {
-  initializeAppCheck,
-  ReCaptchaV3Provider,
-} from 'https://www.gstatic.com/firebasejs/12.18.0/firebase-app-check.js';
 import { reconcileConfigWrite } from './calculator-config.js';
 import {
   currentLocationId,
@@ -112,7 +111,20 @@ export const VAPID_PUBLIC_KEY = 'BD2mUu9H_bxvaxiYdEYGmhFHA_kybZN84Oxzl5Y43Cuni6e
 
 // ── Initialization ────────────────────────────────────────────────────────────
 const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
+
+// ⚠️ initializeAuth, NOT getAuth, AND THE DIFFERENCE IS A PHONE-ONLY COST (speed audit,
+// 26 Sep 2026). getAuth() also installs the machinery for "Sign in with Google" pop-ups
+// and, on a MOBILE browser, starts it on every page before it answers who is signed in:
+// it asks apis.google.com for a script, which this app's own security policy refuses —
+// wasted work and a console error on every screen, on phones only. The app signs in with
+// an email and a password and nothing else, so that machinery is simply left out.
+//
+// ⚠️ THE PERSISTENCE LIST IS getAuth()'s OWN, in the same order. It is where a phone
+// keeps "who is signed in"; a different list would read a different place and sign every
+// phone out on the day this shipped.
+const auth = initializeAuth(app, {
+  persistence: [indexedDBLocalPersistence, browserLocalPersistence, browserSessionPersistence],
+});
 
 // ── Firestore, with the offline cache ON ─────────────────────────────────────
 // WHY. Until now the app had no Firestore persistence at all, so a write made
@@ -256,23 +268,17 @@ if (isLocalhost) {
   console.info('[Firebase] PRODUCTION mode.');
 }
 
-// ── App Check (reCAPTCHA v3) ──────────────────────────────────────────────────
-// Verifies that requests genuinely come from THIS app, so a script that merely
-// reuses the public web API key is rejected. Rolled out in MONITOR mode:
-// enforcement is toggled separately in the Firebase console, so today this only
-// emits tokens for metrics and blocks nothing. Skipped on localhost — local
-// testing uses the Firebase emulator (which ignores App Check) and reCAPTCHA is
-// unreliable there. Wrapped in try/catch so a reCAPTCHA hiccup never breaks boot.
-if (!isLocalhost) {
-  try {
-    initializeAppCheck(app, {
-      provider: new ReCaptchaV3Provider('6Ldc0y4tAAAAAKhEn8mGHyVMryZPYao7l48AX-Rh'),
-      isTokenAutoRefreshEnabled: true,
-    });
-  } catch (err) {
-    console.error('App Check init failed:', err);
-  }
-}
+// ── No App Check, by decision (26 Sep 2026) ───────────────────────────────────
+// It ran reCAPTCHA on every page — a third of a megabyte on the first visit and a
+// few hundred milliseconds of the phone's time on every screen — and, while it stayed
+// in MONITOR mode, it blocked nothing. Worse, its pass lasts a day, so the first
+// screen of every morning waited for Google to score the phone again before it could
+// even ask who was signed in. Federico chose speed; the Firestore rules remain the
+// lock (P2).
+//
+// ⚠️⚠️ NEVER SWITCH APP CHECK "ENFORCED" IN THE FIREBASE CONSOLE WITHOUT PUTTING IT BACK
+// HERE FIRST. With no client sending a token, enforcing it on Firestore or Auth would
+// refuse every phone at once. Both services read UNENFORCED on 26 Sep 2026.
 
 // ── The session ───────────────────────────────────────────────────────────────
 // Who is signed in, and WHICH LOCATION they are working on. The app used to

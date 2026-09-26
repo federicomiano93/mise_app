@@ -26,14 +26,21 @@ import {
   initializeApp,
 } from 'https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js';
 import {
-  getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut, connectAuthEmulator,
+  initializeAuth, indexedDBLocalPersistence, browserLocalPersistence, browserSessionPersistence,
+  signInWithEmailAndPassword, onAuthStateChanged, signOut, connectAuthEmulator,
 } from 'https://www.gstatic.com/firebasejs/12.18.0/firebase-auth.js';
 import {
   getFirestore, doc, getDoc, setDoc, connectFirestoreEmulator,
 } from 'https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js';
 
 const app = initializeApp(firebaseConfig, 'client-orders');
-const auth = getAuth(app);
+// initializeAuth rather than getAuth, for the reason given in js/firebase.js: on a
+// phone getAuth() starts the unused "Sign in with Google" machinery on every load.
+// ⚠️ Same persistence list as getAuth(), in the same order — a client already signed
+// in through their link must stay signed in.
+const auth = initializeAuth(app, {
+  persistence: [indexedDBLocalPersistence, browserLocalPersistence, browserSessionPersistence],
+});
 const db = getFirestore(app);
 
 // ⚠️ THE SECOND APP HAS TO BE POINTED AT THE EMULATOR ITSELF. firebase.js's hostname

@@ -45,9 +45,9 @@
   else window.addEventListener('load', dismiss);
 
   // ⚠️⚠️ THE APP BEING READY IS WHAT LIFTS IT, NOT THE PAGE'S `load` (speed audit,
-  // 23 Sep 2026). `load` waits for EVERY resource — on the live site that includes
-  // reCAPTCHA for App Check, 332 KB that draws nothing and, in monitor mode, blocks
-  // nothing — so the splash covered a Home that was already usable. The session
+  // 23 Sep 2026). `load` waits for EVERY resource — on the live site that included
+  // reCAPTCHA for App Check (removed 26 Sep 2026), 332 KB that drew nothing — so the
+  // splash covered a Home that was already usable. The session
   // settling (signed in and a venue open, the sign-in form, the venue picker…) is the
   // moment there is something to show. `load` and the failsafe above stay as the
   // second and third signals.
