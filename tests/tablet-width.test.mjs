@@ -391,3 +391,95 @@ test('⚠ the catalogue\'s bottom bar is the page, and its buttons are the raise
   assert.match(bar, /padding: 10px 16px calc\(12px \+ env\(safe-area-inset-bottom\)\)/,
     'changing the bar\'s padding moves the update banner');
 });
+
+// ---------------------------------------------------------------------------
+// Tablet layout — Home + Orders only (27 Sep 2026)
+// ---------------------------------------------------------------------------
+//
+// A SECOND width media query, on top of the one this whole file is about: a
+// tablet fixed on the counter, landscape, gets more in view (multi-column) and
+// kitchen-sized controls — Home and Orders only, everything else keeps its
+// 620px column. The tests below pin the three things a good idea here could
+// still get wrong: a SECOND, slightly different query creeping in over time: an
+// override that leaks past Home/Orders to widen a screen nobody asked to
+// change; and a tablet-sized rule written outside the query, which would apply
+// to every screen at every width.
+
+const TABLET_QUERY = '@media (min-width: 900px) and (min-height: 600px)';
+
+// Finds every `@media (...) { ... }` block in a stylesheet whose prelude
+// matches `marker`, and returns each one's inner text (braces excluded).
+// Balanced-brace, not regex-only: this file's media blocks nest ordinary
+// selector rules, and a regex alone cannot tell an inner `}` from the outer one.
+function extractMediaBlocks(css, marker) {
+  const blocks = [];
+  const re = /@media[^{]*\{/g;
+  let m;
+  while ((m = re.exec(css))) {
+    if (!marker.test(m[0])) continue;
+    let depth = 1;
+    let i = re.lastIndex;
+    const start = i;
+    while (i < css.length && depth > 0) {
+      if (css[i] === '{') depth += 1;
+      else if (css[i] === '}') depth -= 1;
+      i += 1;
+    }
+    blocks.push(css.slice(start, i - 1));
+    re.lastIndex = i;
+  }
+  return blocks;
+}
+
+test('the tablet switch is ONE query — the same text wherever it appears', () => {
+  const found = new Set();
+  for (const sheet of ['tokens.css', 'orders.css']) {
+    const css = stripComments(read(sheet));
+    for (const m of css.matchAll(/@media[^{]*(?=\{)/g)) {
+      const q = m[0].trim();
+      if (/min-width:\s*900px/.test(q)) found.add(q);
+    }
+  }
+  assert.deepEqual([...found], [TABLET_QUERY],
+    `every tablet query must read exactly "${TABLET_QUERY}" — found: ${[...found].join(' | ') || '(none)'}`);
+});
+
+test('the tablet query keeps its min-height guard, so a phone turned sideways stays on the phone layout', () => {
+  // 844×390: below the 600px floor, so it is EXCLUDED — a real tablet in landscape
+  // (1024–1366 wide, 768px+ tall) is not.
+  assert.match(TABLET_QUERY, /min-height:\s*600px/);
+});
+
+test('the wide column is scoped to Home and Orders, and defined nowhere else', () => {
+  const tokens = stripComments(read('tokens.css'));
+  const blocks = extractMediaBlocks(tokens, /min-width:\s*900px/);
+  assert.equal(blocks.length, 1, 'tokens.css must carry exactly one tablet media block');
+  const [block] = blocks;
+
+  assert.match(block, /--app-max-width:\s*var\(--app-max-width-wide\)/,
+    'the tablet query must redefine --app-max-width from the wide token');
+  assert.match(block, /body\[data-page="home"\]/, 'Home must be in the scope');
+  assert.match(block, /body\[data-section="orders"\]/,
+    'Orders — and suppliers.html, which shares the same body attribute — must be in the scope');
+
+  // And nowhere outside that one block — an unscoped redefinition would widen
+  // every screen in the app, including the ones this change deliberately leaves alone.
+  const outside = tokens.slice(0, tokens.indexOf(block) - 1)
+    + tokens.slice(tokens.indexOf(block) + block.length);
+  assert.doesNotMatch(outside, /--app-max-width:\s*var\(--app-max-width-wide\)/,
+    '--app-max-width must be redefined only inside the scoped tablet query');
+});
+
+test('no tablet-sized rule for Home escapes the media query', () => {
+  const orders = stripComments(read('orders.css'));
+  const blocks = extractMediaBlocks(orders, /min-width:\s*900px/);
+  assert.ok(blocks.length >= 1, 'orders.css must carry at least one tablet media block');
+  const inside = blocks.join('\n');
+
+  let outside = orders;
+  for (const b of blocks) outside = outside.replace(b, '');
+
+  const sig = /body\[data-page="home"\]\s*\.home-grid\s*\{[^}]*grid-template-columns:\s*repeat\(3/;
+  assert.match(inside, sig, 'expected to find "Home: three columns" inside the tablet query');
+  assert.doesNotMatch(outside, sig, '"Home: three columns" also exists OUTSIDE the tablet query — it would then apply at every width');
+});

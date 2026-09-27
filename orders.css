@@ -140,6 +140,34 @@
   font-family: var(--font-mono);
 }
 
+/* ── Home: tablet layout (Federico, 27 Sep 2026) ──────────────────────────
+   His tablet, landscape, fixed on the counter: three columns of cards instead
+   of one long scroll (7 cards = 3 + 3 + 1), each one taller and read from
+   further away. See tokens.css for the query and why it is scoped to
+   `body[data-page="home"]` — the wider column itself comes free from there;
+   what is here is the part that needs more than a wider column: the grid
+   itself and the bigger card.
+
+   ⚠️ Hidden/reordered cards (js/home-cards.js) keep working unmodified: a grid
+   only lays out the cards that are actually in the DOM, in whatever order
+   they arrive in — nothing here assumes a fixed set of seven. */
+@media (min-width: 900px) and (min-height: 600px) {
+  body[data-page="home"] .home-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+    padding-top: 28px;
+    padding-bottom: calc(32px + var(--safe-bot));
+  }
+  body[data-page="home"] .home-card {
+    min-height: 168px;
+    padding: 24px 24px 24px 148px;
+  }
+  body[data-page="home"] .home-card-icon { width: 130px; }
+  body[data-page="home"] .home-card-icon svg { width: 52px; height: 52px; }
+  body[data-page="home"] .home-card-title { font-size: 24px; }
+  body[data-page="home"] .home-card-sub { font-size: 14px; }
+}
+
 /* ── Orders header (back · title · settings) ──────────────────────────────── */
 .orders-header { gap: 12px; }
 .orders-header-title { flex: 1; text-align: center; }
