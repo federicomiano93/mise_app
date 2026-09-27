@@ -470,16 +470,48 @@ test('the wide column is scoped to Home and Orders, and defined nowhere else', (
     '--app-max-width must be redefined only inside the scoped tablet query');
 });
 
-test('no tablet-sized rule for Home escapes the media query', () => {
+test('no tablet-sized rule for Home or Orders escapes the media query', () => {
   const orders = stripComments(read('orders.css'));
   const blocks = extractMediaBlocks(orders, /min-width:\s*900px/);
   assert.ok(blocks.length >= 1, 'orders.css must carry at least one tablet media block');
   const inside = blocks.join('\n');
 
+  // The two signature rules of the tablet layout — one per feature — must exist
+  // inside the query, and must not ALSO exist outside it.
   let outside = orders;
   for (const b of blocks) outside = outside.replace(b, '');
 
-  const sig = /body\[data-page="home"\]\s*\.home-grid\s*\{[^}]*grid-template-columns:\s*repeat\(3/;
-  assert.match(inside, sig, 'expected to find "Home: three columns" inside the tablet query');
-  assert.doesNotMatch(outside, sig, '"Home: three columns" also exists OUTSIDE the tablet query — it would then apply at every width');
+  const SIGNATURES = [
+    [/body\[data-page="home"\]\s*\.home-grid\s*\{[^}]*grid-template-columns:\s*repeat\(3/, 'Home: three columns'],
+    [/body\[data-section="orders"\]\s*\.ingredient-list\s*\{[^}]*display:\s*grid/, 'Orders: the ingredient grid'],
+  ];
+  for (const [sig, label] of SIGNATURES) {
+    assert.match(inside, sig, `expected to find "${label}" inside the tablet query`);
+    assert.doesNotMatch(outside, sig, `"${label}" also exists OUTSIDE the tablet query — it would then apply at every width`);
+  }
+});
+
+test('the ingredient grid: category headings, the progress bar and the empty state all span both columns', () => {
+  const orders = stripComments(read('orders.css'));
+  const [block] = extractMediaBlocks(orders, /min-width:\s*900px/).filter((b) => /\.ingredient-list\s*\{/.test(b));
+  assert.ok(block, 'the Orders tablet block is missing');
+
+  // All three are declared together as one selector list, so a single rule proves
+  // (or disproves) all of them at once — but each is asserted by name, so a future
+  // edit that drops just one from the list still fails here, naming it.
+  const rule = block.match(/\.ingredient-list\s*>\s*[^{]+\{\s*grid-column:\s*1\s*\/\s*-1;?\s*\}/);
+  assert.ok(rule, 'expected a ".ingredient-list > …" rule setting grid-column: 1 / -1');
+  for (const child of ['.ing-category', '.progress', '.ing-empty']) {
+    assert.ok(rule[0].includes(child),
+      `${child} must span both grid columns, or it would sit beside a row instead of over it`);
+  }
+});
+
+test('the ingredient grid never touches .ing-fields\' own 400px cap', () => {
+  // The two-column grid changes how wide the ROW is, never how far apart the Order
+  // and Stock boxes sit inside it — that is still .ing-fields' 400px cap, pinned by
+  // the earlier "order row keeps its two boxes within reach" test above.
+  const orders = stripComments(read('orders.css'));
+  const [block] = extractMediaBlocks(orders, /min-width:\s*900px/).filter((b) => /\.ingredient-list\s*\{/.test(b));
+  assert.doesNotMatch(block, /\.ing-fields/, 'the tablet block must not touch .ing-fields at all');
 });
