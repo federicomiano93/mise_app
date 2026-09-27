@@ -45,7 +45,7 @@ export function buildManagement(data, actions) {
     el('header', { class: 'orders-header' }, [
       el('button', { type: 'button', class: 'orders-icon-btn', 'aria-label': t('ui.back'), icon: BACK_ICON, onClick: () => actions.onClose() }),
       el('div', { class: 'orders-header-title' }, [el('h1', { text: t('ui.settings') })]),
-      el('span', { style: { width: '36px', flexShrink: '0' } }),
+      el('span', { class: 'header-spacer' }),
     ]),
     content,
   ]);

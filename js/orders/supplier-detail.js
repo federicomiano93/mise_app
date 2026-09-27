@@ -37,7 +37,7 @@ export function buildSupplierDetail(supplier, ctx) {
       }),
       el('div', { class: 'orders-header-title' }, [el('h1', { text: supplier.name })]),
       // Keeps the title centred: the back button on the left needs a counterweight.
-      el('span', { style: { width: '36px', flexShrink: '0' } }),
+      el('span', { class: 'header-spacer' }),
     ]),
     body,
   ]);

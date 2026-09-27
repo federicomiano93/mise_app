@@ -66,7 +66,7 @@ export function openBusinesses({ host } = {}) {
       // service worker's precache list, which is the one failure that does not
       // heal itself on the next load.
       el('div', { class: 'orders-header-title' }, [el('h1', { text: t('bz.title') })]),
-      el('span', { style: { width: '36px', flexShrink: '0' } }),
+      el('span', { class: 'header-spacer' }),
     ]),
     el('div', { class: 'people-scroll' }, [top, list]),
   ]);

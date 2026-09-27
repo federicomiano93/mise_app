@@ -281,6 +281,11 @@
   body[data-page="home"],
   body[data-section="orders"] {
     --app-max-width: var(--app-max-width-wide);
+    /* ⚠️ Repeated on purpose: a custom property's var() is resolved WHERE IT
+       IS DECLARED, so the :root --app-gutter already holds the 620px answer
+       and children inherit that. Without this line the column stays 620px
+       and the three home cards are squeezed into it (measured 27 Sep 2026). */
+    --app-gutter: max(0px, calc((100% - var(--app-max-width)) / 2));
   }
 }
 
@@ -498,6 +503,12 @@
   padding: 0;
 }
 .help-btn:hover { background: var(--rim-bg-hover); }
+
+/* The empty counterweight on the right of a header whose only button is Back:
+   it keeps the title centred. Same width as the header's icon buttons — and the
+   tablet rule in orders.css grows both together, or the title slides 8px off.
+   A class, not an inline width, so that rule can reach it. */
+.header-spacer { width: 36px; flex-shrink: 0; }
 .help-btn:active { background: var(--rim-bg-active); }
 .help-btn:focus-visible {
   outline: 2px solid var(--on-brand);

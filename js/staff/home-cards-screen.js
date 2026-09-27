@@ -92,7 +92,7 @@ export function openHomeCards(session) {
         icon: BACK_ICON, onClick: close,
       }),
       el('div', { class: 'orders-header-title' }, [el('h1', { text: t('homeCards.title') })]),
-      el('span', { style: { width: '36px', flexShrink: '0' } }),
+      el('span', { class: 'header-spacer' }),
     ]),
     el('div', { class: 'people-scroll' }, [
       el('div', { class: 'people-row' }, [

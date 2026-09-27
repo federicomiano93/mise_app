@@ -108,7 +108,7 @@ export function openNewCustomer({ onClose, host, ownerKind } = {}) {
       el('div', { class: 'orders-header-title' }, [
         el('h1', { text: t(forSelf ? 'nc.title.self' : 'nc.title.customer') }),
       ]),
-      el('span', { style: { width: '36px', flexShrink: '0' } }),
+      el('span', { class: 'header-spacer' }),
     ]),
     el('div', { class: 'people-scroll' }, [form, result]),
   ]);
