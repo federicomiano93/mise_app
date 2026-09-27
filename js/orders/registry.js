@@ -497,7 +497,7 @@ export function buildRegistry(data, actions) {
         el('button', { type: 'button', class: 'orders-icon-btn', 'aria-label': t('ui.back'), icon: BACK_ICON, onClick: onBack }),
         el('div', { class: 'orders-header-title' }, [el('h1', { text: title })]),
         // Keeps the title centred: the back button on the left needs a counterweight.
-        el('span', { style: { width: '36px', flexShrink: '0' } }),
+        el('span', { class: 'header-spacer' }),
       ]),
       body,
     ]);

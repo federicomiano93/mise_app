@@ -140,6 +140,34 @@
   font-family: var(--font-mono);
 }
 
+/* ── Home: tablet layout (Federico, 27 Sep 2026) ──────────────────────────
+   His tablet, landscape, fixed on the counter: three columns of cards instead
+   of one long scroll (7 cards = 3 + 3 + 1), each one taller and read from
+   further away. See tokens.css for the query and why it is scoped to
+   `body[data-page="home"]` — the wider column itself comes free from there;
+   what is here is the part that needs more than a wider column: the grid
+   itself and the bigger card.
+
+   ⚠️ Hidden/reordered cards (js/home-cards.js) keep working unmodified: a grid
+   only lays out the cards that are actually in the DOM, in whatever order
+   they arrive in — nothing here assumes a fixed set of seven. */
+@media (min-width: 900px) and (min-height: 600px) {
+  body[data-page="home"] .home-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+    padding-top: 28px;
+    padding-bottom: calc(32px + var(--safe-bot));
+  }
+  body[data-page="home"] .home-card {
+    min-height: 168px;
+    padding: 24px 24px 24px 148px;
+  }
+  body[data-page="home"] .home-card-icon { width: 130px; }
+  body[data-page="home"] .home-card-icon svg { width: 52px; height: 52px; }
+  body[data-page="home"] .home-card-title { font-size: 24px; }
+  body[data-page="home"] .home-card-sub { font-size: 14px; }
+}
+
 /* ── Orders header (back · title · settings) ──────────────────────────────── */
 .orders-header { gap: 12px; }
 .orders-header-title { flex: 1; text-align: center; }
@@ -577,6 +605,69 @@ input.ing-stock {
 .ing-suggestion:empty { display: none; }
 .ing-suggestion { margin-top: 8px; font-size: 12px; font-family: 'DM Mono', monospace; }
 .ing-suggestion.active { color: var(--accent); }
+
+/* ── Orders: tablet layout (Federico, 27 Sep 2026) ────────────────────────
+   His tablet, landscape, fixed on the counter: two columns of ingredients
+   instead of one long scroll, and kitchen-sized boxes — big enough to hit
+   without looking. See tokens.css for the query and why it is scoped to
+   `body[data-section="orders"]` — orders.html AND suppliers.html both carry
+   that attribute, and both get the wider column from there already; what is
+   here is the part a wider column alone does not give: the two-column grid,
+   and controls sized for a kitchen rather than a pocket.
+
+   ⚠️ THE GRID NEEDS NO CHANGE IN js/orders/ingredients.js. buildIngredientList
+   already appends `.ing-category` (a heading) and `.ing-row` (a row) as flat,
+   alternating siblings of `.ingredient-list` — exactly what a CSS grid needs to
+   lay two columns of rows with a heading spanning both: no markup change, no
+   JS change, just `display: grid` here and `grid-column: 1 / -1` on whatever
+   is not a row (the category headings, the progress bar, the empty state).
+
+   ⚠️ SCOPED AS `.ingredient-list`, NEVER BARE `.ing-row` — see the long note
+   above this file: `.ing-row` is also the Calculator's, and both stylesheets
+   load on both pages. `.ingredient-list` is the one container Orders alone
+   builds (ingredients.js), so nothing here can reach a Calculator screen. */
+@media (min-width: 900px) and (min-height: 600px) {
+  /* Both ingredient lists: a supplier's (by category) and the flat
+     «Ingredienti» view (by letter, js/orders/ingredient-list.js). */
+  body[data-section="orders"] .ingredient-list,
+  body[data-section="orders"] .ing-flat-list {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    column-gap: 32px;
+  }
+  /* Everything that is NOT one ingredient's row spans the full width: the
+     category or letter heading, the progress bar (the list's first child)
+     and the empty-list messages. */
+  body[data-section="orders"] .ingredient-list > .ing-category,
+  body[data-section="orders"] .ingredient-list > .progress,
+  body[data-section="orders"] .ingredient-list > .ing-empty,
+  body[data-section="orders"] .ing-flat-list > .ing-letter,
+  body[data-section="orders"] .ing-flat-list > .mgmt-empty {
+    grid-column: 1 / -1;
+  }
+  /* In two columns the last row sits beside another that keeps its line;
+    give it back, so a pair never ends on one line and one gap. */
+  body[data-section="orders"] .ingredient-list > .ing-row:last-child,
+  body[data-section="orders"] .ing-flat-list > .ing-row:last-child { border-bottom: 1px solid var(--border); }
+
+  /* Kitchen-sized: bigger to hit without looking, bigger to read across a
+     counter. --tap-min/--qty-font are the two constants (tokens.css). */
+  body[data-section="orders"] input.ing-qty,
+  body[data-section="orders"] input.ing-stock {
+    font-size: var(--qty-font);
+    min-height: var(--tap-min);
+  }
+  body[data-section="orders"] .ing-name { font-size: 18px; }
+
+  /* Header, tabs and footer: every tap target grows to the same floor. */
+  body[data-section="orders"] .orders-icon-btn,
+  body[data-section="orders"] .orders-header .help-btn { width: var(--tap-min); height: var(--tap-min); }
+  /* Grows with the Back button it balances, so the title stays centred. */
+  body[data-section="orders"] .header-spacer { width: var(--tap-min); }
+  body[data-section="orders"] .tab-bar .tab,
+  body[data-section="orders"] .view-switch-btn { min-height: var(--tap-min); font-size: 15px; }
+  body[data-section="orders"] .recipe-footer-btn { min-height: var(--tap-min); }
+}
 /* A quantity that looks like a typing mistake. Danger red and bold, because it has
    to be noticed at a glance on the row you are typing into — but still the same
    small line, not a banner: it is a question, not a refusal. */

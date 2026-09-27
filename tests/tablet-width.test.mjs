@@ -391,3 +391,165 @@ test('⚠ the catalogue\'s bottom bar is the page, and its buttons are the raise
   assert.match(bar, /padding: 10px 16px calc\(12px \+ env\(safe-area-inset-bottom\)\)/,
     'changing the bar\'s padding moves the update banner');
 });
+
+// ---------------------------------------------------------------------------
+// Tablet layout — Home + Orders only (27 Sep 2026)
+// ---------------------------------------------------------------------------
+//
+// A SECOND width media query, on top of the one this whole file is about: a
+// tablet fixed on the counter, landscape, gets more in view (multi-column) and
+// kitchen-sized controls — Home and Orders only, everything else keeps its
+// 620px column. The tests below pin the three things a good idea here could
+// still get wrong: a SECOND, slightly different query creeping in over time: an
+// override that leaks past Home/Orders to widen a screen nobody asked to
+// change; and a tablet-sized rule written outside the query, which would apply
+// to every screen at every width.
+
+const TABLET_QUERY = '@media (min-width: 900px) and (min-height: 600px)';
+
+// Finds every `@media (...) { ... }` block in a stylesheet whose prelude
+// matches `marker`, and returns each one's inner text (braces excluded).
+// Balanced-brace, not regex-only: this file's media blocks nest ordinary
+// selector rules, and a regex alone cannot tell an inner `}` from the outer one.
+function extractMediaBlocks(css, marker) {
+  const blocks = [];
+  const re = /@media[^{]*\{/g;
+  let m;
+  while ((m = re.exec(css))) {
+    if (!marker.test(m[0])) continue;
+    let depth = 1;
+    let i = re.lastIndex;
+    const start = i;
+    while (i < css.length && depth > 0) {
+      if (css[i] === '{') depth += 1;
+      else if (css[i] === '}') depth -= 1;
+      i += 1;
+    }
+    blocks.push(css.slice(start, i - 1));
+    re.lastIndex = i;
+  }
+  return blocks;
+}
+
+// Every CSS file in the repo root — a tablet query hidden in another sheet, or
+// written as 901px, must still be caught by the "ONE query" test below.
+const ALL_SHEETS = readdirSync(fileURLToPath(root)).filter((f) => f.endsWith('.css'));
+
+test('the tablet switch is ONE query — the same text wherever it appears', () => {
+  const found = new Set();
+  for (const sheet of ALL_SHEETS) {
+    const css = stripComments(read(sheet));
+    for (const m of css.matchAll(/@media[^{]*(?=\{)/g)) {
+      const q = m[0].trim();
+      // Any lower bound on width is a "bigger screen" rule; the app has exactly one.
+      if (/min-width/.test(q)) found.add(q);
+    }
+  }
+  assert.deepEqual([...found], [TABLET_QUERY],
+    `every wide-screen query must read exactly "${TABLET_QUERY}" — found: ${[...found].join(' | ') || '(none)'}`);
+});
+
+test('the tablet query keeps its min-height guard, so a phone turned sideways stays on the phone layout', () => {
+  // 844×390: below the 600px floor, so it is EXCLUDED — a real tablet in landscape
+  // (1024–1366 wide, 768px+ tall) is not. Read from the stylesheet, not from the
+  // constant above, so it fails if the query in the CSS loses the guard.
+  const tokens = stripComments(read('tokens.css'));
+  const q = tokens.match(/@media[^{]*min-width:\s*900px[^{]*(?=\{)/);
+  assert.ok(q, 'tokens.css must carry the tablet query');
+  assert.match(q[0], /min-height:\s*600px/);
+});
+
+test('the wide column is scoped to Home and Orders, and defined nowhere else', () => {
+  const tokens = stripComments(read('tokens.css'));
+  const blocks = extractMediaBlocks(tokens, /min-width:\s*900px/);
+  assert.equal(blocks.length, 1, 'tokens.css must carry exactly one tablet media block');
+  const [block] = blocks;
+
+  assert.match(block, /--app-max-width:\s*var\(--app-max-width-wide\)/,
+    'the tablet query must redefine --app-max-width from the wide token');
+  assert.match(block, /body\[data-page="home"\]/, 'Home must be in the scope');
+  assert.match(block, /body\[data-section="orders"\]/,
+    'Orders — and suppliers.html, which shares the same body attribute — must be in the scope');
+
+  const outside = tokens.slice(0, tokens.indexOf(block) - 1)
+    + tokens.slice(tokens.indexOf(block) + block.length);
+  assert.doesNotMatch(outside, /--app-max-width:\s*var\(--app-max-width-wide\)/,
+    '--app-max-width must be redefined only inside the scoped tablet query');
+});
+
+test('the scoped block RE-DECLARES --app-gutter, or the wide column never happens', () => {
+  // A custom property's var() is resolved where it is DECLARED: the :root
+  // --app-gutter already holds the 620px answer and every child inherits it.
+  // Redefining --app-max-width alone changed nothing on screen — the first build
+  // of this layout squeezed three home cards into 620px with every test green
+  // (27 Sep 2026). The gutter must be re-declared in the SAME rule, with the
+  // same expression as :root.
+  const tokens = stripComments(read('tokens.css'));
+  const rootGutter = tokens.match(/--app-gutter:\s*([^;]+);/)[1].trim();
+  const [block] = extractMediaBlocks(tokens, /min-width:\s*900px/);
+  const rule = block.match(/body\[data-page="home"\][^{]*\{([^}]*)\}/);
+  assert.ok(rule, 'the scoped rule is missing');
+  assert.match(rule[1], /--app-max-width:/);
+  const m = rule[1].match(/--app-gutter:\s*([^;]+);/);
+  assert.ok(m, 'the scoped rule must re-declare --app-gutter');
+  assert.equal(m[1].trim(), rootGutter, 'the re-declared gutter must be the same expression as :root');
+});
+
+test('no tablet-sized rule for Home or Orders escapes the media query', () => {
+  const orders = stripComments(read('orders.css'));
+  const blocks = extractMediaBlocks(orders, /min-width:\s*900px/);
+  assert.ok(blocks.length >= 1, 'orders.css must carry at least one tablet media block');
+  const inside = blocks.join('\n');
+
+  let outside = orders;
+  for (const b of blocks) outside = outside.replace(b, '');
+
+  const SIGNATURES = [
+    [/body\[data-page="home"\]\s*\.home-grid\s*\{[^}]*grid-template-columns:\s*repeat\(3/, 'Home: three columns'],
+    [/body\[data-section="orders"\]\s*\.ingredient-list\s*,[^{]*\.ing-flat-list\s*\{[^}]*display:\s*grid/, 'Orders: both ingredient lists in a grid'],
+  ];
+  for (const [sig, label] of SIGNATURES) {
+    assert.match(inside, sig, `expected to find "${label}" inside the tablet query`);
+    assert.doesNotMatch(outside, sig, `"${label}" also exists OUTSIDE the tablet query — it would then apply at every width`);
+  }
+  // Nothing new may reach the page from outside the query under the two scopes.
+  assert.doesNotMatch(outside, /body\[data-page="home"\]/, 'a Home-scoped rule sits outside the tablet query');
+});
+
+const ordersTabletBlock = () => extractMediaBlocks(stripComments(read('orders.css')), /min-width:\s*900px/)
+  .find((b) => /\.ing-flat-list\s*\{/.test(b));
+
+test('the ingredient grids: every heading and message spans both columns', () => {
+  const block = ordersTabletBlock();
+  assert.ok(block, 'the Orders tablet block is missing');
+  const rule = block.match(/[^{}]*\{\s*grid-column:\s*1\s*\/\s*-1;?\s*\}/);
+  assert.ok(rule, 'expected a rule setting grid-column: 1 / -1');
+  // Each asserted by name, so dropping one from the selector list fails here.
+  for (const child of ['.ingredient-list > .ing-category', '.ingredient-list > .progress',
+    '.ingredient-list > .ing-empty', '.ing-flat-list > .ing-letter', '.ing-flat-list > .mgmt-empty']) {
+    assert.ok(rule[0].replace(/\s+/g, ' ').includes(child),
+      `${child} must span both grid columns, or it would sit beside a row instead of over it`);
+  }
+});
+
+test('the ingredient grid never touches .ing-fields\' own 400px cap', () => {
+  assert.doesNotMatch(ordersTabletBlock(), /\.ing-fields/, 'the tablet block must not touch .ing-fields at all');
+});
+
+test('the header counterweight grows with the Back button, so titles stay centred', () => {
+  // Back goes 36 → 52px on the tablet; a counterweight left at 36 pushed seven
+  // Orders titles 8px off centre. It is a class now, never an inline width.
+  const block = ordersTabletBlock();
+  assert.match(block, /\.orders-icon-btn[^{]*\{[^}]*width:\s*var\(--tap-min\)/);
+  assert.match(block, /\.header-spacer\s*\{[^}]*width:\s*var\(--tap-min\)/);
+  const offenders = [];
+  const walk = (dir) => {
+    for (const f of readdirSync(dir)) {
+      const full = join(dir, f);
+      if (statSync(full).isDirectory()) walk(full);
+      else if (f.endsWith('.js') && /width:\s*'36px'/.test(readFileSync(full, 'utf8'))) offenders.push(full);
+    }
+  };
+  walk(JS_DIR);
+  assert.deepEqual(offenders, [], 'use class "header-spacer" instead of an inline 36px width');
+});

@@ -43,7 +43,7 @@ function header(title, onBack, extra = null) {
       icon: BACK_ICON, onClick: onBack,
     }),
     el('div', { class: 'orders-header-title' }, [el('h1', { text: title })]),
-    extra || el('span', { style: { width: '36px', flexShrink: '0' } }),
+    extra || el('span', { class: 'header-spacer' }),
   ]);
 }
 

@@ -186,7 +186,7 @@ export function buildSupplierPicker(rows, options, callbacks) {
       }),
       el('div', { class: 'orders-header-title' }, [el('h1', { text: title })]),
       // Keeps the title centred: the back button on the left needs a counterweight.
-      el('span', { style: { width: '36px', flexShrink: '0' } }),
+      el('span', { class: 'header-spacer' }),
     ]),
     scroll,
     // Stacked, not the footer's default row: the format chooser belongs ABOVE the

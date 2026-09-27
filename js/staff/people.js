@@ -98,7 +98,7 @@ export function openPeople(session) {
         icon: BACK_ICON, onClick: close,
       }),
       el('div', { class: 'orders-header-title' }, [el('h1', { text: t('people.title') })]),
-      el('span', { style: { width: '36px', flexShrink: '0' } }),
+      el('span', { class: 'header-spacer' }),
     ]),
     el('div', { class: 'people-scroll' }, [codeBox, list]),
   ]);

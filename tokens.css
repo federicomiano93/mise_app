@@ -236,6 +236,17 @@
      place: change the cap and every screen follows. */
   --app-gutter: max(0px, calc((100% - var(--app-max-width)) / 2));
 
+  /* ── Tablet layout switch — Home + Orders only (Federico, 27 Sep 2026) ───
+     His tablet, landscape, fixed on the counter: more in view (multi-column)
+     and kitchen-sized controls — nothing else. --app-max-width-wide is the
+     column this widens to; --tap-min/--qty-font are the kitchen sizes used by
+     the tablet rules in orders.css. All three are plain constants: they do
+     nothing on their own. The switch itself — WHEN and WHERE they apply — is
+     the @media block right after this one closes; read that first. */
+  --app-max-width-wide: 1180px;
+  --tap-min: 52px;
+  --qty-font: 22px;
+
   /* ── Type ────────────────────────────────────────────────────────────── */
   --font:       'Manrope', system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --font-round: 'Manrope', system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -243,6 +254,39 @@
   /* Screen titles. Self-hosted above; Georgia is the fallback for the one
      frame before the file loads, and for a browser that refuses woff2. */
   --font-display: 'Instrument Serif', Georgia, 'Times New Roman', serif;
+}
+
+/* ── The tablet switch itself — Home + Orders only ────────────────────────
+   ⚠️ ONE QUERY, EVERYWHERE. `min-width: 900px AND min-height: 600px`. The
+   min-height keeps a PHONE TURNED SIDEWAYS (844×390 CSS) on the phone layout —
+   390 sits below the 600px floor — while a tablet in real landscape
+   (1024–1366 wide, 768px+ tall) gets the wide column. Every later tablet rule,
+   here and in orders.css, repeats this exact string;
+   tests/tablet-width.test.mjs fails the moment the wording drifts apart.
+   No JS device detection and no orientation lock — both are forbidden by that
+   same test, after a real Galaxy Tab was once locked portrait by a guess made
+   from screen size alone (see the long note there).
+
+   ⚠️ SCOPED, NOT GLOBAL. Redefining --app-max-width at :root would widen
+   every screen in the app — Calculator, Catalogue, Food cost, Pastries —
+   which this change deliberately leaves at their 620px column. Scoping the
+   redefinition to `body[data-page="home"]` (index.html) and
+   `body[data-section="orders"]` (orders.html AND suppliers.html — a page of
+   the Orders section, carrying the same attribute, so it gets the same wider
+   column and nothing else has to be taught about it) means every existing
+   consumer of --app-gutter (.scroll-area, .orders-column,
+   .supplier-detail-body, .supplier-items-body, …) widens for free, with no
+   new CSS of its own. */
+@media (min-width: 900px) and (min-height: 600px) {
+  body[data-page="home"],
+  body[data-section="orders"] {
+    --app-max-width: var(--app-max-width-wide);
+    /* ⚠️ Repeated on purpose: a custom property's var() is resolved WHERE IT
+       IS DECLARED, so the :root --app-gutter already holds the 620px answer
+       and children inherit that. Without this line the column stays 620px
+       and the three home cards are squeezed into it (measured 27 Sep 2026). */
+    --app-gutter: max(0px, calc((100% - var(--app-max-width)) / 2));
+  }
 }
 
 /* ── Update banner (js/sw-update.js) ─────────────────────────────────────
@@ -459,6 +503,12 @@
   padding: 0;
 }
 .help-btn:hover { background: var(--rim-bg-hover); }
+
+/* The empty counterweight on the right of a header whose only button is Back:
+   it keeps the title centred. Same width as the header's icon buttons — and the
+   tablet rule in orders.css grows both together, or the title slides 8px off.
+   A class, not an inline width, so that rule can reach it. */
+.header-spacer { width: 36px; flex-shrink: 0; }
 .help-btn:active { background: var(--rim-bg-active); }
 .help-btn:focus-visible {
   outline: 2px solid var(--on-brand);
