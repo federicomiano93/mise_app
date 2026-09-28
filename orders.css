@@ -2880,17 +2880,6 @@ body.hide-stock .ingredient-list .ing-fields { justify-content: center; }
     color: var(--brand);
   }
   #orders-detail-pane .pane-btn-icon { display: flex; align-items: center; }
-  /* The money under each ordered row (js/orders/order-cost-view.js paintPaneMoney):
-     painted only inside the pane, only for an account that may read prices. */
-  #orders-detail-pane .ing-cost {
-    display: block;
-    margin-top: 6px;
-    font-family: 'DM Mono', monospace;
-    font-size: 13px;
-    color: var(--text-3);
-    text-align: center;
-  }
-  #orders-detail-pane .ing-cost--warn { color: var(--warn); font-weight: 600; }
   #orders-detail-pane .pane-close-btn {
     width: var(--tap-min);
     background: var(--surface-2);

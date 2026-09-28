@@ -73,8 +73,10 @@ export function buildTotalsBox(totals) {
   return el('div', { class: 'totbox', 'aria-label': t('orders.cost.orderTotal') }, [...rows, ...warnings]);
 }
 
-// The money inside the tablet PANE: one `.ing-cost` line under each ordered row and
-// the totals box above «Order placed». Painted from OUTSIDE the shared row builder
+// The money inside the tablet PANE: the totals box above «Order placed», and nothing
+// else. 📌 No cost line under each row (Federico, 28 Sep 2026: «devo vedere solo il
+// totale alla fine») — the lines are still COUNTED, only not drawn; the box's own
+// warning still says how many had no price. Painted from OUTSIDE the shared row builder
 // (js/orders/ingredients.js serves the phone, the flat list and the History editor
 // too, and none of them shows money), onto the rows already on screen — so a
 // keystroke adds or swaps one small line and never rebuilds the field being typed.
@@ -96,12 +98,7 @@ export function paintPaneMoney(root, ingredients, entries, show) {
     const ing = byId.get(row.dataset.ing);
     const qty = Number(entries?.[row.dataset.ing]?.qty);
     if (!ing || !Number.isFinite(qty) || qty <= 0) return;
-    const line = { qty, unitCost: unitCost(ing, ing), vatRate: ing.vatRate != null ? Number(ing.vatRate) : null };
-    lines.push(line);
-    const cost = lineCostText(line);
-    row.appendChild(el('span', {
-      class: `ing-cost pane-money${cost.warn ? ' ing-cost--warn' : ''}`, text: cost.text,
-    }));
+    lines.push({ qty, unitCost: unitCost(ing, ing), vatRate: ing.vatRate != null ? Number(ing.vatRate) : null });
   });
 
   const box = buildTotalsBox(orderCost(lines));

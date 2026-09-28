@@ -33,6 +33,15 @@ export function buildRegistrySettings({ panels, onSet }) {
   const content = el('div', { class: 'mgmt-scroll reg-settings' });
   let current = { ...panels };
 
+  // ⚠️⚠️ DECLARED BEFORE THE FIRST toggle() CALL, NOT AFTER IT. toggle() reads FIELD
+  // the moment it builds a switch, and a `const` read before its line is reached
+  // throws (the temporal dead zone): the whole Settings screen failed to open, with
+  // every test green, until a driven run tapped the gear (28 Sep 2026).
+  // ⚠️ `current` IS KEYED BY THE SWITCH, not read through an if/else on its name. With
+  // two switches the chain was fine; with three, `key === 'showAllergens' ? … : …`
+  // silently files the third one under the second.
+  const FIELD = { showAllergens: 'allergens', showNutrition: 'nutrition', packPhoto: 'packPhoto' };
+
   content.appendChild(el('h3', { class: 'mgmt-section-title', text: t('orders.settings.ingredientCard') }));
   content.appendChild(el('p', { class: 'notif-note', text: t('orders.settings.cardNote') }));
 
@@ -82,10 +91,6 @@ export function buildRegistrySettings({ panels, onSet }) {
   // One switch: a checkbox row, the same shape the Orders settings panel uses for
   // «Mostra la casella scorte». Applied on the tap — there is nothing to lose by
   // getting it wrong and one more tap undoes it.
-  // ⚠️ `current` IS KEYED BY THE SWITCH, not read through an if/else on its name. With
-  // two switches the chain was fine; with three, `key === 'showAllergens' ? … : …`
-  // silently files the third one under the second.
-  const FIELD = { showAllergens: 'allergens', showNutrition: 'nutrition', packPhoto: 'packPhoto' };
 
   function toggle({ key, label, note, confirmOff, confirmOn = null }) {
     const cb = el('input', { type: 'checkbox' });
