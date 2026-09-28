@@ -2302,6 +2302,17 @@ async function roles() {
   await expectDenied('staff cannot change any Orders setting at all',
     () => mergeWrite(`${L}/config/orders`, { ...stamp, showStock: false }, asAccount(SAM)));
 
+  // ── Order lists on/off for the whole venue (28 Sep 2026): a manager's switch,
+  // a boolean and nothing else.
+  await expectDenied('staff cannot turn order lists off',
+    () => mergeWrite(`${L}/config/orders`, { ...stamp, orderLists: false }, asAccount(SAM)));
+  await expectAllowed('a manager can turn order lists off',
+    () => mergeWrite(`${L}/config/orders`, { ...stamp, orderLists: false }, asAccount(MAYA)));
+  await expectAllowed('…and on again',
+    () => mergeWrite(`${L}/config/orders`, { ...stamp, orderLists: true }, asAccount(MAYA)));
+  await expectDenied('order lists must be a true/false, not text',
+    () => mergeWrite(`${L}/config/orders`, { ...stamp, orderLists: 'off' }, asAccount(MAYA)));
+
   // ⚠️ THE PROOF THE TIGHTENING DID NOT INVADE THE CALCULATOR.
   await expectAllowed('staff CAN still save the Calculator config',
     () => mergeWrite(`${L}/config/calculator`, { ...stamp, extraDough: 5 }, asAccount(SAM)));
