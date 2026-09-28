@@ -168,47 +168,6 @@
   body[data-page="home"] .home-card-sub { font-size: 14px; }
 }
 
-/* ── Orders header (back · title · settings) ──────────────────────────────── */
-.orders-header { gap: 12px; }
-.orders-header-title { flex: 1; text-align: center; }
-.orders-header-title h1 {
-  font-family: var(--font-display);
-  font-size: 22px;
-  font-weight: 400;
-  color: var(--on-brand);
-  letter-spacing: 0;
-}
-.orders-header-title p {
-  font-size: 10px;
-  color: var(--on-brand-soft);
-  margin-top: 2px;
-  font-family: var(--font-mono);
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
-
-.orders-icon-btn {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  background: var(--rim-bg);
-  border: 1.5px solid var(--rim-border);
-  color: var(--on-brand);
-  cursor: pointer;
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  text-decoration: none;
-}
-.orders-icon-btn:hover { background: var(--rim-bg-hover); }
-.orders-icon-btn:active { background: var(--rim-bg-active); }
-/* On-brand ring: the app's default green focus ring (--accent-2) is green-on-green
-   here, i.e. invisible. Keyboard focus must be visible on the header too (P18). */
-.orders-icon-btn:focus-visible,
-#header-wa-btn:focus-visible { outline: 2px solid var(--on-brand); outline-offset: 2px; }
-
 /* ── Connection status line (Phase 1) ─────────────────────────────────────── */
 .orders-status {
   font-size: 13px;
@@ -668,8 +627,6 @@ input.ing-stock {
   /* Header, tabs and footer: every tap target grows to the same floor. */
   body[data-section="orders"] .orders-icon-btn,
   body[data-section="orders"] .orders-header .help-btn { width: var(--tap-min); height: var(--tap-min); }
-  /* Grows with the Back button it balances, so the title stays centred. */
-  body[data-section="orders"] .header-spacer { width: var(--tap-min); }
   body[data-section="orders"] .tab-bar .tab,
   body[data-section="orders"] .view-switch-btn { min-height: var(--tap-min); font-size: 15px; }
   body[data-section="orders"] .recipe-footer-btn { min-height: var(--tap-min); }
@@ -2350,16 +2307,9 @@ body.hide-stock .ingredient-list .ing-fields { justify-content: center; }
    avvisi degli ordini» — on the phone too. js/orders/tablet-layout.js now moves
    the hosts at every size; the tablet block below only changes SIZES and where
    the panel hangs. */
-.orders-header { position: relative; }
-.orders-header-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-left: auto;
-  flex-shrink: 0;
-}
-.orders-alerts-btn,
-.orders-lists-btn { position: relative; }
+/* The right-hand slot of the Orders bar carries up to three buttons on a phone, so it
+   keeps a tighter gap than the shared 12px. */
+.orders-header-actions { gap: 8px; flex-shrink: 0; }
 /* The number on a round header button: a small red dot with a white figure,
    ringed in the header's own green so it reads as sitting ON the button. */
 .orders-head-dot {
@@ -2607,31 +2557,9 @@ body:not([data-orders-tab="deliveries"]) #orders-owed { display: none; }
 
   /* ── Review-round fixes (28 Sep 2026) ──────────────────────────────────── */
 
-  /* 8. THE HEADER TITLE, CENTRED WHATEVER THE RIGHT SIDE HOLDS. `header` is
-     `justify-content: space-between` with THREE things on the right now
-     (help · bell · send) against Back alone on the left, so centring by
-     flex alone — equal left/right widths — no longer holds: measured 68px
-     off centre. Taken clean out of flow instead, the same move every
-     full-screen overlay's own header already makes (supplier-items.js and
-     friends): `header` is `position: relative` at every width (style.css),
-     so this only has to fire on a tablet, where the extra buttons exist.
-     `pointer-events: none` on the wrapper (it now visually overlaps the
-     header's own flex children on a narrow-enough tablet) with `auto`
-     restored on its own children keeps the title unclickable air without
-     ever blocking a real button under it. */
-  body[data-card="orders"] > .orders-header > .orders-header-title {
-    position: absolute;
-    left: 50%;
-    top: 50%;
-    /* Both axes: taking a flex child out with position:absolute drops it out
-       of `header`'s own `align-items: center` too, not just its horizontal
-       distribution — top:50% + the Y half of the transform is what keeps it
-       vertically centred in the header's asymmetric padding
-       (calc(14px + safe-top) top, 20px bottom) the way the flex row did. */
-    transform: translate(-50%, -50%);
-    pointer-events: none;
-  }
-  body[data-card="orders"] > .orders-header > .orders-header-title * { pointer-events: auto; }
+  /* 8. (The header title's centring used to be fixed here, by taking it out of the
+     flow. The shared bar is a three-track grid now — tokens.css .app-header — and
+     centres it by itself whatever the right side holds.) */
 
   /* 9. THE RED DEBT BANNER IN THE STRIP: kitchen-sized, and in the app's own
      type — a plain `<button>` does not inherit body's font-family in any
@@ -2732,6 +2660,9 @@ body:not([data-orders-tab="deliveries"]) #orders-owed { display: none; }
      so the phone's full-screen header (green, centred, Back-only) and every
      OTHER overlay's header are completely untouched. */
   #orders-detail-pane .orders-header {
+    /* A flex row, not the green bar's three-track grid: the title is left-aligned
+       and takes what the buttons leave. */
+    display: flex;
     background: transparent;
     padding: 14px 16px;
     border-radius: 0;
@@ -2743,6 +2674,7 @@ body:not([data-orders-tab="deliveries"]) #orders-owed { display: none; }
     min-width: 0;
     text-align: left;
   }
+  #orders-detail-pane .pane-actions { gap: 10px; }
   #orders-detail-pane .orders-header-title h1 {
     color: var(--text);
     font-size: 28px;
@@ -2757,13 +2689,15 @@ body:not([data-orders-tab="deliveries"]) #orders-owed { display: none; }
     font-family: 'DM Mono', monospace;
     font-size: 12px;
     color: var(--text-3);
+    /* The green bar's subtitle is one dimmed line; this one is a sentence on a
+       light card and may wrap. */
+    opacity: 1;
+    white-space: normal;
   }
   #orders-detail-pane .pane-when { color: var(--crust); font-weight: 500; }
-  /* Back arrow and its phone counterweight: no Back in the pane — the X does
-     that job — and no counterweight needed once the title is left-aligned
-     rather than centred. */
-  #orders-detail-pane .pane-back-btn,
-  #orders-detail-pane .header-spacer { display: none; }
+  /* No Back in the pane — the X does that job — so the whole left slot goes,
+     not only the button: an empty slot would still take its gap. */
+  #orders-detail-pane .pane-back-slot { display: none; }
   #orders-detail-pane .pane-list-btn,
   #orders-detail-pane .pane-summary-btn,
   #orders-detail-pane .pane-close-btn {
@@ -2800,7 +2734,7 @@ body:not([data-orders-tab="deliveries"]) #orders-owed { display: none; }
     border: 1.5px solid var(--border);
     color: var(--text-2);
   }
-  /* .orders-icon-btn's own rim-bg/on-brand styling is for the green banner
+  /* .app-icon-btn's own rim-bg/on-brand styling is for the green banner
      header; the close button reuses the class for its 52px round shape only
      and repaints itself here for a light card. */
 

@@ -37,13 +37,15 @@ let showingOlder = false;
 // ── The list of lists ────────────────────────────────────────────────────────
 
 function header(title, onBack, extra = null) {
-  return el('header', { class: 'orders-header' }, [
-    el('button', {
-      type: 'button', class: 'orders-icon-btn', 'aria-label': t('ui.back'),
-      icon: BACK_ICON, onClick: onBack,
-    }),
-    el('div', { class: 'orders-header-title' }, [el('h1', { text: title })]),
-    extra || el('span', { class: 'header-spacer' }),
+  return el('header', { class: 'app-header orders-header' }, [
+    el('span', { class: 'app-header-slot' }, [
+      el('button', {
+        type: 'button', class: 'app-icon-btn orders-icon-btn', 'aria-label': t('ui.back'),
+        icon: BACK_ICON, onClick: onBack,
+      }),
+    ]),
+    el('div', { class: 'app-header-title orders-header-title' }, [el('h1', { text: title })]),
+    el('span', { class: 'app-header-slot' }, extra ? [extra] : []),
   ]);
 }
 

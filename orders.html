@@ -83,11 +83,13 @@
 <div id="auth-gate" class="auth-gate"></div>
 
 
-<header class="orders-header">
-  <a class="orders-icon-btn" href="index.html" data-i18n="ui.back" data-i18n-attr="aria-label" aria-label="Back">
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
-  </a>
-  <div class="orders-header-title">
+<header class="app-header orders-header">
+  <span class="app-header-slot">
+    <a class="app-icon-btn orders-icon-btn" href="index.html" data-i18n="ui.back" data-i18n-attr="aria-label" aria-label="Back">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+    </a>
+  </span>
+  <div class="app-header-title orders-header-title">
     <h1 data-i18n="section.orders">Orders</h1>
     <p data-i18n="ui.supplierOrders">Supplier orders</p>
   </div>
@@ -97,13 +99,13 @@
        keeps the space that is left and nothing ever wraps. The «?» that used to sit
        here is now the «Help» row inside Settings: five round buttons do not fit a
        296px phone. -->
-  <div class="orders-header-actions">
+  <div class="app-header-slot orders-header-actions">
     <!-- The bell: js/orders/tablet-layout.js moves the banners that ask for
          something (not placed, changed since sent, still to re-order, the calendar)
          into #orders-alerts-panel below, at EVERY size, and this opens it. Shown by
          JS only when there is something inside; the number is DERIVED from the
          panel's own children (initAlertsPanel), never written by hand. -->
-    <button class="orders-icon-btn orders-alerts-btn" id="orders-alerts-btn" type="button" aria-expanded="false" aria-controls="orders-alerts-panel" hidden>
+    <button class="app-icon-btn orders-icon-btn orders-alerts-btn" id="orders-alerts-btn" type="button" aria-expanded="false" aria-controls="orders-alerts-panel" hidden>
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
       <span class="orders-head-dot" id="orders-alerts-count" aria-hidden="true" hidden></span>
     </button>
@@ -111,14 +113,14 @@
          screen that already existed. Crust-coloured while a list is waiting — the
          colour is the signal, as the card at the foot of the page used to be. Hidden
          when the venue has turned order lists off (config/orders.orderLists). -->
-    <button class="orders-icon-btn orders-lists-btn" id="orders-lists-btn" type="button" hidden>
+    <button class="app-icon-btn orders-icon-btn orders-lists-btn" id="orders-lists-btn" type="button" hidden>
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V3h6v1"/><path d="M9 10l1.5 1.5L13 9"/><path d="M9 15h6"/></svg>
       <span class="orders-head-dot" id="orders-lists-count" aria-hidden="true" hidden></span>
     </button>
     <!-- ⚠️ A SEND ARROW, NOT THE WHATSAPP MARK — it offers four roads, and a WhatsApp
          glyph would name only one. 📌 Chosen by Federico on 14 Aug from three mounted
          side by side. -->
-    <button class="orders-icon-btn" id="orders-wa-btn" type="button" data-i18n="ui.send" data-i18n-attr="aria-label" aria-label="Send"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M8 7l4-4 4 4"/><path d="M4 15v4a2 2 0 002 2h12a2 2 0 002-2v-4"/></svg></button>
+    <button class="app-icon-btn orders-icon-btn" id="orders-wa-btn" type="button" data-i18n="ui.send" data-i18n-attr="aria-label" aria-label="Send"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M8 7l4-4 4 4"/><path d="M4 15v4a2 2 0 002 2h12a2 2 0 002-2v-4"/></svg></button>
   </div>
   <!-- ⚠️⚠️ A CHILD OF THE HEADER ON PURPOSE (phone and tablet since 28 Sep 2026) —
        see the note on #orders-alerts-btn above. Absolutely positioned, so it sits under the
@@ -287,13 +289,12 @@
        is lost by a reload here, so nothing here may hold an update back. The record
        EDITOR inside it uses .hist-edit-list, which is in that list and should be. -->
   <div class="history-overlay" id="history-overlay" hidden>
-    <header class="orders-header">
-      <button class="orders-icon-btn" id="history-back-btn" type="button" data-i18n="ui.back" data-i18n-attr="aria-label" aria-label="Back"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
-      <!-- Title centred like every other Orders overlay: .orders-header-title takes the
-           middle, the spacer on the right weighs against Back. A bare h1 was pushed to
-           the right edge by the header's space-between. -->
-      <div class="orders-header-title"><h1 data-i18n="ui.history">History</h1></div>
-      <span class="overlay-home-spacer" aria-hidden="true"></span>
+    <header class="app-header orders-header">
+      <span class="app-header-slot">
+        <button class="app-icon-btn orders-icon-btn" id="history-back-btn" type="button" data-i18n="ui.back" data-i18n-attr="aria-label" aria-label="Back"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
+      </span>
+      <div class="app-header-title orders-header-title"><h1 data-i18n="ui.history">History</h1></div>
+      <span class="app-header-slot" aria-hidden="true"></span>
     </header>
     <div class="scroll-area">
       <section class="content active" id="tab-history">

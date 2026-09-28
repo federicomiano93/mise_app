@@ -86,13 +86,15 @@ export function openHomeCards(session) {
   let toggling = false;
 
   const overlay = el('div', { class: 'people-overlay' }, [
-    el('header', { class: 'orders-header' }, [
-      el('button', {
-        type: 'button', class: 'orders-icon-btn', 'aria-label': t('auth.back'),
-        icon: BACK_ICON, onClick: close,
-      }),
-      el('div', { class: 'orders-header-title' }, [el('h1', { text: t('homeCards.title') })]),
-      el('span', { class: 'header-spacer' }),
+    el('header', { class: 'app-header orders-header' }, [
+      el('span', { class: 'app-header-slot' }, [
+        el('button', {
+          type: 'button', class: 'app-icon-btn orders-icon-btn', 'aria-label': t('auth.back'),
+          icon: BACK_ICON, onClick: close,
+        }),
+      ]),
+      el('div', { class: 'app-header-title orders-header-title' }, [el('h1', { text: t('homeCards.title') })]),
+      el('span', { class: 'app-header-slot' }),
     ]),
     el('div', { class: 'people-scroll' }, [
       el('div', { class: 'people-row' }, [

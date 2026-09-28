@@ -72,10 +72,12 @@ export function buildManagement(data, actions) {
   // ⚠️ NO TAB BAR ANY MORE. It carried Suppliers / Ingredients / General, and with
   // the first two gone a bar of one tab is a control that appears to do nothing.
   const overlay = el('div', { class: 'mgmt-overlay' }, [
-    el('header', { class: 'orders-header' }, [
-      el('button', { type: 'button', class: 'orders-icon-btn', 'aria-label': t('ui.back'), icon: BACK_ICON, onClick: () => actions.onClose() }),
-      el('div', { class: 'orders-header-title' }, [el('h1', { text: t('ui.settings') })]),
-      el('span', { class: 'header-spacer' }),
+    el('header', { class: 'app-header orders-header' }, [
+      el('span', { class: 'app-header-slot' }, [
+        el('button', { type: 'button', class: 'app-icon-btn orders-icon-btn', 'aria-label': t('ui.back'), icon: BACK_ICON, onClick: () => actions.onClose() }),
+      ]),
+      el('div', { class: 'app-header-title orders-header-title' }, [el('h1', { text: t('ui.settings') })]),
+      el('span', { class: 'app-header-slot' }),
     ]),
     content,
   ]);

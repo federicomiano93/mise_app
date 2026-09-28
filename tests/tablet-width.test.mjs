@@ -66,7 +66,7 @@ const MUST_BE_CAPPED = [
   '.preview-scroll',
   '.preview-footer',
   '.mgmt-scroll',
-  '.cat-header',
+  '.app-header',             // the ONE green bar (tokens.css); replaced .cat-/.pas-/.fc-/.inv-header
   // ⚠ Added 22 Aug 2026 because catalogue.css:967 SAID this test enforced the cap on
   // it and the test did not: .cat-footer was in neither this list nor the sweep below,
   // which only catches a padded container that is also `position: fixed`. A comment
@@ -74,11 +74,8 @@ const MUST_BE_CAPPED = [
   '.cat-footer',
   '.pick-body',
   '.cat-ing-list--zoom',
-  '.pas-header',
   '.pas-footer',
-  '.fc-header',
   '.fc-footer',
-  '.inv-header',
   '.inv-strip',
   '.inv-footer',
   '.people-scroll',
@@ -536,12 +533,13 @@ test('the ingredient grid never touches .ing-fields\' own 400px cap', () => {
   assert.doesNotMatch(ordersTabletBlock(), /\.ing-fields/, 'the tablet block must not touch .ing-fields at all');
 });
 
-test('the header counterweight grows with the Back button, so titles stay centred', () => {
-  // Back goes 36 → 52px on the tablet; a counterweight left at 36 pushed seven
-  // Orders titles 8px off centre. It is a class now, never an inline width.
+test('the header stays centred when Back grows, and nothing sets a 36px counterweight by hand', () => {
+  // Back goes 36 → 52px on the tablet. A hand-sized counterweight once pushed seven
+  // Orders titles 8px off centre; the shared bar is a three-track grid now (tokens.css
+  // .app-header), which needs no counterweight at all — so none may come back.
   const block = ordersTabletBlock();
   assert.match(block, /\.orders-icon-btn[^{]*\{[^}]*width:\s*var\(--tap-min\)/);
-  assert.match(block, /\.header-spacer\s*\{[^}]*width:\s*var\(--tap-min\)/);
+  assert.doesNotMatch(block, /\.header-spacer/);
   const offenders = [];
   const walk = (dir) => {
     for (const f of readdirSync(dir)) {
@@ -551,5 +549,5 @@ test('the header counterweight grows with the Back button, so titles stay centre
     }
   };
   walk(JS_DIR);
-  assert.deepEqual(offenders, [], 'use class "header-spacer" instead of an inline 36px width');
+  assert.deepEqual(offenders, [], 'give the bar an empty .app-header-slot instead of an inline 36px width');
 });

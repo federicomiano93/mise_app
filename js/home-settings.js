@@ -73,20 +73,19 @@ function section(title, rows) {
 export function openHomeSettings(session) {
   const options = session.options || [];
 
-  const back = node('button', 'orders-icon-btn');
+  const back = node('button', 'app-icon-btn orders-icon-btn');
   back.type = 'button';
   back.setAttribute('aria-label', t('auth.back'));
   back.appendChild(backIcon());
   back.addEventListener('click', close);
 
-  const titleWrap = node('div', 'orders-header-title');
+  const titleWrap = node('div', 'app-header-title orders-header-title');
   titleWrap.appendChild(node('h1', '', t('ui.settings')));
-  const spacer = node('span');
-  spacer.style.width = '36px';
-  spacer.style.flexShrink = '0';
+  const leftSlot = node('span', 'app-header-slot');
+  leftSlot.appendChild(back);
 
-  const header = node('header', 'orders-header');
-  header.append(back, titleWrap, spacer);
+  const header = node('header', 'app-header orders-header');
+  header.append(leftSlot, titleWrap, node('span', 'app-header-slot'));
 
   const scroll = node('div', 'people-scroll set-screen');
   const overlay = node('div', 'people-overlay');

@@ -75,7 +75,7 @@ export function buildSupplierDetail(supplier, ctx) {
   const subline = paneSubline(ctx.orderDays, ctx.deliveryDays).map(({ text, today }) => el(
     today ? 'b' : 'span', { class: 'pane-when', text },
   ));
-  const titleWrap = el('div', { class: 'orders-header-title' }, [
+  const titleWrap = el('div', { class: 'app-header-title orders-header-title' }, [
     el('h1', { text: supplier.name }),
     subline.length ? el('p', { class: 'pane-subline' }, subline.flatMap((n, i) => (
       i === 0 ? [n] : [' · ', n]
@@ -93,22 +93,25 @@ export function buildSupplierDetail(supplier, ctx) {
     onClick: () => ctx.onSummary?.(),
   }, [el('span', { class: 'pane-btn-icon', 'aria-hidden': 'true', icon: SUMMARY_SVG }), t('orders.pane.summary')]);
   const closeBtn = el('button', {
-    type: 'button', class: 'orders-icon-btn pane-close-btn',
+    type: 'button', class: 'app-icon-btn orders-icon-btn pane-close-btn',
     'aria-label': t('orders.pane.closeAria', { supplier: supplier.name }),
     icon: CLOSE_ICON, onClick: () => ctx.onBack?.(),
   });
 
   const overlay = el('div', { class: 'supplier-detail' }, [
-    el('header', { class: 'orders-header' }, [
-      el('button', {
-        type: 'button', class: 'orders-icon-btn pane-back-btn', 'aria-label': t('ui.back'),
-        icon: BACK_ICON, onClick: () => ctx.onBack?.(),
-      }),
+    el('header', { class: 'app-header orders-header' }, [
+      // The slot, not the button, is what the tablet pane hides: the pane has no Back —
+      // its X does that job — and an empty slot must not keep a column of its own.
+      el('span', { class: 'app-header-slot pane-back-slot' }, [
+        el('button', {
+          type: 'button', class: 'app-icon-btn orders-icon-btn', 'aria-label': t('ui.back'),
+          icon: BACK_ICON, onClick: () => ctx.onBack?.(),
+        }),
+      ]),
       titleWrap,
-      // Keeps the title centred on a phone: the back button needs a counterweight.
-      // Hidden on a tablet, where the three buttons on the right already do that job.
-      el('span', { class: 'header-spacer' }),
-      listBtn, summaryBtn, closeBtn,
+      // List / summary / close are tablet-only in looks (orders.css); on a phone this
+      // slot holds nothing visible and the grid keeps the title centred by itself.
+      el('span', { class: 'app-header-slot pane-actions' }, [listBtn, summaryBtn, closeBtn]),
     ]),
     body,
   ]);

@@ -97,7 +97,7 @@ export function buildHistoryEditor(record, ingredients, actions) {
   ]);
 
   const saveBtn = el('button', {
-    type: 'button', class: 'orders-icon-btn hist-edit-save', 'aria-label': t('ui.save'), onClick: save,
+    type: 'button', class: 'app-icon-btn orders-icon-btn hist-edit-save', 'aria-label': t('ui.save'), onClick: save,
   }, t('ui.save'));
 
   // Opened only from History, so it carries .over-history (see orders.css).
@@ -107,13 +107,15 @@ export function buildHistoryEditor(record, ingredients, actions) {
   status.hidden = true;
 
   const overlay = el('div', { class: 'mgmt-overlay over-history' }, [
-    el('header', { class: 'orders-header' }, [
-      el('button', {
-        type: 'button', class: 'orders-icon-btn', 'aria-label': t('ui.back'),
-        icon: BACK_ICON, onClick: () => actions.onClose(),
-      }),
-      el('div', { class: 'orders-header-title' }, [el('h1', { text: t('orders.editOrder') })]),
-      saveBtn,
+    el('header', { class: 'app-header orders-header' }, [
+      el('span', { class: 'app-header-slot' }, [
+        el('button', {
+          type: 'button', class: 'app-icon-btn orders-icon-btn', 'aria-label': t('ui.back'),
+          icon: BACK_ICON, onClick: () => actions.onClose(),
+        }),
+      ]),
+      el('div', { class: 'app-header-title orders-header-title' }, [el('h1', { text: t('orders.editOrder') })]),
+      el('span', { class: 'app-header-slot' }, [saveBtn]),
     ]),
     // .mgmt-scroll, like every sibling overlay: side margins, and a body that
     // SCROLLS. It said .mgmt-content, which no stylesheet has ever defined — so the

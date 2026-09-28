@@ -38,52 +38,6 @@ body {
   overscroll-behavior: none;
 }
 
-/* ── Header ────────────────────────────────────────────────────────────────
-   Back on the LEFT, title CENTRED, a matching slot on the right so the title
-   cannot drift off centre when one side is empty (CLAUDE.md, header spec). */
-.fc-header {
-  flex-shrink: 0;
-  display: grid;
-  grid-template-columns: 44px 1fr 44px;
-  align-items: center;
-  gap: 8px;
-  padding: calc(10px + env(safe-area-inset-top)) 12px 10px;
-  /* Centre the header's contents on the same column as .fc-view below it.
-     12px floor = the padding above, so no phone moves. */
-  padding-inline: max(12px, var(--app-gutter));
-  background: var(--fc-brand);
-  color: var(--fc-brand-ink);
-}
-.fc-header-slot { display: flex; align-items: center; justify-content: center; }
-.fc-icon-btn {
-  width: 36px;
-  height: 36px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  /* ⚠️ --rim-border, NOT --rim. It was written `var(--rim)` — a name defined
-     nowhere — which made the whole declaration invalid, so the browser dropped
-     it in SILENCE and this button carried no rim at all while the identical
-     buttons on Orders, the Catalogue and the help screens carried one. Found by
-     diffing every var() use against the definitions, which is the only thing
-     that finds this: the CSS reads as correct and deliberate. Third one in two
-     days (--text-3, --space-2/3/4). */
-  border: 1.5px solid var(--rim-border);
-  background: var(--rim-bg);
-  color: inherit;
-  cursor: pointer;
-}
-.fc-icon-btn:hover { background: var(--rim-bg-hover); }
-.fc-icon-btn:active { background: var(--rim-bg-active); }
-/* The app's green focus ring is invisible on the green header, so the ring here
-   is the on-brand ink instead. */
-.fc-icon-btn:focus-visible { outline: 2px solid var(--fc-brand-ink); outline-offset: 2px; }
-.fc-icon-btn[hidden] { display: none; }
-.fc-header-title { min-width: 0; text-align: center; }
-.fc-header-title h1 { margin: 0; font-size: 18px; font-weight: 600; letter-spacing: -0.3px; }
-.fc-header-title p { margin: 2px 0 0; font-size: 11px; opacity: .8; font-family: var(--fc-font-mono); }
-
 /* min-height:0 is load-bearing: as a flex child without it, iOS miscomputes the
    height and momentum scrolling freezes or snaps to the top (the v185 fix). */
 .fc-screen {

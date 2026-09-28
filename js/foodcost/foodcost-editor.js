@@ -373,7 +373,6 @@ export function renderEditor({ product, draft = null, app }) {
       backLabel: t('ui.back'),
       searchLabel: t('fc.searchPick'),
       initialQuery,
-      chrome: { header: 'fc-header', slot: 'fc-header-slot', title: 'fc-header-title', icon: 'fc-icon-btn' },
       sections: query => {
         const q = normalizeSearchText(query);
         const matches = name => !q || normalizeSearchText(name).includes(q);

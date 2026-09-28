@@ -147,7 +147,7 @@ function showList() {
   activeSettings = null;
   activeSheet = null;
   leaveGuard = null;
-  setHeader({ title: t('ui.recipes'), sub: t('cat.recipeCatalogue'), back: false, add: true, footer: true });
+  setHeader({ title: t('section.catalogue'), sub: t('ui.recipesKgScaling'), back: false, add: true, footer: true });
   activeList = renderList({
     recipes: getRecipes(),
     usageMap: getUsage(),

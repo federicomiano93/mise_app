@@ -85,20 +85,6 @@ header p {
   text-transform: uppercase;
 }
 
-#header-wa-btn {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  background: var(--rim-bg);
-  border: 1.5px solid var(--rim-border);
-  cursor: pointer;
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-}
-
 /* Utility: hide an element from markup without an inline style="" attribute,
    which the page CSP (style-src 'self') blocks. Use this class instead. */
 .is-hidden { display: none !important; }
@@ -1224,8 +1210,8 @@ input.cp-prod-weight {
    also fixes Save being stranded next to the title when Home is hidden. */
 .recipe-overlay-header {
   position: relative;
-  background: var(--accent);
-  padding: calc(14px + var(--safe-top)) 16px 20px;
+  background: var(--brand);
+  padding: calc(16px + env(safe-area-inset-top)) 16px 20px;
   /* Same column as the recipe body below it. */
   padding-inline: max(16px, var(--app-gutter));
   border-radius: 0 0 26px 26px;
@@ -1235,15 +1221,12 @@ input.cp-prod-weight {
   justify-content: flex-end;
   gap: 12px;
 }
-/* ⚠️ `.overlay-back-btn` IS THE ONE TO USE ON ANYTHING NEW. This rule used to be a
-   hand-kept list of thirteen per-screen class names, and the list itself was the bug:
-   two overlays added on 10 Aug 2026 were not on it, so their Back button fell back to
-   the browser's default — a grey rectangle where every other screen has the round
-   translucent circle. Federico spotted it immediately, because it was the one thing on
-   that screen that did not look like the app.
-   The names below are left as they are rather than churned; new screens carry the
-   shared class and cannot be forgotten. (.products-back-btn and .ingredients-back-btn
-   went on 25 Sep 2026: no page or script writes them any more —
+/* ⚠️ THE LOOK OF A BACK BUTTON IS `.app-icon-btn` (tokens.css) — a screen that invents
+   its own gets a bare glyph or a grey rectangle where every other screen has the round
+   translucent circle, which Federico spotted at once on 10 Aug 2026. What is left here
+   is only the placement: Back takes margin-right:auto, so whatever follows groups at
+   the right edge. The names are left as they are rather than churned.
+   (.products-back-btn and .ingredients-back-btn went on 25 Sep 2026 —
    tests/css-classes.test.mjs.) */
 .overlay-back-btn,
 .recipe-back-btn,
@@ -1251,19 +1234,6 @@ input.cp-prod-weight {
 .wa-back-btn, .cp-back-btn,
 .logview-back-btn, .logedit-back-btn, .logadd-back-btn, .loghistory-back-btn {
   margin-right: auto;   /* everything after it groups at the right edge */
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  background: var(--rim-bg);
-  border: 1.5px solid var(--rim-border);
-  color: var(--on-brand);
-  font-size: 18px;
-  cursor: pointer;
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
 }
 /* Centred on the header, out of the flow, so the side buttons cannot push it off.
    pointer-events:none so it can never swallow a tap meant for a button under it. */
@@ -1283,26 +1253,9 @@ input.cp-prod-weight {
   color: var(--on-brand);
   letter-spacing: -0.3px;
 }
-/* Home shortcut in the overlay headers (Settings, Clients & products, Recipes):
-   same round style as the back button, pushed to the right edge. Lets the user
-   jump straight to the home screen instead of stepping back. When a Save button
-   follows, it sits just to the right of Home (header gap handles the spacing). */
-.overlay-home-btn {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  background: var(--rim-bg);
-  border: 1.5px solid var(--rim-border);
-  color: var(--on-brand);
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  text-decoration: none;
-  cursor: pointer;
-  padding: 0;
-}
-.overlay-home-btn:active { background: var(--rim-bg-active); }
+/* The Home shortcut (.overlay-home-btn) and every Back above are `.app-icon-btn`
+   in the markup (tokens.css): the round rim look is the shared one, defined once.
+   Only the placement is this bar's own. */
 .recipe-scroll {
   flex: 1;
   overflow-y: auto;

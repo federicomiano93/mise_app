@@ -139,13 +139,18 @@ function openMissingPickerScreen(entry, ctx, done) {
   });
 
   const overlay = el('div', { class: 'missing-overlay' }, [
-    el('header', { class: 'orders-header' }, [
-      el('button', {
-        class: 'orders-icon-btn', type: 'button', 'aria-label': t('ui.back'),
-        icon: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>',
-        onclick: () => { overlay.remove(); done(false); },
-      }),
-      el('h1', { text: t('orders.deliveries.whatArrived') }),
+    el('header', { class: 'app-header orders-header' }, [
+      el('span', { class: 'app-header-slot' }, [
+        el('button', {
+          class: 'app-icon-btn orders-icon-btn', type: 'button', 'aria-label': t('ui.back'),
+          icon: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>',
+          onclick: () => { overlay.remove(); done(false); },
+        }),
+      ]),
+      el('div', { class: 'app-header-title orders-header-title' }, [
+        el('h1', { text: t('orders.deliveries.whatArrived') }),
+      ]),
+      el('span', { class: 'app-header-slot' }),
     ]),
     el('div', { class: 'scroll-area' }, [
       el('p', { class: 'missing-hint', text: t('orders.deliveries.untickHint') }),

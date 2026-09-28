@@ -30,7 +30,6 @@ export function openLinkPicker({ ingredients, recipes, suppliers, excludeRecipeI
     backLabel: t('ui.back'),
     searchLabel: t('cat.searchAnIngredient'),
     initialQuery,
-    chrome: { header: 'cat-header cat-pick-header', slot: 'cat-pick-spacer', title: 'cat-pick-title', icon: 'cat-icon-btn' },
     // Only offered when there IS a link: a "remove" on a row that has none does nothing.
     topAction: hasLink ? { label: t('cat.removeTheLink'), value: null } : null,
     sections: query => {

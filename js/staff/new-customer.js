@@ -97,18 +97,20 @@ export function openNewCustomer({ onClose, host, ownerKind } = {}) {
   const result = el('div', { class: 'people-list' });
 
   const overlay = el('div', { class: 'people-overlay' }, [
-    el('header', { class: 'orders-header' }, [
-      el('button', {
-        type: 'button', class: 'orders-icon-btn', 'aria-label': t('ui.back'),
-        icon: BACK_ICON, onClick: leave,
-      }),
+    el('header', { class: 'app-header orders-header' }, [
+      el('span', { class: 'app-header-slot' }, [
+        el('button', {
+          type: 'button', class: 'app-icon-btn orders-icon-btn', 'aria-label': t('ui.back'),
+          icon: BACK_ICON, onClick: leave,
+        }),
+      ]),
       // ⚠️ The title follows the door. It said "New customer" whatever it was
       // about, so a venue of your own was created under a heading calling it
       // somebody else's — the same mistake as the screen itself, in one word.
-      el('div', { class: 'orders-header-title' }, [
+      el('div', { class: 'app-header-title orders-header-title' }, [
         el('h1', { text: t(forSelf ? 'nc.title.self' : 'nc.title.customer') }),
       ]),
-      el('span', { class: 'header-spacer' }),
+      el('span', { class: 'app-header-slot' }),
     ]),
     el('div', { class: 'people-scroll' }, [form, result]),
   ]);

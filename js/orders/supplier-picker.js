@@ -179,14 +179,15 @@ export function buildSupplierPicker(rows, options, callbacks) {
   });
 
   const overlay = el('div', { class: 'preview-overlay' }, [
-    el('header', { class: 'orders-header' }, [
-      el('button', {
-        type: 'button', class: 'orders-icon-btn', 'aria-label': t('ui.back'),
-        icon: BACK_ICON, onClick: () => callbacks.onBack(),
-      }),
-      el('div', { class: 'orders-header-title' }, [el('h1', { text: title })]),
-      // Keeps the title centred: the back button on the left needs a counterweight.
-      el('span', { class: 'header-spacer' }),
+    el('header', { class: 'app-header orders-header' }, [
+      el('span', { class: 'app-header-slot' }, [
+        el('button', {
+          type: 'button', class: 'app-icon-btn orders-icon-btn', 'aria-label': t('ui.back'),
+          icon: BACK_ICON, onClick: () => callbacks.onBack(),
+        }),
+      ]),
+      el('div', { class: 'app-header-title orders-header-title' }, [el('h1', { text: title })]),
+      el('span', { class: 'app-header-slot' }),
     ]),
     scroll,
     // Stacked, not the footer's default row: the format chooser belongs ABOVE the

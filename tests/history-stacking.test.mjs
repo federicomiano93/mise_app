@@ -52,8 +52,8 @@ test('the order editor body scrolls and has margins, like its siblings', () => {
 test('the History title is centred like every other Orders overlay', () => {
   const html = read('orders.html');
   const header = html.slice(html.indexOf('id="history-overlay"'), html.indexOf('</header>', html.indexOf('id="history-overlay"')));
-  assert.match(header, /<div class="orders-header-title"><h1 data-i18n="ui.history">/);
-  assert.match(header, /class="overlay-home-spacer"/, 'a counterweight to Back');
+  assert.match(header, /<div class="app-header-title orders-header-title"><h1 data-i18n="ui.history">/);
+  assert.match(header, /<span class="app-header-slot" aria-hidden="true"><\/span>/, 'an empty right slot to weigh against Back');
 });
 
 // ⚠️ AND A MESSAGE ABOUT IT IS SAID ON TOP TOO. Once the editor was visible, its own
