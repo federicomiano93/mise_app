@@ -1319,7 +1319,8 @@ input.ing-stock {
 }
 .pending-main { display: flex; flex-direction: column; gap: 2px; margin-bottom: 10px; }
 .pending-title { font-size: 14px; font-weight: 700; }
-.pending-sub { font-size: 12px; font-family: 'DM Mono', monospace; opacity: 0.85; }
+/* Full --warn, no opacity: faded to .85 it read 4.22:1 on --warn-bg, under 4.5. */
+.pending-sub { font-size: 12px; font-family: 'DM Mono', monospace; }
 .pending-actions { display: flex; gap: 6px; flex-wrap: wrap; }
 .pending-btn {
   flex: 1 1 auto;

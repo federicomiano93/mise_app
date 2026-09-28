@@ -108,7 +108,10 @@
      literal px. */
   --text:   #1F2416;      /* primary text */
   --text-2: #5E6650;      /* secondary / muted text */
-  --text-3: #7C7566;      /* third level: units, timestamps, fine print */
+  /* ⚠️ Was #7C7566: 4.49:1 on --surface and 3.92:1 on --bg, just under the 4.5:1
+     small text needs (axe, ui-check 28 Sep 2026). This one clears 4.5 on every
+     ground it sits on (--surface 5.36, --surface-2 5.01, --bg 4.68). */
+  --text-3: #706959;      /* third level: units, timestamps, fine print */
   --text-4: #8B8474;      /* small uppercase mono labels */
   --text-5: #B3AB99;      /* placeholder text */
 
