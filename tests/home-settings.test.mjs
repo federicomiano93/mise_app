@@ -89,12 +89,14 @@ test('⚠️⚠️ the holiday row holds its place from the first paint, so no r
 });
 
 test('⚠️ the sentence under a Settings row is in the same typeface as its title', () => {
-  // Both spans live inside a <button>, which takes the SYSTEM font unless the rule names one.
-  const css = read('style.css');
-  const family = name => (css.match(new RegExp(`\\.${name}\\s*\\{[^}]*font-family:\\s*([^;]+);`)) || [])[1];
-  assert.ok(family('settings-menu-title'), '.settings-menu-title names its family');
-  assert.equal(family('settings-menu-sub'), family('settings-menu-title'),
-    'a row whose two lines are set in two different typefaces reads as broken');
+  // Both spans live inside a <button>, which takes the SYSTEM font unless a rule names
+  // one. Since 28 Sep 2026 every settings row is the shared .set-row (tokens.css), which
+  // names the app's font once; the title and the line under it inherit it together.
+  const css = read('tokens.css');
+  assert.match(css, /\.set-row\s*\{[^}]*font-family:\s*var\(--font\)/,
+    '.set-row names the family, so a row can never be set in two typefaces');
+  assert.doesNotMatch(css, /\.set-(title|sub)\s*\{[^}]*font-family/,
+    'and neither line overrides it on its own');
 });
 
 test('the Settings screen is precached', () => {

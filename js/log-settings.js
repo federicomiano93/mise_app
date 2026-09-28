@@ -55,11 +55,13 @@ function recipeCard(recipe) {
   const names = getTabProducts(getConfig(), recipe.id).map(p => p.name);
   card.appendChild(el('div', { class: 'logset-products' }, names.length ? names.join(', ') : t('calc.noProducts')));
 
-  const visRow = el('label', { class: 'extra-toggle-row' }, [el('span', {}, t('calc.keepLogsVisible'))]);
-  const cb = el('input', { type: 'checkbox' });
+  // A real on/off switch (tokens.css .set-switch, 28 Sep 2026); still part of this
+  // form — it edits the working copy and Save commits it.
+  const visRow = el('div', { class: 'extra-toggle-row' }, [el('span', {}, t('calc.keepLogsVisible'))]);
+  const cb = el('input', { type: 'checkbox', role: 'switch', 'aria-label': `${t('calc.keepLogsVisible')}: ${recipe.name}` });
   cb.checked = working.visibility[recipe.id];
   cb.addEventListener('change', () => { working.visibility[recipe.id] = cb.checked; dirty = true; });
-  visRow.appendChild(cb);
+  visRow.appendChild(el('label', { class: 'set-switch' }, [cb, el('span', { class: 'set-switch-track', 'aria-hidden': 'true' })]));
   card.appendChild(visRow);
 
   const durRow = el('label', { class: 'extra-toggle-row' }, [el('span', {}, t('calc.keepVisibleFor'))]);

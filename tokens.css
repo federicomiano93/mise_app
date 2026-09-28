@@ -1050,6 +1050,10 @@
    .set-danger   the quiet destructive action (P20)
    .set-note     fine print under a section */
 .set-screen { display: flex; flex-direction: column; gap: 12px; }
+/* ⚠️ NEVER SHRUNK. A settings screen is a SCROLLING column: left to flex's default,
+   every card was squeezed to fit the screen's height and cut off by its own
+   overflow: hidden — first driven run, 28 Sep 2026. */
+.set-screen > * { flex-shrink: 0; }
 .set-section {
   background: var(--surface);
   border: 1px solid var(--border);

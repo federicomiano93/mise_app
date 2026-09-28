@@ -90,11 +90,18 @@ export function openFoodcostSettings({ rate = null, confirm, onSave, toast, retu
       el('span', { class: 'fc-header-slot' }),
     ]),
     el('main', { class: 'fc-screen' }, [
-      el('div', { class: 'fc-view' }, [
-        el('div', { class: 'fc-field' }, [
-          el('label', { class: 'fc-label', for: 'fcLabourRate', text: t('fc.settings.labourRate', { currency: currentCurrency() }) }),
-          input,
-          el('p', { class: 'fc-note', text: t('fc.settings.labourRateNote') }),
+      // The app's one settings look (tokens.css .set-*, 28 Sep 2026): a card with its
+      // title, the field inside it. ⚠️ STILL A FORM WITH SAVE — a typed amount is not a
+      // tap to take back, so it keeps Save + confirm + the discard guard (the rule written
+      // above .set-section).
+      el('div', { class: 'fc-view set-screen' }, [
+        el('section', { class: 'set-section' }, [
+          el('div', { class: 'set-head' }, [el('h3', { text: t('fc.settings.costsTitle') })]),
+          el('div', { class: 'set-block fc-field' }, [
+            el('label', { class: 'set-label', for: 'fcLabourRate', text: t('fc.settings.labourRate', { currency: currentCurrency() }) }),
+            input,
+            el('p', { class: 'set-sub', text: t('fc.settings.labourRateNote') }),
+          ]),
         ]),
         el('div', { class: 'fc-actions' }, [
           el('button', { class: 'fc-save', type: 'button', text: t('ui.save'), onclick: save }),

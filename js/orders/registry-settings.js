@@ -33,6 +33,15 @@ export function buildRegistrySettings({ panels, onSet }) {
   const content = el('div', { class: 'mgmt-scroll reg-settings set-screen' });
   let current = { ...panels };
 
+  // ⚠️⚠️ DECLARED BEFORE THE FIRST toggle() CALL, NOT AFTER IT. toggle() reads FIELD
+  // the moment it builds a switch, and a `const` read before its line is reached
+  // throws (the temporal dead zone): the whole Settings screen failed to open, with
+  // every test green, until a driven run tapped the gear (28 Sep 2026).
+  // ⚠️ `current` IS KEYED BY THE SWITCH, not read through an if/else on its name. With
+  // two switches the chain was fine; with three, `key === 'showAllergens' ? … : …`
+  // silently files the third one under the second.
+  const FIELD = { showAllergens: 'allergens', showNutrition: 'nutrition', packPhoto: 'packPhoto' };
+
   // ONE card, in the app's one settings look (tokens.css .set-*, 28 Sep 2026): the
   // title and its line, then the three switches as rows.
   const card = el('section', { class: 'set-section' }, [
@@ -88,10 +97,6 @@ export function buildRegistrySettings({ panels, onSet }) {
 
   // One switch row, the same as every settings switch in the app: applied on the tap,
   // «Saved ✓» for two seconds, and put back — with the reason — if refused.
-  // ⚠️ `current` IS KEYED BY THE SWITCH, not read through an if/else on its name. With
-  // two switches the chain was fine; with three, `key === 'showAllergens' ? … : …`
-  // silently files the third one under the second.
-  const FIELD = { showAllergens: 'allergens', showNutrition: 'nutrition', packPhoto: 'packPhoto' };
 
   function toggle({ key, label, note, confirmOff, confirmOn = null }) {
     const cb = el('input', { type: 'checkbox', role: 'switch', 'aria-label': label });

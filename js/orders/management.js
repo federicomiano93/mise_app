@@ -40,6 +40,35 @@ export const isAdmin = true; // the panel is for everybody; each control is gate
 export function buildManagement(data, actions) {
   const content = el('div', { class: 'mgmt-scroll set-screen' });
 
+  // ⚠️ «SAVED ✓» MUST SURVIVE THE REDRAW IT CAUSES. A save writes config/orders, whose
+  // snapshot comes straight back and redraws this whole panel (refresh → render) — so
+  // a chip shown on the row that was tapped vanished with that row before anybody saw
+  // it (found by the driven run). The last save is remembered here, by the row's
+  // title, and every freshly built row asks whether it is the one to show it on.
+  // ⚠️ AND THE REDRAW USUALLY COMES FIRST: Firestore hands the local write back as a
+  // snapshot before the save's own promise resolves, so the row that is on screen when
+  // the save finishes is a NEW one. `chips` always holds the chip of the row currently
+  // drawn for each title, and markSaved() lights that one.
+  let lastSaved = { title: null, until: 0 };
+  const chips = new Map();
+  function savedChip(title) {
+    const chip = el('span', { class: 'set-saved', text: t('settings.saved'), hidden: true });
+    chips.set(title, chip);
+    const left = lastSaved.title === title ? lastSaved.until - Date.now() : 0;
+    if (left > 0) {
+      chip.hidden = false;
+      setTimeout(() => { chip.hidden = true; }, left);
+    }
+    return chip;
+  }
+  function markSaved(title) {
+    lastSaved = { title, until: Date.now() + 2000 };
+    const chip = chips.get(title);
+    if (!chip) return;
+    chip.hidden = false;
+    setTimeout(() => { chip.hidden = true; }, 2000);
+  }
+
   // ⚠️ NO TAB BAR ANY MORE. It carried Suppliers / Ingredients / General, and with
   // the first two gone a bar of one tab is a control that appears to do nothing.
   const overlay = el('div', { class: 'mgmt-overlay' }, [
@@ -128,8 +157,7 @@ export function buildManagement(data, actions) {
       subEl.hidden = !text;
     };
     paintSub();
-    const saved = el('span', { class: 'set-saved', text: t('settings.saved'), hidden: true });
-    let timer = null;
+    const saved = savedChip(title);
 
     input.addEventListener('change', async () => {
       const wanted = input.checked;
@@ -138,9 +166,7 @@ export function buildManagement(data, actions) {
       try {
         await save(wanted);
         paintSub();
-        saved.hidden = false;
-        clearTimeout(timer);
-        timer = setTimeout(() => { saved.hidden = true; }, 2000);
+        markSaved(title);
       } catch (err) {
         input.checked = !wanted;       // back to what is actually stored
         paintSub();
@@ -217,7 +243,7 @@ export function buildManagement(data, actions) {
       if (day === current) opt.selected = true;
       sel.appendChild(opt);
     });
-    const saved = el('span', { class: 'set-saved', text: t('settings.saved'), hidden: true });
+    const saved = savedChip(t('orders.weekStart.title'));
 
     sel.addEventListener('change', async () => {
       const wanted = sel.value;
@@ -227,8 +253,7 @@ export function buildManagement(data, actions) {
       sel.disabled = true;
       try {
         await actions.saveOrdersConfig({ weekStartsOn: wanted });
-        saved.hidden = false;
-        setTimeout(() => { saved.hidden = true; }, 2000);
+        markSaved(t('orders.weekStart.title'));
       } catch (err) {
         sel.value = current;          // back to what is actually stored
         await reportFailure('save', t('orders.weekStart.title'), err);
@@ -238,7 +263,7 @@ export function buildManagement(data, actions) {
     });
 
     return el('div', { class: 'set-row' }, [
-      el('span', { class: 'set-text' }, [el('span', { class: 'set-title', text: t('orders.weekStart.title') })]),
+      el('span', { class: 'set-text' }, [el('span', { class: 'set-title', text: t('orders.weekStart.row') })]),
       saved,
       sel,
     ]);
@@ -293,7 +318,7 @@ export function buildManagement(data, actions) {
       class: 'set-input', id: 'history-days-input',
     });
     input.value = String(config.historyDays);
-    const saved = el('span', { class: 'set-saved', text: t('settings.saved'), hidden: true });
+    const saved = savedChip(t('orders.daysOfPastOrders'));
 
     input.addEventListener('change', async () => {
       const stored = data.ordersConfig().historyDays;
@@ -309,8 +334,7 @@ export function buildManagement(data, actions) {
       input.disabled = true;
       try {
         await actions.saveOrdersConfig({ historyDays: wanted });
-        saved.hidden = false;
-        setTimeout(() => { saved.hidden = true; }, 2000);
+        markSaved(t('orders.daysOfPastOrders'));
       } catch (err) {
         input.value = String(stored);   // back to what is actually stored
         await reportFailure('save', t('orders.daysOfHistory'), err);
