@@ -649,6 +649,12 @@ input.ing-stock {
     give it back, so a pair never ends on one line and one gap. */
   body[data-section="orders"] .ingredient-list > .ing-row:last-child,
   body[data-section="orders"] .ing-flat-list > .ing-row:last-child { border-bottom: 1px solid var(--border); }
+  /* 📌 NO LETTER HEADINGS ON A TABLET (decided 28 Sep 2026). A full-width letter
+     over a letter with one ingredient left half a row empty, again and again down
+     the list. The list is still A→Z and the search box sits right above it, so the
+     letters bought little here; without them the rows pair up in full columns.
+     On a phone (one column) they stay: there they cost no space. */
+  body[data-section="orders"] .ing-flat-list > .ing-letter { display: none; }
 
   /* Kitchen-sized: bigger to hit without looking, bigger to read across a
      counter. --tap-min/--qty-font are the two constants (tokens.css). */
