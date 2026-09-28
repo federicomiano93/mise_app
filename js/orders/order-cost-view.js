@@ -4,12 +4,11 @@
 // (the summary sheet) — both show the SAME numbers from js/order-cost.js, so
 // this is the one place that turns them into DOM rather than two.
 //
-// ⚠️ NEVER CALLED FOR SOMEBODY WHO MAY NOT SEE MONEY. Nothing here checks a
-// permission — it draws whatever js/order-cost.js handed it. The gate is
-// upstream: an ingredient this account may not read the price of has no
-// unitCost at all (js/orders/firebase-orders.js watchIngredientPrices fails
-// permission-denied into an empty map, silently), which reads here exactly
-// like an ingredient nobody has priced yet — "no price", never a wrong one.
+// ⚠️ NEVER CALLED FOR SOMEBODY WHO MAY NOT SEE MONEY. The gate is upstream and
+// explicit: js/orders/orders-main.js passes `show` / `showMoney` true only once
+// the ingredient-prices read has SUCCEEDED (watchIngredientPrices reports it).
+// An empty map alone is not enough — a refused read also gives one, and it would
+// have drawn «no price» and a total in front of an employee.
 
 import { t } from '../i18n.js';
 import { el } from './dom.js';

@@ -3,10 +3,10 @@
 // back out of a rendered screen.
 //
 // ⚠️⚠️ MONEY IS SHOWN ONLY TO PEOPLE WHO CAN READ PRICES. This file computes
-// numbers; the caller (js/orders/orders-main.js) decides whether to draw them
-// at all, gated the same way foodcost-settings.js already gates the rate per
-// hour — an employee shown Orders must never learn what a sack of flour
-// costs. Nothing here enforces that; it cannot, being pure.
+// numbers; the caller (js/orders/orders-main.js) draws them only once the
+// ingredient-prices read actually SUCCEEDED (state.pricesReadable) — the rules
+// refuse it to an employee not shown Food cost. Nothing here enforces that; it
+// cannot, being pure.
 //
 // ⚠️ THE PRICE STAYS NET, EXACTLY AS FOOD COST ALREADY INSISTS ON
 // (js/foodcost/foodcost-model.js): what is stored on ingredient-prices is
@@ -19,15 +19,10 @@ import { parsePackSize } from './pack-size.js';
 // The net cost of ONE ORDERED UNIT of an ingredient — one sack, one case, one
 // piece, whatever the order screen's own quantity box counts.
 //
-//   priceUnit 'pcs'        → pricePerUnit itself: one ordered unit IS one
-//                            priced piece, no conversion needed.
-//   priceUnit 'kg' | 'l'   → pricePerUnit × the pack's weight in kilos, read
-//                            from the ingredient's own `weight` free text
-//                            (js/pack-size.js parsePackSize) — the same
-//                            reading the stocktake already relies on. A pack
-//                            size that cannot be read (parsePackSize -> null)
-//                            means this cannot either: null, never a guess.
-//   no usable price at all → null.
+// A price «by piece» is the price of ONE UNIT BOUGHT — the same thing the stocktake
+// counts (js/inventory/inventory-value.js: «its rate already is per one of them») —
+// so it is the price of one ordered unit, whatever that unit is called. The rules
+// that decide the rest are listed under «ONLY WHEN THE ORDER UNIT LEAVES NO DOUBT».
 //
 // ⚠️ NEVER ROUNDED HERE. A rounded unit cost multiplied by a large quantity
 // drifts from the true total by more than a rounding error should; round
@@ -45,9 +40,18 @@ import { parsePackSize } from './pack-size.js';
 //                                               rate × that many kilos (litres)
 //   pack word or no unit, kg|l price, «25kg»  → rate × the pack's kilos
 //   pcs price, pack text without a multiplier → rate (one ordered unit = one piece)
-//   pcs price on a «6x1kg» case, or a weight   → null (which one is priced?)
-//   unit and a pcs price
-const WEIGHT_UNITS = Object.freeze({ kg: 1, g: 0.001, l: 1, lt: 1, ml: 0.001, cl: 0.01 });
+//   pcs price on a «6x1kg» case, or ordered    → null (which one is priced?)
+//   by weight
+//
+// The order unit is free text, so the weight words are matched in the forms people
+// actually type, in both languages — a missed «kili» would read a kilo as a whole
+// 25kg sack, a total 25 times too high.
+const WEIGHT_UNITS = Object.freeze({
+  kg: 1, kgs: 1, kilo: 1, kilos: 1, kili: 1, chilo: 1, chili: 1, chilogrammi: 1,
+  g: 0.001, gr: 0.001, grammi: 0.001, grams: 0.001,
+  l: 1, lt: 1, litro: 1, litri: 1, litre: 1, litres: 1, liter: 1, liters: 1,
+  ml: 0.001, cl: 0.01,
+});
 const MULTIPLIER = /\d\s*[x×*]\s*\d/i;
 
 export function unitCost(ingredient, price) {
@@ -55,7 +59,7 @@ export function unitCost(ingredient, price) {
   const rate = positiveNumber(price.pricePerUnit);
   if (rate === null) return null;
 
-  const orderUnit = String((ingredient && ingredient.unit) || '').trim().toLowerCase();
+  const orderUnit = String((ingredient && ingredient.unit) || '').trim().toLowerCase().replace(/\.$/, '');
   const byWeight = Object.prototype.hasOwnProperty.call(WEIGHT_UNITS, orderUnit);
   const packText = String((ingredient && ingredient.weight) || '');
 

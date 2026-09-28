@@ -137,3 +137,11 @@ test('costed counts the lines that got a price', () => {
   assert.equal(r.missingPrice, 1);
   assert.equal(r.missingVat, 1);
 });
+
+test('weight words are read in the forms people type, in both languages', () => {
+  for (const unit of ['kili', 'Kg.', 'chili', 'kilo']) {
+    assert.equal(unitCost({ weight: '25kg', unit }, { priceUnit: 'kg', pricePerUnit: 1.8 }), 1.8, unit);
+  }
+  assert.equal(unitCost({ weight: '25kg', unit: 'gr' }, { priceUnit: 'kg', pricePerUnit: 2 }), 0.002);
+  assert.equal(unitCost({ weight: '', unit: 'litri' }, { priceUnit: 'l', pricePerUnit: 1.2 }), 1.2);
+});
