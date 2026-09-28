@@ -2686,7 +2686,7 @@ body.hide-stock .ingredient-list .ing-fields { justify-content: center; }
      header's own flex children on a narrow-enough tablet) with `auto`
      restored on its own children keeps the title unclickable air without
      ever blocking a real button under it. */
-  body[data-section="orders"] .orders-header-title {
+  body[data-card="orders"] > .orders-header > .orders-header-title {
     position: absolute;
     left: 50%;
     top: 50%;
@@ -2698,7 +2698,13 @@ body.hide-stock .ingredient-list .ing-fields { justify-content: center; }
     transform: translate(-50%, -50%);
     pointer-events: none;
   }
-  body[data-section="orders"] .orders-header-title * { pointer-events: auto; }
+  body[data-card="orders"] > .orders-header > .orders-header-title * { pointer-events: auto; }
+  /* ⚠️ With the title out of flow, the header's space-between spread the right-hand
+     buttons across the whole bar (help and bell ended up mid-header, measured 28 Sep
+     2026). Pushing the first of them right keeps Back alone on the left and the
+     help · bell · send group together on the right. Scoped to THIS page's own header
+     (a direct child of body): suppliers.html and the overlays keep theirs. */
+  body[data-card="orders"] > .orders-header > .help-host { margin-left: auto; }
 
   /* 9. THE RED DEBT BANNER IN THE STRIP: kitchen-sized, and in the app's own
      type — a plain `<button>` does not inherit body's font-family in any
