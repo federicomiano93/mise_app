@@ -362,7 +362,10 @@ const HAND_ICON =
 // The placeholder shown in the pane while no supplier is in it. ONE node, kept in
 // the pane and only shown or hidden — never a second child beside the supplier
 // screen (28 Sep 2026: both were visible at once, the order squeezed under it).
-// Its words are set on every refresh, so a language change reaches it.
+// ⚠️ ITS WORDS NEED THEIR OWN onLanguageChange (see init): a refresh runs when the
+// width, tab or supplier changes — NOT when the venue's language arrives, which is
+// usually AFTER the first refresh. Relying on refreshes alone left an Italian venue
+// reading «Choose a supplier» on its tablet (ui-check, 28 Sep 2026).
 function paneEmptyState(pane) {
   let empty = pane.querySelector(':scope > .split-empty');
   if (!empty) {
@@ -373,9 +376,20 @@ function paneEmptyState(pane) {
     ]);
     pane.prepend(empty);
   }
+  paintPaneEmptyWords(empty);
+  return empty;
+}
+
+function paintPaneEmptyWords(empty) {
   empty.querySelector('h2').textContent = t('orders.split.empty.title');
   empty.querySelector('p').textContent = t('orders.split.empty.text');
-  return empty;
+}
+
+// Only rewords a placeholder that already exists — never creates one, so it cannot
+// put a visible placeholder beside a supplier screen already in the pane.
+function repaintPaneEmptyWords() {
+  const empty = document.querySelector('#orders-detail-pane > .split-empty');
+  if (empty) paintPaneEmptyWords(empty);
 }
 
 // Move the open supplier screen to `target` WITHOUT rebuilding it, and give the
@@ -2059,6 +2073,7 @@ async function init() {
   // one until the debt happens to change again.
   onLanguageChange(() => refreshDeliveriesBadge());
   onLanguageChange(() => renderListsButton());
+  onLanguageChange(() => repaintPaneEmptyWords());
 
   // The debounced draft autosave has no caller to hand a rejection to, so it reports
   // through here. Never auto-hidden on a timer: an order that is no longer being
