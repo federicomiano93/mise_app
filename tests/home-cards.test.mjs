@@ -189,8 +189,10 @@ test('the Home filters on the card, and passes the session\'s canManage', () => 
 test('⚠️ the button is drawn only for somebody who can manage the venue', () => {
   // Since 13 Sep 2026 it is a row of the Home's Settings screen, not a line under the cards.
   const src = withoutComments(read('js/home-settings.js'));
+  // Since 28 Sep 2026 the rows sit in cards (tokens.css .set-*): the gate is a
+  // conditional inside the «venue» card instead of an if around an append.
   assert.match(src,
-    /if \(session\.canManage\) \{\s*scroll\.append\(item\(t\('homeCards\.title'\)[\s\S]{0,200}openHomeCards\(session\)/);
+    /session\.canManage \? item\(t\('homeCards\.title'\)[\s\S]{0,200}openHomeCards\(session\)/);
 });
 
 test('⚠️ the page gate asks too, after the section check and before the page is shown', () => {

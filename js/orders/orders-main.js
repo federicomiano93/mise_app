@@ -171,6 +171,7 @@ function applyOrdersConfig(config) {
   // three screens, and hiding a field is a matter of appearance, not of structure. It
   // also means the stored stock values stay exactly where they are.
   document.body.classList.toggle('hide-stock', !config.showStock);
+  renderListsButton();
 }
 
 function watchOrdersConfig() {
@@ -1247,39 +1248,33 @@ async function deleteRequest(id) {
   }
 }
 
-// The one door to the order lists, at the foot of the screen.
+// ⚠️ THE ONE DOOR TO THE ORDER LISTS, SHOWN TO EVERYBODY (since 24 Aug 2026): the
+// people who SEND a list must be able to see one, and the rules already let anybody
+// in the venue read them. ⚠️ AND IT NEVER DISAPPEARS while lists are on — v1.31.1
+// was the tap that finished the last list removing the only entrance.
+// The order-lists button in the green bar (28 Sep 2026) — where the card at the foot
+// of the page used to be. Same signal: crust-coloured while a list is waiting, and it
+// is the door to the list screen. Hidden when the venue turned order lists off.
 //
-// ⚠️⚠️ AND IT IS SHOWN TO EVERYBODY SINCE 24 Aug 2026, which had to change in the same
-// breath as removing the green banner that used to sit at the top. That banner carried
-// no role gate, so it was the ONLY sight an ordinary employee had of the lists —
-// removing it while this card stayed manager-only would have left the very people who
-// SEND a list with no way of ever seeing one. The rules already let anybody in the
-// venue read them; hiding this was only ever hiding the door, never the room.
-//
-// ⚠️ WHITE UNTIL SOMETHING ARRIVES, THEN COLOURED, and that is the half that does the
-// work. v1.31.1 was the tap that finished the last list removing the only entrance —
-// so this is always here, whether or not anything is waiting. Federico asked for it
-// SMALLER on 24 Aug; smaller is a size, not a disappearance.
-function renderRequestCard() {
-  const host = document.getElementById('requests-card-host');
-  if (!host) return;
-  host.textContent = '';
-  host.hidden = false;
-
-  const waiting = waitingRequests(state.requests).length;
-  host.appendChild(el('button', {
-    type: 'button',
-    class: `requests-card${waiting ? ' requests-card--waiting' : ''}`,
-    onClick: openRequestList,
-  }, [
-    el('span', { class: 'requests-card-icon', 'aria-hidden': 'true',
-      icon: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l2 2 4-4"/><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M8 2v4M16 2v4"/></svg>' }),
-    el('span', { class: 'requests-card-text' }, [
-      el('span', { class: 'requests-card-name', text: t('orders.request.open') }),
-      el('span', { class: 'requests-card-sub',
-        text: waiting ? t('orders.request.waiting', { n: waiting }) : t('orders.request.none') }),
-    ]),
-  ]));
+// ⚠️ ONE FUNCTION WRITES IT, called from every path that can change the answer: a
+// requests snapshot, and config/orders arriving (applyOrdersConfig).
+let listsButtonWired = false;
+function renderListsButton() {
+  const btn = document.getElementById('orders-lists-btn');
+  const dot = document.getElementById('orders-lists-count');
+  if (!btn || !dot) return;
+  if (!listsButtonWired) {
+    btn.addEventListener('click', openRequestList);
+    listsButtonWired = true;
+  }
+  btn.hidden = ordersConfig.orderLists === false;
+  const waiting = waitingRequests(state.requests || []).length;
+  btn.classList.toggle('is-waiting', waiting > 0);
+  dot.textContent = waiting > 0 ? String(waiting) : '';
+  dot.hidden = waiting === 0;
+  btn.setAttribute('aria-label', waiting > 0
+    ? `${t('orders.request.open')}: ${t('orders.request.waiting', { n: waiting })}`
+    : t('orders.request.open'));
 }
 
 // "A", "A and B", "A, B and C".
@@ -2170,7 +2165,7 @@ async function init() {
   // are stored rather than held in the page.
   watchOrderRequests(list => {
     state.requests = list;
-    renderRequestCard();
+    renderListsButton();
     // ⚠️ AND THE UNTOLD BANNER, because sending the list again is one of the two
     // things that answers it. Without this it would keep saying "you have added
     // something" for the rest of the day to somebody who had just sent it.

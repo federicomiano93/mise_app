@@ -56,10 +56,23 @@ export function normalizeSendRoutes(doc) {
 // the switches applied to everybody, turning WhatsApp off to hold an employee back
 // would disarm the very person who then has to get the order to the supplier — the
 // order could never leave the building. The switches say what an EMPLOYEE may use.
+//
+// ⚠️ ORDER LISTS OFF TAKES THE «TO THE MANAGER» ROAD AWAY FROM EVERYBODY — that road
+// IS an order list (28 Sep 2026). Unlike the switches above it is not a limit on an
+// employee, it is the venue saying it does not use the feature at all.
 export function routesFor(settings, { canManage = false } = {}) {
-  if (canManage) return [...ROUTES];
+  const listsOn = settings?.orderLists !== false;
+  const keep = r => listsOn || r !== 'manager';
+  if (canManage) return ROUTES.filter(keep);
   const routes = settings?.routes || DEFAULT_ROUTES;
-  return ROUTES.filter(r => routes[r] === true);
+  return ROUTES.filter(r => routes[r] === true && keep(r));
+}
+
+// Would turning order lists OFF leave an employee with no way to send at all?
+// True when the only road switched on for them is «to the manager».
+export function listsAreTheOnlyRoad(settings) {
+  const routes = settings?.routes || DEFAULT_ROUTES;
+  return ROUTES.filter(r => r !== 'manager').every(r => routes[r] !== true);
 }
 
 // Can this route actually be used for this supplier?

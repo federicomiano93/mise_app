@@ -30,13 +30,20 @@ import { reportFailure } from './mgmt-ui.js';
 // panels  — { allergens, nutrition } as they stand right now
 // onSet(key, on) — throws one switch; resolves when the server has agreed
 export function buildRegistrySettings({ panels, onSet }) {
-  const content = el('div', { class: 'mgmt-scroll reg-settings' });
+  const content = el('div', { class: 'mgmt-scroll reg-settings set-screen' });
   let current = { ...panels };
 
-  content.appendChild(el('h3', { class: 'mgmt-section-title', text: t('orders.settings.ingredientCard') }));
-  content.appendChild(el('p', { class: 'notif-note', text: t('orders.settings.cardNote') }));
+  // ONE card, in the app's one settings look (tokens.css .set-*, 28 Sep 2026): the
+  // title and its line, then the three switches as rows.
+  const card = el('section', { class: 'set-section' }, [
+    el('div', { class: 'set-head' }, [
+      el('h3', { text: t('orders.settings.ingredientCard') }),
+      el('p', { text: t('orders.settings.cardNote') }),
+    ]),
+  ]);
+  content.appendChild(card);
 
-  content.appendChild(toggle({
+  card.appendChild(toggle({
     key: 'showAllergens',
     label: t('orders.settings.showAllergens'),
     note: t('orders.settings.showAllergensNote'),
@@ -50,7 +57,7 @@ export function buildRegistrySettings({ panels, onSet }) {
     },
   }));
 
-  content.appendChild(toggle({
+  card.appendChild(toggle({
     key: 'showNutrition',
     label: t('orders.settings.showNutrition'),
     note: t('orders.settings.showNutritionNote'),
@@ -67,7 +74,7 @@ export function buildRegistrySettings({ panels, onSet }) {
   // ⚠️ IT DEFAULTS OFF, which is the opposite of the two above, and the reason is the
   // same one in reverse: a venue that has never heard of it must never find it already
   // running. js/orders/firebase-features.js reads it as `=== true`.
-  content.appendChild(toggle({
+  card.appendChild(toggle({
     key: 'packPhoto',
     label: t('orders.settings.packPhoto'),
     note: t('orders.settings.packPhotoNote'),
@@ -79,17 +86,18 @@ export function buildRegistrySettings({ panels, onSet }) {
     },
   }));
 
-  // One switch: a checkbox row, the same shape the Orders settings panel uses for
-  // «Mostra la casella scorte». Applied on the tap — there is nothing to lose by
-  // getting it wrong and one more tap undoes it.
+  // One switch row, the same as every settings switch in the app: applied on the tap,
+  // «Saved ✓» for two seconds, and put back — with the reason — if refused.
   // ⚠️ `current` IS KEYED BY THE SWITCH, not read through an if/else on its name. With
   // two switches the chain was fine; with three, `key === 'showAllergens' ? … : …`
   // silently files the third one under the second.
   const FIELD = { showAllergens: 'allergens', showNutrition: 'nutrition', packPhoto: 'packPhoto' };
 
   function toggle({ key, label, note, confirmOff, confirmOn = null }) {
-    const cb = el('input', { type: 'checkbox' });
+    const cb = el('input', { type: 'checkbox', role: 'switch', 'aria-label': label });
     cb.checked = !!current[FIELD[key]];
+    const saved = el('span', { class: 'set-saved', text: t('settings.saved'), hidden: true });
+    let timer = null;
 
     cb.addEventListener('change', async () => {
       const wanted = cb.checked;
@@ -104,6 +112,9 @@ export function buildRegistrySettings({ panels, onSet }) {
       try {
         await onSet(key, wanted);
         current[FIELD[key]] = wanted;
+        saved.hidden = false;
+        clearTimeout(timer);
+        timer = setTimeout(() => { saved.hidden = true; }, 2000);
       } catch (err) {
         cb.checked = !wanted;          // back to what is actually stored
         await reportFailure('save', label, err);
@@ -112,9 +123,13 @@ export function buildRegistrySettings({ panels, onSet }) {
       }
     });
 
-    return el('div', { class: 'mgmt-field' }, [
-      el('label', { class: 'mgmt-toggle' }, [cb, el('span', { text: label })]),
-      el('p', { class: 'notif-note', text: note }),
+    return el('div', { class: 'set-row' }, [
+      el('span', { class: 'set-text' }, [
+        el('span', { class: 'set-title', text: label }),
+        el('span', { class: 'set-sub', text: note }),
+      ]),
+      saved,
+      el('label', { class: 'set-switch' }, [cb, el('span', { class: 'set-switch-track', 'aria-hidden': 'true' })]),
     ]);
   }
 

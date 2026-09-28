@@ -355,7 +355,7 @@ test('the settings panel kept the settings and gave up the records', () => {
   assert.doesNotMatch(code, /tabBar|tabButton/,
     'with the two lists gone, a tab bar of one tab is a control that appears to do nothing');
   // …and it kept what it is for.
-  for (const kept of ['buildStockToggle', 'buildWeekStart', 'buildSendRoutes', 'buildHistoryDaysField']) {
+  for (const kept of ['buildStockSwitch', 'buildWeekStart', 'buildSendRoutes', 'buildHistoryDaysField', 'buildOrderListsSwitch']) {
     assert.match(code, new RegExp(`\\b${kept}\\b`), `${kept} is a real setting and stays`);
   }
 });

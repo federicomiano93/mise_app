@@ -270,7 +270,6 @@ test('⚠️ every class the CATALOGUE uses is one this page actually defines', 
     'cat-cost-host',          // container replaced in place when prices arrive
     'cat-guided-host',        // container replaced in place when the batch changes
     'cat-photo-btn',          // queried to show/hide; .cat-alg-sheet-btn is the look
-    'cat-photo-setting-label',// queried in the repaint; the row carries the look
     'guided-edit-list', 'guided-edit-missed', // queried while writing a procedure
     'guided-edit',            // js/update-gate.js BUSY_SELECTORS — a marker, not a look
     'cat-photo-busy',         // js/update-gate.js BUSY_SELECTORS — a paid read in flight

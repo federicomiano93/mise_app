@@ -13,7 +13,8 @@
 // client-order badge had to be fixed once for exactly that: it counted by a rule
 // of its own and went on nagging after the work was done.)
 
-import { getRecentOrderRequestsOnce } from './orders/firebase-orders.js';
+import { getRecentOrderRequestsOnce, getDocOnce, COLLECTIONS } from './orders/firebase-orders.js';
+import { normalizeOrdersConfig } from './orders/orders-config.js';
 import { waitingRequests } from './orders/order-request-model.js';
 import { onSession } from './firebase.js';
 import { isSectionAllowed } from './sections.js';
@@ -39,6 +40,11 @@ function paintBadge(count) {
 
 async function showOrderRequestsHome() {
   try {
+    // ⚠️ A VENUE THAT TURNED ORDER LISTS OFF GETS NO NUMBER (28 Sep 2026): the lists
+    // it already has are kept, but a count on the Home would point at a door the
+    // Orders screen no longer shows. One read of one small document.
+    const config = normalizeOrdersConfig(await getDocOnce(COLLECTIONS.config, 'orders'));
+    if (!config.orderLists) return;
     const waiting = waitingRequests(await getRecentOrderRequestsOnce());
     if (!waiting.length) return;
     paintBadge(waiting.length);

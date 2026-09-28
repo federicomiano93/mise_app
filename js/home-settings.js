@@ -42,14 +42,32 @@ function backIcon() {
   return svg;
 }
 
-// One row: what it is, and one sentence saying what is behind it. The same shape as
-// the Calculator's Settings hub (.settings-menu-btn), so the app has one kind of menu.
+// One row: what it is, and one sentence saying what is behind it — a door to another
+// screen, in the app's ONE settings look (tokens.css .set-*, 28 Sep 2026).
+function rowText(btn, title, sub) {
+  const text = node('span', 'set-text');
+  text.append(node('span', 'set-title', title), node('span', 'set-sub', sub));
+  btn.textContent = '';
+  btn.append(text);
+}
+
 function item(title, sub, onClick) {
-  const btn = node('button', 'settings-menu-btn');
+  const btn = node('button', 'set-row set-door');
   btn.type = 'button';
-  btn.append(node('span', 'settings-menu-title', title), node('span', 'settings-menu-sub', sub));
+  rowText(btn, title, sub);
   btn.addEventListener('click', onClick);
   return btn;
+}
+
+// A card of rows under one title. A card with no rows is not drawn.
+function section(title, rows) {
+  const inner = rows.filter(Boolean);
+  if (!inner.length) return null;
+  const card = node('section', 'set-section');
+  const head = node('div', 'set-head');
+  head.append(node('h3', '', title));
+  card.append(head, ...inner);
+  return card;
 }
 
 export function openHomeSettings(session) {
@@ -70,7 +88,7 @@ export function openHomeSettings(session) {
   const header = node('header', 'orders-header');
   header.append(back, titleWrap, spacer);
 
-  const scroll = node('div', 'people-scroll');
+  const scroll = node('div', 'people-scroll set-screen');
   const overlay = node('div', 'people-overlay');
   overlay.append(header, scroll);
 
@@ -83,65 +101,44 @@ export function openHomeSettings(session) {
     // the driven run, where the Italian owner's rows were read before it had arrived.
     awayRow = item(t('away.title'), t('settings.away.sub'), () => {});
     awayRow.disabled = true;
-    scroll.append(awayRow);
 
-    // ⚠️ OWNER AND MANAGER, which includes a head chef — Federico's rule: everybody
-    // else uses the app's language and cannot change it.
-    if (session.canManage) {
-      scroll.append(item(t('lang.title'), t('lang.intro'), async () => {
-        const { openLanguage } = await import('./staff/language.js');
-        openLanguage(session);
-      }));
-    }
+    // Three cards, by WHO a row is about (Federico, 28 Sep 2026: «migliora la UX di
+    // tutte le impostazioni»): you, the venue, your account.
+    scroll.append(...[
+      section(t('settings.home.you'), [awayRow]),
+      section(t('settings.home.venue'), [
+        // ⚠️ OWNER AND MANAGER, which includes a head chef — Federico's rule: everybody
+        // else uses the app's language and cannot change it.
+        session.canManage ? item(t('lang.title'), t('lang.intro'), async () => {
+          const { openLanguage } = await import('./staff/language.js');
+          openLanguage(session);
+        }) : null,
+        // ⚠️ OWNER AND MANAGER — who decides which cards the employees see. The server
+        // refuses everybody else too (setStaffCard).
+        session.canManage ? item(t('homeCards.title'), t('homeCards.intro'), async () => {
+          const { openHomeCards } = await import('./staff/home-cards-screen.js');
+          openHomeCards(session);
+        }) : null,
+        // ⚠️ OWNERS ONLY. Hiring is the one power a manager does not have, and drawing
+        // this for them would be an invitation to a screen where every button is refused.
+        // The whole session goes in: an invitation that does not say where it lets
+        // somebody in reads exactly like a scam.
+        session.isOwner ? item(t('people.title'), t('settings.people.sub'), async () => {
+          const { openPeople } = await import('./staff/people.js');
+          openPeople(session);
+        }) : null,
+      ]),
+      // ⚠️ FOR SOMEBODY WITH VENUES BUT NO BACK OFFICE. With exactly two venues it jumps
+      // STRAIGHT to the other one; with more, it forgets the remembered one so the
+      // reload comes back to the picker. The app's administrator steps up with the
+      // header arrow instead.
+      section(t('settings.home.account'), [
+        !session.isAppAdmin && options.length > 1 ? item(t('home.switch'), t('settings.switch.sub'), switchVenue) : null,
+      ]),
+    ].filter(Boolean));
 
-    // ⚠️ OWNER AND MANAGER — who decides which cards the employees see. The server
-    // refuses everybody else too (setStaffCard).
-    if (session.canManage) {
-      scroll.append(item(t('homeCards.title'), t('homeCards.intro'), async () => {
-        const { openHomeCards } = await import('./staff/home-cards-screen.js');
-        openHomeCards(session);
-      }));
-    }
-
-    // ⚠️ OWNERS ONLY. Hiring is the one power a manager does not have, and drawing
-    // this for them would be an invitation to a screen where every button is refused.
-    if (session.isOwner) {
-      scroll.append(item(t('people.title'), t('settings.people.sub'), async () => {
-        const { openPeople } = await import('./staff/people.js');
-        // The whole session: the screen needs the venue's NAME as well as who is
-        // looking, because an invitation that does not say where it lets somebody
-        // in reads exactly like a scam.
-        openPeople(session);
-      }));
-    }
-
-    // ⚠️ FOR SOMEBODY WITH VENUES BUT NO BACK OFFICE. With exactly two venues it jumps
-    // STRAIGHT to the other one; with more, it forgets the remembered one so the
-    // reload comes back to the picker. The app's administrator steps up with the
-    // header arrow instead.
-    if (!session.isAppAdmin && options.length > 1) {
-      scroll.append(item(t('home.switch'), t('settings.switch.sub'), async () => {
-        const other = options.filter(id => id !== session.locationId);
-        const names = session.optionNames || {};
-        const cleared = t('home.switch.cleared');
-        const ok = await confirmDialog({
-          title: t('home.switch.title'),
-          message: other.length === 1
-            ? `${t('home.switch.toOne', { other: names[other[0]] || other[0], here: session.name })}\n\n${cleared}`
-            : `${t('home.switch.toMany')}\n\n${cleared}`,
-          okLabel: t('home.switch.ok'),
-          cancelLabel: t('ui.cancel'),
-        });
-        if (!ok) return;
-        // Switching clears this phone's offline copy, and a change still waiting for
-        // signal is waiting in it.
-        if (!await mayLeaveWithUnsent(confirmDialog)) return;
-        if (other.length === 1) switchLocation(other[0]);
-        else forgetLocation();
-      }));
-    }
-
-    const logout = node('button', 'session-logout', t('auth.logOut'));
+    // Log out: the quiet destructive action at the foot, never a row (P20).
+    const logout = node('button', 'set-danger', t('auth.logOut'));
     logout.type = 'button';
     logout.addEventListener('click', async () => {
       const ok = await confirmDialog({
@@ -154,6 +151,26 @@ export function openHomeSettings(session) {
       if (ok && await mayLeaveWithUnsent(confirmDialog)) signOutNow();
     });
     scroll.append(logout);
+  }
+
+  async function switchVenue() {
+    const other = options.filter(id => id !== session.locationId);
+    const names = session.optionNames || {};
+    const cleared = t('home.switch.cleared');
+    const ok = await confirmDialog({
+      title: t('home.switch.title'),
+      message: other.length === 1
+        ? `${t('home.switch.toOne', { other: names[other[0]] || other[0], here: session.name })}\n\n${cleared}`
+        : `${t('home.switch.toMany')}\n\n${cleared}`,
+      okLabel: t('home.switch.ok'),
+      cancelLabel: t('ui.cancel'),
+    });
+    if (!ok) return;
+    // Switching clears this phone's offline copy, and a change still waiting for
+    // signal is waiting in it.
+    if (!await mayLeaveWithUnsent(confirmDialog)) return;
+    if (other.length === 1) switchLocation(other[0]);
+    else forgetLocation();
   }
 
   // ── The holiday row ─────────────────────────────────────────────────────────
@@ -172,12 +189,11 @@ export function openHomeSettings(session) {
     if (!btn) { awayRow?.remove(); awayRow = null; return; }
     const away = btn.classList.contains('session-away');
     const label = btn.textContent;
-    btn.className = `settings-menu-btn${away ? ' settings-menu-btn--away' : ''}`;
-    btn.textContent = '';
-    btn.append(node('span', 'settings-menu-title', label), node('span', 'settings-menu-sub', t('settings.away.sub')));
+    btn.className = `set-row set-door${away ? ' set-row--away' : ''}`;
+    rowText(btn, label, t('settings.away.sub'));
     // IN PLACE — the row takes the slot it was holding, so nothing below it moves.
     if (awayRow?.isConnected) awayRow.replaceWith(btn);
-    else scroll.prepend(btn);
+    else scroll.prepend(section(t('settings.home.you'), [btn]));
     awayRow = btn;
   }
   const onAwayChanged = () => {

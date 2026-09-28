@@ -91,34 +91,39 @@
     <h1 data-i18n="section.orders">Orders</h1>
     <p data-i18n="ui.supplierOrders">Supplier orders</p>
   </div>
-  <span class="help-host" data-help="orders"></span>
-  <!-- ⚠️⚠️ TABLET ONLY. js/orders/tablet-layout.js moves the banners that live
-       inline in the Order tab on a phone (today's orders, the debt, what is
-       pending, what nobody has been told about, the calendar notices) into
-       #orders-alerts-panel below, and this button opens/closes it. Hidden by
-       markup and by CSS on a phone; unhidden by JS only once there is at
-       least one notice to show, on a tablet. The count is DERIVED from the
-       panel's own children (see initAlertsPanel) — never written by hand
-       here, so it can never disagree with what tapping it actually opens. -->
-  <button class="orders-icon-btn orders-alerts-btn" id="orders-alerts-btn" type="button" aria-expanded="false" aria-controls="orders-alerts-panel" hidden>
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-    <span class="orders-alerts-count" id="orders-alerts-count" aria-hidden="true"></span>
-  </button>
-  <!-- ⚠️ A SEND ARROW, NOT THE WHATSAPP MARK. The button no longer means "send on
-       WhatsApp" — it means "send", and offers four roads. A WhatsApp glyph would name
-       exactly ONE of them, which is how somebody learns the wrong thing about what
-       their own app does.
-       📌 An arrow leaving a box, chosen by Federico on 14 Aug from three mounted side
-       by side in this header and screenshotted — the paper plane that shipped hours
-       earlier was his own «questa non mi piace». The shape is the one nearly every app
-       uses for "send this somewhere", and unlike an envelope it does not quietly name
-       the email road, and unlike an arrow in a circle it cannot be mistaken for the
-       Back arrow already sitting at the other end of the same bar. -->
-  <button class="orders-icon-btn" id="orders-wa-btn" type="button" data-i18n="ui.send" data-i18n-attr="aria-label" aria-label="Send"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M8 7l4-4 4 4"/><path d="M4 15v4a2 2 0 002 2h12a2 2 0 002-2v-4"/></svg></button>
-  <!-- ⚠️⚠️ TABLET ONLY, AND A CHILD OF THE HEADER ON PURPOSE — see the note on
-       #orders-alerts-btn above. Absolutely positioned, so it sits under the
+  <!-- ⚠️⚠️ THE RIGHT-HAND GROUP, ON PHONE AND TABLET ALIKE (Federico, 28 Sep 2026:
+       «le liste d'ordine mettile nella barra in alto verde, anche gli avvisi degli
+       ordini»). Bell, order lists, send — one flex group pushed right, so the title
+       keeps the space that is left and nothing ever wraps. The «?» that used to sit
+       here is now the «Help» row inside Settings: five round buttons do not fit a
+       296px phone. -->
+  <div class="orders-header-actions">
+    <!-- The bell: js/orders/tablet-layout.js moves the banners that ask for
+         something (not placed, changed since sent, still to re-order, the calendar)
+         into #orders-alerts-panel below, at EVERY size, and this opens it. Shown by
+         JS only when there is something inside; the number is DERIVED from the
+         panel's own children (initAlertsPanel), never written by hand. -->
+    <button class="orders-icon-btn orders-alerts-btn" id="orders-alerts-btn" type="button" aria-expanded="false" aria-controls="orders-alerts-panel" hidden>
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+      <span class="orders-head-dot" id="orders-alerts-count" aria-hidden="true" hidden></span>
+    </button>
+    <!-- Order lists (js/orders/orders-main.js renderListsButton): opens the list
+         screen that already existed. Crust-coloured while a list is waiting — the
+         colour is the signal, as the card at the foot of the page used to be. Hidden
+         when the venue has turned order lists off (config/orders.orderLists). -->
+    <button class="orders-icon-btn orders-lists-btn" id="orders-lists-btn" type="button" hidden>
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V3h6v1"/><path d="M9 10l1.5 1.5L13 9"/><path d="M9 15h6"/></svg>
+      <span class="orders-head-dot" id="orders-lists-count" aria-hidden="true" hidden></span>
+    </button>
+    <!-- ⚠️ A SEND ARROW, NOT THE WHATSAPP MARK — it offers four roads, and a WhatsApp
+         glyph would name only one. 📌 Chosen by Federico on 14 Aug from three mounted
+         side by side. -->
+    <button class="orders-icon-btn" id="orders-wa-btn" type="button" data-i18n="ui.send" data-i18n-attr="aria-label" aria-label="Send"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M8 7l4-4 4 4"/><path d="M4 15v4a2 2 0 002 2h12a2 2 0 002-2v-4"/></svg></button>
+  </div>
+  <!-- ⚠️⚠️ A CHILD OF THE HEADER ON PURPOSE (phone and tablet since 28 Sep 2026) —
+       see the note on #orders-alerts-btn above. Absolutely positioned, so it sits under the
        header without disturbing the header's own flex row, and is anchored to
-       .orders-header (position: relative, tablet-only) rather than to the
+       .orders-header (position: relative) rather than to the
        page, which is what lets it hang under the button that opens it however
        far down the page has scrolled. js/orders/tablet-layout.js relocates the
        banner HOSTS in here; the renderers that fill them (notifications.js,
@@ -300,19 +305,6 @@
       </section>
     </div>
   </div>
-
-  <!-- ⚠️⚠️ THE ORDER LISTS, AT THE FOOT AND SMALL (Federico, 24 Aug 2026). White and
-       low while there is nothing, coloured the moment a list arrives — the colour IS
-       the signal.
-       ⚠️⚠️ AND IT IS NOW SHOWN TO EVERYBODY, which had to change in the same breath
-       as removing the green banner at the top. That banner was the only sight an
-       ORDINARY EMPLOYEE had of the lists — this card was manager-only — so taking it
-       away without opening the card would have left whoever SENDS a list with no way
-       of ever seeing one. The rules already let anybody in the venue read them.
-       ⚠️ On 14 Aug this card was deliberately made BIGGER, after v1.31.1: the tap that
-       finished the last list removed the only door. It is smaller now, on Federico's
-       word — but it is still ALWAYS THERE, which is the half that mattered. -->
-  <div class="requests-card-host" id="requests-card-host" hidden></div>
 
   <!-- ⚠️⚠️ ONE BUTTON, CENTRED (Federico, 24 Aug 2026). History moved INSIDE
        Settings, and «Fornitori» left altogether — it was the SECOND door to

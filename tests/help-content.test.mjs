@@ -100,9 +100,26 @@ function appPages() {
     .filter(f => !['home.html', 'install-guide.html', 'order.html'].includes(f));
 }
 
+// ⚠️ ONE PAGE KEEPS ITS HELP ONE TAP DEEPER, ON PURPOSE (28 Sep 2026): the Orders
+// green bar holds the bell, the order lists and send, and a «?» beside them does not
+// fit a 296px phone — so Orders' help is the «Help» row of its Settings. Allowed only
+// while that row really calls it.
+const HELP_IN_SETTINGS = { 'orders.html': { id: 'orders', file: 'js/orders/management.js' } };
+
+test('the page whose help lives in Settings really opens it from there', () => {
+  for (const { id, file } of Object.values(HELP_IN_SETTINGS)) {
+    assert.match(read(file), new RegExp(`showHelp\\('${id}'\\)`), `${file} must open the «${id}» help`);
+    assert.ok(helpFor(id), `«${id}» must have text`);
+  }
+});
+
 test('every page of the app carries a help button', () => {
   for (const page of appPages()) {
     const html = read(page);
+    if (HELP_IN_SETTINGS[page]) {
+      assert.match(html, /js\/help-button\.js|js\/orders\/orders-main\.js/, `${page} loads its scripts`);
+      continue;
+    }
     assert.match(html, /data-help="[a-z-]+"/,
       `${page} has no data-help host — every screen must be able to explain itself`);
     assert.match(html, /js\/help-button\.js/, `${page} does not load js/help-button.js`);
@@ -134,6 +151,8 @@ test('the two files that must both know about a section agree', () => {
       hosted.add(id);
     }
     for (const [, id] of read(file).matchAll(/help:\s*'([a-z-]+)'/g)) hosted.add(id);
+    // A settings row that opens the help directly (HELP_IN_SETTINGS above).
+    for (const [, id] of read(file).matchAll(/showHelp\('([a-z-]+)'\)/g)) hosted.add(id);
   }
   const unreachable = SECTIONS.filter(id => !hosted.has(id));
   assert.deepEqual(unreachable, [],

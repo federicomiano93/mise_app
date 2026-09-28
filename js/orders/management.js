@@ -1,7 +1,7 @@
 // management.js — the Orders SETTINGS panel (the gear in the bottom bar).
 //
-// How the order screen looks, when the working week starts, which roads an order
-// may leave by, and the alerts. That is all it is now, and the word above the
+// Order lists on or off, how the order screen looks, when the working week starts,
+// which roads an order may leave by, the alerts, History and Help. That is all it is now, and the word above the
 // screen finally matches what is behind it.
 //
 // ⚠️ THE SUPPLIER AND INGREDIENT RECORDS LEFT THIS FILE. They were here — two lists
@@ -25,7 +25,7 @@ import { el } from './dom.js';
 import { canManageHere } from './firebase-orders.js';
 import { renderNotificationSettings } from './notifications.js';
 import { alertDialog } from './confirm-dialog.js';
-import { ROUTES, validateRoutes, toStored } from './send-routes.js';
+import { ROUTES, validateRoutes, toStored, listsAreTheOnlyRoad } from './send-routes.js';
 import { WEEKDAYS as WEEK_START_DAYS, isValidWeekStart } from './work-week.js';
 // ⚠️ THE SWITCH LIVES HERE, NOT IN notifications.js. That file is importable under
 // Node and has its own test suite BECAUSE it touches no Firebase; importing push.js
@@ -33,11 +33,12 @@ import { WEEKDAYS as WEEK_START_DAYS, isValidWeekStart } from './work-week.js';
 // A screen that already talks to Firestore is the right home for a control that does.
 import { muteOrderRequests, orderRequestsMuted, rememberMute } from '../push.js';
 import { BACK_ICON, reportFailure } from './mgmt-ui.js';
+import { showHelp } from '../help-button.js';
 
 export const isAdmin = true; // the panel is for everybody; each control is gated on its own
 
 export function buildManagement(data, actions) {
-  const content = el('div', { class: 'mgmt-scroll' });
+  const content = el('div', { class: 'mgmt-scroll set-screen' });
 
   // ⚠️ NO TAB BAR ANY MORE. It carried Suppliers / Ingredients / General, and with
   // the first two gone a bar of one tab is a control that appears to do nothing.
@@ -50,158 +51,184 @@ export function buildManagement(data, actions) {
     content,
   ]);
 
-  // ⚠️ FOUR SECTIONS, EACH ANSWERING A DIFFERENT QUESTION (Federico, 14 Aug 2026:
-  // «dividi in sezioni le impostazioni per renderle più chiare»). It was a flat list
-  // with two headings, and the send routes had been dropped under «the order screen» —
-  // where they do not belong: how an order LEAVES is not how the screen LOOKS.
+  // ⚠️ SECTIONS, EACH ANSWERING ONE QUESTION (Federico, 14 Aug 2026: «dividi in
+  // sezioni le impostazioni per renderle più chiare»), drawn with the app's ONE
+  // settings look since 28 Sep 2026 (tokens.css .set-*: «migliora la UX di tutte le
+  // impostazioni»). Every switch here saves on the tap — the rule written above
+  // .set-section in tokens.css.
   //
-  // ⚠️ TWO OF THE FOUR ARE FOR WHOEVER RUNS THE PLACE, and the database says the same:
+  // ⚠️ SOME ARE FOR WHOEVER RUNS THE PLACE, and the database says the same:
   // config/orders is write-gated on canManage(). Hiding them is COURTESY — an employee
   // who reached the screen anyway would simply have the write refused, which is the
   // shape every guard in this app has (v269: hiding is not the feature).
   function render() {
     content.textContent = '';
     const boss = canManageHere();
+    const config = data.ordersConfig();
 
-    // ⚠️ HISTORY IS FIRST, AND IT IS A DOOR AMONG SETTINGS. Federico moved it in here
-    // from the bottom bar on 24 Aug 2026, where it was taking a third of the bar every
-    // day for a screen consulted rarely. The field that says how far back it draws
-    // belongs with it and nowhere else.
-    if (actions.openHistory) {
-      section('ui.history', [buildHistoryDoor(), buildHistoryDaysField()]);
+    if (boss) {
+      section('orders.lists.title', 'orders.lists.note', [buildOrderListsSwitch(config)]);
     }
-    section('orders.section.orderScreen', [buildStockToggle()]);
-    if (boss) section('orders.weekStart.title', [buildWeekStart()]);
-    if (boss) section('orders.section.howSent', [buildSendRoutes()]);
+    section('orders.section.orderScreen', null, [buildStockSwitch(config)]);
+    if (boss) section('orders.weekStart.title', 'orders.weekStart.hint', [buildWeekStart(config)]);
+    if (boss) section('orders.section.howSent', 'orders.send.settingsHint', buildSendRoutes(config));
 
-    const box = el('div', { class: 'mgmt-notif' });
-    section('orders.section.alerts', [box, buildMuteOrderRequests()]);
-    renderNotificationSettings(box);
+    const notif = el('div', { class: 'mgmt-notif' });
+    renderNotificationSettings(notif);
+    section('orders.section.alerts', 'orders.alerts.thisPhone', [
+      el('div', { class: 'set-block' }, [notif]),
+      config.orderLists ? buildMuteOrderRequests() : null,
+    ]);
+
+    // ⚠️ HISTORY IS A DOOR AMONG SETTINGS (Federico moved it in here from the bottom
+    // bar on 24 Aug 2026), and the field that says how far back it draws belongs with
+    // it and nowhere else. HELP moved in here on 28 Sep 2026: the «?» no longer fits
+    // the phone's green bar beside the bell and the order lists.
+    section('orders.section.more', null, [
+      actions.openHistory ? door('orders.settings.openHistory', null, () => actions.openHistory()) : null,
+      actions.openHistory ? buildHistoryDaysField(config) : null,
+      door('orders.settings.help', 'orders.settings.helpSub', () => showHelp('orders')),
+    ]);
   }
 
-  // One heading and its fields, so a section cannot end up with a title and nothing
-  // under it — or fields under somebody else's title.
-  //
-  // ⚠️⚠️ A CARD WITH A BORDER SINCE 24 Aug 2026 (Federico: «dentro impostazioni dividi
-  // visivamente bene tutte le diverse impostazioni perché al momento sono messe tutte
-  // insieme ed è molto confusionario»). It was a heading and then loose fields, all
-  // siblings, so nothing on the screen said where one group ended.
-  //
-  // ⚠️ NOTHING WAS DESIGNED. .mgmt-fold / .mgmt-fold-head--static / .mgmt-fold-body are
-  // the card the ingredient record has used since v1.67.0, and .mgmt-fold-label and the
-  // old .mgmt-section-title are already the same 11px uppercase mono in --text3 — so
-  // the words did not move, only the frame around them arrived.
-  function section(titleKey, fields) {
-    const inner = fields.filter(Boolean);
+  // A card: its title (and one line under it), then its rows. A section with no rows
+  // is not drawn, so a title can never sit over nothing.
+  function section(titleKey, noteKey, rows) {
+    const inner = rows.filter(Boolean);
     if (!inner.length) return;
-    content.appendChild(el('div', { class: 'mgmt-fold' }, [
-      el('h3', { class: 'mgmt-fold-head mgmt-fold-head--static' }, [
-        el('span', { class: 'mgmt-fold-label', text: t(titleKey) }),
+    content.appendChild(el('section', { class: 'set-section' }, [
+      el('div', { class: 'set-head' }, [
+        el('h3', { text: t(titleKey) }),
+        noteKey ? el('p', { text: t(noteKey) }) : null,
       ]),
-      el('div', { class: 'mgmt-fold-body' }, inner),
+      ...inner,
     ]));
   }
 
-  // The way into History, drawn as the row it is rather than as a setting.
-  function buildHistoryDoor() {
-    return el('button', {
-      type: 'button', class: 'mgmt-door', onClick: () => actions.openHistory(),
-    }, [
-      el('span', { class: 'mgmt-door-text', text: t('orders.settings.openHistory') }),
-      el('span', { class: 'mgmt-door-chevron', 'aria-hidden': 'true', text: '›' }),
+  // A row that opens another screen.
+  function door(titleKey, subKey, onClick) {
+    return el('button', { type: 'button', class: 'set-row set-door', onClick }, [
+      el('span', { class: 'set-text' }, [
+        el('span', { class: 'set-title', text: t(titleKey) }),
+        subKey ? el('span', { class: 'set-sub', text: t(subKey) }) : null,
+      ]),
     ]);
   }
 
-  // Show or hide the Stock box on every order row, for EVERY phone (it is stored in
-  // Firestore, not on this device). Applied on the tap, like the notification control
-  // above it — there is nothing to lose by getting it wrong, and one more tap undoes it.
-  function buildStockToggle() {
-    const cb = el('input', { type: 'checkbox' });
-    cb.checked = data.ordersConfig().showStock;
+  // A switch that saves on the tap: optimistic, «Saved ✓» for two seconds, and put
+  // back — with the reason said — if the write is refused.
+  // `sub` may be a function of the current value, for a line that says what ON means.
+  function switchRow({ title, sub, checked, save, failLabel, before }) {
+    const input = el('input', { type: 'checkbox', role: 'switch', 'aria-label': title });
+    input.checked = checked;
+    const subEl = el('span', { class: 'set-sub' });
+    const paintSub = () => {
+      const text = typeof sub === 'function' ? sub(input.checked) : sub;
+      subEl.textContent = text || '';
+      subEl.hidden = !text;
+    };
+    paintSub();
+    const saved = el('span', { class: 'set-saved', text: t('settings.saved'), hidden: true });
+    let timer = null;
 
-    cb.addEventListener('change', async () => {
-      const wanted = cb.checked;
-      cb.disabled = true;
+    input.addEventListener('change', async () => {
+      const wanted = input.checked;
+      if (before && !(await before(wanted))) { input.checked = !wanted; return; }
+      input.disabled = true;
       try {
-        await actions.saveOrdersConfig({ showStock: wanted });
+        await save(wanted);
+        paintSub();
+        saved.hidden = false;
+        clearTimeout(timer);
+        timer = setTimeout(() => { saved.hidden = true; }, 2000);
       } catch (err) {
-        cb.checked = !wanted;          // put the box back to what is actually stored
-        await reportFailure('save', t('orders.showStock'), err);
+        input.checked = !wanted;       // back to what is actually stored
+        paintSub();
+        await reportFailure('save', failLabel || title, err);
       } finally {
-        cb.disabled = false;
+        input.disabled = false;
       }
     });
 
-    return el('div', { class: 'mgmt-field' }, [
-      el('label', { class: 'mgmt-toggle' }, [cb, el('span', { text: t('orders.showTheStockBox') })]),
-      el('p', { class: 'notif-note', text:
-        t('orders.turnThisOffIf') }),
+    return el('div', { class: 'set-row' }, [
+      el('span', { class: 'set-text' }, [el('span', { class: 'set-title', text: title }), subEl]),
+      saved,
+      el('label', { class: 'set-switch' }, [input, el('span', { class: 'set-switch-track', 'aria-hidden': 'true' })]),
     ]);
+  }
+
+  // Order lists on or off for the whole venue (28 Sep 2026, config/orders.orderLists).
+  //
+  // ⚠️ OFF TAKES A ROAD AWAY, so it is refused — and said — when it is the ONLY road an
+  // employee has: turning it off then would leave the staff with no way to send an
+  // order at all, which is the one outcome the send settings exist to prevent.
+  function buildOrderListsSwitch(config) {
+    return switchRow({
+      title: t('orders.lists.switch'),
+      sub: on => t(on ? 'orders.lists.onSub' : 'orders.lists.offSub'),
+      checked: config.orderLists,
+      save: on => actions.saveOrdersConfig({ orderLists: on }),
+      before: async on => {
+        if (on || !listsAreTheOnlyRoad(data.ordersConfig().sendSettings)) return true;
+        await alertDialog(t('orders.lists.needAnotherRoad'));
+        return false;
+      },
+    });
+  }
+
+  // Show or hide the Stock box on every order row, for EVERY phone (Firestore, not
+  // this device). There is nothing to lose by getting it wrong: one more tap undoes it.
+  function buildStockSwitch(config) {
+    return switchRow({
+      title: t('orders.showTheStockBox'),
+      sub: t('orders.turnThisOffIf'),
+      checked: config.showStock,
+      save: on => actions.saveOrdersConfig({ showStock: on }),
+      failLabel: t('orders.showStock'),
+    });
   }
 
   // "Do not buzz this phone about order lists."
   //
-  // ⚠️ ONE SWITCH, for the one alert somebody asked to be able to turn off. Not a switch
-  // per kind: five switches nobody asked for is five more things to get wrong.
-  //
-  // ⚠️ IT SILENCES THE BUZZ, NEVER THE WORK, and the note under it says so — somebody
-  // who turns this off and later finds an app that looks empty has been misled by their
-  // own setting. Same rule the holiday switch is built on.
-  //
+  // ⚠️ ONE SWITCH, for the one alert somebody asked to be able to turn off.
+  // ⚠️ IT SILENCES THE BUZZ, NEVER THE WORK, and the line under it says so.
   // ⚠️ A PROPERTY OF THIS PHONE, not of the person: somebody may want the alert in their
   // pocket and not on the tablet in the kitchen.
   function buildMuteOrderRequests() {
-    const cb = el('input', { type: 'checkbox' });
-    cb.checked = orderRequestsMuted();
-    cb.addEventListener('change', async () => {
-      const wanted = cb.checked;
-      cb.disabled = true;
-      try {
-        await muteOrderRequests(wanted);
-        rememberMute(wanted);
-      } catch (err) {
-        cb.checked = !wanted;      // back to what is actually stored
-        await reportFailure('save', t('orders.mute.orderRequests'), err);
-      } finally {
-        cb.disabled = false;
-      }
+    return switchRow({
+      title: t('orders.mute.orderRequests'),
+      sub: t('orders.mute.stillShown'),
+      checked: orderRequestsMuted(),
+      save: async on => { await muteOrderRequests(on); rememberMute(on); },
     });
-    return el('div', { class: 'mgmt-field' }, [
-      el('label', { class: 'mgmt-toggle' }, [cb, el('span', { text: t('orders.mute.orderRequests') })]),
-      el('p', { class: 'notif-note', text: t('orders.mute.stillShown') }),
-    ]);
   }
 
   // Which day the working week starts on.
   //
-  // ⚠️ IT DECIDES WHAT «THIS WEEK» MEANS ON INCOMING, so it is a decision about how the
-  // venue works, not a preference of one phone — which is why it lives in Firestore and
-  // why the database gates the write on canManage(). Hiding the control is courtesy.
-  //
-  // ⚠️ A <select>, not a row of seven buttons: seven targets on a 320px phone is how a
-  // bar wraps, and this project has already lost a release to exactly that.
-  function buildWeekStart() {
-    const current = data.ordersConfig().weekStartsOn;
-    const sel = el('select', { class: 'mgmt-input' });
-    // ⚠️ THE SHORT NAMES, which the dictionary already carries in both languages and
-    // which Orders already uses for a supplier's delivery days. Inventing a long form
-    // would mean 14 new entries saying what 7 existing ones already say, and two sets
-    // of weekday words is how one of them ends up half-translated.
+  // ⚠️ IT DECIDES WHAT «THIS WEEK» MEANS ON INCOMING — a decision about how the venue
+  // works, which is why the database gates the write on canManage().
+  // ⚠️ A <select>, not seven buttons: seven targets on a 320px phone is how a bar wraps.
+  function buildWeekStart(config) {
+    const current = config.weekStartsOn;
+    const sel = el('select', { class: 'set-select', 'aria-label': t('orders.weekStart.title') });
+    // ⚠️ THE SHORT NAMES the dictionary already carries in both languages.
     WEEK_START_DAYS.forEach((day, i) => {
       const opt = el('option', { value: day, text: t(`day.weekdayShort.${i}`) });
       if (day === current) opt.selected = true;
       sel.appendChild(opt);
     });
+    const saved = el('span', { class: 'set-saved', text: t('settings.saved'), hidden: true });
 
     sel.addEventListener('change', async () => {
       const wanted = sel.value;
-      // ⚠️ Checked before the network, with the same list the model uses: a value the
-      // app does not recognise would be silently read back as Sunday, so the screen
-      // would show one thing and the list would do another.
+      // ⚠️ Checked before the network: a value the app does not recognise would be
+      // read back as Sunday, so the screen would show one thing and the list do another.
       if (!isValidWeekStart(wanted)) { sel.value = current; return; }
       sel.disabled = true;
       try {
         await actions.saveOrdersConfig({ weekStartsOn: wanted });
+        saved.hidden = false;
+        setTimeout(() => { saved.hidden = true; }, 2000);
       } catch (err) {
         sel.value = current;          // back to what is actually stored
         await reportFailure('save', t('orders.weekStart.title'), err);
@@ -210,98 +237,69 @@ export function buildManagement(data, actions) {
       }
     });
 
-    // ⚠️ NO TITLE OF ITS OWN — the section above owns it. Two headings for one block is
-    // how a "section" quietly becomes a flat list again.
-    return el('div', { class: 'mgmt-field' }, [
-      el('p', { class: 'send-setting-hint', text: t('orders.weekStart.hint') }),
+    return el('div', { class: 'set-row' }, [
+      el('span', { class: 'set-text' }, [el('span', { class: 'set-title', text: t('orders.weekStart.title') })]),
+      saved,
       sel,
     ]);
   }
 
-  // Which roads an employee may send an order by.
+  // Which roads an employee may send an order by — one switch per road.
   //
-  // ⚠️ THE SWITCHES SAY WHAT AN EMPLOYEE MAY USE. Whoever runs the place keeps all
-  // four whatever they say - if they applied to everybody, closing WhatsApp to hold
-  // an employee back would disarm the very person who then has to reach the
-  // supplier, and the order could never leave the building. The hint under the
-  // title says so, because a switch whose scope is invisible is a switch that gets
-  // set wrongly.
-  //
-  // ⚠️ AND IT IS A SIGNPOST, NOT A LOCK. WhatsApp and email live outside this app,
-  // so nothing here can stop a person opening WhatsApp themselves. What it does is
-  // take the road out of the app, so nobody takes it by habit - and the message is
-  // BUILT here, so going round it means retyping thirty ingredients.
-  function buildSendRoutes() {
-    const current = data.ordersConfig().sendSettings;
+  // ⚠️ THE SWITCHES SAY WHAT AN EMPLOYEE MAY USE. Whoever runs the place keeps all of
+  // them whatever they say (send-routes.js routesFor); the note under the title says so.
+  // ⚠️ AND IT IS A SIGNPOST, NOT A LOCK: WhatsApp and email live outside this app.
+  // ⚠️ «TO THE MANAGER» IS AN ORDER LIST, so with order lists off its switch is not
+  // drawn at all — the road is gone for everybody (send-routes.js).
+  function buildSendRoutes(config) {
+    const current = config.sendSettings;
     const routes = { ...current.routes };
     let preferred = current.preferred;
 
-    const box = el('div', { class: 'mgmt-field' }, [
-      // ⚠️ .mgmt-section-title, NOT a new class. The first draft invented
-      // .mgmt-subtitle, which is defined in NO stylesheet — the heading would
-      // simply have had no styling, silently, which is the same family of defect
-      // as the undefined custom properties that left three screens flush to the
-      // edge of the phone. Checked before shipping, not after.
-      el('p', { class: 'send-setting-hint', text: t('orders.send.settingsHint') }),
-    ]);
-
-    ROUTES.forEach(route => {
-      const cb = el('input', { type: 'checkbox', class: 'mgmt-check' });
-      cb.checked = routes[route] === true;
-      cb.addEventListener('change', async () => {
-        const wanted = { ...routes, [route]: cb.checked };
-        const verdict = validateRoutes(wanted, preferred);
-        // ⚠️ THE LAST ROAD CANNOT BE CLOSED, and the refusal is SAID. Left silent it
-        // would read as a switch that mysteriously will not stay off.
-        if (!verdict.ok) {
-          cb.checked = true;
+    const rows = ROUTES
+      .filter(route => route !== 'manager' || config.orderLists)
+      .map(route => switchRow({
+        title: t(`orders.send.route.${route}`),
+        checked: routes[route] === true,
+        failLabel: t('orders.send.settingsTitle'),
+        // ⚠️ THE LAST ROAD CANNOT BE CLOSED, and the refusal is SAID.
+        before: async on => {
+          const verdict = validateRoutes({ ...routes, [route]: on }, preferred);
+          if (verdict.ok) return true;
           await alertDialog(t('orders.send.mustKeepOne'));
-          return;
-        }
-        cb.disabled = true;
-        try {
+          return false;
+        },
+        save: async on => {
+          const verdict = validateRoutes({ ...routes, [route]: on }, preferred);
           await actions.saveOrdersConfig(toStored(verdict.routes, verdict.preferred));
           Object.assign(routes, verdict.routes);
           preferred = verdict.preferred;
-        } catch (err) {
-          cb.checked = !cb.checked;      // back to what is actually stored
-          await reportFailure('save', t('orders.send.settingsTitle'), err);
-        } finally {
-          cb.disabled = false;
-        }
-      });
-      box.appendChild(el('label', { class: 'send-setting-row' }, [
-        cb,
-        el('span', { class: 'send-setting-name', text: t(`orders.send.route.${route}`) }),
-      ]));
-    });
-
-    // ⚠️ SAID PLAINLY, because believing an email has gone when it is sitting in a
-    // drafts folder is the worst outcome this road has.
-    box.appendChild(el('p', { class: 'send-setting-hint', text: t('orders.send.emailOpensApp') }));
-    return box;
+        },
+      }));
+    // ⚠️ SAID PLAINLY: believing an email has gone when it is sitting in drafts is the
+    // worst outcome this road has.
+    rows.push(el('div', { class: 'set-block' }, [
+      el('p', { class: 'set-sub', text: t('orders.send.emailOpensApp') }),
+    ]));
+    return rows;
   }
 
-  // How far back the History tab reaches before asking. The app is mostly used by
-  // kitchen staff, who need this week's orders rather than last month's — but this
-  // HIDES and never deletes, which is why the note under it says so out loud.
-  //
-  // Saved on `change` (blur or Enter), not on every keystroke: typing "20" passes
-  // through "2", and saving that would push a 2-day window onto every phone in the
-  // bakery for as long as it takes to type the second digit.
-  function buildHistoryDaysField() {
+  // How far back History reaches. It HIDES and never deletes, and the line under it
+  // says so. Saved on `change` (blur or Enter), not per keystroke: typing "20" passes
+  // through "2", and saving that would push a 2-day window onto every phone.
+  function buildHistoryDaysField(config) {
     const input = el('input', {
       type: 'number', min: '1', max: '365', inputmode: 'numeric',
-      class: 'mgmt-input', id: 'history-days-input',
+      class: 'set-input', id: 'history-days-input',
     });
-    input.value = String(data.ordersConfig().historyDays);
+    input.value = String(config.historyDays);
+    const saved = el('span', { class: 'set-saved', text: t('settings.saved'), hidden: true });
 
     input.addEventListener('change', async () => {
       const stored = data.ordersConfig().historyDays;
       const wanted = Math.floor(Number(input.value));
       // Refuse rather than store: an empty box or a 0 would render an EMPTY History,
-      // which reads as "the orders have been deleted" — the one impression this
-      // feature must never give.
+      // which reads as "the orders have been deleted".
       if (!Number.isFinite(wanted) || wanted < 1 || wanted > 365) {
         input.value = String(stored);
         return;
@@ -311,27 +309,26 @@ export function buildManagement(data, actions) {
       input.disabled = true;
       try {
         await actions.saveOrdersConfig({ historyDays: wanted });
+        saved.hidden = false;
+        setTimeout(() => { saved.hidden = true; }, 2000);
       } catch (err) {
-        input.value = String(stored);   // put the box back to what is actually stored
+        input.value = String(stored);   // back to what is actually stored
         await reportFailure('save', t('orders.daysOfHistory'), err);
       } finally {
         input.disabled = false;
       }
     });
 
-    return el('div', { class: 'mgmt-field' }, [
-      el('label', { class: 'mgmt-field-label', for: 'history-days-input',
-        text: t('orders.daysOfPastOrders') }),
-      el('div', { class: 'mgmt-days-row' }, [input, el('span', { text: t('orders.days') })]),
-      el('p', { class: 'notif-note', text:
-        t('orders.olderOrdersAreNever') }),
+    return el('div', { class: 'set-block' }, [
+      el('label', { class: 'set-label', for: 'history-days-input', text: t('orders.daysOfPastOrders') }),
+      el('div', { class: 'mgmt-days-row' }, [input, el('span', { text: t('orders.days') }), saved]),
+      el('p', { class: 'set-sub', text: t('orders.olderOrdersAreNever') }),
     ]);
   }
 
   render();
 
   // Redrawn when config/orders changes on another phone — the only live document
-  // this panel now shows. ⚠️ The suppliers / ingredients / prices snapshots no
-  // longer call it: nothing here comes from those collections any more.
+  // this panel shows.
   return { overlay, refresh: render };
 }

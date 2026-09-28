@@ -527,6 +527,3 @@
   opacity: .55;
   cursor: default;
 }
-.rec-host .mgmt-scroll > .mgmt-fold + .mgmt-fold {
-  margin-top: 12px;
-}

@@ -9,7 +9,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  ROUTES, DEFAULT_ROUTES, normalizeSendRoutes, routesFor,
+  ROUTES, DEFAULT_ROUTES, normalizeSendRoutes, routesFor, listsAreTheOnlyRoad,
   routeAvailableFor, unreachable, validateRoutes, toStored,
 } from '../js/orders/send-routes.js';
 
@@ -140,4 +140,22 @@ test('a missing preference is stored as an empty string, not undefined', () => {
 
 test('the four roads are named once, and the screens read them from here', () => {
   assert.deepEqual([...ROUTES], ['manager', 'whatsapp', 'whatsappSupplier', 'email']);
+});
+
+// ── Order lists off for the whole venue (28 Sep 2026) ──
+test('order lists OFF takes the «to the manager» road from everybody, managers included', () => {
+  const settings = { routes: { manager: true, whatsapp: true, whatsappSupplier: false, email: false }, orderLists: false };
+  assert.deepEqual(routesFor(settings, { canManage: true }), ROUTES.filter(r => r !== 'manager'));
+  assert.deepEqual(routesFor(settings, { canManage: false }), ['whatsapp']);
+});
+
+test('order lists ON, or never set, changes nothing', () => {
+  const settings = { routes: { manager: true, whatsapp: false, whatsappSupplier: false, email: false } };
+  assert.deepEqual(routesFor(settings, { canManage: true }), [...ROUTES]);
+  assert.deepEqual(routesFor({ ...settings, orderLists: true }, { canManage: false }), ['manager']);
+});
+
+test('lists are the only road when nothing else is on for staff', () => {
+  assert.equal(listsAreTheOnlyRoad({ routes: { manager: true, whatsapp: false, whatsappSupplier: false, email: false } }), true);
+  assert.equal(listsAreTheOnlyRoad({ routes: { manager: true, whatsapp: true, whatsappSupplier: false, email: false } }), false);
 });

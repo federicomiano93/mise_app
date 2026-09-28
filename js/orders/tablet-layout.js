@@ -1,5 +1,11 @@
-// tablet-layout.js — moves the banner HOSTS on the Order tab into tablet
-// slots when the screen is wide enough, and back out when it is not.
+// tablet-layout.js — moves the banner HOSTS on the Order tab into the bell's panel
+// and the strip above the order box, and answers «is this a tablet?» for the rest of
+// Orders.
+//
+// ⚠️⚠️ AT EVERY SIZE SINCE 28 SEP 2026 (later): Federico wanted the order notices in
+// the green bar on the phone too, so the hosts move once, at start, whatever the
+// width, and never move back. The tablet query now only changes SIZES (orders.css)
+// and the split view (orders-main.js).
 //
 // ⚠️ `t` IS CALLED AT RENDER TIME, NEVER FROZEN AT MODULE LOAD — this module is
 // imported before a venue is open, so a phrase fetched at the top of the file
@@ -15,12 +21,6 @@ import { t } from '../i18n.js';
 // renderPending/renderTodayOrders, untold-view.js via orders-main's
 // renderUntoldChanges). This file only moves the HOST NODE in the DOM — it
 // never touches what is inside it.
-//
-// ⚠️ A PLACEHOLDER MARKS WHERE EACH HOST CAME FROM, so leaving the tablet
-// query — a window resized, a tablet turned to portrait — puts every host
-// back EXACTLY where it started, sibling order included. Without it, moving a
-// host back with plain `appendChild` would silently reorder the Order tab the
-// first time somebody resized the window.
 //
 // ⚠️ ONE QUERY, THE SAME TEXT tokens.css and orders.css already carry —
 // tests/tablet-width.test.mjs fails the moment any of the three drifts apart.
@@ -49,33 +49,14 @@ export const TABLET_HOSTS = [
   { id: 'orders-alerts', slot: 'orders-alerts-panel' },
 ];
 
-const anchorId = (hostId) => `${hostId}-tablet-anchor`;
-
-// Move every host into its tablet slot, leaving a same-place placeholder
-// behind. Idempotent: a host already moved (its anchor already exists) is
-// left alone, so calling this twice in a row never duplicates anything.
+// Move every host into its slot. Idempotent: a host already inside its slot is
+// left alone, so calling this twice never duplicates or reorders anything.
 function moveIn() {
   TABLET_HOSTS.forEach(({ id, slot }) => {
     const host = document.getElementById(id);
     const slotEl = document.getElementById(slot);
-    if (!host || !slotEl) return;
-    if (document.getElementById(anchorId(id))) return; // already moved
-    const anchor = document.createElement('span');
-    anchor.id = anchorId(id);
-    anchor.hidden = true;
-    host.parentNode.insertBefore(anchor, host);
+    if (!host || !slotEl || host.parentNode === slotEl) return;
     slotEl.appendChild(host);
-  });
-}
-
-// Put every host back exactly where its anchor marks, and remove the anchor.
-function moveOut() {
-  TABLET_HOSTS.forEach(({ id }) => {
-    const host = document.getElementById(id);
-    const anchor = document.getElementById(anchorId(id));
-    if (!host || !anchor) return;
-    anchor.parentNode.insertBefore(host, anchor);
-    anchor.remove();
   });
 }
 
@@ -94,7 +75,7 @@ export function isTabletNow() {
 export function watchTablet(onChange) {
   const mq = window.matchMedia(TABLET_QUERY);
   const apply = () => {
-    if (mq.matches) moveIn(); else moveOut();
+    moveIn();
     onChange?.(mq.matches);
   };
   apply();
@@ -203,7 +184,7 @@ export function initAlertsPanel() {
     const { count, hasContent } = countNotices(panel);
     countEl.textContent = count > 0 ? String(count) : '';
     countEl.hidden = count === 0;
-    btn.hidden = !isTabletNow() || !hasContent;
+    btn.hidden = !hasContent;
     btn.setAttribute('aria-label', count > 0
       ? t('orders.alerts.panelButton', { n: count })
       : t('orders.alerts.panelRegion'));

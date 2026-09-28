@@ -1017,15 +1017,7 @@ input.ing-stock {
 
 /* A labelled on/off row. Icon-and-text alignment rule: this is a flex row, so the
    box and its label sit on the same centre line instead of the text baseline. */
-.mgmt-toggle {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 15px;
-  color: var(--text);
-  cursor: pointer;
-}
-.mgmt-toggle input { flex-shrink: 0; width: 18px; height: 18px; accent-color: var(--accent); }
+
 
 .mgmt-add {
   width: 100%;
@@ -1481,7 +1473,7 @@ a.home-reminder {
    ⚠️ AND 44px, because an 18px checkbox gives a ~24px row. One of these two turns off
    the allergen screens for the whole venue. */
 .reg-settings .mgmt-field + .mgmt-field { margin-top: 20px; }
-.reg-settings .mgmt-toggle { min-height: 44px; }
+
 
 .alg-block { gap: 10px; }
 
@@ -2017,18 +2009,6 @@ a.home-reminder {
    with no colour at all and nothing would have said so — the fourth silent-CSS defect
    this project has paid for. */
 
-/* ── Settings: which roads an employee may take ──────────────────────────────*/
-.send-setting-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-height: 44px;
-  padding: 6px 0;
-  border-bottom: 1px solid var(--border);
-}
-.send-setting-row .mgmt-check { width: 22px; height: 22px; flex-shrink: 0; accent-color: var(--brand); }
-.send-setting-name { flex: 1; min-width: 0; font-size: 14px; }
-.send-setting-hint { font-size: 12px; color: var(--text3); margin: 4px 0 10px; }
 
 /* ⚠️ IL DEBITO: il cartello che non tace mai da solo.
    The re-order banner beside it switches off because the work got done; this one
@@ -2072,50 +2052,6 @@ a.home-reminder {
    put a lone box against the edge under a centred name. `body.hide-stock` already
    exists and is applied before first paint, so nothing flashes. */
 body.hide-stock .ingredient-list .ing-fields { justify-content: center; }
-
-/* ── The order lists: a box of its own, above the bottom row ─────────────────
-   Federico, 14 Aug 2026: bigger, white normally, coloured when a list arrives, and
-   NOT green.
-
-   ⚠️ It is the only thing down here that carries work SOMEBODY ELSE IS WAITING ON, and
-   a button identical to Settings said the opposite. The colour is what makes it
-   findable without reading it — and unlike the banner at the top, which is an alarm and
-   correctly goes quiet, this is the DOOR and never disappears. That was the v1.31.1
-   defect: the tap that finished the job removed the only entrance.
-
-   ⚠️ Burnt orange, from tokens.css. NOT green, because he asked — and not a colour
-   invented here, because the shared system decides those and a screen that forks its
-   own is how two parts of one app stop looking like one app. */
-.requests-card-host { padding: 0 16px 8px; }
-.requests-card {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  width: 100%;
-  text-align: left;
-  min-height: 64px;
-  padding: 12px 14px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--surface);
-  color: var(--text);
-}
-.requests-card-icon { display: flex; align-items: center; color: var(--text3); flex-shrink: 0; }
-.requests-card-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.requests-card-name { font-size: 15px; font-weight: 600; }
-.requests-card-sub { font-size: 12px; color: var(--text3); }
-
-/* ⚠️ THE WHOLE CARD CHANGES, not a dot in a corner. A badge is something you have to
-   already be looking at; a coloured surface is something you notice while looking at
-   something else, which is the whole job of this control. */
-.requests-card--waiting {
-  background: var(--crust-bg);
-  border-color: var(--crust);
-  color: var(--crust-ink);
-}
-.requests-card--waiting .requests-card-icon,
-.requests-card--waiting .requests-card-sub { color: var(--crust-ink); }
-.requests-card--waiting .requests-card-sub { font-weight: 600; }
 
 /* ── Photographing a packet's ingredient list ──────────────────────────────────
    ⚠️ COPIED FROM .cat-photo-* IN catalogue.css, NOT DESIGNED. Same control doing the
@@ -2387,13 +2323,6 @@ body.hide-stock .ingredient-list .ing-fields { justify-content: center; }
   font-variant-numeric: tabular-nums;
 }
 
-/* ── The order lists, smaller ───────────────────────────────────────
-   ⚠️ 48px, NOT 64px — and not below 44px, which is the floor for anything a thumb
-   has to hit. What was made quieter is the SIZE; the colour swap that announces a
-   waiting list is untouched, because that is the half that does the work. */
-.requests-card { min-height: 48px; padding: 8px 14px; }
-.requests-card-icon svg { width: 20px; height: 20px; }
-
 /* ── One button in the bottom bar ───────────────────────────────────
    .recipe-footer-btn is `flex: 1`, which is right for two or three buttons and wrong
    for one: alone it would stretch the full width of the screen and stop reading as a
@@ -2401,33 +2330,7 @@ body.hide-stock .ingredient-list .ing-fields { justify-content: center; }
 #orders-footer { justify-content: center; }
 #orders-footer .recipe-footer-btn { flex: 0 1 240px; }
 
-/* ⚠️⚠️ THE ONE THING THE CARD SHAPE DOES NOT BRING WITH IT: THE GAP. .mgmt-fold
-   is used inside .mgmt-form, which is a flex column with `gap: 14px`; .mgmt-scroll is
-   not, so dropped straight in the cards would touch each other and read as one long
-   box — the very thing the border was added to stop.
-   ⚠️ SCOPED TO THIS PANEL. .reg-settings on suppliers.html has its own spacing rule
-   and is deliberately not touched. */
-.mgmt-scroll > .mgmt-fold + .mgmt-fold { margin-top: 12px; }
 
-/* A destination among settings: History. A row, not a switch — it goes somewhere. */
-.mgmt-door {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  width: 100%;
-  min-height: 44px;
-  padding: 0;
-  border: 0;
-  background: none;
-  color: var(--text);
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-.mgmt-door-text { font-size: 15px; }
-.mgmt-door-chevron { color: var(--text3); font-size: 20px; line-height: 1; }
-.mgmt-door:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 
 /* ⚠️⚠️ THE ONE BLOCK THAT KEEPS THE TOP OF THIS SCREEN OFF THE PHONE'S EDGES.
    .scroll-area has no horizontal padding on a phone — --app-gutter is 0 there, on
@@ -2441,115 +2344,131 @@ body.hide-stock .ingredient-list .ing-fields { justify-content: center; }
 .orders-column > .orders-status,
 .orders-column > #orders-alerts { padding-inline: 8px; }
 
-/* ── Tablet: the alerts panel + the top strip (Federico, 28 Sep 2026) ────────
-   Slice A of the tablet layout. js/orders/tablet-layout.js MOVES the existing
-   banner hosts (#orders-today, #orders-owed, #orders-pending, #orders-untold,
-   #orders-reorder, #orders-alerts) into #orders-tablet-strip and
-   #orders-alerts-panel when the tablet query matches, and back out when it
-   does not — nothing here rearranges anything by itself, and nothing here is
-   read by a phone: on a phone every one of these three new elements stays
-   completely empty, its own display never overridden, so it takes no space.
+/* ── The green bar and the strip, PHONE AND TABLET (28 Sep 2026, later) ────
+   Federico: «le liste d'ordine mettile nella barra in alto verde, anche gli
+   avvisi degli ordini» — on the phone too. js/orders/tablet-layout.js now moves
+   the hosts at every size; the tablet block below only changes SIZES and where
+   the panel hangs. */
+.orders-header { position: relative; }
+.orders-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+.orders-alerts-btn,
+.orders-lists-btn { position: relative; }
+/* The number on a round header button: a small red dot with a white figure,
+   ringed in the header's own green so it reads as sitting ON the button. */
+.orders-head-dot {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--danger);
+  color: #fff;
+  font-family: var(--font);
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 0 2px var(--brand);
+}
+/* A list waiting: the whole button turns crust — the colour IS the signal, as
+   the card at the foot of the page used to be. */
+.orders-lists-btn.is-waiting { background: var(--crust); border-color: var(--crust); }
+.orders-lists-btn.is-waiting .orders-head-dot { background: #fff; color: var(--crust-ink); }
+.orders-alerts-btn[aria-expanded="true"] { background: var(--on-brand); color: var(--brand); }
 
-   ⚠️ THE "HIDDEN ON A PHONE" HALF STAYS OUTSIDE THE QUERY — same pattern as
-   every other tablet-only control in this file (.home-card-badge and friends):
-   what only HIDES something on a phone is not a look, so it does not need the
-   query; what CHANGES a look belongs inside it (see below). */
-#orders-alerts-panel,
-.orders-alerts-btn { display: none; }
+#orders-alerts-panel { display: none; }
+#orders-alerts-panel:not([hidden]) {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  position: absolute;
+  top: 100%;
+  left: max(8px, var(--app-gutter));
+  right: max(8px, var(--app-gutter));
+  margin-top: 8px;
+  max-height: 70vh;
+  overflow-y: auto;
+  padding: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sheet);
+  /* Below every full-screen Orders overlay (600-950); orders-main.js closes the
+     panel before opening any of them, so this is the fallback, not the plan. */
+  z-index: 500;
+}
+#orders-alerts-panel > * { margin-bottom: 0 !important; }
+
+/* Today's orders, then the debt (tablet-layout.js HOSTS), above the box. */
+#orders-tablet-strip { display: flex; flex-direction: column; gap: 10px; margin-bottom: 10px; }
+#orders-tablet-strip:empty { display: none; }
+#orders-tablet-strip .today-banner,
+#orders-tablet-strip .owed-banner { margin-bottom: 0; }
+/* The debt in the app's one danger red — Federico's call on the tablet, now
+   everywhere: --error-bg/--error-border read 5.0:1 against --danger. */
+#orders-tablet-strip .owed-banner {
+  background: var(--error-bg);
+  border-color: var(--error-border);
+  color: var(--danger);
+  font-family: var(--font);
+}
+/* On Incoming the debt takes the strip's place; on Order the strip is back. */
+body[data-orders-tab="deliveries"] #orders-today { display: none; }
+body:not([data-orders-tab="deliveries"]) #orders-owed { display: none; }
+
+/* The Incoming tab's count, beside its word. */
+.tab-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  margin-left: 6px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--danger);
+  color: var(--on-brand);
+  font-family: 'DM Mono', monospace;
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  vertical-align: middle;
+}
+.tab.active .tab-badge { background: #fff; color: var(--danger); }
+
+/* A phone's bar holds Back, the title and up to three round buttons: the
+   subtitle line would not fit beside them, so below 400px only «Ordini» shows. */
+@media (max-width: 400px) {
+  body[data-card="orders"] > .orders-header .orders-header-title p { display: none; }
+}
 
 @media (min-width: 900px) and (min-height: 600px) {
-  /* Today's orders, then the debt — same order as js/orders/tablet-layout.js
-     TABLET_HOSTS. Empty and invisible until something is moved in. */
-  body[data-section="orders"] #orders-tablet-strip {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    margin-bottom: 12px;
-  }
-  body[data-section="orders"] #orders-tablet-strip:empty { display: none; }
-  /* .today-banner/.owed-banner carry their own margin-bottom for the plain
-     vertical flow they sit in on a phone; the strip is a gap flex column
-     instead, so left alone the two would add up to 20px between them. */
-  body[data-section="orders"] #orders-tablet-strip .today-banner { margin-bottom: 0; }
+  /* The strip is the same as on a phone (above), with the tablet's wider gaps. */
+  body[data-section="orders"] #orders-tablet-strip { gap: 12px; margin-bottom: 12px; }
 
-  /* ⚠️ RED, ON TABLET ONLY — Federico's call: the strip replaces the crust
-     "still to answer" colour with the app's one danger red once the debt
-     banner is the only thing standing where today's chips normally are (see
-     the body[data-orders-tab] rule further down, Slice B). --error-bg/
-     --error-border already read 5.0:1 against --danger — measured, not a new
-     colour (P18): no --danger-bg exists and none is invented here. */
-  body[data-section="orders"] #orders-tablet-strip .owed-banner {
-    background: var(--error-bg);
-    border-color: var(--error-border);
-    color: var(--danger);
-  }
-
-  /* The bell button that opens the panel — a pill (icon + count), not the
-     round 36px header buttons every other icon uses; --tap-min is the floor
-     every tablet control in this file already uses. */
-  body[data-section="orders"] .orders-alerts-btn:not([hidden]) {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    width: auto;
-    height: var(--tap-min);
-    padding: 0 12px;
-    border-radius: var(--radius-pill);
-  }
-  body[data-section="orders"] .orders-alerts-count {
-    font-family: 'DM Mono', monospace;
-    font-size: 13px;
-    font-weight: 700;
-    font-variant-numeric: tabular-nums;
-  }
-
-  /* Anchors the panel below the button that opens it (js/orders/tablet-layout
-     .initAlertsPanel — Escape and an outside tap close it; it is not a modal
-     and is deliberately not .preview-overlay, see the note on it in
-     orders.html). The panel is a CHILD of the header, so this only affects
-     absolutely-positioned descendants and never the header's own flex row. */
-  body[data-section="orders"] .orders-header { position: relative; }
+  /* On a tablet the panel hangs from the right, 500px wide, under the bell. */
   body[data-section="orders"] #orders-alerts-panel:not([hidden]) {
     display: flex;
-    flex-direction: column;
-    gap: 10px;
-    position: absolute;
-    top: 100%;
+    left: auto;
     right: max(16px, var(--app-gutter));
-    margin-top: 8px;
     width: 100%;
     max-width: 500px;
-    max-height: 70vh;
-    overflow-y: auto;
     padding: 14px;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    box-shadow: var(--shadow-sheet);
-    /* ⚠️ 500, NOT 9998 — the review-round bug. Every full-screen Orders
-       overlay sits between 600 (a supplier's own screen / its read-only
-       list / the summary sheet) and 950 (over History); 9998 put this
-       casual dropdown ABOVE ALL OF THEM, so opening a supplier from
-       underneath it looked like nothing had happened. 500 still clears the
-       sticky tab head and ordinary page content, and orders-main.js now
-       closes this panel outright (closeAlertsPanel(), tablet-layout.js)
-       whenever any of those screens opens, so the two are never meant to be
-       on screen together at all — the z-index is the fallback, not the plan. */
-    z-index: 500;
   }
-  /* Every banner inside carries its own margin-bottom (it always sits in a
-     plain vertical flow on a phone); the panel is a gap flex column instead,
-     so the last one would otherwise leave a spare 10px under itself. */
-  body[data-section="orders"] #orders-alerts-panel > * { margin-bottom: 0 !important; }
 
-  /* ── Slice B: the Incoming tab ──────────────────────────────────────────
-     On Incoming, the debt banner takes the strip's place — asking "did it
-     arrive?" IS the point of that tab, so today's chips would be repeating
-     what the tab itself already says. On Order, the strip is back exactly as
-     Slice A left it. A class on <body> (js/orders/orders-main.js setupTabs)
-     decides between the two; neither banner is ever rebuilt for it. */
-  body[data-section="orders"][data-orders-tab="deliveries"] #orders-today { display: none; }
-  body[data-section="orders"]:not([data-orders-tab="deliveries"]) #orders-owed { display: none; }
+  /* ── Slice B: the Incoming tab — which of today's chips and the debt shows is
+     decided above for every size (body[data-orders-tab]); here only the badge's
+     tablet size. */
 
   /* The tab badge — the same red debt count as the strip's owed banner,
      read where the operator is already looking: the tab that answers it. */
@@ -2712,12 +2631,6 @@ body.hide-stock .ingredient-list .ing-fields { justify-content: center; }
     pointer-events: none;
   }
   body[data-card="orders"] > .orders-header > .orders-header-title * { pointer-events: auto; }
-  /* ⚠️ With the title out of flow, the header's space-between spread the right-hand
-     buttons across the whole bar (help and bell ended up mid-header, measured 28 Sep
-     2026). Pushing the first of them right keeps Back alone on the left and the
-     help · bell · send group together on the right. Scoped to THIS page's own header
-     (a direct child of body): suppliers.html and the overlays keep theirs. */
-  body[data-card="orders"] > .orders-header > .help-host { margin-left: auto; }
 
   /* 9. THE RED DEBT BANNER IN THE STRIP: kitchen-sized, and in the app's own
      type — a plain `<button>` does not inherit body's font-family in any
@@ -3005,10 +2918,6 @@ body.hide-stock .ingredient-list .ing-fields { justify-content: center; }
 /* .order-tools is built and passed on every screen size — see buildOrderTools
    in js/orders/orders-main.js — but is only ever a LOOK on a tablet. */
 .order-tools { display: none; }
-/* .tab-badge exists on every screen size (the count is kept in step
-   unconditionally — js/orders/orders-main.js refreshDeliveriesBadge) but is
-   only ever a LOOK on a tablet; this half only hides it on a phone. */
-.tab-badge { display: none; }
 /* The summary button and its spacer both always exist in the DOM (see the
    long note on refreshSupplierDerived in js/orders/suppliers.js) but are only
    ever a LOOK on a tablet — on a phone neither may show, whatever `hidden`

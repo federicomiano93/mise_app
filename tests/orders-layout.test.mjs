@@ -82,31 +82,28 @@ test('changing tab re-asks the question', () => {
 // carried NO role gate, so it was the only sight an ordinary employee had of the
 // lists; the card at the foot was manager-only. Removing the banner while the card
 // stayed gated would leave the very people who SEND a list unable to see one.
-test('⚠️⚠️ the banner is gone AND the card is open to everybody', () => {
+test('⚠️⚠️ the banner is gone AND the order-lists door is open to everybody', () => {
   assert.ok(!PAGE.includes('id="orders-requests"'), 'the top banner is gone from the page');
   assert.ok(!MAIN.includes('renderRequestBanner'), 'and from the code');
   assert.ok(!CSS.includes('.req-banner'), 'and its styles went with it');
 
-  const fn = MAIN.slice(MAIN.indexOf('function renderRequestCard()'));
+  // Since 28 Sep 2026 the door is a button in the green bar, not a card at the foot.
+  assert.ok(!PAGE.includes('requests-card-host'), 'the card at the foot is gone');
+  assert.match(PAGE, /id="orders-lists-btn"/, 'the door is in the green bar');
+  const fn = MAIN.slice(MAIN.indexOf('function renderListsButton()'));
   const body = fn.slice(0, fn.search(/^\}/m));
   assert.ok(body.length > 100, 'the slice must not be empty');
-  assert.ok(!/hidden\s*=\s*!canManageHere\(\)/.test(body),
-    'the card must not be behind a role again — it is the only door left');
+  assert.ok(!/canManageHere\(\)/.test(body),
+    'the button must not be behind a role — it is the only door to the lists');
+  // Hidden ONLY when the venue turned order lists off.
+  assert.match(body, /btn\.hidden = ordersConfig\.orderLists === false;/);
 });
 
-// ⚠️ Smaller was the instruction; quieter-when-empty was never part of it. The colour
-// swap is what makes a waiting list findable without reading the screen.
-test('⚠️ the card still changes colour when a list is waiting', () => {
-  const fn = MAIN.slice(MAIN.indexOf('function renderRequestCard()'));
-  assert.match(fn.slice(0, fn.search(/^\}/m)), /requests-card--waiting/);
-  assert.match(CSS, /\.requests-card--waiting\s*\{/);
-});
-
-// ⚠️ 44px is the floor for anything a thumb has to hit, whatever else changes.
-test('⚠️ the smaller card is still big enough to tap', () => {
-  const rule = CSS.slice(CSS.lastIndexOf('.requests-card {'));
-  const px = Number((rule.slice(0, rule.indexOf('}')).match(/min-height:\s*(\d+)px/) || [])[1]);
-  assert.ok(px >= 44, `min-height is ${px}px — under the 44px tap floor`);
+// ⚠️ The colour swap is what makes a waiting list findable without reading the screen.
+test('⚠️ the order-lists button changes colour when a list is waiting', () => {
+  const fn = MAIN.slice(MAIN.indexOf('function renderListsButton()'));
+  assert.match(fn.slice(0, fn.search(/^\}/m)), /classList\.toggle\('is-waiting', waiting > 0\)/);
+  assert.match(CSS, /\.orders-lists-btn\.is-waiting\s*\{[^}]*background:\s*var\(--crust\)/);
 });
 
 // ── 3. One button in the bar, and History behind the gear ────────────────────
@@ -129,10 +126,11 @@ test('⚠️⚠️ moving History into Settings takes it away from nobody', () =
   const render = MGMT.slice(MGMT.indexOf('function render()'));
   const body = render.slice(0, render.search(/^  \}/m));
   assert.ok(body.length > 100, 'the slice must not be empty');
-  const history = body.slice(body.indexOf("section('ui.history'"));
-  assert.ok(history.length > 10, 'History must be a section of the panel');
-  assert.ok(!/boss/.test(body.slice(body.indexOf("section('ui.history'") - 60,
-    body.indexOf("section('ui.history'"))), 'and it must not sit behind `boss`');
+  const at = body.indexOf("section('orders.section.more'");
+  assert.ok(at > 0, 'History lives in the «More» section of the panel');
+  assert.match(body.slice(at), /actions\.openHistory \? door\('orders\.settings\.openHistory'/);
+  assert.ok(!/if \(boss\)\s*$/.test(body.slice(0, at).trimEnd()),
+    'and that section must not sit behind `boss`');
 });
 
 // ⚠️⚠️ AND IT HAS TO BE IN THE RIGHT HALF OF THE CALL. buildManagement(data,
@@ -153,19 +151,13 @@ test('⚠️⚠️ the way into History is handed in as an ACTION, not as data',
 
 // ── 4. The settings groups can be told apart ─────────────────────────────────
 
-test('every settings group is a card with a border', () => {
+test('every settings group is a card with a border — the app\'s one settings look', () => {
   const fn = MGMT.slice(MGMT.indexOf('function section('));
   const body = fn.slice(0, fn.search(/^  \}/m));
   assert.ok(body.length > 80, 'the slice must not be empty');
-  assert.ok(body.includes("class: 'mgmt-fold'"), 'the card the ingredient record uses');
-  assert.ok(body.includes('mgmt-fold-head--static'), 'a heading, not a tap target that does nothing');
-});
-
-// ⚠️⚠️ THE ONE THING THE CARD SHAPE DOES NOT BRING WITH IT. .mgmt-fold lives inside
-// .mgmt-form, a flex column with a gap; .mgmt-scroll is not one, so without this the
-// cards touch and read as a single long box — the very thing the border was for.
-test('⚠️⚠️ two settings cards do not touch', () => {
-  assert.match(CSS, /\.mgmt-scroll > \.mgmt-fold \+ \.mgmt-fold\s*\{[^}]*margin-top/);
+  assert.ok(body.includes("class: 'set-section'"), 'the shared card from tokens.css');
+  assert.ok(body.includes("class: 'set-head'"), 'with its title block');
+  assert.match(read('tokens.css'), /\.set-section\s*\{[^}]*border:/, 'and the card has a border');
 });
 
 test('an empty group draws no heading at all', () => {

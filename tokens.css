@@ -122,6 +122,7 @@
   /* Pale brand tint — result cards, chips, badges, active-row backgrounds. */
   --accent-light: #E9EFDF;
   --accent-border: #CFDDBB;  /* the border of an --accent-light surface (a picked row) */
+  --switch-off:    #8E8572;  /* a switch that is OFF: 3:1 against --surface, as a control must be */
 
   /* On a green header, text and rims are the on-brand tone at reduced
      strength. Kept as pure white for now: the restyle re-cuts the header in
@@ -1023,3 +1024,187 @@
 }
 .pick-extra:active { transform: scale(.97); }
 .pick-extra:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 2px; }
+
+/* ── Settings: ONE look on every settings screen (28 Sep 2026) ─────────────
+   Federico: «migliora la UX di tutte le impostazioni dell'app» — six settings
+   screens had grown three visual systems (checkboxes, pill buttons, bare
+   headings). These classes are the one system; each feature builds the markup
+   with its OWN el() (no import between features) and the look lives here, the
+   same arrangement as .app-dialog-*.
+
+   ⚠️⚠️ THE ONE RULE FOR SAVING, on every settings screen:
+   - a SWITCH or a SINGLE CHOICE saves on the tap, shows .set-saved («Saved ✓»)
+     for two seconds, and puts itself back and says so if the write fails;
+   - a FORM of several fields or a LIST (clients, WhatsApp lists, labour rate,
+     divisor, extra dough, log) keeps a working copy + Save + a confirm, and
+     warns before leaving unsaved (P20).
+
+   .set-section  a card: .set-head (mono uppercase title + one line under it)
+   .set-row      title + sub on the left, the control on the right, ≥ 52px
+   .set-switch   a real switch on a native <input type="checkbox" role="switch">
+   .set-seg      a choice between a few options (radiogroup of buttons)
+   .set-door     a row that opens another screen (chevron on the right)
+   .set-block    a labelled control that needs the full width (a segmented
+                 choice, a text field)
+   .set-saved    «Saved ✓», beside the row just changed
+   .set-danger   the quiet destructive action (P20)
+   .set-note     fine print under a section */
+.set-screen { display: flex; flex-direction: column; gap: 12px; }
+.set-section {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.set-head { padding: 14px 16px 6px; }
+.set-head h3,
+.set-head h4 {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+.set-head p { margin: 4px 0 0; font-size: 13px; line-height: 1.4; color: var(--text-3); }
+.set-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 52px;
+  padding: 12px 16px;
+  border: 0;
+  border-top: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  font-family: var(--font);
+  text-align: left;
+}
+.set-head + .set-row,
+.set-head + .set-block { border-top: 0; }
+.set-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.set-title { font-size: 15px; font-weight: 600; color: var(--text); }
+.set-sub { font-size: 13px; line-height: 1.35; color: var(--text-3); }
+.set-door { cursor: pointer; }
+.set-door:active { background: var(--surface-2); }
+.set-door::after {
+  content: '';
+  flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+  border-right: 2px solid var(--text-4);
+  border-bottom: 2px solid var(--text-4);
+  transform: rotate(-45deg);
+  margin-right: 4px;
+}
+.set-switch { position: relative; flex-shrink: 0; width: 48px; height: 28px; }
+.set-switch input {
+  position: absolute;
+  inset: -12px -2px;
+  width: calc(100% + 4px);
+  height: calc(100% + 24px);
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+  z-index: 1;
+}
+.set-switch-track {
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  background: var(--switch-off);
+  transition: background 150ms ease;
+  pointer-events: none;
+}
+.set-switch-track::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .25);
+  transition: transform 150ms ease;
+}
+.set-switch input:checked + .set-switch-track { background: var(--brand); }
+.set-switch input:checked + .set-switch-track::after { transform: translateX(20px); }
+.set-switch input:focus-visible + .set-switch-track { outline: 3px solid var(--accent-2); outline-offset: 2px; }
+.set-switch input:disabled { cursor: default; }
+.set-switch input:disabled + .set-switch-track { opacity: .5; }
+.set-block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 16px 14px;
+  border-top: 1px solid var(--border);
+}
+.set-label { font-size: 13px; font-weight: 600; color: var(--text-2); }
+.set-seg {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 4px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 22px;
+}
+.set-seg-btn {
+  flex: 1 1 auto;
+  min-height: 40px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-4);
+  font-family: var(--font);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.set-seg-btn[aria-checked="true"] { background: var(--accent-light); color: var(--brand); }
+.set-seg-btn:active { transform: scale(.97); }
+.set-select,
+.set-input {
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 15px;
+}
+.set-row .set-select { flex-shrink: 0; max-width: 55%; }
+.set-saved {
+  flex-shrink: 0;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: var(--accent-light);
+  color: var(--brand);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.set-danger {
+  align-self: center;
+  min-height: 44px;
+  padding: 10px 16px;
+  border: 0;
+  background: none;
+  color: var(--danger);
+  font-family: var(--font);
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.set-note { margin: 0; padding: 0 4px; font-size: 12px; line-height: 1.45; color: var(--text-3); }
+/* A row whose state is a warning — the holiday row while its owner is away (the same
+   signal the Home gives with .session-logout.session-away). */
+.set-row--away .set-title { color: var(--warn); }

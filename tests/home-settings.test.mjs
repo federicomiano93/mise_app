@@ -47,20 +47,24 @@ test('⚠️ the bottom of the Home never carries the holiday — that is a band
 });
 
 test('⚠️⚠️ every row keeps exactly the gate it had under the cards', () => {
-  assert.match(SETTINGS, /if \(session\.canManage\) \{\s*scroll\.append\(item\(t\('lang\.title'\)/);
-  assert.match(SETTINGS, /if \(session\.canManage\) \{\s*scroll\.append\(item\(t\('homeCards\.title'\)/);
-  assert.match(SETTINGS, /if \(session\.isOwner\) \{\s*scroll\.append\(item\(t\('people\.title'\)/,
+  // Since 28 Sep 2026 the rows sit in three cards (you, the venue, the account), and
+  // each gate is a conditional on the row itself.
+  assert.match(SETTINGS, /session\.canManage \? item\(t\('lang\.title'\)/);
+  assert.match(SETTINGS, /session\.canManage \? item\(t\('homeCards\.title'\)/);
+  assert.match(SETTINGS, /session\.isOwner \? item\(t\('people\.title'\)/,
     'hiring is the one power a manager does not have');
-  assert.match(SETTINGS, /if \(!session\.isAppAdmin && options\.length > 1\) \{\s*scroll\.append\(item\(t\('home\.switch'\)/);
-  assert.equal((SETTINGS.match(/scroll\.append\(item\(/g) || []).length, 4,
+  assert.match(SETTINGS, /!session\.isAppAdmin && options\.length > 1 \? item\(t\('home\.switch'\)/);
+  assert.equal((SETTINGS.match(/ \? item\(/g) || []).length, 4,
     'a fifth row would be a row nobody decided the gate for');
 });
 
 test('⚠️ Log out is for everybody, last, low-key, and asks first', () => {
-  assert.match(SETTINGS, /const logout = node\('button', 'session-logout', t\('auth\.logOut'\)\);/,
+  assert.match(SETTINGS, /const logout = node\('button', 'set-danger', t\('auth\.logOut'\)\);/,
     'a quiet underlined line, never a row dressed like the others (P20)');
+  assert.match(read('tokens.css'), /\.set-danger\s*\{[^}]*text-decoration:\s*underline/,
+    'and the shared quiet-danger look is an underlined line');
   assert.match(SETTINGS, /\n {4}scroll\.append\(logout\);/, 'not inside any gate');
-  assert.ok(SETTINGS.lastIndexOf('scroll.append(item(') < SETTINGS.indexOf('scroll.append(logout)'),
+  assert.ok(SETTINGS.lastIndexOf(' ? item(') < SETTINGS.indexOf('scroll.append(logout)'),
     'and after every row');
   // …and, since 23 Sep 2026, asks a second time only when something typed is still
   // waiting for signal: signing out now clears the offline copy it waits in.
@@ -76,8 +80,10 @@ test('the holiday row follows the holiday, and stops listening when the screen c
 
 test('⚠️⚠️ the holiday row holds its place from the first paint, so no row jumps under a finger', () => {
   const paint = SETTINGS.slice(SETTINGS.indexOf('function paint()'), SETTINGS.indexOf("t('lang.title')"));
-  assert.match(paint, /awayRow = item\(t\('away\.title'\), t\('settings\.away\.sub'\), \(\) => \{\}\);\s*awayRow\.disabled = true;\s*scroll\.append\(awayRow\);/,
-    'the placeholder must be the FIRST thing painted, before any other row');
+  assert.match(paint, /awayRow = item\(t\('away\.title'\), t\('settings\.away\.sub'\), \(\) => \{\}\);\s*awayRow\.disabled = true;/,
+    'the placeholder is built before any other row');
+  assert.match(paint, /scroll\.append\(\.\.\.\[\s*section\(t\('settings\.home\.you'\), \[awayRow\]\),/,
+    'and it is the FIRST card painted, so no row jumps under a finger');
   assert.match(SETTINGS, /if \(awayRow\?\.isConnected\) awayRow\.replaceWith\(btn\);/,
     'the real row replaces the placeholder in place; a prepend is what pushed the list down');
 });
