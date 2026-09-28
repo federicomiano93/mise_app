@@ -39,8 +39,27 @@ test('only rows with qty > 0 appear, sorted by label — same rule as the messag
 });
 
 test('empty entries -> empty lines, never a crash', () => {
-  assert.deepEqual(supplierSummary(SUPPLIER, INGREDIENTS, {}), { name: 'Salvo', lines: [] });
-  assert.deepEqual(supplierSummary(SUPPLIER, INGREDIENTS, null), { name: 'Salvo', lines: [] });
+  const empty = { name: 'Salvo', lines: [], costLines: [], totals: {
+    net: 0, vatByRate: {}, gross: 0, missingPrice: 0, missingVat: 0,
+  } };
+  assert.deepEqual(supplierSummary(SUPPLIER, INGREDIENTS, {}), empty);
+  assert.deepEqual(supplierSummary(SUPPLIER, INGREDIENTS, null), empty);
+});
+
+test('money: a priced, VAT-rated line costs correctly; an unpriced one is flagged, not zero', () => {
+  const priced = [
+    { id: 'flour', name: 'Flour', weight: '25kg', priceUnit: 'kg', pricePerUnit: 1.8, vatRate: 4 },
+    { id: 'bacon', name: 'Bacon', weight: '2.27kg' }, // no price at all
+  ];
+  const entries = { flour: { qty: 2 }, bacon: { qty: 1 } };
+  const { costLines, totals } = supplierSummary(SUPPLIER, priced, entries);
+  const flourLine = costLines.find(l => l.label.startsWith('Flour'));
+  const baconLine = costLines.find(l => l.label.startsWith('Bacon'));
+  assert.equal(flourLine.unitCost, 45); // 1.8 * 25kg
+  assert.equal(flourLine.vatRate, 4);
+  assert.equal(baconLine.unitCost, null);
+  assert.equal(totals.net, 90); // 2 * 45, bacon excluded
+  assert.equal(totals.missingPrice, 1);
 });
 
 test('a null supplier still returns a shape — never throws', () => {

@@ -8,13 +8,49 @@
 // look like" would be two places they could quietly disagree; a summary that
 // showed one number while the message that actually reaches the supplier said
 // another would be worse than no summary at all.
+//
+// ⚠️ MONEY NEVER REACHES order-text.js (29 Sep 2026). The amount is computed
+// HERE, alongside the lines, and never folded into buildOrderMessage's output
+// — see tests/order-cost-message.test.mjs, which pins that adding a price to
+// an ingredient cannot change one byte of what a supplier receives.
 
-import { orderedItems, summaryLines } from './order-text.js';
+import { orderedItems, summaryLines, itemLabel } from './order-text.js';
+import { unitCost, orderCost } from '../order-cost.js';
 
 // supplier: { id, name } | null; ingredients: that supplier's products,
 // already lensed the way orderIngredients()/ingredientsBySupplier() in
-// orders-main.js produce them; entries: state.entries ({ id: { qty, stock } }).
-// -> { name, lines: [{ label, qty }] }
+// orders-main.js produce them — AFTER js/price-model.js's withPrices(), so an
+// ingredient this account may read the price of already carries priceUnit/
+// pricePerUnit/vatRate; one an employee may not simply has none, and its cost
+// comes back null the same way an ingredient nobody has priced yet always has.
+// entries: state.entries ({ id: { qty, stock } }).
+// -> { name, lines: [{ label, qty }], costLines: [{ label, qty, unitCost,
+//      vatRate }], totals: orderCost()'s own shape }
 export function supplierSummary(supplier, ingredients, entries) {
-  return { name: supplier?.name || '', lines: summaryLines(orderedItems(ingredients, entries)) };
+  const items = orderedItems(ingredients, entries);
+  const lines = summaryLines(items);
+
+  // ⚠️ MATCHED BY LABEL, THE SAME KEY summaryLines() itself sorts by. Not
+  // matched by id: `lines` deliberately carries no id (see order-text.js),
+  // because it is built to be identical to the message's own text, which
+  // knows nothing of ids either. Two DIFFERENT ingredients from the same
+  // supplier with an identical name AND weight would collide here — the
+  // same edge case the message itself already cannot tell apart.
+  const byLabel = new Map();
+  (ingredients || []).forEach(ing => {
+    if ((entries?.[ing.id]?.qty || 0) <= 0) return;
+    byLabel.set(itemLabel(ing.name, ing.weight || ''), ing);
+  });
+
+  const costLines = lines.map(({ label, qty }) => {
+    const ing = byLabel.get(label);
+    return {
+      label,
+      qty,
+      unitCost: ing ? unitCost(ing, ing) : null,
+      vatRate: ing && ing.vatRate != null ? Number(ing.vatRate) : null,
+    };
+  });
+
+  return { name: supplier?.name || '', lines, costLines, totals: orderCost(costLines) };
 }

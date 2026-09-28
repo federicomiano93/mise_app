@@ -1174,6 +1174,13 @@ input.ing-stock {
 .mgmt-price-note { display: block; margin-top: 6px; color: var(--warn); }
 .mgmt-price-note:empty { display: none; }
 
+/* The "€45.00 without VAT, €46.80 with VAT at 4%" line (29 Sep 2026) — its own
+   quiet line under the price summary, empty (and gone, via :empty) until both
+   a cost and a VAT rate are known. Plain text colour: it is informative, not
+   a warning the way .mgmt-price-note is. */
+.mgmt-price-vat-summary { margin: 6px 0 0; font-size: 13px; color: var(--text2); }
+.mgmt-price-vat-summary:empty { display: none; }
+
 .mgmt-price-history { display: flex; flex-direction: column; gap: 6px; }
 .mgmt-price-row {
   display: flex;
@@ -3039,10 +3046,48 @@ body.hide-stock .ingredient-list .ing-fields { justify-content: center; }
 }
 .order-summary-row:last-child { border-bottom: none; }
 .order-summary-label { font-size: 16px; font-weight: 500; color: var(--text); min-width: 0; }
+.order-summary-qty-wrap { flex-shrink: 0; display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
 .order-summary-qty {
-  flex-shrink: 0;
   font-family: 'DM Mono', monospace;
   font-variant-numeric: tabular-nums;
   font-weight: 700;
   color: var(--text);
 }
+/* One order's cost, per line — "4 × €45.00 = €180.00 · VAT 4%" — and the box
+   under the whole list. Both are shown to WHOEVER THIS SCREEN IS DRAWN FOR:
+   nothing here checks a role, because an account the rules refuse
+   ingredient-prices to never has a unitCost to show in the first place (see
+   the long note in js/orders/order-cost-view.js) — "no price" reads the same
+   for them as for a manager looking at an ingredient nobody has priced yet.
+   Not tablet-only: the summary sheet is a phone screen too. */
+.order-summary-cost { font-family: 'DM Mono', monospace; font-size: 12px; color: var(--text-3); }
+.order-summary-cost--warn { color: var(--warn); font-weight: 600; }
+
+/* The totals box — js/orders/order-cost-view.js buildTotalsBox(), shared by
+   the summary sheet (any width) and the tablet pane (supplier-detail.js). */
+.totbox {
+  margin-top: 14px;
+  padding: 12px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.totbox-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 15px;
+  color: var(--text2);
+  font-variant-numeric: tabular-nums;
+}
+.totbox-row--total {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text);
+  border-top: 1px solid var(--border);
+  padding-top: 8px;
+  margin-top: 4px;
+}
+.totbox-warn { margin: 6px 0 0; font-size: 13px; color: var(--warn); font-weight: 600; }

@@ -181,6 +181,14 @@
 .rec-host .mgmt-price-note:empty {
   display: none;
 }
+.rec-host .mgmt-price-vat-summary {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: var(--text2);
+}
+.rec-host .mgmt-price-vat-summary:empty {
+  display: none;
+}
 .rec-host .mgmt-price-history {
   display: flex;
   flex-direction: column;
