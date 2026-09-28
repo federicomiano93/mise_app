@@ -623,3 +623,14 @@ test('and that budget would have caught the wording it replaced', () => {
   assert.deepEqual(before.filter(w => w.length <= 11), [],
     'the retired words must all exceed the budget, or the budget proves nothing');
 });
+
+// ⚠️⚠️ THE SETTINGS SCREEN MUST OPEN AT ALL (28 Sep 2026). toggle() reads FIELD while
+// it builds each switch; declared below the first call, the `const` was still in its
+// temporal dead zone and the screen threw on open — live, with every test green.
+test('⚠️⚠️ FIELD is declared before the first switch is built', () => {
+  const src = read('js/orders/registry-settings.js');
+  const field = src.indexOf('const FIELD =');
+  const firstCall = src.indexOf('toggle({');
+  assert.ok(field > 0 && firstCall > 0, 'both are still there');
+  assert.ok(field < firstCall, 'FIELD must be declared before toggle() first runs');
+});
