@@ -79,6 +79,14 @@ function moveOut() {
   });
 }
 
+// Whether the tablet query matches right now — the one place every other
+// module in Orders that needs to ask asks (js/orders/orders-main.js's split
+// view, this file's own initAlertsPanel below), so a future change to the
+// query text only has to happen here.
+export function isTabletNow() {
+  return window.matchMedia(TABLET_QUERY).matches;
+}
+
 // Watch the tablet query and keep every host on the right side of it — a
 // window resized or a tablet rotated while the page is open, not only the
 // state it opened in. `onChange(isTablet)` is called once immediately and
@@ -173,10 +181,6 @@ export function initAlertsPanel() {
   const countEl = document.getElementById('orders-alerts-count');
   if (!btn || !panel || !countEl) return;
 
-  function isTablet() {
-    return window.matchMedia(TABLET_QUERY).matches;
-  }
-
   function setOpen(open) {
     panel.hidden = !open;
     btn.setAttribute('aria-expanded', String(open));
@@ -199,7 +203,7 @@ export function initAlertsPanel() {
     const { count, hasContent } = countNotices(panel);
     countEl.textContent = count > 0 ? String(count) : '';
     countEl.hidden = count === 0;
-    btn.hidden = !isTablet() || !hasContent;
+    btn.hidden = !isTabletNow() || !hasContent;
     btn.setAttribute('aria-label', count > 0
       ? t('orders.alerts.panelButton', { n: count })
       : t('orders.alerts.panelRegion'));

@@ -242,7 +242,21 @@
          typing 4 on Bacon in the flat list is typing 4 in Brakes' order — there is
          no second list to keep in step. "By supplier" is the default and the choice
          is remembered in localStorage. -->
-    <div id="suppliers-list"></div>
+    <!-- ⚠️⚠️ TABLET ONLY, AND ONLY ON THE SUPPLIERS VIEW. js/orders/orders-main.js
+         writes body[data-orders-view] ('suppliers' | 'all') from setView(); the
+         grid this wraps into only turns on for 'suppliers' — the flat
+         ingredient list and Incoming stay full width, exactly as on a phone.
+         #suppliers-list is unchanged: it is still the ONE container both list
+         views mount into (see the long note on it further up this file). -->
+    <div class="orders-split" id="orders-split">
+      <div id="suppliers-list"></div>
+      <!-- The supplier's own order (js/orders/supplier-detail.js) is MOVED in
+           here on a tablet — never rebuilt — and moved back to document.body
+           on a phone; see relocateDetailView() in orders-main.js. Empty until
+           a supplier is tapped: js/orders/orders-main.js fills it with the
+           "Choose a supplier" placeholder below, or removes it, never both. -->
+      <div id="orders-detail-pane"></div>
+    </div>
     <button class="btn-primary" id="place-all-btn" type="button" hidden data-i18n="ui.orderPlaced">Order placed…</button>
     <!-- Start the order again. Shows from ONE supplier up, unlike the button above:
          in the flat list there are no per-supplier cards, so without it a single

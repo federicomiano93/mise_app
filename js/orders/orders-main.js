@@ -58,7 +58,7 @@ import { renderTodayOrders, renderPending } from './reminder-view.js';
 import { resolveSuppliers, orderSuppliers } from './no-supplier.js';
 import { normalizeOrdersConfig } from './orders-config.js';
 import { mountIngredientList } from './ingredient-list.js';
-import { watchTablet, initAlertsPanel, closeAlertsPanel } from './tablet-layout.js';
+import { watchTablet, initAlertsPanel, closeAlertsPanel, isTabletNow } from './tablet-layout.js';
 import { orderSummary } from './ingredient-search.js';
 import {
   watchOrderRequests, sendOrderRequest, setOrderRequestDone, finishOrderRequest,
@@ -336,11 +336,63 @@ function renderSupplierList(container, suppliers) {
     suppliers,
     ingredientsBySupplier: ingredientsBySupplier(),
     entries: state.entries,
+    pickedId: state.openSupplier,
   });
 }
 
+// ── The tablet split view (29 Sep 2026) ────────────────────────────────────
+//
+// Active only on the Order tab's Suppliers view, on a tablet — never on the
+// flat ingredient list or on Incoming, which stay full width exactly as on a
+// phone (the plan's own words). Read fresh every time rather than cached:
+// asked from a handful of call sites, never from a hot path.
+function splitActive() {
+  return isTabletNow() && state.view === 'suppliers';
+}
+
+const HAND_ICON =
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="44" height="44" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/><path d="M21 12H9"/></svg>';
+
+// The placeholder shown in the pane before any supplier is tapped. Built
+// fresh each time it is needed (cheap, static, no listeners) rather than kept
+// around — it is only ever replaced by, or replaced with, the supplier
+// screen itself.
+function renderDetailPaneEmptyState(pane) {
+  pane.replaceChildren(el('div', { class: 'split-empty' }, [
+    el('span', { class: 'split-empty-icon', 'aria-hidden': 'true', icon: HAND_ICON }),
+    el('h2', { text: t('orders.split.empty.title') }),
+    el('p', { text: t('orders.split.empty.text') }),
+  ]));
+}
+
+// Keeps #orders-detail-pane in step with state.openSupplier and with the
+// split being active at all — called after EVERY change to either (opening/
+// closing a supplier, switching view, crossing the tablet width). Moves the
+// EXISTING supplier-detail node between the pane and document.body rather
+// than rebuilding it (a quantity mid-typing, and its focus, must survive a
+// window resize); when nothing is open it fills the pane with the empty
+// state instead. A pane that does not exist yet (a page that has not
+// finished loading orders.html) is simply skipped.
+function refreshDetailPaneMode() {
+  const pane = document.getElementById('orders-detail-pane');
+  if (!pane) return;
+  if (state.openSupplier && detailView) {
+    const target = splitActive() ? pane : document.body;
+    if (detailView.overlay.parentNode !== target) target.appendChild(detailView.overlay);
+  } else {
+    renderDetailPaneEmptyState(pane);
+  }
+}
+
 // ── One supplier's own screen ─────────────────────────────────────────────────
+//
+// ⚠️ TAPPING THE OPEN SUPPLIER AGAIN CLOSES IT. On a phone this path is
+// unreachable — the row sitting under it is covered by the full-screen
+// overlay it would have to be tapped through — so the toggle is free there
+// and is what lets the tablet pane's "tap again to close" (and its X button,
+// which calls closeSupplier the same way) share this one function.
 function openSupplier(supplierId) {
+  if (state.openSupplier === supplierId) { closeSupplier(); return; }
   closeSupplierItems();         // two full-screen screens must never stack up
   closeSummary();
   closeAlertsPanel();           // the panel must never sit on top of a full screen
@@ -352,6 +404,8 @@ function closeSupplier() {
   state.openSupplier = null;
   detailView?.overlay.remove();
   detailView = null;
+  cardsView?.updateSelection(null);
+  refreshDetailPaneMode();
 }
 
 // Create the screen, or repaint the one already up. Repainting happens on every
@@ -372,17 +426,30 @@ function renderOpenSupplier() {
     suggest: suggestFor,
     hooks,
     onBack: closeSupplier,
+    // ⚠️ TABLET PANE HEAD ONLY (orders.css). Opening either must NOT close
+    // this screen — on a phone they still do, through the shared
+    // closeSupplier() inside openSupplierItems/openSummary, since there both
+    // are full-screen and the two cannot be on top of one another. On a
+    // tablet split those two calls skip that close (splitActive()), so the
+    // pane stays put underneath and simply reappears when the sheet closes.
+    onViewList: () => openSupplierItems(supplier.id),
+    onSummary: () => openSummary(supplier.id),
+    orderDays: supplier.orderDays,
+    deliveryDays: supplier.deliveryDays,
   };
 
   if (detailView && detailView.id === supplier.id) {
     detailView.repaint(ctx);
+    cardsView?.updateSelection(supplier.id);
+    refreshDetailPaneMode();
     return;
   }
 
   detailView?.overlay.remove();
   const built = buildSupplierDetail(supplier, ctx);
   detailView = { ...built, id: supplier.id };
-  document.body.appendChild(built.overlay);
+  (splitActive() ? document.getElementById('orders-detail-pane') : document.body)?.appendChild(built.overlay);
+  cardsView?.updateSelection(supplier.id);
 }
 
 // ── What a supplier sells, to look at ─────────────────────────────────────────
@@ -392,7 +459,10 @@ function renderOpenSupplier() {
 // writes NOTHING — which is the whole point of it, and why it can be opened in the
 // middle of an order without a thought.
 function openSupplierItems(supplierId) {
-  closeSupplier();
+  // ⚠️ NOT ON A TABLET SPLIT — see the long note in renderOpenSupplier's ctx.
+  // The pane is not a full-screen overlay there, so it does not compete with
+  // this one for the same space; on a phone it still is, and still does.
+  if (!splitActive()) closeSupplier();
   closeSummary();
   closeAlertsPanel();           // the panel must never sit on top of a full screen
   state.viewingSupplier = supplierId;
@@ -442,7 +512,8 @@ function renderSupplierItems() {
 let summaryEscHandler = null;
 
 function openSummary(supplierId) {
-  closeSupplier();               // two full-screen screens must never stack up
+  // ⚠️ NOT ON A TABLET SPLIT — see the long note in renderOpenSupplier's ctx.
+  if (!splitActive()) closeSupplier();
   closeSupplierItems();
   closeAlertsPanel();            // the panel must never sit on top of a full screen
   state.summarySupplier = supplierId;
@@ -565,6 +636,10 @@ function refreshViewSwitch() {
 function setView(view) {
   if (state.view === view) return;
   state.view = view;
+  // ⚠️ TABLET SPLIT ONLY (orders.css): the ONE place this is written, read by
+  // the grid that turns .orders-split into two columns — never on the flat
+  // ingredient list or on Incoming, which stay full width.
+  document.body.dataset.ordersView = view;
   // The "just what I'm ordering" filter belongs to the flat list; the cards always
   // show everything, so leaving for them drops it rather than hiding it somewhere
   // invisible and surprising the operator with it on the way back.
@@ -574,6 +649,10 @@ function setView(view) {
   render();
   refreshOrderTotals();
   refreshOrderTools();
+  // Leaving the Suppliers view (or coming back to it) turns the split on or
+  // off — the open supplier, if any, has to move between the pane and a
+  // full-screen overlay along with it.
+  refreshDetailPaneMode();
 }
 
 // ── Tablet: the search-row swap button (Slice C) ──────────────────────────
@@ -1907,10 +1986,14 @@ async function init() {
   setupViewSwitch();
   document.getElementById('orders-wa-btn')?.addEventListener('click', openSendScreen);
 
+  // The ONE place state.view's starting value ('suppliers') is mirrored onto
+  // <body> — see setView() for every later write.
+  document.body.dataset.ordersView = state.view;
+
   // ⚠️ WATCHTABLET FIRST, THEN THE PANEL: the panel's first count must see
   // whatever watchTablet already moved into it, including on a page that
   // opens straight at tablet width — see js/orders/tablet-layout.js.
-  watchTablet();
+  watchTablet(() => refreshDetailPaneMode());
   initAlertsPanel();
   // The Incoming tab's aria-label names a count in words ("3 orders owed") —
   // switching the venue's language must not leave it saying so in the old

@@ -2736,7 +2736,250 @@ body.hide-stock .ingredient-list .ing-fields { justify-content: center; }
     height: 24px;
     font-size: 14px;
   }
+
+  /* ══ Two-pane split view — Suppliers, Order tab only (29 Sep 2026) ═══════
+     js/orders/orders-main.js splitActive() decides in JS exactly what this
+     selector decides in CSS: isTabletNow() AND state.view === 'suppliers'.
+     The two must never drift apart, which is why both read the same two
+     facts — isTabletNow() the query, state.view the attribute below — and
+     neither invents a third way to ask "is the split on right now". */
+  body[data-section="orders"][data-orders-tab="order"][data-orders-view="suppliers"] .orders-split {
+    display: grid;
+    grid-template-columns: 372px 1fr;
+    gap: 14px;
+    align-items: start;
+  }
+  /* #suppliers-list becomes the LEFT column: same box look the whole screen
+     already gives it on a phone (nothing to override), just capped to the
+     column width by the grid above. */
+
+  /* The pane: sticky, bounded to (roughly) the viewport, its OWN scroll —
+     see .supplier-detail-body below, which already scrolls on a phone and
+     needs nothing new to do it here too. 12px top/bottom is a first pass on
+     the real device, not a measured constant like --tap-min; Federico's
+     call once he has seen it on the tablet. */
+  body[data-section="orders"][data-orders-tab="order"][data-orders-view="suppliers"] #orders-detail-pane {
+    display: flex;
+    flex-direction: column;
+    position: sticky;
+    top: 12px;
+    max-height: calc(100vh - 24px);
+    min-height: 0;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+  body[data-section="orders"][data-orders-tab="order"][data-orders-view="suppliers"] #orders-detail-pane > .supplier-detail,
+  body[data-section="orders"][data-orders-tab="order"][data-orders-view="suppliers"] #orders-detail-pane > .split-empty {
+    position: static;
+    inset: auto;
+    z-index: auto;
+    flex: 1;
+    min-height: 0;
+    background: transparent;
+    border-radius: 0;
+  }
+
+  /* The empty state — "Choose a supplier". Centred, quiet, the same shape as
+     every other empty state in this app (.empty-state in tokens.css) but its
+     own class: it lives INSIDE a card that already has the border/background,
+     where .empty-state would draw a second one. */
+  .split-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    text-align: center;
+    padding: 40px 24px;
+    color: var(--text-3);
+  }
+  .split-empty-icon { color: var(--text-5); display: flex; }
+  .split-empty h2 {
+    margin: 0;
+    font-family: var(--font-display);
+    font-weight: 400;
+    font-size: 26px;
+    color: var(--text-2);
+  }
+  .split-empty p { margin: 0; font-size: 15px; line-height: 1.45; max-width: 34ch; }
+
+  /* ── The pane head: the SAME .orders-header/.orders-header-title markup
+     every overlay uses, stripped of its green banner look — the pane sits
+     inside a light card, not under the sky. Scoped to `#orders-detail-pane`
+     so the phone's full-screen header (green, centred, Back-only) and every
+     OTHER overlay's header are completely untouched. */
+  #orders-detail-pane .orders-header {
+    background: transparent;
+    padding: 14px 16px;
+    border-radius: 0;
+    border-bottom: 1px solid var(--border);
+    gap: 10px;
+  }
+  #orders-detail-pane .orders-header-title {
+    flex: 1;
+    min-width: 0;
+    text-align: left;
+  }
+  #orders-detail-pane .orders-header-title h1 {
+    color: var(--text);
+    font-size: 28px;
+    line-height: 1.15;
+  }
+  #orders-detail-pane .pane-subline {
+    margin: 4px 0 0;
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    color: var(--text-3);
+  }
+  #orders-detail-pane .pane-when { color: var(--crust); font-weight: 500; }
+  /* Back arrow and its phone counterweight: no Back in the pane — the X does
+     that job — and no counterweight needed once the title is left-aligned
+     rather than centred. */
+  #orders-detail-pane .pane-back-btn,
+  #orders-detail-pane .header-spacer { display: none; }
+  #orders-detail-pane .pane-list-btn,
+  #orders-detail-pane .pane-summary-btn,
+  #orders-detail-pane .pane-close-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    flex-shrink: 0;
+    min-height: var(--tap-min);
+  }
+  #orders-detail-pane .pane-list-btn,
+  #orders-detail-pane .pane-summary-btn {
+    padding: 0 16px;
+    border-radius: 14px;
+    font-family: 'Manrope', sans-serif;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  #orders-detail-pane .pane-list-btn {
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    color: var(--text);
+  }
+  #orders-detail-pane .pane-summary-btn {
+    background: var(--accent-light);
+    border: 1px solid var(--brand-2);
+    color: var(--brand);
+  }
+  #orders-detail-pane .pane-btn-icon { display: flex; align-items: center; }
+  #orders-detail-pane .pane-close-btn {
+    width: var(--tap-min);
+    background: var(--surface-2);
+    border: 1.5px solid var(--border);
+    color: var(--text-2);
+  }
+  /* .orders-icon-btn's own rim-bg/on-brand styling is for the green banner
+     header; the close button reuses the class for its 52px round shape only
+     and repaints itself here for a light card. */
+
+  /* ── The supplier row, compact — the split's own look ─────────────────────
+     The list/summary icons move OUT of the row (into the pane head above)
+     and a day chip + a small number pill take their place. A MORE SPECIFIC
+     selector than the plain "any tablet" rules above (three attributes, not
+     one) is what lets this win back over them without fighting source order. */
+  body[data-section="orders"][data-orders-tab="order"][data-orders-view="suppliers"] .supplier-row-view,
+  body[data-section="orders"][data-orders-tab="order"][data-orders-view="suppliers"] .supplier-row-summary,
+  body[data-section="orders"][data-orders-tab="order"][data-orders-view="suppliers"] .supplier-row-spacer,
+  body[data-section="orders"][data-orders-tab="order"][data-orders-view="suppliers"] .supplier-row-count,
+  body[data-section="orders"][data-orders-tab="order"][data-orders-view="suppliers"] .supplier-row-chevron {
+    display: none;
+  }
+  body[data-section="orders"][data-orders-tab="order"][data-orders-view="suppliers"] .supplier-row {
+    /* Back to a single card: the split's row has nothing outside it any more. */
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+  }
+  /* ⚠️ `.supplier-row > .supplier-row-open`, NOT THE BARE CLASS — same reason
+     as the card-look rule above it (Slice D, the review round): deliveries-
+     view.js's Incoming rows share this class for their own wide tap target
+     and are never wrapped in `.supplier-row`. */
+  body[data-section="orders"][data-orders-tab="order"][data-orders-view="suppliers"] .supplier-row > .supplier-row-open {
+    min-height: 64px;
+    padding: 10px 12px 10px 14px;
+    border-radius: 12px;
+    background: transparent;
+    border: none;
+  }
+  body[data-section="orders"][data-orders-tab="order"][data-orders-view="suppliers"] .supplier-name {
+    font-size: 17px;
+    font-weight: 600;
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  /* Selected: accent-light fill, a light green border, a 4px brand bar on the
+     left — set by js/orders/suppliers.js updateSelection(), never rebuilt. */
+  body[data-section="orders"][data-orders-tab="order"][data-orders-view="suppliers"] .supplier-row--picked {
+    background: var(--accent-light);
+    border-color: #CFDDBB;
+    position: relative;
+  }
+  body[data-section="orders"][data-orders-tab="order"][data-orders-view="suppliers"] .supplier-row--picked::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 10px;
+    bottom: 10px;
+    width: 4px;
+    border-radius: 4px;
+    background: var(--brand);
+  }
+  body[data-section="orders"][data-orders-tab="order"][data-orders-view="suppliers"] .supplier-row-day {
+    display: inline-flex;
+    align-items: center;
+    flex-shrink: 0;
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 4px 8px;
+    border-radius: 6px;
+    color: var(--text-3);
+    background: var(--surface-2);
+  }
+  body[data-section="orders"][data-orders-tab="order"][data-orders-view="suppliers"] .supplier-row-day--today {
+    color: var(--on-brand);
+    background: var(--crust);
+  }
+  body[data-section="orders"][data-orders-tab="order"][data-orders-view="suppliers"] .supplier-row-compact-count {
+    flex-shrink: 0;
+    min-width: 34px;
+    height: 28px;
+    padding: 0 9px;
+    border-radius: 999px;
+    background: var(--brand);
+    color: var(--on-brand);
+    font-family: 'DM Mono', monospace;
+    font-size: 14px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  body[data-section="orders"][data-orders-tab="order"][data-orders-view="suppliers"] .supplier-row-compact-count--zero {
+    background: transparent;
+    color: var(--text-5);
+  }
 }
+/* The day chip and compact count exist on every screen size (see the long
+   note on refreshSupplierDerived in js/orders/suppliers.js) but are only ever
+   a LOOK on the tablet split. */
+.supplier-row-day,
+.supplier-row-compact-count { display: none; }
+/* #orders-detail-pane exists in the markup on every screen size; it is only
+   ever a LOOK on the tablet split (the rule above turns it into the pane). */
+#orders-detail-pane { display: none; }
 /* .order-tools is built and passed on every screen size — see buildOrderTools
    in js/orders/orders-main.js — but is only ever a LOOK on a tablet. */
 .order-tools { display: none; }
