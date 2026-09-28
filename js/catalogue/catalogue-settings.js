@@ -83,7 +83,7 @@ export function renderSettings({ photoOn, onTogglePhoto, labelProfile, onSaveLab
 
   const labelHead = el('h3', {});
   const sizeLabel = el('p', { class: 'set-label' });
-  const sizeSwitch = el('div', { class: 'set-seg', role: 'radiogroup' });
+  const sizeSwitch = el('div', { class: 'set-seg', role: 'group' });
   const sizeButtons = new Map();
 
   // ⚠️ THE PRESETS COME FROM THE MODEL, never typed here. Two lists of paper sizes is
@@ -91,7 +91,7 @@ export function renderSettings({ photoOn, onTogglePhoto, labelProfile, onSaveLab
   // would be wrong is the printed one.
   for (const size of LABEL_SIZES) {
     const btn = el('button', {
-      class: 'set-seg-btn', type: 'button', role: 'radio',
+      class: 'set-seg-btn', type: 'button',
       // Numbers, not a phrase: «76 × 51 mm» is the same in every language, so it is
       // built rather than translated.
       text: `${size.widthMm} × ${size.heightMm}`,
@@ -102,7 +102,7 @@ export function renderSettings({ photoOn, onTogglePhoto, labelProfile, onSaveLab
   }
 
   const customBtn = el('button', {
-    class: 'set-seg-btn', type: 'button', role: 'radio',
+    class: 'set-seg-btn', type: 'button',
     onclick: () => { customOpen = true; paintLabel(); },
   });
   sizeSwitch.appendChild(customBtn);
@@ -151,11 +151,11 @@ export function renderSettings({ photoOn, onTogglePhoto, labelProfile, onSaveLab
   // OFF this screen — a control that changes nothing is one somebody sets wrongly
   // and then trusts. Now they change something.
   const printerLabel = el('p', { class: 'set-label' });
-  const printerSwitch = el('div', { class: 'set-seg', role: 'radiogroup' });
+  const printerSwitch = el('div', { class: 'set-seg', role: 'group' });
   const printerButtons = new Map();
   for (const language of PRINTER_LANGUAGES) {
     const btn = el('button', {
-      class: 'set-seg-btn', type: 'button', role: 'radio',
+      class: 'set-seg-btn', type: 'button',
       onclick: () => save({ printerLanguage: language }),
     });
     printerButtons.set(language, btn);
@@ -164,11 +164,11 @@ export function renderSettings({ photoOn, onTogglePhoto, labelProfile, onSaveLab
   const printerNote = el('p', { class: 'set-sub' });
 
   const dpiLabel = el('p', { class: 'set-label' });
-  const dpiSwitch = el('div', { class: 'set-seg', role: 'radiogroup' });
+  const dpiSwitch = el('div', { class: 'set-seg', role: 'group' });
   const dpiButtons = new Map();
   for (const dpi of DPI_CHOICES) {
     const btn = el('button', {
-      class: 'set-seg-btn', type: 'button', role: 'radio',
+      class: 'set-seg-btn', type: 'button',
       // Numbers, not a phrase — «203 dpi» is the same in every language.
       text: `${dpi} dpi`,
       onclick: () => save({ dpi }),
@@ -231,11 +231,11 @@ export function renderSettings({ photoOn, onTogglePhoto, labelProfile, onSaveLab
   // says so in words, because the two are a single tap apart and the consequences are
   // thrown-away food on one side and unsafe food on the other.
   const dateKindLabel = el('p', { class: 'set-label' });
-  const dateKindSwitch = el('div', { class: 'set-seg', role: 'radiogroup' });
+  const dateKindSwitch = el('div', { class: 'set-seg', role: 'group' });
   const dateKindButtons = new Map();
   for (const kind of DATE_KINDS) {
     const btn = el('button', {
-      class: 'set-seg-btn', type: 'button', role: 'radio',
+      class: 'set-seg-btn', type: 'button',
       onclick: () => save({ dateKind: kind }),
     });
     dateKindButtons.set(kind, btn);
@@ -284,7 +284,7 @@ export function renderSettings({ photoOn, onTogglePhoto, labelProfile, onSaveLab
     for (const [kind, btn] of dateKindButtons) {
       const on = kind === profile.dateKind;
       btn.textContent = t(`label.settings.dateKind.${kind}`);
-      btn.setAttribute('aria-checked', on ? 'true' : 'false');
+      btn.setAttribute('aria-pressed', on ? 'true' : 'false');
     }
   }
   const emptyHint = el('p', { class: 'lab-nofit' });
@@ -319,12 +319,12 @@ export function renderSettings({ photoOn, onTogglePhoto, labelProfile, onSaveLab
     const preset = currentPresetId();
     for (const [id, btn] of sizeButtons) {
       const on = id === preset;
-      btn.setAttribute('aria-checked', on ? 'true' : 'false');
+      btn.setAttribute('aria-pressed', on ? 'true' : 'false');
     }
     // A size that matches no preset IS a custom size, so the fold opens itself —
     // otherwise the screen would show nothing selected and no way to see why.
     const isCustom = preset === null || customOpen;
-    customBtn.setAttribute('aria-checked', preset === null ? 'true' : 'false');
+    customBtn.setAttribute('aria-pressed', preset === null ? 'true' : 'false');
     customRow.hidden = !isCustom;
 
     // ⚠️ NOT WHILE SOMEBODY IS TYPING IN IT. Writing .value under a focused caret
@@ -338,7 +338,7 @@ export function renderSettings({ photoOn, onTogglePhoto, labelProfile, onSaveLab
     for (const [language, btn] of printerButtons) {
       const on = language === profile.printerLanguage;
       btn.textContent = t(`label.settings.printer.${language}`);
-      btn.setAttribute('aria-checked', on ? 'true' : 'false');
+      btn.setAttribute('aria-pressed', on ? 'true' : 'false');
     }
     printerNote.textContent = t('label.settings.printerNote');
 
@@ -352,7 +352,7 @@ export function renderSettings({ photoOn, onTogglePhoto, labelProfile, onSaveLab
     dpiLabel.textContent = t('label.settings.dpi');
     for (const [dpi, btn] of dpiButtons) {
       const on = dpi === profile.dpi;
-      btn.setAttribute('aria-checked', on ? 'true' : 'false');
+      btn.setAttribute('aria-pressed', on ? 'true' : 'false');
     }
     dpiNote.textContent = t('label.settings.dpiNote');
 
@@ -407,9 +407,17 @@ export function renderSettings({ photoOn, onTogglePhoto, labelProfile, onSaveLab
   // paper and printer, and what else goes on the label. Every control saves on the tap.
   const dpiBlock = el('div', { class: 'set-block' }, [dpiLabel, dpiSwitch, dpiNote]);
   const dateKindBlock = el('div', { class: 'set-block' }, [dateKindLabel, dateKindSwitch, dateKindNote]);
+  const noteBlock = el('div', { class: 'set-block' }, [businessNote, emptyHint]);
   const syncBlocks = () => {
     dpiBlock.hidden = dpiSwitch.hidden;
     dateKindBlock.hidden = dateKindSwitch.hidden;
+    // ⚠️ An empty block still draws its border line and padding: hidden with its notes.
+    noteBlock.hidden = businessNote.hidden && emptyHint.hidden;
+    // Each group is named by the label above it, for a screen reader.
+    sizeSwitch.setAttribute('aria-label', sizeLabel.textContent);
+    printerSwitch.setAttribute('aria-label', printerLabel.textContent);
+    dpiSwitch.setAttribute('aria-label', dpiLabel.textContent);
+    dateKindSwitch.setAttribute('aria-label', dateKindLabel.textContent);
   };
   root.classList.add('set-screen');
   root.append(
@@ -427,7 +435,7 @@ export function renderSettings({ photoOn, onTogglePhoto, labelProfile, onSaveLab
       weightSwitch.row,
       storageSwitch.row, storageText.wrap,
       businessSwitch.row, businessName.wrap, businessAddress.wrap,
-      el('div', { class: 'set-block' }, [businessNote, emptyHint]),
+      noteBlock,
     ]),
     setupNote, labelError,
   );

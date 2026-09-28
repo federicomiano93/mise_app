@@ -2058,6 +2058,7 @@ async function init() {
   // switching the venue's language must not leave it saying so in the old
   // one until the debt happens to change again.
   onLanguageChange(() => refreshDeliveriesBadge());
+  onLanguageChange(() => renderListsButton());
 
   // The debounced draft autosave has no caller to hand a rejection to, so it reports
   // through here. Never auto-hidden on a timer: an order that is no longer being

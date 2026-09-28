@@ -68,6 +68,15 @@ export function routesFor(settings, { canManage = false } = {}) {
   return ROUTES.filter(r => routes[r] === true && keep(r));
 }
 
+// The routes as they really stand for staff: with order lists off, «to the manager»
+// is gone for everybody (routesFor), so it can never be the road that is «kept open».
+// ⚠️ Review of 28 Sep 2026: without this, lists off + WhatsApp on let a manager switch
+// WhatsApp off too — validateRoutes still counted the stored manager road — and every
+// employee's Send then offered nothing at all.
+export function effectiveRoutes(routes, orderLists) {
+  return orderLists === false ? { ...routes, manager: false } : { ...routes };
+}
+
 // Would turning order lists OFF leave an employee with no way to send at all?
 // True when the only road switched on for them is «to the manager».
 export function listsAreTheOnlyRoad(settings) {

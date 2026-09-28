@@ -161,10 +161,10 @@
        again. -->
   <div id="orders-alerts" hidden></div>
 
-  <!-- ⚠️⚠️ TABLET ONLY. Today's orders and the debt banner move here, in that
-       order (today first) — js/orders/tablet-layout.js. Empty and invisible
-       on a phone: the two hosts stay exactly where they already were, right
-       above, and nothing here has any size until something is moved into it. -->
+  <!-- ⚠️⚠️ PHONE AND TABLET (since 28 Sep 2026). Today's orders and the debt banner
+       move here, in that order (today first) — js/orders/tablet-layout.js. Which of
+       the two shows is decided by the tab (orders.css, body[data-orders-tab]): today's
+       chips on Order, the debt on Incoming. -->
   <div id="orders-tablet-strip"></div>
 
   <!-- ⚠️⚠️ ONE BOX, SO IT READS AS ONE JOB (Federico, 24 Aug 2026). The two tabs,
@@ -186,7 +186,7 @@
              whole textContent of anything carrying data-i18n on every
              language switch, so a badge span living directly under the same
              data-i18n element would be wiped the first time the language
-             changed. The badge (tablet only — see orders.css) shows the debt
+             changed. The badge (every size since 28 Sep 2026) shows the debt
              owed count from renderOwedBanner; js/orders/orders-main.js keeps
              it in step. -->
         <button class="tab" id="tab-deliveries-btn">

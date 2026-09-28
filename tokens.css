@@ -1092,6 +1092,8 @@
 .set-title { font-size: 15px; font-weight: 600; color: var(--text); }
 .set-sub { font-size: 13px; line-height: 1.35; color: var(--text-3); }
 .set-door { cursor: pointer; }
+/* Inside a card with overflow: hidden an outside ring is cut off: draw it inside. */
+.set-row:focus-visible { outline: 3px solid var(--accent-2); outline-offset: -3px; }
 .set-door:active { background: var(--surface-2); }
 .set-door::after {
   content: '';
@@ -1163,13 +1165,17 @@
   border: 0;
   border-radius: 999px;
   background: transparent;
-  color: var(--text-4);
+  color: var(--text-2);
   font-family: var(--font);
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
 }
-.set-seg-btn[aria-checked="true"] { background: var(--accent-light); color: var(--brand); }
+/* ⚠️ SOLID, as the label screen's own choice always was: a pale tint read 1.08:1
+   against its neighbours, on the one choice here that can harm somebody (use by /
+   best before). --text-2 unselected is 5.9:1 on --surface-2. */
+.set-seg-btn[aria-pressed="true"] { background: var(--brand); color: var(--on-brand); }
+.set-seg-btn:focus-visible { outline: 3px solid var(--accent-2); outline-offset: 2px; }
 .set-seg-btn:active { transform: scale(.97); }
 .set-select,
 .set-input {

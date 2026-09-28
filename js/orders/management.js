@@ -25,7 +25,7 @@ import { el } from './dom.js';
 import { canManageHere } from './firebase-orders.js';
 import { renderNotificationSettings } from './notifications.js';
 import { alertDialog } from './confirm-dialog.js';
-import { ROUTES, validateRoutes, toStored, listsAreTheOnlyRoad } from './send-routes.js';
+import { ROUTES, validateRoutes, toStored, listsAreTheOnlyRoad, effectiveRoutes } from './send-routes.js';
 import { WEEKDAYS as WEEK_START_DAYS, isValidWeekStart } from './work-week.js';
 // ⚠️ THE SWITCH LIVES HERE, NOT IN notifications.js. That file is importable under
 // Node and has its own test suite BECAUSE it touches no Firebase; importing push.js
@@ -289,7 +289,10 @@ export function buildManagement(data, actions) {
         failLabel: t('orders.send.settingsTitle'),
         // ⚠️ THE LAST ROAD CANNOT BE CLOSED, and the refusal is SAID.
         before: async on => {
-          const verdict = validateRoutes({ ...routes, [route]: on }, preferred);
+          // Judged on the roads staff REALLY have: with lists off the manager road
+          // does not count as the one kept open (send-routes.js effectiveRoutes).
+          const verdict = validateRoutes(
+            effectiveRoutes({ ...routes, [route]: on }, config.orderLists), preferred);
           if (verdict.ok) return true;
           await alertDialog(t('orders.send.mustKeepOne'));
           return false;

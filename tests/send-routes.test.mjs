@@ -9,7 +9,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  ROUTES, DEFAULT_ROUTES, normalizeSendRoutes, routesFor, listsAreTheOnlyRoad,
+  ROUTES, DEFAULT_ROUTES, normalizeSendRoutes, routesFor, listsAreTheOnlyRoad, effectiveRoutes,
   routeAvailableFor, unreachable, validateRoutes, toStored,
 } from '../js/orders/send-routes.js';
 
@@ -158,4 +158,14 @@ test('order lists ON, or never set, changes nothing', () => {
 test('lists are the only road when nothing else is on for staff', () => {
   assert.equal(listsAreTheOnlyRoad({ routes: { manager: true, whatsapp: false, whatsappSupplier: false, email: false } }), true);
   assert.equal(listsAreTheOnlyRoad({ routes: { manager: true, whatsapp: true, whatsappSupplier: false, email: false } }), false);
+});
+
+// ⚠️ With order lists off the manager road is gone for everybody, so it can never be
+// the one road «kept open» (review of 28 Sep 2026).
+test('lists off: closing the last real road is refused, even with manager stored on', () => {
+  const routes = { manager: true, whatsapp: true, whatsappSupplier: false, email: false };
+  const closingWhatsApp = effectiveRoutes({ ...routes, whatsapp: false }, false);
+  assert.equal(validateRoutes(closingWhatsApp, 'whatsapp').ok, false);
+  assert.equal(validateRoutes(effectiveRoutes({ ...routes, whatsapp: false }, true), 'whatsapp').ok, true,
+    'with lists on, the manager road still counts');
 });

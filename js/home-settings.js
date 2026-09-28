@@ -186,7 +186,7 @@ export function openHomeSettings(session) {
     const btn = await buildAwayButton();
     if (mine !== awaySeq || !overlay.isConnected) return;
     // Nobody signed in to be on holiday: the held place is given back.
-    if (!btn) { awayRow?.remove(); awayRow = null; return; }
+    if (!btn) { (awayRow?.closest('.set-section') || awayRow)?.remove(); awayRow = null; return; }
     const away = btn.classList.contains('session-away');
     const label = btn.textContent;
     btn.className = `set-row set-door${away ? ' set-row--away' : ''}`;
