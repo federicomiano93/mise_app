@@ -18,56 +18,17 @@
 // the screen; it would just make the month's cost wrong.
 
 import { pricePerKg, formatMoney } from '../price-model.js';
+// ⚠️ MOVED TO js/pack-size.js (29 Sep 2026): js/order-cost.js needs the exact
+// same reading of "how many kilos does one pack hold", and a calculation
+// shared by more than one feature belongs in js/ root (CLAUDE.md "Modular by
+// feature"), not inside this one's folder. Re-exported so every EXISTING
+// import of parsePackSize from this file keeps working.
+import { parsePackSize } from '../pack-size.js';
 
-// Everything convertible to kilos, and the one deliberate equivalence:
-// ⚠️ 1 LITRE IS TREATED AS 1 KG, exactly as js/price-model.js already does for
-// prices. It is wrong for oil and right for milk and water; it is the app's
-// existing convention, and having the count disagree with the price would be
-// worse than either.
-const TO_KG = { kg: 1, g: 0.001, l: 1, lt: 1, ml: 0.001, cl: 0.01 };
-const UNIT = '(kg|lt|ml|cl|g|l)';
-const NUMBER = '([0-9]+(?:[.,][0-9]+)?)';
-
-// "6 x 1kg" / "12x500g" — a case of several packs. The multiplier comes first.
-const MULTIPLIED = new RegExp(`^${NUMBER}\\s*[x×*]\\s*${NUMBER}\\s*${UNIT}$`, 'i');
-// "25kg" / "2,27 kg" / "500 g"
-const PLAIN = new RegExp(`^${NUMBER}\\s*${UNIT}$`, 'i');
-// "kg 5" — the unit first, which is how a lot of Italian invoices are written.
-const UNIT_FIRST = new RegExp(`^${UNIT}\\s*${NUMBER}$`, 'i');
-
-const num = text => Number(String(text).replace(',', '.'));
+export { parsePackSize };
 
 function round3(value) {
   return Math.round((value + Number.EPSILON) * 1000) / 1000;
-}
-
-// How many kilos one pack holds, read from the text somebody typed.
-//
-// ⚠️ IT ANSWERS null FAR MORE OFTEN THAN IT GUESSES, and that is the design. A
-// weight it cannot read is a row with no money beside it and a line on the screen
-// saying so — which somebody can fix in one tap. A guess would be a wrong cost
-// that looks exactly like a right one.
-export function parsePackSize(text) {
-  if (typeof text !== 'string') return null;
-  const clean = text.trim().toLowerCase().replace(/\s+/g, ' ');
-  if (!clean) return null;
-
-  let m = clean.match(MULTIPLIED);
-  if (m) {
-    const total = num(m[1]) * num(m[2]) * TO_KG[m[3]];
-    return Number.isFinite(total) && total > 0 ? round3(total) : null;
-  }
-  m = clean.match(PLAIN);
-  if (m) {
-    const total = num(m[1]) * TO_KG[m[2]];
-    return Number.isFinite(total) && total > 0 ? round3(total) : null;
-  }
-  m = clean.match(UNIT_FIRST);
-  if (m) {
-    const total = num(m[2]) * TO_KG[m[1]];
-    return Number.isFinite(total) && total > 0 ? round3(total) : null;
-  }
-  return null;
 }
 
 // The pack weight this month is using: what somebody typed in beats what the
