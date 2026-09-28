@@ -2523,6 +2523,25 @@ async function roles() {
     () => mergeWrite(`${L}/ingredient-prices/I9`,
       { ...stamp, priceUnit: 'kg', pricePerUnit: 1 }, asAccount(MAYA)));
 
+  // ── The purchase VAT rate (28 Sep 2026): one of the six the app offers, or
+  // nothing. A typo must not be stored as a rate every order total then trusts.
+  for (const rate of [0, 4, 5, 10, 20, 22]) {
+    await expectAllowed(`a manager can store purchase VAT ${rate}%`,
+      () => mergeWrite(`${L}/ingredient-prices/I9`,
+        { ...stamp, priceUnit: 'kg', pricePerUnit: 1, vatRate: rate }, asAccount(MAYA)));
+  }
+  await expectAllowed('a manager can clear the VAT rate (null = not stated)',
+    () => mergeWrite(`${L}/ingredient-prices/I9`,
+      { ...stamp, priceUnit: 'kg', pricePerUnit: 1, vatRate: null }, asAccount(MAYA)));
+  for (const bad of [21, -4, 100, '22']) {
+    await expectDenied(`a VAT rate of ${JSON.stringify(bad)} is refused`,
+      () => mergeWrite(`${L}/ingredient-prices/I9`,
+        { ...stamp, priceUnit: 'kg', pricePerUnit: 1, vatRate: bad }, asAccount(MAYA)));
+  }
+  await expectDenied('an employee cannot set a VAT rate either',
+    () => mergeWrite(`${L}/ingredient-prices/I9`,
+      { ...stamp, vatRate: 4 }, asAccount(SAM)));
+
   // ⚠️ AND THE PRICE HISTORY MOVED BEHIND THE SAME GATE. Leaving it on the Orders
   // gate would be the back door into the thing the front door just locked.
   await seedDoc(`${L}/ingredients/I3/prices/H1`,
