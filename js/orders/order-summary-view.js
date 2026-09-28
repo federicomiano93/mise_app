@@ -16,6 +16,7 @@
 import { t } from '../i18n.js';
 import { el } from './dom.js';
 import { supplierSummary } from './order-summary.js';
+import { lineCostText, buildTotalsBox } from './order-cost-view.js';
 
 const BACK_ICON =
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>';
@@ -61,8 +62,11 @@ export function buildOrderSummaryView(supplier, ingredients, entries, ctx) {
   // `repaint` rebuilds the body only, never the header — a snapshot must not
   // make the supplier's name flicker. Nothing here holds typing, so rebuilding
   // costs nothing: there is no field to rip out from under a finger.
-  function repaint(nextIngredients, nextEntries) {
-    const { lines } = supplierSummary(supplier, nextIngredients, nextEntries);
+  // `showMoney` is false for an account the rules refuse prices to, or before the
+  // prices have arrived: then the sheet is what it was in v1.90.0 — labels and
+  // quantities, no «no price», no total.
+  function repaint(nextIngredients, nextEntries, showMoney = false) {
+    const { lines, costLines, totals } = supplierSummary(supplier, nextIngredients, nextEntries);
     body.replaceChildren();
 
     if (!lines.length) {
@@ -73,14 +77,28 @@ export function buildOrderSummaryView(supplier, ingredients, entries, ctx) {
 
     subtitle.textContent = t('orders.summary.itemCount', { n: lines.length });
 
+    // ⚠️ THIS LINE ALWAYS SAYS SOMETHING ABOUT COST — never checks a
+    // permission, because there is nothing here TO check. For an account the
+    // rules never hand a price to, EVERY ingredient's unitCost comes back
+    // null the same way an ingredient nobody has priced yet always does, so
+    // "no price" is what they see: no number, ever — just like today.
     const card = el('div', { class: 'order-summary-list' });
-    lines.forEach(({ label, qty }) => card.appendChild(el('div', { class: 'order-summary-row' }, [
-      el('span', { class: 'order-summary-label', text: label }),
-      el('span', { class: 'order-summary-qty', text: String(qty) }),
-    ])));
+    costLines.forEach(({ label, qty, unitCost, vatRate }) => {
+      const cost = showMoney ? lineCostText({ qty, unitCost, vatRate }) : null;
+      card.appendChild(el('div', { class: 'order-summary-row' }, [
+        el('span', { class: 'order-summary-label', text: label }),
+        el('div', { class: 'order-summary-qty-wrap' }, [
+          el('span', { class: 'order-summary-qty', text: String(qty) }),
+          cost ? el('span', { class: `order-summary-cost${cost.warn ? ' order-summary-cost--warn' : ''}`, text: cost.text }) : null,
+        ]),
+      ]));
+    });
     body.appendChild(card);
+
+    const box = showMoney ? buildTotalsBox(totals) : null;
+    if (box) body.appendChild(box);
   }
 
-  repaint(ingredients, entries);
+  repaint(ingredients, entries, ctx?.showMoney === true);
   return { overlay, scrim, repaint };
 }

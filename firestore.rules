@@ -635,8 +635,18 @@ service cloud.firestore {
           && stampedFor(lid)
           && request.resource.data.keys().hasOnly([
                'bakery', 'priceUnit', 'pricePerUnit',
-               'packPrice', 'packSize', 'unitWeightKg', 'priceUpdatedAt'
+               'packPrice', 'packSize', 'unitWeightKg', 'priceUpdatedAt',
+               'vatRate'
              ])
+          // The PURCHASE VAT rate (28 Sep 2026), so an order can show what it will
+          // cost with VAT. The price above stays NET — the recipe costs are built
+          // from it and must not move. A closed list: the union of the rates the app
+          // offers in the UK (0, 5, 20) and Italy (4, 10, 22); which of them a venue
+          // is offered is the app's business (its country), what may be STORED is
+          // this. Absent or null = "not stated", never read as 0.
+          && (!('vatRate' in request.resource.data)
+              || request.resource.data.vatRate == null
+              || request.resource.data.vatRate in [0, 4, 5, 10, 20, 22])
           // Every field is OPTIONAL, exactly as on the ingredient itself: this
           // document is written by the same form, which may legitimately be saved
           // with no price at all. Optional is not unchecked — each is validated

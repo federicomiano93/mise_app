@@ -28,9 +28,11 @@ test('every key they ask for exists in both languages, and the Italian is Italia
   const keys = ['fc.vat.standard', 'fc.vat.reduced', 'fc.vat.minimum', 'fc.vat.zero', 'fc.notPriced', 'fc.pricedByWeight',
     'fc.priceEach', 'fc.thisRecipePartlyPriced', 'fc.aria.changeLine', 'fc.aria.quantity', 'fc.aria.kilos', 'fc.aria.pieces',
     'fc.aria.unit', 'fc.unit.pieces'];
-  // The VAT words are named in the model's per-country table, the rest in the two screens.
+  // The VAT words are named in js/vat-rates.js's per-country table (moved out of
+  // foodcost-model.js on 29 Sep 2026, which now only re-exports it — see the note
+  // there), the rest in the two screens.
   const used = read('js/foodcost/foodcost-editor.js') + read('js/foodcost/foodcost-main.js')
-    + read('js/foodcost/foodcost-model.js');
+    + read('js/foodcost/foodcost-model.js') + read('js/vat-rates.js');
   for (const key of keys) {
     assert.ok(used.includes(`'${key}'`), `${key} must actually be asked for`);
     assert.ok(en[key] && it[key], `${key} must exist in both languages`);

@@ -103,9 +103,26 @@ export function priceUnitLabel(unit) {
 // Drop them from this list and an old document keeps a pack price for ever that
 // contradicts its own rate: 180 and 25 sitting under a rate somebody has since
 // corrected to 7.50.
+// ⚠️ `vatRate` JOINED THIS LIST 28 Sep 2026 — the PURCHASE VAT stored beside the
+// price, firestore.rules ingredient-prices (closed to [0, 4, 5, 10, 20, 22] or
+// null). It lives there only: not on the `ingredients` document and not in the
+// price HISTORY subcollection — see INGREDIENT_DRAINED_FIELDS below, pricePatch()
+// and priceRecord().
 export const PRICE_FIELDS = Object.freeze([
-  'priceUnit', 'pricePerUnit', 'packPrice', 'packSize', 'unitWeightKg', 'priceUpdatedAt',
+  'priceUnit', 'pricePerUnit', 'packPrice', 'packSize', 'unitWeightKg', 'priceUpdatedAt', 'vatRate',
 ]);
+
+// The price keys an INGREDIENT document may still carry from before prices moved
+// out, and so the ones every ingredient save sets to null to drain them.
+// ⚠️⚠️ NOT THE SAME LIST AS PRICE_FIELDS, AND THE DIFFERENCE IS A LOCKOUT. The
+// `ingredients` rule whitelists its keys; `vatRate` was never on the ingredient and
+// is not in that whitelist, so writing it there — even as null — made the rules
+// refuse EVERY ingredient save, for every role (review of 28 Sep 2026, caught
+// before it shipped). tests/price-fields-whitelist.test.mjs pins both lists
+// against firestore.rules.
+export const INGREDIENT_DRAINED_FIELDS = Object.freeze(
+  PRICE_FIELDS.filter(key => key !== 'vatRate'),
+);
 
 // Money is rounded to the penny; a RATE is not. A rate can legitimately be tiny —
 // a gelatine leaf is fractions of a penny — and rounding £0.0035 to £0.00 would
@@ -263,7 +280,24 @@ export function formatPricePerUnit(ingredient) {
 // boxes are still half filled. It IS cleared when the unit stops being 'pcs',
 // because a leftover piece weight nothing displays is the kind of stale number
 // that later gets divided by.
-export function pricePatch({ priceUnit, pricePerUnit, unitWeightKg }, nowIso) {
+// The PURCHASE VAT rates this app may ever store (29 Sep 2026) — the union of
+// what firestore.rules accepts on ingredient-prices.vatRate: the UK's (0, 5,
+// 20) and Italy's (4, 10, 22). Kept here rather than imported from
+// js/vat-rates.js (the CHOICES a venue is OFFERED, which vary by country):
+// this is the wider, closed set of what may ever be WRITTEN, whatever venue
+// is saving.
+const VALID_VAT_RATES = Object.freeze([0, 4, 5, 10, 20, 22]);
+
+// '' / null / undefined = "not stated"; anything not in the closed list above
+// is also treated as not stated, rather than trusting a form's own input —
+// the same defence firestore.rules applies server-side.
+function normalizedVatRate(vatRate) {
+  if (vatRate === '' || vatRate === null || vatRate === undefined) return null;
+  const n = Number(vatRate);
+  return VALID_VAT_RATES.includes(n) ? n : null;
+}
+
+export function pricePatch({ priceUnit, pricePerUnit, unitWeightKg, vatRate }, nowIso) {
   const unit = isPriceUnit(priceUnit) ? priceUnit : null;
   const pieceKg = unit === 'pcs' && positiveNumber(unitWeightKg) !== null
     ? roundTo(unitWeightKg, 6)
@@ -279,6 +313,10 @@ export function pricePatch({ priceUnit, pricePerUnit, unitWeightKg }, nowIso) {
     packSize: null,
     unitWeightKg: pieceKg,
     priceUpdatedAt: result.ok ? nowIso : null,
+    // ⚠️ SURVIVES AN INCOMPLETE PRICE, same reasoning as unitWeightKg above: the
+    // rate an accountant quoted is a fact worth keeping even mid-edit of the
+    // price itself.
+    vatRate: normalizedVatRate(vatRate),
   };
 }
 
@@ -310,6 +348,12 @@ export function priceChanged(before, after) {
 // a history that only had its id could never be read newest-first — a trap this
 // project has already fallen into twice, in Orders history and in the pastry
 // records. Order by the field.
+// ⚠️ `vatRate` IS DELIBERATELY NOT HERE. The history is the append-only record of
+// what a KILO/LITRE/PIECE cost, over time; the purchase VAT is a live fact about
+// the ingredient's price today, not a thing whose past values this app tracks.
+// Named fields, not `...patch` — this is also what keeps it out by construction:
+// a future field added to pricePatch()'s return does not silently start being
+// recorded here too.
 export function priceRecord(ingredient, patch, nowIso, source = 'manual') {
   return {
     recordedAt: nowIso,
@@ -352,7 +396,7 @@ export function splitPriceFields(data) {
   // values out of documents written before this change; omitting them would
   // leave a stale rate on the ingredient for ever, readable by everybody, which
   // is the exact thing this change exists to stop.
-  PRICE_FIELDS.forEach(key => { ingredient[key] = null; });
+  INGREDIENT_DRAINED_FIELDS.forEach(key => { ingredient[key] = null; });
   return { ingredient, price };
 }
 

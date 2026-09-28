@@ -245,9 +245,14 @@ export async function watchIngredientPrices(onChange) {
     snap => {
       const map = {};
       snap.forEach(d => { map[d.id] = d.data(); });
-      onChange(map);
+      // ⚠️ An EMPTY answer from the offline cache proves nothing — the server's
+      // refusal may simply not have arrived yet (a tablet with no signal). Only a
+      // server answer, or a cached one that holds prices, counts as «readable».
+      onChange(map, !snap.metadata.fromCache || !snap.empty);
     },
-    () => onChange({}),
+    // Second argument false: the rules refused it (or it failed), so a screen that
+    // shows MONEY must show none — an empty map alone reads like "nothing priced".
+    () => onChange({}, false),
   );
 }
 
