@@ -9,7 +9,7 @@
 // on, so an order left unmarked overnight is filed under the day it was written,
 // not under today.
 
-import { t, joinList } from '../i18n.js';
+import { t, joinList, onLanguageChange } from '../i18n.js';
 // ⚠️ createDoc / removeDoc / saveIngredientWithPrice / getPriceHistory LEFT WITH THE
 // RECORDS. This page no longer creates, deletes or prices anything — it reads the
 // two collections to draw an order. js/orders/registry-main.js holds those calls now.
@@ -58,7 +58,7 @@ import { renderTodayOrders, renderPending } from './reminder-view.js';
 import { resolveSuppliers, orderSuppliers } from './no-supplier.js';
 import { normalizeOrdersConfig } from './orders-config.js';
 import { mountIngredientList } from './ingredient-list.js';
-import { watchTablet, initAlertsPanel } from './tablet-layout.js';
+import { watchTablet, initAlertsPanel, closeAlertsPanel } from './tablet-layout.js';
 import { orderSummary } from './ingredient-search.js';
 import {
   watchOrderRequests, sendOrderRequest, setOrderRequestDone, finishOrderRequest,
@@ -343,6 +343,7 @@ function renderSupplierList(container, suppliers) {
 function openSupplier(supplierId) {
   closeSupplierItems();         // two full-screen screens must never stack up
   closeSummary();
+  closeAlertsPanel();           // the panel must never sit on top of a full screen
   state.openSupplier = supplierId;
   renderOpenSupplier();
 }
@@ -393,6 +394,7 @@ function renderOpenSupplier() {
 function openSupplierItems(supplierId) {
   closeSupplier();
   closeSummary();
+  closeAlertsPanel();           // the panel must never sit on top of a full screen
   state.viewingSupplier = supplierId;
   renderSupplierItems();
 }
@@ -431,17 +433,40 @@ function renderSupplierItems() {
 // Same shape as the two screens above: opened from the list, repainted on
 // every snapshot, closed by itself if the supplier goes away. It writes
 // NOTHING — the same promise supplier-items.js makes, and the same reason.
+//
+// ⚠️ ITS OWN ESCAPE LISTENER, ADDED ON OPEN AND REMOVED ON CLOSE — not a
+// shared always-on one. This screen is opened and closed far more often than
+// a dialog is, from a row that can itself repaint under the same keystroke
+// (refreshSupplierDerived), so the add/remove pair is kept tight around the
+// screen's own lifetime rather than left running for the life of the page.
+let summaryEscHandler = null;
+
 function openSummary(supplierId) {
   closeSupplier();               // two full-screen screens must never stack up
   closeSupplierItems();
+  closeAlertsPanel();            // the panel must never sit on top of a full screen
   state.summarySupplier = supplierId;
   renderSummary();
 }
 
+// `openerId`, not read from state: closeSummary() clears state.summarySupplier
+// FIRST (so a repaint mid-close cannot find a supplier and rebuild the screen
+// it is in the middle of tearing down), and the id is still needed afterwards
+// to give focus back to the row that opened it.
 function closeSummary() {
+  const openerId = state.summarySupplier;
   state.summarySupplier = null;
   summaryView?.overlay.remove();
+  summaryView?.scrim.remove();
   summaryView = null;
+  if (summaryEscHandler) {
+    document.removeEventListener('keydown', summaryEscHandler);
+    summaryEscHandler = null;
+  }
+  // Focus goes back to the button that opened this screen — never assumed
+  // still there: the row it belonged to may have been repainted, or the
+  // supplier deactivated, while the summary was open.
+  document.getElementById(`summary-${openerId}`)?.focus();
 }
 
 function renderSummary() {
@@ -458,10 +483,22 @@ function renderSummary() {
     return;
   }
 
+  const firstOpen = !summaryEscHandler;
   summaryView?.overlay.remove();
+  summaryView?.scrim.remove();
   const built = buildOrderSummaryView(supplier, ingredients, state.entries, { onBack: closeSummary });
   summaryView = { ...built, id: supplier.id };
+  document.body.appendChild(built.scrim);
   document.body.appendChild(built.overlay);
+
+  if (firstOpen) {
+    summaryEscHandler = e => { if (e.key === 'Escape') closeSummary(); };
+    document.addEventListener('keydown', summaryEscHandler);
+  }
+  // Moves focus INTO the screen — its own Back button — the moment it is
+  // actually in the document; built.overlay.querySelector before appendChild
+  // would focus a detached node, which every browser silently ignores.
+  built.overlay.querySelector('.orders-icon-btn')?.focus();
 }
 
 // The flat list is MOUNTED once and then only repainted.
@@ -673,7 +710,15 @@ function renderIncoming() {
 
 // The debt count on the Incoming tab — the same number renderOwedBanner just
 // drew into the banner, never recomputed, so the two can never disagree.
-function refreshDeliveriesBadge(count) {
+//
+// ⚠️ THE LAST COUNT IS REMEMBERED so onLanguageChange (below) can re-run the
+// SAME aria-label in the new language without needing a fresh snapshot —
+// switching the venue's language must not leave this button's label stuck
+// in whatever tongue happened to be current the last time the count moved.
+let lastOwedCount = 0;
+
+function refreshDeliveriesBadge(count = lastOwedCount) {
+  lastOwedCount = count;
   const badge = document.getElementById('tab-deliveries-badge');
   const btn = document.getElementById('tab-deliveries-btn');
   if (!badge || !btn) return;
@@ -1646,6 +1691,7 @@ function dismissPending(supplierId) {
 async function recordPending(supplierId, day) {
   const done = await placeOrder(supplierId, { date: day });
   if (done) dismissPending(supplierId);
+  renderSummary();               // the open summary sheet must not go stale
 }
 
 // "It's today's" — it was never actually ordered. Keep the rows, restamp to today.
@@ -1658,6 +1704,7 @@ async function keepAsToday(supplierId) {
   try {
     await saveDraftNow(state.entries, state.days);
     dismissPending(supplierId);
+    renderSummary();              // the open summary sheet must not go stale
   } catch (err) {
     console.error('Restamping the draft failed:', err);
     if (previous) state.days[supplierId] = previous; else delete state.days[supplierId];
@@ -1684,6 +1731,7 @@ async function discardPending(supplierId) {
     forgetSupplierLocally(supplierId);
     syncInputsFromState();
     dismissPending(supplierId);
+    renderSummary();              // the open summary sheet must not go stale
     setStatus(`${supplier.name} — order discarded`, 'warn', 4000);
   } catch (err) {
     console.error('Discarding the order failed:', err);
@@ -1709,6 +1757,7 @@ function expandSupplier(supplierId) {
 // ── Management panel ──────────────────────────────────────────────────────────
 function openManagement() {
   if (mgmt) return;
+  closeAlertsPanel();           // the panel must never sit on top of a full screen
   // ⚠️ ONLY config/orders REACHES IT NOW. The supplier and ingredient records moved
   // to their own screen (suppliers.html), so this panel no longer needs — or gets —
   // either list.
@@ -1729,6 +1778,7 @@ function openManagement() {
       // not there, in silence, with every test green. Only opening the screen showed
       // it.
       openHistory: () => {
+        closeAlertsPanel();     // the panel must never sit on top of a full screen
         const overlay = document.getElementById('history-overlay');
         if (overlay) overlay.hidden = false;
       },
@@ -1862,6 +1912,10 @@ async function init() {
   // opens straight at tablet width — see js/orders/tablet-layout.js.
   watchTablet();
   initAlertsPanel();
+  // The Incoming tab's aria-label names a count in words ("3 orders owed") —
+  // switching the venue's language must not leave it saying so in the old
+  // one until the debt happens to change again.
+  onLanguageChange(() => refreshDeliveriesBadge());
 
   // The debounced draft autosave has no caller to hand a rejection to, so it reports
   // through here. Never auto-hidden on a timer: an order that is no longer being
@@ -1941,6 +1995,10 @@ async function init() {
     syncInputsFromState();
     renderReminders();
     checkPendingOnce();
+    // ⚠️ AND THE OPEN SUMMARY SHEET, for the same reason as the open list just
+    // below: it shows quantities from this very draft, and a change made on
+    // another phone must not leave it showing yesterday's numbers.
+    renderSummary();
     // ⚠️ THE OPEN LIST DEPENDS ON THE SHARED ORDER, NOT ONLY ON ITSELF. Its
     // "now in the list: 6" marks are a comparison against these very entries, so
     // without this the warning appeared only if the LIST document happened to

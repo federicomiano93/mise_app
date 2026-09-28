@@ -97,10 +97,16 @@ export function watchTablet(onChange) {
 
 // ── What counts as a notice, inside the alerts panel ──────────────────────
 //
-// ⚠️ THE "SHOW THE NOTICES AGAIN" PILL DOES NOT COUNT. It is what is left
-// once every calendar notice has been read and put away (notifications.js
-// renderPill, `.alert-pill`) — counting it would keep the badge lit for
-// something that is, on purpose, no longer a notice.
+// ⚠️⚠️ A NOTICE AND "SOMETHING TO LOOK AT" ARE NOT THE SAME QUESTION, and
+// conflating them is the review-round bug (28 Sep 2026): the bell hid itself
+// at zero notices even while the panel still held the "show the notices
+// again" pill (`.alert-pill`, notifications.js renderPill) — reachable on a
+// phone by scrolling to it, unreachable on a tablet once the bell that opens
+// its only container had hidden itself. So there are TWO answers:
+//   count       — real notices only, what the NUMBER on the badge says.
+//   hasContent  — count > 0 OR the pill is there; what decides whether the
+//                 BELL shows at all. The pill is content worth opening the
+//                 panel for even though it is not itself a notice.
 //
 // PURE, so it can be tested without a DOM (this project has no jsdom): given
 // the CLASS NAMES of the panel's descendants, not the elements themselves.
@@ -116,16 +122,28 @@ export const NOTICE_CLASSES = [
   'alert-banner',         // notifications.js renderAlerts — one per calendar notice
 ];
 
-export function countNoticeClassNames(classNames) {
-  return (classNames || []).filter((cls) => {
+// Content that is NOT a notice but still means "there is something to open
+// the panel for" — today just the one pill.
+const NON_NOTICE_CONTENT_CLASSES = ['alert-pill'];
+
+function classListHasAny(classNames, markers) {
+  return (classNames || []).some((cls) => {
     const parts = String(cls || '').split(/\s+/);
-    return NOTICE_CLASSES.some((marker) => parts.includes(marker));
-  }).length;
+    return markers.some((marker) => parts.includes(marker));
+  });
+}
+
+// -> { count, hasContent }
+export function countNoticeClassNames(classNames) {
+  const list = classNames || [];
+  const count = list.filter((cls) => classListHasAny([cls], NOTICE_CLASSES)).length;
+  const hasContent = count > 0 || classListHasAny(list, NON_NOTICE_CONTENT_CLASSES);
+  return { count, hasContent };
 }
 
 // The DOM wrapper around the pure rule above.
 export function countNotices(panelEl) {
-  if (!panelEl) return 0;
+  if (!panelEl) return { count: 0, hasContent: false };
   const classNames = [...panelEl.querySelectorAll('*')].map((n) => n.className || '');
   return countNoticeClassNames(classNames);
 }
@@ -136,11 +154,24 @@ export function countNotices(panelEl) {
 // (orders.html). Call once, from orders-main's init(), after watchTablet() —
 // so the first count is right even when the page opens already at tablet
 // width. Idempotent by construction: it is only ever called once.
+
+// ⚠️ MODULE-LEVEL, NOT A CLOSURE VARIABLE RETURNED FROM initAlertsPanel(). Any
+// full-screen screen opened over the Order tab (a supplier, its read-only
+// list, its summary, History, Settings) must close this panel first — it is
+// the only door out of the small set of callers this module cannot see from
+// in here, so orders-main.js is handed one small function instead of the
+// whole panel's internals.
+let closePanel = null;
+
+export function closeAlertsPanel() {
+  closePanel?.();
+}
+
 export function initAlertsPanel() {
   const btn = document.getElementById('orders-alerts-btn');
   const panel = document.getElementById('orders-alerts-panel');
-  const count = document.getElementById('orders-alerts-count');
-  if (!btn || !panel || !count) return;
+  const countEl = document.getElementById('orders-alerts-count');
+  if (!btn || !panel || !countEl) return;
 
   function isTablet() {
     return window.matchMedia(TABLET_QUERY).matches;
@@ -150,6 +181,7 @@ export function initAlertsPanel() {
     panel.hidden = !open;
     btn.setAttribute('aria-expanded', String(open));
   }
+  closePanel = () => setOpen(false);
 
   function toggle() {
     setOpen(panel.hidden);
@@ -158,23 +190,39 @@ export function initAlertsPanel() {
   // ⚠️ DERIVED, NEVER TYPED — the same rule js/orders/registry-main.js uses for
   // the bottom bar. A count written by hand here could say "3" over an empty
   // panel the moment a banner's own renderer quietly cleared itself.
+  //
+  // ⚠️ THE BELL AND THE NUMBER ANSWER TWO DIFFERENT QUESTIONS — see the long
+  // note on countNoticeClassNames above. The bell shows whenever there is
+  // ANYTHING to open the panel for (hasContent); the number only counts real
+  // notices, and is blank rather than "0" when there are none.
   function refreshCount() {
-    const n = countNotices(panel);
-    count.textContent = String(n);
-    btn.hidden = !isTablet() || n === 0;
-    btn.setAttribute('aria-label', t('orders.alerts.panelButton', { n }));
-    if (n === 0 && !panel.hidden) setOpen(false); // nothing left to show
+    const { count, hasContent } = countNotices(panel);
+    countEl.textContent = count > 0 ? String(count) : '';
+    countEl.hidden = count === 0;
+    btn.hidden = !isTablet() || !hasContent;
+    btn.setAttribute('aria-label', count > 0
+      ? t('orders.alerts.panelButton', { n: count })
+      : t('orders.alerts.panelRegion'));
+    if (!hasContent && !panel.hidden) setOpen(false); // nothing left to show
   }
 
   btn.addEventListener('click', toggle);
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && !panel.hidden) { setOpen(false); btn.focus(); }
   });
-  // A tap anywhere outside the panel and its own button closes it — the same
-  // "outside tap closes it" rule as every dropdown-like control in this app.
+  // ⚠️ e.composedPath(), CAPTURED AT DISPATCH TIME — not panel.contains(e.target)
+  // read back after the fact. Tapping a notice's own close button (the alert
+  // banner's ×, or an "Order placed" button inside the panel) repaints that
+  // banner SYNCHRONOUSLY, before this listener runs on the same click's
+  // bubble — so by the time `contains()` asked, the tapped node was already
+  // gone from the tree and the panel looked like it had not been touched,
+  // closing itself under the very tap that was supposed to stay inside it.
+  // composedPath() is fixed at the moment the event was dispatched and still
+  // names every ancestor the tapped node had then, panel included.
   document.addEventListener('click', (e) => {
     if (panel.hidden) return;
-    if (panel.contains(e.target) || btn.contains(e.target)) return;
+    const path = typeof e.composedPath === 'function' ? e.composedPath() : [e.target];
+    if (path.includes(panel) || path.includes(btn)) return;
     setOpen(false);
   });
 

@@ -9,7 +9,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { supplierSummary } from '../js/orders/order-summary.js';
-import { buildOrderMessage } from '../js/orders/order-text.js';
+import { buildOrderMessage, orderedItems } from '../js/orders/order-text.js';
 
 const SUPPLIER = { id: 's1', name: 'Salvo' };
 
@@ -47,16 +47,31 @@ test('a null supplier still returns a shape — never throws', () => {
   assert.deepEqual(supplierSummary(null, INGREDIENTS, ENTRIES).name, '');
 });
 
-test('the summary lines are byte-identical to the message\'s own lines', () => {
+// ⚠️ EQUAL, NOT `includes()`. `includes` only proves the summary's lines are
+// SOMEWHERE in the message — it would still pass if the message carried
+// extra lines the summary left out, or the same lines in a different order.
+// This builds the message through orderedItems(), the SAME selection
+// function order-summary.js itself calls (order-text.js), so both halves of
+// the comparison come from the one real code path rather than two separate
+// re-implementations of "what is in this supplier's order" agreeing with
+// each other by coincidence.
+test('the summary lines equal the message section lines — exactly, in order', () => {
   const { lines } = supplierSummary(SUPPLIER, INGREDIENTS, ENTRIES);
-  const message = buildOrderMessage([{
-    supplierName: SUPPLIER.name,
-    items: INGREDIENTS
-      .filter(i => (ENTRIES[i.id]?.qty || 0) > 0)
-      .map(i => ({ name: i.name, weight: i.weight, qty: ENTRIES[i.id].qty })),
-  }]);
-  const messageLines = lines.map(({ label, qty }) => `- ${label}: ${qty}`);
-  for (const line of messageLines) {
-    assert.ok(message.includes(line), `message is missing the summary line "${line}"`);
-  }
+  const items = orderedItems(INGREDIENTS, ENTRIES);
+  const message = buildOrderMessage([{ supplierName: SUPPLIER.name, items }]);
+
+  // `${title}\n\n*Salvo*\n- line\n- line…` — the section after the title,
+  // with its bold supplier heading dropped.
+  const section = message.split('\n\n')[1];
+  const messageLines = section.split('\n').slice(1);
+
+  const summaryLines = lines.map(({ label, qty }) => `- ${label}: ${qty}`);
+  assert.deepEqual(summaryLines, messageLines);
+});
+
+test('a supplier with nothing ordered: the summary is empty and the message carries no section for it', () => {
+  const { lines } = supplierSummary(SUPPLIER, INGREDIENTS, {});
+  assert.deepEqual(lines, []);
+  const items = orderedItems(INGREDIENTS, {});
+  assert.equal(buildOrderMessage([{ supplierName: SUPPLIER.name, items }]), '');
 });

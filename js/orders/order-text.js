@@ -42,6 +42,19 @@ export function itemLabel(name, weight) {
   return [name, weight].filter(Boolean).join(' ');
 }
 
+// The rows one supplier's order is built from: everything with a quantity
+// typed, and nothing else. ⚠️ THE ONE SELECTION EVERY SCREEN THAT SHOWS "what
+// is in this supplier's order right now" MUST CALL — js/orders/preview.js
+// (buildSendScreen, the WhatsApp send screen) and js/orders/order-summary.js
+// (the tablet read-only summary sheet) both call this rather than each
+// filtering `entries` its own way, so the two can never quietly select a
+// different set of rows from the same draft.
+export function orderedItems(ingredients, entries) {
+  return (ingredients || [])
+    .filter(ing => (entries?.[ing.id]?.qty || 0) > 0)
+    .map(ing => ({ name: ing.name, weight: ing.weight || '', qty: entries[ing.id].qty }));
+}
+
 // One supplier's items as sorted `{ label, qty }` lines — the EXACT shape and
 // order the message's own lines are built from. js/orders/order-summary.js
 // (the tablet summary sheet) calls this too, so a supplier's summary can never

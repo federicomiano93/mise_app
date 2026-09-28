@@ -47,16 +47,28 @@ test('countNoticeClassNames counts one notice per matching class name', () => {
     'alert-banner holiday',
     'some-other-thing',
   ];
-  assert.equal(countNoticeClassNames(classNames), 6);
+  assert.deepEqual(countNoticeClassNames(classNames), { count: 6, hasContent: true });
 });
 
-test('the "show the notices again" pill never counts as a notice', () => {
-  assert.equal(countNoticeClassNames(['alert-pill']), 0);
+// ⚠️ THE REVIEW-ROUND BUG (28 Sep 2026): the bell hid itself at zero real
+// notices even while the "show the notices again" pill was the only thing
+// left in the panel, making the pill unreachable on a tablet. `hasContent`
+// is the fix — it must stay true on a pill alone, even though the pill is
+// never counted as a notice.
+test('the pill never counts as a NOTICE, but it still counts as CONTENT', () => {
+  assert.deepEqual(countNoticeClassNames(['alert-pill']), { count: 0, hasContent: true });
   assert.ok(!NOTICE_CLASSES.includes('alert-pill'));
 });
 
-test('countNoticeClassNames is 0 for nothing, or for garbage input', () => {
-  assert.equal(countNoticeClassNames([]), 0);
-  assert.equal(countNoticeClassNames(undefined), 0);
-  assert.equal(countNoticeClassNames(null), 0);
+test('nothing at all -> no notices, no content', () => {
+  assert.deepEqual(countNoticeClassNames([]), { count: 0, hasContent: false });
+  assert.deepEqual(countNoticeClassNames(undefined), { count: 0, hasContent: false });
+  assert.deepEqual(countNoticeClassNames(null), { count: 0, hasContent: false });
+});
+
+test('real notices AND the pill together: the count ignores the pill, hasContent stays true', () => {
+  assert.deepEqual(
+    countNoticeClassNames(['pending-banner', 'alert-pill']),
+    { count: 1, hasContent: true },
+  );
 });

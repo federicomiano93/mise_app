@@ -23,12 +23,25 @@ const BACK_ICON =
 // supplier: { id, name }; ingredients: that supplier's products (already
 // lensed — the same list the order screen and supplier-items.js use);
 // entries: state.entries. ctx: { onBack }
-// -> { overlay, repaint(ingredients, entries) }
+// -> { overlay, scrim, repaint(ingredients, entries) }
+//
+// ⚠️ `scrim` IS A SEPARATE ELEMENT, NEVER PART OF `overlay`. On a phone the
+// screen already covers everything, so the scrim is invisible CSS-wise and
+// harmless; on a tablet, where this is a side sheet with the supplier list
+// still showing beside it, it is what dims the rest of the page and gives a
+// tap anywhere outside the sheet the same effect as Back. The caller
+// (orders-main.js) appends and removes both together.
 export function buildOrderSummaryView(supplier, ingredients, entries, ctx) {
   const body = el('div', { class: 'order-summary-body' });
   const subtitle = el('p', {});
 
-  const overlay = el('div', { class: 'order-summary-view' }, [
+  const scrim = el('div', {
+    class: 'order-summary-scrim', 'aria-hidden': 'true', onClick: () => ctx.onBack?.(),
+  });
+
+  const overlay = el('div', {
+    class: 'order-summary-view', role: 'dialog', 'aria-label': supplier.name,
+  }, [
     el('header', { class: 'orders-header' }, [
       el('button', {
         type: 'button', class: 'orders-icon-btn', 'aria-label': t('ui.back'),
@@ -69,5 +82,5 @@ export function buildOrderSummaryView(supplier, ingredients, entries, ctx) {
   }
 
   repaint(ingredients, entries);
-  return { overlay, repaint };
+  return { overlay, scrim, repaint };
 }

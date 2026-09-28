@@ -1,4 +1,4 @@
-const CACHE_NAME = 'theitalianclub-v389';
+const CACHE_NAME = 'theitalianclub-v391';
 // Firebase SDK modules (loaded from gstatic) are cached SEPARATELY from CACHE_NAME
 // so they survive the cache-version bump that happens on every deploy — otherwise
 // the offline SDK would be wiped each release until the next online load. The name
@@ -384,7 +384,7 @@ const ASSET_HASHES = {
   "./tokens.css": '20c6d94945a028fb',
   "./auth.css": '8db3d5a1b9b85d37',
   "./style.css": '73f77f48801e043c',
-  "./orders.css": 'c24ab1a2148d50a3',
+  "./orders.css": '5e62b4b2afd2617c',
   "./sounds/alarm.wav": '0d1465974f5be95b',
   "./fonts/manrope-latin.woff2": '71eb731d55804619',
   "./fonts/manrope-latin-ext.woff2": 'bd24140af06f1b58',
@@ -496,7 +496,7 @@ const ASSET_HASHES = {
   "./js/orders/boot.js": '53dba081d29270d8',
   "./js/orders/confirm-dialog.js": '61a7f580f37c5ff8',
   "./js/orders/firebase-orders.js": 'f707cb2fa4796756',
-  "./js/orders/orders-main.js": 'eead0e6968546fd9',
+  "./js/orders/orders-main.js": '054d303696055aae',
   "./js/orders/dom.js": '7ec966d71c5356cd',
   "./js/orders/day.js": '8e00beadcda80dd1',
   "./js/orders/deliveries.js": '341d301921b23a4b',
@@ -518,8 +518,8 @@ const ASSET_HASHES = {
   "./js/orders/supplier-items.js": '546e88672e9677f1',
   "./js/orders/orders-config.js": 'f05b01125712a1de',
   "./js/orders/draft.js": '90671af8a5495aa9',
-  "./js/orders/preview.js": '43689698cb90086a',
-  "./js/orders/order-text.js": '6c40cbfdd8e055a3',
+  "./js/orders/preview.js": '7085f896aa11237d',
+  "./js/orders/order-text.js": 'a63a02d02d7dba41',
   "./js/orders/supplier-picker.js": 'a8d50b3f29960593',
   "./js/orders/order-request-model.js": '256c8ff60f99f294',
   "./js/orders/order-requests.js": '8a7758a68295099e',
@@ -541,9 +541,9 @@ const ASSET_HASHES = {
   "./js/orders/holidays-it.js": '7b57e4698b5f299f',
   "./js/orders/suggestions.js": '8705128fe510b5dd',
   "./js/orders/notifications.js": 'cee091e382e6c5b9',
-  "./js/orders/tablet-layout.js": 'cd62879e47bebe03',
-  "./js/orders/order-summary.js": '13c3e89a3823f4fe',
-  "./js/orders/order-summary-view.js": '788b49c192a106f4',
+  "./js/orders/tablet-layout.js": 'f0cf8d39a351397d',
+  "./js/orders/order-summary.js": 'cabaa245a84584fa',
+  "./js/orders/order-summary-view.js": '8e41376a1fee50e7',
   "./catalogue.html": '8ce90f0a732cb223',
   "./catalogue.css": 'ce5f4d7762756b6e',
   "./label-print.css": 'ffbcdf4e7a627a2d',
