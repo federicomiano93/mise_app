@@ -1,4 +1,4 @@
-const CACHE_NAME = 'theitalianclub-v402';
+const CACHE_NAME = 'theitalianclub-v403';
 // Firebase SDK modules (loaded from gstatic) are cached SEPARATELY from CACHE_NAME
 // so they survive the cache-version bump that happens on every deploy — otherwise
 // the offline SDK would be wiped each release until the next online load. The name
@@ -389,7 +389,7 @@ const ASSET_HASHES = {
   "./tokens.css": '72c1655dcb834986',
   "./auth.css": '8db3d5a1b9b85d37',
   "./style.css": '73f77f48801e043c',
-  "./orders.css": 'db917ea02295225d',
+  "./orders.css": '4582aa5c2c88e939',
   "./sounds/alarm.wav": '0d1465974f5be95b',
   "./fonts/manrope-latin.woff2": '71eb731d55804619',
   "./fonts/manrope-latin-ext.woff2": 'bd24140af06f1b58',
@@ -552,7 +552,7 @@ const ASSET_HASHES = {
   "./js/orders/tablet-layout.js": '7b0edf5def634fd4',
   "./js/orders/split-pick.js": '40f79251304fe1b9',
   "./js/orders/order-summary.js": '4d8adc0030de0959',
-  "./js/orders/order-cost-view.js": '01ff49c7a902b8f2',
+  "./js/orders/order-cost-view.js": '842bfc57469521a0',
   "./js/orders/order-summary-view.js": 'a492599e658eff31',
   "./catalogue.html": '8ce90f0a732cb223',
   "./catalogue.css": 'ce5f4d7762756b6e',
