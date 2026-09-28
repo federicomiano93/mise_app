@@ -584,28 +584,8 @@ select.qty-select:focus { outline: none; border-color: var(--crust); background:
 #cp-overlay { z-index: 520; }
 
 
-.settings-menu { padding: 14px 16px; display: flex; flex-direction: column; gap: 12px; }
-.settings-menu-btn {
-  text-align: left;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 16px;
-  cursor: pointer;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.settings-menu-btn:active { background: var(--surface2); }
-.settings-menu-title { font-size: 16px; font-weight: 700; color: var(--text); font-family: 'Manrope', sans-serif; }
-/* ⚠️ THE FAMILY IS NAMED, NOT INHERITED: these spans sit inside a <button>, and a button
-   takes the SYSTEM font from the browser's own stylesheet unless told otherwise. The
-   title always said Manrope; the sentence under it did not, and rendered in the system
-   sans on the Calculator's Settings and the Home's alike. Found on a screenshot. */
-.settings-menu-sub { font-size: 13px; color: var(--text2); font-family: 'Manrope', sans-serif; }
-/* The Home's Settings: the holiday row reads in the warning colour while somebody IS
-   away — the same signal the bottom of the Home gives (.session-logout.session-away). */
-.settings-menu-btn--away .settings-menu-title { color: var(--warn); }
+/* The Calculator settings hub: its cards are the shared .set-* look (tokens.css). */
+.settings-menu { padding: 14px 16px; }
 
 /* Tappable "drill-in" row: the recipe picker and the client list both use it to
    let the user pick one item to edit, instead of showing everything at once. */
@@ -1218,6 +1198,7 @@ input.cp-prod-weight {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 12px;
   width: 100%;
   padding: 14px 16px;
   margin-bottom: 10px;
@@ -1227,9 +1208,10 @@ input.cp-prod-weight {
   color: var(--text);
   font-size: 16px;
   font-weight: 600;
-  cursor: pointer;
 }
-.extra-toggle-row input { width: 22px; height: 22px; accent-color: var(--accent); flex-shrink: 0; }
+/* ⚠️ A DIRECT CHILD ONLY: since 28 Sep 2026 the on/off rows carry a .set-switch,
+   whose own input must keep the switch's full tap area, not shrink to 22px. */
+.extra-toggle-row > input { width: 22px; height: 22px; accent-color: var(--accent); flex-shrink: 0; }
 
 /* The overlay header follows the app-wide spec, like the main headers do: Back on
    the LEFT, the title CENTRED, actions on the RIGHT.

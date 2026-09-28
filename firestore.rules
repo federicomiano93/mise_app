@@ -1350,6 +1350,8 @@ service cloud.firestore {
                'sendRoutes', 'preferredRoute',
                // Which day the working week starts on.
                'weekStartsOn',
+               // Whether the venue uses order lists at all (28 Sep 2026).
+               'orderLists',
                // Retired, still writable by an un-updated phone (see above)
                'products', 'groups', 'focaccia', 'brioche', 'sourdough', 'market'
              ])
@@ -1375,6 +1377,12 @@ service cloud.firestore {
                   && request.resource.data.whatsappClients.size() <= 100))
           && (!('showStock' in request.resource.data)
               || request.resource.data.showStock is bool)
+          // Order lists on or off for the whole venue. Absent = on, so no venue
+          // changes until an owner or manager turns them off; a USE switch, not a
+          // security one — the order-requests rules below are untouched, so a phone
+          // not yet updated can still send one until it updates.
+          && (!('orderLists' in request.resource.data)
+              || request.resource.data.orderLists is bool)
           && (!('historyDays' in request.resource.data)
               || request.resource.data.historyDays is number)
           // Which roads an order may leave by. A map of four booleans, and a

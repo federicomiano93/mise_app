@@ -39,7 +39,12 @@ export function normalizeOrdersConfig(doc) {
     historyDays: historyDaysOf(doc?.historyDays),
     // Which roads an order may leave by. The deciding lives in send-routes.js;
     // this only carries it, so both screens read one answer.
-    sendSettings: normalizeSendRoutes(doc),
+    // `orderLists` rides along because the send chooser is the one place that
+    // offers the «to the manager» road — which IS an order list (send-routes.js).
+    sendSettings: { ...normalizeSendRoutes(doc), orderLists: doc?.orderLists !== false },
+    // Order lists on or off for the whole venue (28 Sep 2026). Only an explicit
+    // `false` turns them off: a venue that never heard of the switch keeps them.
+    orderLists: doc?.orderLists !== false,
     // Which day the working week starts on — it decides what "this week" means on
     // Incoming, and what has fallen out of it and is owed an answer.
     weekStartsOn: weekStartOf(doc),

@@ -604,7 +604,9 @@ function openExtra() {
   if (list) {
     list.textContent = '';
     for (const recipe of getRecipes(extraWorking)) {
-      const cb = el('input', { type: 'checkbox' });
+      // A real on/off switch (tokens.css .set-switch, 28 Sep 2026) — the same control
+      // as every settings screen. Still a FORM: it edits the working copy, Save commits.
+      const cb = el('input', { type: 'checkbox', role: 'switch', 'aria-label': recipe.name });
       cb.checked = isExtraDoughEnabled(extraWorking, recipe.id);
       cb.addEventListener('change', () => {
         if (!extraWorking.extraDough || typeof extraWorking.extraDough !== 'object') extraWorking.extraDough = {};
@@ -612,7 +614,10 @@ function openExtra() {
         extraDirty = true;
         updateExtraSaveBtn();
       });
-      list.appendChild(el('label', { class: 'extra-toggle-row' }, [el('span', {}, recipe.name), cb]));
+      list.appendChild(el('div', { class: 'extra-toggle-row' }, [
+        el('span', {}, recipe.name),
+        el('label', { class: 'set-switch' }, [cb, el('span', { class: 'set-switch-track', 'aria-hidden': 'true' })]),
+      ]));
     }
   }
   updateExtraSaveBtn();

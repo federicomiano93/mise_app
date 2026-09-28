@@ -24,14 +24,25 @@ export function renderSettings({ photoOn, onTogglePhoto, labelProfile, onSaveLab
   // language comes from the VENUE and arrives a moment after the page has drawn
   // itself, so a string written once here is frozen in whatever language the app
   // started in. Same reason, same shape, as photo-capture.js.
-  const label = el('span', { class: 'cat-photo-setting-label' });
-  const state = el('span', { class: 'cat-photo-setting-state' });
-  const row = el('button', {
-    class: 'cat-alg-sheet-btn cat-photo-setting', type: 'button',
-    onclick: () => onTogglePhoto(),
-  }, [label, state]);
-
-  const note = el('p', { class: 'cat-settings-note' });
+  // ⚠️⚠️ A REAL SWITCH SINCE 28 SEP 2026 (tokens.css .set-*, «migliora la UX di tutte
+  // le impostazioni»): the same control every settings screen uses. The tap asks
+  // onTogglePhoto(), which may still say no (its own confirm) — so the box is put
+  // back to `current` at once, and only refresh() from the caller moves it.
+  const label = el('span', { class: 'set-title' });
+  const note = el('span', { class: 'set-sub' });
+  const photoInput = el('input', { type: 'checkbox', role: 'switch' });
+  photoInput.addEventListener('change', () => {
+    photoInput.checked = !!current;
+    onTogglePhoto();
+  });
+  const row = el('div', { class: 'set-row' }, [
+    el('span', { class: 'set-text' }, [label, note]),
+    el('label', { class: 'set-switch' }, [photoInput, el('span', { class: 'set-switch-track', 'aria-hidden': 'true' })]),
+  ]);
+  const photoCard = el('section', { class: 'set-section' }, [
+    el('div', { class: 'set-head' }, [el('h3', {})]),
+    row,
+  ]);
 
   // ⚠️ THE SWITCH'S STATE IS TRACKED HERE, NOT TAKEN FROM THE ARGUMENT EACH TIME.
   // `paint(on = photoOn)` looked equivalent and was not: `photoOn` is the value the
@@ -43,9 +54,10 @@ export function renderSettings({ photoOn, onTogglePhoto, labelProfile, onSaveLab
   function paint(next = current) {
     current = next;
     label.textContent = t('cat.photo.setting');
-    state.textContent = current ? t('cat.photo.on') : t('cat.photo.off');
-    row.classList.toggle('cat-photo-setting--on', !!current);
+    photoInput.checked = !!current;
+    photoInput.setAttribute('aria-label', t('cat.photo.setting'));
     note.textContent = t('cat.photo.settingNote');
+    photoCard.querySelector('h3').textContent = t('settings.cat.photo');
   }
   paint();
 
@@ -69,9 +81,9 @@ export function renderSettings({ photoOn, onTogglePhoto, labelProfile, onSaveLab
   // right-hand edge — which on this screen is the end of the ingredient list.
   let profile = normalizeLabelProfile(labelProfile);
 
-  const labelHead = el('h2', { class: 'lab-settings-h' });
-  const sizeLabel = el('p', { class: 'lab-settings-label' });
-  const sizeSwitch = el('div', { class: 'lab-switch lab-size-switch', role: 'group' });
+  const labelHead = el('h3', {});
+  const sizeLabel = el('p', { class: 'set-label' });
+  const sizeSwitch = el('div', { class: 'set-seg', role: 'group' });
   const sizeButtons = new Map();
 
   // ⚠️ THE PRESETS COME FROM THE MODEL, never typed here. Two lists of paper sizes is
@@ -79,7 +91,7 @@ export function renderSettings({ photoOn, onTogglePhoto, labelProfile, onSaveLab
   // would be wrong is the printed one.
   for (const size of LABEL_SIZES) {
     const btn = el('button', {
-      class: 'lab-switch-btn', type: 'button',
+      class: 'set-seg-btn', type: 'button',
       // Numbers, not a phrase: «76 × 51 mm» is the same in every language, so it is
       // built rather than translated.
       text: `${size.widthMm} × ${size.heightMm}`,
@@ -90,7 +102,7 @@ export function renderSettings({ photoOn, onTogglePhoto, labelProfile, onSaveLab
   }
 
   const customBtn = el('button', {
-    class: 'lab-switch-btn', type: 'button',
+    class: 'set-seg-btn', type: 'button',
     onclick: () => { customOpen = true; paintLabel(); },
   });
   sizeSwitch.appendChild(customBtn);
@@ -138,25 +150,25 @@ export function renderSettings({ photoOn, onTogglePhoto, labelProfile, onSaveLab
   // the stored document and in the rules from the first release, deliberately, but
   // OFF this screen — a control that changes nothing is one somebody sets wrongly
   // and then trusts. Now they change something.
-  const printerLabel = el('p', { class: 'lab-settings-label' });
-  const printerSwitch = el('div', { class: 'lab-switch lab-size-switch', role: 'group' });
+  const printerLabel = el('p', { class: 'set-label' });
+  const printerSwitch = el('div', { class: 'set-seg', role: 'group' });
   const printerButtons = new Map();
   for (const language of PRINTER_LANGUAGES) {
     const btn = el('button', {
-      class: 'lab-switch-btn', type: 'button',
+      class: 'set-seg-btn', type: 'button',
       onclick: () => save({ printerLanguage: language }),
     });
     printerButtons.set(language, btn);
     printerSwitch.appendChild(btn);
   }
-  const printerNote = el('p', { class: 'cat-settings-note' });
+  const printerNote = el('p', { class: 'set-sub' });
 
-  const dpiLabel = el('p', { class: 'lab-settings-label' });
-  const dpiSwitch = el('div', { class: 'lab-switch lab-size-switch', role: 'group' });
+  const dpiLabel = el('p', { class: 'set-label' });
+  const dpiSwitch = el('div', { class: 'set-seg', role: 'group' });
   const dpiButtons = new Map();
   for (const dpi of DPI_CHOICES) {
     const btn = el('button', {
-      class: 'lab-switch-btn', type: 'button',
+      class: 'set-seg-btn', type: 'button',
       // Numbers, not a phrase — «203 dpi» is the same in every language.
       text: `${dpi} dpi`,
       onclick: () => save({ dpi }),
@@ -164,7 +176,7 @@ export function renderSettings({ photoOn, onTogglePhoto, labelProfile, onSaveLab
     dpiButtons.set(dpi, btn);
     dpiSwitch.appendChild(btn);
   }
-  const dpiNote = el('p', { class: 'cat-settings-note' });
+  const dpiNote = el('p', { class: 'set-sub' });
 
 
   // ── What else goes on the label ────────────────────────────────────────────
@@ -174,18 +186,20 @@ export function renderSettings({ photoOn, onTogglePhoto, labelProfile, onSaveLab
   // for; everything here is what a pack travelling to another shop or a market has
   // to carry as well. It says so on the screen, once, so nobody switches these on
   // believing they were missing something.
-  const fullHead = el('h2', { class: 'lab-settings-h' });
-  const fullNote = el('p', { class: 'cat-settings-note' });
+  const fullHead = el('h3', {});
+  const fullNote = el('p', {});
 
   // One switch row, built the same way three times.
+  // One on/off line of the label: a switch row like every other settings switch.
   const switchRow = (key) => {
-    const name = el('span', { class: 'lab-settings-row-name' });
-    const state = el('span', { class: 'lab-settings-row-state' });
-    const row = el('button', {
-      class: 'cat-alg-sheet-btn lab-settings-row', type: 'button',
-      onclick: () => save({ [key]: !profile[key] }),
-    }, [name, state]);
-    return { key, row, name, state };
+    const name = el('span', { class: 'set-title' });
+    const input = el('input', { type: 'checkbox', role: 'switch' });
+    input.addEventListener('change', () => save({ [key]: input.checked }));
+    const row = el('div', { class: 'set-row' }, [
+      el('span', { class: 'set-text' }, [name]),
+      el('label', { class: 'set-switch' }, [input, el('span', { class: 'set-switch-track', 'aria-hidden': 'true' })]),
+    ]);
+    return { key, row, name, input };
   };
   const weightSwitch = switchRow('showWeight');
   const storageSwitch = switchRow('showStorage');
@@ -202,7 +216,7 @@ export function renderSettings({ photoOn, onTogglePhoto, labelProfile, onSaveLab
       onchange: (e) => save({ [key]: String(e.target.value || '').trim() }),
     });
     const name = el('span', { class: 'lab-size-field-name' });
-    const wrap = el('label', { class: 'lab-size-field lab-text-field' }, [
+    const wrap = el('label', { class: 'set-block lab-size-field lab-text-field' }, [
       name, el('span', { class: 'cat-field' }, [input]),
     ]);
     return { key, labelKey, placeholderKey, input, name, wrap };
@@ -210,24 +224,24 @@ export function renderSettings({ photoOn, onTogglePhoto, labelProfile, onSaveLab
   const storageText = textField('storageText', 'label.settings.storageText', 'label.settings.storagePlaceholder');
   const businessName = textField('businessName', 'label.settings.businessName');
   const businessAddress = textField('businessAddress', 'label.settings.businessAddress');
-  const businessNote = el('p', { class: 'cat-settings-note' });
+  const businessNote = el('p', { class: 'set-note' });
 
   // ⚠️⚠️ WHICH DATE, AND IT IS THE ONE CHOICE ON THIS SCREEN THAT CAN HARM SOMEBODY.
   // «Use by» is a safety statement; «best before» is about quality. The note under it
   // says so in words, because the two are a single tap apart and the consequences are
   // thrown-away food on one side and unsafe food on the other.
-  const dateKindLabel = el('p', { class: 'lab-settings-label' });
-  const dateKindSwitch = el('div', { class: 'lab-switch lab-size-switch', role: 'group' });
+  const dateKindLabel = el('p', { class: 'set-label' });
+  const dateKindSwitch = el('div', { class: 'set-seg', role: 'group' });
   const dateKindButtons = new Map();
   for (const kind of DATE_KINDS) {
     const btn = el('button', {
-      class: 'lab-switch-btn', type: 'button',
+      class: 'set-seg-btn', type: 'button',
       onclick: () => save({ dateKind: kind }),
     });
     dateKindButtons.set(kind, btn);
     dateKindSwitch.appendChild(btn);
   }
-  const dateKindNote = el('p', { class: 'cat-settings-note' });
+  const dateKindNote = el('p', { class: 'set-sub' });
 
   function paintFull() {
     fullHead.textContent = t('label.settings.full');
@@ -235,8 +249,8 @@ export function renderSettings({ photoOn, onTogglePhoto, labelProfile, onSaveLab
 
     for (const s of [weightSwitch, storageSwitch, businessSwitch]) {
       s.name.textContent = t(`label.settings.${s.key}`);
-      s.state.textContent = profile[s.key] ? t('cat.photo.on') : t('cat.photo.off');
-      s.row.classList.toggle('lab-settings-row--on', !!profile[s.key]);
+      s.input.checked = !!profile[s.key];
+      s.input.setAttribute('aria-label', t(`label.settings.${s.key}`));
     }
 
     for (const f of [storageText, businessName, businessAddress]) {
@@ -270,24 +284,24 @@ export function renderSettings({ photoOn, onTogglePhoto, labelProfile, onSaveLab
     for (const [kind, btn] of dateKindButtons) {
       const on = kind === profile.dateKind;
       btn.textContent = t(`label.settings.dateKind.${kind}`);
-      btn.classList.toggle('lab-switch-btn--on', on);
       btn.setAttribute('aria-pressed', on ? 'true' : 'false');
     }
   }
   const emptyHint = el('p', { class: 'lab-nofit' });
 
-  const dateLabel = el('span', { class: 'lab-settings-row-name' });
-  const dateState = el('span', { class: 'lab-settings-row-state' });
-  const dateRow = el('button', {
-    class: 'cat-alg-sheet-btn lab-settings-row', type: 'button',
-    onclick: () => save({ showDate: !profile.showDate }),
-  }, [dateLabel, dateState]);
-  const dateNote = el('p', { class: 'cat-settings-note' });
+  const dateLabel = el('span', { class: 'set-title' });
+  const dateNote = el('span', { class: 'set-sub' });
+  const dateInput = el('input', { type: 'checkbox', role: 'switch' });
+  dateInput.addEventListener('change', () => save({ showDate: dateInput.checked }));
+  const dateRow = el('div', { class: 'set-row' }, [
+    el('span', { class: 'set-text' }, [dateLabel, dateNote]),
+    el('label', { class: 'set-switch' }, [dateInput, el('span', { class: 'set-switch-track', 'aria-hidden': 'true' })]),
+  ]);
 
   // ⚠️ IT SAYS WHAT HAS TO BE DONE ONCE AND WHAT HAPPENS IF IT IS NOT. The first
   // print comes out the wrong size until the driver and the print window are set,
   // and somebody who has not been told that reads a correct app as a broken one.
-  const setupNote = el('p', { class: 'cat-settings-note lab-settings-setup' });
+  const setupNote = el('p', { class: 'set-note' });
   const labelError = el('p', { class: 'lab-nofit' });
 
   let customOpen = false;
@@ -297,7 +311,7 @@ export function renderSettings({ photoOn, onTogglePhoto, labelProfile, onSaveLab
     return found ? found.id : null;
   }
 
-  function paintLabel() {
+  let paintLabel = function paintLabelNow() {
     labelHead.textContent = t('label.settings.title');
     sizeLabel.textContent = t('label.settings.size');
     customBtn.textContent = t('label.settings.custom');
@@ -305,13 +319,11 @@ export function renderSettings({ photoOn, onTogglePhoto, labelProfile, onSaveLab
     const preset = currentPresetId();
     for (const [id, btn] of sizeButtons) {
       const on = id === preset;
-      btn.classList.toggle('lab-switch-btn--on', on);
       btn.setAttribute('aria-pressed', on ? 'true' : 'false');
     }
     // A size that matches no preset IS a custom size, so the fold opens itself —
     // otherwise the screen would show nothing selected and no way to see why.
     const isCustom = preset === null || customOpen;
-    customBtn.classList.toggle('lab-switch-btn--on', preset === null);
     customBtn.setAttribute('aria-pressed', preset === null ? 'true' : 'false');
     customRow.hidden = !isCustom;
 
@@ -326,7 +338,6 @@ export function renderSettings({ photoOn, onTogglePhoto, labelProfile, onSaveLab
     for (const [language, btn] of printerButtons) {
       const on = language === profile.printerLanguage;
       btn.textContent = t(`label.settings.printer.${language}`);
-      btn.classList.toggle('lab-switch-btn--on', on);
       btn.setAttribute('aria-pressed', on ? 'true' : 'false');
     }
     printerNote.textContent = t('label.settings.printerNote');
@@ -341,14 +352,13 @@ export function renderSettings({ photoOn, onTogglePhoto, labelProfile, onSaveLab
     dpiLabel.textContent = t('label.settings.dpi');
     for (const [dpi, btn] of dpiButtons) {
       const on = dpi === profile.dpi;
-      btn.classList.toggle('lab-switch-btn--on', on);
       btn.setAttribute('aria-pressed', on ? 'true' : 'false');
     }
     dpiNote.textContent = t('label.settings.dpiNote');
 
     dateLabel.textContent = t('label.settings.showDate');
-    dateState.textContent = profile.showDate ? t('cat.photo.on') : t('cat.photo.off');
-    dateRow.classList.toggle('lab-settings-row--on', profile.showDate);
+    dateInput.checked = !!profile.showDate;
+    dateInput.setAttribute('aria-label', t('label.settings.showDate'));
     dateNote.textContent = t('label.settings.showDateNote');
     setupNote.textContent = t('label.settings.setup');
     paintFull();
@@ -393,19 +403,44 @@ export function renderSettings({ photoOn, onTogglePhoto, labelProfile, onSaveLab
 
   onLanguageChange(() => { if (root.isConnected) paintLabel(); });
 
+  // Three cards, in the app's one settings look (28 Sep 2026): the photo reader, the
+  // paper and printer, and what else goes on the label. Every control saves on the tap.
+  const dpiBlock = el('div', { class: 'set-block' }, [dpiLabel, dpiSwitch, dpiNote]);
+  const dateKindBlock = el('div', { class: 'set-block' }, [dateKindLabel, dateKindSwitch, dateKindNote]);
+  const noteBlock = el('div', { class: 'set-block' }, [businessNote, emptyHint]);
+  const syncBlocks = () => {
+    dpiBlock.hidden = dpiSwitch.hidden;
+    dateKindBlock.hidden = dateKindSwitch.hidden;
+    // ⚠️ An empty block still draws its border line and padding: hidden with its notes.
+    noteBlock.hidden = businessNote.hidden && emptyHint.hidden;
+    // Each group is named by the label above it, for a screen reader.
+    sizeSwitch.setAttribute('aria-label', sizeLabel.textContent);
+    printerSwitch.setAttribute('aria-label', printerLabel.textContent);
+    dpiSwitch.setAttribute('aria-label', dpiLabel.textContent);
+    dateKindSwitch.setAttribute('aria-label', dateKindLabel.textContent);
+  };
+  root.classList.add('set-screen');
   root.append(
-    row, note,
-    labelHead, sizeLabel, sizeSwitch, customRow,
-    printerLabel, printerSwitch, printerNote,
-    dpiLabel, dpiSwitch, dpiNote,
-    dateRow, dateNote,
-    dateKindLabel, dateKindSwitch, dateKindNote,
-    fullHead, fullNote,
-    weightSwitch.row,
-    storageSwitch.row, storageText.wrap,
-    businessSwitch.row, businessName.wrap, businessAddress.wrap, businessNote,
-    emptyHint,
+    photoCard,
+    el('section', { class: 'set-section' }, [
+      el('div', { class: 'set-head' }, [labelHead]),
+      el('div', { class: 'set-block' }, [sizeLabel, sizeSwitch, customRow]),
+      el('div', { class: 'set-block' }, [printerLabel, printerSwitch, printerNote]),
+      dpiBlock,
+      dateRow,
+      dateKindBlock,
+    ]),
+    el('section', { class: 'set-section' }, [
+      el('div', { class: 'set-head' }, [fullHead, fullNote]),
+      weightSwitch.row,
+      storageSwitch.row, storageText.wrap,
+      businessSwitch.row, businessName.wrap, businessAddress.wrap,
+      noteBlock,
+    ]),
     setupNote, labelError,
   );
+  syncBlocks();
+  const paintLabelInner = paintLabel;
+  paintLabel = () => { paintLabelInner(); syncBlocks(); };
   return { root, refresh: paint };
 }

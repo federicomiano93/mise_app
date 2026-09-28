@@ -28,7 +28,7 @@ const CSS = ['style.css', 'orders.css', 'tokens.css', 'auth.css', 'catalogue.css
 
 // Classes that give their content the gutter. ⚠️ Each is CHECKED against the stylesheet
 // below, so removing the padding from one of them fails here rather than on a phone.
-const GUTTER = ['content', 'home-grid', 'install-host', 'requests-card-host',
+const GUTTER = ['content', 'home-grid', 'install-host',
   'reg-page', 'recipe-footer',
   // The Orders screen's own column, added when the order moved into one box:
   // the box needs a MARGIN (its border has to sit inside the screen), and a

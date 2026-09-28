@@ -156,35 +156,61 @@
     </a>
   </div>
   <div class="recipe-scroll">
-    <div class="settings-menu">
-      <button id="open-clients-btn" class="settings-menu-btn">
-        <span class="settings-menu-title" data-i18n="ui.clients">Clients</span>
-        <span class="settings-menu-sub" data-i18n="ui.clientsAndTheProducts">Clients and the products each one orders</span>
-      </button>
-      <button id="open-recipes-btn" class="settings-menu-btn">
-        <span class="settings-menu-title" data-i18n="ui.recipes">Recipes</span>
-        <span class="settings-menu-sub" data-i18n="ui.addEditOrDelete">Add, edit or delete recipes; pick which show as tabs</span>
-      </button>
-      <button id="open-whatsapp-btn" class="settings-menu-btn">
-        <span class="settings-menu-title" data-i18n="ui.whatsapp">WhatsApp</span>
-        <span class="settings-menu-sub" data-i18n="ui.buildOrderListsPick">Build order lists: pick clients and the products to send</span>
-      </button>
-      <button id="open-extra-btn" class="settings-menu-btn">
-        <span class="settings-menu-title" data-i18n="calc.extraDough2">Extra dough</span>
-        <span class="settings-menu-sub" data-i18n="ui.showOrHideThe">Show or hide the extra-dough box in each recipe</span>
-      </button>
-      <button id="open-clientorders-btn" class="settings-menu-btn">
-        <span class="settings-menu-title" data-i18n="ui.clientOrdering">Client ordering</span>
-        <span class="settings-menu-sub" data-i18n="ui.whenOrdersSentFrom">When orders sent from a client’s own link close</span>
-      </button>
-      <button id="open-divisor-btn" class="settings-menu-btn">
-        <span class="settings-menu-title" data-i18n="ui.divisor">Divisor</span>
-        <span class="settings-menu-sub" data-i18n="ui.chooseWhichProductsThe">Choose which products the divisor box splits, per recipe</span>
-      </button>
-      <button id="open-logsettings-btn" class="settings-menu-btn">
-        <span class="settings-menu-title" data-i18n="ui.log">Log</span>
-        <span class="settings-menu-sub" data-i18n="ui.chooseWhichRecipesLogs">Choose which recipes’ logs to show, and how long they stay</span>
-      </button>
+    <!-- ⚠️ THE APP'S ONE SETTINGS LOOK (tokens.css .set-*, 28 Sep 2026): the seven
+         doors grouped in three cards by what they are about. Same ids, same
+         handlers (js/calculator-settings.js), same screens behind them. -->
+    <div class="settings-menu set-screen">
+      <section class="set-section">
+        <div class="set-head"><h3 data-i18n="settings.calc.clients">Clients and orders</h3></div>
+        <button id="open-clients-btn" class="set-row set-door" type="button">
+          <span class="set-text">
+            <span class="set-title" data-i18n="ui.clients">Clients</span>
+            <span class="set-sub" data-i18n="ui.clientsAndTheProducts">Clients and the products each one orders</span>
+          </span>
+        </button>
+        <button id="open-whatsapp-btn" class="set-row set-door" type="button">
+          <span class="set-text">
+            <span class="set-title" data-i18n="ui.whatsapp">WhatsApp</span>
+            <span class="set-sub" data-i18n="ui.buildOrderListsPick">Build order lists: pick clients and the products to send</span>
+          </span>
+        </button>
+        <button id="open-clientorders-btn" class="set-row set-door" type="button">
+          <span class="set-text">
+            <span class="set-title" data-i18n="ui.clientOrdering">Client ordering</span>
+            <span class="set-sub" data-i18n="ui.whenOrdersSentFrom">When orders sent from a client’s own link close</span>
+          </span>
+        </button>
+      </section>
+      <section class="set-section">
+        <div class="set-head"><h3 data-i18n="ui.recipes">Recipes</h3></div>
+        <button id="open-recipes-btn" class="set-row set-door" type="button">
+          <span class="set-text">
+            <span class="set-title" data-i18n="ui.recipes">Recipes</span>
+            <span class="set-sub" data-i18n="ui.addEditOrDelete">Add, edit or delete recipes; pick which show as tabs</span>
+          </span>
+        </button>
+        <button id="open-extra-btn" class="set-row set-door" type="button">
+          <span class="set-text">
+            <span class="set-title" data-i18n="calc.extraDough2">Extra dough</span>
+            <span class="set-sub" data-i18n="ui.showOrHideThe">Show or hide the extra-dough box in each recipe</span>
+          </span>
+        </button>
+        <button id="open-divisor-btn" class="set-row set-door" type="button">
+          <span class="set-text">
+            <span class="set-title" data-i18n="ui.divisor">Divisor</span>
+            <span class="set-sub" data-i18n="ui.chooseWhichProductsThe">Choose which products the divisor box splits, per recipe</span>
+          </span>
+        </button>
+      </section>
+      <section class="set-section">
+        <div class="set-head"><h3 data-i18n="ui.log">Log</h3></div>
+        <button id="open-logsettings-btn" class="set-row set-door" type="button">
+          <span class="set-text">
+            <span class="set-title" data-i18n="ui.log">Log</span>
+            <span class="set-sub" data-i18n="ui.chooseWhichRecipesLogs">Choose which recipes’ logs to show, and how long they stay</span>
+          </span>
+        </button>
+      </section>
     </div>
   </div>
 </div>

@@ -41,7 +41,7 @@ test('a corrupt value leaves the screen alone rather than emptying it', () => {
 // appears without a line in this test has arrived by accident.
 test('it returns only the keys the screen uses, whatever else the document carries', () => {
   const out = normalizeOrdersConfig({ bakery: 'main', showStock: false, somethingElse: 42 });
-  assert.deepEqual(Object.keys(out), ['showStock', 'historyDays', 'sendSettings', 'weekStartsOn']);
+  assert.deepEqual(Object.keys(out), ['showStock', 'historyDays', 'sendSettings', 'orderLists', 'weekStartsOn']);
 });
 
 // ⚠️ AND IT IS ALWAYS USABLE, whatever the document says. An order that cannot leave
@@ -106,4 +106,12 @@ test('nothing usable can produce an empty History', () => {
 
 test('an absurd window is capped rather than trusted', () => {
   assert.equal(normalizeOrdersConfig({ historyDays: 100000 }).historyDays, 365);
+});
+
+// ── Order lists (28 Sep 2026): only an explicit false turns them off ──
+test('order lists default ON, and ride along with the send settings', () => {
+  assert.equal(normalizeOrdersConfig(null).orderLists, true);
+  assert.equal(normalizeOrdersConfig({ orderLists: 'no' }).orderLists, true);
+  assert.equal(normalizeOrdersConfig({ orderLists: false }).orderLists, false);
+  assert.equal(normalizeOrdersConfig({ orderLists: false }).sendSettings.orderLists, false);
 });
