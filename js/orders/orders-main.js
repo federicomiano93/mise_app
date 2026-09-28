@@ -24,6 +24,7 @@ import { mountSupplierList, refreshSupplierDerived } from './suppliers.js';
 import { buildSupplierDetail } from './supplier-detail.js';
 import { buildSupplierItems } from './supplier-items.js';
 import { buildOrderSummaryView } from './order-summary-view.js';
+import { paintPaneMoney } from './order-cost-view.js';
 import {
   scheduleDraftSave, saveDraftNow, flushDraftSave, watchDraft, archiveSupplier, clearSupplier,
   clearQuantities, saveHistoryRecord, deleteHistoryRecord, setDraftSaveReporter,
@@ -133,6 +134,7 @@ const hooks = {
     // from Firestore before appearing; here it has to appear as you type. The summary
     // bar's numbers must move as you type for the same reason.
     refreshOrderTotals();
+    paintMoney();
     // Stamp the day these rows were touched. This is what lets the app offer an
     // order typed yesterday under YESTERDAY's date instead of quietly filing it
     // under today.
@@ -263,6 +265,8 @@ function syncInputsFromState() {
     if (qty && qty !== document.activeElement) qty.value = entry.qty || '';
   });
   refreshAllSuppliers();
+  // A quantity typed on another phone changes this pane's money too.
+  paintMoney();
 }
 
 // ── Rendering: order tab ──────────────────────────────────────────────────────
@@ -326,7 +330,7 @@ function renderSupplierList(container, suppliers) {
       filterActive: state.supplierFilter,
       onQuery: q => { state.supplierQuery = q; },
       onFilter: active => { state.supplierFilter = active; },
-      onOpen: openSupplier,
+      onOpen: toggleSupplier,
       onView: openSupplierItems,
       onSummary: openSummary,
       searchExtras: buildOrderTools(),
@@ -347,57 +351,111 @@ function renderSupplierList(container, suppliers) {
 // phone (the plan's own words). Read fresh every time rather than cached:
 // asked from a handful of call sites, never from a hot path.
 function splitActive() {
-  return isTabletNow() && state.view === 'suppliers';
+  return isTabletNow() && state.view === 'suppliers'
+    && document.body.dataset.ordersTab !== 'deliveries';
 }
 
 const HAND_ICON =
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="44" height="44" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/><path d="M21 12H9"/></svg>';
 
-// The placeholder shown in the pane before any supplier is tapped. Built
-// fresh each time it is needed (cheap, static, no listeners) rather than kept
-// around — it is only ever replaced by, or replaced with, the supplier
-// screen itself.
-function renderDetailPaneEmptyState(pane) {
-  pane.replaceChildren(el('div', { class: 'split-empty' }, [
-    el('span', { class: 'split-empty-icon', 'aria-hidden': 'true', icon: HAND_ICON }),
-    el('h2', { text: t('orders.split.empty.title') }),
-    el('p', { text: t('orders.split.empty.text') }),
-  ]));
+// The placeholder shown in the pane while no supplier is in it. ONE node, kept in
+// the pane and only shown or hidden — never a second child beside the supplier
+// screen (28 Sep 2026: both were visible at once, the order squeezed under it).
+// Its words are set on every refresh, so a language change reaches it.
+function paneEmptyState(pane) {
+  let empty = pane.querySelector(':scope > .split-empty');
+  if (!empty) {
+    empty = el('div', { class: 'split-empty' }, [
+      el('span', { class: 'split-empty-icon', 'aria-hidden': 'true', icon: HAND_ICON }),
+      el('h2', {}),
+      el('p', {}),
+    ]);
+    pane.prepend(empty);
+  }
+  empty.querySelector('h2').textContent = t('orders.split.empty.title');
+  empty.querySelector('p').textContent = t('orders.split.empty.text');
+  return empty;
 }
 
-// Keeps #orders-detail-pane in step with state.openSupplier and with the
-// split being active at all — called after EVERY change to either (opening/
-// closing a supplier, switching view, crossing the tablet width). Moves the
-// EXISTING supplier-detail node between the pane and document.body rather
-// than rebuilding it (a quantity mid-typing, and its focus, must survive a
-// window resize); when nothing is open it fills the pane with the empty
-// state instead. A pane that does not exist yet (a page that has not
-// finished loading orders.html) is simply skipped.
+// Move the open supplier screen to `target` WITHOUT rebuilding it, and give the
+// focus back to the box being typed in: appendChild on a focused element drops
+// the focus (and the phone's keyboard with it); the typed number survives.
+function moveDetail(target) {
+  const node = detailView.overlay;
+  const active = node.contains(document.activeElement) ? document.activeElement : null;
+  let caret = null;
+  try { caret = active ? [active.selectionStart, active.selectionEnd] : null; } catch { caret = null; }
+  target.appendChild(node);
+  if (!active) return;
+  active.focus({ preventScroll: true });
+  try {
+    if (caret && caret[0] !== null) active.setSelectionRange(caret[0], caret[1]);
+  } catch { /* a number input has no caret to restore */ }
+}
+
+// Keeps #orders-detail-pane in step with state.openSupplier and with the split
+// being active — called after EVERY change to either (opening/closing a supplier,
+// switching tab or view, crossing the tablet width).
+//
+// ⚠️ LEAVING THE SPLIT HAS TWO CAUSES AND THEY END DIFFERENTLY:
+//  - the tablet got NARROWER (rotated to portrait): the screen moves to the body
+//    and becomes the phone's full-screen overlay, typing intact — unless the List
+//    or the Summary is open over it, in which case it is closed instead: on a phone
+//    those two close it anyway, and appended after them it would cover them
+//    (two full-screen screens never stack).
+//  - the tab or the view changed on a tablet (Incoming, Ingredients): it is closed.
+//    Moved to the body it would pop up full-screen over the screen just chosen.
 function refreshDetailPaneMode() {
   const pane = document.getElementById('orders-detail-pane');
   if (!pane) return;
   if (state.openSupplier && detailView) {
-    const target = splitActive() ? pane : document.body;
-    if (detailView.overlay.parentNode !== target) target.appendChild(detailView.overlay);
-  } else {
-    renderDetailPaneEmptyState(pane);
+    const inPane = detailView.overlay.parentNode === pane;
+    if (splitActive()) {
+      if (!inPane) moveDetail(pane);
+    } else if (inPane) {
+      if (!isTabletNow() && !itemsView && !summaryView) moveDetail(document.body);
+      else { closeSupplier(); return; }
+    }
   }
+  const holding = !!(detailView && detailView.overlay.parentNode === pane);
+  paneEmptyState(pane).hidden = holding;
+  paintMoney();
+}
+
+// The money in the pane (tablet only, and only for an account that may read
+// prices): see paintPaneMoney in order-cost-view.js. Called after every paint of
+// the supplier screen, every keystroke, every price snapshot and every move.
+function paintMoney() {
+  if (!detailView || !state.openSupplier) return;
+  const pane = document.getElementById('orders-detail-pane');
+  const inPane = !!pane && detailView.overlay.parentNode === pane;
+  paintPaneMoney(
+    detailView.overlay,
+    ingredientsBySupplier()[state.openSupplier] || [],
+    state.entries,
+    inPane && state.pricesReadable === true,
+  );
 }
 
 // ── One supplier's own screen ─────────────────────────────────────────────────
 //
-// ⚠️ TAPPING THE OPEN SUPPLIER AGAIN CLOSES IT. On a phone this path is
-// unreachable — the row sitting under it is covered by the full-screen
-// overlay it would have to be tapped through — so the toggle is free there
-// and is what lets the tablet pane's "tap again to close" (and its X button,
-// which calls closeSupplier the same way) share this one function.
+// ⚠️ ALWAYS OPENS. Only a tap on the supplier's own ROW toggles (toggleSupplier
+// below): a notice that says «Brakes changed» must show Brakes even when Brakes
+// is already open — a toggle here closed it (review of 28 Sep 2026).
 function openSupplier(supplierId) {
-  if (state.openSupplier === supplierId) { closeSupplier(); return; }
   closeSupplierItems();         // two full-screen screens must never stack up
   closeSummary();
   closeAlertsPanel();           // the panel must never sit on top of a full screen
   state.openSupplier = supplierId;
   renderOpenSupplier();
+}
+
+// The row on the left of the tablet split: tap to open, tap the open one again to
+// close. On a phone the row is under the full-screen overlay, so only the first
+// half is ever reachable there.
+function toggleSupplier(supplierId) {
+  if (state.openSupplier === supplierId && detailView) { closeSupplier(); return; }
+  openSupplier(supplierId);
 }
 
 function closeSupplier() {
@@ -450,6 +508,7 @@ function renderOpenSupplier() {
   detailView = { ...built, id: supplier.id };
   (splitActive() ? document.getElementById('orders-detail-pane') : document.body)?.appendChild(built.overlay);
   cardsView?.updateSelection(supplier.id);
+  refreshDetailPaneMode();
 }
 
 // ── What a supplier sells, to look at ─────────────────────────────────────────
@@ -550,14 +609,16 @@ function renderSummary() {
   const ingredients = ingredientsBySupplier()[supplier.id] || [];
 
   if (summaryView && summaryView.id === supplier.id) {
-    summaryView.repaint(ingredients, state.entries);
+    summaryView.repaint(ingredients, state.entries, state.pricesReadable === true);
     return;
   }
 
   const firstOpen = !summaryEscHandler;
   summaryView?.overlay.remove();
   summaryView?.scrim.remove();
-  const built = buildOrderSummaryView(supplier, ingredients, state.entries, { onBack: closeSummary });
+  const built = buildOrderSummaryView(supplier, ingredients, state.entries, {
+    onBack: closeSummary, showMoney: state.pricesReadable === true,
+  });
   summaryView = { ...built, id: supplier.id };
   document.body.appendChild(built.scrim);
   document.body.appendChild(built.overlay);
@@ -1893,6 +1954,9 @@ function setupTabs() {
       // A class on <body>, read by a small number of scoped rules, is what
       // decides between the two — never a rebuild of either banner.
       document.body.dataset.ordersTab = panel === 'tab-deliveries' ? 'deliveries' : 'order';
+      // The split exists only on Order: leaving it closes a supplier open in the
+      // pane rather than popping it up full-screen over Incoming.
+      refreshDetailPaneMode();
     });
   });
   // The screen always opens on Order.
@@ -2142,11 +2206,17 @@ async function init() {
   // Merged in here so the management form still opens on the price it is meant to
   // edit; an employee is refused that collection and simply sees no price, which
   // is the same thing they see for an ingredient nobody has priced.
-  watchIngredientPrices(map => {
+  // ⚠️ `readable` is false when the rules REFUSED the collection (an employee not
+  // shown Food cost): then no money is drawn at all — not «no price» on every line,
+  // not a £0.00 total. Money waits for a snapshot that actually arrived.
+  watchIngredientPrices((map, readable) => {
     state.ingredientPrices = map;
+    state.pricesReadable = readable === true;
     if (state.loaded.ingredients) {
       state.ingredients = withPrices(state.rawIngredients, map);
     }
+    paintMoney();
+    renderSummary();
   });
   watchCollection(COLLECTIONS.ingredients, list => {
     state.rawIngredients = list;

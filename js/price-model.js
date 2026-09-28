@@ -103,13 +103,26 @@ export function priceUnitLabel(unit) {
 // Drop them from this list and an old document keeps a pack price for ever that
 // contradicts its own rate: 180 and 25 sitting under a rate somebody has since
 // corrected to 7.50.
-// ⚠️ `vatRate` JOINED THIS LIST 29 Sep 2026 — the PURCHASE VAT stored beside the
+// ⚠️ `vatRate` JOINED THIS LIST 28 Sep 2026 — the PURCHASE VAT stored beside the
 // price, firestore.rules ingredient-prices (closed to [0, 4, 5, 10, 20, 22] or
-// null). It lives here, not on the `ingredients` document and not in the price
-// HISTORY subcollection — see pricePatch() and priceRecord() below.
+// null). It lives there only: not on the `ingredients` document and not in the
+// price HISTORY subcollection — see INGREDIENT_DRAINED_FIELDS below, pricePatch()
+// and priceRecord().
 export const PRICE_FIELDS = Object.freeze([
   'priceUnit', 'pricePerUnit', 'packPrice', 'packSize', 'unitWeightKg', 'priceUpdatedAt', 'vatRate',
 ]);
+
+// The price keys an INGREDIENT document may still carry from before prices moved
+// out, and so the ones every ingredient save sets to null to drain them.
+// ⚠️⚠️ NOT THE SAME LIST AS PRICE_FIELDS, AND THE DIFFERENCE IS A LOCKOUT. The
+// `ingredients` rule whitelists its keys; `vatRate` was never on the ingredient and
+// is not in that whitelist, so writing it there — even as null — made the rules
+// refuse EVERY ingredient save, for every role (review of 28 Sep 2026, caught
+// before it shipped). tests/price-fields-whitelist.test.mjs pins both lists
+// against firestore.rules.
+export const INGREDIENT_DRAINED_FIELDS = Object.freeze(
+  PRICE_FIELDS.filter(key => key !== 'vatRate'),
+);
 
 // Money is rounded to the penny; a RATE is not. A rate can legitimately be tiny —
 // a gelatine leaf is fractions of a penny — and rounding £0.0035 to £0.00 would
@@ -383,7 +396,7 @@ export function splitPriceFields(data) {
   // values out of documents written before this change; omitting them would
   // leave a stale rate on the ingredient for ever, readable by everybody, which
   // is the exact thing this change exists to stop.
-  PRICE_FIELDS.forEach(key => { ingredient[key] = null; });
+  INGREDIENT_DRAINED_FIELDS.forEach(key => { ingredient[key] = null; });
   return { ingredient, price };
 }
 

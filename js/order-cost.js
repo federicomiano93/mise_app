@@ -32,16 +32,41 @@ import { parsePackSize } from './pack-size.js';
 // ⚠️ NEVER ROUNDED HERE. A rounded unit cost multiplied by a large quantity
 // drifts from the true total by more than a rounding error should; round
 // only the number actually shown, with formatMoney (js/price-model.js).
+//
+// ⚠️⚠️ ONLY WHEN THE ORDER UNIT LEAVES NO DOUBT (review of 28 Sep 2026). The quantity
+// box counts whatever `ingredient.unit` says — a sack, a case, or kilos — and the
+// same pack text reads two ways: «25kg» ordered in `kg` means 30 is thirty kilos,
+// not thirty sacks, and a per-piece price on a «6x1kg» case could be the price of
+// the case or of one bag in it. A guess there is a total 25 times too high or 6
+// times too low that looks exactly as trustworthy as a right one, so anything
+// ambiguous is `null` — counted as «no price» and said so on screen.
+//
+//   order unit kg/g/l/ml/cl and a kg|l price → the quantity IS a weight/volume:
+//                                               rate × that many kilos (litres)
+//   pack word or no unit, kg|l price, «25kg»  → rate × the pack's kilos
+//   pcs price, pack text without a multiplier → rate (one ordered unit = one piece)
+//   pcs price on a «6x1kg» case, or a weight   → null (which one is priced?)
+//   unit and a pcs price
+const WEIGHT_UNITS = Object.freeze({ kg: 1, g: 0.001, l: 1, lt: 1, ml: 0.001, cl: 0.01 });
+const MULTIPLIER = /\d\s*[x×*]\s*\d/i;
+
 export function unitCost(ingredient, price) {
   if (!price || !isPriceUnit(price.priceUnit)) return null;
   const rate = positiveNumber(price.pricePerUnit);
   if (rate === null) return null;
 
-  if (price.priceUnit === 'pcs') return rate;
+  const orderUnit = String((ingredient && ingredient.unit) || '').trim().toLowerCase();
+  const byWeight = Object.prototype.hasOwnProperty.call(WEIGHT_UNITS, orderUnit);
+  const packText = String((ingredient && ingredient.weight) || '');
 
-  // 'kg' | 'l' — the two units parsePackSize already answers in kilos, and
-  // js/price-model.js already treats 1 litre as 1 kilo the same way.
-  const packKg = parsePackSize(ingredient && ingredient.weight);
+  if (price.priceUnit === 'pcs') {
+    if (byWeight || MULTIPLIER.test(packText)) return null;
+    return rate;
+  }
+
+  // 'kg' | 'l' — js/price-model.js already treats 1 litre as 1 kilo the same way.
+  if (byWeight) return rate * WEIGHT_UNITS[orderUnit];
+  const packKg = parsePackSize(packText);
   if (packKg === null) return null;
   return rate * packKg;
 }
@@ -51,7 +76,7 @@ export function unitCost(ingredient, price) {
 // vatRate (or null/undefined for "not stated").
 //
 // line: { qty, unitCost: number|null, vatRate: number|null|undefined }
-// -> { net, vatByRate: { [rate]: amount }, gross, missingPrice, missingVat }
+// -> { net, vatByRate: { [rate]: amount }, gross, missingPrice, missingVat, costed }
 //
 // ⚠️ A LINE WITH NO PRICE IS NOT ZERO. Silently treating it as £0 would make
 // an order cheaper on screen than it will actually be — the one direction
@@ -68,6 +93,10 @@ export function orderCost(lines) {
   const vatByRate = {};
   let missingPrice = 0;
   let missingVat = 0;
+  // Lines that DID get a price — so a screen can tell «nothing is priced» (say so,
+  // print no total) from «everything priced comes to 0» (which cannot happen, but
+  // must never be the way the first case looks).
+  let costed = 0;
 
   for (const line of lines || []) {
     const qty = Number(line && line.qty);
@@ -83,6 +112,7 @@ export function orderCost(lines) {
 
     const lineNet = qty * Number(uc);
     net += lineNet;
+    costed += 1;
 
     const vatRate = line && line.vatRate;
     if (vatRate === null || vatRate === undefined || !Number.isFinite(Number(vatRate))) {
@@ -95,5 +125,5 @@ export function orderCost(lines) {
   }
 
   const vatTotal = Object.values(vatByRate).reduce((sum, v) => sum + v, 0);
-  return { net, vatByRate, gross: net + vatTotal, missingPrice, missingVat };
+  return { net, vatByRate, gross: net + vatTotal, missingPrice, missingVat, costed };
 }

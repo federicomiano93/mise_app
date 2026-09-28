@@ -40,7 +40,7 @@ test('only rows with qty > 0 appear, sorted by label — same rule as the messag
 
 test('empty entries -> empty lines, never a crash', () => {
   const empty = { name: 'Salvo', lines: [], costLines: [], totals: {
-    net: 0, vatByRate: {}, gross: 0, missingPrice: 0, missingVat: 0,
+    net: 0, vatByRate: {}, gross: 0, missingPrice: 0, missingVat: 0, costed: 0,
   } };
   assert.deepEqual(supplierSummary(SUPPLIER, INGREDIENTS, {}), empty);
   assert.deepEqual(supplierSummary(SUPPLIER, INGREDIENTS, null), empty);

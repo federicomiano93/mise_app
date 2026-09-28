@@ -47,7 +47,7 @@ test('qty 0 or non-numeric: not a line at all, excluded from every count', () =>
     { qty: -3, unitCost: 5, vatRate: 4 },
     { qty: null, unitCost: 5, vatRate: 4 },
   ]);
-  assert.deepEqual(result, { net: 0, vatByRate: {}, gross: 0, missingPrice: 0, missingVat: 0 });
+  assert.deepEqual(result, { net: 0, vatByRate: {}, gross: 0, missingPrice: 0, missingVat: 0, costed: 0 });
 });
 
 test('a missing price: excluded from net, counted, never treated as £0', () => {
@@ -101,7 +101,39 @@ test('pcs and kg lines together, exactly as unitCost() would hand them over', ()
 });
 
 test('empty / missing lines -> all zero, never throws', () => {
-  assert.deepEqual(orderCost([]), { net: 0, vatByRate: {}, gross: 0, missingPrice: 0, missingVat: 0 });
-  assert.deepEqual(orderCost(undefined), { net: 0, vatByRate: {}, gross: 0, missingPrice: 0, missingVat: 0 });
-  assert.deepEqual(orderCost(null), { net: 0, vatByRate: {}, gross: 0, missingPrice: 0, missingVat: 0 });
+  assert.deepEqual(orderCost([]), { net: 0, vatByRate: {}, gross: 0, missingPrice: 0, missingVat: 0, costed: 0 });
+  assert.deepEqual(orderCost(undefined), { net: 0, vatByRate: {}, gross: 0, missingPrice: 0, missingVat: 0, costed: 0 });
+  assert.deepEqual(orderCost(null), { net: 0, vatByRate: {}, gross: 0, missingPrice: 0, missingVat: 0, costed: 0 });
+});
+
+// ⚠️ The order unit decides what the quantity counts (review of 28 Sep 2026): a
+// guess here is a total 25 times too high or 6 times too low that looks right.
+test('a kg price ordered IN kilos costs the kilos, not whole packs', () => {
+  assert.equal(unitCost({ weight: '25kg', unit: 'kg' }, { priceUnit: 'kg', pricePerUnit: 1.8 }), 1.8);
+  assert.equal(unitCost({ weight: '25kg', unit: 'g' }, { priceUnit: 'kg', pricePerUnit: 2 }), 0.002);
+  assert.equal(unitCost({ weight: '', unit: 'L' }, { priceUnit: 'l', pricePerUnit: 1.2 }), 1.2);
+});
+
+test('a kg price ordered by the sack costs the sack', () => {
+  assert.equal(unitCost({ weight: '25kg', unit: 'sacchi' }, { priceUnit: 'kg', pricePerUnit: 1.8 }), 45);
+  assert.equal(unitCost({ weight: '6x1kg', unit: 'casse' }, { priceUnit: 'kg', pricePerUnit: 2 }), 12);
+  assert.equal(unitCost({ weight: 'sacco', unit: 'sacchi' }, { priceUnit: 'kg', pricePerUnit: 2 }), null);
+});
+
+test('a per-piece price is used only when one ordered unit is plainly one piece', () => {
+  assert.equal(unitCost({ weight: '1kg', unit: 'pz' }, { priceUnit: 'pcs', pricePerUnit: 9.5 }), 9.5);
+  assert.equal(unitCost({ weight: '', unit: '' }, { priceUnit: 'pcs', pricePerUnit: 0.35 }), 0.35);
+  assert.equal(unitCost({ weight: '6x1kg', unit: 'casse' }, { priceUnit: 'pcs', pricePerUnit: 2 }), null);
+  assert.equal(unitCost({ weight: '', unit: 'kg' }, { priceUnit: 'pcs', pricePerUnit: 2 }), null);
+});
+
+test('costed counts the lines that got a price', () => {
+  const r = orderCost([
+    { qty: 2, unitCost: 10, vatRate: 4 },
+    { qty: 1, unitCost: null, vatRate: 4 },
+    { qty: 3, unitCost: 1, vatRate: null },
+  ]);
+  assert.equal(r.costed, 2);
+  assert.equal(r.missingPrice, 1);
+  assert.equal(r.missingVat, 1);
 });

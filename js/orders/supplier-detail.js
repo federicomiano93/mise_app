@@ -23,8 +23,6 @@ import { t } from '../i18n.js';
 import { el } from './dom.js';
 import { buildIngredientList } from './ingredients.js';
 import { nextMatchingDay } from './split-pick.js';
-import { unitCost, orderCost } from '../order-cost.js';
-import { buildTotalsBox } from './order-cost-view.js';
 
 const BACK_ICON =
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>';
@@ -85,12 +83,12 @@ export function buildSupplierDetail(supplier, ctx) {
   ]);
 
   const listBtn = el('button', {
-    type: 'button', class: 'pane-list-btn', icon: LIST_SVG,
+    type: 'button', class: 'pane-list-btn',
     'aria-label': t('orders.pane.listAria', { supplier: supplier.name }),
     onClick: () => ctx.onViewList?.(),
   }, [el('span', { class: 'pane-btn-icon', 'aria-hidden': 'true', icon: LIST_SVG }), t('orders.pane.list')]);
   const summaryBtn = el('button', {
-    type: 'button', class: 'pane-summary-btn', icon: SUMMARY_SVG,
+    type: 'button', class: 'pane-summary-btn',
     'aria-label': t('orders.pane.summaryAria', { supplier: supplier.name }),
     onClick: () => ctx.onSummary?.(),
   }, [el('span', { class: 'pane-btn-icon', 'aria-hidden': 'true', icon: SUMMARY_SVG }), t('orders.pane.summary')]);
@@ -126,19 +124,9 @@ export function buildSupplierDetail(supplier, ctx) {
     const { filled } = ingredients.reduce((acc, i) => (
       (entries[i.id]?.qty || 0) > 0 ? { filled: acc.filled + 1 } : acc), { filled: 0 });
 
-    // ⚠️ TABLET PANE ONLY, IN LOOKS (orders.css .totbox) — built always, same
-    // split as everything else on this screen; nothing here checks a
-    // permission (see the long note in order-cost-view.js on why it does
-    // not need to). Sits above "Order placed…", matching the mockup.
-    const costLines = ingredients
-      .filter(ing => (entries[ing.id]?.qty || 0) > 0)
-      .map(ing => ({
-        qty: entries[ing.id].qty,
-        unitCost: unitCost(ing, ing),
-        vatRate: ing.vatRate != null ? Number(ing.vatRate) : null,
-      }));
-    const totalsBox = buildTotalsBox(orderCost(costLines));
-    if (totalsBox) body.appendChild(totalsBox);
+    // The money (per-row cost lines, totals) is NOT built here: it is tablet-only
+    // and permission-gated, so orders-main.js paints it onto this screen from the
+    // outside (order-cost-view.js paintPaneMoney) — a phone never gets a node of it.
 
     const placeBtn = el('button', {
       type: 'button',

@@ -2834,7 +2834,11 @@ body.hide-stock .ingredient-list .ing-fields { justify-content: center; }
     font-size: 28px;
     line-height: 1.15;
   }
+  #orders-detail-pane .pane-list-btn { display: flex; }
+  #orders-detail-pane .pane-summary-btn { display: flex; }
+  #orders-detail-pane .pane-close-btn { display: flex; }
   #orders-detail-pane .pane-subline {
+    display: block;
     margin: 4px 0 0;
     font-family: 'DM Mono', monospace;
     font-size: 12px;
@@ -2876,6 +2880,17 @@ body.hide-stock .ingredient-list .ing-fields { justify-content: center; }
     color: var(--brand);
   }
   #orders-detail-pane .pane-btn-icon { display: flex; align-items: center; }
+  /* The money under each ordered row (js/orders/order-cost-view.js paintPaneMoney):
+     painted only inside the pane, only for an account that may read prices. */
+  #orders-detail-pane .ing-cost {
+    display: block;
+    margin-top: 6px;
+    font-family: 'DM Mono', monospace;
+    font-size: 13px;
+    color: var(--text-3);
+    text-align: center;
+  }
+  #orders-detail-pane .ing-cost--warn { color: var(--warn); font-weight: 600; }
   #orders-detail-pane .pane-close-btn {
     width: var(--tap-min);
     background: var(--surface-2);
@@ -2927,7 +2942,7 @@ body.hide-stock .ingredient-list .ing-fields { justify-content: center; }
      left — set by js/orders/suppliers.js updateSelection(), never rebuilt. */
   body[data-section="orders"][data-orders-tab="order"][data-orders-view="suppliers"] .supplier-row--picked {
     background: var(--accent-light);
-    border-color: #CFDDBB;
+    border-color: var(--accent-border);
     position: relative;
   }
   body[data-section="orders"][data-orders-tab="order"][data-orders-view="suppliers"] .supplier-row--picked::before {
@@ -3000,6 +3015,15 @@ body.hide-stock .ingredient-list .ing-fields { justify-content: center; }
    happens to say. */
 .supplier-row-summary,
 .supplier-row-spacer { display: none; }
+/* The supplier screen carries the tablet pane's own controls ALWAYS — it is MOVED,
+   never rebuilt, between the pane and the phone's full-screen overlay — so on a
+   phone they are hidden here, and each is shown again, one rule apiece, inside the
+   tablet block (tests/orders-tablet-display-pairs.test.mjs pins the pairing). The
+   phone's supplier screen must look exactly as it did before the split existed. */
+.pane-list-btn,
+.pane-summary-btn,
+.pane-close-btn,
+.pane-subline { display: none; }
 
 /* ── The order summary screen (Slice D) ─────────────────────────────────────
    Full-screen on a phone (same shell as .supplier-items); a side sheet on a

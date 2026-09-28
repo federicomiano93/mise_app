@@ -62,7 +62,10 @@ export function buildOrderSummaryView(supplier, ingredients, entries, ctx) {
   // `repaint` rebuilds the body only, never the header — a snapshot must not
   // make the supplier's name flicker. Nothing here holds typing, so rebuilding
   // costs nothing: there is no field to rip out from under a finger.
-  function repaint(nextIngredients, nextEntries) {
+  // `showMoney` is false for an account the rules refuse prices to, or before the
+  // prices have arrived: then the sheet is what it was in v1.90.0 — labels and
+  // quantities, no «no price», no total.
+  function repaint(nextIngredients, nextEntries, showMoney = false) {
     const { lines, costLines, totals } = supplierSummary(supplier, nextIngredients, nextEntries);
     body.replaceChildren();
 
@@ -81,21 +84,21 @@ export function buildOrderSummaryView(supplier, ingredients, entries, ctx) {
     // "no price" is what they see: no number, ever — just like today.
     const card = el('div', { class: 'order-summary-list' });
     costLines.forEach(({ label, qty, unitCost, vatRate }) => {
-      const cost = lineCostText({ qty, unitCost, vatRate });
+      const cost = showMoney ? lineCostText({ qty, unitCost, vatRate }) : null;
       card.appendChild(el('div', { class: 'order-summary-row' }, [
         el('span', { class: 'order-summary-label', text: label }),
         el('div', { class: 'order-summary-qty-wrap' }, [
           el('span', { class: 'order-summary-qty', text: String(qty) }),
-          el('span', { class: `order-summary-cost${cost.warn ? ' order-summary-cost--warn' : ''}`, text: cost.text }),
+          cost ? el('span', { class: `order-summary-cost${cost.warn ? ' order-summary-cost--warn' : ''}`, text: cost.text }) : null,
         ]),
       ]));
     });
     body.appendChild(card);
 
-    const box = buildTotalsBox(totals);
+    const box = showMoney ? buildTotalsBox(totals) : null;
     if (box) body.appendChild(box);
   }
 
-  repaint(ingredients, entries);
+  repaint(ingredients, entries, ctx?.showMoney === true);
   return { overlay, scrim, repaint };
 }

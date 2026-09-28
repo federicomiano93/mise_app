@@ -173,7 +173,9 @@ function priceBlock(item, actions, defaultUnit = null) {
   const vatSelect = el('select', { class: 'mgmt-input' });
   vatSelect.appendChild(el('option', { value: '', text: t('orders.vat.notStated') }));
   vatChoices.forEach(({ rate: r, key }) => {
-    const opt = el('option', { value: String(r), text: `${r}% · ${t(key)}` });
+    // The Food cost key already carries the number («{rate}% — standard»): the same
+    // wording the product editor shows, filled in rather than prefixed again.
+    const opt = el('option', { value: String(r), text: t(key, { rate: r }) });
     if (storedVat === r) opt.selected = true;
     vatSelect.appendChild(opt);
   });

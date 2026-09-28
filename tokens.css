@@ -121,6 +121,7 @@
 
   /* Pale brand tint — result cards, chips, badges, active-row backgrounds. */
   --accent-light: #E9EFDF;
+  --accent-border: #CFDDBB;  /* the border of an --accent-light surface (a picked row) */
 
   /* On a green header, text and rims are the on-brand tone at reduced
      strength. Kept as pure white for now: the restyle re-cuts the header in

@@ -10,7 +10,7 @@ import assert from 'node:assert/strict';
 
 import { setCurrency, currentCurrency } from '../js/currency.js';
 import {
-  PRICE_UNITS, PRICE_FIELDS,
+  PRICE_UNITS, PRICE_FIELDS, INGREDIENT_DRAINED_FIELDS,
   roundTo, positiveNumber, isPriceUnit,
   normalizePrice, pricePerKg, costState, isCostable, costReasonText,
   formatMoney, formatRate, formatPricePerUnit,
@@ -369,12 +369,15 @@ test('a saved form splits into the ingredient and its price', () => {
 // ⚠️ THE KEYS STAY ON THE INGREDIENT, SET TO null. Omitting them would leave the
 // old rate on documents written before this change — readable by everybody, for
 // ever — which is the exact thing the split exists to stop.
-test('the ingredient keeps every price key, emptied', () => {
-  const { ingredient } = splitPriceFields({ name: 'Flour', priceUnit: 'kg', pricePerUnit: 7.2 });
-  for (const key of PRICE_FIELDS) {
+test('the ingredient keeps every price key it may carry, emptied', () => {
+  const { ingredient } = splitPriceFields({ name: 'Flour', priceUnit: 'kg', pricePerUnit: 7.2, vatRate: 4 });
+  for (const key of INGREDIENT_DRAINED_FIELDS) {
     assert.ok(key in ingredient, `${key} missing`);
     assert.equal(ingredient[key], null, key);
   }
+  // ⚠️ But never vatRate: the ingredients rule does not accept it, and one key it
+  // refuses fails the whole save (tests/price-fields-whitelist.test.mjs).
+  assert.equal('vatRate' in ingredient, false);
 });
 
 test('a form with no price at all still empties the keys', () => {

@@ -914,6 +914,7 @@ const DICTIONARIES = Object.freeze({
     'orders.vat.summaryLine': '{net} without VAT, {gross} with VAT at {rate}%',
     // ── What an order costs (29 Sep 2026), shown only to whoever may see money ──
     'orders.cost.noPrice': 'no price',
+    'orders.cost.nothingPriced': 'No item here has a price yet: add it in the ingredient’s card',
     'orders.cost.lineTotal': '{qty} × {rate} = {total}',
     'orders.cost.vatNotStated': 'VAT not stated',
     'orders.cost.vatAtRate': 'VAT {rate}%',
@@ -926,7 +927,7 @@ const DICTIONARIES = Object.freeze({
     'orders.pane.orderDay': 'orders {day}',
     'orders.pane.deliveryDay': 'delivery {day}',
     'orders.pane.list': 'List',
-    'orders.pane.listAria': 'All ingredients from {supplier}',
+    'orders.pane.listAria': 'List: all ingredients from {supplier}',
     'orders.pane.summary': 'Summary',
     'orders.pane.summaryAria': 'Order summary: {supplier}',
     'orders.pane.closeAria': 'Close {supplier}’s order',
@@ -3215,6 +3216,7 @@ const DICTIONARIES = Object.freeze({
     'orders.vat.summaryLine': '{net} senza IVA, {gross} con l’IVA al {rate}%',
     // ── Quanto costa un ordine (29 Sep 2026), solo per chi può vedere i prezzi ──
     'orders.cost.noPrice': 'senza prezzo',
+    'orders.cost.nothingPriced': 'Nessuna voce ha ancora un prezzo: aggiungilo nella scheda dell’ingrediente',
     'orders.cost.lineTotal': '{qty} × {rate} = {total}',
     'orders.cost.vatNotStated': 'IVA non indicata',
     'orders.cost.vatAtRate': 'IVA {rate}%',
@@ -3227,7 +3229,7 @@ const DICTIONARIES = Object.freeze({
     'orders.pane.orderDay': 'ordina {day}',
     'orders.pane.deliveryDay': 'consegna {day}',
     'orders.pane.list': 'Elenco',
-    'orders.pane.listAria': 'Tutti gli ingredienti di {supplier}',
+    'orders.pane.listAria': 'Elenco: tutti gli ingredienti di {supplier}',
     'orders.pane.summary': 'Riepilogo',
     'orders.pane.summaryAria': 'Riepilogo ordine: {supplier}',
     'orders.pane.closeAria': 'Chiudi l’ordine di {supplier}',
