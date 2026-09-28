@@ -201,7 +201,7 @@ test('a complete form produces every field, so nothing stale is left behind', ()
   const patch = pricePatch({ priceUnit: 'kg', pricePerUnit: '7.20' }, AT);
   assert.deepEqual(patch, {
     priceUnit: 'kg', pricePerUnit: 7.2, packPrice: null, packSize: null,
-    unitWeightKg: null, priceUpdatedAt: AT,
+    unitWeightKg: null, priceUpdatedAt: AT, vatRate: null,
   });
   // Every field this module owns is present in the patch — a merge write leaves
   // out what it does not mention, so an omitted field would keep its old value.
@@ -422,7 +422,7 @@ test('a price for an ingredient that is not there is simply not used', () => {
 // no price document of its own. The rules now refuse anything but null there, and
 // this refuses to read one, so neither half leans on the other.
 test('a price sitting on the ingredient itself is never used', () => {
-  const planted = { id: 'I1', name: 'Flour', priceUnit: 'kg', pricePerUnit: 0.01, packPrice: 1, packSize: 100, unitWeightKg: 1, priceUpdatedAt: 'x' };
+  const planted = { id: 'I1', name: 'Flour', priceUnit: 'kg', pricePerUnit: 0.01, packPrice: 1, packSize: 100, unitWeightKg: 1, priceUpdatedAt: 'x', vatRate: 4 };
   const [alone] = withPrices([planted], {});
   for (const key of PRICE_FIELDS) assert.equal(alone[key], null, `${key} leaked through from the ingredient`);
   assert.equal(alone.name, 'Flour', 'everything else on the ingredient survives');

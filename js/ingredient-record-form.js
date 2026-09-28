@@ -31,8 +31,18 @@ import { field, formActions, reportFailure, shortDate } from './record-ui.js';
 import {
   PRICE_UNITS, priceUnitLabel,
   pricePatch, priceChanged, priceRecord, pricePerKg,
-  formatPricePerUnit, formatRate, costReasonText,
+  formatPricePerUnit, formatRate, costReasonText, formatMoney,
 } from './price-model.js';
+// The purchase-VAT choices for the venue's country — the SAME menu
+// js/foodcost/foodcost-model.js offers for a product's selling price; moved to
+// js/ root on 29 Sep 2026 because this form now needs it too (CLAUDE.md
+// "Modular by feature").
+import { vatRatesFor } from './vat-rates.js';
+// The net-cost-of-one-ordered-unit calculation Orders uses to show money on
+// an order — reused here for the "costs €45 without VAT, €46.80 with VAT at
+// 4%" summary line, so the form and the order screen can never disagree
+// about what a sack actually costs.
+import { unitCost } from './order-cost.js';
 // ⚠️ THE CURRENCY FOLLOWS THE VENUE'S COUNTRY, and it is read inside priceBlock()
 // rather than up here — the venue is not open when this module is evaluated. See
 // js/currency.js and currencyOf() in js/market.js.
@@ -67,7 +77,7 @@ import {
 // ⚠️ AND THIS FILE IS THEREFORE A LABEL FILE. tests/i18n-label-separation.test.mjs says
 // so by walking the app rather than trusting a list: anything asking market.js for a
 // label word is named there and may never touch currentLanguage/setLanguage.
-import { outputLanguage, allergenName, allergenGroupName, nutrientName } from './market.js';
+import { outputLanguage, allergenName, allergenGroupName, nutrientName, countryOf } from './market.js';
 import { currentSession } from './firebase.js';
 // Reading the pack's own ingredient list. PURE, and also from js/ ROOT: the
 // vocabulary it walks is the same one a label is built from, so a second copy is
@@ -150,6 +160,32 @@ function priceBlock(item, actions, defaultUnit = null) {
   const rate = money(item?.pricePerUnit, '');
   const pieceWeight = money(item?.unitWeightKg, t('orders.eg.pieceWeight'));
 
+  // ── Purchase VAT (29 Sep 2026) — so an order can show what it will cost
+  // WITH VAT. The price above stays net, exactly as it does today: the
+  // recipe costs this ingredient feeds are built from it and must not move.
+  //
+  // ⚠️ READ INSIDE priceBlock(), NEVER AT MODULE LOAD — the venue is not open
+  // when this module is first evaluated (the v1.57.0 defect, see the note on
+  // RATE_LABEL above).
+  const vatCountry = countryOf(currentSession().location);
+  const vatChoices = vatRatesFor(vatCountry);
+  const storedVat = item && item.vatRate != null ? Number(item.vatRate) : null;
+  const vatSelect = el('select', { class: 'mgmt-input' });
+  vatSelect.appendChild(el('option', { value: '', text: t('orders.vat.notStated') }));
+  vatChoices.forEach(({ rate: r, key }) => {
+    const opt = el('option', { value: String(r), text: `${r}% · ${t(key)}` });
+    if (storedVat === r) opt.selected = true;
+    vatSelect.appendChild(opt);
+  });
+  // ⚠️ A RATE ALREADY STORED THAT IS NOT IN THIS COUNTRY'S LIST IS NEVER
+  // CHANGED BY OPENING THE FORM — same rule foodcost-model.js's own
+  // vatSelection() follows for a product's selling VAT. Without this extra
+  // option, the menu would default to "—" and an ordinary Save would
+  // silently erase a rate that is still correct.
+  if (storedVat !== null && !vatChoices.some(c => c.rate === storedVat)) {
+    vatSelect.appendChild(el('option', { value: String(storedVat), text: `${storedVat}%`, selected: true }));
+  }
+
   const rateLabel = el('span', { class: 'mgmt-field-label' });
   // Two lines, not one. A per-piece price can be perfectly complete as a PRICE
   // and still be unusable in a recipe written in grams, and a summary that only
@@ -159,6 +195,9 @@ function priceBlock(item, actions, defaultUnit = null) {
   const summaryMain = el('span', { class: 'mgmt-price-main' });
   const summaryNote = el('span', { class: 'mgmt-price-note' });
   const summary = el('p', { class: 'mgmt-price-summary' }, [summaryMain, summaryNote]);
+  // "€45.00 without VAT, €46.80 with VAT at 4%" — empty (and :empty removes its
+  // gap, tokens.css) until both a cost and a VAT rate are known.
+  const vatSummary = el('p', { class: 'mgmt-price-vat-summary' });
 
   const pieceField = el('label', { class: 'mgmt-field' }, [
     el('span', { class: 'mgmt-field-label', text: t('orders.weightOfOnePiece') }),
@@ -171,6 +210,7 @@ function priceBlock(item, actions, defaultUnit = null) {
       priceUnit: unitSelect.value || null,
       pricePerUnit: rate.value,
       unitWeightKg: pieceWeight.value,
+      vatRate: vatSelect.value,
     };
   }
 
@@ -203,9 +243,26 @@ function priceBlock(item, actions, defaultUnit = null) {
     // when there is something left to do.
     summaryNote.textContent = costReasonText(draft);
     summary.className = 'mgmt-price-summary';
+
+    // ── What ONE ORDERED UNIT costs, with VAT (29 Sep 2026) ──────────────────
+    // ⚠️ THE SAME unitCost() ORDERS ITSELF CALLS. `item?.weight` is the STORED
+    // pack-weight text, not whatever is currently typed in the separate
+    // "Weight" field above this section (the two are not wired together) — so
+    // this line can lag one unsaved edit behind; acceptable for a preview
+    // line, and it corrects itself the moment the record is saved and re-opened.
+    const cost = unitCost(item || {}, draft);
+    const vat = draft.vatRate;
+    if (cost !== null && vat !== null) {
+      const gross = cost + (cost * vat) / 100;
+      vatSummary.textContent = t('orders.vat.summaryLine', {
+        net: formatMoney(cost), gross: formatMoney(gross), rate: vat,
+      });
+    } else {
+      vatSummary.textContent = '';
+    }
   }
 
-  [unitSelect, rate, pieceWeight].forEach(input => {
+  [unitSelect, rate, pieceWeight, vatSelect].forEach(input => {
     input.addEventListener('input', refresh);
     input.addEventListener('change', refresh);
   });
@@ -224,6 +281,15 @@ function priceBlock(item, actions, defaultUnit = null) {
     el('label', { class: 'mgmt-field' }, [rateLabel, rate]),
   ]);
 
+  // The PURCHASE VAT field — its own row, full width: the 2-column pair above
+  // is priceUnit/rate, which belong together as "a rate OF this unit"; VAT is
+  // a third, independent fact and forcing it into that grid would leave an
+  // empty cell beside it on every screen.
+  const vatField = el('label', { class: 'mgmt-field' }, [
+    el('span', { class: 'mgmt-field-label', text: t('orders.vat.label') }),
+    vatSelect,
+  ]);
+
   const node = el('div', {}, [
     // ⚠️ «Peso di un pezzo» STAYS FULL WIDTH. It appears only when the unit is
     // `pcs`, and a column that comes and goes would make the row above it jump.
@@ -233,7 +299,9 @@ function priceBlock(item, actions, defaultUnit = null) {
     // inflates every recipe cost by the VAT rate and nothing on any screen looks wrong.
     el('p', { class: 'notif-note', text: t('orders.exVatNote') }),
     pieceField,
+    vatField,
     summary,
+    vatSummary,
     item ? priceHistoryBlock(item, actions) : null,
   ]);
 
