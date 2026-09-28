@@ -342,6 +342,7 @@ const DICTIONARIES = Object.freeze({
     'aria.whichIngredients': 'Which ingredients to show',
     'aria.whichSuppliers': 'Which suppliers to show',
     'aria.ingredientsFrom': 'Ingredients from {supplier}',
+    'aria.orderSummaryFor': 'Order summary: {supplier}',
 
     // ── The install guide ────────────────────────────────────────────────────
     // ⚠️ THE WHOLE PAGE WAS ENGLISH — every word of it — because it is the one page
@@ -896,6 +897,13 @@ const DICTIONARIES = Object.freeze({
     'orders.request.sendFailed': 'The list was NOT sent — it is still here. Check the connection and try again.',
     'orders.request.title': 'Order lists',
     'orders.request.open': 'Order lists',
+    // ── The tablet alerts panel (Slice A, 28 Sep 2026) ────────────────────────
+    'orders.alerts.panelRegion': 'Notices',
+    'orders.alerts.panelButton': { one: '{n} notice', other: '{n} notices' },
+    'orders.alerts.deliveriesTabBadge': { one: 'Incoming — {n} order owed', other: 'Incoming — {n} orders owed' },
+    // ── The tablet order-summary sheet (Slice D, 28 Sep 2026) ─────────────────
+    'orders.summary.itemCount': { one: 'Order summary · {n} item', other: 'Order summary · {n} items' },
+    'orders.summary.empty': 'No quantities typed',
     'orders.deliveries.tab': 'Incoming',
     'orders.deliveries.owed': { one: '1 order from before this week — did it arrive?',
                                 other: '{n} orders from before this week — did they arrive?' },
@@ -2724,6 +2732,7 @@ const DICTIONARIES = Object.freeze({
     'aria.whichIngredients': 'Quali ingredienti mostrare',
     'aria.whichSuppliers': 'Quali fornitori mostrare',
     'aria.ingredientsFrom': 'Ingredienti di {supplier}',
+    'aria.orderSummaryFor': 'Riepilogo ordine: {supplier}',
 
     // ⚠️ I NOMI DEI PULSANTI SONO QUELLI CHE IL TELEFONO MOSTRA DAVVERO in italiano
     // («Condividi», «Aggiungi alla schermata Home»): la guida segue la lingua del
@@ -3163,6 +3172,13 @@ const DICTIONARIES = Object.freeze({
     'orders.request.sendFailed': 'La lista NON è stata mandata — è ancora qui. Controlla la connessione e riprova.',
     'orders.request.title': 'Liste d’ordine',
     'orders.request.open': 'Liste d’ordine',
+    // ── Il pannello avvisi del tablet (Slice A, 28 Sep 2026) ──────────────────
+    'orders.alerts.panelRegion': 'Avvisi',
+    'orders.alerts.panelButton': { one: '{n} avviso', other: '{n} avvisi' },
+    'orders.alerts.deliveriesTabBadge': { one: 'In arrivo — {n} ordine da confermare', other: 'In arrivo — {n} ordini da confermare' },
+    // ── Il riepilogo ordine del tablet (Slice D, 28 Sep 2026) ─────────────────
+    'orders.summary.itemCount': { one: 'Riepilogo ordine · {n} articolo', other: 'Riepilogo ordine · {n} articoli' },
+    'orders.summary.empty': 'Nessuna quantità scritta',
     'orders.deliveries.tab': 'In arrivo',
     'orders.deliveries.owed': { one: '1 ordine di prima di questa settimana — è arrivato?',
                                 other: '{n} ordini di prima di questa settimana — sono arrivati?' },

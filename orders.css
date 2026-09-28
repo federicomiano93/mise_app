@@ -649,6 +649,12 @@ input.ing-stock {
     give it back, so a pair never ends on one line and one gap. */
   body[data-section="orders"] .ingredient-list > .ing-row:last-child,
   body[data-section="orders"] .ing-flat-list > .ing-row:last-child { border-bottom: 1px solid var(--border); }
+  /* 📌 NO LETTER HEADINGS ON A TABLET (decided 28 Sep 2026). A full-width letter
+     over a letter with one ingredient left half a row empty, again and again down
+     the list. The list is still A→Z and the search box sits right above it, so the
+     letters bought little here; without them the rows pair up in full columns.
+     On a phone (one column) they stay: there they cost no space. */
+  body[data-section="orders"] .ing-flat-list > .ing-letter { display: none; }
 
   /* Kitchen-sized: bigger to hit without looking, bigger to read across a
      counter. --tap-min/--qty-font are the two constants (tokens.css). */
@@ -2427,3 +2433,373 @@ body.hide-stock .ingredient-list .ing-fields { justify-content: center; }
    they are prose, and prose against a screen edge reads as a mistake. */
 .orders-column > .orders-status,
 .orders-column > #orders-alerts { padding-inline: 8px; }
+
+/* ── Tablet: the alerts panel + the top strip (Federico, 28 Sep 2026) ────────
+   Slice A of the tablet layout. js/orders/tablet-layout.js MOVES the existing
+   banner hosts (#orders-today, #orders-owed, #orders-pending, #orders-untold,
+   #orders-reorder, #orders-alerts) into #orders-tablet-strip and
+   #orders-alerts-panel when the tablet query matches, and back out when it
+   does not — nothing here rearranges anything by itself, and nothing here is
+   read by a phone: on a phone every one of these three new elements stays
+   completely empty, its own display never overridden, so it takes no space.
+
+   ⚠️ THE "HIDDEN ON A PHONE" HALF STAYS OUTSIDE THE QUERY — same pattern as
+   every other tablet-only control in this file (.home-card-badge and friends):
+   what only HIDES something on a phone is not a look, so it does not need the
+   query; what CHANGES a look belongs inside it (see below). */
+#orders-alerts-panel,
+.orders-alerts-btn { display: none; }
+
+@media (min-width: 900px) and (min-height: 600px) {
+  /* Today's orders, then the debt — same order as js/orders/tablet-layout.js
+     TABLET_HOSTS. Empty and invisible until something is moved in. */
+  body[data-section="orders"] #orders-tablet-strip {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+  body[data-section="orders"] #orders-tablet-strip:empty { display: none; }
+  /* .today-banner/.owed-banner carry their own margin-bottom for the plain
+     vertical flow they sit in on a phone; the strip is a gap flex column
+     instead, so left alone the two would add up to 20px between them. */
+  body[data-section="orders"] #orders-tablet-strip .today-banner { margin-bottom: 0; }
+
+  /* ⚠️ RED, ON TABLET ONLY — Federico's call: the strip replaces the crust
+     "still to answer" colour with the app's one danger red once the debt
+     banner is the only thing standing where today's chips normally are (see
+     the body[data-orders-tab] rule further down, Slice B). --error-bg/
+     --error-border already read 5.0:1 against --danger — measured, not a new
+     colour (P18): no --danger-bg exists and none is invented here. */
+  body[data-section="orders"] #orders-tablet-strip .owed-banner {
+    background: var(--error-bg);
+    border-color: var(--error-border);
+    color: var(--danger);
+  }
+
+  /* The bell button that opens the panel — a pill (icon + count), not the
+     round 36px header buttons every other icon uses; --tap-min is the floor
+     every tablet control in this file already uses. */
+  body[data-section="orders"] .orders-alerts-btn:not([hidden]) {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    width: auto;
+    height: var(--tap-min);
+    padding: 0 12px;
+    border-radius: var(--radius-pill);
+  }
+  body[data-section="orders"] .orders-alerts-count {
+    font-family: 'DM Mono', monospace;
+    font-size: 13px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Anchors the panel below the button that opens it (js/orders/tablet-layout
+     .initAlertsPanel — Escape and an outside tap close it; it is not a modal
+     and is deliberately not .preview-overlay, see the note on it in
+     orders.html). The panel is a CHILD of the header, so this only affects
+     absolutely-positioned descendants and never the header's own flex row. */
+  body[data-section="orders"] .orders-header { position: relative; }
+  body[data-section="orders"] #orders-alerts-panel:not([hidden]) {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    position: absolute;
+    top: 100%;
+    right: max(16px, var(--app-gutter));
+    margin-top: 8px;
+    width: 100%;
+    max-width: 500px;
+    max-height: 70vh;
+    overflow-y: auto;
+    padding: 14px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-sheet);
+    /* ⚠️ 500, NOT 9998 — the review-round bug. Every full-screen Orders
+       overlay sits between 600 (a supplier's own screen / its read-only
+       list / the summary sheet) and 950 (over History); 9998 put this
+       casual dropdown ABOVE ALL OF THEM, so opening a supplier from
+       underneath it looked like nothing had happened. 500 still clears the
+       sticky tab head and ordinary page content, and orders-main.js now
+       closes this panel outright (closeAlertsPanel(), tablet-layout.js)
+       whenever any of those screens opens, so the two are never meant to be
+       on screen together at all — the z-index is the fallback, not the plan. */
+    z-index: 500;
+  }
+  /* Every banner inside carries its own margin-bottom (it always sits in a
+     plain vertical flow on a phone); the panel is a gap flex column instead,
+     so the last one would otherwise leave a spare 10px under itself. */
+  body[data-section="orders"] #orders-alerts-panel > * { margin-bottom: 0 !important; }
+
+  /* ── Slice B: the Incoming tab ──────────────────────────────────────────
+     On Incoming, the debt banner takes the strip's place — asking "did it
+     arrive?" IS the point of that tab, so today's chips would be repeating
+     what the tab itself already says. On Order, the strip is back exactly as
+     Slice A left it. A class on <body> (js/orders/orders-main.js setupTabs)
+     decides between the two; neither banner is ever rebuilt for it. */
+  body[data-section="orders"][data-orders-tab="deliveries"] #orders-today { display: none; }
+  body[data-section="orders"]:not([data-orders-tab="deliveries"]) #orders-owed { display: none; }
+
+  /* The tab badge — the same red debt count as the strip's owed banner,
+     read where the operator is already looking: the tab that answers it. */
+  body[data-section="orders"] .tab-bar .tab {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+  }
+  body[data-section="orders"] .tab-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 6px;
+    border-radius: 999px;
+    background: var(--danger);
+    color: var(--on-brand);
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ── Slice C: the search row ─────────────────────────────────────────────
+     The "By supplier / Ingredients" pills give way to a single swap button
+     beside the search box — the SAME choice, one tap instead of two pills to
+     read, and it names where tapping it goes rather than where you already
+     are. */
+  body[data-section="orders"] #order-view-switch { display: none; }
+  body[data-section="orders"] .search-row {
+    display: flex;
+    gap: 10px;
+    align-items: stretch;
+  }
+  body[data-section="orders"] .search-row .mgmt-search { flex: 1; margin-bottom: 0; }
+  /* ⚠️ The wrapper, not only the button: the phone rule `.order-tools { display:none }`
+     below this block would otherwise hide the button with it (measured 28 Sep 2026). */
+  body[data-section="orders"] .order-tools { display: flex; }
+  body[data-section="orders"] .order-tools-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: var(--tap-min);
+    padding: 0 16px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    color: var(--text);
+    font-family: 'Manrope', sans-serif;
+    font-size: 15px;
+    font-weight: 600;
+    white-space: nowrap;
+    cursor: pointer;
+  }
+  body[data-section="orders"] .order-tools-icon { display: flex; align-items: center; }
+
+  /* ── Slice D: the supplier row — a list icon out left, a summary icon out
+     right ────────────────────────────────────────────────────────────────
+     The card LOOK moves from .supplier-row onto .supplier-row-open, so both
+     icon boxes can sit OUTSIDE the card, one on each side, on every row —
+     never nested inside it (a button cannot nest in a button, and the frame
+     belongs to the row: the rule this project already learnt from a delete
+     icon that ended its card 41px short of everything below it). */
+  body[data-section="orders"] .supplier-row {
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    gap: 10px;
+  }
+  /* ⚠️ SCOPED TO `.supplier-row > .supplier-row-open`, NEVER THE BARE CLASS.
+     deliveries-view.js builds the Incoming rows with the SAME class —
+     `supplier-row-open delivery-row(--late|--due)` — for the wide tap target
+     it already gives them, but they are never wrapped in a `.supplier-row`
+     div. A bare `.supplier-row-open { border: … }` beat `.delivery-row--late`'s
+     `border-left: 3px solid var(--danger)` on specificity and painted every
+     Incoming row with a plain 1px border, erasing the one signal that row
+     exists to give (measured on the review pass, 28 Sep 2026). */
+  body[data-section="orders"] .supplier-row > .supplier-row-open {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px;
+  }
+  body[data-section="orders"] .supplier-row-view {
+    width: var(--tap-min);
+    height: var(--tap-min);
+    border-radius: 14px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    color: var(--text-3);
+  }
+  body[data-section="orders"] .supplier-row-summary,
+  body[data-section="orders"] .supplier-row-spacer {
+    flex-shrink: 0;
+    width: var(--tap-min);
+    height: var(--tap-min);
+  }
+  /* ⚠️ THE SAME BUG AS `.order-tools` ABOVE: the phone rule further down is an
+     unconditional `display: none`, and sizing alone does not undo that — a
+     `display` has to be set again in here, or the element stays none whatever
+     `hidden` says. This one shipped past review once already (28 Sep 2026);
+     tests/orders-tablet-display-pairs.test.mjs now catches the shape. */
+  body[data-section="orders"] .supplier-row-spacer { display: block; }
+  body[data-section="orders"] .supplier-row-summary {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 14px;
+    background: var(--accent-light);
+    border: 1px solid var(--brand-2);
+    color: var(--brand);
+    cursor: pointer;
+    transition: transform 0.06s ease;
+  }
+  body[data-section="orders"] .supplier-row-summary:active { transform: scale(.94); }
+
+  /* ⚠️ THE SIDE SHEET. On a phone .order-summary-view is the same fixed
+     full-screen overlay every other read-only Orders screen already is (see
+     the unconditional rule below); here it narrows to a panel on the right,
+     the same "drill in without leaving the list behind" feel a side sheet is
+     meant to give on a screen wide enough to have room for it. */
+  body[data-section="orders"] .order-summary-view {
+    left: auto;
+    width: 100%;
+    max-width: 470px;
+    border-left: 1px solid var(--border);
+    box-shadow: var(--shadow-sheet);
+  }
+  /* The dimmed backdrop behind the side sheet — see the long note on `scrim`
+     in js/orders/order-summary-view.js. Unconditional display:none below
+     keeps it inert on a phone, where the sheet is already full-screen. */
+  body[data-section="orders"] .order-summary-scrim { display: block; }
+
+  /* ── Review-round fixes (28 Sep 2026) ──────────────────────────────────── */
+
+  /* 8. THE HEADER TITLE, CENTRED WHATEVER THE RIGHT SIDE HOLDS. `header` is
+     `justify-content: space-between` with THREE things on the right now
+     (help · bell · send) against Back alone on the left, so centring by
+     flex alone — equal left/right widths — no longer holds: measured 68px
+     off centre. Taken clean out of flow instead, the same move every
+     full-screen overlay's own header already makes (supplier-items.js and
+     friends): `header` is `position: relative` at every width (style.css),
+     so this only has to fire on a tablet, where the extra buttons exist.
+     `pointer-events: none` on the wrapper (it now visually overlaps the
+     header's own flex children on a narrow-enough tablet) with `auto`
+     restored on its own children keeps the title unclickable air without
+     ever blocking a real button under it. */
+  body[data-card="orders"] > .orders-header > .orders-header-title {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    /* Both axes: taking a flex child out with position:absolute drops it out
+       of `header`'s own `align-items: center` too, not just its horizontal
+       distribution — top:50% + the Y half of the transform is what keeps it
+       vertically centred in the header's asymmetric padding
+       (calc(14px + safe-top) top, 20px bottom) the way the flex row did. */
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+  }
+  body[data-card="orders"] > .orders-header > .orders-header-title * { pointer-events: auto; }
+  /* ⚠️ With the title out of flow, the header's space-between spread the right-hand
+     buttons across the whole bar (help and bell ended up mid-header, measured 28 Sep
+     2026). Pushing the first of them right keeps Back alone on the left and the
+     help · bell · send group together on the right. Scoped to THIS page's own header
+     (a direct child of body): suppliers.html and the overlays keep theirs. */
+  body[data-card="orders"] > .orders-header > .help-host { margin-left: auto; }
+
+  /* 9. THE RED DEBT BANNER IN THE STRIP: kitchen-sized, and in the app's own
+     type — a plain `<button>` does not inherit body's font-family in any
+     browser, so it rendered in the platform's system font until this said
+     otherwise (measured on the review pass). */
+  body[data-section="orders"] #orders-tablet-strip .owed-banner {
+    min-height: var(--tap-min);
+    padding: 14px;
+    font-size: 16px;
+    font-family: var(--font);
+    display: flex;
+    align-items: center;
+  }
+  /* Spacing: the strip's own gap/margin-bottom are 12px now (see the rule at
+     the top of this block); the search row keeps the 12px it lost when
+     `.search-row .mgmt-search`'s own margin-bottom was zeroed for the flex
+     row above (Slice C) — the row itself carries it now instead. */
+  body[data-section="orders"] .search-row { margin-bottom: 12px; }
+
+  /* 10. THE INCOMING TAB BADGE, 24×24 AT LEAST — measured 20×20. */
+  body[data-section="orders"] .tab-badge {
+    min-width: 24px;
+    height: 24px;
+    font-size: 14px;
+  }
+}
+/* .order-tools is built and passed on every screen size — see buildOrderTools
+   in js/orders/orders-main.js — but is only ever a LOOK on a tablet. */
+.order-tools { display: none; }
+/* .tab-badge exists on every screen size (the count is kept in step
+   unconditionally — js/orders/orders-main.js refreshDeliveriesBadge) but is
+   only ever a LOOK on a tablet; this half only hides it on a phone. */
+.tab-badge { display: none; }
+/* The summary button and its spacer both always exist in the DOM (see the
+   long note on refreshSupplierDerived in js/orders/suppliers.js) but are only
+   ever a LOOK on a tablet — on a phone neither may show, whatever `hidden`
+   happens to say. */
+.supplier-row-summary,
+.supplier-row-spacer { display: none; }
+
+/* ── The order summary screen (Slice D) ─────────────────────────────────────
+   Full-screen on a phone (same shell as .supplier-items); a side sheet on a
+   tablet (the override above). Read-only: no input anywhere in it. */
+.order-summary-view {
+  position: fixed;
+  inset: 0;
+  z-index: 600;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+}
+/* The scrim behind the tablet side sheet (js/orders/order-summary-view.js) —
+   dims the supplier list still showing beside it, and a tap on it is the
+   same as Back. Inert on a phone (display:none, unconditional below): the
+   sheet already covers the whole screen there, so there is nothing to dim. */
+.order-summary-scrim {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 590;
+  background: rgba(0, 0, 0, .35);
+}
+.order-summary-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 14px 16px calc(24px + var(--safe-bot));
+  padding-inline: max(16px, var(--app-gutter));
+}
+.order-summary-list {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 4px 14px 8px;
+}
+.order-summary-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+.order-summary-row:last-child { border-bottom: none; }
+.order-summary-label { font-size: 16px; font-weight: 500; color: var(--text); min-width: 0; }
+.order-summary-qty {
+  flex-shrink: 0;
+  font-family: 'DM Mono', monospace;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  color: var(--text);
+}

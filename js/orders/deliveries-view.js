@@ -245,18 +245,25 @@ async function openReorder(items, ctx) {
 // already taught this project that a dialog nobody can dismiss strands somebody in the
 // middle of service, and had to grow an escape hatch after two attempts. An order that
 // did not turn up is not a kitchen emergency; remembering it for ever is.
+// ⚠️ RETURNS THE COUNT — added on top of the render, not instead of it, when
+// the tablet's tab badge (js/orders/orders-main.js) was given the debt count
+// to show. The DOM is still the single source of truth for the banner itself;
+// this is only a convenience for a caller that already has to call this
+// function anyway and would otherwise recompute unansweredBefore() a second
+// time and risk the two numbers disagreeing.
 export function renderOwedBanner(host, ctx) {
-  if (!host) return;
+  if (!host) return 0;
   host.textContent = '';
   const owed = unansweredBefore(ctx.history, ctx.today, { weekStartsOn: ctx.weekStartsOn });
   host.hidden = !owed.length;
-  if (!owed.length) return;
+  if (!owed.length) return 0;
 
   host.appendChild(el('button', {
     class: 'today-banner owed-banner', type: 'button',
     text: t('orders.deliveries.owed', { n: owed.length }),
     onclick: () => openOwed(owed, ctx),
   }));
+  return owed.length;
 }
 
 // One at a time, oldest first — the same two answers as a delivery in the week, because

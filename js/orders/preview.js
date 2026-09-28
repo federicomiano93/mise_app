@@ -17,19 +17,21 @@ import { t } from '../i18n.js';
 import { buildSupplierPicker } from './supplier-picker.js';
 import { chooseAndSend } from './send-chooser.js';
 import { currentSession } from '../firebase.js';
+import { orderedItems } from './order-text.js';
 
 // suppliers: array; ingredientsBySupplier: { supplierId: [ingredient] };
 // entries: { ingredientId: { qty, stock } }; callbacks: { onBack, onSent };
 // format: { grouped, onChange } — the remembered message-format choice, owned by
 // orders-main so every send path reads the same one.
 export function buildSendScreen(suppliers, ingredientsBySupplier, entries, callbacks, format) {
-  // Only suppliers with at least one ordered item can be sent.
+  // Only suppliers with at least one ordered item can be sent. orderedItems()
+  // is the ONE selection this app uses for "what is in this supplier's order
+  // right now" — js/orders/order-summary.js (the tablet summary sheet) calls
+  // the exact same function, so the two can never quietly disagree.
   const rows = suppliers.map(supplier => ({
     id: supplier.id,
     name: supplier.name,
-    items: (ingredientsBySupplier[supplier.id] || [])
-      .filter(ing => (entries[ing.id]?.qty || 0) > 0)
-      .map(ing => ({ name: ing.name, weight: ing.weight || '', qty: entries[ing.id].qty })),
+    items: orderedItems(ingredientsBySupplier[supplier.id] || [], entries),
   })).filter(row => row.items.length);
 
   return buildSupplierPicker(rows, {

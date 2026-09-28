@@ -44,6 +44,10 @@ const CHEVRON_SVG =
 const LIST_SVG =
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>';
 
+// "See what is in this supplier's order right now" — a clipboard, tablet only.
+const SUMMARY_SVG =
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 2h6v4H9z"/><path d="M9 11h6M9 14h6M9 17h4"/></svg>';
+
 // How many of a supplier's products have a quantity entered.
 export function supplierStats(ingredients, entries) {
   const total = ingredients.length;
@@ -79,6 +83,15 @@ export function refreshSupplierDerived(supplier, ingredients, entries) {
   // script on the page believed was gone.
   const clearBtn = document.getElementById(`clear-btn-${supplier.id}`);
   if (clearBtn) clearBtn.hidden = filled === 0;
+
+  // ⚠️ TABLET ONLY (orders.css), BUT UPDATED UNCONDITIONALLY, IN PLACE — the
+  // same rule as every other derived bit on this row: the summary button and
+  // its spacer both always exist, and only their `hidden` state swaps as
+  // quantities change, so a keystroke never rebuilds the row it happened on.
+  const summaryBtn = document.getElementById(`summary-${supplier.id}`);
+  if (summaryBtn) summaryBtn.hidden = filled === 0;
+  const spacer = document.getElementById(`spacer-${supplier.id}`);
+  if (spacer) spacer.hidden = filled > 0;
 }
 
 // container: #suppliers-list.
@@ -157,7 +170,13 @@ export function mountSupplierList(container, ctx) {
     rows.forEach(s => list.appendChild(buildSupplierRow(s, data, ctx)));
   }
 
-  container.appendChild(search.node);
+  // ⚠️ TABLET ONLY, IN LOOKS: `ctx.searchExtras` is the "⇄ Ingredienti" swap
+  // button orders-main.js builds once (js/orders/tablet-layout's TABLET_QUERY
+  // gates whether it is ever shown; orders.css hides `.search-row` back down
+  // to a plain block on a phone). On a phone this wrapper is inert — it adds
+  // no margin or padding of its own, so .mgmt-search keeps its exact spacing.
+  const searchRow = el('div', { class: 'search-row' }, [search.node, ctx.searchExtras || null]);
+  container.appendChild(searchRow);
   container.appendChild(filterSwitch);
   container.appendChild(list);
 
@@ -215,8 +234,28 @@ function buildSupplierRow(supplier, data, ctx) {
     onClick: () => ctx.onView?.(supplier.id),
   });
 
+  // ⚠️ TABLET ONLY (orders.css), AND ALWAYS BOTH IN THE DOM — see the long
+  // note on refreshSupplierDerived above, which is what keeps `hidden` in
+  // step with `filled` as quantities change, without ever touching this row
+  // again. Only ever ONE of the two is visible at a time; the other keeps the
+  // 52px of width so every row's card starts at the same x, whether or not
+  // this supplier has anything typed.
+  const summaryBtn = el('button', {
+    type: 'button',
+    class: 'supplier-row-summary',
+    id: `summary-${supplier.id}`,
+    'aria-label': t('aria.orderSummaryFor', { supplier: supplier.name }),
+    icon: SUMMARY_SVG,
+    onClick: () => ctx.onSummary?.(supplier.id),
+  });
+  summaryBtn.hidden = filled === 0;
+  const spacer = el('span', {
+    class: 'supplier-row-spacer', id: `spacer-${supplier.id}`, 'aria-hidden': 'true',
+  });
+  spacer.hidden = filled > 0;
+
   return el('div', {
     class: 'supplier-row',
     dataset: { supplier: supplier.id },
-  }, [view, open]);
+  }, [view, open, summaryBtn, spacer]);
 }

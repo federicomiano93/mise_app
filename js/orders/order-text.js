@@ -42,6 +42,27 @@ export function itemLabel(name, weight) {
   return [name, weight].filter(Boolean).join(' ');
 }
 
+// The rows one supplier's order is built from: everything with a quantity
+// typed, and nothing else. ⚠️ THE ONE SELECTION EVERY SCREEN THAT SHOWS "what
+// is in this supplier's order right now" MUST CALL — js/orders/preview.js
+// (buildSendScreen, the WhatsApp send screen) and js/orders/order-summary.js
+// (the tablet read-only summary sheet) both call this rather than each
+// filtering `entries` its own way, so the two can never quietly select a
+// different set of rows from the same draft.
+export function orderedItems(ingredients, entries) {
+  return (ingredients || [])
+    .filter(ing => (entries?.[ing.id]?.qty || 0) > 0)
+    .map(ing => ({ name: ing.name, weight: ing.weight || '', qty: entries[ing.id].qty }));
+}
+
+// One supplier's items as sorted `{ label, qty }` lines — the EXACT shape and
+// order the message's own lines are built from. js/orders/order-summary.js
+// (the tablet summary sheet) calls this too, so a supplier's summary can never
+// show something different from what the message they receive actually says.
+export function summaryLines(items) {
+  return sortItems(items).map(it => ({ label: itemLabel(it.name, it.weight), qty: num(it.qty) }));
+}
+
 // One supplier's block: bold name, then "- label: qty" lines, BY NAME.
 //
 // The sort lives here, in the one place every message passes through, and not in the
@@ -53,7 +74,7 @@ export function itemLabel(name, weight) {
 // different order.
 // group: { supplierName, items: [{ name, weight, qty }] }
 function sectionFor({ supplierName, items }) {
-  const lines = sortItems(items).map(it => `- ${itemLabel(it.name, it.weight)}: ${num(it.qty)}`);
+  const lines = summaryLines(items).map(({ label, qty }) => `- ${label}: ${qty}`);
   return `*${supplierName || 'Order'}*\n` + lines.join('\n');
 }
 
