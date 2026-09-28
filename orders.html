@@ -92,6 +92,18 @@
     <p data-i18n="ui.supplierOrders">Supplier orders</p>
   </div>
   <span class="help-host" data-help="orders"></span>
+  <!-- ⚠️⚠️ TABLET ONLY. js/orders/tablet-layout.js moves the banners that live
+       inline in the Order tab on a phone (today's orders, the debt, what is
+       pending, what nobody has been told about, the calendar notices) into
+       #orders-alerts-panel below, and this button opens/closes it. Hidden by
+       markup and by CSS on a phone; unhidden by JS only once there is at
+       least one notice to show, on a tablet. The count is DERIVED from the
+       panel's own children (see initAlertsPanel) — never written by hand
+       here, so it can never disagree with what tapping it actually opens. -->
+  <button class="orders-icon-btn orders-alerts-btn" id="orders-alerts-btn" type="button" aria-expanded="false" aria-controls="orders-alerts-panel" hidden>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+    <span class="orders-alerts-count" id="orders-alerts-count" aria-hidden="true"></span>
+  </button>
   <!-- ⚠️ A SEND ARROW, NOT THE WHATSAPP MARK. The button no longer means "send on
        WhatsApp" — it means "send", and offers four roads. A WhatsApp glyph would name
        exactly ONE of them, which is how somebody learns the wrong thing about what
@@ -103,6 +115,19 @@
        the email road, and unlike an arrow in a circle it cannot be mistaken for the
        Back arrow already sitting at the other end of the same bar. -->
   <button class="orders-icon-btn" id="orders-wa-btn" type="button" data-i18n="ui.send" data-i18n-attr="aria-label" aria-label="Send"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M8 7l4-4 4 4"/><path d="M4 15v4a2 2 0 002 2h12a2 2 0 002-2v-4"/></svg></button>
+  <!-- ⚠️⚠️ TABLET ONLY, AND A CHILD OF THE HEADER ON PURPOSE — see the note on
+       #orders-alerts-btn above. Absolutely positioned, so it sits under the
+       header without disturbing the header's own flex row, and is anchored to
+       .orders-header (position: relative, tablet-only) rather than to the
+       page, which is what lets it hang under the button that opens it however
+       far down the page has scrolled. js/orders/tablet-layout.js relocates the
+       banner HOSTS in here; the renderers that fill them (notifications.js,
+       deliveries-view.js, reminder-view.js, untold-view.js) are unchanged and
+       keep finding them by id. Order inside: pending, untold, reorder, alerts
+       (js/orders/tablet-layout.js TABLET_HOSTS). Not a modal, and deliberately
+       NOT .preview-overlay — a compulsory update must never be held back by
+       this. -->
+  <div id="orders-alerts-panel" hidden role="region" data-i18n="orders.alerts.panelRegion" data-i18n-attr="aria-label" aria-label="Notices"></div>
 </header>
 
 <div class="scroll-area scroll-with-bar">
@@ -131,6 +156,12 @@
        again. -->
   <div id="orders-alerts" hidden></div>
 
+  <!-- ⚠️⚠️ TABLET ONLY. Today's orders and the debt banner move here, in that
+       order (today first) — js/orders/tablet-layout.js. Empty and invisible
+       on a phone: the two hosts stay exactly where they already were, right
+       above, and nothing here has any size until something is moved into it. -->
+  <div id="orders-tablet-strip"></div>
+
   <!-- ⚠️⚠️ ONE BOX, SO IT READS AS ONE JOB (Federico, 24 Aug 2026). The two tabs,
        the two views and the suppliers under them are all the same piece of work, and
        until now nothing on the screen said so — ten blocks in a column, all looking
@@ -146,7 +177,17 @@
            belongs in that half is the thing you are waiting for. -->
       <nav class="tab-bar" data-i18n="aria.ordersSections" data-i18n-attr="aria-label" aria-label="Orders sections">
         <button class="tab active" id="tab-order-btn" data-i18n="ui.order">Order</button>
-        <button class="tab" id="tab-deliveries-btn" data-i18n="orders.deliveries.tab">Incoming</button>
+        <!-- ⚠️ TEXT AND BADGE ARE SEPARATE NODES. i18n-dom.js overwrites the
+             whole textContent of anything carrying data-i18n on every
+             language switch, so a badge span living directly under the same
+             data-i18n element would be wiped the first time the language
+             changed. The badge (tablet only — see orders.css) shows the debt
+             owed count from renderOwedBanner; js/orders/orders-main.js keeps
+             it in step. -->
+        <button class="tab" id="tab-deliveries-btn">
+          <span data-i18n="orders.deliveries.tab">Incoming</span>
+          <span class="tab-badge" id="tab-deliveries-badge" hidden aria-hidden="true"></span>
+        </button>
       </nav>
       <!-- Two windows onto the SAME order. Quantities are stored per ingredient, so
            typing 4 on Bacon in the flat list is typing 4 in Brakes' order — there is

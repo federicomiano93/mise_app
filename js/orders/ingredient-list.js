@@ -119,7 +119,11 @@ export function mountIngredientList(container, ctx) {
     });
   }
 
-  container.appendChild(search.node);
+  // See the matching note in suppliers.js mountSupplierList: `ctx.searchExtras`
+  // is the tablet-only view-swap button, built once by orders-main.js. Inert
+  // on a phone — it adds no margin/padding of its own.
+  const searchRow = el('div', { class: 'search-row' }, [search.node, ctx.searchExtras || null]);
+  container.appendChild(searchRow);
   container.appendChild(filterSwitch);
   container.appendChild(count);
   container.appendChild(listEl);

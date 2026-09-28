@@ -23,6 +23,7 @@ import { el, groupBy } from './dom.js';
 import { mountSupplierList, refreshSupplierDerived } from './suppliers.js';
 import { buildSupplierDetail } from './supplier-detail.js';
 import { buildSupplierItems } from './supplier-items.js';
+import { buildOrderSummaryView } from './order-summary-view.js';
 import {
   scheduleDraftSave, saveDraftNow, flushDraftSave, watchDraft, archiveSupplier, clearSupplier,
   clearQuantities, saveHistoryRecord, deleteHistoryRecord, setDraftSaveReporter,
@@ -57,6 +58,7 @@ import { renderTodayOrders, renderPending } from './reminder-view.js';
 import { resolveSuppliers, orderSuppliers } from './no-supplier.js';
 import { normalizeOrdersConfig } from './orders-config.js';
 import { mountIngredientList } from './ingredient-list.js';
+import { watchTablet, initAlertsPanel } from './tablet-layout.js';
 import { orderSummary } from './ingredient-search.js';
 import {
   watchOrderRequests, sendOrderRequest, setOrderRequestDone, finishOrderRequest,
@@ -72,6 +74,13 @@ import {
 } from './order-requests.js';
 
 
+// ⚠️ TABLET ONLY (Slice C, 28 Sep 2026). #order-view-switch (the "By supplier /
+// Ingredients" pills) is hidden on a tablet, in favour of a single swap button
+// that lives beside the search box and names the OTHER view — see
+// buildOrderTools() and setupViewSwitch()'s tablet-only sibling below.
+const SWAP_SVG =
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3L3 7l4 4"/><path d="M3 7h13"/><path d="M17 21l4-4-4-4"/><path d="M21 17H8"/></svg>';
+
 const state = {
   suppliers: [],
   ingredients: [],
@@ -85,6 +94,7 @@ const state = {
   pending: [],                  // orders typed on an earlier day and never placed
   openSupplier: null,           // the supplier whose own screen is open, or null
   viewingSupplier: null,        // the supplier whose read-only product list is open
+  summarySupplier: null,        // the supplier whose read-only order summary is open (tablet)
   view: 'suppliers',            // which of the two order views is on screen
   query: '',                    // the flat list's search text, kept OUT of the DOM (see render)
   supplierQuery: '',            // the supplier list's search text — deliberately separate
@@ -100,6 +110,7 @@ let flatView = null;            // mounted flat-list handle, or null when not on
 let cardsView = null;           // mounted supplier-list handle, or null
 let detailView = null;          // the open supplier's screen, or null
 let itemsView = null;           // the open read-only product list, or null
+let summaryView = null;         // the open read-only order summary, or null (tablet)
 let requestListView = null;     // the list of sent order lists, or null
 let openRequestId = null;       // the sent list being worked through, or null
 let requestView = null;         // that list's own screen, or null
@@ -294,6 +305,7 @@ function render() {
 
   renderOpenSupplier();
   renderSupplierItems();
+  renderSummary();
 }
 
 // Both list views own nodes inside the shared container, so whenever it is wiped or
@@ -316,6 +328,8 @@ function renderSupplierList(container, suppliers) {
       onFilter: active => { state.supplierFilter = active; },
       onOpen: openSupplier,
       onView: openSupplierItems,
+      onSummary: openSummary,
+      searchExtras: buildOrderTools(),
     });
   }
   cardsView.repaint({
@@ -328,6 +342,7 @@ function renderSupplierList(container, suppliers) {
 // ── One supplier's own screen ─────────────────────────────────────────────────
 function openSupplier(supplierId) {
   closeSupplierItems();         // two full-screen screens must never stack up
+  closeSummary();
   state.openSupplier = supplierId;
   renderOpenSupplier();
 }
@@ -377,6 +392,7 @@ function renderOpenSupplier() {
 // middle of an order without a thought.
 function openSupplierItems(supplierId) {
   closeSupplier();
+  closeSummary();
   state.viewingSupplier = supplierId;
   renderSupplierItems();
 }
@@ -410,6 +426,44 @@ function renderSupplierItems() {
   document.body.appendChild(built.overlay);
 }
 
+// ── The order summary, to look at (Slice D, tablet) ───────────────────────
+//
+// Same shape as the two screens above: opened from the list, repainted on
+// every snapshot, closed by itself if the supplier goes away. It writes
+// NOTHING — the same promise supplier-items.js makes, and the same reason.
+function openSummary(supplierId) {
+  closeSupplier();               // two full-screen screens must never stack up
+  closeSupplierItems();
+  state.summarySupplier = supplierId;
+  renderSummary();
+}
+
+function closeSummary() {
+  state.summarySupplier = null;
+  summaryView?.overlay.remove();
+  summaryView = null;
+}
+
+function renderSummary() {
+  if (!state.summarySupplier) return;
+
+  const supplier = findOrderSupplier(state.summarySupplier);
+  if (!supplier) { closeSummary(); return; }
+
+  // The SAME lens the order screen and supplier-items.js use.
+  const ingredients = ingredientsBySupplier()[supplier.id] || [];
+
+  if (summaryView && summaryView.id === supplier.id) {
+    summaryView.repaint(ingredients, state.entries);
+    return;
+  }
+
+  summaryView?.overlay.remove();
+  const built = buildOrderSummaryView(supplier, ingredients, state.entries, { onBack: closeSummary });
+  summaryView = { ...built, id: supplier.id };
+  document.body.appendChild(built.overlay);
+}
+
 // The flat list is MOUNTED once and then only repainted.
 //
 // render() runs on every suppliers/ingredients/history snapshot, including ones
@@ -428,6 +482,7 @@ function renderFlatList(container) {
       suggest: suggestFor,
       entries: state.entries,
       hooks,
+      searchExtras: buildOrderTools(),
     });
   }
   flatView.repaint({
@@ -481,6 +536,43 @@ function setView(view) {
   syncViewButtons();
   render();
   refreshOrderTotals();
+  refreshOrderTools();
+}
+
+// ── Tablet: the search-row swap button (Slice C) ──────────────────────────
+//
+// ⚠️ BUILT ONCE, THEN MOVED — never rebuilt. Only one of the two list views is
+// ever mounted at a time (dropListViews nulls the other), so handing the same
+// node to whichever one is mounting simply reparents it; the click handler
+// and its listener never need re-attaching.
+let orderTools = null;
+
+function buildOrderTools() {
+  if (!orderTools) {
+    const label = el('span', { class: 'order-tools-label' });
+    const btn = el('button', {
+      type: 'button', class: 'order-tools-btn',
+      onClick: () => setView(state.view === 'suppliers' ? 'all' : 'suppliers'),
+    }, [
+      el('span', { class: 'order-tools-icon', 'aria-hidden': 'true', icon: SWAP_SVG }),
+      label,
+    ]);
+    orderTools = el('div', { class: 'order-tools' }, [btn]);
+  }
+  refreshOrderTools();
+  return orderTools;
+}
+
+// The label — and the button's own aria-label, for the same reason a button
+// with only an icon inside it needs one — always names the OTHER view: what
+// tapping it will switch TO, not what is on screen now.
+function refreshOrderTools() {
+  if (!orderTools) return;
+  const other = state.view === 'suppliers' ? t('orders.tab.ingredients') : t('orders.tab.suppliers');
+  const label = orderTools.querySelector('.order-tools-label');
+  const btn = orderTools.querySelector('.order-tools-btn');
+  if (label) label.textContent = other;
+  if (btn) btn.setAttribute('aria-label', other);
 }
 
 function syncViewButtons() {
@@ -570,8 +662,25 @@ function renderIncoming() {
   };
 
   renderDeliveries(document.getElementById('deliveries-list'), ctx);
-  renderOwedBanner(document.getElementById('orders-owed'), ctx);
+  const owedCount = renderOwedBanner(document.getElementById('orders-owed'), ctx);
   renderReorderBanner(document.getElementById('orders-reorder'), ctx);
+  // ⚠️ TABLET ONLY IN LOOKS (orders.css), but kept in step unconditionally —
+  // the badge span exists on every screen size and CSS alone decides whether
+  // it is ever seen, the same split every other tablet-only control in this
+  // file uses.
+  refreshDeliveriesBadge(owedCount);
+}
+
+// The debt count on the Incoming tab — the same number renderOwedBanner just
+// drew into the banner, never recomputed, so the two can never disagree.
+function refreshDeliveriesBadge(count) {
+  const badge = document.getElementById('tab-deliveries-badge');
+  const btn = document.getElementById('tab-deliveries-btn');
+  if (!badge || !btn) return;
+  badge.textContent = count > 0 ? String(count) : '';
+  badge.hidden = !(count > 0);
+  if (count > 0) btn.setAttribute('aria-label', t('orders.alerts.deliveriesTabBadge', { n: count }));
+  else btn.removeAttribute('aria-label');
 }
 
 function renderHistory() {
@@ -1650,8 +1759,15 @@ function setupTabs() {
       });
       // The switch belongs to the Order panel even though it now sits above both.
       refreshViewSwitch();
+      // ⚠️ TABLET ONLY (orders.css): on Incoming the debt banner takes the
+      // strip's place instead of sitting above it; on Order the strip is back.
+      // A class on <body>, read by a small number of scoped rules, is what
+      // decides between the two — never a rebuild of either banner.
+      document.body.dataset.ordersTab = panel === 'tab-deliveries' ? 'deliveries' : 'order';
     });
   });
+  // The screen always opens on Order.
+  document.body.dataset.ordersTab = 'order';
 }
 
 // The one wording for a failed draft autosave, named because it is both SET and
@@ -1740,6 +1856,12 @@ async function init() {
   setupTabs();
   setupViewSwitch();
   document.getElementById('orders-wa-btn')?.addEventListener('click', openSendScreen);
+
+  // ⚠️ WATCHTABLET FIRST, THEN THE PANEL: the panel's first count must see
+  // whatever watchTablet already moved into it, including on a page that
+  // opens straight at tablet width — see js/orders/tablet-layout.js.
+  watchTablet();
+  initAlertsPanel();
 
   // The debounced draft autosave has no caller to hand a rejection to, so it reports
   // through here. Never auto-hidden on a timer: an order that is no longer being
