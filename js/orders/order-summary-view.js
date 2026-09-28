@@ -1,0 +1,73 @@
+// order-summary-view.js — a read-only look at one supplier's CURRENT order:
+// exactly what buildSendScreen (preview.js) and the WhatsApp message would
+// show, without opening either. Writes nothing, anywhere — same promise as
+// supplier-items.js, and the same reason: it can be opened mid-order without
+// a second thought.
+//
+// Same shape as supplier-items.js on purpose: opened from the list, repainted
+// on every snapshot (orders-main.js renderSummary), and closed by itself if
+// the supplier goes away.
+//
+// ⚠️ ON TABLET IT IS A SIDE SHEET (orders.css .order-summary-view), not a full
+// page — the phone gets the same full-screen overlay every other read-only
+// Orders screen already uses. The MARKUP is identical either way; only the
+// CSS decides which one it looks like, so there is exactly one thing to test.
+
+import { t } from '../i18n.js';
+import { el } from './dom.js';
+import { supplierSummary } from './order-summary.js';
+
+const BACK_ICON =
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>';
+
+// supplier: { id, name }; ingredients: that supplier's products (already
+// lensed — the same list the order screen and supplier-items.js use);
+// entries: state.entries. ctx: { onBack }
+// -> { overlay, repaint(ingredients, entries) }
+export function buildOrderSummaryView(supplier, ingredients, entries, ctx) {
+  const body = el('div', { class: 'order-summary-body' });
+  const subtitle = el('p', {});
+
+  const overlay = el('div', { class: 'order-summary-view' }, [
+    el('header', { class: 'orders-header' }, [
+      el('button', {
+        type: 'button', class: 'orders-icon-btn', 'aria-label': t('ui.back'),
+        icon: BACK_ICON, onClick: () => ctx.onBack?.(),
+      }),
+      el('div', { class: 'orders-header-title' }, [
+        el('h1', { text: supplier.name }),
+        subtitle,
+      ]),
+      // Keeps the title centred: the back button on the left needs a counterweight —
+      // the same spacer supplier-items.js uses on the same header shape.
+      el('span', { class: 'header-spacer' }),
+    ]),
+    body,
+  ]);
+
+  // `repaint` rebuilds the body only, never the header — a snapshot must not
+  // make the supplier's name flicker. Nothing here holds typing, so rebuilding
+  // costs nothing: there is no field to rip out from under a finger.
+  function repaint(nextIngredients, nextEntries) {
+    const { lines } = supplierSummary(supplier, nextIngredients, nextEntries);
+    body.replaceChildren();
+
+    if (!lines.length) {
+      subtitle.textContent = '';
+      body.appendChild(el('p', { class: 'ing-empty', text: t('orders.summary.empty') }));
+      return;
+    }
+
+    subtitle.textContent = t('orders.summary.itemCount', { n: lines.length });
+
+    const card = el('div', { class: 'order-summary-list' });
+    lines.forEach(({ label, qty }) => card.appendChild(el('div', { class: 'order-summary-row' }, [
+      el('span', { class: 'order-summary-label', text: label }),
+      el('span', { class: 'order-summary-qty', text: String(qty) }),
+    ])));
+    body.appendChild(card);
+  }
+
+  repaint(ingredients, entries);
+  return { overlay, repaint };
+}
