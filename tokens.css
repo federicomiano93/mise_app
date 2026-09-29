@@ -551,7 +551,9 @@
   --app-header-side: 0px;
   grid-template-columns: minmax(var(--app-header-side), 1fr) auto minmax(var(--app-header-side), 1fr);
   align-items: center;
-  gap: 12px;
+  /* 8px between the title and each side, not 12: at 360px «CONTATTI E ALLERGENI» was
+     cut by exactly 8px between two reserved 84px sides (ui-check, 29 Sep 2026). */
+  column-gap: 8px;
   background: var(--brand);
   color: var(--on-brand);
   /* viewport-fit=cover lets the green fill the status-bar area; the safe-area top
