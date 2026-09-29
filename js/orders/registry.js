@@ -34,6 +34,7 @@ import { el } from './dom.js';
 import { confirmDialog } from './confirm-dialog.js';
 import { isTabletNow, watchTablet } from './tablet-layout.js';
 import { snapshotFields, snapshotChanged } from './form-dirty.js';
+import { removeLevel } from './level-stack.js';
 import { buildSearchBox } from './search-box.js';
 import { dayShort } from './suppliers.js';
 import { NO_SUPPLIER_ID } from './no-supplier.js';
@@ -65,7 +66,7 @@ import {
 //            header's «+» should carry, because it follows the active tab.
 //          { pane } — the element beside the list where a level opens on a TABLET
 //            (suppliers.html #registry-pane). Absent = every level is full screen.
-// -> { node, refresh(), openSettings(), addCurrent() }
+// -> { node, refresh(), openSettings(), addCurrent(), askBeforeLeaving(), leaveWouldAsk() }
 export function buildRegistry(data, actions, hooks = {}) {
   // ⚠️ INGREDIENTS FIRST, AND THAT IS THE POINT OF THE SCREEN. Federico: «adesso quando
   // apro la schermata vedo prima i fornitori, invece voglio vedere prima gli
@@ -238,7 +239,7 @@ export function buildRegistry(data, actions, hooks = {}) {
       // is a plural rule that only speaks English.
       [s.category, t('orders.productsCount', { n: counts[s.id] || 0 })].filter(Boolean).join(' · '),
       s.active !== false,
-      () => openFromList(() => openSupplier(s.id)),
+      () => openFromList(() => openSupplier(s.id), `supplier:${s.id}`),
       `supplier:${s.id}`,
     )));
     listHost.appendChild(list);
@@ -330,7 +331,7 @@ export function buildRegistry(data, actions, hooks = {}) {
     // opens its card ABOVE that screen, as on a phone.
     const onList = supplierName !== undefined;
     const row = drillRow(item.name, meta, item.active !== false,
-      () => (onList ? openFromList(() => openIngredientForm(item, null)) : openIngredientForm(item, null)),
+      () => (onList ? openFromList(() => openIngredientForm(item, null), `ingredient:${item.id}`) : openIngredientForm(item, null)),
       onList ? `ingredient:${item.id}` : null);
     // ⚠️ A WORD, NEVER A COLOUR ALONE (P18, and the v1.63.0 rule). «Not declared»
     // and «contains none of the 14» look identical as an empty allergen list, and
@@ -351,10 +352,10 @@ export function buildRegistry(data, actions, hooks = {}) {
 
   // ── One supplier ────────────────────────────────────────────────────────────
   function openSupplier(id) {
-    push(() => {
+    push((entry) => {
       const supplier = data.suppliers().find(s => s.id === id);
       // It can be gone: another phone may have deleted it while this was open.
-      if (!supplier) { pop(); return null; }
+      if (!supplier) { popEntry(entry); return null; }
 
       const body = el('div', { class: 'mgmt-scroll' });
 
@@ -378,7 +379,7 @@ export function buildRegistry(data, actions, hooks = {}) {
           // that no longer exists leaves a Back arrow as the only way off a page
           // about nothing — and the next repaint would pop it anyway, which looks
           // like the app closing by itself.
-          async () => { await actions.deleteSupplier(supplier.id); pop(); }),
+          async () => { await actions.deleteSupplier(supplier.id); popEntry(entry); }),
       ]));
 
       const mine = data.ingredients()
@@ -402,7 +403,7 @@ export function buildRegistry(data, actions, hooks = {}) {
         body.appendChild(list);
       }
 
-      return overlay(supplier.name, body);
+      return overlay(entry, supplier.name, body);
     }, { selects: `supplier:${id}` });
   }
 
@@ -411,17 +412,17 @@ export function buildRegistry(data, actions, hooks = {}) {
   //                           «+ Nuovo fornitore» selects it)
   //   onClosed()            — told when somebody backs out without saving
   function openSupplierForm(item, { onSaved = null, onClosed = null } = {}) {
-    push(() => {
-      const close = () => { pop(); onClosed?.(); };
+    push((entry) => {
+      const close = () => { popEntry(entry); onClosed?.(); };
       const body = el('div', { class: 'mgmt-scroll' }, [
         buildSupplierForm({
           item,
           save: actions.saveSupplier,
-          onDone: (saved) => { pop(); onSaved?.(saved); },
+          onDone: (saved) => { popEntry(entry); onSaved?.(saved); },
           onCancel: close,
         }),
       ]);
-      return overlay(item ? t('orders.editSupplier') : t('orders.newSupplier'), body, close);
+      return overlay(entry, item ? t('orders.editSupplier') : t('orders.newSupplier'), body, close);
     });
   }
 
@@ -436,7 +437,7 @@ export function buildRegistry(data, actions, hooks = {}) {
   // ── One ingredient's form ───────────────────────────────────────────────────
   //   presetKind: 'packaging' when added from the packaging list
   function openIngredientForm(item, presetSupplierId, presetKind = null) {
-    push(() => {
+    push((entry) => {
       const body = el('div', { class: 'mgmt-scroll' }, [
         buildIngredientForm({
           item,
@@ -452,15 +453,15 @@ export function buildRegistry(data, actions, hooks = {}) {
           // The form then knows nothing about overlays and this file stays the only
           // one that navigates — the same seam saveIngredient and priceHistory use.
           actions: { ...actions, capturePackPhoto, packPhotoOn: () => ingredientPanels().packPhoto, createSupplier },
-          onDone: pop,
-          onCancel: pop,
+          onDone: () => popEntry(entry),
+          onCancel: () => popEntry(entry),
         }),
       ]);
       const packaging = item ? isPackaging(item) : presetKind === 'packaging';
       const title = packaging
         ? (item ? t('orders.editPackaging') : t('orders.newPackaging'))
         : (item ? t('orders.editIngredient') : t('orders.newIngredient'));
-      return overlay(title, body);
+      return overlay(entry, title, body);
     }, { selects: item ? `ingredient:${item.id}` : null });
   }
 
@@ -478,18 +479,21 @@ export function buildRegistry(data, actions, hooks = {}) {
   // with every character still in it. None of that machinery is copied.
   function capturePackPhoto() {
     return new Promise((resolve) => {
+      let mine = null;
       let settled = false;
       const settle = (value) => {
         if (settled) return;
         settled = true;
-        pop();
+        popEntry(mine);
         resolve(value);
       };
-      push(() => {
+      push((entry) => {
+        mine = entry;
         const { root } = renderPackPhotoCapture({
           onText: (text, notes) => settle({ text, notes }),
         });
         return overlay(
+          entry,
           t('orders.pack.photo.title'),
           el('div', { class: 'mgmt-scroll' }, [root]),
           () => settle(null),
@@ -510,7 +514,7 @@ export function buildRegistry(data, actions, hooks = {}) {
   // that venue with the allergen form and no way to switch it off. This is also where
   // Federico asked for it: «il settings degli ingredienti».
   function openSettings() {
-    push(() => overlay(t('ui.settings'), buildRegistrySettings({
+    push((entry) => overlay(entry, t('ui.settings'), buildRegistrySettings({
       panels: ingredientPanels(),
       onSet: async (key, on) => {
         // ⚠️ TWO CALLABLES, ROUTED BY KEY. setIngredientPanels writes two fields whose
@@ -532,7 +536,7 @@ export function buildRegistry(data, actions, hooks = {}) {
   // the form it came from, and a Back that only popped would leave that promise pending
   // for ever — with the button that opened it disabled for the life of the form, and
   // nothing on screen saying why.
-  function overlay(title, body, onBack = pop) {
+  function overlay(entry, title, body, onBack = () => popEntry(entry)) {
     const node = el('div', { class: 'mgmt-overlay' }, [
       el('header', { class: 'app-header orders-header' }, [
         el('span', { class: 'app-header-slot' }, [
@@ -559,7 +563,7 @@ export function buildRegistry(data, actions, hooks = {}) {
   function push(build, { fullScreen = false, selects = null } = {}) {
     const entry = { build, overlay: null, fullScreen, selects, snapshot: null };
     stack.push(entry);
-    const node = build();
+    const node = build(entry);
     if (!node) return;              // build() popped us (the thing is gone)
     entry.overlay = node;
     const host = pane && !fullScreen && isTabletNow() ? pane : document.body;
@@ -568,12 +572,29 @@ export function buildRegistry(data, actions, hooks = {}) {
     const form = node.querySelector('.mgmt-form');
     entry.snapshot = form ? snapshotFields(form) : null;
     stackChanged();
+    focusLevel(node);
+    return entry;
   }
 
-  function pop() {
-    const entry = stack.pop();
-    entry?.overlay?.remove();
+  // ⚠️ A LEVEL CLOSES ITSELF, NEVER «THE TOP». A save or a delete answers after an await, and
+  // by then the pane may hold something else (a row tapped meanwhile replaced it): a pop()
+  // would close THAT level and throw its typing away. So every level's Back / done / delete
+  // is bound to its own entry, and closing an entry that is already gone does nothing.
+  function popEntry(entry) {
+    const removed = removeLevel(stack, entry);
+    if (!removed) return;
+    removed.overlay?.remove();
     stackChanged();
+  }
+
+  // Keyboard users land in a level that opens in the pane (the heading is focusable by
+  // script only). Not on a phone, where the level covers the page as before.
+  function focusLevel(node) {
+    if (node.parentNode !== pane) return;
+    const heading = node.querySelector('h1');
+    if (!heading) return;
+    heading.setAttribute('tabindex', '-1');
+    heading.focus({ preventScroll: true });
   }
 
   // ── The tablet's pane ───────────────────────────────────────────────────────
@@ -620,15 +641,66 @@ export function buildRegistry(data, actions, hooks = {}) {
     });
   }
 
+  // The row that was open, and whether the pane held something a moment ago: when the pane
+  // EMPTIES, focus goes back to that row (or the list), because the level that held it has
+  // just left the page and the keyboard would otherwise start again from the top.
+  let lastKey = null;
+  let paneWasHolding = false;
+  let replacing = false;
+
   function stackChanged() {
+    const key = selectedKey();
+    if (key !== null) lastKey = key;
     paintSelection();
     paintPane();
+    const holds = paneHolds();
+    if (paneWasHolding && !holds && !replacing && pane && isTabletNow()) restoreListFocus();
+    paneWasHolding = holds;
+  }
+
+  function restoreListFocus() {
+    const active = document.activeElement;
+    if (active && active !== document.body && !pane.contains(active)) return;   // they are elsewhere
+    const rows = [...listHost.querySelectorAll('[data-sel]')];
+    const row = rows.find(r => r.dataset.sel === lastKey) || rows[0];
+    row?.focus({ preventScroll: true });
   }
 
   // ⚠️ P20 — TYPED WORK IS NEVER LOST SILENTLY. True when any level of the pane holds a form
   // whose fields differ from what they held when it opened.
+  // ⚠️ EXCEPT A FORM WHOSE SAVE IS IN FLIGHT (its Save button is disabled while the write
+  // runs): that typing IS being saved, so «not saved» would be a lie. Replacing it is safe;
+  // its late answer closes only its own level (popEntry).
+  function saveInFlight(entry) {
+    return !!entry.overlay?.querySelector('.mgmt-form .btn-primary:disabled');
+  }
+
   function paneDirty() {
-    return stack.some(entry => !entry.fullScreen && entry.snapshot && snapshotChanged(entry.snapshot));
+    return stack.some(entry => !entry.fullScreen && entry.snapshot && !saveInFlight(entry)
+      && snapshotChanged(entry.snapshot));
+  }
+
+  function confirmDiscard() {
+    return confirmDialog({
+      title: t('orders.registry.discardTitle'),
+      message: t('orders.registry.discardMessage'),
+      okLabel: t('ui.discard'),
+      cancelLabel: t('ui.cancel'),
+      danger: true,
+    });
+  }
+
+  // For the PAGE's own Back (registry-main.js): on a tablet the pane can hold typing while
+  // the header still leads away from the page. Resolves true when it is fine to leave —
+  // at once on a phone, where the full-screen level covers that button.
+  function askBeforeLeaving() {
+    if (!pane || !isTabletNow() || !paneDirty()) return Promise.resolve(true);
+    return confirmDiscard();
+  }
+
+  // Whether askBeforeLeaving() would ask, so the caller can keep a plain link plain.
+  function leaveWouldAsk() {
+    return !!pane && isTabletNow() && paneDirty();
   }
 
   // Close every level of the pane, top first, each the way its own Back would.
@@ -637,27 +709,25 @@ export function buildRegistry(data, actions, hooks = {}) {
       const top = stack[stack.length - 1];
       if (!top || top.fullScreen) break;
       const back = top.overlay ? backOf.get(top.overlay) : null;
-      (back || pop)();
-      if (stack[stack.length - 1] === top) pop();   // a Back that did not pop: never loop
+      if (back) back();
+      popEntry(top);   // a Back that did not pop: never loop
     }
   }
 
   // What tapping a row on the LIST (or the header «+») does. On a phone: just open it, over
   // the list, exactly as before. On a tablet: the new item REPLACES what the pane holds —
   // after asking, if that would throw away typing.
-  function openFromList(open) {
+  // `key` is the row's selection key: tapping the row that is ALREADY open does nothing.
+  function openFromList(open, key = null) {
     if (!pane || !isTabletNow()) { open(); return; }
-    if (!paneDirty()) { clearPane(); open(); return; }
-    confirmDialog({
-      title: t('orders.registry.discardTitle'),
-      message: t('orders.registry.discardMessage'),
-      okLabel: t('ui.discard'),
-      cancelLabel: t('ui.cancel'),
-      danger: true,
-    }).then((ok) => {
-      if (!ok) return;
-      clearPane();
-      open();
+    if (key !== null && key === selectedKey()) return;
+    const replace = () => {
+      replacing = true;             // the pane empties for a moment: no focus jump to the list
+      try { clearPane(); open(); } finally { replacing = false; }
+    };
+    if (!paneDirty()) { replace(); return; }
+    confirmDiscard().then((ok) => {
+      if (ok) replace();
     });
   }
 
@@ -706,7 +776,7 @@ export function buildRegistry(data, actions, hooks = {}) {
     const top = stack[stack.length - 1];
     if (!top || !top.overlay) return;
     if (top.overlay.querySelector('.mgmt-form')) return;   // a form: leave it be
-    const next = top.build();
+    const next = top.build(top);
     if (!next) return;                                     // build() popped it
     top.overlay.replaceWith(next);
     top.overlay = next;
@@ -717,7 +787,7 @@ export function buildRegistry(data, actions, hooks = {}) {
   // say (tests/early-session-callback.test.mjs).
   onLanguageChange(paintPane);
   watchTablet(placeOverlays);
-  return { node, refresh, openSettings, addCurrent };
+  return { node, refresh, openSettings, addCurrent, askBeforeLeaving, leaveWouldAsk };
 }
 
 // The placeholder's icon: an arrow pointing back at the list.

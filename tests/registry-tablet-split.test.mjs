@@ -10,6 +10,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { snapshotFields, snapshotChanged } from '../js/orders/form-dirty.js';
+import { removeLevel } from '../js/orders/level-stack.js';
 import { _dictionaries } from '../js/i18n.js';
 
 const DICT = _dictionaries();
@@ -118,18 +119,86 @@ test('the phone path still appends to document.body', () => {
 
 test('a row tapped on a tablet checks for typed work BEFORE it clears the pane', () => {
   const open = bodyOf(REGISTRY, 'openFromList');
-  assert.ok(open.indexOf('paneDirty()') >= 0, 'openFromList must ask paneDirty()');
-  assert.ok(open.indexOf('paneDirty()') < open.indexOf('clearPane()'), 'the dirty check comes first');
-  // The dialog is the app's own, dangerous, and clearing only follows a yes.
-  assert.match(open, /confirmDialog\(\{[\s\S]*danger:\s*true[\s\S]*\}\)\.then\(\(ok\) => \{\s*if \(!ok\) return;\s*clearPane\(\);/);
+  assert.match(open, /if \(!paneDirty\(\)\) \{ replace\(\); return; \}/);
+  // Clearing happens only inside replace(), reached after a clean check or a yes.
+  assert.match(open, /confirmDiscard\(\)\.then\(\(ok\) => \{\s*if \(ok\) replace\(\);/);
+  assert.equal(open.split('clearPane()').length, 2, 'clearPane() is called once, inside replace()');
+  // The dialog is the app's own and dangerous.
+  assert.match(bodyOf(REGISTRY, 'confirmDiscard'), /confirmDialog\(\{[\s\S]*danger:\s*true/);
   assert.match(REGISTRY, /import \{ confirmDialog \} from '\.\/confirm-dialog\.js'/);
   assert.doesNotMatch(REGISTRY, /\bwindow\.confirm\(|[^.\w]confirm\(|[^.\w]alert\(/);
 });
 
+test('tapping the row that is already open does nothing', () => {
+  assert.match(bodyOf(REGISTRY, 'openFromList'), /if \(key !== null && key === selectedKey\(\)\) return;/);
+});
+
 test('the header «+» and every list row go through openFromList()', () => {
   assert.match(bodyOf(REGISTRY, 'addCurrent'), /openFromList\(/);
-  assert.match(REGISTRY, /openFromList\(\(\) => openSupplier\(s\.id\)\)/);
-  assert.match(REGISTRY, /openFromList\(\(\) => openIngredientForm\(item, null\)\)/);
+  assert.match(REGISTRY, /openFromList\(\(\) => openSupplier\(s\.id\), `supplier:\$\{s\.id\}`\)/);
+  assert.match(REGISTRY, /openFromList\(\(\) => openIngredientForm\(item, null\), `ingredient:\$\{item\.id\}`\)/);
+});
+
+// ── A late answer closes only its own level ──────────────────────────────────
+
+test('a late close of level A, after A was replaced by B, leaves B open', () => {
+  const A = { name: 'A' };
+  const B = { name: 'B' };
+  const stack = [B];                       // A was cleared, B opened
+  assert.equal(removeLevel(stack, A), null);
+  assert.deepEqual(stack, [B]);
+});
+
+test('closing a level removes only that level, wherever it sits', () => {
+  const A = { name: 'A' };
+  const B = { name: 'B' };
+  const C = { name: 'C' };
+  const stack = [A, B, C];
+  assert.equal(removeLevel(stack, B), B);
+  assert.deepEqual(stack, [A, C]);
+  assert.equal(removeLevel(stack, B), null, 'closing twice is a no-op');
+  assert.equal(removeLevel(stack, null), null);
+  assert.deepEqual(stack, [A, C]);
+});
+
+test('no level closes «the top»: every done / cancel / delete is bound to its own entry', () => {
+  assert.doesNotMatch(REGISTRY, /\bpop\(\)|onDone:\s*pop\b|onCancel:\s*pop\b/);
+  assert.match(REGISTRY, /onDone:\s*\(\) => popEntry\(entry\)/);
+  assert.match(REGISTRY, /onCancel:\s*\(\) => popEntry\(entry\)/);
+  assert.match(REGISTRY, /await actions\.deleteSupplier\(supplier\.id\); popEntry\(entry\)/);
+  assert.match(REGISTRY, /onDone:\s*\(saved\) => \{ popEntry\(entry\)/);
+  assert.match(bodyOf(REGISTRY, 'popEntry'), /removeLevel\(stack, entry\)/);
+});
+
+test('a form whose save is in flight is not called unsaved', () => {
+  assert.match(bodyOf(REGISTRY, 'saveInFlight'), /\.btn-primary:disabled/);
+  assert.match(bodyOf(REGISTRY, 'paneDirty'), /!saveInFlight\(entry\)/);
+});
+
+test('the page Back asks first on a tablet, through the same dialog', () => {
+  const ask = bodyOf(REGISTRY, 'askBeforeLeaving');
+  assert.match(ask, /!isTabletNow\(\) \|\| !paneDirty\(\)/);
+  assert.match(ask, /confirmDiscard\(\)/);
+  const main = read('js/orders/registry-main.js');
+  assert.match(main, /getElementById\('registry-back'\)/);
+  assert.match(main, /event\.preventDefault\(\);\s*screen\.askBeforeLeaving\(\)\.then\(\(ok\) => \{ if \(ok\) location\.href/);
+  assert.match(read('suppliers.html'), /id="registry-back" href="index\.html"/);
+});
+
+test('focus moves into a level opened in the pane and back to the list when it empties', () => {
+  assert.match(bodyOf(REGISTRY, 'focusLevel'), /heading\.focus\(\{ preventScroll: true \}\)/);
+  assert.match(bodyOf(REGISTRY, 'restoreListFocus'), /row\?\.focus\(\{ preventScroll: true \}\)/);
+  assert.match(bodyOf(REGISTRY, 'stackChanged'), /restoreListFocus\(\)/);
+});
+
+test('tokens.css uses only tokens tokens.css defines for the split', () => {
+  const css = read('tokens.css');
+  const block = css.slice(css.indexOf('.app-split-area'), css.indexOf('.app-split-list [aria-current="true"]::before'));
+  const used = [...block.matchAll(/var\((--[\w-]+)/g)].map(m => m[1]);
+  assert.ok(used.length > 5);
+  for (const name of new Set(used)) {
+    assert.match(css, new RegExp('\\n\\s*' + name + ':'), name + ' is used by the split but defined nowhere in tokens.css');
+  }
 });
 
 test('clearing the pane leaves each level by its own Back, so no promise is left pending', () => {
