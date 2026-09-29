@@ -128,8 +128,9 @@ test('the catalogue list has no tray around its rows (a card inside a card)', ()
 test('every new «+» and empty-state action is wired to what it promises', () => {
   const fc = stripJsComments(read('js/foodcost/foodcost-main.js'));
   assert.match(fc, /getElementById\('fcAdd'\)/);
-  assert.match(fc, /addBtn\.addEventListener\('click', \(\) => openProduct\(null\)\)/);
-  assert.match(fc, /onAdd: \(\) => openProduct\(null\)/);
+  // Through requestOpen since the tablet split: it asks the editor's guard first.
+  assert.match(fc, /addBtn\.addEventListener\('click', \(\) => requestOpen\(null\)\)/);
+  assert.match(fc, /onAdd: \(\) => requestOpen\(null\)/);
 
   const reg = stripJsComments(read('js/orders/registry-main.js'));
   assert.match(reg, /getElementById\('registry-add'\)/);

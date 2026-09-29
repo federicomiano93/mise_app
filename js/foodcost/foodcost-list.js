@@ -15,7 +15,10 @@ const STATUS_TEXT = { green: 'fc.onTarget', amber: 'fc.slightlyOver', red: 'fc.o
 // `filter` — { title, onShowAll } — is set when the page was opened from a recipe that
 // more than one product uses (Federico's choice, 13 Sep 2026): the caller passes only
 // those products, and this says so on screen and offers the way back to all of them.
-export function renderList({ products, tables, onOpen, onAdd, filter = null }) {
+export function renderList({ products, tables, onOpen, onAdd, filter = null, selectedId = null }) {
+  // The product open beside the list on a tablet, marked aria-current (tokens.css gives it
+  // the picked look). Held here because refresh() repaints every row.
+  let selected = selectedId;
   const rows = el('div', { class: 'fc-list' });
 
   const root = el('div', { class: 'fc-view' }, [
@@ -44,15 +47,26 @@ export function renderList({ products, tables, onOpen, onAdd, filter = null }) {
     }
 
     list.forEach(({ product, result }) => {
-      rows.appendChild(row(product, result, onOpen));
+      rows.appendChild(row(product, result, onOpen, product.id === selected));
     });
   }
 
   paint(products, tables);
-  return { root, refresh: paint };
+  return {
+    root,
+    refresh: paint,
+    // Move the mark WITHOUT repainting: the search, the scroll and the focus stay put.
+    select(id) {
+      selected = id;
+      rows.querySelectorAll('.fc-row').forEach((r) => {
+        if (id !== null && r.dataset.id === id) r.setAttribute('aria-current', 'true');
+        else r.removeAttribute('aria-current');
+      });
+    },
+  };
 }
 
-function row(product, result, onOpen) {
+function row(product, result, onOpen, isSelected) {
   const costed = result.foodCostPct !== null;
 
   // The traffic light is a dot AND a word. Colour alone is not a signal for
@@ -77,6 +91,8 @@ function row(product, result, onOpen) {
 
   return el('button', {
     class: 'fc-row' + (costed ? '' : ' incomplete'), type: 'button',
+    dataset: { id: product.id },
+    'aria-current': isSelected ? 'true' : null,
     onclick: () => onOpen(product),
   }, [
     el('div', { class: 'fc-row-main' }, [

@@ -287,7 +287,8 @@
    which this change deliberately leaves at their 620px column. (29 Sep 2026: every
    section is going wide on a tablet, list left / detail right — the owner's decision;
    the Catalogue is the second after Orders, and its forms keep a 620px column inside
-   the wide page, see catalogue.css.) Scoping the
+   the wide page, see catalogue.css; Food cost is the third — by data-card, since
+   Magazzino shares its data-section and is left alone, see foodcost.css.) Scoping the
    redefinition to `body[data-page="home"]` (index.html) and
    `body[data-section="orders"]` (orders.html AND suppliers.html — a page of
    the Orders section, carrying the same attribute, so it gets the same wider
@@ -298,7 +299,8 @@
 @media (min-width: 900px) and (min-height: 600px) {
   body[data-page="home"],
   body[data-section="orders"],
-  body[data-section="catalogue"] {
+  body[data-section="catalogue"],
+  body[data-card="foodcost"] {
     --app-max-width: var(--app-max-width-wide);
     /* ⚠️ Repeated on purpose: a custom property's var() is resolved WHERE IT
        IS DECLARED, so the :root --app-gutter already holds the 620px answer

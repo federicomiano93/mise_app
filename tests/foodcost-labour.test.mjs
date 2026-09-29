@@ -82,7 +82,7 @@ test('⚠️⚠️ the rate is watched, and its screen offered, only to whoever 
 
   const main = codeOf(read('js/foodcost/foodcost-main.js'));
   assert.match(main, /settingsBtn\.hidden = !canManageHere\(\);/, 'the Settings button carries its own permission');
-  assert.match(main, /footerBar\.hidden = view !== 'list' \|\| settingsBtn\.hidden;/, 'and the bar is shown only while a button in it is');
+  assert.match(main, /footerBar\.hidden = !\(view === 'list' \|\| splitOn\) \|\| settingsBtn\.hidden;/, 'and the bar is shown only while a button in it is (and while the list is on screen)');
 
   const rules = read('firestore.rules');
   const block = rules.slice(rules.indexOf('match /foodcost-settings/{settingsId}'), rules.indexOf('match /products/{id}'));
