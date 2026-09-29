@@ -1025,6 +1025,10 @@ input.ing-stock {
 .mgmt-item-meta { display: block; font-size: 12px; color: var(--text3); font-family: 'DM Mono', monospace; margin-top: 2px; }
 .mgmt-item-actions { display: flex; flex-direction: column; gap: 6px; flex-shrink: 0; align-items: flex-end; }
 .mgmt-link {
+  /* At least 24px tall (WCAG 2.2 target size) — «Mostrali» was 22px. */
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
   background: none;
   border: none;
   color: var(--accent);
@@ -2998,6 +3002,8 @@ body:not([data-orders-tab="deliveries"]) #orders-owed { display: none; }
 /* The unreadable stored weight and its low-key «Remove»: a flex row so the button sits on
    the text's own line, wrapping under it when the stored text is long. */
 .mgmt-weight-legacy-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; margin-top: 6px; }
+.mgmt-field-error { margin: 6px 0 0; font-size: 13px; color: var(--danger); }
+.mgmt-field-error[hidden] { display: none; }
 .mgmt-weight-legacy { margin: 0; font-size: 13px; color: var(--text3); min-width: 0; overflow-wrap: anywhere; }
 /* A box the save was refused for (a weight that is not a number, a «new …» left empty). */
 .mgmt-form .mgmt-input[aria-invalid="true"],
