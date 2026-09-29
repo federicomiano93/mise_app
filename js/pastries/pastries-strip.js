@@ -8,6 +8,7 @@
 import { el } from './dom.js';
 import { onLanguageChange } from '../i18n.js';
 import { WEEKDAYS, weekdayLabel, weekdayShortLabel } from './pastries-model.js';
+import { isTabletNow, watchTablet } from './tablet.js';
 
 // Render the strip into `host`. `openingDay` is the day the screen opened on
 // (tomorrow); it keeps a marker so it stays findable after browsing away.
@@ -30,7 +31,11 @@ export function renderStrip({ host, active, openingDay, counts, onPick }) {
       onkeydown: (e) => handleKey(e, i),
     }, [
       el('span', { class: 'pas-chip-label', 'aria-hidden': 'true' }),
+      // The tablet's vertical list has room for the whole name and for how many pastries
+      // the day holds; on a phone both are display:none (pastries.css).
+      el('span', { class: 'pas-chip-full', 'aria-hidden': 'true' }),
       day === openingDay ? el('span', { class: 'pas-chip-dot', 'aria-hidden': 'true' }) : null,
+      el('span', { class: 'pas-chip-count', 'aria-hidden': 'true' }),
     ]);
     chips.set(day, chip);
     host.appendChild(chip);
@@ -45,15 +50,21 @@ export function renderStrip({ host, active, openingDay, counts, onPick }) {
     chips.forEach((chip, day) => {
       chip.setAttribute('aria-label', weekdayLabel(day));
       chip.querySelector('.pas-chip-label').textContent = weekdayShortLabel(day);
+      chip.querySelector('.pas-chip-full').textContent = weekdayLabel(day);
     });
   }
   paintLabels();
   onLanguageChange(paintLabels);
 
+  // A row of chips on a phone, a column of them on a tablet (pastries.css): say which.
+  host.setAttribute('aria-orientation', isTabletNow() ? 'vertical' : 'horizontal');
+  watchTablet((tablet) => host.setAttribute('aria-orientation', tablet ? 'vertical' : 'horizontal'));
+
   function handleKey(e, index) {
     let next = null;
-    if (e.key === 'ArrowRight') next = (index + 1) % 7;
-    else if (e.key === 'ArrowLeft') next = (index + 6) % 7;
+    // Both pairs, whichever way the strip is laid out: Right/Down go on, Left/Up go back.
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') next = (index + 1) % 7;
+    else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') next = (index + 6) % 7;
     else if (e.key === 'Home') next = 0;
     else if (e.key === 'End') next = 6;
     else return;
@@ -78,7 +89,9 @@ export function renderStrip({ host, active, openingDay, counts, onPick }) {
   // is answered from here rather than by opening it.
   function setCounts(map) {
     chips.forEach((chip, name) => {
-      chip.classList.toggle('pas-chip--empty', !((map || {})[name] > 0));
+      const n = (map || {})[name];
+      chip.classList.toggle('pas-chip--empty', !(n > 0));
+      chip.querySelector('.pas-chip-count').textContent = String(n > 0 ? n : 0);
     });
   }
 

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'theitalianclub-v442';
+const CACHE_NAME = 'theitalianclub-v445';
 // Firebase SDK modules (loaded from gstatic) are cached SEPARATELY from CACHE_NAME
 // so they survive the cache-version bump that happens on every deploy — otherwise
 // the offline SDK would be wiped each release until the next online load. The name
@@ -12,7 +12,7 @@ const CACHE_NAME = 'theitalianclub-v442';
 // the fetch handler below, on the first load that has a network.
 // So between activate() and that first load, a phone that is OFFLINE cannot boot:
 // the code asks for 12.18.0 and nothing has it. In practice the window is very
-// small — activate() only happens after a successful 265-file precache, i.e.
+// small — activate() only happens after a successful 266-file precache, i.e.
 // online, and tapping the update banner reloads the page immediately — but it is
 // not zero, and it is the reason to bump the SDK deliberately rather than often.
 // Leaving the name unchanged would close the window and cost ~1 MB of dead
@@ -334,6 +334,7 @@ const ASSETS = [
   './js/pastries/pastries-lock.js',
   './js/pastries/pastries-logs-store.js',
   './js/pastries/pastries-logs.js',
+  './js/pastries/tablet.js',
   './foodcost.html',
   './foodcost.css',
   './js/foodcost/confirm-dialog.js',
@@ -391,7 +392,7 @@ const ASSET_HASHES = {
   "./install-guide.html": 'c57a55ccf379afaf',
   "./qr.png": '761a95e5bc25e2ba',
   "./js/install-guide.js": '17fcd0c0fec489c2',
-  "./tokens.css": '1569619df75ccea1',
+  "./tokens.css": '9487576f67c421a0',
   "./auth.css": '8db3d5a1b9b85d37',
   "./style.css": '4e0c59d62c594f3d',
   "./orders.css": 'c839512a84d5b6bc',
@@ -599,20 +600,21 @@ const ASSET_HASHES = {
   "./js/catalogue/guided-editor.js": 'b93f216672607087',
   "./js/catalogue/import-to-calculator.js": '509d83f39384e106',
   "./pastries.html": '28219fd4461e15df',
-  "./pastries.css": 'a6a262e471292006',
+  "./pastries.css": '8639f8a1013cbddd',
   "./js/pastries/confirm-dialog.js": '61a7f580f37c5ff8',
   "./js/pastries/dom.js": '84e0623e447bb7ab',
   "./js/pastries/pastries-model.js": 'd162282f04d5287d',
   "./js/pastries/firebase-pastries.js": 'b93e7234e6f4b2bc',
   "./js/pastries/pastries-store.js": '07fcca1ec0717a80',
   "./js/pastries/pastries-main.js": 'c5ce78730a40fd0e',
-  "./js/pastries/pastries-strip.js": 'f795f3d9970d98bf',
+  "./js/pastries/pastries-strip.js": '9cfc62e2edf9a343',
   "./js/pastries/pastries-day.js": '66d6b8f0478f7b2c',
   "./js/pastries/pastries-editor.js": '4c9ab869e2445b1e',
   "./js/pastries/pastries-log-model.js": '6e3160b978365672',
   "./js/pastries/pastries-lock.js": 'adfbaeea4bd7c845',
   "./js/pastries/pastries-logs-store.js": '9a81fc94327027be',
   "./js/pastries/pastries-logs.js": '91b2ec2a8704c3e5',
+  "./js/pastries/tablet.js": 'c4b527a125c07873',
   "./foodcost.html": 'bd44c2b1f1535f1b',
   "./foodcost.css": 'a25b3b5e1fd20f56',
   "./js/foodcost/confirm-dialog.js": '61a7f580f37c5ff8',
@@ -631,7 +633,7 @@ const ASSET_HASHES = {
   "./js/foodcost/product-limits.js": 'd73e12634551ea98',
   "./js/foodcost/foodcost-settings.js": '9627111b53f26939',
   "./inventory.html": 'ded5ca570987f967',
-  "./inventory.css": '6c6be4ef80a979a3',
+  "./inventory.css": '3ee3317ef2527b96',
   "./js/inventory/confirm-dialog.js": '61a7f580f37c5ff8',
   "./js/inventory/dom.js": '5971dfbbb1e223ec',
   "./js/inventory/inventory-model.js": '09eed83d8469a166',
@@ -641,7 +643,7 @@ const ASSET_HASHES = {
   "./js/inventory/inventory-purchases.js": 'f9d2887ae16f7a73',
   "./js/inventory/inventory-value.js": '06e4cbf84aef8e44',
   "./js/inventory/inventory-usage.js": '5b580d4c482d01c3',
-  "./js/inventory/inventory-list.js": '55d1195ca90093d8',
+  "./js/inventory/inventory-list.js": '9ea7ff480bbfa2b1',
   "./js/inventory/inventory-detail.js": '8b3efecbc8a998b8',
   "./js/inventory/inventory-main.js": '367658c897b271d3',
   "./manifest.json": '6c8312404a7d3729',
@@ -677,7 +679,7 @@ const ASSET_HASHES = {
 // code against rules that deployed instantly, which is the very thing the gate exists
 // to prevent. Two things stand between that and a release: the test that every ASSETS
 // entry EXISTS (a mistyped path being the likeliest permanent cause), and this
-// project's post-deploy sweep, which already asks the live site for all 265 files.
+// project's post-deploy sweep, which already asks the live site for all 266 files.
 // ⚠️ NEITHER covers a device-specific failure — nobody has yet confirmed an update
 // landing on a real iPhone under this code.
 //

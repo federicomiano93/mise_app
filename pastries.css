@@ -646,3 +646,87 @@ input.pas-qty.pas-invalid {
   color: var(--pas-text-3);
   margin: 4px 0 0;
 }
+
+/* ── The tablet-only parts of a day chip ───────────────────────────────────
+   The full day name and how many pastries the day holds: a phone's chip is 43px wide and
+   has room for neither, so both stay out of it (the tablet block below shows them). */
+.pas-chip-full { display: none; }
+.pas-chip-count { display: none; }
+
+/* ══ The tablet: the days on the left, the day's list on the right ═══════════════
+   29 Sep 2026, the owner's plan: every section uses the whole width on a tablet. Scoped by
+   data-card="pastries" in tokens.css. The seven-cell strip becomes a vertical list, in the
+   SAME markup (a tablist: Tab lands on the selected day, the arrows move between days —
+   Up/Down here, Left/Right too). The body turns into a grid: header across, then the days
+   and the list side by side, then the bottom bar across. ⚠️ The query text is the app's one
+   tablet switch, tests/tablet-width.test.mjs pins it.
+   The 4am roll and the lock live in JS and are not touched by any of this. */
+@media (min-width: 900px) and (min-height: 600px) {
+  body[data-card="pastries"] {
+    display: grid;
+    /* --app-gutter is a percentage, and in a track list it is a share of the body's width:
+       the two outer tracks hold the wide column centred, the way every other section does. */
+    grid-template-columns: var(--app-gutter) 316px minmax(0, 1fr) var(--app-gutter);
+    grid-template-rows: auto minmax(0, 1fr) auto;
+  }
+  body[data-card="pastries"] > .app-header { grid-column: 1 / -1; grid-row: 1; }
+  body[data-card="pastries"] > .pas-footer { grid-column: 1 / -1; grid-row: 3; }
+  .pas-strip {
+    grid-column: 2;
+    grid-row: 2;
+    align-self: start;
+    max-height: calc(100% - 16px);
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    margin: 16px 0 0 16px;
+  }
+  .pas-screen { grid-column: 3; grid-row: 2; }
+  /* While the editor or the records are open the strip is hidden: the screen takes the
+     whole width, and keeps a readable 620px column, centred, as every form here does. */
+  .pas-strip[hidden] ~ .pas-screen { grid-column: 2 / 4; }
+  .pas-strip[hidden] ~ .pas-screen > * { max-width: 620px; margin-inline: auto; }
+  /* The day's list is not a form: it sits at the left of its pane, at a readable width. */
+  .pas-strip:not([hidden]) ~ .pas-screen > .pas-view { max-width: 720px; margin-inline: 0; }
+
+  .pas-chip {
+    flex-direction: row;
+    justify-content: flex-start;
+    gap: 10px;
+    height: var(--tap-min);
+    padding: 0 16px;
+    font-size: 16px;
+    border-left: 0;
+    border-top: 1px solid var(--pas-border);
+    text-align: left;
+  }
+  .pas-chip:first-child { border-top: 0; }
+  .pas-chip-label { display: none; }
+  .pas-chip-full { display: block; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pas-chip-count {
+    display: block;
+    flex: none;
+    font-family: var(--pas-font-mono);
+    font-variant-numeric: tabular-nums;
+    font-size: 15px;
+  }
+
+  /* The list at kitchen size: names and numbers read from across the counter. */
+  .pas-row-main { min-height: var(--tap-min); padding: 16px 20px; }
+  .pas-row-name { font-size: 24px; }
+  .pas-row-qty { font-size: calc(var(--qty-font) + 6px); }
+  .pas-row[data-open="true"] .pas-row-edit { padding: 0 20px 16px; }
+  input.pas-quick { height: var(--tap-min); width: 104px; font-size: var(--qty-font); }
+  .pas-tick { height: var(--tap-min); width: var(--tap-min); }
+  .pas-confirm-btn, .pas-edit-btn { height: var(--tap-min); }
+}
+
+/* ⚠️ THE TOAST STAYS AT THE 620px COLUMN even though this page is wide on a tablet: it is
+   position: fixed, so it computes --app-gutter from the VIEWPORT. A custom property is
+   resolved where it is declared, so both are re-declared ON the layer. */
+@media (min-width: 900px) and (min-height: 600px) {
+  body[data-card="pastries"] .pas-toast {
+    --app-max-width: 620px;
+    --app-gutter: max(0px, calc((100% - var(--app-max-width)) / 2));
+  }
+}

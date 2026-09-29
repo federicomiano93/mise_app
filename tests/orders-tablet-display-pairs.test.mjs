@@ -122,3 +122,22 @@ test('tokens.css: the split pane hidden on a phone is shown inside the tablet qu
   const missing = candidates.filter((sel) => !shownInsideTabletBlock(tabletCss, sel));
   assert.deepEqual(missing, [], 'display:none on a phone with no tablet display rule:\n  ' + missing.join('\n  '));
 });
+
+// The same rule for the sheets that joined the tablet layout after Orders (29 Sep 2026):
+// Pastries' chip carries a full name and a count that a phone hides (.pas-chip-full,
+// .pas-chip-count), and the tablet block has to give them a display back. Magazzino hides
+// nothing on a phone that a tablet shows; it is scanned anyway, so that a tablet-only
+// control added there later lands on this rule.
+test('pastries.css and inventory.css: a tablet-only part hidden on a phone is shown inside the tablet query', () => {
+  const pas = halves(sheet('pastries.css'));
+  const candidates = bareDisplayNoneSelectors(pas.outsideCss);
+  assert.ok(candidates.includes('.pas-chip-full') && candidates.includes('.pas-chip-count'),
+    'expected the two tablet-only chip parts to be display:none outside the tablet query — the scan itself may be broken');
+  // Pastries also hides .pas-row-edit until a row is opened: a STATE, shown by [data-open],
+  // not a tablet-only part, so only the chip parts are asked for.
+  const missingPas = ['.pas-chip-full', '.pas-chip-count'].filter((sel) => !shownInsideTabletBlock(pas.tabletCss, sel));
+  assert.deepEqual(missingPas, [], 'pastries.css: no tablet display rule for\n  ' + missingPas.join('\n  '));
+  const inv = halves(sheet('inventory.css'));
+  const missingInv = bareDisplayNoneSelectors(inv.outsideCss).filter((sel) => !shownInsideTabletBlock(inv.tabletCss, sel));
+  assert.deepEqual(missingInv, [], 'inventory.css: display:none on a phone with no tablet display rule:\n  ' + missingInv.join('\n  '));
+});
