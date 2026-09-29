@@ -79,6 +79,8 @@ import { t } from './i18n.js';
 // ⚠️ NOTHING HERE CONVERTS. Only the symbol changes; every stored number is used as
 // typed. See js/currency.js.
 import { currentCurrency } from './currency.js';
+// The weight box's reader — a 'pack' case is sized by it (see caseRate).
+import { splitWeight } from './pack-size.js';
 
 // What a price can be quoted PER. Deliberately three, and deliberately not the
 // same list as the recipe units (catalogue-model.js): this is how something is
@@ -199,7 +201,19 @@ export function normalizePrice({ priceUnit, pricePerUnit } = {}) {
 // ── A price quoted per CASE ──────────────────────────────────────────────────
 // What the case may hold, as stored. 'pcs' is the same word PRICE_UNITS uses for a
 // count; the others are how a bag or a bottle inside the case is measured.
-export const CASE_ITEM_UNITS = Object.freeze(['pcs', 'kg', 'g', 'l', 'ml']);
+// ⚠️ 'pack' (30 Sep 2026) means «each one is a package of the size in the ingredient's own
+// WEIGHT box» (busta da 2,5 kg): no size is stored with the case — it is read from the
+// weight at compute time (caseRate's second argument), so the weight stays ONE fact.
+export const PACK_ITEM = 'pack';
+export const CASE_ITEM_UNITS = Object.freeze(['pcs', 'kg', 'g', 'l', 'ml', PACK_ITEM]);
+
+// {size, unit} of an ingredient's weight text when the card would read it as g/kg/ml/l, else null.
+export function packWeightOf(weightText) {
+  const w = splitWeight(weightText);
+  return w.amount !== '' && ['g', 'kg', 'ml', 'l'].includes(w.unit)
+    ? { size: Number(w.amount), unit: w.unit }
+    : null;
+}
 
 // The rate a case works out to, or null when anything is missing, zero or not a
 // number. Never a guess: an incomplete case is «no price», exactly like an empty
@@ -207,7 +221,8 @@ export const CASE_ITEM_UNITS = Object.freeze(['pcs', 'kg', 'g', 'l', 'ml']);
 //   20 / 50 pcs          → 0.4 per piece
 //   20 / (4 × 2.5 kg)    → 2 per kg
 //   20 / (4 × 500 g)     → 10 per kg      (grams are read as thousandths of a kilo)
-export function caseRate({ casePrice, caseCount, caseItemSize, caseItemUnit } = {}) {
+//   20 / (4 × «pack»), weight «2.5 kg» → 2 per kg; a weight that cannot be read → null
+export function caseRate({ casePrice, caseCount, caseItemSize, caseItemUnit } = {}, weightText = '') {
   const price = positiveNumber(casePrice);
   const count = positiveNumber(caseCount);
   if (price === null || count === null || !CASE_ITEM_UNITS.includes(caseItemUnit)) return null;
@@ -215,10 +230,17 @@ export function caseRate({ casePrice, caseCount, caseItemSize, caseItemUnit } = 
   let priceUnit = 'pcs';
   let each = count;
   if (caseItemUnit !== 'pcs') {
-    const size = positiveNumber(caseItemSize);
+    let sizeUnit = caseItemUnit;
+    let size = positiveNumber(caseItemSize);
+    if (caseItemUnit === PACK_ITEM) {
+      const w = packWeightOf(weightText);
+      if (!w) return null;
+      size = positiveNumber(w.size);
+      sizeUnit = w.unit;
+    }
     if (size === null) return null;
-    const perBase = caseItemUnit === 'g' || caseItemUnit === 'ml' ? size / 1000 : size;
-    priceUnit = caseItemUnit === 'kg' || caseItemUnit === 'g' ? 'kg' : 'l';
+    const perBase = sizeUnit === 'g' || sizeUnit === 'ml' ? size / 1000 : size;
+    priceUnit = sizeUnit === 'kg' || sizeUnit === 'g' ? 'kg' : 'l';
     each = count * perBase;
   }
   const rate = roundTo(price / each, CASE_RATE_DECIMALS);
@@ -235,8 +257,9 @@ export function caseOf(source) {
   const count = positiveNumber(s.caseCount);
   const unit = CASE_ITEM_UNITS.includes(s.caseItemUnit) ? s.caseItemUnit : null;
   if (price === null || count === null || unit === null) return null;
-  const size = unit === 'pcs' ? null : positiveNumber(s.caseItemSize);
-  if (unit !== 'pcs' && size === null) return null;
+  const sizeless = unit === 'pcs' || unit === PACK_ITEM;
+  const size = sizeless ? null : positiveNumber(s.caseItemSize);
+  if (!sizeless && size === null) return null;
   return {
     casePrice: roundTo(price, RATE_DECIMALS),
     caseCount: count,
@@ -256,10 +279,13 @@ export function caseOf(source) {
 // it is complete AND the rate it works out to is exactly the stored priceUnit and
 // pricePerUnit. Anything else is a rate typed since: the typed rate wins and the case is
 // ignored (the next save from the card writes all four case keys as null).
-export function storedCaseOf(price) {
+// ⚠️ `ingredient` IS THE ONE THAT CARRIES THE WEIGHT (a 'pack' case is sized by it): a weight
+// edited since the save makes the stored rate stale exactly like an old phone's rate does.
+// Callers that hold price and ingredient merged into one object pass it twice.
+export function storedCaseOf(price, ingredient = price) {
   const stored = caseOf(price);
   if (!stored) return null;
-  const derived = caseRate(stored);
+  const derived = caseRate(stored, ingredient && ingredient.weight);
   if (!derived) return null;
   return price.priceUnit === derived.priceUnit && Number(price.pricePerUnit) === derived.pricePerUnit
     ? stored
@@ -396,13 +422,16 @@ function normalizedVatRate(vatRate) {
 // kept (unlike VAT, it is one fact in four boxes, useless in part).
 export const CASE_MODE = 'case';
 
+// `weightText` is the ingredient's weight as the card holds it right now: only a 'pack' case
+// reads it.
 export function pricePatch(
   { priceUnit, pricePerUnit, unitWeightKg, vatRate, casePrice, caseCount, caseItemSize, caseItemUnit },
   nowIso,
+  weightText = '',
 ) {
   const inCase = priceUnit === CASE_MODE;
   const caseFields = inCase ? caseOf({ casePrice, caseCount, caseItemSize, caseItemUnit }) : null;
-  const derived = caseFields ? caseRate(caseFields) : null;
+  const derived = caseFields ? caseRate(caseFields, weightText) : null;
 
   const unit = inCase ? (derived ? derived.priceUnit : null) : (isPriceUnit(priceUnit) ? priceUnit : null);
   // The piece weight is a fact about the article and survives an incomplete case whose

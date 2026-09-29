@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  categoryChoices, unitChoices, countInCategory, categoryValue, isBlankNewChoice, DEFAULT_CATEGORIES, DEFAULT_UNITS,
+  categoryChoices, unitChoices, packChoices, countInCategory, categoryValue, isBlankNewChoice, DEFAULT_CATEGORIES, DEFAULT_UNITS, DEFAULT_PACKS,
 } from '../js/record-choices.js';
 
 test('a venue that never saved a list gets the defaults of its language', () => {
@@ -71,4 +71,23 @@ test('isBlankNewChoice: «+ New …» with nothing typed is refused; a real menu
   assert.equal(isBlankNewChoice(true, undefined), true);
   assert.equal(isBlankNewChoice(true, 'Tray'), false);
   assert.equal(isBlankNewChoice(false, ''), false);
+});
+
+test('packChoices offers the venue-language defaults, sorted', () => {
+  const it = packChoices({ language: 'it' });
+  assert.deepEqual(it, [...DEFAULT_PACKS.it].sort((a, b) => a.localeCompare(b)));
+  assert.ok(packChoices({ language: 'en' }).includes('bag'));
+  assert.ok(packChoices({ language: undefined }).includes('bag'));
+});
+
+test('packChoices adds words in use, folds a default a used word matches, keeps the current spelling', () => {
+  const out = packChoices({
+    language: 'it',
+    ingredients: [{ packUnit: 'Busta' }, { packUnit: 'stecca' }, { packUnit: ' ' }, {}, null],
+    current: 'Trancio',
+  });
+  assert.ok(out.includes('Busta') && !out.includes('busta'));
+  assert.ok(out.includes('stecca') && out.includes('Trancio'));
+  assert.equal(out.filter(w => w.toLowerCase() === 'busta').length, 1);
+  assert.ok(!out.includes(''));
 });

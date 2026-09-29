@@ -68,7 +68,8 @@ const CASE_UNITS = new Set([
 // price carries a whole case (storedCaseOf — a case that no longer matches its rate is a
 // stale one and is ignored); without one everything below «const orderUnit» is what it was.
 //   a weight/volume word      → as ever: rate × that unit's kilos (a case of pieces: null)
-//   a piece word              → ONE ITEM of the case: case price ÷ how many it holds
+//   a piece word, or the ingredient's own package word (packUnit: «busta») → ONE ITEM of the
+//                               case: case price ÷ how many it holds
 //   a case word, or no unit   → the CASE price («1 cartone of 50 pz at 20» is 20, never 0.40)
 //   a case of ONE             → the case price, for any non-weight word
 //   any other word (busta, sacco, bottiglia…) on a case of several → null: one of WHAT?
@@ -81,12 +82,17 @@ export function unitCost(ingredient, price) {
   const orderUnit = String((ingredient && ingredient.unit) || '').trim().toLowerCase().replace(/\.$/, '');
   const byWeight = Object.prototype.hasOwnProperty.call(WEIGHT_UNITS, orderUnit);
 
-  const wholeCase = storedCaseOf(price);
+  const wholeCase = storedCaseOf(price, ingredient);
   if (wholeCase) {
     if (byWeight) {
       return price.priceUnit === 'pcs' ? null : rate * WEIGHT_UNITS[orderUnit];
     }
-    if (PIECE_UNITS.has(orderUnit)) return wholeCase.casePrice / wholeCase.caseCount;
+    // ⚠️ The ingredient's own «package word» (busta, sacco…) names ONE item of the case, like a
+    // piece word does — that is the whole point of declaring it. Never an empty word.
+    const packWord = String((ingredient && ingredient.packUnit) || '').trim().toLowerCase();
+    if (PIECE_UNITS.has(orderUnit) || (packWord !== '' && orderUnit === packWord)) {
+      return wholeCase.casePrice / wholeCase.caseCount;
+    }
     if (orderUnit === '' || CASE_UNITS.has(orderUnit) || wholeCase.caseCount === 1) return wholeCase.casePrice;
     return null;
   }

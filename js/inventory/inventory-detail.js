@@ -44,7 +44,7 @@ export function renderDetail({ month, ingredient, locale, onCount, readOnly, clo
   const packNote = el('p', { class: 'inv-hint' });
 
   let current = month;
-  const isCased = storedCaseOf(ingredient) !== null;
+  const isCased = storedCaseOf(ingredient, ingredient) !== null;
   const byUnitPrice = isCased || ingredient.priceUnit === 'pcs';
 
   function paintAnswer() {
