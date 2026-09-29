@@ -86,7 +86,7 @@ test('a recipe on a tablet keeps the list alive: it is re-marked, never redrawn'
 
 test('openDetail: tapping the open recipe does nothing; otherwise tablet or phone by the width', () => {
   const body = fnBody('openDetail');
-  assert.match(body, /if \(splitOn && view === 'detail' && currentRecipe && currentRecipe\.id === recipe\.id\) return;/);
+  assert.match(body, /if \(!force && splitOn && view === 'detail' && currentRecipe && currentRecipe\.id === recipe\.id\) return;/);
   assert.match(body, /if \(isTabletNow\(\)\) showDetailTablet\(recipe\);\s*else showDetailPhone\(recipe\);/);
   assert.doesNotMatch(body, /leaveGuard = (?!null)/, 'a read-only recipe sets no guard');
 });
@@ -151,7 +151,7 @@ test('crossing the width re-lays out the list and a recipe only, and leaves any 
 });
 
 test('the live list keeps refreshing beside an open recipe', () => {
-  assert.match(MAIN, /\(view === 'list' \|\| \(view === 'detail' && splitOn\)\) && activeList\) activeList\.refresh\(/);
+  assert.match(MAIN, /if \(view === 'list' \|\| \(view === 'detail' && splitOn\)\) refreshList\(\);/);
 });
 
 test('the words exist in English and in Italian', () => {
@@ -193,4 +193,52 @@ test('the split uses only tokens tokens.css defines', () => {
   for (const [, name] of block.matchAll(/var\((--[a-z0-9-]+)/g)) {
     assert.ok(tokens.includes(`${name}:`), `${name} is not defined in tokens.css`);
   }
+});
+
+// ── Review fixes: the open recipe follows the data, the list holds still ────
+
+test('an open recipe follows the live data: gone -> list with a note, changed -> redrawn in place', () => {
+  const follow = fnBody('followOpenRecipe');
+  assert.match(follow, /find\(r => r\.id === currentRecipe\.id\)/);
+  assert.match(follow, /if \(!latest\) \{ recipeGone\(\); return; \}/);
+  assert.match(follow, /JSON\.stringify\(latest\) !== JSON\.stringify\(currentRecipe\)\) redrawDetail\(latest\)/);
+  assert.match(fnBody('recipeGone'), /toast\(t\('cat\.recipeDeleted'\)\);\s*showList\(\);/);
+  // Called from the snapshot callback for a phone AND a tablet (no splitOn condition).
+  assert.match(MAIN, /if \(view === 'detail' && activeDetail && currentRecipe\) followOpenRecipe\(\);/);
+  const redraw = fnBody('redrawDetail');
+  assert.match(redraw, /currentRecipe = recipe;/);
+  assert.match(redraw, /scrollTop = top/, 'the scroll position is kept');
+  assert.match(redraw, /remove\('cat-zoom-lock'\)/);
+});
+
+test('the pencil always edits the CURRENT stored recipe, never the copy on screen', () => {
+  const edit = fnBody('editCurrent');
+  assert.match(edit, /getRecipes\(\)\.find\(r => r\.id === currentRecipe\.id\)/);
+  assert.match(edit, /if \(stored\) openEditor\(stored\);/);
+  assert.doesNotMatch(edit, /openEditor\(currentRecipe\)/);
+});
+
+test('internal redraws force openDetail; only a tap on the open recipe is a no-op', () => {
+  assert.match(fnBody('openDetail'), /\{ force = false \} = \{\}/);
+  assert.match(fnBody('openDetail'), /if \(!force\) bumpUsage/);
+  assert.match(MAIN, /clearSession\(\); toast\(t\('cat\.thatMixIsNo'\)\); openDetail\(recipe, \{ force: true \}\);/);
+});
+
+test('beside an open recipe the list is refreshed with the usage counts FROZEN', () => {
+  assert.match(fnBody('buildList'), /listUsage = getUsage\(\);/);
+  const refresh = fnBody('refreshList');
+  assert.match(refresh, /if \(!\(view === 'detail' && splitOn\)\) listUsage = getUsage\(\);/);
+  assert.match(refresh, /activeList\.refresh\(getRecipes\(\), listUsage\)/);
+  assert.ok(MAIN.indexOf('let listUsage') < MAIN.search(/^(onSession|onLanguageChange)\(/m));
+});
+
+test('the fixed layers keep the 620px column on the Catalogue tablet, records.css untouched', () => {
+  const css = codeOf(read('catalogue.css'));
+  const inside = css.slice(css.lastIndexOf('@media (min-width: 900px) and (min-height: 600px)'));
+  for (const sel of ['.cat-ing-list--zoom', '.rec-host', '.cat-toast']) {
+    assert.ok(inside.includes('body[data-section="catalogue"] ' + sel), `${sel} must be re-scoped`);
+  }
+  assert.match(inside, /--app-max-width:\s*620px;/);
+  const rootGutter = read('tokens.css').match(/--app-gutter:\s*([^;]+);/)[1].trim();
+  assert.ok(inside.includes(`--app-gutter: ${rootGutter};`), 'same gutter expression as :root');
 });

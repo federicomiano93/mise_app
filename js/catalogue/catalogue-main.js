@@ -82,6 +82,10 @@ let resumeOffered = false; // the "you were mixing" offer is made once per page 
 // below, or it is a TDZ crash when the session answers at once.
 let splitOn = false;       // is the two-column layout showing right now?
 let paneEmpty = null;      // the placeholder node kept for the right-hand pane
+// The usage counts the list was last drawn with. ⚠️ While a recipe is open beside the list
+// they are FROZEN: every snapshot (the print agent's heartbeat included) would otherwise
+// re-sort the rows under a finger. Fresh counts apply the next time the list is shown.
+let listUsage = null;
 
 // ── Header + view helpers ───────────────────────────────────────────────────────
 
@@ -191,9 +195,10 @@ function setListHeader() {
 // The list into the left column (tablet). ⚠️ NOT re-run when a recipe is opened while the
 // list is already there: that is what keeps the search text, the scroll and the focus.
 function buildList(selectedId) {
+  listUsage = getUsage();
   return renderList({
     recipes: getRecipes(),
-    usageMap: getUsage(),
+    usageMap: listUsage,
     initialQuery: searchQuery,
     selectedId,
     onQueryChange: (q) => { searchQuery = q; },
@@ -226,8 +231,52 @@ function showPaneEmpty() {
 }
 
 // The header Edit button, and the pane head's, do the same thing.
+// ⚠️ ALWAYS THE CURRENT STORED RECIPE, never the copy the screen was drawn from: a save is
+// a merge of name, ingredients and steps, so an editor opened on a stale copy would
+// overwrite what somebody corrected on another phone.
 function editCurrent() {
-  if (currentRecipe) openEditor(currentRecipe);
+  if (!currentRecipe) return;
+  const stored = getRecipes().find(r => r.id === currentRecipe.id);
+  if (stored) openEditor(stored);
+  else recipeGone();
+}
+
+// The open recipe was deleted elsewhere: back to the list (the placeholder on a tablet).
+function recipeGone() {
+  toast(t('cat.recipeDeleted'));
+  showList();
+}
+
+// Draw the open recipe again in place, from a fresher copy: same place, same scroll.
+// The scaled batch is kept per recipe outside the screen, so it survives.
+function redrawDetail(recipe) {
+  const body = screen.querySelector('.cat-pane-body');
+  const top = splitOn ? (body ? body.scrollTop : 0) : screen.scrollTop;
+  // A zoomed list locks the page; the view that set the lock is about to be replaced.
+  document.body.classList.remove('cat-zoom-lock');
+  currentRecipe = recipe;
+  if (splitOn) showDetailTablet(recipe);
+  else showDetailPhone(recipe);
+  const fresh = screen.querySelector('.cat-pane-body');
+  if (splitOn && fresh) fresh.scrollTop = top;
+  else if (!splitOn) screen.scrollTop = top;
+}
+
+// The recipes changed while a recipe is open: follow it. Gone -> the list; changed ->
+// redrawn from the fresh copy (the pencil then edits what is really stored).
+function followOpenRecipe() {
+  const latest = getRecipes().find(r => r.id === currentRecipe.id);
+  if (!latest) { recipeGone(); return; }
+  if (JSON.stringify(latest) !== JSON.stringify(currentRecipe)) redrawDetail(latest);
+  else activeDetail.refreshCost(latest);
+}
+
+// The list beside an open recipe, or the list itself, follows the data — with the usage
+// counts frozen while a recipe is open (see listUsage).
+function refreshList() {
+  if (!activeList) return;
+  if (!(view === 'detail' && splitOn)) listUsage = getUsage();
+  activeList.refresh(getRecipes(), listUsage);
 }
 
 // The light head of the pane (tokens.css `.app-split-pane .app-header`): the recipe's name
@@ -380,15 +429,17 @@ function showDetailTablet(recipe) {
   showDetailNode(recipe, activeDetail.root);
 }
 
-function openDetail(recipe) {
+// `force` is for the app's own redraws (a stale Resume button); only a person's TAP on the
+// open recipe is a no-op.
+function openDetail(recipe, { force = false } = {}) {
   // Read-only, so nothing to ask when another recipe replaces this one; and tapping the
   // recipe that is already open does nothing at all.
-  if (splitOn && view === 'detail' && currentRecipe && currentRecipe.id === recipe.id) return;
+  if (!force && splitOn && view === 'detail' && currentRecipe && currentRecipe.id === recipe.id) return;
   stopRun();
   view = 'detail';
   currentRecipe = recipe;
   leaveGuard = null;
-  bumpUsage(recipe.id);
+  if (!force) bumpUsage(recipe.id);
   if (isTabletNow()) showDetailTablet(recipe);
   else showDetailPhone(recipe);
 }
@@ -651,7 +702,7 @@ const app = {
     // A session that has aged out (or belongs to another recipe) is not silently
     // swapped for a fresh run: the button said "resume", and starting from step
     // one instead would look identical and be a different dough.
-    else { clearSession(); toast(t('cat.thatMixIsNo')); openDetail(recipe); }
+    else { clearSession(); toast(t('cat.thatMixIsNo')); openDetail(recipe, { force: true }); }
   },
   // The saved run, but only if it is this recipe's — so a recipe screen never
   // offers to resume somebody else's dough.
@@ -763,19 +814,17 @@ initCatalogue(
     // Back from Food cost names a recipe that may arrive only now — see openWantedRecipe().
     openWantedRecipe();
     // Beside an open recipe on a tablet the list is on screen too, and stays current.
-    if ((view === 'list' || (view === 'detail' && splitOn)) && activeList) activeList.refresh(getRecipes(), getUsage());
+    if (view === 'list' || (view === 'detail' && splitOn)) refreshList();
     // The offer needs the recipes to have arrived — a session is only worth
     // resuming if its recipe is still in the catalogue.
     if (view === 'list') offerResume();
     // A recipe on screen rebuilds its cards whenever anything they depend on
     // arrives — the ingredients and their allergens (still streaming in on a cold
-    // open), or the recipe itself edited on another phone. The freshest copy wins; if
-    // it has been deleted elsewhere, the one already on screen is kept rather than
-    // blanking the cards under the reader.
-    if (view === 'detail' && activeDetail && currentRecipe) {
-      const latest = getRecipes().find(r => r.id === currentRecipe.id) || currentRecipe;
-      activeDetail.refreshCost(latest);
-    }
+    // open), or the recipe itself edited on another phone. ⚠️ THE WHOLE RECIPE FOLLOWS, not
+    // only its cost cards: on a tablet a recipe stays open for hours, and its quantities
+    // must follow a correction made on another phone; deleted elsewhere, it goes back to
+    // the list with a note (followOpenRecipe).
+    if (view === 'detail' && activeDetail && currentRecipe) followOpenRecipe();
     // ⚠️ THE ALLERGEN SHEET NEVER REFRESHED AT ALL until now — it was drawn once
     // and never again, so a declaration made on another phone, or data still
     // arriving on a cold open, simply never reached it. On the screen whose job is

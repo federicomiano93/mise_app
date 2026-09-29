@@ -1356,3 +1356,18 @@ body.cat-zoom-lock { overflow: hidden; }
     margin-inline: auto;
   }
 }
+
+/* ⚠️ THE FIXED LAYERS STAY AT THE 620px COLUMN even though this section is wide on a tablet.
+   They compute --app-gutter from the VIEWPORT (position: fixed), so the wide token would
+   stretch them to 1180px: the hold-to-magnify view, the «new ingredient» sheet opened from
+   the editor (records.css, GENERATED — never edited here) and the toast. A custom property
+   is resolved where it is declared, so both are re-declared ON these layers; the
+   descendants inherit the 620px answer. Screen only: label printing has its own sheet. */
+@media (min-width: 900px) and (min-height: 600px) {
+  body[data-section="catalogue"] .cat-ing-list--zoom,
+  body[data-section="catalogue"] .rec-host,
+  body[data-section="catalogue"] .cat-toast {
+    --app-max-width: 620px;
+    --app-gutter: max(0px, calc((100% - var(--app-max-width)) / 2));
+  }
+}
