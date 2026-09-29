@@ -1757,4 +1757,11 @@ input.cp-prod-weight {
     --app-max-width: 620px;
     --app-gutter: max(0px, calc((100% - var(--app-max-width)) / 2));
   }
+  /* ⚠️ AND THE BODIES HAVE TO USE IT. Most of these screens pad their content with a
+     flat 16px (.settings-menu, #cp-content, #logview-content…), so the header sat in
+     its 620px column while the Settings cards ran the full 1180px under it (driven,
+     29 Sep 2026). #recipe-content already carries the gutter itself — not twice. */
+  body[data-card="calculator"] .recipe-scroll > :not(#recipe-content) {
+    padding-inline: max(16px, var(--app-gutter));
+  }
 }
