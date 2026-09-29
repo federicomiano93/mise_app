@@ -371,7 +371,7 @@ function priceBlock(item, actions, defaultUnit = null) {
   // looked out of proportion (Federico, 30 Sep 2026); the same grid gives it exactly
   // the width of «Come si acquista» above, at 296px and on a tablet alike.
   const vatField = el('div', { class: 'mgmt-pair' }, [
-    el('label', { class: 'mgmt-field' }, [
+    el('label', { class: 'mgmt-field mgmt-price-vat-cell' }, [
       el('span', { class: 'mgmt-field-label', text: t('orders.vat.label') }),
       vatSelect,
     ]),

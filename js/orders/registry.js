@@ -20,7 +20,7 @@
 //
 // NAVIGATION — a stack, so Back is honest at every depth:
 //
-//   Ingredienti · Imballaggi · Fornitori     (the page itself)
+//   Ingredienti · Fornitori · Imballaggi     (the page itself)
 //     └─ one supplier: its record + everything it sells
 //          ├─ its form
 //          └─ one ingredient's form

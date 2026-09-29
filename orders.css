@@ -1148,7 +1148,6 @@ input.ing-stock {
    takes its gap with it. --space-3 is the 12px this form's fields already use. */
 .mgmt-price-block { display: flex; flex-direction: column; gap: var(--space-3); }
 .mgmt-price-block > .mgmt-price-summary.muted { margin-top: var(--space-1); }
-.mgmt-price-block > [hidden] { display: none; }
 
 /* A price quoted per case: the case price, then «Contiene [50] pz» / «[4] × [2.5] kg» on ONE
    row. The boxes share the width equally and may shrink (min-width:0 — a <select> and a
@@ -1174,6 +1173,12 @@ input.ing-stock {
    a warning the way .mgmt-price-note is. */
 .mgmt-price-vat-summary { margin: 6px 0 0; font-size: 13px; color: var(--text2); }
 .mgmt-price-vat-summary:empty { display: none; }
+/* The flex gap of .mgmt-price-block already spaces this line from the block before it; its
+   own 6px margin would be a second gap on top. */
+.mgmt-price-block > .mgmt-price-vat-summary { margin-top: 0; }
+/* The VAT select is half a row from 360px up, the width of «Come si acquista» above it.
+   Below that half is 113px and «— non indicata» needs 100px of text, so it takes the row. */
+@media (max-width: 359px) { .mgmt-price-vat-cell { grid-column: 1 / -1; } }
 
 .mgmt-price-history { display: flex; flex-direction: column; gap: 6px; }
 .mgmt-price-row {

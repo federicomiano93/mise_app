@@ -183,9 +183,6 @@
 .rec-host .mgmt-price-block > .mgmt-price-summary.muted {
   margin-top: var(--space-1);
 }
-.rec-host .mgmt-price-block > [hidden] {
-  display: none;
-}
 .rec-host .mgmt-case {
   display: flex;
   flex-direction: column;
@@ -223,6 +220,14 @@
 }
 .rec-host .mgmt-price-vat-summary:empty {
   display: none;
+}
+.rec-host .mgmt-price-block > .mgmt-price-vat-summary {
+  margin-top: 0;
+}
+@media (max-width: 359px) {
+  .rec-host .mgmt-price-vat-cell {
+    grid-column: 1 / -1;
+  }
 }
 .rec-host .mgmt-price-history {
   display: flex;
