@@ -195,7 +195,10 @@ function openEditor(day) {
   // the unsaved-work question asked from a second place, and there is already a
   // Back that asks it.
   stripHost.hidden = true;
-  setHeader({ title: `Edit ${day}`, sub: 'Pastries', back: true, edit: false });
+  // ⚠️ THE LABEL AND t(), NOT A TEMPLATE: this read «Edit Tuesday / Pastries» on the
+  // Italian venue since 5 Aug 2026 — English words AND the stored day id (code review,
+  // 29 Sep 2026).
+  setHeader({ title: t('past.editDay', { day: weekdayLabel(day) }), sub: t('section.pastries'), back: true, edit: false });
   swap(renderEditor({
     day, items: getItems(day), note: getNote(day), allDays: getDays(), app,
   }));
