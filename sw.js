@@ -1,4 +1,4 @@
-const CACHE_NAME = 'theitalianclub-v439';
+const CACHE_NAME = 'theitalianclub-v440';
 // Firebase SDK modules (loaded from gstatic) are cached SEPARATELY from CACHE_NAME
 // so they survive the cache-version bump that happens on every deploy — otherwise
 // the offline SDK would be wiped each release until the next online load. The name
@@ -461,7 +461,7 @@ const ASSET_HASHES = {
   "./js/location.js": '6aaf53615a8739d1',
   "./js/sections.js": 'abcfdecb2bd5766d',
   "./js/roles.js": '2b491770c4b6165b',
-  "./js/i18n.js": '96bc7551d2fd11c1',
+  "./js/i18n.js": '7bc8c5bba011f145',
   "./js/i18n-dom.js": 'a6d32c5bb1b56674',
   "./js/join-code.js": '5b89de65db5c102f',
   "./js/join-link.js": 'a90ea53c7ba51614',
@@ -603,7 +603,7 @@ const ASSET_HASHES = {
   "./js/pastries/pastries-model.js": 'd162282f04d5287d',
   "./js/pastries/firebase-pastries.js": 'b93e7234e6f4b2bc',
   "./js/pastries/pastries-store.js": '07fcca1ec0717a80',
-  "./js/pastries/pastries-main.js": 'd1ee8f95c4edf44a',
+  "./js/pastries/pastries-main.js": 'c5ce78730a40fd0e',
   "./js/pastries/pastries-strip.js": 'f795f3d9970d98bf',
   "./js/pastries/pastries-day.js": '66d6b8f0478f7b2c',
   "./js/pastries/pastries-editor.js": '4c9ab869e2445b1e',
