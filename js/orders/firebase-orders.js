@@ -15,6 +15,7 @@
 
 import { firebaseConfig, sessionReady, currentSession } from '../firebase.js';
 import { currentLocationId, pathFor } from '../location.js';
+import { planBatches, categoryPatch, INGREDIENT_WRITES_PER_BATCH } from './category-batches.js';
 import {
   getApps,
   getApp,
@@ -205,31 +206,27 @@ export async function createDoc(name, data) {
   return ref.id;
 }
 
-// Set ONE field on many ingredients at once — «delete a category» leaves every ingredient that
-// used it without one. Merge writes stamped with the bakery, exactly like saveDoc.
+// Set the category on many ingredients at once — «delete a category» leaves every ingredient
+// that used it without one. Stamped with the bakery, exactly like saveDoc.
 //
 // ⚠️ `alsoWrite` ({ name, id, data }) RIDES IN THE FIRST BATCH: the venue's category list and
-// the ingredients that used the deleted category then change together or not at all, for
-// anything up to the batch limit. Firestore allows 500 writes per batch; a venue with more
-// ingredients in one category than that is split into several, the list going first.
-const BATCH_LIMIT = 500;
-
+// the first ingredients then change together or not at all. A longer list is split into
+// several batches, the list going first — see js/orders/category-batches.js for why they are
+// small (Firestore's 20 document accesses per write, which the emulator does not enforce).
+//
+// ⚠️ batch.update(), NOT set with merge: an ingredient deleted meanwhile on another phone must
+// not come back as a nameless document. The batch fails instead and the error is reported;
+// the list is recomputed from live data on retry.
 export async function setCategoryOnMany(ids, value, alsoWrite = null) {
   await authReady;
-  const list = Array.isArray(ids) ? ids.filter(Boolean) : [];
-  let index = 0;
-  let first = true;
-  while (first || index < list.length) {
+  const plan = planBatches(ids, INGREDIENT_WRITES_PER_BATCH, !!alsoWrite);
+  for (const step of plan) {
     const batch = writeBatch(db);
-    let room = BATCH_LIMIT;
-    if (first && alsoWrite) {
+    if (step.config) {
       batch.set(doc(db, pathFor(alsoWrite.name), alsoWrite.id), withBakery(alsoWrite.data), { merge: true });
-      room -= 1;
     }
-    first = false;
-    for (const id of list.slice(index, index + room)) {
-      batch.set(doc(db, pathFor(COLLECTIONS.ingredients), id), withBakery({ category: value }), { merge: true });
-      index += 1;
+    for (const id of step.ids) {
+      batch.update(doc(db, pathFor(COLLECTIONS.ingredients), id), withBakery(categoryPatch(value)));
     }
     await batch.commit();
   }
