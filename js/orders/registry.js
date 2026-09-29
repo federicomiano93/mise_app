@@ -59,9 +59,10 @@ import {
   BACK_ICON, mgmtRow,
 } from './mgmt-ui.js';
 
-// data:    { suppliers(): [], ingredients(): [] } — live getters
+// data:    { suppliers(): [], ingredients(): [], categories(current): [], orderUnits(current): [] }
+//            — live getters; the last two are the words the ingredient card's menus offer
 // actions: { saveSupplier, saveIngredient, priceHistory, setSupplierActive,
-//            setIngredientActive, deleteSupplier, deleteIngredient }
+//            setIngredientActive, deleteSupplier, deleteIngredient, deleteCategory(list, ids) }
 // hooks:   { onChrome({ addLabel }) } — told on every paint which word the page
 //            header's «+» should carry, because it follows the active tab.
 //          { pane } — the element beside the list where a level opens on a TABLET
@@ -446,6 +447,9 @@ export function buildRegistry(data, actions, hooks = {}) {
           suppliers: data.suppliers(),
           preset: presetSupplierId,
           presetKind,
+          // The menus' words, from the page's live data — the card imports no feature code.
+          categories: data.categories?.(item?.category) || [],
+          orderUnits: data.orderUnits?.(item?.unit) || [],
           // ⚠️ DECIDED HERE AND HANDED IN, since the card moved to js/ root: whether the
           // price is drawn (the role AND Food cost — see mayWritePrices) and which panels
           // this venue uses. The card itself reads neither.
@@ -518,6 +522,11 @@ export function buildRegistry(data, actions, hooks = {}) {
   function openSettings() {
     push((entry) => overlay(entry, t('ui.settings'), buildRegistrySettings({
       panels: ingredientPanels(),
+      // Read at the moment the screen is built — and it IS rebuilt by refresh() on every
+      // snapshot, so the list and the counts are always the live ones.
+      categories: () => data.categories?.() || [],
+      ingredients: () => data.ingredients(),
+      onDeleteCategory: (list, ids) => actions.deleteCategory(list, ids),
       onSet: async (key, on) => {
         // ⚠️ TWO CALLABLES, ROUTED BY KEY. setIngredientPanels writes two fields whose
         // absence means YES; setPackPhoto writes one whose absence means NO, because it

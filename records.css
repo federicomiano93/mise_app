@@ -544,3 +544,32 @@
   opacity: .55;
   cursor: default;
 }
+.rec-host .mgmt-weight {
+  min-width: 0;
+}
+.rec-host .mgmt-weight-row {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  gap: 8px;
+}
+.rec-host .mgmt-weight-row .mgmt-input {
+  width: 100%;
+  min-width: 0;
+}
+.rec-host .mgmt-weight-legacy {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: var(--text3);
+}
+.rec-host .mgmt-choice {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.rec-host .mgmt-choice .mgmt-input {
+  width: 100%;
+  min-width: 0;
+}
+.rec-host .mgmt-choice > [hidden] {
+  display: none;
+}

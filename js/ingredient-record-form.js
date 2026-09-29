@@ -38,6 +38,11 @@ import {
 // js/ root on 29 Sep 2026 because this form now needs it too (CLAUDE.md
 // "Modular by feature").
 import { vatRatesFor } from './vat-rates.js';
+// The «Peso» box is a number and a unit menu, stored as the one text `weight` (pack-size.js
+// still reads it), and «Categoria» / «Unità d'ordine» are menus over lists their callers
+// hand in (record-choices.js builds them; this file never asks a feature for them).
+import { splitWeight, joinWeight, WEIGHT_UNIT_CHOICES } from './pack-size.js';
+import { categoryValue } from './record-choices.js';
 
 // The one arrow: the same chevron every other list in the app draws. It turns to
 // point down when its fold opens (.mgmt-fold-head--open in orders.css).
@@ -985,6 +990,67 @@ function selectSupplier(select, { id, name }) {
   select.value = id;
 }
 
+// ── «Peso»: a number and a unit ───────────────────────────────────────────────
+//
+// ⚠️ TEXT THAT CANNOT BE SPLIT ("6x1kg", "sacco") IS NEVER LOST. It is shown under the box
+// as «Attuale» and saved exactly as it was, unless a usable number is typed — then the
+// new joined value replaces it. An unusable typed number falls back to the old text
+// rather than erasing it.
+function weightControl(stored) {
+  const start = splitWeight(stored);
+  const amount = el('input', {
+    type: 'text', inputmode: 'decimal', class: 'mgmt-input', value: start.amount,
+    'aria-label': t('orders.weight.amount'), placeholder: t('orders.eg.packWeight'),
+  });
+  const unit = el('select', { class: 'mgmt-input', 'aria-label': t('orders.weight.unit') },
+    WEIGHT_UNIT_CHOICES.map(u => el('option', { value: u, text: u })));
+  unit.value = start.unit;
+  const node = el('div', { class: 'mgmt-weight' }, [
+    el('div', { class: 'mgmt-weight-row' }, [amount, unit]),
+    start.legacy
+      ? el('p', { class: 'mgmt-weight-legacy', text: t('orders.weight.current', { value: start.legacy }) })
+      : null,
+  ]);
+  return {
+    node,
+    read: () => joinWeight(amount.value, unit.value) || start.legacy || '',
+  };
+}
+
+// ── «Categoria» and «Unità d'ordine»: a menu with «+ Nuova …» ─────────────────
+//
+// values — the words on offer; `current` is added by the caller's list already, but is
+// matched ignoring case so the menu opens on it. «— nessuna —» is the empty answer.
+// ⚠️ THE SENTINEL IS NOT A WORD A PERSON WOULD FILE UNDER, so no real value collides with it.
+const NEW_CHOICE = '__mise_new__';
+
+function choiceControl({ values, current, newLabel, placeholder }) {
+  const select = el('select', { class: 'mgmt-input' }, [
+    el('option', { value: '', text: t('orders.choice.none') }),
+    ...values.map(v => el('option', { value: v, text: v })),
+    el('option', { value: NEW_CHOICE, text: newLabel }),
+  ]);
+  const wanted = String(current || '').trim().toLowerCase();
+  const match = values.find(v => v.toLowerCase() === wanted);
+  select.value = match !== undefined ? match : '';
+  // Kept if a caller's list somehow lacks the stored word: never lose a value.
+  if (wanted && match === undefined) {
+    const extra = el('option', { value: String(current).trim(), text: String(current).trim() });
+    select.insertBefore(extra, select.lastChild);
+    select.value = extra.value;
+  }
+  const typed = el('input', { type: 'text', class: 'mgmt-input', placeholder, hidden: 'hidden' });
+  select.addEventListener('change', () => {
+    const isNew = select.value === NEW_CHOICE;
+    typed.hidden = !isNew;
+    if (isNew) typed.focus();
+  });
+  return {
+    node: el('div', { class: 'mgmt-choice' }, [select, typed]),
+    read: () => (select.value === NEW_CHOICE ? typed.value.trim() : select.value),
+  };
+}
+
 // ── The form ──────────────────────────────────────────────────────────────────
 //
 // item        — the ingredient being edited, or null for a new one
@@ -993,6 +1059,8 @@ function selectSupplier(select, { id, name }) {
 // presetKind  — 'packaging' when added from the packaging list
 // presetName  — what a new one is called to start with (the Catalogue passes what was typed)
 // mayPrice    — may this person write a price here (mayWritePrices, js/record-data.js)
+// categories  — the words «Categoria» offers (record-choices.js categoryChoices)
+// orderUnits  — the words «Unità d'ordine» offers (record-choices.js unitChoices)
 // panels      — { allergens, nutrition }: which optional panels this venue uses
 // showKind    — false where only an INGREDIENT makes sense (a recipe row in the Catalogue):
 //               the «Tipo» menu is not drawn and the item is filed as the preset kind
@@ -1006,7 +1074,7 @@ function selectSupplier(select, { id, name }) {
 // to ask must not quietly remove the allergen card.
 export function buildIngredientForm({
   item, suppliers, preset, presetKind = null, presetName = '', mayPrice = false,
-  panels = { allergens: true, nutrition: true }, showKind = true, actions, onDone, onCancel,
+  categories = [], orderUnits = [], panels = { allergens: true, nutrition: true }, showKind = true, actions, onDone, onCancel,
 }) {
   const name = el('input', { type: 'text', class: 'mgmt-input', value: item?.name || presetName || '' });
   // Food, or packaging? (13 Sep 2026.) A box, a tray or a label is bought, priced and
@@ -1019,11 +1087,17 @@ export function buildIngredientForm({
   ]);
   kindSelect.value = startKind;
   const brand = el('input', { type: 'text', class: 'mgmt-input', value: item?.brand || '', placeholder: t('orders.eGGalbani') });
-  const weight = el('input', { type: 'text', class: 'mgmt-input', value: item?.weight || '', placeholder: t('orders.eg.packWeight') });
-  const category = el('input', { type: 'text', class: 'mgmt-input', value: item?.category || '' });
+  const weight = weightControl(item?.weight);
+  const category = choiceControl({
+    values: categories, current: categoryValue(item?.category),
+    newLabel: t('orders.choice.newCategory'), placeholder: t('orders.choice.categoryPlaceholder'),
+  });
   // "unit" is now the ORDER unit (how you count the order: casse, box), shown
   // next to the quantity — not a unit of measure. Same field, new meaning.
-  const unit = el('input', { type: 'text', class: 'mgmt-input', value: item?.unit || '', placeholder: t('orders.eGCasseBox') });
+  const unit = choiceControl({
+    values: orderUnits, current: item?.unit,
+    newLabel: t('orders.choice.newUnit'), placeholder: t('orders.choice.unitPlaceholder'),
+  });
 
   // "No supplier" is a real answer, not a missing one: the supermarket, the cash
   // & carry, the shop down the road. It is FIRST and it is the default for a new
@@ -1102,9 +1176,9 @@ export function buildIngredientForm({
       name: name.value.trim(),
       supplierId: supplierSelect.value,
       brand: brand.value.trim(),
-      weight: weight.value.trim(),
-      category: category.value.trim() || 'Other',
-      unit: unit.value.trim(),
+      weight: weight.read(),
+      category: category.read() || 'Other',
+      unit: unit.read(),
       active: item ? item.active !== false : true,
       kind: kindSelect.value,
       ...patch,
@@ -1150,9 +1224,9 @@ export function buildIngredientForm({
         field(t('orders.field.supplier'), supplierSelect),
         addSupplierBtn,
         field(t('orders.field.brand'), brand),
-        field(t('orders.field.weight'), weight),
-        field(t('orders.field.category'), category),
-        field(t('orders.orderUnit'), unit),
+        field(t('orders.field.weight'), weight.node),
+        field(t('orders.field.category'), category.node),
+        field(t('orders.orderUnit'), unit.node),
       ],
     }),
     // ⚠️ STILL DRAWN ONLY FOR SOMEBODY WHO MAY SEE MONEY — the card wraps the price,

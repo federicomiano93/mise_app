@@ -2968,3 +2968,35 @@ body:not([data-orders-tab="deliveries"]) #orders-owed { display: none; }
   margin-top: 4px;
 }
 .totbox-warn { margin: 6px 0 0; font-size: 13px; color: var(--warn); font-weight: 600; }
+
+/* ── The ingredient card's choice menus and weight box (29 Sep 2026) ───────────────
+   «Peso» is a number with its unit menu beside it; «Categoria» and «Unità d'ordine» are a
+   menu with, when «+ Nuova …» is picked, a text box right under it. The grid columns are
+   minmax(0, …) for the same reason as .mgmt-pair above: a <select> would otherwise size to
+   its widest option and push the number box off the card. */
+.mgmt-weight { min-width: 0; }
+.mgmt-weight-row { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 8px; }
+.mgmt-weight-row .mgmt-input { width: 100%; min-width: 0; }
+.mgmt-weight-legacy { margin: 6px 0 0; font-size: 13px; color: var(--text3); }
+.mgmt-choice { display: flex; flex-direction: column; gap: 8px; }
+.mgmt-choice .mgmt-input { width: 100%; min-width: 0; }
+.mgmt-choice > [hidden] { display: none; }
+
+/* The trash at the end of a category row in Settings: low-key, but a full 44px target. */
+.reg-cat-del {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  margin: -6px -8px -6px 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--danger);
+  cursor: pointer;
+}
+.reg-cat-del:focus-visible { outline: 3px solid var(--accent-2); outline-offset: -3px; }
+.reg-cat-del:disabled { opacity: .5; }
+.reg-cat-saved { display: inline-block; margin-top: 8px; }
