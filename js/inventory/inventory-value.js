@@ -96,6 +96,18 @@ export function packPrice(month, ingredient, closed) {
   return kg === null ? null : round3(rate * kg);
 }
 
+// What the stocktake detail says about a product priced per CASE: the price of ONE COUNTED UNIT
+// in the ingredient's own order unit (the unit the counts are typed in), or — when that unit
+// leaves doubt (busta, sacco… on a case of several) — that it cannot be valued and what to
+// change. PURE: the caller does the t() and the number formatting (formatRate, so a tiny price
+// is never shown as 0.00). Null when the ingredient carries no valid case.
+export function casePackNote(ingredient) {
+  if (!storedCaseOf(ingredient)) return null;
+  const each = unitCost(ingredient, ingredient);
+  if (each === null) return { key: 'inv.packCaseAmbiguous' };
+  return { key: 'inv.packCasePer', value: each, unit: String((ingredient && ingredient.unit) || '').trim() };
+}
+
 // Why a row has no money beside it, so the screen can say which of the two jobs
 // would fix it. `null` means it has one.
 //

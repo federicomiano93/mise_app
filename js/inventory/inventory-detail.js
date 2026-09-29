@@ -12,9 +12,9 @@
 import { t } from '../i18n.js';
 import { el } from './dom.js';
 import { consumption } from './inventory-model.js';
-import { storedCaseOf } from '../price-model.js';
+import { storedCaseOf, formatRate } from '../price-model.js';
 import {
-  parsePackSize, packKgFor, packPrice, lineValue, formatTotal,
+  parsePackSize, packKgFor, packPrice, lineValue, formatTotal, casePackNote,
   NO_PRICE, NO_PACK, NO_FROZEN_PRICE,
 } from './inventory-value.js';
 
@@ -111,7 +111,11 @@ export function renderDetail({ month, ingredient, locale, onCount, readOnly, clo
       return;
     }
     if (isCased) {
-      packNote.textContent = price === null ? t('inv.noPriceYet') : t('inv.packByPiece', { price: formatTotal(price) });
+      // ⚠️ formatRate, not formatTotal: one straw out of 2000 must not read «0.00».
+      const note = casePackNote(ingredient);
+      packNote.textContent = note.value === undefined
+        ? t(note.key)
+        : t(note.key, { price: formatRate(note.value), unit: note.unit || t('inv.packsShort') });
       return;
     }
     if (ingredient.priceUnit === 'pcs') {

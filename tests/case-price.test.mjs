@@ -10,7 +10,7 @@ import {
   PRICE_FIELDS, INGREDIENT_DRAINED_FIELDS, CASE_MODE,
 } from '../js/price-model.js';
 import { unitCost } from '../js/order-cost.js';
-import { packPrice, valueBlocker, lineValue, NO_PRICE } from '../js/inventory/inventory-value.js';
+import { packPrice, valueBlocker, lineValue, casePackNote, NO_PRICE } from '../js/inventory/inventory-value.js';
 
 const AT = '2026-09-30T09:00:00.000Z';
 const CASE_KEYS = ['casePrice', 'caseCount', 'caseItemSize', 'caseItemUnit'];
@@ -343,4 +343,25 @@ test('a closed month still uses only what was frozen into it', () => {
 test('an ingredient without a case is valued as before', () => {
   assert.equal(packPrice({}, { id: 'x', weight: '25kg', priceUnit: 'kg', pricePerUnit: 0.8 }, false), 20);
   assert.equal(packPrice({}, { id: 'p', priceUnit: 'pcs', pricePerUnit: 0.15 }, false), 0.15);
+});
+
+// ── The stocktake detail's sentence for a case ───────────────────────────────
+
+test('casePackNote: the price of one counted unit, in the ingredient order unit', () => {
+  const egg = { unit: 'pz', ...eggs };
+  assert.deepEqual(casePackNote(egg), { key: 'inv.packCasePer', value: 0.4, unit: 'pz' });
+  assert.deepEqual(casePackNote({ unit: 'cartone', ...eggs }), { key: 'inv.packCasePer', value: 20, unit: 'cartone' });
+  assert.deepEqual(casePackNote({ unit: 'kg', ...flour }), { key: 'inv.packCasePer', value: 2, unit: 'kg' });
+  assert.deepEqual(casePackNote({ ...flour }), { key: 'inv.packCasePer', value: 20, unit: '' });
+});
+
+test('casePackNote keeps a tiny price whole, for formatRate to show', () => {
+  const straw = { unit: 'pz', casePrice: 3.49, caseCount: 2000, caseItemUnit: 'pcs', priceUnit: 'pcs', pricePerUnit: 0.001745 };
+  assert.equal(casePackNote(straw).value, 0.001745);
+});
+
+test('casePackNote names the fix when the order unit leaves doubt, and is null without a valid case', () => {
+  assert.deepEqual(casePackNote({ unit: 'busta', ...flour }), { key: 'inv.packCaseAmbiguous' });
+  assert.equal(casePackNote({ unit: 'pz', priceUnit: 'pcs', pricePerUnit: 0.4 }), null);
+  assert.equal(casePackNote({ unit: 'pz', ...eggs, pricePerUnit: 9 }), null);
 });
