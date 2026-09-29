@@ -94,6 +94,7 @@ const EXEMPT = new Map([
   ['.pas-screen', 'wraps .pas-view, which is capped'],
   ['.fc-screen', 'wraps .fc-view, which is capped'],
   ['.inv-screen', 'wraps .inv-view, which is capped'],
+  ['.pas-strip', 'a column of the tablet grid on body[data-card=pastries]: its outer tracks are var(--app-gutter), so it sits inside the cap; on a phone it is an 8px-margin strip'],
   ['.inv-side', 'a column of .inv-view--list, which is capped by .inv-view inside .inv-screen'],
   ['.inv-list', 'a column of .inv-view--list on a tablet, inside .inv-view which is capped'],
   ['.recipe-scroll', 'wraps .recipe-content, which is capped'],
@@ -479,6 +480,8 @@ test('the wide column is scoped to Home, Orders and the Catalogue, and defined n
   assert.doesNotMatch(block, /body\[data-section="foodcost"\]/, 'Magazzino shares that section and must not widen');
   // Magazzino by ITS OWN data-card: the summary column left, the count rows in two columns right.
   assert.match(block, /body\[data-card="inventory"\]/, 'Magazzino must be in the scope (summary column + two-column count)');
+  // Pastries: the seven days become a list on the left, the day's list beside it.
+  assert.match(block, /body\[data-card="pastries"\]/, 'Pastries must be in the scope (days list + the day beside it)');
   assert.match(block, /body\[data-section="orders"\]/,
     'Orders — and suppliers.html, which shares the same body attribute — must be in the scope');
 
