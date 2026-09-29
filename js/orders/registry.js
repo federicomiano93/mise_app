@@ -378,7 +378,11 @@ export function buildRegistry(data, actions, hooks = {}) {
       // Delete is gated inside it, and a second implementation of that gate is a
       // second place for it to be forgotten.
       const days = (list) => (list || []).map(dayShort).join(', ');
+      // The invoice name stays in sight here, on its own screen, once a shorter one is shown
+      // everywhere else — the one place it is still needed, to match a delivery note.
+      const invoiceName = supplierLabel(supplier) !== supplier.name ? supplier.name : '';
       const meta = [
+        invoiceName,
         supplier.category,
         supplier.deliveryDays?.length ? `${t('orders.deliveryShort')} ${days(supplier.deliveryDays)}` : '',
         supplier.orderDays?.length ? `${t('orders.orderShort')} ${days(supplier.orderDays)}` : '',
@@ -441,7 +445,7 @@ export function buildRegistry(data, actions, hooks = {}) {
         buildSupplierForm({
           item,
           save: actions.saveSupplier,
-          onDone: (saved) => { popEntry(entry); onSaved?.(saved); },
+          onDone: (saved) => { popAfterSave(entry); onSaved?.(saved); },
           onCancel: () => guardedLeave(entry, close),
         }),
       ]);
@@ -480,7 +484,7 @@ export function buildRegistry(data, actions, hooks = {}) {
           // The form then knows nothing about overlays and this file stays the only
           // one that navigates — the same seam saveIngredient and priceHistory use.
           actions: { ...actions, capturePackPhoto, packPhotoOn: () => ingredientPanels().packPhoto, createSupplier },
-          onDone: () => popEntry(entry),
+          onDone: () => popAfterSave(entry),
           onCancel: () => guardedLeave(entry, () => popEntry(entry)),
         }),
       ]);
@@ -620,6 +624,15 @@ export function buildRegistry(data, actions, hooks = {}) {
     if (!removed) return;
     removed.overlay?.remove();
     stackChanged();
+  }
+
+  // ⚠️ AFTER A SAVE, THE LEVEL UNDERNEATH IS REDRAWN. The saved document's snapshot lands while
+  // the form is still on top, and refresh() leaves a form alone — so the supplier's screen came
+  // back with its OLD title and name (the «name to show», 29 Sep 2026). Only after a save: a
+  // plain Back keeps the level as it was, scroll position included.
+  function popAfterSave(entry) {
+    popEntry(entry);
+    refresh();
   }
 
   // Keyboard users land in a level that opens in the pane (the heading is focusable by
