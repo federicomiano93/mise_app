@@ -95,8 +95,8 @@ test('the Suppliers header «+» is reachable by everybody who reaches the page,
   assert.doesNotMatch(add, /canManage|isAdmin|hidden/, 'addCurrent must not gate on a role');
   assert.match(add, /openSupplierForm\(null\)/);
   assert.match(add, /openIngredientForm\(null, null, tab === 'packaging' \? 'packaging' : 'ingredient'\)/);
-  // The dashed list buttons are gone; the one left inside a supplier's own screen is pre-set to it.
-  assert.equal((registry.match(/class: 'mgmt-add'/g) || []).length, 1);
+  // The dashed list buttons are gone; the two left inside a supplier's own screen (ingredient, packaging) are pre-set to it.
+  assert.equal((registry.match(/class: 'mgmt-add'/g) || []).length, 2);
   // The empty-state button and the header «+» share the one function.
   assert.match(registry, /class: 'empty-action'[^}]*onClick: addCurrent/);
 });
