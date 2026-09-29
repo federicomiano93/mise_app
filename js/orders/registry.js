@@ -201,7 +201,12 @@ export function buildRegistry(data, actions, hooks = {}) {
     ]);
   }
 
-  const node = el('div', {}, [viewSwitch, search.node, listHost]);
+  // ⚠️ THE SWITCH AND THE SEARCH STAY PUT WHILE THE LIST SCROLLS (Federico, 29 Sep 2026:
+  // «la fascia ingredienti, fornitori e imballaggi più la barra di ricerca devono restare
+  // fisse quando scorro giù»). One wrapper, so the two stick together; orders.css
+  // .reg-sticky-head gives it the opaque ground rows slide under.
+  const head = el('div', { class: 'reg-sticky-head' }, [viewSwitch, search.node]);
+  const node = el('div', {}, [head, listHost]);
 
   // ── The lists ───────────────────────────────────────────────────────────────
   function paintList() {

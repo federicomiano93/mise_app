@@ -1059,6 +1059,26 @@ input.ing-stock {
 #registry-host.reg-page { padding-top: 14px; }
 
 .reg-list-host { display: flex; flex-direction: column; }
+/* The list switch + search, pinned to the top of whichever box scrolls the list (the
+   page on a phone, the left column on a tablet). ⚠️ THE NEGATIVE MARGINS ARE THE HOST'S
+   OWN PADDING (.reg-page 16px sides, #registry-host 14px top), taken back and given as
+   padding: without them rows would show in the gutters beside the bar and in the gap
+   above it. ⚠️ AN OPAQUE GROUND IS PART OF THE MECHANISM, as on .order-box-head.
+   ⚠️ NO overflow ON ANY ANCESTOR BELOW THE SCROLLER, or it stops sticking in silence. */
+.reg-sticky-head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  margin: -14px -16px 0;
+  padding: 14px 16px 0;
+  background: var(--bg);
+}
+/* ⚠️ ON A TABLET THE HOST IS ITSELF THE SCROLLER (.app-split-list), and a sticky box
+   stops at the scroller's PADDING edge — 14px down, with rows showing through the gap
+   above it (measured 29 Sep 2026). Sticking 14px higher puts it back on the edge. */
+@media (min-width: 900px) and (min-height: 600px) {
+  .app-split-list .reg-sticky-head { top: -14px; }
+}
 
 /* A .mgmt-item that is itself the button. A <button> resets font and alignment, so
    both have to be said again — and width, because a flex child button shrinks to
