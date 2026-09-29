@@ -72,3 +72,51 @@ export function parsePackSize(text) {
   }
   return null;
 }
+
+// ── The weight box: one number and one unit ──────────────────────────────────
+//
+// The ingredient card draws «Peso» as a number box beside a unit menu (29 Sep 2026), but
+// the stored field is STILL the one free-text `weight`, "2.5 kg" — so parsePackSize()
+// above keeps reading every old and new value, and no rules change was needed.
+const WEIGHT_UNITS = ['g', 'kg', 'ml', 'l'];
+const WEIGHT_UNIT_ALIAS = { lt: 'l' };
+
+// Text -> { amount, unit } for the two boxes.
+//  - readable ("25kg", "kg 5", "2,27 kg") -> the number as text and its unit;
+//  - empty -> nothing typed, kilos offered first;
+//  - anything else ("6x1kg", "sacco", "50 cl") -> { amount: '', legacy: text }: the card
+//    shows it as «Attuale» and saves it untouched unless a number is typed.
+// ⚠️ 'cl' IS UNREADABLE HERE ON PURPOSE: the menu has no centilitres, and converting would
+// rewrite what somebody typed.
+export function splitWeight(text) {
+  const raw = typeof text === 'string' ? text.trim() : '';
+  if (!raw) return { amount: '', unit: 'kg' };
+  const clean = raw.toLowerCase().replace(/\s+/g, ' ');
+  let amount = null;
+  let unit = null;
+  let m = clean.match(PLAIN);
+  if (m) { amount = m[1]; unit = m[2]; }
+  else {
+    m = clean.match(UNIT_FIRST);
+    if (m) { unit = m[1]; amount = m[2]; }
+  }
+  if (amount !== null) {
+    unit = WEIGHT_UNIT_ALIAS[unit] || unit;
+    const value = num(amount);
+    if (WEIGHT_UNITS.includes(unit) && Number.isFinite(value) && value > 0) {
+      return { amount: String(value), unit };
+    }
+  }
+  return { amount: '', unit: 'kg', legacy: raw };
+}
+
+// The two boxes -> the stored text. '' when there is no usable number, so an empty or
+// broken box can never store a weight of zero. A comma decimal is accepted.
+export function joinWeight(amount, unit) {
+  const value = num(String(amount ?? '').trim());
+  if (!String(amount ?? '').trim() || !Number.isFinite(value) || value <= 0) return '';
+  if (!WEIGHT_UNITS.includes(unit)) return '';
+  return `${value} ${unit}`;
+}
+
+export const WEIGHT_UNIT_CHOICES = Object.freeze([...WEIGHT_UNITS]);
