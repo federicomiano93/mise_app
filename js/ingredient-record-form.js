@@ -41,8 +41,8 @@ import { vatRatesFor } from './vat-rates.js';
 // The «Peso» box is a number and a unit menu, stored as the one text `weight` (pack-size.js
 // still reads it), and «Categoria» / «Unità d'ordine» are menus over lists their callers
 // hand in (record-choices.js builds them; this file never asks a feature for them).
-import { splitWeight, joinWeight, WEIGHT_UNIT_CHOICES } from './pack-size.js';
-import { categoryValue } from './record-choices.js';
+import { splitWeight, joinWeight, isUnusableWeight, WEIGHT_UNIT_CHOICES } from './pack-size.js';
+import { categoryValue, isBlankNewChoice } from './record-choices.js';
 
 // The one arrow: the same chevron every other list in the app draws. It turns to
 // point down when its fold opens (.mgmt-fold-head--open in orders.css).
@@ -1065,12 +1065,15 @@ function selectSupplier(select, { id, name }) {
 
 // ── «Peso»: a number and a unit ───────────────────────────────────────────────
 //
-// ⚠️ TEXT THAT CANNOT BE SPLIT ("6x1kg", "sacco") IS NEVER LOST. It is shown under the box
-// as «Attuale» and saved exactly as it was, unless a usable number is typed — then the
-// new joined value replaces it. An unusable typed number falls back to the old text
-// rather than erasing it.
+// ⚠️ TEXT THAT CANNOT BE SPLIT ("6x1kg", "sacco") IS NEVER LOST BY ACCIDENT. It is shown under
+// the box as «Attuale» and saved exactly as it was, unless a usable number is typed — then the
+// new joined value replaces it — or the person taps «Rimuovi», which is the one way to clear it.
+// ⚠️ A NUMBER BOX WITH SOMETHING UNUSABLE IN IT BLOCKS THE SAVE (invalid()): falling back to ''
+// would erase a weight that was readable before, and falling back to the old text would hide
+// that the typing was thrown away.
 function weightControl(stored) {
   const start = splitWeight(stored);
+  let legacy = start.legacy || '';
   const amount = el('input', {
     type: 'text', inputmode: 'decimal', class: 'mgmt-input', value: start.amount,
     'aria-label': t('orders.weight.amount'), placeholder: t('orders.eg.packWeight'),
@@ -1078,49 +1081,66 @@ function weightControl(stored) {
   const unit = el('select', { class: 'mgmt-input', 'aria-label': t('orders.weight.unit') },
     WEIGHT_UNIT_CHOICES.map(u => el('option', { value: u, text: u })));
   unit.value = start.unit;
+  amount.addEventListener('input', () => amount.removeAttribute('aria-invalid'));
+  const legacyRow = legacy
+    ? el('div', { class: 'mgmt-weight-legacy-row' }, [
+      el('p', { class: 'mgmt-weight-legacy', text: t('orders.weight.current', { value: legacy }) }),
+      el('button', {
+        type: 'button', class: 'mgmt-link', text: t('orders.weight.remove'),
+        onClick: () => { legacy = ''; legacyRow.remove(); amount.focus(); },
+      }),
+    ])
+    : null;
   const node = el('div', { class: 'mgmt-weight' }, [
     el('div', { class: 'mgmt-weight-row' }, [amount, unit]),
-    start.legacy
-      ? el('p', { class: 'mgmt-weight-legacy', text: t('orders.weight.current', { value: start.legacy }) })
-      : null,
+    legacyRow,
   ]);
   return {
     node,
-    read: () => joinWeight(amount.value, unit.value) || start.legacy || '',
+    read: () => joinWeight(amount.value, unit.value) || legacy,
+    invalid: () => isUnusableWeight(amount.value, unit.value),
+    markInvalid: () => { amount.setAttribute('aria-invalid', 'true'); amount.focus(); },
   };
 }
 
 // ── «Categoria» and «Unità d'ordine»: a menu with «+ Nuova …» ─────────────────
 //
-// values — the words on offer; `current` is added by the caller's list already, but is
-// matched ignoring case so the menu opens on it. «— nessuna —» is the empty answer.
+// values — the words on offer (record-choices.js). ⚠️ THE ITEM'S CURRENT VALUE IS MATCHED
+// EXACTLY, never ignoring case: the menu has to open on the very string that is stored, or an
+// unrelated save would write another spelling back. «— nessuna —» is the empty answer.
 // ⚠️ THE SENTINEL IS NOT A WORD A PERSON WOULD FILE UNDER, so no real value collides with it.
 const NEW_CHOICE = '__mise_new__';
 
-function choiceControl({ values, current, newLabel, placeholder }) {
+function choiceControl({ values, current, newLabel, placeholder, ariaLabel }) {
   const select = el('select', { class: 'mgmt-input' }, [
     el('option', { value: '', text: t('orders.choice.none') }),
     ...values.map(v => el('option', { value: v, text: v })),
     el('option', { value: NEW_CHOICE, text: newLabel }),
   ]);
-  const wanted = String(current || '').trim().toLowerCase();
-  const match = values.find(v => v.toLowerCase() === wanted);
+  const wanted = String(current || '').trim();
+  const match = values.find(v => v === wanted);
   select.value = match !== undefined ? match : '';
   // Kept if a caller's list somehow lacks the stored word: never lose a value.
   if (wanted && match === undefined) {
-    const extra = el('option', { value: String(current).trim(), text: String(current).trim() });
+    const extra = el('option', { value: wanted, text: wanted });
     select.insertBefore(extra, select.lastChild);
-    select.value = extra.value;
+    select.value = wanted;
   }
-  const typed = el('input', { type: 'text', class: 'mgmt-input', placeholder, hidden: 'hidden' });
+  const typed = el('input', {
+    type: 'text', class: 'mgmt-input', placeholder, 'aria-label': ariaLabel, hidden: 'hidden',
+  });
+  typed.addEventListener('input', () => typed.removeAttribute('aria-invalid'));
   select.addEventListener('change', () => {
     const isNew = select.value === NEW_CHOICE;
     typed.hidden = !isNew;
+    typed.removeAttribute('aria-invalid');
     if (isNew) typed.focus();
   });
   return {
     node: el('div', { class: 'mgmt-choice' }, [select, typed]),
     read: () => (select.value === NEW_CHOICE ? typed.value.trim() : select.value),
+    invalid: () => isBlankNewChoice(select.value === NEW_CHOICE, typed.value),
+    markInvalid: () => { typed.setAttribute('aria-invalid', 'true'); typed.focus(); },
   };
 }
 
@@ -1164,12 +1184,14 @@ export function buildIngredientForm({
   const category = choiceControl({
     values: categories, current: categoryValue(item?.category),
     newLabel: t('orders.choice.newCategory'), placeholder: t('orders.choice.categoryPlaceholder'),
+    ariaLabel: t('orders.choice.categoryAria'),
   });
   // "unit" is now the ORDER unit (how you count the order: casse, box), shown
   // next to the quantity — not a unit of measure. Same field, new meaning.
   const unit = choiceControl({
     values: orderUnits, current: item?.unit,
     newLabel: t('orders.choice.newUnit'), placeholder: t('orders.choice.unitPlaceholder'),
+    ariaLabel: t('orders.choice.unitAria'),
   });
 
   // "No supplier" is a real answer, not a missing one: the supermarket, the cash
@@ -1235,6 +1257,10 @@ export function buildIngredientForm({
   const save = el('button', { type: 'button', class: 'btn-primary', onClick: async () => {
     // The supplier is no longer required — only the name is.
     if (!name.value.trim()) { name.focus(); return; }
+    // Blocked BEFORE anything is written, and pointing at the box (P20): an unusable weight
+    // would otherwise erase the stored one, an empty «+ New …» would clear the category.
+    const refused = [weight, category, unit].find(control => control.invalid());
+    if (refused) { refused.markInvalid(); return; }
     save.disabled = true;
 
     // Every price field is in the patch, as a number or as null, because this is

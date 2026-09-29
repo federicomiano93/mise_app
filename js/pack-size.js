@@ -120,3 +120,11 @@ export function joinWeight(amount, unit) {
 }
 
 export const WEIGHT_UNIT_CHOICES = Object.freeze([...WEIGHT_UNITS]);
+
+// Something is typed in the number box that is NOT a usable positive number («2.27kg»,
+// «abc», «0»). The card refuses to save it: joinWeight() answers '' for it, and writing ''
+// would erase a weight that was readable before. An EMPTY box is a different answer —
+// «no weight» — and is fine.
+export function isUnusableWeight(amount, unit) {
+  return String(amount ?? '').trim() !== '' && joinWeight(amount, unit) === '';
+}

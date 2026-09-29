@@ -580,10 +580,23 @@
   width: 100%;
   min-width: 0;
 }
+.rec-host .mgmt-weight-legacy-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  margin-top: 6px;
+}
 .rec-host .mgmt-weight-legacy {
-  margin: 6px 0 0;
+  margin: 0;
   font-size: 13px;
   color: var(--text3);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.rec-host .mgmt-form .mgmt-input[aria-invalid="true"],
+.rec-host .mgmt-form .mgmt-input[aria-invalid="true"]:focus {
+  border-color: var(--danger);
 }
 .rec-host .mgmt-choice {
   display: flex;

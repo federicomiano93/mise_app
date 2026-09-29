@@ -30,18 +30,33 @@ const defaultsFor = (table, language) => table[language === 'it' ? 'it' : 'en'];
 
 const clean = (value) => (typeof value === 'string' ? value.trim() : '');
 
-// Trimmed, de-duplicated ignoring case (the FIRST spelling seen wins), sorted.
-function tidy(words) {
+// Trimmed, non-empty, de-duplicated — ignoring case unless `exact` (then only an identical
+// spelling counts as a repeat). The FIRST spelling seen wins.
+function tidy(words, { exact = false } = {}) {
   const seen = new Set();
   const out = [];
   for (const word of words) {
     const text = clean(word);
-    const key = text.toLowerCase();
+    const key = exact ? text : text.toLowerCase();
     if (!text || seen.has(key)) continue;
     seen.add(key);
     out.push(text);
   }
-  return out.sort((a, b) => a.localeCompare(b));
+  return out;
+}
+
+// ⚠️ THE SPELLING OF A STORED VALUE IS NEVER CHANGED BY DRAWING A MENU. Two different rules:
+//  - values IN USE (an ingredient carries them, or it is the item being edited) are kept in
+//    EXACTLY their own spelling, and two spellings that are both in use both stay: they are
+//    different stored strings, and folding «farine» into «Farine» would rewrite one of them
+//    the next time an unrelated save wrote the menu's choice back;
+//  - the venue's saved list and the defaults are only SUGGESTIONS, so one that matches an
+//    in-use value ignoring case gives way to it (its spelling is the one people already use).
+function choices(suggested, inUse) {
+  const used = tidy(inUse, { exact: true });
+  const taken = new Set(used.map(w => w.toLowerCase()));
+  const rest = tidy(suggested).filter(w => !taken.has(w.toLowerCase()));
+  return [...rest, ...used].sort((a, b) => a.localeCompare(b));
 }
 
 // A category as it counts: '' when there is none.
@@ -57,12 +72,12 @@ export function categoryValue(raw) {
 export function categoryChoices({ stored, ingredients, language, current } = {}) {
   const base = Array.isArray(stored) ? stored : defaultsFor(DEFAULT_CATEGORIES, language);
   const used = (ingredients || []).map(i => categoryValue(i?.category));
-  return tidy([...base, ...used, categoryValue(current)]);
+  return choices(base, [...used, categoryValue(current)]);
 }
 
 export function unitChoices({ ingredients, language, current } = {}) {
   const used = (ingredients || []).map(i => i?.unit);
-  return tidy([...defaultsFor(DEFAULT_UNITS, language), ...used, current]);
+  return choices(defaultsFor(DEFAULT_UNITS, language), [...used, current]);
 }
 
 // How many ingredients sit in `category` (case-insensitive, after trimming).
@@ -70,4 +85,10 @@ export function countInCategory(ingredients, category) {
   const key = clean(category).toLowerCase();
   if (!key) return 0;
   return (ingredients || []).filter(i => categoryValue(i?.category).toLowerCase() === key).length;
+}
+
+// «+ New …» was picked in a menu and its text box was left empty: saving would silently clear
+// the category or the unit, so the card blocks it instead.
+export function isBlankNewChoice(isNew, typed) {
+  return isNew === true && clean(typed) === '';
 }

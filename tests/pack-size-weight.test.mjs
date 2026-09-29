@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { splitWeight, joinWeight, parsePackSize } from '../js/pack-size.js';
+import { splitWeight, joinWeight, parsePackSize, isUnusableWeight } from '../js/pack-size.js';
 
 test('splitWeight opens a readable value into number and unit', () => {
   assert.deepEqual(splitWeight('25kg'), { amount: '25', unit: 'kg' });
@@ -45,4 +45,17 @@ test('joinWeight output round-trips through parsePackSize and splitWeight', () =
     assert.equal(parsePackSize(text), kilos);
     assert.deepEqual(splitWeight(text), { amount, unit });
   }
+});
+
+test('isUnusableWeight: only a typed, unusable number counts (an empty box is «no weight»)', () => {
+  assert.equal(isUnusableWeight('', 'kg'), false);
+  assert.equal(isUnusableWeight('   ', 'kg'), false);
+  assert.equal(isUnusableWeight(undefined, 'kg'), false);
+  assert.equal(isUnusableWeight('2.5', 'kg'), false);
+  assert.equal(isUnusableWeight('2,5', 'g'), false);
+  assert.equal(isUnusableWeight('2.27kg', 'kg'), true);
+  assert.equal(isUnusableWeight('abc', 'kg'), true);
+  assert.equal(isUnusableWeight('0', 'kg'), true);
+  assert.equal(isUnusableWeight('-3', 'kg'), true);
+  assert.equal(isUnusableWeight('2', 'bogus'), true);
 });

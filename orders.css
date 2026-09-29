@@ -2991,7 +2991,13 @@ body:not([data-orders-tab="deliveries"]) #orders-owed { display: none; }
 .mgmt-weight { min-width: 0; }
 .mgmt-weight-row { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 8px; }
 .mgmt-weight-row .mgmt-input { width: 100%; min-width: 0; }
-.mgmt-weight-legacy { margin: 6px 0 0; font-size: 13px; color: var(--text3); }
+/* The unreadable stored weight and its low-key «Remove»: a flex row so the button sits on
+   the text's own line, wrapping under it when the stored text is long. */
+.mgmt-weight-legacy-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; margin-top: 6px; }
+.mgmt-weight-legacy { margin: 0; font-size: 13px; color: var(--text3); min-width: 0; overflow-wrap: anywhere; }
+/* A box the save was refused for (a weight that is not a number, a «new …» left empty). */
+.mgmt-form .mgmt-input[aria-invalid="true"],
+.mgmt-form .mgmt-input[aria-invalid="true"]:focus { border-color: var(--danger); }
 .mgmt-choice { display: flex; flex-direction: column; gap: 8px; }
 .mgmt-choice .mgmt-input { width: 100%; min-width: 0; }
 .mgmt-choice > [hidden] { display: none; }
