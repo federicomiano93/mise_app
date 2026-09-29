@@ -40,7 +40,7 @@ export function openVatGuide({ country, currentRate = null, onUse, returnFocus =
   const onKey = e => { if (e.key === 'Escape') { e.preventDefault(); close(); } };
 
   const back = el('button', {
-    class: 'fc-icon-btn', type: 'button', icon: BACK_ICON, 'aria-label': t('ui.back'), onclick: close,
+    class: 'app-icon-btn', type: 'button', icon: BACK_ICON, 'aria-label': t('ui.back'), onclick: close,
   });
 
   const rates = guide.rates.map(group => {
@@ -78,10 +78,10 @@ export function openVatGuide({ country, currentRate = null, onUse, returnFocus =
   const overlay = el('div', {
     class: 'fc-overlay', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'fcGuideTitle',
   }, [
-    el('header', { class: 'fc-header' }, [
-      el('span', { class: 'fc-header-slot' }, [back]),
-      el('div', { class: 'fc-header-title' }, [el('h1', { id: 'fcGuideTitle', text: t('fc.vatGuide.title') })]),
-      el('span', { class: 'fc-header-slot' }),
+    el('header', { class: 'app-header' }, [
+      el('span', { class: 'app-header-slot' }, [back]),
+      el('div', { class: 'app-header-title' }, [el('h1', { id: 'fcGuideTitle', text: t('fc.vatGuide.title') })]),
+      el('span', { class: 'app-header-slot' }),
     ]),
     el('main', { class: 'fc-screen' }, [body]),
   ]);

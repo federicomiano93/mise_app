@@ -62,14 +62,15 @@ export function buildSupplierItems(supplier, ingredients, ctx) {
   const body = el('div', { class: 'supplier-items-body' });
 
   const overlay = el('div', { class: 'supplier-items' }, [
-    el('header', { class: 'orders-header' }, [
-      el('button', {
-        type: 'button', class: 'orders-icon-btn', 'aria-label': t('ui.back'),
-        icon: BACK_ICON, onClick: () => ctx.onBack?.(),
-      }),
-      el('div', { class: 'orders-header-title' }, [el('h1', { text: supplier.name })]),
-      // Keeps the title centred: the back button on the left needs a counterweight.
-      el('span', { class: 'header-spacer' }),
+    el('header', { class: 'app-header orders-header' }, [
+      el('span', { class: 'app-header-slot' }, [
+        el('button', {
+          type: 'button', class: 'app-icon-btn orders-icon-btn', 'aria-label': t('ui.back'),
+          icon: BACK_ICON, onClick: () => ctx.onBack?.(),
+        }),
+      ]),
+      el('div', { class: 'app-header-title orders-header-title' }, [el('h1', { text: supplier.name })]),
+      el('span', { class: 'app-header-slot' }),
     ]),
     body,
   ]);

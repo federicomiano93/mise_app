@@ -8,7 +8,11 @@ import { el } from './dom.js';
 import { sortByUsage, filterByName } from './catalogue-model.js';
 import { buildCatalogueSearch } from './search-box.js';
 
-export function renderList({ recipes, usageMap, initialQuery = '', onQueryChange, onOpen }) {
+// The one arrow: the same chevron every other list in the app draws.
+const CHEVRON_SVG =
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>';
+
+export function renderList({ recipes, usageMap, initialQuery = '', onQueryChange, onOpen, onAdd }) {
   let query = initialQuery;
   let currentRecipes = recipes;
   let currentUsage = usageMap;
@@ -33,12 +37,15 @@ export function renderList({ recipes, usageMap, initialQuery = '', onQueryChange
     listContainer.replaceChildren();
     const visible = sortByUsage(filterByName(currentRecipes, query), currentUsage);
     if (!visible.length) {
-      listContainer.appendChild(el('div', {
-        class: 'cat-empty',
-        text: currentRecipes.length
-          ? t('cat.noRecipeMatchesYour')
-          : t('cat.noRecipesYetTap'),
-      }));
+      // A search that matches nothing stays a small line under the box; a catalogue
+      // with NO recipes is the screen-level empty state, with the header «+»'s action.
+      listContainer.appendChild(currentRecipes.length
+        ? el('div', { class: 'cat-empty', text: t('cat.noRecipeMatchesYour') })
+        : el('div', { class: 'empty-state' }, [
+          el('p', { class: 'empty-title', text: t('calc.noRecipesYet') }),
+          el('p', { class: 'empty-sub', text: t('cat.empty.sub') }),
+          el('button', { class: 'empty-action', type: 'button', text: t('calc.addARecipe'), onclick: onAdd }),
+        ]));
       return;
     }
     for (const recipe of visible) {
@@ -48,7 +55,7 @@ export function renderList({ recipes, usageMap, initialQuery = '', onQueryChange
         onclick: () => onOpen(recipe),
       }, [
         el('span', { class: 'name', text: recipe.name || t('cat.noName') }),
-        el('span', { class: 'chev', text: '›', 'aria-hidden': 'true' }),
+        el('span', { class: 'chev', 'aria-hidden': 'true', icon: CHEVRON_SVG }),
       ]));
     }
   }

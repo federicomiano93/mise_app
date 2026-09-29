@@ -49,16 +49,20 @@ to phones); update it deliberately, never to a release younger than a few weeks 
 | Text cut off | a label ends in «…» or is clipped | fix, unless the ellipsis is deliberate (long names) |
 | Icon off its label (>1.5px) | the icon sits high/low on the text | fix: flex row on the button AND the wrapper span |
 | Title off centre (>2px) | the header title is pushed sideways | see the known decisions below |
+| Header button over its title | a round button is drawn on top of the title or subtitle | fix — never accepted (a fixed 0px side column did it below 360px, 29 Sep 2026) |
 
 ## Known decisions — report them, never «fix» them unasked
 
 These are Federico's to make (see the project CLAUDE.md backlog). Report them once in
 the end list if they are still there; do not reopen them as new findings:
-- `--text-4` at 3.4–3.6:1 (inactive segmented tabs, small mono labels).
-- The Pastries day tabs of other days in `--text-5` (2.24:1).
-- The 36×36 round header buttons (the design system's size; over the 24px minimum).
-- The Orders title 44px off centre on a phone (one button left, three right) and the
-  Calculator title 24px off centre.
+- The 36×36 round header buttons: Federico's choice (29 Sep 2026) is 36px to look at
+  with an invisible 44px touch area (`.app-icon-btn::before`). This check measures the
+  element box, so it still lists them under «Target under 44px» — expected.
+- At 296px only, a header title up to ~25px off centre (Orders, Suppliers, Catalogue):
+  the two sides cannot be mirrored that narrow, and the title gives way rather than
+  the buttons. At 360px and wider any drift is a finding.
+- Resolved 29 Sep 2026, so a NEW finding if it comes back: `--text-4` under 4.5:1, and
+  day names or any read text in `--text-5` (both pinned by tests/text-contrast.test.mjs).
 
 A NEW screen that adds to one of these lists is a finding, not a known decision.
 

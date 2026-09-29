@@ -55,18 +55,20 @@ export function openBusinesses({ host } = {}) {
   const top = el('div', { class: 'people-code' });
 
   const overlay = el('div', { class: 'people-overlay' }, [
-    el('header', { class: 'orders-header' }, [
-      el('button', {
-        type: 'button', class: 'orders-icon-btn', 'aria-label': t('ui.back'),
-        icon: BACK_ICON, onClick: () => overlay.remove(),
-      }),
+    el('header', { class: 'app-header orders-header' }, [
+      el('span', { class: 'app-header-slot' }, [
+        el('button', {
+          type: 'button', class: 'app-icon-btn orders-icon-btn', 'aria-label': t('ui.back'),
+          icon: BACK_ICON, onClick: () => overlay.remove(),
+        }),
+      ]),
       // ⚠️ "Customer businesses". The bare word sat one letter away from "My
       // businesses" on the Misé home and left the whole distinction to a sub-line.
       // The FILE keeps its name on purpose: renaming it would add an entry to the
       // service worker's precache list, which is the one failure that does not
       // heal itself on the next load.
-      el('div', { class: 'orders-header-title' }, [el('h1', { text: t('bz.title') })]),
-      el('span', { class: 'header-spacer' }),
+      el('div', { class: 'app-header-title orders-header-title' }, [el('h1', { text: t('bz.title') })]),
+      el('span', { class: 'app-header-slot' }),
     ]),
     el('div', { class: 'people-scroll' }, [top, list]),
   ]);

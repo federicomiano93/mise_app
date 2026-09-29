@@ -40,46 +40,6 @@ body {
   overscroll-behavior: none;
 }
 
-/* ── Header ────────────────────────────────────────────────────────────────
-   Back on the LEFT, title CENTRED, a matching slot on the right so the title
-   cannot drift off centre when one side is empty (CLAUDE.md, header spec). */
-.inv-header {
-  flex-shrink: 0;
-  display: grid;
-  grid-template-columns: 44px 1fr 44px;
-  align-items: center;
-  gap: 8px;
-  padding: calc(10px + env(safe-area-inset-top)) 12px 10px;
-  padding-inline: max(12px, var(--app-gutter));
-  background: var(--inv-brand);
-  color: var(--inv-brand-ink);
-}
-.inv-header-slot { display: flex; align-items: center; justify-content: center; }
-.inv-icon-btn {
-  width: 36px;
-  height: 36px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  /* ⚠️ --rim-border, NOT --rim: a name defined nowhere makes the whole
-     declaration invalid and the browser drops it in silence, leaving this button
-     the only one in the app with no rim. It has happened here before. */
-  border: 1.5px solid var(--rim-border);
-  background: var(--rim-bg);
-  color: inherit;
-  cursor: pointer;
-}
-.inv-icon-btn:hover { background: var(--rim-bg-hover); }
-.inv-icon-btn:active { background: var(--rim-bg-active); }
-/* The app's green focus ring is invisible on the green header, so the ring here
-   is the on-brand ink instead. */
-.inv-icon-btn:focus-visible { outline: 2px solid var(--inv-brand-ink); outline-offset: 2px; }
-.inv-icon-btn[hidden] { display: none; }
-.inv-header-title { min-width: 0; text-align: center; }
-.inv-header-title h1 { margin: 0; font-size: 18px; font-weight: 600; letter-spacing: -0.3px; }
-.inv-header-title p { margin: 2px 0 0; font-size: 11px; opacity: .8; font-family: var(--inv-font-mono); }
-
 /* ── The month strip ───────────────────────────────────────────────────────
    Directly under the header and never scrolled away: which month is being
    counted is the one fact on this screen that must never be in doubt. */
@@ -384,7 +344,9 @@ body {
 .inv-footer {
   flex-shrink: 0;
   display: flex;
-  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
   padding: 8px 12px calc(8px + env(safe-area-inset-bottom));
   padding-inline: max(12px, var(--app-gutter));
   background: var(--inv-ground);
@@ -392,10 +354,11 @@ body {
 }
 .inv-footer[hidden] { display: none; }
 .inv-footer-btn {
-  flex: 1;
-  min-width: 0;
+  flex: 0 1 240px;
+  max-width: calc(50% - 6px);
   min-height: 44px;
-  padding: 8px 10px;
+  min-width: 0;
+  padding: 8px 12px;
   border: 1px solid var(--inv-border);
   border-radius: var(--inv-radius-sm);
   background: var(--inv-surface);

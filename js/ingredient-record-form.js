@@ -38,6 +38,11 @@ import {
 // js/ root on 29 Sep 2026 because this form now needs it too (CLAUDE.md
 // "Modular by feature").
 import { vatRatesFor } from './vat-rates.js';
+
+// The one arrow: the same chevron every other list in the app draws. It turns to
+// point down when its fold opens (.mgmt-fold-head--open in orders.css).
+const CHEVRON_SVG =
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>';
 // The net-cost-of-one-ordered-unit calculation Orders uses to show money on
 // an order — reused here for the "costs €45 without VAT, €46.80 with VAT at
 // 4%" summary line, so the form and the order screen can never disagree
@@ -939,7 +944,7 @@ function fold({ title, state, above, body, help }) {
   }, [
     el('span', { class: 'mgmt-fold-label', text: title }),
     state,
-    el('span', { class: 'mgmt-fold-chev', 'aria-hidden': 'true', text: '›' }),
+    el('span', { class: 'mgmt-fold-chev', 'aria-hidden': 'true', icon: CHEVRON_SVG }),
   ]);
   // ⚠️⚠️ THE «?» CANNOT GO INSIDE THE HEAD, AND THAT IS NOT A STYLE PREFERENCE: the
   // head IS a <button>, and a button may not contain another button. So the head and

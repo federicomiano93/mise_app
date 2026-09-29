@@ -23,6 +23,10 @@ import { attachLinkSuggestions } from './ingredient-suggest.js';
 // Whole grams, no thousands separator — the same reading as the recipe view.
 const nf = new Intl.NumberFormat('en-GB', { maximumFractionDigits: 0, useGrouping: false });
 
+// The one arrow: the same chevron every other list in the app draws.
+const CHEVRON_SVG =
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>';
+
 const TRASH_SVG =
   '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>';
 
@@ -241,7 +245,7 @@ export function renderEditor({ recipe, draft, allRecipes, app, getLabelProfile =
         // silently dropped. The cell is what carries the frame and the position.
         el('span', { class: 'cat-unit-cell' }, [
           unitSelect,
-          el('span', { class: 'cat-unit-chev', 'aria-hidden': 'true', text: '›' }),
+          el('span', { class: 'cat-unit-chev', 'aria-hidden': 'true', icon: CHEVRON_SVG }),
         ]),
       ]);
       // ⚠️⚠️ «to taste» IS THE ONE UNIT THAT CARRIES NO NUMBER, and the model has said so

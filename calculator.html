@@ -115,30 +115,37 @@
 <div id="auth-gate" class="auth-gate"></div>
 
 
-<header class="orders-header">
-  <button class="orders-icon-btn" id="header-back-btn" type="button" data-i18n="ui.back" data-i18n-attr="aria-label" aria-label="Back">
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
-  </button>
-  <div class="orders-header-title">
-    <h1 data-location-title>Misé</h1>
-    <p data-i18n="ui.doughScalingFromOrders">Dough scaling from orders</p>
+<header class="app-header orders-header">
+  <span class="app-header-slot">
+    <button class="app-icon-btn orders-icon-btn" id="header-back-btn" type="button" data-i18n="ui.back" data-i18n-attr="aria-label" aria-label="Back">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+    </button>
+  </span>
+  <!-- ⚠️ THE SECTION'S OWN NAME, the same key the Home card uses: what you tap on the
+       Home and what you land on carry the same name. It used to show the venue's name
+       (data-location-title), which the Home already shows. -->
+  <div class="app-header-title orders-header-title">
+    <h1 data-i18n="section.calculator">Calculator</h1>
+    <p data-i18n="ui.doughScaling">Dough scaling</p>
   </div>
+  <span class="app-header-slot">
   <span class="help-host" data-help="calculator"></span>
   <!-- ⚠️ THE SAME SEND ARROW AS EVERY OTHER SCREEN (js/send-icon.js). It carried the
        filled WhatsApp brand mark — one of three copies in the app — on a button with NO
        accessible name at all, and the id is left as it was for the same reason
        orders.html keeps `orders-wa-btn`: an id is not a word anybody reads. -->
-  <button class="orders-icon-btn" id="header-wa-btn" type="button" data-i18n="ui.send" data-i18n-attr="aria-label" aria-label="Send"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="M8 7l4-4 4 4"/><path d="M4 15v4a2 2 0 002 2h12a2 2 0 002-2v-4"/></svg></button>
-  <a class="orders-icon-btn is-hidden" id="header-home-right" href="index.html" data-i18n="ui.home" data-i18n-attr="aria-label" aria-label="Home">
+  <button class="app-icon-btn orders-icon-btn" id="header-wa-btn" type="button" data-i18n="ui.send" data-i18n-attr="aria-label" aria-label="Send"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="M8 7l4-4 4 4"/><path d="M4 15v4a2 2 0 002 2h12a2 2 0 002-2v-4"/></svg></button>
+  <a class="app-icon-btn orders-icon-btn is-hidden" id="header-home-right" href="index.html" data-i18n="ui.home" data-i18n-attr="aria-label" aria-label="Home">
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 9.5V21h14V9.5"/></svg>
   </a>
+  </span>
 </header>
 
 <div id="recipe-overlay">
   <div class="recipe-overlay-header">
-    <button class="recipe-back-btn"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
+    <button class="app-icon-btn recipe-back-btn"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
     <span class="recipe-overlay-title" data-i18n="ui.recipes">Recipes</span>
-    <button class="overlay-home-btn" id="recipe-home-btn" type="button" data-i18n="ui.home" data-i18n-attr="aria-label" aria-label="Home">
+    <button class="app-icon-btn" id="recipe-home-btn" type="button" data-i18n="ui.home" data-i18n-attr="aria-label" aria-label="Home">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 9.5V21h14V9.5"/></svg>
     </button>
   </div>
@@ -149,9 +156,9 @@
 
 <div id="settings-overlay">
   <div class="recipe-overlay-header">
-    <button class="settings-back-btn" type="button" data-i18n="ui.back" data-i18n-attr="aria-label" aria-label="Back"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
+    <button class="app-icon-btn settings-back-btn" type="button" data-i18n="ui.back" data-i18n-attr="aria-label" aria-label="Back"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
     <span class="recipe-overlay-title" data-i18n="ui.settings">Settings</span>
-    <a class="overlay-home-btn" href="index.html" data-i18n="ui.home" data-i18n-attr="aria-label" aria-label="Home">
+    <a class="app-icon-btn" href="index.html" data-i18n="ui.home" data-i18n-attr="aria-label" aria-label="Home">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 9.5V21h14V9.5"/></svg>
     </a>
   </div>
@@ -217,9 +224,9 @@
 
 <div id="extra-overlay">
   <div class="recipe-overlay-header">
-    <button class="extra-back-btn"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
+    <button class="app-icon-btn extra-back-btn"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
     <span class="recipe-overlay-title" data-i18n="calc.extraDough2">Extra dough</span>
-    <button class="overlay-home-btn" id="extra-home-btn" type="button" data-i18n="ui.home" data-i18n-attr="aria-label" aria-label="Home">
+    <button class="app-icon-btn" id="extra-home-btn" type="button" data-i18n="ui.home" data-i18n-attr="aria-label" aria-label="Home">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 9.5V21h14V9.5"/></svg>
     </button>
   </div>
@@ -234,9 +241,9 @@
 
 <div id="divisor-overlay">
   <div class="recipe-overlay-header">
-    <button class="divisor-back-btn"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
+    <button class="app-icon-btn divisor-back-btn"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
     <span class="recipe-overlay-title" data-i18n="ui.divisor">Divisor</span>
-    <button class="overlay-home-btn" id="divisor-home-btn" type="button" data-i18n="ui.home" data-i18n-attr="aria-label" aria-label="Home">
+    <button class="app-icon-btn" id="divisor-home-btn" type="button" data-i18n="ui.home" data-i18n-attr="aria-label" aria-label="Home">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 9.5V21h14V9.5"/></svg>
     </button>
   </div>
@@ -247,9 +254,9 @@
 
 <div id="cosettings-overlay">
   <div class="recipe-overlay-header">
-    <button class="overlay-back-btn cosettings-back-btn" type="button" data-i18n="ui.back" data-i18n-attr="aria-label" aria-label="Back"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
+    <button class="app-icon-btn overlay-back-btn cosettings-back-btn" type="button" data-i18n="ui.back" data-i18n-attr="aria-label" aria-label="Back"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
     <span class="recipe-overlay-title" data-i18n="ui.clientOrdering">Client ordering</span>
-    <a class="overlay-home-btn" href="index.html" data-i18n="ui.home" data-i18n-attr="aria-label" aria-label="Home">
+    <a class="app-icon-btn" href="index.html" data-i18n="ui.home" data-i18n-attr="aria-label" aria-label="Home">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 9.5V21h14V9.5"/></svg>
     </a>
   </div>
@@ -260,9 +267,9 @@
 
 <div id="logsettings-overlay">
   <div class="recipe-overlay-header">
-    <button class="logsettings-back-btn"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
+    <button class="app-icon-btn logsettings-back-btn"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
     <span class="recipe-overlay-title" data-i18n="ui.log">Log</span>
-    <button class="overlay-home-btn" id="logsettings-home-btn" type="button" data-i18n="ui.home" data-i18n-attr="aria-label" aria-label="Home">
+    <button class="app-icon-btn" id="logsettings-home-btn" type="button" data-i18n="ui.home" data-i18n-attr="aria-label" aria-label="Home">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 9.5V21h14V9.5"/></svg>
     </button>
   </div>
@@ -273,9 +280,9 @@
 
 <div id="wa-overlay">
   <div class="recipe-overlay-header">
-    <button class="wa-back-btn"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
+    <button class="app-icon-btn wa-back-btn"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
     <span class="recipe-overlay-title" data-i18n="ui.whatsapp">WhatsApp</span>
-    <button class="overlay-home-btn" id="wa-home-btn" type="button" data-i18n="ui.home" data-i18n-attr="aria-label" aria-label="Home">
+    <button class="app-icon-btn" id="wa-home-btn" type="button" data-i18n="ui.home" data-i18n-attr="aria-label" aria-label="Home">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 9.5V21h14V9.5"/></svg>
     </button>
   </div>
@@ -286,9 +293,9 @@
 
 <div id="cp-overlay">
   <div class="recipe-overlay-header">
-    <button class="cp-back-btn"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
+    <button class="app-icon-btn cp-back-btn"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
     <span class="recipe-overlay-title" data-i18n="ui.clients">Clients</span>
-    <button class="overlay-home-btn" id="cp-home-btn" type="button" data-i18n="ui.home" data-i18n-attr="aria-label" aria-label="Home">
+    <button class="app-icon-btn" id="cp-home-btn" type="button" data-i18n="ui.home" data-i18n-attr="aria-label" aria-label="Home">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 9.5V21h14V9.5"/></svg>
     </button>
   </div>
@@ -304,12 +311,12 @@
 
 <div id="clientorders-overlay">
   <div class="recipe-overlay-header">
-    <button class="overlay-back-btn clientorders-back-btn" type="button" data-i18n="ui.back" data-i18n-attr="aria-label" aria-label="Back"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
+    <button class="app-icon-btn overlay-back-btn clientorders-back-btn" type="button" data-i18n="ui.back" data-i18n-attr="aria-label" aria-label="Back"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
     <span class="recipe-overlay-title" data-i18n="ui.ordersReceived">Orders received</span>
     <!-- The title is out of the flow and centred, and Back carries margin-right:auto,
          so anything added here groups at the right edge without moving the title. -->
     <span class="help-host" data-help="client-orders"></span>
-    <a class="overlay-home-btn" id="clientorders-home-btn" href="index.html" data-i18n="ui.home" data-i18n-attr="aria-label" aria-label="Home">
+    <a class="app-icon-btn" id="clientorders-home-btn" href="index.html" data-i18n="ui.home" data-i18n-attr="aria-label" aria-label="Home">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 9.5V21h14V9.5"/></svg>
     </a>
   </div>
@@ -395,9 +402,9 @@
 <!-- Read-only view of a log: the full calculator sheet for that log (D). -->
 <div id="logview-overlay" class="log-overlay">
   <div class="recipe-overlay-header">
-    <button class="logview-back-btn"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
+    <button class="app-icon-btn logview-back-btn"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
     <span class="recipe-overlay-title" id="logview-title" data-i18n="ui.log">Log</span>
-    <button class="overlay-home-btn logview-home-btn" type="button" data-i18n="ui.home" data-i18n-attr="aria-label" aria-label="Home">
+    <button class="app-icon-btn logview-home-btn" type="button" data-i18n="ui.home" data-i18n-attr="aria-label" aria-label="Home">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 9.5V21h14V9.5"/></svg>
     </button>
   </div>
@@ -407,7 +414,7 @@
 <!-- Dedicated log-edit screen (B): editable quantities for the saved log. -->
 <div id="logedit-overlay" class="log-overlay">
   <div class="recipe-overlay-header">
-    <button class="logedit-back-btn"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
+    <button class="app-icon-btn logedit-back-btn"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
     <span class="recipe-overlay-title" data-i18n="ui.editLog">Edit log</span>
   </div>
   <div class="recipe-scroll"><div id="logedit-content"></div></div>
@@ -416,7 +423,7 @@
 <!-- Manual add-log screen: pick a dough, enter quantities, save a new log. -->
 <div id="logadd-overlay" class="log-overlay">
   <div class="recipe-overlay-header">
-    <button class="logadd-back-btn"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
+    <button class="app-icon-btn logadd-back-btn"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
     <span class="recipe-overlay-title" data-i18n="ui.addLog">Add log</span>
   </div>
   <div class="recipe-scroll"><div id="logadd-content"></div></div>
@@ -425,7 +432,7 @@
 <!-- Version history (C): past versions + restore. -->
 <div id="loghistory-overlay" class="log-overlay">
   <div class="recipe-overlay-header">
-    <button class="loghistory-back-btn"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
+    <button class="app-icon-btn loghistory-back-btn"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
     <span class="recipe-overlay-title" data-i18n="ui.editHistory">Edit history</span>
     <span class="overlay-home-spacer"></span>
   </div>

@@ -5,8 +5,9 @@
 // an axe pass caught it on 28 Sep 2026. Nothing looked wrong; the number was.
 // This pins the colours as NUMBERS, so a retune of the palette cannot slip under.
 //
-// ⚠️ --text-4 (3.6:1) and --text-5 (placeholders) are deliberately not pinned here:
-// --text-4 is an open decision of Federico's, --text-5 is placeholder text.
+// --text-4 joined the pinned list on 29 Sep 2026, when Federico chose to darken it
+// (it was 3.41:1). --text-5 is placeholder grey and stays unpinned — which is why
+// no text somebody has to READ may use it (the last test below).
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -35,7 +36,7 @@ test('the contrast formula matches the known values', () => {
   assert.equal(contrast('#7C7566', '#FFFDF7').toFixed(2), '4.49');   // the colour that failed
 });
 
-for (const text of ['--text', '--text-2', '--text-3']) {
+for (const text of ['--text', '--text-2', '--text-3', '--text-4']) {
   for (const ground of ['--surface', '--surface-2', '--bg']) {
     test(`${text} on ${ground} reaches 4.5:1`, () => {
       const ratio = contrast(token(text), token(ground));
@@ -47,4 +48,26 @@ for (const text of ['--text', '--text-2', '--text-3']) {
 test('--warn on --warn-bg reaches 4.5:1', () => {
   const ratio = contrast(token('--warn'), token('--warn-bg'));
   assert.ok(ratio >= 4.5, `${ratio.toFixed(2)}:1`);
+});
+
+// --text-5 is placeholder grey (2.24:1). The Pastries day names wore it and axe
+// flagged them at every size (ui-check, 28 Sep 2026): outside a ::placeholder or an
+// icon it is text somebody has to read, and it fails.
+test('--text-5 colours only placeholders and icons', () => {
+  const sheets = ['tokens.css', 'style.css', 'orders.css', 'catalogue.css', 'foodcost.css',
+    'inventory.css', 'pastries.css', 'order.css', 'auth.css'];
+  const offenders = [];
+  let seen = 0;
+  for (const sheet of sheets) {
+    const src = readFileSync(new URL(`../${sheet}`, import.meta.url), 'utf8')
+      .replace(/\/\*[\s\S]*?\*\//g, '');
+    for (const [, sel, body] of src.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+      if (!/(^|[^-])color:\s*var\(--(pas-)?text-5\)/.test(body)) continue;
+      seen++;
+      if (/::placeholder|-icon\b/.test(sel)) continue;
+      offenders.push(`${sheet}: ${sel.trim()}`);
+    }
+  }
+  assert.ok(seen >= 3, `only ${seen} uses of --text-5 found — the search is broken`);
+  assert.deepEqual(offenders, []);
 });

@@ -39,51 +39,6 @@ body {
   line-height: 1.45;
 }
 
-/* Header */
-/* The header follows the app-wide spec (Calculator + Orders): a 36px icon button
-   on each side and a CENTRED 18px/600 title. Three fixed grid tracks, so an empty
-   side slot still holds its column and the title never drifts off-centre. */
-.cat-header {
-  flex: none;
-  background: var(--cat-brand);
-  color: var(--cat-brand-ink);
-  /* viewport-fit=cover lets the green fill the status-bar area; the safe-area top
-     inset keeps the title/buttons below the clock. */
-  padding: calc(16px + env(safe-area-inset-top)) 16px 20px;
-  /* Centre the header's contents on the same column as .cat-view below it.
-     16px floor = the padding above, so no phone moves. */
-  padding-inline: max(16px, var(--app-gutter));
-  border-radius: 0 0 26px 26px;
-  display: grid;
-  /* ⚠️ THE TWO SIDE TRACKS MUST STAY EQUAL, or the title stops being centred — the
-     whole reason this header is a grid and not a flex row. The right slot gained the
-     "?" beside the action it already had, so both tracks widened to hold two buttons
-     (36 + 12 gap + 36) and the slots align OUTWARD, which keeps Back and the action
-     exactly where they have always been and puts the "?" on the inside. */
-  grid-template-columns: 84px 1fr 84px;
-  align-items: center;
-  gap: 12px;
-}
-.cat-header > .cat-header-slot:first-child { justify-content: flex-start; }
-.cat-header > .cat-header-slot:last-child { justify-content: flex-end; gap: 12px; }
-.cat-header-slot { display: flex; align-items: center; justify-content: center; }
-.cat-icon-btn {
-  appearance: none;
-  background: var(--rim-bg);
-  border: 1.5px solid var(--rim-border);
-  color: inherit;
-  width: 36px; height: 36px; border-radius: 50%; cursor: pointer; flex: none;
-  display: flex; align-items: center; justify-content: center; text-decoration: none;
-}
-.cat-icon-btn:hover { background: var(--rim-bg-hover); }
-.cat-icon-btn:active { background: var(--rim-bg-active); }
-/* On-brand ring: the app's default green focus ring is invisible on the green header. */
-.cat-icon-btn:focus-visible { outline: 2px solid var(--cat-brand-ink); outline-offset: 2px; }
-.cat-icon-btn[hidden] { display: none; }
-.cat-header-title { min-width: 0; text-align: center; }
-.cat-header-title h1 { margin: 0; font-family: var(--font-display); font-size: 22px; font-weight: 400; letter-spacing: 0; text-wrap: balance; }
-.cat-header-title p { margin: 2px 0 0; font-size: 10px; font-family: var(--cat-font-mono); letter-spacing: 0.12em; text-transform: uppercase; opacity: .75; }
-
 /* Scroll area + centered view width */
 .cat-screen { flex: 1; overflow-y: auto; padding: 16px; }
 /* Flex column that fills the scroll area, so the recipe leads and the secondary
@@ -108,15 +63,11 @@ body {
 }
 .cat-search input:focus { border-color: var(--cat-accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--cat-accent) 22%, transparent); }
 
-/* The recipe list sits in a subtly-tinted, softly-framed tray, set a little apart
-   from the search above so "search" and "your recipes" read as two distinct areas.
-   The frame is intentionally quiet — perceptible, not loud. */
+/* The rows sit directly on the page, set a little apart from the search above. The
+   old tinted tray around them made a card inside a card; each row keeps its OWN frame
+   (.cat-card, .alg-sheet-row), exactly like the Suppliers rows. */
 .cat-list-panel {
   margin-top: 18px;
-  padding: 8px;
-  background: var(--cat-surface-2);
-  border: 1px solid var(--cat-border);
-  border-radius: var(--cat-radius);
 }
 
 /* Recipe list — names only */
@@ -130,7 +81,13 @@ body {
 .cat-card:hover { transform: translateY(-1px); box-shadow: var(--cat-shadow); border-color: color-mix(in srgb, var(--cat-accent) 40%, var(--cat-border)); }
 .cat-card:focus-visible { outline: 2px solid var(--cat-accent); outline-offset: 2px; }
 .cat-card .name { flex: 1; min-width: 0; font-family: var(--cat-font-round); font-weight: 600; font-size: 1.12rem; color: var(--cat-text); }
-.cat-card .chev { flex: none; color: var(--cat-text-2); font-size: 1.3rem; line-height: 1; }
+/* The arrow is an SVG now: a flex box, so it centres on the row and never rests on a
+   text baseline. Shared by every «›» row of this page (list, sheet, detail folds). */
+.cat-card .chev,
+.alg-sheet-row .chev,
+.cat-alg-toggle .chev,
+.cat-alg-label-btn .chev { flex: none; display: flex; align-items: center; }
+.cat-card .chev { color: var(--cat-text-2); }
 .cat-empty { text-align: center; color: var(--cat-text-2); padding: 34px 12px; font-size: .95rem; }
 
 /* Detail — the ingredient list is the focus of the screen (no title above it;
@@ -360,18 +317,20 @@ body.cat-zoom-lock { overflow: hidden; }
 }
 /* ⚠️ SCOPED TO .cat-unit, NEVER TO «the second child». The Total row reuses .cat-amount
    with a plain <span> in that slot — anchored by position it would grow an arrow, and
-   the column of numbers it is the sum of would shift. Same `›` the folding cards use
-   (.cat-alg-toggle .chev), so no glyph and no asset was chosen. */
+   the column of numbers it is the sum of would shift. Same chevron SVG the folding cards
+   use (.cat-alg-toggle .chev). */
 .cat-unit-chev {
   position: absolute;
   right: 3px;
   top: 50%;
   transform: translateY(-50%) rotate(90deg);
   pointer-events: none;
-  font-size: 15px;
-  line-height: 1;
+  display: flex;
+  align-items: center;
   color: var(--cat-text-2);
 }
+/* Smaller than the row arrows: it has to fit the 11px reserved on the right. */
+.cat-unit-chev svg { width: 14px; height: 14px; }
 /* ⚠️ COLOUR ONLY, NO SECOND RING. The row already draws an inset focus ring and
    :has() is off the table in this project (v1.21.1), so it cannot be suppressed —
    two rings at once would be noise. Matches .cat-loss-input:focus. */
@@ -588,14 +547,6 @@ body.cat-zoom-lock { overflow: hidden; }
    two. What stays here is where the list sits in THIS page's framed ingredient list, and
    the chooser's header, which wears the catalogue's own. */
 .cat-ing-editgroup .pick-suggest { margin: 0 6px 6px 8px; }
-
-/* ── The link chooser's header ─────────────────────────────────────────────
-   The app's header spec: Back on the LEFT, title CENTRED, a spacer on the right so the
-   title cannot be pushed off centre. */
-.cat-pick-header { flex-shrink: 0; display: flex; align-items: center; }
-.cat-pick-title { flex: 1; min-width: 0; text-align: center; }
-.cat-pick-title h1 { font-size: 18px; font-weight: 600; letter-spacing: -0.3px; }
-.cat-pick-spacer { width: 36px; flex-shrink: 0; display: flex; align-items: center; }
 
 /* ── Reordering the ingredients (13 Sep 2026) ──────────────────────────────
    A mode, not a grip on every row: at 296px the row already holds a name, an amount, a
@@ -1297,8 +1248,9 @@ body.cat-zoom-lock { overflow: hidden; }
 .cat-footer {
   flex: none;
   display: flex;
+  flex-wrap: wrap;
   justify-content: center;
-  gap: 10px;
+  gap: 12px;
   padding: 10px 16px calc(12px + env(safe-area-inset-bottom));
   padding-inline: max(16px, var(--app-gutter));
   /* ⚠⚠ THE BAR IS THE PAGE'S OWN GROUND, NOT A RAISED SURFACE, AND THE FIRST
@@ -1316,9 +1268,10 @@ body.cat-zoom-lock { overflow: hidden; }
 .cat-footer[hidden] { display: none; }
 .cat-footer-btn {
   appearance: none;
-  flex: 1;
-  max-width: 220px;
-  height: 44px;
+  flex: 0 1 240px;
+  max-width: calc(50% - 6px);
+  min-height: 44px;
+  padding: 8px 12px;
   cursor: pointer;
   /* The raised chip, now that the bar behind it is the page. --surface-2 was
      invisible against a --surface bar and is barely lighter than the ground. */

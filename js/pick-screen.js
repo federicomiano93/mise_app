@@ -4,7 +4,7 @@
 // A full-screen overlay with a search box, not a dropdown: there are dozens of ingredients
 // and hundreds of recipes, and a <select> long enough to hold them is unusable on a phone.
 // It follows the app's drill-in pattern and header spec — Back on the LEFT, title CENTRED,
-// nothing on the right — and it wears the CALLING PAGE's own header (`chrome`), so it looks
+// nothing on the right — and it wears the shared green bar (.app-header), so it looks
 // like one more level of that page rather than a screen from somewhere else.
 //
 // ⚠️ It deliberately does NOT use the class `.preview-overlay`: that name is in
@@ -26,11 +26,10 @@ const BACK_ICON = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" w
 //   emptyText(query)  → what to say when nothing at all is listed
 //   topAction         → optional { label, value } under the search box (e.g. remove the link)
 //   extraAction(query)→ optional { label, value } at the end of the list, or null (e.g. create)
-//   chrome            → the page's header classes: { header, slot, title, icon }
 //   initialQuery      → open it already searching
 export function openPickScreen({
   title, backLabel, searchLabel, sections, emptyText, topAction = null, extraAction = null,
-  chrome = {}, initialQuery = '',
+  initialQuery = '',
 }) {
   return new Promise(resolve => {
     let query = String(initialQuery ?? '');
@@ -76,13 +75,13 @@ export function openPickScreen({
     }
 
     const overlay = el('div', { class: 'pick-overlay', role: 'dialog', 'aria-modal': 'true', 'aria-label': title }, [
-      el('header', { class: chrome.header || 'pick-header' }, [
-        el('span', { class: chrome.slot || null }, [
-          el('button', { class: chrome.icon || null, type: 'button', 'aria-label': backLabel,
+      el('header', { class: 'app-header' }, [
+        el('span', { class: 'app-header-slot' }, [
+          el('button', { class: 'app-icon-btn', type: 'button', 'aria-label': backLabel,
             icon: BACK_ICON, onclick: () => close(undefined) }),
         ]),
-        el('div', { class: chrome.title || null }, [el('h1', { text: title })]),
-        el('span', { class: chrome.slot || null }),
+        el('div', { class: 'app-header-title' }, [el('h1', { text: title })]),
+        el('span', { class: 'app-header-slot' }),
       ]),
       el('div', { class: 'pick-body' }, [
         search,

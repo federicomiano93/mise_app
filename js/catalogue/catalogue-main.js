@@ -87,6 +87,7 @@ function setHeader({ title, sub, back, add, edit = false, footer = false }) {
   subEl.removeAttribute('data-i18n');
   titleEl.textContent = title;
   subEl.textContent = sub;
+  subEl.hidden = !sub;   // the list has none: see showList
   homeBtn.hidden = back;   // Home shows only on the list; Back replaces it elsewhere
   backBtn.hidden = !back;
   addBtn.hidden = !add;
@@ -147,13 +148,17 @@ function showList() {
   activeSettings = null;
   activeSheet = null;
   leaveGuard = null;
-  setHeader({ title: t('ui.recipes'), sub: t('cat.recipeCatalogue'), back: false, add: true, footer: true });
+  // No subtitle: «Ricette e scalatura in kg» is cut to «Ricette e scalatur…» on a
+  // 360px phone between two buttons on each side (ui-check, 29 Sep 2026), and a cut
+  // line reads as a fault. The title alone names the screen.
+  setHeader({ title: t('section.catalogue'), sub: '', back: false, add: true, footer: true });
   activeList = renderList({
     recipes: getRecipes(),
     usageMap: getUsage(),
     initialQuery: searchQuery,
     onQueryChange: (q) => { searchQuery = q; },
     onOpen: openDetail,
+    onAdd: () => openEditor(null),
   });
   swap(activeList.root);
 }

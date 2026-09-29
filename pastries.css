@@ -55,56 +55,6 @@ body {
   line-height: 1.45;
 }
 
-/* ── Header ────────────────────────────────────────────────────────────────
-   The app-wide spec: a 36px icon button on each side and a CENTRED title, in
-   three fixed grid tracks so an empty side slot still holds its column. */
-.pas-header {
-  flex: none;
-  background: var(--pas-brand);
-  color: var(--pas-brand-ink);
-  /* viewport-fit=cover lets the green fill the status-bar area; the safe-area top
-     inset keeps the title/buttons below the clock. */
-  padding: calc(16px + env(safe-area-inset-top)) 16px 20px;
-  /* Centre the header's contents on the same column as .pas-view below it.
-     16px floor = the padding above, so no phone moves. */
-  padding-inline: max(16px, var(--app-gutter));
-  border-radius: 0 0 26px 26px;
-  display: grid;
-  /* ⚠️ THE TWO SIDE TRACKS MUST STAY EQUAL, or the title stops being centred — the
-     whole reason this header is a grid and not a flex row. The right slot gained the
-     "?" beside the action it already had, so both tracks widened to hold two buttons
-     (36 + 12 gap + 36) and the slots align OUTWARD, which keeps Back and the action
-     exactly where they have always been and puts the "?" on the inside. */
-  grid-template-columns: 84px 1fr 84px;
-  align-items: center;
-  gap: 12px;
-}
-.pas-header > .pas-header-slot:first-child { justify-content: flex-start; }
-.pas-header > .pas-header-slot:last-child { justify-content: flex-end; gap: 12px; }
-.pas-header-slot { display: flex; align-items: center; justify-content: center; }
-.pas-icon-btn {
-  appearance: none;
-  background: var(--rim-bg);
-  border: 1.5px solid var(--rim-border);
-  color: inherit;
-  width: 36px; height: 36px; border-radius: 50%; cursor: pointer; flex: none;
-  display: flex; align-items: center; justify-content: center; text-decoration: none;
-}
-.pas-icon-btn:hover { background: var(--rim-bg-hover); }
-.pas-icon-btn:active { background: var(--rim-bg-active); }
-/* On-brand ring: the app's default green focus ring is invisible on green. */
-.pas-icon-btn:focus-visible { outline: 2px solid var(--pas-brand-ink); outline-offset: 2px; }
-.pas-icon-btn[hidden] { display: none; }
-.pas-header-title { min-width: 0; text-align: center; }
-.pas-header-title h1 {
-  margin: 0; font-family: var(--font-display); font-size: 22px; font-weight: 400;
-  letter-spacing: 0; text-wrap: balance;
-}
-.pas-header-title p {
-  margin: 2px 0 0; font-size: 10px; font-family: var(--pas-font-mono);
-  letter-spacing: 0.12em; text-transform: uppercase; opacity: .75;
-}
-
 /* ── The weekday strip ─────────────────────────────────────────────────────
    A segmented control: seven equal columns, NO gap, 1px hairlines between. The
    arithmetic matters, because all seven have to be reachable without scrolling
@@ -156,7 +106,9 @@ body {
 
 /* A day with nothing in it reads quieter than one already filled, so "have I
    done Thursday yet?" is answered without opening it. */
-.pas-chip--empty { color: var(--pas-text-5); }
+/* ⚠️ --text-3, not --text-5 (placeholder grey, 2.24:1): the day names are text
+   somebody reads, and the quieter look still holds against a filled day's dark ink. */
+.pas-chip--empty { color: var(--text-3); }
 
 /* The selected day. */
 .pas-chip[aria-selected="true"] {
@@ -299,13 +251,6 @@ input.pas-quick:focus {
 }
 .pas-tick:active { transform: scale(.97); }
 .pas-tick:focus-visible { outline: 2px solid var(--pas-accent); outline-offset: 2px; }
-
-.pas-empty {
-  text-align: center;
-  color: var(--pas-text-2);
-  padding: 40px 16px;
-}
-.pas-empty-hint { display: block; margin-top: 6px; font-size: 14px; color: var(--pas-text-3); }
 
 /* ── The standing note ─────────────────────────────────────────────────────
    A reminder about the WEEKDAY, not about one night: confirming a list never
@@ -595,8 +540,9 @@ input.pas-qty.pas-invalid {
 .pas-footer {
   flex: none;
   display: flex;
+  flex-wrap: wrap;
   justify-content: center;
-  gap: 10px;
+  gap: 12px;
   padding: 10px 16px calc(12px + env(safe-area-inset-bottom));
   padding-inline: max(16px, var(--app-gutter));
   background: var(--pas-ground);
@@ -605,9 +551,10 @@ input.pas-qty.pas-invalid {
 .pas-footer[hidden] { display: none; }
 .pas-footer-btn {
   appearance: none;
-  flex: 1;
-  max-width: 220px;
-  height: 44px;
+  flex: 0 1 240px;
+  max-width: calc(50% - 6px);
+  min-height: 44px;
+  padding: 8px 12px;
   cursor: pointer;
   background: var(--pas-surface);
   border: 1px solid var(--pas-border);

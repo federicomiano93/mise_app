@@ -87,18 +87,30 @@
      open. -->
 <div id="auth-gate" class="auth-gate"></div>
 
-<header class="orders-header">
-  <a class="orders-icon-btn" href="index.html" data-i18n="ui.back" data-i18n-attr="aria-label" aria-label="Back">
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
-  </a>
-  <div class="orders-header-title">
+<header class="app-header orders-header">
+  <span class="app-header-slot">
+    <a class="app-icon-btn orders-icon-btn" href="index.html" data-i18n="ui.back" data-i18n-attr="aria-label" aria-label="Back">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+    </a>
+  </span>
+  <div class="app-header-title orders-header-title">
     <!-- ⚠️ THE SAME KEY THE HOME CARD USES, and a test pins that. What you tap and
          what you land on must carry the same name, or the rename only moves the
          confusion one screen along. -->
     <h1 data-i18n="section.suppliersAndIngredients">Suppliers &amp; ingredients</h1>
     <p data-i18n="ui.contactsAndAllergens">Contacts &amp; allergens</p>
   </div>
-  <span class="help-host" data-help="suppliers"></span>
+  <span class="app-header-slot help-host" data-help="suppliers">
+    <!-- The one way to add on the list, following the active tab (Ingredients ·
+         Packaging · Suppliers). ⚠️ NO role gate: the dashed button it replaced had none,
+         and Delete is the only thing here that asks who you are. Its aria-label is set
+         by js/orders/registry.js on every paint to name the active tab. The static key is the
+         GENERIC «Add», on purpose: when the language arrives the static pass rewrites this
+         label, and a generic word is never wrong on any tab. -->
+    <button class="app-icon-btn orders-icon-btn" id="registry-add" type="button" data-i18n="orders.add.generic" data-i18n-attr="aria-label" aria-label="Add">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+    </button>
+  </span>
 </header>
 
 <!-- ⚠️ `scroll-with-bar` MAKES THE BOTTOM BAR SIT AT THE BOTTOM WHEN THE LIST IS SHORT.

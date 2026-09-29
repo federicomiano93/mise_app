@@ -79,15 +79,15 @@ export function openFoodcostSettings({ rate = null, confirm, onSave, toast, retu
 
   const onKey = e => { if (e.key === 'Escape' && !document.querySelector('.app-dialog')) { e.preventDefault(); leave(); } };
 
-  const back = el('button', { class: 'fc-icon-btn', type: 'button', icon: BACK_ICON, 'aria-label': t('ui.back'), onclick: leave });
+  const back = el('button', { class: 'app-icon-btn', type: 'button', icon: BACK_ICON, 'aria-label': t('ui.back'), onclick: leave });
 
   const overlay = el('div', {
     class: 'fc-overlay fc-settings', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'fcSettingsTitle',
   }, [
-    el('header', { class: 'fc-header' }, [
-      el('span', { class: 'fc-header-slot' }, [back]),
-      el('div', { class: 'fc-header-title' }, [el('h1', { id: 'fcSettingsTitle', text: t('fc.settings.title') })]),
-      el('span', { class: 'fc-header-slot' }),
+    el('header', { class: 'app-header' }, [
+      el('span', { class: 'app-header-slot' }, [back]),
+      el('div', { class: 'app-header-title' }, [el('h1', { id: 'fcSettingsTitle', text: t('fc.settings.title') })]),
+      el('span', { class: 'app-header-slot' }),
     ]),
     el('main', { class: 'fc-screen' }, [
       // The app's one settings look (tokens.css .set-*, 28 Sep 2026): a card with its

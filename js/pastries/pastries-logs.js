@@ -78,12 +78,9 @@ export function renderLogs({ logs, app }) {
   function paint(nextLogs) {
     const items = nextLogs || [];
     if (!items.length) {
-      list.replaceChildren(el('p', { class: 'pas-empty' }, [
-        t('past.noRecordsYet'),
-        el('span', {
-          class: 'pas-empty-hint',
-          text: t('past.tapConfirmAtThe'),
-        }),
+      list.replaceChildren(el('div', { class: 'empty-state' }, [
+        el('p', { class: 'empty-title', text: t('past.noRecordsYet') }),
+        el('p', { class: 'empty-sub', text: t('past.tapConfirmAtThe') }),
       ]));
       return;
     }

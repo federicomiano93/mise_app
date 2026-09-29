@@ -58,8 +58,10 @@ import {
 // data:    { suppliers(): [], ingredients(): [] } — live getters
 // actions: { saveSupplier, saveIngredient, priceHistory, setSupplierActive,
 //            setIngredientActive, deleteSupplier, deleteIngredient }
-// -> { node, refresh() }
-export function buildRegistry(data, actions) {
+// hooks:   { onChrome({ addLabel }) } — told on every paint which word the page
+//            header's «+» should carry, because it follows the active tab.
+// -> { node, refresh(), openSettings(), addCurrent() }
+export function buildRegistry(data, actions, hooks = {}) {
   // ⚠️ INGREDIENTS FIRST, AND THAT IS THE POINT OF THE SCREEN. Federico: «adesso quando
   // apro la schermata vedo prima i fornitori, invece voglio vedere prima gli
   // ingredienti». The backlog says why — 67 ingredients, 0 declared: this list IS the
@@ -154,6 +156,33 @@ export function buildRegistry(data, actions) {
     // buildSearchBox copies the placeholder into aria-label at build time, when there
     // was none — so a screen reader would announce an unlabelled field (P18).
     search.input.setAttribute('aria-label', ph);
+    hooks.onChrome?.({ addLabel: addLabel() });
+  }
+
+  // ── «Add», from the page header ─────────────────────────────────────────────
+  // ⚠️ THE HEADER «+» AND THE EMPTY-STATE BUTTON CALL THIS ONE FUNCTION, so they can
+  // never add different things. It follows the active tab. ⚠️ NO PERMISSION CHECK, on
+  // purpose and exactly as before: the dashed button it replaces had none (see the note
+  // at the top of this file — adding and correcting are ordinary work, and only Delete
+  // asks canManageHere()). Do not add one here.
+  function addCurrent() {
+    if (tab === 'suppliers') openSupplierForm(null);
+    else openIngredientForm(null, null, tab === 'packaging' ? 'packaging' : 'ingredient');
+  }
+
+  function addLabel() {
+    return t(tab === 'suppliers' ? 'orders.add.supplier'
+      : tab === 'packaging' ? 'orders.add.packaging' : 'orders.add.ingredient');
+  }
+
+  // The screen-level empty state (tokens.css): what is missing, one sentence on why it
+  // matters, and the same action the header «+» carries.
+  function emptyState(which) {
+    return el('div', { class: 'empty-state' }, [
+      el('p', { class: 'empty-title', text: t(`orders.empty.${which}.title`) }),
+      el('p', { class: 'empty-sub', text: t(`orders.empty.${which}.sub`) }),
+      el('button', { class: 'empty-action', type: 'button', text: addLabel(), onClick: addCurrent }),
+    ]);
   }
 
   const node = el('div', {}, [viewSwitch, search.node, listHost]);
@@ -175,13 +204,8 @@ export function buildRegistry(data, actions) {
     const all = data.suppliers().slice().sort((a, b) => a.name.localeCompare(b.name));
     const visible = all.filter(s => matches(s.name));
 
-    listHost.appendChild(el('button', {
-      type: 'button', class: 'mgmt-add',
-      onClick: () => openSupplierForm(null),
-    }, t('orders.addSupplier')));
-
     if (!all.length) {
-      listHost.appendChild(el('p', { class: 'mgmt-empty', text: t('orders.noSuppliersYet') }));
+      listHost.appendChild(emptyState('suppliers'));
       return;
     }
     if (!visible.length) {
@@ -218,13 +242,8 @@ export function buildRegistry(data, actions) {
       .sort((a, b) => a.name.localeCompare(b.name));
     const visible = all.filter(i => matches(i.name));
 
-    listHost.appendChild(el('button', {
-      type: 'button', class: 'mgmt-add',
-      onClick: () => openIngredientForm(null, null, kind),
-    }, packaging ? t('orders.addPackaging') : t('orders.addIngredient')));
-
     if (!all.length) {
-      listHost.appendChild(el('p', { class: 'mgmt-empty', text: packaging ? t('orders.noPackagingYet') : t('orders.noIngredientsYet') }));
+      listHost.appendChild(emptyState(packaging ? 'packaging' : 'ingredients'));
       return;
     }
     if (!visible.length) {
@@ -493,11 +512,12 @@ export function buildRegistry(data, actions) {
   // nothing on screen saying why.
   function overlay(title, body, onBack = pop) {
     return el('div', { class: 'mgmt-overlay' }, [
-      el('header', { class: 'orders-header' }, [
-        el('button', { type: 'button', class: 'orders-icon-btn', 'aria-label': t('ui.back'), icon: BACK_ICON, onClick: onBack }),
-        el('div', { class: 'orders-header-title' }, [el('h1', { text: title })]),
-        // Keeps the title centred: the back button on the left needs a counterweight.
-        el('span', { class: 'header-spacer' }),
+      el('header', { class: 'app-header orders-header' }, [
+        el('span', { class: 'app-header-slot' }, [
+          el('button', { type: 'button', class: 'app-icon-btn orders-icon-btn', 'aria-label': t('ui.back'), icon: BACK_ICON, onClick: onBack }),
+        ]),
+        el('div', { class: 'app-header-title orders-header-title' }, [el('h1', { text: title })]),
+        el('span', { class: 'app-header-slot' }),
       ]),
       body,
     ]);
@@ -541,7 +561,7 @@ export function buildRegistry(data, actions) {
   }
 
   paintList();
-  return { node, refresh, openSettings };
+  return { node, refresh, openSettings, addCurrent };
 }
 
 const CHEVRON_SVG =

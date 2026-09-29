@@ -112,7 +112,12 @@
      small text needs (axe, ui-check 28 Sep 2026). This one clears 4.5 on every
      ground it sits on (--surface 5.36, --surface-2 5.01, --bg 4.68). */
   --text-3: #706959;      /* third level: units, timestamps, fine print */
-  --text-4: #8B8474;      /* small uppercase mono labels */
+  /* ⚠️ Was #8B8474: 3.41:1 on --surface-2, under the 4.5:1 small text needs (inactive
+     tabs and filters, ui-check 28 Sep 2026). Federico chose to darken it (29 Sep
+     2026). Nothing lighter than --text-3 clears 4.5 on --bg, so the two now share a
+     value: these labels are told apart by their mono uppercase face, not by a
+     paler grey. Kept as its own name so a later change can split them again. */
+  --text-4: #706959;      /* small uppercase mono labels */
   --text-5: #B3AB99;      /* placeholder text */
 
   /* ── Greens (two, distinct) ──────────────────────────────────────────── */
@@ -509,11 +514,6 @@
 }
 .help-btn:hover { background: var(--rim-bg-hover); }
 
-/* The empty counterweight on the right of a header whose only button is Back:
-   it keeps the title centred. Same width as the header's icon buttons — and the
-   tablet rule in orders.css grows both together, or the title slides 8px off.
-   A class, not an inline width, so that rule can reach it. */
-.header-spacer { width: 36px; flex-shrink: 0; }
 .help-btn:active { background: var(--rim-bg-active); }
 .help-btn:focus-visible {
   outline: 2px solid var(--on-brand);
@@ -527,6 +527,154 @@
   color: var(--text-2);
 }
 .home-header .help-btn:focus-visible { outline-color: var(--accent-2); }
+
+/* ── The green header bar — ONE definition for every section ───────────────────
+   Orders, Suppliers, the Calculator, the Catalogue, Pastries, Food cost and
+   Magazzino each carried their own copy of this bar, and the copies had drifted:
+   two were flat with a sans title, one used a different padding. A feature
+   stylesheet now adds only what is genuinely its own (Orders' bell dots, the
+   tablet sizes) and never redefines the bar's shape or colour.
+
+   ⚠️ EXACTLY THREE CHILDREN, IN THIS ORDER: a left slot, the title block, a right
+   slot — tests/app-header.test.mjs pins it. Three grid tracks, `1fr auto 1fr`,
+   make the title EXACTLY centred whenever both sides fit, whatever the two sides
+   hold; it drifts only when one side genuinely cannot fit (Orders on a phone: three
+   buttons on the right). An empty slot still holds its track — that is the point.
+   ⚠️ The subtitle is one line and ends in an ellipsis: a wrapped subtitle made this
+   bar a different height on every screen. */
+.app-header {
+  flex: none;
+  position: relative;
+  display: grid;
+  /* --app-header-side: the width BOTH sides reserve even when one holds less —
+     see the rule after this one. `auto` = each side at least what it HOLDS.
+     ⚠️ NEVER 0px: a fixed zero minimum lets a side column shrink below its own
+     buttons, and below 360px they were drawn over the title — the bell over
+     «Ordini», the «?» over «Fornitori e ingredienti» (code review, 29 Sep 2026). */
+  --app-header-side: auto;
+  grid-template-columns: minmax(var(--app-header-side), 1fr) auto minmax(var(--app-header-side), 1fr);
+  align-items: center;
+  /* 8px between the title and each side, not 12: at 360px «CONTATTI E ALLERGENI» was
+     cut by exactly 8px between two reserved 84px sides (ui-check, 29 Sep 2026). */
+  column-gap: 8px;
+  background: var(--brand);
+  color: var(--on-brand);
+  /* viewport-fit=cover lets the green fill the status-bar area; the safe-area top
+     inset keeps the title and buttons below the clock. */
+  padding: calc(16px + env(safe-area-inset-top)) 16px 20px;
+  /* Contents on the same column as the screen below. 16px floor = the padding above. */
+  padding-inline: max(16px, var(--app-gutter));
+  border-radius: 0 0 26px 26px;
+}
+/* ⚠️ A LONG TITLE TAKES THE FREE SPACE BEFORE THE SIDES DO. Grid grows an `auto`
+   track to its full width before any `1fr` track gets a pixel, so with one button
+   left and two right a long «Ricettario / RICETTE E SCALATURA IN KG» left the left
+   side at 36px and the title sat 22px off centre on a 360px phone (ui-check,
+   29 Sep 2026). These sections always hold TWO buttons on the right (help + an
+   action), so both sides reserve two buttons' width: 36 + 12 + 36. Food cost and
+   Suppliers are picked by data-card, not data-section: Magazzino shares Food cost's
+   section but has one button on the right, and Orders shares Suppliers'.
+   Not below 360px: at 296 the reserved width would leave the title less than
+   its own longest word — there the drift is the lesser evil.
+   Not Orders: three buttons on the right cannot be mirrored on a phone at all.
+   ⚠️ Written as a max-width EXCEPTION, not a min-width rule: the app has exactly one
+   «bigger screen» query, the tablet switch (tests/tablet-width.test.mjs). */
+body[data-section="catalogue"] .app-header,
+body[data-section="pastries"] .app-header,
+body[data-section="calculator"] .app-header,
+body[data-card="foodcost"] .app-header,
+body[data-card="suppliers"] .app-header {
+  --app-header-side: 84px;
+}
+@media (max-width: 359px) {
+  body[data-section="catalogue"] .app-header,
+  body[data-section="pastries"] .app-header,
+  body[data-section="calculator"] .app-header,
+  body[data-card="foodcost"] .app-header,
+  body[data-card="suppliers"] .app-header {
+    --app-header-side: auto;
+  }
+}
+/* ⚠️ NO `min-width: 0` ON THE SLOTS. With it, a 296px phone let the 1fr tracks
+   shrink below Orders' three buttons, which then overflowed leftwards and «Ordini»
+   was drawn UNDER the bell (measured 29 Sep 2026). A slot must never get narrower
+   than its buttons; the TITLE is the one that gives way (min-width: 0 below, so its
+   one-line subtitle ends in «…» rather than pushing the buttons off the bar), and it
+   drifts off centre only when the sides cannot fit — the accepted cost. */
+.app-header-slot {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.app-header > .app-header-slot:first-child { justify-content: flex-start; }
+.app-header > .app-header-slot:nth-child(3) { justify-content: flex-end; }
+.app-header-title { min-width: 0; text-align: center; }
+.app-header-title h1 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 400;
+  letter-spacing: 0;
+  color: inherit;
+  text-wrap: balance;
+}
+.app-header-title p {
+  margin: 2px 0 0;
+  font-size: 10px;
+  font-family: var(--font-mono);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: inherit;
+  opacity: .75;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* Below 360px the subtitle goes, on every screen — the rule Orders already had at
+   400px. At 296 it was cut to «CONTATTI E ALLERG…» on three screens (ui-check,
+   29 Sep 2026): a line that stops mid-word reads as a fault, the title alone does not. */
+@media (max-width: 359px) {
+  .app-header-title p { display: none; }
+}
+
+/* The round rim button: 36px to look at, 44px to touch. The ::before is the
+   invisible extra — `inset` is measured from the padding box, which sits 1.5px inside
+   the border, so -5.5px is what reaches 44px overall. It changes neither layout nor
+   the visible circle. ⚠️ Nothing else may claim ::before on this button: the Orders
+   badges are child spans for that reason. */
+.app-icon-btn,
+.app-header .help-btn {
+  position: relative;
+}
+.app-icon-btn::before,
+.app-header .help-btn::before {
+  content: '';
+  position: absolute;
+  inset: -5.5px;
+  border-radius: 50%;
+}
+.app-icon-btn {
+  appearance: none;
+  box-sizing: border-box;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border-radius: 50%;
+  background: var(--rim-bg);
+  border: 1.5px solid var(--rim-border);
+  color: var(--on-brand);
+  cursor: pointer;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+}
+.app-icon-btn:hover { background: var(--rim-bg-hover); }
+.app-icon-btn:active { background: var(--rim-bg-active); }
+/* On-brand ring: the app's default green focus ring is invisible on the green bar. */
+.app-icon-btn:focus-visible { outline: 2px solid var(--on-brand); outline-offset: 2px; }
+.app-icon-btn[hidden] { display: none; }
 
 /* ── "Who can get in", and the join-code field ──────────────────────────────
    In tokens.css because it is not one feature's screen: the roster is opened

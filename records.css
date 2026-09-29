@@ -329,9 +329,10 @@
   color: var(--text3);
 }
 .rec-host .mgmt-fold-chev {
+  flex: none;
+  display: flex;
+  align-items: center;
   color: var(--text3);
-  font-size: 18px;
-  line-height: 1;
   transition: transform .15s ease;
 }
 .rec-host .mgmt-fold-head--open .mgmt-fold-chev {

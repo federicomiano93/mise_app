@@ -40,12 +40,12 @@ function layer({ title, body, onBack }) {
   const node = el('div', {
     class: 'pick-overlay rec-host', role: 'dialog', 'aria-modal': 'true', 'aria-label': title,
   }, [
-    el('header', { class: 'cat-header cat-pick-header' }, [
-      el('span', { class: 'cat-pick-spacer' }, [
-        el('button', { class: 'cat-icon-btn', type: 'button', 'aria-label': t('ui.back'), icon: BACK_ICON, onclick: onBack }),
+    el('header', { class: 'app-header' }, [
+      el('span', { class: 'app-header-slot' }, [
+        el('button', { class: 'app-icon-btn', type: 'button', 'aria-label': t('ui.back'), icon: BACK_ICON, onclick: onBack }),
       ]),
-      el('div', { class: 'cat-pick-title' }, [el('h1', { text: title })]),
-      el('span', { class: 'cat-pick-spacer' }),
+      el('div', { class: 'app-header-title' }, [el('h1', { text: title })]),
+      el('span', { class: 'app-header-slot' }),
     ]),
     el('div', { class: 'mgmt-scroll' }, [body]),
   ]);

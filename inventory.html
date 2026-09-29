@@ -85,20 +85,20 @@
 <!-- Three fixed tracks (left slot · title · right slot) so the title is TRULY
      centred: only one button of each slot is ever visible, and an empty slot must
      still hold its column or the title drifts off-centre. -->
-<header class="inv-header">
-  <span class="inv-header-slot">
-    <a class="inv-icon-btn" id="invHome" href="index.html" data-i18n="ui.back" data-i18n-attr="aria-label" aria-label="Back">
+<header class="app-header">
+  <span class="app-header-slot">
+    <a class="app-icon-btn" id="invHome" href="index.html" data-i18n="ui.back" data-i18n-attr="aria-label" aria-label="Back">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
     </a>
-    <button class="inv-icon-btn" id="invBack" data-i18n="ui.back" data-i18n-attr="aria-label" aria-label="Back" hidden>
+    <button class="app-icon-btn" id="invBack" data-i18n="ui.back" data-i18n-attr="aria-label" aria-label="Back" hidden>
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
     </button>
   </span>
-  <div class="inv-header-title">
+  <div class="app-header-title">
     <h1 id="invTitle" data-i18n="section.inventory">Stocktake</h1>
     <p id="invSub" data-i18n="inv.monthOpen">Open</p>
   </div>
-  <span class="inv-header-slot" data-help="inventory"></span>
+  <span class="app-header-slot" data-help="inventory"></span>
 </header>
 
 <!-- Which month is being counted. A strip of its own, under the header and above

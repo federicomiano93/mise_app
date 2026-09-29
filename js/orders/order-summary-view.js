@@ -43,18 +43,18 @@ export function buildOrderSummaryView(supplier, ingredients, entries, ctx) {
   const overlay = el('div', {
     class: 'order-summary-view', role: 'dialog', 'aria-label': supplier.name,
   }, [
-    el('header', { class: 'orders-header' }, [
-      el('button', {
-        type: 'button', class: 'orders-icon-btn', 'aria-label': t('ui.back'),
-        icon: BACK_ICON, onClick: () => ctx.onBack?.(),
-      }),
-      el('div', { class: 'orders-header-title' }, [
+    el('header', { class: 'app-header orders-header' }, [
+      el('span', { class: 'app-header-slot' }, [
+        el('button', {
+          type: 'button', class: 'app-icon-btn orders-icon-btn', 'aria-label': t('ui.back'),
+          icon: BACK_ICON, onClick: () => ctx.onBack?.(),
+        }),
+      ]),
+      el('div', { class: 'app-header-title orders-header-title' }, [
         el('h1', { text: supplier.name }),
         subtitle,
       ]),
-      // Keeps the title centred: the back button on the left needs a counterweight —
-      // the same spacer supplier-items.js uses on the same header shape.
-      el('span', { class: 'header-spacer' }),
+      el('span', { class: 'app-header-slot' }),
     ]),
     body,
   ]);

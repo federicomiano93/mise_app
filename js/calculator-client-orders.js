@@ -15,6 +15,7 @@
 
 import { t, localeTag, joinList } from './i18n.js';
 import { el } from './calculator-render.js';
+import { icon } from './calculator-icons.js';
 import { confirmDialog, alertDialog } from './confirm-dialog.js';
 import { getConfig } from './calculator-config-store.js';
 import { getClientById } from './calculator-config.js';
@@ -120,7 +121,7 @@ function paintBanner() {
     type: 'button',
   }, [
     el('span', { class: 'co-banner-text' }, label),
-    el('span', { class: 'co-banner-go' }, '›'),
+    el('span', { class: 'co-banner-go' }, icon('chevronRight', 18)),
   ]);
   button.addEventListener('click', openScreen);
   host.appendChild(button);
