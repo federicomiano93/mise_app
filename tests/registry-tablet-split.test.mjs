@@ -163,11 +163,14 @@ test('closing a level removes only that level, wherever it sits', () => {
 
 test('no level closes «the top»: every done / cancel / delete is bound to its own entry', () => {
   assert.doesNotMatch(REGISTRY, /\bpop\(\)|onDone:\s*pop\b|onCancel:\s*pop\b/);
-  assert.match(REGISTRY, /onDone:\s*\(\) => popEntry\(entry\)/);
+  // A save closes ITS OWN entry too — through popAfterSave, which then redraws the level it
+  // uncovers (29 Sep 2026: the supplier's screen kept its old title after a save).
+  assert.match(REGISTRY, /onDone:\s*\(\) => popAfterSave\(entry\)/);
+  assert.match(bodyOf(REGISTRY, 'popAfterSave'), /popEntry\(entry\);\s*refresh\(\);/);
   // Cancel asks first when there is typing (P20, 30 Sep 2026), then closes ITS OWN entry.
   assert.match(REGISTRY, /onCancel:\s*\(\) => guardedLeave\(entry, \(\) => popEntry\(entry\)\)/);
   assert.match(REGISTRY, /await actions\.deleteSupplier\(supplier\.id\); popEntry\(entry\)/);
-  assert.match(REGISTRY, /onDone:\s*\(saved\) => \{ popEntry\(entry\)/);
+  assert.match(REGISTRY, /onDone:\s*\(saved\) => \{ popAfterSave\(entry\)/);
   assert.match(bodyOf(REGISTRY, 'popEntry'), /removeLevel\(stack, entry\)/);
 });
 
