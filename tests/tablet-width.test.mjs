@@ -482,6 +482,8 @@ test('the wide column is scoped to Home, Orders and the Catalogue, and defined n
   assert.match(block, /body\[data-card="inventory"\]/, 'Magazzino must be in the scope (summary column + two-column count)');
   // Pastries: the seven days become a list on the left, the day's list beside it.
   assert.match(block, /body\[data-card="pastries"\]/, 'Pastries must be in the scope (days list + the day beside it)');
+  // The Calculator: quantities left, the confirmed recipe right (style.css).
+  assert.match(block, /body\[data-card="calculator"\]/, 'the Calculator must be in the scope (entry + recipe side by side)');
   assert.match(block, /body\[data-section="orders"\]/,
     'Orders — and suppliers.html, which shares the same body attribute — must be in the scope');
 
