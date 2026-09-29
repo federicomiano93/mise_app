@@ -99,7 +99,8 @@ test('the tablist semantics are the same for the row and the column', () => {
   assert.match(STRIP, /e\.key === 'End'/);
   // Said out loud: a column on a tablet, a row on a phone, following a rotation.
   assert.match(STRIP, /host\.setAttribute\('aria-orientation', isTabletNow\(\) \? 'vertical' : 'horizontal'\)/);
-  assert.match(STRIP, /watchTablet\(/);
+  // The ROTATION answer, not only the call (review, 29 Sep 2026).
+  assert.match(STRIP, /watchTablet\(\(tablet\) => host\.setAttribute\('aria-orientation', tablet \? 'vertical' : 'horizontal'\)\)/);
 });
 
 test('every chip carries the day\'s count, from the same map that quietens an empty day', () => {

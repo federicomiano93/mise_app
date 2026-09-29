@@ -53,11 +53,17 @@ test('Magazzino widens on ITS OWN data-card, never on the section Food cost shar
 test('the two-column list exists only under the tablet query', () => {
   assert.match(inside, /\.inv-view--list\s*\{[^}]*display:\s*grid/);
   assert.match(inside, /grid-template-columns:\s*320px minmax\(0, 1fr\)/);
-  assert.match(inside, /\.inv-list\s*\{[^}]*grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\)/);
+  // Two columns only while each row is ≥380px, and names wrap rather than lose the weight.
+  assert.match(inside, /\.inv-list\s*\{[^}]*grid-template-columns:\s*repeat\(auto-fill, minmax\(380px, 1fr\)\)/);
+  assert.match(inside, /\.inv-row-name\s*\{\s*white-space:\s*normal;/);
   assert.match(inside, /\.inv-list > \.inv-group[^{]*\{[^}]*grid-column:\s*1 \/ -1/);
   assert.doesNotMatch(outside, /display:\s*grid/, 'the phone must not get a grid');
   assert.doesNotMatch(outside, /grid-template-columns/);
-  assert.doesNotMatch(outside, /overflow-y:\s*auto[^}]*\}\s*\.inv-list/);
+  // The list scrolls on its own ONLY on a tablet (the review found the old check here
+  // could never match anything): outside the query no .inv-list rule may scroll.
+  for (const [, body] of outside.matchAll(/\.inv-list\s*\{([^}]*)\}/g)) {
+    assert.doesNotMatch(body, /overflow-y/, 'the phone list must scroll with its screen');
+  }
 });
 
 test('the phone half of the side block is the view\'s own column and gap', () => {

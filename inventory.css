@@ -441,10 +441,16 @@ body {
     overflow-y: auto;
     padding: 4px;
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    /* ⚠️ TWO COLUMNS ONLY WHEN EACH ROW STAYS READABLE. A fixed repeat(2) left the
+       name ~100–150px at 960–1024px wide, and the name ends with the pack WEIGHT —
+       «Farina tipo 00 25kg» and «…10kg» both read «Farina tipo 0…», and the count goes
+       on the wrong row (code review, 29 Sep 2026). 380px per row or one column. */
+    grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
     align-content: start;
     gap: 8px;
   }
+  /* And the name is never cut on a tablet: it wraps, weight included. */
+  .inv-row-name { white-space: normal; overflow-wrap: anywhere; }
   .inv-list > .inv-group,
   .inv-list > .inv-empty,
   .inv-list > .empty-state { grid-column: 1 / -1; }
