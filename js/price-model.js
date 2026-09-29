@@ -79,7 +79,8 @@ import { t } from './i18n.js';
 // ⚠️ NOTHING HERE CONVERTS. Only the symbol changes; every stored number is used as
 // typed. See js/currency.js.
 import { currentCurrency } from './currency.js';
-// The weight box's reader — a 'pack' case is sized by it (see caseRate).
+// The weight box's reader — used when a 'pack' case is SAVED, to store the size of one
+// package; caseRate itself works from that stored size, never from the weight.
 import { splitWeight } from './pack-size.js';
 
 // What a price can be quoted PER. Deliberately three, and deliberately not the

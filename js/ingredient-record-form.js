@@ -211,8 +211,9 @@ function priceBlock(item, actions, defaultUnit = null, currentOrder = null) {
   });
   // «busta da 2,5 kg» — one package of the size in the WEIGHT box above. It exists only while
   // that weight can be read as g / kg / ml / l, and its words follow the weight and the
-  // package menu live (syncPackOption, from refresh()). Stored as caseItemUnit 'pack' with no
-  // size: the size is read from the weight whenever the rate is worked out.
+  // package menu live (syncPackOption, from refresh()). Stored as caseItemUnit 'pack' WITH the
+  // size of one package (kg or litres) copied from the weight at save time, so a weight edited
+  // later by somebody without the price section cannot move any money.
   const packOption = el('option', { value: PACK_ITEM });
   if (storedCase && storedCase.caseItemUnit === PACK_ITEM) {
     caseUnitSelect.insertBefore(packOption, caseUnitSelect.options[1] || null);
@@ -224,8 +225,8 @@ function priceBlock(item, actions, defaultUnit = null, currentOrder = null) {
     const word = String(packUnit || '').trim() || t('orders.case.packWord');
     const selected = caseUnitSelect.value === PACK_ITEM;
     // ⚠️ KEPT WHILE CHOSEN even if the weight became unreadable: dropping the option would move
-    // the menu to «pz» without a word and change what the case means. The rate is then simply
-    // «no price» until the weight reads again.
+    // the menu to «pz» without a word and change what the case means. Saving is then refused,
+    // with a message on the weight box, until the weight reads again.
     if (!w && !selected) { packOption.remove(); return; }
     packOption.textContent = w
       ? t('orders.case.packOf', {

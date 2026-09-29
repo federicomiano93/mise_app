@@ -108,8 +108,8 @@ test('R4: a case of packages with no readable weight blocks the save on the weig
   const src = read('js/i18n.js');
   assert.ok(src.includes("'orders.weight.packNeeded': 'The package weight is needed for the case price'"));
   assert.ok(src.includes("'orders.weight.packNeeded': 'Serve il peso della confezione per il prezzo a cartone'"));
-  assert.ok(src.includes("'orders.case.packChanged': 'Il peso della confezione è cambiato: il prezzo al kg si aggiorna quando salvi'"));
-  assert.ok(src.includes("'orders.case.packChanged': 'The package weight has changed: the price per kg updates when you save'"));
+  assert.ok(src.includes("'orders.case.packChanged': 'Il peso della confezione è cambiato: il prezzo si aggiorna quando salvi'"));
+  assert.ok(src.includes("'orders.case.packChanged': 'The package weight has changed: the price updates when you save'"));
 });
 
 test('R5: the «+ Nuovo fornitore…» marker is never saved as a supplier', async () => {
