@@ -152,3 +152,21 @@ test('a stale pack case falls back to the typed rate and its pack weight', () =>
   const ing = { id: 'F', unit: 'kg', weight: 'sacco', ...price, pricePerUnit: 3 };
   assert.equal(valueBlocker({}, ing, false), NO_PACK);
 });
+
+// ⚠️ Review of 30 Sep 2026: on a case that is NOT of packages, an order unit equal to the
+// ingredient's package word is ambiguous even when it is also a CASE word — a box priced
+// «100 pz at 30» declared as a «scatola» and ordered by «scatola» is not 30 € a scatola.
+test('a package word that is also a case word, on a case of pieces or kilos, is no price', () => {
+  const boxes = { priceUnit: 'pcs', pricePerUnit: 0.3, casePrice: 30, caseCount: 100, caseItemSize: null, caseItemUnit: 'pcs' };
+  assert.equal(unitCost({ unit: 'scatola', packUnit: 'scatola' }, boxes), null);
+  assert.equal(unitCost({ unit: 'scatola.', packUnit: 'Scatola' }, boxes), null);
+  // Without a package word «scatola» is only a case word: one case.
+  assert.equal(unitCost({ unit: 'scatola' }, boxes), 30);
+  assert.equal(unitCost({ unit: 'pz', packUnit: 'scatola' }, boxes), 0.3);
+
+  const flour = { priceUnit: 'kg', pricePerUnit: 2, casePrice: 20, caseCount: 10, caseItemSize: 1, caseItemUnit: 'kg' };
+  assert.equal(unitCost({ unit: 'confezione', packUnit: 'confezione', weight: '1 kg' }, flour), null);
+  // A case of ONE item is never ambiguous.
+  const single = { priceUnit: 'pcs', pricePerUnit: 30, casePrice: 30, caseCount: 1, caseItemSize: null, caseItemUnit: 'pcs' };
+  assert.equal(unitCost({ unit: 'scatola', packUnit: 'scatola' }, single), 30);
+});

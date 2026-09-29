@@ -97,6 +97,11 @@ export function unitCost(ingredient, price) {
     if (PIECE_UNITS.has(orderUnit) || (isPackCase && packWord !== '' && orderUnit === packWord)) {
       return wholeCase.casePrice / wholeCase.caseCount;
     }
+    // ⚠️ AND ON ANY OTHER CASE THE PACKAGE WORD IS AMBIGUOUS EVEN WHEN IT IS ALSO A CASE WORD.
+    // A box priced «100 pz at 30», declared as a «scatola» and ordered by «scatola», is one
+    // scatola of 0.30 — or the whole case of 30? Nothing says; the case-word rule below would
+    // answer 30 and look exactly as trustworthy as the right number (review of 30 Sep 2026).
+    if (packWord !== '' && orderUnit === packWord && wholeCase.caseCount !== 1) return null;
     if (orderUnit === '' || CASE_UNITS.has(orderUnit) || wholeCase.caseCount === 1) return wholeCase.casePrice;
     return null;
   }
