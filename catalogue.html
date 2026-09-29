@@ -109,7 +109,14 @@
   </span>
 </header>
 
-<main class="cat-screen" id="catScreen"></main>
+<!-- ⚠️ TWO COLUMNS ON A TABLET ONLY, and only for the list and a recipe: the list on the
+     left (#catListCol), the recipe on the right (#catScreen, which takes `app-split-pane`
+     from catalogue-main.js while the split is on). On a phone #catListCol stays hidden
+     and #catScreen is the whole screen, exactly as before. -->
+<div class="app-split cat-split" id="catSplit" data-split="off">
+  <div class="app-split-list" id="catListCol" hidden></div>
+  <main class="cat-screen" id="catScreen"></main>
+</div>
 
 <!-- The allergen sheet and Settings. Secondary actions live at the bottom, not in the
      header — the app's own rule, and the header's two 84px slots are already full.

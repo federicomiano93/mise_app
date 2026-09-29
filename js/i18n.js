@@ -1193,6 +1193,9 @@ const DICTIONARIES = Object.freeze({
     'cat.searchARecipeBy': 'Search a recipe by name',
     'cat.noRecipeMatchesYour': 'No recipe matches your search.',
     'cat.empty.sub': 'Add your first recipe: its ingredients and their amounts.',
+    // The tablet's empty right-hand pane (29 Sep 2026)
+    'cat.split.empty.title': 'Choose a recipe',
+    'cat.split.empty.text': 'Tap a recipe on the left: it opens here, and you can switch to another without leaving the list.',
     // ── Reading a recipe from a photograph ─────────────────────────────────
     // ⚠️ Every sentence here is chosen so that a REFUSAL never reads as a
     // connection problem. Only cat.photo.err.offline mentions the connection, and
@@ -3527,6 +3530,8 @@ const DICTIONARIES = Object.freeze({
     'cat.searchARecipeBy': 'Cerca una ricetta per nome',
     'cat.noRecipeMatchesYour': 'Nessuna ricetta corrisponde alla ricerca.',
     'cat.empty.sub': 'Aggiungi la tua prima ricetta: i suoi ingredienti e le loro quantità.',
+    'cat.split.empty.title': 'Scegli una ricetta',
+    'cat.split.empty.text': 'Tocca una ricetta a sinistra: si apre qui, e puoi passare a un’altra senza lasciare la lista.',
     // ── Leggere una ricetta da una foto ────────────────────────────────────
     'cat.photo.entry': 'Leggi una ricetta da una foto',
     'cat.photo.fill': 'Compila da una foto',

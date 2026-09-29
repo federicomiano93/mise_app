@@ -12,8 +12,11 @@ import { buildCatalogueSearch } from './search-box.js';
 const CHEVRON_SVG =
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>';
 
-export function renderList({ recipes, usageMap, initialQuery = '', onQueryChange, onOpen, onAdd }) {
+export function renderList({ recipes, usageMap, initialQuery = '', selectedId = null, onQueryChange, onOpen, onAdd }) {
   let query = initialQuery;
+  // The recipe open beside the list on a tablet, marked aria-current (tokens.css gives it
+  // the picked look). Held here because refresh() repaints every row on each snapshot.
+  let selected = selectedId;
   let currentRecipes = recipes;
   let currentUsage = usageMap;
 
@@ -52,6 +55,8 @@ export function renderList({ recipes, usageMap, initialQuery = '', onQueryChange
       listContainer.appendChild(el('button', {
         class: 'cat-card',
         type: 'button',
+        dataset: { id: recipe.id },
+        'aria-current': recipe.id === selected ? 'true' : null,
         onclick: () => onOpen(recipe),
       }, [
         el('span', { class: 'name', text: recipe.name || t('cat.noName') }),
@@ -75,6 +80,15 @@ export function renderList({ recipes, usageMap, initialQuery = '', onQueryChange
       currentRecipes = newRecipes;
       currentUsage = newUsage;
       paint();
+    },
+    // Mark another row as the open one WITHOUT repainting: the search text, the scroll and
+    // the focus of the list stay exactly where they are.
+    select(id) {
+      selected = id;
+      listContainer.querySelectorAll('.cat-card').forEach((row) => {
+        if (id !== null && row.dataset.id === id) row.setAttribute('aria-current', 'true');
+        else row.removeAttribute('aria-current');
+      });
     },
   };
 }

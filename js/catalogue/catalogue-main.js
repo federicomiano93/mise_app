@@ -38,8 +38,16 @@ import { mayOpenFoodCost, foodCostHref, recipeIdFromHash } from '../recipe-link.
 // records page itself gives. From js/ root: the records belong to Orders.
 import { mayEditRecords } from '../records.js';
 import { openIngredientCreate } from './ingredient-create.js';
+import { el } from './dom.js';
+import { isTabletNow, watchTablet } from './tablet.js';
+
+// The arrow the empty right-hand pane draws (the same one the Suppliers pane uses).
+const POINTER_SVG =
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="44" height="44" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/><path d="M21 12H9"/></svg>';
 
 const screen = document.getElementById('catScreen');
+const splitEl = document.getElementById('catSplit');
+const listCol = document.getElementById('catListCol');
 const titleEl = document.getElementById('catTitle');
 const subEl = document.getElementById('catSub');
 const homeBtn = document.getElementById('catHome');
@@ -68,6 +76,12 @@ let activeRun = null;      // { root, confirmLeave, stop } while a guided mix is
 let currentRecipe = null;  // the recipe shown in detail (for the header Edit button)
 let leaveGuard = null;     // async () => boolean; blocks Back when there are unsaved edits
 let resumeOffered = false; // the "you were mixing" offer is made once per page load
+// ⚠️ THE TABLET SPLIT (29 Sep 2026): list on the left, a recipe on the right — for the
+// LIST and a RECIPE only. Every other route leaves it (leaveSplit) and is exactly what it
+// is on a phone. All of this is declared here, above the first onSession/onLanguageChange
+// below, or it is a TDZ crash when the session answers at once.
+let splitOn = false;       // is the two-column layout showing right now?
+let paneEmpty = null;      // the placeholder node kept for the right-hand pane
 
 // ── Header + view helpers ───────────────────────────────────────────────────────
 
@@ -141,6 +155,113 @@ function stopRun() {
   if (activeRun) { activeRun.stop(); activeRun = null; }
 }
 
+// ── The tablet split ────────────────────────────────────────────────────────────
+
+// Turn the two-column layout on or off. #catScreen is the right-hand pane only while it
+// is on (the class is what tokens.css styles); off, it is the whole screen again.
+function setSplit(on) {
+  splitOn = on;
+  splitEl.dataset.split = on ? 'on' : 'off';
+  listCol.hidden = !on;
+  screen.classList.toggle('app-split-pane', on);
+}
+
+// ⚠️ EVERY ROUTE THAT IS NOT THE LIST OR A RECIPE CALLS THIS FIRST — the editor, the
+// mixing steps, the run, the label, the allergen sheet, Settings, the photo screen. They
+// were written for a screen that is theirs alone and keep it. The list column is emptied,
+// not just hidden, so a screen that comes back builds a fresh one.
+function leaveSplit() {
+  if (!splitOn) return;
+  setSplit(false);
+  listCol.replaceChildren();
+  paneEmpty = null;
+  activeList = null;
+}
+
+// The list's own header: it stays while a recipe is open beside it. Title, Home on the
+// left, «+» on the right; the header's Edit is hidden — the pane head carries its own.
+//
+// No subtitle: «Ricette e scalatura in kg» is cut to «Ricette e scalatur…» on a
+// 360px phone between two buttons on each side (ui-check, 29 Sep 2026), and a cut
+// line reads as a fault. The title alone names the screen.
+function setListHeader() {
+  setHeader({ title: t('section.catalogue'), sub: '', back: false, add: true, footer: true });
+}
+
+// The list into the left column (tablet). ⚠️ NOT re-run when a recipe is opened while the
+// list is already there: that is what keeps the search text, the scroll and the focus.
+function buildList(selectedId) {
+  return renderList({
+    recipes: getRecipes(),
+    usageMap: getUsage(),
+    initialQuery: searchQuery,
+    selectedId,
+    onQueryChange: (q) => { searchQuery = q; },
+    onOpen: openDetail,
+    onAdd: () => openEditor(null),
+  });
+}
+
+function paintListColumn(selectedId) {
+  activeList = buildList(selectedId);
+  listCol.replaceChildren(activeList.root);
+  activeList.root.setAttribute('tabindex', '-1');
+}
+
+// What the right-hand pane says while no recipe is open. ONE node, its words asked here at
+// paint time and again on onLanguageChange: the venue's language arrives AFTER the first
+// paint, and a placeholder worded once stayed English on an Italian tablet (the Orders
+// and Suppliers splits, 29 Sep 2026).
+function showPaneEmpty() {
+  if (!paneEmpty) {
+    paneEmpty = el('div', { class: 'app-split-empty' }, [
+      el('span', { class: 'app-split-empty-icon', 'aria-hidden': 'true', icon: POINTER_SVG }),
+      el('h2', {}),
+      el('p', {}),
+    ]);
+  }
+  paneEmpty.querySelector('h2').textContent = t('cat.split.empty.title');
+  paneEmpty.querySelector('p').textContent = t('cat.split.empty.text');
+  screen.replaceChildren(paneEmpty);
+}
+
+// The header Edit button, and the pane head's, do the same thing.
+function editCurrent() {
+  if (currentRecipe) openEditor(currentRecipe);
+}
+
+// The light head of the pane (tokens.css `.app-split-pane .app-header`): the recipe's name
+// centred and Edit on the right. No Back — the list is right there.
+function buildPaneHead(recipe) {
+  return el('header', { class: 'app-header' }, [
+    el('span', { class: 'app-header-slot' }),
+    el('div', { class: 'app-header-title' }, [
+      el('h1', { text: recipe.name || t('cat.recipe'), tabindex: '-1' }),
+    ]),
+    el('span', { class: 'app-header-slot' }, [
+      el('button', {
+        class: 'app-icon-btn',
+        type: 'button',
+        'aria-label': t('aria.editRecipe'),
+        // The very same pencil the page header draws (catalogue.html): one drawing.
+        icon: editBtn.innerHTML,
+        onclick: editCurrent,
+      }),
+    ]),
+  ]);
+}
+
+// A recipe's node into the right place: the pane on a tablet split, the whole screen
+// otherwise. Focus goes to the pane head on a tablet, as swap() gives it to the view.
+function showDetailNode(recipe, node) {
+  if (!splitOn) { swap(node); return; }
+  const head = buildPaneHead(recipe);
+  const body = el('div', { class: 'cat-pane-body' }, [node]);
+  screen.replaceChildren(head, body);
+  const title = head.querySelector('h1');
+  try { title.focus({ preventScroll: true }); } catch (e) { /* focus is best-effort */ }
+}
+
 function showList() {
   stopRun();
   view = 'list';
@@ -148,18 +269,16 @@ function showList() {
   activeSettings = null;
   activeSheet = null;
   leaveGuard = null;
-  // No subtitle: «Ricette e scalatura in kg» is cut to «Ricette e scalatur…» on a
-  // 360px phone between two buttons on each side (ui-check, 29 Sep 2026), and a cut
-  // line reads as a fault. The title alone names the screen.
-  setHeader({ title: t('section.catalogue'), sub: '', back: false, add: true, footer: true });
-  activeList = renderList({
-    recipes: getRecipes(),
-    usageMap: getUsage(),
-    initialQuery: searchQuery,
-    onQueryChange: (q) => { searchQuery = q; },
-    onOpen: openDetail,
-    onAdd: () => openEditor(null),
-  });
+  setListHeader();
+  if (isTabletNow()) {
+    setSplit(true);
+    paintListColumn(null);
+    showPaneEmpty();
+    try { activeList.root.focus({ preventScroll: true }); } catch (e) { /* best-effort */ }
+    return;
+  }
+  leaveSplit();
+  activeList = buildList(null);
   swap(activeList.root);
 }
 
@@ -170,6 +289,7 @@ function showList() {
 // the recipe is one tap away from the list.
 function openLabel(recipe) {
   stopRun();
+  leaveSplit();
   view = 'label';
   activeList = null;
   activeDetail = null;
@@ -213,6 +333,7 @@ function openLabel(recipe) {
 // needs no leave guard: nothing here can be half-typed and lost.
 function showAllergenSheet() {
   stopRun();
+  leaveSplit();
   view = 'allergens';
   activeList = null;
   activeDetail = null;
@@ -236,20 +357,45 @@ function showAllergenSheet() {
   swap(activeSheet.root);
 }
 
-function openDetail(recipe) {
-  stopRun();
-  view = 'detail';
+// A recipe on a PHONE: the whole screen, the header's Back and Edit.
+function showDetailPhone(recipe) {
+  leaveSplit();
   activeList = null;
-  currentRecipe = recipe;
-  leaveGuard = null;
-  bumpUsage(recipe.id);
   setHeader({ title: recipe.name || t('cat.recipe'), sub: t('cat.recipe'), back: true, add: false, edit: true });
   activeDetail = renderDetail({ recipe, app });
   swap(activeDetail.root);
 }
 
+// A recipe on a TABLET: the pane on the right. The page header stays the list's, and the
+// list stays ALIVE in its column — ⚠️ not re-rendered when it is already there, which is
+// what keeps the search text, the scroll and the focus; only the open row is re-marked.
+// Coming from any other route (the column was emptied) it is painted here, once.
+function showDetailTablet(recipe) {
+  const listAlive = splitOn && activeList;
+  setSplit(true);
+  setListHeader();
+  if (listAlive) activeList.select(recipe.id);
+  else paintListColumn(recipe.id);
+  activeDetail = renderDetail({ recipe, app });
+  showDetailNode(recipe, activeDetail.root);
+}
+
+function openDetail(recipe) {
+  // Read-only, so nothing to ask when another recipe replaces this one; and tapping the
+  // recipe that is already open does nothing at all.
+  if (splitOn && view === 'detail' && currentRecipe && currentRecipe.id === recipe.id) return;
+  stopRun();
+  view = 'detail';
+  currentRecipe = recipe;
+  leaveGuard = null;
+  bumpUsage(recipe.id);
+  if (isTabletNow()) showDetailTablet(recipe);
+  else showDetailPhone(recipe);
+}
+
 function openEditor(recipe, draft) {
   stopRun();
+  leaveSplit();
   view = 'editor';
   activeList = null;
   activeDetail = null;
@@ -327,6 +473,7 @@ async function togglePhoto() {
 // not an owner or a manager — and the server refuses the change regardless.
 function showSettings() {
   stopRun();
+  leaveSplit();
   view = 'settings';
   activeList = null;
   activeDetail = null;
@@ -377,6 +524,7 @@ function showPhotoCapture(fromEditor = false, keepDraft = null) {
   backToEditor = !!fromEditor;
   backToEditorDraft = fromEditor ? keepDraft : null;
   stopRun();
+  leaveSplit();
   view = 'photo';
   activeList = null;
   activeDetail = null;
@@ -402,6 +550,7 @@ function showPhotoCapture(fromEditor = false, keepDraft = null) {
 
 function openGuidedEditor(recipe) {
   stopRun();
+  leaveSplit();
   view = 'steps';
   activeList = null;
   activeDetail = null;
@@ -419,6 +568,7 @@ function openGuidedEditor(recipe) {
 // between somebody's hands in dough and the amounts they are working to.
 function openRun(recipe, targetGrams, resume) {
   stopRun();
+  leaveSplit();
   view = 'run';
   activeList = null;
   activeDetail = null;
@@ -587,7 +737,7 @@ const app = {
 
 backBtn.addEventListener('click', handleBack);
 addBtn.addEventListener('click', () => openEditor(null));
-editBtn.addEventListener('click', () => { if (currentRecipe) openEditor(currentRecipe); });
+editBtn.addEventListener('click', editCurrent);
 allergensBtn.addEventListener('click', showAllergenSheet);
 settingsBtn.addEventListener('click', showSettings);
 
@@ -612,7 +762,8 @@ initCatalogue(
   () => {
     // Back from Food cost names a recipe that may arrive only now — see openWantedRecipe().
     openWantedRecipe();
-    if (view === 'list' && activeList) activeList.refresh(getRecipes(), getUsage());
+    // Beside an open recipe on a tablet the list is on screen too, and stays current.
+    if ((view === 'list' || (view === 'detail' && splitOn)) && activeList) activeList.refresh(getRecipes(), getUsage());
     // The offer needs the recipes to have arrived — a session is only worth
     // resuming if its recipe is still in the catalogue.
     if (view === 'list') offerResume();
@@ -674,7 +825,9 @@ onSession((s) => {
     const latest = getRecipes().find(r => r.id === currentRecipe.id) || currentRecipe;
     currentRecipe = latest;
     activeDetail = renderDetail({ recipe: latest, app });
-    swap(activeDetail.root);
+    showDetailNode(latest, activeDetail.root);
+    // The list column is on screen beside it: its header follows the session as well.
+    if (splitOn) setListHeader();
   }
   // ⚠️ THE ALLERGEN SHEET NEEDS THIS TOO, and it is the one screen where being
   // early is worse than being wrong quietly: its top card names the allergens the
@@ -691,12 +844,33 @@ onSession((s) => {
 
 onLanguageChange(() => {
   if (view === 'list') showList();
-  else if (view === 'photo') {
+  else if (view === 'detail' && splitOn) {
+    // The list beside the recipe and the page header are words too; the recipe itself is
+    // left alone, as on a phone. Only the pencil's label needs re-wording in the pane.
+    setListHeader();
+    paintListColumn(currentRecipe ? currentRecipe.id : null);
+    const pencil = screen.querySelector('.app-header button');
+    if (pencil) pencil.setAttribute('aria-label', t('aria.editRecipe'));
+  } else if (view === 'photo') {
     setHeader({ title: t('cat.photo.title'), sub: t('cat.recipeCatalogue'), back: true, add: false });
   } else if (view === 'allergens') {
     // Rebuilt, not repainted: every label and placeholder on it is a t() call
     // resolved when the element is drawn.
     showAllergenSheet();
+  }
+});
+
+// ⚠️ CROSSING THE WIDTH (a rotation, a resized window) re-lays out the list and a recipe
+// only — both are read-only, so drawing them again loses nothing (the search text is kept
+// in searchQuery, a scaled batch outside the screen). Any other route is left alone: an
+// open editor is never redrawn under somebody's hands.
+watchTablet((isTablet) => {
+  if (view === 'list') showList();
+  else if (view === 'detail' && currentRecipe && isTablet !== splitOn) {
+    const latest = getRecipes().find(r => r.id === currentRecipe.id) || currentRecipe;
+    currentRecipe = latest;
+    if (isTablet) showDetailTablet(latest);
+    else showDetailPhone(latest);
   }
 });
 

@@ -114,6 +114,7 @@ const EXEMPT = new Map([
   ['.supplier-items', 'a positioning shell; .supplier-items-body carries the cap'],
   ['.preview-overlay', 'a positioning shell; .preview-scroll carries the cap'],
   ['.mgmt-overlay', 'a positioning shell; .mgmt-scroll carries the cap'],
+  ['.cat-pane-body', 'the scrolling body of the Catalogue\'s tablet pane; the pane is a column of .cat-split, which pads itself with var(--app-gutter)'],
   ['.app-split-list', 'a column of .app-split, which sits inside .scroll-area — that carries the gutter and so the cap'],
   ['.history-overlay', 'a positioning shell; it uses .scroll-area inside'],
   ['.missing-overlay', 'a positioning shell; it uses .scroll-area inside'],
@@ -457,7 +458,10 @@ test('the tablet query keeps its min-height guard, so a phone turned sideways st
   assert.match(q[0], /min-height:\s*600px/);
 });
 
-test('the wide column is scoped to Home and Orders, and defined nowhere else', () => {
+// 29 Sep 2026, the owner's decision: every section goes wide on a tablet, list left /
+// detail right. The Catalogue joined Home and Orders; the others follow one slice at a
+// time and each is added to the pinned list HERE, on purpose, never by accident.
+test('the wide column is scoped to Home, Orders and the Catalogue, and defined nowhere else', () => {
   const tokens = stripComments(read('tokens.css'));
   const blocks = extractMediaBlocks(tokens, /min-width:\s*900px/);
   assert.equal(blocks.length, 1, 'tokens.css must carry exactly one tablet media block');
@@ -466,6 +470,7 @@ test('the wide column is scoped to Home and Orders, and defined nowhere else', (
   assert.match(block, /--app-max-width:\s*var\(--app-max-width-wide\)/,
     'the tablet query must redefine --app-max-width from the wide token');
   assert.match(block, /body\[data-page="home"\]/, 'Home must be in the scope');
+  assert.match(block, /body\[data-section="catalogue"\]/, 'the Catalogue must be in the scope (its list/detail split)');
   assert.match(block, /body\[data-section="orders"\]/,
     'Orders — and suppliers.html, which shares the same body attribute — must be in the scope');
 
