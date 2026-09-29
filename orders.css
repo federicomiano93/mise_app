@@ -2828,7 +2828,7 @@ body:not([data-orders-tab="deliveries"]) #orders-owed { display: none; }
   }
   body[data-section="orders"][data-orders-tab="order"][data-orders-view="suppliers"] .supplier-row-compact-count--zero {
     background: transparent;
-    color: var(--text-5);
+    color: var(--text-3);   /* a readable «—», not placeholder grey */
   }
 }
 /* The day chip and compact count exist on every screen size (see the long

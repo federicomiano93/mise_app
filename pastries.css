@@ -106,7 +106,9 @@ body {
 
 /* A day with nothing in it reads quieter than one already filled, so "have I
    done Thursday yet?" is answered without opening it. */
-.pas-chip--empty { color: var(--pas-text-5); }
+/* ⚠️ --text-3, not --text-5 (placeholder grey, 2.24:1): the day names are text
+   somebody reads, and the quieter look still holds against a filled day's dark ink. */
+.pas-chip--empty { color: var(--text-3); }
 
 /* The selected day. */
 .pas-chip[aria-selected="true"] {

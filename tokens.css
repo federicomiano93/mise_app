@@ -112,7 +112,12 @@
      small text needs (axe, ui-check 28 Sep 2026). This one clears 4.5 on every
      ground it sits on (--surface 5.36, --surface-2 5.01, --bg 4.68). */
   --text-3: #706959;      /* third level: units, timestamps, fine print */
-  --text-4: #8B8474;      /* small uppercase mono labels */
+  /* ⚠️ Was #8B8474: 3.41:1 on --surface-2, under the 4.5:1 small text needs (inactive
+     tabs and filters, ui-check 28 Sep 2026). Federico chose to darken it (29 Sep
+     2026). Nothing lighter than --text-3 clears 4.5 on --bg, so the two now share a
+     value: these labels are told apart by their mono uppercase face, not by a
+     paler grey. Kept as its own name so a later change can split them again. */
+  --text-4: #706959;      /* small uppercase mono labels */
   --text-5: #B3AB99;      /* placeholder text */
 
   /* ── Greens (two, distinct) ──────────────────────────────────────────── */
