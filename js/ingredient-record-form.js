@@ -114,7 +114,9 @@ const CAMERA_ICON = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
 //
 // Returns { node, read() } so the form below can stay readable.
 // `defaultUnit` is how a NEW item starts: packaging is bought by the piece.
-function priceBlock(item, actions, defaultUnit = null) {
+// currentOrder() -> { unit, weight }: what the order-unit menu and the weight box hold RIGHT NOW,
+// so the VAT line follows an edit that has not been saved yet.
+function priceBlock(item, actions, defaultUnit = null, currentOrder = null) {
   // What the price box is called, per purchase form. Spelled out per unit rather
   // than assembled from the unit code, because "Price per pcs" is not English and
   // the label is the only place the ex-VAT rule can be stated.
@@ -332,12 +334,11 @@ function priceBlock(item, actions, defaultUnit = null) {
     summary.className = 'mgmt-price-summary';
 
     // ── What ONE ORDERED UNIT costs, with VAT (29 Sep 2026) ──────────────────
-    // ⚠️ THE SAME unitCost() ORDERS ITSELF CALLS. `item?.weight` is the STORED
-    // pack-weight text, not whatever is currently typed in the separate
-    // "Weight" field above this section (the two are not wired together) — so
-    // this line can lag one unsaved edit behind; acceptable for a preview
-    // line, and it corrects itself the moment the record is saved and re-opened.
-    const cost = unitCost(item || {}, draft);
+    // ⚠️ THE SAME unitCost() ORDERS ITSELF CALLS, fed the order unit and the pack weight as
+    // they stand in the open card (currentOrder), not the stored ones: «20 per case of 50»
+    // reads 20 ordered by the case and 0.40 ordered by the piece, and the line must say which
+    // before Save. The card re-runs refresh() when either control changes.
+    const cost = unitCost({ ...(item || {}), ...(currentOrder ? currentOrder() : {}) }, draft);
     const vat = draft.vatRate;
     if (cost !== null && vat !== null) {
       const gross = cost + (cost * vat) / 100;
@@ -397,7 +398,7 @@ function priceBlock(item, actions, defaultUnit = null) {
     item ? priceHistoryBlock(item, actions) : null,
   ]);
 
-  return { node, read };
+  return { node, read, refresh };
 }
 
 // The append-only record of what this ingredient has cost. Loaded only when
@@ -1074,6 +1075,29 @@ function selectSupplier(select, { id, name }) {
 // ⚠️ A NUMBER BOX WITH SOMETHING UNUSABLE IN IT BLOCKS THE SAVE (invalid()): falling back to ''
 // would erase a weight that was readable before, and falling back to the old text would hide
 // that the typing was thrown away.
+let messageCount = 0;
+// A short visible message under a refused box, tied to it by aria-describedby and gone the
+// moment the box is edited (P18: the border colour alone says nothing to a screen reader).
+function refusalMessage(box, text) {
+  messageCount += 1;
+  const id = `mgmt-refusal-${messageCount}`;
+  const node = el('p', { class: 'mgmt-field-error', id, text, hidden: 'hidden' });
+  return {
+    node,
+    show: () => {
+      node.hidden = false;
+      box.setAttribute('aria-invalid', 'true');
+      box.setAttribute('aria-describedby', id);
+      box.focus();
+    },
+    clear: () => {
+      node.hidden = true;
+      box.removeAttribute('aria-invalid');
+      box.removeAttribute('aria-describedby');
+    },
+  };
+}
+
 function weightControl(stored) {
   const start = splitWeight(stored);
   let legacy = start.legacy || '';
@@ -1084,25 +1108,30 @@ function weightControl(stored) {
   const unit = el('select', { class: 'mgmt-input', 'aria-label': t('orders.weight.unit') },
     WEIGHT_UNIT_CHOICES.map(u => el('option', { value: u, text: u })));
   unit.value = start.unit;
-  amount.addEventListener('input', () => amount.removeAttribute('aria-invalid'));
+  const refusal = refusalMessage(amount, t('orders.weight.invalid'));
+  amount.addEventListener('input', refusal.clear);
   const legacyRow = legacy
     ? el('div', { class: 'mgmt-weight-legacy-row' }, [
       el('p', { class: 'mgmt-weight-legacy', text: t('orders.weight.current', { value: legacy }) }),
       el('button', {
         type: 'button', class: 'mgmt-link', text: t('orders.weight.remove'),
+        'aria-label': t('orders.weight.removeAria', { value: legacy }),
         onClick: () => { legacy = ''; legacyRow.remove(); amount.focus(); },
       }),
     ])
     : null;
   const node = el('div', { class: 'mgmt-weight' }, [
     el('div', { class: 'mgmt-weight-row' }, [amount, unit]),
+    refusal.node,
     legacyRow,
   ]);
   return {
     node,
     read: () => joinWeight(amount.value, unit.value) || legacy,
     invalid: () => isUnusableWeight(amount.value, unit.value),
-    markInvalid: () => { amount.setAttribute('aria-invalid', 'true'); amount.focus(); },
+    markInvalid: refusal.show,
+    // The price block's live VAT line depends on the weight typed here, not only the stored one.
+    onChange: (fn) => { amount.addEventListener('input', fn); unit.addEventListener('change', fn); },
   };
 }
 
@@ -1114,7 +1143,7 @@ function weightControl(stored) {
 // ⚠️ THE SENTINEL IS NOT A WORD A PERSON WOULD FILE UNDER, so no real value collides with it.
 const NEW_CHOICE = '__mise_new__';
 
-function choiceControl({ values, current, newLabel, placeholder, ariaLabel }) {
+function choiceControl({ values, current, newLabel, placeholder, ariaLabel, blankText }) {
   const select = el('select', { class: 'mgmt-input' }, [
     el('option', { value: '', text: t('orders.choice.none') }),
     ...values.map(v => el('option', { value: v, text: v })),
@@ -1132,18 +1161,20 @@ function choiceControl({ values, current, newLabel, placeholder, ariaLabel }) {
   const typed = el('input', {
     type: 'text', class: 'mgmt-input', placeholder, 'aria-label': ariaLabel, hidden: 'hidden',
   });
-  typed.addEventListener('input', () => typed.removeAttribute('aria-invalid'));
+  const refusal = refusalMessage(typed, blankText);
+  typed.addEventListener('input', refusal.clear);
   select.addEventListener('change', () => {
     const isNew = select.value === NEW_CHOICE;
     typed.hidden = !isNew;
-    typed.removeAttribute('aria-invalid');
+    refusal.clear();
     if (isNew) typed.focus();
   });
   return {
-    node: el('div', { class: 'mgmt-choice' }, [select, typed]),
+    node: el('div', { class: 'mgmt-choice' }, [select, typed, refusal.node]),
     read: () => (select.value === NEW_CHOICE ? typed.value.trim() : select.value),
     invalid: () => isBlankNewChoice(select.value === NEW_CHOICE, typed.value),
-    markInvalid: () => { typed.setAttribute('aria-invalid', 'true'); typed.focus(); },
+    markInvalid: refusal.show,
+    onChange: (fn) => { select.addEventListener('change', fn); typed.addEventListener('input', fn); },
   };
 }
 
@@ -1187,14 +1218,14 @@ export function buildIngredientForm({
   const category = choiceControl({
     values: categories, current: categoryValue(item?.category),
     newLabel: t('orders.choice.newCategory'), placeholder: t('orders.choice.categoryPlaceholder'),
-    ariaLabel: t('orders.choice.categoryAria'),
+    ariaLabel: t('orders.choice.categoryAria'), blankText: t('orders.choice.categoryBlank'),
   });
   // "unit" is now the ORDER unit (how you count the order: casse, box), shown
   // next to the quantity — not a unit of measure. Same field, new meaning.
   const unit = choiceControl({
     values: orderUnits, current: item?.unit,
     newLabel: t('orders.choice.newUnit'), placeholder: t('orders.choice.unitPlaceholder'),
-    ariaLabel: t('orders.choice.unitAria'),
+    ariaLabel: t('orders.choice.unitAria'), blankText: t('orders.choice.unitBlank'),
   });
 
   // "No supplier" is a real answer, not a missing one: the supermarket, the cash
@@ -1244,7 +1275,12 @@ export function buildIngredientForm({
   // ⚠️ AND ONLY WHERE THE VENUE USES FOOD COST: a price the database would refuse
   // takes the whole save down with it (see mayWritePrices, js/record-data.js).
   // ⚠️ `mayPrice` IS HANDED IN — see the note on the defaults above.
-  const price = mayPrice ? priceBlock(item, actions, startKind === 'packaging' ? 'pcs' : null) : null;
+  const price = mayPrice ? priceBlock(item, actions, startKind === 'packaging' ? 'pcs' : null,
+    () => ({ unit: unit.read(), weight: weight.read() })) : null;
+  if (price) {
+    unit.onChange(price.refresh);
+    weight.onChange(price.refresh);
+  }
   // ⚠️ NOT A ROLE, A VENUE. Everybody in the building gets the same answer here: it
   // says whether this business tracks allergens and nutrition at all, and the two
   // switches behind it live one screen away (js/orders/registry-settings.js).

@@ -42,3 +42,30 @@ test('the menus match the stored value by its exact spelling', () => {
   assert.match(FORM, /values\.find\(v => v === wanted\)/);
   assert.doesNotMatch(FORM, /toLowerCase\(\) === wanted/);
 });
+
+test('a refused box shows a message tied to it by aria-describedby, and loses it once edited', () => {
+  assert.match(FORM, /box\.setAttribute\('aria-describedby', id\)/);
+  assert.match(FORM, /amount\.addEventListener\('input', refusal\.clear\)/);
+  assert.match(FORM, /typed\.addEventListener\('input', refusal\.clear\)/);
+  for (const key of ['orders.weight.invalid', 'orders.choice.categoryBlank', 'orders.choice.unitBlank', 'orders.weight.removeAria']) {
+    assert.equal(I18N.split(`'${key}':`).length - 1, 2, key);
+  }
+  assert.match(FORM, /'aria-label': t\('orders\.weight\.removeAria', \{ value: legacy \}\)/);
+});
+
+test('the VAT line follows the order unit and weight as they stand in the open card', () => {
+  assert.match(FORM, /unitCost\(\{ \.\.\.\(item \|\| \{\}\), \.\.\.\(currentOrder \? currentOrder\(\) : \{\}\) \}, draft\)/);
+  assert.match(FORM, /unit\.onChange\(price\.refresh\)/);
+  assert.match(FORM, /weight\.onChange\(price\.refresh\)/);
+});
+
+test('the Italian case wording says cartone everywhere', () => {
+  assert.match(I18N, /'orders\.case\.price': 'Prezzo del cartone/);
+  assert.match(I18N, /'orders\.case\.count': 'Quanti nel cartone'/);
+  assert.match(I18N, /'orders\.case\.summaryPiece': '= \{rate\} al pezzo · \{price\} a cartone'/);
+});
+
+test('a text link is at least 24px tall', () => {
+  const CSS = read('orders.css');
+  assert.match(CSS, /\.mgmt-link \{[^}]*min-height: 24px/);
+});
