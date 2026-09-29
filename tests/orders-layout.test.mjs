@@ -181,3 +181,18 @@ test('every new phrase exists in BOTH languages', () => {
 test('the new module is precached, or an offline phone 404s on it', () => {
   assert.ok(read('sw.js').includes("'./js/orders/alert-dismissal.js'"));
 });
+
+// ── The tablet pane's placeholder follows the venue's language ───────────────
+// ⚠️ ui-check, 28 Sep 2026: an Italian venue read «Choose a supplier» on its tablet.
+// The words were set only on a pane refresh, and the language arrives after the
+// first one. Pin that the subscription EXISTS — a deleted call satisfies every
+// «the key is translated» check.
+test('⚠️ the split placeholder is reworded when the language changes', () => {
+  assert.match(MAIN, /onLanguageChange\(\s*\(\)\s*=>\s*repaintPaneEmptyWords\(\)\s*\)/);
+  const body = MAIN.slice(MAIN.indexOf('function repaintPaneEmptyWords'));
+  assert.match(body.slice(0, 300), /#orders-detail-pane > \.split-empty/,
+    'it rewords the existing placeholder, never creates a second one');
+  for (const lang of ['en', 'it']) {
+    assert.ok(_dictionaries()[lang]['orders.split.empty.title'], `${lang} has the title`);
+  }
+});
