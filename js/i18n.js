@@ -943,6 +943,16 @@ const DICTIONARIES = Object.freeze({
     'orders.vat.label': 'VAT',
     'orders.vat.notStated': '— not stated',
     'orders.vat.summaryLine': '{net} without VAT, {gross} with VAT at {rate}%',
+    // ── A price quoted per case (30 Sep 2026) ─────────────────────────────────
+    'orders.priceByCase': 'Per case (carton)',
+    'orders.case.price': 'Case price ({currency}, excluding VAT)',
+    'orders.case.contains': 'Contains',
+    'orders.case.count': 'How many in the case',
+    'orders.case.size': 'Size of each one',
+    'orders.case.unit': 'Unit of each one',
+    'orders.case.pcs': 'pcs',
+    'orders.case.summaryUnit': '= {rate} / {unit} · {price} per case',
+    'orders.case.summaryPiece': '= {rate} each · {price} per case',
     // ── What an order costs (29 Sep 2026), shown only to whoever may see money ──
     'orders.cost.noPrice': 'no price',
     'orders.cost.nothingPriced': 'No item here has a price yet: add it in the ingredient’s card',
@@ -3303,6 +3313,16 @@ const DICTIONARIES = Object.freeze({
     'orders.vat.label': 'IVA',
     'orders.vat.notStated': '— non indicata',
     'orders.vat.summaryLine': '{net} senza IVA, {gross} con l’IVA al {rate}%',
+    // ── Un prezzo a confezione (30 set 2026) ──────────────────────────────────
+    'orders.priceByCase': 'A confezione (cartone)',
+    'orders.case.price': 'Prezzo della confezione ({currency}, IVA esclusa)',
+    'orders.case.contains': 'Contiene',
+    'orders.case.count': 'Quanti nella confezione',
+    'orders.case.size': 'Misura di ciascuno',
+    'orders.case.unit': 'Unità di ciascuno',
+    'orders.case.pcs': 'pz',
+    'orders.case.summaryUnit': '= {rate} / {unit} · {price} a confezione',
+    'orders.case.summaryPiece': '= {rate} al pezzo · {price} a confezione',
     // ── Quanto costa un ordine (29 Sep 2026), solo per chi può vedere i prezzi ──
     'orders.cost.noPrice': 'senza prezzo',
     'orders.cost.nothingPriced': 'Nessuna voce ha ancora un prezzo: aggiungilo nella scheda dell’ingrediente',

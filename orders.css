@@ -1150,6 +1150,15 @@ input.ing-stock {
 .mgmt-price-block > .mgmt-price-summary.muted { margin-top: var(--space-1); }
 .mgmt-price-block > [hidden] { display: none; }
 
+/* A price quoted per case: the case price, then «Contiene [50] pz» / «[4] × [2.5] kg» on ONE
+   row. The boxes share the width equally and may shrink (min-width:0 — a <select> and a
+   number input otherwise keep their intrinsic width and push the row past a 296px card);
+   the × is only a sign between two boxes. Icon/label rules do not apply: no icon here. */
+.mgmt-case { display: flex; flex-direction: column; gap: var(--space-3); }
+.mgmt-case-row { display: flex; align-items: center; gap: 8px; }
+.mgmt-case-row .mgmt-input { flex: 1 1 0; width: auto; min-width: 0; }
+.mgmt-case-x { flex: 0 0 auto; color: var(--text2); }
+
 /* What is still missing, under the numbers. It appears only when the price is
    complete as a PRICE but the ingredient still cannot be costed — a per-piece
    price with no piece weight — which otherwise looks finished and silently stays

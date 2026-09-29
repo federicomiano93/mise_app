@@ -29,7 +29,7 @@ import { kindOf } from './ingredient-kind.js';
 import { NO_SUPPLIER_ID } from './records.js';
 import { field, formActions, reportFailure, shortDate } from './record-ui.js';
 import {
-  PRICE_UNITS, priceUnitLabel,
+  PRICE_UNITS, priceUnitLabel, CASE_MODE, CASE_ITEM_UNITS, caseOf,
   pricePatch, priceChanged, priceRecord, pricePerKg,
   formatPricePerUnit, formatRate, costReasonText, formatMoney,
 } from './price-model.js';
@@ -103,6 +103,15 @@ const CAMERA_ICON = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
 // ingredient already carries in its own Weight field a few lines above
 // ("2.27kg"), and two boxes holding one fact drift apart.
 //
+// ⚠️ «A CONFEZIONE (CARTONE)» IS THE ONE WAY IN THAT DERIVES, AND IT DOES NOT BRING THE
+// OLD DRIFT BACK (30 Sep 2026, the owner's request). It has its OWN boxes — what the
+// case costs, how many it holds, how big each is — instead of asking again for the
+// «Weight» above, and the division is done once, at save time, by caseRate()
+// (js/price-model.js); the case is stored beside the rate it produced, so the rate
+// every recipe cost is built from is still one stored number. It is a MODE of the
+// «Come si acquista» menu, never a stored unit: what is stored is the derived kg / l /
+// pcs rate plus the four case fields.
+//
 // Returns { node, read() } so the form below can stay readable.
 // `defaultUnit` is how a NEW item starts: packaging is bought by the piece.
 function priceBlock(item, actions, defaultUnit = null) {
@@ -142,13 +151,19 @@ function priceBlock(item, actions, defaultUnit = null) {
     pcs: t('orders.eg.ratePerPiece'),
   });
 
+  // A whole case stored on the ingredient reopens the card in case mode, with the
+  // values as typed (never re-derived from the rate: that is what the case is kept for).
+  const storedCase = item ? caseOf(item) : null;
   const unitSelect = el('select', { class: 'mgmt-input' });
   unitSelect.appendChild(el('option', { value: '', text: t('orders.noPrice2') }));
   PRICE_UNITS.forEach(u => {
     const opt = el('option', { value: u, text: priceUnitLabel(u) });
-    if (item ? item.priceUnit === u : defaultUnit === u) opt.selected = true;
+    if (!storedCase && (item ? item.priceUnit === u : defaultUnit === u)) opt.selected = true;
     unitSelect.appendChild(opt);
   });
+  unitSelect.appendChild(el('option', {
+    value: CASE_MODE, text: t('orders.priceByCase'), selected: storedCase ? true : undefined,
+  }));
 
   // step="any" on both of them. A step of 0.01 makes the browser REFUSE 0.0035
   // as invalid — silently, by leaving the box empty on submit — and that is
@@ -169,6 +184,34 @@ function priceBlock(item, actions, defaultUnit = null) {
   // checked for what it is a price OF.
   const rate = money(item?.pricePerUnit, '');
   const pieceWeight = money(item?.unitWeightKg, t('orders.eg.pieceWeight'));
+
+  // ── Priced per case: what the case costs, and what is in it ─────────────────
+  // «Contiene [50] pz» or «Contiene [4] × [2.5] kg». Every box carries its own aria-label
+  // because none has a visible label of its own — they read as one sentence.
+  const casePriceBox = money(storedCase?.casePrice, '');
+  const caseCountBox = money(storedCase?.caseCount, '');
+  const caseSizeBox = money(storedCase?.caseItemSize, '');
+  caseCountBox.setAttribute('aria-label', t('orders.case.count'));
+  caseSizeBox.setAttribute('aria-label', t('orders.case.size'));
+  const caseUnitSelect = el('select', { class: 'mgmt-input', 'aria-label': t('orders.case.unit') });
+  CASE_ITEM_UNITS.forEach(u => {
+    caseUnitSelect.appendChild(el('option', {
+      value: u, text: u === 'pcs' ? t('orders.case.pcs') : u,
+      selected: (storedCase ? storedCase.caseItemUnit : 'pcs') === u ? true : undefined,
+    }));
+  });
+  const caseTimes = el('span', { class: 'mgmt-case-x', text: '×', 'aria-hidden': 'true' });
+  const casePriceLabel = el('span', {
+    class: 'mgmt-field-label',
+    text: t('orders.case.price', { currency: currentCurrency() }),
+  });
+  const caseBlock = el('div', { class: 'mgmt-case' }, [
+    el('label', { class: 'mgmt-field' }, [casePriceLabel, casePriceBox]),
+    el('div', { class: 'mgmt-field' }, [
+      el('span', { class: 'mgmt-field-label', text: t('orders.case.contains') }),
+      el('div', { class: 'mgmt-case-row' }, [caseCountBox, caseTimes, caseSizeBox, caseUnitSelect]),
+    ]),
+  ]);
 
   // ── Purchase VAT (29 Sep 2026) — so an order can show what it will cost
   // WITH VAT. The price above stays net, exactly as it does today: the
@@ -199,6 +242,16 @@ function priceBlock(item, actions, defaultUnit = null) {
   }
 
   const rateLabel = el('span', { class: 'mgmt-field-label' });
+  const rateField = el('label', { class: 'mgmt-field' }, [rateLabel, rate]);
+
+  // «= 2.00 / kg · 20.00 per case» — the rate the case works out to, and the case it
+  // came from. Built per call, in the language the screen has now.
+  function caseSummary(draft) {
+    const price = formatMoney(draft.casePrice);
+    return draft.priceUnit === 'pcs'
+      ? t('orders.case.summaryPiece', { rate: formatRate(draft.pricePerUnit), price })
+      : t('orders.case.summaryUnit', { rate: formatRate(draft.pricePerUnit), unit: draft.priceUnit, price });
+  }
   // Two lines, not one. A per-piece price can be perfectly complete as a PRICE
   // and still be unusable in a recipe written in grams, and a summary that only
   // showed "£2.10 / each" would look finished while the ingredient silently
@@ -223,6 +276,12 @@ function priceBlock(item, actions, defaultUnit = null) {
       pricePerUnit: rate.value,
       unitWeightKg: pieceWeight.value,
       vatRate: vatSelect.value,
+      // Only read as a case when the menu says so (pricePatch ignores them otherwise
+      // and writes all four as null, which is what clears an old case).
+      casePrice: casePriceBox.value,
+      caseCount: caseCountBox.value,
+      caseItemSize: caseSizeBox.value,
+      caseItemUnit: caseUnitSelect.value,
     };
   }
 
@@ -231,7 +290,15 @@ function priceBlock(item, actions, defaultUnit = null) {
   // so a misplaced decimal point is visible before Save rather than after.
   function refresh() {
     const unit = unitSelect.value;
-    pieceField.hidden = unit !== 'pcs';
+    const inCase = unit === CASE_MODE;
+    // In case mode the rate box gives way to the case boxes: the rate is worked out.
+    rateField.hidden = inCase;
+    caseBlock.hidden = !inCase;
+    // «Contiene 50 pz» has no size to give, so the box and its × go.
+    const itemsArePieces = caseUnitSelect.value === 'pcs';
+    caseSizeBox.hidden = itemsArePieces;
+    caseTimes.hidden = itemsArePieces;
+    pieceField.hidden = !(unit === 'pcs' || (inCase && itemsArePieces));
     rateLabel.textContent = RATE_LABEL[unit] || t('orders.priceGeneric', { currency: currentCurrency() });
     // ⚠️ The example follows the UNIT, and an unknown unit gets none. «(un chilo)»
     // left showing while somebody is pricing by the piece is worse than no example.
@@ -242,14 +309,19 @@ function priceBlock(item, actions, defaultUnit = null) {
       summaryMain.textContent = costReasonText(draft);
       summaryNote.textContent = '';
       summary.className = 'mgmt-price-summary muted';
+      // ⚠️ THE VAT LINE MUST GO WITH THE PRICE: without this it kept showing the last
+      // complete figure while a box was being emptied.
+      vatSummary.textContent = '';
       return;
     }
     const perKg = pricePerKg(draft);
     // For a per-piece price the price per KILO is the derived number, and it is
     // the one every recipe cost is built from — so it is spelled out rather than
     // left to be worked out from a piece weight.
-    const parts = [formatPricePerUnit(draft)];
-    if (unit === 'pcs' && perKg !== null) parts.push(`${formatRate(perKg)} / kg`);
+    // For a case the derived rate leads, with the case price it came from, so a
+    // misplaced decimal or a wrong count is visible before Save.
+    const parts = [inCase ? caseSummary(draft) : formatPricePerUnit(draft)];
+    if (draft.priceUnit === 'pcs' && perKg !== null) parts.push(`${formatRate(perKg)} / kg`);
     summaryMain.textContent = parts.filter(Boolean).join('  ·  ');
     // Empty whenever the ingredient IS costable, so the note only ever appears
     // when there is something left to do.
@@ -274,7 +346,7 @@ function priceBlock(item, actions, defaultUnit = null) {
     }
   }
 
-  [unitSelect, rate, pieceWeight, vatSelect].forEach(input => {
+  [unitSelect, rate, pieceWeight, vatSelect, casePriceBox, caseCountBox, caseSizeBox, caseUnitSelect].forEach(input => {
     input.addEventListener('input', refresh);
     input.addEventListener('change', refresh);
   });
@@ -290,7 +362,7 @@ function priceBlock(item, actions, defaultUnit = null) {
   // finish the copy rather than design a second answer.
   const pricePair = el('div', { class: 'mgmt-pair' }, [
     field(t('orders.howItIsBought'), unitSelect),
-    el('label', { class: 'mgmt-field' }, [rateLabel, rate]),
+    rateField,
   ]);
 
   // The PURCHASE VAT field — the LEFT cell of its own .mgmt-pair row, the right cell
@@ -310,6 +382,7 @@ function priceBlock(item, actions, defaultUnit = null) {
     // ⚠️ «Peso di un pezzo» STAYS FULL WIDTH. It appears only when the unit is
     // `pcs`, and a column that comes and goes would make the row above it jump.
     pricePair,
+    caseBlock,
     // Said ONCE, under the pair, instead of four times inside four labels that no
     // longer have room for it. ⚠️ It may not be dropped: entering the gross figure
     // inflates every recipe cost by the VAT rate and nothing on any screen looks wrong.
