@@ -75,6 +75,10 @@ let sheetQuery = '';
 let activeRun = null;      // { root, confirmLeave, stop } while a guided mix is on screen
 let currentRecipe = null;  // the recipe shown in detail (for the header Edit button)
 let leaveGuard = null;     // async () => boolean; blocks Back when there are unsaved edits
+// True only while a LIVE change redraws the open recipe (redrawDetail): nobody asked to
+// move, so focus stays where it is — somebody typing in the search box beside it must
+// not lose the keyboard because the owner corrected the salt on another phone.
+let quietFocus = false;
 let resumeOffered = false; // the "you were mixing" offer is made once per page load
 // ⚠️ THE TABLET SPLIT (29 Sep 2026): list on the left, a recipe on the right — for the
 // LIST and a RECIPE only. Every other route leaves it (leaveSplit) and is exactly what it
@@ -148,6 +152,7 @@ function swap(node) {
   // top of the document on every transition. The view container itself is focused
   // (not an input) to avoid popping the mobile keyboard.
   node.setAttribute('tabindex', '-1');
+  if (quietFocus) return;
   try { node.focus({ preventScroll: true }); } catch (e) { /* focus is best-effort */ }
 }
 
@@ -255,8 +260,11 @@ function redrawDetail(recipe) {
   // A zoomed list locks the page; the view that set the lock is about to be replaced.
   document.body.classList.remove('cat-zoom-lock');
   currentRecipe = recipe;
-  if (splitOn) showDetailTablet(recipe);
-  else showDetailPhone(recipe);
+  quietFocus = true;
+  try {
+    if (splitOn) showDetailTablet(recipe);
+    else showDetailPhone(recipe);
+  } finally { quietFocus = false; }
   const fresh = screen.querySelector('.cat-pane-body');
   if (splitOn && fresh) fresh.scrollTop = top;
   else if (!splitOn) screen.scrollTop = top;
@@ -308,6 +316,7 @@ function showDetailNode(recipe, node) {
   const body = el('div', { class: 'cat-pane-body' }, [node]);
   screen.replaceChildren(head, body);
   const title = head.querySelector('h1');
+  if (quietFocus) return;
   try { title.focus({ preventScroll: true }); } catch (e) { /* focus is best-effort */ }
 }
 

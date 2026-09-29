@@ -242,3 +242,15 @@ test('the fixed layers keep the 620px column on the Catalogue tablet, records.cs
   const rootGutter = read('tokens.css').match(/--app-gutter:\s*([^;]+);/)[1].trim();
   assert.ok(inside.includes(`--app-gutter: ${rootGutter};`), 'same gutter expression as :root');
 });
+
+// A LIVE redraw (another phone edited the open recipe) must not move focus: somebody
+// typing in the search box beside it would lose the keyboard mid-word.
+test('a live redraw of the open recipe leaves focus where it is', () => {
+  const src = readFileSync(new URL('../js/catalogue/catalogue-main.js', import.meta.url), 'utf8');
+  const redraw = src.slice(src.indexOf('function redrawDetail'), src.indexOf('function followOpenRecipe'));
+  assert.match(redraw, /quietFocus = true;[\s\S]*finally \{ quietFocus = false; \}/);
+  for (const fn of ['function swap', 'function showDetailNode']) {
+    const body = src.slice(src.indexOf(fn), src.indexOf('\n}\n', src.indexOf(fn)));
+    assert.match(body, /if \(quietFocus\) return;[\s\S]*\.focus\(/, `${fn} skips focus on a live redraw`);
+  }
+});
