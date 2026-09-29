@@ -380,7 +380,7 @@ export function buildRegistry(data, actions, hooks = {}) {
       const days = (list) => (list || []).map(dayShort).join(', ');
       // The invoice name stays in sight here, on its own screen, once a shorter one is shown
       // everywhere else — the one place it is still needed, to match a delivery note.
-      const invoiceName = supplierLabel(supplier) !== supplier.name ? supplier.name : '';
+      const invoiceName = supplierLabel(supplier) !== supplier.name ? supplier.name : ''; // invoice name, on purpose
       const meta = [
         invoiceName,
         supplier.category,

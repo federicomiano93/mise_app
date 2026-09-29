@@ -160,7 +160,11 @@ const DISPLAY_FILES = [
 
 for (const file of DISPLAY_FILES) {
   test(`${file} shows a supplier through supplierLabel, never its raw name`, () => {
-    const src = read(file).split('\n').filter(l => !l.trim().startsWith('//')).join('\n');
+    // A line that shows the INVOICE name on purpose says so with this marker (the supplier's
+    // own screen keeps it in sight, to match a delivery note); every other .name is a slip.
+    const src = read(file).split('\n')
+      .filter(l => !l.trim().startsWith('//') && !/\/\/ invoice name, on purpose$/.test(l.trimEnd()))
+      .join('\n');
     assert.match(src, /import \{[^}]*\bsupplierLabel\b[^}]*\} from '(\.\.\/|\.\/)supplier-label\.js';/);
     assert.doesNotMatch(src, /\b(?:supplier|sup|s)\??\.name\b/,
       "a supplier variable's .name is the invoice name — use supplierLabel(supplier)");
