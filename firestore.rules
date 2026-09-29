@@ -636,8 +636,30 @@ service cloud.firestore {
           && request.resource.data.keys().hasOnly([
                'bakery', 'priceUnit', 'pricePerUnit',
                'packPrice', 'packSize', 'unitWeightKg', 'priceUpdatedAt',
-               'vatRate'
+               'vatRate',
+               'casePrice', 'caseCount', 'caseItemSize', 'caseItemUnit'
              ])
+          // A price quoted PER CASE (30 Sep 2026): what the case costs, how many it
+          // holds, and how big each one is. The rate above is derived from them by the
+          // app at save time and stored beside them. Each is absent, null, or — for the
+          // three numbers — strictly positive (zero is a half-typed box, never free);
+          // the unit is a closed list. They live HERE ONLY: the ingredients rule has no
+          // such keys, so the app never writes them there (js/price-model.js).
+          && (!('casePrice' in request.resource.data)
+              || request.resource.data.casePrice == null
+              || (request.resource.data.casePrice is number
+                  && request.resource.data.casePrice > 0))
+          && (!('caseCount' in request.resource.data)
+              || request.resource.data.caseCount == null
+              || (request.resource.data.caseCount is number
+                  && request.resource.data.caseCount > 0))
+          && (!('caseItemSize' in request.resource.data)
+              || request.resource.data.caseItemSize == null
+              || (request.resource.data.caseItemSize is number
+                  && request.resource.data.caseItemSize > 0))
+          && (!('caseItemUnit' in request.resource.data)
+              || request.resource.data.caseItemUnit == null
+              || request.resource.data.caseItemUnit in ['pcs', 'kg', 'g', 'l', 'ml'])
           // The PURCHASE VAT rate (28 Sep 2026), so an order can show what it will
           // cost with VAT. The price above stays NET — the recipe costs are built
           // from it and must not move. A closed list: the union of the rates the app

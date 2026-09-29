@@ -2570,6 +2570,45 @@ async function roles() {
     () => mergeWrite(`${L}/ingredient-prices/I9`,
       { ...stamp, vatRate: 4 }, asAccount(SAM)));
 
+  // ── A price quoted per CASE (30 Sep 2026): the case is stored beside the rate the
+  // app derived from it. Numbers strictly positive, the unit from a closed list.
+  const caseDoc = { ...stamp, priceUnit: 'kg', pricePerUnit: 2,
+    casePrice: 20, caseCount: 4, caseItemSize: 2.5, caseItemUnit: 'kg' };
+  await expectAllowed('a manager can store a price per case',
+    () => mergeWrite(`${L}/ingredient-prices/I9`, caseDoc, asAccount(MAYA)));
+  await expectAllowed('…and the owner can',
+    () => mergeWrite(`${L}/ingredient-prices/I9`, caseDoc, asAccount(ALICE)));
+  await expectAllowed('a case of pieces stores no size (null)',
+    () => mergeWrite(`${L}/ingredient-prices/I9`,
+      { ...stamp, priceUnit: 'pcs', pricePerUnit: 0.4,
+        casePrice: 20, caseCount: 50, caseItemSize: null, caseItemUnit: 'pcs' }, asAccount(MAYA)));
+  await expectAllowed('switching back to per-kilo clears the case with nulls',
+    () => mergeWrite(`${L}/ingredient-prices/I9`,
+      { ...stamp, priceUnit: 'kg', pricePerUnit: 2,
+        casePrice: null, caseCount: null, caseItemSize: null, caseItemUnit: null }, asAccount(MAYA)));
+  for (const unit of ['pcs', 'kg', 'g', 'l', 'ml']) {
+    await expectAllowed(`a case unit of ${unit} is accepted`,
+      () => mergeWrite(`${L}/ingredient-prices/I9`, { ...caseDoc, caseItemUnit: unit }, asAccount(MAYA)));
+  }
+  for (const key of ['casePrice', 'caseCount', 'caseItemSize']) {
+    for (const bad of [0, -1, '20']) {
+      await expectDenied(`${key} of ${JSON.stringify(bad)} is refused`,
+        () => mergeWrite(`${L}/ingredient-prices/I9`, { ...caseDoc, [key]: bad }, asAccount(MAYA)));
+    }
+  }
+  for (const bad of ['oz', 'KG', '', 5]) {
+    await expectDenied(`a case unit of ${JSON.stringify(bad)} is refused`,
+      () => mergeWrite(`${L}/ingredient-prices/I9`, { ...caseDoc, caseItemUnit: bad }, asAccount(MAYA)));
+  }
+  await expectDenied('an employee cannot store a price per case',
+    () => mergeWrite(`${L}/ingredient-prices/I9`, caseDoc, asAccount(SAM)));
+  await expectAllowed('(control) the same ingredient write without a case key is fine',
+    () => mergeWrite(`${L}/ingredients/I9`,
+      { ...stamp, name: 'I9', active: true }, asAccount(MAYA)));
+  await expectDenied('the case keys are refused on the ingredient itself',
+    () => mergeWrite(`${L}/ingredients/I9`,
+      { ...stamp, name: 'I9', active: true, casePrice: 20 }, asAccount(MAYA)));
+
   // ⚠️ AND THE PRICE HISTORY MOVED BEHIND THE SAME GATE. Leaving it on the Orders
   // gate would be the back door into the thing the front door just locked.
   await seedDoc(`${L}/ingredients/I3/prices/H1`,
