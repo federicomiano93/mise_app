@@ -36,13 +36,23 @@ const TRASH_ICON =
 // before the chip could be read. Module-level, so the next build still knows.
 let categorySavedUntil = 0;
 
+// Where keyboard focus goes after a category row is deleted — for the same reason: the write's
+// snapshot redraws the whole screen, and a redraw drops focus to the page. `name` is the
+// category whose delete button takes it, `index` the deleted row's place (used when that
+// name is gone); armed for two seconds.
+let categoryFocusAfter = null;
+
 // panels  — { allergens, nutrition } as they stand right now
 // onSet(key, on) — throws one switch; resolves when the server has agreed
 // categories()   — the venue's category list as it stands (record-choices categoryChoices)
 // ingredients()  — every ingredient, to count who uses a category
 // onDeleteCategory(list, ids) — writes the shortened list and clears the category on `ids`
+// categoriesReady() — has the venue's saved list arrived? ⚠️ UNTIL IT HAS, DELETING IS OFF:
+//   categories() then answers the DEFAULTS, and a delete would overwrite the stored list with
+//   them. registry.js redraws this screen when the list loads, which re-enables the buttons.
 export function buildRegistrySettings({
   panels, onSet, categories = () => [], ingredients = () => [], onDeleteCategory = null,
+  categoriesReady = () => true,
 }) {
   const content = el('div', { class: 'mgmt-scroll reg-settings set-screen' });
   let current = { ...panels };
@@ -161,7 +171,7 @@ export function buildRegistrySettings({
   function categoryCard() {
     const list = categories();
     const head = el('div', { class: 'set-head' }, [
-      el('h3', { text: t('orders.settings.categories') }),
+      el('h3', { text: t('orders.settings.categories'), tabindex: '-1' }),
       el('p', { text: t('orders.settings.categoriesNote') }),
     ]);
     const box = el('section', { class: 'set-section' }, [head]);
@@ -179,18 +189,34 @@ export function buildRegistrySettings({
       ]));
     }
     list.forEach(name => box.appendChild(categoryRow(name, list)));
+    // Rebuilt after a delete: focus goes where it was moved to (the node is not in the page
+    // yet, so it waits one tick).
+    if (categoryFocusAfter) setTimeout(() => focusAfterDelete(box), 0);
     return box;
+  }
+
+  // The next row's delete button, or the card heading when no row is left — never the page.
+  function focusAfterDelete(box) {
+    const wanted = categoryFocusAfter;
+    if (!wanted) return;
+    categoryFocusAfter = null;
+    const buttons = [...box.querySelectorAll('.reg-cat-del')];
+    const target = buttons.find(b => b.dataset.category === wanted.name)
+      || buttons[Math.min(wanted.index, buttons.length - 1)]
+      || box.querySelector('h3');
+    target?.focus();
   }
 
   function categoryRow(name, list) {
     const del = el('button', {
-      type: 'button', class: 'reg-cat-del', icon: TRASH_ICON,
+      type: 'button', class: 'reg-cat-del', icon: TRASH_ICON, disabled: categoriesReady() ? null : '',
+      'data-category': name,
       'aria-label': t('orders.settings.deleteCategory', { name }),
       onClick: async () => {
         if (del.disabled) return;
         const key = name.toLowerCase();
         const users = ingredients().filter(i => categoryValue(i?.category).toLowerCase() === key);
-        const count = users.length;
+        const count = countInCategory(ingredients(), name);
         const message = count === 0
           ? t('orders.settings.deleteCategoryNone', { name })
           : (count === 1
@@ -205,9 +231,15 @@ export function buildRegistrySettings({
         try {
           await onDeleteCategory(list.filter(c => c.toLowerCase() !== key), users.map(i => i.id));
           categorySavedUntil = Date.now() + 2000;
+          const index = list.findIndex(c => c.toLowerCase() === key);
+          const rest = list.filter(c => c.toLowerCase() !== key);
+          categoryFocusAfter = { name: rest[Math.min(index, rest.length - 1)] ?? null, index };
+          setTimeout(() => { categoryFocusAfter = null; }, 2000);
           // The write's snapshot normally rebuilds this screen; if it has not yet, say so here.
           if (del.isConnected) {
+            const box = row.parentElement;
             row.remove();
+            focusAfterDelete(box);
             const chip = el('span', { class: 'set-saved reg-cat-saved', text: t('settings.saved') });
             content.querySelector('.set-section:last-child .set-head')?.appendChild(chip);
             setTimeout(() => chip.remove(), 2000);

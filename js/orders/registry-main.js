@@ -28,7 +28,7 @@ const state = {
   // The venue's saved category list (config/orders). null = never saved one, or not
   // loaded yet: both mean «offer the defaults».
   ingredientCategories: null,
-  loaded: { ingredients: false },
+  loaded: { ingredients: false, config: false },
 };
 
 const host = document.getElementById('registry-host');
@@ -47,6 +47,9 @@ const screen = buildRegistry(
       stored: state.ingredientCategories, ingredients: state.ingredients,
       language: outputLanguage(currentSession().location), current,
     }),
+    // ⚠️ Until config/orders has answered, `categories()` is only the defaults: Settings keeps
+    // the delete buttons off, or a delete would overwrite the saved list with them.
+    categoriesLoaded: () => state.loaded.config,
     orderUnits: (current) => unitChoices({
       ingredients: state.ingredients, language: outputLanguage(currentSession().location), current,
     }),
@@ -156,6 +159,7 @@ watchIngredientPrices(map => {
 // back to the defaults plus whatever ingredients already use, which is a usable screen.
 watchDoc(COLLECTIONS.config, 'orders', doc => {
   state.ingredientCategories = Array.isArray(doc?.ingredientCategories) ? doc.ingredientCategories : null;
+  state.loaded.config = true;
   screen.refresh();
 }, err => console.error('Live category list failed:', err));
 

@@ -59,8 +59,9 @@ import {
   BACK_ICON, mgmtRow,
 } from './mgmt-ui.js';
 
-// data:    { suppliers(): [], ingredients(): [], categories(current): [], orderUnits(current): [] }
-//            — live getters; the last two are the words the ingredient card's menus offer
+// data:    { suppliers(): [], ingredients(): [], categories(current): [], orderUnits(current): [],
+//            categoriesLoaded(): boolean } — live getters; categories and orderUnits are the
+//            words the ingredient card's menus offer
 // actions: { saveSupplier, saveIngredient, priceHistory, setSupplierActive,
 //            setIngredientActive, deleteSupplier, deleteIngredient, deleteCategory(list, ids) }
 // hooks:   { onChrome({ addLabel }) } — told on every paint which word the page
@@ -525,6 +526,7 @@ export function buildRegistry(data, actions, hooks = {}) {
       // Read at the moment the screen is built — and it IS rebuilt by refresh() on every
       // snapshot, so the list and the counts are always the live ones.
       categories: () => data.categories?.() || [],
+      categoriesReady: () => data.categoriesLoaded?.() !== false,
       ingredients: () => data.ingredients(),
       onDeleteCategory: (list, ids) => actions.deleteCategory(list, ids),
       onSet: async (key, on) => {
