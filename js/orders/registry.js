@@ -117,8 +117,10 @@ export function buildRegistry(data, actions, hooks = {}) {
     type: 'button', class: 'view-switch-btn', role: 'tab', 'aria-selected': 'false',
     onClick: () => setTab('suppliers'),
   });
+  // Order on screen: Ingredients · Suppliers · Packaging (30 Sep 2026; the buttons are
+  // still BUILT in the order above, only the switch is arranged differently).
   // ⚠️ Ingredients on the LEFT and lit, matching the `tab` default above.
-  const viewSwitch = el('div', { class: 'view-switch', role: 'tablist' }, [ingredientsBtn, packagingBtn, suppliersBtn]);
+  const viewSwitch = el('div', { class: 'view-switch', role: 'tablist' }, [ingredientsBtn, suppliersBtn, packagingBtn]);
 
   // An address can ask for the packaging list (suppliers.html#packaging) — Food cost's
   // packaging chooser sends somebody here when there is nothing to choose yet. Applied
