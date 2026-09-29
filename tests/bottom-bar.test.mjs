@@ -103,3 +103,60 @@ test('the pages that pin their bar outside the scroller stay as they are', () =>
       `${page} keeps its bar outside the scroll area and hides it per screen`);
   }
 });
+
+// ── ONE LOOK FOR EVERY BAR (B4, 29 Sep 2026) ─────────────────────────────────
+//
+// Five bars had five layouts: full-width halves here, 220px-capped chips there, a
+// Calculator grid, an Orders bar that stacked its icons at 360px. Now every bar
+// centres its buttons 12px apart, and each button is 240px at most and never more than
+// half the bar, so two share a row on a phone and a third wraps onto its own row at the
+// SAME width. Written per file (each feature's stylesheet is its own), pinned together.
+const BARS = [
+  ['style.css', '.recipe-footer', '.recipe-footer-btn'],
+  ['catalogue.css', '.cat-footer', '.cat-footer-btn'],
+  ['pastries.css', '.pas-footer', '.pas-footer-btn'],
+  ['foodcost.css', '.fc-footer', '.fc-footer-btn'],
+  ['inventory.css', '.inv-footer', '.inv-footer-btn'],
+];
+
+test('every bottom bar wraps and centres its buttons 12px apart', () => {
+  for (const [file, bar] of BARS) {
+    const rule = block(read(file), bar);
+    assert.match(rule, /flex-wrap:\s*wrap/, `${file} ${bar}`);
+    assert.match(rule, /justify-content:\s*center/, `${file} ${bar}`);
+    assert.match(rule, /gap:\s*12px/, `${file} ${bar}`);
+  }
+});
+
+test('every bottom-bar button is flex: 0 1 240px, half a bar at most, and one height', () => {
+  for (const [file, , btn] of BARS) {
+    const rule = block(read(file), btn);
+    assert.match(rule, /flex:\s*0 1 240px/, `${file} ${btn}`);
+    assert.match(rule, /max-width:\s*calc\(50% - 6px\)/, `${file} ${btn}`);
+    assert.match(rule, /min-height:\s*44px/, `${file} ${btn}`);
+  }
+});
+
+test('the Calculator’s three buttons wrap in the shared bar — no grid, no per-page width', () => {
+  const css = read('style.css').replace(/\/\*[\s\S]*?\*\//g, '');
+  assert.doesNotMatch(css, /body\[data-section="calculator"\] \.recipe-footer/);
+  assert.doesNotMatch(css, /#settings-footer-btn \{/);
+  const orders = read('orders.css').replace(/\/\*[\s\S]*?\*\//g, '');
+  assert.doesNotMatch(orders, /#orders-footer/, 'the shared bar already centres one button');
+  assert.match(orders, /body\[data-section="orders"\] \.recipe-footer-btn \{ min-height: var\(--tap-min\); \}/,
+    'the tablet floor stays');
+});
+
+test('«Reset quantities…» is a quiet text button: no frame, danger text, 44px tall, same handler', () => {
+  const css = read('orders.css');
+  const rule = block(css, '.clear-all-btn');
+  assert.match(rule, /border:\s*0/);
+  assert.match(rule, /background:\s*none/);
+  assert.match(rule, /color:\s*var\(--danger\)/);
+  assert.match(rule, /font-size:\s*14px/);
+  assert.match(rule, /min-height:\s*44px/);
+  assert.match(rule, /margin:\s*8px auto 0/);
+  assert.match(read('orders.html'), /id="clear-all-btn"/);
+  assert.match(read('js/orders/orders-main.js'),
+    /getElementById\('clear-all-btn'\)\?\.addEventListener\('click', openClearScreen\)/);
+});

@@ -344,7 +344,9 @@ body {
 .inv-footer {
   flex-shrink: 0;
   display: flex;
-  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
   padding: 8px 12px calc(8px + env(safe-area-inset-bottom));
   padding-inline: max(12px, var(--app-gutter));
   background: var(--inv-ground);
@@ -352,10 +354,11 @@ body {
 }
 .inv-footer[hidden] { display: none; }
 .inv-footer-btn {
-  flex: 1;
-  min-width: 0;
+  flex: 0 1 240px;
+  max-width: calc(50% - 6px);
   min-height: 44px;
-  padding: 8px 10px;
+  min-width: 0;
+  padding: 8px 12px;
   border: 1px solid var(--inv-border);
   border-radius: var(--inv-radius-sm);
   background: var(--inv-surface);

@@ -642,7 +642,6 @@ input.ing-stock {
 /* Throwing away what has been typed. Both of these are deliberately quiet — a
    text button in danger red, never a filled one: the action destroys work and must
    not sit next to "Order placed" looking like an equal choice (P20). */
-.clear-all-btn,
 .supplier-clear-btn {
   display: block;
   width: 100%;
@@ -658,8 +657,29 @@ input.ing-stock {
   cursor: pointer;
   transition: transform 60ms ease;
 }
-.clear-all-btn:active,
 .supplier-clear-btn:active { transform: scale(.97); }
+
+/* «Reset quantities…» under the supplier list: the quietest thing on the screen. Just
+   words in danger red — no frame, no fill — centred, and 44px tall for the thumb. It is
+   not the same rule as .supplier-clear-btn above, which sits INSIDE a card and keeps its
+   frame. */
+.clear-all-btn {
+  display: block;
+  width: auto;
+  min-height: 44px;
+  margin: 8px auto 0;
+  padding: 0 16px;
+  background: none;
+  border: 0;
+  color: var(--danger);
+  font-family: 'Manrope', sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  text-align: center;
+  cursor: pointer;
+  transition: transform 60ms ease;
+}
+.clear-all-btn:active { transform: scale(.97); }
 
 /* ── Buttons ──────────────────────────────────────────────────────────────── */
 .btn-primary {
@@ -1948,16 +1968,6 @@ a.home-reminder {
    and its own footer has two buttons with room to spare — an unscoped rule here
    would restyle a screen this change has no business touching. Same trap as the
    .ing-row collision that cost v181. */
-@media (max-width: 360px) {
-  body[data-section="orders"] .recipe-footer { gap: 6px; padding-left: 10px; padding-right: 10px; }
-  body[data-section="orders"] .recipe-footer-btn {
-    flex-direction: column;
-    gap: 4px;
-    padding: 8px 4px;
-    font-size: 12px;
-    min-width: 0;    /* the actual cure: let the item shrink below its content */
-  }
-}
 
 /* ⚠️ «How should this order go?» MOVED TO tokens.css ON 24 Aug 2026, and it had to.
    The same sheet is now opened from the Catalogue, the Calculator and «Who can get in»,
@@ -2281,12 +2291,6 @@ body.hide-stock .ingredient-list .ing-fields { justify-content: center; }
   font-variant-numeric: tabular-nums;
 }
 
-/* ── One button in the bottom bar ───────────────────────────────────
-   .recipe-footer-btn is `flex: 1`, which is right for two or three buttons and wrong
-   for one: alone it would stretch the full width of the screen and stop reading as a
-   button at all. */
-#orders-footer { justify-content: center; }
-#orders-footer .recipe-footer-btn { flex: 0 1 240px; }
 
 
 

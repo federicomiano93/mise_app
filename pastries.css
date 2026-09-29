@@ -540,8 +540,9 @@ input.pas-qty.pas-invalid {
 .pas-footer {
   flex: none;
   display: flex;
+  flex-wrap: wrap;
   justify-content: center;
-  gap: 10px;
+  gap: 12px;
   padding: 10px 16px calc(12px + env(safe-area-inset-bottom));
   padding-inline: max(16px, var(--app-gutter));
   background: var(--pas-ground);
@@ -550,9 +551,10 @@ input.pas-qty.pas-invalid {
 .pas-footer[hidden] { display: none; }
 .pas-footer-btn {
   appearance: none;
-  flex: 1;
-  max-width: 220px;
-  height: 44px;
+  flex: 0 1 240px;
+  max-width: calc(50% - 6px);
+  min-height: 44px;
+  padding: 8px 12px;
   cursor: pointer;
   background: var(--pas-surface);
   border: 1px solid var(--pas-border);

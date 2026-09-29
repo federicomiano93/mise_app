@@ -1248,8 +1248,9 @@ body.cat-zoom-lock { overflow: hidden; }
 .cat-footer {
   flex: none;
   display: flex;
+  flex-wrap: wrap;
   justify-content: center;
-  gap: 10px;
+  gap: 12px;
   padding: 10px 16px calc(12px + env(safe-area-inset-bottom));
   padding-inline: max(16px, var(--app-gutter));
   /* ⚠⚠ THE BAR IS THE PAGE'S OWN GROUND, NOT A RAISED SURFACE, AND THE FIRST
@@ -1267,9 +1268,10 @@ body.cat-zoom-lock { overflow: hidden; }
 .cat-footer[hidden] { display: none; }
 .cat-footer-btn {
   appearance: none;
-  flex: 1;
-  max-width: 220px;
-  height: 44px;
+  flex: 0 1 240px;
+  max-width: calc(50% - 6px);
+  min-height: 44px;
+  padding: 8px 12px;
   cursor: pointer;
   /* The raised chip, now that the bar behind it is the page. --surface-2 was
      invisible against a --surface bar and is barely lighter than the ground. */

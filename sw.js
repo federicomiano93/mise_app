@@ -1,4 +1,4 @@
-const CACHE_NAME = 'theitalianclub-v427';
+const CACHE_NAME = 'theitalianclub-v428';
 // Firebase SDK modules (loaded from gstatic) are cached SEPARATELY from CACHE_NAME
 // so they survive the cache-version bump that happens on every deploy — otherwise
 // the offline SDK would be wiped each release until the next online load. The name
@@ -388,8 +388,8 @@ const ASSET_HASHES = {
   "./js/install-guide.js": '17fcd0c0fec489c2',
   "./tokens.css": '6d7d2693be586b33',
   "./auth.css": '8db3d5a1b9b85d37',
-  "./style.css": 'b546f050495ad454',
-  "./orders.css": 'a85f47274f6c5550',
+  "./style.css": '4e0c59d62c594f3d',
+  "./orders.css": 'c839512a84d5b6bc',
   "./sounds/alarm.wav": '0d1465974f5be95b',
   "./fonts/manrope-latin.woff2": '71eb731d55804619',
   "./fonts/manrope-latin-ext.woff2": 'bd24140af06f1b58',
@@ -555,7 +555,7 @@ const ASSET_HASHES = {
   "./js/orders/order-cost-view.js": '842bfc57469521a0',
   "./js/orders/order-summary-view.js": '73fc678e018ba133',
   "./catalogue.html": '2f1ad4c53eb543aa',
-  "./catalogue.css": '4cb9641f10cfde09',
+  "./catalogue.css": '67236e65d4453eae',
   "./label-print.css": 'ffbcdf4e7a627a2d',
   "./records.css": 'f3b47b2cbf27ad62',
   "./js/catalogue/confirm-dialog.js": '61a7f580f37c5ff8',
@@ -591,7 +591,7 @@ const ASSET_HASHES = {
   "./js/catalogue/guided-editor.js": 'b93f216672607087',
   "./js/catalogue/import-to-calculator.js": '509d83f39384e106',
   "./pastries.html": '28219fd4461e15df',
-  "./pastries.css": 'bf56e1b5a44dca39',
+  "./pastries.css": 'a6a262e471292006',
   "./js/pastries/confirm-dialog.js": '61a7f580f37c5ff8',
   "./js/pastries/dom.js": '84e0623e447bb7ab',
   "./js/pastries/pastries-model.js": 'd162282f04d5287d',
@@ -606,7 +606,7 @@ const ASSET_HASHES = {
   "./js/pastries/pastries-logs-store.js": '9a81fc94327027be',
   "./js/pastries/pastries-logs.js": '91b2ec2a8704c3e5',
   "./foodcost.html": '079b003020e3e44d',
-  "./foodcost.css": '690aa30030f81363',
+  "./foodcost.css": '1e369e37a745414e',
   "./js/foodcost/confirm-dialog.js": '61a7f580f37c5ff8',
   "./js/foodcost/dom.js": '911105da04a03481',
   "./js/foodcost/foodcost-model.js": '465baa67bce8123a',
@@ -621,7 +621,7 @@ const ASSET_HASHES = {
   "./js/foodcost/product-limits.js": 'd73e12634551ea98',
   "./js/foodcost/foodcost-settings.js": '9627111b53f26939',
   "./inventory.html": 'ded5ca570987f967',
-  "./inventory.css": 'ce6e53b18262df20',
+  "./inventory.css": '6c6be4ef80a979a3',
   "./js/inventory/confirm-dialog.js": '61a7f580f37c5ff8',
   "./js/inventory/dom.js": '5971dfbbb1e223ec',
   "./js/inventory/inventory-model.js": '09eed83d8469a166',
