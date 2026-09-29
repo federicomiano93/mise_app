@@ -104,7 +104,9 @@ test('both lists are cards like the order summary', () => {
 test('the header is sticky: at the top of the supplier screen, under the tabs in the flat list', () => {
   assert.match(rule('.ing-head'), /position:\s*sticky/);
   assert.match(rule('.ing-head'), /background:\s*var\(--surface\)/);
-  assert.match(rule('.ingredient-list > .ing-head'), /top:\s*0/);
+  // -14px = .supplier-detail-body's padding-top: top 0 left a 14px band of rows above it.
+  assert.match(rule('.ingredient-list > .ing-head'), /top:\s*-14px/);
+  assert.match(rule('.supplier-detail-body'), /padding:\s*14px /);
   assert.match(rule('.ing-flat-list > .ing-head'), /top:\s*var\(--order-head-h,\s*0px\)/);
   const main = read('js/orders/orders-main.js');
   assert.match(main, /trackStickyHead\(document\.querySelector\('\.order-box-head'\)\)/);
@@ -119,9 +121,8 @@ test('with Stock hidden the header and the rows lose the column, and the header 
   assert.match(rule('body.hide-stock .stock-field'), /display:\s*none/);
 });
 
-test('boxes: 64px on a phone, 88px and the tap floor on a tablet; the tablet no longer sets a 2-column grid', () => {
-  assert.match(rule('.ingredient-list'), /--ing-box-w:\s*64px|--ing-box-w/);
-  assert.match(CSS, /--ing-box-w:\s*64px/);
+test('boxes: 56px on a phone (the name keeps 102px at 296), 88px and the tap floor on a tablet; no 2-column grid', () => {
+  assert.match(CSS, /--ing-box-w:\s*56px/);
   assert.match(CSS, /--ing-box-w:\s*88px/);
   assert.match(rule('.ing-row--line input.ing-qty'), /width:\s*var\(--ing-box-w\)/);
   assert.match(rule('.ing-row--line input.ing-qty'), /min-height:\s*var\(--ing-box-h\)/);

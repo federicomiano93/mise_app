@@ -508,9 +508,10 @@
    Column widths are FIXED (--ing-box-w) and shared by the rows and the header: with
    `auto` each row would size its own column by its own unit word («casse», «cartone»),
    and the boxes would no longer line up down the list. */
+/* 56px on a phone: at 296px every pixel the boxes give back goes to the name. */
 .ingredient-list,
 .ing-flat-list {
-  --ing-box-w: 64px;
+  --ing-box-w: 56px;
   --ing-box-h: 44px;
 }
 .ingredient-list {
@@ -547,6 +548,7 @@
 .ing-row--line .ing-top { display: block; margin-bottom: 0; }
 .ing-row--line .ing-name { font-size: 16px; font-weight: 600; text-align: left; overflow-wrap: anywhere; }
 .ing-row--line .ing-supplier { margin: 2px 0 0; }
+.ing-row--line .ing-weight { margin-top: 1px; font-family: 'DM Mono', monospace; font-size: 12px; color: var(--text-3); }
 .ing-row--line .ing-suggestion { margin-top: 2px; }
 .ing-row--line .ing-col {
   display: flex;
@@ -598,7 +600,10 @@
 /* --order-head-h is written by JS (inline on <body>); the 0 here is its honest default
    before the first measurement, and what a page without the tab head would read. */
 body[data-section="orders"] { --order-head-h: 0px; }
-.ingredient-list > .ing-head { top: 0; }
+/* -14px = .supplier-detail-body's padding-top: sticky insets are measured from inside the
+   scroller's padding, so top: 0 left a 14px band where rows showed ABOVE the header
+   (measured 29 Sep 2026). Keep the two numbers together. */
+.ingredient-list > .ing-head { top: -14px; }
 .ing-flat-list > .ing-head { top: var(--order-head-h, 0px); }
 
 /* Stock hidden (Settings): one column fewer, in the rows AND the header. */

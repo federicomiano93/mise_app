@@ -150,9 +150,6 @@ export function buildRow(ing, supplier, suggest, entries, hooks, { meta = '' } =
     updateHint();   // the warning has to appear as the extra digit is typed
   });
 
-  // "name weight" (e.g. "Bacon 2.27kg"); the order unit (e.g. "casse") sits next
-  // to the Order box, not by the name. Both are skipped when empty.
-  const nameLabel = [ing.name, ing.weight].filter(Boolean).join(' ');
 
   // One LINE per ingredient, three columns: the name (with the supplier and the hint
   // under it), the Order box, the Stock box. «Order» / «Stock» are named ONCE, by the
@@ -163,8 +160,11 @@ export function buildRow(ing, supplier, suggest, entries, hooks, { meta = '' } =
   const row = el('div', { class: 'ing-row ing-row--line', dataset: { ing: ing.id } }, [
     el('div', { class: 'ing-main' }, [
       el('div', { class: 'ing-top' }, [
-        el('span', { class: 'ing-name', text: nameLabel }),
+        el('span', { class: 'ing-name', text: ing.name || '' }),
       ]),
+      // The pack weight on a small line of its own (29 Sep 2026): beside the name it pushed
+      // «Marmellata di albicocche 1kg» onto four lines in the 86px a 296px phone leaves.
+      ing.weight ? el('div', { class: 'ing-weight', text: ing.weight }) : null,
       // Its own block, not a second child of .ing-top: that is a baseline-aligned flex
       // row, so the supplier would sit BESIDE the name instead of under it.
       meta ? el('div', { class: 'ing-supplier', text: meta }) : null,
