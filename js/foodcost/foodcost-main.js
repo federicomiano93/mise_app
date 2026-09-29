@@ -28,6 +28,7 @@ import { isPackaging } from '../ingredient-kind.js';
 // that recipe. From js/ root: the catalogue and Food cost share an address, never a folder.
 import { recipeIdFromHash, recipeHref } from '../recipe-link.js';
 import { isTabletNow, watchTablet } from './tablet.js';
+import { crossingRoute } from './crossing-route.js';
 
 // The arrow the empty right-hand pane draws (the same one the other panes use).
 const POINTER_SVG =
@@ -61,6 +62,9 @@ let paneEmpty = null;       // the placeholder node kept for the right-hand pane
 // The editor set aside while its margin history is shown in the pane: ITS NODE, alive, with
 // the working copy and the guard it registered. Back puts the same node back.
 let heldEditor = null;
+// The margin history's own node, kept so a rotation MOVES it (no second fetch) instead of
+// drawing it again.
+let historyBody = null;
 let guardPending = false;   // a «discard changes?» question is already open
 // True while a move across the width runs: nothing may take the focus.
 let quietFocus = false;
@@ -177,7 +181,14 @@ function showPaneEmpty() {
   }
   paneEmpty.querySelector('h2').textContent = t('fc.split.empty.title');
   paneEmpty.querySelector('p').textContent = t('fc.split.empty.text');
+  syncPaneEmpty();
   screen.replaceChildren(paneEmpty);
+}
+
+// ⚠️ NO “Tap a product on the left” BESIDE «No products yet»: with nothing to tap the
+// placeholder is hidden, and comes back when the first product arrives.
+function syncPaneEmpty() {
+  if (paneEmpty) paneEmpty.hidden = listedProducts().length === 0;
 }
 
 // The light head of the pane (tokens.css .app-split-pane .app-header): the product's name
@@ -243,6 +254,7 @@ function showList() {
   currentProduct = null;
   leaveGuard = null;
   heldEditor = null;
+  historyBody = null;
   entryEditor = false;
   draftRecipeId = null;
   // ⚠️ Narrowed, the list has Back (to the recipe) where it otherwise has Home.
@@ -276,6 +288,7 @@ function openProduct(product, draft = null) {
   currentProduct = product;
   leaveGuard = null;
   heldEditor = null;
+  historyBody = null;
   if (isTabletNow()) {
     // The list stays ALIVE in its column (not redrawn: its scroll and focus stay), the page
     // header stays the list's, and the editor opens in the pane.
@@ -303,6 +316,7 @@ function backToProduct() {
   view = 'editor';
   activeEditor = heldEditor;
   heldEditor = null;
+  historyBody = null;
   if (!splitOn) setEditorHeaderPhone(currentProduct);
   showNode(activeEditor.root);
 }
@@ -388,6 +402,7 @@ async function openHistory(product) {
   if (!splitOn) setHeader({ title: t('fc.marginHistory'), sub: product.name || t('fc.productWord'), back: true });
 
   const body = el('div', { class: 'fc-view' }, [el('p', { class: 'fc-empty', text: t('fc.loading') })]);
+  historyBody = body;
   showNode(body);
 
   let entries;
@@ -562,10 +577,15 @@ initFoodCost(
     // Beside the list, a product deleted elsewhere sends an UNTOUCHED editor back to the
     // placeholder; one with typing in it is kept, as on a phone.
     if (view === 'editor' && activeEditor) {
-      if (openProductWasDeleted()) { toast(t('fc.productDeleted')); showList(); return; }
+      if (openProductWasDeleted(activeEditor)) { toast(t('fc.productDeleted')); showList(); return; }
       activeEditor.refreshData();
     }
+    // The margin history shows the product's editor set aside: the same question about it.
+    if (view === 'history' && heldEditor && openProductWasDeleted(heldEditor)) {
+      toast(t('fc.productDeleted')); showList(); return;
+    }
     if (heldEditor) heldEditor.refreshData();
+    if (view === 'list' && splitOn) syncPaneEmpty();
   },
   () => toast(t('fc.liveSyncInterruptedProducts')),
 );
@@ -594,11 +614,33 @@ onLanguageChange(() => {
 // its history — and the EDITOR IS MOVED, NEVER REBUILT: it holds a working copy, and its node
 // keeps every field, its scroll and its guard. The wait is left alone.
 watchTablet((isTablet) => {
-  if (isTablet === splitOn) return;
-  if (view === 'list') showList();
-  else if (view === 'editor' && activeEditor) moveEditor(isTablet);
-  else if (view === 'history' && currentProduct) openHistory(currentProduct);
+  const route = crossingRoute({ view, isTablet, splitOn, hasHeldEditor: !!heldEditor });
+  if (route.action === 'relist') showList();
+  else if (route.action === 'move-editor' && activeEditor) moveEditor(route.toTablet);
+  else if (route.action === 'move-history' && historyBody) moveHistory(route.toTablet);
 });
+
+// The history node MOVES between the pane and the full screen — not fetched again — and the
+// editor set aside stays alive (its node and its guard), so the Back that follows, the pane's
+// or the phone's, returns to exactly what was typed.
+function moveHistory(toTablet) {
+  quietFocus = true;
+  try {
+    if (toTablet) {
+      setSplit(true);
+      setListChrome();
+      paintListColumn(currentProduct ? currentProduct.id : null);
+      showNode(historyBody);
+    } else {
+      setSplit(false);
+      listCol.replaceChildren();
+      paneEmpty = null;
+      activeList = null;
+      setHeader({ title: t('fc.marginHistory'), sub: (currentProduct && currentProduct.name) || t('fc.productWord'), back: true });
+      swap(historyBody);
+    }
+  } finally { quietFocus = false; }
+}
 
 function moveEditor(toTablet) {
   const node = activeEditor.root;
@@ -630,10 +672,10 @@ function moveEditor(toTablet) {
 }
 
 // The stored product the open editor was made from is gone from the live list.
-function openProductWasDeleted() {
+function openProductWasDeleted(editor) {
   return splitOn && currentProduct && currentProduct.id && hasLiveProducts()
     && !getProducts().some(p => p && p.id === currentProduct.id)
-    && activeEditor.isUntouched();
+    && editor.isUntouched();
 }
 
 if (fromRecipe) {

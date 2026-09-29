@@ -1366,6 +1366,7 @@ body.cat-zoom-lock { overflow: hidden; }
 @media (min-width: 900px) and (min-height: 600px) {
   body[data-section="catalogue"] .cat-ing-list--zoom,
   body[data-section="catalogue"] .rec-host,
+  body[data-section="catalogue"] .pick-overlay,
   body[data-section="catalogue"] .cat-toast {
     --app-max-width: 620px;
     --app-gutter: max(0px, calc((100% - var(--app-max-width)) / 2));

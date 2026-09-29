@@ -143,11 +143,12 @@ test('crossing the width MOVES the editor node and never rebuilds it', () => {
   const at = MAIN.indexOf('watchTablet((isTablet) => {');
   assert.ok(at > 0);
   const watch = MAIN.slice(at, MAIN.indexOf('\n});', at));
-  assert.match(watch, /if \(isTablet === splitOn\) return;/);
-  assert.match(watch, /if \(view === 'list'\) showList\(\);/);
-  assert.match(watch, /view === 'editor' && activeEditor\) moveEditor\(isTablet\)/);
-  assert.match(watch, /view === 'history' && currentProduct\) openHistory\(currentProduct\)/);
-  assert.doesNotMatch(watch, /openProduct|renderEditor/);
+  assert.match(watch, /crossingRoute\(\{ view, isTablet, splitOn, hasHeldEditor: !!heldEditor \}\)/);
+  assert.match(watch, /route\.action === 'relist'\) showList\(\)/);
+  assert.match(watch, /'move-editor' && activeEditor\) moveEditor\(route\.toTablet\)/);
+  assert.match(watch, /'move-history' && historyBody\) moveHistory\(route\.toTablet\)/);
+  // ⚠️ the history is NEVER drawn again by a rotation (that broke the page once: the split state was not switched)
+  assert.doesNotMatch(watch, /openHistory|openProduct|renderEditor/);
   const move = fnBody('moveEditor');
   assert.match(move, /const node = activeEditor\.root;/);
   assert.doesNotMatch(move, /renderEditor|openProduct/);
@@ -165,8 +166,9 @@ test('crossing the width MOVES the editor node and never rebuilds it', () => {
 test('live: the working copy is never replaced; a product deleted elsewhere empties an UNTOUCHED pane only', () => {
   const gone = fnBody('openProductWasDeleted');
   assert.match(gone, /splitOn && currentProduct && currentProduct\.id && hasLiveProducts\(\)/);
-  assert.match(gone, /activeEditor\.isUntouched\(\)/);
-  assert.match(MAIN, /if \(openProductWasDeleted\(\)\) \{ toast\(t\('fc\.productDeleted'\)\); showList\(\); return; \}\s*activeEditor\.refreshData\(\);/);
+  assert.match(gone, /editor\.isUntouched\(\)/);
+  assert.match(MAIN, /if \(view === 'history' && heldEditor && openProductWasDeleted\(heldEditor\)\) \{\s*toast\(t\('fc\.productDeleted'\)\); showList\(\); return;/);
+  assert.match(MAIN, /if \(openProductWasDeleted\(activeEditor\)\) \{ toast\(t\('fc\.productDeleted'\)\); showList\(\); return; \}\s*activeEditor\.refreshData\(\);/);
   assert.match(MAIN, /\(view === 'list' \|\| \(splitOn && \(view === 'editor' \|\| view === 'history'\)\)\) && activeList\) \{\s*activeList\.refresh\(/);
   assert.match(MAIN, /if \(heldEditor\) heldEditor\.refreshData\(\);/);
 });
@@ -240,4 +242,52 @@ test('the split uses only tokens tokens.css defines', () => {
   for (const [, name] of block.matchAll(/var\((--[a-z0-9-]+)/g)) {
     assert.ok(tokens.includes(`${name}:`) || local.includes(`${name}:`), `${name} is not defined`);
   }
+});
+
+// ── Review fixes: the history survives a rotation ─────────────────────────────
+
+test('EXECUTED: what a rotation does, for the list, the editor and the history', async () => {
+  const { crossingRoute } = await import('../js/foodcost/crossing-route.js');
+  const held = { hasHeldEditor: true };
+  // tablet -> phone
+  assert.deepEqual(crossingRoute({ view: 'list', isTablet: false, splitOn: true }), { action: 'relist' });
+  assert.deepEqual(crossingRoute({ view: 'editor', isTablet: false, splitOn: true }), { action: 'move-editor', toTablet: false });
+  assert.deepEqual(crossingRoute({ view: 'history', isTablet: false, splitOn: true, ...held }),
+    { action: 'move-history', toTablet: false, keepHeldEditor: true });
+  // phone -> tablet
+  assert.deepEqual(crossingRoute({ view: 'list', isTablet: true, splitOn: false }), { action: 'relist' });
+  assert.deepEqual(crossingRoute({ view: 'editor', isTablet: true, splitOn: false }), { action: 'move-editor', toTablet: true });
+  assert.deepEqual(crossingRoute({ view: 'history', isTablet: true, splitOn: false, hasHeldEditor: false }),
+    { action: 'move-history', toTablet: true, keepHeldEditor: false });
+  // nothing to do when the layout already matches, and the wait is left alone
+  for (const view of ['list', 'editor', 'history']) {
+    assert.equal(crossingRoute({ view, isTablet: true, splitOn: true }).action, 'none');
+    assert.equal(crossingRoute({ view, isTablet: false, splitOn: false }).action, 'none');
+  }
+  assert.equal(crossingRoute({ view: 'loading', isTablet: true, splitOn: false }).action, 'none');
+});
+
+test('moving the history switches the split state, keeps the held editor and fetches nothing again', () => {
+  const move = fnBody('moveHistory');
+  assert.match(move, /setSplit\(true\);[\s\S]*showNode\(historyBody\)/);
+  assert.match(move, /setSplit\(false\);[\s\S]*swap\(historyBody\)/);
+  assert.match(move, /back: true/, 'the phone header carries a Back');
+  assert.doesNotMatch(move, /openHistory|getProductHistory|heldEditor\s*=/, 'no second fetch, and the held editor is not touched');
+  assert.match(fnBody('openHistory'), /historyBody = body;/);
+  // The phone's Back restores the held editor node.
+  assert.match(fnBody('handleBack'), /if \(view === 'history' && heldEditor && !splitOn\) \{ backToProduct\(\); return; \}/);
+});
+
+test('the placeholder is hidden while there is no product to tap', () => {
+  assert.match(fnBody('syncPaneEmpty'), /paneEmpty\.hidden = listedProducts\(\)\.length === 0;/);
+  assert.match(fnBody('showPaneEmpty'), /syncPaneEmpty\(\);/);
+  assert.match(MAIN, /if \(view === 'list' && splitOn\) syncPaneEmpty\(\);/);
+});
+
+test('the ingredient chooser keeps the 620px column on both tablets', () => {
+  for (const [css, sel] of [['foodcost.css', 'body[data-card="foodcost"] .pick-overlay'],
+    ['catalogue.css', 'body[data-section="catalogue"] .pick-overlay']]) {
+    assert.ok(read(css).includes(sel), `${css} must re-scope .pick-overlay`);
+  }
+  assert.match(read('sw.js'), /'\.\/js\/foodcost\/crossing-route\.js'/);
 });

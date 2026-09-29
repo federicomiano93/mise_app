@@ -1,4 +1,4 @@
-const CACHE_NAME = 'theitalianclub-v440';
+const CACHE_NAME = 'theitalianclub-v441';
 // Firebase SDK modules (loaded from gstatic) are cached SEPARATELY from CACHE_NAME
 // so they survive the cache-version bump that happens on every deploy — otherwise
 // the offline SDK would be wiped each release until the next online load. The name
@@ -12,7 +12,7 @@ const CACHE_NAME = 'theitalianclub-v440';
 // the fetch handler below, on the first load that has a network.
 // So between activate() and that first load, a phone that is OFFLINE cannot boot:
 // the code asks for 12.18.0 and nothing has it. In practice the window is very
-// small — activate() only happens after a successful 264-file precache, i.e.
+// small — activate() only happens after a successful 265-file precache, i.e.
 // online, and tapping the update banner reloads the page immediately — but it is
 // not zero, and it is the reason to bump the SDK deliberately rather than often.
 // Leaving the name unchanged would close the window and cost ~1 MB of dead
@@ -344,6 +344,7 @@ const ASSETS = [
   './js/foodcost/foodcost-main.js',
   './js/foodcost/foodcost-list.js',
   './js/foodcost/tablet.js',
+  './js/foodcost/crossing-route.js',
   './js/foodcost/foodcost-editor.js',
   './js/foodcost/foodcost-weighing.js',
   // «Which products take which VAT rate» (13 Sep 2026): the guide's words, per country,
@@ -561,7 +562,7 @@ const ASSET_HASHES = {
   "./js/orders/order-cost-view.js": '842bfc57469521a0',
   "./js/orders/order-summary-view.js": '73fc678e018ba133',
   "./catalogue.html": 'f2ed1afee310d404',
-  "./catalogue.css": 'b1061203740b3228',
+  "./catalogue.css": '655215cf87fd1c75',
   "./label-print.css": 'ffbcdf4e7a627a2d',
   "./records.css": 'f3b47b2cbf27ad62',
   "./js/catalogue/confirm-dialog.js": '61a7f580f37c5ff8',
@@ -613,15 +614,16 @@ const ASSET_HASHES = {
   "./js/pastries/pastries-logs-store.js": '9a81fc94327027be',
   "./js/pastries/pastries-logs.js": '91b2ec2a8704c3e5',
   "./foodcost.html": 'bd44c2b1f1535f1b',
-  "./foodcost.css": 'a9fd20c07e4ac441',
+  "./foodcost.css": 'a25b3b5e1fd20f56',
   "./js/foodcost/confirm-dialog.js": '61a7f580f37c5ff8',
   "./js/foodcost/dom.js": '911105da04a03481',
   "./js/foodcost/foodcost-model.js": '465baa67bce8123a',
   "./js/foodcost/firebase-foodcost.js": '6e843c7f39d651c5',
   "./js/foodcost/foodcost-store.js": '784c7844dfd80044',
-  "./js/foodcost/foodcost-main.js": '8d30a156b89b5412',
+  "./js/foodcost/foodcost-main.js": '9d5c50d6365adf05',
   "./js/foodcost/foodcost-list.js": '897a6bf3b9e0e95d',
   "./js/foodcost/tablet.js": '2eb3e7cad10ca3fc',
+  "./js/foodcost/crossing-route.js": '2993db36c98800ae',
   "./js/foodcost/foodcost-editor.js": '779964ac395bbea2',
   "./js/foodcost/foodcost-weighing.js": 'cb2f9dfafec4d739',
   "./js/foodcost/vat-guide.js": '59257253ecddb640',
@@ -675,7 +677,7 @@ const ASSET_HASHES = {
 // code against rules that deployed instantly, which is the very thing the gate exists
 // to prevent. Two things stand between that and a release: the test that every ASSETS
 // entry EXISTS (a mistyped path being the likeliest permanent cause), and this
-// project's post-deploy sweep, which already asks the live site for all 264 files.
+// project's post-deploy sweep, which already asks the live site for all 265 files.
 // ⚠️ NEITHER covers a device-specific failure — nobody has yet confirmed an update
 // landing on a real iPhone under this code.
 //

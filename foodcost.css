@@ -538,10 +538,12 @@ select.fc-input, .fc-select {
 
 /* ⚠️ THE FULL-SCREEN LAYERS STAY AT THE 620px COLUMN even though this page is wide on a
    tablet: Settings and the VAT guide are position: fixed, so they compute --app-gutter from
-   the VIEWPORT, and so does the toast. A custom property is resolved where it is declared,
+   the VIEWPORT, and so does the toast — and the ingredient chooser (js/pick-screen.js,
+   .pick-overlay), which the editor opens. A custom property is resolved where it is declared,
    so both are re-declared ON the layer; its descendants inherit the 620px answer. */
 @media (min-width: 900px) and (min-height: 600px) {
   body[data-card="foodcost"] .fc-overlay,
+  body[data-card="foodcost"] .pick-overlay,
   body[data-card="foodcost"] .fc-toast {
     --app-max-width: 620px;
     --app-gutter: max(0px, calc((100% - var(--app-max-width)) / 2));
