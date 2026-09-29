@@ -76,10 +76,10 @@ import {
 } from './order-requests.js';
 
 
-// ⚠️ TABLET ONLY (Slice C, 28 Sep 2026). #order-view-switch (the "By supplier /
-// Ingredients" pills) is hidden on a tablet, in favour of a single swap button
-// that lives beside the search box and names the OTHER view — see
-// buildOrderTools() and setupViewSwitch()'s tablet-only sibling below.
+// EVERY SIZE (tablet Slice C 28 Sep 2026; the phone joined 29 Sep 2026).
+// #order-view-switch (the "By supplier / Ingredients" pills) is hidden by
+// orders.css, in favour of a single swap button that lives beside the search
+// box and names the OTHER view — see buildOrderTools() below.
 const SWAP_SVG =
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3L3 7l4 4"/><path d="M3 7h13"/><path d="M17 21l4-4-4-4"/><path d="M21 17H8"/></svg>';
 
@@ -732,7 +732,7 @@ function setView(view) {
   refreshDetailPaneMode();
 }
 
-// ── Tablet: the search-row swap button (Slice C) ──────────────────────────
+// ── The search-row swap button (every screen size) ────────────────────────
 //
 // ⚠️ BUILT ONCE, THEN MOVED — never rebuilt. Only one of the two list views is
 // ever mounted at a time (dropListViews nulls the other), so handing the same

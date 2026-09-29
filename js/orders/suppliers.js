@@ -184,11 +184,9 @@ export function mountSupplierList(container, ctx) {
     rows.forEach(s => list.appendChild(buildSupplierRow(s, data, ctx)));
   }
 
-  // ⚠️ TABLET ONLY, IN LOOKS: `ctx.searchExtras` is the "⇄ Ingredienti" swap
-  // button orders-main.js builds once (js/orders/tablet-layout's TABLET_QUERY
-  // gates whether it is ever shown; orders.css hides `.search-row` back down
-  // to a plain block on a phone). On a phone this wrapper is inert — it adds
-  // no margin or padding of its own, so .mgmt-search keeps its exact spacing.
+  // `ctx.searchExtras` is the "⇄ Ingredienti" swap button orders-main.js builds
+  // once. Since 29 Sep 2026 it shows at every screen size (no JS gate: the phone's
+  // two-pill switch is hidden by orders.css instead).
   const searchRow = el('div', { class: 'search-row' }, [search.node, ctx.searchExtras || null]);
   container.appendChild(searchRow);
   container.appendChild(filterSwitch);

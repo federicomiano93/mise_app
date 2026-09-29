@@ -319,7 +319,7 @@
 .supplier-row-view:hover { background: var(--surface2); color: var(--accent); }
 .supplier-row-view:active { transform: scale(0.94); }
 .supplier-row-main { flex: 1; min-width: 0; }
-.supplier-name { display: block; font-size: 16px; font-weight: 600; color: var(--text); }
+.supplier-name { display: block; font-size: 18px; font-weight: 700; color: var(--text); }
 .supplier-meta { display: block; font-size: 12px; color: var(--text3); font-family: 'DM Mono', monospace; margin-top: 2px; }
 .supplier-row-count {
   flex-shrink: 0;
@@ -977,6 +977,52 @@ input.ing-stock {
 }
 .mgmt-search-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-light); }
 .mgmt-empty { text-align: center; color: var(--text3); font-size: 14px; padding: 20px 12px; font-family: 'DM Mono', monospace; }
+
+/* ── Orders: the search row and its swap button — every screen size ────────────
+   Federico, 29 Sep 2026: on a phone too, the "By supplier | Ingredients" pills give way
+   to ONE quiet button beside the search box, naming the view a tap goes TO. The suppliers
+   and the Order / Incoming tabs are what must stand out; this must not. The button is
+   stretched to the search box's own height and takes its 14px radius, so the two read as
+   one row. The pills stay in the DOM (refreshViewSwitch still writes them) but never show. */
+body[data-section="orders"] #order-view-switch { display: none; }
+body[data-section="orders"] .search-row {
+  display: flex;
+  gap: 10px;
+  align-items: stretch;
+  margin-bottom: 12px;
+}
+body[data-section="orders"] .search-row .mgmt-search { flex: 1; min-width: 0; margin-bottom: 0; }
+body[data-section="orders"] .order-tools { display: flex; align-items: stretch; flex-shrink: 0; }
+body[data-section="orders"] .order-tools-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-inline: 12px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  color: var(--text-2);
+  font-family: 'Manrope', sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: transform 0.06s ease;
+}
+body[data-section="orders"] .order-tools-btn:active { transform: scale(0.97); }
+body[data-section="orders"] .order-tools-btn:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 2px; }
+body[data-section="orders"] .order-tools-icon { display: flex; align-items: center; }
+body[data-section="orders"] .order-tools-icon svg { width: 16px; height: 16px; }
+/* Too narrow for a word beside the search box: the icon alone stays, and the button's
+   aria-label still names the other view. */
+@media (max-width: 359px) {
+  body[data-section="orders"] .order-tools-label { display: none; }
+}
+
+/* The "All (n) / Ordering (n)" filter under the search: quieter than the tabs above it,
+   but every option keeps a 44px tap target. */
+body[data-section="orders"] .ing-filter .view-switch-btn { font-size: 14px; min-height: 44px; }
+body[data-section="orders"] .ing-filter .view-switch-btn:not(.active) { color: var(--text-2); }
 
 /* Section heading inside the General tab, which holds more than one setting. */
 .mgmt-section-title {
@@ -2303,6 +2349,20 @@ body.hide-stock .ingredient-list .ing-fields { justify-content: center; }
    lines up with the content column on a tablet. The box already answers for that. */
 .order-box-head .tab-bar { padding: 10px 8px 8px; padding-inline: 8px; }
 .order-box-head .view-switch { margin: 0 8px 10px; }
+/* The two tabs are what the operator reads first, so they are the biggest type in the
+   head (Federico, 29 Sep 2026). A flex row at EVERY size — the Incoming badge sits
+   centred on the word, never on its baseline. `--tap-min` exists only inside the tablet
+   query, hence the 44px fallback; the plain `.tab` rule in style.css is 14px/500. */
+body[data-section="orders"] .order-box-head .tab-bar .tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: var(--tap-min, 44px);
+  font-size: 18px;
+  font-weight: 600;
+}
+body[data-section="orders"] .order-box-head .tab-bar .tab.active { font-weight: 700; }
 
 /* ── A calendar notice you have read ───────────────────────────────────
    ⚠️ THE CLOSE BUTTON IS A SIBLING OF THE TEXT, AND THE FRAME BELONGS TO THE ROW.
@@ -2510,38 +2570,8 @@ body:not([data-orders-tab="deliveries"]) #orders-owed { display: none; }
     font-variant-numeric: tabular-nums;
   }
 
-  /* ── Slice C: the search row ─────────────────────────────────────────────
-     The "By supplier / Ingredients" pills give way to a single swap button
-     beside the search box — the SAME choice, one tap instead of two pills to
-     read, and it names where tapping it goes rather than where you already
-     are. */
-  body[data-section="orders"] #order-view-switch { display: none; }
-  body[data-section="orders"] .search-row {
-    display: flex;
-    gap: 10px;
-    align-items: stretch;
-  }
-  body[data-section="orders"] .search-row .mgmt-search { flex: 1; margin-bottom: 0; }
-  /* ⚠️ The wrapper, not only the button: the phone rule `.order-tools { display:none }`
-     below this block would otherwise hide the button with it (measured 28 Sep 2026). */
-  body[data-section="orders"] .order-tools { display: flex; }
-  body[data-section="orders"] .order-tools-btn {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    min-height: var(--tap-min);
-    padding: 0 16px;
-    background: var(--surface-2);
-    border: 1px solid var(--border);
-    border-radius: 14px;
-    color: var(--text);
-    font-family: 'Manrope', sans-serif;
-    font-size: 15px;
-    font-weight: 600;
-    white-space: nowrap;
-    cursor: pointer;
-  }
-  body[data-section="orders"] .order-tools-icon { display: flex; align-items: center; }
+  /* The search row and its swap button are drawn at EVERY size now (Federico,
+     29 Sep 2026) — see the rules after `.mgmt-search` near the top of this file. */
 
   /* ── Slice D: the supplier row — a list icon out left, a summary icon out
      right ────────────────────────────────────────────────────────────────
@@ -2833,8 +2863,8 @@ body:not([data-orders-tab="deliveries"]) #orders-owed { display: none; }
     border: none;
   }
   body[data-section="orders"][data-orders-tab="order"][data-orders-view="suppliers"] .supplier-name {
-    font-size: 17px;
-    font-weight: 600;
+    font-size: 18px;
+    font-weight: 700;
     display: block;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -2904,9 +2934,6 @@ body:not([data-orders-tab="deliveries"]) #orders-owed { display: none; }
 /* #orders-detail-pane exists in the markup on every screen size; it is only
    ever a LOOK on the tablet split (the rule above turns it into the pane). */
 #orders-detail-pane { display: none; }
-/* .order-tools is built and passed on every screen size — see buildOrderTools
-   in js/orders/orders-main.js — but is only ever a LOOK on a tablet. */
-.order-tools { display: none; }
 /* The summary button and its spacer both always exist in the DOM (see the
    long note on refreshSupplierDerived in js/orders/suppliers.js) but are only
    ever a LOOK on a tablet — on a phone neither may show, whatever `hidden`
