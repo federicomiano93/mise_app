@@ -44,7 +44,7 @@ export function renderDetail({ month, ingredient, locale, onCount, readOnly, clo
   const packNote = el('p', { class: 'inv-hint' });
 
   let current = month;
-  const isCased = storedCaseOf(ingredient, ingredient) !== null;
+  const isCased = storedCaseOf(ingredient) !== null;
   const byUnitPrice = isCased || ingredient.priceUnit === 'pcs';
 
   function paintAnswer() {
@@ -177,7 +177,8 @@ export function renderDetail({ month, ingredient, locale, onCount, readOnly, clo
   });
 
   // ⚠️ A PRODUCT PRICED BY THE PIECE OR PER CASE HAS NO KILOS BOX: its cost per counted unit
-  // needs no pack weight (a case is worked out by unitCost(), orders' own function), so
+  // needs no pack weight (a case is worked out by unitCost(), orders' own function, and a case of
+  // packages carries its own package size), so
   // «write the kilos in and it gets a value» would send somebody to fill in a number that
   // changes nothing.
   const packField = !money || byUnitPrice ? null : el('div', { class: 'inv-field' }, [

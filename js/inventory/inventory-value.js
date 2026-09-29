@@ -78,9 +78,12 @@ export function packPrice(month, ingredient, closed) {
 
   // ⚠️ A PRICE QUOTED PER CASE (30 Sep 2026): one counted unit is one ORDER unit, and what
   // that costs depends on the unit (eggs ordered in «pz» from a case of 360: one egg; «cartone»:
-  // the case) — unitCost() decides, null when the unit leaves doubt. Needs no pack weight.
+  // the case) — unitCost() decides, null when the unit leaves doubt. Needs no pack weight: a case of
+  // packages carries the size of one package inside itself (stored at save time), so it does not
+  // read the ingredient's weight either. A STALE case (a rate typed over it) is not a case at all
+  // and goes on to the rules below, which do need the weight.
   // Six decimals, not round3: one straw out of 2000 must not round to nothing.
-  if (storedCaseOf(ingredient, ingredient)) {
+  if (storedCaseOf(ingredient)) {
     const each = unitCost(ingredient, ingredient);
     return each === null ? null : roundTo(each, 6);
   }
@@ -102,7 +105,7 @@ export function packPrice(month, ingredient, closed) {
 // change. PURE: the caller does the t() and the number formatting (formatRate, so a tiny price
 // is never shown as 0.00). Null when the ingredient carries no valid case.
 export function casePackNote(ingredient) {
-  if (!storedCaseOf(ingredient, ingredient)) return null;
+  if (!storedCaseOf(ingredient)) return null;
   const each = unitCost(ingredient, ingredient);
   if (each === null) return { key: 'inv.packCaseAmbiguous' };
   return { key: 'inv.packCasePer', value: each, unit: String((ingredient && ingredient.unit) || '').trim() };
@@ -123,7 +126,7 @@ export function valueBlocker(month, ingredient, closed = false) {
   if (closed) {
     return packPrice(month, ingredient, true) === null ? NO_FROZEN_PRICE : null;
   }
-  if (storedCaseOf(ingredient, ingredient)) return unitCost(ingredient, ingredient) === null ? NO_PRICE : null;
+  if (storedCaseOf(ingredient)) return unitCost(ingredient, ingredient) === null ? NO_PRICE : null;
   if (ingredient && ingredient.priceUnit === 'pcs') {
     const each = Number(ingredient.pricePerUnit);
     return Number.isFinite(each) && each > 0 ? null : NO_PRICE;

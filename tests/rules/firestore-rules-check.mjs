@@ -2616,10 +2616,14 @@ async function roles() {
     await expectDenied(`a case unit of ${JSON.stringify(bad)} is refused`,
       () => mergeWrite(`${L}/ingredient-prices/I9`, { ...caseDoc, caseItemUnit: bad }, asAccount(MAYA)));
   }
-  await expectAllowed('a case of packages stores no size (the weight on the ingredient sizes it)',
+  await expectAllowed('a case of packages stores the size of ONE package (kg or litres), copied from the weight',
     () => mergeWrite(`${L}/ingredient-prices/I9`,
       { ...stamp, priceUnit: 'kg', pricePerUnit: 2,
-        casePrice: 20, caseCount: 4, caseItemSize: null, caseItemUnit: 'pack' }, asAccount(MAYA)));
+        casePrice: 20, caseCount: 4, caseItemSize: 2.5, caseItemUnit: 'pack' }, asAccount(MAYA)));
+  await expectDenied('…and a size of zero is refused for packages too',
+    () => mergeWrite(`${L}/ingredient-prices/I9`,
+      { ...stamp, priceUnit: 'kg', pricePerUnit: 2,
+        casePrice: 20, caseCount: 4, caseItemSize: 0, caseItemUnit: 'pack' }, asAccount(MAYA)));
   await expectDenied('an employee cannot store a price per case',
     () => mergeWrite(`${L}/ingredient-prices/I9`, caseDoc, asAccount(SAM)));
   await expectAllowed('(control) the same ingredient write without a case key is fine',
