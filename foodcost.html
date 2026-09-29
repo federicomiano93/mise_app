@@ -106,7 +106,14 @@
   </span>
 </header>
 
-<main class="fc-screen" id="fcScreen"></main>
+<!-- ⚠️ TWO COLUMNS ON A TABLET ONLY, and only for the list, a product and its history: the
+     list on the left (#fcListCol), the product on the right (#fcScreen, which takes
+     `app-split-pane` from foodcost-main.js while the split is on). On a phone #fcListCol
+     stays hidden and #fcScreen is the whole screen, exactly as before. -->
+<div class="app-split fc-split" id="fcSplit" data-split="off">
+  <div class="app-split-list" id="fcListCol" hidden></div>
+  <main class="fc-screen" id="fcScreen"></main>
+</div>
 
 <!-- The bottom bar (13 Sep 2026): Settings, where the hourly labour cost is set.
      ⚠️ EACH BUTTON CARRIES ITS OWN PERMISSION AND THE BAR CARRIES NONE — the bar is hidden

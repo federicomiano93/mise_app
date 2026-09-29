@@ -1465,6 +1465,9 @@ const DICTIONARIES = Object.freeze({
     'fc.empty.action': 'Add a product',
     'fc.empty.title': 'No products yet',
     'fc.empty.sub': 'Add one to see what it costs to make and what it earns.',
+    // The tablet's empty right-hand pane (29 Sep 2026)
+    'fc.split.empty.title': 'Choose a product',
+    'fc.split.empty.text': 'Tap a product on the left: its costs and margin open here, and you can switch to another without leaving the list.',
     'fc.noTargetSet': 'No target set',
     'fc.untitledProduct': 'Untitled product',
     'fc.productsAndMargins': 'Products and margins',
@@ -3801,6 +3804,8 @@ const DICTIONARIES = Object.freeze({
     'fc.empty.action': 'Aggiungi un prodotto',
     'fc.empty.title': 'Ancora nessun prodotto',
     'fc.empty.sub': 'Aggiungine uno per vedere quanto costa e quanto rende.',
+    'fc.split.empty.title': 'Scegli un prodotto',
+    'fc.split.empty.text': 'Tocca un prodotto a sinistra: costi e margine si aprono qui, e puoi passare a un altro senza lasciare la lista.',
     'fc.noTargetSet': 'Nessun obiettivo impostato',
     'fc.untitledProduct': 'Prodotto senza nome',
     'fc.productsAndMargins': 'Prodotti e margini',
