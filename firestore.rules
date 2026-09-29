@@ -659,7 +659,7 @@ service cloud.firestore {
                   && request.resource.data.caseItemSize > 0))
           && (!('caseItemUnit' in request.resource.data)
               || request.resource.data.caseItemUnit == null
-              || request.resource.data.caseItemUnit in ['pcs', 'kg', 'g', 'l', 'ml'])
+              || request.resource.data.caseItemUnit in ['pcs', 'kg', 'g', 'l', 'ml', 'pack'])
           // The PURCHASE VAT rate (28 Sep 2026), so an order can show what it will
           // cost with VAT. The price above stays NET — the recipe costs are built
           // from it and must not move. A closed list: the union of the rates the app
@@ -711,7 +711,7 @@ service cloud.firestore {
                'priceUnit', 'pricePerUnit', 'packPrice', 'packSize',
                'unitWeightKg', 'priceUpdatedAt',
                'allergens', 'mayContain', 'allergensCheckedAt', 'nutrition',
-               'packIngredients'
+               'packIngredients', 'packUnit'
              ])
           && (!('name' in request.resource.data)
               || (request.resource.data.name is string
@@ -733,6 +733,11 @@ service cloud.firestore {
                   && request.resource.data.unit.size() <= 100))
           && (!('active' in request.resource.data)
               || request.resource.data.active is bool)
+          // What ONE package of the weight is called (busta, sacco…), 30 Sep 2026. Optional and
+          // free text like `unit`; '' or absent = none. Absent on every document written before.
+          && (!('packUnit' in request.resource.data)
+              || (request.resource.data.packUnit is string
+                  && request.resource.data.packUnit.size() <= 40))
           // ⚠️⚠️ THE PRICE KEYS MAY ONLY BE null HERE (security audit, 23 Sep 2026).
           // What an ingredient costs lives in ingredient-prices/{id}, behind
           // canManage(…, 'foodcost'), since 12 Aug 2026. These keys stay in the

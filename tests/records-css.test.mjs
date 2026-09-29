@@ -38,7 +38,7 @@ test('every rule is scoped to the layer that holds a card, so nothing else on th
 
 test('the rules the card cannot do without are in it', () => {
   for (const cls of ['mgmt-scroll', 'mgmt-form', 'mgmt-field', 'mgmt-input', 'mgmt-fold', 'mgmt-fold-head',
-    'mgmt-pair', 'mgmt-add-inline', 'alg-row', 'alg-tick', 'day-check', 'btn-primary', 'btn-secondary']) {
+    'mgmt-pair', 'mgmt-pair--data', 'alg-row', 'alg-tick', 'day-check', 'btn-primary', 'btn-secondary']) {
     assert.match(CSS, new RegExp(`\\.rec-host [^{]*\\.${cls}(?![\\w-])`), `no rule for .${cls}`);
   }
 });

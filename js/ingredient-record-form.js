@@ -23,13 +23,13 @@
 // and the person who gets asked «are there nuts in this?» is whoever is at the
 // counter (the v1.62.0 lesson — a gate on a container gates everything put inside).
 
-import { t } from './i18n.js';
+import { t, localeTag } from './i18n.js';
 import { el } from './dom.js';
 import { kindOf } from './ingredient-kind.js';
 import { NO_SUPPLIER_ID } from './records.js';
 import { field, formActions, reportFailure, shortDate } from './record-ui.js';
 import {
-  PRICE_UNITS, priceUnitLabel, CASE_MODE, CASE_ITEM_UNITS, storedCaseOf,
+  PRICE_UNITS, priceUnitLabel, CASE_MODE, CASE_ITEM_UNITS, PACK_ITEM, packWeightOf, packBaseOf, storedCaseOf,
   pricePatch, priceChanged, priceRecord, pricePerKg,
   formatPricePerUnit, formatRate, costReasonText, formatMoney,
 } from './price-model.js';
@@ -42,7 +42,7 @@ import { vatRatesFor } from './vat-rates.js';
 // still reads it), and «Categoria» / «Unità d'ordine» are menus over lists their callers
 // hand in (record-choices.js builds them; this file never asks a feature for them).
 import { splitWeight, joinWeight, isUnusableWeight, WEIGHT_UNIT_CHOICES } from './pack-size.js';
-import { categoryValue, isBlankNewChoice } from './record-choices.js';
+import { categoryValue, isBlankNewChoice, NEW_SUPPLIER_CHOICE, supplierToSave } from './record-choices.js';
 
 // The one arrow: the same chevron every other list in the app draws. It turns to
 // point down when its fold opens (.mgmt-fold-head--open in orders.css).
@@ -114,8 +114,9 @@ const CAMERA_ICON = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
 //
 // Returns { node, read() } so the form below can stay readable.
 // `defaultUnit` is how a NEW item starts: packaging is bought by the piece.
-// currentOrder() -> { unit, weight }: what the order-unit menu and the weight box hold RIGHT NOW,
-// so the VAT line follows an edit that has not been saved yet.
+// currentOrder() -> { unit, weight, packUnit }: what the order-unit menu, the weight box and the
+// package menu hold RIGHT NOW, so the VAT line and a «busta da 2,5 kg» case follow an edit that
+// has not been saved yet.
 function priceBlock(item, actions, defaultUnit = null, currentOrder = null) {
   // What the price box is called, per purchase form. Spelled out per unit rather
   // than assembled from the unit code, because "Price per pcs" is not English and
@@ -159,6 +160,9 @@ function priceBlock(item, actions, defaultUnit = null, currentOrder = null) {
   // stale one (an old phone saved a new rate over it) and the card opens in the typed-rate
   // mode, so the next save writes the rate that is really there — never the old case's.
   const storedCase = item ? storedCaseOf(item) : null;
+  // The ingredient as the card holds it right now (weight and package word are typed in the
+  // product-data section above this block, so they are read live, never from the stored item).
+  const now = () => (currentOrder ? currentOrder() : { unit: item?.unit, weight: item?.weight, packUnit: item?.packUnit });
   const unitSelect = el('select', { class: 'mgmt-input' });
   unitSelect.appendChild(el('option', { value: '', text: t('orders.noPrice2') }));
   PRICE_UNITS.forEach(u => {
@@ -199,23 +203,59 @@ function priceBlock(item, actions, defaultUnit = null, currentOrder = null) {
   caseCountBox.setAttribute('aria-label', t('orders.case.count'));
   caseSizeBox.setAttribute('aria-label', t('orders.case.size'));
   const caseUnitSelect = el('select', { class: 'mgmt-input', 'aria-label': t('orders.case.unit') });
-  CASE_ITEM_UNITS.forEach(u => {
+  CASE_ITEM_UNITS.filter(u => u !== PACK_ITEM).forEach(u => {
     caseUnitSelect.appendChild(el('option', {
       value: u, text: u === 'pcs' ? t('orders.case.pcs') : u,
       selected: (storedCase ? storedCase.caseItemUnit : 'pcs') === u ? true : undefined,
     }));
   });
+  // «busta da 2,5 kg» — one package of the size in the WEIGHT box above. It exists only while
+  // that weight can be read as g / kg / ml / l, and its words follow the weight and the
+  // package menu live (syncPackOption, from refresh()). Stored as caseItemUnit 'pack' WITH the
+  // size of one package (kg or litres) copied from the weight at save time, so a weight edited
+  // later by somebody without the price section cannot move any money.
+  const packOption = el('option', { value: PACK_ITEM });
+  if (storedCase && storedCase.caseItemUnit === PACK_ITEM) {
+    caseUnitSelect.insertBefore(packOption, caseUnitSelect.options[1] || null);
+    caseUnitSelect.value = PACK_ITEM;
+  }
+  function syncPackOption() {
+    const { weight, packUnit } = now();
+    const w = packWeightOf(weight);
+    const word = String(packUnit || '').trim() || t('orders.case.packWord');
+    const selected = caseUnitSelect.value === PACK_ITEM;
+    // ⚠️ KEPT WHILE CHOSEN even if the weight became unreadable: dropping the option would move
+    // the menu to «pz» without a word and change what the case means. Saving is then refused,
+    // with a message on the weight box, until the weight reads again.
+    if (!w && !selected) { packOption.remove(); return; }
+    packOption.textContent = w
+      ? t('orders.case.packOf', {
+        pack: word, size: `${w.size.toLocaleString(localeTag())} ${w.unit}`,
+      })
+      : word;
+    if (!packOption.parentNode) caseUnitSelect.insertBefore(packOption, caseUnitSelect.options[1] || null);
+  }
   const caseTimes = el('span', { class: 'mgmt-case-x', text: '×', 'aria-hidden': 'true' });
-  const casePriceLabel = el('span', {
-    class: 'mgmt-field-label',
-    text: t('orders.case.price', { currency: currentCurrency() }),
+  // ⚠️ THE CASE PRICE TAKES THE RATE BOX'S PLACE — the right cell of the same row, the same
+  // size (Federico, 29 Sep 2026): only «Contiene» is left to draw underneath.
+  const casePriceField = el('label', { class: 'mgmt-field' }, [
+    el('span', {
+      class: 'mgmt-field-label',
+      text: t('orders.case.price', { currency: currentCurrency() }),
+    }),
+    casePriceBox,
+  ]);
+  // ⚠️ A 'pack' case keeps the package size it was saved with, so a weight edited since is not yet in
+  // the price: this one warm line says so, and saving (by somebody with this section) recomputes.
+  const packChangedNote = el('p', {
+    class: 'mgmt-price-note', hidden: 'hidden', text: t('orders.case.packChanged'),
   });
   const caseBlock = el('div', { class: 'mgmt-case' }, [
-    el('label', { class: 'mgmt-field' }, [casePriceLabel, casePriceBox]),
     el('div', { class: 'mgmt-field' }, [
       el('span', { class: 'mgmt-field-label', text: t('orders.case.contains') }),
       el('div', { class: 'mgmt-case-row' }, [caseCountBox, caseTimes, caseSizeBox, caseUnitSelect]),
     ]),
+    packChangedNote,
   ]);
 
   // ── Purchase VAT (29 Sep 2026) — so an order can show what it will cost
@@ -298,18 +338,26 @@ function priceBlock(item, actions, defaultUnit = null, currentOrder = null) {
     const inCase = unit === CASE_MODE;
     // In case mode the rate box gives way to the case boxes: the rate is worked out.
     rateField.hidden = inCase;
+    casePriceField.hidden = !inCase;
     caseBlock.hidden = !inCase;
-    // «Contiene 50 pz» has no size to give, so the box and its × go.
+    syncPackOption();
+    // «Contiene 50 pz» has no size to give, so the box and its × go — and so does «busta da
+    // 2,5 kg», whose size is the weight above.
     const itemsArePieces = caseUnitSelect.value === 'pcs';
-    caseSizeBox.hidden = itemsArePieces;
+    const sizeFromWeight = caseUnitSelect.value === PACK_ITEM;
+    caseSizeBox.hidden = itemsArePieces || sizeFromWeight;
     caseTimes.hidden = itemsArePieces;
+    const savedPack = storedCase && storedCase.caseItemUnit === PACK_ITEM ? storedCase : null;
+    const current = packBaseOf(now().weight);
+    packChangedNote.hidden = !(inCase && sizeFromWeight && savedPack && current
+      && (current.size !== savedPack.caseItemSize || current.priceUnit !== item.priceUnit));
     pieceField.hidden = !(unit === 'pcs' || (inCase && itemsArePieces));
     rateLabel.textContent = RATE_LABEL[unit] || t('orders.priceGeneric', { currency: currentCurrency() });
     // ⚠️ The example follows the UNIT, and an unknown unit gets none. «(un chilo)»
     // left showing while somebody is pricing by the piece is worse than no example.
     rate.placeholder = RATE_HINT[unit] || '';
 
-    const draft = pricePatch(read(), null);
+    const draft = pricePatch(read(), null, now().weight);
     if (draft.pricePerUnit === null) {
       summaryMain.textContent = costReasonText(draft);
       summaryNote.textContent = '';
@@ -338,7 +386,7 @@ function priceBlock(item, actions, defaultUnit = null, currentOrder = null) {
     // they stand in the open card (currentOrder), not the stored ones: «20 per case of 50»
     // reads 20 ordered by the case and 0.40 ordered by the piece, and the line must say which
     // before Save. The card re-runs refresh() when either control changes.
-    const cost = unitCost({ ...(item || {}), ...(currentOrder ? currentOrder() : {}) }, draft);
+    const cost = unitCost({ ...(item || {}), ...now() }, draft);
     const vat = draft.vatRate;
     if (cost !== null && vat !== null) {
       const gross = cost + (cost * vat) / 100;
@@ -364,9 +412,12 @@ function priceBlock(item, actions, defaultUnit = null, currentOrder = null) {
   // ⚠️ THE GRID IS NOT A NEW VALUE. `repeat(2, minmax(0, 1fr))` with an 8px gap is
   // .alg-nutrition, three sections further down THIS SAME FORM. The v1.62.0 rule:
   // finish the copy rather than design a second answer.
+  // ⚠️ THE RIGHT CELL IS ALWAYS THE PRICE: the rate, or — priced per case — the case price,
+  // one of the two hidden at a time (a hidden grid item takes no cell).
   const pricePair = el('div', { class: 'mgmt-pair' }, [
     field(t('orders.howItIsBought'), unitSelect),
     rateField,
+    casePriceField,
   ]);
 
   // The PURCHASE VAT field — the LEFT cell of its own .mgmt-pair row, the right cell
@@ -398,7 +449,12 @@ function priceBlock(item, actions, defaultUnit = null, currentOrder = null) {
     item ? priceHistoryBlock(item, actions) : null,
   ]);
 
-  return { node, read, refresh };
+  // A case of packages with a weight that cannot be read has no size to price by: the save is
+  // refused instead of quietly storing «no price».
+  const needsPackWeight = () => unitSelect.value === CASE_MODE
+    && caseUnitSelect.value === PACK_ITEM && packBaseOf(now().weight) === null;
+
+  return { node, read, refresh, needsPackWeight };
 }
 
 // The append-only record of what this ingredient has cost. Loaded only when
@@ -1055,14 +1111,23 @@ function fold({ title, state, above, body, help }) {
   return el('div', { class: 'mgmt-fold' }, [row, ...above, inner]);
 }
 
-// Put a just-created supplier into the menu, in its alphabetical place after «no supplier»,
-// and select it. An id the menu already holds is only selected.
+// «+ Nuovo fornitore…» is the LAST option of the supplier menu (like «+ Nuova categoria…»); this
+// is its value, which no supplier id can be.
+const NEW_SUPPLIER = NEW_SUPPLIER_CHOICE;
+
+// The longest package word the rules accept (firestore.rules ingredients: packUnit <= 40).
+const PACK_WORD_MAX = 40;
+
+// Put a just-created supplier into the menu, in its alphabetical place after «no supplier» and
+// before «+ Nuovo fornitore…», and select it. An id the menu already holds is only selected.
 function selectSupplier(select, { id, name }) {
   let option = [...select.options].find(o => o.value === id);
   if (!option) {
     option = el('option', { value: id, text: name || id });
-    const after = [...select.options].slice(1).find(o => o.text.localeCompare(option.text) > 0);
-    select.insertBefore(option, after || null);
+    const rows = [...select.options].slice(1);
+    const newRow = rows.find(o => o.value === NEW_SUPPLIER) || null;
+    const after = rows.filter(o => o !== newRow).find(o => o.text.localeCompare(option.text) > 0);
+    select.insertBefore(option, after || newRow);
   }
   select.value = id;
 }
@@ -1129,7 +1194,9 @@ function weightControl(stored) {
     node,
     read: () => joinWeight(amount.value, unit.value) || legacy,
     invalid: () => isUnusableWeight(amount.value, unit.value),
-    markInvalid: refusal.show,
+    markInvalid: () => { refusal.node.textContent = t('orders.weight.invalid'); refusal.show(); },
+    // The case price by package cannot be worked out without this weight.
+    markNeeded: () => { refusal.node.textContent = t('orders.weight.packNeeded'); refusal.show(); },
     // The price block's live VAT line depends on the weight typed here, not only the stored one.
     onChange: (fn) => { amount.addEventListener('input', fn); unit.addEventListener('change', fn); },
   };
@@ -1143,7 +1210,7 @@ function weightControl(stored) {
 // ⚠️ THE SENTINEL IS NOT A WORD A PERSON WOULD FILE UNDER, so no real value collides with it.
 const NEW_CHOICE = '__mise_new__';
 
-function choiceControl({ values, current, newLabel, placeholder, ariaLabel, blankText }) {
+function choiceControl({ values, current, newLabel, placeholder, ariaLabel, blankText, maxLength = null }) {
   const select = el('select', { class: 'mgmt-input' }, [
     el('option', { value: '', text: t('orders.choice.none') }),
     ...values.map(v => el('option', { value: v, text: v })),
@@ -1160,6 +1227,7 @@ function choiceControl({ values, current, newLabel, placeholder, ariaLabel, blan
   }
   const typed = el('input', {
     type: 'text', class: 'mgmt-input', placeholder, 'aria-label': ariaLabel, hidden: 'hidden',
+    maxlength: maxLength ?? undefined,
   });
   const refusal = refusalMessage(typed, blankText);
   typed.addEventListener('input', refusal.clear);
@@ -1183,14 +1251,15 @@ function choiceControl({ values, current, newLabel, placeholder, ariaLabel, blan
 // item        — the ingredient being edited, or null for a new one
 // suppliers   — every supplier, for the picker
 // preset      — a supplier id to start on when adding from inside a supplier's screen
-// presetKind  — 'packaging' when added from the packaging list
+// presetKind  — 'packaging' when added from the packaging list; the Catalogue passes 'ingredient'.
+//               ⚠️ THERE IS NO «TIPO» MENU (Federico, 29 Sep 2026): a new item is filed under the
+//               list it was added from, an existing one keeps its own kind
 // presetName  — what a new one is called to start with (the Catalogue passes what was typed)
 // mayPrice    — may this person write a price here (mayWritePrices, js/record-data.js)
 // categories  — the words «Categoria» offers (record-choices.js categoryChoices)
 // orderUnits  — the words «Unità d'ordine» offers (record-choices.js unitChoices)
+// packs       — the words «Confezione» offers (record-choices.js packChoices)
 // panels      — { allergens, nutrition }: which optional panels this venue uses
-// showKind    — false where only an INGREDIENT makes sense (a recipe row in the Catalogue):
-//               the «Tipo» menu is not drawn and the item is filed as the preset kind
 // actions     — { saveIngredient(id, payload, record, writePrice), priceHistory(id),
 //                 packPhotoOn(), capturePackPhoto(), createSupplier() → { id, name } | null }
 // onDone / onCancel — where the screen goes afterwards
@@ -1201,18 +1270,15 @@ function choiceControl({ values, current, newLabel, placeholder, ariaLabel, blan
 // to ask must not quietly remove the allergen card.
 export function buildIngredientForm({
   item, suppliers, preset, presetKind = null, presetName = '', mayPrice = false,
-  categories = [], orderUnits = [], panels = { allergens: true, nutrition: true }, showKind = true, actions, onDone, onCancel,
+  categories = [], orderUnits = [], packs = [], panels = { allergens: true, nutrition: true }, actions, onDone, onCancel,
 }) {
   const name = el('input', { type: 'text', class: 'mgmt-input', value: item?.name || presetName || '' });
   // Food, or packaging? (13 Sep 2026.) A box, a tray or a label is bought, priced and
-  // ordered like flour, so it is filed here too — and this is also how an item already in
-  // the list is moved between the two. A new one starts on the list it was added from.
+  // ordered like flour, so it is filed here too. A new one starts on the list it was added
+  // from; an existing one keeps its own kind. ⚠️ The «Tipo» menu that used to move an item
+  // between the two is gone (29 Sep 2026) — the kind is fixed while the card is open, and the
+  // save still sends it.
   const startKind = item ? kindOf(item) : (presetKind === 'packaging' ? 'packaging' : 'ingredient');
-  const kindSelect = el('select', { class: 'mgmt-input' }, [
-    el('option', { value: 'ingredient', text: t('orders.kind.ingredient') }),
-    el('option', { value: 'packaging', text: t('orders.kind.packaging') }),
-  ]);
-  kindSelect.value = startKind;
   const brand = el('input', { type: 'text', class: 'mgmt-input', value: item?.brand || '', placeholder: t('orders.eGGalbani') });
   const weight = weightControl(item?.weight);
   const category = choiceControl({
@@ -1226,6 +1292,15 @@ export function buildIngredientForm({
     values: orderUnits, current: item?.unit,
     newLabel: t('orders.choice.newUnit'), placeholder: t('orders.choice.unitPlaceholder'),
     ariaLabel: t('orders.choice.unitAria'), blankText: t('orders.choice.unitBlank'),
+  });
+  // «Confezione» — what ONE package of the weight is called (busta, sacco…). Optional: «— nessuna
+  // —» is the answer for everything sold loose. It is what makes «busta da 2,5 kg» sayable in a
+  // case, and what an order unit of «busta» means (js/order-cost.js).
+  const pack = choiceControl({
+    values: packs, current: item?.packUnit,
+    newLabel: t('orders.choice.newPack'), placeholder: t('orders.choice.packPlaceholder'),
+    ariaLabel: t('orders.choice.packAria'), blankText: t('orders.choice.packBlank'),
+    maxLength: PACK_WORD_MAX,
   });
 
   // "No supplier" is a real answer, not a missing one: the supermarket, the cash
@@ -1249,24 +1324,33 @@ export function buildIngredientForm({
     if (startOn === s.id) opt.selected = true;
     supplierSelect.appendChild(opt);
   });
-  // «+ Nuovo fornitore» — Federico, 13 Sep 2026: «quando scrivo un ingrediente e lo voglio
+  // «+ Nuovo fornitore…» — Federico, 13 Sep 2026: «quando scrivo un ingrediente e lo voglio
   // associare ad un fornitore che non ho ancora inserito in anagrafica dammi la possibilità
-  // di inserirlo direttamente da lì». Drawn only when the caller can open a supplier card.
+  // di inserirlo direttamente da lì». Since 29 Sep 2026 it is the LAST OPTION of the menu, like
+  // «+ Nuova categoria…», and drawn only when the caller can open a supplier card.
   // ⚠️ THE NEW SUPPLIER IS PUT INTO THIS MENU BY HAND: the menu was filled when the card
   // opened, and nothing redraws an open card — which is also what keeps everything typed.
-  const addSupplierBtn = typeof actions?.createSupplier === 'function'
-    ? el('button', { type: 'button', class: 'mgmt-link mgmt-add-inline', text: t('orders.addSupplierInline') })
-    : null;
-  addSupplierBtn?.addEventListener('click', async () => {
-    if (addSupplierBtn.disabled) return;
-    addSupplierBtn.disabled = true;
-    try {
-      const made = await actions.createSupplier();
-      if (made && made.id) selectSupplier(supplierSelect, made);
-    } finally {
-      addSupplierBtn.disabled = false;
-    }
-  });
+  // ⚠️ BACKING OUT PUTS THE MENU BACK on what it showed before: the sentinel must never stay
+  // selected, or a save would file the item under a supplier that does not exist.
+  let previous = supplierSelect.value;
+  if (typeof actions?.createSupplier === 'function') {
+    supplierSelect.appendChild(el('option', { value: NEW_SUPPLIER, text: t('orders.addSupplierInline') }));
+    supplierSelect.addEventListener('change', async () => {
+      if (supplierSelect.value !== NEW_SUPPLIER) { previous = supplierSelect.value; return; }
+      supplierSelect.disabled = true;
+      try {
+        const made = await actions.createSupplier();
+        if (made && made.id) selectSupplier(supplierSelect, made);
+        else supplierSelect.value = previous;
+      } catch (err) {
+        supplierSelect.value = previous;
+        await reportFailure('save', name.value.trim(), err);
+      } finally {
+        supplierSelect.disabled = false;
+        previous = supplierSelect.value;
+      }
+    });
+  }
 
   // ⚠️ THE PRICE IS ONLY DRAWN FOR SOMEBODY WHO MAY SEE MONEY. An employee's
   // form has no price at all — not a disabled one — because a disabled field
@@ -1276,21 +1360,22 @@ export function buildIngredientForm({
   // takes the whole save down with it (see mayWritePrices, js/record-data.js).
   // ⚠️ `mayPrice` IS HANDED IN — see the note on the defaults above.
   const price = mayPrice ? priceBlock(item, actions, startKind === 'packaging' ? 'pcs' : null,
-    () => ({ unit: unit.read(), weight: weight.read() })) : null;
+    () => ({ unit: unit.read(), weight: weight.read(), packUnit: pack.read() })) : null;
   if (price) {
     unit.onChange(price.refresh);
     weight.onChange(price.refresh);
+    pack.onChange(price.refresh);
   }
   // ⚠️ NOT A ROLE, A VENUE. Everybody in the building gets the same answer here: it
   // says whether this business tracks allergens and nutrition at all, and the two
   // switches behind it live one screen away (js/orders/registry-settings.js).
   const allergens = allergenBlock(item, panels, actions);
   // ⚠️ PACKAGING HAS NO ALLERGENS, so the block is HIDDEN for it — never removed, and
-  // never read on Save (below). An item filed as packaging by mistake and moved back
-  // finds its declaration exactly as it was, because the merge write never touched it.
-  const isBox = () => kindSelect.value === 'packaging';
+  // never read on Save (below). Whatever declaration a packaging item already carries (an old
+  // item once filed under the wrong kind) is left exactly as it was, because the merge write
+  // never touches it.
+  const isBox = () => startKind === 'packaging';
   const syncKind = () => { allergens.root.hidden = isBox(); };
-  kindSelect.addEventListener('change', syncKind);
   syncKind();
 
   const save = el('button', { type: 'button', class: 'btn-primary', onClick: async () => {
@@ -1298,8 +1383,11 @@ export function buildIngredientForm({
     if (!name.value.trim()) { name.focus(); return; }
     // Blocked BEFORE anything is written, and pointing at the box (P20): an unusable weight
     // would otherwise erase the stored one, an empty «+ New …» would clear the category.
-    const refused = [weight, category, unit].find(control => control.invalid());
+    const refused = [weight, category, pack, unit].find(control => control.invalid());
     if (refused) { refused.markInvalid(); return; }
+    // ⚠️ A case of packages with no readable weight is refused here, on the weight box, like an
+    // unusable weight: saving would quietly turn the price into «no price».
+    if (price && price.needsPackWeight()) { weight.markNeeded(); return; }
     save.disabled = true;
 
     // Every price field is in the patch, as a number or as null, because this is
@@ -1309,16 +1397,20 @@ export function buildIngredientForm({
     // empty price document — and saveIngredientWithPrice is told not to write
     // one, because a batch is all-or-nothing and a refused price write would
     // fail the whole save of an ordinary rename.
-    const patch = mayPrice ? pricePatch(price.read(), new Date().toISOString()) : {};
+    const patch = mayPrice ? pricePatch(price.read(), new Date().toISOString(), weight.read()) : {};
+    const packUnit = pack.read().slice(0, PACK_WORD_MAX);
     const payload = {
       name: name.value.trim(),
-      supplierId: supplierSelect.value,
+      supplierId: supplierToSave(supplierSelect.value, previous),
       brand: brand.value.trim(),
       weight: weight.read(),
       category: category.read() || 'Other',
       unit: unit.read(),
+      // ⚠️ ONLY WHEN THERE IS SOMETHING TO SAY: a save that sent `packUnit: ''` on every ingredient
+      // would be refused whole by a database whose rules do not know the key yet.
+      ...(packUnit || item?.packUnit ? { packUnit } : {}),
       active: item ? item.active !== false : true,
-      kind: kindSelect.value,
+      kind: startKind,
       ...patch,
       // ⚠️ NOT READ FOR PACKAGING: the merge then leaves any declaration already stored
       // exactly as it was, so filing an ingredient as packaging by mistake loses nothing.
@@ -1358,13 +1450,21 @@ export function buildIngredientForm({
       title: t('orders.section.productData'),
       body: [
         field(t('orders.field.name'), name),
-        showKind ? field(t('orders.field.kind'), kindSelect) : null,
         field(t('orders.field.supplier'), supplierSelect),
-        addSupplierBtn,
-        field(t('orders.field.brand'), brand),
-        field(t('orders.field.weight'), weight.node),
-        field(t('orders.field.category'), category.node),
-        field(t('orders.orderUnit'), unit.node),
+        // ⚠️ HALF-WIDTH PAIRS (Federico, 29 Sep 2026): the short fields two to a row. Name and
+        // supplier stay whole; the last pair has an empty right cell on purpose. Below 360px
+        // they stack (.mgmt-pair--data, orders.css) — half a cell truncates «— nessuna —» there.
+        el('div', { class: 'mgmt-pair mgmt-pair--data' }, [
+          field(t('orders.field.brand'), brand),
+          field(t('orders.field.category'), category.node),
+        ]),
+        el('div', { class: 'mgmt-pair mgmt-pair--data' }, [
+          field(t('orders.field.weight'), weight.node),
+          field(t('orders.field.pack'), pack.node),
+        ]),
+        el('div', { class: 'mgmt-pair mgmt-pair--data' }, [
+          field(t('orders.orderUnit'), unit.node),
+        ]),
       ],
     }),
     // ⚠️ STILL DRAWN ONLY FOR SOMEBODY WHO MAY SEE MONEY — the card wraps the price,

@@ -16,7 +16,7 @@ test('the weight placeholder is a bare number, in both languages', () => {
 });
 
 test('save is blocked, before anything is written, by an unusable weight or an empty «new …» box', () => {
-  const guard = FORM.indexOf('[weight, category, unit].find(control => control.invalid())');
+  const guard = FORM.indexOf('[weight, category, pack, unit].find(control => control.invalid())');
   assert.ok(guard > 0);
   assert.ok(guard < FORM.indexOf('await actions.saveIngredient('));
   assert.match(FORM, /refused\.markInvalid\(\)/);
@@ -54,13 +54,15 @@ test('a refused box shows a message tied to it by aria-describedby, and loses it
 });
 
 test('the VAT line follows the order unit and weight as they stand in the open card', () => {
-  assert.match(FORM, /unitCost\(\{ \.\.\.\(item \|\| \{\}\), \.\.\.\(currentOrder \? currentOrder\(\) : \{\}\) \}, draft\)/);
+  assert.match(FORM, /unitCost\(\{ \.\.\.\(item \|\| \{\}\), \.\.\.now\(\) \}, draft\)/);
+  assert.match(FORM, /const now = \(\) => \(currentOrder \? currentOrder\(\) :/, 'now() is the card as it stands');
+  assert.match(FORM, /pack\.onChange\(price\.refresh\)/);
   assert.match(FORM, /unit\.onChange\(price\.refresh\)/);
   assert.match(FORM, /weight\.onChange\(price\.refresh\)/);
 });
 
 test('the Italian case wording says cartone everywhere', () => {
-  assert.match(I18N, /'orders\.case\.price': 'Prezzo del cartone/);
+  assert.match(I18N, /'orders\.case\.price': 'Prezzo cartone/);
   assert.match(I18N, /'orders\.case\.count': 'Quanti nel cartone'/);
   assert.match(I18N, /'orders\.case\.summaryPiece': '= \{rate\} al pezzo · \{price\} a cartone'/);
 });

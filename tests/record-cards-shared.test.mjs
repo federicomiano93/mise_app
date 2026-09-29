@@ -67,8 +67,9 @@ test('an ingredient of exactly that name already on file is not offered again', 
 
 test('⚠️⚠️ a recipe row is never linked to packaging, and the Catalogue\'s card offers no «Tipo»', () => {
   const create = codeOf(read('js/catalogue/ingredient-create.js'));
-  assert.match(create, /presetKind: 'ingredient',\s*showKind: false,/);
-  assert.match(codeOf(read('js/ingredient-record-form.js')), /showKind \? field\(t\('orders\.field\.kind'\), kindSelect\) : null,/);
+  assert.match(create, /presetKind: 'ingredient',/);
+  assert.doesNotMatch(create, /showKind/);
+  assert.doesNotMatch(codeOf(read('js/ingredient-record-form.js')), /showKind|orders\.field\.kind/, 'no «Tipo» menu on either card');
   assert.match(codeOf(read('js/catalogue/catalogue-editor.js')),
     /if \(!made \|\| !made\.id \|\| made\.kind === 'packaging' \|\| !working\.ingredients\[idx\]\) return;/,
     'and even an item filed as packaging some other way is never linked');
@@ -127,9 +128,9 @@ test('⚠️⚠️ the Catalogue opens the same card, OVER the editor, and backi
 
 test('⚠️ «+ Nuovo fornitore» selects the supplier it has just made, in both places', () => {
   const form = codeOf(read('js/ingredient-record-form.js'));
-  assert.match(form, /const addSupplierBtn = typeof actions\?\.createSupplier === 'function'/,
-    'drawn only where a supplier card can actually be opened');
-  assert.match(form, /field\(t\('orders\.field\.supplier'\), supplierSelect\),\s*addSupplierBtn,/, 'right under the supplier menu');
+  assert.match(form, /if \(typeof actions\?\.createSupplier === 'function'\) \{\s*supplierSelect\.appendChild\(el\('option', \{ value: NEW_SUPPLIER, text: t\('orders\.addSupplierInline'\) \}\)\);/,
+    'the LAST option of the supplier menu, drawn only where a supplier card can actually be opened');
+  assert.match(form, /else supplierSelect\.value = previous;/, 'backing out puts the menu back');
   assert.match(form, /if \(made && made\.id\) selectSupplier\(supplierSelect, made\);/);
   assert.match(codeOf(read('js/orders/registry.js')),
     /return new Promise\(resolve => openSupplierForm\(null, \{ onSaved: resolve, onClosed: \(\) => resolve\(null\) \}\)\);/,

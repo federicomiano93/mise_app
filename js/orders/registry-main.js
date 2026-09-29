@@ -11,7 +11,7 @@
 import { t } from '../i18n.js';
 import { onSession, currentSession } from '../firebase.js';
 import { outputLanguage } from '../market.js';
-import { categoryChoices, unitChoices } from '../record-choices.js';
+import { categoryChoices, unitChoices, packChoices } from '../record-choices.js';
 import { withPrices } from '../price-model.js';
 import { buildRegistry } from './registry.js';
 import {
@@ -51,6 +51,9 @@ const screen = buildRegistry(
     // the delete buttons off, or a delete would overwrite the saved list with them.
     categoriesLoaded: () => state.loaded.config,
     orderUnits: (current) => unitChoices({
+      ingredients: state.ingredients, language: outputLanguage(currentSession().location), current,
+    }),
+    packs: (current) => packChoices({
       ingredients: state.ingredients, language: outputLanguage(currentSession().location), current,
     }),
   },

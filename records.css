@@ -204,7 +204,10 @@
   padding-right: 8px;
 }
 .rec-host .mgmt-case-row select.mgmt-input {
-  flex: 0 0 auto;
+  flex: 0 1 auto;
+}
+.rec-host .mgmt-case-row input.mgmt-input {
+  min-width: 56px;
 }
 .rec-host .mgmt-case-x {
   flex: 0 0 auto;
@@ -296,11 +299,6 @@
 .rec-host .mgmt-form-actions .btn-primary {
   flex: 2;
   margin-top: 0;
-}
-.rec-host .mgmt-add-inline {
-  display: inline-flex;
-  align-items: center;
-  min-height: 44px;
 }
 .rec-host .notif-note {
   margin: 0;
@@ -625,4 +623,19 @@
 }
 .rec-host .mgmt-choice > [hidden] {
   display: none;
+}
+.rec-host .mgmt-pair--data .mgmt-weight-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+.rec-host .mgmt-pair--data .mgmt-weight-row .mgmt-input {
+  padding-left: 8px;
+  padding-right: 8px;
+}
+.rec-host .mgmt-pair--data .mgmt-weight-row select.mgmt-input {
+  width: auto;
+}
+@media (max-width: 359px) {
+  .rec-host .mgmt-pair--data {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }

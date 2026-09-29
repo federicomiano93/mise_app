@@ -442,6 +442,22 @@ async function ingredients() {
     mergeWrite('locations/main/ingredients/ING_MODERN',
       { packIngredients: ['grano'], bakery: 'main' }));
 
+  // ── The word for one package (30 Sep 2026): «busta», «sacco». Optional text, at most 40. ──
+  await expectAllowed('a package word on an ingredient, saved by a manager', () =>
+    mergeWrite('locations/main/ingredients/ING_MODERN', { packUnit: 'busta', bakery: 'main' }, asAccount(MAYA)));
+  await expectAllowed('…and by an employee', () =>
+    mergeWrite('locations/main/ingredients/ING_MODERN', { packUnit: 'sacco', bakery: 'main' }, asAccount(SAM)));
+  await expectAllowed('clearing it with an empty string', () =>
+    mergeWrite('locations/main/ingredients/ING_MODERN', { packUnit: '', bakery: 'main' }, asAccount(SAM)));
+  await expectAllowed('exactly 40 characters', () =>
+    mergeWrite('locations/main/ingredients/ING_MODERN', { packUnit: bigString(40), bakery: 'main' }));
+  await expectDenied('a package word of 41 characters', () =>
+    mergeWrite('locations/main/ingredients/ING_MODERN', { packUnit: bigString(41), bakery: 'main' }));
+  await expectDenied('a package word sent as a number', () =>
+    mergeWrite('locations/main/ingredients/ING_MODERN', { packUnit: 5, bakery: 'main' }));
+  await expectDenied('a package word sent as a list', () =>
+    mergeWrite('locations/main/ingredients/ING_MODERN', { packUnit: ['busta'], bakery: 'main' }));
+
   await expectAllowed('delete an ingredient', () => deleteWrite('locations/main/ingredients/ING_MODERN'));
 }
 
@@ -2586,7 +2602,7 @@ async function roles() {
     () => mergeWrite(`${L}/ingredient-prices/I9`,
       { ...stamp, priceUnit: 'kg', pricePerUnit: 2,
         casePrice: null, caseCount: null, caseItemSize: null, caseItemUnit: null }, asAccount(MAYA)));
-  for (const unit of ['pcs', 'kg', 'g', 'l', 'ml']) {
+  for (const unit of ['pcs', 'kg', 'g', 'l', 'ml', 'pack']) {
     await expectAllowed(`a case unit of ${unit} is accepted`,
       () => mergeWrite(`${L}/ingredient-prices/I9`, { ...caseDoc, caseItemUnit: unit }, asAccount(MAYA)));
   }
@@ -2600,6 +2616,14 @@ async function roles() {
     await expectDenied(`a case unit of ${JSON.stringify(bad)} is refused`,
       () => mergeWrite(`${L}/ingredient-prices/I9`, { ...caseDoc, caseItemUnit: bad }, asAccount(MAYA)));
   }
+  await expectAllowed('a case of packages stores the size of ONE package (kg or litres), copied from the weight',
+    () => mergeWrite(`${L}/ingredient-prices/I9`,
+      { ...stamp, priceUnit: 'kg', pricePerUnit: 2,
+        casePrice: 20, caseCount: 4, caseItemSize: 2.5, caseItemUnit: 'pack' }, asAccount(MAYA)));
+  await expectDenied('…and a size of zero is refused for packages too',
+    () => mergeWrite(`${L}/ingredient-prices/I9`,
+      { ...stamp, priceUnit: 'kg', pricePerUnit: 2,
+        casePrice: 20, caseCount: 4, caseItemSize: 0, caseItemUnit: 'pack' }, asAccount(MAYA)));
   await expectDenied('an employee cannot store a price per case',
     () => mergeWrite(`${L}/ingredient-prices/I9`, caseDoc, asAccount(SAM)));
   await expectAllowed('(control) the same ingredient write without a case key is fine',

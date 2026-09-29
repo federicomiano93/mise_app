@@ -62,5 +62,5 @@ test('the card reopens in case mode only for a case that still matches its rate'
 
 test('the contains row gives its number boxes slim padding and sizes the unit menu to its text', () => {
   assert.match(CSS, /\.mgmt-case-row \.mgmt-input \{[^}]*padding-left: 8px; padding-right: 8px;/);
-  assert.match(CSS, /\.mgmt-case-row select\.mgmt-input \{ flex: 0 0 auto; \}/);
+  assert.match(CSS, /\.mgmt-case-row select\.mgmt-input \{ flex: 0 1 auto; \}/);
 });

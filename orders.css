@@ -996,6 +996,10 @@ input.ing-stock {
    box and its label sit on the same centre line instead of the text baseline. */
 
 
+/* The supplier screen's two adds side by side («+ Ingrediente», «+ Imballaggio»): the same
+   dashed button twice, the row carrying the gap the single one had. */
+.mgmt-add-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-bottom: 14px; }
+.mgmt-add-pair .mgmt-add { margin-bottom: 0; }
 .mgmt-add {
   width: 100%;
   padding: 12px;
@@ -1183,7 +1187,11 @@ input.ing-stock {
    plus the select's arrow did not fit. Slimmer side padding on the three, and the unit menu
    sized to what it holds instead of a quarter of the row. */
 .mgmt-case-row .mgmt-input { flex: 1 1 0; width: auto; min-width: 0; padding-left: 8px; padding-right: 8px; }
-.mgmt-case-row select.mgmt-input { flex: 0 0 auto; }
+/* It may still give way (flex-shrink 1): «busta da 2,5 kg» is a long option, and at 296px the
+   menu has to yield to the count box rather than push the row wider than the card. The number
+   boxes keep a floor so that yielding cannot squeeze them to their padding. */
+.mgmt-case-row select.mgmt-input { flex: 0 1 auto; }
+.mgmt-case-row input.mgmt-input { min-width: 56px; }
 .mgmt-case-x { flex: 0 0 auto; color: var(--text2); }
 
 /* What is still missing, under the numbers. It appears only when the price is
@@ -1245,11 +1253,6 @@ input.ing-stock {
 .mgmt-form-actions { display: flex; gap: 10px; margin-top: 6px; }
 .mgmt-form-actions .btn-secondary { flex: 1; }
 .mgmt-form-actions .btn-primary { flex: 2; margin-top: 0; }
-/* «+ Nuovo fornitore» under an ingredient card's supplier menu: an action the size of its
-   words, at the left edge like everything else in the card — not a full-width bar. The 44px
-   is the finger target (P18), and centring the words in it is also what keeps them off the
-   menu above and the next label below: measured at 1px from the menu without it. */
-.mgmt-add-inline { display: inline-flex; align-items: center; min-height: 44px; }
 
 /* The confirmation dialog moved to the shared .app-dialog-* component
    (js/orders/confirm-dialog.js + tokens.css); .btn-danger went with it — the
@@ -3031,6 +3034,16 @@ body:not([data-orders-tab="deliveries"]) #orders-owed { display: none; }
 .mgmt-choice { display: flex; flex-direction: column; gap: 8px; }
 .mgmt-choice .mgmt-input { width: 100%; min-width: 0; }
 .mgmt-choice > [hidden] { display: none; }
+/* The product-data fields two to a row (29 Sep 2026): [Marca | Categoria], [Peso | Confezione],
+   [Unità d'ordine | —]. The same .mgmt-pair grid as the price row. «Peso» is a number and a
+   unit menu inside ONE half cell (~134px inner at 390, ~119px at 360): the unit menu takes
+   only what «kg» needs and both lose the side padding the full-width row has. Below 360px a
+   half cell is too narrow for «— nessuna —», so the pairs stack — the rule the VAT field
+   already follows (.mgmt-price-vat-cell). */
+.mgmt-pair--data .mgmt-weight-row { grid-template-columns: minmax(0, 1fr) auto; }
+.mgmt-pair--data .mgmt-weight-row .mgmt-input { padding-left: 8px; padding-right: 8px; }
+.mgmt-pair--data .mgmt-weight-row select.mgmt-input { width: auto; }
+@media (max-width: 359px) { .mgmt-pair--data { grid-template-columns: minmax(0, 1fr); } }
 
 /* The trash at the end of a category row in Settings: low-key, but a full 44px target. */
 .reg-cat-del {

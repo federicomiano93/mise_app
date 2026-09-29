@@ -68,7 +68,8 @@ const CASE_UNITS = new Set([
 // price carries a whole case (storedCaseOf — a case that no longer matches its rate is a
 // stale one and is ignored); without one everything below «const orderUnit» is what it was.
 //   a weight/volume word      → as ever: rate × that unit's kilos (a case of pieces: null)
-//   a piece word              → ONE ITEM of the case: case price ÷ how many it holds
+//   a piece word, or — on a case of PACKAGES only — the ingredient's own package word (packUnit:
+//   «busta») → ONE ITEM of the case: case price ÷ how many it holds
 //   a case word, or no unit   → the CASE price («1 cartone of 50 pz at 20» is 20, never 0.40)
 //   a case of ONE             → the case price, for any non-weight word
 //   any other word (busta, sacco, bottiglia…) on a case of several → null: one of WHAT?
@@ -86,7 +87,21 @@ export function unitCost(ingredient, price) {
     if (byWeight) {
       return price.priceUnit === 'pcs' ? null : rate * WEIGHT_UNITS[orderUnit];
     }
-    if (PIECE_UNITS.has(orderUnit)) return wholeCase.casePrice / wholeCase.caseCount;
+    // ⚠️ THE PACKAGE WORD MEANS «ONE ITEM» ONLY FOR A CASE OF PACKAGES ('pack'), and it is asked
+    // BEFORE the case words: a package declared «scatola» and ordered by «scatola» is one package,
+    // not the case. On any other case it means nothing — eggs sold in a «vaschetta» of 360 g,
+    // ordered by «vaschetta» from a case of 60 pieces at 12, are NOT 0.20 each (a tray is not
+    // one egg): they fall through to the rules below and, being no piece/case word, are null.
+    const packWord = String((ingredient && ingredient.packUnit) || '').trim().toLowerCase().replace(/\.$/, '');
+    const isPackCase = wholeCase.caseItemUnit === 'pack';
+    if (PIECE_UNITS.has(orderUnit) || (isPackCase && packWord !== '' && orderUnit === packWord)) {
+      return wholeCase.casePrice / wholeCase.caseCount;
+    }
+    // ⚠️ AND ON ANY OTHER CASE THE PACKAGE WORD IS AMBIGUOUS EVEN WHEN IT IS ALSO A CASE WORD.
+    // A box priced «100 pz at 30», declared as a «scatola» and ordered by «scatola», is one
+    // scatola of 0.30 — or the whole case of 30? Nothing says; the case-word rule below would
+    // answer 30 and look exactly as trustworthy as the right number (review of 30 Sep 2026).
+    if (packWord !== '' && orderUnit === packWord && wholeCase.caseCount !== 1) return null;
     if (orderUnit === '' || CASE_UNITS.has(orderUnit) || wholeCase.caseCount === 1) return wholeCase.casePrice;
     return null;
   }

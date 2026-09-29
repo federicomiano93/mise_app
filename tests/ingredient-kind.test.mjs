@@ -32,7 +32,8 @@ test('⚠️⚠️ the card files the kind, and packaging neither shows nor WRIT
   const form = codeOf(read('js/ingredient-record-form.js'));
   assert.match(form, /const startKind = item \? kindOf\(item\) : \(presetKind === 'packaging' \? 'packaging' : 'ingredient'\);/,
     'an existing item opens on its own kind; a new one on the list it was added from');
-  assert.match(form, /kind: kindSelect\.value,/, 'the kind travels with the save');
+  assert.match(form, /kind: startKind,/, 'the kind travels with the save');
+  assert.doesNotMatch(form, /kindSelect/, 'and there is no «Tipo» menu to change it');
   assert.match(form, /\.\.\.\(isBox\(\) \? \{\} : allergens\.read\(\)\),/,
     '⚠️ not reading the allergens for packaging is what keeps a declaration safe through a wrong filing: the merge never touches it');
   assert.match(form, /const syncKind = \(\) => \{ allergens\.root\.hidden = isBox\(\); \};/, 'hidden, never removed');

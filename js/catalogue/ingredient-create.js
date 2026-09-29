@@ -23,7 +23,7 @@ import { el } from './dom.js';
 import { currentSession } from '../firebase.js';
 import { allergensOn, nutritionOn } from '../venue-features.js';
 import { outputLanguage } from '../market.js';
-import { categoryChoices, unitChoices } from '../record-choices.js';
+import { categoryChoices, unitChoices, packChoices } from '../record-choices.js';
 import { buildIngredientForm } from '../ingredient-record-form.js';
 import { buildSupplierForm } from '../supplier-record-form.js';
 import { mayWritePrices, saveIngredientWithPrice, saveSupplierRecord } from '../record-data.js';
@@ -112,12 +112,13 @@ export function openIngredientCreate({ name, suppliers, ingredients }) {
       presetKind: 'ingredient',
       // ⚠️ NO «Tipo» MENU HERE. A recipe row may only be linked to FOOD (catalogue-model.js
       // linkOptions): filed as packaging, the row would point at an item with no allergens and
-      // no way back to it from the chooser. Found by the code review of 14 Sep 2026.
-      showKind: false,
+      // no way back to it from the chooser. Found by the code review of 14 Sep 2026. The card has
+      // no «Tipo» menu any more (29 Sep 2026): a new item takes the kind it is added from.
       suppliers: supplierList(suppliers),
       preset: null,
       categories: categoryChoices({ stored: undefined, ingredients: known, language }),
       orderUnits: unitChoices({ ingredients: known, language }),
+      packs: packChoices({ ingredients: known, language }),
       // ⚠️ THE SAME TWO DECISIONS registry.js makes, from the same root answers.
       mayPrice: mayWritePrices(),
       panels: { allergens: allergensOn(location), nutrition: nutritionOn(location), packPhoto: false },
