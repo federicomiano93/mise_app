@@ -120,7 +120,7 @@
      instead of hovering over somebody's Save button — so it is pushed down rather than
      taken out. See .scroll-with-bar in style.css; it is the same shape .home-scroll
      already uses for the sign-out row. -->
-<div class="scroll-area scroll-with-bar">
+<div class="scroll-area scroll-with-bar app-split-area">
   <!-- ⚠️ `reg-page` IS THE GUTTER EVERY OTHER PAGE GETS FOR FREE. .scroll-area's own
        horizontal padding is var(--app-gutter), which is 0 on a phone — the other three
        pages that use it wrap their content in .content { padding: 14px 16px }, and this
@@ -134,7 +134,14 @@
        as "this bakery has no suppliers" — which is the wrong thing to believe while
        standing in front of a delivery. Filled by registry-main.js. -->
   <p class="orders-status error reg-page" id="registry-error" role="status" hidden></p>
-  <div id="registry-host" class="reg-page"></div>
+  <!-- ⚠️ TWO COLUMNS ON A TABLET ONLY (tokens.css `.app-split`): the list on the left, the
+       level a row opens on the right (`#registry-pane`, filled by registry.js). On a phone
+       the wrapper is a plain block and the pane is `display: none`, so the page is what it
+       always was. -->
+  <div class="app-split" id="registry-split">
+    <div id="registry-host" class="reg-page app-split-list"></div>
+    <div id="registry-pane" class="app-split-pane"></div>
+  </div>
 
   <!-- ⚠️ A BOTTOM BAR, NOT A GEAR IN THE HEADER, and the reason is the title. This
        page is called «Fornitori e ingredienti»: a third icon button up there takes

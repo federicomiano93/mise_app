@@ -22,7 +22,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
-const css = readFileSync(new URL('../orders.css', import.meta.url), 'utf8')
+const sheet = (name) => readFileSync(new URL('../' + name, import.meta.url), 'utf8')
   .replace(/\/\*[\s\S]*?\*\//g, '');
 
 // Every `@media (...) { ... }` block, balanced-brace (a regex alone cannot
@@ -47,19 +47,6 @@ function mediaBlocks(source) {
   return blocks;
 }
 
-const allMediaBlocks = mediaBlocks(css);
-const tabletCss = allMediaBlocks
-  .filter((b) => /min-width:\s*900px/.test(b.prelude))
-  .map((b) => b.inner)
-  .join('\n');
-
-// Every rule OUTSIDE any @media block — a display:none set inside
-// `@media (max-width: 360px)` or `@media (prefers-reduced-motion: reduce)`
-// is conditional on THAT query, not "always on", and is none of this test's
-// business.
-let outsideCss = css;
-for (const b of allMediaBlocks) outsideCss = outsideCss.replace(b.fullMatch, '');
-
 // A selector that carries no condition of its own: no pseudo-class, no
 // attribute, no descendant/ancestor combinator. `.foo:empty`, `.foo[hidden]`
 // and `body.hide-stock .foo` all encode WHEN they apply in the selector
@@ -79,10 +66,27 @@ function bareDisplayNoneSelectors(source) {
   return [...found];
 }
 
+// The two halves of one stylesheet: the CSS inside the tablet query, and the rules outside
+// any @media block.
+function halves(css) {
+  const allMediaBlocks = mediaBlocks(css);
+  const tabletCss = allMediaBlocks
+    .filter((b) => /min-width:\s*900px/.test(b.prelude))
+    .map((b) => b.inner)
+    .join('\n');
+  // Every rule OUTSIDE any @media block — a display:none set inside
+  // `@media (max-width: 360px)` or `@media (prefers-reduced-motion: reduce)`
+  // is conditional on THAT query, not "always on", and is none of this test's
+  // business.
+  let outsideCss = css;
+  for (const b of allMediaBlocks) outsideCss = outsideCss.replace(b.fullMatch, '');
+  return { tabletCss, outsideCss };
+}
+
 // Does `tabletCss` carry a rule for this exact token (however it is scoped —
 // `body[data-section="orders"] .token`, `.token:not([hidden])`, …) whose
 // declaration block sets `display` to something other than `none`?
-function shownInsideTabletBlock(token) {
+function shownInsideTabletBlock(tabletCss, token) {
   const escaped = token.replace(/[.#]/, (c) => `\\${c}`);
   const re = new RegExp(`${escaped}(?::[\\w-]+(?:\\([^)]*\\))?)?\\s*\\{([^{}]*)\\}`, 'g');
   let m;
@@ -93,6 +97,7 @@ function shownInsideTabletBlock(token) {
 }
 
 test('every tablet-only control hidden outside the query is un-hidden inside it', () => {
+  const { tabletCss, outsideCss } = halves(sheet('orders.css'));
   const candidates = bareDisplayNoneSelectors(outsideCss);
   // Proves the scan actually finds something, the same discipline every
   // "a scan that matches nothing passes for ever" note in this project asks
@@ -100,9 +105,20 @@ test('every tablet-only control hidden outside the query is un-hidden inside it'
   assert.ok(candidates.length >= 4,
     `expected several unconditional display:none selectors in orders.css, found ${candidates.length} — the scan itself may be broken`);
 
-  const missing = candidates.filter((sel) => !shownInsideTabletBlock(sel));
+  const missing = candidates.filter((sel) => !shownInsideTabletBlock(tabletCss, sel));
   assert.deepEqual(missing, [],
     'these are unconditionally display:none on a phone but no rule inside the tablet '
     + 'media query ever sets display to anything else for them — the element can never '
     + 'appear at all, on any screen size:\n  ' + missing.join('\n  '));
+});
+
+// The same rule for tokens.css, where the generic two-pane split lives (suppliers.html's
+// #registry-pane is hidden on a phone and shown by the tablet block).
+test('tokens.css: the split pane hidden on a phone is shown inside the tablet query', () => {
+  const { tabletCss, outsideCss } = halves(sheet('tokens.css'));
+  const candidates = bareDisplayNoneSelectors(outsideCss);
+  assert.ok(candidates.includes('.app-split-pane'),
+    'expected .app-split-pane to be display:none outside the tablet query — the scan itself may be broken');
+  const missing = candidates.filter((sel) => !shownInsideTabletBlock(tabletCss, sel));
+  assert.deepEqual(missing, [], 'display:none on a phone with no tablet display rule:\n  ' + missing.join('\n  '));
 });

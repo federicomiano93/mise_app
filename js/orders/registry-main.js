@@ -54,7 +54,11 @@ const screen = buildRegistry(
     deleteSupplier: (id) => removeDoc(COLLECTIONS.suppliers, id),
     deleteIngredient: (id) => removeDoc(COLLECTIONS.ingredients, id),
   },
-  { onChrome: ({ addLabel }) => addBtn?.setAttribute('aria-label', addLabel) },
+  {
+    onChrome: ({ addLabel }) => addBtn?.setAttribute('aria-label', addLabel),
+    // The tablet's right-hand pane; a phone never shows it and nothing opens in it.
+    pane: document.getElementById('registry-pane'),
+  },
 );
 
 addBtn?.addEventListener('click', () => screen.addCurrent());
