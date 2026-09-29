@@ -11,11 +11,12 @@
 //      filter and the counter are built once and only the row list is repainted —
 //      the pattern renderSearchableList already uses in management.js.
 //
-//   2. RENDER INSIDE #suppliers-list. orders.css scopes the fix for the .ing-row
-//      class the Calculator and Orders share to "#suppliers-list .ing-row". A row
-//      built anywhere else quietly falls back to the Calculator's flex layout, which
-//      on a 320px phone puts the Order box outside the card where it cannot be
-//      tapped. The caller passes that container; this file never makes its own.
+//   2. EVERY ROW COMES FROM buildRow(), which gives it `ing-row--line`. `.ing-row` alone
+//      is also the Calculator's class (both stylesheets load on both pages), and
+//      orders.css hangs the whole row layout on the `--line` hook (since 29 Sep 2026).
+//      A row built by hand without it falls back to the Calculator's flex layout, which
+//      on a 320px phone puts the Order box outside the card where it cannot be tapped.
+//      The caller passes #suppliers-list; this file never makes its own container.
 
 import { t } from '../i18n.js';
 import { el } from './dom.js';

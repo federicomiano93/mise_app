@@ -543,8 +543,8 @@ test('the ingredient lists are ONE column on a tablet too (Federico, 29 Sep 2026
   // like the order summary. The tablet block may not bring a two-column grid back.
   const block = ordersTabletBlock();
   assert.ok(block, 'the Orders tablet block is missing');
-  assert.doesNotMatch(block, /grid-template-columns:s*1frs+1fr/, 'no two-column grid on the ingredient lists');
-  assert.doesNotMatch(block, /column-gap:s*32px/);
+  assert.doesNotMatch(block, /grid-template-columns:\s*1fr\s+1fr/, 'no two-column grid on the ingredient lists');
+  assert.doesNotMatch(block, /column-gap:\s*32px/);
 });
 
 test('the ingredient grid never touches .ing-fields\' own 400px cap', () => {

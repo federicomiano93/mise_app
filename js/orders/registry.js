@@ -631,6 +631,8 @@ export function buildRegistry(data, actions, hooks = {}) {
   // back with its OLD title and name (the «name to show», 29 Sep 2026). Only after a save: a
   // plain Back keeps the level as it was, scroll position included.
   function popAfterSave(entry) {
+    // Already gone (another row tapped while the save ran): nothing was uncovered to redraw.
+    if (!stack.includes(entry)) return;
     popEntry(entry);
     refresh();
   }

@@ -319,7 +319,10 @@
 .supplier-row-view:hover { background: var(--surface2); color: var(--accent); }
 .supplier-row-view:active { transform: scale(0.94); }
 .supplier-row-main { flex: 1; min-width: 0; }
-.supplier-name { display: block; font-size: 18px; font-weight: 700; color: var(--text); }
+.supplier-name { display: block; font-size: 16px; font-weight: 600; color: var(--text); }
+/* The Orders list's supplier rows stand out (Federico, 29 Sep 2026: «quello che devono vedersi
+   bene sono i fornitori»). Scoped to the rows: History's fold headings share .supplier-name. */
+.supplier-row .supplier-name { font-size: 18px; font-weight: 700; }
 .supplier-meta { display: block; font-size: 12px; color: var(--text3); font-family: 'DM Mono', monospace; margin-top: 2px; }
 .supplier-row-count {
   flex-shrink: 0;
@@ -485,9 +488,9 @@
 .ing-unit { font-size: 12px; color: var(--text3); font-family: 'DM Mono', monospace; }
 
 /* ── All-ingredients (flat) list ──────────────────────────────────────────────
-   Rendered INSIDE #suppliers-list, so the .ing-row scoping fix above covers these
-   rows too — see the long note there. A container of its own would silently hand
-   them back to the Calculator's flex layout. */
+   Its rows come from buildRow() and carry `ing-row--line`, the hook every row rule
+   below is scoped to (see .ing-row--line): that, not the container, is what keeps them
+   out of the Calculator's flex layout. */
 .ing-flat-list {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -632,7 +635,8 @@ body.hide-stock .ing-head-stock { display: none; }
   padding-top: 12px;
   margin-bottom: 2px;
 }
-.ing-flat-list > .ing-letter:first-child { padding-top: 6px; }
+.ing-flat-list > .ing-letter:first-child,
+.ing-flat-list > .ing-head + .ing-letter { padding-top: 6px; }
 /* "12 of 65" — how much of the list the search is hiding. */
 .ing-count {
   font-size: 12px;
@@ -1119,6 +1123,10 @@ body[data-section="orders"] .order-tools-icon svg { width: 16px; height: 16px; }
 /* The "All (n) / Ordering (n)" filter under the search: quieter than the tabs above it,
    but every option keeps a 44px tap target. */
 body[data-section="orders"] .ing-filter .view-switch-btn { font-size: 14px; min-height: 44px; }
+/* On a tablet every tap target grows to the same floor, this one too. */
+@media (min-width: 900px) and (min-height: 600px) {
+  body[data-section="orders"] .ing-filter .view-switch-btn { min-height: var(--tap-min); }
+}
 body[data-section="orders"] .ing-filter .view-switch-btn:not(.active) { color: var(--text-2); }
 
 /* Section heading inside the General tab, which holds more than one setting. */

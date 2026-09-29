@@ -23,7 +23,7 @@ import { field, formActions, makeDayChecks, checkedDays, reportFailure } from '.
 // onCancel — backed out; nothing was written
 export function buildSupplierForm({ item, save, onDone, onCancel }) {
   const name = el('input', { type: 'text', class: 'mgmt-input', value: item?.name || '' });
-  const shortName = el('input', { type: 'text', class: 'mgmt-input', maxlength: '40', value: item?.shortName || '' });
+  const shortName = el('input', { type: 'text', class: 'mgmt-input', maxlength: '40', value: item?.shortName || '', 'aria-describedby': 'supplier-short-name-hint' });
   const category = el('input', { type: 'text', class: 'mgmt-input', value: item?.category || '' });
   const phone = el('input', { type: 'tel', class: 'mgmt-input', value: item?.phone || '', placeholder: t('orders.eg.phone') });
   const email = el('input', { type: 'email', class: 'mgmt-input', value: item?.email || '' });
@@ -58,7 +58,7 @@ export function buildSupplierForm({ item, save, onDone, onCancel }) {
   return el('div', { class: 'mgmt-form' }, [
     field(t('orders.field.name'), name),
     field(t('orders.field.shortName'), shortName),
-    el('p', { class: 'notif-note', text: t('orders.field.shortNameHint') }),
+    el('p', { class: 'notif-note', id: 'supplier-short-name-hint', text: t('orders.field.shortNameHint') }),
     field(t('orders.field.category'), category),
     el('div', { class: 'mgmt-field' }, [
       el('span', { class: 'mgmt-field-label', text: t('orders.deliveryDaysWhenThey') }),

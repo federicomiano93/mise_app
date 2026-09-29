@@ -274,12 +274,10 @@ function syncInputsFromState() {
 
 // ── Rendering: order tab ──────────────────────────────────────────────────────
 //
-// Both list views are drawn INSIDE #suppliers-list, and that is not a detail.
-// orders.css scopes the fix for the .ing-row name collision with the Calculator, and
-// a row rendered outside a covered container silently falls back to the Calculator's
-// flex layout and pushes the Order box off the card on a 320px phone. (The supplier's
-// own screen is an overlay, so its list is covered by the `.ingredient-list .ing-row`
-// half of that same rule.)
+// Both list views are drawn INSIDE #suppliers-list. Their rows are kept apart from the
+// Calculator's own `.ing-row` by the `ing-row--line` class buildRow() gives them — every
+// Orders row rule is scoped to it (29 Sep 2026). A row built without it falls back to the
+// Calculator's flex layout and pushes the Order box off the card on a 320px phone.
 function render() {
   const container = document.getElementById('suppliers-list');
   if (!container) return;
@@ -1883,7 +1881,7 @@ async function discardPending(supplierId) {
     syncInputsFromState();
     dismissPending(supplierId);
     renderSummary();              // the open summary sheet must not go stale
-    setStatus(`${supplierLabel(supplier)} — order discarded`, 'warn', 4000);
+    setStatus(t('orders.orderDiscardedFor', { name: supplierLabel(supplier) }), 'warn', 4000);
   } catch (err) {
     console.error('Discarding the order failed:', err);
     setStatus(t('orders.couldNotDiscardThe'), 'error');

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'theitalianclub-v473';
+const CACHE_NAME = 'theitalianclub-v474';
 // Firebase SDK modules (loaded from gstatic) are cached SEPARATELY from CACHE_NAME
 // so they survive the cache-version bump that happens on every deploy — otherwise
 // the offline SDK would be wiped each release until the next online load. The name
@@ -399,7 +399,7 @@ const ASSET_HASHES = {
   "./tokens.css": 'b86f2605b396e07b',
   "./auth.css": '8db3d5a1b9b85d37',
   "./style.css": '314acebfd84603b2',
-  "./orders.css": '72bde81949c59fd0',
+  "./orders.css": 'dea9a6518e1811f6',
   "./sounds/alarm.wav": '0d1465974f5be95b',
   "./fonts/manrope-latin.woff2": '71eb731d55804619',
   "./fonts/manrope-latin-ext.woff2": 'bd24140af06f1b58',
@@ -433,7 +433,7 @@ const ASSET_HASHES = {
   "./js/supplier-label.js": '9601ceed020c0205',
   "./js/record-data.js": 'ce5104faf4f7a3b9',
   "./js/ingredient-record-form.js": '6c485eabf6cfe0fb',
-  "./js/supplier-record-form.js": '058dd04854cec054',
+  "./js/supplier-record-form.js": 'e696787bd1e15b7d',
   "./js/ingredient-kind.js": 'b5ea1d7ec8255fd6',
   "./js/photo-model.js": '67d1d83755bbd33a',
   "./js/market.js": '44718f135a2ed1fb',
@@ -470,7 +470,7 @@ const ASSET_HASHES = {
   "./js/location.js": '6aaf53615a8739d1',
   "./js/sections.js": 'abcfdecb2bd5766d',
   "./js/roles.js": '2b491770c4b6165b',
-  "./js/i18n.js": '8db214d3bcaffd44',
+  "./js/i18n.js": 'fb08914c90fd489b',
   "./js/i18n-dom.js": 'a6d32c5bb1b56674',
   "./js/join-code.js": '5b89de65db5c102f',
   "./js/join-link.js": 'a90ea53c7ba51614',
@@ -517,7 +517,7 @@ const ASSET_HASHES = {
   "./js/orders/category-batches.js": '03d72f63c4fa4a8a',
   "./js/orders/confirm-dialog.js": '61a7f580f37c5ff8',
   "./js/orders/firebase-orders.js": 'ecde8e4b88658ff1',
-  "./js/orders/orders-main.js": 'ae2dbbeb1964a628',
+  "./js/orders/orders-main.js": 'c0a32712125aaaf0',
   "./js/orders/dom.js": '7ec966d71c5356cd',
   "./js/orders/day.js": '8e00beadcda80dd1',
   "./js/orders/deliveries.js": '341d301921b23a4b',
@@ -533,7 +533,7 @@ const ASSET_HASHES = {
   "./js/orders/ingredients.js": '0ca2dfd322dc67a1',
   "./js/orders/no-supplier.js": 'a577ab8cea7c21b4',
   "./js/orders/ingredient-search.js": 'a5efa4b585465972',
-  "./js/orders/ingredient-list.js": '12cf3825d313946c',
+  "./js/orders/ingredient-list.js": '3934daa138993f4f',
   "./js/orders/search-box.js": '471bb6f217d97442',
   "./js/orders/supplier-detail.js": 'c3d3cebdbdfef49f',
   "./js/orders/supplier-items.js": 'f7a6ad7c004b0886',
@@ -552,7 +552,7 @@ const ASSET_HASHES = {
   "./js/orders/alert-dismissal.js": 'fbfe034ffa9f6620',
   "./js/orders/management.js": '97f9592380926b6a',
   "./js/orders/mgmt-ui.js": '8894b23fd41e8a66',
-  "./js/orders/registry.js": '5ce5559a65f733a7',
+  "./js/orders/registry.js": '8e9330fe2f61f10a',
   "./js/orders/registry-main.js": '160f5d9e8804be89',
   "./js/orders/registry-settings.js": '74c80116276527d1',
   "./js/orders/form-dirty.js": '0ca2d475cb77bf7a',

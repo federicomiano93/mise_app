@@ -11,7 +11,7 @@ import { readFileSync } from 'node:fs';
 const src = readFileSync(new URL('../js/orders/registry.js', import.meta.url), 'utf8');
 
 test('popAfterSave pops the level and then redraws the one it uncovers', () => {
-  assert.match(src, /function popAfterSave\(entry\) \{\s*popEntry\(entry\);\s*refresh\(\);\s*\}/);
+  assert.match(src, /function popAfterSave\(entry\) \{[\s\S]*?if \(!stack\.includes\(entry\)\) return;\s*popEntry\(entry\);\s*refresh\(\);\s*\}/);
 });
 
 test('the supplier form and the ingredient form both use it when a save is done', () => {

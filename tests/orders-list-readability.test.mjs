@@ -79,7 +79,10 @@ test('the Order / Incoming tabs are 18px at every size, bold when active', () =>
 });
 
 test('supplier names are 18px bold on the phone and in the tablet split', () => {
-  assert.match(block('.supplier-name'), /font-size:\s*18px;\s*font-weight:\s*700/);
+  // Scoped to the Orders rows: History's fold headings share .supplier-name and stay 16/600
+  // (the review of 29 Sep 2026 caught them growing too).
+  assert.match(block('.supplier-row .supplier-name'), /font-size:\s*18px;\s*font-weight:\s*700/);
+  assert.match(block('.supplier-name'), /font-size:\s*16px;\s*font-weight:\s*600/);
   const split = block('body[data-section="orders"][data-orders-tab="order"][data-orders-view="suppliers"] .supplier-name');
   assert.match(split, /font-size:\s*18px/);
   assert.match(split, /font-weight:\s*700/);
