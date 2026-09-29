@@ -944,7 +944,7 @@ const DICTIONARIES = Object.freeze({
     'orders.vat.notStated': '— not stated',
     'orders.vat.summaryLine': '{net} without VAT, {gross} with VAT at {rate}%',
     // ── A price quoted per case (30 Sep 2026) ─────────────────────────────────
-    'orders.priceByCase': 'Per case (carton)',
+    'orders.priceByCase': 'By the case',
     'orders.case.price': 'Case price ({currency}, excluding VAT)',
     'orders.case.contains': 'Contains',
     'orders.case.count': 'How many in the case',
@@ -3314,7 +3314,7 @@ const DICTIONARIES = Object.freeze({
     'orders.vat.notStated': '— non indicata',
     'orders.vat.summaryLine': '{net} senza IVA, {gross} con l’IVA al {rate}%',
     // ── Un prezzo a confezione (30 set 2026) ──────────────────────────────────
-    'orders.priceByCase': 'A confezione (cartone)',
+    'orders.priceByCase': 'A cartone',
     'orders.case.price': 'Prezzo della confezione ({currency}, IVA esclusa)',
     'orders.case.contains': 'Contiene',
     'orders.case.count': 'Quanti nella confezione',

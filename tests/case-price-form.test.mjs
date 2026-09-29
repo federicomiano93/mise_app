@@ -1,4 +1,4 @@
-// The «A confezione (cartone)» mode of the ingredient card's price block. No DOM is
+// The «A cartone» mode of the ingredient card's price block. No DOM is
 // available under node --test, so this pins the wiring that a pure test cannot reach.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
