@@ -15,6 +15,7 @@
 // reason). Nothing else may.
 
 import { t } from '../i18n.js';
+import { supplierLabel } from '../supplier-label.js';
 import { ingredientsOf, ingredientLabel, recordedName, wholeNumber } from './archive.js';
 import { toISODate, addDays, isBefore } from './day.js';
 
@@ -91,7 +92,7 @@ export function buildOrderRequest({
     // ⚠️ Only suppliers that CONTRIBUTED a line are named. A supplier ticked on the
     // send screen but whose rows have since gone would otherwise appear on the
     // manager's screen as an empty heading with nothing under it.
-    if (used) supplierNames[supplier.id] = supplier.name || '';
+    if (used) supplierNames[supplier.id] = supplierLabel(supplier);
   });
 
   const lines = Object.keys(quantities).length;

@@ -18,6 +18,7 @@
 // arrangement as the flat ingredient list.
 
 import { t } from '../i18n.js';
+import { supplierLabel } from '../supplier-label.js';
 import { el } from './dom.js';
 import { buildSearchBox } from './search-box.js';
 import { filterSuppliers } from './ingredient-search.js';
@@ -261,7 +262,7 @@ function buildSupplierRow(supplier, data, ctx) {
     onClick: () => ctx.onOpen?.(supplier.id),
   }, [
     el('div', { class: 'supplier-row-main' }, [
-      el('span', { class: 'supplier-name', text: supplier.name }),
+      el('span', { class: 'supplier-name', text: supplierLabel(supplier) }),
       el('span', { class: 'supplier-meta', text: [supplier.category, days].filter(Boolean).join(' · ') }),
     ]),
     count,
@@ -275,7 +276,7 @@ function buildSupplierRow(supplier, data, ctx) {
   const view = el('button', {
     type: 'button',
     class: 'supplier-row-view',
-    'aria-label': t('aria.ingredientsFrom', { supplier: supplier.name }),
+    'aria-label': t('aria.ingredientsFrom', { supplier: supplierLabel(supplier) }),
     icon: LIST_SVG,
     onClick: () => ctx.onView?.(supplier.id),
   });
@@ -290,7 +291,7 @@ function buildSupplierRow(supplier, data, ctx) {
     type: 'button',
     class: 'supplier-row-summary',
     id: `summary-${supplier.id}`,
-    'aria-label': t('aria.orderSummaryFor', { supplier: supplier.name }),
+    'aria-label': t('aria.orderSummaryFor', { supplier: supplierLabel(supplier) }),
     icon: SUMMARY_SVG,
     onClick: () => ctx.onSummary?.(supplier.id),
   });

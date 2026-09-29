@@ -30,6 +30,7 @@
 // screen and the read-only product list already use.
 
 import { t, onLanguageChange } from '../i18n.js';
+import { supplierLabel, supplierMatches } from '../supplier-label.js';
 import { el } from './dom.js';
 import { confirmDialog } from './confirm-dialog.js';
 import { isTabletNow, watchTablet } from './tablet-layout.js';
@@ -223,9 +224,14 @@ export function buildRegistry(data, actions, hooks = {}) {
     return !q || String(name || '').toLowerCase().includes(q);
   }
 
+  // A supplier is found by its invoice name AND by the short name the list shows.
+  function matchesSupplier(s) {
+    return supplierMatches(s, query.trim().toLowerCase(), v => String(v || '').toLowerCase());
+  }
+
   function paintSuppliers() {
-    const all = data.suppliers().slice().sort((a, b) => a.name.localeCompare(b.name));
-    const visible = all.filter(s => matches(s.name));
+    const all = data.suppliers().slice().sort((a, b) => supplierLabel(a).localeCompare(supplierLabel(b)));
+    const visible = all.filter(matchesSupplier);
 
     if (!all.length) {
       listHost.appendChild(emptyState('suppliers'));
@@ -242,7 +248,7 @@ export function buildRegistry(data, actions, hooks = {}) {
     const list = el('div', { class: 'mgmt-list' });
     const counts = countBySupplier();
     visible.forEach(s => list.appendChild(drillRow(
-      s.name,
+      supplierLabel(s),
       // ⚠️ THE PLURAL IS IN THE DICTIONARY, never an `if` here: Italian and English
       // do not agree about when one form becomes the other, and a ternary in code
       // is a plural rule that only speaks English.
@@ -261,7 +267,7 @@ export function buildRegistry(data, actions, hooks = {}) {
   function paintItems(kind) {
     const packaging = kind === 'packaging';
     const supById = {};
-    data.suppliers().forEach(s => { supById[s.id] = s.name; });
+    data.suppliers().forEach(s => { supById[s.id] = supplierLabel(s); });
     const all = data.ingredients().filter(i => isPackaging(i) === packaging)
       .sort((a, b) => a.name.localeCompare(b.name));
     const visible = all.filter(i => matches(i.name));
@@ -381,7 +387,7 @@ export function buildRegistry(data, actions, hooks = {}) {
       ].filter(Boolean).join(' · ');
 
       body.appendChild(el('div', { class: 'mgmt-list' }, [
-        mgmtRow(supplier.name, meta, supplier.active !== false,
+        mgmtRow(supplierLabel(supplier), meta, supplier.active !== false,
           () => openSupplierForm(supplier),
           () => actions.setSupplierActive(supplier.id, supplier.active === false),
           // ⚠️ AFTER DELETING, STEP BACK OUT. Staying on the screen of something
@@ -420,7 +426,7 @@ export function buildRegistry(data, actions, hooks = {}) {
         body.appendChild(list);
       }
 
-      return overlay(entry, supplier.name, body);
+      return overlay(entry, supplierLabel(supplier), body);
     }, { selects: `supplier:${id}` });
   }
 

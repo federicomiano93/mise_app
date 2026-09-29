@@ -10,6 +10,7 @@
 // not under today.
 
 import { t, joinList, onLanguageChange } from '../i18n.js';
+import { supplierLabel } from '../supplier-label.js';
 // ⚠️ createDoc / removeDoc / saveIngredientWithPrice / getPriceHistory LEFT WITH THE
 // RECORDS. This page no longer creates, deletes or prices anything — it reads the
 // two collections to draw an order. js/orders/registry-main.js holds those calls now.
@@ -207,7 +208,7 @@ function orderIngredients() {
 function activeSuppliers() {
   return state.suppliers
     .filter(s => s.active !== false)
-    .sort((a, b) => a.name.localeCompare(b.name));
+    .sort((a, b) => supplierLabel(a).localeCompare(supplierLabel(b)));
 }
 
 // The real active suppliers, plus "No supplier" at the end when something is
@@ -1347,11 +1348,11 @@ async function recordSuppliers(supplierIds, { title, okLabel }) {
     // indistinguishable from a bug.
     const quantities = confirmed[supplier.id];
     if (!quantities || !Object.keys(quantities).length) {
-      skipped.push(supplier.name);
+      skipped.push(supplierLabel(supplier));
       continue;
     }
     const done = await placeOrder(supplier.id, { confirm: false, quantities });
-    (done ? saved : failed).push(supplier.name);
+    (done ? saved : failed).push(supplierLabel(supplier));
   }
 
   // A failure must never be buried under a success. placeOrder reports its own
@@ -1382,7 +1383,7 @@ function suppliersWithItems() {
   return orderSupplierList()
     .map(supplier => ({
       id: supplier.id,
-      name: supplier.name,
+      name: supplierLabel(supplier),
       items: (bySupplier[supplier.id] || []).filter(i => (state.entries[i.id]?.qty || 0) > 0),
     }))
     .filter(row => row.items.length);
@@ -1527,11 +1528,11 @@ async function placeOrder(supplierId, { confirm = true, date: pinnedDate, quanti
 
   try {
     await clearSupplier(supplierId, ingredients);
-    setStatus(t('orders.orderSavedToHistory', { names: supplier.name }), 'ok', 5000);
+    setStatus(t('orders.orderSavedToHistory', { names: supplierLabel(supplier) }), 'ok', 5000);
   } catch (err) {
     console.error('Clearing the draft after archiving failed:', err);
     setStatus(
-      t('orders.savedButNotCleared', { name: supplier.name }),
+      t('orders.savedButNotCleared', { name: supplierLabel(supplier) }),
       'warn',
     );
   }
@@ -1565,7 +1566,7 @@ function forgetQuantitiesLocally(supplierIds) {
 }
 
 function confirmClear(supplierIds) {
-  const names = supplierIds.map(id => findOrderSupplier(id)?.name).filter(Boolean);
+  const names = supplierIds.map(id => supplierLabel(findOrderSupplier(id))).filter(Boolean);
   const who = names.length === 1 ? names[0]
     : names.length <= 3 ? names.join(', ')
     : t('orders.nSuppliers', { n: names.length });
@@ -1691,7 +1692,7 @@ function openPlaceConfirm(items, { title, okLabel }) {
     const asked = askedToday(state.requests, supplier.id, date);
     return {
       supplierId: supplier.id,
-      supplierName: supplier.name,
+      supplierName: supplierLabel(supplier),
       when: dayPhrase(date),
       already: state.history.some(h => h.id === historyDocId(date, supplier.id)),
       rows: ingredientsOf(supplier.id, ingredients)
@@ -1867,8 +1868,8 @@ async function discardPending(supplierId) {
   if (!supplier) return;
 
   const ok = await confirmDialog({
-    title: t('orders.discardTitle', { name: supplier.name }),
-    message: t('orders.discardConfirm', { name: supplier.name }),
+    title: t('orders.discardTitle', { name: supplierLabel(supplier) }),
+    message: t('orders.discardConfirm', { name: supplierLabel(supplier) }),
     okLabel: t('ui.discard'),
     cancelLabel: t('ui.cancel'),
     danger: true,
@@ -1881,7 +1882,7 @@ async function discardPending(supplierId) {
     syncInputsFromState();
     dismissPending(supplierId);
     renderSummary();              // the open summary sheet must not go stale
-    setStatus(`${supplier.name} — order discarded`, 'warn', 4000);
+    setStatus(`${supplierLabel(supplier)} — order discarded`, 'warn', 4000);
   } catch (err) {
     console.error('Discarding the order failed:', err);
     setStatus(t('orders.couldNotDiscardThe'), 'error');

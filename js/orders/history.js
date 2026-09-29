@@ -14,6 +14,7 @@
 // disappearing from its own order.
 
 import { t } from '../i18n.js';
+import { supplierLabel } from '../supplier-label.js';
 import { sendIconSvg } from '../send-icon.js';
 import { el, groupBy } from './dom.js';
 import { dayLabel } from './day.js';
@@ -58,7 +59,8 @@ function indexById(items) {
 // without a supplier is a deliberate, named thing; a genuinely unresolvable id is
 // not, and calling that "No supplier" too would hide a real problem.
 function supplierHeading(supplierId, supById) {
-  if (supById[supplierId]?.name) return supById[supplierId].name;
+  const label = supplierLabel(supById[supplierId]);
+  if (label) return label;
   return isNoSupplier(supplierId) ? t('orders.noSupplier') : t('orders.unknownSupplier');
 }
 

@@ -12,6 +12,7 @@
 // onto the same data. Typing 4 on Bacon here IS typing 4 in Brakes' order.
 
 import { itemLabel } from './order-text.js';
+import { supplierLabel, supplierMatches } from '../supplier-label.js';
 
 // Everything NFD splits an accent into: "è" becomes "e" + a combining grave.
 const COMBINING_MARKS = /[̀-ͯ]/g;
@@ -40,7 +41,9 @@ export function matchesQuery(row, query) {
   const q = normalizeText(query);
   if (!q) return true;
   return [row.label, row.ingredient?.brand, row.supplierName]
-    .some(field => normalizeText(field).includes(q));
+    .some(field => normalizeText(field).includes(q))
+    // the invoice name too: a supplier is found by either of its names
+    || supplierMatches(row.supplier, q, normalizeText);
 }
 
 // The suppliers matching what was typed, in the order they were given.
@@ -57,7 +60,7 @@ export function filterSuppliers(suppliers, query) {
   if (!q) return (suppliers || []).slice();
 
   return (suppliers || []).filter(s =>
-    [s?.name, s?.category].some(field => normalizeText(field).includes(q)));
+    supplierMatches(s, q, normalizeText) || normalizeText(s?.category).includes(q));
 }
 
 // Ingredients that belong to one of the given suppliers, A→Z by displayed label.
@@ -82,7 +85,7 @@ export function flatRows({ ingredients, suppliers, query, only }) {
     .map(ing => ({
       ingredient: ing,
       supplier: byId.get(ing.supplierId),
-      supplierName: byId.get(ing.supplierId).name || '',
+      supplierName: supplierLabel(byId.get(ing.supplierId)),
       label: itemLabel(ing.name, ing.weight),
     }))
     // By label, then by id: without the tie-break two products with identical

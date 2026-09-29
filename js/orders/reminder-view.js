@@ -10,6 +10,7 @@
 // order is a button — tapping it opens that supplier's card.
 
 import { t } from '../i18n.js';
+import { supplierLabel } from '../supplier-label.js';
 import { el } from './dom.js';
 import { daySpoken, dayWhen } from './day.js';
 
@@ -35,13 +36,13 @@ export function renderTodayOrders(container, list, { onPick } = {}) {
   const chips = list.map(({ supplier, placed }) => (placed
     ? el('span', { class: 'today-chip placed' }, [
       el('span', { class: 'today-check', icon: CHECK_SVG, 'aria-hidden': 'true' }),
-      el('span', { text: supplier.name }),
+      el('span', { text: supplierLabel(supplier) }),
     ])
     : el('button', {
       type: 'button',
       class: 'today-chip',
       onClick: () => onPick?.(supplier.id),
-    }, supplier.name)));
+    }, supplierLabel(supplier))));
 
   container.appendChild(el('div', { class: 'today-banner' }, [
     el('span', { class: 'today-label', text: t('orders.orderToday') }),
@@ -70,7 +71,7 @@ export function renderPending(container, list, { onPlaced, onToday, onDiscard, n
   list.forEach(({ supplier, day, itemCount }) => {
     container.appendChild(el('div', { class: 'pending-banner' }, [
       el('div', { class: 'pending-main' }, [
-        el('span', { class: 'pending-title', text: t('orders.notPlacedFor', { supplier: supplier.name }) }),
+        el('span', { class: 'pending-title', text: t('orders.notPlacedFor', { supplier: supplierLabel(supplier) }) }),
         el('span', { class: 'pending-sub', text: t('orders.typedWhen', { n: itemCount, when: dayWhen(day, now) }) }),
       ]),
       el('div', { class: 'pending-actions' }, [

@@ -20,6 +20,7 @@
 // simply never tapped.
 
 import { t } from '../i18n.js';
+import { supplierLabel } from '../supplier-label.js';
 import { el } from './dom.js';
 import { buildIngredientList } from './ingredients.js';
 import { nextMatchingDay } from './split-pick.js';
@@ -76,7 +77,7 @@ export function buildSupplierDetail(supplier, ctx) {
     today ? 'b' : 'span', { class: 'pane-when', text },
   ));
   const titleWrap = el('div', { class: 'app-header-title orders-header-title' }, [
-    el('h1', { text: supplier.name }),
+    el('h1', { text: supplierLabel(supplier) }),
     subline.length ? el('p', { class: 'pane-subline' }, subline.flatMap((n, i) => (
       i === 0 ? [n] : [' · ', n]
     ))) : null,
@@ -84,17 +85,17 @@ export function buildSupplierDetail(supplier, ctx) {
 
   const listBtn = el('button', {
     type: 'button', class: 'pane-list-btn',
-    'aria-label': t('orders.pane.listAria', { supplier: supplier.name }),
+    'aria-label': t('orders.pane.listAria', { supplier: supplierLabel(supplier) }),
     onClick: () => ctx.onViewList?.(),
   }, [el('span', { class: 'pane-btn-icon', 'aria-hidden': 'true', icon: LIST_SVG }), t('orders.pane.list')]);
   const summaryBtn = el('button', {
     type: 'button', class: 'pane-summary-btn',
-    'aria-label': t('orders.pane.summaryAria', { supplier: supplier.name }),
+    'aria-label': t('orders.pane.summaryAria', { supplier: supplierLabel(supplier) }),
     onClick: () => ctx.onSummary?.(),
   }, [el('span', { class: 'pane-btn-icon', 'aria-hidden': 'true', icon: SUMMARY_SVG }), t('orders.pane.summary')]);
   const closeBtn = el('button', {
     type: 'button', class: 'app-icon-btn orders-icon-btn pane-close-btn',
-    'aria-label': t('orders.pane.closeAria', { supplier: supplier.name }),
+    'aria-label': t('orders.pane.closeAria', { supplier: supplierLabel(supplier) }),
     icon: CLOSE_ICON, onClick: () => ctx.onBack?.(),
   });
 

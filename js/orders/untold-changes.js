@@ -17,6 +17,7 @@
 // that mean the job is done: the list was sent again, or the order was recorded.
 
 import { wholeNumber as num, ingredientsOf, ingredientLabel, historyDocId } from './archive.js';
+import { supplierLabel } from '../supplier-label.js';
 
 // What today's sent lists asked for, for ONE supplier → { ingredientId: qty }.
 //
@@ -139,7 +140,7 @@ export function untoldChanges({
     if (rows.length) {
       out.push({
         supplierId: supplier.id,
-        supplierName: supplier.name || '',
+        supplierName: supplierLabel(supplier),
         rows,
         // Split once, here, so no screen has to work it out again and get it wrong.
         added: rows.filter(r => !r.alreadyOrdered),

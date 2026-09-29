@@ -13,14 +13,17 @@
 
 import { t } from './i18n.js';
 import { el } from './dom.js';
+import { supplierLabel } from './supplier-label.js';
 import { field, formActions, makeDayChecks, checkedDays, reportFailure } from './record-ui.js';
 
 // item     — the supplier being edited, or null for a new one
 // save     — (id | null, payload) → Promise resolving with the supplier's id
-// onDone   — ({ id, name }) once saved
+// onDone   — ({ id, name }) once saved; `name` is the label the app will SHOW (short name
+//            when there is one), because callers put it on screen straight away
 // onCancel — backed out; nothing was written
 export function buildSupplierForm({ item, save, onDone, onCancel }) {
   const name = el('input', { type: 'text', class: 'mgmt-input', value: item?.name || '' });
+  const shortName = el('input', { type: 'text', class: 'mgmt-input', maxlength: '40', value: item?.shortName || '' });
   const category = el('input', { type: 'text', class: 'mgmt-input', value: item?.category || '' });
   const phone = el('input', { type: 'tel', class: 'mgmt-input', value: item?.phone || '', placeholder: t('orders.eg.phone') });
   const email = el('input', { type: 'email', class: 'mgmt-input', value: item?.email || '' });
@@ -33,6 +36,8 @@ export function buildSupplierForm({ item, save, onDone, onCancel }) {
     saveBtn.disabled = true;
     const payload = {
       name: name.value.trim(),
+      // '' when blank, never omitted: a merge write must be able to CLEAR a short name.
+      shortName: shortName.value.trim(),
       category: category.value.trim(),
       phone: phone.value.trim(),
       email: email.value.trim(),
@@ -47,11 +52,13 @@ export function buildSupplierForm({ item, save, onDone, onCancel }) {
       await reportFailure('save', payload.name, err);
       return;
     }
-    onDone?.({ id: id || item?.id || null, name: payload.name });
+    onDone?.({ id: id || item?.id || null, name: supplierLabel(payload) });
   } }, t('ui.save'));
 
   return el('div', { class: 'mgmt-form' }, [
     field(t('orders.field.name'), name),
+    field(t('orders.field.shortName'), shortName),
+    el('p', { class: 'notif-note', text: t('orders.field.shortNameHint') }),
     field(t('orders.field.category'), category),
     el('div', { class: 'mgmt-field' }, [
       el('span', { class: 'mgmt-field-label', text: t('orders.deliveryDaysWhenThey') }),

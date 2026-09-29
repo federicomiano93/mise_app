@@ -866,6 +866,8 @@ const DICTIONARIES = Object.freeze({
     // could not see, so the whole ingredient form stayed English on an Italian
     // phone while four i18n suites passed. The scan now knows that shape.
     'orders.field.name': 'Name',
+    'orders.field.shortName': 'Name to show',
+    'orders.field.shortNameHint': 'Optional — the shorter name the app shows. Empty: the name above.',
     'orders.field.category': 'Category',
     'orders.field.email': 'Email',
     'orders.field.supplier': 'Supplier',
@@ -3257,6 +3259,8 @@ const DICTIONARIES = Object.freeze({
     // Le schede. ⚠️ Erano scritte in inglese dentro il codice, in una forma che il
     // controllo automatico non sapeva vedere.
     'orders.field.name': 'Nome',
+    'orders.field.shortName': 'Nome da mostrare',
+    'orders.field.shortNameHint': 'Facoltativo — il nome più corto che vedi nell’app. Vuoto: il nome qui sopra.',
     'orders.field.category': 'Categoria',
     'orders.field.email': 'Email',
     'orders.field.supplier': 'Fornitore',

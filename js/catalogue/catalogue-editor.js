@@ -8,6 +8,7 @@
 // into config).
 
 import { t } from '../i18n.js';
+import { supplierLabel } from '../supplier-label.js';
 import { canManageHere } from './firebase-catalogue.js';
 import { el } from './dom.js';
 import {
@@ -384,7 +385,7 @@ export function renderEditor({ recipe, draft, allRecipes, app, getLabelProfile =
 
     const ingredient = app.ingredients()[link.refId];
     if (!ingredient) return t('cat.anIngredientThatNo');
-    const supplier = (app.suppliers()[ingredient.supplierId] || {}).name || '';
+    const supplier = supplierLabel(app.suppliers()[ingredient.supplierId]);
     const weight = String(ingredient.weight || '').trim();
     return ['→ ' + (ingredient.name || t('cat.ingredient')), weight, supplier]
       .filter(Boolean).join('  ·  ');
