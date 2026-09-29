@@ -1049,6 +1049,9 @@ async function isolation() {
       { bakery: 'trattoria-x', showStock: false }, asAccount(BOB)));
   await expectAllowed('…while an employee can still READ them, or no send screen could draw',
     readAs(BOB, 'locations/trattoria-x/config/orders'));
+  await expectDenied('…and the category list is theirs too: an employee may not write it',
+    () => mergeWrite('locations/trattoria-x/config/orders',
+      { bakery: 'trattoria-x', ingredientCategories: ['Bakery'] }, asAccount(BOB)));
   await expectAllowed('a location with every section keeps its recipes',
     readAs(ALICE, 'locations/main/recipes/R1'));
 }
@@ -1076,6 +1079,20 @@ async function configAndLogs() {
       logVisibility: {}, logRetentionHours: 24, logRetentionByDough: {},
     }));
 
+  await expectAllowed('config: a manager writes the ingredient category list', () =>
+    mergeWrite(`${A}/config/orders`, { bakery: 'main', ingredientCategories: ['Panetteria', 'Pasticceria'] }));
+  await expectAllowed('config: an empty category list (every category deleted)', () =>
+    mergeWrite(`${A}/config/orders`, { bakery: 'main', ingredientCategories: [] }));
+  await expectAllowed('config: exactly 100 categories', () =>
+    mergeWrite(`${A}/config/orders`, {
+      bakery: 'main', ingredientCategories: Array.from({ length: 100 }, (_, i) => 'c' + i),
+    }));
+  await expectDenied('config: 101 categories', () =>
+    mergeWrite(`${A}/config/orders`, {
+      bakery: 'main', ingredientCategories: Array.from({ length: 101 }, (_, i) => 'c' + i),
+    }));
+  await expectDenied('config: categories sent as something other than a list', () =>
+    mergeWrite(`${A}/config/orders`, { bakery: 'main', ingredientCategories: 'Bakery' }));
   await expectAllowed('config: the Orders settings patch', () =>
     mergeWrite(`${A}/config/orders`, { bakery: 'main', showStock: false, historyDays: 15 }));
 

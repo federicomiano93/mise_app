@@ -1352,6 +1352,8 @@ service cloud.firestore {
                'weekStartsOn',
                // Whether the venue uses order lists at all (28 Sep 2026).
                'orderLists',
+               // The venue's own list of ingredient categories (29 Sep 2026).
+               'ingredientCategories',
                // Retired, still writable by an un-updated phone (see above)
                'products', 'groups', 'focaccia', 'brioche', 'sourdough', 'market'
              ])
@@ -1385,6 +1387,12 @@ service cloud.firestore {
               || request.resource.data.orderLists is bool)
           && (!('historyDays' in request.resource.data)
               || request.resource.data.historyDays is number)
+          // The category words an ingredient can be filed under. A list of text, capped so
+          // it cannot be used as free storage. ⚠️ OPTIONAL IN BOTH DIRECTIONS, as every
+          // field here has to be: a phone still on the previous version never sends it.
+          && (!('ingredientCategories' in request.resource.data)
+              || (request.resource.data.ingredientCategories is list
+                  && request.resource.data.ingredientCategories.size() <= 100))
           // Which roads an order may leave by. A map of four booleans, and a
           // preferred one.
           //
