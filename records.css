@@ -197,6 +197,11 @@
   flex: 1 1 0;
   width: auto;
   min-width: 0;
+  padding-left: 8px;
+  padding-right: 8px;
+}
+.rec-host .mgmt-case-row select.mgmt-input {
+  flex: 0 0 auto;
 }
 .rec-host .mgmt-case-x {
   flex: 0 0 auto;
