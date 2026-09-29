@@ -316,7 +316,9 @@ export async function watchDoc(name, id, onChange, onError) {
   await authReady;
   return onSnapshot(
     doc(db, pathFor(name), id),
-    snap => onChange(snap.exists() ? { id: snap.id, ...snap.data() } : null),
+    // Second argument: did this answer come from the local cache? «Missing» from the cache
+    // proves nothing (a phone that starts offline has never seen the document).
+    snap => onChange(snap.exists() ? { id: snap.id, ...snap.data() } : null, snap.metadata.fromCache),
     err => {
       console.error(`watchDoc(${name}/${id}) failed:`, err);
       onError?.(err);

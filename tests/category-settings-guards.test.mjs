@@ -26,3 +26,17 @@ test('after a delete, focus goes to a delete button or to the heading, never los
   assert.match(SETTINGS, /\|\| box\.querySelector\('h3'\)/);
   assert.match(SETTINGS, /categoryFocusAfter = \{/);
 });
+
+test('Saved and the focus target are armed BEFORE the write, and disarmed if it fails', () => {
+  const at = SETTINGS.indexOf('categorySavedUntil = Date.now() + 2000');
+  assert.ok(at > 0 && at < SETTINGS.indexOf('await onDeleteCategory('));
+  assert.ok(SETTINGS.indexOf('categoryFocusAfter = {') < SETTINGS.indexOf('await onDeleteCategory('));
+  assert.match(SETTINGS, /categorySavedUntil = 0;[^\n]*\r?\n\s*categoryFocusAfter = null;/);
+});
+
+test('a missing config/orders counts as loaded only when the server said so', () => {
+  const FB = read('js/orders/firebase-orders.js');
+  assert.match(FB, /onChange\(snap\.exists\(\) \? \{ id: snap\.id, \.\.\.snap\.data\(\) \} : null, snap\.metadata\.fromCache\)/);
+  assert.match(MAIN, /\(doc, fromCache\) =>/);
+  assert.match(MAIN, /if \(doc !== null \|\| !fromCache\) state\.loaded\.config = true;/);
+});

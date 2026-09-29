@@ -228,13 +228,16 @@ export function buildRegistrySettings({
         });
         if (!ok) return;
         del.disabled = true;
+        const index = list.findIndex(c => c.toLowerCase() === key);
+        const rest = list.filter(c => c.toLowerCase() !== key);
+        // ⚠️ ARMED BEFORE THE WRITE, NOT AFTER IT: Firestore applies the write locally and
+        // redraws this screen (a snapshot) before the promise resolves, and that redraw is the
+        // one that has to find «Saved» and the focus target waiting.
+        categorySavedUntil = Date.now() + 2000;
+        categoryFocusAfter = { name: rest[Math.min(index, rest.length - 1)] ?? null, index };
+        setTimeout(() => { categoryFocusAfter = null; }, 2000);
         try {
-          await onDeleteCategory(list.filter(c => c.toLowerCase() !== key), users.map(i => i.id));
-          categorySavedUntil = Date.now() + 2000;
-          const index = list.findIndex(c => c.toLowerCase() === key);
-          const rest = list.filter(c => c.toLowerCase() !== key);
-          categoryFocusAfter = { name: rest[Math.min(index, rest.length - 1)] ?? null, index };
-          setTimeout(() => { categoryFocusAfter = null; }, 2000);
+          await onDeleteCategory(rest, users.map(i => i.id));
           // The write's snapshot normally rebuilds this screen; if it has not yet, say so here.
           if (del.isConnected) {
             const box = row.parentElement;
@@ -245,6 +248,8 @@ export function buildRegistrySettings({
             setTimeout(() => chip.remove(), 2000);
           }
         } catch (err) {
+          categorySavedUntil = 0;           // nothing was saved: no chip, no moved focus
+          categoryFocusAfter = null;
           del.disabled = false;             // keep the row; nothing changed
           await reportFailure('save', name, err);
         }

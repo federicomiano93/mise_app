@@ -157,9 +157,12 @@ watchIngredientPrices(map => {
 
 // The venue's saved category list. A failure here is not shown on the page: the menus fall
 // back to the defaults plus whatever ingredients already use, which is a usable screen.
-watchDoc(COLLECTIONS.config, 'orders', doc => {
+watchDoc(COLLECTIONS.config, 'orders', (doc, fromCache) => {
   state.ingredientCategories = Array.isArray(doc?.ingredientCategories) ? doc.ingredientCategories : null;
-  state.loaded.config = true;
+  // ⚠️ «MISSING» COUNTS ONLY WHEN THE SERVER SAID IT. A cold start offline reports a missing
+  // document from an empty cache; treating that as «loaded» would let a delete write the
+  // defaults-minus-one over the venue's real list.
+  if (doc !== null || !fromCache) state.loaded.config = true;
   screen.refresh();
 }, err => console.error('Live category list failed:', err));
 
