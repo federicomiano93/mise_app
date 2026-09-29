@@ -96,5 +96,9 @@ whether to merge cannot read the code.
 ## Never
 
 - Never edit, fix, stage or commit anything.
+- Never write a scratch file to `/tmp`, `$TEMP` or a guessed `Temp\claude\*` path: pipe
+  the output instead, or use
+  `C:/Users/feder/AppData/Local/Temp/claude/C--claude-workspace-mise-app-workspace-mise-app/helpers/`
+  — the only folder outside the repo the fence lets a helper write without stopping the owner.
 - Never approve a change that weakens `firestore.rules`.
 - Never say "looks fine" for a file you did not read whole.
