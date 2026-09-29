@@ -1504,7 +1504,7 @@ a.home-reminder {
   letter-spacing: 0.1em; text-transform: uppercase; color: var(--text3);
 }
 /* The chevron turns to point down while it is open — the only moving part. */
-.mgmt-fold-chev { color: var(--text3); font-size: 18px; line-height: 1; transition: transform .15s ease; }
+.mgmt-fold-chev { flex: none; display: flex; align-items: center; color: var(--text3); transition: transform .15s ease; }
 .mgmt-fold-head--open .mgmt-fold-chev { transform: rotate(90deg); }
 /* The folded half. It gets the breathing room the head used to provide, so opening
    the card does not make the first line collide with the state word. */

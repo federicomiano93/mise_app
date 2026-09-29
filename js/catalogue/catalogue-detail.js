@@ -41,6 +41,10 @@ import { chooseHowToSend } from '../send-sheet.js';
 import { SEND_PATHS, svgElement } from '../send-icon.js';
 import { hasProcedure, normalizeSteps, unassignedRows, progressText, formatDuration } from './guided-model.js';
 
+// The one arrow: the same chevron every other list in the app draws.
+const CHEVRON_SVG =
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>';
+
 const IMPORT_SVG =
   '<svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12l7 7 7-7"/></svg>';
 const TRASH_SVG =
@@ -290,7 +294,7 @@ function allergenPanel(recipe, app) {
     }, [
       el('span', { class: 'cat-alg-label', text: t('cat.alg.title') }),
       statusEl,
-      el('span', { class: 'chev', text: '›', 'aria-hidden': 'true' }),
+      el('span', { class: 'chev', 'aria-hidden': 'true', icon: CHEVRON_SVG }),
     ]);
     return btn;
   };
@@ -354,7 +358,7 @@ function allergenPanel(recipe, app) {
   body.appendChild(el('button', {
     class: 'cat-alg-label-btn', type: 'button',
     onclick: () => app.openLabel(recipe),
-  }, [t('cat.makeALabel'), el('span', { class: 'chev', text: '›', 'aria-hidden': 'true' })]));
+  }, [t('cat.makeALabel'), el('span', { class: 'chev', 'aria-hidden': 'true', icon: CHEVRON_SVG })]));
 
   return panel;
 }

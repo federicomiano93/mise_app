@@ -83,10 +83,9 @@
 <div id="auth-gate" class="auth-gate"></div>
 
 <!-- Three fixed tracks (left slot · title · right slot) so the title is TRULY
-     centred: only one button of each slot is ever visible, and an empty slot must
-     still hold its column or the title drifts off-centre. The right slot is empty
-     here — adding a product is a button in the list, not in the header, because
-     this screen is read far more often than it is added to. -->
+     centred: only one button of the left slot is ever visible, and an empty slot must
+     still hold its column or the title drifts off-centre. The right slot holds the
+     round «+» (shown on the list only, like the Catalogue's) beside the help button. -->
 <header class="app-header">
   <span class="app-header-slot">
     <a class="app-icon-btn" id="fcHome" href="index.html" data-i18n="ui.back" data-i18n-attr="aria-label" aria-label="Back">
@@ -100,7 +99,11 @@
     <h1 id="fcTitle" data-i18n="section.foodcost">Food cost</h1>
     <p id="fcSub" data-i18n="fc.productsAndMargins">Products and margins</p>
   </div>
-  <span class="app-header-slot" data-help="foodcost"></span>
+  <span class="app-header-slot" data-help="foodcost">
+    <button class="app-icon-btn" id="fcAdd" data-i18n="fc.newProduct" data-i18n-attr="aria-label" aria-label="New product" hidden>
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+    </button>
+  </span>
 </header>
 
 <main class="fc-screen" id="fcScreen"></main>

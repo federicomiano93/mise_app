@@ -36,9 +36,9 @@ export function renderDay({ day, items, note, locked = false, app }) {
   let isLocked = !!locked;  // confirmed tonight, and no edit granted since
 
   const list = el('div', { class: 'pas-list' });
-  const empty = el('p', { class: 'pas-empty' }, [
-    t('past.nothingToProveFor', { day: weekdayLabel(day) }),
-    el('span', { class: 'pas-empty-hint', text: t('past.tapThePencilTo') }),
+  const empty = el('div', { class: 'empty-state' }, [
+    el('p', { class: 'empty-title', text: t('past.nothingToProveFor', { day: weekdayLabel(day) }) }),
+    el('p', { class: 'empty-sub', text: t('past.tapThePencilTo') }),
   ]);
   const body = el('div', { class: 'pas-body' });
 

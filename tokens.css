@@ -566,7 +566,9 @@
    left and two right a long «Ricettario / RICETTE E SCALATURA IN KG» left the left
    side at 36px and the title sat 22px off centre on a 360px phone (ui-check,
    29 Sep 2026). These sections always hold TWO buttons on the right (help + an
-   action), so both sides reserve two buttons' width: 36 + 12 + 36.
+   action), so both sides reserve two buttons' width: 36 + 12 + 36. Food cost and
+   Suppliers are picked by data-card, not data-section: Magazzino shares Food cost's
+   section but has one button on the right, and Orders shares Suppliers'.
    Not below 360px: at 296 the reserved width would leave the title less than
    its own longest word — there the drift is the lesser evil.
    Not Orders: three buttons on the right cannot be mirrored on a phone at all.
@@ -574,13 +576,17 @@
    «bigger screen» query, the tablet switch (tests/tablet-width.test.mjs). */
 body[data-section="catalogue"] .app-header,
 body[data-section="pastries"] .app-header,
-body[data-section="calculator"] .app-header {
+body[data-section="calculator"] .app-header,
+body[data-card="foodcost"] .app-header,
+body[data-card="suppliers"] .app-header {
   --app-header-side: 84px;
 }
 @media (max-width: 359px) {
   body[data-section="catalogue"] .app-header,
   body[data-section="pastries"] .app-header,
-  body[data-section="calculator"] .app-header {
+  body[data-section="calculator"] .app-header,
+  body[data-card="foodcost"] .app-header,
+  body[data-card="suppliers"] .app-header {
     --app-header-side: 0px;
   }
 }

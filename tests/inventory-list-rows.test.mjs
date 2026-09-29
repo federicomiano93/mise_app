@@ -262,9 +262,10 @@ test('a product renamed elsewhere gets its new name without the list being rebui
 test('an empty list says so, and stops saying so when a product arrives', () => {
   const { list } = mount([]);
   assert.equal(rowsOf(list.root).length, 0);
-  assert.equal(withClass(list.root, 'inv-empty').length, 1);
+  // The screen-level empty state (tokens.css), not the small in-context line.
+  assert.equal(withClass(list.root, 'empty-state').length, 1);
   list.refresh(month(), THREE);
-  assert.equal(withClass(list.root, 'inv-empty').length, 0);
+  assert.equal(withClass(list.root, 'empty-state').length, 0);
   assert.equal(rowsOf(list.root).length, 3);
 });
 

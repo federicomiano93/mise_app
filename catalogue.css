@@ -63,15 +63,11 @@ body {
 }
 .cat-search input:focus { border-color: var(--cat-accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--cat-accent) 22%, transparent); }
 
-/* The recipe list sits in a subtly-tinted, softly-framed tray, set a little apart
-   from the search above so "search" and "your recipes" read as two distinct areas.
-   The frame is intentionally quiet — perceptible, not loud. */
+/* The rows sit directly on the page, set a little apart from the search above. The
+   old tinted tray around them made a card inside a card; each row keeps its OWN frame
+   (.cat-card, .alg-sheet-row), exactly like the Suppliers rows. */
 .cat-list-panel {
   margin-top: 18px;
-  padding: 8px;
-  background: var(--cat-surface-2);
-  border: 1px solid var(--cat-border);
-  border-radius: var(--cat-radius);
 }
 
 /* Recipe list — names only */
@@ -85,7 +81,13 @@ body {
 .cat-card:hover { transform: translateY(-1px); box-shadow: var(--cat-shadow); border-color: color-mix(in srgb, var(--cat-accent) 40%, var(--cat-border)); }
 .cat-card:focus-visible { outline: 2px solid var(--cat-accent); outline-offset: 2px; }
 .cat-card .name { flex: 1; min-width: 0; font-family: var(--cat-font-round); font-weight: 600; font-size: 1.12rem; color: var(--cat-text); }
-.cat-card .chev { flex: none; color: var(--cat-text-2); font-size: 1.3rem; line-height: 1; }
+/* The arrow is an SVG now: a flex box, so it centres on the row and never rests on a
+   text baseline. Shared by every «›» row of this page (list, sheet, detail folds). */
+.cat-card .chev,
+.alg-sheet-row .chev,
+.cat-alg-toggle .chev,
+.cat-alg-label-btn .chev { flex: none; display: flex; align-items: center; }
+.cat-card .chev { color: var(--cat-text-2); }
 .cat-empty { text-align: center; color: var(--cat-text-2); padding: 34px 12px; font-size: .95rem; }
 
 /* Detail — the ingredient list is the focus of the screen (no title above it;
@@ -315,18 +317,20 @@ body.cat-zoom-lock { overflow: hidden; }
 }
 /* ⚠️ SCOPED TO .cat-unit, NEVER TO «the second child». The Total row reuses .cat-amount
    with a plain <span> in that slot — anchored by position it would grow an arrow, and
-   the column of numbers it is the sum of would shift. Same `›` the folding cards use
-   (.cat-alg-toggle .chev), so no glyph and no asset was chosen. */
+   the column of numbers it is the sum of would shift. Same chevron SVG the folding cards
+   use (.cat-alg-toggle .chev). */
 .cat-unit-chev {
   position: absolute;
   right: 3px;
   top: 50%;
   transform: translateY(-50%) rotate(90deg);
   pointer-events: none;
-  font-size: 15px;
-  line-height: 1;
+  display: flex;
+  align-items: center;
   color: var(--cat-text-2);
 }
+/* Smaller than the row arrows: it has to fit the 11px reserved on the right. */
+.cat-unit-chev svg { width: 14px; height: 14px; }
 /* ⚠️ COLOUR ONLY, NO SECOND RING. The row already draws an inset focus ring and
    :has() is off the table in this project (v1.21.1), so it cannot be suppressed —
    two rings at once would be noise. Matches .cat-loss-input:focus. */

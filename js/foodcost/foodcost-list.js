@@ -23,7 +23,6 @@ export function renderList({ products, tables, onOpen, onAdd, filter = null }) {
       el('p', { class: 'fc-filter-title', text: filter.title }),
       el('button', { class: 'fc-link', type: 'button', text: t('fc.showAll'), onclick: filter.onShowAll }),
     ]) : null,
-    el('button', { class: 'fc-add', type: 'button', text: t('fc.addProduct'), onclick: onAdd }),
     rows,
   ]);
 
@@ -32,8 +31,15 @@ export function renderList({ products, tables, onOpen, onAdd, filter = null }) {
     rows.replaceChildren();
 
     if (!list.length) {
-      rows.appendChild(el('p', { class: 'fc-empty', text:
-        t('fc.noProductsYetAdd') }));
+      // The screen-level empty state (tokens.css). Its button does what the header «+»
+      // does — the header one is the only other way to add, so a first-time viewer is
+      // never left hunting for it. Narrowed to a recipe, the header «+» still adds, and
+      // so does this.
+      rows.appendChild(el('div', { class: 'empty-state' }, [
+        el('p', { class: 'empty-title', text: t('fc.empty.title') }),
+        el('p', { class: 'empty-sub', text: t('fc.empty.sub') }),
+        el('button', { class: 'empty-action', type: 'button', text: t('fc.empty.action'), onclick: onAdd }),
+      ]));
       return;
     }
 

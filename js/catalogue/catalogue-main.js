@@ -158,6 +158,7 @@ function showList() {
     initialQuery: searchQuery,
     onQueryChange: (q) => { searchQuery = q; },
     onOpen: openDetail,
+    onAdd: () => openEditor(null),
   });
   swap(activeList.root);
 }

@@ -695,7 +695,7 @@ input.cp-prod-weight {
   color: var(--error);
 }
 .co-banner-text { flex: 1; min-width: 0; }
-.co-banner-go { flex: none; font-size: 18px; line-height: 1; opacity: .6; }
+.co-banner-go { flex: none; display: flex; align-items: center; opacity: .6; }
 
 .co-card {
   margin-bottom: 14px;

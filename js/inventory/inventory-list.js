@@ -150,10 +150,15 @@ export function renderList({ month, ingredients, locale, onOpen, onCount, onCarr
     rows.replaceChildren();
 
     if (!list.length) {
-      rows.appendChild(el('p', {
-        class: 'inv-empty',
-        text: state.query || state.onlyTodo ? t('inv.nothingMatches') : t('inv.noProductsYet'),
-      }));
+      // A search or filter that matches nothing stays a small line; a stocktake with
+      // NO products at all is the screen-level empty state. No button: the products
+      // come from Suppliers & ingredients, and this page has no «add» of its own.
+      rows.appendChild(state.query || state.onlyTodo
+        ? el('p', { class: 'inv-empty', text: t('inv.nothingMatches') })
+        : el('div', { class: 'empty-state' }, [
+          el('p', { class: 'empty-title', text: t('inv.empty.title') }),
+          el('p', { class: 'empty-sub', text: t('inv.empty.sub') }),
+        ]));
       return;
     }
 

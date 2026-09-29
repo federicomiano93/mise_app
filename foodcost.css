@@ -90,7 +90,7 @@ body {
 .fc-dot.red { background: var(--fc-danger); }
 .fc-dot.none { background: var(--fc-border); }
 
-.fc-add, .fc-add-row {
+.fc-add-row {
   width: 100%;
   padding: 12px;
   border: 1px dashed var(--fc-border);
@@ -101,7 +101,7 @@ body {
   font-size: .88rem;
   cursor: pointer;
 }
-.fc-add:active, .fc-add-row:active { transform: scale(.97); }
+.fc-add-row:active { transform: scale(.97); }
 
 /* ── The answer panel ──────────────────────────────────────────────────────
    Pinned at the top of the product screen, because it is the reason the screen

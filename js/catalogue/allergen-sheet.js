@@ -28,6 +28,10 @@ import {
   incompleteText, rowState, rowIsBlocked,
 } from './recipe-allergen-model.js';
 import { ALLERGEN_GROUPS } from '../allergen-model.js';
+
+// The one arrow: the same chevron every other list in the app draws.
+const CHEVRON_SVG =
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>';
 import {
   canPrintLabel, countryOf, outputLanguage, allergenGroupName, allergenGroupCodes, allergenName,
 } from '../market.js';
@@ -262,7 +266,7 @@ export function renderAllergenSheet({
         ]),
         el('span', { class: 'alg-sheet-what', text: line }),
       ]),
-      el('span', { class: 'chev', text: '›', 'aria-hidden': 'true' }),
+      el('span', { class: 'chev', 'aria-hidden': 'true', icon: CHEVRON_SVG }),
     ]);
   }
 
@@ -311,7 +315,7 @@ function lawCard(location) {
     },
   }, [
     el('span', { class: 'cat-alg-label', text: t('cat.sheet.theLawHere') }),
-    el('span', { class: 'chev', text: '›', 'aria-hidden': 'true' }),
+    el('span', { class: 'chev', 'aria-hidden': 'true', icon: CHEVRON_SVG }),
   ]);
 
   panel.appendChild(btn);

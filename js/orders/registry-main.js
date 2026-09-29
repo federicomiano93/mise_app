@@ -26,6 +26,9 @@ const state = {
 };
 
 const host = document.getElementById('registry-host');
+// The page header's round «+». ⚠️ NEVER HIDDEN ON A ROLE — the dashed button it replaces
+// had no gate either (js/orders/registry.js); registry.js says which word it carries.
+const addBtn = document.getElementById('registry-add');
 
 const screen = buildRegistry(
   {
@@ -51,7 +54,10 @@ const screen = buildRegistry(
     deleteSupplier: (id) => removeDoc(COLLECTIONS.suppliers, id),
     deleteIngredient: (id) => removeDoc(COLLECTIONS.ingredients, id),
   },
+  { onChrome: ({ addLabel }) => addBtn?.setAttribute('aria-label', addLabel) },
 );
+
+addBtn?.addEventListener('click', () => screen.addCurrent());
 
 host?.appendChild(screen.node);
 

@@ -33,6 +33,9 @@ const titleEl = document.getElementById('fcTitle');
 const subEl = document.getElementById('fcSub');
 const homeBtn = document.getElementById('fcHome');
 const backBtn = document.getElementById('fcBack');
+// The round «+» in the header's right slot: the one way to add a product, list only.
+const addBtn = document.getElementById('fcAdd');
+addBtn.addEventListener('click', () => openProduct(null));
 // The bottom bar and its one button, Settings (13 Sep 2026). The button carries its own
 // permission; the bar is shown only while a button in it is.
 const footerBar = document.getElementById('fcFooter');
@@ -61,11 +64,12 @@ let recipeLinkSettled = false;
 let recipeLinkDeadlinePassed = false;
 const RECIPE_LINK_WAIT_MS = 1200;
 
-function setHeader({ title, sub, back }) {
+function setHeader({ title, sub, back, add = false }) {
   titleEl.textContent = title;
   subEl.textContent = sub;
   homeBtn.hidden = back;
   backBtn.hidden = !back;
+  addBtn.hidden = !add;
   paintFooter();
 }
 
@@ -99,7 +103,7 @@ function showList() {
   entryEditor = false;
   draftRecipeId = null;
   // ⚠️ Narrowed, the list has Back (to the recipe) where it otherwise has Home.
-  setHeader({ title: t('fc.foodCost'), sub: t('fc.productsAndMargins'), back: !!listFilter });
+  setHeader({ title: t('fc.foodCost'), sub: t('fc.productsAndMargins'), back: !!listFilter, add: true });
   activeList = renderList({
     products: listedProducts(), tables: tables(), onOpen: openProduct, onAdd: () => openProduct(null),
     filter: listFilter ? {
