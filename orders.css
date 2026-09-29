@@ -1131,8 +1131,24 @@ input.ing-stock {
   padding: 10px 12px;
 }
 /* Nothing is wrong when there is no price yet — most ingredients start this way —
-   so the "no price" state is quiet, not a warning. */
-.mgmt-price-summary.muted { color: var(--text3); }
+   so the "no price" state is quiet, not a warning: small grey text with no box, the
+   size of .mgmt-price-vat-summary below (Federico, 30 Sep 2026: the boxed line was
+   too big and stuck to the VAT field). --text3 passes 4.5:1; --text4 does not. */
+.mgmt-price-summary.muted {
+  color: var(--text3);
+  font-family: inherit;
+  font-size: 13px;
+  background: none;
+  border: none;
+  padding: 0;
+}
+
+/* The blocks of the price section, spaced apart. They are direct children of one
+   column, so a flex gap does it; a block that is hidden or :empty (display:none)
+   takes its gap with it. --space-3 is the 12px this form's fields already use. */
+.mgmt-price-block { display: flex; flex-direction: column; gap: var(--space-3); }
+.mgmt-price-block > .mgmt-price-summary.muted { margin-top: var(--space-1); }
+.mgmt-price-block > [hidden] { display: none; }
 
 /* What is still missing, under the numbers. It appears only when the price is
    complete as a PRICE but the ingredient still cannot be costed — a per-piece

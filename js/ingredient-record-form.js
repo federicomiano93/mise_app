@@ -288,16 +288,20 @@ function priceBlock(item, actions, defaultUnit = null) {
     el('label', { class: 'mgmt-field' }, [rateLabel, rate]),
   ]);
 
-  // The PURCHASE VAT field — its own row, full width: the 2-column pair above
-  // is priceUnit/rate, which belong together as "a rate OF this unit"; VAT is
-  // a third, independent fact and forcing it into that grid would leave an
-  // empty cell beside it on every screen.
-  const vatField = el('label', { class: 'mgmt-field' }, [
-    el('span', { class: 'mgmt-field-label', text: t('orders.vat.label') }),
-    vatSelect,
+  // The PURCHASE VAT field — the LEFT cell of its own .mgmt-pair row, the right cell
+  // left empty on purpose. VAT is a third, independent fact (the pair above is
+  // priceUnit/rate, "a rate OF this unit"), but a select stretched to the full card
+  // looked out of proportion (Federico, 30 Sep 2026); the same grid gives it exactly
+  // the width of «Come si acquista» above, at 296px and on a tablet alike.
+  const vatField = el('div', { class: 'mgmt-pair' }, [
+    el('label', { class: 'mgmt-field' }, [
+      el('span', { class: 'mgmt-field-label', text: t('orders.vat.label') }),
+      vatSelect,
+    ]),
   ]);
 
-  const node = el('div', {}, [
+  // .mgmt-price-block spaces the blocks apart (orders.css); before, they touched.
+  const node = el('div', { class: 'mgmt-price-block' }, [
     // ⚠️ «Peso di un pezzo» STAYS FULL WIDTH. It appears only when the unit is
     // `pcs`, and a column that comes and goes would make the row above it jump.
     pricePair,

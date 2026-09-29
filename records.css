@@ -169,6 +169,22 @@
 }
 .rec-host .mgmt-price-summary.muted {
   color: var(--text3);
+  font-family: inherit;
+  font-size: 13px;
+  background: none;
+  border: none;
+  padding: 0;
+}
+.rec-host .mgmt-price-block {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.rec-host .mgmt-price-block > .mgmt-price-summary.muted {
+  margin-top: var(--space-1);
+}
+.rec-host .mgmt-price-block > [hidden] {
+  display: none;
 }
 .rec-host .mgmt-price-main {
   display: block;
