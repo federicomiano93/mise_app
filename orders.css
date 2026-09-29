@@ -472,9 +472,12 @@
    ⚠️ A NEW container is NOT covered by this. When the supplier screen moved into its
    own overlay its rows left #suppliers-list — `.ingredient-list` is what brings them
    back under the fix, and anything added later must be listed here too. */
-#suppliers-list .ing-row,
-.ingredient-list .ing-row,
 .hist-edit-list .ing-row { display: block; }
+/* (29 Sep 2026) The rows Orders builds for a supplier's screen and the flat list now carry
+   `ing-row--line` and their own grid — see «A supplier's ingredients as rows» below — so
+   `#suppliers-list .ing-row` and `.ingredient-list .ing-row` no longer have a row to
+   guard. The History editor's rows are the one place a plain `.ing-row` is still built
+   here, and keep the block layout above. */
 .ing-row { padding: 12px 0; border-bottom: 1px solid var(--border); }
 .ing-row:last-child { border-bottom: none; }
 .ing-top { display: flex; align-items: baseline; gap: 6px; margin-bottom: 8px; }
@@ -491,6 +494,117 @@
   border-radius: var(--radius);
   padding: 4px 14px 8px;
 }
+
+/* ── A supplier's ingredients as ROWS (Federico, 29 Sep 2026) ──────────────────
+   «un ingrediente uno sotto l'altro con una linea leggera di divisione» and «costruiscilo
+   come il riepilogo»: both lists are a card like .order-summary-list, ONE column at every
+   size, each ingredient a line — name on the left, the Order box, the Stock box. The words
+   ORDER / STOCK are said ONCE, by the sticky header (.ing-head), not under every box.
+
+   ⚠️ EVERY RULE BELOW IS SCOPED THROUGH `.ing-row--line`, THE CLASS ONLY ingredients.js
+   buildRow GIVES. A bare `.ing-row` is also the Calculator's, and calculator.html loads
+   this stylesheet too. The History editor's rows carry no such class and are untouched.
+
+   Column widths are FIXED (--ing-box-w) and shared by the rows and the header: with
+   `auto` each row would size its own column by its own unit word («casse», «cartone»),
+   and the boxes would no longer line up down the list. */
+.ingredient-list,
+.ing-flat-list {
+  --ing-box-w: 64px;
+  --ing-box-h: 44px;
+}
+.ingredient-list {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 4px 14px 8px;
+}
+.ingredient-list > .progress { margin: 10px 0 4px; }
+
+.ingredient-list .ing-row--line,
+.ing-flat-list .ing-row--line {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--ing-box-w) var(--ing-box-w);
+  column-gap: 10px;
+  align-items: start;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+.ingredient-list .ing-row--line:last-child,
+.ing-flat-list .ing-row--line:last-child { border-bottom: none; }
+
+/* The name column is as tall as a box and centres its text against it, so a one-line
+   name sits level with the boxes; the boxes themselves start at the top of the row,
+   so the Order and Stock boxes stay level whether or not the Order box has a unit
+   caption under it. */
+.ing-row--line .ing-main {
+  min-width: 0;
+  min-height: var(--ing-box-h);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.ing-row--line .ing-top { display: block; margin-bottom: 0; }
+.ing-row--line .ing-name { font-size: 16px; font-weight: 600; text-align: left; overflow-wrap: anywhere; }
+.ing-row--line .ing-supplier { margin: 2px 0 0; }
+.ing-row--line .ing-suggestion { margin-top: 2px; }
+.ing-row--line .ing-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  min-width: 0;
+}
+.ing-row--line input.ing-qty,
+.ing-row--line input.ing-stock {
+  width: var(--ing-box-w);
+  min-height: var(--ing-box-h);
+  font-size: 18px;
+  padding: 8px 4px;
+  text-align: center;
+}
+/* The order unit («casse») is a small caption UNDER the Order box. */
+.ing-row--line .ing-order-unit {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 11px;
+  line-height: 1.2;
+  color: var(--text-3);
+}
+
+/* The header line: the same three columns and the same widths as the rows, so each word
+   sits over its boxes. Opaque, with a hairline under it, because rows scroll beneath it. */
+.ing-head {
+  position: sticky;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--ing-box-w) var(--ing-box-w);
+  column-gap: 10px;
+  align-items: end;
+  padding: 8px 0 6px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+.ing-head-col { justify-self: center; white-space: nowrap; }
+/* The supplier's screen scrolls in .supplier-detail-body; the flat list scrolls with the
+   page, under the sticky .order-box-head, whose height orders-main.js measures into
+   --order-head-h (sticky-offset.js). */
+/* --order-head-h is written by JS (inline on <body>); the 0 here is its honest default
+   before the first measurement, and what a page without the tab head would read. */
+body[data-section="orders"] { --order-head-h: 0px; }
+.ingredient-list > .ing-head { top: 0; }
+.ing-flat-list > .ing-head { top: var(--order-head-h, 0px); }
+
+/* Stock hidden (Settings): one column fewer, in the rows AND the header. */
+body.hide-stock .ing-row--line,
+body.hide-stock .ing-head { grid-template-columns: minmax(0, 1fr) var(--ing-box-w); }
+body.hide-stock .ing-head-stock { display: none; }
 /* Who it is bought from, under the name. In the by-supplier view this line is not
    rendered at all — the card heading already says it. */
 .ing-supplier {
@@ -566,53 +680,29 @@ input.ing-stock {
 .ing-suggestion.active { color: var(--accent); }
 
 /* ── Orders: tablet layout (Federico, 27 Sep 2026) ────────────────────────
-   His tablet, landscape, fixed on the counter: two columns of ingredients
-   instead of one long scroll, and kitchen-sized boxes — big enough to hit
+   His tablet, landscape, fixed on the counter: kitchen-sized boxes — big enough to hit
    without looking. See tokens.css for the query and why it is scoped to
    `body[data-section="orders"]` — orders.html AND suppliers.html both carry
-   that attribute, and both get the wider column from there already; what is
-   here is the part a wider column alone does not give: the two-column grid,
-   and controls sized for a kitchen rather than a pocket.
+   that attribute, and both get the wider column from there already.
 
-   ⚠️ THE GRID NEEDS NO CHANGE IN js/orders/ingredients.js. buildIngredientList
-   already appends `.ing-category` (a heading) and `.ing-row` (a row) as flat,
-   alternating siblings of `.ingredient-list` — exactly what a CSS grid needs to
-   lay two columns of rows with a heading spanning both: no markup change, no
-   JS change, just `display: grid` here and `grid-column: 1 / -1` on whatever
-   is not a row (the category headings, the progress bar, the empty state).
+   ⚠️ THE TWO-COLUMN GRID OF INGREDIENTS WAS REMOVED ON 29 SEP 2026 (Federico: one
+   ingredient per row at every size, like the summary). The lists are one column
+   everywhere now; all this block does is make the boxes and the name bigger.
 
-   ⚠️ SCOPED AS `.ingredient-list`, NEVER BARE `.ing-row` — see the long note
-   above this file: `.ing-row` is also the Calculator's, and both stylesheets
-   load on both pages. `.ingredient-list` is the one container Orders alone
-   builds (ingredients.js), so nothing here can reach a Calculator screen. */
+   ⚠️ SCOPED AS `.ingredient-list` / `.ing-flat-list`, NEVER BARE `.ing-row` — see the
+   long note above this file: `.ing-row` is also the Calculator's, and both stylesheets
+   load on both pages. */
 @media (min-width: 900px) and (min-height: 600px) {
   /* Both ingredient lists: a supplier's (by category) and the flat
-     «Ingredienti» view (by letter, js/orders/ingredient-list.js). */
+     «Ingredienti» view (by letter, js/orders/ingredient-list.js). Wider boxes; the
+     rows and the header both read these, so the words stay over their boxes. */
   body[data-section="orders"] .ingredient-list,
   body[data-section="orders"] .ing-flat-list {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    column-gap: 32px;
+    --ing-box-w: 88px;
+    --ing-box-h: var(--tap-min);
   }
-  /* Everything that is NOT one ingredient's row spans the full width: the
-     category or letter heading, the progress bar (the list's first child)
-     and the empty-list messages. */
-  body[data-section="orders"] .ingredient-list > .ing-category,
-  body[data-section="orders"] .ingredient-list > .progress,
-  body[data-section="orders"] .ingredient-list > .ing-empty,
-  body[data-section="orders"] .ing-flat-list > .ing-letter,
-  body[data-section="orders"] .ing-flat-list > .mgmt-empty {
-    grid-column: 1 / -1;
-  }
-  /* In two columns the last row sits beside another that keeps its line;
-    give it back, so a pair never ends on one line and one gap. */
-  body[data-section="orders"] .ingredient-list > .ing-row:last-child,
-  body[data-section="orders"] .ing-flat-list > .ing-row:last-child { border-bottom: 1px solid var(--border); }
-  /* 📌 NO LETTER HEADINGS ON A TABLET (decided 28 Sep 2026). A full-width letter
-     over a letter with one ingredient left half a row empty, again and again down
-     the list. The list is still A→Z and the search box sits right above it, so the
-     letters bought little here; without them the rows pair up in full columns.
-     On a phone (one column) they stay: there they cost no space. */
+  /* 📌 NO LETTER HEADINGS ON A TABLET (decided 28 Sep 2026): the list is still A→Z and
+     the search box sits right above it. On a phone they stay: there they cost no space. */
   body[data-section="orders"] .ing-flat-list > .ing-letter { display: none; }
 
   /* Kitchen-sized: bigger to hit without looking, bigger to read across a
@@ -996,7 +1086,9 @@ body[data-section="orders"] .order-tools { display: flex; align-items: stretch; 
 body[data-section="orders"] .order-tools-btn {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
+  min-width: 44px;
   padding-inline: 12px;
   background: transparent;
   border: 1px solid var(--border);
@@ -2100,33 +2192,9 @@ a.home-reminder {
 }
 
 /* ── The supplier's order rows, made calmer (Federico, 14 Aug 2026) ──────────
-   «vorrei che il nome dell'ingrediente sia centrale e forse in grassetto, la scritta
-   order mettila sotto la casella della quantità, quando non visualizzo lo stock forse
-   la casella la metti centrale… rendilo visibilmente più pulito»
-
-   ⚠️⚠️ EVERY RULE HERE IS SCOPED TO .ingredient-list, AND NOT ONE TOUCHES `.ing-name`
-   ON ITS OWN. That class is also used by the Calculator's recipe sheet, the Log, the
-   recipe detail and the GUIDED MIXING CARD — the one read in a hurry at the mixer — and
-   calculator.html loads this stylesheet too. A bare `.ing-name { text-align: center }`
-   would have re-centred four screens nobody asked to change. It is the same collision
-   that cost this project a release (v181), and the note above the scoping block in this
-   file says in as many words that a new container is not covered unless it is listed.
-
-   The History editor (.hist-edit-list) is deliberately NOT included: correcting a past
-   record is a different job from typing a new order, and it keeps the layout it has. */
-.ingredient-list .ing-top { justify-content: center; }
-.ingredient-list .ing-name { font-weight: 700; text-align: center; }
-
-/* The label goes UNDER the box. column-reverse rather than reordering the markup: the
-   DOM stays label-then-input, so a screen reader still hears the pair in the right
-   order, while a sighted person sees the number first and the word beneath it. */
-.ingredient-list .field { flex-direction: column-reverse; }
-
-/* ⚠️ WITH THE STOCK BOX HIDDEN THE ORDER BOX CENTRES ITSELF. Until now `space-between`
-   simply left it on the left — there is even a comment in this file saying so — which
-   put a lone box against the edge under a centred name. `body.hide-stock` already
-   exists and is applied before first paint, so nothing flashes. */
-body.hide-stock .ingredient-list .ing-fields { justify-content: center; }
+   Its centred-name / label-under-the-box rules were REPLACED on 29 Sep 2026 by the
+   row-per-ingredient layout (`.ing-row--line`, above): name left, one header naming
+   Order / Stock. Nothing of the old look is left here on purpose. */
 
 /* ── Photographing a packet's ingredient list ──────────────────────────────────
    ⚠️ COPIED FROM .cat-photo-* IN catalogue.css, NOT DESIGNED. Same control doing the

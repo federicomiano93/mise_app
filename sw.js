@@ -1,4 +1,4 @@
-const CACHE_NAME = 'theitalianclub-v469';
+const CACHE_NAME = 'theitalianclub-v471';
 // Firebase SDK modules (loaded from gstatic) are cached SEPARATELY from CACHE_NAME
 // so they survive the cache-version bump that happens on every deploy — otherwise
 // the offline SDK would be wiped each release until the next online load. The name
@@ -12,7 +12,7 @@ const CACHE_NAME = 'theitalianclub-v469';
 // the fetch handler below, on the first load that has a network.
 // So between activate() and that first load, a phone that is OFFLINE cannot boot:
 // the code asks for 12.18.0 and nothing has it. In practice the window is very
-// small — activate() only happens after a successful 269-file precache, i.e.
+// small — activate() only happens after a successful 270-file precache, i.e.
 // online, and tapping the update banner reloads the page immediately — but it is
 // not zero, and it is the reason to bump the SDK deliberately rather than often.
 // Leaving the name unchanged would close the window and cost ~1 MB of dead
@@ -277,6 +277,7 @@ const ASSETS = [
   './js/orders/suggestions.js',
   './js/orders/notifications.js',
   './js/orders/tablet-layout.js',
+  './js/orders/sticky-offset.js',
   './js/orders/split-pick.js',
   './js/orders/order-summary.js',
   './js/orders/order-cost-view.js',
@@ -398,7 +399,7 @@ const ASSET_HASHES = {
   "./tokens.css": 'b86f2605b396e07b',
   "./auth.css": '8db3d5a1b9b85d37',
   "./style.css": '314acebfd84603b2',
-  "./orders.css": '561ac388ccbdd379',
+  "./orders.css": '970dc663650ffec8',
   "./sounds/alarm.wav": '0d1465974f5be95b',
   "./fonts/manrope-latin.woff2": '71eb731d55804619',
   "./fonts/manrope-latin-ext.woff2": 'bd24140af06f1b58',
@@ -516,7 +517,7 @@ const ASSET_HASHES = {
   "./js/orders/category-batches.js": '03d72f63c4fa4a8a',
   "./js/orders/confirm-dialog.js": '61a7f580f37c5ff8',
   "./js/orders/firebase-orders.js": 'ecde8e4b88658ff1',
-  "./js/orders/orders-main.js": 'b3179ef706d53135',
+  "./js/orders/orders-main.js": 'ae2dbbeb1964a628',
   "./js/orders/dom.js": '7ec966d71c5356cd',
   "./js/orders/day.js": '8e00beadcda80dd1',
   "./js/orders/deliveries.js": '341d301921b23a4b',
@@ -529,10 +530,10 @@ const ASSET_HASHES = {
   "./js/orders/reminder-view.js": '12eb553c1f553522',
   "./js/orders/suppliers.js": '466470b552e14b77',
   "./js/orders/ingredient-category.js": '21cd5f6a948d0100',
-  "./js/orders/ingredients.js": '737bf221baee7556',
+  "./js/orders/ingredients.js": '5811fa9ca1050a17',
   "./js/orders/no-supplier.js": 'a577ab8cea7c21b4',
   "./js/orders/ingredient-search.js": 'a5efa4b585465972',
-  "./js/orders/ingredient-list.js": 'c30dcabf8641bafe',
+  "./js/orders/ingredient-list.js": '12cf3825d313946c',
   "./js/orders/search-box.js": '471bb6f217d97442',
   "./js/orders/supplier-detail.js": 'c3d3cebdbdfef49f',
   "./js/orders/supplier-items.js": 'f7a6ad7c004b0886',
@@ -564,6 +565,7 @@ const ASSET_HASHES = {
   "./js/orders/suggestions.js": '8705128fe510b5dd',
   "./js/orders/notifications.js": '0da939ffb9bf2477',
   "./js/orders/tablet-layout.js": '9f00a76cb9f9757f',
+  "./js/orders/sticky-offset.js": '9c0ff3c78205049f',
   "./js/orders/split-pick.js": '40f79251304fe1b9',
   "./js/orders/order-summary.js": 'b0cc0f783f0de3ec',
   "./js/orders/order-cost-view.js": '842bfc57469521a0',
@@ -685,7 +687,7 @@ const ASSET_HASHES = {
 // code against rules that deployed instantly, which is the very thing the gate exists
 // to prevent. Two things stand between that and a release: the test that every ASSETS
 // entry EXISTS (a mistyped path being the likeliest permanent cause), and this
-// project's post-deploy sweep, which already asks the live site for all 269 files.
+// project's post-deploy sweep, which already asks the live site for all 270 files.
 // ⚠️ NEITHER covers a device-specific failure — nobody has yet confirmed an update
 // landing on a real iPhone under this code.
 //

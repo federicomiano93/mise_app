@@ -61,6 +61,7 @@ import { resolveSuppliers, orderSuppliers } from './no-supplier.js';
 import { normalizeOrdersConfig } from './orders-config.js';
 import { mountIngredientList } from './ingredient-list.js';
 import { watchTablet, initAlertsPanel, closeAlertsPanel, isTabletNow } from './tablet-layout.js';
+import { trackStickyHead } from './sticky-offset.js';
 import { orderSummary } from './ingredient-search.js';
 import {
   watchOrderRequests, sendOrderRequest, setOrderRequestDone, finishOrderRequest,
@@ -2058,6 +2059,7 @@ async function init() {
 
   setupTabs();
   setupViewSwitch();
+  trackStickyHead(document.querySelector('.order-box-head'));
   document.getElementById('orders-wa-btn')?.addEventListener('click', openSendScreen);
 
   // The ONE place state.view's starting value ('suppliers') is mirrored onto

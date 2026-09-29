@@ -19,7 +19,7 @@
 
 import { t } from '../i18n.js';
 import { el } from './dom.js';
-import { buildRow } from './ingredients.js';
+import { buildRow, buildIngredientHeader } from './ingredients.js';
 import { flatRows } from './ingredient-search.js';
 import { buildSearchBox } from './search-box.js';
 
@@ -110,6 +110,7 @@ export function mountIngredientList(container, ctx) {
       return;
     }
 
+    listEl.appendChild(buildIngredientHeader());
     rows.forEach(row => {
       if (row.letter) listEl.appendChild(el('div', { class: 'ing-letter', text: row.letter }));
       listEl.appendChild(buildRow(
