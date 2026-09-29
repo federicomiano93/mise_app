@@ -1684,3 +1684,77 @@ input.cp-prod-weight {
   font-size: 13px;
   line-height: 1.5;
 }
+
+/* ══ The Calculator on a tablet (29 Sep 2026) ════════════════════════════════════════
+   The page is wide (tokens.css widens body[data-card="calculator"]); a recipe tab shows
+   its quantities on the left and, once it has been confirmed, the calculated recipe on
+   the right. LAYOUT ONLY: when the result is computed, what Confirm writes and the
+   Confirm / Edit lock are untouched — a confirmed tab keeps its fields (greyed, locked)
+   and its result, both in the same panel, which is what lets two columns work at all.
+   ⚠️ EVERY rule is scoped to body[data-card="calculator"]: orders.html and suppliers.html
+   load this sheet too. ⚠️ .ing-row and .cp-* are not touched. */
+@media (min-width: 900px) and (min-height: 600px) {
+  /* Until there is a result (or where :has() is unknown) a tab is ONE comfortable column,
+     centred in the wide page; so are the empty state and the Log. */
+  body[data-card="calculator"] #recipe-tabs > .content,
+  body[data-card="calculator"] #tab-log {
+    max-width: 620px;
+    margin-inline: auto;
+  }
+
+  /* With a result: entry left, recipe right. The rows are named so that the right column
+     spans them all and its extra height lands on the last (flexible) row, never between
+     the entry rows. Never more than 8 entry children exist (see buildRecipePanel). */
+  body[data-card="calculator"] #recipe-tabs > .content.active:has(> .result-block.visible) {
+    max-width: none;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-rows: repeat(8, auto) 1fr;
+    column-gap: 24px;
+    row-gap: 0;
+    align-items: start;
+  }
+  body[data-card="calculator"] #recipe-tabs > .content.active:has(> .result-block.visible) > * {
+    grid-column: 1;
+  }
+  body[data-card="calculator"] #recipe-tabs > .content.active:has(> .result-block.visible) > .result-block {
+    grid-column: 2;
+    grid-row: 1 / -1;
+    margin-top: 0;
+  }
+
+  /* Kitchen sizes for the quantity fields and the buttons of a recipe tab. */
+  body[data-card="calculator"] #recipe-tabs .qty-group { width: 150px; }
+  body[data-card="calculator"] #recipe-tabs input[type="number"],
+  body[data-card="calculator"] #recipe-tabs select.qty-select {
+    width: 104px;
+    min-height: var(--tap-min);
+    font-size: var(--qty-font);
+  }
+  body[data-card="calculator"] #recipe-tabs .extra-unit-select,
+  body[data-card="calculator"] #recipe-tabs .divisor-select { min-height: var(--tap-min); }
+  body[data-card="calculator"] #recipe-tabs .confirm-btn-primary,
+  body[data-card="calculator"] #recipe-tabs .copy-btn,
+  body[data-card="calculator"] #recipe-tabs .copy-send-btn { min-height: var(--tap-min); }
+  body[data-card="calculator"] #tab-bar .tab { min-height: var(--tap-min); }
+}
+
+/* ⚠️ THE FIXED SCREENS KEEP THEIR 620px COLUMN even though this page is wide. They are
+   position: fixed and compute --app-gutter from the VIEWPORT, so the wide token would
+   stretch their headers and bodies to 1180px. A custom property is resolved where it is
+   declared, so it is re-declared ON each layer; descendants inherit the 620px answer. */
+@media (min-width: 900px) and (min-height: 600px) {
+  body[data-card="calculator"] #recipe-overlay,
+  body[data-card="calculator"] #settings-overlay,
+  body[data-card="calculator"] #extra-overlay,
+  body[data-card="calculator"] #divisor-overlay,
+  body[data-card="calculator"] #cosettings-overlay,
+  body[data-card="calculator"] #logsettings-overlay,
+  body[data-card="calculator"] #wa-overlay,
+  body[data-card="calculator"] #cp-overlay,
+  body[data-card="calculator"] #clientorders-overlay,
+  body[data-card="calculator"] .log-overlay {
+    --app-max-width: 620px;
+    --app-gutter: max(0px, calc((100% - var(--app-max-width)) / 2));
+  }
+}
