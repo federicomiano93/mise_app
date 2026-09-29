@@ -72,7 +72,7 @@ test('the header side is reserved for Food cost and Suppliers by data-card, so M
   assert.match(rules, /body\[data-card="suppliers"\] \.app-header/);
   assert.doesNotMatch(rules, /data-section="foodcost"/);
   assert.doesNotMatch(rules, /data-section="orders"/);
-  const exception = css.match(/@media \(max-width: 359px\) \{[^@]*--app-header-side:\s*0px;/)[0];
+  const exception = css.match(/@media \(max-width: 359px\) \{[^@]*--app-header-side:\s*auto;/)[0];
   assert.match(exception, /body\[data-card="foodcost"\]/);
   assert.match(exception, /body\[data-card="suppliers"\]/);
 });
@@ -120,4 +120,29 @@ test('the catalogue list has no tray around its rows (a card inside a card)', ()
   const css = read('catalogue.css').replace(/\/\*[\s\S]*?\*\//g, '');
   const rule = css.match(/\.cat-list-panel \{[^}]*\}/)[0];
   assert.doesNotMatch(rule, /background|border|padding/);
+});
+
+// ⚠️ A «+» THAT DOES NOTHING IS WORSE THAN NO «+» (code review, 29 Sep 2026): each of
+// these lines could be deleted with every other test green, leaving a dead button on
+// screen — and `addBtn?.` would hide a renamed id just as quietly.
+test('every new «+» and empty-state action is wired to what it promises', () => {
+  const fc = stripJsComments(read('js/foodcost/foodcost-main.js'));
+  assert.match(fc, /getElementById\('fcAdd'\)/);
+  assert.match(fc, /addBtn\.addEventListener\('click', \(\) => openProduct\(null\)\)/);
+  assert.match(fc, /onAdd: \(\) => openProduct\(null\)/);
+
+  const reg = stripJsComments(read('js/orders/registry-main.js'));
+  assert.match(reg, /getElementById\('registry-add'\)/);
+  assert.match(reg, /addBtn\??\.addEventListener\('click', \(\) => screen\.addCurrent\(\)\)/);
+  assert.match(read('suppliers.html'), /id="registry-add"/, 'the id the script looks for exists');
+
+  const cat = stripJsComments(read('js/catalogue/catalogue-main.js'));
+  assert.match(cat, /onAdd: \(\) => openEditor\(null\)/);
+
+  for (const [file, pattern] of [
+    ['js/catalogue/catalogue-list.js', /class: 'empty-action'[^}]*onclick: onAdd/],
+    ['js/foodcost/foodcost-list.js', /class: 'empty-action'[^}]*onclick: onAdd/],
+  ]) {
+    assert.match(stripJsComments(read(file)), pattern, `${file}: the empty-state button calls onAdd`);
+  }
 });

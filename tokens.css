@@ -547,8 +547,11 @@
   position: relative;
   display: grid;
   /* --app-header-side: the width BOTH sides reserve even when one holds less —
-     see the rule after this one. 0 = each side takes only what it holds. */
-  --app-header-side: 0px;
+     see the rule after this one. `auto` = each side at least what it HOLDS.
+     ⚠️ NEVER 0px: a fixed zero minimum lets a side column shrink below its own
+     buttons, and below 360px they were drawn over the title — the bell over
+     «Ordini», the «?» over «Fornitori e ingredienti» (code review, 29 Sep 2026). */
+  --app-header-side: auto;
   grid-template-columns: minmax(var(--app-header-side), 1fr) auto minmax(var(--app-header-side), 1fr);
   align-items: center;
   /* 8px between the title and each side, not 12: at 360px «CONTATTI E ALLERGENI» was
@@ -589,7 +592,7 @@ body[data-card="suppliers"] .app-header {
   body[data-section="calculator"] .app-header,
   body[data-card="foodcost"] .app-header,
   body[data-card="suppliers"] .app-header {
-    --app-header-side: 0px;
+    --app-header-side: auto;
   }
 }
 /* ⚠️ NO `min-width: 0` ON THE SLOTS. With it, a 296px phone let the 1fr tracks
@@ -626,6 +629,12 @@ body[data-card="suppliers"] .app-header {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+/* Below 360px the subtitle goes, on every screen — the rule Orders already had at
+   400px. At 296 it was cut to «CONTATTI E ALLERG…» on three screens (ui-check,
+   29 Sep 2026): a line that stops mid-word reads as a fault, the title alone does not. */
+@media (max-width: 359px) {
+  .app-header-title p { display: none; }
 }
 
 /* The round rim button: 36px to look at, 44px to touch. The ::before is the

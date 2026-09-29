@@ -109,7 +109,8 @@ test('tokens.css centres the title with three tracks, side auto side', () => {
   assert.match(rule[2],
     /grid-template-columns:\s*minmax\(var\(--app-header-side\),\s*1fr\) auto minmax\(var\(--app-header-side\),\s*1fr\)/,
     'the two side tracks must stay IDENTICAL, or the title stops being centred');
-  assert.match(rule[2], /--app-header-side:\s*0px/, 'the default reserves nothing');
+  assert.match(rule[2], /--app-header-side:\s*auto;/,
+    'the default reserves what each side holds — a fixed 0 let buttons cover the title below 360px');
   assert.match(rule[2], /border-radius:\s*0 0 26px 26px/);
   assert.match(rule[2], /background:\s*var\(--brand\)/);
 });
@@ -192,4 +193,11 @@ test('⚠️ a header slot may never shrink below its buttons', () => {
   const title = css.match(/(^|\n)\.app-header-title\s*\{([^}]*)\}/);
   assert.ok(title, '.app-header-title is missing from tokens.css');
   assert.match(title[2], /min-width:\s*0/, 'the title gives way instead');
+});
+
+// Below 360px the subtitle is dropped, not cut: «CONTATTI E ALLERG…» on three screens
+// at 296px (ui-check, 29 Sep 2026).
+test('below 360px the header subtitle is hidden, on every screen', () => {
+  const css = stripComments(read('tokens.css'));
+  assert.match(css, /@media \(max-width: 359px\) \{\s*\.app-header-title p \{ display: none; \}\s*\}/);
 });
