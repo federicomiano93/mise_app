@@ -246,6 +246,15 @@ async function suppliers() {
       deliveryDays: [], orderDays: [], active: true, bakery: 'main',
     }));
 
+  await expectAllowed('save a supplier with the name to show (shortName)', () =>
+    mergeWrite('locations/main/suppliers/SUP_MODERN', { shortName: 'Aldo', bakery: 'main' }));
+  await expectAllowed('clear the name to show (empty shortName)', () =>
+    mergeWrite('locations/main/suppliers/SUP_MODERN', { shortName: '', bakery: 'main' }));
+  await expectDenied('a 500-character name to show',
+    () => mergeWrite('locations/main/suppliers/SUP_MODERN', { shortName: bigString(500), bakery: 'main' }));
+  await expectDenied('a name to show that is not text',
+    () => mergeWrite('locations/main/suppliers/SUP_MODERN', { shortName: 42, bakery: 'main' }));
+
   await expectDenied('an unknown key on a supplier',
     () => mergeWrite('locations/main/suppliers/SUP_MODERN', { evil: 'x', bakery: 'main' }));
   await expectDenied('a supplier stamped with the wrong bakery',
