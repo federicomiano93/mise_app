@@ -131,6 +131,7 @@ const EXEMPT = new Map([
     'positioning shells; they use .scroll-area inside'],
   ['body', 'the app shell itself is full-bleed on purpose; the column is set inside it'],
   ['.cat-zoom-close', 'a floating close button, not a container'],
+  ['body[data-section="orders"][data-orders-tab="order"][data-orders-view="suppliers"] #suppliers-list > .supplier-list', 'the scrolling list of the left column of the tablet split; that column has a fixed 372px width'],
   ['.orders-offline', 'one centred line of text on a full-width ground; nothing to align to a column'],
   ['#sw-update-host', 'a transparent host; #sw-update-banner inside is capped at 480px and centred'],
 ]);

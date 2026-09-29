@@ -150,7 +150,7 @@ const KNOWN_UNSTYLED = new Map([
     'order-field'].map(c => [c, 'a name beside a class that styles the element']),
   // A plain wrapper: block layout is all it needs, its children carry the look.
   ...['cat-cost-host', 'cat-guided-host', 'help-host', 'cp-client-list', 'guided-edit-list',
-    'guided-edit-missed', 'guided-body', 'lab-body', 'pas-body', 'missing-list', 'supplier-list',
+    'guided-edit-missed', 'guided-body', 'lab-body', 'pas-body', 'missing-list',
     'orders-cards', 'history-older'].map(c => [c, 'a wrapper; its children are styled']),
   // Text inside a row the ROW lays out.
   ...['crate-count-val', 'history-item-name']

@@ -2758,29 +2758,84 @@ body:not([data-orders-tab="deliveries"]) #orders-owed { display: none; }
   body[data-section="orders"][data-orders-tab="order"][data-orders-view="suppliers"] .orders-split {
     display: grid;
     grid-template-columns: 372px 1fr;
+    /* One row that takes the column's height and may not grow past it: with an
+       auto row the content would set the height and the page would overflow again. */
+    grid-template-rows: minmax(0, 1fr);
     gap: 14px;
-    align-items: start;
+    align-items: stretch;
+    flex: 1 1 0;
+    min-height: 0;
   }
-  /* #suppliers-list becomes the LEFT column: same box look the whole screen
-     already gives it on a phone (nothing to override), just capped to the
-     column width by the grid above. */
 
-  /* The pane: sticky, bounded to (roughly) the viewport, its OWN scroll —
-     see .supplier-detail-body below, which already scrolls on a phone and
-     needs nothing new to do it here too. 12px top/bottom is a first pass on
-     the real device, not a measured constant like --tap-min; Federico's
-     call once he has seen it on the tablet. */
+  /* ⚠️ TWO COLUMNS THAT SCROLL ON THEIR OWN, AND THE PAGE DOES NOT (Federico, 29 Sep 2026:
+     «lo scorrimento separato non funziona bene tra gli ingredienti e i fornitori»).
+     Measured before: wheeling over the pane scrolled it to its end and then dragged the
+     PAGE, taking the supplier list up and the pane's own header out of sight. The cure is
+     to give the page nothing to scroll: every box from .scroll-area down to .orders-split
+     is a column that fills what is left, and only the two columns below have an
+     overflow of their own, each with overscroll-behavior: contain.
+     ONLY in this mode (tablet, Order tab, Suppliers view): the phone, the Incoming tab
+     and the flat Ingredients view keep their one page scroll.
+     `> .scroll-area.scroll-with-bar` = the page's own scroller, never the one inside the
+     History overlay. */
+  body[data-section="orders"][data-orders-tab="order"][data-orders-view="suppliers"] > .scroll-area.scroll-with-bar {
+    overflow-y: hidden;
+  }
+  body[data-section="orders"][data-orders-tab="order"][data-orders-view="suppliers"] .scroll-area > .orders-column {
+    flex: 1 1 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  /* The notices above the box keep their natural height. */
+  body[data-section="orders"][data-orders-tab="order"][data-orders-view="suppliers"] .orders-column > * { flex-shrink: 0; }
+  body[data-section="orders"][data-orders-tab="order"][data-orders-view="suppliers"] .orders-column > .order-box {
+    flex: 1 1 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  body[data-section="orders"][data-orders-tab="order"][data-orders-view="suppliers"] .order-box > .order-box-head { flex-shrink: 0; }
+  /* The tab's own section: reminders and the two buttons keep their height, the split
+     takes the rest. Only the ACTIVE section is made a flex column — an inactive one must
+     stay display:none. */
+  body[data-section="orders"][data-orders-tab="order"][data-orders-view="suppliers"] .order-box > #tab-order.active {
+    flex: 1 1 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  body[data-section="orders"][data-orders-tab="order"][data-orders-view="suppliers"] #tab-order > * { flex-shrink: 0; }
+  body[data-section="orders"][data-orders-tab="order"][data-orders-view="suppliers"] #tab-order > .orders-split { flex-shrink: 1; }
+  /* Left column: the search row and the All / Ordering filter stay put; only the
+     supplier rows scroll. */
+  body[data-section="orders"][data-orders-tab="order"][data-orders-view="suppliers"] #suppliers-list {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+  body[data-section="orders"][data-orders-tab="order"][data-orders-view="suppliers"] #suppliers-list > * { flex-shrink: 0; }
+  body[data-section="orders"][data-orders-tab="order"][data-orders-view="suppliers"] #suppliers-list > .supplier-list {
+    flex: 1 1 0;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  /* The pane: the column's full height, its header on top, and .supplier-detail-body
+     (which already scrolls on a phone) scrolling by itself. It used to be sticky and
+     capped to the viewport, which is what let the page move under it. */
   body[data-section="orders"][data-orders-tab="order"][data-orders-view="suppliers"] #orders-detail-pane {
     display: flex;
     flex-direction: column;
-    position: sticky;
-    top: 12px;
-    max-height: calc(100vh - 24px);
     min-height: 0;
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: var(--radius);
     overflow: hidden;
+  }
+  body[data-section="orders"][data-orders-tab="order"][data-orders-view="suppliers"] #orders-detail-pane .supplier-detail-body {
+    overscroll-behavior: contain;
   }
   body[data-section="orders"][data-orders-tab="order"][data-orders-view="suppliers"] #orders-detail-pane > .supplier-detail,
   body[data-section="orders"][data-orders-tab="order"][data-orders-view="suppliers"] #orders-detail-pane > .split-empty {
