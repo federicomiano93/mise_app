@@ -4,7 +4,7 @@
 // (.orders-header, .cat-header, .pas-header, .fc-header, .inv-header …) and the copies
 // drifted: Food cost and Magazzino were flat with a sans title, the Calculator showed
 // the venue's name where every other screen shows its own. The centring is a grid —
-// `1fr minmax(0, auto) 1fr` — and it only works when the bar has EXACTLY three
+// `minmax(side, 1fr) auto minmax(side, 1fr)` — and it only works when the bar has EXACTLY three
 // children (left slot, title, right slot): a fourth loose button lands in a track of
 // its own and pushes the title off centre with every test green. No unit test can see
 // that, so the shape is pinned here instead.
@@ -101,12 +101,15 @@ test('every header built in JS is an .app-header too', () => {
   assert.deepEqual(offenders, []);
 });
 
-test('tokens.css centres the title with three tracks, 1fr minmax(0, auto) 1fr', () => {
+test('tokens.css centres the title with three tracks, side auto side', () => {
   const css = stripComments(read('tokens.css'));
   const rule = css.match(/(^|\n)\.app-header\s*\{([^}]*)\}/);
   assert.ok(rule, '.app-header is missing from tokens.css');
   assert.match(rule[2], /display:\s*grid/);
-  assert.match(rule[2], /grid-template-columns:\s*1fr minmax\(0,\s*auto\) 1fr/);
+  assert.match(rule[2],
+    /grid-template-columns:\s*minmax\(var\(--app-header-side\),\s*1fr\) auto minmax\(var\(--app-header-side\),\s*1fr\)/,
+    'the two side tracks must stay IDENTICAL, or the title stops being centred');
+  assert.match(rule[2], /--app-header-side:\s*0px/, 'the default reserves nothing');
   assert.match(rule[2], /border-radius:\s*0 0 26px 26px/);
   assert.match(rule[2], /background:\s*var\(--brand\)/);
 });
@@ -171,5 +174,22 @@ test('the Calculator and the Catalogue land on the name the Home card shows', ()
   assert.match(calculator, /<p data-i18n="ui\.doughScaling">/);
   assert.doesNotMatch(calculator, /<h1 data-location-title/);
   const main = read('js/catalogue/catalogue-main.js');
-  assert.match(main, /setHeader\(\{ title: t\('section\.catalogue'\), sub: t\('ui\.recipesKgScaling'\), back: false/);
+  assert.match(main, /setHeader\(\{ title: t\('section\.catalogue'\), sub: '', back: false/);
+  // No subtitle on the list: it was cut to «Ricette e scalatur…» at 360px. An empty
+  // subtitle must be HIDDEN, or it still holds a line of height under the title.
+  assert.match(main, /subEl\.hidden = !sub/);
+  assert.match(read('catalogue.html'), /<p id="catSub" hidden><\/p>/);
+});
+
+// ⚠️ 29 Sep 2026, measured at 296px: with `min-width: 0` on the SLOTS, the tracks
+// shrank below Orders' three buttons, which overflowed leftwards and drew «Ordini»
+// UNDER the bell. The title is the one allowed to give way.
+test('⚠️ a header slot may never shrink below its buttons', () => {
+  const css = stripComments(read('tokens.css'));
+  const slot = css.match(/(^|\n)\.app-header-slot\s*\{([^}]*)\}/);
+  assert.ok(slot, '.app-header-slot is missing from tokens.css');
+  assert.doesNotMatch(slot[2], /min-width:\s*0/);
+  const title = css.match(/(^|\n)\.app-header-title\s*\{([^}]*)\}/);
+  assert.ok(title, '.app-header-title is missing from tokens.css');
+  assert.match(title[2], /min-width:\s*0/, 'the title gives way instead');
 });

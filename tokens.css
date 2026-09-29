@@ -541,7 +541,10 @@
   flex: none;
   position: relative;
   display: grid;
-  grid-template-columns: 1fr minmax(0, auto) 1fr;
+  /* --app-header-side: the width BOTH sides reserve even when one holds less —
+     see the rule after this one. 0 = each side takes only what it holds. */
+  --app-header-side: 0px;
+  grid-template-columns: minmax(var(--app-header-side), 1fr) auto minmax(var(--app-header-side), 1fr);
   align-items: center;
   gap: 12px;
   background: var(--brand);
@@ -553,11 +556,39 @@
   padding-inline: max(16px, var(--app-gutter));
   border-radius: 0 0 26px 26px;
 }
+/* ⚠️ A LONG TITLE TAKES THE FREE SPACE BEFORE THE SIDES DO. Grid grows an `auto`
+   track to its full width before any `1fr` track gets a pixel, so with one button
+   left and two right a long «Ricettario / RICETTE E SCALATURA IN KG» left the left
+   side at 36px and the title sat 22px off centre on a 360px phone (ui-check,
+   29 Sep 2026). These sections always hold TWO buttons on the right (help + an
+   action), so both sides reserve two buttons' width: 36 + 12 + 36.
+   Not below 360px: at 296 the reserved width would leave the title less than
+   its own longest word — there the drift is the lesser evil.
+   Not Orders: three buttons on the right cannot be mirrored on a phone at all.
+   ⚠️ Written as a max-width EXCEPTION, not a min-width rule: the app has exactly one
+   «bigger screen» query, the tablet switch (tests/tablet-width.test.mjs). */
+body[data-section="catalogue"] .app-header,
+body[data-section="pastries"] .app-header,
+body[data-section="calculator"] .app-header {
+  --app-header-side: 84px;
+}
+@media (max-width: 359px) {
+  body[data-section="catalogue"] .app-header,
+  body[data-section="pastries"] .app-header,
+  body[data-section="calculator"] .app-header {
+    --app-header-side: 0px;
+  }
+}
+/* ⚠️ NO `min-width: 0` ON THE SLOTS. With it, a 296px phone let the 1fr tracks
+   shrink below Orders' three buttons, which then overflowed leftwards and «Ordini»
+   was drawn UNDER the bell (measured 29 Sep 2026). A slot must never get narrower
+   than its buttons; the TITLE is the one that gives way (min-width: 0 below, so its
+   one-line subtitle ends in «…» rather than pushing the buttons off the bar), and it
+   drifts off centre only when the sides cannot fit — the accepted cost. */
 .app-header-slot {
   display: flex;
   align-items: center;
   gap: 12px;
-  min-width: 0;
 }
 .app-header > .app-header-slot:first-child { justify-content: flex-start; }
 .app-header > .app-header-slot:nth-child(3) { justify-content: flex-end; }
