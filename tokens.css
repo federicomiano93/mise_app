@@ -266,6 +266,11 @@
   --font-display: 'Instrument Serif', Georgia, 'Times New Roman', serif;
 }
 
+/* The phone half of the two-pane split (the rest is in the tablet block below): the pane
+   does not exist. ⚠️ BEFORE the tablet block, not after — the block gives it back its
+   `display` at the same specificity, so whichever comes LAST wins. */
+.app-split-pane { display: none; }
+
 /* ── The tablet switch itself — Home + Orders only ────────────────────────
    ⚠️ ONE QUERY, EVERYWHERE. `min-width: 900px AND min-height: 600px`. The
    min-height keeps a PHONE TURNED SIDEWAYS (844×390 CSS) on the phone layout —
@@ -296,6 +301,106 @@
        and children inherit that. Without this line the column stays 620px
        and the three home cards are squeezed into it (measured 27 Sep 2026). */
     --app-gutter: max(0px, calc((100% - var(--app-max-width)) / 2));
+  }
+
+  /* ══ The two-pane split — list on the left, detail on the right ═══════════
+     The GENERIC look every section's tablet split shares (plan of 29 Sep 2026); the
+     first user is suppliers.html (js/orders/registry.js). Orders' own split keeps its
+     rules in orders.css and is not migrated.
+     ⚠️ INSIDE THIS ONE BLOCK ON PURPOSE: tests/tablet-width.test.mjs allows exactly one
+     tablet block in this file, and a second query — even the same text — is how the two
+     came to drift apart once. The phone half (the pane is hidden) is outside, below.
+
+     .app-split       the grid; it fills what the header and the bottom bar leave
+     .app-split-list  the left column, its OWN scroll
+     .app-split-pane  the right pane, its own scroll; a level opened in it is an
+                      absolutely placed .mgmt-overlay filling it
+     .app-split-empty what the pane says while nothing is open */
+  .scroll-area.app-split-area { overflow: hidden; }
+  .scroll-area > .app-split {
+    flex: 1 1 0;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: 400px minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+    gap: 14px;
+  }
+  .app-split-list {
+    min-height: 0;
+    overflow-y: auto;
+  }
+  .app-split-pane {
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    min-height: 0;
+    overflow: hidden;
+    margin: 14px 16px 12px 0;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+  }
+  /* A level opened in the pane fills it and scrolls by itself (.mgmt-scroll). */
+  .app-split-pane > .mgmt-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: auto;
+    background: transparent;
+  }
+  /* The green bar is the PAGE's; inside a light card the same header reads as a
+     quiet head: light ground, dark title, the rim buttons repainted for it. */
+  .app-split-pane .app-header {
+    background: transparent;
+    color: var(--text);
+    padding: 12px 16px;
+    border-radius: 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .app-split-pane .app-header h1 { color: var(--text); font-size: 24px; }
+  .app-split-pane .app-icon-btn {
+    background: var(--surface-2);
+    border-color: var(--border);
+    color: var(--text-2);
+  }
+  .app-split-pane .app-icon-btn:hover { background: var(--accent-light); }
+  .app-split-pane .app-icon-btn:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 2px; }
+  .app-split-empty {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    text-align: center;
+    padding: 40px 24px;
+    color: var(--text-3);
+  }
+  .app-split-empty[hidden] { display: none; }
+  .app-split-empty-icon { color: var(--text-5); display: flex; }
+  .app-split-empty h2 {
+    margin: 0;
+    font-family: var(--font-display);
+    font-weight: 400;
+    font-size: 26px;
+    color: var(--text-2);
+  }
+  .app-split-empty p { margin: 0; font-size: 15px; line-height: 1.45; max-width: 34ch; }
+  /* The row that is open on the right: the same picked look as Orders' supplier row
+     (tint, light-green border, a 4px brand bar), set by aria-current. */
+  .app-split-list [aria-current="true"] {
+    background: var(--accent-light);
+    border-color: var(--accent-border);
+    position: relative;
+  }
+  .app-split-list [aria-current="true"]::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 10px;
+    bottom: 10px;
+    width: 4px;
+    border-radius: 4px;
+    background: var(--brand);
   }
 }
 

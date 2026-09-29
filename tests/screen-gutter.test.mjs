@@ -47,6 +47,9 @@ const EXEMPT = {
   'calculator.html': {
     'recipe-tabs': 'holds the recipe panels, and every one of them IS a .content',
   },
+  'suppliers.html': {
+    'registry-split': 'the tablet split\'s wrapper: it pads nothing itself because BOTH of its columns do — the list is a .reg-page, the pane keeps its own margin (tests/registry-tablet-split.test.mjs)',
+  },
   'orders.html': {
     'history-overlay': 'position: fixed — a full-screen overlay, not a column of content',
   },
@@ -147,7 +150,8 @@ test('⚠️ suppliers.html pads BOTH its children, the error line included', ()
   const html = read('suppliers.html');
   assert.match(html, /<p class="orders-status error reg-page" id="registry-error"/,
     'a message saying the list failed to load must not itself be jammed against the edge');
-  assert.match(html, /<div id="registry-host" class="reg-page">/);
+  // The host also carries the tablet split's list class since the split was added.
+  assert.match(html, /<div id="registry-host" class="reg-page app-split-list">/);
   // ⚠️ AND THE FOOTER MUST NOT TAKE IT. The bar is the bottom edge of the app: it spans
   // the full width and lines its buttons up with its own padding-inline.
   const footer = html.match(/<div class="([^"]*)" id="registry-footer"/);

@@ -89,7 +89,8 @@ test('⚠️ and all three pages that have the bar actually opt in', () => {
   for (const page of ['suppliers.html', 'orders.html', 'calculator.html']) {
     const src = read(page);
     assert.match(src, /class="recipe-footer"/, `${page} is expected to have the bar`);
-    assert.match(src, /^<div class="scroll-area scroll-with-bar">$/m,
+    // suppliers.html also carries `app-split-area` (the tablet split, tokens.css).
+    assert.match(src, /^<div class="scroll-area scroll-with-bar( app-split-area)?">$/m,
       `${page}: the PAGE-LEVEL scroll area must opt in — ⚠️ orders.html has a second, `
       + 'nested one inside the history overlay, and that one must be left alone');
   }

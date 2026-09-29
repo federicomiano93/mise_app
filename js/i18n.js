@@ -930,6 +930,15 @@ const DICTIONARIES = Object.freeze({
     'orders.split.empty.title': 'Choose a supplier',
     'orders.split.empty.text': 'Tap a supplier on the left: its order opens here and you write it without leaving the list.',
     'orders.split.nothingOrderedYet': 'Nothing ordered yet',
+    // ── Suppliers & ingredients beside the list, on a tablet (29 Sep 2026) ────
+    'orders.registry.pane.ingredients.title': 'Choose an ingredient',
+    'orders.registry.pane.ingredients.text': 'Tap an ingredient on the left: its card opens here, with the allergens and the price.',
+    'orders.registry.pane.packaging.title': 'Choose packaging',
+    'orders.registry.pane.packaging.text': 'Tap a packaging item on the left: its card opens here without leaving the list.',
+    'orders.registry.pane.suppliers.title': 'Choose a supplier',
+    'orders.registry.pane.suppliers.text': 'Tap a supplier on the left: its details and everything it sells open here.',
+    'orders.registry.discardTitle': 'Discard changes?',
+    'orders.registry.discardMessage': 'What you typed on this card is not saved. Opening something else will throw it away.',
     // ── Purchase VAT on an ingredient's price (29 Sep 2026) ───────────────────
     'orders.vat.label': 'VAT',
     'orders.vat.notStated': '— not stated',
@@ -3259,6 +3268,15 @@ const DICTIONARIES = Object.freeze({
     'orders.split.empty.title': 'Scegli un fornitore',
     'orders.split.empty.text': 'Tocca un fornitore a sinistra: il suo ordine si apre qui e lo scrivi senza lasciare la lista.',
     'orders.split.nothingOrderedYet': 'Niente ordinato ancora',
+    // ── Fornitori e ingredienti accanto alla lista, su tablet (29 Sep 2026) ───
+    'orders.registry.pane.ingredients.title': 'Scegli un ingrediente',
+    'orders.registry.pane.ingredients.text': 'Tocca un ingrediente a sinistra: la sua scheda si apre qui, con gli allergeni e il prezzo.',
+    'orders.registry.pane.packaging.title': 'Scegli un imballaggio',
+    'orders.registry.pane.packaging.text': 'Tocca un imballaggio a sinistra: la sua scheda si apre qui senza lasciare la lista.',
+    'orders.registry.pane.suppliers.title': 'Scegli un fornitore',
+    'orders.registry.pane.suppliers.text': 'Tocca un fornitore a sinistra: i suoi dati e tutto quello che vende si aprono qui.',
+    'orders.registry.discardTitle': 'Scartare le modifiche?',
+    'orders.registry.discardMessage': 'Quello che hai scritto in questa scheda non è salvato. Aprire un’altra cosa lo cancella.',
     // ── IVA d'acquisto sul prezzo di un ingrediente (29 Sep 2026) ─────────────
     'orders.vat.label': 'IVA',
     'orders.vat.notStated': '— non indicata',

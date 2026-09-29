@@ -54,12 +54,26 @@ const screen = buildRegistry(
     deleteSupplier: (id) => removeDoc(COLLECTIONS.suppliers, id),
     deleteIngredient: (id) => removeDoc(COLLECTIONS.ingredients, id),
   },
-  { onChrome: ({ addLabel }) => addBtn?.setAttribute('aria-label', addLabel) },
+  {
+    onChrome: ({ addLabel }) => addBtn?.setAttribute('aria-label', addLabel),
+    // The tablet's right-hand pane; a phone never shows it and nothing opens in it.
+    pane: document.getElementById('registry-pane'),
+  },
 );
 
 addBtn?.addEventListener('click', () => screen.addCurrent());
 
 host?.appendChild(screen.node);
+
+// ⚠️ THE PAGE'S OWN BACK, ON A TABLET, WHILE THE PANE HOLDS TYPING: it leads away from the
+// page, so it asks first (P20). A plain link otherwise — a phone never reaches this branch,
+// its full-screen level covers the button.
+const backLink = document.getElementById('registry-back');
+backLink?.addEventListener('click', (event) => {
+  if (!screen.leaveWouldAsk()) return;
+  event.preventDefault();
+  screen.askBeforeLeaving().then((ok) => { if (ok) location.href = backLink.href; });
+});
 
 // ── The bottom bar ───────────────────────────────────────────────────────────
 //

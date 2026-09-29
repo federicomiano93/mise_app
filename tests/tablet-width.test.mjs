@@ -114,6 +114,7 @@ const EXEMPT = new Map([
   ['.supplier-items', 'a positioning shell; .supplier-items-body carries the cap'],
   ['.preview-overlay', 'a positioning shell; .preview-scroll carries the cap'],
   ['.mgmt-overlay', 'a positioning shell; .mgmt-scroll carries the cap'],
+  ['.app-split-list', 'a column of .app-split, which sits inside .scroll-area — that carries the gutter and so the cap'],
   ['.history-overlay', 'a positioning shell; it uses .scroll-area inside'],
   ['.missing-overlay', 'a positioning shell; it uses .scroll-area inside'],
   ['.pick-overlay', 'a positioning shell; .pick-body carries the cap'],
