@@ -436,7 +436,7 @@ export function buildRegistry(data, actions, hooks = {}) {
           item,
           save: actions.saveSupplier,
           onDone: (saved) => { popEntry(entry); onSaved?.(saved); },
-          onCancel: close,
+          onCancel: () => guardedLeave(entry, close),
         }),
       ]);
       return overlay(entry, item ? t('orders.editSupplier') : t('orders.newSupplier'), body, close);
@@ -475,7 +475,7 @@ export function buildRegistry(data, actions, hooks = {}) {
           // one that navigates — the same seam saveIngredient and priceHistory use.
           actions: { ...actions, capturePackPhoto, packPhotoOn: () => ingredientPanels().packPhoto, createSupplier },
           onDone: () => popEntry(entry),
-          onCancel: () => popEntry(entry),
+          onCancel: () => guardedLeave(entry, () => popEntry(entry)),
         }),
       ]);
       const packaging = item ? isPackaging(item) : presetKind === 'packaging';
@@ -567,13 +567,15 @@ export function buildRegistry(data, actions, hooks = {}) {
     const node = el('div', { class: 'mgmt-overlay' }, [
       el('header', { class: 'app-header orders-header' }, [
         el('span', { class: 'app-header-slot' }, [
-          el('button', { type: 'button', class: 'app-icon-btn orders-icon-btn', 'aria-label': t('ui.back'), icon: BACK_ICON, onClick: onBack }),
+          el('button', { type: 'button', class: 'app-icon-btn orders-icon-btn', 'aria-label': t('ui.back'), icon: BACK_ICON, onClick: () => guardedLeave(entry, onBack) }),
         ]),
         el('div', { class: 'app-header-title orders-header-title' }, [el('h1', { text: title })]),
         el('span', { class: 'app-header-slot' }),
       ]),
       body,
     ]);
+    // ⚠️ THE UNGUARDED close is what is remembered: the pane's own replace / leave paths have
+    // already asked once for the whole pane (paneDirty), and asking again per level would be twice.
     // Remembered so clearing the pane can leave a level THE WAY ITS OWN BACK DOES: the
     // photo screen and the supplier card above an ingredient hand a promise to the form
     // beneath, and a plain removal would leave that promise pending for ever.
@@ -702,9 +704,20 @@ export function buildRegistry(data, actions, hooks = {}) {
     return !!entry.overlay?.querySelector('.mgmt-form .btn-primary:disabled');
   }
 
+  function entryDirty(entry) {
+    return !!entry.snapshot && !saveInFlight(entry) && snapshotChanged(entry.snapshot);
+  }
+
   function paneDirty() {
-    return stack.some(entry => !entry.fullScreen && entry.snapshot && !saveInFlight(entry)
-      && snapshotChanged(entry.snapshot));
+    return stack.some(entry => !entry.fullScreen && entryDirty(entry));
+  }
+
+  // ⚠️ P20 ON EVERY SIZE (Federico, 30 Sep 2026): a level's own Back or Cancel never throws its
+  // typing away without asking. Until now only the TABLET asked (when the pane was replaced or
+  // the page left); on a phone the card's Back discarded a half-typed record in silence.
+  async function guardedLeave(entry, close) {
+    if (entryDirty(entry) && !(await confirmDiscard())) return;
+    close();
   }
 
   function confirmDiscard() {
