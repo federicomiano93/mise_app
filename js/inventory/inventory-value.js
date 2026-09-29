@@ -17,7 +17,7 @@
 // are. No number is ever invented. A guessed pack weight would not look wrong on
 // the screen; it would just make the month's cost wrong.
 
-import { pricePerKg, formatMoney } from '../price-model.js';
+import { pricePerKg, formatMoney, caseOf } from '../price-model.js';
 // ⚠️ MOVED TO js/pack-size.js (29 Sep 2026): js/order-cost.js needs the exact
 // same reading of "how many kilos does one pack hold", and a calculation
 // shared by more than one feature belongs in js/ root (CLAUDE.md "Modular by
@@ -72,6 +72,12 @@ export function packPrice(month, ingredient, closed) {
     return Number.isFinite(frozen) && frozen > 0 ? round3(frozen) : null;
   }
 
+  // ⚠️ A PRICE QUOTED PER CASE (30 Sep 2026): the stocktake counts what is ordered, and
+  // a case is what is ordered — one counted unit is one case, so its cost is the case
+  // price whatever the case holds and whatever the pack text says. Needs no pack weight.
+  const wholeCase = caseOf(ingredient);
+  if (wholeCase) return round3(wholeCase.casePrice);
+
   if (ingredient && ingredient.priceUnit === 'pcs') {
     const each = Number(ingredient.pricePerUnit);
     return Number.isFinite(each) && each > 0 ? round3(each) : null;
@@ -98,6 +104,7 @@ export function valueBlocker(month, ingredient, closed = false) {
   if (closed) {
     return packPrice(month, ingredient, true) === null ? NO_FROZEN_PRICE : null;
   }
+  if (caseOf(ingredient)) return null;
   if (ingredient && ingredient.priceUnit === 'pcs') {
     const each = Number(ingredient.pricePerUnit);
     return Number.isFinite(each) && each > 0 ? null : NO_PRICE;

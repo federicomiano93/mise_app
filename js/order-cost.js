@@ -13,7 +13,7 @@
 // the price WITHOUT VAT, and the VAT is added on top here, once, for
 // DISPLAY. Nothing here ever writes back to a price.
 
-import { isPriceUnit, positiveNumber } from './price-model.js';
+import { isPriceUnit, positiveNumber, caseOf } from './price-model.js';
 import { parsePackSize } from './pack-size.js';
 
 // The net cost of ONE ORDERED UNIT of an ingredient — one sack, one case, one
@@ -53,7 +53,19 @@ const WEIGHT_UNITS = Object.freeze({
   ml: 0.001, cl: 0.01,
 });
 const MULTIPLIER = /\d\s*[x×*]\s*\d/i;
+// The order-unit words that mean «one piece» — for a price quoted per case of pieces,
+// ordering «50 pz» means fifty pieces at the per-piece rate, not fifty cases.
+const PIECE_UNITS = new Set([
+  'pz', 'pezzo', 'pezzi', 'pcs', 'pc', 'piece', 'pieces', 'each',
+]);
 
+// ⚠️ A PRICE QUOTED PER CASE (30 Sep 2026) decides by the order unit, and only when the
+// price carries a whole case; without one everything below «const orderUnit» is exactly
+// what it was.
+//   a weight/volume word      → as ever: rate × that unit's kilos (a case of pieces: null)
+//   a piece word + a pz case  → the per-piece rate
+//   anything else             → the CASE price: one ordered unit is one case
+//     («1 cartone of 50 pz at 20» is 20, never 0.40 — the failure this exists to stop)
 export function unitCost(ingredient, price) {
   if (!price || !isPriceUnit(price.priceUnit)) return null;
   const rate = positiveNumber(price.pricePerUnit);
@@ -61,6 +73,15 @@ export function unitCost(ingredient, price) {
 
   const orderUnit = String((ingredient && ingredient.unit) || '').trim().toLowerCase().replace(/\.$/, '');
   const byWeight = Object.prototype.hasOwnProperty.call(WEIGHT_UNITS, orderUnit);
+
+  const wholeCase = caseOf(price);
+  if (wholeCase) {
+    if (byWeight) {
+      return price.priceUnit === 'pcs' ? null : rate * WEIGHT_UNITS[orderUnit];
+    }
+    if (PIECE_UNITS.has(orderUnit) && price.priceUnit === 'pcs') return rate;
+    return wholeCase.casePrice;
+  }
   const packText = String((ingredient && ingredient.weight) || '');
 
   if (price.priceUnit === 'pcs') {

@@ -45,6 +45,15 @@
 // the field, which is the only place it can be said, because a number cannot be
 // inspected for what it is a price OF.
 //
+// ⚠️ SINCE 30 SEP 2026 THERE IS ALSO A SECOND WAY IN, because the owner asked for
+// exactly the division the old form was retired for: «il cartone costa 20 euro e
+// ho 4 buste da 2.5kg, lui deve calcolare il prezzo al kg». What keeps the old drift
+// problem away is WHERE the division happens: caseRate() runs once, at SAVE time,
+// and the case (price, count, size, unit) is stored BESIDE the rate it produced.
+// The rate every recipe cost is built from is therefore still ONE stored number,
+// never re-derived from a pack text that somebody might edit later; and the case is
+// kept so the form reopens as typed and an order can cost «one case» (order-cost.js).
+//
 // ⚠️ PRICES ARE NET OF VAT. The business reclaims input VAT, so what an
 // ingredient really costs is the ex-VAT figure. Entering the gross one inflates
 // every recipe cost and every food-cost percentage by the VAT rate, and nothing
@@ -108,20 +117,27 @@ export function priceUnitLabel(unit) {
 // null). It lives there only: not on the `ingredients` document and not in the
 // price HISTORY subcollection — see INGREDIENT_DRAINED_FIELDS below, pricePatch()
 // and priceRecord().
+// ⚠️ THE FOUR `case…` KEYS JOINED 30 Sep 2026 (a price quoted per case: what the case
+// costs, how many it holds, how big each is). Like `vatRate` they live on
+// ingredient-prices ONLY — see the two lists below.
+const CASE_FIELDS = Object.freeze(['casePrice', 'caseCount', 'caseItemSize', 'caseItemUnit']);
+
 export const PRICE_FIELDS = Object.freeze([
   'priceUnit', 'pricePerUnit', 'packPrice', 'packSize', 'unitWeightKg', 'priceUpdatedAt', 'vatRate',
+  ...CASE_FIELDS,
 ]);
 
 // The price keys an INGREDIENT document may still carry from before prices moved
 // out, and so the ones every ingredient save sets to null to drain them.
 // ⚠️⚠️ NOT THE SAME LIST AS PRICE_FIELDS, AND THE DIFFERENCE IS A LOCKOUT. The
-// `ingredients` rule whitelists its keys; `vatRate` was never on the ingredient and
-// is not in that whitelist, so writing it there — even as null — made the rules
-// refuse EVERY ingredient save, for every role (review of 28 Sep 2026, caught
-// before it shipped). tests/price-fields-whitelist.test.mjs pins both lists
-// against firestore.rules.
+// `ingredients` rule whitelists its keys; `vatRate` and the four case keys were never
+// on the ingredient and are not in that whitelist, so writing them there — even as
+// null — makes the rules refuse EVERY ingredient save, for every role (review of 28
+// Sep 2026, caught before it shipped). tests/price-fields-whitelist.test.mjs pins both
+// lists against firestore.rules.
+const PRICE_ONLY_FIELDS = Object.freeze(['vatRate', ...CASE_FIELDS]);
 export const INGREDIENT_DRAINED_FIELDS = Object.freeze(
-  PRICE_FIELDS.filter(key => key !== 'vatRate'),
+  PRICE_FIELDS.filter(key => !PRICE_ONLY_FIELDS.includes(key)),
 );
 
 // Money is rounded to the penny; a RATE is not. A rate can legitimately be tiny —
@@ -174,6 +190,55 @@ export function normalizePrice({ priceUnit, pricePerUnit } = {}) {
   // 7.199999999999999 often enough, and that number would be stored, shown, and
   // then compared against a later 7.2 as if the price had moved.
   return { ok: true, pricePerUnit: roundTo(rate, RATE_DECIMALS), reason: null };
+}
+
+// ── A price quoted per CASE ──────────────────────────────────────────────────
+// What the case may hold, as stored. 'pcs' is the same word PRICE_UNITS uses for a
+// count; the others are how a bag or a bottle inside the case is measured.
+export const CASE_ITEM_UNITS = Object.freeze(['pcs', 'kg', 'g', 'l', 'ml']);
+
+// The rate a case works out to, or null when anything is missing, zero or not a
+// number. Never a guess: an incomplete case is «no price», exactly like an empty
+// rate box. `pcs` ignores the size (a case of 50 is 50 pieces, whatever they weigh).
+//   20 / 50 pcs          → 0.4 per piece
+//   20 / (4 × 2.5 kg)    → 2 per kg
+//   20 / (4 × 500 g)     → 10 per kg      (grams are read as thousandths of a kilo)
+export function caseRate({ casePrice, caseCount, caseItemSize, caseItemUnit } = {}) {
+  const price = positiveNumber(casePrice);
+  const count = positiveNumber(caseCount);
+  if (price === null || count === null || !CASE_ITEM_UNITS.includes(caseItemUnit)) return null;
+
+  let priceUnit = 'pcs';
+  let each = count;
+  if (caseItemUnit !== 'pcs') {
+    const size = positiveNumber(caseItemSize);
+    if (size === null) return null;
+    const perBase = caseItemUnit === 'g' || caseItemUnit === 'ml' ? size / 1000 : size;
+    priceUnit = caseItemUnit === 'kg' || caseItemUnit === 'g' ? 'kg' : 'l';
+    each = count * perBase;
+  }
+  const rate = roundTo(price / each, RATE_DECIMALS);
+  // A case so cheap for what it holds that four decimals round it away is not free.
+  return rate > 0 ? { priceUnit, pricePerUnit: rate } : null;
+}
+
+// The four case fields as they may be STORED, or null when they do not make a whole
+// case. Used by the patch (what to write), by the form (what to reopen) and by the two
+// places that cost «one case» (orders, stocktake), so all agree on what a case is.
+export function caseOf(source) {
+  const s = source || {};
+  const price = positiveNumber(s.casePrice);
+  const count = positiveNumber(s.caseCount);
+  const unit = CASE_ITEM_UNITS.includes(s.caseItemUnit) ? s.caseItemUnit : null;
+  if (price === null || count === null || unit === null) return null;
+  const size = unit === 'pcs' ? null : positiveNumber(s.caseItemSize);
+  if (unit !== 'pcs' && size === null) return null;
+  return {
+    casePrice: roundTo(price, RATE_DECIMALS),
+    caseCount: count,
+    caseItemSize: size,
+    caseItemUnit: unit,
+  };
 }
 
 // ── What one kilogram of this ingredient costs ───────────────────────────────
@@ -297,16 +362,42 @@ function normalizedVatRate(vatRate) {
   return VALID_VAT_RATES.includes(n) ? n : null;
 }
 
-export function pricePatch({ priceUnit, pricePerUnit, unitWeightKg, vatRate }, nowIso) {
-  const unit = isPriceUnit(priceUnit) ? priceUnit : null;
-  const pieceKg = unit === 'pcs' && positiveNumber(unitWeightKg) !== null
+// `priceUnit: 'case'` is the FORM's mode for «priced per case», never a stored unit:
+// the rate and its unit are then derived here by caseRate() and the case is written
+// beside them. In every other mode the four case keys go out as null — a MERGE keeps
+// a key that is left out, so switching back to «per kg» would otherwise leave the old
+// case behind to contradict the new rate.
+// ⚠️ AN INCOMPLETE CASE IS «NO PRICE», ALL FOUR KEYS NULL — a half-typed case is not
+// kept (unlike VAT, it is one fact in four boxes, useless in part).
+export const CASE_MODE = 'case';
+
+export function pricePatch(
+  { priceUnit, pricePerUnit, unitWeightKg, vatRate, casePrice, caseCount, caseItemSize, caseItemUnit },
+  nowIso,
+) {
+  const inCase = priceUnit === CASE_MODE;
+  const caseFields = inCase ? caseOf({ casePrice, caseCount, caseItemSize, caseItemUnit }) : null;
+  const derived = caseFields ? caseRate(caseFields) : null;
+
+  const unit = inCase ? (derived ? derived.priceUnit : null) : (isPriceUnit(priceUnit) ? priceUnit : null);
+  // The piece weight is a fact about the article and survives an incomplete case whose
+  // items are pieces, like it survives an incomplete rate.
+  const keepsPieceWeight = unit === 'pcs' || (inCase && caseItemUnit === 'pcs');
+  const pieceKg = keepsPieceWeight && positiveNumber(unitWeightKg) !== null
     ? roundTo(unitWeightKg, 6)
     : null;
 
-  const result = normalizePrice({ priceUnit: unit, pricePerUnit });
+  const result = normalizePrice({
+    priceUnit: unit,
+    pricePerUnit: inCase ? (derived ? derived.pricePerUnit : null) : pricePerUnit,
+  });
   return {
     priceUnit: unit,
     pricePerUnit: result.ok ? result.pricePerUnit : null,
+    casePrice: caseFields && result.ok ? caseFields.casePrice : null,
+    caseCount: caseFields && result.ok ? caseFields.caseCount : null,
+    caseItemSize: caseFields && result.ok ? caseFields.caseItemSize : null,
+    caseItemUnit: caseFields && result.ok ? caseFields.caseItemUnit : null,
     // Retired, and cleared on every save so an old document stops carrying a pack
     // price that disagrees with its own rate. See PRICE_FIELDS.
     packPrice: null,
