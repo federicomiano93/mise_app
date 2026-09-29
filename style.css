@@ -1704,7 +1704,9 @@ input.cp-prod-weight {
 
   /* With a result: entry left, recipe right. The rows are named so that the right column
      spans them all and its extra height lands on the last (flexible) row, never between
-     the entry rows. Never more than 8 entry children exist (see buildRecipePanel). */
+     the entry rows. Up to 9 entry children exist (see buildRecipePanel) but Confirm and
+     Edit are never shown together (applyTabState), so at most 8 take a row — tests/
+     calculator-tablet.test.mjs pins the 8 and that pairing. */
   body[data-card="calculator"] #recipe-tabs > .content.active:has(> .result-block.visible) {
     max-width: none;
     display: grid;
@@ -1725,6 +1727,10 @@ input.cp-prod-weight {
 
   /* Kitchen sizes for the quantity fields and the buttons of a recipe tab. */
   body[data-card="calculator"] #recipe-tabs .qty-group { width: 150px; }
+  /* The extra-dough box keeps its own sizing: a fixed 150px group and a 104px input
+     pushed its field 11px outside the box (measured in review, 29 Sep 2026). */
+  body[data-card="calculator"] #recipe-tabs .extra-dough-row .qty-group { width: auto; }
+  body[data-card="calculator"] #recipe-tabs .extra-dough-row input[type="number"] { width: 84px; }
   body[data-card="calculator"] #recipe-tabs input[type="number"],
   body[data-card="calculator"] #recipe-tabs select.qty-select {
     width: 104px;
@@ -1736,6 +1742,8 @@ input.cp-prod-weight {
   body[data-card="calculator"] #recipe-tabs .confirm-btn-primary,
   body[data-card="calculator"] #recipe-tabs .copy-btn,
   body[data-card="calculator"] #recipe-tabs .copy-send-btn { min-height: var(--tap-min); }
+  /* Square again beside the 52px Copy button (it measured 46×52). */
+  body[data-card="calculator"] #recipe-tabs .copy-send-btn { width: var(--tap-min); height: var(--tap-min); }
   body[data-card="calculator"] #tab-bar .tab { min-height: var(--tap-min); }
 }
 
