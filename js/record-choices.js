@@ -59,6 +59,16 @@ function choices(suggested, inUse) {
   return [...rest, ...used].sort((a, b) => a.localeCompare(b));
 }
 
+// «+ Nuovo fornitore…» is the last option of the supplier menu; this is its value. It is a MARKER,
+// never a supplier: whatever is saved goes through supplierToSave.
+export const NEW_SUPPLIER_CHOICE = '__mise_new_supplier__';
+
+// The supplier id to SAVE: the menu's value, unless it still shows the «+ Nuovo fornitore…» marker
+// (the supplier card was cancelled or failed, or a save raced it) — then the last real value.
+export function supplierToSave(value, previous) {
+  return value === NEW_SUPPLIER_CHOICE ? previous : value;
+}
+
 // A category as it counts: '' when there is none.
 export function categoryValue(raw) {
   const text = clean(raw);

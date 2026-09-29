@@ -29,7 +29,7 @@ import { kindOf } from './ingredient-kind.js';
 import { NO_SUPPLIER_ID } from './records.js';
 import { field, formActions, reportFailure, shortDate } from './record-ui.js';
 import {
-  PRICE_UNITS, priceUnitLabel, CASE_MODE, CASE_ITEM_UNITS, PACK_ITEM, packWeightOf, storedCaseOf,
+  PRICE_UNITS, priceUnitLabel, CASE_MODE, CASE_ITEM_UNITS, PACK_ITEM, packWeightOf, packBaseOf, storedCaseOf,
   pricePatch, priceChanged, priceRecord, pricePerKg,
   formatPricePerUnit, formatRate, costReasonText, formatMoney,
 } from './price-model.js';
@@ -42,7 +42,7 @@ import { vatRatesFor } from './vat-rates.js';
 // still reads it), and «Categoria» / «Unità d'ordine» are menus over lists their callers
 // hand in (record-choices.js builds them; this file never asks a feature for them).
 import { splitWeight, joinWeight, isUnusableWeight, WEIGHT_UNIT_CHOICES } from './pack-size.js';
-import { categoryValue, isBlankNewChoice } from './record-choices.js';
+import { categoryValue, isBlankNewChoice, NEW_SUPPLIER_CHOICE, supplierToSave } from './record-choices.js';
 
 // The one arrow: the same chevron every other list in the app draws. It turns to
 // point down when its fold opens (.mgmt-fold-head--open in orders.css).
@@ -159,7 +159,7 @@ function priceBlock(item, actions, defaultUnit = null, currentOrder = null) {
   // ⚠️ storedCaseOf, not caseOf: a case whose rate no longer matches the stored rate is a
   // stale one (an old phone saved a new rate over it) and the card opens in the typed-rate
   // mode, so the next save writes the rate that is really there — never the old case's.
-  const storedCase = item ? storedCaseOf(item, item) : null;
+  const storedCase = item ? storedCaseOf(item) : null;
   // The ingredient as the card holds it right now (weight and package word are typed in the
   // product-data section above this block, so they are read live, never from the stored item).
   const now = () => (currentOrder ? currentOrder() : { unit: item?.unit, weight: item?.weight, packUnit: item?.packUnit });
@@ -244,11 +244,17 @@ function priceBlock(item, actions, defaultUnit = null, currentOrder = null) {
     }),
     casePriceBox,
   ]);
+  // ⚠️ A 'pack' case keeps the package size it was saved with, so a weight edited since is not yet in
+  // the price: this one warm line says so, and saving (by somebody with this section) recomputes.
+  const packChangedNote = el('p', {
+    class: 'mgmt-price-note', hidden: 'hidden', text: t('orders.case.packChanged'),
+  });
   const caseBlock = el('div', { class: 'mgmt-case' }, [
     el('div', { class: 'mgmt-field' }, [
       el('span', { class: 'mgmt-field-label', text: t('orders.case.contains') }),
       el('div', { class: 'mgmt-case-row' }, [caseCountBox, caseTimes, caseSizeBox, caseUnitSelect]),
     ]),
+    packChangedNote,
   ]);
 
   // ── Purchase VAT (29 Sep 2026) — so an order can show what it will cost
@@ -340,6 +346,10 @@ function priceBlock(item, actions, defaultUnit = null, currentOrder = null) {
     const sizeFromWeight = caseUnitSelect.value === PACK_ITEM;
     caseSizeBox.hidden = itemsArePieces || sizeFromWeight;
     caseTimes.hidden = itemsArePieces;
+    const savedPack = storedCase && storedCase.caseItemUnit === PACK_ITEM ? storedCase : null;
+    const current = packBaseOf(now().weight);
+    packChangedNote.hidden = !(inCase && sizeFromWeight && savedPack && current
+      && (current.size !== savedPack.caseItemSize || current.priceUnit !== item.priceUnit));
     pieceField.hidden = !(unit === 'pcs' || (inCase && itemsArePieces));
     rateLabel.textContent = RATE_LABEL[unit] || t('orders.priceGeneric', { currency: currentCurrency() });
     // ⚠️ The example follows the UNIT, and an unknown unit gets none. «(un chilo)»
@@ -438,7 +448,12 @@ function priceBlock(item, actions, defaultUnit = null, currentOrder = null) {
     item ? priceHistoryBlock(item, actions) : null,
   ]);
 
-  return { node, read, refresh };
+  // A case of packages with a weight that cannot be read has no size to price by: the save is
+  // refused instead of quietly storing «no price».
+  const needsPackWeight = () => unitSelect.value === CASE_MODE
+    && caseUnitSelect.value === PACK_ITEM && packBaseOf(now().weight) === null;
+
+  return { node, read, refresh, needsPackWeight };
 }
 
 // The append-only record of what this ingredient has cost. Loaded only when
@@ -1097,7 +1112,7 @@ function fold({ title, state, above, body, help }) {
 
 // «+ Nuovo fornitore…» is the LAST option of the supplier menu (like «+ Nuova categoria…»); this
 // is its value, which no supplier id can be.
-const NEW_SUPPLIER = '__mise_new_supplier__';
+const NEW_SUPPLIER = NEW_SUPPLIER_CHOICE;
 
 // The longest package word the rules accept (firestore.rules ingredients: packUnit <= 40).
 const PACK_WORD_MAX = 40;
@@ -1178,7 +1193,9 @@ function weightControl(stored) {
     node,
     read: () => joinWeight(amount.value, unit.value) || legacy,
     invalid: () => isUnusableWeight(amount.value, unit.value),
-    markInvalid: refusal.show,
+    markInvalid: () => { refusal.node.textContent = t('orders.weight.invalid'); refusal.show(); },
+    // The case price by package cannot be worked out without this weight.
+    markNeeded: () => { refusal.node.textContent = t('orders.weight.packNeeded'); refusal.show(); },
     // The price block's live VAT line depends on the weight typed here, not only the stored one.
     onChange: (fn) => { amount.addEventListener('input', fn); unit.addEventListener('change', fn); },
   };
@@ -1314,9 +1331,9 @@ export function buildIngredientForm({
   // opened, and nothing redraws an open card — which is also what keeps everything typed.
   // ⚠️ BACKING OUT PUTS THE MENU BACK on what it showed before: the sentinel must never stay
   // selected, or a save would file the item under a supplier that does not exist.
+  let previous = supplierSelect.value;
   if (typeof actions?.createSupplier === 'function') {
     supplierSelect.appendChild(el('option', { value: NEW_SUPPLIER, text: t('orders.addSupplierInline') }));
-    let previous = supplierSelect.value;
     supplierSelect.addEventListener('change', async () => {
       if (supplierSelect.value !== NEW_SUPPLIER) { previous = supplierSelect.value; return; }
       supplierSelect.disabled = true;
@@ -1353,8 +1370,9 @@ export function buildIngredientForm({
   // switches behind it live one screen away (js/orders/registry-settings.js).
   const allergens = allergenBlock(item, panels, actions);
   // ⚠️ PACKAGING HAS NO ALLERGENS, so the block is HIDDEN for it — never removed, and
-  // never read on Save (below). An item filed as packaging by mistake and moved back
-  // finds its declaration exactly as it was, because the merge write never touched it.
+  // never read on Save (below). Whatever declaration a packaging item already carries (an old
+  // item once filed under the wrong kind) is left exactly as it was, because the merge write
+  // never touches it.
   const isBox = () => startKind === 'packaging';
   const syncKind = () => { allergens.root.hidden = isBox(); };
   syncKind();
@@ -1366,6 +1384,9 @@ export function buildIngredientForm({
     // would otherwise erase the stored one, an empty «+ New …» would clear the category.
     const refused = [weight, category, pack, unit].find(control => control.invalid());
     if (refused) { refused.markInvalid(); return; }
+    // ⚠️ A case of packages with no readable weight is refused here, on the weight box, like an
+    // unusable weight: saving would quietly turn the price into «no price».
+    if (price && price.needsPackWeight()) { weight.markNeeded(); return; }
     save.disabled = true;
 
     // Every price field is in the patch, as a number or as null, because this is
@@ -1379,7 +1400,7 @@ export function buildIngredientForm({
     const packUnit = pack.read().slice(0, PACK_WORD_MAX);
     const payload = {
       name: name.value.trim(),
-      supplierId: supplierSelect.value,
+      supplierId: supplierToSave(supplierSelect.value, previous),
       brand: brand.value.trim(),
       weight: weight.read(),
       category: category.read() || 'Other',

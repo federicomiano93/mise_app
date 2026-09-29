@@ -75,7 +75,9 @@ test('«busta da 2,5 kg» reads the LIVE weight and package word, and gives no s
   assert.match(FORM, /pricePatch\(price\.read\(\), new Date\(\)\.toISOString\(\), weight\.read\(\)\)/, 'and so does the save');
   assert.match(FORM, /packUnit: pack\.read\(\) \}\)\) : null;/, 'the VAT line hears the package word');
   assert.match(FORM, /pack\.onChange\(price\.refresh\);/);
-  assert.match(FORM, /storedCaseOf\(item, item\)/, 'reopening reads the case against the stored weight');
+  assert.match(FORM, /storedCaseOf\(item\)/, 'reopening reads the case as stored, whatever the weight says now');
+  assert.match(FORM, /packChangedNote/, 'a weight changed since the save is said, not silently priced');
+  assert.match(FORM, /class: 'mgmt-price-note', hidden: 'hidden', text: t\('orders\.case\.packChanged'\)/);
 });
 
 test('the new phrases exist once in each language and are read at draw time', () => {
@@ -97,4 +99,23 @@ test('R3: the supplier screen has two adds, each fixing the kind; the Catalogue 
   for (const key of ['orders.addIngredientShort', 'orders.addPackagingShort']) {
     assert.equal(src.split(`'${key}':`).length - 1, 2, key);
   }
+});
+
+test('R4: a case of packages with no readable weight blocks the save on the weight box', () => {
+  assert.match(FORM, /if \(price && price\.needsPackWeight\(\)\) \{ weight\.markNeeded\(\); return; \}/);
+  assert.match(FORM, /markNeeded: \(\) => \{ refusal\.node\.textContent = t\('orders\.weight\.packNeeded'\); refusal\.show\(\); \}/);
+  assert.match(FORM, /unitSelect\.value === CASE_MODE\s*&& caseUnitSelect\.value === PACK_ITEM && packBaseOf\(now\(\)\.weight\) === null/);
+  const src = read('js/i18n.js');
+  assert.ok(src.includes("'orders.weight.packNeeded': 'The package weight is needed for the case price'"));
+  assert.ok(src.includes("'orders.weight.packNeeded': 'Serve il peso della confezione per il prezzo a cartone'"));
+  assert.ok(src.includes("'orders.case.packChanged': 'Il peso della confezione è cambiato: il prezzo al kg si aggiorna quando salvi'"));
+  assert.ok(src.includes("'orders.case.packChanged': 'The package weight has changed: the price per kg updates when you save'"));
+});
+
+test('R5: the «+ Nuovo fornitore…» marker is never saved as a supplier', async () => {
+  const { supplierToSave, NEW_SUPPLIER_CHOICE } = await import('../js/record-choices.js');
+  assert.equal(supplierToSave(NEW_SUPPLIER_CHOICE, 'SUP_1'), 'SUP_1');
+  assert.equal(supplierToSave('SUP_2', 'SUP_1'), 'SUP_2');
+  assert.equal(supplierToSave('', 'SUP_1'), '', 'the «no supplier» answer is a real value');
+  assert.match(FORM, /supplierId: supplierToSave\(supplierSelect\.value, previous\),/);
 });
