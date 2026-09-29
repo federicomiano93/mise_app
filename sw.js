@@ -1,4 +1,4 @@
-const CACHE_NAME = 'theitalianclub-v447';
+const CACHE_NAME = 'theitalianclub-v449';
 // Firebase SDK modules (loaded from gstatic) are cached SEPARATELY from CACHE_NAME
 // so they survive the cache-version bump that happens on every deploy — otherwise
 // the offline SDK would be wiped each release until the next online load. The name
@@ -383,19 +383,19 @@ const ASSETS = [
 // hash (first 16 characters): the phone checks every download against it, and an update
 // copies a file whose hash has not changed out of the previous cache instead of fetching it.
 const ASSET_HASHES = {
-  "./": '643d5681436ac7e5',
-  "./index.html": '643d5681436ac7e5',
+  "./": '935fd6611fff1171',
+  "./index.html": '935fd6611fff1171',
   "./home.html": 'c08ad30f3a672010',
   "./calculator.html": 'f80f29963f31f04c',
   "./orders.html": '796c1d99613d2dc0',
-  "./suppliers.html": '52ab9b2ecda8fe5e',
+  "./suppliers.html": '89a18ecc48176997',
   "./install-guide.html": 'c57a55ccf379afaf',
   "./qr.png": '761a95e5bc25e2ba',
   "./js/install-guide.js": '17fcd0c0fec489c2',
   "./tokens.css": 'b86f2605b396e07b',
   "./auth.css": '8db3d5a1b9b85d37',
   "./style.css": '314acebfd84603b2',
-  "./orders.css": 'c839512a84d5b6bc',
+  "./orders.css": 'bb2b3dde7bb724a2',
   "./sounds/alarm.wav": '0d1465974f5be95b',
   "./fonts/manrope-latin.woff2": '71eb731d55804619',
   "./fonts/manrope-latin-ext.woff2": 'bd24140af06f1b58',
@@ -426,7 +426,7 @@ const ASSET_HASHES = {
   "./js/records.js": '6a0ae8b13241abcb',
   "./js/record-ui.js": 'fb1d21fc0e352117',
   "./js/record-data.js": 'ce5104faf4f7a3b9',
-  "./js/ingredient-record-form.js": 'e1887b0cf40d3031',
+  "./js/ingredient-record-form.js": '7d1ca97318445591',
   "./js/supplier-record-form.js": '7d84c7764ce81aee',
   "./js/ingredient-kind.js": 'b5ea1d7ec8255fd6',
   "./js/photo-model.js": '67d1d83755bbd33a',
@@ -464,7 +464,7 @@ const ASSET_HASHES = {
   "./js/location.js": '6aaf53615a8739d1',
   "./js/sections.js": 'abcfdecb2bd5766d',
   "./js/roles.js": '2b491770c4b6165b',
-  "./js/i18n.js": '65979876c599e15f',
+  "./js/i18n.js": '801eaaca1b637d37',
   "./js/i18n-dom.js": 'a6d32c5bb1b56674',
   "./js/join-code.js": '5b89de65db5c102f',
   "./js/join-link.js": 'a90ea53c7ba51614',
@@ -545,7 +545,7 @@ const ASSET_HASHES = {
   "./js/orders/alert-dismissal.js": 'fbfe034ffa9f6620',
   "./js/orders/management.js": '97f9592380926b6a',
   "./js/orders/mgmt-ui.js": '8894b23fd41e8a66',
-  "./js/orders/registry.js": '62fd2d2661868961',
+  "./js/orders/registry.js": '2070abab137b282d',
   "./js/orders/registry-main.js": 'bc6546be756d792e',
   "./js/orders/registry-settings.js": 'c6ab508ba55b3fd8',
   "./js/orders/form-dirty.js": '0ca2d475cb77bf7a',
@@ -565,7 +565,7 @@ const ASSET_HASHES = {
   "./catalogue.html": 'f2ed1afee310d404',
   "./catalogue.css": '655215cf87fd1c75',
   "./label-print.css": 'ffbcdf4e7a627a2d',
-  "./records.css": 'f3b47b2cbf27ad62',
+  "./records.css": 'a9fd4eb32f1ffca6',
   "./js/catalogue/confirm-dialog.js": '61a7f580f37c5ff8',
   "./js/catalogue/dom.js": '9878ae7c750afd79',
   "./js/catalogue/catalogue-model.js": '2f834d120f6a8dc9',
