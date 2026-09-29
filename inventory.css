@@ -96,6 +96,9 @@ body {
   width: 100%;
 }
 .inv-view:focus { outline: none; }
+/* The block that holds the summary, the two actions and the search. A plain column here,
+   with the view's own 12px gap; the tablet gives it a column of its own (bottom of file). */
+.inv-side { display: flex; flex-direction: column; gap: 12px; }
 .inv-empty { text-align: center; color: var(--inv-text-3); font-size: .88rem; padding: 28px 8px; }
 .inv-note { font-size: .74rem; color: var(--inv-text-2); margin: 0; }
 
@@ -408,3 +411,59 @@ body {
   z-index: 9000;
 }
 .inv-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* ══ The tablet: the summary beside the count ═══════════════════════════════════
+   29 Sep 2026, the owner's plan: every section uses the whole width on a tablet. Scoped by
+   data-card="inventory" in tokens.css (NOT data-section, which Food cost shares). The
+   list is two columns under the month strip: a column of its own on the left (the
+   summary, the two actions, the search and filter) and the rows on the right, two to a
+   line, each column scrolling on its own. ⚠️ The query text is the app's one tablet
+   switch, tests/tablet-width.test.mjs pins it.
+   ⚠️ LAYOUT ONLY. The rows are the same DOM in the same order (grid auto-flow is by ROW,
+   so Tab and the keyboard's Next key walk left then right, then down — the reading order);
+   how a box is read, saved or cleared is not touched here. */
+@media (min-width: 900px) and (min-height: 600px) {
+  /* Any screen that is not the list — a product's detail, what the month cost, the notice
+     an employee gets — is a form or a short read, not a list: it keeps the 620px column. */
+  .inv-view:not(.inv-view--list) { max-width: 620px; }
+
+  .inv-view--list {
+    display: grid;
+    grid-template-columns: 320px minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+    gap: 14px;
+    height: 100%;
+  }
+  /* 4px so a focus ring at the edge of a column is not cut off by its own scroll. */
+  .inv-side { min-height: 0; overflow-y: auto; padding: 4px; }
+  .inv-list {
+    min-height: 0;
+    overflow-y: auto;
+    padding: 4px;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-content: start;
+    gap: 8px;
+  }
+  .inv-list > .inv-group,
+  .inv-list > .inv-empty,
+  .inv-list > .empty-state { grid-column: 1 / -1; }
+
+  /* Kitchen size: a hand with flour on it. */
+  .inv-row { min-height: var(--tap-min); }
+  .inv-count {
+    width: 88px;
+    height: var(--tap-min);
+    font-size: var(--qty-font);
+  }
+}
+
+/* ⚠️ THE TOAST STAYS AT THE 620px COLUMN even though this page is wide on a tablet: it is
+   position: fixed, so it computes --app-gutter from the VIEWPORT. A custom property is
+   resolved where it is declared, so both are re-declared ON the layer. */
+@media (min-width: 900px) and (min-height: 600px) {
+  body[data-card="inventory"] .inv-toast {
+    --app-max-width: 620px;
+    --app-gutter: max(0px, calc((100% - var(--app-max-width)) / 2));
+  }
+}

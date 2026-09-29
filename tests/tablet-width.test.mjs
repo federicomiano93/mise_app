@@ -94,6 +94,8 @@ const EXEMPT = new Map([
   ['.pas-screen', 'wraps .pas-view, which is capped'],
   ['.fc-screen', 'wraps .fc-view, which is capped'],
   ['.inv-screen', 'wraps .inv-view, which is capped'],
+  ['.inv-side', 'a column of .inv-view--list, which is capped by .inv-view inside .inv-screen'],
+  ['.inv-list', 'a column of .inv-view--list on a tablet, inside .inv-view which is capped'],
   ['.recipe-scroll', 'wraps .recipe-content, which is capped'],
   ['.auth-gate', 'wraps .auth-card, capped at 360px'],
   ['.app-dialog-backdrop', 'wraps .app-dialog, capped at 480px'],
@@ -475,6 +477,8 @@ test('the wide column is scoped to Home, Orders and the Catalogue, and defined n
   // Food cost by data-card: Magazzino (inventory.html) shares data-section="foodcost" and stays 620px.
   assert.match(block, /body\[data-card="foodcost"\]/, 'Food cost must be in the scope (its list/product split)');
   assert.doesNotMatch(block, /body\[data-section="foodcost"\]/, 'Magazzino shares that section and must not widen');
+  // Magazzino by ITS OWN data-card: the summary column left, the count rows in two columns right.
+  assert.match(block, /body\[data-card="inventory"\]/, 'Magazzino must be in the scope (summary column + two-column count)');
   assert.match(block, /body\[data-section="orders"\]/,
     'Orders — and suppliers.html, which shares the same body attribute — must be in the scope');
 

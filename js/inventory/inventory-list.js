@@ -108,10 +108,16 @@ export function renderList({ month, ingredients, locale, onOpen, onCount, onCarr
     },
   }, [el('span', { text: t('inv.stillToCount') })]);
 
-  const root = el('div', { class: 'inv-view' }, [
-    summary,
-    actions,
-    el('div', { class: 'inv-tools' }, [search, todoToggle]),
+  // The summary, the two actions and the search are ONE block (.inv-side) so the tablet
+  // can hold them in a column of their own beside the rows. On a phone the block is a
+  // plain column with the same 12px gap the view had, so nothing there moves. The DOM
+  // order is the reading order and the Tab order: the side block, then the rows.
+  const root = el('div', { class: 'inv-view inv-view--list' }, [
+    el('div', { class: 'inv-side' }, [
+      summary,
+      actions,
+      el('div', { class: 'inv-tools' }, [search, todoToggle]),
+    ]),
     rows,
   ]);
 

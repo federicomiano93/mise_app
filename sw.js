@@ -1,4 +1,4 @@
-const CACHE_NAME = 'theitalianclub-v441';
+const CACHE_NAME = 'theitalianclub-v442';
 // Firebase SDK modules (loaded from gstatic) are cached SEPARATELY from CACHE_NAME
 // so they survive the cache-version bump that happens on every deploy — otherwise
 // the offline SDK would be wiped each release until the next online load. The name
@@ -391,7 +391,7 @@ const ASSET_HASHES = {
   "./install-guide.html": 'c57a55ccf379afaf',
   "./qr.png": '761a95e5bc25e2ba',
   "./js/install-guide.js": '17fcd0c0fec489c2',
-  "./tokens.css": '1569619df75ccea1',
+  "./tokens.css": 'd8a9933564fc0627',
   "./auth.css": '8db3d5a1b9b85d37',
   "./style.css": '4e0c59d62c594f3d',
   "./orders.css": 'c839512a84d5b6bc',
@@ -631,7 +631,7 @@ const ASSET_HASHES = {
   "./js/foodcost/product-limits.js": 'd73e12634551ea98',
   "./js/foodcost/foodcost-settings.js": '9627111b53f26939',
   "./inventory.html": 'ded5ca570987f967',
-  "./inventory.css": '6c6be4ef80a979a3',
+  "./inventory.css": 'f8a61e9e5df65c52',
   "./js/inventory/confirm-dialog.js": '61a7f580f37c5ff8',
   "./js/inventory/dom.js": '5971dfbbb1e223ec',
   "./js/inventory/inventory-model.js": '09eed83d8469a166',
@@ -641,7 +641,7 @@ const ASSET_HASHES = {
   "./js/inventory/inventory-purchases.js": 'f9d2887ae16f7a73',
   "./js/inventory/inventory-value.js": '06e4cbf84aef8e44',
   "./js/inventory/inventory-usage.js": '5b580d4c482d01c3',
-  "./js/inventory/inventory-list.js": '55d1195ca90093d8',
+  "./js/inventory/inventory-list.js": '9ea7ff480bbfa2b1',
   "./js/inventory/inventory-detail.js": '8b3efecbc8a998b8',
   "./js/inventory/inventory-main.js": '367658c897b271d3',
   "./manifest.json": '6c8312404a7d3729',
