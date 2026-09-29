@@ -146,6 +146,10 @@ export const INGREDIENT_DRAINED_FIELDS = Object.freeze(
 // kitchen can weigh and still keeps the stored number short and comparable.
 const MONEY_DECIMALS = 2;
 const RATE_DECIMALS = 4;
+// A rate DERIVED from a case keeps two more decimals than a typed one: 2000 straws at
+// £3.49 is £0.001745 each, which four decimals would store as 0.0017 (2.6% out), and
+// 10,000 pieces at £0.49 must not round to nothing. The case itself is the exact figure.
+const CASE_RATE_DECIMALS = 6;
 
 // Round without the floating-point surprise: 180/25 is exactly 7.2, but plenty of
 // ordinary divisions land on 7.199999999999999, and that number would be shown,
@@ -217,8 +221,8 @@ export function caseRate({ casePrice, caseCount, caseItemSize, caseItemUnit } = 
     priceUnit = caseItemUnit === 'kg' || caseItemUnit === 'g' ? 'kg' : 'l';
     each = count * perBase;
   }
-  const rate = roundTo(price / each, RATE_DECIMALS);
-  // A case so cheap for what it holds that four decimals round it away is not free.
+  const rate = roundTo(price / each, CASE_RATE_DECIMALS);
+  // A case so cheap for what it holds that even six decimals round it away is not free.
   return rate > 0 ? { priceUnit, pricePerUnit: rate } : null;
 }
 
@@ -239,6 +243,27 @@ export function caseOf(source) {
     caseItemSize: size,
     caseItemUnit: unit,
   };
+}
+
+// The case a price document really STANDS ON, or null. ⚠️ THE ONE READER OF A STORED CASE:
+// orders, the stocktake and the card's reopening mode all ask this, never caseOf() directly.
+//
+// Why caseOf() alone is not enough: a phone still running the old code saves a new RATE with
+// a merge that leaves the case keys of the last case save where they were. Read as they
+// stand, the new code would prefer that stale case — orders and the stocktake would show the
+// old case price, and the card would reopen in case mode and the next save would recompute
+// the OLD rate (even bringing back a price somebody had deleted). So a case counts only when
+// it is complete AND the rate it works out to is exactly the stored priceUnit and
+// pricePerUnit. Anything else is a rate typed since: the typed rate wins and the case is
+// ignored (the next save from the card writes all four case keys as null).
+export function storedCaseOf(price) {
+  const stored = caseOf(price);
+  if (!stored) return null;
+  const derived = caseRate(stored);
+  if (!derived) return null;
+  return price.priceUnit === derived.priceUnit && Number(price.pricePerUnit) === derived.pricePerUnit
+    ? stored
+    : null;
 }
 
 // ── What one kilogram of this ingredient costs ───────────────────────────────
@@ -308,17 +333,17 @@ export function formatMoney(value) {
 }
 
 // A RATE (price per unit). Always at least the two decimals money is read in, and
-// up to four when the number needs them — so £7.20 stays £7.20 while a gelatine
-// leaf at 3.5p shows as £0.035 rather than being rounded up to £0.04 (a 14% error
-// on the only screen anybody checks) or down to £0.00, which reads as free.
+// up to six when the number needs them (a rate derived from a case can be that small) — so
+// £7.20 stays £7.20 while a gelatine leaf at 3.5p shows as £0.035 rather than being rounded up
+// to £0.04 (a 14% error on the only screen anybody checks) or down to £0.00, which reads as free.
 //
-// Written as "pad to four, then drop the zeros the number does not need" rather
+// Written as "pad to six, then drop the zeros the number does not need" rather
 // than as a threshold: a threshold has to be chosen, and any choice is wrong just
 // past it.
 export function formatRate(value) {
   const n = Number(value);
   if (!Number.isFinite(n)) return '';
-  const padded = n.toFixed(RATE_DECIMALS);
+  const padded = n.toFixed(CASE_RATE_DECIMALS);
   const trimmed = padded.replace(/0+$/, '');
   const decimals = Math.max(MONEY_DECIMALS, trimmed.split('.')[1].length);
   return `${currentCurrency()}${n.toFixed(decimals)}`;
@@ -391,9 +416,12 @@ export function pricePatch(
     priceUnit: unit,
     pricePerUnit: inCase ? (derived ? derived.pricePerUnit : null) : pricePerUnit,
   });
+  // ⚠️ A DERIVED RATE IS STORED AS caseRate() MADE IT (six decimals): normalizePrice rounds
+  // to four, and storedCaseOf() could then never recognise its own case.
+  const storedRate = inCase && derived ? derived.pricePerUnit : result.pricePerUnit;
   return {
     priceUnit: unit,
-    pricePerUnit: result.ok ? result.pricePerUnit : null,
+    pricePerUnit: result.ok ? storedRate : null,
     casePrice: caseFields && result.ok ? caseFields.casePrice : null,
     caseCount: caseFields && result.ok ? caseFields.caseCount : null,
     caseItemSize: caseFields && result.ok ? caseFields.caseItemSize : null,

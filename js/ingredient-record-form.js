@@ -29,7 +29,7 @@ import { kindOf } from './ingredient-kind.js';
 import { NO_SUPPLIER_ID } from './records.js';
 import { field, formActions, reportFailure, shortDate } from './record-ui.js';
 import {
-  PRICE_UNITS, priceUnitLabel, CASE_MODE, CASE_ITEM_UNITS, caseOf,
+  PRICE_UNITS, priceUnitLabel, CASE_MODE, CASE_ITEM_UNITS, storedCaseOf,
   pricePatch, priceChanged, priceRecord, pricePerKg,
   formatPricePerUnit, formatRate, costReasonText, formatMoney,
 } from './price-model.js';
@@ -153,7 +153,10 @@ function priceBlock(item, actions, defaultUnit = null) {
 
   // A whole case stored on the ingredient reopens the card in case mode, with the
   // values as typed (never re-derived from the rate: that is what the case is kept for).
-  const storedCase = item ? caseOf(item) : null;
+  // ⚠️ storedCaseOf, not caseOf: a case whose rate no longer matches the stored rate is a
+  // stale one (an old phone saved a new rate over it) and the card opens in the typed-rate
+  // mode, so the next save writes the rate that is really there — never the old case's.
+  const storedCase = item ? storedCaseOf(item) : null;
   const unitSelect = el('select', { class: 'mgmt-input' });
   unitSelect.appendChild(el('option', { value: '', text: t('orders.noPrice2') }));
   PRICE_UNITS.forEach(u => {
