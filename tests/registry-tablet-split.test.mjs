@@ -164,7 +164,8 @@ test('closing a level removes only that level, wherever it sits', () => {
 test('no level closes «the top»: every done / cancel / delete is bound to its own entry', () => {
   assert.doesNotMatch(REGISTRY, /\bpop\(\)|onDone:\s*pop\b|onCancel:\s*pop\b/);
   assert.match(REGISTRY, /onDone:\s*\(\) => popEntry\(entry\)/);
-  assert.match(REGISTRY, /onCancel:\s*\(\) => popEntry\(entry\)/);
+  // Cancel asks first when there is typing (P20, 30 Sep 2026), then closes ITS OWN entry.
+  assert.match(REGISTRY, /onCancel:\s*\(\) => guardedLeave\(entry, \(\) => popEntry\(entry\)\)/);
   assert.match(REGISTRY, /await actions\.deleteSupplier\(supplier\.id\); popEntry\(entry\)/);
   assert.match(REGISTRY, /onDone:\s*\(saved\) => \{ popEntry\(entry\)/);
   assert.match(bodyOf(REGISTRY, 'popEntry'), /removeLevel\(stack, entry\)/);
@@ -172,7 +173,8 @@ test('no level closes «the top»: every done / cancel / delete is bound to its 
 
 test('a form whose save is in flight is not called unsaved', () => {
   assert.match(bodyOf(REGISTRY, 'saveInFlight'), /\.btn-primary:disabled/);
-  assert.match(bodyOf(REGISTRY, 'paneDirty'), /!saveInFlight\(entry\)/);
+  assert.match(bodyOf(REGISTRY, 'paneDirty'), /entryDirty\(entry\)/);
+  assert.match(bodyOf(REGISTRY, 'entryDirty'), /!saveInFlight\(entry\)/);
 });
 
 test('the page Back asks first on a tablet, through the same dialog', () => {
@@ -209,7 +211,7 @@ test('clearing the pane leaves each level by its own Back, so no promise is left
 
 test('every level of a form snapshots its fields once it is built', () => {
   assert.match(bodyOf(REGISTRY, 'push'), /snapshotFields\(form\)/);
-  assert.match(bodyOf(REGISTRY, 'paneDirty'), /snapshotChanged\(entry\.snapshot\)/);
+  assert.match(bodyOf(REGISTRY, 'entryDirty'), /snapshotChanged\(entry\.snapshot\)/);
 });
 
 test('the open row is marked with aria-current and re-marked after every repaint', () => {
