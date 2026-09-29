@@ -504,5 +504,5 @@ test('⚠️⚠️ the Stocktake shows an employee no money and no end of month'
   assert.match(main, /const next = currentSession\(\)\.canManage === true;/);
   const detail = withoutComments(read('js/inventory/inventory-detail.js'));
   assert.match(detail, /if \(money\) \{\s*const \{ value, blocker \} = lineValue\(/);
-  assert.match(detail, /const packField = !money \|\| ingredient\.priceUnit === 'pcs' \? null/);
+  assert.match(detail, /const packField = !money \|\| byUnitPrice \? null/);
 });

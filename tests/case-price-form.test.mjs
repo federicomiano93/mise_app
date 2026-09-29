@@ -42,7 +42,7 @@ test('the count, size and unit boxes each carry an aria-label', () => {
 
 test('pieces hide the size box, and a case reopens as typed', () => {
   assert.match(FORM, /caseSizeBox\.hidden = itemsArePieces/);
-  assert.match(FORM, /const storedCase = item \? caseOf\(item\) : null/);
+  assert.match(FORM, /const storedCase = item \? storedCaseOf\(item\) : null/);
   assert.match(FORM, /rateField\.hidden = inCase/);
 });
 
@@ -53,4 +53,14 @@ test('the phrases are read when the form is drawn, never at module level', () =>
 test('the row styles exist and let the boxes shrink at a narrow width', () => {
   assert.match(CSS, /\.mgmt-case-row \.mgmt-input \{[^}]*min-width: 0/);
   assert.match(CSS, /\.mgmt-case-row \{[^}]*display: flex[^}]*align-items: center/);
+});
+
+test('the card reopens in case mode only for a case that still matches its rate', () => {
+  assert.match(FORM, /const storedCase = item \? storedCaseOf\(item\) : null;/);
+  assert.doesNotMatch(FORM, /[^d]caseOf\(item\)/);
+});
+
+test('the contains row gives its number boxes slim padding and sizes the unit menu to its text', () => {
+  assert.match(CSS, /\.mgmt-case-row \.mgmt-input \{[^}]*padding-left: 8px; padding-right: 8px;/);
+  assert.match(CSS, /\.mgmt-case-row select\.mgmt-input \{ flex: 0 0 auto; \}/);
 });

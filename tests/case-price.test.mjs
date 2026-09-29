@@ -6,11 +6,11 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  caseRate, caseOf, pricePatch, priceChanged, priceRecord, splitPriceFields, withPrices,
+  caseRate, caseOf, storedCaseOf, formatRate, pricePatch, priceChanged, priceRecord, splitPriceFields, withPrices,
   PRICE_FIELDS, INGREDIENT_DRAINED_FIELDS, CASE_MODE,
 } from '../js/price-model.js';
 import { unitCost } from '../js/order-cost.js';
-import { packPrice, valueBlocker, lineValue } from '../js/inventory/inventory-value.js';
+import { packPrice, valueBlocker, lineValue, NO_PRICE } from '../js/inventory/inventory-value.js';
 
 const AT = '2026-09-30T09:00:00.000Z';
 const CASE_KEYS = ['casePrice', 'caseCount', 'caseItemSize', 'caseItemUnit'];
@@ -44,8 +44,26 @@ test('litres and millilitres price per litre', () => {
     { priceUnit: 'l', pricePerUnit: 4 });
 });
 
-test('the rate is rounded to four decimals, never left with floating-point noise', () => {
-  assert.equal(caseRate({ casePrice: 10, caseCount: 3, caseItemUnit: 'pcs' }).pricePerUnit, 3.3333);
+test('a derived rate keeps six decimals, never floating-point noise', () => {
+  assert.equal(caseRate({ casePrice: 10, caseCount: 3, caseItemUnit: 'pcs' }).pricePerUnit, 3.333333);
+});
+
+test('a very small derived rate is kept, not rounded to nothing', () => {
+  // 2000 straws at 3.49 is 0.001745 each — four decimals would store 0.0017 (2.6% out)
+  assert.equal(caseRate({ casePrice: 3.49, caseCount: 2000, caseItemUnit: 'pcs' }).pricePerUnit, 0.001745);
+  // 10,000 pieces at 0.49 is 0.000049 each, which is not free
+  assert.equal(caseRate({ casePrice: 0.49, caseCount: 10000, caseItemUnit: 'pcs' }).pricePerUnit, 0.000049);
+});
+
+test('formatRate shows such small rates in full, never as 0.00', () => {
+  assert.match(formatRate(0.001745), /0\.001745$/);
+  assert.match(formatRate(0.000049), /0\.000049$/);
+  assert.match(formatRate(7.2), /7\.20$/);
+  assert.match(formatRate(0.035), /0\.035$/);
+});
+
+test('a typed rate is still stored to four decimals', () => {
+  assert.equal(pricePatch({ priceUnit: 'kg', pricePerUnit: 1.23456789 }, AT).pricePerUnit, 1.2346);
 });
 
 test('anything missing, zero, negative or not a number gives null, never a guess', () => {
@@ -63,7 +81,7 @@ test('anything missing, zero, negative or not a number gives null, never a guess
   assert.equal(caseRate({}), null);
 });
 
-test('a case so cheap that four decimals round it to nothing is not free', () => {
+test('a case so cheap that even six decimals round it to nothing is not free', () => {
   assert.equal(caseRate({ casePrice: 0.0001, caseCount: 100000, caseItemUnit: 'pcs' }), null);
 });
 
@@ -200,8 +218,26 @@ test('a case of kilos ordered in cartoni is the case price, whatever the pack te
   assert.equal(unitCost({ unit: 'cartone', weight: '2.5kg' }, flour), 20);
 });
 
-test('a piece word on a case of kilos is still one case', () => {
-  assert.equal(unitCost({ unit: 'pz' }, flour), 20);
+test('a piece word on a case of kilos is ONE ITEM of the case (a bag), not the case', () => {
+  assert.equal(unitCost({ unit: 'pz' }, flour), 5);
+});
+
+test('case words and an empty unit are the whole case; other words on a case of several are null', () => {
+  for (const unit of ['cartone', 'cartoni', 'cassa', 'casse', 'collo', 'colli', 'confezione', 'confezioni',
+    'scatola', 'scatole', 'box', 'case', 'cases', 'carton', 'crate', 'pack', 'Cartone']) {
+    assert.equal(unitCost({ unit }, flour), 20, unit);
+  }
+  assert.equal(unitCost({ unit: '' }, flour), 20);
+  for (const unit of ['busta', 'sacco', 'bottiglia']) {
+    assert.equal(unitCost({ unit }, flour), null, unit);
+  }
+});
+
+test('a case of ONE costs the case price for any non-weight word', () => {
+  const sack = { casePrice: 20, caseCount: 1, caseItemSize: 25, caseItemUnit: 'kg', priceUnit: 'kg', pricePerUnit: 0.8 };
+  assert.equal(unitCost({ unit: 'sacco' }, sack), 20);
+  assert.equal(unitCost({ unit: 'pz' }, sack), 20);
+  assert.equal(unitCost({ unit: 'kg' }, sack), 0.8);
 });
 
 test('without a stored case, unitCost is exactly what it was', () => {
@@ -210,6 +246,53 @@ test('without a stored case, unitCost is exactly what it was', () => {
   assert.equal(unitCost({ unit: 'kg' }, { priceUnit: 'pcs', pricePerUnit: 0.9 }), null);
   // a half-stored case is not a case
   assert.equal(unitCost({ unit: 'cartone' }, { priceUnit: 'pcs', pricePerUnit: 0.4, casePrice: 20 }), 0.4);
+});
+
+// ── A stale case is ignored (an old phone saved a rate over it) ──────────────
+
+test('storedCaseOf accepts a case that reproduces its own rate exactly', () => {
+  assert.deepEqual(storedCaseOf(flour),
+    { casePrice: 20, caseCount: 4, caseItemSize: 2.5, caseItemUnit: 'kg' });
+  assert.notEqual(storedCaseOf(eggs), null);
+  const small = { casePrice: 3.49, caseCount: 2000, caseItemUnit: 'pcs', priceUnit: 'pcs', pricePerUnit: 0.001745 };
+  assert.notEqual(storedCaseOf(small), null);
+});
+
+test('the patch a case save writes is recognised by storedCaseOf, at every size', () => {
+  for (const form of [
+    { casePrice: 3.49, caseCount: 2000, caseItemUnit: 'pcs' },
+    { casePrice: 10, caseCount: 3, caseItemUnit: 'pcs' },
+    { casePrice: 20, caseCount: 4, caseItemSize: 2.5, caseItemUnit: 'kg' },
+    { casePrice: 12, caseCount: 7, caseItemSize: 330, caseItemUnit: 'ml' },
+  ]) {
+    assert.notEqual(storedCaseOf(pricePatch({ priceUnit: CASE_MODE, ...form }, AT)), null, JSON.stringify(form));
+  }
+});
+
+test('a rate typed on an old phone over the old case makes that case stale: null', () => {
+  assert.equal(storedCaseOf({ ...flour, pricePerUnit: 2.5 }), null);
+  assert.equal(storedCaseOf({ ...flour, priceUnit: 'l' }), null);
+  assert.equal(storedCaseOf({ ...eggs, priceUnit: 'kg' }), null);
+});
+
+test('a price deleted on an old phone stays deleted: the leftover case is not a price', () => {
+  const deleted = { ...flour, priceUnit: null, pricePerUnit: null };
+  assert.equal(storedCaseOf(deleted), null);
+  assert.equal(unitCost({ unit: 'cartone' }, deleted), null);
+  assert.equal(packPrice({}, { id: 'f', ...deleted }, false), null);
+  assert.equal(valueBlocker({}, { id: 'f', ...deleted }, false), NO_PRICE);
+});
+
+test('orders and the stocktake use the typed rate, not the stale case', () => {
+  const stale = { ...flour, pricePerUnit: 3 };
+  assert.equal(unitCost({ unit: 'kg' }, stale), 3);
+  assert.equal(unitCost({ unit: 'cartone', weight: '10kg' }, stale), 30);
+  assert.equal(packPrice({}, { id: 'f', weight: '10kg', ...stale }, false), 30);
+});
+
+test('storedCaseOf of nothing is null', () => {
+  assert.equal(storedCaseOf(null), null);
+  assert.equal(storedCaseOf({}), null);
 });
 
 // ── The stocktake ────────────────────────────────────────────────────────────
@@ -226,6 +309,29 @@ test('a case carries no blocker', () => {
 
 test('a line is valued at the case price', () => {
   assert.deepEqual(lineValue({}, { id: 'e', ...eggs }, 3, false), { value: 60, blocker: null });
+});
+
+test('counted in the ORDER unit: 720 eggs from a 360-egg case at 54 cost 108, not 38,880', () => {
+  const egg = { id: 'e', unit: 'pz', casePrice: 54, caseCount: 360, caseItemUnit: 'pcs', priceUnit: 'pcs', pricePerUnit: 0.15 };
+  assert.equal(packPrice({}, egg, false), 0.15);
+  assert.equal(lineValue({}, egg, 720, false).value, 108);
+  assert.equal(lineValue({}, { ...egg, unit: 'cartone' }, 2, false).value, 108);
+});
+
+test('counted in kilos: 50 kg from a 25 kg case at 20 cost 40', () => {
+  const sack = { id: 'f', unit: 'kg', casePrice: 20, caseCount: 1, caseItemSize: 25, caseItemUnit: 'kg', priceUnit: 'kg', pricePerUnit: 0.8 };
+  assert.equal(lineValue({}, sack, 50, false).value, 40);
+});
+
+test('an order unit that leaves doubt gives no value, with the no-price blocker', () => {
+  const bag = { id: 'f', unit: 'busta', ...flour };
+  assert.equal(packPrice({}, bag, false), null);
+  assert.deepEqual(lineValue({}, bag, 3, false), { value: null, blocker: NO_PRICE });
+});
+
+test('a tiny per-item cost is not rounded away in the stocktake', () => {
+  const straw = { id: 's', unit: 'pz', casePrice: 0.49, caseCount: 10000, caseItemUnit: 'pcs', priceUnit: 'pcs', pricePerUnit: 0.000049 };
+  assert.equal(packPrice({}, straw, false), 0.000049);
 });
 
 test('a closed month still uses only what was frozen into it', () => {

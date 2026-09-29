@@ -13,7 +13,7 @@
 // the price WITHOUT VAT, and the VAT is added on top here, once, for
 // DISPLAY. Nothing here ever writes back to a price.
 
-import { isPriceUnit, positiveNumber, caseOf } from './price-model.js';
+import { isPriceUnit, positiveNumber, storedCaseOf } from './price-model.js';
 import { parsePackSize } from './pack-size.js';
 
 // The net cost of ONE ORDERED UNIT of an ingredient — one sack, one case, one
@@ -53,19 +53,26 @@ const WEIGHT_UNITS = Object.freeze({
   ml: 0.001, cl: 0.01,
 });
 const MULTIPLIER = /\d\s*[x×*]\s*\d/i;
-// The order-unit words that mean «one piece» — for a price quoted per case of pieces,
-// ordering «50 pz» means fifty pieces at the per-piece rate, not fifty cases.
+// The order-unit words that mean «one item of the case» — ordering «50 pz» from a case price
+// means fifty items, each costing the case price divided by what the case holds.
 const PIECE_UNITS = new Set([
   'pz', 'pezzo', 'pezzi', 'pcs', 'pc', 'piece', 'pieces', 'each',
 ]);
+// The words that mean «one whole case» — the counted thing IS the case that was priced.
+const CASE_UNITS = new Set([
+  'cartone', 'cartoni', 'cassa', 'casse', 'collo', 'colli', 'confezione', 'confezioni',
+  'scatola', 'scatole', 'box', 'case', 'cases', 'carton', 'crate', 'pack',
+]);
 
 // ⚠️ A PRICE QUOTED PER CASE (30 Sep 2026) decides by the order unit, and only when the
-// price carries a whole case; without one everything below «const orderUnit» is exactly
-// what it was.
+// price carries a whole case (storedCaseOf — a case that no longer matches its rate is a
+// stale one and is ignored); without one everything below «const orderUnit» is what it was.
 //   a weight/volume word      → as ever: rate × that unit's kilos (a case of pieces: null)
-//   a piece word + a pz case  → the per-piece rate
-//   anything else             → the CASE price: one ordered unit is one case
-//     («1 cartone of 50 pz at 20» is 20, never 0.40 — the failure this exists to stop)
+//   a piece word              → ONE ITEM of the case: case price ÷ how many it holds
+//   a case word, or no unit   → the CASE price («1 cartone of 50 pz at 20» is 20, never 0.40)
+//   a case of ONE             → the case price, for any non-weight word
+//   any other word (busta, sacco, bottiglia…) on a case of several → null: one of WHAT?
+//     Like every other rule in this file, when in doubt there is no number.
 export function unitCost(ingredient, price) {
   if (!price || !isPriceUnit(price.priceUnit)) return null;
   const rate = positiveNumber(price.pricePerUnit);
@@ -74,13 +81,14 @@ export function unitCost(ingredient, price) {
   const orderUnit = String((ingredient && ingredient.unit) || '').trim().toLowerCase().replace(/\.$/, '');
   const byWeight = Object.prototype.hasOwnProperty.call(WEIGHT_UNITS, orderUnit);
 
-  const wholeCase = caseOf(price);
+  const wholeCase = storedCaseOf(price);
   if (wholeCase) {
     if (byWeight) {
       return price.priceUnit === 'pcs' ? null : rate * WEIGHT_UNITS[orderUnit];
     }
-    if (PIECE_UNITS.has(orderUnit) && price.priceUnit === 'pcs') return rate;
-    return wholeCase.casePrice;
+    if (PIECE_UNITS.has(orderUnit)) return wholeCase.casePrice / wholeCase.caseCount;
+    if (orderUnit === '' || CASE_UNITS.has(orderUnit) || wholeCase.caseCount === 1) return wholeCase.casePrice;
+    return null;
   }
   const packText = String((ingredient && ingredient.weight) || '');
 
