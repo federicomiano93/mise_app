@@ -86,3 +86,15 @@ test('the new phrases exist once in each language and are read at draw time', ()
   }
   assert.doesNotMatch(FORM, /^const [A-Z_]+ = .*t\('orders\./m);
 });
+
+test('R3: the supplier screen has two adds, each fixing the kind; the Catalogue still passes ingredient', () => {
+  const reg = codeOf(read('js/orders/registry.js'));
+  assert.match(reg, /openIngredientForm\(null, supplier\.id, 'ingredient'\)/);
+  assert.match(reg, /openIngredientForm\(null, supplier\.id, 'packaging'\)/);
+  assert.doesNotMatch(reg, /openIngredientForm\(null, supplier\.id\)/, 'no add without a kind');
+  assert.match(codeOf(read('js/catalogue/ingredient-create.js')), /presetKind: 'ingredient',/);
+  const src = read('js/i18n.js');
+  for (const key of ['orders.addIngredientShort', 'orders.addPackagingShort']) {
+    assert.equal(src.split(`'${key}':`).length - 1, 2, key);
+  }
+});

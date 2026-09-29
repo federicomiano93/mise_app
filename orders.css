@@ -996,6 +996,10 @@ input.ing-stock {
    box and its label sit on the same centre line instead of the text baseline. */
 
 
+/* The supplier screen's two adds side by side («+ Ingrediente», «+ Imballaggio»): the same
+   dashed button twice, the row carrying the gap the single one had. */
+.mgmt-add-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-bottom: 14px; }
+.mgmt-add-pair .mgmt-add { margin-bottom: 0; }
 .mgmt-add {
   width: 100%;
   padding: 12px;
