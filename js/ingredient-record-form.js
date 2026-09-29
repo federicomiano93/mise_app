@@ -29,7 +29,7 @@ import { kindOf } from './ingredient-kind.js';
 import { NO_SUPPLIER_ID } from './records.js';
 import { field, formActions, reportFailure, shortDate } from './record-ui.js';
 import {
-  PRICE_UNITS, priceUnitLabel,
+  PRICE_UNITS, priceUnitLabel, CASE_MODE, CASE_ITEM_UNITS, storedCaseOf,
   pricePatch, priceChanged, priceRecord, pricePerKg,
   formatPricePerUnit, formatRate, costReasonText, formatMoney,
 } from './price-model.js';
@@ -38,6 +38,11 @@ import {
 // js/ root on 29 Sep 2026 because this form now needs it too (CLAUDE.md
 // "Modular by feature").
 import { vatRatesFor } from './vat-rates.js';
+// The «Peso» box is a number and a unit menu, stored as the one text `weight` (pack-size.js
+// still reads it), and «Categoria» / «Unità d'ordine» are menus over lists their callers
+// hand in (record-choices.js builds them; this file never asks a feature for them).
+import { splitWeight, joinWeight, isUnusableWeight, WEIGHT_UNIT_CHOICES } from './pack-size.js';
+import { categoryValue, isBlankNewChoice } from './record-choices.js';
 
 // The one arrow: the same chevron every other list in the app draws. It turns to
 // point down when its fold opens (.mgmt-fold-head--open in orders.css).
@@ -98,9 +103,20 @@ const CAMERA_ICON = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
 // ingredient already carries in its own Weight field a few lines above
 // ("2.27kg"), and two boxes holding one fact drift apart.
 //
+// ⚠️ «A CONFEZIONE (CARTONE)» IS THE ONE WAY IN THAT DERIVES, AND IT DOES NOT BRING THE
+// OLD DRIFT BACK (30 Sep 2026, the owner's request). It has its OWN boxes — what the
+// case costs, how many it holds, how big each is — instead of asking again for the
+// «Weight» above, and the division is done once, at save time, by caseRate()
+// (js/price-model.js); the case is stored beside the rate it produced, so the rate
+// every recipe cost is built from is still one stored number. It is a MODE of the
+// «Come si acquista» menu, never a stored unit: what is stored is the derived kg / l /
+// pcs rate plus the four case fields.
+//
 // Returns { node, read() } so the form below can stay readable.
 // `defaultUnit` is how a NEW item starts: packaging is bought by the piece.
-function priceBlock(item, actions, defaultUnit = null) {
+// currentOrder() -> { unit, weight }: what the order-unit menu and the weight box hold RIGHT NOW,
+// so the VAT line follows an edit that has not been saved yet.
+function priceBlock(item, actions, defaultUnit = null, currentOrder = null) {
   // What the price box is called, per purchase form. Spelled out per unit rather
   // than assembled from the unit code, because "Price per pcs" is not English and
   // the label is the only place the ex-VAT rule can be stated.
@@ -137,13 +153,22 @@ function priceBlock(item, actions, defaultUnit = null) {
     pcs: t('orders.eg.ratePerPiece'),
   });
 
+  // A whole case stored on the ingredient reopens the card in case mode, with the
+  // values as typed (never re-derived from the rate: that is what the case is kept for).
+  // ⚠️ storedCaseOf, not caseOf: a case whose rate no longer matches the stored rate is a
+  // stale one (an old phone saved a new rate over it) and the card opens in the typed-rate
+  // mode, so the next save writes the rate that is really there — never the old case's.
+  const storedCase = item ? storedCaseOf(item) : null;
   const unitSelect = el('select', { class: 'mgmt-input' });
   unitSelect.appendChild(el('option', { value: '', text: t('orders.noPrice2') }));
   PRICE_UNITS.forEach(u => {
     const opt = el('option', { value: u, text: priceUnitLabel(u) });
-    if (item ? item.priceUnit === u : defaultUnit === u) opt.selected = true;
+    if (!storedCase && (item ? item.priceUnit === u : defaultUnit === u)) opt.selected = true;
     unitSelect.appendChild(opt);
   });
+  unitSelect.appendChild(el('option', {
+    value: CASE_MODE, text: t('orders.priceByCase'), selected: storedCase ? true : undefined,
+  }));
 
   // step="any" on both of them. A step of 0.01 makes the browser REFUSE 0.0035
   // as invalid — silently, by leaving the box empty on submit — and that is
@@ -164,6 +189,34 @@ function priceBlock(item, actions, defaultUnit = null) {
   // checked for what it is a price OF.
   const rate = money(item?.pricePerUnit, '');
   const pieceWeight = money(item?.unitWeightKg, t('orders.eg.pieceWeight'));
+
+  // ── Priced per case: what the case costs, and what is in it ─────────────────
+  // «Contiene [50] pz» or «Contiene [4] × [2.5] kg». Every box carries its own aria-label
+  // because none has a visible label of its own — they read as one sentence.
+  const casePriceBox = money(storedCase?.casePrice, '');
+  const caseCountBox = money(storedCase?.caseCount, '');
+  const caseSizeBox = money(storedCase?.caseItemSize, '');
+  caseCountBox.setAttribute('aria-label', t('orders.case.count'));
+  caseSizeBox.setAttribute('aria-label', t('orders.case.size'));
+  const caseUnitSelect = el('select', { class: 'mgmt-input', 'aria-label': t('orders.case.unit') });
+  CASE_ITEM_UNITS.forEach(u => {
+    caseUnitSelect.appendChild(el('option', {
+      value: u, text: u === 'pcs' ? t('orders.case.pcs') : u,
+      selected: (storedCase ? storedCase.caseItemUnit : 'pcs') === u ? true : undefined,
+    }));
+  });
+  const caseTimes = el('span', { class: 'mgmt-case-x', text: '×', 'aria-hidden': 'true' });
+  const casePriceLabel = el('span', {
+    class: 'mgmt-field-label',
+    text: t('orders.case.price', { currency: currentCurrency() }),
+  });
+  const caseBlock = el('div', { class: 'mgmt-case' }, [
+    el('label', { class: 'mgmt-field' }, [casePriceLabel, casePriceBox]),
+    el('div', { class: 'mgmt-field' }, [
+      el('span', { class: 'mgmt-field-label', text: t('orders.case.contains') }),
+      el('div', { class: 'mgmt-case-row' }, [caseCountBox, caseTimes, caseSizeBox, caseUnitSelect]),
+    ]),
+  ]);
 
   // ── Purchase VAT (29 Sep 2026) — so an order can show what it will cost
   // WITH VAT. The price above stays net, exactly as it does today: the
@@ -194,6 +247,16 @@ function priceBlock(item, actions, defaultUnit = null) {
   }
 
   const rateLabel = el('span', { class: 'mgmt-field-label' });
+  const rateField = el('label', { class: 'mgmt-field' }, [rateLabel, rate]);
+
+  // «= 2.00 / kg · 20.00 per case» — the rate the case works out to, and the case it
+  // came from. Built per call, in the language the screen has now.
+  function caseSummary(draft) {
+    const price = formatMoney(draft.casePrice);
+    return draft.priceUnit === 'pcs'
+      ? t('orders.case.summaryPiece', { rate: formatRate(draft.pricePerUnit), price })
+      : t('orders.case.summaryUnit', { rate: formatRate(draft.pricePerUnit), unit: draft.priceUnit, price });
+  }
   // Two lines, not one. A per-piece price can be perfectly complete as a PRICE
   // and still be unusable in a recipe written in grams, and a summary that only
   // showed "£2.10 / each" would look finished while the ingredient silently
@@ -218,6 +281,12 @@ function priceBlock(item, actions, defaultUnit = null) {
       pricePerUnit: rate.value,
       unitWeightKg: pieceWeight.value,
       vatRate: vatSelect.value,
+      // Only read as a case when the menu says so (pricePatch ignores them otherwise
+      // and writes all four as null, which is what clears an old case).
+      casePrice: casePriceBox.value,
+      caseCount: caseCountBox.value,
+      caseItemSize: caseSizeBox.value,
+      caseItemUnit: caseUnitSelect.value,
     };
   }
 
@@ -226,7 +295,15 @@ function priceBlock(item, actions, defaultUnit = null) {
   // so a misplaced decimal point is visible before Save rather than after.
   function refresh() {
     const unit = unitSelect.value;
-    pieceField.hidden = unit !== 'pcs';
+    const inCase = unit === CASE_MODE;
+    // In case mode the rate box gives way to the case boxes: the rate is worked out.
+    rateField.hidden = inCase;
+    caseBlock.hidden = !inCase;
+    // «Contiene 50 pz» has no size to give, so the box and its × go.
+    const itemsArePieces = caseUnitSelect.value === 'pcs';
+    caseSizeBox.hidden = itemsArePieces;
+    caseTimes.hidden = itemsArePieces;
+    pieceField.hidden = !(unit === 'pcs' || (inCase && itemsArePieces));
     rateLabel.textContent = RATE_LABEL[unit] || t('orders.priceGeneric', { currency: currentCurrency() });
     // ⚠️ The example follows the UNIT, and an unknown unit gets none. «(un chilo)»
     // left showing while somebody is pricing by the piece is worse than no example.
@@ -237,14 +314,19 @@ function priceBlock(item, actions, defaultUnit = null) {
       summaryMain.textContent = costReasonText(draft);
       summaryNote.textContent = '';
       summary.className = 'mgmt-price-summary muted';
+      // ⚠️ THE VAT LINE MUST GO WITH THE PRICE: without this it kept showing the last
+      // complete figure while a box was being emptied.
+      vatSummary.textContent = '';
       return;
     }
     const perKg = pricePerKg(draft);
     // For a per-piece price the price per KILO is the derived number, and it is
     // the one every recipe cost is built from — so it is spelled out rather than
     // left to be worked out from a piece weight.
-    const parts = [formatPricePerUnit(draft)];
-    if (unit === 'pcs' && perKg !== null) parts.push(`${formatRate(perKg)} / kg`);
+    // For a case the derived rate leads, with the case price it came from, so a
+    // misplaced decimal or a wrong count is visible before Save.
+    const parts = [inCase ? caseSummary(draft) : formatPricePerUnit(draft)];
+    if (draft.priceUnit === 'pcs' && perKg !== null) parts.push(`${formatRate(perKg)} / kg`);
     summaryMain.textContent = parts.filter(Boolean).join('  ·  ');
     // Empty whenever the ingredient IS costable, so the note only ever appears
     // when there is something left to do.
@@ -252,12 +334,11 @@ function priceBlock(item, actions, defaultUnit = null) {
     summary.className = 'mgmt-price-summary';
 
     // ── What ONE ORDERED UNIT costs, with VAT (29 Sep 2026) ──────────────────
-    // ⚠️ THE SAME unitCost() ORDERS ITSELF CALLS. `item?.weight` is the STORED
-    // pack-weight text, not whatever is currently typed in the separate
-    // "Weight" field above this section (the two are not wired together) — so
-    // this line can lag one unsaved edit behind; acceptable for a preview
-    // line, and it corrects itself the moment the record is saved and re-opened.
-    const cost = unitCost(item || {}, draft);
+    // ⚠️ THE SAME unitCost() ORDERS ITSELF CALLS, fed the order unit and the pack weight as
+    // they stand in the open card (currentOrder), not the stored ones: «20 per case of 50»
+    // reads 20 ordered by the case and 0.40 ordered by the piece, and the line must say which
+    // before Save. The card re-runs refresh() when either control changes.
+    const cost = unitCost({ ...(item || {}), ...(currentOrder ? currentOrder() : {}) }, draft);
     const vat = draft.vatRate;
     if (cost !== null && vat !== null) {
       const gross = cost + (cost * vat) / 100;
@@ -269,7 +350,7 @@ function priceBlock(item, actions, defaultUnit = null) {
     }
   }
 
-  [unitSelect, rate, pieceWeight, vatSelect].forEach(input => {
+  [unitSelect, rate, pieceWeight, vatSelect, casePriceBox, caseCountBox, caseSizeBox, caseUnitSelect].forEach(input => {
     input.addEventListener('input', refresh);
     input.addEventListener('change', refresh);
   });
@@ -285,22 +366,27 @@ function priceBlock(item, actions, defaultUnit = null) {
   // finish the copy rather than design a second answer.
   const pricePair = el('div', { class: 'mgmt-pair' }, [
     field(t('orders.howItIsBought'), unitSelect),
-    el('label', { class: 'mgmt-field' }, [rateLabel, rate]),
+    rateField,
   ]);
 
-  // The PURCHASE VAT field — its own row, full width: the 2-column pair above
-  // is priceUnit/rate, which belong together as "a rate OF this unit"; VAT is
-  // a third, independent fact and forcing it into that grid would leave an
-  // empty cell beside it on every screen.
-  const vatField = el('label', { class: 'mgmt-field' }, [
-    el('span', { class: 'mgmt-field-label', text: t('orders.vat.label') }),
-    vatSelect,
+  // The PURCHASE VAT field — the LEFT cell of its own .mgmt-pair row, the right cell
+  // left empty on purpose. VAT is a third, independent fact (the pair above is
+  // priceUnit/rate, "a rate OF this unit"), but a select stretched to the full card
+  // looked out of proportion (Federico, 30 Sep 2026); the same grid gives it exactly
+  // the width of «Come si acquista» above, at 296px and on a tablet alike.
+  const vatField = el('div', { class: 'mgmt-pair' }, [
+    el('label', { class: 'mgmt-field mgmt-price-vat-cell' }, [
+      el('span', { class: 'mgmt-field-label', text: t('orders.vat.label') }),
+      vatSelect,
+    ]),
   ]);
 
-  const node = el('div', {}, [
+  // .mgmt-price-block spaces the blocks apart (orders.css); before, they touched.
+  const node = el('div', { class: 'mgmt-price-block' }, [
     // ⚠️ «Peso di un pezzo» STAYS FULL WIDTH. It appears only when the unit is
     // `pcs`, and a column that comes and goes would make the row above it jump.
     pricePair,
+    caseBlock,
     // Said ONCE, under the pair, instead of four times inside four labels that no
     // longer have room for it. ⚠️ It may not be dropped: entering the gross figure
     // inflates every recipe cost by the VAT rate and nothing on any screen looks wrong.
@@ -312,7 +398,7 @@ function priceBlock(item, actions, defaultUnit = null) {
     item ? priceHistoryBlock(item, actions) : null,
   ]);
 
-  return { node, read };
+  return { node, read, refresh };
 }
 
 // The append-only record of what this ingredient has cost. Loaded only when
@@ -981,6 +1067,117 @@ function selectSupplier(select, { id, name }) {
   select.value = id;
 }
 
+// ── «Peso»: a number and a unit ───────────────────────────────────────────────
+//
+// ⚠️ TEXT THAT CANNOT BE SPLIT ("6x1kg", "sacco") IS NEVER LOST BY ACCIDENT. It is shown under
+// the box as «Attuale» and saved exactly as it was, unless a usable number is typed — then the
+// new joined value replaces it — or the person taps «Rimuovi», which is the one way to clear it.
+// ⚠️ A NUMBER BOX WITH SOMETHING UNUSABLE IN IT BLOCKS THE SAVE (invalid()): falling back to ''
+// would erase a weight that was readable before, and falling back to the old text would hide
+// that the typing was thrown away.
+let messageCount = 0;
+// A short visible message under a refused box, tied to it by aria-describedby and gone the
+// moment the box is edited (P18: the border colour alone says nothing to a screen reader).
+function refusalMessage(box, text) {
+  messageCount += 1;
+  const id = `mgmt-refusal-${messageCount}`;
+  const node = el('p', { class: 'mgmt-field-error', id, text, hidden: 'hidden' });
+  return {
+    node,
+    show: () => {
+      node.hidden = false;
+      box.setAttribute('aria-invalid', 'true');
+      box.setAttribute('aria-describedby', id);
+      box.focus();
+    },
+    clear: () => {
+      node.hidden = true;
+      box.removeAttribute('aria-invalid');
+      box.removeAttribute('aria-describedby');
+    },
+  };
+}
+
+function weightControl(stored) {
+  const start = splitWeight(stored);
+  let legacy = start.legacy || '';
+  const amount = el('input', {
+    type: 'text', inputmode: 'decimal', class: 'mgmt-input', value: start.amount,
+    'aria-label': t('orders.weight.amount'), placeholder: t('orders.eg.packWeight'),
+  });
+  const unit = el('select', { class: 'mgmt-input', 'aria-label': t('orders.weight.unit') },
+    WEIGHT_UNIT_CHOICES.map(u => el('option', { value: u, text: u })));
+  unit.value = start.unit;
+  const refusal = refusalMessage(amount, t('orders.weight.invalid'));
+  amount.addEventListener('input', refusal.clear);
+  const legacyRow = legacy
+    ? el('div', { class: 'mgmt-weight-legacy-row' }, [
+      el('p', { class: 'mgmt-weight-legacy', text: t('orders.weight.current', { value: legacy }) }),
+      el('button', {
+        type: 'button', class: 'mgmt-link', text: t('orders.weight.remove'),
+        'aria-label': t('orders.weight.removeAria', { value: legacy }),
+        onClick: () => { legacy = ''; legacyRow.remove(); amount.focus(); },
+      }),
+    ])
+    : null;
+  const node = el('div', { class: 'mgmt-weight' }, [
+    el('div', { class: 'mgmt-weight-row' }, [amount, unit]),
+    refusal.node,
+    legacyRow,
+  ]);
+  return {
+    node,
+    read: () => joinWeight(amount.value, unit.value) || legacy,
+    invalid: () => isUnusableWeight(amount.value, unit.value),
+    markInvalid: refusal.show,
+    // The price block's live VAT line depends on the weight typed here, not only the stored one.
+    onChange: (fn) => { amount.addEventListener('input', fn); unit.addEventListener('change', fn); },
+  };
+}
+
+// ── «Categoria» and «Unità d'ordine»: a menu with «+ Nuova …» ─────────────────
+//
+// values — the words on offer (record-choices.js). ⚠️ THE ITEM'S CURRENT VALUE IS MATCHED
+// EXACTLY, never ignoring case: the menu has to open on the very string that is stored, or an
+// unrelated save would write another spelling back. «— nessuna —» is the empty answer.
+// ⚠️ THE SENTINEL IS NOT A WORD A PERSON WOULD FILE UNDER, so no real value collides with it.
+const NEW_CHOICE = '__mise_new__';
+
+function choiceControl({ values, current, newLabel, placeholder, ariaLabel, blankText }) {
+  const select = el('select', { class: 'mgmt-input' }, [
+    el('option', { value: '', text: t('orders.choice.none') }),
+    ...values.map(v => el('option', { value: v, text: v })),
+    el('option', { value: NEW_CHOICE, text: newLabel }),
+  ]);
+  const wanted = String(current || '').trim();
+  const match = values.find(v => v === wanted);
+  select.value = match !== undefined ? match : '';
+  // Kept if a caller's list somehow lacks the stored word: never lose a value.
+  if (wanted && match === undefined) {
+    const extra = el('option', { value: wanted, text: wanted });
+    select.insertBefore(extra, select.lastChild);
+    select.value = wanted;
+  }
+  const typed = el('input', {
+    type: 'text', class: 'mgmt-input', placeholder, 'aria-label': ariaLabel, hidden: 'hidden',
+  });
+  const refusal = refusalMessage(typed, blankText);
+  typed.addEventListener('input', refusal.clear);
+  select.addEventListener('change', () => {
+    const isNew = select.value === NEW_CHOICE;
+    typed.hidden = !isNew;
+    refusal.clear();
+    if (isNew) typed.focus();
+  });
+  return {
+    node: el('div', { class: 'mgmt-choice' }, [select, typed, refusal.node]),
+    read: () => (select.value === NEW_CHOICE ? typed.value.trim() : select.value),
+    invalid: () => isBlankNewChoice(select.value === NEW_CHOICE, typed.value),
+    markInvalid: refusal.show,
+    onChange: (fn) => { select.addEventListener('change', fn); typed.addEventListener('input', fn); },
+  };
+}
+
 // ── The form ──────────────────────────────────────────────────────────────────
 //
 // item        — the ingredient being edited, or null for a new one
@@ -989,6 +1186,8 @@ function selectSupplier(select, { id, name }) {
 // presetKind  — 'packaging' when added from the packaging list
 // presetName  — what a new one is called to start with (the Catalogue passes what was typed)
 // mayPrice    — may this person write a price here (mayWritePrices, js/record-data.js)
+// categories  — the words «Categoria» offers (record-choices.js categoryChoices)
+// orderUnits  — the words «Unità d'ordine» offers (record-choices.js unitChoices)
 // panels      — { allergens, nutrition }: which optional panels this venue uses
 // showKind    — false where only an INGREDIENT makes sense (a recipe row in the Catalogue):
 //               the «Tipo» menu is not drawn and the item is filed as the preset kind
@@ -1002,7 +1201,7 @@ function selectSupplier(select, { id, name }) {
 // to ask must not quietly remove the allergen card.
 export function buildIngredientForm({
   item, suppliers, preset, presetKind = null, presetName = '', mayPrice = false,
-  panels = { allergens: true, nutrition: true }, showKind = true, actions, onDone, onCancel,
+  categories = [], orderUnits = [], panels = { allergens: true, nutrition: true }, showKind = true, actions, onDone, onCancel,
 }) {
   const name = el('input', { type: 'text', class: 'mgmt-input', value: item?.name || presetName || '' });
   // Food, or packaging? (13 Sep 2026.) A box, a tray or a label is bought, priced and
@@ -1015,11 +1214,19 @@ export function buildIngredientForm({
   ]);
   kindSelect.value = startKind;
   const brand = el('input', { type: 'text', class: 'mgmt-input', value: item?.brand || '', placeholder: t('orders.eGGalbani') });
-  const weight = el('input', { type: 'text', class: 'mgmt-input', value: item?.weight || '', placeholder: t('orders.eg.packWeight') });
-  const category = el('input', { type: 'text', class: 'mgmt-input', value: item?.category || '' });
+  const weight = weightControl(item?.weight);
+  const category = choiceControl({
+    values: categories, current: categoryValue(item?.category),
+    newLabel: t('orders.choice.newCategory'), placeholder: t('orders.choice.categoryPlaceholder'),
+    ariaLabel: t('orders.choice.categoryAria'), blankText: t('orders.choice.categoryBlank'),
+  });
   // "unit" is now the ORDER unit (how you count the order: casse, box), shown
   // next to the quantity — not a unit of measure. Same field, new meaning.
-  const unit = el('input', { type: 'text', class: 'mgmt-input', value: item?.unit || '', placeholder: t('orders.eGCasseBox') });
+  const unit = choiceControl({
+    values: orderUnits, current: item?.unit,
+    newLabel: t('orders.choice.newUnit'), placeholder: t('orders.choice.unitPlaceholder'),
+    ariaLabel: t('orders.choice.unitAria'), blankText: t('orders.choice.unitBlank'),
+  });
 
   // "No supplier" is a real answer, not a missing one: the supermarket, the cash
   // & carry, the shop down the road. It is FIRST and it is the default for a new
@@ -1068,7 +1275,12 @@ export function buildIngredientForm({
   // ⚠️ AND ONLY WHERE THE VENUE USES FOOD COST: a price the database would refuse
   // takes the whole save down with it (see mayWritePrices, js/record-data.js).
   // ⚠️ `mayPrice` IS HANDED IN — see the note on the defaults above.
-  const price = mayPrice ? priceBlock(item, actions, startKind === 'packaging' ? 'pcs' : null) : null;
+  const price = mayPrice ? priceBlock(item, actions, startKind === 'packaging' ? 'pcs' : null,
+    () => ({ unit: unit.read(), weight: weight.read() })) : null;
+  if (price) {
+    unit.onChange(price.refresh);
+    weight.onChange(price.refresh);
+  }
   // ⚠️ NOT A ROLE, A VENUE. Everybody in the building gets the same answer here: it
   // says whether this business tracks allergens and nutrition at all, and the two
   // switches behind it live one screen away (js/orders/registry-settings.js).
@@ -1084,6 +1296,10 @@ export function buildIngredientForm({
   const save = el('button', { type: 'button', class: 'btn-primary', onClick: async () => {
     // The supplier is no longer required — only the name is.
     if (!name.value.trim()) { name.focus(); return; }
+    // Blocked BEFORE anything is written, and pointing at the box (P20): an unusable weight
+    // would otherwise erase the stored one, an empty «+ New …» would clear the category.
+    const refused = [weight, category, unit].find(control => control.invalid());
+    if (refused) { refused.markInvalid(); return; }
     save.disabled = true;
 
     // Every price field is in the patch, as a number or as null, because this is
@@ -1098,9 +1314,9 @@ export function buildIngredientForm({
       name: name.value.trim(),
       supplierId: supplierSelect.value,
       brand: brand.value.trim(),
-      weight: weight.value.trim(),
-      category: category.value.trim() || 'Other',
-      unit: unit.value.trim(),
+      weight: weight.read(),
+      category: category.read() || 'Other',
+      unit: unit.read(),
       active: item ? item.active !== false : true,
       kind: kindSelect.value,
       ...patch,
@@ -1146,9 +1362,9 @@ export function buildIngredientForm({
         field(t('orders.field.supplier'), supplierSelect),
         addSupplierBtn,
         field(t('orders.field.brand'), brand),
-        field(t('orders.field.weight'), weight),
-        field(t('orders.field.category'), category),
-        field(t('orders.orderUnit'), unit),
+        field(t('orders.field.weight'), weight.node),
+        field(t('orders.field.category'), category.node),
+        field(t('orders.orderUnit'), unit.node),
       ],
     }),
     // ⚠️ STILL DRAWN ONLY FOR SOMEBODY WHO MAY SEE MONEY — the card wraps the price,

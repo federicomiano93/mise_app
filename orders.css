@@ -1025,6 +1025,10 @@ input.ing-stock {
 .mgmt-item-meta { display: block; font-size: 12px; color: var(--text3); font-family: 'DM Mono', monospace; margin-top: 2px; }
 .mgmt-item-actions { display: flex; flex-direction: column; gap: 6px; flex-shrink: 0; align-items: flex-end; }
 .mgmt-link {
+  /* At least 24px tall (WCAG 2.2 target size) — «Mostrali» was 22px. */
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
   background: none;
   border: none;
   color: var(--accent);
@@ -1131,8 +1135,36 @@ input.ing-stock {
   padding: 10px 12px;
 }
 /* Nothing is wrong when there is no price yet — most ingredients start this way —
-   so the "no price" state is quiet, not a warning. */
-.mgmt-price-summary.muted { color: var(--text3); }
+   so the "no price" state is quiet, not a warning: small grey text with no box, the
+   size of .mgmt-price-vat-summary below (Federico, 30 Sep 2026: the boxed line was
+   too big and stuck to the VAT field). --text3 passes 4.5:1; --text4 does not. */
+.mgmt-price-summary.muted {
+  color: var(--text3);
+  font-family: inherit;
+  font-size: 13px;
+  background: none;
+  border: none;
+  padding: 0;
+}
+
+/* The blocks of the price section, spaced apart. They are direct children of one
+   column, so a flex gap does it; a block that is hidden or :empty (display:none)
+   takes its gap with it. --space-3 is the 12px this form's fields already use. */
+.mgmt-price-block { display: flex; flex-direction: column; gap: var(--space-3); }
+.mgmt-price-block > .mgmt-price-summary.muted { margin-top: var(--space-1); }
+
+/* A price quoted per case: the case price, then «Contiene [50] pz» / «[4] × [2.5] kg» on ONE
+   row. The boxes share the width equally and may shrink (min-width:0 — a <select> and a
+   number input otherwise keep their intrinsic width and push the row past a 296px card);
+   the × is only a sign between two boxes. Icon/label rules do not apply: no icon here. */
+.mgmt-case { display: flex; flex-direction: column; gap: var(--space-3); }
+.mgmt-case-row { display: flex; align-items: center; gap: 8px; }
+/* At 296px the four controls share ~200px: with the card's 12px side padding «1000» and «ml»
+   plus the select's arrow did not fit. Slimmer side padding on the three, and the unit menu
+   sized to what it holds instead of a quarter of the row. */
+.mgmt-case-row .mgmt-input { flex: 1 1 0; width: auto; min-width: 0; padding-left: 8px; padding-right: 8px; }
+.mgmt-case-row select.mgmt-input { flex: 0 0 auto; }
+.mgmt-case-x { flex: 0 0 auto; color: var(--text2); }
 
 /* What is still missing, under the numbers. It appears only when the price is
    complete as a PRICE but the ingredient still cannot be costed — a per-piece
@@ -1149,6 +1181,12 @@ input.ing-stock {
    a warning the way .mgmt-price-note is. */
 .mgmt-price-vat-summary { margin: 6px 0 0; font-size: 13px; color: var(--text2); }
 .mgmt-price-vat-summary:empty { display: none; }
+/* The flex gap of .mgmt-price-block already spaces this line from the block before it; its
+   own 6px margin would be a second gap on top. */
+.mgmt-price-block > .mgmt-price-vat-summary { margin-top: 0; }
+/* The VAT select is half a row from 360px up, the width of «Come si acquista» above it.
+   Below that half is 113px and «— non indicata» needs 100px of text, so it takes the row. */
+@media (max-width: 359px) { .mgmt-price-vat-cell { grid-column: 1 / -1; } }
 
 .mgmt-price-history { display: flex; flex-direction: column; gap: 6px; }
 .mgmt-price-row {
@@ -2952,3 +2990,43 @@ body:not([data-orders-tab="deliveries"]) #orders-owed { display: none; }
   margin-top: 4px;
 }
 .totbox-warn { margin: 6px 0 0; font-size: 13px; color: var(--warn); font-weight: 600; }
+
+/* ── The ingredient card's choice menus and weight box (29 Sep 2026) ───────────────
+   «Peso» is a number with its unit menu beside it; «Categoria» and «Unità d'ordine» are a
+   menu with, when «+ Nuova …» is picked, a text box right under it. The grid columns are
+   minmax(0, …) for the same reason as .mgmt-pair above: a <select> would otherwise size to
+   its widest option and push the number box off the card. */
+.mgmt-weight { min-width: 0; }
+.mgmt-weight-row { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 8px; }
+.mgmt-weight-row .mgmt-input { width: 100%; min-width: 0; }
+/* The unreadable stored weight and its low-key «Remove»: a flex row so the button sits on
+   the text's own line, wrapping under it when the stored text is long. */
+.mgmt-weight-legacy-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; margin-top: 6px; }
+.mgmt-field-error { margin: 6px 0 0; font-size: 13px; color: var(--danger); }
+.mgmt-field-error[hidden] { display: none; }
+.mgmt-weight-legacy { margin: 0; font-size: 13px; color: var(--text3); min-width: 0; overflow-wrap: anywhere; }
+/* A box the save was refused for (a weight that is not a number, a «new …» left empty). */
+.mgmt-form .mgmt-input[aria-invalid="true"],
+.mgmt-form .mgmt-input[aria-invalid="true"]:focus { border-color: var(--danger); }
+.mgmt-choice { display: flex; flex-direction: column; gap: 8px; }
+.mgmt-choice .mgmt-input { width: 100%; min-width: 0; }
+.mgmt-choice > [hidden] { display: none; }
+
+/* The trash at the end of a category row in Settings: low-key, but a full 44px target. */
+.reg-cat-del {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  margin: -6px -8px -6px 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--danger);
+  cursor: pointer;
+}
+.reg-cat-del:focus-visible { outline: 3px solid var(--accent-2); outline-offset: -3px; }
+.reg-cat-del:disabled { opacity: .5; }
+.reg-cat-saved { display: inline-block; margin-top: 8px; }

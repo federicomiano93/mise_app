@@ -20,7 +20,7 @@
 //
 // NAVIGATION — a stack, so Back is honest at every depth:
 //
-//   Ingredienti · Imballaggi · Fornitori     (the page itself)
+//   Ingredienti · Fornitori · Imballaggi     (the page itself)
 //     └─ one supplier: its record + everything it sells
 //          ├─ its form
 //          └─ one ingredient's form
@@ -59,9 +59,11 @@ import {
   BACK_ICON, mgmtRow,
 } from './mgmt-ui.js';
 
-// data:    { suppliers(): [], ingredients(): [] } — live getters
+// data:    { suppliers(): [], ingredients(): [], categories(current): [], orderUnits(current): [],
+//            categoriesLoaded(): boolean } — live getters; categories and orderUnits are the
+//            words the ingredient card's menus offer
 // actions: { saveSupplier, saveIngredient, priceHistory, setSupplierActive,
-//            setIngredientActive, deleteSupplier, deleteIngredient }
+//            setIngredientActive, deleteSupplier, deleteIngredient, deleteCategory(list, ids) }
 // hooks:   { onChrome({ addLabel }) } — told on every paint which word the page
 //            header's «+» should carry, because it follows the active tab.
 //          { pane } — the element beside the list where a level opens on a TABLET
@@ -117,8 +119,10 @@ export function buildRegistry(data, actions, hooks = {}) {
     type: 'button', class: 'view-switch-btn', role: 'tab', 'aria-selected': 'false',
     onClick: () => setTab('suppliers'),
   });
+  // Order on screen: Ingredients · Suppliers · Packaging (30 Sep 2026; the buttons are
+  // still BUILT in the order above, only the switch is arranged differently).
   // ⚠️ Ingredients on the LEFT and lit, matching the `tab` default above.
-  const viewSwitch = el('div', { class: 'view-switch', role: 'tablist' }, [ingredientsBtn, packagingBtn, suppliersBtn]);
+  const viewSwitch = el('div', { class: 'view-switch', role: 'tablist' }, [ingredientsBtn, suppliersBtn, packagingBtn]);
 
   // An address can ask for the packaging list (suppliers.html#packaging) — Food cost's
   // packaging chooser sends somebody here when there is nothing to choose yet. Applied
@@ -444,6 +448,9 @@ export function buildRegistry(data, actions, hooks = {}) {
           suppliers: data.suppliers(),
           preset: presetSupplierId,
           presetKind,
+          // The menus' words, from the page's live data — the card imports no feature code.
+          categories: data.categories?.(item?.category) || [],
+          orderUnits: data.orderUnits?.(item?.unit) || [],
           // ⚠️ DECIDED HERE AND HANDED IN, since the card moved to js/ root: whether the
           // price is drawn (the role AND Food cost — see mayWritePrices) and which panels
           // this venue uses. The card itself reads neither.
@@ -516,6 +523,12 @@ export function buildRegistry(data, actions, hooks = {}) {
   function openSettings() {
     push((entry) => overlay(entry, t('ui.settings'), buildRegistrySettings({
       panels: ingredientPanels(),
+      // Read at the moment the screen is built — and it IS rebuilt by refresh() on every
+      // snapshot, so the list and the counts are always the live ones.
+      categories: () => data.categories?.() || [],
+      categoriesReady: () => data.categoriesLoaded?.() !== false,
+      ingredients: () => data.ingredients(),
+      onDeleteCategory: (list, ids) => actions.deleteCategory(list, ids),
       onSet: async (key, on) => {
         // ⚠️ TWO CALLABLES, ROUTED BY KEY. setIngredientPanels writes two fields whose
         // absence means YES; setPackPhoto writes one whose absence means NO, because it

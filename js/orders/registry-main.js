@@ -9,12 +9,15 @@
 // js/orders/ and imports nothing from another feature's folder.
 
 import { t } from '../i18n.js';
-import { onSession } from '../firebase.js';
+import { onSession, currentSession } from '../firebase.js';
+import { outputLanguage } from '../market.js';
+import { categoryChoices, unitChoices } from '../record-choices.js';
 import { withPrices } from '../price-model.js';
 import { buildRegistry } from './registry.js';
 import {
   COLLECTIONS, watchCollection, watchIngredientPrices, canManageHere,
   saveDoc, removeDoc, saveIngredientWithPrice, saveSupplierRecord, getPriceHistory,
+  watchDoc, setCategoryOnMany,
 } from './firebase-orders.js';
 
 const state = {
@@ -22,7 +25,10 @@ const state = {
   rawIngredients: [],
   ingredientPrices: {},
   ingredients: [],
-  loaded: { ingredients: false },
+  // The venue's saved category list (config/orders). null = never saved one, or not
+  // loaded yet: both mean «offer the defaults».
+  ingredientCategories: null,
+  loaded: { ingredients: false, config: false },
 };
 
 const host = document.getElementById('registry-host');
@@ -34,6 +40,19 @@ const screen = buildRegistry(
   {
     suppliers: () => state.suppliers,
     ingredients: () => state.ingredients,
+    // ⚠️ THE LANGUAGE IS READ HERE, AT CALL TIME: no venue is open when this module loads.
+    // The words are the venue's OUTPUT language, not the screen's (js/record-choices.js).
+    // `current` is the item being edited, whose own value is always offered.
+    categories: (current) => categoryChoices({
+      stored: state.ingredientCategories, ingredients: state.ingredients,
+      language: outputLanguage(currentSession().location), current,
+    }),
+    // ⚠️ Until config/orders has answered, `categories()` is only the defaults: Settings keeps
+    // the delete buttons off, or a delete would overwrite the saved list with them.
+    categoriesLoaded: () => state.loaded.config,
+    orderUnits: (current) => unitChoices({
+      ingredients: state.ingredients, language: outputLanguage(currentSession().location), current,
+    }),
   },
   {
     // Resolves with the supplier's id, new or not: «+ Nuovo fornitore» inside an ingredient's
@@ -53,6 +72,9 @@ const screen = buildRegistry(
     setIngredientActive: (id, active) => saveDoc(COLLECTIONS.ingredients, id, { active }),
     deleteSupplier: (id) => removeDoc(COLLECTIONS.suppliers, id),
     deleteIngredient: (id) => removeDoc(COLLECTIONS.ingredients, id),
+    // The shortened list and «no category» on every ingredient that used it — one batch.
+    deleteCategory: (list, ids) => setCategoryOnMany(ids, 'Other',
+      { name: COLLECTIONS.config, id: 'orders', data: { ingredientCategories: list } }),
   },
   {
     onChrome: ({ addLabel }) => addBtn?.setAttribute('aria-label', addLabel),
@@ -132,6 +154,17 @@ watchIngredientPrices(map => {
     screen.refresh();
   }
 });
+
+// The venue's saved category list. A failure here is not shown on the page: the menus fall
+// back to the defaults plus whatever ingredients already use, which is a usable screen.
+watchDoc(COLLECTIONS.config, 'orders', (doc, fromCache) => {
+  state.ingredientCategories = Array.isArray(doc?.ingredientCategories) ? doc.ingredientCategories : null;
+  // ⚠️ «MISSING» COUNTS ONLY WHEN THE SERVER SAID IT. A cold start offline reports a missing
+  // document from an empty cache; treating that as «loaded» would let a delete write the
+  // defaults-minus-one over the venue's real list.
+  if (doc !== null || !fromCache) state.loaded.config = true;
+  screen.refresh();
+}, err => console.error('Live category list failed:', err));
 
 watchCollection(COLLECTIONS.ingredients, list => {
   state.rawIngredients = list;

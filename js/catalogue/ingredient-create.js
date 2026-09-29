@@ -22,6 +22,8 @@ import { t } from '../i18n.js';
 import { el } from './dom.js';
 import { currentSession } from '../firebase.js';
 import { allergensOn, nutritionOn } from '../venue-features.js';
+import { outputLanguage } from '../market.js';
+import { categoryChoices, unitChoices } from '../record-choices.js';
 import { buildIngredientForm } from '../ingredient-record-form.js';
 import { buildSupplierForm } from '../supplier-record-form.js';
 import { mayWritePrices, saveIngredientWithPrice, saveSupplierRecord } from '../record-data.js';
@@ -32,6 +34,11 @@ const BACK_ICON = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" w
 function supplierList(suppliers) {
   if (Array.isArray(suppliers)) return suppliers.filter(s => s && s.id);
   return Object.entries(suppliers || {}).map(([id, s]) => ({ ...s, id: s?.id || id }));
+}
+
+// The catalogue's ingredients as a plain list (it keeps them as { id: ingredient }).
+function ingredientList(ingredients) {
+  return Array.isArray(ingredients) ? ingredients : Object.values(ingredients || {});
 }
 
 // One full-screen layer in the catalogue's own header. `.rec-host` is what records.css
@@ -80,7 +87,11 @@ function createSupplier(layers) {
 
 // Open the card for a new ingredient called `name`. Resolves with { id, name } once it is
 // saved, or with null when somebody backs out.
-export function openIngredientCreate({ name, suppliers }) {
+//
+// ⚠️ NO STORED CATEGORY LIST HERE, ON PURPOSE: the list lives in config/orders, which a
+// Catalogue-only venue cannot read. The menus offer the venue's default words plus every
+// category and unit the ingredients already use.
+export function openIngredientCreate({ name, suppliers, ingredients }) {
   return new Promise(resolve => {
     const layers = [];
     let settled = false;
@@ -93,6 +104,8 @@ export function openIngredientCreate({ name, suppliers }) {
     };
 
     const location = currentSession().location;
+    const language = outputLanguage(location);
+    const known = ingredientList(ingredients);
     const form = buildIngredientForm({
       item: null,
       presetName: name,
@@ -103,6 +116,8 @@ export function openIngredientCreate({ name, suppliers }) {
       showKind: false,
       suppliers: supplierList(suppliers),
       preset: null,
+      categories: categoryChoices({ stored: undefined, ingredients: known, language }),
+      orderUnits: unitChoices({ ingredients: known, language }),
       // ⚠️ THE SAME TWO DECISIONS registry.js makes, from the same root answers.
       mayPrice: mayWritePrices(),
       panels: { allergens: allergensOn(location), nutrition: nutritionOn(location), packPhoto: false },

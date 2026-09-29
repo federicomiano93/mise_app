@@ -531,9 +531,9 @@ test('⚠️⚠️ the screen opens on the INGREDIENTS, and all three parts of t
   const code = codeOf(REGISTRY);
   assert.match(code, /let tab = 'ingredients';/,
     'the default list must be the ingredients');
-  // ⚠️ THREE BUTTONS SINCE 13 Sep 2026 — Ingredienti · Imballaggi · Fornitori. Packaging
-  // sits beside the ingredients because it is the same kind of record, bought the same way.
-  assert.match(code, /role: 'tablist' \}, \[ingredientsBtn, packagingBtn, suppliersBtn\]/,
+  // ⚠️ THREE BUTTONS SINCE 13 Sep 2026 — Ingredienti · Fornitori · Imballaggi (order changed
+  // 30 Sep 2026). Packaging is the same kind of record as an ingredient, bought the same way.
+  assert.match(code, /role: 'tablist' \}, \[ingredientsBtn, suppliersBtn, packagingBtn\]/,
     'the ingredients button must be built FIRST, so it sits on the left');
   const built = code.slice(0, code.indexOf('const viewSwitch'));
   const ing = built.indexOf('const ingredientsBtn');

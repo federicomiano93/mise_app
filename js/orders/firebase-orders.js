@@ -15,6 +15,7 @@
 
 import { firebaseConfig, sessionReady, currentSession } from '../firebase.js';
 import { currentLocationId, pathFor } from '../location.js';
+import { planBatches, categoryPatch, INGREDIENT_WRITES_PER_BATCH } from './category-batches.js';
 import {
   getApps,
   getApp,
@@ -33,6 +34,7 @@ import {
   deleteField,
   onSnapshot,
   runTransaction,
+  writeBatch,
   query,
   where,
   orderBy,
@@ -204,6 +206,32 @@ export async function createDoc(name, data) {
   return ref.id;
 }
 
+// Set the category on many ingredients at once — «delete a category» leaves every ingredient
+// that used it without one. Stamped with the bakery, exactly like saveDoc.
+//
+// ⚠️ `alsoWrite` ({ name, id, data }) RIDES IN THE FIRST BATCH: the venue's category list and
+// the first ingredients then change together or not at all. A longer list is split into
+// several batches, the list going first — see js/orders/category-batches.js for why they are
+// small (Firestore's 20 document accesses per write, which the emulator does not enforce).
+//
+// ⚠️ batch.update(), NOT set with merge: an ingredient deleted meanwhile on another phone must
+// not come back as a nameless document. The batch fails instead and the error is reported;
+// the list is recomputed from live data on retry.
+export async function setCategoryOnMany(ids, value, alsoWrite = null) {
+  await authReady;
+  const plan = planBatches(ids, INGREDIENT_WRITES_PER_BATCH, !!alsoWrite);
+  for (const step of plan) {
+    const batch = writeBatch(db);
+    if (step.config) {
+      batch.set(doc(db, pathFor(alsoWrite.name), alsoWrite.id), withBakery(alsoWrite.data), { merge: true });
+    }
+    for (const id of step.ids) {
+      batch.update(doc(db, pathFor(COLLECTIONS.ingredients), id), withBakery(categoryPatch(value)));
+    }
+    await batch.commit();
+  }
+}
+
 // Delete a document. The rules permit this for drafts, suppliers, ingredients
 // and — since orders became correctable — orders-history.
 export async function removeDoc(name, id) {
@@ -288,7 +316,9 @@ export async function watchDoc(name, id, onChange, onError) {
   await authReady;
   return onSnapshot(
     doc(db, pathFor(name), id),
-    snap => onChange(snap.exists() ? { id: snap.id, ...snap.data() } : null),
+    // Second argument: did this answer come from the local cache? «Missing» from the cache
+    // proves nothing (a phone that starts offline has never seen the document).
+    snap => onChange(snap.exists() ? { id: snap.id, ...snap.data() } : null, snap.metadata.fromCache),
     err => {
       console.error(`watchDoc(${name}/${id}) failed:`, err);
       onError?.(err);

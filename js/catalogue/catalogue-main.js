@@ -735,7 +735,7 @@ const app = {
   // Federico, 13 Sep 2026: «semplicemente apri una scheda ingrediente come in fornitori ed
   // ingredienti». ⚠️ Asked of the session each time, like Food cost above.
   mayCreateIngredient: () => { const s = currentSession(); return mayEditRecords(s.location, s.canManage); },
-  createIngredient: (name) => openIngredientCreate({ name, suppliers: getSuppliers() }),
+  createIngredient: (name) => openIngredientCreate({ name, suppliers: getSuppliers(), ingredients: getIngredients() }),
   // Delete a catalogue recipe with a strong confirm, warning first if the recipe
   // was imported into the Calculator (the two are independent copies — deleting
   // here never touches the Calculator). The link check is raced with a short

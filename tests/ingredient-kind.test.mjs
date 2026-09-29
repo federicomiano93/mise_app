@@ -36,7 +36,7 @@ test('⚠️⚠️ the card files the kind, and packaging neither shows nor WRIT
   assert.match(form, /\.\.\.\(isBox\(\) \? \{\} : allergens\.read\(\)\),/,
     '⚠️ not reading the allergens for packaging is what keeps a declaration safe through a wrong filing: the merge never touches it');
   assert.match(form, /const syncKind = \(\) => \{ allergens\.root\.hidden = isBox\(\); \};/, 'hidden, never removed');
-  assert.match(form, /priceBlock\(item, actions, startKind === 'packaging' \? 'pcs' : null\)/, 'a new box is priced by the piece');
+  assert.match(form, /priceBlock\(item, actions, startKind === 'packaging' \? 'pcs' : null,/, 'a new box is priced by the piece');
 });
 
 test('the Catalogue never offers packaging to a recipe row, and Food cost keeps the two apart', () => {

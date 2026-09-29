@@ -1049,6 +1049,9 @@ async function isolation() {
       { bakery: 'trattoria-x', showStock: false }, asAccount(BOB)));
   await expectAllowed('…while an employee can still READ them, or no send screen could draw',
     readAs(BOB, 'locations/trattoria-x/config/orders'));
+  await expectDenied('…and the category list is theirs too: an employee may not write it',
+    () => mergeWrite('locations/trattoria-x/config/orders',
+      { bakery: 'trattoria-x', ingredientCategories: ['Bakery'] }, asAccount(BOB)));
   await expectAllowed('a location with every section keeps its recipes',
     readAs(ALICE, 'locations/main/recipes/R1'));
 }
@@ -1076,6 +1079,20 @@ async function configAndLogs() {
       logVisibility: {}, logRetentionHours: 24, logRetentionByDough: {},
     }));
 
+  await expectAllowed('config: a manager writes the ingredient category list', () =>
+    mergeWrite(`${A}/config/orders`, { bakery: 'main', ingredientCategories: ['Panetteria', 'Pasticceria'] }));
+  await expectAllowed('config: an empty category list (every category deleted)', () =>
+    mergeWrite(`${A}/config/orders`, { bakery: 'main', ingredientCategories: [] }));
+  await expectAllowed('config: exactly 100 categories', () =>
+    mergeWrite(`${A}/config/orders`, {
+      bakery: 'main', ingredientCategories: Array.from({ length: 100 }, (_, i) => 'c' + i),
+    }));
+  await expectDenied('config: 101 categories', () =>
+    mergeWrite(`${A}/config/orders`, {
+      bakery: 'main', ingredientCategories: Array.from({ length: 101 }, (_, i) => 'c' + i),
+    }));
+  await expectDenied('config: categories sent as something other than a list', () =>
+    mergeWrite(`${A}/config/orders`, { bakery: 'main', ingredientCategories: 'Bakery' }));
   await expectAllowed('config: the Orders settings patch', () =>
     mergeWrite(`${A}/config/orders`, { bakery: 'main', showStock: false, historyDays: 15 }));
 
@@ -2552,6 +2569,45 @@ async function roles() {
   await expectDenied('an employee cannot set a VAT rate either',
     () => mergeWrite(`${L}/ingredient-prices/I9`,
       { ...stamp, vatRate: 4 }, asAccount(SAM)));
+
+  // ── A price quoted per CASE (30 Sep 2026): the case is stored beside the rate the
+  // app derived from it. Numbers strictly positive, the unit from a closed list.
+  const caseDoc = { ...stamp, priceUnit: 'kg', pricePerUnit: 2,
+    casePrice: 20, caseCount: 4, caseItemSize: 2.5, caseItemUnit: 'kg' };
+  await expectAllowed('a manager can store a price per case',
+    () => mergeWrite(`${L}/ingredient-prices/I9`, caseDoc, asAccount(MAYA)));
+  await expectAllowed('…and the owner can',
+    () => mergeWrite(`${L}/ingredient-prices/I9`, caseDoc, asAccount(ALICE)));
+  await expectAllowed('a case of pieces stores no size (null)',
+    () => mergeWrite(`${L}/ingredient-prices/I9`,
+      { ...stamp, priceUnit: 'pcs', pricePerUnit: 0.4,
+        casePrice: 20, caseCount: 50, caseItemSize: null, caseItemUnit: 'pcs' }, asAccount(MAYA)));
+  await expectAllowed('switching back to per-kilo clears the case with nulls',
+    () => mergeWrite(`${L}/ingredient-prices/I9`,
+      { ...stamp, priceUnit: 'kg', pricePerUnit: 2,
+        casePrice: null, caseCount: null, caseItemSize: null, caseItemUnit: null }, asAccount(MAYA)));
+  for (const unit of ['pcs', 'kg', 'g', 'l', 'ml']) {
+    await expectAllowed(`a case unit of ${unit} is accepted`,
+      () => mergeWrite(`${L}/ingredient-prices/I9`, { ...caseDoc, caseItemUnit: unit }, asAccount(MAYA)));
+  }
+  for (const key of ['casePrice', 'caseCount', 'caseItemSize']) {
+    for (const bad of [0, -1, '20']) {
+      await expectDenied(`${key} of ${JSON.stringify(bad)} is refused`,
+        () => mergeWrite(`${L}/ingredient-prices/I9`, { ...caseDoc, [key]: bad }, asAccount(MAYA)));
+    }
+  }
+  for (const bad of ['oz', 'KG', '', 5]) {
+    await expectDenied(`a case unit of ${JSON.stringify(bad)} is refused`,
+      () => mergeWrite(`${L}/ingredient-prices/I9`, { ...caseDoc, caseItemUnit: bad }, asAccount(MAYA)));
+  }
+  await expectDenied('an employee cannot store a price per case',
+    () => mergeWrite(`${L}/ingredient-prices/I9`, caseDoc, asAccount(SAM)));
+  await expectAllowed('(control) the same ingredient write without a case key is fine',
+    () => mergeWrite(`${L}/ingredients/I9`,
+      { ...stamp, name: 'I9', active: true }, asAccount(MAYA)));
+  await expectDenied('the case keys are refused on the ingredient itself',
+    () => mergeWrite(`${L}/ingredients/I9`,
+      { ...stamp, name: 'I9', active: true, casePrice: 20 }, asAccount(MAYA)));
 
   // ⚠️ AND THE PRICE HISTORY MOVED BEHIND THE SAME GATE. Leaving it on the Orders
   // gate would be the back door into the thing the front door just locked.

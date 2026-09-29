@@ -61,3 +61,35 @@ test('the vatRate typed goes to the price half', () => {
   const { price } = splitPriceFields({ name: 'Flour', priceUnit: 'kg', pricePerUnit: 1.8, vatRate: 4 });
   assert.equal(price.vatRate, 4);
 });
+
+// ── The four case keys (30 Sep 2026) follow the vatRate pattern exactly ──────────
+
+const CASE_KEYS = ['casePrice', 'caseCount', 'caseItemSize', 'caseItemUnit'];
+
+test('the ingredient-prices rule accepts each case key', () => {
+  for (const key of CASE_KEYS) assert.ok(PRICE_KEYS.includes(key), `ingredient-prices refuses "${key}"`);
+});
+
+test('the ingredients rule has NO case key, so none may be drained onto an ingredient', () => {
+  for (const key of CASE_KEYS) {
+    assert.equal(INGREDIENT_KEYS.includes(key), false, `ingredients rule unexpectedly lists "${key}"`);
+    assert.equal(INGREDIENT_DRAINED_FIELDS.includes(key), false, `"${key}" would be written onto every ingredient`);
+  }
+  assert.equal(INGREDIENT_DRAINED_FIELDS.includes('vatRate'), false);
+});
+
+test('a case typed in the form reaches the price half and never the ingredient', () => {
+  const data = {
+    name: 'Eggs', supplierId: 'S1', priceUnit: 'pcs', pricePerUnit: 0.4,
+    casePrice: 20, caseCount: 50, caseItemSize: null, caseItemUnit: 'pcs',
+  };
+  const { ingredient, price } = splitPriceFields(data);
+  for (const key of CASE_KEYS) {
+    assert.equal(key in ingredient, false, `${key} reached the ingredient`);
+    assert.ok(key in price, key);
+  }
+  for (const key of Object.keys(ingredient)) {
+    if (PRICE_FIELDS.includes(key)) assert.ok(INGREDIENT_KEYS.includes(key), key);
+  }
+  for (const key of Object.keys(price)) assert.ok(PRICE_KEYS.includes(key), key);
+});

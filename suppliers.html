@@ -78,7 +78,7 @@
 <link rel="stylesheet" href="auth.css">
 <link rel="stylesheet" href="style.css">
 <link rel="stylesheet" href="orders.css">
-<title data-i18n="title.suppliers">Suppliers &amp; ingredients — Misé</title>
+<title data-i18n="title.suppliers">Ingredients &amp; suppliers — Misé</title>
 </head>
 <body data-section="orders" data-card="suppliers">
 <!-- Sign-in cover. It is HERE, in the markup, so it is opaque from the first
@@ -97,12 +97,12 @@
     <!-- ⚠️ THE SAME KEY THE HOME CARD USES, and a test pins that. What you tap and
          what you land on must carry the same name, or the rename only moves the
          confusion one screen along. -->
-    <h1 data-i18n="section.suppliersAndIngredients">Suppliers &amp; ingredients</h1>
+    <h1 data-i18n="section.suppliersAndIngredients">Ingredients &amp; suppliers</h1>
     <p data-i18n="ui.contactsAndAllergens">Contacts &amp; allergens</p>
   </div>
   <span class="app-header-slot help-host" data-help="suppliers">
     <!-- The one way to add on the list, following the active tab (Ingredients ·
-         Packaging · Suppliers). ⚠️ NO role gate: the dashed button it replaced had none,
+         Suppliers · Packaging). ⚠️ NO role gate: the dashed button it replaced had none,
          and Delete is the only thing here that asks who you are. Its aria-label is set
          by js/orders/registry.js on every paint to name the active tab. The static key is the
          GENERIC «Add», on purpose: when the language arrives the static pass rewrites this

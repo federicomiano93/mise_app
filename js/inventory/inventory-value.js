@@ -17,7 +17,11 @@
 // are. No number is ever invented. A guessed pack weight would not look wrong on
 // the screen; it would just make the month's cost wrong.
 
-import { pricePerKg, formatMoney } from '../price-model.js';
+import { pricePerKg, formatMoney, roundTo, storedCaseOf } from '../price-model.js';
+// ⚠️ THE SAME unitCost() ORDERS USES, for a product priced per case: the stocktake counts in the
+// ORDER unit, so what one counted unit costs must be decided by the one function that already
+// reads that unit — two copies of the rule could only ever disagree.
+import { unitCost } from '../order-cost.js';
 // ⚠️ MOVED TO js/pack-size.js (29 Sep 2026): js/order-cost.js needs the exact
 // same reading of "how many kilos does one pack hold", and a calculation
 // shared by more than one feature belongs in js/ root (CLAUDE.md "Modular by
@@ -72,6 +76,15 @@ export function packPrice(month, ingredient, closed) {
     return Number.isFinite(frozen) && frozen > 0 ? round3(frozen) : null;
   }
 
+  // ⚠️ A PRICE QUOTED PER CASE (30 Sep 2026): one counted unit is one ORDER unit, and what
+  // that costs depends on the unit (eggs ordered in «pz» from a case of 360: one egg; «cartone»:
+  // the case) — unitCost() decides, null when the unit leaves doubt. Needs no pack weight.
+  // Six decimals, not round3: one straw out of 2000 must not round to nothing.
+  if (storedCaseOf(ingredient)) {
+    const each = unitCost(ingredient, ingredient);
+    return each === null ? null : roundTo(each, 6);
+  }
+
   if (ingredient && ingredient.priceUnit === 'pcs') {
     const each = Number(ingredient.pricePerUnit);
     return Number.isFinite(each) && each > 0 ? round3(each) : null;
@@ -81,6 +94,18 @@ export function packPrice(month, ingredient, closed) {
   if (rate === null) return null;
   const kg = packKgFor(month, ingredient);
   return kg === null ? null : round3(rate * kg);
+}
+
+// What the stocktake detail says about a product priced per CASE: the price of ONE COUNTED UNIT
+// in the ingredient's own order unit (the unit the counts are typed in), or — when that unit
+// leaves doubt (busta, sacco… on a case of several) — that it cannot be valued and what to
+// change. PURE: the caller does the t() and the number formatting (formatRate, so a tiny price
+// is never shown as 0.00). Null when the ingredient carries no valid case.
+export function casePackNote(ingredient) {
+  if (!storedCaseOf(ingredient)) return null;
+  const each = unitCost(ingredient, ingredient);
+  if (each === null) return { key: 'inv.packCaseAmbiguous' };
+  return { key: 'inv.packCasePer', value: each, unit: String((ingredient && ingredient.unit) || '').trim() };
 }
 
 // Why a row has no money beside it, so the screen can say which of the two jobs
@@ -98,6 +123,7 @@ export function valueBlocker(month, ingredient, closed = false) {
   if (closed) {
     return packPrice(month, ingredient, true) === null ? NO_FROZEN_PRICE : null;
   }
+  if (storedCaseOf(ingredient)) return unitCost(ingredient, ingredient) === null ? NO_PRICE : null;
   if (ingredient && ingredient.priceUnit === 'pcs') {
     const each = Number(ingredient.pricePerUnit);
     return Number.isFinite(each) && each > 0 ? null : NO_PRICE;

@@ -12,8 +12,9 @@
 import { t } from '../i18n.js';
 import { el } from './dom.js';
 import { consumption } from './inventory-model.js';
+import { storedCaseOf, formatRate } from '../price-model.js';
 import {
-  parsePackSize, packKgFor, packPrice, lineValue, formatTotal,
+  parsePackSize, packKgFor, packPrice, lineValue, formatTotal, casePackNote,
   NO_PRICE, NO_PACK, NO_FROZEN_PRICE,
 } from './inventory-value.js';
 
@@ -43,6 +44,8 @@ export function renderDetail({ month, ingredient, locale, onCount, readOnly, clo
   const packNote = el('p', { class: 'inv-hint' });
 
   let current = month;
+  const isCased = storedCaseOf(ingredient) !== null;
+  const byUnitPrice = isCased || ingredient.priceUnit === 'pcs';
 
   function paintAnswer() {
     const line = consumption(current, ingredient.id);
@@ -107,6 +110,14 @@ export function renderDetail({ month, ingredient, locale, onCount, readOnly, clo
         : t('inv.packFrozen', { price: formatTotal(price) });
       return;
     }
+    if (isCased) {
+      // ⚠️ formatRate, not formatTotal: one straw out of 2000 must not read «0.00».
+      const note = casePackNote(ingredient);
+      packNote.textContent = note.value === undefined
+        ? t(note.key)
+        : t(note.key, { price: formatRate(note.value), unit: note.unit || t('inv.packsShort') });
+      return;
+    }
     if (ingredient.priceUnit === 'pcs') {
       packNote.textContent = price === null ? t('inv.packByPieceNoPrice') : t('inv.packByPiece', { price: formatTotal(price) });
       return;
@@ -165,7 +176,11 @@ export function renderDetail({ month, ingredient, locale, onCount, readOnly, clo
     onchange: (e) => { onCount('packKg', ingredient.id, e.target.value); },
   });
 
-  const packField = !money || ingredient.priceUnit === 'pcs' ? null : el('div', { class: 'inv-field' }, [
+  // ⚠️ A PRODUCT PRICED BY THE PIECE OR PER CASE HAS NO KILOS BOX: its cost per counted unit
+  // needs no pack weight (a case is worked out by unitCost(), orders' own function), so
+  // «write the kilos in and it gets a value» would send somebody to fill in a number that
+  // changes nothing.
+  const packField = !money || byUnitPrice ? null : el('div', { class: 'inv-field' }, [
     el('label', { class: 'inv-label', for: 'inv-packKg', text: t('inv.packKgLabel') }),
     packInput,
     packNote,
@@ -175,7 +190,7 @@ export function renderDetail({ month, ingredient, locale, onCount, readOnly, clo
     answer,
     ...fields,
     packField,
-    money && ingredient.priceUnit === 'pcs' ? packNote : null,
+    money && byUnitPrice ? packNote : null,
     el('p', { class: 'inv-note', text: t('inv.emptyIsNotZero') }),
   ]);
 
