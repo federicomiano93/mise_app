@@ -81,9 +81,9 @@ import { configForHost, isPreviewHost } from './firebase-target.js';
 
 // ── Configuration (PUBLIC config, P1 — committed on purpose, see .gitignore) ──
 // The real values live in js/firebase-target.js, beside the PREVIEW project's, and the
-// page's hostname picks one: a Firebase Hosting preview channel gets the preview project
-// (fake data, for trying a pull request before it goes live); everything else — the live
-// site and localhost included — gets production, exactly as before.
+// page's hostname picks one: production ONLY on the live site and localhost (an allowlist);
+// every other host — a pull request's preview link, a LAN address, a tunnel — gets the preview
+// project, fake data, so a mistake shows an empty test app instead of writing real orders.
 export const firebaseConfig = configForHost(location.hostname);
 export const isPreview = isPreviewHost(location.hostname);
 
@@ -232,8 +232,9 @@ function writeCacheOwner(uid) {
 
 // ── Local emulator switch (AUTOMATIC, by hostname) ────────────────────────────
 // On localhost / 127.0.0.1 the app talks to the LOCAL Firebase Emulator Suite, so
-// development and manual browser testing NEVER touch production Firestore. On any
-// other hostname (the live github.io domain) it connects to production as before.
+// development and manual browser testing NEVER touch production Firestore. On the live
+// github.io domain it connects to production; on any other host, to the preview project
+// (js/firebase-target.js).
 //
 // This decision is made automatically from the URL — there is deliberately NO
 // manual flag. A flag could be left in the wrong state and either point the live

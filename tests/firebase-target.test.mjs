@@ -10,6 +10,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
   configForHost, isPreviewHost, PRODUCTION_CONFIG, PREVIEW_CONFIG, PREVIEW_PROJECT_ID, PRODUCTION_HOSTS,
 } from '../js/firebase-target.js';
@@ -44,7 +45,10 @@ test('⚠️ every preview address gets the PREVIEW project, never production', 
 
 test('any host nobody listed lands on the preview (the harmless side)', () => {
   for (const host of ['192.168.1.20', 'abc.ngrok.app', 'bakery-app-ebf90.web.app', 'example.com',
-    'federicomiano93.github.io.evil.example', 'github.io', '', undefined]) {
+    'federicomiano93.github.io.evil.example', 'github.io', '', undefined,
+    // ⚠️ the emulator switch compares these exactly, so a dotted spelling would reach
+    // production WITHOUT being diverted to the emulator
+    'localhost.', '127.0.0.1.']) {
     assert.equal(configForHost(host), PREVIEW_CONFIG, String(host));
   }
 });
@@ -78,11 +82,13 @@ test('no file but firebase-target.js holds a Firebase key or imports a config di
       if (/AIza[\w-]{30,}/.test(src) || /\b(PRODUCTION|PREVIEW)_CONFIG\b/.test(src)) offenders.push(full);
     }
   };
-  walk(new URL('js', ROOT).pathname.replace(/^\/(\w:)/, '$1'));
+  walk(fileURLToPath(new URL('js', ROOT)));
   assert.deepEqual(offenders, []);
 });
 
 test('every page marks a preview with the ribbon, from the gate every page loads', () => {
   assert.match(read('js/auth-gate.js'), /if \(isPreview\) showPreviewRibbon\(\);/);
+  // the client's order page loads no staff gate, so it draws the ribbon itself
+  assert.match(read('js/client-orders/order-main.js'), /if \(isPreviewHost\(location\.hostname\)\) showPreviewRibbon\(\);/);
   assert.match(read('tokens.css'), /\.preview-ribbon\s*\{[^}]*pointer-events:\s*none/);
 });

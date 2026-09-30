@@ -44,18 +44,17 @@ export const PREVIEW_CONFIG = Object.freeze({
 });
 
 // The live site, and the addresses the local emulator switch in js/firebase.js recognises.
-export const PRODUCTION_HOSTS = Object.freeze([
-  'federicomiano93.github.io',
-  'localhost', '127.0.0.1', '::1', '[::1]',
-]);
+export const LIVE_HOST = 'federicomiano93.github.io';
+export const LOCAL_HOSTS = Object.freeze(['localhost', '127.0.0.1', '::1', '[::1]']);
+export const PRODUCTION_HOSTS = Object.freeze([LIVE_HOST, ...LOCAL_HOSTS]);
 
-// "example.com." is the same host as "example.com": a browser accepts the trailing dot.
-function normalise(hostname) {
-  return String(hostname || '').toLowerCase().replace(/\.$/, '');
-}
-
+// ⚠️ THE TRAILING DOT IS FORGIVEN FOR THE LIVE SITE ONLY. "federicomiano93.github.io." is the
+// same site and GitHub serves it. But the local names must match EXACTLY what the emulator
+// switch in js/firebase.js compares: "localhost." would get production's config there without
+// being diverted to the emulator — real writes from a page that looks local.
 export function isPreviewHost(hostname) {
-  return !PRODUCTION_HOSTS.includes(normalise(hostname));
+  const host = String(hostname || '').toLowerCase();
+  return !(host === LIVE_HOST || host === `${LIVE_HOST}.` || LOCAL_HOSTS.includes(host));
 }
 
 export function configForHost(hostname) {
