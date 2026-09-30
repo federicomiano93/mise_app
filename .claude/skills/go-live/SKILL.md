@@ -1,0 +1,85 @@
+---
+name: go-live
+description: The release sequence for Mise — from a green PR to a verified live app with its tag, GitHub Release and records. Use when a piece of work is finished and ready to publish, when Federico says to go live / merge / publish / «vai live» / «fai il merge», when preparing the «ready — when do you want it live?» question, or when rolling back a broken release.
+---
+
+# Going live — Mise
+
+Merging to `main` = the app changes on every phone. It is **the only moment the work stops
+for Federico**, and the question is about TIMING, not content: he picks the hour.
+
+## 1. Before asking him (do all of it, silently)
+
+- [ ] PR open from a feature branch; `gh pr checks <n>` → `test` and `rules` green.
+- [ ] `code-reviewer` has reviewed the branch; its findings fixed or listed.
+- [ ] `smoke-test` gates run; the changed screens driven on the emulator (`drive-app`).
+- [ ] Precached files changed → `node scripts/sw-hashes.mjs` was run (its test is green).
+- [ ] **`cd functions && npm audit --audit-level=high`** — `deploy-functions` runs on EVERY
+      push to main and refuses on a high advisory, even when `functions/` did not change
+      (twice on 30 Sep 2026). If it fails, fix the lockfile on its OWN branch first.
+- [ ] Rules changed? → know whether they must go FIRST (the app sends a key the live rules
+      refuse) — see `firestore-rules`. Read the live state now: `node scripts/rules-live-diff.mjs`.
+- [ ] Stacked PRs: the top PR carries the others — ONE merge of the top one.
+- [ ] Draft the tag annotation (see 4) and check it for business data NOW.
+
+Then ask, in Italian and plain words: *«È pronto. Contiene: … (what he will SEE, not
+files). Quando lo vuoi live?»* and tell him to **expect two clicks** if rules change (the
+harness asks for `firebase deploy` and for the merge) — one otherwise.
+
+## 2. At his word — no further questions
+
+1. **Rules first** (if needed): `firebase deploy --only firestore:rules` from the branch.
+   Two warnings are normal (`member()`, `orderClientOf()`); a third → stop and read it.
+   Then `node scripts/rules-live-diff.mjs` → `identicalToLocal: true`.
+2. **Merge**: `gh pr merge <n> --merge` (merge commits, never squash — the history reads
+   PR by PR). ⚠️ Never `git push origin main`; main takes nothing without the PR.
+3. **Watch main**: `gh run list --branch main --limit 3` → the push run's `test`, `rules`
+   and `deploy-functions` all `success` (`gh run watch <id>`). ⚠️ On 13 Sep a push fired
+   no run for 30+ minutes: if nothing appears in ~5 min, say so; Pages can be kicked by
+   hand: `gh api -X POST repos/federicomiano93/mise_app/pages/builds`.
+4. **Verify live** (P6), on an updated local main (`git switch main && git pull`):
+   - `curl -s -o /dev/null -w "%{http_code}" https://federicomiano93.github.io/mise_app/`
+     and `…/js/firebase.js` → both `200`.
+   - `node scripts/verify-live-assets.mjs` → `sameRelease: true`, `problems: []`
+     (right after the merge Pages may still serve the old sw.js: wait and re-run).
+   - `deploy-functions` success confirmed (step 3) — on EVERY release.
+   - If the whole site 404s: Settings → Pages (a secret-scanning alert can disable it).
+
+## 3. If it is broken — roll back, do not patch forward
+
+- `main` is protected, so a rollback is a PR too: `git switch -c fix/revert-vX.Y.Z` →
+  `git revert -m 1 <merge-sha>` → push → PR → checks → merge. Never `reset --hard`, never
+  force-push. Tell Federico in one line what broke and that the previous version is back.
+- Rules: only if the new rules refuse the old app — deploy the previous tag's file
+  (`git show vPREV:firestore.rules`) from a branch, then read back.
+
+## 4. Tag and Release
+
+- Version: patch = fix · minor = feature · major = breaking. A release that changes only
+  `functions/package-lock.json` is a patch with the cache unchanged.
+- Annotation: subject line = what changed for the people using it; a short paragraph;
+  `PR #n, cache vNNN`. ⚠️ **The repo is PUBLIC and a tag cannot be edited later** (the
+  `v1.9.0` tag still carries four real supplier names): no supplier, customer or staff
+  names, no prices, no emails, no venue ids.
+- `git tag -a vX.Y.Z -F <annotation-file>` on the MERGE commit → `git push origin vX.Y.Z`
+  → `gh release create vX.Y.Z --title "<subject>" --notes-file <annotation-file> --verify-tag --latest`.
+  Annotation files go in the session scratchpad.
+
+## 5. Records (local notes — copy each to `..\backup-note\` before editing)
+
+- `STORICO-DEPLOY.md`: a new entry at the TOP of the release list — tag, date, PR(s), merge
+  sha, cache, what changed, rules deployed first + ruleset id, live assets N/N matching,
+  functions deployed, anything learnt.
+- `CLAUDE.md`: the «Live on `main`» line (cache + tag) and, under «Live but never seen on his
+  phone», what to ask him and the calls I took for him. Move the oldest entries to
+  `ARCHIVIO-BACKLOG.md` when the list grows (the note budget: `~/.claude/check-notes-size.mjs`).
+- Delete the merged branch locally (`git branch -d`) and on GitHub if still there; GitHub
+  should hold only `main` (`git fetch --prune`).
+
+## 6. Tell him (Italian, plain)
+
+- It is live; what to open on his phone and what to try, in order of importance.
+- ⚠️ Every phone must update (the update banner / reopen the app) — and when a change alters
+  what is saved, nobody should use the new feature until their phone has updated.
+- The decisions taken for him during the work, FIRST in the list (global P10).
+- Which model did what (global P21), in one line.
