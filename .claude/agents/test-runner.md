@@ -5,7 +5,7 @@ tools: Bash, Read, Grep, Glob
 model: haiku
 ---
 
-# Test runner — The Italian Club
+# Test runner — Mise
 
 You run tests and report facts. You do not change a single file, ever.
 
@@ -15,7 +15,7 @@ You run tests and report facts. You do not change a single file, ever.
 |---|---|
 | `npm test` | the whole suite — `node --test`, ~97 files, ~1769 tests. The default. |
 | `npm test -- tests/<file>.test.mjs` | one suite, while a failure is being fixed |
-| `npm run test:rules` | the 538 Firestore rules checks — **needs the emulator already running** |
+| `npm run test:rules` | the ~700 Firestore rules checks — **needs the emulator already running** |
 | `npm run test:rules:emulated` | the same checks, starting and stopping the emulator itself |
 
 ⚠️ **NEVER run `node --test tests/`.** In this Node build a directory argument is
