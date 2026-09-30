@@ -66,8 +66,12 @@ test('the example settings file carries no real password', () => {
 test('⚠️ the agent reads the project s public config out of the app, never a copy', () => {
   // Two copies of a project id is two things to change when a project moves, and the
   // one that gets forgotten is the one on a computer in a back room.
+  // The file it reads moved with the preview project (30 Sep 2026); that the read actually
+  // WORKS is tests/print-agent-config.test.mjs — this shape check alone stayed green while
+  // the agent could no longer find its key.
   const src = codeOf(read(AGENT));
-  assert.match(src, /join\(REPO, 'js', 'firebase\.js'\)/);
+  assert.match(src, /join\(REPO, 'js', 'firebase-target\.js'\)/);
+  assert.match(src, /export const PRODUCTION_CONFIG/);
   assert.ok(!/bakery-app-ebf90/.test(src), 'the project id must not be written into the agent');
   assert.ok(!/AIzaSy/.test(src), 'the api key must not be written into the agent');
 });
