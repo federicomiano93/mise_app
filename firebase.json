@@ -13,6 +13,25 @@
       ]
     }
   ],
+  "hosting": [
+    {
+      "target": "preview",
+      "public": ".",
+      "ignore": [
+        "firebase.json",
+        "**/.*",
+        "**/node_modules/**",
+        "functions/**",
+        "tests/**",
+        "scripts/**",
+        "print-agent/**",
+        "**/*.md",
+        "package.json",
+        "package-lock.json",
+        "firestore.rules"
+      ]
+    }
+  ],
   "emulators": {
     "auth": {
       "port": 9099

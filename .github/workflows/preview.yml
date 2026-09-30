@@ -1,0 +1,71 @@
+name: Preview
+
+# One link per pull request, so Federico can open the change on his phone BEFORE it goes live.
+# It publishes the PR's pages to a Firebase Hosting preview channel of the PREVIEW project
+# (mise-app-preview — fake data only), deploys the PR's Firestore rules THERE, and writes the
+# link on the pull request. js/firebase-target.js makes those pages talk to the preview project
+# and draw the «preview · test data» ribbon.
+#
+# ⚠️ IT CANNOT TOUCH PRODUCTION, and not by convention: the Google credential below belongs to
+# the preview project (its own workload identity pool, its own service account, whose roles are
+# Hosting admin, Rules admin and read-only viewers — on that project only). Production's deploy
+# lives in test.yml, behind `test` + `rules` and the push to main.
+#
+# This job is NOT a required check: a broken preview must never block a fix from shipping.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+concurrency:
+  group: preview-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  preview:
+    # A PR from a fork gets no identity token, and must not get a public link to our code path.
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+
+      # ⚠️ The trust is pinned to this repository on Google's side, in TWO places, exactly like
+      # production's (see test.yml): the provider's attribute condition
+      #   assertion.repository == 'federicomiano93/mise_app'
+      # and the service account's IAM policy (…/attribute.repository/federicomiano93/mise_app).
+      # Renaming the repository breaks this job until BOTH are repointed.
+      - name: Sign in to Google (no key) — the PREVIEW project only
+        uses: google-github-actions/auth@v2
+        with:
+          project_id: mise-app-preview
+          workload_identity_provider: projects/863348756512/locations/global/workloadIdentityPools/github-pool/providers/github-provider
+          service_account: preview-deploy@mise-app-preview.iam.gserviceaccount.com
+
+      - name: Deploy this PR's rules and pages to its preview channel
+        id: deploy
+        env:
+          CHANNEL: pr-${{ github.event.pull_request.number }}
+        run: |
+          npm install --global firebase-tools@15.26.0
+          firebase deploy --only firestore:rules --project mise-app-preview --non-interactive
+          firebase hosting:channel:deploy "$CHANNEL" --only preview --project mise-app-preview \
+            --expires 14d --non-interactive --json > channel.json
+          url=$(node -e "const r=require('./channel.json');const hit=Object.values(r.result||{}).find(v=>v&&v.url);if(!hit){console.error(JSON.stringify(r).slice(0,500));process.exit(1)}console.log(hit.url)")
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+
+      - name: Put the link on the pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          URL: ${{ steps.deploy.outputs.url }}
+        run: |
+          body="**Anteprima di questa PR** (dati di prova, non i tuoi): $URL
+          Aprila sul telefono ed entra con un account di prova. Il link si aggiorna a ogni modifica della PR e scade dopo 14 giorni."
+          gh pr comment "$PR" --edit-last --body "$body" || gh pr comment "$PR" --body "$body"
