@@ -83,7 +83,7 @@ Sign in with a ONE-venue account. Labels are English, with the Italian in bracke
   inputs lock, Confirm becomes **Edit** (Modifica) → footer **Log** (Registro) shows the
   entry with date and time → trash icon "Delete log" → **Delete** (Elimina) → it is gone.
 - **Orders** (`orders.html`): tap a supplier → its order opens full screen → type a
-  quantity in a row → wait a second → **reload the page: the quantity is still there** (the draft saves
+  quantity in a row → wait a second → **reload the page, tap the same supplier again: the quantity is still there** (the draft saves
   0.8 s after typing — never lose the user's work) → the supplier row shows the count → **Order placed** (Ordine fatto,
   disabled until something is typed) → confirmation screen → **Order placed** → the rows
   clear and the order waits on **Incoming** (In arrivo). Tablet and owner/manager: the

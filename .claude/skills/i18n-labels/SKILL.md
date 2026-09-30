@@ -27,7 +27,8 @@ ingredient card is a food word too.
    orders words differently. Never `'Delete ' + name`.
 4. **Counts**: the entry is an object — `'join.expires.days': { one: '{n} day left', other:
    '{n} days left' }` — picked by `Intl.PluralRules`, in BOTH languages. ⚠️ The number
-   MUST be passed as `n`: `t(key, { n })`. `{ count }` silently always picks the plural.
+   MUST be passed as `n`: `t(key, { n })`. `{ count }` silently picks the plural AND leaves a
+   literal `{n}` on screen.
    Never `n === 1 ? … : …` at the call site.
 5. **Case is the translator's**: a word inside a sentence gets its own entry
    (`role.owner.inSentence`); never `.toLowerCase()` a translated word.
@@ -59,10 +60,10 @@ goes through `supplierLabel()`.
 - A file that shows food words is a **LABEL FILE**: declare it in
   `tests/i18n-label-separation.test.mjs`. It may never touch `currentLanguage`,
   `setLanguage`, `languageFromTag` or `interfaceLanguage` — anywhere in the file.
-- **Read the output language INSIDE the drawing function**, exactly in the shape the test
-  requires: `const lang = outputLanguage(location);` on its own line inside the function,
-  then `allergenName(code, lang)` / `labelWord(key, lang)` with `lang` as the last
-  argument. At module load no venue is open, the language is `null` for the life of the
+- **Read the output language INSIDE the drawing function**, in the shape the test pins: an
+  indented `const lang = outputLanguage(…)` line inside the function (e.g.
+  `outputLanguage(currentSession().location)`), then `allergenName(code, lang)` /
+  `labelWord(key, lang)` with `lang` as the last argument. At module load no venue is open, the language is `null` for the life of the
   page, and every name falls back to English in silence.
 - **Pin that the call EXISTS**, not only that it is shaped right — a deleted call satisfies
   every «asked in the right language» check.

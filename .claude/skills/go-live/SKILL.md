@@ -18,7 +18,10 @@ for Federico**, and the question is about TIMING, not content: he picks the hour
       push to main and refuses on a high advisory, even when `functions/` did not change
       (twice on 30 Sep 2026). If it fails, fix the lockfile on its OWN branch first.
 - [ ] `git fetch` → `node scripts/rules-live-diff.mjs origin/main` → `identical: true`
-      (the live rules are main's; `false` = somebody deployed something unmerged — stop).
+      (the live rules are main's). `false` → find out why before anything else: an allowed
+      early deploy of add-only rules from another open PR (compare with that branch: `node
+      scripts/rules-live-diff.mjs origin/<its-branch>`) means this release must include that
+      PR's rules too; anything unexplained → stop and report.
 - [ ] Rules changed on this branch? → it must contain the latest main (`git merge
       origin/main`, push, checks green again), `git diff origin/main -- firestore.rules`
       shows ONLY this PR's change, and decide whether they go FIRST (the app sends a key the
@@ -59,11 +62,18 @@ harness asks for `firebase deploy` and for the merge) — one otherwise.
 - `main` is protected, so a rollback is a PR too: `git switch -c fix/revert-vX.Y.Z` →
   `git revert -m 1 <merge-sha>` → push → PR → checks → merge. Never `reset --hard`, never
   force-push. Tell Federico in one line what broke and that the previous version is back.
-- Rules: rolling the app back needs NO rules change (new optional keys do not bother an old
-  app). ⚠️ **Never deploy an older rules file** — phones have already saved the new keys
-  into real documents, and an older whitelist would refuse every later save of them for
-  ever. A broken rule is fixed by a NEW rules change that still lists those keys
-  (`firestore-rules`), deployed from an up-to-date branch and read back.
+- ⚠️⚠️ **If the release changed `firestore.rules`, the revert must KEEP the live rules
+  file:** after `git revert`, run `git checkout <merge-sha> -- firestore.rules` and commit it
+  on the revert branch. Otherwise main goes back to the OLD rules while the new ones stay
+  live — every later pre-check reads «live ≠ main», and the next rules deploy from main
+  would publish the old whitelist (the retired-field trap below).
+- ⚠️ **Never deploy an older rules file** — phones have already saved the new keys into
+  real documents, and an older whitelist refuses every later save of them for ever. A
+  broken rule is fixed by a NEW rules change that still lists those keys (`firestore-rules`).
+- ⚠️ **A rollback is not always free for the data.** New optional keys do not bother an old
+  app — but if the release RAISED a model number (products' `model`, which the rules refuse
+  to lower) or made a key REQUIRED on a whole-document write, every document saved since
+  refuses the old app's saves. Then do NOT roll back: patch forward with a fix PR.
 
 ## 4. Tag and Release
 

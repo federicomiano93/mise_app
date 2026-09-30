@@ -18,10 +18,10 @@ them record a bug that already happened once.
 | Is this document well formed? | the field rules of the block | — |
 
 - `canUse(lid, section)` = `member` + `sectionOn` — what ordinary daily work needs.
-- `canManage(lid, section)` = `canUse` + role is `'owner'` or `'manager'`. Guards DELETING
-  suppliers, ingredients, recipes, products, client menus; and WRITING `config/orders`,
-  `config/labels`, `ingredient-prices`, `client-accounts`, `foodcost-settings`. Read the
-  block — it is not only a delete gate. ⚠️ Two tiers only: hiring lives in
+- `canManage(lid, section)` = `canUse` + role is `'owner'` or `'manager'`. Among others it
+  guards DELETING suppliers, ingredients, recipes, products, client menus; WRITING
+  `config/orders`, `config/labels`, `ingredient-prices`, `client-accounts`; and even
+  READING `foodcost-settings`. Always read the block itself — it is not only a delete gate. ⚠️ Two tiers only: hiring lives in
   `functions/onboarding.js`, never in the rules.
 - `cardAccess(lid, section, card)` → `'manage' | 'staff' | 'none'` — the MONEY screens
   (Food cost, Magazzino). An employee gets `'staff'` only where the venue set
@@ -119,10 +119,12 @@ error). ⚠️ **A new membership value goes in THREE places or it is a lockout:
   ADD optional keys are safe to deploy early (old phones never send them).
 - ⚠️⚠️ **Deploy only from a branch that contains the latest `main`.** The deploy publishes
   the WHOLE file: from a branch cut before another rules change went live, it silently
-  UNDOES that change. So: `git fetch` → `node scripts/rules-live-diff.mjs origin/main` must
-  say `identical: true` (live = main; otherwise somebody deployed something unmerged —
-  stop) → `git merge origin/main` into the branch → `git diff origin/main -- firestore.rules`
-  shows ONLY this PR's change → deploy.
+  UNDOES that change. So: `git fetch` → `node scripts/rules-live-diff.mjs origin/main` →
+  `identical: true` (live = main; if `false`, find out why — an early add-only deploy from
+  another open PR means this branch must carry that PR's rules too; anything unexplained,
+  stop) → `git merge origin/main` into the branch, push, checks green again → `git diff
+  origin/main -- firestore.rules` shows ONLY this PR's change → deploy from a CLEAN
+  checkout (the read-back reads the working tree, uncommitted edits included).
 - `firebase deploy --only firestore:rules` from the repo root (the harness asks Federico —
   expected). **Two warnings are normal, for ever:** `Invalid type. Received one of [null].
   Expected one of [map].` — one in `member()`, one in `orderClientOf()`. A THIRD warning, or
@@ -133,8 +135,11 @@ error). ⚠️ **A new membership value goes in THREE places or it is a lockout:
 - ⚠️ **Never «roll back» by deploying an older rules file.** While the new version was live,
   phones saved its new keys into real documents; an older whitelist refuses every later save
   of those documents — the retired-field trap. A rules fix is a NEW change that still lists
-  every key production may now carry. (Rolling the APP back needs no rules change: new
-  optional keys do not bother an old app.)
+  every key production may now carry. Reverting an app release that changed the rules must
+  keep the live `firestore.rules` on main (`go-live` → roll back).
+- ⚠️ **A change that RAISES a version the rules refuse to lower** (products' `model`) **or
+  makes a key REQUIRED** on a whole-document write cannot be rolled back by reverting the
+  app: documents saved since would refuse the old app. Say so in the PR, before it ships.
 - Part of the release sequence in the `go-live` skill.
 
 ## Never
