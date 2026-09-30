@@ -76,6 +76,20 @@
   src: url(fonts/instrument-serif-latin-ext.woff2) format('woff2');
   unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
 }
+/* «Mise Numbers» — the DIGITS of Atkinson Hyperlegible Next (Braille Institute, SIL Open
+   Font License), for the boxes where a number is typed and read at the counter (Federico,
+   30 Sep 2026: numbers easier to read). Drawn so that 1/7, 3/8, 0/O and 6/9 cannot be taken
+   for one another. SUBSET to 0-9 , . and space (4 KB instead of 34, variable weight 200-800,
+   `tnum` kept for aligned columns): every other character in the same box — a placeholder's
+   letters — falls through to Manrope by `unicode-range`, so only the figures change. */
+@font-face {
+  font-family: 'Mise Numbers';
+  font-style: normal;
+  font-weight: 200 800;
+  font-display: swap;
+  src: url(fonts/atkinson-next-digits.woff2) format('woff2');
+  unicode-range: U+0020, U+002C, U+002E, U+0030-0039;
+}
 
 /* ── [hidden] really means hidden ─────────────────────────────────────────
    The browser hides [hidden] with a `display: none` rule of the same weight as
@@ -264,6 +278,19 @@
   /* Screen titles. Self-hosted above; Georgia is the fallback for the one
      frame before the file loads, and for a browser that refuses woff2. */
   --font-display: 'Instrument Serif', Georgia, 'Times New Roman', serif;
+  /* The figures in a number box: «Mise Numbers» (digits only, above), everything else
+     in the app's own face. */
+  --font-numbers: 'Mise Numbers', 'Manrope', system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+/* ⚠️ EVERY BOX A NUMBER IS TYPED INTO, IN ONE RULE — and `!important` on purpose. Each
+   section styles its own boxes (`.ing-qty`, `.inv-count`, `.fc-input`, `.co-qty`,
+   `input[type="number"]` in style.css and records.css…), several naming a face of their own
+   (DM Mono, Manrope, a section alias), and a later, more specific rule would quietly keep
+   the old figures on one screen. This is a design-system decision for all of them at once;
+   nothing else in the app sets a font with `!important` on a number box. */
+input:is([type="number"], [inputmode="decimal"], [inputmode="numeric"]) {
+  font-family: var(--font-numbers) !important;
 }
 
 /* The phone half of the two-pane split (the rest is in the tablet block below): the pane

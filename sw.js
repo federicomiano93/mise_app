@@ -1,4 +1,4 @@
-const CACHE_NAME = 'theitalianclub-v490';
+const CACHE_NAME = 'theitalianclub-v491';
 // Firebase SDK modules (loaded from gstatic) are cached SEPARATELY from CACHE_NAME
 // so they survive the cache-version bump that happens on every deploy — otherwise
 // the offline SDK would be wiped each release until the next online load. The name
@@ -12,7 +12,7 @@ const CACHE_NAME = 'theitalianclub-v490';
 // the fetch handler below, on the first load that has a network.
 // So between activate() and that first load, a phone that is OFFLINE cannot boot:
 // the code asks for 12.18.0 and nothing has it. In practice the window is very
-// small — activate() only happens after a successful 269-file precache, i.e.
+// small — activate() only happens after a successful 270-file precache, i.e.
 // online, and tapping the update banner reloads the page immediately — but it is
 // not zero, and it is the reason to bump the SDK deliberately rather than often.
 // Leaving the name unchanged would close the window and cost ~1 MB of dead
@@ -72,6 +72,7 @@ const ASSETS = [
   './fonts/dm-mono-500-latin-ext.woff2',
   './fonts/instrument-serif-latin.woff2',
   './fonts/instrument-serif-latin-ext.woff2',
+  './fonts/atkinson-next-digits.woff2',
   './js/app.js',
   './js/confirm-dialog.js',
   './js/calculator-icons.js',
@@ -395,7 +396,7 @@ const ASSET_HASHES = {
   "./install-guide.html": 'c57a55ccf379afaf',
   "./qr.png": '761a95e5bc25e2ba',
   "./js/install-guide.js": '17fcd0c0fec489c2',
-  "./tokens.css": 'df8f8c04b015c97f',
+  "./tokens.css": '0fd4b0b24f828885',
   "./auth.css": '8db3d5a1b9b85d37',
   "./style.css": '314acebfd84603b2',
   "./orders.css": '041f3d9b5f1148e4',
@@ -408,6 +409,7 @@ const ASSET_HASHES = {
   "./fonts/dm-mono-500-latin-ext.woff2": 'b87200956400a4ac',
   "./fonts/instrument-serif-latin.woff2": '0ad69719cac6f45e',
   "./fonts/instrument-serif-latin-ext.woff2": '0caad588cab430ca',
+  "./fonts/atkinson-next-digits.woff2": '99ffa5b0e9a45a2b',
   "./js/app.js": '52b427fa0153b133',
   "./js/confirm-dialog.js": '61a7f580f37c5ff8',
   "./js/calculator-icons.js": '6bb803c39eabc4e0',
@@ -685,7 +687,7 @@ const ASSET_HASHES = {
 // code against rules that deployed instantly, which is the very thing the gate exists
 // to prevent. Two things stand between that and a release: the test that every ASSETS
 // entry EXISTS (a mistyped path being the likeliest permanent cause), and this
-// project's post-deploy sweep, which already asks the live site for all 269 files.
+// project's post-deploy sweep, which already asks the live site for all 270 files.
 // ⚠️ NEITHER covers a device-specific failure — nobody has yet confirmed an update
 // landing on a real iPhone under this code.
 //
