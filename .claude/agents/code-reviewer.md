@@ -81,8 +81,9 @@ interaction between the change and the lines around it, not in the diff hunk.
   ever.
 - ⚠️ Firestore allows **ten document reads per rule evaluation, counted by CALL**. Past
   it the rule fails with an EVALUATION ERROR, which looks like any other 403 — so count
-  the `get()` calls of every changed rule (`canManage()` ≈ 3, `cardAccess()` = 2; it
-  already contains `canUse()` — never repeat the section check) and check
+  the `get()` calls of every changed rule (`canManage()` ≈ 3, `cardAccess()` = 2;
+  `canManage()` already contains `canUse()` and `cardAccess()` repeats the same membership
+  and section check inline — never add a second one) and check
   `tests/rules-read-budget.test.mjs` was updated with intent.
 - A rule that judges `resource.data` must split `allow get` from `allow list` — on a
   query `resource` is null.

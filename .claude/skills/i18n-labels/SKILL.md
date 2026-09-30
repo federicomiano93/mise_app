@@ -11,7 +11,7 @@ Two DIFFERENT languages, kept in different files on purpose:
 |---|---|---|
 | What | the words a person TAPS and READS on screen | the words that name FOOD: allergens, nutrients, label text |
 | Decided by | the venue's `language` (before a venue is open: the phone) | the venue's **country** (`js/market.js`) — **the law** (Reg. 1169/2011: the language where the food is SOLD) |
-| Code | `t('key', vars)` from `js/i18n.js`; `data-i18n` in HTML | `allergenName` / `allergenGroupName` / `nutrientName` / `labelWord(key, outputLanguage(location))` |
+| Code | `t('key', vars)` from `js/i18n.js`; `data-i18n` in HTML | `const lang = outputLanguage(location)` inside the function, then `allergenName` / `allergenGroupName` / `nutrientName` / `labelWord(…, lang)` |
 | Example | Federico's UK venues can run the interface in Italian… | …and their labels must still print in English |
 
 **The rule: a word that names a FOOD asks the COUNTRY; a word that tells somebody what to
@@ -25,8 +25,10 @@ ingredient card is a food word too.
    2670). `tests/i18n-keys-exist.test.mjs` fails on a key asked for but missing.
 3. **One phrase with holes, never glued halves**: `'Delete {name}?'` + `{ name }` — Italian
    orders words differently. Never `'Delete ' + name`.
-4. **Counts**: `.one` / `.other` entries, chosen by `Intl.PluralRules` — never
-   `n === 1 ? … : …` at the call site, and counted in BOTH languages.
+4. **Counts**: the entry is an object — `'join.expires.days': { one: '{n} day left', other:
+   '{n} days left' }` — picked by `Intl.PluralRules`, in BOTH languages. ⚠️ The number
+   MUST be passed as `n`: `t(key, { n })`. `{ count }` silently always picks the plural.
+   Never `n === 1 ? … : …` at the call site.
 5. **Case is the translator's**: a word inside a sentence gets its own entry
    (`role.owner.inSentence`); never `.toLowerCase()` a translated word.
 6. **Static HTML**: `data-i18n="key"` for the text, plus `data-i18n-attr="aria-label"` (or
@@ -47,29 +49,38 @@ ingredient card is a food word too.
 role values (`'owner'`, `'manager'`, `'staff'`), units stored on documents (`kg`, `l`,
 `pcs`, `tsp`, `tbsp`, `pinch`, `to taste`), country and language codes. They are stored and
 compared by the rules — translating one breaks data, and a test names it. What a person
-READS for a unit comes from `unitText()` (`js/catalogue/catalogue-model.js`); the stored
-value stays English. A supplier's name on screen always goes through `supplierLabel()`.
+READS for a unit comes from a function, never the stored word: recipe-row units from
+`unitText()` (inside `js/catalogue/` only — no other feature may import it), price units
+from `priceUnitLabel()` (`js/price-model.js`, shared). A supplier's name on screen always
+goes through `supplierLabel()`.
 
 ## Food words and labels — the part that can hurt somebody
 
 - A file that shows food words is a **LABEL FILE**: declare it in
-  `tests/i18n-label-separation.test.mjs`. It may NEVER import `currentLanguage` /
-  `setLanguage` / `t` for those words.
-- **Read the output language INSIDE the drawing function**, never at module load — at load
-  no venue is open, the language is `null` for the life of the page, and every name falls
-  back to English in silence.
+  `tests/i18n-label-separation.test.mjs`. It may never touch `currentLanguage`,
+  `setLanguage`, `languageFromTag` or `interfaceLanguage` — anywhere in the file.
+- **Read the output language INSIDE the drawing function**, exactly in the shape the test
+  requires: `const lang = outputLanguage(location);` on its own line inside the function,
+  then `allergenName(code, lang)` / `labelWord(key, lang)` with `lang` as the last
+  argument. At module load no venue is open, the language is `null` for the life of the
+  page, and every name falls back to English in silence.
 - **Pin that the call EXISTS**, not only that it is shaped right — a deleted call satisfies
   every «asked in the right language» check.
-- Currency follows the country too (`currencyOf(location)`); numbers and dates are formatted
-  with `localeTag(lang)` through `Intl`, never by hand.
+- **Money on screen**: `currentCurrency()` (`js/currency.js`) — read INSIDE the drawing
+  function (it falls back to £ before a venue is open); it derives from the venue's
+  country. **Numbers and dates on screen**: `Intl` with `localeTag()` — which follows the
+  INTERFACE language, so it is for screens, not for label text. Never format by hand.
 - The allergen dictionary: a phrase that overrides a stem AND names an allergen needs its
   own tier (`burro di arachidi` must still say peanuts). The specific cereal/nut is named
   (`gluten-wheat`), and `mayContain` is never merged into `allergens`.
 
 ## Exceptions, on purpose
 
-- The **sign-in screen** stays in English and says «Mise»: nobody is inside, no venue.
-- Screens ABOVE a venue (picker, invitation) follow the phone.
+- The **sign-in screen** says «Mise», not a venue's name, and its language follows the PHONE
+  (`languageFromTag(navigator.language)` in `js/auth-gate.js`) — nobody is inside yet. Its
+  text still goes through `t()`. (The comment at the top of `js/i18n.js` saying it stays in
+  English is out of date.)
+- Screens ABOVE a venue (picker, invitation) follow the phone too.
 - `order.html` is the CLIENT's page: it names the venue, never «Mise».
 - ⚠️ `install-guide.html` names buttons in the phone's OWN menus — never fold it into a
   language fix.

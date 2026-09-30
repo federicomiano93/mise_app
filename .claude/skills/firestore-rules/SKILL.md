@@ -18,9 +18,11 @@ them record a bug that already happened once.
 | Is this document well formed? | the field rules of the block | — |
 
 - `canUse(lid, section)` = `member` + `sectionOn` — what ordinary daily work needs.
-- `canManage(lid, section)` = `canUse` + role is `'owner'` or `'manager'`. Guards deleting
-  suppliers, ingredients, recipes, products, client accounts/menus, and `config/orders`.
-  ⚠️ Two tiers only: hiring lives in `functions/onboarding.js`, never in the rules.
+- `canManage(lid, section)` = `canUse` + role is `'owner'` or `'manager'`. Guards DELETING
+  suppliers, ingredients, recipes, products, client menus; and WRITING `config/orders`,
+  `config/labels`, `ingredient-prices`, `client-accounts`, `foodcost-settings`. Read the
+  block — it is not only a delete gate. ⚠️ Two tiers only: hiring lives in
+  `functions/onboarding.js`, never in the rules.
 - `cardAccess(lid, section, card)` → `'manage' | 'staff' | 'none'` — the MONEY screens
   (Food cost, Magazzino). An employee gets `'staff'` only where the venue set
   `staffShownCards.<card> == true` (literal `true`).
@@ -39,11 +41,25 @@ error). ⚠️ **A new membership value goes in THREE places or it is a lockout:
 ## Documents no client may write
 
 - `users/{uid}`, `locations/{lid}`, `locations/{lid}/members/{uid}`, `join-codes`,
-  `rate-limits*`, `admins` → `allow write: if false`. A new field on `locations/{lid}` needs
-  **a Cloud Function**, not a rule: add a callable in `functions/onboarding.js` that writes
-  **ONE field with `{ merge: true }`**, never a spread of the document (it also holds the
-  name, sections and country). `members/{uid}` is a label, never an identity — no rule may
-  read it to decide anything.
+  `rate-limits*`, `admins` → `allow write: if false`. `members/{uid}` is a label, never an
+  identity — no rule may read it to decide anything.
+- **A new field on `locations/{lid}` needs a Cloud Function, not a rule.** ⚠️ A callable runs
+  with full server rights and SKIPS the rules — **its own checks are the only lock**. Copy
+  `setStaffCard` in `functions/onboarding.js`, all four parts:
+  1. `const uid = requireAuth(request);` then validate every input — `locationId` against
+     `/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/`, the value's type and allowed set — BEFORE any path
+     is built from it.
+  2. **The role check:** `const access = await accessValue(uid, locationId);` and refuse
+     with `permission-denied` unless `access` is `'owner'` or `'manager'` (only `'owner'` for
+     anything about people). Without it any signed-in account can change ANY venue.
+  3. Write **ONE field with `{ merge: true }`**, never a spread (the document also holds the
+     name, sections and country).
+  4. **Add it to the `export { … } from './onboarding.js'` list in `functions/index.js`** —
+     a callable missing there is never deployed and the app gets a bare «internal» error.
+  Plus a test like `tests/home-cards.test.mjs` (which pins the export and the role check),
+  and a reading side (e.g. `js/venue-features.js`) whose default for a missing key is the
+  SAFE one.
+  `deploy-functions` publishes it on the merge — confirm it ran (`go-live`).
 
 ## Changing a collection — the checklist
 
@@ -101,12 +117,24 @@ error). ⚠️ **A new membership value goes in THREE places or it is a lockout:
 - If the new app version SENDS a key the live rules do not know, **deploy the rules BEFORE
   merging** — otherwise every phone that updates gets «could not save». Rules that only
   ADD optional keys are safe to deploy early (old phones never send them).
-- `firebase deploy --only firestore:rules` from the repo root, on the branch (the harness
-  asks Federico — expected). **Two warnings are normal, for ever:** `Invalid type. Received
-  one of [null]. Expected one of [map].` — one in `member()`, one in `orderClientOf()`. A
-  THIRD warning, or one elsewhere, is new: stop and read it.
-- **Read it back:** `node scripts/rules-live-diff.mjs` → must say `identicalToLocal: true`.
-  «Deploy succeeded» is not proof (P5). Say the ruleset id in the release notes.
+- ⚠️⚠️ **Deploy only from a branch that contains the latest `main`.** The deploy publishes
+  the WHOLE file: from a branch cut before another rules change went live, it silently
+  UNDOES that change. So: `git fetch` → `node scripts/rules-live-diff.mjs origin/main` must
+  say `identical: true` (live = main; otherwise somebody deployed something unmerged —
+  stop) → `git merge origin/main` into the branch → `git diff origin/main -- firestore.rules`
+  shows ONLY this PR's change → deploy.
+- `firebase deploy --only firestore:rules` from the repo root (the harness asks Federico —
+  expected). **Two warnings are normal, for ever:** `Invalid type. Received one of [null].
+  Expected one of [map].` — one in `member()`, one in `orderClientOf()`. A THIRD warning, or
+  one elsewhere, is new: stop and read it.
+- **Read it back:** `node scripts/rules-live-diff.mjs` → `identical: true` against the
+  branch file; after the merge, `node scripts/rules-live-diff.mjs origin/main` → `true`
+  again. «Deploy succeeded» is not proof (P5). Say the ruleset id in the release notes.
+- ⚠️ **Never «roll back» by deploying an older rules file.** While the new version was live,
+  phones saved its new keys into real documents; an older whitelist refuses every later save
+  of those documents — the retired-field trap. A rules fix is a NEW change that still lists
+  every key production may now carry. (Rolling the APP back needs no rules change: new
+  optional keys do not bother an old app.)
 - Part of the release sequence in the `go-live` skill.
 
 ## Never

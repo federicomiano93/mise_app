@@ -44,7 +44,9 @@ There is no fallback and no check that the emulator is up. Confirm it: the conso
 
 ## When the task really IS production data
 
-Allowed without stopping (global P10) — the protection is not a question to Federico:
+⚠️ **Only the main conversation may do this — a helper agent (`implementer`, any
+sub-agent) NEVER writes to production: it stops and reports.** For the main conversation it
+is allowed without stopping (global P10) — the protection is not a question to Federico:
 1. **Copy first**: read the exact document(s) and save them as JSON in the session
    scratchpad, so the change can be put back by hand.
 2. Write the smallest change, through the app where possible (it obeys the rules), and

@@ -17,9 +17,14 @@ for Federico**, and the question is about TIMING, not content: he picks the hour
 - [ ] **`cd functions && npm audit --audit-level=high`** — `deploy-functions` runs on EVERY
       push to main and refuses on a high advisory, even when `functions/` did not change
       (twice on 30 Sep 2026). If it fails, fix the lockfile on its OWN branch first.
-- [ ] Rules changed? → know whether they must go FIRST (the app sends a key the live rules
-      refuse) — see `firestore-rules`. Read the live state now: `node scripts/rules-live-diff.mjs`.
-- [ ] Stacked PRs: the top PR carries the others — ONE merge of the top one.
+- [ ] `git fetch` → `node scripts/rules-live-diff.mjs origin/main` → `identical: true`
+      (the live rules are main's; `false` = somebody deployed something unmerged — stop).
+- [ ] Rules changed on this branch? → it must contain the latest main (`git merge
+      origin/main`, push, checks green again), `git diff origin/main -- firestore.rules`
+      shows ONLY this PR's change, and decide whether they go FIRST (the app sends a key the
+      live rules refuse) — see `firestore-rules`.
+- [ ] Stacked PRs: every PR in the stack targets `main`; the top one carries the others —
+      ONE merge of the top one, then check the lower ones show as merged.
 - [ ] Draft the tag annotation (see 4) and check it for business data NOW.
 
 Then ask, in Italian and plain words: *«È pronto. Contiene: … (what he will SEE, not
@@ -28,9 +33,9 @@ harness asks for `firebase deploy` and for the merge) — one otherwise.
 
 ## 2. At his word — no further questions
 
-1. **Rules first** (if needed): `firebase deploy --only firestore:rules` from the branch.
-   Two warnings are normal (`member()`, `orderClientOf()`); a third → stop and read it.
-   Then `node scripts/rules-live-diff.mjs` → `identicalToLocal: true`.
+1. **Rules first** (if needed): `firebase deploy --only firestore:rules` from the up-to-date
+   branch. Two warnings are normal (`member()`, `orderClientOf()`); a third → stop and read
+   it. Then `node scripts/rules-live-diff.mjs` → `identical: true`.
 2. **Merge**: `gh pr merge <n> --merge` (merge commits, never squash — the history reads
    PR by PR). ⚠️ Never `git push origin main`; main takes nothing without the PR.
 3. **Watch main**: `gh run list --branch main --limit 3` → the push run's `test`, `rules`
@@ -42,7 +47,11 @@ harness asks for `firebase deploy` and for the merge) — one otherwise.
      and `…/js/firebase.js` → both `200`.
    - `node scripts/verify-live-assets.mjs` → `sameRelease: true`, `problems: []`
      (right after the merge Pages may still serve the old sw.js: wait and re-run).
+   - `node scripts/rules-live-diff.mjs origin/main` → `identical: true` (live rules = main).
    - `deploy-functions` success confirmed (step 3) — on EVERY release.
+   - **Open the live app** in a real phone-sized browser (`drive-app` has the window and
+     the console reader): the sign-in screen draws, no console errors, no 404. Signing in on production is NOT scripted (no test account exists there): the
+     signed-in check is Federico's — step 6 asks him for it explicitly.
    - If the whole site 404s: Settings → Pages (a secret-scanning alert can disable it).
 
 ## 3. If it is broken — roll back, do not patch forward
@@ -50,8 +59,11 @@ harness asks for `firebase deploy` and for the merge) — one otherwise.
 - `main` is protected, so a rollback is a PR too: `git switch -c fix/revert-vX.Y.Z` →
   `git revert -m 1 <merge-sha>` → push → PR → checks → merge. Never `reset --hard`, never
   force-push. Tell Federico in one line what broke and that the previous version is back.
-- Rules: only if the new rules refuse the old app — deploy the previous tag's file
-  (`git show vPREV:firestore.rules`) from a branch, then read back.
+- Rules: rolling the app back needs NO rules change (new optional keys do not bother an old
+  app). ⚠️ **Never deploy an older rules file** — phones have already saved the new keys
+  into real documents, and an older whitelist would refuse every later save of them for
+  ever. A broken rule is fixed by a NEW rules change that still lists those keys
+  (`firestore-rules`), deployed from an up-to-date branch and read back.
 
 ## 4. Tag and Release
 
@@ -78,7 +90,9 @@ harness asks for `firebase deploy` and for the merge) — one otherwise.
 
 ## 6. Tell him (Italian, plain)
 
-- It is live; what to open on his phone and what to try, in order of importance.
+- It is live; what to open on his phone and what to try, in order of importance — and ask
+  him to do ONE real save on the changed screen and tell you if anything says it could not
+  save (the only signed-in check on production).
 - ⚠️ Every phone must update (the update banner / reopen the app) — and when a change alters
   what is saved, nobody should use the new feature until their phone has updated.
 - The decisions taken for him during the work, FIRST in the list (global P10).
