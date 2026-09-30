@@ -13,9 +13,9 @@ You run tests and report facts. You do not change a single file, ever.
 
 | Command | What it is |
 |---|---|
-| `npm test` | the whole suite — `node --test`, ~97 files, ~1769 tests. The default. |
+| `npm test` | the whole suite — `node --test`, ~200 files, over 3,000 tests. The default. |
 | `npm test -- tests/<file>.test.mjs` | one suite, while a failure is being fixed |
-| `npm run test:rules` | the ~700 Firestore rules checks — **needs the emulator already running** |
+| `npm run test:rules` | the ~770 Firestore rules checks — **needs the emulator already running** |
 | `npm run test:rules:emulated` | the same checks, starting and stopping the emulator itself |
 
 ⚠️ **NEVER run `node --test tests/`.** In this Node build a directory argument is
@@ -34,7 +34,7 @@ Report in this order, always, even when everything passes:
    not a pass.
    ⚠️ This runner prints `suites 0` for the whole suite — the files register no named
    suites. Do not report that as a fault and do not treat it as "nothing ran"; the
-   number that matters is `tests`. As of the last baseline it is **1769 · 0 fail**.
+   number that matters is `tests`. On 30 Sep 2026 GitHub reported **3166 · 0 fail** on main.
 2. **Only the failures**, one block each:
    - the test file and the line, as `tests/foo.test.mjs:123`
    - the test name
