@@ -166,7 +166,7 @@ test('ing-row--filled follows the quantity: at build, in setQty and when another
   const main = read('js/orders/orders-main.js');
   const sync = main.slice(main.indexOf('function syncInputsFromState'));
   assert.match(sync.slice(0, sync.indexOf('refreshAllSuppliers')), /markFilled\(row, entry\.qty\)/);
-  assert.match(main, /import \{ markFilled \} from '\.\/ingredients\.js'/);
+  assert.match(main, /import \{ markFilled, paintUnitSelect \} from '\.\/ingredients\.js'/);
 });
 
 test('the clear button is a 44x44 target, hidden until the row is filled, and the name makes room', () => {
@@ -190,4 +190,46 @@ test('the clear-quantity label exists in English and Italian', () => {
 
 test('the swap button beside the search is at least 44px wide', () => {
   assert.match(rule('body[data-section="orders"] .order-tools-btn'), /min-width:\s*44px/);
+});
+
+// ── The unit choice on a row (30 Sep 2026) ───────────────────────────────────
+test('a row offers a unit menu only when the card offers a choice, in place of the caption', () => {
+  assert.match(buildRowSource, /unitChoices\(ing,\s*entry\.unit\)/);
+  assert.match(buildRowSource, /choices\.length >= 2/);
+  assert.match(buildRowSource, /class:\s*'ing-unit-select'/);
+  assert.match(buildRowSource, /!unitSelect && ing\.unit \? el\('span', \{ class: 'ing-order-unit'/);
+  assert.match(buildRowSource, /t\('orders\.unitToOrderFor',\s*\{\s*name:\s*ingredientLabel\(ing\)\s*\|\|\s*t\('orders\.unnamedProduct'\)\s*\}\)/);
+});
+
+test('changing the unit stores only a non-default unit, autosaves, and keeps the quantity', () => {
+  const change = buildRowSource.slice(buildRowSource.indexOf("unitSelect.addEventListener('change'"));
+  const handler = change.slice(0, change.indexOf('});') + 3);
+  assert.match(handler, /\.unit = storedUnitFor\(unitSelect\.value,\s*ing\)/);
+  assert.match(handler, /hooks\.afterChange\(supplier\.id\)/);
+  assert.match(handler, /updateHint\(\)/);
+  assert.doesNotMatch(handler, /\.qty\s*=/, 'the quantity is not touched');
+});
+
+test('the draft arriving from another phone repaints the unit menu, skipping a focused one', () => {
+  assert.match(INGREDIENTS, /export function paintUnitSelect\(row, ing, entry\)/);
+  assert.match(INGREDIENTS, /select === document\.activeElement/);
+  const main = read('js/orders/orders-main.js');
+  assert.match(main, /import \{ markFilled, paintUnitSelect \} from '\.\/ingredients\.js'/);
+  const sync = main.slice(main.indexOf('function syncInputsFromState'));
+  assert.match(sync.slice(0, sync.indexOf('refreshAllSuppliers')), /paintUnitSelect\(row, ingById\[row\.dataset\.ing\], entry\)/);
+});
+
+test('the unit menu is a second grid line over Order + Stock, a 44px target, scoped to the row class', () => {
+  const r = rule('.ing-row--line .ing-unit-select');
+  assert.match(r, /grid-column:\s*2 \/ -1/);
+  assert.match(r, /grid-row:\s*2/);
+  assert.match(r, /min-height:\s*var\(--ing-box-h\)/);
+  assert.match(rule('.ing-row--line .ing-unit-select:focus-visible'), /outline:/);
+  assert.match(rule('.ingredient-list .ing-row--choice .ing-main'), /grid-row:\s*1 \/ span 2/);
+});
+
+test('the unit menu label exists in English and Italian', () => {
+  const i18n = read('js/i18n.js');
+  assert.match(i18n, /'orders\.unitToOrderFor': 'Unit to order for \{name\}'/);
+  assert.match(i18n, /'orders\.unitToOrderFor': 'Unità d’ordine per \{name\}'/);
 });

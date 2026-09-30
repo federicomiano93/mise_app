@@ -19,12 +19,18 @@
 //
 // The order unit (casse/box) is a private reminder on the order screen and is NOT in
 // the message — the supplier gets the number only. An empty weight is skipped.
+// ⚠️ ONE EXCEPTION: a line of an ingredient that can be ordered in more than one unit
+// («cartone» or «busta») says which — «- Flour 2.5kg: 2 × busta» — because 2 of the
+// wrong one is a different order. The item carries `unit` only for those lines
+// (js/order-unit.js decides), so every other line stays byte-identical.
 //
 // The name in the title is the LOCATION PLACING THE ORDER, passed in by the caller
 // from the session. It used to be the constant 'The Italian Club', which was harmless
 // with one location and wrong the moment there were two: a supplier would receive
 // another location's order signed with this one's name. With no name the title
 // falls back to a plain '*Order*' — anonymous is recoverable, wrong is not.
+
+import { lineUnit, cleanUnit, qtyWithUnit } from '../order-unit.js';
 
 export function orderTitle(locationName) {
   const name = String(locationName || '').trim();
@@ -58,7 +64,11 @@ export const compareLabels = new Intl.Collator(undefined, { numeric: true }).com
 export function orderedItems(ingredients, entries) {
   return (ingredients || [])
     .filter(ing => (entries?.[ing.id]?.qty || 0) > 0)
-    .map(ing => ({ name: ing.name, weight: ing.weight || '', qty: entries[ing.id].qty }));
+    .map(ing => {
+      const item = { name: ing.name, weight: ing.weight || '', qty: entries[ing.id].qty };
+      const unit = lineUnit(ing, entries[ing.id]);
+      return unit ? { ...item, unit } : item;
+    });
 }
 
 // One supplier's items as sorted `{ label, qty }` lines — the EXACT shape and
@@ -66,7 +76,11 @@ export function orderedItems(ingredients, entries) {
 // (the tablet summary sheet) calls this too, so a supplier's summary can never
 // show something different from what the message they receive actually says.
 export function summaryLines(items) {
-  return sortItems(items).map(it => ({ label: itemLabel(it.name, it.weight), qty: num(it.qty) }));
+  return sortItems(items).map(it => {
+    const line = { label: itemLabel(it.name, it.weight), qty: num(it.qty) };
+    const unit = cleanUnit(it.unit);
+    return unit ? { ...line, unit } : line;
+  });
 }
 
 // One supplier's block: bold name, then "- label: qty" lines, BY NAME.
@@ -80,7 +94,7 @@ export function summaryLines(items) {
 // different order.
 // group: { supplierName, items: [{ name, weight, qty }] }
 function sectionFor({ supplierName, items }) {
-  const lines = summaryLines(items).map(({ label, qty }) => `- ${label}: ${qty}`);
+  const lines = summaryLines(items).map(({ label, qty, unit }) => `- ${label}: ${qtyWithUnit(qty, unit)}`);
   return `*${supplierName || 'Order'}*\n` + lines.join('\n');
 }
 
@@ -92,7 +106,8 @@ export function sortItems(items) {
 
 // One flat shopping list: every item from every group, no supplier headings.
 //
-// Two lines carrying the SAME label are added together. That is what a shopping list
+// Two lines carrying the SAME label AND unit are added together — 2 buste and 1 cartone
+// are never summed (nor converted), so a line with a unit is grouped on both. That is what a shopping list
 // wants — the same flour bought from two suppliers is still "buy this much flour" to
 // the person walking round the shop. (In the grouped format they stay apart, because
 // there each line is addressed to a different supplier.)
@@ -103,13 +118,18 @@ function flatLines(groups) {
   const totals = new Map();
   groups.forEach(group => (group.items || []).forEach(item => {
     const label = itemLabel(item.name, item.weight);
-    totals.set(label, (totals.get(label) || 0) + num(item.qty));
+    const unit = cleanUnit(item.unit);
+    // Keyed on the lower-cased unit so «Busta» and «busta» are one line; the text shown
+    // is the first spelling met. A NUL separator cannot occur in a typed label.
+    const key = `${label}\u0000${unit.toLowerCase()}`;
+    const seen = totals.get(key);
+    totals.set(key, { label, unit: seen ? seen.unit : unit, qty: (seen?.qty || 0) + num(item.qty) });
   }));
 
-  return [...totals.entries()]
-    .filter(([, qty]) => qty > 0)
-    .sort((a, b) => a[0].localeCompare(b[0]))
-    .map(([label, qty]) => `- ${label}: ${qty}`);
+  return [...totals.values()]
+    .filter(line => line.qty > 0)
+    .sort((a, b) => a.label.localeCompare(b.label) || a.unit.localeCompare(b.unit))
+    .map(({ label, unit, qty }) => `- ${label}: ${qtyWithUnit(qty, unit)}`);
 }
 
 // The whole message, in one of two formats.
@@ -150,15 +170,20 @@ export function buildOrderMessage(groups, { grouped = true, locationName = '' } 
 // Same order of preference as recordedName (archive.js); name and weight stay
 // SEPARATE fields here because the message composes them itself, and a frozen name
 // already carries its weight.
-export function itemsFromQuantities(quantities, ingredientsById, names) {
+//
+// `units` is the record's frozen `units` map: only what was frozen is shown, never the
+// card's unit, so a message re-sent from History reads exactly as it did the first time.
+export function itemsFromQuantities(quantities, ingredientsById, names, units) {
   return Object.keys(quantities || {})
     .map(id => {
       const live = ingredientsById?.[id];
-      return {
+      const item = {
         name: live?.name || names?.[id] || 'Deleted ingredient',
         weight: (live && live.weight) || '',
         qty: num(quantities[id]),
       };
+      const unit = cleanUnit(units?.[id]);
+      return unit ? { ...item, unit } : item;
     })
     .filter(it => it.qty > 0)
     .sort((a, b) => compareLabels(itemLabel(a.name, a.weight), itemLabel(b.name, b.weight)));

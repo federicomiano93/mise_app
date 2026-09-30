@@ -13,6 +13,7 @@ import { t } from '../i18n.js';
 import { el } from './dom.js';
 import { isUnusualQuantity } from './suggestions.js';
 import { wholeNumber, sortByLabel, ingredientLabel } from './archive.js';
+import { unitChoices, entryUnit, storedUnitFor, sameUnit } from '../order-unit.js';
 
 // How many of a supplier's ingredients already have a quantity entered — used to
 // paint the progress bar correctly on first render (before any typing), so a
@@ -42,6 +43,27 @@ const CLEAR_ICON =
 // phone, so the button can never be out of step with the box beside it.
 export function markFilled(row, qty) {
   row?.classList.toggle('ing-row--filled', (Number(qty) || 0) > 0);
+}
+
+// The option a line's unit selects: the one spelled like it, whatever its capitals
+// («Busta» stored, «busta» on the card), else the unit itself.
+function optionFor(select, unit) {
+  const same = [...select.options].find(o => sameUnit(o.value, unit));
+  return same ? same.value : unit;
+}
+
+// Show a draft entry's unit in a row's unit menu, if it has one. Called when the draft
+// arrives from another phone: without it this phone would keep showing — and pricing —
+// the old unit. It skips the menu being used right now, exactly as the number boxes are
+// skipped, so nothing jumps under a finger.
+export function paintUnitSelect(row, ing, entry) {
+  const select = row?.querySelector('.ing-unit-select');
+  if (!select || !ing || select === document.activeElement) return;
+  const unit = entryUnit(entry, ing);
+  if (![...select.options].some(o => sameUnit(o.value, unit))) {
+    select.appendChild(el('option', { value: unit, text: unit }));
+  }
+  select.value = optionFor(select, unit);
 }
 
 export function buildIngredientList(supplier, ingredients, suggest, entries, hooks,
@@ -154,6 +176,25 @@ export function buildRow(ing, supplier, suggest, entries, hooks, { meta = '' } =
     updateHint();   // the warning has to appear as the extra digit is typed
   });
 
+  // ⚠️ A MENU ONLY WHEN THE CARD OFFERS A CHOICE («cartone» or «busta»); any other row keeps
+  // the caption and is untouched. The options are the card's own words — venue data, never
+  // translated. The quantity is kept when the unit changes: the person is correcting the
+  // unit, not the number. Read at build time, so the list is always the card as it is now.
+  const choices = unitChoices(ing, entry.unit);
+  const unitSelect = choices.length >= 2
+    ? el('select', {
+      class: 'ing-unit-select',
+      'aria-label': t('orders.unitToOrderFor', { name: ingredientLabel(ing) || t('orders.unnamedProduct') }),
+    }, choices.map(unit => el('option', { value: unit, text: unit })))
+    : null;
+  if (unitSelect) {
+    unitSelect.value = optionFor(unitSelect, entryUnit(entry, ing));
+    unitSelect.addEventListener('change', () => {
+      entryFor(entries, ing.id).unit = storedUnitFor(unitSelect.value, ing);
+      hooks.afterChange(supplier.id);
+      updateHint();
+    });
+  }
 
   // One LINE per ingredient, three columns: the name (with the supplier and the hint
   // under it), the Order box, the Stock box. «Order» / «Stock» are named ONCE, by the
@@ -190,11 +231,13 @@ export function buildRow(ing, supplier, suggest, entries, hooks, { meta = '' } =
     ]),
     el('div', { class: 'ing-col' }, [
       qtyInput,
-      ing.unit ? el('span', { class: 'ing-order-unit', text: ing.unit }) : null,
+      !unitSelect && ing.unit ? el('span', { class: 'ing-order-unit', text: ing.unit }) : null,
     ]),
     // `stock-field` is what body.hide-stock hides (Settings → hide stock).
     el('div', { class: 'ing-col stock-field' }, [stockInput]),
+    unitSelect,
   ]);
+  if (unitSelect) row.classList.add('ing-row--choice');
 
   stockInput.value = entry.stock || '';
   qtyInput.value = entry.qty || '';

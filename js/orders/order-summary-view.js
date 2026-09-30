@@ -17,6 +17,7 @@ import { t } from '../i18n.js';
 import { supplierLabel } from '../supplier-label.js';
 import { el } from './dom.js';
 import { supplierSummary } from './order-summary.js';
+import { qtyWithUnit } from '../order-unit.js';
 import { lineCostText, buildTotalsBox } from './order-cost-view.js';
 
 const BACK_ICON =
@@ -84,12 +85,12 @@ export function buildOrderSummaryView(supplier, ingredients, entries, ctx) {
     // null the same way an ingredient nobody has priced yet always does, so
     // "no price" is what they see: no number, ever — just like today.
     const card = el('div', { class: 'order-summary-list' });
-    costLines.forEach(({ label, qty, unitCost, vatRate }) => {
+    costLines.forEach(({ label, qty, unit, unitCost, vatRate }) => {
       const cost = showMoney ? lineCostText({ qty, unitCost, vatRate }) : null;
       card.appendChild(el('div', { class: 'order-summary-row' }, [
         el('span', { class: 'order-summary-label', text: label }),
         el('div', { class: 'order-summary-qty-wrap' }, [
-          el('span', { class: 'order-summary-qty', text: String(qty) }),
+          el('span', { class: 'order-summary-qty', text: qtyWithUnit(qty, unit) }),
           cost ? el('span', { class: `order-summary-cost${cost.warn ? ' order-summary-cost--warn' : ''}`, text: cost.text }) : null,
         ]),
       ]));

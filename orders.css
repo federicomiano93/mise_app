@@ -631,6 +631,33 @@
   color: var(--text-3);
 }
 
+/* ⚠️ THE UNIT CHOICE (30 Sep 2026): a product that can be ordered by the «cartone» OR by the
+   «busta» gets a menu in place of the caption. It is a direct child of the row, on a second
+   grid line spanning the Order AND Stock columns, NOT inside .ing-col: the Order column is
+   56px on a phone, and «cartone» plus the menu's arrow needs ~70px, so it would be cut. Over
+   both columns it has 122px at 296px wide (186px on a tablet) and the name column, which
+   spans both lines, keeps its width. `2 / -1` is also right with Stock hidden (one column). */
+.ing-row--line .ing-unit-select {
+  grid-column: 2 / -1;
+  grid-row: 2;
+  width: 100%;
+  min-width: 0;
+  min-height: var(--ing-box-h);
+  margin-top: 6px;
+  padding: 0 8px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 13px;
+  text-overflow: ellipsis;
+}
+.ing-row--line .ing-unit-select:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 1px; }
+/* The name and its hint stay beside both lines, but the name still sits level with the boxes. */
+.ingredient-list .ing-row--choice .ing-main,
+.ing-flat-list .ing-row--choice .ing-main { grid-row: 1 / span 2; }
+
 /* The header line: the same three columns and the same widths as the rows, so each word
    sits over its boxes. Opaque, with a hairline under it, because rows scroll beneath it. */
 .ing-head {

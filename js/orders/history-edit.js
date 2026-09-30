@@ -15,6 +15,7 @@ import { t } from '../i18n.js';
 import { el } from './dom.js';
 import { confirmDialog, alertDialog } from './confirm-dialog.js';
 import { dayLabel, dayPhrase, spellDay } from './day.js';
+import { recordUnit } from '../order-unit.js';
 import { isLegacyRecord, recordDate, recordedName, wholeNumber as num } from './archive.js';
 
 const BACK_ICON =
@@ -44,7 +45,7 @@ export function buildHistoryEditor(record, ingredients, actions) {
     .map(id => ({
       id,
       name: recordedName(id, ingById, record.names),
-      unit: ingById[id]?.unit || '',
+      unit: recordUnit(record, id, ingById[id]),
       qty: num(quantities[id]),
       stock: num(stock[id]),
     }))

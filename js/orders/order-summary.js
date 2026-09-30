@@ -17,6 +17,7 @@
 import { orderedItems, summaryLines, itemLabel } from './order-text.js';
 import { supplierLabel } from '../supplier-label.js';
 import { unitCost, orderCost } from '../order-cost.js';
+import { entryUnit } from '../order-unit.js';
 
 // supplier: { id, name } | null; ingredients: that supplier's products,
 // already lensed the way orderIngredients()/ingredientsBySupplier() in
@@ -37,18 +38,26 @@ export function supplierSummary(supplier, ingredients, entries) {
   // knows nothing of ids either. Two DIFFERENT ingredients from the same
   // supplier with an identical name AND weight would collide here — the
   // same edge case the message itself already cannot tell apart.
+  //
+  // ⚠️ THE UNIT PRICES THE LINE — a busta costs a quarter of the cartone — so the line's
+  // own unit (from the draft entry, found by the same ingredient) is what is priced,
+  // and it travels on the cost line for the screens that show it.
   const byLabel = new Map();
   (ingredients || []).forEach(ing => {
     if ((entries?.[ing.id]?.qty || 0) <= 0) return;
     byLabel.set(itemLabel(ing.name, ing.weight || ''), ing);
   });
 
-  const costLines = lines.map(({ label, qty }) => {
+  const costLines = lines.map(({ label, qty, unit }) => {
     const ing = byLabel.get(label);
+    // The price of ONE of THIS line's unit: unitCost() reads `unit` off the ingredient,
+    // so it is handed the card with the line's unit in place of its own.
+    const priced = ing ? { ...ing, unit: entryUnit(entries?.[ing.id], ing) } : null;
     return {
       label,
       qty,
-      unitCost: ing ? unitCost(ing, ing) : null,
+      ...(unit ? { unit } : {}),
+      unitCost: priced ? unitCost(priced, priced) : null,
       vatRate: ing && ing.vatRate != null ? Number(ing.vatRate) : null,
     };
   });

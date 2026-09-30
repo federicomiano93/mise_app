@@ -25,7 +25,7 @@ import { currentSession } from '../firebase.js';
 import { el, groupBy } from './dom.js';
 import { mountSupplierList, refreshSupplierDerived } from './suppliers.js';
 import { buildSupplierDetail } from './supplier-detail.js';
-import { markFilled } from './ingredients.js';
+import { markFilled, paintUnitSelect } from './ingredients.js';
 import { buildSupplierItems } from './supplier-items.js';
 import { buildOrderSummaryView } from './order-summary-view.js';
 import { paintOrderMoney } from './order-cost-view.js';
@@ -59,7 +59,7 @@ import {
 import {
   historyDocId, ingredientsOf, supplierHasItems, ingredientLabel, wholeNumber,
 } from './archive.js';
-import { storedUnitFor } from '../order-unit.js';
+import { storedUnitFor, entryUnit, isDefaultUnit } from '../order-unit.js';
 import { todayOrders, pendingSuppliers } from './reminders.js';
 import { renderTodayOrders, renderPending } from './reminder-view.js';
 import { resolveSuppliers, orderSuppliers, NO_SUPPLIER_ID } from './no-supplier.js';
@@ -270,8 +270,12 @@ function refreshOrderTotals() {
 // is an overlay OUTSIDE that container, and scoping to it would mean a quantity typed
 // on another phone silently stopped appearing while you were inside a supplier.
 function syncInputsFromState() {
+  const ingById = indexById(state.ingredients);
   document.querySelectorAll('.ing-row[data-ing]').forEach(row => {
     const entry = state.entries[row.dataset.ing] || {};
+    // A unit changed on another phone has to reach the select too, or this phone would
+    // keep showing (and pricing) the old unit until the page was reloaded.
+    paintUnitSelect(row, ingById[row.dataset.ing], entry);
     const stock = row.querySelector('.ing-stock');
     const qty = row.querySelector('.ing-qty');
     if (stock && stock !== document.activeElement) stock.value = entry.stock || '';
@@ -845,7 +849,7 @@ function recordToRow(record) {
   return {
     id: record.id,
     name: record.supplierName || 'Order',
-    items: itemsFromQuantities(record.quantities, indexById(state.ingredients), record.names),
+    items: itemsFromQuantities(record.quantities, indexById(state.ingredients), record.names, record.units),
   };
 }
 
@@ -1621,7 +1625,12 @@ function entriesToRecord(supplierId, ingredients, confirmed) {
 // The usual amount for a row whose quantity looks like a typing mistake, else
 // null. ⚠️ THE SAME LENS THE ROW HINT USES (js/orders/ingredients.js), so the
 // confirmation can never warn about a row that showed no warning.
+//
+// ⚠️ NONE FOR A LINE IN A NON-DEFAULT UNIT: the history the «usual» is worked out from
+// counts cartoni, so «usually about 4» beside 4 buste would compare two different things.
 function usualFor(id, qty) {
+  const ing = state.ingredients.find(i => i.id === id);
+  if (ing && !isDefaultUnit(state.entries[id], ing)) return null;
   const result = suggestFor(id, 0);
   return result?.active && isUnusualQuantity(qty, result.par) ? result.par : null;
 }
@@ -1644,7 +1653,7 @@ function openPlaceConfirm(items, { title, okLabel }) {
         .map(ing => ({
           id: ing.id,
           name: ingredientLabel(ing),
-          unit: ing.unit || '',
+          unit: entryUnit(state.entries[ing.id], ing),
           qty: wholeNumber(state.entries[ing.id]?.qty),
           asked: asked[ing.id],
         }))
