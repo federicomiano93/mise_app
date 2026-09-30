@@ -13,6 +13,20 @@
       ]
     }
   ],
+  "hosting": [
+    {
+      "target": "preview",
+      "public": "_site",
+      "ignore": [
+        "**/.*",
+        "**/.*/**",
+        "gha-creds-*.json",
+        "channel.json",
+        "**/*.log",
+        "**/*.md"
+      ]
+    }
+  ],
   "emulators": {
     "auth": {
       "port": 9099

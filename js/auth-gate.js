@@ -18,7 +18,8 @@
 import { t, setLanguage, languageFromTag } from './i18n.js';
 import { markJustJoined } from './install-hint.js';
 import { onSession, signIn, signUp, sendReset, chooseLocation, signOutNow,
-         enterMyBusinesses, backToHub } from './firebase.js';
+         enterMyBusinesses, backToHub, isPreview } from './firebase.js';
+import { showPreviewRibbon } from './preview-ribbon.js';
 import { normalizeTyped } from './join-code.js';
 import { kindOfTyped, readJoinToken, codeShapeHint } from './join-link.js';
 import { nameProblem, passwordProblem, MIN_PASSWORD_LENGTH } from './credentials.js';
@@ -26,6 +27,10 @@ import { isSectionAllowed, isSectionAllowedFor } from './sections.js';
 import { cardVisibleTo } from './home-cards.js';
 
 const HOME = 'index.html';
+
+// Every page loads this gate, so this is where a pull request's preview marks itself
+// (js/preview-ribbon.js). The live site never passes the test.
+if (isPreview) showPreviewRibbon();
 
 // ⚠️ AN INVITATION MUST SURVIVE A RELOAD, and until 13 Aug 2026 it did not.
 // Redeeming one can need a sign-in first, and signing in reloads the page — so a

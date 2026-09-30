@@ -1,6 +1,7 @@
 // firebase.js — Firebase setup + Firestore helpers
 //
-// Real config lives here; firebase.example.js is the placeholder template.
+// The real config is picked by js/firebase-target.js (production, or the preview project on a
+// pull request's preview link); firebase.example.js is the placeholder template.
 // js/firebase.js IS committed to Git: Firebase web API keys are public config
 // (sent to every visitor's browser), not secrets. Security comes from Firestore
 // Security Rules + API key restrictions, never from hiding this file.
@@ -76,18 +77,15 @@ import {
 } from './local-data.js';
 import { sameData } from './same-data.js';
 import { isBusy } from './update-gate.js';
+import { configForHost, isPreviewHost } from './firebase-target.js';
 
 // ── Configuration (PUBLIC config, P1 — committed on purpose, see .gitignore) ──
-// Copied from firebase.example.js, whose "placeholders only" heading came with
-// it: these are the real values, and this is the file the app actually loads.
-export const firebaseConfig = {
-  apiKey: "AIzaSyCIy5dRbE9Ce_mJQ4-r7QuSOquKpgkwoMo",
-  authDomain: "bakery-app-ebf90.firebaseapp.com",
-  projectId: "bakery-app-ebf90",
-  storageBucket: "bakery-app-ebf90.firebasestorage.app",
-  messagingSenderId: "27778450817",
-  appId: "1:27778450817:web:74e1bab55d10c3f9279480"
-};
+// The real values live in js/firebase-target.js, beside the PREVIEW project's, and the
+// page's hostname picks one: production ONLY on the live site and localhost (an allowlist);
+// every other host — a pull request's preview link, a LAN address, a tunnel — gets the preview
+// project, fake data, so a mistake shows an empty test app instead of writing real orders.
+export const firebaseConfig = configForHost(location.hostname);
+export const isPreview = isPreviewHost(location.hostname);
 
 // The Web Push key, for notifications that arrive with the app closed.
 //
@@ -234,15 +232,16 @@ function writeCacheOwner(uid) {
 
 // ── Local emulator switch (AUTOMATIC, by hostname) ────────────────────────────
 // On localhost / 127.0.0.1 the app talks to the LOCAL Firebase Emulator Suite, so
-// development and manual browser testing NEVER touch production Firestore. On any
-// other hostname (the live github.io domain) it connects to production as before.
+// development and manual browser testing NEVER touch production Firestore. On the live
+// github.io domain it connects to production; on any other host, to the preview project
+// (js/firebase-target.js).
 //
 // This decision is made automatically from the URL — there is deliberately NO
 // manual flag. A flag could be left in the wrong state and either point the live
 // site at the emulator or point local testing at production. Hostname can't be
 // forgotten: it is simply where the page is being served from.
 //
-// The production config above is unchanged; we only REDIRECT the SDK's traffic to
+// The config above (production's, on localhost) is unchanged; we only REDIRECT the SDK's traffic to
 // the local emulator ports (firebase.json: auth 9099, firestore 8080) when local.
 // ⚠️ EXPORTED, AND EVERY OTHER FIREBASE APP IN THIS REPO MUST USE IT. The client
 // ordering page and the link minter each create a SECOND Firebase app (so a client's

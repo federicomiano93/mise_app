@@ -69,6 +69,9 @@ import { sameData } from './same-data.js';
 import { isBusy } from './update-gate.js';
 
 // ── Configuration (placeholders only — fill these in js/firebase.js) ──────────
+// The real js/firebase.js does not hold these literally: it asks js/firebase-target.js,
+// `configForHost(location.hostname)`, which returns the production project's config or, on a
+// pull request's preview link, the preview project's. Put your projects' values there.
 export const firebaseConfig = {
   apiKey: "YOUR_API_KEY",
   authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
@@ -77,6 +80,9 @@ export const firebaseConfig = {
   messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
   appId: "YOUR_APP_ID"
 };
+// True only on a preview link (js/firebase-target.js `isPreviewHost`); the gate then draws
+// the «preview · test data» ribbon.
+export const isPreview = false;
 
 // The Web Push key, for notifications that arrive with the app closed.
 // PUBLIC config (P1): the public half of the Web Push certificate pair, handed to

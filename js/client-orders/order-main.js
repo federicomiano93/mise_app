@@ -29,8 +29,13 @@ import {
   orderableDates, defaultOrderDate, orderDocId, buildOrder, normalizeQuantities,
   isDateOpen, isValidOrderClientId, normalizeCutoff,
 } from '../client-order-model.js';
+import { isPreviewHost } from '../firebase-target.js';
+import { showPreviewRibbon } from '../preview-ribbon.js';
 
 const HOST = document.getElementById('order-root');
+
+// This page does not load the staff gate, so it marks a pull request's preview itself.
+if (isPreviewHost(location.hostname)) showPreviewRibbon();
 
 // ⚠️ THE NAME COMES FROM THE MENU, because the location document is NOT readable
 // by a client — staff-only on purpose, since it also lists which sections the

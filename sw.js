@@ -1,4 +1,4 @@
-const CACHE_NAME = 'theitalianclub-v491';
+const CACHE_NAME = 'theitalianclub-v495';
 // Firebase SDK modules (loaded from gstatic) are cached SEPARATELY from CACHE_NAME
 // so they survive the cache-version bump that happens on every deploy — otherwise
 // the offline SDK would be wiped each release until the next online load. The name
@@ -12,7 +12,7 @@ const CACHE_NAME = 'theitalianclub-v491';
 // the fetch handler below, on the first load that has a network.
 // So between activate() and that first load, a phone that is OFFLINE cannot boot:
 // the code asks for 12.18.0 and nothing has it. In practice the window is very
-// small — activate() only happens after a successful 270-file precache, i.e.
+// small — activate() only happens after a successful 272-file precache, i.e.
 // online, and tapping the update banner reloads the page immediately — but it is
 // not zero, and it is the reason to bump the SDK deliberately rather than often.
 // Leaving the name unchanged would close the window and cost ~1 MB of dead
@@ -156,6 +156,8 @@ const ASSETS = [
   './js/whats-new.js',
   './js/whats-new-boot.js',
   './js/firebase.js',
+  // Imported by js/firebase.js on every page: it picks the Firebase project by hostname.
+  './js/firebase-target.js',
   // ⚠️ js/firebase.js IMPORTS IT, and every page loads that first: missing here, an
   // installed phone offline after the deploy would boot no screen at all.
   './js/same-data.js',
@@ -200,6 +202,8 @@ const ASSETS = [
   // without it the Home would not open.
   './js/unsent-guard.js',
   './js/auth-gate.js',
+  // Imported by the gate on every page (drawn only on a preview link).
+  './js/preview-ribbon.js',
   './js/home-session.js',
   './js/home-settings.js',
   './js/location-title.js',
@@ -396,7 +400,7 @@ const ASSET_HASHES = {
   "./install-guide.html": 'c57a55ccf379afaf',
   "./qr.png": '761a95e5bc25e2ba',
   "./js/install-guide.js": '17fcd0c0fec489c2',
-  "./tokens.css": '0fd4b0b24f828885',
+  "./tokens.css": '16783e285b2ddb77',
   "./auth.css": '8db3d5a1b9b85d37',
   "./style.css": '314acebfd84603b2',
   "./orders.css": '041f3d9b5f1148e4',
@@ -467,12 +471,13 @@ const ASSET_HASHES = {
   "./js/splash-init.js": '0982bbf1d8228eab',
   "./js/whats-new.js": '28a18a0146f90592',
   "./js/whats-new-boot.js": 'c4a88b96a1986d6a',
-  "./js/firebase.js": 'd2936961b85522a0',
+  "./js/firebase.js": 'f09bb1c18ac124e1',
+  "./js/firebase-target.js": 'b3759997e54ddbc3',
   "./js/same-data.js": '11ff91c9b0192d20',
   "./js/location.js": '6aaf53615a8739d1',
   "./js/sections.js": 'abcfdecb2bd5766d',
   "./js/roles.js": '2b491770c4b6165b',
-  "./js/i18n.js": '43c3c9143a7408c3',
+  "./js/i18n.js": '4c9155dab5c20ced',
   "./js/i18n-dom.js": 'a6d32c5bb1b56674',
   "./js/join-code.js": '5b89de65db5c102f',
   "./js/join-link.js": 'a90ea53c7ba51614',
@@ -488,7 +493,8 @@ const ASSET_HASHES = {
   "./js/staff/home-cards-screen.js": 'a53963420fed4227',
   "./js/local-data.js": 'f858223fe05e3f77',
   "./js/unsent-guard.js": 'd75b23b7ad361133',
-  "./js/auth-gate.js": '35bc1722a2ad0a17',
+  "./js/auth-gate.js": 'fc9f6d47dbea5f4c',
+  "./js/preview-ribbon.js": 'ee39b7ee13f78c02',
   "./js/home-session.js": '1df0014d501c0404',
   "./js/home-settings.js": 'ad226838e6629316',
   "./js/location-title.js": '296d2d7d3d04d7f3',
@@ -687,7 +693,7 @@ const ASSET_HASHES = {
 // code against rules that deployed instantly, which is the very thing the gate exists
 // to prevent. Two things stand between that and a release: the test that every ASSETS
 // entry EXISTS (a mistyped path being the likeliest permanent cause), and this
-// project's post-deploy sweep, which already asks the live site for all 270 files.
+// project's post-deploy sweep, which already asks the live site for all 272 files.
 // ⚠️ NEITHER covers a device-specific failure — nobody has yet confirmed an update
 // landing on a real iPhone under this code.
 //

@@ -37,3 +37,6 @@ ARCHIVIO-BACKLOG.md
 # says so and tests/print-agent.test.mjs fails if the file ever appears; this line
 # is the third belt, because the cost of the mistake is somebody else's database.
 print-agent/print-agent.json
+
+# Staged by .github/workflows/preview.yml for a preview channel; never committed.
+_site/

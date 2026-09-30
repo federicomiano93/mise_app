@@ -1,5 +1,14 @@
 {
   "projects": {
     "default": "bakery-app-ebf90"
+  },
+  "targets": {
+    "mise-app-preview": {
+      "hosting": {
+        "preview": [
+          "mise-app-preview"
+        ]
+      }
+    }
   }
 }

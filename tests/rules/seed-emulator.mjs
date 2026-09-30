@@ -70,6 +70,22 @@ export function toFields(obj) {
   return fields;
 }
 
+// ── Where the writes go ──────────────────────────────────────────────────────
+// The emulator, always — unless scripts/seed-preview.mjs swaps in the PREVIEW project
+// (useBackend), a real Firebase project that holds only this same fake data, so a pull
+// request's preview link has something to show. Nothing in this file can name production:
+// the preview backend lives in that script, with its project id fixed.
+const EMULATOR_BACKEND = Object.freeze({
+  docUrl: (path) => `${BASE}/${path}`,
+  headers: async () => OWNER,
+  account: emulatorAccount,
+});
+let backend = EMULATOR_BACKEND;
+
+export function useBackend(next) {
+  backend = next;
+}
+
 // ── Emulator helpers ─────────────────────────────────────────────────────────
 export async function wipe() {
   const res = await fetch(
@@ -82,9 +98,9 @@ export async function wipe() {
 // Create/overwrite a document as owner (rules bypassed). No updateMask → the whole
 // document is replaced, which is what "plant exactly this shape" means.
 export async function seedDoc(path, data) {
-  const res = await fetch(`${BASE}/${path}`, {
+  const res = await fetch(backend.docUrl(path), {
     method: 'PATCH',
-    headers: OWNER,
+    headers: await backend.headers(),
     body: JSON.stringify({ fields: toFields(data) }),
   });
   if (!res.ok) throw new Error(`Seed ${path} failed: ${res.status} ${await res.text()}`);
@@ -92,7 +108,7 @@ export async function seedDoc(path, data) {
 
 // Read a document back as owner. Returns the raw REST document, or null.
 export async function readDoc(path) {
-  const res = await fetch(`${BASE}/${path}`, { headers: OWNER });
+  const res = await fetch(backend.docUrl(path), { headers: await backend.headers() });
   return res.ok ? res.json() : null;
 }
 
@@ -257,6 +273,12 @@ const AUTH_BASE = 'http://127.0.0.1:9099/identitytoolkit.googleapis.com/v1/accou
 // screen looks exactly like "the login is broken", for an hour, until you work
 // out that it was the seeder. So: create it, or sign in to the one that exists.
 export async function seedAccount(email, password, locations) {
+  const uid = await backend.account(email, password);
+  await seedDoc(`users/${uid}`, { locations });
+  return uid;
+}
+
+async function emulatorAccount(email, password) {
   const post = async (op, extra = {}) => {
     const res = await fetch(`${AUTH_BASE}:${op}?key=fake`, {
       method: 'POST',
@@ -273,7 +295,6 @@ export async function seedAccount(email, password, locations) {
   if (!body.localId) {
     throw new Error(`Could not seed ${email}: ${JSON.stringify(body).slice(0, 200)}`);
   }
-  await seedDoc(`users/${body.localId}`, { locations });
   return body.localId;
 }
 

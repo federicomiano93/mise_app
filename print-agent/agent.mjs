@@ -88,11 +88,23 @@ function loadConfig() {
 // with its own narrow pattern and a named failure, rather than by parsing the whole
 // object — a parser that half-works would hand this program a wrong project id and
 // it would fail as «permission denied», which explains nothing.
+//
+// ⚠️ PRODUCTION'S BLOCK, BY NAME — never the hostname switch. Since the preview project
+// (30 Sep 2026) the app's config lives in js/firebase-target.js, which also holds the
+// preview project's; a web page picks one by its address, but this program has no address,
+// and configForHost() would hand it the PREVIEW project: labels queued in the shop would
+// never print. So it reads the PRODUCTION_CONFIG block only, as text (no import: the shop
+// computer's Node need not understand the app's module syntax).
+// tests/print-agent-config.test.mjs pins it.
 function readAppConfig() {
-  const src = readFileSync(join(REPO, 'js', 'firebase.js'), 'utf8');
+  const file = join(REPO, 'js', 'firebase-target.js');
+  const src = readFileSync(file, 'utf8');
+  const start = src.indexOf('export const PRODUCTION_CONFIG');
+  const block = start < 0 ? '' : src.slice(start, src.indexOf('});', start));
+  if (!block) die('Could not find PRODUCTION_CONFIG in js/firebase-target.js — has that file changed shape?');
   const one = (field) => {
-    const m = src.match(new RegExp(`${field}:\\s*"([^"]+)"`));
-    if (!m) die(`Could not find ${field} in js/firebase.js — has that file changed shape?`);
+    const m = block.match(new RegExp(`${field}:\\s*"([^"]+)"`));
+    if (!m) die(`Could not find ${field} in PRODUCTION_CONFIG (js/firebase-target.js) — has that file changed shape?`);
     return m[1];
   };
   return { apiKey: one('apiKey'), projectId: one('projectId') };
