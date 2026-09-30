@@ -1,7 +1,6 @@
 {
   "projects": {
-    "default": "bakery-app-ebf90",
-    "preview": "mise-app-preview"
+    "default": "bakery-app-ebf90"
   },
   "targets": {
     "mise-app-preview": {

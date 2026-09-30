@@ -11,6 +11,15 @@ name: Preview
 # Hosting admin, Rules admin and read-only viewers — on that project only). Production's deploy
 # lives in test.yml, behind `test` + `rules` and the push to main.
 #
+# ⚠️⚠️ ONLY THE APP'S OWN FILES ARE PUBLISHED, FROM GIT, NEVER THE WORKSPACE. The first version
+# uploaded the checkout folder, and with it `.git/config` (the job's GitHub token) and the
+# `gha-creds-*.json` file the sign-in step writes there — on a public address, for anyone who
+# read the public Actions log (30 Sep 2026; the channel was deleted and that trust disabled and
+# replaced within the hour; the audit log shows no use but the job's own). So: `git archive` of
+# an ALLOWLIST into `_site/` (no dot-folder, no workspace file can get in), checkout without
+# persisted credentials, the deploy output kept in $RUNNER_TEMP, and a check after every deploy
+# that fails — and takes the channel down — if anything internal answers.
+#
 # This job is NOT a required check: a broken preview must never block a fix from shipping.
 
 on:
@@ -29,12 +38,26 @@ jobs:
     permissions:
       contents: read
       id-token: write
-      pull-requests: write
+    outputs:
+      url: ${{ steps.deploy.outputs.url }}
     steps:
       - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v5
         with:
           node-version: '22'
+
+      # The app, and nothing else: the pages, their stylesheets, sw.js, the manifest, js/ and
+      # the static folders — exactly what GitHub Pages serves the app from. `:(glob)` keeps
+      # `*.html` / `*.css` to the top level.
+      - name: Stage only the app's files
+        run: |
+          rm -rf _site && mkdir _site
+          git archive --format=tar HEAD -- \
+            ':(glob)*.html' ':(glob)*.css' sw.js manifest.json qr.png js icons fonts sounds \
+            | tar -x -C _site
+          find _site -maxdepth 1 | sort
 
       # ⚠️ The trust is pinned to this repository on Google's side, in TWO places, exactly like
       # production's (see test.yml): the provider's attribute condition
@@ -45,7 +68,7 @@ jobs:
         uses: google-github-actions/auth@v2
         with:
           project_id: mise-app-preview
-          workload_identity_provider: projects/863348756512/locations/global/workloadIdentityPools/github-pool/providers/github-provider
+          workload_identity_provider: projects/863348756512/locations/global/workloadIdentityPools/github-pool/providers/github-oidc
           service_account: preview-deploy@mise-app-preview.iam.gserviceaccount.com
 
       - name: Deploy this PR's rules and pages to its preview channel
@@ -56,16 +79,47 @@ jobs:
           npm install --global firebase-tools@15.26.0
           firebase deploy --only firestore:rules --project mise-app-preview --non-interactive
           firebase hosting:channel:deploy "$CHANNEL" --only preview --project mise-app-preview \
-            --expires 14d --non-interactive --json > channel.json
-          url=$(node -e "const r=require('./channel.json');const hit=Object.values(r.result||{}).find(v=>v&&v.url);if(!hit){console.error(JSON.stringify(r).slice(0,500));process.exit(1)}console.log(hit.url)")
+            --expires 14d --non-interactive --json > "$RUNNER_TEMP/channel.json"
+          url=$(node -e "const r=require(process.argv[1]);const hit=Object.values(r.result||{}).find(v=>v&&v.url);if(!hit){console.error(JSON.stringify(r).slice(0,500));process.exit(1)}console.log(hit.url)" "$RUNNER_TEMP/channel.json")
           echo "url=$url" >> "$GITHUB_OUTPUT"
 
+      - name: Prove nothing internal is being served
+        env:
+          CHANNEL: pr-${{ github.event.pull_request.number }}
+          URL: ${{ steps.deploy.outputs.url }}
+        run: |
+          code() { curl -s -o /dev/null -w "%{http_code}" "$URL/$1"; }
+          [ "$(code index.html)" = 200 ] || { echo "index.html is not served"; exit 1; }
+          leaked=""
+          for path in .git/config .git/HEAD .github/workflows/preview.yml .claude/settings.json \
+                      firebase.json firestore.rules package.json functions/index.js \
+                      scripts/seed-preview.mjs tests/firebase-target.test.mjs README.txt; do
+            [ "$(code "$path")" = 404 ] || leaked="$leaked $path"
+          done
+          for creds in gha-creds-*.json; do
+            [ -e "$creds" ] && { [ "$(code "$creds")" = 404 ] || leaked="$leaked $creds"; }
+          done
+          if [ -n "$leaked" ]; then
+            echo "::error::served but must not be:$leaked — taking the channel down"
+            firebase hosting:channel:delete "$CHANNEL" --project mise-app-preview --force
+            exit 1
+          fi
+
+  # The comment gets its own job: the only one allowed to write on the PR, and it installs and
+  # runs nothing but `gh`.
+  comment:
+    needs: preview
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
       - name: Put the link on the pull request
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
           PR: ${{ github.event.pull_request.number }}
-          URL: ${{ steps.deploy.outputs.url }}
+          URL: ${{ needs.preview.outputs.url }}
         run: |
           body="**Anteprima di questa PR** (dati di prova, non i tuoi): $URL
-          Aprila sul telefono ed entra con un account di prova. Il link si aggiorna a ogni modifica della PR e scade dopo 14 giorni."
+          Aprila sul telefono ed entra con un account di prova. Il link si aggiorna a ogni modifica della PR e scade dopo 14 giorni. In anteprima non funziona ciò che passa dal server: codici d'invito, alcuni interruttori delle impostazioni, notifiche, lettura da foto."
           gh pr comment "$PR" --edit-last --body "$body" || gh pr comment "$PR" --body "$body"

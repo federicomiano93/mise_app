@@ -16,19 +16,14 @@
   "hosting": [
     {
       "target": "preview",
-      "public": ".",
+      "public": "_site",
       "ignore": [
-        "firebase.json",
         "**/.*",
-        "**/node_modules/**",
-        "functions/**",
-        "tests/**",
-        "scripts/**",
-        "print-agent/**",
-        "**/*.md",
-        "package.json",
-        "package-lock.json",
-        "firestore.rules"
+        "**/.*/**",
+        "gha-creds-*.json",
+        "channel.json",
+        "**/*.log",
+        "**/*.md"
       ]
     }
   ],
