@@ -12,8 +12,10 @@
 
 import { isBefore, weekdayOf } from './day.js';
 import { ingredientsOf, supplierHasItems } from './archive.js';
+import { supplierLabel } from '../supplier-label.js';
 
-const byName = (a, b) => String(a.name || '').localeCompare(String(b.name || ''));
+// Sorted by the label the screen SHOWS, so the list reads A–Z as drawn.
+const byName = (a, b) => supplierLabel(a).localeCompare(supplierLabel(b));
 
 // The suppliers an order was already recorded for on `today`.
 //

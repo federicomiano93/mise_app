@@ -9,6 +9,7 @@
 // nobody sees, on a screen that looks perfectly healthy because it is empty.
 
 import { t } from '../i18n.js';
+import { supplierLabel } from '../supplier-label.js';
 import { el } from './dom.js';
 import { confirmDialog, alertDialog } from './confirm-dialog.js';
 import { spellDay, dayLabel } from './day.js';
@@ -56,7 +57,7 @@ function section(host, entries, headingKey, tone, ctx) {
 }
 
 function deliveryRow({ order, supplier, expected }, tone, ctx) {
-  const name = supplier?.name || order.supplierName || t('orders.deliveries.unknownSupplier');
+  const name = supplierLabel(supplier) || order.supplierName || t('orders.deliveries.unknownSupplier');
   const count = Object.keys(order.quantities || {}).length;
 
   // ⚠️ AN ORDER WITH NO EXPECTED DATE SAYS SO, rather than showing a blank where a
@@ -93,7 +94,7 @@ function deliveryRow({ order, supplier, expected }, tone, ctx) {
 // "something is missing" is the only path that opens the rows.
 async function openArrival(entry, ctx) {
   const { order } = entry;
-  const name = entry.supplier?.name || order.supplierName || '';
+  const name = supplierLabel(entry.supplier) || order.supplierName || '';
 
   const answer = await confirmDialog({
     title: t('orders.deliveries.arrivedTitle', { supplier: name }),

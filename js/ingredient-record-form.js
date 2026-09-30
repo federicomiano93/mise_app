@@ -26,6 +26,7 @@
 import { t, localeTag } from './i18n.js';
 import { el } from './dom.js';
 import { kindOf } from './ingredient-kind.js';
+import { supplierLabel } from './supplier-label.js';
 import { NO_SUPPLIER_ID } from './records.js';
 import { field, formActions, reportFailure, shortDate } from './record-ui.js';
 import {
@@ -1319,8 +1320,8 @@ export function buildIngredientForm({
   const startOn = item ? item.supplierId : (preset || NO_SUPPLIER_ID);
   const supplierSelect = el('select', { class: 'mgmt-input' });
   supplierSelect.appendChild(el('option', { value: NO_SUPPLIER_ID, text: t('orders.noSupplier2') }));
-  suppliers.slice().sort((a, b) => a.name.localeCompare(b.name)).forEach(s => {
-    const opt = el('option', { value: s.id, text: s.name });
+  suppliers.slice().sort((a, b) => supplierLabel(a).localeCompare(supplierLabel(b))).forEach(s => {
+    const opt = el('option', { value: s.id, text: supplierLabel(s) });
     if (startOn === s.id) opt.selected = true;
     supplierSelect.appendChild(opt);
   });

@@ -14,6 +14,7 @@
 // CSS decides which one it looks like, so there is exactly one thing to test.
 
 import { t } from '../i18n.js';
+import { supplierLabel } from '../supplier-label.js';
 import { el } from './dom.js';
 import { supplierSummary } from './order-summary.js';
 import { lineCostText, buildTotalsBox } from './order-cost-view.js';
@@ -41,7 +42,7 @@ export function buildOrderSummaryView(supplier, ingredients, entries, ctx) {
   });
 
   const overlay = el('div', {
-    class: 'order-summary-view', role: 'dialog', 'aria-label': supplier.name,
+    class: 'order-summary-view', role: 'dialog', 'aria-label': supplierLabel(supplier),
   }, [
     el('header', { class: 'app-header orders-header' }, [
       el('span', { class: 'app-header-slot' }, [
@@ -51,7 +52,7 @@ export function buildOrderSummaryView(supplier, ingredients, entries, ctx) {
         }),
       ]),
       el('div', { class: 'app-header-title orders-header-title' }, [
-        el('h1', { text: supplier.name }),
+        el('h1', { text: supplierLabel(supplier) }),
         subtitle,
       ]),
       el('span', { class: 'app-header-slot' }),

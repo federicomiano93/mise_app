@@ -137,7 +137,7 @@ test('⚠️ «+ Nuovo fornitore» selects the supplier it has just made, in bot
     'the promise settles on Back too, or the button stays disabled for the life of the card');
   assert.match(codeOf(read('js/catalogue/ingredient-create.js')), /createSupplier: \(\) => createSupplier\(layers\),/);
   const card = codeOf(read('js/supplier-record-form.js'));
-  assert.match(card, /onDone\?\.\(\{ id: id \|\| item\?\.id \|\| null, name: payload\.name \}\);/);
+  assert.match(card, /onDone\?\.\(\{ id: id \|\| item\?\.id \|\| null, name: supplierLabel\(payload\) \}\);/);
   assert.match(card, /await reportFailure\('save', payload\.name, err\);\s*return;/, 'a failed save never reports success');
 });
 

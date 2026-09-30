@@ -13,6 +13,7 @@
 // screens disagreeing about what a supplier sells would be worse than no screen.
 
 import { t } from '../i18n.js';
+import { supplierLabel } from '../supplier-label.js';
 import { el } from './dom.js';
 import { ingredientLabel } from './archive.js';
 import { groupByCategory } from './ingredient-category.js';
@@ -69,7 +70,7 @@ export function buildSupplierItems(supplier, ingredients, ctx) {
           icon: BACK_ICON, onClick: () => ctx.onBack?.(),
         }),
       ]),
-      el('div', { class: 'app-header-title orders-header-title' }, [el('h1', { text: supplier.name })]),
+      el('div', { class: 'app-header-title orders-header-title' }, [el('h1', { text: supplierLabel(supplier) })]),
       el('span', { class: 'app-header-slot' }),
     ]),
     body,

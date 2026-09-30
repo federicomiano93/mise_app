@@ -17,6 +17,7 @@
 // they scale in proportion but stay out of the weight total (and can't be imported
 // into the grams-only Calculator). Legacy rows with no unit are treated as grams.
 import { t } from '../i18n.js';
+import { supplierLabel } from '../supplier-label.js';
 
 export const CATALOGUE_UNITS = ['g', 'kg', 'mg', 'ml', 'cl', 'dl', 'l', 'pcs', 'tsp', 'tbsp', 'pinch', 'to taste'];
 export const DEFAULT_UNIT = 'g';
@@ -327,7 +328,7 @@ export function normalizeSearchText(value) {
 export function linkOptions({ ingredients, recipes, suppliers, query, excludeRecipeId } = {}) {
   const q = normalizeSearchText(query);
   const matches = (...fields) => !q || fields.some(f => normalizeSearchText(f).includes(q));
-  const supplierName = id => (suppliers && (suppliers[id] || {}).name) || '';
+  const supplierName = id => supplierLabel(suppliers && suppliers[id]);
 
   const ingredientList = Object.values(ingredients || {})
     // ⚠️ PACKAGING IS NOT AN INGREDIENT (13 Sep 2026): a box filed under «Imballaggi» in

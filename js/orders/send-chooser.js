@@ -7,6 +7,7 @@
 // wasted on every order, every day, for no information.
 
 import { t } from '../i18n.js';
+import { supplierLabel } from '../supplier-label.js';
 import { el } from './dom.js';
 import { alertDialog } from './confirm-dialog.js';
 import { buildOrderMessage, whatsappUrl } from './order-text.js';
@@ -49,7 +50,7 @@ export function offerFor({ settings, canManage, suppliers }) {
     // missing from a send nobody mentioned is an order that simply never happened.
     if (cannot.length) {
       const missing = t('orders.send.noContact', { n: cannot.length,
-        names: cannot.map(s => s.name).join(', ') });
+        names: cannot.map(s => supplierLabel(s)).join(', ') });
       note = note ? `${note} · ${missing}` : missing;
     }
     return { route, perSupplier, reachable, cannot, note, usable: reachable.length > 0 };

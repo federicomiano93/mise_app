@@ -10,6 +10,7 @@
 // not under today.
 
 import { t, joinList, onLanguageChange } from '../i18n.js';
+import { supplierLabel } from '../supplier-label.js';
 // ⚠️ createDoc / removeDoc / saveIngredientWithPrice / getPriceHistory LEFT WITH THE
 // RECORDS. This page no longer creates, deletes or prices anything — it reads the
 // two collections to draw an order. js/orders/registry-main.js holds those calls now.
@@ -60,6 +61,7 @@ import { resolveSuppliers, orderSuppliers } from './no-supplier.js';
 import { normalizeOrdersConfig } from './orders-config.js';
 import { mountIngredientList } from './ingredient-list.js';
 import { watchTablet, initAlertsPanel, closeAlertsPanel, isTabletNow } from './tablet-layout.js';
+import { trackStickyHead } from './sticky-offset.js';
 import { orderSummary } from './ingredient-search.js';
 import {
   watchOrderRequests, sendOrderRequest, setOrderRequestDone, finishOrderRequest,
@@ -75,10 +77,10 @@ import {
 } from './order-requests.js';
 
 
-// ⚠️ TABLET ONLY (Slice C, 28 Sep 2026). #order-view-switch (the "By supplier /
-// Ingredients" pills) is hidden on a tablet, in favour of a single swap button
-// that lives beside the search box and names the OTHER view — see
-// buildOrderTools() and setupViewSwitch()'s tablet-only sibling below.
+// EVERY SIZE (tablet Slice C 28 Sep 2026; the phone joined 29 Sep 2026).
+// #order-view-switch (the "By supplier / Ingredients" pills) is hidden by
+// orders.css, in favour of a single swap button that lives beside the search
+// box and names the OTHER view — see buildOrderTools() below.
 const SWAP_SVG =
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3L3 7l4 4"/><path d="M3 7h13"/><path d="M17 21l4-4-4-4"/><path d="M21 17H8"/></svg>';
 
@@ -207,7 +209,7 @@ function orderIngredients() {
 function activeSuppliers() {
   return state.suppliers
     .filter(s => s.active !== false)
-    .sort((a, b) => a.name.localeCompare(b.name));
+    .sort((a, b) => supplierLabel(a).localeCompare(supplierLabel(b)));
 }
 
 // The real active suppliers, plus "No supplier" at the end when something is
@@ -272,12 +274,10 @@ function syncInputsFromState() {
 
 // ── Rendering: order tab ──────────────────────────────────────────────────────
 //
-// Both list views are drawn INSIDE #suppliers-list, and that is not a detail.
-// orders.css scopes the fix for the .ing-row name collision with the Calculator, and
-// a row rendered outside a covered container silently falls back to the Calculator's
-// flex layout and pushes the Order box off the card on a 320px phone. (The supplier's
-// own screen is an overlay, so its list is covered by the `.ingredient-list .ing-row`
-// half of that same rule.)
+// Both list views are drawn INSIDE #suppliers-list. Their rows are kept apart from the
+// Calculator's own `.ing-row` by the `ing-row--line` class buildRow() gives them — every
+// Orders row rule is scoped to it (29 Sep 2026). A row built without it falls back to the
+// Calculator's flex layout and pushes the Order box off the card on a 320px phone.
 function render() {
   const container = document.getElementById('suppliers-list');
   if (!container) return;
@@ -731,7 +731,7 @@ function setView(view) {
   refreshDetailPaneMode();
 }
 
-// ── Tablet: the search-row swap button (Slice C) ──────────────────────────
+// ── The search-row swap button (every screen size) ────────────────────────
 //
 // ⚠️ BUILT ONCE, THEN MOVED — never rebuilt. Only one of the two list views is
 // ever mounted at a time (dropListViews nulls the other), so handing the same
@@ -1347,11 +1347,11 @@ async function recordSuppliers(supplierIds, { title, okLabel }) {
     // indistinguishable from a bug.
     const quantities = confirmed[supplier.id];
     if (!quantities || !Object.keys(quantities).length) {
-      skipped.push(supplier.name);
+      skipped.push(supplierLabel(supplier));
       continue;
     }
     const done = await placeOrder(supplier.id, { confirm: false, quantities });
-    (done ? saved : failed).push(supplier.name);
+    (done ? saved : failed).push(supplierLabel(supplier));
   }
 
   // A failure must never be buried under a success. placeOrder reports its own
@@ -1382,7 +1382,7 @@ function suppliersWithItems() {
   return orderSupplierList()
     .map(supplier => ({
       id: supplier.id,
-      name: supplier.name,
+      name: supplierLabel(supplier),
       items: (bySupplier[supplier.id] || []).filter(i => (state.entries[i.id]?.qty || 0) > 0),
     }))
     .filter(row => row.items.length);
@@ -1527,11 +1527,11 @@ async function placeOrder(supplierId, { confirm = true, date: pinnedDate, quanti
 
   try {
     await clearSupplier(supplierId, ingredients);
-    setStatus(t('orders.orderSavedToHistory', { names: supplier.name }), 'ok', 5000);
+    setStatus(t('orders.orderSavedToHistory', { names: supplierLabel(supplier) }), 'ok', 5000);
   } catch (err) {
     console.error('Clearing the draft after archiving failed:', err);
     setStatus(
-      t('orders.savedButNotCleared', { name: supplier.name }),
+      t('orders.savedButNotCleared', { name: supplierLabel(supplier) }),
       'warn',
     );
   }
@@ -1565,7 +1565,7 @@ function forgetQuantitiesLocally(supplierIds) {
 }
 
 function confirmClear(supplierIds) {
-  const names = supplierIds.map(id => findOrderSupplier(id)?.name).filter(Boolean);
+  const names = supplierIds.map(id => supplierLabel(findOrderSupplier(id))).filter(Boolean);
   const who = names.length === 1 ? names[0]
     : names.length <= 3 ? names.join(', ')
     : t('orders.nSuppliers', { n: names.length });
@@ -1691,7 +1691,7 @@ function openPlaceConfirm(items, { title, okLabel }) {
     const asked = askedToday(state.requests, supplier.id, date);
     return {
       supplierId: supplier.id,
-      supplierName: supplier.name,
+      supplierName: supplierLabel(supplier),
       when: dayPhrase(date),
       already: state.history.some(h => h.id === historyDocId(date, supplier.id)),
       rows: ingredientsOf(supplier.id, ingredients)
@@ -1867,8 +1867,8 @@ async function discardPending(supplierId) {
   if (!supplier) return;
 
   const ok = await confirmDialog({
-    title: t('orders.discardTitle', { name: supplier.name }),
-    message: t('orders.discardConfirm', { name: supplier.name }),
+    title: t('orders.discardTitle', { name: supplierLabel(supplier) }),
+    message: t('orders.discardConfirm', { name: supplierLabel(supplier) }),
     okLabel: t('ui.discard'),
     cancelLabel: t('ui.cancel'),
     danger: true,
@@ -1881,7 +1881,7 @@ async function discardPending(supplierId) {
     syncInputsFromState();
     dismissPending(supplierId);
     renderSummary();              // the open summary sheet must not go stale
-    setStatus(`${supplier.name} — order discarded`, 'warn', 4000);
+    setStatus(t('orders.orderDiscardedFor', { name: supplierLabel(supplier) }), 'warn', 4000);
   } catch (err) {
     console.error('Discarding the order failed:', err);
     setStatus(t('orders.couldNotDiscardThe'), 'error');
@@ -2057,6 +2057,7 @@ async function init() {
 
   setupTabs();
   setupViewSwitch();
+  trackStickyHead(document.querySelector('.order-box-head'));
   document.getElementById('orders-wa-btn')?.addEventListener('click', openSendScreen);
 
   // The ONE place state.view's starting value ('suppliers') is mirrored onto

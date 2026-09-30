@@ -52,10 +52,17 @@ For each step of the plan:
    collection changed, have it run the rules checks too.
    If you cannot delegate, run `npm test` yourself and apply test-runner's reporting
    rules — totals plus failures only, never the passing output.
-   ⚠️ **The output goes to the session scratchpad, NEVER into the repository.** A
-   128 KB `test-output.txt` was once left at the repo root, undeclared, one distracted
-   `git add -A` away from a commit. `npm test > "<scratchpad>/test-run.txt" 2>&1`,
-   then read back the tail.
+   ⚠️ **The output goes through a pipe, or into the helpers folder — NEVER into the
+   repository.** A 128 KB `test-output.txt` was once left at the repo root, undeclared,
+   one distracted `git add -A` away from a commit. Prefer
+   `npm test 2>&1 | grep -E "^ℹ (tests|pass|fail)|^✖|not ok" | head -60`; when a file
+   is really needed, the one folder outside the repo the fence lets you write without
+   stopping the owner is
+   `C:/Users/feder/AppData/Local/Temp/claude/C--claude-workspace-mise-app-workspace-mise-app/helpers/`
+   (`mkdir -p` it first). ⚠️ **Never `/tmp`, `$TEMP`, `$env:TEMP` or a guessed
+   `Temp\claude\*` path** — the same goes for a throwaway edit script (`$TEMP/edit.mjs`):
+   on 29 Sep 2026 those raised ~35 of his 51 permission prompts in a day. The fence now
+   refuses them and names the right folder; re-run there, never ask him.
 4. Fix what broke, or stop and report if the failure means the plan was wrong.
 
 ## Before you say you are done

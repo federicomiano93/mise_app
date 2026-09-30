@@ -15,6 +15,7 @@
 // an ingredient cannot change one byte of what a supplier receives.
 
 import { orderedItems, summaryLines, itemLabel } from './order-text.js';
+import { supplierLabel } from '../supplier-label.js';
 import { unitCost, orderCost } from '../order-cost.js';
 
 // supplier: { id, name } | null; ingredients: that supplier's products,
@@ -52,5 +53,5 @@ export function supplierSummary(supplier, ingredients, entries) {
     };
   });
 
-  return { name: supplier?.name || '', lines, costLines, totals: orderCost(costLines) };
+  return { name: supplierLabel(supplier), lines, costLines, totals: orderCost(costLines) };
 }

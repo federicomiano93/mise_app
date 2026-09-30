@@ -55,7 +55,7 @@ export function buildIngredientList(supplier, ingredients, suggest, entries, hoo
     el('div', { class: 'progress-track' }, [fill]),
   ]);
 
-  const body = el('div', { class: 'ingredient-list' }, [progress]);
+  const body = el('div', { class: 'ingredient-list' }, [progress, buildIngredientHeader()]);
 
   // ⚠️ THE GROUPING IS NOT DONE HERE. It used to be, with a bare
   // `Object.keys(groupBy(...)).sort()`, and it produced a heading reading
@@ -74,6 +74,17 @@ export function buildIngredientList(supplier, ingredients, suggest, entries, hoo
   });
 
   return body;
+}
+
+// The line that names the two columns, once, at the top of a list. Sticky (orders.css),
+// so it stays in sight while the rows scroll under it. The language is read HERE, inside
+// the function, never at module load (no venue is open then).
+export function buildIngredientHeader() {
+  return el('div', { class: 'ing-head', 'aria-hidden': 'true' }, [
+    el('span'),
+    el('span', { class: 'ing-head-col', text: t('orders.field.order') }),
+    el('span', { class: 'ing-head-col ing-head-stock', text: t('orders.field.stock') }),
+  ]);
 }
 
 // One ingredient row. Exported because the flat "All ingredients" view builds the
@@ -139,31 +150,32 @@ export function buildRow(ing, supplier, suggest, entries, hooks, { meta = '' } =
     updateHint();   // the warning has to appear as the extra digit is typed
   });
 
-  // "name weight" (e.g. "Bacon 2.27kg"); the order unit (e.g. "casse") sits next
-  // to the Order box, not by the name. Both are skipped when empty.
-  const nameLabel = [ing.name, ing.weight].filter(Boolean).join(' ');
 
-  const row = el('div', { class: 'ing-row', dataset: { ing: ing.id } }, [
-    el('div', { class: 'ing-top' }, [
-      el('span', { class: 'ing-name', text: nameLabel }),
-    ]),
-    // Its own block, not a second child of .ing-top: that is a baseline-aligned flex
-    // row, so the supplier would sit BESIDE the name instead of under it.
-    meta ? el('div', { class: 'ing-supplier', text: meta }) : null,
-    el('div', { class: 'ing-fields' }, [
-      el('label', { class: 'field order-field' }, [
-        el('span', { class: 'field-label', text: t('orders.field.order') }),
-        el('div', { class: 'ing-order-input' }, [
-          qtyInput,
-          ing.unit ? el('span', { class: 'ing-order-unit', text: ing.unit }) : null,
-        ]),
+  // One LINE per ingredient, three columns: the name (with the supplier and the hint
+  // under it), the Order box, the Stock box. «Order» / «Stock» are named ONCE, by the
+  // sticky header (buildIngredientHeader), not under every box — each input keeps its
+  // own aria-label, which already names the ingredient.
+  // `ing-row--line` is the hook orders.css scopes every one of these rules to:
+  // `.ing-row` alone is also the Calculator's, and both stylesheets load on both pages.
+  const row = el('div', { class: 'ing-row ing-row--line', dataset: { ing: ing.id } }, [
+    el('div', { class: 'ing-main' }, [
+      el('div', { class: 'ing-top' }, [
+        el('span', { class: 'ing-name', text: ing.name || '' }),
       ]),
-      el('label', { class: 'field stock-field' }, [
-        el('span', { class: 'field-label', text: t('orders.field.stock') }),
-        stockInput,
-      ]),
+      // The pack weight on a small line of its own (29 Sep 2026): beside the name it pushed
+      // «Marmellata di albicocche 1kg» onto four lines in the 86px a 296px phone leaves.
+      ing.weight ? el('div', { class: 'ing-weight', text: ing.weight }) : null,
+      // Its own block, not a second child of .ing-top: that is a baseline-aligned flex
+      // row, so the supplier would sit BESIDE the name instead of under it.
+      meta ? el('div', { class: 'ing-supplier', text: meta }) : null,
+      hint,
     ]),
-    hint,
+    el('div', { class: 'ing-col' }, [
+      qtyInput,
+      ing.unit ? el('span', { class: 'ing-order-unit', text: ing.unit }) : null,
+    ]),
+    // `stock-field` is what body.hide-stock hides (Settings → hide stock).
+    el('div', { class: 'ing-col stock-field' }, [stockInput]),
   ]);
 
   stockInput.value = entry.stock || '';

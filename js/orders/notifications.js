@@ -19,6 +19,7 @@
 // now — see js/firebase.example.js.
 
 import { t } from '../i18n.js';
+import { supplierLabel } from '../supplier-label.js';
 import { el } from './dom.js';
 import { isHoliday } from './holidays.js';
 import {
@@ -101,7 +102,7 @@ export function computeAlerts(suppliers, now = new Date(), country = null) {
   if (toOrder.length) {
     const items = toOrder.map(s => {
       const when = nextDeliveryLabel(s, now);
-      return when ? `${s.name} — ${when}` : s.name;
+      return when ? `${supplierLabel(s)} — ${when}` : supplierLabel(s);
     });
     alerts.push({
       kind: 'order',
@@ -111,7 +112,7 @@ export function computeAlerts(suppliers, now = new Date(), country = null) {
       // Notification body: supplier names only. The title carries the action and
       // the phone already shows "from Misé", so the app name is never
       // repeated here.
-      text: toOrder.map(s => s.name).join(', '),
+      text: toOrder.map(s => supplierLabel(s)).join(', '),
     });
   }
 
@@ -148,7 +149,7 @@ export function computeAlerts(suppliers, now = new Date(), country = null) {
           kind: 'conflict',
           key: `conf-${s.id}-${iso}`,
           text: t('orders.alert.deliveryClash', {
-            supplier: s.name, day: t(`day.weekdayLong.${dayIndex}`), date: iso,
+            supplier: supplierLabel(s), day: t(`day.weekdayLong.${dayIndex}`), date: iso,
           }),
         });
       }

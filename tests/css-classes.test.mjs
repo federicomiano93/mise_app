@@ -146,11 +146,11 @@ const mentioned = (cls, code) =>
 // way, and the test below makes an entry leave this list the day it is styled or gone.
 const KNOWN_UNSTYLED = new Map([
   // A modifier on an element another class already styles; it names what the element is.
-  ...['alg-sheet', 'lab-view', 'ing-filter', 'pc-overlay', 'send-chooser', 'home-cards-list',
+  ...['alg-sheet', 'lab-view', 'pc-overlay', 'send-chooser', 'home-cards-list',
     'order-field'].map(c => [c, 'a name beside a class that styles the element']),
   // A plain wrapper: block layout is all it needs, its children carry the look.
   ...['cat-cost-host', 'cat-guided-host', 'help-host', 'cp-client-list', 'guided-edit-list',
-    'guided-edit-missed', 'guided-body', 'lab-body', 'pas-body', 'missing-list', 'supplier-list',
+    'guided-edit-missed', 'guided-body', 'lab-body', 'pas-body', 'missing-list',
     'orders-cards', 'history-older'].map(c => [c, 'a wrapper; its children are styled']),
   // Text inside a row the ROW lays out.
   ...['crate-count-val', 'history-item-name']

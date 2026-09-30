@@ -14,6 +14,7 @@
 // forgetting to record it afterwards was the whole problem.
 
 import { t } from '../i18n.js';
+import { supplierLabel } from '../supplier-label.js';
 import { buildSupplierPicker } from './supplier-picker.js';
 import { chooseAndSend } from './send-chooser.js';
 import { currentSession } from '../firebase.js';
@@ -30,7 +31,7 @@ export function buildSendScreen(suppliers, ingredientsBySupplier, entries, callb
   // the exact same function, so the two can never quietly disagree.
   const rows = suppliers.map(supplier => ({
     id: supplier.id,
-    name: supplier.name,
+    name: supplierLabel(supplier),
     items: orderedItems(ingredientsBySupplier[supplier.id] || [], entries),
   })).filter(row => row.items.length);
 

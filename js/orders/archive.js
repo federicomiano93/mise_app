@@ -11,6 +11,7 @@
 // nothing had to be migrated.
 
 import { t } from '../i18n.js';
+import { supplierLabel } from '../supplier-label.js';
 import { toISODate, addDays, isBefore } from './day.js';
 
 // A quantity, made safe: whole, never negative, never NaN — and never Infinity.
@@ -87,7 +88,7 @@ export function buildSupplierArchive({ supplier, ingredients, entries, date, now
   return {
     date,
     supplierId: supplier.id,
-    supplierName: supplier.name || '',
+    supplierName: supplierLabel(supplier),
     quantities,
     stock,
     // What each item was CALLED on the day. The screen prefers the live ingredient

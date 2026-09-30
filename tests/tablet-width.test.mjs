@@ -131,6 +131,7 @@ const EXEMPT = new Map([
     'positioning shells; they use .scroll-area inside'],
   ['body', 'the app shell itself is full-bleed on purpose; the column is set inside it'],
   ['.cat-zoom-close', 'a floating close button, not a container'],
+  ['body[data-section="orders"][data-orders-tab="order"][data-orders-view="suppliers"] #suppliers-list > .supplier-list', 'the scrolling list of the left column of the tablet split; that column has a fixed 372px width'],
   ['.orders-offline', 'one centred line of text on a full-width ground; nothing to align to a column'],
   ['#sw-update-host', 'a transparent host; #sw-update-banner inside is capped at 480px and centred'],
 ]);
@@ -522,7 +523,9 @@ test('no tablet-sized rule for Home or Orders escapes the media query', () => {
 
   const SIGNATURES = [
     [/body\[data-page="home"\]\s*\.home-grid\s*\{[^}]*grid-template-columns:\s*repeat\(3/, 'Home: three columns'],
-    [/body\[data-section="orders"\]\s*\.ingredient-list\s*,[^{]*\.ing-flat-list\s*\{[^}]*display:\s*grid/, 'Orders: both ingredient lists in a grid'],
+    // Federico, 29 Sep 2026: the two-column grid is gone (one ingredient per row at every
+    // size); the tablet still widens the boxes, through --ing-box-w on both lists.
+    [/body\[data-section="orders"\]\s*\.ingredient-list\s*,[^{]*\.ing-flat-list\s*\{[^}]*--ing-box-w:\s*88px/, 'Orders: both ingredient lists get the wider boxes'],
   ];
   for (const [sig, label] of SIGNATURES) {
     assert.match(inside, sig, `expected to find "${label}" inside the tablet query`);
@@ -535,17 +538,13 @@ test('no tablet-sized rule for Home or Orders escapes the media query', () => {
 const ordersTabletBlock = () => extractMediaBlocks(stripComments(read('orders.css')), /min-width:\s*900px/)
   .find((b) => /\.ing-flat-list\s*\{/.test(b));
 
-test('the ingredient grids: every heading and message spans both columns', () => {
+test('the ingredient lists are ONE column on a tablet too (Federico, 29 Sep 2026)', () => {
+  // He replaced his own 27 Sep two-column choice: one ingredient per row at every size,
+  // like the order summary. The tablet block may not bring a two-column grid back.
   const block = ordersTabletBlock();
   assert.ok(block, 'the Orders tablet block is missing');
-  const rule = block.match(/[^{}]*\{\s*grid-column:\s*1\s*\/\s*-1;?\s*\}/);
-  assert.ok(rule, 'expected a rule setting grid-column: 1 / -1');
-  // Each asserted by name, so dropping one from the selector list fails here.
-  for (const child of ['.ingredient-list > .ing-category', '.ingredient-list > .progress',
-    '.ingredient-list > .ing-empty', '.ing-flat-list > .ing-letter', '.ing-flat-list > .mgmt-empty']) {
-    assert.ok(rule[0].replace(/\s+/g, ' ').includes(child),
-      `${child} must span both grid columns, or it would sit beside a row instead of over it`);
-  }
+  assert.doesNotMatch(block, /grid-template-columns:\s*1fr\s+1fr/, 'no two-column grid on the ingredient lists');
+  assert.doesNotMatch(block, /column-gap:\s*32px/);
 });
 
 test('the ingredient grid never touches .ing-fields\' own 400px cap', () => {

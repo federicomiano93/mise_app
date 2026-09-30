@@ -815,6 +815,7 @@ const DICTIONARIES = Object.freeze({
     'orders.confirm.noneRecorded': 'Nothing was recorded for {names} — every quantity was 0.',
     'orders.couldNotUpdateThe2': 'Could not update the order’s day — check your network and try again.',
     'orders.couldNotDiscardThe': 'Could not discard the order — check your network and try again.',
+    'orders.orderDiscardedFor': '{name} — order discarded',
     'orders.couldNotSaveThe2': 'Could not save the order — check your network. Keep this page open.',
     'orders.sendOrder': 'Send order',
     'orders.noItemsInThis': 'No items in this order yet. Add quantities first.',
@@ -866,6 +867,8 @@ const DICTIONARIES = Object.freeze({
     // could not see, so the whole ingredient form stayed English on an Italian
     // phone while four i18n suites passed. The scan now knows that shape.
     'orders.field.name': 'Name',
+    'orders.field.shortName': 'Name to show',
+    'orders.field.shortNameHint': 'Optional — the shorter name the app shows. Empty: the name above.',
     'orders.field.category': 'Category',
     'orders.field.email': 'Email',
     'orders.field.supplier': 'Supplier',
@@ -3221,6 +3224,7 @@ const DICTIONARIES = Object.freeze({
     'orders.confirm.noneRecorded': 'Per {names} non è stato registrato niente — tutte le quantità erano a 0.',
     'orders.couldNotUpdateThe2': 'Non è stato possibile aggiornare il giorno dell’ordine — controlla la rete e riprova.',
     'orders.couldNotDiscardThe': 'Non è stato possibile scartare l’ordine — controlla la rete e riprova.',
+    'orders.orderDiscardedFor': '{name} — ordine scartato',
     'orders.couldNotSaveThe2': 'Non è stato possibile salvare l’ordine — controlla la rete. Tieni aperta questa pagina.',
     'orders.sendOrder': 'Manda l’ordine',
     'orders.noItemsInThis': 'Ancora nessuna voce in questo ordine. Aggiungi prima le quantità.',
@@ -3257,6 +3261,8 @@ const DICTIONARIES = Object.freeze({
     // Le schede. ⚠️ Erano scritte in inglese dentro il codice, in una forma che il
     // controllo automatico non sapeva vedere.
     'orders.field.name': 'Nome',
+    'orders.field.shortName': 'Nome da mostrare',
+    'orders.field.shortNameHint': 'Facoltativo — il nome più corto che vedi nell’app. Vuoto: il nome qui sopra.',
     'orders.field.category': 'Categoria',
     'orders.field.email': 'Email',
     'orders.field.supplier': 'Fornitore',

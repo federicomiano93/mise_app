@@ -30,6 +30,7 @@
 // screen and the read-only product list already use.
 
 import { t, onLanguageChange } from '../i18n.js';
+import { supplierLabel, supplierMatches } from '../supplier-label.js';
 import { el } from './dom.js';
 import { confirmDialog } from './confirm-dialog.js';
 import { isTabletNow, watchTablet } from './tablet-layout.js';
@@ -223,9 +224,14 @@ export function buildRegistry(data, actions, hooks = {}) {
     return !q || String(name || '').toLowerCase().includes(q);
   }
 
+  // A supplier is found by its invoice name AND by the short name the list shows.
+  function matchesSupplier(s) {
+    return supplierMatches(s, query.trim().toLowerCase(), v => String(v || '').toLowerCase());
+  }
+
   function paintSuppliers() {
-    const all = data.suppliers().slice().sort((a, b) => a.name.localeCompare(b.name));
-    const visible = all.filter(s => matches(s.name));
+    const all = data.suppliers().slice().sort((a, b) => supplierLabel(a).localeCompare(supplierLabel(b)));
+    const visible = all.filter(matchesSupplier);
 
     if (!all.length) {
       listHost.appendChild(emptyState('suppliers'));
@@ -242,7 +248,7 @@ export function buildRegistry(data, actions, hooks = {}) {
     const list = el('div', { class: 'mgmt-list' });
     const counts = countBySupplier();
     visible.forEach(s => list.appendChild(drillRow(
-      s.name,
+      supplierLabel(s),
       // ⚠️ THE PLURAL IS IN THE DICTIONARY, never an `if` here: Italian and English
       // do not agree about when one form becomes the other, and a ternary in code
       // is a plural rule that only speaks English.
@@ -261,7 +267,7 @@ export function buildRegistry(data, actions, hooks = {}) {
   function paintItems(kind) {
     const packaging = kind === 'packaging';
     const supById = {};
-    data.suppliers().forEach(s => { supById[s.id] = s.name; });
+    data.suppliers().forEach(s => { supById[s.id] = supplierLabel(s); });
     const all = data.ingredients().filter(i => isPackaging(i) === packaging)
       .sort((a, b) => a.name.localeCompare(b.name));
     const visible = all.filter(i => matches(i.name));
@@ -372,7 +378,11 @@ export function buildRegistry(data, actions, hooks = {}) {
       // Delete is gated inside it, and a second implementation of that gate is a
       // second place for it to be forgotten.
       const days = (list) => (list || []).map(dayShort).join(', ');
+      // The invoice name stays in sight here, on its own screen, once a shorter one is shown
+      // everywhere else — the one place it is still needed, to match a delivery note.
+      const invoiceName = supplierLabel(supplier) !== supplier.name ? supplier.name : ''; // invoice name, on purpose
       const meta = [
+        invoiceName,
         supplier.category,
         supplier.deliveryDays?.length ? `${t('orders.deliveryShort')} ${days(supplier.deliveryDays)}` : '',
         supplier.orderDays?.length ? `${t('orders.orderShort')} ${days(supplier.orderDays)}` : '',
@@ -381,7 +391,7 @@ export function buildRegistry(data, actions, hooks = {}) {
       ].filter(Boolean).join(' · ');
 
       body.appendChild(el('div', { class: 'mgmt-list' }, [
-        mgmtRow(supplier.name, meta, supplier.active !== false,
+        mgmtRow(supplierLabel(supplier), meta, supplier.active !== false,
           () => openSupplierForm(supplier),
           () => actions.setSupplierActive(supplier.id, supplier.active === false),
           // ⚠️ AFTER DELETING, STEP BACK OUT. Staying on the screen of something
@@ -420,7 +430,7 @@ export function buildRegistry(data, actions, hooks = {}) {
         body.appendChild(list);
       }
 
-      return overlay(entry, supplier.name, body);
+      return overlay(entry, supplierLabel(supplier), body);
     }, { selects: `supplier:${id}` });
   }
 
@@ -435,7 +445,7 @@ export function buildRegistry(data, actions, hooks = {}) {
         buildSupplierForm({
           item,
           save: actions.saveSupplier,
-          onDone: (saved) => { popEntry(entry); onSaved?.(saved); },
+          onDone: (saved) => { popAfterSave(entry); onSaved?.(saved); },
           onCancel: () => guardedLeave(entry, close),
         }),
       ]);
@@ -474,7 +484,7 @@ export function buildRegistry(data, actions, hooks = {}) {
           // The form then knows nothing about overlays and this file stays the only
           // one that navigates — the same seam saveIngredient and priceHistory use.
           actions: { ...actions, capturePackPhoto, packPhotoOn: () => ingredientPanels().packPhoto, createSupplier },
-          onDone: () => popEntry(entry),
+          onDone: () => popAfterSave(entry),
           onCancel: () => guardedLeave(entry, () => popEntry(entry)),
         }),
       ]);
@@ -614,6 +624,17 @@ export function buildRegistry(data, actions, hooks = {}) {
     if (!removed) return;
     removed.overlay?.remove();
     stackChanged();
+  }
+
+  // ⚠️ AFTER A SAVE, THE LEVEL UNDERNEATH IS REDRAWN. The saved document's snapshot lands while
+  // the form is still on top, and refresh() leaves a form alone — so the supplier's screen came
+  // back with its OLD title and name (the «name to show», 29 Sep 2026). Only after a save: a
+  // plain Back keeps the level as it was, scroll position included.
+  function popAfterSave(entry) {
+    // Already gone (another row tapped while the save ran): nothing was uncovered to redraw.
+    if (!stack.includes(entry)) return;
+    popEntry(entry);
+    refresh();
   }
 
   // Keyboard users land in a level that opens in the pane (the heading is focusable by

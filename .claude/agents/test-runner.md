@@ -57,13 +57,26 @@ from being committed.
 ⚠️ **Never redirect, tee or write any output into the repository** — not at the root,
 not in `tests/`, not "temporarily". The repo is the product.
 
-✅ **Use the session scratchpad directory named in your environment** (the
-`…\Temp\claude\…\scratchpad` path). It is outside the project, needs no permission,
-and nothing there can ever reach a commit:
+✅ **First choice: write no file at all — pipe.** The totals and the failures are all
+you report, and a pipe keeps them:
 
 ```bash
-npm test > "<scratchpad>/test-run.txt" 2>&1; tail -20 "<scratchpad>/test-run.txt"
+npm test 2>&1 | grep -E "^ℹ (tests|pass|fail)|^✖|not ok|Error|expected|actual" | head -80
 ```
+
+✅ **When you genuinely need the whole output in a file, use exactly this folder** —
+it is the only place outside the repo the folder fence lets you write without
+stopping the owner with a question:
+
+```bash
+H="C:/Users/feder/AppData/Local/Temp/claude/C--claude-workspace-mise-app-workspace-mise-app/helpers"
+mkdir -p "$H"; npm test > "$H/test-run.txt" 2>&1; tail -20 "$H/test-run.txt"
+```
+
+⚠️ **NEVER `/tmp`, `$TEMP`, `$env:TEMP`, `C:\tmp`, or a guessed `Temp\claude\*\…` path.**
+On 29 Sep 2026 exactly that raised ~35 of the owner's 51 permission prompts in one day.
+The fence now refuses them and names the right folder — if you see that refusal,
+re-run the command writing there, and never ask the owner about it.
 
 Then read back only the totals and the failures. **And say in your report where you
 put it** — an undeclared file is the part that makes this dangerous, not the file.
