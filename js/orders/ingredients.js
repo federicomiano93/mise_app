@@ -44,12 +44,13 @@ export function markFilled(row, qty) {
   row?.classList.toggle('ing-row--filled', (Number(qty) || 0) > 0);
 }
 
-export function buildIngredientList(supplier, ingredients, suggest, entries, hooks) {
+export function buildIngredientList(supplier, ingredients, suggest, entries, hooks,
+  { emptyKey = 'orders.noIngredientsYetAddAbove' } = {}) {
   // A supplier with no ingredients shows a clear empty state, not a progress bar
   // stuck at 0 of 0 (the old "Loading…" bug: nothing ever replaced the placeholder).
   if (!ingredients.length) {
     return el('div', { class: 'ingredient-list' }, [
-      el('p', { class: 'ing-empty', text: t('orders.noIngredientsYetAdd') }),
+      el('p', { class: 'ing-empty', text: t(emptyKey) }),
     ]);
   }
 

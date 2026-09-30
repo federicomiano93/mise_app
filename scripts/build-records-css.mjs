@@ -23,7 +23,7 @@ export const CARD_FILES = Object.freeze([
   'js/ingredient-record-form.js',
   'js/record-ui.js',
   'js/supplier-record-form.js',
-  'js/catalogue/ingredient-create.js',
+  'js/ingredient-create.js',
 ]);
 // Drawn inside a card by js/help-button.js, not by the card's own code.
 const EXTRA_CLASSES = Object.freeze(['help-btn']);

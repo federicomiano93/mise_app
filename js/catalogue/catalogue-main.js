@@ -37,7 +37,7 @@ import { mayOpenFoodCost, foodCostHref, recipeIdFromHash } from '../recipe-link.
 // Whether this person may add an ingredient to the records from here — the same answer the
 // records page itself gives. From js/ root: the records belong to Orders.
 import { mayEditRecords } from '../records.js';
-import { openIngredientCreate } from './ingredient-create.js';
+import { openIngredientCreate } from '../ingredient-create.js';
 import { el } from './dom.js';
 import { isTabletNow, watchTablet } from './tablet.js';
 

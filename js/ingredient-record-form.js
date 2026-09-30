@@ -15,7 +15,7 @@
 // ingrediente come in fornitori ed ingredienti». So it imports nothing from a feature
 // folder, and the two things it used to ask Orders — may this person write a price, which
 // panels does this venue use — are HANDED IN by whoever opens it (js/orders/registry.js,
-// js/catalogue/ingredient-create.js), both taking the answer from the same root functions.
+// js/ingredient-create.js), both taking the answer from the same root functions.
 //
 // ⚠️ NOTHING HERE IS HIDDEN BY ROLE EXCEPT THE PRICE, and that one is not really
 // hidden either — see mayPrice below. The allergen block is drawn for everybody,

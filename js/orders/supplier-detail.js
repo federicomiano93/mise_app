@@ -36,6 +36,8 @@ const LIST_SVG =
 // "See the summary sheet" — the same clipboard suppliers.js uses (SUMMARY_SVG there).
 const SUMMARY_SVG =
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 2h6v4H9z"/><path d="M9 11h6M9 14h6M9 17h4"/></svg>';
+const PLUS_SVG =
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>';
 const CLOSE_ICON =
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>';
 
@@ -60,7 +62,7 @@ function paneSubline(orderDays, deliveryDays, now = new Date()) {
 }
 
 // ctx: { ingredients, entries, suggest, hooks, onBack, onViewList, onSummary,
-//        orderDays, deliveryDays }
+//        onAddIngredient, orderDays, deliveryDays }
 // -> { overlay, repaint(ctx) }
 //
 // `repaint` rebuilds only the BODY, never the header — a live snapshot from another
@@ -120,7 +122,31 @@ export function buildSupplierDetail(supplier, ctx) {
   function repaint(next) {
     const { ingredients, entries, suggest, hooks } = next;
     body.replaceChildren();
-    body.appendChild(buildIngredientList(supplier, ingredients, suggest, entries, hooks));
+
+    // ⚠️ FIRST — also for a supplier with no ingredients yet, which is exactly when it is
+    // needed. It sits ABOVE the list card, outside `.ingredient-list`, so the sticky
+    // Order/Stock header inside the list is untouched. The card it opens has THIS supplier
+    // preset (orders-main.js openAddIngredient). Present only when orders-main hands in
+    // `onAddIngredient`: it leaves it out where the owner has hidden «Suppliers &
+    // ingredients» from this person (records.js mayEditRecords) — a display switch, like the
+    // Catalogue's; the rules decide the save either way.
+    const canAdd = typeof next.onAddIngredient === 'function';
+    if (canAdd) {
+      body.appendChild(el('button', {
+        type: 'button',
+        class: 'mgmt-add supplier-add-ing',
+        'aria-label': t('orders.addIngredientToListAria', { supplier: supplierLabel(supplier) }),
+        onClick: () => next.onAddIngredient(),
+      }, [
+        el('span', { class: 'supplier-add-ing-icon', icon: PLUS_SVG, 'aria-hidden': 'true' }),
+        el('span', { text: t('orders.addIngredientToList') }),
+      ]));
+    }
+
+    body.appendChild(buildIngredientList(supplier, ingredients, suggest, entries, hooks, {
+      // «add the first one with the button above» only when there IS a button above.
+      emptyKey: canAdd ? 'orders.noIngredientsYetAddAbove' : 'orders.noIngredientsYetAdd',
+    }));
 
     // No products, nothing to record — the empty state inside the list already says so.
     if (!ingredients.length) return;

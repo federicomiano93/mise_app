@@ -62,7 +62,7 @@ test('«Confezione» is a menu with «+ Nuova…», saved as packUnit only when 
   assert.match(FORM, /packs = \[\]/);
   assert.match(read('js/orders/registry.js'), /packs: data\.packs\?\.\(item\?\.packUnit\) \|\| \[\],/);
   assert.match(read('js/orders/registry-main.js'), /packs: \(current\) => packChoices\(\{/);
-  assert.match(read('js/catalogue/ingredient-create.js'), /packs: packChoices\(\{ ingredients: known, language \}\),/);
+  assert.match(read('js/ingredient-create.js'), /packs: packChoices\(\{ ingredients: known, language \}\),/);
   assert.match(read('firestore.rules'), /'packIngredients', 'packUnit'/);
 });
 
@@ -94,7 +94,7 @@ test('R3: the supplier screen has two adds, each fixing the kind; the Catalogue 
   assert.match(reg, /openIngredientForm\(null, supplier\.id, 'ingredient'\)/);
   assert.match(reg, /openIngredientForm\(null, supplier\.id, 'packaging'\)/);
   assert.doesNotMatch(reg, /openIngredientForm\(null, supplier\.id\)/, 'no add without a kind');
-  assert.match(codeOf(read('js/catalogue/ingredient-create.js')), /presetKind: 'ingredient',/);
+  assert.match(codeOf(read('js/ingredient-create.js')), /presetKind: 'ingredient',/);
   const src = read('js/i18n.js');
   for (const key of ['orders.addIngredientShort', 'orders.addPackagingShort']) {
     assert.equal(src.split(`'${key}':`).length - 1, 2, key);

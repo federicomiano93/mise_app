@@ -102,6 +102,14 @@
   color: var(--text);
   cursor: pointer;
 }
+.rec-host .mgmt-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 650;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+}
 .rec-host .mgmt-scroll {
   flex: 1;
   overflow-y: auto;

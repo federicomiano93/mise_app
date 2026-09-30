@@ -439,6 +439,17 @@
 }
 .supplier-place-icon { display: flex; align-items: center; }
 
+/* «+ Add ingredient» above a supplier's list: the registry's dashed .mgmt-add, made a flex row
+   (button AND icon span, or the SVG sits ~2px low) and at least a finger tall. */
+.supplier-add-ing {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+}
+.supplier-add-ing-icon { display: flex; align-items: center; }
+
 /* ── Progress bar ─────────────────────────────────────────────────────────── */
 .progress { margin-bottom: 14px; }
 .progress-track { height: 6px; background: var(--surface2); border-radius: 3px; overflow: hidden; }

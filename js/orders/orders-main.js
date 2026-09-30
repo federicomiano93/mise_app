@@ -14,6 +14,8 @@ import { supplierLabel } from '../supplier-label.js';
 // ⚠️ createDoc / removeDoc / saveIngredientWithPrice / getPriceHistory LEFT WITH THE
 // RECORDS. This page no longer creates, deletes or prices anything — it reads the
 // two collections to draw an order. js/orders/registry-main.js holds those calls now.
+// (The one exception is «+ Add ingredient» on a supplier's screen, which opens the records'
+// own card through js/ingredient-create.js — the card does its own saving.)
 import {
   watchCollection, watchDoc, saveDoc, COLLECTIONS,
   watchIngredientPrices, canManageHere, authReady,
@@ -48,7 +50,8 @@ import { refreshHolidays } from './holidays.js';
 import { countryOf } from '../market.js';
 import { renderAlerts } from './notifications.js';
 import { routesFor } from './send-routes.js';
-import { confirmDialog } from './confirm-dialog.js';
+import { confirmDialog, alertDialog } from './confirm-dialog.js';
+import { mayEditRecords } from '../records.js';
 import { todayISO, dayPhrase, daySpoken, localDayOf, dayLabel } from './day.js';
 import {
   buildOrderMessage, whatsappUrl, itemsFromQuantities, indexById,
@@ -58,7 +61,8 @@ import {
 } from './archive.js';
 import { todayOrders, pendingSuppliers } from './reminders.js';
 import { renderTodayOrders, renderPending } from './reminder-view.js';
-import { resolveSuppliers, orderSuppliers } from './no-supplier.js';
+import { resolveSuppliers, orderSuppliers, NO_SUPPLIER_ID } from './no-supplier.js';
+import { openIngredientCreate } from '../ingredient-create.js';
 import { normalizeOrdersConfig } from './orders-config.js';
 import { mountIngredientList } from './ingredient-list.js';
 import { watchTablet, initAlertsPanel, closeAlertsPanel, isTabletNow } from './tablet-layout.js';
@@ -89,6 +93,7 @@ const state = {
   suppliers: [],
   ingredients: [],
   rawIngredients: [],
+  ingredientCategories: null,   // config/orders' stored category list, or null (never stored)
   ingredientPrices: {},
   history: [],
   requests: [],                 // order lists somebody sent to whoever runs the place
@@ -182,6 +187,9 @@ function watchOrdersConfig() {
     const config = normalizeOrdersConfig(doc);
     try { localStorage.setItem(CONFIG_KEY, JSON.stringify(config)); } catch { /* private mode */ }
     applyOrdersConfig(config);
+    // The stored category list, for the ingredient card opened from a supplier's screen; null =
+    // never stored, so the card offers the venue's default words (same reading as registry-main.js).
+    state.ingredientCategories = Array.isArray(doc?.ingredientCategories) ? doc.ingredientCategories : null;
     // The window may have just changed — on this phone or on another one. Stock is a
     // <body> class and needs no repaint; how many days History shows does.
     renderHistory();
@@ -484,6 +492,36 @@ function closeSupplier() {
   refreshDetailPaneMode();
 }
 
+// «+ Add ingredient» on a supplier's own screen: the records' ingredient card with THIS supplier
+// preset. Nothing to refresh afterwards — the ingredients snapshot that follows the save runs
+// render() → renderOpenSupplier(), which repaints the open screen with the new row.
+// ⚠️ Guarded against a double tap: two layers would be two cards for one ingredient.
+let addingIngredient = false;
+function mayAddIngredient() {
+  const { location, canManage } = currentSession();
+  return mayEditRecords(location, canManage);
+}
+function openAddIngredient(supplierId) {
+  if (addingIngredient) return;
+  addingIngredient = true;
+  openIngredientCreate({
+    suppliers: state.suppliers,
+    ingredients: state.rawIngredients,
+    // The pseudo «no supplier» is not a stored supplier: preset it and the menu would name
+    // an id the record does not carry.
+    presetSupplierId: supplierId === NO_SUPPLIER_ID ? null : supplierId,
+    storedCategories: state.ingredientCategories,
+    // z 650 — above `.supplier-detail` (600), styled by orders.css itself.
+    layerClass: 'mgmt-overlay',
+  })
+    // A card that fails to build must not leave a button that silently does nothing.
+    .catch(err => {
+      console.error('Could not open the ingredient card', err);
+      alertDialog(t('orders.addIngredientFailed'));
+    })
+    .finally(() => { addingIngredient = false; });
+}
+
 // Create the screen, or repaint the one already up. Repainting happens on every
 // suppliers/ingredients/history snapshot, exactly as the expanded card was rebuilt
 // before — keystrokes never come through here, they reach the inputs through
@@ -510,6 +548,10 @@ function renderOpenSupplier() {
     // pane stays put underneath and simply reappears when the sheet closes.
     onViewList: () => openSupplierItems(supplier.id),
     onSummary: () => openSummary(supplier.id),
+    // ⚠️ THE SAME QUESTION THE CATALOGUE ASKS (records.js mayEditRecords): where the owner has
+    // hidden «Suppliers & ingredients» from the staff, a door to the same card from Orders
+    // would quietly undo the switch. Asked on every repaint, so it follows the switch live.
+    onAddIngredient: mayAddIngredient() ? () => openAddIngredient(supplier.id) : null,
     orderDays: supplier.orderDays,
     deliveryDays: supplier.deliveryDays,
   };

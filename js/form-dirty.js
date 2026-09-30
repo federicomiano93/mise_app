@@ -1,7 +1,9 @@
 // form-dirty.js — «has anything been typed into this form since it opened?»
 //
-// Used by the tablet split on suppliers.html: tapping another row replaces what is open in
-// the pane, and a card with unsaved typing must ask before it is thrown away (P20).
+// Used by the tablet split on suppliers.html (tapping another row replaces what is open in
+// the pane) and by js/ingredient-create.js (Back on a new ingredient's card, from a recipe
+// row or from a supplier's order screen): a card with unsaved typing must ask before it is
+// thrown away (P20).
 //
 // GENERIC ON PURPOSE. The two cards are big (allergen ticks, prices, packs, nutrition) and
 // live in js/ root; teaching this file about each field would rot the day one is added. So

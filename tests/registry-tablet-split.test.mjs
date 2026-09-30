@@ -9,7 +9,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { snapshotFields, snapshotChanged } from '../js/orders/form-dirty.js';
+import { snapshotFields, snapshotChanged } from '../js/form-dirty.js';
 import { removeLevel } from '../js/orders/level-stack.js';
 import { _dictionaries } from '../js/i18n.js';
 
@@ -260,7 +260,7 @@ test('registry-main hands the pane in, and suppliers.html carries the three piec
 
 test('the pane keeps the feature boundary: it imports only from its own folder and js/ root', () => {
   const imports = [...read('js/orders/registry.js').matchAll(/from '([^']+)'/g)].map(m => m[1]);
-  assert.ok(imports.includes('./tablet-layout.js') && imports.includes('./form-dirty.js'));
+  assert.ok(imports.includes('./tablet-layout.js') && imports.includes('../form-dirty.js'));
   assert.ok(imports.every(p => !/\.\.\/(catalogue|foodcost|pastries|inventory|staff)\//.test(p)), imports.join(', '));
 });
 
