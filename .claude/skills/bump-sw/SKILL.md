@@ -1,6 +1,6 @@
 ---
 name: bump-sw
-description: Bump the service worker cache version and keep the precache list complete. Use whenever any cached file (HTML, CSS, JS under js/, icons, manifest) has been added, edited, or removed in The Italian Club, before committing. Installed PWAs keep serving the old cache until CACHE_NAME changes, so always run this when finishing a change that touches a file listed in sw.js.
+description: Bump the service worker cache version and keep the precache list complete. Use whenever any cached file (HTML, CSS, JS under js/, icons, fonts, manifest) has been added, edited, or removed in Mise, before committing. Installed PWAs keep serving the old cache until CACHE_NAME changes, so always run this when finishing a change that touches a file listed in sw.js.
 ---
 
 # Bump the service worker

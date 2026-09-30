@@ -30,6 +30,16 @@ jobs:
       # No install step: the suite is pure Node with zero dependencies, run by the
       # built-in test runner (`node --test`, see package.json).
       - run: npm test
+      # ⚠️ THE SAME CHECK deploy-functions RUNS, MOVED FORWARD TO THE PULL REQUEST.
+      # deploy-functions runs on EVERY push to main and refuses on a high advisory,
+      # even when functions/ did not change — twice on 30 Sep 2026 a release went
+      # live with the server half refused, and each time a separate lockfile PR had
+      # to follow. Here the same advisory turns the PR red BEFORE the merge, while
+      # the fix can still ride with it. Same level, same reasoning as the deploy
+      # step below. `npm audit` reads the lockfile, so no install is needed.
+      - name: Vulnerability check of the server's dependencies (P11)
+        run: npm audit --audit-level=high
+        working-directory: functions
 
   # The security rules are the app's ONLY boundary between two businesses sharing
   # one database, and until now their suite ran only when somebody remembered to
