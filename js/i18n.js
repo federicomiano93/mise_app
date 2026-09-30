@@ -2666,6 +2666,7 @@ const DICTIONARIES = Object.freeze({
     'price.needPieceWeight': 'Add the weight of one piece to use this in a recipe',
 
     'common.loading': 'Loading…',
+    'preview.ribbon': 'Preview · test data',
   }),
   it: Object.freeze({
     'role.owner': 'Titolare',
@@ -4841,6 +4842,7 @@ const DICTIONARIES = Object.freeze({
     'price.needPieceWeight': 'Aggiungi il peso di un pezzo per usarlo in una ricetta',
 
     'common.loading': 'Caricamento…',
+    'preview.ribbon': 'Anteprima · dati di prova',
   }),
 });
 

@@ -113,6 +113,7 @@ const EXEMPT = new Map([
   ['body[data-section="orders"] .recipe-footer-btn', 'inside @media (max-width:360px)'],
   ['.result-header', 'no padding of its own; sits inside .scroll-area'],
   ['.splash', 'a full-screen colour wash with a centred logo, no content column'],
+  ['.preview-ribbon', 'a small fixed pill in the bottom-left corner, sized by its own text; no content column'],
   ['.supplier-detail', 'a positioning shell; .supplier-detail-body carries the cap'],
   ['.supplier-items', 'a positioning shell; .supplier-items-body carries the cap'],
   ['.preview-overlay', 'a positioning shell; .preview-scroll carries the cap'],

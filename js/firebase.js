@@ -76,18 +76,15 @@ import {
 } from './local-data.js';
 import { sameData } from './same-data.js';
 import { isBusy } from './update-gate.js';
+import { configForHost, isPreviewHost } from './firebase-target.js';
 
 // ── Configuration (PUBLIC config, P1 — committed on purpose, see .gitignore) ──
-// Copied from firebase.example.js, whose "placeholders only" heading came with
-// it: these are the real values, and this is the file the app actually loads.
-export const firebaseConfig = {
-  apiKey: "AIzaSyCIy5dRbE9Ce_mJQ4-r7QuSOquKpgkwoMo",
-  authDomain: "bakery-app-ebf90.firebaseapp.com",
-  projectId: "bakery-app-ebf90",
-  storageBucket: "bakery-app-ebf90.firebasestorage.app",
-  messagingSenderId: "27778450817",
-  appId: "1:27778450817:web:74e1bab55d10c3f9279480"
-};
+// The real values live in js/firebase-target.js, beside the PREVIEW project's, and the
+// page's hostname picks one: a Firebase Hosting preview channel gets the preview project
+// (fake data, for trying a pull request before it goes live); everything else — the live
+// site and localhost included — gets production, exactly as before.
+export const firebaseConfig = configForHost(location.hostname);
+export const isPreview = isPreviewHost(location.hostname);
 
 // The Web Push key, for notifications that arrive with the app closed.
 //
