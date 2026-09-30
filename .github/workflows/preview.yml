@@ -35,6 +35,7 @@ jobs:
     # A PR from a fork gets no identity token, and must not get a public link to our code path.
     if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: read
       id-token: write
@@ -57,6 +58,11 @@ jobs:
           git archive --format=tar HEAD -- \
             ':(glob)*.html' ':(glob)*.css' sw.js manifest.json qr.png js icons fonts sounds \
             | tar -x -C _site
+          # ⚠️ No symlinks: firebase-tools FOLLOWS them when it uploads, so a committed
+          # `js/x -> ../..` would publish the workspace — credentials file included.
+          if [ -n "$(find _site -type l)" ]; then
+            echo "::error::symlink in the staged site:"; find _site -type l; exit 1
+          fi
           find _site -maxdepth 1 | sort
 
       # ⚠️ The trust is pinned to this repository on Google's side, in TWO places, exactly like
@@ -87,9 +93,10 @@ jobs:
         env:
           CHANNEL: pr-${{ github.event.pull_request.number }}
           URL: ${{ steps.deploy.outputs.url }}
+        # Every path is checked BEFORE any verdict, so nothing can skip the leak check; a curl
+        # that fails answers 000, which counts as served — the safe direction.
         run: |
-          code() { curl -s -o /dev/null -w "%{http_code}" "$URL/$1"; }
-          [ "$(code index.html)" = 200 ] || { echo "index.html is not served"; exit 1; }
+          code() { curl -s --max-time 15 -o /dev/null -w "%{http_code}" "$URL/$1"; }
           leaked=""
           for path in .git/config .git/HEAD .github/workflows/preview.yml .claude/settings.json \
                       firebase.json firestore.rules package.json functions/index.js \
@@ -104,12 +111,14 @@ jobs:
             firebase hosting:channel:delete "$CHANNEL" --project mise-app-preview --force
             exit 1
           fi
+          [ "$(code index.html)" = 200 ] || { echo "::error::index.html is not served"; exit 1; }
 
   # The comment gets its own job: the only one allowed to write on the PR, and it installs and
   # runs nothing but `gh`.
   comment:
     needs: preview
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     permissions:
       pull-requests: write
     steps:

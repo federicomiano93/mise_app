@@ -32,6 +32,13 @@ test('hosting publishes the staged _site folder, bound to the "preview" target',
 test('_site is built from git by an allowlist, never copied from the workspace', () => {
   assert.match(workflow, /git archive --format=tar HEAD -- \\\n\s+':\(glob\)\*\.html' ':\(glob\)\*\.css' sw\.js manifest\.json qr\.png js icons fonts sounds \\\n\s+\| tar -x -C _site/);
   assert.doesNotMatch(workflow, /cp -r|rsync/);
+  // firebase-tools follows symlinks on upload: one committed link could publish the workspace
+  assert.match(workflow, /if \[ -n "\$\(find _site -type l\)" \]; then/);
+});
+
+test('the deploy job cannot hang for hours', () => {
+  assert.match(workflow, /timeout-minutes: 15/);
+  assert.match(workflow, /curl -s --max-time 15/);
 });
 
 test('no credential is left in the workspace for anything to pick up', () => {
@@ -60,7 +67,9 @@ test('the workflow signs in to, and deploys to, the preview project only', () =>
     assert.match(line, /--project mise-app-preview/, line.trim());
   }
   assert.match(workflow, /service_account: preview-deploy@mise-app-preview\.iam\.gserviceaccount\.com/);
-  assert.match(workflow, /providers\/github-oidc\n/, 'github-provider was disabled after the 30 Sep leak');
+  assert.match(workflow, /providers\/github-oidc\n/,
+    'the PREVIEW project\'s github-provider was disabled after the 30 Sep leak (production\'s own ' +
+    'github-provider, in bakery-app-ebf90, is a different one and must stay enabled)');
 });
 
 test('only the comment job may write on the PR, and it runs nothing but gh', () => {
