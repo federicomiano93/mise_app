@@ -15,7 +15,8 @@ orders, real prices). Which database a write reaches is decided by the **hostnam
 |---|---|---|
 | `localhost` / `127.0.0.1` / `::1` | yes | **emulator — safe, write freely** |
 | `localhost` / `127.0.0.1` / `::1` | no | **nowhere** — writes fail, production untouched, the test is INVALID |
-| anything else: the live site, a LAN IP (a phone on Wi-Fi), a tunnel | — | **PRODUCTION** |
+| `federicomiano93.github.io` (the live site) | — | **PRODUCTION** |
+| anything else: a PR preview link, a LAN IP (a phone on Wi-Fi), a tunnel | — | **PRODUCTION until PR #244 is live; since then the PREVIEW project** (fake data, `js/firebase-target.js`) — never the emulator, and never a valid local test |
 
 There is no fallback and no check that the emulator is up. Confirm it: the console prints
 "LOCAL EMULATOR mode", and the emulator UI answers on http://127.0.0.1:4000.
@@ -39,8 +40,9 @@ There is no fallback and no check that the emulator is up. Confirm it: the conso
   127.0.0.1:9099`) set in the SAME command, an Admin SDK script writes to production with
   full power. Put the variables on the command line itself, and prefer the REST emulator
   calls `seed-emulator.mjs` uses.
-- A LAN IP or tunnel to test on a phone = production. To test on a phone safely, use the
-  phone-preview window on the PC instead (`drive-app`).
+- A LAN IP or tunnel to test on a phone is not a local test (production before PR #244, the
+  preview project after). To try a change on a real phone, use the PR's **preview link**
+  (fake data); to drive it from the PC, the phone-preview window (`drive-app`).
 
 ## When the task really IS production data
 
