@@ -16,6 +16,7 @@ import { t } from '../i18n.js';
 import { el } from './dom.js';
 import { dayLabel } from './day.js';
 import { confirmDialog } from './confirm-dialog.js';
+import { qtyWithUnit, sameUnit, entryUnit, recordUnit } from '../order-unit.js';
 import {
   groupRequest, isRequestDone, remainingIds, waitingRequests, liveDifference,
   splitRequestsByAge, REQUEST_WINDOW_DAYS,
@@ -120,7 +121,7 @@ export function buildRequestListScreen(requests, callbacks) {
 
 // ── One list, open ───────────────────────────────────────────────────────────
 
-function itemRow(item, { differsTo, orderedQty, onToggle }) {
+function itemRow(item, { differsTo, differsUnit = '', orderedQty, orderedUnit = '', itemUnit = item.unit, onToggle }) {
   const box = el('input', { type: 'checkbox' });
   box.checked = item.done;
   box.addEventListener('change', () => onToggle(item.id, box.checked, box));
@@ -147,7 +148,9 @@ function itemRow(item, { differsTo, orderedQty, onToggle }) {
   if (differsTo !== undefined) {
     lines.push(el('span', {
       class: 'req-item-changed',
-      text: t('orders.request.nowInList', { n: differsTo }),
+      // The unit only when it is not the one the list was sent in: «now: 2 × busta».
+      // Nothing left in the list needs no unit: «now: 0», never «now: 0 × cartone».
+      text: t('orders.request.nowInList', { n: differsUnit && differsTo > 0 ? qtyWithUnit(differsTo, differsUnit) : differsTo }),
     }));
   }
 
@@ -158,31 +161,34 @@ function itemRow(item, { differsTo, orderedQty, onToggle }) {
   //
   // ⚠️ `undefined` MEANS "NOTHING RECORDED YET", which is a different statement from
   // "none was bought". A row still waiting must say nothing at all.
-  if (orderedQty !== undefined && orderedQty !== item.qty) {
+  // ⚠️ A DIFFERENT UNIT COUNTS AS NOT THE SAME even at an equal number («asked 2 cartoni,
+  // bought 2 buste»), and the unit is printed so the two can be told apart.
+  const otherUnit = !sameUnit(orderedUnit, itemUnit);
+  if (orderedQty !== undefined && (orderedQty !== item.qty || otherUnit)) {
     lines.push(el('span', {
       class: 'req-item-ordered',
-      text: t('orders.untold.ordered', { n: orderedQty }),
+      text: t('orders.untold.ordered', { n: otherUnit ? qtyWithUnit(orderedQty, orderedUnit) : orderedQty }),
     }));
   }
 
   return el('label', { class: `req-item${item.done ? ' req-item--done' : ''}` }, [
     box,
     el('span', { class: 'req-item-main' }, lines),
-    el('span', { class: 'req-item-qty', text: String(item.qty) }),
+    el('span', { class: 'req-item-qty', text: qtyWithUnit(item.qty, item.unit) }),
   ]);
 }
 
 // request: one document. options: { ingredientsById, entries, canManage }.
 // callbacks: { onBack, onToggle, onFinish, onDelete, onPlaced }.
 export function buildRequestScreen(request, options, callbacks) {
-  const { ingredientsById = {}, entries = {}, orderedById = {},
+  const { ingredientsById = {}, entries = {}, orderedById = {}, orderedUnits = {},
     canManage = false } = options || {};
   const groups = groupRequest(request, ingredientsById);
   // ⚠️ A ROW THAT HAS BEEN ORDERED IS NOT ASKED "has the shared order moved?" — see
   // the note above itemRow. Filtered here, once, so the count that decides the
   // sentence above the rows cannot disagree with the marks on the rows themselves.
   const differences = Object.fromEntries(
-    Object.entries(liveDifference(request, entries))
+    Object.entries(liveDifference(request, entries, ingredientsById))
       .filter(([id]) => orderedById[id] === undefined));
   const scroll = el('div', { class: 'preview-scroll' });
 
@@ -216,7 +222,14 @@ export function buildRequestScreen(request, options, callbacks) {
       ]),
       ...group.items.map(item => itemRow(item, {
         differsTo: differences[item.id],
+        differsUnit: differences[item.id] !== undefined
+          && !sameUnit(entryUnit(entries[item.id], ingredientsById[item.id]), recordUnit(request, item.id, ingredientsById[item.id]))
+          ? entryUnit(entries[item.id], ingredientsById[item.id]) : '',
         orderedQty: orderedById[item.id],
+        // Both sides fall back to the card's unit, as a record with no frozen unit means it:
+        // «2 × cartone» against a record without units is the SAME order, not a different one.
+        orderedUnit: recordUnit({ units: orderedUnits }, item.id, ingredientsById[item.id]),
+        itemUnit: recordUnit(request, item.id, ingredientsById[item.id]),
         onToggle: callbacks.onToggle,
       })),
       // ⚠️ THE HAND-OFF TO THE ROAD EVERYBODY ALREADY WALKS. Recording the order

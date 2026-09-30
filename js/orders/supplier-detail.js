@@ -10,57 +10,24 @@
 // the supplier screen, the flat list and the History editor, so a fix to how a
 // quantity behaves cannot land in one of them and not the others.
 //
-// ⚠️⚠️ THE SAME NODE, TWO HOMES (29 Sep 2026). On a phone this is a full-screen
-// overlay with a Back arrow; on a tablet split view, orders-main.js moves the very
-// same `overlay` into `#orders-detail-pane` instead of appending it to
-// document.body — never rebuilds it, so a quantity mid-typing survives a window
-// resize. The header therefore carries BOTH sets of controls always (the Back
-// arrow AND the List/Summary/Close buttons the pane needs); orders.css shows
-// whichever set belongs to the current width, and the ones that stay hidden are
-// simply never tapped.
+// A full-screen overlay on a phone AND on a tablet (30 Sep 2026: the tablet's
+// two-pane split was removed — the owner wanted the same screen everywhere). The
+// header is the app's one pattern: Back left, the title centred, an EMPTY slot
+// on the right so the three-track grid keeps the title centred.
 
 import { t } from '../i18n.js';
 import { supplierLabel } from '../supplier-label.js';
 import { el } from './dom.js';
 import { buildIngredientList } from './ingredients.js';
-import { nextMatchingDay } from './split-pick.js';
 
 const BACK_ICON =
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>';
 const CHECK_SVG =
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>';
-// "See what this supplier sells" — the same list glyph suppliers.js uses for the
-// same job on the phone row (LIST_SVG there).
-const LIST_SVG =
-  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>';
-// "See the summary sheet" — the same clipboard suppliers.js uses (SUMMARY_SVG there).
-const SUMMARY_SVG =
-  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 2h6v4H9z"/><path d="M9 11h6M9 14h6M9 17h4"/></svg>';
-const CLOSE_ICON =
-  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>';
+const PLUS_SVG =
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>';
 
-// The subline text: "orders {day} · delivery {day}" — the SAME question
-// js/orders/split-pick.js answers for the tablet row's day chip, asked twice
-// (order days, delivery days) so the two can never compute "today" two
-// different ways. Only ever built once, at construction — see the header note
-// above on why this never rebuilds on repaint.
-function paneSubline(orderDays, deliveryDays, now = new Date()) {
-  const order = nextMatchingDay(orderDays, now);
-  const delivery = nextMatchingDay(deliveryDays, now);
-  const parts = [];
-  if (order) {
-    const day = order.isToday ? t('day.today.inSentence') : t(`day.weekdayShort.${order.weekdayIndex}`);
-    parts.push({ text: t('orders.pane.orderDay', { day }), today: order.isToday });
-  }
-  if (delivery) {
-    const day = delivery.isToday ? t('day.today.inSentence') : t(`day.weekdayShort.${delivery.weekdayIndex}`);
-    parts.push({ text: t('orders.pane.deliveryDay', { day }), today: false });
-  }
-  return parts;
-}
-
-// ctx: { ingredients, entries, suggest, hooks, onBack, onViewList, onSummary,
-//        orderDays, deliveryDays }
+// ctx: { ingredients, entries, suggest, hooks, onBack, onAddIngredient }
 // -> { overlay, repaint(ctx) }
 //
 // `repaint` rebuilds only the BODY, never the header — a live snapshot from another
@@ -70,49 +37,20 @@ function paneSubline(orderDays, deliveryDays, now = new Date()) {
 export function buildSupplierDetail(supplier, ctx) {
   const body = el('div', { class: 'supplier-detail-body' });
 
-  // ⚠️ TABLET ONLY, IN LOOKS (orders.css) — built always, so the pane never has
-  // to rebuild this header when a phone becomes a tablet mid-session (a window
-  // resized, a tablet rotated: js/orders/orders-main.js relocateDetailView).
-  const subline = paneSubline(ctx.orderDays, ctx.deliveryDays).map(({ text, today }) => el(
-    today ? 'b' : 'span', { class: 'pane-when', text },
-  ));
   const titleWrap = el('div', { class: 'app-header-title orders-header-title' }, [
     el('h1', { text: supplierLabel(supplier) }),
-    subline.length ? el('p', { class: 'pane-subline' }, subline.flatMap((n, i) => (
-      i === 0 ? [n] : [' · ', n]
-    ))) : null,
   ]);
-
-  const listBtn = el('button', {
-    type: 'button', class: 'pane-list-btn',
-    'aria-label': t('orders.pane.listAria', { supplier: supplierLabel(supplier) }),
-    onClick: () => ctx.onViewList?.(),
-  }, [el('span', { class: 'pane-btn-icon', 'aria-hidden': 'true', icon: LIST_SVG }), t('orders.pane.list')]);
-  const summaryBtn = el('button', {
-    type: 'button', class: 'pane-summary-btn',
-    'aria-label': t('orders.pane.summaryAria', { supplier: supplierLabel(supplier) }),
-    onClick: () => ctx.onSummary?.(),
-  }, [el('span', { class: 'pane-btn-icon', 'aria-hidden': 'true', icon: SUMMARY_SVG }), t('orders.pane.summary')]);
-  const closeBtn = el('button', {
-    type: 'button', class: 'app-icon-btn orders-icon-btn pane-close-btn',
-    'aria-label': t('orders.pane.closeAria', { supplier: supplierLabel(supplier) }),
-    icon: CLOSE_ICON, onClick: () => ctx.onBack?.(),
-  });
 
   const overlay = el('div', { class: 'supplier-detail' }, [
     el('header', { class: 'app-header orders-header' }, [
-      // The slot, not the button, is what the tablet pane hides: the pane has no Back —
-      // its X does that job — and an empty slot must not keep a column of its own.
-      el('span', { class: 'app-header-slot pane-back-slot' }, [
+      el('span', { class: 'app-header-slot' }, [
         el('button', {
           type: 'button', class: 'app-icon-btn orders-icon-btn', 'aria-label': t('ui.back'),
           icon: BACK_ICON, onClick: () => ctx.onBack?.(),
         }),
       ]),
       titleWrap,
-      // List / summary / close are tablet-only in looks (orders.css); on a phone this
-      // slot holds nothing visible and the grid keeps the title centred by itself.
-      el('span', { class: 'app-header-slot pane-actions' }, [listBtn, summaryBtn, closeBtn]),
+      el('span', { class: 'app-header-slot' }),
     ]),
     body,
   ]);
@@ -120,7 +58,31 @@ export function buildSupplierDetail(supplier, ctx) {
   function repaint(next) {
     const { ingredients, entries, suggest, hooks } = next;
     body.replaceChildren();
-    body.appendChild(buildIngredientList(supplier, ingredients, suggest, entries, hooks));
+
+    // ⚠️ FIRST — also for a supplier with no ingredients yet, which is exactly when it is
+    // needed. It sits ABOVE the list card, outside `.ingredient-list`, so the sticky
+    // Order/Stock header inside the list is untouched. The card it opens has THIS supplier
+    // preset (orders-main.js openAddIngredient). Present only when orders-main hands in
+    // `onAddIngredient`: it leaves it out where the owner has hidden «Suppliers &
+    // ingredients» from this person (records.js mayEditRecords) — a display switch, like the
+    // Catalogue's; the rules decide the save either way.
+    const canAdd = typeof next.onAddIngredient === 'function';
+    if (canAdd) {
+      body.appendChild(el('button', {
+        type: 'button',
+        class: 'mgmt-add supplier-add-ing',
+        'aria-label': t('orders.addIngredientToListAria', { supplier: supplierLabel(supplier) }),
+        onClick: () => next.onAddIngredient(),
+      }, [
+        el('span', { class: 'supplier-add-ing-icon', icon: PLUS_SVG, 'aria-hidden': 'true' }),
+        el('span', { text: t('orders.addIngredientToList') }),
+      ]));
+    }
+
+    body.appendChild(buildIngredientList(supplier, ingredients, suggest, entries, hooks, {
+      // «add the first one with the button above» only when there IS a button above.
+      emptyKey: canAdd ? 'orders.noIngredientsYetAddAbove' : 'orders.noIngredientsYetAdd',
+    }));
 
     // No products, nothing to record — the empty state inside the list already says so.
     if (!ingredients.length) return;
@@ -128,9 +90,9 @@ export function buildSupplierDetail(supplier, ctx) {
     const { filled } = ingredients.reduce((acc, i) => (
       (entries[i.id]?.qty || 0) > 0 ? { filled: acc.filled + 1 } : acc), { filled: 0 });
 
-    // The money (per-row cost lines, totals) is NOT built here: it is tablet-only
-    // and permission-gated, so orders-main.js paints it onto this screen from the
-    // outside (order-cost-view.js paintPaneMoney) — a phone never gets a node of it.
+    // The money (totals box) is NOT built here: it is tablet-only and
+    // permission-gated, so orders-main.js paints it onto this screen from the
+    // outside (order-cost-view.js paintOrderMoney) — a phone never gets a node of it.
 
     const placeBtn = el('button', {
       type: 'button',

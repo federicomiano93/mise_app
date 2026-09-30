@@ -23,7 +23,6 @@ import { el } from './dom.js';
 import { buildSearchBox } from './search-box.js';
 import { filterSuppliers } from './ingredient-search.js';
 import { itemsLabel } from './supplier-picker.js';
-import { nextMatchingDay } from './split-pick.js';
 
 // ⚠️ THE KEYS OF THE STORED DAYS, MAPPED TO THE DICTIONARY'S SHORT FORMS. The left
 // side is DATA — exactly what a supplier's deliveryDays holds, and it must stay English
@@ -94,18 +93,6 @@ export function refreshSupplierDerived(supplier, ingredients, entries) {
   if (summaryBtn) summaryBtn.hidden = filled === 0;
   const spacer = document.getElementById(`spacer-${supplier.id}`);
   if (spacer) spacer.hidden = filled > 0;
-
-  // ⚠️ SPLIT VIEW ONLY (orders.css), same "always there, only its content
-  // moves" rule: the compact count pill the split's own row shows instead of
-  // `count-${id}` above.
-  const compact = document.getElementById(`compact-count-${supplier.id}`);
-  if (compact) {
-    // The dash is a SYMBOL, not a word — same as the mockup's own `—` — so it
-    // needs no dictionary entry; the aria-label carries the actual sentence.
-    compact.textContent = filled ? String(filled) : '—';
-    compact.classList.toggle('supplier-row-compact-count--zero', filled === 0);
-    compact.setAttribute('aria-label', filled ? itemsLabel(filled) : t('orders.split.nothingOrderedYet'));
-  }
 }
 
 // container: #suppliers-list.
@@ -113,7 +100,7 @@ export function refreshSupplierDerived(supplier, ingredients, entries) {
 //        onView(supplierId) }
 // -> { repaint({ suppliers, ingredientsBySupplier, entries }) }
 export function mountSupplierList(container, ctx) {
-  let data = { suppliers: [], ingredientsBySupplier: {}, entries: {}, pickedId: null };
+  let data = { suppliers: [], ingredientsBySupplier: {}, entries: {} };
   let query = ctx.query || '';
   let filtering = Boolean(ctx.filterActive);
 
@@ -145,7 +132,7 @@ export function mountSupplierList(container, ctx) {
     paint();
   }
 
-  const list = el('div', { class: 'supplier-list' });
+  const list = el('div');
 
   // How many suppliers currently have something typed. Unlike the ingredient filter,
   // this needs no freezing: you cannot type a quantity on this screen, you tap into a
@@ -205,19 +192,6 @@ export function mountSupplierList(container, ctx) {
       orderingBtn.textContent = t('orders.filter.ordering', { n: ordering });
       filterSwitch.hidden = ordering === 0 && !filtering;
     },
-    // ⚠️ SPLIT VIEW ONLY, AND NEVER A REBUILD — tapping a row to open/close the
-    // tablet pane must not rip the list (and its scroll position, and the row
-    // just tapped) out from under the finger that tapped it. Toggles the
-    // "picked" look and `aria-current` on whichever rows exist right now;
-    // harmless — and unused — outside the split, where nothing ever sets it.
-    updateSelection(pickedId) {
-      data.pickedId = pickedId;
-      list.querySelectorAll('.supplier-row').forEach(row => {
-        const picked = row.dataset.supplier === pickedId;
-        row.classList.toggle('supplier-row--picked', picked);
-        row.querySelector('.supplier-row-open')?.setAttribute('aria-current', String(picked));
-      });
-    },
   };
 }
 
@@ -236,27 +210,11 @@ function buildSupplierRow(supplier, data, ctx) {
     filled ? itemsLabel(filled) : '');
   count.hidden = filled === 0;
 
-  // ⚠️ SPLIT VIEW ONLY (orders.css) — the day chip ("TODAY"/next order
-  // weekday) and the compact number pill the split's row shows instead of
-  // the chevron/count-label pair above. Built always, same "always both in
-  // the DOM" rule as everything else tablet-only on this row; see
-  // refreshSupplierDerived for how the count half stays live without a
-  // rebuild. The day chip does not need one: a supplier's own order days
-  // essentially never change while its row is on screen.
-  const dayInfo = nextMatchingDay(supplier.orderDays);
-  const dayChip = dayInfo ? el('span', {
-    class: `supplier-row-day${dayInfo.isToday ? ' supplier-row-day--today' : ''}`,
-  }, dayInfo.isToday ? t('day.today') : t(`day.weekdayShort.${dayInfo.weekdayIndex}`)) : null;
-  const compactCount = el('span', {
-    class: `supplier-row-compact-count${filled ? '' : ' supplier-row-compact-count--zero'}`,
-    id: `compact-count-${supplier.id}`,
-    'aria-label': filled ? itemsLabel(filled) : t('orders.split.nothingOrderedYet'),
-  }, filled ? String(filled) : '—');
-
   const open = el('button', {
     type: 'button',
     class: 'supplier-row-open',
-    'aria-current': String(data.pickedId === supplier.id),
+    // Where focus returns when the full-screen order is closed (orders-main.js leaveSupplier).
+    id: `open-${supplier.id}`,
     onClick: () => ctx.onOpen?.(supplier.id),
   }, [
     el('div', { class: 'supplier-row-main' }, [
@@ -264,8 +222,6 @@ function buildSupplierRow(supplier, data, ctx) {
       el('span', { class: 'supplier-meta', text: [supplier.category, days].filter(Boolean).join(' · ') }),
     ]),
     count,
-    dayChip,
-    compactCount,
     el('span', { class: 'supplier-row-chevron', icon: CHEVRON_SVG, 'aria-hidden': 'true' }),
   ]);
 
@@ -300,7 +256,7 @@ function buildSupplierRow(supplier, data, ctx) {
   spacer.hidden = filled > 0;
 
   return el('div', {
-    class: `supplier-row${data.pickedId === supplier.id ? ' supplier-row--picked' : ''}`,
+    class: 'supplier-row',
     dataset: { supplier: supplier.id },
   }, [view, open, summaryBtn, spacer]);
 }

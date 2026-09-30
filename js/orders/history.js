@@ -16,6 +16,7 @@
 import { t } from '../i18n.js';
 import { supplierLabel } from '../supplier-label.js';
 import { sendIconSvg } from '../send-icon.js';
+import { recordUnit } from '../order-unit.js';
 import { el, groupBy } from './dom.js';
 import { dayLabel } from './day.js';
 import {
@@ -175,11 +176,13 @@ function cardActions(record, callbacks) {
 }
 
 // The rows of one record: "name weight … qty unit", by name.
-function itemRows(quantities, ingById, names) {
+// The unit is the one the order was PLACED in (frozen into the record), else the card's.
+function itemRows(record, ingById) {
+  const quantities = record.quantities;
   return Object.keys(quantities || {})
     .map(id => ({
-      name: recordedName(id, ingById, names),
-      unit: ingById[id]?.unit || '',
+      name: recordedName(id, ingById, record.names),
+      unit: recordUnit(record, id, ingById[id]),
       qty: quantities[id],
     }))
     .sort((a, b) => a.name.localeCompare(b.name))
@@ -192,7 +195,7 @@ function itemRows(quantities, ingById, names) {
 // One order: one supplier, one day.
 function buildOrderCard(record, ingById, callbacks) {
   const count = Object.keys(record.quantities || {}).length;
-  const rows = itemRows(record.quantities, ingById, record.names);
+  const rows = itemRows(record, ingById);
 
   const body = el('div', { class: 'history-body' }, [
     ...(rows.length ? rows : [el('p', { class: 'history-empty', text: t('orders.noItemsRecorded') })]),

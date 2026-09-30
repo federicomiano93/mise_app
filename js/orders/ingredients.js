@@ -12,8 +12,8 @@
 import { t } from '../i18n.js';
 import { el } from './dom.js';
 import { isUnusualQuantity } from './suggestions.js';
-import { wholeNumber } from './archive.js';
-import { groupByCategory } from './ingredient-category.js';
+import { wholeNumber, sortByLabel, ingredientLabel } from './archive.js';
+import { unitChoices, entryUnit, storedUnitFor, sameUnit, isDefaultUnit } from '../order-unit.js';
 
 // How many of a supplier's ingredients already have a quantity entered — used to
 // paint the progress bar correctly on first render (before any typing), so a
@@ -35,12 +35,44 @@ function entryFor(entries, id) {
   return entries[id] || (entries[id] = { qty: 0, stock: 0 });
 }
 
-export function buildIngredientList(supplier, ingredients, suggest, entries, hooks) {
+const CLEAR_ICON =
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="M6 6l12 12"/></svg>';
+
+// A row with a quantity shows its «clear» button (orders.css keys off this class). One
+// helper, used by the row itself AND by orders-main when a value arrives from another
+// phone, so the button can never be out of step with the box beside it.
+export function markFilled(row, qty) {
+  row?.classList.toggle('ing-row--filled', (Number(qty) || 0) > 0);
+}
+
+// The option a line's unit selects: the one spelled like it, whatever its capitals
+// («Busta» stored, «busta» on the card), else the unit itself.
+function optionFor(select, unit) {
+  const same = [...select.options].find(o => sameUnit(o.value, unit));
+  return same ? same.value : unit;
+}
+
+// Show a draft entry's unit in a row's unit menu, if it has one. Called when the draft
+// arrives from another phone: without it this phone would keep showing — and pricing —
+// the old unit. It skips the menu being used right now, exactly as the number boxes are
+// skipped, so nothing jumps under a finger.
+export function paintUnitSelect(row, ing, entry) {
+  const select = row?.querySelector('.ing-unit-select');
+  if (!select || !ing || select === document.activeElement) return;
+  const unit = entryUnit(entry, ing);
+  if (![...select.options].some(o => sameUnit(o.value, unit))) {
+    select.appendChild(el('option', { value: unit, text: unit }));
+  }
+  select.value = optionFor(select, unit);
+}
+
+export function buildIngredientList(supplier, ingredients, suggest, entries, hooks,
+  { emptyKey = 'orders.noIngredientsYetAddAbove' } = {}) {
   // A supplier with no ingredients shows a clear empty state, not a progress bar
   // stuck at 0 of 0 (the old "Loading…" bug: nothing ever replaced the placeholder).
   if (!ingredients.length) {
     return el('div', { class: 'ingredient-list' }, [
-      el('p', { class: 'ing-empty', text: t('orders.noIngredientsYetAdd') }),
+      el('p', { class: 'ing-empty', text: t(emptyKey) }),
     ]);
   }
 
@@ -57,21 +89,13 @@ export function buildIngredientList(supplier, ingredients, suggest, entries, hoo
 
   const body = el('div', { class: 'ingredient-list' }, [progress, buildIngredientHeader()]);
 
-  // ⚠️ THE GROUPING IS NOT DONE HERE. It used to be, with a bare
-  // `Object.keys(groupBy(...)).sort()`, and it produced a heading reading
-  // "undefined" for a row whose category field was absent, filed 'Other' bare
-  // under whatever heading happened to precede it, and split one category in two
-  // when a value carried a trailing space. ingredient-category.js is now the ONE
-  // answer, shared with the read-only supplier-items screen — two screens
-  // disagreeing about which heading a row belongs under is how somebody orders
-  // the wrong thing.
-  groupByCategory(ingredients).forEach(({ category, items }) => {
-    if (category) body.appendChild(el('div', { class: 'ing-category' }, category));
-    items
-      .slice()
-      .sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')))
-      .forEach(ing => body.appendChild(buildRow(ing, supplier, suggest, entries, hooks)));
-  });
+  // ⚠️ ONE FLAT LIST, A→Z BY NAME AND WEIGHT, NO CATEGORY HEADINGS (the owner asked for it,
+  // 30 Sep 2026: at the counter he looks a product up by its name, not by the shelf it
+  // lives on). It is the same order as the read-only supplier-items screen (both go through
+  // sortByLabel) and as the message sent to the supplier (order-text.js sortItems): all of
+  // them compare labels with the one numeric collator, compareLabels.
+  sortByLabel(ingredients)
+    .forEach(ing => body.appendChild(buildRow(ing, supplier, suggest, entries, hooks)));
 
   return body;
 }
@@ -95,6 +119,7 @@ export function buildIngredientHeader() {
 // entirely in the by-supplier view: the card heading already says whose it is.
 export function buildRow(ing, supplier, suggest, entries, hooks, { meta = '' } = {}) {
   const entry = entryFor(entries, ing.id);
+  let row;
 
   const stockInput = el('input', {
     type: 'number', class: 'ing-stock', min: '0', inputmode: 'numeric',
@@ -110,6 +135,7 @@ export function buildRow(ing, supplier, suggest, entries, hooks, { meta = '' } =
     const qty = wholeNumber(value);
     entryFor(entries, ing.id).qty = qty;
     if (!fromInput) qtyInput.value = qty || '';
+    markFilled(row, qty);
     hooks.afterChange(supplier.id);
   }
 
@@ -122,6 +148,16 @@ export function buildRow(ing, supplier, suggest, entries, hooks, { meta = '' } =
   // "Suggested: 8" sitting beside "much more than usual" would be saying the same
   // thing twice anyway.
   function updateHint() {
+    // ⚠️ NO HINT, AND NO AUTO-FILL, FOR A LINE IN ANOTHER UNIT THAN THE CARD'S. The history
+    // the suggestion is worked out from counts the card's unit, so «Suggested: 4» under a
+    // line of buste — or 4 typed into it from the stock box — would be a number of the
+    // wrong thing. Returning an inactive result stops both (the stock handler fills only
+    // on an active one); switching back to the card's unit brings them back.
+    if (!isDefaultUnit(entryFor(entries, ing.id), ing)) {
+      hint.textContent = '';
+      hint.className = 'ing-suggestion';
+      return { active: false };
+    }
     const result = suggest(ing.id, entryFor(entries, ing.id).stock || 0);
     const qty = entryFor(entries, ing.id).qty || 0;
 
@@ -150,6 +186,25 @@ export function buildRow(ing, supplier, suggest, entries, hooks, { meta = '' } =
     updateHint();   // the warning has to appear as the extra digit is typed
   });
 
+  // ⚠️ A MENU ONLY WHEN THE CARD OFFERS A CHOICE («cartone» or «busta»); any other row keeps
+  // the caption and is untouched. The options are the card's own words — venue data, never
+  // translated. The quantity is kept when the unit changes: the person is correcting the
+  // unit, not the number. Read at build time, so the list is always the card as it is now.
+  const choices = unitChoices(ing, entry.unit);
+  const unitSelect = choices.length >= 2
+    ? el('select', {
+      class: 'ing-unit-select',
+      'aria-label': t('orders.unitToOrderFor', { name: ingredientLabel(ing) || t('orders.unnamedProduct') }),
+    }, choices.map(unit => el('option', { value: unit, text: unit })))
+    : null;
+  if (unitSelect) {
+    unitSelect.value = optionFor(unitSelect, entryUnit(entry, ing));
+    unitSelect.addEventListener('change', () => {
+      entryFor(entries, ing.id).unit = storedUnitFor(unitSelect.value, ing);
+      hooks.afterChange(supplier.id);
+      updateHint();
+    });
+  }
 
   // One LINE per ingredient, three columns: the name (with the supplier and the hint
   // under it), the Order box, the Stock box. «Order» / «Stock» are named ONCE, by the
@@ -157,7 +212,7 @@ export function buildRow(ing, supplier, suggest, entries, hooks, { meta = '' } =
   // own aria-label, which already names the ingredient.
   // `ing-row--line` is the hook orders.css scopes every one of these rules to:
   // `.ing-row` alone is also the Calculator's, and both stylesheets load on both pages.
-  const row = el('div', { class: 'ing-row ing-row--line', dataset: { ing: ing.id } }, [
+  row = el('div', { class: 'ing-row ing-row--line', dataset: { ing: ing.id } }, [
     el('div', { class: 'ing-main' }, [
       el('div', { class: 'ing-top' }, [
         el('span', { class: 'ing-name', text: ing.name || '' }),
@@ -169,17 +224,39 @@ export function buildRow(ing, supplier, suggest, entries, hooks, { meta = '' } =
       // row, so the supplier would sit BESIDE the name instead of under it.
       meta ? el('div', { class: 'ing-supplier', text: meta }) : null,
       hint,
+      // In the name column on purpose: it holds nothing tappable, so a 44px target here
+      // steals no tap from the Order / Stock boxes. Shown only while there is a quantity.
+      el('button', {
+        type: 'button', class: 'ing-qty-clear', icon: CLEAR_ICON,
+        // Name AND weight: «Flour 1kg» and «Flour 25kg» must not both read «clear Flour».
+        'aria-label': t('orders.clearQtyFor', { name: ingredientLabel(ing) || t('orders.unnamedProduct') }),
+        onClick: (event) => {
+          // A cleared line starts again in the card's own unit (the default), exactly as
+          // «Clear quantities» does — the unit goes first so the one autosave carries both.
+          const cleared = entryFor(entries, ing.id);
+          cleared.unit = '';
+          paintUnitSelect(row, ing, cleared);
+          setQty(0);
+          updateHint();
+          // Only a keyboard activation goes back to the box: after a tap the phone's
+          // on-screen keyboard would pop up over the list for no reason.
+          if (event.detail === 0) qtyInput.focus();
+        },
+      }),
     ]),
     el('div', { class: 'ing-col' }, [
       qtyInput,
-      ing.unit ? el('span', { class: 'ing-order-unit', text: ing.unit }) : null,
+      !unitSelect && ing.unit ? el('span', { class: 'ing-order-unit', text: ing.unit }) : null,
     ]),
     // `stock-field` is what body.hide-stock hides (Settings → hide stock).
     el('div', { class: 'ing-col stock-field' }, [stockInput]),
+    unitSelect,
   ]);
+  if (unitSelect) row.classList.add('ing-row--choice');
 
   stockInput.value = entry.stock || '';
   qtyInput.value = entry.qty || '';
+  markFilled(row, entry.qty);
   updateHint(); // show suggestion without overwriting a restored quantity
   return row;
 }

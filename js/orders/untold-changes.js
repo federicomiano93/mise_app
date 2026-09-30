@@ -18,6 +18,14 @@
 
 import { wholeNumber as num, ingredientsOf, ingredientLabel, historyDocId } from './archive.js';
 import { supplierLabel } from '../supplier-label.js';
+import { sameUnit, recordUnit, entryUnit } from '../order-unit.js';
+
+// Was this line of a list / record made in the unit the row means now? Rows with no
+// `live` entry (or no live filter at all) are not judged — the old behaviour.
+function inLiveUnit(source, id, live) {
+  const row = live?.[id];
+  return !row || sameUnit(recordUnit(source, id, row.ing), row.unit);
+}
 
 // What today's sent lists asked for, for ONE supplier → { ingredientId: qty }.
 //
@@ -30,7 +38,12 @@ import { supplierLabel } from '../supplier-label.js';
 // ⚠️ `today` IS PASSED IN, never read from a clock here: the caller pins the day
 // (an order can be recorded under an earlier day) and a pure function must not
 // disagree with it.
-export function askedToday(requests, supplierId, today) {
+//
+// ⚠️ `live` (optional, { [id]: { ing, unit } } — the unit each row means NOW) keeps the
+// answer to ONE unit: a line told in another unit is not counted, never converted, so
+// the row then reads as untold — an alarm that may be spurious, never a silence that
+// hides a quantity the buyer was not told in the unit it will be bought in.
+export function askedToday(requests, supplierId, today, live = null) {
   const day = String(today || '');
   const out = {};
   (requests || []).forEach(request => {
@@ -39,6 +52,7 @@ export function askedToday(requests, supplierId, today) {
     const supplierOf = request.supplierOf || {};
     Object.keys(quantities).forEach(id => {
       if (supplierOf[id] !== supplierId) return;
+      if (!inLiveUnit(request, id, live)) return;
       out[id] = Math.max(num(out[id]), num(quantities[id]));
     });
   });
@@ -68,11 +82,17 @@ export function askedToday(requests, supplierId, today) {
 //
 // ⚠️ THE STOCK READING IS CARRIED THROUGH UNTOUCHED. Counting the shelves is work
 // already done, and it is not what anybody confirmed.
-export function confirmedEntries(entries, supplierIngredients, quantities) {
+//
+// ⚠️ THE UNIT IS CONFIRMED TOO. `units` ({ [id]: unit }) is what the confirmation screen
+// SHOWED beside each quantity; it replaces the live unit of that row, so a change made on
+// another phone while the screen was open cannot record a unit nobody was shown.
+export function confirmedEntries(entries, supplierIngredients, quantities, units = null) {
   const out = { ...(entries || {}) };
   (supplierIngredients || []).forEach(ing => {
     if (!ing || !ing.id) return;
-    out[ing.id] = { ...(out[ing.id] || {}), qty: num(quantities?.[ing.id]) };
+    const row = { ...(out[ing.id] || {}), qty: num(quantities?.[ing.id]) };
+    if (units && typeof units[ing.id] === 'string') row.unit = units[ing.id];
+    out[ing.id] = row;
   });
   return out;
 }
@@ -83,10 +103,18 @@ export function confirmedEntries(entries, supplierIngredients, quantities) {
 // it (archive.js mergeArchives), so this is the day's TOTAL for that supplier. For the
 // question being asked here — "has anybody been told about this?" — the total is
 // exactly the right answer.
-export function orderedToday(history, supplierId, today) {
+//
+// `live` as in askedToday: lines recorded in another unit than the row's are left out.
+export function orderedToday(history, supplierId, today, live = null) {
   const id = historyDocId(today, supplierId);
   const record = (history || []).find(r => r && r.id === id);
-  return record?.quantities || {};
+  const quantities = record?.quantities || {};
+  if (!live) return quantities;
+  const out = {};
+  Object.keys(quantities).forEach(key => {
+    if (inLiveUnit(record, key, live)) out[key] = quantities[key];
+  });
+  return out;
 }
 
 // ⚠️⚠️ THE QUESTION: does the shared order hold more than anybody has been told about?
@@ -115,11 +143,20 @@ export function untoldChanges({
   const out = [];
   (suppliers || []).forEach(supplier => {
     if (!supplier || !supplier.id) return;
-    const asked = askedToday(requests, supplier.id, today);
-    const ordered = orderedToday(history, supplier.id, today);
-    if (!Object.keys(asked).length && !Object.keys(ordered).length) return;
+    const supplierIngredients = ingredientsOf(supplier.id, ingredients);
+    // The unit each of this supplier's rows means now: told and ordered amounts count
+    // only when they were in it.
+    const liveUnits = Object.fromEntries(supplierIngredients.map(ing =>
+      [ing.id, { ing, unit: entryUnit(entries?.[ing.id], ing) }]));
+    const asked = askedToday(requests, supplier.id, today, liveUnits);
+    const ordered = orderedToday(history, supplier.id, today, liveUnits);
+    const orderedAnyUnit = orderedToday(history, supplier.id, today);
+    // The gate is «was anything told at all today», in any unit — a list that named
+    // only the OTHER unit is exactly the case that must alarm.
+    const askedAnyUnit = askedToday(requests, supplier.id, today);
+    if (!Object.keys(askedAnyUnit).length && !Object.keys(orderedAnyUnit).length) return;
 
-    const rows = ingredientsOf(supplier.id, ingredients).map(ing => {
+    const rows = supplierIngredients.map(ing => {
       const live = num(entries?.[ing.id]?.qty);
       const told = num(asked[ing.id]);
       const done = num(ordered[ing.id]);
@@ -133,7 +170,9 @@ export function untoldChanges({
         id: ing.id,
         name: ingredientLabel(ing),
         live, told, ordered: done, extra,
-        alreadyOrdered: done > 0,
+        // In ANY unit: a busta line after 2 cartoni were phoned in is still «already
+        // said down a telephone», and the wording for that case is the honest one.
+        alreadyOrdered: num(orderedAnyUnit[ing.id]) > 0,
       };
     }).filter(Boolean);
 

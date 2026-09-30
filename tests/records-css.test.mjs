@@ -56,5 +56,5 @@ test('⚠️ loaded by the Catalogue, precached, and by no page that already loa
 });
 
 test('the Catalogue\'s card layer carries the class the copy is scoped to', () => {
-  assert.match(read('js/catalogue/ingredient-create.js'), /class: 'pick-overlay rec-host'/);
+  assert.match(read('js/ingredient-create.js'), /const CATALOGUE_LAYER = 'pick-overlay rec-host'/);
 });

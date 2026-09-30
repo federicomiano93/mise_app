@@ -34,7 +34,7 @@ import { supplierLabel, supplierMatches } from '../supplier-label.js';
 import { el } from './dom.js';
 import { confirmDialog } from './confirm-dialog.js';
 import { isTabletNow, watchTablet } from './tablet-layout.js';
-import { snapshotFields, snapshotChanged } from './form-dirty.js';
+import { snapshotFields, snapshotChanged } from '../form-dirty.js';
 import { removeLevel } from './level-stack.js';
 import { buildSearchBox } from './search-box.js';
 import { dayShort } from './suppliers.js';

@@ -20,6 +20,7 @@ import {
   buildSupplierArchive, mergeArchives, historyDocId, ingredientsOf, quantityPathsFor,
   changedEntries, changedDays,
 } from './archive.js';
+import { cleanUnit } from '../order-unit.js';
 
 const DRAFT_ID = 'current';
 const SAVE_DELAY_MS = 800; // debounce to limit Firestore writes (cost control)
@@ -63,6 +64,8 @@ function detach(entries) {
   const out = {};
   Object.entries(entries || {}).forEach(([id, entry]) => {
     out[id] = { qty: entry?.qty, stock: entry?.stock };
+    // Only when present, so an ordinary entry keeps its {qty, stock} shape.
+    if (entry && entry.unit !== undefined) out[id].unit = entry.unit;
   });
   return out;
 }
@@ -134,7 +137,8 @@ export function saveDraftNow(entries, days) {
     // flight is still this phone's, and must stay claimed.
     Object.entries(entriesDelta).forEach(([id, sent]) => {
       const held = pending.entries[id];
-      if (held && held.qty === sent.qty && held.stock === sent.stock) delete pending.entries[id];
+      if (held && held.qty === sent.qty && held.stock === sent.stock
+        && cleanUnit(held.unit) === cleanUnit(sent.unit)) delete pending.entries[id];
     });
     Object.entries(daysDelta).forEach(([id, sent]) => {
       if (pending.days[id] === sent) delete pending.days[id];
@@ -180,14 +184,22 @@ export function watchDraft(onChange, onError) {
 // were forgotten, and replacing would destroy the original order. The read and the
 // write are one transaction, so two phones tapping at the same moment cannot lose
 // one of the two orders.
+//
+// ⚠️ The same ingredient in a DIFFERENT unit from the day's first order is refused
+// (`orders/unit-conflict`, thrown inside the transaction, so nothing is written): the
+// two quantities cannot be added. `cardUnitOf` tells the merge what unit a record from
+// before the unit choice was placed in.
 export function archiveSupplier({ supplier, ingredients, entries, date, now = new Date() }) {
   const incoming = buildSupplierArchive({ supplier, ingredients, entries, date, now });
   if (!incoming) return Promise.resolve(null);
 
+  const unitById = {};
+  (ingredients || []).forEach(ing => { unitById[ing.id] = ing.unit; });
+
   return transactDoc(
     COLLECTIONS.history,
     historyDocId(date, supplier.id),
-    existing => mergeArchives(existing, incoming),
+    existing => mergeArchives(existing, incoming, { cardUnitOf: id => unitById[id] }),
   );
 }
 

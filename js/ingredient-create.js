@@ -1,4 +1,12 @@
-// ingredient-create.js — add an ingredient that is not in the records yet, from a recipe row.
+// ingredient-create.js — add an ingredient that is not in the records yet: from a recipe row in
+// the Catalogue, and from a supplier's own order screen in Orders (a supplier preset).
+//
+// Lives in js/ root because TWO features open it, and a feature may not import another's folder.
+// The layer's class is a PARAMETER for the same reason: the Catalogue hosts the card in
+// `.pick-overlay rec-host`, but on the Orders page `.pick-overlay` (z-index 60, tokens.css) would
+// sit UNDER `.supplier-detail` (z-index 600), and orders.html does not load records.css, whose
+// rules are scoped to `.rec-host`. orders.css styles `.mgmt-*` directly and `.mgmt-overlay` sits
+// at z 650, so Orders passes 'mgmt-overlay' and the header takes Orders' own look.
 //
 // Federico, 13 Sep 2026: «quando voglio associare un ingrediente di una ricetta ad un
 // ingrediente in anagrafica per il prezzo, se non c'è in anagrafica fammelo inserire
@@ -18,17 +26,21 @@
 // ⚠️ IT ASKS NO PERMISSION ITSELF. The row that opens it is offered only where
 // js/records.js mayEditRecords() says yes; the rules decide the save regardless (P2).
 
-import { t } from '../i18n.js';
+import { t } from './i18n.js';
 import { el } from './dom.js';
-import { currentSession } from '../firebase.js';
-import { allergensOn, nutritionOn } from '../venue-features.js';
-import { outputLanguage } from '../market.js';
-import { categoryChoices, unitChoices, packChoices } from '../record-choices.js';
-import { buildIngredientForm } from '../ingredient-record-form.js';
-import { buildSupplierForm } from '../supplier-record-form.js';
-import { mayWritePrices, saveIngredientWithPrice, saveSupplierRecord } from '../record-data.js';
+import { confirmDialog } from './confirm-dialog.js';
+import { currentSession } from './firebase.js';
+import { allergensOn, nutritionOn } from './venue-features.js';
+import { outputLanguage } from './market.js';
+import { categoryChoices, unitChoices, packChoices } from './record-choices.js';
+import { buildIngredientForm } from './ingredient-record-form.js';
+import { buildSupplierForm } from './supplier-record-form.js';
+import { mayWritePrices, saveIngredientWithPrice, saveSupplierRecord } from './record-data.js';
+import { snapshotFields, snapshotChanged } from './form-dirty.js';
 
 const BACK_ICON = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>';
+
+const CATALOGUE_LAYER = 'pick-overlay rec-host';
 
 // The catalogue's suppliers as the card wants them: a list of { id, name, … }.
 function supplierList(suppliers) {
@@ -41,17 +53,23 @@ function ingredientList(ingredients) {
   return Array.isArray(ingredients) ? ingredients : Object.values(ingredients || {});
 }
 
-// One full-screen layer in the catalogue's own header. `.rec-host` is what records.css
-// scopes the cards' styles to, so they reach these cards and nothing else on the page.
-function layer({ title, body, onBack }) {
+// One full-screen layer. In the Catalogue, `.rec-host` is what records.css scopes the cards'
+// styles to, so they reach these cards and nothing else on the page. Hosted in Orders'
+// `.mgmt-overlay` the header wears Orders' classes (the ones registry.js overlay() draws), so
+// the card looks like every other level of «Fornitori e ingredienti».
+function layer({ title, body, onBack, layerClass }) {
+  const orders = layerClass.split(' ').includes('mgmt-overlay');
   const node = el('div', {
-    class: 'pick-overlay rec-host', role: 'dialog', 'aria-modal': 'true', 'aria-label': title,
+    class: layerClass, role: 'dialog', 'aria-modal': 'true', 'aria-label': title,
   }, [
-    el('header', { class: 'app-header' }, [
+    el('header', { class: orders ? 'app-header orders-header' : 'app-header' }, [
       el('span', { class: 'app-header-slot' }, [
-        el('button', { class: 'app-icon-btn', type: 'button', 'aria-label': t('ui.back'), icon: BACK_ICON, onclick: onBack }),
+        el('button', {
+          class: orders ? 'app-icon-btn orders-icon-btn' : 'app-icon-btn',
+          type: 'button', 'aria-label': t('ui.back'), icon: BACK_ICON, onclick: onBack,
+        }),
       ]),
-      el('div', { class: 'app-header-title' }, [el('h1', { text: title })]),
+      el('div', { class: orders ? 'app-header-title orders-header-title' : 'app-header-title' }, [el('h1', { text: title })]),
       el('span', { class: 'app-header-slot' }),
     ]),
     el('div', { class: 'mgmt-scroll' }, [body]),
@@ -62,7 +80,7 @@ function layer({ title, body, onBack }) {
 
 // «+ Nuovo fornitore» inside the card: one more layer above it. Resolves with { id, name }
 // once saved, or null.
-function createSupplier(layers) {
+function createSupplier(layers, layerClass) {
   return new Promise(resolve => {
     let node = null;
     const close = (value) => {
@@ -72,6 +90,7 @@ function createSupplier(layers) {
       resolve(value);
     };
     node = layer({
+      layerClass,
       title: t('orders.newSupplier'),
       onBack: () => close(null),
       body: buildSupplierForm({
@@ -85,13 +104,35 @@ function createSupplier(layers) {
   });
 }
 
-// Open the card for a new ingredient called `name`. Resolves with { id, name } once it is
+// P20: Back or Cancel never throws typing away without asking — the same question, and the same
+// snapshot helper, registry.js uses. A save in flight is typing being saved, so it is not
+// «unsaved» (the Save button is disabled while it runs).
+function typedInto(snapshot, layerNode) {
+  if (!snapshot || layerNode?.querySelector('.mgmt-form .btn-primary:disabled')) return false;
+  return snapshotChanged(snapshot);
+}
+
+function confirmDiscard() {
+  return confirmDialog({
+    title: t('orders.registry.discardTitle'),
+    message: t('orders.registry.discardMessage'),
+    okLabel: t('ui.discard'),
+    cancelLabel: t('ui.cancel'),
+    danger: true,
+  });
+}
+
+// Open the card for a new ingredient called `name`. Resolves with { id, name, kind } once it is
 // saved, or with null when somebody backs out.
 //
-// ⚠️ NO STORED CATEGORY LIST HERE, ON PURPOSE: the list lives in config/orders, which a
-// Catalogue-only venue cannot read. The menus offer the venue's default words plus every
-// category and unit the ingredients already use.
-export function openIngredientCreate({ name, suppliers, ingredients }) {
+// `presetSupplierId` pre-selects the supplier (Orders opens it from a supplier's own screen).
+// ⚠️ `storedCategories` is undefined from the Catalogue, ON PURPOSE: the list lives in
+// config/orders, which a Catalogue-only venue cannot read. Orders, which has read it, passes it
+// in; either way the menus also offer every category and unit the ingredients already use.
+export function openIngredientCreate({
+  name = '', suppliers, ingredients, presetSupplierId = null,
+  storedCategories = undefined, layerClass = CATALOGUE_LAYER,
+}) {
   return new Promise(resolve => {
     const layers = [];
     let settled = false;
@@ -106,6 +147,15 @@ export function openIngredientCreate({ name, suppliers, ingredients }) {
     const location = currentSession().location;
     const language = outputLanguage(location);
     const known = ingredientList(ingredients);
+    // Assigned below, once the layer exists; both Back and Cancel only run after that.
+    let snapshot = null;
+    let cardLayer = null;
+    const leave = async () => {
+      if (typedInto(snapshot, cardLayer) && !(await confirmDiscard())) return;
+      saved = null;
+      finish();
+    };
+
     const form = buildIngredientForm({
       item: null,
       presetName: name,
@@ -115,8 +165,8 @@ export function openIngredientCreate({ name, suppliers, ingredients }) {
       // no way back to it from the chooser. Found by the code review of 14 Sep 2026. The card has
       // no «Tipo» menu any more (29 Sep 2026): a new item takes the kind it is added from.
       suppliers: supplierList(suppliers),
-      preset: null,
-      categories: categoryChoices({ stored: undefined, ingredients: known, language }),
+      preset: presetSupplierId,
+      categories: categoryChoices({ stored: storedCategories, ingredients: known, language }),
       orderUnits: unitChoices({ ingredients: known, language }),
       packs: packChoices({ ingredients: known, language }),
       // ⚠️ THE SAME TWO DECISIONS registry.js makes, from the same root answers.
@@ -132,16 +182,20 @@ export function openIngredientCreate({ name, suppliers, ingredients }) {
         // The packet photograph stays on «Fornitori e ingredienti»: it spends money per tap,
         // and it is switched on there.
         packPhotoOn: () => false,
-        createSupplier: () => createSupplier(layers),
+        createSupplier: () => createSupplier(layers, layerClass),
       },
       onDone: finish,
-      onCancel: () => { saved = null; finish(); },
+      onCancel: leave,
     });
 
-    layers.push(layer({
+    cardLayer = layer({
+      layerClass,
       title: t('orders.newIngredient'),
       body: form,
-      onBack: () => { saved = null; finish(); },
-    }));
+      onBack: leave,
+    });
+    layers.push(cardLayer);
+    // Taken once the form is in place, to tell «typed into» from «just opened».
+    snapshot = snapshotFields(form);
   });
 }

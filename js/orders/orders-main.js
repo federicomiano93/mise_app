@@ -14,6 +14,8 @@ import { supplierLabel } from '../supplier-label.js';
 // ⚠️ createDoc / removeDoc / saveIngredientWithPrice / getPriceHistory LEFT WITH THE
 // RECORDS. This page no longer creates, deletes or prices anything — it reads the
 // two collections to draw an order. js/orders/registry-main.js holds those calls now.
+// (The one exception is «+ Add ingredient» on a supplier's screen, which opens the records'
+// own card through js/ingredient-create.js — the card does its own saving.)
 import {
   watchCollection, watchDoc, saveDoc, COLLECTIONS,
   watchIngredientPrices, canManageHere, authReady,
@@ -23,9 +25,10 @@ import { currentSession } from '../firebase.js';
 import { el, groupBy } from './dom.js';
 import { mountSupplierList, refreshSupplierDerived } from './suppliers.js';
 import { buildSupplierDetail } from './supplier-detail.js';
+import { markFilled, paintUnitSelect } from './ingredients.js';
 import { buildSupplierItems } from './supplier-items.js';
 import { buildOrderSummaryView } from './order-summary-view.js';
-import { paintPaneMoney } from './order-cost-view.js';
+import { paintOrderMoney } from './order-cost-view.js';
 import {
   scheduleDraftSave, saveDraftNow, flushDraftSave, watchDraft, archiveSupplier, clearSupplier,
   clearQuantities, saveHistoryRecord, deleteHistoryRecord, setDraftSaveReporter,
@@ -47,17 +50,21 @@ import { refreshHolidays } from './holidays.js';
 import { countryOf } from '../market.js';
 import { renderAlerts } from './notifications.js';
 import { routesFor } from './send-routes.js';
-import { confirmDialog } from './confirm-dialog.js';
-import { todayISO, dayPhrase, daySpoken, localDayOf, dayLabel } from './day.js';
+import { confirmDialog, alertDialog } from './confirm-dialog.js';
+import { mayEditRecords } from '../records.js';
+import { todayISO, dayPhrase, daySpoken, dayWhen, localDayOf, dayLabel } from './day.js';
 import {
   buildOrderMessage, whatsappUrl, itemsFromQuantities, indexById,
 } from './order-text.js';
 import {
   historyDocId, ingredientsOf, supplierHasItems, ingredientLabel, wholeNumber,
+  unitConflicts, unitConflictList,
 } from './archive.js';
+import { storedUnitFor, entryUnit, isDefaultUnit } from '../order-unit.js';
 import { todayOrders, pendingSuppliers } from './reminders.js';
 import { renderTodayOrders, renderPending } from './reminder-view.js';
-import { resolveSuppliers, orderSuppliers } from './no-supplier.js';
+import { resolveSuppliers, orderSuppliers, NO_SUPPLIER_ID } from './no-supplier.js';
+import { openIngredientCreate } from '../ingredient-create.js';
 import { normalizeOrdersConfig } from './orders-config.js';
 import { mountIngredientList } from './ingredient-list.js';
 import { watchTablet, initAlertsPanel, closeAlertsPanel, isTabletNow } from './tablet-layout.js';
@@ -88,6 +95,7 @@ const state = {
   suppliers: [],
   ingredients: [],
   rawIngredients: [],
+  ingredientCategories: null,   // config/orders' stored category list, or null (never stored)
   ingredientPrices: {},
   history: [],
   requests: [],                 // order lists somebody sent to whoever runs the place
@@ -181,6 +189,9 @@ function watchOrdersConfig() {
     const config = normalizeOrdersConfig(doc);
     try { localStorage.setItem(CONFIG_KEY, JSON.stringify(config)); } catch { /* private mode */ }
     applyOrdersConfig(config);
+    // The stored category list, for the ingredient card opened from a supplier's screen; null =
+    // never stored, so the card offers the venue's default words (same reading as registry-main.js).
+    state.ingredientCategories = Array.isArray(doc?.ingredientCategories) ? doc.ingredientCategories : null;
     // The window may have just changed — on this phone or on another one. Stock is a
     // <body> class and needs no repaint; how many days History shows does.
     renderHistory();
@@ -260,15 +271,21 @@ function refreshOrderTotals() {
 // is an overlay OUTSIDE that container, and scoping to it would mean a quantity typed
 // on another phone silently stopped appearing while you were inside a supplier.
 function syncInputsFromState() {
+  const ingById = indexById(state.ingredients);
   document.querySelectorAll('.ing-row[data-ing]').forEach(row => {
     const entry = state.entries[row.dataset.ing] || {};
+    // A unit changed on another phone has to reach the select too, or this phone would
+    // keep showing (and pricing) the old unit until the page was reloaded.
+    paintUnitSelect(row, ingById[row.dataset.ing], entry);
     const stock = row.querySelector('.ing-stock');
     const qty = row.querySelector('.ing-qty');
     if (stock && stock !== document.activeElement) stock.value = entry.stock || '';
     if (qty && qty !== document.activeElement) qty.value = entry.qty || '';
+    // Outside the focus guard: the button must follow the DRAFT even while the box is focused.
+    markFilled(row, entry.qty);
   });
   refreshAllSuppliers();
-  // A quantity typed on another phone changes this pane's money too.
+  // A quantity typed on another phone changes the order total too.
   paintMoney();
 }
 
@@ -331,7 +348,7 @@ function renderSupplierList(container, suppliers) {
       filterActive: state.supplierFilter,
       onQuery: q => { state.supplierQuery = q; },
       onFilter: active => { state.supplierFilter = active; },
-      onOpen: toggleSupplier,
+      onOpen: openSupplier,
       onView: openSupplierItems,
       onSummary: openSummary,
       searchExtras: buildOrderTools(),
@@ -341,122 +358,28 @@ function renderSupplierList(container, suppliers) {
     suppliers,
     ingredientsBySupplier: ingredientsBySupplier(),
     entries: state.entries,
-    pickedId: state.openSupplier,
   });
 }
 
-// ── The tablet split view (29 Sep 2026) ────────────────────────────────────
-//
-// Active only on the Order tab's Suppliers view, on a tablet — never on the
-// flat ingredient list or on Incoming, which stay full width exactly as on a
-// phone (the plan's own words). Read fresh every time rather than cached:
-// asked from a handful of call sites, never from a hot path.
-function splitActive() {
-  return isTabletNow() && state.view === 'suppliers'
-    && document.body.dataset.ordersTab !== 'deliveries';
-}
-
-const HAND_ICON =
-  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="44" height="44" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/><path d="M21 12H9"/></svg>';
-
-// The placeholder shown in the pane while no supplier is in it. ONE node, kept in
-// the pane and only shown or hidden — never a second child beside the supplier
-// screen (28 Sep 2026: both were visible at once, the order squeezed under it).
-// ⚠️ ITS WORDS NEED THEIR OWN onLanguageChange (see init): a refresh runs when the
-// width, tab or supplier changes — NOT when the venue's language arrives, which is
-// usually AFTER the first refresh. Relying on refreshes alone left an Italian venue
-// reading «Choose a supplier» on its tablet (ui-check, 28 Sep 2026).
-function paneEmptyState(pane) {
-  let empty = pane.querySelector(':scope > .split-empty');
-  if (!empty) {
-    empty = el('div', { class: 'split-empty' }, [
-      el('span', { class: 'split-empty-icon', 'aria-hidden': 'true', icon: HAND_ICON }),
-      el('h2', {}),
-      el('p', {}),
-    ]);
-    pane.prepend(empty);
-  }
-  paintPaneEmptyWords(empty);
-  return empty;
-}
-
-function paintPaneEmptyWords(empty) {
-  empty.querySelector('h2').textContent = t('orders.split.empty.title');
-  empty.querySelector('p').textContent = t('orders.split.empty.text');
-}
-
-// Only rewords a placeholder that already exists — never creates one, so it cannot
-// put a visible placeholder beside a supplier screen already in the pane.
-function repaintPaneEmptyWords() {
-  const empty = document.querySelector('#orders-detail-pane > .split-empty');
-  if (empty) paintPaneEmptyWords(empty);
-}
-
-// Move the open supplier screen to `target` WITHOUT rebuilding it, and give the
-// focus back to the box being typed in: appendChild on a focused element drops
-// the focus (and the phone's keyboard with it); the typed number survives.
-function moveDetail(target) {
-  const node = detailView.overlay;
-  const active = node.contains(document.activeElement) ? document.activeElement : null;
-  let caret = null;
-  try { caret = active ? [active.selectionStart, active.selectionEnd] : null; } catch { caret = null; }
-  target.appendChild(node);
-  if (!active) return;
-  active.focus({ preventScroll: true });
-  try {
-    if (caret && caret[0] !== null) active.setSelectionRange(caret[0], caret[1]);
-  } catch { /* a number input has no caret to restore */ }
-}
-
-// Keeps #orders-detail-pane in step with state.openSupplier and with the split
-// being active — called after EVERY change to either (opening/closing a supplier,
-// switching tab or view, crossing the tablet width).
-//
-// ⚠️ LEAVING THE SPLIT HAS TWO CAUSES AND THEY END DIFFERENTLY:
-//  - the tablet got NARROWER (rotated to portrait): the screen moves to the body
-//    and becomes the phone's full-screen overlay, typing intact — unless the List
-//    or the Summary is open over it, in which case it is closed instead: on a phone
-//    those two close it anyway, and appended after them it would cover them
-//    (two full-screen screens never stack).
-//  - the tab or the view changed on a tablet (Incoming, Ingredients): it is closed.
-//    Moved to the body it would pop up full-screen over the screen just chosen.
-function refreshDetailPaneMode() {
-  const pane = document.getElementById('orders-detail-pane');
-  if (!pane) return;
-  if (state.openSupplier && detailView) {
-    const inPane = detailView.overlay.parentNode === pane;
-    if (splitActive()) {
-      if (!inPane) moveDetail(pane);
-    } else if (inPane) {
-      if (!isTabletNow() && !itemsView && !summaryView) moveDetail(document.body);
-      else { closeSupplier(); return; }
-    }
-  }
-  const holding = !!(detailView && detailView.overlay.parentNode === pane);
-  paneEmptyState(pane).hidden = holding;
-  paintMoney();
-}
-
-// The money in the pane (tablet only, and only for an account that may read
-// prices): see paintPaneMoney in order-cost-view.js. Called after every paint of
-// the supplier screen, every keystroke, every price snapshot and every move.
+// The order TOTAL on the supplier's full-screen view — tablet only, and only for
+// an account that may read prices (state.pricesReadable is true only once the
+// ingredient-prices read has succeeded): see paintOrderMoney in order-cost-view.js.
+// Called after every paint of the supplier screen, every keystroke, every price
+// snapshot and every change of width.
 function paintMoney() {
   if (!detailView || !state.openSupplier) return;
-  const pane = document.getElementById('orders-detail-pane');
-  const inPane = !!pane && detailView.overlay.parentNode === pane;
-  paintPaneMoney(
+  paintOrderMoney(
     detailView.overlay,
     ingredientsBySupplier()[state.openSupplier] || [],
     state.entries,
-    inPane && state.pricesReadable === true,
+    isTabletNow() && state.pricesReadable === true,
   );
 }
 
 // ── One supplier's own screen ─────────────────────────────────────────────────
 //
-// ⚠️ ALWAYS OPENS. Only a tap on the supplier's own ROW toggles (toggleSupplier
-// below): a notice that says «Brakes changed» must show Brakes even when Brakes
-// is already open — a toggle here closed it (review of 28 Sep 2026).
+// ⚠️ ALWAYS OPENS, never toggles: a notice that says «Brakes changed» must show
+// Brakes even when Brakes is already open — a toggle closed it (review of 28 Sep 2026).
 function openSupplier(supplierId) {
   closeSupplierItems();         // two full-screen screens must never stack up
   closeSummary();
@@ -465,20 +388,48 @@ function openSupplier(supplierId) {
   renderOpenSupplier();
 }
 
-// The row on the left of the tablet split: tap to open, tap the open one again to
-// close. On a phone the row is under the full-screen overlay, so only the first
-// half is ever reachable there.
-function toggleSupplier(supplierId) {
-  if (state.openSupplier === supplierId && detailView) { closeSupplier(); return; }
-  openSupplier(supplierId);
-}
-
 function closeSupplier() {
   state.openSupplier = null;
   detailView?.overlay.remove();
   detailView = null;
-  cardsView?.updateSelection(null);
-  refreshDetailPaneMode();
+}
+// Back on the order screen: close it and hand focus back to the row that opened it — the
+// summary sheet's own pattern (closeSummary). Full screen covers the list, so without this
+// a keyboard or screen-reader user would be dropped at the top of the page.
+function leaveSupplier() {
+  const openerId = state.openSupplier;
+  closeSupplier();
+  if (openerId) document.getElementById(`open-${openerId}`)?.focus();
+}
+
+// «+ Add ingredient» on a supplier's own screen: the records' ingredient card with THIS supplier
+// preset. Nothing to refresh afterwards — the ingredients snapshot that follows the save runs
+// render() → renderOpenSupplier(), which repaints the open screen with the new row.
+// ⚠️ Guarded against a double tap: two layers would be two cards for one ingredient.
+let addingIngredient = false;
+function mayAddIngredient() {
+  const { location, canManage } = currentSession();
+  return mayEditRecords(location, canManage);
+}
+function openAddIngredient(supplierId) {
+  if (addingIngredient) return;
+  addingIngredient = true;
+  openIngredientCreate({
+    suppliers: state.suppliers,
+    ingredients: state.rawIngredients,
+    // The pseudo «no supplier» is not a stored supplier: preset it and the menu would name
+    // an id the record does not carry.
+    presetSupplierId: supplierId === NO_SUPPLIER_ID ? null : supplierId,
+    storedCategories: state.ingredientCategories,
+    // z 650 — above `.supplier-detail` (600), styled by orders.css itself.
+    layerClass: 'mgmt-overlay',
+  })
+    // A card that fails to build must not leave a button that silently does nothing.
+    .catch(err => {
+      console.error('Could not open the ingredient card', err);
+      alertDialog(t('orders.addIngredientFailed'));
+    })
+    .finally(() => { addingIngredient = false; });
 }
 
 // Create the screen, or repaint the one already up. Repainting happens on every
@@ -498,32 +449,27 @@ function renderOpenSupplier() {
     entries: state.entries,
     suggest: suggestFor,
     hooks,
-    onBack: closeSupplier,
-    // ⚠️ TABLET PANE HEAD ONLY (orders.css). Opening either must NOT close
-    // this screen — on a phone they still do, through the shared
-    // closeSupplier() inside openSupplierItems/openSummary, since there both
-    // are full-screen and the two cannot be on top of one another. On a
-    // tablet split those two calls skip that close (splitActive()), so the
-    // pane stays put underneath and simply reappears when the sheet closes.
-    onViewList: () => openSupplierItems(supplier.id),
-    onSummary: () => openSummary(supplier.id),
-    orderDays: supplier.orderDays,
-    deliveryDays: supplier.deliveryDays,
+    onBack: leaveSupplier,
+    // ⚠️ THE SAME QUESTION THE CATALOGUE ASKS (records.js mayEditRecords): where the owner has
+    // hidden «Suppliers & ingredients» from the staff, a door to the same card from Orders
+    // would quietly undo the switch. Asked on every repaint, so it follows the switch live.
+    onAddIngredient: mayAddIngredient() ? () => openAddIngredient(supplier.id) : null,
   };
 
   if (detailView && detailView.id === supplier.id) {
     detailView.repaint(ctx);
-    cardsView?.updateSelection(supplier.id);
-    refreshDetailPaneMode();
+    paintMoney();
     return;
   }
 
   detailView?.overlay.remove();
   const built = buildSupplierDetail(supplier, ctx);
   detailView = { ...built, id: supplier.id };
-  (splitActive() ? document.getElementById('orders-detail-pane') : document.body)?.appendChild(built.overlay);
-  cardsView?.updateSelection(supplier.id);
-  refreshDetailPaneMode();
+  document.body.appendChild(built.overlay);
+  // Into the screen that now covers everything, on its Back — as the summary sheet does.
+  // Only on a NEW screen: a repaint (above) must never pull focus out of a box mid-typing.
+  built.overlay.querySelector('.orders-icon-btn')?.focus({ preventScroll: true });
+  paintMoney();
 }
 
 // ── What a supplier sells, to look at ─────────────────────────────────────────
@@ -533,10 +479,7 @@ function renderOpenSupplier() {
 // writes NOTHING — which is the whole point of it, and why it can be opened in the
 // middle of an order without a thought.
 function openSupplierItems(supplierId) {
-  // ⚠️ NOT ON A TABLET SPLIT — see the long note in renderOpenSupplier's ctx.
-  // The pane is not a full-screen overlay there, so it does not compete with
-  // this one for the same space; on a phone it still is, and still does.
-  if (!splitActive()) closeSupplier();
+  closeSupplier();              // two full-screen screens must never stack up
   closeSummary();
   closeAlertsPanel();           // the panel must never sit on top of a full screen
   state.viewingSupplier = supplierId;
@@ -586,8 +529,7 @@ function renderSupplierItems() {
 let summaryEscHandler = null;
 
 function openSummary(supplierId) {
-  // ⚠️ NOT ON A TABLET SPLIT — see the long note in renderOpenSupplier's ctx.
-  if (!splitActive()) closeSupplier();
+  closeSupplier();
   closeSupplierItems();
   closeAlertsPanel();            // the panel must never sit on top of a full screen
   state.summarySupplier = supplierId;
@@ -712,10 +654,6 @@ function refreshViewSwitch() {
 function setView(view) {
   if (state.view === view) return;
   state.view = view;
-  // ⚠️ TABLET SPLIT ONLY (orders.css): the ONE place this is written, read by
-  // the grid that turns .orders-split into two columns — never on the flat
-  // ingredient list or on Incoming, which stay full width.
-  document.body.dataset.ordersView = view;
   // The "just what I'm ordering" filter belongs to the flat list; the cards always
   // show everything, so leaving for them drops it rather than hiding it somewhere
   // invisible and surprising the operator with it on the way back.
@@ -725,10 +663,6 @@ function setView(view) {
   render();
   refreshOrderTotals();
   refreshOrderTools();
-  // Leaving the Suppliers view (or coming back to it) turns the split on or
-  // off — the open supplier, if any, has to move between the pane and a
-  // full-screen overlay along with it.
-  refreshDetailPaneMode();
 }
 
 // ── The search-row swap button (every screen size) ────────────────────────
@@ -844,8 +778,13 @@ function renderIncoming() {
     // ⚠️ GOES THROUGH THE SAME AUTOSAVE EVERY KEYSTROKE USES. A second way to write
     // the draft is a second thing that can disagree with the first about what is in it.
     onReorder: async (applied) => {
-      applied.forEach(({ id, qty }) => {
-        state.entries[id] = { ...(state.entries[id] || { stock: 0 }), qty };
+      applied.forEach(({ id, qty, unit }) => {
+        // The re-ordered line comes back in the unit it was first ordered in; the card's
+        // own unit is stored as nothing (see storedUnitFor).
+        state.entries[id] = {
+          ...(state.entries[id] || { stock: 0 }), qty,
+          unit: storedUnitFor(unit, ingredientsById[id]),
+        };
       });
       await saveDraftNow(state.entries, state.days);
       syncInputsFromState();
@@ -911,7 +850,7 @@ function recordToRow(record) {
   return {
     id: record.id,
     name: record.supplierName || 'Order',
-    items: itemsFromQuantities(record.quantities, indexById(state.ingredients), record.names),
+    items: itemsFromQuantities(record.quantities, indexById(state.ingredients), record.names, record.units),
   };
 }
 
@@ -1025,6 +964,8 @@ function openSendScreen() {
     sendSettings: ordersConfig.sendSettings,
     canManage: canManageHere(),
     onBack: () => overlay.remove(),
+    // Asked by the chooser once the road is known, and only for roads that reach the supplier.
+    beforeSend: rows => refuseOnUnitConflict(rows.map(r => ({ supplierId: r.id, date: dayForSupplier(r.id) }))),
     onSent: supplierIds => {
       overlay.remove();
       offerToRecordSent(supplierIds);
@@ -1190,6 +1131,17 @@ function orderedForRequest(request) {
   return out;
 }
 
+// The unit each of those recorded lines was bought in, where the record froze one —
+// shown beside the amount, so «ordered 2» is never read in the wrong unit.
+function orderedUnitsForRequest(request) {
+  const out = {};
+  supplierIdsOf(request).forEach(supplierId => {
+    const record = state.history.find(r => r && r.id === historyDocId(request.date, supplierId));
+    Object.assign(out, record?.units || {});
+  });
+  return out;
+}
+
 function renderOpenRequest() {
   if (!openRequestId) { requestView?.remove(); requestView = null; return; }
   const request = findRequest(openRequestId);
@@ -1211,6 +1163,7 @@ function renderOpenRequest() {
     // history record would be REFUSED by firestore.rules as it stands (a closed key
     // list), and it can be deduced from fields both documents already carry.
     orderedById: orderedForRequest(request),
+    orderedUnits: orderedUnitsForRequest(request),
     canManage: currentSession().canManage === true,
   }, {
     onBack: () => { openRequestId = null; renderOpenRequest(); },
@@ -1345,12 +1298,14 @@ async function recordSuppliers(supplierIds, { title, okLabel }) {
     // that is "not this one", not a failure. Recording it would write an empty
     // order, which archive.js refuses anyway — but silently, and a silent skip is
     // indistinguishable from a bug.
-    const quantities = confirmed[supplier.id];
+    const quantities = confirmed.quantities[supplier.id];
     if (!quantities || !Object.keys(quantities).length) {
       skipped.push(supplierLabel(supplier));
       continue;
     }
-    const done = await placeOrder(supplier.id, { confirm: false, quantities });
+    const done = await placeOrder(supplier.id, {
+      confirm: false, quantities, units: confirmed.units[supplier.id],
+    });
     (done ? saved : failed).push(supplierLabel(supplier));
   }
 
@@ -1435,6 +1390,55 @@ function dayForSupplier(supplierId) {
   return state.days[supplierId] || localDayOf(state.draftUpdatedAt) || todayISO();
 }
 
+// ⚠️ THE SAME-DAY UNIT CHECK, ASKED BEFORE ANYTHING LEAVES THE APP (before a message is sent,
+// before the confirmation screen opens). Today's record per supplier comes from the live
+// history this page already holds. mergeArchives still refuses inside the write as the last
+// safety net, but by then a message may already have gone out.
+// items: [{ supplierId, date }]. Answers `false` AT ONCE when nothing clashes — it is
+// deliberately not async, so a WhatsApp window opened right after is still inside the tap
+// (iOS Safari blocks a popup that waits behind an await). When something clashes it answers
+// a promise that resolves true once the person has read why.
+// `recording`: the caller is about to RECORD several suppliers in one go, and a refusal means
+// none of them was — the message says so.
+//
+// ⚠️ AN EXCEPTION IN THE CHECK MUST NEVER KILL THE SEND BUTTON: it is logged and the send goes
+// on, because the merge inside the write still refuses a real clash.
+function refuseOnUnitConflict(items, { recording = false } = {}) {
+  let message;
+  try {
+    message = unitConflictMessage(items, recording);
+  } catch (err) {
+    console.error('Unit check failed, carrying on:', err);
+    return false;
+  }
+  if (!message) return false;
+  return alertDialog(message).then(() => true);
+}
+
+// The refusal text for these suppliers and days, or '' when nothing clashes.
+function unitConflictMessage(items, recording) {
+  const ingredients = orderIngredients();
+  const found = items.map(({ supplierId, date }) => ({
+    supplierId, date,
+    conflicts: unitConflicts(
+      state.history.find(h => h && h.id === historyDocId(date, supplierId)),
+      state.entries, ingredients, supplierId),
+  })).filter(f => f.conflicts.length);
+  if (!found.length) return '';
+
+  const several = items.length > 1;
+  const mixedDays = new Set(found.map(f => f.date)).size > 1;
+  // One supplier: the plain list. Several: each line is prefixed with WHO it is about, and with
+  // its day too when the days differ.
+  const list = !several ? unitConflictList(found[0].conflicts) : found.map(f => {
+    const supplier = findOrderSupplier(f.supplierId);
+    const who = (supplier ? supplierLabel(supplier) : f.supplierId) + (mixedDays ? ` (${daySpoken(f.date)})` : '');
+    return f.conflicts.map(c => `${who}: ${c.name} — ${c.unit}`).join(', ');
+  }).join('; ');
+  const text = t('orders.unitConflict', { day: dayWhen(found[0].date), list });
+  return several && recording ? `${text} ${t('orders.unitConflictNothingRecorded')}` : text;
+}
+
 // Drop a supplier's rows from the in-memory draft immediately, so the screen
 // clears without waiting for the write to come back (and so a debounced save
 // already in flight cannot resurrect them).
@@ -1452,7 +1456,7 @@ function forgetSupplierLocally(supplierId) {
 // because state.days[supplierId] is restamped to today by any keystroke on that
 // supplier's rows — so reading it here would file a "Placed yesterday" order under
 // TODAY, which is precisely the mistake this whole feature exists to prevent.
-async function placeOrder(supplierId, { confirm = true, date: pinnedDate, quantities = null } = {}) {
+async function placeOrder(supplierId, { confirm = true, date: pinnedDate, quantities = null, units = null } = {}) {
   const supplier = findOrderSupplier(supplierId);
   if (!supplier) return false;
   const ingredients = orderIngredients();
@@ -1485,9 +1489,12 @@ async function placeOrder(supplierId, { confirm = true, date: pinnedDate, quanti
   // null only for the paths that deliberately do not ask (the unfinished-order
   // banner answering "placed yesterday" about an order that already went out).
   let confirmed = quantities;
+  let confirmedUnits = units;
   if (confirm) {
-    confirmed = await askToConfirmPlacement(supplier, date);
-    if (!confirmed) return false;
+    const answer = await askToConfirmPlacement(supplier, date);
+    if (!answer) return false;
+    confirmed = answer.quantities;
+    confirmedUnits = answer.units;
   }
   if (placing.has(supplierId)) return false; // the screen was open a while — re-check
 
@@ -1500,11 +1507,27 @@ async function placeOrder(supplierId, { confirm = true, date: pinnedDate, quanti
     // lost when the next snapshot arrives.
     await flushDraftSave();
     await archiveSupplier({
-      supplier, ingredients, entries: entriesToRecord(supplierId, ingredients, confirmed), date,
+      supplier, ingredients, entries: entriesToRecord(supplierId, ingredients, confirmed, confirmedUnits), date,
     });
   } catch (err) {
     console.error('Archiving order failed:', err);
-    setStatus(t('orders.couldNotSaveThe'), 'error');
+    if (err?.code === 'orders/unit-conflict') {
+      // Not a failure of the write: the same ingredient was already ordered today in a
+      // different unit and the two cannot be added. Nothing was written and the draft
+      // is untouched, so say exactly which lines and what to do about it. The screens
+      // normally catch this BEFORE anything is sent (refuseOnUnitConflict); this is the
+      // last safety net, for a record that changed on another phone in between.
+      const conflicts = unitConflicts(
+        state.history.find(h => h && h.id === historyDocId(date, supplierId)),
+        state.entries, ingredients, supplierId);
+      const list = conflicts.length ? unitConflictList(conflicts) : (err.ids || []).map(id => {
+        const ing = ingredients.find(i => i.id === id);
+        return (ing && ingredientLabel(ing)) || id;
+      }).join(', ');
+      await alertDialog(t('orders.unitConflict', { day: dayWhen(date), list }));
+    } else {
+      setStatus(t('orders.couldNotSaveThe'), 'error');
+    }
     placing.delete(supplierId);
     refreshAllSuppliers();          // restore the button to whatever the rows say
     return false;
@@ -1556,6 +1579,7 @@ function forgetQuantitiesLocally(supplierIds) {
       const entry = state.entries[ing.id];
       if (!entry) return;
       delete entry.qty;
+      delete entry.unit;   // back to the card's unit, like the paths quantityPathsFor deletes
       // Nothing ordered and nothing on the shelf is not a row at all — and it
       // matches what Firestore does when the last key of a map is deleted.
       if (!(Number(entry.stock) > 0)) delete state.entries[ing.id];
@@ -1667,50 +1691,71 @@ function disablePlaceButton(supplierId) {
 // `confirmed` is null only for the paths that deliberately do not ask, and then
 // the shared order is recorded as it stands — which is right: nobody was shown
 // anything to disagree with.
-function entriesToRecord(supplierId, ingredients, confirmed) {
+function entriesToRecord(supplierId, ingredients, confirmed, units = null) {
   if (!confirmed) return state.entries;
-  return confirmedEntries(state.entries, ingredientsOf(supplierId, ingredients), confirmed);
+  return confirmedEntries(state.entries, ingredientsOf(supplierId, ingredients), confirmed, units);
 }
 
 // The usual amount for a row whose quantity looks like a typing mistake, else
 // null. ⚠️ THE SAME LENS THE ROW HINT USES (js/orders/ingredients.js), so the
 // confirmation can never warn about a row that showed no warning.
+//
+// ⚠️ NONE FOR A LINE IN A NON-DEFAULT UNIT: the history the «usual» is worked out from
+// counts cartoni, so «usually about 4» beside 4 buste would compare two different things.
 function usualFor(id, qty) {
+  const ing = state.ingredients.find(i => i.id === id);
+  if (ing && !isDefaultUnit(state.entries[id], ing)) return null;
   const result = suggestFor(id, 0);
   return result?.active && isUnusualQuantity(qty, result.par) ? result.par : null;
 }
 
 // The confirmation screen, for one supplier or for several. Resolves to
-// { [supplierId]: { [ingredientId]: qty } }, or null when it was backed out of.
-function openPlaceConfirm(items, { title, okLabel }) {
+// { quantities: { [supplierId]: { [ingredientId]: qty } }, units: { [supplierId]: { [ingredientId]: unit } } },
+// or null when it was backed out of (or refused for a unit conflict, having said why).
+//
+// ⚠️ `units` IS WHAT THE SCREEN SHOWED, frozen when it opened, next to the quantities: the
+// draft is live on every phone, and a unit changed elsewhere while this screen is open must
+// not become a different unit from the one the person confirmed.
+async function openPlaceConfirm(items, { title, okLabel }) {
+  // ⚠️ Before the screen opens: a clash with today's record is refused here, not after.
+  if (await refuseOnUnitConflict(items.map(({ supplier, date }) => ({ supplierId: supplier.id, date })), { recording: true })) {
+    return null;
+  }
   const ingredients = orderIngredients();
+  const shownUnits = {};
   const groups = items.map(({ supplier, date }) => {
     // What today's sent lists asked for, so whoever confirms can see where their
     // number differs from what they were asked for. `undefined` for a row no list
     // carried — which is not the same as a list asking for none of it.
-    const asked = askedToday(state.requests, supplier.id, date);
+    // Only what was asked in the unit the row means now: «asked 4 cartoni» beside a line
+    // of buste would compare two different things.
+    const liveUnits = Object.fromEntries(ingredientsOf(supplier.id, ingredients).map(ing =>
+      [ing.id, { ing, unit: entryUnit(state.entries[ing.id], ing) }]));
+    const asked = askedToday(state.requests, supplier.id, date, liveUnits);
+    const rows = ingredientsOf(supplier.id, ingredients)
+      .map(ing => ({
+        id: ing.id,
+        name: ingredientLabel(ing),
+        unit: entryUnit(state.entries[ing.id], ing),
+        qty: wholeNumber(state.entries[ing.id]?.qty),
+        asked: asked[ing.id],
+      }))
+      .filter(row => row.qty > 0)
+      .sort((a, b) => a.name.localeCompare(b.name));
+    shownUnits[supplier.id] = Object.fromEntries(rows.map(row => [row.id, row.unit]));
     return {
       supplierId: supplier.id,
       supplierName: supplierLabel(supplier),
       when: dayPhrase(date),
       already: state.history.some(h => h.id === historyDocId(date, supplier.id)),
-      rows: ingredientsOf(supplier.id, ingredients)
-        .map(ing => ({
-          id: ing.id,
-          name: ingredientLabel(ing),
-          unit: ing.unit || '',
-          qty: wholeNumber(state.entries[ing.id]?.qty),
-          asked: asked[ing.id],
-        }))
-        .filter(row => row.qty > 0)
-        .sort((a, b) => a.name.localeCompare(b.name)),
+      rows,
     };
   });
 
   return new Promise(resolve => {
     const overlay = buildPlaceConfirm({ title, okLabel, groups, usualFor }, {
       onBack: () => { overlay.remove(); resolve(null); },
-      onConfirm: result => { overlay.remove(); resolve(result); },
+      onConfirm: result => { overlay.remove(); resolve({ quantities: result, units: shownUnits }); },
     });
     document.body.appendChild(overlay);
   });
@@ -1728,14 +1773,16 @@ async function askToConfirmPlacement(supplier, date) {
     title: already ? t('orders.confirm.addTitle') : t('orders.orderPlaced'),
     okLabel: already ? t('orders.addToIt') : t('orders.orderPlaced'),
   });
-  return result ? (result[supplier.id] || null) : null;
+  const quantities = result ? result.quantities[supplier.id] : null;
+  return quantities ? { quantities, units: result.units[supplier.id] } : null;
 }
 
 // The suggestion engine bound to the history currently in memory. ONE definition,
 // shared by every row on every screen and by the unusual-quantity check, so the
 // number a row shows and the number the confirmation quotes are the same number.
 function suggestFor(id, stock) {
-  return computeSuggestion(id, stock, state.history);
+  const ing = state.ingredients.find(i => i.id === id) || null;
+  return computeSuggestion(id, stock, state.history, ing);
 }
 
 // ── Reminders (today's orders / an order left from an earlier day) ────────────
@@ -1963,9 +2010,6 @@ function setupTabs() {
       // A class on <body>, read by a small number of scoped rules, is what
       // decides between the two — never a rebuild of either banner.
       document.body.dataset.ordersTab = panel === 'tab-deliveries' ? 'deliveries' : 'order';
-      // The split exists only on Order: leaving it closes a supplier open in the
-      // pane rather than popping it up full-screen over Incoming.
-      refreshDetailPaneMode();
     });
   });
   // The screen always opens on Order.
@@ -2060,21 +2104,18 @@ async function init() {
   trackStickyHead(document.querySelector('.order-box-head'));
   document.getElementById('orders-wa-btn')?.addEventListener('click', openSendScreen);
 
-  // The ONE place state.view's starting value ('suppliers') is mirrored onto
-  // <body> — see setView() for every later write.
-  document.body.dataset.ordersView = state.view;
-
   // ⚠️ WATCHTABLET FIRST, THEN THE PANEL: the panel's first count must see
   // whatever watchTablet already moved into it, including on a page that
   // opens straight at tablet width — see js/orders/tablet-layout.js.
-  watchTablet(() => refreshDetailPaneMode());
+  // The money box on the supplier screen follows the width, so a tablet rotated or
+  // resized while a supplier is open gains or loses it at once.
+  watchTablet(() => paintMoney());
   initAlertsPanel();
   // The Incoming tab's aria-label names a count in words ("3 orders owed") —
   // switching the venue's language must not leave it saying so in the old
   // one until the debt happens to change again.
   onLanguageChange(() => refreshDeliveriesBadge());
   onLanguageChange(() => renderListsButton());
-  onLanguageChange(() => repaintPaneEmptyWords());
 
   // The debounced draft autosave has no caller to hand a rejection to, so it reports
   // through here. Never auto-hidden on a timer: an order that is no longer being

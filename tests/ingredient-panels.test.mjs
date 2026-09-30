@@ -158,7 +158,7 @@ test('⚠️⚠️ all five places ask, and the label is one of them', () => {
     ['js/orders/registry.js (opening the card)',
       REGISTRY.slice(REGISTRY.indexOf('function openIngredientForm'), REGISTRY.indexOf('function capturePackPhoto')),
       /panels: ingredientPanels\(\),/],
-    ['js/catalogue/ingredient-create.js', codeOf(read('js/catalogue/ingredient-create.js')),
+    ['js/ingredient-create.js', codeOf(read('js/ingredient-create.js')),
       /panels: \{ allergens: allergensOn\(location\), nutrition: nutritionOn\(location\), packPhoto: false \}/],
     ['js/orders/registry.js', REGISTRY, /ingredientPanels\(\)\.allergens && allergenState\(item\)/],
     ['js/catalogue/catalogue-detail.js', DETAIL, /if \(!allergensOn\(currentSession\(\)\.location\)\)/],
@@ -302,7 +302,7 @@ test('⚠️ every class this screen writes is defined in a stylesheet it loads'
   for (const file of ['js/ingredient-record-form.js', 'js/orders/registry-settings.js',
     'js/orders/registry.js', 'js/orders/photo-capture.js',
     // The two shared cards and what they are built from (13 Sep 2026).
-    'js/supplier-record-form.js', 'js/record-ui.js', 'js/catalogue/ingredient-create.js']) {
+    'js/supplier-record-form.js', 'js/record-ui.js', 'js/ingredient-create.js']) {
     for (const m of codeOf(read(file)).matchAll(/\bclass: '([^'${}]+)'/g)) {
       for (const cls of m[1].split(/\s+/).filter(Boolean)) {
         if (!defined.has(cls)) offenders.push(`${file}: .${cls}`);

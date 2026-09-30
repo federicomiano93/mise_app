@@ -15,6 +15,7 @@ import { t } from '../i18n.js';
 import { el } from './dom.js';
 import { confirmDialog, alertDialog } from './confirm-dialog.js';
 import { dayLabel, dayPhrase, spellDay } from './day.js';
+import { recordUnit } from '../order-unit.js';
 import { isLegacyRecord, recordDate, recordedName, wholeNumber as num } from './archive.js';
 
 const BACK_ICON =
@@ -44,7 +45,7 @@ export function buildHistoryEditor(record, ingredients, actions) {
     .map(id => ({
       id,
       name: recordedName(id, ingById, record.names),
-      unit: ingById[id]?.unit || '',
+      unit: recordUnit(record, id, ingById[id]),
       qty: num(quantities[id]),
       stock: num(stock[id]),
     }))
@@ -171,11 +172,19 @@ export function buildHistoryEditor(record, ingredients, actions) {
     // stored `id` shadows the real document id — if the two ever diverged, the next
     // save would target the wrong document. The id is the first argument; it never
     // belongs in the payload.
-    const { id, ...fields } = record;
+    const { id, units: recordedUnits, ...fields } = record;
+    // The units frozen into the record stay, but only for items still ordered — a line
+    // taken down to 0 must not leave a unit behind for something that is not in the
+    // order. Left out entirely when none remain, like a record that never had any.
+    const nextUnits = {};
+    Object.keys(nextQuantities).forEach(itemId => {
+      if (recordedUnits?.[itemId]) nextUnits[itemId] = recordedUnits[itemId];
+    });
     actions.onSave(id, {
       ...fields,
       quantities: nextQuantities,
       stock: nextStock,
+      ...(Object.keys(nextUnits).length ? { units: nextUnits } : {}),
       updatedAt: new Date().toISOString(),
     });
   }

@@ -14,6 +14,7 @@ import { el } from './dom.js';
 import { confirmDialog, alertDialog } from './confirm-dialog.js';
 import { spellDay, dayLabel } from './day.js';
 import { recordedName, wholeNumber } from './archive.js';
+import { qtyWithUnit } from '../order-unit.js';
 import {
   pendingDeliveries, shortfall, stillToReorder, applyReorder, unansweredBefore,
 } from './deliveries.js';
@@ -135,7 +136,7 @@ function openMissingPickerScreen(entry, ctx, done) {
     list.appendChild(el('label', { class: 'missing-row' }, [
       box,
       el('span', { class: 'missing-name', text: label(id, order, ctx) }),
-      el('span', { class: 'missing-qty', text: String(wholeNumber(order.quantities[id])) }),
+      el('span', { class: 'missing-qty', text: qtyWithUnit(wholeNumber(order.quantities[id]), order.units?.[id]) }),
     ]));
   });
 
@@ -212,7 +213,7 @@ export function renderReorderBanner(host, ctx) {
 }
 
 async function openReorder(items, ctx) {
-  const lines = items.map(i => `• ${recordedName(i.id, ctx.ingredientsById || {}, {})} — ${i.qty}`);
+  const lines = items.map(i => `• ${recordedName(i.id, ctx.ingredientsById || {}, {})} — ${qtyWithUnit(i.qty, i.unit)}`);
 
   const go = await confirmDialog({
     title: t('orders.reorder.title'),

@@ -29,8 +29,8 @@ import { consumption, progressOf } from './inventory-model.js';
 
 // A product with no category typed, or the default 'Other', belongs to the same
 // group: three ways of saying "nothing was chosen here" that must not become
-// three headings. Copied from the Orders rule rather than imported — a feature
-// never imports from another feature's folder.
+// three headings. (Orders had the same rule until 30 Sep 2026, when its lists went flat
+// A→Z; this one is the Stocktake's own — a feature never imports from another's folder.)
 function categoryOf(ingredient) {
   const raw = String((ingredient && ingredient.category) || '').trim();
   return raw === 'Other' ? '' : raw;

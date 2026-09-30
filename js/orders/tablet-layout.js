@@ -5,7 +5,8 @@
 // ⚠️⚠️ AT EVERY SIZE SINCE 28 SEP 2026 (later): Federico wanted the order notices in
 // the green bar on the phone too, so the hosts move once, at start, whatever the
 // width, and never move back. The tablet query now only changes SIZES (orders.css)
-// and the split view (orders-main.js).
+// and whether the order total is drawn (orders-main.js paintMoney). The two-pane split
+// it also drove was removed on 30 Sep 2026: a supplier's order opens full screen.
 //
 // ⚠️ `t` IS CALLED AT RENDER TIME, NEVER FROZEN AT MODULE LOAD — this module is
 // imported before a venue is open, so a phrase fetched at the top of the file
@@ -61,8 +62,8 @@ function moveIn() {
 }
 
 // Whether the tablet query matches right now — the one place every other
-// module in Orders that needs to ask asks (js/orders/orders-main.js's split
-// view, this file's own initAlertsPanel below), so a future change to the
+// module in Orders that needs to ask asks (js/orders/orders-main.js's order
+// total, this file's own initAlertsPanel below), so a future change to the
 // query text only has to happen here.
 export function isTabletNow() {
   return window.matchMedia(TABLET_QUERY).matches;

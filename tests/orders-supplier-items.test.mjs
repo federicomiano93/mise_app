@@ -1,89 +1,74 @@
 // Unit tests for the read-only "what this supplier sells" screen (P15).
 //
-// Only the grouping/ordering decision is tested — that is the part with rules in it.
+// Only the ordering decision is tested — that is the part with rules in it.
 // The screen itself needs a real document and is checked by driving the app.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { itemGroups, countLabel } from '../js/orders/supplier-items.js';
+import { readFileSync } from 'node:fs';
+import { itemRows, countLabel } from '../js/orders/supplier-items.js';
 
 const ing = (id, name, extra = {}) => ({ id, name, active: true, ...extra });
 
-test('an empty supplier yields no groups at all', () => {
-  assert.deepEqual(itemGroups([]), []);
-  assert.deepEqual(itemGroups(null), []);
+test('an empty supplier yields no rows at all', () => {
+  assert.deepEqual(itemRows([]), []);
+  assert.deepEqual(itemRows(null), []);
 });
 
-test('a product with no category is shown bare, with no heading to sit under', () => {
-  const groups = itemGroups([ing('a', 'Olive oil')]);
-  assert.equal(groups.length, 1);
-  assert.equal(groups[0].category, '');
-  assert.deepEqual(groups[0].items, [{ id: 'a', label: 'Olive oil', unit: '' }]);
+test('rows are ONE flat list — no category headings, whatever the categories', () => {
+  const rows = itemRows([ing('a', 'Olive oil', { category: 'Other' })]);
+  assert.deepEqual(rows, [{ id: 'a', label: 'Olive oil', unit: '' }]);
+  const src = readFileSync(new URL('../js/orders/supplier-items.js', import.meta.url), 'utf8');
+  assert.doesNotMatch(src, /ing-category/);
+  assert.doesNotMatch(src, /ingredient-category/);
 });
 
-test('"Other" is treated as no category — it is the default, not information', () => {
-  const groups = itemGroups([ing('a', 'Olive oil', { category: 'Other' })]);
-  assert.equal(groups[0].category, '');
-});
-
-test('named categories come A-Z, each with its own heading', () => {
-  const groups = itemGroups([
+test('rows run A-Z across categories, as one list', () => {
+  const rows = itemRows([
     ing('c', 'Milk', { category: 'Fresh' }),
     ing('a', 'Flour', { category: 'Dry' }),
+    ing('d', 'Cling film'),
     ing('b', 'Butter', { category: 'Fresh' }),
   ]);
-  assert.deepEqual(groups.map(g => g.category), ['Dry', 'Fresh']);
-  assert.deepEqual(groups[1].items.map(i => i.label), ['Butter', 'Milk']);
-});
-
-// The whole reason the uncategorised block is not left in alphabetical position:
-// rows with no heading must never appear UNDER a heading they do not belong to.
-test('the uncategorised block comes FIRST, above every heading', () => {
-  const groups = itemGroups([
-    ing('a', 'Flour', { category: 'Dry' }),
-    ing('b', 'Cling film'),
-    ing('c', 'Milk', { category: 'Fresh' }),
-  ]);
-  assert.deepEqual(groups.map(g => g.category), ['', 'Dry', 'Fresh']);
-  assert.deepEqual(groups[0].items.map(i => i.label), ['Cling film']);
+  assert.deepEqual(rows.map(r => r.label), ['Butter', 'Cling film', 'Flour', 'Milk']);
 });
 
 test('rows sort by the label a person reads, not by the name alone', () => {
-  const groups = itemGroups([
+  const rows = itemRows([
     ing('a', 'Flour', { weight: '25kg' }),
     ing('b', 'Flour', { weight: '1kg' }),
   ]);
-  assert.deepEqual(groups[0].items.map(i => i.label), ['Flour 1kg', 'Flour 25kg']);
+  assert.deepEqual(rows.map(r => r.label), ['Flour 1kg', 'Flour 25kg']);
 });
 
 // Without the tie-break, two identical labels can swap places between repaints and
 // the rows jump under the eye reading them.
 test('identical labels keep a stable order, broken by id', () => {
-  const forwards = itemGroups([ing('z', 'Salt'), ing('a', 'Salt')]);
-  const backwards = itemGroups([ing('a', 'Salt'), ing('z', 'Salt')]);
-  assert.deepEqual(forwards[0].items.map(i => i.id), ['a', 'z']);
-  assert.deepEqual(backwards[0].items.map(i => i.id), ['a', 'z']);
+  const forwards = itemRows([ing('z', 'Salt'), ing('a', 'Salt')]);
+  const backwards = itemRows([ing('a', 'Salt'), ing('z', 'Salt')]);
+  assert.deepEqual(forwards.map(i => i.id), ['a', 'z']);
+  assert.deepEqual(backwards.map(i => i.id), ['a', 'z']);
 });
 
 test('a missing weight leaves no trailing space in the label', () => {
-  assert.equal(itemGroups([ing('a', 'Semolina')])[0].items[0].label, 'Semolina');
+  assert.equal(itemRows([ing('a', 'Semolina')])[0].label, 'Semolina');
 });
 
 test('a nameless product is named honestly, never by its document id', () => {
-  const label = itemGroups([{ id: 'Fdx92kQ1' }])[0].items[0].label;
+  const label = itemRows([{ id: 'Fdx92kQ1' }])[0].label;
   assert.equal(label, 'Unnamed product');
   assert.ok(!label.includes('Fdx92kQ1'));
 });
 
 test('a missing unit is an empty string, so the screen can leave it out', () => {
-  assert.equal(itemGroups([ing('a', 'Semolina')])[0].items[0].unit, '');
-  assert.equal(itemGroups([ing('a', 'Semolina', { unit: 'bag' })])[0].items[0].unit, 'bag');
+  assert.equal(itemRows([ing('a', 'Semolina')])[0].unit, '');
+  assert.equal(itemRows([ing('a', 'Semolina', { unit: 'bag' })])[0].unit, 'bag');
 });
 
-test('nothing in the list is dropped, whatever the shape', () => {
-  const groups = itemGroups([ing('a', 'Flour'), null, ing('b', 'Salt', { category: 'Dry' })]);
-  const total = groups.reduce((n, g) => n + g.items.length, 0);
-  assert.equal(total, 2);
+test('nothing real in the list is dropped, and the input is not reordered', () => {
+  const input = [ing('b', 'Salt'), null, ing('a', 'Flour')];
+  assert.equal(itemRows(input).length, 2);
+  assert.deepEqual(input.map(i => i?.id), ['b', undefined, 'a']);
 });
 
 test('the count reads as English, singular and plural', () => {

@@ -94,3 +94,21 @@ test('a supplier with nothing ordered: the summary is empty and the message carr
   const items = orderedItems(INGREDIENTS, {});
   assert.equal(buildOrderMessage([{ supplierName: SUPPLIER.name, items }]), '');
 });
+
+// ── A line priced in ITS unit (30 Sep 2026) ──────────────────────────────────
+// Flour is sold by the case of 4 bags at 20. The same card is 20 a cartone or 5 a busta,
+// and the order must be priced in whichever the line was placed in.
+test('money: a line is priced in its own unit — cartone by default, busta when chosen', () => {
+  const flour = {
+    id: 'flour', name: 'Flour', weight: '2.5kg', unit: 'cartone', packUnit: 'busta',
+    priceUnit: 'kg', pricePerUnit: 2, unitWeightKg: null, vatRate: 4,
+    caseCount: 4, caseItemSize: 2.5, caseItemUnit: 'pack', casePrice: 20,
+  };
+  const asCarton = supplierSummary(SUPPLIER, [flour], { flour: { qty: 2 } });
+  const asBag = supplierSummary(SUPPLIER, [flour], { flour: { qty: 2, unit: 'busta' } });
+  assert.equal(asCarton.costLines[0].unitCost, 20);
+  assert.equal(asBag.costLines[0].unitCost, 5);
+  assert.equal(asBag.costLines[0].unit, 'busta');
+  assert.equal(asBag.totals.net, 10);
+  assert.equal(asCarton.costLines[0].unit, 'cartone');
+});

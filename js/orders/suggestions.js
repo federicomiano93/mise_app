@@ -22,7 +22,9 @@
 // Bank holidays do NOT change the suggestion — they are alert-only (a week-before
 // notice and a delivery-day-conflict notice).
 
-const MIN_ORDERS = 4;       // orders of this ingredient before suggestions activate
+import { sameUnit, recordUnit, isDefaultUnit } from '../order-unit.js';
+
+const MIN_ORDERS = 4;      // orders of this ingredient before suggestions activate
 const WINDOW_ORDERS = 8;    // average over at most this many recent orders
 
 // Read a stored quantity defensively: anything that is not a finite, non-negative
@@ -49,9 +51,15 @@ function num(value) {
 // Only records that actually ORDERED this ingredient count: `quantities` holds
 // ordered rows only, so a day the shelf was full and nothing was ordered is
 // absent, and correctly does not drag the par level around.
-export function computeSuggestion(ingredientId, currentStock, history) {
+//
+// ⚠️ `ing` (the card) makes the par level UNIT-AWARE: an order placed in another unit
+// than the card's («2 × busta» on a «cartone» card) is skipped, never converted — the
+// average of cartoni and buste is a number of nothing. Without `ing` every order counts,
+// as before the unit choice existed.
+export function computeSuggestion(ingredientId, currentStock, history, ing = null) {
   const orders = (history || [])
     .filter(r => r.quantities && Object.prototype.hasOwnProperty.call(r.quantities, ingredientId))
+    .filter(r => !ing || sameUnit(recordUnit(r, ingredientId, ing), ing.unit))
     .sort((a, b) => String(b.date || b.weekStart || '').localeCompare(String(a.date || a.weekStart || '')));
 
   if (orders.length < MIN_ORDERS) {
@@ -105,6 +113,8 @@ export function unusualQuantities(ingredients, entries, suggest) {
     .map(ing => {
       const qty = num(entries?.[ing.id]?.qty);
       if (!qty) return null;
+      // The usual amount counts the card's unit; a line in another unit has none.
+      if (!isDefaultUnit(entries?.[ing.id], ing)) return null;
       const result = suggest(ing.id, 0);
       if (!result?.active || !isUnusualQuantity(qty, result.par)) return null;
       return { id: ing.id, name: ing.name || ing.id, qty, usual: result.par };

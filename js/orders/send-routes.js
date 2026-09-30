@@ -17,6 +17,13 @@
 
 export const ROUTES = Object.freeze(['manager', 'whatsapp', 'whatsappSupplier', 'email']);
 
+// Does this road put the order in the SUPPLIER's hands (WhatsApp, email)? «Manager» sends an
+// in-app list to a colleague: nothing leaves the building and it is never merged into the
+// history, so the same-day unit check has nothing to say about it.
+export function routeSendsToSupplier(route) {
+  return ROUTES.includes(route) && route !== 'manager';
+}
+
 // The two that address one supplier directly need a way to reach it.
 const NEEDS = Object.freeze({ whatsappSupplier: 'phone', email: 'email' });
 

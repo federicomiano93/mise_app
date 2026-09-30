@@ -21,7 +21,7 @@ import { currentSession } from '../firebase.js';
 import { orderedItems } from './order-text.js';
 
 // suppliers: array; ingredientsBySupplier: { supplierId: [ingredient] };
-// entries: { ingredientId: { qty, stock } }; callbacks: { onBack, onSent };
+// entries: { ingredientId: { qty, stock } }; callbacks: { onBack, onSent, beforeSend };
 // format: { grouped, onChange } — the remembered message-format choice, owned by
 // orders-main so every send path reads the same one.
 export function buildSendScreen(suppliers, ingredientsBySupplier, entries, callbacks, format) {
@@ -51,17 +51,23 @@ export function buildSendScreen(suppliers, ingredientsBySupplier, entries, callb
     // supplier directly need a sentence under them anyway.
   }, {
     onBack: () => callbacks.onBack(),
-    onConfirm: (selected, { grouped }) => chooseAndSend({
-      rows: selected,
-      settings: callbacks.sendSettings,
-      canManage: callbacks.canManage === true,
-      // ⚠️ ONLY THE PICKED SUPPLIERS, matched by ID. The chooser has to know which
-      // of them can actually be reached, and by name they could not be told apart.
-      suppliers: selected.map(r => suppliers.find(s => s.id === r.id)).filter(Boolean),
-      locationName: currentSession().name,
-      grouped,
-      onSendToManager: callbacks.onSendToManager,
-      onSent: callbacks.onSent,
-    }),
+    onConfirm: (selected, { grouped }) => {
+      // ⚠️ NOT async, and the unit check is not here: chooseAndSend runs `beforeSend` once the
+      // road is known (an in-app list to a manager needs no check), and synchronously when
+      // nothing clashes, so WhatsApp still opens inside the tap.
+      return chooseAndSend({
+        beforeSend: callbacks.beforeSend,
+        rows: selected,
+        settings: callbacks.sendSettings,
+        canManage: callbacks.canManage === true,
+        // ⚠️ ONLY THE PICKED SUPPLIERS, matched by ID. The chooser has to know which
+        // of them can actually be reached, and by name they could not be told apart.
+        suppliers: selected.map(r => suppliers.find(s => s.id === r.id)).filter(Boolean),
+        locationName: currentSession().name,
+        grouped,
+        onSendToManager: callbacks.onSendToManager,
+        onSent: callbacks.onSent,
+      });
+    },
   });
 }

@@ -13,6 +13,8 @@
 import { t } from '../i18n.js';
 import { supplierLabel } from '../supplier-label.js';
 import { toISODate, addDays, isBefore } from './day.js';
+import { compareLabels } from './order-text.js';
+import { cleanUnit, sameUnit, lineUnit, entryUnit, recordUnit } from '../order-unit.js';
 
 // A quantity, made safe: whole, never negative, never NaN — and never Infinity.
 //
@@ -69,6 +71,7 @@ export function buildSupplierArchive({ supplier, ingredients, entries, date, now
   const quantities = {};
   const stock = {};
   const names = {};
+  const units = {};
 
   ingredientsOf(supplier.id, ingredients).forEach(ing => {
     const entry = entries?.[ing.id];
@@ -78,6 +81,11 @@ export function buildSupplierArchive({ supplier, ingredients, entries, date, now
     if (qty > 0) {
       quantities[ing.id] = qty;
       names[ing.id] = ingredientLabel(ing);
+      // Frozen for every line that HAD a choice (even the default one: «1 cartone» and
+      // «1 busta» are different orders) and for any non-default unit. A line with no
+      // choice stays out, so an ordinary record keeps its old shape.
+      const unit = lineUnit(ing, entry);
+      if (unit) units[ing.id] = unit;
     }
     if (qty > 0 || onHand > 0) stock[ing.id] = onHand;
   });
@@ -97,6 +105,7 @@ export function buildSupplierArchive({ supplier, ingredients, entries, date, now
     // order and a row of raw document ids. Same reasoning as supplierName, which has
     // been frozen into the record since the per-day model.
     names,
+    ...(Object.keys(units).length ? { units } : {}),
     createdAt: timestamp,
     updatedAt: timestamp,
   };
@@ -106,6 +115,21 @@ export function buildSupplierArchive({ supplier, ingredients, entries, date, now
 // name frozen into a record matches what the live row would have shown.
 export function ingredientLabel(ing) {
   return [ing?.name, ing?.weight].filter(Boolean).join(' ');
+}
+
+// The order every list of a supplier's products is read in: by the label a person reads,
+// numerically («Flour 5kg» before «Flour 25kg» — the message's own compareLabels), then by
+// id, so two identical labels cannot swap places between repaints and make the rows jump
+// under the eye. A nameless item has an empty label and so sorts first — it stays visible
+// at the top instead of hiding.
+export function compareByLabel(a, b) {
+  return compareLabels(ingredientLabel(a), ingredientLabel(b))
+    || String(a?.id).localeCompare(String(b?.id));
+}
+
+// A sorted COPY — the caller's list is the shared state and is never reordered.
+export function sortByLabel(list) {
+  return (list || []).filter(Boolean).slice().sort(compareByLabel);
 }
 
 // What a PAST order calls one of its items, in order of preference:
@@ -147,7 +171,12 @@ export function quantityPathsFor(supplierIds, ingredients) {
   const paths = [];
   ids.forEach(supplierId => {
     ingredientsOf(supplierId, ingredients, { activeOnly: false })
-      .forEach(ing => paths.push(`entries.${ing.id}.qty`));
+      .forEach(ing => {
+        paths.push(`entries.${ing.id}.qty`);
+        // The unit goes with the quantity: a cleared row starts again in the card's own
+        // unit (the default), never in whatever the last order happened to use.
+        paths.push(`entries.${ing.id}.unit`);
+      });
     paths.push(`days.${supplierId}`);
   });
   return paths;
@@ -175,13 +204,21 @@ export function changedEntries(next, known) {
     const before = (known || {})[id];
     const qty = num(entry?.qty);
     const stock = num(entry?.stock);
+    const unit = cleanUnit(entry?.unit);
+    const beforeUnit = cleanUnit(before?.unit);
     // Merely LOOKING at a supplier materialises a blank row in memory, and an
     // all-zero row that the document never had says nothing worth storing.
     // (A row that EXISTS and is taken down to zero is a real change: `before`
-    // is there, so it still goes.)
-    if (!before && qty === 0 && stock === 0) return;
-    if (!before || num(before.qty) !== qty || num(before.stock) !== stock) {
-      out[id] = { qty, stock };
+    // is there, so it still goes.) A row that carries a unit is not blank.
+    if (!before && qty === 0 && stock === 0 && !unit) return;
+    if (!before || num(before.qty) !== qty || num(before.stock) !== stock || beforeUnit !== unit) {
+      const row = { qty, stock };
+      // ⚠️ `unit: ''` IS SENT ON PURPOSE when a row goes back to the card's unit: a merge
+      // write never deletes a nested key, so omitting it would leave the old unit in the
+      // document and the row would come back as «busta» on the next snapshot. An
+      // ordinary entry (no unit on either side) keeps exactly {qty, stock}.
+      if (unit || beforeUnit) row.unit = unit;
+      out[id] = row;
     }
   });
   return out;
@@ -202,13 +239,33 @@ export function changedDays(next, known) {
 // would silently destroy the first order — the rows are cleared after archiving,
 // so the second payload only ever carries the forgotten items). The stock reading
 // is a measurement, not a total: the newer one wins.
-export function mergeArchives(existing, incoming) {
+//
+// ⚠️ NEVER ADD TWO DIFFERENT UNITS. 2 cartoni + 3 buste is neither 5 of anything nor a
+// number we may convert (we do not know the case size here), so the same ingredient
+// ordered twice in one day in different units THROWS `orders/unit-conflict` and nothing
+// is written. `cardUnitOf(id)` supplies the unit of a record that froze none (every
+// record from before the choice existed is in the card's own unit).
+export function mergeArchives(existing, incoming, { cardUnitOf } = {}) {
   if (!existing) return incoming;
+
+  const effectiveUnit = (record, id) => recordUnit(record, id, { unit: cardUnitOf?.(id) });
+  const conflicts = Object.keys(incoming.quantities || {}).filter(id =>
+    num(existing.quantities?.[id]) > 0 && num(incoming.quantities[id]) > 0 &&
+    !sameUnit(effectiveUnit(existing, id), effectiveUnit(incoming, id)));
+  if (conflicts.length) {
+    // The message is the code itself: never shown (placeOrder says it through t()), and a
+    // sentence here would be a phrase that reaches a screen without the dictionary.
+    const err = new Error('orders/unit-conflict');
+    err.code = 'orders/unit-conflict';
+    err.ids = conflicts;
+    throw err;
+  }
 
   const quantities = { ...(existing.quantities || {}) };
   Object.entries(incoming.quantities || {}).forEach(([id, qty]) => {
     quantities[id] = num(quantities[id]) + num(qty);
   });
+  const units = { ...(existing.units || {}), ...(incoming.units || {}) };
 
   return {
     ...incoming,
@@ -219,9 +276,39 @@ export function mergeArchives(existing, incoming) {
     // rows placed earlier in the day — and a phone still on the previous version
     // sends no names at all, which must not erase the ones already stored.
     names: { ...(existing.names || {}), ...(incoming.names || {}) },
+    // Same reasoning as names: keep the units of the rows placed earlier in the day.
+    ...(Object.keys(units).length ? { units } : {}),
     createdAt: existing.createdAt || incoming.createdAt,
     updatedAt: incoming.updatedAt,
   };
+}
+
+// ⚠️ THE SAME QUESTION mergeArchives ANSWERS, asked BEFORE anything leaves the app: which of
+// the draft's lines would meet today's record of this supplier in a DIFFERENT unit? The
+// merge throws on these, but by then a WhatsApp message may already have gone to the
+// supplier, so the screens ask this first. Both use recordUnit() and sameUnit(), so «the
+// same unit» has one meaning.
+//
+// existingRecord: today's history record for this supplier, or null/undefined.
+// -> [{ id, name, unit }] — `unit` is the one ALREADY RECORDED, what the person must stay in.
+export function unitConflicts(existingRecord, entries, ingredients, supplierId) {
+  if (!existingRecord) return [];
+  const out = [];
+  ingredientsOf(supplierId, ingredients).forEach(ing => {
+    const entry = entries?.[ing.id];
+    if (!entry || num(entry.qty) <= 0 || num(existingRecord.quantities?.[ing.id]) <= 0) return;
+    const recorded = recordUnit(existingRecord, ing.id, ing);
+    if (!sameUnit(entryUnit(entry, ing), recorded)) {
+      out.push({ id: ing.id, name: ingredientLabel(ing), unit: recorded });
+    }
+  });
+  return out;
+}
+
+// «Flour 25kg — cartone, Yeast — busta»: each clashing line with the unit it must stay in,
+// joined with commas (no singular/plural agreement to get wrong in either language).
+export function unitConflictList(conflicts) {
+  return (conflicts || []).map(c => `${c.name} — ${c.unit}`).join(', ');
 }
 
 // Split day sections (the output of groupHistoryByDay) into the ones History shows

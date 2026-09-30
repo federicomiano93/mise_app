@@ -1,6 +1,6 @@
 // order-cost-view.js — the money DRAWN on screen: one line's cost, and the
 // totals box under a supplier's whole order. Shared by js/orders/
-// supplier-detail.js (the tablet pane) and js/orders/order-summary-view.js
+// orders-main.js (the tablet's supplier screen) and js/orders/order-summary-view.js
 // (the summary sheet) — both show the SAME numbers from js/order-cost.js, so
 // this is the one place that turns them into DOM rather than two.
 //
@@ -13,7 +13,8 @@
 import { t } from '../i18n.js';
 import { el } from './dom.js';
 import { formatMoney } from '../price-model.js';
-import { unitCost, orderCost } from '../order-cost.js';
+import { lineUnitCost, orderCost } from '../order-cost.js';
+import { entryUnit } from '../order-unit.js';
 
 // One ordered line's money, as the small mono line under its quantity box /
 // beside its label: "4 × €45.00 = €180.00 + VAT 4%", or the two things that
@@ -73,23 +74,24 @@ export function buildTotalsBox(totals) {
   return el('div', { class: 'totbox', 'aria-label': t('orders.cost.orderTotal') }, [...rows, ...warnings]);
 }
 
-// The money inside the tablet PANE: the totals box above «Order placed», and nothing
-// else. 📌 No cost line under each row (Federico, 28 Sep 2026: «devo vedere solo il
-// totale alla fine») — the lines are still COUNTED, only not drawn; the box's own
-// warning still says how many had no price. Painted from OUTSIDE the shared row builder
-// (js/orders/ingredients.js serves the phone, the flat list and the History editor
-// too, and none of them shows money), onto the rows already on screen — so a
-// keystroke adds or swaps one small line and never rebuilds the field being typed.
+// The money on the tablet's full-screen supplier view: the totals box above «Order
+// placed», and nothing else. 📌 No cost line under each row (Federico, 28 Sep 2026:
+// «devo vedere solo il totale alla fine») — the lines are still COUNTED, only not
+// drawn; the box's own warning still says how many had no price. Painted from OUTSIDE
+// the shared row builder (js/orders/ingredients.js serves the phone, the flat list and
+// the History editor too, and none of them shows money), onto the rows already on
+// screen — so a keystroke adds or swaps one small box and never rebuilds the field
+// being typed.
 //
 // `show` false — the account may not read prices, the prices have not arrived yet,
-// or the screen is not in the tablet split — removes every trace instead: money is
-// never drawn from a guess, and never on a phone.
+// or the screen is a phone's — removes every trace instead: money is never drawn
+// from a guess, and never on a phone.
 //
 // root: the supplier screen's node; ingredients: that supplier's (with prices);
 // entries: the draft quantities.
-export function paintPaneMoney(root, ingredients, entries, show) {
+export function paintOrderMoney(root, ingredients, entries, show) {
   if (!root) return;
-  root.querySelectorAll('.pane-money').forEach(node => node.remove());
+  root.querySelectorAll('.order-money').forEach(node => node.remove());
   if (!show) return;
 
   const byId = new Map((ingredients || []).map(ing => [ing.id, ing]));
@@ -98,12 +100,13 @@ export function paintPaneMoney(root, ingredients, entries, show) {
     const ing = byId.get(row.dataset.ing);
     const qty = Number(entries?.[row.dataset.ing]?.qty);
     if (!ing || !Number.isFinite(qty) || qty <= 0) return;
-    lines.push({ qty, unitCost: unitCost(ing, ing), vatRate: ing.vatRate != null ? Number(ing.vatRate) : null });
+    // Priced in THIS line's unit (a busta is not a cartone), as order-summary.js does.
+    lines.push({ qty, unitCost: lineUnitCost(ing, ing, entryUnit(entries[row.dataset.ing], ing)), vatRate: ing.vatRate != null ? Number(ing.vatRate) : null });
   });
 
   const box = buildTotalsBox(orderCost(lines));
   if (!box) return;
-  box.classList.add('pane-money');
+  box.classList.add('order-money');
   const place = root.querySelector('.supplier-place-btn');
   if (place) place.before(box);
   else root.querySelector('.supplier-detail-body')?.appendChild(box);

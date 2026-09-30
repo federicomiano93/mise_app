@@ -54,7 +54,7 @@ test('an empty weight is skipped, leaving no double space', () => {
   assert.equal(itemLabel('Bacon', '2.27kg'), 'Bacon 2.27kg');
 });
 
-test('the order unit never reaches the supplier — only the number', () => {
+test('the order unit never reaches the supplier for an ingredient WITHOUT a unit choice — only the number', () => {
   const text = buildOrderMessage([
     { supplierName: 'S', items: [{ name: 'Bacon', weight: '2.27kg', qty: 3 }] },
   ], CLUB);
@@ -270,4 +270,57 @@ test('with no name the order goes out anonymous rather than wrongly signed', () 
   const text = buildOrderMessage(
     [{ supplierName: 'Bako', items: [{ name: 'Flour', weight: '25kg', qty: 1 }] }]);
   assert.ok(text.startsWith('*Order*\n'));
+});
+
+// ── Ingredients that can be ordered in more than one unit (30 Sep 2026) ──────
+// «2 cartoni» and «2 buste» are different orders, so a line of such an ingredient says
+// which — and ONLY such a line: everything else stays byte-identical.
+import { orderedItems, summaryLines } from '../js/orders/order-text.js';
+
+const CHOICE = { id: 'f', name: 'Flour', weight: '2.5kg', unit: 'cartone', packUnit: 'busta' };
+const PLAIN = { id: 'b', name: 'Bacon', weight: '2.27kg', unit: 'casse' };
+
+test('a line with a unit choice says its unit; the default choice says it too', () => {
+  const chosen = orderedItems([CHOICE], { f: { qty: 2, stock: 0, unit: 'busta' } });
+  assert.equal(buildOrderMessage([{ supplierName: 'S', items: chosen }], CLUB),
+    '*Order — The Italian Club*\n\n*S*\n- Flour 2.5kg: 2 × busta');
+  const dflt = orderedItems([CHOICE], { f: { qty: 2, stock: 0 } });
+  assert.equal(buildOrderMessage([{ supplierName: 'S', items: dflt }], CLUB),
+    '*Order — The Italian Club*\n\n*S*\n- Flour 2.5kg: 2 × cartone');
+});
+
+test('lines of ingredients WITHOUT a choice are byte-identical to before', () => {
+  const items = orderedItems([PLAIN], { b: { qty: 3, stock: 0 } });
+  assert.deepEqual(items, [{ name: 'Bacon', weight: '2.27kg', qty: 3 }]);
+  assert.equal(buildOrderMessage([{ supplierName: 'S', items }], CLUB),
+    '*Order — The Italian Club*\n\n*S*\n- Bacon 2.27kg: 3');
+});
+
+test('summary lines and message lines stay the same thing for a unit line', () => {
+  const items = orderedItems([CHOICE, PLAIN], { f: { qty: 2, unit: 'busta' }, b: { qty: 1 } });
+  const text = buildOrderMessage([{ supplierName: 'S', items }], CLUB);
+  const fromSummary = summaryLines(items).map(({ label, qty, unit }) =>
+    `- ${label}: ${unit ? `${qty} × ${unit}` : qty}`);
+  assert.deepEqual(text.split('\n').slice(3), fromSummary);
+});
+
+test('one shopping list never adds different units together, and does add equal ones', () => {
+  const text = buildOrderMessage([
+    { supplierName: 'A', items: [{ name: 'Flour', weight: '2.5kg', qty: 2, unit: 'busta' }] },
+    { supplierName: 'B', items: [
+      { name: 'Flour', weight: '2.5kg', qty: 1, unit: 'cartone' },
+      { name: 'Flour', weight: '2.5kg', qty: 3, unit: 'Busta' },
+    ] },
+  ], { ...CLUB, grouped: false });
+  assert.equal(text,
+    '*Order — The Italian Club*\n\n- Flour 2.5kg: 5 × busta\n- Flour 2.5kg: 1 × cartone');
+});
+
+test('a re-sent record shows only the units it froze', () => {
+  const byId = indexById([CHOICE, PLAIN]);
+  const items = itemsFromQuantities({ f: 4, b: 2 }, byId, {}, { f: 'busta' });
+  assert.equal(items.find(i => i.name === 'Flour').unit, 'busta');
+  assert.equal('unit' in items.find(i => i.name === 'Bacon'), false);
+  // An old record with no `units` reads exactly as it always did.
+  assert.equal('unit' in itemsFromQuantities({ f: 4 }, byId, {})[0], false);
 });

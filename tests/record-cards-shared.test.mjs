@@ -66,7 +66,7 @@ test('an ingredient of exactly that name already on file is not offered again', 
 });
 
 test('⚠️⚠️ a recipe row is never linked to packaging, and the Catalogue\'s card offers no «Tipo»', () => {
-  const create = codeOf(read('js/catalogue/ingredient-create.js'));
+  const create = codeOf(read('js/ingredient-create.js'));
   assert.match(create, /presetKind: 'ingredient',/);
   assert.doesNotMatch(create, /showKind/);
   assert.doesNotMatch(codeOf(read('js/ingredient-record-form.js')), /showKind|orders\.field\.kind/, 'no «Tipo» menu on either card');
@@ -113,14 +113,18 @@ test('⚠️⚠️ creating links the row, from the list and from the chooser al
 // ── The card in the Catalogue is THE card ────────────────────────────────────
 
 test('⚠️⚠️ the Catalogue opens the same card, OVER the editor, and backing out saves nothing', () => {
-  const create = codeOf(read('js/catalogue/ingredient-create.js'));
-  assert.match(create, /import \{ buildIngredientForm \} from '\.\.\/ingredient-record-form\.js';/,
+  const create = codeOf(read('js/ingredient-create.js'));
+  assert.match(create, /import \{ buildIngredientForm \} from '\.\/ingredient-record-form\.js';/,
     'the same card, not a lighter copy');
   assert.match(create, /document\.body\.appendChild\(node\);/,
     'a layer on top: swapping the screen would destroy the recipe rows typed so far');
   assert.doesNotMatch(create, /\bswap\(|replaceChildren\(/);
   assert.match(create, /saved = \{ id: newId, name: payload\.name, kind: payload\.kind \};/);
-  assert.match(create, /onCancel: \(\) => \{ saved = null; finish\(\); \},/);
+  // Cancel and Back share ONE leave(): it asks first when something was typed, then forgets
+  // any save result and closes.
+  assert.match(create, /onCancel: leave,/);
+  assert.match(create, /onBack: leave,/);
+  assert.match(create, /const leave = async \(\) => \{\s*if \(typedInto\(snapshot, cardLayer\) && !\(await confirmDiscard\(\)\)\) return;\s*saved = null;\s*finish\(\);\s*\};/);
   assert.match(create, /packPhotoOn: \(\) => false,/, 'the paid photograph stays where it is switched on');
   assert.doesNotMatch(create, /price-model\.js|recipe-cost-model\.js|formatRate|pricePerKg/,
     'the Catalogue itself still handles no money: the price box is the card\'s own');
@@ -135,7 +139,7 @@ test('⚠️ «+ Nuovo fornitore» selects the supplier it has just made, in bot
   assert.match(codeOf(read('js/orders/registry.js')),
     /return new Promise\(resolve => openSupplierForm\(null, \{ onSaved: resolve, onClosed: \(\) => resolve\(null\) \}\)\);/,
     'the promise settles on Back too, or the button stays disabled for the life of the card');
-  assert.match(codeOf(read('js/catalogue/ingredient-create.js')), /createSupplier: \(\) => createSupplier\(layers\),/);
+  assert.match(codeOf(read('js/ingredient-create.js')), /createSupplier: \(\) => createSupplier\(layers, layerClass\),/);
   const card = codeOf(read('js/supplier-record-form.js'));
   assert.match(card, /onDone\?\.\(\{ id: id \|\| item\?\.id \|\| null, name: supplierLabel\(payload\) \}\);/);
   assert.match(card, /await reportFailure\('save', payload\.name, err\);\s*return;/, 'a failed save never reports success');

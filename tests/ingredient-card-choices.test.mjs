@@ -19,7 +19,7 @@ test('the card imports no feature folder, and receives its lists as parameters',
 
 test('both callers hand the lists in', () => {
   assert.match(read('js/orders/registry.js'), /categories: data\.categories\?\.\(item\?\.category\)/);
-  assert.match(read('js/catalogue/ingredient-create.js'), /categories: categoryChoices\(\{ stored: undefined/);
+  assert.match(read('js/ingredient-create.js'), /categories: categoryChoices\(\{ stored: storedCategories/);
 });
 
 test('the rules whitelist and cap the category list', () => {

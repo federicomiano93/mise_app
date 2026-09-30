@@ -82,7 +82,7 @@ test('the one Delete gate, and the one price gate, are still where they were', (
   // nobody tells it: a forgotten argument draws no price rather than a refused one.
   assert.match(codeOf(FORM), /presetName = '', mayPrice = false,/,
     'the ingredient form must draw the price only when told, and default to not drawing it');
-  for (const opener of ['js/orders/registry.js', 'js/catalogue/ingredient-create.js']) {
+  for (const opener of ['js/orders/registry.js', 'js/ingredient-create.js']) {
     assert.match(codeOf(read(opener)), /mayPrice: mayWritePrices\(\),/,
       `${opener} must decide the price with the one rule, mayWritePrices()`);
   }
@@ -363,16 +363,17 @@ test('the settings panel kept the settings and gave up the records', () => {
 test('each moved piece has exactly one home, and is opened by the two screens that need it', () => {
   const files = ['js/orders/registry.js', 'js/orders/registry-main.js', 'js/orders/management.js',
     'js/orders/orders-main.js', 'js/catalogue/catalogue-main.js', 'js/catalogue/catalogue-editor.js',
-    'js/catalogue/ingredient-create.js'];
+    'js/ingredient-create.js'];
   const importers = (pattern) => files.filter(f => pattern.test(read(f)));
   // ⚠️ Since 13 Sep 2026 the two cards live in js/ root: «Fornitori e ingredienti» opens them,
-  // and so does a recipe row in the Catalogue. Nobody else — a third caller would be a third
-  // place deciding the price and the panels.
-  assert.deepEqual(importers(/from '\.\.\/ingredient-record-form\.js'/),
-    ['js/orders/registry.js', 'js/catalogue/ingredient-create.js'],
-    'the ingredient card is reached from the records screen and from a recipe row, nowhere else');
-  assert.deepEqual(importers(/from '\.\.\/supplier-record-form\.js'/),
-    ['js/orders/registry.js', 'js/catalogue/ingredient-create.js']);
+  // and so does js/ingredient-create.js (a recipe row in the Catalogue, and since 30 Sep 2026
+  // «+ Add ingredient» on a supplier's order screen). Nobody else — a third caller would be a
+  // third place deciding the price and the panels.
+  assert.deepEqual(importers(/from '\.{1,2}\/ingredient-record-form\.js'/),
+    ['js/orders/registry.js', 'js/ingredient-create.js'],
+    'the ingredient card is reached from the records screen and through ingredient-create.js, nowhere else');
+  assert.deepEqual(importers(/from '\.{1,2}\/supplier-record-form\.js'/),
+    ['js/orders/registry.js', 'js/ingredient-create.js']);
   assert.throws(() => read('js/orders/ingredient-form.js'), /ENOENT/,
     'the old copy is gone — two ingredient cards would be two places to fix an allergen rule');
   assert.deepEqual(files.filter(f => /from '\.\/registry\.js'/.test(read(f))), ['js/orders/registry-main.js']);
