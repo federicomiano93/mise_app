@@ -8,14 +8,18 @@
 //                                  a change on his phone BEFORE it goes live
 //                                  (.github/workflows/preview.yml, scripts/seed-preview.mjs)
 //
-// ⚠️ PRODUCTION IS THE DEFAULT. The live site, localhost (which js/firebase.js then diverts to
-// the emulator by hostname, as before) and any host this file does not recognise all get the
-// production config — exactly what every page got before this file existed.
+// ⚠️⚠️ PRODUCTION IS AN ALLOWLIST, AND EVERYTHING ELSE IS THE PREVIEW. Production's config goes
+// only to the live site and to localhost (which js/firebase.js then diverts to the emulator,
+// with production's project id, exactly as before). Any other host — a preview channel on
+// web.app OR on firebaseapp.com, a trailing-dot spelling, a LAN address, a tunnel, a copy of
+// the app served anywhere — gets the preview project. The first version did the opposite
+// (preview only on recognised hosts) and a review found two preview addresses that fell
+// through to production: when this file is wrong, it must be wrong towards an EMPTY TEST APP,
+// never towards somebody writing real orders.
 //
-// ⚠️⚠️ THE DIRECTION THAT MATTERS IS THE OTHER ONE: a preview page must NEVER get the
-// production config, or somebody trying a pull request would be saving real orders. So the
-// preview hosts are recognised by their fixed shapes and nothing looser:
-//   mise-app-preview.web.app · mise-app-preview.firebaseapp.com · mise-app-preview--<channel>.web.app
+// The cost of that direction, taken knowingly: if the live site ever moves to another address,
+// every phone would open the empty preview until this list names the new one — loud, and
+// harmless to the data.
 
 export const PRODUCTION_CONFIG = Object.freeze({
   apiKey: "AIzaSyCIy5dRbE9Ce_mJQ4-r7QuSOquKpgkwoMo",
@@ -39,13 +43,19 @@ export const PREVIEW_CONFIG = Object.freeze({
   appId: "1:863348756512:web:b1fb6fb82fa1448abf6c45",
 });
 
-const PREVIEW_CHANNEL_HOST = new RegExp(`^${PREVIEW_PROJECT_ID}--[a-z0-9-]{1,63}\\.web\\.app$`);
+// The live site, and the addresses the local emulator switch in js/firebase.js recognises.
+export const PRODUCTION_HOSTS = Object.freeze([
+  'federicomiano93.github.io',
+  'localhost', '127.0.0.1', '::1', '[::1]',
+]);
+
+// "example.com." is the same host as "example.com": a browser accepts the trailing dot.
+function normalise(hostname) {
+  return String(hostname || '').toLowerCase().replace(/\.$/, '');
+}
 
 export function isPreviewHost(hostname) {
-  const host = String(hostname || '').toLowerCase();
-  return host === `${PREVIEW_PROJECT_ID}.web.app`
-    || host === `${PREVIEW_PROJECT_ID}.firebaseapp.com`
-    || PREVIEW_CHANNEL_HOST.test(host);
+  return !PRODUCTION_HOSTS.includes(normalise(hostname));
 }
 
 export function configForHost(hostname) {

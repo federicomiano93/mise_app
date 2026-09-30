@@ -1,6 +1,7 @@
 // firebase.js — Firebase setup + Firestore helpers
 //
-// Real config lives here; firebase.example.js is the placeholder template.
+// The real config is picked by js/firebase-target.js (production, or the preview project on a
+// pull request's preview link); firebase.example.js is the placeholder template.
 // js/firebase.js IS committed to Git: Firebase web API keys are public config
 // (sent to every visitor's browser), not secrets. Security comes from Firestore
 // Security Rules + API key restrictions, never from hiding this file.
@@ -239,7 +240,7 @@ function writeCacheOwner(uid) {
 // site at the emulator or point local testing at production. Hostname can't be
 // forgotten: it is simply where the page is being served from.
 //
-// The production config above is unchanged; we only REDIRECT the SDK's traffic to
+// The config above (production's, on localhost) is unchanged; we only REDIRECT the SDK's traffic to
 // the local emulator ports (firebase.json: auth 9099, firestore 8080) when local.
 // ⚠️ EXPORTED, AND EVERY OTHER FIREBASE APP IN THIS REPO MUST USE IT. The client
 // ordering page and the link minter each create a SECOND Firebase app (so a client's
