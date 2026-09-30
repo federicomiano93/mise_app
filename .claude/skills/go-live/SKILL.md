@@ -92,15 +92,19 @@ harness asks for `firebase deploy` and for the merge) — one otherwise.
 - `STORICO-DEPLOY.md`: a new entry at the TOP of the release list — tag, date, PR(s), merge
   sha, cache, what changed, rules deployed first + ruleset id, live assets N/N matching,
   functions deployed, anything learnt.
-- `CLAUDE.md`: the «Live on `main`» line (cache + tag) and, under «Live but never seen on his
-  phone», what to ask him and the calls I took for him. Move the oldest entries to
-  `ARCHIVIO-BACKLOG.md` when the list grows (the note budget: `~/.claude/check-notes-size.mjs`).
+- `CLAUDE.md`: the «Live on `main`» line (cache + tag) only.
+- **The «Controlli di Mise» page** (URL in CLAUDE.md, «Open backlog»; shape in memory
+  `pagina-controlli`): add this release's items with ONE `ArtifactData batch` — a group
+  `release: "vX.Y.Z · <area>"`, `rank` = the version as a number (v1.98.0 → 9800), and per item
+  one of: `prova` (what to open and try, with `device`), `scelta` (a call I took for him),
+  `decidi` (a decision still his), `prima` (a warning to give BEFORE use). Italian, plain, one
+  action per item, `status: "todo"`, `note: ""`. Never delete an item he has not answered.
 - Delete the merged branch locally (`git branch -d`) and on GitHub if still there; GitHub
   should hold only `main` (`git fetch --prune`).
 
 ## 6. Tell him (Italian, plain)
 
-- It is live; what to open on his phone and what to try, in order of importance — and ask
+- It is live; the page «Controlli di Mise» has what to try, in order of importance — and ask
   him to do ONE real save on the changed screen and tell you if anything says it could not
   save (the only signed-in check on production).
 - ⚠️ Every phone must update (the update banner / reopen the app) — and when a change alters
