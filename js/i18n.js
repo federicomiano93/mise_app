@@ -935,10 +935,6 @@ const DICTIONARIES = Object.freeze({
     // ── The tablet order-summary sheet (Slice D, 28 Sep 2026) ─────────────────
     'orders.summary.itemCount': { one: 'Order summary · {n} item', other: 'Order summary · {n} items' },
     'orders.summary.empty': 'No quantities typed',
-    // ── The tablet split view (29 Sep 2026) ───────────────────────────────────
-    'orders.split.empty.title': 'Choose a supplier',
-    'orders.split.empty.text': 'Tap a supplier on the left: its order opens here and you write it without leaving the list.',
-    'orders.split.nothingOrderedYet': 'Nothing ordered yet',
     // ── Suppliers & ingredients beside the list, on a tablet (29 Sep 2026) ────
     'orders.registry.pane.ingredients.title': 'Choose an ingredient',
     'orders.registry.pane.ingredients.text': 'Tap an ingredient on the left: its card opens here, with the allergens and the price.',
@@ -978,13 +974,6 @@ const DICTIONARIES = Object.freeze({
                                    other: '{n} items with no price, not included: the total is lower than the real one' },
     'orders.cost.missingVatTotal': { one: '{n} item with no VAT rate stated — its VAT is not in the total above',
                                       other: '{n} items with no VAT rate stated — their VAT is not in the total above' },
-    'orders.pane.orderDay': 'orders {day}',
-    'orders.pane.deliveryDay': 'delivery {day}',
-    'orders.pane.list': 'List',
-    'orders.pane.listAria': 'List: all ingredients from {supplier}',
-    'orders.pane.summary': 'Summary',
-    'orders.pane.summaryAria': 'Order summary: {supplier}',
-    'orders.pane.closeAria': 'Close {supplier}’s order',
     'orders.deliveries.tab': 'Incoming',
     'orders.deliveries.owed': { one: '1 order from before this week — did it arrive?',
                                 other: '{n} orders from before this week — did they arrive?' },
@@ -3329,10 +3318,6 @@ const DICTIONARIES = Object.freeze({
     // ── Il riepilogo ordine del tablet (Slice D, 28 Sep 2026) ─────────────────
     'orders.summary.itemCount': { one: 'Riepilogo ordine · {n} articolo', other: 'Riepilogo ordine · {n} articoli' },
     'orders.summary.empty': 'Nessuna quantità scritta',
-    // ── Il pannello diviso del tablet (29 Sep 2026) ───────────────────────────
-    'orders.split.empty.title': 'Scegli un fornitore',
-    'orders.split.empty.text': 'Tocca un fornitore a sinistra: il suo ordine si apre qui e lo scrivi senza lasciare la lista.',
-    'orders.split.nothingOrderedYet': 'Niente ordinato ancora',
     // ── Fornitori e ingredienti accanto alla lista, su tablet (29 Sep 2026) ───
     'orders.registry.pane.ingredients.title': 'Scegli un ingrediente',
     'orders.registry.pane.ingredients.text': 'Tocca un ingrediente a sinistra: la sua scheda si apre qui, con gli allergeni e il prezzo.',
@@ -3372,13 +3357,6 @@ const DICTIONARIES = Object.freeze({
                                    other: '{n} voci senza prezzo, non incluse: il totale è più basso del vero' },
     'orders.cost.missingVatTotal': { one: '{n} voce senza IVA indicata — la sua IVA non è nel totale sopra',
                                       other: '{n} voci senza IVA indicata — la loro IVA non è nel totale sopra' },
-    'orders.pane.orderDay': 'ordina {day}',
-    'orders.pane.deliveryDay': 'consegna {day}',
-    'orders.pane.list': 'Elenco',
-    'orders.pane.listAria': 'Elenco: tutti gli ingredienti di {supplier}',
-    'orders.pane.summary': 'Riepilogo',
-    'orders.pane.summaryAria': 'Riepilogo ordine: {supplier}',
-    'orders.pane.closeAria': 'Chiudi l’ordine di {supplier}',
     'orders.deliveries.tab': 'In arrivo',
     'orders.deliveries.owed': { one: '1 ordine di prima di questa settimana — è arrivato?',
                                 other: '{n} ordini di prima di questa settimana — sono arrivati?' },

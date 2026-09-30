@@ -28,7 +28,7 @@ import { buildSupplierDetail } from './supplier-detail.js';
 import { markFilled } from './ingredients.js';
 import { buildSupplierItems } from './supplier-items.js';
 import { buildOrderSummaryView } from './order-summary-view.js';
-import { paintPaneMoney } from './order-cost-view.js';
+import { paintOrderMoney } from './order-cost-view.js';
 import {
   scheduleDraftSave, saveDraftNow, flushDraftSave, watchDraft, archiveSupplier, clearSupplier,
   clearQuantities, saveHistoryRecord, deleteHistoryRecord, setDraftSaveReporter,
@@ -279,7 +279,7 @@ function syncInputsFromState() {
     markFilled(row, entry.qty);
   });
   refreshAllSuppliers();
-  // A quantity typed on another phone changes this pane's money too.
+  // A quantity typed on another phone changes the order total too.
   paintMoney();
 }
 
@@ -342,7 +342,7 @@ function renderSupplierList(container, suppliers) {
       filterActive: state.supplierFilter,
       onQuery: q => { state.supplierQuery = q; },
       onFilter: active => { state.supplierFilter = active; },
-      onOpen: toggleSupplier,
+      onOpen: openSupplier,
       onView: openSupplierItems,
       onSummary: openSummary,
       searchExtras: buildOrderTools(),
@@ -352,122 +352,28 @@ function renderSupplierList(container, suppliers) {
     suppliers,
     ingredientsBySupplier: ingredientsBySupplier(),
     entries: state.entries,
-    pickedId: state.openSupplier,
   });
 }
 
-// ── The tablet split view (29 Sep 2026) ────────────────────────────────────
-//
-// Active only on the Order tab's Suppliers view, on a tablet — never on the
-// flat ingredient list or on Incoming, which stay full width exactly as on a
-// phone (the plan's own words). Read fresh every time rather than cached:
-// asked from a handful of call sites, never from a hot path.
-function splitActive() {
-  return isTabletNow() && state.view === 'suppliers'
-    && document.body.dataset.ordersTab !== 'deliveries';
-}
-
-const HAND_ICON =
-  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="44" height="44" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/><path d="M21 12H9"/></svg>';
-
-// The placeholder shown in the pane while no supplier is in it. ONE node, kept in
-// the pane and only shown or hidden — never a second child beside the supplier
-// screen (28 Sep 2026: both were visible at once, the order squeezed under it).
-// ⚠️ ITS WORDS NEED THEIR OWN onLanguageChange (see init): a refresh runs when the
-// width, tab or supplier changes — NOT when the venue's language arrives, which is
-// usually AFTER the first refresh. Relying on refreshes alone left an Italian venue
-// reading «Choose a supplier» on its tablet (ui-check, 28 Sep 2026).
-function paneEmptyState(pane) {
-  let empty = pane.querySelector(':scope > .split-empty');
-  if (!empty) {
-    empty = el('div', { class: 'split-empty' }, [
-      el('span', { class: 'split-empty-icon', 'aria-hidden': 'true', icon: HAND_ICON }),
-      el('h2', {}),
-      el('p', {}),
-    ]);
-    pane.prepend(empty);
-  }
-  paintPaneEmptyWords(empty);
-  return empty;
-}
-
-function paintPaneEmptyWords(empty) {
-  empty.querySelector('h2').textContent = t('orders.split.empty.title');
-  empty.querySelector('p').textContent = t('orders.split.empty.text');
-}
-
-// Only rewords a placeholder that already exists — never creates one, so it cannot
-// put a visible placeholder beside a supplier screen already in the pane.
-function repaintPaneEmptyWords() {
-  const empty = document.querySelector('#orders-detail-pane > .split-empty');
-  if (empty) paintPaneEmptyWords(empty);
-}
-
-// Move the open supplier screen to `target` WITHOUT rebuilding it, and give the
-// focus back to the box being typed in: appendChild on a focused element drops
-// the focus (and the phone's keyboard with it); the typed number survives.
-function moveDetail(target) {
-  const node = detailView.overlay;
-  const active = node.contains(document.activeElement) ? document.activeElement : null;
-  let caret = null;
-  try { caret = active ? [active.selectionStart, active.selectionEnd] : null; } catch { caret = null; }
-  target.appendChild(node);
-  if (!active) return;
-  active.focus({ preventScroll: true });
-  try {
-    if (caret && caret[0] !== null) active.setSelectionRange(caret[0], caret[1]);
-  } catch { /* a number input has no caret to restore */ }
-}
-
-// Keeps #orders-detail-pane in step with state.openSupplier and with the split
-// being active — called after EVERY change to either (opening/closing a supplier,
-// switching tab or view, crossing the tablet width).
-//
-// ⚠️ LEAVING THE SPLIT HAS TWO CAUSES AND THEY END DIFFERENTLY:
-//  - the tablet got NARROWER (rotated to portrait): the screen moves to the body
-//    and becomes the phone's full-screen overlay, typing intact — unless the List
-//    or the Summary is open over it, in which case it is closed instead: on a phone
-//    those two close it anyway, and appended after them it would cover them
-//    (two full-screen screens never stack).
-//  - the tab or the view changed on a tablet (Incoming, Ingredients): it is closed.
-//    Moved to the body it would pop up full-screen over the screen just chosen.
-function refreshDetailPaneMode() {
-  const pane = document.getElementById('orders-detail-pane');
-  if (!pane) return;
-  if (state.openSupplier && detailView) {
-    const inPane = detailView.overlay.parentNode === pane;
-    if (splitActive()) {
-      if (!inPane) moveDetail(pane);
-    } else if (inPane) {
-      if (!isTabletNow() && !itemsView && !summaryView) moveDetail(document.body);
-      else { closeSupplier(); return; }
-    }
-  }
-  const holding = !!(detailView && detailView.overlay.parentNode === pane);
-  paneEmptyState(pane).hidden = holding;
-  paintMoney();
-}
-
-// The money in the pane (tablet only, and only for an account that may read
-// prices): see paintPaneMoney in order-cost-view.js. Called after every paint of
-// the supplier screen, every keystroke, every price snapshot and every move.
+// The order TOTAL on the supplier's full-screen view — tablet only, and only for
+// an account that may read prices (state.pricesReadable is true only once the
+// ingredient-prices read has succeeded): see paintOrderMoney in order-cost-view.js.
+// Called after every paint of the supplier screen, every keystroke, every price
+// snapshot and every change of width.
 function paintMoney() {
   if (!detailView || !state.openSupplier) return;
-  const pane = document.getElementById('orders-detail-pane');
-  const inPane = !!pane && detailView.overlay.parentNode === pane;
-  paintPaneMoney(
+  paintOrderMoney(
     detailView.overlay,
     ingredientsBySupplier()[state.openSupplier] || [],
     state.entries,
-    inPane && state.pricesReadable === true,
+    isTabletNow() && state.pricesReadable === true,
   );
 }
 
 // ── One supplier's own screen ─────────────────────────────────────────────────
 //
-// ⚠️ ALWAYS OPENS. Only a tap on the supplier's own ROW toggles (toggleSupplier
-// below): a notice that says «Brakes changed» must show Brakes even when Brakes
-// is already open — a toggle here closed it (review of 28 Sep 2026).
+// ⚠️ ALWAYS OPENS, never toggles: a notice that says «Brakes changed» must show
+// Brakes even when Brakes is already open — a toggle closed it (review of 28 Sep 2026).
 function openSupplier(supplierId) {
   closeSupplierItems();         // two full-screen screens must never stack up
   closeSummary();
@@ -476,20 +382,18 @@ function openSupplier(supplierId) {
   renderOpenSupplier();
 }
 
-// The row on the left of the tablet split: tap to open, tap the open one again to
-// close. On a phone the row is under the full-screen overlay, so only the first
-// half is ever reachable there.
-function toggleSupplier(supplierId) {
-  if (state.openSupplier === supplierId && detailView) { closeSupplier(); return; }
-  openSupplier(supplierId);
-}
-
 function closeSupplier() {
   state.openSupplier = null;
   detailView?.overlay.remove();
   detailView = null;
-  cardsView?.updateSelection(null);
-  refreshDetailPaneMode();
+}
+// Back on the order screen: close it and hand focus back to the row that opened it — the
+// summary sheet's own pattern (closeSummary). Full screen covers the list, so without this
+// a keyboard or screen-reader user would be dropped at the top of the page.
+function leaveSupplier() {
+  const openerId = state.openSupplier;
+  closeSupplier();
+  if (openerId) document.getElementById(`open-${openerId}`)?.focus();
 }
 
 // «+ Add ingredient» on a supplier's own screen: the records' ingredient card with THIS supplier
@@ -539,36 +443,27 @@ function renderOpenSupplier() {
     entries: state.entries,
     suggest: suggestFor,
     hooks,
-    onBack: closeSupplier,
-    // ⚠️ TABLET PANE HEAD ONLY (orders.css). Opening either must NOT close
-    // this screen — on a phone they still do, through the shared
-    // closeSupplier() inside openSupplierItems/openSummary, since there both
-    // are full-screen and the two cannot be on top of one another. On a
-    // tablet split those two calls skip that close (splitActive()), so the
-    // pane stays put underneath and simply reappears when the sheet closes.
-    onViewList: () => openSupplierItems(supplier.id),
-    onSummary: () => openSummary(supplier.id),
+    onBack: leaveSupplier,
     // ⚠️ THE SAME QUESTION THE CATALOGUE ASKS (records.js mayEditRecords): where the owner has
     // hidden «Suppliers & ingredients» from the staff, a door to the same card from Orders
     // would quietly undo the switch. Asked on every repaint, so it follows the switch live.
     onAddIngredient: mayAddIngredient() ? () => openAddIngredient(supplier.id) : null,
-    orderDays: supplier.orderDays,
-    deliveryDays: supplier.deliveryDays,
   };
 
   if (detailView && detailView.id === supplier.id) {
     detailView.repaint(ctx);
-    cardsView?.updateSelection(supplier.id);
-    refreshDetailPaneMode();
+    paintMoney();
     return;
   }
 
   detailView?.overlay.remove();
   const built = buildSupplierDetail(supplier, ctx);
   detailView = { ...built, id: supplier.id };
-  (splitActive() ? document.getElementById('orders-detail-pane') : document.body)?.appendChild(built.overlay);
-  cardsView?.updateSelection(supplier.id);
-  refreshDetailPaneMode();
+  document.body.appendChild(built.overlay);
+  // Into the screen that now covers everything, on its Back — as the summary sheet does.
+  // Only on a NEW screen: a repaint (above) must never pull focus out of a box mid-typing.
+  built.overlay.querySelector('.orders-icon-btn')?.focus({ preventScroll: true });
+  paintMoney();
 }
 
 // ── What a supplier sells, to look at ─────────────────────────────────────────
@@ -578,10 +473,7 @@ function renderOpenSupplier() {
 // writes NOTHING — which is the whole point of it, and why it can be opened in the
 // middle of an order without a thought.
 function openSupplierItems(supplierId) {
-  // ⚠️ NOT ON A TABLET SPLIT — see the long note in renderOpenSupplier's ctx.
-  // The pane is not a full-screen overlay there, so it does not compete with
-  // this one for the same space; on a phone it still is, and still does.
-  if (!splitActive()) closeSupplier();
+  closeSupplier();              // two full-screen screens must never stack up
   closeSummary();
   closeAlertsPanel();           // the panel must never sit on top of a full screen
   state.viewingSupplier = supplierId;
@@ -631,8 +523,7 @@ function renderSupplierItems() {
 let summaryEscHandler = null;
 
 function openSummary(supplierId) {
-  // ⚠️ NOT ON A TABLET SPLIT — see the long note in renderOpenSupplier's ctx.
-  if (!splitActive()) closeSupplier();
+  closeSupplier();
   closeSupplierItems();
   closeAlertsPanel();            // the panel must never sit on top of a full screen
   state.summarySupplier = supplierId;
@@ -757,10 +648,6 @@ function refreshViewSwitch() {
 function setView(view) {
   if (state.view === view) return;
   state.view = view;
-  // ⚠️ TABLET SPLIT ONLY (orders.css): the ONE place this is written, read by
-  // the grid that turns .orders-split into two columns — never on the flat
-  // ingredient list or on Incoming, which stay full width.
-  document.body.dataset.ordersView = view;
   // The "just what I'm ordering" filter belongs to the flat list; the cards always
   // show everything, so leaving for them drops it rather than hiding it somewhere
   // invisible and surprising the operator with it on the way back.
@@ -770,10 +657,6 @@ function setView(view) {
   render();
   refreshOrderTotals();
   refreshOrderTools();
-  // Leaving the Suppliers view (or coming back to it) turns the split on or
-  // off — the open supplier, if any, has to move between the pane and a
-  // full-screen overlay along with it.
-  refreshDetailPaneMode();
 }
 
 // ── The search-row swap button (every screen size) ────────────────────────
@@ -2008,9 +1891,6 @@ function setupTabs() {
       // A class on <body>, read by a small number of scoped rules, is what
       // decides between the two — never a rebuild of either banner.
       document.body.dataset.ordersTab = panel === 'tab-deliveries' ? 'deliveries' : 'order';
-      // The split exists only on Order: leaving it closes a supplier open in the
-      // pane rather than popping it up full-screen over Incoming.
-      refreshDetailPaneMode();
     });
   });
   // The screen always opens on Order.
@@ -2105,21 +1985,18 @@ async function init() {
   trackStickyHead(document.querySelector('.order-box-head'));
   document.getElementById('orders-wa-btn')?.addEventListener('click', openSendScreen);
 
-  // The ONE place state.view's starting value ('suppliers') is mirrored onto
-  // <body> — see setView() for every later write.
-  document.body.dataset.ordersView = state.view;
-
   // ⚠️ WATCHTABLET FIRST, THEN THE PANEL: the panel's first count must see
   // whatever watchTablet already moved into it, including on a page that
   // opens straight at tablet width — see js/orders/tablet-layout.js.
-  watchTablet(() => refreshDetailPaneMode());
+  // The money box on the supplier screen follows the width, so a tablet rotated or
+  // resized while a supplier is open gains or loses it at once.
+  watchTablet(() => paintMoney());
   initAlertsPanel();
   // The Incoming tab's aria-label names a count in words ("3 orders owed") —
   // switching the venue's language must not leave it saying so in the old
   // one until the debt happens to change again.
   onLanguageChange(() => refreshDeliveriesBadge());
   onLanguageChange(() => renderListsButton());
-  onLanguageChange(() => repaintPaneEmptyWords());
 
   // The debounced draft autosave has no caller to hand a rejection to, so it reports
   // through here. Never auto-hidden on a timer: an order that is no longer being

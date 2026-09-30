@@ -71,14 +71,3 @@ test('--text-5 colours only placeholders and icons', () => {
   assert.ok(seen >= 3, `only ${seen} uses of --text-5 found — the search is broken`);
   assert.deepEqual(offenders, []);
 });
-
-// The «Today» chip on the tablet's supplier rows (ui-check, Italian tablet, 29 Sep 2026):
-// pale --on-brand text on --crust measured 3.2:1. It sits on --crust-ink now — pinned as the
-// rule it is AND as the number, so neither the rule nor the palette can drift back under.
-test('the tablet «Today» chip: pale text on --crust-ink, at least 4.5:1', () => {
-  const orders = readFileSync(new URL('../orders.css', import.meta.url), 'utf8');
-  const rule = orders.match(/\.supplier-row-day--today \{[^}]*\}/)?.[0] || '';
-  assert.match(rule, /background:\s*var\(--crust-ink\)/);
-  assert.match(rule, /color:\s*var\(--on-brand\)/);
-  assert.ok(contrast(token('--on-brand'), token('--crust-ink')) >= 4.5);
-});

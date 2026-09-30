@@ -316,8 +316,8 @@
 
   /* ══ The two-pane split — list on the left, detail on the right ═══════════
      The GENERIC look every section's tablet split shares (plan of 29 Sep 2026); the
-     first user is suppliers.html (js/orders/registry.js). Orders' own split keeps its
-     rules in orders.css and is not migrated.
+     first user is suppliers.html (js/orders/registry.js). (Orders' order tab had a split
+     of its own in orders.css until 30 Sep 2026; it now opens a supplier full screen.)
      ⚠️ INSIDE THIS ONE BLOCK ON PURPOSE: tests/tablet-width.test.mjs allows exactly one
      tablet block in this file, and a second query — even the same text — is how the two
      came to drift apart once. The phone half (the pane is hidden) is outside, below.

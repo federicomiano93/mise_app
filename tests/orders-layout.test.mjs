@@ -182,17 +182,51 @@ test('the new module is precached, or an offline phone 404s on it', () => {
   assert.ok(read('sw.js').includes("'./js/orders/alert-dismissal.js'"));
 });
 
-// ── The tablet pane's placeholder follows the venue's language ───────────────
-// ⚠️ ui-check, 28 Sep 2026: an Italian venue read «Choose a supplier» on its tablet.
-// The words were set only on a pane refresh, and the language arrives after the
-// first one. Pin that the subscription EXISTS — a deleted call satisfies every
-// «the key is translated» check.
-test('⚠️ the split placeholder is reworded when the language changes', () => {
-  assert.match(MAIN, /onLanguageChange\(\s*\(\)\s*=>\s*repaintPaneEmptyWords\(\)\s*\)/);
-  const body = MAIN.slice(MAIN.indexOf('function repaintPaneEmptyWords'));
-  assert.match(body.slice(0, 300), /#orders-detail-pane > \.split-empty/,
-    'it rewords the existing placeholder, never creates a second one');
-  for (const lang of ['en', 'it']) {
-    assert.ok(_dictionaries()[lang]['orders.split.empty.title'], `${lang} has the title`);
-  }
+// ── A supplier's order is full screen on a tablet too (30 Sep 2026) ─────────
+// The two-pane split (suppliers left, order right) was removed on the owner's
+// decision: the screen opens over the page exactly as on a phone.
+test('the supplier screen is always appended to document.body; no pane exists', () => {
+  assert.ok(!PAGE.includes('orders-detail-pane'));
+  assert.ok(!PAGE.includes('orders-split'));
+  assert.ok(!MAIN.includes('orders-detail-pane'));
+  assert.ok(!/splitActive/.test(MAIN));
+  const fn = MAIN.slice(MAIN.indexOf('function renderOpenSupplier'));
+  assert.match(fn.slice(0, fn.search(/^\}/m)), /document\.body\.appendChild\(built\.overlay\)/);
+});
+
+// ── The order total on a tablet's full-screen supplier view ──────────────────
+test('⚠️ money shows only on a tablet AND only when prices are readable', () => {
+  const fn = MAIN.slice(MAIN.indexOf('function paintMoney'));
+  const body = fn.slice(0, fn.search(/^\}/m));
+  assert.match(body, /isTabletNow\(\)\s*&&\s*state\.pricesReadable\s*===\s*true/);
+  assert.match(body, /paintOrderMoney\(/);
+});
+
+test('the totals box is placed before «Order placed», as .order-money', () => {
+  const src = codeOf(read('js/orders/order-cost-view.js'));
+  const fn = src.slice(src.indexOf('export function paintOrderMoney'));
+  assert.match(fn, /classList\.add\('order-money'\)/);
+  assert.match(fn, /root\.querySelector\('\.supplier-place-btn'\)/);
+  assert.match(fn, /place\.before\(box\)/);
+  assert.ok(!/pane-money/.test(src));
+});
+
+test('the tablet re-paints the money when the width crosses the breakpoint', () => {
+  assert.match(MAIN, /watchTablet\(\s*\(\)\s*=>\s*paintMoney\(\)\s*\)/);
+});
+
+// ── The full-screen supplier order (30 Sep 2026) ──────────────────────────────
+test('a long supplier name stays centred: both header sides reserve the Back button, phone and tablet', () => {
+  assert.match(CSS, /^\.supplier-detail > \.app-header \{ --app-header-side: 36px; \}/m);
+  assert.match(CSS, /body\[data-section="orders"\] \.supplier-detail > \.app-header \{ --app-header-side: var\(--tap-min\); \}/);
+});
+
+test('focus goes INTO the full-screen order on open, and back to its row on Back', () => {
+  const main = read('js/orders/orders-main.js');
+  const render = main.slice(main.indexOf('function renderOpenSupplier'), main.indexOf('// ── What a supplier sells'));
+  // Only when a NEW screen is built — after the early return that repaints in place.
+  assert.ok(render.indexOf("querySelector('.orders-icon-btn')?.focus(") > render.indexOf('detailView.repaint(ctx);'));
+  assert.match(main, /onBack: leaveSupplier,/);
+  assert.match(main, /function leaveSupplier\(\) \{[\s\S]*?document\.getElementById\(`open-\$\{openerId\}`\)\?\.focus\(\);/);
+  assert.match(read('js/orders/suppliers.js'), /id: `open-\$\{supplier\.id\}`/);
 });
