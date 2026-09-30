@@ -3039,7 +3039,9 @@ body:not([data-orders-tab="deliveries"]) #orders-owed { display: none; }
   }
   body[data-section="orders"][data-orders-tab="order"][data-orders-view="suppliers"] .supplier-row-day--today {
     color: var(--on-brand);
-    background: var(--crust);
+    /* --crust-ink, not --crust: the pale text measured 3.2:1 on --crust (ui-check, Italian
+       tablet, 29 Sep 2026) and 6.0:1 here — the same swap tokens.css already made twice. */
+    background: var(--crust-ink);
   }
   body[data-section="orders"][data-orders-tab="order"][data-orders-view="suppliers"] .supplier-row-compact-count {
     flex-shrink: 0;
