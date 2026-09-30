@@ -1,66 +1,69 @@
 ---
 name: firestore-write-guard
-description: Guard Firestore writes during manual testing in The Italian Club. The SAFE path is the local Firebase emulator on localhost; warn forcefully whenever the emulator is NOT confirmed active or the page is served from a non-localhost hostname (live domain, LAN IP, tunnel), because those writes hit the real production database. Use whenever a task involves confirming a dough, saving Settings/config, adding or editing suppliers/ingredients, autosaving an Orders draft, or saving/deleting log entries. Raise this proactively, before starting, without being asked.
+description: Keep test writes off the real Mise database. Use BEFORE any action that could save to Firestore outside the unit tests — driving the app in a browser, a probe or driver script, seeding, a node script with firebase-admin, testing from a phone on the LAN, or fixing a real document — whether it saves a dough, a log, a supplier, an ingredient, a price, an order, a draft, a stocktake, settings or a product. Explains which database a write reaches and what to do when the task really is production data.
 ---
 
-# Firestore write guard — The Italian Club
+# Firestore write guard — Mise
 
-The Italian Club has ONE production Firestore (`bakery-app-ebf90`) under Anonymous
-Auth, so a write against production changes the real data the live site shows, and
-several collections deny deletes. A local Firebase **emulator** (live since v1.3.0)
-is the safe place to write during testing. Which database a write hits depends on
-the EMULATOR being up and the HOSTNAME — not on "I'm testing locally".
+There is ONE Firestore, `bakery-app-ebf90`, holding real venues (real suppliers, real
+orders, real prices). Which database a write reaches is decided by the **hostname** and by
+**whether the emulator is running** — never by "I'm only testing".
 
-## How the switch works (js/firebase.js)
-On a localhost hostname (`localhost`, `127.0.0.1`, `::1`) the app redirects the SDK
-to the emulator (Auth 9099, Firestore 8080) UNCONDITIONALLY, by hostname alone — it
-does NOT check whether the emulator is actually running, and there is NO production
-fallback. On any other hostname it uses production.
+## The switch (`js/firebase.js`, by hostname only)
 
-## The three situations
-1. **localhost WITH the emulator running → SAFE default. Write freely.**
-   Confirm it: the console shows the green "LOCAL EMULATOR mode — production data is
-   NOT touched" line and the emulator is up (UI at http://127.0.0.1:4000). This is
-   the standard way to test writes — start it proactively (`npx serve` +
-   `firebase emulators:start --only auth,firestore`).
-2. **localhost WITHOUT the emulator running → writes FAIL; nothing is saved.**
-   The SDK is hardwired to localhost:8080 with no production fallback, so the write
-   cannot reach anything — it errors or stays pending. Production is NOT touched, but
-   this is NOT a valid test: nothing is being saved. Start the emulator.
-3. **Any non-localhost hostname → PRODUCTION. Warn forcefully.**
-   The live github.io domain — but ALSO a LAN IP (e.g. 192.168.x.x to test from a
-   phone) or a tunnel (ngrok): all make the switch choose production. This is the
-   real danger; the warning below applies in full.
+| Page served from | Emulator running? | Where writes go |
+|---|---|---|
+| `localhost` / `127.0.0.1` / `::1` | yes | **emulator — safe, write freely** |
+| `localhost` / `127.0.0.1` / `::1` | no | **nowhere** — writes fail, production untouched, the test is INVALID |
+| anything else: the live site, a LAN IP (a phone on Wi-Fi), a tunnel | — | **PRODUCTION** |
 
-## When to warn (proactively, before starting)
-Before any task that triggers a Firestore WRITE during manual/browser testing,
-UNLESS situation 1 is confirmed (emulator up + "LOCAL EMULATOR mode" in console):
-- Confirming a dough (writes the `logs` model)
-- Saving Settings / config (`config/calculator`)
-- Adding or editing a supplier or ingredient (`suppliers` / `ingredients`)
-- Autosaving an Orders draft (`drafts/current`)
-- Saving or deleting a log entry
+There is no fallback and no check that the emulator is up. Confirm it: the console prints
+"LOCAL EMULATOR mode", and the emulator UI answers on http://127.0.0.1:4000.
 
-Default to proposing the emulator FIRST, so the test is safe by construction.
+## The safe path (default for every test)
 
-## What to say (when the emulator is NOT confirmed active)
-"Unless the local emulator is running, this could write to the PRODUCTION Firestore —
-anything not served from a true localhost hostname (live site, a LAN IP to test on a
-phone, a tunnel) hits real production data. A test supplier or ingredient can at least
-be deleted from the app afterwards, but `drafts/current` and `config/*` have delete
-denied — a bad write there can only be repaired by overwriting it by hand from the
-Firebase Console. Let me start the emulator first (safe local database), or do you
-want to proceed against production?"
+1. `firebase emulators:start --only auth,firestore --project bakery-app-ebf90`
+   ⚠️ That project id, exactly: another id makes saves fail with an **evaluation error in
+   `canUse()`** that looks like a broken app.
+2. Seed: `FIREBASE_PROJECT_ID=bakery-app-ebf90 node tests/rules/seed-emulator.mjs`
+   (production-SHAPED data incl. legacy fields, hardcoded to 127.0.0.1; test accounts are
+   `*@club.test`).
+3. Serve the app locally over http (never `file://`) and drive it — the `drive-app` skill
+   has the ports, accounts and traps.
+4. **After an emulator restart, re-seed** — it starts empty.
 
-## Exempt — no warning needed
-- `npm test` (automated math/logic tests) — pure functions, never touch Firestore.
-- Read-only / local-only checks: dough gram calculations (on-screen only), the
-  Recipes overlay (saves to localStorage only), Copy/WhatsApp, viewing Orders.
+## Scripts are a bigger risk than the page
+
+- The browser app obeys the rules; **a node script with `firebase-admin` BYPASSES them.**
+  Without `FIRESTORE_EMULATOR_HOST=127.0.0.1:8080` (and `FIREBASE_AUTH_EMULATOR_HOST=
+  127.0.0.1:9099`) set in the SAME command, an Admin SDK script writes to production with
+  full power. Put the variables on the command line itself, and prefer the REST emulator
+  calls `seed-emulator.mjs` uses.
+- A LAN IP or tunnel to test on a phone = production. To test on a phone safely, use the
+  phone-preview window on the PC instead (`drive-app`).
+
+## When the task really IS production data
+
+Allowed without stopping (global P10) — the protection is not a question to Federico:
+1. **Copy first**: read the exact document(s) and save them as JSON in the session
+   scratchpad, so the change can be put back by hand.
+2. Write the smallest change, through the app where possible (it obeys the rules), and
+   write a document the rules ACCEPT — every collection has a closed key whitelist, so an
+   invented probe document gets `permission-denied` (that is the rules working).
+3. Read it back.
+4. Put it in the end-of-work list: which venue, which document, before → after.
+⚠️ Some collections refuse deletes (`drafts/current`, `config/*`, `daily-logs`, `inventory`):
+a bad write there can only be repaired by overwriting it. Never delete production data to
+"clean up a test" — and never weaken `firestore.rules` to make cleanup possible.
+
+## Exempt
+
+- `npm test` — pure functions, never touches Firestore.
+- `npm run test:rules:emulated` — its own emulator under `demo-theitalianclub`.
+- Reading the live site without signing in, and `node scripts/rules-live-diff.mjs` (read-only).
 
 ## Never
-- Never suggest weakening `firestore.rules` to delete test data — fixing test cleanup
-  by lowering production security is worse than the problem.
-- Never tell Federico writes are safe just because it's "localhost" — safety requires
-  the emulator confirmed active AND a true localhost hostname.
-- Never tell Federico writes are safe or reversible when they hit delete-denied
-  collections in production.
+
+- Call a write "safe" because the URL says localhost — the emulator must be confirmed up.
+- Run a firebase-admin script without the emulator variables on the same command line.
+- Test writes from a LAN IP or tunnel and call it local.
