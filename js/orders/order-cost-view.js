@@ -13,7 +13,7 @@
 import { t } from '../i18n.js';
 import { el } from './dom.js';
 import { formatMoney } from '../price-model.js';
-import { unitCost, orderCost } from '../order-cost.js';
+import { lineUnitCost, orderCost } from '../order-cost.js';
 import { entryUnit } from '../order-unit.js';
 
 // One ordered line's money, as the small mono line under its quantity box /
@@ -101,8 +101,7 @@ export function paintOrderMoney(root, ingredients, entries, show) {
     const qty = Number(entries?.[row.dataset.ing]?.qty);
     if (!ing || !Number.isFinite(qty) || qty <= 0) return;
     // Priced in THIS line's unit (a busta is not a cartone), as order-summary.js does.
-    const priced = { ...ing, unit: entryUnit(entries[row.dataset.ing], ing) };
-    lines.push({ qty, unitCost: unitCost(priced, priced), vatRate: ing.vatRate != null ? Number(ing.vatRate) : null });
+    lines.push({ qty, unitCost: lineUnitCost(ing, ing, entryUnit(entries[row.dataset.ing], ing)), vatRate: ing.vatRate != null ? Number(ing.vatRate) : null });
   });
 
   const box = buildTotalsBox(orderCost(lines));

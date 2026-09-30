@@ -16,7 +16,7 @@
 
 import { orderedItems, summaryLines, itemLabel } from './order-text.js';
 import { supplierLabel } from '../supplier-label.js';
-import { unitCost, orderCost } from '../order-cost.js';
+import { lineUnitCost, orderCost } from '../order-cost.js';
 import { entryUnit } from '../order-unit.js';
 
 // supplier: { id, name } | null; ingredients: that supplier's products,
@@ -50,14 +50,13 @@ export function supplierSummary(supplier, ingredients, entries) {
 
   const costLines = lines.map(({ label, qty, unit }) => {
     const ing = byLabel.get(label);
-    // The price of ONE of THIS line's unit: unitCost() reads `unit` off the ingredient,
-    // so it is handed the card with the line's unit in place of its own.
-    const priced = ing ? { ...ing, unit: entryUnit(entries?.[ing.id], ing) } : null;
+    // The price of ONE of THIS line's unit; lineUnitCost() says «no price» rather than guess
+    // when the chosen unit cannot be priced from the card.
     return {
       label,
       qty,
       ...(unit ? { unit } : {}),
-      unitCost: priced ? unitCost(priced, priced) : null,
+      unitCost: ing ? lineUnitCost(ing, ing, entryUnit(entries?.[ing.id], ing)) : null,
       vatRate: ing && ing.vatRate != null ? Number(ing.vatRate) : null,
     };
   });

@@ -252,3 +252,40 @@ test('a nonsense window shows everything rather than hiding everything', () => {
   assert.deepEqual(splitRequestsByAge(list, NaN).recent, list);
   assert.deepEqual(splitRequestsByAge(list, undefined, new Date('2026-08-14')).older, list);
 });
+
+// ── Units ────────────────────────────────────────────────────────────────────
+
+const BAG_CARD = { id: 'i1', name: 'Flour 00', weight: '25kg', supplierId: 's1', active: true, unit: 'cartone', packUnit: 'busta' };
+
+function buildWith(entries) {
+  return buildOrderRequest({
+    suppliers: SUPPLIERS, ingredients: [BAG_CARD, INGREDIENTS[1], INGREDIENTS[2]], entries,
+    date: '2026-08-14', from: FROM, now: NOW,
+  });
+}
+
+test('a list freezes the unit of a line that has a choice, and only that line', () => {
+  const req = buildWith({ i1: { qty: 2, unit: 'busta' }, i2: { qty: 1 } });
+  assert.deepEqual(req.units, { i1: 'busta' });
+  // The card's own unit is still frozen for a line WITH a choice — the record does the same.
+  assert.deepEqual(buildWith({ i1: { qty: 2 } }).units, { i1: 'cartone' });
+});
+
+test('a list with no unit anywhere keeps its old shape (no `units` key)', () => {
+  assert.equal('units' in build({ i1: { qty: 4 } }), false);
+});
+
+test('groupRequest carries each line’s unit', () => {
+  const req = buildWith({ i1: { qty: 2, unit: 'busta' }, i2: { qty: 1 } });
+  const items = groupRequest(req, {}).find(g => g.supplierId === 's1').items;
+  assert.equal(items.find(i => i.id === 'i1').unit, 'busta');
+  assert.equal(items.find(i => i.id === 'i2').unit, '');
+});
+
+test('⚠️ a different unit is a difference even at the same number', () => {
+  const req = buildWith({ i1: { qty: 2 } });
+  const byId = { i1: BAG_CARD };
+  assert.deepEqual(liveDifference(req, { i1: { qty: 2 } }, byId), {});
+  assert.deepEqual(liveDifference(req, { i1: { qty: 2, unit: 'busta' } }, byId), { i1: 2 });
+  assert.deepEqual(liveDifference(req, { i1: { qty: 2, unit: 'Cartone' } }, byId), {});
+});

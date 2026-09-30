@@ -52,12 +52,13 @@ import { renderAlerts } from './notifications.js';
 import { routesFor } from './send-routes.js';
 import { confirmDialog, alertDialog } from './confirm-dialog.js';
 import { mayEditRecords } from '../records.js';
-import { todayISO, dayPhrase, daySpoken, localDayOf, dayLabel } from './day.js';
+import { todayISO, dayPhrase, daySpoken, dayWhen, localDayOf, dayLabel } from './day.js';
 import {
   buildOrderMessage, whatsappUrl, itemsFromQuantities, indexById,
 } from './order-text.js';
 import {
   historyDocId, ingredientsOf, supplierHasItems, ingredientLabel, wholeNumber,
+  unitConflicts, unitConflictList,
 } from './archive.js';
 import { storedUnitFor, entryUnit, isDefaultUnit } from '../order-unit.js';
 import { todayOrders, pendingSuppliers } from './reminders.js';
@@ -963,6 +964,8 @@ function openSendScreen() {
     sendSettings: ordersConfig.sendSettings,
     canManage: canManageHere(),
     onBack: () => overlay.remove(),
+    // Asked by the chooser once the road is known, and only for roads that reach the supplier.
+    beforeSend: rows => refuseOnUnitConflict(rows.map(r => ({ supplierId: r.id, date: dayForSupplier(r.id) }))),
     onSent: supplierIds => {
       overlay.remove();
       offerToRecordSent(supplierIds);
@@ -1128,6 +1131,17 @@ function orderedForRequest(request) {
   return out;
 }
 
+// The unit each of those recorded lines was bought in, where the record froze one —
+// shown beside the amount, so «ordered 2» is never read in the wrong unit.
+function orderedUnitsForRequest(request) {
+  const out = {};
+  supplierIdsOf(request).forEach(supplierId => {
+    const record = state.history.find(r => r && r.id === historyDocId(request.date, supplierId));
+    Object.assign(out, record?.units || {});
+  });
+  return out;
+}
+
 function renderOpenRequest() {
   if (!openRequestId) { requestView?.remove(); requestView = null; return; }
   const request = findRequest(openRequestId);
@@ -1149,6 +1163,7 @@ function renderOpenRequest() {
     // history record would be REFUSED by firestore.rules as it stands (a closed key
     // list), and it can be deduced from fields both documents already carry.
     orderedById: orderedForRequest(request),
+    orderedUnits: orderedUnitsForRequest(request),
     canManage: currentSession().canManage === true,
   }, {
     onBack: () => { openRequestId = null; renderOpenRequest(); },
@@ -1283,12 +1298,14 @@ async function recordSuppliers(supplierIds, { title, okLabel }) {
     // that is "not this one", not a failure. Recording it would write an empty
     // order, which archive.js refuses anyway — but silently, and a silent skip is
     // indistinguishable from a bug.
-    const quantities = confirmed[supplier.id];
+    const quantities = confirmed.quantities[supplier.id];
     if (!quantities || !Object.keys(quantities).length) {
       skipped.push(supplierLabel(supplier));
       continue;
     }
-    const done = await placeOrder(supplier.id, { confirm: false, quantities });
+    const done = await placeOrder(supplier.id, {
+      confirm: false, quantities, units: confirmed.units[supplier.id],
+    });
     (done ? saved : failed).push(supplierLabel(supplier));
   }
 
@@ -1373,6 +1390,55 @@ function dayForSupplier(supplierId) {
   return state.days[supplierId] || localDayOf(state.draftUpdatedAt) || todayISO();
 }
 
+// ⚠️ THE SAME-DAY UNIT CHECK, ASKED BEFORE ANYTHING LEAVES THE APP (before a message is sent,
+// before the confirmation screen opens). Today's record per supplier comes from the live
+// history this page already holds. mergeArchives still refuses inside the write as the last
+// safety net, but by then a message may already have gone out.
+// items: [{ supplierId, date }]. Answers `false` AT ONCE when nothing clashes — it is
+// deliberately not async, so a WhatsApp window opened right after is still inside the tap
+// (iOS Safari blocks a popup that waits behind an await). When something clashes it answers
+// a promise that resolves true once the person has read why.
+// `recording`: the caller is about to RECORD several suppliers in one go, and a refusal means
+// none of them was — the message says so.
+//
+// ⚠️ AN EXCEPTION IN THE CHECK MUST NEVER KILL THE SEND BUTTON: it is logged and the send goes
+// on, because the merge inside the write still refuses a real clash.
+function refuseOnUnitConflict(items, { recording = false } = {}) {
+  let message;
+  try {
+    message = unitConflictMessage(items, recording);
+  } catch (err) {
+    console.error('Unit check failed, carrying on:', err);
+    return false;
+  }
+  if (!message) return false;
+  return alertDialog(message).then(() => true);
+}
+
+// The refusal text for these suppliers and days, or '' when nothing clashes.
+function unitConflictMessage(items, recording) {
+  const ingredients = orderIngredients();
+  const found = items.map(({ supplierId, date }) => ({
+    supplierId, date,
+    conflicts: unitConflicts(
+      state.history.find(h => h && h.id === historyDocId(date, supplierId)),
+      state.entries, ingredients, supplierId),
+  })).filter(f => f.conflicts.length);
+  if (!found.length) return '';
+
+  const several = items.length > 1;
+  const mixedDays = new Set(found.map(f => f.date)).size > 1;
+  // One supplier: the plain list. Several: each line is prefixed with WHO it is about, and with
+  // its day too when the days differ.
+  const list = !several ? unitConflictList(found[0].conflicts) : found.map(f => {
+    const supplier = findOrderSupplier(f.supplierId);
+    const who = (supplier ? supplierLabel(supplier) : f.supplierId) + (mixedDays ? ` (${daySpoken(f.date)})` : '');
+    return f.conflicts.map(c => `${who}: ${c.name} — ${c.unit}`).join(', ');
+  }).join('; ');
+  const text = t('orders.unitConflict', { day: dayWhen(found[0].date), list });
+  return several && recording ? `${text} ${t('orders.unitConflictNothingRecorded')}` : text;
+}
+
 // Drop a supplier's rows from the in-memory draft immediately, so the screen
 // clears without waiting for the write to come back (and so a debounced save
 // already in flight cannot resurrect them).
@@ -1390,7 +1456,7 @@ function forgetSupplierLocally(supplierId) {
 // because state.days[supplierId] is restamped to today by any keystroke on that
 // supplier's rows — so reading it here would file a "Placed yesterday" order under
 // TODAY, which is precisely the mistake this whole feature exists to prevent.
-async function placeOrder(supplierId, { confirm = true, date: pinnedDate, quantities = null } = {}) {
+async function placeOrder(supplierId, { confirm = true, date: pinnedDate, quantities = null, units = null } = {}) {
   const supplier = findOrderSupplier(supplierId);
   if (!supplier) return false;
   const ingredients = orderIngredients();
@@ -1423,9 +1489,12 @@ async function placeOrder(supplierId, { confirm = true, date: pinnedDate, quanti
   // null only for the paths that deliberately do not ask (the unfinished-order
   // banner answering "placed yesterday" about an order that already went out).
   let confirmed = quantities;
+  let confirmedUnits = units;
   if (confirm) {
-    confirmed = await askToConfirmPlacement(supplier, date);
-    if (!confirmed) return false;
+    const answer = await askToConfirmPlacement(supplier, date);
+    if (!answer) return false;
+    confirmed = answer.quantities;
+    confirmedUnits = answer.units;
   }
   if (placing.has(supplierId)) return false; // the screen was open a while — re-check
 
@@ -1438,19 +1507,24 @@ async function placeOrder(supplierId, { confirm = true, date: pinnedDate, quanti
     // lost when the next snapshot arrives.
     await flushDraftSave();
     await archiveSupplier({
-      supplier, ingredients, entries: entriesToRecord(supplierId, ingredients, confirmed), date,
+      supplier, ingredients, entries: entriesToRecord(supplierId, ingredients, confirmed, confirmedUnits), date,
     });
   } catch (err) {
     console.error('Archiving order failed:', err);
     if (err?.code === 'orders/unit-conflict') {
       // Not a failure of the write: the same ingredient was already ordered today in a
       // different unit and the two cannot be added. Nothing was written and the draft
-      // is untouched, so say exactly which lines and what to do about it.
-      const names = (err.ids || []).map(id => {
+      // is untouched, so say exactly which lines and what to do about it. The screens
+      // normally catch this BEFORE anything is sent (refuseOnUnitConflict); this is the
+      // last safety net, for a record that changed on another phone in between.
+      const conflicts = unitConflicts(
+        state.history.find(h => h && h.id === historyDocId(date, supplierId)),
+        state.entries, ingredients, supplierId);
+      const list = conflicts.length ? unitConflictList(conflicts) : (err.ids || []).map(id => {
         const ing = ingredients.find(i => i.id === id);
         return (ing && ingredientLabel(ing)) || id;
       }).join(', ');
-      await alertDialog(t('orders.unitConflict', { names }));
+      await alertDialog(t('orders.unitConflict', { day: dayWhen(date), list }));
     } else {
       setStatus(t('orders.couldNotSaveThe'), 'error');
     }
@@ -1617,9 +1691,9 @@ function disablePlaceButton(supplierId) {
 // `confirmed` is null only for the paths that deliberately do not ask, and then
 // the shared order is recorded as it stands — which is right: nobody was shown
 // anything to disagree with.
-function entriesToRecord(supplierId, ingredients, confirmed) {
+function entriesToRecord(supplierId, ingredients, confirmed, units = null) {
   if (!confirmed) return state.entries;
-  return confirmedEntries(state.entries, ingredientsOf(supplierId, ingredients), confirmed);
+  return confirmedEntries(state.entries, ingredientsOf(supplierId, ingredients), confirmed, units);
 }
 
 // The usual amount for a row whose quantity looks like a typing mistake, else
@@ -1636,36 +1710,52 @@ function usualFor(id, qty) {
 }
 
 // The confirmation screen, for one supplier or for several. Resolves to
-// { [supplierId]: { [ingredientId]: qty } }, or null when it was backed out of.
-function openPlaceConfirm(items, { title, okLabel }) {
+// { quantities: { [supplierId]: { [ingredientId]: qty } }, units: { [supplierId]: { [ingredientId]: unit } } },
+// or null when it was backed out of (or refused for a unit conflict, having said why).
+//
+// ⚠️ `units` IS WHAT THE SCREEN SHOWED, frozen when it opened, next to the quantities: the
+// draft is live on every phone, and a unit changed elsewhere while this screen is open must
+// not become a different unit from the one the person confirmed.
+async function openPlaceConfirm(items, { title, okLabel }) {
+  // ⚠️ Before the screen opens: a clash with today's record is refused here, not after.
+  if (await refuseOnUnitConflict(items.map(({ supplier, date }) => ({ supplierId: supplier.id, date })), { recording: true })) {
+    return null;
+  }
   const ingredients = orderIngredients();
+  const shownUnits = {};
   const groups = items.map(({ supplier, date }) => {
     // What today's sent lists asked for, so whoever confirms can see where their
     // number differs from what they were asked for. `undefined` for a row no list
     // carried — which is not the same as a list asking for none of it.
-    const asked = askedToday(state.requests, supplier.id, date);
+    // Only what was asked in the unit the row means now: «asked 4 cartoni» beside a line
+    // of buste would compare two different things.
+    const liveUnits = Object.fromEntries(ingredientsOf(supplier.id, ingredients).map(ing =>
+      [ing.id, { ing, unit: entryUnit(state.entries[ing.id], ing) }]));
+    const asked = askedToday(state.requests, supplier.id, date, liveUnits);
+    const rows = ingredientsOf(supplier.id, ingredients)
+      .map(ing => ({
+        id: ing.id,
+        name: ingredientLabel(ing),
+        unit: entryUnit(state.entries[ing.id], ing),
+        qty: wholeNumber(state.entries[ing.id]?.qty),
+        asked: asked[ing.id],
+      }))
+      .filter(row => row.qty > 0)
+      .sort((a, b) => a.name.localeCompare(b.name));
+    shownUnits[supplier.id] = Object.fromEntries(rows.map(row => [row.id, row.unit]));
     return {
       supplierId: supplier.id,
       supplierName: supplierLabel(supplier),
       when: dayPhrase(date),
       already: state.history.some(h => h.id === historyDocId(date, supplier.id)),
-      rows: ingredientsOf(supplier.id, ingredients)
-        .map(ing => ({
-          id: ing.id,
-          name: ingredientLabel(ing),
-          unit: entryUnit(state.entries[ing.id], ing),
-          qty: wholeNumber(state.entries[ing.id]?.qty),
-          asked: asked[ing.id],
-        }))
-        .filter(row => row.qty > 0)
-        .sort((a, b) => a.name.localeCompare(b.name)),
+      rows,
     };
   });
 
   return new Promise(resolve => {
     const overlay = buildPlaceConfirm({ title, okLabel, groups, usualFor }, {
       onBack: () => { overlay.remove(); resolve(null); },
-      onConfirm: result => { overlay.remove(); resolve(result); },
+      onConfirm: result => { overlay.remove(); resolve({ quantities: result, units: shownUnits }); },
     });
     document.body.appendChild(overlay);
   });
@@ -1683,14 +1773,16 @@ async function askToConfirmPlacement(supplier, date) {
     title: already ? t('orders.confirm.addTitle') : t('orders.orderPlaced'),
     okLabel: already ? t('orders.addToIt') : t('orders.orderPlaced'),
   });
-  return result ? (result[supplier.id] || null) : null;
+  const quantities = result ? result.quantities[supplier.id] : null;
+  return quantities ? { quantities, units: result.units[supplier.id] } : null;
 }
 
 // The suggestion engine bound to the history currently in memory. ONE definition,
 // shared by every row on every screen and by the unusual-quantity check, so the
 // number a row shows and the number the confirmation quotes are the same number.
 function suggestFor(id, stock) {
-  return computeSuggestion(id, stock, state.history);
+  const ing = state.ingredients.find(i => i.id === id) || null;
+  return computeSuggestion(id, stock, state.history, ing);
 }
 
 // ── Reminders (today's orders / an order left from an earlier day) ────────────

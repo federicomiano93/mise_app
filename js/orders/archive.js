@@ -14,7 +14,7 @@ import { t } from '../i18n.js';
 import { supplierLabel } from '../supplier-label.js';
 import { toISODate, addDays, isBefore } from './day.js';
 import { compareLabels } from './order-text.js';
-import { cleanUnit, sameUnit, lineUnit } from '../order-unit.js';
+import { cleanUnit, sameUnit, lineUnit, entryUnit, recordUnit } from '../order-unit.js';
 
 // A quantity, made safe: whole, never negative, never NaN — and never Infinity.
 //
@@ -248,7 +248,7 @@ export function changedDays(next, known) {
 export function mergeArchives(existing, incoming, { cardUnitOf } = {}) {
   if (!existing) return incoming;
 
-  const effectiveUnit = (record, id) => cleanUnit(record.units?.[id]) || cleanUnit(cardUnitOf?.(id));
+  const effectiveUnit = (record, id) => recordUnit(record, id, { unit: cardUnitOf?.(id) });
   const conflicts = Object.keys(incoming.quantities || {}).filter(id =>
     num(existing.quantities?.[id]) > 0 && num(incoming.quantities[id]) > 0 &&
     !sameUnit(effectiveUnit(existing, id), effectiveUnit(incoming, id)));
@@ -281,6 +281,34 @@ export function mergeArchives(existing, incoming, { cardUnitOf } = {}) {
     createdAt: existing.createdAt || incoming.createdAt,
     updatedAt: incoming.updatedAt,
   };
+}
+
+// ⚠️ THE SAME QUESTION mergeArchives ANSWERS, asked BEFORE anything leaves the app: which of
+// the draft's lines would meet today's record of this supplier in a DIFFERENT unit? The
+// merge throws on these, but by then a WhatsApp message may already have gone to the
+// supplier, so the screens ask this first. Both use recordUnit() and sameUnit(), so «the
+// same unit» has one meaning.
+//
+// existingRecord: today's history record for this supplier, or null/undefined.
+// -> [{ id, name, unit }] — `unit` is the one ALREADY RECORDED, what the person must stay in.
+export function unitConflicts(existingRecord, entries, ingredients, supplierId) {
+  if (!existingRecord) return [];
+  const out = [];
+  ingredientsOf(supplierId, ingredients).forEach(ing => {
+    const entry = entries?.[ing.id];
+    if (!entry || num(entry.qty) <= 0 || num(existingRecord.quantities?.[ing.id]) <= 0) return;
+    const recorded = recordUnit(existingRecord, ing.id, ing);
+    if (!sameUnit(entryUnit(entry, ing), recorded)) {
+      out.push({ id: ing.id, name: ingredientLabel(ing), unit: recorded });
+    }
+  });
+  return out;
+}
+
+// «Flour 25kg — cartone, Yeast — busta»: each clashing line with the unit it must stay in,
+// joined with commas (no singular/plural agreement to get wrong in either language).
+export function unitConflictList(conflicts) {
+  return (conflicts || []).map(c => `${c.name} — ${c.unit}`).join(', ');
 }
 
 // Split day sections (the output of groupHistoryByDay) into the ones History shows

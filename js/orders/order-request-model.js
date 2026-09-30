@@ -18,6 +18,7 @@ import { t } from '../i18n.js';
 import { supplierLabel } from '../supplier-label.js';
 import { ingredientsOf, ingredientLabel, recordedName, wholeNumber } from './archive.js';
 import { toISODate, addDays, isBefore } from './day.js';
+import { lineUnit, cleanUnit, recordUnit, entryUnit, sameUnit } from '../order-unit.js';
 
 // ⚠️ A CAP, BECAUSE THE RULES CANNOT COUNT WHAT THEY CANNOT SEE. firestore.rules
 // caps each map's size; this is the same number at this end, so a list too big is
@@ -70,6 +71,7 @@ export function buildOrderRequest({
   suppliers, ingredients, entries, date, from, note = '', now = new Date(),
 }) {
   const quantities = {};
+  const units = {};
   const names = {};
   const supplierOf = {};
   const supplierNames = {};
@@ -83,6 +85,10 @@ export function buildOrderRequest({
       const qty = wholeNumber(entries?.[ing.id]?.qty);
       if (qty <= 0) return;
       quantities[ing.id] = qty;
+      // The unit the line means, frozen like the record does — only for a line with a
+      // choice (or a non-default unit), so every other list keeps its old shape.
+      const unit = lineUnit(ing, entries?.[ing.id]);
+      if (unit) units[ing.id] = unit;
       // Frozen the day it was sent, so a list still names what was asked for after
       // the ingredient is renamed or deleted.
       names[ing.id] = ingredientLabel(ing);
@@ -104,6 +110,8 @@ export function buildOrderRequest({
     fromUid: from?.uid || '',
     fromName: from?.name || '',
     quantities,
+    // Left out entirely when no line has a unit: the rules treat the key as optional.
+    ...(Object.keys(units).length ? { units } : {}),
     names,
     supplierOf,
     supplierNames,
@@ -178,6 +186,8 @@ export function groupRequest(request, ingredientsById) {
       id,
       name: recordedName(id, ingredientsById, request?.names),
       qty: wholeNumber(quantities[id]),
+      // What the line was sent in; '' = the card's own unit (no word to print).
+      unit: cleanUnit(request?.units?.[id]),
       done: done[id] === true,
     });
   });
@@ -214,14 +224,21 @@ export function supplierIdsOf(request) {
 // after doing exactly the right thing every line would otherwise light up with
 // "now 0" — an alarm that fires on success is an alarm people learn to ignore. A
 // ticked line has already been dealt with, so the warning has no job left on it.
-export function liveDifference(request, entries) {
+//
+// ⚠️ A DIFFERENT UNIT IS A DIFFERENCE, even at the same number: 2 cartoni were sent and
+// the live line now says 2 buste. `ingredientsById` (optional) lets the card's own unit
+// stand for «no unit stored»; without it only stored units are compared.
+export function liveDifference(request, entries, ingredientsById = {}) {
   const quantities = request?.quantities || {};
   const done = request?.done || {};
   const out = {};
   Object.keys(quantities).forEach(id => {
     if (done[id] === true) return;
+    const ing = ingredientsById?.[id];
     const live = wholeNumber(entries?.[id]?.qty);
-    if (live !== wholeNumber(quantities[id])) out[id] = live;
+    const sentUnit = recordUnit(request, id, ing);
+    const liveUnit = entryUnit(entries?.[id], ing);
+    if (live !== wholeNumber(quantities[id]) || !sameUnit(sentUnit, liveUnit)) out[id] = live;
   });
   return out;
 }

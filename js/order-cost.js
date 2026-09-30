@@ -15,6 +15,7 @@
 
 import { isPriceUnit, positiveNumber, storedCaseOf } from './price-model.js';
 import { parsePackSize } from './pack-size.js';
+import { cleanUnit, sameUnit } from './order-unit.js';
 
 // The net cost of ONE ORDERED UNIT of an ingredient — one sack, one case, one
 // piece, whatever the order screen's own quantity box counts.
@@ -117,6 +118,21 @@ export function unitCost(ingredient, price) {
   const packKg = parsePackSize(packText);
   if (packKg === null) return null;
   return rate * packKg;
+}
+
+// The net cost of ONE of a line's CHOSEN unit. The card's own unit (or no choice) is exactly
+// unitCost(). A DIFFERENT unit is priced only when it is the card's package word AND the price
+// carries a stored case of packages: case price ÷ packages in it. Every other combination is
+// null («no price») — a per-piece or per-kilo rate says nothing about how much a busta costs,
+// and a stale unit (a package since renamed) means nothing either; a guess would be 4 times
+// too high and look as trustworthy as a right number.
+export function lineUnitCost(ingredient, price, unit) {
+  const chosen = cleanUnit(unit);
+  if (chosen === '' || sameUnit(chosen, ingredient && ingredient.unit)) return unitCost(ingredient, price);
+  const wholeCase = storedCaseOf(price);
+  if (!wholeCase || wholeCase.caseItemUnit !== 'pack' || !(wholeCase.caseCount > 0)) return null;
+  if (!sameUnit(chosen, ingredient && ingredient.packUnit)) return null;
+  return unitCost({ ...ingredient, unit: chosen }, price);
 }
 
 // The whole order's cost from its LINES — one entry per ingredient actually

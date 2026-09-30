@@ -20,7 +20,7 @@ import {
   monthKey, previousMonth, nextMonth, isClosed, isMonthId, consumption,
   productsOfMonth,
 } from './inventory-model.js';
-import { confirmDialog } from './confirm-dialog.js';
+import { confirmDialog, alertDialog } from './confirm-dialog.js';
 import { sessionReady, currentSession } from '../firebase.js';
 
 const screen = document.getElementById('invScreen');
@@ -233,6 +233,12 @@ async function handlePurchases() {
   if (found.failed) { toast(t('inv.purchasesFailed')); return; }
   if (!found.orders) { toast(t('inv.purchasesNone', { month: monthName(openMonthId) })); return; }
 
+  // Products ordered in another unit than the stocktake counts in, which the app could
+  // not convert: said out loud in a dialog (a toast vanishes before a list of names can
+  // be read), because a quiet omission would read as «none bought».
+  const otherUnit = otherUnitSentence(found.unconverted);
+  if (!found.products && otherUnit) { await alertDialog(otherUnit); return; }
+
   // ⚠️ ONE COUNT IN THE SENTENCE, AND IT IS THE ONE THAT INFLECTS. A message
   // carrying two numbers cannot agree with both: the first version of this said
   // "2 orders covering 1 products", which is the kind of thing that makes an app
@@ -248,6 +254,20 @@ async function handlePurchases() {
   if (!ok) return;
   const filled = applyPurchases(found.totals);
   toast(t('inv.purchasesFilled', { n: filled }));
+  if (otherUnit) await alertDialog(otherUnit);
+}
+
+// «{names}: ordered in another unit…», or '' when every line could be counted. The names
+// are read from the ingredients as they are now, inside the function (the language is
+// only known once a venue is open).
+function otherUnitSentence(ids) {
+  if (!ids || !ids.length) return '';
+  const byId = Object.fromEntries(getIngredients().map(i => [i.id, i]));
+  const names = ids
+    .map(id => [byId[id]?.name, byId[id]?.weight].filter(Boolean).join(' ').trim() || t('inv.unnamedProduct'))
+    .sort((a, b) => a.localeCompare(b))
+    .join(', ');
+  return t('inv.purchasesOtherUnit', { names });
 }
 
 // Freeze the month, and open the next one with these counts as its opening.

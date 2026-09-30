@@ -214,8 +214,8 @@ test('⚠️⚠️ what was already ordered is drawn as its own block', () => {
 
 test('the sent list is told what was actually ordered', () => {
   assert.match(MAIN, /orderedById: orderedForRequest\(/);
-  assert.ok(REQ.includes('orderedQty !== undefined && orderedQty !== item.qty'),
-    'and says so only when the two disagree');
+  assert.ok(REQ.includes('orderedQty !== undefined && (orderedQty !== item.qty || otherUnit)'),
+    'and says so only when the two disagree — in number or in unit');
 });
 
 // ⚠️⚠️ RECORDING AN ORDER CLEARS THE ROWS, so on a row already bought the old
@@ -255,4 +255,42 @@ test('every new phrase exists in BOTH languages', () => {
       assert.ok(ok, `${key} is missing in ${lang}`);
     }
   }
+});
+
+// ── Units: told and ordered count only in the unit the row means now ──────────
+
+const CARD_ING = [{ id: 'flour', name: 'Flour', supplierId: 's1', unit: 'cartone', packUnit: 'busta' }];
+const runUnits = ({ requests = [], history = [], draft }) => untoldChanges({
+  suppliers: SUPPLIERS, ingredients: CARD_ING, entries: draft, requests, history, today: TODAY,
+});
+
+test('⚠️ 2 cartoni told, then the line becomes 2 buste: reported in full', () => {
+  const told = list({ flour: 2 }, { units: { flour: 'cartone' } });
+  const out = runUnits({ requests: [told], draft: { flour: { qty: 2, unit: 'busta' } } });
+  assert.equal(out.length, 1, 'the gate still opens: a list WAS sent');
+  assert.equal(out[0].rows[0].extra, 2);
+});
+
+test('the same unit still quiets the row, whatever the capitals', () => {
+  const told = list({ flour: 2 }, { units: { flour: 'Busta' } });
+  assert.deepEqual(runUnits({ requests: [told], draft: { flour: { qty: 2, unit: 'busta' } } }), []);
+});
+
+test('a list with no stored unit is in the card’s unit', () => {
+  const told = list({ flour: 2 });
+  assert.deepEqual(runUnits({ requests: [told], draft: { flour: { qty: 2 } } }), []);
+  assert.equal(runUnits({ requests: [told], draft: { flour: { qty: 2, unit: 'busta' } } })[0].rows[0].extra, 2);
+});
+
+test('an order already placed in another unit is «already ordered», never matched', () => {
+  const placed = record({ flour: 2 }, { units: { flour: 'cartone' } });
+  const out = runUnits({ history: [placed], draft: { flour: { qty: 2, unit: 'busta' } } });
+  assert.equal(out[0].rows[0].extra, 2);
+  assert.equal(out[0].rows[0].alreadyOrdered, true);
+});
+
+test('orderedToday keeps only the lines in the unit asked for', () => {
+  const placed = record({ flour: 2, bacon: 1 }, { units: { flour: 'busta' } });
+  const live = { flour: { ing: CARD_ING[0], unit: 'cartone' } };
+  assert.deepEqual(orderedToday([placed], 's1', TODAY, live), { bacon: 1 });
 });

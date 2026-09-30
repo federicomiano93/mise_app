@@ -280,3 +280,45 @@ test('an order with nothing odd in it reports nothing', () => {
 test('a row left at zero is not an order and is never flagged', () => {
   assert.deepEqual(unusualQuantities(ING, { flour: { qty: 0 } }, suggest), []);
 });
+
+// ── The unit an order was placed in ──────────────────────────────────────────
+// A «cartone» card that can also be ordered by the «busta»: the par level is a number
+// of cartoni, so orders placed in buste must not be averaged into it.
+
+const CARD = { id: 'flour', unit: 'cartone', packUnit: 'busta' };
+const inUnit = (date, qty, stock, unit) => ({ ...order(date, 'flour', qty, stock), ...(unit ? { units: { flour: unit } } : {}) });
+
+test('⚠️ orders placed in another unit are left out of the par level', () => {
+  const history = [
+    inUnit('2026-09-01', 4, 0), inUnit('2026-09-02', 4, 0), inUnit('2026-09-03', 4, 0),
+    inUnit('2026-09-04', 4, 0, 'cartone'),
+    inUnit('2026-09-05', 40, 0, 'busta'), inUnit('2026-09-06', 40, 0, 'busta'),
+  ];
+  const r = computeSuggestion('flour', 0, history, CARD);
+  assert.equal(r.active, true);
+  assert.equal(r.par, 4, 'the two busta orders did not drag it up');
+  // Without the card every order counts, as before the choice existed.
+  assert.notEqual(computeSuggestion('flour', 0, history).par, 4);
+});
+
+test('orders in another unit do not count toward the four needed to activate', () => {
+  const history = [
+    inUnit('2026-09-01', 4, 0), inUnit('2026-09-02', 4, 0),
+    inUnit('2026-09-03', 4, 0, 'busta'), inUnit('2026-09-04', 4, 0, 'busta'),
+  ];
+  const r = computeSuggestion('flour', 0, history, CARD);
+  assert.equal(r.active, false);
+  assert.equal(r.ordersRemaining, 2);
+});
+
+test('the unit is compared ignoring capitals and spaces', () => {
+  const history = ['01', '02', '03', '04'].map(d => inUnit(`2026-09-${d}`, 3, 0, ' Cartone '));
+  assert.equal(computeSuggestion('flour', 0, history, CARD).active, true);
+});
+
+test('a line in another unit than the card has no «usual» in the unusual-quantity check', () => {
+  const suggest = () => ({ active: true, par: 4 });
+  const entries = { flour: { qty: 300, unit: 'busta' } };
+  assert.deepEqual(unusualQuantities([CARD], entries, suggest), []);
+  assert.equal(unusualQuantities([CARD], { flour: { qty: 300 } }, suggest).length, 1);
+});

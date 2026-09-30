@@ -326,10 +326,13 @@ export async function readProposedPurchases() {
   if (!bounds) return { totals: {}, orders: 0, products: 0, failed: false };
   try {
     const records = await getOrdersInMonth(bounds.from, bounds.to);
-    return { ...purchasesInMonth(records, monthId), failed: false };
+    // The PRICED ingredients: a case of packages (what lets a line in «busta» be counted
+    // in «cartone») is stored in the price document, which `ingredients` already merges.
+    const byId = Object.fromEntries(ingredients.map(i => [i.id, i]));
+    return { ...purchasesInMonth(records, monthId, byId), failed: false };
   } catch (err) {
     console.warn('Could not read the orders of this month:', err);
-    return { totals: {}, orders: 0, products: 0, failed: true };
+    return { totals: {}, orders: 0, products: 0, unconverted: [], failed: true };
   }
 }
 

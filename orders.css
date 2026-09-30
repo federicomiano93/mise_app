@@ -650,7 +650,9 @@
   background: var(--surface-2);
   color: var(--text);
   font-family: var(--font);
-  font-size: 13px;
+  /* 16px, never less: iOS Safari zooms the whole page when a control under 16px is focused.
+     «cartone» is ~60px at this size, inside the ~86px left of the 122px after padding and arrow. */
+  font-size: 16px;
   text-overflow: ellipsis;
 }
 .ing-row--line .ing-unit-select:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 1px; }

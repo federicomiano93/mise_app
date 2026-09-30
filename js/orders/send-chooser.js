@@ -11,7 +11,7 @@ import { supplierLabel } from '../supplier-label.js';
 import { el } from './dom.js';
 import { alertDialog } from './confirm-dialog.js';
 import { buildOrderMessage, whatsappUrl } from './order-text.js';
-import { routesFor, routeAvailableFor, unreachable } from './send-routes.js';
+import { routesFor, routeAvailableFor, unreachable, routeSendsToSupplier } from './send-routes.js';
 import { WHATSAPP_PATHS, EMAIL_PATHS, svgFrom } from '../send-icon.js';
 
 // ⚠️ THE TWO SHARED GLYPHS COME FROM js/send-icon.js SINCE 24 Aug 2026, because the
@@ -59,7 +59,7 @@ export function offerFor({ settings, canManage, suppliers }) {
 
 // Ask, then act. `rows` are the picked suppliers ({ id, name, items }).
 export function chooseAndSend({ rows, settings, canManage, suppliers, locationName, grouped,
-                               onSendToManager, onSent }) {
+                               onSendToManager, onSent, beforeSend }) {
   const offers = offerFor({ settings, canManage, suppliers }).filter(o => o.usable);
 
   if (!offers.length) {
@@ -97,6 +97,13 @@ export function chooseAndSend({ rows, settings, canManage, suppliers, locationNa
   });
 
   function take(offer) {
+    // ⚠️ ASKED HERE, WHERE THE ROAD IS KNOWN, AND ONLY FOR ROADS THAT REACH THE SUPPLIER.
+    // `beforeSend` answers false at once when all is well (so window.open below stays inside
+    // the tap), or a promise once it has refused and said why — then nothing is sent.
+    if (beforeSend && routeSendsToSupplier(offer.route)) {
+      const refused = beforeSend(rows);
+      if (refused) return refused.then(() => false);
+    }
     if (offer.route === 'manager') { onSendToManager?.(rows.map(r => r.id)); return true; }
 
     const message = supplierName => buildOrderMessage(

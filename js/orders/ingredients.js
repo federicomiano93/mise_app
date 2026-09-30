@@ -13,7 +13,7 @@ import { t } from '../i18n.js';
 import { el } from './dom.js';
 import { isUnusualQuantity } from './suggestions.js';
 import { wholeNumber, sortByLabel, ingredientLabel } from './archive.js';
-import { unitChoices, entryUnit, storedUnitFor, sameUnit } from '../order-unit.js';
+import { unitChoices, entryUnit, storedUnitFor, sameUnit, isDefaultUnit } from '../order-unit.js';
 
 // How many of a supplier's ingredients already have a quantity entered — used to
 // paint the progress bar correctly on first render (before any typing), so a
@@ -148,6 +148,16 @@ export function buildRow(ing, supplier, suggest, entries, hooks, { meta = '' } =
   // "Suggested: 8" sitting beside "much more than usual" would be saying the same
   // thing twice anyway.
   function updateHint() {
+    // ⚠️ NO HINT, AND NO AUTO-FILL, FOR A LINE IN ANOTHER UNIT THAN THE CARD'S. The history
+    // the suggestion is worked out from counts the card's unit, so «Suggested: 4» under a
+    // line of buste — or 4 typed into it from the stock box — would be a number of the
+    // wrong thing. Returning an inactive result stops both (the stock handler fills only
+    // on an active one); switching back to the card's unit brings them back.
+    if (!isDefaultUnit(entryFor(entries, ing.id), ing)) {
+      hint.textContent = '';
+      hint.className = 'ing-suggestion';
+      return { active: false };
+    }
     const result = suggest(ing.id, entryFor(entries, ing.id).stock || 0);
     const qty = entryFor(entries, ing.id).qty || 0;
 
@@ -221,6 +231,11 @@ export function buildRow(ing, supplier, suggest, entries, hooks, { meta = '' } =
         // Name AND weight: «Flour 1kg» and «Flour 25kg» must not both read «clear Flour».
         'aria-label': t('orders.clearQtyFor', { name: ingredientLabel(ing) || t('orders.unnamedProduct') }),
         onClick: (event) => {
+          // A cleared line starts again in the card's own unit (the default), exactly as
+          // «Clear quantities» does — the unit goes first so the one autosave carries both.
+          const cleared = entryFor(entries, ing.id);
+          cleared.unit = '';
+          paintUnitSelect(row, ing, cleared);
           setQty(0);
           updateHint();
           // Only a keyboard activation goes back to the box: after a tap the phone's

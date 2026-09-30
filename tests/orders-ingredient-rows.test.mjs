@@ -155,6 +155,9 @@ test('the clear button zeroes the quantity, keeps stock, and focuses only from t
   const button = buildRowSource.slice(buildRowSource.indexOf("'ing-qty-clear'"));
   const handler = button.slice(button.indexOf('onClick'), button.indexOf("class: 'ing-col'"));
   assert.doesNotMatch(handler, /stock/i);
+  // A cleared line goes back to the card's unit, and the menu is repainted to show it.
+  assert.match(handler, /\.unit = ''/);
+  assert.match(handler, /paintUnitSelect\(row, ing, cleared\)/);
   assert.match(buildRowSource, /function setQty\(value, fromInput\) \{\s*const qty = wholeNumber\(value\);\s*entryFor\(entries, ing\.id\)\.qty = qty;/);
 });
 
@@ -224,6 +227,8 @@ test('the unit menu is a second grid line over Order + Stock, a 44px target, sco
   assert.match(r, /grid-column:\s*2 \/ -1/);
   assert.match(r, /grid-row:\s*2/);
   assert.match(r, /min-height:\s*var\(--ing-box-h\)/);
+  // iOS Safari zooms the page on focusing a control under 16px.
+  assert.match(r, /font-size:\s*(1[6-9]|[2-9]\d)px/);
   assert.match(rule('.ing-row--line .ing-unit-select:focus-visible'), /outline:/);
   assert.match(rule('.ingredient-list .ing-row--choice .ing-main'), /grid-row:\s*1 \/ span 2/);
 });
@@ -232,4 +237,22 @@ test('the unit menu label exists in English and Italian', () => {
   const i18n = read('js/i18n.js');
   assert.match(i18n, /'orders\.unitToOrderFor': 'Unit to order for \{name\}'/);
   assert.match(i18n, /'orders\.unitToOrderFor': 'Unità d’ordine per \{name\}'/);
+});
+
+test('⚠️ a line in another unit than the card shows no suggestion and never auto-fills', () => {
+  const hint = buildRowSource.slice(buildRowSource.indexOf('function updateHint'));
+  const body = hint.slice(0, hint.indexOf('stockInput.addEventListener'));
+  // The guard comes BEFORE the suggestion is asked for, and answers «inactive» — which is
+  // what the stock handler reads to decide whether to fill the quantity in.
+  const guard = body.indexOf('isDefaultUnit(entryFor(entries, ing.id), ing)');
+  assert.ok(guard > -1 && guard < body.indexOf('suggest(ing.id'));
+  assert.match(body.slice(guard, body.indexOf('suggest(ing.id')), /return \{ active: false \}/);
+  assert.match(buildRowSource, /if \(result\.active\) setQty\(result\.suggestion\)/);
+  // Switching unit re-runs the hint, so going back to the default brings it back.
+  assert.match(buildRowSource, /unitSelect\.addEventListener\('change'[\s\S]*?updateHint\(\)/);
+});
+
+test('the suggestion engine is asked with the card, so its history is one unit', () => {
+  const main = read('js/orders/orders-main.js');
+  assert.match(main, /computeSuggestion\(id, stock, state\.history, ing\)/);
 });

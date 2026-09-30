@@ -107,6 +107,81 @@ test('halves add up without leaving float dust behind', () => {
 
 test('a month with no orders proposes nothing, and says so without failing', () => {
   const out = purchasesInMonth([], '2026-09');
-  assert.deepEqual(out, { totals: {}, orders: 0, products: 0 });
+  assert.deepEqual(out, { totals: {}, orders: 0, products: 0, unconverted: [] });
   assert.deepEqual(purchasesInMonth(null, '2026-09').totals, {});
+});
+
+// ── Units ────────────────────────────────────────────────────────────────────
+
+import { qtyInCardUnit } from '../js/inventory/inventory-purchases.js';
+import { readFileSync } from 'node:fs';
+
+// A «cartone» card holding 4 × «busta», priced by the case (the case is what lets a line
+// in buste be counted in cartoni).
+const CASED = {
+  id: 'flour', unit: 'cartone', packUnit: 'busta',
+  priceUnit: 'kg', pricePerUnit: 2, casePrice: 20, caseCount: 4, caseItemSize: 2.5, caseItemUnit: 'pack',
+};
+const UNCASED = { id: 'flour', unit: 'cartone', packUnit: 'busta' };
+const withUnits = (qty, unit) => order('2026-09-04', { flour: qty }, { units: { flour: unit } });
+
+test('a line in the card’s own unit counts as before', () => {
+  const r = purchasesInMonth([withUnits(3, 'cartone')], '2026-09', { flour: UNCASED });
+  assert.deepEqual(r.totals, { flour: 3 });
+  assert.deepEqual(r.unconverted, []);
+});
+
+test('⚠️ 2 buste on a case of 4 are half a cartone', () => {
+  const r = purchasesInMonth([withUnits(2, 'busta'), withUnits(3, 'cartone')], '2026-09', { flour: CASED });
+  assert.deepEqual(r.totals, { flour: 3.5 });
+  assert.deepEqual(r.unconverted, []);
+});
+
+test('an odd division is kept to three decimals, the precision the stocktake stores', () => {
+  // 30 / (3 × 2.5 kg) = 4 per kg: the stored rate must stay the one the case derives.
+  const three = { ...CASED, caseCount: 3, casePrice: 30, pricePerUnit: 4 };
+  assert.deepEqual(purchasesInMonth([withUnits(1, 'busta')], '2026-09', { flour: three }).totals, { flour: 0.333 });
+});
+
+test('⚠️ another unit with no case to convert by is LEFT OUT and reported, never guessed', () => {
+  const r = purchasesInMonth([withUnits(2, 'busta'), withUnits(3, 'cartone')], '2026-09', { flour: UNCASED });
+  assert.deepEqual(r.totals, { flour: 3 });
+  assert.deepEqual(r.unconverted, ['flour']);
+});
+
+test('a case of pieces (not packages), or a stale case, is not used to convert', () => {
+  const pieces = { ...CASED, caseItemUnit: 'pcs', caseItemSize: null };
+  assert.equal(qtyInCardUnit(2, 'busta', pieces), null);
+  const stale = { ...CASED, pricePerUnit: 9 };
+  assert.equal(qtyInCardUnit(2, 'busta', stale), null);
+});
+
+test('a unit that is neither the card’s nor its package is not converted', () => {
+  assert.equal(qtyInCardUnit(2, 'sacco', CASED), null);
+});
+
+test('a frozen unit with no card (deleted) is reported, never counted as the card unit', () => {
+  const r = purchasesInMonth([withUnits(2, 'busta')], '2026-09', {});
+  assert.deepEqual(r.totals, {});
+  assert.deepEqual(r.unconverted, ['flour']);
+});
+
+test('a product with no card (deleted) and old records behave exactly as before', () => {
+  assert.deepEqual(purchasesInMonth([order('2026-09-04', { flour: 5 })], '2026-09', { flour: CASED }).totals, { flour: 5 });
+  assert.deepEqual(purchasesInMonth([order('2026-09-04', { flour: 5 })], '2026-09').totals, { flour: 5 });
+});
+
+test('a line marked missing does not reach the unit question at all', () => {
+  const rec = order('2026-09-04', { flour: 2 }, { units: { flour: 'busta' }, missing: { flour: true } });
+  const r = purchasesInMonth([rec], '2026-09', { flour: UNCASED });
+  assert.deepEqual(r.totals, {});
+  assert.deepEqual(r.unconverted, []);
+});
+
+test('the sentence exists in English and Italian and inventory imports only from js/ root', () => {
+  const i18n = readFileSync(new URL('../js/i18n.js', import.meta.url), 'utf8');
+  assert.match(i18n, /'inv\.purchasesOtherUnit': '\{names\}: not counted here — the app cannot tell how many of the counted unit they make\. Add them by hand\.'/);
+  assert.match(i18n, /'inv\.purchasesOtherUnit': '\{names\}: non contati qui, perché l’app non sa a quante unità del conteggio corrispondono\. Aggiungili a mano\.'/);
+  const src = readFileSync(new URL('../js/inventory/inventory-purchases.js', import.meta.url), 'utf8');
+  assert.doesNotMatch(src, /from '\.\.\/orders\//);
 });
