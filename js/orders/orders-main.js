@@ -59,6 +59,7 @@ import {
 import {
   historyDocId, ingredientsOf, supplierHasItems, ingredientLabel, wholeNumber,
 } from './archive.js';
+import { storedUnitFor } from '../order-unit.js';
 import { todayOrders, pendingSuppliers } from './reminders.js';
 import { renderTodayOrders, renderPending } from './reminder-view.js';
 import { resolveSuppliers, orderSuppliers, NO_SUPPLIER_ID } from './no-supplier.js';
@@ -772,8 +773,13 @@ function renderIncoming() {
     // ⚠️ GOES THROUGH THE SAME AUTOSAVE EVERY KEYSTROKE USES. A second way to write
     // the draft is a second thing that can disagree with the first about what is in it.
     onReorder: async (applied) => {
-      applied.forEach(({ id, qty }) => {
-        state.entries[id] = { ...(state.entries[id] || { stock: 0 }), qty };
+      applied.forEach(({ id, qty, unit }) => {
+        // The re-ordered line comes back in the unit it was first ordered in; the card's
+        // own unit is stored as nothing (see storedUnitFor).
+        state.entries[id] = {
+          ...(state.entries[id] || { stock: 0 }), qty,
+          unit: storedUnitFor(unit, ingredientsById[id]),
+        };
       });
       await saveDraftNow(state.entries, state.days);
       syncInputsFromState();
@@ -1432,7 +1438,18 @@ async function placeOrder(supplierId, { confirm = true, date: pinnedDate, quanti
     });
   } catch (err) {
     console.error('Archiving order failed:', err);
-    setStatus(t('orders.couldNotSaveThe'), 'error');
+    if (err?.code === 'orders/unit-conflict') {
+      // Not a failure of the write: the same ingredient was already ordered today in a
+      // different unit and the two cannot be added. Nothing was written and the draft
+      // is untouched, so say exactly which lines and what to do about it.
+      const names = (err.ids || []).map(id => {
+        const ing = ingredients.find(i => i.id === id);
+        return (ing && ingredientLabel(ing)) || id;
+      }).join(', ');
+      await alertDialog(t('orders.unitConflict', { names }));
+    } else {
+      setStatus(t('orders.couldNotSaveThe'), 'error');
+    }
     placing.delete(supplierId);
     refreshAllSuppliers();          // restore the button to whatever the rows say
     return false;
@@ -1484,6 +1501,7 @@ function forgetQuantitiesLocally(supplierIds) {
       const entry = state.entries[ing.id];
       if (!entry) return;
       delete entry.qty;
+      delete entry.unit;   // back to the card's unit, like the paths quantityPathsFor deletes
       // Nothing ordered and nothing on the shelf is not a row at all — and it
       // matches what Firestore does when the last key of a map is deleted.
       if (!(Number(entry.stock) > 0)) delete state.entries[ing.id];

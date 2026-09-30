@@ -749,6 +749,29 @@ async function history() {
     () => wholeWrite('locations/main/orders-history/2026-07-24_SUP_MODERN',
       { ...modern, names: 'Bacon' }));
 
+  // ── units: the unit each line was ordered in ───────────────────────────────
+  //
+  // OPTIONAL IN BOTH DIRECTIONS, like `names`: a phone that does not know the choice
+  // sends none, a phone that does sends it, and both must be able to record an order.
+  // The denials come with their types because a list HAS .size(): without `is map` a
+  // list of 500 or fewer items would pass the ceiling alone.
+  await expectAllowed('an order carrying the unit each line was ordered in',
+    () => wholeWrite('locations/main/orders-history/2026-07-24_SUP_MODERN',
+      { ...modern, units: { ING_MODERN: 'busta' } }));
+  await expectAllowed('an order with no units at all (an ordinary one)',
+    () => wholeWrite('locations/main/orders-history/2026-07-24_SUP_MODERN', modern));
+  await expectDenied('units sent as a list instead of a map',
+    () => wholeWrite('locations/main/orders-history/2026-07-24_SUP_MODERN',
+      { ...modern, units: ['busta'] }));
+  await expectDenied('units sent as a string',
+    () => wholeWrite('locations/main/orders-history/2026-07-24_SUP_MODERN',
+      { ...modern, units: 'busta' }));
+  const manyUnits = {};
+  for (let i = 0; i < 501; i++) manyUnits[`ING_${i}`] = 'busta';
+  await expectDenied('units with more than 500 keys',
+    () => wholeWrite('locations/main/orders-history/2026-07-24_SUP_MODERN',
+      { ...modern, units: manyUnits }));
+
   // The two allow statements must not OR into a hole: a weekly-shaped payload has to
   // stay out of the daily ids.
   await expectDenied('a legacy-shaped payload smuggled under a current-model id',
@@ -756,6 +779,9 @@ async function history() {
   await expectDenied('names smuggled onto a legacy weekly record',
     () => wholeWrite('locations/main/orders-history/2026-W28',
       { ...legacyPayload, names: { ING_LEGACY: 'Type 00 Flour' } }));
+  await expectDenied('units smuggled onto a legacy weekly record',
+    () => wholeWrite('locations/main/orders-history/2026-W28',
+      { ...legacyPayload, units: { ING_LEGACY: 'busta' } }));
 
   await expectAllowed('delete a recorded order',
     () => deleteWrite('locations/main/orders-history/2026-07-24_SUP_MODERN'));
@@ -2816,6 +2842,10 @@ async function orderRequests() {
     () => wholeWrite(REQ, { ...sent, date: '14/08/2026' }, asAccount(SAM)));
   await expectDenied('a stray field nobody validated',
     () => wholeWrite(REQ, { ...sent, priority: 'urgent' }, asAccount(SAM)));
+  await expectDenied('units sent as a list instead of a map',
+    () => wholeWrite(REQ, { ...sent, units: ['busta'] }, asAccount(SAM)));
+  await expectDenied('units sent as a string',
+    () => wholeWrite(REQ, { ...sent, units: 'busta' }, asAccount(SAM)));
   await expectDenied('a list stamped for another location',
     () => wholeWrite(REQ, { ...sent, bakery: 'trattoria-x' }, asAccount(SAM)));
   await expectDenied('somebody with no access at all sending a list',
@@ -2826,6 +2856,11 @@ async function orderRequests() {
   // Now the list really is sent — by an ordinary EMPLOYEE, which is the whole point.
   await expectAllowed('an employee sends an order list to whoever runs the place',
     () => wholeWrite(REQ, sent, asAccount(SAM)));
+  // A list that names the unit of the lines that have a choice; another document, because
+  // REQ now exists and an overwrite is an update, which only ever touches the ticks.
+  await expectAllowed('an order list carrying the unit of each line that has a choice',
+    () => wholeWrite(`${L}/order-requests/REQ_UNITS`,
+      { ...sent, units: { ING_A: 'busta' } }, asAccount(SAM)));
 
   // ⚠️⚠️ THE NARROWEST UPDATE IN THE FILE, AND HERE IS WHY IT MATTERS. Ticking is
   // open to everybody in the location, so if the update were not pinned to `done`

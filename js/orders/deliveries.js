@@ -18,6 +18,7 @@
 // was ordered at all, which is exactly what you need to chase a supplier.
 
 import { recordDate, isLegacyRecord, wholeNumber } from './archive.js';
+import { cleanUnit } from '../order-unit.js';
 import { parseISODate, toISODate, addDays, isBefore, weekdayOf } from './day.js';
 import { inCurrentWeek, beforeCurrentWeek, DEFAULT_WEEK_START } from './work-week.js';
 
@@ -165,11 +166,15 @@ export function stillToReorder(history, draftEntries) {
       // Already in the order being typed?
       if (wholeNumber(draftEntries?.[id]?.qty) > 0) return;
 
+      // The unit the missed line was ORDERED in, when the record froze one: putting it
+      // back in another unit would order a different thing. Absent for ordinary lines.
+      const unit = cleanUnit(record.units?.[id]);
       out.push({
         id,
         supplierId,
         qty: wholeNumber(record.quantities?.[id]),
         missedOn,
+        ...(unit ? { unit } : {}),
       });
     });
   });
@@ -198,7 +203,7 @@ export function applyReorder(items, draftEntries) {
     if (!item?.id) return;
     const existing = wholeNumber(draftEntries?.[item.id]?.qty);
     if (existing > 0) skipped.push({ id: item.id, qty: item.qty, existing });
-    else applied.push({ id: item.id, qty: wholeNumber(item.qty) });
+    else applied.push({ id: item.id, qty: wholeNumber(item.qty), ...(item.unit ? { unit: item.unit } : {}) });
   });
 
   return { applied, skipped };
