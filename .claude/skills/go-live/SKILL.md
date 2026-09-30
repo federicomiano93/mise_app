@@ -30,9 +30,14 @@ for Federico**, and the question is about TIMING, not content: he picks the hour
       ONE merge of the top one, then check the lower ones show as merged.
 - [ ] Draft the tag annotation (see 4) and check it for business data NOW.
 
+- [ ] The PR's **preview link** works (the `preview` job comments it on the PR: a Firebase
+      Hosting channel of `mise-app-preview`, fake data, the «Preview · test data» ribbon) — open
+      it once at phone width, signed in with a `*@club.test` account.
+
 Then ask, in Italian and plain words: *«È pronto. Contiene: … (what he will SEE, not
-files). Quando lo vuoi live?»* and tell him to **expect two clicks** if rules change (the
-harness asks for `firebase deploy` and for the merge) — one otherwise.
+files). Puoi provarlo prima sul telefono qui: <preview link> (dati di prova). Quando lo vuoi
+live?»* and tell him to **expect two clicks** if rules change (the harness asks for
+`firebase deploy` and for the merge) — one otherwise.
 
 ## 2. At his word — no further questions
 
