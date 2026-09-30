@@ -402,8 +402,6 @@
   color: var(--text3);
   font-family: 'DM Mono', monospace;
 }
-/* The first heading needs no gap above it: it is the first thing in the card. */
-.supplier-items-list > .ing-category:first-child { margin-top: 6px; }
 
 /* The History cards still collapse in place, so their chevron and head stay. */
 .supplier-card {
@@ -548,6 +546,45 @@
   flex-direction: column;
   justify-content: center;
 }
+/* The quick «clear the quantity» button. It sits in the name column (nothing tappable is
+   there, so its 44px target steals no tap from the boxes), ends at the column's edge —
+   never over the gap, so a thumb aiming at the Order box's edge cannot clear it — and only
+   exists while the row has a quantity (`ing-row--filled`, set by ingredients.js). Centred
+   on the box whatever the box's height (44px phone, 52px tablet). The 28px circle is drawn
+   by the svg; the button is the 44px target.
+   The filled selectors lead with the list class because the scoping test wants every
+   `.ing-row--line` rule to start from `.ingredient-list` / `.ing-flat-list`. */
+.ing-row--line .ing-main { position: relative; }
+.ing-row--line .ing-qty-clear {
+  display: none;
+  position: absolute;
+  top: calc((var(--ing-box-h, 44px) - 44px) / 2);
+  right: 0;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-3);
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.ing-row--line .ing-qty-clear svg {
+  box-sizing: border-box;
+  width: 28px;
+  height: 28px;
+  padding: 5px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+}
+.ing-row--line .ing-qty-clear:active svg { transform: scale(.94); }
+.ing-row--line .ing-qty-clear:focus-visible { outline: 2px solid var(--accent-2); outline-offset: -2px; border-radius: 50%; }
+.ingredient-list .ing-row--line.ing-row--filled .ing-qty-clear,
+.ing-flat-list .ing-row--line.ing-row--filled .ing-qty-clear { display: flex; }
+.ingredient-list .ing-row--line.ing-row--filled .ing-main,
+.ing-flat-list .ing-row--line.ing-row--filled .ing-main { padding-right: 44px; }
 .ing-row--line .ing-top { display: block; margin-bottom: 0; }
 .ing-row--line .ing-name { font-size: 16px; font-weight: 600; text-align: left; overflow-wrap: anywhere; }
 .ing-row--line .ing-supplier { margin: 2px 0 0; }
@@ -621,8 +658,8 @@ body.hide-stock .ing-head-stock { display: none; }
   font-family: 'DM Mono', monospace;
   margin: -4px 0 8px;
 }
-/* The A / B / C dividers. Same treatment as .ing-category so the flat list and a
-   supplier's categorised list read as the same kind of list. No rule of its own:
+/* The A / B / C dividers. Same treatment as .ing-category (the Incoming tab's
+   headings) so every list in Orders reads as the same kind of list. No rule of its own:
    the row above already draws .ing-row's bottom border, and a second line here
    would double it. */
 .ing-letter {
@@ -702,7 +739,7 @@ input.ing-stock {
    long note above this file: `.ing-row` is also the Calculator's, and both stylesheets
    load on both pages. */
 @media (min-width: 900px) and (min-height: 600px) {
-  /* Both ingredient lists: a supplier's (by category) and the flat
+  /* Both ingredient lists: a supplier's (A→Z) and the flat
      «Ingredienti» view (by letter, js/orders/ingredient-list.js). Wider boxes; the
      rows and the header both read these, so the words stay over their boxes. */
   body[data-section="orders"] .ingredient-list,

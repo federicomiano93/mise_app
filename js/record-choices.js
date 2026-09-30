@@ -22,8 +22,7 @@ export const DEFAULT_UNITS = Object.freeze({
   en: Object.freeze(['pcs', 'kg', 'case', 'crate', 'sack', 'bag', 'pack']),
 });
 
-// The stored «no category» word (see js/orders/ingredient-category.js, which is a FEATURE
-// file and so is not imported here): a blank category is saved as 'Other'.
+// The stored «no category» word: a blank category is saved as 'Other', and reads back as blank.
 const NO_CATEGORY_WORD = 'Other';
 
 const defaultsFor = (table, language) => table[language === 'it' ? 'it' : 'en'];

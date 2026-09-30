@@ -13,6 +13,7 @@
 import { t } from '../i18n.js';
 import { supplierLabel } from '../supplier-label.js';
 import { toISODate, addDays, isBefore } from './day.js';
+import { compareLabels } from './order-text.js';
 
 // A quantity, made safe: whole, never negative, never NaN — and never Infinity.
 //
@@ -106,6 +107,21 @@ export function buildSupplierArchive({ supplier, ingredients, entries, date, now
 // name frozen into a record matches what the live row would have shown.
 export function ingredientLabel(ing) {
   return [ing?.name, ing?.weight].filter(Boolean).join(' ');
+}
+
+// The order every list of a supplier's products is read in: by the label a person reads,
+// numerically («Flour 5kg» before «Flour 25kg» — the message's own compareLabels), then by
+// id, so two identical labels cannot swap places between repaints and make the rows jump
+// under the eye. A nameless item has an empty label and so sorts first — it stays visible
+// at the top instead of hiding.
+export function compareByLabel(a, b) {
+  return compareLabels(ingredientLabel(a), ingredientLabel(b))
+    || String(a?.id).localeCompare(String(b?.id));
+}
+
+// A sorted COPY — the caller's list is the shared state and is never reordered.
+export function sortByLabel(list) {
+  return (list || []).filter(Boolean).slice().sort(compareByLabel);
 }
 
 // What a PAST order calls one of its items, in order of preference:

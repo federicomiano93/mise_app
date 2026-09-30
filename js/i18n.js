@@ -755,6 +755,7 @@ const DICTIONARIES = Object.freeze({
     'orders.live.ingredients': 'ingredients',
     'orders.stockOnHandFor': '{name} stock on hand',
     'orders.qtyToOrderFor': '{name} quantity to order',
+    'orders.clearQtyFor': 'Clear the quantity of {name}',
     'orders.qtyOrderedFor': '{name} quantity ordered',
     'orders.ingredientCount': {
       one: '{n} ingredient',
@@ -3169,6 +3170,7 @@ const DICTIONARIES = Object.freeze({
     'orders.live.ingredients': 'gli ingredienti',
     'orders.stockOnHandFor': 'Giacenza di {name}',
     'orders.qtyToOrderFor': 'Quantità da ordinare di {name}',
+    'orders.clearQtyFor': 'Azzera la quantità di {name}',
     'orders.qtyOrderedFor': 'Quantità ordinata di {name}',
     'orders.ingredientCount': {
       one: '{n} ingrediente',

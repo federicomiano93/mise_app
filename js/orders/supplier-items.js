@@ -15,36 +15,23 @@
 import { t } from '../i18n.js';
 import { supplierLabel } from '../supplier-label.js';
 import { el } from './dom.js';
-import { ingredientLabel } from './archive.js';
-import { groupByCategory } from './ingredient-category.js';
+import { ingredientLabel, sortByLabel } from './archive.js';
 
 const BACK_ICON =
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>';
 
 // PURE — the whole reason this is testable without a browser (P15).
 //
-// -> [{ category, items: [{ id, label, unit }] }]
-//
-// ⚠️ THE CATEGORY QUESTION IS NOT ANSWERED HERE ANY MORE. It used to be, with a
-// local `categoryOf` and a local ordering rule — correct, and copied nowhere. The
-// ORDER screen answered the same question separately and got it wrong three ways
-// at once. Both now ask ingredient-category.js, so the two screens cannot drift
-// into disagreeing about which heading a row belongs under.
-export function itemGroups(ingredients) {
-  return groupByCategory(ingredients).map(({ category, items }) => ({
-    category,
-    items: items
-      .map(ing => ({
-        id: ing.id,
-        // Never the raw document id: "Fdx92kQ1" tells nobody what it is. Same
-        // reasoning, and the same helper, as the names in History.
-        label: ingredientLabel(ing) || t('orders.unnamedProduct'),
-        unit: ing.unit || '',
-      }))
-      // By label, then by id as a tie-break: without it two products with identical
-      // labels can swap places between repaints and the rows jump under the eye.
-      .sort((a, b) =>
-        a.label.localeCompare(b.label) || String(a.id).localeCompare(String(b.id))),
+// -> [{ id, label, unit }], flat, A→Z. No category headings (owner's request, 30 Sep
+// 2026): the order screen is one flat list too, and both sort through sortByLabel so
+// the two screens can never disagree about where a row sits.
+export function itemRows(ingredients) {
+  return sortByLabel(ingredients).map(ing => ({
+    id: ing.id,
+    // Never the raw document id: "Fdx92kQ1" tells nobody what it is. Same
+    // reasoning, and the same helper, as the names in History.
+    label: ingredientLabel(ing) || t('orders.unnamedProduct'),
+    unit: ing.unit || '',
   }));
 }
 
@@ -89,13 +76,10 @@ export function buildSupplierItems(supplier, ingredients, ctx) {
     body.appendChild(el('p', { class: 'ing-count', text: countLabel(list.length) }));
 
     const rows = el('div', { class: 'supplier-items-list' });
-    itemGroups(list).forEach(group => {
-      if (group.category) rows.appendChild(el('div', { class: 'ing-category' }, group.category));
-      group.items.forEach(item => rows.appendChild(el('div', { class: 'supplier-item' }, [
-        el('span', { class: 'supplier-item-name', text: item.label }),
-        item.unit ? el('span', { class: 'supplier-item-unit', text: item.unit }) : null,
-      ])));
-    });
+    itemRows(list).forEach(item => rows.appendChild(el('div', { class: 'supplier-item' }, [
+      el('span', { class: 'supplier-item-name', text: item.label }),
+      item.unit ? el('span', { class: 'supplier-item-unit', text: item.unit }) : null,
+    ])));
     body.appendChild(rows);
   }
 

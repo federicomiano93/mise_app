@@ -135,6 +135,59 @@ test('the unit is a small caption under the Order box', () => {
   assert.match(r, /var\(--text-3\)/);
 });
 
+test('each row has a clear-quantity button in the name column, named per ingredient', () => {
+  assert.match(buildRowSource, /class:\s*'ing-qty-clear'/);
+  assert.match(buildRowSource, /type:\s*'button'/);
+  // Name AND weight, so «Flour 1kg» and «Flour 25kg» are two different buttons to a
+  // screen reader, and a nameless product never reads «undefined».
+  assert.match(buildRowSource, /t\('orders\.clearQtyFor',\s*\{\s*name:\s*ingredientLabel\(ing\)\s*\|\|\s*t\('orders\.unnamedProduct'\)\s*\}\)/);
+  // It is the LAST child of .ing-main: it must come before the Order column starts.
+  assert.ok(buildRowSource.indexOf("'ing-qty-clear'") > buildRowSource.indexOf("class: 'ing-main'"));
+  assert.ok(buildRowSource.indexOf("'ing-qty-clear'") < buildRowSource.indexOf("class: 'ing-col'"));
+});
+
+test('the clear button zeroes the quantity, keeps stock, and focuses only from the keyboard', () => {
+  assert.match(buildRowSource, /setQty\(0\)/);
+  assert.match(buildRowSource, /event\.detail === 0\)\s*qtyInput\.focus\(\)/);
+  assert.doesNotMatch(buildRowSource, /confirmDialog/);
+  // KEEPS STOCK: the handler touches the quantity only — the stock counted on the shelf
+  // is a different fact and survives the order being cleared.
+  const button = buildRowSource.slice(buildRowSource.indexOf("'ing-qty-clear'"));
+  const handler = button.slice(button.indexOf('onClick'), button.indexOf("class: 'ing-col'"));
+  assert.doesNotMatch(handler, /stock/i);
+  assert.match(buildRowSource, /function setQty\(value, fromInput\) \{\s*const qty = wholeNumber\(value\);\s*entryFor\(entries, ing\.id\)\.qty = qty;/);
+});
+
+test('ing-row--filled follows the quantity: at build, in setQty and when another phone syncs', () => {
+  assert.match(INGREDIENTS, /export function markFilled\(row, qty\)/);
+  assert.match(INGREDIENTS, /toggle\('ing-row--filled'/);
+  assert.match(buildRowSource, /markFilled\(row, qty\)/, 'setQty');
+  assert.match(buildRowSource, /markFilled\(row, entry\.qty\)/, 'build time');
+  const main = read('js/orders/orders-main.js');
+  const sync = main.slice(main.indexOf('function syncInputsFromState'));
+  assert.match(sync.slice(0, sync.indexOf('refreshAllSuppliers')), /markFilled\(row, entry\.qty\)/);
+  assert.match(main, /import \{ markFilled \} from '\.\/ingredients\.js'/);
+});
+
+test('the clear button is a 44x44 target, hidden until the row is filled, and the name makes room', () => {
+  const base = rule('.ing-row--line .ing-qty-clear');
+  assert.match(base, /width:\s*44px/);
+  assert.match(base, /height:\s*44px/);
+  assert.match(base, /display:\s*none/);
+  assert.match(rule('.ing-row--line .ing-main'), /position:\s*relative/);
+  assert.match(rule('.ingredient-list .ing-row--line.ing-row--filled .ing-qty-clear'), /display:\s*flex/);
+  assert.match(rule('.ing-flat-list .ing-row--line.ing-row--filled .ing-qty-clear'), /display:\s*flex/);
+  assert.match(rule('.ingredient-list .ing-row--line.ing-row--filled .ing-main'), /padding-right:\s*44px/);
+  assert.match(rule('.ing-row--line .ing-qty-clear:focus-visible'), /outline:/);
+});
+
+test('the clear-quantity label exists in English and Italian', () => {
+  const i18n = read('js/i18n.js');
+  assert.equal(i18n.match(/'orders\.clearQtyFor':/g).length, 2);
+  assert.match(i18n, /'orders\.clearQtyFor': 'Clear the quantity of \{name\}'/);
+  assert.match(i18n, /'orders\.clearQtyFor': 'Azzera la quantità di \{name\}'/);
+});
+
 test('the swap button beside the search is at least 44px wide', () => {
   assert.match(rule('body[data-section="orders"] .order-tools-btn'), /min-width:\s*44px/);
 });

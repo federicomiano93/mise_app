@@ -12,8 +12,7 @@
 import { t } from '../i18n.js';
 import { el } from './dom.js';
 import { isUnusualQuantity } from './suggestions.js';
-import { wholeNumber } from './archive.js';
-import { groupByCategory } from './ingredient-category.js';
+import { wholeNumber, sortByLabel, ingredientLabel } from './archive.js';
 
 // How many of a supplier's ingredients already have a quantity entered — used to
 // paint the progress bar correctly on first render (before any typing), so a
@@ -33,6 +32,16 @@ function countFilled(ingredients, entries) {
 // this.
 function entryFor(entries, id) {
   return entries[id] || (entries[id] = { qty: 0, stock: 0 });
+}
+
+const CLEAR_ICON =
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="M6 6l12 12"/></svg>';
+
+// A row with a quantity shows its «clear» button (orders.css keys off this class). One
+// helper, used by the row itself AND by orders-main when a value arrives from another
+// phone, so the button can never be out of step with the box beside it.
+export function markFilled(row, qty) {
+  row?.classList.toggle('ing-row--filled', (Number(qty) || 0) > 0);
 }
 
 export function buildIngredientList(supplier, ingredients, suggest, entries, hooks) {
@@ -57,21 +66,13 @@ export function buildIngredientList(supplier, ingredients, suggest, entries, hoo
 
   const body = el('div', { class: 'ingredient-list' }, [progress, buildIngredientHeader()]);
 
-  // ⚠️ THE GROUPING IS NOT DONE HERE. It used to be, with a bare
-  // `Object.keys(groupBy(...)).sort()`, and it produced a heading reading
-  // "undefined" for a row whose category field was absent, filed 'Other' bare
-  // under whatever heading happened to precede it, and split one category in two
-  // when a value carried a trailing space. ingredient-category.js is now the ONE
-  // answer, shared with the read-only supplier-items screen — two screens
-  // disagreeing about which heading a row belongs under is how somebody orders
-  // the wrong thing.
-  groupByCategory(ingredients).forEach(({ category, items }) => {
-    if (category) body.appendChild(el('div', { class: 'ing-category' }, category));
-    items
-      .slice()
-      .sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')))
-      .forEach(ing => body.appendChild(buildRow(ing, supplier, suggest, entries, hooks)));
-  });
+  // ⚠️ ONE FLAT LIST, A→Z BY NAME AND WEIGHT, NO CATEGORY HEADINGS (the owner asked for it,
+  // 30 Sep 2026: at the counter he looks a product up by its name, not by the shelf it
+  // lives on). It is the same order as the read-only supplier-items screen (both go through
+  // sortByLabel) and as the message sent to the supplier (order-text.js sortItems): all of
+  // them compare labels with the one numeric collator, compareLabels.
+  sortByLabel(ingredients)
+    .forEach(ing => body.appendChild(buildRow(ing, supplier, suggest, entries, hooks)));
 
   return body;
 }
@@ -95,6 +96,7 @@ export function buildIngredientHeader() {
 // entirely in the by-supplier view: the card heading already says whose it is.
 export function buildRow(ing, supplier, suggest, entries, hooks, { meta = '' } = {}) {
   const entry = entryFor(entries, ing.id);
+  let row;
 
   const stockInput = el('input', {
     type: 'number', class: 'ing-stock', min: '0', inputmode: 'numeric',
@@ -110,6 +112,7 @@ export function buildRow(ing, supplier, suggest, entries, hooks, { meta = '' } =
     const qty = wholeNumber(value);
     entryFor(entries, ing.id).qty = qty;
     if (!fromInput) qtyInput.value = qty || '';
+    markFilled(row, qty);
     hooks.afterChange(supplier.id);
   }
 
@@ -157,7 +160,7 @@ export function buildRow(ing, supplier, suggest, entries, hooks, { meta = '' } =
   // own aria-label, which already names the ingredient.
   // `ing-row--line` is the hook orders.css scopes every one of these rules to:
   // `.ing-row` alone is also the Calculator's, and both stylesheets load on both pages.
-  const row = el('div', { class: 'ing-row ing-row--line', dataset: { ing: ing.id } }, [
+  row = el('div', { class: 'ing-row ing-row--line', dataset: { ing: ing.id } }, [
     el('div', { class: 'ing-main' }, [
       el('div', { class: 'ing-top' }, [
         el('span', { class: 'ing-name', text: ing.name || '' }),
@@ -169,6 +172,20 @@ export function buildRow(ing, supplier, suggest, entries, hooks, { meta = '' } =
       // row, so the supplier would sit BESIDE the name instead of under it.
       meta ? el('div', { class: 'ing-supplier', text: meta }) : null,
       hint,
+      // In the name column on purpose: it holds nothing tappable, so a 44px target here
+      // steals no tap from the Order / Stock boxes. Shown only while there is a quantity.
+      el('button', {
+        type: 'button', class: 'ing-qty-clear', icon: CLEAR_ICON,
+        // Name AND weight: «Flour 1kg» and «Flour 25kg» must not both read «clear Flour».
+        'aria-label': t('orders.clearQtyFor', { name: ingredientLabel(ing) || t('orders.unnamedProduct') }),
+        onClick: (event) => {
+          setQty(0);
+          updateHint();
+          // Only a keyboard activation goes back to the box: after a tap the phone's
+          // on-screen keyboard would pop up over the list for no reason.
+          if (event.detail === 0) qtyInput.focus();
+        },
+      }),
     ]),
     el('div', { class: 'ing-col' }, [
       qtyInput,
@@ -180,6 +197,7 @@ export function buildRow(ing, supplier, suggest, entries, hooks, { meta = '' } =
 
   stockInput.value = entry.stock || '';
   qtyInput.value = entry.qty || '';
+  markFilled(row, entry.qty);
   updateHint(); // show suggestion without overwriting a restored quantity
   return row;
 }

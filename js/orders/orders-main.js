@@ -23,6 +23,7 @@ import { currentSession } from '../firebase.js';
 import { el, groupBy } from './dom.js';
 import { mountSupplierList, refreshSupplierDerived } from './suppliers.js';
 import { buildSupplierDetail } from './supplier-detail.js';
+import { markFilled } from './ingredients.js';
 import { buildSupplierItems } from './supplier-items.js';
 import { buildOrderSummaryView } from './order-summary-view.js';
 import { paintPaneMoney } from './order-cost-view.js';
@@ -266,6 +267,8 @@ function syncInputsFromState() {
     const qty = row.querySelector('.ing-qty');
     if (stock && stock !== document.activeElement) stock.value = entry.stock || '';
     if (qty && qty !== document.activeElement) qty.value = entry.qty || '';
+    // Outside the focus guard: the button must follow the DRAFT even while the box is focused.
+    markFilled(row, entry.qty);
   });
   refreshAllSuppliers();
   // A quantity typed on another phone changes this pane's money too.

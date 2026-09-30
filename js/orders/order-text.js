@@ -42,6 +42,12 @@ export function itemLabel(name, weight) {
   return [name, weight].filter(Boolean).join(' ');
 }
 
+// How two labels are put in order, everywhere a supplier's products are listed — the
+// message, the order screen, the read-only list (archive.js compareByLabel). NUMERIC, so
+// «Flour 5kg» comes before «Flour 25kg»: a plain localeCompare reads digits as letters and
+// put the 25kg bag first. One collator, so the screen and the message cannot drift apart.
+export const compareLabels = new Intl.Collator(undefined, { numeric: true }).compare;
+
 // The rows one supplier's order is built from: everything with a quantity
 // typed, and nothing else. ⚠️ THE ONE SELECTION EVERY SCREEN THAT SHOWS "what
 // is in this supplier's order right now" MUST CALL — js/orders/preview.js
@@ -81,7 +87,7 @@ function sectionFor({ supplierName, items }) {
 // By displayed label, so the message reads in the order the eye expects.
 export function sortItems(items) {
   return (items || []).slice().sort((a, b) =>
-    itemLabel(a.name, a.weight).localeCompare(itemLabel(b.name, b.weight)));
+    compareLabels(itemLabel(a.name, a.weight), itemLabel(b.name, b.weight)));
 }
 
 // One flat shopping list: every item from every group, no supplier headings.
@@ -155,7 +161,7 @@ export function itemsFromQuantities(quantities, ingredientsById, names) {
       };
     })
     .filter(it => it.qty > 0)
-    .sort((a, b) => itemLabel(a.name, a.weight).localeCompare(itemLabel(b.name, b.weight)));
+    .sort((a, b) => compareLabels(itemLabel(a.name, a.weight), itemLabel(b.name, b.weight)));
 }
 
 // Index a list of ingredients by id, for itemsFromQuantities.
