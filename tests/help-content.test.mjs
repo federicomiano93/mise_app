@@ -180,24 +180,38 @@ const FORBIDDEN_NAME_HASHES = new Set([
   'ef1cab5a69c62e6bef2ee237370ae5b7b0cde4cd820a312114169db5cec1ed92',
 ]);
 
-function namesFound(text) {
+const sha256 = s => createHash('sha256').update(s).digest('hex');
+
+function namesFound(text, hashes = FORBIDDEN_NAME_HASHES) {
   const words = text.toLowerCase().split(/[^\p{L}]+/u).filter(Boolean);
   const grams = [...words];
   for (let i = 0; i + 1 < words.length; i++) grams.push(`${words[i]} ${words[i + 1]}`);
-  return grams.filter(g => FORBIDDEN_NAME_HASHES.has(createHash('sha256').update(g).digest('hex')));
+  return grams.filter(g => hashes.has(sha256(g)));
 }
 
+// HELP holds dictionary KEYS; what a person reads is t(key). The guard reads the sentences
+// themselves, in every language they are shown in — scanning the keys alone was blind.
 test('nothing in the explanations names a real client or supplier', () => {
-  const all = Object.values(HELP).flatMap(e => [e.title, ...e.lines]).join(' ');
-  assert.deepEqual(namesFound(all), []);
-  assert.equal(/\balmonds\b/i.test(all), false);
+  const keys = Object.values(HELP).flatMap(e => [e.title, ...e.lines]);
+  try {
+    for (const lang of ['en', 'it']) {
+      setLanguage(lang);
+      const all = keys.map(k => t(k)).join(' ');
+      assert.ok(all.length > 500, `the ${lang} help text was read`);
+      // (The old list also banned «almonds»; read as real sentences, the allergen help
+      // rightly names almonds as a nut, so a food word cannot be policed here.)
+      assert.deepEqual(namesFound(all), [], lang);
+    }
+  } finally {
+    setLanguage('en');
+  }
 });
 
 test('the name guard catches a planted name, so it cannot pass by being blind', () => {
-  // Built at run time from a reversed string so the plain name never appears in this file.
-  const planted = [...'ovlas'].reverse().join('');
-  assert.deepEqual(namesFound(`Order from ${planted.toUpperCase()}, today.`), [planted]);
-  const plantedTwo = [...'hsif bulc'].reverse().join('');
-  assert.deepEqual(namesFound(`Ask ${plantedTwo} first`), [plantedTwo]);
-  assert.deepEqual(namesFound('Order from a supplier today.'), []);
+  // Proved with FICTIONAL names hashed here, so no real name has to be written down to test it.
+  const planted = new Set([sha256('faro'), sha256('gelso bakery')]);
+  assert.deepEqual(namesFound('Order from FARO, today.', planted), ['faro']);
+  assert.deepEqual(namesFound('Ask Gelso  Bakery first', planted), ['gelso bakery']);
+  assert.deepEqual(namesFound('Order from a supplier today.', planted), []);
+  assert.equal(FORBIDDEN_NAME_HASHES.size, 7);
 });

@@ -249,9 +249,10 @@ test('the old weekly record is recognised and still has a date', () => {
 
 test('history groups by day, newest day first, suppliers by name inside a day', () => {
   const groups = groupHistoryByDay([
-    { id: '2026-07-13_alba', date: '2026-07-13', supplierId: 'alba', supplierName: 'Alba', quantities: { flour: 1 } },
-    LEGACY,
+    // Etna first on purpose: the expected Alba, Etna can only come from the sort.
     { id: '2026-07-13_etna', date: '2026-07-13', supplierId: 'etna', supplierName: 'Etna', quantities: { nutella: 1 } },
+    LEGACY,
+    { id: '2026-07-13_alba', date: '2026-07-13', supplierId: 'alba', supplierName: 'Alba', quantities: { flour: 1 } },
   ]);
 
   assert.deepEqual(groups.map(g => g.date), ['2026-07-13', '2026-07-06']);

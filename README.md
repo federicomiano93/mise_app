@@ -34,8 +34,8 @@ nutrients, follow the venue's country, because that is what the label law requir
 - **Firebase**: Firestore for the data (with an offline cache), Email/Password
   Authentication, Cloud Functions (`functions/`) for the few things a phone must not do
   itself, and Cloud Messaging for notifications.
-- **GitHub Pages** serves the app. A service worker precaches every file, checks each one
-  against its fingerprint, and updates the app on every phone after a release.
+- **GitHub Pages** serves the app. A service worker precaches the app's files, checks each
+  one against its fingerprint, and brings installed phones up to date after a release.
 - **One deployment serves many venues.** Each venue's data sits in its own folder
   (`locations/{id}/…`), and the security rules let an account reach only the venues it
   belongs to.
