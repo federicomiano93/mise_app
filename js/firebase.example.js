@@ -876,7 +876,7 @@ export function saveCalculatorConfig(config) {
 //                               stock:{id:qty}, createdAt, updatedAt }
 //
 // An order is ONE DAY and ONE SUPPLIER: suppliers are not ordered on the same days
-// (Salvo on Mondays, Caterite almost daily), so a single weekly document could not
+// (one on Mondays, another almost daily), so a single weekly document could not
 // say what was ordered, or when. `days` on the draft records which day each
 // supplier's rows were typed on, so an order left unmarked overnight is filed
 // under the day it was written rather than the day it was finally recorded.

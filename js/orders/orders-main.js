@@ -387,8 +387,8 @@ function paintMoney() {
 
 // ── One supplier's own screen ─────────────────────────────────────────────────
 //
-// ⚠️ ALWAYS OPENS, never toggles: a notice that says «Brakes changed» must show
-// Brakes even when Brakes is already open — a toggle closed it (review of 28 Sep 2026).
+// ⚠️ ALWAYS OPENS, never toggles: a notice that says «Cielo changed» must show
+// Cielo even when Cielo is already open — a toggle closed it (review of 28 Sep 2026).
 function openSupplier(supplierId) {
   closeSupplierItems();         // two full-screen screens must never stack up
   closeSummary();

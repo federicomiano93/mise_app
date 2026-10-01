@@ -408,8 +408,8 @@ export function buildRegistry(data, actions, hooks = {}) {
       body.appendChild(el('h3', { class: 'mgmt-section-title', text: t('orders.whatTheySell') }));
       // ⚠️ TWO ADDS, NOT ONE (29 Sep 2026): the card has no «Tipo» menu any more, so what a new
       // item IS is decided by the button that opened it — one add here would file a box as food.
-      // ⚠️ PRE-SET TO THIS SUPPLIER. Adding a product from inside Salvo's screen and then
-      // having to pick Salvo from a list is the kind of re-asking that makes a screen feel like
+      // ⚠️ PRE-SET TO THIS SUPPLIER. Adding a product from inside a supplier's screen and then
+      // having to pick that supplier from a list is the kind of re-asking that makes a screen feel like
       // a form rather than a place.
       body.appendChild(el('div', { class: 'mgmt-add-pair' }, [
         el('button', {

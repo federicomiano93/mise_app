@@ -116,7 +116,7 @@ export async function saveMonthFields(monthId, patch, clear = {}) {
 // Every order placed inside one month, read ONCE — never watched.
 //
 // ⚠️ BOUNDED BY A RANGE ON `date`, NOT BY THE DOCUMENT ID. The ids look like
-// `2026-09-04_salvo`, so a key range reads tempting; Firestore refuses a
+// `2026-09-04_alba`, so a key range reads tempting; Firestore refuses a
 // descending scan by key, and this project has lost a release to that twice. An
 // inequality on ONE field plus nothing else needs no composite index.
 //

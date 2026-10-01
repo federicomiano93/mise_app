@@ -3,13 +3,13 @@
 // rendered markup (P15) — the same reason archive.js, reminders.js and day.js exist.
 //
 // The view it feeds answers one question the by-supplier screen cannot: "where do I
-// type the Bacon?" — without already knowing that Bacon comes from Brakes. With 6
+// type the Bacon?" — without already knowing that Bacon comes from Cielo. With 6
 // suppliers and 65 ingredients that meant opening and closing cards until it turned
 // up.
 //
 // There is no second list of quantities anywhere: entries are keyed by INGREDIENT
 // ({ id: { qty, stock } }), so the flat list and the supplier cards are two windows
-// onto the same data. Typing 4 on Bacon here IS typing 4 in Brakes' order.
+// onto the same data. Typing 4 on Bacon here IS typing 4 in Cielo's order.
 
 import { itemLabel } from './order-text.js';
 import { supplierLabel, supplierMatches } from '../supplier-label.js';
@@ -35,7 +35,7 @@ export function letterOf(label) {
 }
 
 // Does this row match what was typed? Name, weight, brand AND supplier name, so
-// "salvo" lists everything bought from Salvo and "no supplier" everything bought
+// "alba" lists everything bought from Alba and "no supplier" everything bought
 // without one — which is the point of having the search at all.
 export function matchesQuery(row, query) {
   const q = normalizeText(query);
