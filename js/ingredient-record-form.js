@@ -23,7 +23,7 @@
 // and the person who gets asked «are there nuts in this?» is whoever is at the
 // counter (the v1.62.0 lesson — a gate on a container gates everything put inside).
 
-import { t } from './i18n.js';
+import { t, localeTag } from './i18n.js';
 import { el } from './dom.js';
 import { kindOf } from './ingredient-kind.js';
 import { supplierLabel } from './supplier-label.js';
@@ -138,6 +138,12 @@ const CAMERA_ICON = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
 // SAVE — what the VAT line costs one ordered unit of.
 // ctx.formatTouched() -> has the person moved Confezione, the count or the inner word.
 // ctx.initialWeight — the weight text as the card opened.
+// The stored case when it was priced by an EXPLICIT size (kg, g, l, ml), else null.
+const explicitSizeCase = (item) => {
+  const stored = item ? storedCaseOf(item) : null;
+  return stored && ['kg', 'g', 'l', 'ml'].includes(stored.caseItemUnit) ? stored : null;
+};
+
 function priceBlock(item, actions, defaultUnit = null, ctx) {
   // What the price box is called, per purchase form. Spelled out per unit rather
   // than assembled from the unit code, because "Price per pcs" is not English and
@@ -328,16 +334,27 @@ function priceBlock(item, actions, defaultUnit = null, ctx) {
     casePriceLabel.textContent = fmt.kind === 'carton'
       ? t('orders.case.price', { currency: currentCurrency() })
       : t('orders.case.packPrice', { currency: currentCurrency() });
-    pieceField.hidden = !((typedForm && unit === 'pcs') || form === PRICE_FORMS.cartonPieces);
+    // ⚠️ A CASE PRICED BY WEIGHT WHOSE WEIGHT NO LONGER READS (a legacy 4 × 2.5 kg case on a card with
+    // an empty weight) is NOT a case of pieces: the piece-weight box stays away and the note below says
+    // what the price was for. A touched price is refused on the weight box (weightNeededForPrice).
+    const sized = explicitSizeCase(item);
+    const needsSize = Boolean(sized) && fmt.kind === 'carton' && packBaseOf(weight) === null;
+    pieceField.hidden = needsSize || !((typedForm && unit === 'pcs') || form === PRICE_FORMS.cartonPieces);
     rateLabel.textContent = RATE_LABEL[unit] || t('orders.priceGeneric', { currency: currentCurrency() });
     // ⚠️ The example follows the UNIT, and an unknown unit gets none. «(un chilo)»
     // left showing while somebody is pricing by the piece is worse than no example.
     rate.placeholder = RATE_HINT[unit] || '';
 
     const changed = formatChanged(item, fmt, weight);
-    changedNote.hidden = !changed;
-    if (changed) changedText.textContent = t('orders.case.packChanged', { old: changed.old, new: changed.new });
-    recomputeBtn.hidden = dirty();
+    changedNote.hidden = !changed && !needsSize;
+    if (needsSize) {
+      changedText.textContent = t('orders.case.sizeNeeded', {
+        count: sized.caseCount, size: `${sized.caseItemSize.toLocaleString(localeTag())} ${sized.caseItemUnit}`,
+      });
+    } else if (changed) {
+      changedText.textContent = t('orders.case.packChanged', { old: changed.old, new: changed.new });
+    }
+    recomputeBtn.hidden = dirty() || needsSize;
 
     const draft = pricePatch(read(), null, weight);
     priceAgainNote.hidden = !(dirty() && !typedForm && casePriceBox.value === '' && positiveNumber(item?.pricePerUnit) !== null);
@@ -1184,6 +1201,13 @@ function weightControl(stored) {
     invalid: () => isUnusableWeight(amount.value, unit.value),
     markInvalid: () => { refusal.node.textContent = t('orders.weight.invalid'); refusal.show(); },
     // The case price by package cannot be worked out without this weight.
+    // The size a stored case was priced at, shown as a PLACEHOLDER only (never a value: an untouched
+    // save must write nothing new), with the unit menu on its unit while the box is empty.
+    hint: (size, sizeUnit) => {
+      if (amount.value !== '') return;
+      amount.setAttribute('placeholder', size);
+      if (WEIGHT_UNIT_CHOICES.includes(sizeUnit)) unit.value = sizeUnit;
+    },
     markNeeded: () => { refusal.node.textContent = t('orders.weight.packNeeded'); refusal.show(); },
     // The price block's live VAT line depends on the weight typed here, not only the stored one.
     onChange: (fn) => { amount.addEventListener('input', fn); unit.addEventListener('change', fn); },
@@ -1425,6 +1449,10 @@ export function buildIngredientForm({
     formatTouched: formatIsTouched,
     initialWeight: weight.read(),
   }) : null;
+  const sizedStored = mayPrice ? explicitSizeCase(item) : null;
+  if (sizedStored && packBaseOf(weight.read()) === null) {
+    weight.hint(sizedStored.caseItemSize.toLocaleString(localeTag()), sizedStored.caseItemUnit);
+  }
   weight.onChange(syncFormat);
   pack.onChange(syncFormat);
   count.addEventListener('input', syncFormat);

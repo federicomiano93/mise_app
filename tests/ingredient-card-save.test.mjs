@@ -436,3 +436,52 @@ test('the VAT line prices one CARTON for a carton (20 net, 20.80 at 4%)', () => 
   assert.ok(card.all().some(n => n.classList.contains('mgmt-price-vat-summary') && n.textContent === '€20.00 without VAT, €20.80 with VAT at 4%'),
     card.all().filter(n => n.classList.contains('mgmt-price-vat-summary')).map(n => n.textContent).join('|'));
 });
+
+// ── A legacy explicit-size case on a card whose weight does not read ─────────
+// 4 × 2.5 kg at 20: without the weight, a touched price would become a case of PIECES and the
+// € / kg every recipe uses would silently go. The size is hinted, never written.
+const LEGACY_NO_WEIGHT = { ...LEGACY_KG, weight: '' };
+
+test('reopening shows the stored size as a placeholder (not a value) and says what the price was for', () => {
+  const card = openCard({ item: LEGACY_NO_WEIGHT });
+  assert.equal(card.weightAmount.attributes.placeholder, '2.5');
+  assert.equal(card.weightAmount.value, '');
+  assert.equal(card.weightUnit.value, 'kg');
+  assert.ok(card.notes().includes('This price was for 4 × 2.5 kg: write the weight of one item to recalculate it.'), card.notes().join(' | '));
+  assert.equal(card.all().some(n => n.textContent === 'Weight of one piece (kg)' && shown(n.parentNode)), false, 'no piece weight');
+  assert.equal(shown(card.recompute), false);
+});
+
+test('the same for grams and millilitres, in the stored unit', () => {
+  const g = openCard({ item: { ...LEGACY_G, weight: '' } });
+  assert.equal(g.weightAmount.attributes.placeholder, '500');
+  assert.equal(g.weightUnit.value, 'g');
+  const ml = openCard({ item: { ...BASE, weight: '', priceUnit: 'l', pricePerUnit: 4, casePrice: 12, caseCount: 6, caseItemSize: 500, caseItemUnit: 'ml' } });
+  assert.equal(ml.weightUnit.value, 'ml');
+  assert.ok(ml.notes().some(n => /6 × 500 ml/.test(n)));
+});
+
+test('an untouched save with the hint showing is still verbatim', async () => {
+  const card = openCard({ item: LEGACY_NO_WEIGHT });
+  const { payload, record } = await card.save();
+  for (const key of PRICE_KEYS) assert.equal(payload[key] ?? null, LEGACY_NO_WEIGHT[key] ?? null, key);
+  assert.equal(record, null);
+  assert.equal(payload.weight, '', 'the placeholder was never written as the weight');
+  for (const key of FORMAT_KEYS) assert.equal(key in payload, false, key);
+});
+
+test('a touched price without the weight is refused on the weight box, never stored as pieces', async () => {
+  const card = openCard({ item: LEGACY_NO_WEIGHT });
+  type(card.casePrice, '22');
+  assert.equal(await card.save(), undefined);
+  assert.ok(card.weightAmount.focused > 0);
+  assert.equal(card.weightAmount.attributes['aria-invalid'], 'true');
+});
+
+test('with the weight typed, the normal Cartone pack path stores the right € / kg', async () => {
+  const card = openCard({ item: LEGACY_NO_WEIGHT });
+  type(card.weightAmount, '2.5');
+  type(card.casePrice, '22');
+  const { payload } = await card.save();
+  assert.deepEqual([payload.caseItemUnit, payload.caseItemSize, payload.caseCount, payload.priceUnit, payload.pricePerUnit], ['pack', 2.5, 4, 'kg', 2.2]);
+});

@@ -50,7 +50,7 @@ test('the price box means what the format and the weight say, and shows only the
   assert.match(FORM, /const pricePair = el\('div', \{ class: 'mgmt-pair' \}, \[unitField, rateField, casePriceField\]\);/);
   assert.match(FORM, /casePriceLabel\.textContent = fmt\.kind === 'carton'\s*\? t\('orders\.case\.price'/);
   assert.match(FORM, /: t\('orders\.case\.packPrice'/);
-  assert.match(FORM, /pieceField\.hidden = !\(\(typedForm && unit === 'pcs'\) \|\| form === PRICE_FORMS\.cartonPieces\);/);
+  assert.match(FORM, /pieceField\.hidden = needsSize \|\| !\(\(typedForm && unit === 'pcs'\) \|\| form === PRICE_FORMS\.cartonPieces\);/);
 });
 
 test('⚠️ UNTOUCHED MEANS UNCHANGED: read() hands pricePatch the stored price until a person touches something', () => {
@@ -77,7 +77,7 @@ test('the format-changed note shows both formats and offers «Ricalcola», which
   assert.match(FORM, /const changed = formatChanged\(item, fmt, weight\);/);
   assert.match(FORM, /t\('orders\.case\.packChanged', \{ old: changed\.old, new: changed\.new \}\)/);
   assert.match(FORM, /onClick: \(\) => \{ recomputed = true; refresh\(\); \}/);
-  assert.match(FORM, /recomputeBtn\.hidden = dirty\(\);/, 'once the price is being recomputed the button has done its job');
+  assert.match(FORM, /recomputeBtn\.hidden = dirty\(\) \|\| needsSize;/, 'once the price is being recomputed the button has done its job');
   assert.match(I18N, /'orders\.case\.packChanged': 'Il formato è cambiato dall’ultimo prezzo: salvato \{old\}, con questo formato \{new\}\. Ricontrolla il prezzo\.'/);
   assert.match(I18N, /'orders\.case\.recompute': 'Ricalcola'/);
 });
