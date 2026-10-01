@@ -8,6 +8,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { HELP, SECTIONS, helpFor, helpText, helpTitle } from '../js/help-content.js';
@@ -165,8 +166,38 @@ test('the help is precached, or an offline phone loses it', () => {
   assert.match(sw, /'\.\/js\/help-button\.js'/);
 });
 
+// This repo is public, so the list of names a help text must never contain cannot be
+// readable here: it would publish exactly what it guards. Only the SHA-256 digests of the
+// lowercased names are kept; a text is split into words and every 1-word and 2-word run is
+// hashed and looked up.
+const FORBIDDEN_NAME_HASHES = new Set([
+  '4890b0fb9f15499f8e160677b3965dc9b1819f716d91670256adb1864e1dbeaf',
+  'a9866a92728178a8c630f5377872f7c5c0d2c62a2a4158e6b768729996b8d000',
+  'fbfdc403f3e42b7315f67644dbb78eecf765c869f951136bf3e35b673aeafca4',
+  '67c565f1912de6ef87a3a109d5645fbb602bf64ab5f0cb2c261f8687a278a946',
+  '9698c413fc6a0ca4b53fb5ae2a97796db329a85fe5d4166ddb122d4975160c0c',
+  'ad21acb889da17fe038f780b19e02f0110bbcba66f3248f4912d9f6539919c8f',
+  'ef1cab5a69c62e6bef2ee237370ae5b7b0cde4cd820a312114169db5cec1ed92',
+]);
+
+function namesFound(text) {
+  const words = text.toLowerCase().split(/[^\p{L}]+/u).filter(Boolean);
+  const grams = [...words];
+  for (let i = 0; i + 1 < words.length; i++) grams.push(`${words[i]} ${words[i + 1]}`);
+  return grams.filter(g => FORBIDDEN_NAME_HASHES.has(createHash('sha256').update(g).digest('hex')));
+}
+
 test('nothing in the explanations names a real client or supplier', () => {
-  // This repo is public. The texts describe the app, never the business.
   const all = Object.values(HELP).flatMap(e => [e.title, ...e.lines]).join(' ');
-  assert.equal(/\b(club fish|bakery ltd|salvo|brakes|caterite|continental|bako|almonds)\b/i.test(all), false);
+  assert.deepEqual(namesFound(all), []);
+  assert.equal(/\balmonds\b/i.test(all), false);
+});
+
+test('the name guard catches a planted name, so it cannot pass by being blind', () => {
+  // Built at run time from a reversed string so the plain name never appears in this file.
+  const planted = [...'ovlas'].reverse().join('');
+  assert.deepEqual(namesFound(`Order from ${planted.toUpperCase()}, today.`), [planted]);
+  const plantedTwo = [...'hsif bulc'].reverse().join('');
+  assert.deepEqual(namesFound(`Ask ${plantedTwo} first`), [plantedTwo]);
+  assert.deepEqual(namesFound('Order from a supplier today.'), []);
 });
