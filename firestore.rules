@@ -716,7 +716,7 @@ service cloud.firestore {
                'priceUnit', 'pricePerUnit', 'packPrice', 'packSize',
                'unitWeightKg', 'priceUpdatedAt',
                'allergens', 'mayContain', 'allergensCheckedAt', 'nutrition',
-               'packIngredients', 'packUnit'
+               'packIngredients', 'packUnit', 'packCount'
              ])
           && (!('name' in request.resource.data)
               || (request.resource.data.name is string
@@ -743,6 +743,16 @@ service cloud.firestore {
           && (!('packUnit' in request.resource.data)
               || (request.resource.data.packUnit is string
                   && request.resource.data.packUnit.size() <= 40))
+          // How many `packUnit`s ONE carton holds (1 Oct 2026, «Confezione: Cartone, contiene
+          // 4 × busta»). A whole number 1–10000, or null/absent = «Singola». ⚠️ PRODUCT DATA, SO
+          // IT LIVES HERE AND NOT IN ingredient-prices: whoever may edit an ingredient (staff
+          // included) says what it comes in, and Orders and the stocktake need it without being
+          // allowed to read money. The price document keeps its own frozen copy (caseCount).
+          && (!('packCount' in request.resource.data)
+              || request.resource.data.packCount == null
+              || (request.resource.data.packCount is int
+                  && request.resource.data.packCount >= 1
+                  && request.resource.data.packCount <= 10000))
           // ⚠️⚠️ THE PRICE KEYS MAY ONLY BE null HERE (security audit, 23 Sep 2026).
           // What an ingredient costs lives in ingredient-prices/{id}, behind
           // canManage(…, 'foodcost'), since 12 Aug 2026. These keys stay in the

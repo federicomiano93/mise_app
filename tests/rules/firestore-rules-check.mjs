@@ -467,6 +467,29 @@ async function ingredients() {
   await expectDenied('a package word sent as a list', () =>
     mergeWrite('locations/main/ingredients/ING_MODERN', { packUnit: ['busta'], bakery: 'main' }));
 
+  // ── How many packages one carton holds (1 Oct 2026): a whole number 1–10000, or null. ──
+  // Negative ones first: a check that only ever sends good data stays green with the rule gone.
+  await expectDenied('a carton of nothing', () =>
+    mergeWrite('locations/main/ingredients/ING_MODERN', { packCount: 0, bakery: 'main' }));
+  await expectDenied('a carton of two and a half', () =>
+    mergeWrite('locations/main/ingredients/ING_MODERN', { packCount: 2.5, bakery: 'main' }));
+  await expectDenied('a carton count sent as text', () =>
+    mergeWrite('locations/main/ingredients/ING_MODERN', { packCount: '4', bakery: 'main' }));
+  await expectDenied('a carton of more than 10000', () =>
+    mergeWrite('locations/main/ingredients/ING_MODERN', { packCount: 10001, bakery: 'main' }));
+  await expectDenied('a negative carton', () =>
+    mergeWrite('locations/main/ingredients/ING_MODERN', { packCount: -4, bakery: 'main' }));
+  await expectAllowed('a carton of 4, saved by a manager', () =>
+    mergeWrite('locations/main/ingredients/ING_MODERN', { packCount: 4, packUnit: 'busta', unit: 'cartone', bakery: 'main' }, asAccount(MAYA)));
+  await expectAllowed('…and by an employee — it is product data, not money', () =>
+    mergeWrite('locations/main/ingredients/ING_MODERN', { packCount: 6, bakery: 'main' }, asAccount(SAM)));
+  await expectAllowed('exactly 10000', () =>
+    mergeWrite('locations/main/ingredients/ING_MODERN', { packCount: 10000, bakery: 'main' }));
+  await expectAllowed('back to «Singola» with null', () =>
+    mergeWrite('locations/main/ingredients/ING_MODERN', { packCount: null, bakery: 'main' }));
+  await expectAllowed('a document that never had the key stays writable', () =>
+    mergeWrite('locations/main/ingredients/ING_MODERN', { name: 'Bacon', bakery: 'main' }));
+
   await expectAllowed('delete an ingredient', () => deleteWrite('locations/main/ingredients/ING_MODERN'));
 }
 
