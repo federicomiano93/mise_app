@@ -16,6 +16,7 @@ import { el } from './dom.js';
 import { confirmDialog, alertDialog } from './confirm-dialog.js';
 import { dayLabel, dayPhrase, spellDay } from './day.js';
 import { recordUnit } from '../order-unit.js';
+import { HISTORY_LIVE_MONTHS } from './history-window.js';
 import { isLegacyRecord, recordDate, recordedName, wholeNumber as num } from './archive.js';
 
 const BACK_ICON =
@@ -192,7 +193,7 @@ export function buildHistoryEditor(record, ingredients, actions) {
   async function remove() {
     const ok = await confirmDialog({
       title: t('orders.deleteThisOrder'),
-      message: t('orders.deleteOrderFor', { supplier: recordTitle(record), day: dayPhrase(recordDate(record)) }),
+      message: t('orders.deleteOrderFor', { supplier: recordTitle(record), day: dayPhrase(recordDate(record)), n: HISTORY_LIVE_MONTHS }),
       okLabel: t('ui.delete'),
       cancelLabel: t('ui.cancel'),
       danger: true,
