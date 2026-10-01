@@ -10,10 +10,10 @@
 // exists for exactly this reason, so the text can be asserted in a unit test instead
 // of being re-read out of rendered markup (P15).
 //
-// The format is deliberately unchanged from what the app has always sent:
+// The format (one supplier — «Ordine» on an Italian venue; with several suppliers each
+// one's lines sit under a bold *Supplier name* heading):
 //   *Order — The Italian Club*
 //
-//   *Supplier name*
 //   - Bacon 2.27kg: 5
 //   - Mozzarella 1kg: 2
 //
@@ -31,10 +31,16 @@
 // falls back to a plain '*Order*' — anonymous is recoverable, wrong is not.
 
 import { lineUnit, cleanUnit, qtyWithUnit } from '../order-unit.js';
+import { labelWord } from '../market.js';
 
-export function orderTitle(locationName) {
+// ⚠️ THE TITLE WORD FOLLOWS THE VENUE'S COUNTRY, NOT THE SCREEN. The supplier reads this
+// message in the language of the place the food is bought in, whatever language the owner's
+// phone speaks. `language` is outputLanguage(location) — 'it' | 'en' | null — passed in by
+// the caller so this file stays pure; null (country not set) falls back to English.
+export function orderTitle(locationName, language = null) {
+  const word = labelWord('orderTitle', language);
   const name = String(locationName || '').trim();
-  return name ? `*Order — ${name}*` : '*Order*';
+  return name ? `*${word} — ${name}*` : `*${word}*`;
 }
 
 // Round a quantity the same way every other Orders module does (archive.js).
@@ -93,9 +99,12 @@ export function summaryLines(items) {
 // receive the same order twice with the lines shuffled, and reasonably read it as a
 // different order.
 // group: { supplierName, items: [{ name, weight, qty }] }
-function sectionFor({ supplierName, items }) {
-  const lines = summaryLines(items).map(({ label, qty, unit }) => `- ${label}: ${qtyWithUnit(qty, unit)}`);
-  return `*${supplierName || 'Order'}*\n` + lines.join('\n');
+//
+// `heading` false leaves the bold supplier line out: a message that carries ONE supplier
+// is addressed to that supplier, who needs no reminder of their own name.
+function sectionFor({ supplierName, items }, heading = true) {
+  const lines = summaryLines(items).map(({ label, qty, unit }) => `- ${label}: ${qtyWithUnit(qty, unit)}`).join('\n');
+  return heading ? `*${supplierName || 'Order'}*\n${lines}` : lines;
 }
 
 // By displayed label, so the message reads in the order the eye expects.
@@ -144,12 +153,19 @@ function flatLines(groups) {
 //
 // Returns '' when there is nothing to send, so callers can refuse rather than open
 // WhatsApp with an empty order.
-export function buildOrderMessage(groups, { grouped = true, locationName = '' } = {}) {
+//
+// ⚠️ ONE SUPPLIER, NO HEADING: with a single supplier the message is title, blank line and
+// the lines. With several, each keeps its bold name — otherwise nobody could tell who sells
+// what. `language` is the venue's output language (see orderTitle).
+export function buildOrderMessage(groups, { grouped = true, locationName = '', language = null } = {}) {
   const withItems = (groups || []).filter(g => (g.items || []).length);
   if (!withItems.length) return '';
-  const title = orderTitle(locationName);
+  const title = orderTitle(locationName, language);
 
-  if (grouped) return `${title}\n\n` + withItems.map(sectionFor).join('\n\n');
+  if (grouped) {
+    const heading = withItems.length > 1;
+    return `${title}\n\n` + withItems.map(g => sectionFor(g, heading)).join('\n\n');
+  }
 
   const lines = flatLines(withItems);
   if (!lines.length) return '';

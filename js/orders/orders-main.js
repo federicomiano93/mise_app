@@ -48,7 +48,7 @@ import { renderUntold } from './untold-view.js';
 import { buildManagement, isAdmin } from './management.js';
 import { computeSuggestion, isUnusualQuantity } from './suggestions.js';
 import { refreshHolidays } from './holidays.js';
-import { countryOf } from '../market.js';
+import { countryOf, outputLanguage } from '../market.js';
 import { renderAlerts } from './notifications.js';
 import { routesFor } from './send-routes.js';
 import { confirmDialog, alertDialog } from './confirm-dialog.js';
@@ -923,7 +923,8 @@ function messageFormatOption() {
 function sendMessageFor(rows, { grouped = GROUPED_BY_DEFAULT } = {}) {
   const text = buildOrderMessage(
     rows.map(r => ({ supplierName: r.name, items: r.items })),
-    { grouped, locationName: currentSession().name });
+    { grouped, locationName: currentSession().name,
+      language: outputLanguage(currentSession().location) });
   if (!text) {
     setStatus(t('orders.nothingToSendThat'), 'warn', 4000);
     return;

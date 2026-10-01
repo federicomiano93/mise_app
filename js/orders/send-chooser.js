@@ -58,7 +58,7 @@ export function offerFor({ settings, canManage, suppliers }) {
 }
 
 // Ask, then act. `rows` are the picked suppliers ({ id, name, items }).
-export function chooseAndSend({ rows, settings, canManage, suppliers, locationName, grouped,
+export function chooseAndSend({ rows, settings, canManage, suppliers, locationName, language, grouped,
                                onSendToManager, onSent, beforeSend }) {
   const offers = offerFor({ settings, canManage, suppliers }).filter(o => o.usable);
 
@@ -109,7 +109,7 @@ export function chooseAndSend({ rows, settings, canManage, suppliers, locationNa
     const message = supplierName => buildOrderMessage(
       rows.filter(r => !supplierName || r.name === supplierName)
         .map(r => ({ supplierName: r.name, items: r.items })),
-      { grouped, locationName });
+      { grouped, locationName, language });
 
     if (offer.route === 'whatsapp') {
       const text = message(null);
@@ -128,7 +128,7 @@ export function chooseAndSend({ rows, settings, canManage, suppliers, locationNa
       const row = rows.find(r => r.id === supplier.id);
       if (!row) return;
       const text = buildOrderMessage([{ supplierName: row.name, items: row.items }],
-        { grouped: true, locationName });
+        { grouped: true, locationName, language });
       if (!text) return;
       const url = offer.route === 'email'
         ? mailto(supplier.email, t('orders.send.emailSubject', { name: locationName || '' }), text)

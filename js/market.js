@@ -121,6 +121,9 @@ const LABEL_WORDS = Object.freeze({
     useBy: 'Use by',
     bestBefore: 'Best before',
     storage: 'Storage',
+    // The title of the order message a SUPPLIER receives (js/orders/order-text.js): it
+    // is read in the venue's country, not on the owner's screen.
+    orderTitle: 'Order',
   },
   it: {
     contains: 'Contiene',
@@ -134,6 +137,7 @@ const LABEL_WORDS = Object.freeze({
     useBy: 'Da consumarsi entro il',
     bestBefore: 'Da consumarsi preferibilmente entro il',
     storage: 'Conservazione',
+    orderTitle: 'Ordine',
   },
 });
 
