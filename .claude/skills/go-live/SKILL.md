@@ -105,7 +105,8 @@ live?»* and tell him to **expect two clicks** if rules change (the harness asks
   `decidi` (a decision still his), `prima` (a warning to give BEFORE use). Every item also gets
   a `card` — the app card it belongs to, which the page filters by: `Ordini`, `Fornitori e
   ingredienti`, `Ricettario`, `Calcolatore`, `Paste`, `Food cost`, `Magazzino`, `Etichette`,
-  `Tutta l'app` or `Account e sicurezza`. Italian, plain, one action per item,
+  `Tutta l'app` or `Account e sicurezza` — and an `addedOn: "YYYY-MM-DD"` (the release date; the
+  page filters and sorts by it). Italian, plain, one action per item,
   `status: "todo"`, `note: ""`. Never delete an item he has not answered.
 - Delete the merged branch locally (`git branch -d`) and on GitHub if still there; GitHub
   should hold only `main` (`git fetch --prune`).

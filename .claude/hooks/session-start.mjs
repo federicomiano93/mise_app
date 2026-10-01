@@ -251,7 +251,7 @@ const lines = await Promise.all([
 const output = [
   'Mise — session start checks (automatic):',
   ...lines,
-  '- Read the «Controlli di Mise» page first (ArtifactData list of items and requests — memory pagina-controlli) and bring Federico every problem, note and new request.',
+  '- Read the «Controlli di Mise» page first (ArtifactData get settings/main, then list items and requests — memory pagina-controlli) and bring Federico every problem, note and new request — skipping every item whose card is in settings/main.disabledCards (cards he switched off).',
 ].join('\n');
 
 // Exit only once the text has been flushed; a child that never finished must not keep us alive.
