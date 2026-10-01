@@ -23,6 +23,7 @@ import {
   groupHistoryByDay, isLegacyRecord, splitHistoryByAge, countRecords, recordedName,
 } from './archive.js';
 import { isNoSupplier } from './no-supplier.js';
+import { HISTORY_LIVE_MONTHS, olderFooterState, historyFooter } from './history-window.js';
 // The one definition of "3 items", shared rather than copied — the two copies had
 // already drifted into two different English plurals, and neither was translated.
 import { itemsLabel } from './supplier-picker.js';
@@ -65,16 +66,39 @@ function supplierHeading(supplierId, supById) {
   return isNoSupplier(supplierId) ? t('orders.noSupplier') : t('orders.unknownSupplier');
 }
 
-// callbacks: { onEdit(record), onSend(record), onSendDay(date, records) }
-// options:   { historyDays, now } — how many days to show at a glance, see archive.js
+// callbacks: { onEdit(record), onSend(record), onSendDay(date, records), onLoadOlder() }
+// options:   { historyDays, now, older } — how many days to show at a glance, see archive.js;
+//            older = { loading, done, error }: where the on-demand paging of orders beyond
+//            the live window stands. It comes in through the options on EVERY repaint and is
+//            never kept in the DOM, so a snapshot arriving mid-load cannot lose «Loading…».
+//            Left out, it reads as done — no «Load older orders» button.
 export function renderHistory(container, history, suppliers, ingredients, callbacks = {}, options = {}) {
   if (!container) return;
+  // Focus is restored below when a button the person just pressed is about to be redrawn.
+  const refocus = wantsLoadFocus;
   container.textContent = '';
 
   const days = groupHistoryByDay(history);
+  const paging = options.older || { done: true };
 
-  if (!days.length) {
-    container.appendChild(el('p', { class: 'history-empty', text: t('orders.noPastOrdersYet') }));
+  if (options.historyDays !== lastWindow) {
+    lastWindow = options.historyDays;
+    showingOlder = false;
+  }
+
+  const { recent, older } = splitHistoryByAge(days, options.historyDays, options.now);
+  const foot = historyFooter({
+    recentCount: recent.length, olderInMemory: older.length, showingOlder, older: paging,
+  });
+
+  if (foot.empty) {
+    // Nothing live, but older orders may exist: never say there are none until they were
+    // looked at.
+    container.appendChild(el('p', { class: 'history-empty', text: foot.empty === 'none'
+      ? t('orders.noPastOrdersYet')
+      : t('orders.noOrdersInLastMonths', { n: HISTORY_LIVE_MONTHS }) }));
+    if (foot.load) container.appendChild(loadOlderFooter(paging, callbacks));
+    settleFocus(container, refocus, foot.load);
     return;
   }
 
@@ -90,43 +114,101 @@ export function renderHistory(container, history, suppliers, ingredients, callba
     ));
   };
 
-  if (options.historyDays !== lastWindow) {
-    lastWindow = options.historyDays;
-    showingOlder = false;
+  (foot.days === 'all' ? days : recent).forEach(appendDay);
+
+  if (foot.parkedFoot) {
+    // The note and the button live in ONE element so revealing the old orders takes the
+    // note with it. Left behind, "No orders in the last day" would sit above the orders
+    // it just said were not there.
+    const parkedFoot = el('div', { class: 'history-older' });
+    // Nothing recent but plenty older: say so, or the screen reads as "the orders are
+    // gone" with a lone button under it.
+    if (foot.note) {
+      parkedFoot.appendChild(el('p', { class: 'history-empty', text:
+        t('orders.noOrdersInTheLast', { n: Number(options.historyDays) }) }));
+    }
+    parkedFoot.appendChild(olderButton(older, appendDay, parkedFoot, container, () => {
+      // Revealing the parked days can bring the load button in under them.
+      if (historyFooter({
+        recentCount: recent.length, olderInMemory: older.length, showingOlder: true, older: paging,
+      }).load) container.appendChild(loadOlderFooter(paging, callbacks));
+    }));
+    container.appendChild(parkedFoot);
+  } else if (foot.load) {
+    container.appendChild(loadOlderFooter(paging, callbacks));
   }
-
-  const { recent, older } = splitHistoryByAge(days, options.historyDays, options.now);
-
-  (showingOlder ? days : recent).forEach(appendDay);
-
-  if (!older.length || showingOlder) return;
-
-  // The note and the button live in ONE element so revealing the old orders takes the
-  // note with it. Left behind, "No orders in the last day" would sit above the orders
-  // it just said were not there.
-  const foot = el('div', { class: 'history-older' });
-  // Nothing recent but plenty older: say so, or the screen reads as "the orders are
-  // gone" with a lone button under it.
-  if (!recent.length) {
-    foot.appendChild(el('p', { class: 'history-empty', text:
-      t('orders.noOrdersInTheLast', { n: Number(options.historyDays) }) }));
-  }
-  foot.appendChild(olderButton(older, appendDay, foot));
-  container.appendChild(foot);
+  settleFocus(container, refocus, foot.load);
 }
 
-// Reveal the orders older than the window. They are already in memory — the whole
-// collection is read when the app opens — so this fetches nothing and cannot fail.
-function olderButton(older, appendDay, foot) {
+// Reveal the orders older than the window that are ALREADY in memory — the live window
+// plus any pages loaded on demand — so this fetches nothing and cannot fail. Fetching
+// orders beyond them is loadOlderFooter's job.
+function olderButton(older, appendDay, foot, container, appendLoadFoot) {
   return el('button', {
     type: 'button',
     class: 'history-older-btn',
     onClick: () => {
       showingOlder = true;
       foot.remove();
+      const before = container.lastElementChild;
       older.forEach(appendDay);
+      appendLoadFoot();
+      // The button that held focus has just been removed; without this focus drops to the
+      // page and a keyboard or screen-reader user starts again from the top. It goes to the
+      // first revealed card.
+      let node = before ? before.nextElementSibling : container.firstElementChild;
+      while (node && !node.querySelector?.('.supplier-head') && !node.classList?.contains('supplier-card')) {
+        node = node.nextElementSibling;
+      }
+      (node?.querySelector?.('.supplier-head') || node?.firstElementChild)?.focus?.();
     },
   }, [t('orders.showOlderOrders', { n: countRecords(older) })]);
+}
+
+// Whether the «Load older orders» button was the last thing pressed, so the next repaint
+// gives focus back to its replacement. Set on the click and cleared once it has been
+// honoured; the repaint BEFORE the page arrives draws a disabled button, which cannot take
+// focus, so the wish waits for the repaint after it.
+let wantsLoadFocus = false;
+
+function settleFocus(container, wanted, loadVisible) {
+  if (!wanted) return;
+  // The load footer, when drawn, is always the last thing in the list.
+  const btn = container.lastElementChild?.querySelector?.('.history-older-btn');
+  if (loadVisible && btn && !btn.disabled) {
+    btn.focus();
+    wantsLoadFocus = false;
+    return;
+  }
+  if (loadVisible) return;   // still loading, or the button is about to come back
+  // Paging is finished and the button is gone: park focus on the list itself.
+  wantsLoadFocus = false;
+  if (!container.hasAttribute('tabindex')) container.setAttribute('tabindex', '-1');
+  container.focus();
+}
+
+// «Load older orders»: fetches the next page from Firestore (orders-main.js loadOlderHistory).
+// Its whole state comes from `paging`; a failed attempt shows a line above the same button,
+// which is then the retry (the failure is also announced in History's status line).
+function loadOlderFooter(paging, callbacks) {
+  const state = olderFooterState(paging);
+  const foot = el('div', { class: 'history-older' });
+  if (state.failed) {
+    foot.appendChild(el('p', { class: 'history-empty', text: t('orders.olderOrdersFailed') }));
+  }
+  foot.appendChild(el('button', {
+    type: 'button',
+    class: 'history-older-btn',
+    disabled: state.disabled ? '' : null,   // el() would set disabled="false" for a boolean
+    onClick: () => {
+      // The loaded page is entirely older than historyDays: without this it would be parked
+      // behind «Show older orders» and the person would see nothing happen.
+      showingOlder = true;
+      wantsLoadFocus = true;
+      callbacks.onLoadOlder?.();
+    },
+  }, [state.disabled ? t('orders.loading') : t('orders.loadOlderOrders')]));
+  return foot;
 }
 
 // The day heading, with a "Send all" beside it once there is more than one order to
