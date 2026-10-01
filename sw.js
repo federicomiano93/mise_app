@@ -1,4 +1,4 @@
-const CACHE_NAME = 'theitalianclub-v507';
+const CACHE_NAME = 'theitalianclub-v508';
 // Firebase SDK modules (loaded from gstatic) are cached SEPARATELY from CACHE_NAME
 // so they survive the cache-version bump that happens on every deploy — otherwise
 // the offline SDK would be wiped each release until the next online load. The name
@@ -406,7 +406,7 @@ const ASSET_HASHES = {
   "./tokens.css": '35378c324986c90f',
   "./auth.css": '89b970ddd3c5c9be',
   "./style.css": '314acebfd84603b2',
-  "./orders.css": '24dcdbd04a3cf8b7',
+  "./orders.css": '202ddf06e7f3dd0f',
   "./sounds/alarm.wav": '0d1465974f5be95b',
   "./fonts/manrope-latin.woff2": '71eb731d55804619',
   "./fonts/manrope-latin-ext.woff2": 'bd24140af06f1b58',
@@ -442,7 +442,7 @@ const ASSET_HASHES = {
   "./js/supplier-label.js": '9601ceed020c0205',
   "./js/order-unit.js": '1e5149dc8263a4f5',
   "./js/record-data.js": '47d198fbb955d963',
-  "./js/ingredient-record-form.js": '6043f2817a3c36ec',
+  "./js/ingredient-record-form.js": '40c90ced69b4fd03',
   "./js/supplier-record-form.js": 'e696787bd1e15b7d',
   "./js/ingredient-kind.js": 'b5ea1d7ec8255fd6',
   "./js/photo-model.js": '67d1d83755bbd33a',
@@ -481,7 +481,7 @@ const ASSET_HASHES = {
   "./js/location.js": '6aaf53615a8739d1',
   "./js/sections.js": 'abcfdecb2bd5766d',
   "./js/roles.js": '2b491770c4b6165b',
-  "./js/i18n.js": '723b1a0719149e43',
+  "./js/i18n.js": '30a5b6830748dff1',
   "./js/i18n-dom.js": 'a6d32c5bb1b56674',
   "./js/join-code.js": '5b89de65db5c102f',
   "./js/join-link.js": 'a90ea53c7ba51614',
@@ -564,8 +564,8 @@ const ASSET_HASHES = {
   "./js/orders/alert-dismissal.js": 'fbfe034ffa9f6620',
   "./js/orders/management.js": '1797cd30f5834ffd',
   "./js/orders/mgmt-ui.js": '8894b23fd41e8a66',
-  "./js/orders/registry.js": 'fb2806ae75f8cc24',
-  "./js/orders/registry-main.js": '7006399e26051743',
+  "./js/orders/registry.js": 'ae77bae2dd9bd24c',
+  "./js/orders/registry-main.js": '3bd566a7fea725db',
   "./js/orders/registry-settings.js": '74c80116276527d1',
   "./js/form-dirty.js": '27dce3718a33d438',
   "./js/orders/level-stack.js": '6832e37854829455',
@@ -584,7 +584,7 @@ const ASSET_HASHES = {
   "./catalogue.html": '91eacf7f31a7713b',
   "./catalogue.css": '655215cf87fd1c75',
   "./label-print.css": 'ffbcdf4e7a627a2d',
-  "./records.css": '669f2455fea64d33',
+  "./records.css": '2a4ddcb99e16c298',
   "./js/catalogue/confirm-dialog.js": '61a7f580f37c5ff8',
   "./js/catalogue/dom.js": '9878ae7c750afd79',
   "./js/catalogue/catalogue-model.js": '797cccdb6a9a4d53',
@@ -602,7 +602,7 @@ const ASSET_HASHES = {
   "./js/print-queue-model.js": '52602cad051dbba0',
   "./js/catalogue/print-transports.js": '088f68d76249710f',
   "./js/catalogue/ingredient-picker.js": 'a8eef2afe961e8a2',
-  "./js/ingredient-create.js": '7c81be2a361393a9',
+  "./js/ingredient-create.js": '56e3fc8b24e7d769',
   "./js/ingredient-edit-model.js": '75b571a45585a715',
   "./js/catalogue/ingredient-suggest.js": '70f26e512587e448',
   "./js/catalogue/firebase-catalogue.js": '4a56f24592f377c5',

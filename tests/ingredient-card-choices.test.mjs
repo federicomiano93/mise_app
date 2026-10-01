@@ -6,15 +6,21 @@ import { readFileSync } from 'node:fs';
 const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
 const FORM = read('js/ingredient-record-form.js');
 
-test('an empty category is still saved as "Other", and weight/unit come from the controls', () => {
+test('an empty category is still saved as "Other", and the weight comes from its control', () => {
   assert.match(FORM, /category: category\.read\(\) \|\| 'Other'/);
   assert.match(FORM, /weight: weight\.read\(\)/);
-  assert.match(FORM, /unit: unit\.read\(\)/);
+});
+
+test('there is no «Unità d\'ordine» menu: the unit is written by the format, or left alone', () => {
+  assert.doesNotMatch(FORM, /const unit = choiceControl|unit\.read\(\)|unit\.node|orderUnits/);
+  // a NEW item gets an empty unit (or its loose-price word); an existing one sends none unless touched
+  assert.match(FORM, /\.\.\.\(item \? \{\} : \{ unit: looseWord \}\),\s*\.\.\.formatKeys,/);
+  assert.doesNotMatch(FORM, /^\s*unit: [a-z]+\.read\(\),$/m);
 });
 
 test('the card imports no feature folder, and receives its lists as parameters', () => {
   assert.doesNotMatch(FORM, /from '\.\/(orders|catalogue|foodcost|inventory)\//);
-  assert.match(FORM, /categories = \[\], orderUnits = \[\]/);
+  assert.match(FORM, /categories = \[\], packs = \[\]/);
 });
 
 test('both callers hand the lists in', () => {
