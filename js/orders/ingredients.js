@@ -206,6 +206,23 @@ export function buildRow(ing, supplier, suggest, entries, hooks, { meta = '' } =
     });
   }
 
+  // ⚠️ THE NAME IS A BUTTON ONLY FOR WHOEVER MAY EDIT INGREDIENTS (Federico, 1 Oct 2026: the
+  // card «Modifica ingrediente» one tap from the order, instead of going back to «Fornitori e
+  // ingredienti»). Everybody else keeps plain text — a control that opens a card the person may
+  // not use teaches them the app is broken. The question is put to the caller on EVERY build,
+  // and rows are rebuilt on every snapshot, so it follows the owner's switch live.
+  // It is a real <button> (keyboard, focus ring, an accessible name that says what it does) drawn
+  // to look exactly like the span it replaces (.ing-name-btn, orders.css): the row must not move.
+  // The quantity / stock boxes and the × button are SIBLINGS of it, never inside it.
+  const editable = typeof hooks.onEditIngredient === 'function' && hooks.mayEditIngredient?.() === true;
+  const nameNode = editable
+    ? el('button', {
+      type: 'button', class: 'ing-name ing-name-btn', text: ing.name || '',
+      'aria-label': t('orders.editIngredientFor', { name: ingredientLabel(ing) || t('orders.unnamedProduct') }),
+      onClick: () => hooks.onEditIngredient(ing),
+    })
+    : el('span', { class: 'ing-name', text: ing.name || '' });
+
   // One LINE per ingredient, three columns: the name (with the supplier and the hint
   // under it), the Order box, the Stock box. «Order» / «Stock» are named ONCE, by the
   // sticky header (buildIngredientHeader), not under every box — each input keeps its
@@ -215,7 +232,7 @@ export function buildRow(ing, supplier, suggest, entries, hooks, { meta = '' } =
   row = el('div', { class: 'ing-row ing-row--line', dataset: { ing: ing.id } }, [
     el('div', { class: 'ing-main' }, [
       el('div', { class: 'ing-top' }, [
-        el('span', { class: 'ing-name', text: ing.name || '' }),
+        nameNode,
       ]),
       // The pack weight on a small line of its own (29 Sep 2026): beside the name it pushed
       // «Marmellata di albicocche 1kg» onto four lines in the 86px a 296px phone leaves.

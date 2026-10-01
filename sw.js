@@ -1,4 +1,4 @@
-const CACHE_NAME = 'theitalianclub-v501';
+const CACHE_NAME = 'theitalianclub-v502';
 // Firebase SDK modules (loaded from gstatic) are cached SEPARATELY from CACHE_NAME
 // so they survive the cache-version bump that happens on every deploy — otherwise
 // the offline SDK would be wiped each release until the next online load. The name
@@ -12,7 +12,7 @@ const CACHE_NAME = 'theitalianclub-v501';
 // the fetch handler below, on the first load that has a network.
 // So between activate() and that first load, a phone that is OFFLINE cannot boot:
 // the code asks for 12.18.0 and nothing has it. In practice the window is very
-// small — activate() only happens after a successful 273-file precache, i.e.
+// small — activate() only happens after a successful 274-file precache, i.e.
 // online, and tapping the update banner reloads the page immediately — but it is
 // not zero, and it is the reason to bump the SDK deliberately rather than often.
 // Leaving the name unchanged would close the window and cost ~1 MB of dead
@@ -313,6 +313,7 @@ const ASSETS = [
   './js/catalogue/print-transports.js',
   './js/catalogue/ingredient-picker.js',
   './js/ingredient-create.js',
+  './js/ingredient-edit-model.js',
   './js/catalogue/ingredient-suggest.js',
   './js/catalogue/firebase-catalogue.js',
   './js/catalogue/catalogue-store.js',
@@ -404,7 +405,7 @@ const ASSET_HASHES = {
   "./tokens.css": '35378c324986c90f',
   "./auth.css": '89b970ddd3c5c9be',
   "./style.css": '314acebfd84603b2',
-  "./orders.css": '041f3d9b5f1148e4',
+  "./orders.css": '8b1f55fff70132f8',
   "./sounds/alarm.wav": '0d1465974f5be95b',
   "./fonts/manrope-latin.woff2": '71eb731d55804619',
   "./fonts/manrope-latin-ext.woff2": 'bd24140af06f1b58',
@@ -438,7 +439,7 @@ const ASSET_HASHES = {
   "./js/record-ui.js": 'fb1d21fc0e352117',
   "./js/supplier-label.js": '9601ceed020c0205',
   "./js/order-unit.js": '1e5149dc8263a4f5',
-  "./js/record-data.js": 'ce5104faf4f7a3b9',
+  "./js/record-data.js": '95d8d62ae4744ab9',
   "./js/ingredient-record-form.js": '5ce3d2c2461315e5',
   "./js/supplier-record-form.js": 'e696787bd1e15b7d',
   "./js/ingredient-kind.js": 'b5ea1d7ec8255fd6',
@@ -478,7 +479,7 @@ const ASSET_HASHES = {
   "./js/location.js": '6aaf53615a8739d1',
   "./js/sections.js": 'abcfdecb2bd5766d',
   "./js/roles.js": '2b491770c4b6165b',
-  "./js/i18n.js": '1c46352e83ad7add',
+  "./js/i18n.js": 'c664aa51fe897abb',
   "./js/i18n-dom.js": 'a6d32c5bb1b56674',
   "./js/join-code.js": '5b89de65db5c102f',
   "./js/join-link.js": 'a90ea53c7ba51614',
@@ -526,7 +527,7 @@ const ASSET_HASHES = {
   "./js/orders/category-batches.js": '03d72f63c4fa4a8a',
   "./js/orders/confirm-dialog.js": '61a7f580f37c5ff8',
   "./js/orders/firebase-orders.js": 'af5e1dd0f3d1bf04',
-  "./js/orders/orders-main.js": '1faa2e5baac12dc8',
+  "./js/orders/orders-main.js": '8d77fae24488a7cf',
   "./js/orders/dom.js": '7ec966d71c5356cd',
   "./js/orders/day.js": '8e00beadcda80dd1',
   "./js/orders/deliveries.js": 'cb8ab18721026f83',
@@ -539,7 +540,7 @@ const ASSET_HASHES = {
   "./js/orders/reminders.js": 'e9c255f18abea237',
   "./js/orders/reminder-view.js": '12eb553c1f553522',
   "./js/orders/suppliers.js": '4affc6816abb4b3a',
-  "./js/orders/ingredients.js": '0fed6b56cd67b3f9',
+  "./js/orders/ingredients.js": '2226caf300b9a5b7',
   "./js/orders/no-supplier.js": 'a577ab8cea7c21b4',
   "./js/orders/ingredient-search.js": '3998cd3f18e0144e',
   "./js/orders/ingredient-list.js": '3934daa138993f4f',
@@ -599,7 +600,8 @@ const ASSET_HASHES = {
   "./js/print-queue-model.js": '52602cad051dbba0',
   "./js/catalogue/print-transports.js": '088f68d76249710f',
   "./js/catalogue/ingredient-picker.js": 'a8eef2afe961e8a2',
-  "./js/ingredient-create.js": '3c3695f8da18493d',
+  "./js/ingredient-create.js": '7c81be2a361393a9',
+  "./js/ingredient-edit-model.js": '4eee97b2ed391756',
   "./js/catalogue/ingredient-suggest.js": '70f26e512587e448',
   "./js/catalogue/firebase-catalogue.js": '4a56f24592f377c5',
   "./js/catalogue/catalogue-store.js": '32d3ef5ccfb6da26',
@@ -695,7 +697,7 @@ const ASSET_HASHES = {
 // code against rules that deployed instantly, which is the very thing the gate exists
 // to prevent. Two things stand between that and a release: the test that every ASSETS
 // entry EXISTS (a mistyped path being the likeliest permanent cause), and this
-// project's post-deploy sweep, which already asks the live site for all 273 files.
+// project's post-deploy sweep, which already asks the live site for all 274 files.
 // ⚠️ NEITHER covers a device-specific failure — nobody has yet confirmed an update
 // landing on a real iPhone under this code.
 //

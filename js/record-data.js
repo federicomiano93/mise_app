@@ -23,6 +23,7 @@ import {
   collection,
   doc,
   setDoc,
+  getDoc,
   writeBatch,
 } from 'https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js';
 
@@ -98,6 +99,17 @@ export async function saveIngredientWithPrice(id, data, priceRecord, writePrice 
   }
   await batch.commit();
   return ref.id;
+}
+
+// One ingredient's price document, or null when it has none. Read only to open an EXISTING
+// ingredient's card from a screen whose live price snapshot has not answered yet (see
+// itemWithPrice): a card shown without the stored price would erase it on an untouched Save.
+// ⚠️ IT THROWS ON FAILURE, never returns null for «could not read»: null means «no price», and
+// opening the card on that would be the very bug this read exists to prevent.
+export async function readIngredientPrice(id) {
+  await sessionReady;
+  const snap = await getDoc(doc(collection(db, pathFor(INGREDIENT_PRICES)), id));
+  return snap.exists() ? snap.data() : null;   // the same shape the live price map holds
 }
 
 // Save a supplier — a new one when `id` is null — and return its id.

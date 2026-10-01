@@ -603,6 +603,23 @@
 .ing-flat-list .ing-row--line.ing-row--filled .ing-main { padding-right: 44px; }
 .ing-row--line .ing-top { display: block; margin-bottom: 0; }
 .ing-row--line .ing-name { font-size: 16px; font-weight: 600; text-align: left; overflow-wrap: anywhere; }
+/* The name as a BUTTON (ingredients.js, only for whoever may edit ingredients): it must look
+   exactly like the span it replaces, so it takes the .ing-name size, weight and colour as they
+   are and only strips what a <button> adds — the box, the background, the centring. Not
+   `font: inherit`: that would reset the size .ing-name (and its 18px tablet rule) set. */
+.ing-row--line .ing-name-btn {
+  display: block;
+  max-width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font-family: inherit;
+  line-height: inherit;
+  letter-spacing: inherit;
+  cursor: pointer;
+}
+.ing-row--line .ing-name-btn:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 2px; border-radius: var(--radius-sm); }
 .ing-row--line .ing-supplier { margin: 2px 0 0; }
 .ing-row--line .ing-weight { margin-top: 1px; font-family: 'DM Mono', monospace; font-size: 12px; color: var(--text-3); }
 .ing-row--line .ing-suggestion { margin-top: 2px; }

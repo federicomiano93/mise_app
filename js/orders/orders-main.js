@@ -14,12 +14,13 @@ import { supplierLabel } from '../supplier-label.js';
 // ⚠️ createDoc / removeDoc / saveIngredientWithPrice / getPriceHistory LEFT WITH THE
 // RECORDS. This page no longer creates, deletes or prices anything — it reads the
 // two collections to draw an order. js/orders/registry-main.js holds those calls now.
-// (The one exception is «+ Add ingredient» on a supplier's screen, which opens the records'
-// own card through js/ingredient-create.js — the card does its own saving.)
+// (The exceptions are «+ Add ingredient» on a supplier's screen and the ingredient NAME on a
+// row, which open the records' own card through js/ingredient-create.js — the card does its own
+// saving.)
 import {
   watchCollection, watchDoc, saveDoc, COLLECTIONS,
   watchRecentHistory, getOlderHistory, getLegacyHistory,
-  watchIngredientPrices, canManageHere, authReady,
+  watchIngredientPrices, canManageHere, authReady, getPriceHistory,
 } from './firebase-orders.js';
 import { withPrices } from '../price-model.js';
 import { currentSession } from '../firebase.js';
@@ -66,7 +67,7 @@ import { storedUnitFor, entryUnit, isDefaultUnit } from '../order-unit.js';
 import { todayOrders, pendingSuppliers } from './reminders.js';
 import { renderTodayOrders, renderPending } from './reminder-view.js';
 import { resolveSuppliers, orderSuppliers, NO_SUPPLIER_ID } from './no-supplier.js';
-import { openIngredientCreate } from '../ingredient-create.js';
+import { openIngredientCreate, openIngredientEdit } from '../ingredient-create.js';
 import { normalizeOrdersConfig } from './orders-config.js';
 import { mountIngredientList } from './ingredient-list.js';
 import { watchTablet, initAlertsPanel, closeAlertsPanel, isTabletNow } from './tablet-layout.js';
@@ -165,6 +166,11 @@ const hooks = {
   },
   onClear(supplierId) {
     clearQuantitiesFor([supplierId]);
+  },
+  // The ingredient NAME on a row opens the records' card (ingredients.js asks both on every build).
+  mayEditIngredient: () => mayAddIngredient(),
+  onEditIngredient(ing) {
+    openEditIngredient(ing);
   },
 };
 
@@ -439,6 +445,40 @@ function openAddIngredient(supplierId) {
       alertDialog(t('orders.addIngredientFailed'));
     })
     .finally(() => { addingIngredient = false; });
+}
+
+// The ingredient NAME on a row: the records' own card for THIS ingredient, as an overlay above
+// whatever Orders screen is up (supplier screen or the flat list). Nothing to refresh afterwards:
+// the live snapshot after the save repaints the rows with the new name / weight / unit, and the
+// screen underneath was never touched — same scroll, every typed quantity still in state.entries.
+// ⚠️ Same gate as «+ Add ingredient» (mayAddIngredient), and the same double-tap guard: two
+// layers would be two cards for one ingredient.
+// ⚠️ THE ITEM IS state.ingredients' (the document MERGED with its price), never the row's
+// copy, and `pricesLoaded` tells the opener whether that merge has really seen the prices: if
+// not, it reads the price document before drawing — a card without the stored price would erase
+// it on an untouched Save (js/ingredient-edit-model.js).
+function openEditIngredient(ing) {
+  if (addingIngredient || !mayAddIngredient()) return;
+  const item = state.ingredients.find(i => i.id === ing.id) || ing;
+  addingIngredient = true;
+  openIngredientEdit({
+    item,
+    suppliers: state.suppliers,
+    ingredients: state.rawIngredients,
+    storedCategories: state.ingredientCategories,
+    layerClass: 'mgmt-overlay',
+    pricesLoaded: state.pricesReadable === true,
+    actions: { priceHistory: (id) => getPriceHistory(id) },
+  })
+    .catch(err => {
+      console.error('Could not open the ingredient card', err);
+      alertDialog(t('orders.addIngredientFailed'));
+    })
+    .finally(() => {
+      addingIngredient = false;
+      // The row was rebuilt by the snapshot; hand focus back to its name (keyboard users).
+      document.querySelector(`[data-ing="${CSS.escape(ing.id)}"] .ing-name-btn`)?.focus({ preventScroll: true });
+    });
 }
 
 // Create the screen, or repaint the one already up. Repainting happens on every
