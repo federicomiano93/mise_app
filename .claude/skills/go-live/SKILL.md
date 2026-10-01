@@ -102,8 +102,11 @@ live?»* and tell him to **expect two clicks** if rules change (the harness asks
   `pagina-controlli`): add this release's items with ONE `ArtifactData batch` — a group
   `release: "vX.Y.Z · <area>"`, `rank` = the version as a number (v1.98.0 → 9800), and per item
   one of: `prova` (what to open and try, with `device`), `scelta` (a call I took for him),
-  `decidi` (a decision still his), `prima` (a warning to give BEFORE use). Italian, plain, one
-  action per item, `status: "todo"`, `note: ""`. Never delete an item he has not answered.
+  `decidi` (a decision still his), `prima` (a warning to give BEFORE use). Every item also gets
+  a `card` — the app card it belongs to, which the page filters by: `Ordini`, `Fornitori e
+  ingredienti`, `Ricettario`, `Calcolatore`, `Paste`, `Food cost`, `Magazzino`, `Etichette`,
+  `Tutta l'app` or `Account e sicurezza`. Italian, plain, one action per item,
+  `status: "todo"`, `note: ""`. Never delete an item he has not answered.
 - Delete the merged branch locally (`git branch -d`) and on GitHub if still there; GitHub
   should hold only `main` (`git fetch --prune`).
 

@@ -252,7 +252,6 @@ const output = [
   'Mise — session start checks (automatic):',
   ...lines,
   '- Read the «Controlli di Mise» page first (ArtifactData list of items and requests — memory pagina-controlli) and bring Federico every problem, note and new request.',
-  '- Firebase Alerts still unconfirmed — remind Federico in one line (remove this line from .claude/hooks/session-start.mjs once he confirms).',
 ].join('\n');
 
 // Exit only once the text has been flushed; a child that never finished must not keep us alive.
