@@ -14,7 +14,7 @@
 // including whatever someone else is typing right now — is left alone.
 
 import {
-  saveDoc, watchDoc, clearFields, transactDoc, replaceDoc, removeDoc, COLLECTIONS,
+  saveDoc, patchDoc, watchDoc, clearFields, transactDoc, replaceDoc, removeDoc, COLLECTIONS,
 } from './firebase-orders.js';
 import {
   buildSupplierArchive, mergeArchives, historyDocId, ingredientsOf, quantityPathsFor,
@@ -285,18 +285,24 @@ export function deleteHistoryRecord(id) {
 
 // Say that an order arrived, and which of its rows did not.
 //
-// ⚠️⚠️ A MERGE, NOT A REWRITE, AND THAT IS THE WHOLE POINT. `quantities` is the map
-// the suggestion engine averages over; rewriting the record whole from a screen that
-// only knows about the delivery would be one refactor away from carrying a stale copy
-// of it back to the server. This write cannot touch what was ordered because it never
-// sends it.
+// ⚠️⚠️ THREE FIELDS, NOT A REWRITE OF THE RECORD, AND THAT IS THE WHOLE POINT.
+// `quantities` is the map the suggestion engine averages over; rewriting the record
+// whole from a screen that only knows about the delivery would be one refactor away
+// from carrying a stale copy of it back to the server. This write cannot touch what was
+// ordered because it never sends it.
 //
 // ⚠️ AN EMPTY `deliveredAt` IS A REAL VALUE — "we looked and it has not arrived" —
 // and it is how a confirmation is taken back after a mis-tap. It is written, not
-// omitted: omitting it from a merge leaves the old stamp in place, so an un-confirm
-// would silently do nothing.
+// omitted: omitting it leaves the old stamp in place, so an un-confirm would silently
+// do nothing.
+//
+// ⚠️ `missing` IS REPLACED WHOLE (patchDoc), never merged. A merge write adds the new
+// marks to the stored ones, so a second answer could never say «the flour came after
+// all»: the old mark stayed, and the flour stayed on the re-order list and out of the
+// stocktake for ever. A second answer happens when a same-day order re-opens a delivery
+// (js/orders/archive.js mergeArchives).
 export function confirmDelivery(id, { deliveredAt, missing }) {
-  return saveDoc(COLLECTIONS.history, id, {
+  return patchDoc(COLLECTIONS.history, id, {
     deliveredAt: deliveredAt || '',
     missing: missing || {},
     updatedAt: new Date().toISOString(),

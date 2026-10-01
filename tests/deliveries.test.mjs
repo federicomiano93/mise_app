@@ -272,3 +272,33 @@ test('⚠️ nothing here mutates the orders it is given', () => {
   expectedDeliveryOn(record, SUPPLIERS.weekly);
   assert.equal(JSON.stringify(record), before, 'the record must come back untouched');
 });
+
+// ── A delivery answered a second time ────────────────────────────────────────
+// A same-day order re-opens a delivery that already carries «did not arrive» marks
+// (js/orders/archive.js mergeArchives). Read as source: the screen and the write need a
+// browser and Firestore, and what matters is the shape of the two calls.
+import { readFileSync } from 'node:fs';
+const read = p => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
+
+test('a re-opened delivery goes straight to the rows, the old marks unticked', () => {
+  const view = read('js/orders/deliveries-view.js');
+  const arrival = view.slice(view.indexOf('async function openArrival'), view.indexOf('function openMissingPicker('));
+  // Asked BEFORE the «everything arrived?» dialog, which would tick the known-missing lines.
+  const early = arrival.indexOf('if (carriedMissingIds(order).length) return openMissingPicker(');
+  assert.ok(early >= 0, 'the early return to the rows is gone');
+  assert.ok(early < arrival.indexOf('confirmDialog('));
+  // The known-missing lines start in the Set AND unticked on screen — the two must agree,
+  // or a line shown as arrived would still be saved as missing.
+  assert.match(view, /const missing = new Set\(carriedMissingIds\(order\)/);
+  assert.match(view, /\.\.\.\(missing\.has\(id\) \? \{\} : \{ checked: 'checked' \}\)/);
+});
+
+test('the answer REPLACES the stored marks — a merge could never untick one', () => {
+  const draft = read('js/orders/draft.js');
+  const fn = draft.slice(draft.indexOf('export function confirmDelivery'));
+  assert.match(fn.slice(0, 200), /return patchDoc\(COLLECTIONS\.history/);
+  const fs = read('js/orders/firebase-orders.js');
+  const patch = fs.slice(fs.indexOf('export async function patchDoc'), fs.indexOf('export async function clearFields'));
+  assert.match(patch, /updateDoc\(/);
+  assert.doesNotMatch(patch, /merge/);
+});

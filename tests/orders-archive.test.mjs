@@ -231,6 +231,34 @@ test('the newer stock reading wins — a measurement is not a total', () => {
   assert.deepEqual(mergeArchives(existing, incoming).stock, { flour: 6 });
 });
 
+// The record is written WHOLE (transactDoc → tx.set): what the merge leaves out is deleted.
+test('a second order the same day keeps the «did not arrive» marks', () => {
+  const existing = {
+    quantities: { flour: 4, butter: 2 }, stock: {},
+    deliveredAt: '2026-07-13T09:00:00.000Z', missing: { butter: true },
+  };
+  const incoming = { quantities: { semola: 2 }, stock: {} };
+  const merged = mergeArchives(existing, incoming);
+  assert.deepEqual(merged.missing, { butter: true });
+  // The semola has not arrived: the order goes back to «still to answer».
+  assert.equal('deliveredAt' in merged, false);
+});
+
+test('a missing line ordered again the same day loses its mark — it has just been re-ordered', () => {
+  const existing = { quantities: { flour: 4, butter: 2 }, missing: { butter: true, flour: true } };
+  const merged = mergeArchives(existing, { quantities: { butter: 2 } });
+  assert.deepEqual(merged.missing, { flour: true });
+});
+
+test('no marks left means no `missing` key at all, never an empty map', () => {
+  assert.equal('missing' in mergeArchives({ quantities: { flour: 4 } }, { quantities: { flour: 1 } }), false);
+  const reordered = mergeArchives({ quantities: { flour: 4 }, missing: { flour: true } }, { quantities: { flour: 1 } });
+  assert.equal('missing' in reordered, false);
+  // Anything but a literal true was never a mark.
+  const odd = mergeArchives({ quantities: { flour: 4 }, missing: { flour: 'yes' } }, { quantities: { semola: 1 } });
+  assert.equal('missing' in odd, false);
+});
+
 // ── legacy weekly records ─────────────────────────────────────────────────────
 
 const LEGACY = {

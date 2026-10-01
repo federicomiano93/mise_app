@@ -97,6 +97,12 @@ async function openArrival(entry, ctx) {
   const { order } = entry;
   const name = supplierLabel(entry.supplier) || order.supplierName || '';
 
+  // ⚠️ AN ORDER THAT ALREADY CARRIES «DID NOT ARRIVE» MARKS goes straight to the rows. It is
+  // asked again only because a second order was added the same day (js/orders/archive.js
+  // mergeArchives), and «everything arrived» would then also tick the lines that were
+  // already known to be missing — one tap erasing what somebody said earlier.
+  if (carriedMissingIds(order).length) return openMissingPicker(entry, ctx);
+
   const answer = await confirmDialog({
     title: t('orders.deliveries.arrivedTitle', { supplier: name }),
     message: t('orders.deliveries.arrivedMessage', { day: spellDay(order.date) }),
@@ -122,11 +128,13 @@ function openMissingPickerScreen(entry, ctx, done) {
   const { order } = entry;
   const ids = Object.keys(order.quantities || {}).sort((a, b) =>
     label(a, order, ctx).localeCompare(label(b, order, ctx)));
-  const missing = new Set();
+  // Lines already marked as missing start unticked; everything else is considered arrived.
+  const missing = new Set(carriedMissingIds(order).filter(id => ids.includes(id)));
 
   const list = el('div', { class: 'missing-list' });
   ids.forEach(id => {
-    const box = el('input', { type: 'checkbox', class: 'missing-check', checked: 'checked' });
+    const box = el('input', { type: 'checkbox', class: 'missing-check',
+      ...(missing.has(id) ? {} : { checked: 'checked' }) });
     box.addEventListener('change', () => {
       if (box.checked) missing.delete(id); else missing.add(id);
     });
@@ -170,6 +178,10 @@ function openMissingPickerScreen(entry, ctx, done) {
   ]);
 
   document.body.appendChild(overlay);
+}
+
+function carriedMissingIds(order) {
+  return Object.keys(order?.missing || {}).filter(id => order.missing[id] === true);
 }
 
 function label(id, order, ctx) {

@@ -266,9 +266,18 @@ export function mergeArchives(existing, incoming, { cardUnitOf } = {}) {
     quantities[id] = num(quantities[id]) + num(qty);
   });
   const units = { ...(existing.units || {}), ...(incoming.units || {}) };
+  const missing = carriedMissing(existing, incoming);
 
   return {
     ...incoming,
+    // ⚠️ THE WRITE IS A WHOLE REPLACEMENT (transactDoc → tx.set), so whatever this object
+    // leaves out is DELETED from the record. `missing` used to be left out: a second order
+    // the same day after the delivery had been answered wiped «the flour never came» — the
+    // re-order reminder vanished and the stocktake counted the flour as bought.
+    // `deliveredAt` IS left out on purpose: the lines just added have not arrived, so the
+    // order goes back to «still to answer» (js/orders/deliveries-view.js re-asks with the
+    // carried marks already unticked).
+    ...(missing ? { missing } : {}),
     quantities,
     stock: { ...(existing.stock || {}), ...(incoming.stock || {}) },
     // Keep every name the record has ever carried. The incoming write only names the
@@ -281,6 +290,20 @@ export function mergeArchives(existing, incoming, { cardUnitOf } = {}) {
     createdAt: existing.createdAt || incoming.createdAt,
     updatedAt: incoming.updatedAt,
   };
+}
+
+// The «did not arrive» marks a record keeps when a second order the same day is merged into
+// it, or null when none are left. A line ordered AGAIN in the second order is dropped from
+// the marks: it has just been re-ordered, so it must leave the re-order list. The price, a
+// known one: its quantity is now both orders added up, and one true/false mark cannot say
+// «half of it came» — if the second van brings it, the stocktake proposes the sum as bought.
+// Rare (answered AND re-ordered on the order day), and the stocktake figure is editable.
+function carriedMissing(existing, incoming) {
+  const out = {};
+  Object.entries(existing.missing || {}).forEach(([id, value]) => {
+    if (value === true && !(num(incoming.quantities?.[id]) > 0)) out[id] = true;
+  });
+  return Object.keys(out).length ? out : null;
 }
 
 // ⚠️ THE SAME QUESTION mergeArchives ANSWERS, asked BEFORE anything leaves the app: which of
