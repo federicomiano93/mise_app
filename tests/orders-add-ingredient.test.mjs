@@ -17,21 +17,23 @@ const CREATE = stripJs(read('js/ingredient-create.js'));
 const CSS = stripCss(read('orders.css'));
 const I18N = read('js/i18n.js');
 
-test('the button is built FIRST in repaint, before the list, and not behind ingredients.length', () => {
-  const repaint = DETAIL.slice(DETAIL.indexOf('function repaint'));
-  const button = repaint.indexOf("t('orders.addIngredientToList')");
-  const aria = repaint.indexOf("t('orders.addIngredientToListAria'");
-  const list = repaint.indexOf('buildIngredientList(');
-  const early = repaint.indexOf('if (!ingredients.length) return;');
-  assert.ok(button > 0 && aria > 0, 'the button carries its label and its aria-label');
-  assert.ok(button < list && aria < list, 'the button comes before the list');
-  assert.ok(button < early, 'a supplier with no ingredients still gets the button');
-  assert.match(repaint, /class: 'mgmt-add supplier-add-ing'/);
-  assert.match(repaint, /onClick: \(\) => next\.onAddIngredient\(\)/);
-  // Built only when orders-main hands the door in (see the next test).
-  assert.match(repaint, /const canAdd = typeof next\.onAddIngredient === 'function';\s*if \(canAdd\) \{/);
-  assert.match(repaint, /icon: PLUS_SVG/);
+test('the button is a round icon button in the HEADER, on the right, built once and never inside the body', () => {
+  const header = DETAIL.slice(DETAIL.indexOf("el('header'"), DETAIL.indexOf('body,\n  ]);'));
+  const slots = header.split("el('span', { class: 'app-header-slot' }");
+  assert.equal(slots.length, 3, 'two slots in the header: Back on the left, the add button on the right');
+  assert.match(slots[2], /\[addBtn\]/, 'the right slot holds the add button');
+  assert.match(DETAIL, /class: 'app-icon-btn orders-icon-btn'/);
+  assert.match(DETAIL, /'aria-label': t\('orders\.addIngredientToListAria', \{ supplier: supplierLabel\(supplier\) \}\)/);
+  assert.match(DETAIL, /icon: PLUS_SVG, onClick: \(\) => addIngredient\?\.\(\)/);
   assert.match(DETAIL, /const PLUS_SVG =\s*'<svg[^']*M12 5v14M5 12h14/, 'a plus drawn as an inline SVG');
+  const repaint = DETAIL.slice(DETAIL.indexOf('function repaint'));
+  assert.doesNotMatch(repaint, /mgmt-add/, 'the dashed body button is gone');
+  assert.doesNotMatch(repaint, /appendChild\(addBtn\)/, 'the add button is never put in the scrolling body');
+  // Present only when orders-main hands the door in — HIDDEN, not disabled (see the next test).
+  assert.match(repaint, /const canAdd = typeof next\.onAddIngredient === 'function';/);
+  assert.match(repaint, /addIngredient = canAdd \? \(\) => next\.onAddIngredient\(\) : null;/);
+  assert.match(repaint, /addBtn\.hidden = !canAdd;/);
+  assert.doesNotMatch(DETAIL, /addBtn\.disabled/);
 });
 
 test('Orders opens the shared card from js/ root, over the supplier screen, with this supplier', () => {
@@ -67,17 +69,10 @@ test('the shared opener takes the layer class and the preset, and keeps price wi
   assert.match(CREATE, /orders-header/, 'in Orders the header wears the Orders look');
 });
 
-test('the button is at least a finger tall, and icon + text are a flex row', () => {
-  const start = CSS.indexOf('.supplier-add-ing {');
-  assert.ok(start >= 0, 'orders.css styles the button');
-  const rule = CSS.slice(start, CSS.indexOf('}', start));
-  assert.match(rule, /display:\s*flex/);
-  assert.match(rule, /align-items:\s*center/);
-  const px = Number(/min-height:\s*(\d+)px/.exec(rule)?.[1]);
-  assert.ok(px >= 44, `min-height ${px}px is under 44px`);
-  const icon = CSS.slice(CSS.indexOf('.supplier-add-ing-icon'), CSS.indexOf('}', CSS.indexOf('.supplier-add-ing-icon')));
-  assert.match(icon, /display:\s*flex/);
-  assert.match(icon, /align-items:\s*center/);
+test('the header button wears the shared icon-button look, and the old dashed button CSS is gone', () => {
+  // The look (36x36, rim, focus ring) is .app-icon-btn / .orders-icon-btn, the Back button's own.
+  assert.doesNotMatch(CSS, /\.supplier-add-ing/, 'no rule left for the retired body button');
+  assert.match(CSS, /\.orders-icon-btn/, 'the tablet floor for header icon buttons still applies');
 });
 
 test('the empty state points at the button, and every new key exists in EN and IT', () => {
