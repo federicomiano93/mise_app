@@ -559,7 +559,7 @@ export async function seedDemoWorld() {
     { bakery: 'owner', 'panificio-miano': 'owner' });
   const staffUid = await seedAccount('staff@club.test', DEMO_PASSWORD, { bakery: true });
   // ⚠️ ONE VENUE AND NOT AN APP ADMIN, so signing in OPENS IT instead of landing on the
-  // Misé hub. That is what makes an Italian venue drivable without crossing a hub every
+  // Mise hub. That is what makes an Italian venue drivable without crossing a hub every
   // time — and the hub is where a driver silently reads the wrong screen (v1.65.1).
   await seedAccount('miano@club.test', DEMO_PASSWORD, { 'panificio-miano': 'owner' });
   // The third role, so "Who can get in" can be looked at with all three on screen
@@ -610,7 +610,7 @@ export async function seedDemoWorld() {
   // ⚠️ A CUSTOMER WHO BOUGHT THE APP FOR TWO OF THEIR OWN PLACES: an owner of
   // more than one venue who is NOT the app's administrator. Every other seeded
   // account is one or the other, so before this there was no way to check that
-  // the Misé home screen stays out of an ordinary customer's way while "Switch
+  // the Mise home screen stays out of an ordinary customer's way while "Switch
   // location" keeps working for them — the two halves of that feature could only
   // ever be tested together, on an account where both are true.
   //
@@ -679,7 +679,7 @@ if (import.meta.url === pathToFileURL(process.argv[1]).href) {
     staff@club.test      → the same bakery as an EMPLOYEE (no delete buttons)
     rosa@club.test       → Trattoria Rosa (Orders only)
     restaurant@club.test → The Italian Club (Orders only, no data at all)
-    owner@club.test      → all three, AND the app's administrator (the Misé home)
+    owner@club.test      → all three, AND the app's administrator (the Mise home)
     duevenues@club.test  → two venues, NOT an app admin (an ordinary customer)
     nobody@club.test     → an account with no location
 `);

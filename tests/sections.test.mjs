@@ -214,7 +214,7 @@ test('the app administrator opens on the hub', () => {
 });
 
 // ⚠️ A remembered venue must NOT skip the hub. It is what "open the app and you
-// are in Misé" means; skipping it would make the hub reachable only on the very
+// are in Mise" means; skipping it would make the hub reachable only on the very
 // first open of a device and never again.
 test('a remembered venue does not skip the hub', () => {
   assert.equal(pickStart(TWO, { isAppAdmin: true, remembered: 'trattoria-x' }).status, 'hub');
@@ -265,7 +265,7 @@ test('no options at all is not a crash', () => {
 // ── The back arrow: "show me my venues" ────────────────────────────────────
 
 // ⚠️ IT MUST BEAT THE HUB. Somebody who taps the arrow inside a venue is asking for
-// the venue list; answering with the Misé home would skip the very screen the arrow
+// the venue list; answering with the Mise home would skip the very screen the arrow
 // was pressed to reach.
 test('asking for the venue picker wins over the hub', () => {
   const out = pickStart(TWO, { isAppAdmin: true, pickVenue: true, remembered: 'main' });

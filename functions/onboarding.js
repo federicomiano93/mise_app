@@ -404,7 +404,7 @@ export const reissueOwnerLink = onCall(CALL, async (request) => {
 
 // Remove a business that was created by mistake.
 //
-// ⚠️ IT EXISTS BECAUSE THE APP COULD CREATE AND NEVER UNDO. Federico opened Misé
+// ⚠️ IT EXISTS BECAUSE THE APP COULD CREATE AND NEVER UNDO. Federico opened Mise
 // on his phone, added his own bakery from the customer list, and was left with a
 // business he could not enter and could not remove — the Firebase console was the
 // only way out, which is the exact thing this whole area of the app exists to

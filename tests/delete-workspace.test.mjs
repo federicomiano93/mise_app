@@ -1,6 +1,6 @@
 // Removing a business that was created by mistake.
 //
-// WHY IT EXISTS. Federico opened Misé on his phone, added his own bakery from the
+// WHY IT EXISTS. Federico opened Mise on his phone, added his own bakery from the
 // customer list, and was left with a business he could not enter and could not
 // remove: the app could create and never undo, so the Firebase console was the
 // only way out — the exact thing this area of the app exists to stop needing.

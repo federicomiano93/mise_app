@@ -44,7 +44,7 @@ async function handOver(name, link, expiresAt) {
 }
 
 // `host` is where the overlay is mounted, and it matters in exactly one case.
-// Opened from the Misé home screen the sign-in cover is still up, and that cover
+// Opened from the Mise home screen the sign-in cover is still up, and that cover
 // marks every OTHER child of <body> `inert` — so a panel appended to the body
 // there would be drawn and could not be touched. Mounted inside the cover it is
 // part of the topmost layer instead. Everywhere else the body is right.
@@ -63,7 +63,7 @@ export function openBusinesses({ host } = {}) {
         }),
       ]),
       // ⚠️ "Customer businesses". The bare word sat one letter away from "My
-      // businesses" on the Misé home and left the whole distinction to a sub-line.
+      // businesses" on the Mise home and left the whole distinction to a sub-line.
       // The FILE keeps its name on purpose: renaming it would add an entry to the
       // service worker's precache list, which is the one failure that does not
       // heal itself on the next load.
@@ -89,7 +89,7 @@ export function openBusinesses({ host } = {}) {
 
   top.append(
     // ⚠️ THE TITLE NOW CARRIES HALF OF WHAT THIS USED TO SAY. It read "The
-    // businesses using Misé. Your own venues are not here — …", and with the
+    // businesses using Mise. Your own venues are not here — …", and with the
     // screen called "Customer businesses" the first half repeats the heading. A
     // sentence whose opening says nothing new is a sentence people stop reading,
     // and the part that matters — where your own venues actually are — is at the

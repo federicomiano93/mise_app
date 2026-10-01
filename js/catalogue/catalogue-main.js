@@ -562,7 +562,7 @@ function showSettings() {
 // dropping somebody on the list would strand them mid-task.
 //
 // ⚠️ CONSUMED THE INSTANT IT IS READ, exactly like the one-shot flag behind "Back to
-// Misé" (v275). Left set, every later Back would open an editor instead of the list.
+// Mise" (v275). Left set, every later Back would open an editor instead of the list.
 let backToEditor = false;
 // ⚠️ AND WHAT WAS TYPED COMES BACK WITH IT. Without this the editor's working copy
 // died the moment the photo screen replaced it — it lives only in renderEditor's
@@ -671,7 +671,7 @@ async function handleBack() {
   }
   leaveGuard = null;
   // ⚠️ READ AND CLEARED IN ONE GESTURE. Left set it would send every later Back into a
-  // new editor — the trap the "Back to Misé" flag was written to avoid.
+  // new editor — the trap the "Back to Mise" flag was written to avoid.
   if (backToEditor) { const kept = backToEditorDraft; backToEditor = false; backToEditorDraft = null; openEditor(null, kept); return; }
   showList();
 }

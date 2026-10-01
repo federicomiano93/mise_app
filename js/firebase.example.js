@@ -234,7 +234,7 @@ if (isLocalhost) {
 
 const ACTIVE_LOCATION_KEY = 'active-location';
 
-// Has this opening of the app already been past the Misé home screen?
+// Has this opening of the app already been past the Mise home screen?
 //
 // ⚠️ sessionStorage, NOT localStorage, AND THE FEATURE DEPENDS ON IT. This app is
 // several pages — the Home, the Calculator, Orders — and every one of them is a
@@ -298,7 +298,7 @@ let markSignedIn;
 // Resolves as soon as a REAL account is signed in — before any location is open,
 // and whether or not one ever is.
 //
-// ⚠️ IT EXISTS BECAUSE THE MISÉ HOME SCREEN SITS ABOVE EVERY LOCATION. The calls
+// ⚠️ IT EXISTS BECAUSE THE MISE HOME SCREEN SITS ABOVE EVERY LOCATION. The calls
 // made from there are about the app's own customers, and their caller is
 // deliberately not a member of any of them, so there is no location to wait for.
 // They used to await sessionReady — which never resolves on that screen — and the
@@ -582,7 +582,7 @@ export function backToHub() {
 // venue must find its cache intact.
 export function openVenuePicker() {
   try { sessionStorage.setItem(PICK_VENUE_KEY, '1'); } catch { /* private mode */ }
-  markHubPassed(true);   // the arrow asks for the venue list, not for the Misé home
+  markHubPassed(true);   // the arrow asks for the venue list, not for the Mise home
   location.reload();
 }
 

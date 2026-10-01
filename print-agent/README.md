@@ -1,4 +1,4 @@
-# Misé print agent
+# Mise print agent
 
 The small program that lets a **phone** print a food label on a printer plugged into
 the **shop computer**.

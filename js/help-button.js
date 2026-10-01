@@ -78,7 +78,7 @@ function label(button, id) {
 // place nothing on screen can show it. mountHelpButtons() runs when this module is
 // first imported — BEFORE any venue is open, so before the app knows what language it
 // speaks — and an attribute set then is never redrawn by anything. On an Italian venue
-// every «?» in the app announced itself as «What is Misé?», «What is Calculator?».
+// every «?» in the app announced itself as «What is Mise?», «What is Calculator?».
 //
 // ⚠️ IT SURVIVED BECAUSE IT IS INVISIBLE. An aria-label is read by a screen reader and
 // by nothing else: no screenshot shows it, no measurement finds it, and the sheet the

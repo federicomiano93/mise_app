@@ -49,10 +49,10 @@ test('the client ordering page names no venue', () => {
 
 // ── The product name, where it belongs ───────────────────────────────────────
 
-test('the installed app is called Misé', () => {
+test('the installed app is called Mise', () => {
   const manifest = JSON.parse(read('manifest.json'));
-  assert.equal(manifest.name, 'Misé');
-  assert.equal(manifest.short_name, 'Misé');
+  assert.equal(manifest.name, 'Mise');
+  assert.equal(manifest.short_name, 'Mise');
 });
 
 // ⚠️ Nobody is signed in on this screen, so the app cannot know whose venue it
@@ -60,7 +60,7 @@ test('the installed app is called Misé', () => {
 // to somebody else's business.
 test('the sign-in screen shows the product, not a venue', () => {
   const src = code('js/auth-gate.js');
-  assert.ok(src.includes("'auth-title', 'Misé'"));
+  assert.ok(src.includes("'auth-title', 'Mise'"));
   assert.ok(!src.includes('The Italian Club'));
 });
 
@@ -79,6 +79,6 @@ test('no page still carries a venue name in its title or install name', () => {
 // DIFFERENT PLACES, so no amount of using the app reveals that they have parted.
 test('both copies of the push fallback say the same thing', () => {
   for (const p of ['js/push-model.js', 'functions/push-model.js']) {
-    assert.ok(code(p).includes("|| 'Misé'"), p);
+    assert.ok(code(p).includes("|| 'Mise'"), p);
   }
 });

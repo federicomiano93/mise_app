@@ -143,7 +143,7 @@ test('a counted phrase is counted in every language', () => {
 
 // ── Before anybody is signed in ──────────────────────────────────
 
-// The sign-in, join, picker and Misé home screens sit ABOVE every venue, so there
+// The sign-in, join, picker and Mise home screens sit ABOVE every venue, so there
 // is no setting for them to read. The device's language is the only signal there
 // is — and for the case it exists for it is a good one.
 test('the device tag picks a language, and an unknown one is English', () => {
