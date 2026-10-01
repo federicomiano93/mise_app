@@ -342,15 +342,22 @@ function render() {
 // Both list views own nodes inside the shared container, so whenever it is wiped or
 // handed to the other view, the stale handle has to go with it.
 function dropListViews() {
-  flatView = null;
+  dropFlatView();
   cardsView = null;
+}
+
+// ⚠️ THE FLAT LIST OWNS ResizeObservers: dropping the handle without destroy() would leave
+// them running on a list that is no longer in the page.
+function dropFlatView() {
+  flatView?.destroy();
+  flatView = null;
 }
 
 // The supplier list is MOUNTED once and then only repainted — see the note on
 // renderFlatList below; the same trap, the same answer.
 function renderSupplierList(container, suppliers) {
   if (!cardsView) {
-    flatView = null;
+    dropFlatView();
     container.textContent = '';
     cardsView = mountSupplierList(container, {
       query: state.supplierQuery,

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'theitalianclub-v509';
+const CACHE_NAME = 'theitalianclub-v511';
 // Firebase SDK modules (loaded from gstatic) are cached SEPARATELY from CACHE_NAME
 // so they survive the cache-version bump that happens on every deploy — otherwise
 // the offline SDK would be wiped each release until the next online load. The name
@@ -404,7 +404,7 @@ const ASSET_HASHES = {
   "./tokens.css": '0ce265ae92fad535',
   "./auth.css": 'e4ba63eda208115b',
   "./style.css": '011704cc77f2029b',
-  "./orders.css": '275ad8f9606c8551',
+  "./orders.css": 'bfb4142d47501d25',
   "./sounds/alarm.wav": '0d1465974f5be95b',
   "./fonts/manrope-latin.woff2": '71eb731d55804619',
   "./fonts/manrope-latin-ext.woff2": 'bd24140af06f1b58',
@@ -526,7 +526,7 @@ const ASSET_HASHES = {
   "./js/orders/category-batches.js": '03d72f63c4fa4a8a',
   "./js/orders/confirm-dialog.js": '61a7f580f37c5ff8',
   "./js/orders/firebase-orders.js": 'af5e1dd0f3d1bf04',
-  "./js/orders/orders-main.js": '0ce7b13b745ad109',
+  "./js/orders/orders-main.js": 'fc44b3e075f2d09a',
   "./js/orders/dom.js": '7ec966d71c5356cd',
   "./js/orders/day.js": '8e00beadcda80dd1',
   "./js/orders/deliveries.js": 'cb8ab18721026f83',
@@ -542,7 +542,7 @@ const ASSET_HASHES = {
   "./js/orders/ingredients.js": '0fed6b56cd67b3f9',
   "./js/orders/no-supplier.js": 'a577ab8cea7c21b4',
   "./js/orders/ingredient-search.js": '3998cd3f18e0144e',
-  "./js/orders/ingredient-list.js": 'c2fc51f59a485ff7',
+  "./js/orders/ingredient-list.js": 'bd69097d0d4af250',
   "./js/orders/search-box.js": '471bb6f217d97442',
   "./js/orders/supplier-detail.js": 'a1a1311bb3850ad8',
   "./js/orders/supplier-items.js": '08575e8ea54ebe34',
@@ -574,7 +574,7 @@ const ASSET_HASHES = {
   "./js/orders/suggestions.js": '4ce6ee178401868c',
   "./js/orders/notifications.js": '72fe5c2caeeb5a3b',
   "./js/orders/tablet-layout.js": '78613f8ebf11850f',
-  "./js/orders/sticky-offset.js": 'fcc80482ca185cfd',
+  "./js/orders/sticky-offset.js": 'a0c2e623a591b6ba',
   "./js/orders/order-summary.js": '3a9ad87dad4119e2',
   "./js/orders/order-cost-view.js": '8812db131fc92d28',
   "./js/orders/order-summary-view.js": '88dd7cfd3e65e3f4',

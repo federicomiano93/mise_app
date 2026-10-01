@@ -21,3 +21,28 @@ export function trackStickyHead(head, root = document.body, property = '--order-
   observer.observe(head);
   return observer;
 }
+
+// A pinned header that is REBUILT on every repaint (the Order / Stock header of the flat
+// list is drawn again with each snapshot), so one observer is re-pointed at whichever node
+// is current. `watch(null)` and `stop()` both leave the variable at 0 — no list, no offset.
+export function trackSwappableHead(property, root = document.body) {
+  let observer = null;
+  const reset = () => root.style.setProperty(property, '0px');
+  return {
+    watch(node) {
+      observer?.disconnect();
+      observer = null;
+      if (!node) { reset(); return; }
+      const write = () => root.style.setProperty(property, `${node.offsetHeight}px`);
+      write();
+      if (typeof ResizeObserver !== 'function') return;
+      observer = new ResizeObserver(write);
+      observer.observe(node);
+    },
+    stop() {
+      observer?.disconnect();
+      observer = null;
+      reset();
+    },
+  };
+}

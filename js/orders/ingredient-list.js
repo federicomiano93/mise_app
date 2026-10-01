@@ -23,7 +23,7 @@ import { el } from './dom.js';
 import { buildRow, buildIngredientHeader } from './ingredients.js';
 import { flatRows } from './ingredient-search.js';
 import { buildSearchBox } from './search-box.js';
-import { trackStickyHead } from './sticky-offset.js';
+import { trackStickyHead, trackSwappableHead } from './sticky-offset.js';
 
 // container: the #suppliers-list element (see rule 2 above).
 // ctx: { query, onQuery(text), onFilter(active), suggest(id, stock), entries, hooks }
@@ -97,6 +97,7 @@ export function mountIngredientList(container, ctx) {
     }
 
     listEl.replaceChildren();
+    ingHead?.watch(null);
 
     if (!total) {
       listEl.appendChild(el('p', { class: 'mgmt-empty', text: t('orders.noIngredientsYetAdd') }));
@@ -113,6 +114,7 @@ export function mountIngredientList(container, ctx) {
     }
 
     listEl.appendChild(buildIngredientHeader());
+    ingHead?.watch(listEl.firstElementChild);
     rows.forEach(row => {
       if (row.letter) listEl.appendChild(el('div', { class: 'ing-letter', text: row.letter }));
       listEl.appendChild(buildRow(
@@ -130,11 +132,24 @@ export function mountIngredientList(container, ctx) {
   // --order-search-h, which the Order / Stock header (.ing-head) adds to its own offset.
   const stickyHead = el('div', { class: 'ing-sticky-head' }, [searchRow, filterSwitch]);
   container.appendChild(stickyHead);
-  trackStickyHead(stickyHead, document.body, '--order-search-h');
+  // ⚠️ THE OBSERVERS ARE KEPT, and ended by destroy(): a ResizeObserver holds the node it
+  // watches, so one left running after the list is dropped would pin the whole dead list in
+  // memory and keep writing the CSS variables of a screen that is gone.
+  const searchObserver = trackStickyHead(stickyHead, document.body, '--order-search-h');
+  // The Order / Stock header is redrawn on every paint, so its height has its own tracker.
+  const ingHead = trackSwappableHead('--order-ing-head-h');
   container.appendChild(count);
   container.appendChild(listEl);
 
   return {
+    // Called by orders-main when the list is dropped: ends both observers and zeroes the
+    // offsets they wrote.
+    destroy() {
+      searchObserver?.disconnect();
+      ingHead.stop();
+      document.body.style.setProperty('--order-search-h', '0px');
+    },
+
     repaint(next) {
       data = next;
       paint();

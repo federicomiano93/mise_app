@@ -691,7 +691,14 @@ body[data-section="orders"] { --order-head-h: 0px; }
   display: flow-root;
   background: var(--surface);
 }
-body[data-section="orders"] { --order-search-h: 0px; }
+body[data-section="orders"] { --order-search-h: 0px; --order-ing-head-h: 0px; }
+/* ⚠️ A BOX THE BROWSER SCROLLS TO ON FOCUS must land BELOW everything pinned over the list:
+   the tab bar, the search bar and the Order / Stock header. Without this the focused
+   quantity box is brought to the very top of the scroller — under them, invisible. The
+   three heights are the measured variables above, never pixels. */
+body[data-section="orders"] .scroll-area {
+  scroll-padding-top: calc(var(--order-head-h, 0px) + var(--order-search-h, 0px) + var(--order-ing-head-h, 0px));
+}
 
 /* Stock hidden (Settings): one column fewer, in the rows AND the header. */
 body.hide-stock .ing-row--line,
