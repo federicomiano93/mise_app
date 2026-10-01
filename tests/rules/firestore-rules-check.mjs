@@ -2602,6 +2602,49 @@ async function roles() {
     () => mergeWrite(`${L}/ingredient-prices/I9`,
       { ...stamp, priceUnit: 'kg', pricePerUnit: 1 }, asAccount(MAYA)));
 
+  // ── Deleting an ingredient (1 Oct 2026): the ingredient AND its price in ONE batch ──
+  //
+  // ⚠️ THE APP INCLUDES THE PRICE DELETE ONLY FOR SOMEBODY ALLOWED TO MAKE IT
+  // (mayWritePrices): a refused member fails the whole batch and the ingredient stays.
+  // These pin the rule that decision mirrors — canManage(lid, 'foodcost') on the price.
+  const batchDelete = (paths, headers) => fetch(
+    `${FS.replace(/\/documents$/, '')}/documents:commit`,
+    {
+      method: 'POST', headers,
+      body: JSON.stringify({
+        writes: paths.map(p => ({ delete: `projects/${PROJECT}/databases/(default)/documents/${p}` })),
+      }),
+    });
+  await seedDoc(`${L}/ingredient-prices/D1`, { ...stamp, priceUnit: 'kg', pricePerUnit: 2 });
+  await seedDoc(`${L}/ingredient-prices/D2`, { ...stamp, priceUnit: 'kg', pricePerUnit: 2 });
+  await seedDoc(`${L}/ingredient-prices/D3`, { ...stamp, priceUnit: 'kg', pricePerUnit: 2 });
+  await expectDenied('an employee cannot delete an ingredient price',
+    () => deleteWrite(`${L}/ingredient-prices/D1`, asAccount(SAM)));
+  await expectDenied('a member of ANOTHER venue cannot delete this venue\'s ingredient price',
+    () => deleteWrite(`${L}/ingredient-prices/D1`, asAccount(BOB)));
+  await expectAllowed('a manager can delete an ingredient price',
+    () => deleteWrite(`${L}/ingredient-prices/D1`, asAccount(MAYA)));
+  await expectAllowed('an owner can delete an ingredient price',
+    () => deleteWrite(`${L}/ingredient-prices/D2`, asAccount(ALICE)));
+
+  await seedDoc(`${L}/ingredients/DB`, { ...stamp, name: 'Batch flour', active: true });
+  await seedDoc(`${L}/ingredient-prices/DB`, { ...stamp, priceUnit: 'kg', pricePerUnit: 1 });
+  await expectAllowed('a manager deletes an ingredient and its price in ONE batch',
+    () => batchDelete([`${L}/ingredients/DB`, `${L}/ingredient-prices/DB`], asAccount(MAYA)));
+  await expectDenied('an employee\'s batch with the price delete fails WHOLE',
+    () => batchDelete([`${L}/ingredients/D3`, `${L}/ingredient-prices/D3`], asAccount(SAM)));
+
+  // The append-only history under an ingredient can never be deleted — it stays behind.
+  await seedDoc(`${L}/ingredients/DH`, { ...stamp, name: 'History flour', active: true });
+  await seedDoc(`${L}/ingredients/DH/prices/H1`, {
+    bakery: 'main', recordedAt: '2026-09-01T10:00:00.000Z', priceUnit: 'kg', pricePerUnit: 1,
+    supplierId: 'S1', source: 'manual',
+  });
+  await expectDenied('nobody deletes a price-history entry, not even the owner',
+    () => deleteWrite(`${L}/ingredients/DH/prices/H1`, asAccount(ALICE)));
+  await expectDenied('…nor a manager',
+    () => deleteWrite(`${L}/ingredients/DH/prices/H1`, asAccount(MAYA)));
+
   // ── The purchase VAT rate (28 Sep 2026): one of the six the app offers, or
   // nothing. A typo must not be stored as a rate every order total then trusts.
   for (const rate of [0, 4, 5, 10, 20, 22]) {
