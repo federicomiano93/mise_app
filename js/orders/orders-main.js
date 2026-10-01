@@ -871,9 +871,11 @@ function renderHistory() {
 
 // «Load older orders»: the next page from before the live window (the paging rules live in
 // createOlderLoader). A failure keeps what was loaded, is announced in History's own status
-// line, and the same button is the retry.
+// line, and the same button is the retry. A retry first takes the old failure down —
+// left up, it kept saying «couldn't load» above the page that had just loaded.
 async function loadOlderHistory() {
   if (!olderLoader) return;
+  clearStatusIf(t('orders.olderOrdersFailed'));
   await olderLoader.load();
   if (olderLoader.state().error) setStatus(t('orders.olderOrdersFailed'), 'error');
 }

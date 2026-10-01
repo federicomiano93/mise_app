@@ -22,6 +22,14 @@ test('both the save and the delete of the History editor patch a loaded older re
   assert.match(editor, /deleteHistoryRecord\([^)]*\);\s*patchOlderRecord\(id, null\)/);
 });
 
+test('a retry takes the previous failure line down before loading', () => {
+  const main = read('js/orders/orders-main.js');
+  const start = main.indexOf('async function loadOlderHistory(');
+  assert.ok(start >= 0);
+  const fn = main.slice(start, main.indexOf('\n}\n', start));
+  assert.match(fn, /clearStatusIf\(t\('orders\.olderOrdersFailed'\)\);\s*await olderLoader\.load\(\)/);
+});
+
 test('the load button turns showingOlder on before it asks for the page', () => {
   assert.match(read('js/orders/history.js'), /showingOlder = true;[\s\S]{0,200}callbacks\.onLoadOlder/);
 });
