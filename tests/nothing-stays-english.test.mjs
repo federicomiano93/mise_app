@@ -14,7 +14,7 @@
 //   setStatus(`${names} — order saved to history ✓`)   a template handed to a helper
 //   return `${n} ingredients are not priced yet…`      a sentence RETURNED by a model
 //   'aria-label': `Ingredients from ${name}`           an attribute, invisible on screen
-//   <title>Orders — Misé</title>                       markup, which nothing scanned
+//   <title>Orders — Mise</title>                       markup, which nothing scanned
 //   toLocaleDateString('en-GB', …)                     not a phrase at all
 //
 // Adding an eighth shape would buy a week. So this file asks the opposite question and
@@ -352,7 +352,7 @@ test('…and leaves alone keys, classes, identifiers and translated text', () =>
     "el('button', { class: 'btn', type: 'button' }, t('ui.edit'))",
     "el('option', { value: 'kg' }, 'kg')",
     "el('span', { class: 'Weird-Class' })",
-    "el('p', { class: 'auth-title' }, 'Misé')",
+    "el('p', { class: 'auth-title' }, 'Mise')",
     "el('div', { 'data-day': 'Monday' }, [el('b', {}, 'Monday')])",
     "  type: 'button', class: 'orders-icon-btn', 'aria-label': t('ui.back'),",
     "  { title: 'section.orders', body: 'help.ordersReceived' },",
@@ -377,9 +377,9 @@ test('the scan reads the app, not an empty folder', () => {
 // checked whether a piece of text HAS one. So every page title and thirty-five
 // aria-labels sat in English through four i18n suites and a full translation release.
 
-// ⚠️ THE PRODUCT'S NAME IS NOT A PHRASE. «Misé» is what the app is called, in every
+// ⚠️ THE PRODUCT'S NAME IS NOT A PHRASE. «Mise» is what the app is called, in every
 // language, and a key for it would be an invitation to translate it.
-const BRAND = /^(Misé|Mise)$/;
+const BRAND = /^Mise$/;
 
 // ⚠️ ONE PAGE, AND IT CANNOT BE TRANSLATED AT ALL. home.html is the redirect stub for
 // PWAs installed before index.html existed. Its CSP allows no script whatsoever and it
@@ -440,21 +440,21 @@ test('⚠️ every word written into the markup carries a key', () => {
 });
 
 test('the markup scan finds text and attributes when they are there', () => {
-  const page = '<title>Orders — Misé</title><button aria-label="Back"></button><p>Install the app</p>';
+  const page = '<title>Orders — Mise</title><button aria-label="Back"></button><p>Install the app</p>';
   const hits = untranslatedMarkup(page);
   assert.equal(hits.length, 3, hits.join(' | '));
 });
 
 test('…and is satisfied by a key, on the text or on the attribute', () => {
-  const page = '<title data-i18n="title.orders">Orders — Misé</title>'
+  const page = '<title data-i18n="title.orders">Orders — Mise</title>'
     + '<button data-i18n="ui.back" data-i18n-attr="aria-label" aria-label="Back"></button>'
     + '<p data-i18n="ig.installTheApp">Install the app</p>';
   assert.deepEqual(untranslatedMarkup(page), []);
 });
 
 test('…and does not fire on the product’s own name', () => {
-  assert.deepEqual(untranslatedMarkup('<h1>Misé</h1>'), [],
-    'the app is called Misé in every language');
+  assert.deepEqual(untranslatedMarkup('<h1>Mise</h1>'), [],
+    'the app is called Mise in every language');
 });
 
 test('the markup scan reads real pages', () => {

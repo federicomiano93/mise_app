@@ -1,7 +1,7 @@
 // archive.js — turning a draft into history records. Pure: no Firestore here.
 //
 // An order is one DAY and one SUPPLIER: orders-history/{YYYY-MM-DD}_{supplierId}.
-// Marking Salvo as placed must not touch the quantities already typed for the
+// Marking a supplier as placed must not touch the quantities already typed for the
 // supplier you order on Thursday, so every function below works on ONE supplier's
 // slice of the shared draft.
 //

@@ -147,7 +147,7 @@ const DICTIONARIES = Object.freeze({
     'people.link.manual': 'Copy this link and send it to them:\n\n{link}',
 
     // ── Signing in ──────────────────────────────────────────────────────────
-    // ⚠️ «Misé» IS NOT HERE. It is the product's name, not a phrase — the same
+    // ⚠️ «Mise» IS NOT HERE. It is the product's name, not a phrase — the same
     // reason a venue's name never passes through a dictionary either.
     'auth.signIn.sub': 'Sign in to open your location.',
     'auth.email': 'Email',
@@ -238,8 +238,8 @@ const DICTIONARIES = Object.freeze({
     // cannot be fixed by translating either half.
     'hub.mine.sub': { one: 'The place you run', other: 'The places you run' },
     'hub.customers': 'Customer businesses',
-    'hub.customers.sub': 'The businesses using Misé',
-    'hub.back': 'Back to Misé',
+    'hub.customers.sub': 'The businesses using Mise',
+    'hub.back': 'Back to Mise',
 
     'picker.title': 'Choose location',
     'picker.sub': 'You have access to more than one.',
@@ -319,13 +319,13 @@ const DICTIONARIES = Object.freeze({
     // again — it cannot be per-language, and changing it costs a re-install by hand
     // on every phone (v1.56.1, v1.58.1). These are the page titles, which follow the
     // reader like everything else drawn on screen.
-    'title.calculator': 'Dough calculator — Misé',
-    'title.catalogue': 'Recipe catalogue — Misé',
-    'title.foodcost': 'Food cost — Misé',
-    'title.orders': 'Orders — Misé',
-    'title.pastries': 'Pastries — Misé',
-    'title.suppliers': 'Ingredients & suppliers — Misé',
-    'title.inventory': 'Stocktake — Misé',
+    'title.calculator': 'Dough calculator — Mise',
+    'title.catalogue': 'Recipe catalogue — Mise',
+    'title.foodcost': 'Food cost — Mise',
+    'title.orders': 'Orders — Mise',
+    'title.pastries': 'Pastries — Mise',
+    'title.suppliers': 'Ingredients & suppliers — Mise',
+    'title.inventory': 'Stocktake — Mise',
 
     // ── What a screen reader says, which nothing on screen shows ─────────────
     // ⚠️ INVISIBLE, AND THEREFORE THE LAST THING ANYBODY NOTICES. Every icon button
@@ -350,7 +350,7 @@ const DICTIONARIES = Object.freeze({
     // language. It follows the PHONE (navigator.language), which is the only fact
     // available here and is also the right one: these steps name buttons in the
     // phone's OWN menus, and a phone set to Italian shows «Condividi», not «Share».
-    'ig.pageTitle': 'Install Misé',
+    'ig.pageTitle': 'Install Mise',
     'ig.installTheApp': 'Install the app',
     'ig.whichDevice': 'Which device are you using?',
     'ig.device.ios': 'iPhone / iPad',
@@ -358,7 +358,7 @@ const DICTIONARIES = Object.freeze({
     'ig.device.desktop': 'Computer',
     'ig.yourDevice': 'your device',
     'ig.changeDevice': '← Change device',
-    'ig.qrAlt': 'QR code to open the Misé app',
+    'ig.qrAlt': 'QR code to open the Mise app',
     'ig.qrCaption': 'Or scan this with your phone camera to open the app',
     'ig.safari.title': 'Open this page in Safari to install.',
     'ig.safari.body': 'On iPhone the app can only be added to the Home Screen from Safari — other browsers (like Chrome) cannot install it.',
@@ -373,7 +373,7 @@ const DICTIONARIES = Object.freeze({
     'ig.android.3': 'Tap “Install app” / “Add to Home screen”.',
     'ig.android.4': 'Confirm — the app icon appears.',
     'ig.desktop.1': 'Open the link in Chrome or Edge.',
-    'ig.desktop.2': 'Click the install icon in the address bar (a small screen with a ⊕), or the menu → “Install Misé”.',
+    'ig.desktop.2': 'Click the install icon in the address bar (a small screen with a ⊕), or the menu → “Install Mise”.',
     'ig.desktop.3': 'Confirm — it opens in its own window and gets a shortcut.',
     'ig.note': 'You only do this once per device. After that, just tap the app icon — like any other app.',
 
@@ -2385,7 +2385,7 @@ const DICTIONARIES = Object.freeze({
     // apps, never the web app itself). It can only compare against what it recorded
     // itself, so it is blind to every install that predates it. A release note is the
     // only channel that reaches those devices.
-    'help.reinstallOnce': 'If you use Misé from your home screen, delete it and add it again once — part of an installed app is fixed when you add it, and no update can reach it.',
+    'help.reinstallOnce': 'If you use Mise from your home screen, delete it and add it again once — part of an installed app is fixed when you add it, and no update can reach it.',
     'help.reinstallNothingLost': 'Nothing is lost: your work is saved online, not inside the app.',
     'help.reinstallFromNowOn': 'If the install will not go through, carry on from the browser — it works just the same. From now on the app tells you by itself whenever this is needed.',
     'help.acceptIsNowCalled': 'Accept is now called Confirm — the same word the Calculator uses for the same thing.',
@@ -2786,8 +2786,8 @@ const DICTIONARIES = Object.freeze({
     'hub.mine': 'Le mie attività',
     'hub.mine.sub': { one: 'Il locale che gestisci', other: 'I locali che gestisci' },
     'hub.customers': 'Attività dei clienti',
-    'hub.customers.sub': 'Le attività che usano Misé',
-    'hub.back': 'Torna a Misé',
+    'hub.customers.sub': 'Le attività che usano Mise',
+    'hub.back': 'Torna a Mise',
 
     'picker.title': 'Scegli il locale',
     'picker.sub': 'Hai accesso a più di uno.',
@@ -2840,13 +2840,13 @@ const DICTIONARIES = Object.freeze({
     'section.pastries.sub': 'Le sette liste di lievitazione della settimana',
     'section.foodcost.sub': 'Prezzi, margini ed etichette',
 
-    'title.calculator': 'Calcolatore impasti — Misé',
-    'title.catalogue': 'Ricettario — Misé',
-    'title.foodcost': 'Food cost — Misé',
-    'title.orders': 'Ordini — Misé',
-    'title.pastries': 'Paste — Misé',
-    'title.suppliers': 'Ingredienti e fornitori — Misé',
-    'title.inventory': 'Magazzino — Misé',
+    'title.calculator': 'Calcolatore impasti — Mise',
+    'title.catalogue': 'Ricettario — Mise',
+    'title.foodcost': 'Food cost — Mise',
+    'title.orders': 'Ordini — Mise',
+    'title.pastries': 'Paste — Mise',
+    'title.suppliers': 'Ingredienti e fornitori — Mise',
+    'title.inventory': 'Magazzino — Mise',
 
     'aria.mainSections': 'Sezioni principali',
     'aria.ordersSections': 'Sezioni degli ordini',
@@ -2863,7 +2863,7 @@ const DICTIONARIES = Object.freeze({
     // ⚠️ I NOMI DEI PULSANTI SONO QUELLI CHE IL TELEFONO MOSTRA DAVVERO in italiano
     // («Condividi», «Aggiungi alla schermata Home»): la guida segue la lingua del
     // telefono, quindi le due cose sono d’accordo per costruzione.
-    'ig.pageTitle': 'Installa Misé',
+    'ig.pageTitle': 'Installa Mise',
     'ig.installTheApp': 'Installa l’app',
     'ig.whichDevice': 'Che dispositivo stai usando?',
     'ig.device.ios': 'iPhone / iPad',
@@ -2871,7 +2871,7 @@ const DICTIONARIES = Object.freeze({
     'ig.device.desktop': 'Computer',
     'ig.yourDevice': 'il tuo',
     'ig.changeDevice': '← Cambia dispositivo',
-    'ig.qrAlt': 'Codice QR per aprire l’app Misé',
+    'ig.qrAlt': 'Codice QR per aprire l’app Mise',
     'ig.qrCaption': 'Oppure inquadra questo con la fotocamera del telefono per aprire l’app',
     'ig.safari.title': 'Apri questa pagina in Safari per installare.',
     'ig.safari.body': 'Su iPhone l’app si può aggiungere alla schermata Home solo da Safari — gli altri browser (come Chrome) non riescono a installarla.',
@@ -2886,7 +2886,7 @@ const DICTIONARIES = Object.freeze({
     'ig.android.3': 'Tocca “Installa app” / “Aggiungi a schermata Home”.',
     'ig.android.4': 'Conferma — l’icona dell’app compare.',
     'ig.desktop.1': 'Apri il link in Chrome o Edge.',
-    'ig.desktop.2': 'Clicca l’icona di installazione nella barra degli indirizzi (un piccolo schermo con un ⊕), oppure il menu → “Installa Misé”.',
+    'ig.desktop.2': 'Clicca l’icona di installazione nella barra degli indirizzi (un piccolo schermo con un ⊕), oppure il menu → “Installa Mise”.',
     'ig.desktop.3': 'Conferma — si apre in una finestra sua e ottiene un collegamento.',
     'ig.note': 'Lo fai una volta sola per dispositivo. Dopo, tocchi l’icona dell’app — come qualsiasi altra app.',
 
@@ -4613,7 +4613,7 @@ const DICTIONARIES = Object.freeze({
     'help.whatToPutOut': 'Cosa mettere a lievitare, come una lista fissa per ogni giorno della settimana.',
     'help.confirmKeepsARecord': 'Conferma tiene un registro della nottata e blocca la lista fino alle 4.',
     'help.unlikeTheCalculatorA': 'A differenza del Calcolatore, un nuovo giorno NON la svuota: la lista è quello che fai di solito quel giorno della settimana.',
-    'help.reinstallOnce': 'Se usi Misé dalla schermata Home, cancellala e riaggiungila una volta — una parte di un’app installata viene fissata quando la aggiungi, e nessun aggiornamento può raggiungerla.',
+    'help.reinstallOnce': 'Se usi Mise dalla schermata Home, cancellala e riaggiungila una volta — una parte di un’app installata viene fissata quando la aggiungi, e nessun aggiornamento può raggiungerla.',
     'help.reinstallNothingLost': 'Non perdi niente: il tuo lavoro è salvato online, non dentro l’app.',
     'help.reinstallFromNowOn': 'Se l’installazione non riesce, continua pure dal browser — funziona uguale. D’ora in poi è l’app stessa ad avvisarti quando serve.',
     'help.acceptIsNowCalled': 'Accetta ora si chiama Conferma — la stessa parola che il Calcolatore usa per la stessa cosa.',
@@ -4919,7 +4919,7 @@ export function interfaceLanguage(location) {
 }
 
 // ⚠️ THE SCREENS ABOVE EVERY VENUE HAVE NO SETTING TO READ, and this is what they
-// use instead. Sign-in, "I have a join code" and the Misé home all happen before a
+// use instead. Sign-in, "I have a join code" and the Mise home all happen before a
 // location is open — the same reason the sign-in screen says «Mise» where every
 // other screen says the venue's name. There is genuinely nothing to look up.
 //

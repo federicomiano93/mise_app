@@ -49,10 +49,10 @@ test('the client ordering page names no venue', () => {
 
 // ── The product name, where it belongs ───────────────────────────────────────
 
-test('the installed app is called Misé', () => {
+test('the installed app is called Mise', () => {
   const manifest = JSON.parse(read('manifest.json'));
-  assert.equal(manifest.name, 'Misé');
-  assert.equal(manifest.short_name, 'Misé');
+  assert.equal(manifest.name, 'Mise');
+  assert.equal(manifest.short_name, 'Mise');
 });
 
 // ⚠️ Nobody is signed in on this screen, so the app cannot know whose venue it
@@ -60,7 +60,7 @@ test('the installed app is called Misé', () => {
 // to somebody else's business.
 test('the sign-in screen shows the product, not a venue', () => {
   const src = code('js/auth-gate.js');
-  assert.ok(src.includes("'auth-title', 'Misé'"));
+  assert.ok(src.includes("'auth-title', 'Mise'"));
   assert.ok(!src.includes('The Italian Club'));
 });
 
@@ -79,6 +79,31 @@ test('no page still carries a venue name in its title or install name', () => {
 // DIFFERENT PLACES, so no amount of using the app reveals that they have parted.
 test('both copies of the push fallback say the same thing', () => {
   for (const p of ['js/push-model.js', 'functions/push-model.js']) {
-    assert.ok(code(p).includes("|| 'Misé'"), p);
+    assert.ok(code(p).includes("|| 'Mise'"), p);
   }
+});
+
+// The old spellings never come back. The product is «Mise», without an accent, and
+// the file headers once named the first customer instead of the app. The forbidden
+// strings are assembled at run time so that THIS file does not contain them: a
+// scan that matched its own source would fail forever, or need an exemption.
+test('the old spellings never come back', async () => {
+  const { execFileSync } = await import('node:child_process');
+  const forbidden = [
+    'Mis' + 'é',
+    'MIS' + 'É',
+    'ITALIAN CLUB' + ' PWA',
+  ];
+  const files = execFileSync('git', ['ls-files', '-z'], { cwd: ROOT, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 })
+    .split('\0')
+    .filter((f) => f && !f.startsWith('functions/node_modules/'));
+  assert.ok(files.length > 100, `only ${files.length} tracked files — the scan is not finding them`);
+  const offenders = [];
+  for (const f of files) {
+    let text;
+    try { text = readFileSync(new URL(`../${f}`, import.meta.url)).toString('utf8'); } catch { continue; }
+    if (text.includes('\0')) continue; // binary: icons, fonts
+    for (const bad of forbidden) if (text.includes(bad)) offenders.push(`${f}: ${bad}`);
+  }
+  assert.deepEqual(offenders, []);
 });

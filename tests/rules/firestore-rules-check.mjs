@@ -2816,7 +2816,7 @@ async function orderRequests() {
     quantities: { ING_A: 4, ING_B: 2 },
     names: { ING_A: 'Flour 00 25kg', ING_B: 'Butter 5kg' },
     supplierOf: { ING_A: 'SUP_1', ING_B: 'SUP_1' },
-    supplierNames: { SUP_1: 'Caterite' },
+    supplierNames: { SUP_1: 'Borgo' },
     done: {}, note: '',
     createdAt: '2026-08-14T08:00:00.000Z', updatedAt: '2026-08-14T08:00:00.000Z',
   };

@@ -212,7 +212,7 @@ function signInScreen({ note = '' } = {}) {
   // here told every other customer's staff they were signing in to somebody
   // else's business. The venue's own name appears the moment it is known, in the
   // green header (js/location-title.js).
-  card.append(el('h1', 'auth-title', 'Misé'));
+  card.append(el('h1', 'auth-title', 'Mise'));
   card.append(el('p', 'auth-sub', note || t('auth.signIn.sub')));
 
   const form = el('form', 'auth-form');
@@ -588,7 +588,7 @@ function hubChoice(label, description, onClick) {
 
 function hubScreen(session) {
   const card = el('div', 'auth-card');
-  card.append(el('h1', 'auth-title', 'Misé'));
+  card.append(el('h1', 'auth-title', 'Mise'));
   card.append(el('p', 'auth-sub', t('hub.where')));
 
   const list = el('div', 'auth-choices');
@@ -910,9 +910,9 @@ function render(session) {
 }
 
 // ⚠️ THE LANGUAGE FOR THE SCREENS ABOVE EVERY VENUE, SET BEFORE THE FIRST ONE IS
-// DRAWN. Sign-in, "I have a join code", the picker and the Misé home all happen
+// DRAWN. Sign-in, "I have a join code", the picker and the Mise home all happen
 // before a location is open, so there is no setting to read — the same reason
-// this screen says «Misé» where every other screen says the venue's name.
+// this screen says «Mise» where every other screen says the venue's name.
 //
 // The device's own language is the best signal there is, and for the case it
 // exists for it is a good one: an Italian buyer opening the app for the first

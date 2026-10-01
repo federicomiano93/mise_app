@@ -37,29 +37,29 @@ test('never throws on nothing, and answers an empty string', () => {
 // ── Search finds a supplier by either name ───────────────────────────────────
 
 const ALDO = { id: 'aldo', name: 'Aldo Legacy Foods Ltd Wholesale', shortName: 'Aldo', category: 'Dry' };
-const SALVO = { id: 'salvo', name: 'Salvo', category: 'Dairy' };
+const ALBA = { id: 'alba', name: 'Alba', category: 'Dairy' };
 
 test('supplierMatches: by short name, by invoice name, empty query matches all', () => {
   assert.ok(supplierMatches(ALDO, 'aldo', normalizeText));
   assert.ok(supplierMatches(ALDO, 'wholesale', normalizeText));
-  assert.ok(!supplierMatches(ALDO, 'salvo', normalizeText));
-  assert.ok(supplierMatches(SALVO, '', normalizeText));
+  assert.ok(!supplierMatches(ALDO, 'alba', normalizeText));
+  assert.ok(supplierMatches(ALBA, '', normalizeText));
 });
 
 test('filterSuppliers finds by short name, invoice name and category', () => {
-  const all = [ALDO, SALVO];
+  const all = [ALDO, ALBA];
   assert.deepEqual(filterSuppliers(all, 'aldo').map(s => s.id), ['aldo']);
   assert.deepEqual(filterSuppliers(all, 'legacy').map(s => s.id), ['aldo']);
-  assert.deepEqual(filterSuppliers(all, 'dairy').map(s => s.id), ['salvo']);
+  assert.deepEqual(filterSuppliers(all, 'dairy').map(s => s.id), ['alba']);
 });
 
 test('ingredient search rows carry the label and match either name', () => {
   const ing = { id: 'flour', name: 'Flour', weight: '1kg', supplierId: 'aldo' };
-  const { rows } = flatRows({ ingredients: [ing], suppliers: [ALDO, SALVO], query: '', only: null });
+  const { rows } = flatRows({ ingredients: [ing], suppliers: [ALDO, ALBA], query: '', only: null });
   assert.equal(rows[0].supplierName, 'Aldo');
   assert.ok(matchesQuery(rows[0], 'aldo'));
   assert.ok(matchesQuery(rows[0], 'legacy'));
-  assert.ok(!matchesQuery(rows[0], 'salvo'));
+  assert.ok(!matchesQuery(rows[0], 'alba'));
 });
 
 // ── The supplier card's payload ──────────────────────────────────────────────

@@ -390,7 +390,7 @@ async function main() {
     .replace(/[^A-Za-z0-9_-]/g, '-').slice(0, 60) || 'shop-pc';
 
   let session = await signIn(app, cfg);
-  console.log(`Misé print agent ${VERSION}`);
+  console.log(`Mise print agent ${VERSION}`);
   // ⚠️ SAID OUT LOUD, EVERY TIME. A window that does not say which database it is
   // talking to is how somebody tests against production and never finds out.
   console.log(`  data:    ${EMULATOR ? `LOCAL EMULATOR ${EMULATOR}` : 'PRODUCTION'}`);

@@ -44,7 +44,7 @@ const call = name => httpsCallable(functions, name);
 // ⚠️⚠️ THESE THREE AWAIT signedInReady, NOT sessionReady, AND THE DIFFERENCE IS
 // THE WHOLE SCREEN WORKING OR HANGING FOR EVER.
 //
-// They are reached from the Misé home, which sits ABOVE every location — and
+// They are reached from the Mise home, which sits ABOVE every location — and
 // they are about businesses their caller is deliberately NOT a member of, so
 // there is no location involved at any point. sessionReady resolves when a
 // location OPENS, which on that screen never happens: the Businesses list sat on

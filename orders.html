@@ -1,5 +1,5 @@
 <!--
-  THE ITALIAN CLUB PWA — Orders
+  MISE — Orders
   Supplier-order workflow. Header + navigation + scroll area.
   All logic lives in js/orders/* (loaded via orders-main.js).
   Reuses style.css; new styles in orders.css.
@@ -65,7 +65,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Misé">
+<meta name="apple-mobile-web-app-title" content="Mise">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <link rel="icon" type="image/png" href="icons/icon-192.png">
@@ -73,7 +73,7 @@
 <link rel="stylesheet" href="auth.css">
 <link rel="stylesheet" href="style.css">
 <link rel="stylesheet" href="orders.css">
-<title data-i18n="title.orders">Orders — Misé</title>
+<title data-i18n="title.orders">Orders — Mise</title>
 </head>
 <body data-section="orders" data-card="orders">
 <!-- Sign-in cover. It is HERE, in the markup, so it is opaque from the first
@@ -197,7 +197,7 @@
         </button>
       </nav>
       <!-- Two windows onto the SAME order. Quantities are stored per ingredient, so
-           typing 4 on Bacon in the flat list is typing 4 in Brakes' order — there is
+           typing 4 on Bacon in the flat list is typing 4 in Cielo's order — there is
            no second list to keep in step. "By supplier" is the default and the choice
            is remembered in localStorage.
            ⚠️⚠️ IT LIVES IN THE HEAD NOW, SO IT NO LONGER HIDES ITSELF BY BEING
@@ -238,7 +238,7 @@
     <div id="orders-pending"></div>
     <div id="orders-today"></div>
     <!-- The per-supplier "Order placed" lives on each supplier card, so recording
-         Salvo's Monday order cannot wipe the quantities already typed for the
+         a supplier's Monday order cannot wipe the quantities already typed for the
          supplier you order on Thursday. The button below does NOT bring back the
          old global one that archived everything into a single record: it opens a
          tick-list, and each supplier still gets its own {day}_{supplier} record.
@@ -246,7 +246,7 @@
          — with one, the button on its own card is right there. In the flat list
          there are no cards, so ONE is enough. -->
     <!-- Two windows onto the SAME order. Quantities are stored per ingredient, so
-         typing 4 on Bacon in the flat list is typing 4 in Brakes' order — there is
+         typing 4 on Bacon in the flat list is typing 4 in Cielo's order — there is
          no second list to keep in step. "By supplier" is the default and the choice
          is remembered in localStorage. -->
     <!-- #suppliers-list is the ONE container both list views mount into (by supplier,

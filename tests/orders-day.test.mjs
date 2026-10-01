@@ -85,7 +85,7 @@ test('spellDay always spells the date out, never "Today"', () => {
 
 test('dayPhrase reads inside a sentence, and every confirm uses it', () => {
   const now = new Date(2026, 6, 13);
-  // "Record Salvo's order for yesterday?" — not "...order yesterday?".
+  // "Record Alba's order for yesterday?" — not "...order yesterday?".
   assert.equal(dayPhrase('2026-07-13', now), 'for today');
   assert.equal(dayPhrase('2026-07-12', now), 'for yesterday');
   assert.equal(dayPhrase('2026-07-06', now), 'for Mon 6 Jul 2026');

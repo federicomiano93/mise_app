@@ -95,7 +95,7 @@ test('⚠️ a phone number is reduced to digits, whatever it was typed as', () 
 // supplier's name would truncate the message at exactly that point — and the
 // supplier would receive half an order with nothing saying so.
 test('⚠️ the mail link escapes the whole message, so nothing is truncated', () => {
-  const url = mailto('a@b.test', 'Order from Misé', 'Flour 25kg: 2\nSalt & pepper: 1');
+  const url = mailto('a@b.test', 'Order from Mise', 'Flour 25kg: 2\nSalt & pepper: 1');
   assert.ok(url.startsWith('mailto:a%40b.test?subject='));
   assert.ok(!url.includes('Salt & pepper'), 'the ampersand must not survive raw');
   assert.ok(url.includes('%26'), 'it is escaped');

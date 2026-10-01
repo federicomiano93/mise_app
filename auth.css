@@ -195,7 +195,7 @@
 .auth-choice:hover { background: var(--accent-light); border-color: var(--accent-2); }
 .auth-choice:disabled { opacity: .6; cursor: default; }
 
-/* The two doors on the Misé home screen carry a line of their own, because
+/* The two doors on the Mise home screen carry a line of their own, because
    "Businesses" and "My businesses" differ by a single word and the sub-line is
    what tells them apart at a glance. The location picker's buttons have no
    sub-line and are unaffected: these only apply where the spans exist. */

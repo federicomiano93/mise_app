@@ -76,7 +76,7 @@ function gearIcon() {
 
 // The bottom of the Home, after the cards: the app's bottom-bar button, «Settings».
 //
-// ⚠️ "Back to Misé" and "Businesses" are deliberately NOT behind it either. The header
+// ⚠️ "Back to Mise" and "Businesses" are deliberately NOT behind it either. The header
 // arrow steps up to them (renderUpArrow below) — this bar belongs to ONE customer's
 // venue, and the app's own customer list is not a drawer inside it.
 function renderSessionActions(session) {

@@ -9,8 +9,8 @@
 //   suggestion  = round( par − current stock ), floored at 0
 //
 // The window counts ORDERS, not weeks. An order is now one day and one supplier
-// (archive.js), and suppliers are not all weekly: Salvo is ordered on Mondays,
-// Caterite almost daily. Averaging "the last 8 weeks" would silently mean
+// (archive.js), and suppliers are not all weekly: one is ordered on Mondays,
+// another almost daily. Averaging "the last 8 weeks" would silently mean
 // something different for each supplier. "The last 8 times you ordered this
 // ingredient" means the same thing for all of them — and for a weekly supplier it
 // is the same window as before.

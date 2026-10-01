@@ -335,7 +335,7 @@ test('⚠️ «Compila da una foto» is the LAST thing on the new-recipe form, u
 
 test('⚠️ the way back out of the photo screen is a ONE-SHOT marker', () => {
   // Left set, it would send every later Back into a new editor — the trap the
-  // sessionStorage flag behind "Back to Misé" (v275) is consumed on read to avoid.
+  // sessionStorage flag behind "Back to Mise" (v275) is consumed on read to avoid.
   const main = codeOf(read('js/catalogue/catalogue-main.js'));
   assert.ok(main.includes('backToEditor'), 'the return marker is gone');
   // ⚠️ CLEARED IN THE SAME BREATH AS IT IS READ, and the assertion has to SAY so.

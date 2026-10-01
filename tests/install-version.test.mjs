@@ -200,7 +200,7 @@ test('both files are precached', () => {
 // against, so changing the manifest without updating it here would ship a change that
 // warns nobody.
 const DECLARED_FINGERPRINT =
-  'name=Misé;short_name=Misé;start_url=index.html;display=standalone;orientation=;scope=;'
+  'name=Mise;short_name=Mise;start_url=index.html;display=standalone;orientation=;scope=;'
   + 'icons=icons/icon-192.png|192x192|any maskable,icons/icon-512.png|512x512|any maskable';
 
 test('⚠️ manifest.json has not changed without the change being declared', () => {

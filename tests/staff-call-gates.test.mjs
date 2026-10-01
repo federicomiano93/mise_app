@@ -2,7 +2,7 @@
 // and whose failure mode is a screen that hangs for ever in silence.
 //
 // ⚠️ THE DEFECT THIS PINS, found by driving the app on 12 Aug 2026. The three
-// calls that belong to the app's OWN back office are made from the Misé home
+// calls that belong to the app's OWN back office are made from the Mise home
 // screen, which sits ABOVE every location. They awaited `sessionReady`, which
 // resolves when a location OPENS — and on that screen none ever does. The
 // Businesses list sat on "Loading…" indefinitely: no error, nothing in the
@@ -69,7 +69,7 @@ for (const name of ['createWorkspace', 'listWorkspaces', 'reissueOwnerLink']) {
   test(`${name} waits for the account, not for a location`, () => {
     const body = code(name);
     assert.ok(body.includes('await signedInReady'),
-      `${name} must await signedInReady — it is called from the Misé home, where no location opens`);
+      `${name} must await signedInReady — it is called from the Mise home, where no location opens`);
     assert.ok(!body.includes('await sessionReady'),
       `${name} awaits sessionReady, which never resolves on the screen that calls it: it will hang for ever`);
   });

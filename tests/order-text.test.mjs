@@ -40,13 +40,13 @@ test('the message keeps the format the app has always sent', () => {
 
 test('several suppliers are separated by a blank line', () => {
   const text = buildOrderMessage([
-    { supplierName: 'Bako', items: [{ name: 'Flour', weight: '25kg', qty: 4 }] },
-    { supplierName: 'Salvo', items: [{ name: 'Olives', weight: '', qty: 1 }] },
+    { supplierName: 'Etna', items: [{ name: 'Flour', weight: '25kg', qty: 4 }] },
+    { supplierName: 'Alba', items: [{ name: 'Olives', weight: '', qty: 1 }] },
   ], CLUB);
   assert.equal(text,
     '*Order — The Italian Club*\n\n' +
-    '*Bako*\n- Flour 25kg: 4\n\n' +
-    '*Salvo*\n- Olives: 1');
+    '*Etna*\n- Flour 25kg: 4\n\n' +
+    '*Alba*\n- Olives: 1');
 });
 
 test('an empty weight is skipped, leaving no double space', () => {
@@ -164,8 +164,8 @@ test('sortItems does not mutate the caller\'s array', () => {
 // accident. These tests pin the new shape AND stand guard over the old one.
 
 const THREE_SUPPLIERS = [
-  { supplierName: 'Brakes', items: [{ name: 'Bacon', weight: '2.27kg', qty: 4 }] },
-  { supplierName: 'Salvo', items: [{ name: 'Mozzarella', weight: '5kg', qty: 2 }] },
+  { supplierName: 'Cielo', items: [{ name: 'Bacon', weight: '2.27kg', qty: 4 }] },
+  { supplierName: 'Alba', items: [{ name: 'Mozzarella', weight: '5kg', qty: 2 }] },
   { supplierName: 'No supplier', items: [{ name: 'Baking Paper', weight: '', qty: 2 }] },
 ];
 
@@ -182,8 +182,8 @@ test('the By supplier format is byte-identical with or without the option', () =
   // a second format must not have moved a single character of it.
   const golden =
     '*Order — The Italian Club*\n\n' +
-    '*Brakes*\n- Bacon 2.27kg: 4\n\n' +
-    '*Salvo*\n- Mozzarella 5kg: 2\n\n' +
+    '*Cielo*\n- Bacon 2.27kg: 4\n\n' +
+    '*Alba*\n- Mozzarella 5kg: 2\n\n' +
     '*No supplier*\n- Baking Paper: 2';
   assert.equal(buildOrderMessage(THREE_SUPPLIERS, CLUB), golden);
   assert.equal(buildOrderMessage(THREE_SUPPLIERS, { ...CLUB }), golden);
@@ -193,19 +193,19 @@ test('the By supplier format is byte-identical with or without the option', () =
 test('One list adds up two lines carrying the same label', () => {
   // The same product bought from two suppliers is one thing to buy.
   const text = buildOrderMessage([
-    { supplierName: 'Bako', items: [{ name: 'Flour', weight: '25kg', qty: 4 }] },
-    { supplierName: 'Salvo', items: [{ name: 'Flour', weight: '25kg', qty: 3 }] },
+    { supplierName: 'Etna', items: [{ name: 'Flour', weight: '25kg', qty: 4 }] },
+    { supplierName: 'Alba', items: [{ name: 'Flour', weight: '25kg', qty: 3 }] },
   ], { grouped: false, ...CLUB });
   assert.equal(text, '*Order — The Italian Club*\n\n- Flour 25kg: 7');
 });
 
 test('…while the By supplier format keeps them apart, one line per supplier', () => {
   const text = buildOrderMessage([
-    { supplierName: 'Bako', items: [{ name: 'Flour', weight: '25kg', qty: 4 }] },
-    { supplierName: 'Salvo', items: [{ name: 'Flour', weight: '25kg', qty: 3 }] },
+    { supplierName: 'Etna', items: [{ name: 'Flour', weight: '25kg', qty: 4 }] },
+    { supplierName: 'Alba', items: [{ name: 'Flour', weight: '25kg', qty: 3 }] },
   ], CLUB);
   assert.equal(text,
-    '*Order — The Italian Club*\n\n*Bako*\n- Flour 25kg: 4\n\n*Salvo*\n- Flour 25kg: 3');
+    '*Order — The Italian Club*\n\n*Etna*\n- Flour 25kg: 4\n\n*Alba*\n- Flour 25kg: 3');
 });
 
 test('One list distinguishes two weights of the same product', () => {
@@ -257,7 +257,7 @@ test('One list rounds and ignores junk exactly as the grouped format does', () =
 test('the title names the location that is placing the order', () => {
   assert.equal(orderTitle('Trattoria Rosa'), '*Order — Trattoria Rosa*');
   const text = buildOrderMessage(
-    [{ supplierName: 'Bako', items: [{ name: 'Flour', weight: '25kg', qty: 1 }] }],
+    [{ supplierName: 'Etna', items: [{ name: 'Flour', weight: '25kg', qty: 1 }] }],
     { locationName: 'Trattoria Rosa' });
   assert.ok(text.startsWith('*Order — Trattoria Rosa*'));
   assert.ok(!text.includes('Italian Club'));
@@ -268,7 +268,7 @@ test('with no name the order goes out anonymous rather than wrongly signed', () 
     assert.equal(orderTitle(missing), '*Order*', `${JSON.stringify(missing)} must not invent a name`);
   });
   const text = buildOrderMessage(
-    [{ supplierName: 'Bako', items: [{ name: 'Flour', weight: '25kg', qty: 1 }] }]);
+    [{ supplierName: 'Etna', items: [{ name: 'Flour', weight: '25kg', qty: 1 }] }]);
   assert.ok(text.startsWith('*Order*\n'));
 });
 

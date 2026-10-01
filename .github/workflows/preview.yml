@@ -100,7 +100,7 @@ jobs:
           leaked=""
           for path in .git/config .git/HEAD .github/workflows/preview.yml .claude/settings.json \
                       firebase.json firestore.rules package.json functions/index.js \
-                      scripts/seed-preview.mjs tests/firebase-target.test.mjs README.txt; do
+                      scripts/seed-preview.mjs tests/firebase-target.test.mjs README.md; do
             [ "$(code "$path")" = 404 ] || leaked="$leaked $path"
           done
           for creds in gha-creds-*.json; do

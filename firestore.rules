@@ -1637,7 +1637,7 @@ service cloud.firestore {
       }
 
       // ── An order a client typed themselves ──────────────────────────────
-      // One document per delivery DATE per client: 2026-08-11_c-clubfish. Correcting
+      // One document per delivery DATE per client: 2026-08-11_c-farofish. Correcting
       // an order rewrites that document rather than adding a second, so what the
       // bakery reads is always the client's current answer and never a pile of
       // amendments to reconcile by hand.

@@ -8,6 +8,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { HELP, SECTIONS, helpFor, helpText, helpTitle } from '../js/help-content.js';
@@ -165,8 +166,52 @@ test('the help is precached, or an offline phone loses it', () => {
   assert.match(sw, /'\.\/js\/help-button\.js'/);
 });
 
+// This repo is public, so the list of names a help text must never contain cannot be
+// readable here: it would publish exactly what it guards. Only the SHA-256 digests of the
+// lowercased names are kept; a text is split into words and every 1-word and 2-word run is
+// hashed and looked up.
+const FORBIDDEN_NAME_HASHES = new Set([
+  '4890b0fb9f15499f8e160677b3965dc9b1819f716d91670256adb1864e1dbeaf',
+  'a9866a92728178a8c630f5377872f7c5c0d2c62a2a4158e6b768729996b8d000',
+  'fbfdc403f3e42b7315f67644dbb78eecf765c869f951136bf3e35b673aeafca4',
+  '67c565f1912de6ef87a3a109d5645fbb602bf64ab5f0cb2c261f8687a278a946',
+  '9698c413fc6a0ca4b53fb5ae2a97796db329a85fe5d4166ddb122d4975160c0c',
+  'ad21acb889da17fe038f780b19e02f0110bbcba66f3248f4912d9f6539919c8f',
+  'ef1cab5a69c62e6bef2ee237370ae5b7b0cde4cd820a312114169db5cec1ed92',
+]);
+
+const sha256 = s => createHash('sha256').update(s).digest('hex');
+
+function namesFound(text, hashes = FORBIDDEN_NAME_HASHES) {
+  const words = text.toLowerCase().split(/[^\p{L}]+/u).filter(Boolean);
+  const grams = [...words];
+  for (let i = 0; i + 1 < words.length; i++) grams.push(`${words[i]} ${words[i + 1]}`);
+  return grams.filter(g => hashes.has(sha256(g)));
+}
+
+// HELP holds dictionary KEYS; what a person reads is t(key). The guard reads the sentences
+// themselves, in every language they are shown in — scanning the keys alone was blind.
 test('nothing in the explanations names a real client or supplier', () => {
-  // This repo is public. The texts describe the app, never the business.
-  const all = Object.values(HELP).flatMap(e => [e.title, ...e.lines]).join(' ');
-  assert.equal(/\b(club fish|bakery ltd|salvo|brakes|caterite|continental|bako|almonds)\b/i.test(all), false);
+  const keys = Object.values(HELP).flatMap(e => [e.title, ...e.lines]);
+  try {
+    for (const lang of ['en', 'it']) {
+      setLanguage(lang);
+      const all = keys.map(k => t(k)).join(' ');
+      assert.ok(all.length > 500, `the ${lang} help text was read`);
+      // (The old list also banned «almonds»; read as real sentences, the allergen help
+      // rightly names almonds as a nut, so a food word cannot be policed here.)
+      assert.deepEqual(namesFound(all), [], lang);
+    }
+  } finally {
+    setLanguage('en');
+  }
+});
+
+test('the name guard catches a planted name, so it cannot pass by being blind', () => {
+  // Proved with FICTIONAL names hashed here, so no real name has to be written down to test it.
+  const planted = new Set([sha256('faro'), sha256('gelso bakery')]);
+  assert.deepEqual(namesFound('Order from FARO, today.', planted), ['faro']);
+  assert.deepEqual(namesFound('Ask Gelso  Bakery first', planted), ['gelso bakery']);
+  assert.deepEqual(namesFound('Order from a supplier today.', planted), []);
+  assert.equal(FORBIDDEN_NAME_HASHES.size, 7);
 });

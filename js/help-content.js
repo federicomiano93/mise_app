@@ -20,7 +20,7 @@ import { t } from './i18n.js';
 
 export const HELP = {
   home: {
-    title: 'Misé',
+    title: 'Mise',
     lines: [
       'help.eachCardOpensOne',
       'help.yourWorkIsSaved',

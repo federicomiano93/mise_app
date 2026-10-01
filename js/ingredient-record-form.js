@@ -1313,8 +1313,8 @@ export function buildIngredientForm({
   // matches nothing, so no <option> is selected and the browser falls back to the
   // first one, which is precisely where that ingredient now belongs.
   //
-  // ⚠️ `preset` IS ONLY FOR A NEW ONE. Adding from inside Salvo's screen should
-  // start on Salvo — but applying it to an EXISTING ingredient would silently
+  // ⚠️ `preset` IS ONLY FOR A NEW ONE. Adding from inside a supplier's screen should
+  // start on that supplier — but applying it to an EXISTING ingredient would silently
   // re-file somebody else's product the moment its form was opened from the wrong
   // place.
   const startOn = item ? item.supplierId : (preset || NO_SUPPLIER_ID);
