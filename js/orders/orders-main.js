@@ -18,6 +18,7 @@ import { supplierLabel } from '../supplier-label.js';
 // own card through js/ingredient-create.js — the card does its own saving.)
 import {
   watchCollection, watchDoc, saveDoc, COLLECTIONS,
+  watchRecentHistory, getOlderHistory, getLegacyHistory,
   watchIngredientPrices, canManageHere, authReady,
 } from './firebase-orders.js';
 import { withPrices } from '../price-model.js';
@@ -56,6 +57,7 @@ import { todayISO, dayPhrase, daySpoken, dayWhen, localDayOf, dayLabel } from '.
 import {
   buildOrderMessage, whatsappUrl, itemsFromQuantities, indexById,
 } from './order-text.js';
+import { liveHistoryStart, mergeHistory } from './history-window.js';
 import {
   historyDocId, ingredientsOf, supplierHasItems, ingredientLabel, wholeNumber,
   unitConflicts, unitConflictList,
@@ -97,7 +99,15 @@ const state = {
   rawIngredients: [],
   ingredientCategories: null,   // config/orders' stored category list, or null (never stored)
   ingredientPrices: {},
+  // The LIVE window only (the last HISTORY_LIVE_MONTHS months, a real-time listener). It
+  // feeds suggestions, deliveries, reminders and every banner, so tapping «Load older
+  // orders» can never move a suggested quantity.
   history: [],
+  // Orders from before that window, fetched page by page on request. Shown in History and
+  // looked up by id; never part of any total.
+  olderHistory: [],
+  older: { loading: false, done: false, error: false, cursor: null },
+  historyFrom: '',              // where the live window starts — the older pages end just before it
   requests: [],                 // order lists somebody sent to whoever runs the place
   entries: {},                  // { ingredientId: { qty, stock } } — shared object, mutated in place
   days: {},                     // { supplierId: 'YYYY-MM-DD' } — the day those rows were typed
@@ -822,19 +832,71 @@ function refreshDeliveriesBadge(count = lastOwedCount) {
   else btn.removeAttribute('aria-label');
 }
 
+// Live window + the pages loaded on demand — what History lists and what an id lookup
+// searches. Aggregates keep using state.history alone.
+function allHistory() {
+  return mergeHistory(state.history, state.olderHistory);
+}
+
 function renderHistory() {
   renderHistoryView(
     document.getElementById('history-list'),
-    state.history,
+    allHistory(),
     state.suppliers,
     // Resolved, so the one legacy weekly record groups an orphaned item under
     // "No supplier" rather than "Unknown supplier". Names are unaffected either way.
     orderIngredients(),
-    { onEdit: openHistoryEditor, onSend: sendRecord, onSendDay: openSendDayScreen },
+    {
+      onEdit: openHistoryEditor, onSend: sendRecord, onSendDay: openSendDayScreen,
+      onLoadOlder: loadOlderHistory,
+    },
     // Only what is SHOWN is narrowed. state.history stays whole, so the suggestion
     // engine (which needs 4+ past orders of an ingredient) is untouched by this.
-    { historyDays: ordersConfig.historyDays },
+    // The paging state travels in the options on every repaint: a snapshot arriving
+    // mid-load must not lose «Loading…» or the pages already loaded.
+    {
+      historyDays: ordersConfig.historyDays,
+      older: {
+        loading: state.older.loading, done: state.older.done, error: state.older.error,
+      },
+    },
   );
+}
+
+// «Load older orders»: the next page from before the live window. A failure keeps what was
+// loaded and offers the retry; the legacy weekly record is fetched once, when the pages run
+// out, so it still appears at the very end.
+async function loadOlderHistory() {
+  if (state.older.loading || state.older.done) return;
+  state.older.loading = true;
+  state.older.error = false;
+  renderHistory();
+  try {
+    const page = await getOlderHistory({
+      before: state.historyFrom, cursor: state.older.cursor,
+    });
+    let records = page.records;
+    if (page.done) records = records.concat(await getLegacyHistory());
+    state.olderHistory = mergeHistory(state.olderHistory, records);
+    state.older.cursor = page.cursor;
+    state.older.done = page.done;
+  } catch (err) {
+    console.error('Loading older orders failed:', err);
+    state.older.error = true;
+  } finally {
+    state.older.loading = false;
+    renderHistory();
+  }
+}
+
+// An edit or delete of an order that lives in an older page: the live listener cannot see
+// it, so keep the loaded copy in step after the write SUCCEEDED. `next` null = deleted.
+function patchOlderRecord(id, next) {
+  if (!state.olderHistory.some(r => r && r.id === id)) return;
+  state.olderHistory = next
+    ? state.olderHistory.map(r => (r && r.id === id ? { ...next, bakery: r.bakery, id } : r))
+    : state.olderHistory.filter(r => r && r.id !== id);
+  renderHistory();
 }
 
 // ── Sending an order that is already recorded ─────────────────────────────────
@@ -914,6 +976,7 @@ function openHistoryEditor(record) {
     onSave: async (id, next) => {
       try {
         await saveHistoryRecord(id, next);
+        patchOlderRecord(id, next);
         overlay.remove();
         setStatus(t('orders.orderUpdated'), 'ok', 4000);
       } catch (err) {
@@ -924,6 +987,7 @@ function openHistoryEditor(record) {
     onDelete: async id => {
       try {
         await deleteHistoryRecord(id);
+        patchOlderRecord(id, null);
         overlay.remove();
         setStatus(t('orders.orderDeleted'), 'warn', 4000);
       } catch (err) {
@@ -1126,7 +1190,7 @@ function findRequest(id) {
 function orderedForRequest(request) {
   const out = {};
   supplierIdsOf(request).forEach(supplierId => {
-    Object.assign(out, orderedToday(state.history, supplierId, request.date));
+    Object.assign(out, orderedToday(allHistory(), supplierId, request.date));
   });
   return out;
 }
@@ -1136,7 +1200,7 @@ function orderedForRequest(request) {
 function orderedUnitsForRequest(request) {
   const out = {};
   supplierIdsOf(request).forEach(supplierId => {
-    const record = state.history.find(r => r && r.id === historyDocId(request.date, supplierId));
+    const record = allHistory().find(r => r && r.id === historyDocId(request.date, supplierId));
     Object.assign(out, record?.units || {});
   });
   return out;
@@ -1421,7 +1485,7 @@ function unitConflictMessage(items, recording) {
   const found = items.map(({ supplierId, date }) => ({
     supplierId, date,
     conflicts: unitConflicts(
-      state.history.find(h => h && h.id === historyDocId(date, supplierId)),
+      allHistory().find(h => h && h.id === historyDocId(date, supplierId)),
       state.entries, ingredients, supplierId),
   })).filter(f => f.conflicts.length);
   if (!found.length) return '';
@@ -1518,7 +1582,7 @@ async function placeOrder(supplierId, { confirm = true, date: pinnedDate, quanti
       // normally catch this BEFORE anything is sent (refuseOnUnitConflict); this is the
       // last safety net, for a record that changed on another phone in between.
       const conflicts = unitConflicts(
-        state.history.find(h => h && h.id === historyDocId(date, supplierId)),
+        allHistory().find(h => h && h.id === historyDocId(date, supplierId)),
         state.entries, ingredients, supplierId);
       const list = conflicts.length ? unitConflictList(conflicts) : (err.ids || []).map(id => {
         const ing = ingredients.find(i => i.id === id);
@@ -1747,7 +1811,7 @@ async function openPlaceConfirm(items, { title, okLabel }) {
       supplierId: supplier.id,
       supplierName: supplierLabel(supplier),
       when: dayPhrase(date),
-      already: state.history.some(h => h.id === historyDocId(date, supplier.id)),
+      already: allHistory().some(h => h.id === historyDocId(date, supplier.id)),
       rows,
     };
   });
@@ -1763,7 +1827,7 @@ async function openPlaceConfirm(items, { title, okLabel }) {
 
 // One supplier. Resolves to that supplier's confirmed quantities, or null.
 async function askToConfirmPlacement(supplier, date) {
-  const already = state.history.some(h => h.id === historyDocId(date, supplier.id));
+  const already = allHistory().some(h => h.id === historyDocId(date, supplier.id));
   // ⚠️ THE HEADER DOES NOT NAME THE SUPPLIER, AND THAT WAS MEASURED. "Add to Brava
   // Fresh's order" wrapped to THREE lines at 320px — and the name is already on
   // screen, in the group heading, with the day beside it. A header that repeats what
@@ -2209,7 +2273,10 @@ async function init() {
     renderOpenRequest();
   }, liveDataLost(() => t('orders.live.draft')));
 
-  watchCollection(COLLECTIONS.history, list => {
+  // ⚠️ THE LIVE WINDOW ONLY — see the COST NOTE in firebase-orders.js. The start is kept in
+  // state so the older pages end exactly where this listener begins.
+  state.historyFrom = liveHistoryStart();
+  watchRecentHistory(state.historyFrom, list => {
     applyHistory(list);
     renderReminders();
   }, liveDataLost(() => t('orders.live.history')));

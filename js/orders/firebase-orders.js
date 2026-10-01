@@ -27,6 +27,7 @@ import {
   doc,
   getDoc,
   getDocs,
+  getDocsFromServer,
   setDoc,
   addDoc,
   updateDoc,
@@ -39,6 +40,7 @@ import {
   where,
   orderBy,
   limit,
+  startAfter,
 } from 'https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js';
 
 // Reuse the default app if firebase.js already created it; otherwise create it.
@@ -108,22 +110,74 @@ export async function watchCollection(name, onChange, onError) {
   );
 }
 
-// COST NOTE (P14) — orders-history is read WHOLE on every app open, and with one
-// document per day per supplier it now grows by roughly 500-1000 documents a year
-// (it used to grow by 52). That is fine at today's size and stays well inside the
-// free tier for a long time, but it does not stay fine for ever.
+// COST NOTE (P14) — orders-history grows by roughly 500-1000 documents a year (one per
+// day per supplier), and an unbounded listener would read all of it on every Orders open,
+// slower and dearer for ever. So the live listener covers only the last
+// HISTORY_LIVE_MONTHS calendar months (watchRecentHistory: `date >= liveHistoryStart()`),
+// and anything older is fetched on demand, one page at a time, when somebody taps «Load
+// older orders» (getOlderHistory). Nothing is deleted; older orders are just not read until
+// wanted.
 //
-// The obvious fix — read only the newest N by document id — does NOT work:
-// Firestore refuses a descending scan by key ("does not support descending key
-// scans"), and limitToLast on an ascending key order is rewritten into exactly
-// that same descending scan, so it fails too. Bounding the read means ordering by
-// a FIELD (`date`, descending, which is fully supported) — and the one legacy
-// weekly document has no `date` field, so it would silently drop out of History.
+// Why `date` and not the document id: Firestore refuses a descending scan by key ("does
+// not support descending key scans"), and limitToLast on an ascending key order is
+// rewritten into exactly that scan. Ordering by a FIELD is fully supported, and a single
+// field needs no composite index.
 //
-// So: revisit when orders-history passes ~1000 documents. Then add `date` to the
-// legacy record (one additive write) and switch this listener to
-// orderBy('date','desc') + limit. Not before — today the collection holds two
-// documents, and a production data change to speed that up would be absurd.
+// Why the legacy record is fetched by `weekStart`: the one old weekly document (July 2026)
+// has no `date`, so no `date` query can ever return it. Only legacy records carry
+// `weekStart` (the rules' hasOnly keeps it off modern ones), so ordering by it returns
+// just them. getLegacyHistory is called once, when the paging reaches its end.
+
+// The live window: orders from `fromDate` ("YYYY-MM-DD") onwards, in real time. Same
+// error handling as watchCollection — onSnapshot does not resubscribe after an error.
+export async function watchRecentHistory(fromDate, onChange, onError) {
+  await authReady;
+  return onSnapshot(
+    query(collection(db, pathFor(COLLECTIONS.history)), where('date', '>=', fromDate)),
+    snap => onChange(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
+    err => {
+      console.error('watchRecentHistory failed:', err);
+      onError?.(err);
+    },
+  );
+}
+
+// ⚠️ BOTH ONE-OFF READS BELOW USE getDocsFromServer, NEVER getDocs. The app runs Firestore
+// with its persistent offline cache, and offline getDocs quietly answers from that cache —
+// often empty or partial. A short page would then read as `done`, and «Load older orders»
+// would vanish for good under a false "no more orders". getDocsFromServer REJECTS when the
+// server cannot be reached, which is what puts the error line and the retry on screen.
+
+// One page of orders OLDER than `before`, newest first. `cursor` is the last document
+// snapshot of the previous page (null for the first). Returns the records, the cursor to
+// pass next time, and whether this was the last page.
+export async function getOlderHistory({ before, cursor = null, pageSize = 100 }) {
+  await authReady;
+  const constraints = [
+    where('date', '<', before),
+    orderBy('date', 'desc'),
+    ...(cursor ? [startAfter(cursor)] : []),
+    limit(pageSize),
+  ];
+  const snap = await getDocsFromServer(
+    query(collection(db, pathFor(COLLECTIONS.history)), ...constraints));
+  const records = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  return {
+    records,
+    cursor: snap.docs.length ? snap.docs[snap.docs.length - 1] : cursor,
+    done: records.length < pageSize,
+  };
+}
+
+// The legacy weekly records — the only ones with a `weekStart` and no `date`.
+export async function getLegacyHistory() {
+  await authReady;
+  const snap = await getDocsFromServer(query(
+    collection(db, pathFor(COLLECTIONS.history)),
+    orderBy('weekStart'),
+  ));
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+}
 
 // One-off read of a collection. Returns an array of { id, ...data }.
 export async function getCollection(name) {

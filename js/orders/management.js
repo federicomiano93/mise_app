@@ -22,6 +22,7 @@
 
 import { t } from '../i18n.js';
 import { el } from './dom.js';
+import { HISTORY_LIVE_MONTHS } from './history-window.js';
 import { canManageHere } from './firebase-orders.js';
 import { renderNotificationSettings } from './notifications.js';
 import { alertDialog } from './confirm-dialog.js';
@@ -351,7 +352,7 @@ export function buildManagement(data, actions) {
     return el('div', { class: 'set-block' }, [
       el('label', { class: 'set-label', for: 'history-days-input', text: t('orders.daysOfPastOrders') }),
       el('div', { class: 'mgmt-days-row' }, [input, el('span', { text: t('orders.days') }), saved]),
-      el('p', { class: 'set-sub', text: t('orders.olderOrdersAreNever') }),
+      el('p', { class: 'set-sub', text: t('orders.olderOrdersAreNever', { n: HISTORY_LIVE_MONTHS }) }),
     ]);
   }
 
