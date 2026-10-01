@@ -233,3 +233,15 @@ test('every new string exists in English and Italian, and the screen is wired to
   const main = readFileSync(new URL('../js/orders/orders-main.js', import.meta.url), 'utf8');
   assert.match(main, /onResolve: async \(item\) => \{ await resolveMissing\(item\.recordId, item\.id\); \}/);
 });
+
+// Found driving it (1 Oct 2026): the ingredient list can arrive after the order history,
+// and a card drawn in between said «Ingrediente eliminato». The order's frozen names are the
+// fallback, and the banner opens the list with the freshest ctx it was drawn with.
+test('a card falls back to the names frozen in its order, never to «deleted»', async () => {
+  const { readFileSync } = await import('node:fs');
+  const src = readFileSync(new URL('../js/orders/deliveries-view.js', import.meta.url), 'utf8');
+  const card = src.slice(src.indexOf('function reorderCard'));
+  assert.match(card.slice(0, 900), /recordedName\(item\.id, ctx\.ingredientsById \|\| \{\}, record\?\.names \|\| \{\}\)/);
+  assert.match(src, /openReorderScreen\(lastBannerCtx \|\| ctx\)/);
+  assert.match(card.slice(0, 1400), /supplierLabel\(supplier\) \|\| record\?\.supplierName \|\| t\('orders\.deliveries\.unknownSupplier'\)/);
+});

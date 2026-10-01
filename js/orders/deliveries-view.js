@@ -210,6 +210,7 @@ export function renderReorderBanner(host, ctx) {
   // second subscription. It must run even when the banner has gone (host missing or no
   // items left): the list stays open on its empty text until somebody taps Back.
   if (openList) openList.redraw(ctx);
+  lastBannerCtx = ctx;
   if (!host) return;
   host.textContent = '';
   const items = stillToReorder(ctx.history, ctx.entries);
@@ -226,13 +227,15 @@ export function renderReorderBanner(host, ctx) {
     // two, and a language with three would need the code changed rather than the
     // dictionary. Intl.PluralRules already does this for every other count here.
     text: t('orders.reorder.count', { n: items.length }),
-    onclick: () => openReorderScreen(ctx),
+    // The freshest ctx this banner was drawn with; the open list then follows every render.
+    onclick: () => openReorderScreen(lastBannerCtx || ctx),
   }));
 }
 
 // The open «Da riordinare» list, or null. One at a time: the banner is under the overlay, so
 // a second tap cannot come, but a stale handle would redraw a node that is gone.
 let openList = null;
+let lastBannerCtx = null;
 
 // ⚠️ ONE CARD PER MISSING LINE, AND EACH LINE WAITS UNTIL SOMEBODY DECIDES. Federico buys a
 // missing ingredient «da un'altra parte» as often as from the same supplier, so there is no
@@ -284,9 +287,14 @@ function openReorderScreen(firstCtx) {
 
 function reorderCard(item, getCtx) {
   const ctx = getCtx();
-  const name = recordedName(item.id, ctx.ingredientsById || {}, {});
+  // ⚠️ THE NAMES FROZEN INTO THE ORDER are the fallback, never `{}`: the ingredient list can
+  // arrive after the order history, and a card drawn in between said «Ingrediente eliminato»
+  // for an ingredient that exists (found driving it, 1 Oct 2026).
+  const record = (ctx.history || []).find(r => r && (r.id === item.recordId));
+  const name = recordedName(item.id, ctx.ingredientsById || {}, record?.names || {});
   const supplier = ctx.suppliersById?.[item.supplierId] || null;
-  const supplierName = supplierLabel(supplier) || t('orders.deliveries.unknownSupplier');
+  // Same fallback for the supplier: the name the order was placed under.
+  const supplierName = supplierLabel(supplier) || record?.supplierName || t('orders.deliveries.unknownSupplier');
 
   return el('div', { class: 'reorder-card' }, [
     el('div', { class: 'reorder-main' }, [
