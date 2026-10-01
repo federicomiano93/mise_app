@@ -82,3 +82,28 @@ test('both copies of the push fallback say the same thing', () => {
     assert.ok(code(p).includes("|| 'Mise'"), p);
   }
 });
+
+// The old spellings never come back. The product is «Mise», without an accent, and
+// the file headers once named the first customer instead of the app. The forbidden
+// strings are assembled at run time so that THIS file does not contain them: a
+// scan that matched its own source would fail forever, or need an exemption.
+test('the old spellings never come back', async () => {
+  const { execFileSync } = await import('node:child_process');
+  const forbidden = [
+    'Mis' + 'é',
+    'MIS' + 'É',
+    'ITALIAN CLUB' + ' PWA',
+  ];
+  const files = execFileSync('git', ['ls-files', '-z'], { cwd: ROOT, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 })
+    .split('\0')
+    .filter((f) => f && !f.startsWith('functions/node_modules/'));
+  assert.ok(files.length > 100, `only ${files.length} tracked files — the scan is not finding them`);
+  const offenders = [];
+  for (const f of files) {
+    let text;
+    try { text = readFileSync(new URL(`../${f}`, import.meta.url)).toString('utf8'); } catch { continue; }
+    if (text.includes('\0')) continue; // binary: icons, fonts
+    for (const bad of forbidden) if (text.includes(bad)) offenders.push(`${f}: ${bad}`);
+  }
+  assert.deepEqual(offenders, []);
+});
