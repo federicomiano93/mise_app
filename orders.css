@@ -689,7 +689,20 @@ body[data-section="orders"] { --order-head-h: 0px; }
    scroller's padding, so top: 0 left a 14px band where rows showed ABOVE the header
    (measured 29 Sep 2026). Keep the two numbers together. */
 .ingredient-list > .ing-head { top: -14px; }
-.ing-flat-list > .ing-head { top: var(--order-head-h, 0px); }
+/* In the flat list the header sticks under the tabs AND the pinned search bar. */
+.ing-flat-list > .ing-head { top: calc(var(--order-head-h, 0px) + var(--order-search-h, 0px)); }
+/* The search row + filter pills of the flat list, pinned under the tab bar.
+   ⚠️ `flow-root` KEEPS THE CHILDREN'S BOTTOM MARGINS INSIDE THE BAR: left to collapse out,
+   they open a gap under it (measured as the bar's offsetHeight) where rows show through.
+   ⚠️ AN OPAQUE GROUND AND NO overflow ON ANY ANCESTOR, as on .order-box-head. */
+.ing-sticky-head {
+  position: sticky;
+  top: var(--order-head-h, 0px);
+  z-index: 2;
+  display: flow-root;
+  background: var(--surface);
+}
+body[data-section="orders"] { --order-search-h: 0px; }
 
 /* Stock hidden (Settings): one column fewer, in the rows AND the header. */
 body.hide-stock .ing-row--line,

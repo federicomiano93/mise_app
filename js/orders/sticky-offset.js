@@ -6,10 +6,15 @@
 // when the view switch is shown or hidden. So the height is measured, once, here, and
 // handed to CSS as `--order-head-h` on <body>; orders.css reads
 // `top: var(--order-head-h, 0px)`.
+//
+// The «per ingrediente» view pins a second bar under the tabs (the search row and the
+// filter pills, `.ing-sticky-head`); its height is measured the same way into
+// `--order-search-h`, and the Order / Stock header sticks under BOTH. Never a pixel guess:
+// the bar changes height with the screen size and when the filter pills are hidden.
 
-export function trackStickyHead(head, root = document.body) {
+export function trackStickyHead(head, root = document.body, property = '--order-head-h') {
   if (!head) return null;
-  const write = () => root.style.setProperty('--order-head-h', `${head.offsetHeight}px`);
+  const write = () => root.style.setProperty(property, `${head.offsetHeight}px`);
   write();
   if (typeof ResizeObserver !== 'function') return null;
   const observer = new ResizeObserver(write);

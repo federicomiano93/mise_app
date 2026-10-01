@@ -23,6 +23,7 @@ import { el } from './dom.js';
 import { buildRow, buildIngredientHeader } from './ingredients.js';
 import { flatRows } from './ingredient-search.js';
 import { buildSearchBox } from './search-box.js';
+import { trackStickyHead } from './sticky-offset.js';
 
 // container: the #suppliers-list element (see rule 2 above).
 // ctx: { query, onQuery(text), onFilter(active), suggest(id, stock), entries, hooks }
@@ -124,8 +125,12 @@ export function mountIngredientList(container, ctx) {
   // See the matching note in suppliers.js mountSupplierList: `ctx.searchExtras`
   // is the view-swap button (every screen size), built once by orders-main.js.
   const searchRow = el('div', { class: 'search-row' }, [search.node, ctx.searchExtras || null]);
-  container.appendChild(searchRow);
-  container.appendChild(filterSwitch);
+  // ⚠️ THE SEARCH ROW AND THE FILTER PILLS ARE ONE STICKY BAR, pinned under the tab bar so
+  // the search stays reachable half way down a long list. Its height is measured into
+  // --order-search-h, which the Order / Stock header (.ing-head) adds to its own offset.
+  const stickyHead = el('div', { class: 'ing-sticky-head' }, [searchRow, filterSwitch]);
+  container.appendChild(stickyHead);
+  trackStickyHead(stickyHead, document.body, '--order-search-h');
   container.appendChild(count);
   container.appendChild(listEl);
 
