@@ -982,6 +982,9 @@ const DICTIONARIES = Object.freeze({
     'orders.case.pcs': 'pcs',
     'orders.case.summaryUnit': '= {rate} / {unit} · {price} per case',
     'orders.case.summaryPiece': '= {rate} each · {price} per case',
+    // ── «Package: Single | Case» (1 Oct 2026): the line under the format ───────
+    'orders.format.summary': 'Case of {items} of {size} ({total})',
+    'orders.format.summaryNoWeight': 'Case of {items}',
     // ── What an order costs (29 Sep 2026), shown only to whoever may see money ──
     'orders.cost.noPrice': 'no price',
     'orders.cost.nothingPriced': 'No item here has a price yet: add it in the ingredient’s card',
@@ -3386,6 +3389,9 @@ const DICTIONARIES = Object.freeze({
     'orders.case.pcs': 'pz',
     'orders.case.summaryUnit': '= {rate} / {unit} · {price} a cartone',
     'orders.case.summaryPiece': '= {rate} al pezzo · {price} a cartone',
+    // ── «Confezione: Singola | Cartone» (1 ott 2026): la riga sotto il formato ──
+    'orders.format.summary': 'Cartone da {items} da {size} ({total})',
+    'orders.format.summaryNoWeight': 'Cartone da {items}',
     // ── Quanto costa un ordine (29 Sep 2026), solo per chi può vedere i prezzi ──
     'orders.cost.noPrice': 'senza prezzo',
     'orders.cost.nothingPriced': 'Nessuna voce ha ancora un prezzo: aggiungilo nella scheda dell’ingrediente',

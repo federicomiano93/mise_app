@@ -93,3 +93,34 @@ test('a case typed in the form reaches the price half and never the ingredient',
   }
   for (const key of Object.keys(price)) assert.ok(PRICE_KEYS.includes(key), key);
 });
+
+// ── packCount (1 Oct 2026): product data, so it lives on the ingredient and nowhere near the money ──
+test('packCount is on the ingredients whitelist and on neither price list', () => {
+  assert.ok(INGREDIENT_KEYS.includes('packCount'), 'the ingredients rule must accept it');
+  assert.equal(PRICE_KEYS.includes('packCount'), false, 'ingredient-prices never carries it');
+  assert.equal(PRICE_FIELDS.includes('packCount'), false, 'splitPriceFields would send it to the price document');
+  assert.equal(INGREDIENT_DRAINED_FIELDS.includes('packCount'), false, 'and it is not drained to null on every save');
+});
+
+test('packCount stays on the ingredient half when an ingredient is split', () => {
+  const { ingredient, price } = splitPriceFields({ name: 'Flour', packCount: 4, packUnit: 'busta', unit: 'cartone', pricePerUnit: 2, priceUnit: 'kg' });
+  assert.equal(ingredient.packCount, 4);
+  assert.equal('packCount' in price, false);
+  // a Singola after a Cartone writes null, which the rules accept
+  assert.equal(splitPriceFields({ packCount: null }).ingredient.packCount, null);
+});
+
+test('every key the format adds to a payload is one the ingredients rule accepts', async () => {
+  const { formatPatch } = await import('../js/pack-format.js');
+  const fresh = { kind: 'single', count: null, inner: '', unit: 'sacco', packUnit: 'x' };
+  for (const form of [
+    { kind: 'carton', count: 4, inner: 'busta', cartonWord: 'cartone' },
+    { kind: 'carton', count: 4, inner: '', cartonWord: 'case' },
+  ]) {
+    for (const key of Object.keys(formatPatch(fresh, form))) assert.ok(INGREDIENT_KEYS.includes(key), key);
+  }
+  const carton = { kind: 'carton', count: 4, inner: 'busta', unit: 'cartone', packUnit: 'busta' };
+  for (const key of Object.keys(formatPatch(carton, { kind: 'single', count: null, inner: 'busta', cartonWord: 'cartone' }))) {
+    assert.ok(INGREDIENT_KEYS.includes(key), key);
+  }
+});

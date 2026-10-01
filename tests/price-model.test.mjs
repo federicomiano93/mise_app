@@ -451,3 +451,166 @@ test('split then merge restores what the form had', () => {
   assert.equal(back.pricePerUnit, 7.2);
   assert.equal(back.name, 'Flour');
 });
+
+// ── «Confezione» and the ONE price box (1 Oct 2026) ──────────────────────────
+// What the card's price box means follows the format and the weight; these are the pure halves
+// of it (js/price-model.js). The DOM half is pinned in case-price-form.test.mjs.
+import * as PM from '../js/price-model.js';
+
+const CARTON = (count, inner = 'busta') => ({ kind: 'carton', count, inner });
+const SINGLE = { kind: 'single', count: null, inner: '' };
+const NOW = '2026-10-01T10:00:00.000Z';
+
+test('the price box means: carton + weight → cartone; carton alone → pieces; single + weight → confezione; loose → typed', () => {
+  assert.equal(PM.priceFormOf(CARTON(4), '2.5kg'), PM.PRICE_FORMS.cartonPack);
+  assert.equal(PM.priceFormOf(CARTON(50), ''), PM.PRICE_FORMS.cartonPieces);
+  assert.equal(PM.priceFormOf(CARTON(50), '6x1kg'), PM.PRICE_FORMS.cartonPieces);
+  assert.equal(PM.priceFormOf(SINGLE, '25kg'), PM.PRICE_FORMS.singlePack);
+  assert.equal(PM.priceFormOf(SINGLE, '500 ml'), PM.PRICE_FORMS.singlePack);
+  assert.equal(PM.priceFormOf(SINGLE, ''), PM.PRICE_FORMS.typed);
+  assert.equal(PM.priceFormOf(SINGLE, 'sacco'), PM.PRICE_FORMS.typed);
+});
+
+test('20 for a case of 4 × 2.5 kg is 2 a kilo and 5 a busta', () => {
+  const input = PM.formatPriceInput(CARTON(4), '2.5kg', { price: '20', vat: '' });
+  const patch = PM.pricePatch(input, NOW, '2.5kg');
+  assert.deepEqual([patch.priceUnit, patch.pricePerUnit, patch.caseItemUnit, patch.caseItemSize, patch.caseCount, patch.casePrice],
+    ['kg', 2, 'pack', 2.5, 4, 20]);
+  assert.equal(patch.casePrice / patch.caseCount, 5);
+});
+
+test('a carton with no readable weight is a case of PIECES: a rate per piece, the piece weight kept', () => {
+  const input = PM.formatPriceInput(CARTON(50, 'pezzo'), '', { price: '20', pieceKg: '0.06', vat: '22' });
+  const patch = PM.pricePatch(input, NOW, '');
+  assert.deepEqual([patch.priceUnit, patch.pricePerUnit, patch.caseItemUnit, patch.caseCount, patch.unitWeightKg, patch.vatRate],
+    ['pcs', 0.4, 'pcs', 50, 0.06, 22]);
+});
+
+test('a single with a weight that reads is a case of ONE package: 20 for a 25 kg sack is 0.80 a kilo', () => {
+  const input = PM.formatPriceInput(SINGLE, '25kg', { price: '20', vat: '' });
+  const patch = PM.pricePatch(input, NOW, '25kg');
+  assert.deepEqual([patch.priceUnit, patch.pricePerUnit, patch.caseCount, patch.caseItemUnit, patch.caseItemSize],
+    ['kg', 0.8, 1, 'pack', 25]);
+  assert.deepEqual(PM.storedCaseOf(patch), { casePrice: 20, caseCount: 1, caseItemSize: 25, caseItemUnit: 'pack' });
+});
+
+test('a loose single keeps today\'s typed rate, exactly as it was', () => {
+  const input = PM.formatPriceInput(SINGLE, '', { rate: '7.2', unit: 'kg', pieceKg: '', vat: '' });
+  const patch = PM.pricePatch(input, NOW, '');
+  assert.deepEqual([patch.priceUnit, patch.pricePerUnit, patch.caseCount], ['kg', 7.2, null]);
+  const none = PM.pricePatch(PM.formatPriceInput(SINGLE, '', { rate: '', unit: null, vat: '' }), NOW, '');
+  assert.equal(none.pricePerUnit, null);
+});
+
+test('an empty carton count prices nothing (the card refuses the save before it gets here)', () => {
+  const patch = PM.pricePatch(PM.formatPriceInput(CARTON(null), '2.5kg', { price: '20', vat: '' }), NOW, '2.5kg');
+  assert.equal(patch.pricePerUnit, null);
+  assert.equal(patch.caseCount, null);
+});
+
+test('the box starts on the stored case price for a carton, and on one package\'s price for a single', () => {
+  const stored = { priceUnit: 'kg', pricePerUnit: 2, casePrice: 20, caseCount: 4, caseItemSize: 2.5, caseItemUnit: 'pack' };
+  assert.equal(PM.priceBoxPrefill(stored, CARTON(4), '2.5kg'), 20);
+  assert.equal(PM.priceBoxPrefill(stored, CARTON(5), '2.5kg'), 20, 'the invoice figure stays when the count changes');
+  assert.equal(PM.priceBoxPrefill(stored, SINGLE, '2.5kg'), 5, 'case price ÷ count');
+});
+
+test('with only a typed rate the box starts at rate × count × size, so the rate is kept', () => {
+  const typed = { priceUnit: 'kg', pricePerUnit: 2 };
+  assert.equal(PM.priceBoxPrefill(typed, CARTON(4), '2.5kg'), 20);
+  assert.equal(PM.priceBoxPrefill(typed, SINGLE, '2.5kg'), 5);
+  assert.equal(PM.priceBoxPrefill(typed, SINGLE, '500g'), 1);
+  assert.equal(PM.priceBoxPrefill({ priceUnit: 'pcs', pricePerUnit: 0.4 }, CARTON(50, 'pezzo'), ''), 20);
+  assert.equal(PM.priceBoxPrefill({ priceUnit: 'pcs', pricePerUnit: 1.2 }, SINGLE, '500g'), 1.2, 'a rate per piece is one package');
+  // nothing to start from: empty, never a guess
+  assert.equal(PM.priceBoxPrefill(typed, CARTON(null), '2.5kg'), null);
+  assert.equal(PM.priceBoxPrefill({}, CARTON(4), '2.5kg'), null);
+  assert.equal(PM.priceBoxPrefill(null, CARTON(4), '2.5kg'), null);
+  assert.equal(PM.priceBoxPrefill(typed, SINGLE, ''), null, 'a loose single uses the rate box, not this one');
+  assert.equal(PM.priceBoxPrefill(typed, CARTON(4), ''), null, 'a rate per kilo cannot become a price per piece');
+});
+
+test('over a grid of rates, sizes and counts the pre-filled box gives back the same rate', () => {
+  const rates = [0.8, 1.25, 3.49, 7.2, 12.5, 0.035, 0.0035, 18];
+  const weights = ['25kg', '2.5kg', '500g', '250 g', '1l', '750ml', '100g', '5kg'];
+  for (const rate of rates) {
+    for (const weight of weights) {
+      for (const count of [1, 4, 12, 50]) {
+        const item = { priceUnit: 'kg', pricePerUnit: rate };
+        const fmt = count === 1 ? SINGLE : CARTON(count);
+        const box = PM.priceBoxPrefill(item, fmt, weight);
+        const patch = PM.pricePatch(PM.formatPriceInput(fmt, weight, { price: String(box), vat: '' }), NOW, weight);
+        // ⚠️ THE CASE PRICE IS KEPT TO FOUR DECIMALS (caseOf), so the rate can only move by half a
+        // hundredth of a cent divided by what the case weighs — nothing at a realistic price, a
+        // fraction of a percent on a price that is itself under a cent; a rate typed to the penny
+        // must come back EXACTLY
+        const kilos = count * PM.packBaseOf(weight).size;
+        assert.ok(Math.abs(patch.pricePerUnit - rate) <= 5.1e-5 / kilos + 1e-9, `${rate} × ${count} × ${weight}: ${patch.pricePerUnit}`);
+        if (rate >= 0.8 && Number.isInteger(rate * 100)) {
+          assert.equal(patch.pricePerUnit, rate, `${rate} × ${count} × ${weight} must be exact`);
+        }
+      }
+    }
+  }
+});
+
+test('a case price round-trips: re-typing the pre-filled box gives the stored rate (several shapes)', () => {
+  for (const [weight, rate] of [['2.5kg', 2], ['500g', 10], ['750ml', 4], ['25kg', 0.8]]) {
+    const first = PM.pricePatch(
+      PM.formatPriceInput(CARTON(4), weight, { price: String(PM.priceBoxPrefill({ priceUnit: 'kg', pricePerUnit: rate }, CARTON(4), weight)), vat: '' }),
+      NOW, weight,
+    );
+    assert.equal(first.pricePerUnit, rate, weight);
+    // and the stored case itself, re-read, starts the box on the same case price
+    assert.equal(PM.priceBoxPrefill({ ...first }, CARTON(4), weight), first.casePrice);
+  }
+});
+
+test('a price document written verbatim by the untouched path equals the stored one, for any stored case', () => {
+  for (const stored of [
+    { priceUnit: 'kg', pricePerUnit: 2, casePrice: 20, caseCount: 4, caseItemSize: 2.5, caseItemUnit: 'pack' },
+    { priceUnit: 'kg', pricePerUnit: 10, casePrice: 20, caseCount: 4, caseItemSize: 500, caseItemUnit: 'g' },
+    { priceUnit: 'l', pricePerUnit: 4, casePrice: 12, caseCount: 6, caseItemSize: 500, caseItemUnit: 'ml' },
+    { priceUnit: 'l', pricePerUnit: 3.2, casePrice: 12.8, caseCount: 4, caseItemSize: 1, caseItemUnit: 'pack' },
+    { priceUnit: 'pcs', pricePerUnit: 0.4, casePrice: 20, caseCount: 50, caseItemUnit: 'pcs' },
+    { priceUnit: 'pcs', pricePerUnit: 3.333333, casePrice: 10, caseCount: 3, caseItemUnit: 'pcs' },
+    { priceUnit: 'kg', pricePerUnit: 7.2 },
+    { priceUnit: 'pcs', pricePerUnit: 0.3, unitWeightKg: 0.05 },
+  ]) {
+    // whatever the weight says now — the stored case is its own authority
+    for (const weight of ['2.5kg', '3kg', '', 'sacco']) {
+      const patch = PM.pricePatch(PM.storedPriceInput(stored, ''), NOW, weight);
+      for (const key of ['priceUnit', 'pricePerUnit', 'casePrice', 'caseCount', 'caseItemSize', 'caseItemUnit', 'unitWeightKg']) {
+        assert.equal(patch[key] ?? null, stored[key] ?? null, `${key} (${JSON.stringify(stored)}, weight "${weight}")`);
+      }
+      assert.equal(PM.priceChanged(stored, patch), false);
+    }
+  }
+});
+
+test('a STALE case (a rate typed over it) is not written back: the stored rate is', () => {
+  const stale = { priceUnit: 'kg', pricePerUnit: 3, casePrice: 20, caseCount: 4, caseItemSize: 2.5, caseItemUnit: 'pack' };
+  const patch = PM.pricePatch(PM.storedPriceInput(stale, ''), NOW, '2.5kg');
+  assert.equal(patch.pricePerUnit, 3);
+  assert.equal(patch.caseCount, null, 'and the dead case goes out as null, as every typed-rate save does');
+});
+
+test('only the VAT is read live on the untouched path', () => {
+  const stored = { priceUnit: 'kg', pricePerUnit: 7.2, vatRate: 4 };
+  assert.equal(PM.pricePatch(PM.storedPriceInput(stored, '10'), NOW, '').vatRate, 10);
+  assert.equal(PM.pricePatch(PM.storedPriceInput(stored, ''), NOW, '').vatRate, null);
+  assert.equal(PM.pricePatch(PM.storedPriceInput(stored, '4'), NOW, '').priceUnit, 'kg');
+});
+
+test('a weight-priced case cannot be re-priced once its weight stops reading; pieces and empty boxes can', () => {
+  const kgCase = { priceUnit: 'kg', pricePerUnit: 2, casePrice: 20, caseCount: 4, caseItemSize: 2.5, caseItemUnit: 'pack' };
+  const base = { item: kgCase, fmt: CARTON(4), weightText: 'sacco', dirty: true, priceBox: '22' };
+  assert.equal(PM.weightNeededForPrice(base), true);
+  assert.equal(PM.weightNeededForPrice({ ...base, weightText: '2.5kg' }), false, 'a readable weight is fine');
+  assert.equal(PM.weightNeededForPrice({ ...base, dirty: false }), false, 'untouched writes the stored case');
+  assert.equal(PM.weightNeededForPrice({ ...base, priceBox: '' }), false, 'an emptied box is no price');
+  assert.equal(PM.weightNeededForPrice({ ...base, fmt: SINGLE }), false);
+  const pieces = { priceUnit: 'pcs', pricePerUnit: 0.4, casePrice: 20, caseCount: 50, caseItemUnit: 'pcs' };
+  assert.equal(PM.weightNeededForPrice({ ...base, item: pieces }), false);
+  assert.equal(PM.weightNeededForPrice({ ...base, item: { priceUnit: 'kg', pricePerUnit: 2 } }), false, 'a typed rate has no case to protect');
+});

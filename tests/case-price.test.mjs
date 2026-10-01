@@ -365,3 +365,23 @@ test('casePackNote names the fix when the order unit leaves doubt, and is null w
   assert.equal(casePackNote({ unit: 'pz', priceUnit: 'pcs', pricePerUnit: 0.4 }), null);
   assert.equal(casePackNote({ unit: 'pz', ...eggs, pricePerUnit: 9 }), null);
 });
+
+// ── A legacy explicit-size case written back by an untouched save (1 Oct 2026) ──
+// The card no longer offers «Contiene count × size × unit», but 4 × 2.5 kg cases typed with it
+// are in production: reopened and saved without a touch they must come back as they were.
+import { storedPriceInput } from '../js/price-model.js';
+
+test('a legacy explicit-size case (kg, g, l, ml) written back untouched is the same case and the same rate', () => {
+  for (const stored of [
+    { priceUnit: 'kg', pricePerUnit: 2, casePrice: 20, caseCount: 4, caseItemSize: 2.5, caseItemUnit: 'kg' },
+    { priceUnit: 'kg', pricePerUnit: 10, casePrice: 20, caseCount: 4, caseItemSize: 500, caseItemUnit: 'g' },
+    { priceUnit: 'l', pricePerUnit: 2, casePrice: 12, caseCount: 6, caseItemSize: 1, caseItemUnit: 'l' },
+    { priceUnit: 'l', pricePerUnit: 4, casePrice: 12, caseCount: 6, caseItemSize: 500, caseItemUnit: 'ml' },
+  ]) {
+    assert.ok(storedCaseOf(stored), 'it stands before');
+    const patch = pricePatch(storedPriceInput(stored, ''), AT, '');
+    for (const key of ['priceUnit', 'pricePerUnit', ...CASE_KEYS]) assert.equal(patch[key], stored[key], key);
+    assert.deepEqual(storedCaseOf(patch), storedCaseOf(stored), 'and it stands after');
+    assert.equal(priceChanged(stored, patch), false);
+  }
+});
