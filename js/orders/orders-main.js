@@ -33,7 +33,7 @@ import { paintOrderMoney } from './order-cost-view.js';
 import {
   scheduleDraftSave, saveDraftNow, flushDraftSave, watchDraft, archiveSupplier, clearSupplier,
   clearQuantities, saveHistoryRecord, deleteHistoryRecord, setDraftSaveReporter,
-  confirmDelivery,
+  confirmDelivery, resolveMissing,
 } from './draft.js';
 import { buildSendScreen } from './preview.js';
 import { buildSupplierPicker } from './supplier-picker.js';
@@ -799,6 +799,9 @@ function renderIncoming() {
       syncInputsFromState();
       render();   // redraws the banner too — see the note at the top of render()
     },
+    // «Risolto»: one merge write on the record the line was missed on. No local state is
+    // touched — the history snapshot that carries the mark redraws the banner and the list.
+    onResolve: async (item) => { await resolveMissing(item.recordId, item.id); },
   };
 
   renderDeliveries(document.getElementById('deliveries-list'), ctx);

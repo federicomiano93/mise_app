@@ -204,6 +204,12 @@ async function confirm(entry, missingIds, ctx) {
 // ⚠️ IT LIVES AT THE TOP OF THE ORDER TAB, WHERE THE WORK HAPPENS. A list on a screen
 // nobody opens does not answer "so I do not forget to order them".
 export function renderReorderBanner(host, ctx) {
+  // ⚠️ AN OPEN LIST IS REDRAWN FROM HERE, BEFORE ANY EARLY RETURN. orders-main calls this on
+  // every snapshot and every render(), with the freshest data — so a line put back or marked
+  // «Risolto» (on this phone or the other one in the kitchen) leaves the open list without a
+  // second subscription. It must run even when the banner has gone (host missing or no
+  // items left): the list stays open on its empty text until somebody taps Back.
+  if (openList) openList.redraw(ctx);
   if (!host) return;
   host.textContent = '';
   const items = stillToReorder(ctx.history, ctx.entries);
@@ -220,34 +226,122 @@ export function renderReorderBanner(host, ctx) {
     // two, and a language with three would need the code changed rather than the
     // dictionary. Intl.PluralRules already does this for every other count here.
     text: t('orders.reorder.count', { n: items.length }),
-    onclick: () => openReorder(items, ctx),
+    onclick: () => openReorderScreen(ctx),
   }));
 }
 
-async function openReorder(items, ctx) {
-  const lines = items.map(i => `• ${recordedName(i.id, ctx.ingredientsById || {}, {})} — ${qtyWithUnit(i.qty, i.unit)}`);
+// The open «Da riordinare» list, or null. One at a time: the banner is under the overlay, so
+// a second tap cannot come, but a stale handle would redraw a node that is gone.
+let openList = null;
 
-  const go = await confirmDialog({
-    title: t('orders.reorder.title'),
-    message: `${t('orders.reorder.message')}\n\n${lines.join('\n')}`,
-    okLabel: t('orders.reorder.putBack'),
-    cancelLabel: t('ui.cancel'),
-  });
-  if (!go) return;
+// ⚠️ ONE CARD PER MISSING LINE, AND EACH LINE WAITS UNTIL SOMEBODY DECIDES. Federico buys a
+// missing ingredient «da un'altra parte» as often as from the same supplier, so there is no
+// single «put everything back» any more: per line, «put it back in {supplier}'s order» or
+// «Risolto» (bought elsewhere — it leaves this list for good, and goes in no order).
+function openReorderScreen(firstCtx) {
+  if (openList) return;
+  let latest = firstCtx;
 
-  const { applied, skipped } = applyReorder(items, ctx.entries);
-  try {
-    await ctx.onReorder(applied);
-  } catch {
-    await alertDialog(t('orders.deliveries.couldNotSave'));
-    return;
-  }
+  const body = el('div', { class: 'reorder-list' });
 
+  const close = () => { overlay.remove(); openList = null; };
+
+  const overlay = el('div', { class: 'missing-overlay reorder-overlay' }, [
+    el('header', { class: 'app-header orders-header' }, [
+      el('span', { class: 'app-header-slot' }, [
+        el('button', {
+          class: 'app-icon-btn orders-icon-btn', type: 'button', 'aria-label': t('ui.back'),
+          icon: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>',
+          onclick: close,
+        }),
+      ]),
+      el('div', { class: 'app-header-title orders-header-title' }, [
+        el('h1', { text: t('orders.reorder.screenTitle') }),
+      ]),
+      el('span', { class: 'app-header-slot' }),
+    ]),
+    el('div', { class: 'scroll-area' }, [body]),
+  ]);
+
+  // Redrawn from the LATEST ctx, never from a list captured at open: the data under it moves.
+  const redraw = ctx => {
+    if (ctx) latest = ctx;
+    body.textContent = '';
+    const items = stillToReorder(latest.history, latest.entries);
+    // ⚠️ AN EMPTY LIST STAYS OPEN, with a sentence. Closing it when the last line goes would
+    // yank the screen from under the thumb that just tapped.
+    if (!items.length) {
+      body.appendChild(el('p', { class: 'ing-empty', text: t('orders.reorder.empty') }));
+      return;
+    }
+    items.forEach(item => body.appendChild(reorderCard(item, () => latest)));
+  };
+
+  openList = { redraw };
+  redraw();
+  document.body.appendChild(overlay);
+}
+
+function reorderCard(item, getCtx) {
+  const ctx = getCtx();
+  const name = recordedName(item.id, ctx.ingredientsById || {}, {});
+  const supplier = ctx.suppliersById?.[item.supplierId] || null;
+  const supplierName = supplierLabel(supplier) || t('orders.deliveries.unknownSupplier');
+
+  return el('div', { class: 'reorder-card' }, [
+    el('div', { class: 'reorder-main' }, [
+      el('span', { class: 'reorder-name', text: name }),
+      el('span', { class: 'missing-qty', text: qtyWithUnit(item.qty, item.unit) }),
+    ]),
+    el('div', {
+      class: 'reorder-meta',
+      text: t('orders.reorder.rowMeta', { supplier: supplierName, day: spellDay(item.missedOn) }),
+    }),
+    el('button', {
+      class: 'btn-secondary reorder-put', type: 'button',
+      text: t('orders.reorder.putBackIn', { supplier: supplierName }),
+      'aria-label': t('orders.reorder.putBackInAria', { supplier: supplierName, name }),
+      onclick: () => putBackOne(item, getCtx()),
+    }),
+    el('button', {
+      class: 'reorder-resolve', type: 'button',
+      text: t('orders.reorder.resolved'),
+      'aria-label': t('orders.reorder.resolvedAria', { name }),
+      onclick: () => resolveOne(item, name, getCtx()),
+    }),
+  ]);
+}
+
+async function putBackOne(item, ctx) {
+  const { applied, skipped } = applyReorder([item], ctx.entries);
   // ⚠️ A SKIP IS REPORTED, NEVER SWALLOWED. A row already carrying a quantity was
   // typed by a person — possibly seconds ago on another phone — so it is left alone;
   // saying nothing would look exactly like the button having failed.
-  if (skipped.length) {
-    await alertDialog(t('orders.reorder.someSkipped', { n: String(skipped.length) }));
+  if (!applied.length) {
+    await alertDialog(t('orders.reorder.someSkipped', { n: skipped.length || 1 }));
+    return;
+  }
+  try {
+    // onReorder ends in render(), which redraws this list from fresh data.
+    await ctx.onReorder(applied);
+  } catch {
+    await alertDialog(t('orders.deliveries.couldNotSave'));
+  }
+}
+
+async function resolveOne(item, name, ctx) {
+  const go = await confirmDialog({
+    title: t('orders.reorder.resolveTitle'),
+    message: t('orders.reorder.resolveMessage', { name }),
+    okLabel: t('orders.reorder.resolved'),
+    cancelLabel: t('ui.cancel'),
+  });
+  if (!go) return;
+  try {
+    // The row leaves when the history snapshot carrying the mark lands (renderReorderBanner).
+    await ctx.onResolve(item);
+  } catch {
+    await alertDialog(t('orders.deliveries.couldNotSave'));
   }
 }
 
