@@ -191,7 +191,7 @@ body.cat-zoom-lock { overflow: hidden; }
 .cat-detail-del:focus-visible { outline: 2px solid var(--cat-accent); outline-offset: 2px; }
 
 /* Editor */
-.cat-editor label { display: block; font-size: .78rem; color: var(--cat-text-2); text-transform: uppercase; letter-spacing: .06em; margin: 0 2px 6px; }
+.cat-editor label { display: block; font-size: var(--field-label-size); color: var(--field-label-color); font-weight: var(--field-label-weight); margin: 0 2px 6px; }
 .cat-editor .cat-name-input { width: 100%; padding: 12px 14px; font-size: 1.05rem; font-family: var(--cat-font-round); font-weight: 600; color: var(--cat-text); background: var(--cat-surface); border: 1px solid var(--cat-border); border-radius: 12px; outline: none; margin-bottom: 18px; }
 .cat-editor .cat-name-input:focus { border-color: var(--cat-accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--cat-accent) 22%, transparent); }
 /* Ingredients: ONE framed list, one row per ingredient, closed by a live Total —
@@ -443,7 +443,7 @@ body.cat-zoom-lock { overflow: hidden; }
 .cat-loss-field { margin-top: 14px; }
 .cat-loss-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .cat-loss-cell { display: block; min-width: 0; }
-.cat-loss-label { display: block; font-size: .78rem; color: var(--cat-text-2); margin-bottom: 6px; }
+.cat-loss-label { display: block; font-size: var(--field-label-size); color: var(--field-label-color); font-weight: var(--field-label-weight); margin-bottom: 6px; }
 .cat-loss-row { display: flex; align-items: center; gap: 8px; }
 .cat-loss-input {
   width: 100%;
@@ -1141,7 +1141,7 @@ body.cat-zoom-lock { overflow: hidden; }
 
 .lab-size-custom { display: flex; gap: 10px; margin-bottom: 12px; }
 .lab-size-field { flex: 1; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-.lab-size-field-name { font-size: .78rem; color: var(--cat-text-2); }
+.lab-size-field-name { font-size: var(--field-label-size); color: var(--field-label-color); font-weight: var(--field-label-weight); }
 /* ⚠️ A flex row on the row AND on its two children: an inline box would sit the
    state pill on the text baseline, about 2px low. The commonest bug in this app. */
 

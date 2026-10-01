@@ -71,12 +71,9 @@
 .auth-form { display: flex; flex-direction: column; }
 
 .auth-label {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  font-weight: 500;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--text-4);
+  font-size: var(--field-label-size);
+  font-weight: var(--field-label-weight);
+  color: var(--field-label-color);
   margin-bottom: 6px;
 }
 

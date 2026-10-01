@@ -316,8 +316,8 @@ input.pas-quick:focus {
   gap: 12px; margin-bottom: 10px;
 }
 .pas-editor-label {
-  font-size: 10px; font-family: var(--pas-font-mono); letter-spacing: 0.12em;
-  text-transform: uppercase; color: var(--pas-text-3);
+  font-size: var(--field-label-size); font-weight: var(--field-label-weight);
+  color: var(--field-label-color);
 }
 .pas-editor-count { font-size: 13px; color: var(--pas-text-3); }
 

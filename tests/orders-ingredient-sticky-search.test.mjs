@@ -11,8 +11,8 @@ const js = readFileSync(new URL('../js/orders/ingredient-list.js', import.meta.u
 const offset = readFileSync(new URL('../js/orders/sticky-offset.js', import.meta.url), 'utf8');
 const css = readFileSync(new URL('../orders.css', import.meta.url), 'utf8');
 const rule = sel => {
-  const esc = sel.replace(/[.*+?^${}()|[\]\>]/g, '\$&');
-  const m = css.match(new RegExp(`(?:^|\n)${esc} \{([^}]*)\}`));
+  const esc = sel.replace(/[.*+?^${}()|[\]\\>]/g, '\\$&');
+  const m = css.match(new RegExp(`(?:^|\\n)${esc} \\{([^}]*)\\}`));
   assert.ok(m, `${sel} rule missing from orders.css`);
   return m[1];
 };

@@ -281,6 +281,19 @@
   /* The figures in a number box: «Mise Numbers» (digits only, above), everything else
      in the app's own face. */
   --font-numbers: 'Mise Numbers', 'Manrope', system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+
+  /* ── The name of a field (Federico, 1 Oct 2026) ──────────────────────────
+     «tutti i nomi delle caselle in grassetto, leggermente più grandi e visibili del
+     contenuto delle caselle» — in the whole app, so ONE definition. ⚠️ EVERY CLASS THAT
+     NAMES AN INPUT, SELECT OR TEXTAREA TAKES THESE THREE, and none keeps a size, weight
+     or colour of its own (tests/field-label-tokens.test.mjs lists them). The size is one
+     step above the largest text a box holds: boxes type at 15px, and 16px where iOS would
+     otherwise zoom the page on focus, so 17px reads larger on both. Sentence case, never
+     the small uppercase mono of a group title: a heading names a SECTION, not a box.
+     The colour is the full text colour, as dark as the content it names. */
+  --field-label-size: 17px;
+  --field-label-weight: 700;
+  --field-label-color: var(--text);
 }
 
 /* ⚠️ EVERY BOX A NUMBER IS TYPED INTO, IN ONE RULE — and `!important` on purpose. Each
@@ -1464,7 +1477,7 @@ body[data-card="suppliers"] .app-header {
   padding: 12px 16px 14px;
   border-top: 1px solid var(--border);
 }
-.set-label { font-size: 13px; font-weight: 600; color: var(--text-2); }
+.set-label { font-size: var(--field-label-size); font-weight: var(--field-label-weight); color: var(--field-label-color); }
 .set-seg {
   display: flex;
   flex-wrap: wrap;
