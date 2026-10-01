@@ -33,7 +33,7 @@ const ING = [
   { id: 'bacon', name: 'Bacon', supplierId: 's1' },
   { id: 'milk', name: 'Milk', supplierId: 's1' },
 ];
-const SUPPLIER = { id: 's1', name: 'Brakes' };
+const SUPPLIER = { id: 's1', name: 'Cielo' };
 
 // ── 1. confirmedEntries — the rule itself ────────────────────────────────────
 

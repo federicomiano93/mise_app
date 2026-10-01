@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 import { buildOrderMessage } from '../js/orders/order-text.js';
 
 const withoutPrice = [{
-  supplierName: 'Salvo',
+  supplierName: 'Alba',
   items: [
     { name: 'Flour', weight: '25kg', qty: 3 },
     { name: 'Bacon', weight: '2.27kg', qty: 5 },
@@ -17,7 +17,7 @@ const withoutPrice = [{
 }];
 
 const withPrice = [{
-  supplierName: 'Salvo',
+  supplierName: 'Alba',
   items: [
     { name: 'Flour', weight: '25kg', qty: 3, priceUnit: 'kg', pricePerUnit: 1.8, vatRate: 4 },
     { name: 'Bacon', weight: '2.27kg', qty: 5, priceUnit: 'kg', pricePerUnit: 9.5, vatRate: 20 },

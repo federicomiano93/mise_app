@@ -21,14 +21,14 @@ import {
   wholeNumber, changedEntries, changedDays,
 } from '../js/orders/archive.js';
 
-const SALVO = { id: 'salvo', name: 'Salvo' };
-const BAKO = { id: 'bako', name: 'Bako' };
+const ALBA = { id: 'alba', name: 'Alba' };
+const ETNA = { id: 'etna', name: 'Etna' };
 
 const INGREDIENTS = [
-  { id: 'flour', name: 'Flour uniqua blue', supplierId: 'salvo' },
-  { id: 'semola', name: 'Semola', supplierId: 'salvo' },
-  { id: 'oldbag', name: 'Discontinued bag', supplierId: 'salvo', active: false },
-  { id: 'nutella', name: 'Nutella 3kg', supplierId: 'bako' },
+  { id: 'flour', name: 'Flour uniqua blue', supplierId: 'alba' },
+  { id: 'semola', name: 'Semola', supplierId: 'alba' },
+  { id: 'oldbag', name: 'Discontinued bag', supplierId: 'alba', active: false },
+  { id: 'nutella', name: 'Nutella 3kg', supplierId: 'etna' },
 ];
 
 const NOW = new Date(2026, 6, 13, 9, 0);
@@ -118,27 +118,27 @@ test('a colleague\'s newer quantity is never re-asserted at this phone\'s stale 
 
 test('only the day stamps that moved are sent', () => {
   assert.deepEqual(
-    changedDays({ salvo: '2026-08-05', bako: '2026-07-20' }, { bako: '2026-07-20' }),
-    { salvo: '2026-08-05' });
-  assert.deepEqual(changedDays({ bako: '2026-07-20' }, { bako: '2026-07-20' }), {});
+    changedDays({ alba: '2026-08-05', etna: '2026-07-20' }, { etna: '2026-07-20' }),
+    { alba: '2026-08-05' });
+  assert.deepEqual(changedDays({ etna: '2026-07-20' }, { etna: '2026-07-20' }), {});
 });
 
 test('historyDocId is the day and the supplier', () => {
-  assert.equal(historyDocId('2026-07-13', 'salvo'), '2026-07-13_salvo');
+  assert.equal(historyDocId('2026-07-13', 'alba'), '2026-07-13_alba');
 });
 
 test('ingredientsOf hides deactivated products by default, but can list them all', () => {
-  assert.deepEqual(ingredientsOf('salvo', INGREDIENTS).map(i => i.id), ['flour', 'semola']);
+  assert.deepEqual(ingredientsOf('alba', INGREDIENTS).map(i => i.id), ['flour', 'semola']);
   assert.deepEqual(
-    ingredientsOf('salvo', INGREDIENTS, { activeOnly: false }).map(i => i.id),
+    ingredientsOf('alba', INGREDIENTS, { activeOnly: false }).map(i => i.id),
     ['flour', 'semola', 'oldbag'],
   );
 });
 
 test('supplierHasItems is about ORDERED quantities, not stock readings', () => {
-  assert.equal(supplierHasItems('salvo', INGREDIENTS, { flour: { qty: 3, stock: 0 } }), true);
-  assert.equal(supplierHasItems('salvo', INGREDIENTS, { flour: { qty: 0, stock: 9 } }), false);
-  assert.equal(supplierHasItems('salvo', INGREDIENTS, {}), false);
+  assert.equal(supplierHasItems('alba', INGREDIENTS, { flour: { qty: 3, stock: 0 } }), true);
+  assert.equal(supplierHasItems('alba', INGREDIENTS, { flour: { qty: 0, stock: 9 } }), false);
+  assert.equal(supplierHasItems('alba', INGREDIENTS, {}), false);
 });
 
 test('the archive holds ONLY that supplier\'s products', () => {
@@ -146,19 +146,19 @@ test('the archive holds ONLY that supplier\'s products', () => {
     flour: { qty: 4, stock: 1 },
     nutella: { qty: 7, stock: 2 }, // another supplier — must not leak in
   };
-  const record = buildSupplierArchive({ supplier: SALVO, ingredients: INGREDIENTS, entries, date: '2026-07-13', now: NOW });
+  const record = buildSupplierArchive({ supplier: ALBA, ingredients: INGREDIENTS, entries, date: '2026-07-13', now: NOW });
 
   assert.deepEqual(record.quantities, { flour: 4 });
   assert.deepEqual(record.stock, { flour: 1 });
-  assert.equal(record.supplierId, 'salvo');
-  assert.equal(record.supplierName, 'Salvo'); // frozen: survives a rename or a delete
+  assert.equal(record.supplierId, 'alba');
+  assert.equal(record.supplierName, 'Alba'); // frozen: survives a rename or a delete
   assert.equal(record.date, '2026-07-13');
   assert.equal(record.createdAt, NOW.toISOString());
 });
 
 test('the archive uses the day it is GIVEN, so a forgotten order files under its own day', () => {
   const record = buildSupplierArchive({
-    supplier: SALVO, ingredients: INGREDIENTS,
+    supplier: ALBA, ingredients: INGREDIENTS,
     entries: { flour: { qty: 4, stock: 0 } },
     date: '2026-07-12', // yesterday — the day the operator actually typed it
     now: NOW,           // ...even though it is being saved today
@@ -168,7 +168,7 @@ test('the archive uses the day it is GIVEN, so a forgotten order files under its
 
 test('a row with stock but nothing ordered is NOT an order (it would ratchet par upward)', () => {
   const record = buildSupplierArchive({
-    supplier: SALVO, ingredients: INGREDIENTS,
+    supplier: ALBA, ingredients: INGREDIENTS,
     entries: { flour: { qty: 4, stock: 1 }, semola: { qty: 0, stock: 9 } },
     date: '2026-07-13', now: NOW,
   });
@@ -180,17 +180,17 @@ test('a row with stock but nothing ordered is NOT an order (it would ratchet par
 
 test('an empty order is no order at all', () => {
   assert.equal(buildSupplierArchive({
-    supplier: SALVO, ingredients: INGREDIENTS, entries: {}, date: '2026-07-13', now: NOW,
+    supplier: ALBA, ingredients: INGREDIENTS, entries: {}, date: '2026-07-13', now: NOW,
   }), null);
   assert.equal(buildSupplierArchive({
-    supplier: SALVO, ingredients: INGREDIENTS,
+    supplier: ALBA, ingredients: INGREDIENTS,
     entries: { flour: { qty: 0, stock: 5 } }, date: '2026-07-13', now: NOW,
   }), null);
 });
 
 test('junk quantities are clamped, never NaN or negative', () => {
   const record = buildSupplierArchive({
-    supplier: SALVO, ingredients: INGREDIENTS,
+    supplier: ALBA, ingredients: INGREDIENTS,
     entries: { flour: { qty: '4.6', stock: -3 }, semola: { qty: 'abc', stock: 'x' } },
     date: '2026-07-13', now: NOW,
   });
@@ -200,12 +200,12 @@ test('junk quantities are clamped, never NaN or negative', () => {
 
 test('a second order the same day ADDS to the first — nothing is ever lost', () => {
   const first = buildSupplierArchive({
-    supplier: SALVO, ingredients: INGREDIENTS,
+    supplier: ALBA, ingredients: INGREDIENTS,
     entries: { flour: { qty: 4, stock: 1 } }, date: '2026-07-13', now: NOW,
   });
   // "I forgot the semola" — and one more bag of flour.
   const second = buildSupplierArchive({
-    supplier: SALVO, ingredients: INGREDIENTS,
+    supplier: ALBA, ingredients: INGREDIENTS,
     entries: { flour: { qty: 1, stock: 0 }, semola: { qty: 2, stock: 0 } },
     date: '2026-07-13', now: new Date(2026, 6, 13, 15, 0),
   });
@@ -219,7 +219,7 @@ test('a second order the same day ADDS to the first — nothing is ever lost', (
 
 test('merging into nothing is just the new order', () => {
   const incoming = buildSupplierArchive({
-    supplier: SALVO, ingredients: INGREDIENTS,
+    supplier: ALBA, ingredients: INGREDIENTS,
     entries: { flour: { qty: 4, stock: 1 } }, date: '2026-07-13', now: NOW,
   });
   assert.deepEqual(mergeArchives(null, incoming), incoming);
@@ -243,19 +243,19 @@ const LEGACY = {
 test('the old weekly record is recognised and still has a date', () => {
   assert.equal(isLegacyRecord(LEGACY), true);
   assert.equal(recordDate(LEGACY), '2026-07-06');
-  assert.equal(isLegacyRecord({ supplierId: 'salvo', date: '2026-07-13' }), false);
-  assert.equal(recordDate({ supplierId: 'salvo', date: '2026-07-13' }), '2026-07-13');
+  assert.equal(isLegacyRecord({ supplierId: 'alba', date: '2026-07-13' }), false);
+  assert.equal(recordDate({ supplierId: 'alba', date: '2026-07-13' }), '2026-07-13');
 });
 
 test('history groups by day, newest day first, suppliers by name inside a day', () => {
   const groups = groupHistoryByDay([
-    { id: '2026-07-13_salvo', date: '2026-07-13', supplierId: 'salvo', supplierName: 'Salvo', quantities: { flour: 1 } },
+    { id: '2026-07-13_alba', date: '2026-07-13', supplierId: 'alba', supplierName: 'Alba', quantities: { flour: 1 } },
     LEGACY,
-    { id: '2026-07-13_bako', date: '2026-07-13', supplierId: 'bako', supplierName: 'Bako', quantities: { nutella: 1 } },
+    { id: '2026-07-13_etna', date: '2026-07-13', supplierId: 'etna', supplierName: 'Etna', quantities: { nutella: 1 } },
   ]);
 
   assert.deepEqual(groups.map(g => g.date), ['2026-07-13', '2026-07-06']);
-  assert.deepEqual(groups[0].records.map(r => r.supplierName), ['Bako', 'Salvo']);
+  assert.deepEqual(groups[0].records.map(r => r.supplierName), ['Alba', 'Etna']);
   assert.equal(groups[1].records.length, 1);
   assert.equal(isLegacyRecord(groups[1].records[0]), true);
 });
@@ -271,10 +271,10 @@ test('the legacy record sorts as the newest record of its own year, and no furth
   // not obvious, and it decides whether the record shows up at all:
   //   - against a 2026 date it wins, because the ids differ at index 5, where
   //     'W' (0x57) beats any digit. So it reads as the newest record of 2026...
-  assert.ok('2026-W28' > '2026-12-31_salvo');
-  assert.ok('2026-W28' > '2026-07-13_salvo');
+  assert.ok('2026-W28' > '2026-12-31_alba');
+  assert.ok('2026-W28' > '2026-07-13_alba');
   //   - ...but a later YEAR beats it outright (they differ at index 3 first).
-  assert.ok('2027-01-05_salvo' > '2026-W28');
+  assert.ok('2027-01-05_alba' > '2026-W28');
   // Which is why History cannot rely on the window alone to keep old records
   // reachable: it also loads older pages on demand (loadOlderHistory).
 });
@@ -290,9 +290,9 @@ test('the legacy record sorts as the newest record of its own year, and no furth
 //     behind a button and still feeds the suggestion engine.
 
 const WINDOW_DAYS = [
-  { date: '2026-07-31', records: [{ supplierId: 'salvo' }] },
-  { date: '2026-07-17', records: [{ supplierId: 'bako' }] },
-  { date: '2026-07-16', records: [{ supplierId: 'salvo' }, { supplierId: 'bako' }] },
+  { date: '2026-07-31', records: [{ supplierId: 'alba' }] },
+  { date: '2026-07-17', records: [{ supplierId: 'etna' }] },
+  { date: '2026-07-16', records: [{ supplierId: 'alba' }, { supplierId: 'etna' }] },
   { date: '2026-07-09', records: [{ weekStart: '2026-07-09' }] },
 ];
 const WINDOW_NOW = new Date('2026-07-31T09:00:00');
@@ -368,9 +368,9 @@ test('the button counts ORDERS, not days', () => {
 // ids — and History exists to answer "what did I order", which an id cannot.
 
 test('an order records what each item was called that day', () => {
-  const ingredients = [{ id: 'flour', name: 'Flour uniqua blue', weight: '25kg', supplierId: 'salvo' }];
+  const ingredients = [{ id: 'flour', name: 'Flour uniqua blue', weight: '25kg', supplierId: 'alba' }];
   const record = buildSupplierArchive({
-    supplier: SALVO, ingredients,
+    supplier: ALBA, ingredients,
     entries: { flour: { qty: 4, stock: 1 } },
     date: '2026-07-13', now: NOW,
   });
@@ -379,7 +379,7 @@ test('an order records what each item was called that day', () => {
 
 test('only ORDERED items are named — the same rows quantities holds', () => {
   const record = buildSupplierArchive({
-    supplier: SALVO, ingredients: INGREDIENTS,
+    supplier: ALBA, ingredients: INGREDIENTS,
     entries: { flour: { qty: 4, stock: 1 }, semola: { qty: 0, stock: 9 } },
     date: '2026-07-13', now: NOW,
   });
@@ -426,7 +426,7 @@ test('ingredientLabel joins name and weight, and copes with either missing', () 
 //     test below that says so in as many words.
 
 test('clearing takes the quantity and leaves the stock reading', () => {
-  const paths = quantityPathsFor(['salvo'], INGREDIENTS);
+  const paths = quantityPathsFor(['alba'], INGREDIENTS);
   assert.ok(paths.includes('entries.flour.qty'));
   assert.ok(!paths.includes('entries.flour'), 'the whole row must not be removed');
   assert.ok(!paths.some(p => p.endsWith('.stock')), 'no stock reading may be cleared');
@@ -434,32 +434,32 @@ test('clearing takes the quantity and leaves the stock reading', () => {
 
 test('the day stamp goes with the quantities', () => {
   // With nothing left to order, "these rows were typed on Monday" describes nothing.
-  assert.ok(quantityPathsFor(['salvo'], INGREDIENTS).includes('days.salvo'));
+  assert.ok(quantityPathsFor(['alba'], INGREDIENTS).includes('days.alba'));
 });
 
 test('a deactivated product is cleared too', () => {
   // Invisible on screen but still in the document: skipping it would leave a
   // quantity nobody can see or remove.
-  assert.ok(quantityPathsFor(['salvo'], INGREDIENTS).includes('entries.oldbag.qty'));
+  assert.ok(quantityPathsFor(['alba'], INGREDIENTS).includes('entries.oldbag.qty'));
 });
 
 test('only the chosen suppliers are touched', () => {
-  const paths = quantityPathsFor(['salvo'], INGREDIENTS);
-  assert.ok(!paths.some(p => p.includes('nutella')), "Bako's row must survive");
-  assert.ok(!paths.includes('days.bako'));
+  const paths = quantityPathsFor(['alba'], INGREDIENTS);
+  assert.ok(!paths.some(p => p.includes('nutella')), "Etna's row must survive");
+  assert.ok(!paths.includes('days.etna'));
 });
 
 test('several suppliers come back as ONE list, for one write', () => {
-  const paths = quantityPathsFor(['salvo', 'bako'], INGREDIENTS);
+  const paths = quantityPathsFor(['alba', 'etna'], INGREDIENTS);
   assert.ok(paths.includes('entries.flour.qty'));
   assert.ok(paths.includes('entries.nutella.qty'));
-  assert.ok(paths.includes('days.salvo'));
-  assert.ok(paths.includes('days.bako'));
+  assert.ok(paths.includes('days.alba'));
+  assert.ok(paths.includes('days.etna'));
 });
 
 test('NOTHING in the list can reach the order history', () => {
   // The guarantee Federico asked for, pinned: every path is inside the draft.
-  const paths = quantityPathsFor(['salvo', 'bako'], INGREDIENTS);
+  const paths = quantityPathsFor(['alba', 'etna'], INGREDIENTS);
   paths.forEach(p => {
     assert.ok(/^(entries|days)\./.test(p), `unexpected path: ${p}`);
   });
@@ -468,5 +468,5 @@ test('NOTHING in the list can reach the order history', () => {
 test('nothing to clear produces nothing', () => {
   assert.deepEqual(quantityPathsFor([], INGREDIENTS), []);
   assert.deepEqual(quantityPathsFor(null, INGREDIENTS), []);
-  assert.deepEqual(quantityPathsFor(['salvo'], []), ['days.salvo']);
+  assert.deepEqual(quantityPathsFor(['alba'], []), ['days.alba']);
 });

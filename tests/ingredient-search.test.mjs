@@ -17,16 +17,16 @@ import {
   normalizeText, letterOf, matchesQuery, flatRows, orderSummary, filterSuppliers,
 } from '../js/orders/ingredient-search.js';
 
-const SALVO = { id: 'salvo', name: 'Salvo', active: true };
-const BRAKES = { id: 'brakes', name: 'Brakes', active: true };
-const SUPPLIERS = [BRAKES, SALVO];
+const ALBA = { id: 'alba', name: 'Alba', active: true };
+const CIELO = { id: 'cielo', name: 'Cielo', active: true };
+const SUPPLIERS = [CIELO, ALBA];
 
-const BACON = { id: 'bacon', name: 'Bacon', weight: '2.27kg', brand: 'Denny', supplierId: 'brakes' };
-const MOZZARELLA = { id: 'mozza', name: 'Mozzarella', weight: '5kg', supplierId: 'salvo' };
-const ALMONDS = { id: 'almonds', name: 'Almond Flakes', weight: '1kg', supplierId: 'salvo' };
+const BACON = { id: 'bacon', name: 'Bacon', weight: '2.27kg', brand: 'Denny', supplierId: 'cielo' };
+const MOZZARELLA = { id: 'mozza', name: 'Mozzarella', weight: '5kg', supplierId: 'alba' };
+const ALMONDS = { id: 'almonds', name: 'Almond Flakes', weight: '1kg', supplierId: 'alba' };
 const PAPER = { id: 'paper', name: 'Baking Paper', supplierId: NO_SUPPLIER_ID };
 const GONE = { id: 'gone', name: 'Ghost Item', supplierId: 'deleted-supplier' };
-const RETIRED = { id: 'retired', name: 'Old Stock', supplierId: 'salvo', active: false };
+const RETIRED = { id: 'retired', name: 'Old Stock', supplierId: 'alba', active: false };
 
 // ── no-supplier: where an ingredient belongs ─────────────────────────────────
 
@@ -35,12 +35,12 @@ test('the pseudo-supplier has no order days, so it never joins "order today"', (
   assert.equal(NO_SUPPLIER.name, 'No supplier');
   assert.deepEqual(NO_SUPPLIER.orderDays, []);
   assert.ok(isNoSupplier(NO_SUPPLIER_ID));
-  assert.ok(!isNoSupplier('salvo'));
+  assert.ok(!isNoSupplier('alba'));
 });
 
 test('an ingredient whose supplier was DELETED is filed under No supplier', () => {
   const resolved = resolveSuppliers([BACON, GONE], SUPPLIERS, true);
-  assert.equal(resolved.find(i => i.id === 'bacon').supplierId, 'brakes');
+  assert.equal(resolved.find(i => i.id === 'bacon').supplierId, 'cielo');
   assert.equal(resolved.find(i => i.id === 'gone').supplierId, NO_SUPPLIER_ID);
 });
 
@@ -52,7 +52,7 @@ test('an ingredient saved WITHOUT a supplier stays under No supplier', () => {
 // The trap: suppliers and ingredients arrive in separate Firestore snapshots.
 test('nothing is reclassified until the suppliers have actually arrived', () => {
   const resolved = resolveSuppliers([BACON, MOZZARELLA], [], false);
-  assert.deepEqual(resolved.map(i => i.supplierId), ['brakes', 'salvo']);
+  assert.deepEqual(resolved.map(i => i.supplierId), ['cielo', 'alba']);
   // …and the stored objects are handed back untouched, not copied and rewritten.
   assert.equal(resolved[0], BACON);
 });
@@ -64,16 +64,16 @@ test('resolving never mutates the stored ingredient', () => {
 });
 
 test('No supplier appears only when something is filed under it, and always last', () => {
-  const withNone = orderSuppliers([BRAKES, SALVO], resolveSuppliers([BACON, PAPER], SUPPLIERS, true));
-  assert.deepEqual(withNone.map(s => s.name), ['Brakes', 'Salvo', 'No supplier']);
+  const withNone = orderSuppliers([CIELO, ALBA], resolveSuppliers([BACON, PAPER], SUPPLIERS, true));
+  assert.deepEqual(withNone.map(s => s.name), ['Cielo', 'Alba', 'No supplier']);
 
-  const withoutNone = orderSuppliers([BRAKES, SALVO], resolveSuppliers([BACON], SUPPLIERS, true));
-  assert.deepEqual(withoutNone.map(s => s.name), ['Brakes', 'Salvo']);
+  const withoutNone = orderSuppliers([CIELO, ALBA], resolveSuppliers([BACON], SUPPLIERS, true));
+  assert.deepEqual(withoutNone.map(s => s.name), ['Cielo', 'Alba']);
 });
 
 test('a DEACTIVATED no-supplier ingredient does not conjure up the card', () => {
   const hidden = { id: 'hidden', name: 'Hidden', supplierId: NO_SUPPLIER_ID, active: false };
-  assert.deepEqual(orderSuppliers([SALVO], [hidden]).map(s => s.name), ['Salvo']);
+  assert.deepEqual(orderSuppliers([ALBA], [hidden]).map(s => s.name), ['Alba']);
 });
 
 // ── normalizeText / letterOf ─────────────────────────────────────────────────
@@ -93,7 +93,7 @@ test('a row is filed under its first letter; anything else under #', () => {
 
 // ── matchesQuery ─────────────────────────────────────────────────────────────
 
-const ROW = { label: 'Bacon 2.27kg', ingredient: { brand: 'Denny' }, supplierName: 'Brakes' };
+const ROW = { label: 'Bacon 2.27kg', ingredient: { brand: 'Denny' }, supplierName: 'Cielo' };
 
 test('an empty search matches everything', () => {
   assert.ok(matchesQuery(ROW, ''));
@@ -104,30 +104,30 @@ test('the search looks at name, weight, brand and supplier', () => {
   assert.ok(matchesQuery(ROW, 'bac'));       // name
   assert.ok(matchesQuery(ROW, '2.27'));      // weight, part of the label
   assert.ok(matchesQuery(ROW, 'denny'));     // brand
-  assert.ok(matchesQuery(ROW, 'BRAKES'));    // supplier, any case
-  assert.ok(!matchesQuery(ROW, 'salvo'));
+  assert.ok(matchesQuery(ROW, 'CIELO'));    // supplier, any case
+  assert.ok(!matchesQuery(ROW, 'alba'));
 });
 
 // ── filterSuppliers ──────────────────────────────────────────────────────────
 
-const CATERITE = { id: 'cat', name: 'Caterite', category: 'Dry goods' };
-const CONTINENTAL = { id: 'con', name: 'Continental wine & food ltd.', category: 'Deli' };
-const SUPPLIER_LIST = [BRAKES, CATERITE, CONTINENTAL, SALVO];
+const BORGO = { id: 'cat', name: 'Borgo', category: 'Dry goods' };
+const DELTA = { id: 'con', name: 'Delta wine & food ltd.', category: 'Deli' };
+const SUPPLIER_LIST = [CIELO, BORGO, DELTA, ALBA];
 
 test('an empty search returns every supplier, in the order given', () => {
   assert.deepEqual(filterSuppliers(SUPPLIER_LIST, '').map(s => s.name),
-    ['Brakes', 'Caterite', 'Continental wine & food ltd.', 'Salvo']);
+    ['Cielo', 'Borgo', 'Delta wine & food ltd.', 'Alba']);
   assert.deepEqual(filterSuppliers(SUPPLIER_LIST, '   ').length, 4);
 });
 
 test('it matches on the supplier name, part-way through and in any case', () => {
-  assert.deepEqual(filterSuppliers(SUPPLIER_LIST, 'ter').map(s => s.name), ['Caterite']);
-  assert.deepEqual(filterSuppliers(SUPPLIER_LIST, 'SALVO').map(s => s.name), ['Salvo']);
+  assert.deepEqual(filterSuppliers(SUPPLIER_LIST, 'org').map(s => s.name), ['Borgo']);
+  assert.deepEqual(filterSuppliers(SUPPLIER_LIST, 'ALBA').map(s => s.name), ['Alba']);
 });
 
 test('it matches the category too — it is written on the row, so it must be searchable', () => {
   assert.deepEqual(filterSuppliers(SUPPLIER_LIST, 'deli').map(s => s.name),
-    ['Continental wine & food ltd.']);
+    ['Delta wine & food ltd.']);
 });
 
 test('"no supplier" finds the pseudo-supplier, as it does in the ingredient list', () => {
@@ -159,7 +159,7 @@ const ALL = [BACON, MOZZARELLA, ALMONDS, PAPER, GONE, RETIRED];
 
 function rowsFor(query) {
   const ingredients = resolveSuppliers(ALL, SUPPLIERS, true);
-  const suppliers = orderSuppliers([BRAKES, SALVO], ingredients);
+  const suppliers = orderSuppliers([CIELO, ALBA], ingredients);
   return flatRows({ ingredients, suppliers, query });
 }
 
@@ -178,7 +178,7 @@ test('a deactivated ingredient is left out entirely', () => {
 
 test('an ingredient of a DEACTIVATED supplier is hidden, exactly as on the cards', () => {
   const ingredients = resolveSuppliers([BACON, MOZZARELLA], SUPPLIERS, true);
-  const { rows, total } = flatRows({ ingredients, suppliers: [SALVO], query: '' });
+  const { rows, total } = flatRows({ ingredients, suppliers: [ALBA], query: '' });
   assert.deepEqual(rows.map(r => r.label), ['Mozzarella 5kg']);
   assert.equal(total, 1);
 });
@@ -194,7 +194,7 @@ test('the letters follow the SEARCH, they are not a stale copy of the full list'
 });
 
 test('searching a supplier name lists what is bought from them', () => {
-  assert.deepEqual(rowsFor('salvo').rows.map(r => r.label), ['Almond Flakes 1kg', 'Mozzarella 5kg']);
+  assert.deepEqual(rowsFor('alba').rows.map(r => r.label), ['Almond Flakes 1kg', 'Mozzarella 5kg']);
 });
 
 test('searching "no supplier" lists what is bought without one', () => {
@@ -210,7 +210,7 @@ test('the counter has both halves: what is shown and what exists', () => {
 
 test('each row carries the supplier it is filed under, for the line under the name', () => {
   const byId = Object.fromEntries(rowsFor('').rows.map(r => [r.ingredient.id, r.supplierName]));
-  assert.equal(byId.bacon, 'Brakes');
+  assert.equal(byId.bacon, 'Cielo');
   assert.equal(byId.paper, 'No supplier');
   assert.equal(byId.gone, 'No supplier');
 });
@@ -224,7 +224,7 @@ test('nothing at all does not throw', () => {
 
 function filtered(only, query = '') {
   const ingredients = resolveSuppliers(ALL, SUPPLIERS, true);
-  const suppliers = orderSuppliers([BRAKES, SALVO], ingredients);
+  const suppliers = orderSuppliers([CIELO, ALBA], ingredients);
   return flatRows({ ingredients, suppliers, query, only });
 }
 
@@ -237,7 +237,7 @@ test('the filter narrows the list to the given ids, and the total still counts a
 test('the search combines with the filter instead of replacing it', () => {
   const only = new Set(['bacon', 'paper', 'mozza']);
   assert.deepEqual(filtered(only, 'bak').rows.map(r => r.label), ['Baking Paper']);
-  assert.deepEqual(filtered(only, 'salvo').rows.map(r => r.label), ['Mozzarella 5kg']);
+  assert.deepEqual(filtered(only, 'alba').rows.map(r => r.label), ['Mozzarella 5kg']);
 });
 
 test('an id in the filter that no longer exists is simply not shown', () => {
@@ -253,14 +253,14 @@ test('the letters follow the filtered list too', () => {
 
 function summaryFor(entries) {
   const ingredients = resolveSuppliers(ALL, SUPPLIERS, true);
-  const suppliers = orderSuppliers([BRAKES, SALVO], ingredients);
+  const suppliers = orderSuppliers([CIELO, ALBA], ingredients);
   return orderSummary({ ingredients, suppliers, entries });
 }
 
 test('the summary counts the items and the suppliers behind them', () => {
   const s = summaryFor({ bacon: { qty: 4 }, mozza: { qty: 2 }, almonds: { qty: 1 } });
   assert.equal(s.itemCount, 3);
-  assert.equal(s.supplierCount, 2, 'Almonds and Mozzarella are both Salvo');
+  assert.equal(s.supplierCount, 2, 'Almonds and Mozzarella are both Alba');
   assert.deepEqual(s.ids.slice().sort(), ['almonds', 'bacon', 'mozza']);
 });
 
@@ -287,8 +287,8 @@ test('a deactivated ingredient, or one of a hidden supplier, is out of the summa
   assert.equal(summaryFor({ retired: { qty: 5 } }).itemCount, 0);
 
   const ingredients = resolveSuppliers([BACON, MOZZARELLA], SUPPLIERS, true);
-  const s = orderSummary({ ingredients, suppliers: [SALVO], entries: { bacon: { qty: 4 }, mozza: { qty: 1 } } });
-  assert.deepEqual(s.ids, ['mozza'], 'Brakes is not in the supplier list, so Bacon is not orderable');
+  const s = orderSummary({ ingredients, suppliers: [ALBA], entries: { bacon: { qty: 4 }, mozza: { qty: 1 } } });
+  assert.deepEqual(s.ids, ['mozza'], 'Cielo is not in the supplier list, so Bacon is not orderable');
 });
 
 test('an empty order summarises to zero without throwing', () => {

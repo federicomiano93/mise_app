@@ -7,7 +7,7 @@
 // most recent. A bug here would suggest the wrong amount to order.
 //
 // The window counts ORDERS, not weeks: an order is one day and one supplier, and
-// Caterite is ordered almost daily while Salvo is ordered on Mondays. Records
+// Borgo is ordered almost daily while Alba is ordered on Mondays. Records
 // written by the old weekly model (no `date`, only `weekStart`, every supplier
 // merged) still count as one order each.
 
@@ -20,7 +20,7 @@ import {
 // One order of `id`: ordered `qty`, had `stock` on hand, placed on `date`.
 const order = (date, id, qty, stock) => ({
   date,
-  supplierId: 'salvo',
+  supplierId: 'alba',
   quantities: { [id]: qty },
   stock: { [id]: stock },
 });
@@ -88,7 +88,7 @@ test('a stock reading with nothing ordered does NOT count as an order', () => {
     order('2026-07-06', 'flour', 10, 0),
     order('2026-07-07', 'flour', 10, 0),
     order('2026-07-08', 'flour', 10, 0),
-    { date: '2026-07-09', supplierId: 'salvo', quantities: {}, stock: { flour: 40 } },
+    { date: '2026-07-09', supplierId: 'alba', quantities: {}, stock: { flour: 40 } },
   ];
   assert.deepEqual(computeSuggestion('flour', 0, history), { active: false, ordersRemaining: 1 });
 });

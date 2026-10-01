@@ -11,7 +11,7 @@ import assert from 'node:assert/strict';
 import { supplierSummary } from '../js/orders/order-summary.js';
 import { buildOrderMessage, orderedItems } from '../js/orders/order-text.js';
 
-const SUPPLIER = { id: 's1', name: 'Salvo' };
+const SUPPLIER = { id: 's1', name: 'Alba' };
 
 const INGREDIENTS = [
   { id: 'flour', name: 'Flour', weight: '25kg' },
@@ -30,7 +30,7 @@ const ENTRIES = {
 
 test('only rows with qty > 0 appear, sorted by label — same rule as the message', () => {
   const { name, lines } = supplierSummary(SUPPLIER, INGREDIENTS, ENTRIES);
-  assert.equal(name, 'Salvo');
+  assert.equal(name, 'Alba');
   assert.deepEqual(lines, [
     { label: 'Bacon 2.27kg', qty: 5 },
     { label: 'Flour 25kg', qty: 3 },
@@ -39,7 +39,7 @@ test('only rows with qty > 0 appear, sorted by label — same rule as the messag
 });
 
 test('empty entries -> empty lines, never a crash', () => {
-  const empty = { name: 'Salvo', lines: [], costLines: [], totals: {
+  const empty = { name: 'Alba', lines: [], costLines: [], totals: {
     net: 0, vatByRate: {}, gross: 0, missingPrice: 0, missingVat: 0, costed: 0,
   } };
   assert.deepEqual(supplierSummary(SUPPLIER, INGREDIENTS, {}), empty);
@@ -79,7 +79,7 @@ test('the summary lines equal the message section lines — exactly, in order', 
   const items = orderedItems(INGREDIENTS, ENTRIES);
   const message = buildOrderMessage([{ supplierName: SUPPLIER.name, items }]);
 
-  // `${title}\n\n*Salvo*\n- line\n- line…` — the section after the title,
+  // `${title}\n\n*Alba*\n- line\n- line…` — the section after the title,
   // with its bold supplier heading dropped.
   const section = message.split('\n\n')[1];
   const messageLines = section.split('\n').slice(1);

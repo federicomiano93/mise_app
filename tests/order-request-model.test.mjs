@@ -24,8 +24,8 @@ import {
 const NOW = new Date('2026-08-14T09:00:00Z');
 
 const SUPPLIERS = [
-  { id: 's1', name: 'Caterite' },
-  { id: 's2', name: 'Salvo' },
+  { id: 's1', name: 'Borgo' },
+  { id: 's2', name: 'Alba' },
 ];
 
 const INGREDIENTS = [
@@ -74,12 +74,12 @@ test('the names and the supplier are frozen onto the list', () => {
   const req = build({ i1: { qty: 4 }, i3: { qty: 2 } });
   assert.equal(req.names.i1, 'Flour 00 25kg');
   assert.equal(req.supplierOf.i1, 's1');
-  assert.equal(req.supplierNames.s1, 'Caterite');
-  assert.equal(req.supplierNames.s2, 'Salvo');
+  assert.equal(req.supplierNames.s1, 'Borgo');
+  assert.equal(req.supplierNames.s2, 'Alba');
 });
 
 test('a supplier that contributed nothing is not named at all', () => {
-  // Salvo was ticked, but its only row is at 0 — an empty heading on the
+  // Alba was ticked, but its only row is at 0 — an empty heading on the
   // manager's screen would be a supplier to chase for nothing.
   const req = build({ i1: { qty: 4 }, i3: { qty: 0 } });
   assert.deepEqual(Object.keys(req.supplierNames), ['s1']);
@@ -184,10 +184,10 @@ test('only unfinished lists are waiting, newest first', () => {
 test('the list is regrouped under its suppliers, with a count each', () => {
   const req = { ...build({ i1: { qty: 4 }, i2: { qty: 1 }, i3: { qty: 2 } }), done: { i1: true } };
   const groups = groupRequest(req, {});
-  const caterite = groups.find(g => g.supplierId === 's1');
-  assert.equal(caterite.supplierName, 'Caterite');
-  assert.equal(caterite.total, 2);
-  assert.equal(caterite.doneCount, 1);
+  const borgo = groups.find(g => g.supplierId === 's1');
+  assert.equal(borgo.supplierName, 'Borgo');
+  assert.equal(borgo.total, 2);
+  assert.equal(borgo.doneCount, 1);
   assert.equal(groups.find(g => g.supplierId === 's2').total, 1);
 });
 

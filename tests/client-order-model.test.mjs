@@ -176,16 +176,16 @@ test('a client id may not contain an underscore', () => {
   // ⚠️ The security rules recover the client from `{date}_{clientId}` by splitting on
   // the underscore. One inside the id would split into three and compare the wrong
   // half — a rule that fails open or closed depending on the customer's name.
-  assert.equal(isValidOrderClientId('c-clubfish'), true);
-  assert.equal(isValidOrderClientId('c-club_fish'), false);
+  assert.equal(isValidOrderClientId('c-farofish'), true);
+  assert.equal(isValidOrderClientId('c-faro_fish'), false);
   assert.equal(isValidOrderClientId(''), false);
   assert.equal(isValidOrderClientId('-leading'), false);
   assert.equal(isValidOrderClientId('a'.repeat(65)), false);
 });
 
 test('an order id is built in one place, and refuses to guess', () => {
-  assert.equal(orderDocId('2026-08-11', 'c-clubfish'), '2026-08-11_c-clubfish');
-  assert.throws(() => orderDocId('11-08-2026', 'c-clubfish'), /Invalid order date/);
+  assert.equal(orderDocId('2026-08-11', 'c-farofish'), '2026-08-11_c-farofish');
+  assert.throws(() => orderDocId('11-08-2026', 'c-farofish'), /Invalid order date/);
   assert.throws(() => orderDocId('2026-08-11', 'c_bad'), /Invalid client id/);
 });
 

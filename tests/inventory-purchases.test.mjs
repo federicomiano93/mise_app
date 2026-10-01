@@ -16,7 +16,7 @@ const FLOUR = 'flour';
 const BUTTER = 'butter';
 
 const order = (date, quantities, over = {}) => ({
-  bakery: 'main', date, supplierId: 'salvo', supplierName: 'Salvo',
+  bakery: 'main', date, supplierId: 'alba', supplierName: 'Alba',
   quantities, stock: {}, createdAt: date, updatedAt: date, ...over,
 });
 
@@ -91,7 +91,7 @@ test('every order of the month is added up, per product', () => {
 
 test('two suppliers selling the same product add up — it is one shelf', () => {
   const out = purchasesInMonth([
-    order('2026-09-04', { [FLOUR]: 10 }, { supplierId: 'salvo' }),
+    order('2026-09-04', { [FLOUR]: 10 }, { supplierId: 'alba' }),
     order('2026-09-05', { [FLOUR]: 4 }, { supplierId: 'other' }),
   ], '2026-09');
   assert.deepEqual(out.totals, { [FLOUR]: 14 });
