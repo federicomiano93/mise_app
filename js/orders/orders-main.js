@@ -57,7 +57,7 @@ import { todayISO, dayPhrase, daySpoken, dayWhen, localDayOf, dayLabel } from '.
 import {
   buildOrderMessage, whatsappUrl, itemsFromQuantities, indexById,
 } from './order-text.js';
-import { liveHistoryStart, mergeHistory } from './history-window.js';
+import { liveHistoryStart, mergeHistory, createOlderLoader } from './history-window.js';
 import {
   historyDocId, ingredientsOf, supplierHasItems, ingredientLabel, wholeNumber,
   unitConflicts, unitConflictList,
@@ -103,10 +103,8 @@ const state = {
   // feeds suggestions, deliveries, reminders and every banner, so tapping «Load older
   // orders» can never move a suggested quantity.
   history: [],
-  // Orders from before that window, fetched page by page on request. Shown in History and
-  // looked up by id; never part of any total.
-  olderHistory: [],
-  older: { loading: false, done: false, error: false, cursor: null },
+  // (Orders from before that window live in olderLoader below — fetched on request, shown in
+  // History and looked up by id, never part of any total.)
   historyFrom: '',              // where the live window starts — the older pages end just before it
   requests: [],                 // order lists somebody sent to whoever runs the place
   entries: {},                  // { ingredientId: { qty, stock } } — shared object, mutated in place
@@ -124,6 +122,7 @@ const state = {
   loaded: { suppliers: false, ingredients: false, draft: false },
 };
 
+let olderLoader = null;          // pages of orders older than the live window; made when that listener starts
 let mgmt = null;                // open management panel handle, or null
 let pendingChecked = false;     // the unfinished-order check runs once per page load
 let ordersConfig = normalizeOrdersConfig(null);   // config/orders, mirrored locally — see below
@@ -832,13 +831,21 @@ function refreshDeliveriesBadge(count = lastOwedCount) {
   else btn.removeAttribute('aria-label');
 }
 
+// The paging state of the older orders. Before the live listener has started there is no
+// loader yet: nothing loaded, and the button simply waits.
+function olderState() {
+  return olderLoader ? olderLoader.state()
+    : { loading: false, done: false, error: false, records: [] };
+}
+
 // Live window + the pages loaded on demand — what History lists and what an id lookup
 // searches. Aggregates keep using state.history alone.
 function allHistory() {
-  return mergeHistory(state.history, state.olderHistory);
+  return mergeHistory(state.history, olderState().records);
 }
 
 function renderHistory() {
+  const older = olderState();
   renderHistoryView(
     document.getElementById('history-list'),
     allHistory(),
@@ -850,53 +857,31 @@ function renderHistory() {
       onEdit: openHistoryEditor, onSend: sendRecord, onSendDay: openSendDayScreen,
       onLoadOlder: loadOlderHistory,
     },
-    // Only what is SHOWN is narrowed. state.history stays whole, so the suggestion
-    // engine (which needs 4+ past orders of an ingredient) is untouched by this.
+    // Only what is SHOWN is narrowed: the list is the live window plus any pages loaded on
+    // demand, while state.history stays the live window alone, so the suggestion engine
+    // (which needs 4+ past orders of an ingredient) is untouched by this.
     // The paging state travels in the options on every repaint: a snapshot arriving
     // mid-load must not lose «Loading…» or the pages already loaded.
     {
       historyDays: ordersConfig.historyDays,
-      older: {
-        loading: state.older.loading, done: state.older.done, error: state.older.error,
-      },
+      older: { loading: older.loading, done: older.done, error: older.error },
     },
   );
 }
 
-// «Load older orders»: the next page from before the live window. A failure keeps what was
-// loaded and offers the retry; the legacy weekly record is fetched once, when the pages run
-// out, so it still appears at the very end.
+// «Load older orders»: the next page from before the live window (the paging rules live in
+// createOlderLoader). A failure keeps what was loaded, is announced in History's own status
+// line, and the same button is the retry.
 async function loadOlderHistory() {
-  if (state.older.loading || state.older.done) return;
-  state.older.loading = true;
-  state.older.error = false;
-  renderHistory();
-  try {
-    const page = await getOlderHistory({
-      before: state.historyFrom, cursor: state.older.cursor,
-    });
-    let records = page.records;
-    if (page.done) records = records.concat(await getLegacyHistory());
-    state.olderHistory = mergeHistory(state.olderHistory, records);
-    state.older.cursor = page.cursor;
-    state.older.done = page.done;
-  } catch (err) {
-    console.error('Loading older orders failed:', err);
-    state.older.error = true;
-  } finally {
-    state.older.loading = false;
-    renderHistory();
-  }
+  if (!olderLoader) return;
+  await olderLoader.load();
+  if (olderLoader.state().error) setStatus(t('orders.olderOrdersFailed'), 'error');
 }
 
 // An edit or delete of an order that lives in an older page: the live listener cannot see
 // it, so keep the loaded copy in step after the write SUCCEEDED. `next` null = deleted.
 function patchOlderRecord(id, next) {
-  if (!state.olderHistory.some(r => r && r.id === id)) return;
-  state.olderHistory = next
-    ? state.olderHistory.map(r => (r && r.id === id ? { ...next, bakery: r.bakery, id } : r))
-    : state.olderHistory.filter(r => r && r.id !== id);
-  renderHistory();
+  olderLoader?.patch(id, next);
 }
 
 // ── Sending an order that is already recorded ─────────────────────────────────
@@ -2276,6 +2261,12 @@ async function init() {
   // ⚠️ THE LIVE WINDOW ONLY — see the COST NOTE in firebase-orders.js. The start is kept in
   // state so the older pages end exactly where this listener begins.
   state.historyFrom = liveHistoryStart();
+  olderLoader = createOlderLoader({
+    fetchPage: getOlderHistory,
+    fetchLegacy: getLegacyHistory,
+    before: state.historyFrom,
+    onChange: renderHistory,
+  });
   watchRecentHistory(state.historyFrom, list => {
     applyHistory(list);
     renderReminders();

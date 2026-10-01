@@ -56,3 +56,88 @@ export function historyEmptyKind(hasRecords, older) {
   if (hasRecords) return null;
   return older?.done ? 'none' : 'recent';
 }
+
+// Where the foot of the History list puts things, decided from plain numbers so the
+// placement (and the «a loaded page must be SEEN» rule) can be tested without a DOM.
+//   recentCount   — day sections inside the historyDays window
+//   olderInMemory — day sections parked behind «Show older orders» (in memory already)
+//   showingOlder  — the person has asked to see past the window (kept by history.js)
+//   older         — { loading, done, error } of the on-demand paging
+// -> { empty, days, parkedFoot, note, load }
+//   empty      — null, 'recent' or 'none' (see historyEmptyKind); 'recent' also gets the button
+//   days       — 'recent' (only the window) or 'all' (everything in memory)
+//   parkedFoot — «Show older orders (N)» is drawn
+//   note       — the «No orders in the last N days» line above it
+//   load       — «Load older orders» is drawn, after everything that is in memory
+export function historyFooter({ recentCount, olderInMemory, showingOlder, older }) {
+  const paging = older || { done: true };
+  const hasRecords = (recentCount || 0) + (olderInMemory || 0) > 0;
+  const empty = historyEmptyKind(hasRecords, paging);
+  if (empty) return { empty, days: 'recent', parkedFoot: false, note: false, load: empty === 'recent' };
+
+  const parked = olderInMemory > 0 && !showingOlder;
+  return {
+    empty: null,
+    days: showingOlder ? 'all' : 'recent',
+    parkedFoot: parked,
+    note: parked && !(recentCount > 0),
+    load: !parked && olderFooterState(paging).visible,
+  };
+}
+
+// The paging of orders older than the live window, with the two Firestore reads INJECTED so
+// it can be tested with fakes. `fetchPage({ before, cursor })` -> { records, cursor, done };
+// `fetchLegacy()` -> records. `onChange` is called when a load starts and when it ends (the
+// caller repaints). Failures never clear what was loaded and never move the cursor, so a
+// retry asks for exactly the same page; a legacy failure leaves `done` false and the retry
+// fetches only the legacy record.
+export function createOlderLoader({ fetchPage, fetchLegacy, before, onChange }) {
+  const s = {
+    loading: false, done: false, error: false, cursor: null, pagesDone: false, records: [],
+  };
+  const changed = () => onChange?.();
+
+  async function load() {
+    if (s.loading || s.done) return;
+    s.loading = true;
+    s.error = false;
+    changed();
+    try {
+      if (!s.pagesDone) {
+        const page = await fetchPage({ before, cursor: s.cursor });
+        s.records = mergeHistory(s.records, page.records);
+        s.cursor = page.cursor;
+        s.pagesDone = page.done;
+      }
+      if (s.pagesDone) {
+        s.records = mergeHistory(s.records, await fetchLegacy());
+        s.done = true;
+      }
+    } catch (err) {
+      console.error('Loading older orders failed:', err);
+      s.error = true;
+    } finally {
+      s.loading = false;
+      changed();
+    }
+  }
+
+  // After an edit or delete of a loaded record: the live listener cannot see it. `next`
+  // replaces the record whole (as replaceDoc does); null removes it.
+  function patch(id, next) {
+    if (!s.records.some(r => r && r.id === id)) return false;
+    s.records = next
+      ? s.records.map(r => (r && r.id === id ? { ...next, bakery: r.bakery, id } : r))
+      : s.records.filter(r => r && r.id !== id);
+    changed();
+    return true;
+  }
+
+  return {
+    load,
+    patch,
+    state: () => ({
+      loading: s.loading, done: s.done, error: s.error, cursor: s.cursor, records: s.records,
+    }),
+  };
+}
