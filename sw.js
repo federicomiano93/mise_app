@@ -243,6 +243,7 @@ const ASSETS = [
   './js/orders/send-chooser.js',
   './js/orders/work-week.js',
   './js/orders/archive.js',
+  './js/orders/history-window.js',
   './js/orders/reminders.js',
   './js/orders/reminder-view.js',
   './js/orders/suppliers.js',
