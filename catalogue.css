@@ -446,7 +446,7 @@ body.cat-zoom-lock { overflow: hidden; }
 /* What the dough weighs before the oven and after — the two numbers the loss is
    worked out from. The percentage itself is now READ, not typed. */
 .cat-loss-field { margin-top: 14px; }
-.cat-loss-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.cat-loss-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; align-items: end; }
 .cat-loss-cell { display: block; min-width: 0; }
 .cat-loss-label { display: block; font-size: var(--field-label-size); color: var(--field-label-color); font-weight: var(--field-label-weight); margin-bottom: 6px; }
 .cat-loss-row { display: flex; align-items: center; gap: 8px; }
@@ -1144,7 +1144,7 @@ body.cat-zoom-lock { overflow: hidden; }
    buttons is a second set of paddings and focus rings to keep in step. */
 
 
-.lab-size-custom { display: flex; gap: 10px; margin-bottom: 12px; }
+.lab-size-custom { display: flex; align-items: flex-end; gap: 10px; margin-bottom: 12px; }
 .lab-size-field { flex: 1; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .lab-size-field-name { font-size: var(--field-label-size); color: var(--field-label-color); font-weight: var(--field-label-weight); }
 /* ⚠️ A flex row on the row AND on its two children: an inline box would sit the

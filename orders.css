@@ -1924,7 +1924,11 @@ a.home-reminder {
 .alg-nut-title { margin-top: 14px; font-size: 12px; color: var(--text2); font-weight: 500; }
 /* Two columns on a phone: eight single-column rows would push Save two screens
    down, and these are short numbers. */
-.alg-nutrition { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+/* ⚠️ align-items: end ON EVERY PAIRED GRID BELOW (and .cat-loss-pair, .fc-weigh-pair,
+   .lab-size-custom): a field label can wrap to two lines at 296px, and with the default
+   stretch the box beside it would then start lower. Bottom-aligned, the BOXES share a line
+   and a long label only grows upward. */
+.alg-nutrition { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; align-items: end; }
 
 /* Two fields that belong together, side by side — «Come si acquista» and the rate.
    ⚠️ THE SAME GRID AS .alg-nutrition ABOVE, deliberately: identical values, three
@@ -1932,7 +1936,7 @@ a.home-reminder {
    ⚠️ minmax(0, 1fr) and not 1fr: a grid item's default min-width is auto, so a long
    <select> option would push its column wider than half and shove the other one off.
    That is the same flex/grid trap this project has already paid for once. */
-.mgmt-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.mgmt-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; align-items: end; }
 /* The <select> and the <input> are 100% of their column; without this the select
    sizes to its widest option instead of to the space it has been given. */
 .mgmt-pair .mgmt-input { width: 100%; min-width: 0; }
