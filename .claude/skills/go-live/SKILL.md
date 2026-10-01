@@ -115,4 +115,3 @@ live?»* and tell him to **expect two clicks** if rules change (the harness asks
 - ⚠️ Every phone must update (the update banner / reopen the app) — and when a change alters
   what is saved, nobody should use the new feature until their phone has updated.
 - The decisions taken for him during the work, FIRST in the list (global P10).
-- Which model did what (global P21), in one line.
