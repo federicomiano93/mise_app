@@ -931,8 +931,9 @@ body[data-card="suppliers"] .app-header {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
-  font-size: 13px;
-  color: var(--text-2);
+  font-size: var(--field-label-size);
+  font-weight: var(--field-label-weight);
+  color: var(--field-label-color);
 }
 
 .nc-sections { display: flex; flex-direction: column; gap: var(--space-2); }

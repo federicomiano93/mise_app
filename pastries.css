@@ -315,6 +315,12 @@ input.pas-quick:focus {
   display: flex; align-items: baseline; justify-content: space-between;
   gap: 12px; margin-bottom: 10px;
 }
+/* The list heading «Da far lievitare per …»: not a field's name, so it keeps the small mono
+   look .pas-editor-label had before the field-label tokens. */
+.pas-editor-heading {
+  font-size: 10px; font-family: var(--pas-font-mono); letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--pas-text-3);
+}
 .pas-editor-label {
   font-size: var(--field-label-size); font-weight: var(--field-label-weight);
   color: var(--field-label-color);

@@ -29,6 +29,20 @@ const FIELD_LABELS = [
   ['orders.css', '.field-label'],
   ['orders.css', '.alg-nut-label'],
   ['records.css', '.rec-host .alg-nut-label'],
+  // Found by the review of 1 Oct 2026.
+  ['auth.css', '.away-label'],
+  ['tokens.css', '.people-label'],
+  ['orders.css', '.preview-format-label'],
+  ['style.css', '.extra-dough-label'],
+];
+
+// Text that is NOT a field's name and must keep the look it had before the tokens: each has
+// its own class, and the element no longer wears a field-label class.
+const NOT_FIELD_LABELS = [
+  ['js/pastries/pastries-editor.js', /class: 'pas-editor-heading'/, 'pastries.css', '.pas-editor-heading'],
+  ['js/ingredient-record-form.js', /class: 'alg-nut-title'/, 'orders.css', '.alg-nut-title'],
+  ['js/ingredient-record-form.js', /class: 'mgmt-history-label'/, 'orders.css', '.mgmt-history-label'],
+  ['js/catalogue/catalogue-editor.js', /class: 'cat-ing-head-label'/, 'catalogue.css', '.cat-editor .cat-ing-head-label'],
 ];
 
 const ruleOf = (css, selector) => {
@@ -55,4 +69,20 @@ test('every field-label class takes size, weight and colour from the tokens', ()
     assert.doesNotMatch(rule, /text-transform:\s*uppercase/, `${selector} must be sentence case`);
     assert.doesNotMatch(rule, /letter-spacing/, `${selector} must not be letter-spaced`);
   }
+});
+
+test('a heading that only looked like a label keeps its own look and its own class', () => {
+  for (const [js, usage, css, selector] of NOT_FIELD_LABELS) {
+    assert.match(read(js), usage, `${js} uses its own class`);
+    const rule = ruleOf(read(css), selector);
+    assert.doesNotMatch(rule, /--field-label-/, `${selector} must not take the field-label tokens`);
+    assert.match(rule, /font-size:\s*(10px|12px|\.78rem)/, `${selector} keeps its small size`);
+  }
+  assert.doesNotMatch(read('js/ingredient-record-form.js'), /mgmt-field-label alg-nut-title/);
+  assert.doesNotMatch(read('js/pastries/pastries-editor.js'),
+    /class: 'pas-editor-label',\s*\n?\s*text: t\('past\.toProveFor/);
+});
+
+test('the unit inside a bold label is not bold', () => {
+  assert.match(ruleOf(read('catalogue.css'), '.cat-loss-unit'), /font-weight:\s*400/);
 });

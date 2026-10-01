@@ -201,7 +201,12 @@ body.cat-zoom-lock { overflow: hidden; }
    nothing tying a name to its amount. The inputs are borderless INSIDE the frame:
    the row itself is the field, and focus is shown by tinting the whole row. */
 .cat-ing-head { display: flex; align-items: baseline; justify-content: space-between; }
-.cat-editor .cat-ing-head-label { margin-bottom: 6px; }
+/* «Ingredienti» heads a LIST, it names no box: `.cat-editor label` would make it a field
+   label, so it keeps the look it had before the field-label tokens. */
+.cat-editor .cat-ing-head-label {
+  margin-bottom: 6px; font-size: .78rem; font-weight: 400; color: var(--cat-text-2);
+  text-transform: uppercase; letter-spacing: .06em;
+}
 .cat-ing-count { font-family: var(--cat-font-mono); font-size: .78rem; color: var(--cat-text-2); font-variant-numeric: tabular-nums; }
 .cat-ing-editrows { background: var(--cat-surface); border: 1px solid var(--cat-border); border-radius: var(--cat-radius); overflow: hidden; }
 .cat-ing-editrow {
@@ -459,7 +464,7 @@ body.cat-zoom-lock { overflow: hidden; }
   font-variant-numeric: tabular-nums;
 }
 .cat-loss-input:focus { outline: none; border-color: var(--cat-accent); }
-.cat-loss-unit { font-size: .95rem; color: var(--cat-text-2); flex: none; }
+.cat-loss-unit { font-size: .95rem; font-weight: 400; color: var(--cat-text-2); flex: none; }
 /* The answer, and it is the point of the two boxes — so it reads as a statement, not
    as a footnote the way the old hint did. */
 .cat-loss-out { margin-top: 10px; font-size: .86rem; color: var(--cat-text); }

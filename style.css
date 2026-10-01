@@ -300,7 +300,7 @@ select.qty-select:focus { outline: none; border-color: var(--crust); background:
   border: 1px solid var(--warn-border);
   border-radius: var(--radius);
 }
-.extra-dough-label { flex: 1; font-size: 15px; font-weight: 600; color: var(--crust-ink); }
+.extra-dough-label { flex: 1; font-size: var(--field-label-size); font-weight: var(--field-label-weight); color: var(--field-label-color); }
 .extra-dough-row input[type="number"], .extra-dough-row .extra-unit-select {
   background: var(--surface);
   border-color: var(--warn-border);

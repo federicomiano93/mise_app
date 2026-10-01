@@ -501,7 +501,7 @@ function priceHistoryBlock(item, actions) {
   // middle under a left-aligned label — the one thing in the section not lining up with
   // everything else, in the very release asked to make it «visivamente coerente».
   return el('div', { class: 'mgmt-field mgmt-history' }, [
-    el('span', { class: 'mgmt-field-label', text: t('orders.priceHistory') }),
+    el('span', { class: 'mgmt-history-label', text: t('orders.priceHistory') }),
     button,
     list,
   ]);
@@ -1031,7 +1031,7 @@ function allergenBlock(item, panels, actions = {}) {
       help: 'nutrition',
       above: [],
       body: [
-        el('p', { class: 'mgmt-field-label alg-nut-title', text: t('orders.per100G') }),
+        el('p', { class: 'alg-nut-title', text: t('orders.per100G') }),
         nutritionGrid,
       ],
     }));
