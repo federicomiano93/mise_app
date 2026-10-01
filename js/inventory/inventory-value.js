@@ -21,7 +21,7 @@ import { pricePerKg, formatMoney, roundTo, storedCaseOf } from '../price-model.j
 // ⚠️ THE SAME unitCost() ORDERS USES, for a product priced per case: the stocktake counts in the
 // ORDER unit, so what one counted unit costs must be decided by the one function that already
 // reads that unit — two copies of the rule could only ever disagree.
-import { unitCost } from '../order-cost.js';
+import { unitCost, packsPerUnit } from '../order-cost.js';
 // ⚠️ MOVED TO js/pack-size.js (29 Sep 2026): js/order-cost.js needs the exact
 // same reading of "how many kilos does one pack hold", and a calculation
 // shared by more than one feature belongs in js/ root (CLAUDE.md "Modular by
@@ -47,7 +47,10 @@ export function packKgFor(month, ingredient, closed = false) {
   const stored = month && month.packKg ? Number(month.packKg[id]) : NaN;
   if (Number.isFinite(stored) && stored > 0) return round3(stored);
   if (closed) return null;
-  return parsePackSize(ingredient && ingredient.weight);
+  const kg = parsePackSize(ingredient && ingredient.weight);
+  // ⚠️ A CARTON'S WEIGHT IS ONE ITEM'S (js/order-cost.js packsPerUnit): counted in cartoni, the
+  // stocktake's pack is packCount of them — read as one busta it would value a carton 4 times low.
+  return kg === null ? null : kg * packsPerUnit(ingredient);
 }
 
 // What one pack of this costs.

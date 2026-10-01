@@ -48,3 +48,23 @@ test('no unit or the card unit is exactly unitCost()', () => {
     assert.equal(lineUnitCost(p, p, 'cartone'), unitCost(p, p));
   }
 });
+
+// ── «Cartone: contiene 50 × pezzo» with no weight to read (1 Oct 2026) ───────
+test('a pieces case priced for a card whose packCount is its count prices the inner word too', () => {
+  const carton = { unit: 'cartone', packUnit: 'pezzo', packCount: 50, weight: '' };
+  assert.equal(lineUnitCost(carton, pcsCase, 'pezzo'), 0.4);
+  assert.equal(lineUnitCost(carton, pcsCase, 'cartone'), 20);
+  assert.equal(lineUnitCost(carton, pcsCase, ''), 20, 'no choice is the card unit');
+});
+
+test('without that packCount a pieces case still cannot price the package word', () => {
+  assert.equal(lineUnitCost({ ...card, packUnit: 'busta' }, pcsCase, 'busta'), null);
+  assert.equal(lineUnitCost({ ...card, packUnit: 'busta', packCount: 12 }, pcsCase, 'busta'), null, 'a count that is not the case\'s');
+  assert.equal(lineUnitCost({ ...card, packUnit: 'busta', packCount: 50 }, pcsCase, 'sacco'), null, 'a stale unit is still nothing');
+});
+
+test('a pack case is priced the same with or without the packCount', () => {
+  assert.equal(lineUnitCost({ ...card, packCount: 4 }, packCase, 'busta'), 5);
+  assert.equal(lineUnitCost({ ...card, packCount: 4 }, packCase, 'cartone'), 20);
+  assert.equal(lineUnitCost(card, packCase, 'busta'), 5);
+});

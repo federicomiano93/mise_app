@@ -301,3 +301,28 @@ test('a sent list and a record with no frozen unit both mean the card unit: no f
   assert.match(src, /itemUnit: recordUnit\(request, item\.id, ingredientsById\[item\.id\]\)/);
   assert.match(src, /const otherUnit = !sameUnit\(orderedUnit, itemUnit\)/);
 });
+
+// ── A card saved as «Cartone» keeps the order row's cartone / busta choice working unchanged ──
+import { formatPatch } from '../js/pack-format.js';
+import { hasUnitChoice, unitChoices as orderUnitChoices } from '../js/order-unit.js';
+import { qtyInCardUnit } from '../js/inventory/inventory-purchases.js';
+
+test('what «Cartone» writes makes the order row offer the carton and the package', () => {
+  const written = formatPatch(
+    { kind: 'single', count: null, inner: '', unit: '', packUnit: '' },
+    { kind: 'carton', count: 4, inner: 'busta', cartonWord: 'cartone' },
+  );
+  const card = { id: 'flour', name: 'Farina', supplierId: 'sup', weight: '2.5 kg', ...written };
+  assert.equal(hasUnitChoice(card), true);
+  assert.deepEqual(orderUnitChoices(card), ['cartone', 'busta']);
+  // a line ordered in buste is counted in cartoni by the stocktake, from the card alone
+  assert.equal(qtyInCardUnit(8, 'busta', card), 2);
+});
+
+test('a line placed in the package word of a carton card freezes that unit in the record', () => {
+  const card = { id: 'flour', name: 'Farina', supplierId: 'sup', weight: '2.5 kg', unit: 'cartone', packUnit: 'busta', packCount: 4 };
+  const out = buildSupplierArchive({
+    supplier: SUPPLIER, ingredients: [card], entries: { flour: { qty: 2, stock: 0, unit: 'busta' } }, date: '2026-09-30', now: NOW,
+  });
+  assert.equal(out.units.flour, 'busta');
+});

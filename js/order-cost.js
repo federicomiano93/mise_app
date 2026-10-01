@@ -75,6 +75,25 @@ const CASE_UNITS = new Set([
 //   a case of ONE             → the case price, for any non-weight word
 //   any other word (busta, sacco, bottiglia…) on a case of several → null: one of WHAT?
 //     Like every other rule in this file, when in doubt there is no number.
+// A stored case that holds exactly what the card's «Cartone» says it holds.
+function isOwnCarton(ingredient, wholeCase) {
+  const count = ingredient && ingredient.packCount;
+  return wholeCase.caseItemUnit === 'pcs' && Number.isInteger(count) && count >= 1 && wholeCase.caseCount === count;
+}
+
+// ⚠️ A CARTON'S WEIGHT IS THE WEIGHT OF ONE ITEM (1 Oct 2026): «Cartone da 4 buste da 2,5 kg» keeps
+// 2.5kg in `weight` and 4 in `packCount`. A line ordered in anything but the package word is
+// therefore packCount packages — priced as one package it would come out 4 times too cheap.
+// Returns how many packages ONE ordered unit holds when the weight text is a per-item weight.
+export function packsPerUnit(ingredient) {
+  // ⚠️ A WHOLE NUMBER AND NOTHING ELSE — the rules store `int`, and a string «4» is not one.
+  const count = ingredient && ingredient.packCount;
+  if (!Number.isInteger(count) || count < 1) return 1;
+  const pack = cleanUnit(ingredient && ingredient.packUnit);
+  const unit = cleanUnit(ingredient && ingredient.unit);
+  return pack && sameUnit(unit, pack) ? 1 : count;
+}
+
 export function unitCost(ingredient, price) {
   if (!price || !isPriceUnit(price.priceUnit)) return null;
   const rate = positiveNumber(price.pricePerUnit);
@@ -94,7 +113,10 @@ export function unitCost(ingredient, price) {
     // ordered by «vaschetta» from a case of 60 pieces at 12, are NOT 0.20 each (a tray is not
     // one egg): they fall through to the rules below and, being no piece/case word, are null.
     const packWord = String((ingredient && ingredient.packUnit) || '').trim().toLowerCase().replace(/\.$/, '');
-    const isPackCase = wholeCase.caseItemUnit === 'pack';
+    // ⚠️ A CASE OF PIECES COUNTS AS A CASE OF PACKAGES when its count is the ingredient's own
+    // packCount (1 Oct 2026, «Cartone: contiene 50 × pezzo» with no weight to read): the card
+    // wrote both numbers, so the inner word IS the item the case holds.
+    const isPackCase = wholeCase.caseItemUnit === 'pack' || isOwnCarton(ingredient, wholeCase);
     if (PIECE_UNITS.has(orderUnit) || (isPackCase && packWord !== '' && orderUnit === packWord)) {
       return wholeCase.casePrice / wholeCase.caseCount;
     }
@@ -117,7 +139,7 @@ export function unitCost(ingredient, price) {
   if (byWeight) return rate * WEIGHT_UNITS[orderUnit];
   const packKg = parsePackSize(packText);
   if (packKg === null) return null;
-  return rate * packKg;
+  return rate * packKg * packsPerUnit(ingredient);
 }
 
 // The net cost of ONE of a line's CHOSEN unit. The card's own unit (or no choice) is exactly
@@ -130,7 +152,8 @@ export function lineUnitCost(ingredient, price, unit) {
   const chosen = cleanUnit(unit);
   if (chosen === '' || sameUnit(chosen, ingredient && ingredient.unit)) return unitCost(ingredient, price);
   const wholeCase = storedCaseOf(price);
-  if (!wholeCase || wholeCase.caseItemUnit !== 'pack' || !(wholeCase.caseCount > 0)) return null;
+  if (!wholeCase || !(wholeCase.caseCount > 0)) return null;
+  if (wholeCase.caseItemUnit !== 'pack' && !isOwnCarton(ingredient, wholeCase)) return null;
   if (!sameUnit(chosen, ingredient && ingredient.packUnit)) return null;
   return unitCost({ ...ingredient, unit: chosen }, price);
 }

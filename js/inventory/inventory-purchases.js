@@ -125,8 +125,13 @@ export function purchasesInMonth(records, monthId, ingredientsById = {}) {
 // at all is not guessed.
 export function qtyInCardUnit(qty, lineUnit, ing) {
   if (sameUnit(lineUnit, ing && ing.unit)) return qty;
+  if (!sameUnit(lineUnit, ing && ing.packUnit)) return null;
+  // ⚠️ THE CARD'S OWN packCount FIRST (1 Oct 2026): product data, readable by everybody, and the
+  // number the person typed under «Cartone». The stored case is the fallback for a card saved
+  // before packCount existed. Either way, nothing is guessed.
+  const count = ing && ing.packCount;
+  if (Number.isInteger(count) && count >= 1) return qty / count;
   const stored = storedCaseOf(ing);
   if (!stored || stored.caseItemUnit !== 'pack' || !(stored.caseCount > 0)) return null;
-  if (sameUnit(lineUnit, ing.packUnit)) return qty / stored.caseCount;
-  return null;
+  return qty / stored.caseCount;
 }

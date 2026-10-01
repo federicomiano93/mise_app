@@ -265,3 +265,25 @@ test('a frozen price of zero is not a price', () => {
   // Nothing is free, and a 0 in that map is the shape a half-written close leaves.
   assert.equal(packPrice({ unitPrice: { flour: 0 } }, byKg(), true), null);
 });
+
+// ── «Cartone»: the weight is one item's, the stocktake counts cartoni (1 Oct 2026) ──
+test('packKgFor multiplies the weight by packCount when the stocktake counts in the carton', () => {
+  const carton = byKg({ unit: 'cartone', packUnit: 'busta', packCount: 4, weight: '2.5kg' });
+  assert.equal(packKgFor({ packKg: {} }, carton), 10);
+  assert.equal(packPrice({ packKg: {} }, { ...carton, pricePerUnit: 2 }), 20, 'a carton is not priced as one busta');
+  // counted in the package word itself, the weight is already one item's
+  assert.equal(packKgFor({ packKg: {} }, { ...carton, unit: 'busta' }), 2.5);
+});
+
+test('a weight somebody typed into the month, and a closed month, are never multiplied', () => {
+  const carton = byKg({ unit: 'cartone', packUnit: 'busta', packCount: 4, weight: '2.5kg' });
+  assert.equal(packKgFor({ packKg: { flour: 12 } }, carton), 12);
+  assert.equal(packKgFor({ packKg: {} }, carton, true), null);
+  assert.equal(packKgFor({ packKg: { flour: 12 } }, carton, true), 12);
+});
+
+test('no packCount: the weight is the pack, as it always was', () => {
+  assert.equal(packKgFor({ packKg: {} }, byKg({ unit: 'cartone', packUnit: 'busta', weight: '2.5kg' })), 2.5);
+  assert.equal(packKgFor({ packKg: {} }, byKg()), 25);
+  assert.equal(packKgFor({ packKg: {} }, byKg({ weight: 'sacco', packCount: 4 })), null, 'an unreadable weight stays unreadable');
+});

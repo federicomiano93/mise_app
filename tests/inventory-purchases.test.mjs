@@ -113,7 +113,6 @@ test('a month with no orders proposes nothing, and says so without failing', () 
 
 // ── Units ────────────────────────────────────────────────────────────────────
 
-import { qtyInCardUnit } from '../js/inventory/inventory-purchases.js';
 import { readFileSync } from 'node:fs';
 
 // A «cartone» card holding 4 × «busta», priced by the case (the case is what lets a line
@@ -184,4 +183,28 @@ test('the sentence exists in English and Italian and inventory imports only from
   assert.match(i18n, /'inv\.purchasesOtherUnit': '\{names\}: non contati qui, perché l’app non sa a quante unità del conteggio corrispondono\. Aggiungili a mano\.'/);
   const src = readFileSync(new URL('../js/inventory/inventory-purchases.js', import.meta.url), 'utf8');
   assert.doesNotMatch(src, /from '\.\.\/orders\//);
+});
+
+// ── «Cartone» saved by the card: packCount converts buste into cartoni (1 Oct 2026) ──
+import { qtyInCardUnit } from '../js/inventory/inventory-purchases.js';
+
+test('qtyInCardUnit converts with the card\'s own packCount, no price needed', () => {
+  const card = { unit: 'cartone', packUnit: 'busta', packCount: 4 };
+  assert.equal(qtyInCardUnit(8, 'busta', card), 2);
+  assert.equal(qtyInCardUnit(2, 'cartone', card), 2);
+  assert.equal(qtyInCardUnit(2, 'Busta', card), 0.5, 'matched ignoring case');
+  assert.equal(qtyInCardUnit(3, 'sacco', card), null, 'a unit the card does not offer is never guessed');
+});
+
+test('packCount wins over a stored case; a stored case of packages is the fallback', () => {
+  const stored = { priceUnit: 'kg', pricePerUnit: 2, casePrice: 20, caseCount: 4, caseItemSize: 2.5, caseItemUnit: 'pack' };
+  assert.equal(qtyInCardUnit(8, 'busta', { unit: 'cartone', packUnit: 'busta', packCount: 8, ...stored }), 1);
+  assert.equal(qtyInCardUnit(8, 'busta', { unit: 'cartone', packUnit: 'busta', ...stored }), 2, 'a card saved before packCount');
+  assert.equal(qtyInCardUnit(8, 'busta', { unit: 'cartone', packUnit: 'busta' }), null, 'neither: not guessed');
+  const pieces = { priceUnit: 'pcs', pricePerUnit: 0.4, casePrice: 20, caseCount: 50, caseItemUnit: 'pcs' };
+  assert.equal(qtyInCardUnit(100, 'pezzo', { unit: 'cartone', packUnit: 'pezzo', ...pieces }), null, 'a case of pieces alone is not a carton count');
+  assert.equal(qtyInCardUnit(100, 'pezzo', { unit: 'cartone', packUnit: 'pezzo', packCount: 50, ...pieces }), 2);
+  for (const packCount of [0, -2, 1.5, '4']) {
+    assert.equal(qtyInCardUnit(8, 'busta', { unit: 'cartone', packUnit: 'busta', packCount }), null, String(packCount));
+  }
 });
