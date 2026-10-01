@@ -55,7 +55,7 @@ import { confirmDialog, alertDialog } from './confirm-dialog.js';
 import { mayEditRecords } from '../records.js';
 import { todayISO, dayPhrase, daySpoken, dayWhen, localDayOf, dayLabel } from './day.js';
 import {
-  buildOrderMessage, whatsappUrl, itemsFromQuantities, indexById,
+  buildOrderMessage, whatsappUrl, itemsFromQuantities, indexById, fallbackSupplierName,
 } from './order-text.js';
 import { liveHistoryStart, mergeHistory, createOlderLoader } from './history-window.js';
 import {
@@ -896,10 +896,11 @@ function patchOlderRecord(id, next) {
 // A stored record → the picker/message row shape. Names and weights are resolved from
 // the CURRENT ingredient list, the same lens the History view uses on screen.
 function recordToRow(record) {
+  const language = outputLanguage(currentSession().location);
   return {
     id: record.id,
-    name: record.supplierName || 'Order',
-    items: itemsFromQuantities(record.quantities, indexById(state.ingredients), record.names, record.units),
+    name: record.supplierName || fallbackSupplierName(language),
+    items: itemsFromQuantities(record.quantities, indexById(state.ingredients), record.names, record.units, language),
   };
 }
 

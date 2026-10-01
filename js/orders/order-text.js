@@ -102,9 +102,20 @@ export function summaryLines(items) {
 //
 // `heading` false leaves the bold supplier line out: a message that carries ONE supplier
 // is addressed to that supplier, who needs no reminder of their own name.
-function sectionFor({ supplierName, items }, heading = true) {
+function sectionFor({ supplierName, items }, heading = true, language = null) {
   const lines = summaryLines(items).map(({ label, qty, unit }) => `- ${label}: ${qtyWithUnit(qty, unit)}`).join('\n');
-  return heading ? `*${supplierName || 'Order'}*\n${lines}` : lines;
+  return heading ? `*${supplierName || fallbackSupplierName(language)}*\n${lines}` : lines;
+}
+
+// The heading of a supplier with no name — the venue's country language, like the title.
+export function fallbackSupplierName(language = null) {
+  return labelWord('orderTitle', language);
+}
+
+// The subject of an order sent by email: the body is in the venue's country language, so
+// the subject must be too (it used to follow the screen).
+export function emailSubject(locationName, language = null) {
+  return labelWord('emailSubject', language).replace('{name}', String(locationName || '').trim());
 }
 
 // By displayed label, so the message reads in the order the eye expects.
@@ -144,9 +155,9 @@ function flatLines(groups) {
 // The whole message, in one of two formats.
 // groups: [{ supplierName, items: [{ name, weight, qty }] }]
 //
-//   grouped: true  (the default, and what the app has always sent) — one bold section
-//                  per supplier. This is the format a SUPPLIER receives, so it is
-//                  deliberately untouched, down to the byte.
+//   grouped: true  (the default) — one bold section per supplier, the heading left out
+//                  when only one supplier is in the message. This is the format a
+//                  SUPPLIER receives, so tests/order-text.test.mjs pins it to the byte.
 //   grouped: false — one flat A→Z list with no headings: a shopping list for yourself.
 //                  It does NOT say who sells what, so sending it to a supplier shows
 //                  them everyone else's order too. Hence the default above.
@@ -164,7 +175,7 @@ export function buildOrderMessage(groups, { grouped = true, locationName = '', l
 
   if (grouped) {
     const heading = withItems.length > 1;
-    return `${title}\n\n` + withItems.map(g => sectionFor(g, heading)).join('\n\n');
+    return `${title}\n\n` + withItems.map(g => sectionFor(g, heading, language)).join('\n\n');
   }
 
   const lines = flatLines(withItems);
@@ -189,12 +200,15 @@ export function buildOrderMessage(groups, { grouped = true, locationName = '', l
 //
 // `units` is the record's frozen `units` map: only what was frozen is shown, never the
 // card's unit, so a message re-sent from History reads exactly as it did the first time.
-export function itemsFromQuantities(quantities, ingredientsById, names, units) {
+//
+// `language` is the venue's output language: the stand-in for a deleted ingredient is a word
+// the supplier reads, so it follows the country like the title.
+export function itemsFromQuantities(quantities, ingredientsById, names, units, language = null) {
   return Object.keys(quantities || {})
     .map(id => {
       const live = ingredientsById?.[id];
       const item = {
-        name: live?.name || names?.[id] || 'Deleted ingredient',
+        name: live?.name || names?.[id] || labelWord('deletedIngredient', language),
         weight: (live && live.weight) || '',
         qty: num(quantities[id]),
       };

@@ -10,7 +10,7 @@ import { t } from '../i18n.js';
 import { supplierLabel } from '../supplier-label.js';
 import { el } from './dom.js';
 import { alertDialog } from './confirm-dialog.js';
-import { buildOrderMessage, whatsappUrl } from './order-text.js';
+import { buildOrderMessage, whatsappUrl, emailSubject } from './order-text.js';
 import { routesFor, routeAvailableFor, unreachable, routeSendsToSupplier } from './send-routes.js';
 import { WHATSAPP_PATHS, EMAIL_PATHS, svgFrom } from '../send-icon.js';
 
@@ -131,7 +131,7 @@ export function chooseAndSend({ rows, settings, canManage, suppliers, locationNa
         { grouped: true, locationName, language });
       if (!text) return;
       const url = offer.route === 'email'
-        ? mailto(supplier.email, t('orders.send.emailSubject', { name: locationName || '' }), text)
+        ? mailto(supplier.email, emailSubject(locationName, language), text)
         : `https://wa.me/${digitsOf(supplier.phone)}?text=${encodeURIComponent(text)}`;
       window.open(url, '_blank');
       sent.push(supplier.id);

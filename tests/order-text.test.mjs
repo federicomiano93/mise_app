@@ -24,7 +24,7 @@ const ingredients = [
   { id: 'i3', name: 'Loose apples', weight: '' },
 ];
 
-test('the message keeps the format the app has always sent', () => {
+test('a one-supplier message is the title, a blank line and the lines', () => {
   const text = buildOrderMessage([
     { supplierName: 'Brava Fresh', items: [
       { name: 'Bacon', weight: '2.27kg', qty: 5 },
@@ -360,4 +360,33 @@ test('a message for ONE supplier has no supplier heading', () => {
 test('a grouped message for SEVERAL suppliers keeps every heading', () => {
   assert.equal(buildOrderMessage(TWO, CLUB),
     '*Order — The Italian Club*\n\n*Etna*\n- Flour 25kg: 1\n\n*Alba*\n- Olives: 2');
+});
+
+// ── The other words a supplier reads follow the country too (1 Oct 2026) ─────
+import { fallbackSupplierName, emailSubject } from '../js/orders/order-text.js';
+
+test('the heading of a nameless supplier follows the country language', () => {
+  const two = [
+    { supplierName: '', items: [{ name: 'Flour', weight: '', qty: 1 }] },
+    { supplierName: 'Alba', items: [{ name: 'Olives', weight: '', qty: 2 }] },
+  ];
+  assert.ok(buildOrderMessage(two, { language: 'it' }).includes('*Ordine*\n- Flour: 1'));
+  assert.ok(buildOrderMessage(two, { language: 'en' }).includes('*Order*\n- Flour: 1'));
+  assert.equal(fallbackSupplierName('it'), 'Ordine');
+  assert.equal(fallbackSupplierName(null), 'Order');
+});
+
+test('an ingredient deleted since the order is named in the country language', () => {
+  assert.deepEqual(itemsFromQuantities({ gone: 3 }, {}, {}, {}, 'it'),
+    [{ name: 'Ingrediente eliminato', weight: '', qty: 3 }]);
+  assert.deepEqual(itemsFromQuantities({ gone: 3 }, {}, {}, {}, 'en'),
+    [{ name: 'Deleted ingredient', weight: '', qty: 3 }]);
+  assert.equal(itemsFromQuantities({ gone: 3 }, {})[0].name, 'Deleted ingredient');
+});
+
+test('the email subject follows the country language, like the body', () => {
+  assert.equal(emailSubject('Panificio Miano', 'it'), 'Ordine da Panificio Miano');
+  assert.equal(emailSubject('The Italian Club', 'en'), 'Order from The Italian Club');
+  assert.equal(emailSubject('X', null), 'Order from X');
+  assert.equal(emailSubject(null, 'it'), 'Ordine da ');
 });
