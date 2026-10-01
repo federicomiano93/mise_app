@@ -2264,7 +2264,7 @@ a.home-reminder {
   min-height: 44px;
   background: none;
   border: none;
-  font-family: 'Manrope', sans-serif;
+  font-family: var(--font-round);
   font-size: 14px;
   font-weight: 600;
   color: var(--text2);

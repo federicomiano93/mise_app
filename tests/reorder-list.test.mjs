@@ -36,8 +36,16 @@ class Node {
     this.classList.add(...String(value).split(/\s+/));
   }
 
+  get parentNode() { return this.parent; }
+  contains(node) { for (let n = node; n; n = n.parent) if (n === this) return true; return false; }
+  querySelectorAll(sel) {
+    const want = sel.startsWith('.') ? n => n.classList.contains(sel.slice(1)) : n => n.tagName === sel.toUpperCase();
+    return walkAll(this).filter(n => n !== this && want(n));
+  }
+  querySelector(sel) { return this.querySelectorAll(sel)[0] || null; }
+
   set textContent(value) {
-    this.children.forEach(c => { c.parent = null; });
+    this.children.forEach(c => { if (c.contains(document.activeElement)) document.activeElement = body; c.parent = null; });
     this.children = [];
     this._text = value === '' ? null : String(value);
   }
@@ -52,10 +60,11 @@ class Node {
   getAttribute(name) { return this.attributes[name]; }
   appendChild(child) { child.parent = this; this.children.push(child); return child; }
   remove() {
+    if (this.contains(document.activeElement)) document.activeElement = body;
     if (this.parent) this.parent.children = this.parent.children.filter(c => c !== this);
     this.parent = null;
   }
-  focus() {}
+  focus() { document.activeElement = this; }
   addEventListener(type, fn) { (this.listeners[type] = this.listeners[type] || []).push(fn); }
   async click() { for (const fn of this.listeners.click || []) await fn({ target: this }); }
 }
@@ -64,15 +73,25 @@ class Text extends Node {
   constructor(text) { super('#text'); this._text = String(text); }
 }
 
+function walkAll(node, out = []) {
+  out.push(node);
+  node.children.forEach(child => walkAll(child, out));
+  return out;
+}
+
 const body = new Node('body');
+const keyListeners = new Set();
 globalThis.document = {
   body,
   createElement: tag => new Node(tag),
   createTextNode: text => new Text(text),
-  addEventListener() {},
-  removeEventListener() {},
-  activeElement: null,
+  addEventListener(type, fn) { if (type === 'keydown') keyListeners.add(fn); },
+  removeEventListener(type, fn) { keyListeners.delete(fn); },
+  querySelector: sel => body.querySelector(sel),
+  getElementById: id => walkAll(body).find(n => n.attributes.id === id) || null,
+  activeElement: body,
 };
+const pressKey = key => [...keyListeners].forEach(fn => fn({ key, defaultPrevented: false, preventDefault() { this.defaultPrevented = true; } }));
 
 const { renderReorderBanner } = await import('../js/orders/deliveries-view.js');
 const { _dictionaries } = await import('../js/i18n.js');
@@ -100,8 +119,15 @@ function makeCtx(over = {}) {
         quantities: { yeast: 2 }, units: {}, deliveredAt: '2026-09-30T08:00:00Z', missing: { yeast: true } },
     ],
     entries: {},
-    suppliersById: { aldo: { id: 'aldo', name: 'Aldo Legacy Foods Ltd', shortName: 'Aldo' } },
-    ingredientsById: { flour: { id: 'flour', name: 'Flour' }, yeast: { id: 'yeast', name: 'Yeast' } },
+    suppliersById: {
+      aldo: { id: 'aldo', name: 'Aldo Legacy Foods Ltd', shortName: 'Aldo' },
+      bruno: { id: 'bruno', name: 'Bruno', shortName: 'Bruno' },
+    },
+    // Flour has since moved to Bruno; yeast sits under «No supplier» (resolveSuppliers).
+    ingredientsById: {
+      flour: { id: 'flour', name: 'Flour', supplierId: 'bruno' },
+      yeast: { id: 'yeast', name: 'Yeast', supplierId: '__no_supplier__' },
+    },
     today: '2026-10-01',
     onReorder: async applied => { calls.reorder.push(applied); },
     onResolve: async item => { calls.resolve.push(item); },
@@ -129,12 +155,16 @@ test('the banner opens the list: one card per line, each with both buttons named
     const [first] = cards();
     const buttons = walk(first).filter(n => n.tagName === 'BUTTON');
     assert.equal(buttons.length, 2);
-    assert.equal(buttons[0].getAttribute('aria-label'), 'Put back in Aldo’s order — Flour');
+    assert.equal(buttons[0].getAttribute('aria-label'), 'Put back in Bruno’s order — Flour');
     assert.equal(buttons[1].getAttribute('aria-label'), 'Resolved — Flour');
-    assert.match(first.textContent, /from Aldo · did not arrive/);
+    assert.match(first.textContent, /from Aldo · did not arrive/, 'the small line keeps where it was missed');
+    assert.match(buttons[0].textContent, /Bruno/, 'the button names where it will go');
     // A supplier nobody can name is said so, never left blank.
     assert.match(cards()[1].textContent, /from [^·]+ · did not arrive/);
     assert.doesNotMatch(cards()[1].textContent, /from  ·/);
+    // Yeast has no live supplier: nowhere a typed quantity would show, so only «Resolved».
+    assert.equal(withClass('reorder-put', cards()[1]).length, 0);
+    assert.equal(withClass('reorder-resolve', cards()[1]).length, 1);
   } finally { closeList(); }
   assert.equal(overlay(), undefined, 'Back closes it');
 });
@@ -173,7 +203,7 @@ test('«Resolved» asks first; «Cancel» writes nothing, «Resolved» writes re
     const pending = press.click();
     await tick();
     assert.equal(calls.resolve.length, 0, 'nothing is written before the answer');
-    assert.match(withClass('app-dialog-title')[0].textContent, /Mark as resolved\?/);
+    assert.match(withClass('app-dialog-title')[0].textContent, /^Mark it as resolved[?]$/);
     assert.match(withClass('app-dialog-msg')[0].textContent, /^Flour leaves this list/);
     assert.equal(withClass('app-dialog-btn-danger').length, 0, 'not a danger dialog');
     await dialogButton('app-dialog-btn-ghost').click();
@@ -244,4 +274,156 @@ test('a card falls back to the names frozen in its order, never to «deleted»',
   assert.match(card.slice(0, 900), /recordedName\(item\.id, ctx\.ingredientsById \|\| \{\}, record\?\.names \|\| \{\}\)/);
   assert.match(src, /openReorderScreen\(lastBannerCtx \|\| ctx\)/);
   assert.match(card.slice(0, 1400), /supplierLabel\(supplier\) \|\| record\?\.supplierName \|\| t\('orders\.deliveries\.unknownSupplier'\)/);
+});
+
+// ── «Put back» only where a typed quantity would be seen ─────────────────────────────────
+
+test('no «put back» for an ingredient that is gone, switched off, or whose supplier is not active', () => {
+  const cases = {
+    gone: { ingredientsById: { yeast: { id: 'yeast', name: 'Yeast', supplierId: 'aldo' } } },
+    off: { ingredientsById: { flour: { id: 'flour', name: 'Flour', supplierId: 'bruno', active: false },
+      yeast: { id: 'yeast', name: 'Yeast', supplierId: 'aldo' } } },
+    supplierOff: { suppliersById: { aldo: { id: 'aldo', name: 'Aldo', active: false },
+      bruno: { id: 'bruno', name: 'Bruno', active: false } },
+    ingredientsById: { flour: { id: 'flour', name: 'Flour', supplierId: 'bruno' },
+      yeast: { id: 'yeast', name: 'Yeast', supplierId: 'aldo' } } },
+  };
+  for (const [label, over] of Object.entries(cases)) {
+    const { ctx } = makeCtx(over);
+    openList(ctx);
+    try {
+      assert.equal(cards().length, 2, label);
+      // flour is the first card; for «gone» flour is missing from the live list.
+      assert.equal(withClass('reorder-put', cards()[0]).length, 0, `${label}: flour has no put-back`);
+      assert.equal(withClass('reorder-resolve', cards()[0]).length, 1, `${label}: «Resolved» stays`);
+    } finally { closeList(); }
+  }
+});
+
+// ── Accessibility of the overlay ─────────────────────────────────────────────────────────
+
+test('the overlay is a modal dialog named by its title, with focus on Back', () => {
+  const { ctx } = makeCtx();
+  openList(ctx);
+  try {
+    const o = overlay();
+    assert.equal(o.getAttribute('role'), 'dialog');
+    assert.equal(o.getAttribute('aria-modal'), 'true');
+    assert.equal(o.getAttribute('aria-label'), 'To re-order');
+    assert.equal(document.activeElement, withClass('app-icon-btn', o)[0]);
+  } finally { closeList(); }
+});
+
+test('Escape closes it and focus returns to the banner', () => {
+  const { ctx } = makeCtx();
+  const host = openList(ctx);
+  pressKey('Escape');
+  assert.equal(overlay(), undefined);
+  assert.equal(document.activeElement, withClass('reorder-banner', host)[0]);
+});
+
+test('Escape with a dialog on top closes the dialog only, not the list', async () => {
+  const { ctx } = makeCtx();
+  openList(ctx);
+  try {
+    const pending = withClass('reorder-resolve', cards()[0])[0].click();
+    await tick();
+    pressKey('Escape');
+    assert.ok(overlay(), 'the list is still open under the dialog');
+    assert.equal(withClass('app-dialog-backdrop').length, 0, 'the dialog took the Escape');
+    await pending;
+  } finally { closeList(); }
+});
+
+test('with the banner gone, closing puts focus on the Order tab, never on <body>', () => {
+  const tab = new Node('button');
+  tab.setAttribute('id', 'tab-order-btn');
+  body.appendChild(tab);
+  try {
+    const { ctx } = makeCtx();
+    const host = openList(ctx);
+    renderReorderBanner(host, { ...ctx, history: [] });
+    closeList();
+    assert.equal(document.activeElement, tab);
+  } finally { tab.remove(); }
+});
+
+test('when an answered card leaves, focus moves to the next card, then to Back when none is left', () => {
+  const bothLive = { ingredientsById: {
+    flour: { id: 'flour', name: 'Flour', supplierId: 'bruno' },
+    yeast: { id: 'yeast', name: 'Yeast', supplierId: 'aldo' } } };
+  const { ctx } = makeCtx(bothLive);
+  const host = openList(ctx);
+  try {
+    withClass('reorder-resolve', cards()[0])[0].focus();
+    renderReorderBanner(host, { ...ctx, history: [ctx.history[1]] });
+    assert.equal(cards().length, 1);
+    assert.equal(document.activeElement, walk(cards()[0]).find(n => n.tagName === 'BUTTON'),
+      'the next card\'s first button');
+
+    renderReorderBanner(host, { ...ctx, history: [] });
+    assert.equal(document.activeElement, withClass('app-icon-btn', overlay())[0], 'Back');
+  } finally { closeList(); }
+});
+
+// ── A second tap while the write runs ────────────────────────────────────────────────────
+
+test('both buttons are off while a row saves, back on after a failure', async () => {
+  let release;
+  const { ctx } = makeCtx({
+    onReorder: () => new Promise((_, reject) => { release = reject; }),
+  });
+  openList(ctx);
+  try {
+    const card = cards()[0];
+    const buttons = walk(card).filter(n => n.tagName === 'BUTTON');
+    const pending = buttons[0].click();
+    await tick();
+    assert.deepEqual(buttons.map(b => b.disabled), [true, true]);
+
+    release(new Error('offline'));
+    await tick();
+    assert.deepEqual(buttons.map(b => b.disabled), [false, false]);
+    await dialogButton('app-dialog-btn-solid').click();
+    await pending;
+  } finally { closeList(); }
+});
+
+test('a redraw while a row saves keeps its new card disabled', async () => {
+  const { ctx } = makeCtx({ onReorder: () => new Promise(() => {}) });
+  const host = openList(ctx);
+  try {
+    walk(cards()[0]).find(n => n.tagName === 'BUTTON').click();
+    await tick();
+    renderReorderBanner(host, { ...ctx });
+    assert.ok(walk(cards()[0]).filter(n => n.tagName === 'BUTTON').every(b => b.disabled));
+  } finally { closeList(); }
+});
+
+// ── History's whole-record save keeps the delivery answers ───────────────────────────────
+
+test('editing an order in History carries missing, deliveredAt and missingResolved through', async () => {
+  const { buildHistoryEditor } = await import('../js/orders/history-edit.js');
+  const record = {
+    id: '2026-09-29_aldo', date: '2026-09-29', supplierId: 'aldo', supplierName: 'Aldo',
+    bakery: 'b', quantities: { flour: 5, yeast: 2 }, stock: { flour: 0, yeast: 0 },
+    deliveredAt: '2026-09-30T08:00:00Z',
+    missing: { flour: true },
+    missingResolved: { flour: '2026-10-01T09:00:00Z' },
+  };
+  const saved = [];
+  const editor = buildHistoryEditor(record, [{ id: 'flour', name: 'Flour' }, { id: 'yeast', name: 'Yeast' }],
+    { onClose() {}, onSave: (id, next) => saved.push([id, next]), onDelete() {} });
+  const pending = withClass('hist-edit-save', editor)[0].click();
+  await tick();
+  await dialogButton('app-dialog-btn-solid').click();
+  await pending;
+
+  assert.equal(saved.length, 1);
+  const [id, next] = saved[0];
+  assert.equal(id, '2026-09-29_aldo');
+  assert.equal(next.deliveredAt, record.deliveredAt);
+  assert.deepEqual(next.missing, record.missing);
+  assert.deepEqual(next.missingResolved, record.missingResolved);
+  assert.equal(next.id, undefined, 'the document id never enters the payload');
 });
