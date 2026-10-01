@@ -42,8 +42,11 @@ export function checkedDays(checks) {
   return checks.map(l => l.querySelector('input')).filter(c => c.checked).map(c => c.dataset.day);
 }
 
-export function formActions(saveBtn, onCancel) {
+// `deleteBtn` (optional) is a small icon button for an EXISTING record: it goes FIRST, apart
+// from the Cancel/Save pair, so it never sits beside Save as an equal choice (P20).
+export function formActions(saveBtn, onCancel, deleteBtn = null) {
   return el('div', { class: 'mgmt-form-actions' }, [
+    deleteBtn,
     el('button', { type: 'button', class: 'btn-secondary', onClick: () => onCancel?.() }, t('ui.cancel')),
     saveBtn,
   ]);

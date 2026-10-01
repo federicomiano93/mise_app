@@ -304,7 +304,9 @@ const PRICES = 'prices';
 // WRITE A PRICE live in js/record-data.js since 13 Sep 2026: the two record cards are also
 // opened from the Catalogue, which may not import this folder. Re-exported, so every Orders
 // screen calls exactly what it called before.
-export { saveIngredientWithPrice, saveSupplierRecord, mayWritePrices } from '../record-data.js';
+export {
+  saveIngredientWithPrice, saveSupplierRecord, mayWritePrices, deleteIngredientWithPrice,
+} from '../record-data.js';
 
 // What every ingredient costs, as a map keyed by ingredient id.
 //

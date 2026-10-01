@@ -200,7 +200,7 @@ test('Orders opens it over the current screen with the same gate and guard as «
   assert.match(MAIN, /function openEditIngredient\(ing\) \{\s*if \(addingIngredient \|\| !mayAddIngredient\(\)\) return;/);
   assert.match(MAIN, /const item = state\.ingredients\.find\(i => i\.id === ing\.id\) \|\| ing;/, 'the merged item, with its price');
   assert.match(MAIN, /pricesLoaded: state\.pricesReadable === true,/);
-  assert.match(MAIN, /actions: \{ priceHistory: \(id\) => getPriceHistory\(id\) \},/);
+  assert.match(MAIN, /priceHistory: \(id\) => getPriceHistory\(id\),/);
   assert.match(MAIN, /layerClass: 'mgmt-overlay',[\s\S]*layerClass: 'mgmt-overlay',/, 'both openers use Orders\' own layer (z 650)');
   assert.doesNotMatch(MAIN, /ingredient-record-form\.js/, 'never the card directly');
 });

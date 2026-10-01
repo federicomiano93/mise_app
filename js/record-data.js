@@ -13,6 +13,7 @@
 import { firebaseConfig, sessionReady, currentSession } from './firebase.js';
 import { currentLocationId, pathFor } from './location.js';
 import { splitPriceFields } from './price-model.js';
+import { deletePlan } from './ingredient-edit-model.js';
 import {
   getApps,
   getApp,
@@ -110,6 +111,21 @@ export async function readIngredientPrice(id) {
   await sessionReady;
   const snap = await getDoc(doc(collection(db, pathFor(INGREDIENT_PRICES)), id));
   return snap.exists() ? snap.data() : null;   // the same shape the live price map holds
+}
+
+// Delete an ingredient — and its price document too, when this person may write prices — as
+// ONE atomic write. The list of documents is deletePlan() (js/ingredient-edit-model.js), where
+// the two reasons it is what it is are written down: the price delete only for somebody the
+// rules let delete it (a refused member fails the WHOLE batch), and the append-only price
+// history under the ingredient staying behind (the rules forbid deleting it).
+// Past orders keep the ingredient's frozen name (orders-history `names`), so they still show it.
+export async function deleteIngredientWithPrice(id, writePrice = false) {
+  await sessionReady;
+  const batch = writeBatch(db);
+  deletePlan({ id, mayPrice: writePrice }).forEach(({ collection: name, id: docId }) => {
+    batch.delete(doc(collection(db, pathFor(name)), docId));
+  });
+  await batch.commit();
 }
 
 // Save a supplier — a new one when `id` is null — and return its id.

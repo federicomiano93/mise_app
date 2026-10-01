@@ -21,6 +21,7 @@ import {
   watchCollection, watchDoc, saveDoc, COLLECTIONS,
   watchRecentHistory, getOlderHistory, getLegacyHistory,
   watchIngredientPrices, canManageHere, authReady, getPriceHistory,
+  deleteIngredientWithPrice, mayWritePrices,
 } from './firebase-orders.js';
 import { withPrices } from '../price-model.js';
 import { currentSession } from '../firebase.js';
@@ -34,7 +35,7 @@ import { paintOrderMoney } from './order-cost-view.js';
 import {
   scheduleDraftSave, saveDraftNow, flushDraftSave, watchDraft, archiveSupplier, clearSupplier,
   clearQuantities, saveHistoryRecord, deleteHistoryRecord, setDraftSaveReporter,
-  confirmDelivery,
+  confirmDelivery, clearIngredientFromDraft,
 } from './draft.js';
 import { buildSendScreen } from './preview.js';
 import { buildSupplierPicker } from './supplier-picker.js';
@@ -457,6 +458,21 @@ function openAddIngredient(supplierId) {
 // copy, and `pricesLoaded` tells the opener whether that merge has really seen the prices: if
 // not, it reads the price document before drawing — a card without the stored price would erase
 // it on an untouched Save (js/ingredient-edit-model.js).
+// ⚠️ THE DELETE FIRST, THE DRAFT CLEAN-UP SECOND, and only if the delete landed: a refused
+// delete must leave the typed quantity where it was. The clean-up is best effort — the
+// ingredient is already gone and its row with it, and a failure here must not report the delete
+// as failed (it would invite a second delete of something that no longer exists).
+// The local entry goes too, or the draft autosave would write the quantity straight back.
+async function deleteIngredientAndDraftRow(id) {
+  await deleteIngredientWithPrice(id, mayWritePrices());
+  delete state.entries[id];
+  try {
+    await clearIngredientFromDraft(id);
+  } catch (err) {
+    console.error('The draft still holds a deleted ingredient:', err);
+  }
+}
+
 function openEditIngredient(ing) {
   if (addingIngredient || !mayAddIngredient()) return;
   const item = state.ingredients.find(i => i.id === ing.id) || ing;
@@ -468,7 +484,11 @@ function openEditIngredient(ing) {
     storedCategories: state.ingredientCategories,
     layerClass: 'mgmt-overlay',
     pricesLoaded: state.pricesReadable === true,
-    actions: { priceHistory: (id) => getPriceHistory(id) },
+    actions: {
+      priceHistory: (id) => getPriceHistory(id),
+      // The bin, only for whoever may delete (the rules decide either way — P2).
+      ...(canManageHere() ? { deleteIngredient: deleteIngredientAndDraftRow } : {}),
+    },
   })
     .catch(err => {
       console.error('Could not open the ingredient card', err);

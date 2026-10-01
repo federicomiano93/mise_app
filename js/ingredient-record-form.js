@@ -39,6 +39,7 @@ import {
 // js/ root on 29 Sep 2026 because this form now needs it too (CLAUDE.md
 // "Modular by feature").
 import { vatRatesFor } from './vat-rates.js';
+import { confirmAndDelete } from './ingredient-edit-model.js';
 // The «Peso» box is a number and a unit menu, stored as the one text `weight` (pack-size.js
 // still reads it), and «Categoria» / «Unità d'ordine» are menus over lists their callers
 // hand in (record-choices.js builds them; this file never asks a feature for them).
@@ -95,6 +96,8 @@ import { currentSession } from './firebase.js';
 // the copy that quietly disagrees about what is in somebody's food.
 import { readPackIngredients, reconcileTicks, tickKey } from './allergen-match.js';
 import { confirmDialog, alertDialog } from './confirm-dialog.js';
+
+const TRASH_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>';
 
 const CAMERA_ICON = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>';
 
@@ -1262,7 +1265,9 @@ function choiceControl({ values, current, newLabel, placeholder, ariaLabel, blan
 // packs       — the words «Confezione» offers (record-choices.js packChoices)
 // panels      — { allergens, nutrition }: which optional panels this venue uses
 // actions     — { saveIngredient(id, payload, record, writePrice), priceHistory(id),
-//                 packPhotoOn(), capturePackPhoto(), createSupplier() → { id, name } | null }
+//                 packPhotoOn(), capturePackPhoto(), createSupplier() → { id, name } | null,
+//                 deleteIngredient(id) — optional: handed in only to somebody who may delete; it
+//                 draws the bin, and only for an existing item }
 // onDone / onCancel — where the screen goes afterwards
 //
 // ⚠️ THE TWO DEFAULTS POINT THE SAFE WAY. No `mayPrice` means no price drawn and none
@@ -1436,6 +1441,37 @@ export function buildIngredientForm({
     }
   } }, t('ui.save'));
 
+  // ⚠️ THE BIN EXISTS ONLY FOR AN EXISTING INGREDIENT AND ONLY WHEN THE CALLER HANDS IN
+  // `actions.deleteIngredient` — and the caller hands it in only to an owner or a manager (the
+  // card reads no role, like the price). A small, low-key red icon, never a button beside Save
+  // (CLAUDE.md «Buttons», P20). The question is always asked, in danger style.
+  // ⚠️ THE FAILURE IS SAID, AND NOTHING CHANGES: the card stays open with what was typed, the
+  // list is untouched (the snapshot only fires if the delete landed).
+  const deleteBtn = item && typeof actions?.deleteIngredient === 'function'
+    ? el('button', {
+      type: 'button', class: 'mgmt-delete-btn', icon: TRASH_SVG,
+      'aria-label': t('orders.deleteIngredient'),
+      onClick: () => confirmAndDelete({
+        item,
+        ask: () => confirmDialog({
+          title: t('orders.deleteIngredientTitle', { name: item.name }),
+          message: t('orders.deleteIngredientMessage'),
+          okLabel: t('ui.delete'),
+          cancelLabel: t('ui.cancel'),
+          danger: true,
+        }),
+        remove: (id) => actions.deleteIngredient(id),
+        onStart: () => { deleteBtn.disabled = true; save.disabled = true; },
+        onDone: () => onDone?.(),
+        onFail: async (err) => {
+          deleteBtn.disabled = false;
+          save.disabled = false;
+          await reportFailure('delete', item.name, err);
+        },
+      }),
+    })
+    : null;
+
   return el('div', { class: 'mgmt-form' }, [
     // ⚠️ NO TITLE OF ITS OWN ANY MORE. It had one because the panel's header said
     // «Impostazioni» and something had to name the form. The form now has a header
@@ -1473,6 +1509,6 @@ export function buildIngredientForm({
     // empty one, because an empty card labelled «Prezzo» advertises what it withholds.
     ...(price ? [section({ title: t('orders.section.price'), body: [price.node] })] : []),
     allergens.root,
-    formActions(save, onCancel),
+    formActions(save, onCancel, deleteBtn),
   ]);
 }

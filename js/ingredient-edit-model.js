@@ -48,3 +48,28 @@ export function deletePlan({ id, mayPrice }) {
 export function draftEntryPath(id) {
   return `entries.${id}`;
 }
+
+// The bin's whole flow, with its collaborators handed in so it can be run without a screen:
+// ask first, delete only on «yes», and say so on failure without having changed anything.
+//
+//   ask()       → Promise<boolean>   the danger confirmation
+//   remove(id)  → Promise            the feature's delete (the batch, the draft clean-up)
+//   onStart()   — lock the card while the write runs (a second tap must not delete twice)
+//   onDone()    — the card closes
+//   onFail(err) — unlock the card and say what went wrong; the card stays open, as typed
+//
+// Resolves true only when the ingredient was deleted. ⚠️ `onDone` runs ONLY after `remove`
+// succeeded: closing the card on a refused delete would look like it had worked.
+export async function confirmAndDelete({ item, ask, remove, onStart, onDone, onFail }) {
+  if (!item || !item.id) return false;
+  if (!(await ask())) return false;
+  onStart?.();
+  try {
+    await remove(item.id);
+  } catch (err) {
+    onFail?.(err);
+    return false;
+  }
+  onDone?.();
+  return true;
+}

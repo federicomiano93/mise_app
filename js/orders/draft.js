@@ -21,6 +21,7 @@ import {
   changedEntries, changedDays,
 } from './archive.js';
 import { cleanUnit } from '../order-unit.js';
+import { draftEntryPath } from '../ingredient-edit-model.js';
 
 const DRAFT_ID = 'current';
 const SAVE_DELAY_MS = 800; // debounce to limit Firestore writes (cost control)
@@ -241,6 +242,24 @@ function forgetKnown(paths) {
       delete known.days[id];
       delete pending.days[id];
     }
+  });
+}
+
+// Take ONE ingredient's row out of the shared draft — called when the ingredient is deleted.
+//
+// ⚠️ WITHOUT IT A DELETED PRODUCT STAYS IN `drafts/current`, INVISIBLE: no row draws it, but
+// the quantity is still in the document and would be archived into the next order of its
+// supplier (the same reason clearSupplier clears the UNFILTERED list). Only the named path is
+// cleared, so whatever another phone is typing for other ingredients survives.
+// A draft that does not exist yet has nothing to clear, and updateDoc refuses a missing
+// document — that refusal is not a failure of the delete, so it is the caller's to log.
+export function clearIngredientFromDraft(ingredientId) {
+  const paths = [draftEntryPath(ingredientId)];
+  return clearFields(COLLECTIONS.drafts, DRAFT_ID, paths, {
+    updatedAt: new Date().toISOString(),
+  }).then(result => {
+    forgetKnown(paths);
+    return result;
   });
 }
 

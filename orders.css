@@ -1506,6 +1506,26 @@ body[data-section="orders"] .ing-filter .view-switch-btn:not(.active) { color: v
 .mgmt-form-actions { display: flex; gap: 10px; margin-top: 6px; }
 .mgmt-form-actions .btn-secondary { flex: 1; }
 .mgmt-form-actions .btn-primary { flex: 2; margin-top: 0; }
+/* The bin on an existing record's card: small and quiet — danger-red icon, no fill, no border —
+   so it never competes with Save (P20). 44px is the target; the 20px icon is centred in it. */
+.mgmt-form-actions .mgmt-delete-btn {
+  flex: 0 0 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--danger);
+  cursor: pointer;
+  transition: transform 60ms ease;
+}
+.mgmt-form-actions .mgmt-delete-btn:active { transform: scale(.97); }
+.mgmt-form-actions .mgmt-delete-btn:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 2px; }
+.mgmt-form-actions .mgmt-delete-btn:disabled { opacity: .5; cursor: default; }
 
 /* The confirmation dialog moved to the shared .app-dialog-* component
    (js/orders/confirm-dialog.js + tokens.css); .btn-danger went with it — the
