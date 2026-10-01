@@ -220,3 +220,38 @@ test('the words exist in English and Italian, and the button style keeps the row
   assert.doesNotMatch(rule, /text-decoration|font-size|font-weight|color:/, 'size, weight and colour stay .ing-name\'s');
   assert.match(css, /\.ing-row--line \.ing-name-btn:focus-visible \{ outline: 2px solid/, 'a visible focus ring');
 });
+
+test('⚠️ the row hooks still call openEditIngredient — deleting the call fails here', () => {
+  assert.match(MAIN, /onEditIngredient\(ing\) \{\s*openEditIngredient\(ing\);\s*\}/);
+  assert.match(MAIN, /function openEditIngredient\(ing\) \{/);
+  assert.match(codeOf(read('js/orders/ingredients.js')), /onClick: \(\) => hooks\.onEditIngredient\(ing\),/);
+});
+
+test('the name button\'s touch target is 44px tall and 24px wide at least, drawn without moving the row', () => {
+  const css = read('orders.css').replace(/\/\*[\s\S]*?\*\//g, '');
+  const head = css.indexOf('.ing-row--line .ing-name-btn {', css.indexOf('position: relative') - 200);
+  const btnAt = css.indexOf('.ing-row--line .ing-name-btn { position: relative');
+  assert.ok(btnAt >= 0 && head >= 0);
+  const btn = css.slice(btnAt, css.indexOf('}', btnAt));
+  assert.match(btn, /position:\s*relative/);
+  assert.match(btn, /min-width:\s*24px/);
+  const at = css.indexOf('.ing-row--line .ing-name-btn::before {');
+  assert.ok(at >= 0, 'an invisible hit area');
+  const rule = css.slice(at, css.indexOf('}', at));
+  assert.match(rule, /position:\s*absolute/);
+  const vertical = Number(/inset:\s*-(\d+(?:\.\d+)?)px 0;/.exec(rule)?.[1]);
+  // The name line is 22px; the hit area adds this much above and below.
+  assert.ok(22 + 2 * vertical >= 44, `${22 + 2 * vertical}px is under 44`);
+  assert.match(rule, /inset:\s*-[\d.]+px 0;/, 'horizontal 0: it never reaches the boxes, the × or the unit menu');
+  assert.doesNotMatch(rule, /background|border/, 'invisible');
+});
+
+test('focus goes back inside the screen on top, never a hidden row or the page body', () => {
+  const fn = MAIN.slice(MAIN.indexOf('function restoreFocusAfterCard'), MAIN.indexOf('function openEditIngredient'));
+  assert.match(fn, /const scope = detailView \? detailView\.overlay : document;/);
+  assert.match(fn, /scope\.querySelector\(`\[data-ing=/, 'the row is looked up in the screen on top');
+  assert.match(fn, /scope\.querySelector\('\.search-row input'\)/);
+  assert.match(fn, /scope\.querySelector\('\.orders-icon-btn'\)/);
+  assert.match(fn, /wasDeleted \? null/, 'after a delete it does not look for the gone row');
+  assert.match(MAIN, /\.finally\(\(\) => \{\s*addingIngredient = false;\s*restoreFocusAfterCard\(ing\.id\);/);
+});

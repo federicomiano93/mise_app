@@ -12,11 +12,11 @@
 import { t, joinList, onLanguageChange } from '../i18n.js';
 import { supplierLabel } from '../supplier-label.js';
 // ⚠️ createDoc / removeDoc / saveIngredientWithPrice / getPriceHistory LEFT WITH THE
-// RECORDS. This page no longer creates, deletes or prices anything — it reads the
-// two collections to draw an order. js/orders/registry-main.js holds those calls now.
-// (The exceptions are «+ Add ingredient» on a supplier's screen and the ingredient NAME on a
-// row, which open the records' own card through js/ingredient-create.js — the card does its own
-// saving.)
+// RECORDS: this page writes only the order itself (draft, history), and js/orders/registry-main.js
+// holds the record calls. The exceptions open the records' own card through
+// js/ingredient-create.js: «+ Add ingredient» on a supplier's screen creates, and the
+// ingredient NAME on a row edits — and, for an owner or manager, deletes (the card's bin ends in
+// deleteIngredientAndDraftRow below, which also takes the ingredient's line out of the draft).
 import {
   watchCollection, watchDoc, saveDoc, COLLECTIONS,
   watchRecentHistory, getOlderHistory, getLegacyHistory,
@@ -35,7 +35,7 @@ import { paintOrderMoney } from './order-cost-view.js';
 import {
   scheduleDraftSave, saveDraftNow, flushDraftSave, watchDraft, archiveSupplier, clearSupplier,
   clearQuantities, saveHistoryRecord, deleteHistoryRecord, setDraftSaveReporter,
-  confirmDelivery, clearIngredientFromDraft,
+  confirmDelivery, dropDeletedIngredientFromDraft,
 } from './draft.js';
 import { buildSendScreen } from './preview.js';
 import { buildSupplierPicker } from './supplier-picker.js';
@@ -459,18 +459,33 @@ function openAddIngredient(supplierId) {
 // not, it reads the price document before drawing — a card without the stored price would erase
 // it on an untouched Save (js/ingredient-edit-model.js).
 // ⚠️ THE DELETE FIRST, THE DRAFT CLEAN-UP SECOND, and only if the delete landed: a refused
-// delete must leave the typed quantity where it was. The clean-up is best effort — the
-// ingredient is already gone and its row with it, and a failure here must not report the delete
-// as failed (it would invite a second delete of something that no longer exists).
+// delete must leave the typed quantity where it was. The clean-up is NOT awaited — the card
+// closes as soon as the batch resolves — and a failure is only logged (draft.js).
 // The local entry goes too, or the draft autosave would write the quantity straight back.
+// `deletedIngredientId` tells the focus restore below that the row is gone (or about to be: the
+// snapshot may land after the card has closed), so focus goes to a visible element instead.
+let deletedIngredientId = null;
 async function deleteIngredientAndDraftRow(id) {
   await deleteIngredientWithPrice(id, mayWritePrices());
+  deletedIngredientId = id;
   delete state.entries[id];
-  try {
-    await clearIngredientFromDraft(id);
-  } catch (err) {
-    console.error('The draft still holds a deleted ingredient:', err);
-  }
+  dropDeletedIngredientFromDraft(id);
+}
+
+// After the card closes, hand focus back INSIDE THE SCREEN THAT IS ON TOP: the open supplier's
+// screen if there is one, else the flat list — never a row hidden behind an overlay, and never
+// the page body. The row's name button when it is still there; after a delete, the search box
+// of the flat list or the supplier screen's header Back.
+function restoreFocusAfterCard(ingredientId) {
+  const wasDeleted = deletedIngredientId === ingredientId;
+  deletedIngredientId = null;
+  const scope = detailView ? detailView.overlay : document;
+  const name = wasDeleted ? null
+    : scope.querySelector(`[data-ing="${CSS.escape(ingredientId)}"] .ing-name-btn`);
+  const target = name
+    || scope.querySelector('.search-row input')
+    || scope.querySelector('.orders-icon-btn');
+  target?.focus({ preventScroll: true });
 }
 
 function openEditIngredient(ing) {
@@ -496,8 +511,7 @@ function openEditIngredient(ing) {
     })
     .finally(() => {
       addingIngredient = false;
-      // The row was rebuilt by the snapshot; hand focus back to its name (keyboard users).
-      document.querySelector(`[data-ing="${CSS.escape(ing.id)}"] .ing-name-btn`)?.focus({ preventScroll: true });
+      restoreFocusAfterCard(ing.id);
     });
 }
 

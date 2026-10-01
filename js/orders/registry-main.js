@@ -14,6 +14,7 @@ import { outputLanguage } from '../market.js';
 import { categoryChoices, unitChoices, packChoices } from '../record-choices.js';
 import { withPrices } from '../price-model.js';
 import { buildRegistry } from './registry.js';
+import { dropDeletedIngredientFromDraft } from './draft.js';
 import {
   COLLECTIONS, watchCollection, watchIngredientPrices, canManageHere,
   saveDoc, removeDoc, saveIngredientWithPrice, saveSupplierRecord, getPriceHistory,
@@ -81,7 +82,12 @@ const screen = buildRegistry(
     // write prices (saveIngredientWithPrice's reasoning). The rules decide either way (P2).
     get deleteIngredient() {
       return canManageHere()
-        ? (id) => deleteIngredientWithPrice(id, mayWritePrices())
+        ? async (id) => {
+          await deleteIngredientWithPrice(id, mayWritePrices());
+          // ⚠️ ALSO THE ORDER DRAFT, like the Orders path: a quantity typed for this ingredient
+          // would otherwise stay in drafts/current. Not awaited — the card closes now.
+          dropDeletedIngredientFromDraft(id);
+        }
         : undefined;
     },
     // The shortened list and «no category» on every ingredient that used it — one batch.

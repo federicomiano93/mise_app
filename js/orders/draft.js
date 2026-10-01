@@ -247,12 +247,22 @@ function forgetKnown(paths) {
 
 // Take ONE ingredient's row out of the shared draft — called when the ingredient is deleted.
 //
-// ⚠️ WITHOUT IT A DELETED PRODUCT STAYS IN `drafts/current`, INVISIBLE: no row draws it, but
-// the quantity is still in the document and would be archived into the next order of its
-// supplier (the same reason clearSupplier clears the UNFILTERED list). Only the named path is
+// ⚠️ WITHOUT IT A DELETED PRODUCT LEAVES ITS LINE IN `drafts/current`: leftover data. No row
+// draws it, and the archive and the totals only walk the ingredients that still exist, so it is
+// never ordered nor counted — but it would sit in the document for ever. Only the named path is
 // cleared, so whatever another phone is typing for other ingredients survives.
 // A draft that does not exist yet has nothing to clear, and updateDoc refuses a missing
 // document — that refusal is not a failure of the delete, so it is the caller's to log.
+// ⚠️ NOT AWAITED BY THE CARD: the card closes the moment the delete batch has landed, and this
+// runs after it. A failure is only logged — the ingredient is already gone, and reporting it as a
+// failed delete would invite a second delete of something that no longer exists. One function for
+// both screens that can delete (Orders and Fornitori), so neither can forget it.
+export function dropDeletedIngredientFromDraft(ingredientId) {
+  clearIngredientFromDraft(ingredientId).catch(err => {
+    console.error('The draft still holds a deleted ingredient:', err);
+  });
+}
+
 export function clearIngredientFromDraft(ingredientId) {
   const paths = [draftEntryPath(ingredientId)];
   return clearFields(COLLECTIONS.drafts, DRAFT_ID, paths, {

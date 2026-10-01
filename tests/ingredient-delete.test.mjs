@@ -137,7 +137,9 @@ test('the bin is quiet: danger-red icon, no fill, no border, a 44px target', () 
 });
 
 test('Fornitori hands the action in only to an owner or manager, read when each card opens', () => {
-  assert.match(REG_MAIN, /get deleteIngredient\(\) \{\s*return canManageHere\(\)\s*\? \(id\) => deleteIngredientWithPrice\(id, mayWritePrices\(\)\)\s*: undefined;/);
+  assert.match(REG_MAIN, /get deleteIngredient\(\) \{\s*return canManageHere\(\)\s*\? async \(id\) => \{\s*await deleteIngredientWithPrice\(id, mayWritePrices\(\)\);\s*dropDeletedIngredientFromDraft\(id\);\s*\}\s*: undefined;/,
+    'Fornitori also takes the line out of the order draft, after the batch and without awaiting it');
+  assert.match(REG_MAIN, /import \{ dropDeletedIngredientFromDraft \} from '\.\/draft\.js';/);
   // registry.js spreads the actions object each time it opens a card, which runs the getter then.
   const registry = codeOf(read('js/orders/registry.js'));
   assert.match(registry, /actions: \{ \.\.\.actions, capturePackPhoto,/);
@@ -149,11 +151,13 @@ test('Orders hands the action in only to an owner or manager, and the draft row 
   const fn = MAIN.slice(MAIN.indexOf('async function deleteIngredientAndDraftRow'), MAIN.indexOf('function openEditIngredient'));
   const del = fn.indexOf('await deleteIngredientWithPrice(id, mayWritePrices());');
   const local = fn.indexOf('delete state.entries[id];');
-  const draft = fn.indexOf('await clearIngredientFromDraft(id);');
+  const draft = fn.indexOf('dropDeletedIngredientFromDraft(id);');
   assert.ok(del > 0 && local > del && draft > local,
     'delete first; the typed quantity is only touched once the delete landed');
-  assert.match(fn, /catch \(err\) \{\s*console\.error\(/, 'a failed clean-up is logged, never reported as a failed delete');
+  assert.doesNotMatch(fn, /await dropDeleted|await clearIngredientFromDraft/, 'the card must not wait for the draft clean-up');
   const draftJs = codeOf(read('js/orders/draft.js'));
+  assert.match(draftJs, /export function dropDeletedIngredientFromDraft\(ingredientId\) \{\s*clearIngredientFromDraft\(ingredientId\)\.catch\(err => \{\s*console\.error\(/,
+    'a failed clean-up is logged, never reported as a failed delete');
   assert.match(draftJs, /export function clearIngredientFromDraft\(ingredientId\) \{\s*const paths = \[draftEntryPath\(ingredientId\)\];\s*return clearFields\(COLLECTIONS\.drafts, DRAFT_ID, paths,/);
   assert.match(draftJs, /forgetKnown\(paths\);/, 'the autosave baseline forgets it too, or it is written straight back');
 });
@@ -174,5 +178,6 @@ test('the words exist in English and Italian', () => {
   }
   assert.match(dict, /'orders\.deleteIngredientTitle': 'Delete “\{name\}”\?'/);
   assert.match(dict, /'orders\.deleteIngredientTitle': 'Eliminare «\{name\}»\?'/);
-  assert.match(dict, /'orders\.deleteIngredientMessage': 'Non si può annullare\. Gli ordini passati lo mostrano ancora; nelle ricette e nel food cost comparirà come ingrediente mancante\.'/);
+  assert.match(dict, /'orders\.deleteIngredientMessage': 'Non si può annullare\. Gli ordini passati lo mostrano ancora; nelle ricette e nel food cost comparirà come ingrediente mancante, e le etichette di quelle ricette restano bloccate finché non lo sostituisci\.'/);
+  assert.match(dict, /'orders\.deleteIngredientMessage': 'This cannot be undone\. Past orders still show it; in recipes and food cost it will appear as a missing ingredient, and the labels of those recipes stay blocked until you replace it\.'/);
 });

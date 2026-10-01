@@ -44,7 +44,7 @@ export function deletePlan({ id, mayPrice }) {
 
 // The field path of an ingredient's quantity in the shared order draft (`drafts/current`).
 // Cleared when the ingredient is deleted, or its quantity would sit in the draft, invisible
-// and still counted in the order totals.
+// and uncounted — leftover data, never ordered, since nothing walks an ingredient that is gone.
 export function draftEntryPath(id) {
   return `entries.${id}`;
 }

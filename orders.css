@@ -619,6 +619,17 @@
   letter-spacing: inherit;
   cursor: pointer;
 }
+/* The TOUCH target is 44px tall without the row moving: the 22px name button carries an invisible
+   hit area 11px taller above and below (the .app-icon-btn::before trick, tokens.css). It is
+   horizontal-0 on purpose — the Order / Stock boxes, the unit menu and the × are in other columns,
+   and the button is capped at the name column's width — so it overlaps none of them. The
+   min-width keeps even a one-letter name above WCAG 2.2's 24px. */
+.ing-row--line .ing-name-btn { position: relative; min-width: 24px; }
+.ing-row--line .ing-name-btn::before {
+  content: '';
+  position: absolute;
+  inset: -11px 0;
+}
 .ing-row--line .ing-name-btn:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 2px; border-radius: var(--radius-sm); }
 .ing-row--line .ing-supplier { margin: 2px 0 0; }
 .ing-row--line .ing-weight { margin-top: 1px; font-family: 'DM Mono', monospace; font-size: 12px; color: var(--text-3); }
