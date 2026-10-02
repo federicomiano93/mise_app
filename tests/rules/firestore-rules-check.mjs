@@ -292,6 +292,19 @@ async function ingredients() {
       category: 'Other', unit: '', active: true, bakery: 'main',
     }));
 
+  // ── The name the app shows (2 Oct 2026) ──
+  await expectAllowed('an ingredient with the name to show (shortName)', () =>
+    mergeWrite('locations/main/ingredients/ING_MODERN', { shortName: 'Flour', bakery: 'main' }));
+  await expectAllowed('…cleared back to empty', () =>
+    mergeWrite('locations/main/ingredients/ING_MODERN', { shortName: '', bakery: 'main' }));
+  await expectAllowed('…a 60-character name to show', () =>
+    mergeWrite('locations/main/ingredients/ING_MODERN', { shortName: bigString(60), bakery: 'main' }));
+  await expectDenied('a 61-character name to show on an ingredient',
+    () => mergeWrite('locations/main/ingredients/ING_MODERN', { shortName: bigString(61), bakery: 'main' }));
+  await expectDenied('a name to show on an ingredient that is not text',
+    () => mergeWrite('locations/main/ingredients/ING_MODERN', { shortName: 42, bakery: 'main' }));
+  await mergeWrite('locations/main/ingredients/ING_MODERN', { shortName: '', bakery: 'main' });
+
   await expectDenied('an unknown key on an ingredient',
     () => mergeWrite('locations/main/ingredients/ING_MODERN', { evil: 'x', bakery: 'main' }));
   // ── Packaging is an item too (13 Sep 2026) ──

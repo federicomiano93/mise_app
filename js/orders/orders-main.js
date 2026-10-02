@@ -63,7 +63,7 @@ import {
 } from './order-text.js';
 import { liveHistoryStart, mergeHistory, createOlderLoader } from './history-window.js';
 import {
-  historyDocId, ingredientsOf, supplierHasItems, ingredientLabel, wholeNumber,
+  historyDocId, ingredientsOf, supplierHasItems, ingredientDisplayLabel, wholeNumber,
   unitConflicts, unitConflictList,
 } from './archive.js';
 import { storedUnitFor, entryUnit, isDefaultUnit } from '../order-unit.js';
@@ -1738,7 +1738,7 @@ async function placeOrder(supplierId, { confirm = true, date: pinnedDate, quanti
         state.entries, ingredients, supplierId);
       const list = conflicts.length ? unitConflictList(conflicts) : (err.ids || []).map(id => {
         const ing = ingredients.find(i => i.id === id);
-        return (ing && ingredientLabel(ing)) || id;
+        return (ing && ingredientDisplayLabel(ing)) || id;
       }).join(', ');
       await alertDialog(t('orders.unitConflict', { day: dayWhen(date), list }));
     } else {
@@ -1955,7 +1955,7 @@ async function openPlaceConfirm(items, { title, okLabel }) {
     const rows = ingredientsOf(supplier.id, ingredients)
       .map(ing => ({
         id: ing.id,
-        name: ingredientLabel(ing),
+        name: ingredientDisplayLabel(ing),
         unit: entryUnit(state.entries[ing.id], ing),
         qty: wholeNumber(state.entries[ing.id]?.qty),
         asked: asked[ing.id],

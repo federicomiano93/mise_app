@@ -28,6 +28,7 @@ import { unitCost, itemsPerOrderedUnit } from '../order-cost.js';
 // feature"), not inside this one's folder. Re-exported so every EXISTING
 // import of parsePackSize from this file keeps working.
 import { parsePackSize } from '../pack-size.js';
+import { ingredientDisplayName } from '../ingredient-name.js';
 
 export { parsePackSize };
 
@@ -185,7 +186,7 @@ export function monthCost({ month, ingredients, consumptionOf, closed }) {
     // at the top they would bury the thing the screen is for.
     if ((a.value === null) !== (b.value === null)) return a.value === null ? 1 : -1;
     if (a.value !== b.value) return (b.value || 0) - (a.value || 0);
-    return String(a.ingredient.name || '').localeCompare(String(b.ingredient.name || ''));
+    return ingredientDisplayName(a.ingredient).localeCompare(ingredientDisplayName(b.ingredient));
   });
 
   return { lines, total: round3(total), counted, withoutValue };

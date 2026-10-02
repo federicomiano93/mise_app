@@ -428,6 +428,17 @@
 .rec-host .mgmt-fold-body {
   padding-top: 2px;
 }
+.rec-host .mgmt-fold-body--data {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+.rec-host .mgmt-form .mgmt-fold-body--data .mgmt-input {
+  min-height: var(--tap-min);
+}
+.rec-host .mgmt-fold-body--data > .notif-note {
+  margin-top: calc(-1 * var(--space-2));
+}
 .rec-host .alg-head-state {
   margin-left: auto;
   font-family: var(--font-mono);
