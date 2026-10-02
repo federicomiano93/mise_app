@@ -334,3 +334,39 @@ test('a case of pieces is the NORMAL shape: it agrees while the count and the it
   const bare = { ...PIECES_CASE, unitWeightKg: null };
   assert.equal(formatChanged(bare, carton(50), '60g'), null);
 });
+
+// ── 2nd deep review (1 Oct 2026) ─────────────────────────────────────────────
+
+test('review 3b: a package word as the unit, with no packCount, is a Singola whatever the stored case says', () => {
+  // what an employee leaves behind after turning a Cartone into a Singola, seen by a manager
+  const left = { ...PACK_CASE, unit: 'busta', packUnit: 'busta' };
+  assert.equal(formatOf(left, left).kind, 'single');
+  const pcs = { ...PIECES_CASE, unit: 'pezzo', packUnit: 'pezzo' };
+  assert.equal(formatOf(pcs, pcs).kind, 'single');
+  // …but a carton word, a different word or an explicit packCount still read as before
+  assert.equal(formatOf({ ...left, unit: 'cartone' }, left).kind, 'carton');
+  assert.equal(formatOf({ ...left, unit: 'sacco' }, left).kind, 'carton', 'a stored case of 4 under another word (rule 3)');
+  assert.equal(formatOf({ ...left, packCount: 4 }, left).kind, 'carton', 'rule 1 comes first');
+  assert.equal(formatOf({ ...left, unit: ' Busta ', packUnit: 'busta' }, left).kind, 'single', 'matched ignoring case and spaces');
+});
+
+test('review 2: force writes the full carton format even when the format was not touched; never for a Singola', () => {
+  const before = beforeOf(PACK_CASE);
+  assert.deepEqual(formatPatch(before, formOf(before)), {}, 'untouched, no price typed: nothing');
+  assert.deepEqual(formatPatch(before, formOf(before), { force: true }), { packCount: 4, packUnit: 'busta', unit: 'cartone' });
+  const single = beforeOf(TYPED_SACK);
+  assert.deepEqual(formatPatch(single, formOf(single), { force: true }), {}, 'a price typed under Singola adds no format keys');
+  // a carton word already stored is kept
+  const cassa = beforeOf({ ...PACK_CASE, unit: 'cassa' });
+  assert.equal(formatPatch(cassa, formOf(cassa), { force: true }).unit, 'cassa');
+});
+
+test('review 4: a per-piece price flags a piece weight that differs from the weight now readable (an employee changed it)', () => {
+  const egg = { priceUnit: 'pcs', pricePerUnit: 0.25, unitWeightKg: 0.06 };
+  const single = { kind: 'single', count: null, inner: '' };
+  assert.equal(formatChanged(egg, single, '60g'), null);
+  assert.deepEqual(formatChanged(egg, single, '70g'), { old: '0.06 kg', new: '0.07 kg' });
+  assert.equal(formatChanged(egg, single, 'sacco'), null, 'an unreadable weight says nothing');
+  assert.equal(formatChanged({ priceUnit: 'pcs', pricePerUnit: 0.25 }, single, '70g'), null, 'no remembered piece weight, nothing to disagree about');
+  assert.equal(formatChanged({ priceUnit: 'kg', pricePerUnit: 2, unitWeightKg: 0.06 }, single, '70g'), null, 'a per-kilo rate has no piece');
+});

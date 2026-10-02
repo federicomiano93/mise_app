@@ -70,3 +70,11 @@ test('the three callers wire it: the card says what it replaced, Fornitori and O
 test('a history record that froze no unit being re-read is left alone, and the code says so', () => {
   assert.match(read('js/orders/draft.js'), /a line already recorded in orders-history carries no frozen unit/);
 });
+
+test('review 1: a line typed in an item with NO unit (every new Singola) is frozen in the package word', async () => {
+  // the card turned a unit-less Singola into a Cartone and tells the caller it replaced «busta» (its package)
+  globalThis.__draftDoc = { entries: { flour: { qty: 8, stock: 0 } } };
+  const cartonCard = { id: 'flour', unit: 'cartone', packUnit: 'busta', packCount: 4, weight: '2.5kg' };
+  assert.equal(await freezeUnitInDraft({ id: 'flour', from: 'busta', item: cartonCard }), true);
+  assert.deepEqual(globalThis.__draftWrites[0].data.entries, { flour: { unit: 'busta' } }, '8 bags stay 8 bags, not 8 cartons');
+});

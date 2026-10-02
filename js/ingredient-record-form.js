@@ -30,7 +30,7 @@ import { supplierLabel } from './supplier-label.js';
 import { NO_SUPPLIER_ID } from './records.js';
 import { field, formActions, reportFailure, shortDate } from './record-ui.js';
 import {
-  PRICE_UNITS, priceUnitLabel, PRICE_FORMS, priceFormOf, formatPriceInput, storedPriceInput, priceBoxStart,
+  PRICE_UNITS, priceUnitLabel, PRICE_FORMS, priceFormOf, formatPriceInput, storedPriceInput, singleFromCaseInput, priceBoxStart,
   weightNeededForPrice, positiveNumber, packBaseOf, storedCaseOf,
   pricePatch, priceChanged, priceRecord, pricePerKg,
   formatPricePerUnit, formatRate, costReasonText, formatMoney,
@@ -131,8 +131,8 @@ const CAMERA_ICON = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
 // is SAID (the note), the box shows the stored figure only while it still means the same thing, and the
 // price stays exactly as saved until a person writes the new one.
 // ⚠️⚠️ AN UNTOUCHED PRICE IS NEVER RE-DERIVED. `dirty()` is true only when a person typed in a
-// price box, moved Confezione / the count / the inner word / the weight, or tapped «Ricalcola».
-// Until then read() hands pricePatch the STORED price exactly (storedPriceInput), so reopening a
+// price box or tapped «Ricalcola» — never for a moved format or weight. Until then read() hands
+// pricePatch the STORED price exactly (storedPriceInput), so reopening a
 // product and fixing a typo in its name writes the same rate, the same case and no history entry.
 // Pre-filling the box from the stored price and dividing it back would drift the rate by rounding.
 //
@@ -142,6 +142,11 @@ const CAMERA_ICON = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
 // RIGHT NOW, so the box's own meaning follows an edit that has not been saved yet.
 // ctx.order() -> { unit, weight, packUnit, packCount }: the same, as the ingredient the card would
 // SAVE — what the VAT line costs one ordered unit of.
+// ctx.openedKind — 'single' | 'carton' as the card OPENED; ctx.initialWeight — the weight text as it opened.
+// ⚠️ TWO THINGS MOVE THE PRICE'S SHAPE WITHOUT MOVING ITS MONEY, and neither plants a history entry
+// (keepsMoney()): a Cartone turned into a Singola (the case becomes a per-item rate, singleFromCaseInput)
+// and a corrected weight on a per-item price whose remembered piece weight was tracking it (the piece
+// weight follows, the price per item does not change because its weight was corrected).
 // The stored case when it was priced by an EXPLICIT size (kg, g, l, ml), else null.
 const explicitSizeCase = (item) => {
   const stored = item ? storedCaseOf(item) : null;
@@ -221,6 +226,21 @@ function priceBlock(item, actions, defaultUnit = null, ctx) {
   let priceTyped = false;
   let recomputed = false;
   const dirty = () => !item || priceTyped || recomputed;
+  // A Cartone the person has turned into a Singola, on a price that stands on a case: the same money in the
+  // per-item shape. (Not for a card that merely OPENS as a Singola with a case of several — that stays verbatim.)
+  const convertsCase = () => !dirty() && Boolean(item) && ctx.openedKind === 'carton'
+    && now().fmt.kind === 'single' && Boolean(storedCaseOf(item));
+  // A corrected weight on a per-item price whose piece weight was TRACKING the old weight: the new weight in
+  // kilos, or null. A price whose piece weight was never the pack weight (an old per-piece price) is left alone.
+  function syncedWeightKg() {
+    if (dirty() || !item || item.priceUnit !== 'pcs') return null;
+    const base = packBaseOf(now().weight);
+    const was = packBaseOf(ctx.initialWeight);
+    if (!base || !was || Math.abs(base.size - was.size) < 1e-9) return null;
+    const kg = positiveNumber(item.unitWeightKg);
+    return kg !== null && Math.abs(kg - was.size) < 1e-9 ? base.size : null;
+  }
+  const keepsMoney = () => convertsCase() || syncedWeightKg() !== null;
 
   // ── Purchase VAT (29 Sep 2026) — so an order can show what it will cost
   // WITH VAT. The price above stays net, exactly as it does today: the
@@ -265,7 +285,9 @@ function priceBlock(item, actions, defaultUnit = null, ctx) {
   const changedText = el('p', { class: 'mgmt-price-note' });
   const recomputeBtn = el('button', {
     type: 'button', class: 'mgmt-link', text: t('orders.case.recompute'),
-    onClick: () => { recomputed = true; refresh(); },
+    // ⚠️ FOCUS FOLLOWS THE LINK THAT HIDES ITSELF: left on a hidden button it would drop to the page. The box
+    // it just filled is where the person looks next.
+    onClick: () => { recomputed = true; refresh(); casePriceBox.focus(); },
   });
   const changedNote = el('div', { class: 'mgmt-field', hidden: 'hidden' }, [changedText, recomputeBtn]);
   // «The saved price stays … until you write the new one or tap Recalculate» — what Save does, said.
@@ -310,7 +332,11 @@ function priceBlock(item, actions, defaultUnit = null, ctx) {
 
   function read() {
     const vat = vatSelect.value;
-    if (!dirty()) return storedPriceInput(item, vat);
+    if (!dirty()) {
+      const input = convertsCase() ? singleFromCaseInput(item, vat) : storedPriceInput(item, vat);
+      const synced = syncedWeightKg();
+      return synced === null ? input : { ...input, unitWeightKg: synced };
+    }
     return formatPriceInput(now().fmt, now().weight, {
       price: casePriceBox.value,
       rate: rate.value,
@@ -328,7 +354,9 @@ function priceBlock(item, actions, defaultUnit = null, ctx) {
     const form = priceFormOf(fmt, weight);
     const typedForm = form === PRICE_FORMS.typed;
     const unit = unitSelect.value;
-    const changed = formatChanged(item, fmt, weight);
+    // A change that keeps the money (a Cartone → Singola, a corrected weight) is not «a format that no longer
+    // matches the price»: nothing to warn about, and the box shows the figure as it will be written.
+    const changed = keepsMoney() ? null : formatChanged(item, fmt, weight);
     // The box shows the stored figure while it still means the same thing; otherwise it is EMPTY with
     // the same price carried to this format as its placeholder (never a value: nothing is written until
     // somebody types or taps «Ricalcola», which fills it in and keeps following the format).
@@ -479,7 +507,7 @@ function priceBlock(item, actions, defaultUnit = null, ctx) {
     item, fmt: now().fmt, weightText: now().weight, dirty: dirty(), priceBox: casePriceBox.value,
   });
 
-  return { node, read, refresh, needsWeight, dirty };
+  return { node, read, refresh, needsWeight, dirty, keepsMoney };
 }
 
 // The append-only record of what this ingredient has cost. Loaded only when
@@ -1368,7 +1396,7 @@ export function buildIngredientForm({
   const formatIsTouched = () => formatTouched(before, formState());
   // What the card would SAVE for the order unit and the package, so the VAT line prices the right unit.
   const orderNow = () => {
-    const patch = formatPatch(before, { ...formState(), cartonWord });
+    const patch = formatPatch(before, { ...formState(), cartonWord }, { force: Boolean(price && price.dirty()) });
     return {
       unit: 'unit' in patch ? patch.unit : (item?.unit || ''),
       weight: weight.read(),
@@ -1471,6 +1499,8 @@ export function buildIngredientForm({
   price = mayPrice ? priceBlock(item, actions, startKind === 'packaging' ? 'pcs' : null, {
     now: () => ({ weight: weight.read(), fmt: { ...formState(), kind } }),
     order: orderNow,
+    openedKind: opened.kind,
+    initialWeight: weight.read(),
   }) : null;
   const sizedStored = mayPrice ? explicitSizeCase(item) : null;
   if (sizedStored && packBaseOf(weight.read()) === null) {
@@ -1534,7 +1564,9 @@ export function buildIngredientForm({
     // the write is a merge, so an untouched save leaves `unit`, `packUnit` and `packCount` exactly as
     // they are stored. The one thing a NEW item gets besides: an empty `unit`, or — a loose item priced
     // «al kg» / «al litro» / «al pezzo» — that word, so Orders shows «kg» beside the quantity.
-    const formatKeys = formatPatch(before, { ...state, cartonWord });
+    // ⚠️ A PRICE TYPED (or «Ricalcola») UNDER CARTONE WRITES THE FULL FORMAT TOO — the case is stored per item
+    // with the count, so packCount, the inner word and the carton word must say the same thing.
+    const formatKeys = formatPatch(before, { ...state, cartonWord }, { force: Boolean(price && price.dirty()) });
     if (formatKeys.packUnit) formatKeys.packUnit = formatKeys.packUnit.slice(0, PACK_WORD_MAX);
     const looseWord = !item && mayPrice && patch.pricePerUnit !== null
       ? looseUnit({
@@ -1561,7 +1593,8 @@ export function buildIngredientForm({
     // the form to correct a spelling must not plant an identical entry — a
     // history of non-events cannot answer "when did this go up?" — and removing
     // a price is not a price, so it records nothing.
-    const record = mayPrice && patch.pricePerUnit !== null && priceChanged(item, patch)
+    // ⚠️ NO HISTORY ENTRY WHEN ONLY THE SHAPE MOVED: the same cost per item (Cartone → Singola, a corrected weight).
+    const record = mayPrice && patch.pricePerUnit !== null && !price.keepsMoney() && priceChanged(item, patch)
       ? priceRecord({ ...item, supplierId: payload.supplierId }, patch, patch.priceUpdatedAt)
       : null;
 
@@ -1569,8 +1602,12 @@ export function buildIngredientForm({
       // ⚠️ A FORMAT CHANGE THAT REPLACES THE ORDER UNIT IS TOLD TO THE CALLER, which owns the order draft:
       // a line typed as «8» (in the old unit) must not start reading 8 of the new one. The card imports
       // no feature code, so it only says what it replaced (draft.js freezeUnitInDraft does the rest).
-      const replacedUnit = item && 'unit' in payload && cleanUnit(item.unit) && !sameUnit(payload.unit, item.unit)
-        ? cleanUnit(item.unit) : '';
+      // An item saved with NO unit (every new Singola) meant «one item» per untouched line — which is one
+      // package: the package word the card now writes is what to freeze there.
+      let replacedUnit = '';
+      if (item && 'unit' in payload && !sameUnit(payload.unit, item.unit)) {
+        replacedUnit = cleanUnit(item.unit) || cleanUnit('packUnit' in payload ? payload.packUnit : item.packUnit);
+      }
       await actions.saveIngredient(item?.id || null, payload, record, mayPrice, replacedUnit ? { unitChangedFrom: replacedUnit } : undefined);
       onDone?.();
     }

@@ -16,7 +16,7 @@
 // With «Cartone» the existing order machinery keeps working unchanged: unit + packUnit make
 // hasUnitChoice() true (js/order-unit.js), so the order row offers «cartone / busta».
 
-import { cleanUnit, hasUnitChoice } from './order-unit.js';
+import { cleanUnit, sameUnit, hasUnitChoice } from './order-unit.js';
 import { storedCaseOf, packBaseOf, packWeightOf, roundTo } from './price-model.js';
 import { packWordFor, looseUnitFor } from './record-choices.js';
 import { t, localeTag } from './i18n.js';
@@ -67,7 +67,12 @@ export function formatOf(item, price = null) {
   if (hasUnitChoice(it) && isCartonWord(it.unit)) {
     return { kind: 'carton', count: stored ? wholeCount(stored.caseCount) : null, inner };
   }
-  if (stored && stored.caseCount > 1) {
+  // ⚠️ A PACKAGE WORD AS THE ORDER UNIT, WITH NO packCount, IS A SINGOLA, whatever the stored case says
+  // (2nd review, 1 Oct 2026): it is what an employee leaves behind when a Cartone is turned into a Singola
+  // (the unit becomes «busta», the case of 4 stays in the price document until a manager touches it). The
+  // readers price that line as ONE item; reading it back as a carton would undo the employee's change.
+  const packWordIsUnit = inner !== '' && sameUnit(it.unit, it.packUnit) && !isCartonWord(it.unit);
+  if (stored && stored.caseCount > 1 && !packWordIsUnit) {
     return { kind: 'carton', count: wholeCount(stored.caseCount), inner };
   }
   return { kind: 'single', count: null, inner };
@@ -94,8 +99,12 @@ export function formatTouched(before, form) {
 //   Singola after Cartone → { packCount: null, unit }   a carton word becomes the PACKAGE word, any other stays
 // ⚠️ packUnit is written only when there is a word to say, or one is stored to clear — never
 // a blank key on an item that never had one.
-export function formatPatch(before, form) {
-  if (!formatTouched(before, form)) return {};
+// ⚠️ `force` is for a price typed (or «Ricalcola») under Cartone: the case is then written PER ITEM with
+// the count, so the product data must say the same thing — packCount, the inner word and the carton
+// word — exactly as if the format had been touched (2nd review: a bare price retyped on a live 'pack'
+// carton converted the case but never wrote packCount, and the bag lines lost their price).
+export function formatPatch(before, form, { force = false } = {}) {
+  if (!formatTouched(before, form) && !(force && form.kind === 'carton')) return {};
   if (form.kind === 'carton') {
     const inner = cleanUnit(form.inner);
     return {
@@ -156,7 +165,17 @@ export function formatSummary(fmt, weight, lang) {
 // is compared by the same size; a case of pieces has no size and only its count is compared.
 export function formatChanged(price, fmt, weight) {
   const stored = price ? storedCaseOf(price) : null;
-  if (!stored) return null;
+  if (!stored) {
+    // A per-piece price remembers one piece's weight; a weight changed since (by an employee, who cannot
+    // see the price) is said, and the manager's «Ricalcola» writes the new one. A weight that cannot be
+    // read says nothing.
+    const base = packBaseOf(weight);
+    const kg = Number(price && price.unitWeightKg);
+    if (price && price.priceUnit === 'pcs' && kg > 0 && base && Math.abs(base.size - kg) > 1e-9) {
+      return { old: `${numberText(kg)} ${base.priceUnit}`, new: `${numberText(base.size)} ${base.priceUnit}` };
+    }
+    return null;
+  }
   const count = fmt.kind === 'carton' ? fmt.count : 1;
   if (!count) return null;
   const base = packBaseOf(weight);

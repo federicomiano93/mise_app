@@ -62,7 +62,7 @@ test('«Confezione» is Singola | Cartone; the inner word is a menu with «+ Nuo
   assert.match(FORM, /const pack = choiceControl\(\{\s*values: packs, current: openedInner \|\| item\?\.packUnit,/);
   assert.match(FORM, /maxLength: PACK_WORD_MAX, selectLabel: t\('orders\.format\.innerAria'\),/);
   assert.match(FORM, /const refused = \[weight, category, \.\.\.\(kind === 'carton' \? \[pack\] : \[\]\)\]\.find\(control => control\.invalid\(\)\);/, 'an empty «+ Nuova…» blocks the save of a carton');
-  assert.match(FORM, /const formatKeys = formatPatch\(before, \{ \.\.\.state, cartonWord \}\);/);
+  assert.match(FORM, /const formatKeys = formatPatch\(before, \{ \.\.\.state, cartonWord \}, \{ force: Boolean\(price && price\.dirty\(\)\) \}\);/);
   assert.match(FORM, /if \(formatKeys\.packUnit\) formatKeys\.packUnit = formatKeys\.packUnit\.slice\(0, PACK_WORD_MAX\);/);
   assert.doesNotMatch(FORM, /\.\.\.\(packUnit \|\| item\?\.packUnit \? \{ packUnit \} : \{\}\)/, 'the old unconditional packUnit is gone');
   assert.match(FORM, /packs = \[\]/);

@@ -54,12 +54,14 @@ test('the price box means what the format and the weight say, and shows only the
 });
 
 test('⚠️ UNTOUCHED MEANS UNCHANGED: read() hands pricePatch the stored price until a person touches something', () => {
-  assert.match(FORM, /if \(!dirty\(\)\) return storedPriceInput\(item, vat\);/);
+  assert.match(FORM, /if \(!dirty\(\)\) \{\s*const input = convertsCase\(\) \? singleFromCaseInput\(item, vat\) : storedPriceInput\(item, vat\);/);
   assert.match(FORM, /return formatPriceInput\(now\(\)\.fmt, now\(\)\.weight, \{/);
   // dirty() is: a new item, a typed price box, «Ricalcola» — and NOTHING else (review, rule B): moving the
   // format or the weight never rewrites a stored price
   assert.match(FORM, /const dirty = \(\) => !item \|\| priceTyped \|\| recomputed;/);
-  assert.doesNotMatch(FORM, /ctx\.formatTouched|initialWeight/);
+  assert.doesNotMatch(FORM, /ctx\.formatTouched/);
+  // (initialWeight and openedKind only decide two shape-only changes that keep the money — keepsMoney())
+  assert.match(FORM, /const keepsMoney = \(\) => convertsCase\(\) \|\| syncedWeightKg\(\) !== null;/);
 });
 
 test('every price box a person can type in sets the flag, BEFORE the live line refreshes', () => {
@@ -77,9 +79,9 @@ test('the box shows the stored figure only while it still means the same thing; 
 });
 
 test('the format-changed note shows both formats and offers «Ricalcola», which only sets the flag', () => {
-  assert.match(FORM, /const changed = formatChanged\(item, fmt, weight\);/);
+  assert.match(FORM, /const changed = keepsMoney\(\) \? null : formatChanged\(item, fmt, weight\);/);
   assert.match(FORM, /t\('orders\.case\.packChanged', \{ old: changed\.old, new: changed\.new \}\)/);
-  assert.match(FORM, /onClick: \(\) => \{ recomputed = true; refresh\(\); \}/);
+  assert.match(FORM, /onClick: \(\) => \{ recomputed = true; refresh\(\); casePriceBox\.focus\(\); \}/, 'focus follows the link that hides itself');
   assert.match(FORM, /recomputeBtn\.hidden = dirty\(\) \|\| needsSize \|\| start\.suggestion === null;/, 'once the price is being recomputed the button has done its job');
   assert.match(I18N, /'orders\.case\.packChanged': 'Il formato è cambiato dall’ultimo prezzo: salvato \{old\}, con questo formato \{new\}\. Ricontrolla il prezzo\.'/);
   assert.match(I18N, /'orders\.case\.recompute': 'Ricalcola'/);

@@ -640,3 +640,33 @@ test('a weight-priced case cannot be re-priced once its weight stops reading; pi
   assert.equal(PM.weightNeededForPrice({ ...base, item: pieces }), false);
   assert.equal(PM.weightNeededForPrice({ ...base, item: { priceUnit: 'kg', pricePerUnit: 2 } }), false, 'a typed rate has no case to protect');
 });
+
+// ── 2nd deep review (1 Oct 2026): a Cartone turned into a Singola keeps the money ───────────────
+test('singleFromCaseInput: the same cost per item, in the per-item shape, with six decimals kept', () => {
+  const pack = { priceUnit: 'kg', pricePerUnit: 2, casePrice: 20, caseCount: 4, caseItemSize: 2.5, caseItemUnit: 'pack' };
+  const a = PM.pricePatch(PM.singleFromCaseInput(pack, ''), NOW, '2.5kg');
+  assert.deepEqual([a.priceUnit, a.pricePerUnit, a.unitWeightKg, a.caseCount, a.casePrice], ['pcs', 5, 2.5, null, null]);
+  assert.equal(PM.pricePerKg(a), 2, 'per kilo is unchanged');
+  const grams = PM.pricePatch(PM.singleFromCaseInput({ priceUnit: 'kg', pricePerUnit: 10, casePrice: 20, caseCount: 4, caseItemSize: 500, caseItemUnit: 'g' }, ''), NOW, '');
+  assert.deepEqual([grams.pricePerUnit, grams.unitWeightKg], [5, 0.5]);
+  const litres = PM.pricePatch(PM.singleFromCaseInput({ priceUnit: 'l', pricePerUnit: 4, casePrice: 12, caseCount: 6, caseItemSize: 500, caseItemUnit: 'ml' }, ''), NOW, '');
+  assert.deepEqual([litres.pricePerUnit, litres.unitWeightKg], [2, 0.5]);
+  // a case of pieces keeps the piece weight the price already remembers, and an odd division keeps six decimals
+  const odd = PM.pricePatch(PM.singleFromCaseInput({ priceUnit: 'pcs', pricePerUnit: 3.333333, casePrice: 10, caseCount: 3, caseItemUnit: 'pcs', unitWeightKg: 0.2 }, ''), NOW, '');
+  assert.deepEqual([odd.pricePerUnit, odd.unitWeightKg], [3.333333, 0.2]);
+  // no stored case: the stored price as it is
+  assert.deepEqual(PM.singleFromCaseInput({ priceUnit: 'kg', pricePerUnit: 7.2 }, '4'), PM.storedPriceInput({ priceUnit: 'kg', pricePerUnit: 7.2 }, '4'));
+});
+
+test('a rate typed without keepRate is still rounded to four decimals (only the converter keeps six)', () => {
+  assert.equal(PM.pricePatch({ priceUnit: 'pcs', pricePerUnit: 3.333333 }, NOW, '').pricePerUnit, 3.3333);
+});
+
+test('«each» is an interface word: one phrase with a hole, in English and in Italian', async () => {
+  assert.equal(PM.formatPricePerUnit({ priceUnit: 'pcs', pricePerUnit: 0.3 }), '£0.30 / each');
+  const { setLanguage } = await import('../js/i18n.js');
+  setLanguage('it');
+  try { assert.equal(PM.formatPricePerUnit({ priceUnit: 'pcs', pricePerUnit: 0.3 }), '£0.30 al pezzo'); }
+  finally { setLanguage('en'); }
+  assert.equal(PM.formatPricePerUnit({ priceUnit: 'kg', pricePerUnit: 7.2 }), '£7.20 / kg');
+});

@@ -394,7 +394,10 @@ export function formatPricePerUnit(ingredient) {
   const ing = ingredient || {};
   const rate = positiveNumber(ing.pricePerUnit);
   if (rate === null || !isPriceUnit(ing.priceUnit)) return '';
-  return `${formatRate(rate)} / ${ing.priceUnit === 'pcs' ? 'each' : ing.priceUnit}`;
+  // ⚠️ «each» IS AN INTERFACE WORD (t(), «al pezzo» in Italian), not a literal: it now appears in notes and history.
+  // One phrase with a hole, not glued halves: Italian has no «/ al pezzo».
+  if (ing.priceUnit === 'pcs') return t('price.perEach', { rate: formatRate(rate) });
+  return `${formatRate(rate)} / ${ing.priceUnit}`;
 }
 
 // ── Writing a price ──────────────────────────────────────────────────────────
@@ -442,7 +445,7 @@ export const CASE_MODE = 'case';
 // case back verbatim (storedPriceInput) — copying the weight into it would re-price a case that
 // somebody without the price section had only re-weighed.
 export function pricePatch(
-  { priceUnit, pricePerUnit, unitWeightKg, vatRate, casePrice, caseCount, caseItemSize, caseItemUnit, packBasis },
+  { priceUnit, pricePerUnit, unitWeightKg, vatRate, casePrice, caseCount, caseItemSize, caseItemUnit, packBasis, keepRate },
   nowIso,
   weightText = '',
 ) {
@@ -468,7 +471,10 @@ export function pricePatch(
   });
   // ⚠️ A DERIVED RATE IS STORED AS caseRate() MADE IT (six decimals): normalizePrice rounds
   // to four, and storedCaseOf() could then never recognise its own case.
-  const storedRate = inCase && derived ? derived.pricePerUnit : result.pricePerUnit;
+  // ⚠️ `keepRate`: a rate worked out from a stored case (singleFromCaseInput) keeps its six decimals, so
+  // moving a price from «a case of 3 at 10» to «3.333333 each» does not move the money by rounding.
+  const storedRate = inCase && derived ? derived.pricePerUnit
+    : (keepRate && result.ok ? roundTo(pricePerUnit, CASE_RATE_DECIMALS) : result.pricePerUnit);
   return {
     priceUnit: unit,
     pricePerUnit: result.ok ? storedRate : null,
@@ -549,6 +555,26 @@ export function storedPriceInput(item, vat) {
     };
   }
   return { priceUnit: it.priceUnit || null, pricePerUnit: it.pricePerUnit, unitWeightKg: it.unitWeightKg, vatRate: vat };
+}
+
+// A Cartone turned into a Singola, with no price typed: the SAME money in the per-item shape — the rate is
+// casePrice ÷ caseCount, the item weight is the one the price already remembers (or, for a case priced by
+// weight, that case's size in kilos), and the case keys go out null. Fed to pricePatch it gives a price the
+// readers carry exactly as before (cost per item is unchanged), so the caller writes NO history entry.
+export function singleFromCaseInput(item, vat) {
+  const it = item || {};
+  const stored = storedCaseOf(it);
+  if (!stored) return storedPriceInput(item, vat);
+  const byWeight = stored.caseItemUnit !== 'pcs';
+  const small = stored.caseItemUnit === 'g' || stored.caseItemUnit === 'ml';
+  const sizeKg = byWeight ? roundTo(small ? stored.caseItemSize / 1000 : stored.caseItemSize, CASE_RATE_DECIMALS) : null;
+  return {
+    priceUnit: 'pcs',
+    pricePerUnit: roundTo(stored.casePrice / stored.caseCount, CASE_RATE_DECIMALS),
+    unitWeightKg: positiveNumber(it.unitWeightKg) !== null ? it.unitWeightKg : sizeKg,
+    vatRate: vat,
+    keepRate: true,
+  };
 }
 
 // What the price box shows while nobody has typed in it — { value, suggestion }, each a number or null.
