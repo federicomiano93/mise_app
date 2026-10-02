@@ -5,6 +5,8 @@
 export const COLLECTIONS = { drafts: 'drafts', orderHistory: 'orders-history' };
 export async function getDocOnce() { return globalThis.__draftDoc ?? null; }
 export async function saveDoc(name, id, data) { globalThis.__draftWrites.push({ name, id, data }); }
+// patchDoc arrives with PR #253 («Da riordinare»): draft.js imports it there, so the stub offers it too.
+export async function patchDoc(name, id, data) { globalThis.__draftWrites.push({ name, id, data, patch: true }); }
 export async function watchDoc() { return () => {}; }
 export async function clearFields() {}
 export async function transactDoc() {}
