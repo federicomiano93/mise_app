@@ -52,6 +52,7 @@ export function isCartonWord(word) {
 // true = the card of before. In order:
 //   packCount present                                   → new card (only the new card writes it)
 //   a stored case by an explicit size (kg, g, l, ml)     → before
+//   a stored case of packages or pieces ordered by its own package word → new card (an employee's Singola)
 //   a stored case of pieces                              → before (the new card writes these only WITH packCount)
 //   a stored case of packages, ordered by anything but the whole case ('' or a carton word) → before
 //   a rate on a weight text that does not read («6x1kg», «sacco») → before
@@ -61,8 +62,12 @@ export function usesLegacyCard(item) {
   if (wholeCount(it.packCount) !== null) return false;
   const stored = storedCaseOf(it);
   if (stored) {
-    if (stored.caseItemUnit !== 'pack') return true;
     const unit = cleanUnit(it.unit);
+    // ⚠️ A CASE ORDERED BY ITS OWN PACKAGE WORD is what the NEW card leaves behind when an employee turns its
+    // Cartone into a Singola (5th review, 2 Oct 2026): it stays on the new card, which reopens it as a
+    // Singola with «Ricalcola». The card of before has no way back for it.
+    if ((stored.caseItemUnit === 'pack' || stored.caseItemUnit === 'pcs') && unit !== '' && sameUnit(unit, it.packUnit)) return false;
+    if (stored.caseItemUnit !== 'pack') return true;
     return !(unit === '' || isCartonWord(unit));
   }
   const priced = Number(it.pricePerUnit) > 0;

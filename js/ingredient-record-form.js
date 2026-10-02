@@ -2006,9 +2006,14 @@ export function buildIngredientForm({
       // ⚠️ EXCEPT AN EMPTY UNIT ON A CARD THAT OPENED AS A CARTONE (4th review, 2 Oct 2026): there '' already
       // meant «the whole case» (a stored case ordered with no unit), so the carton word now written means the
       // same thing and nothing is frozen — freezing the package word would turn «1» case into «1 busta».
+      // ⚠️ AND THE OTHER WAY ROUND (5th review, 2 Oct 2026): that same empty unit, turned into a Singola, stays ''
+      // but now means ONE item — so the open line is frozen in the carton word it always meant.
       let replacedUnit = '';
-      if (item && 'unit' in payload && !sameUnit(payload.unit, item.unit)) {
-        const wasWholeCase = cleanUnit(item.unit) === '' && opened.kind === 'carton' && isCartonWord(payload.unit);
+      const emptyMeantCase = Boolean(item) && cleanUnit(item.unit) === '' && opened.kind === 'carton';
+      if (emptyMeantCase && state.kind === 'single' && 'unit' in payload && cleanUnit(payload.unit) === '') {
+        replacedUnit = cartonWord;
+      } else if (item && 'unit' in payload && !sameUnit(payload.unit, item.unit)) {
+        const wasWholeCase = emptyMeantCase && isCartonWord(payload.unit);
         replacedUnit = wasWholeCase ? ''
           : cleanUnit(item.unit) || cleanUnit('packUnit' in payload ? payload.packUnit : item.packUnit);
       }

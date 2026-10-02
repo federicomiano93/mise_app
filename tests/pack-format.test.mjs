@@ -399,7 +399,10 @@ test('reduced scope: only the shapes found in production open the new card', () 
   assert.equal(legacy(LEGACY_G_CASE), true, 'grams');
   assert.equal(legacy(PIECES_CASE), true, 'a case of pieces with no packCount');
   assert.equal(legacy({ ...PACK_CASE, unit: 'kg' }), true, 'a pack case ordered by weight');
-  assert.equal(legacy({ ...PACK_CASE, unit: 'busta' }), true, 'a pack case ordered by the package');
+  // …except a case ordered by its OWN package word: the new card's Cartone turned into a Singola by an employee
+  assert.equal(legacy({ ...PACK_CASE, unit: 'busta' }), false, 'a pack case ordered by its own package word');
+  assert.equal(legacy({ ...PIECES_CASE, unit: 'pezzo' }), false, 'a pieces case ordered by its own package word');
+  assert.equal(legacy({ ...PACK_CASE, unit: 'busta', packUnit: 'sacco' }), true, 'a package word that is not its own');
   assert.equal(legacy({ ...PACK_CASE, unit: 'pz' }), true, 'a pack case ordered by the piece');
   assert.equal(legacy({ weight: '6x1kg', priceUnit: 'kg', pricePerUnit: 2 }), true, 'a rate on a multiplier weight');
   assert.equal(legacy({ weight: 'sacco', priceUnit: 'pcs', pricePerUnit: 2 }), true, 'a rate on a word');

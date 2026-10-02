@@ -187,6 +187,16 @@ test('3 a legacy «6x1kg» weight with packCount 6 is NOT multiplied twice: 12, 
   assert.equal(unitCost({ ...card, weight: 'sacco' }, { priceUnit: 'kg', pricePerUnit: 2 }), null);
 });
 
+test('5th review F2: one busta of a «6x1kg» carton has no price — never the whole carton\'s 12', () => {
+  const card = { unit: 'cartone', packUnit: 'busta', packCount: 6, weight: '6x1kg' };
+  const perKg = { priceUnit: 'kg', pricePerUnit: 2 };
+  assert.equal(unitCost(card, perKg), 12, 'the carton line keeps the old whole-unit reading');
+  assert.equal(lineUnitCost(card, perKg, 'busta'), null);
+  assert.equal(unitCost({ ...card, unit: 'busta' }, perKg), null);
+  // a carton of ONE: the package IS the carton
+  assert.equal(unitCost({ ...card, packCount: 1, unit: 'busta' }, perKg), 12);
+});
+
 test('4th review 3: a piece that is not the item (eggs on a 360 g tray) has no carton price', () => {
   const eggs = { priceUnit: 'pcs', pricePerUnit: 0.25, unitWeightKg: 0.06 };
   const card = { unit: 'cartone', packUnit: 'vaschetta', packCount: 10, weight: '360g' };

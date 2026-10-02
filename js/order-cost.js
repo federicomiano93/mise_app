@@ -141,7 +141,10 @@ export function unitCost(ingredient, price) {
   if (Object.prototype.hasOwnProperty.call(WEIGHT_UNITS, orderUnit)) return legacyUnitCost(ingredient, price);
   if (pieceIsNotItem(ingredient, price)) return null;
   const each = costPerItem(ingredient, price);
-  return each === null ? legacyUnitCost(ingredient, price) : each * items;
+  if (each !== null) return each * items;
+  // ⚠️ ONE ITEM WITH NO KNOWN COST HAS NO PRICE (5th review, 2 Oct 2026): the old reading prices the WHOLE
+  // ordered unit («6x1kg» → 12), which is the carton — never one busta of it. Only the carton word keeps it.
+  return items === validPackCount(ingredient) ? legacyUnitCost(ingredient, price) : null;
 }
 
 // A per-piece price read by WEIGHT: what one kilo costs is the piece's price ÷ one piece's weight, so a
@@ -172,7 +175,8 @@ function legacyUnitCost(ingredient, price) {
     // ⚠️ THAT STAYS, ON PURPOSE (2nd review, 1 Oct 2026, decided by the owner's rule «refuse rather than
     // guess»): on legacy data a case of 30 eggs ordered by its own package word is not ONE egg. So after
     // an EMPLOYEE turns a Cartone into a Singola the line has no price until a manager opens the card
-    // (it reopens as a Singola, says the format changed, and «Ricalcola» converts it to per-item).
+    // (it reopens on the new card as a Singola — pack-format.js usesLegacyCard keeps a case ordered by its own
+    // package word there — says the format changed, and «Ricalcola» converts it to per-item).
     const packWord = String((ingredient && ingredient.packUnit) || '').trim().toLowerCase().replace(/\.$/, '');
     const isPackCase = wholeCase.caseItemUnit === 'pack';
     if (PIECE_UNITS.has(orderUnit) || (isPackCase && packWord !== '' && orderUnit === packWord)) {
