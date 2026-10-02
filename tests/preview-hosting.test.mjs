@@ -13,7 +13,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
-const read = (p) => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
+// A Windows checkout turns every LF into CRLF, and the patterns below match `\n` across lines:
+// read as LF so the suite passes the same on his PC as on CI.
+const read = (p) => readFileSync(new URL('../' + p, import.meta.url), 'utf8').replace(/\r\n/g, '\n');
 const firebaseJson = JSON.parse(read('firebase.json'));
 const firebaserc = JSON.parse(read('.firebaserc'));
 const workflow = read('.github/workflows/preview.yml');
