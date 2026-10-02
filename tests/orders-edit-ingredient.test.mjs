@@ -266,10 +266,12 @@ test('Fornitori reads the price BEFORE it draws an existing ingredient, and a fa
   const open = REGISTRY.slice(REGISTRY.indexOf('async function openIngredientForm('), REGISTRY.indexOf('function showIngredientForm('));
   assert.ok(open.length > 0, 'the opener exists');
   assert.match(open, /needsPriceRead\(\{ mayPrice: mayWritePrices\(\), pricesLoaded: data\.pricesLoaded\?\.\(\) === true \}\)/);
-  const readAt = open.indexOf('itemWithPrice(item, await data.readPrice(item.id))');
+  // the item is looked up in the live list at open time, never taken from the row's own copy
+  assert.match(open, /const current = item \? \(data\.ingredients\(\)\.find\(i => i\.id === item\.id\) \|\| item\) : item;/);
+  const readAt = open.indexOf('itemWithPrice(current, await data.readPrice(current.id))');
   const showAt = open.indexOf('showIngredientForm(shown,');
   assert.ok(readAt > 0 && showAt > readAt, 'the price is merged before the card is shown');
-  assert.match(open, /catch \(err\) \{\s*await reportFailure\('load', item\.name, err\);\s*return;/, 'a failed read shows the failure and opens no card');
+  assert.match(open, /catch \(err\) \{[^}]*await alertDialog\(t\('orders\.addIngredientFailed'\)\);\s*return;/, 'a failed read says the card could not open, and opens none');
   // every way into the card goes through the guarded opener
   assert.doesNotMatch(REGISTRY.replace(/function showIngredientForm\(/, ''), /showIngredientForm\((?!shown,)/);
 });
