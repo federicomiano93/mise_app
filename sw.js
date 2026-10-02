@@ -1,4 +1,4 @@
-const CACHE_NAME = 'theitalianclub-v510';
+const CACHE_NAME = 'theitalianclub-v511';
 // Firebase SDK modules (loaded from gstatic) are cached SEPARATELY from CACHE_NAME
 // so they survive the cache-version bump that happens on every deploy — otherwise
 // the offline SDK would be wiped each release until the next online load. The name
@@ -12,7 +12,7 @@ const CACHE_NAME = 'theitalianclub-v510';
 // the fetch handler below, on the first load that has a network.
 // So between activate() and that first load, a phone that is OFFLINE cannot boot:
 // the code asks for 12.18.0 and nothing has it. In practice the window is very
-// small — activate() only happens after a successful 274-file precache, i.e.
+// small — activate() only happens after a successful 275-file precache, i.e.
 // online, and tapping the update banner reloads the page immediately — but it is
 // not zero, and it is the reason to bump the SDK deliberately rather than often.
 // Leaving the name unchanged would close the window and cost ~1 MB of dead
@@ -166,6 +166,7 @@ const ASSETS = [
   './js/roles.js',
   './js/i18n.js',
   './js/i18n-dom.js',
+  './js/keyboard-done.js',
   './js/join-code.js',
   './js/join-link.js',
   './js/credentials.js',
@@ -480,7 +481,8 @@ const ASSET_HASHES = {
   "./js/sections.js": 'abcfdecb2bd5766d',
   "./js/roles.js": '2b491770c4b6165b',
   "./js/i18n.js": 'df080042bd3a5310',
-  "./js/i18n-dom.js": 'a6d32c5bb1b56674',
+  "./js/i18n-dom.js": '24249af4367511e5',
+  "./js/keyboard-done.js": '4a4b75c43a15e2c7',
   "./js/join-code.js": '5b89de65db5c102f',
   "./js/join-link.js": 'a90ea53c7ba51614',
   "./js/credentials.js": '5d9eece15a3a969a',
@@ -697,7 +699,7 @@ const ASSET_HASHES = {
 // code against rules that deployed instantly, which is the very thing the gate exists
 // to prevent. Two things stand between that and a release: the test that every ASSETS
 // entry EXISTS (a mistyped path being the likeliest permanent cause), and this
-// project's post-deploy sweep, which already asks the live site for all 274 files.
+// project's post-deploy sweep, which already asks the live site for all 275 files.
 // ⚠️ NEITHER covers a device-specific failure — nobody has yet confirmed an update
 // landing on a real iPhone under this code.
 //
