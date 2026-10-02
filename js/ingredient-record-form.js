@@ -30,7 +30,7 @@ import { supplierLabel } from './supplier-label.js';
 import { NO_SUPPLIER_ID } from './records.js';
 import { field, formActions, reportFailure, shortDate } from './record-ui.js';
 import {
-  PRICE_UNITS, priceUnitLabel, PRICE_FORMS, priceFormOf, formatPriceInput, storedPriceInput, priceBoxPrefill,
+  PRICE_UNITS, priceUnitLabel, PRICE_FORMS, priceFormOf, formatPriceInput, storedPriceInput, priceBoxStart,
   weightNeededForPrice, positiveNumber, packBaseOf, storedCaseOf,
   pricePatch, priceChanged, priceRecord, pricePerKg,
   formatPricePerUnit, formatRate, costReasonText, formatMoney,
@@ -46,6 +46,7 @@ import {
 // "Modular by feature").
 import { vatRatesFor } from './vat-rates.js';
 import { confirmAndDelete } from './ingredient-edit-model.js';
+import { cleanUnit, sameUnit } from './order-unit.js';
 // The «Peso» box is a number and a unit menu, stored as the one text `weight` (pack-size.js
 // still reads it), and «Categoria» / the carton's inner word are menus over lists their callers
 // hand in (record-choices.js builds them; this file never asks a feature for them).
@@ -124,6 +125,11 @@ const CAMERA_ICON = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
 // still one stored number. The old «A cartone» choice and its «Contiene count × size × unit» row
 // are gone from the screen; the card asks for the count ONCE, in «Dati prodotto».
 //
+// ⚠️⚠️ EDITING THE FORMAT OR THE WEIGHT NEVER REWRITES A STORED PRICE (1 Oct 2026, review of the first
+// build, which re-priced on every weight edit and turned an egg at 0.25 a piece into 4.03 a kilo). Only
+// typing in a price box, or «Ricalcola», makes the price dirty; a format that no longer matches the price
+// is SAID (the note), the box shows the stored figure only while it still means the same thing, and the
+// price stays exactly as saved until a person writes the new one.
 // ⚠️⚠️ AN UNTOUCHED PRICE IS NEVER RE-DERIVED. `dirty()` is true only when a person typed in a
 // price box, moved Confezione / the count / the inner word / the weight, or tapped «Ricalcola».
 // Until then read() hands pricePatch the STORED price exactly (storedPriceInput), so reopening a
@@ -136,8 +142,6 @@ const CAMERA_ICON = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
 // RIGHT NOW, so the box's own meaning follows an edit that has not been saved yet.
 // ctx.order() -> { unit, weight, packUnit, packCount }: the same, as the ingredient the card would
 // SAVE — what the VAT line costs one ordered unit of.
-// ctx.formatTouched() -> has the person moved Confezione, the count or the inner word.
-// ctx.initialWeight — the weight text as the card opened.
 // The stored case when it was priced by an EXPLICIT size (kg, g, l, ml), else null.
 const explicitSizeCase = (item) => {
   const stored = item ? storedCaseOf(item) : null;
@@ -210,14 +214,13 @@ function priceBlock(item, actions, defaultUnit = null, ctx) {
   const rate = money(item?.pricePerUnit, '');
   const pieceWeight = money(item?.unitWeightKg, t('orders.eg.pieceWeight'));
   // The case / package price: «Prezzo cartone» or «Prezzo confezione» by the format. Its value is
-  // FILLED by refresh() (priceBoxPrefill) for as long as nobody has typed in it.
+  // FILLED by refresh() (priceBoxStart) for as long as nobody has typed in it.
   const casePriceBox = money('', '');
 
   // ⚠️ WHAT A PERSON HAS DONE TO THE PRICE, as flags the form cannot forget. See the header.
   let priceTyped = false;
   let recomputed = false;
-  const dirty = () => !item || priceTyped || recomputed
-    || ctx.formatTouched() || now().weight !== ctx.initialWeight;
+  const dirty = () => !item || priceTyped || recomputed;
 
   // ── Purchase VAT (29 Sep 2026) — so an order can show what it will cost
   // WITH VAT. The price above stays net, exactly as it does today: the
@@ -265,6 +268,8 @@ function priceBlock(item, actions, defaultUnit = null, ctx) {
     onClick: () => { recomputed = true; refresh(); },
   });
   const changedNote = el('div', { class: 'mgmt-field', hidden: 'hidden' }, [changedText, recomputeBtn]);
+  // «The saved price stays … until you write the new one or tap Recalculate» — what Save does, said.
+  const keepsNote = el('p', { class: 'mgmt-price-note', hidden: 'hidden' });
   // A price that existed and has no number under the new format: said, because saving it empty
   // would remove the price.
   const priceAgainNote = el('p', {
@@ -323,10 +328,15 @@ function priceBlock(item, actions, defaultUnit = null, ctx) {
     const form = priceFormOf(fmt, weight);
     const typedForm = form === PRICE_FORMS.typed;
     const unit = unitSelect.value;
-    // The box follows the format until a person types in it — the same rate under a new count.
+    const changed = formatChanged(item, fmt, weight);
+    // The box shows the stored figure while it still means the same thing; otherwise it is EMPTY with
+    // the same price carried to this format as its placeholder (never a value: nothing is written until
+    // somebody types or taps «Ricalcola», which fills it in and keeps following the format).
+    const start = priceBoxStart(item, fmt, weight, Boolean(changed));
     if (!priceTyped) {
-      const start = priceBoxPrefill(item, fmt, weight);
-      casePriceBox.value = start === null ? '' : String(start);
+      const shown = recomputed ? start.suggestion : start.value;
+      casePriceBox.value = shown === null ? '' : String(shown);
+      casePriceBox.setAttribute('placeholder', shown === null && start.suggestion !== null ? String(start.suggestion) : '');
     }
     unitField.hidden = !typedForm;
     rateField.hidden = !typedForm;
@@ -345,7 +355,6 @@ function priceBlock(item, actions, defaultUnit = null, ctx) {
     // left showing while somebody is pricing by the piece is worse than no example.
     rate.placeholder = RATE_HINT[unit] || '';
 
-    const changed = formatChanged(item, fmt, weight);
     changedNote.hidden = !changed && !needsSize;
     if (needsSize) {
       changedText.textContent = t('orders.case.sizeNeeded', {
@@ -354,7 +363,17 @@ function priceBlock(item, actions, defaultUnit = null, ctx) {
     } else if (changed) {
       changedText.textContent = t('orders.case.packChanged', { old: changed.old, new: changed.new });
     }
-    recomputeBtn.hidden = dirty() || needsSize;
+    recomputeBtn.hidden = dirty() || needsSize || start.suggestion === null;
+    // The saved price is still what Save writes: said when the box has nothing of its own to show.
+    const hasPrice = positiveNumber(item?.pricePerUnit) !== null;
+    const keeps = !dirty() && !typedForm && hasPrice && casePriceBox.value === '' && !needsSize;
+    keepsNote.hidden = !keeps;
+    if (keeps) {
+      const price = formatPricePerUnit(item);
+      keepsNote.textContent = changedNote.hidden || recomputeBtn.hidden
+        ? t('orders.case.keepsPriceTyped', { price })
+        : t('orders.case.keepsPrice', { price });
+    }
 
     const draft = pricePatch(read(), null, weight);
     priceAgainNote.hidden = !(dirty() && !typedForm && casePriceBox.value === '' && positiveNumber(item?.pricePerUnit) !== null);
@@ -440,6 +459,7 @@ function priceBlock(item, actions, defaultUnit = null, ctx) {
     // column that comes and goes would make the row above it jump.
     pricePair,
     changedNote,
+    keepsNote,
     priceAgainNote,
     // Said ONCE, under the pair, instead of four times inside four labels that no
     // longer have room for it. ⚠️ It may not be dropped: entering the gross figure
@@ -1446,8 +1466,6 @@ export function buildIngredientForm({
   price = mayPrice ? priceBlock(item, actions, startKind === 'packaging' ? 'pcs' : null, {
     now: () => ({ weight: weight.read(), fmt: { ...formState(), kind } }),
     order: orderNow,
-    formatTouched: formatIsTouched,
-    initialWeight: weight.read(),
   }) : null;
   const sizedStored = mayPrice ? explicitSizeCase(item) : null;
   if (sizedStored && packBaseOf(weight.read()) === null) {
@@ -1535,7 +1553,12 @@ export function buildIngredientForm({
       : null;
 
     try {
-      await actions.saveIngredient(item?.id || null, payload, record, mayPrice);
+      // ⚠️ A FORMAT CHANGE THAT REPLACES THE ORDER UNIT IS TOLD TO THE CALLER, which owns the order draft:
+      // a line typed as «8» (in the old unit) must not start reading 8 of the new one. The card imports
+      // no feature code, so it only says what it replaced (draft.js freezeUnitInDraft does the rest).
+      const replacedUnit = item && 'unit' in payload && cleanUnit(item.unit) && !sameUnit(payload.unit, item.unit)
+        ? cleanUnit(item.unit) : '';
+      await actions.saveIngredient(item?.id || null, payload, record, mayPrice, replacedUnit ? { unitChangedFrom: replacedUnit } : undefined);
       onDone?.();
     }
     catch (err) {

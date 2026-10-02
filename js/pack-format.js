@@ -91,7 +91,7 @@ export function formatTouched(before, form) {
 // write keeps every stored key. before = { ...formatOf(), unit: the stored order unit,
 // packUnit: the stored package word }, form = { kind, count, inner, cartonWord }.
 //   Cartone  → { packCount, packUnit?, unit }   unit keeps a carton word already stored
-//   Singola after Cartone → { packCount: null, unit }   a carton word leaves, any other stays
+//   Singola after Cartone → { packCount: null, unit }   a carton word becomes the PACKAGE word, any other stays
 // ⚠️ packUnit is written only when there is a word to say, or one is stored to clear — never
 // a blank key on an item that never had one.
 export function formatPatch(before, form) {
@@ -104,7 +104,14 @@ export function formatPatch(before, form) {
       unit: isCartonWord(before.unit) ? cleanUnit(before.unit) : form.cartonWord,
     };
   }
-  return { packCount: null, unit: isCartonWord(before.unit) ? '' : cleanUnit(before.unit) };
+  // ⚠️ THE CARTON WORD BECOMES THE PACKAGE WORD, NOT '' (review of 1 Oct 2026): a stored case of 4 that
+  // an employee (no price section) turns into a Singola is read with the ORDER UNIT only — empty, it
+  // reads «the whole case» and a single bag was priced 20 instead of 5; «busta» reads «one item of the
+  // case». With no package word there is nothing better than ''.
+  return {
+    packCount: null,
+    unit: isCartonWord(before.unit) ? cleanUnit(before.packUnit) : cleanUnit(before.unit),
+  };
 }
 
 // The order unit a NEW single item gets from its price, when it is loose (no readable weight):
@@ -154,6 +161,16 @@ export function formatChanged(price, fmt, weight) {
   if (!count) return null;
   const base = packBaseOf(weight);
 
+  // ⚠️ A CASE OF PIECES IS THE NORMAL SHAPE NOW (every price typed for formatted goods is stored per
+  // item): it agrees with the card while the count is the same and, when the price remembers one
+  // item's weight, that weight is the card's. A weight that cannot be read says nothing.
+  if (stored.caseItemUnit === 'pcs') {
+    if (stored.caseCount !== count) return { old: numberText(stored.caseCount), new: numberText(count) };
+    const itemKg = Number(price.unitWeightKg);
+    if (!base || !(itemKg > 0) || Math.abs(base.size - itemKg) < 1e-9) return null;
+    const label = (kg, n) => `${numberText(n)} × ${numberText(kg)} ${base.priceUnit}`;
+    return { old: label(itemKg, stored.caseCount), new: label(base.size, count) };
+  }
   const small = stored.caseItemUnit === 'g' || stored.caseItemUnit === 'ml';
   const storedSize = stored.caseItemUnit === 'pcs' ? null
     : roundTo(small ? stored.caseItemSize / 1000 : stored.caseItemSize, 6);
@@ -168,9 +185,6 @@ export function formatChanged(price, fmt, weight) {
     return { old, new: base ? fresh : numberText(count) };
   }
   if (!base) return null;
-  // A case of pieces whose ingredient now has a readable weight is priced per PIECE and would be
-  // re-priced per kilo by the next price edit: said, never switched silently.
-  if (storedSize === null) return fmt.kind === 'carton' ? { old, new: fresh } : null;
   const sameSize = Math.abs(base.size - storedSize) < 1e-9 && base.priceUnit === storedUnit;
   return sameSize ? null : { old, new: fresh };
 }

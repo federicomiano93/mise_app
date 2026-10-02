@@ -14,6 +14,7 @@ import { registerHooks } from 'node:module';
 
 import { installDom, walk, type, choose, click, shown } from './helpers/form-dom.mjs';
 import { PRICE_FIELDS, priceChanged } from '../js/price-model.js';
+import * as PM from '../js/price-model.js';
 
 // ⚠️ THE CARD'S OWN `./firebase.js` IS REPLACED — only for that one importer.
 const STUB = new URL('./helpers/session-stub.mjs', import.meta.url).href;
@@ -64,7 +65,7 @@ function openCard({ item = null, mayPrice = true, kind = null } = {}) {
     packs: PACKS,
     panels: { allergens: false, nutrition: false },
     actions: {
-      saveIngredient: async (id, payload, record, writePrice) => { saves.push({ id, payload, record, writePrice }); },
+      saveIngredient: async (id, payload, record, writePrice, meta) => { saves.push({ id, payload, record, writePrice, meta }); },
       priceHistory: async () => [],
       packPhotoOn: () => false,
     },
@@ -188,7 +189,7 @@ test('the «Unità d\'ordine» menu is gone from the card', () => {
 
 // ── Choosing Cartone on a new ingredient ─────────────────────────────────────
 
-test('Cartone, 4 × a 2.5 kg weight, a case price of 20 → 2 a kilo, 5 a busta, the carton word of the venue', async () => {
+test('Cartone, 4 × a 2.5 kg weight, a case price of 20 → stored PER ITEM: 5 a busta, 2.5 kg each, 2 a kilo through pricePerKg', async () => {
   const card = openCard();
   type(card.name, 'Farina 00');
   click(card.carton);
@@ -205,8 +206,8 @@ test('Cartone, 4 × a 2.5 kg weight, a case price of 20 → 2 a kilo, 5 a busta,
     [4, 'busta', 'cartone'],
   );
   assert.deepEqual(
-    [payload.priceUnit, payload.pricePerUnit, payload.casePrice, payload.caseCount, payload.caseItemUnit, payload.caseItemSize],
-    ['kg', 2, 20, 4, 'pack', 2.5],
+    [payload.priceUnit, payload.pricePerUnit, payload.casePrice, payload.caseCount, payload.caseItemUnit, payload.caseItemSize, payload.unitWeightKg],
+    ['pcs', 5, 20, 4, 'pcs', null, 2.5],
   );
   assert.ok(record, 'a new price is a history entry');
   assert.equal(spaceless(payload.weight), '2.5kg');
@@ -288,13 +289,13 @@ test('a carton word already stored is kept, not overwritten by the venue\'s own'
   assert.equal(payload.unit, 'cassa');
 });
 
-test('Singola after Cartone: packCount null and the carton unit leaves; a price reader\'s price is not re-derived by it alone', async () => {
+test('Singola after Cartone: packCount null, the carton word becomes the package word (one busta)', async () => {
   const stored = { ...BASE, unit: 'cartone', packUnit: 'busta', packCount: 4, weight: '2.5kg' };
   const card = openCard({ item: stored, mayPrice: false });
   click(card.single);
   const { payload } = await card.save();
   assert.equal(payload.packCount, null);
-  assert.equal(payload.unit, '');
+  assert.equal(payload.unit, 'busta', 'an empty unit would read «the whole case»');
   assert.equal('packUnit' in payload, false, 'the package word stays as stored');
 });
 
@@ -319,15 +320,51 @@ test('a typed rate under a weight that reads: Peso touched keeps the rate, and n
   assert.equal(record, null);
 });
 
-test('a typed rate turned into a Cartone keeps its rate: 2 a kilo × 4 × 2.5 kg starts the box at 20', async () => {
+test('a typed rate turned into a Cartone: the box SHOWS the same price (2 a kilo × 4 × 2.5 kg = 20) and the save leaves it verbatim', async () => {
   const card = openCard({ item: { ...BASE, unit: 'sacco', weight: '2.5kg', priceUnit: 'kg', pricePerUnit: 2 } });
   click(card.carton);
   type(card.count, '4');
   assert.equal(card.casePrice.value, '20');
   const { payload, record } = await card.save();
-  assert.deepEqual([payload.pricePerUnit, payload.casePrice, payload.caseCount], [2, 20, 4]);
-  assert.equal(record, null, 'same rate, so no history entry');
+  // ⚠️ nobody typed in the price box, so the stored rate is written back exactly — no case invented
+  assert.deepEqual([payload.priceUnit, payload.pricePerUnit, payload.casePrice, payload.caseCount], ['kg', 2, null, null]);
+  assert.equal(record, null);
   assert.deepEqual([payload.packCount, payload.unit], [4, 'cartone']);
+});
+
+test('defect 4: a per-kilo item with no readable weight turned into a Cartone keeps its price on an untouched price box', async () => {
+  const card = openCard({ item: TYPED_KG });
+  click(card.carton);
+  type(card.count, '4');
+  assert.equal(card.casePrice.value, '', 'nothing to carry a per-kilo rate to without a weight');
+  assert.ok(card.notes().some(n => n === 'The saved price stays €7.20 / kg until you write a new price.'), card.notes().join(' | '));
+  const { payload, record } = await card.save();
+  assert.deepEqual([payload.priceUnit, payload.pricePerUnit], ['kg', 7.2], 'the price is NOT deleted');
+  assert.equal(record, null);
+  assert.deepEqual([payload.packCount, payload.unit], [4, 'cartone']);
+});
+
+test('defect 1: an egg priced 0.25 a piece, weight edited to 60 g, keeps «a piece» and its piece weight', async () => {
+  const egg = { ...BASE, unit: 'pz', weight: '', priceUnit: 'pcs', pricePerUnit: 0.25, unitWeightKg: 0.06 };
+  const card = openCard({ item: egg });
+  type(card.weightAmount, '60');
+  choose(card.weightUnit, 'g');
+  assert.equal(card.casePrice.value, '0.25', 'the box shows the same price per item');
+  const { payload, record } = await card.save();
+  assert.deepEqual([payload.priceUnit, payload.pricePerUnit, payload.unitWeightKg], ['pcs', 0.25, 0.06]);
+  assert.equal(record, null);
+  assert.equal(spaceless(payload.weight), '60g');
+});
+
+test('a price typed for a single with a weight that reads is one item: 0.25 for a 60 g egg', async () => {
+  const card = openCard();
+  type(card.name, 'Uovo');
+  type(card.weightAmount, '60');
+  choose(card.weightUnit, 'g');
+  type(card.casePrice, '0.25');
+  const { payload } = await card.save();
+  assert.deepEqual([payload.priceUnit, payload.pricePerUnit, payload.unitWeightKg], ['pcs', 0.25, 0.06]);
+  for (const key of ['casePrice', 'caseCount', 'caseItemSize', 'caseItemUnit']) assert.equal(payload[key], null, key);
 });
 
 test('a loose item (no readable weight) keeps «How it is bought» and the typed rate', async () => {
@@ -384,7 +421,7 @@ test('a NEW single with no price, or priced by a pack, gets an empty unit', asyn
   type(pack.casePrice, '20');
   const { payload } = await pack.save();
   assert.equal(payload.unit, '');
-  assert.deepEqual([payload.priceUnit, payload.pricePerUnit, payload.caseCount, payload.caseItemUnit], ['kg', 0.8, 1, 'pack']);
+  assert.deepEqual([payload.priceUnit, payload.pricePerUnit, payload.unitWeightKg, payload.caseCount, payload.caseItemUnit], ['pcs', 20, 25, null, null]);
 });
 
 test('an EXISTING item with an empty unit is not given one by editing its price', async () => {
@@ -403,12 +440,16 @@ test('a weight changed since the price is said, with both formats; untouched, th
   assert.deepEqual([payload.pricePerUnit, payload.casePrice, payload.caseItemSize], [2, 20, 2.5]);
 });
 
-test('«Recalculate» prices the stored case price under the format now on the card', async () => {
+test('«Recalculate» carries the stored price to the format now on the card', async () => {
   const card = openCard({ item: { ...PACK_CASE, weight: '3kg' } });
+  assert.equal(card.casePrice.value, '', 'the changed format shows NO stored figure…');
+  assert.equal(card.casePrice.attributes.placeholder, '24', '…and offers the carried price as a placeholder');
   click(card.recompute);
+  assert.equal(card.casePrice.value, '24');
   assert.equal(shown(card.recompute), false, 'its job is done');
   const { payload, record } = await card.save();
-  assert.deepEqual([payload.casePrice, payload.caseCount, payload.caseItemSize, payload.pricePerUnit], [20, 4, 3, 1.666667]);
+  // the same per-kilo rate carried to the new weight: 2 a kilo × 3 kg × 4 = 24, stored per item (6 a bag, 3 kg each)
+  assert.deepEqual([payload.casePrice, payload.caseCount, payload.caseItemUnit, payload.pricePerUnit, payload.unitWeightKg], [24, 4, 'pcs', 6, 3]);
   assert.ok(record, 'the rate moved, so the history says so');
 });
 
@@ -417,10 +458,12 @@ test('no note when the format agrees with the price', () => {
   assert.equal(openCard({ item: LEGACY_G }).notes().some(n => /format has changed/.test(n)), false);
 });
 
-test('a price that existed and has no number under the new format says so', () => {
+test('a price typed and then emptied under a new format says so: saving would remove it', () => {
   const card = openCard({ item: TYPED_KG });
   click(card.carton);
   type(card.count, '4');
+  type(card.casePrice, '30');
+  type(card.casePrice, '');
   assert.ok(card.notes().some(n => /no price yet: type the price/.test(n)), card.notes().join(' | '));
 });
 
@@ -478,10 +521,79 @@ test('a touched price without the weight is refused on the weight box, never sto
   assert.equal(card.weightAmount.attributes['aria-invalid'], 'true');
 });
 
-test('with the weight typed, the normal Cartone pack path stores the right € / kg', async () => {
+test('with the weight typed, the price is stored per item and still means the right € / kg', async () => {
   const card = openCard({ item: LEGACY_NO_WEIGHT });
   type(card.weightAmount, '2.5');
   type(card.casePrice, '22');
   const { payload } = await card.save();
-  assert.deepEqual([payload.caseItemUnit, payload.caseItemSize, payload.caseCount, payload.priceUnit, payload.pricePerUnit], ['pack', 2.5, 4, 'kg', 2.2]);
+  assert.deepEqual([payload.caseItemUnit, payload.caseCount, payload.priceUnit, payload.pricePerUnit, payload.unitWeightKg], ['pcs', 4, 'pcs', 5.5, 2.5]);
+  assert.equal(PM.pricePerKg(payload), 2.2);
+});
+
+// ── Editing the format or the weight never rewrites a stored price (review, rule B) ───────────
+
+test('B: an employee-style count change on a stored case leaves the price EXACTLY as saved, and says so', async () => {
+  const card = openCard({ item: PACK_CASE });
+  type(card.count, '5');
+  assert.equal(card.casePrice.value, '', 'the figure no longer means the same thing');
+  assert.equal(card.casePrice.attributes.placeholder, '25', '2 a kilo × 2.5 kg × 5');
+  assert.ok(card.notes().includes('The format has changed since the last price: saved 4 × 2.5 kg, with this format 5 × 2.5 kg. Check the price.'), card.notes().join(' | '));
+  assert.ok(card.notes().includes('The saved price stays €2.00 / kg until you write the new price or tap Recalculate.'), card.notes().join(' | '));
+  const { payload, record } = await card.save();
+  assert.deepEqual([payload.priceUnit, payload.pricePerUnit, payload.casePrice, payload.caseCount, payload.caseItemUnit, payload.caseItemSize], ['kg', 2, 20, 4, 'pack', 2.5]);
+  assert.equal(record, null);
+  assert.equal(payload.packCount, 5, 'the product data did change');
+});
+
+test('B: «Recalculate» after a count change fills the box with the carried price, and saving stores it per item', async () => {
+  const card = openCard({ item: PACK_CASE });
+  type(card.count, '5');
+  click(card.recompute);
+  assert.equal(card.casePrice.value, '25');
+  const { payload, record } = await card.save();
+  assert.deepEqual([payload.casePrice, payload.caseCount, payload.caseItemUnit, payload.pricePerUnit, payload.unitWeightKg], [25, 5, 'pcs', 5, 2.5]);
+  // a person asked for it, and the stored UNIT moved from «per kilo» to «per item»: the history says so
+  assert.deepEqual([record.priceUnit, record.pricePerUnit, record.unitWeightKg], ['pcs', 5, 2.5]);
+});
+
+test('B: a weight edit alone never rewrites a stored case either', async () => {
+  const card = openCard({ item: PACK_CASE });
+  type(card.weightAmount, '3');
+  const { payload, record } = await card.save();
+  assert.deepEqual([payload.pricePerUnit, payload.casePrice, payload.caseItemSize, payload.caseItemUnit], [2, 20, 2.5, 'pack']);
+  assert.equal(record, null);
+});
+
+// ── D: a format change that replaces the order unit is told to the caller ───────────────────
+
+test('D: turning a sack into a carton says which unit it replaced, so the open draft line can keep it', async () => {
+  const card = openCard({ item: { ...BASE, unit: 'sacco', weight: '10kg' }, mayPrice: false });
+  click(card.carton);
+  type(card.count, '2');
+  const { payload, meta } = await card.save();
+  assert.equal(payload.unit, 'cartone');
+  assert.deepEqual(meta, { unitChangedFrom: 'sacco' });
+});
+
+test('D: Cartone → Singola says it replaced «cartone»; an unchanged unit, a new item and an empty old unit say nothing', async () => {
+  const toSingle = openCard({ item: { ...BASE, unit: 'cartone', packUnit: 'busta', packCount: 4, weight: '2.5kg' }, mayPrice: false });
+  click(toSingle.single);
+  assert.deepEqual((await toSingle.save()).meta, { unitChangedFrom: 'cartone' });
+  // only the count changed: «cartone» stays «cartone»
+  const sameUnit = openCard({ item: { ...BASE, unit: 'cartone', packUnit: 'busta', packCount: 4, weight: '2.5kg' }, mayPrice: false });
+  type(sameUnit.count, '6');
+  assert.equal((await sameUnit.save()).meta, undefined);
+  // untouched
+  assert.equal((await openCard({ item: TYPED_SACK }).save()).meta, undefined);
+  // a new item has no old unit
+  const fresh = openCard();
+  type(fresh.name, 'Farina');
+  click(fresh.carton);
+  type(fresh.count, '4');
+  assert.equal((await fresh.save()).meta, undefined);
+  // an old unit that was empty means nothing to freeze
+  const empty = openCard({ item: { ...BASE, unit: '', weight: '10kg' }, mayPrice: false });
+  click(empty.carton);
+  type(empty.count, '3');
+  assert.equal((await empty.save()).meta, undefined);
 });

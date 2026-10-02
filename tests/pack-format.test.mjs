@@ -160,10 +160,11 @@ test('a packUnit key is written only when there is a word to say or one to clear
   assert.equal(formatPatch(had, { kind: 'carton', count: 3, inner: '', cartonWord: 'cartone' }).packUnit, '');
 });
 
-test('Singola after Cartone: packCount null, a carton unit leaves, any other unit stays', () => {
+test('Singola after Cartone: packCount null, the carton word becomes the PACKAGE word (one busta), any other unit stays', () => {
   const stored = { unit: 'cartone', packUnit: 'busta', packCount: 4 };
   const before = beforeOf(stored, null);
-  assert.deepEqual(formatPatch(before, formOf(before, { kind: 'single' })), { packCount: null, unit: '' });
+  // ⚠️ NOT '': an empty unit reads «the whole case» to the readers, so a bag was priced as the carton (review defect 2b)
+  assert.deepEqual(formatPatch(before, formOf(before, { kind: 'single' })), { packCount: null, unit: 'busta' });
   const keeps = beforeOf({ unit: 'sacco', packUnit: 'busta', packCount: 2 }, null);
   assert.deepEqual(formatPatch(keeps, formOf(keeps, { kind: 'single' })), { packCount: null, unit: 'sacco' });
   // a carton that was only inferred from a stored case (no packCount): still null, harmless on a merge
@@ -323,7 +324,13 @@ test('an unreadable weight or an empty count cannot be compared, so nothing is s
   assert.equal(formatChanged(PACK_CASE, carton(null), '2.5kg'), null);
 });
 
-test('a case of pieces on a card whose weight now reads is flagged: the next price edit would price per kilo', () => {
-  const flagged = formatChanged(PIECES_CASE, carton(50), '60g');
-  assert.deepEqual(flagged, { old: '50', new: '50 × 0.06 kg' });
+test('a case of pieces is the NORMAL shape: it agrees while the count and the item weight agree', () => {
+  assert.equal(formatChanged(PIECES_CASE, carton(50), '60g'), null, 'the price remembers 0.06 kg an item: the card says 60 g');
+  assert.equal(formatChanged(PIECES_CASE, carton(50), '0.06 kg'), null);
+  assert.equal(formatChanged(PIECES_CASE, carton(50), 'sacco'), null, 'an unreadable weight says nothing');
+  assert.deepEqual(formatChanged(PIECES_CASE, carton(50), '50g'), { old: '50 × 0.06 kg', new: '50 × 0.05 kg' }, 'a re-weighed item is said');
+  assert.deepEqual(formatChanged(PIECES_CASE, carton(40), '60g'), { old: '50', new: '40' });
+  // a pieces case whose price remembers no item weight cannot disagree about one
+  const bare = { ...PIECES_CASE, unitWeightKg: null };
+  assert.equal(formatChanged(bare, carton(50), '60g'), null);
 });

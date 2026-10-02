@@ -120,7 +120,7 @@ test('R4: a weight-priced case with no readable weight blocks the save on the we
   assert.match(FORM, /markNeeded: \(\) => \{ refusal\.node\.textContent = t\('orders\.weight\.packNeeded'\); refusal\.show\(\); \}/);
   const src = read('js/i18n.js');
   assert.ok(src.includes("'orders.weight.packNeeded': 'The weight of one item is needed for the case price'"));
-  assert.ok(src.includes("'orders.weight.packNeeded': 'Serve il peso di un pezzo per il prezzo a cartone'"));
+  assert.ok(src.includes("'orders.weight.packNeeded': 'Serve il peso di una confezione per il prezzo a cartone'"));
   assert.ok(src.includes("'orders.case.packChanged': 'The format has changed since the last price: saved {old}, with this format {new}. Check the price.'"));
 });
 

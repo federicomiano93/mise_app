@@ -452,9 +452,15 @@ test('split then merge restores what the form had', () => {
   assert.equal(back.name, 'Flour');
 });
 
-// ── «Confezione» and the ONE price box (1 Oct 2026) ──────────────────────────
+// ── «Confezione» and the ONE price box (1 Oct 2026, reworked after the deep review) ───────────
 // What the card's price box means follows the format and the weight; these are the pure halves
-// of it (js/price-model.js). The DOM half is pinned in case-price-form.test.mjs.
+// of it (js/price-model.js). The DOM half is executed in ingredient-card-save.test.mjs.
+//
+// ⚠️ THE STORAGE POLICY: a price typed for formatted goods is stored PER ITEM — priceUnit 'pcs', the
+// rate is ONE item's price, unitWeightKg is one item's weight in kilos when the weight reads (litres
+// 1:1). A carton is a case of that many pieces (casePrice, caseCount, caseItemUnit 'pcs'). The first
+// build stored a case of ONE package priced per kilo, and an egg at 0.25 a piece became 4.03 a kilo
+// with no piece weight — Food cost's «in pieces» lines and packaging lost their cost.
 import * as PM from '../js/price-model.js';
 
 const CARTON = (count, inner = 'busta') => ({ kind: 'carton', count, inner });
@@ -471,12 +477,22 @@ test('the price box means: carton + weight → cartone; carton alone → pieces;
   assert.equal(PM.priceFormOf(SINGLE, 'sacco'), PM.PRICE_FORMS.typed);
 });
 
-test('20 for a case of 4 × 2.5 kg is 2 a kilo and 5 a busta', () => {
-  const input = PM.formatPriceInput(CARTON(4), '2.5kg', { price: '20', vat: '' });
-  const patch = PM.pricePatch(input, NOW, '2.5kg');
-  assert.deepEqual([patch.priceUnit, patch.pricePerUnit, patch.caseItemUnit, patch.caseItemSize, patch.caseCount, patch.casePrice],
-    ['kg', 2, 'pack', 2.5, 4, 20]);
-  assert.equal(patch.casePrice / patch.caseCount, 5);
+test('a carton priced 20 for 4 × 2.5 kg is stored per item: 5 a busta, a case of 4 pieces, 2.5 kg each', () => {
+  const patch = PM.pricePatch(PM.formatPriceInput(CARTON(4), '2.5kg', { price: '20', vat: '' }), NOW, '2.5kg');
+  assert.deepEqual(
+    [patch.priceUnit, patch.pricePerUnit, patch.caseItemUnit, patch.caseItemSize, patch.caseCount, patch.casePrice, patch.unitWeightKg],
+    ['pcs', 5, 'pcs', null, 4, 20, 2.5],
+  );
+  assert.ok(PM.storedCaseOf(patch), 'the case stands on its own rate (casePrice ÷ count)');
+  assert.equal(PM.pricePerKg(patch), 2, 'and the per-kilo consumers still get 2 a kilo');
+});
+
+test('litres read 1:1 as kilos, grams as thousandths: 12 for 6 × 750 ml is 2 a bottle, 2.6667 a litre', () => {
+  const patch = PM.pricePatch(PM.formatPriceInput(CARTON(6), '750ml', { price: '12', vat: '' }), NOW, '750ml');
+  assert.deepEqual([patch.priceUnit, patch.pricePerUnit, patch.unitWeightKg], ['pcs', 2, 0.75]);
+  assert.equal(PM.pricePerKg(patch), 2.6667);
+  const grams = PM.pricePatch(PM.formatPriceInput(CARTON(4), '500g', { price: '20', vat: '' }), NOW, '500g');
+  assert.deepEqual([grams.pricePerUnit, grams.unitWeightKg], [5, 0.5]);
 });
 
 test('a carton with no readable weight is a case of PIECES: a rate per piece, the piece weight kept', () => {
@@ -484,14 +500,26 @@ test('a carton with no readable weight is a case of PIECES: a rate per piece, th
   const patch = PM.pricePatch(input, NOW, '');
   assert.deepEqual([patch.priceUnit, patch.pricePerUnit, patch.caseItemUnit, patch.caseCount, patch.unitWeightKg, patch.vatRate],
     ['pcs', 0.4, 'pcs', 50, 0.06, 22]);
+  // a readable weight wins over the piece-weight box
+  const weighed = PM.pricePatch(PM.formatPriceInput(CARTON(50, 'pezzo'), '60g', { price: '20', pieceKg: '0.5', vat: '' }), NOW, '60g');
+  assert.equal(weighed.unitWeightKg, 0.06);
 });
 
-test('a single with a weight that reads is a case of ONE package: 20 for a 25 kg sack is 0.80 a kilo', () => {
-  const input = PM.formatPriceInput(SINGLE, '25kg', { price: '20', vat: '' });
-  const patch = PM.pricePatch(input, NOW, '25kg');
-  assert.deepEqual([patch.priceUnit, patch.pricePerUnit, patch.caseCount, patch.caseItemUnit, patch.caseItemSize],
-    ['kg', 0.8, 1, 'pack', 25]);
-  assert.deepEqual(PM.storedCaseOf(patch), { casePrice: 20, caseCount: 1, caseItemSize: 25, caseItemUnit: 'pack' });
+test('defect 1: a single with a weight that reads keeps «a piece»: an egg at 0.25 with 60 g stays 0.25 a piece', () => {
+  const patch = PM.pricePatch(PM.formatPriceInput(SINGLE, '60g', { price: '0.25', vat: '' }), NOW, '60g');
+  assert.deepEqual([patch.priceUnit, patch.pricePerUnit, patch.unitWeightKg], ['pcs', 0.25, 0.06]);
+  for (const key of ['casePrice', 'caseCount', 'caseItemSize', 'caseItemUnit']) assert.equal(patch[key], null, `${key} is written null`);
+  assert.equal(PM.pricePerKg(patch), 4.1667, 'per kilo it is derived, never stored as the price');
+  assert.equal(PM.costState(patch).costable, true);
+  // a packaging «vaschetta 500 ml» ends per piece as well
+  const tub = PM.pricePatch(PM.formatPriceInput(SINGLE, '500ml', { price: '0.12', vat: '' }), NOW, '500ml');
+  assert.deepEqual([tub.priceUnit, tub.pricePerUnit, tub.unitWeightKg], ['pcs', 0.12, 0.5]);
+});
+
+test('a single priced 20 for a 25 kg sack is 20 a piece weighing 25 kg — 0.80 a kilo through pricePerKg', () => {
+  const patch = PM.pricePatch(PM.formatPriceInput(SINGLE, '25kg', { price: '20', vat: '' }), NOW, '25kg');
+  assert.deepEqual([patch.priceUnit, patch.pricePerUnit, patch.unitWeightKg, patch.caseCount], ['pcs', 20, 25, null]);
+  assert.equal(PM.pricePerKg(patch), 0.8);
 });
 
 test('a loose single keeps today\'s typed rate, exactly as it was', () => {
@@ -508,61 +536,50 @@ test('an empty carton count prices nothing (the card refuses the save before it 
   assert.equal(patch.caseCount, null);
 });
 
-test('the box starts on the stored case price for a carton, and on one package\'s price for a single', () => {
-  const stored = { priceUnit: 'kg', pricePerUnit: 2, casePrice: 20, caseCount: 4, caseItemSize: 2.5, caseItemUnit: 'pack' };
-  assert.equal(PM.priceBoxPrefill(stored, CARTON(4), '2.5kg'), 20);
-  assert.equal(PM.priceBoxPrefill(stored, CARTON(5), '2.5kg'), 20, 'the invoice figure stays when the count changes');
-  assert.equal(PM.priceBoxPrefill(stored, SINGLE, '2.5kg'), 5, 'case price ÷ count');
+// ── What the price box shows: the stored figure only while it still means the same thing ─────────
+
+test('priceBoxStart: a stored case in its own format shows its price; changed, it is EMPTY with the suggestion', () => {
+  const pcsCase = { priceUnit: 'pcs', pricePerUnit: 5, casePrice: 20, caseCount: 4, caseItemUnit: 'pcs', unitWeightKg: 2.5 };
+  assert.deepEqual(PM.priceBoxStart(pcsCase, CARTON(4), '2.5kg', false), { value: 20, suggestion: 20 });
+  assert.deepEqual(PM.priceBoxStart(pcsCase, CARTON(5), '2.5kg', true), { value: null, suggestion: 25 }, 'the same price per item, five of them');
+  assert.deepEqual(PM.priceBoxStart(pcsCase, SINGLE, '2.5kg', true), { value: null, suggestion: 5 });
 });
 
-test('with only a typed rate the box starts at rate × count × size, so the rate is kept', () => {
-  const typed = { priceUnit: 'kg', pricePerUnit: 2 };
-  assert.equal(PM.priceBoxPrefill(typed, CARTON(4), '2.5kg'), 20);
-  assert.equal(PM.priceBoxPrefill(typed, SINGLE, '2.5kg'), 5);
-  assert.equal(PM.priceBoxPrefill(typed, SINGLE, '500g'), 1);
-  assert.equal(PM.priceBoxPrefill({ priceUnit: 'pcs', pricePerUnit: 0.4 }, CARTON(50, 'pezzo'), ''), 20);
-  assert.equal(PM.priceBoxPrefill({ priceUnit: 'pcs', pricePerUnit: 1.2 }, SINGLE, '500g'), 1.2, 'a rate per piece is one package');
-  // nothing to start from: empty, never a guess
-  assert.equal(PM.priceBoxPrefill(typed, CARTON(null), '2.5kg'), null);
-  assert.equal(PM.priceBoxPrefill({}, CARTON(4), '2.5kg'), null);
-  assert.equal(PM.priceBoxPrefill(null, CARTON(4), '2.5kg'), null);
-  assert.equal(PM.priceBoxPrefill(typed, SINGLE, ''), null, 'a loose single uses the rate box, not this one');
-  assert.equal(PM.priceBoxPrefill(typed, CARTON(4), ''), null, 'a rate per kilo cannot become a price per piece');
+test('priceBoxStart: a legacy per-kilo case carries its RATE to the new weight', () => {
+  const packCase = { priceUnit: 'kg', pricePerUnit: 2, casePrice: 20, caseCount: 4, caseItemSize: 2.5, caseItemUnit: 'pack' };
+  assert.deepEqual(PM.priceBoxStart(packCase, CARTON(4), '2.5kg', false), { value: 20, suggestion: 20 });
+  assert.deepEqual(PM.priceBoxStart(packCase, CARTON(4), '3kg', true), { value: null, suggestion: 24 }, '2 a kilo × 3 kg × 4');
+  assert.deepEqual(PM.priceBoxStart(packCase, SINGLE, '2.5kg', false), { value: 5, suggestion: 5 }, 'a case of one has the case price ÷ count');
+  assert.deepEqual(PM.priceBoxStart(packCase, CARTON(4), '', true), { value: null, suggestion: null }, 'no weight, no suggestion');
 });
 
-test('over a grid of rates, sizes and counts the pre-filled box gives back the same rate', () => {
-  const rates = [0.8, 1.25, 3.49, 7.2, 12.5, 0.035, 0.0035, 18];
-  const weights = ['25kg', '2.5kg', '500g', '250 g', '1l', '750ml', '100g', '5kg'];
-  for (const rate of rates) {
-    for (const weight of weights) {
-      for (const count of [1, 4, 12, 50]) {
-        const item = { priceUnit: 'kg', pricePerUnit: rate };
-        const fmt = count === 1 ? SINGLE : CARTON(count);
-        const box = PM.priceBoxPrefill(item, fmt, weight);
-        const patch = PM.pricePatch(PM.formatPriceInput(fmt, weight, { price: String(box), vat: '' }), NOW, weight);
-        // ⚠️ THE CASE PRICE IS KEPT TO FOUR DECIMALS (caseOf), so the rate can only move by half a
-        // hundredth of a cent divided by what the case weighs — nothing at a realistic price, a
-        // fraction of a percent on a price that is itself under a cent; a rate typed to the penny
-        // must come back EXACTLY
-        const kilos = count * PM.packBaseOf(weight).size;
-        assert.ok(Math.abs(patch.pricePerUnit - rate) <= 5.1e-5 / kilos + 1e-9, `${rate} × ${count} × ${weight}: ${patch.pricePerUnit}`);
-        if (rate >= 0.8 && Number.isInteger(rate * 100)) {
-          assert.equal(patch.pricePerUnit, rate, `${rate} × ${count} × ${weight} must be exact`);
-        }
-      }
-    }
+test('priceBoxStart: with only a typed rate the box shows that rate carried over', () => {
+  assert.deepEqual(PM.priceBoxStart({ priceUnit: 'kg', pricePerUnit: 2 }, CARTON(4), '2.5kg'), { value: 20, suggestion: 20 });
+  assert.deepEqual(PM.priceBoxStart({ priceUnit: 'kg', pricePerUnit: 2 }, SINGLE, '500g'), { value: 1, suggestion: 1 });
+  assert.deepEqual(PM.priceBoxStart({ priceUnit: 'pcs', pricePerUnit: 0.4 }, CARTON(50, 'pezzo'), ''), { value: 20, suggestion: 20 });
+  assert.deepEqual(PM.priceBoxStart({ priceUnit: 'pcs', pricePerUnit: 1.2 }, SINGLE, '500g'), { value: 1.2, suggestion: 1.2 });
+  // nothing to carry: empty, never a guess
+  for (const [item, fmt, weight] of [
+    [{ priceUnit: 'kg', pricePerUnit: 2 }, CARTON(null), '2.5kg'],
+    [{}, CARTON(4), '2.5kg'],
+    [null, CARTON(4), '2.5kg'],
+    [{ priceUnit: 'kg', pricePerUnit: 2 }, SINGLE, ''],
+    [{ priceUnit: 'kg', pricePerUnit: 2 }, CARTON(4), ''],
+  ]) {
+    assert.deepEqual(PM.priceBoxStart(item, fmt, weight), { value: null, suggestion: null }, JSON.stringify([item, fmt, weight]));
   }
 });
 
-test('a case price round-trips: re-typing the pre-filled box gives the stored rate (several shapes)', () => {
-  for (const [weight, rate] of [['2.5kg', 2], ['500g', 10], ['750ml', 4], ['25kg', 0.8]]) {
-    const first = PM.pricePatch(
-      PM.formatPriceInput(CARTON(4), weight, { price: String(PM.priceBoxPrefill({ priceUnit: 'kg', pricePerUnit: rate }, CARTON(4), weight)), vat: '' }),
-      NOW, weight,
-    );
-    assert.equal(first.pricePerUnit, rate, weight);
-    // and the stored case itself, re-read, starts the box on the same case price
-    assert.equal(PM.priceBoxPrefill({ ...first }, CARTON(4), weight), first.casePrice);
+test('a price carried to a new format is the same per-item price: typing the suggestion keeps the per-kilo rate', () => {
+  for (const [item, fmt, weight] of [
+    [{ priceUnit: 'kg', pricePerUnit: 2 }, CARTON(4), '2.5kg'],
+    [{ priceUnit: 'kg', pricePerUnit: 0.8 }, SINGLE, '25kg'],
+    [{ priceUnit: 'l', pricePerUnit: 4 }, CARTON(6), '500ml'],
+    [{ priceUnit: 'kg', pricePerUnit: 10 }, CARTON(12), '250 g'],
+  ]) {
+    const box = PM.priceBoxStart(item, fmt, weight).suggestion;
+    const patch = PM.pricePatch(PM.formatPriceInput(fmt, weight, { price: String(box), vat: '' }), NOW, weight);
+    assert.ok(Math.abs(PM.pricePerKg(patch) - item.pricePerUnit) < 1e-3, `${JSON.stringify(item)} ${weight}: ${PM.pricePerKg(patch)}`);
   }
 });
 
@@ -573,6 +590,7 @@ test('a price document written verbatim by the untouched path equals the stored 
     { priceUnit: 'l', pricePerUnit: 4, casePrice: 12, caseCount: 6, caseItemSize: 500, caseItemUnit: 'ml' },
     { priceUnit: 'l', pricePerUnit: 3.2, casePrice: 12.8, caseCount: 4, caseItemSize: 1, caseItemUnit: 'pack' },
     { priceUnit: 'pcs', pricePerUnit: 0.4, casePrice: 20, caseCount: 50, caseItemUnit: 'pcs' },
+    { priceUnit: 'pcs', pricePerUnit: 5, casePrice: 20, caseCount: 4, caseItemUnit: 'pcs', unitWeightKg: 2.5 },
     { priceUnit: 'pcs', pricePerUnit: 3.333333, casePrice: 10, caseCount: 3, caseItemUnit: 'pcs' },
     { priceUnit: 'kg', pricePerUnit: 7.2 },
     { priceUnit: 'pcs', pricePerUnit: 0.3, unitWeightKg: 0.05 },
@@ -586,6 +604,14 @@ test('a price document written verbatim by the untouched path equals the stored 
       assert.equal(PM.priceChanged(stored, patch), false);
     }
   }
+});
+
+test('defect 6: a tiny rate retouched through the card writes no history entry — the stored price is verbatim', () => {
+  // 0.0123 a kilo on a 250 g pack: a typed price (0.003075) would not survive four decimals; untouched, it never goes through one
+  const stored = { priceUnit: 'kg', pricePerUnit: 0.0123 };
+  const patch = PM.pricePatch(PM.storedPriceInput(stored, ''), NOW, '250g');
+  assert.equal(patch.pricePerUnit, 0.0123);
+  assert.equal(PM.priceChanged(stored, patch), false);
 });
 
 test('a STALE case (a rate typed over it) is not written back: the stored rate is', () => {

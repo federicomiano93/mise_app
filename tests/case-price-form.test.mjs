@@ -56,10 +56,10 @@ test('the price box means what the format and the weight say, and shows only the
 test('⚠️ UNTOUCHED MEANS UNCHANGED: read() hands pricePatch the stored price until a person touches something', () => {
   assert.match(FORM, /if \(!dirty\(\)\) return storedPriceInput\(item, vat\);/);
   assert.match(FORM, /return formatPriceInput\(now\(\)\.fmt, now\(\)\.weight, \{/);
-  // dirty() is: a new item, a typed price box, «Ricalcola», a moved format, a moved weight
-  assert.match(FORM, /const dirty = \(\) => !item \|\| priceTyped \|\| recomputed\s*\|\| ctx\.formatTouched\(\) \|\| now\(\)\.weight !== ctx\.initialWeight;/);
-  // the weight is compared with how it read when the card OPENED, never with the stored text
-  assert.match(FORM, /initialWeight: weight\.read\(\),/);
+  // dirty() is: a new item, a typed price box, «Ricalcola» — and NOTHING else (review, rule B): moving the
+  // format or the weight never rewrites a stored price
+  assert.match(FORM, /const dirty = \(\) => !item \|\| priceTyped \|\| recomputed;/);
+  assert.doesNotMatch(FORM, /ctx\.formatTouched|initialWeight/);
 });
 
 test('every price box a person can type in sets the flag, BEFORE the live line refreshes', () => {
@@ -69,17 +69,21 @@ test('every price box a person can type in sets the flag, BEFORE the live line r
   assert.doesNotMatch(FORM, /vatSelect\.addEventListener\('(input|change)', \(\) => \{ priceTyped/);
 });
 
-test('the box follows the format until somebody types in it', () => {
-  assert.match(FORM, /if \(!priceTyped\) \{\s*const start = priceBoxPrefill\(item, fmt, weight\);\s*casePriceBox\.value = start === null \? '' : String\(start\);/);
+test('the box shows the stored figure only while it still means the same thing; otherwise empty, with the carried price as placeholder', () => {
+  assert.match(FORM, /const start = priceBoxStart\(item, fmt, weight, Boolean\(changed\)\);/);
+  assert.match(FORM, /const shown = recomputed \? start\.suggestion : start\.value;/);
+  assert.match(FORM, /casePriceBox\.setAttribute\('placeholder', shown === null && start\.suggestion !== null \? String\(start\.suggestion\) : ''\);/);
+  assert.match(FORM, /keepsNote\.hidden = !keeps;/);
 });
 
 test('the format-changed note shows both formats and offers «Ricalcola», which only sets the flag', () => {
   assert.match(FORM, /const changed = formatChanged\(item, fmt, weight\);/);
   assert.match(FORM, /t\('orders\.case\.packChanged', \{ old: changed\.old, new: changed\.new \}\)/);
   assert.match(FORM, /onClick: \(\) => \{ recomputed = true; refresh\(\); \}/);
-  assert.match(FORM, /recomputeBtn\.hidden = dirty\(\) \|\| needsSize;/, 'once the price is being recomputed the button has done its job');
+  assert.match(FORM, /recomputeBtn\.hidden = dirty\(\) \|\| needsSize \|\| start\.suggestion === null;/, 'once the price is being recomputed the button has done its job');
   assert.match(I18N, /'orders\.case\.packChanged': 'Il formato è cambiato dall’ultimo prezzo: salvato \{old\}, con questo formato \{new\}\. Ricontrolla il prezzo\.'/);
   assert.match(I18N, /'orders\.case\.recompute': 'Ricalcola'/);
+  assert.match(I18N, /'orders\.case\.keepsPrice': 'Il prezzo salvato resta \{price\} finché non scrivi il nuovo prezzo o tocchi Ricalcola\.'/);
 });
 
 test('a price that existed and has no number under the new format is said, never saved empty in silence', () => {

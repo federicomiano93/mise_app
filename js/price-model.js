@@ -491,9 +491,9 @@ export function pricePatch(
 
 // ── How the card turns «Confezione» and its boxes into what pricePatch reads ──
 // (1 Oct 2026.) The card has ONE price box whose meaning follows the format and the weight:
-//   Cartone, weight readable    → «Prezzo cartone»: a case of PACKAGES (one package = the weight)
-//   Cartone, weight unreadable  → «Prezzo cartone»: a case of PIECES (a rate per piece)
-//   Singola, weight readable    → «Prezzo confezione»: a case of ONE package
+//   Cartone, weight readable    → «Prezzo cartone»: a case of PIECES, one item = the weight (stored per item)
+//   Cartone, weight unreadable  → «Prezzo cartone»: a case of PIECES, the piece weight asked separately
+//   Singola, weight readable    → «Prezzo confezione»: the price of ONE item, a rate per piece + its weight
 //   Singola, weight unreadable  → «Come si acquista» + the typed rate, as it always was
 // The old «A cartone» choice of «Come si acquista» is gone from the screen; CASE_MODE stays as the
 // internal input pricePatch reads, so nothing about how a case is STORED changed.
@@ -511,17 +511,22 @@ export function priceFormOf(fmt, weightText) {
 // boxes = { price, rate, unit, pieceKg, vat }.
 export function formatPriceInput(fmt, weightText, { price, rate, unit, pieceKg, vat } = {}) {
   const form = priceFormOf(fmt, weightText);
-  if (form === PRICE_FORMS.cartonPack) {
-    return { priceUnit: CASE_MODE, casePrice: price, caseCount: fmt.count, caseItemUnit: PACK_ITEM, vatRate: vat };
-  }
-  if (form === PRICE_FORMS.cartonPieces) {
+  // ⚠️ A PRICE TYPED FOR FORMATTED GOODS IS STORED PER ITEM (1 Oct 2026, review): priceUnit 'pcs', the
+  // rate is the price of ONE item, and `unitWeightKg` is one item's weight in kilos when the weight
+  // reads (litres read 1:1 as kilos, the app's standing approximation). The old way — a case of ONE
+  // package priced per kilo — made an egg priced 0.25 a piece become 4.03 a kilo with no piece weight,
+  // and Food cost's «in pieces» lines and packaging (priceUnit 'pcs') lost their cost. Per-kilo
+  // consumers keep working through pricePerKg (pcs rate ÷ unitWeightKg).
+  const itemKg = packBaseOf(weightText)?.size ?? null;
+  if (form === PRICE_FORMS.cartonPack || form === PRICE_FORMS.cartonPieces) {
+    // A carton is a case of that many items: caseRate(pcs) = casePrice ÷ count is the per-item rate.
     return {
       priceUnit: CASE_MODE, casePrice: price, caseCount: fmt.count, caseItemUnit: 'pcs',
-      unitWeightKg: pieceKg, vatRate: vat,
+      unitWeightKg: itemKg ?? pieceKg, vatRate: vat,
     };
   }
   if (form === PRICE_FORMS.singlePack) {
-    return { priceUnit: CASE_MODE, casePrice: price, caseCount: 1, caseItemUnit: PACK_ITEM, vatRate: vat };
+    return { priceUnit: 'pcs', pricePerUnit: price, unitWeightKg: itemKg, vatRate: vat };
   }
   return { priceUnit: unit || null, pricePerUnit: rate, unitWeightKg: pieceKg, vatRate: vat };
 }
@@ -546,31 +551,35 @@ export function storedPriceInput(item, vat) {
   return { priceUnit: it.priceUnit || null, pricePerUnit: it.pricePerUnit, unitWeightKg: it.unitWeightKg, vatRate: vat };
 }
 
-// What the price box starts on (and follows, while nobody has typed in it): the number that keeps
-// the stored price as it is under the format now on screen, or null when there is none.
-//   Cartone  with a stored case → its price (the figure on the invoice)
-//   Cartone  otherwise          → rate × count × weight (or × count for a rate per piece)
-//   Singola  with a stored case → the price of one package (case price ÷ count)
-//   Singola  otherwise          → rate × weight (or the rate itself for a rate per piece)
-// Ten decimals: the figure must divide back to the same rate (a tiny weight times a precise rate
-// rounded to the penny would not).
-export function priceBoxPrefill(item, fmt, weightText) {
+// What the price box shows while nobody has typed in it — { value, suggestion }, each a number or null.
+// ⚠️ EDITING THE FORMAT OR THE WEIGHT NEVER REWRITES A STORED PRICE (1 Oct 2026, review): only typing in
+// this box, or «Ricalcola», makes the price dirty. So the box shows the stored figure only while it
+// STILL MEANS THE SAME THING (`changed` is false — pack-format.js formatChanged); once the format or
+// weight differs from what the price was saved under it is EMPTY, and `suggestion` — the same price
+// per item carried to the new format — is what the card offers as its placeholder and what
+// «Ricalcola» fills in.
+//   suggestion  per-item price × the items now asked for: a rate per piece × count, or a per-kilo rate ×
+//               one item's weight × count (null when the weight does not read, or the count is empty)
+//   value       Cartone with a stored case → its price; Singola with a stored case of one → its price;
+//               no stored case (a typed rate) → the suggestion, which is that rate carried over
+// Ten decimals: the figure must divide back to the same rate.
+export function priceBoxStart(item, fmt, weightText, changed = false) {
   const it = item || {};
   const base = packBaseOf(weightText);
   const stored = storedCaseOf(it);
   const carton = Boolean(fmt) && fmt.kind === 'carton';
-  if (carton && stored) return stored.casePrice;
-  if (!carton && stored && base) return roundTo(stored.casePrice / stored.caseCount, 10);
-  const rate = positiveNumber(it.pricePerUnit);
-  if (rate === null) return null;
-  const weighed = it.priceUnit === 'kg' || it.priceUnit === 'l';
   const count = carton ? positiveNumber(fmt.count) : 1;
-  if (count === null) return null;
-  if (base) {
-    if (weighed) return roundTo(rate * count * base.size, 10);
-    return it.priceUnit === 'pcs' ? roundTo(rate * count, 10) : null;
+  const rate = positiveNumber(it.pricePerUnit);
+  let suggestion = null;
+  if (count !== null && rate !== null) {
+    if (it.priceUnit === 'pcs') suggestion = roundTo(rate * count, 10);
+    else if (base) suggestion = roundTo(rate * base.size * count, 10);
   }
-  return carton && it.priceUnit === 'pcs' ? roundTo(rate * count, 10) : null;
+  if (stored) {
+    if (changed) return { value: null, suggestion };
+    return { value: carton ? stored.casePrice : roundTo(stored.casePrice / stored.caseCount, 10), suggestion };
+  }
+  return { value: suggestion, suggestion };
 }
 
 // ⚠️ A CASE PRICED BY WEIGHT CANNOT BE RE-PRICED WITHOUT ONE: the person typed a price on a
