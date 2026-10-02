@@ -1005,7 +1005,6 @@ const DICTIONARIES = Object.freeze({
     'orders.send.noContact': { one: 'no contact saved for {names}',
                                other: 'no contact saved for {names}' },
     'orders.send.noRouteAvailable': 'There is no way to send this order. Ask whoever runs the place to switch one on in Settings.',
-    'orders.send.emailSubject': 'Order from {name}',
     // Settings
     'orders.send.settingsTitle': 'How orders may be sent',
     'orders.send.settingsHint': 'What the people working here can use. You always keep them all.',
@@ -3405,7 +3404,6 @@ const DICTIONARIES = Object.freeze({
     'orders.send.noContact': { one: 'nessun recapito salvato per {names}',
                                other: 'nessun recapito salvato per {names}' },
     'orders.send.noRouteAvailable': 'Non c’è nessun modo di mandare quest’ordine. Chiedi a chi gestisce il locale di accenderne uno nelle Impostazioni.',
-    'orders.send.emailSubject': 'Ordine da {name}',
     // Impostazioni
     'orders.send.settingsTitle': 'Come si possono mandare gli ordini',
     'orders.send.settingsHint': 'Cosa possono usare le persone che lavorano qui. Tu le mantieni sempre tutte.',

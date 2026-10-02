@@ -79,10 +79,10 @@ test('the summary lines equal the message section lines — exactly, in order', 
   const items = orderedItems(INGREDIENTS, ENTRIES);
   const message = buildOrderMessage([{ supplierName: SUPPLIER.name, items }]);
 
-  // `${title}\n\n*Alba*\n- line\n- line…` — the section after the title,
-  // with its bold supplier heading dropped.
+  // `${title}\n\n- line\n- line…` — one supplier carries no heading, so the part after
+  // the title is the lines themselves.
   const section = message.split('\n\n')[1];
-  const messageLines = section.split('\n').slice(1);
+  const messageLines = section.split('\n');
 
   const summaryLines = lines.map(({ label, qty }) => `- ${label}: ${qty}`);
   assert.deepEqual(summaryLines, messageLines);

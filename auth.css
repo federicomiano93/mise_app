@@ -71,12 +71,9 @@
 .auth-form { display: flex; flex-direction: column; }
 
 .auth-label {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  font-weight: 500;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--text-4);
+  font-size: var(--field-label-size);
+  font-weight: var(--field-label-weight);
+  color: var(--field-label-color);
   margin-bottom: 6px;
 }
 
@@ -246,12 +243,9 @@
 .away-form { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
 .away-what { font-size: 13px; line-height: 1.5; color: var(--text2); }
 .away-label {
-  font-family: 'DM Mono', monospace;
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: .05em;
-  text-transform: uppercase;
-  color: var(--text3);
+  font-size: var(--field-label-size);
+  font-weight: var(--field-label-weight);
+  color: var(--field-label-color);
 }
 .away-date {
   width: 100%;

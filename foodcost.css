@@ -158,7 +158,7 @@ body {
    taller than the text fields on the phone while measuring identical on the
    desktop (the v236 lesson). */
 .fc-field { display: flex; flex-direction: column; gap: 6px; }
-.fc-label { font-size: .78rem; color: var(--fc-text-2); font-weight: 500; }
+.fc-label { font-size: var(--field-label-size); color: var(--field-label-color); font-weight: var(--field-label-weight); }
 .fc-field[hidden] { display: none; }
 .fc-input {
   width: 100%;
@@ -211,9 +211,9 @@ select.fc-input, .fc-select {
    the recipe editor on 13 Sep 2026. Two boxes side by side, as they were there; the
    answer under them reads as a statement, not as a footnote. */
 .fc-weigh { margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--fc-border); }
-.fc-weigh-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.fc-weigh-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; align-items: end; }
 .fc-weigh-cell { display: block; min-width: 0; }
-.fc-weigh-label { display: block; font-size: .72rem; color: var(--fc-text-2); margin-bottom: 4px; }
+.fc-weigh-label { display: block; font-size: var(--field-label-size); color: var(--field-label-color); font-weight: var(--field-label-weight); margin-bottom: 4px; }
 .fc-weigh-row { display: flex; align-items: center; gap: 6px; }
 .fc-weigh-row .fc-input { min-width: 0; }
 .fc-weigh-unit { font-size: .8rem; color: var(--fc-text-2); flex: none; }
