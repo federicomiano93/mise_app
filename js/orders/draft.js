@@ -21,6 +21,7 @@ import {
   changedEntries, changedDays,
 } from './archive.js';
 import { cleanUnit } from '../order-unit.js';
+import { cleanSupplierId } from './line-supplier.js';
 
 const DRAFT_ID = 'current';
 const SAVE_DELAY_MS = 800; // debounce to limit Firestore writes (cost control)
@@ -66,6 +67,10 @@ function detach(entries) {
     out[id] = { qty: entry?.qty, stock: entry?.stock };
     // Only when present, so an ordinary entry keeps its {qty, stock} shape.
     if (entry && entry.unit !== undefined) out[id].unit = entry.unit;
+    // The supplier override travels the same way (line-supplier.js): without it the baseline
+    // could never see that a line had been sent elsewhere, and moving it back would read as
+    // «unchanged» and never be written.
+    if (entry && entry.supplierId !== undefined) out[id].supplierId = entry.supplierId;
   });
   return out;
 }
@@ -138,7 +143,8 @@ export function saveDraftNow(entries, days) {
     Object.entries(entriesDelta).forEach(([id, sent]) => {
       const held = pending.entries[id];
       if (held && held.qty === sent.qty && held.stock === sent.stock
-        && cleanUnit(held.unit) === cleanUnit(sent.unit)) delete pending.entries[id];
+        && cleanUnit(held.unit) === cleanUnit(sent.unit)
+        && cleanSupplierId(held.supplierId) === cleanSupplierId(sent.supplierId)) delete pending.entries[id];
     });
     Object.entries(daysDelta).forEach(([id, sent]) => {
       if (pending.days[id] === sent) delete pending.days[id];
