@@ -1268,19 +1268,6 @@ body[data-section="orders"] .ing-filter .view-switch-btn:not(.active) { color: v
    box and its label sit on the same centre line instead of the text baseline. */
 
 
-.mgmt-add {
-  width: 100%;
-  padding: 12px;
-  margin-bottom: 14px;
-  background: var(--surface);
-  border: 1px dashed var(--accent);
-  border-radius: var(--radius-sm);
-  color: var(--accent);
-  font-family: 'Manrope', sans-serif;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-}
 .mgmt-list { display: flex; flex-direction: column; gap: 8px; }
 .mgmt-item {
   display: flex;
