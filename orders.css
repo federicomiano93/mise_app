@@ -2253,6 +2253,40 @@ a.home-reminder {
 .missing-qty { font-variant-numeric: tabular-nums; color: var(--text3); font-size: 14px; }
 .missing-save { width: 100%; margin-top: 16px; }
 
+/* ── «To re-order» list ──────────────────────────────────────────────────────
+   Shares .missing-overlay (z-index 950: above .supplier-detail 600, below dialogs 10000).
+   One card per missing line; both buttons are 44px tall and full width, so at 296px the
+   long «Put back in {supplier}'s order» wraps instead of overflowing. «Resolved» is a
+   quiet text button so it never competes with the put-back action. */
+.reorder-overlay .scroll-area { padding-bottom: 24px; }
+.reorder-list { display: flex; flex-direction: column; }
+.reorder-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.reorder-main { display: flex; align-items: baseline; gap: 12px; }
+.reorder-name { flex: 1; min-width: 0; font-size: 15px; font-weight: 600; overflow-wrap: anywhere; }
+.reorder-meta { font-size: 13px; color: var(--text3); }
+.reorder-card .reorder-put { width: 100%; min-height: 44px; }
+.reorder-resolve {
+  width: 100%;
+  min-height: 44px;
+  background: none;
+  border: none;
+  font-family: var(--font-round);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text2);
+  cursor: pointer;
+}
+.reorder-resolve:active { background: var(--surface2); border-radius: var(--radius-sm); }
+
 /* The re-order reminder reuses .today-banner; this only makes it a full-width
    button and gives it the warning tint, so it is not mistaken for the ordering
    reminders sitting directly beneath it. */

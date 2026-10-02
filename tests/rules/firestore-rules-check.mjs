@@ -745,6 +745,23 @@ async function history() {
       { ...modern, deliveredAt: '' }));
   await expectAllowed('an order from a phone that has not updated yet (no delivery fields)',
     () => wholeWrite('locations/main/orders-history/2026-07-24_SUP_MODERN', modern));
+
+  // ── missingResolved: a missing line somebody marked «Risolto» ─────────────
+  // Negative ones first: a list has .size(), so only `is map` refuses it.
+  await expectDenied('missingResolved sent as a list instead of a map',
+    () => wholeWrite('locations/main/orders-history/2026-07-24_SUP_MODERN',
+      { ...modern, missing: { ING_MODERN: true }, missingResolved: ['ING_MODERN'] }));
+  await expectDenied('missingResolved sent as a string',
+    () => wholeWrite('locations/main/orders-history/2026-07-24_SUP_MODERN',
+      { ...modern, missing: { ING_MODERN: true }, missingResolved: 'ING_MODERN' }));
+  const tooMany = Object.fromEntries(Array.from({ length: 501 }, (_, i) => [`ING_${i}`, '2026-10-01T09:00:00.000Z']));
+  await expectDenied('missingResolved with more lines than an order may have',
+    () => wholeWrite('locations/main/orders-history/2026-07-24_SUP_MODERN',
+      { ...modern, missing: { ING_MODERN: true }, missingResolved: tooMany }));
+  await expectAllowed('a missing line marked «Risolto»',
+    () => wholeWrite('locations/main/orders-history/2026-07-24_SUP_MODERN',
+      { ...modern, deliveredAt: '2026-07-25T09:00:00.000Z', missing: { ING_MODERN: true },
+        missingResolved: { ING_MODERN: '2026-10-01T09:00:00.000Z' } }));
   await expectDenied('names sent as a string',
     () => wholeWrite('locations/main/orders-history/2026-07-24_SUP_MODERN',
       { ...modern, names: 'Bacon' }));

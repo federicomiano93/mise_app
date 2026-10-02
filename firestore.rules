@@ -948,7 +948,7 @@ service cloud.firestore {
                'bakery', 'date', 'supplierId', 'supplierName',
                'quantities', 'stock', 'names', 'createdAt', 'updatedAt',
                // The delivery half of an order's life — see the note below.
-               'deliveredAt', 'missing',
+               'deliveredAt', 'missing', 'missingResolved',
                // The unit each line was ordered in — see the note below.
                'units'
              ])
@@ -1008,6 +1008,15 @@ service cloud.firestore {
           && (!('missing' in request.resource.data)
               || (request.resource.data.missing is map
                   && request.resource.data.missing.size() <= 500))
+          // `missingResolved` (1 Oct 2026) — { ingredientId: '2026-10-01T…' }: a missing line
+          // somebody marked «Risolto» (bought elsewhere), so it leaves the «Da riordinare»
+          // list for good. Federico: a missing ingredient stays pending until he decides,
+          // not until the same supplier is ordered from again. ⚠️ BESIDE `missing`, never
+          // instead of it: the line still did not arrive, so the stocktake must still not
+          // count it as bought. OPTIONAL in both directions, like the two above.
+          && (!('missingResolved' in request.resource.data)
+              || (request.resource.data.missingResolved is map
+                  && request.resource.data.missingResolved.size() <= 500))
           && request.resource.data.createdAt is string
           && request.resource.data.createdAt.size() <= 64
           && request.resource.data.updatedAt is string

@@ -267,6 +267,9 @@ export function mergeArchives(existing, incoming, { cardUnitOf } = {}) {
   });
   const units = { ...(existing.units || {}), ...(incoming.units || {}) };
   const missing = carriedMissing(existing, incoming);
+  // «Risolto» marks travel with the marks they answer, and only with them.
+  const resolved = Object.fromEntries(Object.entries(existing.missingResolved || {})
+    .filter(([id, at]) => missing?.[id] === true && typeof at === 'string' && at));
 
   return {
     ...incoming,
@@ -278,6 +281,7 @@ export function mergeArchives(existing, incoming, { cardUnitOf } = {}) {
     // order goes back to «still to answer» (js/orders/deliveries-view.js re-asks with the
     // carried marks already unticked).
     ...(missing ? { missing } : {}),
+    ...(Object.keys(resolved).length ? { missingResolved: resolved } : {}),
     quantities,
     stock: { ...(existing.stock || {}), ...(incoming.stock || {}) },
     // Keep every name the record has ever carried. The incoming write only names the

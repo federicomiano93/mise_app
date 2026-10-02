@@ -308,3 +308,14 @@ export function confirmDelivery(id, { deliveredAt, missing }) {
     updatedAt: new Date().toISOString(),
   });
 }
+
+// «Risolto» on one missing line: bought elsewhere, so it leaves «Da riordinare» for good.
+// ⚠️ A MERGE, on purpose: the map is ADDED to (one line at a time, maybe from two phones),
+// and `missing` itself is never touched — the line still did not arrive, so the stocktake
+// must still not count it as bought.
+export function resolveMissing(recordId, ingredientId, at = new Date().toISOString()) {
+  return saveDoc(COLLECTIONS.history, recordId, {
+    missingResolved: { [ingredientId]: at },
+    updatedAt: at,
+  });
+}

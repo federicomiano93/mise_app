@@ -499,3 +499,16 @@ test('nothing to clear produces nothing', () => {
   assert.deepEqual(quantityPathsFor(null, INGREDIENTS), []);
   assert.deepEqual(quantityPathsFor(['alba'], []), ['days.alba']);
 });
+
+test('«Risolto» marks travel with the marks they answer, and only with them', () => {
+  const existing = {
+    quantities: { flour: 4, butter: 2 },
+    missing: { flour: true, butter: true },
+    missingResolved: { flour: '2026-10-01T09:00:00.000Z', butter: '2026-10-01T09:00:00.000Z' },
+  };
+  // Butter is ordered again the same day: its mark goes, and its «Risolto» with it.
+  const merged = mergeArchives(existing, { quantities: { butter: 1 } });
+  assert.deepEqual(merged.missing, { flour: true });
+  assert.deepEqual(merged.missingResolved, { flour: '2026-10-01T09:00:00.000Z' });
+  assert.equal('missingResolved' in mergeArchives({ quantities: { flour: 1 } }, { quantities: { flour: 1 } }), false);
+});
