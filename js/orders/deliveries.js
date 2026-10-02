@@ -17,7 +17,7 @@
 // the app suggests for months — and it would also destroy the evidence that the thing
 // was ordered at all, which is exactly what you need to chase a supplier.
 
-import { recordDate, isLegacyRecord, wholeNumber } from './archive.js';
+import { recordDate, isLegacyRecord, wholeNumber, historyDocId } from './archive.js';
 import { cleanUnit } from '../order-unit.js';
 import { parseISODate, toISODate, addDays, isBefore, weekdayOf } from './day.js';
 import { inCurrentWeek, beforeCurrentWeek, DEFAULT_WEEK_START } from './work-week.js';
@@ -129,21 +129,28 @@ export function pendingDeliveries(orders, suppliersById, today,
   return out;
 }
 
+// When a missing line was marked «Risolto», or '' — a non-empty string is the only answer.
+export function resolvedOn(record, id) {
+  const at = record?.missingResolved?.[id];
+  return typeof at === 'string' && at.trim() !== '' ? at : '';
+}
+
 // Everything that did not arrive and has not been dealt with since.
 //
-//   -> [{ id, supplierId, qty, missedOn }]
+//   -> [{ id, supplierId, recordId, qty, missedOn, unit? }]
 //
-// ⚠️⚠️ IT IS DERIVED, NOT STORED, AND THAT IS WHAT MAKES IT SAFE. There is no "I
-// have re-ordered this" flag to set, so there is nothing that can be left switched on
-// by a failed write and nothing that can disagree with the orders themselves. Same
-// reasoning as the pastry lock, where "is tonight's list done?" needed no flag: a
-// record either exists or it does not.
+// ⚠️⚠️ IT IS DERIVED, NOT STORED, AND THAT IS WHAT MAKES IT SAFE — with ONE stored
+// answer. There is no "I have re-ordered this" flag to set, so there is nothing that can
+// be left switched on by a failed write and nothing that can disagree with the orders
+// themselves. The exception is «Risolto» (`missingResolved`, 1 Oct 2026): «I bought it
+// elsewhere» leaves no trace in any order, so it has to be said and kept.
 //
-// An ingredient drops off when EITHER
-//   * a later order to the same supplier asked for it again, or
+// An ingredient drops off when
+//   * somebody marked it «Risolto», or
+//   * a later order (to any supplier) asked for it again, or
 //   * it already has a quantity in the order being typed right now.
 //
-// ⚠️ THE SECOND ONE IS WHY THE BANNER GOES QUIET THE MOMENT THE WORK IS DONE, rather
+// ⚠️ THE LAST ONE IS WHY THE LIST GOES QUIET THE MOMENT THE WORK IS DONE, rather
 // than waiting until that order is placed. Without it, "put it back in the order"
 // would leave its own reminder on screen, and a reminder that survives the action it
 // asked for is one people learn to ignore.
@@ -156,9 +163,16 @@ export function stillToReorder(history, draftEntries) {
     const supplierId = record.supplierId;
 
     shortfall(record).forEach(id => {
-      // Asked for again, later, from the same supplier?
+      // Marked «Risolto» — bought elsewhere (1 Oct 2026). The one STORED answer on this
+      // list: Federico wants a missing line to wait until he decides.
+      if (resolvedOn(record, id)) return;
+
+      // Asked for again, later, from ANY supplier? «Ordina da un altro fornitore» keeps the
+      // same ingredient id and files the line under the other supplier's order, so once that
+      // order is placed its record names this ingredient. Matching only the same supplier
+      // would bring the line back after it was ordered elsewhere. If that order is never
+      // placed (cleared, typed to 0, discarded) no record exists and the line stays here.
       const reordered = records.some(other =>
-        other.supplierId === supplierId &&
         isBefore(missedOn, recordDate(other)) &&
         wholeNumber(other.quantities?.[id]) > 0);
       if (reordered) return;
@@ -172,6 +186,8 @@ export function stillToReorder(history, draftEntries) {
       out.push({
         id,
         supplierId,
+        // The record a «Risolto» is written to.
+        recordId: record.id || historyDocId(missedOn, supplierId),
         qty: wholeNumber(record.quantities?.[id]),
         missedOn,
         ...(unit ? { unit } : {}),

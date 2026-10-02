@@ -24,6 +24,7 @@ import { productsUsingRecipe, draftFromRecipe } from './foodcost-model.js';
 import { formatRate, formatMoney, pricePerKg } from '../price-model.js';
 // Food or packaging? From js/ root, where the registry that files it asks the same question.
 import { isPackaging } from '../ingredient-kind.js';
+import { ingredientDisplayName } from '../ingredient-name.js';
 // The address a recipe's «Apri nel Food cost» opens this page with, and the way back to
 // that recipe. From js/ root: the catalogue and Food cost share an address, never a folder.
 import { recipeIdFromHash, recipeHref } from '../recipe-link.js';
@@ -516,7 +517,9 @@ const app = {
   ingredientOptions() {
     return Object.values(getIngredients())
       .filter(i => i && i.active !== false && !isPackaging(i) && String(i.name || '').trim())
-      .map(i => ({ id: i.id, name: String(i.name).trim(), meta: String(i.weight || '').trim() }))
+      .map(i => ({
+        id: i.id, name: ingredientDisplayName(i).trim(), invoiceName: String(i.name).trim(), meta: String(i.weight || '').trim(),
+      }))
       .sort((a, b) => a.name.localeCompare(b.name));
   },
 
@@ -533,7 +536,7 @@ const app = {
         const note = each ? t('fc.priceEach', { price: formatRate(each) })
           : perKg !== null ? t('fc.pricedByWeight')
             : t('fc.notPriced');
-        return { id: i.id, name: String(i.name).trim(), meta: note };
+        return { id: i.id, name: ingredientDisplayName(i).trim(), invoiceName: String(i.name).trim(), meta: note };
       })
       .sort((a, b) => a.name.localeCompare(b.name));
   },

@@ -231,6 +231,34 @@ test('the newer stock reading wins — a measurement is not a total', () => {
   assert.deepEqual(mergeArchives(existing, incoming).stock, { flour: 6 });
 });
 
+// The record is written WHOLE (transactDoc → tx.set): what the merge leaves out is deleted.
+test('a second order the same day keeps the «did not arrive» marks', () => {
+  const existing = {
+    quantities: { flour: 4, butter: 2 }, stock: {},
+    deliveredAt: '2026-07-13T09:00:00.000Z', missing: { butter: true },
+  };
+  const incoming = { quantities: { semola: 2 }, stock: {} };
+  const merged = mergeArchives(existing, incoming);
+  assert.deepEqual(merged.missing, { butter: true });
+  // The semola has not arrived: the order goes back to «still to answer».
+  assert.equal('deliveredAt' in merged, false);
+});
+
+test('a missing line ordered again the same day loses its mark — it has just been re-ordered', () => {
+  const existing = { quantities: { flour: 4, butter: 2 }, missing: { butter: true, flour: true } };
+  const merged = mergeArchives(existing, { quantities: { butter: 2 } });
+  assert.deepEqual(merged.missing, { flour: true });
+});
+
+test('no marks left means no `missing` key at all, never an empty map', () => {
+  assert.equal('missing' in mergeArchives({ quantities: { flour: 4 } }, { quantities: { flour: 1 } }), false);
+  const reordered = mergeArchives({ quantities: { flour: 4 }, missing: { flour: true } }, { quantities: { flour: 1 } });
+  assert.equal('missing' in reordered, false);
+  // Anything but a literal true was never a mark.
+  const odd = mergeArchives({ quantities: { flour: 4 }, missing: { flour: 'yes' } }, { quantities: { semola: 1 } });
+  assert.equal('missing' in odd, false);
+});
+
 // ── legacy weekly records ─────────────────────────────────────────────────────
 
 const LEGACY = {
@@ -470,4 +498,17 @@ test('nothing to clear produces nothing', () => {
   assert.deepEqual(quantityPathsFor([], INGREDIENTS), []);
   assert.deepEqual(quantityPathsFor(null, INGREDIENTS), []);
   assert.deepEqual(quantityPathsFor(['alba'], []), ['days.alba']);
+});
+
+test('«Risolto» marks travel with the marks they answer, and only with them', () => {
+  const existing = {
+    quantities: { flour: 4, butter: 2 },
+    missing: { flour: true, butter: true },
+    missingResolved: { flour: '2026-10-01T09:00:00.000Z', butter: '2026-10-01T09:00:00.000Z' },
+  };
+  // Butter is ordered again the same day: its mark goes, and its «Risolto» with it.
+  const merged = mergeArchives(existing, { quantities: { butter: 1 } });
+  assert.deepEqual(merged.missing, { flour: true });
+  assert.deepEqual(merged.missingResolved, { flour: '2026-10-01T09:00:00.000Z' });
+  assert.equal('missingResolved' in mergeArchives({ quantities: { flour: 1 } }, { quantities: { flour: 1 } }), false);
 });

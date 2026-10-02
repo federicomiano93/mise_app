@@ -19,6 +19,7 @@ import { buildSupplierPicker } from './supplier-picker.js';
 import { chooseAndSend } from './send-chooser.js';
 import { currentSession } from '../firebase.js';
 import { orderedItems } from './order-text.js';
+import { outputLanguage } from '../market.js';
 
 // suppliers: array; ingredientsBySupplier: { supplierId: [ingredient] };
 // entries: { ingredientId: { qty, stock } }; callbacks: { onBack, onSent, beforeSend };
@@ -64,6 +65,7 @@ export function buildSendScreen(suppliers, ingredientsBySupplier, entries, callb
         // of them can actually be reached, and by name they could not be told apart.
         suppliers: selected.map(r => suppliers.find(s => s.id === r.id)).filter(Boolean),
         locationName: currentSession().name,
+        language: outputLanguage(currentSession().location),
         grouped,
         onSendToManager: callbacks.onSendToManager,
         onSent: callbacks.onSent,

@@ -12,15 +12,19 @@
 import { t } from '../i18n.js';
 import { el } from './dom.js';
 import { isUnusualQuantity } from './suggestions.js';
-import { wholeNumber, sortByLabel, ingredientLabel } from './archive.js';
+import { wholeNumber, sortByLabel, ingredientDisplayLabel } from './archive.js';
+import { ingredientDisplayName } from '../ingredient-name.js';
 import { unitChoices, entryUnit, storedUnitFor, sameUnit, isDefaultUnit } from '../order-unit.js';
 
 // How many of a supplier's ingredients already have a quantity entered — used to
 // paint the progress bar correctly on first render (before any typing), so a
 // supplier is never stuck on a placeholder. refreshSupplierDerived (suppliers.js)
 // keeps it in sync as the operator types.
+//
+// ⚠️ A row ordered ELSEWHERE this time (`elsewhereId`, see orders-main.js screenRowsFor) is
+// not counted: its quantity belongs to another supplier's order.
 function countFilled(ingredients, entries) {
-  return ingredients.filter(i => (entries[i.id]?.qty || 0) > 0).length;
+  return ingredients.filter(i => !i.elsewhereId && (entries[i.id]?.qty || 0) > 0).length;
 }
 
 // The row's slice of the shared draft, re-created if it is gone.
@@ -76,11 +80,11 @@ export function buildIngredientList(supplier, ingredients, suggest, entries, hoo
     ]);
   }
 
-  const total = ingredients.length;
+  const total = ingredients.filter(i => !i.elsewhereId).length;
   const filled = countFilled(ingredients, entries);
 
   const fill = el('div', { class: 'progress-fill', id: `progress-fill-${supplier.id}`,
-    style: { width: `${Math.round((filled / total) * 100)}%` } });
+    style: { width: `${total ? Math.round((filled / total) * 100) : 0}%` } });
   // The bar stays (a quick "how full is this order" cue); the "X of Y filled" text
   // was removed — the bar already says it.
   const progress = el('div', { class: 'progress' }, [
@@ -123,17 +127,46 @@ export function buildRow(ing, supplier, suggest, entries, hooks, { meta = '' } =
 
   const stockInput = el('input', {
     type: 'number', class: 'ing-stock', min: '0', inputmode: 'numeric',
-    'aria-label': t('orders.stockOnHandFor', { name: ing.name }),
+    'aria-label': t('orders.stockOnHandFor', { name: ingredientDisplayName(ing) }),
   });
   const qtyInput = el('input', {
     type: 'number', class: 'ing-qty', min: '0', inputmode: 'numeric',
-    'aria-label': t('orders.qtyToOrderFor', { name: ing.name }),
+    'aria-label': t('orders.qtyToOrderFor', { name: ingredientDisplayName(ing) }),
   });
   const hint = el('div', { class: 'ing-suggestion' });
 
+  // ⚠️ WHOSE ORDER THIS LINE IS IN («Ordina da un altro fornitore», line-supplier.js). One
+  // ingredient is in ONE order at a time, so a quantity typed on a row settles it:
+  //   * a row SENT HERE from another supplier (`usualSupplierId`) keeps the line in this
+  //     supplier's order while it has a quantity, and lets it go back at zero;
+  //   * a row of THIS supplier's that is ordered elsewhere this time (`away`) shows an
+  //     empty box; typing a quantity takes the line back (override cleared, same write);
+  //   * any other row never carries an override — a stale one is cleared on the way.
+  // The key is sent as '' (never left behind) by changedEntries when it goes.
+  let away = ing.elsewhereId || '';
+  const note = el('div', { class: 'ing-line-note' });
+  function paintNote() {
+    const text = away
+      ? t('orders.line.thisTimeFrom', { supplier: ing.elsewhereLabel || '' })
+      : ing.usualSupplierId ? t('orders.line.usuallyFrom', { supplier: ing.usualLabel || '' }) : '';
+    note.textContent = text;
+    note.hidden = !text;
+  }
+  function claimLine(entry, qty) {
+    if (ing.usualSupplierId) entry.supplierId = qty > 0 ? supplier.id : '';
+    else if (entry.supplierId) entry.supplierId = '';
+    if (away) {
+      away = '';
+      delete row.dataset.elsewhere;
+      paintNote();
+    }
+  }
+
   function setQty(value, fromInput) {
     const qty = wholeNumber(value);
-    entryFor(entries, ing.id).qty = qty;
+    const entry = entryFor(entries, ing.id);
+    entry.qty = qty;
+    claimLine(entry, qty);
     if (!fromInput) qtyInput.value = qty || '';
     markFilled(row, qty);
     hooks.afterChange(supplier.id);
@@ -148,6 +181,12 @@ export function buildRow(ing, supplier, suggest, entries, hooks, { meta = '' } =
   // "Suggested: 8" sitting beside "much more than usual" would be saying the same
   // thing twice anyway.
   function updateHint() {
+    // Nothing to suggest for a row whose line is in another supplier's order.
+    if (away) {
+      hint.textContent = '';
+      hint.className = 'ing-suggestion';
+      return { active: false };
+    }
     // ⚠️ NO HINT, AND NO AUTO-FILL, FOR A LINE IN ANOTHER UNIT THAN THE CARD'S. The history
     // the suggestion is worked out from counts the card's unit, so «Suggested: 4» under a
     // line of buste — or 4 typed into it from the stock box — would be a number of the
@@ -194,7 +233,7 @@ export function buildRow(ing, supplier, suggest, entries, hooks, { meta = '' } =
   const unitSelect = choices.length >= 2
     ? el('select', {
       class: 'ing-unit-select',
-      'aria-label': t('orders.unitToOrderFor', { name: ingredientLabel(ing) || t('orders.unnamedProduct') }),
+      'aria-label': t('orders.unitToOrderFor', { name: ingredientDisplayLabel(ing) || t('orders.unnamedProduct') }),
     }, choices.map(unit => el('option', { value: unit, text: unit })))
     : null;
   if (unitSelect) {
@@ -206,6 +245,23 @@ export function buildRow(ing, supplier, suggest, entries, hooks, { meta = '' } =
     });
   }
 
+  // ⚠️ THE NAME IS A BUTTON ONLY FOR WHOEVER MAY EDIT INGREDIENTS (Federico, 1 Oct 2026: the
+  // card «Modifica ingrediente» one tap from the order, instead of going back to «Fornitori e
+  // ingredienti»). Everybody else keeps plain text — a control that opens a card the person may
+  // not use teaches them the app is broken. The question is put to the caller on EVERY build,
+  // and rows are rebuilt on every snapshot, so it follows the owner's switch live.
+  // It is a real <button> (keyboard, focus ring, an accessible name that says what it does) drawn
+  // to look exactly like the span it replaces (.ing-name-btn, orders.css): the row must not move.
+  // The quantity / stock boxes and the × button are SIBLINGS of it, never inside it.
+  const editable = typeof hooks.onEditIngredient === 'function' && hooks.mayEditIngredient?.() === true;
+  const nameNode = editable
+    ? el('button', {
+      type: 'button', class: 'ing-name ing-name-btn', text: ingredientDisplayName(ing),
+      'aria-label': t('orders.editIngredientFor', { name: ingredientDisplayLabel(ing) || t('orders.unnamedProduct') }),
+      onClick: () => hooks.onEditIngredient(ing),
+    })
+    : el('span', { class: 'ing-name', text: ingredientDisplayName(ing) });
+
   // One LINE per ingredient, three columns: the name (with the supplier and the hint
   // under it), the Order box, the Stock box. «Order» / «Stock» are named ONCE, by the
   // sticky header (buildIngredientHeader), not under every box — each input keeps its
@@ -215,7 +271,7 @@ export function buildRow(ing, supplier, suggest, entries, hooks, { meta = '' } =
   row = el('div', { class: 'ing-row ing-row--line', dataset: { ing: ing.id } }, [
     el('div', { class: 'ing-main' }, [
       el('div', { class: 'ing-top' }, [
-        el('span', { class: 'ing-name', text: ing.name || '' }),
+        nameNode,
       ]),
       // The pack weight on a small line of its own (29 Sep 2026): beside the name it pushed
       // «Marmellata di albicocche 1kg» onto four lines in the 86px a 296px phone leaves.
@@ -223,13 +279,14 @@ export function buildRow(ing, supplier, suggest, entries, hooks, { meta = '' } =
       // Its own block, not a second child of .ing-top: that is a baseline-aligned flex
       // row, so the supplier would sit BESIDE the name instead of under it.
       meta ? el('div', { class: 'ing-supplier', text: meta }) : null,
+      note,
       hint,
       // In the name column on purpose: it holds nothing tappable, so a 44px target here
       // steals no tap from the Order / Stock boxes. Shown only while there is a quantity.
       el('button', {
         type: 'button', class: 'ing-qty-clear', icon: CLEAR_ICON,
         // Name AND weight: «Flour 1kg» and «Flour 25kg» must not both read «clear Flour».
-        'aria-label': t('orders.clearQtyFor', { name: ingredientLabel(ing) || t('orders.unnamedProduct') }),
+        'aria-label': t('orders.clearQtyFor', { name: ingredientDisplayLabel(ing) || t('orders.unnamedProduct') }),
         onClick: (event) => {
           // A cleared line starts again in the card's own unit (the default), exactly as
           // «Clear quantities» does — the unit goes first so the one autosave carries both.
@@ -253,10 +310,13 @@ export function buildRow(ing, supplier, suggest, entries, hooks, { meta = '' } =
     unitSelect,
   ]);
   if (unitSelect) row.classList.add('ing-row--choice');
+  if (away) row.dataset.elsewhere = away;
+  paintNote();
 
   stockInput.value = entry.stock || '';
-  qtyInput.value = entry.qty || '';
-  markFilled(row, entry.qty);
+  // A row ordered elsewhere this time shows an EMPTY box: that number is the other order's.
+  qtyInput.value = away ? '' : entry.qty || '';
+  markFilled(row, away ? 0 : entry.qty);
   updateHint(); // show suggestion without overwriting a restored quantity
   return row;
 }

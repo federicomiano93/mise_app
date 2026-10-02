@@ -12,6 +12,7 @@ import {
   reopenMonth, pullOpeningFromPrevious, readProposedPurchases, applyPurchases,
   flush, flushBeforeLeaving, setSyncErrorHandler,
 } from './inventory-store.js';
+import { ingredientDisplayName } from '../ingredient-name.js';
 import { renderList } from './inventory-list.js';
 import { renderDetail } from './inventory-detail.js';
 import { renderUsage } from './inventory-usage.js';
@@ -138,7 +139,7 @@ function openIngredient(ingredient) {
   activeIngredient = ingredient;
   builtClosed = readOnly();
   setHeader({
-    title: [ingredient.name, ingredient.weight].filter(Boolean).join(' ') || t('inv.unnamedProduct'),
+    title: [ingredientDisplayName(ingredient), ingredient.weight].filter(Boolean).join(' ') || t('inv.unnamedProduct'),
     sub: monthName(openMonthId),
     back: true,
   });
@@ -314,7 +315,8 @@ async function handleClose() {
   const packKg = {};
   const openMonth = getMonth();
   countable.forEach(i => {
-    names[i.id] = [i.name, i.weight].filter(Boolean).join(' ').trim();
+    // frozen as the screens show it: it is only read back when the product is gone
+    names[i.id] = [ingredientDisplayName(i), i.weight].filter(Boolean).join(' ').trim();
     const price = packPrice(openMonth, i, false);
     if (price !== null) unitPrice[i.id] = price;
     const kg = packKgFor(openMonth, i, false);

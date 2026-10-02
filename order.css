@@ -73,9 +73,9 @@ body {
 .co-label {
   display: block;
   margin-bottom: 8px;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-2);
+  font-size: var(--field-label-size);
+  font-weight: var(--field-label-weight);
+  color: var(--field-label-color);
 }
 
 .co-hint {

@@ -14,11 +14,13 @@ import { outputLanguage } from '../market.js';
 import { categoryChoices, unitChoices, packChoices } from '../record-choices.js';
 import { withPrices } from '../price-model.js';
 import { buildRegistry } from './registry.js';
+import { dropDeletedIngredientFromDraft, freezeUnitInDraft } from './draft.js';
 import {
   COLLECTIONS, watchCollection, watchIngredientPrices, canManageHere,
   saveDoc, removeDoc, saveIngredientWithPrice, saveSupplierRecord, getPriceHistory,
-  watchDoc, setCategoryOnMany,
+  watchDoc, setCategoryOnMany, deleteIngredientWithPrice, mayWritePrices,
 } from './firebase-orders.js';
+import { readIngredientPrice } from '../record-data.js';
 
 const state = {
   suppliers: [],
@@ -29,6 +31,9 @@ const state = {
   // loaded yet: both mean «offer the defaults».
   ingredientCategories: null,
   loaded: { ingredients: false, config: false },
+  // Whether the live prices have really answered (watchIngredientPrices' second argument): until
+  // then an ingredient card reads its own price document before it opens (registry.js).
+  pricesReadable: false,
 };
 
 const host = document.getElementById('registry-host');
@@ -50,6 +55,8 @@ const screen = buildRegistry(
     // ⚠️ Until config/orders has answered, `categories()` is only the defaults: Settings keeps
     // the delete buttons off, or a delete would overwrite the saved list with them.
     categoriesLoaded: () => state.loaded.config,
+    pricesLoaded: () => state.pricesReadable === true,
+    readPrice: (id) => readIngredientPrice(id),
     orderUnits: (current) => unitChoices({
       ingredients: state.ingredients, language: outputLanguage(currentSession().location), current,
     }),
@@ -68,13 +75,36 @@ const screen = buildRegistry(
     // including a write to ingredient-prices for somebody the rules refuse would
     // fail the WHOLE save, so renaming an ingredient — ordinary work — would come
     // back as a permission error with nothing on screen explaining it.
-    saveIngredient: (id, payload, record, writePrice) =>
-      saveIngredientWithPrice(id, payload, record, writePrice),
+    // `meta.unitChangedFrom` is the order unit the card has just replaced (Cartone / Singola): the open
+    // draft line is frozen in it so a quantity keeps its meaning (draft.js freezeUnitInDraft). Not part of
+    // the save: if it fails the ingredient is already saved, and only the log says so.
+    saveIngredient: async (id, payload, record, writePrice, meta) => {
+      const savedId = await saveIngredientWithPrice(id, payload, record, writePrice);
+      if (meta && meta.unitChangedFrom) {
+        freezeUnitInDraft({ id: savedId, from: meta.unitChangedFrom, item: payload })
+          .catch(err => console.error('The draft line kept an old unit:', err));
+      }
+      return savedId;
+    },
     priceHistory: (id) => getPriceHistory(id),
     setSupplierActive: (id, active) => saveDoc(COLLECTIONS.suppliers, id, { active }),
     setIngredientActive: (id, active) => saveDoc(COLLECTIONS.ingredients, id, { active }),
     deleteSupplier: (id) => removeDoc(COLLECTIONS.suppliers, id),
-    deleteIngredient: (id) => removeDoc(COLLECTIONS.ingredients, id),
+    // ⚠️ A GETTER, AND THE GATE LIVES HERE (registry.js may ask no role): the card draws its bin
+    // only when this is a function, and registry.js reads it each time a card is opened, so it
+    // follows the session — which arrives AFTER this module runs — and is absent for staff.
+    // The ingredient and its price go in one batch; the price delete only where the person may
+    // write prices (saveIngredientWithPrice's reasoning). The rules decide either way (P2).
+    get deleteIngredient() {
+      return canManageHere()
+        ? async (id) => {
+          await deleteIngredientWithPrice(id, mayWritePrices());
+          // ⚠️ ALSO THE ORDER DRAFT, like the Orders path: a quantity typed for this ingredient
+          // would otherwise stay in drafts/current. Not awaited — the card closes now.
+          dropDeletedIngredientFromDraft(id);
+        }
+        : undefined;
+    },
     // The shortened list and «no category» on every ingredient that used it — one batch.
     deleteCategory: (list, ids) => setCategoryOnMany(ids, 'Other',
       { name: COLLECTIONS.config, id: 'orders', data: { ingredientCategories: list } }),
@@ -150,8 +180,9 @@ watchCollection(COLLECTIONS.suppliers, list => {
 // here so the form opens on the price it is meant to edit; an employee is refused
 // that collection and simply sees no price, which is the same thing they see for
 // an ingredient nobody has priced.
-watchIngredientPrices(map => {
+watchIngredientPrices((map, readable) => {
   state.ingredientPrices = map;
+  state.pricesReadable = readable === true;
   if (state.loaded.ingredients) {
     state.ingredients = withPrices(state.rawIngredients, map);
     screen.refresh();

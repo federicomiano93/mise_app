@@ -16,7 +16,7 @@
 // and as isDelivered() in deliveries.js. It goes quiet only for the two reasons
 // that mean the job is done: the list was sent again, or the order was recorded.
 
-import { wholeNumber as num, ingredientsOf, ingredientLabel, historyDocId } from './archive.js';
+import { wholeNumber as num, ingredientsOf, ingredientDisplayLabel, historyDocId } from './archive.js';
 import { supplierLabel } from '../supplier-label.js';
 import { sameUnit, recordUnit, entryUnit } from '../order-unit.js';
 
@@ -168,7 +168,7 @@ export function untoldChanges({
       // app must say what happened and who to ring, never pretend it can fix it.
       return {
         id: ing.id,
-        name: ingredientLabel(ing),
+        name: ingredientDisplayLabel(ing),
         live, told, ordered: done, extra,
         // In ANY unit: a busta line after 2 cartoni were phoned in is still «already
         // said down a telephone», and the wording for that case is the honest one.

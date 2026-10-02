@@ -31,7 +31,9 @@ const codeOf = (src) => src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*
 
 const PAGE = read('suppliers.html');
 const REGISTRY = read('js/orders/registry.js');
-const FORM = read('js/ingredient-record-form.js');
+import { newCardSource } from './helpers/card-source.mjs';
+// The NEW card only: the card of before is pinned in legacy-card.test.mjs.
+const FORM = newCardSource();
 const MGMT = read('js/orders/management.js');
 const SW = read('sw.js');
 const ORDERS_CSS = read('orders.css');

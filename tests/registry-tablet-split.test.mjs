@@ -125,7 +125,7 @@ test('a row tapped on a tablet checks for typed work BEFORE it clears the pane',
   assert.equal(open.split('clearPane()').length, 2, 'clearPane() is called once, inside replace()');
   // The dialog is the app's own and dangerous.
   assert.match(bodyOf(REGISTRY, 'confirmDiscard'), /confirmDialog\(\{[\s\S]*danger:\s*true/);
-  assert.match(REGISTRY, /import \{ confirmDialog \} from '\.\/confirm-dialog\.js'/);
+  assert.match(REGISTRY, /import \{ confirmDialog(, alertDialog)? \} from '\.\/confirm-dialog\.js'/);
   assert.doesNotMatch(REGISTRY, /\bwindow\.confirm\(|[^.\w]confirm\(|[^.\w]alert\(/);
 });
 
@@ -279,4 +279,14 @@ test('the new words exist in English and in Italian, and differ', () => {
     assert.ok(DICT.it[key], `it is missing ${key}`);
     assert.notEqual(DICT.en[key], DICT.it[key], `${key} is untranslated`);
   }
+});
+
+test('a level in the pane has an opaque ground: stacked levels never show through each other', () => {
+  // A supplier, then one of its ingredients on top: a transparent top level printed both titles over
+  // each other and the supplier's rows between the card's sections (seen on a tablet, 2 Oct 2026).
+  const css = read('tokens.css').replace(/\r\n/g, '\n');
+  const rule = css.match(/\.app-split-pane > \.mgmt-overlay \{([^}]*)\}/);
+  assert.ok(rule, 'the pane level rule exists');
+  assert.match(rule[1], /background: var\(--bg\);/);
+  assert.doesNotMatch(rule[1], /transparent/);
 });

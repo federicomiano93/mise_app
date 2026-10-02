@@ -23,6 +23,7 @@
 // notice and a delivery-day-conflict notice).
 
 import { sameUnit, recordUnit, isDefaultUnit } from '../order-unit.js';
+import { ingredientDisplayName } from '../ingredient-name.js';
 
 const MIN_ORDERS = 4;      // orders of this ingredient before suggestions activate
 const WINDOW_ORDERS = 8;    // average over at most this many recent orders
@@ -117,7 +118,7 @@ export function unusualQuantities(ingredients, entries, suggest) {
       if (!isDefaultUnit(entries?.[ing.id], ing)) return null;
       const result = suggest(ing.id, 0);
       if (!result?.active || !isUnusualQuantity(qty, result.par)) return null;
-      return { id: ing.id, name: ing.name || ing.id, qty, usual: result.par };
+      return { id: ing.id, name: ingredientDisplayName(ing) || ing.id, qty, usual: result.par };
     })
     .filter(Boolean)
     .sort((a, b) => (b.qty / b.usual) - (a.qty / a.usual));

@@ -32,14 +32,14 @@
 import { t, onLanguageChange } from '../i18n.js';
 import { supplierLabel, supplierMatches } from '../supplier-label.js';
 import { el } from './dom.js';
-import { confirmDialog } from './confirm-dialog.js';
+import { confirmDialog, alertDialog } from './confirm-dialog.js';
 import { isTabletNow, watchTablet } from './tablet-layout.js';
 import { snapshotFields, snapshotChanged } from '../form-dirty.js';
 import { removeLevel } from './level-stack.js';
 import { buildSearchBox } from './search-box.js';
 import { dayShort } from './suppliers.js';
 import { NO_SUPPLIER_ID } from './no-supplier.js';
-import { ingredientLabel } from './archive.js';
+import { ingredientDisplayName } from '../ingredient-name.js';
 import { formatPricePerUnit } from '../price-model.js';
 import { allergenState } from '../allergen-model.js';
 // Food or packaging? From js/ root: Food cost and the Catalogue ask the same question.
@@ -48,6 +48,7 @@ import { isPackaging } from '../ingredient-kind.js';
 // This screen still decides everything around them: the overlay, the navigation, and — for
 // the ingredient card — whether the price is drawn and which panels the venue uses.
 import { buildIngredientForm } from '../ingredient-record-form.js';
+import { itemWithPrice, needsPriceRead } from '../ingredient-edit-model.js';
 import { buildSupplierForm } from '../supplier-record-form.js';
 import { mayWritePrices } from './firebase-orders.js';
 // ⚠️ A FEATURE SWITCH, NOT A ROLE GATE, and the difference is why this may sit in a
@@ -61,8 +62,10 @@ import {
 } from './mgmt-ui.js';
 
 // data:    { suppliers(): [], ingredients(): [], categories(current): [], orderUnits(current): [],
-//            packs(current): [], categoriesLoaded(): boolean } — live getters; categories,
-//            orderUnits and packs are the words the ingredient card's menus offer
+//            packs(current): [], categoriesLoaded(): boolean, pricesLoaded(): boolean,
+//            readPrice(id): Promise<price doc | null> } — live getters; categories,
+//            orderUnits and packs are the words the ingredient card's menus offer (orderUnits only
+//            for the card of before, which an old stored price shape opens)
 // actions: { saveSupplier, saveIngredient, priceHistory, setSupplierActive,
 //            setIngredientActive, deleteSupplier, deleteIngredient, deleteCategory(list, ids) }
 // hooks:   { onChrome({ addLabel }) } — told on every paint which word the page
@@ -269,8 +272,8 @@ export function buildRegistry(data, actions, hooks = {}) {
     const supById = {};
     data.suppliers().forEach(s => { supById[s.id] = supplierLabel(s); });
     const all = data.ingredients().filter(i => isPackaging(i) === packaging)
-      .sort((a, b) => a.name.localeCompare(b.name));
-    const visible = all.filter(i => matches(i.name));
+      .sort((a, b) => ingredientDisplayName(a).localeCompare(ingredientDisplayName(b)));
+    const visible = all.filter(i => matches(i.name) || matches(i.shortName));
 
     if (!all.length) {
       listHost.appendChild(emptyState(packaging ? 'packaging' : 'ingredients'));
@@ -345,7 +348,7 @@ export function buildRegistry(data, actions, hooks = {}) {
     // holds; a row on a supplier's own screen — supplierName undefined, itself in the pane —
     // opens its card ABOVE that screen, as on a phone.
     const onList = supplierName !== undefined;
-    const row = drillRow(item.name, meta, item.active !== false,
+    const row = drillRow(ingredientDisplayName(item), meta, item.active !== false,
       () => (onList ? openFromList(() => openIngredientForm(item, null), `ingredient:${item.id}`) : openIngredientForm(item, null)),
       onList ? `ingredient:${item.id}` : null);
     // ⚠️ A WORD, NEVER A COLOUR ALONE (P18, and the v1.63.0 rule). «Not declared»
@@ -403,27 +406,15 @@ export function buildRegistry(data, actions, hooks = {}) {
 
       const mine = data.ingredients()
         .filter(i => (i.supplierId || NO_SUPPLIER_ID) === supplier.id)
-        .sort((a, b) => a.name.localeCompare(b.name));
+        .sort((a, b) => ingredientDisplayName(a).localeCompare(ingredientDisplayName(b)));
 
       body.appendChild(el('h3', { class: 'mgmt-section-title', text: t('orders.whatTheySell') }));
-      // ⚠️ TWO ADDS, NOT ONE (29 Sep 2026): the card has no «Tipo» menu any more, so what a new
-      // item IS is decided by the button that opened it — one add here would file a box as food.
-      // ⚠️ PRE-SET TO THIS SUPPLIER. Adding a product from inside a supplier's screen and then
-      // having to pick that supplier from a list is the kind of re-asking that makes a screen feel like
-      // a form rather than a place.
-      body.appendChild(el('div', { class: 'mgmt-add-pair' }, [
-        el('button', {
-          type: 'button', class: 'mgmt-add',
-          onClick: () => openIngredientForm(null, supplier.id, 'ingredient'),
-        }, t('orders.addIngredientShort')),
-        el('button', {
-          type: 'button', class: 'mgmt-add',
-          onClick: () => openIngredientForm(null, supplier.id, 'packaging'),
-        }, t('orders.addPackagingShort')),
-      ]));
+      // ⚠️ NO ADD BUTTONS ON THIS SCREEN (2 Oct 2026, Federico: «one + only»). A new ingredient or
+      // packaging is added from the Ingredienti / Imballaggi tab with the header «+»; this screen is
+      // opened from the Fornitori tab, where that «+» adds a supplier, so the empty text says where to go.
 
       if (!mine.length) {
-        body.appendChild(el('p', { class: 'mgmt-empty', text: t('orders.noIngredientsYetAdd') }));
+        body.appendChild(el('p', { class: 'mgmt-empty', text: t('orders.noIngredientsYetAddPlus') }));
       } else {
         const list = el('div', { class: 'mgmt-list' });
         mine.forEach(i => list.appendChild(ingredientRow(i)));
@@ -463,7 +454,37 @@ export function buildRegistry(data, actions, hooks = {}) {
 
   // ── One ingredient's form ───────────────────────────────────────────────────
   //   presetKind: 'packaging' when added from the packaging list
-  function openIngredientForm(item, presetSupplierId, presetKind = null) {
+  //
+  // ⚠️⚠️ AN EXISTING INGREDIENT OPENS ONLY WITH ITS PRICE (5th review of PR #254, 2 Oct 2026). The prices
+  // are a second live collection and can arrive AFTER the ingredients: a card opened in that moment shows
+  // empty price boxes, and an untouched Save writes «no price» over the stored one — the card erasing
+  // what it failed to show. So, while the live prices have not answered, the price document is read first
+  // (the same guard Orders' openIngredientEdit uses, js/ingredient-edit-model.js). A read that fails opens
+  // NOTHING: the failure is said, and nothing can be saved over a price nobody saw.
+  // ⚠️ AND FROM THE LIST AS IT IS NOW, NEVER FROM THE ROW'S OWN COPY (6th review, 2 Oct 2026): a row keeps
+  // the object it was drawn with, and a supplier's screen under an open card is not redrawn — so a row drawn
+  // before the prices arrived would open a card with no price after they had (or with an old one).
+  let opening = false;
+  async function openIngredientForm(item, presetSupplierId, presetKind = null) {
+    const current = item ? (data.ingredients().find(i => i.id === item.id) || item) : item;
+    let shown = current;
+    if (current && needsPriceRead({ mayPrice: mayWritePrices(), pricesLoaded: data.pricesLoaded?.() === true })) {
+      if (opening) return;           // a second tap while the price is on its way
+      opening = true;
+      try {
+        shown = itemWithPrice(current, await data.readPrice(current.id));
+      } catch (err) {
+        console.error('The ingredient card could not read its price:', err);
+        await alertDialog(t('orders.addIngredientFailed'));
+        return;
+      } finally {
+        opening = false;
+      }
+    }
+    showIngredientForm(shown, presetSupplierId, presetKind);
+  }
+
+  function showIngredientForm(item, presetSupplierId, presetKind = null) {
     push((entry) => {
       const body = el('div', { class: 'mgmt-scroll' }, [
         buildIngredientForm({

@@ -105,7 +105,7 @@ test('each suggestion carries what the screen shows, and a tick on the current l
   const out = suggestLinks(base({ query: 'burro', linked: { kind: 'ingredient', refId: 'B1' } }));
   const occelli = out.items.find(i => i.refId === 'B1');
   assert.deepEqual(occelli, {
-    kind: 'ingredient', refId: 'B1', name: 'Burro Occelli', weight: '1 kg', supplierName: 'Brava Fresh', linked: true,
+    kind: 'ingredient', refId: 'B1', name: 'Burro Occelli', displayName: 'Burro Occelli', weight: '1 kg', supplierName: 'Brava Fresh', linked: true,
   });
   assert.equal(out.items.filter(i => i.linked).length, 1, 'only the row\'s own link is ticked');
   assert.equal(suggestLinks(base({ query: 'burro', linked: { kind: 'recipe', refId: 'B1' } }))

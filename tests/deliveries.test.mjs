@@ -181,7 +181,7 @@ const missed = over => order({
 
 test('an ingredient that did not arrive is still to re-order', () => {
   const out = stillToReorder([missed()], {});
-  assert.deepEqual(out, [{ id: 'flour', supplierId: 'weekly', qty: 10, missedOn: '2026-08-10' }]);
+  assert.deepEqual(out, [{ id: 'flour', supplierId: 'weekly', recordId: '2026-08-10_weekly', qty: 10, missedOn: '2026-08-10' }]);
 });
 
 test('…and drops off once a LATER order to that supplier asks for it again', () => {
@@ -195,9 +195,11 @@ test('an earlier order does not clear it', () => {
   assert.equal(stillToReorder([missed(), earlier], {}).length, 1);
 });
 
-test('another supplier ordering the same ingredient does not clear it', () => {
+// Since «Ordina da un altro fornitore» (2 Oct 2026) the same ingredient id can be ordered from
+// another supplier, so a LATER order from any supplier counts as ordering it again.
+test('a later order for the same ingredient from another supplier clears it', () => {
   const other = order({ date: '2026-08-12', supplierId: 'noDays', quantities: { flour: 10 } });
-  assert.equal(stillToReorder([missed(), other], {}).length, 1);
+  assert.equal(stillToReorder([missed(), other], {}).length, 0);
 });
 
 // ⚠️ THIS IS WHY THE BANNER GOES QUIET AS SOON AS THE WORK IS DONE, rather than when
@@ -271,4 +273,62 @@ test('⚠️ nothing here mutates the orders it is given', () => {
   pendingDeliveries([record], SUPPLIERS, TODAY);
   expectedDeliveryOn(record, SUPPLIERS.weekly);
   assert.equal(JSON.stringify(record), before, 'the record must come back untouched');
+});
+
+// ── A delivery answered a second time ────────────────────────────────────────
+// A same-day order re-opens a delivery that already carries «did not arrive» marks
+// (js/orders/archive.js mergeArchives). Read as source: the screen and the write need a
+// browser and Firestore, and what matters is the shape of the two calls.
+import { readFileSync } from 'node:fs';
+const read = p => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
+
+test('a re-opened delivery goes straight to the rows, the old marks unticked', () => {
+  const view = read('js/orders/deliveries-view.js');
+  const arrival = view.slice(view.indexOf('async function openArrival'), view.indexOf('function openMissingPicker('));
+  // Asked BEFORE the «everything arrived?» dialog, which would tick the known-missing lines.
+  const early = arrival.indexOf('if (carriedMissingIds(order).length) return openMissingPicker(');
+  assert.ok(early >= 0, 'the early return to the rows is gone');
+  assert.ok(early < arrival.indexOf('confirmDialog('));
+  // The known-missing lines start in the Set AND unticked on screen — the two must agree,
+  // or a line shown as arrived would still be saved as missing.
+  assert.match(view, /const missing = new Set\(carriedMissingIds\(order\)/);
+  assert.match(view, /\.\.\.\(missing\.has\(id\) \? \{\} : \{ checked: 'checked' \}\)/);
+});
+
+test('the answer REPLACES the stored marks — a merge could never untick one', () => {
+  const draft = read('js/orders/draft.js');
+  const fn = draft.slice(draft.indexOf('export function confirmDelivery'));
+  assert.match(fn.slice(0, 200), /return patchDoc\(COLLECTIONS\.history/);
+  const fs = read('js/orders/firebase-orders.js');
+  const patch = fs.slice(fs.indexOf('export async function patchDoc'), fs.indexOf('export async function clearFields'));
+  assert.match(patch, /updateDoc\(/);
+  assert.doesNotMatch(patch, /merge/);
+});
+
+// ── «Risolto»: a missing line bought elsewhere (1 Oct 2026) ──────────────────
+test('a missing line marked «Risolto» leaves the re-order list for good', () => {
+  const missed = order({ id: '2026-08-10_weekly', deliveredAt: '2026-08-11T09:00:00Z', missing: { flour: true, butter: true },
+    missingResolved: { flour: '2026-08-12T10:00:00Z' } });
+  const list = stillToReorder([missed], {});
+  assert.deepEqual(list.map(i => i.id), ['butter']);
+  assert.equal(list[0].recordId, '2026-08-10_weekly');
+});
+
+test('only a non-empty string resolves a line — anything else leaves it on the list', () => {
+  for (const odd of ['', '   ', true, 1, null]) {
+    const missed = order({ deliveredAt: '2026-08-11T09:00:00Z', missing: { flour: true }, missingResolved: { flour: odd } });
+    assert.deepEqual(stillToReorder([missed], {}).map(i => i.id), ['flour'], `value ${JSON.stringify(odd)}`);
+  }
+});
+
+test('a record read without its id still names the record a «Risolto» goes to', () => {
+  const missed = order({ deliveredAt: '2026-08-11T09:00:00Z', missing: { flour: true } });
+  assert.equal(stillToReorder([missed], {})[0].recordId, '2026-08-10_weekly');
+});
+
+test('«Risolto» is a merge beside `missing`, never a change to it', () => {
+  const draft = read('js/orders/draft.js');
+  const fn = draft.slice(draft.indexOf('export function resolveMissing'));
+  assert.match(fn.slice(0, 300), /return saveDoc\(COLLECTIONS\.history, recordId, \{\s*missingResolved: \{ \[ingredientId\]: at \}/);
+  assert.doesNotMatch(fn.slice(0, 300), /missing:/);
 });

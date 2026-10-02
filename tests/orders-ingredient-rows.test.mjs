@@ -107,7 +107,9 @@ test('the header is sticky: at the top of the supplier screen, under the tabs in
   // -14px = .supplier-detail-body's padding-top: top 0 left a 14px band of rows above it.
   assert.match(rule('.ingredient-list > .ing-head'), /top:\s*-14px/);
   assert.match(rule('.supplier-detail-body'), /padding:\s*14px /);
-  assert.match(rule('.ing-flat-list > .ing-head'), /top:\s*var\(--order-head-h,\s*0px\)/);
+  // …and under the pinned search bar too, so the offset is the two measured heights added.
+  assert.match(rule('.ing-flat-list > .ing-head'),
+    /top:\s*calc\(var\(--order-head-h,\s*0px\)\s*\+\s*var\(--order-search-h,\s*0px\)\)/);
   const main = read('js/orders/orders-main.js');
   assert.match(main, /trackStickyHead\(document\.querySelector\('\.order-box-head'\)\)/);
   assert.match(read('js/orders/sticky-offset.js'), /--order-head-h/);
@@ -140,7 +142,7 @@ test('each row has a clear-quantity button in the name column, named per ingredi
   assert.match(buildRowSource, /type:\s*'button'/);
   // Name AND weight, so «Flour 1kg» and «Flour 25kg» are two different buttons to a
   // screen reader, and a nameless product never reads «undefined».
-  assert.match(buildRowSource, /t\('orders\.clearQtyFor',\s*\{\s*name:\s*ingredientLabel\(ing\)\s*\|\|\s*t\('orders\.unnamedProduct'\)\s*\}\)/);
+  assert.match(buildRowSource, /t\('orders\.clearQtyFor',\s*\{\s*name:\s*ingredientDisplayLabel\(ing\)\s*\|\|\s*t\('orders\.unnamedProduct'\)\s*\}\)/);
   // It is the LAST child of .ing-main: it must come before the Order column starts.
   assert.ok(buildRowSource.indexOf("'ing-qty-clear'") > buildRowSource.indexOf("class: 'ing-main'"));
   assert.ok(buildRowSource.indexOf("'ing-qty-clear'") < buildRowSource.indexOf("class: 'ing-col'"));
@@ -158,17 +160,17 @@ test('the clear button zeroes the quantity, keeps stock, and focuses only from t
   // A cleared line goes back to the card's unit, and the menu is repainted to show it.
   assert.match(handler, /\.unit = ''/);
   assert.match(handler, /paintUnitSelect\(row, ing, cleared\)/);
-  assert.match(buildRowSource, /function setQty\(value, fromInput\) \{\s*const qty = wholeNumber\(value\);\s*entryFor\(entries, ing\.id\)\.qty = qty;/);
+  assert.match(buildRowSource, /function setQty\(value, fromInput\) \{\s*const qty = wholeNumber\(value\);\s*const entry = entryFor\(entries, ing\.id\);\s*entry\.qty = qty;\s*claimLine\(entry, qty\);/);
 });
 
 test('ing-row--filled follows the quantity: at build, in setQty and when another phone syncs', () => {
   assert.match(INGREDIENTS, /export function markFilled\(row, qty\)/);
   assert.match(INGREDIENTS, /toggle\('ing-row--filled'/);
   assert.match(buildRowSource, /markFilled\(row, qty\)/, 'setQty');
-  assert.match(buildRowSource, /markFilled\(row, entry\.qty\)/, 'build time');
+  assert.match(buildRowSource, /markFilled\(row, away \? 0 : entry\.qty\)/, 'build time');
   const main = read('js/orders/orders-main.js');
   const sync = main.slice(main.indexOf('function syncInputsFromState'));
-  assert.match(sync.slice(0, sync.indexOf('refreshAllSuppliers')), /markFilled\(row, entry\.qty\)/);
+  assert.match(sync.slice(0, sync.indexOf('refreshAllSuppliers')), /markFilled\(row, away \? 0 : entry\.qty\)/);
   assert.match(main, /import \{ markFilled, paintUnitSelect \} from '\.\/ingredients\.js'/);
 });
 
@@ -201,7 +203,7 @@ test('a row offers a unit menu only when the card offers a choice, in place of t
   assert.match(buildRowSource, /choices\.length >= 2/);
   assert.match(buildRowSource, /class:\s*'ing-unit-select'/);
   assert.match(buildRowSource, /!unitSelect && ing\.unit \? el\('span', \{ class: 'ing-order-unit'/);
-  assert.match(buildRowSource, /t\('orders\.unitToOrderFor',\s*\{\s*name:\s*ingredientLabel\(ing\)\s*\|\|\s*t\('orders\.unnamedProduct'\)\s*\}\)/);
+  assert.match(buildRowSource, /t\('orders\.unitToOrderFor',\s*\{\s*name:\s*ingredientDisplayLabel\(ing\)\s*\|\|\s*t\('orders\.unnamedProduct'\)\s*\}\)/);
 });
 
 test('changing the unit stores only a non-default unit, autosaves, and keeps the quantity', () => {

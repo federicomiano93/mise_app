@@ -14,13 +14,15 @@
 // including whatever someone else is typing right now — is left alone.
 
 import {
-  saveDoc, watchDoc, clearFields, transactDoc, replaceDoc, removeDoc, COLLECTIONS,
+  saveDoc, patchDoc, watchDoc, clearFields, transactDoc, replaceDoc, removeDoc, getDocOnce, COLLECTIONS,
 } from './firebase-orders.js';
 import {
   buildSupplierArchive, mergeArchives, historyDocId, ingredientsOf, quantityPathsFor,
   changedEntries, changedDays,
 } from './archive.js';
-import { cleanUnit } from '../order-unit.js';
+import { cleanUnit, storedUnitFor } from '../order-unit.js';
+import { draftEntryPath } from '../ingredient-edit-model.js';
+import { cleanSupplierId } from './line-supplier.js';
 
 const DRAFT_ID = 'current';
 const SAVE_DELAY_MS = 800; // debounce to limit Firestore writes (cost control)
@@ -66,6 +68,10 @@ function detach(entries) {
     out[id] = { qty: entry?.qty, stock: entry?.stock };
     // Only when present, so an ordinary entry keeps its {qty, stock} shape.
     if (entry && entry.unit !== undefined) out[id].unit = entry.unit;
+    // The supplier override travels the same way (line-supplier.js): without it the baseline
+    // could never see that a line had been sent elsewhere, and moving it back would read as
+    // «unchanged» and never be written.
+    if (entry && entry.supplierId !== undefined) out[id].supplierId = entry.supplierId;
   });
   return out;
 }
@@ -138,7 +144,8 @@ export function saveDraftNow(entries, days) {
     Object.entries(entriesDelta).forEach(([id, sent]) => {
       const held = pending.entries[id];
       if (held && held.qty === sent.qty && held.stock === sent.stock
-        && cleanUnit(held.unit) === cleanUnit(sent.unit)) delete pending.entries[id];
+        && cleanUnit(held.unit) === cleanUnit(sent.unit)
+        && cleanSupplierId(held.supplierId) === cleanSupplierId(sent.supplierId)) delete pending.entries[id];
     });
     Object.entries(daysDelta).forEach(([id, sent]) => {
       if (pending.days[id] === sent) delete pending.days[id];
@@ -244,6 +251,60 @@ function forgetKnown(paths) {
   });
 }
 
+// Take ONE ingredient's row out of the shared draft — called when the ingredient is deleted.
+//
+// ⚠️ WITHOUT IT A DELETED PRODUCT LEAVES ITS LINE IN `drafts/current`: leftover data. No row
+// draws it, and the archive and the totals only walk the ingredients that still exist, so it is
+// never ordered nor counted — but it would sit in the document for ever. Only the named path is
+// cleared, so whatever another phone is typing for other ingredients survives.
+// A draft that does not exist yet has nothing to clear, and updateDoc refuses a missing
+// document — that refusal is not a failure of the delete, so it is the caller's to log.
+// ⚠️ NOT AWAITED BY THE CARD: the card closes the moment the delete batch has landed, and this
+// runs after it. A failure is only logged — the ingredient is already gone, and reporting it as a
+// failed delete would invite a second delete of something that no longer exists. One function for
+// both screens that can delete (Orders and Fornitori), so neither can forget it.
+export function dropDeletedIngredientFromDraft(ingredientId) {
+  clearIngredientFromDraft(ingredientId).catch(err => {
+    console.error('The draft still holds a deleted ingredient:', err);
+  });
+}
+
+export function clearIngredientFromDraft(ingredientId) {
+  const paths = [draftEntryPath(ingredientId)];
+  return clearFields(COLLECTIONS.drafts, DRAFT_ID, paths, {
+    updatedAt: new Date().toISOString(),
+  }).then(result => {
+    forgetKnown(paths);
+    return result;
+  });
+}
+
+// An ingredient's ORDER UNIT was changed by its card (Cartone / Singola rewrite it): freeze the unit
+// the open draft line was typed in, so «8 buste» stays 8 buste instead of reading 8 cartoni.
+//
+// ⚠️ A DRAFT LINE WITH NO UNIT OF ITS OWN MEANS «THE CARD'S UNIT, WHATEVER IT IS NOW» (storedUnitFor):
+// changing the card's unit silently changes what every untouched line counts. So when the line has a
+// quantity and no unit of its own, the OLD unit is written onto it — by the very rule Orders uses for
+// a chosen unit (nothing when it is the card's unit still). The card's new unit is in `item`.
+// ⚠️ ONLY THE DRAFT: a line already recorded in orders-history carries no frozen unit, and re-reading
+// it with the new card unit reads the new word. That was already true whenever «Unità d'ordine» was
+// edited, before this card existed — it is left alone, on purpose.
+// One function for both screens that can edit an ingredient (Orders and Fornitori). It READS the
+// draft once and then merges ONE field, so whatever another phone is typing survives. A failure is
+// the caller's to log: the ingredient is already saved.
+export async function freezeUnitInDraft({ id, from, item }) {
+  const frozen = storedUnitFor(from, item);
+  if (!frozen) return false;
+  const draft = await getDocOnce(COLLECTIONS.drafts, DRAFT_ID);
+  const entry = draft && draft.entries ? draft.entries[id] : null;
+  if (!(Number(entry && entry.qty) > 0) || cleanUnit(entry.unit)) return false;
+  await saveDoc(COLLECTIONS.drafts, DRAFT_ID, {
+    updatedAt: new Date().toISOString(),
+    entries: { [id]: { unit: frozen } },
+  });
+  return true;
+}
+
 // Throw away the quantities typed for one or more suppliers WITHOUT recording an
 // order — the "start this order again" button.
 //
@@ -285,20 +346,37 @@ export function deleteHistoryRecord(id) {
 
 // Say that an order arrived, and which of its rows did not.
 //
-// ⚠️⚠️ A MERGE, NOT A REWRITE, AND THAT IS THE WHOLE POINT. `quantities` is the map
-// the suggestion engine averages over; rewriting the record whole from a screen that
-// only knows about the delivery would be one refactor away from carrying a stale copy
-// of it back to the server. This write cannot touch what was ordered because it never
-// sends it.
+// ⚠️⚠️ THREE FIELDS, NOT A REWRITE OF THE RECORD, AND THAT IS THE WHOLE POINT.
+// `quantities` is the map the suggestion engine averages over; rewriting the record
+// whole from a screen that only knows about the delivery would be one refactor away
+// from carrying a stale copy of it back to the server. This write cannot touch what was
+// ordered because it never sends it.
 //
 // ⚠️ AN EMPTY `deliveredAt` IS A REAL VALUE — "we looked and it has not arrived" —
 // and it is how a confirmation is taken back after a mis-tap. It is written, not
-// omitted: omitting it from a merge leaves the old stamp in place, so an un-confirm
-// would silently do nothing.
+// omitted: omitting it leaves the old stamp in place, so an un-confirm would silently
+// do nothing.
+//
+// ⚠️ `missing` IS REPLACED WHOLE (patchDoc), never merged. A merge write adds the new
+// marks to the stored ones, so a second answer could never say «the flour came after
+// all»: the old mark stayed, and the flour stayed on the re-order list and out of the
+// stocktake for ever. A second answer happens when a same-day order re-opens a delivery
+// (js/orders/archive.js mergeArchives).
 export function confirmDelivery(id, { deliveredAt, missing }) {
-  return saveDoc(COLLECTIONS.history, id, {
+  return patchDoc(COLLECTIONS.history, id, {
     deliveredAt: deliveredAt || '',
     missing: missing || {},
     updatedAt: new Date().toISOString(),
+  });
+}
+
+// «Risolto» on one missing line: bought elsewhere, so it leaves «Da riordinare» for good.
+// ⚠️ A MERGE, on purpose: the map is ADDED to (one line at a time, maybe from two phones),
+// and `missing` itself is never touched — the line still did not arrive, so the stocktake
+// must still not count it as bought.
+export function resolveMissing(recordId, ingredientId, at = new Date().toISOString()) {
+  return saveDoc(COLLECTIONS.history, recordId, {
+    missingResolved: { [ingredientId]: at },
+    updatedAt: at,
   });
 }

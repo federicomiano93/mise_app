@@ -229,7 +229,7 @@ export function renderEditor({ day, items, note, allDays, app }) {
   return el('div', { class: 'pas-view' }, [
     datalist,
     el('div', { class: 'pas-editor-head' }, [
-      el('span', { class: 'pas-editor-label', text: t('past.toProveFor', { day: weekdayLabel(day) }) }),
+      el('span', { class: 'pas-editor-heading', text: t('past.toProveFor', { day: weekdayLabel(day) }) }),
       countEl,
     ]),
     rowsContainer,

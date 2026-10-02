@@ -12,9 +12,11 @@
 
 import { t } from '../i18n.js';
 import { supplierLabel } from '../supplier-label.js';
+import { ingredientDisplayName } from '../ingredient-name.js';
 import { toISODate, addDays, isBefore } from './day.js';
 import { compareLabels } from './order-text.js';
 import { cleanUnit, sameUnit, lineUnit, entryUnit, recordUnit } from '../order-unit.js';
+import { overrideOf, cleanSupplierId } from './line-supplier.js';
 
 // A quantity, made safe: whole, never negative, never NaN — and never Infinity.
 //
@@ -113,8 +115,17 @@ export function buildSupplierArchive({ supplier, ingredients, entries, date, now
 
 // The label an order shows for an ingredient: "Bacon 2.27kg". One definition, so a
 // name frozen into a record matches what the live row would have shown.
+//
+// ⚠️ THIS IS THE LABEL OF WHAT WAS SENT: it keeps the INVOICE name on purpose, and it is what is
+// frozen into `names`. To put an ingredient on a SCREEN use ingredientDisplayLabel below.
 export function ingredientLabel(ing) {
   return [ing?.name, ing?.weight].filter(Boolean).join(' ');
+}
+
+// The label a SCREEN shows for an ingredient: the «name to show» when there is one (js/ingredient-name.js),
+// else the name, then the weight. Never written into a record and never sent to a supplier.
+export function ingredientDisplayLabel(ing) {
+  return [ingredientDisplayName(ing), ing?.weight].filter(Boolean).join(' ');
 }
 
 // The order every list of a supplier's products is read in: by the label a person reads,
@@ -123,7 +134,7 @@ export function ingredientLabel(ing) {
 // under the eye. A nameless item has an empty label and so sorts first — it stays visible
 // at the top instead of hiding.
 export function compareByLabel(a, b) {
-  return compareLabels(ingredientLabel(a), ingredientLabel(b))
+  return compareLabels(ingredientDisplayLabel(a), ingredientDisplayLabel(b))
     || String(a?.id).localeCompare(String(b?.id));
 }
 
@@ -140,7 +151,7 @@ export function sortByLabel(list) {
 // reading "Fdx92kQ1: 4" tells nobody what was bought, and the whole point of History
 // is answering exactly that.
 export function recordedName(id, ingredientsById, names) {
-  const live = ingredientLabel(ingredientsById?.[id]);
+  const live = ingredientDisplayLabel(ingredientsById?.[id]);
   if (live) return live;
   const stored = names?.[id];
   return typeof stored === 'string' && stored.trim() ? stored.trim() : t('orders.deletedIngredient');
@@ -176,6 +187,10 @@ export function quantityPathsFor(supplierIds, ingredients) {
         // The unit goes with the quantity: a cleared row starts again in the card's own
         // unit (the default), never in whatever the last order happened to use.
         paths.push(`entries.${ing.id}.unit`);
+        // ⚠️ AND THE OVERRIDE (line-supplier.js): it never outlives the quantity it
+        // redirects, or the next quantity typed for this ingredient would go to a supplier
+        // nobody chose this time.
+        paths.push(`entries.${ing.id}.supplierId`);
       });
     paths.push(`days.${supplierId}`);
   });
@@ -206,18 +221,31 @@ export function changedEntries(next, known) {
     const stock = num(entry?.stock);
     const unit = cleanUnit(entry?.unit);
     const beforeUnit = cleanUnit(before?.unit);
+    // The override only exists while there is a quantity (overrideOf), so a line taken to
+    // zero loses it in this same write.
+    const supplierTo = overrideOf(entry);
+    // ⚠️ THE STORED VALUE, RAW — not overrideOf(before), which is '' whenever the stored row has
+    // no quantity. A leftover {qty: 0, supplierId: 'X'} (an older phone typing 0 or running
+    // «start again», or a two-phone race) must still be seen and cleared, or the next quantity
+    // typed for this ingredient would revive it and file the line under X.
+    const beforeSupplierRaw = cleanSupplierId(before?.supplierId);
     // Merely LOOKING at a supplier materialises a blank row in memory, and an
     // all-zero row that the document never had says nothing worth storing.
     // (A row that EXISTS and is taken down to zero is a real change: `before`
     // is there, so it still goes.) A row that carries a unit is not blank.
     if (!before && qty === 0 && stock === 0 && !unit) return;
-    if (!before || num(before.qty) !== qty || num(before.stock) !== stock || beforeUnit !== unit) {
+    if (!before || num(before.qty) !== qty || num(before.stock) !== stock || beforeUnit !== unit
+      || beforeSupplierRaw !== supplierTo) {
       const row = { qty, stock };
       // ⚠️ `unit: ''` IS SENT ON PURPOSE when a row goes back to the card's unit: a merge
       // write never deletes a nested key, so omitting it would leave the old unit in the
       // document and the row would come back as «busta» on the next snapshot. An
       // ordinary entry (no unit on either side) keeps exactly {qty, stock}.
       if (unit || beforeUnit) row.unit = unit;
+      // ⚠️ THE SAME FOR THE OVERRIDE: `supplierId: ''` is sent when a line goes back to its
+      // usual supplier or to zero, because a merge write cannot delete a nested key. An
+      // ordinary line (no override on either side) keeps exactly {qty, stock}.
+      if (supplierTo || beforeSupplierRaw) row.supplierId = supplierTo;
       out[id] = row;
     }
   });
@@ -266,9 +294,22 @@ export function mergeArchives(existing, incoming, { cardUnitOf } = {}) {
     quantities[id] = num(quantities[id]) + num(qty);
   });
   const units = { ...(existing.units || {}), ...(incoming.units || {}) };
+  const missing = carriedMissing(existing, incoming);
+  // «Risolto» marks travel with the marks they answer, and only with them.
+  const resolved = Object.fromEntries(Object.entries(existing.missingResolved || {})
+    .filter(([id, at]) => missing?.[id] === true && typeof at === 'string' && at));
 
   return {
     ...incoming,
+    // ⚠️ THE WRITE IS A WHOLE REPLACEMENT (transactDoc → tx.set), so whatever this object
+    // leaves out is DELETED from the record. `missing` used to be left out: a second order
+    // the same day after the delivery had been answered wiped «the flour never came» — the
+    // re-order reminder vanished and the stocktake counted the flour as bought.
+    // `deliveredAt` IS left out on purpose: the lines just added have not arrived, so the
+    // order goes back to «still to answer» (js/orders/deliveries-view.js re-asks with the
+    // carried marks already unticked).
+    ...(missing ? { missing } : {}),
+    ...(Object.keys(resolved).length ? { missingResolved: resolved } : {}),
     quantities,
     stock: { ...(existing.stock || {}), ...(incoming.stock || {}) },
     // Keep every name the record has ever carried. The incoming write only names the
@@ -281,6 +322,20 @@ export function mergeArchives(existing, incoming, { cardUnitOf } = {}) {
     createdAt: existing.createdAt || incoming.createdAt,
     updatedAt: incoming.updatedAt,
   };
+}
+
+// The «did not arrive» marks a record keeps when a second order the same day is merged into
+// it, or null when none are left. A line ordered AGAIN in the second order is dropped from
+// the marks: it has just been re-ordered, so it must leave the re-order list. The price, a
+// known one: its quantity is now both orders added up, and one true/false mark cannot say
+// «half of it came» — if the second van brings it, the stocktake proposes the sum as bought.
+// Rare (answered AND re-ordered on the order day), and the stocktake figure is editable.
+function carriedMissing(existing, incoming) {
+  const out = {};
+  Object.entries(existing.missing || {}).forEach(([id, value]) => {
+    if (value === true && !(num(incoming.quantities?.[id]) > 0)) out[id] = true;
+  });
+  return Object.keys(out).length ? out : null;
 }
 
 // ⚠️ THE SAME QUESTION mergeArchives ANSWERS, asked BEFORE anything leaves the app: which of
@@ -299,7 +354,7 @@ export function unitConflicts(existingRecord, entries, ingredients, supplierId) 
     if (!entry || num(entry.qty) <= 0 || num(existingRecord.quantities?.[ing.id]) <= 0) return;
     const recorded = recordUnit(existingRecord, ing.id, ing);
     if (!sameUnit(entryUnit(entry, ing), recorded)) {
-      out.push({ id: ing.id, name: ingredientLabel(ing), unit: recorded });
+      out.push({ id: ing.id, name: ingredientDisplayLabel(ing), unit: recorded });
     }
   });
   return out;

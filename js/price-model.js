@@ -394,7 +394,10 @@ export function formatPricePerUnit(ingredient) {
   const ing = ingredient || {};
   const rate = positiveNumber(ing.pricePerUnit);
   if (rate === null || !isPriceUnit(ing.priceUnit)) return '';
-  return `${formatRate(rate)} / ${ing.priceUnit === 'pcs' ? 'each' : ing.priceUnit}`;
+  // ⚠️ «each» IS AN INTERFACE WORD (t(), «al pezzo» in Italian), not a literal: it now appears in notes and history.
+  // One phrase with a hole, not glued halves: Italian has no «/ al pezzo».
+  if (ing.priceUnit === 'pcs') return t('price.perEach', { rate: formatRate(rate) });
+  return `${formatRate(rate)} / ${ing.priceUnit}`;
 }
 
 // ── Writing a price ──────────────────────────────────────────────────────────
@@ -437,17 +440,22 @@ export const CASE_MODE = 'case';
 
 // `weightText` is the ingredient's weight as the card holds it right now: only a 'pack' case
 // reads it, and only to COPY the size of one package into the case being saved.
+// ⚠️ `packBasis` ('kg' | 'l') MARKS A 'pack' CASE WHOSE SIZE IS ALREADY KNOWN: caseItemSize is then
+// authoritative and the weight text is not read at all. It is how an UNTOUCHED save writes a stored
+// case back verbatim (storedPriceInput) — copying the weight into it would re-price a case that
+// somebody without the price section had only re-weighed.
 export function pricePatch(
-  { priceUnit, pricePerUnit, unitWeightKg, vatRate, casePrice, caseCount, caseItemSize, caseItemUnit },
+  { priceUnit, pricePerUnit, unitWeightKg, vatRate, casePrice, caseCount, caseItemSize, caseItemUnit, packBasis, keepRate },
   nowIso,
   weightText = '',
 ) {
   const inCase = priceUnit === CASE_MODE;
-  const base = inCase && caseItemUnit === PACK_ITEM ? packBaseOf(weightText) : null;
+  const knownBasis = inCase && caseItemUnit === PACK_ITEM && (packBasis === 'kg' || packBasis === 'l') ? packBasis : null;
+  const base = inCase && caseItemUnit === PACK_ITEM && !knownBasis ? packBaseOf(weightText) : null;
   const caseFields = inCase
     ? caseOf({ casePrice, caseCount, caseItemSize: base ? base.size : caseItemSize, caseItemUnit })
     : null;
-  const derived = caseFields ? caseRate(caseFields, base ? base.priceUnit : null) : null;
+  const derived = caseFields ? caseRate(caseFields, base ? base.priceUnit : knownBasis) : null;
 
   const unit = inCase ? (derived ? derived.priceUnit : null) : (isPriceUnit(priceUnit) ? priceUnit : null);
   // The piece weight is a fact about the article and survives an incomplete case whose
@@ -463,7 +471,10 @@ export function pricePatch(
   });
   // ⚠️ A DERIVED RATE IS STORED AS caseRate() MADE IT (six decimals): normalizePrice rounds
   // to four, and storedCaseOf() could then never recognise its own case.
-  const storedRate = inCase && derived ? derived.pricePerUnit : result.pricePerUnit;
+  // ⚠️ `keepRate`: a rate worked out from a stored case (singleFromCaseInput) keeps its six decimals, so
+  // moving a price from «a case of 3 at 10» to «3.333333 each» does not move the money by rounding.
+  const storedRate = inCase && derived ? derived.pricePerUnit
+    : (keepRate && result.ok ? roundTo(pricePerUnit, CASE_RATE_DECIMALS) : result.pricePerUnit);
   return {
     priceUnit: unit,
     pricePerUnit: result.ok ? storedRate : null,
@@ -484,6 +495,149 @@ export function pricePatch(
   };
 }
 
+// ── How the card turns «Confezione» and its boxes into what pricePatch reads ──
+// (1 Oct 2026.) The card has ONE price box whose meaning follows the format and the weight:
+//   Cartone, weight readable    → «Prezzo cartone»: a case of PIECES, one item = the weight (stored per item)
+//   Cartone, weight unreadable  → «Prezzo cartone»: a case of PIECES, the piece weight asked separately
+//   Singola, weight readable    → «Prezzo confezione»: the price of ONE item, a rate per piece + its weight
+//   Singola, weight unreadable  → «Come si acquista» + the typed rate, as it always was
+// The old «A cartone» choice of «Come si acquista» is gone from the screen; CASE_MODE stays as the
+// internal input pricePatch reads, so nothing about how a case is STORED changed.
+export const PRICE_FORMS = Object.freeze({
+  cartonPack: 'carton-pack', cartonPieces: 'carton-pieces', singlePack: 'single-pack', typed: 'typed',
+});
+
+// ⚠️ A PER-PIECE PRICE WITH ITS OWN PIECE WEIGHT (3rd review, 1 Oct 2026). «Prezzo confezione» says «one item =
+// the weight», and the weight → piece-weight sync follows it — but an old per-piece price keeps `weight` as the
+// PACK (eggs: 360 g, 0.25 a piece, 0.06 kg a piece) and `unitWeightKg` as ONE PIECE. Reading the pack weight as
+// the piece weight made a retyped price write 0.36 kg for a 60 g egg: Food cost per kilo 6 times too low (500
+// times for gelatine), with the piece-weight box hidden so nobody could see it. So the new meaning applies ONLY
+// when the stored piece weight is what the new card itself writes — equal to the readable weight. An item priced
+// per piece whose piece weight is absent, or differs from the weight, is «per piece with its own piece weight»:
+// the form of today (a price per piece and a visible «Peso di un pezzo»), and the weight never touches it.
+// The weight it is compared with is the one the card OPENED with when that reads (a weight edited later must
+// not turn a tracking price into an own-weight one), else the one on screen.
+export function ownPieceWeight(item, weightText, initialText = weightText) {
+  if (!item || item.priceUnit !== 'pcs') return false;
+  const kg = positiveNumber(item.unitWeightKg);
+  const reference = packBaseOf(initialText) || packBaseOf(weightText);
+  return !(kg !== null && reference && Math.abs(reference.size - kg) < 1e-9);
+}
+
+export function priceFormOf(fmt, weightText, ownPiece = false) {
+  const readable = packBaseOf(weightText) !== null && !ownPiece;
+  if (fmt && fmt.kind === 'carton') return readable ? PRICE_FORMS.cartonPack : PRICE_FORMS.cartonPieces;
+  return readable ? PRICE_FORMS.singlePack : PRICE_FORMS.typed;
+}
+
+// The boxes → pricePatch's input, for a price a person TYPED (or re-typed).
+// boxes = { price, rate, unit, pieceKg, vat }.
+export function formatPriceInput(fmt, weightText, { price, rate, unit, pieceKg, vat, ownPiece = false } = {}) {
+  const form = priceFormOf(fmt, weightText, ownPiece);
+  // ⚠️ A PRICE TYPED FOR FORMATTED GOODS IS STORED PER ITEM (1 Oct 2026, review): priceUnit 'pcs', the
+  // rate is the price of ONE item, and `unitWeightKg` is one item's weight in kilos when the weight
+  // reads (litres read 1:1 as kilos, the app's standing approximation). The old way — a case of ONE
+  // package priced per kilo — made an egg priced 0.25 a piece become 4.03 a kilo with no piece weight,
+  // and Food cost's «in pieces» lines and packaging (priceUnit 'pcs') lost their cost. Per-kilo
+  // consumers keep working through pricePerKg (pcs rate ÷ unitWeightKg).
+  const itemKg = ownPiece ? null : (packBaseOf(weightText)?.size ?? null);
+  if (form === PRICE_FORMS.cartonPack || form === PRICE_FORMS.cartonPieces) {
+    // A carton is a case of that many items: caseRate(pcs) = casePrice ÷ count is the per-item rate.
+    return {
+      priceUnit: CASE_MODE, casePrice: price, caseCount: fmt.count, caseItemUnit: 'pcs',
+      unitWeightKg: itemKg ?? pieceKg, vatRate: vat,
+    };
+  }
+  if (form === PRICE_FORMS.singlePack) {
+    // keepRate: a per-item price carried from a case (10 / 3) keeps its six decimals, like the converter's
+    return { priceUnit: 'pcs', pricePerUnit: price, unitWeightKg: itemKg, vatRate: vat, keepRate: true };
+  }
+  return { priceUnit: unit || null, pricePerUnit: rate, unitWeightKg: pieceKg, vatRate: vat };
+}
+
+// ⚠️ UNTOUCHED MEANS UNCHANGED: the STORED price in pricePatch's input shape — a stored case as
+// the case (a 'pack' one with its own stored size, never the weight as it reads today; a legacy
+// explicit-size one kg/g/l/ml as it is), otherwise the typed rate. Fed to pricePatch it gives back
+// the same rate, the same unit and the same case, so priceChanged() is false and no history entry
+// is written. Only the VAT is the person's to change on its own, so it is passed in.
+export function storedPriceInput(item, vat) {
+  const it = item || {};
+  const stored = storedCaseOf(it);
+  if (stored) {
+    return {
+      priceUnit: CASE_MODE,
+      casePrice: stored.casePrice, caseCount: stored.caseCount,
+      caseItemSize: stored.caseItemSize, caseItemUnit: stored.caseItemUnit,
+      packBasis: stored.caseItemUnit === PACK_ITEM ? it.priceUnit : undefined,
+      unitWeightKg: it.unitWeightKg, vatRate: vat,
+    };
+  }
+  return { priceUnit: it.priceUnit || null, pricePerUnit: it.pricePerUnit, unitWeightKg: it.unitWeightKg, vatRate: vat };
+}
+
+// A Cartone turned into a Singola, with no price typed: the SAME money in the per-item shape — the rate is
+// casePrice ÷ caseCount, the item weight is the one the price already remembers (or, for a case priced by
+// weight, that case's size in kilos), and the case keys go out null. Fed to pricePatch it gives a price the
+// readers carry exactly as before (cost per item is unchanged), so the caller writes NO history entry.
+export function singleFromCaseInput(item, vat) {
+  const it = item || {};
+  const stored = storedCaseOf(it);
+  if (!stored) return storedPriceInput(item, vat);
+  const byWeight = stored.caseItemUnit !== 'pcs';
+  const small = stored.caseItemUnit === 'g' || stored.caseItemUnit === 'ml';
+  const sizeKg = byWeight ? roundTo(small ? stored.caseItemSize / 1000 : stored.caseItemSize, CASE_RATE_DECIMALS) : null;
+  return {
+    priceUnit: 'pcs',
+    pricePerUnit: roundTo(stored.casePrice / stored.caseCount, CASE_RATE_DECIMALS),
+    unitWeightKg: positiveNumber(it.unitWeightKg) !== null ? it.unitWeightKg : sizeKg,
+    vatRate: vat,
+    keepRate: true,
+  };
+}
+
+// What the price box shows while nobody has typed in it — { value, suggestion }, each a number or null.
+// ⚠️ EDITING THE FORMAT OR THE WEIGHT NEVER REWRITES A STORED PRICE (1 Oct 2026, review): only typing in
+// this box, or «Ricalcola», makes the price dirty. So the box shows the stored figure only while it
+// STILL MEANS THE SAME THING (`changed` is false — pack-format.js formatChanged); once the format or
+// weight differs from what the price was saved under it is EMPTY, and `suggestion` — the same price
+// per item carried to the new format — is what the card offers as its placeholder and what
+// «Ricalcola» fills in.
+//   suggestion  per-item price × the items now asked for: a rate per piece × count, or a per-kilo rate ×
+//               one item's weight × count (null when the weight does not read, or the count is empty)
+//   value       Cartone with a stored case → its price; Singola with a stored case of one → its price;
+//               no stored case (a typed rate) → the suggestion, which is that rate carried over
+// Ten decimals: the figure must divide back to the same rate.
+export function priceBoxStart(item, fmt, weightText, changed = false) {
+  const it = item || {};
+  const base = packBaseOf(weightText);
+  const stored = storedCaseOf(it);
+  const carton = Boolean(fmt) && fmt.kind === 'carton';
+  const count = carton ? positiveNumber(fmt.count) : 1;
+  const rate = positiveNumber(it.pricePerUnit);
+  let suggestion = null;
+  if (count !== null && rate !== null) {
+    if (it.priceUnit === 'pcs') suggestion = roundTo(rate * count, 10);
+    else if (base) suggestion = roundTo(rate * base.size * count, 10);
+  }
+  if (stored) {
+    if (changed) return { value: null, suggestion };
+    return { value: carton ? stored.casePrice : roundTo(stored.casePrice / stored.caseCount, 10), suggestion };
+  }
+  return { value: suggestion, suggestion };
+}
+
+// ⚠️ A CASE PRICED BY WEIGHT CANNOT BE RE-PRICED WITHOUT ONE: the person typed a price on a
+// carton whose stored case is by kilo or litre (a 'pack' or a legacy explicit size), and the
+// weight no longer reads. Pricing it as pieces would silently turn «€ per kg» into «€ per
+// piece», so the save is refused on the weight box instead. An emptied price box is no price
+// and needs nothing.
+export function weightNeededForPrice({ item, fmt, weightText, dirty, priceBox }) {
+  if (!dirty || !fmt || fmt.kind !== 'carton') return false;
+  if (priceBox === '' || priceBox === null || priceBox === undefined) return false;
+  const stored = storedCaseOf(item || {});
+  return Boolean(stored) && stored.caseItemUnit !== 'pcs' && packBaseOf(weightText) === null;
+}
+
 // Has the price actually changed? Asked before appending to the history, so that
 // re-saving an ingredient to fix a typo in its NAME does not plant a second price
 // record identical to the first — a history full of non-events is a history nobody
@@ -496,11 +650,42 @@ export function pricePatch(
 // them, so an ingredient priced under the old form differs on them the first time
 // it is opened and saved — and comparing them would read that as a price change
 // and plant a history entry recording a rate that never moved.
-export function priceChanged(before, after) {
+export function priceChangedByRepresentation(before, after) {
   const a = before || {};
   const b = after || {};
   return ['priceUnit', 'pricePerUnit', 'unitWeightKg']
     .some(key => (a[key] ?? null) !== (b[key] ?? null));
+}
+
+// ⚠️ THE MONEY, NOT THE REPRESENTATION (3rd review, 1 Oct 2026). A price is the same price when what an item
+// costs and what a kilo costs are the same, however they are stored: «2 a kilo» turned into «5 a bag of 2.5
+// kg», the same 20 retyped on a live pack carton, a Cartone turned into a Singola — none of those is «when did
+// this go up?» news. And a change of the remembered piece weight IS one: it is the divisor of the price per
+// kilo that every recipe cost is built from, so it moves a cost even when no money moved.
+// So: per-kilo cost and per-piece cost are compared, each when both sides have it, within rounding; a price
+// that cannot be expressed per kilo on one side and can on the other (a piece weight appeared or went) is a
+// change; when there is nothing to compare, the stored representation decides, as it always did.
+const closeTo = (x, y) => Math.abs(x - y) <= Math.max(1e-6, Math.abs(x) * 1e-4);
+function moneyOf(p) {
+  const rate = positiveNumber(p.pricePerUnit);
+  return {
+    rate,
+    perKg: rate === null ? null : pricePerKg(p),
+    perPiece: rate !== null && p.priceUnit === 'pcs' ? rate : null,
+  };
+}
+export function priceChanged(before, after) {
+  const a = moneyOf(before || {});
+  const b = moneyOf(after || {});
+  if (a.rate !== null && b.rate !== null) {
+    if (a.perKg !== null && b.perKg !== null) {
+      if (!closeTo(a.perKg, b.perKg)) return true;
+      return a.perPiece !== null && b.perPiece !== null && !closeTo(a.perPiece, b.perPiece);
+    }
+    if (a.perKg !== null || b.perKg !== null) return true;
+    if (a.perPiece !== null && b.perPiece !== null) return !closeTo(a.perPiece, b.perPiece);
+  }
+  return priceChangedByRepresentation(before, after);
 }
 
 // One entry in the append-only history. It carries the SUPPLIER as well as the

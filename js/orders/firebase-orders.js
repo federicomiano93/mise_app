@@ -222,6 +222,14 @@ export async function replaceDoc(name, id, data) {
   return setDoc(doc(db, pathFor(name), id), withBakery(data));
 }
 
+// Replace the named TOP-LEVEL fields of an existing document, each one whole, and leave
+// every other field alone. Unlike saveDoc, a map given here is not merged into the stored
+// one: { missing: { semola: true } } over a stored { flour: true } leaves { semola: true }.
+export async function patchDoc(name, id, data) {
+  await authReady;
+  return updateDoc(doc(db, pathFor(name), id), withBakery(data));
+}
+
 // Remove specific fields — including keys inside a map ('entries.<ingredientId>')
 // — and patch the rest, leaving every other key untouched.
 //
@@ -304,7 +312,9 @@ const PRICES = 'prices';
 // WRITE A PRICE live in js/record-data.js since 13 Sep 2026: the two record cards are also
 // opened from the Catalogue, which may not import this folder. Re-exported, so every Orders
 // screen calls exactly what it called before.
-export { saveIngredientWithPrice, saveSupplierRecord, mayWritePrices } from '../record-data.js';
+export {
+  saveIngredientWithPrice, saveSupplierRecord, mayWritePrices, deleteIngredientWithPrice,
+} from '../record-data.js';
 
 // What every ingredient costs, as a map keyed by ingredient id.
 //

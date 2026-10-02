@@ -444,17 +444,6 @@
 }
 .supplier-place-icon { display: flex; align-items: center; }
 
-/* «+ Add ingredient» above a supplier's list: the registry's dashed .mgmt-add, made a flex row
-   (button AND icon span, or the SVG sits ~2px low) and at least a finger tall. */
-.supplier-add-ing {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  min-height: 44px;
-}
-.supplier-add-ing-icon { display: flex; align-items: center; }
-
 /* ── Progress bar ─────────────────────────────────────────────────────────── */
 .progress { margin-bottom: 14px; }
 .progress-track { height: 6px; background: var(--surface2); border-radius: 3px; overflow: hidden; }
@@ -603,6 +592,36 @@
 .ing-flat-list .ing-row--line.ing-row--filled .ing-main { padding-right: 44px; }
 .ing-row--line .ing-top { display: block; margin-bottom: 0; }
 .ing-row--line .ing-name { font-size: 16px; font-weight: 600; text-align: left; overflow-wrap: anywhere; }
+/* The name as a BUTTON (ingredients.js, only for whoever may edit ingredients): it must look
+   exactly like the span it replaces, so it takes the .ing-name size, weight and colour as they
+   are and only strips what a <button> adds — the box, the background, the centring. Not
+   `font: inherit`: that would reset the size .ing-name (and its 18px tablet rule) set. */
+.ing-row--line .ing-name-btn {
+  display: block;
+  max-width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font-family: inherit;
+  line-height: inherit;
+  letter-spacing: inherit;
+  cursor: pointer;
+}
+/* The TOUCH target is 44px tall without the row moving: the 22px name button carries an invisible
+   hit area 11px taller above and below (the .app-icon-btn::before trick, tokens.css). It is
+   horizontal-0 on purpose — the Order / Stock boxes, the unit menu and the × are in other columns,
+   and the button is capped at the name column's width — so it overlaps none of them. The
+   min-width keeps even a one-letter name above WCAG 2.2's 24px, and 1px of padding taken back
+   by a -1px margin makes the BOX itself 24px tall (WCAG measures the element) with the row
+   exactly where it was. */
+.ing-row--line .ing-name-btn { position: relative; min-width: 24px; padding-block: 1px; margin-block: -1px; }
+.ing-row--line .ing-name-btn::before {
+  content: '';
+  position: absolute;
+  inset: -11px 0;
+}
+.ing-row--line .ing-name-btn:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 2px; border-radius: var(--radius-sm); }
 .ing-row--line .ing-supplier { margin: 2px 0 0; }
 .ing-row--line .ing-weight { margin-top: 1px; font-family: 'DM Mono', monospace; font-size: 12px; color: var(--text-3); }
 .ing-row--line .ing-suggestion { margin-top: 2px; }
@@ -689,7 +708,27 @@ body[data-section="orders"] { --order-head-h: 0px; }
    scroller's padding, so top: 0 left a 14px band where rows showed ABOVE the header
    (measured 29 Sep 2026). Keep the two numbers together. */
 .ingredient-list > .ing-head { top: -14px; }
-.ing-flat-list > .ing-head { top: var(--order-head-h, 0px); }
+/* In the flat list the header sticks under the tabs AND the pinned search bar. */
+.ing-flat-list > .ing-head { top: calc(var(--order-head-h, 0px) + var(--order-search-h, 0px)); }
+/* The search row + filter pills of the flat list, pinned under the tab bar.
+   ⚠️ `flow-root` KEEPS THE CHILDREN'S BOTTOM MARGINS INSIDE THE BAR: left to collapse out,
+   they open a gap under it (measured as the bar's offsetHeight) where rows show through.
+   ⚠️ AN OPAQUE GROUND AND NO overflow ON ANY ANCESTOR, as on .order-box-head. */
+.ing-sticky-head {
+  position: sticky;
+  top: var(--order-head-h, 0px);
+  z-index: 2;
+  display: flow-root;
+  background: var(--surface);
+}
+body[data-section="orders"] { --order-search-h: 0px; --order-ing-head-h: 0px; }
+/* ⚠️ A BOX THE BROWSER SCROLLS TO ON FOCUS must land BELOW everything pinned over the list:
+   the tab bar, the search bar and the Order / Stock header. Without this the focused
+   quantity box is brought to the very top of the scroller — under them, invisible. The
+   three heights are the measured variables above, never pixels. */
+body[data-section="orders"] .scroll-area {
+  scroll-padding-top: calc(var(--order-head-h, 0px) + var(--order-search-h, 0px) + var(--order-ing-head-h, 0px));
+}
 
 /* Stock hidden (Settings): one column fewer, in the rows AND the header. */
 body.hide-stock .ing-row--line,
@@ -754,7 +793,7 @@ body.hide-stock .stock-field { display: none; }
    .ing-row, which the Calculator also uses — see the long note above. */
 .ing-fields { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; max-width: 400px; margin-inline: auto; }
 .field { display: flex; flex-direction: column; align-items: center; gap: 5px; }
-.field-label { font-size: 10px; color: var(--text3); font-family: 'DM Mono', monospace; text-transform: uppercase; letter-spacing: 0.08em; }
+.field-label { font-size: var(--field-label-size); color: var(--field-label-color); font-weight: var(--field-label-weight); }
 .ing-order-input { display: flex; align-items: center; gap: 6px; }
 .ing-order-unit { font-size: 13px; color: var(--text3); font-family: 'DM Mono', monospace; white-space: nowrap; }
 
@@ -971,12 +1010,9 @@ input.ing-stock {
 }
 .preview-format { display: flex; flex-direction: column; gap: 6px; }
 .preview-format-label {
-  font-family: 'DM Mono', monospace;
-  font-size: 10px;
-  font-weight: 600;
-  color: var(--text3);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
+  font-size: var(--field-label-size);
+  font-weight: var(--field-label-weight);
+  color: var(--field-label-color);
 }
 .preview-format .view-switch { margin-bottom: 0; }
 
@@ -1232,23 +1268,6 @@ body[data-section="orders"] .ing-filter .view-switch-btn:not(.active) { color: v
    box and its label sit on the same centre line instead of the text baseline. */
 
 
-/* The supplier screen's two adds side by side («+ Ingrediente», «+ Imballaggio»): the same
-   dashed button twice, the row carrying the gap the single one had. */
-.mgmt-add-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-bottom: 14px; }
-.mgmt-add-pair .mgmt-add { margin-bottom: 0; }
-.mgmt-add {
-  width: 100%;
-  padding: 12px;
-  margin-bottom: 14px;
-  background: var(--surface);
-  border: 1px dashed var(--accent);
-  border-radius: var(--radius-sm);
-  color: var(--accent);
-  font-family: 'Manrope', sans-serif;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-}
 .mgmt-list { display: flex; flex-direction: column; gap: 8px; }
 .mgmt-item {
   display: flex;
@@ -1360,7 +1379,7 @@ body[data-section="orders"] .ing-filter .view-switch-btn:not(.active) { color: v
 /* ── Management forms ─────────────────────────────────────────────────────── */
 .mgmt-form { display: flex; flex-direction: column; gap: 14px; }
 .mgmt-field { display: flex; flex-direction: column; gap: 6px; }
-.mgmt-field-label { font-size: 12px; color: var(--text2); font-weight: 500; }
+.mgmt-field-label { font-size: var(--field-label-size); color: var(--field-label-color); font-weight: var(--field-label-weight); }
 /* The input styling is scoped to .mgmt-form, so any field OUTSIDE a form (the General
    tab's settings) has to be named here too — otherwise it renders as a bare browser
    input in the middle of a styled panel. */
@@ -1413,10 +1432,12 @@ body[data-section="orders"] .ing-filter .view-switch-btn:not(.active) { color: v
 .mgmt-price-block { display: flex; flex-direction: column; gap: var(--space-3); }
 .mgmt-price-block > .mgmt-price-summary.muted { margin-top: var(--space-1); }
 
-/* A price quoted per case: the case price, then «Contiene [50] pz» / «[4] × [2.5] kg» on ONE
-   row. The boxes share the width equally and may shrink (min-width:0 — a <select> and a
-   number input otherwise keep their intrinsic width and push the row past a 296px card);
-   the × is only a sign between two boxes. Icon/label rules do not apply: no icon here. */
+/* «Contiene [4] × [busta ▾]» (the card's carton row) on ONE row. The boxes share the width and
+   may shrink (min-width:0 — a <select> and a number input otherwise keep their intrinsic width and
+   push the row past a 296px card); the × is only a sign between two boxes. Icon/label rules do not
+   apply: no icon here. */
+/* The card of before (an old stored price shape): the case price, then «Contiene [50] pz» /
+   «[4] × [2.5] kg» — the box that holds that row and its «package weight changed» line. */
 .mgmt-case { display: flex; flex-direction: column; gap: var(--space-3); }
 .mgmt-case-row { display: flex; align-items: center; gap: 8px; }
 /* At 296px the four controls share ~200px: with the card's 12px side padding «1000» and «ml»
@@ -1429,6 +1450,12 @@ body[data-section="orders"] .ing-filter .view-switch-btn:not(.active) { color: v
 .mgmt-case-row select.mgmt-input { flex: 0 1 auto; }
 .mgmt-case-row input.mgmt-input { min-width: 56px; }
 .mgmt-case-x { flex: 0 0 auto; color: var(--text2); }
+/* «Contiene [4] × [busta ▾]» (1 Oct 2026): the inner-word menu is a .mgmt-choice (the menu plus
+   its «+ Nuova…» text box and refusal line), a column of its own. It takes the rest of the row
+   beside the count, and what is inside it must not inherit the row's flex sizing — in a column
+   that would be a flex-basis of 0 on the height. */
+.mgmt-case-row > .mgmt-choice { flex: 1 1 0; min-width: 0; }
+.mgmt-case-row .mgmt-choice .mgmt-input { flex: none; }
 
 /* What is still missing, under the numbers. It appears only when the price is
    complete as a PRICE but the ingredient still cannot be costed — a per-piece
@@ -1489,6 +1516,26 @@ body[data-section="orders"] .ing-filter .view-switch-btn:not(.active) { color: v
 .mgmt-form-actions { display: flex; gap: 10px; margin-top: 6px; }
 .mgmt-form-actions .btn-secondary { flex: 1; }
 .mgmt-form-actions .btn-primary { flex: 2; margin-top: 0; }
+/* The bin on an existing record's card: small and quiet — danger-red icon, no fill, no border —
+   so it never competes with Save (P20). 44px is the target; the 20px icon is centred in it. */
+.mgmt-form-actions .mgmt-delete-btn {
+  flex: 0 0 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--danger);
+  cursor: pointer;
+  transition: transform 60ms ease;
+}
+.mgmt-form-actions .mgmt-delete-btn:active { transform: scale(.97); }
+.mgmt-form-actions .mgmt-delete-btn:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 2px; }
+.mgmt-form-actions .mgmt-delete-btn:disabled { opacity: .5; cursor: default; }
 
 /* The confirmation dialog moved to the shared .app-dialog-* component
    (js/orders/confirm-dialog.js + tokens.css); .btn-danger went with it — the
@@ -1826,6 +1873,14 @@ a.home-reminder {
 /* The folded half. It gets the breathing room the head used to provide, so opening
    the card does not make the first line collide with the state word. */
 .mgmt-fold-body { padding-top: 2px; }
+/* «Dati prodotto» of the ingredient card only (2 Oct 2026, Federico: more room for the boxes): the
+   rows were flush against each other, so they now sit one step apart (--space-4), and the boxes
+   take the roomier --tap-min height instead of the form's 44px. Nothing app-wide: the price
+   section and every other form keep their own rhythm. The hint under «Nome da mostrare» is
+   tucked back up to its own box, so it still reads as that box's note. */
+.mgmt-fold-body--data { display: flex; flex-direction: column; gap: var(--space-4); }
+.mgmt-form .mgmt-fold-body--data .mgmt-input { min-height: var(--tap-min); }
+.mgmt-fold-body--data > .notif-note { margin-top: calc(-1 * var(--space-2)); }
 
 /* ⚠️ THE STATE IS A WORD, NEVER A COLOUR ALONE (P18) — and it stays OUTSIDE the fold
    with the status line below it, because on this screen the ANSWER is never behind a
@@ -1920,10 +1975,16 @@ a.home-reminder {
 .alg-tick--may { color: var(--text2); }
 .alg-checked { margin-top: 12px; font-size: 13px; font-weight: 600; align-items: flex-start; }
 
-.alg-nut-title { margin-top: 14px; }
+/* «Per 100 g» names a GROUP of boxes, not one box: it keeps the look it had as a
+   .mgmt-field-label before the field-label tokens (it is not a field's name). */
+.alg-nut-title { margin-top: 14px; font-size: 12px; color: var(--text2); font-weight: 500; }
 /* Two columns on a phone: eight single-column rows would push Save two screens
    down, and these are short numbers. */
-.alg-nutrition { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+/* ⚠️ align-items: end ON EVERY PAIRED GRID BELOW (and .cat-loss-pair, .fc-weigh-pair,
+   .lab-size-custom): a field label can wrap to two lines at 296px, and with the default
+   stretch the box beside it would then start lower. Bottom-aligned, the BOXES share a line
+   and a long label only grows upward. */
+.alg-nutrition { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; align-items: end; }
 
 /* Two fields that belong together, side by side — «Come si acquista» and the rate.
    ⚠️ THE SAME GRID AS .alg-nutrition ABOVE, deliberately: identical values, three
@@ -1931,7 +1992,7 @@ a.home-reminder {
    ⚠️ minmax(0, 1fr) and not 1fr: a grid item's default min-width is auto, so a long
    <select> option would push its column wider than half and shove the other one off.
    That is the same flex/grid trap this project has already paid for once. */
-.mgmt-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.mgmt-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; align-items: end; }
 /* The <select> and the <input> are 100% of their column; without this the select
    sizes to its widest option instead of to the space it has been given. */
 .mgmt-pair .mgmt-input { width: 100%; min-width: 0; }
@@ -1940,8 +2001,11 @@ a.home-reminder {
    label and input in the same card started at the left edge. Shrink it to its text and
    pin it left; nothing else about the link changes. */
 .mgmt-history > .mgmt-link { align-self: flex-start; }
+/* The line above the price-history link: a heading for a list, not a field's name, so it
+   keeps the small quiet look .mgmt-field-label had before the field-label tokens. */
+.mgmt-history-label { font-size: 12px; color: var(--text2); font-weight: 500; }
 .alg-nut-field { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
-.alg-nut-label { font-size: 11px; color: var(--text2); line-height: 1.3; }
+.alg-nut-label { font-size: var(--field-label-size); color: var(--field-label-color); font-weight: var(--field-label-weight); line-height: 1.3; }
 .alg-num { width: 100%; font-variant-numeric: tabular-nums; }
 
 /* ── Order lists sent from one person to another ───────────────────────────── */
@@ -2238,16 +2302,53 @@ a.home-reminder {
 .missing-qty { font-variant-numeric: tabular-nums; color: var(--text3); font-size: 14px; }
 .missing-save { width: 100%; margin-top: 16px; }
 
-/* The re-order reminder reuses .today-banner; this only makes it a full-width
-   button and gives it the warning tint, so it is not mistaken for the ordering
-   reminders sitting directly beneath it. */
-.reorder-banner {
+/* ── «To re-order» list ──────────────────────────────────────────────────────
+   Shares .missing-overlay (z-index 950: above .supplier-detail 600, below dialogs 10000).
+   One card per missing line; its three buttons are 44px tall and full width, stacked, so
+   at 296px the long «Put back in {supplier}'s order» wraps instead of overflowing. «Put back»
+   is the solid green one, «Order from another supplier» the secondary, and «Resolved» a
+   quiet text button so it never competes with either. The supplier chooser reuses the
+   same overlay (.reorder-chooser) with the Incoming tab's rows. */
+.reorder-overlay .scroll-area { padding-bottom: 24px; }
+.reorder-list { display: flex; flex-direction: column; }
+.reorder-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.reorder-main { display: flex; align-items: baseline; gap: 12px; }
+.reorder-name { flex: 1; min-width: 0; font-size: 15px; font-weight: 600; overflow-wrap: anywhere; }
+.reorder-meta { font-size: 13px; color: var(--text3); }
+.reorder-card .reorder-put,
+.reorder-card .reorder-other { width: 100%; min-height: 44px; }
+.reorder-chooser .reorder-choice { width: 100%; margin-bottom: 8px; }
+.reorder-resolve {
   width: 100%;
-  text-align: left;
-  background: var(--warn-bg);
-  border-color: var(--warn-border);
-  color: var(--warn);
+  min-height: 44px;
+  background: none;
+  border: none;
+  font-family: var(--font-round);
+  font-size: 14px;
   font-weight: 600;
+  color: var(--text2);
+  cursor: pointer;
+}
+.reorder-resolve:active { background: var(--surface2); border-radius: var(--radius-sm); }
+
+/* The small line under an ingredient whose order is NOT with its usual supplier this time
+   («di solito da …» on the supplier it was sent to, «questa volta in ordine da …» on its
+   own). Same look as the supplier line of the flat list. */
+.ing-row--line .ing-line-note {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--text3);
+  font-family: 'DM Mono', monospace;
+  overflow-wrap: anywhere;
 }
 
 /* ── The bottom bar at three buttons, on the narrowest phones ────────────────

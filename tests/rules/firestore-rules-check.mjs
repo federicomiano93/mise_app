@@ -292,6 +292,19 @@ async function ingredients() {
       category: 'Other', unit: '', active: true, bakery: 'main',
     }));
 
+  // ── The name the app shows (2 Oct 2026) ──
+  await expectAllowed('an ingredient with the name to show (shortName)', () =>
+    mergeWrite('locations/main/ingredients/ING_MODERN', { shortName: 'Flour', bakery: 'main' }));
+  await expectAllowed('…cleared back to empty', () =>
+    mergeWrite('locations/main/ingredients/ING_MODERN', { shortName: '', bakery: 'main' }));
+  await expectAllowed('…a 60-character name to show', () =>
+    mergeWrite('locations/main/ingredients/ING_MODERN', { shortName: bigString(60), bakery: 'main' }));
+  await expectDenied('a 61-character name to show on an ingredient',
+    () => mergeWrite('locations/main/ingredients/ING_MODERN', { shortName: bigString(61), bakery: 'main' }));
+  await expectDenied('a name to show on an ingredient that is not text',
+    () => mergeWrite('locations/main/ingredients/ING_MODERN', { shortName: 42, bakery: 'main' }));
+  await mergeWrite('locations/main/ingredients/ING_MODERN', { shortName: '', bakery: 'main' });
+
   await expectDenied('an unknown key on an ingredient',
     () => mergeWrite('locations/main/ingredients/ING_MODERN', { evil: 'x', bakery: 'main' }));
   // ── Packaging is an item too (13 Sep 2026) ──
@@ -467,6 +480,29 @@ async function ingredients() {
   await expectDenied('a package word sent as a list', () =>
     mergeWrite('locations/main/ingredients/ING_MODERN', { packUnit: ['busta'], bakery: 'main' }));
 
+  // ── How many packages one carton holds (1 Oct 2026): a whole number 1–10000, or null. ──
+  // Negative ones first: a check that only ever sends good data stays green with the rule gone.
+  await expectDenied('a carton of nothing', () =>
+    mergeWrite('locations/main/ingredients/ING_MODERN', { packCount: 0, bakery: 'main' }));
+  await expectDenied('a carton of two and a half', () =>
+    mergeWrite('locations/main/ingredients/ING_MODERN', { packCount: 2.5, bakery: 'main' }));
+  await expectDenied('a carton count sent as text', () =>
+    mergeWrite('locations/main/ingredients/ING_MODERN', { packCount: '4', bakery: 'main' }));
+  await expectDenied('a carton of more than 10000', () =>
+    mergeWrite('locations/main/ingredients/ING_MODERN', { packCount: 10001, bakery: 'main' }));
+  await expectDenied('a negative carton', () =>
+    mergeWrite('locations/main/ingredients/ING_MODERN', { packCount: -4, bakery: 'main' }));
+  await expectAllowed('a carton of 4, saved by a manager', () =>
+    mergeWrite('locations/main/ingredients/ING_MODERN', { packCount: 4, packUnit: 'busta', unit: 'cartone', bakery: 'main' }, asAccount(MAYA)));
+  await expectAllowed('…and by an employee — it is product data, not money', () =>
+    mergeWrite('locations/main/ingredients/ING_MODERN', { packCount: 6, bakery: 'main' }, asAccount(SAM)));
+  await expectAllowed('exactly 10000', () =>
+    mergeWrite('locations/main/ingredients/ING_MODERN', { packCount: 10000, bakery: 'main' }));
+  await expectAllowed('back to «Singola» with null', () =>
+    mergeWrite('locations/main/ingredients/ING_MODERN', { packCount: null, bakery: 'main' }));
+  await expectAllowed('a document that never had the key stays writable', () =>
+    mergeWrite('locations/main/ingredients/ING_MODERN', { name: 'Bacon', bakery: 'main' }));
+
   await expectAllowed('delete an ingredient', () => deleteWrite('locations/main/ingredients/ING_MODERN'));
 }
 
@@ -627,6 +663,28 @@ async function drafts() {
       bakery: 'main',
     }));
 
+  // «Ordina da un altro fornitore»: a line carries `supplierId` INSIDE its entry. The rules look
+  // only at the top-level keys and at `entries` being a map, so this needs no rules change — pinned
+  // here so a future tightening of the entry shape cannot silently lock the feature out. The
+  // second write is how the key leaves again (a merge cannot delete a nested key).
+  await expectAllowed('a draft line sent to another supplier (entries.<id>.supplierId)', () =>
+    mergeWrite('locations/main/drafts/current', {
+      entries: { ING_ELSEWHERE: { qty: 4, stock: 0, supplierId: 'SUP_OTHER' } },
+      days: { SUP_OTHER: '2026-10-02' },
+      updatedAt: new Date().toISOString(),
+      bakery: 'main',
+    }));
+  await expectAllowed('…and the same line going back to its usual supplier (supplierId: \'\')', () =>
+    mergeWrite('locations/main/drafts/current', {
+      entries: { ING_ELSEWHERE: { qty: 4, stock: 0, supplierId: '' } },
+      updatedAt: new Date().toISOString(),
+      bakery: 'main',
+    }));
+  await expectAllowed('…and a surgical clear of just that key', () =>
+    clearWrite('locations/main/drafts/current',
+      { updatedAt: new Date().toISOString(), bakery: 'main' },
+      ['entries.ING_ELSEWHERE.supplierId', 'days.SUP_OTHER']));
+
   await expectAllowed('clearSupplier removes one supplier\'s rows', () =>
     clearWrite('locations/main/drafts/current',
       { updatedAt: new Date().toISOString(), bakery: 'main' },
@@ -745,6 +803,23 @@ async function history() {
       { ...modern, deliveredAt: '' }));
   await expectAllowed('an order from a phone that has not updated yet (no delivery fields)',
     () => wholeWrite('locations/main/orders-history/2026-07-24_SUP_MODERN', modern));
+
+  // ── missingResolved: a missing line somebody marked «Risolto» ─────────────
+  // Negative ones first: a list has .size(), so only `is map` refuses it.
+  await expectDenied('missingResolved sent as a list instead of a map',
+    () => wholeWrite('locations/main/orders-history/2026-07-24_SUP_MODERN',
+      { ...modern, missing: { ING_MODERN: true }, missingResolved: ['ING_MODERN'] }));
+  await expectDenied('missingResolved sent as a string',
+    () => wholeWrite('locations/main/orders-history/2026-07-24_SUP_MODERN',
+      { ...modern, missing: { ING_MODERN: true }, missingResolved: 'ING_MODERN' }));
+  const tooMany = Object.fromEntries(Array.from({ length: 501 }, (_, i) => [`ING_${i}`, '2026-10-01T09:00:00.000Z']));
+  await expectDenied('missingResolved with more lines than an order may have',
+    () => wholeWrite('locations/main/orders-history/2026-07-24_SUP_MODERN',
+      { ...modern, missing: { ING_MODERN: true }, missingResolved: tooMany }));
+  await expectAllowed('a missing line marked «Risolto»',
+    () => wholeWrite('locations/main/orders-history/2026-07-24_SUP_MODERN',
+      { ...modern, deliveredAt: '2026-07-25T09:00:00.000Z', missing: { ING_MODERN: true },
+        missingResolved: { ING_MODERN: '2026-10-01T09:00:00.000Z' } }));
   await expectDenied('names sent as a string',
     () => wholeWrite('locations/main/orders-history/2026-07-24_SUP_MODERN',
       { ...modern, names: 'Bacon' }));
@@ -2601,6 +2676,49 @@ async function roles() {
   await expectAllowed('a manager can write one',
     () => mergeWrite(`${L}/ingredient-prices/I9`,
       { ...stamp, priceUnit: 'kg', pricePerUnit: 1 }, asAccount(MAYA)));
+
+  // ── Deleting an ingredient (1 Oct 2026): the ingredient AND its price in ONE batch ──
+  //
+  // ⚠️ THE APP INCLUDES THE PRICE DELETE ONLY FOR SOMEBODY ALLOWED TO MAKE IT
+  // (mayWritePrices): a refused member fails the whole batch and the ingredient stays.
+  // These pin the rule that decision mirrors — canManage(lid, 'foodcost') on the price.
+  const batchDelete = (paths, headers) => fetch(
+    `${FS.replace(/\/documents$/, '')}/documents:commit`,
+    {
+      method: 'POST', headers,
+      body: JSON.stringify({
+        writes: paths.map(p => ({ delete: `projects/${PROJECT}/databases/(default)/documents/${p}` })),
+      }),
+    });
+  await seedDoc(`${L}/ingredient-prices/D1`, { ...stamp, priceUnit: 'kg', pricePerUnit: 2 });
+  await seedDoc(`${L}/ingredient-prices/D2`, { ...stamp, priceUnit: 'kg', pricePerUnit: 2 });
+  await seedDoc(`${L}/ingredient-prices/D3`, { ...stamp, priceUnit: 'kg', pricePerUnit: 2 });
+  await expectDenied('an employee cannot delete an ingredient price',
+    () => deleteWrite(`${L}/ingredient-prices/D1`, asAccount(SAM)));
+  await expectDenied('a member of ANOTHER venue cannot delete this venue\'s ingredient price',
+    () => deleteWrite(`${L}/ingredient-prices/D1`, asAccount(BOB)));
+  await expectAllowed('a manager can delete an ingredient price',
+    () => deleteWrite(`${L}/ingredient-prices/D1`, asAccount(MAYA)));
+  await expectAllowed('an owner can delete an ingredient price',
+    () => deleteWrite(`${L}/ingredient-prices/D2`, asAccount(ALICE)));
+
+  await seedDoc(`${L}/ingredients/DB`, { ...stamp, name: 'Batch flour', active: true });
+  await seedDoc(`${L}/ingredient-prices/DB`, { ...stamp, priceUnit: 'kg', pricePerUnit: 1 });
+  await expectAllowed('a manager deletes an ingredient and its price in ONE batch',
+    () => batchDelete([`${L}/ingredients/DB`, `${L}/ingredient-prices/DB`], asAccount(MAYA)));
+  await expectDenied('an employee\'s batch with the price delete fails WHOLE',
+    () => batchDelete([`${L}/ingredients/D3`, `${L}/ingredient-prices/D3`], asAccount(SAM)));
+
+  // The append-only history under an ingredient can never be deleted — it stays behind.
+  await seedDoc(`${L}/ingredients/DH`, { ...stamp, name: 'History flour', active: true });
+  await seedDoc(`${L}/ingredients/DH/prices/H1`, {
+    bakery: 'main', recordedAt: '2026-09-01T10:00:00.000Z', priceUnit: 'kg', pricePerUnit: 1,
+    supplierId: 'S1', source: 'manual',
+  });
+  await expectDenied('nobody deletes a price-history entry, not even the owner',
+    () => deleteWrite(`${L}/ingredients/DH/prices/H1`, asAccount(ALICE)));
+  await expectDenied('…nor a manager',
+    () => deleteWrite(`${L}/ingredients/DH/prices/H1`, asAccount(MAYA)));
 
   // ── The purchase VAT rate (28 Sep 2026): one of the six the app offers, or
   // nothing. A typo must not be stored as a rate every order total then trusts.

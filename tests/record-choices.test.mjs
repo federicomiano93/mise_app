@@ -91,3 +91,57 @@ test('packChoices adds words in use, folds a default a used word matches, keeps 
   assert.equal(out.filter(w => w.toLowerCase() === 'busta').length, 1);
   assert.ok(!out.includes(''));
 });
+
+// ── «Confezione: Cartone» words (1 Oct 2026) ─────────────────────────────────
+import {
+  cartonWordFor, packWordFor, looseUnitFor, pieceWordFor, defaultPackFor,
+} from '../js/record-choices.js';
+
+test('the carton word follows the language, English for anything unknown', () => {
+  assert.equal(cartonWordFor('it'), 'cartone');
+  assert.equal(cartonWordFor('en'), 'case');
+  for (const language of [null, undefined, '', 'fr']) assert.equal(cartonWordFor(language), 'case');
+});
+
+test('the default package plurals are a table, and a word outside it has none', () => {
+  assert.equal(packWordFor('busta', 4, 'it'), 'buste');
+  assert.equal(packWordFor('sacco', 2, 'it'), 'sacchi');
+  assert.equal(packWordFor('bottiglia', 12, 'it'), 'bottiglie');
+  assert.equal(packWordFor('barattolo', 6, 'it'), 'barattoli');
+  assert.equal(packWordFor('scatola', 6, 'it'), 'scatole');
+  assert.equal(packWordFor('vaschetta', 6, 'it'), 'vaschette');
+  assert.equal(packWordFor('pezzo', 50, 'it'), 'pezzi');
+  assert.equal(packWordFor('box', 3, 'en'), 'boxes');
+  assert.equal(packWordFor('bag', 4, 'en'), 'bags');
+  assert.equal(packWordFor('busta', 1, 'it'), 'busta', 'one is the word itself');
+  assert.equal(packWordFor(' Busta ', 3, 'it'), 'buste', 'trimmed, case-insensitive');
+  assert.equal(packWordFor('sleeve', 4, 'en'), null);
+  assert.equal(packWordFor('busta', 4, 'en'), null, 'an Italian word on an English venue is custom');
+  assert.equal(packWordFor('', 4, 'it'), null);
+  assert.equal(packWordFor(null, 4, 'it'), null);
+});
+
+test('every default package word has a plural in both languages', () => {
+  for (const language of ['it', 'en']) {
+    for (const word of DEFAULT_PACKS[language]) {
+      assert.ok(packWordFor(word, 2, language), `${language} ${word}`);
+      assert.notEqual(packWordFor(word, 2, language), word, `${language} ${word} must change in the plural`);
+    }
+  }
+});
+
+test('the loose-item order unit words, the piece word and the default package word', () => {
+  assert.equal(looseUnitFor('kg', 'it'), 'kg');
+  assert.equal(looseUnitFor('l', 'it'), 'l');
+  assert.equal(looseUnitFor('pcs', 'it'), 'pz');
+  assert.equal(looseUnitFor('pcs', 'en'), 'pcs');
+  assert.equal(looseUnitFor('weird', 'it'), '');
+  assert.equal(looseUnitFor(null, 'it'), '');
+  assert.equal(pieceWordFor('it'), 'pezzo');
+  assert.equal(pieceWordFor('en'), 'piece');
+  assert.equal(defaultPackFor('it'), 'busta');
+  assert.equal(defaultPackFor('en'), 'bag');
+  // the words the card writes are words the menus already offer
+  assert.ok(DEFAULT_PACKS.it.includes(pieceWordFor('it')) && DEFAULT_PACKS.en.includes(pieceWordFor('en')));
+  assert.ok(DEFAULT_UNITS.it.includes(looseUnitFor('pcs', 'it')) && DEFAULT_UNITS.en.includes(looseUnitFor('pcs', 'en')));
+});

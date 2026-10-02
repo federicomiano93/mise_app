@@ -148,9 +148,9 @@
   gap: 6px;
 }
 .rec-host .mgmt-field-label {
-  font-size: 12px;
-  color: var(--text2);
-  font-weight: 500;
+  font-size: var(--field-label-size);
+  color: var(--field-label-color);
+  font-weight: var(--field-label-weight);
 }
 .rec-host .mgmt-form .mgmt-input {
   width: 100%;
@@ -220,6 +220,13 @@
 .rec-host .mgmt-case-x {
   flex: 0 0 auto;
   color: var(--text2);
+}
+.rec-host .mgmt-case-row > .mgmt-choice {
+  flex: 1 1 0;
+  min-width: 0;
+}
+.rec-host .mgmt-case-row .mgmt-choice .mgmt-input {
+  flex: none;
 }
 .rec-host .mgmt-price-main {
   display: block;
@@ -308,6 +315,32 @@
   flex: 2;
   margin-top: 0;
 }
+.rec-host .mgmt-form-actions .mgmt-delete-btn {
+  flex: 0 0 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--danger);
+  cursor: pointer;
+  transition: transform 60ms ease;
+}
+.rec-host .mgmt-form-actions .mgmt-delete-btn:active {
+  transform: scale(.97);
+}
+.rec-host .mgmt-form-actions .mgmt-delete-btn:focus-visible {
+  outline: 2px solid var(--accent-2);
+  outline-offset: 2px;
+}
+.rec-host .mgmt-form-actions .mgmt-delete-btn:disabled {
+  opacity: .5;
+  cursor: default;
+}
 .rec-host .notif-note {
   margin: 0;
   font-size: 13px;
@@ -394,6 +427,17 @@
 }
 .rec-host .mgmt-fold-body {
   padding-top: 2px;
+}
+.rec-host .mgmt-fold-body--data {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+.rec-host .mgmt-form .mgmt-fold-body--data .mgmt-input {
+  min-height: var(--tap-min);
+}
+.rec-host .mgmt-fold-body--data > .notif-note {
+  margin-top: calc(-1 * var(--space-2));
 }
 .rec-host .alg-head-state {
   margin-left: auto;
@@ -529,16 +573,21 @@
 }
 .rec-host .alg-nut-title {
   margin-top: 14px;
+  font-size: 12px;
+  color: var(--text2);
+  font-weight: 500;
 }
 .rec-host .alg-nutrition {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
+  align-items: end;
 }
 .rec-host .mgmt-pair {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
+  align-items: end;
 }
 .rec-host .mgmt-pair .mgmt-input {
   width: 100%;
@@ -547,6 +596,11 @@
 .rec-host .mgmt-history > .mgmt-link {
   align-self: flex-start;
 }
+.rec-host .mgmt-history-label {
+  font-size: 12px;
+  color: var(--text2);
+  font-weight: 500;
+}
 .rec-host .alg-nut-field {
   display: flex;
   flex-direction: column;
@@ -554,8 +608,9 @@
   min-width: 0;
 }
 .rec-host .alg-nut-label {
-  font-size: 11px;
-  color: var(--text2);
+  font-size: var(--field-label-size);
+  color: var(--field-label-color);
+  font-weight: var(--field-label-weight);
   line-height: 1.3;
 }
 .rec-host .alg-num {

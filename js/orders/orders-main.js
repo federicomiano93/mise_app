@@ -12,14 +12,16 @@
 import { t, joinList, onLanguageChange } from '../i18n.js';
 import { supplierLabel } from '../supplier-label.js';
 // ⚠️ createDoc / removeDoc / saveIngredientWithPrice / getPriceHistory LEFT WITH THE
-// RECORDS. This page no longer creates, deletes or prices anything — it reads the
-// two collections to draw an order. js/orders/registry-main.js holds those calls now.
-// (The one exception is «+ Add ingredient» on a supplier's screen, which opens the records'
-// own card through js/ingredient-create.js — the card does its own saving.)
+// RECORDS: this page writes only the order itself (draft, history), and js/orders/registry-main.js
+// holds the record calls. The exceptions open the records' own card through
+// js/ingredient-create.js: «+ Add ingredient» on a supplier's screen creates, and the
+// ingredient NAME on a row edits — and, for an owner or manager, deletes (the card's bin ends in
+// deleteIngredientAndDraftRow below, which also takes the ingredient's line out of the draft).
 import {
   watchCollection, watchDoc, saveDoc, COLLECTIONS,
   watchRecentHistory, getOlderHistory, getLegacyHistory,
-  watchIngredientPrices, canManageHere, authReady,
+  watchIngredientPrices, canManageHere, authReady, getPriceHistory,
+  deleteIngredientWithPrice, mayWritePrices,
 } from './firebase-orders.js';
 import { withPrices } from '../price-model.js';
 import { currentSession } from '../firebase.js';
@@ -33,12 +35,14 @@ import { paintOrderMoney } from './order-cost-view.js';
 import {
   scheduleDraftSave, saveDraftNow, flushDraftSave, watchDraft, archiveSupplier, clearSupplier,
   clearQuantities, saveHistoryRecord, deleteHistoryRecord, setDraftSaveReporter,
-  confirmDelivery,
+  confirmDelivery, resolveMissing, dropDeletedIngredientFromDraft, freezeUnitInDraft,
 } from './draft.js';
 import { buildSendScreen } from './preview.js';
 import { buildSupplierPicker } from './supplier-picker.js';
 import { renderHistory as renderHistoryView } from './history.js';
-import { renderDeliveries, renderReorderBanner, renderOwedBanner } from './deliveries-view.js';
+import {
+  renderDeliveries, renderReorderButton, repaintReorderButton, renderOwedBanner,
+} from './deliveries-view.js';
 import { buildHistoryEditor } from './history-edit.js';
 import { buildPlaceConfirm } from './place-confirm.js';
 import {
@@ -48,25 +52,26 @@ import { renderUntold } from './untold-view.js';
 import { buildManagement, isAdmin } from './management.js';
 import { computeSuggestion, isUnusualQuantity } from './suggestions.js';
 import { refreshHolidays } from './holidays.js';
-import { countryOf } from '../market.js';
+import { countryOf, outputLanguage } from '../market.js';
 import { renderAlerts } from './notifications.js';
 import { routesFor } from './send-routes.js';
 import { confirmDialog, alertDialog } from './confirm-dialog.js';
 import { mayEditRecords } from '../records.js';
 import { todayISO, dayPhrase, daySpoken, dayWhen, localDayOf, dayLabel } from './day.js';
 import {
-  buildOrderMessage, whatsappUrl, itemsFromQuantities, indexById,
+  buildOrderMessage, whatsappUrl, itemsFromQuantities, indexById, fallbackSupplierName,
 } from './order-text.js';
 import { liveHistoryStart, mergeHistory, createOlderLoader } from './history-window.js';
 import {
-  historyDocId, ingredientsOf, supplierHasItems, ingredientLabel, wholeNumber,
+  historyDocId, ingredientsOf, supplierHasItems, ingredientDisplayLabel, wholeNumber,
   unitConflicts, unitConflictList,
 } from './archive.js';
 import { storedUnitFor, entryUnit, isDefaultUnit } from '../order-unit.js';
 import { todayOrders, pendingSuppliers } from './reminders.js';
 import { renderTodayOrders, renderPending } from './reminder-view.js';
 import { resolveSuppliers, orderSuppliers, NO_SUPPLIER_ID } from './no-supplier.js';
-import { openIngredientCreate } from '../ingredient-create.js';
+import { overrideSignature } from './line-supplier.js';
+import { openIngredientCreate, openIngredientEdit } from '../ingredient-create.js';
 import { normalizeOrdersConfig } from './orders-config.js';
 import { mountIngredientList } from './ingredient-list.js';
 import { watchTablet, initAlertsPanel, closeAlertsPanel, isTabletNow } from './tablet-layout.js';
@@ -166,6 +171,11 @@ const hooks = {
   onClear(supplierId) {
     clearQuantitiesFor([supplierId]);
   },
+  // The ingredient NAME on a row opens the records' card (ingredients.js asks both on every build).
+  mayEditIngredient: () => mayAddIngredient(),
+  onEditIngredient(ing) {
+    openEditIngredient(ing);
+  },
 };
 
 // ── Orders settings (config/orders) ───────────────────────────────────────────
@@ -221,8 +231,19 @@ function watchOrdersConfig() {
 // names by id and edit the stored document, so re-pointing a supplier there would
 // be a lie.
 
-// Ingredients with every supplierId resolved against the suppliers that exist.
+// Ingredients with every supplierId resolved against the suppliers that exist — AND with
+// every line the draft sends to another supplier («Ordina da un altro fornitore», for this
+// order only) filed under that supplier. This is THE lens of the order flow: the lists,
+// the counts, the message, the summary, the archive and the clearing all read it, so they
+// cannot disagree about whose line a line is (js/orders/line-supplier.js).
 function orderIngredients() {
+  return resolveSuppliers(state.ingredients, state.suppliers, state.loaded.suppliers, state.entries);
+}
+
+// The same ingredients WITHOUT the per-order overrides: what each supplier SELLS. The
+// read-only product list wants this, and so does a supplier's own screen for the rows it
+// keeps showing when one of them is ordered elsewhere this time.
+function catalogueIngredients() {
   return resolveSuppliers(state.ingredients, state.suppliers, state.loaded.suppliers);
 }
 
@@ -246,6 +267,35 @@ function findOrderSupplier(supplierId) {
 
 function ingredientsBySupplier() {
   return groupBy(orderIngredients().filter(i => i.active !== false), 'supplierId');
+}
+
+// The rows a supplier's OWN screen draws: everything it usually sells, plus the lines
+// other suppliers' ingredients were sent to it this time.
+//   * an ingredient of this supplier that is ordered elsewhere stays, marked `elsewhereId`
+//     (its row shows an empty quantity and «questa volta in ordine da …»; typing there
+//     moves the line back);
+//   * a line sent here is marked `usualSupplierId` (its row says «di solito da …»).
+// Counts and totals do NOT read this — they read the lens, where a line is in one order.
+function screenRowsFor(supplierId) {
+  const lens = indexById(orderIngredients());
+  const label = id => supplierLabel(findOrderSupplier(id)) || '';
+  const own = (groupBy(catalogueIngredients().filter(i => i.active !== false), 'supplierId')[supplierId] || [])
+    .map(ing => {
+      const now = lens[ing.id];
+      return now && now.supplierId !== supplierId
+        ? { ...ing, elsewhereId: now.supplierId, elsewhereLabel: label(now.supplierId) }
+        : ing;
+    });
+  const incoming = withNoteLabels((ingredientsBySupplier()[supplierId] || []).filter(i => i.usualSupplierId));
+  return [...own, ...incoming];
+}
+
+// A line sent to another supplier says where it usually comes from («di solito da …»): the
+// name is looked up here, where the suppliers are, and handed to the row on the ingredient.
+function withNoteLabels(list) {
+  return list.map(i => (i.usualSupplierId
+    ? { ...i, usualLabel: supplierLabel(findOrderSupplier(i.usualSupplierId)) || '' }
+    : i));
 }
 
 function refreshAllSuppliers() {
@@ -289,9 +339,12 @@ function syncInputsFromState() {
     const stock = row.querySelector('.ing-stock');
     const qty = row.querySelector('.ing-qty');
     if (stock && stock !== document.activeElement) stock.value = entry.stock || '';
-    if (qty && qty !== document.activeElement) qty.value = entry.qty || '';
+    // ⚠️ A ROW ORDERED ELSEWHERE THIS TIME shows an EMPTY quantity (its number belongs to the
+    // other supplier's order), whatever the shared draft says — see screenRowsFor.
+    const away = Boolean(row.dataset.elsewhere);
+    if (qty && qty !== document.activeElement) qty.value = away ? '' : entry.qty || '';
     // Outside the focus guard: the button must follow the DRAFT even while the box is focused.
-    markFilled(row, entry.qty);
+    markFilled(row, away ? 0 : entry.qty);
   });
   refreshAllSuppliers();
   // A quantity typed on another phone changes the order total too.
@@ -342,15 +395,22 @@ function render() {
 // Both list views own nodes inside the shared container, so whenever it is wiped or
 // handed to the other view, the stale handle has to go with it.
 function dropListViews() {
-  flatView = null;
+  dropFlatView();
   cardsView = null;
+}
+
+// ⚠️ THE FLAT LIST OWNS ResizeObservers: dropping the handle without destroy() would leave
+// them running on a list that is no longer in the page.
+function dropFlatView() {
+  flatView?.destroy();
+  flatView = null;
 }
 
 // The supplier list is MOUNTED once and then only repainted — see the note on
 // renderFlatList below; the same trap, the same answer.
 function renderSupplierList(container, suppliers) {
   if (!cardsView) {
-    flatView = null;
+    dropFlatView();
     container.textContent = '';
     cardsView = mountSupplierList(container, {
       query: state.supplierQuery,
@@ -441,6 +501,75 @@ function openAddIngredient(supplierId) {
     .finally(() => { addingIngredient = false; });
 }
 
+// The ingredient NAME on a row: the records' own card for THIS ingredient, as an overlay above
+// whatever Orders screen is up (supplier screen or the flat list). Nothing to refresh afterwards:
+// the live snapshot after the save repaints the rows with the new name / weight / unit, and the
+// screen underneath was never touched — same scroll, every typed quantity still in state.entries.
+// ⚠️ Same gate as «+ Add ingredient» (mayAddIngredient), and the same double-tap guard: two
+// layers would be two cards for one ingredient.
+// ⚠️ THE ITEM IS state.ingredients' (the document MERGED with its price), never the row's
+// copy, and `pricesLoaded` tells the opener whether that merge has really seen the prices: if
+// not, it reads the price document before drawing — a card without the stored price would erase
+// it on an untouched Save (js/ingredient-edit-model.js).
+// ⚠️ THE DELETE FIRST, THE DRAFT CLEAN-UP SECOND, and only if the delete landed: a refused
+// delete must leave the typed quantity where it was. The clean-up is NOT awaited — the card
+// closes as soon as the batch resolves — and a failure is only logged (draft.js).
+// The local entry goes too, or the draft autosave would write the quantity straight back.
+// `deletedIngredientId` tells the focus restore below that the row is gone (or about to be: the
+// snapshot may land after the card has closed), so focus goes to a visible element instead.
+let deletedIngredientId = null;
+async function deleteIngredientAndDraftRow(id) {
+  await deleteIngredientWithPrice(id, mayWritePrices());
+  deletedIngredientId = id;
+  delete state.entries[id];
+  dropDeletedIngredientFromDraft(id);
+}
+
+// After the card closes, hand focus back INSIDE THE SCREEN THAT IS ON TOP: the open supplier's
+// screen if there is one, else the flat list — never a row hidden behind an overlay, and never
+// the page body. The row's name button when it is still there; after a delete, the search box
+// of the flat list or the supplier screen's header Back.
+function restoreFocusAfterCard(ingredientId) {
+  const wasDeleted = deletedIngredientId === ingredientId;
+  deletedIngredientId = null;
+  const scope = detailView ? detailView.overlay : document;
+  const name = wasDeleted ? null
+    : scope.querySelector(`[data-ing="${CSS.escape(ingredientId)}"] .ing-name-btn`);
+  const target = name
+    || scope.querySelector('.search-row input')
+    || scope.querySelector('.orders-icon-btn');
+  target?.focus({ preventScroll: true });
+}
+
+function openEditIngredient(ing) {
+  if (addingIngredient || !mayAddIngredient()) return;
+  const item = state.ingredients.find(i => i.id === ing.id) || ing;
+  addingIngredient = true;
+  openIngredientEdit({
+    item,
+    suppliers: state.suppliers,
+    ingredients: state.rawIngredients,
+    storedCategories: state.ingredientCategories,
+    layerClass: 'mgmt-overlay',
+    pricesLoaded: state.pricesReadable === true,
+    actions: {
+      priceHistory: (id) => getPriceHistory(id),
+      // The bin, only for whoever may delete (the rules decide either way — P2).
+      ...(canManageHere() ? { deleteIngredient: deleteIngredientAndDraftRow } : {}),
+      // «Cartone» / «Singola» rewrite the order unit: the open draft line keeps the unit it was typed in.
+      unitChanged: freezeUnitInDraft,
+    },
+  })
+    .catch(err => {
+      console.error('Could not open the ingredient card', err);
+      alertDialog(t('orders.addIngredientFailed'));
+    })
+    .finally(() => {
+      addingIngredient = false;
+      restoreFocusAfterCard(ing.id);
+    });
+}
+
 // Create the screen, or repaint the one already up. Repainting happens on every
 // suppliers/ingredients/history snapshot, exactly as the expanded card was rebuilt
 // before — keystrokes never come through here, they reach the inputs through
@@ -454,7 +583,7 @@ function renderOpenSupplier() {
   if (!supplier) { closeSupplier(); return; }
 
   const ctx = {
-    ingredients: ingredientsBySupplier()[supplier.id] || [],
+    ingredients: screenRowsFor(supplier.id),
     entries: state.entries,
     suggest: suggestFor,
     hooks,
@@ -510,8 +639,9 @@ function renderSupplierItems() {
   if (!supplier) { closeSupplierItems(); return; }
 
   // The SAME lens the order screen uses — never state.ingredients raw, or a product
-  // left without a supplier would appear on one screen and not the other.
-  const ingredients = ingredientsBySupplier()[supplier.id] || [];
+  // left without a supplier would appear on one screen and not the other. Without the
+  // per-order overrides: this list says what the supplier SELLS.
+  const ingredients = groupBy(catalogueIngredients().filter(i => i.active !== false), 'supplierId')[supplier.id] || [];
 
   if (itemsView && itemsView.id === supplier.id) {
     itemsView.repaint(ingredients);
@@ -621,7 +751,7 @@ function renderFlatList(container) {
     });
   }
   flatView.repaint({
-    ingredients: orderIngredients(),
+    ingredients: withNoteLabels(orderIngredients()),
     suppliers: orderSupplierList(),
     only: state.filterIds,
     inOrderCount: currentSummary().itemCount,
@@ -793,17 +923,50 @@ function renderIncoming() {
         state.entries[id] = {
           ...(state.entries[id] || { stock: 0 }), qty,
           unit: storedUnitFor(unit, ingredientsById[id]),
+          // Back in ITS OWN supplier's order: never in one an old override pointed at.
+          supplierId: '',
         };
       });
       await saveDraftNow(state.entries, state.days);
       syncInputsFromState();
-      render();   // redraws the banner too — see the note at the top of render()
+      render();   // redraws the button too — see the note at the top of render()
     },
+    // «Ordina da un altro fornitore»: this line, THIS ORDER ONLY, goes to ANOTHER supplier.
+    // The ingredient keeps its usual supplier; the line carries the override
+    // (line-supplier.js). ⚠️ NOTHING IS MARKED RESOLVED: if that order is never placed the
+    // line must stay on this list. stillToReorder drops it while it sits in the draft, and for
+    // good once ANY supplier's later order names the ingredient. If the draft write fails the
+    // local change is put back.
+    onOtherSupplier: async (line, supplierId) => {
+      const { id, qty, unit } = line;
+      const hadEntry = Object.prototype.hasOwnProperty.call(state.entries, id);
+      const previousEntry = state.entries[id];
+      const previousDay = state.days[supplierId];
+      state.entries[id] = {
+        ...(previousEntry || { stock: 0 }), qty,
+        unit: storedUnitFor(unit, ingredientsById[id]),
+        supplierId,
+      };
+      state.days[supplierId] = todayISO();
+      try {
+        await saveDraftNow(state.entries, state.days);
+      } catch (err) {
+        if (hadEntry) state.entries[id] = previousEntry; else delete state.entries[id];
+        if (previousDay) state.days[supplierId] = previousDay; else delete state.days[supplierId];
+        throw err;
+      }
+      syncInputsFromState();
+      render();
+    },
+    // «Risolto»: one merge write on the record the line was missed on. No local state is
+    // touched — the history snapshot that carries the mark redraws the banner and the list.
+    onResolve: async (item) => { await resolveMissing(item.recordId, item.id); },
   };
 
   renderDeliveries(document.getElementById('deliveries-list'), ctx);
   const owedCount = renderOwedBanner(document.getElementById('orders-owed'), ctx);
-  renderReorderBanner(document.getElementById('orders-reorder'), ctx);
+  renderReorderButton(document.getElementById('orders-reorder-btn'),
+    document.getElementById('orders-reorder-count'), ctx);
   // ⚠️ TABLET ONLY IN LOOKS (orders.css), but kept in step unconditionally —
   // the badge span exists on every screen size and CSS alone decides whether
   // it is ever seen, the same split every other tablet-only control in this
@@ -896,10 +1059,11 @@ function patchOlderRecord(id, next) {
 // A stored record → the picker/message row shape. Names and weights are resolved from
 // the CURRENT ingredient list, the same lens the History view uses on screen.
 function recordToRow(record) {
+  const language = outputLanguage(currentSession().location);
   return {
     id: record.id,
-    name: record.supplierName || 'Order',
-    items: itemsFromQuantities(record.quantities, indexById(state.ingredients), record.names, record.units),
+    name: record.supplierName || fallbackSupplierName(language),
+    items: itemsFromQuantities(record.quantities, indexById(state.ingredients), record.names, record.units, language),
   };
 }
 
@@ -923,7 +1087,8 @@ function messageFormatOption() {
 function sendMessageFor(rows, { grouped = GROUPED_BY_DEFAULT } = {}) {
   const text = buildOrderMessage(
     rows.map(r => ({ supplierName: r.name, items: r.items })),
-    { grouped, locationName: currentSession().name });
+    { grouped, locationName: currentSession().name,
+      language: outputLanguage(currentSession().location) });
   if (!text) {
     setStatus(t('orders.nothingToSendThat'), 'warn', 4000);
     return;
@@ -1573,7 +1738,7 @@ async function placeOrder(supplierId, { confirm = true, date: pinnedDate, quanti
         state.entries, ingredients, supplierId);
       const list = conflicts.length ? unitConflictList(conflicts) : (err.ids || []).map(id => {
         const ing = ingredients.find(i => i.id === id);
-        return (ing && ingredientLabel(ing)) || id;
+        return (ing && ingredientDisplayLabel(ing)) || id;
       }).join(', ');
       await alertDialog(t('orders.unitConflict', { day: dayWhen(date), list }));
     } else {
@@ -1600,7 +1765,10 @@ async function placeOrder(supplierId, { confirm = true, date: pinnedDate, quanti
   renderReminders();
 
   try {
-    await clearSupplier(supplierId, ingredients);
+    // ⚠️ THE LENS AS IT IS NOW, not the list taken before the confirmation screen opened: a line
+    // another phone moved to a different supplier meanwhile is that supplier's, and clearing by
+    // the old list would wipe its entry.
+    await clearSupplier(supplierId, orderIngredients());
     setStatus(t('orders.orderSavedToHistory', { names: supplierLabel(supplier) }), 'ok', 5000);
   } catch (err) {
     console.error('Clearing the draft after archiving failed:', err);
@@ -1631,6 +1799,7 @@ function forgetQuantitiesLocally(supplierIds) {
       if (!entry) return;
       delete entry.qty;
       delete entry.unit;   // back to the card's unit, like the paths quantityPathsFor deletes
+      delete entry.supplierId;   // the override goes with the quantity it redirected
       // Nothing ordered and nothing on the shelf is not a row at all — and it
       // matches what Firestore does when the last key of a map is deleted.
       if (!(Number(entry.stock) > 0)) delete state.entries[ing.id];
@@ -1786,7 +1955,7 @@ async function openPlaceConfirm(items, { title, okLabel }) {
     const rows = ingredientsOf(supplier.id, ingredients)
       .map(ing => ({
         id: ing.id,
-        name: ingredientLabel(ing),
+        name: ingredientDisplayLabel(ing),
         unit: entryUnit(state.entries[ing.id], ing),
         qty: wholeNumber(state.entries[ing.id]?.qty),
         asked: asked[ing.id],
@@ -2167,6 +2336,7 @@ async function init() {
   // one until the debt happens to change again.
   onLanguageChange(() => refreshDeliveriesBadge());
   onLanguageChange(() => renderListsButton());
+  onLanguageChange(() => repaintReorderButton());
 
   // The debounced draft autosave has no caller to hand a rejection to, so it reports
   // through here. Never auto-hidden on a timer: an order that is no longer being
@@ -2239,10 +2409,15 @@ async function init() {
 
   // Real-time draft: restores exact state on open and keeps staff in sync.
   watchDraft(draft => {
+    // A line another phone moved to (or back from) a different supplier changes whose rows
+    // are on screen, and a draft snapshot never rebuilds the rows. Compared with what THIS
+    // phone held a moment ago, so the echo of its own typing never triggers a repaint.
+    const overridesBefore = overrideSignature(state.entries);
     setEntries(draft.entries);
     state.days = draft.days || {};
     state.draftUpdatedAt = draft.updatedAt;
     state.loaded.draft = true;
+    if (overrideSignature(state.entries) !== overridesBefore) render();
     syncInputsFromState();
     renderReminders();
     checkPendingOnce();

@@ -711,16 +711,23 @@ service cloud.firestore {
               || request.resource.data.kind == null
               || request.resource.data.kind in ['ingredient', 'packaging'])
           && request.resource.data.keys().hasOnly([
-               'bakery', 'name', 'supplierId', 'brand', 'weight',
+               'bakery', 'name', 'shortName', 'supplierId', 'brand', 'weight',
                'category', 'unit', 'active', 'kind',
                'priceUnit', 'pricePerUnit', 'packPrice', 'packSize',
                'unitWeightKg', 'priceUpdatedAt',
                'allergens', 'mayContain', 'allergensCheckedAt', 'nutrition',
-               'packIngredients', 'packUnit'
+               'packIngredients', 'packUnit', 'packCount'
              ])
           && (!('name' in request.resource.data)
               || (request.resource.data.name is string
                   && request.resource.data.name.size() <= 200))
+          // The name the app SHOWS on screen (2 Oct 2026, «nome da mostrare»), beside the invoice
+          // name that every message to a supplier keeps. Same shape as suppliers.shortName:
+          // optional, '' or absent means «show the name». PRODUCT DATA: it lives here, never in
+          // ingredient-prices.
+          && (!('shortName' in request.resource.data)
+              || (request.resource.data.shortName is string
+                  && request.resource.data.shortName.size() <= 60))
           && (!('supplierId' in request.resource.data)
               || (request.resource.data.supplierId is string
                   && request.resource.data.supplierId.size() <= 200))
@@ -743,6 +750,16 @@ service cloud.firestore {
           && (!('packUnit' in request.resource.data)
               || (request.resource.data.packUnit is string
                   && request.resource.data.packUnit.size() <= 40))
+          // How many `packUnit`s ONE carton holds (1 Oct 2026, «Confezione: Cartone, contiene
+          // 4 × busta»). A whole number 1–10000, or null/absent = «Singola». ⚠️ PRODUCT DATA, SO
+          // IT LIVES HERE AND NOT IN ingredient-prices: whoever may edit an ingredient (staff
+          // included) says what it comes in, and Orders and the stocktake need it without being
+          // allowed to read money. The price document keeps its own frozen copy (caseCount).
+          && (!('packCount' in request.resource.data)
+              || request.resource.data.packCount == null
+              || (request.resource.data.packCount is int
+                  && request.resource.data.packCount >= 1
+                  && request.resource.data.packCount <= 10000))
           // ⚠️⚠️ THE PRICE KEYS MAY ONLY BE null HERE (security audit, 23 Sep 2026).
           // What an ingredient costs lives in ingredient-prices/{id}, behind
           // canManage(…, 'foodcost'), since 12 Aug 2026. These keys stay in the
@@ -948,7 +965,7 @@ service cloud.firestore {
                'bakery', 'date', 'supplierId', 'supplierName',
                'quantities', 'stock', 'names', 'createdAt', 'updatedAt',
                // The delivery half of an order's life — see the note below.
-               'deliveredAt', 'missing',
+               'deliveredAt', 'missing', 'missingResolved',
                // The unit each line was ordered in — see the note below.
                'units'
              ])
@@ -1008,6 +1025,15 @@ service cloud.firestore {
           && (!('missing' in request.resource.data)
               || (request.resource.data.missing is map
                   && request.resource.data.missing.size() <= 500))
+          // `missingResolved` (1 Oct 2026) — { ingredientId: '2026-10-01T…' }: a missing line
+          // somebody marked «Risolto» (bought elsewhere), so it leaves the «Da riordinare»
+          // list for good. Federico: a missing ingredient stays pending until he decides,
+          // not until the same supplier is ordered from again. ⚠️ BESIDE `missing`, never
+          // instead of it: the line still did not arrive, so the stocktake must still not
+          // count it as bought. OPTIONAL in both directions, like the two above.
+          && (!('missingResolved' in request.resource.data)
+              || (request.resource.data.missingResolved is map
+                  && request.resource.data.missingResolved.size() <= 500))
           && request.resource.data.createdAt is string
           && request.resource.data.createdAt.size() <= 64
           && request.resource.data.updatedAt is string

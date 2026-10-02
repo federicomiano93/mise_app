@@ -66,6 +66,10 @@ const LABEL_FILES = [
   // «confectionery») and quotes each country's law in that country's language, so it is
   // held to the same rule: nothing in it may reach the interface language.
   'js/foodcost/vat-guide.js',
+  // ⚠️ ADDED with the order title: the message a SUPPLIER receives says «Ordine» or «Order»
+  // by the venue's COUNTRY (language passed in by the caller), never by the owner's screen.
+  // Pure, draws no screen, so it is also MODEL_ONLY below.
+  'js/orders/order-text.js',
 ];
 
 // ⚠️ EVERY LABEL FILE THAT DRAWS A SCREEN ASSIGNS THE LANGUAGE ONCE, FROM THE COUNTRY,
@@ -123,6 +127,7 @@ const MODEL_ONLY = [
   'js/catalogue/recipe-label-model.js',
   'js/catalogue/label-template-model.js',
   'js/foodcost/vat-guide.js',
+  'js/orders/order-text.js',
 ];
 
 test('the label MODEL files do not import the interface language at all', () => {
