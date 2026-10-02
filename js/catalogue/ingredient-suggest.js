@@ -42,7 +42,8 @@ export function attachLinkSuggestions(input, { options, linked, onPick, onSeeAll
       return {
         total: result.total,
         items: result.items.map(item => ({
-          name: item.name,
+          // The list SHOWS the name to show; the value keeps the invoice name (it fills a row's label).
+          name: item.displayName ?? item.name,
           // ⚠️ NO PRICE: the catalogue shows no money (tests/catalogue-no-money.test.mjs).
           meta: item.kind === 'recipe'
             ? t('cat.recipe')
@@ -71,5 +72,5 @@ export function nameTaken(ingredients, name) {
   const wanted = String(name ?? '').trim().toLowerCase();
   return Object.values(ingredients || {})
     .some(ing => ing && ing.active !== false && ing.kind !== 'packaging'
-      && String(ing.name ?? '').trim().toLowerCase() === wanted);
+      && [ing.name, ing.shortName].some(v => String(v ?? '').trim().toLowerCase() === wanted));
 }

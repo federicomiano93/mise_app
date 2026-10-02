@@ -10,6 +10,7 @@
 // asks first.
 
 import { t } from '../i18n.js';
+import { ingredientDisplayName } from '../ingredient-name.js';
 import { canManageHere } from './firebase-foodcost.js';
 import { el } from './dom.js';
 import {
@@ -388,14 +389,14 @@ export function renderEditor({ product, draft = null, app }) {
           out.push({
             heading: both ? t('fc.ingredients') : '',
             // ⚠️ NO PRICE: «nella sezione "composto da" non mostrare il prezzo».
-            items: app.ingredientOptions().filter(o => matches(o.name))
+            items: app.ingredientOptions().filter(o => matches(o.name) || matches(o.invoiceName))
               .map(o => ({ name: o.name, meta: o.meta, value: { kind: 'ingredient', id: o.id } })),
           });
         }
         if (mode === 'packaging') {
           out.push({
             heading: '',
-            items: app.packagingOptions().filter(o => matches(o.name))
+            items: app.packagingOptions().filter(o => matches(o.name) || matches(o.invoiceName))
               .map(o => ({ name: o.name, meta: o.meta, value: { kind: 'packaging', id: o.id } })),
           });
         }
@@ -450,7 +451,7 @@ export function renderEditor({ product, draft = null, app }) {
       return recipe ? { text: String(recipe.name || '').trim(), missing: false } : { text: t('fc.thisRecipeNoLonger'), missing: true };
     }
     const item = app.tables().ingredients[entry.ingredientId];
-    return item ? { text: String(item.name || '').trim(), missing: false } : { text: t('fc.thisItemNoLonger'), missing: true };
+    return item ? { text: ingredientDisplayName(item).trim(), missing: false } : { text: t('fc.thisItemNoLonger'), missing: true };
   }
 
   //   kind: 'recipe' | 'ingredient' | 'packaging'

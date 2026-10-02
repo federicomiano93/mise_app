@@ -24,6 +24,7 @@
 // makes every margin look better than it is, by exactly the VAT rate.
 
 import { t } from '../i18n.js';
+import { ingredientDisplayName } from '../ingredient-name.js';
 import { pricePerKg as ingredientPricePerKg, roundTo, positiveNumber } from '../price-model.js';
 import { costRecipe } from '../catalogue/recipe-cost-model.js';
 // ⚠️ MOVED TO js/vat-rates.js (29 Sep 2026): the ingredient price form's
@@ -245,12 +246,12 @@ export function batchTotals(product, tables = {}) {
       const line = ingredientLineCost(component, ingredient);
       if (line.cost === null) {
         partial = true;
-        rows.push({ kind: 'ingredient', id: component.ingredientId, name: ingredient.name || '', qty: component.qty, unit: component.unit, cost: null, reason: line.reason });
+        rows.push({ kind: 'ingredient', id: component.ingredientId, name: ingredientDisplayName(ingredient), qty: component.qty, unit: component.unit, cost: null, reason: line.reason });
         return;
       }
       cost += line.cost;
       kg += line.kg;
-      rows.push({ kind: 'ingredient', id: component.ingredientId, name: ingredient.name || '', qty: component.qty, unit: component.unit, cost: line.cost, reason: null });
+      rows.push({ kind: 'ingredient', id: component.ingredientId, name: ingredientDisplayName(ingredient), qty: component.qty, unit: component.unit, cost: line.cost, reason: null });
       return;
     }
 
@@ -301,12 +302,12 @@ export function packagingPerUnit(product, tables = {}) {
     const each = ingredient.priceUnit === 'pcs' ? positiveNumber(ingredient.pricePerUnit) : null;
     if (each === null) {
       partial = true;
-      rows.push({ kind: 'packaging', id: item.ingredientId, name: ingredient.name || '', qty: item.qtyPcs, cost: null, reason: 'no-piece-price' });
+      rows.push({ kind: 'packaging', id: item.ingredientId, name: ingredientDisplayName(ingredient), qty: item.qtyPcs, cost: null, reason: 'no-piece-price' });
       return;
     }
     const lineCost = roundTo(item.qtyPcs * each, 4);
     cost += lineCost;
-    rows.push({ kind: 'packaging', id: item.ingredientId, name: ingredient.name || '', qty: item.qtyPcs, cost: lineCost, reason: null });
+    rows.push({ kind: 'packaging', id: item.ingredientId, name: ingredientDisplayName(ingredient), qty: item.qtyPcs, cost: lineCost, reason: null });
   });
 
   return { cost: roundTo(cost, 4), partial, rows };

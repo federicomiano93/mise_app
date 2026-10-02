@@ -45,7 +45,7 @@ test('the supplier menu ends with «+ Nuovo fornitore…» and the old link butt
 });
 
 test('the short fields sit two to a row, name and supplier stay whole', () => {
-  assert.match(FORM, /field\(t\('orders\.field\.name'\), name\),\s*field\(t\('orders\.field\.supplier'\), supplierSelect\),/);
+  assert.match(FORM, /field\(t\('orders\.field\.name'\), name\),\s*field\(t\('orders\.field\.shortName'\), shortName\),\s*el\('p', \{[^}]*\}\),\s*field\(t\('orders\.field\.supplier'\), supplierSelect\),/);
   assert.match(FORM, /mgmt-pair mgmt-pair--data' \}, \[\s*field\(t\('orders\.field\.brand'\), brand\),\s*field\(t\('orders\.field\.category'\), category\.node\),\s*\]\)/);
   // [Peso | Confezione: Singola · Cartone] then, for a carton only, «Contiene [n] × [busta ▾]»
   assert.match(FORM, /mgmt-pair mgmt-pair--data' \}, \[\s*field\(t\('orders\.field\.weight'\), weight\.node\),\s*el\('div', \{ class: 'mgmt-field' \}, \[\s*el\('span', \{ class: 'mgmt-field-label', id: segLabelId, text: t\('orders\.field\.pack'\) \}\),\s*el\('div', \{ class: 'set-seg', role: 'group', 'aria-labelledby': segLabelId \}, \[segSingle, segCarton\]\),\s*\]\),\s*\]\),\s*containsBlock,/);
@@ -106,15 +106,14 @@ test('the new phrases exist once in each language and are read at draw time', ()
   assert.doesNotMatch(FORM, /^const [A-Z_]+ = .*t\('orders\./m);
 });
 
-test('R3: the supplier screen has two adds, each fixing the kind; the Catalogue still passes ingredient', () => {
+test('R3: the supplier screen has no add of its own (one «+» only); the header add names the kind; the Catalogue still passes ingredient', () => {
   const reg = codeOf(read('js/orders/registry.js'));
-  assert.match(reg, /openIngredientForm\(null, supplier\.id, 'ingredient'\)/);
-  assert.match(reg, /openIngredientForm\(null, supplier\.id, 'packaging'\)/);
-  assert.doesNotMatch(reg, /openIngredientForm\(null, supplier\.id\)/, 'no add without a kind');
+  assert.doesNotMatch(reg, /openIngredientForm\(null, supplier\.id/);
+  assert.match(reg, /openIngredientForm\(null, null, tab === 'packaging' \? 'packaging' : 'ingredient'\)/, 'the header add names the kind');
   assert.match(codeOf(read('js/ingredient-create.js')), /presetKind: 'ingredient',/);
   const src = read('js/i18n.js');
   for (const key of ['orders.addIngredientShort', 'orders.addPackagingShort']) {
-    assert.equal(src.split(`'${key}':`).length - 1, 2, key);
+    assert.equal(src.split(`'${key}':`).length - 1, 0, `${key} is not used any more`);
   }
 });
 

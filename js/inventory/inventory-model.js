@@ -192,7 +192,9 @@ export function productsOfMonth(month, ingredients) {
     const frozen = names[id];
     // The frozen label already carries the pack text, so the live `weight` is
     // dropped rather than printed twice.
-    return frozen ? { ...known, id, name: frozen, weight: '' } : { ...known, id };
+    // `shortName` is dropped too: the frozen label is what that month shows, and a live short name
+    // would replace it (and make two products with the same short name look identical).
+    return frozen ? { ...known, id, name: frozen, shortName: '', weight: '' } : { ...known, id };
   });
 }
 

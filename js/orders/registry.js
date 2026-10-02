@@ -39,7 +39,7 @@ import { removeLevel } from './level-stack.js';
 import { buildSearchBox } from './search-box.js';
 import { dayShort } from './suppliers.js';
 import { NO_SUPPLIER_ID } from './no-supplier.js';
-import { ingredientLabel } from './archive.js';
+import { ingredientDisplayName } from '../ingredient-name.js';
 import { formatPricePerUnit } from '../price-model.js';
 import { allergenState } from '../allergen-model.js';
 // Food or packaging? From js/ root: Food cost and the Catalogue ask the same question.
@@ -272,8 +272,8 @@ export function buildRegistry(data, actions, hooks = {}) {
     const supById = {};
     data.suppliers().forEach(s => { supById[s.id] = supplierLabel(s); });
     const all = data.ingredients().filter(i => isPackaging(i) === packaging)
-      .sort((a, b) => a.name.localeCompare(b.name));
-    const visible = all.filter(i => matches(i.name));
+      .sort((a, b) => ingredientDisplayName(a).localeCompare(ingredientDisplayName(b)));
+    const visible = all.filter(i => matches(i.name) || matches(i.shortName));
 
     if (!all.length) {
       listHost.appendChild(emptyState(packaging ? 'packaging' : 'ingredients'));
@@ -348,7 +348,7 @@ export function buildRegistry(data, actions, hooks = {}) {
     // holds; a row on a supplier's own screen — supplierName undefined, itself in the pane —
     // opens its card ABOVE that screen, as on a phone.
     const onList = supplierName !== undefined;
-    const row = drillRow(item.name, meta, item.active !== false,
+    const row = drillRow(ingredientDisplayName(item), meta, item.active !== false,
       () => (onList ? openFromList(() => openIngredientForm(item, null), `ingredient:${item.id}`) : openIngredientForm(item, null)),
       onList ? `ingredient:${item.id}` : null);
     // ⚠️ A WORD, NEVER A COLOUR ALONE (P18, and the v1.63.0 rule). «Not declared»
@@ -406,27 +406,15 @@ export function buildRegistry(data, actions, hooks = {}) {
 
       const mine = data.ingredients()
         .filter(i => (i.supplierId || NO_SUPPLIER_ID) === supplier.id)
-        .sort((a, b) => a.name.localeCompare(b.name));
+        .sort((a, b) => ingredientDisplayName(a).localeCompare(ingredientDisplayName(b)));
 
       body.appendChild(el('h3', { class: 'mgmt-section-title', text: t('orders.whatTheySell') }));
-      // ⚠️ TWO ADDS, NOT ONE (29 Sep 2026): the card has no «Tipo» menu any more, so what a new
-      // item IS is decided by the button that opened it — one add here would file a box as food.
-      // ⚠️ PRE-SET TO THIS SUPPLIER. Adding a product from inside a supplier's screen and then
-      // having to pick that supplier from a list is the kind of re-asking that makes a screen feel like
-      // a form rather than a place.
-      body.appendChild(el('div', { class: 'mgmt-add-pair' }, [
-        el('button', {
-          type: 'button', class: 'mgmt-add',
-          onClick: () => openIngredientForm(null, supplier.id, 'ingredient'),
-        }, t('orders.addIngredientShort')),
-        el('button', {
-          type: 'button', class: 'mgmt-add',
-          onClick: () => openIngredientForm(null, supplier.id, 'packaging'),
-        }, t('orders.addPackagingShort')),
-      ]));
+      // ⚠️ NO ADD BUTTONS ON THIS SCREEN (2 Oct 2026, Federico: «one + only»). A new ingredient or
+      // packaging is added from the Ingredienti / Imballaggi tab with the header «+»; this screen is
+      // opened from the Fornitori tab, where that «+» adds a supplier, so the empty text says where to go.
 
       if (!mine.length) {
-        body.appendChild(el('p', { class: 'mgmt-empty', text: t('orders.noIngredientsYetAdd') }));
+        body.appendChild(el('p', { class: 'mgmt-empty', text: t('orders.noIngredientsYetAddPlus') }));
       } else {
         const list = el('div', { class: 'mgmt-list' });
         mine.forEach(i => list.appendChild(ingredientRow(i)));

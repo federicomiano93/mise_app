@@ -711,7 +711,7 @@ service cloud.firestore {
               || request.resource.data.kind == null
               || request.resource.data.kind in ['ingredient', 'packaging'])
           && request.resource.data.keys().hasOnly([
-               'bakery', 'name', 'supplierId', 'brand', 'weight',
+               'bakery', 'name', 'shortName', 'supplierId', 'brand', 'weight',
                'category', 'unit', 'active', 'kind',
                'priceUnit', 'pricePerUnit', 'packPrice', 'packSize',
                'unitWeightKg', 'priceUpdatedAt',
@@ -721,6 +721,13 @@ service cloud.firestore {
           && (!('name' in request.resource.data)
               || (request.resource.data.name is string
                   && request.resource.data.name.size() <= 200))
+          // The name the app SHOWS on screen (2 Oct 2026, «nome da mostrare»), beside the invoice
+          // name that every message to a supplier keeps. Same shape as suppliers.shortName:
+          // optional, '' or absent means «show the name». PRODUCT DATA: it lives here, never in
+          // ingredient-prices.
+          && (!('shortName' in request.resource.data)
+              || (request.resource.data.shortName is string
+                  && request.resource.data.shortName.size() <= 60))
           && (!('supplierId' in request.resource.data)
               || (request.resource.data.supplierId is string
                   && request.resource.data.supplierId.size() <= 200))

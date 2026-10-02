@@ -16,6 +16,7 @@
 
 import { orderedItems, summaryLines, itemLabel } from './order-text.js';
 import { supplierLabel } from '../supplier-label.js';
+import { ingredientDisplayName } from '../ingredient-name.js';
 import { lineUnitCost, orderCost } from '../order-cost.js';
 import { entryUnit } from '../order-unit.js';
 
@@ -52,8 +53,10 @@ export function supplierSummary(supplier, ingredients, entries) {
     const ing = byLabel.get(label);
     // The price of ONE of THIS line's unit; lineUnitCost() says «no price» rather than guess
     // when the chosen unit cannot be priced from the card.
+    // ⚠️ `lines` above stay the message's own text (the invoice name); the sheet SHOWS the name to
+    // show, found through the same ingredient (the match key is still the message's label).
     return {
-      label,
+      label: ing ? itemLabel(ingredientDisplayName(ing), ing.weight || '') : label,
       qty,
       ...(unit ? { unit } : {}),
       unitCost: ing ? lineUnitCost(ing, ing, entryUnit(entries?.[ing.id], ing)) : null,

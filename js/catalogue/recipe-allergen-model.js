@@ -27,6 +27,7 @@
 // alternative, a second copy of the walk, is the thing this project refuses.
 
 import { t } from '../i18n.js';
+import { ingredientDisplayName } from '../ingredient-name.js';
 import { unitOf, isWeighableUnit, ingredientGrams, linkOf } from './catalogue-model.js';
 import { MAX_RECIPE_DEPTH } from './recipe-cost-model.js';
 import { normalizeAllergens, normalizeMayContain, isDeclared } from '../allergen-model.js';
@@ -240,7 +241,8 @@ export function blockingIngredients(recipes, tables = {}) {
     for (const id of undeclaredIdsIn(recipe, tables, 1, new Set())) {
       if (!counts.has(id)) {
         const ingredient = lookup(tables.ingredients, id);
-        counts.set(id, { id, name: (ingredient && ingredient.name) || t('cat.unknownIngredient'), recipes: new Set() });
+        counts.set(id, { id, // a SCREEN list (what to go and declare), so the name to show; the printed label keeps `name`
+        name: (ingredient && ingredientDisplayName(ingredient)) || t('cat.unknownIngredient'), recipes: new Set() });
       }
       counts.get(id).recipes.add(recipe.id);
     }
