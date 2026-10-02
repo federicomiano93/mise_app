@@ -617,6 +617,26 @@ test('D: Cartone → Singola says it replaced «cartone»; an unchanged unit, a 
   assert.deepEqual((await none.save()).meta, { unitChangedFrom: 'cassetta' });
 });
 
+test('5th review F3: the case ordered with NO unit, turned into a Singola, freezes the open line in the carton word', async () => {
+  // the one 'pack' case in production: unit '', a case of 4 bags priced 20
+  const sugar = {
+    ...BASE, unit: '', packUnit: 'busta', weight: '2.5kg',
+    priceUnit: 'kg', pricePerUnit: 2, casePrice: 20, caseCount: 4, caseItemSize: 2.5, caseItemUnit: 'pack',
+  };
+  const card = openCard({ item: sugar });
+  assert.equal(isCarton(card), true, 'a manager sees the stored case as a Cartone');
+  click(card.single);
+  const { payload, meta } = await card.save();
+  assert.equal(payload.unit, '', 'the unit stays empty');
+  assert.deepEqual(meta, { unitChangedFrom: 'cartone' }, '«2» meant two cases: it stays two cases');
+  // and the same case turned into a Cartone the person names keeps «2» as two cases: nothing frozen
+  const toCarton = openCard({ item: sugar });
+  choose(toCarton.inner, 'sacco');
+  const saved = await toCarton.save();
+  assert.equal(saved.payload.unit, 'cartone');
+  assert.equal(saved.meta, undefined);
+});
+
 // ── The word for ONE item inside is required like the count, when the carton is being written ──
 
 test('a carton being written with no inner word is refused on the inner menu: block, focus, highlight', async () => {
@@ -754,29 +774,48 @@ test('review 3 (employee): Cartone → Singola leaves the case alone, and the li
   assert.equal(packPrice({ packKg: {} }, pieces, false), null);
 });
 
-// ⚠️ REDUCED SCOPE (2 Oct 2026): what is stored after an employee turned a 'pack' carton of 4 into a Singola (unit
-// = «busta», no packCount) is a 'pack' case ordered by a package word — one of the shapes that keeps the card of
-// before (usesLegacyCard). The two tests that used to drive «Ricalcola» / a typed price on it through the NEW card
-// now pin that the card of before opens for it and an untouched save writes the stored price back verbatim; that
-// card's own behaviour is driven in legacy-card.test.mjs.
-const opensLegacyCard = (card) => card.single === undefined && card.carton === undefined
-  && card.all().some(n => n.classList.contains('mgmt-field-label') && n.textContent === 'Order unit');
-
-test('review 3 (manager after an employee): a Singola made by an employee over a case of 4 opens the card of before, and saves verbatim', async () => {
+test('review 3 (manager after an employee): the card reopens as a Singola, says the format changed, and Ricalcola converts it to per-item', async () => {
+  // what is stored after an employee turned a 'pack' carton of 4 into a Singola (unit = «busta», no packCount)
   const stored = { ...PACK_CASE, packCount: null, unit: 'busta' };
   const card = openCard({ item: stored });
-  assert.equal(opensLegacyCard(card), true, 'the card of before, with «Order unit» and no Single / Case buttons');
+  assert.equal(isCarton(card), false, 'a Singola, not a carton read back from the case');
+  assert.ok(card.notes().some(n => /^The format has changed since the last price: saved 4 × 2\.5 kg/.test(n)), card.notes().join(' | '));
+  assert.equal(shown(card.recompute), true);
+  // untouched: the stored price verbatim (nothing guessed on the manager's behalf)
   const untouched = await card.save();
   for (const key of PRICE_KEYS) assert.equal(untouched.payload[key] ?? null, stored[key] ?? null, key);
   assert.equal(untouched.record, null);
-  assert.equal('packCount' in untouched.payload, false);
-  assert.equal(untouched.meta, undefined, 'no unit change is reported');
+  // Ricalcola: the same price per item carried to a single (2 a kilo × 2.5 kg = 5), stored per item
+  const recalc = openCard({ item: stored });
+  click(recalc.recompute);
+  assert.equal(recalc.casePrice.value, '5');
+  const { payload, record } = await recalc.save();
+  assert.deepEqual([payload.priceUnit, payload.pricePerUnit, payload.unitWeightKg, payload.caseCount], ['pcs', 5, 2.5, null]);
+  assert.equal(record, null, 'a representation change with the same money: no history entry (3rd review)');
+  const ing = asStored(stored, payload);
+  assert.equal(unitCost(ing, ing), 5, 'now Orders prices one bag');
+  assert.equal(packPrice({ packKg: {} }, ing, false), 5);
+  assert.equal(PM.pricePerKg(ing), 2);
 });
 
-test('review 3 (manager after an employee): the same shape with a package word typed as the order unit still opens the card of before', () => {
-  for (const unit of ['busta', 'sacco', 'kg', 'pz']) {
+test('review 3 (manager after an employee): a typed price converts it too', async () => {
+  const card = openCard({ item: { ...PACK_CASE, packCount: null, unit: 'busta' } });
+  type(card.casePrice, '5');
+  const { payload } = await card.save();
+  assert.deepEqual([payload.priceUnit, payload.pricePerUnit, payload.unitWeightKg, payload.caseCount], ['pcs', 5, 2.5, null]);
+  const ing = asStored(PACK_CASE, payload);
+  assert.equal(unitCost(ing, ing), 5);
+});
+
+// ⚠️ 5th review: ONLY a case ordered by its OWN package word («busta» / «busta») stays on the new card. The same 'pack'
+// case ordered by weight, by the piece or by another package word is still an old shape: the card of before opens.
+const opensLegacyCard = (card) => card.single === undefined && card.carton === undefined
+  && card.all().some(n => n.classList.contains('mgmt-field-label') && n.textContent === 'Order unit');
+test('review 3 (manager after an employee): the same case ordered by weight, the piece or another package word opens the card of before', () => {
+  for (const unit of ['sacco', 'kg', 'pz']) {
     assert.equal(opensLegacyCard(openCard({ item: { ...PACK_CASE, packCount: null, unit } })), true, unit);
   }
+  assert.equal(opensLegacyCard(openCard({ item: { ...PACK_CASE, packCount: null, unit: 'busta' } })), false, 'its own package word: the new card');
 });
 
 test('review 4 (3rd: history): a corrected weight on a per-item price moves the piece weight, not the price — and the history says so', async () => {
@@ -910,15 +949,13 @@ test('3rd review 2: Cartone ↔ Singola is a change the open-card snapshot sees,
 
 // ── 5: Ricalcola over a 10/3 case keeps six decimals ─────────────────────────
 
-// ⚠️ REDUCED SCOPE (2 Oct 2026): an employee-made Singola over a case of 3 at 10 is a case of PIECES with no
-// packCount, so the card of before opens for it; «Ricalcola» (the new card's) is not there to be tapped. What is
-// still pinned is that the six-decimal rate survives an untouched save of that card, with no history entry.
-test('3rd review 5: an employee-made Singola over a case of 3 at 10 opens the card of before and keeps 3.333333 verbatim, no history entry', async () => {
+test('3rd review 5: Ricalcola on an employee-made Singola over a case of 3 at 10 keeps 3.333333 and plants no history entry', async () => {
   const stored = { ...BASE, unit: 'busta', packUnit: 'busta', weight: '1kg', priceUnit: 'pcs', pricePerUnit: 3.333333,
     casePrice: 10, caseCount: 3, caseItemUnit: 'pcs', unitWeightKg: 1 };
   const card = openCard({ item: stored });
-  assert.equal(opensLegacyCard(card), true);
+  assert.equal(isCarton(card), false);
+  click(card.recompute);
   const { payload, record } = await card.save();
-  assert.deepEqual([payload.priceUnit, payload.pricePerUnit, payload.unitWeightKg, payload.caseCount, payload.casePrice], ['pcs', 3.333333, 1, 3, 10]);
+  assert.deepEqual([payload.priceUnit, payload.pricePerUnit, payload.unitWeightKg, payload.caseCount], ['pcs', 3.333333, 1, null]);
   assert.equal(record, null, 'the same money');
 });

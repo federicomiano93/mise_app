@@ -52,7 +52,7 @@ const G_CASE = { ...BASE, unit: 'kg', weight: '500g', priceUnit: 'kg', pricePerU
 const ML_CASE = { ...BASE, unit: 'l', weight: '', priceUnit: 'l', pricePerUnit: 4, casePrice: 12, caseCount: 6, caseItemSize: 500, caseItemUnit: 'ml' };
 const PIECES = { ...BASE, unit: 'cartone', packUnit: 'pezzo', weight: '', priceUnit: 'pcs', pricePerUnit: 0.4, casePrice: 20, caseCount: 50, caseItemUnit: 'pcs', unitWeightKg: 0.06, vatRate: 22 };
 const PACK_BY_KG = { ...PACK, unit: 'kg' };
-const PACK_BY_BUSTA = { ...PACK, unit: 'busta' };
+const PACK_BY_OTHER_WORD = { ...PACK, unit: 'sacco' };
 const PACK_BY_PIECE = { ...PACK, unit: 'pz' };
 const MULTIPLIER = { ...BASE, unit: 'sacco', weight: '6x1kg', priceUnit: 'kg', pricePerUnit: 2, vatRate: 4 };
 const WORD_WEIGHT = { ...BASE, unit: 'sacco', weight: 'sacco', priceUnit: 'pcs', pricePerUnit: 2 };
@@ -64,7 +64,7 @@ const LEGACY_SHAPES = {
   'a case by an explicit size (ml)': ML_CASE,
   'a case of pieces with no packCount': PIECES,
   'a pack case ordered by weight': PACK_BY_KG,
-  'a pack case ordered by the package word': PACK_BY_BUSTA,
+  'a pack case ordered by another package word (not its own)': PACK_BY_OTHER_WORD,
   'a pack case ordered by the piece': PACK_BY_PIECE,
   'a rate on a multiplier weight («6x1kg»)': MULTIPLIER,
   'a rate on a word («sacco»)': WORD_WEIGHT,
@@ -79,13 +79,16 @@ const NEW_SHAPES = {
   'eggs: a per-piece price with its own piece weight': { ...BASE, weight: '360g', priceUnit: 'pcs', pricePerUnit: 0.25, unitWeightKg: 0.06 },
   'a pack case ordered with no unit': { ...PACK, unit: '' },
   'a pack case ordered by the carton': PACK,
+  // ⚠️ 5th review: what an employee leaves after turning a new-card Cartone into a Singola stays on the NEW card
+  'a pack case ordered by its own package word («busta» / «busta»)': { ...PACK, unit: 'busta' },
+  'a case of pieces ordered by its own package word («pezzo» / «pezzo»)': { ...PIECES, unit: 'pezzo' },
   'a pack case ordered by any carton word': { ...PACK, unit: 'Cassa' },
   'a case of pieces WITH packCount': { ...PIECES, packCount: 50 },
   'an explicit-size case WITH packCount': { ...KG_CASE, packCount: 4 },
   'a weight that does not read and no price': { ...BASE, weight: '6x1kg' },
 };
 
-const ORDER_UNITS = ['cartone', 'kg', 'l', 'pz'];
+const ORDER_UNITS = ['busta', 'cartone', 'kg', 'l', 'pz'];
 const PACKS = ['barattolo', 'bottiglia', 'busta', 'pezzo', 'sacco', 'scatola', 'vaschetta'];
 const CATEGORIES = ['Panetteria', 'Pasticceria', 'Vendita'];
 
@@ -149,6 +152,9 @@ const PRICE_KEYS = ['priceUnit', 'pricePerUnit', 'casePrice', 'caseCount', 'case
 test('the card the form opens agrees with the gate (usesLegacyCard) for every shape', () => {
   for (const [name, item] of Object.entries(LEGACY_SHAPES)) assert.equal(usesLegacyCard(item), true, name);
   for (const [name, item] of Object.entries(NEW_SHAPES)) assert.equal(usesLegacyCard(item), false, name);
+  // the pair that decides it: the SAME 'pack' case, ordered by its own package word vs by weight
+  assert.equal(usesLegacyCard({ ...PACK, unit: 'busta' }), false);
+  assert.equal(usesLegacyCard({ ...PACK, unit: 'kg' }), true);
 });
 
 test('each old price shape opens the card of before: «Unità d\'ordine», «Come si acquista» with «A cartone», no Singola / Cartone', () => {
@@ -167,7 +173,7 @@ test('a stored case reopens in case mode with the values as typed; a typed rate 
   const kg = openCard({ item: KG_CASE });
   assert.equal(kg.howBought.value, 'case');
   assert.deepEqual([kg.casePrice.value, kg.caseCount.value, kg.caseSize.value, kg.caseUnit.value], ['20', '4', '2.5', 'kg']);
-  const pack = openCard({ item: PACK_BY_BUSTA });
+  const pack = openCard({ item: PACK_BY_OTHER_WORD });
   assert.equal(pack.caseUnit.value, 'pack', 'a case of packages');
   assert.equal(shown(pack.caseSize), false, '«busta da 2,5 kg» has no size box: the size is the weight');
   const pieces = openCard({ item: PIECES });
@@ -257,7 +263,7 @@ test('the history keeps its rule: a rate retyped to the same money plants nothin
 });
 
 test('a case of packages with no readable weight is refused on the weight box, in the card of before\'s words', async () => {
-  const card = openCard({ item: PACK_BY_BUSTA });
+  const card = openCard({ item: PACK_BY_OTHER_WORD });
   type(card.weightAmount, '');
   assert.equal(await card.save(), undefined, 'nothing was written');
   assert.ok(card.weightAmount.focused > 0, 'jumped to the weight box');
@@ -267,7 +273,7 @@ test('a case of packages with no readable weight is refused on the weight box, i
 });
 
 test('a weight edited since a «busta da 2,5 kg» case was saved is said in the card of before\'s line, and the price follows on save', async () => {
-  const card = openCard({ item: PACK_BY_BUSTA });
+  const card = openCard({ item: PACK_BY_OTHER_WORD });
   assert.equal(card.notes().some(n => /package weight has changed/.test(n)), false);
   type(card.weightAmount, '3');
   assert.deepEqual(card.notes().filter(n => /changed/.test(n)), ['The package weight has changed: the price updates when you save']);
@@ -278,7 +284,7 @@ test('a weight edited since a «busta da 2,5 kg» case was saved is said in the 
 });
 
 test('the live line says the rate and the case price, in the card of before\'s wording; a piece case says «each»', () => {
-  assert.ok(/= .*2\.00 \/ kg · .*20\.00 per case/.test(openCard({ item: PACK_BY_BUSTA }).summary()));
+  assert.ok(/= .*2\.00 \/ kg · .*20\.00 per case/.test(openCard({ item: PACK_BY_OTHER_WORD }).summary()));
   assert.ok(/= .*0\.40 each · .*20\.00 per case/.test(openCard({ item: PIECES }).summary()), openCard({ item: PIECES }).summary());
 });
 
@@ -300,7 +306,9 @@ test('«Unità d\'ordine» is a menu with «+ New unit…»: an empty new box is
 
 test('the order unit and the package word feed the VAT line: «20 per case of 4» is 20 by the case, 5 by the bag', () => {
   const vatLine = (card) => card.all().filter(n => n.classList.contains('mgmt-price-vat-summary')).map(n => n.textContent).join('');
-  const card = openCard({ item: PACK_BY_BUSTA });
+  // stored ordered by «sacco» (not its own package word, so the card of before): the order unit is then moved live
+  const card = openCard({ item: PACK_BY_OTHER_WORD });
+  choose(card.orderUnit, 'busta');
   assert.equal(vatLine(card), '€5.00 without VAT, €5.20 with VAT at 4%', 'ordered by the bag (busta)');
   choose(card.orderUnit, 'cartone');
   assert.equal(vatLine(card), '€20.00 without VAT, €20.80 with VAT at 4%', 'ordered by the case');
@@ -319,7 +327,7 @@ test('changing the order unit is a change the open-card snapshot sees (P20)', ()
 test('the words of the card of before are the old ones, in Italian too', () => {
   setLanguage('it');
   try {
-    const card = openCard({ item: PACK_BY_BUSTA });
+    const card = openCard({ item: PACK_BY_OTHER_WORD });
     assert.ok(card.orderUnit, '«Unità d’ordine»');
     assert.equal(card.howBought.options.at(-1).textContent, 'A cartone');
     assert.ok(card.all().some(n => n.attributes['aria-label'] === 'Misura di ciascuno'));
