@@ -183,19 +183,57 @@ test('an ordinary line keeps exactly {qty, stock} — the key appears only when 
     { yeast: { qty: 2, stock: 1 } });
 });
 
-// ── «Da riordinare»: resolving is what keeps the line from coming back ────────
+// ── «Da riordinare»: the line leaves when an order really names it ────────────
+
+test('a stored leftover override with no quantity is cleared by the next write (stock only)', () => {
+  const known = { L: { qty: undefined, stock: 2, supplierId: 'X' } };
+  assert.deepEqual(changedEntries({ L: { qty: 5, stock: 2, supplierId: '' } }, known),
+    { L: { qty: 5, stock: 2, supplierId: '' } });
+});
+
+test('«put back» over a stored {qty: 0, unit, supplierId} clears the override', () => {
+  const known = { L: { qty: 0, stock: 0, unit: 'busta', supplierId: 'X' } };
+  assert.deepEqual(changedEntries({ L: { qty: 5, stock: 0, unit: 'busta', supplierId: '' } }, known),
+    { L: { qty: 5, stock: 0, unit: 'busta', supplierId: '' } });
+  assert.deepEqual(changedEntries({ L: { qty: 0, stock: 0, unit: 'busta', supplierId: 'X' } }, known),
+    { L: { qty: 0, stock: 0, unit: 'busta', supplierId: '' } }, 'even with nothing else changed');
+});
+
+test('a supplier whose rows are all ordered elsewhere draws a 0% bar, never NaN%', () => {
+  assert.match(read('js/orders/ingredients.js'), /total \? Math\.round\(\(filled \/ total\) \* 100\) : 0/);
+});
+
+test('placing an order clears by the lens as it is NOW', () => {
+  const main = read('js/orders/orders-main.js');
+  assert.match(main, /await clearSupplier\(supplierId, orderIngredients\(\)\);\s*setStatus\(t\('orders\.orderSavedToHistory'/);
+});
 
 const MISSED = [{
   id: '2026-09-29_aldo', date: '2026-09-29', supplierId: 'aldo', quantities: { flour: 5 },
   deliveredAt: '2026-09-30T08:00:00Z', missing: { flour: true },
 }];
 
-test('without the resolve mark the line comes back once the other order is sent and the draft cleared', () => {
-  assert.deepEqual(stillToReorder(MISSED, { flour: { qty: 5, supplierId: 'bruno' } }), [], 'in the draft: hidden');
-  assert.equal(stillToReorder(MISSED, {}).length, 1, 'the draft was cleared by placing the order: back again');
+test('moved to the other supplier: hidden while it sits in the draft', () => {
+  assert.deepEqual(stillToReorder(MISSED, { flour: { qty: 5, supplierId: 'bruno' } }), []);
 });
 
-test('with the resolve mark the line stays gone, in the draft and after it', () => {
+test('moved to the other supplier and that order never placed (draft cleared): back in the list', () => {
+  assert.equal(stillToReorder(MISSED, {}).length, 1);
+});
+
+test('moved to the other supplier and that order PLACED: gone for good', () => {
+  const placed = [...MISSED, { id: '2026-10-02_bruno', date: '2026-10-02', supplierId: 'bruno', quantities: { flour: 5 } }];
+  assert.deepEqual(stillToReorder(placed, {}), []);
+});
+
+test('a later order from the usual supplier still clears it, and one from before the miss does not', () => {
+  const later = [...MISSED, { id: '2026-10-01_aldo', date: '2026-10-01', supplierId: 'aldo', quantities: { flour: 2 } }];
+  assert.deepEqual(stillToReorder(later, {}), []);
+  const earlier = [...MISSED, { id: '2026-09-20_bruno', date: '2026-09-20', supplierId: 'bruno', quantities: { flour: 2 } }];
+  assert.equal(stillToReorder(earlier, {}).length, 1);
+});
+
+test('«Risolto» still keeps the line gone, in the draft and after it', () => {
   const resolved = [{ ...MISSED[0], missingResolved: { flour: '2026-10-02T09:00:00Z' } }];
   assert.deepEqual(stillToReorder(resolved, { flour: { qty: 5, supplierId: 'bruno' } }), []);
   assert.deepEqual(stillToReorder(resolved, {}), []);

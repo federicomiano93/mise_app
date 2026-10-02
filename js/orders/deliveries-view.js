@@ -437,7 +437,8 @@ function chooseOtherSupplier(item, name, opener, getCtx, lock) {
   const choices = otherSupplierChoices(item, ctx);
   const ing = ctx.ingredientsById?.[item.id];
   const usual = ctx.suppliersById?.[ing?.supplierId];
-  const usualName = (usual ? supplierLabel(usual) : '') || t('orders.noSupplier');
+  // An ingredient with no usual supplier has nobody for it to «stay with»: that sentence is left out.
+  const usualName = usual ? supplierLabel(usual) : '';
 
   const onKey = e => {
     if (e.key !== 'Escape' || e.defaultPrevented) return;
@@ -477,11 +478,7 @@ function chooseOtherSupplier(item, name, opener, getCtx, lock) {
         lock(false, { keepDisabled: true });
       } catch (err) {
         lock(false);
-        // The draft write landed and only the «resolved» mark did not: say exactly that,
-        // because «not saved» would be a lie — the line IS in the other supplier's order.
-        await alertDialog(err?.code === 'orders/not-resolved'
-          ? t('orders.reorder.otherNotResolved', { supplier: supplierLabel(supplier) })
-          : t('orders.deliveries.couldNotSave'));
+        await alertDialog(t('orders.deliveries.couldNotSave'));
       }
     },
   }, [
@@ -501,7 +498,9 @@ function chooseOtherSupplier(item, name, opener, getCtx, lock) {
       el('span', { class: 'app-header-slot' }),
     ]),
     el('div', { class: 'scroll-area' }, [
-      el('p', { class: 'missing-hint', text: t('orders.reorder.chooseHint', { name, supplier: usualName }) }),
+      el('p', { class: 'missing-hint', text: usualName
+        ? t('orders.reorder.chooseHint', { name, supplier: usualName })
+        : t('orders.reorder.chooseHintNoUsual', { name }) }),
       ...(rows.length ? rows : [el('p', { class: 'ing-empty', text: t('orders.reorder.chooseEmpty') })]),
     ]),
   ]);

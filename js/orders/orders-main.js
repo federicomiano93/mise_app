@@ -850,13 +850,10 @@ function renderIncoming() {
     },
     // «Ordina da un altro fornitore»: this line, THIS ORDER ONLY, goes to ANOTHER supplier.
     // The ingredient keeps its usual supplier; the line carries the override
-    // (line-supplier.js), and the missing line is marked resolved so that, once that order
-    // is sent and the draft cleared, it does not come back on this list.
-    //
-    // ⚠️ ONE DRAFT WRITE, THEN THE RESOLVE — never the other way round. If the draft write
-    // fails the local change is put back and nothing else happens; if only the resolve
-    // fails the line IS in the other supplier's order, which the thrown code tells the
-    // screen, so it can say exactly that instead of «not saved».
+    // (line-supplier.js). ⚠️ NOTHING IS MARKED RESOLVED: if that order is never placed the
+    // line must stay on this list. stillToReorder drops it while it sits in the draft, and for
+    // good once ANY supplier's later order names the ingredient. If the draft write fails the
+    // local change is put back.
     onOtherSupplier: async (line, supplierId) => {
       const { id, qty, unit } = line;
       const hadEntry = Object.prototype.hasOwnProperty.call(state.entries, id);
@@ -877,14 +874,6 @@ function renderIncoming() {
       }
       syncInputsFromState();
       render();
-      try {
-        await resolveMissing(line.recordId, id);
-      } catch (err) {
-        const partial = new Error('orders/not-resolved');
-        partial.code = 'orders/not-resolved';
-        partial.cause = err;
-        throw partial;
-      }
     },
     // «Risolto»: one merge write on the record the line was missed on. No local state is
     // touched — the history snapshot that carries the mark redraws the banner and the list.
@@ -1691,7 +1680,10 @@ async function placeOrder(supplierId, { confirm = true, date: pinnedDate, quanti
   renderReminders();
 
   try {
-    await clearSupplier(supplierId, ingredients);
+    // ⚠️ THE LENS AS IT IS NOW, not the list taken before the confirmation screen opened: a line
+    // another phone moved to a different supplier meanwhile is that supplier's, and clearing by
+    // the old list would wipe its entry.
+    await clearSupplier(supplierId, orderIngredients());
     setStatus(t('orders.orderSavedToHistory', { names: supplierLabel(supplier) }), 'ok', 5000);
   } catch (err) {
     console.error('Clearing the draft after archiving failed:', err);

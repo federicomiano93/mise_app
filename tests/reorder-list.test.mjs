@@ -270,7 +270,7 @@ test('every new string exists in English and Italian, and the screen is wired to
   const dict = _dictionaries();
   for (const key of ['screenTitle', 'empty', 'rowMeta', 'putBackIn', 'putBackInAria', 'resolved',
     'resolvedAria', 'resolveTitle', 'resolveMessage', 'buttonAria', 'otherSupplier', 'otherSupplierAria',
-    'chooseTitle', 'chooseHint', 'chooseAria', 'chooseEmpty', 'otherNotResolved']) {
+    'chooseTitle', 'chooseHint', 'chooseHintNoUsual', 'chooseAria', 'chooseEmpty']) {
     for (const lang of ['en', 'it']) {
       assert.ok(dict[lang][`orders.reorder.${key}`], `${lang} is missing orders.reorder.${key}`);
     }
@@ -614,20 +614,15 @@ test('a failed draft write says «Not saved» and the card is usable again', asy
   } finally { closeList(); }
 });
 
-test('when only the «resolved» mark failed it says the line IS in the other order, not «not saved»', async () => {
-  const { ctx } = chooserCtx({
-    onOtherSupplier: async () => { const e = new Error('x'); e.code = 'orders/not-resolved'; throw e; },
-  });
+test('an ingredient with no usual supplier gets a hint WITHOUT the «stays with» sentence', async () => {
+  const { ctx } = chooserCtx();
   openList(ctx);
   try {
-    await otherButton(cards()[0]).click();
-    const pending = choiceRows()[0].click();
-    await tick();
-    const said = dialogButton('app-dialog-backdrop').textContent;
-    assert.match(said, /It is now in Aldo’s order, but it could not be taken off this list/);
-    assert.doesNotMatch(said, /Not saved/);
-    await dialogButton('app-dialog-btn-solid').click();
-    await pending;
+    await otherButton(cards()[1]).click();           // yeast: no live usual supplier
+    const said = chooser().textContent;
+    assert.match(said, /Yeast goes in the order of the supplier you choose, for this order only\./);
+    assert.doesNotMatch(said, /stays with|No supplier/);
+    chooserBack().listeners.click[0]();
   } finally { closeList(); }
 });
 
@@ -660,12 +655,13 @@ test('the card is three full-width stacked buttons in the order put back, anothe
   assert.match(css, /\.reorder-card \{\s*display: flex;\s*flex-direction: column;/);
 });
 
-test('the draft is written BEFORE the missing line is resolved, and a failed write is undone', () => {
+test('moving a line writes the draft only — nothing is marked resolved — and a failed write is undone', () => {
   const main = readFileSync(new URL('../js/orders/orders-main.js', import.meta.url), 'utf8');
   const fn = main.slice(main.indexOf('onOtherSupplier: async'), main.indexOf('onResolve: async'));
-  assert.ok(fn.indexOf('await saveDraftNow(state.entries, state.days)') < fn.indexOf('await resolveMissing(line.recordId, id)'));
+  assert.match(fn, /await saveDraftNow\(state\.entries, state\.days\)/);
+  assert.doesNotMatch(fn, /resolveMissing/);
+  assert.doesNotMatch(readFileSync(new URL('../js/i18n.js', import.meta.url), 'utf8'), /otherNotResolved/);
   assert.match(fn, /supplierId,\s*\};/, 'the line carries the override');
   assert.match(fn, /state\.days\[supplierId\] = todayISO\(\);/);
   assert.match(fn, /catch \(err\) \{\s*if \(hadEntry\) state\.entries\[id\] = previousEntry; else delete state\.entries\[id\];/);
-  assert.match(fn, /partial\.code = 'orders\/not-resolved'/);
 });

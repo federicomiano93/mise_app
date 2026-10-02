@@ -1,4 +1,4 @@
-const CACHE_NAME = 'theitalianclub-v510';
+const CACHE_NAME = 'theitalianclub-v511';
 // Firebase SDK modules (loaded from gstatic) are cached SEPARATELY from CACHE_NAME
 // so they survive the cache-version bump that happens on every deploy — otherwise
 // the offline SDK would be wiped each release until the next online load. The name
@@ -479,7 +479,7 @@ const ASSET_HASHES = {
   "./js/location.js": '6aaf53615a8739d1',
   "./js/sections.js": 'abcfdecb2bd5766d',
   "./js/roles.js": '2b491770c4b6165b',
-  "./js/i18n.js": '6c7169e5fcd20280',
+  "./js/i18n.js": '076642953dafe90b',
   "./js/i18n-dom.js": 'a6d32c5bb1b56674',
   "./js/join-code.js": '5b89de65db5c102f',
   "./js/join-link.js": 'a90ea53c7ba51614',
@@ -527,20 +527,20 @@ const ASSET_HASHES = {
   "./js/orders/category-batches.js": '03d72f63c4fa4a8a',
   "./js/orders/confirm-dialog.js": '61a7f580f37c5ff8',
   "./js/orders/firebase-orders.js": '062295db38560c0e',
-  "./js/orders/orders-main.js": 'ff90b2b297e20597',
+  "./js/orders/orders-main.js": '69294a4a690e33d8',
   "./js/orders/dom.js": '7ec966d71c5356cd',
   "./js/orders/day.js": '8e00beadcda80dd1',
-  "./js/orders/deliveries.js": '70958a0880dc157a',
-  "./js/orders/deliveries-view.js": 'f35e99dc6eac432f',
+  "./js/orders/deliveries.js": '29471cfe5dd2dd48',
+  "./js/orders/deliveries-view.js": 'cdce7b5d2dac2ea6',
   "./js/orders/send-routes.js": '88562d53be92460e',
   "./js/orders/send-chooser.js": '9230aca2f6724221',
   "./js/orders/work-week.js": '0ad139be5b53ea69',
-  "./js/orders/archive.js": 'e5d6c9f4eadc11d5',
+  "./js/orders/archive.js": '33052de28b601e0d',
   "./js/orders/history-window.js": 'f080bfc32d981c5a',
   "./js/orders/reminders.js": 'e9c255f18abea237',
   "./js/orders/reminder-view.js": '12eb553c1f553522',
   "./js/orders/suppliers.js": '4affc6816abb4b3a',
-  "./js/orders/ingredients.js": 'ab8b71b68d9f0b6a',
+  "./js/orders/ingredients.js": '37abfb0152f8a1a3',
   "./js/orders/no-supplier.js": '185050fd12a0a2b0',
   "./js/orders/line-supplier.js": '3d9d21bdc79b2955',
   "./js/orders/ingredient-search.js": '3998cd3f18e0144e',

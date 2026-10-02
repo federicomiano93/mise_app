@@ -83,7 +83,7 @@ export function buildIngredientList(supplier, ingredients, suggest, entries, hoo
   const filled = countFilled(ingredients, entries);
 
   const fill = el('div', { class: 'progress-fill', id: `progress-fill-${supplier.id}`,
-    style: { width: `${Math.round((filled / total) * 100)}%` } });
+    style: { width: `${total ? Math.round((filled / total) * 100) : 0}%` } });
   // The bar stays (a quick "how full is this order" cue); the "X of Y filled" text
   // was removed — the bar already says it.
   const progress = el('div', { class: 'progress' }, [
