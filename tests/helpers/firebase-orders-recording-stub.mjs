@@ -16,5 +16,7 @@ export async function clearFields(name, id, paths, patch = {}) {
 }
 export async function transactDoc(name, id, updater) { calls.transactDoc.push({ name, id, updater }); return null; }
 export function watchDoc() { return () => {}; }
+// draft.js reads the draft once in some paths (PR #254's freezeUnitInDraft): nothing stored here.
+export async function getDocOnce() { return null; }
 export async function replaceDoc() {}
 export async function removeDoc() {}

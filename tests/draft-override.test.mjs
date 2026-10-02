@@ -1,5 +1,5 @@
 // The draft WRITER and the per-line supplier override (js/orders/line-supplier.js). draft.js runs
-// for real here; only its data layer is replaced by tests/helpers/firebase-orders-stub.mjs, which
+// for real here; only its data layer is replaced by tests/helpers/firebase-orders-recording-stub.mjs, which
 // records every write. What must hold: the override is written with the line, and EVERY path
 // that takes the quantity away takes the key away in the same write.
 
