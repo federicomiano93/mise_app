@@ -83,9 +83,11 @@ const CASE_UNITS = new Set([
 // carton of 4 cost 5, not 20). So: the cost of ONE item (case price ÷ what that case held, or the
 // per-piece rate, or a per-kilo rate × one item's weight) × the items in ONE ORDERED UNIT (packCount
 // when ordered in the carton word, 1 when ordered in the package word).
-// ⚠️ AN ITEM WITH NO packCount NEVER COMES HERE: legacyUnitCost() below is the old function, byte for
-// byte, and tests/readers-regression-grid.test.mjs runs a frozen copy of it against this over every
-// stored shape. A weight that is unreadable or a multiplier («6x1kg», «sacco») also keeps today's
+// ⚠️ AN ITEM WITH NO packCount NEVER COMES HERE: legacyUnitCost() below is the old function, and
+// tests/readers-regression-grid.test.mjs runs a frozen copy of it against this over every stored
+// shape. Exactly TWO shapes read differently from before (2nd review, 1 Oct 2026), both named in the
+// grid: the package word on a case of PIECES (one item — what «Singola after Cartone» leaves behind),
+// and a weight word on a per-piece price that remembers one piece's weight. A weight that is unreadable or a multiplier («6x1kg», «sacco») also keeps today's
 // whole-unit reading and is NOT multiplied by packCount — that was the ×6-twice defect.
 
 // A packCount as the rules store it: a whole number ≥ 1. Anything else (a string, 0, 2.5) is none.
@@ -129,6 +131,13 @@ export function unitCost(ingredient, price) {
   return each === null ? legacyUnitCost(ingredient, price) : each * items;
 }
 
+// A per-piece price read by WEIGHT: what one kilo costs is the piece's price ÷ one piece's weight, so a
+// line of `kilos` kilos costs that × kilos. null while nobody said what a piece weighs.
+function viaPieceWeight(price, rate, kilos) {
+  const pieceKg = positiveNumber(price.unitWeightKg);
+  return pieceKg === null ? null : (rate / pieceKg) * kilos;
+}
+
 function legacyUnitCost(ingredient, price) {
   if (!price || !isPriceUnit(price.priceUnit)) return null;
   const rate = positiveNumber(price.pricePerUnit);
@@ -140,15 +149,16 @@ function legacyUnitCost(ingredient, price) {
   const wholeCase = storedCaseOf(price);
   if (wholeCase) {
     if (byWeight) {
-      return price.priceUnit === 'pcs' ? null : rate * WEIGHT_UNITS[orderUnit];
+      return price.priceUnit === 'pcs' ? viaPieceWeight(price, rate, WEIGHT_UNITS[orderUnit]) : rate * WEIGHT_UNITS[orderUnit];
     }
-    // ⚠️ THE PACKAGE WORD MEANS «ONE ITEM» ONLY FOR A CASE OF PACKAGES ('pack'), and it is asked
-    // BEFORE the case words: a package declared «scatola» and ordered by «scatola» is one package,
-    // not the case. On any other case it means nothing — eggs sold in a «vaschetta» of 360 g,
-    // ordered by «vaschetta» from a case of 60 pieces at 12, are NOT 0.20 each (a tray is not
-    // one egg): they fall through to the rules below and, being no piece/case word, are null.
+    // ⚠️ THE PACKAGE WORD MEANS «ONE ITEM» for a case of PACKAGES ('pack') and — since the 2nd review of
+    // 1 Oct 2026 — for a case of PIECES too, and it is asked BEFORE the case words: a package
+    // declared «scatola» and ordered by «scatola» is one package, not the case. The pieces case is
+    // what a Singola leaves behind when an employee (no price section) turns a Cartone into one: its
+    // unit becomes the package word, and one of those is casePrice ÷ caseCount. (Before, such a line
+    // had no price at all.) An explicit-size case (4 × 2.5 kg) still says nothing.
     const packWord = String((ingredient && ingredient.packUnit) || '').trim().toLowerCase().replace(/\.$/, '');
-    const isPackCase = wholeCase.caseItemUnit === 'pack';
+    const isPackCase = wholeCase.caseItemUnit === 'pack' || wholeCase.caseItemUnit === 'pcs';
     if (PIECE_UNITS.has(orderUnit) || (isPackCase && packWord !== '' && orderUnit === packWord)) {
       return wholeCase.casePrice / wholeCase.caseCount;
     }
@@ -163,7 +173,8 @@ function legacyUnitCost(ingredient, price) {
   const packText = String((ingredient && ingredient.weight) || '');
 
   if (price.priceUnit === 'pcs') {
-    if (byWeight || MULTIPLIER.test(packText)) return null;
+    if (byWeight) return viaPieceWeight(price, rate, WEIGHT_UNITS[orderUnit]);
+    if (MULTIPLIER.test(packText)) return null;
     return rate;
   }
 

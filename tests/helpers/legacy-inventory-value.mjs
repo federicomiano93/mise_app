@@ -18,7 +18,7 @@
 // are. No number is ever invented. A guessed pack weight would not look wrong on
 // the screen; it would just make the month's cost wrong.
 
-import { pricePerKg, formatMoney, roundTo, storedCaseOf } from '../../js/price-model.js';
+import { pricePerKg, formatMoney, roundTo, storedCaseOf } from './legacy-price-model.mjs';
 // ⚠️ THE SAME unitCost() ORDERS USES, for a product priced per case: the stocktake counts in the
 // ORDER unit, so what one counted unit costs must be decided by the one function that already
 // reads that unit — two copies of the rule could only ever disagree.
@@ -28,7 +28,7 @@ import { unitCost } from './legacy-order-cost.mjs';
 // shared by more than one feature belongs in js/ root (CLAUDE.md "Modular by
 // feature"), not inside this one's folder. Re-exported so every EXISTING
 // import of parsePackSize from this file keeps working.
-import { parsePackSize } from '../../js/pack-size.js';
+import { parsePackSize } from './legacy-pack-size.mjs';
 
 export { parsePackSize };
 

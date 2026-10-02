@@ -58,39 +58,97 @@ function* shapes() {
 
 const same = (a, b) => Object.is(a, b) || (typeof a === 'number' && typeof b === 'number' && a === b);
 
+// ⚠️ EXACTLY TWO SHAPES READ DIFFERENTLY FROM MAIN (2nd review, 1 Oct 2026), and each goes from null to a
+// number — never from a number to another number, never the other way. Both are asserted here by hand-made
+// expectations; every other shape must be identical.
+const norm = (v) => String(v || '').trim().toLowerCase().replace(/\.$/, '');
+const WEIGHT_WORDS = ['kg', 'g', 'l', 'ml'];   // the weight words the grid uses (js/order-cost.js knows more)
+const PIECE_WORDS = ['pz', 'pezzo'];
+// A. THE PACKAGE WORD ON A CASE OF PIECES is ONE item: what a Singola leaves behind after an employee turns a
+//    Cartone into one. unit = packUnit, a pcs case of several, no weight or piece word.
+const shapeA = (ing) => {
+  const c = ing.caseItemUnit === 'pcs' && ing.casePrice > 0 && ing.caseCount > 1;
+  const word = norm(ing.unit);
+  return Boolean(c) && word !== '' && word === norm(ing.packUnit)
+    && !WEIGHT_WORDS.includes(word) && !PIECE_WORDS.includes(word);
+};
+// B. A WEIGHT WORD ON A PER-PIECE PRICE THAT REMEMBERS ONE PIECE'S WEIGHT: kilos × (rate ÷ piece weight).
+const shapeB = (ing) => ing.priceUnit === 'pcs' && ing.unitWeightKg > 0 && ing.pricePerUnit > 0 && WEIGHT_WORDS.includes(norm(ing.unit));
+const expectedA = (ing) => ing.casePrice / ing.caseCount;
+const expectedB = (ing) => ({ kg: 1, l: 1, g: 0.001, ml: 0.001 })[norm(ing.unit)] * (ing.pricePerUnit / ing.unitWeightKg);
+const near = (a, b) => typeof a === 'number' && Math.abs(a - b) < 1e-9;
+const hasCase = (ing) => ing.caseItemUnit !== undefined && ing.casePrice > 0;
+
 test('the grid is big enough to mean something', () => {
   let n = 0;
   for (const _ of shapes()) n += 1;
   assert.ok(n > 90000, `${n} shapes`);
 });
 
-test('unitCost and lineUnitCost give EXACTLY the old numbers for every item with no packCount', () => {
+test('unitCost and lineUnitCost give EXACTLY the old numbers for every item with no packCount, but for the two named shapes', () => {
   const bad = [];
+  const changed = { A: 0, B: 0 };
   for (const { name, ing } of shapes()) {
-    if (!same(unitCost(ing, ing), old.unitCost(ing, ing))) bad.push(`unitCost ${name} ${JSON.stringify(ing)}`);
+    const now = unitCost(ing, ing);
+    const was = old.unitCost(ing, ing);
+    if (!same(now, was)) {
+      if (shapeA(ing) && was === null && near(now, expectedA(ing))) changed.A += 1;
+      else if (shapeB(ing) && was === null && near(now, expectedB(ing))) changed.B += 1;
+      else bad.push(`unitCost ${name} ${JSON.stringify(ing)}: ${was} -> ${now}`);
+    }
     for (const chosen of ['', ing.unit, ing.packUnit, 'cartone', 'busta', 'pz']) {
-      if (!same(lineUnitCost(ing, ing, chosen), old.lineUnitCost(ing, ing, chosen))) {
-        bad.push(`lineUnitCost(${chosen}) ${name} ${JSON.stringify(ing)}`);
-      }
+      const viaUnit = chosen === '' || norm(chosen) === norm(ing.unit);
+      const a = lineUnitCost(ing, ing, chosen);
+      const b = old.lineUnitCost(ing, ing, chosen);
+      if (same(a, b)) continue;
+      // a line in the card's own unit goes through unitCost: the same two shapes; any other unit is unchanged
+      if (viaUnit && ((shapeA(ing) && b === null && near(a, expectedA(ing))) || (shapeB(ing) && b === null && near(a, expectedB(ing))))) continue;
+      bad.push(`lineUnitCost(${chosen}) ${name} ${JSON.stringify(ing)}`);
     }
     if (bad.length > 5) break;
   }
   assert.deepEqual(bad, []);
+  assert.ok(changed.A > 0 && changed.B > 0, `both named shapes must actually occur in the grid: ${JSON.stringify(changed)}`);
 });
 
-test('the stocktake (packPrice, packKgFor, valueBlocker, casePackNote) gives EXACTLY the old numbers', () => {
+test('the two changed shapes, spelled out by hand', () => {
+  // A: «Singola after Cartone» — the package word on a pcs case of 4 at 20 is ONE item, 5 (was: no price)
+  const a = { unit: 'busta', packUnit: 'busta', weight: '2.5kg', priceUnit: 'pcs', pricePerUnit: 5, casePrice: 20, caseCount: 4, caseItemUnit: 'pcs', unitWeightKg: 2.5 };
+  assert.equal(old.unitCost(a, a), null);
+  assert.equal(unitCost(a, a), 5);
+  // ...but a word that is not the package word is still ambiguous, and an explicit-size case still says nothing
+  assert.equal(unitCost({ ...a, unit: 'vassoio' }, a), null);
+  const kgCase = { ...a, priceUnit: 'kg', pricePerUnit: 2, caseItemUnit: 'kg', caseItemSize: 2.5, unitWeightKg: undefined };
+  assert.equal(unitCost(kgCase, kgCase), null);
+  // B: a per-piece price with one piece's weight read by weight — 0.25 an egg of 60 g is 4.1667 a kilo (was: no price)
+  const egg = { unit: 'kg', packUnit: '', weight: '', priceUnit: 'pcs', pricePerUnit: 0.25, unitWeightKg: 0.06 };
+  assert.equal(old.unitCost(egg, egg), null);
+  assert.ok(near(unitCost(egg, egg), 0.25 / 0.06));
+  assert.ok(near(unitCost({ ...egg, unit: 'g' }, egg), 0.25 / 0.06 / 1000));
+  // without a piece weight it stays no price
+  assert.equal(unitCost(egg, { priceUnit: 'pcs', pricePerUnit: 0.25 }), null);
+});
+
+test('the stocktake gives EXACTLY the old numbers for every item with no packCount, but for the two named shapes', () => {
   const bad = [];
   const months = [{ packKg: {} }, { packKg: { x: 12 } }, { packKg: { x: 0 } }, null];
   for (const { name, ing } of shapes()) {
+    const touched = (shapeA(ing) || shapeB(ing)) && hasCase(ing);
     for (const month of months) {
       for (const closed of [false, true]) {
         const m = month && closed ? { ...month, unitPrice: { x: 1.5 } } : month;
         if (!same(packKgFor(m, ing, closed), oldValue.packKgFor(m, ing, closed))) bad.push(`packKgFor ${name} ${JSON.stringify(ing)}`);
-        if (!same(packPrice(m, ing, closed), oldValue.packPrice(m, ing, closed))) bad.push(`packPrice ${name} ${JSON.stringify(ing)} ${JSON.stringify(m)}`);
-        if (valueBlocker(m, ing, closed) !== oldValue.valueBlocker(m, ing, closed)) bad.push(`valueBlocker ${name} ${JSON.stringify(ing)}`);
+        const p = packPrice(m, ing, closed);
+        const q = oldValue.packPrice(m, ing, closed);
+        if (!same(p, q) && !(touched && !closed && q === null && typeof p === 'number')) bad.push(`packPrice ${name} ${JSON.stringify(ing)} ${JSON.stringify(m)}: ${q} -> ${p}`);
+        const v = valueBlocker(m, ing, closed);
+        const w = oldValue.valueBlocker(m, ing, closed);
+        if (v !== w && !(touched && !closed && w === 'no-price' && v === null)) bad.push(`valueBlocker ${name} ${JSON.stringify(ing)}`);
       }
     }
-    assert.deepEqual(casePackNote(ing), oldValue.casePackNote(ing), `casePackNote ${name}`);
+    const note = casePackNote(ing);
+    const was = oldValue.casePackNote(ing);
+    if (JSON.stringify(note) !== JSON.stringify(was) && !(touched && was && was.key === 'inv.packCaseAmbiguous' && note && note.key === 'inv.packCasePer')) bad.push(`casePackNote ${name} ${JSON.stringify(ing)}`);
     if (bad.length > 5) break;
   }
   assert.deepEqual(bad, []);

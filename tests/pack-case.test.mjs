@@ -115,9 +115,12 @@ test('another word on a case of several is null; on a case of one it is the case
 
 // ── The package word means nothing on any other case ────────────────────────
 
-test('⚠️ eggs: a «vaschetta» of 360 g ordered by vaschetta from a case of 60 pieces at 12 is null, not 0.20', () => {
+// ⚠️ REVERSED by the 2nd review of 1 Oct 2026. «Tray is not one egg» held while a package word could mean anything;
+// now it is how the card says «one item»: a package word equal to the unit is ONE item of a case of pieces
+// (what a Singola leaves behind after a Cartone). A tray that is NOT one egg must not be declared as the package.
+test('⚠️ eggs: a «vaschetta» ordered by vaschetta from a case of 60 pieces at 12 is ONE item, 0.20 (was: no price)', () => {
   const eggs = { casePrice: 12, caseCount: 60, caseItemSize: null, caseItemUnit: 'pcs', priceUnit: 'pcs', pricePerUnit: 0.2 };
-  assert.equal(unitCost({ unit: 'vaschetta', weight: '360 g', packUnit: 'vaschetta' }, eggs), null);
+  assert.equal(unitCost({ unit: 'vaschetta', weight: '360 g', packUnit: 'vaschetta' }, eggs), 0.2);
   assert.equal(unitCost({ unit: 'pz', packUnit: 'vaschetta' }, eggs), 0.2, 'a piece word still counts');
   assert.equal(unitCost({ unit: 'cartone', packUnit: 'vaschetta' }, eggs), 12);
 });
@@ -153,13 +156,14 @@ test('a stale pack case falls back to the typed rate and its pack weight', () =>
   assert.equal(valueBlocker({}, ing, false), NO_PACK);
 });
 
-// ⚠️ Review of 30 Sep 2026: on a case that is NOT of packages, an order unit equal to the
-// ingredient's package word is ambiguous even when it is also a CASE word — a box priced
-// «100 pz at 30» declared as a «scatola» and ordered by «scatola» is not 30 € a scatola.
-test('a package word that is also a case word, on a case of pieces or kilos, is no price', () => {
+// ⚠️ Review of 30 Sep 2026, REVISED by the 2nd review of 1 Oct 2026: on an explicit-size case (kilos), an
+// order unit equal to the ingredient's package word is ambiguous even when it is also a CASE word. On a case
+// of PIECES it is no longer: the package word is ONE item (what a Singola leaves behind after a Cartone), so a
+// box priced «100 pz at 30» declared as a «scatola» and ordered by «scatola» is 0.30 a scatola.
+test('a package word that is also a case word is ONE item on a case of pieces, and no price on a case of kilos', () => {
   const boxes = { priceUnit: 'pcs', pricePerUnit: 0.3, casePrice: 30, caseCount: 100, caseItemSize: null, caseItemUnit: 'pcs' };
-  assert.equal(unitCost({ unit: 'scatola', packUnit: 'scatola' }, boxes), null);
-  assert.equal(unitCost({ unit: 'scatola.', packUnit: 'Scatola' }, boxes), null);
+  assert.equal(unitCost({ unit: 'scatola', packUnit: 'scatola' }, boxes), 0.3);
+  assert.equal(unitCost({ unit: 'scatola.', packUnit: 'Scatola' }, boxes), 0.3);
   // Without a package word «scatola» is only a case word: one case.
   assert.equal(unitCost({ unit: 'scatola' }, boxes), 30);
   assert.equal(unitCost({ unit: 'pz', packUnit: 'scatola' }, boxes), 0.3);

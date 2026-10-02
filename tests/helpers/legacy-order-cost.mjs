@@ -16,9 +16,9 @@
 // the price WITHOUT VAT, and the VAT is added on top here, once, for
 // DISPLAY. Nothing here ever writes back to a price.
 
-import { isPriceUnit, positiveNumber, storedCaseOf } from '../../js/price-model.js';
-import { parsePackSize } from '../../js/pack-size.js';
-import { cleanUnit, sameUnit } from '../../js/order-unit.js';
+import { isPriceUnit, positiveNumber, storedCaseOf } from './legacy-price-model.mjs';
+import { parsePackSize } from './legacy-pack-size.mjs';
+import { cleanUnit, sameUnit } from './legacy-order-unit.mjs';
 
 // The net cost of ONE ORDERED UNIT of an ingredient — one sack, one case, one
 // piece, whatever the order screen's own quantity box counts.

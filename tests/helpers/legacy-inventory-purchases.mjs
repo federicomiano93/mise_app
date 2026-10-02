@@ -19,8 +19,8 @@
 // "had + bought − left" never crosses a unit boundary. Nothing here converts
 // anything into kilos; that belongs to the money, not to the count.
 
-import { sameUnit, recordUnit } from '../../js/order-unit.js';
-import { storedCaseOf } from '../../js/price-model.js';
+import { sameUnit, recordUnit } from './legacy-order-unit.mjs';
+import { storedCaseOf } from './legacy-price-model.mjs';
 
 // A quantity as the Orders feature stores it. Deliberately the same shape as
 // wholeNumber() in js/orders/archive.js — copied rather than imported, because a
