@@ -25,6 +25,7 @@
 
 import { t } from '../i18n.js';
 import { el } from './dom.js';
+import { ingredientDisplayName } from '../ingredient-name.js';
 import { consumption, progressOf } from './inventory-model.js';
 
 // A product with no category typed, or the default 'Other', belongs to the same
@@ -37,7 +38,7 @@ function categoryOf(ingredient) {
 }
 
 function labelOf(ingredient) {
-  return [ingredient.name, ingredient.weight].filter(Boolean).join(' ').trim()
+  return [ingredientDisplayName(ingredient), ingredient.weight].filter(Boolean).join(' ').trim()
     || t('inv.unnamedProduct');
 }
 
@@ -50,7 +51,9 @@ function fold(text) {
 function matches(ingredient, query) {
   if (!query) return true;
   const needle = fold(query);
+  // by the name to show AND the invoice name
   return fold(ingredient.name).includes(needle)
+    || fold(ingredient.shortName).includes(needle)
     || fold(ingredient.brand).includes(needle)
     || fold(ingredient.category).includes(needle);
 }
@@ -186,7 +189,7 @@ export function renderList({ month, ingredients, locale, onOpen, onCount, onCarr
           text: key || t('inv.noCategory'),
         }));
         groups.get(key)
-          .sort((a, b) => String(a.name).localeCompare(String(b.name), locale))
+          .sort((a, b) => ingredientDisplayName(a).localeCompare(ingredientDisplayName(b), locale))
           .forEach(ingredient => rows.appendChild(row(ingredient)));
       });
   }

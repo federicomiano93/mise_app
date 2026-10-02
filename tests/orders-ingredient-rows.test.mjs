@@ -140,7 +140,7 @@ test('each row has a clear-quantity button in the name column, named per ingredi
   assert.match(buildRowSource, /type:\s*'button'/);
   // Name AND weight, so «Flour 1kg» and «Flour 25kg» are two different buttons to a
   // screen reader, and a nameless product never reads «undefined».
-  assert.match(buildRowSource, /t\('orders\.clearQtyFor',\s*\{\s*name:\s*ingredientLabel\(ing\)\s*\|\|\s*t\('orders\.unnamedProduct'\)\s*\}\)/);
+  assert.match(buildRowSource, /t\('orders\.clearQtyFor',\s*\{\s*name:\s*ingredientDisplayLabel\(ing\)\s*\|\|\s*t\('orders\.unnamedProduct'\)\s*\}\)/);
   // It is the LAST child of .ing-main: it must come before the Order column starts.
   assert.ok(buildRowSource.indexOf("'ing-qty-clear'") > buildRowSource.indexOf("class: 'ing-main'"));
   assert.ok(buildRowSource.indexOf("'ing-qty-clear'") < buildRowSource.indexOf("class: 'ing-col'"));
@@ -201,7 +201,7 @@ test('a row offers a unit menu only when the card offers a choice, in place of t
   assert.match(buildRowSource, /choices\.length >= 2/);
   assert.match(buildRowSource, /class:\s*'ing-unit-select'/);
   assert.match(buildRowSource, /!unitSelect && ing\.unit \? el\('span', \{ class: 'ing-order-unit'/);
-  assert.match(buildRowSource, /t\('orders\.unitToOrderFor',\s*\{\s*name:\s*ingredientLabel\(ing\)\s*\|\|\s*t\('orders\.unnamedProduct'\)\s*\}\)/);
+  assert.match(buildRowSource, /t\('orders\.unitToOrderFor',\s*\{\s*name:\s*ingredientDisplayLabel\(ing\)\s*\|\|\s*t\('orders\.unnamedProduct'\)\s*\}\)/);
 });
 
 test('changing the unit stores only a non-default unit, autosaves, and keeps the quantity', () => {

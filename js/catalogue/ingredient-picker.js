@@ -42,7 +42,7 @@ export function openLinkPicker({ ingredients, recipes, suppliers, excludeRecipeI
           // is real only in Food cost, where the oven loss and the rest of the product
           // are known), and it no longer even loads the prices.
           items: options.ingredients.map(opt => ({
-            name: opt.name,
+            name: opt.displayName ?? opt.name,
             meta: [opt.weight, opt.supplierName].filter(Boolean).join('  ·  '),
             value: { kind: 'ingredient', refId: opt.id, name: opt.name },
           })),

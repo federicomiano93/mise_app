@@ -109,7 +109,7 @@ test('the bin is drawn only for an existing item with the action handed in, and 
   assert.match(block, /confirmDialog\(\{/, 'the copied dialog, never the browser\'s');
   assert.match(block, /'aria-label': t\('orders\.deleteIngredient'\)/, 'an icon button needs its spoken name');
   assert.match(block, /okLabel: t\('ui\.delete'\)/);
-  assert.match(block, /reportFailure\('delete', item\.name, err\)/, 'a failure uses the friendly dialog');
+  assert.match(block, /reportFailure\('delete', ingredientDisplayName\(item\), err\)/, 'a failure uses the friendly dialog');
   assert.match(FORM, /formActions\(save, onCancel, deleteBtn\),/);
   assert.doesNotMatch(FORM, /\bcanManage\b|\bcanManageHere\b/, 'the card reads no role — the caller decides');
   assert.match(FORM, /const TRASH_SVG = '<svg[^']*stroke-width="2"[^']*stroke="currentColor"|const TRASH_SVG = '<svg[^']*stroke="currentColor"[^']*stroke-width="2"/,

@@ -12,7 +12,8 @@
 import { t } from '../i18n.js';
 import { el } from './dom.js';
 import { isUnusualQuantity } from './suggestions.js';
-import { wholeNumber, sortByLabel, ingredientLabel } from './archive.js';
+import { wholeNumber, sortByLabel, ingredientDisplayLabel } from './archive.js';
+import { ingredientDisplayName } from '../ingredient-name.js';
 import { unitChoices, entryUnit, storedUnitFor, sameUnit, isDefaultUnit } from '../order-unit.js';
 
 // How many of a supplier's ingredients already have a quantity entered — used to
@@ -123,11 +124,11 @@ export function buildRow(ing, supplier, suggest, entries, hooks, { meta = '' } =
 
   const stockInput = el('input', {
     type: 'number', class: 'ing-stock', min: '0', inputmode: 'numeric',
-    'aria-label': t('orders.stockOnHandFor', { name: ing.name }),
+    'aria-label': t('orders.stockOnHandFor', { name: ingredientDisplayName(ing) }),
   });
   const qtyInput = el('input', {
     type: 'number', class: 'ing-qty', min: '0', inputmode: 'numeric',
-    'aria-label': t('orders.qtyToOrderFor', { name: ing.name }),
+    'aria-label': t('orders.qtyToOrderFor', { name: ingredientDisplayName(ing) }),
   });
   const hint = el('div', { class: 'ing-suggestion' });
 
@@ -194,7 +195,7 @@ export function buildRow(ing, supplier, suggest, entries, hooks, { meta = '' } =
   const unitSelect = choices.length >= 2
     ? el('select', {
       class: 'ing-unit-select',
-      'aria-label': t('orders.unitToOrderFor', { name: ingredientLabel(ing) || t('orders.unnamedProduct') }),
+      'aria-label': t('orders.unitToOrderFor', { name: ingredientDisplayLabel(ing) || t('orders.unnamedProduct') }),
     }, choices.map(unit => el('option', { value: unit, text: unit })))
     : null;
   if (unitSelect) {
@@ -217,11 +218,11 @@ export function buildRow(ing, supplier, suggest, entries, hooks, { meta = '' } =
   const editable = typeof hooks.onEditIngredient === 'function' && hooks.mayEditIngredient?.() === true;
   const nameNode = editable
     ? el('button', {
-      type: 'button', class: 'ing-name ing-name-btn', text: ing.name || '',
-      'aria-label': t('orders.editIngredientFor', { name: ingredientLabel(ing) || t('orders.unnamedProduct') }),
+      type: 'button', class: 'ing-name ing-name-btn', text: ingredientDisplayName(ing),
+      'aria-label': t('orders.editIngredientFor', { name: ingredientDisplayLabel(ing) || t('orders.unnamedProduct') }),
       onClick: () => hooks.onEditIngredient(ing),
     })
-    : el('span', { class: 'ing-name', text: ing.name || '' });
+    : el('span', { class: 'ing-name', text: ingredientDisplayName(ing) });
 
   // One LINE per ingredient, three columns: the name (with the supplier and the hint
   // under it), the Order box, the Stock box. «Order» / «Stock» are named ONCE, by the
@@ -246,7 +247,7 @@ export function buildRow(ing, supplier, suggest, entries, hooks, { meta = '' } =
       el('button', {
         type: 'button', class: 'ing-qty-clear', icon: CLEAR_ICON,
         // Name AND weight: «Flour 1kg» and «Flour 25kg» must not both read «clear Flour».
-        'aria-label': t('orders.clearQtyFor', { name: ingredientLabel(ing) || t('orders.unnamedProduct') }),
+        'aria-label': t('orders.clearQtyFor', { name: ingredientDisplayLabel(ing) || t('orders.unnamedProduct') }),
         onClick: (event) => {
           // A cleared line starts again in the card's own unit (the default), exactly as
           // «Clear quantities» does — the unit goes first so the one autosave carries both.

@@ -1262,10 +1262,6 @@ body[data-section="orders"] .ing-filter .view-switch-btn:not(.active) { color: v
    box and its label sit on the same centre line instead of the text baseline. */
 
 
-/* The supplier screen's two adds side by side («+ Ingrediente», «+ Imballaggio»): the same
-   dashed button twice, the row carrying the gap the single one had. */
-.mgmt-add-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-bottom: 14px; }
-.mgmt-add-pair .mgmt-add { margin-bottom: 0; }
 .mgmt-add {
   width: 100%;
   padding: 12px;
@@ -1884,6 +1880,14 @@ a.home-reminder {
 /* The folded half. It gets the breathing room the head used to provide, so opening
    the card does not make the first line collide with the state word. */
 .mgmt-fold-body { padding-top: 2px; }
+/* «Dati prodotto» of the ingredient card only (2 Oct 2026, Federico: more room for the boxes): the
+   rows were flush against each other, so they now sit one step apart (--space-4), and the boxes
+   take the roomier --tap-min height instead of the form's 44px. Nothing app-wide: the price
+   section and every other form keep their own rhythm. The hint under «Nome da mostrare» is
+   tucked back up to its own box, so it still reads as that box's note. */
+.mgmt-fold-body--data { display: flex; flex-direction: column; gap: var(--space-4); }
+.mgmt-form .mgmt-fold-body--data .mgmt-input { min-height: var(--tap-min); }
+.mgmt-fold-body--data > .notif-note { margin-top: calc(-1 * var(--space-2)); }
 
 /* ⚠️ THE STATE IS A WORD, NEVER A COLOUR ALONE (P18) — and it stays OUTSIDE the fold
    with the status line below it, because on this screen the ANSWER is never behind a

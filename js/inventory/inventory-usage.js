@@ -10,6 +10,7 @@
 
 import { t } from '../i18n.js';
 import { el } from './dom.js';
+import { ingredientDisplayName } from '../ingredient-name.js';
 import { formatTotal, NO_PRICE, NO_PACK, NO_FROZEN_PRICE } from './inventory-value.js';
 
 const BLOCKER_TEXT = {
@@ -48,7 +49,7 @@ export function renderUsage({ cost, locale, month }) {
   }
 
   lines.forEach(({ ingredient, used, value, blocker }) => {
-    const name = [ingredient.name, ingredient.weight].filter(Boolean).join(' ').trim()
+    const name = [ingredientDisplayName(ingredient), ingredient.weight].filter(Boolean).join(' ').trim()
       || (month.names || {})[ingredient.id]
       || t('inv.unnamedProduct');
     const unit = ingredient.unit || t('inv.packsShort');

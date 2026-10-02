@@ -27,6 +27,7 @@ import { t, localeTag } from './i18n.js';
 import { el } from './dom.js';
 import { kindOf } from './ingredient-kind.js';
 import { supplierLabel } from './supplier-label.js';
+import { ingredientDisplayName } from './ingredient-name.js';
 import { NO_SUPPLIER_ID } from './records.js';
 import { field, formActions, reportFailure, shortDate } from './record-ui.js';
 import {
@@ -826,7 +827,7 @@ function priceHistoryBlock(item, actions) {
     } catch (err) {
       button.disabled = false;
       button.textContent = t('orders.showThem');
-      await reportFailure('load', item.name, err);
+      await reportFailure('load', ingredientDisplayName(item), err);
     }
   } }, t('orders.showThem'));
 
@@ -1408,12 +1409,16 @@ function allergenBlock(item, panels, actions = {}) {
 //
 // ⚠️ AN <h3>, NOT A BUTTON. There is nothing behind it to open, and a tap target that
 // does nothing is worse than no tap target: it teaches somebody the card is closed.
-function section({ title, body }) {
+// `data`: the «Dati prodotto» section, whose boxes are a little taller and whose rows have room between
+// them (orders.css .mgmt-fold-body--data) — the price section keeps the compact rhythm.
+function section({ title, body, data = false }) {
+  const inner = el('div', { class: 'mgmt-fold-body' }, body);
+  if (data) inner.classList.add('mgmt-fold-body--data');
   return el('div', { class: 'mgmt-fold' }, [
     el('h3', { class: 'mgmt-fold-head mgmt-fold-head--static' }, [
       el('span', { class: 'mgmt-fold-label', text: title }),
     ]),
-    el('div', { class: 'mgmt-fold-body' }, body),
+    inner,
   ]);
 }
 
@@ -1648,6 +1653,11 @@ export function buildIngredientForm({
   // never sees a price, and the new card has no price of theirs to misread.
   const legacyCard = Boolean(mayPrice && item && usesLegacyCard(item));
   const name = el('input', { type: 'text', class: 'mgmt-input', value: item?.name || presetName || '' });
+  // «Nome da mostrare»: what every screen shows instead of the invoice name (js/ingredient-name.js).
+  const shortName = el('input', {
+    type: 'text', class: 'mgmt-input', maxlength: '60', value: item?.shortName || '',
+    'aria-describedby': 'ingredient-short-name-hint',
+  });
   // Food, or packaging? (13 Sep 2026.) A box, a tray or a label is bought, priced and
   // ordered like flour, so it is filed here too. A new one starts on the list it was added
   // from; an existing one keeps its own kind. ⚠️ The «Tipo» menu that used to move an item
@@ -1887,6 +1897,8 @@ export function buildIngredientForm({
     const packUnit = pack.read().slice(0, PACK_WORD_MAX);
     const payload = {
       name: name.value.trim(),
+      // '' when blank, never omitted: a merge write must be able to CLEAR a display name.
+      shortName: shortName.value.trim(),
       supplierId: supplierToSave(supplierSelect.value, previous),
       brand: brand.value.trim(),
       weight: weight.read(),
@@ -1972,6 +1984,8 @@ export function buildIngredientForm({
       : '';
     const payload = {
       name: name.value.trim(),
+      // '' when blank, never omitted: a merge write must be able to CLEAR a display name.
+      shortName: shortName.value.trim(),
       supplierId: supplierToSave(supplierSelect.value, previous),
       brand: brand.value.trim(),
       weight: weight.read(),
@@ -2040,7 +2054,7 @@ export function buildIngredientForm({
       onClick: () => confirmAndDelete({
         item,
         ask: () => confirmDialog({
-          title: t('orders.deleteIngredientTitle', { name: item.name }),
+          title: t('orders.deleteIngredientTitle', { name: ingredientDisplayName(item) }),
           message: t('orders.deleteIngredientMessage'),
           okLabel: t('ui.delete'),
           cancelLabel: t('ui.cancel'),
@@ -2052,7 +2066,7 @@ export function buildIngredientForm({
         onFail: async (err) => {
           deleteBtn.disabled = false;
           save.disabled = false;
-          await reportFailure('delete', item.name, err);
+          await reportFailure('delete', ingredientDisplayName(item), err);
         },
       }),
     })
@@ -2097,8 +2111,11 @@ export function buildIngredientForm({
     // rather than its second half.
     section({
       title: t('orders.section.productData'),
+      data: true,
       body: [
         field(t('orders.field.name'), name),
+        field(t('orders.field.shortName'), shortName),
+        el('p', { class: 'notif-note', id: 'ingredient-short-name-hint', text: t('orders.field.ingredientShortNameHint') }),
         field(t('orders.field.supplier'), supplierSelect),
         // ⚠️ HALF-WIDTH PAIRS (Federico, 29 Sep 2026): the short fields two to a row. Name and
         // supplier stay whole; the last pair has an empty right cell on purpose. Below 360px

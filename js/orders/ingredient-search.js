@@ -13,6 +13,7 @@
 
 import { itemLabel } from './order-text.js';
 import { supplierLabel, supplierMatches } from '../supplier-label.js';
+import { ingredientDisplayName, ingredientNameMatches } from '../ingredient-name.js';
 
 // Everything NFD splits an accent into: "è" becomes "e" + a combining grave.
 const COMBINING_MARKS = /[̀-ͯ]/g;
@@ -43,7 +44,9 @@ export function matchesQuery(row, query) {
   return [row.label, row.ingredient?.brand, row.supplierName]
     .some(field => normalizeText(field).includes(q))
     // the invoice name too: a supplier is found by either of its names
-    || supplierMatches(row.supplier, q, normalizeText);
+    || supplierMatches(row.supplier, q, normalizeText)
+    // an ingredient too: found by the name to show AND by the invoice name
+    || ingredientNameMatches(row.ingredient, q, normalizeText);
 }
 
 // The suppliers matching what was typed, in the order they were given.
@@ -86,7 +89,7 @@ export function flatRows({ ingredients, suppliers, query, only }) {
       ingredient: ing,
       supplier: byId.get(ing.supplierId),
       supplierName: supplierLabel(byId.get(ing.supplierId)),
-      label: itemLabel(ing.name, ing.weight),
+      label: itemLabel(ingredientDisplayName(ing), ing.weight),
     }))
     // By label, then by id: without the tie-break two products with identical
     // labels could swap places between repaints and the rows would jump.

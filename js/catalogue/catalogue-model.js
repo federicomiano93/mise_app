@@ -18,6 +18,7 @@
 // into the grams-only Calculator). Legacy rows with no unit are treated as grams.
 import { t } from '../i18n.js';
 import { supplierLabel } from '../supplier-label.js';
+import { ingredientDisplayName } from '../ingredient-name.js';
 
 export const CATALOGUE_UNITS = ['g', 'kg', 'mg', 'ml', 'cl', 'dl', 'l', 'pcs', 'tsp', 'tbsp', 'pinch', 'to taste'];
 export const DEFAULT_UNIT = 'g';
@@ -336,13 +337,17 @@ export function linkOptions({ ingredients, recipes, suppliers, query, excludeRec
     .filter(ing => ing && ing.active !== false && ing.kind !== 'packaging')
     .map(ing => ({
       id: ing.id,
+      // `name` stays the invoice name (it is what fills a recipe row's printed label); `displayName`
+      // is what the lists SHOW and sort by (js/ingredient-name.js).
       name: String(ing.name || '').trim(),
+      displayName: ingredientDisplayName(ing).trim(),
+      shortName: String(ing.shortName || '').trim(),
       weight: String(ing.weight || '').trim(),
       supplierName: supplierName(ing.supplierId),
       ingredient: ing,
     }))
-    .filter(row => row.name && matches(row.name, row.weight, row.supplierName))
-    .sort((a, b) => a.name.localeCompare(b.name) || String(a.id).localeCompare(String(b.id)));
+    .filter(row => row.name && matches(row.name, row.shortName, row.weight, row.supplierName))
+    .sort((a, b) => a.displayName.localeCompare(b.displayName) || String(a.id).localeCompare(String(b.id)));
 
   const recipeList = (Array.isArray(recipes) ? recipes : Object.values(recipes || {}))
     .filter(r => r && r.id !== excludeRecipeId && String(r.name || '').trim())
@@ -375,6 +380,15 @@ function matchRank(name, q) {
   return 2;
 }
 
+// The best rank an option gets across BOTH its names (the name to show and the invoice name).
+function bestRank(opt, q) {
+  const ranks = [opt.displayName ?? opt.name, opt.name, opt.shortName]
+    .filter(v => v !== undefined && v !== null && String(v) !== '')
+    .map(v => matchRank(normalizeSearchText(v), q))
+    .filter(r => r >= 0);
+  return ranks.length ? Math.min(...ranks) : -1;
+}
+
 //   { items: [{ kind, refId, name, weight, supplierName, linked }], total }
 //
 // ⚠️ THE NAME ONLY, never the supplier or the pack weight the full chooser also searches.
@@ -393,14 +407,15 @@ export function suggestLinks({
   // The same candidates as the full chooser: active ingredients, never this recipe.
   const all = linkOptions({ ingredients, recipes, suppliers, query: '', excludeRecipeId });
   const ranked = (list, kind) => list
-    .map(opt => ({ opt, rank: matchRank(normalizeSearchText(opt.name), q) }))
+    .map(opt => ({ opt, rank: bestRank(opt, q) }))
     .filter(entry => entry.rank >= 0)
     .sort((a, b) => a.rank - b.rank
-      || a.opt.name.localeCompare(b.opt.name) || String(a.opt.id).localeCompare(String(b.opt.id)))
+      || (a.opt.displayName ?? a.opt.name).localeCompare(b.opt.displayName ?? b.opt.name) || String(a.opt.id).localeCompare(String(b.opt.id)))
     .map(({ opt }) => ({
       kind,
       refId: opt.id,
       name: opt.name,
+      displayName: opt.displayName ?? opt.name,
       weight: opt.weight || '',
       supplierName: opt.supplierName || '',
       linked: !!linked && linked.kind === kind && linked.refId === opt.id,
