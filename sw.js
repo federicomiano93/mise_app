@@ -1,4 +1,4 @@
-const CACHE_NAME = 'theitalianclub-v509';
+const CACHE_NAME = 'theitalianclub-v510';
 // Firebase SDK modules (loaded from gstatic) are cached SEPARATELY from CACHE_NAME
 // so they survive the cache-version bump that happens on every deploy — otherwise
 // the offline SDK would be wiped each release until the next online load. The name
@@ -441,7 +441,7 @@ const ASSET_HASHES = {
   "./js/supplier-label.js": '9601ceed020c0205',
   "./js/order-unit.js": '1e5149dc8263a4f5',
   "./js/record-data.js": '47d198fbb955d963',
-  "./js/ingredient-record-form.js": 'f92cfd9014697e62',
+  "./js/ingredient-record-form.js": '5afa3c124227b046',
   "./js/supplier-record-form.js": 'e696787bd1e15b7d',
   "./js/ingredient-kind.js": 'b5ea1d7ec8255fd6',
   "./js/ingredient-name.js": '9045e25fc169d2ff',
@@ -481,7 +481,7 @@ const ASSET_HASHES = {
   "./js/location.js": '6aaf53615a8739d1',
   "./js/sections.js": 'abcfdecb2bd5766d',
   "./js/roles.js": '2b491770c4b6165b',
-  "./js/i18n.js": '624b1466f3bac32e',
+  "./js/i18n.js": '86139530d91c4a0b',
   "./js/i18n-dom.js": 'a6d32c5bb1b56674',
   "./js/join-code.js": '5b89de65db5c102f',
   "./js/join-link.js": 'a90ea53c7ba51614',
@@ -564,7 +564,7 @@ const ASSET_HASHES = {
   "./js/orders/alert-dismissal.js": 'fbfe034ffa9f6620',
   "./js/orders/management.js": '1797cd30f5834ffd',
   "./js/orders/mgmt-ui.js": '8894b23fd41e8a66',
-  "./js/orders/registry.js": '5c5ea1672cc8eeb0',
+  "./js/orders/registry.js": '468d42ee3d759016',
   "./js/orders/registry-main.js": '7fe909f55cfbcdab',
   "./js/orders/registry-settings.js": '74c80116276527d1',
   "./js/form-dirty.js": '27dce3718a33d438',
@@ -656,7 +656,7 @@ const ASSET_HASHES = {
   "./inventory.css": '3ee3317ef2527b96',
   "./js/inventory/confirm-dialog.js": '61a7f580f37c5ff8',
   "./js/inventory/dom.js": '5971dfbbb1e223ec',
-  "./js/inventory/inventory-model.js": '09eed83d8469a166',
+  "./js/inventory/inventory-model.js": '7cc2935526d50a88',
   "./js/inventory/firebase-inventory.js": '98880ab94f7ccdfa',
   "./js/inventory/inventory-outbox.js": '396a5be9a9069278',
   "./js/inventory/inventory-store.js": '3ea0528fdec4eabb',

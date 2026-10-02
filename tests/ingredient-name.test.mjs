@@ -236,3 +236,32 @@ test('firestore.rules: ingredients accept shortName (≤60, text), and ingredien
   const prices = rules.slice(rules.indexOf('match /ingredient-prices/{id} {'));
   assert.doesNotMatch(prices.slice(0, prices.indexOf('hasOnly')+400), /shortName/);
 });
+
+// ── A closed month shows what was frozen, never the live short name ──────────
+
+test('⚠️ a closed month shows each product\'s frozen label even when both share a short name', async () => {
+  const { productsOfMonth } = await import('../js/inventory/inventory-model.js');
+  const live = [
+    { id: 'a', name: 'FARINA TIPO 00 W280', shortName: 'Farina 00', weight: '25kg', active: true },
+    { id: 'b', name: 'FARINA TIPO 00 W280', shortName: 'Farina 00', weight: '1kg', active: true },
+  ];
+  const month = {
+    closedAt: '2026-09-30', names: { a: 'FARINA TIPO 00 W280 25kg', b: 'FARINA TIPO 00 W280 1kg' },
+    opening: {}, purchased: {}, closing: { a: 1, b: 1 },
+  };
+  const rows = productsOfMonth(month, live);
+  assert.deepEqual(rows.map(r => ingredientDisplayName(r)), ['FARINA TIPO 00 W280 25kg', 'FARINA TIPO 00 W280 1kg']);
+});
+
+test('the card gives each hint a counter id, never a fixed one', () => {
+  const src = read('js/ingredient-record-form.js');
+  assert.doesNotMatch(src, /'ingredient-short-name-hint'/);
+  const a = openCard(STORED), b = openCard(STORED);
+  const hint = card => walk(card.root).find(n => n.classList.contains('notif-note') && n.attributes.id)?.attributes.id;
+  assert.notEqual(hint(a), hint(b));
+});
+
+test('a supplier screen with no products points to the Ingredients tab, with its own key in both languages', () => {
+  assert.match(read('js/orders/registry.js'), /orders\.noIngredientsYetAddPlus/);
+  assert.equal(read('js/i18n.js').split("'orders.noIngredientsYetAddPlus':").length - 1, 2);
+});

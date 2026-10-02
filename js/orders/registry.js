@@ -410,10 +410,11 @@ export function buildRegistry(data, actions, hooks = {}) {
 
       body.appendChild(el('h3', { class: 'mgmt-section-title', text: t('orders.whatTheySell') }));
       // ⚠️ NO ADD BUTTONS ON THIS SCREEN (2 Oct 2026, Federico: «one + only»). A new ingredient or
-      // packaging is added from the «+» in the page header, which follows the active tab.
+      // packaging is added from the Ingredienti / Imballaggi tab with the header «+»; this screen is
+      // opened from the Fornitori tab, where that «+» adds a supplier, so the empty text says where to go.
 
       if (!mine.length) {
-        body.appendChild(el('p', { class: 'mgmt-empty', text: t('orders.noIngredientsYetAdd') }));
+        body.appendChild(el('p', { class: 'mgmt-empty', text: t('orders.noIngredientsYetAddPlus') }));
       } else {
         const list = el('div', { class: 'mgmt-list' });
         mine.forEach(i => list.appendChild(ingredientRow(i)));

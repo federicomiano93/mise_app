@@ -1654,9 +1654,10 @@ export function buildIngredientForm({
   const legacyCard = Boolean(mayPrice && item && usesLegacyCard(item));
   const name = el('input', { type: 'text', class: 'mgmt-input', value: item?.name || presetName || '' });
   // «Nome da mostrare»: what every screen shows instead of the invoice name (js/ingredient-name.js).
+  const shortNameHintId = `mgmt-short-name-hint-${++messageCount}`;
   const shortName = el('input', {
     type: 'text', class: 'mgmt-input', maxlength: '60', value: item?.shortName || '',
-    'aria-describedby': 'ingredient-short-name-hint',
+    'aria-describedby': shortNameHintId,
   });
   // Food, or packaging? (13 Sep 2026.) A box, a tray or a label is bought, priced and
   // ordered like flour, so it is filed here too. A new one starts on the list it was added
@@ -2115,7 +2116,7 @@ export function buildIngredientForm({
       body: [
         field(t('orders.field.name'), name),
         field(t('orders.field.shortName'), shortName),
-        el('p', { class: 'notif-note', id: 'ingredient-short-name-hint', text: t('orders.field.ingredientShortNameHint') }),
+        el('p', { class: 'notif-note', id: shortNameHintId, text: t('orders.field.ingredientShortNameHint') }),
         field(t('orders.field.supplier'), supplierSelect),
         // ⚠️ HALF-WIDTH PAIRS (Federico, 29 Sep 2026): the short fields two to a row. Name and
         // supplier stay whole; the last pair has an empty right cell on purpose. Below 360px
