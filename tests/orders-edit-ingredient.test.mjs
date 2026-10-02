@@ -255,3 +255,28 @@ test('focus goes back inside the screen on top, never a hidden row or the page b
   assert.match(fn, /wasDeleted \? null/, 'after a delete it does not look for the gone row');
   assert.match(MAIN, /\.finally\(\(\) => \{\s*addingIngredient = false;\s*restoreFocusAfterCard\(ing\.id\);/);
 });
+
+// ── Fornitori: the same guard (5th review of PR #254, 2 Oct 2026) ─────────────
+// The prices are a second live collection; a card opened before they answer showed empty boxes and an
+// untouched Save erased the stored price. Fornitori now reads the price document first, like Orders.
+const REGISTRY = codeOf(read('js/orders/registry.js'));
+const REGISTRY_MAIN = codeOf(read('js/orders/registry-main.js'));
+
+test('Fornitori reads the price BEFORE it draws an existing ingredient, and a failed read opens nothing', () => {
+  const open = REGISTRY.slice(REGISTRY.indexOf('async function openIngredientForm('), REGISTRY.indexOf('function showIngredientForm('));
+  assert.ok(open.length > 0, 'the opener exists');
+  assert.match(open, /needsPriceRead\(\{ mayPrice: mayWritePrices\(\), pricesLoaded: data\.pricesLoaded\?\.\(\) === true \}\)/);
+  const readAt = open.indexOf('itemWithPrice(item, await data.readPrice(item.id))');
+  const showAt = open.indexOf('showIngredientForm(shown,');
+  assert.ok(readAt > 0 && showAt > readAt, 'the price is merged before the card is shown');
+  assert.match(open, /catch \(err\) \{\s*await reportFailure\('load', item\.name, err\);\s*return;/, 'a failed read shows the failure and opens no card');
+  // every way into the card goes through the guarded opener
+  assert.doesNotMatch(REGISTRY.replace(/function showIngredientForm\(/, ''), /showIngredientForm\((?!shown,)/);
+});
+
+test('Fornitori counts the prices as loaded only when the watcher says they are readable', () => {
+  assert.match(REGISTRY_MAIN, /watchIngredientPrices\(\(map, readable\) => \{\s*state\.ingredientPrices = map;\s*state\.pricesReadable = readable === true;/);
+  assert.match(REGISTRY_MAIN, /pricesLoaded: \(\) => state\.pricesReadable === true,/);
+  assert.match(REGISTRY_MAIN, /readPrice: \(id\) => readIngredientPrice\(id\),/);
+  assert.match(REGISTRY_MAIN, /pricesReadable: false,/, 'not loaded until the watcher answers');
+});

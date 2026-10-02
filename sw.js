@@ -1,4 +1,4 @@
-const CACHE_NAME = 'theitalianclub-v517';
+const CACHE_NAME = 'theitalianclub-v507';
 // Firebase SDK modules (loaded from gstatic) are cached SEPARATELY from CACHE_NAME
 // so they survive the cache-version bump that happens on every deploy — otherwise
 // the offline SDK would be wiped each release until the next online load. The name
@@ -12,7 +12,7 @@ const CACHE_NAME = 'theitalianclub-v517';
 // the fetch handler below, on the first load that has a network.
 // So between activate() and that first load, a phone that is OFFLINE cannot boot:
 // the code asks for 12.18.0 and nothing has it. In practice the window is very
-// small — activate() only happens after a successful 275-file precache, i.e.
+// small — activate() only happens after a successful 274-file precache, i.e.
 // online, and tapping the update banner reloads the page immediately — but it is
 // not zero, and it is the reason to bump the SDK deliberately rather than often.
 // Leaving the name unchanged would close the window and cost ~1 MB of dead
@@ -81,7 +81,6 @@ const ASSETS = [
   './js/vat-rates.js',
   './js/pack-size.js',
   './js/record-choices.js',
-  './js/pack-format.js',
   './js/order-cost.js',
   // ⚠️ NEW, AND js/firebase.js IMPORTS IT — which every page loads before anything
   // else. Missing from this list, an installed phone that goes offline after the
@@ -425,7 +424,6 @@ const ASSET_HASHES = {
   "./js/vat-rates.js": 'a3d073040b1d8490',
   "./js/pack-size.js": 'e5aae95d8c7b03d5',
   "./js/record-choices.js": '38da7c93b6f723a2',
-  "./js/pack-format.js": '8d26b19258f7932e',
   "./js/order-cost.js": 'a89d555ef365227d',
   "./js/currency.js": '9300d5695d2a6dac',
   "./js/allergen-model.js": 'a9ad7592da832a56',
@@ -564,8 +562,8 @@ const ASSET_HASHES = {
   "./js/orders/alert-dismissal.js": 'fbfe034ffa9f6620',
   "./js/orders/management.js": '1797cd30f5834ffd',
   "./js/orders/mgmt-ui.js": '8894b23fd41e8a66',
-  "./js/orders/registry.js": 'a2b8dc5ac7009306',
-  "./js/orders/registry-main.js": 'b1eb0d776f689a36',
+  "./js/orders/registry.js": '6fbb4b9c8f33548f',
+  "./js/orders/registry-main.js": '7fe909f55cfbcdab',
   "./js/orders/registry-settings.js": '74c80116276527d1',
   "./js/form-dirty.js": '27dce3718a33d438',
   "./js/orders/level-stack.js": '6832e37854829455',
@@ -699,7 +697,7 @@ const ASSET_HASHES = {
 // code against rules that deployed instantly, which is the very thing the gate exists
 // to prevent. Two things stand between that and a release: the test that every ASSETS
 // entry EXISTS (a mistyped path being the likeliest permanent cause), and this
-// project's post-deploy sweep, which already asks the live site for all 275 files.
+// project's post-deploy sweep, which already asks the live site for all 274 files.
 // ⚠️ NEITHER covers a device-specific failure — nobody has yet confirmed an update
 // landing on a real iPhone under this code.
 //
