@@ -627,7 +627,7 @@ test('5th review F3: the case ordered with NO unit, turned into a Singola, freez
   assert.equal(isCarton(card), true, 'a manager sees the stored case as a Cartone');
   click(card.single);
   const { payload, meta } = await card.save();
-  assert.equal(payload.unit, '', 'the unit stays empty');
+  assert.equal(payload.unit, 'busta', 'the package word: a line now counts bags (6th review)');
   assert.deepEqual(meta, { unitChangedFrom: 'cartone' }, '«2» meant two cases: it stays two cases');
   // and the same case turned into a Cartone the person names keeps «2» as two cases: nothing frozen
   const toCarton = openCard({ item: sugar });

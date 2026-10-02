@@ -68,6 +68,9 @@ const LEGACY_SHAPES = {
   'a pack case ordered by the piece': PACK_BY_PIECE,
   'a rate on a multiplier weight («6x1kg»)': MULTIPLIER,
   'a rate on a word («sacco»)': WORD_WEIGHT,
+  // 6th review: an old «A cartone 30 pz» ordered by its own package word — 30 eggs, not one
+  'a case of pieces ordered by its own package word, piece ≠ the weight': { ...PIECES, unit: 'vaschetta', packUnit: 'vaschetta', weight: '360g' },
+  'a case of pieces ordered by its own package word, no readable weight': { ...PIECES, unit: 'pezzo' },
 };
 // Every shape that must still open the NEW card.
 const NEW_SHAPES = {
@@ -81,7 +84,8 @@ const NEW_SHAPES = {
   'a pack case ordered by the carton': PACK,
   // ⚠️ 5th review: what an employee leaves after turning a new-card Cartone into a Singola stays on the NEW card
   'a pack case ordered by its own package word («busta» / «busta»)': { ...PACK, unit: 'busta' },
-  'a case of pieces ordered by its own package word («pezzo» / «pezzo»)': { ...PIECES, unit: 'pezzo' },
+  // …a case of pieces only when its piece weight IS the card's weight (6th review): what the new card writes
+  'a case of pieces ordered by its own package word, piece = the weight': { ...PIECES, unit: 'pezzo', weight: '60g' },
   'a pack case ordered by any carton word': { ...PACK, unit: 'Cassa' },
   'a case of pieces WITH packCount': { ...PIECES, packCount: 50 },
   'an explicit-size case WITH packCount': { ...KG_CASE, packCount: 4 },

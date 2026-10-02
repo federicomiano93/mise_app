@@ -363,6 +363,19 @@ test('review 2: force writes the full carton format even when the format was not
 
 // ── 4th deep review (2 Oct 2026) and the reduced scope ───────────────────────
 
+test('6th review: an employee’s Singola on a case ordered with NO unit writes the package word', () => {
+  const before = beforeOf({ ...PACK_CASE, unit: '' });
+  assert.equal(before.kind, 'carton');
+  assert.deepEqual(formatPatch(before, formOf(before, { kind: 'single' })), { packCount: null, unit: 'busta' });
+  // an employee sees no price: the same item opens as a Singola for them and nothing changes
+  const employee = beforeOf({ ...PACK_CASE, unit: '', packCount: 4 }, null);
+  assert.deepEqual(formatPatch(employee, formOf(employee, { kind: 'single' })), { packCount: null, unit: 'busta' });
+  // a Singola that opened as a Singola keeps its empty unit
+  const single = beforeOf({ unit: '', packUnit: 'busta', weight: '1kg' }, null);
+  assert.equal(single.kind, 'single');
+  assert.deepEqual(formatPatch(single, formOf(single, { kind: 'carton', count: 3, inner: 'busta' })).unit, 'cartone');
+});
+
 test('4th review 1: a price-only edit never writes the order unit', () => {
   // the 'pack' case ordered with NO unit (the one case in production): '' already reads «the whole case»
   const noUnit = { ...PACK_CASE, unit: '' };
@@ -401,7 +414,9 @@ test('reduced scope: only the shapes found in production open the new card', () 
   assert.equal(legacy({ ...PACK_CASE, unit: 'kg' }), true, 'a pack case ordered by weight');
   // …except a case ordered by its OWN package word: the new card's Cartone turned into a Singola by an employee
   assert.equal(legacy({ ...PACK_CASE, unit: 'busta' }), false, 'a pack case ordered by its own package word');
-  assert.equal(legacy({ ...PIECES_CASE, unit: 'pezzo' }), false, 'a pieces case ordered by its own package word');
+  assert.equal(legacy({ ...PIECES_CASE, unit: 'pezzo', weight: '60g' }), false, 'a pieces case ordered by its own package word, piece = weight');
+  assert.equal(legacy({ ...PIECES_CASE, unit: 'pezzo' }), true, '…but not with no readable weight');
+  assert.equal(legacy({ ...PIECES_CASE, unit: 'vaschetta', packUnit: 'vaschetta', weight: '360g' }), true, '30 eggs in a tray are not one egg');
   assert.equal(legacy({ ...PACK_CASE, unit: 'busta', packUnit: 'sacco' }), true, 'a package word that is not its own');
   assert.equal(legacy({ ...PACK_CASE, unit: 'pz' }), true, 'a pack case ordered by the piece');
   assert.equal(legacy({ weight: '6x1kg', priceUnit: 'kg', pricePerUnit: 2 }), true, 'a rate on a multiplier weight');
