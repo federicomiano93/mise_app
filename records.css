@@ -221,6 +221,13 @@
   flex: 0 0 auto;
   color: var(--text2);
 }
+.rec-host .mgmt-case-row > .mgmt-choice {
+  flex: 1 1 0;
+  min-width: 0;
+}
+.rec-host .mgmt-case-row .mgmt-choice .mgmt-input {
+  flex: none;
+}
 .rec-host .mgmt-price-main {
   display: block;
 }

@@ -1449,10 +1449,12 @@ body[data-section="orders"] .ing-filter .view-switch-btn:not(.active) { color: v
 .mgmt-price-block { display: flex; flex-direction: column; gap: var(--space-3); }
 .mgmt-price-block > .mgmt-price-summary.muted { margin-top: var(--space-1); }
 
-/* A price quoted per case: the case price, then «Contiene [50] pz» / «[4] × [2.5] kg» on ONE
-   row. The boxes share the width equally and may shrink (min-width:0 — a <select> and a
-   number input otherwise keep their intrinsic width and push the row past a 296px card);
-   the × is only a sign between two boxes. Icon/label rules do not apply: no icon here. */
+/* «Contiene [4] × [busta ▾]» (the card's carton row) on ONE row. The boxes share the width and
+   may shrink (min-width:0 — a <select> and a number input otherwise keep their intrinsic width and
+   push the row past a 296px card); the × is only a sign between two boxes. Icon/label rules do not
+   apply: no icon here. */
+/* The card of before (an old stored price shape): the case price, then «Contiene [50] pz» /
+   «[4] × [2.5] kg» — the box that holds that row and its «package weight changed» line. */
 .mgmt-case { display: flex; flex-direction: column; gap: var(--space-3); }
 .mgmt-case-row { display: flex; align-items: center; gap: 8px; }
 /* At 296px the four controls share ~200px: with the card's 12px side padding «1000» and «ml»
@@ -1465,6 +1467,12 @@ body[data-section="orders"] .ing-filter .view-switch-btn:not(.active) { color: v
 .mgmt-case-row select.mgmt-input { flex: 0 1 auto; }
 .mgmt-case-row input.mgmt-input { min-width: 56px; }
 .mgmt-case-x { flex: 0 0 auto; color: var(--text2); }
+/* «Contiene [4] × [busta ▾]» (1 Oct 2026): the inner-word menu is a .mgmt-choice (the menu plus
+   its «+ Nuova…» text box and refusal line), a column of its own. It takes the rest of the row
+   beside the count, and what is inside it must not inherit the row's flex sizing — in a column
+   that would be a flex-basis of 0 on the height. */
+.mgmt-case-row > .mgmt-choice { flex: 1 1 0; min-width: 0; }
+.mgmt-case-row .mgmt-choice .mgmt-input { flex: none; }
 
 /* What is still missing, under the numbers. It appears only when the price is
    complete as a PRICE but the ingredient still cannot be costed — a per-piece

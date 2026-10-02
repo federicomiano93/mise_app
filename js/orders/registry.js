@@ -64,7 +64,8 @@ import {
 // data:    { suppliers(): [], ingredients(): [], categories(current): [], orderUnits(current): [],
 //            packs(current): [], categoriesLoaded(): boolean, pricesLoaded(): boolean,
 //            readPrice(id): Promise<price doc | null> } — live getters; categories,
-//            orderUnits and packs are the words the ingredient card's menus offer
+//            orderUnits and packs are the words the ingredient card's menus offer (orderUnits only
+//            for the card of before, which an old stored price shape opens)
 // actions: { saveSupplier, saveIngredient, priceHistory, setSupplierActive,
 //            setIngredientActive, deleteSupplier, deleteIngredient, deleteCategory(list, ids) }
 // hooks:   { onChrome({ addLabel }) } — told on every paint which word the page

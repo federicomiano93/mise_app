@@ -8,13 +8,15 @@ import { readFileSync } from 'node:fs';
 
 const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
 const codeOf = src => src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
-const FORM = codeOf(read('js/ingredient-record-form.js'));
+import { newCardSource } from './helpers/card-source.mjs';
+// The NEW card only: the card of before is pinned in legacy-card.test.mjs.
+const FORM = codeOf(newCardSource());
 const CSS = read('orders.css');
 
-test('the price box is the right cell of the same row in every mode', () => {
-  assert.match(FORM, /const pricePair = el\('div', \{ class: 'mgmt-pair' \}, \[\s*field\(t\('orders\.howItIsBought'\), unitSelect\),\s*rateField,\s*casePriceField,\s*\]\);/);
-  assert.match(FORM, /rateField\.hidden = inCase;\s*casePriceField\.hidden = !inCase;/);
-  assert.doesNotMatch(FORM, /casePriceLabel/, 'the full-width case price field is gone');
+test('the price box shares the row: the rate beside «Come si acquista», or the case price alone', () => {
+  assert.match(FORM, /const unitField = field\(t\('orders\.howItIsBought'\), unitSelect\);/);
+  assert.match(FORM, /const pricePair = el\('div', \{ class: 'mgmt-pair' \}, \[unitField, rateField, casePriceField\]\);/);
+  assert.match(FORM, /unitField\.hidden = !typedForm;\s*rateField\.hidden = !typedForm;\s*casePriceField\.hidden = typedForm;/);
 });
 
 test('the case price label is the short one', () => {
@@ -45,8 +47,9 @@ test('the supplier menu ends with «+ Nuovo fornitore…» and the old link butt
 test('the short fields sit two to a row, name and supplier stay whole', () => {
   assert.match(FORM, /field\(t\('orders\.field\.name'\), name\),\s*field\(t\('orders\.field\.supplier'\), supplierSelect\),/);
   assert.match(FORM, /mgmt-pair mgmt-pair--data' \}, \[\s*field\(t\('orders\.field\.brand'\), brand\),\s*field\(t\('orders\.field\.category'\), category\.node\),\s*\]\)/);
-  assert.match(FORM, /mgmt-pair mgmt-pair--data' \}, \[\s*field\(t\('orders\.field\.weight'\), weight\.node\),\s*field\(t\('orders\.field\.pack'\), pack\.node\),\s*\]\)/);
-  assert.match(FORM, /mgmt-pair mgmt-pair--data' \}, \[\s*field\(t\('orders\.orderUnit'\), unit\.node\),\s*\]\)/);
+  // [Peso | Confezione: Singola · Cartone] then, for a carton only, «Contiene [n] × [busta ▾]»
+  assert.match(FORM, /mgmt-pair mgmt-pair--data' \}, \[\s*field\(t\('orders\.field\.weight'\), weight\.node\),\s*el\('div', \{ class: 'mgmt-field' \}, \[\s*el\('span', \{ class: 'mgmt-field-label', id: segLabelId, text: t\('orders\.field\.pack'\) \}\),\s*el\('div', \{ class: 'set-seg', role: 'group', 'aria-labelledby': segLabelId \}, \[segSingle, segCarton\]\),\s*\]\),\s*\]\),\s*containsBlock,/);
+  assert.doesNotMatch(FORM, /orders\.orderUnit/);
 });
 
 test('below 360px the product-data pairs stack, and the weight fits a half cell', () => {
@@ -54,11 +57,16 @@ test('below 360px the product-data pairs stack, and the weight fits a half cell'
   assert.match(CSS, /\.mgmt-pair--data \.mgmt-weight-row \{ grid-template-columns: minmax\(0, 1fr\) auto; \}/);
 });
 
-test('«Confezione» is a menu with «+ Nuova…», saved as packUnit only when there is something to say', () => {
-  assert.match(FORM, /const pack = choiceControl\(\{\s*values: packs, current: item\?\.packUnit,/);
-  assert.match(FORM, /maxLength: PACK_WORD_MAX,/);
-  assert.match(FORM, /const refused = \[weight, category, pack, unit\]\.find\(control => control\.invalid\(\)\);/, 'an empty «+ Nuova…» blocks the save');
-  assert.match(FORM, /\.\.\.\(packUnit \|\| item\?\.packUnit \? \{ packUnit \} : \{\}\),/);
+test('«Confezione» is Singola | Cartone; the inner word is a menu with «+ Nuova…», saved only when the format was touched', () => {
+  // the settings kit's segmented control, two pressed-state buttons (not a <label>: a label would press the first)
+  assert.match(FORM, /type: 'button', class: 'set-seg-btn', 'aria-pressed': String\(kind === value\), text,/);
+  assert.match(FORM, /class: 'set-seg', role: 'group', 'aria-labelledby': segLabelId/);
+  assert.match(FORM, /const pack = choiceControl\(\{\s*values: packs, current: openedInner \|\| item\?\.packUnit,/);
+  assert.match(FORM, /maxLength: PACK_WORD_MAX, selectLabel: t\('orders\.format\.innerAria'\),/);
+  assert.match(FORM, /const refused = \[weight, category, \.\.\.\(kind === 'carton' \? \[pack\] : \[\]\)\]\.find\(control => control\.invalid\(\)\);/, 'an empty «+ Nuova…» blocks the save of a carton');
+  assert.match(FORM, /const formatKeys = formatPatch\(before, \{ \.\.\.state, cartonWord \}, \{ force: Boolean\(price && price\.dirty\(\)\) \}\);/);
+  assert.match(FORM, /if \(formatKeys\.packUnit\) formatKeys\.packUnit = formatKeys\.packUnit\.slice\(0, PACK_WORD_MAX\);/);
+  assert.doesNotMatch(FORM, /\.\.\.\(packUnit \|\| item\?\.packUnit \? \{ packUnit \} : \{\}\)/, 'the old unconditional packUnit is gone');
   assert.match(FORM, /packs = \[\]/);
   assert.match(read('js/orders/registry.js'), /packs: data\.packs\?\.\(item\?\.packUnit\) \|\| \[\],/);
   assert.match(read('js/orders/registry-main.js'), /packs: \(current\) => packChoices\(\{/);
@@ -66,24 +74,33 @@ test('«Confezione» is a menu with «+ Nuova…», saved as packUnit only when 
   assert.match(read('firestore.rules'), /'packIngredients', 'packUnit'/);
 });
 
-test('«busta da 2,5 kg» reads the LIVE weight and package word, and gives no size box', () => {
-  assert.match(FORM, /function syncPackOption\(\) \{/);
-  assert.match(FORM, /const \{ weight, packUnit \} = now\(\);/);
-  assert.match(FORM, /if \(!w && !selected\) \{ packOption\.remove\(\); return; \}/, 'only while readable, unless chosen');
-  assert.match(FORM, /caseSizeBox\.hidden = itemsArePieces \|\| sizeFromWeight;/);
-  assert.match(FORM, /pricePatch\(read\(\), null, now\(\)\.weight\)/, 'the live line uses the current weight');
+test('the price follows the LIVE weight, count and package word, never a copy of them', () => {
+  assert.match(FORM, /const draft = pricePatch\(read\(\), null, weight\);/, 'the live line uses the current weight');
   assert.match(FORM, /pricePatch\(price\.read\(\), new Date\(\)\.toISOString\(\), weight\.read\(\)\)/, 'and so does the save');
-  assert.match(FORM, /packUnit: pack\.read\(\) \}\)\) : null;/, 'the VAT line hears the package word');
-  assert.match(FORM, /pack\.onChange\(price\.refresh\);/);
+  assert.match(FORM, /now: \(\) => \(\{ weight: weight\.read\(\), fmt: \{ \.\.\.formState\(\), kind \} \}\),\s*order: orderNow,/);
+  assert.match(FORM, /weight\.onChange\(syncFormat\);\s*pack\.onChange\(syncFormat\);\s*count\.addEventListener\('input', syncFormat\);/);
+  assert.match(FORM, /if \(price\) price\.refresh\(\);/, 'every format edit re-draws the price');
   assert.match(FORM, /storedCaseOf\(item\)/, 'reopening reads the case as stored, whatever the weight says now');
-  assert.match(FORM, /packChangedNote/, 'a weight changed since the save is said, not silently priced');
-  assert.match(FORM, /class: 'mgmt-price-note', hidden: 'hidden', text: t\('orders\.case\.packChanged'\)/);
+});
+
+test('«Cartone» names its contents: switching to it picks the venue\'s default package when none is set', () => {
+  assert.match(FORM, /if \(kind === 'carton' && pack\.read\(\) === ''\) \{ pack\.set\(defaultPackFor\(lang\)\); innerAutoSet = true; \}/);
+  assert.match(FORM, /if \(kind === 'single' && innerAutoSet\) \{ pack\.set\(''\); innerAutoSet = false; \}/);
+  assert.match(FORM, /const lang = outputLanguage\(currentSession\(\)\.location\);\s*const cartonWord = cartonWordFor\(lang\);/);
+});
+
+test('the count box is a whole-number box; it is refused, with a jump to it, only when a carton is being WRITTEN', () => {
+  assert.match(FORM, /type: 'number', class: 'mgmt-input', min: '1', max: '10000', step: '1', inputmode: 'numeric',/);
+  assert.match(FORM, /if \(state\.kind === 'carton' && \(formatIsTouched\(\) \|\| \(price && price\.dirty\(\)\)\) && parseCount\(count\.value\) === null\) \{\s*countRefusal\.show\(\);\s*return;/);
+  assert.match(FORM, /count\.addEventListener\('input', countRefusal\.clear\);/);
+  const guard = FORM.indexOf('countRefusal.show();');
+  assert.ok(guard > 0 && guard < FORM.indexOf('await actions.saveIngredient('), 'before anything is written');
 });
 
 test('the new phrases exist once in each language and are read at draw time', () => {
   const src = read('js/i18n.js');
   for (const key of ['orders.field.pack', 'orders.choice.newPack', 'orders.choice.packPlaceholder',
-    'orders.choice.packBlank', 'orders.choice.packAria', 'orders.case.packOf', 'orders.case.packWord']) {
+    'orders.choice.packBlank', 'orders.choice.packAria']) {
     assert.equal(src.split(`'${key}':`).length - 1, 2, key);
   }
   assert.doesNotMatch(FORM, /^const [A-Z_]+ = .*t\('orders\./m);
@@ -101,15 +118,13 @@ test('R3: the supplier screen has two adds, each fixing the kind; the Catalogue 
   }
 });
 
-test('R4: a case of packages with no readable weight blocks the save on the weight box', () => {
-  assert.match(FORM, /if \(price && price\.needsPackWeight\(\)\) \{ weight\.markNeeded\(\); return; \}/);
+test('R4: a weight-priced case with no readable weight blocks the save on the weight box', () => {
+  assert.match(FORM, /if \(price && price\.needsWeight\(\)\) \{ weight\.markNeeded\(\); return; \}/);
   assert.match(FORM, /markNeeded: \(\) => \{ refusal\.node\.textContent = t\('orders\.weight\.packNeeded'\); refusal\.show\(\); \}/);
-  assert.match(FORM, /unitSelect\.value === CASE_MODE\s*&& caseUnitSelect\.value === PACK_ITEM && packBaseOf\(now\(\)\.weight\) === null/);
   const src = read('js/i18n.js');
-  assert.ok(src.includes("'orders.weight.packNeeded': 'The package weight is needed for the case price'"));
-  assert.ok(src.includes("'orders.weight.packNeeded': 'Serve il peso della confezione per il prezzo a cartone'"));
-  assert.ok(src.includes("'orders.case.packChanged': 'Il peso della confezione è cambiato: il prezzo si aggiorna quando salvi'"));
-  assert.ok(src.includes("'orders.case.packChanged': 'The package weight has changed: the price updates when you save'"));
+  assert.ok(src.includes("'orders.weight.packNeeded': 'The weight of one item is needed for the case price'"));
+  assert.ok(src.includes("'orders.weight.packNeeded': 'Serve il peso di una confezione per il prezzo a cartone'"));
+  assert.ok(src.includes("'orders.case.packChanged': 'The format has changed since the last price: saved {old}, with this format {new}. Check the price.'"));
 });
 
 test('R5: the «+ Nuovo fornitore…» marker is never saved as a supplier', async () => {

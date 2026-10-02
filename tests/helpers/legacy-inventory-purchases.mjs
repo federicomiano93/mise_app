@@ -1,3 +1,4 @@
+// legacy-inventory-purchases.mjs — FROZEN COPY of js/inventory/inventory-purchases.js on main. See legacy-order-cost.mjs.
 // inventory-purchases.js — what a month's orders say was bought.
 //
 // PURE, IMPORTS ONLY FROM js/ ROOT (never another feature's folder): given the order-history records of one month, it answers
@@ -18,8 +19,8 @@
 // "had + bought − left" never crosses a unit boundary. Nothing here converts
 // anything into kilos; that belongs to the money, not to the count.
 
-import { sameUnit, recordUnit } from '../order-unit.js';
-import { storedCaseOf } from '../price-model.js';
+import { sameUnit, recordUnit } from './legacy-order-unit.mjs';
+import { storedCaseOf } from './legacy-price-model.mjs';
 
 // A quantity as the Orders feature stores it. Deliberately the same shape as
 // wholeNumber() in js/orders/archive.js — copied rather than imported, because a
@@ -123,19 +124,10 @@ export function purchasesInMonth(records, monthId, ingredientsById = {}) {
 // card's unit and its package, so «the line is in the package» is the one other case
 // there is; a stored unit that is neither (a renamed package), a stale case or no case
 // at all is not guessed.
-// ⚠️ «FILL FROM PURCHASES» RE-READS THIS MONTH'S HISTORY LINES THAT FROZE NO UNIT IN THE CARD'S UNIT AS IT IS NOW
-// (3rd review, 1 Oct 2026). Turning a Cartone into a Singola (or back) rewrites `unit`, and an older line that
-// froze none then reads in the new word. It was always so whenever an ingredient's unit was edited — «Unità
-// d'ordine» did it too — and it is left alone on purpose; only the OPEN draft line is frozen (draft.js).
 export function qtyInCardUnit(qty, lineUnit, ing) {
   if (sameUnit(lineUnit, ing && ing.unit)) return qty;
-  if (!sameUnit(lineUnit, ing && ing.packUnit)) return null;
-  // ⚠️ THE CARD'S OWN packCount FIRST (1 Oct 2026): product data, readable by everybody, and the
-  // number the person typed under «Cartone». The stored case is the fallback for a card saved
-  // before packCount existed. Either way, nothing is guessed.
-  const count = ing && ing.packCount;
-  if (Number.isInteger(count) && count >= 1) return qty / count;
   const stored = storedCaseOf(ing);
   if (!stored || stored.caseItemUnit !== 'pack' || !(stored.caseCount > 0)) return null;
-  return qty / stored.caseCount;
+  if (sameUnit(lineUnit, ing.packUnit)) return qty / stored.caseCount;
+  return null;
 }

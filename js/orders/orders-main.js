@@ -35,7 +35,7 @@ import { paintOrderMoney } from './order-cost-view.js';
 import {
   scheduleDraftSave, saveDraftNow, flushDraftSave, watchDraft, archiveSupplier, clearSupplier,
   clearQuantities, saveHistoryRecord, deleteHistoryRecord, setDraftSaveReporter,
-  confirmDelivery, resolveMissing, dropDeletedIngredientFromDraft,
+  confirmDelivery, resolveMissing, dropDeletedIngredientFromDraft, freezeUnitInDraft,
 } from './draft.js';
 import { buildSendScreen } from './preview.js';
 import { buildSupplierPicker } from './supplier-picker.js';
@@ -510,6 +510,8 @@ function openEditIngredient(ing) {
       priceHistory: (id) => getPriceHistory(id),
       // The bin, only for whoever may delete (the rules decide either way — P2).
       ...(canManageHere() ? { deleteIngredient: deleteIngredientAndDraftRow } : {}),
+      // «Cartone» / «Singola» rewrite the order unit: the open draft line keeps the unit it was typed in.
+      unitChanged: freezeUnitInDraft,
     },
   })
     .catch(err => {

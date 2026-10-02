@@ -170,3 +170,34 @@ test('a package word that is also a case word, on a case of pieces or kilos, is 
   const single = { priceUnit: 'pcs', pricePerUnit: 30, casePrice: 30, caseCount: 1, caseItemSize: null, caseItemUnit: 'pcs' };
   assert.equal(unitCost({ unit: 'scatola', packUnit: 'scatola' }, single), 30);
 });
+
+// ── A case of ONE package, and a stored size written back verbatim (1 Oct 2026) ──
+// «Singola» with a weight that reads is a case of one: 20 for a 25 kg sack is 0.80 a kilo.
+test('a case of one package prices the pack: 20 for a 25 kg sack is 0.80 a kilo, and the sack costs 20', () => {
+  const p = pricePatch({ priceUnit: CASE_MODE, casePrice: 20, caseCount: 1, caseItemUnit: 'pack' }, AT, '25kg');
+  assert.deepEqual([p.priceUnit, p.pricePerUnit, p.caseCount, p.caseItemUnit, p.caseItemSize], ['kg', 0.8, 1, 'pack', 25]);
+  assert.ok(storedCaseOf(p), 'a case of one stands on its own rate');
+  for (const unit of ['', 'sacco', 'busta', 'pz']) {
+    assert.equal(unitCost({ unit, weight: '25kg' }, p), 20, `ordered in "${unit}"`);
+  }
+  assert.equal(unitCost({ unit: 'kg', weight: '25kg' }, p), 0.8, 'ordered by weight it is the rate');
+});
+
+test('20 for 4 × 2.5 kg is 2 a kilo and 5 a busta, ordered either way', () => {
+  const p = patchFor('2.5kg');
+  assert.equal(p.pricePerUnit, 2);
+  const card = { unit: 'cartone', packUnit: 'busta', packCount: 4, weight: '2.5kg' };
+  assert.equal(unitCost(card, p), 20);
+  assert.equal(unitCost({ ...card, unit: 'busta' }, p), 5);
+});
+
+test('packBasis makes the stored size authoritative: the weight on the card is not read', () => {
+  const stored = { priceUnit: CASE_MODE, casePrice: 20, caseCount: 4, caseItemSize: 2.5, caseItemUnit: 'pack', packBasis: 'kg' };
+  for (const weight of ['2.5kg', '3kg', '', 'sacco', undefined]) {
+    const p = pricePatch(stored, AT, weight);
+    assert.deepEqual([p.priceUnit, p.pricePerUnit, p.caseItemSize], ['kg', 2, 2.5], String(weight));
+  }
+  // a basis that is not kg or l is ignored, and the weight rules again (here: unreadable → no price)
+  assert.equal(pricePatch({ ...stored, packBasis: 'pcs' }, AT, '').pricePerUnit, null);
+  assert.equal(pricePatch({ ...stored, packBasis: 'l' }, AT, '').priceUnit, 'l');
+});

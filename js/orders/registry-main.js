@@ -14,7 +14,7 @@ import { outputLanguage } from '../market.js';
 import { categoryChoices, unitChoices, packChoices } from '../record-choices.js';
 import { withPrices } from '../price-model.js';
 import { buildRegistry } from './registry.js';
-import { dropDeletedIngredientFromDraft } from './draft.js';
+import { dropDeletedIngredientFromDraft, freezeUnitInDraft } from './draft.js';
 import {
   COLLECTIONS, watchCollection, watchIngredientPrices, canManageHere,
   saveDoc, removeDoc, saveIngredientWithPrice, saveSupplierRecord, getPriceHistory,
@@ -75,8 +75,17 @@ const screen = buildRegistry(
     // including a write to ingredient-prices for somebody the rules refuse would
     // fail the WHOLE save, so renaming an ingredient — ordinary work — would come
     // back as a permission error with nothing on screen explaining it.
-    saveIngredient: (id, payload, record, writePrice) =>
-      saveIngredientWithPrice(id, payload, record, writePrice),
+    // `meta.unitChangedFrom` is the order unit the card has just replaced (Cartone / Singola): the open
+    // draft line is frozen in it so a quantity keeps its meaning (draft.js freezeUnitInDraft). Not part of
+    // the save: if it fails the ingredient is already saved, and only the log says so.
+    saveIngredient: async (id, payload, record, writePrice, meta) => {
+      const savedId = await saveIngredientWithPrice(id, payload, record, writePrice);
+      if (meta && meta.unitChangedFrom) {
+        freezeUnitInDraft({ id: savedId, from: meta.unitChangedFrom, item: payload })
+          .catch(err => console.error('The draft line kept an old unit:', err));
+      }
+      return savedId;
+    },
     priceHistory: (id) => getPriceHistory(id),
     setSupplierActive: (id, active) => saveDoc(COLLECTIONS.suppliers, id, { active }),
     setIngredientActive: (id, active) => saveDoc(COLLECTIONS.ingredients, id, { active }),
