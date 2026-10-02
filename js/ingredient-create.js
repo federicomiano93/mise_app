@@ -226,6 +226,8 @@ export function openIngredientCreate({
 //   priceHistory(id)     — the append-only price history reader (Orders' getPriceHistory)
 //   deleteIngredient(id) — present only for whoever may delete; draws the card's bin (and does
 //                          the feature's own clean-up, e.g. the order draft)
+//   unitChanged({ id, from, item }) — optional: the card replaced the order unit `from`; the feature
+//                          freezes the open draft line in it (Orders: draft.js freezeUnitInDraft)
 // Everything else is the same as the Fornitori screen's own card: title, fields, price, panels,
 // «+ Nuovo fornitore», and the question before typing is thrown away (P20).
 export async function openIngredientEdit({
@@ -269,9 +271,14 @@ export async function openIngredientEdit({
       mayPrice,
       panels: { allergens: allergensOn(location), nutrition: nutritionOn(location), packPhoto: false },
       actions: {
-        saveIngredient: async (id, payload, record, writePrice) => {
+        saveIngredient: async (id, payload, record, writePrice, meta) => {
           const savedId = await saveIngredientWithPrice(id, payload, record, writePrice);
           saved = { id: savedId, name: payload.name };
+          // The calling feature owns the draft; this file may not import it. Its failure is only logged.
+          if (meta && meta.unitChangedFrom && typeof actions.unitChanged === 'function') {
+            Promise.resolve(actions.unitChanged({ id: savedId, from: meta.unitChangedFrom, item: { ...stored, ...payload } }))
+              .then(undefined, err => console.error('The draft line kept an old unit:', err));
+          }
         },
         priceHistory: actions.priceHistory || (async () => []),
         // As on the create path: the packet photograph spends money per tap and stays on

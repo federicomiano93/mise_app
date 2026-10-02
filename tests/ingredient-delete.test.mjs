@@ -139,7 +139,7 @@ test('the bin is quiet: danger-red icon, no fill, no border, a 44px target', () 
 test('Fornitori hands the action in only to an owner or manager, read when each card opens', () => {
   assert.match(REG_MAIN, /get deleteIngredient\(\) \{\s*return canManageHere\(\)\s*\? async \(id\) => \{\s*await deleteIngredientWithPrice\(id, mayWritePrices\(\)\);\s*dropDeletedIngredientFromDraft\(id\);\s*\}\s*: undefined;/,
     'Fornitori also takes the line out of the order draft, after the batch and without awaiting it');
-  assert.match(REG_MAIN, /import \{ dropDeletedIngredientFromDraft \} from '\.\/draft\.js';/);
+  assert.match(REG_MAIN, /import \{ dropDeletedIngredientFromDraft, freezeUnitInDraft \} from '\.\/draft\.js';/);
   // registry.js spreads the actions object each time it opens a card, which runs the getter then.
   const registry = codeOf(read('js/orders/registry.js'));
   assert.match(registry, /actions: \{ \.\.\.actions, capturePackPhoto,/);

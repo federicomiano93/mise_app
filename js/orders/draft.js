@@ -14,13 +14,13 @@
 // including whatever someone else is typing right now — is left alone.
 
 import {
-  saveDoc, watchDoc, clearFields, transactDoc, replaceDoc, removeDoc, COLLECTIONS,
+  saveDoc, watchDoc, clearFields, transactDoc, replaceDoc, removeDoc, getDocOnce, COLLECTIONS,
 } from './firebase-orders.js';
 import {
   buildSupplierArchive, mergeArchives, historyDocId, ingredientsOf, quantityPathsFor,
   changedEntries, changedDays,
 } from './archive.js';
-import { cleanUnit } from '../order-unit.js';
+import { cleanUnit, storedUnitFor } from '../order-unit.js';
 import { draftEntryPath } from '../ingredient-edit-model.js';
 
 const DRAFT_ID = 'current';
@@ -271,6 +271,32 @@ export function clearIngredientFromDraft(ingredientId) {
     forgetKnown(paths);
     return result;
   });
+}
+
+// An ingredient's ORDER UNIT was changed by its card (Cartone / Singola rewrite it): freeze the unit
+// the open draft line was typed in, so «8 buste» stays 8 buste instead of reading 8 cartoni.
+//
+// ⚠️ A DRAFT LINE WITH NO UNIT OF ITS OWN MEANS «THE CARD'S UNIT, WHATEVER IT IS NOW» (storedUnitFor):
+// changing the card's unit silently changes what every untouched line counts. So when the line has a
+// quantity and no unit of its own, the OLD unit is written onto it — by the very rule Orders uses for
+// a chosen unit (nothing when it is the card's unit still). The card's new unit is in `item`.
+// ⚠️ ONLY THE DRAFT: a line already recorded in orders-history carries no frozen unit, and re-reading
+// it with the new card unit reads the new word. That was already true whenever «Unità d'ordine» was
+// edited, before this card existed — it is left alone, on purpose.
+// One function for both screens that can edit an ingredient (Orders and Fornitori). It READS the
+// draft once and then merges ONE field, so whatever another phone is typing survives. A failure is
+// the caller's to log: the ingredient is already saved.
+export async function freezeUnitInDraft({ id, from, item }) {
+  const frozen = storedUnitFor(from, item);
+  if (!frozen) return false;
+  const draft = await getDocOnce(COLLECTIONS.drafts, DRAFT_ID);
+  const entry = draft && draft.entries ? draft.entries[id] : null;
+  if (!(Number(entry && entry.qty) > 0) || cleanUnit(entry.unit)) return false;
+  await saveDoc(COLLECTIONS.drafts, DRAFT_ID, {
+    updatedAt: new Date().toISOString(),
+    entries: { [id]: { unit: frozen } },
+  });
+  return true;
 }
 
 // Throw away the quantities typed for one or more suppliers WITHOUT recording an
