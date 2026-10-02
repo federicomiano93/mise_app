@@ -15,6 +15,8 @@
 // appears is worse than one that never changes at all.
 
 import { t, currentLanguage, onLanguageChange } from './i18n.js';
+// Shared by every page: the ✓ / Done key on every single-line box.
+import './keyboard-done.js';
 
 // Every element carrying data-i18n gets its text replaced. An element may also
 // carry data-i18n-attr="placeholder" (or any attribute name) to have that
