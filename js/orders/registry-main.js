@@ -20,6 +20,7 @@ import {
   saveDoc, removeDoc, saveIngredientWithPrice, saveSupplierRecord, getPriceHistory,
   watchDoc, setCategoryOnMany, deleteIngredientWithPrice, mayWritePrices,
 } from './firebase-orders.js';
+import { readIngredientPrice } from '../record-data.js';
 
 const state = {
   suppliers: [],
@@ -30,6 +31,9 @@ const state = {
   // loaded yet: both mean «offer the defaults».
   ingredientCategories: null,
   loaded: { ingredients: false, config: false },
+  // Whether the live prices have really answered (watchIngredientPrices' second argument): until
+  // then an ingredient card reads its own price document before it opens (registry.js).
+  pricesReadable: false,
 };
 
 const host = document.getElementById('registry-host');
@@ -51,6 +55,8 @@ const screen = buildRegistry(
     // ⚠️ Until config/orders has answered, `categories()` is only the defaults: Settings keeps
     // the delete buttons off, or a delete would overwrite the saved list with them.
     categoriesLoaded: () => state.loaded.config,
+    pricesLoaded: () => state.pricesReadable === true,
+    readPrice: (id) => readIngredientPrice(id),
     orderUnits: (current) => unitChoices({
       ingredients: state.ingredients, language: outputLanguage(currentSession().location), current,
     }),
@@ -165,8 +171,9 @@ watchCollection(COLLECTIONS.suppliers, list => {
 // here so the form opens on the price it is meant to edit; an employee is refused
 // that collection and simply sees no price, which is the same thing they see for
 // an ingredient nobody has priced.
-watchIngredientPrices(map => {
+watchIngredientPrices((map, readable) => {
   state.ingredientPrices = map;
+  state.pricesReadable = readable === true;
   if (state.loaded.ingredients) {
     state.ingredients = withPrices(state.rawIngredients, map);
     screen.refresh();
