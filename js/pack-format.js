@@ -66,13 +66,25 @@ export function usesLegacyCard(item) {
     // ⚠️ A CASE ORDERED BY ITS OWN PACKAGE WORD is what the NEW card leaves behind when an employee turns its
     // Cartone into a Singola (5th review, 2 Oct 2026): it stays on the new card, which reopens it as a
     // Singola with «Ricalcola». The card of before has no way back for it.
-    if ((stored.caseItemUnit === 'pack' || stored.caseItemUnit === 'pcs') && unit !== '' && sameUnit(unit, it.packUnit)) return false;
+    // ⚠️ A CASE OF PIECES only when its piece weight IS the card's weight — what the new card writes. An old
+    // «A cartone 30 pz» ordered by its «vaschetta» (30 eggs, not one) stays on the card of before (6th review).
+    if (unit !== '' && sameUnit(unit, it.packUnit)) {
+      if (stored.caseItemUnit === 'pack') return false;
+      if (stored.caseItemUnit === 'pcs' && pieceIsItem(it)) return false;
+    }
     if (stored.caseItemUnit !== 'pack') return true;
     return !(unit === '' || isCartonWord(unit));
   }
   const priced = Number(it.pricePerUnit) > 0;
   const weight = typeof it.weight === 'string' ? it.weight.trim() : '';
   return priced && weight !== '' && packBaseOf(weight) === null;
+}
+
+// The price remembers one piece's weight, and it is the card's own readable weight.
+function pieceIsItem(it) {
+  const base = packBaseOf(typeof it.weight === 'string' ? it.weight : '');
+  const kg = Number(it.unitWeightKg);
+  return base !== null && Number.isFinite(kg) && kg > 0 && Math.abs(base.size - kg) < 1e-9;
 }
 
 // The count the rules accept (firestore.rules ingredients.packCount): a whole number 1–10000.
@@ -170,9 +182,12 @@ export function formatPatch(before, form, { force = false } = {}) {
   // an employee (no price section) turns into a Singola is read with the ORDER UNIT only — empty, it
   // reads «the whole case» and a single bag was priced 20 instead of 5; «busta» reads «one item of the
   // case». With no package word there is nothing better than ''.
+  // ⚠️ AND SO DOES AN EMPTY UNIT ON A CARD THAT OPENED AS A CARTONE (6th review, 2 Oct 2026): there '' meant
+  // «the whole case» too, and an employee's Singola left it '' — the readers kept ordering whole cases.
+  const meantCase = isCartonWord(before.unit) || (cleanUnit(before.unit) === '' && before.kind === 'carton');
   return {
     packCount: null,
-    unit: isCartonWord(before.unit) ? cleanUnit(before.packUnit) : cleanUnit(before.unit),
+    unit: meantCase ? cleanUnit(before.packUnit) : cleanUnit(before.unit),
   };
 }
 
