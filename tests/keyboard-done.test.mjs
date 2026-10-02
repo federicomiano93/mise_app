@@ -25,6 +25,25 @@ function fakeDoc() {
     fire: (type, target, extra = {}) => handlers[type]({ target, ...extra }),
   };
 }
+test('added boxes get the hint, nested ones too, textarea and next untouched', () => {
+  let callback; let observed;
+  class FakeObserver { constructor(cb) { callback = cb; } observe(target, opts) { observed = { target, opts }; } }
+  const existing = fakeNode('input', { type: 'text' });
+  const d = { ...fakeDoc(), documentElement: {}, querySelectorAll: () => [existing] };
+  installKeyboardDone(d, FakeObserver);
+  assert.equal(existing.getAttribute('enterkeyhint'), 'done');
+  assert.deepEqual(observed.opts, { childList: true, subtree: true });
+  const added = fakeNode('input', { type: 'number' }); added.nodeType = 1;
+  const nested = fakeNode('input', {}); const area = fakeNode('textarea'); const next = fakeNode('input', { enterkeyhint: 'next' });
+  const overlay = { nodeType: 1, tagName: 'DIV', getAttribute: () => null, querySelectorAll: () => [nested, next] };
+  area.nodeType = 1;
+  callback([{ addedNodes: [added, overlay, area, { nodeType: 3 }] }]);
+  assert.equal(added.getAttribute('enterkeyhint'), 'done');
+  assert.equal(nested.getAttribute('enterkeyhint'), 'done');
+  assert.equal(area.getAttribute('enterkeyhint'), null);
+  assert.equal(next.getAttribute('enterkeyhint'), 'next');
+});
+
 const setup = () => { const d = fakeDoc(); installKeyboardDone(d); return d; };
 
 test('focus gives text, number and typeless inputs the done key', () => {

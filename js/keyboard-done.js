@@ -41,16 +41,40 @@ export function shouldBlurOnEnter(node, event) {
   return !inForm;
 }
 
-export function installKeyboardDone(doc) {
+function hint(node) {
+  if (wantsDoneKey(node)) node.setAttribute('enterkeyhint', 'done');
+}
+
+// Applies the hint to a node and to every input inside it.
+export function hintTree(node) {
+  if (!node || node.nodeType !== 1) return;
+  hint(node);
+  if (typeof node.querySelectorAll === 'function') {
+    for (const input of node.querySelectorAll('input')) hint(input);
+  }
+}
+
+// On Android the keyboard may be configured before or as focus lands, so the
+// hint is also set as boxes are ADDED: one scan at install, then one observer
+// (childList + subtree, no attribute watching) that walks only the added nodes.
+// The focusin path stays as a backstop. `Observer` is injectable for tests.
+export function installKeyboardDone(doc, Observer = typeof MutationObserver !== 'undefined' ? MutationObserver : null) {
   if (!doc || typeof doc.addEventListener !== 'function') return;
-  doc.addEventListener('focusin', (event) => {
-    const node = event.target;
-    if (wantsDoneKey(node)) node.setAttribute('enterkeyhint', 'done');
-  });
+  doc.addEventListener('focusin', (event) => hint(event.target));
   doc.addEventListener('keydown', (event) => {
     const node = event.target;
     if (shouldBlurOnEnter(node, event)) node.blur();
   });
+  if (typeof doc.querySelectorAll === 'function') {
+    for (const input of doc.querySelectorAll('input')) hint(input);
+  }
+  if (Observer && doc.documentElement) {
+    new Observer((records) => {
+      for (const record of records) {
+        for (const added of record.addedNodes) hintTree(added);
+      }
+    }).observe(doc.documentElement, { childList: true, subtree: true });
+  }
 }
 
 installKeyboardDone(typeof document !== 'undefined' ? document : null);
