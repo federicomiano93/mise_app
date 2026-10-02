@@ -8,7 +8,9 @@ import { readFileSync } from 'node:fs';
 
 const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
 const codeOf = src => src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
-const FORM = codeOf(read('js/ingredient-record-form.js'));
+import { newCardSource, legacyCardSource } from './helpers/card-source.mjs';
+// ⚠️ These tests are about the NEW card; the card of before (old stored price shapes) is pinned in legacy-card.test.mjs.
+const FORM = codeOf(newCardSource());
 const I18N = read('js/i18n.js');
 const CSS = read('orders.css');
 
@@ -28,12 +30,16 @@ test('every new phrase exists once in English and once in Italian, and the card 
   }
 });
 
-test('the retired phrases are gone from both languages and from the code', () => {
+// ⚠️ THESE PHRASES ARE NOT RETIRED FROM THE DICTIONARY ANY MORE (2 Oct 2026, reduced scope): the card of before
+// still draws them for an old stored price shape. They stay retired from the NEW card, which never asks for them.
+test('the phrases of the card of before are not asked for by the new card, and live on for the old one', () => {
+  const legacy = codeOf(legacyCardSource());
   for (const key of ['orders.priceByCase', 'orders.case.size', 'orders.case.unit', 'orders.case.pcs', 'orders.orderUnit',
     'orders.choice.newUnit', 'orders.choice.unitPlaceholder', 'orders.choice.unitBlank', 'orders.choice.unitAria',
     'orders.case.packOf', 'orders.case.packWord']) {
-    assert.equal(I18N.includes(`'${key}':`), false, `${key} is retired`);
-    assert.equal(FORM.includes(`'${key}'`), false, `${key} is still asked for`);
+    assert.equal(FORM.includes(`'${key}'`), false, `${key} is still asked for by the new card`);
+    assert.equal(I18N.split(`'${key}':`).length - 1, 2, `${key} must stay in both languages for the card of before`);
+    assert.ok(legacy.includes(`'${key}'`), `${key} is not used by the card of before`);
   }
 });
 

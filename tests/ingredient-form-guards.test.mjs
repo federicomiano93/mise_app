@@ -6,7 +6,9 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
-const FORM = read('js/ingredient-record-form.js');
+import { newCardSource } from './helpers/card-source.mjs';
+// The NEW card only: the card of before is pinned in legacy-card.test.mjs.
+const FORM = newCardSource();
 const I18N = read('js/i18n.js');
 
 test('the weight placeholder is a bare number, in both languages', () => {

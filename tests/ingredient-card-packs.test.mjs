@@ -8,7 +8,9 @@ import { readFileSync } from 'node:fs';
 
 const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
 const codeOf = src => src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
-const FORM = codeOf(read('js/ingredient-record-form.js'));
+import { newCardSource } from './helpers/card-source.mjs';
+// The NEW card only: the card of before is pinned in legacy-card.test.mjs.
+const FORM = codeOf(newCardSource());
 const CSS = read('orders.css');
 
 test('the price box shares the row: the rate beside «Come si acquista», or the case price alone', () => {
