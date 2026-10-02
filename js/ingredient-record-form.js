@@ -1242,7 +1242,7 @@ function weightControl(stored) {
 // ⚠️ THE SENTINEL IS NOT A WORD A PERSON WOULD FILE UNDER, so no real value collides with it.
 const NEW_CHOICE = '__mise_new__';
 
-function choiceControl({ values, current, newLabel, placeholder, ariaLabel, blankText, maxLength = null, selectLabel = null }) {
+function choiceControl({ values, current, newLabel, placeholder, ariaLabel, blankText, maxLength = null, selectLabel = null, emptyText = null }) {
   const select = el('select', { class: 'mgmt-input', 'aria-label': selectLabel ?? undefined }, [
     el('option', { value: '', text: t('orders.choice.none') }),
     ...values.map(v => el('option', { value: v, text: v })),
@@ -1263,14 +1263,18 @@ function choiceControl({ values, current, newLabel, placeholder, ariaLabel, blan
   });
   const refusal = refusalMessage(typed, blankText);
   typed.addEventListener('input', refusal.clear);
+  // «Nothing chosen» refused on the MENU itself — only for a menu that must be answered (the carton's
+  // inner word); the «+ New…» box has its own refusal above.
+  const emptyRefusal = emptyText ? refusalMessage(select, emptyText) : null;
   select.addEventListener('change', () => {
+    emptyRefusal?.clear();
     const isNew = select.value === NEW_CHOICE;
     typed.hidden = !isNew;
     refusal.clear();
     if (isNew) typed.focus();
   });
   return {
-    node: el('div', { class: 'mgmt-choice' }, [select, typed, refusal.node]),
+    node: el('div', { class: 'mgmt-choice' }, [select, typed, refusal.node, emptyRefusal?.node]),
     read: () => (select.value === NEW_CHOICE ? typed.value.trim() : select.value),
     // Put the menu on a word that is already on offer (the default package when «Cartone» is picked).
     set: (word) => {
@@ -1278,6 +1282,7 @@ function choiceControl({ values, current, newLabel, placeholder, ariaLabel, blan
     },
     invalid: () => isBlankNewChoice(select.value === NEW_CHOICE, typed.value),
     markInvalid: refusal.show,
+    markEmpty: () => emptyRefusal?.show(),
     onChange: (fn) => { select.addEventListener('change', fn); typed.addEventListener('input', fn); },
   };
 }
@@ -1346,7 +1351,7 @@ export function buildIngredientForm({
     values: packs, current: openedInner || item?.packUnit,
     newLabel: t('orders.choice.newPack'), placeholder: t('orders.choice.packPlaceholder'),
     ariaLabel: t('orders.choice.packAria'), blankText: t('orders.choice.packBlank'),
-    maxLength: PACK_WORD_MAX, selectLabel: t('orders.format.innerAria'),
+    maxLength: PACK_WORD_MAX, selectLabel: t('orders.format.innerAria'), emptyText: t('orders.format.innerNeeded'),
   });
   const count = el('input', {
     type: 'number', class: 'mgmt-input', min: '1', max: '10000', step: '1', inputmode: 'numeric',
@@ -1502,6 +1507,14 @@ export function buildIngredientForm({
     const state = formState();
     if (state.kind === 'carton' && (formatIsTouched() || (price && price.dirty())) && parseCount(count.value) === null) {
       countRefusal.show();
+      return;
+    }
+    // ⚠️ AND SO IS THE WORD FOR ONE ITEM INSIDE, by the same rule and with the same treatment: a
+    // carton that is being written must say what it holds («Cartone da 4 …»). Switching to Cartone
+    // pre-selects the venue's default word, so the normal path never gets here; an untouched legacy
+    // card with no package word is never blocked.
+    if (state.kind === 'carton' && (formatIsTouched() || (price && price.dirty())) && pack.read() === '') {
+      pack.markEmpty();
       return;
     }
     // ⚠️ A case priced by weight, with a weight that no longer reads, is refused here, on the weight

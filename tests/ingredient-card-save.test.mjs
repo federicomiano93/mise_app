@@ -515,6 +515,7 @@ test('an untouched save with the hint showing is still verbatim', async () => {
 
 test('a touched price without the weight is refused on the weight box, never stored as pieces', async () => {
   const card = openCard({ item: LEGACY_NO_WEIGHT });
+  choose(card.inner, 'busta');   // the legacy card names no package: a person writing a price must say what the carton holds
   type(card.casePrice, '22');
   assert.equal(await card.save(), undefined);
   assert.ok(card.weightAmount.focused > 0);
@@ -523,6 +524,7 @@ test('a touched price without the weight is refused on the weight box, never sto
 
 test('with the weight typed, the price is stored per item and still means the right € / kg', async () => {
   const card = openCard({ item: LEGACY_NO_WEIGHT });
+  choose(card.inner, 'busta');
   type(card.weightAmount, '2.5');
   type(card.casePrice, '22');
   const { payload } = await card.save();
@@ -596,4 +598,63 @@ test('D: Cartone → Singola says it replaced «cartone»; an unchanged unit, a 
   click(empty.carton);
   type(empty.count, '3');
   assert.equal((await empty.save()).meta, undefined);
+});
+
+// ── The word for ONE item inside is required like the count, when the carton is being written ──
+
+test('a carton being written with no inner word is refused on the inner menu: block, focus, highlight', async () => {
+  // a legacy 4 × 2.5 kg case names no package; the person moves the count
+  const card = openCard({ item: LEGACY_KG });
+  assert.equal(card.inner.value, '');
+  type(card.count, '5');
+  assert.equal(await card.save(), undefined, 'nothing written');
+  assert.ok(card.inner.focused > 0, 'jumped to the menu');
+  assert.equal(card.inner.attributes['aria-invalid'], 'true', 'highlighted');
+  assert.ok(card.all().some(n => n.classList.contains('mgmt-field-error') && shown(n) && n.textContent === 'Choose what is inside the case'));
+  // choosing a word clears the refusal and lets the save through
+  choose(card.inner, 'busta');
+  assert.equal(card.inner.attributes['aria-invalid'], undefined);
+  const { payload } = await card.save();
+  assert.deepEqual([payload.packCount, payload.packUnit, payload.unit], [5, 'busta', 'cartone']);
+});
+
+test('typing a price under a carton with no inner word is refused on the inner menu too', async () => {
+  const card = openCard({ item: LEGACY_KG });
+  type(card.casePrice, '22');
+  assert.equal(await card.save(), undefined);
+  assert.equal(card.inner.attributes['aria-invalid'], 'true');
+});
+
+test('the count is checked first, then the inner word', async () => {
+  const card = openCard();
+  type(card.name, 'Farina');
+  click(card.carton);
+  choose(card.inner, '');
+  assert.equal(await card.save(), undefined);
+  assert.equal(card.count.attributes['aria-invalid'], 'true');
+  assert.equal(card.inner.attributes['aria-invalid'], undefined);
+  type(card.count, '4');
+  assert.equal(await card.save(), undefined);
+  assert.equal(card.inner.attributes['aria-invalid'], 'true');
+});
+
+test('switching to Cartone pre-selects the default word (busta on an Italian venue), so the normal path is never refused', async () => {
+  const card = openCard();
+  type(card.name, 'Farina');
+  click(card.carton);
+  assert.equal(card.inner.value, 'busta');
+  type(card.count, '4');
+  assert.ok(await card.save());
+});
+
+test('an untouched legacy card with no package word is never blocked, and neither is an employee one', async () => {
+  assert.ok(await openCard({ item: LEGACY_KG }).save());
+  assert.ok(await openCard({ item: LEGACY_G }).save());
+  assert.ok(await openCard({ item: { ...BASE, unit: 'cartone', packUnit: 'busta', weight: '2.5kg' }, mayPrice: false }).save());
+});
+
+test('a Singola never needs an inner word', async () => {
+  const card = openCard({ item: TYPED_SACK });
+  type(card.rate, '1');
+  assert.ok(await card.save());
 });
