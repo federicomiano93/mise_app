@@ -1447,6 +1447,9 @@ body[data-section="orders"] .ing-filter .view-switch-btn:not(.active) { color: v
    may shrink (min-width:0 — a <select> and a number input otherwise keep their intrinsic width and
    push the row past a 296px card); the × is only a sign between two boxes. Icon/label rules do not
    apply: no icon here. */
+/* The card of before (an old stored price shape): the case price, then «Contiene [50] pz» /
+   «[4] × [2.5] kg» — the box that holds that row and its «package weight changed» line. */
+.mgmt-case { display: flex; flex-direction: column; gap: var(--space-3); }
 .mgmt-case-row { display: flex; align-items: center; gap: 8px; }
 /* At 296px the four controls share ~200px: with the card's 12px side padding «1000» and «ml»
    plus the select's arrow did not fit. Slimmer side padding on the three, and the unit menu

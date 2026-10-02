@@ -34,7 +34,7 @@ import { confirmDialog } from './confirm-dialog.js';
 import { currentSession } from './firebase.js';
 import { allergensOn, nutritionOn } from './venue-features.js';
 import { outputLanguage } from './market.js';
-import { categoryChoices, packChoices } from './record-choices.js';
+import { categoryChoices, unitChoices, packChoices } from './record-choices.js';
 import { buildIngredientForm } from './ingredient-record-form.js';
 import { buildSupplierForm } from './supplier-record-form.js';
 import {
@@ -173,6 +173,7 @@ export function openIngredientCreate({
       suppliers: supplierList(suppliers),
       preset: presetSupplierId,
       categories: categoryChoices({ stored: storedCategories, ingredients: known, language }),
+      orderUnits: unitChoices({ ingredients: known, language }),
       packs: packChoices({ ingredients: known, language }),
       // ⚠️ THE SAME TWO DECISIONS registry.js makes, from the same root answers.
       mayPrice: mayWritePrices(),
@@ -264,9 +265,10 @@ export async function openIngredientEdit({
     const form = buildIngredientForm({
       item: stored,
       suppliers: supplierList(suppliers),
-      // `current` keeps the ingredient's own category / pack word on the menu even when
+      // `current` keeps the ingredient's own category / unit / pack word on the menu even when
       // no other ingredient uses it, exactly as the Fornitori screen's card does.
       categories: categoryChoices({ stored: storedCategories, ingredients: known, language, current: stored.category }),
+      orderUnits: unitChoices({ ingredients: known, language, current: stored.unit }),
       packs: packChoices({ ingredients: known, language, current: stored.packUnit }),
       mayPrice,
       panels: { allergens: allergensOn(location), nutrition: nutritionOn(location), packPhoto: false },

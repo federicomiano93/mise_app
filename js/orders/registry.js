@@ -60,9 +60,10 @@ import {
   BACK_ICON, mgmtRow,
 } from './mgmt-ui.js';
 
-// data:    { suppliers(): [], ingredients(): [], categories(current): [],
-//            packs(current): [], categoriesLoaded(): boolean } — live getters; categories
-//            and packs are the words the ingredient card's menus offer
+// data:    { suppliers(): [], ingredients(): [], categories(current): [], orderUnits(current): [],
+//            packs(current): [], categoriesLoaded(): boolean } — live getters; categories,
+//            orderUnits and packs are the words the ingredient card's menus offer (orderUnits only
+//            for the card of before, which an old stored price shape opens)
 // actions: { saveSupplier, saveIngredient, priceHistory, setSupplierActive,
 //            setIngredientActive, deleteSupplier, deleteIngredient, deleteCategory(list, ids) }
 // hooks:   { onChrome({ addLabel }) } — told on every paint which word the page
@@ -473,6 +474,7 @@ export function buildRegistry(data, actions, hooks = {}) {
           presetKind,
           // The menus' words, from the page's live data — the card imports no feature code.
           categories: data.categories?.(item?.category) || [],
+          orderUnits: data.orderUnits?.(item?.unit) || [],
           packs: data.packs?.(item?.packUnit) || [],
           // ⚠️ DECIDED HERE AND HANDED IN, since the card moved to js/ root: whether the
           // price is drawn (the role AND Food cost — see mayWritePrices) and which panels

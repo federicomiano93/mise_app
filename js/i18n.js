@@ -991,6 +991,24 @@ const DICTIONARIES = Object.freeze({
     'orders.format.summary': 'Case of {items} of {size} ({total})',
     'orders.format.summaryNoWeight': 'Case of {items}',
     'orders.format.priceAgain': 'This format has no price yet: type the price',
+    // ── The card of before (2 Oct 2026): an ingredient with an OLD stored price shape keeps the card
+    // with «Order unit» and «By the case». These are that card's words, as they were. The four
+    // `orders.legacyCard.*` entries are the old wording of keys the new card now words differently.
+    'orders.orderUnit': 'Order unit',
+    'orders.priceByCase': 'By the case',
+    'orders.case.packOf': '{pack} of {size}',
+    'orders.case.packWord': 'pack',
+    'orders.legacyCard.packChanged': 'The package weight has changed: the price updates when you save',
+    'orders.legacyCard.packNeeded': 'The package weight is needed for the case price',
+    'orders.case.size': 'Size of each one',
+    'orders.case.unit': 'Unit of each one',
+    'orders.case.pcs': 'pcs',
+    'orders.legacyCard.summaryUnit': '= {rate} / {unit} · {price} per case',
+    'orders.legacyCard.summaryPiece': '= {rate} each · {price} per case',
+    'orders.choice.newUnit': '+ New unit…',
+    'orders.choice.unitPlaceholder': 'New unit, e.g. tray',
+    'orders.choice.unitBlank': 'Write the new unit’s name',
+    'orders.choice.unitAria': 'New order unit',
     // ── What an order costs (29 Sep 2026), shown only to whoever may see money ──
     'orders.cost.noPrice': 'no price',
     'orders.cost.nothingPriced': 'No item here has a price yet: add it in the ingredient’s card',
@@ -3400,6 +3418,24 @@ const DICTIONARIES = Object.freeze({
     'orders.format.summary': 'Cartone da {items} da {size} ({total})',
     'orders.format.summaryNoWeight': 'Cartone da {items}',
     'orders.format.priceAgain': 'Questo formato non ha ancora un prezzo: scrivilo',
+    // ── La scheda di prima (2 ott 2026): un ingrediente con un prezzo salvato di forma vecchia tiene la
+    // scheda con «Unità d’ordine» e «A cartone». Sono le parole di quella scheda, com’erano. Le quattro voci
+    // `orders.legacyCard.*` sono il vecchio testo di chiavi che la scheda nuova ora scrive in altro modo.
+    'orders.orderUnit': 'Unità d’ordine',
+    'orders.priceByCase': 'A cartone',
+    'orders.case.packOf': '{pack} da {size}',
+    'orders.case.packWord': 'confezione',
+    'orders.legacyCard.packChanged': 'Il peso della confezione è cambiato: il prezzo si aggiorna quando salvi',
+    'orders.legacyCard.packNeeded': 'Serve il peso della confezione per il prezzo a cartone',
+    'orders.case.size': 'Misura di ciascuno',
+    'orders.case.unit': 'Unità di ciascuno',
+    'orders.case.pcs': 'pz',
+    'orders.legacyCard.summaryUnit': '= {rate} / {unit} · {price} a cartone',
+    'orders.legacyCard.summaryPiece': '= {rate} al pezzo · {price} a cartone',
+    'orders.choice.newUnit': '+ Nuova unità…',
+    'orders.choice.unitPlaceholder': 'Nuova unità, es. vassoio',
+    'orders.choice.unitBlank': 'Scrivi il nome della nuova unità',
+    'orders.choice.unitAria': 'Nuova unità d’ordine',
     // ── Quanto costa un ordine (29 Sep 2026), solo per chi può vedere i prezzi ──
     'orders.cost.noPrice': 'senza prezzo',
     'orders.cost.nothingPriced': 'Nessuna voce ha ancora un prezzo: aggiungilo nella scheda dell’ingrediente',

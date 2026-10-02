@@ -35,10 +35,16 @@ import {
   pricePatch, priceChanged, priceRecord, pricePerKg,
   formatPricePerUnit, formatRate, costReasonText, formatMoney,
 } from './price-model.js';
+// legacy-card:begin
+// What the card of before (an old stored price shape) needs and the new card does not: the «A cartone» mode
+// and the case row's units.
+import { CASE_MODE, CASE_ITEM_UNITS, PACK_ITEM, packWeightOf } from './price-model.js';
+// legacy-card:end
 // «Confezione: Singola | Cartone» — what an ingredient comes in, read from what is stored and
 // written back ONLY when a person moved it (js/pack-format.js, pure).
 import {
   formatOf, formatTouched, formatPatch, formatSummary, formatChanged, looseUnit, parseCount, isCartonWord,
+  usesLegacyCard,
 } from './pack-format.js';
 // The purchase-VAT choices for the venue's country — the SAME menu
 // js/foodcost/foodcost-model.js offers for a product's selling price; moved to
@@ -512,6 +518,288 @@ function priceBlock(item, actions, defaultUnit = null, ctx) {
 
   return { node, read, refresh, needsWeight, dirty, keepsMoney };
 }
+
+// legacy-card:begin
+// ── The price block of BEFORE (2 Oct 2026, reduced scope) ─────────────────────
+// ⚠️ FOR AN INGREDIENT WHOSE STORED PRICE HAS AN OLD SHAPE (pack-format.js usesLegacyCard), the card
+// is the one that shipped before «Confezione: Singola | Cartone»: «Come si acquista» with its «A cartone»
+// mode, the case row (count × size × unit) and «busta da 2,5 kg». Four deep reviews each found another old
+// shape the new card misread into wrong money, so those shapes keep the card that reads them as they
+// always were. COPIED from the branch before the new card (PR #252), not refactored: the money this
+// block writes is the money that block always wrote. Only the dictionary names of four phrases differ
+// (`orders.legacyCard.*`), because the new card words those same keys otherwise.
+//
+// A whole case stored on the ingredient reopens the card in case mode, with the values as typed (never
+// re-derived from the rate: that is what the case is kept for).
+// currentOrder() -> { unit, weight, packUnit }: what the order-unit menu, the weight box and the package
+// menu hold RIGHT NOW, so the VAT line and a «busta da 2,5 kg» case follow an edit that has not been
+// saved yet.
+// Returns { node, read, refresh, needsPackWeight }.
+function legacyPriceBlock(item, actions, defaultUnit = null, currentOrder = null) {
+  // ⚠️ BUILT WHEN THE FORM IS DRAWN, NEVER AT MODULE LOAD (see RATE_LABEL in priceBlock).
+  const RATE_LABEL = Object.freeze({
+    kg: t('orders.pricePerKg', { currency: currentCurrency() }),
+    l: t('orders.pricePerLitre', { currency: currentCurrency() }),
+    pcs: t('orders.pricePerPiece', { currency: currentCurrency() }),
+  });
+  // The worked example inside the box: it pre-empts the one mistake the form cannot detect, the
+  // invoice total typed where the rate belongs. It carries no currency, only the unit.
+  const RATE_HINT = Object.freeze({
+    kg: t('orders.eg.ratePerKg'),
+    l: t('orders.eg.ratePerLitre'),
+    pcs: t('orders.eg.ratePerPiece'),
+  });
+
+  // ⚠️ storedCaseOf, not caseOf: a case whose rate no longer matches the stored rate is a stale one (an
+  // old phone saved a new rate over it) and the card opens in the typed-rate mode, so the next save writes
+  // the rate that is really there — never the old case's.
+  const storedCase = item ? storedCaseOf(item) : null;
+  // The ingredient as the card holds it right now (weight and package word are typed in the
+  // product-data section above this block, so they are read live, never from the stored item).
+  const now = () => (currentOrder ? currentOrder() : { unit: item?.unit, weight: item?.weight, packUnit: item?.packUnit });
+  const unitSelect = el('select', { class: 'mgmt-input' });
+  unitSelect.appendChild(el('option', { value: '', text: t('orders.noPrice2') }));
+  PRICE_UNITS.forEach(u => {
+    const opt = el('option', { value: u, text: priceUnitLabel(u) });
+    if (!storedCase && (item ? item.priceUnit === u : defaultUnit === u)) opt.selected = true;
+    unitSelect.appendChild(opt);
+  });
+  unitSelect.appendChild(el('option', {
+    value: CASE_MODE, text: t('orders.priceByCase'), selected: storedCase ? true : undefined,
+  }));
+
+  // step="any": a step of 0.01 makes the browser REFUSE 0.0035 as invalid — silently, by leaving the
+  // box empty on submit — and that is exactly what a vanilla pod weighs and a gelatine leaf costs.
+  const money = (value, placeholder) => el('input', {
+    type: 'number', class: 'mgmt-input', min: '0', step: 'any',
+    inputmode: 'decimal', value: value ?? '', placeholder,
+  });
+  // ⚠️ The placeholder is EMPTY here and filled by refresh() below: it depends on the purchase unit.
+  const rate = money(item?.pricePerUnit, '');
+  const pieceWeight = money(item?.unitWeightKg, t('orders.eg.pieceWeight'));
+
+  // ── Priced per case: what the case costs, and what is in it ─────────────────
+  // «Contiene [50] pz» or «Contiene [4] × [2.5] kg». Every box carries its own aria-label
+  // because none has a visible label of its own — they read as one sentence.
+  const casePriceBox = money(storedCase?.casePrice, '');
+  const caseCountBox = money(storedCase?.caseCount, '');
+  const caseSizeBox = money(storedCase?.caseItemSize, '');
+  caseCountBox.setAttribute('aria-label', t('orders.case.count'));
+  caseSizeBox.setAttribute('aria-label', t('orders.case.size'));
+  const caseUnitSelect = el('select', { class: 'mgmt-input', 'aria-label': t('orders.case.unit') });
+  CASE_ITEM_UNITS.filter(u => u !== PACK_ITEM).forEach(u => {
+    caseUnitSelect.appendChild(el('option', {
+      value: u, text: u === 'pcs' ? t('orders.case.pcs') : u,
+      selected: (storedCase ? storedCase.caseItemUnit : 'pcs') === u ? true : undefined,
+    }));
+  });
+  // «busta da 2,5 kg» — one package of the size in the WEIGHT box above. It exists only while that
+  // weight can be read as g / kg / ml / l, and its words follow the weight and the package menu live
+  // (syncPackOption, from refresh()). Stored as caseItemUnit 'pack' WITH the size of one package (kg or
+  // litres) copied from the weight at save time, so a weight edited later by somebody without the price
+  // section cannot move any money.
+  const packOption = el('option', { value: PACK_ITEM });
+  if (storedCase && storedCase.caseItemUnit === PACK_ITEM) {
+    caseUnitSelect.insertBefore(packOption, caseUnitSelect.options[1] || null);
+    caseUnitSelect.value = PACK_ITEM;
+  }
+  function syncPackOption() {
+    const { weight, packUnit } = now();
+    const w = packWeightOf(weight);
+    const word = String(packUnit || '').trim() || t('orders.case.packWord');
+    const selected = caseUnitSelect.value === PACK_ITEM;
+    // ⚠️ KEPT WHILE CHOSEN even if the weight became unreadable: dropping the option would move
+    // the menu to «pz» without a word and change what the case means. Saving is then refused,
+    // with a message on the weight box, until the weight reads again.
+    if (!w && !selected) { packOption.remove(); return; }
+    packOption.textContent = w
+      ? t('orders.case.packOf', {
+        pack: word, size: `${w.size.toLocaleString(localeTag())} ${w.unit}`,
+      })
+      : word;
+    if (!packOption.parentNode) caseUnitSelect.insertBefore(packOption, caseUnitSelect.options[1] || null);
+  }
+  const caseTimes = el('span', { class: 'mgmt-case-x', text: '×', 'aria-hidden': 'true' });
+  // ⚠️ THE CASE PRICE TAKES THE RATE BOX'S PLACE — the right cell of the same row, the same size:
+  // only «Contiene» is left to draw underneath.
+  const casePriceField = el('label', { class: 'mgmt-field' }, [
+    el('span', {
+      class: 'mgmt-field-label',
+      text: t('orders.case.price', { currency: currentCurrency() }),
+    }),
+    casePriceBox,
+  ]);
+  // ⚠️ A 'pack' case keeps the package size it was saved with, so a weight edited since is not yet in
+  // the price: this one warm line says so, and saving (by somebody with this section) recomputes.
+  const packChangedNote = el('p', {
+    class: 'mgmt-price-note', hidden: 'hidden', text: t('orders.legacyCard.packChanged'),
+  });
+  const caseBlock = el('div', { class: 'mgmt-case' }, [
+    el('div', { class: 'mgmt-field' }, [
+      el('span', { class: 'mgmt-field-label', text: t('orders.case.contains') }),
+      el('div', { class: 'mgmt-case-row' }, [caseCountBox, caseTimes, caseSizeBox, caseUnitSelect]),
+    ]),
+    packChangedNote,
+  ]);
+
+  // ── Purchase VAT — so an order can show what it will cost WITH VAT. The price stays net.
+  // ⚠️ READ INSIDE THE BLOCK, NEVER AT MODULE LOAD — the venue is not open when this module loads.
+  const vatCountry = countryOf(currentSession().location);
+  const vatChoices = vatRatesFor(vatCountry);
+  const storedVat = item && item.vatRate != null ? Number(item.vatRate) : null;
+  const vatSelect = el('select', { class: 'mgmt-input' });
+  vatSelect.appendChild(el('option', { value: '', text: t('orders.vat.notStated') }));
+  vatChoices.forEach(({ rate: r, key }) => {
+    const opt = el('option', { value: String(r), text: t(key, { rate: r }) });
+    if (storedVat === r) opt.selected = true;
+    vatSelect.appendChild(opt);
+  });
+  // ⚠️ A RATE ALREADY STORED THAT IS NOT IN THIS COUNTRY'S LIST IS NEVER CHANGED BY OPENING THE FORM.
+  if (storedVat !== null && !vatChoices.some(c => c.rate === storedVat)) {
+    vatSelect.appendChild(el('option', { value: String(storedVat), text: `${storedVat}%`, selected: true }));
+  }
+
+  const rateLabel = el('span', { class: 'mgmt-field-label' });
+  const rateField = el('label', { class: 'mgmt-field' }, [rateLabel, rate]);
+
+  // «= 2.00 / kg · 20.00 per case» — the rate the case works out to, and the case it came from.
+  // Built per call, in the language the screen has now.
+  function caseSummary(draft) {
+    const price = formatMoney(draft.casePrice);
+    return draft.priceUnit === 'pcs'
+      ? t('orders.legacyCard.summaryPiece', { rate: formatRate(draft.pricePerUnit), price })
+      : t('orders.legacyCard.summaryUnit', { rate: formatRate(draft.pricePerUnit), unit: draft.priceUnit, price });
+  }
+  // Two lines, not one: the numbers on top, what is still missing underneath.
+  const summaryMain = el('span', { class: 'mgmt-price-main' });
+  const summaryNote = el('span', { class: 'mgmt-price-note' });
+  const summary = el('p', { class: 'mgmt-price-summary' }, [summaryMain, summaryNote]);
+  // "€45.00 without VAT, €46.80 with VAT at 4%" — empty until both a cost and a VAT rate are known.
+  const vatSummary = el('p', { class: 'mgmt-price-vat-summary' });
+
+  const pieceField = el('label', { class: 'mgmt-field' }, [
+    el('span', { class: 'mgmt-field-label', text: t('orders.weightOfOnePiece') }),
+    pieceWeight,
+    el('p', { class: 'notif-note', text: t('orders.neededOnlyToUse') }),
+  ]);
+
+  function read() {
+    return {
+      priceUnit: unitSelect.value || null,
+      pricePerUnit: rate.value,
+      unitWeightKg: pieceWeight.value,
+      vatRate: vatSelect.value,
+      // Only read as a case when the menu says so (pricePatch ignores them otherwise
+      // and writes all four as null, which is what clears an old case).
+      casePrice: casePriceBox.value,
+      caseCount: caseCountBox.value,
+      caseItemSize: caseSizeBox.value,
+      caseItemUnit: caseUnitSelect.value,
+    };
+  }
+
+  // The live line under the boxes: what a kilo of this costs, while the boxes are still being typed
+  // into, so a misplaced decimal point is visible before Save rather than after.
+  function refresh() {
+    const unit = unitSelect.value;
+    const inCase = unit === CASE_MODE;
+    // In case mode the rate box gives way to the case boxes: the rate is worked out.
+    rateField.hidden = inCase;
+    casePriceField.hidden = !inCase;
+    caseBlock.hidden = !inCase;
+    syncPackOption();
+    // «Contiene 50 pz» has no size to give, so the box and its × go — and so does «busta da
+    // 2,5 kg», whose size is the weight above.
+    const itemsArePieces = caseUnitSelect.value === 'pcs';
+    const sizeFromWeight = caseUnitSelect.value === PACK_ITEM;
+    caseSizeBox.hidden = itemsArePieces || sizeFromWeight;
+    caseTimes.hidden = itemsArePieces;
+    const savedPack = storedCase && storedCase.caseItemUnit === PACK_ITEM ? storedCase : null;
+    const current = packBaseOf(now().weight);
+    packChangedNote.hidden = !(inCase && sizeFromWeight && savedPack && current
+      && (current.size !== savedPack.caseItemSize || current.priceUnit !== item.priceUnit));
+    pieceField.hidden = !(unit === 'pcs' || (inCase && itemsArePieces));
+    rateLabel.textContent = RATE_LABEL[unit] || t('orders.priceGeneric', { currency: currentCurrency() });
+    // ⚠️ The example follows the UNIT, and an unknown unit gets none.
+    rate.placeholder = RATE_HINT[unit] || '';
+
+    const draft = pricePatch(read(), null, now().weight);
+    if (draft.pricePerUnit === null) {
+      summaryMain.textContent = costReasonText(draft);
+      summaryNote.textContent = '';
+      summary.className = 'mgmt-price-summary muted';
+      // ⚠️ THE VAT LINE MUST GO WITH THE PRICE.
+      vatSummary.textContent = '';
+      return;
+    }
+    const perKg = pricePerKg(draft);
+    // For a per-piece price the price per KILO is the derived number every recipe cost is built from;
+    // for a case the derived rate leads, with the case price it came from.
+    const parts = [inCase ? caseSummary(draft) : formatPricePerUnit(draft)];
+    if (draft.priceUnit === 'pcs' && perKg !== null) parts.push(`${formatRate(perKg)} / kg`);
+    summaryMain.textContent = parts.filter(Boolean).join('  ·  ');
+    // Empty whenever the ingredient IS costable.
+    summaryNote.textContent = costReasonText(draft);
+    summary.className = 'mgmt-price-summary';
+
+    // ⚠️ THE SAME unitCost() ORDERS ITSELF CALLS, fed the order unit and the pack weight as they stand in
+    // the open card (currentOrder), not the stored ones. The card re-runs refresh() when either changes.
+    const cost = unitCost({ ...(item || {}), ...now() }, draft);
+    const vat = draft.vatRate;
+    if (cost !== null && vat !== null) {
+      const gross = cost + (cost * vat) / 100;
+      vatSummary.textContent = t('orders.vat.summaryLine', {
+        net: formatMoney(cost), gross: formatMoney(gross), rate: vat,
+      });
+    } else {
+      vatSummary.textContent = '';
+    }
+  }
+
+  [unitSelect, rate, pieceWeight, vatSelect, casePriceBox, caseCountBox, caseSizeBox, caseUnitSelect].forEach(input => {
+    input.addEventListener('input', refresh);
+    input.addEventListener('change', refresh);
+  });
+  refresh();
+
+  // ⚠️ THE RIGHT CELL IS ALWAYS THE PRICE: the rate, or — priced per case — the case price, one of
+  // the two hidden at a time (a hidden grid item takes no cell).
+  const pricePair = el('div', { class: 'mgmt-pair' }, [
+    field(t('orders.howItIsBought'), unitSelect),
+    rateField,
+    casePriceField,
+  ]);
+
+  // The PURCHASE VAT field — the LEFT cell of its own .mgmt-pair row, the right cell left empty on purpose.
+  const vatField = el('div', { class: 'mgmt-pair' }, [
+    el('label', { class: 'mgmt-field mgmt-price-vat-cell' }, [
+      el('span', { class: 'mgmt-field-label', text: t('orders.vat.label') }),
+      vatSelect,
+    ]),
+  ]);
+
+  const node = el('div', { class: 'mgmt-price-block' }, [
+    // ⚠️ «Peso di un pezzo» STAYS FULL WIDTH: a column that comes and goes would make the row above jump.
+    pricePair,
+    caseBlock,
+    // ⚠️ It may not be dropped: entering the gross figure inflates every recipe cost by the VAT rate
+    // and nothing on any screen looks wrong.
+    el('p', { class: 'notif-note', text: t('orders.exVatNote') }),
+    pieceField,
+    vatField,
+    summary,
+    vatSummary,
+    item ? priceHistoryBlock(item, actions) : null,
+  ]);
+
+  // A case of packages with a weight that cannot be read has no size to price by: the save is
+  // refused instead of quietly storing «no price».
+  const needsPackWeight = () => unitSelect.value === CASE_MODE
+    && caseUnitSelect.value === PACK_ITEM && packBaseOf(now().weight) === null;
+
+  return { node, read, refresh, needsPackWeight };
+}
+// legacy-card:end
 
 // The append-only record of what this ingredient has cost. Loaded only when
 // asked for: it is a separate read per ingredient, and nobody opening the form to
@@ -1260,6 +1548,9 @@ function weightControl(stored) {
       if (WEIGHT_UNIT_CHOICES.includes(sizeUnit)) unit.value = sizeUnit;
     },
     markNeeded: () => { refusal.node.textContent = t('orders.weight.packNeeded'); refusal.show(); },
+    // The same refusal with another phrase: the card of before words «the package weight is needed» its own
+    // way (orders.legacyCard.packNeeded), because the new card words that key otherwise.
+    markNeededAs: (text) => { refusal.node.textContent = text; refusal.show(); },
     // The price block's live VAT line depends on the weight typed here, not only the stored one.
     onChange: (fn) => { amount.addEventListener('input', fn); unit.addEventListener('change', fn); },
   };
@@ -1330,9 +1621,12 @@ function choiceControl({ values, current, newLabel, placeholder, ariaLabel, blan
 // mayPrice    — may this person write a price here (mayWritePrices, js/record-data.js)
 // categories  — the words «Categoria» offers (record-choices.js categoryChoices)
 // packs       — the words a carton's contents may be called (record-choices.js packChoices)
-//               ⚠️ THERE IS NO «UNITÀ D'ORDINE» MENU (1 Oct 2026): «Confezione: Cartone» writes the
-//               order unit itself, and a single item keeps the unit it has
-// panels      — { allergens, nutrition }: which optional panels this venue uses
+//               ⚠️ THERE IS NO «UNITÀ D'ORDINE» MENU on the new card (1 Oct 2026): «Confezione:
+//               Cartone» writes the order unit itself, and a single item keeps the unit it has
+// orderUnits  — the words «Unità d'ordine» offers (record-choices.js unitChoices). ONLY the card of
+//               before uses them: an ingredient whose stored price has an old shape (usesLegacyCard)
+//               opens that card, with its order-unit menu
+// panels     — { allergens, nutrition }: which optional panels this venue uses
 // actions     — { saveIngredient(id, payload, record, writePrice), priceHistory(id),
 //                 packPhotoOn(), capturePackPhoto(), createSupplier() → { id, name } | null,
 //                 deleteIngredient(id) — optional: handed in only to somebody who may delete; it
@@ -1345,8 +1639,14 @@ function choiceControl({ values, current, newLabel, placeholder, ariaLabel, blan
 // to ask must not quietly remove the allergen card.
 export function buildIngredientForm({
   item, suppliers, preset, presetKind = null, presetName = '', mayPrice = false,
-  categories = [], packs = [], panels = { allergens: true, nutrition: true }, actions, onDone, onCancel,
+  categories = [], orderUnits = [], packs = [], panels = { allergens: true, nutrition: true }, actions, onDone, onCancel,
 }) {
+  // ⚠️ WHICH CARD OPENS (reduced scope, 2 Oct 2026): the new «Confezione: Singola | Cartone» card only for the
+  // price shapes that exist in production; every other stored price shape opens the card of before, with its
+  // «Unità d'ordine» menu and its «A cartone» price mode (pack-format.js usesLegacyCard). `item` is the
+  // ingredient merged with its price for whoever may see money, so it is judged only for them: an employee
+  // never sees a price, and the new card has no price of theirs to misread.
+  const legacyCard = Boolean(mayPrice && item && usesLegacyCard(item));
   const name = el('input', { type: 'text', class: 'mgmt-input', value: item?.name || presetName || '' });
   // Food, or packaging? (13 Sep 2026.) A box, a tray or a label is bought, priced and
   // ordered like flour, so it is filed here too. A new one starts on the list it was added
@@ -1384,6 +1684,22 @@ export function buildIngredientForm({
     ariaLabel: t('orders.choice.packAria'), blankText: t('orders.choice.packBlank'),
     maxLength: PACK_WORD_MAX, selectLabel: t('orders.format.innerAria'), emptyText: t('orders.format.innerNeeded'),
   });
+  // legacy-card:begin
+  // ⚠️ THE CARD OF BEFORE has its own two menus, built as they always were (and only for it): «Confezione»
+  // (what ONE package of the weight is called — no «what is inside the case» wording, answering it is
+  // optional) and «Unità d'ordine» (how you count the order: casse, box — not a unit of measure).
+  const legacyPack = legacyCard ? choiceControl({
+    values: packs, current: item?.packUnit,
+    newLabel: t('orders.choice.newPack'), placeholder: t('orders.choice.packPlaceholder'),
+    ariaLabel: t('orders.choice.packAria'), blankText: t('orders.choice.packBlank'),
+    maxLength: PACK_WORD_MAX,
+  }) : null;
+  const legacyUnit = legacyCard ? choiceControl({
+    values: orderUnits, current: item?.unit,
+    newLabel: t('orders.choice.newUnit'), placeholder: t('orders.choice.unitPlaceholder'),
+    ariaLabel: t('orders.choice.unitAria'), blankText: t('orders.choice.unitBlank'),
+  }) : null;
+  // legacy-card:end
   const count = el('input', {
     type: 'number', class: 'mgmt-input', min: '1', max: '10000', step: '1', inputmode: 'numeric',
     value: opened.count ?? '', 'aria-label': t('orders.case.count'),
@@ -1509,20 +1825,33 @@ export function buildIngredientForm({
   // ⚠️ `mayPrice` IS HANDED IN — see the note on the defaults above.
   // ⚠️ THE FORMAT AND THE WEIGHT ARE HANDED TO IT AS FUNCTIONS, never copied: the price box means
   // «cartone» or «confezione» by what they hold at this moment.
-  price = mayPrice ? priceBlock(item, actions, startKind === 'packaging' ? 'pcs' : null, {
-    now: () => ({ weight: weight.read(), fmt: { ...formState(), kind } }),
-    order: orderNow,
-    openedKind: opened.kind,
-    initialWeight: weight.read(),
-  }) : null;
-  const sizedStored = mayPrice ? explicitSizeCase(item) : null;
-  if (sizedStored && packBaseOf(weight.read()) === null) {
-    weight.hint(sizedStored.caseItemSize.toLocaleString(localeTag()), sizedStored.caseItemUnit);
+  // legacy-card:begin
+  if (legacyCard) {
+    // ⚠️ THE CARD OF BEFORE: its own price block, fed what the order-unit menu, the weight and the package
+    // menu hold now, and re-drawn when any of them changes. None of the format machinery runs.
+    price = legacyPriceBlock(item, actions, startKind === 'packaging' ? 'pcs' : null,
+      () => ({ unit: legacyUnit.read(), weight: weight.read(), packUnit: legacyPack.read() }));
+    legacyUnit.onChange(price.refresh);
+    weight.onChange(price.refresh);
+    legacyPack.onChange(price.refresh);
   }
-  weight.onChange(syncFormat);
-  pack.onChange(syncFormat);
-  count.addEventListener('input', syncFormat);
-  syncFormat();
+  // legacy-card:end
+  if (!legacyCard) {
+    price = mayPrice ? priceBlock(item, actions, startKind === 'packaging' ? 'pcs' : null, {
+      now: () => ({ weight: weight.read(), fmt: { ...formState(), kind } }),
+      order: orderNow,
+      openedKind: opened.kind,
+      initialWeight: weight.read(),
+    }) : null;
+    const sizedStored = mayPrice ? explicitSizeCase(item) : null;
+    if (sizedStored && packBaseOf(weight.read()) === null) {
+      weight.hint(sizedStored.caseItemSize.toLocaleString(localeTag()), sizedStored.caseItemUnit);
+    }
+    weight.onChange(syncFormat);
+    pack.onChange(syncFormat);
+    count.addEventListener('input', syncFormat);
+    syncFormat();
+  }
   // ⚠️ NOT A ROLE, A VENUE. Everybody in the building gets the same answer here: it
   // says whether this business tracks allergens and nutrition at all, and the two
   // switches behind it live one screen away (js/orders/registry-settings.js).
@@ -1535,9 +1864,64 @@ export function buildIngredientForm({
   const syncKind = () => { allergens.root.hidden = isBox(); };
   syncKind();
 
+  // legacy-card:begin
+  // ── The save of the card of before — COPIED from the branch before the new card, not refactored ──────────
+  // Its payload carries `unit` and `packUnit` from the two menus, its refusals are the old ones, and it
+  // never says a unit changed (the order unit is a menu a person chose, not something the card rewrites).
+  async function saveLegacyCard() {
+    // Inside this function `pack` and `unit` are the card of before's two menus, as they were named then.
+    const pack = legacyPack;
+    const unit = legacyUnit;
+    // Blocked BEFORE anything is written, and pointing at the box (P20): an unusable weight
+    // would otherwise erase the stored one, an empty «+ New …» would clear the category.
+    const refused = [weight, category, pack, unit].find(control => control.invalid());
+    if (refused) { refused.markInvalid(); return; }
+    // ⚠️ A case of packages with no readable weight is refused here, on the weight box, like an
+    // unusable weight: saving would quietly turn the price into «no price».
+    if (price && price.needsPackWeight()) { weight.markNeededAs(t('orders.legacyCard.packNeeded')); return; }
+    save.disabled = true;
+
+    // Every price field is in the patch, as a number or as null, because this is a MERGE write: a field
+    // left out keeps whatever it had, so emptying the boxes could never actually remove a price.
+    const patch = mayPrice ? pricePatch(price.read(), new Date().toISOString(), weight.read()) : {};
+    const packUnit = pack.read().slice(0, PACK_WORD_MAX);
+    const payload = {
+      name: name.value.trim(),
+      supplierId: supplierToSave(supplierSelect.value, previous),
+      brand: brand.value.trim(),
+      weight: weight.read(),
+      category: category.read() || 'Other',
+      unit: unit.read(),
+      // ⚠️ ONLY WHEN THERE IS SOMETHING TO SAY: a save that sent `packUnit: ''` on every ingredient
+      // would be refused whole by a database whose rules do not know the key yet.
+      ...(packUnit || item?.packUnit ? { packUnit } : {}),
+      active: item ? item.active !== false : true,
+      kind: startKind,
+      ...patch,
+      // ⚠️ NOT READ FOR PACKAGING: the merge then leaves any declaration already stored untouched.
+      ...(isBox() ? {} : allergens.read()),
+    };
+
+    // Record the price only when it is COMPLETE and actually different (the money, priceChanged).
+    const record = mayPrice && patch.pricePerUnit !== null && priceChanged(item, patch)
+      ? priceRecord({ ...item, supplierId: payload.supplierId }, patch, patch.priceUpdatedAt)
+      : null;
+
+    try {
+      await actions.saveIngredient(item?.id || null, payload, record, mayPrice);
+      onDone?.();
+    }
+    catch (err) {
+      save.disabled = false;                       // let them try again
+      await reportFailure('save', payload.name, err);
+    }
+  }
+  // legacy-card:end
+
   const save = el('button', { type: 'button', class: 'btn-primary', onClick: async () => {
     // The supplier is no longer required — only the name is.
     if (!name.value.trim()) { name.focus(); return; }
+    if (legacyCard) { await saveLegacyCard(); return; }
     // Blocked BEFORE anything is written, and pointing at the box (P20): an unusable weight
     // would otherwise erase the stored one, an empty «+ New …» would clear the category.
     // (The carton's inner-word menu only counts while «Cartone» is showing.)
@@ -1668,6 +2052,32 @@ export function buildIngredientForm({
     })
     : null;
 
+  // The new card's last rows of «Dati prodotto».
+  // ⚠️ «CONFEZIONE» IS NOT A <label>: a label around two buttons would press the first one
+  // when its text is tapped. The group is named by aria-labelledby instead.
+  const formatRows = [
+    el('div', { class: 'mgmt-pair mgmt-pair--data' }, [
+      field(t('orders.field.weight'), weight.node),
+      el('div', { class: 'mgmt-field' }, [
+        el('span', { class: 'mgmt-field-label', id: segLabelId, text: t('orders.field.pack') }),
+        el('div', { class: 'set-seg', role: 'group', 'aria-labelledby': segLabelId }, [segSingle, segCarton]),
+      ]),
+    ]),
+    containsBlock,
+    kindMirror,
+  ];
+  // legacy-card:begin
+  const legacyRows = legacyCard ? [
+    el('div', { class: 'mgmt-pair mgmt-pair--data' }, [
+      field(t('orders.field.weight'), weight.node),
+      field(t('orders.field.pack'), legacyPack.node),
+    ]),
+    el('div', { class: 'mgmt-pair mgmt-pair--data' }, [
+      field(t('orders.orderUnit'), legacyUnit.node),
+    ]),
+  ] : [];
+  // legacy-card:end
+
   return el('div', { class: 'mgmt-form' }, [
     // ⚠️ NO TITLE OF ITS OWN ANY MORE. It had one because the panel's header said
     // «Impostazioni» and something had to name the form. The form now has a header
@@ -1691,17 +2101,9 @@ export function buildIngredientForm({
           field(t('orders.field.brand'), brand),
           field(t('orders.field.category'), category.node),
         ]),
-        // ⚠️ «CONFEZIONE» IS NOT A <label>: a label around two buttons would press the first one
-        // when its text is tapped. The group is named by aria-labelledby instead.
-        el('div', { class: 'mgmt-pair mgmt-pair--data' }, [
-          field(t('orders.field.weight'), weight.node),
-          el('div', { class: 'mgmt-field' }, [
-            el('span', { class: 'mgmt-field-label', id: segLabelId, text: t('orders.field.pack') }),
-            el('div', { class: 'set-seg', role: 'group', 'aria-labelledby': segLabelId }, [segSingle, segCarton]),
-          ]),
-        ]),
-        containsBlock,
-        kindMirror,
+        // ⚠️ THE LAST ROWS DIFFER BY CARD: «Peso» + «Confezione: Singola | Cartone» for the new one,
+        // «Peso» + «Confezione» (the package-word menu) + «Unità d'ordine» for the card of before.
+        ...(legacyCard ? legacyRows : formatRows),
       ],
     }),
     // ⚠️ STILL DRAWN ONLY FOR SOMEBODY WHO MAY SEE MONEY — the card wraps the price,

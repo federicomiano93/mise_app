@@ -194,6 +194,11 @@
 .rec-host .mgmt-price-block > .mgmt-price-summary.muted {
   margin-top: var(--space-1);
 }
+.rec-host .mgmt-case {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
 .rec-host .mgmt-case-row {
   display: flex;
   align-items: center;
