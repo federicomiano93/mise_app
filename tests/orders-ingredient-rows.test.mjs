@@ -158,17 +158,17 @@ test('the clear button zeroes the quantity, keeps stock, and focuses only from t
   // A cleared line goes back to the card's unit, and the menu is repainted to show it.
   assert.match(handler, /\.unit = ''/);
   assert.match(handler, /paintUnitSelect\(row, ing, cleared\)/);
-  assert.match(buildRowSource, /function setQty\(value, fromInput\) \{\s*const qty = wholeNumber\(value\);\s*entryFor\(entries, ing\.id\)\.qty = qty;/);
+  assert.match(buildRowSource, /function setQty\(value, fromInput\) \{\s*const qty = wholeNumber\(value\);\s*const entry = entryFor\(entries, ing\.id\);\s*entry\.qty = qty;\s*claimLine\(entry, qty\);/);
 });
 
 test('ing-row--filled follows the quantity: at build, in setQty and when another phone syncs', () => {
   assert.match(INGREDIENTS, /export function markFilled\(row, qty\)/);
   assert.match(INGREDIENTS, /toggle\('ing-row--filled'/);
   assert.match(buildRowSource, /markFilled\(row, qty\)/, 'setQty');
-  assert.match(buildRowSource, /markFilled\(row, entry\.qty\)/, 'build time');
+  assert.match(buildRowSource, /markFilled\(row, away \? 0 : entry\.qty\)/, 'build time');
   const main = read('js/orders/orders-main.js');
   const sync = main.slice(main.indexOf('function syncInputsFromState'));
-  assert.match(sync.slice(0, sync.indexOf('refreshAllSuppliers')), /markFilled\(row, entry\.qty\)/);
+  assert.match(sync.slice(0, sync.indexOf('refreshAllSuppliers')), /markFilled\(row, away \? 0 : entry\.qty\)/);
   assert.match(main, /import \{ markFilled, paintUnitSelect \} from '\.\/ingredients\.js'/);
 });
 

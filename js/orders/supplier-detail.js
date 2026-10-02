@@ -87,8 +87,9 @@ export function buildSupplierDetail(supplier, ctx) {
     // No products, nothing to record — the empty state inside the list already says so.
     if (!ingredients.length) return;
 
+    // A row ordered elsewhere this time (`elsewhereId`) is not this supplier's line.
     const { filled } = ingredients.reduce((acc, i) => (
-      (entries[i.id]?.qty || 0) > 0 ? { filled: acc.filled + 1 } : acc), { filled: 0 });
+      !i.elsewhereId && (entries[i.id]?.qty || 0) > 0 ? { filled: acc.filled + 1 } : acc), { filled: 0 });
 
     // The money (totals box) is NOT built here: it is tablet-only and
     // permission-gated, so orders-main.js paints it onto this screen from the
