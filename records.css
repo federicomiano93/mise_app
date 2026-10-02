@@ -221,6 +221,13 @@
   flex: 0 0 auto;
   color: var(--text2);
 }
+.rec-host .mgmt-case-row > .mgmt-choice {
+  flex: 1 1 0;
+  min-width: 0;
+}
+.rec-host .mgmt-case-row .mgmt-choice .mgmt-input {
+  flex: none;
+}
 .rec-host .mgmt-price-main {
   display: block;
 }
@@ -307,6 +314,32 @@
 .rec-host .mgmt-form-actions .btn-primary {
   flex: 2;
   margin-top: 0;
+}
+.rec-host .mgmt-form-actions .mgmt-delete-btn {
+  flex: 0 0 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--danger);
+  cursor: pointer;
+  transition: transform 60ms ease;
+}
+.rec-host .mgmt-form-actions .mgmt-delete-btn:active {
+  transform: scale(.97);
+}
+.rec-host .mgmt-form-actions .mgmt-delete-btn:focus-visible {
+  outline: 2px solid var(--accent-2);
+  outline-offset: 2px;
+}
+.rec-host .mgmt-form-actions .mgmt-delete-btn:disabled {
+  opacity: .5;
+  cursor: default;
 }
 .rec-host .notif-note {
   margin: 0;

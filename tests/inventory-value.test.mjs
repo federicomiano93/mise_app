@@ -265,3 +265,41 @@ test('a frozen price of zero is not a price', () => {
   // Nothing is free, and a 0 in that map is the shape a half-written close leaves.
   assert.equal(packPrice({ unitPrice: { flour: 0 } }, byKg(), true), null);
 });
+
+// ── «Cartone»: the weight is one item's, the stocktake counts cartoni (1 Oct 2026) ──
+test('packKgFor multiplies the weight by packCount when the stocktake counts in the carton', () => {
+  const carton = byKg({ unit: 'cartone', packUnit: 'busta', packCount: 4, weight: '2.5kg' });
+  assert.equal(packKgFor({ packKg: {} }, carton), 10);
+  assert.equal(packPrice({ packKg: {} }, { ...carton, pricePerUnit: 2 }), 20, 'a carton is not priced as one busta');
+  // counted in the package word itself, the weight is already one item's
+  assert.equal(packKgFor({ packKg: {} }, { ...carton, unit: 'busta' }), 2.5);
+});
+
+test('a weight somebody typed into the month, and a closed month, are never multiplied', () => {
+  const carton = byKg({ unit: 'cartone', packUnit: 'busta', packCount: 4, weight: '2.5kg' });
+  assert.equal(packKgFor({ packKg: { flour: 12 } }, carton), 12);
+  assert.equal(packKgFor({ packKg: {} }, carton, true), null);
+  assert.equal(packKgFor({ packKg: { flour: 12 } }, carton, true), 12);
+});
+
+test('no packCount: the weight is the pack, as it always was', () => {
+  assert.equal(packKgFor({ packKg: {} }, byKg({ unit: 'cartone', packUnit: 'busta', weight: '2.5kg' })), 2.5);
+  assert.equal(packKgFor({ packKg: {} }, byKg()), 25);
+  assert.equal(packKgFor({ packKg: {} }, byKg({ weight: 'sacco', packCount: 4 })), null, 'an unreadable weight stays unreadable');
+});
+
+import { unitCost } from '../js/order-cost.js';
+
+// ── 3rd deep review (1 Oct 2026): a carton that cannot be priced has NO price ───────────────────
+test('packCount set and the carton cannot be priced (a multiplier weight, «6x1l»): refuse, never one item\'s rate as a whole carton', () => {
+  const month = { packKg: {} };
+  const ing = { id: 'c', unit: 'cartone', packUnit: 'busta', packCount: 6, weight: '6x1l', priceUnit: 'pcs', pricePerUnit: 0.4 };
+  assert.equal(unitCost(ing, ing), null, 'the reader refuses');
+  assert.equal(packPrice(month, ing, false), null, 'the stocktake used to answer 0.4 for a whole carton');
+  assert.equal(valueBlocker(month, ing, false), NO_PRICE);
+  // a carton that CAN be priced is, and a Singola (no packCount) keeps today's answer
+  assert.equal(packPrice(month, { ...ing, weight: '' }, false), 2.4);
+  assert.equal(valueBlocker(month, { ...ing, weight: '' }, false), null);
+  const { packCount, ...single } = ing;
+  assert.equal(packPrice(month, single, false), 0.4);
+});

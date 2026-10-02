@@ -19,9 +19,11 @@
 // its closure; replacing it would throw away every row typed so far. The card sits on top, and
 // closing it — saved or not — leaves the editor exactly as it was.
 //
-// ⚠️ NO MONEY IS READ HERE. The catalogue loads no prices (tests/catalogue-no-money.test.mjs):
-// a NEW ingredient has none to show, and the price box inside the card is the card's own,
-// drawn only for somebody who may write one (mayWritePrices).
+// ⚠️ NO MONEY IS READ BY THE CREATE PATH. The catalogue loads no prices
+// (tests/catalogue-no-money.test.mjs): a NEW ingredient has none to show, and the price box
+// inside the card is the card's own, drawn only for somebody who may write one (mayWritePrices).
+// The EDIT path (openIngredientEdit, below) is opened only from Orders, which holds the prices;
+// it reads the price document itself only if Orders' snapshot has not arrived yet.
 //
 // ⚠️ IT ASKS NO PERMISSION ITSELF. The row that opens it is offered only where
 // js/records.js mayEditRecords() says yes; the rules decide the save regardless (P2).
@@ -35,7 +37,11 @@ import { outputLanguage } from './market.js';
 import { categoryChoices, unitChoices, packChoices } from './record-choices.js';
 import { buildIngredientForm } from './ingredient-record-form.js';
 import { buildSupplierForm } from './supplier-record-form.js';
-import { mayWritePrices, saveIngredientWithPrice, saveSupplierRecord } from './record-data.js';
+import {
+  mayWritePrices, saveIngredientWithPrice, saveSupplierRecord, readIngredientPrice,
+} from './record-data.js';
+import { itemWithPrice, needsPriceRead } from './ingredient-edit-model.js';
+import { isPackaging } from './ingredient-kind.js';
 import { snapshotFields, snapshotChanged } from './form-dirty.js';
 
 const BACK_ICON = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>';
@@ -196,6 +202,104 @@ export function openIngredientCreate({
     });
     layers.push(cardLayer);
     // Taken once the form is in place, to tell «typed into» from «just opened».
+    snapshot = snapshotFields(form);
+  });
+}
+
+// Open the card for an EXISTING ingredient, from a screen that is not «Fornitori e ingredienti»
+// (Orders: tap the name on a row — Federico, 1 Oct 2026: «voglio accedere alla scheda modifica
+// ingrediente dalla scheda ordini così non devo tornare indietro nella scheda ingredienti e
+// fornitori»). Resolves with { id, name } once it is saved, or with null when somebody backs
+// out (or the ingredient is deleted from inside the card).
+//
+// `item` is the ingredient AS THE CARD OPENS IT: the document merged with its price document
+// (Orders holds both and merges them with withPrices). `pricesLoaded` says whether that merge
+// has really seen the price collection; when it has not, and this person may write prices,
+// the price document is read here before anything is drawn.
+//
+// ⚠️ A CARD WITHOUT THE STORED PRICE IS NEVER SHOWN. Its price boxes would be empty and an
+// untouched Save would then erase the price (pricePatch writes nulls over a merge). If the
+// read fails this REJECTS and the caller says «could not be opened» — it never falls back to
+// an empty price. Somebody who may not write prices gets no price block at all, so nothing
+// can be erased and nothing is read.
+//
+// `actions` carries what only the calling feature can do, because this file may not import it:
+//   priceHistory(id)     — the append-only price history reader (Orders' getPriceHistory)
+//   deleteIngredient(id) — present only for whoever may delete; draws the card's bin (and does
+//                          the feature's own clean-up, e.g. the order draft)
+//   unitChanged({ id, from, item }) — optional: the card replaced the order unit `from`; the feature
+//                          freezes the open draft line in it (Orders: draft.js freezeUnitInDraft)
+// Everything else is the same as the Fornitori screen's own card: title, fields, price, panels,
+// «+ Nuovo fornitore», and the question before typing is thrown away (P20).
+export async function openIngredientEdit({
+  item, suppliers, ingredients, storedCategories = undefined, layerClass = CATALOGUE_LAYER,
+  pricesLoaded = false, actions = {},
+}) {
+  const mayPrice = mayWritePrices();
+  const stored = needsPriceRead({ mayPrice, pricesLoaded })
+    ? itemWithPrice(item, await readIngredientPrice(item.id))
+    : item;
+
+  return new Promise(resolve => {
+    const layers = [];
+    let settled = false;
+    let saved = null;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      layers.splice(0).forEach(node => node.remove());
+      resolve(saved);
+    };
+
+    const location = currentSession().location;
+    const language = outputLanguage(location);
+    const known = ingredientList(ingredients);
+    let snapshot = null;
+    let cardLayer = null;
+    const leave = async () => {
+      if (typedInto(snapshot, cardLayer) && !(await confirmDiscard())) return;
+      saved = null;
+      finish();
+    };
+
+    const form = buildIngredientForm({
+      item: stored,
+      suppliers: supplierList(suppliers),
+      // `current` keeps the ingredient's own category / unit / pack word on the menu even when
+      // no other ingredient uses it, exactly as the Fornitori screen's card does.
+      categories: categoryChoices({ stored: storedCategories, ingredients: known, language, current: stored.category }),
+      orderUnits: unitChoices({ ingredients: known, language, current: stored.unit }),
+      packs: packChoices({ ingredients: known, language, current: stored.packUnit }),
+      mayPrice,
+      panels: { allergens: allergensOn(location), nutrition: nutritionOn(location), packPhoto: false },
+      actions: {
+        saveIngredient: async (id, payload, record, writePrice, meta) => {
+          const savedId = await saveIngredientWithPrice(id, payload, record, writePrice);
+          saved = { id: savedId, name: payload.name };
+          // The calling feature owns the draft; this file may not import it. Its failure is only logged.
+          if (meta && meta.unitChangedFrom && typeof actions.unitChanged === 'function') {
+            Promise.resolve(actions.unitChanged({ id: savedId, from: meta.unitChangedFrom, item: { ...stored, ...payload } }))
+              .then(undefined, err => console.error('The draft line kept an old unit:', err));
+          }
+        },
+        priceHistory: actions.priceHistory || (async () => []),
+        // As on the create path: the packet photograph spends money per tap and stays on
+        // «Fornitori e ingredienti».
+        packPhotoOn: () => false,
+        createSupplier: () => createSupplier(layers, layerClass),
+        ...(typeof actions.deleteIngredient === 'function' ? { deleteIngredient: actions.deleteIngredient } : {}),
+      },
+      onDone: finish,
+      onCancel: leave,
+    });
+
+    cardLayer = layer({
+      layerClass,
+      title: isPackaging(stored) ? t('orders.editPackaging') : t('orders.editIngredient'),
+      body: form,
+      onBack: leave,
+    });
+    layers.push(cardLayer);
     snapshot = snapshotFields(form);
   });
 }

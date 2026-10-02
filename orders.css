@@ -592,6 +592,36 @@
 .ing-flat-list .ing-row--line.ing-row--filled .ing-main { padding-right: 44px; }
 .ing-row--line .ing-top { display: block; margin-bottom: 0; }
 .ing-row--line .ing-name { font-size: 16px; font-weight: 600; text-align: left; overflow-wrap: anywhere; }
+/* The name as a BUTTON (ingredients.js, only for whoever may edit ingredients): it must look
+   exactly like the span it replaces, so it takes the .ing-name size, weight and colour as they
+   are and only strips what a <button> adds — the box, the background, the centring. Not
+   `font: inherit`: that would reset the size .ing-name (and its 18px tablet rule) set. */
+.ing-row--line .ing-name-btn {
+  display: block;
+  max-width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font-family: inherit;
+  line-height: inherit;
+  letter-spacing: inherit;
+  cursor: pointer;
+}
+/* The TOUCH target is 44px tall without the row moving: the 22px name button carries an invisible
+   hit area 11px taller above and below (the .app-icon-btn::before trick, tokens.css). It is
+   horizontal-0 on purpose — the Order / Stock boxes, the unit menu and the × are in other columns,
+   and the button is capped at the name column's width — so it overlaps none of them. The
+   min-width keeps even a one-letter name above WCAG 2.2's 24px, and 1px of padding taken back
+   by a -1px margin makes the BOX itself 24px tall (WCAG measures the element) with the row
+   exactly where it was. */
+.ing-row--line .ing-name-btn { position: relative; min-width: 24px; padding-block: 1px; margin-block: -1px; }
+.ing-row--line .ing-name-btn::before {
+  content: '';
+  position: absolute;
+  inset: -11px 0;
+}
+.ing-row--line .ing-name-btn:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 2px; border-radius: var(--radius-sm); }
 .ing-row--line .ing-supplier { margin: 2px 0 0; }
 .ing-row--line .ing-weight { margin-top: 1px; font-family: 'DM Mono', monospace; font-size: 12px; color: var(--text-3); }
 .ing-row--line .ing-suggestion { margin-top: 2px; }
@@ -1419,10 +1449,12 @@ body[data-section="orders"] .ing-filter .view-switch-btn:not(.active) { color: v
 .mgmt-price-block { display: flex; flex-direction: column; gap: var(--space-3); }
 .mgmt-price-block > .mgmt-price-summary.muted { margin-top: var(--space-1); }
 
-/* A price quoted per case: the case price, then «Contiene [50] pz» / «[4] × [2.5] kg» on ONE
-   row. The boxes share the width equally and may shrink (min-width:0 — a <select> and a
-   number input otherwise keep their intrinsic width and push the row past a 296px card);
-   the × is only a sign between two boxes. Icon/label rules do not apply: no icon here. */
+/* «Contiene [4] × [busta ▾]» (the card's carton row) on ONE row. The boxes share the width and
+   may shrink (min-width:0 — a <select> and a number input otherwise keep their intrinsic width and
+   push the row past a 296px card); the × is only a sign between two boxes. Icon/label rules do not
+   apply: no icon here. */
+/* The card of before (an old stored price shape): the case price, then «Contiene [50] pz» /
+   «[4] × [2.5] kg» — the box that holds that row and its «package weight changed» line. */
 .mgmt-case { display: flex; flex-direction: column; gap: var(--space-3); }
 .mgmt-case-row { display: flex; align-items: center; gap: 8px; }
 /* At 296px the four controls share ~200px: with the card's 12px side padding «1000» and «ml»
@@ -1435,6 +1467,12 @@ body[data-section="orders"] .ing-filter .view-switch-btn:not(.active) { color: v
 .mgmt-case-row select.mgmt-input { flex: 0 1 auto; }
 .mgmt-case-row input.mgmt-input { min-width: 56px; }
 .mgmt-case-x { flex: 0 0 auto; color: var(--text2); }
+/* «Contiene [4] × [busta ▾]» (1 Oct 2026): the inner-word menu is a .mgmt-choice (the menu plus
+   its «+ Nuova…» text box and refusal line), a column of its own. It takes the rest of the row
+   beside the count, and what is inside it must not inherit the row's flex sizing — in a column
+   that would be a flex-basis of 0 on the height. */
+.mgmt-case-row > .mgmt-choice { flex: 1 1 0; min-width: 0; }
+.mgmt-case-row .mgmt-choice .mgmt-input { flex: none; }
 
 /* What is still missing, under the numbers. It appears only when the price is
    complete as a PRICE but the ingredient still cannot be costed — a per-piece
@@ -1495,6 +1533,26 @@ body[data-section="orders"] .ing-filter .view-switch-btn:not(.active) { color: v
 .mgmt-form-actions { display: flex; gap: 10px; margin-top: 6px; }
 .mgmt-form-actions .btn-secondary { flex: 1; }
 .mgmt-form-actions .btn-primary { flex: 2; margin-top: 0; }
+/* The bin on an existing record's card: small and quiet — danger-red icon, no fill, no border —
+   so it never competes with Save (P20). 44px is the target; the 20px icon is centred in it. */
+.mgmt-form-actions .mgmt-delete-btn {
+  flex: 0 0 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--danger);
+  cursor: pointer;
+  transition: transform 60ms ease;
+}
+.mgmt-form-actions .mgmt-delete-btn:active { transform: scale(.97); }
+.mgmt-form-actions .mgmt-delete-btn:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 2px; }
+.mgmt-form-actions .mgmt-delete-btn:disabled { opacity: .5; cursor: default; }
 
 /* The confirmation dialog moved to the shared .app-dialog-* component
    (js/orders/confirm-dialog.js + tokens.css); .btn-danger went with it — the

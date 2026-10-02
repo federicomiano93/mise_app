@@ -1,66 +1,132 @@
-// The «A cartone» mode of the ingredient card's price block. No DOM is
-// available under node --test, so this pins the wiring that a pure test cannot reach.
+// The ingredient card's price block after «Confezione: Singola | Cartone» (1 Oct 2026). No DOM
+// is available under node --test, so this pins the wiring a pure test cannot reach; what the
+// card DECIDES lives in pack-format.js and price-model.js and is tested in pack-format.test.mjs,
+// price-model.test.mjs and pack-case.test.mjs.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
-const FORM = read('js/ingredient-record-form.js');
+const codeOf = src => src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+import { newCardSource, legacyCardSource } from './helpers/card-source.mjs';
+// ⚠️ These tests are about the NEW card; the card of before (old stored price shapes) is pinned in legacy-card.test.mjs.
+const FORM = codeOf(newCardSource());
 const I18N = read('js/i18n.js');
 const CSS = read('orders.css');
 
 const KEYS = [
-  'orders.priceByCase', 'orders.case.price', 'orders.case.contains', 'orders.case.count',
-  'orders.case.size', 'orders.case.unit', 'orders.case.pcs',
-  'orders.case.summaryUnit', 'orders.case.summaryPiece',
+  'orders.case.price', 'orders.case.packPrice', 'orders.case.contains', 'orders.case.count',
+  'orders.case.summaryUnit', 'orders.case.summaryPiece', 'orders.case.perItem',
+  'orders.case.packChanged', 'orders.case.recompute',
+  'orders.format.single', 'orders.format.carton', 'orders.format.countInvalid', 'orders.format.innerAria',
+  'orders.format.priceAgain',
 ];
 
-test('every case phrase exists once in English and once in Italian', () => {
-  for (const key of KEYS) {
-    const hits = I18N.split(`'${key}':`).length - 1;
-    assert.equal(hits, 2, `${key} should be defined in both languages`);
-    assert.ok(FORM.includes(`'${key}'`), `${key} is not used by the card`);
+test('every new phrase exists once in English and once in Italian, and the card or pack-format uses it', () => {
+  const formatModule = read('js/pack-format.js');
+  for (const key of [...KEYS, 'orders.format.summary', 'orders.format.summaryNoWeight']) {
+    assert.equal(I18N.split(`'${key}':`).length - 1, 2, `${key} should be defined in both languages`);
+    assert.ok(FORM.includes(`'${key}'`) || formatModule.includes(`'${key}'`), `${key} is not used`);
   }
 });
 
-test('the menu gains a case mode that is not a stored unit', () => {
-  assert.match(FORM, /value: CASE_MODE, text: t\('orders\.priceByCase'\)/);
-  assert.match(FORM, /priceUnit: unitSelect\.value \|\| null/);
-});
-
-test('the form hands all four case boxes to pricePatch', () => {
-  for (const key of ['casePrice', 'caseCount', 'caseItemSize', 'caseItemUnit']) {
-    assert.match(FORM, new RegExp(key + ': [a-zA-Z]+\.value'), key);
+// ⚠️ THESE PHRASES ARE NOT RETIRED FROM THE DICTIONARY ANY MORE (2 Oct 2026, reduced scope): the card of before
+// still draws them for an old stored price shape. They stay retired from the NEW card, which never asks for them.
+test('the phrases of the card of before are not asked for by the new card, and live on for the old one', () => {
+  const legacy = codeOf(legacyCardSource());
+  for (const key of ['orders.priceByCase', 'orders.case.size', 'orders.case.unit', 'orders.case.pcs', 'orders.orderUnit',
+    'orders.choice.newUnit', 'orders.choice.unitPlaceholder', 'orders.choice.unitBlank', 'orders.choice.unitAria',
+    'orders.case.packOf', 'orders.case.packWord']) {
+    assert.equal(FORM.includes(`'${key}'`), false, `${key} is still asked for by the new card`);
+    assert.equal(I18N.split(`'${key}':`).length - 1, 2, `${key} must stay in both languages for the card of before`);
+    assert.ok(legacy.includes(`'${key}'`), `${key} is not used by the card of before`);
   }
 });
 
-test('the count, size and unit boxes each carry an aria-label', () => {
-  assert.match(FORM, /caseCountBox\.setAttribute\('aria-label', t\('orders\.case\.count'\)\)/);
-  assert.match(FORM, /caseSizeBox\.setAttribute\('aria-label', t\('orders\.case\.size'\)\)/);
-  assert.match(FORM, /'aria-label': t\('orders\.case\.unit'\)/);
+test('«Come si acquista» has no «A cartone» choice any more, and its menu is only the three price units', () => {
+  assert.doesNotMatch(FORM, /CASE_MODE|CASE_ITEM_UNITS|PACK_ITEM/, 'the case mode is an internal input of pricePatch now');
+  assert.match(FORM, /PRICE_UNITS\.forEach\(u => \{/);
+  assert.doesNotMatch(FORM, /caseSizeBox|caseUnitSelect|caseCountBox|syncPackOption|packOption/, 'the «Contiene count × size × unit» row is gone');
 });
 
-test('pieces hide the size box, and a case reopens as typed', () => {
-  assert.match(FORM, /caseSizeBox\.hidden = itemsArePieces/);
-  assert.match(FORM, /const storedCase = item \? storedCaseOf\(item\) : null/);
-  assert.match(FORM, /rateField\.hidden = inCase/);
+test('the price box means what the format and the weight say, and shows only the boxes that mean something', () => {
+  assert.match(FORM, /const form = priceFormOf\(fmt, weight, ownPieceWeight\(item, weight, ctx\.initialWeight\)\);/);
+  assert.match(FORM, /const typedForm = form === PRICE_FORMS\.typed;/);
+  assert.match(FORM, /unitField\.hidden = !typedForm;\s*rateField\.hidden = !typedForm;\s*casePriceField\.hidden = typedForm;/);
+  assert.match(FORM, /const pricePair = el\('div', \{ class: 'mgmt-pair' \}, \[unitField, rateField, casePriceField\]\);/);
+  assert.match(FORM, /casePriceLabel\.textContent = fmt\.kind === 'carton'\s*\? t\('orders\.case\.price'/);
+  assert.match(FORM, /: t\('orders\.case\.packPrice'/);
+  assert.match(FORM, /pieceField\.hidden = needsSize \|\| !\(\(typedForm && unit === 'pcs'\) \|\| form === PRICE_FORMS\.cartonPieces\);/);
+});
+
+test('⚠️ UNTOUCHED MEANS UNCHANGED: read() hands pricePatch the stored price until a person touches something', () => {
+  assert.match(FORM, /if \(!dirty\(\)\) \{\s*const input = convertsCase\(\) \? singleFromCaseInput\(item, vat\) : storedPriceInput\(item, vat\);/);
+  assert.match(FORM, /return formatPriceInput\(now\(\)\.fmt, now\(\)\.weight, \{/);
+  // dirty() is: a new item, a typed price box, «Ricalcola» — and NOTHING else (review, rule B): moving the
+  // format or the weight never rewrites a stored price
+  assert.match(FORM, /const dirty = \(\) => !item \|\| priceTyped \|\| recomputed;/);
+  assert.doesNotMatch(FORM, /ctx\.formatTouched/);
+  // (initialWeight and openedKind only decide two shape-only changes that keep the money — keepsMoney())
+  assert.match(FORM, /const keepsMoney = \(\) => convertsCase\(\) \|\| syncedWeightKg\(\) !== null;/);
+});
+
+test('every price box a person can type in sets the flag, BEFORE the live line refreshes', () => {
+  assert.match(FORM, /\[unitSelect, rate, pieceWeight, casePriceBox\]\.forEach\(input => \{\s*input\.addEventListener\('input', \(\) => \{ priceTyped = true; \}\);\s*input\.addEventListener\('change', \(\) => \{ priceTyped = true; \}\);/);
+  assert.ok(FORM.indexOf('priceTyped = true') < FORM.indexOf("[unitSelect, rate, pieceWeight, vatSelect, casePriceBox].forEach"));
+  // VAT is independent of the price: moving it must not make the price dirty
+  assert.doesNotMatch(FORM, /vatSelect\.addEventListener\('(input|change)', \(\) => \{ priceTyped/);
+});
+
+test('the box shows the stored figure only while it still means the same thing; otherwise empty, with the carried price as placeholder', () => {
+  assert.match(FORM, /const start = priceBoxStart\(item, fmt, weight, Boolean\(changed\)\);/);
+  assert.match(FORM, /const shown = recomputed \? start\.suggestion : start\.value;/);
+  assert.match(FORM, /casePriceBox\.setAttribute\('placeholder', shown === null && start\.suggestion !== null \? String\(start\.suggestion\) : ''\);/);
+  assert.match(FORM, /keepsNote\.hidden = !keeps;/);
+});
+
+test('the format-changed note shows both formats and offers «Ricalcola», which only sets the flag', () => {
+  assert.match(FORM, /const changed = keepsMoney\(\) \? null : formatChanged\(item, fmt, weight\);/);
+  assert.match(FORM, /t\('orders\.case\.packChanged', \{ old: changed\.old, new: changed\.new \}\)/);
+  assert.match(FORM, /onClick: \(\) => \{ recomputed = true; refresh\(\); \(rateField\.hidden \? casePriceBox : rate\)\.focus\(\); \}/, 'focus follows the link that hides itself, to the VISIBLE box');
+  assert.match(FORM, /recomputeBtn\.hidden = dirty\(\) \|\| needsSize \|\| start\.suggestion === null;/, 'once the price is being recomputed the button has done its job');
+  assert.match(I18N, /'orders\.case\.packChanged': 'Il formato è cambiato dall’ultimo prezzo: salvato \{old\}, con questo formato \{new\}\. Ricontrolla il prezzo\.'/);
+  assert.match(I18N, /'orders\.case\.recompute': 'Ricalcola'/);
+  assert.match(I18N, /'orders\.case\.keepsPrice': 'Il prezzo salvato resta \{price\} finché non scrivi il nuovo prezzo o tocchi Ricalcola\.'/);
+});
+
+test('a price that existed and has no number under the new format is said, never saved empty in silence', () => {
+  assert.match(FORM, /priceAgainNote\.hidden = !\(dirty\(\) && !typedForm && casePriceBox\.value === '' && positiveNumber\(item\?\.pricePerUnit\) !== null\);/);
+});
+
+test('the live summary names the rate and what ONE item costs; the VAT line prices the unit the card would save', () => {
+  assert.match(FORM, /t\('orders\.case\.perItem', \{\s*price: formatMoney\(draft\.casePrice \/ draft\.caseCount\), item: inner,/);
+  assert.match(FORM, /unitCost\(\{ \.\.\.\(item \|\| \{\}\), \.\.\.ctx\.order\(\) \}, draft\)/);
+  assert.match(I18N, /'orders\.case\.summaryUnit': '= \{rate\} \/ \{unit\}'/);
+  assert.match(I18N, /'orders\.case\.perItem': '\{price\} a \{item\}'/);
+});
+
+test('a weight-priced case with an unreadable weight is refused on the weight box', () => {
+  assert.match(FORM, /const needsWeight = \(\) => weightNeededForPrice\(\{\s*item, fmt: now\(\)\.fmt, weightText: now\(\)\.weight, dirty: dirty\(\), priceBox: casePriceBox\.value,/);
+  assert.match(FORM, /if \(price && price\.needsWeight\(\)\) \{ weight\.markNeeded\(\); return; \}/);
+});
+
+test('the card reopens from a case only when it still matches its rate', () => {
+  assert.doesNotMatch(FORM, /[^d]caseOf\(item\)/);
+  assert.match(FORM, /storedCaseOf\(item\)\?\.caseItemUnit === 'pcs'/);
 });
 
 test('the phrases are read when the form is drawn, never at module level', () => {
-  assert.doesNotMatch(FORM, /^const [A-Z_]+ = .*t\('orders\.(case|priceByCase)/m);
+  const raw = read('js/ingredient-record-form.js');
+  assert.doesNotMatch(raw, /^const [A-Z_]+ = .*t\('orders\.(case|format)/m);
 });
 
-test('the row styles exist and let the boxes shrink at a narrow width', () => {
+test('the contains row styles exist and let the boxes shrink at a narrow width', () => {
   assert.match(CSS, /\.mgmt-case-row \.mgmt-input \{[^}]*min-width: 0/);
   assert.match(CSS, /\.mgmt-case-row \{[^}]*display: flex[^}]*align-items: center/);
+  assert.match(CSS, /\.mgmt-case-row > \.mgmt-choice \{ flex: 1 1 0; min-width: 0; \}/);
+  assert.match(CSS, /\.mgmt-case-row \.mgmt-choice \.mgmt-input \{ flex: none; \}/);
 });
 
-test('the card reopens in case mode only for a case that still matches its rate', () => {
-  assert.match(FORM, /const storedCase = item \? storedCaseOf\(item\) : null;/);
-  assert.doesNotMatch(FORM, /[^d]caseOf\(item\)/);
-});
-
-test('the contains row gives its number boxes slim padding and sizes the unit menu to its text', () => {
+test('the contains row gives its number box slim padding', () => {
   assert.match(CSS, /\.mgmt-case-row \.mgmt-input \{[^}]*padding-left: 8px; padding-right: 8px;/);
-  assert.match(CSS, /\.mgmt-case-row select\.mgmt-input \{ flex: 0 1 auto; \}/);
 });

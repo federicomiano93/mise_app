@@ -12,14 +12,16 @@
 import { t, joinList, onLanguageChange } from '../i18n.js';
 import { supplierLabel } from '../supplier-label.js';
 // ⚠️ createDoc / removeDoc / saveIngredientWithPrice / getPriceHistory LEFT WITH THE
-// RECORDS. This page no longer creates, deletes or prices anything — it reads the
-// two collections to draw an order. js/orders/registry-main.js holds those calls now.
-// (The one exception is «+ Add ingredient» on a supplier's screen, which opens the records'
-// own card through js/ingredient-create.js — the card does its own saving.)
+// RECORDS: this page writes only the order itself (draft, history), and js/orders/registry-main.js
+// holds the record calls. The exceptions open the records' own card through
+// js/ingredient-create.js: «+ Add ingredient» on a supplier's screen creates, and the
+// ingredient NAME on a row edits — and, for an owner or manager, deletes (the card's bin ends in
+// deleteIngredientAndDraftRow below, which also takes the ingredient's line out of the draft).
 import {
   watchCollection, watchDoc, saveDoc, COLLECTIONS,
   watchRecentHistory, getOlderHistory, getLegacyHistory,
-  watchIngredientPrices, canManageHere, authReady,
+  watchIngredientPrices, canManageHere, authReady, getPriceHistory,
+  deleteIngredientWithPrice, mayWritePrices,
 } from './firebase-orders.js';
 import { withPrices } from '../price-model.js';
 import { currentSession } from '../firebase.js';
@@ -33,7 +35,7 @@ import { paintOrderMoney } from './order-cost-view.js';
 import {
   scheduleDraftSave, saveDraftNow, flushDraftSave, watchDraft, archiveSupplier, clearSupplier,
   clearQuantities, saveHistoryRecord, deleteHistoryRecord, setDraftSaveReporter,
-  confirmDelivery, resolveMissing,
+  confirmDelivery, resolveMissing, dropDeletedIngredientFromDraft, freezeUnitInDraft,
 } from './draft.js';
 import { buildSendScreen } from './preview.js';
 import { buildSupplierPicker } from './supplier-picker.js';
@@ -66,7 +68,7 @@ import { storedUnitFor, entryUnit, isDefaultUnit } from '../order-unit.js';
 import { todayOrders, pendingSuppliers } from './reminders.js';
 import { renderTodayOrders, renderPending } from './reminder-view.js';
 import { resolveSuppliers, orderSuppliers, NO_SUPPLIER_ID } from './no-supplier.js';
-import { openIngredientCreate } from '../ingredient-create.js';
+import { openIngredientCreate, openIngredientEdit } from '../ingredient-create.js';
 import { normalizeOrdersConfig } from './orders-config.js';
 import { mountIngredientList } from './ingredient-list.js';
 import { watchTablet, initAlertsPanel, closeAlertsPanel, isTabletNow } from './tablet-layout.js';
@@ -165,6 +167,11 @@ const hooks = {
   },
   onClear(supplierId) {
     clearQuantitiesFor([supplierId]);
+  },
+  // The ingredient NAME on a row opens the records' card (ingredients.js asks both on every build).
+  mayEditIngredient: () => mayAddIngredient(),
+  onEditIngredient(ing) {
+    openEditIngredient(ing);
   },
 };
 
@@ -446,6 +453,75 @@ function openAddIngredient(supplierId) {
       alertDialog(t('orders.addIngredientFailed'));
     })
     .finally(() => { addingIngredient = false; });
+}
+
+// The ingredient NAME on a row: the records' own card for THIS ingredient, as an overlay above
+// whatever Orders screen is up (supplier screen or the flat list). Nothing to refresh afterwards:
+// the live snapshot after the save repaints the rows with the new name / weight / unit, and the
+// screen underneath was never touched — same scroll, every typed quantity still in state.entries.
+// ⚠️ Same gate as «+ Add ingredient» (mayAddIngredient), and the same double-tap guard: two
+// layers would be two cards for one ingredient.
+// ⚠️ THE ITEM IS state.ingredients' (the document MERGED with its price), never the row's
+// copy, and `pricesLoaded` tells the opener whether that merge has really seen the prices: if
+// not, it reads the price document before drawing — a card without the stored price would erase
+// it on an untouched Save (js/ingredient-edit-model.js).
+// ⚠️ THE DELETE FIRST, THE DRAFT CLEAN-UP SECOND, and only if the delete landed: a refused
+// delete must leave the typed quantity where it was. The clean-up is NOT awaited — the card
+// closes as soon as the batch resolves — and a failure is only logged (draft.js).
+// The local entry goes too, or the draft autosave would write the quantity straight back.
+// `deletedIngredientId` tells the focus restore below that the row is gone (or about to be: the
+// snapshot may land after the card has closed), so focus goes to a visible element instead.
+let deletedIngredientId = null;
+async function deleteIngredientAndDraftRow(id) {
+  await deleteIngredientWithPrice(id, mayWritePrices());
+  deletedIngredientId = id;
+  delete state.entries[id];
+  dropDeletedIngredientFromDraft(id);
+}
+
+// After the card closes, hand focus back INSIDE THE SCREEN THAT IS ON TOP: the open supplier's
+// screen if there is one, else the flat list — never a row hidden behind an overlay, and never
+// the page body. The row's name button when it is still there; after a delete, the search box
+// of the flat list or the supplier screen's header Back.
+function restoreFocusAfterCard(ingredientId) {
+  const wasDeleted = deletedIngredientId === ingredientId;
+  deletedIngredientId = null;
+  const scope = detailView ? detailView.overlay : document;
+  const name = wasDeleted ? null
+    : scope.querySelector(`[data-ing="${CSS.escape(ingredientId)}"] .ing-name-btn`);
+  const target = name
+    || scope.querySelector('.search-row input')
+    || scope.querySelector('.orders-icon-btn');
+  target?.focus({ preventScroll: true });
+}
+
+function openEditIngredient(ing) {
+  if (addingIngredient || !mayAddIngredient()) return;
+  const item = state.ingredients.find(i => i.id === ing.id) || ing;
+  addingIngredient = true;
+  openIngredientEdit({
+    item,
+    suppliers: state.suppliers,
+    ingredients: state.rawIngredients,
+    storedCategories: state.ingredientCategories,
+    layerClass: 'mgmt-overlay',
+    pricesLoaded: state.pricesReadable === true,
+    actions: {
+      priceHistory: (id) => getPriceHistory(id),
+      // The bin, only for whoever may delete (the rules decide either way — P2).
+      ...(canManageHere() ? { deleteIngredient: deleteIngredientAndDraftRow } : {}),
+      // «Cartone» / «Singola» rewrite the order unit: the open draft line keeps the unit it was typed in.
+      unitChanged: freezeUnitInDraft,
+    },
+  })
+    .catch(err => {
+      console.error('Could not open the ingredient card', err);
+      alertDialog(t('orders.addIngredientFailed'));
+    })
+    .finally(() => {
+      addingIngredient = false;
+      restoreFocusAfterCard(ing.id);
+    });
 }
 
 // Create the screen, or repaint the one already up. Repainting happens on every

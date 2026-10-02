@@ -1,3 +1,6 @@
+// legacy-order-cost.mjs — a FROZEN COPY of js/order-cost.js as it was on main before «Cartone» (1 Oct 2026).
+// The regression grid (tests/readers-regression-grid.test.mjs) runs it against the live readers: an item
+// with no packCount must price EXACTLY as it always did. Never edit this file to make a test pass.
 // order-cost.js — what an order costs, net and with VAT. PURE (P15): no DOM,
 // no Firestore, so every rule below is asserted under Node rather than read
 // back out of a rendered screen.
@@ -13,9 +16,9 @@
 // the price WITHOUT VAT, and the VAT is added on top here, once, for
 // DISPLAY. Nothing here ever writes back to a price.
 
-import { isPriceUnit, positiveNumber, storedCaseOf, packWeightOf, packBaseOf } from './price-model.js';
-import { parsePackSize } from './pack-size.js';
-import { cleanUnit, sameUnit } from './order-unit.js';
+import { isPriceUnit, positiveNumber, storedCaseOf } from './legacy-price-model.mjs';
+import { parsePackSize } from './legacy-pack-size.mjs';
+import { cleanUnit, sameUnit } from './legacy-order-unit.mjs';
 
 // The net cost of ONE ORDERED UNIT of an ingredient — one sack, one case, one
 // piece, whatever the order screen's own quantity box counts.
@@ -75,86 +78,7 @@ const CASE_UNITS = new Set([
 //   a case of ONE             → the case price, for any non-weight word
 //   any other word (busta, sacco, bottiglia…) on a case of several → null: one of WHAT?
 //     Like every other rule in this file, when in doubt there is no number.
-// ── «Cartone» (1 Oct 2026): current product data × the stored cost of ONE item ───────────────
-// ⚠️ WHEN THE CARD SAYS «CARTONE» (a whole-number packCount) THE ANSWER IS BUILT FROM WHAT THE CARD
-// SAYS NOW, NOT FROM THE FORMAT THE PRICE WAS TYPED UNDER. An employee can change the count, the
-// package word or the weight from a screen that has no price section; the frozen case then no
-// longer matches, and reading it as it stands would misprice (a one-pack case of 5 turned into a
-// carton of 4 cost 5, not 20). So: the cost of ONE item (case price ÷ what that case held, or the
-// per-piece rate, or a per-kilo rate × one item's weight) × the items in ONE ORDERED UNIT (packCount
-// when ordered in the carton word, 1 when ordered in the package word).
-// ⚠️ AN ITEM WITH NO packCount NEVER COMES HERE: legacyUnitCost() below is the old function, and
-// tests/readers-regression-grid.test.mjs runs a frozen copy of it against this over every stored
-// shape. Exactly ONE shape reads differently from before (2nd review, 1 Oct 2026), named in the
-// grid: a weight word on a per-piece price that remembers one piece's weight. A weight that is unreadable or a multiplier («6x1kg», «sacco») also keeps today's
-// whole-unit reading and is NOT multiplied by packCount — that was the ×6-twice defect.
-
-// A packCount as the rules store it: a whole number ≥ 1. Anything else (a string, 0, 2.5) is none.
-export function validPackCount(ingredient) {
-  const count = ingredient && ingredient.packCount;
-  return Number.isInteger(count) && count >= 1 ? count : null;
-}
-
-// How many items ONE ordered unit of this card holds: packCount for the carton, 1 for the package word
-// or a piece word. null for an item with no packCount.
-export function itemsPerOrderedUnit(ingredient) {
-  const count = validPackCount(ingredient);
-  if (count === null) return null;
-  const unit = cleanUnit(ingredient.unit).toLowerCase().replace(/\.$/, '');
-  const pack = cleanUnit(ingredient.packUnit).toLowerCase().replace(/\.$/, '');
-  if ((pack !== '' && unit === pack) || PIECE_UNITS.has(unit)) return 1;
-  return count;
-}
-
-// The net cost of ONE item, from the stored price and the card's weight; null when that cannot be
-// known (a per-kilo rate with no simple weight, or a pieces price on a multiplier text).
-// ⚠️ A PIECE THAT IS NOT THE ITEM (4th review, 2 Oct 2026): eggs priced 0.25 a piece, remembered as 60 g each,
-// on a card whose weight is the 360 g tray. One item of the carton is the TRAY, and 0.25 is one egg: how many
-// eggs a tray holds is written nowhere. A per-piece rate (no stored case) that remembers a piece weight
-// different from the card's readable weight is therefore NOT the price of one item — a carton card gets no
-// number from it (refuse rather than guess), and is not handed to the old reading either, which would price
-// the whole carton as one egg.
-export function pieceIsNotItem(ingredient, price) {
-  if (!price || price.priceUnit !== 'pcs' || storedCaseOf(price)) return false;
-  const pieceKg = positiveNumber(price.unitWeightKg);
-  const base = packBaseOf(String((ingredient && ingredient.weight) || ''));
-  return pieceKg !== null && base !== null && Math.abs(base.size - pieceKg) > 1e-9;
-}
-
-export function costPerItem(ingredient, price) {
-  const wholeCase = storedCaseOf(price);
-  if (wholeCase) return wholeCase.casePrice / wholeCase.caseCount;
-  const rate = positiveNumber(price && price.pricePerUnit);
-  if (rate === null || !isPriceUnit(price.priceUnit)) return null;
-  const packText = String((ingredient && ingredient.weight) || '');
-  if (price.priceUnit === 'pcs') return MULTIPLIER.test(packText) || pieceIsNotItem(ingredient, price) ? null : rate;
-  const base = packBaseOf(packText);
-  return base ? rate * base.size : null;
-}
-
 export function unitCost(ingredient, price) {
-  const items = itemsPerOrderedUnit(ingredient);
-  if (items === null) return legacyUnitCost(ingredient, price);
-  if (!price || !isPriceUnit(price.priceUnit) || positiveNumber(price.pricePerUnit) === null) return null;
-  const orderUnit = String((ingredient && ingredient.unit) || '').trim().toLowerCase().replace(/\.$/, '');
-  // Ordered by weight, the quantity IS kilos or litres: that was never about the case.
-  if (Object.prototype.hasOwnProperty.call(WEIGHT_UNITS, orderUnit)) return legacyUnitCost(ingredient, price);
-  if (pieceIsNotItem(ingredient, price)) return null;
-  const each = costPerItem(ingredient, price);
-  if (each !== null) return each * items;
-  // ⚠️ ONE ITEM WITH NO KNOWN COST HAS NO PRICE (5th review, 2 Oct 2026): the old reading prices the WHOLE
-  // ordered unit («6x1kg» → 12), which is the carton — never one busta of it. Only the carton word keeps it.
-  return items === validPackCount(ingredient) ? legacyUnitCost(ingredient, price) : null;
-}
-
-// A per-piece price read by WEIGHT: what one kilo costs is the piece's price ÷ one piece's weight, so a
-// line of `kilos` kilos costs that × kilos. null while nobody said what a piece weighs.
-function viaPieceWeight(price, rate, kilos) {
-  const pieceKg = positiveNumber(price.unitWeightKg);
-  return pieceKg === null ? null : (rate / pieceKg) * kilos;
-}
-
-function legacyUnitCost(ingredient, price) {
   if (!price || !isPriceUnit(price.priceUnit)) return null;
   const rate = positiveNumber(price.pricePerUnit);
   if (rate === null) return null;
@@ -165,18 +89,13 @@ function legacyUnitCost(ingredient, price) {
   const wholeCase = storedCaseOf(price);
   if (wholeCase) {
     if (byWeight) {
-      return price.priceUnit === 'pcs' ? viaPieceWeight(price, rate, WEIGHT_UNITS[orderUnit]) : rate * WEIGHT_UNITS[orderUnit];
+      return price.priceUnit === 'pcs' ? null : rate * WEIGHT_UNITS[orderUnit];
     }
     // ⚠️ THE PACKAGE WORD MEANS «ONE ITEM» ONLY FOR A CASE OF PACKAGES ('pack'), and it is asked
     // BEFORE the case words: a package declared «scatola» and ordered by «scatola» is one package,
     // not the case. On any other case it means nothing — eggs sold in a «vaschetta» of 360 g,
     // ordered by «vaschetta» from a case of 60 pieces at 12, are NOT 0.20 each (a tray is not
     // one egg): they fall through to the rules below and, being no piece/case word, are null.
-    // ⚠️ THAT STAYS, ON PURPOSE (2nd review, 1 Oct 2026, decided by the owner's rule «refuse rather than
-    // guess»): on legacy data a case of 30 eggs ordered by its own package word is not ONE egg. So after
-    // an EMPLOYEE turns a Cartone into a Singola the line has no price until a manager opens the card
-    // (it reopens on the new card as a Singola — pack-format.js usesLegacyCard keeps a case ordered by its own
-    // package word there — says the format changed, and «Ricalcola» converts it to per-item).
     const packWord = String((ingredient && ingredient.packUnit) || '').trim().toLowerCase().replace(/\.$/, '');
     const isPackCase = wholeCase.caseItemUnit === 'pack';
     if (PIECE_UNITS.has(orderUnit) || (isPackCase && packWord !== '' && orderUnit === packWord)) {
@@ -193,8 +112,7 @@ function legacyUnitCost(ingredient, price) {
   const packText = String((ingredient && ingredient.weight) || '');
 
   if (price.priceUnit === 'pcs') {
-    if (byWeight) return viaPieceWeight(price, rate, WEIGHT_UNITS[orderUnit]);
-    if (MULTIPLIER.test(packText)) return null;
+    if (byWeight || MULTIPLIER.test(packText)) return null;
     return rate;
   }
 
@@ -215,11 +133,6 @@ export function lineUnitCost(ingredient, price, unit) {
   const chosen = cleanUnit(unit);
   if (chosen === '' || sameUnit(chosen, ingredient && ingredient.unit)) return unitCost(ingredient, price);
   const wholeCase = storedCaseOf(price);
-  if (validPackCount(ingredient) !== null) {
-    // A carton card: its package word is ONE item, whatever the stored case held.
-    if (!sameUnit(chosen, ingredient.packUnit)) return null;
-    return unitCost({ ...ingredient, unit: chosen }, price);
-  }
   if (!wholeCase || wholeCase.caseItemUnit !== 'pack' || !(wholeCase.caseCount > 0)) return null;
   if (!sameUnit(chosen, ingredient && ingredient.packUnit)) return null;
   return unitCost({ ...ingredient, unit: chosen }, price);

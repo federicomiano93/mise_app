@@ -115,3 +115,48 @@ export function packChoices({ ingredients, language, current } = {}) {
   const used = (ingredients || []).map(i => i?.packUnit);
   return choices(defaultsFor(DEFAULT_PACKS, language), [...used, current]);
 }
+
+// ── «Confezione: Cartone» — the words the card writes for it ──────────────────
+// Same venue-data rule: the venue's OUTPUT language decides them, never the screen's.
+// ⚠️ THE ORDER UNIT OF A CARTON IS WRITTEN BY THE CARD, NOT TYPED (1 Oct 2026): the «Unità
+// d'ordine» menu is gone, and a card that says «Cartone» stores this word in `unit` (unless the
+// item already carries a carton word of its own — js/pack-format.js keeps that one).
+export const CARTON_WORD = Object.freeze({ it: 'cartone', en: 'case' });
+export const cartonWordFor = (language) => defaultsFor(CARTON_WORD, language);
+
+// The order unit a NEW loose item gets from the way it is priced («al kg», «al litro», «al
+// pezzo»): the same words the old «Unità d'ordine» menu offered for them.
+export const LOOSE_UNIT_WORDS = Object.freeze({
+  it: Object.freeze({ kg: 'kg', l: 'l', pcs: 'pz' }),
+  en: Object.freeze({ kg: 'kg', l: 'l', pcs: 'pcs' }),
+});
+export const looseUnitFor = (priceUnit, language) => defaultsFor(LOOSE_UNIT_WORDS, language)[priceUnit] || '';
+
+// What one item inside a carton is called when the card has to show it before anybody picked
+// a word (a stored case of pieces whose ingredient names no package).
+export const PIECE_WORD = Object.freeze({ it: 'pezzo', en: 'piece' });
+export const pieceWordFor = (language) => defaultsFor(PIECE_WORD, language);
+
+// The plural of the DEFAULT package words, for «Cartone da 4 buste». A small table, not a
+// grammar: a word somebody typed in («+ Nuova…») is not in it and the caller falls back to
+// «4 × parola». ⚠️ SINGULAR FOR ONE, and null for any word the table does not know.
+const PACK_PLURALS = Object.freeze({
+  it: Object.freeze({
+    busta: 'buste', sacco: 'sacchi', bottiglia: 'bottiglie', barattolo: 'barattoli',
+    scatola: 'scatole', vaschetta: 'vaschette', pezzo: 'pezzi',
+  }),
+  en: Object.freeze({
+    bag: 'bags', sack: 'sacks', bottle: 'bottles', jar: 'jars', box: 'boxes', tub: 'tubs', piece: 'pieces',
+  }),
+});
+
+export function packWordFor(word, count, language) {
+  const key = clean(word).toLowerCase();
+  const plural = defaultsFor(PACK_PLURALS, language)[key];
+  if (!plural) return null;
+  return Number(count) === 1 ? key : plural;
+}
+
+// The package word «Cartone» starts on when nothing was picked yet: the first default of the list
+// (busta / bag), never the alphabetically first word of a menu.
+export const defaultPackFor = (language) => defaultsFor(DEFAULT_PACKS, language)[0];

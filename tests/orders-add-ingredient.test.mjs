@@ -37,7 +37,8 @@ test('the button is a round icon button in the HEADER, on the right, built once 
 });
 
 test('Orders opens the shared card from js/ root, over the supplier screen, with this supplier', () => {
-  assert.match(MAIN, /import \{ openIngredientCreate \} from '\.\.\/ingredient-create\.js';/);
+  // The same module also holds the EDIT opener (the ingredient name on a row), so both come from it.
+  assert.match(MAIN, /import \{ openIngredientCreate, openIngredientEdit \} from '\.\.\/ingredient-create\.js';/);
   assert.doesNotMatch(MAIN, /ingredient-record-form\.js/, 'never the card directly: one opener decides price and panels');
   assert.doesNotMatch(MAIN, /catalogue\//, 'no cross-feature import');
   // ⚠️ The owner's «hide Suppliers & ingredients from the staff» switch closes this door too,

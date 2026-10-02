@@ -149,7 +149,7 @@ test('a new supplier gets its id BEFORE the write, so it can be selected at once
   const data = codeOf(read('js/record-data.js'));
   assert.match(data, /const ref = id \? doc\(suppliers, id\) : doc\(suppliers\);\s*await setDoc\(ref, withBakery\(data\), \{ merge: true \}\);\s*return ref\.id;/);
   assert.match(codeOf(read('js/orders/firebase-orders.js')),
-    /export \{ saveIngredientWithPrice, saveSupplierRecord, mayWritePrices \} from '\.\.\/record-data\.js';/,
+    /export \{\s*saveIngredientWithPrice, saveSupplierRecord, mayWritePrices, deleteIngredientWithPrice,\s*\} from '\.\.\/record-data\.js';/,
     'Orders calls the same writes, not a copy of them');
   assert.match(codeOf(read('js/orders/registry-main.js')), /saveSupplier: \(id, payload\) => saveSupplierRecord\(id, payload\),/);
 });

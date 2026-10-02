@@ -48,6 +48,8 @@ import { isPackaging } from '../ingredient-kind.js';
 // This screen still decides everything around them: the overlay, the navigation, and — for
 // the ingredient card — whether the price is drawn and which panels the venue uses.
 import { buildIngredientForm } from '../ingredient-record-form.js';
+import { itemWithPrice, needsPriceRead } from '../ingredient-edit-model.js';
+import { reportFailure } from '../record-ui.js';
 import { buildSupplierForm } from '../supplier-record-form.js';
 import { mayWritePrices } from './firebase-orders.js';
 // ⚠️ A FEATURE SWITCH, NOT A ROLE GATE, and the difference is why this may sit in a
@@ -61,8 +63,10 @@ import {
 } from './mgmt-ui.js';
 
 // data:    { suppliers(): [], ingredients(): [], categories(current): [], orderUnits(current): [],
-//            packs(current): [], categoriesLoaded(): boolean } — live getters; categories,
-//            orderUnits and packs are the words the ingredient card's menus offer
+//            packs(current): [], categoriesLoaded(): boolean, pricesLoaded(): boolean,
+//            readPrice(id): Promise<price doc | null> } — live getters; categories,
+//            orderUnits and packs are the words the ingredient card's menus offer (orderUnits only
+//            for the card of before, which an old stored price shape opens)
 // actions: { saveSupplier, saveIngredient, priceHistory, setSupplierActive,
 //            setIngredientActive, deleteSupplier, deleteIngredient, deleteCategory(list, ids) }
 // hooks:   { onChrome({ addLabel }) } — told on every paint which word the page
@@ -463,7 +467,32 @@ export function buildRegistry(data, actions, hooks = {}) {
 
   // ── One ingredient's form ───────────────────────────────────────────────────
   //   presetKind: 'packaging' when added from the packaging list
-  function openIngredientForm(item, presetSupplierId, presetKind = null) {
+  //
+  // ⚠️⚠️ AN EXISTING INGREDIENT OPENS ONLY WITH ITS PRICE (5th review of PR #254, 2 Oct 2026). The prices
+  // are a second live collection and can arrive AFTER the ingredients: a card opened in that moment shows
+  // empty price boxes, and an untouched Save writes «no price» over the stored one — the card erasing
+  // what it failed to show. So, while the live prices have not answered, the price document is read first
+  // (the same guard Orders' openIngredientEdit uses, js/ingredient-edit-model.js). A read that fails opens
+  // NOTHING: the failure is said, and nothing can be saved over a price nobody saw.
+  let opening = false;
+  async function openIngredientForm(item, presetSupplierId, presetKind = null) {
+    let shown = item;
+    if (item && needsPriceRead({ mayPrice: mayWritePrices(), pricesLoaded: data.pricesLoaded?.() === true })) {
+      if (opening) return;           // a second tap while the price is on its way
+      opening = true;
+      try {
+        shown = itemWithPrice(item, await data.readPrice(item.id));
+      } catch (err) {
+        await reportFailure('load', item.name, err);
+        return;
+      } finally {
+        opening = false;
+      }
+    }
+    showIngredientForm(shown, presetSupplierId, presetKind);
+  }
+
+  function showIngredientForm(item, presetSupplierId, presetKind = null) {
     push((entry) => {
       const body = el('div', { class: 'mgmt-scroll' }, [
         buildIngredientForm({
