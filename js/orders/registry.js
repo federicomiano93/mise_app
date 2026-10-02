@@ -32,7 +32,7 @@
 import { t, onLanguageChange } from '../i18n.js';
 import { supplierLabel, supplierMatches } from '../supplier-label.js';
 import { el } from './dom.js';
-import { confirmDialog } from './confirm-dialog.js';
+import { confirmDialog, alertDialog } from './confirm-dialog.js';
 import { isTabletNow, watchTablet } from './tablet-layout.js';
 import { snapshotFields, snapshotChanged } from '../form-dirty.js';
 import { removeLevel } from './level-stack.js';
@@ -49,7 +49,6 @@ import { isPackaging } from '../ingredient-kind.js';
 // the ingredient card — whether the price is drawn and which panels the venue uses.
 import { buildIngredientForm } from '../ingredient-record-form.js';
 import { itemWithPrice, needsPriceRead } from '../ingredient-edit-model.js';
-import { reportFailure } from '../record-ui.js';
 import { buildSupplierForm } from '../supplier-record-form.js';
 import { mayWritePrices } from './firebase-orders.js';
 // ⚠️ A FEATURE SWITCH, NOT A ROLE GATE, and the difference is why this may sit in a
@@ -473,16 +472,21 @@ export function buildRegistry(data, actions, hooks = {}) {
   // what it failed to show. So, while the live prices have not answered, the price document is read first
   // (the same guard Orders' openIngredientEdit uses, js/ingredient-edit-model.js). A read that fails opens
   // NOTHING: the failure is said, and nothing can be saved over a price nobody saw.
+  // ⚠️ AND FROM THE LIST AS IT IS NOW, NEVER FROM THE ROW'S OWN COPY (6th review, 2 Oct 2026): a row keeps
+  // the object it was drawn with, and a supplier's screen under an open card is not redrawn — so a row drawn
+  // before the prices arrived would open a card with no price after they had (or with an old one).
   let opening = false;
   async function openIngredientForm(item, presetSupplierId, presetKind = null) {
-    let shown = item;
-    if (item && needsPriceRead({ mayPrice: mayWritePrices(), pricesLoaded: data.pricesLoaded?.() === true })) {
+    const current = item ? (data.ingredients().find(i => i.id === item.id) || item) : item;
+    let shown = current;
+    if (current && needsPriceRead({ mayPrice: mayWritePrices(), pricesLoaded: data.pricesLoaded?.() === true })) {
       if (opening) return;           // a second tap while the price is on its way
       opening = true;
       try {
-        shown = itemWithPrice(item, await data.readPrice(item.id));
+        shown = itemWithPrice(current, await data.readPrice(current.id));
       } catch (err) {
-        await reportFailure('load', item.name, err);
+        console.error('The ingredient card could not read its price:', err);
+        await alertDialog(t('orders.addIngredientFailed'));
         return;
       } finally {
         opening = false;
