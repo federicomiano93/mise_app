@@ -17,6 +17,7 @@
 // change, no rules deploy.
 
 import { t } from '../i18n.js';
+import { withLineSuppliers } from './line-supplier.js';
 
 // ⚠️ THE ID ITSELF LIVES IN js/records.js since 13 Sep 2026: the ingredient card is shared
 // with the Catalogue, which may not import this folder, and a stored id must never exist in
@@ -72,13 +73,20 @@ export function noSupplier() {
 // Firestore in separate snapshots, and before the supplier one lands every single
 // supplier is "missing": resolving then would flash all 65 ingredients as
 // "No supplier" for a frame. Untouched list until the suppliers are really in.
-export function resolveSuppliers(ingredients, suppliers, suppliersLoaded) {
+//
+// `entries` (the draft) is optional and is the SECOND thing this lens decides: a line the
+// draft sends to another supplier («Ordina da un altro fornitore», line-supplier.js) comes
+// back filed under THAT supplier, with `usualSupplierId` naming its own. Without `entries`
+// every ingredient stays with its usual supplier — which is what the read-only product
+// list wants, because what a supplier sells does not change with one order.
+export function resolveSuppliers(ingredients, suppliers, suppliersLoaded, entries = null) {
   const list = ingredients || [];
   if (!suppliersLoaded) return list;
 
   const known = new Set((suppliers || []).map(s => s.id));
-  return list.map(ing =>
+  const usual = list.map(ing =>
     known.has(ing.supplierId) ? ing : { ...ing, supplierId: NO_SUPPLIER_ID });
+  return withLineSuppliers(usual, entries, suppliers);
 }
 
 // The suppliers the order screen works with: the real active ones (already sorted

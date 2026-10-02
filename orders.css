@@ -2313,9 +2313,11 @@ a.home-reminder {
 
 /* ── «To re-order» list ──────────────────────────────────────────────────────
    Shares .missing-overlay (z-index 950: above .supplier-detail 600, below dialogs 10000).
-   One card per missing line; both buttons are 44px tall and full width, so at 296px the
-   long «Put back in {supplier}'s order» wraps instead of overflowing. «Resolved» is a
-   quiet text button so it never competes with the put-back action. */
+   One card per missing line; its three buttons are 44px tall and full width, stacked, so
+   at 296px the long «Put back in {supplier}'s order» wraps instead of overflowing. «Put back»
+   is the solid green one, «Order from another supplier» the secondary, and «Resolved» a
+   quiet text button so it never competes with either. The supplier chooser reuses the
+   same overlay (.reorder-chooser) with the Incoming tab's rows. */
 .reorder-overlay .scroll-area { padding-bottom: 24px; }
 .reorder-list { display: flex; flex-direction: column; }
 .reorder-card {
@@ -2331,7 +2333,9 @@ a.home-reminder {
 .reorder-main { display: flex; align-items: baseline; gap: 12px; }
 .reorder-name { flex: 1; min-width: 0; font-size: 15px; font-weight: 600; overflow-wrap: anywhere; }
 .reorder-meta { font-size: 13px; color: var(--text3); }
-.reorder-card .reorder-put { width: 100%; min-height: 44px; }
+.reorder-card .reorder-put,
+.reorder-card .reorder-other { width: 100%; min-height: 44px; }
+.reorder-chooser .reorder-choice { width: 100%; margin-bottom: 8px; }
 .reorder-resolve {
   width: 100%;
   min-height: 44px;
@@ -2345,16 +2349,15 @@ a.home-reminder {
 }
 .reorder-resolve:active { background: var(--surface2); border-radius: var(--radius-sm); }
 
-/* The re-order reminder reuses .today-banner; this only makes it a full-width
-   button and gives it the warning tint, so it is not mistaken for the ordering
-   reminders sitting directly beneath it. */
-.reorder-banner {
-  width: 100%;
-  text-align: left;
-  background: var(--warn-bg);
-  border-color: var(--warn-border);
-  color: var(--warn);
-  font-weight: 600;
+/* The small line under an ingredient whose order is NOT with its usual supplier this time
+   («di solito da …» on the supplier it was sent to, «questa volta in ordine da …» on its
+   own). Same look as the supplier line of the flat list. */
+.ing-row--line .ing-line-note {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--text3);
+  font-family: 'DM Mono', monospace;
+  overflow-wrap: anywhere;
 }
 
 /* ── The bottom bar at three buttons, on the narrowest phones ────────────────

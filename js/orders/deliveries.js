@@ -147,7 +147,7 @@ export function resolvedOn(record, id) {
 //
 // An ingredient drops off when
 //   * somebody marked it «Risolto», or
-//   * a later order to the same supplier asked for it again, or
+//   * a later order (to any supplier) asked for it again, or
 //   * it already has a quantity in the order being typed right now.
 //
 // ⚠️ THE LAST ONE IS WHY THE LIST GOES QUIET THE MOMENT THE WORK IS DONE, rather
@@ -164,13 +164,15 @@ export function stillToReorder(history, draftEntries) {
 
     shortfall(record).forEach(id => {
       // Marked «Risolto» — bought elsewhere (1 Oct 2026). The one STORED answer on this
-      // list: Federico wants a missing line to wait until he decides, and ordering it from
-      // ANOTHER supplier is a different ingredient the app cannot match to this one.
+      // list: Federico wants a missing line to wait until he decides.
       if (resolvedOn(record, id)) return;
 
-      // Asked for again, later, from the same supplier?
+      // Asked for again, later, from ANY supplier? «Ordina da un altro fornitore» keeps the
+      // same ingredient id and files the line under the other supplier's order, so once that
+      // order is placed its record names this ingredient. Matching only the same supplier
+      // would bring the line back after it was ordered elsewhere. If that order is never
+      // placed (cleared, typed to 0, discarded) no record exists and the line stays here.
       const reordered = records.some(other =>
-        other.supplierId === supplierId &&
         isBefore(missedOn, recordDate(other)) &&
         wholeNumber(other.quantities?.[id]) > 0);
       if (reordered) return;

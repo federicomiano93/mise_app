@@ -98,10 +98,19 @@
        ordini»). Bell, order lists, send — one flex group pushed right, so the title
        keeps the space that is left and nothing ever wraps. The «?» that used to sit
        here is now the «Help» row inside Settings: five round buttons do not fit a
-       296px phone. -->
+       296px phone. «To re-order» (2 Oct 2026) is the fourth button, and the bell, the
+       order lists and the send arrow are the other three: four is the most that fit. -->
   <div class="app-header-slot orders-header-actions">
+    <!-- ⚠️ «DA RIORDINARE»: what never arrived and nobody has dealt with yet. Its own button,
+         LEFT of the bell, and NOT a notice inside it. Shown by JS
+         (js/orders/deliveries-view.js renderReorderButton) only while something is to be
+         re-ordered; the number is the count of those lines. Opens the list screen. -->
+    <button class="app-icon-btn orders-icon-btn" id="orders-reorder-btn" type="button" hidden>
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+      <span class="orders-head-dot" id="orders-reorder-count" aria-hidden="true" hidden></span>
+    </button>
     <!-- The bell: js/orders/tablet-layout.js moves the banners that ask for
-         something (not placed, changed since sent, still to re-order, the calendar)
+         something (not placed, changed since sent, the calendar)
          into #orders-alerts-panel below, at EVERY size, and this opens it. Shown by
          JS only when there is something inside; the number is DERIVED from the
          panel's own children (initAlertsPanel), never written by hand. -->
@@ -130,7 +139,7 @@
        far down the page has scrolled. js/orders/tablet-layout.js relocates the
        banner HOSTS in here; the renderers that fill them (notifications.js,
        deliveries-view.js, reminder-view.js, untold-view.js) are unchanged and
-       keep finding them by id. Order inside: pending, untold, reorder, alerts
+       keep finding them by id. Order inside: pending, untold, alerts
        (js/orders/tablet-layout.js TABLET_HOSTS). Not a modal, and deliberately
        NOT .preview-overlay — a compulsory update must never be held back by
        this. -->
@@ -227,7 +236,6 @@
          strict week window safe: without it an order that never arrived would vanish,
          unanswered, on the day the week turned. -->
     <div id="orders-owed" hidden></div>
-    <div id="orders-reorder" hidden></div>
     <!-- ⚠️⚠️ WHAT NOBODY HAS BEEN TOLD ABOUT. The shared order is live on every
          phone here, and both the sent list and the recorded order are only
          photographs of it — so somebody can add to it after the person who buys

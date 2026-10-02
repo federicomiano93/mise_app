@@ -18,7 +18,7 @@ import { t } from '../i18n.js';
 
 // ⚠️⚠️ THE RENDERERS NEVER CHANGE. Every host below is found BY ID and filled
 // by its own function elsewhere (notifications.js renderAlerts,
-// deliveries-view.js renderOwedBanner/renderReorderBanner, reminder-view.js
+// deliveries-view.js renderOwedBanner, reminder-view.js
 // renderPending/renderTodayOrders, untold-view.js via orders-main's
 // renderUntoldChanges). This file only moves the HOST NODE in the DOM — it
 // never touches what is inside it.
@@ -40,13 +40,13 @@ export const TABLET_QUERY = `${MIN_WIDTH} and ${MIN_HEIGHT}`;
 // host id -> the tablet slot it moves into. Order matters: within one slot,
 // hosts are appended in the order they appear here.
 //   orders-tablet-strip — today's orders, then the debt (today first).
-//   orders-alerts-panel — pending, untold, reorder, then the calendar notices.
+//   orders-alerts-panel — pending, untold, then the calendar notices. (The «to re-order»
+//   notice left the bell on 2 Oct 2026: it has its own round button in the green bar.)
 export const TABLET_HOSTS = [
   { id: 'orders-today', slot: 'orders-tablet-strip' },
   { id: 'orders-owed', slot: 'orders-tablet-strip' },
   { id: 'orders-pending', slot: 'orders-alerts-panel' },
   { id: 'orders-untold', slot: 'orders-alerts-panel' },
-  { id: 'orders-reorder', slot: 'orders-alerts-panel' },
   { id: 'orders-alerts', slot: 'orders-alerts-panel' },
 ];
 
@@ -104,7 +104,6 @@ export const NOTICE_CLASSES = [
   'pending-banner',       // reminder-view.js renderPending — one per supplier
   'untold-banner',        // untold-view.js — "the order changed since the last send"
   'untold-ordered',       // untold-view.js — "already ordered, and this changed"
-  'reorder-banner',       // deliveries-view.js renderReorderBanner
   'owed-banner',          // deliveries-view.js renderOwedBanner (only ever off-tablet
                            // inside the panel if a caller ever moved it there by mistake —
                            // it normally lives in the strip, not the panel, but a notice

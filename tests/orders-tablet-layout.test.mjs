@@ -31,9 +31,11 @@ test('the top strip is today, then the debt — today first', () => {
   assert.deepEqual(strip, ['orders-today', 'orders-owed']);
 });
 
-test('the alerts panel is pending, untold, reorder, then the calendar notices', () => {
+test('the alerts panel is pending, untold, then the calendar notices — «to re-order» is NOT in the bell', () => {
   const panel = TABLET_HOSTS.filter((h) => h.slot === 'orders-alerts-panel').map((h) => h.id);
-  assert.deepEqual(panel, ['orders-pending', 'orders-untold', 'orders-reorder', 'orders-alerts']);
+  assert.deepEqual(panel, ['orders-pending', 'orders-untold', 'orders-alerts']);
+  assert.ok(!TABLET_HOSTS.some((h) => h.id === 'orders-reorder'));
+  assert.ok(!NOTICE_CLASSES.includes('reorder-banner'), 'the bell no longer counts it');
 });
 
 test('countNoticeClassNames counts one notice per matching class name', () => {
@@ -42,12 +44,13 @@ test('countNoticeClassNames counts one notice per matching class name', () => {
     'pending-banner',
     'today-banner untold-banner',   // a real element carries more than one class
     'untold-ordered',
-    'today-banner reorder-banner',
     'alert-banner order',
     'alert-banner holiday',
     'some-other-thing',
   ];
-  assert.deepEqual(countNoticeClassNames(classNames), { count: 6, hasContent: true });
+  assert.deepEqual(countNoticeClassNames(classNames), { count: 5, hasContent: true });
+  // «To re-order» has its own button in the bar and is never counted by the bell.
+  assert.deepEqual(countNoticeClassNames(['today-banner reorder-banner']), { count: 0, hasContent: false });
 });
 
 // ⚠️ THE REVIEW-ROUND BUG (28 Sep 2026): the bell hid itself at zero real
