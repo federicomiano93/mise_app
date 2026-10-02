@@ -48,14 +48,14 @@ import { renderUntold } from './untold-view.js';
 import { buildManagement, isAdmin } from './management.js';
 import { computeSuggestion, isUnusualQuantity } from './suggestions.js';
 import { refreshHolidays } from './holidays.js';
-import { countryOf } from '../market.js';
+import { countryOf, outputLanguage } from '../market.js';
 import { renderAlerts } from './notifications.js';
 import { routesFor } from './send-routes.js';
 import { confirmDialog, alertDialog } from './confirm-dialog.js';
 import { mayEditRecords } from '../records.js';
 import { todayISO, dayPhrase, daySpoken, dayWhen, localDayOf, dayLabel } from './day.js';
 import {
-  buildOrderMessage, whatsappUrl, itemsFromQuantities, indexById,
+  buildOrderMessage, whatsappUrl, itemsFromQuantities, indexById, fallbackSupplierName,
 } from './order-text.js';
 import { liveHistoryStart, mergeHistory, createOlderLoader } from './history-window.js';
 import {
@@ -342,15 +342,22 @@ function render() {
 // Both list views own nodes inside the shared container, so whenever it is wiped or
 // handed to the other view, the stale handle has to go with it.
 function dropListViews() {
-  flatView = null;
+  dropFlatView();
   cardsView = null;
+}
+
+// ⚠️ THE FLAT LIST OWNS ResizeObservers: dropping the handle without destroy() would leave
+// them running on a list that is no longer in the page.
+function dropFlatView() {
+  flatView?.destroy();
+  flatView = null;
 }
 
 // The supplier list is MOUNTED once and then only repainted — see the note on
 // renderFlatList below; the same trap, the same answer.
 function renderSupplierList(container, suppliers) {
   if (!cardsView) {
-    flatView = null;
+    dropFlatView();
     container.textContent = '';
     cardsView = mountSupplierList(container, {
       query: state.supplierQuery,
@@ -896,10 +903,11 @@ function patchOlderRecord(id, next) {
 // A stored record → the picker/message row shape. Names and weights are resolved from
 // the CURRENT ingredient list, the same lens the History view uses on screen.
 function recordToRow(record) {
+  const language = outputLanguage(currentSession().location);
   return {
     id: record.id,
-    name: record.supplierName || 'Order',
-    items: itemsFromQuantities(record.quantities, indexById(state.ingredients), record.names, record.units),
+    name: record.supplierName || fallbackSupplierName(language),
+    items: itemsFromQuantities(record.quantities, indexById(state.ingredients), record.names, record.units, language),
   };
 }
 
@@ -923,7 +931,8 @@ function messageFormatOption() {
 function sendMessageFor(rows, { grouped = GROUPED_BY_DEFAULT } = {}) {
   const text = buildOrderMessage(
     rows.map(r => ({ supplierName: r.name, items: r.items })),
-    { grouped, locationName: currentSession().name });
+    { grouped, locationName: currentSession().name,
+      language: outputLanguage(currentSession().location) });
   if (!text) {
     setStatus(t('orders.nothingToSendThat'), 'warn', 4000);
     return;

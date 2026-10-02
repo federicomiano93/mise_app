@@ -444,17 +444,6 @@
 }
 .supplier-place-icon { display: flex; align-items: center; }
 
-/* «+ Add ingredient» above a supplier's list: the registry's dashed .mgmt-add, made a flex row
-   (button AND icon span, or the SVG sits ~2px low) and at least a finger tall. */
-.supplier-add-ing {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  min-height: 44px;
-}
-.supplier-add-ing-icon { display: flex; align-items: center; }
-
 /* ── Progress bar ─────────────────────────────────────────────────────────── */
 .progress { margin-bottom: 14px; }
 .progress-track { height: 6px; background: var(--surface2); border-radius: 3px; overflow: hidden; }
@@ -689,7 +678,27 @@ body[data-section="orders"] { --order-head-h: 0px; }
    scroller's padding, so top: 0 left a 14px band where rows showed ABOVE the header
    (measured 29 Sep 2026). Keep the two numbers together. */
 .ingredient-list > .ing-head { top: -14px; }
-.ing-flat-list > .ing-head { top: var(--order-head-h, 0px); }
+/* In the flat list the header sticks under the tabs AND the pinned search bar. */
+.ing-flat-list > .ing-head { top: calc(var(--order-head-h, 0px) + var(--order-search-h, 0px)); }
+/* The search row + filter pills of the flat list, pinned under the tab bar.
+   ⚠️ `flow-root` KEEPS THE CHILDREN'S BOTTOM MARGINS INSIDE THE BAR: left to collapse out,
+   they open a gap under it (measured as the bar's offsetHeight) where rows show through.
+   ⚠️ AN OPAQUE GROUND AND NO overflow ON ANY ANCESTOR, as on .order-box-head. */
+.ing-sticky-head {
+  position: sticky;
+  top: var(--order-head-h, 0px);
+  z-index: 2;
+  display: flow-root;
+  background: var(--surface);
+}
+body[data-section="orders"] { --order-search-h: 0px; --order-ing-head-h: 0px; }
+/* ⚠️ A BOX THE BROWSER SCROLLS TO ON FOCUS must land BELOW everything pinned over the list:
+   the tab bar, the search bar and the Order / Stock header. Without this the focused
+   quantity box is brought to the very top of the scroller — under them, invisible. The
+   three heights are the measured variables above, never pixels. */
+body[data-section="orders"] .scroll-area {
+  scroll-padding-top: calc(var(--order-head-h, 0px) + var(--order-search-h, 0px) + var(--order-ing-head-h, 0px));
+}
 
 /* Stock hidden (Settings): one column fewer, in the rows AND the header. */
 body.hide-stock .ing-row--line,
@@ -754,7 +763,7 @@ body.hide-stock .stock-field { display: none; }
    .ing-row, which the Calculator also uses — see the long note above. */
 .ing-fields { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; max-width: 400px; margin-inline: auto; }
 .field { display: flex; flex-direction: column; align-items: center; gap: 5px; }
-.field-label { font-size: 10px; color: var(--text3); font-family: 'DM Mono', monospace; text-transform: uppercase; letter-spacing: 0.08em; }
+.field-label { font-size: var(--field-label-size); color: var(--field-label-color); font-weight: var(--field-label-weight); }
 .ing-order-input { display: flex; align-items: center; gap: 6px; }
 .ing-order-unit { font-size: 13px; color: var(--text3); font-family: 'DM Mono', monospace; white-space: nowrap; }
 
@@ -971,12 +980,9 @@ input.ing-stock {
 }
 .preview-format { display: flex; flex-direction: column; gap: 6px; }
 .preview-format-label {
-  font-family: 'DM Mono', monospace;
-  font-size: 10px;
-  font-weight: 600;
-  color: var(--text3);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
+  font-size: var(--field-label-size);
+  font-weight: var(--field-label-weight);
+  color: var(--field-label-color);
 }
 .preview-format .view-switch { margin-bottom: 0; }
 
@@ -1360,7 +1366,7 @@ body[data-section="orders"] .ing-filter .view-switch-btn:not(.active) { color: v
 /* ── Management forms ─────────────────────────────────────────────────────── */
 .mgmt-form { display: flex; flex-direction: column; gap: 14px; }
 .mgmt-field { display: flex; flex-direction: column; gap: 6px; }
-.mgmt-field-label { font-size: 12px; color: var(--text2); font-weight: 500; }
+.mgmt-field-label { font-size: var(--field-label-size); color: var(--field-label-color); font-weight: var(--field-label-weight); }
 /* The input styling is scoped to .mgmt-form, so any field OUTSIDE a form (the General
    tab's settings) has to be named here too — otherwise it renders as a bare browser
    input in the middle of a styled panel. */
@@ -1920,10 +1926,16 @@ a.home-reminder {
 .alg-tick--may { color: var(--text2); }
 .alg-checked { margin-top: 12px; font-size: 13px; font-weight: 600; align-items: flex-start; }
 
-.alg-nut-title { margin-top: 14px; }
+/* «Per 100 g» names a GROUP of boxes, not one box: it keeps the look it had as a
+   .mgmt-field-label before the field-label tokens (it is not a field's name). */
+.alg-nut-title { margin-top: 14px; font-size: 12px; color: var(--text2); font-weight: 500; }
 /* Two columns on a phone: eight single-column rows would push Save two screens
    down, and these are short numbers. */
-.alg-nutrition { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+/* ⚠️ align-items: end ON EVERY PAIRED GRID BELOW (and .cat-loss-pair, .fc-weigh-pair,
+   .lab-size-custom): a field label can wrap to two lines at 296px, and with the default
+   stretch the box beside it would then start lower. Bottom-aligned, the BOXES share a line
+   and a long label only grows upward. */
+.alg-nutrition { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; align-items: end; }
 
 /* Two fields that belong together, side by side — «Come si acquista» and the rate.
    ⚠️ THE SAME GRID AS .alg-nutrition ABOVE, deliberately: identical values, three
@@ -1931,7 +1943,7 @@ a.home-reminder {
    ⚠️ minmax(0, 1fr) and not 1fr: a grid item's default min-width is auto, so a long
    <select> option would push its column wider than half and shove the other one off.
    That is the same flex/grid trap this project has already paid for once. */
-.mgmt-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.mgmt-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; align-items: end; }
 /* The <select> and the <input> are 100% of their column; without this the select
    sizes to its widest option instead of to the space it has been given. */
 .mgmt-pair .mgmt-input { width: 100%; min-width: 0; }
@@ -1940,8 +1952,11 @@ a.home-reminder {
    label and input in the same card started at the left edge. Shrink it to its text and
    pin it left; nothing else about the link changes. */
 .mgmt-history > .mgmt-link { align-self: flex-start; }
+/* The line above the price-history link: a heading for a list, not a field's name, so it
+   keeps the small quiet look .mgmt-field-label had before the field-label tokens. */
+.mgmt-history-label { font-size: 12px; color: var(--text2); font-weight: 500; }
 .alg-nut-field { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
-.alg-nut-label { font-size: 11px; color: var(--text2); line-height: 1.3; }
+.alg-nut-label { font-size: var(--field-label-size); color: var(--field-label-color); font-weight: var(--field-label-weight); line-height: 1.3; }
 .alg-num { width: 100%; font-variant-numeric: tabular-nums; }
 
 /* ── Order lists sent from one person to another ───────────────────────────── */

@@ -24,7 +24,7 @@ const ingredients = [
   { id: 'i3', name: 'Loose apples', weight: '' },
 ];
 
-test('the message keeps the format the app has always sent', () => {
+test('a one-supplier message is the title, a blank line and the lines', () => {
   const text = buildOrderMessage([
     { supplierName: 'Brava Fresh', items: [
       { name: 'Bacon', weight: '2.27kg', qty: 5 },
@@ -33,7 +33,6 @@ test('the message keeps the format the app has always sent', () => {
   ], CLUB);
   assert.equal(text,
     '*Order — The Italian Club*\n\n' +
-    '*Brava Fresh*\n' +
     '- Bacon 2.27kg: 5\n' +
     '- Mozzarella 1kg: 2');
 });
@@ -148,7 +147,7 @@ test('the builder sorts the lines itself, whatever order the caller passes', () 
     ],
   }], CLUB);
   assert.equal(shuffled,
-    '*Order — The Italian Club*\n\n*S*\n- Bacon 2.27kg: 5\n- Mozzarella 1kg: 2');
+    '*Order — The Italian Club*\n\n- Bacon 2.27kg: 5\n- Mozzarella 1kg: 2');
 });
 
 test('sortItems does not mutate the caller\'s array', () => {
@@ -283,17 +282,17 @@ const PLAIN = { id: 'b', name: 'Bacon', weight: '2.27kg', unit: 'casse' };
 test('a line with a unit choice says its unit; the default choice says it too', () => {
   const chosen = orderedItems([CHOICE], { f: { qty: 2, stock: 0, unit: 'busta' } });
   assert.equal(buildOrderMessage([{ supplierName: 'S', items: chosen }], CLUB),
-    '*Order — The Italian Club*\n\n*S*\n- Flour 2.5kg: 2 × busta');
+    '*Order — The Italian Club*\n\n- Flour 2.5kg: 2 × busta');
   const dflt = orderedItems([CHOICE], { f: { qty: 2, stock: 0 } });
   assert.equal(buildOrderMessage([{ supplierName: 'S', items: dflt }], CLUB),
-    '*Order — The Italian Club*\n\n*S*\n- Flour 2.5kg: 2 × cartone');
+    '*Order — The Italian Club*\n\n- Flour 2.5kg: 2 × cartone');
 });
 
 test('lines of ingredients WITHOUT a choice are byte-identical to before', () => {
   const items = orderedItems([PLAIN], { b: { qty: 3, stock: 0 } });
   assert.deepEqual(items, [{ name: 'Bacon', weight: '2.27kg', qty: 3 }]);
   assert.equal(buildOrderMessage([{ supplierName: 'S', items }], CLUB),
-    '*Order — The Italian Club*\n\n*S*\n- Bacon 2.27kg: 3');
+    '*Order — The Italian Club*\n\n- Bacon 2.27kg: 3');
 });
 
 test('summary lines and message lines stay the same thing for a unit line', () => {
@@ -301,7 +300,7 @@ test('summary lines and message lines stay the same thing for a unit line', () =
   const text = buildOrderMessage([{ supplierName: 'S', items }], CLUB);
   const fromSummary = summaryLines(items).map(({ label, qty, unit }) =>
     `- ${label}: ${unit ? `${qty} × ${unit}` : qty}`);
-  assert.deepEqual(text.split('\n').slice(3), fromSummary);
+  assert.deepEqual(text.split('\n').slice(2), fromSummary);
 });
 
 test('one shopping list never adds different units together, and does add equal ones', () => {
@@ -323,4 +322,71 @@ test('a re-sent record shows only the units it froze', () => {
   assert.equal('unit' in items.find(i => i.name === 'Bacon'), false);
   // An old record with no `units` reads exactly as it always did.
   assert.equal('unit' in itemsFromQuantities({ f: 4 }, byId, {})[0], false);
+});
+
+// ── Title language and supplier headings (1 Oct 2026) ────────────────────────
+// The title word is the venue's COUNTRY language (outputLanguage), passed in by the caller;
+// a message carrying ONE supplier has no heading, several keep theirs.
+const ONE = [{ supplierName: 'Etna', items: [{ name: 'Flour', weight: '25kg', qty: 1 }] }];
+const TWO = [...ONE, { supplierName: 'Alba', items: [{ name: 'Olives', weight: '', qty: 2 }] }];
+
+test('an Italian venue titles the message «Ordine», an English one «Order»', () => {
+  assert.equal(orderTitle('Panificio Miano', 'it'), '*Ordine — Panificio Miano*');
+  assert.equal(orderTitle('The Italian Club', 'en'), '*Order — The Italian Club*');
+  assert.ok(buildOrderMessage(ONE, { locationName: 'Panificio Miano', language: 'it' })
+    .startsWith('*Ordine — Panificio Miano*\n\n'));
+  assert.ok(buildOrderMessage(ONE, { locationName: 'The Italian Club', language: 'en' })
+    .startsWith('*Order — The Italian Club*\n\n'));
+});
+
+test('an unknown country falls back to English, and a nameless Italian order is «Ordine»', () => {
+  assert.equal(orderTitle('X', null), '*Order — X*');
+  assert.equal(orderTitle('X'), '*Order — X*');
+  assert.equal(orderTitle('', 'it'), '*Ordine*');
+});
+
+test('the One list format takes the title word too', () => {
+  assert.equal(buildOrderMessage(TWO, { grouped: false, locationName: 'Panificio Miano', language: 'it' }),
+    '*Ordine — Panificio Miano*\n\n- Flour 25kg: 1\n- Olives: 2');
+});
+
+test('a message for ONE supplier has no supplier heading', () => {
+  assert.equal(buildOrderMessage(ONE, CLUB), '*Order — The Italian Club*\n\n- Flour 25kg: 1');
+  // A second supplier with nothing in it does not count as a second supplier.
+  const withEmpty = [...ONE, { supplierName: 'Empty', items: [] }];
+  assert.equal(buildOrderMessage(withEmpty, CLUB), '*Order — The Italian Club*\n\n- Flour 25kg: 1');
+});
+
+test('a grouped message for SEVERAL suppliers keeps every heading', () => {
+  assert.equal(buildOrderMessage(TWO, CLUB),
+    '*Order — The Italian Club*\n\n*Etna*\n- Flour 25kg: 1\n\n*Alba*\n- Olives: 2');
+});
+
+// ── The other words a supplier reads follow the country too (1 Oct 2026) ─────
+import { fallbackSupplierName, emailSubject } from '../js/orders/order-text.js';
+
+test('the heading of a nameless supplier follows the country language', () => {
+  const two = [
+    { supplierName: '', items: [{ name: 'Flour', weight: '', qty: 1 }] },
+    { supplierName: 'Alba', items: [{ name: 'Olives', weight: '', qty: 2 }] },
+  ];
+  assert.ok(buildOrderMessage(two, { language: 'it' }).includes('*Ordine*\n- Flour: 1'));
+  assert.ok(buildOrderMessage(two, { language: 'en' }).includes('*Order*\n- Flour: 1'));
+  assert.equal(fallbackSupplierName('it'), 'Ordine');
+  assert.equal(fallbackSupplierName(null), 'Order');
+});
+
+test('an ingredient deleted since the order is named in the country language', () => {
+  assert.deepEqual(itemsFromQuantities({ gone: 3 }, {}, {}, {}, 'it'),
+    [{ name: 'Ingrediente eliminato', weight: '', qty: 3 }]);
+  assert.deepEqual(itemsFromQuantities({ gone: 3 }, {}, {}, {}, 'en'),
+    [{ name: 'Deleted ingredient', weight: '', qty: 3 }]);
+  assert.equal(itemsFromQuantities({ gone: 3 }, {})[0].name, 'Deleted ingredient');
+});
+
+test('the email subject follows the country language, like the body', () => {
+  assert.equal(emailSubject('Panificio Miano', 'it'), 'Ordine da Panificio Miano');
+  assert.equal(emailSubject('The Italian Club', 'en'), 'Order from The Italian Club');
+  assert.equal(emailSubject('X', null), 'Order from X');
+  assert.equal(emailSubject(null, 'it'), 'Ordine da ');
 });

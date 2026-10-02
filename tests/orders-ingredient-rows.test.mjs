@@ -107,7 +107,9 @@ test('the header is sticky: at the top of the supplier screen, under the tabs in
   // -14px = .supplier-detail-body's padding-top: top 0 left a 14px band of rows above it.
   assert.match(rule('.ingredient-list > .ing-head'), /top:\s*-14px/);
   assert.match(rule('.supplier-detail-body'), /padding:\s*14px /);
-  assert.match(rule('.ing-flat-list > .ing-head'), /top:\s*var\(--order-head-h,\s*0px\)/);
+  // …and under the pinned search bar too, so the offset is the two measured heights added.
+  assert.match(rule('.ing-flat-list > .ing-head'),
+    /top:\s*calc\(var\(--order-head-h,\s*0px\)\s*\+\s*var\(--order-search-h,\s*0px\)\)/);
   const main = read('js/orders/orders-main.js');
   assert.match(main, /trackStickyHead\(document\.querySelector\('\.order-box-head'\)\)/);
   assert.match(read('js/orders/sticky-offset.js'), /--order-head-h/);

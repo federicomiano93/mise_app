@@ -12,8 +12,9 @@
 //
 // A full-screen overlay on a phone AND on a tablet (30 Sep 2026: the tablet's
 // two-pane split was removed — the owner wanted the same screen everywhere). The
-// header is the app's one pattern: Back left, the title centred, an EMPTY slot
-// on the right so the three-track grid keeps the title centred.
+// header is the app's one pattern: Back left, the title centred, «+ Add ingredient» in
+// the slot on the right (an empty-looking slot when hidden, so the three-track grid keeps
+// the title centred either way).
 
 import { t } from '../i18n.js';
 import { supplierLabel } from '../supplier-label.js';
@@ -25,7 +26,7 @@ const BACK_ICON =
 const CHECK_SVG =
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>';
 const PLUS_SVG =
-  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>';
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>';
 
 // ctx: { ingredients, entries, suggest, hooks, onBack, onAddIngredient }
 // -> { overlay, repaint(ctx) }
@@ -41,6 +42,23 @@ export function buildSupplierDetail(supplier, ctx) {
     el('h1', { text: supplierLabel(supplier) }),
   ]);
 
+  // ⚠️ «+ ADD INGREDIENT» LIVES IN THE HEADER, on the right (Federico, 1 Oct 2026): it used
+  // to be a dashed button at the top of the body and scrolled away on a long list. The
+  // header is never rebuilt by repaint, so this one button is built once and only shown,
+  // hidden or re-pointed there. Also for a supplier with no ingredients yet, which is
+  // exactly when it is needed. The card it opens has THIS supplier preset (orders-main.js
+  // openAddIngredient). Hidden — not disabled — when orders-main hands in no
+  // `onAddIngredient`: it leaves it out where the owner has hidden «Suppliers &
+  // ingredients» from this person (records.js mayEditRecords) — a display switch, like the
+  // Catalogue's; the rules decide the save either way.
+  let addIngredient = null;
+  const addBtn = el('button', {
+    type: 'button', class: 'app-icon-btn orders-icon-btn',
+    'aria-label': t('orders.addIngredientToListAria', { supplier: supplierLabel(supplier) }),
+    title: t('orders.addIngredientToList'),
+    icon: PLUS_SVG, onClick: () => addIngredient?.(),
+  });
+
   const overlay = el('div', { class: 'supplier-detail' }, [
     el('header', { class: 'app-header orders-header' }, [
       el('span', { class: 'app-header-slot' }, [
@@ -50,7 +68,7 @@ export function buildSupplierDetail(supplier, ctx) {
         }),
       ]),
       titleWrap,
-      el('span', { class: 'app-header-slot' }),
+      el('span', { class: 'app-header-slot' }, [addBtn]),
     ]),
     body,
   ]);
@@ -59,25 +77,9 @@ export function buildSupplierDetail(supplier, ctx) {
     const { ingredients, entries, suggest, hooks } = next;
     body.replaceChildren();
 
-    // ⚠️ FIRST — also for a supplier with no ingredients yet, which is exactly when it is
-    // needed. It sits ABOVE the list card, outside `.ingredient-list`, so the sticky
-    // Order/Stock header inside the list is untouched. The card it opens has THIS supplier
-    // preset (orders-main.js openAddIngredient). Present only when orders-main hands in
-    // `onAddIngredient`: it leaves it out where the owner has hidden «Suppliers &
-    // ingredients» from this person (records.js mayEditRecords) — a display switch, like the
-    // Catalogue's; the rules decide the save either way.
     const canAdd = typeof next.onAddIngredient === 'function';
-    if (canAdd) {
-      body.appendChild(el('button', {
-        type: 'button',
-        class: 'mgmt-add supplier-add-ing',
-        'aria-label': t('orders.addIngredientToListAria', { supplier: supplierLabel(supplier) }),
-        onClick: () => next.onAddIngredient(),
-      }, [
-        el('span', { class: 'supplier-add-ing-icon', icon: PLUS_SVG, 'aria-hidden': 'true' }),
-        el('span', { text: t('orders.addIngredientToList') }),
-      ]));
-    }
+    addIngredient = canAdd ? () => next.onAddIngredient() : null;
+    addBtn.hidden = !canAdd;
 
     body.appendChild(buildIngredientList(supplier, ingredients, suggest, entries, hooks, {
       // «add the first one with the button above» only when there IS a button above.
