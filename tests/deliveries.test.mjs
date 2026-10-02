@@ -181,7 +181,7 @@ const missed = over => order({
 
 test('an ingredient that did not arrive is still to re-order', () => {
   const out = stillToReorder([missed()], {});
-  assert.deepEqual(out, [{ id: 'flour', supplierId: 'weekly', qty: 10, missedOn: '2026-08-10' }]);
+  assert.deepEqual(out, [{ id: 'flour', supplierId: 'weekly', recordId: '2026-08-10_weekly', qty: 10, missedOn: '2026-08-10' }]);
 });
 
 test('…and drops off once a LATER order to that supplier asks for it again', () => {
@@ -301,4 +301,32 @@ test('the answer REPLACES the stored marks — a merge could never untick one', 
   const patch = fs.slice(fs.indexOf('export async function patchDoc'), fs.indexOf('export async function clearFields'));
   assert.match(patch, /updateDoc\(/);
   assert.doesNotMatch(patch, /merge/);
+});
+
+// ── «Risolto»: a missing line bought elsewhere (1 Oct 2026) ──────────────────
+test('a missing line marked «Risolto» leaves the re-order list for good', () => {
+  const missed = order({ id: '2026-08-10_weekly', deliveredAt: '2026-08-11T09:00:00Z', missing: { flour: true, butter: true },
+    missingResolved: { flour: '2026-08-12T10:00:00Z' } });
+  const list = stillToReorder([missed], {});
+  assert.deepEqual(list.map(i => i.id), ['butter']);
+  assert.equal(list[0].recordId, '2026-08-10_weekly');
+});
+
+test('only a non-empty string resolves a line — anything else leaves it on the list', () => {
+  for (const odd of ['', '   ', true, 1, null]) {
+    const missed = order({ deliveredAt: '2026-08-11T09:00:00Z', missing: { flour: true }, missingResolved: { flour: odd } });
+    assert.deepEqual(stillToReorder([missed], {}).map(i => i.id), ['flour'], `value ${JSON.stringify(odd)}`);
+  }
+});
+
+test('a record read without its id still names the record a «Risolto» goes to', () => {
+  const missed = order({ deliveredAt: '2026-08-11T09:00:00Z', missing: { flour: true } });
+  assert.equal(stillToReorder([missed], {})[0].recordId, '2026-08-10_weekly');
+});
+
+test('«Risolto» is a merge beside `missing`, never a change to it', () => {
+  const draft = read('js/orders/draft.js');
+  const fn = draft.slice(draft.indexOf('export function resolveMissing'));
+  assert.match(fn.slice(0, 300), /return saveDoc\(COLLECTIONS\.history, recordId, \{\s*missingResolved: \{ \[ingredientId\]: at \}/);
+  assert.doesNotMatch(fn.slice(0, 300), /missing:/);
 });

@@ -204,6 +204,14 @@ async function confirm(entry, missingIds, ctx) {
 // ⚠️ IT LIVES AT THE TOP OF THE ORDER TAB, WHERE THE WORK HAPPENS. A list on a screen
 // nobody opens does not answer "so I do not forget to order them".
 export function renderReorderBanner(host, ctx) {
+  // ⚠️ AN OPEN LIST IS REDRAWN FROM HERE, BEFORE ANY EARLY RETURN. orders-main calls this on
+  // every snapshot and every render(), with the freshest data — so a line put back or marked
+  // «Risolto» (on this phone or the other one in the kitchen) leaves the open list without a
+  // second subscription. It must run even when the banner has gone (host missing or no
+  // items left): the list stays open on its empty text until somebody taps Back.
+  if (openList) openList.redraw(ctx);
+  lastBannerCtx = ctx;
+  bannerHost = host;
   if (!host) return;
   host.textContent = '';
   const items = stillToReorder(ctx.history, ctx.entries);
@@ -220,34 +228,212 @@ export function renderReorderBanner(host, ctx) {
     // two, and a language with three would need the code changed rather than the
     // dictionary. Intl.PluralRules already does this for every other count here.
     text: t('orders.reorder.count', { n: items.length }),
-    onclick: () => openReorder(items, ctx),
+    // The freshest ctx this banner was drawn with; the open list then follows every render.
+    onclick: () => openReorderScreen(lastBannerCtx || ctx),
   }));
 }
 
-async function openReorder(items, ctx) {
-  const lines = items.map(i => `• ${recordedName(i.id, ctx.ingredientsById || {}, {})} — ${qtyWithUnit(i.qty, i.unit)}`);
+// The open «Da riordinare» list, or null. One at a time: the banner is under the overlay, so
+// a second tap cannot come, but a stale handle would redraw a node that is gone.
+let openList = null;
+let lastBannerCtx = null;
+let bannerHost = null;
+// Lines whose write is running («recordId|ingredientId»): both buttons of that card stay
+// disabled, and stay so across a redraw that rebuilds the card.
+const busy = new Set();
+const busyKey = item => `${item.recordId}|${item.id}`;
 
-  const go = await confirmDialog({
-    title: t('orders.reorder.title'),
-    message: `${t('orders.reorder.message')}\n\n${lines.join('\n')}`,
-    okLabel: t('orders.reorder.putBack'),
-    cancelLabel: t('ui.cancel'),
-  });
-  if (!go) return;
+// ⚠️ «PUT BACK» NAMES THE SUPPLIER THE LINE WILL REALLY GO TO — the ingredient's CURRENT
+// supplier — which is not always the one it was missed from (it may have been moved since).
+// A draft quantity is only ever seen on an order row, so where no visible row would carry
+// it — the ingredient is gone, switched off, or has no active supplier (Orders files those
+// under «No supplier», which this app does not offer as a place to put an order back) —
+// there is no such button: a quantity typed into a row nobody can see is an order that is
+// never placed. Returns the label to show, or null.
+function putBackTarget(item, ctx) {
+  const ing = ctx.ingredientsById?.[item.id];
+  if (!ing || ing.active === false) return null;
+  const supplier = ctx.suppliersById?.[ing.supplierId];
+  if (!supplier || supplier.active === false) return null;
+  return supplierLabel(supplier) || null;
+}
 
-  const { applied, skipped } = applyReorder(items, ctx.entries);
-  try {
-    await ctx.onReorder(applied);
-  } catch {
-    await alertDialog(t('orders.deliveries.couldNotSave'));
-    return;
+// ⚠️ ONE CARD PER MISSING LINE, AND EACH LINE WAITS UNTIL SOMEBODY DECIDES. Federico buys a
+// missing ingredient «da un'altra parte» as often as from the same supplier, so there is no
+// single «put everything back» any more: per line, «put it back in {supplier}'s order» or
+// «Risolto» (bought elsewhere — it leaves this list for good, and goes in no order).
+function openReorderScreen(firstCtx) {
+  if (openList) return;
+  let latest = firstCtx;
+
+  const body = el('div', { class: 'reorder-list' });
+
+  // Escape closes — but not when a dialog is on top, whose own Escape must only close it.
+  const onKey = e => {
+    if (e.key !== 'Escape' || e.defaultPrevented) return;
+    if (document.querySelector?.('.app-dialog-backdrop')) return;
+    close();
+  };
+
+  // ⚠️ FOCUS GOES BACK TO THE BANNER, which is rebuilt on every render — so it is looked up
+  // now, not remembered. When the banner has gone (the list was emptied) the Order tab is a
+  // visible, focusable place on the same screen; focus must never fall to <body>.
+  function close() {
+    overlay.remove();
+    openList = null;
+    document.removeEventListener('keydown', onKey);
+    (bannerHost?.querySelector?.('.reorder-banner') || document.getElementById('tab-order-btn'))?.focus();
   }
 
+  const backBtn = el('button', {
+    class: 'app-icon-btn orders-icon-btn', type: 'button', 'aria-label': t('ui.back'),
+    icon: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>',
+    onclick: close,
+  });
+
+  // The same three attributes as the order summary sheet (orders-main.js).
+  const overlay = el('div', {
+    class: 'missing-overlay reorder-overlay',
+    role: 'dialog', 'aria-modal': 'true', 'aria-label': t('orders.reorder.screenTitle'),
+  }, [
+    el('header', { class: 'app-header orders-header' }, [
+      el('span', { class: 'app-header-slot' }, [backBtn]),
+      el('div', { class: 'app-header-title orders-header-title' }, [
+        el('h1', { text: t('orders.reorder.screenTitle') }),
+      ]),
+      el('span', { class: 'app-header-slot' }),
+    ]),
+    el('div', { class: 'scroll-area' }, [body]),
+  ]);
+
+  // Redrawn from the LATEST ctx, never from a list captured at open: the data under it moves.
+  const redraw = ctx => {
+    if (ctx) latest = ctx;
+    // ⚠️ FOCUS SURVIVES THE REDRAW. A card that is answered disappears, taking the focused
+    // button with it — a keyboard or screen-reader user would be dropped on <body>. So the
+    // card holding focus is noted first, and focus then goes to the card now at that place
+    // (the next one), or to Back when none is left.
+    const focusedAt = cardIndexHoldingFocus(body);
+    body.textContent = '';
+    const items = stillToReorder(latest.history, latest.entries);
+    // ⚠️ AN EMPTY LIST STAYS OPEN, with a sentence. Closing it when the last line goes would
+    // yank the screen from under the thumb that just tapped.
+    if (!items.length) {
+      body.appendChild(el('p', { class: 'ing-empty', text: t('orders.reorder.empty') }));
+    } else {
+      items.forEach(item => body.appendChild(reorderCard(item, () => latest)));
+    }
+    if (focusedAt >= 0) {
+      const cardNodes = Array.from(body.children).filter(c => c.classList.contains('reorder-card'));
+      const next = cardNodes[Math.min(focusedAt, cardNodes.length - 1)];
+      const buttons = next ? Array.from(next.querySelectorAll('button')) : [];
+      (buttons.find(b => !b.disabled) || buttons[0] || backBtn).focus();
+    }
+  };
+
+  openList = { redraw };
+  redraw();
+  document.body.appendChild(overlay);
+  document.addEventListener('keydown', onKey);
+  // Moves focus INTO the screen once it is in the document (focusing a detached node is
+  // silently ignored) — the order summary does the same.
+  backBtn.focus();
+}
+
+// The index of the card that holds keyboard focus, or -1.
+function cardIndexHoldingFocus(body) {
+  let node = document.activeElement;
+  while (node && node.parentNode !== body) node = node.parentNode;
+  return node ? Array.from(body.children).indexOf(node) : -1;
+}
+
+function reorderCard(item, getCtx) {
+  const ctx = getCtx();
+  // ⚠️ THE NAMES FROZEN INTO THE ORDER are the fallback, never `{}`: the ingredient list can
+  // arrive after the order history, and a card drawn in between said «Ingrediente eliminato»
+  // for an ingredient that exists (found driving it, 1 Oct 2026).
+  const record = (ctx.history || []).find(r => r && (r.id === item.recordId));
+  const name = recordedName(item.id, ctx.ingredientsById || {}, record?.names || {});
+  const supplier = ctx.suppliersById?.[item.supplierId] || null;
+  // Same fallback for the supplier: the name the order was placed under.
+  const supplierName = supplierLabel(supplier) || record?.supplierName || t('orders.deliveries.unknownSupplier');
+
+  // The supplier the line will really go to; null = no «put back» button on this card.
+  const target = putBackTarget(item, ctx);
+
+  const putBtn = target === null ? null : el('button', {
+    class: 'btn-secondary reorder-put', type: 'button',
+    text: t('orders.reorder.putBackIn', { supplier: target }),
+    'aria-label': t('orders.reorder.putBackInAria', { supplier: target, name }),
+  });
+  const resolveBtn = el('button', {
+    class: 'reorder-resolve', type: 'button',
+    text: t('orders.reorder.resolved'),
+    'aria-label': t('orders.reorder.resolvedAria', { name }),
+  });
+  const buttons = [putBtn, resolveBtn].filter(Boolean);
+
+  // ⚠️ BOTH BUTTONS OF A CARD ARE OFF WHILE ITS WRITE RUNS: a second tap on a slow phone
+  // would send the same line twice. Re-enabled only on failure — on success the card is
+  // about to go, and a re-enabled button on it would invite the second tap anyway.
+  const lock = (on, { keepDisabled = false } = {}) => {
+    if (on) busy.add(busyKey(item)); else busy.delete(busyKey(item));
+    buttons.forEach(b => { b.disabled = on || keepDisabled; });
+  };
+  if (busy.has(busyKey(item))) buttons.forEach(b => { b.disabled = true; });
+
+  putBtn?.addEventListener('click', () => putBackOne(item, getCtx(), lock));
+  resolveBtn.addEventListener('click', () => resolveOne(item, name, getCtx(), lock));
+
+  return el('div', { class: 'reorder-card' }, [
+    el('div', { class: 'reorder-main' }, [
+      el('span', { class: 'reorder-name', text: name }),
+      el('span', { class: 'missing-qty', text: qtyWithUnit(item.qty, item.unit) }),
+    ]),
+    el('div', {
+      class: 'reorder-meta',
+      text: t('orders.reorder.rowMeta', { supplier: supplierName, day: spellDay(item.missedOn) }),
+    }),
+    ...buttons,
+  ]);
+}
+
+async function putBackOne(item, ctx, lock) {
+  const { applied, skipped } = applyReorder([item], ctx.entries);
   // ⚠️ A SKIP IS REPORTED, NEVER SWALLOWED. A row already carrying a quantity was
   // typed by a person — possibly seconds ago on another phone — so it is left alone;
   // saying nothing would look exactly like the button having failed.
-  if (skipped.length) {
-    await alertDialog(t('orders.reorder.someSkipped', { n: String(skipped.length) }));
+  if (!applied.length) {
+    await alertDialog(t('orders.reorder.someSkipped', { n: skipped.length || 1 }));
+    return;
+  }
+  lock(true);
+  try {
+    // onReorder ends in render(), which redraws this list from fresh data.
+    await ctx.onReorder(applied);
+    lock(false, { keepDisabled: true });
+  } catch {
+    lock(false);
+    await alertDialog(t('orders.deliveries.couldNotSave'));
+  }
+}
+
+async function resolveOne(item, name, ctx, lock) {
+  const go = await confirmDialog({
+    title: t('orders.reorder.resolveTitle'),
+    message: t('orders.reorder.resolveMessage', { name }),
+    okLabel: t('orders.reorder.resolved'),
+    cancelLabel: t('ui.cancel'),
+  });
+  if (!go) return;
+  lock(true);
+  try {
+    // The row leaves when the history snapshot carrying the mark lands (renderReorderBanner).
+    await ctx.onResolve(item);
+    lock(false, { keepDisabled: true });
+  } catch {
+    lock(false);
+    await alertDialog(t('orders.deliveries.couldNotSave'));
   }
 }
 
