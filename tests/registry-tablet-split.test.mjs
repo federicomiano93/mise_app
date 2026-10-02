@@ -125,7 +125,7 @@ test('a row tapped on a tablet checks for typed work BEFORE it clears the pane',
   assert.equal(open.split('clearPane()').length, 2, 'clearPane() is called once, inside replace()');
   // The dialog is the app's own and dangerous.
   assert.match(bodyOf(REGISTRY, 'confirmDiscard'), /confirmDialog\(\{[\s\S]*danger:\s*true/);
-  assert.match(REGISTRY, /import \{ confirmDialog \} from '\.\/confirm-dialog\.js'/);
+  assert.match(REGISTRY, /import \{ confirmDialog(, alertDialog)? \} from '\.\/confirm-dialog\.js'/);
   assert.doesNotMatch(REGISTRY, /\bwindow\.confirm\(|[^.\w]confirm\(|[^.\w]alert\(/);
 });
 
