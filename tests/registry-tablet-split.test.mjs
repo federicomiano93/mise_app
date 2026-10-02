@@ -280,3 +280,13 @@ test('the new words exist in English and in Italian, and differ', () => {
     assert.notEqual(DICT.en[key], DICT.it[key], `${key} is untranslated`);
   }
 });
+
+test('a level in the pane has an opaque ground: stacked levels never show through each other', () => {
+  // A supplier, then one of its ingredients on top: a transparent top level printed both titles over
+  // each other and the supplier's rows between the card's sections (seen on a tablet, 2 Oct 2026).
+  const css = read('tokens.css').replace(/\r\n/g, '\n');
+  const rule = css.match(/\.app-split-pane > \.mgmt-overlay \{([^}]*)\}/);
+  assert.ok(rule, 'the pane level rule exists');
+  assert.match(rule[1], /background: var\(--bg\);/);
+  assert.doesNotMatch(rule[1], /transparent/);
+});
