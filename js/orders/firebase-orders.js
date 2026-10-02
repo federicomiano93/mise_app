@@ -222,6 +222,14 @@ export async function replaceDoc(name, id, data) {
   return setDoc(doc(db, pathFor(name), id), withBakery(data));
 }
 
+// Replace the named TOP-LEVEL fields of an existing document, each one whole, and leave
+// every other field alone. Unlike saveDoc, a map given here is not merged into the stored
+// one: { missing: { semola: true } } over a stored { flour: true } leaves { semola: true }.
+export async function patchDoc(name, id, data) {
+  await authReady;
+  return updateDoc(doc(db, pathFor(name), id), withBakery(data));
+}
+
 // Remove specific fields — including keys inside a map ('entries.<ingredientId>')
 // — and patch the rest, leaving every other key untouched.
 //
