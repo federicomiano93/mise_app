@@ -727,20 +727,56 @@ test('review 3 (manager): a legacy explicit-size case and a case of pieces conve
   assert.deepEqual([pcs.payload.pricePerUnit, pcs.payload.unitWeightKg, pcs.payload.caseCount, pcs.record], [0.4, 0.06, null, null]);
 });
 
-test('review 3 (employee): Cartone → Singola leaves the case alone; the readers carry it, and the card reopens as a Singola', async () => {
+test('review 3 (employee): Cartone → Singola leaves the case alone, and the line has NO price (refuse rather than guess)', async () => {
   const card = openCard({ item: { ...BASE, unit: 'cartone', packUnit: 'busta', packCount: 4, weight: '2.5kg' }, mayPrice: false });
   click(card.single);
   const { payload } = await card.save();
   assert.deepEqual([payload.packCount, payload.unit], [null, 'busta']);
-  const stored = { ...PACK_CASE, packCount: null, unit: payload.unit };
-  assert.equal(unitCost(stored, stored), 5, 'one bag, from the case of 4 that is still stored');
-  assert.equal(packPrice({ packKg: {} }, stored, false), 5);
-  // a manager opening it: a Singola (not a carton read back from the case), the price verbatim
-  const manager = openCard({ item: stored });
-  assert.equal(isCarton(manager), false);
-  const reopened = await manager.save();
-  for (const key of PRICE_KEYS) assert.equal(reopened.payload[key] ?? null, stored[key] ?? null, key);
-  assert.equal(reopened.record, null);
+  for (const key of PRICE_FIELDS) assert.equal(key in payload, false, key);
+  // a price saved under the new policy is a case of PIECES; read with the employee's unit (the package word)
+  // it is ambiguous — a bag, or one egg of a tray? — so Orders and the stocktake show NO price, never a guess
+  const perItem = { ...PACK_CASE, priceUnit: 'pcs', pricePerUnit: 5, caseItemSize: null, caseItemUnit: 'pcs', unitWeightKg: 2.5, packCount: null, unit: payload.unit };
+  assert.equal(unitCost(perItem, perItem), null);
+  assert.equal(packPrice({ packKg: {} }, perItem, false), null);
+  // (an old case of PACKAGES is the one shape main already prices as one busta: unchanged)
+  const legacy = { ...PACK_CASE, packCount: null, unit: payload.unit };
+  assert.equal(unitCost(legacy, legacy), 5);
+  const pieces = { ...PIECES, unit: 'vaschetta', packUnit: 'vaschetta', packCount: null };
+  assert.equal(unitCost(pieces, pieces), null, 'a case of PIECES ordered by its own package word: not one egg');
+  assert.equal(packPrice({ packKg: {} }, pieces, false), null);
+});
+
+test('review 3 (manager after an employee): the card reopens as a Singola, says the format changed, and Ricalcola converts it to per-item', async () => {
+  // what is stored after an employee turned a 'pack' carton of 4 into a Singola (unit = «busta», no packCount)
+  const stored = { ...PACK_CASE, packCount: null, unit: 'busta' };
+  const card = openCard({ item: stored });
+  assert.equal(isCarton(card), false, 'a Singola, not a carton read back from the case');
+  assert.ok(card.notes().some(n => /^The format has changed since the last price: saved 4 × 2\.5 kg/.test(n)), card.notes().join(' | '));
+  assert.equal(shown(card.recompute), true);
+  // untouched: the stored price verbatim (nothing guessed on the manager's behalf)
+  const untouched = await card.save();
+  for (const key of PRICE_KEYS) assert.equal(untouched.payload[key] ?? null, stored[key] ?? null, key);
+  assert.equal(untouched.record, null);
+  // Ricalcola: the same price per item carried to a single (2 a kilo × 2.5 kg = 5), stored per item
+  const recalc = openCard({ item: stored });
+  click(recalc.recompute);
+  assert.equal(recalc.casePrice.value, '5');
+  const { payload, record } = await recalc.save();
+  assert.deepEqual([payload.priceUnit, payload.pricePerUnit, payload.unitWeightKg, payload.caseCount], ['pcs', 5, 2.5, null]);
+  assert.ok(record, 'the stored unit moved from per kilo to per item: the history says so');
+  const ing = asStored(stored, payload);
+  assert.equal(unitCost(ing, ing), 5, 'now Orders prices one bag');
+  assert.equal(packPrice({ packKg: {} }, ing, false), 5);
+  assert.equal(PM.pricePerKg(ing), 2);
+});
+
+test('review 3 (manager after an employee): a typed price converts it too', async () => {
+  const card = openCard({ item: { ...PACK_CASE, packCount: null, unit: 'busta' } });
+  type(card.casePrice, '5');
+  const { payload } = await card.save();
+  assert.deepEqual([payload.priceUnit, payload.pricePerUnit, payload.unitWeightKg, payload.caseCount], ['pcs', 5, 2.5, null]);
+  const ing = asStored(PACK_CASE, payload);
+  assert.equal(unitCost(ing, ing), 5);
 });
 
 test('review 4: a corrected weight on a per-item price moves the piece weight, not the price, and plants no history entry', async () => {

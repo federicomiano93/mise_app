@@ -58,23 +58,14 @@ function* shapes() {
 
 const same = (a, b) => Object.is(a, b) || (typeof a === 'number' && typeof b === 'number' && a === b);
 
-// ⚠️ EXACTLY TWO SHAPES READ DIFFERENTLY FROM MAIN (2nd review, 1 Oct 2026), and each goes from null to a
-// number — never from a number to another number, never the other way. Both are asserted here by hand-made
-// expectations; every other shape must be identical.
+// ⚠️ EXACTLY ONE SHAPE READS DIFFERENTLY FROM MAIN (2nd review, 1 Oct 2026), and it goes from null to a number —
+// never from a number to another number, never the other way. It is asserted here by a hand-made expectation;
+// every other shape must be identical. (A package word on a case of PIECES stays null on purpose: on legacy data
+// a case of 30 eggs ordered by its own package word is not ONE egg — refuse rather than guess.)
 const norm = (v) => String(v || '').trim().toLowerCase().replace(/\.$/, '');
 const WEIGHT_WORDS = ['kg', 'g', 'l', 'ml'];   // the weight words the grid uses (js/order-cost.js knows more)
-const PIECE_WORDS = ['pz', 'pezzo'];
-// A. THE PACKAGE WORD ON A CASE OF PIECES is ONE item: what a Singola leaves behind after an employee turns a
-//    Cartone into one. unit = packUnit, a pcs case of several, no weight or piece word.
-const shapeA = (ing) => {
-  const c = ing.caseItemUnit === 'pcs' && ing.casePrice > 0 && ing.caseCount > 1;
-  const word = norm(ing.unit);
-  return Boolean(c) && word !== '' && word === norm(ing.packUnit)
-    && !WEIGHT_WORDS.includes(word) && !PIECE_WORDS.includes(word);
-};
 // B. A WEIGHT WORD ON A PER-PIECE PRICE THAT REMEMBERS ONE PIECE'S WEIGHT: kilos × (rate ÷ piece weight).
 const shapeB = (ing) => ing.priceUnit === 'pcs' && ing.unitWeightKg > 0 && ing.pricePerUnit > 0 && WEIGHT_WORDS.includes(norm(ing.unit));
-const expectedA = (ing) => ing.casePrice / ing.caseCount;
 const expectedB = (ing) => ({ kg: 1, l: 1, g: 0.001, ml: 0.001 })[norm(ing.unit)] * (ing.pricePerUnit / ing.unitWeightKg);
 const near = (a, b) => typeof a === 'number' && Math.abs(a - b) < 1e-9;
 const hasCase = (ing) => ing.caseItemUnit !== undefined && ing.casePrice > 0;
@@ -85,15 +76,14 @@ test('the grid is big enough to mean something', () => {
   assert.ok(n > 90000, `${n} shapes`);
 });
 
-test('unitCost and lineUnitCost give EXACTLY the old numbers for every item with no packCount, but for the two named shapes', () => {
+test('unitCost and lineUnitCost give EXACTLY the old numbers for every item with no packCount, but for the named shape', () => {
   const bad = [];
-  const changed = { A: 0, B: 0 };
+  let changed = 0;
   for (const { name, ing } of shapes()) {
     const now = unitCost(ing, ing);
     const was = old.unitCost(ing, ing);
     if (!same(now, was)) {
-      if (shapeA(ing) && was === null && near(now, expectedA(ing))) changed.A += 1;
-      else if (shapeB(ing) && was === null && near(now, expectedB(ing))) changed.B += 1;
+      if (shapeB(ing) && was === null && near(now, expectedB(ing))) changed += 1;
       else bad.push(`unitCost ${name} ${JSON.stringify(ing)}: ${was} -> ${now}`);
     }
     for (const chosen of ['', ing.unit, ing.packUnit, 'cartone', 'busta', 'pz']) {
@@ -101,39 +91,39 @@ test('unitCost and lineUnitCost give EXACTLY the old numbers for every item with
       const a = lineUnitCost(ing, ing, chosen);
       const b = old.lineUnitCost(ing, ing, chosen);
       if (same(a, b)) continue;
-      // a line in the card's own unit goes through unitCost: the same two shapes; any other unit is unchanged
-      if (viaUnit && ((shapeA(ing) && b === null && near(a, expectedA(ing))) || (shapeB(ing) && b === null && near(a, expectedB(ing))))) continue;
+      // a line in the card's own unit goes through unitCost: the same shape; any other unit is unchanged
+      if (viaUnit && shapeB(ing) && b === null && near(a, expectedB(ing))) continue;
       bad.push(`lineUnitCost(${chosen}) ${name} ${JSON.stringify(ing)}`);
     }
     if (bad.length > 5) break;
   }
   assert.deepEqual(bad, []);
-  assert.ok(changed.A > 0 && changed.B > 0, `both named shapes must actually occur in the grid: ${JSON.stringify(changed)}`);
+  assert.ok(changed > 0, 'the named shape must actually occur in the grid');
 });
 
-test('the two changed shapes, spelled out by hand', () => {
-  // A: «Singola after Cartone» — the package word on a pcs case of 4 at 20 is ONE item, 5 (was: no price)
-  const a = { unit: 'busta', packUnit: 'busta', weight: '2.5kg', priceUnit: 'pcs', pricePerUnit: 5, casePrice: 20, caseCount: 4, caseItemUnit: 'pcs', unitWeightKg: 2.5 };
-  assert.equal(old.unitCost(a, a), null);
-  assert.equal(unitCost(a, a), 5);
-  // ...but a word that is not the package word is still ambiguous, and an explicit-size case still says nothing
-  assert.equal(unitCost({ ...a, unit: 'vassoio' }, a), null);
-  const kgCase = { ...a, priceUnit: 'kg', pricePerUnit: 2, caseItemUnit: 'kg', caseItemSize: 2.5, unitWeightKg: undefined };
-  assert.equal(unitCost(kgCase, kgCase), null);
-  // B: a per-piece price with one piece's weight read by weight — 0.25 an egg of 60 g is 4.1667 a kilo (was: no price)
+test('the changed shape, spelled out by hand — and the one that must NOT change', () => {
+  // a per-piece price with one piece's weight read by weight — 0.25 an egg of 60 g is 4.1667 a kilo (was: no price)
   const egg = { unit: 'kg', packUnit: '', weight: '', priceUnit: 'pcs', pricePerUnit: 0.25, unitWeightKg: 0.06 };
   assert.equal(old.unitCost(egg, egg), null);
   assert.ok(near(unitCost(egg, egg), 0.25 / 0.06));
   assert.ok(near(unitCost({ ...egg, unit: 'g' }, egg), 0.25 / 0.06 / 1000));
   // without a piece weight it stays no price
   assert.equal(unitCost(egg, { priceUnit: 'pcs', pricePerUnit: 0.25 }), null);
+  // ⚠️ A «vaschetta» of 30 eggs ordered by its own package word is NOT one egg: refuse rather than guess
+  const tray = { unit: 'vaschetta', packUnit: 'vaschetta', weight: '', priceUnit: 'pcs', pricePerUnit: 0.4, casePrice: 12, caseCount: 30, caseItemUnit: 'pcs' };
+  assert.equal(old.unitCost(tray, tray), null);
+  assert.equal(unitCost(tray, tray), null);
+  assert.equal(packPrice({ packKg: {} }, tray, false), null);
+  // and an explicit-size case still says nothing
+  const kgCase = { unit: 'busta', packUnit: 'busta', weight: '', priceUnit: 'kg', pricePerUnit: 2, casePrice: 20, caseCount: 4, caseItemSize: 2.5, caseItemUnit: 'kg' };
+  assert.equal(unitCost(kgCase, kgCase), null);
 });
 
-test('the stocktake gives EXACTLY the old numbers for every item with no packCount, but for the two named shapes', () => {
+test('the stocktake gives EXACTLY the old numbers for every item with no packCount, but for the named shape', () => {
   const bad = [];
   const months = [{ packKg: {} }, { packKg: { x: 12 } }, { packKg: { x: 0 } }, null];
   for (const { name, ing } of shapes()) {
-    const touched = (shapeA(ing) || shapeB(ing)) && hasCase(ing);
+    const touched = shapeB(ing) && hasCase(ing);
     for (const month of months) {
       for (const closed of [false, true]) {
         const m = month && closed ? { ...month, unitPrice: { x: 1.5 } } : month;

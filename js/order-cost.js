@@ -85,9 +85,8 @@ const CASE_UNITS = new Set([
 // when ordered in the carton word, 1 when ordered in the package word).
 // ⚠️ AN ITEM WITH NO packCount NEVER COMES HERE: legacyUnitCost() below is the old function, and
 // tests/readers-regression-grid.test.mjs runs a frozen copy of it against this over every stored
-// shape. Exactly TWO shapes read differently from before (2nd review, 1 Oct 2026), both named in the
-// grid: the package word on a case of PIECES (one item — what «Singola after Cartone» leaves behind),
-// and a weight word on a per-piece price that remembers one piece's weight. A weight that is unreadable or a multiplier («6x1kg», «sacco») also keeps today's
+// shape. Exactly ONE shape reads differently from before (2nd review, 1 Oct 2026), named in the
+// grid: a weight word on a per-piece price that remembers one piece's weight. A weight that is unreadable or a multiplier («6x1kg», «sacco») also keeps today's
 // whole-unit reading and is NOT multiplied by packCount — that was the ×6-twice defect.
 
 // A packCount as the rules store it: a whole number ≥ 1. Anything else (a string, 0, 2.5) is none.
@@ -151,14 +150,17 @@ function legacyUnitCost(ingredient, price) {
     if (byWeight) {
       return price.priceUnit === 'pcs' ? viaPieceWeight(price, rate, WEIGHT_UNITS[orderUnit]) : rate * WEIGHT_UNITS[orderUnit];
     }
-    // ⚠️ THE PACKAGE WORD MEANS «ONE ITEM» for a case of PACKAGES ('pack') and — since the 2nd review of
-    // 1 Oct 2026 — for a case of PIECES too, and it is asked BEFORE the case words: a package
-    // declared «scatola» and ordered by «scatola» is one package, not the case. The pieces case is
-    // what a Singola leaves behind when an employee (no price section) turns a Cartone into one: its
-    // unit becomes the package word, and one of those is casePrice ÷ caseCount. (Before, such a line
-    // had no price at all.) An explicit-size case (4 × 2.5 kg) still says nothing.
+    // ⚠️ THE PACKAGE WORD MEANS «ONE ITEM» ONLY FOR A CASE OF PACKAGES ('pack'), and it is asked
+    // BEFORE the case words: a package declared «scatola» and ordered by «scatola» is one package,
+    // not the case. On any other case it means nothing — eggs sold in a «vaschetta» of 360 g,
+    // ordered by «vaschetta» from a case of 60 pieces at 12, are NOT 0.20 each (a tray is not
+    // one egg): they fall through to the rules below and, being no piece/case word, are null.
+    // ⚠️ THAT STAYS, ON PURPOSE (2nd review, 1 Oct 2026, decided by the owner's rule «refuse rather than
+    // guess»): on legacy data a case of 30 eggs ordered by its own package word is not ONE egg. So after
+    // an EMPLOYEE turns a Cartone into a Singola the line has no price until a manager opens the card
+    // (it reopens as a Singola, says the format changed, and «Ricalcola» converts it to per-item).
     const packWord = String((ingredient && ingredient.packUnit) || '').trim().toLowerCase().replace(/\.$/, '');
-    const isPackCase = wholeCase.caseItemUnit === 'pack' || wholeCase.caseItemUnit === 'pcs';
+    const isPackCase = wholeCase.caseItemUnit === 'pack';
     if (PIECE_UNITS.has(orderUnit) || (isPackCase && packWord !== '' && orderUnit === packWord)) {
       return wholeCase.casePrice / wholeCase.caseCount;
     }
