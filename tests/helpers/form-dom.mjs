@@ -63,7 +63,16 @@ export class Node {
   replaceChildren() { this.children = []; this._text = null; }
   focus() { this.focused += 1; }
   // The card asks the help-button module to fill its «?» hosts; this fake has no selector engine and no help.
-  querySelectorAll() { return []; }
+  // Just enough selector for js/form-dirty.js («input, select, textarea»); anything else finds nothing.
+  querySelectorAll(selector) {
+    if (!/^[a-z, ]+$/.test(String(selector))) return [];
+    const tags = String(selector).split(',').map(t => t.trim().toUpperCase());
+    return walk(this).filter(n => n !== this && tags.includes(n.tagName));
+  }
+  get type() {
+    if (this.attributes.type !== undefined) return this.attributes.type;
+    return this.tagName === 'SELECT' ? 'select-one' : (this.tagName === 'TEXTAREA' ? 'textarea' : 'text');
+  }
   querySelector() { return null; }
 
   addEventListener(type, fn) { (this.listeners[type] = this.listeners[type] || []).push(fn); }

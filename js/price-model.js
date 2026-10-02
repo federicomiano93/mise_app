@@ -507,23 +507,40 @@ export const PRICE_FORMS = Object.freeze({
   cartonPack: 'carton-pack', cartonPieces: 'carton-pieces', singlePack: 'single-pack', typed: 'typed',
 });
 
-export function priceFormOf(fmt, weightText) {
-  const readable = packBaseOf(weightText) !== null;
+// ⚠️ A PER-PIECE PRICE WITH ITS OWN PIECE WEIGHT (3rd review, 1 Oct 2026). «Prezzo confezione» says «one item =
+// the weight», and the weight → piece-weight sync follows it — but an old per-piece price keeps `weight` as the
+// PACK (eggs: 360 g, 0.25 a piece, 0.06 kg a piece) and `unitWeightKg` as ONE PIECE. Reading the pack weight as
+// the piece weight made a retyped price write 0.36 kg for a 60 g egg: Food cost per kilo 6 times too low (500
+// times for gelatine), with the piece-weight box hidden so nobody could see it. So the new meaning applies ONLY
+// when the stored piece weight is what the new card itself writes — equal to the readable weight. An item priced
+// per piece whose piece weight is absent, or differs from the weight, is «per piece with its own piece weight»:
+// the form of today (a price per piece and a visible «Peso di un pezzo»), and the weight never touches it.
+// The weight it is compared with is the one the card OPENED with when that reads (a weight edited later must
+// not turn a tracking price into an own-weight one), else the one on screen.
+export function ownPieceWeight(item, weightText, initialText = weightText) {
+  if (!item || item.priceUnit !== 'pcs') return false;
+  const kg = positiveNumber(item.unitWeightKg);
+  const reference = packBaseOf(initialText) || packBaseOf(weightText);
+  return !(kg !== null && reference && Math.abs(reference.size - kg) < 1e-9);
+}
+
+export function priceFormOf(fmt, weightText, ownPiece = false) {
+  const readable = packBaseOf(weightText) !== null && !ownPiece;
   if (fmt && fmt.kind === 'carton') return readable ? PRICE_FORMS.cartonPack : PRICE_FORMS.cartonPieces;
   return readable ? PRICE_FORMS.singlePack : PRICE_FORMS.typed;
 }
 
 // The boxes → pricePatch's input, for a price a person TYPED (or re-typed).
 // boxes = { price, rate, unit, pieceKg, vat }.
-export function formatPriceInput(fmt, weightText, { price, rate, unit, pieceKg, vat } = {}) {
-  const form = priceFormOf(fmt, weightText);
+export function formatPriceInput(fmt, weightText, { price, rate, unit, pieceKg, vat, ownPiece = false } = {}) {
+  const form = priceFormOf(fmt, weightText, ownPiece);
   // ⚠️ A PRICE TYPED FOR FORMATTED GOODS IS STORED PER ITEM (1 Oct 2026, review): priceUnit 'pcs', the
   // rate is the price of ONE item, and `unitWeightKg` is one item's weight in kilos when the weight
   // reads (litres read 1:1 as kilos, the app's standing approximation). The old way — a case of ONE
   // package priced per kilo — made an egg priced 0.25 a piece become 4.03 a kilo with no piece weight,
   // and Food cost's «in pieces» lines and packaging (priceUnit 'pcs') lost their cost. Per-kilo
   // consumers keep working through pricePerKg (pcs rate ÷ unitWeightKg).
-  const itemKg = packBaseOf(weightText)?.size ?? null;
+  const itemKg = ownPiece ? null : (packBaseOf(weightText)?.size ?? null);
   if (form === PRICE_FORMS.cartonPack || form === PRICE_FORMS.cartonPieces) {
     // A carton is a case of that many items: caseRate(pcs) = casePrice ÷ count is the per-item rate.
     return {
@@ -532,7 +549,8 @@ export function formatPriceInput(fmt, weightText, { price, rate, unit, pieceKg, 
     };
   }
   if (form === PRICE_FORMS.singlePack) {
-    return { priceUnit: 'pcs', pricePerUnit: price, unitWeightKg: itemKg, vatRate: vat };
+    // keepRate: a per-item price carried from a case (10 / 3) keeps its six decimals, like the converter's
+    return { priceUnit: 'pcs', pricePerUnit: price, unitWeightKg: itemKg, vatRate: vat, keepRate: true };
   }
   return { priceUnit: unit || null, pricePerUnit: rate, unitWeightKg: pieceKg, vatRate: vat };
 }
@@ -632,11 +650,42 @@ export function weightNeededForPrice({ item, fmt, weightText, dirty, priceBox })
 // them, so an ingredient priced under the old form differs on them the first time
 // it is opened and saved — and comparing them would read that as a price change
 // and plant a history entry recording a rate that never moved.
-export function priceChanged(before, after) {
+export function priceChangedByRepresentation(before, after) {
   const a = before || {};
   const b = after || {};
   return ['priceUnit', 'pricePerUnit', 'unitWeightKg']
     .some(key => (a[key] ?? null) !== (b[key] ?? null));
+}
+
+// ⚠️ THE MONEY, NOT THE REPRESENTATION (3rd review, 1 Oct 2026). A price is the same price when what an item
+// costs and what a kilo costs are the same, however they are stored: «2 a kilo» turned into «5 a bag of 2.5
+// kg», the same 20 retyped on a live pack carton, a Cartone turned into a Singola — none of those is «when did
+// this go up?» news. And a change of the remembered piece weight IS one: it is the divisor of the price per
+// kilo that every recipe cost is built from, so it moves a cost even when no money moved.
+// So: per-kilo cost and per-piece cost are compared, each when both sides have it, within rounding; a price
+// that cannot be expressed per kilo on one side and can on the other (a piece weight appeared or went) is a
+// change; when there is nothing to compare, the stored representation decides, as it always did.
+const closeTo = (x, y) => Math.abs(x - y) <= Math.max(1e-6, Math.abs(x) * 1e-4);
+function moneyOf(p) {
+  const rate = positiveNumber(p.pricePerUnit);
+  return {
+    rate,
+    perKg: rate === null ? null : pricePerKg(p),
+    perPiece: rate !== null && p.priceUnit === 'pcs' ? rate : null,
+  };
+}
+export function priceChanged(before, after) {
+  const a = moneyOf(before || {});
+  const b = moneyOf(after || {});
+  if (a.rate !== null && b.rate !== null) {
+    if (a.perKg !== null && b.perKg !== null) {
+      if (!closeTo(a.perKg, b.perKg)) return true;
+      return a.perPiece !== null && b.perPiece !== null && !closeTo(a.perPiece, b.perPiece);
+    }
+    if (a.perKg !== null || b.perKg !== null) return true;
+    if (a.perPiece !== null && b.perPiece !== null) return !closeTo(a.perPiece, b.perPiece);
+  }
+  return priceChangedByRepresentation(before, after);
 }
 
 // One entry in the append-only history. It carries the SUPPLIER as well as the

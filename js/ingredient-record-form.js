@@ -30,7 +30,7 @@ import { supplierLabel } from './supplier-label.js';
 import { NO_SUPPLIER_ID } from './records.js';
 import { field, formActions, reportFailure, shortDate } from './record-ui.js';
 import {
-  PRICE_UNITS, priceUnitLabel, PRICE_FORMS, priceFormOf, formatPriceInput, storedPriceInput, singleFromCaseInput, priceBoxStart,
+  PRICE_UNITS, priceUnitLabel, PRICE_FORMS, priceFormOf, formatPriceInput, storedPriceInput, singleFromCaseInput, priceBoxStart, ownPieceWeight,
   weightNeededForPrice, positiveNumber, packBaseOf, storedCaseOf,
   pricePatch, priceChanged, priceRecord, pricePerKg,
   formatPricePerUnit, formatRate, costReasonText, formatMoney,
@@ -285,9 +285,9 @@ function priceBlock(item, actions, defaultUnit = null, ctx) {
   const changedText = el('p', { class: 'mgmt-price-note' });
   const recomputeBtn = el('button', {
     type: 'button', class: 'mgmt-link', text: t('orders.case.recompute'),
-    // ⚠️ FOCUS FOLLOWS THE LINK THAT HIDES ITSELF: left on a hidden button it would drop to the page. The box
-    // it just filled is where the person looks next.
-    onClick: () => { recomputed = true; refresh(); casePriceBox.focus(); },
+    // ⚠️ FOCUS FOLLOWS THE LINK THAT HIDES ITSELF: left on a hidden button it would drop to the page. It goes to
+    // the price box that is VISIBLE in this form — the case price, or the typed rate — never to a hidden one.
+    onClick: () => { recomputed = true; refresh(); (rateField.hidden ? casePriceBox : rate).focus(); },
   });
   const changedNote = el('div', { class: 'mgmt-field', hidden: 'hidden' }, [changedText, recomputeBtn]);
   // «The saved price stays … until you write the new one or tap Recalculate» — what Save does, said.
@@ -338,6 +338,7 @@ function priceBlock(item, actions, defaultUnit = null, ctx) {
       return synced === null ? input : { ...input, unitWeightKg: synced };
     }
     return formatPriceInput(now().fmt, now().weight, {
+      ownPiece: ownPieceWeight(item, now().weight, ctx.initialWeight),
       price: casePriceBox.value,
       rate: rate.value,
       unit: unitSelect.value || null,
@@ -351,7 +352,9 @@ function priceBlock(item, actions, defaultUnit = null, ctx) {
   // so a misplaced decimal point is visible before Save rather than after.
   function refresh() {
     const { fmt, weight } = now();
-    const form = priceFormOf(fmt, weight);
+    // ⚠️ A per-piece price with its OWN piece weight keeps today's form (a price per piece + a visible «Peso di un
+    // pezzo»): «Prezzo confezione» and the weight sync are for prices whose piece weight is the weight (price-model.js).
+    const form = priceFormOf(fmt, weight, ownPieceWeight(item, weight, ctx.initialWeight));
     const typedForm = form === PRICE_FORMS.typed;
     const unit = unitSelect.value;
     // A change that keeps the money (a Cartone → Singola, a corrected weight) is not «a format that no longer
@@ -1404,6 +1407,10 @@ export function buildIngredientForm({
       packCount: 'packCount' in patch ? patch.packCount : (item?.packCount ?? null),
     };
   };
+  // ⚠️ THE FORMAT IS TWO BUTTONS, AND js/form-dirty.js ONLY SEES VALUES (P20): without a value to compare, a
+  // Cartone → Singola change was invisible to it and Back threw it away without asking. This hidden input
+  // mirrors the choice, so the snapshot of the open card catches it in both directions.
+  const kindMirror = el('input', { type: 'hidden', value: kind });
   const segLabelId = `mgmt-format-label-${++messageCount}`;
   const segButton = (value, text) => el('button', {
     type: 'button', class: 'set-seg-btn', 'aria-pressed': String(kind === value), text,
@@ -1427,14 +1434,20 @@ export function buildIngredientForm({
     segSingle.setAttribute('aria-pressed', String(kind === 'single'));
     segCarton.setAttribute('aria-pressed', String(kind === 'carton'));
     containsBlock.hidden = kind !== 'carton';
+    kindMirror.value = kind;
     formatSummaryLine.textContent = formatSummary({ ...formState(), kind }, weight.read(), lang);
     if (price) price.refresh();
   }
+  // The default word «Cartone» picks for itself is taken back when the person returns to «Singola» without having
+  // chosen anything: a menu left on «busta» behind a hidden row would read as a change the snapshot (P20) must ask about.
+  let innerAutoSet = false;
+  pack.onChange(() => { innerAutoSet = false; });
   function setKind(next) {
     if (next === kind) return;
     kind = next;
     // «Cartone» always names its contents: the package already on the card, else the venue's busta.
-    if (kind === 'carton' && pack.read() === '') pack.set(defaultPackFor(lang));
+    if (kind === 'carton' && pack.read() === '') { pack.set(defaultPackFor(lang)); innerAutoSet = true; }
+    if (kind === 'single' && innerAutoSet) { pack.set(''); innerAutoSet = false; }
     syncFormat();
   }
 
@@ -1593,8 +1606,10 @@ export function buildIngredientForm({
     // the form to correct a spelling must not plant an identical entry — a
     // history of non-events cannot answer "when did this go up?" — and removing
     // a price is not a price, so it records nothing.
-    // ⚠️ NO HISTORY ENTRY WHEN ONLY THE SHAPE MOVED: the same cost per item (Cartone → Singola, a corrected weight).
-    const record = mayPrice && patch.pricePerUnit !== null && !price.keepsMoney() && priceChanged(item, patch)
+    // ⚠️ NO HISTORY ENTRY WHEN ONLY THE SHAPE MOVED, AND ONE WHEN A COST MOVED: priceChanged compares the MONEY (cost
+    // per item and per kilo), so «2 a kilo» turned into «5 a 2.5 kg bag» or a Cartone turned into a Singola write none,
+    // and a changed piece weight (the divisor of every recipe's cost per kilo) writes one.
+    const record = mayPrice && patch.pricePerUnit !== null && priceChanged(item, patch)
       ? priceRecord({ ...item, supplierId: payload.supplierId }, patch, patch.priceUpdatedAt)
       : null;
 
@@ -1681,6 +1696,7 @@ export function buildIngredientForm({
           ]),
         ]),
         containsBlock,
+        kindMirror,
       ],
     }),
     // ⚠️ STILL DRAWN ONLY FOR SOMEBODY WHO MAY SEE MONEY — the card wraps the price,

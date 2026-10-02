@@ -82,7 +82,8 @@ test('the price follows the LIVE weight, count and package word, never a copy of
 });
 
 test('«Cartone» names its contents: switching to it picks the venue\'s default package when none is set', () => {
-  assert.match(FORM, /if \(kind === 'carton' && pack\.read\(\) === ''\) pack\.set\(defaultPackFor\(lang\)\);/);
+  assert.match(FORM, /if \(kind === 'carton' && pack\.read\(\) === ''\) \{ pack\.set\(defaultPackFor\(lang\)\); innerAutoSet = true; \}/);
+  assert.match(FORM, /if \(kind === 'single' && innerAutoSet\) \{ pack\.set\(''\); innerAutoSet = false; \}/);
   assert.match(FORM, /const lang = outputLanguage\(currentSession\(\)\.location\);\s*const cartonWord = cartonWordFor\(lang\);/);
 });
 

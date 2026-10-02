@@ -287,3 +287,19 @@ test('no packCount: the weight is the pack, as it always was', () => {
   assert.equal(packKgFor({ packKg: {} }, byKg()), 25);
   assert.equal(packKgFor({ packKg: {} }, byKg({ weight: 'sacco', packCount: 4 })), null, 'an unreadable weight stays unreadable');
 });
+
+import { unitCost } from '../js/order-cost.js';
+
+// ── 3rd deep review (1 Oct 2026): a carton that cannot be priced has NO price ───────────────────
+test('packCount set and the carton cannot be priced (a multiplier weight, «6x1l»): refuse, never one item\'s rate as a whole carton', () => {
+  const month = { packKg: {} };
+  const ing = { id: 'c', unit: 'cartone', packUnit: 'busta', packCount: 6, weight: '6x1l', priceUnit: 'pcs', pricePerUnit: 0.4 };
+  assert.equal(unitCost(ing, ing), null, 'the reader refuses');
+  assert.equal(packPrice(month, ing, false), null, 'the stocktake used to answer 0.4 for a whole carton');
+  assert.equal(valueBlocker(month, ing, false), NO_PRICE);
+  // a carton that CAN be priced is, and a Singola (no packCount) keeps today's answer
+  assert.equal(packPrice(month, { ...ing, weight: '' }, false), 2.4);
+  assert.equal(valueBlocker(month, { ...ing, weight: '' }, false), null);
+  const { packCount, ...single } = ing;
+  assert.equal(packPrice(month, single, false), 0.4);
+});

@@ -670,3 +670,58 @@ test('«each» is an interface word: one phrase with a hole, in English and in I
   finally { setLanguage('en'); }
   assert.equal(PM.formatPricePerUnit({ priceUnit: 'kg', pricePerUnit: 7.2 }), '£7.20 / kg');
 });
+
+// ── 3rd deep review (1 Oct 2026) ─────────────────────────────────────────────
+
+test('ownPieceWeight: only a per-piece price whose piece weight is the weight tracks it', () => {
+  const pcs = (uwk) => ({ priceUnit: 'pcs', pricePerUnit: 0.25, unitWeightKg: uwk });
+  assert.equal(PM.ownPieceWeight(pcs(0.06), '60g'), false, 'what the new card writes');
+  assert.equal(PM.ownPieceWeight(pcs(0.06), '0.06 kg'), false);
+  assert.equal(PM.ownPieceWeight(pcs(0.06), '360g'), true, 'eggs: weight is the PACK');
+  assert.equal(PM.ownPieceWeight({ priceUnit: 'pcs', pricePerUnit: 0.03, unitWeightKg: 0.002 }, '1kg'), true, 'gelatine');
+  assert.equal(PM.ownPieceWeight(pcs(undefined), '500ml'), true, 'no piece weight: today\'s per-piece form');
+  assert.equal(PM.ownPieceWeight(pcs(0.06), ''), true, 'nothing to compare with');
+  // a weight EDITED later must not flip a tracking price: the weight it opened with decides
+  assert.equal(PM.ownPieceWeight(pcs(0.06), '70g', '60g'), false);
+  assert.equal(PM.ownPieceWeight(pcs(0.06), '400g', '360g'), true);
+  // not a per-piece price, or a new item
+  assert.equal(PM.ownPieceWeight({ priceUnit: 'kg', pricePerUnit: 2 }, '2.5kg'), false);
+  assert.equal(PM.ownPieceWeight(null, '2.5kg'), false);
+});
+
+test('ownPiece keeps today\'s typed form and never writes the pack weight as the piece weight', () => {
+  const single = { kind: 'single', count: null, inner: '' };
+  assert.equal(PM.priceFormOf(single, '360g', true), PM.PRICE_FORMS.typed);
+  assert.equal(PM.priceFormOf({ kind: 'carton', count: 4, inner: 'x' }, '360g', true), PM.PRICE_FORMS.cartonPieces);
+  const patch = PM.pricePatch(PM.formatPriceInput(single, '360g', { rate: '0.26', unit: 'pcs', pieceKg: '0.06', ownPiece: true, vat: '' }), NOW, '360g');
+  assert.deepEqual([patch.priceUnit, patch.pricePerUnit, patch.unitWeightKg], ['pcs', 0.26, 0.06]);
+  const carton = PM.pricePatch(PM.formatPriceInput({ kind: 'carton', count: 4, inner: 'x' }, '360g', { price: '1', pieceKg: '0.06', ownPiece: true, vat: '' }), NOW, '360g');
+  assert.equal(carton.unitWeightKg, 0.06);
+});
+
+test('3rd review 4: priceChanged compares the MONEY, not the stored representation', () => {
+  const kg2 = { priceUnit: 'kg', pricePerUnit: 2 };
+  // the same money in another shape: no change
+  assert.equal(PM.priceChanged(kg2, { priceUnit: 'pcs', pricePerUnit: 5, unitWeightKg: 2.5 }), false, '2 a kilo is 5 for 2.5 kg');
+  assert.equal(PM.priceChanged({ priceUnit: 'pcs', pricePerUnit: 5, unitWeightKg: 2.5 }, kg2), false);
+  assert.equal(PM.priceChanged({ priceUnit: 'pcs', pricePerUnit: 3.333333, unitWeightKg: 1 }, { priceUnit: 'pcs', pricePerUnit: 3.3333, unitWeightKg: 1 }), false, 'within rounding');
+  assert.equal(PM.priceChanged(kg2, { priceUnit: 'l', pricePerUnit: 2 }), false, 'a litre is read as a kilo');
+  // a real change in either dimension
+  assert.equal(PM.priceChanged(kg2, { priceUnit: 'pcs', pricePerUnit: 6, unitWeightKg: 2.5 }), true);
+  assert.equal(PM.priceChanged(kg2, { priceUnit: 'kg', pricePerUnit: 2.1 }), true);
+  assert.equal(PM.priceChanged({ priceUnit: 'pcs', pricePerUnit: 0.25, unitWeightKg: 0.06 }, { priceUnit: 'pcs', pricePerUnit: 0.26, unitWeightKg: 0.06 }), true);
+  // a changed piece weight IS a change (the divisor of the cost per kilo), and so is one appearing
+  assert.equal(PM.priceChanged({ priceUnit: 'pcs', pricePerUnit: 0.25, unitWeightKg: 0.06 }, { priceUnit: 'pcs', pricePerUnit: 0.25, unitWeightKg: 0.07 }), true);
+  assert.equal(PM.priceChanged({ priceUnit: 'pcs', pricePerUnit: 0.25 }, { priceUnit: 'pcs', pricePerUnit: 0.25, unitWeightKg: 0.06 }), true);
+  // nothing to compare: the representation decides, as it always did
+  assert.equal(PM.priceChanged(null, { priceUnit: 'kg', pricePerUnit: 2 }), true);
+  assert.equal(PM.priceChanged({}, {}), false);
+  assert.equal(PM.priceChanged({ priceUnit: 'pcs', pricePerUnit: 1 }, { priceUnit: 'pcs', pricePerUnit: 1.5 }), true);
+  assert.equal(PM.priceChanged({ priceUnit: 'pcs', pricePerUnit: 1 }, { priceUnit: 'pcs', pricePerUnit: 1 }), false);
+});
+
+test('3rd review 5: a per-item price carried from a case keeps six decimals when the card writes it', () => {
+  const single = { kind: 'single', count: null, inner: '' };
+  const patch = PM.pricePatch(PM.formatPriceInput(single, '1kg', { price: '3.333333', vat: '' }), NOW, '1kg');
+  assert.equal(patch.pricePerUnit, 3.333333);
+});

@@ -95,10 +95,12 @@ export function packPrice(month, ingredient, closed) {
   }
 
   if (ingredient && ingredient.priceUnit === 'pcs') {
-    // A carton card counts cartons: the price of one is the per-item rate × the items in it.
+    // A carton card counts cartons: the price of one is the per-item rate × the items in it. ⚠️ AND WHEN THE
+    // CARTON CANNOT BE PRICED (a multiplier weight, «6x1l») THERE IS NO PRICE — never one item's rate standing in
+    // for a whole carton (3rd review): refuse rather than guess.
     if (itemsPerOrderedUnit(ingredient) !== null) {
       const viaCard = unitCost(ingredient, ingredient);
-      if (viaCard !== null) return round3(viaCard);
+      return viaCard === null ? null : round3(viaCard);
     }
     const each = Number(ingredient.pricePerUnit);
     return Number.isFinite(each) && each > 0 ? round3(each) : null;
@@ -139,6 +141,8 @@ export function valueBlocker(month, ingredient, closed = false) {
   }
   if (storedCaseOf(ingredient)) return unitCost(ingredient, ingredient) === null ? NO_PRICE : null;
   if (ingredient && ingredient.priceUnit === 'pcs') {
+    // the same refusal as packPrice: a carton card whose carton cannot be priced has no price
+    if (itemsPerOrderedUnit(ingredient) !== null && unitCost(ingredient, ingredient) === null) return NO_PRICE;
     const each = Number(ingredient.pricePerUnit);
     return Number.isFinite(each) && each > 0 ? null : NO_PRICE;
   }

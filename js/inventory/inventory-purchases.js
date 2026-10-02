@@ -123,6 +123,10 @@ export function purchasesInMonth(records, monthId, ingredientsById = {}) {
 // card's unit and its package, so «the line is in the package» is the one other case
 // there is; a stored unit that is neither (a renamed package), a stale case or no case
 // at all is not guessed.
+// ⚠️ «FILL FROM PURCHASES» RE-READS THIS MONTH'S HISTORY LINES THAT FROZE NO UNIT IN THE CARD'S UNIT AS IT IS NOW
+// (3rd review, 1 Oct 2026). Turning a Cartone into a Singola (or back) rewrites `unit`, and an older line that
+// froze none then reads in the new word. It was always so whenever an ingredient's unit was edited — «Unità
+// d'ordine» did it too — and it is left alone on purpose; only the OPEN draft line is frozen (draft.js).
 export function qtyInCardUnit(qty, lineUnit, ing) {
   if (sameUnit(lineUnit, ing && ing.unit)) return qty;
   if (!sameUnit(lineUnit, ing && ing.packUnit)) return null;

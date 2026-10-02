@@ -1,4 +1,4 @@
-const CACHE_NAME = 'theitalianclub-v514';
+const CACHE_NAME = 'theitalianclub-v515';
 // Firebase SDK modules (loaded from gstatic) are cached SEPARATELY from CACHE_NAME
 // so they survive the cache-version bump that happens on every deploy — otherwise
 // the offline SDK would be wiped each release until the next online load. The name
@@ -421,11 +421,11 @@ const ASSET_HASHES = {
   "./js/confirm-dialog.js": '61a7f580f37c5ff8',
   "./js/calculator-icons.js": '6bb803c39eabc4e0',
   "./js/hold-to-zoom.js": '92ffddd4533b46d7',
-  "./js/price-model.js": '6ccc7e3d29a576be',
+  "./js/price-model.js": 'f978e5a00d7bb968',
   "./js/vat-rates.js": 'a3d073040b1d8490',
   "./js/pack-size.js": 'e5aae95d8c7b03d5',
   "./js/record-choices.js": '38da7c93b6f723a2',
-  "./js/pack-format.js": '7f32c4e57e63f131',
+  "./js/pack-format.js": '86cb40c313ec9315',
   "./js/order-cost.js": '640c48b6037ce01b',
   "./js/currency.js": '9300d5695d2a6dac',
   "./js/allergen-model.js": 'a9ad7592da832a56',
@@ -442,7 +442,7 @@ const ASSET_HASHES = {
   "./js/supplier-label.js": '9601ceed020c0205',
   "./js/order-unit.js": '1e5149dc8263a4f5',
   "./js/record-data.js": '47d198fbb955d963',
-  "./js/ingredient-record-form.js": 'a81da752b1fb6a21',
+  "./js/ingredient-record-form.js": '8ed0b2e0934ca707',
   "./js/supplier-record-form.js": 'e696787bd1e15b7d',
   "./js/ingredient-kind.js": 'b5ea1d7ec8255fd6',
   "./js/photo-model.js": '67d1d83755bbd33a',
@@ -660,8 +660,8 @@ const ASSET_HASHES = {
   "./js/inventory/firebase-inventory.js": '98880ab94f7ccdfa',
   "./js/inventory/inventory-outbox.js": '396a5be9a9069278',
   "./js/inventory/inventory-store.js": '3ea0528fdec4eabb',
-  "./js/inventory/inventory-purchases.js": '7c5fd05cc6dccdb6',
-  "./js/inventory/inventory-value.js": 'ccb17e0a139a361e',
+  "./js/inventory/inventory-purchases.js": '703db62f90a981c9',
+  "./js/inventory/inventory-value.js": 'ba2a0aaab561f2ec',
   "./js/inventory/inventory-usage.js": '5b580d4c482d01c3',
   "./js/inventory/inventory-list.js": 'bd7ef2eceb92c330',
   "./js/inventory/inventory-detail.js": 'ce63d7af51a2622a',

@@ -324,15 +324,14 @@ test('an unreadable weight or an empty count cannot be compared, so nothing is s
   assert.equal(formatChanged(PACK_CASE, carton(null), '2.5kg'), null);
 });
 
-test('a case of pieces is the NORMAL shape: it agrees while the count and the item weight agree', () => {
-  assert.equal(formatChanged(PIECES_CASE, carton(50), '60g'), null, 'the price remembers 0.06 kg an item: the card says 60 g');
+test('a case of pieces is the NORMAL shape: it agrees while the count agrees, whatever the weight says', () => {
+  assert.equal(formatChanged(PIECES_CASE, carton(50), '60g'), null);
   assert.equal(formatChanged(PIECES_CASE, carton(50), '0.06 kg'), null);
   assert.equal(formatChanged(PIECES_CASE, carton(50), 'sacco'), null, 'an unreadable weight says nothing');
-  assert.deepEqual(formatChanged(PIECES_CASE, carton(50), '50g'), { old: '50 × 0.06 kg', new: '50 × 0.05 kg' }, 'a re-weighed item is said');
+  // ⚠️ THE WEIGHT IS NOT COMPARED (3rd review): an old per-piece price keeps the PACK weight in `weight` and ONE
+  // PIECE's in unitWeightKg, so a difference between them says nothing
+  assert.equal(formatChanged(PIECES_CASE, carton(50), '2kg'), null);
   assert.deepEqual(formatChanged(PIECES_CASE, carton(40), '60g'), { old: '50', new: '40' });
-  // a pieces case whose price remembers no item weight cannot disagree about one
-  const bare = { ...PIECES_CASE, unitWeightKg: null };
-  assert.equal(formatChanged(bare, carton(50), '60g'), null);
 });
 
 // ── 2nd deep review (1 Oct 2026) ─────────────────────────────────────────────
@@ -361,12 +360,18 @@ test('review 2: force writes the full carton format even when the format was not
   assert.equal(formatPatch(cassa, formOf(cassa), { force: true }).unit, 'cassa');
 });
 
-test('review 4: a per-piece price flags a piece weight that differs from the weight now readable (an employee changed it)', () => {
+test('3rd review 1: a per-piece price never flags its weight (own piece weight ≠ pack weight is normal)', () => {
   const egg = { priceUnit: 'pcs', pricePerUnit: 0.25, unitWeightKg: 0.06 };
   const single = { kind: 'single', count: null, inner: '' };
-  assert.equal(formatChanged(egg, single, '60g'), null);
-  assert.deepEqual(formatChanged(egg, single, '70g'), { old: '0.06 kg', new: '0.07 kg' });
-  assert.equal(formatChanged(egg, single, 'sacco'), null, 'an unreadable weight says nothing');
-  assert.equal(formatChanged({ priceUnit: 'pcs', pricePerUnit: 0.25 }, single, '70g'), null, 'no remembered piece weight, nothing to disagree about');
-  assert.equal(formatChanged({ priceUnit: 'kg', pricePerUnit: 2, unitWeightKg: 0.06 }, single, '70g'), null, 'a per-kilo rate has no piece');
+  for (const weight of ['60g', '70g', '360g', 'sacco', '']) assert.equal(formatChanged(egg, single, weight), null, weight);
+});
+
+// ── 3rd deep review (1 Oct 2026) ─────────────────────────────────────────────
+
+test('3rd review 5: the format note shows the unit right for litres and millilitres', () => {
+  const litres = { priceUnit: 'l', pricePerUnit: 4, casePrice: 12, caseCount: 6, caseItemSize: 0.5, caseItemUnit: 'pack' };
+  assert.deepEqual(formatChanged(litres, carton(6), '750ml'), { old: '6 × 0.5 l', new: '6 × 0.75 l' });
+  const ml = { priceUnit: 'l', pricePerUnit: 4, casePrice: 12, caseCount: 6, caseItemSize: 500, caseItemUnit: 'ml' };
+  assert.deepEqual(formatChanged(ml, carton(6), '1l'), { old: '6 × 0.5 l', new: '6 × 1 l' });
+  assert.equal(formatChanged(ml, carton(6), '500ml'), null);
 });

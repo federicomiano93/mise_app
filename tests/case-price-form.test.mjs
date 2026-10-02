@@ -44,7 +44,7 @@ test('«Come si acquista» has no «A cartone» choice any more, and its menu is
 });
 
 test('the price box means what the format and the weight say, and shows only the boxes that mean something', () => {
-  assert.match(FORM, /const form = priceFormOf\(fmt, weight\);/);
+  assert.match(FORM, /const form = priceFormOf\(fmt, weight, ownPieceWeight\(item, weight, ctx\.initialWeight\)\);/);
   assert.match(FORM, /const typedForm = form === PRICE_FORMS\.typed;/);
   assert.match(FORM, /unitField\.hidden = !typedForm;\s*rateField\.hidden = !typedForm;\s*casePriceField\.hidden = typedForm;/);
   assert.match(FORM, /const pricePair = el\('div', \{ class: 'mgmt-pair' \}, \[unitField, rateField, casePriceField\]\);/);
@@ -81,7 +81,7 @@ test('the box shows the stored figure only while it still means the same thing; 
 test('the format-changed note shows both formats and offers «Ricalcola», which only sets the flag', () => {
   assert.match(FORM, /const changed = keepsMoney\(\) \? null : formatChanged\(item, fmt, weight\);/);
   assert.match(FORM, /t\('orders\.case\.packChanged', \{ old: changed\.old, new: changed\.new \}\)/);
-  assert.match(FORM, /onClick: \(\) => \{ recomputed = true; refresh\(\); casePriceBox\.focus\(\); \}/, 'focus follows the link that hides itself');
+  assert.match(FORM, /onClick: \(\) => \{ recomputed = true; refresh\(\); \(rateField\.hidden \? casePriceBox : rate\)\.focus\(\); \}/, 'focus follows the link that hides itself, to the VISIBLE box');
   assert.match(FORM, /recomputeBtn\.hidden = dirty\(\) \|\| needsSize \|\| start\.suggestion === null;/, 'once the price is being recomputed the button has done its job');
   assert.match(I18N, /'orders\.case\.packChanged': 'Il formato è cambiato dall’ultimo prezzo: salvato \{old\}, con questo formato \{new\}\. Ricontrolla il prezzo\.'/);
   assert.match(I18N, /'orders\.case\.recompute': 'Ricalcola'/);

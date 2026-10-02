@@ -10,6 +10,13 @@
 // PERSON MOVED Confezione, the count or the inner word (formatPatch → {} otherwise: a merge
 // write then leaves every stored key exactly where it was).
 //
+// ⚠️⚠️ THE PREVIOUS APP VERSION IGNORES packCount (6, 3rd review, 1 Oct 2026). On an old phone a Cartone built on
+// an existing per-item or per-kilo price WITHOUT a typed price — the card's «untouched means unchanged» keeps the
+// stored rate — is read as ONE item per carton: its weight is one item's, its rate is one item's, and the old
+// readers know nothing of the count. Closing a stocktake month on an old phone would FREEZE that price. And
+// this release is not undone by a plain revert: the field stays on the documents. So the go-live must get the
+// manager phones onto the new version (a reload) BEFORE the stocktake is opened or closed.
+//
 // How a format is stored, on `ingredients/{id}` (product data, so staff may set it):
 //   Cartone  packCount = a whole number ≥ 1 · unit = a carton word · packUnit = the inner word
 //   Singola  packCount = null/absent · unit and packUnit untouched
@@ -165,30 +172,17 @@ export function formatSummary(fmt, weight, lang) {
 // is compared by the same size; a case of pieces has no size and only its count is compared.
 export function formatChanged(price, fmt, weight) {
   const stored = price ? storedCaseOf(price) : null;
-  if (!stored) {
-    // A per-piece price remembers one piece's weight; a weight changed since (by an employee, who cannot
-    // see the price) is said, and the manager's «Ricalcola» writes the new one. A weight that cannot be
-    // read says nothing.
-    const base = packBaseOf(weight);
-    const kg = Number(price && price.unitWeightKg);
-    if (price && price.priceUnit === 'pcs' && kg > 0 && base && Math.abs(base.size - kg) > 1e-9) {
-      return { old: `${numberText(kg)} ${base.priceUnit}`, new: `${numberText(base.size)} ${base.priceUnit}` };
-    }
-    return null;
-  }
+  if (!stored) return null;
   const count = fmt.kind === 'carton' ? fmt.count : 1;
   if (!count) return null;
   const base = packBaseOf(weight);
 
   // ⚠️ A CASE OF PIECES IS THE NORMAL SHAPE NOW (every price typed for formatted goods is stored per
-  // item): it agrees with the card while the count is the same and, when the price remembers one
-  // item's weight, that weight is the card's. A weight that cannot be read says nothing.
+  // item): it agrees with the card while the count is the same. ITS WEIGHT IS NOT COMPARED (3rd review): an old
+  // per-piece price keeps `weight` as the PACK and `unitWeightKg` as ONE PIECE, so a difference between them says
+  // nothing — and a weight changed by an employee cannot be told from that, so it is not flagged.
   if (stored.caseItemUnit === 'pcs') {
-    if (stored.caseCount !== count) return { old: numberText(stored.caseCount), new: numberText(count) };
-    const itemKg = Number(price.unitWeightKg);
-    if (!base || !(itemKg > 0) || Math.abs(base.size - itemKg) < 1e-9) return null;
-    const label = (kg, n) => `${numberText(n)} × ${numberText(kg)} ${base.priceUnit}`;
-    return { old: label(itemKg, stored.caseCount), new: label(base.size, count) };
+    return stored.caseCount !== count ? { old: numberText(stored.caseCount), new: numberText(count) } : null;
   }
   const small = stored.caseItemUnit === 'g' || stored.caseItemUnit === 'ml';
   const storedSize = stored.caseItemUnit === 'pcs' ? null
