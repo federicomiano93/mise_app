@@ -19,8 +19,11 @@ import { unitChoices, entryUnit, storedUnitFor, sameUnit, isDefaultUnit } from '
 // paint the progress bar correctly on first render (before any typing), so a
 // supplier is never stuck on a placeholder. refreshSupplierDerived (suppliers.js)
 // keeps it in sync as the operator types.
+//
+// ⚠️ A row ordered ELSEWHERE this time (`elsewhereId`, see orders-main.js screenRowsFor) is
+// not counted: its quantity belongs to another supplier's order.
 function countFilled(ingredients, entries) {
-  return ingredients.filter(i => (entries[i.id]?.qty || 0) > 0).length;
+  return ingredients.filter(i => !i.elsewhereId && (entries[i.id]?.qty || 0) > 0).length;
 }
 
 // The row's slice of the shared draft, re-created if it is gone.
@@ -76,11 +79,11 @@ export function buildIngredientList(supplier, ingredients, suggest, entries, hoo
     ]);
   }
 
-  const total = ingredients.length;
+  const total = ingredients.filter(i => !i.elsewhereId).length;
   const filled = countFilled(ingredients, entries);
 
   const fill = el('div', { class: 'progress-fill', id: `progress-fill-${supplier.id}`,
-    style: { width: `${Math.round((filled / total) * 100)}%` } });
+    style: { width: `${total ? Math.round((filled / total) * 100) : 0}%` } });
   // The bar stays (a quick "how full is this order" cue); the "X of Y filled" text
   // was removed — the bar already says it.
   const progress = el('div', { class: 'progress' }, [
@@ -131,9 +134,38 @@ export function buildRow(ing, supplier, suggest, entries, hooks, { meta = '' } =
   });
   const hint = el('div', { class: 'ing-suggestion' });
 
+  // ⚠️ WHOSE ORDER THIS LINE IS IN («Ordina da un altro fornitore», line-supplier.js). One
+  // ingredient is in ONE order at a time, so a quantity typed on a row settles it:
+  //   * a row SENT HERE from another supplier (`usualSupplierId`) keeps the line in this
+  //     supplier's order while it has a quantity, and lets it go back at zero;
+  //   * a row of THIS supplier's that is ordered elsewhere this time (`away`) shows an
+  //     empty box; typing a quantity takes the line back (override cleared, same write);
+  //   * any other row never carries an override — a stale one is cleared on the way.
+  // The key is sent as '' (never left behind) by changedEntries when it goes.
+  let away = ing.elsewhereId || '';
+  const note = el('div', { class: 'ing-line-note' });
+  function paintNote() {
+    const text = away
+      ? t('orders.line.thisTimeFrom', { supplier: ing.elsewhereLabel || '' })
+      : ing.usualSupplierId ? t('orders.line.usuallyFrom', { supplier: ing.usualLabel || '' }) : '';
+    note.textContent = text;
+    note.hidden = !text;
+  }
+  function claimLine(entry, qty) {
+    if (ing.usualSupplierId) entry.supplierId = qty > 0 ? supplier.id : '';
+    else if (entry.supplierId) entry.supplierId = '';
+    if (away) {
+      away = '';
+      delete row.dataset.elsewhere;
+      paintNote();
+    }
+  }
+
   function setQty(value, fromInput) {
     const qty = wholeNumber(value);
-    entryFor(entries, ing.id).qty = qty;
+    const entry = entryFor(entries, ing.id);
+    entry.qty = qty;
+    claimLine(entry, qty);
     if (!fromInput) qtyInput.value = qty || '';
     markFilled(row, qty);
     hooks.afterChange(supplier.id);
@@ -148,6 +180,12 @@ export function buildRow(ing, supplier, suggest, entries, hooks, { meta = '' } =
   // "Suggested: 8" sitting beside "much more than usual" would be saying the same
   // thing twice anyway.
   function updateHint() {
+    // Nothing to suggest for a row whose line is in another supplier's order.
+    if (away) {
+      hint.textContent = '';
+      hint.className = 'ing-suggestion';
+      return { active: false };
+    }
     // ⚠️ NO HINT, AND NO AUTO-FILL, FOR A LINE IN ANOTHER UNIT THAN THE CARD'S. The history
     // the suggestion is worked out from counts the card's unit, so «Suggested: 4» under a
     // line of buste — or 4 typed into it from the stock box — would be a number of the
@@ -240,6 +278,7 @@ export function buildRow(ing, supplier, suggest, entries, hooks, { meta = '' } =
       // Its own block, not a second child of .ing-top: that is a baseline-aligned flex
       // row, so the supplier would sit BESIDE the name instead of under it.
       meta ? el('div', { class: 'ing-supplier', text: meta }) : null,
+      note,
       hint,
       // In the name column on purpose: it holds nothing tappable, so a 44px target here
       // steals no tap from the Order / Stock boxes. Shown only while there is a quantity.
@@ -270,10 +309,13 @@ export function buildRow(ing, supplier, suggest, entries, hooks, { meta = '' } =
     unitSelect,
   ]);
   if (unitSelect) row.classList.add('ing-row--choice');
+  if (away) row.dataset.elsewhere = away;
+  paintNote();
 
   stockInput.value = entry.stock || '';
-  qtyInput.value = entry.qty || '';
-  markFilled(row, entry.qty);
+  // A row ordered elsewhere this time shows an EMPTY box: that number is the other order's.
+  qtyInput.value = away ? '' : entry.qty || '';
+  markFilled(row, away ? 0 : entry.qty);
   updateHint(); // show suggestion without overwriting a restored quantity
   return row;
 }

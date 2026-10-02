@@ -650,6 +650,28 @@ async function drafts() {
       bakery: 'main',
     }));
 
+  // «Ordina da un altro fornitore»: a line carries `supplierId` INSIDE its entry. The rules look
+  // only at the top-level keys and at `entries` being a map, so this needs no rules change — pinned
+  // here so a future tightening of the entry shape cannot silently lock the feature out. The
+  // second write is how the key leaves again (a merge cannot delete a nested key).
+  await expectAllowed('a draft line sent to another supplier (entries.<id>.supplierId)', () =>
+    mergeWrite('locations/main/drafts/current', {
+      entries: { ING_ELSEWHERE: { qty: 4, stock: 0, supplierId: 'SUP_OTHER' } },
+      days: { SUP_OTHER: '2026-10-02' },
+      updatedAt: new Date().toISOString(),
+      bakery: 'main',
+    }));
+  await expectAllowed('…and the same line going back to its usual supplier (supplierId: \'\')', () =>
+    mergeWrite('locations/main/drafts/current', {
+      entries: { ING_ELSEWHERE: { qty: 4, stock: 0, supplierId: '' } },
+      updatedAt: new Date().toISOString(),
+      bakery: 'main',
+    }));
+  await expectAllowed('…and a surgical clear of just that key', () =>
+    clearWrite('locations/main/drafts/current',
+      { updatedAt: new Date().toISOString(), bakery: 'main' },
+      ['entries.ING_ELSEWHERE.supplierId', 'days.SUP_OTHER']));
+
   await expectAllowed('clearSupplier removes one supplier\'s rows', () =>
     clearWrite('locations/main/drafts/current',
       { updatedAt: new Date().toISOString(), bakery: 'main' },

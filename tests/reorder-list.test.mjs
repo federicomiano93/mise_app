@@ -1,9 +1,10 @@
-// reorder-list.test.mjs — the «To re-order» list opened from the banner on the Order tab.
+// reorder-list.test.mjs — the «To re-order» list opened from the round button in the green bar.
 //
-// One card per missing line; each says where it was missed and offers two answers: put it
-// back in THAT supplier's order, or «Resolved» (bought elsewhere). Driven on a small fake
-// DOM, because what matters is which write each button makes — and that a failed write, or
-// a «no» to the question, changes nothing.
+// One card per missing line; each says where it was missed and offers three answers: put it
+// back in THAT supplier's order, order it from ANOTHER supplier (this order only), or
+// «Resolved» (bought elsewhere). Driven on a small fake DOM, because what matters is which
+// write each button makes — and that a failed write, or a «no» to the question, changes
+// nothing.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -93,7 +94,9 @@ globalThis.document = {
 };
 const pressKey = key => [...keyListeners].forEach(fn => fn({ key, defaultPrevented: false, preventDefault() { this.defaultPrevented = true; } }));
 
-const { renderReorderBanner } = await import('../js/orders/deliveries-view.js');
+const { renderReorderButton: drawReorderButton, repaintReorderButton } = await import('../js/orders/deliveries-view.js');
+// The bar's button and the dot on it, as orders.html has them.
+const renderReorderButton = (btn, ctx) => drawReorderButton(btn, btn.dot, ctx);
 const { _dictionaries } = await import('../js/i18n.js');
 
 function walk(node, out = []) {
@@ -136,27 +139,38 @@ function makeCtx(over = {}) {
   return { ctx, calls };
 }
 
+function makeButton() {
+  const btn = new Node('button');
+  btn.dot = new Node('span');
+  btn.hidden = true;
+  return btn;
+}
+
 function openList(ctx) {
-  const host = new Node('div');
-  renderReorderBanner(host, ctx);
-  withClass('reorder-banner', host)[0].listeners.click[0]();
-  return host;
+  const btn = makeButton();
+  renderReorderButton(btn, ctx);
+  btn.listeners.click[0]();
+  return btn;
 }
 
 function closeList() {
   withClass('app-icon-btn', overlay())[0].listeners.click[0]();
 }
 
-test('the banner opens the list: one card per line, each with both buttons named for its ingredient', () => {
+test('the button opens the list: one card per line, each with its three buttons named for its ingredient', () => {
   const { ctx } = makeCtx();
   openList(ctx);
   try {
     assert.equal(cards().length, 2);
     const [first] = cards();
     const buttons = walk(first).filter(n => n.tagName === 'BUTTON');
-    assert.equal(buttons.length, 2);
+    assert.equal(buttons.length, 3);
     assert.equal(buttons[0].getAttribute('aria-label'), 'Put back in Bruno’s order — Flour');
-    assert.equal(buttons[1].getAttribute('aria-label'), 'Resolved — Flour');
+    assert.equal(buttons[1].getAttribute('aria-label'), 'Order from another supplier — Flour');
+    assert.equal(buttons[2].getAttribute('aria-label'), 'Resolved — Flour');
+    assert.ok(buttons[0].classList.contains('btn-primary'), 'put back is the solid one');
+    assert.ok(buttons[1].classList.contains('btn-secondary'), 'another supplier is the secondary one');
+    assert.ok(buttons[2].classList.contains('reorder-resolve'), 'resolved is the low-key one');
     assert.match(first.textContent, /from Aldo · did not arrive/, 'the small line keeps where it was missed');
     assert.match(buttons[0].textContent, /Bruno/, 'the button names where it will go');
     // A supplier nobody can name is said so, never left blank.
@@ -241,21 +255,22 @@ test('the open list is redrawn by the next render, and an empty one stays open w
   try {
     assert.equal(cards().length, 2);
     const next = { ...ctx, history: [ctx.history[1]] };
-    renderReorderBanner(host, next);
+    renderReorderButton(host, next);
     assert.equal(cards().length, 1);
 
-    renderReorderBanner(host, { ...ctx, history: [] });
+    renderReorderButton(host, { ...ctx, history: [] });
     assert.equal(cards().length, 0);
     assert.ok(overlay(), 'the screen is not pulled away under the thumb');
     assert.equal(withClass('ing-empty', overlay())[0].textContent, 'Nothing to re-order.');
-    assert.equal(host.hidden, true, 'the banner itself goes, as before');
+    assert.equal(host.hidden, true, 'the button itself goes');
   } finally { closeList(); }
 });
 
 test('every new string exists in English and Italian, and the screen is wired to the write', () => {
   const dict = _dictionaries();
   for (const key of ['screenTitle', 'empty', 'rowMeta', 'putBackIn', 'putBackInAria', 'resolved',
-    'resolvedAria', 'resolveTitle', 'resolveMessage']) {
+    'resolvedAria', 'resolveTitle', 'resolveMessage', 'buttonAria', 'otherSupplier', 'otherSupplierAria',
+    'chooseTitle', 'chooseHint', 'chooseHintNoUsual', 'chooseAria', 'chooseEmpty']) {
     for (const lang of ['en', 'it']) {
       assert.ok(dict[lang][`orders.reorder.${key}`], `${lang} is missing orders.reorder.${key}`);
     }
@@ -272,7 +287,7 @@ test('a card falls back to the names frozen in its order, never to «deleted»',
   const src = readFileSync(new URL('../js/orders/deliveries-view.js', import.meta.url), 'utf8');
   const card = src.slice(src.indexOf('function reorderCard'));
   assert.match(card.slice(0, 900), /recordedName\(item\.id, ctx\.ingredientsById \|\| \{\}, record\?\.names \|\| \{\}\)/);
-  assert.match(src, /openReorderScreen\(lastBannerCtx \|\| ctx\)/);
+  assert.match(src, /openReorderScreen\(lastBannerCtx\)/);
   assert.match(card.slice(0, 1400), /supplierLabel\(supplier\) \|\| record\?\.supplierName \|\| t\('orders\.deliveries\.unknownSupplier'\)/);
 });
 
@@ -314,12 +329,12 @@ test('the overlay is a modal dialog named by its title, with focus on Back', () 
   } finally { closeList(); }
 });
 
-test('Escape closes it and focus returns to the banner', () => {
+test('Escape closes it and focus returns to the button in the bar', () => {
   const { ctx } = makeCtx();
-  const host = openList(ctx);
+  const btn = openList(ctx);
   pressKey('Escape');
   assert.equal(overlay(), undefined);
-  assert.equal(document.activeElement, withClass('reorder-banner', host)[0]);
+  assert.equal(document.activeElement, btn);
 });
 
 test('Escape with a dialog on top closes the dialog only, not the list', async () => {
@@ -335,14 +350,14 @@ test('Escape with a dialog on top closes the dialog only, not the list', async (
   } finally { closeList(); }
 });
 
-test('with the banner gone, closing puts focus on the Order tab, never on <body>', () => {
+test('with the button gone, closing puts focus on the Order tab, never on <body>', () => {
   const tab = new Node('button');
   tab.setAttribute('id', 'tab-order-btn');
   body.appendChild(tab);
   try {
     const { ctx } = makeCtx();
     const host = openList(ctx);
-    renderReorderBanner(host, { ...ctx, history: [] });
+    renderReorderButton(host, { ...ctx, history: [] });
     closeList();
     assert.equal(document.activeElement, tab);
   } finally { tab.remove(); }
@@ -356,19 +371,19 @@ test('when an answered card leaves, focus moves to the next card, then to Back w
   const host = openList(ctx);
   try {
     withClass('reorder-resolve', cards()[0])[0].focus();
-    renderReorderBanner(host, { ...ctx, history: [ctx.history[1]] });
+    renderReorderButton(host, { ...ctx, history: [ctx.history[1]] });
     assert.equal(cards().length, 1);
     assert.equal(document.activeElement, walk(cards()[0]).find(n => n.tagName === 'BUTTON'),
       'the next card\'s first button');
 
-    renderReorderBanner(host, { ...ctx, history: [] });
+    renderReorderButton(host, { ...ctx, history: [] });
     assert.equal(document.activeElement, withClass('app-icon-btn', overlay())[0], 'Back');
   } finally { closeList(); }
 });
 
 // ── A second tap while the write runs ────────────────────────────────────────────────────
 
-test('both buttons are off while a row saves, back on after a failure', async () => {
+test('all the card\'s buttons are off while a row saves, back on after a failure', async () => {
   let release;
   const { ctx } = makeCtx({
     onReorder: () => new Promise((_, reject) => { release = reject; }),
@@ -379,11 +394,11 @@ test('both buttons are off while a row saves, back on after a failure', async ()
     const buttons = walk(card).filter(n => n.tagName === 'BUTTON');
     const pending = buttons[0].click();
     await tick();
-    assert.deepEqual(buttons.map(b => b.disabled), [true, true]);
+    assert.deepEqual(buttons.map(b => b.disabled), [true, true, true]);
 
     release(new Error('offline'));
     await tick();
-    assert.deepEqual(buttons.map(b => b.disabled), [false, false]);
+    assert.deepEqual(buttons.map(b => b.disabled), [false, false, false]);
     await dialogButton('app-dialog-btn-solid').click();
     await pending;
   } finally { closeList(); }
@@ -395,7 +410,7 @@ test('a redraw while a row saves keeps its new card disabled', async () => {
   try {
     walk(cards()[0]).find(n => n.tagName === 'BUTTON').click();
     await tick();
-    renderReorderBanner(host, { ...ctx });
+    renderReorderButton(host, { ...ctx });
     assert.ok(walk(cards()[0]).filter(n => n.tagName === 'BUTTON').every(b => b.disabled));
   } finally { closeList(); }
 });
@@ -426,4 +441,227 @@ test('editing an order in History carries missing, deliveredAt and missingResolv
   assert.deepEqual(next.missing, record.missing);
   assert.deepEqual(next.missingResolved, record.missingResolved);
   assert.equal(next.id, undefined, 'the document id never enters the payload');
+});
+
+// ── The round button in the green bar ─────────────────────────────────────────────────────
+
+test('the button is hidden with nothing to re-order, and shows the count and its label otherwise', () => {
+  const { ctx } = makeCtx();
+  const btn = makeButton();
+  renderReorderButton(btn, { ...ctx, history: [] });
+  assert.equal(btn.hidden, true);
+  assert.equal(btn.dot.hidden, true);
+  assert.equal(btn.dot.textContent, '');
+
+  renderReorderButton(btn, ctx);
+  assert.equal(btn.hidden, false);
+  assert.equal(btn.dot.hidden, false);
+  assert.equal(btn.dot.textContent, '2');
+  assert.equal(btn.getAttribute('aria-label'), 'To re-order (2)');
+
+  renderReorderButton(btn, { ...ctx, history: [ctx.history[0]] });
+  assert.equal(btn.dot.textContent, '1');
+  assert.equal(btn.getAttribute('aria-label'), 'To re-order (1)');
+});
+
+test('a line already in the draft (anywhere) does not count', () => {
+  const { ctx } = makeCtx({ entries: { flour: { qty: 5, supplierId: 'aldo' } } });
+  const btn = makeButton();
+  renderReorderButton(btn, ctx);
+  assert.equal(btn.dot.textContent, '1');
+});
+
+test('the label is drawn again in the new language, with no new snapshot', () => {
+  const { ctx } = makeCtx();
+  const btn = makeButton();
+  renderReorderButton(btn, ctx);
+  const before = btn.getAttribute('aria-label');
+  repaintReorderButton();
+  assert.equal(btn.getAttribute('aria-label'), before);
+});
+
+test('the button is in the green bar left of the bell, hidden, with the Feather icon — and nothing is left in the page body or the bell', () => {
+  const html = readFileSync(new URL('../orders.html', import.meta.url), 'utf8');
+  const btnAt = html.indexOf('id="orders-reorder-btn"');
+  const bellAt = html.indexOf('id="orders-alerts-btn"');
+  assert.ok(btnAt > 0 && btnAt < bellAt, 'left of the bell');
+  const tag = html.slice(html.lastIndexOf('<button', btnAt), html.indexOf('</button>', btnAt));
+  assert.match(tag, /class="app-icon-btn orders-icon-btn"/);
+  assert.match(tag, /type="button" hidden>/);
+  assert.match(tag, /<polyline points="1 4 1 10 7 10"\/><path d="M3\.51 15a9 9 0 1 0 2\.13-9\.36L1 10"\/>/);
+  assert.match(tag, /id="orders-reorder-count"/);
+  assert.match(tag, /width="20" height="20"/);
+  assert.doesNotMatch(html, /id="orders-reorder"/, 'no banner host any more');
+  const main = readFileSync(new URL('../js/orders/orders-main.js', import.meta.url), 'utf8');
+  assert.match(main, /renderReorderButton\(document\.getElementById\('orders-reorder-btn'\),\s*document\.getElementById\('orders-reorder-count'\), ctx\)/);
+  assert.match(main, /onLanguageChange\(\(\) => repaintReorderButton\(\)\)/);
+});
+
+// ── «Ordina da un altro fornitore» ────────────────────────────────────────────────────────
+
+const chooser = () => withClass('reorder-chooser')[0];
+const choiceRows = () => withClass('reorder-choice', chooser());
+const otherButton = card => withClass('reorder-other', card)[0];
+const chooserBack = () => withClass('app-icon-btn', chooser())[0];
+
+function chooserCtx(over = {}) {
+  const { ctx, calls } = makeCtx({
+    suppliersById: {
+      aldo: { id: 'aldo', name: 'Aldo Legacy Foods Ltd', shortName: 'Aldo' },
+      bruno: { id: 'bruno', name: 'Bruno', shortName: 'Bruno' },
+      zed: { id: 'zed', name: 'Zed', shortName: 'Zed' },
+      cleo: { id: 'cleo', name: 'Cleo', shortName: 'Cleo', active: false },
+      'no-supplier': { id: 'no-supplier', name: 'No supplier' },
+    },
+    ...over,
+  });
+  calls.other = [];
+  if (!ctx.onOtherSupplier) {
+    ctx.onOtherSupplier = async (line, supplierId) => { calls.other.push([line, supplierId]); };
+  }
+  return { ctx, calls };
+}
+
+test('the chooser lists the active suppliers by name, without the usual one, the switched-off one or «no supplier»', async () => {
+  const { ctx } = chooserCtx();
+  openList(ctx);
+  try {
+    await otherButton(cards()[0]).click();           // flour: usual supplier is Bruno
+    assert.ok(chooser(), 'the chooser is open over the list');
+    assert.deepEqual(choiceRows().map(r => r.textContent), ['Aldo', 'Zed']);
+    assert.equal(document.activeElement, chooserBack(), 'focus goes in, on Back');
+    assert.equal(chooser().getAttribute('role'), 'dialog');
+    assert.match(chooser().textContent, /Flour goes in the order of the supplier you choose, for this order only\. It stays with Bruno\./);
+    chooserBack().listeners.click[0]();
+  } finally { closeList(); }
+});
+
+test('Back returns to the list and writes nothing; Escape closes only the chooser', async () => {
+  const { ctx, calls } = chooserCtx();
+  openList(ctx);
+  try {
+    const button = otherButton(cards()[0]);
+    await button.click();
+    chooserBack().listeners.click[0]();
+    assert.equal(chooser(), undefined);
+    assert.ok(overlay(), 'the list is still there');
+    assert.equal(calls.other.length, 0);
+    assert.equal(calls.reorder.length, 0);
+    assert.equal(calls.resolve.length, 0);
+    assert.equal(document.activeElement, button, 'focus goes back to the button that opened it');
+
+    await button.click();
+    pressKey('Escape');
+    assert.equal(chooser(), undefined, 'the chooser took the Escape');
+    assert.ok(overlay(), 'the list did not');
+    assert.equal(calls.other.length, 0);
+  } finally { closeList(); }
+});
+
+test('choosing a supplier makes ONE call with the missing quantity, the record and that supplier', async () => {
+  const { ctx, calls } = chooserCtx();
+  openList(ctx);
+  try {
+    await otherButton(cards()[0]).click();
+    await choiceRows()[0].click();                   // Aldo
+    assert.equal(calls.other.length, 1);
+    assert.deepEqual(calls.other[0], [{ id: 'flour', qty: 5, recordId: '2026-09-29_aldo' }, 'aldo']);
+    assert.equal(chooser(), undefined, 'the chooser closes');
+    assert.equal(calls.reorder.length, 0, 'the usual «put back» is not used');
+    assert.equal(calls.resolve.length, 0, 'the resolve is part of the one callback, after the draft write');
+  } finally { closeList(); }
+});
+
+test('a line that froze a unit keeps it for the other supplier', async () => {
+  const { ctx, calls } = chooserCtx();
+  ctx.history[0].units = { flour: 'busta' };
+  openList(ctx);
+  try {
+    await otherButton(cards()[0]).click();
+    await choiceRows()[0].click();
+    assert.deepEqual(calls.other[0][0], { id: 'flour', qty: 5, unit: 'busta', recordId: '2026-09-29_aldo' });
+  } finally { closeList(); }
+});
+
+test('a quantity typed meanwhile is never overwritten: it is said, and nothing is written', async () => {
+  const { ctx, calls } = chooserCtx();
+  openList(ctx);
+  try {
+    await otherButton(cards()[0]).click();
+    ctx.entries.flour = { qty: 3 };
+    const pending = choiceRows()[0].click();
+    await tick();
+    assert.equal(calls.other.length, 0);
+    assert.match(dialogButton('app-dialog-backdrop').textContent, /already had a quantity/);
+    await dialogButton('app-dialog-btn-solid').click();
+    await pending;
+    chooserBack().listeners.click[0]();
+  } finally { closeList(); }
+});
+
+test('a failed draft write says «Not saved» and the card is usable again', async () => {
+  const { ctx } = chooserCtx({ onOtherSupplier: async () => { throw new Error('offline'); } });
+  openList(ctx);
+  try {
+    const card = cards()[0];
+    await otherButton(card).click();
+    const pending = choiceRows()[0].click();
+    await tick();
+    assert.match(dialogButton('app-dialog-backdrop').textContent, /Not saved/);
+    await dialogButton('app-dialog-btn-solid').click();
+    await pending;
+    assert.ok(walk(card).filter(n => n.tagName === 'BUTTON').every(b => !b.disabled));
+  } finally { closeList(); }
+});
+
+test('an ingredient with no usual supplier gets a hint WITHOUT the «stays with» sentence', async () => {
+  const { ctx } = chooserCtx();
+  openList(ctx);
+  try {
+    await otherButton(cards()[1]).click();           // yeast: no live usual supplier
+    const said = chooser().textContent;
+    assert.match(said, /Yeast goes in the order of the supplier you choose, for this order only\./);
+    assert.doesNotMatch(said, /stays with|No supplier/);
+    chooserBack().listeners.click[0]();
+  } finally { closeList(); }
+});
+
+test('no «another supplier» button where there is nobody to choose, or the ingredient cannot be seen', () => {
+  const cases = {
+    alone: { suppliersById: { bruno: { id: 'bruno', name: 'Bruno' } } },
+    gone: { ingredientsById: { yeast: { id: 'yeast', name: 'Yeast', supplierId: 'aldo' } } },
+    off: { ingredientsById: { flour: { id: 'flour', name: 'Flour', supplierId: 'bruno', active: false },
+      yeast: { id: 'yeast', name: 'Yeast', supplierId: 'aldo' } } },
+  };
+  for (const [label, over] of Object.entries(cases)) {
+    const { ctx } = chooserCtx(over);
+    openList(ctx);
+    try {
+      assert.equal(withClass('reorder-other', cards()[0]).length, 0, `${label}: flour has no other-supplier button`);
+      assert.equal(withClass('reorder-resolve', cards()[0]).length, 1, `${label}: «Resolved» stays`);
+    } finally { closeList(); }
+  }
+});
+
+test('the card is three full-width stacked buttons in the order put back, another supplier, resolved', () => {
+  const { ctx } = chooserCtx();
+  openList(ctx);
+  try {
+    const classes = walk(cards()[0]).filter(n => n.tagName === 'BUTTON').map(b => [...b.classList.set].join(' '));
+    assert.deepEqual(classes, ['btn-primary reorder-put', 'btn-secondary reorder-other', 'reorder-resolve']);
+  } finally { closeList(); }
+  const css = readFileSync(new URL('../orders.css', import.meta.url), 'utf8');
+  assert.match(css, /\.reorder-card \.reorder-put,\s*\.reorder-card \.reorder-other \{ width: 100%; min-height: 44px; \}/);
+  assert.match(css, /\.reorder-card \{\s*display: flex;\s*flex-direction: column;/);
+});
+
+test('moving a line writes the draft only — nothing is marked resolved — and a failed write is undone', () => {
+  const main = readFileSync(new URL('../js/orders/orders-main.js', import.meta.url), 'utf8');
+  const fn = main.slice(main.indexOf('onOtherSupplier: async'), main.indexOf('onResolve: async'));
+  assert.match(fn, /await saveDraftNow\(state\.entries, state\.days\)/);
+  assert.doesNotMatch(fn, /resolveMissing/);
+  assert.doesNotMatch(readFileSync(new URL('../js/i18n.js', import.meta.url), 'utf8'), /otherNotResolved/);
+  assert.match(fn, /supplierId,\s*\};/, 'the line carries the override');
+  assert.match(fn, /state\.days\[supplierId\] = todayISO\(\);/);
+  assert.match(fn, /catch \(err\) \{\s*if \(hadEntry\) state\.entries\[id\] = previousEntry; else delete state\.entries\[id\];/);
 });

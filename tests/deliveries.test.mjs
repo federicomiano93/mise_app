@@ -195,9 +195,11 @@ test('an earlier order does not clear it', () => {
   assert.equal(stillToReorder([missed(), earlier], {}).length, 1);
 });
 
-test('another supplier ordering the same ingredient does not clear it', () => {
+// Since «Ordina da un altro fornitore» (2 Oct 2026) the same ingredient id can be ordered from
+// another supplier, so a LATER order from any supplier counts as ordering it again.
+test('a later order for the same ingredient from another supplier clears it', () => {
   const other = order({ date: '2026-08-12', supplierId: 'noDays', quantities: { flour: 10 } });
-  assert.equal(stillToReorder([missed(), other], {}).length, 1);
+  assert.equal(stillToReorder([missed(), other], {}).length, 0);
 });
 
 // ⚠️ THIS IS WHY THE BANNER GOES QUIET AS SOON AS THE WORK IS DONE, rather than when

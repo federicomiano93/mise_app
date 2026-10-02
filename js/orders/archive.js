@@ -15,6 +15,7 @@ import { supplierLabel } from '../supplier-label.js';
 import { toISODate, addDays, isBefore } from './day.js';
 import { compareLabels } from './order-text.js';
 import { cleanUnit, sameUnit, lineUnit, entryUnit, recordUnit } from '../order-unit.js';
+import { overrideOf, cleanSupplierId } from './line-supplier.js';
 
 // A quantity, made safe: whole, never negative, never NaN — and never Infinity.
 //
@@ -176,6 +177,10 @@ export function quantityPathsFor(supplierIds, ingredients) {
         // The unit goes with the quantity: a cleared row starts again in the card's own
         // unit (the default), never in whatever the last order happened to use.
         paths.push(`entries.${ing.id}.unit`);
+        // ⚠️ AND THE OVERRIDE (line-supplier.js): it never outlives the quantity it
+        // redirects, or the next quantity typed for this ingredient would go to a supplier
+        // nobody chose this time.
+        paths.push(`entries.${ing.id}.supplierId`);
       });
     paths.push(`days.${supplierId}`);
   });
@@ -206,18 +211,31 @@ export function changedEntries(next, known) {
     const stock = num(entry?.stock);
     const unit = cleanUnit(entry?.unit);
     const beforeUnit = cleanUnit(before?.unit);
+    // The override only exists while there is a quantity (overrideOf), so a line taken to
+    // zero loses it in this same write.
+    const supplierTo = overrideOf(entry);
+    // ⚠️ THE STORED VALUE, RAW — not overrideOf(before), which is '' whenever the stored row has
+    // no quantity. A leftover {qty: 0, supplierId: 'X'} (an older phone typing 0 or running
+    // «start again», or a two-phone race) must still be seen and cleared, or the next quantity
+    // typed for this ingredient would revive it and file the line under X.
+    const beforeSupplierRaw = cleanSupplierId(before?.supplierId);
     // Merely LOOKING at a supplier materialises a blank row in memory, and an
     // all-zero row that the document never had says nothing worth storing.
     // (A row that EXISTS and is taken down to zero is a real change: `before`
     // is there, so it still goes.) A row that carries a unit is not blank.
     if (!before && qty === 0 && stock === 0 && !unit) return;
-    if (!before || num(before.qty) !== qty || num(before.stock) !== stock || beforeUnit !== unit) {
+    if (!before || num(before.qty) !== qty || num(before.stock) !== stock || beforeUnit !== unit
+      || beforeSupplierRaw !== supplierTo) {
       const row = { qty, stock };
       // ⚠️ `unit: ''` IS SENT ON PURPOSE when a row goes back to the card's unit: a merge
       // write never deletes a nested key, so omitting it would leave the old unit in the
       // document and the row would come back as «busta» on the next snapshot. An
       // ordinary entry (no unit on either side) keeps exactly {qty, stock}.
       if (unit || beforeUnit) row.unit = unit;
+      // ⚠️ THE SAME FOR THE OVERRIDE: `supplierId: ''` is sent when a line goes back to its
+      // usual supplier or to zero, because a merge write cannot delete a nested key. An
+      // ordinary line (no override on either side) keeps exactly {qty, stock}.
+      if (supplierTo || beforeSupplierRaw) row.supplierId = supplierTo;
       out[id] = row;
     }
   });
