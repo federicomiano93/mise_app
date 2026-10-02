@@ -27,18 +27,26 @@ export function isSingleLineInput(node) {
   return TEXT_LIKE_TYPES.includes(type);
 }
 
-// Gets the Done key: a single-line input with no enterkeyhint of its own.
-export function wantsDoneKey(node) {
-  return isSingleLineInput(node) && !node.getAttribute('enterkeyhint');
+function insideForm(node) {
+  return !!(typeof node.closest === 'function' ? node.closest('form') : node.form);
 }
 
-// Enter closes the keyboard only on a box showing «done», outside any <form>.
-export function shouldBlurOnEnter(node, event) {
+// Gets the Done key: a single-line input with no enterkeyhint of its own and
+// outside any <form>. In a form the browser's own key stays (Android shows
+// «Next» between fields, and Enter submitting a half-filled form is wrong).
+export function wantsDoneKey(node) {
+  return isSingleLineInput(node) && !node.getAttribute('enterkeyhint') && !insideForm(node);
+}
+
+// Enter closes the keyboard only on a box showing «done», outside any <form>,
+// and only on a touch device: with a hardware keyboard the focus must stay in
+// a search or quantity box. `coarse` is the answer to (pointer: coarse).
+export function shouldBlurOnEnter(node, event, coarse = true) {
+  if (!coarse) return false;
   if (!event || event.key !== 'Enter' || event.isComposing) return false;
   if (!isSingleLineInput(node)) return false;
   if (node.getAttribute('enterkeyhint') !== 'done') return false;
-  const inForm = typeof node.closest === 'function' ? node.closest('form') : node.form;
-  return !inForm;
+  return !insideForm(node);
 }
 
 function hint(node) {
@@ -58,12 +66,20 @@ export function hintTree(node) {
 // hint is also set as boxes are ADDED: one scan at install, then one observer
 // (childList + subtree, no attribute watching) that walks only the added nodes.
 // The focusin path stays as a backstop. `Observer` is injectable for tests.
-export function installKeyboardDone(doc, Observer = typeof MutationObserver !== 'undefined' ? MutationObserver : null) {
+export function isCoarsePointer(media = typeof matchMedia === 'function' ? matchMedia : null) {
+  try { return !!(media && media('(pointer: coarse)').matches); } catch { return false; }
+}
+
+export function installKeyboardDone(
+  doc,
+  Observer = typeof MutationObserver !== 'undefined' ? MutationObserver : null,
+  media = typeof matchMedia === 'function' ? matchMedia : null,
+) {
   if (!doc || typeof doc.addEventListener !== 'function') return;
   doc.addEventListener('focusin', (event) => hint(event.target));
   doc.addEventListener('keydown', (event) => {
     const node = event.target;
-    if (shouldBlurOnEnter(node, event)) node.blur();
+    if (shouldBlurOnEnter(node, event, isCoarsePointer(media))) node.blur();
   });
   if (typeof doc.querySelectorAll === 'function') {
     for (const input of doc.querySelectorAll('input')) hint(input);

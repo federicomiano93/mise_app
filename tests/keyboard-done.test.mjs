@@ -44,7 +44,8 @@ test('added boxes get the hint, nested ones too, textarea and next untouched', (
   assert.equal(next.getAttribute('enterkeyhint'), 'next');
 });
 
-const setup = () => { const d = fakeDoc(); installKeyboardDone(d); return d; };
+const touch = () => ({ matches: true });
+const setup = (media = touch) => { const d = fakeDoc(); installKeyboardDone(d, null, media); return d; };
 
 test('focus gives text, number and typeless inputs the done key', () => {
   const d = setup();
@@ -74,9 +75,31 @@ test('Enter blurs a done box outside a form', () => {
   assert.equal(n.blurred, 1);
 });
 
+test('a box inside a form gets no hint at all', () => {
+  const d = setup();
+  const n = fakeNode('input', { type: 'text' }, { inForm: true });
+  d.fire('focusin', n);
+  assert.equal(n.getAttribute('enterkeyhint'), null);
+});
+
+test('Enter blurs only on a touch device, never with a hardware keyboard', () => {
+  const mouse = setup(() => ({ matches: false }));
+  const a = fakeNode('input', { type: 'search' });
+  mouse.fire('focusin', a);
+  mouse.fire('keydown', a, { key: 'Enter' });
+  assert.equal(a.blurred, 0);
+  const asked = [];
+  const finger = setup((q) => { asked.push(q); return { matches: true }; });
+  const b = fakeNode('input', { type: 'search' });
+  finger.fire('focusin', b);
+  finger.fire('keydown', b, { key: 'Enter' });
+  assert.equal(b.blurred, 1);
+  assert.deepEqual(asked, ['(pointer: coarse)']);
+});
+
 test('Enter does nothing inside a form, while composing, on other keys, on next or textarea', () => {
   const d = setup();
-  const inForm = fakeNode('input', { type: 'text' }, { inForm: true });
+  const inForm = fakeNode('input', { type: 'text', enterkeyhint: 'done' }, { inForm: true });
   d.fire('focusin', inForm);
   d.fire('keydown', inForm, { key: 'Enter' });
   assert.equal(inForm.blurred, 0);
@@ -124,22 +147,42 @@ function walk(dir, out = []) {
   return out;
 }
 
+// Every type: 'number' match, bounded to ITS OWN object literal (balanced braces),
+// so a neighbouring input's inputmode in the same statement cannot satisfy it.
+// Returns the 1-based line of each one lacking an inputmode.
+export function numberInputsWithoutInputmode(src) {
+  const lacking = [];
+  const re = /type: ?'number'/g;
+  let m;
+  while ((m = re.exec(src))) {
+    let depth = 0; let start = -1;
+    for (let k = m.index; k >= 0; k -= 1) {
+      if (src[k] === '}') depth += 1;
+      else if (src[k] === '{') { if (depth === 0) { start = k; break; } depth -= 1; }
+    }
+    let end = src.length; depth = 0;
+    for (let k = start; k < src.length; k += 1) {
+      if (src[k] === '{') depth += 1;
+      else if (src[k] === '}') { depth -= 1; if (depth === 0) { end = k; break; } }
+    }
+    const literal = src.slice(start, end + 1);
+    // calculator-render sets attrs.inputmode right after `const attrs = {…}`.
+    const viaAttrs = /const attrs = \{$/.test(src.slice(Math.max(0, start - 14), start + 1))
+      && /attrs\.inputmode =/.test(src.slice(end, end + 300));
+    if (!/\binputmode\b/.test(literal) && !viaAttrs) lacking.push(src.slice(0, m.index).split('\n').length);
+  }
+  return lacking;
+}
+
+test('the inputmode guard catches a first input whose neighbour has the inputmode', () => {
+  const crafted = "a(el('input', { type: 'number', min: '0' }), el('input', { type: 'number', inputmode: 'numeric' }));";
+  assert.equal(numberInputsWithoutInputmode(crafted).length, 1);
+});
+
 test('every number input built in js/ declares an inputmode', () => {
   const bad = [];
   for (const file of walk('js')) {
-    const src = read(file);
-    const re = /type: ?'number'/g;
-    let m;
-    while ((m = re.exec(src))) {
-      // The props object of this input: from the opening of el('input', { to its close.
-      const start = src.lastIndexOf('{', m.index);
-      const end = src.indexOf('});', m.index);
-      const block = src.slice(Math.max(0, start), end < 0 ? m.index + 600 : end);
-      const wide = src.slice(Math.max(0, m.index - 300), m.index + 700);
-      if (!/inputmode/.test(block) && !/attrs\.inputmode/.test(wide)) {
-        bad.push(`${file}:${src.slice(0, m.index).split('\n').length}`);
-      }
-    }
+    for (const line of numberInputsWithoutInputmode(read(file))) bad.push(`${file}:${line}`);
   }
   assert.deepEqual(bad, []);
 });
