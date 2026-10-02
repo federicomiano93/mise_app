@@ -108,13 +108,26 @@ export function itemsPerOrderedUnit(ingredient) {
 
 // The net cost of ONE item, from the stored price and the card's weight; null when that cannot be
 // known (a per-kilo rate with no simple weight, or a pieces price on a multiplier text).
+// ⚠️ A PIECE THAT IS NOT THE ITEM (4th review, 2 Oct 2026): eggs priced 0.25 a piece, remembered as 60 g each,
+// on a card whose weight is the 360 g tray. One item of the carton is the TRAY, and 0.25 is one egg: how many
+// eggs a tray holds is written nowhere. A per-piece rate (no stored case) that remembers a piece weight
+// different from the card's readable weight is therefore NOT the price of one item — a carton card gets no
+// number from it (refuse rather than guess), and is not handed to the old reading either, which would price
+// the whole carton as one egg.
+export function pieceIsNotItem(ingredient, price) {
+  if (!price || price.priceUnit !== 'pcs' || storedCaseOf(price)) return false;
+  const pieceKg = positiveNumber(price.unitWeightKg);
+  const base = packBaseOf(String((ingredient && ingredient.weight) || ''));
+  return pieceKg !== null && base !== null && Math.abs(base.size - pieceKg) > 1e-9;
+}
+
 export function costPerItem(ingredient, price) {
   const wholeCase = storedCaseOf(price);
   if (wholeCase) return wholeCase.casePrice / wholeCase.caseCount;
   const rate = positiveNumber(price && price.pricePerUnit);
   if (rate === null || !isPriceUnit(price.priceUnit)) return null;
   const packText = String((ingredient && ingredient.weight) || '');
-  if (price.priceUnit === 'pcs') return MULTIPLIER.test(packText) ? null : rate;
+  if (price.priceUnit === 'pcs') return MULTIPLIER.test(packText) || pieceIsNotItem(ingredient, price) ? null : rate;
   const base = packBaseOf(packText);
   return base ? rate * base.size : null;
 }
@@ -126,6 +139,7 @@ export function unitCost(ingredient, price) {
   const orderUnit = String((ingredient && ingredient.unit) || '').trim().toLowerCase().replace(/\.$/, '');
   // Ordered by weight, the quantity IS kilos or litres: that was never about the case.
   if (Object.prototype.hasOwnProperty.call(WEIGHT_UNITS, orderUnit)) return legacyUnitCost(ingredient, price);
+  if (pieceIsNotItem(ingredient, price)) return null;
   const each = costPerItem(ingredient, price);
   return each === null ? legacyUnitCost(ingredient, price) : each * items;
 }

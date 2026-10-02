@@ -41,6 +41,35 @@ export function isCartonWord(word) {
   return CARTON_WORDS.has(cleanUnit(word).toLowerCase().replace(/\.$/, ''));
 }
 
+// ── Which card opens: the new one, or the one of before (reduced scope, 2 Oct 2026) ──
+// ⚠️ FOUR DEEP REVIEWS EACH FOUND ANOTHER OLD PRICE SHAPE THAT THE NEW CARD MISREAD INTO WRONG MONEY. A
+// read-only count of production (2 Oct 2026) found that only a few shapes exist: no price, a plain rate
+// per kg / l / piece, and one 'pack' case ordered by the whole case. So the new card is for those (and
+// for what it writes itself); EVERY OTHER STORED PRICE OPENS THE CARD OF BEFORE — «Unità d'ordine» and
+// «A cartone», exactly as on main, which the regression grid proves the readers still read as they did.
+// `item` is the ingredient with its price merged in (withPrices), read by somebody who may see money; an
+// employee never sees a price, so the caller never asks for them (their card has no price to misread).
+// true = the card of before. In order:
+//   packCount present                                   → new card (only the new card writes it)
+//   a stored case by an explicit size (kg, g, l, ml)     → before
+//   a stored case of pieces                              → before (the new card writes these only WITH packCount)
+//   a stored case of packages, ordered by anything but the whole case ('' or a carton word) → before
+//   a rate on a weight text that does not read («6x1kg», «sacco») → before
+//   anything else                                        → new card
+export function usesLegacyCard(item) {
+  const it = item || {};
+  if (wholeCount(it.packCount) !== null) return false;
+  const stored = storedCaseOf(it);
+  if (stored) {
+    if (stored.caseItemUnit !== 'pack') return true;
+    const unit = cleanUnit(it.unit);
+    return !(unit === '' || isCartonWord(unit));
+  }
+  const priced = Number(it.pricePerUnit) > 0;
+  const weight = typeof it.weight === 'string' ? it.weight.trim() : '';
+  return priced && weight !== '' && packBaseOf(weight) === null;
+}
+
 // The count the rules accept (firestore.rules ingredients.packCount): a whole number 1–10000.
 export const PACK_COUNT_MAX = 10000;
 
@@ -107,11 +136,23 @@ export function formatTouched(before, form) {
 // ⚠️ packUnit is written only when there is a word to say, or one is stored to clear — never
 // a blank key on an item that never had one.
 // ⚠️ `force` is for a price typed (or «Ricalcola») under Cartone: the case is then written PER ITEM with
-// the count, so the product data must say the same thing — packCount, the inner word and the carton
-// word — exactly as if the format had been touched (2nd review: a bare price retyped on a live 'pack'
-// carton converted the case but never wrote packCount, and the bag lines lost their price).
+// the count, so the product data must say the same thing — packCount and the inner word — exactly as if
+// the format had been touched (2nd review: a bare price retyped on a live 'pack' carton converted the
+// case but never wrote packCount, and the bag lines lost their price).
+// ⚠️⚠️ BUT A PRICE NEVER MOVES THE ORDER UNIT (4th review, 2 Oct 2026): a price-only edit wrote the carton
+// word over `kg` / `pz`, and the month's counted kilos were re-read as cartons. With the format untouched
+// `unit` stays exactly as stored: '' or a carton word already read «the whole case», and a weight or piece
+// word keeps its own reading (order-cost.js unitCost).
 export function formatPatch(before, form, { force = false } = {}) {
-  if (!formatTouched(before, form) && !(force && form.kind === 'carton')) return {};
+  const touched = formatTouched(before, form);
+  if (!touched && !(force && form.kind === 'carton')) return {};
+  if (!touched) {
+    const inner = cleanUnit(form.inner);
+    return {
+      packCount: parseCount(form.count),
+      ...(inner || cleanUnit(before.packUnit) ? { packUnit: inner } : {}),
+    };
+  }
   if (form.kind === 'carton') {
     const inner = cleanUnit(form.inner);
     return {

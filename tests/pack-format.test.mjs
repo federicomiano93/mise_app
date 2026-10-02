@@ -13,6 +13,7 @@ import assert from 'node:assert/strict';
 
 import {
   formatOf, formatTouched, formatPatch, formatSummary, formatChanged, isCartonWord, parseCount, looseUnit,
+  usesLegacyCard,
 } from '../js/pack-format.js';
 import {
   pricePatch, priceChanged, storedPriceInput, PRICE_FIELDS, storedCaseOf,
@@ -352,12 +353,60 @@ test('review 3b: a package word as the unit, with no packCount, is a Singola wha
 test('review 2: force writes the full carton format even when the format was not touched; never for a Singola', () => {
   const before = beforeOf(PACK_CASE);
   assert.deepEqual(formatPatch(before, formOf(before)), {}, 'untouched, no price typed: nothing');
-  assert.deepEqual(formatPatch(before, formOf(before), { force: true }), { packCount: 4, packUnit: 'busta', unit: 'cartone' });
+  assert.deepEqual(formatPatch(before, formOf(before), { force: true }), { packCount: 4, packUnit: 'busta' });
   const single = beforeOf(TYPED_SACK);
   assert.deepEqual(formatPatch(single, formOf(single), { force: true }), {}, 'a price typed under Singola adds no format keys');
-  // a carton word already stored is kept
+  // a carton word already stored is kept — by not being written at all
   const cassa = beforeOf({ ...PACK_CASE, unit: 'cassa' });
-  assert.equal(formatPatch(cassa, formOf(cassa), { force: true }).unit, 'cassa');
+  assert.equal('unit' in formatPatch(cassa, formOf(cassa), { force: true }), false);
+});
+
+// ── 4th deep review (2 Oct 2026) and the reduced scope ───────────────────────
+
+test('4th review 1: a price-only edit never writes the order unit', () => {
+  // the 'pack' case ordered with NO unit (the one case in production): '' already reads «the whole case»
+  const noUnit = { ...PACK_CASE, unit: '' };
+  const before = beforeOf(noUnit);
+  assert.equal(before.kind, 'carton');
+  assert.deepEqual(formatPatch(before, formOf(before), { force: true }), { packCount: 4, packUnit: 'busta' });
+  // a legacy unit choice ordered by a carton word, no case: the count typed IS a touch, and the word is kept
+  const choice = beforeOf({ unit: 'cartone', packUnit: 'busta', priceUnit: 'kg', pricePerUnit: 2, weight: '2.5kg' });
+  assert.deepEqual(formatPatch(choice, formOf(choice, { count: 6 }), { force: true }), { packCount: 6, packUnit: 'busta', unit: 'cartone' });
+  // a format the PERSON moved still writes the carton word over a weight unit (that line is frozen in kg)
+  const kgSingle = beforeOf({ unit: 'kg', weight: '2.5kg', priceUnit: 'kg', pricePerUnit: 2 });
+  assert.equal(formatPatch(kgSingle, formOf(kgSingle, { kind: 'carton', count: 4, inner: 'busta' })).unit, 'cartone');
+});
+
+test('reduced scope: only the shapes found in production open the new card', () => {
+  const legacy = (item) => usesLegacyCard(item);
+  // the new card
+  assert.equal(legacy({}), false, 'a new item');
+  assert.equal(legacy({ weight: '25kg', unit: 'sacco' }), false, 'no price');
+  assert.equal(legacy(TYPED_KG), false, 'a rate per kilo, no weight');
+  assert.equal(legacy(TYPED_SACK), false, 'a rate per kilo on a readable weight');
+  assert.equal(legacy({ weight: '1l', priceUnit: 'l', pricePerUnit: 3 }), false, 'a rate per litre');
+  assert.equal(legacy({ weight: '60g', priceUnit: 'pcs', pricePerUnit: 0.25 }), false, 'per piece, no piece weight');
+  assert.equal(legacy({ weight: '60g', priceUnit: 'pcs', pricePerUnit: 0.25, unitWeightKg: 0.06 }), false, 'per piece = the weight');
+  assert.equal(legacy({ weight: '360g', priceUnit: 'pcs', pricePerUnit: 0.25, unitWeightKg: 0.06 }), false, 'eggs: own piece weight, today\'s typed form');
+  assert.equal(legacy(TYPED_PIECE), false, 'per piece with a piece weight and no weight');
+  assert.equal(legacy({ ...PACK_CASE, unit: '' }), false, 'a pack case ordered with no unit (Zucchero di canna)');
+  assert.equal(legacy(PACK_CASE), false, 'a pack case ordered by the carton');
+  assert.equal(legacy({ ...PACK_CASE, unit: 'Cassa' }), false, 'any carton word');
+  assert.equal(legacy({ ...PIECES_CASE, packCount: 50 }), false, 'what the new card writes for a Cartone');
+  assert.equal(legacy({ ...LEGACY_KG_CASE, packCount: 4 }), false, 'packCount wins: only the new card writes it');
+  // the card of before
+  assert.equal(legacy(LEGACY_KG_CASE), true, 'a case by an explicit size');
+  assert.equal(legacy(LEGACY_G_CASE), true, 'grams');
+  assert.equal(legacy(PIECES_CASE), true, 'a case of pieces with no packCount');
+  assert.equal(legacy({ ...PACK_CASE, unit: 'kg' }), true, 'a pack case ordered by weight');
+  assert.equal(legacy({ ...PACK_CASE, unit: 'busta' }), true, 'a pack case ordered by the package');
+  assert.equal(legacy({ ...PACK_CASE, unit: 'pz' }), true, 'a pack case ordered by the piece');
+  assert.equal(legacy({ weight: '6x1kg', priceUnit: 'kg', pricePerUnit: 2 }), true, 'a rate on a multiplier weight');
+  assert.equal(legacy({ weight: 'sacco', priceUnit: 'pcs', pricePerUnit: 2 }), true, 'a rate on a word');
+  // a weight that does not read, with no price, is no money to misread
+  assert.equal(legacy({ weight: '6x1kg' }), false);
+  // a case that no longer matches its rate is stale: storedCaseOf ignores it, and so does this
+  assert.equal(legacy({ ...LEGACY_KG_CASE, pricePerUnit: 3 }), false);
 });
 
 test('3rd review 1: a per-piece price never flags its weight (own piece weight ≠ pack weight is normal)', () => {

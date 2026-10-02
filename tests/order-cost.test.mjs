@@ -151,7 +151,7 @@ test('weight words are read in the forms people type, in both languages', () => 
 // section; the frozen case then no longer matches. The readers therefore compute from what the card
 // says NOW: cost of ONE item × the items in one ORDERED unit (packCount for the carton word, 1 for
 // the package word). Items with no packCount are priced exactly as before (readers-regression-grid).
-import { itemsPerOrderedUnit, validPackCount, costPerItem } from '../js/order-cost.js';
+import { itemsPerOrderedUnit, validPackCount, costPerItem, lineUnitCost } from '../js/order-cost.js';
 
 const CARTON_CARD = { unit: 'cartone', packUnit: 'busta', packCount: 4, weight: '2.5kg' };
 
@@ -185,6 +185,22 @@ test('3 a legacy «6x1kg» weight with packCount 6 is NOT multiplied twice: 12, 
   assert.equal(unitCost(card, { priceUnit: 'pcs', pricePerUnit: 0.4 }), null);
   // «sacco» is no weight either
   assert.equal(unitCost({ ...card, weight: 'sacco' }, { priceUnit: 'kg', pricePerUnit: 2 }), null);
+});
+
+test('4th review 3: a piece that is not the item (eggs on a 360 g tray) has no carton price', () => {
+  const eggs = { priceUnit: 'pcs', pricePerUnit: 0.25, unitWeightKg: 0.06 };
+  const card = { unit: 'cartone', packUnit: 'vaschetta', packCount: 10, weight: '360g' };
+  assert.equal(costPerItem(card, eggs), null, 'one tray is not one egg');
+  assert.equal(unitCost(card, eggs), null);
+  assert.equal(lineUnitCost(card, eggs, 'vaschetta'), null);
+  // the piece IS the item when the price remembers the card's own weight, or no weight at all
+  assert.equal(unitCost({ ...card, weight: '60g' }, eggs), 2.5);
+  assert.equal(unitCost(card, { priceUnit: 'pcs', pricePerUnit: 0.25 }), 2.5);
+  assert.equal(unitCost({ ...card, weight: '' }, eggs), 2.5, 'no weight on the card: the piece is the item');
+  // litres read 1:1 as kilos
+  assert.equal(unitCost({ ...card, weight: '750ml' }, { priceUnit: 'pcs', pricePerUnit: 3, unitWeightKg: 0.75 }), 30);
+  // and an item with NO packCount reads exactly as before
+  assert.equal(unitCost({ unit: 'vaschetta', weight: '360g' }, eggs), 0.25);
 });
 
 test('a per-kilo rate × one item\'s weight × the items in the unit', () => {

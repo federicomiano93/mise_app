@@ -38,7 +38,7 @@ import {
 // «Confezione: Singola | Cartone» — what an ingredient comes in, read from what is stored and
 // written back ONLY when a person moved it (js/pack-format.js, pure).
 import {
-  formatOf, formatTouched, formatPatch, formatSummary, formatChanged, looseUnit, parseCount,
+  formatOf, formatTouched, formatPatch, formatSummary, formatChanged, looseUnit, parseCount, isCartonWord,
 } from './pack-format.js';
 // The purchase-VAT choices for the venue's country — the SAME menu
 // js/foodcost/foodcost-model.js offers for a product's selling price; moved to
@@ -1619,9 +1619,14 @@ export function buildIngredientForm({
       // no feature code, so it only says what it replaced (draft.js freezeUnitInDraft does the rest).
       // An item saved with NO unit (every new Singola) meant «one item» per untouched line — which is one
       // package: the package word the card now writes is what to freeze there.
+      // ⚠️ EXCEPT AN EMPTY UNIT ON A CARD THAT OPENED AS A CARTONE (4th review, 2 Oct 2026): there '' already
+      // meant «the whole case» (a stored case ordered with no unit), so the carton word now written means the
+      // same thing and nothing is frozen — freezing the package word would turn «1» case into «1 busta».
       let replacedUnit = '';
       if (item && 'unit' in payload && !sameUnit(payload.unit, item.unit)) {
-        replacedUnit = cleanUnit(item.unit) || cleanUnit('packUnit' in payload ? payload.packUnit : item.packUnit);
+        const wasWholeCase = cleanUnit(item.unit) === '' && opened.kind === 'carton' && isCartonWord(payload.unit);
+        replacedUnit = wasWholeCase ? ''
+          : cleanUnit(item.unit) || cleanUnit('packUnit' in payload ? payload.packUnit : item.packUnit);
       }
       await actions.saveIngredient(item?.id || null, payload, record, mayPrice, replacedUnit ? { unitChangedFrom: replacedUnit } : undefined);
       onDone?.();
