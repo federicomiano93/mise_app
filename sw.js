@@ -1,4 +1,4 @@
-const CACHE_NAME = 'theitalianclub-v509';
+const CACHE_NAME = 'theitalianclub-v503';
 // Firebase SDK modules (loaded from gstatic) are cached SEPARATELY from CACHE_NAME
 // so they survive the cache-version bump that happens on every deploy — otherwise
 // the offline SDK would be wiped each release until the next online load. The name
@@ -12,7 +12,7 @@ const CACHE_NAME = 'theitalianclub-v509';
 // the fetch handler below, on the first load that has a network.
 // So between activate() and that first load, a phone that is OFFLINE cannot boot:
 // the code asks for 12.18.0 and nothing has it. In practice the window is very
-// small — activate() only happens after a successful 274-file precache, i.e.
+// small — activate() only happens after a successful 273-file precache, i.e.
 // online, and tapping the update banner reloads the page immediately — but it is
 // not zero, and it is the reason to bump the SDK deliberately rather than often.
 // Leaving the name unchanged would close the window and cost ~1 MB of dead
@@ -313,7 +313,6 @@ const ASSETS = [
   './js/catalogue/print-transports.js',
   './js/catalogue/ingredient-picker.js',
   './js/ingredient-create.js',
-  './js/ingredient-edit-model.js',
   './js/catalogue/ingredient-suggest.js',
   './js/catalogue/firebase-catalogue.js',
   './js/catalogue/catalogue-store.js',
@@ -402,7 +401,7 @@ const ASSET_HASHES = {
   "./install-guide.html": '155cc21e1c1dc524',
   "./qr.png": '761a95e5bc25e2ba',
   "./js/install-guide.js": '17fcd0c0fec489c2',
-  "./tokens.css": '0ce265ae92fad535',
+  "./tokens.css": '15a90c6c1535077b',
   "./auth.css": 'e4ba63eda208115b',
   "./style.css": '011704cc77f2029b',
   "./orders.css": 'b93b622b3a9c2b78',
@@ -601,7 +600,6 @@ const ASSET_HASHES = {
   "./js/catalogue/print-transports.js": '088f68d76249710f',
   "./js/catalogue/ingredient-picker.js": 'a8eef2afe961e8a2',
   "./js/ingredient-create.js": '4a77e51e8bffb44d',
-  "./js/ingredient-edit-model.js": '75b571a45585a715',
   "./js/catalogue/ingredient-suggest.js": '70f26e512587e448',
   "./js/catalogue/firebase-catalogue.js": '4a56f24592f377c5',
   "./js/catalogue/catalogue-store.js": '32d3ef5ccfb6da26',
@@ -697,7 +695,7 @@ const ASSET_HASHES = {
 // code against rules that deployed instantly, which is the very thing the gate exists
 // to prevent. Two things stand between that and a release: the test that every ASSETS
 // entry EXISTS (a mistyped path being the likeliest permanent cause), and this
-// project's post-deploy sweep, which already asks the live site for all 274 files.
+// project's post-deploy sweep, which already asks the live site for all 273 files.
 // ⚠️ NEITHER covers a device-specific failure — nobody has yet confirmed an update
 // landing on a real iPhone under this code.
 //

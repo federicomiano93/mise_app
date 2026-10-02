@@ -391,12 +391,15 @@ input:is([type="number"], [inputmode="decimal"], [inputmode="numeric"]) {
     border: 1px solid var(--border);
     border-radius: var(--radius);
   }
-  /* A level opened in the pane fills it and scrolls by itself (.mgmt-scroll). */
+  /* A level opened in the pane fills it and scrolls by itself (.mgmt-scroll).
+     ⚠️ ITS GROUND IS THE PANE'S, NEVER TRANSPARENT (2 Oct 2026): levels STACK in the pane (a supplier,
+     then one of its ingredients on top), and a see-through top level showed the one under it — two titles
+     printed over each other in the head, the supplier's rows between the card's sections. */
   .app-split-pane > .mgmt-overlay {
     position: absolute;
     inset: 0;
     z-index: auto;
-    background: transparent;
+    background: var(--bg);
   }
   /* The green bar is the PAGE's; inside a light card the same header reads as a
      quiet head: light ground, dark title, the rim buttons repainted for it. */
