@@ -146,43 +146,76 @@ test('weight words are read in the forms people type, in both languages', () => 
   assert.equal(unitCost({ weight: '', unit: 'litri' }, { priceUnit: 'l', pricePerUnit: 1.2 }), 1.2);
 });
 
-// ── «Cartone» saved by the card (1 Oct 2026): packCount, and a weight that is ONE item's ──
-import { packsPerUnit } from '../js/order-cost.js';
+// ── «Cartone» (1 Oct 2026, review): current product data × the stored cost of ONE item ──────────
+// An employee can change the count, the package word or the weight from a screen with no price
+// section; the frozen case then no longer matches. The readers therefore compute from what the card
+// says NOW: cost of ONE item × the items in one ORDERED unit (packCount for the carton word, 1 for
+// the package word). Items with no packCount are priced exactly as before (readers-regression-grid).
+import { itemsPerOrderedUnit, validPackCount, costPerItem } from '../js/order-cost.js';
 
-test('a carton card prices a carton, not one busta: the weight text is one item\'s', () => {
-  const carton = { unit: 'cartone', packUnit: 'busta', packCount: 4, weight: '2.5kg' };
-  const perKg = { priceUnit: 'kg', pricePerUnit: 2 };
-  assert.equal(unitCost(carton, perKg), 20, '4 × 2.5 kg at 2 a kilo');
-  assert.equal(packsPerUnit(carton), 4);
-  // ordered in the package word itself: one busta
-  assert.equal(unitCost({ ...carton, unit: 'busta', packUnit: 'busta' }, perKg), 5);
-  assert.equal(packsPerUnit({ ...carton, unit: 'Busta' }), 1, 'the package word is matched ignoring case');
+const CARTON_CARD = { unit: 'cartone', packUnit: 'busta', packCount: 4, weight: '2.5kg' };
+
+test('2(a) a one-pack case of 5 turned into a carton of 4 costs 20, not 5', () => {
+  const oneBag = { priceUnit: 'kg', pricePerUnit: 2, casePrice: 5, caseCount: 1, caseItemSize: 2.5, caseItemUnit: 'pack' };
+  assert.equal(unitCost(CARTON_CARD, oneBag), 20);
+  assert.equal(unitCost({ ...CARTON_CARD, unit: 'busta' }, oneBag), 5, 'and one busta is still 5');
 });
 
-test('without a packCount nothing changed: the weight is the whole pack', () => {
-  const old = { unit: 'cartone', packUnit: 'busta', weight: '2.5kg' };
-  assert.equal(unitCost(old, { priceUnit: 'kg', pricePerUnit: 2 }), 5);
-  assert.equal(packsPerUnit(old), 1);
-  for (const packCount of [0, -1, 2.5, '4', null, undefined]) {
-    assert.equal(packsPerUnit({ ...old, packCount }), 1, String(packCount));
-  }
-  assert.equal(unitCost({ unit: 'sacco', weight: '25kg' }, { priceUnit: 'kg', pricePerUnit: 0.8 }), 20);
+test('2(b) a pack case of 4 turned into a Singola prices one bag as 5, not the whole 20', () => {
+  const packCase = { priceUnit: 'kg', pricePerUnit: 2, casePrice: 20, caseCount: 4, caseItemSize: 2.5, caseItemUnit: 'pack' };
+  // what the card writes for Singola after Cartone: no packCount, the carton word replaced by the package word
+  const single = { unit: 'busta', packUnit: 'busta', weight: '2.5kg' };
+  assert.equal(unitCost(single, packCase), 5);
+  // the carton itself is unchanged
+  assert.equal(unitCost(CARTON_CARD, packCase), 20);
 });
 
-test('ordering by weight on a carton card is still a plain rate × kilos', () => {
-  const carton = { unit: 'kg', packUnit: 'busta', packCount: 4, weight: '2.5kg' };
-  assert.equal(unitCost(carton, { priceUnit: 'kg', pricePerUnit: 2 }), 2);
-});
-
-test('a stored case of PIECES whose count is the card\'s packCount counts as a case of packages', () => {
+test('2(c) a typed 0.40 a piece turned into a carton of 50 costs 20, not 0.40', () => {
+  const perPiece = { priceUnit: 'pcs', pricePerUnit: 0.4 };
   const card = { unit: 'cartone', packUnit: 'pezzo', packCount: 50, weight: '' };
-  const price = { priceUnit: 'pcs', pricePerUnit: 0.4, casePrice: 20, caseCount: 50, caseItemUnit: 'pcs' };
-  assert.equal(unitCost(card, price), 20, 'the carton');
-  assert.equal(unitCost({ ...card, unit: 'pezzo' }, price), 0.4, 'one pezzo');
-  assert.equal(unitCost({ ...card, unit: 'pz' }, price), 0.4, 'a piece word');
-  // a DIFFERENT packCount is not the case that was priced: the package word stays ambiguous
-  assert.equal(unitCost({ ...card, packCount: 40, unit: 'busta', packUnit: 'busta' }, price), null);
-  // and the busta of a pieces case is NOT a piece when the card says nothing about it
-  const nothing = { unit: 'busta', packUnit: 'busta', weight: '' };
-  assert.equal(unitCost(nothing, price), null);
+  assert.equal(unitCost(card, perPiece), 20);
+  assert.equal(unitCost({ ...card, unit: 'pezzo' }, perPiece), 0.4);
+});
+
+test('3 a legacy «6x1kg» weight with packCount 6 is NOT multiplied twice: 12, not 72', () => {
+  const card = { unit: 'cartone', packUnit: 'busta', packCount: 6, weight: '6x1kg' };
+  assert.equal(unitCost(card, { priceUnit: 'kg', pricePerUnit: 2 }), 12);
+  assert.equal(costPerItem(card, { priceUnit: 'kg', pricePerUnit: 2 }), null, 'one item\'s weight is unknown');
+  // a pieces rate on a multiplier text stays ambiguous, as it always was
+  assert.equal(unitCost(card, { priceUnit: 'pcs', pricePerUnit: 0.4 }), null);
+  // «sacco» is no weight either
+  assert.equal(unitCost({ ...card, weight: 'sacco' }, { priceUnit: 'kg', pricePerUnit: 2 }), null);
+});
+
+test('a per-kilo rate × one item\'s weight × the items in the unit', () => {
+  const perKg = { priceUnit: 'kg', pricePerUnit: 2 };
+  assert.equal(unitCost(CARTON_CARD, perKg), 20, '2 a kilo × 2.5 kg × 4');
+  assert.equal(unitCost({ ...CARTON_CARD, unit: 'busta' }, perKg), 5);
+  assert.equal(unitCost({ ...CARTON_CARD, weight: '500g' }, perKg), 4, 'grams read as thousandths of a kilo');
+  assert.equal(unitCost({ ...CARTON_CARD, unit: 'kg' }, perKg), 2, 'ordered by weight it is still the plain rate');
+});
+
+test('a case of pieces, priced per item, follows the count the card says now', () => {
+  const pcsCase = { priceUnit: 'pcs', pricePerUnit: 0.4, casePrice: 20, caseCount: 50, caseItemUnit: 'pcs' };
+  const card = { unit: 'cartone', packUnit: 'pezzo', packCount: 40, weight: '' };
+  assert.equal(unitCost(card, pcsCase), 16, '40 × 0.40 — not the 20 the old 50 cost');
+  assert.equal(unitCost({ ...card, packCount: 50 }, pcsCase), 20);
+});
+
+test('itemsPerOrderedUnit: the carton word counts packCount, the package or a piece word counts one, no packCount is null', () => {
+  assert.equal(itemsPerOrderedUnit(CARTON_CARD), 4);
+  assert.equal(itemsPerOrderedUnit({ ...CARTON_CARD, unit: 'Busta' }), 1);
+  assert.equal(itemsPerOrderedUnit({ ...CARTON_CARD, unit: 'pz' }), 1);
+  assert.equal(itemsPerOrderedUnit({ unit: 'cartone', packUnit: 'busta' }), null);
+  for (const packCount of [0, -1, 2.5, '4', null, undefined, NaN]) {
+    assert.equal(validPackCount({ packCount }), null, String(packCount));
+  }
+});
+
+test('the per-item price storage (pcs rate + piece weight) prices every way', () => {
+  // an egg at 0.25 a piece, 60 g: a carton of 30 costs 7.50; one egg 0.25; per kilo it is 4.1667
+  const egg = { priceUnit: 'pcs', pricePerUnit: 0.25, unitWeightKg: 0.06 };
+  const card = { unit: 'cartone', packUnit: 'uovo', packCount: 30, weight: '60g' };
+  assert.equal(unitCost(card, egg), 7.5);
+  assert.equal(unitCost({ ...card, unit: 'uovo' }, egg), 0.25);
 });

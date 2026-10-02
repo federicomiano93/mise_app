@@ -1,3 +1,4 @@
+// legacy-inventory-value.mjs — FROZEN COPY of js/inventory/inventory-value.js on main before «Cartone». See legacy-order-cost.mjs.
 // inventory-value.js — what a month's consumption was worth.
 //
 // PURE. It imports only js/price-model.js, which lives in js/ root precisely
@@ -17,17 +18,17 @@
 // are. No number is ever invented. A guessed pack weight would not look wrong on
 // the screen; it would just make the month's cost wrong.
 
-import { pricePerKg, formatMoney, roundTo, storedCaseOf, packWeightOf } from '../price-model.js';
+import { pricePerKg, formatMoney, roundTo, storedCaseOf } from '../../js/price-model.js';
 // ⚠️ THE SAME unitCost() ORDERS USES, for a product priced per case: the stocktake counts in the
 // ORDER unit, so what one counted unit costs must be decided by the one function that already
 // reads that unit — two copies of the rule could only ever disagree.
-import { unitCost, itemsPerOrderedUnit } from '../order-cost.js';
+import { unitCost } from './legacy-order-cost.mjs';
 // ⚠️ MOVED TO js/pack-size.js (29 Sep 2026): js/order-cost.js needs the exact
 // same reading of "how many kilos does one pack hold", and a calculation
 // shared by more than one feature belongs in js/ root (CLAUDE.md "Modular by
 // feature"), not inside this one's folder. Re-exported so every EXISTING
 // import of parsePackSize from this file keeps working.
-import { parsePackSize } from '../pack-size.js';
+import { parsePackSize } from '../../js/pack-size.js';
 
 export { parsePackSize };
 
@@ -47,13 +48,7 @@ export function packKgFor(month, ingredient, closed = false) {
   const stored = month && month.packKg ? Number(month.packKg[id]) : NaN;
   if (Number.isFinite(stored) && stored > 0) return round3(stored);
   if (closed) return null;
-  const kg = parsePackSize(ingredient && ingredient.weight);
-  // ⚠️ A CARTON'S WEIGHT IS ONE ITEM'S (1 Oct 2026): counted in cartoni, the stocktake's pack is
-  // packCount of them. Only for a SIMPLE readable weight — «6x1kg» or «sacco» keep today's reading of
-  // the whole ordered unit and are never multiplied (that was the ×6-twice defect).
-  const items = itemsPerOrderedUnit(ingredient);
-  if (items !== null && kg !== null && packWeightOf(ingredient.weight)) return kg * items;
-  return kg;
+  return parsePackSize(ingredient && ingredient.weight);
 }
 
 // What one pack of this costs.
@@ -95,11 +90,6 @@ export function packPrice(month, ingredient, closed) {
   }
 
   if (ingredient && ingredient.priceUnit === 'pcs') {
-    // A carton card counts cartons: the price of one is the per-item rate × the items in it.
-    if (itemsPerOrderedUnit(ingredient) !== null) {
-      const viaCard = unitCost(ingredient, ingredient);
-      if (viaCard !== null) return round3(viaCard);
-    }
     const each = Number(ingredient.pricePerUnit);
     return Number.isFinite(each) && each > 0 ? round3(each) : null;
   }
