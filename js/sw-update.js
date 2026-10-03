@@ -32,7 +32,7 @@
 // foreground (the case that matters for an installed PWA on a phone), and on a
 // slow interval as a fallback for a tablet left open all day.
 
-import { t } from './i18n.js';
+import { t, onLanguageChange } from './i18n.js';
 import {
   updateGateState, isBusy, readAttempts, bumpAttempts, resetAttempts,
 } from './update-gate.js';
@@ -185,7 +185,6 @@ function showBanner(reg) {
   const banner = document.createElement('button');
   banner.id = 'sw-update-banner';
   banner.type = 'button';
-  banner.textContent = t('help.newVersionAvailableTap');
 
   const host = document.createElement('div');
   host.id = 'sw-update-host';
@@ -193,6 +192,7 @@ function showBanner(reg) {
   host.appendChild(banner);
   document.body.appendChild(host);
   keepAboveBottomBar(host);
+  paintWords();
 
   banner.addEventListener('click', () => applyUpdate(reg, banner));
 }
@@ -233,18 +233,15 @@ function showGate(reg, withEscape) {
   const title = document.createElement('h2');
   title.className = 'app-dialog-title';
   title.id = 'sw-update-gate-title';
-  title.textContent = t('help.updateTheAppTo');
 
   const message = document.createElement('p');
   message.className = 'app-dialog-msg';
-  message.textContent = withEscape
-    ? t('help.theUpdateDidNot')
-    : t('help.aNewVersionIs');
+  message.id = 'sw-update-gate-msg';
 
   const updateBtn = document.createElement('button');
   updateBtn.type = 'button';
   updateBtn.className = 'app-dialog-btn app-dialog-btn-solid';
-  updateBtn.textContent = withEscape ? t('help.tryAgain') : t('help.updateNow');
+  updateBtn.id = 'sw-update-gate-go';
   updateBtn.addEventListener('click', () => applyUpdate(reg, updateBtn));
 
   const actions = document.createElement('div');
@@ -256,7 +253,7 @@ function showGate(reg, withEscape) {
     const carryOn = document.createElement('button');
     carryOn.type = 'button';
     carryOn.className = 'app-dialog-btn app-dialog-btn-ghost';
-    carryOn.textContent = t('help.continueWithoutUpdating');
+    carryOn.id = 'sw-update-gate-carry-on';
     carryOn.addEventListener('click', () => {
       dismissed = true;
       gate.remove();
@@ -273,6 +270,7 @@ function showGate(reg, withEscape) {
   const gate = document.createElement('div');
   gate.id = 'sw-update-gate';
   gate.className = 'app-dialog-backdrop';
+  if (withEscape) gate.dataset.escape = 'yes';
   gate.setAttribute('role', 'alertdialog');
   gate.setAttribute('aria-modal', 'true');
   gate.setAttribute('aria-labelledby', 'sw-update-gate-title');
@@ -296,5 +294,36 @@ function showGate(reg, withEscape) {
   });
 
   document.body.appendChild(gate);
+  paintWords();
   updateBtn.focus();
 }
+
+// ⚠️ THE WORDS OF BOTH SURFACES ARE WRITTEN HERE, AND WRITTEN AGAIN WHEN THE LANGUAGE
+// CHANGES. The update is noticed at page load, often before the session has brought
+// the venue's own language — so on Panificio Miano the modal used to say «Update the
+// app to carry on» in English and stay that way (seen 3 Oct 2026), while a banner
+// drawn a moment later was Italian. Everything is looked up by id, so a surface that
+// is not on the page is simply skipped.
+export function paintWords() {
+  const banner = document.getElementById('sw-update-banner');
+  if (banner) banner.textContent = banner.disabled ? t('help.updating') : t('help.newVersionAvailableTap');
+
+  const gate = document.getElementById('sw-update-gate');
+  if (!gate) return;
+  const withEscape = gate.dataset.escape === 'yes';
+  const title = document.getElementById('sw-update-gate-title');
+  if (title) title.textContent = t('help.updateTheAppTo');
+  const message = document.getElementById('sw-update-gate-msg');
+  if (message) message.textContent = withEscape ? t('help.theUpdateDidNot') : t('help.aNewVersionIs');
+  const go = document.getElementById('sw-update-gate-go');
+  if (go) {
+    go.textContent = go.disabled ? t('help.updating')
+      : withEscape ? t('help.tryAgain') : t('help.updateNow');
+  }
+  const carryOn = document.getElementById('sw-update-gate-carry-on');
+  if (carryOn) carryOn.textContent = t('help.continueWithoutUpdating');
+}
+
+// Last line on purpose: every top-level declaration above is initialised before a
+// language change can call in (tests/early-session-callback.test.mjs).
+onLanguageChange(() => paintWords());
