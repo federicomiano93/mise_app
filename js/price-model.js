@@ -365,7 +365,7 @@ export function costReasonText(ingredient) {
 
 // ── Formatting ───────────────────────────────────────────────────────────────
 
-// An amount of money: always two decimals, always the currency in front.
+// An amount of money: always two decimals.
 // How it is WRITTEN (separators, symbol before or after) follows the venue's country —
 // js/currency.js moneyText; this only rounds.
 export function formatMoney(value) {

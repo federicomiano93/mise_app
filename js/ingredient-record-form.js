@@ -327,7 +327,7 @@ function priceBlock(item, actions, defaultUnit = null, ctx) {
   const summaryMain = el('span', { class: 'mgmt-price-main' });
   const summaryNote = el('span', { class: 'mgmt-price-note' });
   const summary = el('p', { class: 'mgmt-price-summary' }, [summaryMain, summaryNote]);
-  // "€45.00 without VAT, €46.80 with VAT at 4%" — empty (and :empty removes its
+  // "£45.00 without VAT, £46.80 with VAT at 4%" (Italy: «45,00 €») — empty (and :empty removes its
   // gap, tokens.css) until both a cost and a VAT rate are known.
   const vatSummary = el('p', { class: 'mgmt-price-vat-summary' });
 
@@ -675,7 +675,7 @@ function legacyPriceBlock(item, actions, defaultUnit = null, currentOrder = null
   const summaryMain = el('span', { class: 'mgmt-price-main' });
   const summaryNote = el('span', { class: 'mgmt-price-note' });
   const summary = el('p', { class: 'mgmt-price-summary' }, [summaryMain, summaryNote]);
-  // "€45.00 without VAT, €46.80 with VAT at 4%" — empty until both a cost and a VAT rate are known.
+  // "£45.00 without VAT, £46.80 with VAT at 4%" (Italy: «45,00 €») — empty until both a cost and a VAT rate are known.
   const vatSummary = el('p', { class: 'mgmt-price-vat-summary' });
 
   const pieceField = el('label', { class: 'mgmt-field' }, [
