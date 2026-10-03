@@ -143,6 +143,13 @@ test('⚠️ the currency is read when money is FORMATTED, not when the module l
     assert.equal(formatMoney(6.5), '€6.50', 'formatMoney must follow the venue');
     assert.equal(formatRate(0.0035), '€0.0035', 'so must a rate, decimals and all');
     assert.equal(formatPricePerUnit({ priceUnit: 'kg', pricePerUnit: 6.5 }), '€6.50 / kg');
+    // An Italian venue also WRITES the amount the Italian way (4 Oct 2026), read when
+    // formatting like the symbol.
+    setCurrency('€', { decimal: ',', group: '.', symbolAfter: true });
+    assert.equal(formatMoney(1234.5), '1.234,50 €');
+    assert.equal(formatMoney(6.5), '6,50 €');
+    assert.equal(formatRate(0.0035), '0,0035 €');
+    assert.equal(formatPricePerUnit({ priceUnit: 'kg', pricePerUnit: 6.5 }), '6,50 € / kg');
     // And back, in the same process: nothing may have been captured on first import.
     setCurrency('£');
     assert.equal(formatMoney(6.5), '£6.50', 'it must change back — nothing is frozen');

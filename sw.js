@@ -1,4 +1,4 @@
-const CACHE_NAME = 'theitalianclub-v535';
+const CACHE_NAME = 'theitalianclub-v536';
 // Firebase SDK modules (loaded from gstatic) are cached SEPARATELY from CACHE_NAME
 // so they survive the cache-version bump that happens on every deploy — otherwise
 // the offline SDK would be wiped each release until the next online load. The name
@@ -433,14 +433,14 @@ const ASSET_HASHES = {
   "./js/confirm-dialog.js": '61a7f580f37c5ff8',
   "./js/calculator-icons.js": '6bb803c39eabc4e0',
   "./js/hold-to-zoom.js": '92ffddd4533b46d7',
-  "./js/price-model.js": 'f978e5a00d7bb968',
+  "./js/price-model.js": '4b05ead006afe497',
   "./js/vat-rates.js": 'a3d073040b1d8490',
   "./js/vat-number.js": '097b915810c4d39a',
   "./js/pack-size.js": 'e5aae95d8c7b03d5',
   "./js/pack-format.js": 'c1b3a80d0921eb39',
   "./js/record-choices.js": '38da7c93b6f723a2',
   "./js/order-cost.js": 'a89d555ef365227d',
-  "./js/currency.js": '9300d5695d2a6dac',
+  "./js/currency.js": '25916e4bb8803e8b',
   "./js/allergen-model.js": 'a9ad7592da832a56',
   "./js/allergen-terms.js": '554df7742c345ca6',
   "./js/allergen-match.js": '049c14d576539d26',
@@ -460,7 +460,7 @@ const ASSET_HASHES = {
   "./js/ingredient-kind.js": 'b5ea1d7ec8255fd6',
   "./js/ingredient-name.js": '9045e25fc169d2ff',
   "./js/photo-model.js": '67d1d83755bbd33a',
-  "./js/market.js": '1711851bea5a607b',
+  "./js/market.js": '4b3979c5ca8128f7',
   "./js/push-model.js": '1a3f64b5f28dc19c',
   "./js/push.js": 'd7aad3c3bd098461',
   "./js/client-order-model.js": '01afe2d8a045dbe8',
@@ -489,7 +489,7 @@ const ASSET_HASHES = {
   "./js/splash-init.js": '0982bbf1d8228eab',
   "./js/whats-new.js": '28a18a0146f90592',
   "./js/whats-new-boot.js": 'c4a88b96a1986d6a',
-  "./js/firebase.js": 'd8ad340010d99565',
+  "./js/firebase.js": '23490978214bea8d',
   "./js/firebase-target.js": 'b3759997e54ddbc3',
   "./js/same-data.js": '11ff91c9b0192d20',
   "./js/location.js": '6aaf53615a8739d1',

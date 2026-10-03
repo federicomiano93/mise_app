@@ -20,7 +20,7 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
-import { setCurrency, currentCurrency } from '../js/currency.js';
+import { setCurrency, currentCurrency, moneyText } from '../js/currency.js';
 import { stringsIn } from './helpers/strings-in.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -87,10 +87,10 @@ test('⚠️ the call is actually made, and on the location the session just ope
   const src = read('js/firebase.js');
   assert.equal((src.match(/setCurrency\(/g) || []).length, 1,
     'exactly one place may decide the currency');
-  assert.match(src, /setCurrency\(currencyOf\(location\)\)/,
-    'it must read the location document the session opened, not a remembered id');
+  assert.match(src, /setCurrency\(currencyOf\(location\), moneyLayoutOf\(location\)\)/,
+    'it must read the location document the session opened, not a remembered id — both the symbol and how the amount is written');
   assert.match(src, /import \{ setCurrency \} from '\.\/currency\.js'/);
-  assert.match(src, /import \{ currencyOf \} from '\.\/market\.js'/);
+  assert.match(src, /import \{ currencyOf, moneyLayoutOf \} from '\.\/market\.js'/);
 });
 
 // ── No symbol may be written by hand ─────────────────────────────────────────
@@ -149,3 +149,39 @@ function jsFiles() {
   walk('js');
   return out;
 }
+
+// ── How the amount is written (4 Oct 2026) ───────────────────────────────────
+const IT = { decimal: ',', group: '.', symbolAfter: true };
+const NB = ' ';
+
+test('Italian layout: «1.234,56 €», a no-break space before the symbol', () => {
+  try {
+    setCurrency('€', IT);
+    assert.equal(moneyText('6.50'), `6,50${NB}€`);
+    assert.equal(moneyText('1234.56'), `1.234,56${NB}€`);
+    assert.equal(moneyText('1234567.00'), `1.234.567,00${NB}€`);
+    assert.equal(moneyText('999.99'), `999,99${NB}€`);
+    assert.equal(moneyText('-1234.50'), `-1.234,50${NB}€`);
+    assert.equal(moneyText('0.0035'), `0,0035${NB}€`, 'a small rate keeps every decimal');
+    assert.equal(moneyText('12'), `12${NB}€`);
+  } finally {
+    setCurrency('£');
+  }
+});
+
+test('the British layout and the fallback are exactly what the app always showed', () => {
+  try {
+    setCurrency('£', { decimal: '.', group: '', symbolAfter: false });
+    assert.equal(moneyText('1234.56'), '£1234.56');
+    assert.equal(moneyText('-1.20'), '£-1.20');
+    setCurrency('£');
+    assert.equal(moneyText('1234.56'), '£1234.56', 'no layout given = the historical one');
+    setCurrency('€', { decimal: ',' });
+    assert.equal(moneyText('1234.56'), '€1234.56', 'a half-formed layout falls back, never half-applies');
+    setCurrency('€', IT);
+    setCurrency('£');
+    assert.equal(moneyText('7.20'), '£7.20', 'a venue change puts the layout back too');
+  } finally {
+    setCurrency('£');
+  }
+});

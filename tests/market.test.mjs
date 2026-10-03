@@ -21,6 +21,8 @@ import {
   allergenGroupCodes,
   currencyOf,
   CURRENCY_COUNTRIES,
+  moneyLayoutOf,
+  MONEY_LAYOUT_COUNTRIES,
 } from '../js/market.js';
 import { ALLERGEN_CODES, ALLERGEN_GROUPS, NUTRIENT_KEYS, allergenLabel } from '../js/allergen-model.js';
 import { _dictionaries } from '../js/i18n.js';
@@ -495,4 +497,17 @@ test('an unknown country has no currency, and says so', () => {
   for (const location of [null, undefined, {}, { country: 'FR' }, { country: '' }]) {
     assert.equal(currencyOf(location), null);
   }
+});
+
+// ── How an amount is written (4 Oct 2026: «sistema anche i prezzi in formato italiano») ──
+// Same rule as the symbol: the COUNTRY decides, the screen language never does.
+test('the money layout follows the country, and every country has one', () => {
+  assert.deepEqual([...MONEY_LAYOUT_COUNTRIES].sort(), [...COUNTRIES].sort(),
+    'COUNTRIES and the money layout table must hold exactly the same countries');
+  assert.deepEqual({ ...moneyLayoutOf({ country: 'IT', language: 'en' }) },
+    { decimal: ',', group: '.', symbolAfter: true }, 'an Italian venue read in English still writes 1.234,56 €');
+  assert.deepEqual({ ...moneyLayoutOf({ country: 'GB', language: 'it' }) },
+    { decimal: '.', group: '', symbolAfter: false }, 'a UK venue keeps the layout it always had');
+  assert.equal(moneyLayoutOf({}), null);
+  assert.equal(moneyLayoutOf(null), null);
 });
