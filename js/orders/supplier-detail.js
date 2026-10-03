@@ -39,7 +39,7 @@ export function buildSupplierDetail(supplier, ctx) {
   const body = el('div', { class: 'supplier-detail-body' });
 
   const titleWrap = el('div', { class: 'app-header-title orders-header-title' }, [
-    el('h1', { text: supplierLabel(supplier), tabindex: '-1' }),
+    el('h1', { text: supplierLabel(supplier) }),
   ]);
 
   // ⚠️ «+ ADD INGREDIENT» LIVES IN THE HEADER, on the right (Federico, 1 Oct 2026): it used
@@ -79,7 +79,7 @@ export function buildSupplierDetail(supplier, ctx) {
     live,
   ]);
 
-  // The «Order for <day>» line at the top of the body (see buildDayLine). Repaint rebuilds
+  // The «Order: …» line at the top of the body (see buildDayLine). Repaint rebuilds
   // the body, so the live one is kept here for refreshDay() to find.
   let dayLine = null;
 
@@ -87,10 +87,10 @@ export function buildSupplierDetail(supplier, ctx) {
     const { ingredients, entries, suggest, hooks } = next;
     body.replaceChildren();
 
-    // ⚠️ BUILT ALWAYS, HIDDEN WHEN THERE IS NOTHING TO SAY — same trap as the clear
+    // ⚠️ BUILT ALWAYS, HIDDEN WHEN THE SUPPLIER HAS NO ORDER DAYS — same trap as the clear
     // button below: this function runs on a snapshot, not a keystroke, so a line that
     // only existed when needed could not appear as the first quantity creates a stamp.
-    dayLine = buildDayLine(next.dayInfo);
+    dayLine = buildDayLine(next.dayInfo, supplier.id);
     body.appendChild(dayLine.node);
 
     const canAdd = typeof next.onAddIngredient === 'function';
@@ -155,31 +155,48 @@ export function buildSupplierDetail(supplier, ctx) {
     // true while the line is showing, false once hidden, undefined with no line built
     refreshDay: () => dayLine?.refresh(),
     announce: text => { live.textContent = text; },
-    focusTitle: () => titleWrap.querySelector('h1')?.focus({ preventScroll: true }),
   };
 }
 
-// The line above the ingredient list: which day these quantities are for, and one
-// button to change it.
-// info: () => ({ text, buttonLabel, onClick }) | null, supplied by orders-main (which
-// owns the draft and the language of the day words). Asked again on every refresh.
-function buildDayLine(info) {
-  const text = el('span', { class: 'supplier-day-text' });
-  const button = el('button', { type: 'button', class: 'supplier-day-btn' });
-  let action = null;
-  button.addEventListener('click', () => action?.());
-  const node = el('div', { class: 'supplier-day-line' }, [text, button]);
+// The line above the ingredient list: «Order: [Today | Next order (Thu 8)]» and, under it,
+// «Expected delivery: <day>». A native <select>, so the phone's own picker and screen
+// reader support come free; its accessible name is the visible label.
+// info: () => ({ label, options: [{value, label}], selected, deliveryText, onChange(value) })
+// | null, supplied by orders-main (which owns the draft and the language of the day words).
+// Asked again on every refresh, so the select always shows the CURRENT stamp.
+//
+// Why a select and not a sentence plus a button: «Ordine per lunedì» + «Per oggi» read as
+// «this order is for today» (owner, 3 Oct 2026). Both answers are always visible now.
+function buildDayLine(info, supplierId) {
+  const selectId = `supplier-day-select-${supplierId}`;
+  const label = el('label', { class: 'supplier-day-label', for: selectId });
+  const select = el('select', { class: 'supplier-day-select', id: selectId });
+  const delivery = el('p', { class: 'supplier-day-delivery' });
+  let change = null;
+  let shown = '';
+  select.addEventListener('change', event => change?.(event.target.value));
+  const node = el('div', { class: 'supplier-day-line' }, [
+    el('div', { class: 'supplier-day-row' }, [label, select]),
+    delivery,
+  ]);
 
   function refresh() {
     const now = typeof info === 'function' ? info() : null;
     node.hidden = !now;
-    action = now ? now.onClick : null;
-    text.textContent = now ? now.text : '';
-    button.textContent = now ? now.buttonLabel : '';
-    // The visible words alone («For today») would not say what they change.
-    if (now) button.setAttribute('aria-label', `${now.text}: ${now.buttonLabel}`);
-    else button.removeAttribute('aria-label');
-    return Boolean(now);
+    change = now ? now.onChange : null;
+    if (!now) return false;
+    label.textContent = now.label;
+    // Rebuild the options only when their words changed: a snapshot must not close a
+    // picker the person is looking at.
+    const key = now.options.map(o => `${o.value}:${o.label}`).join('|');
+    if (key !== shown) {
+      shown = key;
+      select.replaceChildren(...now.options.map(o => el('option', { value: o.value, text: o.label })));
+    }
+    select.value = now.selected;
+    delivery.textContent = now.deliveryText || '';
+    delivery.hidden = !now.deliveryText;
+    return true;
   }
   refresh();
   return { node, refresh };

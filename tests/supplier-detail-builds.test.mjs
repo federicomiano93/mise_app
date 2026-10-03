@@ -44,6 +44,9 @@ class Node {
   replaceChildren(...kids) { this.children = []; this._text = null; this.append(...kids); }
   addEventListener(type, fn) { (this.listeners[type] = this.listeners[type] || []).push(fn); }
   fire(type) { (this.listeners[type] || []).forEach(fn => fn({ target: this, detail: 1 })); }
+  dispatch(type, value) { this.value = value; this.fire(type); }
+  get value() { return this._value; }
+  set value(v) { this._value = String(v); }
   querySelector(sel) { return find(this, n => n.tagName === sel.toUpperCase()) || null; }
   focus() { globalThis.document.activeElement = this; }
 }
@@ -78,7 +81,20 @@ test('⚠️ the supplier screen builds at all (a crash here means no supplier o
   assert.doesNotThrow(() => buildSupplierDetail(supplier, ctx(() => null)));
 });
 
-test('no day to say: the line exists and is hidden', () => {
+const info = (over = {}) => () => ({
+  label: 'Ordine:',
+  options: [
+    { value: 'today', label: 'Oggi' },
+    { value: 'next', label: 'Prossimo ordine (gio 8)' },
+  ],
+  selected: 'today',
+  deliveryText: 'Consegna prevista: lunedì 12 ottobre',
+  onChange() {},
+  ...over,
+});
+const optionsOf = select => select.children.map(o => [o.getAttribute('value'), o.textContent]);
+
+test('a supplier with no order days: the line exists and is hidden', () => {
   const view = buildSupplierDetail(supplier, ctx(() => null));
   const line = byClass(view.overlay, 'supplier-day-line');
   assert.ok(line, 'the day line is always built');
@@ -86,27 +102,42 @@ test('no day to say: the line exists and is hidden', () => {
   assert.equal(view.refreshDay(), false);
 });
 
-test('a future day: the words, the button and its full accessible name', () => {
-  let tapped = 0;
-  const view = buildSupplierDetail(supplier, ctx(() => ({
-    text: 'Ordine per domenica 4 ottobre', buttonLabel: 'Per oggi', onClick: () => { tapped++; },
-  })));
+test('the line: a labelled select with the two answers, the selected one and the delivery', () => {
+  const view = buildSupplierDetail(supplier, ctx(info({ selected: 'next' })));
   const line = byClass(view.overlay, 'supplier-day-line');
-  const button = byClass(line, 'supplier-day-btn');
+  const select = byClass(line, 'supplier-day-select');
+  const label = byClass(line, 'supplier-day-label');
   assert.equal(line.hidden, false);
-  assert.equal(byClass(line, 'supplier-day-text').textContent, 'Ordine per domenica 4 ottobre');
-  assert.equal(button.textContent, 'Per oggi');
-  assert.equal(button.getAttribute('aria-label'), 'Ordine per domenica 4 ottobre: Per oggi');
-  button.fire('click');
-  assert.equal(tapped, 1);
+  assert.equal(select.tagName, 'SELECT');
+  assert.equal(label.textContent, 'Ordine:');
+  assert.equal(label.getAttribute('for'), select.getAttribute('id'), 'the label names the select');
+  assert.deepEqual(optionsOf(select), [['today', 'Oggi'], ['next', 'Prossimo ordine (gio 8)']]);
+  assert.equal(select.value, 'next');
+  const delivery = byClass(line, 'supplier-day-delivery');
+  assert.equal(delivery.textContent, 'Consegna prevista: lunedì 12 ottobre');
+  assert.equal(delivery.hidden, false);
 });
 
-test('the line follows a refresh, and the result is announced on the screen', () => {
-  let info = { text: 'Ordine per oggi', buttonLabel: 'Sposta a mer 7', onClick() {} };
-  const view = buildSupplierDetail(supplier, ctx(() => info));
+test('no delivery days: the delivery text is hidden', () => {
+  const view = buildSupplierDetail(supplier, ctx(info({ deliveryText: '' })));
+  assert.equal(byClass(view.overlay, 'supplier-day-delivery').hidden, true);
+});
+
+test('changing the select calls the handler with the chosen value', () => {
+  const seen = [];
+  const view = buildSupplierDetail(supplier, ctx(info({ onChange: v => seen.push(v) })));
+  byClass(view.overlay, 'supplier-day-select').dispatch('change', 'next');
+  assert.deepEqual(seen, ['next']);
+});
+
+test('the line follows a refresh (select and delivery), and the result is announced', () => {
+  let current = { selected: 'today', deliveryText: 'A' };
+  const view = buildSupplierDetail(supplier, ctx(() => info(current)()));
+  const line = byClass(view.overlay, 'supplier-day-line');
+  current = { selected: 'next', deliveryText: 'B' };
   assert.equal(view.refreshDay(), true);
-  info = null;
-  assert.equal(view.refreshDay(), false);
-  view.announce('Ordine spostato a oggi');
-  assert.equal(byClass(view.overlay, 'supplier-day-live').textContent, 'Ordine spostato a oggi');
+  assert.equal(byClass(line, 'supplier-day-select').value, 'next');
+  assert.equal(byClass(line, 'supplier-day-delivery').textContent, 'B');
+  view.announce('Ordine per oggi');
+  assert.equal(byClass(view.overlay, 'supplier-day-live').textContent, 'Ordine per oggi');
 });

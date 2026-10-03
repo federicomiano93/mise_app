@@ -24,6 +24,7 @@ import { buildSearchBox } from './search-box.js';
 import { filterSuppliers } from './ingredient-search.js';
 import { itemsLabel } from './supplier-picker.js';
 import { spellShortDate } from './day.js';
+import { nextDeliveryAfter } from './order-day.js';
 
 // ⚠️ THE KEYS OF THE STORED DAYS, MAPPED TO THE DICTIONARY'S SHORT FORMS. The left
 // side is DATA — exactly what a supplier's deliveryDays holds, and it must stay English
@@ -50,11 +51,16 @@ const LIST_SVG =
 const SUMMARY_SVG =
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 2h6v4H9z"/><path d="M9 11h6M9 14h6M9 17h4"/></svg>';
 
-// The small «for Mon 13» tag under a supplier's name. Always in the DOM, shown or hidden
-// (see refreshSupplierDerived) — read the language here, when it is drawn.
-function paintForDay(node, forDay) {
+// The small «delivery Mon 12» tag under a supplier's name (the delivery day that follows the
+// order day the quantities are for); «for Thu 8» — the order day itself — when the supplier
+// has no delivery days. Always in the DOM, shown or hidden (see refreshSupplierDerived) —
+// read the language here, when it is drawn.
+function paintForDay(node, forDay, supplier) {
   if (!node) return;
-  node.textContent = forDay ? t('day.for', { day: spellShortDate(forDay) }) : '';
+  const delivery = forDay ? nextDeliveryAfter(supplier, forDay) : '';
+  node.textContent = !forDay ? ''
+    : delivery ? t('day.delivery', { day: spellShortDate(delivery) })
+      : t('day.for', { day: spellShortDate(forDay) });
   node.hidden = !forDay;
 }
 
@@ -76,7 +82,7 @@ export function refreshSupplierDerived(supplier, ingredients, entries, forDay = 
   // «for Mon 13»: the quantities typed are meant for a LATER order day. The first
   // keystroke on a non-order day can create that stamp, so it is revealed in place. ⚠️ Only
   // with something typed: a stock-only edit can create the stamp too, and must not tag the row.
-  paintForDay(document.getElementById(`for-${supplier.id}`), filled ? forDay : '');
+  paintForDay(document.getElementById(`for-${supplier.id}`), filled ? forDay : '', supplier);
 
   const count = document.getElementById(`count-${supplier.id}`);
   if (count) {
@@ -225,7 +231,7 @@ function buildSupplierRow(supplier, data, ctx) {
   count.hidden = filled === 0;
 
   const forDay = el('span', { class: 'supplier-for-day', id: `for-${supplier.id}` });
-  paintForDay(forDay, filled ? data.forDay?.(supplier.id) || '' : '');
+  paintForDay(forDay, filled ? data.forDay?.(supplier.id) || '' : '', supplier);
 
   const open = el('button', {
     type: 'button',

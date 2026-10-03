@@ -7,11 +7,12 @@
 // the next morning they look like an order forgotten yesterday, and on the same day
 // they look like an untold addition to the order just recorded.
 //
-// THE RULE (the owner's decision):
+// THE RULE (the owner's decision, 3 Oct 2026 — deliberately needs NO history):
 //   * a supplier with no order days → today, as ever;
-//   * today IS one of its order days → today (a same-day addition stays today's);
-//   * otherwise, once this cycle's order is recorded → its NEXT order day;
-//   * otherwise (not yet ordered this cycle) → today.
+//   * today IS one of its order days → today;
+//   * ANY other day → its NEXT order day, even if this cycle's order was never recorded.
+//     The owner accepted that: a forgotten order goes to the next cycle unless he picks
+//     «Today» on the supplier's screen.
 // A stamp already today or in the future is kept: it is the person's choice, or an
 // earlier computation of this same rule.
 //
@@ -46,55 +47,43 @@ export function nextOrderDay(supplier, today) {
   return null;
 }
 
-// The most recent order day on or before `today`, or null when there are none.
-function lastOrderDay(supplier, today) {
-  const days = orderDaysOf(supplier);
-  if (!days.length || !today) return null;
-  const start = parseISODate(today);
-  for (let back = 0; back < 7; back += 1) {
-    const iso = toISODate(addDays(start, -back));
-    if (days.includes(weekdayOf(iso))) return iso;
+// The first date STRICTLY after `iso` that is one of the supplier's delivery days, or ''
+// when it has none. The same rule as expectedDeliveryOn (deliveries.js), kept here so this
+// pure file needs no import of another screen's module.
+export function nextDeliveryAfter(supplier, iso) {
+  const days = (supplier?.deliveryDays || []).filter(d => WEEKDAYS.includes(d));
+  if (!days.length || !iso) return '';
+  const start = parseISODate(iso);
+  for (let step = 1; step <= 7; step += 1) {
+    const next = toISODate(addDays(start, step));
+    if (days.includes(weekdayOf(next))) return next;
   }
-  return null;
+  return '';
 }
 
 // Where quantities typed NOW belong, with no stamp to respect yet.
-export function targetDayFor({ supplier, history, today }) {
+export function targetDayFor({ supplier, today }) {
   const days = orderDaysOf(supplier);
   if (!days.length) return today;
   if (days.includes(weekdayOf(today))) return today;
-
-  const cycleStart = lastOrderDay(supplier, today);
-  const recorded = (history || []).some(r =>
-    r && r.supplierId === supplier.id && r.date && String(r.date) >= cycleStart);
-  return recorded ? nextOrderDay(supplier, today) : today;
+  return nextOrderDay(supplier, today);
 }
 
 // The stamp after a row of this supplier changed: the existing one when it is today or
 // later, otherwise the rule above.
-//
-// ⚠️ `historyLoaded: false` MEANS «DO NOT COMPUTE»: the rule reads the recorded orders, and
-// without them a supplier that was already ordered looks un-ordered — «today» would be
-// stamped from an incomplete picture. The existing stamp (possibly none) is returned
-// untouched and the next keystroke, once the history has arrived, stamps correctly.
-export function stampFor({ current, supplier, history, today, historyLoaded = true }) {
+export function stampFor({ current, supplier, today }) {
   if (current && String(current) >= String(today)) return current;
-  if (!historyLoaded) return current;
-  return targetDayFor({ supplier, history, today });
+  return targetDayFor({ supplier, today });
 }
 
-// The future day to SHOW on a supplier's screen before anything is typed: the stamp when it
-// is already in the future, or — with no stamp, or a stale one — the day the next keystroke
-// WOULD be stamped for, when that is in the future. '' when there is nothing to announce.
-// Showing it up front means the line is there when the screen opens, so the first keystroke
-// does not push the rows down.
-export function previewDay({ current, supplier, history, today, historyLoaded = true }) {
+// The future day a supplier's order is going to, to SHOW on its screen before anything is
+// typed: the stamp when it is in the future, or — with no stamp, or a stale one — the day
+// the next keystroke WOULD be stamped for, when that is in the future. '' means «today».
+export function previewDay({ current, supplier, today }) {
   if (isFutureDay(current, today)) return current;
-  // A stamp of today is a choice already made («For today», or typing today): never
-  // second-guessed.
+  // A stamp of today is a choice already made («Today»): never second-guessed.
   if (current && String(current) >= String(today)) return '';
-  if (!historyLoaded) return '';
-  const target = targetDayFor({ supplier, history, today });
+  const target = targetDayFor({ supplier, today });
   return isFutureDay(target, today) ? target : '';
 }
 
@@ -115,15 +104,4 @@ export function recordDay(stamp, today) {
 // for a later day. The untold-changes banner asks only about these.
 export function notForLater(suppliers, days, today) {
   return (suppliers || []).filter(s => !isFutureDay(days?.[s?.id], today));
-}
-
-// «Today is an order day of this supplier and its order is already recorded»: the one
-// moment when next week's typing can be put aside by hand. Returns the next order day
-// to move to, or null when the offer does not apply.
-export function moveAsideDay({ supplier, history, today, current }) {
-  if (isFutureDay(current, today)) return null;
-  if (!orderDaysOf(supplier).includes(weekdayOf(today))) return null;
-  const recorded = (history || []).some(r =>
-    r && r.supplierId === supplier.id && r.date === today);
-  return recorded ? nextOrderDay(supplier, today) : null;
 }

@@ -61,7 +61,8 @@ import {
   todayISO, dayPhrase, daySpoken, dayWhen, localDayOf, dayLabel, spellShortDate, spellLongDate,
 } from './day.js';
 import {
-  stampFor, recordDay, isFutureDay, nextOrderOffer, notForLater, moveAsideDay, previewDay,
+  stampFor, recordDay, isFutureDay, nextOrderOffer, notForLater, previewDay, nextOrderDay,
+  nextDeliveryAfter,
 } from './order-day.js';
 import {
   buildOrderMessage, whatsappUrl, itemsFromQuantities, indexById, fallbackSupplierName,
@@ -1635,63 +1636,60 @@ function futureDayOf(supplierId) {
   return isFutureDay(stamp, todayISO()) ? stamp : '';
 }
 
-// Stamp a supplier after one of its rows changed (order-day.js stampFor). ⚠️ Nothing is
-// written until the history has arrived: the rule reads the recorded orders, and without
-// them an already-ordered supplier looks un-ordered, which would stamp «today» from an
-// incomplete picture. The next keystroke after the history lands stamps correctly.
+// Stamp a supplier after one of its rows changed (order-day.js stampFor). The rule needs no
+// history any more, so it can be asked at any moment.
 function stampNow(supplierId, current) {
   const stamp = stampFor({
-    current, supplier: findOrderSupplier(supplierId) || {}, history: state.history,
-    today: todayISO(), historyLoaded: state.loaded.history,
+    current, supplier: findOrderSupplier(supplierId) || {}, today: todayISO(),
   });
   if (stamp) state.days[supplierId] = stamp;
 }
 
-// The line on a supplier's own screen, or null when there is nothing to say (see
-// supplier-detail.js). Asked again on every keystroke and repaint, so the day words are
-// read here, inside the drawing path, never frozen at load.
+// The «Order: [Today | Next order (Thu 8)]» line on a supplier's own screen, or null when
+// the supplier has no order days (see supplier-detail.js). Asked again on every keystroke
+// and repaint, so the words are read here, inside the drawing path, never frozen at load.
 //
-// The «for <future day>» state is shown BEFORE anything is typed (previewDay): the line is
-// there when the screen opens, so the first keystroke does not push the rows down.
+// The select always offers both answers, on an order day too: the default there is Today,
+// but «Next order» stays available. The expected delivery follows the order day IN EFFECT
+// (owner: «se scelgo oggi e non è il giorno per effettuare l'ordine ci aspettiamo la
+// consegna il prossimo giorno di consegna del fornitore»).
 function dayInfoFor(supplier) {
   const today = todayISO();
-  const future = previewDay({
-    current: state.days[supplier.id], supplier, history: state.history, today,
-    historyLoaded: state.loaded.history,
-  });
-  if (future) {
-    return {
-      text: t('orders.dayLine.forDate', { day: spellLongDate(future) }),
-      buttonLabel: t('orders.dayLine.forToday'),
-      onClick: () => setSupplierDay(supplier.id, today),
-    };
-  }
-  const aside = moveAsideDay({
-    supplier, history: state.history, today, current: state.days[supplier.id],
-  });
-  if (!aside) return null;
+  const next = nextOrderDay(supplier, today);
+  if (!next) return null;
+  const future = previewDay({ current: state.days[supplier.id], supplier, today });
+  const selected = future ? 'next' : 'today';
+  const delivery = nextDeliveryAfter(supplier, selected === 'next' ? next : today);
   return {
-    text: t('orders.dayLine.today'),
-    buttonLabel: t('orders.dayLine.moveTo', { day: spellShortDate(aside) }),
-    onClick: () => setSupplierDay(supplier.id, aside),
+    label: t('orders.dayLine.label'),
+    options: [
+      { value: 'today', label: t('orders.dayLine.optToday') },
+      { value: 'next', label: t('orders.dayLine.optNext', { day: spellShortDate(next) }) },
+    ],
+    selected,
+    deliveryText: delivery
+      ? t('orders.dayLine.delivery', { day: spellLongDate(delivery) }) : '',
+    onChange: value => setSupplierDay(supplier.id, value),
   };
 }
 
-// The two buttons of the day line. Same rollback and error status as keepAsToday. The
-// result is announced politely, and if the line went away (the button with it) focus
-// moves to the screen's title instead of being lost on the page.
-async function setSupplierDay(supplierId, day) {
-  if (!await restamp(supplierId, day)) return;
+// The select of the day line. Same rollback and error status as keepAsToday. On failure
+// the line is redrawn from the (restored) stamp, so the select never shows a choice that
+// was not saved. The result is announced politely; focus stays on the select.
+async function setSupplierDay(supplierId, value) {
   const supplier = findOrderSupplier(supplierId);
-  if (supplier) {
-    refreshSupplierDerived(supplier, ingredientsBySupplier()[supplierId] || [], state.entries,
-      futureDayOf(supplierId));
-  }
-  const stillThere = detailView?.refreshDay();
-  detailView?.announce(day === todayISO()
-    ? t('orders.dayLine.movedToday')
-    : t('orders.dayLine.movedTo', { day: spellShortDate(day) }));
-  if (stillThere === false) detailView?.focusTitle();
+  if (!supplier) return;
+  const today = todayISO();
+  const next = nextOrderDay(supplier, today);
+  const day = value === 'next' && next ? next : today;
+  const saved = await restamp(supplierId, day);
+  detailView?.refreshDay();
+  if (!saved) return;
+  refreshSupplierDerived(supplier, ingredientsBySupplier()[supplierId] || [], state.entries,
+    futureDayOf(supplierId));
+  detailView?.announce(day === today
+    ? t('orders.dayLine.today')
+    : t('orders.dayLine.announceNext', { day: spellShortDate(day) }));
   renderReminders();
 }
 

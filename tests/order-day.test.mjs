@@ -7,8 +7,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
-  nextOrderDay, targetDayFor, stampFor, recordDay, isFutureDay, notForLater, moveAsideDay,
-  previewDay, nextOrderOffer,
+  nextOrderDay, targetDayFor, stampFor, recordDay, isFutureDay, notForLater,
+  previewDay, nextOrderOffer, nextDeliveryAfter,
 } from '../js/orders/order-day.js';
 import { spellShortDate, spellLongDate } from '../js/orders/day.js';
 import { pendingSuppliers } from '../js/orders/reminders.js';
@@ -20,7 +20,7 @@ const NEXT_MON = '2026-10-19';
 const free = { id: 's1', name: 'Free' };
 const monOnly = { id: 's1', name: 'Mon', orderDays: ['Monday'] };
 const monThu = { id: 's1', name: 'MonThu', orderDays: ['Monday', 'Thursday'] };
-const rec = (date, supplierId = 's1') => ({ id: `${date}_${supplierId}`, date, supplierId });
+const SAT = '2026-10-17', SUN = '2026-10-18';
 
 test('nextOrderDay: none without order days, and strictly after today', () => {
   assert.equal(nextOrderDay(free, WED), null);
@@ -36,42 +36,43 @@ test('nextOrderDay ignores values that are not weekday names', () => {
 });
 
 test('no order days: the target is today, always', () => {
-  assert.equal(targetDayFor({ supplier: free, history: [rec(MON)], today: WED }), WED);
+  assert.equal(targetDayFor({ supplier: free, today: WED }), WED);
 });
 
-test('today is an order day: the target is today, with or without a record today', () => {
-  assert.equal(targetDayFor({ supplier: monOnly, history: [], today: MON }), MON);
-  assert.equal(targetDayFor({ supplier: monOnly, history: [rec(MON)], today: MON }), MON);
+test('today is an order day: the target is today', () => {
+  assert.equal(targetDayFor({ supplier: monOnly, today: MON }), MON);
+  assert.equal(targetDayFor({ supplier: monThu, today: THU }), THU);
 });
 
-test('not an order day, cycle recorded: the next order day (wraps over the weekend)', () => {
-  assert.equal(targetDayFor({ supplier: monOnly, history: [rec(MON)], today: WED }), NEXT_MON);
-  assert.equal(targetDayFor({ supplier: monThu, history: [rec(MON)], today: TUE }), THU);
-});
-
-test('a record made after the order day also closes the cycle', () => {
-  assert.equal(targetDayFor({ supplier: monOnly, history: [rec(TUE)], today: WED }), NEXT_MON);
-});
-
-test('not an order day, cycle not recorded: today', () => {
-  assert.equal(targetDayFor({ supplier: monOnly, history: [], today: WED }), WED);
-  // an old record of a previous cycle does not count, nor does another supplier's
-  assert.equal(targetDayFor({ supplier: monOnly, history: [rec('2026-10-05')], today: WED }), WED);
-  assert.equal(targetDayFor({ supplier: monOnly, history: [rec(MON, 'other')], today: WED }), WED);
+test('any other day: the next order day, with no history needed (wraps over the weekend)', () => {
+  assert.equal(targetDayFor({ supplier: monOnly, today: WED }), NEXT_MON);
+  assert.equal(targetDayFor({ supplier: monThu, today: TUE }), THU);
+  assert.equal(targetDayFor({ supplier: monThu, today: SUN }), '2026-10-19');
 });
 
 test('stampFor keeps a stamp that is today or in the future', () => {
-  const base = { supplier: monOnly, history: [rec(MON)], today: WED };
+  const base = { supplier: monOnly, today: WED };
   assert.equal(stampFor({ ...base, current: WED }), WED);
   assert.equal(stampFor({ ...base, current: '2026-10-26' }), '2026-10-26');
   assert.equal(stampFor({ ...base, current: THU }), THU);
 });
 
 test('stampFor recomputes a stale or missing stamp', () => {
-  const base = { supplier: monOnly, history: [rec(MON)], today: WED };
+  const base = { supplier: monOnly, today: WED };
   assert.equal(stampFor({ ...base, current: MON }), NEXT_MON);
   assert.equal(stampFor({ ...base, current: undefined }), NEXT_MON);
-  assert.equal(stampFor({ supplier: monOnly, history: [], today: WED, current: MON }), WED);
+  assert.equal(stampFor({ supplier: free, today: WED, current: MON }), WED);
+});
+
+test('nextDeliveryAfter: strictly after the day, wraps the week, empty without delivery days', () => {
+  const tueFri = { id: 's1', deliveryDays: ['Tuesday', 'Friday'] };
+  assert.equal(nextDeliveryAfter(tueFri, MON), TUE);
+  assert.equal(nextDeliveryAfter(tueFri, TUE), '2026-10-16');       // the day itself does not count
+  assert.equal(nextDeliveryAfter(tueFri, SAT), '2026-10-20');       // wraps into next week
+  assert.equal(nextDeliveryAfter(free, MON), '');
+  assert.equal(nextDeliveryAfter({ id: 'x', deliveryDays: [] }, MON), '');
+  assert.equal(nextDeliveryAfter({ id: 'x', deliveryDays: ['Lunedì'] }, MON), '');
+  assert.equal(nextDeliveryAfter(tueFri, ''), '');
 });
 
 test('recordDay clamps a future stamp to today and leaves past and today alone', () => {
@@ -86,15 +87,6 @@ test('isFutureDay', () => {
   assert.equal(isFutureDay(WED, WED), false);
   assert.equal(isFutureDay('', WED), false);
   assert.equal(isFutureDay(undefined, WED), false);
-});
-
-test('moveAsideDay: only on an order day with today recorded and a next order day', () => {
-  assert.equal(moveAsideDay({ supplier: monOnly, history: [rec(MON)], today: MON }), NEXT_MON);
-  assert.equal(moveAsideDay({ supplier: monOnly, history: [], today: MON }), null);
-  assert.equal(moveAsideDay({ supplier: monOnly, history: [rec(MON)], today: TUE }), null);
-  assert.equal(moveAsideDay({ supplier: free, history: [rec(MON)], today: MON }), null);
-  assert.equal(
-    moveAsideDay({ supplier: monOnly, history: [rec(MON)], today: MON, current: NEXT_MON }), null);
 });
 
 test('notForLater drops suppliers stamped for a later day', () => {
@@ -130,24 +122,14 @@ test('the short and long day phrases carry no year and read from the dictionary'
   assert.equal(spellShortDate(''), '');
 });
 
-test('stampFor does not compute until the history has loaded', () => {
-  const base = { supplier: monOnly, history: [], today: WED, historyLoaded: false };
-  assert.equal(stampFor({ ...base, current: undefined }), undefined);
-  assert.equal(stampFor({ ...base, current: MON }), MON);          // existing stamp untouched
-  assert.equal(stampFor({ ...base, current: NEXT_MON }), NEXT_MON); // a future one is still kept
-  assert.equal(stampFor({ ...base, historyLoaded: true, current: undefined }), WED);
-});
-
-test('previewDay shows the future day before anything is typed', () => {
-  const base = { supplier: monOnly, history: [rec(MON)], today: WED };
+test('previewDay: the future order day in effect, or empty for today', () => {
+  const base = { supplier: monOnly, today: WED };
   assert.equal(previewDay({ ...base, current: undefined }), NEXT_MON);
   assert.equal(previewDay({ ...base, current: MON }), NEXT_MON);       // stale stamp
   assert.equal(previewDay({ ...base, current: THU }), THU);            // already future
-  assert.equal(previewDay({ ...base, current: WED }), '');             // «For today» already chosen
-  assert.equal(previewDay({ ...base, history: [], current: undefined }), '');   // cycle not recorded
+  assert.equal(previewDay({ ...base, current: WED }), '');             // «Today» already chosen
   assert.equal(previewDay({ ...base, supplier: free }), '');
   assert.equal(previewDay({ ...base, today: MON, current: undefined }), '');    // an order day
-  assert.equal(previewDay({ ...base, historyLoaded: false, current: undefined }), '');
 });
 
 test('nextOrderOffer: not on an order day, and only with a next order day', () => {
@@ -161,7 +143,9 @@ const read = f => readFileSync(new URL(`../js/orders/${f}`, import.meta.url), 'u
 test('wiring: recording uses the clamped day, stamps go through stampFor', () => {
   const main = read('orders-main.js');
   assert.match(main, /function dayForSupplier\(supplierId\) \{\n  return recordDay\(rawDayFor\(supplierId\), todayISO\(\)\);/);
-  assert.match(main, /function stampNow\([\s\S]*?stampFor\(\{[\s\S]*?historyLoaded: state\.loaded\.history/);
+  const stamp = main.slice(main.indexOf('function stampNow'), main.indexOf('function dayInfoFor'));
+  assert.match(stamp, /stampFor\(\{/);
+  assert.doesNotMatch(stamp, /history/, 'the rule needs no history');
   const after = main.slice(main.indexOf('afterChange(supplierId)'), main.indexOf('onPlaced(supplierId)'));
   assert.match(after, /stampNow\(supplierId, state\.days\[supplierId\]\)/);
   assert.doesNotMatch(after, /= todayISO\(\)/);
@@ -188,9 +172,18 @@ test('wiring: the pending banner draws the 4th button only when given a next day
 
 test('wiring: the supplier screen builds the day line always and toggles hidden', () => {
   const detail = read('supplier-detail.js');
-  assert.match(detail, /dayLine = buildDayLine\(next\.dayInfo\);\n\s*body\.appendChild\(dayLine\.node\);/);
+  assert.match(detail, /dayLine = buildDayLine\(next\.dayInfo, supplier\.id\);\n\s*body\.appendChild\(dayLine\.node\);/);
   assert.match(detail, /node\.hidden = !now;/);
   assert.match(detail, /role: 'status', 'aria-live': 'polite'/);
+});
+
+test('wiring: the day line shows for any supplier with order days; the old buttons are gone', () => {
+  const main = read('orders-main.js');
+  const fn = main.slice(main.indexOf('function dayInfoFor'), main.indexOf('async function setSupplierDay'));
+  assert.match(fn, /if \(!next\) return null;/);
+  assert.match(fn, /nextDeliveryAfter\(supplier, selected === 'next' \? next : today\)/);
+  assert.doesNotMatch(main, /moveAsideDay|focusTitle/);
+  assert.doesNotMatch(read('supplier-detail.js'), /focusTitle|supplier-day-btn/);
 });
 
 test('wiring: the list row tag needs something typed', () => {
