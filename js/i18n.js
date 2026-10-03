@@ -481,6 +481,24 @@ const DICTIONARIES = Object.freeze({
     // every language at once.
     'day.on': 'on {day}',
     'day.for': 'for {day}',
+    'day.delivery': 'delivery {day}',
+    'day.shortDate': '{weekday} {d}',
+    'day.monthLong.0': 'January', 'day.monthLong.1': 'February', 'day.monthLong.2': 'March',
+    'day.monthLong.3': 'April', 'day.monthLong.4': 'May', 'day.monthLong.5': 'June',
+    'day.monthLong.6': 'July', 'day.monthLong.7': 'August', 'day.monthLong.8': 'September',
+    'day.monthLong.9': 'October', 'day.monthLong.10': 'November', 'day.monthLong.11': 'December',
+    // The day a supplier's typed quantities are FOR (js/orders/order-day.js): next week's order
+    // typed early is stamped for its order day, not for today.
+    'orders.dayLine.label': 'Order:',
+    'orders.dayLine.optToday': 'Today',
+    'orders.dayLine.optNext': 'Next order ({day})',
+    'orders.dayLine.delivery': 'Expected delivery: {day}',
+    'orders.dayLine.today': 'Order for today',
+    'orders.dayLine.optPast': 'From {day}',
+    'orders.dayLine.optLater': 'For {day}',
+    'orders.dayLine.announceNext': 'Order moved to the next order ({day})',
+    'orders.dayLine.announceLater': 'Order for {day}',
+    'orders.pendingForNext': 'For the next order ({day})',
 
     // ── Sentences that name a DAY, kept whole ────────────────────────────────
     // ⚠️ WHOLE SENTENCES, not a day word glued into English. Once 'Today' could be
@@ -488,14 +506,12 @@ const DICTIONARIES = Object.freeze({
     // an untranslated sentence, which is worse than either language alone.
     'orders.sendDay': 'Send {day}',
     'orders.notPlacedFor': '{supplier} — order not placed',
-    // ⚠️ ONE SENTENCE, NOT TWO NESTED. It was `t('orders.typedWhen', { items: t(
-    // 'orders.itemsCount', { n }) })` — a count phrase dropped into a sentence whose
-    // PARTICIPLE has to agree with it. English does not notice; Italian read «1 voce
-    // scritte» on the Orders screen, which is simply wrong. Seen in a screenshot after
-    // every check had passed.
-    'orders.typedWhen': {
-      one: '{n} item typed {when}',
-      other: '{n} items typed {when}',
+    // ⚠️ ONE SENTENCE, NOT TWO NESTED: a count phrase dropped into a sentence whose word has to
+    // agree with it reads «1 voce scritte» in Italian. No participle either: the day may be the
+    // day the order was FOR, not the day it was typed. {when} is dayPhrase(): «for Mon 19 Oct 2026».
+    'orders.pendingItems': {
+      one: '{n} item {when}',
+      other: '{n} items {when}',
     },
     'orders.placedWhen': 'Placed {when}',
     'orders.updateOrderFor': 'Update {supplier}’s order {day}?',
@@ -951,6 +967,7 @@ const DICTIONARIES = Object.freeze({
     'orders.settings.helpSub': 'How the orders screen works',
     // ── The tablet alerts panel (Slice A, 28 Sep 2026) ────────────────────────
     'orders.alerts.panelRegion': 'Notices',
+    'orders.alerts.empty': 'No notices right now.',
     'orders.alerts.panelButton': { one: '{n} notice', other: '{n} notices' },
     'orders.alerts.deliveriesTabBadge': { one: 'Incoming — {n} order owed', other: 'Incoming — {n} orders owed' },
     // ── The tablet order-summary sheet (Slice D, 28 Sep 2026) ─────────────────
@@ -1066,6 +1083,7 @@ const DICTIONARIES = Object.freeze({
     'orders.deliveries.saveArrival': 'Save',
     'orders.deliveries.couldNotSave': 'Not saved. Check the connection and try again.',
     'orders.reorder.buttonAria': 'To re-order ({n})',
+    'orders.reorder.buttonAriaNone': 'To re-order',
     'orders.reorder.otherSupplier': 'Order from another supplier',
     'orders.reorder.otherSupplierAria': 'Order from another supplier — {name}',
     'orders.reorder.chooseTitle': 'Choose a supplier',
@@ -3176,12 +3194,28 @@ const DICTIONARIES = Object.freeze({
     'day.madeFor': '{made} per {target}',
     'day.on': 'il {day}',
     'day.for': 'per {day}',
+    'day.delivery': 'consegna {day}',
+    'day.shortDate': '{weekday} {d}',
+    'day.monthLong.0': 'gennaio', 'day.monthLong.1': 'febbraio', 'day.monthLong.2': 'marzo',
+    'day.monthLong.3': 'aprile', 'day.monthLong.4': 'maggio', 'day.monthLong.5': 'giugno',
+    'day.monthLong.6': 'luglio', 'day.monthLong.7': 'agosto', 'day.monthLong.8': 'settembre',
+    'day.monthLong.9': 'ottobre', 'day.monthLong.10': 'novembre', 'day.monthLong.11': 'dicembre',
+    'orders.dayLine.label': 'Ordine:',
+    'orders.dayLine.optToday': 'Oggi',
+    'orders.dayLine.optNext': 'Prossimo ordine ({day})',
+    'orders.dayLine.delivery': 'Consegna prevista: {day}',
+    'orders.dayLine.today': 'Ordine per oggi',
+    'orders.dayLine.optPast': 'Del {day}',
+    'orders.dayLine.optLater': 'Per {day}',
+    'orders.dayLine.announceNext': 'Ordine spostato al prossimo ordine ({day})',
+    'orders.dayLine.announceLater': 'Ordine per {day}',
+    'orders.pendingForNext': 'Per il prossimo ordine ({day})',
 
     'orders.sendDay': 'Manda {day}',
     'orders.notPlacedFor': '{supplier} — ordine non effettuato',
-    'orders.typedWhen': {
-      one: '{n} voce scritta {when}',
-      other: '{n} voci scritte {when}',
+    'orders.pendingItems': {
+      one: '{n} voce {when}',
+      other: '{n} voci {when}',
     },
     'orders.placedWhen': 'Effettuato {when}',
     'orders.updateOrderFor': 'Aggiornare l’ordine di {supplier} {day}?',
@@ -3563,6 +3597,7 @@ const DICTIONARIES = Object.freeze({
     'orders.settings.helpSub': 'Come funziona la schermata degli ordini',
     // ── Il pannello avvisi del tablet (Slice A, 28 Sep 2026) ──────────────────
     'orders.alerts.panelRegion': 'Avvisi',
+    'orders.alerts.empty': 'Nessun avviso al momento.',
     'orders.alerts.panelButton': { one: '{n} avviso', other: '{n} avvisi' },
     'orders.alerts.deliveriesTabBadge': { one: 'In arrivo — {n} ordine da confermare', other: 'In arrivo — {n} ordini da confermare' },
     // ── Il riepilogo ordine del tablet (Slice D, 28 Sep 2026) ─────────────────
@@ -3676,6 +3711,7 @@ const DICTIONARIES = Object.freeze({
     'orders.deliveries.saveArrival': 'Salva',
     'orders.deliveries.couldNotSave': 'Non salvato. Controlla la connessione e riprova.',
     'orders.reorder.buttonAria': 'Da riordinare ({n})',
+    'orders.reorder.buttonAriaNone': 'Da riordinare',
     'orders.reorder.otherSupplier': 'Ordina da un altro fornitore',
     'orders.reorder.otherSupplierAria': 'Ordina da un altro fornitore — {name}',
     'orders.reorder.chooseTitle': 'Scegli il fornitore',

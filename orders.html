@@ -102,19 +102,26 @@
        order lists and the send arrow are the other three: four is the most that fit. -->
   <div class="app-header-slot orders-header-actions">
     <!-- ⚠️ «DA RIORDINARE»: what never arrived and nobody has dealt with yet. Its own button,
-         LEFT of the bell, and NOT a notice inside it. Shown by JS
-         (js/orders/deliveries-view.js renderReorderButton) only while something is to be
-         re-ordered; the number is the count of those lines. Opens the list screen. -->
-    <button class="app-icon-btn orders-icon-btn" id="orders-reorder-btn" type="button" hidden>
+         LEFT of the bell, and NOT a notice inside it. ALWAYS shown, with no `hidden` here so
+         it cannot flash in late (Federico, 3 Oct 2026: «voglio che i tasti siano permanenti,
+         le notifiche arrivano quando ci sono»); only the red number
+         (js/orders/deliveries-view.js renderReorderButton) comes and goes, and is the count
+         of the lines to re-order. Opens the list screen, which has an empty text.
+         ⚠️ NAMED AND DISABLED IN THE MARKUP: until the first snapshot arrives the renderer has
+         not run, so the button has no handler yet — it must not be a nameless control that does
+         nothing. renderReorderButton enables it and takes over the label. -->
+    <button class="app-icon-btn orders-icon-btn" id="orders-reorder-btn" type="button" disabled
+            data-i18n="orders.reorder.buttonAriaNone" data-i18n-attr="aria-label" aria-label="To re-order">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
       <span class="orders-head-dot" id="orders-reorder-count" aria-hidden="true" hidden></span>
     </button>
     <!-- The bell: js/orders/tablet-layout.js moves the banners that ask for
          something (not placed, changed since sent, the calendar)
-         into #orders-alerts-panel below, at EVERY size, and this opens it. Shown by
-         JS only when there is something inside; the number is DERIVED from the
-         panel's own children (initAlertsPanel), never written by hand. -->
-    <button class="app-icon-btn orders-icon-btn orders-alerts-btn" id="orders-alerts-btn" type="button" aria-expanded="false" aria-controls="orders-alerts-panel" hidden>
+         into #orders-alerts-panel below, at EVERY size, and this opens it. ALWAYS shown
+         (3 Oct 2026, see the note on the button before this one): with nothing inside, the
+         panel says so in #orders-alerts-empty. Only the number is conditional, and it is
+         DERIVED from the panel's own children (initAlertsPanel), never written by hand. -->
+    <button class="app-icon-btn orders-icon-btn orders-alerts-btn" id="orders-alerts-btn" type="button" aria-expanded="false" aria-controls="orders-alerts-panel">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
       <span class="orders-head-dot" id="orders-alerts-count" aria-hidden="true" hidden></span>
     </button>
@@ -143,7 +150,12 @@
        (js/orders/tablet-layout.js TABLET_HOSTS). Not a modal, and deliberately
        NOT .preview-overlay — a compulsory update must never be held back by
        this. -->
-  <div id="orders-alerts-panel" hidden role="region" data-i18n="orders.alerts.panelRegion" data-i18n-attr="aria-label" aria-label="Notices"></div>
+  <div id="orders-alerts-panel" hidden role="region" data-i18n="orders.alerts.panelRegion" data-i18n-attr="aria-label" aria-label="Notices">
+    <!-- Shown by initAlertsPanel only while the panel holds nothing else. Its class is
+         deliberately not a notice class, so the bell's number never counts it. -->
+    <!-- A div, not a <p>: the panel sits inside <header>, and style.css «header p» (the Calculator's small caps subtitle) would draw it in tiny uppercase. -->
+    <div id="orders-alerts-empty" class="orders-alerts-empty" data-i18n="orders.alerts.empty">No notices right now.</div>
+  </div>
 </header>
 
 <div class="scroll-area scroll-with-bar">
