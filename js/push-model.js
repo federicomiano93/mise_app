@@ -140,8 +140,8 @@ const WORDS = Object.freeze({
     openCalculator: 'Apri il Calcolatore per vederlo.',
     newList: 'Lista d’ordine',
     newListPlain: 'È arrivata una lista d’ordine',
-    lineToOrder: 'voce da ordinare.',
-    linesToOrder: 'voci da ordinare.',
+    lineToOrder: 'articolo da ordinare.',
+    linesToOrder: 'articoli da ordinare.',
     openOrders: 'Apri Ordini per vederla.',
   },
 });
