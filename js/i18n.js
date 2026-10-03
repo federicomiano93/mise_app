@@ -910,6 +910,7 @@ const DICTIONARIES = Object.freeze({
     'orders.eg.ratePerLitre': 'e.g. 6.00 (one litre)',
     'orders.eg.ratePerPiece': 'e.g. 0.035 (one piece)',
     'orders.eg.pieceWeight': 'e.g. 0.055',
+    'orders.price.notANumber': 'Write just a number above zero, like 7.20.',
     'orders.ingredientsCount': { one: '{n} ingredient', other: '{n} ingredients' },
 
     // The record forms. ⚠️ These labels were literals passed as an ARGUMENT —
@@ -3562,6 +3563,7 @@ const DICTIONARIES = Object.freeze({
     'orders.eg.ratePerLitre': 'es. 6,00 (un litro)',
     'orders.eg.ratePerPiece': 'es. 0,035 (un pezzo)',
     'orders.eg.pieceWeight': 'es. 0,055',
+    'orders.price.notANumber': 'Scrivi solo un numero maggiore di zero, come 7,20.',
     'orders.ingredientsCount': { one: '{n} ingrediente', other: '{n} ingredienti' },
 
     // Le schede. ⚠️ Erano scritte in inglese dentro il codice, in una forma che il

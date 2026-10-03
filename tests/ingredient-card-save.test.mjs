@@ -982,12 +982,26 @@ test('a price typed with a comma is saved as the same number as with a point', a
   assert.equal(payload.casePrice, 20.4, 'the case price box reads the comma too');
 });
 
-test('a price with two marks («1.234,5») is not guessed at: it is not saved as a number', async () => {
+// Review of #278: text that is not a number used to be saved as «no price», quietly deleting the
+// stored one. It is refused on Save now, on that box (P20), and nothing is written.
+test('a price box holding something that is not a number is refused on Save, never saved as no price', async () => {
+  for (const typed of ['1.234,5', 'abc', '12,50 x', '-5', '0']) {
+    const card = openCard({ item: TYPED_KG });
+    type(card.rate, typed);
+    const before = card.saves.length;
+    await card.save();
+    assert.equal(card.saves.length, before, `«${typed}» must not be saved`);
+    assert.equal(card.rate.getAttribute('aria-invalid'), 'true', `«${typed}» is pointed at`);
+    assert.ok(card.all().some(n => n.classList.contains('mgmt-field-error') && !n.hidden && /number above zero/.test(n.textContent)),
+      'a visible message says what to write');
+    type(card.rate, '7,5');
+    assert.notEqual(card.rate.getAttribute('aria-invalid'), 'true', 'typing clears the refusal');
+  }
+  // An EMPTY box is still how a price is removed.
   const card = openCard({ item: TYPED_KG });
-  type(card.rate, '1.234,5');
+  type(card.rate, '');
   const { payload } = await card.save();
-  assert.notEqual(payload.pricePerUnit, 1.2345);
-  assert.notEqual(payload.pricePerUnit, 1234.5);
+  assert.equal(payload.pricePerUnit, null);
 });
 
 test('the price boxes are text with the decimal keyboard, and an Italian venue shows the comma in them', () => {

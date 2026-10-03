@@ -218,6 +218,25 @@ test('an untouched save writes the stored price back verbatim: same unit, rate, 
   }
 });
 
+// The boxes of this card are read on EVERY save, so in an Italian venue — where they now SHOW
+// «2,5» and «0,055» — an untouched save must still write back the very same numbers and no
+// history entry (review of #278, 4 Oct 2026).
+test('an untouched save in the Italian layout writes the same numbers back, and no history record', async () => {
+  const { moneyLayoutOf } = await import('../js/market.js');
+  try {
+    setCurrency('€', moneyLayoutOf({ country: 'IT' }));
+    for (const [name, item] of Object.entries(LEGACY_SHAPES)) {
+      const card = openCard({ item });
+      const result = await card.save();
+      assert.ok(result, `${name}: it saved`);
+      for (const key of PRICE_KEYS) assert.equal(result.payload[key] ?? null, item[key] ?? null, `${name}: ${key}`);
+      assert.equal(result.record, null, `${name}: no history record`);
+    }
+  } finally {
+    setCurrency('€');
+  }
+});
+
 test('an untouched save writes no packCount, no history record, and reports no unit change', async () => {
   for (const [name, item] of Object.entries(LEGACY_SHAPES)) {
     const card = openCard({ item });
