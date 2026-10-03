@@ -282,6 +282,16 @@
   color: var(--text3);
   flex-shrink: 0;
 }
+.rec-host .mgmt-price-tag {
+  display: inline-block;
+  margin-right: 8px;
+  padding: 1px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--surface-2);
+  color: var(--text-2);
+  font-size: 11px;
+}
 .rec-host .day-checks {
   display: flex;
   flex-wrap: wrap;

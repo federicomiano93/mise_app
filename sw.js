@@ -1,4 +1,4 @@
-const CACHE_NAME = 'theitalianclub-v515';
+const CACHE_NAME = 'theitalianclub-v519';
 // Firebase SDK modules (loaded from gstatic) are cached SEPARATELY from CACHE_NAME
 // so they survive the cache-version bump that happens on every deploy — otherwise
 // the offline SDK would be wiped each release until the next online load. The name
@@ -12,7 +12,7 @@ const CACHE_NAME = 'theitalianclub-v515';
 // the fetch handler below, on the first load that has a network.
 // So between activate() and that first load, a phone that is OFFLINE cannot boot:
 // the code asks for 12.18.0 and nothing has it. In practice the window is very
-// small — activate() only happens after a successful 277-file precache, i.e.
+// small — activate() only happens after a successful 283-file precache, i.e.
 // online, and tapping the update banner reloads the page immediately — but it is
 // not zero, and it is the reason to bump the SDK deliberately rather than often.
 // Leaving the name unchanged would close the window and cost ~1 MB of dead
@@ -79,6 +79,7 @@ const ASSETS = [
   './js/hold-to-zoom.js',
   './js/price-model.js',
   './js/vat-rates.js',
+  './js/vat-number.js',
   './js/pack-size.js',
   './js/record-choices.js',
   './js/order-cost.js',
@@ -276,6 +277,14 @@ const ASSETS = [
   './js/orders/registry.js',
   './js/orders/registry-main.js',
   './js/orders/registry-settings.js',
+  // «Import from invoices»: the pure model and plan, the data layer and the screen (suppliers.html).
+  // pack-format.js was missing from this list although the ingredient card has imported it since
+  // 1 Oct 2026; the import model needs it too, so it is listed here.
+  './js/pack-format.js',
+  './js/orders/invoice-import-model.js',
+  './js/orders/invoice-import-plan.js',
+  './js/orders/invoice-import-data.js',
+  './js/orders/invoice-import-screen.js',
   './js/form-dirty.js',
   './js/orders/level-stack.js',
   './js/orders/firebase-features.js',
@@ -401,14 +410,14 @@ const ASSET_HASHES = {
   "./home.html": 'a4401ab28cb28eb9',
   "./calculator.html": '6febbbbb883d4939',
   "./orders.html": '7448d3e3cbd7561c',
-  "./suppliers.html": '408eeeac61e60686',
+  "./suppliers.html": '741d00b081eee520',
   "./install-guide.html": '155cc21e1c1dc524',
   "./qr.png": '761a95e5bc25e2ba',
   "./js/install-guide.js": '17fcd0c0fec489c2',
   "./tokens.css": '15a90c6c1535077b',
   "./auth.css": 'e4ba63eda208115b',
   "./style.css": '011704cc77f2029b',
-  "./orders.css": 'a4077937664b9b70',
+  "./orders.css": '781fc833e2bc015f',
   "./sounds/alarm.wav": '0d1465974f5be95b',
   "./fonts/manrope-latin.woff2": '71eb731d55804619',
   "./fonts/manrope-latin-ext.woff2": 'bd24140af06f1b58',
@@ -425,6 +434,7 @@ const ASSET_HASHES = {
   "./js/hold-to-zoom.js": '92ffddd4533b46d7',
   "./js/price-model.js": 'f978e5a00d7bb968',
   "./js/vat-rates.js": 'a3d073040b1d8490',
+  "./js/vat-number.js": '097b915810c4d39a',
   "./js/pack-size.js": 'e5aae95d8c7b03d5',
   "./js/record-choices.js": '38da7c93b6f723a2',
   "./js/order-cost.js": 'a89d555ef365227d',
@@ -443,8 +453,8 @@ const ASSET_HASHES = {
   "./js/supplier-label.js": '9601ceed020c0205',
   "./js/order-unit.js": '1e5149dc8263a4f5',
   "./js/record-data.js": '47d198fbb955d963',
-  "./js/ingredient-record-form.js": '2c97cdd9862b3b25',
-  "./js/supplier-record-form.js": 'e696787bd1e15b7d',
+  "./js/ingredient-record-form.js": 'e84a93ceafe8a2f0',
+  "./js/supplier-record-form.js": '29b82e744f6921c1',
   "./js/ingredient-kind.js": 'b5ea1d7ec8255fd6',
   "./js/ingredient-name.js": '9045e25fc169d2ff',
   "./js/photo-model.js": '67d1d83755bbd33a',
@@ -483,7 +493,7 @@ const ASSET_HASHES = {
   "./js/location.js": '6aaf53615a8739d1',
   "./js/sections.js": 'abcfdecb2bd5766d',
   "./js/roles.js": '2b491770c4b6165b',
-  "./js/i18n.js": 'a6f9c8d95ced8ddd',
+  "./js/i18n.js": '53d3297789873ce7',
   "./js/i18n-dom.js": '24249af4367511e5',
   "./js/keyboard-done.js": '4a4b75c43a15e2c7',
   "./js/join-code.js": '5b89de65db5c102f',
@@ -569,8 +579,13 @@ const ASSET_HASHES = {
   "./js/orders/management.js": '1797cd30f5834ffd',
   "./js/orders/mgmt-ui.js": '8894b23fd41e8a66',
   "./js/orders/registry.js": '468d42ee3d759016',
-  "./js/orders/registry-main.js": '7fe909f55cfbcdab',
+  "./js/orders/registry-main.js": 'cfba8f63af6987a2',
   "./js/orders/registry-settings.js": '74c80116276527d1',
+  "./js/pack-format.js": 'c1b3a80d0921eb39',
+  "./js/orders/invoice-import-model.js": '83fc9ef6febd7d36',
+  "./js/orders/invoice-import-plan.js": '5dd52c0716adfa9d',
+  "./js/orders/invoice-import-data.js": 'e27a00d2b6a50b9b',
+  "./js/orders/invoice-import-screen.js": '5b049f460332eea7',
   "./js/form-dirty.js": '27dce3718a33d438',
   "./js/orders/level-stack.js": '6832e37854829455',
   "./js/orders/firebase-features.js": 'de89853130a11423',
@@ -588,7 +603,7 @@ const ASSET_HASHES = {
   "./catalogue.html": '91eacf7f31a7713b',
   "./catalogue.css": 'd92cf3afef699fe4',
   "./label-print.css": 'ffbcdf4e7a627a2d',
-  "./records.css": 'ebe8a10686f08a08',
+  "./records.css": '484b114e27c695b8',
   "./js/catalogue/confirm-dialog.js": '61a7f580f37c5ff8',
   "./js/catalogue/dom.js": '9878ae7c750afd79',
   "./js/catalogue/catalogue-model.js": '28a30011303d987a',
@@ -703,7 +718,7 @@ const ASSET_HASHES = {
 // code against rules that deployed instantly, which is the very thing the gate exists
 // to prevent. Two things stand between that and a release: the test that every ASSETS
 // entry EXISTS (a mistyped path being the likeliest permanent cause), and this
-// project's post-deploy sweep, which already asks the live site for all 277 files.
+// project's post-deploy sweep, which already asks the live site for all 283 files.
 // ⚠️ NEITHER covers a device-specific failure — nobody has yet confirmed an update
 // landing on a real iPhone under this code.
 //
