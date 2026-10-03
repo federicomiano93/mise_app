@@ -126,6 +126,109 @@ class PackagedGoodsTest(PricingCase):
         self.assertEqual(ev.reliability, "da verificare")
 
 
+class EggQuantityTest(PricingCase):
+    """The «X 30» of an egg line may or may not be applied on top of the quantity."""
+
+    UNCLEAR = "uova: non è chiaro se la quantità conta uova o confezioni"
+
+    def test_quantity_already_in_eggs_is_not_divided_by_the_tray_size_again(self):
+        self.add([{"desc": "UOVA IN VASSOI X 30L", "qty": 180, "unit": "NR", "total": 27.27}])
+        _, params, ev = self.evaluate_only()
+        self.assertEqual(params.pack_count, 30)
+        point = self.price(ev)
+        self.assertEqual((point.price, point.qty), (0.1515, 180.0))
+        self.assertEqual(ev.reliability, "media")
+
+    def test_quantity_in_packs_is_multiplied_by_the_pack_count(self):
+        self.add([{"desc": "CONFEZIONE DA 4 UOVA FRESCHE", "qty": 77, "unit": "pz", "total": 90.86}])
+        _, params, ev = self.evaluate_only()
+        self.assertEqual(params.pack_count, 4)
+        point = self.price(ev)
+        self.assertEqual((point.price, point.qty), (0.295, 308.0))
+        self.assertEqual(ev.reliability, "media")
+
+    def test_both_readings_believable_counts_packs_and_asks_for_a_check(self):
+        # 4.00 / 10 = 0.40 per egg and 4.00 / 40 = 0.10 per egg: both are egg prices.
+        self.add([{"desc": "CONFEZIONE DA 4 UOVA FRESCHE", "qty": 10, "unit": "pz", "total": 4}])
+        _, _, ev = self.evaluate_only()
+        point = self.price(ev)
+        self.assertEqual((point.price, point.qty), (0.1, 40.0))
+        self.assertEqual((ev.reliability, ev.note), ("da verificare", self.UNCLEAR))
+
+    def test_neither_reading_believable_counts_packs_and_asks_for_a_check(self):
+        # 100 / 1 = 100 per egg and 100 / 30 = 3.33 per egg: neither is an egg price.
+        self.add([{"desc": "UOVA IN VASSOI X 30", "qty": 1, "unit": "NR", "total": 100}])
+        _, _, ev = self.evaluate_only()
+        point = self.price(ev)
+        self.assertEqual((point.price, point.qty), (3.3333, 30.0))
+        self.assertEqual((ev.reliability, ev.note), ("da verificare", self.UNCLEAR))
+
+    def test_the_workbook_pack_count_still_drives_the_packs_reading(self):
+        self.add([{"desc": "UOVA IN VASSOI X 30", "qty": 10, "unit": "NR", "total": 60}])
+        catalogue, product = self.only_product(self.catalogue())
+        params = products.propose_params(product, catalogue.config)
+        params = products.Params(params.price_unit, params.pack, 20, params.egg, params.egg_weight_kg)
+        ev = products.evaluate(product, params, catalogue)
+        # eggs: 6.00 (out), packs of 20: 0.30 (in)
+        self.assertEqual((self.price(ev).price, self.price(ev).qty), (0.3, 200.0))
+
+
+class MultipackUnitFirstTest(PricingCase):
+    def test_millilitre_portions_are_summed_into_litres(self):
+        self.add([{"desc": "ML10X102 OLIO EVO MONODOSE", "qty": 1, "unit": "NR", "total": 15.63}])
+        _, params, ev = self.evaluate_only()
+        self.assertEqual((params.pack.size, params.pack.unit, params.pack_count), (10, "ml", 102))
+        point = self.price(ev)
+        self.assertEqual((point.price, point.qty), (15.3235, 1.02))
+        self.assertEqual(ev.reliability, "media")
+
+    def test_grams_portions_are_summed_into_kilograms(self):
+        self.add([{"desc": "GR25X40 ZUCCHERO BUSTINE", "qty": 2, "unit": "CT", "total": 6}])
+        _, params, ev = self.evaluate_only()
+        self.assertEqual((params.pack.size, params.pack.unit, params.pack_count), (25, "g", 40))
+        point = self.price(ev)
+        self.assertEqual((point.price, point.qty), (3.0, 2.0))
+
+    def test_kilograms_times_count(self):
+        self.add([{"desc": "KG1X10 FARINA", "qty": 3, "unit": "CT", "total": 24}])
+        _, params, ev = self.evaluate_only()
+        self.assertEqual((params.pack.size, params.pack.unit, params.pack_count), (1, "kg", 10))
+        point = self.price(ev)
+        self.assertEqual((point.price, point.qty), (0.8, 30.0))
+
+
+class ImplausiblePriceTest(PricingCase):
+    NOTE = "prezzo fuori scala: controlla peso e confezione"
+
+    def check(self, row, expected_price):
+        self.add([row])
+        _, _, ev = self.evaluate_only()
+        self.assertEqual(self.price(ev).price, expected_price)
+        self.assertEqual((ev.reliability, ev.note), ("da verificare", self.NOTE))
+
+    def test_too_cheap_per_kg(self):
+        self.check({"desc": "FARINA", "qty": 100, "unit": "KG", "total": 4}, 0.04)
+
+    def test_too_dear_per_kg(self):
+        self.check({"desc": "FARINA", "qty": 1, "unit": "KG", "total": 350}, 350.0)
+
+    def test_too_dear_per_litre_from_a_misread_pack(self):
+        self.check({"desc": "OLIO LT 0,01", "qty": 1, "unit": "NR", "total": 15}, 1500.0)
+
+    def test_pieces_below_and_above_their_range(self):
+        self.check({"desc": "UOVA CAT. M", "qty": 1000, "unit": "PZ", "total": 5}, 0.005)
+        self.setUp()
+        self.check({"desc": "UOVA CAT. M", "qty": 1, "unit": "PZ", "total": 60}, 60.0)
+
+    def test_the_bounds_themselves_are_fine(self):
+        for total in (5, 300):  # exactly 0.05 and 300 per kg
+            with self.subTest(total=total):
+                self.setUp()
+                self.add([{"desc": "SPEZIA", "qty": 100 if total == 5 else 1, "unit": "KG", "total": total}])
+                _, _, ev = self.evaluate_only()
+                self.assertEqual(ev.reliability, "alta")
+
+
 class DocumentRulesTest(PricingCase):
     def test_free_goods_on_a_separate_line_lower_the_price(self):
         self.add([

@@ -100,6 +100,11 @@ test suites.
   really cost (line total ÷ quantity, so discounts and free goods on a separate line are
   included). One entry per invoice per product: lines of the same product on the same
   invoice are added together, and `line` is the first of them.
+- **Sanity rules on the price** (`pricing.py`): a price per kg/l below 0.05 or above 300, or per
+  piece below 0.01 or above 50, is always «da verificare» («prezzo fuori scala»), never «alta» or
+  «media». For eggs with a per-pack count N, both readings of the quantity (counts eggs / counts
+  packs) are tried and the one giving 0.05–0.90 € per egg wins; if both or neither do, packs are
+  assumed and the product is «da verificare». The chosen reading also sets `qty`.
 - `vatRate` is the line's rate if it is one of 0/4/5/10/20/22, else `null`.
 - `weight` is ONE package (`"2.5 kg"`), `packCount` how many packages a carton holds
   (`null` = sold singly), exactly as the ingredient card stores them.

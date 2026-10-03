@@ -137,6 +137,20 @@ def parse_pack(description: str) -> PackInfo | None:
     m = re.search(r"\bPZ\.?\s*(\d+)\s*GR\.?\s*(\d+)", d)
     if m:
         return PackInfo(float(m.group(2)), "g", int(m.group(1)))
+    # Unit FIRST, then size x count: "ML10X102" is 102 portions of 10 ml, "GR25X40" 40 of 25 g,
+    # "KG1X10" ten of 1 kg. The unit must not be the tail of a longer word.
+    m = re.search(r"(?<![A-Z])(ML|CL|LT|L|GR|G|KG)\s*\.?\s*" + _NUM + r"\s*[X×*]\s*(\d+)(?!\d)", d)
+    if m:
+        unit, size, count = m.group(1), _f(m.group(2)), int(m.group(3))
+        if unit == "KG":
+            return PackInfo(size, "kg", count)
+        if unit in ("GR", "G"):
+            return PackInfo(size, "g", count)
+        if unit == "ML":
+            return PackInfo(size, "ml", count)
+        if unit == "CL":
+            return PackInfo(size * 10, "ml", count)
+        return PackInfo(size, "l", count)
     # "kg 2,5 x 4", "KG.2,5X4"
     m = re.search(r"\bKG\.?\s*" + _NUM + r"\s*X\s*(\d+)(?!\d)", d)
     if m:

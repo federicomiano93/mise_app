@@ -10,6 +10,17 @@ class PackParsingTest(unittest.TestCase):
     def check(self, description, size, unit, count=None):
         self.assertEqual(parse_pack(description), PackInfo(size, unit, count), description)
 
+    def test_unit_first_size_times_count(self):
+        self.check("ML10X102 OLIO EVO MONODOSE", 10, "ml", 102)
+        self.check("GR25X40 ZUCCHERO BUSTINE", 25, "g", 40)
+        self.check("KG1X10 FARINA", 1, "kg", 10)
+        self.check("CL 5 X 24 SCIROPPO", 50, "ml", 24)
+        self.check("LT 1,5 x 6 ACETO", 1.5, "l", 6)
+
+    def test_unit_first_does_not_match_inside_a_word(self):
+        self.assertIsNone(parse_pack("BUSTE ML"))
+        self.assertIsNone(parse_pack("DOLCE5X3"))
+
     def test_the_prototype_patterns(self):
         self.check("PASTA 2,5kg* 4pz", 2.5, "kg", 4)
         self.check("PASTA 85gr* 50pz", 85, "g", 50)
