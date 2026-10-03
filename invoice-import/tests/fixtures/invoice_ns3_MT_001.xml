@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ns2:FileMetadati xmlns:ns2="http://www.fatturapa.gov.it/sdi/messaggi/v1.0">
+  <IdentificativoSdI>18000000001</IdentificativoSdI>
+  <NomeFile>invoice_ns3.xml</NomeFile>
+</ns2:FileMetadati>

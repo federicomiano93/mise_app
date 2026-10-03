@@ -30,6 +30,15 @@ jobs:
       # No install step: the suite is pure Node with zero dependencies, run by the
       # built-in test runner (`node --test`, see package.json).
       - run: npm test
+      # The owner's LOCAL invoice script (invoice-import/) is Python, not Node. Its tests
+      # run here on invented invoices only: real invoices never go in this repository.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Invoice import script tests
+        run: |
+          python -m pip install -r invoice-import/requirements.txt
+          python -m unittest discover -s invoice-import/tests -t invoice-import
       # ⚠️ THE SAME CHECK deploy-functions RUNS, MOVED FORWARD TO THE PULL REQUEST.
       # deploy-functions runs on EVERY push to main and refuses on a high advisory,
       # even when functions/ did not change — twice on 30 Sep 2026 a release went

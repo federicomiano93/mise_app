@@ -21,6 +21,7 @@ import {
   watchDoc, setCategoryOnMany, deleteIngredientWithPrice, mayWritePrices,
 } from './firebase-orders.js';
 import { readIngredientPrice } from '../record-data.js';
+import { openInvoiceImport } from './invoice-import-screen.js';
 
 const state = {
   suppliers: [],
@@ -30,7 +31,7 @@ const state = {
   // The venue's saved category list (config/orders). null = never saved one, or not
   // loaded yet: both mean «offer the defaults».
   ingredientCategories: null,
-  loaded: { ingredients: false, config: false },
+  loaded: { suppliers: false, ingredients: false, config: false },
   // Whether the live prices have really answered (watchIngredientPrices' second argument): until
   // then an ingredient card reads its own price document before it opens (registry.js).
   pricesReadable: false,
@@ -146,11 +147,32 @@ backLink?.addEventListener('click', (event) => {
 const footerEl = document.getElementById('registry-footer');
 const settingsBtn = document.getElementById('registry-settings-btn');
 
+const importBtn = document.getElementById('registry-import-btn');
+
 settingsBtn?.addEventListener('click', () => screen.openSettings());
+
+// ⚠️ THE IMPORT WRITES PRICES AND CREATES SUPPLIERS AND INGREDIENTS: it needs the role AND the Food cost
+// section, the same pair the rules ask for a price (mayWritePrices). The click asks again; the rules decide (P2).
+importBtn?.addEventListener('click', () => {
+  if (!(canManageHere() && mayWritePrices())) return;
+  openInvoiceImport({
+    suppliers: () => state.suppliers,
+    ingredients: () => state.ingredients,
+    prices: () => state.ingredientPrices,
+    // Plans against lists that have really arrived, or every supplier and ingredient would read as new.
+    ready: () => state.loaded.suppliers && state.loaded.ingredients && state.pricesReadable === true,
+    // Focus goes back here when the screen closes (a browser that does not focus a button on tap leaves
+    // nothing else to return to).
+    opener: importBtn,
+    // The venue's OUTPUT language, read when the import runs: the carton word on a new ingredient is food.
+    language: () => outputLanguage(currentSession().location),
+  });
+});
 
 onSession(() => {
   if (!footerEl || !settingsBtn) return;
   settingsBtn.hidden = !canManageHere();
+  if (importBtn) importBtn.hidden = !(canManageHere() && mayWritePrices());
   footerEl.hidden = ![...footerEl.children].some(child => !child.hidden);
 });
 
@@ -171,6 +193,7 @@ function liveDataLost(what) {
 // needed to draw the screen, so both are unbounded — the same choice Orders makes.
 watchCollection(COLLECTIONS.suppliers, list => {
   state.suppliers = list;
+  state.loaded.suppliers = true;
   screen.refresh();
 }, liveDataLost('suppliers'));
 

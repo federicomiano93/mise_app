@@ -821,7 +821,11 @@ function priceHistoryBlock(item, actions) {
       entries.forEach(entry => {
         list.appendChild(el('div', { class: 'mgmt-price-row' }, [
           el('span', { class: 'mgmt-price-rate', text: formatPricePerUnit(entry) }),
-          el('span', { class: 'mgmt-price-when', text: shortDate(entry.recordedAt) }),
+          // ⚠️ A WORD, NOT A COLOUR: a point read from an invoice says so beside its date.
+          el('span', { class: 'mgmt-price-when' }, [
+            entry.source === 'invoice' ? el('span', { class: 'mgmt-price-tag', text: t('orders.priceFromInvoice') }) : null,
+            shortDate(entry.recordedAt),
+          ]),
         ]));
       });
     } catch (err) {

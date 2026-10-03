@@ -250,6 +250,14 @@ async function suppliers() {
     mergeWrite('locations/main/suppliers/SUP_MODERN', { shortName: 'Aldo', bakery: 'main' }));
   await expectAllowed('clear the name to show (empty shortName)', () =>
     mergeWrite('locations/main/suppliers/SUP_MODERN', { shortName: '', bakery: 'main' }));
+  await expectAllowed('save a supplier VAT number', () =>
+    mergeWrite('locations/main/suppliers/SUP_MODERN', { vatNumber: 'IT00000000077', bakery: 'main' }));
+  await expectAllowed('clear the VAT number', () =>
+    mergeWrite('locations/main/suppliers/SUP_MODERN', { vatNumber: '', bakery: 'main' }));
+  await expectDenied('a VAT number long enough to be a payload',
+    () => mergeWrite('locations/main/suppliers/SUP_MODERN', { vatNumber: bigString(31), bakery: 'main' }));
+  await expectDenied('a VAT number sent as a number',
+    () => mergeWrite('locations/main/suppliers/SUP_MODERN', { vatNumber: 2903820872, bakery: 'main' }));
   await expectDenied('a 500-character name to show',
     () => mergeWrite('locations/main/suppliers/SUP_MODERN', { shortName: bigString(500), bakery: 'main' }));
   await expectDenied('a name to show that is not text',
@@ -304,6 +312,14 @@ async function ingredients() {
   await expectDenied('a name to show on an ingredient that is not text',
     () => mergeWrite('locations/main/ingredients/ING_MODERN', { shortName: 42, bakery: 'main' }));
   await mergeWrite('locations/main/ingredients/ING_MODERN', { shortName: '', bakery: 'main' });
+  await expectAllowed('an ingredient with the supplier article code', () =>
+    mergeWrite('locations/main/ingredients/ING_MODERN', { supplierCode: 'FAR-00-25', bakery: 'main' }));
+  await expectAllowed('clear the supplier article code', () =>
+    mergeWrite('locations/main/ingredients/ING_MODERN', { supplierCode: '', bakery: 'main' }));
+  await expectDenied('a supplier article code longer than 60',
+    () => mergeWrite('locations/main/ingredients/ING_MODERN', { supplierCode: bigString(61), bakery: 'main' }));
+  await expectDenied('a supplier article code sent as a number',
+    () => mergeWrite('locations/main/ingredients/ING_MODERN', { supplierCode: 12345, bakery: 'main' }));
 
   await expectDenied('an unknown key on an ingredient',
     () => mergeWrite('locations/main/ingredients/ING_MODERN', { evil: 'x', bakery: 'main' }));
@@ -551,6 +567,44 @@ async function ingredientPrices() {
     () => wholeWrite(`${PRICES}/SEEDED`, entry({ pricePerUnit: 1 })));
   await expectDenied('deleting a price already recorded',
     () => deleteWrite(`${PRICES}/SEEDED`));
+
+  // ── A price read from an invoice (3 Oct 2026, invoice import) ──
+  // Its id is "inv-<SDI id>-<line>", so importing the same invoice twice aims at a
+  // document that exists — an update, which the block denies. The server, not the app,
+  // is what makes a second copy impossible.
+  const fromInvoice = (over = {}) => entry({
+    source: 'invoice', invoiceId: '18000000072', invoiceDate: '2026-08-31', invoiceQty: 25, ...over,
+  });
+  await expectAllowed('a price read from an invoice, under its invoice id', () =>
+    wholeWrite(`${PRICES}/inv-18000000072-5`, fromInvoice()));
+  await expectDenied('⚠️ the same invoice line imported a second time',
+    () => wholeWrite(`${PRICES}/inv-18000000072-5`, fromInvoice()));
+  await expectAllowed('another line of the same invoice', () =>
+    wholeWrite(`${PRICES}/inv-18000000072-7`, fromInvoice({ pricePerUnit: 0.85 })));
+  await expectAllowed('an invoice price without the quantity bought', () => {
+    const e = fromInvoice({ invoiceId: '18000000073' }); delete e.invoiceQty;
+    return wholeWrite(`${PRICES}/inv-18000000073-1`, e);
+  });
+  await expectDenied('an invoice price under a generated id',
+    () => createWrite(PRICES, fromInvoice()));
+  await expectDenied('an invoice price whose id names ANOTHER invoice',
+    () => wholeWrite(`${PRICES}/inv-99999999999-5`, fromInvoice()));
+  await expectDenied('an invoice id that is not digits (it is spliced into a pattern)',
+    () => wholeWrite(`${PRICES}/inv-.*-5`, fromInvoice({ invoiceId: '.*' })));
+  await expectDenied('an invoice price with no invoice id', () => {
+    const e = fromInvoice(); delete e.invoiceId;
+    return wholeWrite(`${PRICES}/inv-18000000074-1`, e);
+  });
+  await expectDenied('an invoice price with no invoice date', () => {
+    const e = fromInvoice({ invoiceId: '18000000074' }); delete e.invoiceDate;
+    return wholeWrite(`${PRICES}/inv-18000000074-1`, e);
+  });
+  await expectDenied('an invoice date that is not YYYY-MM-DD',
+    () => wholeWrite(`${PRICES}/inv-18000000074-1`, fromInvoice({ invoiceId: '18000000074', invoiceDate: '31/08/2026' })));
+  await expectDenied('an invoice quantity of zero',
+    () => wholeWrite(`${PRICES}/inv-18000000074-1`, fromInvoice({ invoiceId: '18000000074', invoiceQty: 0 })));
+  await expectDenied('a MANUAL price carrying invoice keys',
+    () => createWrite(PRICES, entry({ invoiceId: '18000000075', invoiceDate: '2026-08-31' })));
 
   // A field left OUT, not sent as null: toValue() encodes undefined as an explicit
   // null, which is a different thing from absent and would test a different rule.
