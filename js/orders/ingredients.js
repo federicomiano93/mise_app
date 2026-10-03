@@ -217,7 +217,9 @@ export function buildRow(ing, supplier, suggest, entries, hooks, { meta = '' } =
     entryFor(entries, ing.id).stock = wholeNumber(stockInput.value);
     const result = updateHint();
     if (result.active) setQty(result.suggestion); // auto-fill the suggested order (also autosaves)
-    else hooks.afterChange(supplier.id);           // still autosave the stock value
+    // ⚠️ stockOnly: counting stock says nothing about WHICH order the rows are for, so it must
+    // never move the supplier's day stamp (orders-main afterChange).
+    else hooks.afterChange(supplier.id, { stockOnly: true });   // still autosave the stock value
     updateHint();                                  // the auto-filled qty may itself be worth a word
   });
   qtyInput.addEventListener('input', () => {

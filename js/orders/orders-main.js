@@ -26,7 +26,7 @@ import {
 import { withPrices } from '../price-model.js';
 import { currentSession } from '../firebase.js';
 import { el, groupBy } from './dom.js';
-import { mountSupplierList, refreshSupplierDerived } from './suppliers.js';
+import { mountSupplierList, refreshSupplierDerived, supplierStats } from './suppliers.js';
 import { buildSupplierDetail } from './supplier-detail.js';
 import { markFilled, paintUnitSelect } from './ingredients.js';
 import { buildSupplierItems } from './supplier-items.js';
@@ -57,7 +57,13 @@ import { renderAlerts } from './notifications.js';
 import { routesFor } from './send-routes.js';
 import { confirmDialog, alertDialog } from './confirm-dialog.js';
 import { mayEditRecords } from '../records.js';
-import { todayISO, dayPhrase, daySpoken, dayWhen, localDayOf, dayLabel } from './day.js';
+import {
+  todayISO, dayPhrase, daySpoken, dayWhen, localDayOf, dayLabel, spellShortDate, spellLongDate,
+} from './day.js';
+import {
+  stampFor, recordDay, isFutureDay, nextOrderOffer, notForLater, dayChoices,
+  nextDeliveryAfter,
+} from './order-day.js';
 import {
   buildOrderMessage, whatsappUrl, itemsFromQuantities, indexById, fallbackSupplierName,
 } from './order-text.js';
@@ -113,7 +119,7 @@ const state = {
   historyFrom: '',              // where the live window starts — the older pages end just before it
   requests: [],                 // order lists somebody sent to whoever runs the place
   entries: {},                  // { ingredientId: { qty, stock } } — shared object, mutated in place
-  days: {},                     // { supplierId: 'YYYY-MM-DD' } — the day those rows were typed
+  days: {},                     // { supplierId: 'YYYY-MM-DD' } — the day those rows are FOR (may be a future order day)
   draftUpdatedAt: '',           // fallback day for a draft written before `days` existed
   pending: [],                  // orders typed on an earlier day and never placed
   openSupplier: null,           // the supplier whose own screen is open, or null
@@ -124,7 +130,7 @@ const state = {
   supplierQuery: '',            // the supplier list's search text — deliberately separate
   supplierFilter: false,        // supplier list showing only what is being ordered
   filterIds: null,              // FROZEN Set of ingredient ids, or null for "show everything"
-  loaded: { suppliers: false, ingredients: false, draft: false },
+  loaded: { suppliers: false, ingredients: false, draft: false, history: false },
 };
 
 let olderLoader = null;          // pages of orders older than the live window; made when that listener starts
@@ -148,21 +154,26 @@ function setEntries(next) {
 }
 
 const hooks = {
-  afterChange(supplierId) {
+  afterChange(supplierId, { stockOnly = false } = {}) {
     const supplier = findOrderSupplier(supplierId);
+    // Stamp the day these rows are FOR. Next week's quantities typed early are stamped
+    // for the supplier's next order day (order-day.js), so the next morning they are not
+    // an «order not placed» and today's record is not «changed after ordering». This
+    // is what lets the app offer an order typed yesterday under YESTERDAY's date instead
+    // of quietly filing it under today. Done BEFORE the repaint below, which shows the stamp.
+    // A stock-only edit never moves the day: counting stock is not ordering.
+    if (!stockOnly) stampNow(supplierId, state.days[supplierId]);
     if (supplier) {
-      refreshSupplierDerived(supplier, ingredientsBySupplier()[supplierId] || [], state.entries);
+      refreshSupplierDerived(supplier, ingredientsBySupplier()[supplierId] || [], state.entries,
+        futureDayOf(supplierId));
     }
+    detailView?.refreshDay();
     // In the flat list there are no per-supplier cards, so the "Order placed…" button
     // is the only way to record an order. It used to wait for the change to come back
     // from Firestore before appearing; here it has to appear as you type. The summary
     // bar's numbers must move as you type for the same reason.
     refreshOrderTotals();
     paintMoney();
-    // Stamp the day these rows were touched. This is what lets the app offer an
-    // order typed yesterday under YESTERDAY's date instead of quietly filing it
-    // under today.
-    state.days[supplierId] = todayISO();
     scheduleDraftSave(state.entries, state.days);
   },
   onPlaced(supplierId) {
@@ -300,7 +311,9 @@ function withNoteLabels(list) {
 
 function refreshAllSuppliers() {
   const bySupplier = ingredientsBySupplier();
-  orderSupplierList().forEach(s => refreshSupplierDerived(s, bySupplier[s.id] || [], state.entries));
+  orderSupplierList().forEach(s =>
+    refreshSupplierDerived(s, bySupplier[s.id] || [], state.entries, futureDayOf(s.id)));
+  detailView?.refreshDay();
   refreshOrderTotals();
 }
 
@@ -427,6 +440,7 @@ function renderSupplierList(container, suppliers) {
     suppliers,
     ingredientsBySupplier: ingredientsBySupplier(),
     entries: state.entries,
+    forDay: futureDayOf,
   });
 }
 
@@ -592,6 +606,7 @@ function renderOpenSupplier() {
     // hidden «Suppliers & ingredients» from the staff, a door to the same card from Orders
     // would quietly undo the switch. Asked on every repaint, so it follows the switch live.
     onAddIngredient: mayAddIngredient() ? () => openAddIngredient(supplier.id) : null,
+    dayInfo: () => dayInfoFor(supplier),
   };
 
   if (detailView && detailView.id === supplier.id) {
@@ -947,7 +962,7 @@ function renderIncoming() {
         unit: storedUnitFor(unit, ingredientsById[id]),
         supplierId,
       };
-      state.days[supplierId] = todayISO();
+      stampNow(supplierId, previousDay);
       try {
         await saveDraftNow(state.entries, state.days);
       } catch (err) {
@@ -1599,11 +1614,99 @@ function refreshPlaceAllButton() {
 
 // ── Order placed (one supplier at a time) ─────────────────────────────────────
 
-// The day a supplier's rows belong to: the day they were typed. Falls back to the
-// draft's own timestamp for rows written before the app recorded that, and to
-// today when there is nothing at all to go on.
-function dayForSupplier(supplierId) {
+// The day a supplier's rows are FOR. Normally the day they were typed; next week's
+// quantities typed early are stamped with the supplier's next order day (order-day.js).
+// Falls back to the draft's own timestamp for rows written before the app recorded a
+// stamp, and to today when there is nothing at all to go on.
+//
+// ⚠️ TWO ACCESSORS, TWO QUESTIONS. rawDayFor is the stamp as stored — what the screens and
+// the reminders read, and it can be in the FUTURE (next week's order typed early).
+// dayForSupplier is the day an order is RECORDED under, and is never later than today: an
+// order placed now was ordered now, whatever week its quantities were typed for.
+function rawDayFor(supplierId) {
   return state.days[supplierId] || localDayOf(state.draftUpdatedAt) || todayISO();
+}
+
+function dayForSupplier(supplierId) {
+  return recordDay(rawDayFor(supplierId), todayISO());
+}
+
+// The stamp when it is in the future, else '' — what the supplier list row tags.
+function futureDayOf(supplierId) {
+  const stamp = state.days[supplierId];
+  return isFutureDay(stamp, todayISO()) ? stamp : '';
+}
+
+// Stamp a supplier after one of its rows changed (order-day.js stampFor). The rule needs no
+// history any more, so it can be asked at any moment.
+function stampNow(supplierId, current) {
+  const stamp = stampFor({
+    current, supplier: findOrderSupplier(supplierId) || {}, today: todayISO(),
+  });
+  if (stamp) state.days[supplierId] = stamp;
+}
+
+// The «Order: [Today | Next order (Thu 8) | …]» line on a supplier's own screen, or null
+// when there is only one answer to give (see supplier-detail.js). Asked again on every
+// keystroke and repaint, so the words are read here, inside the drawing path, never frozen
+// at load. WHAT is offered is decided by dayChoices (order-day.js), which also shows a
+// stored stamp that is neither today nor the next order day; this only translates it.
+//
+// The expected delivery follows the order day IN EFFECT (owner: «se scelgo oggi e non è il
+// giorno per effettuare l'ordine ci aspettiamo la consegna il prossimo giorno di consegna
+// del fornitore»).
+function choicesFor(supplier) {
+  const filled = supplierStats(ingredientsBySupplier()[supplier.id] || [], state.entries).filled;
+  return dayChoices({
+    supplier, stamp: state.days[supplier.id], hasItems: filled > 0, today: todayISO(),
+  });
+}
+
+function dayInfoFor(supplier) {
+  const choices = choicesFor(supplier);
+  if (choices.options.length < 2) return null;
+  const delivery = nextDeliveryAfter(supplier, choices.selectedDay);
+  const words = {
+    today: () => t('orders.dayLine.optToday'),
+    past: day => t('orders.dayLine.optPast', { day }),
+    next: day => t('orders.dayLine.optNext', { day }),
+    later: day => t('orders.dayLine.optLater', { day }),
+  };
+  return {
+    label: t('orders.dayLine.label'),
+    options: choices.options.map(o => ({
+      value: o.value, label: words[o.kind](spellShortDate(o.day)),
+    })),
+    selected: choices.selected,
+    deliveryText: delivery
+      ? t('orders.dayLine.delivery', { day: spellLongDate(delivery) }) : '',
+    onChange: value => setSupplierDay(supplier.id, value),
+  };
+}
+
+// The select of the day line. Same rollback and error status as keepAsToday. On failure
+// the line is redrawn from the (restored) stamp, so the select never shows a choice that
+// was not saved. Choosing «past» is choosing what is already stored: nothing is written.
+// The result is announced politely; focus stays on the select.
+async function setSupplierDay(supplierId, value) {
+  const supplier = findOrderSupplier(supplierId);
+  if (!supplier) return;
+  const choice = choicesFor(supplier).options.find(o => o.value === value);
+  if (!choice || choice.kind === 'past') {
+    detailView?.refreshDay();
+    return;
+  }
+  const saved = await restamp(supplierId, choice.day);
+  detailView?.refreshDay();
+  if (!saved) return;
+  refreshSupplierDerived(supplier, ingredientsBySupplier()[supplierId] || [], state.entries,
+    futureDayOf(supplierId));
+  const day = spellShortDate(choice.day);
+  detailView?.announce(
+    choice.kind === 'today' ? t('orders.dayLine.today')
+      : choice.kind === 'next' ? t('orders.dayLine.announceNext', { day })
+        : t('orders.dayLine.announceLater', { day }));
+  renderReminders();
 }
 
 // ⚠️ THE SAME-DAY UNIT CHECK, ASKED BEFORE ANYTHING LEAVES THE APP (before a message is sent,
@@ -1677,9 +1780,9 @@ function forgetSupplierLocally(supplierId) {
 // `confirm: false` is used right after a WhatsApp send, where the operator has
 // just answered the same question for every supplier that was sent.
 // `date` PINS the day. The unfinished-order banner passes the day it is showing,
-// because state.days[supplierId] is restamped to today by any keystroke on that
-// supplier's rows — so reading it here would file a "Placed yesterday" order under
-// TODAY, which is precisely the mistake this whole feature exists to prevent.
+// because a keystroke on that supplier's rows restamps state.days[supplierId] (to today
+// or to its next order day) — so reading it here would file a "Placed yesterday" order
+// under the wrong day, which is precisely the mistake this whole feature exists to prevent.
 async function placeOrder(supplierId, { confirm = true, date: pinnedDate, quantities = null, units = null } = {}) {
   const supplier = findOrderSupplier(supplierId);
   if (!supplier) return false;
@@ -2029,6 +2132,8 @@ function renderReminders() {
   renderPending(document.getElementById('orders-pending'), state.pending, {
     onPlaced: recordPending,
     onToday: keepAsToday,
+    onNext: keepForNextOrder,
+    nextDayOf: supplier => nextOrderOffer(supplier, todayISO()),
     onDiscard: discardPending,
   });
 
@@ -2056,7 +2161,9 @@ function renderUntoldChanges() {
   renderUntold(
     host,
     untoldChanges({
-      suppliers: orderSupplierList(),
+      // ⚠️ NOT THE SUPPLIERS STAMPED FOR A LATER DAY: their typing is next week's order,
+      // not an addition to the one just recorded or sent.
+      suppliers: notForLater(orderSupplierList(), state.days, todayISO()),
       ingredients: orderIngredients(),
       entries: state.entries,
       requests: state.requests,
@@ -2109,9 +2216,9 @@ function dismissPending(supplierId) {
 //
 // The day is the one the BANNER is showing, pinned when the unfinished order was
 // found, and it is passed through explicitly. It must not be re-read from
-// state.days here: touching any row of that supplier restamps that to today
-// (hooks.afterChange), so the record would land under today while the button
-// still said "Placed yesterday".
+// state.days here: touching any row of that supplier restamps it (hooks.afterChange: to
+// today, or to its next order day), so the record would land under the wrong day while
+// the button still said "Placed yesterday".
 async function recordPending(supplierId, day) {
   const done = await placeOrder(supplierId, { date: day });
   if (done) dismissPending(supplierId);
@@ -2123,16 +2230,34 @@ async function recordPending(supplierId, day) {
 // and swallowing a failure would leave the draft still stamped with the old day and
 // nothing on screen to say so.
 async function keepAsToday(supplierId) {
+  if (!await restamp(supplierId, todayISO())) return;
+  dismissPending(supplierId);
+  renderSummary();                // the open summary sheet must not go stale
+}
+
+// «For the next order (Mon 13)» — the rows are next week's, typed early. Same handling.
+async function keepForNextOrder(supplierId, day) {
+  if (!await restamp(supplierId, day)) return;
+  dismissPending(supplierId);
+  renderSummary();
+}
+
+// Set a supplier's day stamp and save it NOW. On failure the old stamp is put back and
+// the person is told; returns whether it was saved.
+async function restamp(supplierId, day) {
   const previous = state.days[supplierId];
-  state.days[supplierId] = todayISO();
+  state.days[supplierId] = day;
   try {
     await saveDraftNow(state.entries, state.days);
-    dismissPending(supplierId);
-    renderSummary();              // the open summary sheet must not go stale
+    return true;
   } catch (err) {
     console.error('Restamping the draft failed:', err);
     if (previous) state.days[supplierId] = previous; else delete state.days[supplierId];
+    // Keystrokes typed while this save was in flight rode on the failed write: queue the
+    // normal autosave again so they are not left unsent.
+    scheduleDraftSave(state.entries, state.days);
     setStatus(t('orders.couldNotUpdateThe2'), 'error');
+    return false;
   }
 }
 
@@ -2453,6 +2578,7 @@ async function init() {
     onChange: renderHistory,
   });
   watchRecentHistory(state.historyFrom, list => {
+    state.loaded.history = true;
     applyHistory(list);
     renderReminders();
   }, liveDataLost(() => t('orders.live.history')));

@@ -95,8 +95,9 @@ export function watchTablet(onChange) {
 // its only container had hidden itself. So there are TWO answers:
 //   count       — real notices only, what the NUMBER on the badge says.
 //   hasContent  — count > 0 OR the pill is there; what decides whether the
-//                 BELL shows at all. The pill is content worth opening the
-//                 panel for even though it is not itself a notice.
+//                 panel's "No notices right now." line is hidden (the bell itself
+//                 is permanent since 3 Oct 2026). The pill is content even
+//                 though it is not itself a notice.
 //
 // PURE, so it can be tested without a DOM (this project has no jsdom): given
 // the CLASS NAMES of the panel's descendants, not the elements themselves.
@@ -160,6 +161,7 @@ export function initAlertsPanel() {
   const btn = document.getElementById('orders-alerts-btn');
   const panel = document.getElementById('orders-alerts-panel');
   const countEl = document.getElementById('orders-alerts-count');
+  const emptyEl = document.getElementById('orders-alerts-empty');
   if (!btn || !panel || !countEl) return;
 
   function setOpen(open) {
@@ -177,18 +179,23 @@ export function initAlertsPanel() {
   // panel the moment a banner's own renderer quietly cleared itself.
   //
   // ⚠️ THE BELL AND THE NUMBER ANSWER TWO DIFFERENT QUESTIONS — see the long
-  // note on countNoticeClassNames above. The bell shows whenever there is
-  // ANYTHING to open the panel for (hasContent); the number only counts real
-  // notices, and is blank rather than "0" when there are none.
+  // note on countNoticeClassNames above. `hasContent` decides whether the panel
+  // shows its empty line; the number only counts real notices, and is blank
+  // rather than "0" when there are none.
+  //
+  // ⚠️ THE BELL IS PERMANENT (Federico, 3 Oct 2026): it never hides. With no content the
+  // panel stays open on its empty line instead of closing under the thumb. The empty line
+  // is excluded from the count because its class is neither a notice class nor the pill.
+  // It is only written when its state CHANGES: the observer below watches `hidden`, and
+  // re-setting the same value would queue another record and loop for ever.
   function refreshCount() {
     const { count, hasContent } = countNotices(panel);
     countEl.textContent = count > 0 ? String(count) : '';
     countEl.hidden = count === 0;
-    btn.hidden = !hasContent;
     btn.setAttribute('aria-label', count > 0
       ? t('orders.alerts.panelButton', { n: count })
       : t('orders.alerts.panelRegion'));
-    if (!hasContent && !panel.hidden) setOpen(false); // nothing left to show
+    if (emptyEl && emptyEl.hidden !== hasContent) emptyEl.hidden = hasContent;
   }
 
   btn.addEventListener('click', toggle);
@@ -213,7 +220,7 @@ export function initAlertsPanel() {
 
   // Every renderer that fills the panel's hosts writes into them
   // independently and has no idea the panel — or the button — exists. The
-  // observer is what lets the count (and the button's very visibility) follow
+  // observer is what lets the count (and the panel's empty line) follow
   // whatever they do, including a host crossing in or out of `hidden`.
   const observer = new MutationObserver(refreshCount);
   observer.observe(panel, {

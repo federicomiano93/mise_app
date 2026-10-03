@@ -59,6 +59,11 @@ export function buildSupplierDetail(supplier, ctx) {
     icon: PLUS_SVG, onClick: () => addIngredient?.(),
   });
 
+  // A polite live region on this screen: the result of the day select is spoken, not only
+  // drawn. Declared BEFORE the overlay that holds it:
+  // used earlier, it was a TDZ crash and the supplier screen would not open at all.
+  const live = el('p', { class: 'supplier-day-live', role: 'status', 'aria-live': 'polite' });
+
   const overlay = el('div', { class: 'supplier-detail' }, [
     el('header', { class: 'app-header orders-header' }, [
       el('span', { class: 'app-header-slot' }, [
@@ -71,11 +76,26 @@ export function buildSupplierDetail(supplier, ctx) {
       el('span', { class: 'app-header-slot' }, [addBtn]),
     ]),
     body,
+    live,
   ]);
+
+  // The «Order: …» line at the top of the body (see buildDayLine). Repaint rebuilds
+  // the body, so the live one is kept here for refreshDay() to find.
+  let dayLine = null;
 
   function repaint(next) {
     const { ingredients, entries, suggest, hooks } = next;
+    // A snapshot rebuilds the body, and the select the person is using with it: give the
+    // new one the focus back, or a screen reader loses its place mid-choice.
+    const hadFocus = Boolean(dayLine) && globalThis.document?.activeElement === dayLine.select;
     body.replaceChildren();
+
+    // ⚠️ BUILT ALWAYS, HIDDEN WHEN THERE IS ONLY ONE ANSWER TO GIVE — same trap as the clear
+    // button below: this function runs on a snapshot, not a keystroke, so a line that
+    // only existed when needed could not appear as the first quantity creates a stamp.
+    dayLine = buildDayLine(next.dayInfo, supplier.id);
+    body.appendChild(dayLine.node);
+    if (hadFocus) dayLine.select.focus({ preventScroll: true });
 
     const canAdd = typeof next.onAddIngredient === 'function';
     addIngredient = canAdd ? () => next.onAddIngredient() : null;
@@ -132,5 +152,57 @@ export function buildSupplierDetail(supplier, ctx) {
   }
 
   repaint(ctx);
-  return { overlay, repaint };
+  // refreshDay: re-read the day line in place, for the keystroke path (afterChange).
+  return {
+    overlay,
+    repaint,
+    // true while the line is showing, false once hidden, undefined with no line built
+    refreshDay: () => dayLine?.refresh(),
+    announce: text => { live.textContent = text; },
+  };
+}
+
+// The line above the ingredient list: «Order: [Today | Next order (Thu 8)]» and, under it,
+// «Expected delivery: <day>». A native <select>, so the phone's own picker and screen
+// reader support come free; its accessible name is the visible label.
+// info: () => ({ label, options: [{value, label}], selected, deliveryText, onChange(value) })
+// | null when there is only one answer to give, supplied by orders-main (which owns the draft
+// and the language of the day words).
+// Asked again on every refresh, so the select always shows the CURRENT stamp.
+//
+// Why a select and not a sentence plus a button: «Ordine per lunedì» + «Per oggi» read as
+// «this order is for today» (owner, 3 Oct 2026). Both answers are always visible now.
+function buildDayLine(info, supplierId) {
+  const selectId = `supplier-day-select-${supplierId}`;
+  const label = el('label', { class: 'supplier-day-label', for: selectId });
+  const select = el('select', { class: 'supplier-day-select', id: selectId });
+  const delivery = el('p', { class: 'supplier-day-delivery' });
+  let change = null;
+  let shown = '';
+  select.addEventListener('change', event => change?.(event.target.value));
+  const node = el('div', { class: 'supplier-day-line' }, [
+    el('div', { class: 'supplier-day-row' }, [label, select]),
+    delivery,
+  ]);
+
+  function refresh() {
+    const now = typeof info === 'function' ? info() : null;
+    node.hidden = !now;
+    change = now ? now.onChange : null;
+    if (!now) return false;
+    label.textContent = now.label;
+    // Rebuild the options only when their words changed, so a refresh does not reset the
+    // list under a finger.
+    const key = now.options.map(o => `${o.value}:${o.label}`).join('|');
+    if (key !== shown) {
+      shown = key;
+      select.replaceChildren(...now.options.map(o => el('option', { value: o.value, text: o.label })));
+    }
+    select.value = now.selected;
+    delivery.textContent = now.deliveryText || '';
+    delivery.hidden = !now.deliveryText;
+    return true;
+  }
+  refresh();
+  return { node, select, refresh };
 }
