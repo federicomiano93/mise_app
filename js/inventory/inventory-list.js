@@ -65,6 +65,12 @@ function num(value, locale) {
   return new Intl.NumberFormat(locale, { maximumFractionDigits: 3 }).format(value);
 }
 
+// ⚠️ A BOX A PERSON EDITS NEVER SHOWS A THOUSANDS SEPARATOR (4 Oct 2026): readCount() reads one
+// mark as the decimal, so «1,234.5» edited to «1,235» came back as 1.235 — see inventory-detail.js.
+function boxNum(value, locale) {
+  return new Intl.NumberFormat(locale, { maximumFractionDigits: 3, useGrouping: false }).format(value);
+}
+
 export function renderList({ month, ingredients, locale, onOpen, onCount, onCarry, onPurchases, readOnly }) {
   const state = { query: '', onlyTodo: false };
 
@@ -224,7 +230,7 @@ export function renderList({ month, ingredients, locale, onOpen, onCount, onCarr
       // phone and eat the width the number needs.
       class: 'inv-count', type: 'text', inputmode: 'decimal',
       autocomplete: 'off', enterkeyhint: 'next',
-      value: line.closing === null ? '' : num(line.closing, locale),
+      value: line.closing === null ? '' : boxNum(line.closing, locale),
       'aria-label': t('inv.countFor', { name }),
       disabled: readOnly ? 'disabled' : null,
       onchange: (e) => onCount(ingredient.id, e.target.value),
