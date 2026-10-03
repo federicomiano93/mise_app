@@ -97,6 +97,31 @@ export function currencyOf(location) {
 // a screen wants currencyOf(location), which answers for the venue that is open.
 export const CURRENCY_COUNTRIES = Object.freeze(Object.keys(CURRENCY_BY_COUNTRY));
 
+// ── How an amount is WRITTEN ─────────────────────────────────────────────────
+//
+// Same rule as the symbol: how money is written is a fact about the country, not a
+// screen preference (Federico, 4 Oct 2026: «sistema anche i prezzi in formato italiano»).
+// An Italian bakery reads «1.234,56 €» whatever language the screen is in; a British one
+// keeps «£1234.56» exactly as it always has — no grouping was ever shown there, and
+// changing a customer's screens was not asked for.
+//
+// `group` is put between thousands ('' = none); `symbolAfter` writes «12,50 €» instead
+// of «£12.50». Only the LAYOUT of the text: the number is never touched (js/currency.js).
+const MONEY_LAYOUT_BY_COUNTRY = Object.freeze({
+  GB: Object.freeze({ decimal: '.', group: '', symbolAfter: false }),
+  IT: Object.freeze({ decimal: ',', group: '.', symbolAfter: true }),
+});
+
+// null for an unknown country, like currencyOf(): js/currency.js then keeps its
+// historical layout, the same fallback the symbol takes.
+export function moneyLayoutOf(location) {
+  const country = countryOf(location);
+  return country ? MONEY_LAYOUT_BY_COUNTRY[country] : null;
+}
+
+// For the test that pins this table to COUNTRIES, like CURRENCY_COUNTRIES.
+export const MONEY_LAYOUT_COUNTRIES = Object.freeze(Object.keys(MONEY_LAYOUT_BY_COUNTRY));
+
 // ── The label's own vocabulary ───────────────────────────────────────────────
 //
 // ⚠️ ONLY WHAT GOES ON A LABEL LIVES HERE. This is not the app's translation

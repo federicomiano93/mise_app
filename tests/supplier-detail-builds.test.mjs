@@ -264,3 +264,10 @@ test('both languages have the bar phrase with the plural pair', () => {
   assert.match(entries[1][1], /^{n} articolo nell’ordine/);
   assert.match(entries[1][2], /^{n} articoli nell’ordine/);
 });
+
+// His decision, 4 Oct 2026: the summary's total warnings say «articoli», like its bar and title.
+test('the summary warnings say «articolo / articoli» in Italian, agreed in gender', () => {
+  const dict = read('js/i18n.js');
+  assert.match(dict, /'orders\.cost\.missingPrice': \{ one: '\{n\} articolo senza prezzo, non incluso:[^']*',\s*other: '\{n\} articoli senza prezzo, non inclusi:/);
+  assert.match(dict, /'orders\.cost\.missingVatTotal': \{ one: '\{n\} articolo senza IVA indicata[^']*',\s*other: '\{n\} articoli senza IVA indicata/);
+});

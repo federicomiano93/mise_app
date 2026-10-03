@@ -78,7 +78,7 @@ import { t } from './i18n.js';
 //
 // ⚠️ NOTHING HERE CONVERTS. Only the symbol changes; every stored number is used as
 // typed. See js/currency.js.
-import { currentCurrency } from './currency.js';
+import { moneyText } from './currency.js';
 // The weight box's reader — used when a 'pack' case is SAVED, to store the size of one
 // package; caseRate itself works from that stored size, never from the weight.
 import { splitWeight } from './pack-size.js';
@@ -365,10 +365,12 @@ export function costReasonText(ingredient) {
 
 // ── Formatting ───────────────────────────────────────────────────────────────
 
-// An amount of money: always two decimals, always the currency in front.
+// An amount of money: always two decimals.
+// How it is WRITTEN (separators, symbol before or after) follows the venue's country —
+// js/currency.js moneyText; this only rounds.
 export function formatMoney(value) {
   const n = Number(value);
-  return `${currentCurrency()}${(Number.isFinite(n) ? n : 0).toFixed(MONEY_DECIMALS)}`;
+  return moneyText((Number.isFinite(n) ? n : 0).toFixed(MONEY_DECIMALS));
 }
 
 // A RATE (price per unit). Always at least the two decimals money is read in, and
@@ -385,7 +387,7 @@ export function formatRate(value) {
   const padded = n.toFixed(CASE_RATE_DECIMALS);
   const trimmed = padded.replace(/0+$/, '');
   const decimals = Math.max(MONEY_DECIMALS, trimmed.split('.')[1].length);
-  return `${currentCurrency()}${n.toFixed(decimals)}`;
+  return moneyText(n.toFixed(decimals));
 }
 
 // "£7.20 / kg" — the headline number on the ingredient row. Empty when unknown, so

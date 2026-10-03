@@ -25,7 +25,7 @@ import { setLanguage, interfaceLanguage } from './i18n.js';
 // currencyOf reads the venue's COUNTRY; interfaceLanguage above reads its LANGUAGE.
 // Both are tiny and import nothing heavy, which is why they may sit in this file at
 // all: every page loads it before anything else.
-import { currencyOf } from './market.js';
+import { currencyOf, moneyLayoutOf } from './market.js';
 import { setCurrency } from './currency.js';
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js';
 import {
@@ -559,8 +559,9 @@ async function enterLocation(locationId, options, user) {
   // from the day before: a fact about the world follows the country, a preference
   // follows the screen.
   //
-  // ⚠️ Nothing is converted anywhere — only the symbol changes. See js/currency.js.
-  setCurrency(currencyOf(location));
+  // ⚠️ Nothing is converted anywhere — only the symbol and how the amount is written
+  // («1.234,56 €» in Italy, 4 Oct 2026) change. See js/currency.js.
+  setCurrency(currencyOf(location), moneyLayoutOf(location));
 
   setSession({
     status: 'ready', user, locationId, location, options,

@@ -67,9 +67,10 @@ goes through `supplierLabel()`.
   page, and every name falls back to English in silence.
 - **Pin that the call EXISTS**, not only that it is shaped right — a deleted call satisfies
   every «asked in the right language» check.
-- **Money on screen**: `currentCurrency()` (`js/currency.js`) — read INSIDE the drawing
-  function (it falls back to £ before a venue is open); it derives from the venue's
-  country. **Numbers and dates on screen**: `Intl` with `localeTag()` — which follows the
+- **Money on screen**: always `formatMoney` / `formatRate` (`js/price-model.js`) — they
+  read the symbol AND the layout («£1234.56» / «1.234,56 €», `js/currency.js` moneyText)
+  inside the drawing function, both from the venue's country. `currentCurrency()` alone is
+  only for a field caption («Prezzo al kg (€)»): beside a number it would skip the layout. **Numbers and dates on screen**: `Intl` with `localeTag()` — which follows the
   INTERFACE language, so it is for screens, not for label text. Never format by hand.
 - The allergen dictionary: a phrase that overrides a stem AND names an allergen needs its
   own tier (`burro di arachidi` must still say peanuts). The specific cereal/nut is named

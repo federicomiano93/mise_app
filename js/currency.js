@@ -29,12 +29,38 @@
 // half-drawn screen. See the note beside currencyOf() in js/market.js.
 const FALLBACK = '£';
 
+// How the amount is written when no venue says otherwise: the layout every screen used
+// before the country decided it (js/market.js moneyLayoutOf) — «£1234.56».
+const FALLBACK_LAYOUT = Object.freeze({ decimal: '.', group: '', symbolAfter: false });
+
 let current = FALLBACK;
+let layout = FALLBACK_LAYOUT;
 
 // Set when the session opens a venue. Anything that is not a non-empty string puts
-// the fallback back, so a corrupt or missing country can never blank the price line.
-export function setCurrency(symbol) {
+// the fallback back, so a corrupt or missing country can never blank the price line;
+// a layout that is not the expected shape puts the historical layout back.
+export function setCurrency(symbol, moneyLayout) {
   current = typeof symbol === 'string' && symbol ? symbol : FALLBACK;
+  layout = moneyLayout
+    && typeof moneyLayout.decimal === 'string' && moneyLayout.decimal
+    && typeof moneyLayout.group === 'string'
+    && typeof moneyLayout.symbolAfter === 'boolean'
+    ? moneyLayout : FALLBACK_LAYOUT;
+}
+
+// An amount ALREADY ROUNDED to text («-1234.56», from toFixed in js/price-model.js) →
+// what a person reads: «£-1234.56» in Britain, «-1.234,56 €» in Italy. TEXT ONLY — it
+// moves the separators and the symbol and never reads the value (see the note at the
+// top: nothing here may restate a number). The space before a trailing symbol is a
+// no-break space, so «€» never wraps onto a line of its own.
+export function moneyText(fixed) {
+  const text = String(fixed);
+  const parts = /^(-?)(\d+)(?:\.(\d+))?$/.exec(text);
+  if (!parts) return layout.symbolAfter ? `${text} ${current}` : `${current}${text}`;
+  const [, sign, whole, fraction] = parts;
+  const grouped = layout.group ? whole.replace(/\B(?=(\d{3})+(?!\d))/g, layout.group) : whole;
+  const number = sign + grouped + (fraction === undefined ? '' : layout.decimal + fraction);
+  return layout.symbolAfter ? `${number} ${current}` : `${current}${number}`;
 }
 
 // ⚠️⚠️ CALL THIS INSIDE THE FUNCTION THAT DRAWS, NEVER AT MODULE LOAD. A module is
