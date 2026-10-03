@@ -43,7 +43,7 @@ export function buildOrderSummaryView(supplier, ingredients, entries, ctx) {
   });
 
   const overlay = el('div', {
-    class: 'order-summary-view', role: 'dialog', 'aria-label': supplierLabel(supplier),
+    class: 'order-summary-view', role: 'dialog', 'aria-modal': 'true', 'aria-label': supplierLabel(supplier),
   }, [
     el('header', { class: 'app-header orders-header' }, [
       el('span', { class: 'app-header-slot' }, [

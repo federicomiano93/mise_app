@@ -3518,7 +3518,7 @@ const DICTIONARIES = Object.freeze({
     'orders.nothingIsBeingOrdered': 'Non si sta ancora ordinando niente.',
 
     'orders.itemsCount': { one: '{n} voce', other: '{n} voci' },
-    'orders.summaryBar': { one: '{n} voce nell’ordine · Riepilogo', other: '{n} voci nell’ordine · Riepilogo' },
+    'orders.summaryBar': { one: '{n} articolo nell’ordine · Riepilogo', other: '{n} articoli nell’ordine · Riepilogo' },
     'orders.whatsappMessage': 'Messaggio WhatsApp',
 
     // ── La schermata Fornitori: le schede, su una pagina tutta loro ──────────

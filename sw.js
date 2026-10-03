@@ -1,4 +1,4 @@
-const CACHE_NAME = 'theitalianclub-v531';
+const CACHE_NAME = 'theitalianclub-v533';
 // Firebase SDK modules (loaded from gstatic) are cached SEPARATELY from CACHE_NAME
 // so they survive the cache-version bump that happens on every deploy — otherwise
 // the offline SDK would be wiped each release until the next online load. The name
@@ -416,7 +416,7 @@ const ASSET_HASHES = {
   "./tokens.css": '15a90c6c1535077b',
   "./auth.css": 'e4ba63eda208115b',
   "./style.css": '011704cc77f2029b',
-  "./orders.css": '26189a8dc2ee10d0',
+  "./orders.css": 'ec8c2c3c477a0124',
   "./sounds/alarm.wav": '0d1465974f5be95b',
   "./fonts/manrope-latin.woff2": '71eb731d55804619',
   "./fonts/manrope-latin-ext.woff2": 'bd24140af06f1b58',
@@ -493,7 +493,7 @@ const ASSET_HASHES = {
   "./js/location.js": '6aaf53615a8739d1',
   "./js/sections.js": 'abcfdecb2bd5766d',
   "./js/roles.js": '2b491770c4b6165b',
-  "./js/i18n.js": '97d44546ad6c11f8',
+  "./js/i18n.js": '07ed739b6600cc7b',
   "./js/i18n-dom.js": '24249af4367511e5',
   "./js/keyboard-done.js": '4a4b75c43a15e2c7',
   "./js/join-code.js": '5b89de65db5c102f',
@@ -542,7 +542,7 @@ const ASSET_HASHES = {
   "./js/orders/category-batches.js": '03d72f63c4fa4a8a',
   "./js/orders/confirm-dialog.js": '61a7f580f37c5ff8',
   "./js/orders/firebase-orders.js": 'de887575159d9af2',
-  "./js/orders/orders-main.js": '7368a03e91b7f663',
+  "./js/orders/orders-main.js": 'eef741037e634565',
   "./js/orders/dom.js": '7ec966d71c5356cd',
   "./js/orders/day.js": '107abcbdf353c709',
   "./js/orders/order-day.js": '1194fbe02f9a9686',
@@ -599,7 +599,7 @@ const ASSET_HASHES = {
   "./js/orders/sticky-offset.js": 'a0c2e623a591b6ba',
   "./js/orders/order-summary.js": '0e2d3ad98ec27217',
   "./js/orders/order-cost-view.js": '8812db131fc92d28',
-  "./js/orders/order-summary-view.js": '88dd7cfd3e65e3f4',
+  "./js/orders/order-summary-view.js": '2ab80dbb8b7fa26f',
   "./catalogue.html": '91eacf7f31a7713b',
   "./catalogue.css": 'd92cf3afef699fe4',
   "./label-print.css": 'ffbcdf4e7a627a2d',

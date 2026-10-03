@@ -220,6 +220,40 @@ test('wiring: keystrokes update the bar; the summary opens over the supplier and
   assert.match(read('js/sw-update.js'), /BOTTOM_BARS = \[[^\]]*'\.supplier-summary-bar'/);
 });
 
+// The review fixes of 3 Oct 2026: each one is invisible on a phone tap, so only these keep them.
+test('the summary over the supplier screen is a real modal, and leaves nothing behind', () => {
+  assert.match(read('js/orders/order-summary-view.js'), /role: 'dialog', 'aria-modal': 'true'/);
+
+  const main = read('js/orders/orders-main.js');
+  const fn = name => main.match(new RegExp(`function ${name}\\([\\s\\S]*?\\r?\\n}\\r?\\n`))[0];
+
+  // The screen underneath leaves the tab order only once the sheet is really there…
+  assert.match(fn('openSummaryOverSupplier'), /if \(detailView && summaryView\) detailView\.overlay\.inert = true;/);
+  // …and every close gives it back BEFORE focus moves to the bar's button (inert refuses focus).
+  const close = fn('closeSummary');
+  const uninert = close.indexOf('detailView.overlay.inert = false');
+  assert.ok(uninert > 0 && uninert < close.indexOf('.focus()'), 'inert cleared before the focus call');
+  // An Escape a dialog above already used closes only that dialog.
+  assert.match(main, /summaryEscHandler = e => \{ if \(e\.key !== 'Escape' \|\| e\.defaultPrevented\) return; closeSummary\(\); \}/);
+  // Whatever closes the supplier screen takes the summary over it along, and focus lands on the list row.
+  const closeSup = fn('closeSupplier');
+  assert.match(closeSup, /if \(hadSummary\) closeSummary\(\);/);
+  assert.ok(closeSup.indexOf('closeSummary()') < closeSup.indexOf('overlay.remove()'), 'closed while the screen is still there');
+  assert.match(closeSup, /if \(hadSummary && id\) document\.getElementById\(`open-\$\{id\}`\)\?\.focus\(\);/);
+});
+
+test('phone layout of the summary: the cost drops onto its own line, the tablet column is untouched', () => {
+  const css = read('orders.css');
+  const at = css.indexOf('@media (max-width: 899px) {\r\n  .order-summary-row') >= 0
+    ? css.indexOf('@media (max-width: 899px) {\r\n  .order-summary-row')
+    : css.indexOf('@media (max-width: 899px) {\n  .order-summary-row');
+  assert.ok(at > 0, 'the phone block exists');
+  const phone = css.slice(at, css.indexOf('\n}', at));
+  assert.match(phone, /\.order-summary-row \{ flex-wrap: wrap;/);
+  assert.match(phone, /\.order-summary-qty-wrap \{ display: contents; \}/);
+  assert.match(phone, /\.order-summary-cost \{[^}]*flex: 0 0 100%;[^}]*overflow-wrap: anywhere;/);
+});
+
 test('both languages have the bar phrase with the plural pair', () => {
   const dict = read('js/i18n.js');
   const entries = [...dict.matchAll(/'orders\.summaryBar': \{ one: '([^']*)', other: '([^']*)' \}/g)];
@@ -227,6 +261,6 @@ test('both languages have the bar phrase with the plural pair', () => {
   for (const [, one, other] of entries) {
     assert.ok(one.includes('{n}') && other.includes('{n}'));
   }
-  assert.match(entries[1][1], /voce/);
-  assert.match(entries[1][2], /voci/);
+  assert.match(entries[1][1], /^{n} articolo nell’ordine/);
+  assert.match(entries[1][2], /^{n} articoli nell’ordine/);
 });

@@ -124,7 +124,8 @@ const state = {
   pending: [],                  // orders typed on an earlier day and never placed
   openSupplier: null,           // the supplier whose own screen is open, or null
   viewingSupplier: null,        // the supplier whose read-only product list is open
-  summarySupplier: null,        // the supplier whose read-only order summary is open (tablet)
+  summarySupplier: null,        // the supplier whose read-only order summary is open
+  summaryOverSupplier: false,   // true when that summary was opened from the supplier screen's bar, over it
   view: 'suppliers',            // which of the two order views is on screen
   query: '',                    // the flat list's search text, kept OUT of the DOM (see render)
   supplierQuery: '',            // the supplier list's search text — deliberately separate
@@ -472,9 +473,19 @@ function openSupplier(supplierId) {
 }
 
 function closeSupplier() {
+  // ⚠️ A summary opened OVER this screen goes with it, whatever closed the screen (Back, order
+  // placed, quantities cleared, supplier deactivated): left behind it would sit over the list
+  // with a flag that says «over a supplier screen» when none exists. Closed first, while the
+  // screen is still there to be made interactive again.
+  const id = state.openSupplier;
+  const hadSummary = state.summaryOverSupplier === true;
+  if (hadSummary) closeSummary();
   state.openSupplier = null;
   detailView?.overlay.remove();
   detailView = null;
+  // closeSummary() just focused the bar's button, which went with the screen: hand focus to the
+  // list row instead, or a keyboard user is dropped on the page body (leaveSupplier does the same).
+  if (hadSummary && id) document.getElementById(`open-${id}`)?.focus();
 }
 // Back on the order screen: close it and hand focus back to the row that opened it — the
 // summary sheet's own pattern (closeSummary). Full screen covers the list, so without this
@@ -703,6 +714,10 @@ function openSummaryOverSupplier(supplierId) {
   state.summaryOverSupplier = true;
   state.summarySupplier = supplierId;
   renderSummary();
+  // ⚠️ inert: the supplier screen under the sheet must leave the tab order and the screen
+  // reader's reach (aria-modal alone is not honoured everywhere). Cleared by closeSummary.
+  // Only once the sheet really opened: renderSummary() gives up when the supplier is gone.
+  if (detailView && summaryView) detailView.overlay.inert = true;
 }
 
 // `openerId`, not read from state: closeSummary() clears state.summarySupplier
@@ -714,6 +729,7 @@ function closeSummary() {
   const fromBar = state.summaryOverSupplier === true;
   state.summarySupplier = null;
   state.summaryOverSupplier = false;
+  if (detailView) detailView.overlay.inert = false;
   summaryView?.overlay.remove();
   summaryView?.scrim.remove();
   summaryView = null;
@@ -756,7 +772,9 @@ function renderSummary() {
   document.body.appendChild(built.overlay);
 
   if (firstOpen) {
-    summaryEscHandler = e => { if (e.key === 'Escape') closeSummary(); };
+    // defaultPrevented: an Escape a dialog above the summary already used must close only
+    // that dialog (same guard as deliveries-view.js).
+    summaryEscHandler = e => { if (e.key !== 'Escape' || e.defaultPrevented) return; closeSummary(); };
     document.addEventListener('keydown', summaryEscHandler);
   }
   // Moves focus INTO the screen — its own Back button — the moment it is
