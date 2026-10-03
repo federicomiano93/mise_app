@@ -224,15 +224,70 @@ test('the draft arriving from another phone repaints the unit menu, skipping a f
   assert.match(sync.slice(0, sync.indexOf('refreshAllSuppliers')), /paintUnitSelect\(row, ingById\[row\.dataset\.ing\], entry\)/);
 });
 
-test('the unit menu is a second grid line over Order + Stock, a 44px target, scoped to the row class', () => {
+// Intent changed on 3 Oct 2026 (owner): the menu used to be a square second line under the
+// Order + Stock boxes (`grid-column: 2 / -1`, 44px tall, surface-2). It is now a pill LEFT of
+// the boxes — under the name on a phone, in its own column on a tablet — so those two pins
+// were replaced, not loosened: the pill look, the 16px floor and the scoping are pinned instead.
+test('the unit menu is an accent pill under the name on a phone, scoped to the row class', () => {
   const r = rule('.ing-row--line .ing-unit-select');
-  assert.match(r, /grid-column:\s*2 \/ -1/);
-  assert.match(r, /grid-row:\s*2/);
-  assert.match(r, /min-height:\s*var\(--ing-box-h\)/);
+  assert.match(r, /grid-column:\s*1;/, 'the name column');
+  assert.match(r, /grid-row:\s*2;/, 'under the name');
+  assert.match(r, /border-radius:\s*var\(--radius-pill\)/);
+  assert.match(r, /background:\s*var\(--accent-light\)/);
+  assert.match(r, /border:\s*1px solid var\(--accent-border\)/);
+  assert.match(r, /color:\s*var\(--brand\)/);
+  assert.match(r, /font-weight:\s*600/);
+  assert.match(r, /width:\s*auto/, 'as wide as its word, not a box');
+  assert.doesNotMatch(r, /(?<!max-)width:\s*100%/);
   // iOS Safari zooms the page on focusing a control under 16px.
   assert.match(r, /font-size:\s*(1[6-9]|[2-9]\d)px/);
   assert.match(rule('.ing-row--line .ing-unit-select:focus-visible'), /outline:/);
-  assert.match(rule('.ingredient-list .ing-row--choice .ing-main'), /grid-row:\s*1 \/ span 2/);
+  // The Order and Stock columns span both lines so the boxes keep their place.
+  assert.match(rule('.ingredient-list .ing-row--choice .ing-col'), /grid-row:\s*1 \/ span 2/);
+  assert.match(rule('.ingredient-list .ing-row--choice'), /grid-template-rows:\s*auto 1fr/);
+  // Every item names its column, or a spanning box would be auto-placed onto the name.
+  assert.match(rule('.ing-row--line .ing-main'), /grid-column:\s*1/);
+  assert.match(rule('.ing-row--line .ing-col'), /grid-column:\s*2/);
+  assert.match(rule('.ing-row--line .ing-col.stock-field'), /grid-column:\s*3/);
+});
+
+test('on a tablet the pill is a column of its own left of the Order box, header in step', () => {
+  const at = CSS.indexOf('@media (min-width: 900px) and (min-height: 600px)');
+  assert.ok(at >= 0);
+  const tablet = CSS.slice(at);
+  assert.match(tablet, /--ing-pill-w:\s*120px/);
+  const four = /grid-template-columns:\s*minmax\(0,\s*1fr\)\s+var\(--ing-pill-w\)\s+var\(--ing-box-w\)\s+var\(--ing-box-w\)/;
+  const block = (sel) => tablet.slice(tablet.indexOf(sel), tablet.indexOf('}', tablet.indexOf(sel)));
+  assert.match(block('body[data-section="orders"] .ingredient-list .ing-row--line,'), four, 'rows');
+  assert.match(block('body[data-section="orders"] .ingredient-list > .ing-head,'), four, 'the header shares the columns');
+  assert.match(tablet, /body\.hide-stock\[data-section="orders"\] \.ingredient-list \.ing-row--line,[\s\S]*?var\(--ing-pill-w\)\s+var\(--ing-box-w\);/);
+  const pill = block('body[data-section="orders"] .ingredient-list .ing-row--line .ing-unit-select,');
+  assert.match(pill, /grid-column:\s*2/);
+  assert.match(pill, /grid-row:\s*1/);
+  assert.match(tablet, /\.ing-row--line \.ing-col \{ grid-column: 3; grid-row: 1; \}/);
+  assert.match(tablet, /\.ing-head > :nth-child\(2\),[^{]*\{ grid-column: 3; \}/);
+  assert.match(tablet, /\.ing-head > \.ing-head-stock\s*\{ grid-column: 4; \}|\.ing-head > \.ing-head-stock \{ grid-column: 4; \}/);
+});
+
+test('the − and + buttons sit under the Order box, as wide as it, quiet, tokens only', () => {
+  const steps = rule('.ing-row--line .ing-steps');
+  assert.match(steps, /grid-template-columns:\s*1fr 1fr/);
+  assert.match(steps, /width:\s*var\(--ing-box-w\)/);
+  const btn = rule('.ing-row--line .ing-step');
+  assert.match(btn, /height:\s*var\(--ing-step-h\)/);
+  assert.match(btn, /border:\s*1\.5px solid var\(--border\)/);
+  assert.match(btn, /border-radius:\s*var\(--radius-sm\)/);
+  assert.match(btn, /color:\s*var\(--brand\)/);
+  assert.match(btn, /background:\s*var\(--surface\)/);
+  assert.match(btn, /display:\s*flex/);
+  assert.match(btn, /align-items:\s*center/);
+  assert.match(rule('.ing-row--line .ing-step:active:not(:disabled)'), /scale\(\.97\)/);
+  assert.match(rule('.ing-row--line .ing-step:focus-visible'), /var\(--accent-2\)/);
+  assert.match(CSS, /--ing-step-h:\s*30px/);
+  // Under the box, above the unit caption.
+  const col = buildRowSource.slice(buildRowSource.indexOf("class: 'ing-col'"));
+  assert.ok(col.indexOf('ing-steps') > col.indexOf('qtyInput'));
+  assert.ok(col.indexOf('ing-steps') < col.indexOf('ing-order-unit'));
 });
 
 test('the unit menu label exists in English and Italian', () => {

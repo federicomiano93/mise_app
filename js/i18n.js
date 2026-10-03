@@ -776,6 +776,8 @@ const DICTIONARIES = Object.freeze({
     'orders.qtyToOrderFor': '{name} quantity to order',
     'orders.clearQtyFor': 'Clear the quantity of {name}',
     'orders.unitToOrderFor': 'Unit to order for {name}',
+    'orders.qtyOneMoreFor': 'One more {name}',
+    'orders.qtyOneFewerFor': 'One fewer {name}',
     'orders.qtyOrderedFor': '{name} quantity ordered',
     'orders.ingredientCount': {
       one: '{n} ingredient',
@@ -3411,6 +3413,8 @@ const DICTIONARIES = Object.freeze({
     'orders.qtyToOrderFor': 'Quantità da ordinare di {name}',
     'orders.clearQtyFor': 'Azzera la quantità di {name}',
     'orders.unitToOrderFor': 'Unità d’ordine per {name}',
+    'orders.qtyOneMoreFor': 'Uno in più: {name}',
+    'orders.qtyOneFewerFor': 'Uno in meno: {name}',
     'orders.qtyOrderedFor': 'Quantità ordinata di {name}',
     'orders.ingredientCount': {
       one: '{n} ingrediente',

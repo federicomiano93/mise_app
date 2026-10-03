@@ -519,6 +519,7 @@
 .ing-flat-list {
   --ing-box-w: 56px;
   --ing-box-h: 44px;
+  --ing-step-h: 30px;
 }
 .ingredient-list {
   background: var(--surface);
@@ -650,34 +651,80 @@
   color: var(--text-3);
 }
 
-/* ⚠️ THE UNIT CHOICE (30 Sep 2026): a product that can be ordered by the «cartone» OR by the
-   «busta» gets a menu in place of the caption. It is a direct child of the row, on a second
-   grid line spanning the Order AND Stock columns, NOT inside .ing-col: the Order column is
-   56px on a phone, and «cartone» plus the menu's arrow needs ~70px, so it would be cut. Over
-   both columns it has 122px at 296px wide (186px on a tablet) and the name column, which
-   spans both lines, keeps its width. `2 / -1` is also right with Stock hidden (one column). */
-.ing-row--line .ing-unit-select {
-  grid-column: 2 / -1;
-  grid-row: 2;
-  width: 100%;
+/* ⚠️ «−» AND «+» UNDER THE ORDER BOX ONLY (owner, 3 Oct 2026: a counter hand taps one more
+   instead of opening the keypad). Two small buttons side by side, together exactly as wide as
+   the box (56px phone → two 26px buttons and a 4px gap; the tablet's 88px scales the same way),
+   inside the Order .ing-col so they follow the box wherever the grid puts it. Quiet on purpose:
+   the box is the main control, these are a shortcut. ingredients.js drives them through setQty
+   (the typing path) and markFilled disables «−» at 0. */
+.ing-row--line .ing-steps {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  width: var(--ing-box-w);
+}
+.ing-row--line .ing-step {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   min-width: 0;
-  min-height: var(--ing-box-h);
-  margin-top: 6px;
-  padding: 0 8px;
+  height: var(--ing-step-h);
+  padding: 0;
   border: 1.5px solid var(--border);
   border-radius: var(--radius-sm);
-  background: var(--surface-2);
-  color: var(--text);
+  background: var(--surface);
+  color: var(--brand);
+  cursor: pointer;
+  transition: transform 60ms;
+}
+.ing-row--line .ing-step:active:not(:disabled) { transform: scale(.97); }
+.ing-row--line .ing-step:disabled { opacity: .4; cursor: default; }
+.ing-row--line .ing-step:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 1px; }
+
+/* ⚠️ EVERY ITEM HAS ITS OWN COLUMN (phone: name 1, Order 2, Stock 3). An item with a definite
+   row but an auto column is placed in the FIRST free column of that row — the choice rows below
+   give the Order and Stock columns a row span, and without this they would land on the name. */
+.ing-row--line .ing-main { grid-column: 1; grid-row: 1; }
+.ing-row--line .ing-col { grid-column: 2; }
+.ing-row--line .ing-col.stock-field { grid-column: 3; }
+
+/* ⚠️ THE UNIT CHOICE AS A PILL, LEFT OF THE BOXES (owner, 3 Oct 2026: «il dropdown lì non mi
+   piace, mettilo a sinistra delle caselle, con un layout diverso, deve distinguersi dalle
+   caselle»). A product that can be ordered by the «cartone» OR by the «busta» keeps a native
+   <select> (the phone's own picker), drawn as an --accent-light pill so nobody takes it for a
+   number box: round, green-tinted, bold, compact, as wide as its word. It is a direct child of
+   the row and the grid moves it — one element, no second copy to keep in step.
+   PHONE: second grid line, name column, right under the name and weight; the Order and Stock
+   columns span both lines so the boxes (and the buttons under Order) keep their place, and
+   `auto 1fr` leaves any extra height to the empty bottom of the pill's line, not between name and
+   pill. The name column keeps the width it had (the pill sits INSIDE it): «cartone» at 16px is
+   ~96px with arrow, the column ~102px at 296px, and max-width + ellipsis covers the narrowest.
+   TABLET (the media query below): one line, a column of its own just left of the Order box. */
+.ing-row--line .ing-unit-select {
+  grid-column: 1;
+  grid-row: 2;
+  justify-self: start;
+  width: auto;
+  max-width: 100%;
+  min-width: 0;
+  min-height: 34px;
+  margin-top: 6px;
+  padding: 0 4px 0 12px;
+  border: 1px solid var(--accent-border);
+  border-radius: var(--radius-pill);
+  background: var(--accent-light);
+  color: var(--brand);
   font-family: var(--font);
-  /* 16px, never less: iOS Safari zooms the whole page when a control under 16px is focused.
-     «cartone» is ~60px at this size, inside the ~86px left of the 122px after padding and arrow. */
+  font-weight: 600;
+  /* 16px, never less: iOS Safari zooms the whole page when a control under 16px is focused. */
   font-size: 16px;
   text-overflow: ellipsis;
 }
 .ing-row--line .ing-unit-select:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 1px; }
-/* The name and its hint stay beside both lines, but the name still sits level with the boxes. */
-.ingredient-list .ing-row--choice .ing-main,
-.ing-flat-list .ing-row--choice .ing-main { grid-row: 1 / span 2; }
+.ingredient-list .ing-row--choice,
+.ing-flat-list .ing-row--choice { grid-template-rows: auto 1fr; }
+.ingredient-list .ing-row--choice .ing-col,
+.ing-flat-list .ing-row--choice .ing-col { grid-row: 1 / span 2; }
 
 /* The header line: the same three columns and the same widths as the rows, so each word
    sits over its boxes. Opaque, with a hairline under it, because rows scroll beneath it. */
@@ -830,7 +877,44 @@ input.ing-stock {
   body[data-section="orders"] .ing-flat-list {
     --ing-box-w: 88px;
     --ing-box-h: var(--tap-min);
+    --ing-step-h: 36px;
+    --ing-pill-w: 120px;
   }
+  /* The unit pill leaves the name column and takes a column of its own between the name and
+     the Order box, on the SAME line as the boxes (owner, 3 Oct 2026). Every row and the header
+     carry that column, empty when a row has no choice, so the boxes stay under «Ordine ·
+     Giacenza» — which is why the column is a fixed 120px («cartone» ≈ 96px with arrow).
+     Explicit columns everywhere (name 1, pill 2, Order 3, Stock 4); the row spans of the phone
+     layout are put back to one line. Stock hidden: the last column goes, as on a phone. */
+  body[data-section="orders"] .ingredient-list .ing-row--line,
+  body[data-section="orders"] .ing-flat-list .ing-row--line,
+  body[data-section="orders"] .ingredient-list > .ing-head,
+  body[data-section="orders"] .ing-flat-list > .ing-head {
+    grid-template-columns: minmax(0, 1fr) var(--ing-pill-w) var(--ing-box-w) var(--ing-box-w);
+  }
+  body.hide-stock[data-section="orders"] .ingredient-list .ing-row--line,
+  body.hide-stock[data-section="orders"] .ing-flat-list .ing-row--line,
+  body.hide-stock[data-section="orders"] .ingredient-list > .ing-head,
+  body.hide-stock[data-section="orders"] .ing-flat-list > .ing-head {
+    grid-template-columns: minmax(0, 1fr) var(--ing-pill-w) var(--ing-box-w);
+  }
+  body[data-section="orders"] .ingredient-list .ing-row--choice,
+  body[data-section="orders"] .ing-flat-list .ing-row--choice { grid-template-rows: none; }
+  body[data-section="orders"] .ingredient-list .ing-row--line .ing-col,
+  body[data-section="orders"] .ing-flat-list .ing-row--line .ing-col { grid-column: 3; grid-row: 1; }
+  body[data-section="orders"] .ingredient-list .ing-row--line .ing-col.stock-field,
+  body[data-section="orders"] .ing-flat-list .ing-row--line .ing-col.stock-field { grid-column: 4; }
+  body[data-section="orders"] .ingredient-list .ing-row--line .ing-unit-select,
+  body[data-section="orders"] .ing-flat-list .ing-row--line .ing-unit-select {
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: end;
+    margin-top: calc((var(--ing-box-h) - 34px) / 2);
+  }
+  body[data-section="orders"] .ingredient-list > .ing-head > :nth-child(2),
+  body[data-section="orders"] .ing-flat-list > .ing-head > :nth-child(2) { grid-column: 3; }
+  body[data-section="orders"] .ingredient-list > .ing-head > .ing-head-stock,
+  body[data-section="orders"] .ing-flat-list > .ing-head > .ing-head-stock { grid-column: 4; }
   /* 📌 NO LETTER HEADINGS ON A TABLET (decided 28 Sep 2026): the list is still A→Z and
      the search box sits right above it. On a phone they stay: there they cost no space. */
   body[data-section="orders"] .ing-flat-list > .ing-letter { display: none; }
