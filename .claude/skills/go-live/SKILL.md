@@ -41,9 +41,10 @@ live?»* and tell him to **expect two clicks** if rules change (the harness asks
 
 ## 2. At his word — no further questions
 
-1. **Rules first** (if needed): `firebase deploy --only firestore:rules` from the up-to-date
-   branch. Two warnings are normal (`member()`, `orderClientOf()`); a third → stop and read
-   it. Then `node scripts/rules-live-diff.mjs` → `identical: true`.
+1. **Rules first** (if needed): `firebase deploy --only firestore:rules --project bakery-app-ebf90`
+   from the up-to-date branch — the project always named, never left to `.firebaserc`'s
+   default. Three warnings are normal (`member()`, `cardAccess()`, `orderClientOf()`); a
+   fourth → stop and read it. Then `node scripts/rules-live-diff.mjs` → `identical: true`.
 2. **Merge**: `gh pr merge <n> --merge` (merge commits, never squash — the history reads
    PR by PR). ⚠️ Never `git push origin main`; main takes nothing without the PR.
 3. **Watch main**: `gh run list --branch main --limit 3` → the push run's `test`, `rules`
