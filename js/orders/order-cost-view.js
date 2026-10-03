@@ -13,6 +13,7 @@
 import { t } from '../i18n.js';
 import { el } from './dom.js';
 import { formatMoney } from '../price-model.js';
+import { localNumber } from '../currency.js';
 import { lineUnitCost, orderCost } from '../order-cost.js';
 import { entryUnit } from '../order-unit.js';
 
@@ -22,7 +23,8 @@ import { entryUnit } from '../order-unit.js';
 export function lineCostText({ qty, unitCost, vatRate }) {
   if (unitCost === null || unitCost === undefined) return { text: t('orders.cost.noPrice'), warn: true };
   const total = qty * unitCost;
-  const base = t('orders.cost.lineTotal', { qty, rate: formatMoney(unitCost), total: formatMoney(total) });
+  // The quantity in the money's layout: «2,5 × 6,50 €», never «2.5 × 6,50 €».
+  const base = t('orders.cost.lineTotal', { qty: localNumber(qty), rate: formatMoney(unitCost), total: formatMoney(total) });
   if (vatRate === null || vatRate === undefined) {
     return { text: `${base} · ${t('orders.cost.vatNotStated')}`, warn: true };
   }

@@ -13,7 +13,7 @@ const I18N = read('js/i18n.js');
 
 test('the weight placeholder is a bare number, in both languages', () => {
   assert.match(I18N, /'orders\.eg\.packWeight': 'e\.g\. 2\.5'/);
-  assert.match(I18N, /'orders\.eg\.packWeight': 'es\. 2\.5'/);
+  assert.match(I18N, /'orders\.eg\.packWeight': 'es\. 2,5'/, 'Italian writes the comma; both marks are read');
   assert.doesNotMatch(I18N, /'orders\.eg\.packWeight': '[^']*kg/);
 });
 

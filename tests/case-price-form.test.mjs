@@ -80,7 +80,7 @@ test('every price box a person can type in sets the flag, BEFORE the live line r
 test('the box shows the stored figure only while it still means the same thing; otherwise empty, with the carried price as placeholder', () => {
   assert.match(FORM, /const start = priceBoxStart\(item, fmt, weight, Boolean\(changed\)\);/);
   assert.match(FORM, /const shown = recomputed \? start\.suggestion : start\.value;/);
-  assert.match(FORM, /casePriceBox\.setAttribute\('placeholder', shown === null && start\.suggestion !== null \? String\(start\.suggestion\) : ''\);/);
+  assert.match(FORM, /casePriceBox\.setAttribute\('placeholder', shown === null && start\.suggestion !== null \? localNumber\(start\.suggestion, false\) : ''\);/);
   assert.match(FORM, /keepsNote\.hidden = !keeps;/);
 });
 
@@ -95,7 +95,7 @@ test('the format-changed note shows both formats and offers «Ricalcola», which
 });
 
 test('a price that existed and has no number under the new format is said, never saved empty in silence', () => {
-  assert.match(FORM, /priceAgainNote\.hidden = !\(dirty\(\) && !typedForm && casePriceBox\.value === '' && positiveNumber\(item\?\.pricePerUnit\) !== null\);/);
+  assert.match(FORM, /priceAgainNote\.hidden = !\(dirty\(\) && !typedForm && typedDecimal\(casePriceBox\.value\) === '' && positiveNumber\(item\?\.pricePerUnit\) !== null\);/);
 });
 
 test('the live summary names the rate and what ONE item costs; the VAT line prices the unit the card would save', () => {
@@ -106,7 +106,7 @@ test('the live summary names the rate and what ONE item costs; the VAT line pric
 });
 
 test('a weight-priced case with an unreadable weight is refused on the weight box', () => {
-  assert.match(FORM, /const needsWeight = \(\) => weightNeededForPrice\(\{\s*item, fmt: now\(\)\.fmt, weightText: now\(\)\.weight, dirty: dirty\(\), priceBox: casePriceBox\.value,/);
+  assert.match(FORM, /const needsWeight = \(\) => weightNeededForPrice\(\{\s*item, fmt: now\(\)\.fmt, weightText: now\(\)\.weight, dirty: dirty\(\), priceBox: typedDecimal\(casePriceBox\.value\),/);
   assert.match(FORM, /if \(price && price\.needsWeight\(\)\) \{ weight\.markNeeded\(\); return; \}/);
 });
 

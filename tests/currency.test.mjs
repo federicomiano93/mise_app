@@ -20,7 +20,7 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
-import { setCurrency, currentCurrency, moneyText } from '../js/currency.js';
+import { setCurrency, currentCurrency, moneyText, localNumber, typedDecimal } from '../js/currency.js';
 import { stringsIn } from './helpers/strings-in.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -184,4 +184,32 @@ test('the British layout and the fallback are exactly what the app always showed
   } finally {
     setCurrency('£');
   }
+});
+
+// A quantity or weight beside a price, and what a person types in a price box (4 Oct 2026).
+test('localNumber writes a plain number in the money layout; typedDecimal reads either mark', () => {
+  try {
+    setCurrency('€', IT);
+    assert.equal(localNumber('2.5'), '2,5');
+    assert.equal(localNumber(2.5), '2,5', 'a number is taken as its text');
+    assert.equal(localNumber('1234.5'), '1.234,5');
+    assert.equal(localNumber('1234.5', false), '1234,5', 'a box value is never grouped');
+    assert.equal(localNumber('3'), '3');
+    assert.equal(localNumber('1e-7'), '1e-7', 'text it cannot read comes back as is');
+    setCurrency('£');
+    assert.equal(localNumber('1234.5'), '1234.5', 'the British layout leaves it alone');
+  } finally {
+    setCurrency('£');
+  }
+  assert.equal(typedDecimal('12,5'), '12.5');
+  assert.equal(typedDecimal(' 12.5 '), '12.5');
+  assert.equal(typedDecimal(''), '');
+  assert.equal(typedDecimal(null), '');
+  assert.equal(Number(typedDecimal('1.234,5')), NaN, 'two marks: unreadable, never guessed');
+});
+
+test('the order line writes its quantity in the money layout', () => {
+  const src = read('js/orders/order-cost-view.js');
+  assert.match(src, /t\('orders\.cost\.lineTotal', \{ qty: localNumber\(qty\), rate:/);
+  assert.match(read('js/inventory/inventory-detail.js'), /t\('inv\.packKnownPriced', \{ kg: localNumber\(roundTo\(kg, 3\)\), price:/);
 });

@@ -54,13 +54,30 @@ export function setCurrency(symbol, moneyLayout) {
 // top: nothing here may restate a number). The space before a trailing symbol is a
 // no-break space, so «€» never wraps onto a line of its own.
 export function moneyText(fixed) {
-  const text = String(fixed);
-  const parts = /^(-?)(\d+)(?:\.(\d+))?$/.exec(text);
-  if (!parts) return layout.symbolAfter ? `${text} ${current}` : `${current}${text}`;
-  const [, sign, whole, fraction] = parts;
-  const grouped = layout.group ? whole.replace(/\B(?=(\d{3})+(?!\d))/g, layout.group) : whole;
-  const number = sign + grouped + (fraction === undefined ? '' : layout.decimal + fraction);
+  const number = localNumber(fixed);
   return layout.symbolAfter ? `${number} ${current}` : `${current}${number}`;
+}
+
+// A plain number's text («2.5», «1234.5») in the SAME layout as the money, without a symbol:
+// for a quantity or a weight printed on the same line as a price, so one line never mixes
+// «2.5 × 6,50 €» (4 Oct 2026). `grouped: false` for the value of a box a person edits —
+// a thousands dot typed back would not read as a number. Text it cannot read is returned as is.
+export function localNumber(text, grouped = true) {
+  const raw = String(text);
+  const parts = /^(-?)(\d+)(?:\.(\d+))?$/.exec(raw);
+  if (!parts) return raw;
+  const [, sign, whole, fraction] = parts;
+  const groups = grouped && layout.group ? whole.replace(/\B(?=(\d{3})+(?!\d))/g, layout.group) : whole;
+  return sign + groups + (fraction === undefined ? '' : layout.decimal + fraction);
+}
+
+// What a person typed in a price box → the text the price model reads: «12,5» and «12.5»
+// both mean twelve and a half, whatever the venue or the phone (the box is a text field
+// with the decimal keyboard, so the phone's own keyboard decides which mark it offers).
+// Only ONE mark is accepted: «1.234,5» comes back unreadable and is refused downstream,
+// never guessed at. Text handling only — the value is never read here.
+export function typedDecimal(text) {
+  return String(text ?? '').trim().replace(',', '.');
 }
 
 // ⚠️⚠️ CALL THIS INSIDE THE FUNCTION THAT DRAWS, NEVER AT MODULE LOAD. A module is

@@ -380,9 +380,11 @@ test('the new card\'s machinery never starts on the card of before', () => {
 test('the menu gains a case mode that is not a stored unit; the form hands all four case boxes to pricePatch', () => {
   assert.match(LEGACY, /value: CASE_MODE, text: t\('orders\.priceByCase'\)/);
   assert.match(LEGACY, /priceUnit: unitSelect\.value \|\| null/);
-  for (const key of ['casePrice', 'caseCount', 'caseItemSize', 'caseItemUnit']) {
-    assert.match(LEGACY, new RegExp(key + ': [a-zA-Z]+\.value'), key);
+  // The three typed boxes go through typedDecimal (a comma reads as a point, 4 Oct 2026).
+  for (const key of ['casePrice', 'caseCount', 'caseItemSize']) {
+    assert.match(LEGACY, new RegExp(key + ': typedDecimal\\([a-zA-Z]+\\.value\\)'), key);
   }
+  assert.match(LEGACY, /caseItemUnit: caseUnitSelect\.value/);
 });
 
 test('the count, size and unit boxes each carry an aria-label; pieces hide the size box, and a case reopens as typed', () => {
