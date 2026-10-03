@@ -1,4 +1,4 @@
-const CACHE_NAME = 'theitalianclub-v519';
+const CACHE_NAME = 'theitalianclub-v521';
 // Firebase SDK modules (loaded from gstatic) are cached SEPARATELY from CACHE_NAME
 // so they survive the cache-version bump that happens on every deploy — otherwise
 // the offline SDK would be wiped each release until the next online load. The name
@@ -11,7 +11,7 @@ const CACHE_NAME = 'theitalianclub-v519';
 // all-or-nothing install and stop the phone updating at all). They arrive through
 // the fetch handler below, on the first load that has a network.
 // So between activate() and that first load, a phone that is OFFLINE cannot boot:
-// the code asks for 12.18.0 and nothing has it. In practice the window is very
+// the code asks for the new version and nothing has it. In practice the window is very
 // small — activate() only happens after a successful 283-file precache, i.e.
 // online, and tapping the update banner reloads the page immediately — but it is
 // not zero, and it is the reason to bump the SDK deliberately rather than often.
@@ -44,7 +44,7 @@ const CACHE_NAME = 'theitalianclub-v519';
 // could run the app before this upgrade is locked out by it. What DID grow is
 // the cold download: firestore went 426 KB -> 668 KB, paid once, into this
 // cache.
-const SDK_CACHE = 'firebase-sdk-12-18-0';
+const SDK_CACHE = 'firebase-sdk-12-19-0';
 const ASSETS = [
   './',
   './index.html',
@@ -451,7 +451,7 @@ const ASSET_HASHES = {
   "./js/record-ui.js": 'cddac8193fb24a3b',
   "./js/supplier-label.js": '9601ceed020c0205',
   "./js/order-unit.js": '1e5149dc8263a4f5',
-  "./js/record-data.js": '47d198fbb955d963',
+  "./js/record-data.js": '4055f2a4cc82a953',
   "./js/ingredient-record-form.js": 'e84a93ceafe8a2f0',
   "./js/supplier-record-form.js": '29b82e744f6921c1',
   "./js/ingredient-kind.js": 'b5ea1d7ec8255fd6',
@@ -459,10 +459,10 @@ const ASSET_HASHES = {
   "./js/photo-model.js": '67d1d83755bbd33a',
   "./js/market.js": '1711851bea5a607b',
   "./js/push-model.js": '1a3f64b5f28dc19c',
-  "./js/push.js": 'afae0b76a614217c',
+  "./js/push.js": 'd7aad3c3bd098461',
   "./js/client-order-model.js": '01afe2d8a045dbe8',
   "./js/client-order-history.js": 'c2939671de6d8112',
-  "./js/client-orders-data.js": '4e490005f9908359',
+  "./js/client-orders-data.js": 'fe05d6e0f3d6d31e',
   "./js/calculator-client-orders.js": '9e2d24f49368b74c',
   "./js/home-client-orders-badge.js": '2d1ebe03f89f0699',
   "./js/home-order-requests-badge.js": '3c3f93da00331b92',
@@ -486,7 +486,7 @@ const ASSET_HASHES = {
   "./js/splash-init.js": '0982bbf1d8228eab',
   "./js/whats-new.js": '28a18a0146f90592',
   "./js/whats-new-boot.js": 'c4a88b96a1986d6a',
-  "./js/firebase.js": '379947062df613dc',
+  "./js/firebase.js": 'd8ad340010d99565',
   "./js/firebase-target.js": 'b3759997e54ddbc3',
   "./js/same-data.js": '11ff91c9b0192d20',
   "./js/location.js": '6aaf53615a8739d1',
@@ -500,7 +500,7 @@ const ASSET_HASHES = {
   "./js/credentials.js": '5d9eece15a3a969a',
   "./js/staff/dom.js": 'e700814a373b85e9',
   "./js/staff/confirm-dialog.js": '61a7f580f37c5ff8',
-  "./js/staff/firebase-staff.js": '6de5e4bd511328f7',
+  "./js/staff/firebase-staff.js": '556b93b42a530ad5',
   "./js/share.js": 'ec8cbe05c9aa86ab',
   "./js/send-icon.js": '3690291475f44a99',
   "./js/send-sheet.js": '3774a0e7acf2ae9e',
@@ -540,7 +540,7 @@ const ASSET_HASHES = {
   "./js/orders/boot.js": '53dba081d29270d8',
   "./js/orders/category-batches.js": '03d72f63c4fa4a8a',
   "./js/orders/confirm-dialog.js": '61a7f580f37c5ff8',
-  "./js/orders/firebase-orders.js": '316bd30105ea10fa',
+  "./js/orders/firebase-orders.js": 'de887575159d9af2',
   "./js/orders/orders-main.js": '2e9c621de9f4da14',
   "./js/orders/dom.js": '7ec966d71c5356cd',
   "./js/orders/day.js": '8e00beadcda80dd1',
@@ -582,12 +582,12 @@ const ASSET_HASHES = {
   "./js/orders/registry-settings.js": '74c80116276527d1',
   "./js/orders/invoice-import-model.js": '83fc9ef6febd7d36',
   "./js/orders/invoice-import-plan.js": '5dd52c0716adfa9d',
-  "./js/orders/invoice-import-data.js": 'e27a00d2b6a50b9b',
+  "./js/orders/invoice-import-data.js": '6f2dfd88c7417e3f',
   "./js/orders/invoice-import-screen.js": '5b049f460332eea7',
   "./js/form-dirty.js": '27dce3718a33d438',
   "./js/orders/level-stack.js": '6832e37854829455',
-  "./js/orders/firebase-features.js": 'de89853130a11423',
-  "./js/orders/firebase-photo.js": '39a66d803edc884c',
+  "./js/orders/firebase-features.js": 'a0c27a97d6eb7747',
+  "./js/orders/firebase-photo.js": '03e602401453f7c5',
   "./js/orders/photo-capture.js": 'eea1f85f85b0f26a',
   "./js/orders/holidays.js": '93d9c22d24769c1c',
   "./js/orders/holidays-it.js": '7b57e4698b5f299f',
@@ -610,7 +610,7 @@ const ASSET_HASHES = {
   "./js/catalogue/allergen-sheet.js": 'b82e723ddeee0224',
   "./js/catalogue/photo-model.js": '437ecaf7df453145',
   "./js/catalogue/photo-capture.js": '575332d39e58288d',
-  "./js/catalogue/firebase-photo.js": 'a1ecd040521d9a5d',
+  "./js/catalogue/firebase-photo.js": '6f642c842cd16a3b',
   "./js/catalogue/recipe-label-model.js": '8790302faf981b5a',
   "./js/catalogue/label-view.js": '77e90c2e289a2457',
   "./js/catalogue/label-template-model.js": '480a35fa8bd788e3',
@@ -622,7 +622,7 @@ const ASSET_HASHES = {
   "./js/ingredient-create.js": '4a77e51e8bffb44d',
   "./js/ingredient-edit-model.js": '75b571a45585a715',
   "./js/catalogue/ingredient-suggest.js": 'ddf3ca8acc2ed799',
-  "./js/catalogue/firebase-catalogue.js": '4a56f24592f377c5',
+  "./js/catalogue/firebase-catalogue.js": 'e560966537c00cae',
   "./js/catalogue/catalogue-store.js": '32d3ef5ccfb6da26',
   "./js/catalogue/catalogue-main.js": 'e4d45c2098ab7281',
   "./js/catalogue/catalogue-list.js": 'e3884564b29e8a7c',
@@ -641,7 +641,7 @@ const ASSET_HASHES = {
   "./js/pastries/confirm-dialog.js": '61a7f580f37c5ff8',
   "./js/pastries/dom.js": '84e0623e447bb7ab',
   "./js/pastries/pastries-model.js": 'd162282f04d5287d',
-  "./js/pastries/firebase-pastries.js": 'b93e7234e6f4b2bc',
+  "./js/pastries/firebase-pastries.js": '89d43ccad1e099b2',
   "./js/pastries/pastries-store.js": '07fcca1ec0717a80',
   "./js/pastries/pastries-main.js": 'c5ce78730a40fd0e',
   "./js/pastries/pastries-strip.js": '9cfc62e2edf9a343',
@@ -657,7 +657,7 @@ const ASSET_HASHES = {
   "./js/foodcost/confirm-dialog.js": '61a7f580f37c5ff8',
   "./js/foodcost/dom.js": '911105da04a03481',
   "./js/foodcost/foodcost-model.js": '24b84dc23a6182f4',
-  "./js/foodcost/firebase-foodcost.js": '6e843c7f39d651c5',
+  "./js/foodcost/firebase-foodcost.js": '48eee23e4556b3f3',
   "./js/foodcost/foodcost-store.js": '784c7844dfd80044',
   "./js/foodcost/foodcost-main.js": '705e1059e091ca51',
   "./js/foodcost/foodcost-list.js": '897a6bf3b9e0e95d',
@@ -674,7 +674,7 @@ const ASSET_HASHES = {
   "./js/inventory/confirm-dialog.js": '61a7f580f37c5ff8',
   "./js/inventory/dom.js": '5971dfbbb1e223ec',
   "./js/inventory/inventory-model.js": '7cc2935526d50a88',
-  "./js/inventory/firebase-inventory.js": '98880ab94f7ccdfa',
+  "./js/inventory/firebase-inventory.js": '14b4c710163c0408',
   "./js/inventory/inventory-outbox.js": '396a5be9a9069278',
   "./js/inventory/inventory-store.js": '3ea0528fdec4eabb',
   "./js/inventory/inventory-purchases.js": '703db62f90a981c9',
@@ -868,7 +868,7 @@ self.addEventListener('fetch', e => {
   // 2026). Every module used to be downloaded again BEHIND every page and written back
   // into this cache — ~900 KB rewritten to the phone's storage on each screen change,
   // competing with the page for the very disk the offline database reads from. It
-  // bought nothing: the version is in the ADDRESS (/firebasejs/12.18.0/…), so a file at
+  // bought nothing: the version is in the ADDRESS (/firebasejs/12.19.0/…), so a file at
   // one address never changes, and a new SDK version is a new address, fetched here on
   // its first use.
   if (url.origin !== self.location.origin) {

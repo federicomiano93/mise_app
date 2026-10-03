@@ -20,7 +20,7 @@ import {
   getApps,
   getApp,
   initializeApp,
-} from 'https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js';
+} from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js';
 import {
   getFirestore,
   collection,
@@ -41,7 +41,7 @@ import {
   orderBy,
   limit,
   startAfter,
-} from 'https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js';
+} from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js';
 
 // Reuse the default app if firebase.js already created it; otherwise create it.
 const app = getApps().length ? getApp() : initializeApp(firebaseConfig);

@@ -428,7 +428,7 @@ test('writes are never touched by the worker', async () => {
 // ⚠️ The SDK modules used to be downloaded again and rewritten to the phone's storage
 // behind EVERY page (~900 KB a screen change). The version is in their address, so a
 // cached one can never be out of date.
-const SDK_MODULE = 'https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js';
+const SDK_MODULE = 'https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js';
 
 test('⚠⚠ a cached Firebase SDK module is served from its cache, with no download behind it', async () => {
   const sdkCache = loadWorker().read('SDK_CACHE');

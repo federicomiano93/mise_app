@@ -24,7 +24,7 @@ import {
   writeBatch,
   query,
   where,
-} from 'https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js';
+} from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js';
 
 const SUPPLIERS = 'suppliers';
 const INGREDIENTS = 'ingredients';

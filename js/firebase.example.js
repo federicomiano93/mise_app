@@ -19,7 +19,7 @@
 //   - saveCalculatorConfig(config)    → js/calculator-config-store.js
 //   - side-effect `import './firebase.js'` for init → js/app.js
 
-import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js';
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js';
 import {
   initializeAuth,
   indexedDBLocalPersistence,
@@ -31,7 +31,7 @@ import {
   signOut,
   sendPasswordResetEmail,
   connectAuthEmulator,
-} from 'https://www.gstatic.com/firebasejs/12.18.0/firebase-auth.js';
+} from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js';
 import {
   getFirestore,
   initializeFirestore,
@@ -53,7 +53,7 @@ import {
   terminate,
   clearIndexedDbPersistence,
   waitForPendingWrites,
-} from 'https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js';
+} from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js';
 import {
   currentLocationId,
   pathFor,
