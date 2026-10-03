@@ -126,7 +126,8 @@ const state = {
   pending: [],                  // orders typed on an earlier day and never placed
   openSupplier: null,           // the supplier whose own screen is open, or null
   viewingSupplier: null,        // the supplier whose read-only product list is open
-  summarySupplier: null,        // the supplier whose read-only order summary is open (tablet)
+  summarySupplier: null,        // the supplier whose read-only order summary is open
+  summaryOverSupplier: false,   // true when that summary was opened from the supplier screen's bar, over it
   view: 'suppliers',            // which of the two order views is on screen
   query: '',                    // the flat list's search text, kept OUT of the DOM (see render)
   supplierQuery: '',            // the supplier list's search text — deliberately separate
@@ -481,9 +482,19 @@ function openSupplier(supplierId) {
 }
 
 function closeSupplier() {
+  // ⚠️ A summary opened OVER this screen goes with it, whatever closed the screen (Back, order
+  // placed, quantities cleared, supplier deactivated): left behind it would sit over the list
+  // with a flag that says «over a supplier screen» when none exists. Closed first, while the
+  // screen is still there to be made interactive again.
+  const id = state.openSupplier;
+  const hadSummary = state.summaryOverSupplier === true;
+  if (hadSummary) closeSummary();
   state.openSupplier = null;
   detailView?.overlay.remove();
   detailView = null;
+  // closeSummary() just focused the bar's button, which went with the screen: hand focus to the
+  // list row instead, or a keyboard user is dropped on the page body (leaveSupplier does the same).
+  if (hadSummary && id) document.getElementById(`open-${id}`)?.focus();
 }
 // Back on the order screen: close it and hand focus back to the row that opened it — the
 // summary sheet's own pattern (closeSummary). Full screen covers the list, so without this
@@ -611,6 +622,7 @@ function renderOpenSupplier() {
     suggest: suggestFor,
     hooks,
     onBack: leaveSupplier,
+    onSummary: openSummaryOverSupplier,
     // ⚠️ THE SAME QUESTION THE CATALOGUE ASKS (records.js mayEditRecords): where the owner has
     // hidden «Suppliers & ingredients» from the staff, a door to the same card from Orders
     // would quietly undo the switch. Asked on every repaint, so it follows the switch live.
@@ -695,8 +707,26 @@ function openSummary(supplierId) {
   closeSupplier();
   closeSupplierItems();
   closeAlertsPanel();            // the panel must never sit on top of a full screen
+  state.summaryOverSupplier = false;
   state.summarySupplier = supplierId;
   renderSummary();
+}
+
+// ⚠️ FROM THE BAR AT THE FOOT OF THE SUPPLIER'S SCREEN the summary opens ON TOP of it and
+// leaves it open — «così posso vedere tutto quello che ho selezionato senza tornare indietro»
+// (owner, 3 Oct 2026). Closing the supplier first (openSummary) would throw away the person's
+// place and make Back land on the list. closeSummary() then gives focus back to the bar's
+// button, and the supplier screen underneath was never touched: typing preserved.
+function openSummaryOverSupplier(supplierId) {
+  closeSupplierItems();
+  closeAlertsPanel();
+  state.summaryOverSupplier = true;
+  state.summarySupplier = supplierId;
+  renderSummary();
+  // ⚠️ inert: the supplier screen under the sheet must leave the tab order and the screen
+  // reader's reach (aria-modal alone is not honoured everywhere). Cleared by closeSummary.
+  // Only once the sheet really opened: renderSummary() gives up when the supplier is gone.
+  if (detailView && summaryView) detailView.overlay.inert = true;
 }
 
 // `openerId`, not read from state: closeSummary() clears state.summarySupplier
@@ -705,7 +735,10 @@ function openSummary(supplierId) {
 // to give focus back to the row that opened it.
 function closeSummary() {
   const openerId = state.summarySupplier;
+  const fromBar = state.summaryOverSupplier === true;
   state.summarySupplier = null;
+  state.summaryOverSupplier = false;
+  if (detailView) detailView.overlay.inert = false;
   summaryView?.overlay.remove();
   summaryView?.scrim.remove();
   summaryView = null;
@@ -716,7 +749,7 @@ function closeSummary() {
   // Focus goes back to the button that opened this screen — never assumed
   // still there: the row it belonged to may have been repainted, or the
   // supplier deactivated, while the summary was open.
-  document.getElementById(`summary-${openerId}`)?.focus();
+  document.getElementById(fromBar ? `summary-bar-${openerId}` : `summary-${openerId}`)?.focus();
 }
 
 function renderSummary() {
@@ -740,11 +773,17 @@ function renderSummary() {
     onBack: closeSummary, showMoney: state.pricesReadable === true,
   });
   summaryView = { ...built, id: supplier.id };
+  // Above the supplier screen it sits over (orders.css .order-summary--over-supplier): both
+  // are z 600, so only the DOM order would decide, and a rebuilt supplier screen would win.
+  built.overlay.classList.toggle('order-summary--over-supplier', state.summaryOverSupplier === true);
+  built.scrim.classList.toggle('order-summary--over-supplier', state.summaryOverSupplier === true);
   document.body.appendChild(built.scrim);
   document.body.appendChild(built.overlay);
 
   if (firstOpen) {
-    summaryEscHandler = e => { if (e.key === 'Escape') closeSummary(); };
+    // defaultPrevented: an Escape a dialog above the summary already used must close only
+    // that dialog (same guard as deliveries-view.js).
+    summaryEscHandler = e => { if (e.key !== 'Escape' || e.defaultPrevented) return; closeSummary(); };
     document.addEventListener('keydown', summaryEscHandler);
   }
   // Moves focus INTO the screen — its own Back button — the moment it is
@@ -1763,8 +1802,16 @@ function unitConflictMessage(items, recording) {
     const who = (supplier ? supplierLabel(supplier) : f.supplierId) + (mixedDays ? ` (${daySpoken(f.date)})` : '');
     return f.conflicts.map(c => `${who}: ${c.name} — ${c.unit}`).join(', ');
   }).join('; ');
-  const text = t('orders.unitConflict', { day: dayWhen(found[0].date), list });
+  const text = unitConflictText(dayWhen(found[0].date), list, found.flatMap(f => f.conflicts));
   return several && recording ? `${text} ${t('orders.unitConflictNothingRecorded')}` : text;
+}
+
+// The refusal, plus — only when it would help — how to make the two units addable: a card that
+// offers both units but does not say how many packages one case holds (archive.js unitConflicts
+// marks those `fixable`). Advice that cannot fix the line is worse than none.
+function unitConflictText(day, list, conflicts) {
+  const text = t('orders.unitConflict', { day, list });
+  return conflicts.some(c => c.fixable) ? `${text} ${t('orders.unitConflictHint')}` : text;
 }
 
 // Drop a supplier's rows from the in-memory draft immediately, so the screen
@@ -1852,7 +1899,7 @@ async function placeOrder(supplierId, { confirm = true, date: pinnedDate, quanti
         const ing = ingredients.find(i => i.id === id);
         return (ing && ingredientDisplayLabel(ing)) || id;
       }).join(', ');
-      await alertDialog(t('orders.unitConflict', { day: dayWhen(date), list }));
+      await alertDialog(unitConflictText(dayWhen(date), list, conflicts));
     } else {
       setStatus(t('orders.couldNotSaveThe'), 'error');
     }

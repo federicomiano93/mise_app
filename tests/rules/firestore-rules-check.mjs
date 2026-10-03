@@ -878,6 +878,26 @@ async function history() {
     () => wholeWrite('locations/main/orders-history/2026-07-24_SUP_MODERN',
       { ...modern, names: 'Bacon' }));
 
+  // ── sends: each order of the day kept apart, with its time (3 Oct 2026) ────
+  // Negative ones first: a list has .size(), so only `is map` refuses it.
+  const send = { at: '2026-07-24T08:00:00.000Z', quantities: { ING_MODERN: 5 } };
+  await expectDenied('sends sent as a list instead of a map',
+    () => wholeWrite('locations/main/orders-history/2026-07-24_SUP_MODERN',
+      { ...modern, sends: [send] }));
+  await expectDenied('sends sent as a string',
+    () => wholeWrite('locations/main/orders-history/2026-07-24_SUP_MODERN',
+      { ...modern, sends: 'morning' }));
+  const tooManySends = Object.fromEntries(Array.from({ length: 51 }, (_, i) => [`s${i}`, send]));
+  await expectDenied('more sends than one day may hold',
+    () => wholeWrite('locations/main/orders-history/2026-07-24_SUP_MODERN',
+      { ...modern, sends: tooManySends }));
+  await expectAllowed('an order carrying its sends',
+    () => wholeWrite('locations/main/orders-history/2026-07-24_SUP_MODERN',
+      { ...modern, sends: { s20260724080000000: send,
+        s20260724154000000: { at: '2026-07-24T15:40:00.000Z', quantities: { ING_MODERN: 2 }, units: { ING_MODERN: 'busta' } } } }));
+  await expectAllowed('an order from a phone that has not updated yet (no sends)',
+    () => wholeWrite('locations/main/orders-history/2026-07-24_SUP_MODERN', modern));
+
   // ── units: the unit each line was ordered in ───────────────────────────────
   //
   // OPTIONAL IN BOTH DIRECTIONS, like `names`: a phone that does not know the choice

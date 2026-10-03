@@ -42,11 +42,19 @@ function entryFor(entries, id) {
 const CLEAR_ICON =
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="M6 6l12 12"/></svg>';
 
-// A row with a quantity shows its «clear» button (orders.css keys off this class). One
-// helper, used by the row itself AND by orders-main when a value arrives from another
-// phone, so the button can never be out of step with the box beside it.
+const MINUS_ICON =
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/></svg>';
+const PLUS_ICON =
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14"/><path d="M5 12h14"/></svg>';
+
+// A row with a quantity shows its «clear» button (orders.css keys off this class) and can
+// step down with «−». One helper, used by the row itself AND by orders-main when a value
+// arrives from another phone, so neither button can be out of step with the box beside it.
 export function markFilled(row, qty) {
-  row?.classList.toggle('ing-row--filled', (Number(qty) || 0) > 0);
+  const filled = (Number(qty) || 0) > 0;
+  row?.classList.toggle('ing-row--filled', filled);
+  const minus = row?.querySelector('.ing-step-minus');
+  if (minus) minus.disabled = !filled;
 }
 
 // The option a line's unit selects: the one spelled like it, whatever its capitals
@@ -227,6 +235,26 @@ export function buildRow(ing, supplier, suggest, entries, hooks, { meta = '' } =
     updateHint();   // the warning has to appear as the extra digit is typed
   });
 
+  // «−» and «+» under the Order box (owner, 3 Oct 2026). They start from what the BOX shows
+  // and go through setQty, the one path typing uses, so autosave, the filled state, the ×,
+  // the totals and the «much more than usual» line all follow. Reading the box (not the
+  // draft) is what makes a row ordered elsewhere behave like typing into its empty box:
+  // «+» gives 1 and takes the line back. Never below 0; 0 shows an empty box.
+  // ⚠️ A KEYBOARD «−» THAT REACHES 0 DISABLES ITSELF (markFilled), and a disabled button drops
+  // focus to the page: the focus goes to the box instead, as the × does. After a tap nothing
+  // moves — the phone's keyboard must not pop up over the list.
+  function step(delta, event) {
+    setQty(wholeNumber(qtyInput.value) + delta);
+    updateHint();
+    if (event?.detail === 0 && event.currentTarget?.disabled) qtyInput.focus();
+  }
+  const stepLabel = ingredientDisplayLabel(ing) || t('orders.unnamedProduct');
+  const stepButton = (cls, key, icon, delta) => el('button', {
+    type: 'button', class: `ing-step ${cls}`, icon,
+    'aria-label': t(key, { name: stepLabel }),
+    onClick: (event) => step(delta, event),
+  });
+
   // ⚠️ A MENU ONLY WHEN THE CARD OFFERS A CHOICE («cartone» or «busta»); any other row keeps
   // the caption and is untouched. The options are the card's own words — venue data, never
   // translated. The quantity is kept when the unit changes: the person is correcting the
@@ -303,13 +331,21 @@ export function buildRow(ing, supplier, suggest, entries, hooks, { meta = '' } =
         },
       }),
     ]),
+    // ⚠️ THE MENU COMES RIGHT AFTER THE NAME IN THE DOCUMENT, where it is DRAWN (left of the
+    // boxes): keyboard and screen readers follow the document, and met «cartone / busta» only
+    // after both boxes when it was the row's last child. Every row item has an explicit grid column (orders.css), so
+    // its place here costs no layout. `el()` skips it when there is no choice.
+    unitSelect,
     el('div', { class: 'ing-col' }, [
       qtyInput,
+      el('div', { class: 'ing-steps' }, [
+        stepButton('ing-step-minus', 'orders.qtyOneFewerFor', MINUS_ICON, -1),
+        stepButton('ing-step-plus', 'orders.qtyOneMoreFor', PLUS_ICON, 1),
+      ]),
       !unitSelect && ing.unit ? el('span', { class: 'ing-order-unit', text: ing.unit }) : null,
     ]),
     // `stock-field` is what body.hide-stock hides (Settings → hide stock).
     el('div', { class: 'ing-col stock-field' }, [stockInput]),
-    unitSelect,
   ]);
   if (unitSelect) row.classList.add('ing-row--choice');
   if (away) row.dataset.elsewhere = away;

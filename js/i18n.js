@@ -792,6 +792,8 @@ const DICTIONARIES = Object.freeze({
     'orders.qtyToOrderFor': '{name} quantity to order',
     'orders.clearQtyFor': 'Clear the quantity of {name}',
     'orders.unitToOrderFor': 'Unit to order for {name}',
+    'orders.qtyOneMoreFor': 'One more {name}',
+    'orders.qtyOneFewerFor': 'One fewer {name}',
     'orders.qtyOrderedFor': '{name} quantity ordered',
     'orders.ingredientCount': {
       one: '{n} ingredient',
@@ -816,7 +818,15 @@ const DICTIONARIES = Object.freeze({
     'orders.nothingToRecordFor': 'Nothing to record for this supplier — add quantities first.',
     'orders.youReOfflineReconnect': 'You’re offline — reconnect to record this order.',
     'orders.couldNotSaveThe': 'Could not save the order — check your network and try again.',
+    // Several orders the same day, each shown apart in History with its time (js/orders/history.js).
+    'orders.history.firstSend': 'Order · {time}',
+    'orders.history.laterSend': 'Added · {time}',
+    'orders.history.editedSend': 'Corrected · {time}',
+    'orders.history.earlierSends': 'Earlier orders',
+    'orders.history.dayTotal': 'Day total',
     'orders.unitConflict': 'Already ordered from this supplier {day}: {list}. To add more, order it in the same unit.',
+    // Added only when it would help: the card offers both units but does not say how many packs a case holds.
+    'orders.unitConflictHint': 'Or write on the ingredient card how many packs one case holds: then the two are added up in packs.',
     'orders.unitConflictNothingRecorded': 'Nothing has been recorded yet.',
     'orders.clearQuantities': 'Clear quantities',
     'orders.youReOfflineReconnect2': 'You’re offline — reconnect to clear these quantities.',
@@ -872,6 +882,7 @@ const DICTIONARIES = Object.freeze({
     // history.js) that had already drifted into two different plurals. One
     // definition now, and Intl decides the form.
     'orders.itemsCount': { one: '{n} item', other: '{n} items' },
+    'orders.summaryBar': { one: '{n} item in the order · Summary', other: '{n} items in the order · Summary' },
     'orders.whatsappMessage': 'WhatsApp message',
 
     // ── The Fornitori screen: the records, on a page of their own ────────────
@@ -3453,6 +3464,8 @@ const DICTIONARIES = Object.freeze({
     'orders.qtyToOrderFor': 'Quantità da ordinare di {name}',
     'orders.clearQtyFor': 'Azzera la quantità di {name}',
     'orders.unitToOrderFor': 'Unità d’ordine per {name}',
+    'orders.qtyOneMoreFor': 'Uno in più: {name}',
+    'orders.qtyOneFewerFor': 'Uno in meno: {name}',
     'orders.qtyOrderedFor': 'Quantità ordinata di {name}',
     'orders.ingredientCount': {
       one: '{n} ingrediente',
@@ -3475,7 +3488,13 @@ const DICTIONARIES = Object.freeze({
     'orders.nothingToRecordFor': 'Niente da registrare per questo fornitore — aggiungi prima le quantità.',
     'orders.youReOfflineReconnect': 'Sei offline — riconnettiti per registrare questo ordine.',
     'orders.couldNotSaveThe': 'Non è stato possibile salvare l’ordine — controlla la rete e riprova.',
+    'orders.history.firstSend': 'Ordine · ore {time}',
+    'orders.history.laterSend': 'Aggiunta · ore {time}',
+    'orders.history.editedSend': 'Corretto · ore {time}',
+    'orders.history.earlierSends': 'Ordini precedenti',
+    'orders.history.dayTotal': 'Totale del giorno',
     'orders.unitConflict': 'Già ordinato a questo fornitore {day}: {list}. Per aggiungerne, ordinalo nella stessa unità.',
+    'orders.unitConflictHint': 'Oppure scrivi nella scheda dell’ingrediente quante confezioni ci sono in un cartone: allora vengono sommate in confezioni.',
     'orders.unitConflictNothingRecorded': 'Non è stato registrato ancora niente.',
     'orders.clearQuantities': 'Azzera le quantità',
     'orders.youReOfflineReconnect2': 'Sei offline — riconnettiti per azzerare queste quantità.',
@@ -3525,6 +3544,7 @@ const DICTIONARIES = Object.freeze({
     'orders.nothingIsBeingOrdered': 'Non si sta ancora ordinando niente.',
 
     'orders.itemsCount': { one: '{n} voce', other: '{n} voci' },
+    'orders.summaryBar': { one: '{n} articolo nell’ordine · Riepilogo', other: '{n} articoli nell’ordine · Riepilogo' },
     'orders.whatsappMessage': 'Messaggio WhatsApp',
 
     // ── La schermata Fornitori: le schede, su una pagina tutta loro ──────────
