@@ -949,6 +949,7 @@ const DICTIONARIES = Object.freeze({
     'orders.settings.helpSub': 'How the orders screen works',
     // ── The tablet alerts panel (Slice A, 28 Sep 2026) ────────────────────────
     'orders.alerts.panelRegion': 'Notices',
+    'orders.alerts.empty': 'No notices right now.',
     'orders.alerts.panelButton': { one: '{n} notice', other: '{n} notices' },
     'orders.alerts.deliveriesTabBadge': { one: 'Incoming — {n} order owed', other: 'Incoming — {n} orders owed' },
     // ── The tablet order-summary sheet (Slice D, 28 Sep 2026) ─────────────────
@@ -1064,6 +1065,7 @@ const DICTIONARIES = Object.freeze({
     'orders.deliveries.saveArrival': 'Save',
     'orders.deliveries.couldNotSave': 'Not saved. Check the connection and try again.',
     'orders.reorder.buttonAria': 'To re-order ({n})',
+    'orders.reorder.buttonAriaNone': 'Still to re-order',
     'orders.reorder.otherSupplier': 'Order from another supplier',
     'orders.reorder.otherSupplierAria': 'Order from another supplier — {name}',
     'orders.reorder.chooseTitle': 'Choose a supplier',
@@ -3559,6 +3561,7 @@ const DICTIONARIES = Object.freeze({
     'orders.settings.helpSub': 'Come funziona la schermata degli ordini',
     // ── Il pannello avvisi del tablet (Slice A, 28 Sep 2026) ──────────────────
     'orders.alerts.panelRegion': 'Avvisi',
+    'orders.alerts.empty': 'Nessun avviso al momento.',
     'orders.alerts.panelButton': { one: '{n} avviso', other: '{n} avvisi' },
     'orders.alerts.deliveriesTabBadge': { one: 'In arrivo — {n} ordine da confermare', other: 'In arrivo — {n} ordini da confermare' },
     // ── Il riepilogo ordine del tablet (Slice D, 28 Sep 2026) ─────────────────
@@ -3672,6 +3675,7 @@ const DICTIONARIES = Object.freeze({
     'orders.deliveries.saveArrival': 'Salva',
     'orders.deliveries.couldNotSave': 'Non salvato. Controlla la connessione e riprova.',
     'orders.reorder.buttonAria': 'Da riordinare ({n})',
+    'orders.reorder.buttonAriaNone': 'Da riordinare',
     'orders.reorder.otherSupplier': 'Ordina da un altro fornitore',
     'orders.reorder.otherSupplierAria': 'Ordina da un altro fornitore — {name}',
     'orders.reorder.chooseTitle': 'Scegli il fornitore',

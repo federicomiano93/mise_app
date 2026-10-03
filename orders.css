@@ -2762,6 +2762,17 @@ body[data-section="orders"] .order-box-head .tab-bar .tab.active { font-weight: 
   z-index: 500;
 }
 #orders-alerts-panel > * { margin-bottom: 0 !important; }
+/* Shown while the panel holds nothing else (initAlertsPanel): the bell is permanent, so an
+   empty panel says so in a quiet voice. */
+.orders-alerts-empty {
+  margin: 0;
+  padding: 8px 4px;
+  text-align: center;
+  font-family: var(--font);
+  font-size: 14px;
+  color: var(--text-3);
+}
+.orders-alerts-empty[hidden] { display: none; }
 
 /* Today's orders, then the debt (tablet-layout.js HOSTS), above the box. */
 #orders-tablet-strip { display: flex; flex-direction: column; gap: 10px; margin-bottom: 10px; }

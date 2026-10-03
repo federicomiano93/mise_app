@@ -204,8 +204,8 @@ async function confirm(entry, missingIds, ctx) {
 
 // ⚠️ ITS OWN ROUND BUTTON IN THE GREEN BAR (#orders-reorder-btn, 2 Oct 2026), NOT A NOTICE IN
 // THE BELL: «da riordinare» is work to do, and a bell that mixes it with reminders and
-// calendar notices hides it. The button is shown only while something is to be re-ordered,
-// carries the count on a small dot and opens the list. Everything it shows is DERIVED here
+// calendar notices hides it. The button is always shown, carries
+// the count on a small dot (only while there is something) and opens the list. Everything it shows is DERIVED here
 // from the history and the draft — nothing is stored.
 export function renderReorderButton(btn, countEl, ctx) {
   // ⚠️ AN OPEN LIST IS REDRAWN FROM HERE, BEFORE ANY EARLY RETURN. orders-main calls this on
@@ -224,13 +224,17 @@ export function renderReorderButton(btn, countEl, ctx) {
     wiredButtons.add(btn);
   }
   const items = stillToReorder(ctx.history, ctx.entries);
-  btn.hidden = !items.length;
+  // ⚠️ THE BUTTON NEVER HIDES (Federico, 3 Oct 2026): only the number comes and goes.
+  btn.hidden = false;
   if (countEl) {
     countEl.textContent = items.length ? String(items.length) : '';
     countEl.hidden = !items.length;
   }
-  // The language is read HERE, at drawing time — never when the module loads.
-  btn.setAttribute('aria-label', t('orders.reorder.buttonAria', { n: items.length }));
+  // The language is read HERE, at drawing time — never when the module loads. At zero the
+  // label drops the number: «To re-order (0)» reads wrong to a screen reader.
+  btn.setAttribute('aria-label', items.length
+    ? t('orders.reorder.buttonAria', { n: items.length })
+    : t('orders.reorder.buttonAriaNone'));
 }
 
 // Draw the button again from the last data it had — for a change of language, which brings
@@ -285,9 +289,8 @@ function openReorderScreen(firstCtx) {
     close();
   };
 
-  // ⚠️ FOCUS GOES BACK TO THE BUTTON IN THE BAR, which is hidden once nothing is left to
-  // re-order — then the Order tab is a visible, focusable place on the same screen; focus
-  // must never fall to <body>.
+  // ⚠️ FOCUS GOES BACK TO THE BUTTON IN THE BAR; the Order tab is the fallback if the button
+  // is missing or hidden — focus must never fall to <body>.
   function close() {
     overlay.remove();
     openList = null;
