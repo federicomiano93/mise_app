@@ -17,6 +17,11 @@ class PackParsingTest(unittest.TestCase):
         self.check("CL 5 X 24 SCIROPPO", 50, "ml", 24)
         self.check("LT 1,5 x 6 ACETO", 1.5, "l", 6)
 
+    def test_a_fraction_of_a_unit_is_not_its_denominator(self):
+        self.check("BRESAOLA STELLA 1/2KG", 0.5, "kg")
+        self.check("SALAME 1/4 KG", 0.25, "kg")
+        self.check("FARINA KG 25", 25, "kg")
+
     def test_unit_first_does_not_match_inside_a_word(self):
         self.assertIsNone(parse_pack("BUSTE ML"))
         self.assertIsNone(parse_pack("DOLCE5X3"))

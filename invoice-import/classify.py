@@ -128,6 +128,10 @@ def _count_after(d: str) -> int | None:
 
 def parse_pack(description: str) -> PackInfo | None:
     d = (description or "").upper()
+    # "1/2KG", "1/4 KG": a fraction of a unit. Without this the "2KG" inside "1/2KG" reads as
+    # a 2 kg pack — four times the real half kilo (real invoice, 3 Oct 2026).
+    d = re.sub(r"(?<![\d/])(\d)\s*/\s*(\d)(?=\s*(?:KG|GR|G|LT|L|ML)\b)",
+               lambda m: str(round(int(m.group(1)) / int(m.group(2)), 3)), d)
 
     # "2,5kg* 4pz", "85gr* 50pz", "2,5 KG X 4", "1kgx6", "7gx80"
     m = re.search(_NUM + r"\s*(KG|GR|G)\.?\s*[*X]\s*(\d+)(?!\d)", d)
