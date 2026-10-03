@@ -211,8 +211,8 @@ export function renderReorderButton(btn, countEl, ctx) {
   // ⚠️ AN OPEN LIST IS REDRAWN FROM HERE, BEFORE ANY EARLY RETURN. orders-main calls this on
   // every snapshot and every render(), with the freshest data — so a line put back or marked
   // «Risolto» (on this phone or the other one in the kitchen) leaves the open list without a
-  // second subscription. It must run even when the button has gone (missing or no items
-  // left): the list stays open on its empty text until somebody taps Back.
+  // second subscription. It must run even when no button was handed in or no items are
+  // left: the list stays open on its empty text until somebody taps Back.
   if (openList) openList.redraw(ctx);
   lastBannerCtx = ctx;
   reorderBtn = btn || null;
@@ -226,6 +226,7 @@ export function renderReorderButton(btn, countEl, ctx) {
   const items = stillToReorder(ctx.history, ctx.entries);
   // ⚠️ THE BUTTON NEVER HIDES (Federico, 3 Oct 2026): only the number comes and goes.
   btn.hidden = false;
+  btn.disabled = false;   // the markup ships it disabled until this first run (orders.html)
   if (countEl) {
     countEl.textContent = items.length ? String(items.length) : '';
     countEl.hidden = !items.length;

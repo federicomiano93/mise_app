@@ -2710,7 +2710,7 @@ body[data-section="orders"] .order-box-head .tab-bar .tab.active { font-weight: 
    avvisi degli ordini» — on the phone too. js/orders/tablet-layout.js now moves
    the hosts at every size; the tablet block below only changes SIZES and where
    the panel hangs. */
-/* The right-hand slot of the Orders bar carries up to three buttons on a phone, so it
+/* The right-hand slot of the Orders bar carries up to four buttons on a phone, so it
    keeps a tighter gap than the shared 12px. */
 .orders-header-actions { gap: 8px; flex-shrink: 0; }
 /* The number on a round header button: a small red dot with a white figure,
@@ -2811,7 +2811,7 @@ body:not([data-orders-tab="deliveries"]) #orders-owed { display: none; }
 }
 .tab.active .tab-badge { background: #fff; color: var(--danger); }
 
-/* A phone's bar holds Back, the title and up to three round buttons: the
+/* A phone's bar holds Back, the title and up to four round buttons: the
    subtitle line would not fit beside them, so below 400px only «Ordini» shows. */
 @media (max-width: 400px) {
   body[data-card="orders"] > .orders-header .orders-header-title p { display: none; }

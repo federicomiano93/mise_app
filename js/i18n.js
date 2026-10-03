@@ -1065,7 +1065,7 @@ const DICTIONARIES = Object.freeze({
     'orders.deliveries.saveArrival': 'Save',
     'orders.deliveries.couldNotSave': 'Not saved. Check the connection and try again.',
     'orders.reorder.buttonAria': 'To re-order ({n})',
-    'orders.reorder.buttonAriaNone': 'Still to re-order',
+    'orders.reorder.buttonAriaNone': 'To re-order',
     'orders.reorder.otherSupplier': 'Order from another supplier',
     'orders.reorder.otherSupplierAria': 'Order from another supplier — {name}',
     'orders.reorder.chooseTitle': 'Choose a supplier',

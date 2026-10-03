@@ -134,7 +134,7 @@ test('the new keys exist in English and Italian', () => {
   const src = read('js/i18n.js');
   for (const [key, en, it] of [
     ['orders.alerts.empty', 'No notices right now.', 'Nessun avviso al momento.'],
-    ['orders.reorder.buttonAriaNone', 'Still to re-order', 'Da riordinare'],
+    ['orders.reorder.buttonAriaNone', 'To re-order', 'Da riordinare'],
   ]) {
     assert.ok(src.includes(`'${key}': '${en}'`), `${key} in English`);
     assert.ok(src.includes(`'${key}': '${it}'`), `${key} in Italian`);
@@ -146,4 +146,15 @@ test('the empty line is styled with tokens only', () => {
   const rule = css.match(/\.orders-alerts-empty\s*\{[^}]*\}/)[0];
   assert.match(rule, /color:\s*var\(--text-3\)/);
   assert.doesNotMatch(rule, /#[0-9a-f]{3,6}\b/i);
+});
+
+// ⚠️ Visible from the first paint but wired only by the first snapshot: until then it must be
+// a NAMED, DISABLED button, never a nameless one that ignores a tap (review, 3 Oct 2026).
+test('before any data the reorder button is named and disabled; the renderer enables it', () => {
+  const tag = openTag('orders-reorder-btn');
+  assert.match(tag, /\sdisabled(\s|>)/);
+  assert.match(tag, /data-i18n="orders\.reorder\.buttonAriaNone"/);
+  assert.match(tag, /data-i18n-attr="aria-label"/);
+  assert.match(tag, /aria-label="To re-order"/);
+  assert.match(read('js/orders/deliveries-view.js'), /btn\.disabled = false;/);
 });

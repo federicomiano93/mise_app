@@ -1,4 +1,4 @@
-const CACHE_NAME = 'theitalianclub-v525';
+const CACHE_NAME = 'theitalianclub-v526';
 // Firebase SDK modules (loaded from gstatic) are cached SEPARATELY from CACHE_NAME
 // so they survive the cache-version bump that happens on every deploy — otherwise
 // the offline SDK would be wiped each release until the next online load. The name
@@ -407,7 +407,7 @@ const ASSET_HASHES = {
   "./index.html": '941d8ee8dc45b049',
   "./home.html": 'a4401ab28cb28eb9',
   "./calculator.html": '6febbbbb883d4939',
-  "./orders.html": '326e3d54f1099f49',
+  "./orders.html": 'cc98b4a475eb6720',
   "./suppliers.html": '741d00b081eee520',
   "./install-guide.html": '155cc21e1c1dc524',
   "./qr.png": '761a95e5bc25e2ba',
@@ -415,7 +415,7 @@ const ASSET_HASHES = {
   "./tokens.css": '15a90c6c1535077b',
   "./auth.css": 'e4ba63eda208115b',
   "./style.css": '011704cc77f2029b',
-  "./orders.css": 'f47ab8f9ba12c150',
+  "./orders.css": 'fb80f50f94753415',
   "./sounds/alarm.wav": '0d1465974f5be95b',
   "./fonts/manrope-latin.woff2": '71eb731d55804619',
   "./fonts/manrope-latin-ext.woff2": 'bd24140af06f1b58',
@@ -492,7 +492,7 @@ const ASSET_HASHES = {
   "./js/location.js": '6aaf53615a8739d1',
   "./js/sections.js": 'abcfdecb2bd5766d',
   "./js/roles.js": '2b491770c4b6165b',
-  "./js/i18n.js": '92194109ab7443b3',
+  "./js/i18n.js": '98c7fa3b42d3a4c0',
   "./js/i18n-dom.js": '24249af4367511e5',
   "./js/keyboard-done.js": '4a4b75c43a15e2c7',
   "./js/join-code.js": '5b89de65db5c102f',
@@ -545,7 +545,7 @@ const ASSET_HASHES = {
   "./js/orders/dom.js": '7ec966d71c5356cd',
   "./js/orders/day.js": '8e00beadcda80dd1',
   "./js/orders/deliveries.js": '29471cfe5dd2dd48',
-  "./js/orders/deliveries-view.js": '595f06f345aebf2d',
+  "./js/orders/deliveries-view.js": 'b966bffd1a1d205d',
   "./js/orders/send-routes.js": '88562d53be92460e',
   "./js/orders/send-chooser.js": 'b36520fb74f98561',
   "./js/orders/work-week.js": '0ad139be5b53ea69',
@@ -593,7 +593,7 @@ const ASSET_HASHES = {
   "./js/orders/holidays-it.js": '7b57e4698b5f299f',
   "./js/orders/suggestions.js": '56cf68433d758dcb',
   "./js/orders/notifications.js": '72fe5c2caeeb5a3b',
-  "./js/orders/tablet-layout.js": '56a84ef9a999af9d',
+  "./js/orders/tablet-layout.js": '195fd7269db13996',
   "./js/orders/sticky-offset.js": 'a0c2e623a591b6ba',
   "./js/orders/order-summary.js": '0e2d3ad98ec27217',
   "./js/orders/order-cost-view.js": '8812db131fc92d28',

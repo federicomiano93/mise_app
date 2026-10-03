@@ -453,7 +453,7 @@ test('the button is always shown; with nothing to re-order only the number is hi
   assert.equal(btn.hidden, false);
   assert.equal(btn.dot.hidden, true);
   assert.equal(btn.dot.textContent, '');
-  assert.equal(btn.getAttribute('aria-label'), 'Still to re-order');
+  assert.equal(btn.getAttribute('aria-label'), 'To re-order');
 
   renderReorderButton(btn, ctx);
   assert.equal(btn.hidden, false);
@@ -489,7 +489,7 @@ test('the button is in the green bar left of the bell, never hidden, with the Fe
   assert.ok(btnAt > 0 && btnAt < bellAt, 'left of the bell');
   const tag = html.slice(html.lastIndexOf('<button', btnAt), html.indexOf('</button>', btnAt));
   assert.match(tag, /class="app-icon-btn orders-icon-btn"/);
-  assert.match(tag, /type="button">/);
+  assert.match(tag, /type="button"/);
   assert.doesNotMatch(tag.slice(0, tag.indexOf('>') + 1), /\shidden/, 'permanent: no hidden in the markup');
   assert.match(tag, /<polyline points="1 4 1 10 7 10"\/><path d="M3\.51 15a9 9 0 1 0 2\.13-9\.36L1 10"\/>/);
   assert.match(tag, /id="orders-reorder-count"/);

@@ -179,9 +179,9 @@ export function initAlertsPanel() {
   // panel the moment a banner's own renderer quietly cleared itself.
   //
   // ⚠️ THE BELL AND THE NUMBER ANSWER TWO DIFFERENT QUESTIONS — see the long
-  // note on countNoticeClassNames above. The bell shows whenever there is
-  // ANYTHING to open the panel for (hasContent); the number only counts real
-  // notices, and is blank rather than "0" when there are none.
+  // note on countNoticeClassNames above. `hasContent` decides whether the panel
+  // shows its empty line; the number only counts real notices, and is blank
+  // rather than "0" when there are none.
   //
   // ⚠️ THE BELL IS PERMANENT (Federico, 3 Oct 2026): it never hides. With no content the
   // panel stays open on its empty line instead of closing under the thumb. The empty line
@@ -220,7 +220,7 @@ export function initAlertsPanel() {
 
   // Every renderer that fills the panel's hosts writes into them
   // independently and has no idea the panel — or the button — exists. The
-  // observer is what lets the count (and the button's very visibility) follow
+  // observer is what lets the count (and the panel's empty line) follow
   // whatever they do, including a host crossing in or out of `hidden`.
   const observer = new MutationObserver(refreshCount);
   observer.observe(panel, {

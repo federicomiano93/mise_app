@@ -106,8 +106,12 @@
          it cannot flash in late (Federico, 3 Oct 2026: «voglio che i tasti siano permanenti,
          le notifiche arrivano quando ci sono»); only the red number
          (js/orders/deliveries-view.js renderReorderButton) comes and goes, and is the count
-         of the lines to re-order. Opens the list screen, which has an empty text. -->
-    <button class="app-icon-btn orders-icon-btn" id="orders-reorder-btn" type="button">
+         of the lines to re-order. Opens the list screen, which has an empty text.
+         ⚠️ NAMED AND DISABLED IN THE MARKUP: until the first snapshot arrives the renderer has
+         not run, so the button has no handler yet — it must not be a nameless control that does
+         nothing. renderReorderButton enables it and takes over the label. -->
+    <button class="app-icon-btn orders-icon-btn" id="orders-reorder-btn" type="button" disabled
+            data-i18n="orders.reorder.buttonAriaNone" data-i18n-attr="aria-label" aria-label="To re-order">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
       <span class="orders-head-dot" id="orders-reorder-count" aria-hidden="true" hidden></span>
     </button>
