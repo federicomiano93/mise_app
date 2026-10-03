@@ -33,6 +33,7 @@ installDom();
 globalThis.__miseTestSession = { location: { id: 'loc-test', country: 'IT', language: 'en' } };
 const { buildIngredientForm } = await import('../js/ingredient-record-form.js');
 const { setCurrency } = await import('../js/currency.js');
+const MARKET = await import('../js/market.js');
 before(() => setCurrency('€'));
 
 // ── The stored shapes of the brief's «existing data» table ───────────────────
@@ -958,4 +959,61 @@ test('3rd review 5: Ricalcola on an employee-made Singola over a case of 3 at 10
   const { payload, record } = await card.save();
   assert.deepEqual([payload.priceUnit, payload.pricePerUnit, payload.unitWeightKg, payload.caseCount], ['pcs', 3.333333, 1, null]);
   assert.equal(record, null, 'the same money');
+});
+
+// ── «12,5» and «12.5» both mean twelve and a half (4 Oct 2026) ──────────────
+// The price boxes were <input type="number">, which shows and accepts the PHONE's decimal mark:
+// on a phone not set to Italian «12,5» was emptied on save. They are text boxes now, read
+// through typedDecimal(), and an Italian venue shows its figures with the comma.
+test('a price typed with a comma is saved as the same number as with a point', async () => {
+  for (const typed of ['7,5', '7.5', ' 7,5 ']) {
+    const card = openCard({ item: TYPED_KG });
+    type(card.rate, typed);
+    const { payload } = await card.save();
+    assert.equal(payload.pricePerUnit, 7.5, `typed «${typed}»`);
+  }
+  const card = openCard();
+  type(card.name, 'Farina 00');
+  click(card.carton);
+  type(card.count, '4');
+  type(card.weightAmount, '2,5');
+  type(card.casePrice, '20,40');
+  const { payload } = await card.save();
+  assert.equal(payload.casePrice, 20.4, 'the case price box reads the comma too');
+});
+
+// Review of #278: text that is not a number used to be saved as «no price», quietly deleting the
+// stored one. It is refused on Save now, on that box (P20), and nothing is written.
+test('a price box holding something that is not a number is refused on Save, never saved as no price', async () => {
+  for (const typed of ['1.234,5', 'abc', '12,50 x', '-5', '0']) {
+    const card = openCard({ item: TYPED_KG });
+    type(card.rate, typed);
+    const before = card.saves.length;
+    await card.save();
+    assert.equal(card.saves.length, before, `«${typed}» must not be saved`);
+    assert.equal(card.rate.getAttribute('aria-invalid'), 'true', `«${typed}» is pointed at`);
+    assert.ok(card.all().some(n => n.classList.contains('mgmt-field-error') && !n.hidden && /number above zero/.test(n.textContent)),
+      'a visible message says what to write');
+    type(card.rate, '7,5');
+    assert.notEqual(card.rate.getAttribute('aria-invalid'), 'true', 'typing clears the refusal');
+  }
+  // An EMPTY box is still how a price is removed.
+  const card = openCard({ item: TYPED_KG });
+  type(card.rate, '');
+  const { payload } = await card.save();
+  assert.equal(payload.pricePerUnit, null);
+});
+
+test('the price boxes are text with the decimal keyboard, and an Italian venue shows the comma in them', () => {
+  const { moneyLayoutOf } = MARKET;
+  try {
+    setCurrency('€', moneyLayoutOf({ country: 'IT' }));
+    const card = openCard({ item: TYPED_KG });
+    assert.equal(card.rate.type, 'text');
+    assert.equal(card.rate.getAttribute('inputmode'), 'decimal');
+    assert.equal(card.rate.value, '7,2', 'the stored 7.2 shown the Italian way');
+    assert.ok(card.notes().every(n => !/€7\.20/.test(n)), 'no British-layout money left on the card');
+  } finally {
+    setCurrency('€');
+  }
 });

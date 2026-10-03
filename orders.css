@@ -1580,6 +1580,11 @@ body[data-section="orders"] .ing-filter .view-switch-btn:not(.active) { color: v
 }
 .mgmt-form .mgmt-input:focus,
 .mgmt-days-row .mgmt-input:focus { outline: none; border-color: var(--accent); }
+/* The price boxes became text fields with the decimal keyboard on 4 Oct 2026 (they read «7,20»
+   and «7.20» alike) and so lost what style.css gives input[type="number"]: they keep that look —
+   semi-bold figures, the crust ground while being typed into. */
+.mgmt-form .mgmt-input[inputmode="decimal"] { font-weight: 600; }
+.mgmt-form .mgmt-input[inputmode="decimal"]:focus { background: var(--crust-bg); }
 
 /* ── The price block in the ingredient form ────────────────────────────────────
    The live answer to "what does a kilo of this cost", under the boxes it is

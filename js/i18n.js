@@ -902,14 +902,15 @@ const DICTIONARIES = Object.freeze({
     'orders.notDeclaredShort': 'not declared',
     'orders.registry.loadFailed': 'Could not load the suppliers. Check your connection and try again.',
     'orders.registry.whichList': 'Which list to show',
-    // ⚠️ The NUMBER keeps its decimal point in both languages: these boxes are
-    // <input type="number">, which refuses a comma. Only «e.g.» is translated.
+    // The example follows the interface language (Italian writes «7,20»): since 4 Oct 2026
+    // these boxes are text fields that read «7,20» and «7.20» alike (currency.js typedDecimal).
     'orders.eg.packWeight': 'e.g. 2.5',
     'orders.eg.ratePerKg': 'e.g. 7.20 (one kilo)',
     'orders.exVatNote': 'Prices are net of VAT.',
     'orders.eg.ratePerLitre': 'e.g. 6.00 (one litre)',
     'orders.eg.ratePerPiece': 'e.g. 0.035 (one piece)',
     'orders.eg.pieceWeight': 'e.g. 0.055',
+    'orders.price.notANumber': 'Write just a number above zero, like 7.20.',
     'orders.ingredientsCount': { one: '{n} ingredient', other: '{n} ingredients' },
 
     // The record forms. ⚠️ These labels were literals passed as an ARGUMENT —
@@ -3556,12 +3557,13 @@ const DICTIONARIES = Object.freeze({
     'orders.notDeclaredShort': 'non dichiarato',
     'orders.registry.loadFailed': 'Non è stato possibile caricare i fornitori. Controlla la connessione e riprova.',
     'orders.registry.whichList': 'Quale elenco mostrare',
-    'orders.eg.packWeight': 'es. 2.5',
-    'orders.eg.ratePerKg': 'es. 7.20 (un chilo)',
+    'orders.eg.packWeight': 'es. 2,5',
+    'orders.eg.ratePerKg': 'es. 7,20 (un chilo)',
     'orders.exVatNote': 'I prezzi sono al netto dell’IVA.',
-    'orders.eg.ratePerLitre': 'es. 6.00 (un litro)',
-    'orders.eg.ratePerPiece': 'es. 0.035 (un pezzo)',
-    'orders.eg.pieceWeight': 'es. 0.055',
+    'orders.eg.ratePerLitre': 'es. 6,00 (un litro)',
+    'orders.eg.ratePerPiece': 'es. 0,035 (un pezzo)',
+    'orders.eg.pieceWeight': 'es. 0,055',
+    'orders.price.notANumber': 'Scrivi solo un numero maggiore di zero, come 7,20.',
     'orders.ingredientsCount': { one: '{n} ingrediente', other: '{n} ingredienti' },
 
     // Le schede. ⚠️ Erano scritte in inglese dentro il codice, in una forma che il

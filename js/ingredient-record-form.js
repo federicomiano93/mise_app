@@ -75,7 +75,7 @@ import { unitCost } from './order-cost.js';
 // ⚠️ THE CURRENCY FOLLOWS THE VENUE'S COUNTRY, and it is read inside priceBlock()
 // rather than up here — the venue is not open when this module is evaluated. See
 // js/currency.js and currencyOf() in js/market.js.
-import { currentCurrency } from './currency.js';
+import { currentCurrency, localNumber, typedDecimal } from './currency.js';
 // ⚠️ THE APP'S ONE «?», not a second one. This overlay is built long after the page
 // has loaded, so it asks the module to fill the hosts it has just created.
 import { mountHelpButtons } from './help-button.js';
@@ -206,18 +206,17 @@ function priceBlock(item, actions, defaultUnit = null, ctx) {
     unitSelect.appendChild(opt);
   });
 
-  // step="any" on both of them. A step of 0.01 makes the browser REFUSE 0.0035
-  // as invalid — silently, by leaving the box empty on submit — and that is
-  // exactly the number a vanilla pod weighs AND the number a gelatine leaf
-  // costs, so it is the wrong step for the rate as well as for the weight.
+  // ⚠️ A TEXT BOX WITH THE DECIMAL KEYBOARD, NOT <input type="number"> (4 Oct 2026). A number
+  // box shows and accepts the decimal mark of the PHONE's language: on a phone not set to
+  // Italian it showed «12.5» under «12,50 €» and silently emptied «12,5» on save. Now the
+  // box shows the figure in the venue's layout and typedDecimal() reads «12,5» and «12.5»
+  // alike before any model sees it (the old step="any" worry — 0.0035 refused — is gone
+  // with the number box). Text that is not a number reads as no price, as before.
   const money = (value, placeholder) => el('input', {
-    type: 'number', class: 'mgmt-input', min: '0', step: 'any',
-    inputmode: 'decimal', value: value ?? '', placeholder,
+    type: 'text', class: 'mgmt-input', inputmode: 'decimal', autocomplete: 'off',
+    value: value === null || value === undefined || value === '' ? '' : localNumber(value, false), placeholder,
   });
-  // ⚠️ THE NUMBER KEEPS ITS DECIMAL POINT IN BOTH LANGUAGES. Only the words around it
-  // are translated: the box is <input type="number">, which does not accept a comma,
-  // so an example written «7,20» would be an instruction to type something the field
-  // then refuses.
+  // The examples follow the interface language («es. 7,20»): both marks are accepted.
   //
   // ⚠️ The placeholder is EMPTY here and filled by refresh() below, because it now
   // depends on the purchase unit — «(un chilo)» is wrong the moment somebody picks
@@ -228,6 +227,12 @@ function priceBlock(item, actions, defaultUnit = null, ctx) {
   // The case / package price: «Prezzo cartone» or «Prezzo confezione» by the format. Its value is
   // FILLED by refresh() (priceBoxStart) for as long as nobody has typed in it.
   const casePriceBox = money('', '');
+  // Text that is not a number is refused on Save, on its box (see unreadablePrice).
+  const rateRefusal = refusalMessage(rate, t('orders.price.notANumber'));
+  const pieceRefusal = refusalMessage(pieceWeight, t('orders.price.notANumber'));
+  const casePriceRefusal = refusalMessage(casePriceBox, t('orders.price.notANumber'));
+  [[rate, rateRefusal], [pieceWeight, pieceRefusal], [casePriceBox, casePriceRefusal]]
+    .forEach(([box, refusal]) => box.addEventListener('input', refusal.clear));
 
   // ⚠️ WHAT A PERSON HAS DONE TO THE PRICE, as flags the form cannot forget. See the header.
   let priceTyped = false;
@@ -278,12 +283,12 @@ function priceBlock(item, actions, defaultUnit = null, ctx) {
   }
 
   const rateLabel = el('span', { class: 'mgmt-field-label' });
-  const rateField = el('label', { class: 'mgmt-field' }, [rateLabel, rate]);
+  const rateField = el('label', { class: 'mgmt-field' }, [rateLabel, rate, rateRefusal.node]);
   const unitField = field(t('orders.howItIsBought'), unitSelect);
   // ⚠️ THE CASE PRICE TAKES THE RATE BOX'S PLACE in the same row (Federico, 29 Sep 2026); it
   // carries one of two names by the format, set by refresh().
   const casePriceLabel = el('span', { class: 'mgmt-field-label' });
-  const casePriceField = el('label', { class: 'mgmt-field' }, [casePriceLabel, casePriceBox]);
+  const casePriceField = el('label', { class: 'mgmt-field' }, [casePriceLabel, casePriceBox, casePriceRefusal.node]);
 
   // ⚠️ THE FORMAT CHANGED SINCE THE LAST PRICE (employee, or this card, changed the count or the
   // weight): a price stands on the format it was typed under, so the line says both and asks for a
@@ -334,6 +339,7 @@ function priceBlock(item, actions, defaultUnit = null, ctx) {
   const pieceField = el('label', { class: 'mgmt-field' }, [
     el('span', { class: 'mgmt-field-label', text: t('orders.weightOfOnePiece') }),
     pieceWeight,
+    pieceRefusal.node,
     el('p', { class: 'notif-note', text: t('orders.neededOnlyToUse') }),
   ]);
 
@@ -346,10 +352,10 @@ function priceBlock(item, actions, defaultUnit = null, ctx) {
     }
     return formatPriceInput(now().fmt, now().weight, {
       ownPiece: ownPieceWeight(item, now().weight, ctx.initialWeight),
-      price: casePriceBox.value,
-      rate: rate.value,
+      price: typedDecimal(casePriceBox.value),
+      rate: typedDecimal(rate.value),
       unit: unitSelect.value || null,
-      pieceKg: pieceWeight.value,
+      pieceKg: typedDecimal(pieceWeight.value),
       vat,
     });
   }
@@ -373,8 +379,8 @@ function priceBlock(item, actions, defaultUnit = null, ctx) {
     const start = priceBoxStart(item, fmt, weight, Boolean(changed));
     if (!priceTyped) {
       const shown = recomputed ? start.suggestion : start.value;
-      casePriceBox.value = shown === null ? '' : String(shown);
-      casePriceBox.setAttribute('placeholder', shown === null && start.suggestion !== null ? String(start.suggestion) : '');
+      casePriceBox.value = shown === null ? '' : localNumber(shown, false);
+      casePriceBox.setAttribute('placeholder', shown === null && start.suggestion !== null ? localNumber(start.suggestion, false) : '');
     }
     unitField.hidden = !typedForm;
     rateField.hidden = !typedForm;
@@ -404,7 +410,7 @@ function priceBlock(item, actions, defaultUnit = null, ctx) {
     recomputeBtn.hidden = dirty() || needsSize || start.suggestion === null;
     // The saved price is still what Save writes: said when the box has nothing of its own to show.
     const hasPrice = positiveNumber(item?.pricePerUnit) !== null;
-    const keeps = !dirty() && !typedForm && hasPrice && casePriceBox.value === '' && !needsSize;
+    const keeps = !dirty() && !typedForm && hasPrice && typedDecimal(casePriceBox.value) === '' && !needsSize;
     keepsNote.hidden = !keeps;
     if (keeps) {
       const price = formatPricePerUnit(item);
@@ -414,7 +420,7 @@ function priceBlock(item, actions, defaultUnit = null, ctx) {
     }
 
     const draft = pricePatch(read(), null, weight);
-    priceAgainNote.hidden = !(dirty() && !typedForm && casePriceBox.value === '' && positiveNumber(item?.pricePerUnit) !== null);
+    priceAgainNote.hidden = !(dirty() && !typedForm && typedDecimal(casePriceBox.value) === '' && positiveNumber(item?.pricePerUnit) !== null);
     if (draft.pricePerUnit === null) {
       summaryMain.textContent = costReasonText(draft);
       summaryNote.textContent = '';
@@ -514,10 +520,14 @@ function priceBlock(item, actions, defaultUnit = null, ctx) {
   // price by: the save is refused on the weight box instead of quietly turning «per kg» into «per
   // piece» (price-model.js weightNeededForPrice).
   const needsWeight = () => weightNeededForPrice({
-    item, fmt: now().fmt, weightText: now().weight, dirty: dirty(), priceBox: casePriceBox.value,
+    item, fmt: now().fmt, weightText: now().weight, dirty: dirty(), priceBox: typedDecimal(casePriceBox.value),
   });
 
-  return { node, read, refresh, needsWeight, dirty, keepsMoney };
+  const unreadable = () => unreadablePrice([
+    [rate, rateRefusal, rateField], [casePriceBox, casePriceRefusal, casePriceField], [pieceWeight, pieceRefusal, pieceField],
+  ]);
+
+  return { node, read, refresh, needsWeight, dirty, keepsMoney, unreadable };
 }
 
 // legacy-card:begin
@@ -569,11 +579,11 @@ function legacyPriceBlock(item, actions, defaultUnit = null, currentOrder = null
     value: CASE_MODE, text: t('orders.priceByCase'), selected: storedCase ? true : undefined,
   }));
 
-  // step="any": a step of 0.01 makes the browser REFUSE 0.0035 as invalid — silently, by leaving the
-  // box empty on submit — and that is exactly what a vanilla pod weighs and a gelatine leaf costs.
+  // A text box with the decimal keyboard, read through typedDecimal(): see the same factory in the
+  // card above (4 Oct 2026) — «12,5» and «12.5» both mean twelve and a half.
   const money = (value, placeholder) => el('input', {
-    type: 'number', class: 'mgmt-input', min: '0', step: 'any',
-    inputmode: 'decimal', value: value ?? '', placeholder,
+    type: 'text', class: 'mgmt-input', inputmode: 'decimal', autocomplete: 'off',
+    value: value === null || value === undefined || value === '' ? '' : localNumber(value, false), placeholder,
   });
   // ⚠️ The placeholder is EMPTY here and filled by refresh() below: it depends on the purchase unit.
   const rate = money(item?.pricePerUnit, '');
@@ -585,6 +595,13 @@ function legacyPriceBlock(item, actions, defaultUnit = null, currentOrder = null
   const casePriceBox = money(storedCase?.casePrice, '');
   const caseCountBox = money(storedCase?.caseCount, '');
   const caseSizeBox = money(storedCase?.caseItemSize, '');
+  // Text that is not a number is refused on Save, on its box (see unreadablePrice).
+  const [rateRefusal, pieceRefusal, casePriceRefusal, caseCountRefusal, caseSizeRefusal] =
+    [rate, pieceWeight, casePriceBox, caseCountBox, caseSizeBox].map(box => {
+      const refusal = refusalMessage(box, t('orders.price.notANumber'));
+      box.addEventListener('input', refusal.clear);
+      return refusal;
+    });
   caseCountBox.setAttribute('aria-label', t('orders.case.count'));
   caseSizeBox.setAttribute('aria-label', t('orders.case.size'));
   const caseUnitSelect = el('select', { class: 'mgmt-input', 'aria-label': t('orders.case.unit') });
@@ -629,6 +646,7 @@ function legacyPriceBlock(item, actions, defaultUnit = null, currentOrder = null
       text: t('orders.case.price', { currency: currentCurrency() }),
     }),
     casePriceBox,
+    casePriceRefusal.node,
   ]);
   // ⚠️ A 'pack' case keeps the package size it was saved with, so a weight edited since is not yet in
   // the price: this one warm line says so, and saving (by somebody with this section) recomputes.
@@ -639,6 +657,8 @@ function legacyPriceBlock(item, actions, defaultUnit = null, currentOrder = null
     el('div', { class: 'mgmt-field' }, [
       el('span', { class: 'mgmt-field-label', text: t('orders.case.contains') }),
       el('div', { class: 'mgmt-case-row' }, [caseCountBox, caseTimes, caseSizeBox, caseUnitSelect]),
+      caseCountRefusal.node,
+      caseSizeRefusal.node,
     ]),
     packChangedNote,
   ]);
@@ -661,7 +681,7 @@ function legacyPriceBlock(item, actions, defaultUnit = null, currentOrder = null
   }
 
   const rateLabel = el('span', { class: 'mgmt-field-label' });
-  const rateField = el('label', { class: 'mgmt-field' }, [rateLabel, rate]);
+  const rateField = el('label', { class: 'mgmt-field' }, [rateLabel, rate, rateRefusal.node]);
 
   // «= 2.00 / kg · 20.00 per case» — the rate the case works out to, and the case it came from.
   // Built per call, in the language the screen has now.
@@ -681,20 +701,21 @@ function legacyPriceBlock(item, actions, defaultUnit = null, currentOrder = null
   const pieceField = el('label', { class: 'mgmt-field' }, [
     el('span', { class: 'mgmt-field-label', text: t('orders.weightOfOnePiece') }),
     pieceWeight,
+    pieceRefusal.node,
     el('p', { class: 'notif-note', text: t('orders.neededOnlyToUse') }),
   ]);
 
   function read() {
     return {
       priceUnit: unitSelect.value || null,
-      pricePerUnit: rate.value,
-      unitWeightKg: pieceWeight.value,
+      pricePerUnit: typedDecimal(rate.value),
+      unitWeightKg: typedDecimal(pieceWeight.value),
       vatRate: vatSelect.value,
       // Only read as a case when the menu says so (pricePatch ignores them otherwise
       // and writes all four as null, which is what clears an old case).
-      casePrice: casePriceBox.value,
-      caseCount: caseCountBox.value,
-      caseItemSize: caseSizeBox.value,
+      casePrice: typedDecimal(casePriceBox.value),
+      caseCount: typedDecimal(caseCountBox.value),
+      caseItemSize: typedDecimal(caseSizeBox.value),
       caseItemUnit: caseUnitSelect.value,
     };
   }
@@ -798,7 +819,12 @@ function legacyPriceBlock(item, actions, defaultUnit = null, currentOrder = null
   const needsPackWeight = () => unitSelect.value === CASE_MODE
     && caseUnitSelect.value === PACK_ITEM && packBaseOf(now().weight) === null;
 
-  return { node, read, refresh, needsPackWeight };
+  const unreadable = () => unreadablePrice([
+    [rate, rateRefusal, rateField], [pieceWeight, pieceRefusal, pieceField], [casePriceBox, casePriceRefusal, casePriceField],
+    [caseCountBox, caseCountRefusal, caseBlock], [caseSizeBox, caseSizeRefusal, caseBlock],
+  ]);
+
+  return { node, read, refresh, needsPackWeight, unreadable };
 }
 // legacy-card:end
 
@@ -1516,6 +1542,21 @@ function refusalMessage(box, text) {
   };
 }
 
+// A price box whose text is not a number above zero («12,50 EUR» pasted from an invoice, «abc»,
+// «1.234,5», «0»): refused on Save and pointed at (P20), never saved as «no price» in silence.
+// Review of #278, 4 Oct 2026. [box, refusal, field] triples; a box counts only while it and its
+// field are showing, and an empty box is not refused (that is how a price is removed).
+function unreadablePrice(boxes) {
+  for (const [box, refusal, field] of boxes) {
+    if (box.hidden || field.hidden) continue;
+    const text = typedDecimal(box.value);
+    if (text === '') continue;
+    const n = Number(text);
+    if (!(Number.isFinite(n) && n > 0)) return refusal;
+  }
+  return null;
+}
+
 function weightControl(stored) {
   const start = splitWeight(stored);
   let legacy = start.legacy || '';
@@ -1894,6 +1935,8 @@ export function buildIngredientForm({
     // ⚠️ A case of packages with no readable weight is refused here, on the weight box, like an
     // unusable weight: saving would quietly turn the price into «no price».
     if (price && price.needsPackWeight()) { weight.markNeededAs(t('orders.legacyCard.packNeeded')); return; }
+    const unreadableBox = price && price.unreadable();
+    if (unreadableBox) { unreadableBox.show(); return; }
     save.disabled = true;
 
     // Every price field is in the patch, as a number or as null, because this is a MERGE write: a field
@@ -1964,6 +2007,9 @@ export function buildIngredientForm({
     // ⚠️ A case priced by weight, with a weight that no longer reads, is refused here, on the weight
     // box, like an unusable weight: saving would quietly turn «per kg» into «per piece».
     if (price && price.needsWeight()) { weight.markNeeded(); return; }
+    // Text in a price box that is not a number would be saved as «no price»: refused on that box.
+    const unreadableBox = price && price.unreadable();
+    if (unreadableBox) { unreadableBox.show(); return; }
     save.disabled = true;
 
     // Every price field is in the patch, as a number or as null, because this is

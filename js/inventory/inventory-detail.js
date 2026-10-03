@@ -12,7 +12,8 @@
 import { t } from '../i18n.js';
 import { el } from './dom.js';
 import { consumption } from './inventory-model.js';
-import { storedCaseOf, formatRate } from '../price-model.js';
+import { storedCaseOf, formatRate, roundTo } from '../price-model.js';
+import { localNumber } from '../currency.js';
 import {
   parsePackSize, packKgFor, packPrice, lineValue, formatTotal, casePackNote,
   NO_PRICE, NO_PACK, NO_FROZEN_PRICE,
@@ -128,9 +129,11 @@ export function renderDetail({ month, ingredient, locale, onCount, readOnly, clo
         : t('inv.packUnknown');
       return;
     }
+    // Beside a price the kilos take the price's layout (the venue's country), so one line never
+    // reads «2.5 kg … 3,40 €»; without a price they follow the screen language as before.
     packNote.textContent = price === null
       ? t('inv.packKnown', { kg: num(kg, locale) })
-      : t('inv.packKnownPriced', { kg: num(kg, locale), price: formatTotal(price) });
+      : t('inv.packKnownPriced', { kg: localNumber(roundTo(kg, 3)), price: formatTotal(price) });
   }
 
   const fields = FIELDS.map(({ map, label, hint }) => {

@@ -72,6 +72,13 @@ goes through `supplierLabel()`.
   inside the drawing function, both from the venue's country. `currentCurrency()` alone is
   only for a field caption («Prezzo al kg (€)»): beside a number it would skip the layout. **Numbers and dates on screen**: `Intl` with `localeTag()` — which follows the
   INTERFACE language, so it is for screens, not for label text. Never format by hand.
+  ⚠️ **The one exception: a number on the SAME LINE as a price** (a quantity «2,5 × 6,50 €»,
+  the stocktake kilos beside a price) takes the money's layout with `localNumber()`
+  (`js/currency.js`), so one line never mixes «2.5» and «6,50 €». **Price boxes** are text
+  fields (`inputmode="decimal"`): shown with `localNumber(v, false)`, read with
+  `typedDecimal()` («12,5» = «12.5»), and refused on Save when the text is not a number above
+  zero (`unreadablePrice`, never saved as «no price»). The weight box is NOT localised: the
+  weight is stored as TEXT, so showing «2,5» would rewrite every stored weight on save.
 - The allergen dictionary: a phrase that overrides a stem AND names an allergen needs its
   own tier (`burro di arachidi` must still say peanuts). The specific cereal/nut is named
   (`gluten-wheat`), and `mayContain` is never merged into `allergens`.

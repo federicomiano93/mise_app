@@ -218,6 +218,25 @@ test('an untouched save writes the stored price back verbatim: same unit, rate, 
   }
 });
 
+// The boxes of this card are read on EVERY save, so in an Italian venue — where they now SHOW
+// «2,5» and «0,055» — an untouched save must still write back the very same numbers and no
+// history entry (review of #278, 4 Oct 2026).
+test('an untouched save in the Italian layout writes the same numbers back, and no history record', async () => {
+  const { moneyLayoutOf } = await import('../js/market.js');
+  try {
+    setCurrency('€', moneyLayoutOf({ country: 'IT' }));
+    for (const [name, item] of Object.entries(LEGACY_SHAPES)) {
+      const card = openCard({ item });
+      const result = await card.save();
+      assert.ok(result, `${name}: it saved`);
+      for (const key of PRICE_KEYS) assert.equal(result.payload[key] ?? null, item[key] ?? null, `${name}: ${key}`);
+      assert.equal(result.record, null, `${name}: no history record`);
+    }
+  } finally {
+    setCurrency('€');
+  }
+});
+
 test('an untouched save writes no packCount, no history record, and reports no unit change', async () => {
   for (const [name, item] of Object.entries(LEGACY_SHAPES)) {
     const card = openCard({ item });
@@ -380,9 +399,11 @@ test('the new card\'s machinery never starts on the card of before', () => {
 test('the menu gains a case mode that is not a stored unit; the form hands all four case boxes to pricePatch', () => {
   assert.match(LEGACY, /value: CASE_MODE, text: t\('orders\.priceByCase'\)/);
   assert.match(LEGACY, /priceUnit: unitSelect\.value \|\| null/);
-  for (const key of ['casePrice', 'caseCount', 'caseItemSize', 'caseItemUnit']) {
-    assert.match(LEGACY, new RegExp(key + ': [a-zA-Z]+\.value'), key);
+  // The three typed boxes go through typedDecimal (a comma reads as a point, 4 Oct 2026).
+  for (const key of ['casePrice', 'caseCount', 'caseItemSize']) {
+    assert.match(LEGACY, new RegExp(key + ': typedDecimal\\([a-zA-Z]+\\.value\\)'), key);
   }
+  assert.match(LEGACY, /caseItemUnit: caseUnitSelect\.value/);
 });
 
 test('the count, size and unit boxes each carry an aria-label; pieces hide the size box, and a case reopens as typed', () => {

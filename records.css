@@ -167,6 +167,12 @@
   outline: none;
   border-color: var(--accent);
 }
+.rec-host .mgmt-form .mgmt-input[inputmode="decimal"] {
+  font-weight: 600;
+}
+.rec-host .mgmt-form .mgmt-input[inputmode="decimal"]:focus {
+  background: var(--crust-bg);
+}
 .rec-host .mgmt-price-summary {
   font-family: 'DM Mono', monospace;
   font-variant-numeric: tabular-nums;
