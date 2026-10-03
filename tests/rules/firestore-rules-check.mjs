@@ -2510,6 +2510,22 @@ async function roles() {
   await expectDenied('order lists must be a true/false, not text',
     () => mergeWrite(`${L}/config/orders`, { ...stamp, orderLists: 'off' }, asAccount(MAYA)));
 
+  // ── The order of the supplier list (4 Oct 2026): a manager's setting, a capped list.
+  await expectAllowed('a manager sets the supplier order',
+    () => mergeWrite(`${L}/config/orders`, { ...stamp, supplierOrder: ['s2', 's1'] }, asAccount(MAYA)));
+  await expectAllowed('…an empty supplier order (back to alphabetical)',
+    () => mergeWrite(`${L}/config/orders`, { ...stamp, supplierOrder: [] }, asAccount(MAYA)));
+  await expectAllowed('…exactly 300 suppliers',
+    () => mergeWrite(`${L}/config/orders`,
+      { ...stamp, supplierOrder: Array.from({ length: 300 }, (_, i) => 's' + i) }, asAccount(MAYA)));
+  await expectDenied('…but not 301',
+    () => mergeWrite(`${L}/config/orders`,
+      { ...stamp, supplierOrder: Array.from({ length: 301 }, (_, i) => 's' + i) }, asAccount(MAYA)));
+  await expectDenied('the supplier order must be a list, not text',
+    () => mergeWrite(`${L}/config/orders`, { ...stamp, supplierOrder: 's1,s2' }, asAccount(MAYA)));
+  await expectDenied('staff cannot change the supplier order',
+    () => mergeWrite(`${L}/config/orders`, { ...stamp, supplierOrder: ['s1'] }, asAccount(SAM)));
+
   // ⚠️ THE PROOF THE TIGHTENING DID NOT INVADE THE CALCULATOR.
   await expectAllowed('staff CAN still save the Calculator config',
     () => mergeWrite(`${L}/config/calculator`, { ...stamp, extraDough: 5 }, asAccount(SAM)));

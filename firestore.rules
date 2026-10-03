@@ -1466,6 +1466,8 @@ service cloud.firestore {
                'orderLists',
                // The venue's own list of ingredient categories (29 Sep 2026).
                'ingredientCategories',
+               // The order of the supplier list, dragged in Orders settings (4 Oct 2026).
+               'supplierOrder',
                // Retired, still writable by an un-updated phone (see above)
                'products', 'groups', 'focaccia', 'brioche', 'sourdough', 'market'
              ])
@@ -1505,6 +1507,14 @@ service cloud.firestore {
           && (!('ingredientCategories' in request.resource.data)
               || (request.resource.data.ingredientCategories is list
                   && request.resource.data.ingredientCategories.size() <= 100))
+          // The supplier ids in the order the Orders list shows them, for the whole venue.
+          // A list (its order IS the data), capped so it cannot be used as free storage;
+          // the ids themselves are not judged — a stale one is ignored by the app. Written
+          // only by whoever may write config/orders at all (canManage, above). OPTIONAL in
+          // both directions: a phone on the previous version never sends it.
+          && (!('supplierOrder' in request.resource.data)
+              || (request.resource.data.supplierOrder is list
+                  && request.resource.data.supplierOrder.size() <= 300))
           // Which roads an order may leave by. A map of four booleans, and a
           // preferred one.
           //
