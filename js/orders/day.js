@@ -84,6 +84,26 @@ export function spellDay(iso) {
   });
 }
 
+// A day without year or month, for a tag where space is tight: "Mon 13" / "lun 13".
+export function spellShortDate(iso) {
+  if (!iso) return '';
+  const d = parseISODate(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return t('day.shortDate', { weekday: weekdayShort(d.getDay()), d: d.getDate() });
+}
+
+// A day spelled in full, without the year: "Monday 13 October" / "lunedì 13 ottobre".
+export function spellLongDate(iso) {
+  if (!iso) return '';
+  const d = parseISODate(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return t('day.spelledNoYear', {
+    weekday: t(`day.weekdayLong.${d.getDay()}`),
+    d: d.getDate(),
+    month: t(`day.monthLong.${d.getMonth()}`),
+  });
+}
+
 // Human label for a day section: "Today" / "Yesterday" / "Mon 6 Jul 2026".
 export function dayLabel(iso, now = new Date()) {
   if (!iso) return '';

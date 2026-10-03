@@ -172,7 +172,7 @@
 .orders-status {
   font-size: 13px;
   font-family: 'DM Mono', monospace;
-  color: var(--text2);
+  color: var(--text-2);
   background: var(--surface2);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
@@ -324,6 +324,16 @@
    bene sono i fornitori»). Scoped to the rows: History's fold headings share .supplier-name. */
 .supplier-row .supplier-name { font-size: 18px; font-weight: 700; }
 .supplier-meta { display: block; font-size: 12px; color: var(--text3); font-family: 'DM Mono', monospace; margin-top: 2px; }
+/* «for Mon 13»: this supplier's typed quantities are meant for a later order day. Its own
+   line under the meta, so it can wrap instead of widening the row at 296px. */
+.supplier-for-day {
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent);
+  font-family: 'DM Mono', monospace;
+}
 .supplier-row-count {
   flex-shrink: 0;
   padding: 4px 10px;
@@ -862,6 +872,66 @@ input.ing-stock {
 /* Empty state inside a supplier with no ingredients (was the stuck "Loading…"). */
 .ing-empty { font-size: 13px; color: var(--text3); font-family: 'DM Mono', monospace; padding: 4px 0; }
 
+/* The day these quantities are for, at the top of a supplier's screen: «Order: [select]» and
+   the expected delivery under it. The select is a PILL, deliberately unlike the square
+   quantity boxes below it, so nobody mistakes it for a number field. Hidden for a supplier
+   with no order days (the [hidden] rule in tokens.css wins over this display). Wraps
+   rather than widening at 296px. */
+.supplier-day-line {
+  margin-bottom: 10px;
+  padding: 8px 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.supplier-day-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+}
+.supplier-day-label {
+  flex: 0 0 auto;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+.supplier-day-select {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  min-height: 44px;
+  /* Modest side padding on purpose: at 296px the longest Italian answer, «Prossimo ordine
+     (gio 15)», is ~205px of 16px text and must fit beside the native arrow without being
+     clipped (a lost date is the whole point of the line). */
+  padding: 0 6px 0 12px;
+  background: var(--accent-light);
+  border: 1px solid var(--accent-border);
+  border-radius: var(--radius-pill);
+  color: var(--brand);
+  font-family: 'Manrope', sans-serif;
+  font-size: 16px;   /* below 16px iOS zooms the page on focus */
+  font-weight: 600;
+  cursor: pointer;
+}
+.supplier-day-delivery {
+  margin: 6px 0 0;
+  font-size: 14px;
+  color: var(--text-2);
+}
+/* Spoken, never seen: the polite announcement of a day change. */
+.supplier-day-live {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 /* Throwing away what has been typed. Both of these are deliberately quiet — a
    text button in danger red, never a filled one: the action destroys work and must
    not sit next to "Order placed" looking like an equal choice (P20). */
@@ -963,7 +1033,7 @@ input.ing-stock {
   border-radius: var(--radius-sm);
   font-size: 14px;
   font-weight: 600;
-  color: var(--text2);
+  color: var(--text-2);
   cursor: pointer;
 }
 .send-supplier-row {
@@ -1049,7 +1119,7 @@ input.ing-stock {
   background: transparent;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  color: var(--text2);
+  color: var(--text-2);
   font-family: 'Manrope', sans-serif;
   font-size: 11px;
   font-weight: 600;
@@ -1094,7 +1164,7 @@ input.ing-stock {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  color: var(--text2);
+  color: var(--text-2);
   font-family: 'Manrope', sans-serif;
   font-size: 14px;
   font-weight: 600;
@@ -1449,7 +1519,7 @@ body[data-section="orders"] .ing-filter .view-switch-btn:not(.active) { color: v
    boxes keep a floor so that yielding cannot squeeze them to their padding. */
 .mgmt-case-row select.mgmt-input { flex: 0 1 auto; }
 .mgmt-case-row input.mgmt-input { min-width: 56px; }
-.mgmt-case-x { flex: 0 0 auto; color: var(--text2); }
+.mgmt-case-x { flex: 0 0 auto; color: var(--text-2); }
 /* «Contiene [4] × [busta ▾]» (1 Oct 2026): the inner-word menu is a .mgmt-choice (the menu plus
    its «+ Nuova…» text box and refusal line), a column of its own. It takes the rest of the row
    beside the count, and what is inside it must not inherit the row's flex sizing — in a column
@@ -1470,7 +1540,7 @@ body[data-section="orders"] .ing-filter .view-switch-btn:not(.active) { color: v
    quiet line under the price summary, empty (and gone, via :empty) until both
    a cost and a VAT rate are known. Plain text colour: it is informative, not
    a warning the way .mgmt-price-note is. */
-.mgmt-price-vat-summary { margin: 6px 0 0; font-size: 13px; color: var(--text2); }
+.mgmt-price-vat-summary { margin: 6px 0 0; font-size: 13px; color: var(--text-2); }
 .mgmt-price-vat-summary:empty { display: none; }
 /* The flex gap of .mgmt-price-block already spaces this line from the block before it; its
    own 6px margin would be a second gap on top. */
@@ -1510,7 +1580,7 @@ body[data-section="orders"] .ing-filter .view-switch-btn:not(.active) { color: v
    would read as a text field and invite a sentence. */
 .mgmt-days-row { display: flex; align-items: center; gap: 8px; }
 .mgmt-days-row .mgmt-input { width: 92px; font-variant-numeric: tabular-nums; }
-.mgmt-days-row span { font-size: 14px; color: var(--text2); }
+.mgmt-days-row span { font-size: 14px; color: var(--text-2); }
 .day-checks { display: flex; flex-wrap: wrap; gap: 8px; }
 .day-check {
   display: flex;
@@ -1569,7 +1639,7 @@ body[data-section="orders"] .ing-filter .view-switch-btn:not(.active) { color: v
 }
 /* Notifications settings section (inside the management panel — Alerts tab). */
 .mgmt-notif { padding: 16px; display: flex; flex-direction: column; gap: 14px; }
-.notif-desc { margin: 0; font-size: 13px; line-height: 1.5; color: var(--text2); }
+.notif-desc { margin: 0; font-size: 13px; line-height: 1.5; color: var(--text-2); }
 .notif-note { margin: 0; font-size: 13px; color: var(--text3); }
 .notif-status { margin: 0; padding: 10px 12px; border-radius: var(--radius-sm); font-size: 13px; line-height: 1.4; }
 .notif-status.on, .enable-notifs { display: flex; align-items: center; justify-content: center; gap: 6px; }
@@ -1661,7 +1731,7 @@ body[data-section="orders"] .ing-filter .view-switch-btn:not(.active) { color: v
   border-radius: var(--radius-sm);
   border: 1px solid var(--warn-border);
   background: var(--surface);
-  color: var(--text2);
+  color: var(--text-2);
   font-family: 'Manrope', sans-serif;
   font-size: 13px;
   font-weight: 600;
@@ -1749,7 +1819,7 @@ a.home-reminder {
 .install-btn:active { background: var(--brand-press); }
 .install-tip {
   font-size: 13px;
-  color: var(--text2);
+  color: var(--text-2);
   line-height: 1.5;
   background: var(--surface);
   border: 1px solid var(--border);
@@ -1860,7 +1930,7 @@ a.home-reminder {
   height: 32px;
   background: var(--surface);
   border-color: var(--border);
-  color: var(--text2);
+  color: var(--text-2);
 }
 .mgmt-fold-help .help-btn:focus-visible { outline-color: var(--accent); }
 /* The heading of a card that has nothing to fold — «Dati prodotto», «Prezzo». Same
@@ -1983,12 +2053,12 @@ a.home-reminder {
    in a column. Pinned to the left they form two straight vertical lines down the
    form, which is what makes a long tick list scannable. */
 .alg-tick { justify-content: flex-start; padding: 0 9px; min-height: 44px; font-size: 11px; }
-.alg-tick--may { color: var(--text2); }
+.alg-tick--may { color: var(--text-2); }
 .alg-checked { margin-top: 12px; font-size: 13px; font-weight: 600; align-items: flex-start; }
 
 /* «Per 100 g» names a GROUP of boxes, not one box: it keeps the look it had as a
    .mgmt-field-label before the field-label tokens (it is not a field's name). */
-.alg-nut-title { margin-top: 14px; font-size: 12px; color: var(--text2); font-weight: 500; }
+.alg-nut-title { margin-top: 14px; font-size: 12px; color: var(--text-2); font-weight: 500; }
 /* Two columns on a phone: eight single-column rows would push Save two screens
    down, and these are short numbers. */
 /* ⚠️ align-items: end ON EVERY PAIRED GRID BELOW (and .cat-loss-pair, .fc-weigh-pair,
@@ -2014,7 +2084,7 @@ a.home-reminder {
 .mgmt-history > .mgmt-link { align-self: flex-start; }
 /* The line above the price-history link: a heading for a list, not a field's name, so it
    keeps the small quiet look .mgmt-field-label had before the field-label tokens. */
-.mgmt-history-label { font-size: 12px; color: var(--text2); font-weight: 500; }
+.mgmt-history-label { font-size: 12px; color: var(--text-2); font-weight: 500; }
 .alg-nut-field { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .alg-nut-label { font-size: var(--field-label-size); color: var(--field-label-color); font-weight: var(--field-label-weight); line-height: 1.3; }
 .alg-num { width: 100%; font-variant-numeric: tabular-nums; }
@@ -2051,13 +2121,13 @@ a.home-reminder {
   font-family: 'DM Mono', monospace;
   font-size: 12px;
   font-weight: 600;
-  color: var(--text2);
+  color: var(--text-2);
   font-variant-numeric: tabular-nums;
 }
 .req-card-count--done { color: var(--brand); }
 
 .req-empty { text-align: center; padding: 48px 20px; }
-.req-empty-title { font-size: 15px; font-weight: 600; color: var(--text2); }
+.req-empty-title { font-size: 15px; font-weight: 600; color: var(--text-2); }
 .req-empty-hint { margin-top: var(--space-2); font-size: 13px; color: var(--text3); line-height: 1.5; }
 
 /* Who sent it, and when — at the top of the open list. */
@@ -2152,7 +2222,7 @@ a.home-reminder {
    ⚠️ The 4.20 figure is the DESIGN's own colour and it is used all over the app —
    that is a separate, app-wide question for Federico, exactly like --text-4's
    3.6:1. Not fixed unilaterally here; only this new line was chosen properly. */
-.req-item--done .req-item-name { color: var(--text2); }
+.req-item--done .req-item-name { color: var(--text-2); }
 /* ⚠️⚠️ WHAT WAS ACTUALLY BOUGHT. Not the warn colour of the line above it: that
    one says "this has moved, look again", this one states a fact that is already
    settled — the order that happened. The accent, so it reads as information and
@@ -2346,7 +2416,7 @@ a.home-reminder {
   font-family: var(--font-round);
   font-size: 14px;
   font-weight: 600;
-  color: var(--text2);
+  color: var(--text-2);
   cursor: pointer;
 }
 .reorder-resolve:active { background: var(--surface2); border-radius: var(--radius-sm); }
@@ -2414,7 +2484,7 @@ a.home-reminder {
    four bare grey browser rectangles with no error anywhere, which is the `.mgmt-btn`
    failure this project has shipped twice. The v1.62.0 lesson: finish the copy. */
 .alg-photo-lead {
-  margin: 0 0 14px; font-size: .95rem; line-height: 1.45; color: var(--text2);
+  margin: 0 0 14px; font-size: .95rem; line-height: 1.45; color: var(--text-2);
 }
 .alg-photo-strip {
   display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 12px;
@@ -2461,10 +2531,10 @@ a.home-reminder {
 
 .alg-photo-status {
   margin: 10px 0 0; min-height: 1.2em; font-size: .9rem; line-height: 1.4;
-  color: var(--text2);
+  color: var(--text-2);
 }
 .alg-photo-status--bad { color: var(--danger); }
-.alg-photo-status--busy { color: var(--text2); }
+.alg-photo-status--busy { color: var(--text-2); }
 
 /* ⚠️ NOT styled as a footnote. What lands in the box was read by a machine, and a
    misread ingredient word is an allergen the matcher will not propose. */
@@ -2473,7 +2543,7 @@ a.home-reminder {
   padding-inline: max(14px, var(--app-gutter));
   background: var(--surface); border: 1px solid var(--border);
   border-radius: var(--radius);
-  font-size: .88rem; line-height: 1.45; color: var(--text2);
+  font-size: .88rem; line-height: 1.45; color: var(--text-2);
 }
 
 /* ── The confirmation screen: what is about to be recorded ──────────────────
@@ -2488,7 +2558,7 @@ a.home-reminder {
 .pc-lead {
   margin: 0 0 12px;
   font-size: 13px;
-  color: var(--text2);
+  color: var(--text-2);
 }
 /* Shown only while some row is actually odd. A warning that is always there is a
    warning nobody reads. */
@@ -3046,7 +3116,7 @@ body:not([data-orders-tab="deliveries"]) #orders-owed { display: none; }
   display: flex;
   justify-content: space-between;
   font-size: 15px;
-  color: var(--text2);
+  color: var(--text-2);
   font-variant-numeric: tabular-nums;
 }
 .totbox-row--total {
