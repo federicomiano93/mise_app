@@ -3543,7 +3543,7 @@ const DICTIONARIES = Object.freeze({
     'orders.selectAllSuppliers': 'Seleziona tutti i fornitori',
     'orders.nothingIsBeingOrdered': 'Non si sta ancora ordinando niente.',
 
-    'orders.itemsCount': { one: '{n} voce', other: '{n} voci' },
+    'orders.itemsCount': { one: '{n} articolo', other: '{n} articoli' },
     'orders.summaryBar': { one: '{n} articolo nell’ordine · Riepilogo', other: '{n} articoli nell’ordine · Riepilogo' },
     'orders.whatsappMessage': 'Messaggio WhatsApp',
 
