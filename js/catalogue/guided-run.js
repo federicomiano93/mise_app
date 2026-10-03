@@ -121,10 +121,8 @@ export function renderRun({ recipe, targetGrams, app, resume = null }) {
   let scheduled = '';
 
   const body = el('div', { class: 'guided-body' });
-  // ⚠️ `.guided-run` IS THE MARKER TWO OTHER MODULES LOOK FOR — js/update-gate.js
-  // (so a compulsory update waits instead of reloading the page mid-dough) and
-  // js/idle-reset.js (so five minutes in the background does not bounce someone
-  // back to the Home screen with their hands in flour). It is built here and torn
+  // ⚠️ `.guided-run` IS THE MARKER js/update-gate.js LOOKS FOR (so a compulsory update
+  // waits instead of reloading the page mid-dough). It is built here and torn
   // down on leaving, so it exists ONLY while the run is on screen; a marker that
   // outlived the screen would make the app look permanently busy and the update
   // would never appear again, silently.

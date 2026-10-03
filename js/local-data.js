@@ -47,7 +47,6 @@ export const KEEP_PREFIXES = Object.freeze([
   'firebaseLocalStorage', // ditto (SDK fallback storage)
   'uk-bank-holidays',     // public data, belongs to nobody
   'whats-new-seen',       // about the app version you have seen, not about a location
-  'lastHiddenAt',         // idle-reset timer
   'active-location',    // which location to open next — managed by the session itself
   // WHOSE data the offline database copy holds (see offlineCacheVerdict below). It has
   // to outlive a venue switch, or the next boot could not tell a new person from the old.

@@ -39,7 +39,7 @@ test('Firebase’s own session storage is NEVER cleared', () => {
 });
 
 test('what belongs to nobody, or to the app itself, survives', () => {
-  const keys = ['uk-bank-holidays', 'whats-new-seen', 'lastHiddenAt', 'active-location'];
+  const keys = ['uk-bank-holidays', 'whats-new-seen', 'active-location'];
   assert.deepEqual(keysToClear(keys), []);
 });
 
