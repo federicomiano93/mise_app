@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<p:FatturaElettronica xmlns:p="http://ivaservizi.agenziaentrate.gov.it/docs/xsd/fatture/v1.2" versione="FPR12">
+  <p:FatturaElettronicaHeader>
+    <p:CedentePrestatore>
+      <p:DatiAnagrafici>
+        <p:IdFiscaleIVA><p:IdPaese>IT</p:IdPaese><p:IdCodice>00000000002</p:IdCodice></p:IdFiscaleIVA>
+        <p:Anagrafica><p:Denominazione>ALTRO FORNITORE ESEMPIO SPA</p:Denominazione></p:Anagrafica>
+      </p:DatiAnagrafici>
+    </p:CedentePrestatore>
+  </p:FatturaElettronicaHeader>
+  <p:FatturaElettronicaBody>
+    <p:DatiGenerali>
+      <p:DatiGeneraliDocumento>
+        <p:TipoDocumento>TD01</p:TipoDocumento>
+        <p:Data>2026-09-02</p:Data>
+        <p:Numero>55/A</p:Numero>
+        <p:ImportoTotaleDocumento>12.00</p:ImportoTotaleDocumento>
+      </p:DatiGeneraliDocumento>
+    </p:DatiGenerali>
+    <p:DatiBeniServizi>
+      <p:DettaglioLinee>
+        <p:NumeroLinea>1</p:NumeroLinea>
+        <p:Descrizione>OLIO DI OLIVA LT 5</p:Descrizione>
+        <p:Quantita>2.00</p:Quantita>
+        <p:UnitaMisura>LT</p:UnitaMisura>
+        <p:PrezzoUnitario>3.00</p:PrezzoUnitario>
+        <p:PrezzoTotale>6.00</p:PrezzoTotale>
+        <p:AliquotaIVA>10.00</p:AliquotaIVA>
+      </p:DettaglioLinee>
+    </p:DatiBeniServizi>
+  </p:FatturaElettronicaBody>
+</p:FatturaElettronica>

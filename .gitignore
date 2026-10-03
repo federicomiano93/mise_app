@@ -40,3 +40,16 @@ print-agent/print-agent.json
 
 # Staged by .github/workflows/preview.yml for a preview channel; never committed.
 _site/
+
+# ⚠️ INVOICE IMPORT (3 Oct 2026): real invoices, the decisions workbook and the import
+# file hold real supplier names and prices, and this repository is public and served by
+# GitHub Pages. They live in ..\import-fatture\, outside the repo; these lines are the
+# second belt in case one is ever saved in here by mistake. The test fixtures are
+# invented and live under invoice-import/tests/fixtures/ as .xml, which stays allowed.
+*.xlsx
+*.p7m
+*.zip
+mise-import-*.json
+invoice-import/config.json
+__pycache__/
+*.pyc
