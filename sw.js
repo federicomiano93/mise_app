@@ -81,6 +81,7 @@ const ASSETS = [
   './js/vat-rates.js',
   './js/vat-number.js',
   './js/pack-size.js',
+  './js/pack-format.js',
   './js/record-choices.js',
   './js/order-cost.js',
   // ⚠️ NEW, AND js/firebase.js IMPORTS IT — which every page loads before anything
@@ -278,9 +279,6 @@ const ASSETS = [
   './js/orders/registry-main.js',
   './js/orders/registry-settings.js',
   // «Import from invoices»: the pure model and plan, the data layer and the screen (suppliers.html).
-  // pack-format.js was missing from this list although the ingredient card has imported it since
-  // 1 Oct 2026; the import model needs it too, so it is listed here.
-  './js/pack-format.js',
   './js/orders/invoice-import-model.js',
   './js/orders/invoice-import-plan.js',
   './js/orders/invoice-import-data.js',
@@ -436,6 +434,7 @@ const ASSET_HASHES = {
   "./js/vat-rates.js": 'a3d073040b1d8490',
   "./js/vat-number.js": '097b915810c4d39a',
   "./js/pack-size.js": 'e5aae95d8c7b03d5',
+  "./js/pack-format.js": 'c1b3a80d0921eb39',
   "./js/record-choices.js": '38da7c93b6f723a2',
   "./js/order-cost.js": 'a89d555ef365227d',
   "./js/currency.js": '9300d5695d2a6dac',
@@ -581,7 +580,6 @@ const ASSET_HASHES = {
   "./js/orders/registry.js": '468d42ee3d759016',
   "./js/orders/registry-main.js": 'cfba8f63af6987a2',
   "./js/orders/registry-settings.js": '74c80116276527d1',
-  "./js/pack-format.js": 'c1b3a80d0921eb39',
   "./js/orders/invoice-import-model.js": '83fc9ef6febd7d36',
   "./js/orders/invoice-import-plan.js": '5dd52c0716adfa9d',
   "./js/orders/invoice-import-data.js": 'e27a00d2b6a50b9b',

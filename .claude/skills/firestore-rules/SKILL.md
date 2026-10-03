@@ -125,10 +125,12 @@ error). ⚠️ **A new membership value goes in THREE places or it is a lockout:
   stop) → `git merge origin/main` into the branch, push, checks green again → `git diff
   origin/main -- firestore.rules` shows ONLY this PR's change → deploy from a CLEAN
   checkout (the read-back reads the working tree, uncommitted edits included).
-- `firebase deploy --only firestore:rules` from the repo root (the harness asks Federico —
-  expected). **Two warnings are normal, for ever:** `Invalid type. Received one of [null].
-  Expected one of [map].` — one in `member()`, one in `orderClientOf()`. A THIRD warning, or
-  one elsewhere, is new: stop and read it.
+- `firebase deploy --only firestore:rules --project bakery-app-ebf90` from the repo root (the
+  harness asks Federico — expected). Always name the project: a bare deploy goes wherever
+  `.firebaserc` or a stored `firebase use` points. **Three warnings are normal, for ever:**
+  `Invalid type. Received one of [null]. Expected one of [map].` — in `member()`,
+  `cardAccess()` and `orderClientOf()`. A FOURTH warning, or one elsewhere, is new: stop and
+  read it.
 - **Read it back:** `node scripts/rules-live-diff.mjs` → `identical: true` against the
   branch file; after the merge, `node scripts/rules-live-diff.mjs origin/main` → `true`
   again. «Deploy succeeded» is not proof (P5). Say the ruleset id in the release notes.
