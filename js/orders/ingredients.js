@@ -240,15 +240,19 @@ export function buildRow(ing, supplier, suggest, entries, hooks, { meta = '' } =
   // the totals and the «much more than usual» line all follow. Reading the box (not the
   // draft) is what makes a row ordered elsewhere behave like typing into its empty box:
   // «+» gives 1 and takes the line back. Never below 0; 0 shows an empty box.
-  function step(delta) {
+  // ⚠️ A KEYBOARD «−» THAT REACHES 0 DISABLES ITSELF (markFilled), and a disabled button drops
+  // focus to the page: the focus goes to the box instead, as the × does. After a tap nothing
+  // moves — the phone's keyboard must not pop up over the list.
+  function step(delta, event) {
     setQty(wholeNumber(qtyInput.value) + delta);
     updateHint();
+    if (event?.detail === 0 && event.currentTarget?.disabled) qtyInput.focus();
   }
   const stepLabel = ingredientDisplayLabel(ing) || t('orders.unnamedProduct');
   const stepButton = (cls, key, icon, delta) => el('button', {
     type: 'button', class: `ing-step ${cls}`, icon,
     'aria-label': t(key, { name: stepLabel }),
-    onClick: () => step(delta),
+    onClick: (event) => step(delta, event),
   });
 
   // ⚠️ A MENU ONLY WHEN THE CARD OFFERS A CHOICE («cartone» or «busta»); any other row keeps
@@ -327,6 +331,11 @@ export function buildRow(ing, supplier, suggest, entries, hooks, { meta = '' } =
         },
       }),
     ]),
+    // ⚠️ THE MENU COMES RIGHT AFTER THE NAME IN THE DOCUMENT, where it is DRAWN (left of the
+    // boxes): keyboard and screen readers follow the document, and met «cartone / busta» only
+    // after both boxes when it was the row's last child. Every row item has an explicit grid column (orders.css), so
+    // its place here costs no layout. `el()` skips it when there is no choice.
+    unitSelect,
     el('div', { class: 'ing-col' }, [
       qtyInput,
       el('div', { class: 'ing-steps' }, [
@@ -337,7 +346,6 @@ export function buildRow(ing, supplier, suggest, entries, hooks, { meta = '' } =
     ]),
     // `stock-field` is what body.hide-stock hides (Settings → hide stock).
     el('div', { class: 'ing-col stock-field' }, [stockInput]),
-    unitSelect,
   ]);
   if (unitSelect) row.classList.add('ing-row--choice');
   if (away) row.dataset.elsewhere = away;

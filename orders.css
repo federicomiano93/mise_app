@@ -674,6 +674,8 @@
   width: var(--ing-box-w);
 }
 .ing-row--line .ing-step {
+  /* Two quick taps on «+» must add 2, not zoom the page (iOS Safari's double-tap zoom). */
+  touch-action: manipulation;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -831,8 +833,8 @@ body.hide-stock .ing-head-stock { display: none; }
 body.hide-stock .stock-field { display: none; }
 
 /* Order on the LEFT, Stock on the RIGHT, pushed to the two edges of the row; each
-   column centres its label over its input. No +/- steppers (they overflowed on
-   phones). The order unit (e.g. "casse") sits next to the Order box — a fixed
+   column centres its label over its input. (These old `.ing-fields` steppers overflowed
+   on phones; the «−»/«+» under the Order box of `.ing-row--line` are sized to the box.) The order unit (e.g. "casse") sits next to the Order box — a fixed
    per-ingredient label, not an input. */
 /* ⚠️ CAPPING THE ROW WAS NOT ENOUGH, and the number said so. `space-between` with
    two 96px boxes puts the whole remainder between them: on a 620px row that is

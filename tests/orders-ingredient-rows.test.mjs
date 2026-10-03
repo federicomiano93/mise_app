@@ -313,3 +313,20 @@ test('the suggestion engine is asked with the card, so its history is one unit',
   const main = read('js/orders/orders-main.js');
   assert.match(main, /computeSuggestion\(id, stock, state\.history, ing\)/);
 });
+
+// Review of the pill + steppers (3 Oct 2026): what a keyboard, a screen reader and an iPhone meet.
+test('the unit menu comes right after the name in the document, where it is drawn', () => {
+  const rowBuild = buildRowSource.slice(buildRowSource.indexOf("row = el('div', { class: 'ing-row ing-row--line'"));
+  const menuAt = rowBuild.indexOf('    unitSelect,');
+  assert.ok(menuAt > 0, 'the menu is a direct child of the row');
+  assert.ok(menuAt < rowBuild.indexOf("el('div', { class: 'ing-col' }"), 'before the Order box');
+});
+
+test('two quick taps on «+» add two instead of zooming the page', () => {
+  assert.match(CSS, /\.ing-row--line \.ing-step \{[^}]*touch-action: manipulation/);
+});
+
+test('a keyboard «−» that reaches 0 hands the focus to the box', () => {
+  assert.match(buildRowSource, /if \(event\?\.detail === 0 && event\.currentTarget\?\.disabled\) qtyInput\.focus\(\);/);
+  assert.match(buildRowSource, /onClick: \(event\) => step\(delta, event\)/);
+});
