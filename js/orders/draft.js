@@ -4,10 +4,11 @@
 // change autosaves (debounced) so reopening the app restores the exact state, and
 // a real-time listener keeps two phones in sync.
 //
-// It also remembers, per supplier, the DAY its rows were last touched
-// (`days: { supplierId: 'YYYY-MM-DD' }`). Without that the app cannot tell an
-// order typed today from one typed on Sunday and never marked as placed — and it
-// would file the Sunday order under today.
+// It also remembers, per supplier, the DAY its rows are FOR
+// (`days: { supplierId: 'YYYY-MM-DD' }`): normally the day they were typed, or — for
+// next week's quantities typed early — the supplier's next order day (order-day.js).
+// Without that the app cannot tell an order typed today from one typed on Sunday and
+// never marked as placed — and it would file the Sunday order under today.
 //
 // Archiving is per supplier: it writes orders-history/{day}_{supplierId} and
 // removes ONLY that supplier's keys from the draft. The other suppliers' work —
