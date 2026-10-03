@@ -3,6 +3,7 @@
 //
 import { normalizeSendRoutes } from './send-routes.js';
 import { weekStartOf } from './work-week.js';
+import { normalizeSupplierOrder } from './supplier-order.js';
 
 // This is the first setting Orders has ever had. It lives in Firestore at
 // config/orders so it applies to every phone in the bakery — "we do not track stock
@@ -48,6 +49,9 @@ export function normalizeOrdersConfig(doc) {
     // Which day the working week starts on — it decides what "this week" means on
     // Incoming, and what has fallen out of it and is owed an answer.
     weekStartsOn: weekStartOf(doc),
+    // The order the suppliers are listed in, chosen in Settings (supplier-order.js).
+    // Empty = alphabetical, exactly as before the setting existed.
+    supplierOrder: normalizeSupplierOrder(doc?.supplierOrder),
   };
 }
 
