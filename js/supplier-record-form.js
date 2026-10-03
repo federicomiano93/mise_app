@@ -14,6 +14,7 @@
 import { t } from './i18n.js';
 import { el } from './dom.js';
 import { supplierLabel } from './supplier-label.js';
+import { normalizeVat } from './vat-number.js';
 import { field, formActions, makeDayChecks, checkedDays, reportFailure } from './record-ui.js';
 
 // item     — the supplier being edited, or null for a new one
@@ -27,6 +28,8 @@ export function buildSupplierForm({ item, save, onDone, onCancel }) {
   const category = el('input', { type: 'text', class: 'mgmt-input', value: item?.category || '' });
   const phone = el('input', { type: 'tel', class: 'mgmt-input', value: item?.phone || '', placeholder: t('orders.eg.phone') });
   const email = el('input', { type: 'email', class: 'mgmt-input', value: item?.email || '' });
+  // The company's VAT number («P.IVA»), how an invoice finds its supplier. Optional.
+  const vatNumber = el('input', { type: 'text', class: 'mgmt-input', maxlength: '30', autocomplete: 'off', value: item?.vatNumber || '', placeholder: t('orders.eg.vatNumber') });
 
   const deliveryChecks = makeDayChecks(item?.deliveryDays);
   const orderChecks = makeDayChecks(item?.orderDays);
@@ -44,6 +47,8 @@ export function buildSupplierForm({ item, save, onDone, onCancel }) {
       deliveryDays: checkedDays(deliveryChecks),
       orderDays: checkedDays(orderChecks),
       active: item ? item.active !== false : true,
+      // The canonical form (js/vat-number.js) — the one shape the invoice import matches on. '' clears it.
+      vatNumber: normalizeVat(vatNumber.value),
     };
     let id;
     try { id = await save(item?.id || null, payload); }
@@ -70,6 +75,7 @@ export function buildSupplierForm({ item, save, onDone, onCancel }) {
     ]),
     field(t('orders.phoneWhatsappDigitsOnly'), phone),
     field(t('orders.field.email'), email),
+    field(t('orders.field.vatNumber'), vatNumber),
     formActions(saveBtn, onCancel),
   ]);
 }

@@ -1494,6 +1494,17 @@ body[data-section="orders"] .ing-filter .view-switch-btn:not(.active) { color: v
 .mgmt-price-row:last-child { border-bottom: none; }
 .mgmt-price-rate { color: var(--text); font-weight: 600; }
 .mgmt-price-when { color: var(--text3); flex-shrink: 0; }
+/* «invoice» / «fattura» beside the date of a price that came from an invoice import. */
+.mgmt-price-tag {
+  display: inline-block;
+  margin-right: 8px;
+  padding: 1px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--surface-2);
+  color: var(--text-2);
+  font-size: 11px;
+}
 
 /* A number and its unit on one line. The box is sized for three digits — full width
    would read as a text field and invite a sentence. */
@@ -3097,3 +3108,107 @@ body:not([data-orders-tab="deliveries"]) #orders-owed { display: none; }
 .reg-cat-del:focus-visible { outline: 3px solid var(--accent-2); outline-offset: -3px; }
 .reg-cat-del:disabled { opacity: .5; }
 .reg-cat-saved { display: inline-block; margin-top: 8px; }
+
+/* ── Import from invoices (js/orders/invoice-import-screen.js) ────────────────────
+   Every class is .invimp-… . Tokens only. The overlay is .mgmt-overlay: header, scroll body, a live line
+   for the progress, and a footer that holds the one primary button (it never scrolls away). */
+.invimp-screen { display: flex; flex-direction: column; gap: 14px; }
+.invimp-screen > * { flex-shrink: 0; }
+.invimp-step { margin: 0; font-family: var(--font-mono); font-size: 12px; color: var(--text-3); }
+.invimp-heading { margin: 0; font-size: 20px; font-weight: 700; color: var(--text); }
+.invimp-heading:focus { outline: none; }
+.invimp-note { margin: 0; font-size: 13px; line-height: 1.45; color: var(--text-2); }
+/* The native file box is 23 px tall and says «Choose File» in the browser's language: it is kept, hidden but
+   still focusable, and a label dressed as a button opens it. The focus ring is drawn on the label. */
+.invimp-file { position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+.invimp-file-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.invimp-file-btn { display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; min-height: 44px; }
+.invimp-file-input:focus-visible + .invimp-file-btn { outline: 3px solid var(--accent-2); outline-offset: 2px; }
+.invimp-file-name { margin: 0; font-size: 13px; line-height: 1.4; color: var(--text-2); overflow-wrap: anywhere; }
+.invimp-list { display: flex; flex-direction: column; gap: 8px; }
+.invimp-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.invimp-row-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.invimp-row-main { flex: 1; min-width: 0; }
+.invimp-reason { margin: 0; font-size: 13px; line-height: 1.4; color: var(--error); }
+.invimp-status {
+  flex-shrink: 0;
+  padding: 3px 10px;
+  border-radius: var(--radius-pill);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.invimp-status--ok { background: var(--accent-light); color: var(--brand); }
+.invimp-status--quiet { background: var(--surface-2); color: var(--text-2); border: 1px solid var(--border); }
+.invimp-status--warn { background: var(--warn-bg); color: var(--warn); border: 1px solid var(--warn-border); }
+.invimp-status--error { background: var(--error-bg); color: var(--error); border: 1px solid var(--error-border); }
+.invimp-choice { display: flex; flex-direction: column; gap: 4px; }
+.invimp-choice-label { font-size: 13px; font-weight: 600; color: var(--text-2); }
+.invimp-select { width: 100%; }
+.invimp-filters { display: flex; flex-wrap: wrap; gap: 8px; }
+.invimp-filter {
+  min-height: 40px;
+  padding: 0 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  color: var(--text-2);
+  font-family: var(--font);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.invimp-filter[aria-pressed="true"] { background: var(--brand); border-color: var(--brand); color: var(--on-brand); }
+.invimp-filter:focus-visible { outline: 3px solid var(--accent-2); outline-offset: 2px; }
+.invimp-filter:active { transform: scale(.97); }
+.invimp-group { display: flex; flex-direction: column; gap: 8px; }
+.invimp-group-title {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-2);
+  cursor: pointer;
+}
+.invimp-group-title:focus-visible { outline: 3px solid var(--accent-2); outline-offset: 2px; }
+.invimp-group[open] > .invimp-group-title { margin-bottom: 8px; }
+.invimp-progress { width: 100%; height: 12px; accent-color: var(--brand); }
+.invimp-live {
+  padding: 8px 16px;
+  padding-inline: max(16px, var(--app-gutter));
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--text-2);
+}
+.invimp-live:empty { display: none; }
+.invimp-footer {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 16px calc(10px + var(--safe-bot));
+  padding-inline: max(16px, var(--app-gutter));
+  background: var(--bg);
+  border-top: 1px solid var(--border);
+}
+.invimp-footer .btn-primary { margin-top: 0; }
+.invimp-hint { margin: 0; font-size: 13px; line-height: 1.4; color: var(--text-2); text-align: center; }
