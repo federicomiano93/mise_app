@@ -1651,8 +1651,16 @@ function unitConflictMessage(items, recording) {
     const who = (supplier ? supplierLabel(supplier) : f.supplierId) + (mixedDays ? ` (${daySpoken(f.date)})` : '');
     return f.conflicts.map(c => `${who}: ${c.name} — ${c.unit}`).join(', ');
   }).join('; ');
-  const text = t('orders.unitConflict', { day: dayWhen(found[0].date), list });
+  const text = unitConflictText(dayWhen(found[0].date), list, found.flatMap(f => f.conflicts));
   return several && recording ? `${text} ${t('orders.unitConflictNothingRecorded')}` : text;
+}
+
+// The refusal, plus — only when it would help — how to make the two units addable: a card that
+// offers both units but does not say how many packages one case holds (archive.js unitConflicts
+// marks those `fixable`). Advice that cannot fix the line is worse than none.
+function unitConflictText(day, list, conflicts) {
+  const text = t('orders.unitConflict', { day, list });
+  return conflicts.some(c => c.fixable) ? `${text} ${t('orders.unitConflictHint')}` : text;
 }
 
 // Drop a supplier's rows from the in-memory draft immediately, so the screen
@@ -1740,7 +1748,7 @@ async function placeOrder(supplierId, { confirm = true, date: pinnedDate, quanti
         const ing = ingredients.find(i => i.id === id);
         return (ing && ingredientDisplayLabel(ing)) || id;
       }).join(', ');
-      await alertDialog(t('orders.unitConflict', { day: dayWhen(date), list }));
+      await alertDialog(unitConflictText(dayWhen(date), list, conflicts));
     } else {
       setStatus(t('orders.couldNotSaveThe'), 'error');
     }

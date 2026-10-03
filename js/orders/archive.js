@@ -15,7 +15,9 @@ import { supplierLabel } from '../supplier-label.js';
 import { ingredientDisplayName } from '../ingredient-name.js';
 import { toISODate, addDays, isBefore } from './day.js';
 import { compareLabels } from './order-text.js';
-import { cleanUnit, sameUnit, lineUnit, entryUnit, recordUnit } from '../order-unit.js';
+import {
+  cleanUnit, sameUnit, lineUnit, entryUnit, recordUnit, inPackages, addableInPackages, hasUnitChoice,
+} from '../order-unit.js';
 import { overrideOf, cleanSupplierId } from './line-supplier.js';
 
 // A quantity, made safe: whole, never negative, never NaN — and never Infinity.
@@ -101,6 +103,15 @@ export function buildSupplierArchive({ supplier, ingredients, entries, date, now
     supplierName: supplierLabel(supplier),
     quantities,
     stock,
+    // This order as it was placed, with its time (see sendIdFor / mergeArchives). A second
+    // order the same day adds its own entry here while `quantities` becomes the day's total.
+    sends: {
+      [sendIdFor(timestamp)]: {
+        at: timestamp,
+        quantities: { ...quantities },
+        ...(Object.keys(units).length ? { units: { ...units } } : {}),
+      },
+    },
     // What each item was CALLED on the day. The screen prefers the live ingredient
     // (a rename should show through everywhere), so this is only read once the
     // ingredient is gone — and then it is the only thing standing between a past
@@ -273,13 +284,18 @@ export function changedDays(next, known) {
 // ordered twice in one day in different units THROWS `orders/unit-conflict` and nothing
 // is written. `cardUnitOf(id)` supplies the unit of a record that froze none (every
 // record from before the choice existed is in the card's own unit).
-export function mergeArchives(existing, incoming, { cardUnitOf } = {}) {
+export function mergeArchives(existing, incoming, { cardUnitOf, cardOf } = {}) {
   if (!existing) return incoming;
 
-  const effectiveUnit = (record, id) => recordUnit(record, id, { unit: cardUnitOf?.(id) });
-  const conflicts = Object.keys(incoming.quantities || {}).filter(id =>
+  const card = id => cardOf?.(id) || { unit: cardUnitOf?.(id) };
+  const effectiveUnit = (record, id) => recordUnit(record, id, card(id));
+  // Lines in two different units: added up IN PACKAGES when the card says how many one case
+  // holds (order-unit.js inPackages), refused otherwise.
+  const mixed = Object.keys(incoming.quantities || {}).filter(id =>
     num(existing.quantities?.[id]) > 0 && num(incoming.quantities[id]) > 0 &&
     !sameUnit(effectiveUnit(existing, id), effectiveUnit(incoming, id)));
+  const conflicts = mixed.filter(id =>
+    !addableInPackages(effectiveUnit(existing, id), effectiveUnit(incoming, id), card(id)));
   if (conflicts.length) {
     // The message is the code itself: never shown (placeOrder says it through t()), and a
     // sentence here would be a phrase that reaches a screen without the dictionary.
@@ -290,10 +306,18 @@ export function mergeArchives(existing, incoming, { cardUnitOf } = {}) {
   }
 
   const quantities = { ...(existing.quantities || {}) };
+  const units = { ...(existing.units || {}), ...(incoming.units || {}) };
   Object.entries(incoming.quantities || {}).forEach(([id, qty]) => {
+    if (mixed.includes(id)) {
+      // 1 cartone (of 4) this morning + 2 buste now = 6 buste for the day.
+      const ing = card(id);
+      quantities[id] = inPackages(num(quantities[id]), effectiveUnit(existing, id), ing)
+        + inPackages(num(qty), effectiveUnit(incoming, id), ing);
+      units[id] = cleanUnit(ing.packUnit);
+      return;
+    }
     quantities[id] = num(quantities[id]) + num(qty);
   });
-  const units = { ...(existing.units || {}), ...(incoming.units || {}) };
   const missing = carriedMissing(existing, incoming);
   // «Risolto» marks travel with the marks they answer, and only with them.
   const resolved = Object.fromEntries(Object.entries(existing.missingResolved || {})
@@ -319,6 +343,10 @@ export function mergeArchives(existing, incoming, { cardUnitOf } = {}) {
     names: { ...(existing.names || {}), ...(incoming.names || {}) },
     // Same reasoning as names: keep the units of the rows placed earlier in the day.
     ...(Object.keys(units).length ? { units } : {}),
+    // Every order of the day, each as it was placed. A record written before sends existed
+    // (or by a phone on the previous version) first becomes ONE send of what it held, at the
+    // time it was created, so the morning order is not lost from the list.
+    sends: capSends({ ...sendsBefore(existing), ...(incoming.sends || {}) }),
     createdAt: existing.createdAt || incoming.createdAt,
     updatedAt: incoming.updatedAt,
   };
@@ -338,6 +366,99 @@ function carriedMissing(existing, incoming) {
   return Object.keys(out).length ? out : null;
 }
 
+// The id of one send in `sends`: its time, digits only («s20261003091200123»), so the keys
+// sort in the order the sends were placed and two sends a millisecond apart do not collide.
+export function sendIdFor(iso) {
+  return `s${String(iso || '').replace(/\D/g, '')}`;
+}
+
+// The sends a record already holds, or — for a record from before sends existed — one send
+// made of what it held. A record with nothing in it has nothing to show.
+//
+// ⚠️ THAT SEND GETS A TIME ONLY WHEN THE RECORD WAS NEVER TOUCHED AFTER IT WAS CREATED.
+// A phone on the previous version adds a second order by rewriting the record without
+// `sends`: its quantities are then two orders, and stamping them with the first one's time
+// would tell a lie in the very list that exists to trace orders. No time reads «Ordini
+// precedenti» (history.js) — true whatever happened.
+function sendsBefore(record) {
+  if (record.sends && typeof record.sends === 'object') return record.sends;
+  if (!Object.keys(record.quantities || {}).length) return {};
+  const at = typeof record.createdAt === 'string' && record.createdAt === record.updatedAt
+    ? record.createdAt : '';
+  return {
+    [at ? sendIdFor(at) : 's0']: {
+      at,
+      quantities: { ...record.quantities },
+      ...(record.units && Object.keys(record.units).length ? { units: { ...record.units } } : {}),
+    },
+  };
+}
+
+// The rules hold one day's sends to 50 (firestore.rules). Past that the FIRST send and the
+// latest 49 are kept — the total in `quantities` is unaffected — instead of a refused write
+// that would read as a network failure. Keys sort by time (sendIdFor).
+export const MAX_SENDS = 50;
+export function capSends(sends) {
+  const keys = Object.keys(sends || {}).sort();
+  if (keys.length <= MAX_SENDS) return sends;
+  const kept = [keys[0], ...keys.slice(keys.length - (MAX_SENDS - 1))];
+  return Object.fromEntries(kept.map(k => [k, sends[k]]));
+}
+
+// A correction made in History, kept as its own entry with its time (history-edit.js), so the
+// list of sends never contradicts the corrected total: «Corretto · ore 16:20» shows what the
+// order became. Only for a record that already has sends — an old record keeps its old look.
+export function withCorrection(record, quantities, units, at) {
+  if (!record || !record.sends || typeof record.sends !== 'object') return null;
+  return capSends({
+    ...record.sends,
+    [sendIdFor(at)]: {
+      at, kind: 'edit',
+      quantities: { ...quantities },
+      ...(units && Object.keys(units).length ? { units: { ...units } } : {}),
+    },
+  });
+}
+
+// The sends of a record, oldest first, for the History screen: [{ at, kind, quantities, units }].
+// A send with no time (see sendsBefore) comes first. Anything malformed (a phone's bug, a hand
+// edit) is skipped rather than drawn as nonsense.
+export function recordSends(record) {
+  const sends = record && typeof record.sends === 'object' && record.sends ? record.sends : {};
+  return Object.values(sends)
+    .filter(s => s && typeof s === 'object' && s.quantities && typeof s.quantities === 'object')
+    .map(s => ({
+      at: typeof s.at === 'string' ? s.at : '',
+      kind: s.kind === 'edit' ? 'edit' : 'order',
+      quantities: s.quantities,
+      units: s.units && typeof s.units === 'object' ? s.units : {},
+    }))
+    .sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0));
+}
+
+// What History draws for one record, decided here so it can be tested:
+// -> { sections: [{ heading, time, quantities, units }], total: bool }
+//   heading ∈ 'first' | 'later' | 'edit' | 'earlier' (no time known).
+// Two or more sends: one section each, then the day's total. One send with a time: just its
+// heading above the total. Otherwise (a record from before sends, or one untimed send): nothing
+// extra — the card looks as it always did.
+export function sendSections(record) {
+  const sends = recordSends(record);
+  if (sends.length === 1 && sends[0].at) {
+    return { sections: [{ heading: 'first', time: sends[0].at, quantities: null, units: null }], total: false };
+  }
+  if (sends.length < 2) return { sections: [], total: false };
+  return {
+    sections: sends.map((send, i) => ({
+      heading: !send.at ? 'earlier' : send.kind === 'edit' ? 'edit' : i === 0 ? 'first' : 'later',
+      time: send.at,
+      quantities: send.quantities,
+      units: send.units,
+    })),
+    total: true,
+  };
+}
+
 // ⚠️ THE SAME QUESTION mergeArchives ANSWERS, asked BEFORE anything leaves the app: which of
 // the draft's lines would meet today's record of this supplier in a DIFFERENT unit? The
 // merge throws on these, but by then a WhatsApp message may already have gone to the
@@ -353,8 +474,14 @@ export function unitConflicts(existingRecord, entries, ingredients, supplierId) 
     const entry = entries?.[ing.id];
     if (!entry || num(entry.qty) <= 0 || num(existingRecord.quantities?.[ing.id]) <= 0) return;
     const recorded = recordUnit(existingRecord, ing.id, ing);
-    if (!sameUnit(entryUnit(entry, ing), recorded)) {
-      out.push({ id: ing.id, name: ingredientDisplayLabel(ing), unit: recorded });
+    const typed = entryUnit(entry, ing);
+    if (!sameUnit(typed, recorded) && !addableInPackages(typed, recorded, ing)) {
+      out.push({
+        id: ing.id, name: ingredientDisplayLabel(ing), unit: recorded,
+        // Would writing «how many packages one case holds» on the card make the two addable?
+        // Only for a card that offers exactly these two units — the message says so then.
+        fixable: hasUnitChoice(ing) && [typed, recorded].every(u => sameUnit(u, ing.unit) || sameUnit(u, ing.packUnit)),
+      });
     }
   });
   return out;

@@ -13,14 +13,14 @@
 // ingredient list; one deleted since then falls back to its id rather than
 // disappearing from its own order.
 
-import { t } from '../i18n.js';
+import { t, localeTag } from '../i18n.js';
 import { supplierLabel } from '../supplier-label.js';
 import { sendIconSvg } from '../send-icon.js';
 import { recordUnit } from '../order-unit.js';
 import { el, groupBy } from './dom.js';
 import { dayLabel } from './day.js';
 import {
-  groupHistoryByDay, isLegacyRecord, splitHistoryByAge, countRecords, recordedName,
+  groupHistoryByDay, isLegacyRecord, splitHistoryByAge, countRecords, recordedName, sendSections,
 } from './archive.js';
 import { isNoSupplier } from './no-supplier.js';
 import { HISTORY_LIVE_MONTHS, olderFooterState, historyFooter } from './history-window.js';
@@ -275,12 +275,35 @@ function itemRows(record, ingById) {
 }
 
 // One order: one supplier, one day.
+//
+// ⚠️ SEVERAL ORDERS THE SAME DAY ARE SHOWN APART, each with its time (Federico, 3 Oct 2026: «se
+// ci sono problemi è più semplice risalire agli ordini fatti»): «Ordine · ore 9:12», «Aggiunta ·
+// ore 15:40», then the day's total — the numbers every other screen counts. One send shows only
+// its time above the rows. A record from before sends existed looks exactly as it always did.
 function buildOrderCard(record, ingById, callbacks) {
   const count = Object.keys(record.quantities || {}).length;
   const rows = itemRows(record, ingById);
+  const { sections, total } = sendSections(record);
+
+  let content;
+  if (!rows.length) {
+    content = [el('p', { class: 'history-empty', text: t('orders.noItemsRecorded') })];
+  } else {
+    content = [
+      ...sections.flatMap(section => [
+        el('div', { class: 'history-supplier', text: sendHeading(section) }),
+        // A lone send is only a heading over the total; with several, each lists its own lines.
+        ...(section.quantities
+          ? itemRows({ quantities: section.quantities, units: section.units, names: record.names }, ingById)
+          : []),
+      ]),
+      ...(total ? [el('div', { class: 'history-supplier', text: t('orders.history.dayTotal') })] : []),
+      ...rows,
+    ];
+  }
 
   const body = el('div', { class: 'history-body' }, [
-    ...(rows.length ? rows : [el('p', { class: 'history-empty', text: t('orders.noItemsRecorded') })]),
+    ...content,
     ...cardActions(record, callbacks),
   ]);
   body.hidden = true;
@@ -289,6 +312,27 @@ function buildOrderCard(record, ingById, callbacks) {
     collapsibleHead(record.supplierName || t('orders.unknownSupplier'), itemsLabel(count), body),
     body,
   ]);
+}
+
+// «Ordine · ore 9:12» / «Aggiunta · ore 15:40» / «Corretto · ore 16:20», or «Ordini precedenti»
+// for what was ordered before the time of each order was kept (archive.js sendsBefore).
+const SEND_HEADING = {
+  first: 'orders.history.firstSend',
+  later: 'orders.history.laterSend',
+  edit: 'orders.history.editedSend',
+};
+function sendHeading(section) {
+  const time = timeOf(section.time);
+  if (!time || section.heading === 'earlier') return t('orders.history.earlierSends');
+  return t(SEND_HEADING[section.heading] || SEND_HEADING.later, { time });
+}
+
+// The local time of an ISO timestamp, «9:12», in the interface language's own format.
+function timeOf(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  return new Intl.DateTimeFormat(localeTag(), { hour: 'numeric', minute: '2-digit' }).format(d);
 }
 
 // A record from the old weekly model: a whole week, every supplier in one
