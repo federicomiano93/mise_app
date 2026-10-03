@@ -271,3 +271,11 @@ test('the summary warnings say «articolo / articoli» in Italian, agreed in gen
   assert.match(dict, /'orders\.cost\.missingPrice': \{ one: '\{n\} articolo senza prezzo, non incluso:[^']*',\s*other: '\{n\} articoli senza prezzo, non inclusi:/);
   assert.match(dict, /'orders\.cost\.missingVatTotal': \{ one: '\{n\} articolo senza IVA indicata[^']*',\s*other: '\{n\} articoli senza IVA indicata/);
 });
+
+// His decision, 4 Oct 2026: the supplier list's count says «articoli» too (and so the History
+// and supplier-picker rows that share it), like the summary bar.
+test('the item count says «articolo / articoli» in Italian', () => {
+  const dict = read('js/i18n.js');
+  assert.match(dict, /'orders\.itemsCount': \{ one: '\{n\} articolo', other: '\{n\} articoli' \}/);
+  assert.match(dict, /'orders\.itemsCount': \{ one: '\{n\} item', other: '\{n\} items' \}/);
+});
