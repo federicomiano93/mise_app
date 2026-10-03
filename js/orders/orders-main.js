@@ -26,7 +26,7 @@ import {
 import { withPrices } from '../price-model.js';
 import { currentSession } from '../firebase.js';
 import { el, groupBy } from './dom.js';
-import { mountSupplierList, refreshSupplierDerived } from './suppliers.js';
+import { mountSupplierList, refreshSupplierDerived, supplierStats } from './suppliers.js';
 import { buildSupplierDetail } from './supplier-detail.js';
 import { markFilled, paintUnitSelect } from './ingredients.js';
 import { buildSupplierItems } from './supplier-items.js';
@@ -61,7 +61,7 @@ import {
   todayISO, dayPhrase, daySpoken, dayWhen, localDayOf, dayLabel, spellShortDate, spellLongDate,
 } from './day.js';
 import {
-  stampFor, recordDay, isFutureDay, nextOrderOffer, notForLater, previewDay, nextOrderDay,
+  stampFor, recordDay, isFutureDay, nextOrderOffer, notForLater, dayChoices,
   nextDeliveryAfter,
 } from './order-day.js';
 import {
@@ -154,14 +154,15 @@ function setEntries(next) {
 }
 
 const hooks = {
-  afterChange(supplierId) {
+  afterChange(supplierId, { stockOnly = false } = {}) {
     const supplier = findOrderSupplier(supplierId);
     // Stamp the day these rows are FOR. Next week's quantities typed early are stamped
     // for the supplier's next order day (order-day.js), so the next morning they are not
     // an «order not placed» and today's record is not «changed after ordering». This
     // is what lets the app offer an order typed yesterday under YESTERDAY's date instead
     // of quietly filing it under today. Done BEFORE the repaint below, which shows the stamp.
-    stampNow(supplierId, state.days[supplierId]);
+    // A stock-only edit never moves the day: counting stock is not ordering.
+    if (!stockOnly) stampNow(supplierId, state.days[supplierId]);
     if (supplier) {
       refreshSupplierDerived(supplier, ingredientsBySupplier()[supplierId] || [], state.entries,
         futureDayOf(supplierId));
@@ -1645,28 +1646,38 @@ function stampNow(supplierId, current) {
   if (stamp) state.days[supplierId] = stamp;
 }
 
-// The «Order: [Today | Next order (Thu 8)]» line on a supplier's own screen, or null when
-// the supplier has no order days (see supplier-detail.js). Asked again on every keystroke
-// and repaint, so the words are read here, inside the drawing path, never frozen at load.
+// The «Order: [Today | Next order (Thu 8) | …]» line on a supplier's own screen, or null
+// when there is only one answer to give (see supplier-detail.js). Asked again on every
+// keystroke and repaint, so the words are read here, inside the drawing path, never frozen
+// at load. WHAT is offered is decided by dayChoices (order-day.js), which also shows a
+// stored stamp that is neither today nor the next order day; this only translates it.
 //
-// The select always offers both answers, on an order day too: the default there is Today,
-// but «Next order» stays available. The expected delivery follows the order day IN EFFECT
-// (owner: «se scelgo oggi e non è il giorno per effettuare l'ordine ci aspettiamo la
-// consegna il prossimo giorno di consegna del fornitore»).
+// The expected delivery follows the order day IN EFFECT (owner: «se scelgo oggi e non è il
+// giorno per effettuare l'ordine ci aspettiamo la consegna il prossimo giorno di consegna
+// del fornitore»).
+function choicesFor(supplier) {
+  const filled = supplierStats(ingredientsBySupplier()[supplier.id] || [], state.entries).filled;
+  return dayChoices({
+    supplier, stamp: state.days[supplier.id], hasItems: filled > 0, today: todayISO(),
+  });
+}
+
 function dayInfoFor(supplier) {
-  const today = todayISO();
-  const next = nextOrderDay(supplier, today);
-  if (!next) return null;
-  const future = previewDay({ current: state.days[supplier.id], supplier, today });
-  const selected = future ? 'next' : 'today';
-  const delivery = nextDeliveryAfter(supplier, selected === 'next' ? next : today);
+  const choices = choicesFor(supplier);
+  if (choices.options.length < 2) return null;
+  const delivery = nextDeliveryAfter(supplier, choices.selectedDay);
+  const words = {
+    today: () => t('orders.dayLine.optToday'),
+    past: day => t('orders.dayLine.optPast', { day }),
+    next: day => t('orders.dayLine.optNext', { day }),
+    later: day => t('orders.dayLine.optLater', { day }),
+  };
   return {
     label: t('orders.dayLine.label'),
-    options: [
-      { value: 'today', label: t('orders.dayLine.optToday') },
-      { value: 'next', label: t('orders.dayLine.optNext', { day: spellShortDate(next) }) },
-    ],
-    selected,
+    options: choices.options.map(o => ({
+      value: o.value, label: words[o.kind](spellShortDate(o.day)),
+    })),
+    selected: choices.selected,
     deliveryText: delivery
       ? t('orders.dayLine.delivery', { day: spellLongDate(delivery) }) : '',
     onChange: value => setSupplierDay(supplier.id, value),
@@ -1675,21 +1686,26 @@ function dayInfoFor(supplier) {
 
 // The select of the day line. Same rollback and error status as keepAsToday. On failure
 // the line is redrawn from the (restored) stamp, so the select never shows a choice that
-// was not saved. The result is announced politely; focus stays on the select.
+// was not saved. Choosing «past» is choosing what is already stored: nothing is written.
+// The result is announced politely; focus stays on the select.
 async function setSupplierDay(supplierId, value) {
   const supplier = findOrderSupplier(supplierId);
   if (!supplier) return;
-  const today = todayISO();
-  const next = nextOrderDay(supplier, today);
-  const day = value === 'next' && next ? next : today;
-  const saved = await restamp(supplierId, day);
+  const choice = choicesFor(supplier).options.find(o => o.value === value);
+  if (!choice || choice.kind === 'past') {
+    detailView?.refreshDay();
+    return;
+  }
+  const saved = await restamp(supplierId, choice.day);
   detailView?.refreshDay();
   if (!saved) return;
   refreshSupplierDerived(supplier, ingredientsBySupplier()[supplierId] || [], state.entries,
     futureDayOf(supplierId));
-  detailView?.announce(day === today
-    ? t('orders.dayLine.today')
-    : t('orders.dayLine.announceNext', { day: spellShortDate(day) }));
+  const day = spellShortDate(choice.day);
+  detailView?.announce(
+    choice.kind === 'today' ? t('orders.dayLine.today')
+      : choice.kind === 'next' ? t('orders.dayLine.announceNext', { day })
+        : t('orders.dayLine.announceLater', { day }));
   renderReminders();
 }
 

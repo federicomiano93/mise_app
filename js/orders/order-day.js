@@ -87,6 +87,41 @@ export function previewDay({ current, supplier, today }) {
   return isFutureDay(target, today) ? target : '';
 }
 
+// What the supplier screen's day select OFFERS and which answer it shows. ⚠️ IT TELLS THE
+// TRUTH ABOUT THE STORED STAMP: a select that only knew «Today / Next order» would show
+// «Today» over rows stamped for another day, and hide the stamp of a supplier whose order
+// days were later edited away.
+//   options: [{ value, kind, day }] in date order, deduped by date. `value` is the kind:
+//     'past'  — the stored stamp, already gone by, while the supplier still has items;
+//     'today';
+//     'next'  — the computed next order day (only with order days);
+//     'later' — a stored future stamp that is NOT the computed next order day.
+//   selected: the stored stamp when it is today or later, or the past one with items;
+//     otherwise what the next keystroke would do (previewDay).
+//   selectedDay: the date of the selected option, what the expected delivery is counted from.
+// The caller shows the line only with two or more options.
+export function dayChoices({ supplier, stamp, hasItems, today }) {
+  const next = nextOrderDay(supplier, today);
+  const options = [{ value: 'today', kind: 'today', day: today }];
+  if (stamp && String(stamp) < String(today) && hasItems) {
+    options.push({ value: 'past', kind: 'past', day: stamp });
+  }
+  if (next) options.push({ value: 'next', kind: 'next', day: next });
+  if (isFutureDay(stamp, today) && stamp !== next) {
+    options.push({ value: 'later', kind: 'later', day: stamp });
+  }
+  options.sort((x, y) => String(x.day).localeCompare(String(y.day)));
+
+  let selected;
+  if (stamp && String(stamp) === String(today)) selected = 'today';
+  else if (isFutureDay(stamp, today)) selected = stamp === next ? 'next' : 'later';
+  else if (stamp && hasItems) selected = 'past';
+  else selected = previewDay({ current: stamp, supplier, today }) ? 'next' : 'today';
+
+  const chosen = options.find(o => o.value === selected) || options[0];
+  return { options, selected: chosen.value, selectedDay: chosen.day };
+}
+
 // The «for the next order» answer on the pending banner: the next order day, but only when
 // today is NOT one of the supplier's order days («It's today's» already covers that case,
 // and «next order» would jump a whole week). null when it does not apply.

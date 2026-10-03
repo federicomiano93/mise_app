@@ -59,8 +59,8 @@ export function buildSupplierDetail(supplier, ctx) {
     icon: PLUS_SVG, onClick: () => addIngredient?.(),
   });
 
-  // A polite live region on this screen: the result of the day buttons is spoken, not only
-  // drawn (the button may disappear with the line). Declared BEFORE the overlay that holds it:
+  // A polite live region on this screen: the result of the day select is spoken, not only
+  // drawn. Declared BEFORE the overlay that holds it:
   // used earlier, it was a TDZ crash and the supplier screen would not open at all.
   const live = el('p', { class: 'supplier-day-live', role: 'status', 'aria-live': 'polite' });
 
@@ -85,13 +85,17 @@ export function buildSupplierDetail(supplier, ctx) {
 
   function repaint(next) {
     const { ingredients, entries, suggest, hooks } = next;
+    // A snapshot rebuilds the body, and the select the person is using with it: give the
+    // new one the focus back, or a screen reader loses its place mid-choice.
+    const hadFocus = Boolean(dayLine) && globalThis.document?.activeElement === dayLine.select;
     body.replaceChildren();
 
-    // ⚠️ BUILT ALWAYS, HIDDEN WHEN THE SUPPLIER HAS NO ORDER DAYS — same trap as the clear
+    // ⚠️ BUILT ALWAYS, HIDDEN WHEN THERE IS ONLY ONE ANSWER TO GIVE — same trap as the clear
     // button below: this function runs on a snapshot, not a keystroke, so a line that
     // only existed when needed could not appear as the first quantity creates a stamp.
     dayLine = buildDayLine(next.dayInfo, supplier.id);
     body.appendChild(dayLine.node);
+    if (hadFocus) dayLine.select.focus({ preventScroll: true });
 
     const canAdd = typeof next.onAddIngredient === 'function';
     addIngredient = canAdd ? () => next.onAddIngredient() : null;
@@ -162,7 +166,8 @@ export function buildSupplierDetail(supplier, ctx) {
 // «Expected delivery: <day>». A native <select>, so the phone's own picker and screen
 // reader support come free; its accessible name is the visible label.
 // info: () => ({ label, options: [{value, label}], selected, deliveryText, onChange(value) })
-// | null, supplied by orders-main (which owns the draft and the language of the day words).
+// | null when there is only one answer to give, supplied by orders-main (which owns the draft
+// and the language of the day words).
 // Asked again on every refresh, so the select always shows the CURRENT stamp.
 //
 // Why a select and not a sentence plus a button: «Ordine per lunedì» + «Per oggi» read as
@@ -186,8 +191,8 @@ function buildDayLine(info, supplierId) {
     change = now ? now.onChange : null;
     if (!now) return false;
     label.textContent = now.label;
-    // Rebuild the options only when their words changed: a snapshot must not close a
-    // picker the person is looking at.
+    // Rebuild the options only when their words changed, so a refresh does not reset the
+    // list under a finger.
     const key = now.options.map(o => `${o.value}:${o.label}`).join('|');
     if (key !== shown) {
       shown = key;
@@ -199,5 +204,5 @@ function buildDayLine(info, supplierId) {
     return true;
   }
   refresh();
-  return { node, refresh };
+  return { node, select, refresh };
 }

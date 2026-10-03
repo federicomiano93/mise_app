@@ -8,7 +8,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
   nextOrderDay, targetDayFor, stampFor, recordDay, isFutureDay, notForLater,
-  previewDay, nextOrderOffer, nextDeliveryAfter,
+  previewDay, nextOrderOffer, nextDeliveryAfter, dayChoices,
 } from '../js/orders/order-day.js';
 import { spellShortDate, spellLongDate } from '../js/orders/day.js';
 import { pendingSuppliers } from '../js/orders/reminders.js';
@@ -146,8 +146,8 @@ test('wiring: recording uses the clamped day, stamps go through stampFor', () =>
   const stamp = main.slice(main.indexOf('function stampNow'), main.indexOf('function dayInfoFor'));
   assert.match(stamp, /stampFor\(\{/);
   assert.doesNotMatch(stamp, /history/, 'the rule needs no history');
-  const after = main.slice(main.indexOf('afterChange(supplierId)'), main.indexOf('onPlaced(supplierId)'));
-  assert.match(after, /stampNow\(supplierId, state\.days\[supplierId\]\)/);
+  const after = main.slice(main.indexOf('afterChange(supplierId,'), main.indexOf('onPlaced(supplierId)'));
+  assert.match(after, /if \(!stockOnly\) stampNow\(supplierId, state\.days\[supplierId\]\)/);
   assert.doesNotMatch(after, /= todayISO\(\)/);
 });
 
@@ -177,13 +177,84 @@ test('wiring: the supplier screen builds the day line always and toggles hidden'
   assert.match(detail, /role: 'status', 'aria-live': 'polite'/);
 });
 
-test('wiring: the day line shows for any supplier with order days; the old buttons are gone', () => {
+test('wiring: the day line is decided by dayChoices; the old buttons are gone', () => {
   const main = read('orders-main.js');
-  const fn = main.slice(main.indexOf('function dayInfoFor'), main.indexOf('async function setSupplierDay'));
-  assert.match(fn, /if \(!next\) return null;/);
-  assert.match(fn, /nextDeliveryAfter\(supplier, selected === 'next' \? next : today\)/);
+  const fn = main.slice(main.indexOf('function choicesFor'), main.indexOf('async function setSupplierDay'));
+  assert.match(fn, /dayChoices\(\{/);
+  assert.match(fn, /choices\.options\.length < 2\) return null;/);
+  assert.match(fn, /nextDeliveryAfter\(supplier, choices\.selectedDay\)/);
+  const set = main.slice(main.indexOf('async function setSupplierDay'), main.indexOf('// ⚠️ THE SAME-DAY UNIT CHECK'));
+  assert.match(set, /choice\.kind === 'past'/);
+  assert.match(set, /restamp\(supplierId, choice\.day\)/);
   assert.doesNotMatch(main, /moveAsideDay|focusTitle/);
   assert.doesNotMatch(read('supplier-detail.js'), /focusTitle|supplier-day-btn/);
+});
+
+test('wiring: only a stock edit that fills no quantity passes stockOnly', () => {
+  const rows = read('ingredients.js');
+  const stock = rows.slice(rows.indexOf("stockInput.addEventListener('input'"), rows.indexOf("qtyInput.addEventListener('input'"));
+  assert.match(stock, /hooks\.afterChange\(supplier\.id, \{ stockOnly: true \}\)/);
+  assert.equal((rows.match(/stockOnly/g) || []).length, 2, 'the flag is on the stock path alone (one code, one comment)');
+});
+
+const SATURDAY_ONLY = { id: 's1', orderDays: ['Saturday'] };
+const kinds = c => c.options.map(o => `${o.kind}:${o.day}`);
+
+test('dayChoices: an order day with no stamp offers today (selected) and the next order', () => {
+  const c = dayChoices({ supplier: monOnly, stamp: undefined, hasItems: false, today: MON });
+  assert.deepEqual(kinds(c), [`today:${MON}`, `next:${NEXT_MON}`]);
+  assert.equal(c.selected, 'today');
+  assert.equal(c.selectedDay, MON);
+});
+
+test('dayChoices: a non-order day with no stamp selects the next order day', () => {
+  const c = dayChoices({ supplier: monOnly, stamp: undefined, hasItems: false, today: WED });
+  assert.deepEqual(kinds(c), [`today:${WED}`, `next:${NEXT_MON}`]);
+  assert.equal(c.selected, 'next');
+  assert.equal(c.selectedDay, NEXT_MON);
+});
+
+test('dayChoices: a stamp of today on a non-order day stays «today»', () => {
+  const c = dayChoices({ supplier: monOnly, stamp: WED, hasItems: true, today: WED });
+  assert.equal(c.selected, 'today');
+  assert.equal(c.options.length, 2);
+});
+
+test('dayChoices: a future stamp equal to the next order day is just «next» (deduped)', () => {
+  const c = dayChoices({ supplier: monOnly, stamp: NEXT_MON, hasItems: true, today: WED });
+  assert.deepEqual(kinds(c), [`today:${WED}`, `next:${NEXT_MON}`]);
+  assert.equal(c.selected, 'next');
+});
+
+test('dayChoices: a future stamp that is not the next order day (order days edited) is shown and selected', () => {
+  const c = dayChoices({ supplier: monThu, stamp: NEXT_MON, hasItems: true, today: WED });
+  assert.deepEqual(kinds(c), [`today:${WED}`, `next:${THU}`, `later:${NEXT_MON}`]);
+  assert.equal(c.selected, 'later');
+  assert.equal(c.selectedDay, NEXT_MON);
+});
+
+test('dayChoices: a past stamp WITH items is offered and selected; without items it is ignored', () => {
+  const withItems = dayChoices({ supplier: monOnly, stamp: MON, hasItems: true, today: WED });
+  assert.deepEqual(kinds(withItems), [`past:${MON}`, `today:${WED}`, `next:${NEXT_MON}`]);
+  assert.equal(withItems.selected, 'past');
+  assert.equal(withItems.selectedDay, MON);
+  const without = dayChoices({ supplier: monOnly, stamp: MON, hasItems: false, today: WED });
+  assert.deepEqual(kinds(without), [`today:${WED}`, `next:${NEXT_MON}`]);
+  assert.equal(without.selected, 'next');
+});
+
+test('dayChoices: no order days — one answer, unless a future stamp is stored', () => {
+  const plain = dayChoices({ supplier: free, stamp: undefined, hasItems: true, today: WED });
+  assert.deepEqual(kinds(plain), [`today:${WED}`]);
+  assert.equal(plain.selected, 'today');
+  const stuck = dayChoices({ supplier: free, stamp: THU, hasItems: true, today: WED });
+  assert.deepEqual(kinds(stuck), [`today:${WED}`, `later:${THU}`]);
+  assert.equal(stuck.selected, 'later');
+});
+
+test('dayChoices: options come in date order, and a Saturday-only supplier wraps correctly', () => {
+  const c = dayChoices({ supplier: SATURDAY_ONLY, stamp: undefined, hasItems: false, today: SUN });
+  assert.equal(c.options[1].day, '2026-10-24');
 });
 
 test('wiring: the list row tag needs something typed', () => {

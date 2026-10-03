@@ -494,7 +494,10 @@ const DICTIONARIES = Object.freeze({
     'orders.dayLine.optNext': 'Next order ({day})',
     'orders.dayLine.delivery': 'Expected delivery: {day}',
     'orders.dayLine.today': 'Order for today',
-    'orders.dayLine.announceNext': 'Order for the next order ({day})',
+    'orders.dayLine.optPast': 'From {day}',
+    'orders.dayLine.optLater': 'For {day}',
+    'orders.dayLine.announceNext': 'Order moved to the next order ({day})',
+    'orders.dayLine.announceLater': 'Order for {day}',
     'orders.pendingForNext': 'For the next order ({day})',
 
     // ── Sentences that name a DAY, kept whole ────────────────────────────────
@@ -3198,7 +3201,10 @@ const DICTIONARIES = Object.freeze({
     'orders.dayLine.optNext': 'Prossimo ordine ({day})',
     'orders.dayLine.delivery': 'Consegna prevista: {day}',
     'orders.dayLine.today': 'Ordine per oggi',
-    'orders.dayLine.announceNext': 'Ordine per il prossimo ordine ({day})',
+    'orders.dayLine.optPast': 'Del {day}',
+    'orders.dayLine.optLater': 'Per {day}',
+    'orders.dayLine.announceNext': 'Ordine spostato al prossimo ordine ({day})',
+    'orders.dayLine.announceLater': 'Ordine per {day}',
     'orders.pendingForNext': 'Per il prossimo ordine ({day})',
 
     'orders.sendDay': 'Manda {day}',

@@ -879,7 +879,7 @@ input.ing-stock {
    rather than widening at 296px. */
 .supplier-day-line {
   margin-bottom: 10px;
-  padding: 8px 12px;
+  padding: 8px 10px;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
@@ -901,7 +901,10 @@ input.ing-stock {
   min-width: 0;
   max-width: 100%;
   min-height: 44px;
-  padding: 0 14px;
+  /* Modest side padding on purpose: at 296px the longest Italian answer, «Prossimo ordine
+     (gio 15)», is ~205px of 16px text and must fit beside the native arrow without being
+     clipped (a lost date is the whole point of the line). */
+  padding: 0 6px 0 12px;
   background: var(--accent-light);
   border: 1px solid var(--accent-border);
   border-radius: var(--radius-pill);

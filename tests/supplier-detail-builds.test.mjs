@@ -45,8 +45,13 @@ class Node {
   addEventListener(type, fn) { (this.listeners[type] = this.listeners[type] || []).push(fn); }
   fire(type) { (this.listeners[type] || []).forEach(fn => fn({ target: this, detail: 1 })); }
   dispatch(type, value) { this.value = value; this.fire(type); }
+  // As in a browser: assigning a value that is not an option leaves the select with none.
   get value() { return this._value; }
-  set value(v) { this._value = String(v); }
+  set value(v) {
+    const options = this.children.filter(c => c.tagName === 'OPTION');
+    this._value = this.tagName === 'SELECT' && !options.some(o => o.getAttribute('value') === String(v))
+      ? '' : String(v);
+  }
   querySelector(sel) { return find(this, n => n.tagName === sel.toUpperCase()) || null; }
   focus() { globalThis.document.activeElement = this; }
 }
@@ -113,6 +118,7 @@ test('the line: a labelled select with the two answers, the selected one and the
   assert.equal(label.getAttribute('for'), select.getAttribute('id'), 'the label names the select');
   assert.deepEqual(optionsOf(select), [['today', 'Oggi'], ['next', 'Prossimo ordine (gio 8)']]);
   assert.equal(select.value, 'next');
+  assert.ok(optionsOf(select).some(([value]) => value === select.value), 'the selected option is a real one');
   const delivery = byClass(line, 'supplier-day-delivery');
   assert.equal(delivery.textContent, 'Consegna prevista: lunedì 12 ottobre');
   assert.equal(delivery.hidden, false);
@@ -140,4 +146,12 @@ test('the line follows a refresh (select and delivery), and the result is announ
   assert.equal(byClass(line, 'supplier-day-delivery').textContent, 'B');
   view.announce('Ordine per oggi');
   assert.equal(byClass(view.overlay, 'supplier-day-live').textContent, 'Ordine per oggi');
+});
+
+test('a snapshot repaint gives the focus back to the day select', () => {
+  const view = buildSupplierDetail(supplier, ctx(info()));
+  byClass(view.overlay, 'supplier-day-select').focus();
+  view.repaint(ctx(info()));
+  const fresh = byClass(view.overlay, 'supplier-day-select');
+  assert.equal(globalThis.document.activeElement, fresh);
 });

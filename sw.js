@@ -1,4 +1,4 @@
-const CACHE_NAME = 'theitalianclub-v528';
+const CACHE_NAME = 'theitalianclub-v529';
 // Firebase SDK modules (loaded from gstatic) are cached SEPARATELY from CACHE_NAME
 // so they survive the cache-version bump that happens on every deploy — otherwise
 // the offline SDK would be wiped each release until the next online load. The name
@@ -416,7 +416,7 @@ const ASSET_HASHES = {
   "./tokens.css": '15a90c6c1535077b',
   "./auth.css": 'e4ba63eda208115b',
   "./style.css": '011704cc77f2029b',
-  "./orders.css": '7d8f92ab6865a61a',
+  "./orders.css": '6994507c4a446c0c',
   "./sounds/alarm.wav": '0d1465974f5be95b',
   "./fonts/manrope-latin.woff2": '71eb731d55804619',
   "./fonts/manrope-latin-ext.woff2": 'bd24140af06f1b58',
@@ -493,7 +493,7 @@ const ASSET_HASHES = {
   "./js/location.js": '6aaf53615a8739d1',
   "./js/sections.js": 'abcfdecb2bd5766d',
   "./js/roles.js": '2b491770c4b6165b',
-  "./js/i18n.js": 'e7f6abcf49dc3e1b',
+  "./js/i18n.js": '59d4f6dbd410ad42',
   "./js/i18n-dom.js": '24249af4367511e5',
   "./js/keyboard-done.js": '4a4b75c43a15e2c7',
   "./js/join-code.js": '5b89de65db5c102f',
@@ -542,10 +542,10 @@ const ASSET_HASHES = {
   "./js/orders/category-batches.js": '03d72f63c4fa4a8a',
   "./js/orders/confirm-dialog.js": '61a7f580f37c5ff8',
   "./js/orders/firebase-orders.js": 'de887575159d9af2',
-  "./js/orders/orders-main.js": '7352a88696ccdde0',
+  "./js/orders/orders-main.js": '465c22331add68c5',
   "./js/orders/dom.js": '7ec966d71c5356cd',
   "./js/orders/day.js": '107abcbdf353c709',
-  "./js/orders/order-day.js": '3b88cef2919f77fe',
+  "./js/orders/order-day.js": '1194fbe02f9a9686',
   "./js/orders/deliveries.js": '29471cfe5dd2dd48',
   "./js/orders/deliveries-view.js": 'cdce7b5d2dac2ea6',
   "./js/orders/send-routes.js": '88562d53be92460e',
@@ -556,13 +556,13 @@ const ASSET_HASHES = {
   "./js/orders/reminders.js": 'e9c255f18abea237',
   "./js/orders/reminder-view.js": '8fef47478579d97e',
   "./js/orders/suppliers.js": 'c68481a7c9872fd3',
-  "./js/orders/ingredients.js": 'd6b14c9085b7dc5d',
+  "./js/orders/ingredients.js": '7cd7a75fc1103a4a',
   "./js/orders/no-supplier.js": '185050fd12a0a2b0',
   "./js/orders/line-supplier.js": '3d9d21bdc79b2955',
   "./js/orders/ingredient-search.js": 'b205e1d0d4d5185c',
   "./js/orders/ingredient-list.js": 'bd69097d0d4af250',
   "./js/orders/search-box.js": '471bb6f217d97442',
-  "./js/orders/supplier-detail.js": '294b2c032b50e3d0',
+  "./js/orders/supplier-detail.js": '127479335834062b',
   "./js/orders/supplier-items.js": 'f435e2c2fb1a4f1b',
   "./js/orders/orders-config.js": 'afe069c341cc8e01',
   "./js/orders/draft.js": '8194738830da9300',
