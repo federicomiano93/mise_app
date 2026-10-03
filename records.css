@@ -14,7 +14,6 @@
   --accent: var(--brand);
   --safe-bot: env(safe-area-inset-bottom, 0px);
   --surface2: var(--surface-2);
-  --text2: var(--text-2);
   --text3: var(--text-3);
 }
 
@@ -219,7 +218,7 @@
 }
 .rec-host .mgmt-case-x {
   flex: 0 0 auto;
-  color: var(--text2);
+  color: var(--text-2);
 }
 .rec-host .mgmt-case-row > .mgmt-choice {
   flex: 1 1 0;
@@ -242,7 +241,7 @@
 .rec-host .mgmt-price-vat-summary {
   margin: 6px 0 0;
   font-size: 13px;
-  color: var(--text2);
+  color: var(--text-2);
 }
 .rec-host .mgmt-price-vat-summary:empty {
   display: none;
@@ -406,7 +405,7 @@
   height: 32px;
   background: var(--surface);
   border-color: var(--border);
-  color: var(--text2);
+  color: var(--text-2);
 }
 .rec-host .mgmt-fold-help .help-btn:focus-visible {
   outline-color: var(--accent);
@@ -573,7 +572,7 @@
   font-size: 11px;
 }
 .rec-host .alg-tick--may {
-  color: var(--text2);
+  color: var(--text-2);
 }
 .rec-host .alg-checked {
   margin-top: 12px;
@@ -584,7 +583,7 @@
 .rec-host .alg-nut-title {
   margin-top: 14px;
   font-size: 12px;
-  color: var(--text2);
+  color: var(--text-2);
   font-weight: 500;
 }
 .rec-host .alg-nutrition {
@@ -608,7 +607,7 @@
 }
 .rec-host .mgmt-history-label {
   font-size: 12px;
-  color: var(--text2);
+  color: var(--text-2);
   font-weight: 500;
 }
 .rec-host .alg-nut-field {

@@ -665,6 +665,6 @@ test('moving a line writes the draft only — nothing is marked resolved — and
   assert.doesNotMatch(fn, /resolveMissing/);
   assert.doesNotMatch(readFileSync(new URL('../js/i18n.js', import.meta.url), 'utf8'), /otherNotResolved/);
   assert.match(fn, /supplierId,\s*\};/, 'the line carries the override');
-  assert.match(fn, /state\.days\[supplierId\] = todayISO\(\);/);
+  assert.match(fn, /stampNow\(supplierId, previousDay\);/, 'stamped by the order-day rule, not blindly today');
   assert.match(fn, /catch \(err\) \{\s*if \(hadEntry\) state\.entries\[id\] = previousEntry; else delete state\.entries\[id\];/);
 });

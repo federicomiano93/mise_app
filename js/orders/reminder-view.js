@@ -12,7 +12,7 @@
 import { t } from '../i18n.js';
 import { supplierLabel } from '../supplier-label.js';
 import { el } from './dom.js';
-import { daySpoken, dayWhen } from './day.js';
+import { daySpoken, dayPhrase, spellShortDate } from './day.js';
 
 const CHECK_SVG =
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>';
@@ -63,16 +63,21 @@ export function renderTodayOrders(container, list, { onPick } = {}) {
 // to today. It is not wanted at all (Discard) — the rows go, behind a red confirm.
 //
 // list: [{ supplier, day, itemCount }] from reminders.pendingSuppliers
-export function renderPending(container, list, { onPlaced, onToday, onDiscard, now } = {}) {
+// A fourth answer, only when the supplier has a next order day: the rows are next
+// week's, typed early (`nextDayOf(supplier)` → "YYYY-MM-DD" | null, `onNext(id, day)`).
+export function renderPending(container, list, {
+  onPlaced, onToday, onNext, nextDayOf, onDiscard, now,
+} = {}) {
   if (!container) return;
   container.textContent = '';
   if (!list.length) return;
 
   list.forEach(({ supplier, day, itemCount }) => {
+    const nextDay = nextDayOf ? nextDayOf(supplier) : null;
     container.appendChild(el('div', { class: 'pending-banner' }, [
       el('div', { class: 'pending-main' }, [
         el('span', { class: 'pending-title', text: t('orders.notPlacedFor', { supplier: supplierLabel(supplier) }) }),
-        el('span', { class: 'pending-sub', text: t('orders.typedWhen', { n: itemCount, when: dayWhen(day, now) }) }),
+        el('span', { class: 'pending-sub', text: t('orders.pendingItems', { n: itemCount, when: dayPhrase(day, now) }) }),
       ]),
       el('div', { class: 'pending-actions' }, [
         el('button', {
@@ -83,6 +88,10 @@ export function renderPending(container, list, { onPlaced, onToday, onDiscard, n
           type: 'button', class: 'pending-btn',
           onClick: () => onToday?.(supplier.id),
         }, t('orders.itSTodayS')),
+        nextDay ? el('button', {
+          type: 'button', class: 'pending-btn',
+          onClick: () => onNext?.(supplier.id, nextDay),
+        }, t('orders.pendingForNext', { day: spellShortDate(nextDay) })) : null,
         el('button', {
           type: 'button', class: 'pending-btn danger',
           onClick: () => onDiscard?.(supplier.id),
