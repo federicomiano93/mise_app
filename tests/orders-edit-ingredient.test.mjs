@@ -52,7 +52,24 @@ class Node {
     return this.children.map(c => c.textContent).join('');
   }
 
-  setAttribute(name, value) { this.attributes[name] = String(value); }
+  get options() { return this.children.filter(c => c.tagName === 'OPTION'); }
+  querySelector(selector) {
+    const name = selector.replace(/^\./, '');
+    const find = (node) => {
+      for (const child of node.children) {
+        if (child.classList.contains(name)) return child;
+        const deeper = find(child);
+        if (deeper) return deeper;
+      }
+      return null;
+    };
+    return find(this);
+  }
+
+  setAttribute(name, value) {
+    this.attributes[name] = String(value);
+    if (name === 'value') this.value = String(value);
+  }
   getAttribute(name) { return this.attributes[name]; }
   appendChild(child) { this.children.push(child); return child; }
   addEventListener(type, fn) { (this.listeners[type] = this.listeners[type] || []).push(fn); }
@@ -127,6 +144,129 @@ test('the name button holds nothing else: the boxes, the × and the unit are its
     assert.ok(other, `${cls} is still on the row`);
     assert.ok(!walk(name).includes(other), `${cls} must not sit inside the name button`);
   }
+});
+
+// ── «−» / «+» under the Order box (3 Oct 2026) and the unit pill ─────────────
+
+function steppedRow({ ing = FLOUR, entries = {}, afterChange = () => {}, suggest } = {}) {
+  const hooks = { afterChange };
+  const node = buildRow(ing, SUPPLIER, suggest || (() => ({ active: false })), entries, hooks);
+  return {
+    node, entries,
+    qty: withClass(node, 'ing-qty')[0],
+    minus: withClass(node, 'ing-step-minus')[0],
+    plus: withClass(node, 'ing-step-plus')[0],
+  };
+}
+
+test('the + button takes an empty box to 1, and − takes it back to empty', () => {
+  const saved = [];
+  const r = steppedRow({ afterChange: id => saved.push(id) });
+  assert.equal(r.qty.value, '', 'starts empty');
+  r.plus.fire('click');
+  assert.equal(r.qty.value, 1);
+  assert.equal(r.entries.flour.qty, 1);
+  assert.ok(r.node.classList.contains('ing-row--filled'), 'the filled state (and the ×) follows');
+  r.plus.fire('click');
+  assert.equal(r.entries.flour.qty, 2);
+  r.minus.fire('click');
+  r.minus.fire('click');
+  assert.equal(r.qty.value, '', '0 shows an empty box, as typing 0 does');
+  assert.equal(r.entries.flour.qty, 0);
+  assert.ok(!r.node.classList.contains('ing-row--filled'));
+  assert.deepEqual(saved, ['s1', 's1', 's1', 's1'], 'every tap autosaves through the typing path');
+});
+
+test('− is disabled at 0 and enabled while there is a quantity; it never goes below 0', () => {
+  const r = steppedRow();
+  assert.equal(r.minus.disabled, true);
+  r.plus.fire('click');
+  assert.equal(r.minus.disabled, false);
+  r.minus.fire('click');
+  assert.equal(r.minus.disabled, true);
+  r.minus.fire('click');   // a stray tap that gets through anyway
+  assert.equal(r.entries.flour.qty, 0);
+  const filled = steppedRow({ entries: { flour: { qty: 3, stock: 0 } } });
+  assert.equal(filled.minus.disabled, false, 'a row built with a quantity starts enabled');
+  assert.equal(filled.qty.value, 3);
+});
+
+test('the buttons start from what the BOX shows, so they behave exactly like typing', () => {
+  const r = steppedRow();
+  r.qty.value = '7';
+  r.qty.fire('input');
+  r.plus.fire('click');
+  assert.equal(r.entries.flour.qty, 8);
+  r.qty.value = '12';          // typed, input event not yet fired
+  r.minus.fire('click');
+  assert.equal(r.entries.flour.qty, 11);
+});
+
+test('a row ordered elsewhere this time: + behaves like typing 1 into its empty box and takes the line back', () => {
+  const ing = { ...FLOUR, elsewhereId: 's2', elsewhereLabel: 'Other Ltd' };
+  const r = steppedRow({ ing, entries: { flour: { qty: 9, stock: 0 } } });
+  assert.equal(r.qty.value, '', 'the other order\'s number is not shown');
+  assert.equal(r.minus.disabled, true);
+  r.plus.fire('click');
+  assert.equal(r.entries.flour.qty, 1, 'one more than the EMPTY box, not than the other order\'s 9');
+  assert.equal(r.node.dataset.elsewhere, undefined, 'the line is taken back, as typing would');
+});
+
+test('the buttons update the «much more than usual» hint like typing does', () => {
+  const suggest = () => ({ active: true, par: 3, suggestion: 3 });
+  const r = steppedRow({ suggest });
+  const [hint] = withClass(r.node, 'ing-suggestion');
+  assert.match(hint.className, /active/);
+  r.qty.value = '2';
+  r.qty.fire('input');
+  assert.doesNotMatch(hint.className, /warn/);
+  r.qty.value = '99';          // a slip of the finger, not yet reported by an input event
+  r.plus.fire('click');
+  assert.match(hint.className, /warn/, 'the hint was recomputed after the tap');
+});
+
+test('each button is named per ingredient (name + weight), and both languages exist', () => {
+  const r = steppedRow();
+  assert.equal(r.plus.getAttribute('aria-label'), 'One more Strong flour 25kg');
+  assert.equal(r.minus.getAttribute('aria-label'), 'One fewer Strong flour 25kg');
+  assert.equal(r.plus.getAttribute('type'), 'button');
+  const dict = read('js/i18n.js');
+  assert.match(dict, /'orders\.qtyOneMoreFor': 'One more \{name\}'/);
+  assert.match(dict, /'orders\.qtyOneFewerFor': 'One fewer \{name\}'/);
+  assert.match(dict, /'orders\.qtyOneMoreFor': 'Uno in più: \{name\}'/);
+  assert.match(dict, /'orders\.qtyOneFewerFor': 'Uno in meno: \{name\}'/);
+});
+
+test('the buttons sit in the Order column under the box; the Stock column has none', () => {
+  const r = steppedRow();
+  const cols = withClass(r.node, 'ing-col');
+  assert.ok(walk(cols[0]).includes(r.plus) && walk(cols[0]).includes(r.minus));
+  assert.ok(cols[0].children.indexOf(r.qty) < cols[0].children.findIndex(c => c.classList.contains('ing-steps')));
+  assert.equal(withClass(cols[1], 'ing-step').length, 0);
+});
+
+test('a card with a unit choice keeps its native select: a direct row child, pill class hook, label and change handler', () => {
+  const ing = { ...FLOUR, unit: 'cartone', packUnit: 'busta' };
+  const saved = [];
+  const r = steppedRow({ ing, afterChange: id => saved.push(id) });
+  const select = r.node.children.find(c => c.tagName === 'SELECT');
+  assert.ok(select, 'the select is a direct child of the row (the grid places it)');
+  assert.ok(select.classList.contains('ing-unit-select'));
+  assert.ok(r.node.classList.contains('ing-row--choice'));
+  assert.match(select.getAttribute('aria-label'), /Strong flour/);
+  assert.deepEqual(select.options.map(o => o.value), ['cartone', 'busta']);
+  select.value = 'busta';
+  select.fire('change');
+  assert.equal(r.entries.flour.unit, 'busta');
+  assert.deepEqual(saved, ['s1']);
+  assert.equal(withClass(r.node, 'ing-order-unit').length, 0, 'no caption beside a menu');
+});
+
+test('a card without a choice keeps the unit caption under the buttons', () => {
+  const r = steppedRow();
+  const col = withClass(r.node, 'ing-col')[0];
+  const kinds = col.children.map(c => c.classList.contains('ing-steps') ? 'steps' : c.classList.contains('ing-order-unit') ? 'caption' : 'box');
+  assert.deepEqual(kinds, ['box', 'steps', 'caption']);
 });
 
 // ── The price survives an untouched Save ─────────────────────────────────────
