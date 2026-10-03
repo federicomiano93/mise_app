@@ -192,21 +192,22 @@ export function watchDraft(onChange, onError) {
 // write are one transaction, so two phones tapping at the same moment cannot lose
 // one of the two orders.
 //
-// ⚠️ The same ingredient in a DIFFERENT unit from the day's first order is refused
-// (`orders/unit-conflict`, thrown inside the transaction, so nothing is written): the
-// two quantities cannot be added. `cardUnitOf` tells the merge what unit a record from
-// before the unit choice was placed in.
+// ⚠️ The same ingredient in a DIFFERENT unit from the day's first order is added up in
+// PACKAGES when its card says how many one case holds (1 cartone of 4 + 2 buste = 6 buste),
+// and refused otherwise (`orders/unit-conflict`, thrown inside the transaction, so nothing is
+// written). `cardOf` hands the merge each ingredient's card: its unit (what a record from
+// before the unit choice was placed in), its package and how many packages a case holds.
 export function archiveSupplier({ supplier, ingredients, entries, date, now = new Date() }) {
   const incoming = buildSupplierArchive({ supplier, ingredients, entries, date, now });
   if (!incoming) return Promise.resolve(null);
 
-  const unitById = {};
-  (ingredients || []).forEach(ing => { unitById[ing.id] = ing.unit; });
+  const cardById = {};
+  (ingredients || []).forEach(ing => { cardById[ing.id] = ing; });
 
   return transactDoc(
     COLLECTIONS.history,
     historyDocId(date, supplier.id),
-    existing => mergeArchives(existing, incoming, { cardUnitOf: id => unitById[id] }),
+    existing => mergeArchives(existing, incoming, { cardOf: id => cardById[id] }),
   );
 }
 
