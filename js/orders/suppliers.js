@@ -22,7 +22,7 @@ import { supplierLabel } from '../supplier-label.js';
 import { el } from './dom.js';
 import { buildSearchBox } from './search-box.js';
 import { filterSuppliers } from './ingredient-search.js';
-import { itemsLabel } from './supplier-picker.js';
+import { itemsLabel, summaryBarLabel } from './supplier-picker.js';
 import { spellShortDate } from './day.js';
 import { nextDeliveryAfter } from './order-day.js';
 
@@ -113,6 +113,10 @@ export function refreshSupplierDerived(supplier, ingredients, entries, forDay = 
   if (summaryBtn) summaryBtn.hidden = filled === 0;
   const spacer = document.getElementById(`spacer-${supplier.id}`);
   if (spacer) spacer.hidden = filled > 0;
+
+  // The bar at the foot of the supplier's own screen: the count, on every keystroke.
+  const barText = document.getElementById(`summary-bar-text-${supplier.id}`);
+  if (barText) barText.textContent = summaryBarLabel(filled);
 }
 
 // container: #suppliers-list.

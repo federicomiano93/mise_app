@@ -1006,7 +1006,9 @@ service cloud.firestore {
                // The delivery half of an order's life — see the note below.
                'deliveredAt', 'missing', 'missingResolved',
                // The unit each line was ordered in — see the note below.
-               'units'
+               'units',
+               // Each order of the day kept apart, with its time — see the note below.
+               'sends'
              ])
           && request.resource.data.date is string
           && request.resource.data.date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
@@ -1073,6 +1075,17 @@ service cloud.firestore {
           && (!('missingResolved' in request.resource.data)
               || (request.resource.data.missingResolved is map
                   && request.resource.data.missingResolved.size() <= 500))
+          // `sends` (3 Oct 2026) — { <sendId>: { at, quantities, units? } }: each order of the
+          // day as it was placed, with its time, so a morning order and an afternoon addition
+          // stay told apart (Federico: «se ci sono problemi è più semplice risalire agli
+          // ordini fatti»). `quantities` beside it stays the day's TOTAL, the map every other
+          // screen reads. A map keyed by send, never a list (rules cannot look inside a list);
+          // the entries themselves are not judged — like `quantities`' values — and the cap
+          // keeps the document small. OPTIONAL in both directions, like the fields above:
+          // a phone on the previous version records without it.
+          && (!('sends' in request.resource.data)
+              || (request.resource.data.sends is map
+                  && request.resource.data.sends.size() <= 50))
           && request.resource.data.createdAt is string
           && request.resource.data.createdAt.size() <= 64
           && request.resource.data.updatedAt is string
