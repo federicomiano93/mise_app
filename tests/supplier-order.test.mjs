@@ -82,6 +82,16 @@ test('the screen saves the whole list through saveOrdersConfig', () => {
   assert.doesNotMatch(src, /\.name\b/);
 });
 
+// Review of 4 Oct 2026: a setDoc never settles offline, so a save queued behind the previous
+// one lived only in page memory and was lost when the app closed (P20).
+test('every move goes to Firestore at once, and switched-off suppliers keep their place', () => {
+  const src = withoutComments(read('js/orders/supplier-order-screen.js'));
+  assert.doesNotMatch(src, /chain/);
+  assert.doesNotMatch(src, /await saveOrdersConfig/);
+  assert.match(src, /const offScreen = currentOrder\(\)\.filter\(id => !byId\.has\(id\)\);/);
+  assert.match(src, /saveOrdersConfig\(\{ supplierOrder: \[\.\.\.next, \.\.\.offScreen\] \}\)/);
+});
+
 test('the screen ignores an Escape another layer already handled', () => {
   const src = withoutComments(read('js/orders/supplier-order-screen.js'));
   assert.match(src, /event\.defaultPrevented/);

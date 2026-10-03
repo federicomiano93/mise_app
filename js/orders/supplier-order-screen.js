@@ -101,15 +101,21 @@ export function openSupplierOrder({ suppliers, order: currentOrder, saveOrdersCo
     return [...list.querySelectorAll('.supplier-order-row')].map(row => row.dataset.supplier);
   }
 
-  // The order the server last agreed to — where a failed save goes back to.
+  // The order the server last agreed to — where a refused save goes back to.
   let confirmedOrder = order;
-  // ⚠️ SAVES RUN ONE AT A TIME, AND ONLY THE NEWEST IS SENT (same reasoning as the Home
-  // cards screen): four quick arrow presses must not send four overlapping writes, and a
-  // failure must not put the screen back over a later save that succeeded.
   let latest = order;
-  let chain = Promise.resolve();
   let savedTimer = null;
+  // ⚠️ Ids already stored that are NOT on screen (a supplier switched off): kept at the end of
+  // what is saved, so switching it back on returns it to its place, not to the bottom.
+  const offScreen = currentOrder().filter(id => !byId.has(id));
 
+  // ⚠️ EVERY MOVE IS HANDED TO FIRESTORE AT ONCE, never queued behind the previous one
+  // (review of 4 Oct 2026). The Home cards screen chains its saves because it calls a Cloud
+  // Function, which fails at once offline; this is a setDoc, whose promise waits for the
+  // SERVER — offline it never settles, and a chain would have kept every later drag in page
+  // memory only, lost when the app closed (P20). Firestore keeps one phone's writes in order
+  // and in its local cache, so the newest order always lands last. Offline the status stays
+  // «Saving…» until the signal returns, which is the truth.
   function saveOrder(next, focusId) {
     if (next.join('\n') === order.join('\n')) return;
     order = next;
@@ -118,25 +124,23 @@ export function openSupplierOrder({ suppliers, order: currentOrder, saveOrdersCo
     if (focusId) gripOf(focusId)?.focus();
     clearTimeout(savedTimer);
     status.textContent = t('orders.supplierOrder.saving');
-    chain = chain.then(async () => {
-      if (latest !== next) return;
-      try {
-        await saveOrdersConfig({ supplierOrder: next });
-        confirmedOrder = next;
-        if (latest === next) {
-          status.textContent = t('settings.saved');
-          savedTimer = setTimeout(() => { status.textContent = ''; }, 2000);
-        }
-      } catch (err) {
-        if (latest !== next) return;
-        status.textContent = '';
-        const focused = document.activeElement?.closest?.('.supplier-order-row')?.dataset.supplier;
-        order = confirmedOrder;
-        latest = confirmedOrder;
-        paint();
-        if (focused) gripOf(focused)?.focus();
-        await alertDialog(t('orders.supplierOrder.err'));
+    saveOrdersConfig({ supplierOrder: [...next, ...offScreen] }).then(() => {
+      confirmedOrder = next;
+      if (latest === next) {
+        status.textContent = t('settings.saved');
+        savedTimer = setTimeout(() => { status.textContent = ''; }, 2000);
       }
+    }, async () => {
+      // Refused (the rules, or a lost role): every later write is refused as well, so the
+      // screen goes back to the last order the server agreed to.
+      if (latest !== next) return;
+      status.textContent = '';
+      const focused = document.activeElement?.closest?.('.supplier-order-row')?.dataset.supplier;
+      order = confirmedOrder;
+      latest = confirmedOrder;
+      paint();
+      if (focused) gripOf(focused)?.focus();
+      await alertDialog(t('orders.supplierOrder.err'));
     });
   }
 
