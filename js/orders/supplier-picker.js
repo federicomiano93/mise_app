@@ -24,6 +24,13 @@ export function itemsLabel(count) {
   return t('orders.itemsCount', { n: count });
 }
 
+// The text of the summary bar at the foot of a supplier's order screen. Shared by the screen
+// that draws it (supplier-detail.js) and the in-place keystroke refresh (suppliers.js), so the
+// two can never word it differently. `n`, not `count`: see the i18n-labels skill.
+export function summaryBarLabel(count) {
+  return t('orders.summaryBar', { n: count });
+}
+
 // The message-format chooser: grouped by supplier (what a supplier receives) or one
 // flat shopping list (for yourself).
 //

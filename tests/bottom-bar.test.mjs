@@ -161,3 +161,12 @@ test('«Reset quantities…» is a quiet text button: no frame, danger text, 44p
   assert.match(read('js/orders/orders-main.js'),
     /getElementById\('clear-all-btn'\)\?\.addEventListener\('click', openClearScreen\)/);
 });
+
+// The supplier screen's summary bar (3 Oct 2026) follows the same pairing: the page's ground
+// for the bar, the raised surface for the button (the latter is .recipe-footer-btn itself).
+test('the supplier screen’s summary bar is the page ground, its button the raised surface', () => {
+  const orders = read('orders.css');
+  assert.match(block(orders, '.supplier-summary-bar'), /background:\s*var\(--bg\)/);
+  assert.doesNotMatch(block(orders, '.supplier-summary-bar'), /background:\s*var\(--surface\)/);
+  assert.match(read('js/orders/supplier-detail.js'), /class: 'recipe-footer-btn supplier-summary-btn'/);
+});

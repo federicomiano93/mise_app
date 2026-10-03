@@ -20,6 +20,7 @@ import { t } from '../i18n.js';
 import { supplierLabel } from '../supplier-label.js';
 import { el } from './dom.js';
 import { buildIngredientList } from './ingredients.js';
+import { summaryBarLabel } from './supplier-picker.js';
 
 const BACK_ICON =
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>';
@@ -28,7 +29,11 @@ const CHECK_SVG =
 const PLUS_SVG =
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>';
 
-// ctx: { ingredients, entries, suggest, hooks, onBack, onAddIngredient }
+// Same clipboard as the list's summary button (suppliers.js SUMMARY_SVG), a size up for a bar.
+const SUMMARY_SVG =
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 2h6v4H9z"/><path d="M9 11h6M9 14h6M9 17h4"/></svg>';
+
+// ctx: { ingredients, entries, suggest, hooks, onBack, onAddIngredient, onSummary(supplierId) }
 // -> { overlay, repaint(ctx) }
 //
 // `repaint` rebuilds only the BODY, never the header — a live snapshot from another
@@ -64,6 +69,26 @@ export function buildSupplierDetail(supplier, ctx) {
   // used earlier, it was a TDZ crash and the supplier screen would not open at all.
   const live = el('p', { class: 'supplier-day-live', role: 'status', 'aria-live': 'polite' });
 
+  // ⚠️ THE SUMMARY BAR: «aggiungi il resoconto dentro la scheda dei fornitori così posso vedere
+  // tutto quello che ho selezionato senza tornare indietro» (owner, 3 Oct 2026). A third row of
+  // the overlay's flex column — header / body that scrolls / bar — so it never covers the last
+  // rows or the «Ordine fatto» button. Always built and always shown, also with 0 items: the
+  // owner wants permanent controls. The count is updated in place on every keystroke by
+  // refreshSupplierDerived (suppliers.js) through the ids below; never rebuilt by repaint.
+  const summaryText = el('span', {
+    class: 'supplier-summary-text', id: `summary-bar-text-${supplier.id}`,
+  }, summaryBarLabel(0));
+  const summaryBar = el('div', { class: 'supplier-summary-bar' }, [
+    el('button', {
+      type: 'button', class: 'recipe-footer-btn supplier-summary-btn',
+      id: `summary-bar-${supplier.id}`,
+      onClick: () => ctx.onSummary?.(supplier.id),
+    }, [
+      el('span', { class: 'supplier-summary-icon', icon: SUMMARY_SVG, 'aria-hidden': 'true' }),
+      summaryText,
+    ]),
+  ]);
+
   const overlay = el('div', { class: 'supplier-detail' }, [
     el('header', { class: 'app-header orders-header' }, [
       el('span', { class: 'app-header-slot' }, [
@@ -76,6 +101,7 @@ export function buildSupplierDetail(supplier, ctx) {
       el('span', { class: 'app-header-slot' }, [addBtn]),
     ]),
     body,
+    summaryBar,
     live,
   ]);
 
@@ -106,12 +132,14 @@ export function buildSupplierDetail(supplier, ctx) {
       emptyKey: canAdd ? 'orders.noIngredientsYetAddAbove' : 'orders.noIngredientsYetAdd',
     }));
 
-    // No products, nothing to record — the empty state inside the list already says so.
-    if (!ingredients.length) return;
-
     // A row ordered elsewhere this time (`elsewhereId`) is not this supplier's line.
     const { filled } = ingredients.reduce((acc, i) => (
       !i.elsewhereId && (entries[i.id]?.qty || 0) > 0 ? { filled: acc.filled + 1 } : acc), { filled: 0 });
+    // Before the early return below: the bar shows 0 for a supplier with no products too.
+    summaryText.textContent = summaryBarLabel(filled);
+
+    // No products, nothing to record — the empty state inside the list already says so.
+    if (!ingredients.length) return;
 
     // The money (totals box) is NOT built here: it is tablet-only and
     // permission-gated, so orders-main.js paints it onto this screen from the
