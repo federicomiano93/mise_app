@@ -262,7 +262,7 @@ test('the open list is redrawn by the next render, and an empty one stays open w
     assert.equal(cards().length, 0);
     assert.ok(overlay(), 'the screen is not pulled away under the thumb');
     assert.equal(withClass('ing-empty', overlay())[0].textContent, 'Nothing to re-order.');
-    assert.equal(host.hidden, true, 'the button itself goes');
+    assert.equal(host.hidden, false, 'the button stays, only its number goes');
   } finally { closeList(); }
 });
 
@@ -350,14 +350,14 @@ test('Escape with a dialog on top closes the dialog only, not the list', async (
   } finally { closeList(); }
 });
 
-test('with the button gone, closing puts focus on the Order tab, never on <body>', () => {
+test('with the button hidden by anything, closing puts focus on the Order tab, never on <body>', () => {
   const tab = new Node('button');
   tab.setAttribute('id', 'tab-order-btn');
   body.appendChild(tab);
   try {
     const { ctx } = makeCtx();
     const host = openList(ctx);
-    renderReorderButton(host, { ...ctx, history: [] });
+    host.hidden = true;
     closeList();
     assert.equal(document.activeElement, tab);
   } finally { tab.remove(); }
@@ -445,13 +445,15 @@ test('editing an order in History carries missing, deliveredAt and missingResolv
 
 // ── The round button in the green bar ─────────────────────────────────────────────────────
 
-test('the button is hidden with nothing to re-order, and shows the count and its label otherwise', () => {
+test('the button is always shown; with nothing to re-order only the number is hidden, and the label drops the count', () => {
   const { ctx } = makeCtx();
   const btn = makeButton();
+  btn.hidden = true; // even a button left hidden by older markup is shown again
   renderReorderButton(btn, { ...ctx, history: [] });
-  assert.equal(btn.hidden, true);
+  assert.equal(btn.hidden, false);
   assert.equal(btn.dot.hidden, true);
   assert.equal(btn.dot.textContent, '');
+  assert.equal(btn.getAttribute('aria-label'), 'To re-order');
 
   renderReorderButton(btn, ctx);
   assert.equal(btn.hidden, false);
@@ -480,14 +482,15 @@ test('the label is drawn again in the new language, with no new snapshot', () =>
   assert.equal(btn.getAttribute('aria-label'), before);
 });
 
-test('the button is in the green bar left of the bell, hidden, with the Feather icon — and nothing is left in the page body or the bell', () => {
+test('the button is in the green bar left of the bell, never hidden, with the Feather icon — and nothing is left in the page body or the bell', () => {
   const html = readFileSync(new URL('../orders.html', import.meta.url), 'utf8');
   const btnAt = html.indexOf('id="orders-reorder-btn"');
   const bellAt = html.indexOf('id="orders-alerts-btn"');
   assert.ok(btnAt > 0 && btnAt < bellAt, 'left of the bell');
   const tag = html.slice(html.lastIndexOf('<button', btnAt), html.indexOf('</button>', btnAt));
   assert.match(tag, /class="app-icon-btn orders-icon-btn"/);
-  assert.match(tag, /type="button" hidden>/);
+  assert.match(tag, /type="button"/);
+  assert.doesNotMatch(tag.slice(0, tag.indexOf('>') + 1), /\shidden/, 'permanent: no hidden in the markup');
   assert.match(tag, /<polyline points="1 4 1 10 7 10"\/><path d="M3\.51 15a9 9 0 1 0 2\.13-9\.36L1 10"\/>/);
   assert.match(tag, /id="orders-reorder-count"/);
   assert.match(tag, /width="20" height="20"/);
