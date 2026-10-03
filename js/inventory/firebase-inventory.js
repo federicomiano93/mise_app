@@ -25,7 +25,7 @@ import {
   getApps,
   getApp,
   initializeApp,
-} from 'https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js';
+} from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js';
 import {
   getFirestore,
   collection,
@@ -37,7 +37,7 @@ import {
   deleteField,
   query,
   where,
-} from 'https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js';
+} from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js';
 
 const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 export const db = getFirestore(app);
