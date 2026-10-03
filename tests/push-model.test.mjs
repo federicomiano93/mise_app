@@ -197,15 +197,15 @@ test('the notifications are written in the venue’s language', () => {
   const it = orderRequestNotification({ fromName: 'Marco', quantities: { a: 1, b: 2 } }, 'it');
   const en = orderRequestNotification({ fromName: 'Marco', quantities: { a: 1, b: 2 } }, 'en');
   assert.notEqual(it.title, en.title);
-  assert.match(it.body, /voci/);
+  assert.match(it.body, /articoli/);
   assert.match(en.body, /items/);
 
   assert.match(orderNotification({ clientName: 'Bar Centrale', date: '2026-08-12' }, 'it').title, /Nuovo ordine/);
   assert.match(timerNotification({}, 'it').body, /Tempo scaduto/);
 });
 
-test('Italian gets a real singular, not "1 voci"', () => {
-  assert.match(orderRequestNotification({ fromName: 'M', quantities: { a: 1 } }, 'it').body, /1 voce/);
+test('Italian gets a real singular, not "1 articoli"', () => {
+  assert.match(orderRequestNotification({ fromName: 'M', quantities: { a: 1 } }, 'it').body, /1 articolo da ordinare/);
   assert.match(orderRequestNotification({ fromName: 'M', quantities: { a: 1 } }, 'en').body, /1 item/);
 });
 
