@@ -39,7 +39,7 @@ export function buildSupplierDetail(supplier, ctx) {
   const body = el('div', { class: 'supplier-detail-body' });
 
   const titleWrap = el('div', { class: 'app-header-title orders-header-title' }, [
-    el('h1', { text: supplierLabel(supplier) }),
+    el('h1', { text: supplierLabel(supplier), tabindex: '-1' }),
   ]);
 
   // ⚠️ «+ ADD INGREDIENT» LIVES IN THE HEADER, on the right (Federico, 1 Oct 2026): it used
@@ -59,6 +59,11 @@ export function buildSupplierDetail(supplier, ctx) {
     icon: PLUS_SVG, onClick: () => addIngredient?.(),
   });
 
+  // A polite live region on this screen: the result of the day buttons is spoken, not only
+  // drawn (the button may disappear with the line). Declared BEFORE the overlay that holds it:
+  // used earlier, it was a TDZ crash and the supplier screen would not open at all.
+  const live = el('p', { class: 'supplier-day-live', role: 'status', 'aria-live': 'polite' });
+
   const overlay = el('div', { class: 'supplier-detail' }, [
     el('header', { class: 'app-header orders-header' }, [
       el('span', { class: 'app-header-slot' }, [
@@ -71,11 +76,22 @@ export function buildSupplierDetail(supplier, ctx) {
       el('span', { class: 'app-header-slot' }, [addBtn]),
     ]),
     body,
+    live,
   ]);
+
+  // The «Order for <day>» line at the top of the body (see buildDayLine). Repaint rebuilds
+  // the body, so the live one is kept here for refreshDay() to find.
+  let dayLine = null;
 
   function repaint(next) {
     const { ingredients, entries, suggest, hooks } = next;
     body.replaceChildren();
+
+    // ⚠️ BUILT ALWAYS, HIDDEN WHEN THERE IS NOTHING TO SAY — same trap as the clear
+    // button below: this function runs on a snapshot, not a keystroke, so a line that
+    // only existed when needed could not appear as the first quantity creates a stamp.
+    dayLine = buildDayLine(next.dayInfo);
+    body.appendChild(dayLine.node);
 
     const canAdd = typeof next.onAddIngredient === 'function';
     addIngredient = canAdd ? () => next.onAddIngredient() : null;
@@ -132,5 +148,39 @@ export function buildSupplierDetail(supplier, ctx) {
   }
 
   repaint(ctx);
-  return { overlay, repaint };
+  // refreshDay: re-read the day line in place, for the keystroke path (afterChange).
+  return {
+    overlay,
+    repaint,
+    // true while the line is showing, false once hidden, undefined with no line built
+    refreshDay: () => dayLine?.refresh(),
+    announce: text => { live.textContent = text; },
+    focusTitle: () => titleWrap.querySelector('h1')?.focus({ preventScroll: true }),
+  };
+}
+
+// The line above the ingredient list: which day these quantities are for, and one
+// button to change it.
+// info: () => ({ text, buttonLabel, onClick }) | null, supplied by orders-main (which
+// owns the draft and the language of the day words). Asked again on every refresh.
+function buildDayLine(info) {
+  const text = el('span', { class: 'supplier-day-text' });
+  const button = el('button', { type: 'button', class: 'supplier-day-btn' });
+  let action = null;
+  button.addEventListener('click', () => action?.());
+  const node = el('div', { class: 'supplier-day-line' }, [text, button]);
+
+  function refresh() {
+    const now = typeof info === 'function' ? info() : null;
+    node.hidden = !now;
+    action = now ? now.onClick : null;
+    text.textContent = now ? now.text : '';
+    button.textContent = now ? now.buttonLabel : '';
+    // The visible words alone («For today») would not say what they change.
+    if (now) button.setAttribute('aria-label', `${now.text}: ${now.buttonLabel}`);
+    else button.removeAttribute('aria-label');
+    return Boolean(now);
+  }
+  refresh();
+  return { node, refresh };
 }

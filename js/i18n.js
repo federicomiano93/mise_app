@@ -481,6 +481,20 @@ const DICTIONARIES = Object.freeze({
     // every language at once.
     'day.on': 'on {day}',
     'day.for': 'for {day}',
+    'day.shortDate': '{weekday} {d}',
+    'day.monthLong.0': 'January', 'day.monthLong.1': 'February', 'day.monthLong.2': 'March',
+    'day.monthLong.3': 'April', 'day.monthLong.4': 'May', 'day.monthLong.5': 'June',
+    'day.monthLong.6': 'July', 'day.monthLong.7': 'August', 'day.monthLong.8': 'September',
+    'day.monthLong.9': 'October', 'day.monthLong.10': 'November', 'day.monthLong.11': 'December',
+    // The day a supplier's typed quantities are FOR (js/orders/order-day.js): next week's order
+    // typed early is stamped for its order day, not for today.
+    'orders.dayLine.forDate': 'Order for {day}',
+    'orders.dayLine.forToday': 'For today',
+    'orders.dayLine.today': 'Order for today',
+    'orders.dayLine.moveTo': 'Move to {day}',
+    'orders.dayLine.movedToday': 'Order moved to today',
+    'orders.dayLine.movedTo': 'Order moved to {day}',
+    'orders.pendingForNext': 'For the next order ({day})',
 
     // ── Sentences that name a DAY, kept whole ────────────────────────────────
     // ⚠️ WHOLE SENTENCES, not a day word glued into English. Once 'Today' could be
@@ -488,14 +502,12 @@ const DICTIONARIES = Object.freeze({
     // an untranslated sentence, which is worse than either language alone.
     'orders.sendDay': 'Send {day}',
     'orders.notPlacedFor': '{supplier} — order not placed',
-    // ⚠️ ONE SENTENCE, NOT TWO NESTED. It was `t('orders.typedWhen', { items: t(
-    // 'orders.itemsCount', { n }) })` — a count phrase dropped into a sentence whose
-    // PARTICIPLE has to agree with it. English does not notice; Italian read «1 voce
-    // scritte» on the Orders screen, which is simply wrong. Seen in a screenshot after
-    // every check had passed.
-    'orders.typedWhen': {
-      one: '{n} item typed {when}',
-      other: '{n} items typed {when}',
+    // ⚠️ ONE SENTENCE, NOT TWO NESTED: a count phrase dropped into a sentence whose word has to
+    // agree with it reads «1 voce scritte» in Italian. No participle either: the day may be the
+    // day the order was FOR, not the day it was typed. {when} is dayPhrase(): «for Mon 19 Oct 2026».
+    'orders.pendingItems': {
+      one: '{n} item {when}',
+      other: '{n} items {when}',
     },
     'orders.placedWhen': 'Placed {when}',
     'orders.updateOrderFor': 'Update {supplier}’s order {day}?',
@@ -3174,12 +3186,24 @@ const DICTIONARIES = Object.freeze({
     'day.madeFor': '{made} per {target}',
     'day.on': 'il {day}',
     'day.for': 'per {day}',
+    'day.shortDate': '{weekday} {d}',
+    'day.monthLong.0': 'gennaio', 'day.monthLong.1': 'febbraio', 'day.monthLong.2': 'marzo',
+    'day.monthLong.3': 'aprile', 'day.monthLong.4': 'maggio', 'day.monthLong.5': 'giugno',
+    'day.monthLong.6': 'luglio', 'day.monthLong.7': 'agosto', 'day.monthLong.8': 'settembre',
+    'day.monthLong.9': 'ottobre', 'day.monthLong.10': 'novembre', 'day.monthLong.11': 'dicembre',
+    'orders.dayLine.forDate': 'Ordine per {day}',
+    'orders.dayLine.forToday': 'Per oggi',
+    'orders.dayLine.today': 'Ordine per oggi',
+    'orders.dayLine.moveTo': 'Sposta a {day}',
+    'orders.dayLine.movedToday': 'Ordine spostato a oggi',
+    'orders.dayLine.movedTo': 'Ordine spostato a {day}',
+    'orders.pendingForNext': 'Per il prossimo ordine ({day})',
 
     'orders.sendDay': 'Manda {day}',
     'orders.notPlacedFor': '{supplier} — ordine non effettuato',
-    'orders.typedWhen': {
-      one: '{n} voce scritta {when}',
-      other: '{n} voci scritte {when}',
+    'orders.pendingItems': {
+      one: '{n} voce {when}',
+      other: '{n} voci {when}',
     },
     'orders.placedWhen': 'Effettuato {when}',
     'orders.updateOrderFor': 'Aggiornare l’ordine di {supplier} {day}?',
