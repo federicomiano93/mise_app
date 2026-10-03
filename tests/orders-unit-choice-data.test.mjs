@@ -183,7 +183,8 @@ const TODAYS_RECORD = {
 
 test('unitConflicts lists a line whose unit differs from the one already recorded today', () => {
   const out = unitConflicts(TODAYS_RECORD, { flour: { qty: 3, unit: 'busta' } }, INGREDIENTS, 'sup');
-  assert.deepEqual(out, [{ id: 'flour', name: 'Farina 2.5 kg', unit: 'cartone' }]);
+  // `fixable`: the card offers both units but no packCount — writing it would make them addable.
+  assert.deepEqual(out, [{ id: 'flour', name: 'Farina 2.5 kg', unit: 'cartone', fixable: true }]);
 });
 
 test('unitConflicts is silent for the same unit (any capitals), no record, or nothing typed', () => {
@@ -221,14 +222,19 @@ test('the message exists in English and Italian with a {list} placeholder', () =
   const i18n = readFileSync(new URL('../js/i18n.js', import.meta.url), 'utf8');
   assert.match(i18n, /'orders\.unitConflict': 'Already ordered from this supplier \{day\}: \{list\}\. To add more, order it in the same unit\.'/);
   assert.match(i18n, /'orders\.unitConflict': 'Già ordinato a questo fornitore \{day\}: \{list\}\. Per aggiungerne, ordinalo nella stessa unità\.'/);
+  // Since 3 Oct 2026, the way to make the two addable (order-unit.js inPackages), only when it helps.
+  assert.match(i18n, /'orders\.unitConflictHint': 'Or write on the ingredient card how many packs one case holds: then the two are added up in packs\.'/);
+  assert.match(i18n, /'orders\.unitConflictHint': 'Oppure scrivi nella scheda dell’ingrediente quante confezioni ci sono in un cartone: allora vengono sommate in confezioni\.'/);
   assert.match(i18n, /'orders\.unitConflictNothingRecorded': 'Nothing has been recorded yet\.'/);
   assert.match(i18n, /'orders\.unitConflictNothingRecorded': 'Non è stato registrato ancora niente\.'/);
 });
 
 test('the conflict text names the day with the app\'s own day phrase (today, yesterday, a date)', () => {
   const main = readFileSync(new URL('../js/orders/orders-main.js', import.meta.url), 'utf8');
-  assert.match(main, /t\('orders\.unitConflict', \{ day: dayWhen\(found\[0\]\.date\), list \}\)/);
-  assert.match(main, /t\('orders\.unitConflict', \{ day: dayWhen\(date\), list \}\)/);
+  assert.match(main, /unitConflictText\(dayWhen\(found\[0\]\.date\), list, /);
+  assert.match(main, /unitConflictText\(dayWhen\(date\), list, conflicts\)/);
+  assert.match(main, /t\('orders\.unitConflict', \{ day, list \}\)/);
+  assert.match(main, /conflicts\.some\(c => c\.fixable\) \? `\$\{text\} \$\{t\('orders\.unitConflictHint'\)\}` : text/);
   assert.doesNotMatch(main, /t\('orders\.unitConflict', \{ list/);
 });
 
