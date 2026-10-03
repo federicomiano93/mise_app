@@ -80,3 +80,17 @@ test('only the comment job may write on the PR, and it runs nothing but gh', () 
   assert.match(commentJob, /permissions:\n\s+pull-requests: write\n/);
   assert.doesNotMatch(commentJob, /npm|npx|firebase|checkout/);
 });
+
+// ⚠️ ONE FIXED LINK (Federico, 3 Oct 2026: «non voglio mettere sempre le credenziali»): each PR
+// channel is a new web.app subdomain, so a phone asks for the password on every PR. The same
+// staged files also go to the fixed `anteprima` channel, where he signs in once per phone — and
+// that upload is leak-checked exactly like the PR's, never left out of the check.
+test('every deploy also refreshes the fixed «anteprima» channel, and both channels are leak-checked', () => {
+  assert.match(workflow, /firebase hosting:channel:deploy anteprima --only preview --project mise-app-preview \\\r?\n\s+--expires 30d --non-interactive --json > "\$RUNNER_TEMP\/fixed\.json"/);
+  assert.match(workflow, /fixed_url: \$\{\{ steps\.deploy\.outputs\.fixed_url \}\}/);
+  const check = workflow.slice(workflow.indexOf('Prove nothing internal is being served'), workflow.indexOf('\n  comment:\n'));
+  assert.match(check, /check "\$PR_CHANNEL" "\$PR_URL"/);
+  assert.match(check, /check anteprima "\$FIXED_URL"/);
+  assert.match(workflow, /\*\*Link fisso\*\*/);
+  assert.doesNotMatch(workflow, /password|PREVIEW_PASSWORD/i, 'no credential is ever baked into the preview');
+});

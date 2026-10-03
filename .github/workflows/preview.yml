@@ -41,6 +41,7 @@ jobs:
       id-token: write
     outputs:
       url: ${{ steps.deploy.outputs.url }}
+      fixed_url: ${{ steps.deploy.outputs.fixed_url }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -77,41 +78,62 @@ jobs:
           workload_identity_provider: projects/863348756512/locations/global/workloadIdentityPools/github-pool/providers/github-oidc
           service_account: preview-deploy@mise-app-preview.iam.gserviceaccount.com
 
-      - name: Deploy this PR's rules and pages to its preview channel
+      # ⚠️ TWO CHANNELS, THE SAME FILES. `pr-<n>` is this PR's own link. `anteprima` is ONE FIXED
+      # link that always shows the most recently updated PR (Federico, 3 Oct 2026: «non voglio
+      # mettere sempre le credenziali»): every channel is a different web.app subdomain, so a
+      # phone treats each PR link as a new site and asks him to sign in again; on the fixed one
+      # he signs in once per phone and stays signed in. Its expiry is pushed to 30 days (the
+      # maximum) on every deploy, so the address only changes after a month with no PR at all.
+      # Never the preview project's live site, and never a sign-in secret baked into the pages: the
+      # address is public.
+      - name: Deploy this PR's rules and pages to its preview channel and the fixed one
         id: deploy
         env:
           CHANNEL: pr-${{ github.event.pull_request.number }}
         run: |
           npm install --global firebase-tools@15.26.0
           firebase deploy --only firestore:rules --project mise-app-preview --non-interactive
+          link() { node -e "const r=require(process.argv[1]);const hit=Object.values(r.result||{}).find(v=>v&&v.url);if(!hit){console.error(JSON.stringify(r).slice(0,500));process.exit(1)}console.log(hit.url)" "$1"; }
           firebase hosting:channel:deploy "$CHANNEL" --only preview --project mise-app-preview \
             --expires 14d --non-interactive --json > "$RUNNER_TEMP/channel.json"
-          url=$(node -e "const r=require(process.argv[1]);const hit=Object.values(r.result||{}).find(v=>v&&v.url);if(!hit){console.error(JSON.stringify(r).slice(0,500));process.exit(1)}console.log(hit.url)" "$RUNNER_TEMP/channel.json")
+          url=$(link "$RUNNER_TEMP/channel.json")
           echo "url=$url" >> "$GITHUB_OUTPUT"
+          firebase hosting:channel:deploy anteprima --only preview --project mise-app-preview \
+            --expires 30d --non-interactive --json > "$RUNNER_TEMP/fixed.json"
+          fixed=$(link "$RUNNER_TEMP/fixed.json")
+          echo "fixed_url=$fixed" >> "$GITHUB_OUTPUT"
 
       - name: Prove nothing internal is being served
         env:
-          CHANNEL: pr-${{ github.event.pull_request.number }}
-          URL: ${{ steps.deploy.outputs.url }}
+          PR_CHANNEL: pr-${{ github.event.pull_request.number }}
+          PR_URL: ${{ steps.deploy.outputs.url }}
+          FIXED_URL: ${{ steps.deploy.outputs.fixed_url }}
         # Every path is checked BEFORE any verdict, so nothing can skip the leak check; a curl
-        # that fails answers 000, which counts as served — the safe direction.
+        # that fails answers 000, which counts as served — the safe direction. BOTH channels are
+        # checked (they carry the same files, but each is its own upload), and the one that
+        # leaks is taken down.
         run: |
-          code() { curl -s --max-time 15 -o /dev/null -w "%{http_code}" "$URL/$1"; }
-          leaked=""
-          for path in .git/config .git/HEAD .github/workflows/preview.yml .claude/settings.json \
-                      firebase.json firestore.rules package.json functions/index.js \
-                      scripts/seed-preview.mjs tests/firebase-target.test.mjs README.md; do
-            [ "$(code "$path")" = 404 ] || leaked="$leaked $path"
-          done
-          for creds in gha-creds-*.json; do
-            [ -e "$creds" ] && { [ "$(code "$creds")" = 404 ] || leaked="$leaked $creds"; }
-          done
-          if [ -n "$leaked" ]; then
-            echo "::error::served but must not be:$leaked — taking the channel down"
-            firebase hosting:channel:delete "$CHANNEL" --project mise-app-preview --force
-            exit 1
-          fi
-          [ "$(code index.html)" = 200 ] || { echo "::error::index.html is not served"; exit 1; }
+          check() {
+            CHANNEL="$1"; URL="$2"
+            code() { curl -s --max-time 15 -o /dev/null -w "%{http_code}" "$URL/$1"; }
+            leaked=""
+            for path in .git/config .git/HEAD .github/workflows/preview.yml .claude/settings.json \
+                        firebase.json firestore.rules package.json functions/index.js \
+                        scripts/seed-preview.mjs tests/firebase-target.test.mjs README.md; do
+              [ "$(code "$path")" = 404 ] || leaked="$leaked $path"
+            done
+            for creds in gha-creds-*.json; do
+              [ -e "$creds" ] && { [ "$(code "$creds")" = 404 ] || leaked="$leaked $creds"; }
+            done
+            if [ -n "$leaked" ]; then
+              echo "::error::served but must not be:$leaked — taking the channel down"
+              firebase hosting:channel:delete "$CHANNEL" --project mise-app-preview --force
+              exit 1
+            fi
+            [ "$(code index.html)" = 200 ] || { echo "::error::index.html is not served on $CHANNEL"; exit 1; }
+          }
+          check "$PR_CHANNEL" "$PR_URL"
+          check anteprima "$FIXED_URL"
 
   # The comment gets its own job: the only one allowed to write on the PR, and it installs and
   # runs nothing but `gh`.
@@ -128,7 +150,9 @@ jobs:
           GH_REPO: ${{ github.repository }}
           PR: ${{ github.event.pull_request.number }}
           URL: ${{ needs.preview.outputs.url }}
+          FIXED_URL: ${{ needs.preview.outputs.fixed_url }}
         run: |
           body="**Anteprima di questa PR** (dati di prova, non i tuoi): $URL
-          Aprila sul telefono ed entra con un account di prova. Il link si aggiorna a ogni modifica della PR e scade dopo 14 giorni. In anteprima non funziona ciò che passa dal server: codici d'invito, alcuni interruttori delle impostazioni, notifiche, lettura da foto."
+          **Link fisso**, sempre l'ultima PR aggiornata — entri una volta per telefono e resti dentro: $FIXED_URL
+          Aprila sul telefono ed entra con un account di prova. Il link della PR si aggiorna a ogni modifica e scade dopo 14 giorni; quello fisso cambia solo dopo 30 giorni senza PR. In anteprima non funziona ciò che passa dal server: codici d'invito, alcuni interruttori delle impostazioni, notifiche, lettura da foto."
           gh pr comment "$PR" --edit-last --body "$body" || gh pr comment "$PR" --body "$body"
