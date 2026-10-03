@@ -155,3 +155,78 @@ test('a snapshot repaint gives the focus back to the day select', () => {
   const fresh = byClass(view.overlay, 'supplier-day-select');
   assert.equal(globalThis.document.activeElement, fresh);
 });
+
+// ── The summary bar at the foot of the screen (owner, 3 Oct 2026) ────────────────────────
+// «aggiungi il resoconto dentro la scheda dei fornitori così posso vedere tutto quello che ho
+// selezionato senza tornare indietro».
+import { readFileSync } from 'node:fs';
+const read = p => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
+
+const barOf = view => byClass(view.overlay, 'supplier-summary-bar');
+
+test('the bar is built with 0 items, after the scrolling body and not inside it', () => {
+  const view = buildSupplierDetail(supplier, ctx(() => null));
+  const bar = barOf(view);
+  assert.ok(bar, 'the bar is always built');
+  const kids = view.overlay.children;
+  assert.ok(kids.indexOf(bar) > kids.indexOf(byClass(view.overlay, 'supplier-detail-body')),
+    'a sibling AFTER the body');
+  assert.equal(find(byClass(view.overlay, 'supplier-detail-body'), n => n === bar), null, 'not inside the body');
+  const button = bar.children[0];
+  assert.equal(button.tagName, 'BUTTON');
+  assert.equal(button.getAttribute('type'), 'button');
+  assert.equal(button.getAttribute('id'), 'summary-bar-S1');
+  assert.equal(button.textContent, '0 items in the order · Summary');
+  assert.equal(bar.hidden, false);
+});
+
+test('the bar counts the rows with a quantity, not those ordered elsewhere, with the plural words', () => {
+  const rows = [
+    { id: 'a', name: 'A', supplierId: 'S1' },
+    { id: 'b', name: 'B', supplierId: 'S1' },
+    { id: 'c', name: 'C', supplierId: 'S1', elsewhereId: 'S2' },
+  ];
+  const withQty = entries => ({ ...ctx(() => null), ingredients: rows, entries });
+  const view = buildSupplierDetail(supplier, withQty({ a: { qty: 1 }, c: { qty: 4 } }));
+  assert.equal(barOf(view).children[0].textContent, '1 item in the order · Summary');
+  view.repaint(withQty({ a: { qty: 1 }, b: { qty: 2 }, c: { qty: 4 } }));
+  assert.equal(barOf(view).children[0].textContent, '2 items in the order · Summary');
+});
+
+test('tapping the bar calls the handler with the supplier id', () => {
+  const seen = [];
+  const view = buildSupplierDetail(supplier, { ...ctx(() => null), onSummary: id => seen.push(id) });
+  barOf(view).children[0].fire('click');
+  assert.deepEqual(seen, ['S1']);
+});
+
+test('wiring: keystrokes update the bar; the summary opens over the supplier and focus returns to the bar', () => {
+  const suppliers = read('js/orders/suppliers.js');
+  assert.match(suppliers, /summary-bar-text-\$\{supplier\.id\}[\s\S]{0,120}summaryBarLabel\(filled\)/);
+
+  const main = read('js/orders/orders-main.js');
+  // \r?: a Windows checkout has CRLF line ends.
+  const over = main.match(/function openSummaryOverSupplier\([\s\S]*?\r?\n}\r?\n/)[0];
+  assert.doesNotMatch(over, /closeSupplier\(\)/, 'the supplier screen stays open');
+  assert.match(main, /onSummary: openSummaryOverSupplier/);
+  assert.match(main, /fromBar \? `summary-bar-\$\{openerId\}`/);
+  const plain = main.match(/function openSummary\(supplierId\) \{[\s\S]*?\r?\n}\r?\n/)[0];
+  assert.match(plain, /closeSupplier\(\)/, 'the list button path is unchanged');
+
+  const css = read('orders.css');
+  assert.match(css, /\.order-summary-view\.order-summary--over-supplier \{ z-index: 610; \}/);
+  assert.match(css, /\.supplier-summary-icon \{ display: flex; align-items: center;/);
+
+  assert.match(read('js/sw-update.js'), /BOTTOM_BARS = \[[^\]]*'\.supplier-summary-bar'/);
+});
+
+test('both languages have the bar phrase with the plural pair', () => {
+  const dict = read('js/i18n.js');
+  const entries = [...dict.matchAll(/'orders\.summaryBar': \{ one: '([^']*)', other: '([^']*)' \}/g)];
+  assert.equal(entries.length, 2, 'EN and IT');
+  for (const [, one, other] of entries) {
+    assert.ok(one.includes('{n}') && other.includes('{n}'));
+  }
+  assert.match(entries[1][1], /voce/);
+  assert.match(entries[1][2], /voci/);
+});

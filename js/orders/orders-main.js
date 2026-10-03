@@ -602,6 +602,7 @@ function renderOpenSupplier() {
     suggest: suggestFor,
     hooks,
     onBack: leaveSupplier,
+    onSummary: openSummaryOverSupplier,
     // ⚠️ THE SAME QUESTION THE CATALOGUE ASKS (records.js mayEditRecords): where the owner has
     // hidden «Suppliers & ingredients» from the staff, a door to the same card from Orders
     // would quietly undo the switch. Asked on every repaint, so it follows the switch live.
@@ -686,6 +687,20 @@ function openSummary(supplierId) {
   closeSupplier();
   closeSupplierItems();
   closeAlertsPanel();            // the panel must never sit on top of a full screen
+  state.summaryOverSupplier = false;
+  state.summarySupplier = supplierId;
+  renderSummary();
+}
+
+// ⚠️ FROM THE BAR AT THE FOOT OF THE SUPPLIER'S SCREEN the summary opens ON TOP of it and
+// leaves it open — «così posso vedere tutto quello che ho selezionato senza tornare indietro»
+// (owner, 3 Oct 2026). Closing the supplier first (openSummary) would throw away the person's
+// place and make Back land on the list. closeSummary() then gives focus back to the bar's
+// button, and the supplier screen underneath was never touched: typing preserved.
+function openSummaryOverSupplier(supplierId) {
+  closeSupplierItems();
+  closeAlertsPanel();
+  state.summaryOverSupplier = true;
   state.summarySupplier = supplierId;
   renderSummary();
 }
@@ -696,7 +711,9 @@ function openSummary(supplierId) {
 // to give focus back to the row that opened it.
 function closeSummary() {
   const openerId = state.summarySupplier;
+  const fromBar = state.summaryOverSupplier === true;
   state.summarySupplier = null;
+  state.summaryOverSupplier = false;
   summaryView?.overlay.remove();
   summaryView?.scrim.remove();
   summaryView = null;
@@ -707,7 +724,7 @@ function closeSummary() {
   // Focus goes back to the button that opened this screen — never assumed
   // still there: the row it belonged to may have been repainted, or the
   // supplier deactivated, while the summary was open.
-  document.getElementById(`summary-${openerId}`)?.focus();
+  document.getElementById(fromBar ? `summary-bar-${openerId}` : `summary-${openerId}`)?.focus();
 }
 
 function renderSummary() {
@@ -731,6 +748,10 @@ function renderSummary() {
     onBack: closeSummary, showMoney: state.pricesReadable === true,
   });
   summaryView = { ...built, id: supplier.id };
+  // Above the supplier screen it sits over (orders.css .order-summary--over-supplier): both
+  // are z 600, so only the DOM order would decide, and a rebuilt supplier screen would win.
+  built.overlay.classList.toggle('order-summary--over-supplier', state.summaryOverSupplier === true);
+  built.scrim.classList.toggle('order-summary--over-supplier', state.summaryOverSupplier === true);
   document.body.appendChild(built.scrim);
   document.body.appendChild(built.overlay);
 
