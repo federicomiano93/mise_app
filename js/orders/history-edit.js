@@ -17,7 +17,7 @@ import { confirmDialog, alertDialog } from './confirm-dialog.js';
 import { dayLabel, dayPhrase, spellDay } from './day.js';
 import { recordUnit } from '../order-unit.js';
 import { HISTORY_LIVE_MONTHS } from './history-window.js';
-import { isLegacyRecord, recordDate, recordedName, wholeNumber as num } from './archive.js';
+import { isLegacyRecord, recordDate, recordedName, wholeNumber as num, withCorrection } from './archive.js';
 
 const BACK_ICON =
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>';
@@ -181,12 +181,17 @@ export function buildHistoryEditor(record, ingredients, actions) {
     Object.keys(nextQuantities).forEach(itemId => {
       if (recordedUnits?.[itemId]) nextUnits[itemId] = recordedUnits[itemId];
     });
+    const now = new Date().toISOString();
+    // The correction joins the day's list of sends with its time (archive.js withCorrection),
+    // so «Ordine · ore 9:12» is never left standing above numbers nobody ordered at 9:12.
+    const sends = withCorrection(record, nextQuantities, nextUnits, now);
     actions.onSave(id, {
       ...fields,
       quantities: nextQuantities,
       stock: nextStock,
       ...(Object.keys(nextUnits).length ? { units: nextUnits } : {}),
-      updatedAt: new Date().toISOString(),
+      ...(sends ? { sends } : {}),
+      updatedAt: now,
     });
   }
 

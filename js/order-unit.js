@@ -8,8 +8,9 @@
 // «which unit does this line mean?» — answered in ONE place, so the draft, the history,
 // the message and the stocktake cannot disagree.
 //
-// ⚠️ A QUANTITY IN ONE UNIT IS NEVER CONVERTED INTO ANOTHER HERE. 2 cartoni and 2 buste
-// are different numbers of different things; the callers refuse to add them up instead.
+// ⚠️ A QUANTITY IN ONE UNIT IS CONVERTED INTO ANOTHER IN ONE CASE ONLY: inPackages() below,
+// for two orders of the same day. Everywhere else 2 cartoni and 2 buste are different numbers
+// of different things.
 
 const MAX_UNIT = 100;
 
@@ -81,6 +82,27 @@ export function recordUnit(record, id, ing) {
 export function qtyWithUnit(qty, unit) {
   const u = cleanUnit(unit);
   return u ? `${qty} × ${u}` : String(qty);
+}
+
+// ⚠️ THE ONE CONVERSION THERE IS (Federico, 3 Oct 2026: «se ordino un cartone che ha 4 buste e
+// nel pomeriggio ordino 2 buste considera un totale di 6 buste, il prezzo non cambia»).
+// A quantity in the card's own unit or in its package, expressed in PACKAGES — or null when
+// that cannot be known. Only when the card offers that choice AND says how many packages one
+// unit holds (`packCount`, the whole number typed under «Cartone»). Nothing is guessed: no
+// packCount, or a unit that is neither of the two, answers null and the callers refuse as
+// before. Packages, never fractions of a case: 6 buste, not 1.5 cartoni. The price stays
+// right because a busta line is priced per busta (order-cost-view.js lineUnitCost).
+export function inPackages(qty, unit, ing) {
+  if (!hasUnitChoice(ing)) return null;
+  if (sameUnit(unit, ing.packUnit)) return qty;
+  const count = ing.packCount;
+  if (sameUnit(unit, ing.unit) && Number.isInteger(count) && count >= 1) return qty * count;
+  return null;
+}
+
+// Can two quantities of one ingredient, in these two units, be added up (in packages)?
+export function addableInPackages(unitA, unitB, ing) {
+  return inPackages(1, unitA, ing) !== null && inPackages(1, unitB, ing) !== null;
 }
 
 // What the DRAFT stores for a chosen unit: nothing for the card's own unit (so the
