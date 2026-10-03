@@ -101,7 +101,14 @@ export function buildManagement(data, actions) {
     if (boss) {
       section('orders.lists.title', 'orders.lists.note', [buildOrderListsSwitch(config)]);
     }
-    section('orders.section.orderScreen', null, [buildStockSwitch(config)]);
+    section('orders.section.orderScreen', null, [
+      buildStockSwitch(config),
+      // The order of the supplier list is the venue's, so only whoever runs the place
+      // sets it (config/orders is write-gated on canManage, the door is courtesy).
+      boss && actions.openSupplierOrder
+        ? door('orders.supplierOrder.door', 'orders.supplierOrder.doorSub', () => actions.openSupplierOrder(), 'supplier-order-door')
+        : null,
+    ]);
     if (boss) section('orders.weekStart.title', 'orders.weekStart.hint', [buildWeekStart(config)]);
     if (boss) section('orders.section.howSent', 'orders.send.settingsHint', buildSendRoutes(config));
 
@@ -138,8 +145,8 @@ export function buildManagement(data, actions) {
   }
 
   // A row that opens another screen.
-  function door(titleKey, subKey, onClick) {
-    return el('button', { type: 'button', class: 'set-row set-door', onClick }, [
+  function door(titleKey, subKey, onClick, id) {
+    return el('button', { type: 'button', class: 'set-row set-door', id, onClick }, [
       el('span', { class: 'set-text' }, [
         el('span', { class: 'set-title', text: t(titleKey) }),
         subKey ? el('span', { class: 'set-sub', text: t(subKey) }) : null,

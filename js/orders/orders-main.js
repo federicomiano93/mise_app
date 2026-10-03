@@ -79,6 +79,8 @@ import { resolveSuppliers, orderSuppliers, NO_SUPPLIER_ID } from './no-supplier.
 import { overrideSignature } from './line-supplier.js';
 import { openIngredientCreate, openIngredientEdit } from '../ingredient-create.js';
 import { normalizeOrdersConfig } from './orders-config.js';
+import { sortSuppliersByOrder } from './supplier-order.js';
+import { openSupplierOrder } from './supplier-order-screen.js';
 import { mountIngredientList } from './ingredient-list.js';
 import { watchTablet, initAlertsPanel, closeAlertsPanel, isTabletNow } from './tablet-layout.js';
 import { trackStickyHead } from './sticky-offset.js';
@@ -219,7 +221,11 @@ function watchOrdersConfig() {
   return watchDoc(COLLECTIONS.config, 'orders', doc => {
     const config = normalizeOrdersConfig(doc);
     try { localStorage.setItem(CONFIG_KEY, JSON.stringify(config)); } catch { /* private mode */ }
+    const orderChanged = config.supplierOrder.join('\n') !== ordersConfig.supplierOrder.join('\n');
     applyOrdersConfig(config);
+    // The list is redrawn only when the supplier order really changed (on this phone or
+    // another one): a redraw while somebody is typing in a row must stay rare.
+    if (orderChanged) render();
     // The stored category list, for the ingredient card opened from a supplier's screen; null =
     // never stored, so the card offers the venue's default words (same reading as registry-main.js).
     state.ingredientCategories = Array.isArray(doc?.ingredientCategories) ? doc.ingredientCategories : null;
@@ -260,9 +266,12 @@ function catalogueIngredients() {
 }
 
 function activeSuppliers() {
-  return state.suppliers
-    .filter(s => s.active !== false)
-    .sort((a, b) => supplierLabel(a).localeCompare(supplierLabel(b)));
+  // The venue's own order (Settings → Supplier order); alphabetical when none was chosen.
+  return sortSuppliersByOrder(
+    state.suppliers.filter(s => s.active !== false),
+    ordersConfig.supplierOrder,
+    supplierLabel,
+  );
 }
 
 // The real active suppliers, plus "No supplier" at the end when something is
@@ -2374,6 +2383,13 @@ function openManagement() {
       // merges, so writing `{ showStock }` alone would leave historyDays untouched —
       // but only as long as every caller keeps passing just what it changed.
       saveOrdersConfig: patch => saveDoc(COLLECTIONS.config, 'orders', patch),
+      // The screen where the supplier order is dragged. It gets the live suppliers and
+      // order through getters, so a change from another phone shows when it is reopened.
+      openSupplierOrder: () => openSupplierOrder({
+        suppliers: () => activeSuppliers(),
+        order: () => ordersConfig.supplierOrder,
+        saveOrdersConfig: patch => saveDoc(COLLECTIONS.config, 'orders', patch),
+      }),
     },
   );
   document.body.appendChild(mgmt.overlay);
