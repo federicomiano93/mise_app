@@ -129,6 +129,27 @@ header p {
 #tab-bar .tab {
   flex: 0 1 calc((100% - 3 * 8px) / 4);
 }
+/* The bar lives INSIDE .scroll-area (calculator.html), which already carries the page gutter:
+   the floor here is the same 16px every .content has, so tabs, title and fields share
+   their left edge. (Orders and the management panel keep the rule above.) */
+.scroll-area > #tab-bar { padding-inline: 16px; }
+/* A lone recipe: its name as a TITLE, never a button — not focusable, no fill, the display
+   face the result card's heading uses. The only thing on a lone-recipe screen that is not
+   tappable and is the biggest word on it. */
+.calc-recipe-title {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  padding: var(--space-1) 2px 0;
+  font-family: var(--font-display);
+  font-size: 28px;
+  font-weight: 400;
+  line-height: 1.15;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+.calc-recipe-title[hidden] { display: none; }
+
 /* ⚠️ ON A NARROW PHONE FOUR TABS MUST STILL FIT. A tab could not shrink below its longest
    word (min-width: auto), so four real names — «Biscotti al cacao e cioccolato fondente»
    beside three others — added up to more than a 296px bar and the fourth tab was cut off
@@ -1778,20 +1799,17 @@ input.cp-prod-weight {
 }
 
 /* ══ The Calculator on a tablet (29 Sep 2026) ════════════════════════════════════════
-   The page is wide (tokens.css widens body[data-card="calculator"]); a recipe tab shows
-   its quantities on the left and, once it has been confirmed, the calculated recipe on
-   the right. LAYOUT ONLY: when the result is computed, what Confirm writes and the
-   Confirm / Edit lock are untouched — a confirmed tab keeps its fields (greyed, locked)
-   and its result, both in the same panel, which is what lets two columns work at all.
+   The page is wide (tokens.css widens body[data-card="calculator"]); a recipe tab is one
+   620px column, left, with kitchen-sized fields and buttons. (Until 4 Oct 2026 a confirmed
+   tab split into two columns; it is one column again, result first.) LAYOUT ONLY: when the
+   result is computed, what Confirm writes and the Confirm / Edit lock are untouched.
    ⚠️ EVERY rule is scoped to body[data-card="calculator"]: orders.html and suppliers.html
    load this sheet too. ⚠️ .ing-row and .cp-* are not touched. */
 @media (min-width: 900px) and (min-height: 600px) {
-  /* Until there is a result (or where :has() is unknown) a tab is ONE comfortable column;
-     so are the empty state and the Log. ⚠️ A RECIPE TAB'S COLUMN SITS LEFT, under the
-     first tab, not centred (owner, 4 Oct 2026: «Impasto totale» to the left): it is the
-     same place the entry column takes once a result appears beside it, so the fields no
-     longer jump from the middle to the left on the first calculation. The empty state
-     (#tab-empty, a card with no entry column) and the Log stay centred. */
+  /* A tab is ONE comfortable column, confirmed or not; so are the empty state and the Log.
+     ⚠️ A RECIPE TAB'S COLUMN SITS LEFT, under the first tab, not centred (owner, 4 Oct 2026:
+     «Impasto totale» to the left). The empty state (#tab-empty, a card with no entry column)
+     and the Log stay centred. */
   body[data-card="calculator"] #recipe-tabs > .content,
   body[data-card="calculator"] #tab-log {
     max-width: 620px;
@@ -1799,38 +1817,22 @@ input.cp-prod-weight {
   }
   body[data-card="calculator"] #recipe-tabs > .content:not(#tab-empty) { margin-inline: 0 auto; }
 
-  /* With a result: entry left, recipe right. The rows are named so that the right column
-     spans them all and its extra height lands on the last (flexible) row, never between
-     the entry rows. Up to 9 entry children exist (see buildRecipePanel) but Confirm and
-     Edit are never shown together (applyTabState), so at most 8 take a row — tests/
-     calculator-tablet.test.mjs pins the 8 and that pairing. */
-  body[data-card="calculator"] #recipe-tabs > .content.active:has(> .result-block.visible) {
-    max-width: none;
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    grid-template-rows: repeat(8, auto) 1fr;
-    column-gap: 24px;
-    row-gap: 0;
-    align-items: start;
-  }
-  body[data-card="calculator"] #recipe-tabs > .content.active:has(> .result-block.visible) > * {
-    grid-column: 1;
-  }
-  body[data-card="calculator"] #recipe-tabs > .content.active:has(> .result-block.visible) > .result-block {
-    grid-column: 2;
-    grid-row: 1 / -1;
-    margin-top: 0;
-  }
+  /* ⚠️ NO SECOND COLUMN (4 Oct 2026). A confirmed recipe used to move to a right-hand column
+     beside its greyed entries; it is now ONE column on a tablet exactly as on a phone, the
+     recipe FIRST, then the quantities (js/calc.js moves the result block in the DOM). The
+     620px column above is the same one an unconfirmed tab uses, so nothing jumps sideways on
+     Confirm. */
 
   /* The «Total dough (g)» box: label + one field, so it sits LEFT and is about one and a
      half recipe tabs wide instead of a 590px card with an empty middle. A tab is a quarter
-     of the bar less three 8px gaps, and the bar is min(viewport − 2×16px, 1180px) wide
-     (tokens.css widens the page to 1180px), hence the min(). Phones are untouched: this
+     of the bar less three 8px gaps, and the bar is min(viewport − 2×16px, 1148px) wide
+     (tokens.css widens the page to 1180px; the bar sits inside it with 16px a side), hence
+     the min(). Phones are untouched: this
      whole block only applies to a tablet. ⚠️ EVERY .param-row (leavening, trays, total) takes
      this width, not only the total: the leavening row used to keep the full column, so its
      box ended ~200px right of the trays and total boxes (4 Oct 2026). One width, one right edge. */
   body[data-card="calculator"] #recipe-tabs .param-row {
-    width: calc(1.5 * (min(100vw - 32px, 1180px) - 3 * 8px) / 4);
+    width: calc(1.5 * (min(100vw - 32px, 1148px) - 3 * 8px) / 4);
     min-width: 280px;
     max-width: 100%;
     margin-right: auto;

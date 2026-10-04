@@ -24,11 +24,28 @@ import { effectiveRecipe } from './calculator-catalogue-link.js';
 import { canCalculate } from './calculator-recipe-source.js';
 import { getConfig } from './calculator-config-store.js';
 import { el } from './calculator-render.js';
+import { placeResult } from './result-place.js';
 import { scaleRecipe } from './calculator-dough-math.js';
 import { buildRecipeText } from './calculator-recipe-text.js';
 
-export function showResult(id) { const e = document.getElementById(id); if (e) e.classList.add('visible'); }
-export function hideResult(id) { const e = document.getElementById(id); if (e) e.classList.remove('visible'); }
+export function showResult(id) {
+  const e = document.getElementById(id);
+  if (!e) return;
+  const wasHidden = !e.classList.contains('visible');
+  e.classList.add('visible');
+  placeResult(e, true);
+  // Confirm is tapped at the bottom of the entries: bring the recipe, now at the top, into view.
+  if (wasHidden) {
+    const scroll = document.querySelector('.scroll-area');
+    if (scroll) scroll.scrollTop = 0;
+  }
+}
+export function hideResult(id) {
+  const e = document.getElementById(id);
+  if (!e) return;
+  e.classList.remove('visible');
+  placeResult(e, false);
+}
 
 // Reads a quantity input/select by id; 0 when absent or empty. Works for <input>/<select>.
 function qtyOf(id) {

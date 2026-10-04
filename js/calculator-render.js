@@ -92,6 +92,23 @@ function knobRange(defaultPct) {
   return { min: 0.1, max: 3, step: 0.05, inputmode: 'decimal' };
 }
 
+// The strip above the recipe panels. TWO OR MORE recipes → one tab each. ONE recipe → its name
+// as a plain title: a lone tab is a button that switches to the screen you are already on, and
+// its solid look says «tap me» about a name (4 Oct 2026). The title is not focusable and takes no
+// tap; app.js hides it while the Log is open (the header Back leaves the Log, there is no tab).
+export function buildTabBar(bar, recipes, onPick) {
+  bar.textContent = '';
+  if (recipes.length === 1) {
+    bar.appendChild(el('h2', { class: 'calc-recipe-title', 'data-recipe': recipes[0].id }, recipes[0].name));
+    return;
+  }
+  recipes.forEach(r => {
+    const btn = el('button', { class: 'tab', type: 'button', 'data-recipe': r.id }, r.name);
+    btn.addEventListener('click', () => onPick(r.id));
+    bar.appendChild(btn);
+  });
+}
+
 // Build one recipe's calculator tab panel (a .content div, id `tab-<recipeId>`),
 // laid out by the recipe's logic:
 //   orders → leavening knob (if shown) + Orders + extra + Confirm/Edit + result

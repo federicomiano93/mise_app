@@ -12,7 +12,7 @@ import { shareMarketOrder, closeLoafModal, sendWithLoaves, closeListPicker, clos
 import { syncLinkedRecipes } from './calculator-catalogue-link.js';
 import { getConfig, initConfig, canSyncConfig } from './calculator-config-store.js';
 import { initLogs } from './log-store.js';
-import { renderTab, buildRecipePanel, buildEmptyPanel, el } from './calculator-render.js';
+import { renderTab, buildRecipePanel, buildEmptyPanel, buildTabBar, el } from './calculator-render.js';
 import {
   getVisibleRecipes, getRecipeById, getTabProducts, isExtraDoughEnabled,
   calculatorEmptyReason, showsClientOrdersButton, settledTraysText,
@@ -60,6 +60,9 @@ function switchTab(name) {
   document.querySelectorAll('#tab-bar .tab').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.recipe === name);
   });
+  // A lone recipe is a title, not a tab (buildTabBar): it names the recipe on screen, so it
+  // steps aside while the Log is open.
+  document.querySelectorAll('#tab-bar .calc-recipe-title').forEach(h => { h.hidden = h.dataset.recipe !== name; });
   const scroll = document.querySelector('.scroll-area');
   if (scroll) scroll.scrollTop = 0;
   // Footer "Log" is a no-op while the Log is open; hide it there (the tab-bar still leaves).
@@ -337,14 +340,7 @@ function renderAll() {
 
   // Tab bar.
   const bar = document.getElementById('tab-bar');
-  if (bar) {
-    bar.textContent = '';
-    recipes.forEach(r => {
-      const btn = el('button', { class: 'tab', type: 'button', 'data-recipe': r.id }, r.name);
-      btn.addEventListener('click', () => switchTab(r.id));
-      bar.appendChild(btn);
-    });
-  }
+  if (bar) buildTabBar(bar, recipes, switchTab);
 
   // Panels — or, when there is not one recipe to draw, the panel that says so.
   const emptyReason = calculatorEmptyReason(getConfig(), canSyncConfig());

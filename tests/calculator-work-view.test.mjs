@@ -152,3 +152,130 @@ test('S3: render source has no unit span in the param rows, and the tablet width
   // the group is right-aligned, so a lone input ends at the row's right padding
   assert.match(css, /\.qty-group \{[^}]*justify-content: flex-end/);
 });
+
+// ── S4: names scroll away; one recipe is a title; the confirmed panel opens with the result ──
+test('S4: the tab bar is INSIDE the scroll area, at its top', () => {
+  const html = read('calculator.html');
+  const area = html.indexOf('<div class="scroll-area scroll-with-bar">');
+  const bar = html.indexOf('<div class="tab-bar" id="tab-bar"></div>');
+  const tabs = html.indexOf('<div id="recipe-tabs"></div>');
+  assert.ok(area > 0 && bar > area && tabs > bar, 'scroll-area > tab-bar > recipe-tabs');
+  const css = strip(read('style.css'));
+  assert.match(css, /\.scroll-area > #tab-bar \{ padding-inline: 16px; \}/, 'no second gutter inside the scroll area');
+  assert.match(css, /\.tab-bar \{[^}]*padding-inline: max\(16px, var\(--app-gutter\)\)/, 'the shared bar (Orders) keeps its cap');
+});
+
+test('S4: ONE recipe is drawn as a plain title (h2, no button, nothing to tap or focus)', async () => {
+  useDom();
+  const { buildTabBar } = await import('../js/calculator-render.js');
+  const bar = new Node('div');
+  const picks = [];
+  buildTabBar(bar, [{ id: 'focaccia', name: 'Focaccia' }], id => picks.push(id));
+  assert.equal(bar.children.length, 1);
+  assert.equal(bar.children[0].tagName, 'H2');
+  assert.equal(bar.children[0].className, 'calc-recipe-title');
+  assert.equal(bar.children[0].textContent, 'Focaccia');
+  assert.equal(bar.children[0].attributes.tabindex, undefined);
+  assert.equal(walk(bar).filter(n => n.tagName === 'BUTTON').length, 0);
+  delete globalThis.document;
+});
+
+test('S4: two or more recipes stay tabs, and a tap picks that recipe', async () => {
+  useDom();
+  const { buildTabBar } = await import('../js/calculator-render.js');
+  const bar = new Node('div');
+  const picks = [];
+  buildTabBar(bar, [{ id: 'a', name: 'A' }, { id: 'b', name: 'B' }, { id: 'c', name: 'C' }], id => picks.push(id));
+  const tabs = bar.children;
+  assert.deepEqual(tabs.map(n => n.tagName), ['BUTTON', 'BUTTON', 'BUTTON']);
+  assert.ok(tabs.every(n => n.className === 'tab'));
+  tabs[1].fire('click');
+  assert.deepEqual(picks, ['b']);
+  // rebuilding replaces, never appends
+  buildTabBar(bar, [{ id: 'a', name: 'A' }], () => {});
+  assert.equal(bar.children.length, 1);
+  delete globalThis.document;
+});
+
+test('S4: app.js hides the title while the Log is open, and draws the bar through buildTabBar', () => {
+  const app = read('js/app.js');
+  assert.match(app, /if \(bar\) buildTabBar\(bar, recipes, switchTab\);/);
+  assert.match(app, /'#tab-bar \.calc-recipe-title'\)\.forEach\(h => \{ h\.hidden = h\.dataset\.recipe !== name; \}\)/);
+  assert.match(strip(read('style.css')), /\.calc-recipe-title \{[^}]*font-family: var\(--font-display\)/);
+});
+
+// The panel as buildRecipePanel makes it, with a registry for getElementById.
+async function panelWorld() {
+  useDom();
+  const registry = new Map();
+  globalThis.document.getElementById = id => registry.get(id) || null;
+  const scroll = new Node('div');
+  scroll.scrollTop = 99;
+  globalThis.document.querySelector = sel => (sel === '.scroll-area' ? scroll : null);
+  const { buildRecipePanel } = await import('../js/calculator-render.js');
+  const { placeResult } = await import('../js/result-place.js');
+  const showResult = id => { placeResult(registry.get(id), true); scroll.scrollTop = 0; };
+  const hideResult = id => placeResult(registry.get(id), false);
+  const panel = buildRecipePanel({
+    id: 'r1', name: 'Pizza', logic: 'both', trayWeight: 1000,
+    ingredients: [{ key: 'flour', label: 'Flour', grams: 600 }, { key: 'yeast', label: 'Yeast', grams: 6 }],
+    leaveningKey: 'yeast', leaveningDefaultPct: 1, showLeavening: true,
+  });
+  for (const n of walk(panel)) if (n.attributes && n.attributes.id) registry.set(n.attributes.id, n);
+  return { panel, scroll, showResult, hideResult };
+}
+// A real insertBefore MOVES a node that is already in the tree; the shared fake only adds it.
+const fakeInsertBefore = Node.prototype.insertBefore;
+Node.prototype.insertBefore = function (child, ref) {
+  if (child.parentNode) child.parentNode.children = child.parentNode.children.filter(c => c !== child);
+  return fakeInsertBefore.call(this, child, ref);
+};
+const order = panel => panel.children.map(n => n.attributes.id || n.className.split(' ')[0]);
+
+test('S4: before Confirm the panel keeps its order; the confirmed one opens with the result', async () => {
+  const { panel, scroll, showResult, hideResult } = await panelWorld();
+  const before = order(panel);
+  assert.equal(before[before.length - 2], 'r1-result', 'result sits just above Reset, hidden');
+  assert.equal(before[before.length - 1], 'reset-btn');
+
+  showResult('r1-result');
+  const shown = order(panel);
+  assert.equal(shown[0], 'r1-result', 'result FIRST');
+  assert.deepEqual(shown.slice(1), before.filter(x => x !== 'r1-result'), 'everything else keeps its relative order');
+  const rest = shown.slice(1);
+  assert.ok(rest.indexOf('param-row') < rest.indexOf('r1-edit-btn'), 'entries, then Edit');
+  assert.ok(rest.indexOf('r1-edit-btn') < rest.indexOf('reset-btn'), 'Edit, then Reset');
+  assert.equal(scroll.scrollTop, 0, 'the page is brought to the top so the recipe is in view');
+
+  showResult('r1-result'); // a recalculation while shown: nothing moves
+  assert.deepEqual(order(panel), shown);
+
+  hideResult('r1-result'); // Edit: back where it was
+  assert.deepEqual(order(panel), before);
+  delete globalThis.document;
+});
+
+test('S4: the «fields cleared» note stays above the result', async () => {
+  const { panel, showResult } = await panelWorld();
+  const note = new Node('div');
+  note.className = 'tab-cleared-note';
+  panel.insertBefore(note, panel.children[0]);
+  showResult('r1-result');
+  assert.deepEqual(order(panel).slice(0, 2), ['tab-cleared-note', 'r1-result']);
+  delete globalThis.document;
+});
+
+test('S4: the DOM is moved, never reordered with CSS `order` (keyboard order = visual order)', () => {
+  const css = strip(read('style.css'));
+  const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].filter(m => /#recipe-tabs|result-block|\.content/.test(m[1]));
+  for (const m of rules) assert.doesNotMatch(m[2], /(^|[;\s])order:/, m[1].trim());
+});
+
+test('S4: calc.js moves the result on show and hide, and scrolls to the top on the first show', () => {
+  const calcJs = read('js/calc.js');
+  assert.match(calcJs, /import \{ placeResult \} from '\.\/result-place\.js';/);
+  assert.match(calcJs, /e\.classList\.add\('visible'\);\s*placeResult\(e, true\);/);
+  assert.match(calcJs, /e\.classList\.remove\('visible'\);\s*placeResult\(e, false\);/);
+  assert.match(calcJs, /if \(wasHidden\) \{\s*const scroll = document\.querySelector\('\.scroll-area'\);\s*if \(scroll\) scroll\.scrollTop = 0;/);
+  assert.match(read('sw.js'), /'\.\/js\/result-place\.js'/);
+});

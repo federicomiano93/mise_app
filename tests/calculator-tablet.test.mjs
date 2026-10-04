@@ -53,12 +53,11 @@ test('the Calculator widens on its data-card, and calculator.html carries it', (
   assert.match(read('calculator.html'), /<body data-section="calculator" data-card="calculator">/);
 });
 
-test('the two-column recipe tab exists only under the tablet query', () => {
-  assert.match(inside, /\.content\.active:has\(> \.result-block\.visible\)\s*\{[^}]*display:\s*grid/);
-  assert.match(inside, /grid-template-columns:\s*minmax\(0, 1fr\) minmax\(0, 1fr\)/);
-  assert.match(inside, /\.result-block\s*\{[^}]*grid-column:\s*2/);
-  assert.doesNotMatch(outside, /:has\(/, 'no :has() rule outside the tablet query');
+test('a confirmed recipe tab is ONE column on a tablet: no grid, no :has() (4 Oct 2026)', () => {
+  assert.ok(!strip(sheet).includes(':has('), 'no :has() rule anywhere in style.css');
+  assert.doesNotMatch(inside, /display:\s*grid|grid-template|grid-column|grid-row/);
   assert.doesNotMatch(outside, /body\[data-card="calculator"\]/, 'no Calculator body rule outside the tablet query');
+  assert.ok(inside.includes('body[data-card="calculator"] #recipe-tabs > .content:not(#tab-empty) { margin-inline: 0 auto; }'));
 });
 
 test('every tablet rule of this section is scoped to the Calculator', () => {
@@ -106,16 +105,4 @@ test('no new file: the Calculator tablet layout is CSS only (nothing to precache
 // their bodies (flat 16px padding) ran the full 1180px. Pinned so deleting it goes red.
 test('the side screens\' bodies pad with the 620px gutter, the recipe sheet excepted', () => {
   assert.match(inside, /body\[data-card="calculator"\] \.recipe-scroll > :not\(#recipe-content\)\s*\{\s*padding-inline:\s*max\(16px, var\(--app-gutter\)\);\s*\}/);
-});
-
-// The grid gives the entry column 8 rows: true only while Confirm and Edit are never
-// shown together (applyTabState shows at most one of them).
-test('at most 8 entry rows: Confirm and Edit are never both shown', () => {
-  assert.match(inside, /grid-template-rows:\s*repeat\(8, auto\) 1fr/);
-  const calc = read('js/calc.js');
-  const body = calc.slice(calc.indexOf('function applyTabState'), calc.indexOf('\n}\n', calc.indexOf('function applyTabState')));
-  assert.ok(body.length > 50, 'applyTabState not found');
-  // The two conditions are exact opposites on `locked`, so one of them is always hidden.
-  assert.match(body, /dayBox\.style\.display\s*=\s*\(ready && !locked\) \? 'block' : 'none'/);
-  assert.match(body, /editBtn\.style\.display\s*=\s*\(ready && locked\)\s*\? 'block' : 'none'/);
 });

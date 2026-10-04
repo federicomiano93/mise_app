@@ -1,4 +1,4 @@
-const CACHE_NAME = 'theitalianclub-v592';
+const CACHE_NAME = 'theitalianclub-v593';
 // Firebase SDK modules (loaded from gstatic) are cached SEPARATELY from CACHE_NAME
 // so they survive the cache-version bump that happens on every deploy — otherwise
 // the offline SDK would be wiped each release until the next online load. The name
@@ -12,7 +12,7 @@ const CACHE_NAME = 'theitalianclub-v592';
 // the fetch handler below, on the first load that has a network.
 // So between activate() and that first load, a phone that is OFFLINE cannot boot:
 // the code asks for the new version and nothing has it. In practice the window is very
-// small — activate() only happens after a successful 298-file precache, i.e.
+// small — activate() only happens after a successful 299-file precache, i.e.
 // online, and tapping the update banner reloads the page immediately — but it is
 // not zero, and it is the reason to bump the SDK deliberately rather than often.
 // Leaving the name unchanged would close the window and cost ~1 MB of dead
@@ -236,6 +236,7 @@ const ASSETS = [
   './js/calculator-confirm.js',
   './js/calculator-config.js',
   './js/confirm-flow.js',
+  './js/result-place.js',
   './js/calculator-config-store.js',
   './js/calculator-order-prefill.js',
   './js/calculator-order-text.js',
@@ -421,7 +422,7 @@ const ASSET_HASHES = {
   "./": 'fb6d4386faa840f8',
   "./index.html": 'fb6d4386faa840f8',
   "./home.html": 'a4401ab28cb28eb9',
-  "./calculator.html": '5bb4f66393503f2c',
+  "./calculator.html": '1342c7f5093e1664',
   "./orders.html": 'e1cc2322509dfbe5',
   "./suppliers.html": 'd0d861102a8e44b4',
   "./install-guide.html": '155cc21e1c1dc524',
@@ -432,7 +433,7 @@ const ASSET_HASHES = {
   "./js/install-guide.js": '17fcd0c0fec489c2',
   "./tokens.css": '464bba6f602dc374',
   "./auth.css": '55b0bc1d41af5718',
-  "./style.css": 'ab0d9242788cd078',
+  "./style.css": 'abbf66f15a423ba8',
   "./orders.css": '645ae3d74e83bb8f',
   "./sounds/alarm.wav": '0d1465974f5be95b',
   "./fonts/manrope-latin.woff2": '71eb731d55804619',
@@ -444,7 +445,7 @@ const ASSET_HASHES = {
   "./fonts/instrument-serif-latin.woff2": '0ad69719cac6f45e',
   "./fonts/instrument-serif-latin-ext.woff2": '0caad588cab430ca',
   "./fonts/atkinson-next-digits.woff2": '99ffa5b0e9a45a2b',
-  "./js/app.js": '8d749ba918073c0d',
+  "./js/app.js": 'f42a362a8f3b5ccc',
   "./js/confirm-dialog.js": '61a7f580f37c5ff8',
   "./js/calculator-icons.js": '6bb803c39eabc4e0',
   "./js/hold-to-zoom.js": 'e077890cd7ba70de',
@@ -538,7 +539,7 @@ const ASSET_HASHES = {
   "./js/app-version.js": '2ed7f01712161130',
   "./js/location-title.js": '296d2d7d3d04d7f3',
   "./js/recipes.js": 'd078db16391046b7',
-  "./js/calc.js": '1e76dfefa9546ea5',
+  "./js/calc.js": '3734a4b4aaad3d90',
   "./js/calculator-recipe-text.js": 'aa41a24dba41595f',
   "./js/calculator-dough-math.js": '85008bf4375927f4',
   "./js/log.js": '386a3720e891f9ae',
@@ -554,10 +555,11 @@ const ASSET_HASHES = {
   "./js/calculator-confirm.js": '68a8ecb9ef0f0ab9',
   "./js/calculator-config.js": '65e76f83f8458dbb',
   "./js/confirm-flow.js": '350a9b206670e6bd',
+  "./js/result-place.js": '01dfd5a297ba5c9c',
   "./js/calculator-config-store.js": 'e1fe72337b0b2bf3',
   "./js/calculator-order-prefill.js": '28c00f4fea7d43b7',
   "./js/calculator-order-text.js": '3eabd34a0df19321',
-  "./js/calculator-render.js": '95490d2976bbf761',
+  "./js/calculator-render.js": '8f435a69dfd2b462',
   "./js/calculator-settings.js": 'b60e28ec7bea4d76',
   "./js/calculator-whatsapp-settings.js": '39823bea666c3471',
   "./js/vendor/sortable.esm.js": '824d48148fc5b469',
@@ -746,7 +748,7 @@ const ASSET_HASHES = {
 // code against rules that deployed instantly, which is the very thing the gate exists
 // to prevent. Two things stand between that and a release: the test that every ASSETS
 // entry EXISTS (a mistyped path being the likeliest permanent cause), and this
-// project's post-deploy sweep, which already asks the live site for all 298 files.
+// project's post-deploy sweep, which already asks the live site for all 299 files.
 // ⚠️ NEITHER covers a device-specific failure — nobody has yet confirmed an update
 // landing on a real iPhone under this code.
 //
