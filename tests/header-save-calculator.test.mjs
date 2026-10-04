@@ -122,7 +122,7 @@ test('Home is hidden with the hidden attribute so the header title rule can see 
 
 test('the shared header Save style: 36px pill, 44px touch area, on-brand ring', () => {
   const css = read('tokens.css');
-  const rule = css.match(/\.app-header-save \{[^}]*\}/)[0];
+  const rule = css.match(/^\.app-header-save \{[^}]*\}/m)[0];
   assert.match(rule, /height: 36px/);
   assert.match(rule, /border-radius: 999px/);
   assert.match(rule, /background: var\(--surface\)/);

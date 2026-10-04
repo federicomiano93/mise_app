@@ -911,8 +911,9 @@ export function renderEditor({ product, draft = null, app }) {
       t('fc.thePriceOnThe')),
     suggestion,
 
-    el('div', { class: 'fc-actions' }, [
-      el('button', { class: 'fc-save', type: 'button', text: t('ui.save'), onclick: onSave }),
+    // Save is in the header (foodcost-main.js asks the editor's save()). History and Delete
+    // stay here, small and low-key; a new product has neither, so no empty row.
+    historyBtn || (product && canManageHere()) ? el('div', { class: 'fc-actions' }, [
       historyBtn,
       // ⚠️ Owner only. Deleting a product takes its margin history with it, and
       // that history cannot be rebuilt — a snapshot exists only where somebody
@@ -922,11 +923,12 @@ export function renderEditor({ product, draft = null, app }) {
       product && canManageHere() ? el('button', { class: 'fc-delete', type: 'button', onclick: onDelete }, [
         el('span', { icon: TRASH_SVG, 'aria-hidden': 'true' }), t('fc.deleteProduct2'),
       ]) : null,
-    ]),
+    ]) : null,
   ]);
 
   return {
     root,
+    save: onSave,
     // Still exactly as it arrived: nothing typed ever, and no Save under way.
     isUntouched: () => !touched && !busy,
     // ⚠️ WITHOUT THIS THE LINES ARE DRAWN ONCE, FROM WHATEVER HAD ARRIVED.

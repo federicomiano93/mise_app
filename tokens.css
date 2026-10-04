@@ -423,6 +423,9 @@ input:is([type="number"], [inputmode="decimal"], [inputmode="numeric"]) {
   }
   .app-split-pane .app-icon-btn:hover { background: var(--accent-light); }
   .app-split-pane .app-icon-btn:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 2px; }
+  /* The cream pill is for the green bar; on the pane's light head it is the solid green button. */
+  .app-split-pane .app-header-save { background: var(--brand); color: var(--on-brand); }
+  .app-split-pane .app-header-save:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 2px; }
   .app-split-empty {
     flex: 1;
     display: flex;
@@ -780,6 +783,17 @@ body[data-card="suppliers"] .app-header {
   body[data-card="suppliers"] .app-header {
     --app-header-side: auto;
   }
+}
+/* ⚠️ A HEADER THAT HOLDS A SAVE DROPS THE 84px RESERVE (4 Oct 2026). «?» + «Salva» is 114px on the
+   right — wider than the reserve — and a fixed minimum lets that side shrink to 84 and overflow
+   leftwards over the title (measured: «Modifica ricetta» under the «?» at 360, Italian). The
+   screen adds .app-header--save while its Save is showing; `auto` makes each side at least what
+   it HOLDS, so the title gives way (a few px off centre at 360, none on a tablet) and is never
+   under a button. */
+body[data-section="catalogue"] .app-header.app-header--save,
+body[data-section="pastries"] .app-header.app-header--save,
+body[data-card="foodcost"] .app-header.app-header--save {
+  --app-header-side: auto;
 }
 /* ⚠️ NO `min-width: 0` ON THE SLOTS. With it, a 296px phone let the 1fr tracks
    shrink below Orders' three buttons, which then overflowed leftwards and «Ordini»

@@ -540,16 +540,20 @@ export function renderEditor({ recipe, draft, allRecipes, app, getLabelProfile =
     try { first?.focus({ preventScroll: true }); } catch (e) { /* focus is best-effort */ }
   }
 
-  const actions = el('div', { class: 'cat-editor-actions' }, [
-    el('button', { class: 'cat-save-btn', type: 'button', text: t('ui.save'), onclick: onSave }),
-    // ⚠️ Owner only, same as the detail screen. Staff may still edit and save.
-    recipe && canManageHere() ? el('button', { class: 'cat-del-btn', type: 'button', onclick: onDelete }, [
+  // Save is in the green header (app.setHeaderSave). Delete stays down here, small and low-key.
+  app.setHeaderSave(onSave);
+
+  // ⚠️ Owner only, same as the detail screen. Staff may still edit and save.
+  const actions = recipe && canManageHere()
+    ? el('div', { class: 'cat-editor-actions' }, [
+      el('button', { class: 'cat-del-btn', type: 'button', onclick: onDelete }, [
       el('span', { icon: TRASH_SVG, 'aria-hidden': 'true' }),
       // ⚠️ SEEN ON A SCREENSHOT OF AN ITALIAN VENUE, 13 Sep 2026: «Salva» beside
       // «Delete». The detail screen's own button has always used this key.
       t('cat.deleteRecipe'),
-    ]) : null,
-  ]);
+      ]),
+    ])
+    : null;
 
   renderIngredientRows();
 
@@ -602,7 +606,7 @@ export function renderEditor({ recipe, draft, allRecipes, app, getLabelProfile =
     addRowBtn,
     labelField,
     actions,
-    // ⚠️ LAST, UNDER SAVE. Federico, 13 Sep 2026: «il compila da una foto mettilo sotto
+    // ⚠️ LAST, UNDER DELETE. Federico, 13 Sep 2026: «il compila da una foto mettilo sotto
     // alla fine della pagina». It sat under the name, between the one field every recipe
     // starts from and the ingredients it is typed into — in the way of the job it is an
     // alternative to. On a new recipe there is no Delete, so it is directly under Save.

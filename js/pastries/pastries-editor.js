@@ -195,6 +195,8 @@ export function renderEditor({ day, items, note, allDays, app }) {
     });
   });
 
+  app.setHeaderSave(onSave);
+
   renderRows();
 
   const addBtn = el('button', {
@@ -241,9 +243,6 @@ export function renderEditor({ day, items, note, allDays, app }) {
         text: t('past.noteStays', { day: weekdayLabel(day) }),
       }),
       noteInput,
-    ]),
-    el('div', { class: 'pas-editor-actions' }, [
-      el('button', { class: 'pas-save-btn', type: 'button', text: t('ui.save'), onclick: onSave }),
     ]),
   ]);
 }

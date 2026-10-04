@@ -54,6 +54,8 @@ const homeBtn = document.getElementById('catHome');
 const backBtn = document.getElementById('catBack');
 const addBtn = document.getElementById('catAdd');
 const editBtn = document.getElementById('catEdit');
+const saveBtn = document.getElementById('catSave');
+const headerEl = saveBtn.closest('.app-header');
 const footerEl = document.getElementById('catFooter');
 const settingsBtn = document.getElementById('catSettings');
 const allergensBtn = document.getElementById('catAllergens');
@@ -84,6 +86,9 @@ let sheetQuery = '';
 let activeRun = null;      // { root, confirmLeave, stop } while a guided mix is on screen
 let currentRecipe = null;  // the recipe shown in detail (for the header Edit button)
 let leaveGuard = null;     // async () => boolean; blocks Back when there are unsaved edits
+// The open editor's Save, shown in the green header (app.setHeaderSave). setHeader() clears it
+// on every route, so the button exists only on the screens that registered a handler.
+let headerSave = null;
 // True only while a LIVE change redraws the open recipe (redrawDetail): nobody asked to
 // move, so focus stays where it is — somebody typing in the search box beside it must
 // not lose the keyboard because the owner corrected the salt on another phone.
@@ -123,6 +128,9 @@ function setHeader({ title, sub, back, add, edit = false, footer = false }) {
   backBtn.hidden = !back;
   addBtn.hidden = !add;
   editBtn.hidden = !edit;
+  headerSave = null;
+  saveBtn.hidden = true;
+  headerEl.classList.remove('app-header--save');
   // ⚠️ THE BOTTOM BAR IS CHROME, SO IT IS HIDDEN PER SCREEN RATHER THAN BUILT PER
   // SCREEN. Left visible everywhere it would put a Settings button under an open
   // editor and beside a running mixing timer — one mis-tap from leaving either.
@@ -723,6 +731,12 @@ const app = {
   deleteRecipe,
   bumpUsage,
   setLeaveGuard: (fn) => { leaveGuard = fn; },
+  // An editor's one Save lives in the header, not at the bottom of a form that scrolls.
+  setHeaderSave: (fn) => {
+    headerSave = fn;
+    saveBtn.hidden = !fn;
+    headerEl.classList.toggle('app-header--save', !!fn);
+  },
   // The new-recipe form's way to the photograph reader, and whether to offer it at
   // all. ⚠️ photoOn is a FUNCTION, not a value: the switch can be thrown from another
   // phone, and a value captured when this object was built would be stale for the
@@ -823,6 +837,7 @@ const app = {
 backBtn.addEventListener('click', handleBack);
 addBtn.addEventListener('click', () => openEditor(null));
 editBtn.addEventListener('click', editCurrent);
+saveBtn.addEventListener('click', () => headerSave?.());
 allergensBtn.addEventListener('click', showAllergenSheet);
 settingsBtn.addEventListener('click', showSettings);
 

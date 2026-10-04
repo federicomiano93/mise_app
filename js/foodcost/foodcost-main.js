@@ -44,6 +44,10 @@ const homeBtn = document.getElementById('fcHome');
 const backBtn = document.getElementById('fcBack');
 // The round «+» in the header's right slot: the one way to add a product, list only.
 const addBtn = document.getElementById('fcAdd');
+// The phone's Save for an open product. On a tablet the page header stays the list's and
+// the Save is built into the pane head instead (buildPaneHead) — never both.
+const saveBtn = document.getElementById('fcSave');
+const headerEl = saveBtn.closest('.app-header');
 addBtn.addEventListener('click', () => requestOpen(null));
 // The bottom bar and its one button, Settings (13 Sep 2026). The button carries its own
 // permission; the bar is shown only while a button in it is.
@@ -93,6 +97,8 @@ function setHeader({ title, sub, back, add = false }) {
   homeBtn.hidden = back;
   backBtn.hidden = !back;
   addBtn.hidden = !add;
+  saveBtn.hidden = true;   // only setEditorHeaderPhone shows it
+  headerEl.classList.remove('app-header--save');
   paintFooter();
 }
 
@@ -199,7 +205,8 @@ function buildPaneHead() {
   const title = inHistory
     ? t('fc.marginHistory')
     : (currentProduct ? (currentProduct.name || t('fc.productWord')) : t('fc.newProduct'));
-  return el('header', { class: 'app-header' }, [
+  const withSave = view === 'editor' && !!activeEditor;
+  return el('header', { class: withSave ? 'app-header app-header--save' : 'app-header' }, [
     el('span', { class: 'app-header-slot' }, [
       inHistory ? el('button', {
         class: 'app-icon-btn', type: 'button', 'aria-label': t('ui.back'),
@@ -207,7 +214,12 @@ function buildPaneHead() {
       }) : null,
     ]),
     el('div', { class: 'app-header-title' }, [el('h1', { text: title, tabindex: '-1' })]),
-    el('span', { class: 'app-header-slot' }),
+    el('span', { class: 'app-header-slot' }, [
+      // The product's Save, in the pane's own head (a phone has it in the page header).
+      withSave ? el('button', {
+        type: 'button', class: 'app-header-save', onclick: () => activeEditor?.save(),
+      }, t('ui.save')) : null,
+    ]),
   ]);
 }
 
@@ -281,6 +293,8 @@ function filterTitle(recipeId) {
 // The editor's header on a PHONE: its own title and a Back.
 function setEditorHeaderPhone(product) {
   setHeader({ title: product ? (product.name || t('fc.productWord')) : t('fc.newProduct'), sub: t('fc.foodCost'), back: true });
+  saveBtn.hidden = false;
+  headerEl.classList.add('app-header--save');
 }
 
 function openProduct(product, draft = null) {
@@ -543,6 +557,7 @@ const app = {
 };
 
 backBtn.addEventListener('click', handleBack);
+saveBtn.addEventListener('click', () => activeEditor?.save());
 // ⚠️ Home is a plain link. Beside an open editor it must ask the same guard first, or a tap on
 // it would throw the typing away with the page.
 homeBtn.addEventListener('click', async (e) => {
