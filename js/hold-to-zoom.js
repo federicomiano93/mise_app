@@ -1,15 +1,23 @@
-// hold-to-zoom.js — whole-app momentary magnifier (loaded on every page).
+// hold-to-zoom.js — whole-app momentary magnifier (loaded on six pages: calculator,
+// catalogue, index, orders, pastries, suppliers).
 //
-// Pinch anywhere with two fingers to magnify the WHOLE screen — any page, and any
-// sub-screen or pop-up on top of it — while you hold; it springs back to normal
-// the instant a finger lifts. (The browser's own pinch-zoom stays where you leave
-// it; this returns to 1× on release.) Scaling the <body> means every screen and
+// Pinch anywhere with two fingers to magnify the WHOLE screen — any sub-screen or
+// pop-up on top of the page — while you hold; it springs back to normal
+// the instant a finger lifts. Scaling the <body> means every screen and
 // every overlay is covered uniformly, including ones the app builds on the fly —
 // no per-element marking to keep in sync.
 //
 // It only reacts while TWO fingers are down, so one-finger scrolling and taps are
-// untouched, and it preventDefaults the two-finger gesture (both touch events and
-// the iOS `gesture*` events) so the OS pinch-zoom can't fight it.
+// untouched. The touch listeners are PASSIVE (so scrolling never waits for this
+// file): the browser's own pinch-zoom is switched off by this file itself (the
+// touch-action write below), so nothing needs preventDefault() any more.
+
+// This disables only the browser pinch that the magnifier replaces, and only on a page
+// that loads this file; foodcost, inventory and order keep their browser pinch-zoom.
+// Passive listeners need it: a non-passive document touch listener makes EVERY
+// one-finger scroll wait for the main thread. A CSSOM write, so the CSP
+// (style-src 'self') allows it.
+document.documentElement.style.touchAction = 'pan-x pan-y';
 
 const MAX_SCALE = 3;          // never magnify past 3×
 const SNAP_BACK_MS = 200;     // spring-back duration on release
@@ -23,7 +31,6 @@ const fingerDistance = (a, b) => Math.hypot(a.clientX - b.clientX, a.clientY - b
 
 document.addEventListener('touchstart', (e) => {
   if (e.touches.length !== 2) return;
-  e.preventDefault();                       // claim the two-finger gesture
   pinching = true;
   clearTimeout(clearTimer);
   startDist = fingerDistance(e.touches[0], e.touches[1]) || 1;
@@ -32,14 +39,13 @@ document.addEventListener('touchstart', (e) => {
   const my = (e.touches[0].clientY + e.touches[1].clientY) / 2;
   stage.style.transformOrigin = `${mx}px ${my}px`;
   stage.style.transition = 'none';          // follow the fingers with no lag
-}, { passive: false });
+}, { passive: true });
 
 document.addEventListener('touchmove', (e) => {
   if (!pinching || e.touches.length !== 2) return;
-  e.preventDefault();
   const ratio = fingerDistance(e.touches[0], e.touches[1]) / startDist;
   stage.style.transform = `scale(${Math.min(MAX_SCALE, Math.max(1, ratio))})`;
-}, { passive: false });
+}, { passive: true });
 
 function release(e) {
   if (!pinching || e.touches.length >= 2) return;  // still pinching with 2 fingers

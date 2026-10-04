@@ -277,6 +277,10 @@ function renderClientDetail(ci) {
   cpTitle().textContent = t('calc.editClient');
   setHomeVisible(false);
   const content = document.getElementById('cp-content');
+  // The list's Sortable is bound to a node about to be thrown away; destroying it
+  // here (not only when the list is redrawn) frees its document-level listeners
+  // while the detail is open instead of keeping a dead list alive.
+  if (clientSortable) { clientSortable.destroy(); clientSortable = null; }
   content.textContent = '';
 
   const nameInput = el('input', { class: 'cp-client-name', type: 'text', value: client.name || '', placeholder: t('calc.clientName') });

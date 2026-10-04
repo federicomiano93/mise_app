@@ -52,17 +52,38 @@ export function setLogsErrorHandler(fn) {
   onError = typeof fn === 'function' ? fn : null;
 }
 
+// The records listener holds up to 120 documents live. It runs only while the
+// Records screen is on show: stopPastryLogs() ends it when the person leaves, and
+// the next opening starts a fresh one. `logsWatchSeq` is what makes a stop win over
+// a start still waiting for sign-in — that start answers with an unsubscribe the
+// moment it arrives, and finds its number out of date.
+let unsubLogs = null;
+let logsWatchSeq = 0;
+
+export function stopPastryLogs() {
+  logsWatchSeq += 1;
+  if (unsubLogs) {
+    try { unsubLogs(); } catch (e) { /* already gone */ }
+    unsubLogs = null;
+  }
+}
+
 // Start syncing. onUpdate() fires whenever the records change. Attach this only
 // when the Records screen opens — never at page boot.
 export function initPastryLogs(onUpdate, onStreamError) {
   notify = typeof onUpdate === 'function' ? onUpdate : null;
+  stopPastryLogs();           // never two listeners: a second start replaces the first
+  const mine = logsWatchSeq;
   watchPastryLogs(
     remote => {
       logs = normalizeLogs(remote);
       if (notify) notify(logs);
     },
     err => { if (onStreamError) onStreamError(err); },
-  ).catch(err => {
+  ).then(unsub => {
+    if (mine !== logsWatchSeq) { try { unsub(); } catch (e) { /* already gone */ } return; }
+    unsubLogs = unsub;
+  }).catch(err => {
     console.error('Pastry records live sync failed to start:', err);
     if (onStreamError) onStreamError(err);
   });
@@ -86,7 +107,16 @@ export function isConfirmedTonight(day) {
 // app behaving exactly as it did before this feature existed. Locking on data
 // nobody could read would leave someone unable to correct a list at 4am with
 // nothing on screen to explain it.
+//
+// ⚠️ TWO CALLS CLOSE TOGETHER MUST NOT ORPHAN A LISTENER. The first one's
+// subscription only arrives after an await, so the second call found nothing to
+// drop and both were kept — one of them with no handle left to stop it. The
+// numbered call that is no longer the latest stops its own subscription instead.
+let confirmationsSeq = 0;
+
 export async function watchConfirmations(workDate, onChange) {
+  confirmationsSeq += 1;
+  const mine = confirmationsSeq;
   if (unsubConfirmed) {
     try { unsubConfirmed(); } catch (e) { /* already gone */ }
     unsubConfirmed = null;
@@ -94,13 +124,20 @@ export async function watchConfirmations(workDate, onChange) {
   confirmed = new Set();
   if (onChange) onChange();
   try {
-    unsubConfirmed = await watchPastryLogsForDate(
+    const unsub = await watchPastryLogsForDate(
       workDate,
-      docs => { confirmed = confirmedDaysFrom(docs); if (onChange) onChange(); },
-      () => { confirmed = new Set(); if (onChange) onChange(); },
+      docs => { if (mine === confirmationsSeq) { confirmed = confirmedDaysFrom(docs); if (onChange) onChange(); } },
+      () => { if (mine === confirmationsSeq) { confirmed = new Set(); if (onChange) onChange(); } },
     );
+    if (mine !== confirmationsSeq) {
+      try { unsub(); } catch (e) { /* already gone */ }
+      return;
+    }
+    unsubConfirmed = unsub;
   } catch (err) {
     console.warn('Could not watch tonight\'s confirmations:', err);
+    // An older call that failed must not empty a newer call's set.
+    if (mine !== confirmationsSeq) return;
     confirmed = new Set();
     if (onChange) onChange();
   }

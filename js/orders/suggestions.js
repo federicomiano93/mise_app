@@ -44,6 +44,29 @@ function num(value) {
   return Number.isFinite(n) && n > 0 ? n : 0;
 }
 
+// The history cut once into one list per ingredient: ingredientId → the records that carry
+// that ingredient in `quantities`, newest first (the same order computeSuggestion sorts to).
+// computeSuggestion filters and sorts the WHOLE history on every call, and a screen asks it
+// once per row — handing it `index.get(id) || []` instead gives the identical answer for a
+// fraction of the work (the filter it applies is exactly «has this ingredient in quantities»,
+// and a stable sort of an already sorted list changes nothing).
+export function indexHistoryByIngredient(history) {
+  const index = new Map();
+  (history || []).forEach(record => {
+    if (!record || !record.quantities) return;
+    Object.keys(record.quantities).forEach(id => {
+      if (!index.has(id)) index.set(id, []);
+      index.get(id).push(record);
+    });
+  });
+  index.forEach(records => records.sort(newestFirst));
+  return index;
+}
+
+function newestFirst(a, b) {
+  return String(b.date || b.weekStart || '').localeCompare(String(a.date || a.weekStart || ''));
+}
+
 // history: array of { date | weekStart, quantities:{id:qty}, stock:{id:qty} }
 // Returns one of:
 //   { active: false, ordersRemaining: N }     — not enough history yet
@@ -61,7 +84,7 @@ export function computeSuggestion(ingredientId, currentStock, history, ing = nul
   const orders = (history || [])
     .filter(r => r.quantities && Object.prototype.hasOwnProperty.call(r.quantities, ingredientId))
     .filter(r => !ing || sameUnit(recordUnit(r, ingredientId, ing), ing.unit))
-    .sort((a, b) => String(b.date || b.weekStart || '').localeCompare(String(a.date || a.weekStart || '')));
+    .sort(newestFirst);
 
   if (orders.length < MIN_ORDERS) {
     return { active: false, ordersRemaining: MIN_ORDERS - orders.length };

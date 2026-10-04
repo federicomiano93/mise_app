@@ -533,18 +533,24 @@ export function buildRegistry(data, actions, hooks = {}) {
     return new Promise((resolve) => {
       let mine = null;
       let settled = false;
+      let disposeCapture = null;
+      // The ONE funnel every way out goes through (the reader's answer, Back, and the
+      // pane being cleared all end here), so the screen's language listener and its
+      // photographs are released exactly once.
       const settle = (value) => {
         if (settled) return;
         settled = true;
         popEntry(mine);
+        disposeCapture?.();
         resolve(value);
       };
       push((entry) => {
         mine = entry;
         entry.keepAlive = true;   // refresh() must not rebuild this screen
-        const { root } = renderPackPhotoCapture({
+        const { root, dispose } = renderPackPhotoCapture({
           onText: (text, notes) => settle({ text, notes }),
         });
+        disposeCapture = dispose;
         return overlay(
           entry,
           t('orders.pack.photo.title'),

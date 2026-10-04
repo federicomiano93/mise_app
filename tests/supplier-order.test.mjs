@@ -64,9 +64,11 @@ test('normalizeOrdersConfig carries supplierOrder, empty by default', () => {
 
 test('activeSuppliers sorts through sortSuppliersByOrder with the config order', () => {
   const src = withoutComments(read('js/orders/orders-main.js'));
-  assert.match(src, /function activeSuppliers\(\) \{\r?\n\s*return sortSuppliersByOrder\(/);
+  assert.match(src, /memoLast\(\(suppliers, order\) => sortSuppliersByOrder\(/);
+  assert.match(src, /function activeSuppliers\(\) \{[^}]*sortActiveSuppliers\(state\.suppliers, ordersConfig\.supplierOrder\)/);
   assert.match(src, /ordersConfig\.supplierOrder/);
-  assert.match(src, /if \(orderChanged\) render\(\)/);
+  // Drawn by the one-pass scheduler since the render pass (tests/orders-render-scheduler.test.mjs).
+  assert.match(src, /if \(orderChanged\) scheduleRender\('list'\)/);
 });
 
 test('the Settings door sits inside the boss-only branch', () => {

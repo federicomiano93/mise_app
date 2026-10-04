@@ -311,7 +311,8 @@ test('⚠️ a line in another unit than the card shows no suggestion and never 
 
 test('the suggestion engine is asked with the card, so its history is one unit', () => {
   const main = read('js/orders/orders-main.js');
-  assert.match(main, /computeSuggestion\(id, stock, state\.history, ing\)/);
+  // The history reaches it already cut to this ingredient (indexHistoryByIngredient): the same records.
+  assert.match(main, /computeSuggestion\(id, stock, historyIndex\(state\.history\)\.get\(id\) \|\| \[\], ing\)/);
 });
 
 // Review of the pill + steppers (3 Oct 2026): what a keyboard, a screen reader and an iPhone meet.

@@ -64,7 +64,7 @@ export function renderSettings({ photoOn, onTogglePhoto, labelProfile, onSaveLab
   // A language arriving while this screen is open. `root.isConnected` guards it:
   // swap() replaces the screen's children with no teardown hook, so the listener
   // outlives the view.
-  onLanguageChange(() => { if (root.isConnected) paint(); });
+  const stopPaintOnLanguage = onLanguageChange(() => { if (root.isConnected) paint(); });
 
   // ── Label printing ──────────────────────────────────────────────────────────
   //
@@ -401,7 +401,7 @@ export function renderSettings({ photoOn, onTogglePhoto, labelProfile, onSaveLab
     return queue;
   }
 
-  onLanguageChange(() => { if (root.isConnected) paintLabel(); });
+  const stopLabelOnLanguage = onLanguageChange(() => { if (root.isConnected) paintLabel(); });
 
   // Three cards, in the app's one settings look (28 Sep 2026): the photo reader, the
   // paper and printer, and what else goes on the label. Every control saves on the tap.
@@ -442,5 +442,8 @@ export function renderSettings({ photoOn, onTogglePhoto, labelProfile, onSaveLab
   syncBlocks();
   const paintLabelInner = paintLabel;
   paintLabel = () => { paintLabelInner(); syncBlocks(); };
-  return { root, refresh: paint };
+  // Called by catalogue-main.js whenever the screen is replaced: both language
+  // listeners are let go so reopening Settings never stacks another pair.
+  const dispose = () => { stopPaintOnLanguage(); stopLabelOnLanguage(); };
+  return { root, refresh: paint, dispose };
 }
