@@ -53,15 +53,6 @@ function hint(node) {
   if (wantsDoneKey(node)) node.setAttribute('enterkeyhint', 'done');
 }
 
-// Applies the hint to a node and to every input inside it.
-export function hintTree(node) {
-  if (!node || node.nodeType !== 1) return;
-  hint(node);
-  if (typeof node.querySelectorAll === 'function') {
-    for (const input of node.querySelectorAll('input')) hint(input);
-  }
-}
-
 export function isCoarsePointer(media = typeof matchMedia === 'function' ? matchMedia : null) {
   try { return !!(media && media('(pointer: coarse)').matches); } catch { return false; }
 }
@@ -77,6 +68,10 @@ export function installKeyboardDone(
 ) {
   if (!doc || typeof doc.addEventListener !== 'function') return;
   doc.addEventListener('focusin', (event) => hint(event.target), true);
+  // Safety net: some Android keyboards read `enterkeyhint` when the tap lands, before
+  // `focusin` fires, so the first tap could still show the plain key. A pointerdown
+  // reaches the box earlier; the hint is idempotent, so doing both costs nothing.
+  doc.addEventListener('pointerdown', (event) => hint(event.target), { capture: true, passive: true });
   doc.addEventListener('keydown', (event) => {
     const node = event.target;
     if (shouldBlurOnEnter(node, event, isCoarsePointer(media))) node.blur();
