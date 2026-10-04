@@ -173,7 +173,7 @@ export function buildRecipePanel(recipe) {
   content.appendChild(el('div', { class: 'result-block', id: id + '-result' }, [
     el('div', { class: 'result-card' }, [
       el('div', { class: 'result-header' }, [
-        el('h3', {}, recipe.name + ' dough'),
+        el('h3', {}, t('calc.doughTitle', { name: recipe.name })),
         el('span', { class: 'result-badge', id: id + '-badge' }, ''),
       ]),
       el('div', { id: id + '-ingredients' }),

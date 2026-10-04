@@ -916,10 +916,20 @@ function normalizeRecipe(raw, index) {
     ? Number(raw.baselinePct)
     : (leaveningKey && leaveningDefaultPct > 0 ? leaveningDefaultPct : null);
 
+  // ⚠️ THE LINK TO A CATALOGUE RECIPE MUST SURVIVE. Since 14 Aug 2026 a tab can take its
+  // ingredients from the Catalogue (`catalogueId`, its leavening as `leaveningRid`), but
+  // this function rebuilt every recipe from a fixed list that did not carry them — and it
+  // runs on every save, on the live stream and on the cached copy, so a link chosen in
+  // Settings → Recipes was gone the moment it was saved (found 4 Oct 2026, driving).
+  const link = raw.catalogueId && String(raw.catalogueId).trim()
+    ? { catalogueId: String(raw.catalogueId).trim(), leaveningRid: raw.leaveningRid ? String(raw.leaveningRid) : null }
+    : {};
+
   return {
     id, name, logic, ingredients,
     // Kept whatever the logic, so switching away from trays and back loses nothing.
     trayWeight: normalizeTrayWeight(raw.trayWeight),
+    ...link,
     leaveningKey, leaveningDefaultPct, showLeavening, baselinePct,
     order: Number(raw.order) || 0,
     visible: raw.visible !== false,

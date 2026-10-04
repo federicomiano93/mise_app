@@ -465,7 +465,7 @@ function freeLinesField(target) {
     const input = el('input', {
       class: 'cp-client-name', type: 'text', value: line.name || '',
       placeholder: t('calc.eGLoavesOf'),
-      'aria-label': t('calc.extraLine') + (i + 1),
+      'aria-label': t('calc.extraLineN', { i: i + 1 }),
     });
     // ⚠️ The id is NOT recomputed as the name is typed. It keys the quantity box in
     // the order modal, so changing it mid-edit would move somebody's typed number to
@@ -488,7 +488,7 @@ function renderEntryDetail() {
   const entry = lists()[activeList].clients[activeEntry];
   if (!Array.isArray(entry.products)) entry.products = [];
   const client = getClientById(getConfig(), entry.clientId);
-  waTitle().textContent = client ? (client.name || 'Client') : 'Client';
+  waTitle().textContent = client ? (client.name || t('calc.unnamedClient')) : t('calc.unknownClient');
   setHomeVisible(false);
   const content = document.getElementById('wa-content');
   content.textContent = '';
