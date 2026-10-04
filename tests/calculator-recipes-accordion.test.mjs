@@ -43,8 +43,21 @@ test('showClientOrdersButton: a literal false stays false, through a normalise r
   assert.equal(showsClientOrdersButton({}), true);
 });
 
+test('askDoughDay: missing, corrupt or anything but false is ON; a literal false survives', () => {
+  assert.equal(DEFAULT_CONFIG.askDoughDay, true);
+  assert.equal(normalizeConfig({ clients: [] }).askDoughDay, true);
+  assert.equal(normalizeConfig(null).askDoughDay, true);
+  for (const junk of [0, '', 'false', null, 'no']) {
+    assert.equal(normalizeConfig({ clients: [], askDoughDay: junk }).askDoughDay, true, String(junk));
+  }
+  const off = normalizeConfig({ clients: [], askDoughDay: false });
+  assert.equal(off.askDoughDay, false);
+  assert.equal(normalizeConfig(off).askDoughDay, false);
+  assert.equal(normalizeConfig({ products: [], clients: [], askDoughDay: false }).askDoughDay, false, 'catalogue branch');
+});
+
 test('configModel: the app always writes its own number, whatever the document said', () => {
-  assert.equal(CONFIG_MODEL, 3);
+  assert.equal(CONFIG_MODEL, 4);
   for (const stored of [undefined, 0, 1, 2, 99, 'x']) {
     const raw = { clients: [] };
     if (stored !== undefined) raw.configModel = stored;

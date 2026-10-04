@@ -801,6 +801,7 @@ export function readOldLogsOnce() {
 //     recipes: [ { id, name, logic: orders|total|both|trays|traysTotal, trayWeight (grams per tray,
 //                  whole, 1-100000, default 1000; kept whatever the logic), ingredients, ... } ],
 //     showClientOrdersButton: bool  (the bottom-bar Orders button; missing = true),
+//     askDoughDay: bool  (Confirm asks «today or tomorrow?»; missing = true),
 //     configModel: number  (the shape version; the app always writes its own, and the
 //                           rules refuse a lower one, so an older build cannot drop keys) }
 // A product belongs to the CLIENT that orders it — there is no shared catalogue. Two
