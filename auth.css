@@ -110,6 +110,24 @@
   min-height: 48px;       /* comfortable tap target */
 }
 
+/* The same button as a link (reset-password.html: «Open Mise» is a navigation, not an action). */
+a.auth-btn-link {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 18px;
+  text-decoration: none;
+}
+
+/* The account's email, present for password managers and invisible to everybody else. */
+.auth-hidden-username {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
 .auth-btn:hover { background: var(--brand-2); }
 .auth-btn:disabled { opacity: .6; cursor: default; }
 
