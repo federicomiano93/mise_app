@@ -74,6 +74,18 @@ test('announce() while the screen is busy starts ONE observer, however often it 
   assert.equal(resizeListeners.size, 1);
 });
 
+test('the driver seam __keepAboveBottomBar leaves the real banner tracker running', async () => {
+  const { __keepAboveBottomBar } = await import('../js/sw-update.js');
+  const before = liveObservers().filter((o) => o.options.attributes);
+  assert.equal(before.length, 1, 'the banner tracker should be up');
+  const stop = __keepAboveBottomBar({ style: {}, isConnected: true });
+  assert.ok(before[0].live, 'the seam stopped the real banner tracker');
+  assert.equal(liveObservers().filter((o) => o.options.attributes).length, 2);
+  stop();
+  assert.ok(before[0].live, 'stopping the driver tracker stopped the real one');
+  assert.equal(liveObservers().filter((o) => o.options.attributes).length, 1);
+});
+
 test('once the screen is quiet the gate shows and every observer and listener is let go', () => {
   busy = false;
   const watcher = liveObservers().find((o) => o.options.childList);

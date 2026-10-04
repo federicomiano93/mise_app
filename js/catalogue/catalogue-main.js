@@ -154,12 +154,19 @@ function setHeader({ title, sub, back, add, edit = false, footer = false }) {
   if (footer) footerEl.hidden = ![...footerEl.children].some(child => !child.hidden);
 }
 
-// The photo screen's teardown, held until the NEXT swap — every screen change goes
-// through swap(), so this is the one place that sees every way out of it.
+// The photo screen's teardown, held until the screen is replaced. swap() and the two
+// split-pane paths that replace the screen themselves (showPaneEmpty, showDetailNode)
+// all run it through releaseScreen(), so it sees every way out of the photo screen.
 let disposeScreen = null;
 
+function releaseScreen() {
+  const dispose = disposeScreen;
+  disposeScreen = null;
+  dispose?.();
+}
+
 function swap(node, dispose = null) {
-  disposeScreen?.();
+  releaseScreen();
   disposeScreen = dispose;
   screen.replaceChildren(node);
   screen.scrollTop = 0;
@@ -247,6 +254,7 @@ function showPaneEmpty() {
   }
   paneEmpty.querySelector('h2').textContent = t('cat.split.empty.title');
   paneEmpty.querySelector('p').textContent = t('cat.split.empty.text');
+  releaseScreen();
   screen.replaceChildren(paneEmpty);
 }
 
@@ -329,6 +337,7 @@ function showDetailNode(recipe, node) {
   if (!splitOn) { swap(node); return; }
   const head = buildPaneHead(recipe);
   const body = el('div', { class: 'cat-pane-body' }, [node]);
+  releaseScreen();
   screen.replaceChildren(head, body);
   const title = head.querySelector('h1');
   if (quietFocus) return;

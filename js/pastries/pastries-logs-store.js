@@ -136,6 +136,8 @@ export async function watchConfirmations(workDate, onChange) {
     unsubConfirmed = unsub;
   } catch (err) {
     console.warn('Could not watch tonight\'s confirmations:', err);
+    // An older call that failed must not empty a newer call's set.
+    if (mine !== confirmationsSeq) return;
     confirmed = new Set();
     if (onChange) onChange();
   }
