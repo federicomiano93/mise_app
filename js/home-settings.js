@@ -18,6 +18,7 @@ import { confirmDialog } from './confirm-dialog.js';
 import { signOutNow, switchLocation, forgetLocation } from './firebase.js';
 import { mayLeaveWithUnsent } from './unsent-guard.js';
 import { buildAwayButton } from './away-screen.js';
+import { versionNumber, versionState } from './app-version.js';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
@@ -134,6 +135,7 @@ export function openHomeSettings(session) {
       section(t('settings.home.account'), [
         !session.isAppAdmin && options.length > 1 ? item(t('home.switch'), t('settings.switch.sub'), switchVenue) : null,
       ]),
+      section(t('settings.home.app'), [versionRow()]),
     ].filter(Boolean));
 
     // Log out: the quiet destructive action at the foot, never a row (P20).
@@ -199,8 +201,93 @@ export function openHomeSettings(session) {
     addAway().catch(err => console.warn('The holiday row is not available:', err));
   };
 
+  // ── The App version row ─────────────────────────────────────────────────────
+  //
+  // Each device answers for itself — the app records no version on the server (P8).
+  // It is a plain row, not a door: it opens nothing. The state is read from this
+  // device's own service worker and registration, then a fresh check is started so
+  // a release that landed a minute ago shows up without leaving the screen.
+  let versionCleanup = () => {};
+  function versionRow() {
+    const sub = node('span', 'set-sub');
+    sub.setAttribute('aria-live', 'polite');
+    const text = node('span', 'set-text');
+    text.append(node('span', 'set-title', t('settings.app.title')), sub);
+    const row = node('div', 'set-row');
+    row.append(text);
+
+    let version;          // undefined = still asking
+    let waiting = false;
+    let action = null;
+
+    function paintVersion() {
+      const state = versionState({ version, waiting });
+      const number = versionNumber(version) || '—';
+      const phrase = {
+        checking: t('settings.app.checking', { n: number }),
+        unknown: t('settings.app.unknown'),
+        waiting: t('settings.app.waiting', { n: number }),
+        current: t('settings.app.current', { n: number }),
+      }[state];
+      sub.textContent = phrase;
+      if (state === 'waiting' && !action) {
+        action = node('button', 'btn-primary set-action', t('settings.app.update'));
+        action.type = 'button';
+        action.addEventListener('click', async () => {
+          const { updateNow } = await import('./sw-update.js');
+          updateNow(action);
+        });
+        row.append(action);
+      } else if (state !== 'waiting' && action) {
+        action.remove();
+        action = null;
+      }
+    }
+
+    paintVersion();
+
+    const watched = [];
+    versionCleanup();
+    versionCleanup = () => {
+      for (const [target, type, fn] of watched) target.removeEventListener(type, fn);
+      watched.length = 0;
+    };
+    const listen = (target, type, fn) => { target.addEventListener(type, fn); watched.push([target, type, fn]); };
+
+    (async () => {
+      const { askRunningVersion } = await import('./sw-update.js');
+      version = await askRunningVersion();
+      const reg = ('serviceWorker' in navigator)
+        ? await navigator.serviceWorker.getRegistration().catch(() => null) : null;
+      if (!overlay.isConnected) return;
+      // A waiting worker only counts when this page is controlled by an older one.
+      const controlled = () => !!navigator.serviceWorker?.controller;
+      waiting = !!(reg && reg.waiting && controlled());
+      paintVersion();
+      if (!reg) return;
+
+      const markWaiting = () => {
+        if (!overlay.isConnected || !controlled()) return;
+        waiting = true;
+        paintVersion();
+      };
+      const watch = worker => {
+        if (!worker) return;
+        const onState = () => { if (worker.state === 'installed') markWaiting(); };
+        listen(worker, 'statechange', onState);
+        onState();
+      };
+      listen(reg, 'updatefound', () => watch(reg.installing));
+      watch(reg.installing);
+      reg.update().catch(() => {});
+    })().catch(err => console.warn('The app version is not available:', err));
+
+    return row;
+  }
+
   function close() {
     window.removeEventListener('away-changed', onAwayChanged);
+    versionCleanup();
     overlay.remove();
   }
 

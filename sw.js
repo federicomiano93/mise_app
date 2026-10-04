@@ -1,4 +1,4 @@
-const CACHE_NAME = 'theitalianclub-v546';
+const CACHE_NAME = 'theitalianclub-v547';
 // Firebase SDK modules (loaded from gstatic) are cached SEPARATELY from CACHE_NAME
 // so they survive the cache-version bump that happens on every deploy — otherwise
 // the offline SDK would be wiped each release until the next online load. The name
@@ -12,7 +12,7 @@ const CACHE_NAME = 'theitalianclub-v546';
 // the fetch handler below, on the first load that has a network.
 // So between activate() and that first load, a phone that is OFFLINE cannot boot:
 // the code asks for the new version and nothing has it. In practice the window is very
-// small — activate() only happens after a successful 285-file precache, i.e.
+// small — activate() only happens after a successful 286-file precache, i.e.
 // online, and tapping the update banner reloads the page immediately — but it is
 // not zero, and it is the reason to bump the SDK deliberately rather than often.
 // Leaving the name unchanged would close the window and cost ~1 MB of dead
@@ -209,6 +209,7 @@ const ASSETS = [
   './js/preview-ribbon.js',
   './js/home-session.js',
   './js/home-settings.js',
+  './js/app-version.js',
   './js/location-title.js',
   './js/recipes.js',
   './js/calc.js',
@@ -414,7 +415,7 @@ const ASSET_HASHES = {
   "./install-guide.html": '155cc21e1c1dc524',
   "./qr.png": '761a95e5bc25e2ba',
   "./js/install-guide.js": '17fcd0c0fec489c2',
-  "./tokens.css": '15a90c6c1535077b',
+  "./tokens.css": 'b2e5b7a1dbe6abaf',
   "./auth.css": 'e4ba63eda208115b',
   "./style.css": '011704cc77f2029b',
   "./orders.css": '0dcc278f040c12d9',
@@ -476,7 +477,7 @@ const ASSET_HASHES = {
   "./js/home-away.js": 'd791865d4ec8e8b1',
   "./js/help-content.js": '6ea7f0e9586c250d',
   "./js/help-button.js": '74575dcd436e06cc',
-  "./js/sw-update.js": '4401c8f215a55281',
+  "./js/sw-update.js": '15bd6ca0e57b6fa3',
   "./js/update-gate.js": '2387259480385bfb',
   "./js/install-version.js": 'a35dbefbbbaa3acf',
   "./js/install-version-boot.js": '0e0cea81512abcec',
@@ -493,7 +494,7 @@ const ASSET_HASHES = {
   "./js/location.js": '6aaf53615a8739d1',
   "./js/sections.js": 'abcfdecb2bd5766d',
   "./js/roles.js": '2b491770c4b6165b',
-  "./js/i18n.js": '8c6c285d8ffe406e',
+  "./js/i18n.js": '58db951c49a9a938',
   "./js/i18n-dom.js": '24249af4367511e5',
   "./js/keyboard-done.js": '4a4b75c43a15e2c7',
   "./js/join-code.js": '5b89de65db5c102f',
@@ -513,7 +514,8 @@ const ASSET_HASHES = {
   "./js/auth-gate.js": '087bd4f627f12197',
   "./js/preview-ribbon.js": 'ee39b7ee13f78c02',
   "./js/home-session.js": '4066767af86b6601',
-  "./js/home-settings.js": 'ad226838e6629316',
+  "./js/home-settings.js": '6560e33e431f68d7',
+  "./js/app-version.js": '7faf320b0308fa5d',
   "./js/location-title.js": '296d2d7d3d04d7f3',
   "./js/recipes.js": '2ca757945dc99521',
   "./js/calc.js": '3c9dbd187a60501c',
@@ -720,7 +722,7 @@ const ASSET_HASHES = {
 // code against rules that deployed instantly, which is the very thing the gate exists
 // to prevent. Two things stand between that and a release: the test that every ASSETS
 // entry EXISTS (a mistyped path being the likeliest permanent cause), and this
-// project's post-deploy sweep, which already asks the live site for all 285 files.
+// project's post-deploy sweep, which already asks the live site for all 286 files.
 // ⚠️ NEITHER covers a device-specific failure — nobody has yet confirmed an update
 // landing on a real iPhone under this code.
 //
@@ -955,6 +957,11 @@ self.addEventListener('message', e => {
   if (!e.source) return;
   if (e.data && e.data.action === 'skipWaiting') {
     self.skipWaiting();
+  }
+  // «Which version am I running?» — answered on the page's own port, for the
+  // App version row in Home → Settings.
+  if (e.data && e.data.action === 'version' && e.ports && e.ports[0]) {
+    e.ports[0].postMessage({ version: CACHE_NAME });
   }
 });
 
