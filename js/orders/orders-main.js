@@ -74,6 +74,8 @@ import {
 } from './archive.js';
 import { storedUnitFor, entryUnit, isDefaultUnit } from '../order-unit.js';
 import { todayOrders, pendingSuppliers } from './reminders.js';
+import { pendingDeliveries } from './deliveries.js';
+import { kioskOrderLines } from './kiosk-lines.js';
 import { renderTodayOrders, renderPending } from './reminder-view.js';
 import { resolveSuppliers, orderSuppliers, NO_SUPPLIER_ID } from './no-supplier.js';
 import { overrideSignature } from './line-supplier.js';
@@ -2838,5 +2840,27 @@ async function init() {
     checkPendingOnce();
   }, liveDataLost(() => t('orders.live.ingredients')));
 }
+
+// ── The kiosk rest screen (js/kiosk.js) ──────────────────────────────────────
+// The cover asks every page for extra lines with this window event and reads
+// `detail.lines` straight after dispatching, so the answer must be synchronous. It reuses
+// what the banners already compute (todayOrders, pendingDeliveries) from the data Orders
+// already holds: no Firestore read, no DOM work, and NO scheduleRender — a resting screen
+// must never wake the render scheduler. A failure here must not break the rest screen.
+window.addEventListener('kiosk-rest-info', event => {
+  try {
+    if (!state.loaded.suppliers || !state.loaded.history) return;
+    const today = todayISO();
+    const toOrder = todayOrders({ suppliers: state.suppliers, history: state.history, today })
+      .filter(row => !row.placed).map(row => row.supplier);
+    const suppliersById = {};
+    (state.suppliers || []).forEach(s => { suppliersById[s.id] = s; });
+    const deliveriesToday = pendingDeliveries(state.history, suppliersById, today,
+      { weekStartsOn: ordersConfig.weekStartsOn }).dueToday.length;
+    event.detail.lines.push(...kioskOrderLines({ toOrder, deliveriesToday }, t));
+  } catch (err) {
+    console.warn('The kiosk lines are not available:', err);
+  }
+});
 
 init();

@@ -51,6 +51,10 @@ export const KEEP_PREFIXES = Object.freeze([
   // WHOSE data the offline database copy holds (see offlineCacheVerdict below). It has
   // to outlive a venue switch, or the next boot could not tell a new person from the old.
   OFFLINE_CACHE_OWNER_KEY,
+  // Kiosk mode (js/kiosk.js): a setting of THIS DEVICE (a lab tablet), not of a person or
+  // a venue, and it holds no personal data. Signing out must not switch the tablet's
+  // kiosk off — the next person to sign in finds it as it was left.
+  'kiosk-',
 ]);
 
 // Given every key currently in storage, which ones must go.

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'theitalianclub-v558';
+const CACHE_NAME = 'theitalianclub-v565';
 // Firebase SDK modules (loaded from gstatic) are cached SEPARATELY from CACHE_NAME
 // so they survive the cache-version bump that happens on every deploy — otherwise
 // the offline SDK would be wiped each release until the next online load. The name
@@ -12,7 +12,7 @@ const CACHE_NAME = 'theitalianclub-v558';
 // the fetch handler below, on the first load that has a network.
 // So between activate() and that first load, a phone that is OFFLINE cannot boot:
 // the code asks for the new version and nothing has it. In practice the window is very
-// small — activate() only happens after a successful 288-file precache, i.e.
+// small — activate() only happens after a successful 292-file precache, i.e.
 // online, and tapping the update banner reloads the page immediately — but it is
 // not zero, and it is the reason to bump the SDK deliberately rather than often.
 // Leaving the name unchanged would close the window and cost ~1 MB of dead
@@ -148,6 +148,9 @@ const ASSETS = [
   // open. The two files above ARE listed: they are the Calculator's own half.
   './js/sw-update.js',
   './js/update-gate.js',
+  './js/kiosk.js',
+  './js/kiosk-model.js',
+  './js/wake-lock.js',
   './js/install-version.js',
   './js/install-version-boot.js',
   './js/install-hint.js',
@@ -250,6 +253,7 @@ const ASSETS = [
   './js/orders/archive.js',
   './js/orders/history-window.js',
   './js/orders/reminders.js',
+  './js/orders/kiosk-lines.js',
   './js/orders/reminder-view.js',
   './js/orders/suppliers.js',
   './js/orders/ingredients.js',
@@ -408,16 +412,16 @@ const ASSETS = [
 // hash (first 16 characters): the phone checks every download against it, and an update
 // copies a file whose hash has not changed out of the previous cache instead of fetching it.
 const ASSET_HASHES = {
-  "./": '941d8ee8dc45b049',
-  "./index.html": '941d8ee8dc45b049',
+  "./": '8027d149e737f088',
+  "./index.html": '8027d149e737f088',
   "./home.html": 'a4401ab28cb28eb9',
-  "./calculator.html": '087af6709bcba365',
-  "./orders.html": 'a4b453b6503f7086',
-  "./suppliers.html": '96fc05f1fed7d098',
+  "./calculator.html": '10eeeed816fd69c6',
+  "./orders.html": '3ddbe12f7ae3d349',
+  "./suppliers.html": 'ed55c318cba51168',
   "./install-guide.html": '155cc21e1c1dc524',
   "./qr.png": '761a95e5bc25e2ba',
   "./js/install-guide.js": '17fcd0c0fec489c2',
-  "./tokens.css": '3672a14fa08bcb1c',
+  "./tokens.css": 'be95331e1ba022d6',
   "./auth.css": 'e4ba63eda208115b',
   "./style.css": '2e10bd937e5e4509',
   "./orders.css": '550912deaebd0064',
@@ -481,6 +485,9 @@ const ASSET_HASHES = {
   "./js/help-button.js": '74575dcd436e06cc',
   "./js/sw-update.js": '645f66a2c7f40a6a',
   "./js/update-gate.js": '2387259480385bfb',
+  "./js/kiosk.js": '68fc99ee7dad95c0',
+  "./js/kiosk-model.js": '11735770388b0a44',
+  "./js/wake-lock.js": '3cc98d18c5e2cbab',
   "./js/install-version.js": 'a35dbefbbbaa3acf',
   "./js/install-version-boot.js": '0e0cea81512abcec',
   "./js/install-hint.js": 'ff453ada2a444fee',
@@ -489,14 +496,14 @@ const ASSET_HASHES = {
   "./js/home-orders-badge.js": 'b41b71d1d04f6ff8',
   "./js/splash-init.js": '0982bbf1d8228eab',
   "./js/whats-new.js": '28a18a0146f90592',
-  "./js/whats-new-boot.js": '2cff9db7522781f5',
+  "./js/whats-new-boot.js": 'fc298a84a183238b',
   "./js/firebase.js": '23490978214bea8d',
   "./js/firebase-target.js": 'b3759997e54ddbc3',
   "./js/same-data.js": '11ff91c9b0192d20',
   "./js/location.js": '6aaf53615a8739d1',
   "./js/sections.js": 'abcfdecb2bd5766d',
   "./js/roles.js": '2b491770c4b6165b',
-  "./js/i18n.js": '0c27837fd3cb45d5',
+  "./js/i18n.js": '3669bd32ae6200af',
   "./js/i18n-dom.js": '24249af4367511e5',
   "./js/keyboard-done.js": 'de05a6dd1f3aac26',
   "./js/join-code.js": '5b89de65db5c102f',
@@ -511,12 +518,12 @@ const ASSET_HASHES = {
   "./js/staff/people.js": 'e108038561ee08f4',
   "./js/staff/language.js": '3e4c115f6cfe2bd2',
   "./js/staff/home-cards-screen.js": 'a53963420fed4227',
-  "./js/local-data.js": 'dfc78ba9d0d1fbaa',
+  "./js/local-data.js": '15240f20e96af7e0',
   "./js/unsent-guard.js": 'd75b23b7ad361133',
   "./js/auth-gate.js": '087bd4f627f12197',
   "./js/preview-ribbon.js": 'ee39b7ee13f78c02',
   "./js/home-session.js": '4066767af86b6601',
-  "./js/home-settings.js": '9ea7dad3116eec71',
+  "./js/home-settings.js": '22977f1f07dd9ad8',
   "./js/app-version.js": '2ed7f01712161130',
   "./js/location-title.js": '296d2d7d3d04d7f3',
   "./js/recipes.js": '2ca757945dc99521',
@@ -546,7 +553,7 @@ const ASSET_HASHES = {
   "./js/orders/category-batches.js": '03d72f63c4fa4a8a',
   "./js/orders/confirm-dialog.js": '61a7f580f37c5ff8',
   "./js/orders/firebase-orders.js": 'de887575159d9af2',
-  "./js/orders/orders-main.js": 'e0b2a23961395a62',
+  "./js/orders/orders-main.js": '33e62d806a80332b',
   "./js/orders/dom.js": '7ec966d71c5356cd',
   "./js/orders/day.js": '107abcbdf353c709',
   "./js/orders/order-day.js": '1194fbe02f9a9686',
@@ -558,6 +565,7 @@ const ASSET_HASHES = {
   "./js/orders/archive.js": '3c1dab75b1779247',
   "./js/orders/history-window.js": 'f080bfc32d981c5a',
   "./js/orders/reminders.js": 'e9c255f18abea237',
+  "./js/orders/kiosk-lines.js": '5b8e62a965bec75d',
   "./js/orders/reminder-view.js": '8fef47478579d97e',
   "./js/orders/suppliers.js": 'b1fb5923228df1a8',
   "./js/orders/ingredients.js": 'cdcb74e00643cc06',
@@ -608,7 +616,7 @@ const ASSET_HASHES = {
   "./js/orders/order-summary.js": '0e2d3ad98ec27217',
   "./js/orders/order-cost-view.js": '4b03fed043e88d39',
   "./js/orders/order-summary-view.js": '2ab80dbb8b7fa26f',
-  "./catalogue.html": '90fb703beea7eac1',
+  "./catalogue.html": '5af9e8db9d18ce7b',
   "./catalogue.css": '24bc9da19a432bb4',
   "./label-print.css": 'ffbcdf4e7a627a2d',
   "./records.css": 'd9c17ed942d57f13',
@@ -642,11 +650,11 @@ const ASSET_HASHES = {
   "./js/catalogue/catalogue-detail.js": '52ab290f2feb8f75',
   "./js/catalogue/catalogue-editor.js": '73e9c0547e088baa',
   "./js/catalogue/guided-model.js": '60902e8129430dd7',
-  "./js/catalogue/guided-alarm.js": '55fb5626d4ef22e7',
+  "./js/catalogue/guided-alarm.js": '9104e391cb96f5ef',
   "./js/catalogue/guided-run.js": 'da10dcad21f5e8d8',
   "./js/catalogue/guided-editor.js": 'b93f216672607087',
   "./js/catalogue/import-to-calculator.js": '509d83f39384e106',
-  "./pastries.html": '77d770274f16f538',
+  "./pastries.html": '805d13e01d8a9494',
   "./pastries.css": '22cfec0973829369',
   "./js/pastries/confirm-dialog.js": '61a7f580f37c5ff8',
   "./js/pastries/dom.js": '84e0623e447bb7ab',
@@ -662,7 +670,7 @@ const ASSET_HASHES = {
   "./js/pastries/pastries-logs-store.js": '85cc1ec0c21baa30',
   "./js/pastries/pastries-logs.js": '91b2ec2a8704c3e5',
   "./js/pastries/tablet.js": 'c4b527a125c07873',
-  "./foodcost.html": '6b4ee431ef03f17b',
+  "./foodcost.html": '7fe1593768d00657',
   "./foodcost.css": '4dc25a1880002e8a',
   "./js/foodcost/confirm-dialog.js": '61a7f580f37c5ff8',
   "./js/foodcost/dom.js": '911105da04a03481',
@@ -679,7 +687,7 @@ const ASSET_HASHES = {
   "./js/foodcost/vat-guide-view.js": '34ce4c1f2df472ed',
   "./js/foodcost/product-limits.js": 'd73e12634551ea98',
   "./js/foodcost/foodcost-settings.js": '9627111b53f26939',
-  "./inventory.html": 'ff99413a9886cde0',
+  "./inventory.html": '30415c5efae98d2d',
   "./inventory.css": 'd80b7de1b5da298e',
   "./js/inventory/confirm-dialog.js": '61a7f580f37c5ff8',
   "./js/inventory/dom.js": '5971dfbbb1e223ec',
@@ -726,7 +734,7 @@ const ASSET_HASHES = {
 // code against rules that deployed instantly, which is the very thing the gate exists
 // to prevent. Two things stand between that and a release: the test that every ASSETS
 // entry EXISTS (a mistyped path being the likeliest permanent cause), and this
-// project's post-deploy sweep, which already asks the live site for all 288 files.
+// project's post-deploy sweep, which already asks the live site for all 292 files.
 // ⚠️ NEITHER covers a device-specific failure — nobody has yet confirmed an update
 // landing on a real iPhone under this code.
 //

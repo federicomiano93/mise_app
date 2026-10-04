@@ -14,7 +14,11 @@
 // never a row dressed like the others, and it still asks first.
 
 import { t } from './i18n.js';
-import { confirmDialog } from './confirm-dialog.js';
+import { confirmDialog, alertDialog } from './confirm-dialog.js';
+import {
+  KIOSK_STORAGE_KEY, REST_MINUTES_CHOICES, NIGHT_HOURS_CHOICES,
+  readKioskSettings, serializeKioskSettings,
+} from './kiosk-model.js';
 import { signOutNow, switchLocation, forgetLocation } from './firebase.js';
 import { mayLeaveWithUnsent } from './unsent-guard.js';
 import { buildAwayButton } from './away-screen.js';
@@ -60,13 +64,15 @@ function item(title, sub, onClick) {
   return btn;
 }
 
-// A card of rows under one title. A card with no rows is not drawn.
-function section(title, rows) {
+// A card of rows under one title. A card with no rows is not drawn. `headExtra` sits on
+// the title line (the kiosk card's one «Saved ✓»).
+function section(title, rows, headExtra = null) {
   const inner = rows.filter(Boolean);
   if (!inner.length) return null;
   const card = node('section', 'set-section');
   const head = node('div', 'set-head');
   head.append(node('h3', '', title));
+  if (headExtra) head.append(headExtra);
   card.append(head, ...inner);
   return card;
 }
@@ -135,7 +141,8 @@ export function openHomeSettings(session) {
       section(t('settings.home.account'), [
         !session.isAppAdmin && options.length > 1 ? item(t('home.switch'), t('settings.switch.sub'), switchVenue) : null,
       ]),
-      section(t('settings.home.app'), [versionRow()]),
+      // «This device»: what is true of THIS tablet or phone, not of a person or a venue.
+      section(t('settings.home.device'), [versionRow(), ...(session.canManage ? kioskRows() : [])], kioskSaved),
     ].filter(Boolean));
 
     // Log out: the quiet destructive action at the foot, never a row (P20).
@@ -322,6 +329,111 @@ export function openHomeSettings(session) {
     })().catch(err => console.warn('The app version is not available:', err));
 
     return row;
+  }
+
+  // ── Kiosk mode (this device only) ───────────────────────────────────────────
+  //
+  // Owner and manager only — the same gate as the language row. Stored in THIS device's
+  // localStorage (js/kiosk-model.js), never in Firestore; js/kiosk.js listens for the
+  // event below and switches on or off at once. A switch or single choice saves on the
+  // tap with «Saved ✓»; the two choices appear and vanish in place (hidden), so the rows
+  // above never move.
+  //
+  // ⚠️ ONE «Saved ✓», ON THE CARD'S TITLE LINE. Placed in a row or beside a choice's label it
+  // covered «Tablet del laboratorio» and «Spegni lo schermo dopo» at 296px (measured, 4 Oct
+  // 2026), and in the flow it would make the row taller for two seconds under a moving
+  // finger. The title line has free room on the right in both languages.
+  let kioskSaved = null;
+  function kioskRows() {
+    const read = () => { try { return localStorage.getItem(KIOSK_STORAGE_KEY); } catch { return null; } };
+    // False when the device refused the write; the caller puts its control back.
+    function store(change) {
+      try {
+        localStorage.setItem(KIOSK_STORAGE_KEY, serializeKioskSettings(read(), change));
+      } catch {
+        alertDialog(t('kiosk.settings.notSaved'));
+        return false;
+      }
+      window.dispatchEvent(new Event('kiosk-settings-changed'));
+      return true;
+    }
+    kioskSaved = node('span', 'set-saved', t('settings.saved'));
+    kioskSaved.setAttribute('role', 'status');
+    kioskSaved.hidden = true;
+    let savedTimer = null;
+    const flash = () => {
+      kioskSaved.hidden = false;
+      clearTimeout(savedTimer);
+      savedTimer = setTimeout(() => { kioskSaved.hidden = true; }, 2000);
+    };
+
+    const current = readKioskSettings(read());
+
+    // The switch row.
+    const cb = node('input');
+    cb.type = 'checkbox';
+    cb.setAttribute('role', 'switch');
+    cb.setAttribute('aria-label', t('kiosk.settings.title'));
+    cb.checked = current.enabled;
+    const text = node('span', 'set-text');
+    text.append(node('span', 'set-title', t('kiosk.settings.title')), node('span', 'set-sub', t('kiosk.settings.sub')));
+    const track = node('span', 'set-switch-track');
+    track.setAttribute('aria-hidden', 'true');
+    const switchLabel = node('label', 'set-switch');
+    switchLabel.append(cb, track);
+    const switchRow = node('div', 'set-row');
+    switchRow.append(text, switchLabel);
+
+    // The two choices and the note, one wrapper so they show and hide together.
+    const details = node('div');
+    details.hidden = !current.enabled;
+
+    function choice(labelKey, subKey, field, options, labelOf) {
+      const block = node('div', 'set-block');
+      const label = node('p', 'set-label', t(labelKey));
+      block.append(label);
+      if (subKey) block.append(node('span', 'set-sub', t(subKey)));
+      const seg = node('div', 'set-seg');
+      seg.setAttribute('role', 'group');
+      seg.setAttribute('aria-label', t(labelKey));
+      const buttons = options.map(value => {
+        const btn = node('button', 'set-seg-btn', labelOf(value));
+        btn.type = 'button';
+        btn.dataset.value = String(value);
+        btn.addEventListener('click', () => {
+          const was = readKioskSettings(read())[field];
+          if (was === value) return;
+          if (!store({ [field]: value })) return;
+          paint(value);
+          flash();
+        });
+        seg.append(btn);
+        return btn;
+      });
+      const paint = value => buttons.forEach(b => b.setAttribute('aria-pressed', String(b.dataset.value === String(value))));
+      paint(current[field]);
+      block.append(seg);
+      return block;
+    }
+
+    details.append(
+      choice('kiosk.settings.dimAfter', null, 'restMinutes', REST_MINUTES_CHOICES,
+        n => t('kiosk.settings.minutes', { n })),
+      choice('kiosk.settings.offAfter', 'kiosk.settings.offAfter.sub', 'nightHours', NIGHT_HOURS_CHOICES,
+        n => (n === 0 ? t('kiosk.settings.never') : t('kiosk.settings.hours', { n }))),
+    );
+    const noteBlock = node('div', 'set-block');
+    noteBlock.append(node('p', 'set-note', t('kiosk.settings.note')));
+    details.append(noteBlock);
+
+    cb.addEventListener('change', () => {
+      const wanted = cb.checked;
+      if (!store({ enabled: wanted })) { cb.checked = !wanted; return; }
+      details.hidden = !wanted;
+      flash();
+    });
+
+    return [switchRow, details];
   }
 
   function close() {

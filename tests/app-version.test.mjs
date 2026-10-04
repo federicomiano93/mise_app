@@ -109,7 +109,7 @@ test('the worker answers {action:"version"} on the port and still skips waiting'
 
 test('home-settings builds the App row in its own section', () => {
   const src = readFileSync(new URL('../js/home-settings.js', import.meta.url), 'utf8');
-  assert.match(src, /t\('settings\.home\.app'\)/);
+  assert.match(src, /t\('settings\.home\.device'\)/);
   assert.match(src, /updateNow\(/);
   assert.match(src, /askVersionOf\(/);
   assert.match(src, /set-row--version/);
