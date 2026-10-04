@@ -33,9 +33,13 @@ export function createRenderScheduler({ flush, raf }) {
     if (paused || !pending.size) return;
     const parts = new Set(pending);
     pending.clear();
-    flush(parts);
-    // Parts recorded WHILE drawing (a draw that asks for another) get their own frame.
-    request();
+    try {
+      flush(parts);
+    } finally {
+      // Parts recorded WHILE drawing (a draw that asks for another) get their own frame —
+      // and a flush that throws must not leave the scheduler waiting for ever.
+      request();
+    }
   }
 
   return {

@@ -107,7 +107,9 @@ test('every snapshot handler schedules its drawing instead of drawing', () => {
     'watchIngredientPrices((map, readable) =>',
     'watchCollection(COLLECTIONS.ingredients, list =>',
   ]) {
-    const body = handlerBody(opening);
+    // showAlerts() stays direct in the suppliers handler on purpose: it also raises the browser
+    // notification, which must fire while the page is hidden (no animation frames then).
+    const body = handlerBody(opening).replace(/\bshowAlerts\(\);/, '');
     assert.match(body, /scheduleRender\(/, `${opening} schedules`);
     assert.doesNotMatch(body, direct, `${opening} draws nothing directly`);
   }
@@ -154,9 +156,9 @@ test('applyHistory stores the list and no longer draws Incoming itself', () => {
 test('the flush draws Incoming once: render() already did when it got that far', () => {
   const at = main.indexOf('function flushRender(parts)');
   const body = main.slice(at, main.indexOf('\n}\n', at));
-  assert.match(body, /if \(parts\.has\('list'\)\) render\(\);/);
+  assert.match(body, /if \(parts\.has\('list'\)\) drawPart\('list', render\);/);
   assert.match(body, /parts\.has\('incoming'\) && !incomingDrawn/);
-  assert.match(body, /if \(parts\.has\('sync'\)\) syncInputsFromState\(\);\s*else if \(parts\.has\('money'\)\) paintMoney\(\);/);
+  assert.match(body, /if \(parts\.has\('sync'\)\) drawPart\('sync', syncInputsFromState\);\s*else if \(parts\.has\('money'\)\) drawPart\('money', paintMoney\);/);
   assert.match(main, /function renderIncoming\(\) \{\s*incomingDrawCount \+= 1;/);
 });
 
@@ -188,4 +190,33 @@ test('checkPendingOnce stores state.pending and schedules the banner instead of 
   assert.match(body, /state\.pending = pendingSuppliers\(/);
   assert.match(body, /scheduleRender\('reminders'\)/);
   assert.doesNotMatch(body, /renderReminders\(\)/);
+});
+
+// Review of 4 Oct 2026: one part that throws must not stop the others, nor the scheduler.
+test('a flush that throws does not leave the scheduler stuck', () => {
+  const frames = [];
+  let calls = 0;
+  const scheduler = createRenderScheduler({
+    flush: () => { calls += 1; if (calls === 1) throw new Error('boom'); },
+    raf: cb => frames.push(cb),
+  });
+  scheduler.schedule('list');
+  assert.throws(() => frames.splice(0).forEach(cb => cb()));
+  scheduler.schedule('history');
+  frames.splice(0).forEach(cb => cb());
+  assert.equal(calls, 2, 'the next schedule is drawn');
+});
+
+test('every part of the flush is drawn on its own, so one failure leaves the others', () => {
+  const flush = main.slice(main.indexOf('function flushRender('), main.indexOf('function dropListViews('));
+  for (const name of ['list', 'sync', 'money', 'history', 'incoming', 'reminders', 'untold', 'summary', 'requestList', 'openRequest']) {
+    assert.match(flush, new RegExp(`drawPart\\('${name}', `), name);
+  }
+  assert.match(main, /function drawPart\(name, draw\) \{\n\s*try \{ draw\(\); \} catch \(err\) \{ console\.error\(/);
+});
+
+test('holiday and delivery-clash alerts are raised at once, not on the next frame', () => {
+  assert.doesNotMatch(main, /'alerts'/, 'alerts are no longer a deferred part');
+  const supp = main.slice(main.indexOf("state.loaded.suppliers = true;"), main.indexOf("checkPendingOnce();", main.indexOf("state.loaded.suppliers = true;")));
+  assert.match(supp, /showAlerts\(\);/);
 });

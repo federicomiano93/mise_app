@@ -1,4 +1,4 @@
-const CACHE_NAME = 'theitalianclub-v555';
+const CACHE_NAME = 'theitalianclub-v556';
 // Firebase SDK modules (loaded from gstatic) are cached SEPARATELY from CACHE_NAME
 // so they survive the cache-version bump that happens on every deploy — otherwise
 // the offline SDK would be wiped each release until the next online load. The name
@@ -544,7 +544,7 @@ const ASSET_HASHES = {
   "./js/orders/category-batches.js": '03d72f63c4fa4a8a',
   "./js/orders/confirm-dialog.js": '61a7f580f37c5ff8',
   "./js/orders/firebase-orders.js": 'de887575159d9af2',
-  "./js/orders/orders-main.js": 'dd1af36f461085fd',
+  "./js/orders/orders-main.js": 'e0b2a23961395a62',
   "./js/orders/dom.js": '7ec966d71c5356cd',
   "./js/orders/day.js": '107abcbdf353c709',
   "./js/orders/order-day.js": '1194fbe02f9a9686',
@@ -562,7 +562,7 @@ const ASSET_HASHES = {
   "./js/orders/no-supplier.js": '185050fd12a0a2b0',
   "./js/orders/line-supplier.js": '3d9d21bdc79b2955',
   "./js/orders/memo.js": '5629ad18c45095f2',
-  "./js/orders/render-scheduler.js": 'd66d35f241a3dd71',
+  "./js/orders/render-scheduler.js": 'ba85c95abb13b359',
   "./js/orders/ingredient-search.js": 'b205e1d0d4d5185c',
   "./js/orders/ingredient-list.js": 'bd69097d0d4af250',
   "./js/orders/search-box.js": '471bb6f217d97442',

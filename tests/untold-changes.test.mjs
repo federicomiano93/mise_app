@@ -187,7 +187,7 @@ test('⚠️⚠️ the banner is repainted when the draft changes AND when a lis
   assert.ok(watcher.slice(0, watcher.indexOf('liveDataLost')).includes("scheduleRender('untold'"),
     'sending the list again must be able to silence it');
   // ...and the one-pass flush is what actually repaints it (the old direct call, now batched).
-  assert.match(MAIN, /parts\.has\('untold'\)[^\n]*renderUntoldChanges\(\)/);
+  assert.match(MAIN, /parts\.has\('untold'\)[^\n]*drawPart\('untold', renderUntoldChanges\)/);
 });
 
 // ⚠️ IT IS DERIVED, SO THERE IS NOTHING TO DISMISS. A dismissal would be a stored

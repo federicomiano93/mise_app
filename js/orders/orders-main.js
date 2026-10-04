@@ -470,21 +470,28 @@ export function setRenderPaused(paused) {
 
 // The order of the old direct calls, with the repeats folded: render() already redraws Incoming
 // (and the open summary) when it gets that far, and a sync already repaints the money.
+// ⚠️ EACH PART IS DRAWN ON ITS OWN (review of 4 Oct 2026): one part that throws must not stop
+// the others. Before the scheduler every listener drew its own pieces, so a bug in one list
+// left the banners, History and Incoming alone; in one shared pass an uncaught error would
+// skip everything after it until the next snapshot (P17). The error is still logged.
+function drawPart(name, draw) {
+  try { draw(); } catch (err) { console.error(`Orders: drawing «${name}» failed`, err); }
+}
+
 function flushRender(parts) {
   const incomingBefore = incomingDrawCount;
-  if (parts.has('list')) render();
+  if (parts.has('list')) drawPart('list', render);
   const incomingDrawn = incomingDrawCount !== incomingBefore;
-  if (parts.has('sync')) syncInputsFromState();
-  else if (parts.has('money')) paintMoney();
-  if (parts.has('history')) renderHistory();
-  if (parts.has('incoming') && !incomingDrawn) renderIncoming();
-  if (parts.has('alerts')) showAlerts();
-  if (parts.has('reminders')) renderReminders();
+  if (parts.has('sync')) drawPart('sync', syncInputsFromState);
+  else if (parts.has('money')) drawPart('money', paintMoney);
+  if (parts.has('history')) drawPart('history', renderHistory);
+  if (parts.has('incoming') && !incomingDrawn) drawPart('incoming', renderIncoming);
+  if (parts.has('reminders')) drawPart('reminders', renderReminders);
   // renderReminders already redraws the untold banner when suppliers are in.
-  if (parts.has('untold') && !(parts.has('reminders') && state.loaded.suppliers)) renderUntoldChanges();
-  if (parts.has('summary')) renderSummary();
-  if (parts.has('requestList') && requestListView) renderRequestList();
-  if (parts.has('openRequest')) renderOpenRequest();
+  if (parts.has('untold') && !(parts.has('reminders') && state.loaded.suppliers)) drawPart('untold', renderUntoldChanges);
+  if (parts.has('summary')) drawPart('summary', renderSummary);
+  if (parts.has('requestList') && requestListView) drawPart('requestList', renderRequestList);
+  if (parts.has('openRequest')) drawPart('openRequest', renderOpenRequest);
 }
 
 // Both list views own nodes inside the shared container, so whenever it is wiped or
@@ -2799,7 +2806,11 @@ async function init() {
     // suppliers that had them — and stayed wrong until something else forced a
     // repaint. Two live collections feed one screen, so both must redraw it. Same
     // shape as the recipe cost that computed once and said "no cost yet" (v247).
-    scheduleRender('list', 'history', 'incoming', 'alerts', 'reminders');
+    scheduleRender('list', 'history', 'incoming', 'reminders');
+    // NOT deferred: showAlerts() also raises the browser notification for a holiday or a
+    // delivery clash (notifications.js maybeNotify), which must fire even while this page is
+    // in the background, where animation frames do not run. It is cheap.
+    showAlerts();
     checkPendingOnce();
   }, liveDataLost(() => t('orders.live.suppliers')));
   // ⚠️ THE PRICES ARE A SECOND COLLECTION AND ARRIVE SEPARATELY. They moved off
