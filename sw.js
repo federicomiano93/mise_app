@@ -1,4 +1,4 @@
-const CACHE_NAME = 'theitalianclub-v566';
+const CACHE_NAME = 'theitalianclub-v567';
 // Firebase SDK modules (loaded from gstatic) are cached SEPARATELY from CACHE_NAME
 // so they survive the cache-version bump that happens on every deploy — otherwise
 // the offline SDK would be wiped each release until the next online load. The name
@@ -412,12 +412,12 @@ const ASSETS = [
 // hash (first 16 characters): the phone checks every download against it, and an update
 // copies a file whose hash has not changed out of the previous cache instead of fetching it.
 const ASSET_HASHES = {
-  "./": '8027d149e737f088',
-  "./index.html": '8027d149e737f088',
+  "./": 'fb6d4386faa840f8',
+  "./index.html": 'fb6d4386faa840f8',
   "./home.html": 'a4401ab28cb28eb9',
-  "./calculator.html": '10eeeed816fd69c6',
-  "./orders.html": '3ddbe12f7ae3d349',
-  "./suppliers.html": 'ed55c318cba51168',
+  "./calculator.html": '3364609a9b29718d',
+  "./orders.html": 'e1cc2322509dfbe5',
+  "./suppliers.html": 'd0d861102a8e44b4',
   "./install-guide.html": '155cc21e1c1dc524',
   "./qr.png": '761a95e5bc25e2ba',
   "./js/install-guide.js": '17fcd0c0fec489c2',
@@ -616,7 +616,7 @@ const ASSET_HASHES = {
   "./js/orders/order-summary.js": '0e2d3ad98ec27217',
   "./js/orders/order-cost-view.js": '4b03fed043e88d39',
   "./js/orders/order-summary-view.js": '2ab80dbb8b7fa26f',
-  "./catalogue.html": '5af9e8db9d18ce7b',
+  "./catalogue.html": 'f27b622a01c793d7',
   "./catalogue.css": '24bc9da19a432bb4',
   "./label-print.css": 'ffbcdf4e7a627a2d',
   "./records.css": 'd9c17ed942d57f13',
@@ -654,7 +654,7 @@ const ASSET_HASHES = {
   "./js/catalogue/guided-run.js": 'da10dcad21f5e8d8',
   "./js/catalogue/guided-editor.js": 'b93f216672607087',
   "./js/catalogue/import-to-calculator.js": '509d83f39384e106',
-  "./pastries.html": '805d13e01d8a9494',
+  "./pastries.html": '5b32dd4773909a38',
   "./pastries.css": '22cfec0973829369',
   "./js/pastries/confirm-dialog.js": '61a7f580f37c5ff8',
   "./js/pastries/dom.js": '84e0623e447bb7ab',
@@ -670,7 +670,7 @@ const ASSET_HASHES = {
   "./js/pastries/pastries-logs-store.js": '85cc1ec0c21baa30',
   "./js/pastries/pastries-logs.js": '91b2ec2a8704c3e5',
   "./js/pastries/tablet.js": 'c4b527a125c07873',
-  "./foodcost.html": '7fe1593768d00657',
+  "./foodcost.html": '7e90db00b416f5bc',
   "./foodcost.css": '4dc25a1880002e8a',
   "./js/foodcost/confirm-dialog.js": '61a7f580f37c5ff8',
   "./js/foodcost/dom.js": '911105da04a03481',
@@ -687,7 +687,7 @@ const ASSET_HASHES = {
   "./js/foodcost/vat-guide-view.js": '34ce4c1f2df472ed',
   "./js/foodcost/product-limits.js": 'd73e12634551ea98',
   "./js/foodcost/foodcost-settings.js": '9627111b53f26939',
-  "./inventory.html": '30415c5efae98d2d',
+  "./inventory.html": 'd9762babb2ebdec6',
   "./inventory.css": 'd80b7de1b5da298e',
   "./js/inventory/confirm-dialog.js": '61a7f580f37c5ff8',
   "./js/inventory/dom.js": '5971dfbbb1e223ec',
@@ -761,8 +761,7 @@ const VERIFY_FINGERPRINTS = !['localhost', '127.0.0.1', '::1', '[::1]'].includes
 
 // A body's git blob hash, the same one scripts/sw-hashes.mjs recorded: sha1 of
 // "blob <length>\0" followed by the bytes.
-async function blobHash(response) {
-  const body = new Uint8Array(await response.clone().arrayBuffer());
+async function blobHashOf(body) {
   const head = new TextEncoder().encode(`blob ${body.byteLength}\0`);
   const all = new Uint8Array(head.length + body.length);
   all.set(head);
@@ -771,11 +770,47 @@ async function blobHash(response) {
   return [...digest].map(b => b.toString(16).padStart(2, '0')).join('').slice(0, 16);
 }
 
-// The response, carrying its fingerprint — which is how the NEXT update recognises it.
-function stamped(response, hash) {
+async function blobHash(response) {
+  return blobHashOf(new Uint8Array(await response.clone().arrayBuffer()));
+}
+
+// ⚠️ A DOWNLOADED BODY IS READ ONCE (weak-tablet plan A3). It used to be cloned for the
+// hash and streamed again for the cache, which buffers every file twice on a 1.5 GB
+// tablet. The bytes are read here, hashed, and the cached Response is built from the
+// very same bytes.
+async function download(response) {
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  return { response, bytes, hash: await blobHashOf(bytes) };
+}
+
+// The bytes, carrying their fingerprint — which is how the NEXT update recognises them.
+function stamped({ response, bytes }, hash) {
   const headers = new Headers(response.headers);
   headers.set(HASH_HEADER, hash);
-  return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
+  return new Response(bytes, { status: response.status, statusText: response.statusText, headers });
+}
+
+// ⚠️ AT MOST 6 DOWNLOADS IN FLIGHT. The whole list used to leave in one burst: GitHub
+// Pages has answered 503 to bursts, and ~290 bodies in memory at once is a peak a
+// 1.5 GB lab tablet does not have. Results are per asset, in the order given, with
+// allSettled semantics: one failure never stops the others.
+const PRECACHE_CONCURRENCY = 6;
+
+async function settledPool(items, limit, work) {
+  const results = new Array(items.length);
+  let next = 0;
+  const lane = async () => {
+    while (next < items.length) {
+      const i = next++;
+      try {
+        results[i] = { status: 'fulfilled', value: await work(items[i]) };
+      } catch (reason) {
+        results[i] = { status: 'rejected', reason };
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, lane));
+  return results;
 }
 
 // The caches earlier releases left behind, newest first: where an unchanged file is
@@ -808,14 +843,15 @@ async function cacheOne(cache, donors, asset) {
   }
   let res = await fetch(request);
   if (!res.ok) throw new Error(`${asset}: HTTP ${res.status}`);
-  let got = await blobHash(res);
+  res = await download(res);
+  let got = res.hash;
   if (VERIFY_FINGERPRINTS && want && got !== want) {
     // Most likely the CDN still holding the previous copy for a minute after a deploy.
     // The same file asked for under an address it has never seen goes past it.
     const again = await fetch(new Request(`${asset}${asset.includes('?') ? '&' : '?'}fp=${want}`, { cache: 'reload' }));
     if (again.ok) {
-      const againHash = await blobHash(again);
-      if (againHash === want) { res = again; got = againHash; }
+      const second = await download(again);
+      if (second.hash === want) { res = second; got = second.hash; }
     }
   }
   // ⚠️⚠️ A COPY THAT STILL DOES NOT MATCH IS STORED ANYWAY — NEVER REFUSED (code review,
@@ -838,7 +874,7 @@ async function precache() {
     // Back off before a retry, never before the first attempt: a throttle that is
     // answered immediately is simply the same burst again.
     if (attempt > 1) await new Promise(done => setTimeout(done, 400 * (attempt - 1)));
-    const results = await Promise.allSettled(pending.map(asset => cacheOne(cache, donors, asset)));
+    const results = await settledPool(pending, PRECACHE_CONCURRENCY, asset => cacheOne(cache, donors, asset));
     pending = pending.filter((url, i) => results[i].status === 'rejected');
   }
   if (pending.length) {

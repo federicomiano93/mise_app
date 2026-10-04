@@ -47,9 +47,9 @@ const abs = asset => new URL(asset, SW_URL).href;
 // responseType: what the network's answers claim to be. Node builds every Response as
 // 'default'; a browser's cross-origin fetch answers 'cors', and the SDK branch of sw.js
 // stores only those — so without this the storing half of that branch never runs here.
-function loadWorker({ fails = () => false, stale = () => false, existingCaches = [], donors = {}, hostname = 'example.test', responseType = null } = {}) {
+function loadWorker({ fails = () => false, stale = () => false, existingCaches = [], donors = {}, hostname = 'example.test', responseType = null, latency = 0 } = {}) {
   const listeners = new Map();
-  const record = { puts: [], attempts: [], inits: [], opened: [], deleted: [], skipWaiting: 0 };
+  const record = { puts: [], attempts: [], inits: [], opened: [], deleted: [], skipWaiting: 0, inFlight: 0, maxInFlight: 0 };
   const attemptsFor = new Map();
   const stores = new Map();
   let context;
@@ -113,7 +113,11 @@ function loadWorker({ fails = () => false, stale = () => false, existingCaches =
       if (fails(url, attempt)) return Promise.reject(new TypeError('Failed to fetch ' + url));
       const res = new Response(stale(url, attempt) ? `stale:${url}` : `asset:${url}`, { status: 200 });
       if (responseType) Object.defineProperty(res, 'type', { value: responseType });
-      return Promise.resolve(res);
+      if (!latency) return Promise.resolve(res);
+      // A download that takes a moment, so the number in flight at once can be measured.
+      record.inFlight += 1;
+      record.maxInFlight = Math.max(record.maxInFlight, record.inFlight);
+      return new Promise(done => setTimeout(() => { record.inFlight -= 1; done(res); }, latency));
     },
     crypto: {
       subtle: {
@@ -374,6 +378,51 @@ test('the SDK cache is never used as a source: it holds other files under other 
   const w = loadWorker({ donors: { [names.read('SDK_CACHE')]: { './index.html': names.read('ASSET_HASHES')['./index.html'] } } });
   await install(w);
   assert.ok(w.record.attempts.includes(abs('./index.html')));
+});
+
+// ── Downloads are limited and read once (weak-tablet plan A3) ────────────────
+
+test('⚠⚠ at most PRECACHE_CONCURRENCY downloads are in flight at once, yet still more than one', async () => {
+  const w = loadWorker({ latency: 2 });
+  const limit = w.read('PRECACHE_CONCURRENCY');
+  assert.equal(limit, 6);
+  await install(w);
+  assert.ok(w.record.attempts.length > 50, 'the slice must be big enough to burst');
+  assert.ok(w.record.maxInFlight <= limit, `${w.record.maxInFlight} downloads were in flight at once`);
+  assert.ok(w.record.maxInFlight > 1, 'the install must still download in parallel');
+});
+
+test('⚠ the limit holds on a retry too, and a file failing twice then succeeding still installs', async () => {
+  const w = loadWorker({ latency: 1, fails: (url, attempt) => /\/(orders|style)\.css$/.test(url) && attempt <= 2 });
+  const assets = w.read('ASSETS');
+  await install(w);
+  assert.ok(w.record.maxInFlight <= 6);
+  assert.deepEqual([...w.record.added].sort(), [...assets].map(abs).sort());
+});
+
+test('⚠ one file failing on every attempt still refuses the install and names it, among others that succeeded', async () => {
+  const w = loadWorker({ latency: 1, fails: url => url.endsWith('/orders.css') });
+  await assert.rejects(install(w), /precache incomplete: 1 of \d+ assets failed — .*orders\.css/);
+  assert.ok(w.record.added.length > 100, 'one failure must not stop the others');
+});
+
+test('⚠⚠ the cached body is exactly the downloaded bytes, stamped with its fingerprint', async () => {
+  const w = loadWorker();
+  await install(w);
+  const stored = w.stores.get(w.read('CACHE_NAME')).get(abs('./orders.css'));
+  assert.equal(await stored.text(), `asset:${abs('./orders.css')}`);
+  assert.equal(stored.status, 200);
+  assert.equal(stored.headers.get('x-mise-hash'), w.read('ASSET_HASHES')['./orders.css']);
+});
+
+test('⚠ a donor copy with the matching hash is copied through the pool, not fetched', async () => {
+  const names = loadWorker();
+  const hashes = names.read('ASSET_HASHES');
+  const w = loadWorker({ latency: 1, donors: { 'theitalianclub-v1': { './index.html': hashes['./index.html'] } } });
+  await install(w);
+  assert.ok(!w.record.attempts.includes(abs('./index.html')));
+  const stored = w.stores.get(w.read('CACHE_NAME')).get(abs('./index.html'));
+  assert.equal(await stored.text(), 'donated:./index.html');
 });
 
 // ── Serving ──────────────────────────────────────────────────────────────────
