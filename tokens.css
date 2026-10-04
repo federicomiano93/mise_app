@@ -103,6 +103,13 @@
    in this app ever wants a [hidden] element visible. One rule, every screen. */
 [hidden] { display: none !important; }
 
+/* One finger scrolls, nothing else is left to the browser. This switches off the
+   browser's own pinch-zoom, which js/hold-to-zoom.js already blocked with
+   preventDefault() — so nothing changes for the person — and it is what lets that
+   file's touch listeners be passive: a non-passive touch listener on the document
+   makes EVERY one-finger scroll wait for the main thread (a weak tablet stutters). */
+html { touch-action: pan-x pan-y; }
+
 :root {
   /* ── Ground & surfaces ───────────────────────────────────────────────── */
   --bg:        #F4EDE0;   /* page background (warm neutral ground) */
