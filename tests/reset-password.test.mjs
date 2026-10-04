@@ -122,3 +122,12 @@ test('firebase.js and its example both export the two reset helpers', () => {
     assert.match(s, /verifyPasswordResetCode,\s*\n\s*confirmPasswordReset,/, f);
   }
 });
+
+// The first drive showed the form in the browser's Times: this page loads no style.css,
+// where the app's body font lives. The page's body carries .auth-page, which sets it.
+test('the reset page sets the app font on its body', () => {
+  const html = readFileSync(new URL('../reset-password.html', import.meta.url), 'utf8');
+  const css = readFileSync(new URL('../auth.css', import.meta.url), 'utf8');
+  assert.match(html, /<body class="auth-page">/);
+  assert.match(css, /\.auth-page \{ font-family: var\(--font\);/);
+});
