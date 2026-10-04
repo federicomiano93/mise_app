@@ -5,7 +5,7 @@ import {
   restoreRevealed, clearRevealed, restoreLock, clearLock, getLock,
 } from './calc.js';
 import { saveDay, editTab, renderLog } from './log.js';
-import { openRecipes, closeRecipes, goHomeFromRecipes } from './recipes.js';
+import { openRecipes, closeRecipes, goHomeFromRecipes, saveRecipes } from './recipes.js';
 import { openSettings } from './calculator-settings.js';
 import './log-settings.js';
 import { shareMarketOrder, closeLoafModal, sendWithLoaves, closeListPicker, closeWhoPicker } from './whatsapp.js';
@@ -441,6 +441,7 @@ document.getElementById('header-back-btn').addEventListener('click', () => {
 document.getElementById('log-footer-btn').addEventListener('click', () => switchTab('log'));
 document.getElementById('settings-footer-btn').addEventListener('click', openSettings);
 document.querySelector('.recipe-back-btn').addEventListener('click', closeRecipes);
+document.getElementById('recipe-save-btn').addEventListener('click', saveRecipes);
 document.getElementById('recipe-home-btn').addEventListener('click', goHomeFromRecipes);
 document.querySelector('.loaf-modal-cancel').addEventListener('click', closeLoafModal);
 document.querySelector('.loaf-modal-send').addEventListener('click', sendWithLoaves);

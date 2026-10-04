@@ -19,7 +19,7 @@
 //   • Level 3  → add to the message: this client's own products, then everyone
 //                else's, then a box for a name that is in neither list
 //
-// PERSISTENCE MODEL: each item is saved from ITS OWN detail screen (a bottom Save).
+// PERSISTENCE MODEL: each item is saved from ITS OWN detail screen (the Save in the header).
 // The top screen has NO Save — it only lists items and deletes them, and a delete is
 // applied immediately (with confirmation). Leaving a detail with unsaved edits prompts
 // to discard. Returning to the top re-reads the saved config, so unsaved edits never
@@ -66,7 +66,7 @@ function waTitle() { return document.querySelector('#wa-overlay .recipe-overlay-
 // accidental exit mid-edit), matching the Clients editor.
 function setHomeVisible(visible) {
   const btn = document.getElementById('wa-home-btn');
-  if (btn) btn.style.display = visible ? '' : 'none';
+  if (btn) btn.hidden = !visible;
 }
 
 function markDirty() { dirty = true; }
@@ -138,6 +138,8 @@ function goHome() { window.location.href = 'index.html'; }
 
 // ── Render dispatch ────────────────────────────────────────────────────────────
 function renderEditor() {
+  // The header Save belongs to the three detail levels only; each of them turns it on.
+  setSaveVisible(false);
   if (activeDirect !== null) {
     if (addingProduct) { renderProductPicker(); return; }
     renderDirectDetail();
@@ -150,10 +152,9 @@ function renderEditor() {
   renderEntryDetail();
 }
 
-function saveBottomButton() {
-  const btn = el('button', { class: 'cp-save-bottom', type: 'button' }, t('ui.save'));
-  btn.addEventListener('click', saveDetail);
-  return btn;
+function setSaveVisible(visible) {
+  const btn = document.getElementById('wa-save-btn');
+  if (btn) btn.hidden = !visible;
 }
 
 function deleteIcon(label, onDelete) {
@@ -344,7 +345,7 @@ function renderListDetail() {
   addClient.addEventListener('click', () => { choosingClient = true; renderEditor(); });
   content.appendChild(addClient);
 
-  content.appendChild(saveBottomButton());
+  setSaveVisible(true);
 }
 
 // One client-entry card: the client's name (from the address book), a summary of its
@@ -491,7 +492,7 @@ function renderEntryDetail() {
   content.appendChild(productsField(entry));
   content.appendChild(addProductButton());
   content.appendChild(freeLinesField(entry));
-  content.appendChild(saveBottomButton());
+  setSaveVisible(true);
 }
 
 function renderDirectDetail() {
@@ -513,7 +514,7 @@ function renderDirectDetail() {
   content.appendChild(productsField(dc));
   content.appendChild(addProductButton());
   content.appendChild(freeLinesField(dc));
-  content.appendChild(saveBottomButton());
+  setSaveVisible(true);
 }
 
 // One added-product row: the product name and a small remove icon. Removing a single
@@ -665,4 +666,5 @@ function byHandField(target, added) {
 
 // ── Static wiring (elements exist in calculator.html) ──────────────────────────
 document.querySelector('.wa-back-btn').addEventListener('click', backWhatsapp);
+document.getElementById('wa-save-btn').addEventListener('click', saveDetail);
 document.getElementById('wa-home-btn').addEventListener('click', goHome);

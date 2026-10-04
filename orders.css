@@ -1291,7 +1291,6 @@ input.ing-stock {
 .history-older-btn:active { transform: scale(.97); }
 
 /* ── History editor overlay ───────────────────────────────────────────────── */
-.hist-edit-save { width: auto; padding: 0 10px; font-size: 15px; font-weight: 600; }
 .hist-edit-what {
   font-family: 'DM Mono', monospace;
   font-size: 12px;

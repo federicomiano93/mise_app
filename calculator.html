@@ -145,10 +145,11 @@
 <div id="recipe-overlay">
   <div class="recipe-overlay-header">
     <button class="app-icon-btn recipe-back-btn"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
-    <span class="recipe-overlay-title" data-i18n="ui.recipes">Recipes</span>
+    <button type="button" class="app-header-save" id="recipe-save-btn" data-i18n="ui.save">Save</button>
     <button class="app-icon-btn" id="recipe-home-btn" type="button" data-i18n="ui.home" data-i18n-attr="aria-label" aria-label="Home">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 9.5V21h14V9.5"/></svg>
     </button>
+    <span class="recipe-overlay-title" data-i18n="ui.recipes">Recipes</span>
   </div>
   <div class="recipe-scroll">
     <div class="recipe-content" id="recipe-content"></div>
@@ -226,16 +227,16 @@
 <div id="extra-overlay">
   <div class="recipe-overlay-header">
     <button class="app-icon-btn extra-back-btn"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
-    <span class="recipe-overlay-title" data-i18n="calc.extraDough2">Extra dough</span>
+    <button type="button" class="app-header-save" id="extra-save-btn" data-i18n="ui.save" disabled>Save</button>
     <button class="app-icon-btn" id="extra-home-btn" type="button" data-i18n="ui.home" data-i18n-attr="aria-label" aria-label="Home">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 9.5V21h14V9.5"/></svg>
     </button>
+    <span class="recipe-overlay-title" data-i18n="calc.extraDough2">Extra dough</span>
   </div>
   <div class="recipe-scroll">
     <div id="extra-content">
       <p class="extra-help" data-i18n="ui.showTheExtraDough">Show the “Extra dough” box in each recipe tab. Tap Save to apply your changes.</p>
       <div id="extra-content-list"></div>
-      <button class="cp-save-bottom" id="extra-save-btn" type="button" disabled data-i18n="ui.save">Save</button>
     </div>
   </div>
 </div>
@@ -243,10 +244,11 @@
 <div id="divisor-overlay">
   <div class="recipe-overlay-header">
     <button class="app-icon-btn divisor-back-btn"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
-    <span class="recipe-overlay-title" data-i18n="ui.divisor">Divisor</span>
+    <button type="button" class="app-header-save" id="divisor-save-btn" data-i18n="ui.save" hidden>Save</button>
     <button class="app-icon-btn" id="divisor-home-btn" type="button" data-i18n="ui.home" data-i18n-attr="aria-label" aria-label="Home">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 9.5V21h14V9.5"/></svg>
     </button>
+    <span class="recipe-overlay-title" data-i18n="ui.divisor">Divisor</span>
   </div>
   <div class="recipe-scroll">
     <div id="divisor-content"></div>
@@ -256,10 +258,11 @@
 <div id="cosettings-overlay">
   <div class="recipe-overlay-header">
     <button class="app-icon-btn overlay-back-btn cosettings-back-btn" type="button" data-i18n="ui.back" data-i18n-attr="aria-label" aria-label="Back"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
-    <span class="recipe-overlay-title" data-i18n="ui.clientOrdering">Client ordering</span>
+    <button type="button" class="app-header-save" id="cosettings-save-btn" data-i18n="ui.save">Save</button>
     <a class="app-icon-btn" href="index.html" data-i18n="ui.home" data-i18n-attr="aria-label" aria-label="Home">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 9.5V21h14V9.5"/></svg>
     </a>
+    <span class="recipe-overlay-title" data-i18n="ui.clientOrdering">Client ordering</span>
   </div>
   <div class="recipe-scroll">
     <div id="cosettings-content"></div>
@@ -269,10 +272,11 @@
 <div id="logsettings-overlay">
   <div class="recipe-overlay-header">
     <button class="app-icon-btn logsettings-back-btn"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
-    <span class="recipe-overlay-title" data-i18n="ui.log">Log</span>
+    <button type="button" class="app-header-save" id="logsettings-save-btn" data-i18n="ui.save">Save</button>
     <button class="app-icon-btn" id="logsettings-home-btn" type="button" data-i18n="ui.home" data-i18n-attr="aria-label" aria-label="Home">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 9.5V21h14V9.5"/></svg>
     </button>
+    <span class="recipe-overlay-title" data-i18n="ui.log">Log</span>
   </div>
   <div class="recipe-scroll">
     <div id="logsettings-content"></div>
@@ -282,10 +286,11 @@
 <div id="wa-overlay">
   <div class="recipe-overlay-header">
     <button class="app-icon-btn wa-back-btn"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
-    <span class="recipe-overlay-title" data-i18n="ui.whatsapp">WhatsApp</span>
+    <button type="button" class="app-header-save" id="wa-save-btn" data-i18n="ui.save" hidden>Save</button>
     <button class="app-icon-btn" id="wa-home-btn" type="button" data-i18n="ui.home" data-i18n-attr="aria-label" aria-label="Home">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 9.5V21h14V9.5"/></svg>
     </button>
+    <span class="recipe-overlay-title" data-i18n="ui.whatsapp">WhatsApp</span>
   </div>
   <div class="recipe-scroll">
     <div id="wa-content"></div>
@@ -295,10 +300,11 @@
 <div id="cp-overlay">
   <div class="recipe-overlay-header">
     <button class="app-icon-btn cp-back-btn"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
-    <span class="recipe-overlay-title" data-i18n="ui.clients">Clients</span>
+    <button type="button" class="app-header-save" id="cp-save-btn" data-i18n="ui.save">Save</button>
     <button class="app-icon-btn" id="cp-home-btn" type="button" data-i18n="ui.home" data-i18n-attr="aria-label" aria-label="Home">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 9.5V21h14V9.5"/></svg>
     </button>
+    <span class="recipe-overlay-title" data-i18n="ui.clients">Clients</span>
   </div>
   <div class="recipe-scroll">
     <div id="cp-content"></div>
@@ -416,6 +422,7 @@
 <div id="logedit-overlay" class="log-overlay">
   <div class="recipe-overlay-header">
     <button class="app-icon-btn logedit-back-btn"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
+    <button type="button" class="app-header-save" id="logedit-save-btn" data-i18n="ui.save">Save</button>
     <span class="recipe-overlay-title" data-i18n="ui.editLog">Edit log</span>
   </div>
   <div class="recipe-scroll"><div id="logedit-content"></div></div>
@@ -425,6 +432,7 @@
 <div id="logadd-overlay" class="log-overlay">
   <div class="recipe-overlay-header">
     <button class="app-icon-btn logadd-back-btn"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
+    <button type="button" class="app-header-save" id="logadd-save-btn" data-i18n="ui.save" hidden>Save</button>
     <span class="recipe-overlay-title" data-i18n="ui.addLog">Add log</span>
   </div>
   <div class="recipe-scroll"><div id="logadd-content"></div></div>

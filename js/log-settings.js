@@ -42,9 +42,6 @@ function render() {
     t('calc.forEachRecipeChoose') +
     t('calc.logsAreAlwaysKept')));
   getRecipes(getConfig()).forEach(r => c.appendChild(recipeCard(r)));
-  const save = el('button', { class: 'cp-save-bottom', type: 'button' }, t('calc.saveChanges'));
-  save.addEventListener('click', saveAll);
-  c.appendChild(save);
 }
 
 // One card per recipe: its products (for context) + the two editable settings.
@@ -92,6 +89,7 @@ async function closeLogSettings() {
 }
 
 document.getElementById('open-logsettings-btn').addEventListener('click', openLogSettings);
+document.getElementById('logsettings-save-btn').addEventListener('click', saveAll);
 document.querySelector('.logsettings-back-btn').addEventListener('click', closeLogSettings);
 document.getElementById('logsettings-home-btn').addEventListener('click', async () => {
   if (!(await confirmDiscard(dirty))) return;

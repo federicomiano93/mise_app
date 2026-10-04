@@ -53,6 +53,9 @@ function loadRecipe(id) {
 function render() {
   const c = document.getElementById('logadd-content');
   c.textContent = '';
+  // The header Save appears only once a recipe is picked (turned on at the end).
+  const saveBtn = document.getElementById('logadd-save-btn');
+  saveBtn.hidden = true;
 
   // Recipe chooser (required, first).
   c.appendChild(el('div', { class: 'cp-label' }, t('ui.recipe')));
@@ -113,9 +116,7 @@ function render() {
     }
   }
 
-  const save = el('button', { class: 'cp-save-bottom', type: 'button' }, t('calc.saveLog'));
-  save.addEventListener('click', commit);
-  c.appendChild(save);
+  saveBtn.hidden = false;
 }
 
 // Build and save a brand-new log — same generic math/shape as a calculator Confirm.
@@ -143,4 +144,5 @@ async function commit() {
 }
 
 // ── Wiring (elements exist in calculator.html) ────────────────────────────────
+document.getElementById('logadd-save-btn').addEventListener('click', commit);
 document.querySelector('.logadd-back-btn').addEventListener('click', () => close(false));

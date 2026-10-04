@@ -862,6 +862,45 @@ body[data-card="suppliers"] .app-header {
 .app-icon-btn:focus-visible { outline: 2px solid var(--on-brand); outline-offset: 2px; }
 .app-icon-btn[hidden] { display: none; }
 
+/* The screen's ONE Save, in the green header on the right (4 Oct 2026): a cream pill
+   with the word, 36px to look at and 44px to touch — the same trick as .app-icon-btn,
+   with no border, so the padding box is the visible box and -4px reaches 44px.
+   --brand on --surface is ~10:1. It is a <button> and carries its own [hidden] (a
+   screen shows it only on the levels that save) and :disabled (a form with nothing
+   changed). The on-brand focus ring, as on every header control. */
+.app-header-save {
+  appearance: none;
+  position: relative;
+  box-sizing: border-box;
+  height: 36px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--brand);
+  font-family: var(--font);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform .06s ease;
+}
+.app-header-save::before {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: 999px;
+}
+.app-header-save:active:not(:disabled) { transform: scale(.97); }
+.app-header-save:focus-visible { outline: 2px solid var(--on-brand); outline-offset: 2px; }
+.app-header-save:disabled { opacity: .5; cursor: default; }
+.app-header-save[hidden] { display: none; }
+
 /* ── Kiosk rest screen (js/kiosk.js) ─────────────────────────────────────────
    9500: above the app's own screens (the sign-in cover is 9000, the overlays 9100),
    below the update banner (9999) and the dialogs (10000), so an update can still be

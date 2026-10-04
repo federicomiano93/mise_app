@@ -71,7 +71,7 @@ export function openLogEdit(logId) {
   document.getElementById('logedit-overlay').classList.add('visible');
 }
 
-// `dirty` no longer drives a button — "Save changes" at the bottom is always
+// `dirty` does not drive the header Save (#logedit-save-btn) — it is always
 // pressable — but it still raises the unsaved-changes question on the way out.
 function markDirty() { dirty = true; }
 
@@ -98,16 +98,9 @@ function render() {
     }
     card.appendChild(qtyRow(it, (q) => { it.qty = q; markDirty(); }));
   }
-
-  c.appendChild(saveBottom());
 }
 
 // ── Save (append a new version) ───────────────────────────────────────────────
-function saveBottom() {
-  const b = el('button', { class: 'cp-save-bottom', type: 'button' }, t('calc.saveChanges'));
-  b.addEventListener('click', save);
-  return b;
-}
 
 async function save() {
   if (!(await confirmDialog({ message: t('calc.saveTheseChangesAs'), okLabel: t('ui.save'), cancelLabel: t('ui.cancel') }))) return;
@@ -225,5 +218,6 @@ function openHistoryVersion(i) {
 }
 
 // ── Wiring ────────────────────────────────────────────────────────────────────
+document.getElementById('logedit-save-btn').addEventListener('click', save);
 document.querySelector('.logedit-back-btn').addEventListener('click', () => closeEdit(false));
 document.querySelector('.loghistory-back-btn').addEventListener('click', closeHistory);

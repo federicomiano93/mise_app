@@ -1262,6 +1262,43 @@ input.cp-prod-weight {
   color: var(--on-brand);
   letter-spacing: -0.3px;
 }
+/* ⚠️ A header that holds the screen's Save (.app-header-save, tokens.css) has less
+   room for the title: the Save pill (~66px) and often Home sit on the right, and the
+   title is out of the flow, so it would be drawn UNDER them (at 296px, worst in
+   Italian). While the Save is showing, the title gets a window between Back and the
+   first right-hand button instead of the 52% centre block, and the text is centred in
+   that window:
+   • Save alone → the window is symmetric (Save's width + gaps on BOTH sides), so the
+     title stays exactly centred;
+   • Save + Home → the window is [Back … Save): the title sits left of centre (about
+     40px) rather than go under a button — a symmetric window would leave ~16px at
+     296px. The same trade the Orders headers make at 296px (ui-check skill).
+   Below 360px the title is also a little smaller, because the window is narrow, and
+   Save alone uses the Back-to-Save window too.
+   ⚠️ NO :has() (off the table in this project, tests/calculator-tablet.test.mjs): the
+   title is the LAST child of these headers, after Save and Home, so the sibling
+   combinator can see whether they are showing. Visually the order is unchanged (the
+   title is out of the flow). Home is hidden with the `hidden` attribute, never a style. */
+.recipe-overlay-header { --ov-pad: max(16px, var(--app-gutter)); }
+.app-header-save:not([hidden]) ~ .recipe-overlay-title {
+  left: calc(var(--ov-pad) + 66px + 8px);
+  right: calc(var(--ov-pad) + 66px + 8px);
+  transform: none;
+  max-width: none;
+}
+.app-header-save:not([hidden]) ~ .app-icon-btn:not([hidden]) ~ .recipe-overlay-title {
+  left: calc(var(--ov-pad) + 36px + 8px);
+  right: calc(var(--ov-pad) + 66px + 12px + 36px + 8px);
+}
+@media (max-width: 359px) {
+  /* Too narrow for a symmetric window: Save alone also gets [Back … Save) (~15px
+     left of centre) — a title cut to «Aggiungi regi…» is worse than a title slightly
+     off centre. */
+  .app-header-save:not([hidden]) ~ .recipe-overlay-title {
+    left: calc(var(--ov-pad) + 36px + 8px);
+    font-size: 18px;
+  }
+}
 /* The Home shortcut (.overlay-home-btn) and every Back above are `.app-icon-btn`
    in the markup (tokens.css): the round rim look is the shared one, defined once.
    Only the placement is this bar's own. */

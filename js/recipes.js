@@ -51,7 +51,7 @@ function recipes() {
 
 function setHomeVisible(visible) {
   const btn = document.getElementById('recipe-home-btn');
-  if (btn) btn.style.display = visible ? '' : 'none';
+  if (btn) btn.hidden = !visible;
 }
 
 function markDirty() { dirty = true; }
@@ -124,7 +124,7 @@ function findInvalid() {
   return null;
 }
 
-async function saveRecipes() {
+export async function saveRecipes() {
   const invalid = findInvalid();
   if (invalid !== null) {
     showErrors = true;
@@ -187,11 +187,8 @@ function renderRecipeList() {
     renderEditor();
   });
   content.appendChild(add);
-
-  // The list itself can be saved (e.g. after a delete or a visibility change).
-  const save = el('button', { class: 'cp-save-bottom', type: 'button' }, t('ui.save'));
-  save.addEventListener('click', saveRecipes);
-  content.appendChild(save);
+  // The list itself can be saved (e.g. after a delete or a visibility change): the
+  // header Save (#recipe-save-btn, wired in app.js) is on both levels.
 }
 
 async function deleteRecipe(ri) {
@@ -330,10 +327,6 @@ function renderRecipeDetail(ri) {
   content.appendChild(el('div', { class: 'cp-field' }, [
     el('label', { class: 'cp-crate-label' }, [visCb, el('span', {}, t('calc.showAsACalculator') + MAX_VISIBLE_RECIPES + ')')]),
   ]));
-
-  const save = el('button', { class: 'cp-save-bottom', type: 'button' }, t('ui.save'));
-  save.addEventListener('click', saveRecipes);
-  content.appendChild(save);
 }
 
 // One ingredient row: name (autocomplete) + grams + optional "leavening" radio + remove.

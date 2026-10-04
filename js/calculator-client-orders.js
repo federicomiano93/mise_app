@@ -490,8 +490,10 @@ function renderCutoffSettings() {
       t('calc.cutoff.empty')),
   ]));
 
-  const save = el('button', { class: 'cp-add-prod', type: 'button' }, t('ui.save'));
-  save.addEventListener('click', async () => {
+  // The Save lives in the header (static in calculator.html). The screen is redrawn
+  // on every open, and a property handler replaces the old one instead of stacking.
+  const save = document.getElementById('cosettings-save-btn');
+  save.onclick = async () => {
     const wanted = normalizeCutoff(input.value);
     if (input.value && !CUTOFF_PATTERN.test(input.value)) {
       await alertDialog(t('calc.thatIsNotA'));
@@ -513,8 +515,7 @@ function renderCutoffSettings() {
       await alertDialog(t('calc.notSavedCheckYour'));
     }
     save.disabled = false;
-  });
-  content.appendChild(save);
+  };
 }
 
 export function initClientOrders(injected) {

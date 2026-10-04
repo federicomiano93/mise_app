@@ -78,7 +78,7 @@ function cpTitle() { return document.querySelector('#cp-overlay .recipe-overlay-
 // The header Home button is hidden on detail screens, shown on the list.
 function setHomeVisible(visible) {
   const btn = document.getElementById('cp-home-btn');
-  if (btn) btn.style.display = visible ? '' : 'none';
+  if (btn) btn.hidden = !visible;
 }
 
 function openClients() {
@@ -123,8 +123,8 @@ async function goHomeFromClients() {
   window.location.href = 'index.html';
 }
 
-// `dirty` no longer drives a button — the green Save at the bottom is always
-// pressable — but it is still what asks "Discard unsaved changes?" on the way out.
+// `dirty` does not drive the header Save (#cp-save-btn) — it is always pressable —
+// but it is still what asks "Discard unsaved changes?" on the way out.
 function markDirty() { dirty = true; }
 
 // The index of the first client that is invalid (a blank name, or a product with no
@@ -182,12 +182,6 @@ function renderEditor() {
   else renderClientDetail(activeClient);
 }
 
-function saveBottomButton(onSave) {
-  const btn = el('button', { class: 'cp-save-bottom', type: 'button' }, t('ui.save'));
-  btn.addEventListener('click', onSave);
-  return btn;
-}
-
 function deleteIcon(label, onDelete) {
   const btn = el('button', { class: 'cp-del-icon', type: 'button', 'aria-label': label }, icon('trash', 17));
   btn.addEventListener('click', onDelete);
@@ -243,8 +237,7 @@ function renderClientList() {
   content.appendChild(add);
 
   // ⚠️ The list is savable in its own right: dragging a client to reorder marks
-  // changes, and with the header Save gone this is the only way to keep a reorder.
-  content.appendChild(saveBottomButton(saveClients));
+  // changes, so the header Save (#cp-save-btn) stays on this level too.
 }
 
 function clientBox(client, ci) {
@@ -315,7 +308,6 @@ function renderClientDetail(ci) {
   content.appendChild(field);
 
   content.appendChild(orderingLinkField(client));
-  content.appendChild(saveBottomButton(saveClients));
 }
 
 // ── The client's own ordering link ────────────────────────────────────────────
@@ -679,7 +671,13 @@ function setDivisorTitle(text) {
 }
 function setDivisorHomeVisible(visible) {
   const btn = document.getElementById('divisor-home-btn');
-  if (btn) btn.style.display = visible ? '' : 'none';
+  if (btn) btn.hidden = !visible;
+}
+
+// The header Save exists only on the detail level (and only when it lists products).
+function setDivisorSaveVisible(visible) {
+  const btn = document.getElementById('divisor-save-btn');
+  if (btn) btn.hidden = !visible;
 }
 
 function updateDivisorSaveBtn() {
@@ -697,6 +695,7 @@ function renderDivisorSettings() {
 function renderDivisorTabChooser() {
   setDivisorTitle(t('ui.divisor'));
   setDivisorHomeVisible(true);
+  setDivisorSaveVisible(false);
   const content = document.getElementById('divisor-content');
   content.textContent = '';
   content.appendChild(el('p', { class: 'extra-help' },
@@ -728,15 +727,14 @@ function renderDivisorTabDetail(tab) {
   });
   if (products.length === 0) {
     content.appendChild(el('div', { class: 'cp-empty-hint' }, t('calc.noProductsInThis3')));
+    setDivisorSaveVisible(false);
     return;
   }
   products.forEach(p => content.appendChild(divisorProductRow(tab, p)));
   const clearBtn = el('button', { class: 'divisor-clear-btn', type: 'button' }, t('calc.untickAll'));
   clearBtn.addEventListener('click', () => clearDivisorTab(tab));
   content.appendChild(clearBtn);
-  const saveBtn = el('button', { class: 'cp-save-bottom', id: 'divisor-save-btn', type: 'button' }, t('ui.save'));
-  saveBtn.addEventListener('click', saveDivisor);
-  content.appendChild(saveBtn);
+  setDivisorSaveVisible(true);
   updateDivisorSaveBtn();
 }
 
@@ -779,6 +777,7 @@ async function saveDivisor() {
 
 document.getElementById('open-divisor-btn').addEventListener('click', openDivisor);
 document.querySelector('.divisor-back-btn').addEventListener('click', backDivisor);
+document.getElementById('divisor-save-btn').addEventListener('click', saveDivisor);
 document.getElementById('divisor-home-btn').addEventListener('click', async () => {
   if (!(await confirmDiscard(divisorDirty))) return;
   window.location.href = 'index.html';
@@ -790,4 +789,5 @@ document.getElementById('open-clients-btn').addEventListener('click', openClient
 document.getElementById('open-whatsapp-btn').addEventListener('click', openWhatsapp);
 document.getElementById('open-recipes-btn').addEventListener('click', openRecipes);
 document.querySelector('.cp-back-btn').addEventListener('click', closeClients);
+document.getElementById('cp-save-btn').addEventListener('click', saveClients);
 document.getElementById('cp-home-btn').addEventListener('click', goHomeFromClients);
