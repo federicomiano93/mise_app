@@ -8,29 +8,30 @@ import {
   HISTORY_LIVE_MONTHS, liveHistoryStart, mergeHistory, olderFooterState, historyEmptyKind,
 } from '../js/orders/history-window.js';
 
-test('the live window is four calendar months', () => {
-  assert.equal(HISTORY_LIVE_MONTHS, 4);
+// Two since 4 Oct 2026 (the cost of re-reading the window at every opening; see the constant).
+test('the live window is two calendar months', () => {
+  assert.equal(HISTORY_LIVE_MONTHS, 2);
 });
 
-test('liveHistoryStart: four calendar months back, day clamped to the month', () => {
-  assert.equal(liveHistoryStart(new Date(2026, 6, 31)), '2026-03-31');
-  assert.equal(liveHistoryStart(new Date(2026, 5, 30)), '2026-02-28');
-  assert.equal(liveHistoryStart(new Date(2028, 5, 30)), '2028-02-29');
-  assert.equal(liveHistoryStart(new Date(2027, 0, 15)), '2026-09-15');
-  assert.equal(liveHistoryStart(new Date(2026, 9, 1)), '2026-06-01');
+test('liveHistoryStart: two calendar months back, day clamped to the month', () => {
+  assert.equal(liveHistoryStart(new Date(2026, 6, 31)), '2026-05-31');
+  assert.equal(liveHistoryStart(new Date(2026, 3, 30)), '2026-02-28');
+  assert.equal(liveHistoryStart(new Date(2028, 3, 30)), '2028-02-29');
+  assert.equal(liveHistoryStart(new Date(2027, 0, 15)), '2026-11-15');
+  assert.equal(liveHistoryStart(new Date(2026, 9, 1)), '2026-08-01');
 });
 
 test('liveHistoryStart: a clock-change day does not shift the date', () => {
   // UK clocks went forward on 29 Mar 2026 and back on 25 Oct 2026.
-  assert.equal(liveHistoryStart(new Date(2026, 6, 29, 0, 30)), '2026-03-29');
-  assert.equal(liveHistoryStart(new Date(2026, 9, 25, 1, 30)), '2026-06-25');
+  assert.equal(liveHistoryStart(new Date(2026, 4, 29, 0, 30)), '2026-03-29');
+  assert.equal(liveHistoryStart(new Date(2026, 11, 25, 1, 30)), '2026-10-25');
 });
 
 test('liveHistoryStart reads the LOCAL date, not the UTC one', () => {
   // 23:30 local on the 31st is already the next day in UTC for any zone east of Greenwich.
-  assert.equal(liveHistoryStart(new Date(2026, 6, 31, 23, 30)), '2026-03-31');
+  assert.equal(liveHistoryStart(new Date(2026, 6, 31, 23, 30)), '2026-05-31');
   // 00:30 local on the 1st is still the previous day in UTC for any zone west of it.
-  assert.equal(liveHistoryStart(new Date(2026, 7, 1, 0, 30)), '2026-04-01');
+  assert.equal(liveHistoryStart(new Date(2026, 7, 1, 0, 30)), '2026-06-01');
 });
 
 test('mergeHistory: union by id, the live copy wins, inputs untouched', () => {

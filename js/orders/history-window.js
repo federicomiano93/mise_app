@@ -8,7 +8,14 @@
 import { toISODate } from './day.js';
 
 // The one definition of "recent". Settings text and the empty state quote it.
-export const HISTORY_LIVE_MONTHS = 4;
+//
+// ⚠️ TWO, NOT FOUR (Federico, 4 Oct 2026). Every opening of Orders re-reads the whole window
+// from the offline cache, and the NUMBER of records is what costs: measured on a weak-tablet
+// profile (CPU 6×, ~150 records in four months) four months took 3.4 s of CPU and two 2.6 s
+// (−24%, the list drawn 0.35 s sooner); reading once instead of listening changed nothing.
+// Two months still holds the last 8 orders a weekly supplier's suggestions average
+// (suggestions.js); a monthly supplier falls under MIN_ORDERS — his accepted trade-off.
+export const HISTORY_LIVE_MONTHS = 2;
 
 // "YYYY-MM-DD" exactly HISTORY_LIVE_MONTHS calendar months before today's LOCAL date, the
 // day clamped to the length of that month (31 Jul -> 31 Mar, 30 Jun -> 28 Feb).
