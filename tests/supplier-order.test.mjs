@@ -67,7 +67,8 @@ test('activeSuppliers sorts through sortSuppliersByOrder with the config order',
   assert.match(src, /memoLast\(\(suppliers, order\) => sortSuppliersByOrder\(/);
   assert.match(src, /function activeSuppliers\(\) \{[^}]*sortActiveSuppliers\(state\.suppliers, ordersConfig\.supplierOrder\)/);
   assert.match(src, /ordersConfig\.supplierOrder/);
-  assert.match(src, /if \(orderChanged\) render\(\)/);
+  // Drawn by the one-pass scheduler since the render pass (tests/orders-render-scheduler.test.mjs).
+  assert.match(src, /if \(orderChanged\) scheduleRender\('list'\)/);
 });
 
 test('the Settings door sits inside the boss-only branch', () => {
