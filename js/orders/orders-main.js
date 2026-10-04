@@ -2849,7 +2849,7 @@ async function init() {
 // must never wake the render scheduler. A failure here must not break the rest screen.
 window.addEventListener('kiosk-rest-info', event => {
   try {
-    if (!state.loaded.suppliers) return;
+    if (!state.loaded.suppliers || !state.loaded.history) return;
     const today = todayISO();
     const toOrder = todayOrders({ suppliers: state.suppliers, history: state.history, today })
       .filter(row => !row.placed).map(row => row.supplier);

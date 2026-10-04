@@ -1,4 +1,4 @@
-const CACHE_NAME = 'theitalianclub-v563';
+const CACHE_NAME = 'theitalianclub-v564';
 // Firebase SDK modules (loaded from gstatic) are cached SEPARATELY from CACHE_NAME
 // so they survive the cache-version bump that happens on every deploy — otherwise
 // the offline SDK would be wiped each release until the next online load. The name
@@ -421,7 +421,7 @@ const ASSET_HASHES = {
   "./install-guide.html": '155cc21e1c1dc524',
   "./qr.png": '761a95e5bc25e2ba',
   "./js/install-guide.js": '17fcd0c0fec489c2',
-  "./tokens.css": '3e4ae7af42d85d96',
+  "./tokens.css": 'ad4def0ffae669da',
   "./auth.css": 'e4ba63eda208115b',
   "./style.css": '2e10bd937e5e4509',
   "./orders.css": '550912deaebd0064',
@@ -485,8 +485,8 @@ const ASSET_HASHES = {
   "./js/help-button.js": '74575dcd436e06cc',
   "./js/sw-update.js": '645f66a2c7f40a6a',
   "./js/update-gate.js": '2387259480385bfb',
-  "./js/kiosk.js": '4d52fe77fd20d092',
-  "./js/kiosk-model.js": 'd1ebfdfbdb6d7a0b',
+  "./js/kiosk.js": '68fc99ee7dad95c0',
+  "./js/kiosk-model.js": '11735770388b0a44',
   "./js/wake-lock.js": '3cc98d18c5e2cbab',
   "./js/install-version.js": 'a35dbefbbbaa3acf',
   "./js/install-version-boot.js": '0e0cea81512abcec',
@@ -496,7 +496,7 @@ const ASSET_HASHES = {
   "./js/home-orders-badge.js": 'b41b71d1d04f6ff8',
   "./js/splash-init.js": '0982bbf1d8228eab',
   "./js/whats-new.js": '28a18a0146f90592',
-  "./js/whats-new-boot.js": '2cff9db7522781f5',
+  "./js/whats-new-boot.js": 'fc298a84a183238b',
   "./js/firebase.js": '23490978214bea8d',
   "./js/firebase-target.js": 'b3759997e54ddbc3',
   "./js/same-data.js": '11ff91c9b0192d20',
@@ -523,7 +523,7 @@ const ASSET_HASHES = {
   "./js/auth-gate.js": '087bd4f627f12197',
   "./js/preview-ribbon.js": 'ee39b7ee13f78c02',
   "./js/home-session.js": '4066767af86b6601',
-  "./js/home-settings.js": 'a9e4433cc945abca',
+  "./js/home-settings.js": '5fac4cd11c644dd2',
   "./js/app-version.js": '2ed7f01712161130',
   "./js/location-title.js": '296d2d7d3d04d7f3',
   "./js/recipes.js": '2ca757945dc99521',
@@ -553,7 +553,7 @@ const ASSET_HASHES = {
   "./js/orders/category-batches.js": '03d72f63c4fa4a8a',
   "./js/orders/confirm-dialog.js": '61a7f580f37c5ff8',
   "./js/orders/firebase-orders.js": 'de887575159d9af2',
-  "./js/orders/orders-main.js": 'a55130102881e750',
+  "./js/orders/orders-main.js": '33e62d806a80332b',
   "./js/orders/dom.js": '7ec966d71c5356cd',
   "./js/orders/day.js": '107abcbdf353c709',
   "./js/orders/order-day.js": '1194fbe02f9a9686',

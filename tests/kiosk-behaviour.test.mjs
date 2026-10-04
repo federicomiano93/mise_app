@@ -53,7 +53,8 @@ async function makeEnv({ settings = { enabled: true, restMinutes: 2, nightHours:
   doc.body = new El(doc, 'body'); doc.body.isConnected = true;
   doc.documentElement = new El(doc, 'html');
   doc.gate = new El(doc, 'div'); doc.gate.isConnected = true;
-  const win = { addEventListener: add, removeEventListener() {}, dispatchEvent: () => true, document: doc };
+  const events = [];
+  const win = { addEventListener: add, removeEventListener() {}, dispatchEvent: ev => { events.push(ev.type); return true; }, document: doc };
   const reloads = { n: 0 };
   const waiting = { value: false };
   const define = (k, v) => Object.defineProperty(globalThis, k, { value: v, configurable: true, writable: true });
@@ -76,7 +77,7 @@ async function makeEnv({ settings = { enabled: true, restMinutes: 2, nightHours:
 
   const settle = () => new Promise(r => setTimeout(r, 0));
   return {
-    k, doc, clock, reloads, updates, waiting, settle,
+    k, doc, clock, reloads, updates, waiting, settle, events,
     cover: () => doc.body.children.find(c => c.id === 'kiosk-rest') || null,
     advance(ms) { clock.now += ms; },
     fire(type) { (listeners.get(type) || []).forEach(fn => fn({ type })); },
@@ -179,13 +180,41 @@ test('a focused field does not stop the rest, but holds back the reloads', () =>
   e.advance(3 * MIN);
   await e.tick();
   assert.equal(e.k.state(), 'rest', 'rests with a field focused');
+  assert.notEqual(e.doc.activeElement, input, 'the cover took the focus');
   e.waiting.value = true;
-  input.focus();                          // the person's field has the focus again
+  await e.tick();                         // NOT re-focused by hand: the field that had it still counts
+  assert.equal(e.updates.n, 0, 'no auto-update while a field was left focused');
+  e.advance(61 * MIN);
   await e.tick();
-  assert.equal(e.updates.n, 0, 'no auto-update while a field is focused');
-  e.doc.activeElement = null;
+  assert.equal(e.k.state(), 'night');
+  assert.equal(e.reloads.n, 0, 'no daily reload either');
+  input.remove();                         // the field is gone from the page
   await e.tick();
   assert.equal(e.updates.n, 1);
+}));
+
+test('a focused checkbox is not typing', () => inEnv({}, async e => {
+  const box = new El(e.doc, 'input'); box.type = 'checkbox';
+  e.doc.body.append(box); box.focus();
+  e.advance(3 * MIN); await e.tick();
+  e.waiting.value = true;
+  await e.tick();
+  assert.equal(e.updates.n, 1);
+}));
+
+test('a signed-out tablet holds no wake lock; a signed-in one does', () => inEnv({}, async e => {
+  assert.equal(e.k.hasLock(), true);
+  e.k.session({ status: 'signed-out' });
+  assert.equal(e.k.hasLock(), false);
+  e.k.session({ status: 'ready', name: 'V' });
+  assert.equal(e.k.hasLock(), true);
+}));
+
+test('taking the cover off announces kiosk-awake', () => inEnv({}, async e => {
+  e.advance(3 * MIN); await e.tick();
+  assert.ok(!e.events.includes('kiosk-awake'));
+  e.k.session({ status: 'signed-out' });
+  assert.ok(e.events.includes('kiosk-awake'));
 }));
 
 test('the daily reload happens exactly once, at the rest→night transition, and comes back dark', () => inEnv({}, async e => {

@@ -101,7 +101,26 @@ function afterSignIn() {
   });
 }
 
+// Kiosk mode (js/kiosk.js): after an UNATTENDED update the page comes back under the black
+// rest cover, and a dialog opened now would light up the screen in the middle of the night
+// (and count as work). So the notice waits until the cover is taken off — js/kiosk.js
+// announces that with a `kiosk-awake` window event. Both are js/ root files: no import.
+// Looked at when the notice WANTS to open, not at load: the cover goes up in kiosk.js's own
+// start-up, which may run after this file's first lines.
+async function afterKioskAwake(resumed) {
+  // A resumed page whose cover is not up yet: give kiosk.js one turn to raise it. (If kiosk
+  // mode has since been switched off the key is stale and nothing will ever come, so do not
+  // wait for it for ever.)
+  if (resumed && !document.getElementById('kiosk-rest')) await new Promise(r => setTimeout(r, 0));
+  if (!document.getElementById('kiosk-rest')) return;
+  await new Promise(resolve => {
+    window.addEventListener('kiosk-awake', () => resolve(), { once: true });
+  });
+}
+
 async function run() {
+  let resumed = false;
+  try { resumed = sessionStorage.getItem('kiosk-resume') !== null; } catch { /* ignore */ }
   const seen = readSeen();
   if (seen === null) return;                 // storage unavailable — stay quiet
 
@@ -121,6 +140,7 @@ async function run() {
 
   await afterSignIn();
   await afterSplash();
+  await afterKioskAwake(resumed);
 
   // Recorded BEFORE the dialog opens, not after. The alternative re-shows the same
   // notice for ever if the page is closed or reloaded while it is open — and being

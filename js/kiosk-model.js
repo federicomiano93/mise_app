@@ -54,7 +54,9 @@ export function nextKioskState({ state, now, lastInputAt, restSince, busy, signe
   } else if (next === 'rest') {
     if (s.nightHours > 0 && Number(now) - Number(restSince) >= s.nightHours * HOUR) next = 'night';
   }
-  return { state: next, wakeLock: next !== 'night' };
+  // No lock in night (so Android can switch the backlight off) and none while signed out
+  // (a bright sign-in form all night).
+  return { state: next, wakeLock: next !== 'night' && !!signedIn };
 }
 
 // An update may be applied only while nobody is looking at the screen.

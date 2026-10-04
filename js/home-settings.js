@@ -352,7 +352,6 @@ export function openHomeSettings(session) {
     function savedChip(host) {
       const chip = node('span', 'set-saved', t('settings.saved'));
       chip.hidden = true;
-      chip.style.alignSelf = 'flex-start';
       let timer = null;
       host.flash = () => {
         chip.hidden = false;
@@ -372,14 +371,13 @@ export function openHomeSettings(session) {
     cb.checked = current.enabled;
     const rowHost = {};
     const rowSaved = savedChip(rowHost);
-    rowSaved.style.alignSelf = '';
     const text = node('span', 'set-text');
     text.append(node('span', 'set-title', t('kiosk.settings.title')), node('span', 'set-sub', t('kiosk.settings.sub')));
     const track = node('span', 'set-switch-track');
     track.setAttribute('aria-hidden', 'true');
     const switchLabel = node('label', 'set-switch');
     switchLabel.append(cb, track);
-    const switchRow = node('div', 'set-row');
+    const switchRow = node('div', 'set-row set-row--kiosk');
     switchRow.append(text, rowSaved, switchLabel);
 
     // The two choices and the note, one wrapper so they show and hide together.
@@ -388,7 +386,7 @@ export function openHomeSettings(session) {
 
     function choice(labelKey, subKey, field, options, labelOf) {
       const host = {};
-      const block = node('div', 'set-block');
+      const block = node('div', 'set-block set-block--kiosk');
       const label = node('p', 'set-label', t(labelKey));
       block.append(label);
       if (subKey) block.append(node('span', 'set-sub', t(subKey)));

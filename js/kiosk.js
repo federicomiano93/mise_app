@@ -217,6 +217,9 @@ function hideRest() {
   overlay = null;
   overlayParts = null;
   if (!gone) return;
+  // js/whats-new-boot.js waits for this before opening its notice, so an unattended
+  // update never lights a dialog over the black cover (both are js/ root: no import).
+  try { window.dispatchEvent(new Event('kiosk-awake')); } catch { /* ignore */ }
   if (reducedMotion()) { gone.remove(); return; }
   gone.classList.remove('kiosk-rest--shown');
   setTimeout(() => gone.remove(), FADE_MS);
@@ -224,11 +227,19 @@ function hideRest() {
 
 // ── The state machine, driven ────────────────────────────────────────────────
 
-function typingNow() {
-  const a = document.activeElement;
+const NON_TEXT_INPUTS = ['checkbox', 'radio', 'button', 'submit', 'reset', 'image', 'file', 'range', 'color'];
+function isField(a) {
   if (!a || a === document.body) return false;
   const tag = a.tagName;
-  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || a.isContentEditable === true;
+  if (tag === 'INPUT') return !NON_TEXT_INPUTS.includes(String(a.type || '').toLowerCase());
+  return tag === 'TEXTAREA' || tag === 'SELECT' || a.isContentEditable === true;
+}
+// ⚠️ While the cover is up the focus is ON the cover, so «is a field focused» alone would
+// always be false: the field that had the focus when the screen went to rest still counts,
+// for as long as it is on the page — it holds back the reloads (never the rest).
+function typingNow() {
+  if (isField(document.activeElement)) return true;
+  return state !== 'active' && !!focusBeforeRest && focusBeforeRest.isConnected && isField(focusBeforeRest);
 }
 
 // ⚠️ THE UPDATE GATE IS NOT WORK. It is `.app-dialog-backdrop` (a BUSY selector) and it
@@ -248,6 +259,13 @@ function busyBySelectors() {
 function isSignedIn() {
   const gate = document.getElementById('auth-gate');
   return sessionStatus === 'ready' && (!gate || gate.childElementCount === 0);
+}
+
+// The screen is held on only for a signed-in tablet: a signed-out one would show a bright
+// sign-in form all night. While the session is still loading (a fresh page) it is held.
+function lockWanted() {
+  if (state === 'night') return false;
+  return sessionStatus === 'loading' || isSignedIn();
 }
 
 function syncLock(wanted) {
@@ -270,7 +288,7 @@ function wake(viaKey) {
   // A reload already on its way must not bring the cover back to a person who is here.
   if (updating) { try { sessionStorage.removeItem(KIOSK_RESUME_KEY); } catch { /* ignore */ } }
   enter('active');
-  syncLock(true);
+  syncLock(lockWanted());
   // Only after a KEY: refocusing a quantity box after a touch would pop the keyboard.
   if (viaKey === true && back && back.isConnected) {
     try { back.focus({ preventScroll: true }); } catch { /* ignore */ }
@@ -304,6 +322,12 @@ async function maybeReload(prev, busy, signedIn) {
   if (!shouldAutoUpdate({ state, busy: stillBusy, updateWaiting: waiting })) return;
   updating = true;
   safeSet(sessionStorage, KIOSK_RESUME_KEY, state);
+  // Woken in the same breath: do not reload under a person who is here.
+  if (state === 'active') {
+    try { sessionStorage.removeItem(KIOSK_RESUME_KEY); } catch { /* ignore */ }
+    updating = false;
+    return;
+  }
   try {
     await updateNowImpl();
   } catch { updating = false; }
@@ -324,7 +348,9 @@ function tick() {
     state, now: Date.now(), lastInputAt, restSince, busy: busySelectors, signedIn, settings,
   });
   enter(result.state);
-  syncLock(result.wakeLock);
+  // The model says no lock for a signed-out tablet; a page still loading its session (a
+  // resumed one) keeps it until the answer comes.
+  syncLock(result.wakeLock || (sessionStatus === 'loading' && result.state !== 'night'));
   if (state !== 'active') {
     paintRest();
     maybeReload(prev, busySelectors || typingNow(), signedIn);
@@ -336,6 +362,7 @@ function onSessionChange(session) {
   venueName = (sessionStatus === 'ready' && (session.name || session.locationId)) || '';
   if (state !== 'active' && sessionStatus !== 'loading' && sessionStatus !== 'ready') wake(false);
   else if (overlay) paintRest();
+  if (started && sessionStatus !== 'loading') syncLock(lockWanted());
 }
 
 function onInput() {

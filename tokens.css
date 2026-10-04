@@ -1582,6 +1582,22 @@ body[data-card="suppliers"] .app-header {
   font-weight: 600;
   white-space: nowrap;
 }
+/* «Saved ✓» on the kiosk rows (Home → Settings → This device) sits OUT of the flow, so
+   showing it for two seconds can neither squeeze the title nor make the row taller. On the
+   switch row it is left of the switch (48px wide) on the title line; on a choice it is at
+   the right end of the label line. */
+.set-row--kiosk,
+.set-block--kiosk { position: relative; }
+.set-row--kiosk .set-saved {
+  position: absolute;
+  top: var(--space-2);
+  right: calc(var(--space-4) + 48px + var(--space-3));
+}
+.set-block--kiosk .set-saved {
+  position: absolute;
+  top: var(--space-3);
+  right: var(--space-4);
+}
 .set-danger {
   align-self: center;
   min-height: 44px;
