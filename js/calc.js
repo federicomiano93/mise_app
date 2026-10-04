@@ -16,7 +16,7 @@ import {
   computeRecipeTarget, getTabProducts, doughExtraGrams, isExtraDoughEnabled,
   getDivisorProducts, divisorTotal, splitDough, DIVISOR_MAX,
   isCrateEnabled, getCratePerBox, crateCount,
-  getRecipeById, recipeSpec, showsLeaveningKnob,
+  getRecipeById, recipeSpec, showsLeaveningKnob, normalizeTrays, traysGrams, formatGrams, isProRata,
 } from './calculator-config.js';
 // ⚠️ Where a tab's ingredients really come from. A screen reading
 // recipe.ingredients directly would see the tab's own leftover copy.
@@ -47,10 +47,22 @@ export function extraDoughGramsFor(recipeId) {
   return doughExtraGrams(valEl.value, unitEl ? unitEl.value : 'g');
 }
 
-// The typed total (grams) for a 'total'/'both' recipe; 0 when the field is absent.
+// The typed total (grams) for a 'total'/'both'/'traysTotal' recipe; 0 when the field is absent.
 function totalInputFor(recipeId) {
   const e = document.getElementById(recipeId + '-total-input');
   return e ? Math.max(0, +e.value || 0) : 0;
+}
+
+// The typed number of trays for a trays recipe: whole trays, 0 when the field is absent.
+function traysFor(recipeId) {
+  const e = document.getElementById(recipeId + '-trays-input');
+  return e ? normalizeTrays(e.value) : 0;
+}
+
+// «= 5,000 g» beside the trays field: what the trays alone make with this recipe's weight.
+function paintTraysGrams(recipe) {
+  const out = document.getElementById(recipe.id + '-trays-grams');
+  if (out) out.textContent = t('calc.traysEquals', { g: formatGrams(traysGrams(recipe, traysFor(recipe.id))) });
 }
 
 // The leavening % in effect: the knob value when the recipe shows a knob, otherwise
@@ -87,6 +99,7 @@ export function getLock(id) { return lockState[id] || { locked: false, logId: nu
 function recipeReady(recipe) {
   return computeRecipeTarget(getConfig(), recipe, {
     getQty: qtyOf, extraGrams: extraDoughGramsFor(recipe.id), totalInput: totalInputFor(recipe.id),
+    trays: traysFor(recipe.id),
   }) > 0;
 }
 
@@ -224,7 +237,9 @@ export function calc(id) {
 
   const target = computeRecipeTarget(config, recipe, {
     getQty: qtyOf, extraGrams: extraDoughGramsFor(id), totalInput: totalInputFor(id),
+    trays: traysFor(id),
   });
+  paintTraysGrams(recipe);
   const resultId = id + '-result';
   if (target <= 0) {
     hideResult(resultId);
@@ -250,7 +265,7 @@ export function calc(id) {
 
   const pct = leaveningPctFor(recipe);
   const spec = recipeSpec(source);
-  if (recipe.logic === 'total') spec.leaveningKey = null; // pure pro-rata, no leavening adjust
+  if (isProRata(recipe.logic)) spec.leaveningKey = null; // pure pro-rata, no leavening adjust
   const scaled = scaleRecipe(spec, target, pct);
   const rows = source.ingredients.map((ing, i) => ({ name: ing.label, grams: scaled[i] || 0 }));
   renderIngredients(id + '-ingredients', rows);

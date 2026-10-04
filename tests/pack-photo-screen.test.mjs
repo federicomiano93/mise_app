@@ -131,7 +131,7 @@ test('⚠️⚠️ backing out of the photo screen resolves, it does not hang', 
   assert.match(REGISTRY, /return overlay\(\s*entry,\s*t\('orders\.pack\.photo\.title'\),[\s\S]*?\(\) => settle\(null\),/,
     'Back must settle the promise: one that never resolves leaves the button that '
     + 'opened it disabled for the life of the form, with nothing on screen saying why');
-  assert.match(REGISTRY, /function overlay\(entry, title, body, onBack = \(\) => popEntry\(entry\)\)/,
+  assert.match(REGISTRY, /function overlay\(entry, title, body, onBack = \(\) => popEntry\(entry\)[,)]/,
     'and the overlay has to allow that, rather than always popping silently');
   assert.match(REGISTRY, /let settled = false;[\s\S]*?if \(settled\) return;/,
     'and it settles once: a second answer must not pop a screen that is already gone');

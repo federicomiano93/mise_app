@@ -9,6 +9,7 @@ import { t } from './i18n.js';
 import { el } from './calculator-render.js';
 import { icon } from './calculator-icons.js';
 import { dayLabel } from './log-model.js';
+import { formatGrams } from './calculator-config.js';
 
 const num = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
 
@@ -49,6 +50,16 @@ function renderItems(version) {
     for (const p of prods) {
       wrap.appendChild(el('div', { class: 'log-item' }, [p.name + ': ', el('strong', {}, num(p.qty) + (p.unit === 'kg' ? ' kg' : ' pz'))]));
     }
+  }
+  // A trays dough: «5 trays × 1,000 g», and the grams typed by hand on top of them, if any.
+  const sh = version.sheet;
+  if (sh && num(sh.trayWeight_g) > 0 && sh.trays !== undefined) {
+    const trays = num(sh.trays);
+    wrap.appendChild(el('div', { class: 'log-item' }, [
+      el('strong', {}, t('calc.traysOfWeight', { n: trays, trays: formatGrams(trays), g: formatGrams(num(sh.trayWeight_g)) })),
+    ]));
+    const typed = num(sh.total_g) - trays * num(sh.trayWeight_g);
+    if (typed > 0) wrap.appendChild(el('div', { class: 'log-item' }, t('calc.traysTypedPart', { g: formatGrams(typed) })));
   }
   if (version.sheet && num(version.sheet.extra_g) > 0) {
     wrap.appendChild(el('div', { class: 'log-item' }, t('calc.extraDough') + num(version.sheet.extra_g) + ' g'));
@@ -125,7 +136,7 @@ export function renderVersion(version, log) {
   const day = dayLabel(log, Date.now());
 
   frag.appendChild(el('div', { class: 'logview-head' }, [
-    el('span', { class: 'logview-dough' }, log ? log.dough : (v.sheet ? v.sheet.dough : t('ui.log'))),
+    el('span', { class: 'logview-dough' }, log ? log.dough : (v.sheet ? v.sheet.dough : t('ui.doughFallback'))),
     el('span', { class: 'logday-badge ' + day.tone }, day.text),
   ]));
   const at = v.at || {};

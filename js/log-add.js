@@ -7,7 +7,7 @@
 import { t } from './i18n.js';
 import { el } from './calculator-render.js';
 import { getConfig } from './calculator-config-store.js';
-import { getRecipes, getRecipeById, getTabProducts, getDivisorIncluded } from './calculator-config.js';
+import { getRecipes, getRecipeById, getTabProducts, getDivisorIncluded, usesOrders, usesTypedTotal, usesTrays, normalizeTrays, settledTraysText, traysGrams, formatGrams } from './calculator-config.js';
 import { logTimestamp } from './log-time.js';
 import { confirmDiscard } from './calculator-confirm.js';
 import { buildSheet, buildLogText, recipeSnapshot } from './log-model.js';
@@ -15,23 +15,29 @@ import { createAndSave } from './log-store.js';
 import { qtyRow } from './log-qty.js';
 import { confirmDialog, alertDialog } from './confirm-dialog.js';
 import { recipeToSave } from './calculator-catalogue-link.js';
+import { createSaveGuard } from './save-guard.js';
+import { revealField } from './reveal-field.js';
+
+// While the save is in flight the header Save is disabled and Back waits (js/save-guard.js).
+const saveGuard = createSaveGuard(() => document.getElementById('logadd-save-btn'));
 
 const num = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
 
-let state = null; // { recipeId, forDay, items[], totalInput } or null when closed
+let state = null; // { recipeId, forDay, items[], totalInput, dayMissing } or null when closed
 
 export function openLogAdd() {
-  state = { recipeId: null, forDay: null, items: [], totalInput: 0 };
+  state = { recipeId: null, forDay: null, items: [], totalInput: 0, trays: 0, dayMissing: false };
   render();
   document.getElementById('logadd-overlay').classList.add('visible');
 }
 
 function isDirty() {
   if (!state) return false;
-  return !!(state.recipeId || state.forDay || num(state.totalInput) > 0 || state.items.some(it => num(it.qty) > 0));
+  return !!(state.recipeId || state.forDay || num(state.totalInput) > 0 || num(state.trays) > 0 || state.items.some(it => num(it.qty) > 0));
 }
 
 async function close(saved) {
+  if (!saved && saveGuard.saving) return;
   if (!saved && !(await confirmDiscard(isDirty()))) return;
   document.getElementById('logadd-overlay').classList.remove('visible');
   state = null;
@@ -43,7 +49,8 @@ function loadRecipe(id) {
   const recipe = getRecipeById(getConfig(), id);
   state.recipeId = id;
   state.totalInput = 0;
-  const hasOrders = recipe && (recipe.logic === 'orders' || recipe.logic === 'both');
+  state.trays = 0;
+  const hasOrders = !!recipe && usesOrders(recipe.logic);
   state.items = hasOrders ? getTabProducts(getConfig(), id).map(p => ({
     id: p.id, name: p.name, clientName: p.clientName, weightG: p.weight, kind: p.kind,
     crate: p.crate || { show: false, perBox: 20 }, qty: 0,
@@ -54,6 +61,9 @@ function loadRecipe(id) {
 function render() {
   const c = document.getElementById('logadd-content');
   c.textContent = '';
+  // The header Save appears only once a recipe is picked (turned on at the end).
+  const saveBtn = document.getElementById('logadd-save-btn');
+  saveBtn.hidden = true;
 
   // Recipe chooser (required, first).
   c.appendChild(el('div', { class: 'cp-label' }, t('ui.recipe')));
@@ -75,20 +85,45 @@ function render() {
     return;
   }
   const recipe = getRecipeById(getConfig(), state.recipeId);
-  const hasOrders = recipe && (recipe.logic === 'orders' || recipe.logic === 'both');
-  const hasTotal = recipe && (recipe.logic === 'total' || recipe.logic === 'both');
+  const hasOrders = !!recipe && usesOrders(recipe.logic);
+  const hasTotal = !!recipe && usesTypedTotal(recipe.logic);
+  const hasTrays = !!recipe && usesTrays(recipe.logic);
 
   // Today / Tomorrow (required).
   c.appendChild(el('div', { class: 'cp-label' }, t('calc.whenIsThisDough')));
-  const dayChoices = el('div', { class: 'logday-choices' });
+  // ⚠️ Save is in the header from the moment a recipe is picked, so it can be tapped with no
+  // day chosen: commit() then says so HERE, above the two buttons, and they turn red.
+  const dayMissing = state.dayMissing && !state.forDay;
+  if (dayMissing) c.appendChild(el('div', { class: 'logday-hint', role: 'alert' }, t('calc.chooseDayFirst')));
+  const dayChoices = el('div', { class: 'logday-choices' + (dayMissing ? ' logday-choices--missing' : '') });
   for (const d of ['today', 'tomorrow']) {
     const btn = el('button', { class: 'logday-choice' + (state.forDay === d ? ' selected' : ''), type: 'button' }, d === 'today' ? t('ui.today') : t('ui.tomorrow'));
-    btn.addEventListener('click', () => { state.forDay = d; render(); });
+    btn.addEventListener('click', () => { state.forDay = d; state.dayMissing = false; render(); });
     dayChoices.appendChild(btn);
   }
   c.appendChild(dayChoices);
 
-  // Typed total (total/both logic).
+  // Number of trays (trays/traysTotal logic): whole trays, the recipe's own tray weight.
+  if (hasTrays) {
+    const input = el('input', { type: 'number', id: 'logadd-trays', class: 'cp-prod-weight', min: '0', step: '1', value: String(num(state.trays)), inputmode: 'numeric', 'aria-describedby': 'logadd-trays-grams' });
+    // «= 5,000 g» under the box, as on the Calculator; kept OUT of the label so the field's name stays put.
+    const grams = el('span', { class: 'trays-grams', id: 'logadd-trays-grams', 'aria-live': 'polite' }, '');
+    const paintGrams = () => { grams.textContent = t('calc.traysEquals', { g: formatGrams(traysGrams(recipe, state.trays)) }); };
+    input.addEventListener('input', () => { state.trays = normalizeTrays(input.value); paintGrams(); });
+    // Whole trays only: a fraction is replaced by the whole number that is computed.
+    input.addEventListener('change', () => {
+      const whole = settledTraysText(input.value);
+      if (whole !== null) input.value = whole;
+    });
+    paintGrams();
+    c.appendChild(el('div', { class: 'cp-field' }, [
+      el('label', { class: 'cp-label', for: 'logadd-trays' }, t('calc.trayCount')),
+      el('div', { class: 'cp-prod-card-row' }, [input]),
+      grams,
+    ]));
+  }
+
+  // Typed total (total/both/traysTotal logic).
   if (hasTotal) {
     const input = el('input', { type: 'number', class: 'cp-prod-weight', min: '0', step: '1', value: String(num(state.totalInput)), inputmode: 'numeric' });
     input.addEventListener('input', () => { state.totalInput = num(input.value); });
@@ -114,14 +149,20 @@ function render() {
     }
   }
 
-  const save = el('button', { class: 'cp-save-bottom', type: 'button' }, t('calc.saveLog'));
-  save.addEventListener('click', commit);
-  c.appendChild(save);
+  saveBtn.hidden = false;
 }
 
 // Build and save a brand-new log — same generic math/shape as a calculator Confirm.
-async function commit() {
-  if (!state || !state.recipeId || !state.forDay) return;
+function commit() { return saveGuard.run(doCommit); }
+
+async function doCommit() {
+  if (!state || !state.recipeId) return;
+  if (!state.forDay) {
+    state.dayMissing = true;
+    render();
+    revealField(document.querySelector('#logadd-content .logday-choices--missing .logday-choice'));
+    return;
+  }
   if (!(await confirmDialog({ message: t('calc.saveThisLog'), okLabel: t('ui.save'), cancelLabel: t('ui.cancel') }))) return;
   const tabRecipe = getRecipeById(getConfig(), state.recipeId);
   if (!tabRecipe) return;
@@ -134,7 +175,7 @@ async function commit() {
   }));
   const divisor = { includedIds: getDivisorIncluded(getConfig(), state.recipeId), n: 0 };
   const sheet = buildSheet({
-    recipe, items, extraGrams: 0, totalInput: num(state.totalInput),
+    recipe, items, extraGrams: 0, totalInput: num(state.totalInput), trays: num(state.trays),
     leaveningPct: recipe.leaveningDefaultPct, divisor,
   });
   const text = buildLogText(items, [], { grams: 0, value: 0, unit: 'g' });
@@ -147,4 +188,5 @@ async function commit() {
 }
 
 // ── Wiring (elements exist in calculator.html) ────────────────────────────────
+document.getElementById('logadd-save-btn').addEventListener('click', commit);
 document.querySelector('.logadd-back-btn').addEventListener('click', () => close(false));

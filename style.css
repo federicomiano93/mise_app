@@ -120,6 +120,35 @@ header p {
   color: var(--on-brand);
   font-weight: 600;
 }
+/* ⚠️ THE CALCULATOR'S RECIPE TABS ONLY (#tab-bar exists on calculator.html alone; Orders and
+   the management panel share .tab-bar/.tab above and keep flex: 1). A recipe tab keeps the
+   width it has with FOUR recipes — a quarter of the bar less the three gaps — whether there
+   are one, two, three or four, left-aligned, instead of one tab stretching across the whole
+   bar. It may still SHRINK/grow to its longest word (min-width stays auto), exactly as the
+   old flex: 1 tab did, so a long name wraps and a long single word is never clipped. */
+#tab-bar .tab {
+  flex: 0 1 calc((100% - 3 * 8px) / 4);
+}
+/* ⚠️ ON A NARROW PHONE FOUR TABS MUST STILL FIT. A tab could not shrink below its longest
+   word (min-width: auto), so four real names — «Biscotti al cacao e cioccolato fondente»
+   beside three others — added up to more than a 296px bar and the fourth tab was cut off
+   at the screen edge (older than the quarter rule; found driving it, 4 Oct 2026). With
+   FOUR tabs a tab may shrink to its quarter: the text gets a little smaller and a long
+   word breaks, with a hyphen where the browser knows the language (<html lang> is set by
+   i18n-dom.js). With one, two or three there is room, so a tab keeps its quarter basis,
+   grows to its longest word at the normal size and never breaks «Sourdough» mid-word.
+   The bar holds only tabs (js/app.js), so counting siblings counts the tabs. */
+@media (max-width: 420px) {
+  #tab-bar .tab:first-child:nth-last-child(4),
+  #tab-bar .tab:first-child:nth-last-child(4) ~ .tab {
+    min-width: 0;
+    padding: 8px 3px;
+    font-size: 12px;
+    line-height: 1.25;
+    hyphens: auto;
+    overflow-wrap: anywhere;
+  }
+}
 
 /* Scroll area */
 .scroll-area {
@@ -287,6 +316,11 @@ select.qty-select:focus { outline: none; border-color: var(--crust); background:
   margin-bottom: 10px;
 }
 .param-label { flex: 1; font-size: var(--field-label-size); color: var(--field-label-color); font-weight: var(--field-label-weight); }
+/* «= 5,000 g» under «Number of trays»: what the trays alone make, a plain line, not a label. */
+.param-label-stack { flex: 1; }
+.param-label-stack > .param-label { display: block; }
+/* No small-text size token exists: three steps under the field-label size (14px today). */
+.trays-grams { display: block; margin-top: var(--space-1); font-size: calc(var(--field-label-size) - 3px); font-weight: normal; color: var(--text-2); font-variant-numeric: tabular-nums; }
 
 /* Extra-dough box: a free amount of dough (g or kg) added on top of the products,
    present in every dough tab. Dashed border marks it as a separate, optional add-on. */
@@ -951,6 +985,7 @@ input.cp-prod-weight {
 /* Every control in a card is the same height, and a comfortable target for a thumb. */
 .cp-prod-card-row > select,
 .cp-prod-card-row > input:not([type="checkbox"]) { min-height: 40px; }
+.cp-prod-card-row > input.rc-tray-weight { min-height: 44px; }
 
 /* ── A product's four fields: label | field | unit ──────────────────────────────
    A three-column grid, so every label starts on one line and every field starts AND
@@ -1261,6 +1296,43 @@ input.cp-prod-weight {
   font-weight: 400;
   color: var(--on-brand);
   letter-spacing: -0.3px;
+}
+/* ⚠️ A header that holds the screen's Save (.app-header-save, tokens.css) has less
+   room for the title: the Save pill (~66px) and often Home sit on the right, and the
+   title is out of the flow, so it would be drawn UNDER them (at 296px, worst in
+   Italian). While the Save is showing, the title gets a window between Back and the
+   first right-hand button instead of the 52% centre block, and the text is centred in
+   that window:
+   • Save alone → the window is symmetric (Save's width + gaps on BOTH sides), so the
+     title stays exactly centred;
+   • Save + Home → the window is [Back … Save): the title sits left of centre (about
+     40px) rather than go under a button — a symmetric window would leave ~16px at
+     296px. The same trade the Orders headers make at 296px (ui-check skill).
+   Below 360px the title is also a little smaller, because the window is narrow, and
+   Save alone uses the Back-to-Save window too.
+   ⚠️ NO :has() (off the table in this project, tests/calculator-tablet.test.mjs): the
+   title is the LAST child of these headers, after Save and Home, so the sibling
+   combinator can see whether they are showing. Visually the order is unchanged (the
+   title is out of the flow). Home is hidden with the `hidden` attribute, never a style. */
+.recipe-overlay-header { --ov-pad: max(16px, var(--app-gutter)); }
+.app-header-save:not([hidden]) ~ .recipe-overlay-title {
+  left: calc(var(--ov-pad) + 66px + 8px);
+  right: calc(var(--ov-pad) + 66px + 8px);
+  transform: none;
+  max-width: none;
+}
+.app-header-save:not([hidden]) ~ .app-icon-btn:not([hidden]) ~ .recipe-overlay-title {
+  left: calc(var(--ov-pad) + 36px + 8px);
+  right: calc(var(--ov-pad) + 66px + 12px + 36px + 8px);
+}
+@media (max-width: 359px) {
+  /* Too narrow for a symmetric window: Save alone also gets [Back … Save) (~15px
+     left of centre) — a title cut to «Aggiungi regi…» is worse than a title slightly
+     off centre. */
+  .app-header-save:not([hidden]) ~ .recipe-overlay-title {
+    left: calc(var(--ov-pad) + 36px + 8px);
+    font-size: 18px;
+  }
 }
 /* The Home shortcut (.overlay-home-btn) and every Back above are `.app-icon-btn`
    in the markup (tokens.css): the round rim look is the shared one, defined once.
@@ -1574,6 +1646,10 @@ input.cp-prod-weight {
   font-family: 'Manrope', sans-serif; font-size: 15px; font-weight: 600;
 }
 .logday-choice.selected { border-color: var(--accent); background: var(--accent-light); color: var(--accent); }
+/* «Choose Today or Tomorrow first.» — Save was tapped with no day: the message sits above the
+   two buttons and the buttons wear the invalid border (the same red as .cp-invalid). */
+.logday-hint { color: var(--danger); font-size: 14px; font-weight: 600; padding: 0 2px 8px; margin: 0; }
+.logday-choices--missing .logday-choice { border-color: var(--danger); }
 
 /* Log overlays (read-only view, edit screen, history) — same shell as #recipe-overlay. */
 .log-overlay {
@@ -1609,33 +1685,28 @@ input.cp-prod-weight {
   display: inline-flex; align-items: center; gap: 4px;
 }
 
-/* ── "How it calculates": three rows, each explaining itself ─────────────────
-   A dropdown can only explain the option already chosen, and the question here is
-   what the DIFFERENCE is. Side by side the three answers are compared BEFORE the
-   choice, not after. A tooltip was never an option: hovering needs a mouse, and an
-   open dropdown on a phone is drawn by the OS, so the app cannot reach inside it. */
-.cp-choice {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  width: 100%;
-  padding: 12px 14px;
-  margin-bottom: 8px;
+/* ── A recipe row that opens in place (Settings → Recipes) ───────────────────
+   The frame is the row's (.wa-entry-card, which the head button and the delete icon
+   share); the panel under the head holds «How it calculates», the show switch and the
+   button that opens the full recipe. One row is open at a time. */
+.rc-row { flex-direction: column; }
+.rc-head { display: flex; align-items: stretch; }
+.rc-row .drill-chevron svg { transition: transform 150ms ease; }
+.rc-row.is-open .drill-chevron svg { transform: rotate(90deg); }
+.rc-panel {
+  padding: 4px 18px 16px;
+  border-top: 1px solid var(--border);
   background: var(--surface);
-  border: 1.5px solid var(--border);
-  border-radius: var(--radius-sm);
-  font-family: 'Manrope', sans-serif;
-  text-align: left;
-  cursor: pointer;
-  transition: transform 60ms ease;
 }
-.cp-choice:active { transform: scale(.98); }
-.cp-choice--on { border-color: var(--accent); background: var(--accent-light); }
-.cp-choice-name { font-size: 15px; font-weight: 600; color: var(--text); }
-.cp-choice--on .cp-choice-name { color: var(--accent); }
-/* ⚠️ --text2, not --text3: this line is the whole point of the row, and --text3
-   measures 4.20:1 against this background — under the 4.5:1 normal text needs. */
-.cp-choice-why { font-size: 13px; line-height: 1.45; color: var(--text2); }
+.rc-panel .cp-field { margin-top: 14px; }
+/* The tray weight sits close under the logic hint it belongs to (this must out-rank the rule above). */
+.rc-panel .cp-field.rc-tray-field { margin-top: var(--space-1); }
+.rc-panel select.rc-logic { width: 100%; min-height: 44px; font-size: 15px; padding: 8px 10px; }
+/* ⚠️ --text-2, not --text-3: the sentence under the select is the whole point of the
+   control, and --text-3 measures under the 4.5:1 normal text needs on this ground. */
+.rc-panel .rc-logic-hint { margin-top: 8px; color: var(--text2); line-height: 1.45; }
+.rc-panel .extra-toggle-row { margin-bottom: 14px; padding: 10px 12px; font-size: 15px; }
+.rc-panel .rc-edit-btn { width: 100%; min-height: 44px; }
 
 /* ── The Leavening box ──────────────────────────────────────────────────────
    One bounded block holding the three things that belong together: which
@@ -1694,13 +1765,18 @@ input.cp-prod-weight {
    ⚠️ EVERY rule is scoped to body[data-card="calculator"]: orders.html and suppliers.html
    load this sheet too. ⚠️ .ing-row and .cp-* are not touched. */
 @media (min-width: 900px) and (min-height: 600px) {
-  /* Until there is a result (or where :has() is unknown) a tab is ONE comfortable column,
-     centred in the wide page; so are the empty state and the Log. */
+  /* Until there is a result (or where :has() is unknown) a tab is ONE comfortable column;
+     so are the empty state and the Log. ⚠️ A RECIPE TAB'S COLUMN SITS LEFT, under the
+     first tab, not centred (owner, 4 Oct 2026: «Impasto totale» to the left): it is the
+     same place the entry column takes once a result appears beside it, so the fields no
+     longer jump from the middle to the left on the first calculation. The empty state
+     (#tab-empty, a card with no entry column) and the Log stay centred. */
   body[data-card="calculator"] #recipe-tabs > .content,
   body[data-card="calculator"] #tab-log {
     max-width: 620px;
     margin-inline: auto;
   }
+  body[data-card="calculator"] #recipe-tabs > .content:not(#tab-empty) { margin-inline: 0 auto; }
 
   /* With a result: entry left, recipe right. The rows are named so that the right column
      spans them all and its extra height lands on the last (flexible) row, never between
@@ -1723,6 +1799,19 @@ input.cp-prod-weight {
     grid-column: 2;
     grid-row: 1 / -1;
     margin-top: 0;
+  }
+
+  /* The «Total dough (g)» box: label + one field, so it sits LEFT and is about one and a
+     half recipe tabs wide instead of a 590px card with an empty middle. A tab is a quarter
+     of the bar less three 8px gaps, and the bar is min(viewport − 2×16px, 1180px) wide
+     (tokens.css widens the page to 1180px), hence the min(). Phones are untouched: this
+     whole block only applies to a tablet. Only this row carries the class — the leavening
+     knob row (also .param-row) keeps the full column. */
+  body[data-card="calculator"] #recipe-tabs .param-row--total {
+    width: calc(1.5 * (min(100vw - 32px, 1180px) - 3 * 8px) / 4);
+    min-width: 280px;
+    max-width: 100%;
+    margin-right: auto;
   }
 
   /* Kitchen sizes for the quantity fields and the buttons of a recipe tab. */

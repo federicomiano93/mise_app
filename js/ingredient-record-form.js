@@ -1681,7 +1681,11 @@ function choiceControl({ values, current, newLabel, placeholder, ariaLabel, blan
 //                 packPhotoOn(), capturePackPhoto(), createSupplier() → { id, name } | null,
 //                 deleteIngredient(id) — optional: handed in only to somebody who may delete; it
 //                 draws the bin, and only for an existing item }
-// onDone / onCancel — where the screen goes afterwards
+// onDone — where the screen goes afterwards (Back is the screen's own: it asks before throwing typing away)
+//
+// ⚠️ THE SAVE BUTTON IS NOT IN THE FORM (4 Oct 2026): it is the header pill (.app-header-save), exposed as
+// `form.headerSave` for the screen to put in its right-hand slot. It disables itself while a write runs and
+// ignores a second tap, whichever header it ends up in.
 //
 // ⚠️ THE TWO DEFAULTS POINT THE SAFE WAY. No `mayPrice` means no price drawn and none
 // written — never a price the database refuses together with the whole save. No `panels`
@@ -1689,7 +1693,7 @@ function choiceControl({ values, current, newLabel, placeholder, ariaLabel, blan
 // to ask must not quietly remove the allergen card.
 export function buildIngredientForm({
   item, suppliers, preset, presetKind = null, presetName = '', mayPrice = false,
-  categories = [], orderUnits = [], packs = [], panels = { allergens: true, nutrition: true }, actions, onDone, onCancel,
+  categories = [], orderUnits = [], packs = [], panels = { allergens: true, nutrition: true }, actions, onDone,
 }) {
   // ⚠️ WHICH CARD OPENS (reduced scope, 2 Oct 2026): the new «Confezione: Singola | Cartone» card only for the
   // price shapes that exist in production; every other stored price shape opens the card of before, with its
@@ -1978,7 +1982,8 @@ export function buildIngredientForm({
   }
   // legacy-card:end
 
-  const save = el('button', { type: 'button', class: 'btn-primary', onClick: async () => {
+  const save = el('button', { type: 'button', class: 'app-header-save', onClick: async () => {
+    if (save.disabled) return;
     // The supplier is no longer required — only the name is.
     if (!name.value.trim()) { name.focus(); return; }
     if (legacyCard) { await saveLegacyCard(); return; }
@@ -2149,7 +2154,7 @@ export function buildIngredientForm({
   ] : [];
   // legacy-card:end
 
-  return el('div', { class: 'mgmt-form' }, [
+  const form = el('div', { class: 'mgmt-form' }, [
     // ⚠️ NO TITLE OF ITS OWN ANY MORE. It had one because the panel's header said
     // «Impostazioni» and something had to name the form. The form now has a header
     // of its own that says «Modifica ingrediente», so the h2 said it a second time,
@@ -2185,6 +2190,8 @@ export function buildIngredientForm({
     // empty one, because an empty card labelled «Prezzo» advertises what it withholds.
     ...(price ? [section({ title: t('orders.section.price'), body: [price.node] })] : []),
     allergens.root,
-    formActions(save, onCancel, deleteBtn),
+    formActions(deleteBtn),
   ]);
+  form.headerSave = save;
+  return form;
 }

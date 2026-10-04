@@ -7,7 +7,7 @@
 // and, when it has data, updates the cache and notifies the app to re-render.
 
 import { t } from './i18n.js';
-import { DEFAULT_CONFIG, cloneConfig, normalizeConfig, getClients } from './calculator-config.js';
+import { DEFAULT_CONFIG, cloneConfig, normalizeConfig, getClients, saveFailureKey } from './calculator-config.js';
 import { watchCalculatorConfig, saveCalculatorConfig } from './firebase.js';
 import { alertDialog } from './confirm-dialog.js';
 import { publishMenus } from './client-orders-data.js';
@@ -91,9 +91,9 @@ export function canSyncConfig() {
 }
 
 // Persist a new config. Local-first (P17): update memory + cache and re-render
-// immediately so the change is instant and works offline; the Firestore write is
-// best-effort and its failure (e.g. offline, rules not yet deployed) is logged
-// but does not lose the local change or block the UI.
+// immediately so the change is instant; the Firestore write follows. If the write
+// fails (offline, refused) the local copy is taken back to what it was and the result
+// says so — see the catch below and saveConfigOrSay for what a screen does with it.
 // Whether any client's PUBLISHED product list would read differently after this save.
 // Everything else in the config — recipes, WhatsApp lists, log settings — is invisible
 // to a client, so a save that touches only those must not cost a read of every menu.
@@ -106,7 +106,8 @@ function menusWouldChange(before, after) {
 
 export function saveConfig(config) {
   const previous = current;
-  current = normalizeConfig(config);
+  const mine = normalizeConfig(config);
+  current = mine;
   writeCache(current);
   if (notify) notify(current);
 
@@ -149,7 +150,32 @@ export function saveConfig(config) {
       return { synced: true };
     })
     .catch(err => {
-      console.warn('Calculator config saved locally but not synced to Firestore:', err);
-      return { synced: false, reason: 'write-failed', error: err };
+      console.warn('Calculator config not saved to Firestore:', err);
+      // ⚠️ A REFUSED WRITE IS TAKEN BACK LOCALLY TOO. Nothing re-sends it later, and at the
+      // next load the server copy replaces the local one — so keeping it here would show
+      // the change as saved until then, and then lose it. The caller tells the person
+      // «not saved» and keeps ITS working copy with the edits; the app itself goes back
+      // to what the server has. Only if nothing newer has replaced it meanwhile (a
+      // snapshot or another save).
+      if (current === mine) {
+        current = previous;
+        writeCache(current);
+        if (notify) notify(current);
+      }
+      return { synced: false, reason: 'write-failed', code: err && err.code, error: err };
     });
+}
+
+// saveConfig for a screen: resolves true when the change is stored (or was kept on this
+// phone with its own explanation, 'no-server-answer'), false after saying why it was NOT
+// saved. On false the screen must keep its edits and stay dirty, and give Save back.
+// `onFail` runs BEFORE the message, for a control that saves on the tap and must be put
+// back where it was (a switch).
+export async function saveConfigOrSay(config, { onFail } = {}) {
+  const result = await saveConfig(config);
+  const key = saveFailureKey(result);
+  if (!key) return true;
+  if (onFail) onFail();
+  await alertDialog(t(key));
+  return false;
 }

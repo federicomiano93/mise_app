@@ -110,17 +110,17 @@ test('the bin is drawn only for an existing item with the action handed in, and 
   assert.match(block, /'aria-label': t\('orders\.deleteIngredient'\)/, 'an icon button needs its spoken name');
   assert.match(block, /okLabel: t\('ui\.delete'\)/);
   assert.match(block, /reportFailure\('delete', ingredientDisplayName\(item\), err\)/, 'a failure uses the friendly dialog');
-  assert.match(FORM, /formActions\(save, onCancel, deleteBtn\),/);
+  assert.match(FORM, /formActions\(deleteBtn\),/);
   assert.doesNotMatch(FORM, /\bcanManage\b|\bcanManageHere\b/, 'the card reads no role — the caller decides');
   assert.match(FORM, /const TRASH_SVG = '<svg[^']*stroke-width="2"[^']*stroke="currentColor"|const TRASH_SVG = '<svg[^']*stroke="currentColor"[^']*stroke-width="2"/,
     'inline SVG, stroked 2px, currentColor');
 });
 
-test('the bin sits first in the action row, apart from Cancel and Save', () => {
+test('the bin is alone in the action row: Save is in the header, there is no Cancel', () => {
   const ui = codeOf(read('js/record-ui.js'));
-  assert.match(ui, /export function formActions\(saveBtn, onCancel, deleteBtn = null\) \{\s*return el\('div', \{ class: 'mgmt-form-actions' \}, \[\s*deleteBtn,/);
-  // The supplier card keeps its two buttons: it passes no third argument.
-  assert.doesNotMatch(codeOf(read('js/supplier-record-form.js')), /formActions\([^)]*,[^)]*,/);
+  assert.match(ui, /export function formActions\(deleteBtn = null\) \{\s*if \(!deleteBtn\) return null;\s*return el\('div', \{ class: 'mgmt-form-actions' \}, \[deleteBtn\]\);/);
+  // The supplier card has nothing to delete: it draws no row at all.
+  assert.match(codeOf(read('js/supplier-record-form.js')), /formActions\(\),/);
 });
 
 test('the bin is quiet: danger-red icon, no fill, no border, a 44px target', () => {

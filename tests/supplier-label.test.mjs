@@ -108,12 +108,11 @@ async function submit({ item, typed }) {
     item,
     save: async (id, payload) => { saved.push(payload); return id || 'new-id'; },
     onDone: d => done.push(d),
-    onCancel: () => {},
   });
   const [name, shortName] = textInputs(form);
   name.value = typed.name;
   shortName.value = typed.shortName;
-  const save = form.all(n => n.tagName === 'button' && n.className === 'btn-primary')[0];
+  const save = form.headerSave;
   await save.listeners.click();
   return { saved, done, shortName };
 }

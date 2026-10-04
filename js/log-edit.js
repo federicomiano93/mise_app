@@ -15,14 +15,18 @@ import { t } from './i18n.js';
 import { el } from './calculator-render.js';
 import { icon } from './calculator-icons.js';
 import { getConfig } from './calculator-config-store.js';
-import { getTabProducts, getDivisorIncluded, getRecipes, getRecipeById } from './calculator-config.js';
+import { getTabProducts, getDivisorIncluded, getRecipes, getRecipeById, usesTrays, normalizeTrays, settledTraysText, traysGrams, formatGrams } from './calculator-config.js';
 import { logTimestamp } from './log-time.js';
 import { confirmDiscard } from './calculator-confirm.js';
-import { buildSheet, buildLogText, typedTotalOf, latestVersion, recipeSnapshot, editRows } from './log-model.js';
+import { buildSheet, buildLogText, typedTotalOf, latestVersion, recipeSnapshot, editRows, traysEditState, traysSheetRecipe } from './log-model.js';
 import { getLogById, appendAndSave, restoreAndSave } from './log-store.js';
 import { renderVersion } from './log-view.js';
 import { qtyRow } from './log-qty.js';
 import { confirmDialog } from './confirm-dialog.js';
+import { createSaveGuard } from './save-guard.js';
+
+// While the save is in flight the header Save is disabled and Back waits (js/save-guard.js).
+const saveGuard = createSaveGuard(() => document.getElementById('logedit-save-btn'));
 
 const num = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
 
@@ -65,24 +69,58 @@ export function openLogEdit(logId) {
     })),
   }));
 
-  working = { logId, dough: log.dough, recipeId: tab, tab, recipe, items, occasional, calculatedBy: v.calculatedBy || '' };
+  // A trays dough is edited by its trays (and, for «trays + total», the grams typed on top):
+  // the weight of a tray stays the one the dough was MADE with (the frozen recipe's).
+  const sheet = v.sheet || {};
+  const { trays, trayWeight, typedTotal } = traysEditState(sheet, recipe);
+
+  working = { logId, dough: log.dough, recipeId: tab, tab, recipe, items, occasional, calculatedBy: v.calculatedBy || '', trays, typedTotal, trayWeight };
   dirty = false;
   render();
   document.getElementById('logedit-overlay').classList.add('visible');
 }
 
-// `dirty` no longer drives a button — "Save changes" at the bottom is always
+// `dirty` does not drive the header Save (#logedit-save-btn) — it is always
 // pressable — but it still raises the unsaved-changes question on the way out.
 function markDirty() { dirty = true; }
 
 function render() {
   const c = document.getElementById('logedit-content');
   c.textContent = '';
-  c.appendChild(el('div', { class: 'logedit-dough' }, t('calc.logTitle', { dough: working.dough })));
+  c.appendChild(el('div', { class: 'logedit-dough' }, working.dough));
 
   const by = el('input', { class: 'cp-client-name', type: 'text', value: working.calculatedBy, placeholder: t('calc.nameOptional') });
   by.addEventListener('input', () => { working.calculatedBy = by.value; markDirty(); });
   c.appendChild(el('div', { class: 'cp-field' }, [el('label', { class: 'cp-label' }, t('calc.calculatedBy2')), by]));
+
+  if (working.recipe && usesTrays(working.recipe.logic)) {
+    const trays = el('input', { type: 'number', id: 'logedit-trays', class: 'cp-prod-weight', min: '0', step: '1', value: String(working.trays), inputmode: 'numeric', 'aria-describedby': 'logedit-trays-grams' });
+    // «= 5,000 g» at the weight the dough was MADE with; outside the label so the field's name stays put.
+    const grams = el('span', { class: 'trays-grams', id: 'logedit-trays-grams', 'aria-live': 'polite' }, '');
+    const paintGrams = () => { grams.textContent = t('calc.traysEquals', { g: formatGrams(traysGrams({ trayWeight: working.trayWeight }, working.trays)) }); };
+    trays.addEventListener('input', () => { working.trays = normalizeTrays(trays.value); paintGrams(); markDirty(); });
+    // Whole trays only: a fraction is replaced by the whole number that is computed.
+    trays.addEventListener('change', () => {
+      const whole = settledTraysText(trays.value);
+      if (whole !== null) trays.value = whole;
+    });
+    paintGrams();
+    c.appendChild(el('div', { class: 'cp-field' }, [
+      el('label', { class: 'cp-label', for: 'logedit-trays' }, t('calc.trayCount')),
+      el('div', { class: 'cp-prod-card-row' }, [trays]),
+      grams,
+    ]));
+    if (working.recipe.logic === 'traysTotal') {
+      const typed = el('input', { type: 'number', id: 'logedit-total', class: 'cp-prod-weight', min: '0', step: '1', value: String(working.typedTotal), inputmode: 'numeric' });
+      typed.addEventListener('input', () => { working.typedTotal = Math.max(0, num(typed.value)); markDirty(); });
+      c.appendChild(el('div', { class: 'cp-field' }, [
+        el('label', { class: 'cp-label', for: 'logedit-total' }, t('calc.totalDoughG')),
+        el('div', { class: 'cp-prod-card-row' }, [typed, el('span', { class: 'cp-unit' }, 'g')]),
+      ]));
+    }
+    // A trays dough has no products: say nothing about quantities that cannot exist.
+    return;
+  }
 
   c.appendChild(el('div', { class: 'cp-label' }, t('calc.productsQuantitiesOnly')));
   let lastClient = null;
@@ -98,18 +136,13 @@ function render() {
     }
     card.appendChild(qtyRow(it, (q) => { it.qty = q; markDirty(); }));
   }
-
-  c.appendChild(saveBottom());
 }
 
 // ── Save (append a new version) ───────────────────────────────────────────────
-function saveBottom() {
-  const b = el('button', { class: 'cp-save-bottom', type: 'button' }, t('calc.saveChanges'));
-  b.addEventListener('click', save);
-  return b;
-}
 
-async function save() {
+function save() { return saveGuard.run(doSave); }
+
+async function doSave() {
   if (!(await confirmDialog({ message: t('calc.saveTheseChangesAs'), okLabel: t('ui.save'), cancelLabel: t('ui.cancel') }))) return;
   const tab = working.tab;
 
@@ -140,10 +173,13 @@ async function save() {
   const prevSheet = prevVersion.sheet;
   const leaveningPct = prevSheet && prevSheet.param ? prevSheet.param.value : (recipe ? recipe.leaveningDefaultPct : 0);
   const extraG = prevSheet ? num(prevSheet.extra_g) : 0;
-  const totalInput = typedTotalOf(recipe, prevVersion);
+  // «Trays + total» keeps the grams typed on top of the trays (traysEditState); «total» and
+  // «both» read the typed part back from the saved sheet (typedTotalOf).
+  const totalInput = recipe && recipe.logic === 'traysTotal' ? working.typedTotal : typedTotalOf(recipe, prevVersion);
+  const trays = recipe && usesTrays(recipe.logic) ? working.trays : 0;
   const divisor = { includedIds: getDivisorIncluded(getConfig(), tab), n: prevSheet && prevSheet.divisor ? prevSheet.divisor.n : 0 };
 
-  const sheet = buildSheet({ recipe, items: items.concat(occLines), extraGrams: extraG, totalInput, leaveningPct, divisor });
+  const sheet = buildSheet({ recipe: traysSheetRecipe(recipe, working.trayWeight), items: items.concat(occLines), extraGrams: extraG, totalInput, trays, leaveningPct, divisor });
   const extra = { grams: extraG, value: extraG, unit: 'g' };
   const text = buildLogText(items, occClean, extra);
   const version = {
@@ -157,6 +193,7 @@ async function save() {
 }
 
 async function closeEdit(saved) {
+  if (!saved && saveGuard.saving) return;
   if (!saved && !(await confirmDiscard(dirty))) return; // "continue editing" on cancel
   document.getElementById('logedit-overlay').classList.remove('visible');
   working = null;
@@ -226,5 +263,6 @@ function openHistoryVersion(i) {
 }
 
 // ── Wiring ────────────────────────────────────────────────────────────────────
+document.getElementById('logedit-save-btn').addEventListener('click', save);
 document.querySelector('.logedit-back-btn').addEventListener('click', () => closeEdit(false));
 document.querySelector('.loghistory-back-btn').addEventListener('click', closeHistory);

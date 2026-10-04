@@ -81,13 +81,16 @@ export function openFoodcostSettings({ rate = null, confirm, onSave, toast, retu
 
   const back = el('button', { class: 'app-icon-btn', type: 'button', icon: BACK_ICON, 'aria-label': t('ui.back'), onclick: leave });
 
+  // The one Save, in the green header (a form of fields keeps Save + confirm, P20).
+  const saveBtn = el('button', { class: 'app-header-save', type: 'button', onclick: save }, t('ui.save'));
+
   const overlay = el('div', {
     class: 'fc-overlay fc-settings', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'fcSettingsTitle',
   }, [
     el('header', { class: 'app-header' }, [
       el('span', { class: 'app-header-slot' }, [back]),
       el('div', { class: 'app-header-title' }, [el('h1', { id: 'fcSettingsTitle', text: t('fc.settings.title') })]),
-      el('span', { class: 'app-header-slot' }),
+      el('span', { class: 'app-header-slot' }, [saveBtn]),
     ]),
     el('main', { class: 'fc-screen' }, [
       // The app's one settings look (tokens.css .set-*, 28 Sep 2026): a card with its
@@ -102,9 +105,6 @@ export function openFoodcostSettings({ rate = null, confirm, onSave, toast, retu
             input,
             el('p', { class: 'set-sub', text: t('fc.settings.labourRateNote') }),
           ]),
-        ]),
-        el('div', { class: 'fc-actions' }, [
-          el('button', { class: 'fc-save', type: 'button', text: t('ui.save'), onclick: save }),
         ]),
       ]),
     ]),

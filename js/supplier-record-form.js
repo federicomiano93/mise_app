@@ -21,8 +21,12 @@ import { field, formActions, makeDayChecks, checkedDays, reportFailure } from '.
 // save     — (id | null, payload) → Promise resolving with the supplier's id
 // onDone   — ({ id, name }) once saved; `name` is the label the app will SHOW (short name
 //            when there is one), because callers put it on screen straight away
-// onCancel — backed out; nothing was written
-export function buildSupplierForm({ item, save, onDone, onCancel }) {
+//
+// ⚠️ THE SAVE BUTTON IS NOT IN THE FORM. It is the header pill (.app-header-save) and the form
+// exposes it as `form.headerSave`; the screen that draws the header puts it in the right-hand
+// slot. The form keeps ownership of its state (it disables itself while the write runs), so the
+// header cannot drift from it. Back is the screen's own and does what Cancel used to.
+export function buildSupplierForm({ item, save, onDone }) {
   const name = el('input', { type: 'text', class: 'mgmt-input', value: item?.name || '' });
   const shortName = el('input', { type: 'text', class: 'mgmt-input', maxlength: '40', value: item?.shortName || '', 'aria-describedby': 'supplier-short-name-hint' });
   const category = el('input', { type: 'text', class: 'mgmt-input', value: item?.category || '' });
@@ -34,7 +38,8 @@ export function buildSupplierForm({ item, save, onDone, onCancel }) {
   const deliveryChecks = makeDayChecks(item?.deliveryDays);
   const orderChecks = makeDayChecks(item?.orderDays);
 
-  const saveBtn = el('button', { type: 'button', class: 'btn-primary', onClick: async () => {
+  const saveBtn = el('button', { type: 'button', class: 'app-header-save', onClick: async () => {
+    if (saveBtn.disabled) return;
     if (!name.value.trim()) { name.focus(); return; }
     saveBtn.disabled = true;
     const payload = {
@@ -60,7 +65,7 @@ export function buildSupplierForm({ item, save, onDone, onCancel }) {
     onDone?.({ id: id || item?.id || null, name: supplierLabel(payload) });
   } }, t('ui.save'));
 
-  return el('div', { class: 'mgmt-form' }, [
+  const form = el('div', { class: 'mgmt-form' }, [
     field(t('orders.field.name'), name),
     field(t('orders.field.shortName'), shortName),
     el('p', { class: 'notif-note', id: 'supplier-short-name-hint', text: t('orders.field.shortNameHint') }),
@@ -76,6 +81,8 @@ export function buildSupplierForm({ item, save, onDone, onCancel }) {
     field(t('orders.phoneWhatsappDigitsOnly'), phone),
     field(t('orders.field.email'), email),
     field(t('orders.field.vatNumber'), vatNumber),
-    formActions(saveBtn, onCancel),
+    formActions(),
   ]);
+  form.headerSave = saveBtn;
+  return form;
 }

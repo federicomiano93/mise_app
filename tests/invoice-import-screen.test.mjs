@@ -193,12 +193,12 @@ async function submitSupplier({ item, vat }) {
   installFakeDom();
   const { buildSupplierForm } = await import('../js/supplier-record-form.js');
   const saved = [];
-  const form = buildSupplierForm({ item, save: async (id, payload) => { saved.push(payload); return id || 'new'; }, onDone: () => {}, onCancel: () => {} });
+  const form = buildSupplierForm({ item, save: async (id, payload) => { saved.push(payload); return id || 'new'; }, onDone: () => {} });
   const inputs = form.all(n => n.tagName === 'input' && n.attrs.type !== 'checkbox');
   const [name, , , , , vatBox] = inputs;
   name.value = 'Mulino Esempio';
   if (vat !== undefined) vatBox.value = vat;
-  const save = form.all(n => n.tagName === 'button' && n.className === 'btn-primary')[0];
+  const save = form.headerSave;
   await save.listeners.click();
   return { saved, vatBox };
 }

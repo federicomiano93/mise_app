@@ -112,7 +112,6 @@ function openCard({ item = null, mayPrice = true } = {}) {
       packPhotoOn: () => false,
     },
     onDone: () => {},
-    onCancel: () => {},
   });
   const all = () => walk(root);
   const byAria = (label) => all().find(n => n.attributes['aria-label'] === label);
@@ -134,7 +133,7 @@ function openCard({ item = null, mayPrice = true } = {}) {
     caseUnit: byAria('Unit of each one'),
     weightAmount: byAria('Weight amount'),
     weightUnit: byAria('Weight unit'),
-    saveBtn: all().find(n => n.tagName === 'BUTTON' && n.classList.contains('btn-primary')),
+    saveBtn: root.headerSave,
     notes: () => all().filter(n => n.classList.contains('mgmt-price-note') && shown(n) && n.textContent).map(n => n.textContent),
     summary: () => all().filter(n => n.classList.contains('mgmt-price-main') && shown(n)).map(n => n.textContent).join(' '),
     async save() { click(card.saveBtn); await new Promise(r => setImmediate(r)); return saves[saves.length - 1]; },

@@ -633,8 +633,8 @@ export function nonWeighableLabels(recipe) {
 }
 
 // Add or update an imported recipe inside a config's recipes[]. If a recipe with the
-// same id already exists it is replaced in place, preserving its tab order/visibility
-// (so a re-import never duplicates and never hijacks the tab bar); otherwise it is
+// same id already exists it is replaced in place, preserving its tab order/visibility and how it calculates
+// (logic, trayWeight) (so a re-import never duplicates and never hijacks the tab bar); otherwise it is
 // appended. Pure: returns a new config plus the action taken.
 export function mergeImportedRecipe(config, recipe) {
   const recipes = Array.isArray(config.recipes) ? config.recipes.slice() : [];
@@ -642,13 +642,27 @@ export function mergeImportedRecipe(config, recipe) {
   let action;
   if (idx >= 0) {
     const prev = recipes[idx];
-    recipes[idx] = { ...recipe, order: prev.order, visible: prev.visible };
+    // The owner chose how this tab calculates (logic, tray weight); an import refreshes the
+    // ingredients, never that (a fresh import always says logic: 'total').
+    recipes[idx] = {
+      ...recipe, order: prev.order, visible: prev.visible,
+      ...(prev.logic !== undefined ? { logic: prev.logic } : {}),
+      ...(prev.trayWeight !== undefined ? { trayWeight: prev.trayWeight } : {}),
+    };
     action = 'updated';
   } else {
     recipes.push(recipe);
     action = 'added';
   }
   return { config: { ...config, recipes }, action };
+}
+
+// Which sentence explains a refused import. permission-denied = the server REFUSED: this app
+// is older than the data (configModel), which a connection check would never fix, so it says
+// «out of date» (the Calculator's own key, same rule as saveFailureKey in calculator-config.js,
+// not imported here because this file touches no Calculator code). Anything else: the connection.
+export function importFailureKey(err) {
+  return err && err.code === 'permission-denied' ? 'calc.notSavedOutOfDate' : 'cat.importFailedCheckYour';
 }
 
 // Find the Calculator copy of a catalogue recipe (imported as 'cat-<id>'), or null.

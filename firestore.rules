@@ -1465,6 +1465,9 @@ service cloud.firestore {
                'bakery', 'configRev',
                // Calculator
                'clients', 'recipes', 'ingredients',
+               // The old-phone guard (see below) and the switch for the bottom-bar
+               // Orders button (4 Oct 2026).
+               'configModel', 'showClientOrdersButton',
                'whatsappLists', 'whatsappClients',
                'extraDough', 'divisorIncluded',
                'logVisibility', 'logRetentionHours', 'logRetentionByDough',
@@ -1486,6 +1489,25 @@ service cloud.firestore {
              ])
           && (!('configRev' in request.resource.data)
               || request.resource.data.configRev is number)
+          // ⚠️⚠️ THE OLD-PHONE GUARD, the same one products carry (`model`), and it costs
+          // no read. The Calculator rebuilds config/calculator from a FIXED list of keys
+          // and saves it WHOLE, so a phone still on an older version would drop every
+          // field it has never heard of — the Orders-button switch flipped back on, a
+          // «per tray» recipe rewritten as «from orders» — in silence. Once the
+          // document carries `configModel`, a save must carry at least the same: the old
+          // phone is refused («could not save») until it updates, and the settings
+          // survive. A merge that does not send the key keeps the stored one, so it
+          // passes. A document nobody has saved since stays writable by everyone.
+          && (!('configModel' in request.resource.data)
+              || (request.resource.data.configModel is int
+                  && request.resource.data.configModel >= 1
+                  && request.resource.data.configModel <= 100))
+          && (resource == null
+              || !('configModel' in resource.data)
+              || request.resource.data.get('configModel', 0) >= resource.data.configModel)
+          // Whether the bottom bar shows the Orders button. Absent = shown.
+          && (!('showClientOrdersButton' in request.resource.data)
+              || request.resource.data.showClientOrdersButton is bool)
           && (!('clients' in request.resource.data)
               || (request.resource.data.clients is list
                   && request.resource.data.clients.size() <= 200))

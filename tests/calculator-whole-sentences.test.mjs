@@ -35,14 +35,14 @@ const NEW_KEYS = {
   'calc.recipeUsedByProducts': { holes: ['n'], plural: true },
   'calc.deleteRecipeNamed': { holes: ['name'] },
   'calc.deleteThisRecipe': { holes: [] },
-  'calc.tooManyVisibleRecipes': { holes: ['n'], plural: true },
-  'calc.showAsTabMax': { holes: ['n'] },
-  'calc.deleteLogNamed': { holes: ['dough'] },
-  'calc.deleteThisLog': { holes: [] },
+  // The Recipes list moved the visibility switch into the row (PR #292): its refusal is one sentence.
+  'calc.recipe.limitReached': { holes: ['n'] },
+  // One entry of the Dough history is «a dough» (PR #292).
+  'calc.deleteDoughConfirm': { holes: ['name'] },
+  'calc.deleteThisDough': { holes: [] },
   'calc.restoredFromVersion': { holes: ['v'] },
   'calc.versionCreated': { holes: [] },
   'calc.versionEdited': { holes: [] },
-  'calc.logTitle': { holes: ['dough'] },
   'calc.byName': { holes: ['name'] },
   'calc.doughTitle': { holes: ['name'] },
   'calc.gramsRaw': { holes: ['g'] },
@@ -101,11 +101,11 @@ test('Italian: the messages from the review read as Italian sentences', () => {
     assert.equal(t('calc.recipeUsedByProducts', { n: 1 }),
       'Questa ricetta è usata da 1 prodotto. Prima collegalo a un’altra ricetta o eliminalo in Impostazioni → Clienti.');
     assert.match(t('calc.recipeUsedByProducts', { n: 3 }), /^Questa ricetta è usata da 3 prodotti\./);
-    assert.equal(t('calc.tooManyVisibleRecipes', { n: 4 }),
-      'Solo 4 ricette possono comparire come linguette insieme. Nascondine prima un’altra.');
+    assert.equal(t('calc.recipe.limitReached', { n: 4 }),
+      'Nel calcolatore ci sono già 4 ricette. Per mostrare questa, nascondine prima un’altra.');
     assert.equal(t('calc.deleteRecipeNamed', { name: 'Focaccia' }), 'Vuoi eliminare la ricetta Focaccia?');
     assert.equal(t('calc.divisorTitle', { recipe: 'Pizza' }), 'Divisore di Pizza');
-    assert.equal(t('calc.logTitle', { dough: 'Pizza' }), 'Registro di Pizza');
+    assert.equal(t('calc.deleteThisDough'), 'Vuoi eliminare questo impasto? Non si può annullare.');
     assert.equal(t('calc.versionCreated'), 'Creata');
     assert.equal(t('calc.versionEdited'), 'Modificata');
     assert.equal(t('calc.clientFallback'), 'Cliente');
@@ -124,9 +124,10 @@ test('English: the same messages keep their wording, with the right screen named
       'This recipe is used by 1 product. Reassign or delete it in Settings → Clients first.');
     assert.equal(t('calc.recipeUsedByProducts', { n: 2 }),
       'This recipe is used by 2 products. Reassign or delete them in Settings → Clients first.');
-    assert.equal(t('calc.tooManyVisibleRecipes', { n: 4 }), 'Only 4 recipes can show as tabs at once. Hide another first.');
+    assert.equal(t('calc.recipe.limitReached', { n: 4 }),
+      'There are already 4 recipes in the calculator. To show this one, hide another first.');
     assert.equal(t('calc.deleteRecipeNamed', { name: 'Focaccia' }), 'Delete the Focaccia recipe?');
-    assert.equal(t('calc.logTitle', { dough: 'Pizza' }), 'Pizza log');
+    assert.equal(t('calc.deleteThisDough'), 'Delete this dough? This cannot be undone.');
     assert.equal(t('calc.logKeepHours', { n: 1 }), '1 hour');
     // English venues keep the words they had before the fix.
     assert.equal(t('calc.clientFallback'), 'Client');

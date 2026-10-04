@@ -78,7 +78,6 @@ function openCard({ item = null, mayPrice = true, kind = null } = {}) {
       packPhotoOn: () => false,
     },
     onDone: () => {},
-    onCancel: () => {},
   });
   const all = () => walk(root);
   const byAria = (label) => all().find(n => n.attributes['aria-label'] === label);
@@ -95,7 +94,7 @@ function openCard({ item = null, mayPrice = true, kind = null } = {}) {
     weightUnit: byAria('Weight unit'),
     single: all().find(n => n.tagName === 'BUTTON' && n.classList.contains('set-seg-btn') && n.textContent === 'Single'),
     carton: all().find(n => n.tagName === 'BUTTON' && n.classList.contains('set-seg-btn') && n.textContent === 'Case'),
-    saveBtn: all().find(n => n.tagName === 'BUTTON' && n.classList.contains('btn-primary')),
+    saveBtn: root.headerSave,
     name: all().find(n => n.tagName === 'INPUT' && n.classList.contains('mgmt-input')),
     // ⚠️ LOOKED UP WHEN ASKED: the card renames its price boxes as the format changes.
     get casePrice() { return labelled(/^(Case|Pack) price/); },

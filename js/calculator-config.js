@@ -43,9 +43,24 @@
 // product is pruned). The dough math never reads this — it is purely for the order
 // message.
 
-import { t } from './i18n.js';
+import { t, localeTag } from './i18n.js';
 
 export const TABS = ['focaccia', 'brioche', 'sourdough'];
+
+// ⚠️ THE SHAPE NUMBER OF config/calculator, like `model: 2` on a food-cost product.
+// assemble() rebuilds the document from a FIXED list of keys, so a phone still running an
+// older build that saves the config silently DROPS every key added since (the Orders-button
+// switch flips back on; a later «per tray» recipe would be rewritten as «from orders»).
+// The app therefore always writes EXACTLY this number — never Math.max(stored, this): a
+// build that knows less must write a LOWER number, and the rules refuse a write that
+// lowers configModel, so the older build gets «could not save» instead of deleting data.
+// Raise it (here and in the rules) the day a new key or recipe logic is added.
+// 1 = the document before the field existed; 2 = adds showClientOrdersButton;
+// 3 = adds the 'trays' / 'traysTotal' recipe logics and `trayWeight`: an app that does not
+// know them would rewrite a trays recipe as «from orders» and drop its tray weight.
+// The rules need no change: they refuse a LOWER number, and the recipes are a list they
+// do not look inside.
+export const CONFIG_MODEL = 3;
 
 // Allowed weight range, in grams. Guards against a typo turning 150 into 15000
 // and silently producing ten times the intended dough.
@@ -104,7 +119,17 @@ export const DEFAULT_CONFIG = {
   // Which days the WhatsApp order form fills itself from. Default: both, because a
   // day's order is normally assembled from two days' work.
   orderPrefillWindow: 'both',
+  // The bottom-bar «Orders» button. ON by default (read as `!== false`, see
+  // showsClientOrdersButton): a venue that never heard of the key sees no change.
+  showClientOrdersButton: true,
+  configModel: CONFIG_MODEL,
 };
+
+// Whether the bottom bar offers the Orders button. Missing, corrupt or anything but a
+// literal false = ON, so a typo can never remove the only door to the clients' orders.
+export function showsClientOrdersButton(config) {
+  return !(config && config.showClientOrdersButton === false);
+}
 
 const KINDS = ['number', 'dropdown', 'kg'];
 
@@ -204,11 +229,80 @@ export function getAllProducts(config) {
 
 // ── Recipes (the base) + ingredient registry ──────────────────────────────────
 
-// The three calc logics a recipe can use:
-//   'orders' → quantities from clients (+ leavening knob) — today's behaviour
-//   'total'  → one typed total in grams, ingredients pro-rata (no clients/leavening)
-//   'both'   → orders + a typed total + leavening; the two totals are summed
-export const LOGICS = ['orders', 'total', 'both'];
+// The calc logics a recipe can use:
+//   'orders'     → quantities from clients (+ leavening knob) — today's behaviour
+//   'total'      → one typed total in grams, ingredients pro-rata (no clients/leavening)
+//   'both'       → orders + a typed total + leavening; the two totals are summed
+//   'trays'      → a number of trays × the recipe's tray weight, ingredients pro-rata
+//   'traysTotal' → trays × tray weight + a typed total in grams, ingredients pro-rata
+export const LOGICS = ['orders', 'total', 'both', 'trays', 'traysTotal'];
+
+// Logics that take clients' orders (and so a leavening knob, an extra-dough box, products).
+export function usesOrders(logic) { return logic === 'orders' || logic === 'both'; }
+// Logics that take a typed total in grams.
+export function usesTypedTotal(logic) { return logic === 'total' || logic === 'both' || logic === 'traysTotal'; }
+// Logics that take a number of trays.
+export function usesTrays(logic) { return logic === 'trays' || logic === 'traysTotal'; }
+// Logics that scale pro-rata with the leavening neutralised (no orders to adjust it for).
+export function isProRata(logic) { return logic === 'total' || usesTrays(logic); }
+
+// ── Trays ─────────────────────────────────────────────────────────────────────
+// One tray weighs `trayWeight` grams of dough, set per recipe. Whole grams: a scale in a
+// kitchen does not show tenths, and a whole number keeps «5 × 1,000 g» readable.
+export const DEFAULT_TRAY_WEIGHT = 1000;
+export const MAX_TRAY_WEIGHT = 100000;
+// Below this a typed weight is almost surely kilos («1.2» meant as 1.2 kg): Save refuses it.
+export const MIN_TRAY_WEIGHT = 50;
+export const MAX_TRAYS = 10000;
+
+// A tray weight → whole grams in MIN_TRAY_WEIGHT…MAX_TRAY_WEIGHT; missing, text, NaN or under
+// the minimum → 1000. A stored weight under 50 g can only come from somewhere other than the
+// Recipes screen (which refuses it); 1000 is the safe reading, never 1 g per tray.
+export function normalizeTrayWeight(v) {
+  const n = Math.round(Number(v));
+  if (!Number.isFinite(n) || n < MIN_TRAY_WEIGHT) return DEFAULT_TRAY_WEIGHT;
+  return Math.min(n, MAX_TRAY_WEIGHT);
+}
+
+// Whether a typed tray weight is a usable answer (the Recipes screen blocks Save otherwise).
+export function isValidTrayWeight(v) {
+  if (v === '' || v === null || v === undefined) return false;
+  const n = Number(v);
+  return Number.isFinite(n) && n >= MIN_TRAY_WEIGHT && n <= MAX_TRAY_WEIGHT;
+}
+
+// A typed number of trays → a whole number in 0…MAX_TRAYS. WHOLE TRAYS ONLY, decided in this
+// one place: if half trays are ever wanted, this is the only line that changes.
+export function normalizeTrays(v) {
+  const n = Math.floor(Number(v));
+  if (!Number.isFinite(n) || n < 0) return 0;
+  return Math.min(n, MAX_TRAYS);
+}
+
+// What a trays box must show so that it equals what is computed: the whole number used, or
+// null when the box already says it (or is empty, which is left alone while typing).
+export function settledTraysText(raw) {
+  if (raw === '' || raw === null || raw === undefined) return null;
+  const used = String(normalizeTrays(raw));
+  return used === String(raw).trim() ? null : used;
+}
+
+// The grams a number of trays makes with this recipe's tray weight.
+export function traysGrams(recipe, trays) {
+  return normalizeTrays(trays) * normalizeTrayWeight(recipe && recipe.trayWeight);
+}
+
+// «5,000» / «5.000»: grouped in the interface language. Intl's Italian skips the group for
+// four digits unless asked, and a tray count makes four-digit grams the everyday case.
+// Called while drawing, so the language is read then.
+export function formatGrams(n) {
+  const v = Number.isFinite(Number(n)) ? Number(n) : 0;
+  try {
+    return new Intl.NumberFormat(localeTag(), { useGrouping: 'always', maximumFractionDigits: 0 }).format(v);
+  } catch (e) {
+    return String(Math.round(v));
+  }
+}
 
 // The maximum number of recipes that can be visible as calculator tabs at once.
 export const MAX_VISIBLE_RECIPES = 4;
@@ -267,9 +361,9 @@ export function calculatorEmptyReason(config, serverAnswered) {
 
 // Whether a recipe's calculator tab shows a leavening knob: only logics that order
 // or sum ('orders'/'both'), and only when the recipe designates a leavening with the
-// "show the knob" flag on. A 'total' recipe never shows it (pure pro-rata).
+// "show the knob" flag on. A 'total' or trays recipe never shows it (pure pro-rata).
 export function showsLeaveningKnob(recipe) {
-  if (!recipe || (recipe.logic !== 'orders' && recipe.logic !== 'both')) return false;
+  if (!recipe || !usesOrders(recipe.logic)) return false;
   return !!(recipe.leaveningKey && recipe.showLeavening);
 }
 
@@ -451,12 +545,17 @@ export function computeTarget(config, tab, getQty) {
 //   'orders' → Σ(qty×weight) over the recipe's products + extra
 //   'total'  → the typed total only
 //   'both'   → Σ(qty×weight) + the typed total + extra
+//   'trays'      → trays × the recipe's tray weight
+//   'traysTotal' → trays × the recipe's tray weight + the typed total
 // All inputs are coerced so the result is always a finite number ≥ 0.
-export function computeRecipeTarget(config, recipe, { getQty, extraGrams = 0, totalInput = 0 } = {}) {
+export function computeRecipeTarget(config, recipe, { getQty, extraGrams = 0, totalInput = 0, trays = 0 } = {}) {
   if (!recipe) return 0;
-  const extra = Math.max(0, Number(extraGrams) || 0);
-  const typed = Math.max(0, Number(totalInput) || 0);
+  const finite = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
+  const extra = Math.max(0, finite(extraGrams));
+  const typed = Math.max(0, finite(totalInput));
   if (recipe.logic === 'total') return typed;
+  if (recipe.logic === 'trays') return traysGrams(recipe, trays);
+  if (recipe.logic === 'traysTotal') return traysGrams(recipe, trays) + typed;
   const orders = (typeof getQty === 'function') ? computeTarget(config, recipe.id, getQty) : 0;
   if (recipe.logic === 'both') return orders + typed + extra;
   return orders + extra; // 'orders'
@@ -828,6 +927,8 @@ function normalizeRecipe(raw, index) {
 
   return {
     id, name, logic, ingredients,
+    // Kept whatever the logic, so switching away from trays and back loses nothing.
+    trayWeight: normalizeTrayWeight(raw.trayWeight),
     ...link,
     leaveningKey, leaveningDefaultPct, showLeavening, baselinePct,
     order: Number(raw.order) || 0,
@@ -905,6 +1006,9 @@ function assemble(clients, raw) {
     // An unknown or missing value falls back to 'both' — the widest window, so a
     // corrupt setting never silently narrows what the order form offers.
     orderPrefillWindow: getOrderPrefillWindow(raw),
+    showClientOrdersButton: showsClientOrdersButton(raw),
+    // Always this build's own number (see CONFIG_MODEL), never the stored one.
+    configModel: CONFIG_MODEL,
   };
 }
 
@@ -1049,4 +1153,14 @@ export function reconcileConfigWrite(config, server) {
     if (importedMissing.length) recipes = recipes.concat(importedMissing);
   }
   return { recipes, configRev: serverRev + 1 };
+}
+
+// Which sentence tells a person that a config save did NOT reach the server (a key of
+// js/i18n.js), or null when it did. `result` is what saveConfig resolves with.
+// permission-denied is the server REFUSING: since the configModel guard that means this
+// device runs an older app than the data. Anything else (offline, network, timeout) is the
+// connection. 'no-server-answer' explains itself inside saveConfig, so it has no key here.
+export function saveFailureKey(result) {
+  if (!result || result.reason !== 'write-failed') return null;
+  return result.code === 'permission-denied' ? 'calc.notSavedOutOfDate' : 'calc.notSavedCheckConnection';
 }
