@@ -45,7 +45,12 @@ export function openRecipeFullScreen({ name, rows, totalG, opener }) {
   closeBtn.title = t('calc.exitFullScreen');
   closeBtn.innerHTML = CLOSE_SVG; // static author markup
 
-  const view = el('div', { class: 'calc-zoom', role: 'dialog', 'aria-modal': 'true', 'aria-label': name }, [closeBtn, body]);
+  // The × lives in its own strip ABOVE the scrolling rows (not floating over them): a row scrolled
+  // up never slides under it and loses its «g».
+  const view = el('div', { class: 'calc-zoom', role: 'dialog', 'aria-modal': 'true', 'aria-label': name }, [
+    el('div', { class: 'calc-zoom-top' }, [closeBtn]),
+    el('div', { class: 'calc-zoom-scroll' }, [body]),
+  ]);
   const controls = buildZoomControls({
     storageKey: ZOOM_STORAGE_KEY,
     target: view,
@@ -81,7 +86,7 @@ export function openRecipeFullScreen({ name, rows, totalG, opener }) {
   document.body.appendChild(view);
   try { closeBtn.focus({ preventScroll: true }); } catch (e) { /* best-effort */ }
 
-  const api = { node: view, close, controls };
+  const api = { node: view, close, controls, closeBtn };
   current = api;
   return api;
 }

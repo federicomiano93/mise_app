@@ -418,6 +418,8 @@ select.qty-select:focus { outline: none; border-color: var(--crust); background:
   cursor: pointer;
 }
 .calc-fullscreen-btn:active { background: var(--accent-light); transform: scale(.97); }
+/* The grams never break across two lines, whatever the ingredient's name (a long name wraps instead). */
+.result-card .ing-val { white-space: nowrap; }
 /* Tapping the list or the total opens the same view; the pointer says so. */
 .result-card .total-dough-row, .result-card [id$="-ingredients"] { cursor: zoom-in; }
 
@@ -434,18 +436,18 @@ select.qty-select:focus { outline: none; border-color: var(--crust); background:
   z-index: 2000;
   display: flex;
   flex-direction: column;
-  overflow-y: auto;
   background: var(--surface);
   color: var(--text);
-  padding: var(--space-4) clamp(16px, 6vw, 56px);
-  padding-bottom: var(--zoom-steps-room);
   font-size: clamp(1.1rem, 4.4vw, 1.6rem);
 }
+/* The × has a strip of its own: the rows scroll BELOW it, never under it. */
+.calc-zoom-top {
+  flex: none;
+  display: flex;
+  justify-content: flex-end;
+  padding: var(--space-3) clamp(16px, 6vw, 56px) 0;
+}
 .calc-zoom-close {
-  position: fixed;
-  top: var(--space-3);
-  right: var(--space-3);
-  z-index: 2;
   width: 48px;
   height: 48px;
   display: flex;
@@ -458,7 +460,15 @@ select.qty-select:focus { outline: none; border-color: var(--crust); background:
   cursor: pointer;
 }
 .calc-zoom-close:active { transform: scale(.97); }
-.calc-zoom-rows { margin: auto 0; width: 100%; padding-top: 48px; }
+.calc-zoom-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  padding: 0 clamp(16px, 6vw, 56px) var(--zoom-steps-room);
+}
+.calc-zoom-rows { margin: auto 0; width: 100%; }
 .calc-zoom-row {
   display: flex;
   flex-wrap: wrap;

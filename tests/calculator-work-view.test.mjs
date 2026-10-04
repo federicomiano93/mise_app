@@ -458,7 +458,7 @@ test('S5: × and Escape close it, the page unlocks, and focus goes back to the o
   const { openRecipeFullScreen } = await import('../js/calc-fullscreen.js');
   for (const how of ['x', 'escape']) {
     const api = openRecipeFullScreen({ name: 'Pizza', rows: ROWS, totalG: 980, opener: w.opener });
-    const closeBtn = api.node.children[0];
+    const closeBtn = api.closeBtn;
     assert.equal(closeBtn.attributes['aria-label'], 'Exit full screen');
     assert.equal(closeBtn.focused, 1, 'focus moved in, onto ×');
     const before = w.opener.focused;
@@ -475,7 +475,7 @@ test('S5: Tab stays inside the dialog (× → − → + → ×)', async () => {
   const w = viewWorld();
   const { openRecipeFullScreen } = await import('../js/calc-fullscreen.js');
   const api = openRecipeFullScreen({ name: 'Pizza', rows: ROWS, totalG: 980, opener: w.opener });
-  const stops = [api.node.children[0], ...api.controls.node.children];
+  const stops = [api.closeBtn, ...api.controls.node.children];
   assert.equal(stops.length, 3);
   const order = [];
   let at = 0; // the × holds focus when the view opens
@@ -533,7 +533,9 @@ test('S5: the visible button is in the result header, labelled, and a real icon'
 
 test('S5: the full-screen CSS — wrap, bottom room for the pair, locked page, tablet column', () => {
   const css = strip(read('style.css'));
-  assert.match(css, /\.calc-zoom \{[^}]*position: fixed;[^}]*inset: 0;[^}]*padding-bottom: var\(--zoom-steps-room\)/);
+  assert.match(css, /\.calc-zoom \{[^}]*position: fixed;[^}]*inset: 0;/);
+  assert.match(css, /\.calc-zoom-scroll \{[^}]*overflow-y: auto;[^}]*padding: 0 clamp\(16px, 6vw, 56px\) var\(--zoom-steps-room\)/);
+  assert.match(css, /\.calc-zoom-top \{[^}]*flex: none;/, 'the × has a strip of its own, above the scrolling rows');
   assert.match(css, /\.calc-zoom-row \{[^}]*flex-wrap: wrap;[^}]*font-size: calc\(1em \* var\(--zoom-scale, 1\)\)/);
   assert.match(css, /\.calc-zoom-close \{[^}]*width: 48px;[^}]*height: 48px;/);
   assert.match(css, /body\.calc-zoom-lock \.scroll-area \{ overflow: hidden; \}/);
