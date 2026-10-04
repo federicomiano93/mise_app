@@ -20,6 +20,7 @@ import {
 import { workDayIndex } from './log-model.js';
 import { confirmDialog } from './confirm-dialog.js';
 import { initClientOrders } from './calculator-client-orders.js';
+import { runConfirm } from './confirm-flow.js';
 
 // Service-worker registration and the update banner live in js/sw-update.js,
 // shared by every page — nothing to do here.
@@ -307,7 +308,11 @@ function wireRecipe(recipe) {
 
   // Confirm (opens the shared day picker), Edit, Copy, WhatsApp, Reset.
   const confirmBtn = document.getElementById(id + '-day-confirm');
-  if (confirmBtn) confirmBtn.addEventListener('click', () => openDayModal(id));
+  if (confirmBtn) confirmBtn.addEventListener('click', () => runConfirm(id, {
+    config: getConfig(),
+    openDayPicker: openDayModal,
+    saveToday: saveForToday,
+  }));
   const editBtn = document.getElementById(id + '-edit-btn');
   if (editBtn) editBtn.addEventListener('click', () => editTab(id));
   const copyBtn = document.getElementById(id + '-copy-btn');
@@ -432,6 +437,11 @@ const dayModal = document.getElementById('day-modal');
 let dayModalTab = null;
 function openDayModal(recipeId) { dayModalTab = recipeId; dayModal.classList.add('visible'); }
 function closeDayModal() { dayModal.classList.remove('visible'); dayModalTab = null; }
+// Confirm with «Ask which day» switched off: the same save the Today button makes.
+function saveForToday(recipeId) {
+  saveDay(recipeId, 'today');
+  touchTab(recipeId);
+}
 if (dayModal) {
   dayModal.querySelectorAll('.day-btn').forEach(btn => {
     btn.addEventListener('click', () => {

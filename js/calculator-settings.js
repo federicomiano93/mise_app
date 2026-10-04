@@ -23,7 +23,7 @@ import { SEND_PATHS, svgElement } from './send-icon.js';
 import { getConfig, saveConfigOrSay, canSyncConfig } from './calculator-config-store.js';
 import {
   WEIGHT_MIN, WEIGHT_MAX, cloneConfig, isExtraDoughEnabled, getTabProducts, isInDivisor,
-  getRecipes, getRecipeById, pairId, showsClientOrdersButton,
+  getRecipes, getRecipeById, pairId, showsClientOrdersButton, asksDoughDay,
 } from './calculator-config.js';
 import { el } from './calculator-render.js';
 import { icon } from './calculator-icons.js';
@@ -74,6 +74,7 @@ function isBlank(s) { return !s || !String(s).trim(); }
 // ── Hub ───────────────────────────────────────────────────────────────────────
 export function openSettings() {
   paintOrdersButtonSwitch();
+  paintAskDaySwitch();
   show('settings-overlay');
 }
 function closeSettings() { hide('settings-overlay'); }
@@ -111,6 +112,27 @@ async function onOrdersButtonSwitch() {
 
 const ordersButtonSwitch = document.getElementById('orders-button-switch');
 if (ordersButtonSwitch) ordersButtonSwitch.addEventListener('change', onOrdersButtonSwitch);
+
+// ── «Ask which day the dough is for» ──────────────────────────────────────────
+// Venue-wide (config/calculator.askDoughDay), saved on the tap exactly like the Orders
+// button switch above and sharing its «Saved ✓» tag (same section). Off = Confirm saves
+// for today at once (js/confirm-flow.js). A refused write puts the switch back.
+function paintAskDaySwitch() {
+  const cb = document.getElementById('ask-day-switch');
+  if (cb) cb.checked = asksDoughDay(getConfig());
+}
+
+async function onAskDaySwitch() {
+  const cb = document.getElementById('ask-day-switch');
+  const cfg = cloneConfig(getConfig());
+  const wanted = cb.checked;
+  cfg.askDoughDay = wanted;
+  const saved = await saveConfigOrSay(cfg, { onFail: () => { cb.checked = !wanted; } });
+  if (saved && canSyncConfig()) flashOrdersButtonSaved();
+}
+
+const askDaySwitch = document.getElementById('ask-day-switch');
+if (askDaySwitch) askDaySwitch.addEventListener('change', onAskDaySwitch);
 
 // ── Clients editor ─────────────────────────────────────────────────────────────
 function clients() {

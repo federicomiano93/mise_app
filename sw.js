@@ -1,4 +1,4 @@
-const CACHE_NAME = 'theitalianclub-v588';
+const CACHE_NAME = 'theitalianclub-v589';
 // Firebase SDK modules (loaded from gstatic) are cached SEPARATELY from CACHE_NAME
 // so they survive the cache-version bump that happens on every deploy — otherwise
 // the offline SDK would be wiped each release until the next online load. The name
@@ -12,7 +12,7 @@ const CACHE_NAME = 'theitalianclub-v588';
 // the fetch handler below, on the first load that has a network.
 // So between activate() and that first load, a phone that is OFFLINE cannot boot:
 // the code asks for the new version and nothing has it. In practice the window is very
-// small — activate() only happens after a successful 297-file precache, i.e.
+// small — activate() only happens after a successful 298-file precache, i.e.
 // online, and tapping the update banner reloads the page immediately — but it is
 // not zero, and it is the reason to bump the SDK deliberately rather than often.
 // Leaving the name unchanged would close the window and cost ~1 MB of dead
@@ -235,6 +235,7 @@ const ASSETS = [
   './js/whatsapp.js',
   './js/calculator-confirm.js',
   './js/calculator-config.js',
+  './js/confirm-flow.js',
   './js/calculator-config-store.js',
   './js/calculator-order-prefill.js',
   './js/calculator-order-text.js',
@@ -420,7 +421,7 @@ const ASSET_HASHES = {
   "./": 'fb6d4386faa840f8',
   "./index.html": 'fb6d4386faa840f8',
   "./home.html": 'a4401ab28cb28eb9',
-  "./calculator.html": '004fb03110e8eb87',
+  "./calculator.html": '5bb4f66393503f2c',
   "./orders.html": 'e1cc2322509dfbe5',
   "./suppliers.html": 'd0d861102a8e44b4',
   "./install-guide.html": '155cc21e1c1dc524',
@@ -443,7 +444,7 @@ const ASSET_HASHES = {
   "./fonts/instrument-serif-latin.woff2": '0ad69719cac6f45e',
   "./fonts/instrument-serif-latin-ext.woff2": '0caad588cab430ca',
   "./fonts/atkinson-next-digits.woff2": '99ffa5b0e9a45a2b',
-  "./js/app.js": '5ac1157ca9afc546',
+  "./js/app.js": '8d749ba918073c0d',
   "./js/confirm-dialog.js": '61a7f580f37c5ff8',
   "./js/calculator-icons.js": '6bb803c39eabc4e0',
   "./js/hold-to-zoom.js": 'e077890cd7ba70de',
@@ -513,7 +514,7 @@ const ASSET_HASHES = {
   "./js/location.js": '6aaf53615a8739d1',
   "./js/sections.js": 'abcfdecb2bd5766d',
   "./js/roles.js": '7a7c5cf34d57f511',
-  "./js/i18n.js": 'abb9054a0aa76868',
+  "./js/i18n.js": '1fc8b7f883eb36a1',
   "./js/i18n-dom.js": '24249af4367511e5',
   "./js/keyboard-done.js": 'de05a6dd1f3aac26',
   "./js/join-code.js": '5b89de65db5c102f',
@@ -551,12 +552,13 @@ const ASSET_HASHES = {
   "./js/log-settings.js": '2878595500c2fea5',
   "./js/whatsapp.js": '85499983381f4136',
   "./js/calculator-confirm.js": '68a8ecb9ef0f0ab9',
-  "./js/calculator-config.js": '83efc5cb8c4196bd',
+  "./js/calculator-config.js": '65e76f83f8458dbb',
+  "./js/confirm-flow.js": '350a9b206670e6bd',
   "./js/calculator-config-store.js": 'e1fe72337b0b2bf3',
   "./js/calculator-order-prefill.js": '28c00f4fea7d43b7',
   "./js/calculator-order-text.js": '3eabd34a0df19321',
   "./js/calculator-render.js": '6a96c5f18b157f3e',
-  "./js/calculator-settings.js": 'b1c6abf08f4ec749',
+  "./js/calculator-settings.js": 'b60e28ec7bea4d76',
   "./js/calculator-whatsapp-settings.js": '39823bea666c3471',
   "./js/vendor/sortable.esm.js": '824d48148fc5b469',
   "./js/orders/boot.js": '53dba081d29270d8',
@@ -744,7 +746,7 @@ const ASSET_HASHES = {
 // code against rules that deployed instantly, which is the very thing the gate exists
 // to prevent. Two things stand between that and a release: the test that every ASSETS
 // entry EXISTS (a mistyped path being the likeliest permanent cause), and this
-// project's post-deploy sweep, which already asks the live site for all 297 files.
+// project's post-deploy sweep, which already asks the live site for all 298 files.
 // ⚠️ NEITHER covers a device-specific failure — nobody has yet confirmed an update
 // landing on a real iPhone under this code.
 //
