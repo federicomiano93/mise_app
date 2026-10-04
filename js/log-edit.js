@@ -15,7 +15,7 @@ import { t } from './i18n.js';
 import { el } from './calculator-render.js';
 import { icon } from './calculator-icons.js';
 import { getConfig } from './calculator-config-store.js';
-import { getTabProducts, getDivisorIncluded, getRecipes, getRecipeById } from './calculator-config.js';
+import { getTabProducts, getDivisorIncluded, getRecipes, getRecipeById, usesTrays, normalizeTrays, normalizeTrayWeight } from './calculator-config.js';
 import { logTimestamp } from './log-time.js';
 import { confirmDiscard } from './calculator-confirm.js';
 import { buildSheet, buildLogText, latestVersion, recipeSnapshot, editRows } from './log-model.js';
@@ -69,7 +69,14 @@ export function openLogEdit(logId) {
     })),
   }));
 
-  working = { logId, dough: log.dough, recipeId: tab, tab, recipe, items, occasional, calculatedBy: v.calculatedBy || '' };
+  // A trays dough is edited by its trays (and, for «trays + total», the grams typed on top):
+  // the weight of a tray stays the one the dough was MADE with (the frozen recipe's).
+  const sheet = v.sheet || {};
+  const trayWeight = normalizeTrayWeight(sheet.trayWeight_g || (recipe && recipe.trayWeight));
+  const trays = normalizeTrays(sheet.trays);
+  const typedTotal = recipe && recipe.logic === 'traysTotal' ? Math.max(0, num(sheet.total_g) - trays * trayWeight) : 0;
+
+  working = { logId, dough: log.dough, recipeId: tab, tab, recipe, items, occasional, calculatedBy: v.calculatedBy || '', trays, typedTotal, trayWeight };
   dirty = false;
   render();
   document.getElementById('logedit-overlay').classList.add('visible');
@@ -87,6 +94,25 @@ function render() {
   const by = el('input', { class: 'cp-client-name', type: 'text', value: working.calculatedBy, placeholder: t('calc.nameOptional') });
   by.addEventListener('input', () => { working.calculatedBy = by.value; markDirty(); });
   c.appendChild(el('div', { class: 'cp-field' }, [el('label', { class: 'cp-label' }, t('calc.calculatedBy2')), by]));
+
+  if (working.recipe && usesTrays(working.recipe.logic)) {
+    const trays = el('input', { type: 'number', id: 'logedit-trays', class: 'cp-prod-weight', min: '0', step: '1', value: String(working.trays), inputmode: 'numeric' });
+    trays.addEventListener('input', () => { working.trays = normalizeTrays(trays.value); markDirty(); });
+    c.appendChild(el('div', { class: 'cp-field' }, [
+      el('label', { class: 'cp-label', for: 'logedit-trays' }, t('calc.trayCount')),
+      el('div', { class: 'cp-prod-card-row' }, [trays]),
+    ]));
+    if (working.recipe.logic === 'traysTotal') {
+      const typed = el('input', { type: 'number', id: 'logedit-total', class: 'cp-prod-weight', min: '0', step: '1', value: String(working.typedTotal), inputmode: 'numeric' });
+      typed.addEventListener('input', () => { working.typedTotal = Math.max(0, num(typed.value)); markDirty(); });
+      c.appendChild(el('div', { class: 'cp-field' }, [
+        el('label', { class: 'cp-label', for: 'logedit-total' }, t('calc.totalDoughG')),
+        el('div', { class: 'cp-prod-card-row' }, [typed, el('span', { class: 'cp-unit' }, 'g')]),
+      ]));
+    }
+    // A trays dough has no products: say nothing about quantities that cannot exist.
+    return;
+  }
 
   c.appendChild(el('div', { class: 'cp-label' }, t('calc.productsQuantitiesOnly')));
   let lastClient = null;
@@ -138,10 +164,12 @@ async function doSave() {
   const prevSheet = (latestVersion(getLogById(working.logId)) || {}).sheet;
   const leaveningPct = prevSheet && prevSheet.param ? prevSheet.param.value : (recipe ? recipe.leaveningDefaultPct : 0);
   const extraG = prevSheet ? num(prevSheet.extra_g) : 0;
-  const totalInput = recipe && recipe.logic === 'total' ? num(prevSheet && prevSheet.total_g) : 0;
+  const totalInput = recipe && recipe.logic === 'total' ? num(prevSheet && prevSheet.total_g)
+    : recipe && recipe.logic === 'traysTotal' ? working.typedTotal : 0;
+  const trays = recipe && usesTrays(recipe.logic) ? working.trays : 0;
   const divisor = { includedIds: getDivisorIncluded(getConfig(), tab), n: prevSheet && prevSheet.divisor ? prevSheet.divisor.n : 0 };
 
-  const sheet = buildSheet({ recipe, items: items.concat(occLines), extraGrams: extraG, totalInput, leaveningPct, divisor });
+  const sheet = buildSheet({ recipe: recipe && usesTrays(recipe.logic) ? { ...recipe, trayWeight: working.trayWeight } : recipe, items: items.concat(occLines), extraGrams: extraG, totalInput, trays, leaveningPct, divisor });
   const extra = { grams: extraG, value: extraG, unit: 'g' };
   const text = buildLogText(items, occClean, extra);
   const version = {

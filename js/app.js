@@ -261,7 +261,17 @@ function wireRecipe(recipe) {
     });
   }
 
-  // Typed total (total/both logic) — persisted like quantities.
+  // Number of trays (trays/traysTotal logic) — persisted, expired and reset exactly like the
+  // typed total below: the 'trays-' key is stamped by touchTab and dropped by forgetTabStorage.
+  const traysInput = document.getElementById(id + '-trays-input');
+  if (traysInput) {
+    const saved = localStorage.getItem('trays-' + id);
+    if (saved !== null) traysInput.value = saved;
+    traysInput.addEventListener('input', () => { calc(id); localStorage.setItem('trays-' + id, traysInput.value); touchTab(id); });
+    wireNumberUX(traysInput, id);
+  }
+
+  // Typed total (total/both/traysTotal logic) — persisted like quantities.
   const totalInput = document.getElementById(id + '-total-input');
   if (totalInput) {
     const saved = localStorage.getItem('total-' + id);
@@ -377,6 +387,7 @@ function forgetTabStorage(recipeId) {
   clearQty(recipeId);
   localStorage.removeItem('param-' + recipeId);
   localStorage.removeItem('total-' + recipeId);
+  localStorage.removeItem('trays-' + recipeId);
   localStorage.removeItem('extra-' + recipeId);
   localStorage.removeItem('extra-unit-' + recipeId);
   localStorage.removeItem('touched-' + recipeId);

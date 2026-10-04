@@ -44,7 +44,7 @@ test('showClientOrdersButton: a literal false stays false, through a normalise r
 });
 
 test('configModel: the app always writes its own number, whatever the document said', () => {
-  assert.equal(CONFIG_MODEL, 2);
+  assert.equal(CONFIG_MODEL, 3);
   for (const stored of [undefined, 0, 1, 2, 99, 'x']) {
     const raw = { clients: [] };
     if (stored !== undefined) raw.configModel = stored;
@@ -145,7 +145,7 @@ test('four shown recipes: the switch alerts and goes back OFF; adding asks first
   assert.match(js, /okLabel: t\('calc\.recipe\.createHidden'\)/);
   assert.match(js, /visible: !full/);
   assert.equal(MAX_VISIBLE_RECIPES, 4);
-  assert.deepEqual([...LOGICS], ['orders', 'total', 'both']);
+  assert.deepEqual([...LOGICS], ['orders', 'total', 'both', 'trays', 'traysTotal']);
 });
 
 test('a refused write is told to the person and the screen stays as it was (see calculator-save-failure.test.mjs)', () => {

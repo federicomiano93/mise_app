@@ -16,6 +16,7 @@ import { t } from './i18n.js';
 import { confirmDiscard } from './calculator-confirm.js';
 import { confirmDialog, alertDialog } from './confirm-dialog.js';
 import { createSaveGuard } from './save-guard.js';
+import { revealField } from './reveal-field.js';
 
 // While the write is in flight the header Save is disabled and Back / Home wait (js/save-guard.js).
 const saveGuard = createSaveGuard(() => document.getElementById('recipe-save-btn'));
@@ -23,6 +24,7 @@ import { recipeTotal } from './calculator-dough-math.js';
 import { getConfig, saveConfigOrSay } from './calculator-config-store.js';
 import {
   cloneConfig, getRecipes, getIngredients, getProducts, LOGICS, MAX_VISIBLE_RECIPES,
+  usesOrders, usesTrays, isValidTrayWeight, DEFAULT_TRAY_WEIGHT, MAX_TRAY_WEIGHT,
 } from './calculator-config.js';
 import { el } from './calculator-render.js';
 import { icon } from './calculator-icons.js';
@@ -36,7 +38,10 @@ export { recipeTotal };
 
 // Keys, resolved at draw time — see the note in js/calculator-render.js. A phrase put
 // here directly is frozen in whatever language the app started in.
-const LOGIC_LABELS = { orders: 'calc.fromOrders', total: 'calc.fromATotal', both: 'calc.bothOrdersTotal' };
+const LOGIC_LABELS = {
+  orders: 'calc.fromOrders', total: 'calc.fromATotal', both: 'calc.bothOrdersTotal',
+  trays: 'calc.byTray', traysTotal: 'calc.byTrayPlusTotal',
+};
 
 let working = null;       // deep copy being edited
 let activeRecipe = null;  // null = the recipe list, an index = a recipe's detail
@@ -151,6 +156,16 @@ async function doSaveRecipes() {
     alertDialog(t('calc.pleaseGiveEveryRecipe'));
     return;
   }
+  // A trays recipe needs a tray weight: block, open that recipe's row, mark the box and jump to it.
+  const badTray = recipes().findIndex(r => usesTrays(logicOf(r)) && !isValidTrayWeight(r.trayWeight));
+  if (badTray !== -1) {
+    showErrors = true;
+    activeRecipe = null;
+    openRow = badTray;
+    renderEditor();
+    revealField(document.getElementById('rc-tray-weight-' + badTray));
+    return;
+  }
   if (!(await confirmDialog({ message: t('calc.saveTheseChanges'), okLabel: t('ui.save'), cancelLabel: t('ui.cancel') }))) return;
   try {
     // A refused write has already been explained; the screen then stays as it is, edits and
@@ -230,7 +245,7 @@ function renderRecipeList() {
       cancelLabel: t('ui.cancel'),
     }))) return;
     recipes().push({
-      id: genId('r'), name: '', logic: 'orders', ingredients: [],
+      id: genId('r'), name: '', logic: 'orders', trayWeight: DEFAULT_TRAY_WEIGHT, ingredients: [],
       leaveningKey: null, leaveningDefaultPct: 0, showLeavening: true, baselinePct: null,
       order: recipes().length, visible: !full,
     });
@@ -273,11 +288,41 @@ function recipePanel(r, ri, panelId, subEl) {
   LOGICS.forEach(l => select.appendChild(el('option', { value: l }, t(LOGIC_LABELS[l]))));
   select.value = logicOf(r);
   const hint = el('div', { class: 'cp-hint rc-logic-hint', id: hintId }, t(`calc.logicHint.${logicOf(r)}`));
+  // Weight of one tray, only for the two tray logics. The value is kept on the recipe when the
+  // logic is switched away and back (the field is hidden, never cleared). The working copy holds
+  // what was TYPED (so an empty box can be refused on Save); the saved config normalises it.
+  const trayId = 'rc-tray-weight-' + ri;
+  const trayInput = el('input', {
+    type: 'number', id: trayId, class: 'cp-prod-weight rc-tray-weight', min: '1', max: String(MAX_TRAY_WEIGHT),
+    step: '1', inputmode: 'numeric', value: String(r.trayWeight === undefined ? DEFAULT_TRAY_WEIGHT : r.trayWeight),
+  });
+  const trayError = el('div', { class: 'logday-hint', role: 'alert', id: trayId + '-error', hidden: '' }, t('calc.trayWeightMissing'));
+  const paintTrayError = () => {
+    const bad = showErrors && usesTrays(logicOf(r)) && !isValidTrayWeight(r.trayWeight);
+    trayInput.classList.toggle('cp-invalid', bad);
+    trayError.hidden = !bad;
+    if (bad) trayInput.setAttribute('aria-describedby', trayId + '-error'); else trayInput.removeAttribute('aria-describedby');
+  };
+  const trayField = el('div', { class: 'cp-field rc-tray-field' }, [
+    el('label', { class: 'cp-label', for: trayId }, t('calc.trayWeightG')),
+    el('div', { class: 'cp-prod-card-row' }, [trayInput, el('span', { class: 'cp-unit' }, 'g')]),
+    trayError,
+  ]);
+  trayField.hidden = !usesTrays(logicOf(r));
+  trayInput.addEventListener('input', () => {
+    r.trayWeight = trayInput.value === '' ? '' : Number(trayInput.value);
+    markDirty();
+    if (isValidTrayWeight(r.trayWeight)) { trayInput.classList.remove('cp-invalid'); trayError.hidden = true; }
+  });
+  paintTrayError();
+
   select.addEventListener('change', () => {
     r.logic = select.value;
     markDirty();
     hint.textContent = t(`calc.logicHint.${logicOf(r)}`);
     subEl.textContent = recipeSubLine(r);
+    trayField.hidden = !usesTrays(logicOf(r));
+    paintTrayError();
   });
 
   // Show in the calculator (≤ MAX_VISIBLE_RECIPES).
@@ -304,6 +349,7 @@ function recipePanel(r, ri, panelId, subEl) {
       select,
       hint,
     ]),
+    trayField,
     el('div', { class: 'extra-toggle-row' }, [
       el('span', { id: titleId }, t('calc.recipe.showInCalculator')),
       el('label', { class: 'set-switch' }, [showCb, el('span', { class: 'set-switch-track', 'aria-hidden': 'true' })]),
@@ -355,7 +401,7 @@ function renderRecipeDetail(ri) {
   // Where this recipe's ingredients come from: its own list, or the Catalogue.
   content.appendChild(sourceBox(r));
 
-  const showLeaveningPicker = (r.logic === 'orders' || r.logic === 'both');
+  const showLeaveningPicker = usesOrders(r.logic);
   const linked = isLinked(r);
   const resolved = effectiveRecipe(r);
 

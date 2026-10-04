@@ -7,7 +7,7 @@
 import { t } from './i18n.js';
 import { el } from './calculator-render.js';
 import { getConfig } from './calculator-config-store.js';
-import { getRecipes, getRecipeById, getTabProducts, getDivisorIncluded } from './calculator-config.js';
+import { getRecipes, getRecipeById, getTabProducts, getDivisorIncluded, usesOrders, usesTypedTotal, usesTrays, normalizeTrays } from './calculator-config.js';
 import { logTimestamp } from './log-time.js';
 import { confirmDiscard } from './calculator-confirm.js';
 import { buildSheet, buildLogText, recipeSnapshot } from './log-model.js';
@@ -25,14 +25,14 @@ const num = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
 let state = null; // { recipeId, forDay, items[], totalInput, dayMissing } or null when closed
 
 export function openLogAdd() {
-  state = { recipeId: null, forDay: null, items: [], totalInput: 0, dayMissing: false };
+  state = { recipeId: null, forDay: null, items: [], totalInput: 0, trays: 0, dayMissing: false };
   render();
   document.getElementById('logadd-overlay').classList.add('visible');
 }
 
 function isDirty() {
   if (!state) return false;
-  return !!(state.recipeId || state.forDay || num(state.totalInput) > 0 || state.items.some(it => num(it.qty) > 0));
+  return !!(state.recipeId || state.forDay || num(state.totalInput) > 0 || num(state.trays) > 0 || state.items.some(it => num(it.qty) > 0));
 }
 
 async function close(saved) {
@@ -48,7 +48,8 @@ function loadRecipe(id) {
   const recipe = getRecipeById(getConfig(), id);
   state.recipeId = id;
   state.totalInput = 0;
-  const hasOrders = recipe && (recipe.logic === 'orders' || recipe.logic === 'both');
+  state.trays = 0;
+  const hasOrders = !!recipe && usesOrders(recipe.logic);
   state.items = hasOrders ? getTabProducts(getConfig(), id).map(p => ({
     id: p.id, name: p.name, clientName: p.clientName, weightG: p.weight, kind: p.kind,
     crate: p.crate || { show: false, perBox: 20 }, qty: 0,
@@ -83,8 +84,9 @@ function render() {
     return;
   }
   const recipe = getRecipeById(getConfig(), state.recipeId);
-  const hasOrders = recipe && (recipe.logic === 'orders' || recipe.logic === 'both');
-  const hasTotal = recipe && (recipe.logic === 'total' || recipe.logic === 'both');
+  const hasOrders = !!recipe && usesOrders(recipe.logic);
+  const hasTotal = !!recipe && usesTypedTotal(recipe.logic);
+  const hasTrays = !!recipe && usesTrays(recipe.logic);
 
   // Today / Tomorrow (required).
   c.appendChild(el('div', { class: 'cp-label' }, t('calc.whenIsThisDough')));
@@ -100,7 +102,17 @@ function render() {
   }
   c.appendChild(dayChoices);
 
-  // Typed total (total/both logic).
+  // Number of trays (trays/traysTotal logic): whole trays, the recipe's own tray weight.
+  if (hasTrays) {
+    const input = el('input', { type: 'number', id: 'logadd-trays', class: 'cp-prod-weight', min: '0', step: '1', value: String(num(state.trays)), inputmode: 'numeric' });
+    input.addEventListener('input', () => { state.trays = normalizeTrays(input.value); });
+    c.appendChild(el('div', { class: 'cp-field' }, [
+      el('label', { class: 'cp-label', for: 'logadd-trays' }, t('calc.trayCount')),
+      el('div', { class: 'cp-prod-card-row' }, [input]),
+    ]));
+  }
+
+  // Typed total (total/both/traysTotal logic).
   if (hasTotal) {
     const input = el('input', { type: 'number', class: 'cp-prod-weight', min: '0', step: '1', value: String(num(state.totalInput)), inputmode: 'numeric' });
     input.addEventListener('input', () => { state.totalInput = num(input.value); });
@@ -149,7 +161,7 @@ async function doCommit() {
   }));
   const divisor = { includedIds: getDivisorIncluded(getConfig(), state.recipeId), n: 0 };
   const sheet = buildSheet({
-    recipe, items, extraGrams: 0, totalInput: num(state.totalInput),
+    recipe, items, extraGrams: 0, totalInput: num(state.totalInput), trays: num(state.trays),
     leaveningPct: recipe.leaveningDefaultPct, divisor,
   });
   const text = buildLogText(items, [], { grams: 0, value: 0, unit: 'g' });

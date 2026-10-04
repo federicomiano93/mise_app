@@ -43,7 +43,7 @@
 // product is pruned). The dough math never reads this — it is purely for the order
 // message.
 
-import { t } from './i18n.js';
+import { t, localeTag } from './i18n.js';
 
 export const TABS = ['focaccia', 'brioche', 'sourdough'];
 
@@ -55,8 +55,12 @@ export const TABS = ['focaccia', 'brioche', 'sourdough'];
 // build that knows less must write a LOWER number, and the rules refuse a write that
 // lowers configModel, so the older build gets «could not save» instead of deleting data.
 // Raise it (here and in the rules) the day a new key or recipe logic is added.
-// 1 = the document before the field existed; 2 = adds showClientOrdersButton.
-export const CONFIG_MODEL = 2;
+// 1 = the document before the field existed; 2 = adds showClientOrdersButton;
+// 3 = adds the 'trays' / 'traysTotal' recipe logics and `trayWeight`: an app that does not
+// know them would rewrite a trays recipe as «from orders» and drop its tray weight.
+// The rules need no change: they refuse a LOWER number, and the recipes are a list they
+// do not look inside.
+export const CONFIG_MODEL = 3;
 
 // Allowed weight range, in grams. Guards against a typo turning 150 into 15000
 // and silently producing ten times the intended dough.
@@ -225,11 +229,68 @@ export function getAllProducts(config) {
 
 // ── Recipes (the base) + ingredient registry ──────────────────────────────────
 
-// The three calc logics a recipe can use:
-//   'orders' → quantities from clients (+ leavening knob) — today's behaviour
-//   'total'  → one typed total in grams, ingredients pro-rata (no clients/leavening)
-//   'both'   → orders + a typed total + leavening; the two totals are summed
-export const LOGICS = ['orders', 'total', 'both'];
+// The calc logics a recipe can use:
+//   'orders'     → quantities from clients (+ leavening knob) — today's behaviour
+//   'total'      → one typed total in grams, ingredients pro-rata (no clients/leavening)
+//   'both'       → orders + a typed total + leavening; the two totals are summed
+//   'trays'      → a number of trays × the recipe's tray weight, ingredients pro-rata
+//   'traysTotal' → trays × tray weight + a typed total in grams, ingredients pro-rata
+export const LOGICS = ['orders', 'total', 'both', 'trays', 'traysTotal'];
+
+// Logics that take clients' orders (and so a leavening knob, an extra-dough box, products).
+export function usesOrders(logic) { return logic === 'orders' || logic === 'both'; }
+// Logics that take a typed total in grams.
+export function usesTypedTotal(logic) { return logic === 'total' || logic === 'both' || logic === 'traysTotal'; }
+// Logics that take a number of trays.
+export function usesTrays(logic) { return logic === 'trays' || logic === 'traysTotal'; }
+// Logics that scale pro-rata with the leavening neutralised (no orders to adjust it for).
+export function isProRata(logic) { return logic === 'total' || usesTrays(logic); }
+
+// ── Trays ─────────────────────────────────────────────────────────────────────
+// One tray weighs `trayWeight` grams of dough, set per recipe. Whole grams: a scale in a
+// kitchen does not show tenths, and a whole number keeps «5 × 1,000 g» readable.
+export const DEFAULT_TRAY_WEIGHT = 1000;
+export const MAX_TRAY_WEIGHT = 100000;
+export const MAX_TRAYS = 10000;
+
+// A typed tray weight → whole grams in 1…MAX_TRAY_WEIGHT; missing, text, NaN or ≤ 0 → 1000.
+export function normalizeTrayWeight(v) {
+  const n = Math.round(Number(v));
+  if (!Number.isFinite(n) || n < 1) return DEFAULT_TRAY_WEIGHT;
+  return Math.min(n, MAX_TRAY_WEIGHT);
+}
+
+// Whether a typed tray weight is a usable answer (the Recipes screen blocks Save otherwise).
+export function isValidTrayWeight(v) {
+  if (v === '' || v === null || v === undefined) return false;
+  const n = Number(v);
+  return Number.isFinite(n) && n >= 1 && n <= MAX_TRAY_WEIGHT;
+}
+
+// A typed number of trays → a whole number in 0…MAX_TRAYS. WHOLE TRAYS ONLY, decided in this
+// one place: if half trays are ever wanted, this is the only line that changes.
+export function normalizeTrays(v) {
+  const n = Math.floor(Number(v));
+  if (!Number.isFinite(n) || n < 0) return 0;
+  return Math.min(n, MAX_TRAYS);
+}
+
+// The grams a number of trays makes with this recipe's tray weight.
+export function traysGrams(recipe, trays) {
+  return normalizeTrays(trays) * normalizeTrayWeight(recipe && recipe.trayWeight);
+}
+
+// «5,000» / «5.000»: grouped in the interface language. Intl's Italian skips the group for
+// four digits unless asked, and a tray count makes four-digit grams the everyday case.
+// Called while drawing, so the language is read then.
+export function formatGrams(n) {
+  const v = Number.isFinite(Number(n)) ? Number(n) : 0;
+  try {
+    return new Intl.NumberFormat(localeTag(), { useGrouping: 'always', maximumFractionDigits: 0 }).format(v);
+  } catch (e) {
+    return String(Math.round(v));
+  }
+}
 
 // The maximum number of recipes that can be visible as calculator tabs at once.
 export const MAX_VISIBLE_RECIPES = 4;
@@ -288,9 +349,9 @@ export function calculatorEmptyReason(config, serverAnswered) {
 
 // Whether a recipe's calculator tab shows a leavening knob: only logics that order
 // or sum ('orders'/'both'), and only when the recipe designates a leavening with the
-// "show the knob" flag on. A 'total' recipe never shows it (pure pro-rata).
+// "show the knob" flag on. A 'total' or trays recipe never shows it (pure pro-rata).
 export function showsLeaveningKnob(recipe) {
-  if (!recipe || (recipe.logic !== 'orders' && recipe.logic !== 'both')) return false;
+  if (!recipe || !usesOrders(recipe.logic)) return false;
   return !!(recipe.leaveningKey && recipe.showLeavening);
 }
 
@@ -472,12 +533,17 @@ export function computeTarget(config, tab, getQty) {
 //   'orders' → Σ(qty×weight) over the recipe's products + extra
 //   'total'  → the typed total only
 //   'both'   → Σ(qty×weight) + the typed total + extra
+//   'trays'      → trays × the recipe's tray weight
+//   'traysTotal' → trays × the recipe's tray weight + the typed total
 // All inputs are coerced so the result is always a finite number ≥ 0.
-export function computeRecipeTarget(config, recipe, { getQty, extraGrams = 0, totalInput = 0 } = {}) {
+export function computeRecipeTarget(config, recipe, { getQty, extraGrams = 0, totalInput = 0, trays = 0 } = {}) {
   if (!recipe) return 0;
-  const extra = Math.max(0, Number(extraGrams) || 0);
-  const typed = Math.max(0, Number(totalInput) || 0);
+  const finite = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
+  const extra = Math.max(0, finite(extraGrams));
+  const typed = Math.max(0, finite(totalInput));
   if (recipe.logic === 'total') return typed;
+  if (recipe.logic === 'trays') return traysGrams(recipe, trays);
+  if (recipe.logic === 'traysTotal') return traysGrams(recipe, trays) + typed;
   const orders = (typeof getQty === 'function') ? computeTarget(config, recipe.id, getQty) : 0;
   if (recipe.logic === 'both') return orders + typed + extra;
   return orders + extra; // 'orders'
@@ -840,6 +906,8 @@ function normalizeRecipe(raw, index) {
 
   return {
     id, name, logic, ingredients,
+    // Kept whatever the logic, so switching away from trays and back loses nothing.
+    trayWeight: normalizeTrayWeight(raw.trayWeight),
     leaveningKey, leaveningDefaultPct, showLeavening, baselinePct,
     order: Number(raw.order) || 0,
     visible: raw.visible !== false,

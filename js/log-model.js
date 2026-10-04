@@ -40,7 +40,9 @@
 
 import { t } from './i18n.js';
 import { scaleRecipe } from './calculator-dough-math.js';
-import { recipeSpec } from './calculator-config.js';
+import {
+  recipeSpec, usesTrays, isProRata, normalizeTrays, normalizeTrayWeight, traysGrams,
+} from './calculator-config.js';
 
 export const FOR_DAYS = ['today', 'tomorrow'];
 
@@ -65,24 +67,31 @@ function safeForDay(d) { return FOR_DAYS.includes(d) ? d : 'today'; }
 // `recipe` is the CONFIG recipe (id, name, logic, ingredients[{key,label,grams}],
 // leaveningKey, leaveningDefaultPct, baselinePct). The target is computed by the
 // recipe's logic (orders → items + extra; total → typed total; both → items + total
-// + extra), then the recipe is scaled to it with the unified scaleRecipe — so the
+// + extra; trays → trays × tray weight; traysTotal → that + typed total), then the recipe is scaled to it with the unified scaleRecipe — so the
 // stored sheet is faithful and independent of any later config change.
 //   items:   [{ id, name, clientName, qty, weightG, kind, crate }]
 //   divisor: { includedIds: [...], n: 0..4 }  (optional, display-only crate split)
-export function buildSheet({ recipe, items, extraGrams = 0, totalInput = 0, leaveningPct, divisor }) {
+//   trays:   whole trays for the 'trays' / 'traysTotal' logics; the tray weight is the
+//            recipe's own, and BOTH are stored on the sheet (`trays`, `trayWeight_g`) so the
+//            log keeps what it was made with even if the recipe's tray weight changes later.
+export function buildSheet({ recipe, items, extraGrams = 0, totalInput = 0, trays = 0, leaveningPct, divisor }) {
   const lines = Array.isArray(items) ? items : [];
   const productsTotal = lines.reduce((s, it) => s + num(it.qty) * num(it.weightG), 0);
   const extra = Math.max(0, num(extraGrams));
   const typed = Math.max(0, num(totalInput));
   const logic = (recipe && recipe.logic) || 'orders';
+  const trayCount = usesTrays(logic) ? normalizeTrays(trays) : 0;
+  const trayWeight = normalizeTrayWeight(recipe && recipe.trayWeight);
   const total = logic === 'total' ? typed
+    : logic === 'trays' ? traysGrams(recipe, trayCount)
+    : logic === 'traysTotal' ? traysGrams(recipe, trayCount) + typed
     : logic === 'both' ? (productsTotal + typed + extra)
     : (productsTotal + extra);
 
   const recipeIngs = (recipe && Array.isArray(recipe.ingredients)) ? recipe.ingredients : [];
   const pct = Number.isFinite(Number(leaveningPct)) ? Number(leaveningPct) : (recipe ? num(recipe.leaveningDefaultPct) : 0);
   const spec = recipeSpec(recipe || {});
-  if (logic === 'total') spec.leaveningKey = null; // pure pro-rata
+  if (isProRata(logic)) spec.leaveningKey = null; // pure pro-rata
   let amounts = [];
   if (total > 0 && recipeIngs.length) amounts = scaleRecipe(spec, total, pct);
   const ingredients = recipeIngs.map((ing, i) => ({ name: ing.label, grams: Math.round(num(amounts[i])) }));
@@ -117,7 +126,7 @@ export function buildSheet({ recipe, items, extraGrams = 0, totalInput = 0, leav
     crates.push({ name: it.name, count: Math.round((qty / perBox) * 10) / 10, eachBoxG: Math.round(perBox * num(it.weightG)) });
   }
 
-  return {
+  const sheet = {
     dough: recipe ? safeDough(recipe.name) : 'Recipe',
     recipeId: recipe ? recipe.id : '',
     param: paramOut,
@@ -127,6 +136,9 @@ export function buildSheet({ recipe, items, extraGrams = 0, totalInput = 0, leav
     divisor: divisorOut,
     crates,
   };
+  // Only a trays dough carries these; a sheet saved with another logic stays as it was.
+  if (usesTrays(logic)) { sheet.trays = trayCount; sheet.trayWeight_g = trayWeight; }
+  return sheet;
 }
 
 // Human-readable grouped text (client header + indented product lines + extra),
@@ -171,6 +183,8 @@ export function recipeSnapshot(recipe) {
     id: String(recipe.id || ''),
     name: safeDough(recipe.name),
     logic: recipe.logic || 'orders',
+    // Only a trays recipe has a tray weight worth freezing; the other snapshots keep their shape.
+    ...(usesTrays(recipe.logic) ? { trayWeight: normalizeTrayWeight(recipe.trayWeight) } : {}),
     ingredients: (Array.isArray(recipe.ingredients) ? recipe.ingredients : [])
       .map(ing => ({ key: String(ing.key || ''), label: String(ing.label || ''), grams: num(ing.grams) })),
     leaveningKey: recipe.leaveningKey || null,
