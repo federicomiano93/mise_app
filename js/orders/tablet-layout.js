@@ -134,7 +134,12 @@ export function countNoticeClassNames(classNames) {
 // The DOM wrapper around the pure rule above.
 export function countNotices(panelEl) {
   if (!panelEl) return { count: 0, hasContent: false };
-  const classNames = [...panelEl.querySelectorAll('*')].map((n) => n.className || '');
+  // Ask the browser for only the elements that can matter, instead of walking and
+  // mapping every descendant of the panel on each mutation: the same elements end up
+  // in the count, because a descendant counts only if it carries one of these classes.
+  const markers = [...NOTICE_CLASSES, ...NON_NOTICE_CONTENT_CLASSES];
+  const classNames = [...panelEl.querySelectorAll(markers.map((c) => `.${c}`).join(','))]
+    .map((n) => n.className || '');
   return countNoticeClassNames(classNames);
 }
 
@@ -186,8 +191,8 @@ export function initAlertsPanel() {
   // ⚠️ THE BELL IS PERMANENT (Federico, 3 Oct 2026): it never hides. With no content the
   // panel stays open on its empty line instead of closing under the thumb. The empty line
   // is excluded from the count because its class is neither a notice class nor the pill.
-  // It is only written when its state CHANGES: the observer below watches `hidden`, and
-  // re-setting the same value would queue another record and loop for ever.
+  // It is only written when its state CHANGES: the observer below watches the panel's
+  // subtree, and rewriting the same value is needless work on every pass.
   function refreshCount() {
     const { count, hasContent } = countNotices(panel);
     countEl.textContent = count > 0 ? String(count) : '';
@@ -221,11 +226,12 @@ export function initAlertsPanel() {
   // Every renderer that fills the panel's hosts writes into them
   // independently and has no idea the panel — or the button — exists. The
   // observer is what lets the count (and the panel's empty line) follow
-  // whatever they do, including a host crossing in or out of `hidden`.
+  // whatever they do. Only nodes coming and going can change the answer: the count
+  // reads class names, never the `hidden` attribute (a hidden host still counts its
+  // banners), so attribute changes are not watched — they only woke refreshCount for
+  // an unchanged result.
   const observer = new MutationObserver(refreshCount);
-  observer.observe(panel, {
-    childList: true, subtree: true, attributes: true, attributeFilter: ['hidden'],
-  });
+  observer.observe(panel, { childList: true, subtree: true });
 
   refreshCount();
 }

@@ -266,14 +266,15 @@ test('the message to the other supplier carries the line under the INVOICE name;
 
 test('the order flow reads ingredients through the lens that knows the draft, and the rows claim the line', () => {
   const main = read('js/orders/orders-main.js');
-  assert.match(main, /return resolveSuppliers\(state\.ingredients, state\.suppliers, state\.loaded\.suppliers, state\.entries\);/);
+  // (memoised since the render pass: the same call, also keyed on the override signature — tests/orders-memo.test.mjs)
+  assert.match(main, /resolveLens\(state\.ingredients, state\.suppliers, state\.loaded\.suppliers, state\.entries,\s*overrideSignature\(state\.entries\)\)/);
   // What a supplier SELLS is the lens without the draft.
-  assert.match(main, /function catalogueIngredients\(\) \{\s*return resolveSuppliers\(state\.ingredients, state\.suppliers, state\.loaded\.suppliers\);/);
+  assert.match(main, /function catalogueIngredients\(\) \{\s*return resolveCatalogue\(state\.ingredients, state\.suppliers, state\.loaded\.suppliers\);/);
   assert.match(main, /const ingredients = groupBy\(catalogueIngredients\(\)/, 'the read-only product list');
   assert.match(main, /ingredients: screenRowsFor\(supplier\.id\)/, 'a supplier\'s own screen');
   // A draft snapshot that moves a line repaints, the echo of this phone\'s own typing does not.
   assert.match(main, /const overridesBefore = overrideSignature\(state\.entries\);/);
-  assert.match(main, /if \(overrideSignature\(state\.entries\) !== overridesBefore\) render\(\);/);
+  assert.match(main, /if \(overrideSignature\(state\.entries\) !== overridesBefore\) scheduleRender\('list'\);/);
   // «start again» also forgets the key in memory.
   assert.match(main, /delete entry\.supplierId;/);
   // «put back» never lands in an order an old override pointed at.

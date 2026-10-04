@@ -84,6 +84,10 @@ function watchForUpdates(reg) {
 
 // The banner first (it is instant and unobtrusive), then the modal as soon as the
 // operator is not in the middle of something.
+// ⚠️ EXPORTED ONLY FOR TESTS (like __keepAboveBottomBar): a waiting worker cannot be
+// arranged from a test. Underscored: nothing in the app may call it.
+export function __announce(reg) { announce(reg); }
+
 function announce(reg) {
   showBanner(reg);
   scheduleGate(reg);
@@ -161,17 +165,42 @@ function placeAboveBottomBar(host) {
 // a new service worker is waiting, which cannot be arranged from a test; the
 // alternative is a driver that re-implements the placement, which would prove the
 // driver works and nothing else. Underscored: nothing in the app may call it.
-export function __keepAboveBottomBar(host) { keepAboveBottomBar(host); }
+// It uses its own tracker and leaves the real banner's alone; the returned function
+// stops the driver's.
+export function __keepAboveBottomBar(host) { return trackAboveBottomBar(host); }
+
+// ⚠️ The observer and the resize listener are let go the moment the banner is taken
+// away for good (showGate removes it), not "on the next mutation after it left" — a
+// body-wide attribute observer that outlives its banner runs on every class/style
+// change of a page left open for days. One tracker at a time: starting a new one
+// first stops the old one.
+let stopKeepingAbove = null;
+
+function stopKeepingAboveBottomBar() {
+  stopKeepingAbove?.();
+  stopKeepingAbove = null;
+}
 
 function keepAboveBottomBar(host) {
+  stopKeepingAboveBottomBar();
+  stopKeepingAbove = trackAboveBottomBar(host);
+}
+
+// Starts a tracker and RETURNS its stop function, touching no module state — so the
+// driver seam can run one without stopping the real banner's tracker.
+function trackAboveBottomBar(host) {
   placeAboveBottomBar(host);
   const reposition = () => {
-    if (!host.isConnected) { window.removeEventListener('resize', reposition); observer.disconnect(); return; }
+    if (!host.isConnected) { stopKeepingAboveBottomBar(); return; }
     placeAboveBottomBar(host);
   };
   const observer = new MutationObserver(reposition);
   observer.observe(document.body, { subtree: true, attributes: true, attributeFilter: ['hidden', 'class', 'style'] });
   window.addEventListener('resize', reposition);
+  return () => {
+    observer.disconnect();
+    window.removeEventListener('resize', reposition);
+  };
 }
 
 // The banner is built here (not in each page's HTML) so no page can ship
@@ -201,26 +230,37 @@ function showBanner(reg) {
 // wait on a MutationObserver rather than a timer: the screen changing is exactly
 // the event we are waiting for, and polling a kitchen tablet every second for
 // hours is waste.
+//
+// ⚠️ ONE observer at most, held at module level: announce() runs again on every
+// «statechange» and every `updatefound`, and a second call while the first is still
+// waiting used to start a second body-wide observer that nothing could reach. It is
+// disconnected as soon as the gate shows or the person chose to carry on.
+let gateObserver = null;
+
+function stopWatchingForQuiet() {
+  gateObserver?.disconnect();
+  gateObserver = null;
+}
+
 function scheduleGate(reg) {
-  if (document.getElementById('sw-update-gate')) return;
-  let observer = null;
+  if (gateObserver || document.getElementById('sw-update-gate')) return;
 
   const attempt = () => {
-    if (dismissed) { observer?.disconnect(); return true; }
+    if (dismissed) { stopWatchingForQuiet(); return true; }
     const state = updateGateState({
       waiting: true,
       busy: isBusy(document),
       attempts: readAttempts(),
     });
     if (state === 'hidden') return false;      // busy — try again when the DOM changes
-    observer?.disconnect();
+    stopWatchingForQuiet();
     showGate(reg, state === 'blocking-with-escape');
     return true;
   };
 
   if (attempt()) return;
-  observer = new MutationObserver(attempt);
-  observer.observe(document.body, { childList: true, subtree: true });
+  gateObserver = new MutationObserver(attempt);
+  gateObserver.observe(document.body, { childList: true, subtree: true });
 }
 
 // The modal itself. Reuses the .app-dialog styles rather than confirmDialog(),
@@ -229,6 +269,7 @@ function scheduleGate(reg) {
 function showGate(reg, withEscape) {
   if (document.getElementById('sw-update-gate')) return;
   document.getElementById('sw-update-host')?.remove();   // the banner has done its job
+  stopKeepingAboveBottomBar();
 
   const title = document.createElement('h2');
   title.className = 'app-dialog-title';

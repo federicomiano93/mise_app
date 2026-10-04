@@ -25,27 +25,42 @@ function fakeDoc() {
     fire: (type, target, extra = {}) => handlers[type]({ target, ...extra }),
   };
 }
-test('added boxes get the hint, nested ones too, textarea and next untouched', () => {
-  let callback; let observed;
-  class FakeObserver { constructor(cb) { callback = cb; } observe(target, opts) { observed = { target, opts }; } }
-  const existing = fakeNode('input', { type: 'text' });
-  const d = { ...fakeDoc(), documentElement: {}, querySelectorAll: () => [existing] };
-  installKeyboardDone(d, FakeObserver);
-  assert.equal(existing.getAttribute('enterkeyhint'), 'done');
-  assert.deepEqual(observed.opts, { childList: true, subtree: true });
-  const added = fakeNode('input', { type: 'number' }); added.nodeType = 1;
-  const nested = fakeNode('input', {}); const area = fakeNode('textarea'); const next = fakeNode('input', { enterkeyhint: 'next' });
-  const overlay = { nodeType: 1, tagName: 'DIV', getAttribute: () => null, querySelectorAll: () => [nested, next] };
-  area.nodeType = 1;
-  callback([{ addedNodes: [added, overlay, area, { nodeType: 3 }] }]);
-  assert.equal(added.getAttribute('enterkeyhint'), 'done');
-  assert.equal(nested.getAttribute('enterkeyhint'), 'done');
+test('focusing a box gives it the hint, in the capturing phase, with no observer', () => {
+  const calls = [];
+  const d = { addEventListener: (type, fn, capture) => calls.push({ type, fn, capture }) };
+  installKeyboardDone(d);
+  const focusin = calls.find((c) => c.type === 'focusin');
+  assert.equal(focusin.capture, true);
+  const input = fakeNode('input', { type: 'number' });
+  focusin.fn({ target: input });
+  assert.equal(input.getAttribute('enterkeyhint'), 'done');
+  const area = fakeNode('textarea');
+  const next = fakeNode('input', { enterkeyhint: 'next' });
+  focusin.fn({ target: area });
+  focusin.fn({ target: next });
   assert.equal(area.getAttribute('enterkeyhint'), null);
   assert.equal(next.getAttribute('enterkeyhint'), 'next');
 });
 
+test('a pointerdown also gives the hint, capturing and passive, before the keyboard is asked for', () => {
+  const calls = [];
+  const d = { addEventListener: (type, fn, opts) => calls.push({ type, fn, opts }) };
+  installKeyboardDone(d);
+  const down = calls.find((c) => c.type === 'pointerdown');
+  assert.deepEqual(down.opts, { capture: true, passive: true });
+  const input = fakeNode('input', { type: 'text' });
+  down.fn({ target: input });
+  assert.equal(input.getAttribute('enterkeyhint'), 'done');
+  const next = fakeNode('input', { enterkeyhint: 'next' });
+  const area = fakeNode('textarea');
+  const div = { tagName: 'DIV' };
+  for (const n of [next, area, div]) down.fn({ target: n });
+  assert.equal(next.getAttribute('enterkeyhint'), 'next');
+  assert.equal(area.getAttribute('enterkeyhint'), null);
+});
+
 const touch = () => ({ matches: true });
-const setup = (media = touch) => { const d = fakeDoc(); installKeyboardDone(d, null, media); return d; };
+const setup = (media = touch) => { const d = fakeDoc(); installKeyboardDone(d, media); return d; };
 
 test('focus gives text, number and typeless inputs the done key', () => {
   const d = setup();
@@ -193,4 +208,13 @@ test('the HTML pages declare no number input without an inputmode', () => {
       assert.match(tag, /inputmode=/, `${page}: ${tag}`);
     }
   }
+});
+
+test('no file watches the whole page for added nodes', () => {
+  // A subtree observer on the document wakes on every row the app draws, for the
+  // life of the tab. Pin the shape out of every file outside js/vendor.
+  const shape = /\.observe\(\s*(?:document\.documentElement|document|doc\.documentElement|doc)\s*,\s*\{[^}]*subtree\s*:\s*true/;
+  assert.ok(shape.test('o.observe(document.documentElement, { childList: true, subtree: true })'));
+  const bad = walk('js').filter((file) => shape.test(read(file)));
+  assert.deepEqual(bad, []);
 });

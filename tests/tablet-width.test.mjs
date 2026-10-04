@@ -323,8 +323,10 @@ test('⚠ the banner is actually placed, and stops watching when it goes', () =>
   assert.match(src, /document\.body\.appendChild\(host\);\s*\r?\n\s*keepAboveBottomBar\(host\);/,
     'showBanner must place the banner above the bottom bar');
   // ⚠ The observer outliving the banner would keep measuring for the life of the page.
-  assert.match(src, /if \(!host\.isConnected\)[^\n]*disconnect\(\)/,
+  assert.match(src, /if \(!host\.isConnected\)[^\n]*stopKeepingAboveBottomBar\(\)/,
     'the observer must stop when the banner is gone');
+  assert.match(src, /observer\.disconnect\(\);\s*\r?\n\s*window\.removeEventListener\('resize', reposition\)/,
+    'stopping must disconnect the observer AND drop the resize listener');
   // ⚠ A bar that is NOT at the foot of the viewport must not push the banner up over
   // content — the geometric test is what makes the selector list safe to be approximate.
   assert.match(src, /Math\.abs\(box\.bottom - window\.innerHeight\)/,

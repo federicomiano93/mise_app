@@ -16,7 +16,7 @@ import { renderDay } from './pastries-day.js';
 import { renderEditor } from './pastries-editor.js';
 import { renderLogs } from './pastries-logs.js';
 import {
-  initPastryLogs, getVisibleLogs, confirmDay, removeLog, tonightsRecord,
+  initPastryLogs, stopPastryLogs, getVisibleLogs, confirmDay, removeLog, tonightsRecord,
   setLogsErrorHandler, isConfirmedTonight, watchConfirmations,
 } from './pastries-logs-store.js';
 import { provingDayFor } from './pastries-model.js';
@@ -167,6 +167,10 @@ function showDay(day, opts = {}) {
   stripHost.hidden = false;
   footer.hidden = false;
   logsView = null;
+  // Leaving Records ends its 120-document live listener; showLogs() starts a fresh
+  // one on the next visit. Every way out of Records lands here.
+  stopPastryLogs();
+  logsStarted = false;
   if (strip) strip.setActive(day);
   screen.setAttribute('aria-labelledby', `pas-tab-${day}`);
   setHeader({

@@ -91,7 +91,7 @@ export function refreshSupplierDerived(supplier, ingredients, entries, forDay = 
   }
 
   const fill = document.getElementById(`progress-fill-${supplier.id}`);
-  if (fill) fill.style.width = `${total ? Math.round((filled / total) * 100) : 0}%`;
+  if (fill) fill.style.transform = `translateX(${(total ? Math.round((filled / total) * 100) : 0) - 100}%)`;
 
   const placeBtn = document.getElementById(`place-btn-${supplier.id}`);
   if (placeBtn) placeBtn.disabled = filled === 0;

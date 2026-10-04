@@ -65,7 +65,16 @@ let view = 'list';        // 'list' | 'detail' | 'editor' | 'steps' | 'run'
 let searchQuery = '';
 let activeList = null;     // { root, refresh } while the list is shown
 let activeDetail = null;   // { root, refreshCost } while a recipe is shown
-let activeSettings = null; // { root, refresh } while Settings is shown
+let activeSettings = null; // { root, refresh, dispose } while Settings is shown
+
+// ⚠️ EVERY WAY OUT OF SETTINGS ENDS HERE — the screen is replaced, never "closed", so
+// there is no teardown hook; each place that clears it goes through this, and the
+// screen's language listeners are released with it (one more would pile up on every
+// opening of a screen left running for days).
+function setActiveSettings(next) {
+  activeSettings?.dispose?.();
+  activeSettings = next;
+}
 let activeSheet = null;    // { root, refresh } while the allergen sheet is shown
 // ⚠️ ITS OWN QUERY, NOT the list's. The two screens search the same recipes for
 // different reasons — "which do I cook" versus "which one is a customer asking
@@ -145,7 +154,20 @@ function setHeader({ title, sub, back, add, edit = false, footer = false }) {
   if (footer) footerEl.hidden = ![...footerEl.children].some(child => !child.hidden);
 }
 
-function swap(node) {
+// The photo screen's teardown, held until the screen is replaced. swap() and the two
+// split-pane paths that replace the screen themselves (showPaneEmpty, showDetailNode)
+// all run it through releaseScreen(), so it sees every way out of the photo screen.
+let disposeScreen = null;
+
+function releaseScreen() {
+  const dispose = disposeScreen;
+  disposeScreen = null;
+  dispose?.();
+}
+
+function swap(node, dispose = null) {
+  releaseScreen();
+  disposeScreen = dispose;
   screen.replaceChildren(node);
   screen.scrollTop = 0;
   // Move focus into the new view so keyboard/screen-reader users don't drop to the
@@ -232,6 +254,7 @@ function showPaneEmpty() {
   }
   paneEmpty.querySelector('h2').textContent = t('cat.split.empty.title');
   paneEmpty.querySelector('p').textContent = t('cat.split.empty.text');
+  releaseScreen();
   screen.replaceChildren(paneEmpty);
 }
 
@@ -314,6 +337,7 @@ function showDetailNode(recipe, node) {
   if (!splitOn) { swap(node); return; }
   const head = buildPaneHead(recipe);
   const body = el('div', { class: 'cat-pane-body' }, [node]);
+  releaseScreen();
   screen.replaceChildren(head, body);
   const title = head.querySelector('h1');
   if (quietFocus) return;
@@ -324,7 +348,7 @@ function showList() {
   stopRun();
   view = 'list';
   activeDetail = null;
-  activeSettings = null;
+  setActiveSettings(null);
   activeSheet = null;
   leaveGuard = null;
   setListHeader();
@@ -351,7 +375,7 @@ function openLabel(recipe) {
   view = 'label';
   activeList = null;
   activeDetail = null;
-  activeSettings = null;
+  setActiveSettings(null);
   activeSheet = null;
   currentRecipe = recipe;
   leaveGuard = null;
@@ -395,7 +419,7 @@ function showAllergenSheet() {
   view = 'allergens';
   activeList = null;
   activeDetail = null;
-  activeSettings = null;
+  setActiveSettings(null);
   activeSheet = null;
   leaveGuard = null;
   setHeader({ title: t('cat.allergens'), sub: t('cat.recipeCatalogue'), back: true, add: false });
@@ -459,7 +483,7 @@ function openEditor(recipe, draft) {
   view = 'editor';
   activeList = null;
   activeDetail = null;
-  activeSettings = null;
+  setActiveSettings(null);
   activeSheet = null;
   setHeader({
     // ⚠️ A draft is a NEW recipe, so `recipe` stays null and the title is right
@@ -537,11 +561,11 @@ function showSettings() {
   view = 'settings';
   activeList = null;
   activeDetail = null;
-  activeSettings = null;
+  setActiveSettings(null);
   activeSheet = null;
   leaveGuard = null;
   setHeader({ title: t('ui.settings'), sub: t('cat.recipeCatalogue'), back: true, add: false });
-  activeSettings = renderSettings({
+  setActiveSettings(renderSettings({
     photoOn: photoIsOn(),
     onTogglePhoto: togglePhoto,
     // ⚠️ THE VALUE, not a getter, and the difference is deliberate: this screen is
@@ -552,7 +576,7 @@ function showSettings() {
     // The store is local-first and rolls its own copy back on a rejection; the
     // screen rolls back what a person can see. Both, because they are two copies.
     onSaveLabel: patch => saveLabelProfile(patch),
-  });
+  }));
   swap(activeSettings.root);
 }
 
@@ -588,11 +612,11 @@ function showPhotoCapture(fromEditor = false, keepDraft = null) {
   view = 'photo';
   activeList = null;
   activeDetail = null;
-  activeSettings = null;
+  setActiveSettings(null);
   activeSheet = null;
   leaveGuard = null;
   setHeader({ title: t('cat.photo.title'), sub: t('cat.recipeCatalogue'), back: true, add: false });
-  swap(renderPhotoCapture({
+  const capture = renderPhotoCapture({
     app,
     // The draft never touches the database. It goes straight into the ordinary
     // editor as a working copy, and waits there for the same Save as any recipe
@@ -605,7 +629,8 @@ function showPhotoCapture(fromEditor = false, keepDraft = null) {
       openEditor(null, draft);
       if (notes && notes.rowsCapped) toast(t('cat.photo.capped'));
     },
-  }).root);
+  });
+  swap(capture.root, capture.dispose);
 }
 
 function openGuidedEditor(recipe) {
@@ -614,7 +639,7 @@ function openGuidedEditor(recipe) {
   view = 'steps';
   activeList = null;
   activeDetail = null;
-  activeSettings = null;
+  setActiveSettings(null);
   activeSheet = null;
   currentRecipe = recipe;
   setHeader({ title: t('cat.mixingSteps'), sub: recipe.name || t('cat.recipe'), back: true, add: false });
@@ -632,7 +657,7 @@ function openRun(recipe, targetGrams, resume) {
   view = 'run';
   activeList = null;
   activeDetail = null;
-  activeSettings = null;
+  setActiveSettings(null);
   activeSheet = null;
   currentRecipe = recipe;
   setHeader({ title: recipe.name || t('cat.recipe'), sub: t('cat.guidedMixing'), back: true, add: false, edit: false });

@@ -50,7 +50,7 @@ import {
 } from './untold-changes.js';
 import { renderUntold } from './untold-view.js';
 import { buildManagement, isAdmin } from './management.js';
-import { computeSuggestion, isUnusualQuantity } from './suggestions.js';
+import { computeSuggestion, isUnusualQuantity, indexHistoryByIngredient } from './suggestions.js';
 import { refreshHolidays } from './holidays.js';
 import { countryOf, outputLanguage } from '../market.js';
 import { renderAlerts } from './notifications.js';
@@ -77,6 +77,8 @@ import { todayOrders, pendingSuppliers } from './reminders.js';
 import { renderTodayOrders, renderPending } from './reminder-view.js';
 import { resolveSuppliers, orderSuppliers, NO_SUPPLIER_ID } from './no-supplier.js';
 import { overrideSignature } from './line-supplier.js';
+import { memoLast } from './memo.js';
+import { createRenderScheduler } from './render-scheduler.js';
 import { openIngredientCreate, openIngredientEdit } from '../ingredient-create.js';
 import { normalizeOrdersConfig } from './orders-config.js';
 import { sortSuppliersByOrder } from './supplier-order.js';
@@ -225,13 +227,13 @@ function watchOrdersConfig() {
     applyOrdersConfig(config);
     // The list is redrawn only when the supplier order really changed (on this phone or
     // another one): a redraw while somebody is typing in a row must stay rare.
-    if (orderChanged) render();
+    if (orderChanged) scheduleRender('list');
     // The stored category list, for the ingredient card opened from a supplier's screen; null =
     // never stored, so the card offers the venue's default words (same reading as registry-main.js).
     state.ingredientCategories = Array.isArray(doc?.ingredientCategories) ? doc.ingredientCategories : null;
     // The window may have just changed — on this phone or on another one. Stock is a
     // <body> class and needs no repaint; how many days History shows does.
-    renderHistory();
+    scheduleRender('history');
     mgmt?.refresh();
   });
 }
@@ -254,40 +256,65 @@ function watchOrdersConfig() {
 // order only) filed under that supplier. This is THE lens of the order flow: the lists,
 // the counts, the message, the summary, the archive and the clearing all read it, so they
 // cannot disagree about whose line a line is (js/orders/line-supplier.js).
+//
+// ⚠️ THE FIVE DERIVED VIEWS BELOW ARE MEMOISED BY THEIR INPUTS (memo.js), and what they return
+// is SHARED: a caller must never sort, push to or edit it (every caller filters or maps into
+// a copy first). state.ingredients, state.suppliers and ordersConfig are only ever REPLACED
+// (the snapshot handlers assign a fresh array/object), so their references are valid keys.
+// state.entries is the exception — mutated in place — which is why the key is the override
+// signature, the only part of it this lens reads (line-supplier.js withLineSuppliers).
+const resolveLens = memoLast(resolveSuppliers);
 function orderIngredients() {
-  return resolveSuppliers(state.ingredients, state.suppliers, state.loaded.suppliers, state.entries);
+  return resolveLens(state.ingredients, state.suppliers, state.loaded.suppliers, state.entries,
+    overrideSignature(state.entries));
 }
 
 // The same ingredients WITHOUT the per-order overrides: what each supplier SELLS. The
 // read-only product list wants this, and so does a supplier's own screen for the rows it
 // keeps showing when one of them is ordered elsewhere this time.
+const resolveCatalogue = memoLast(resolveSuppliers);
 function catalogueIngredients() {
-  return resolveSuppliers(state.ingredients, state.suppliers, state.loaded.suppliers);
+  return resolveCatalogue(state.ingredients, state.suppliers, state.loaded.suppliers);
 }
 
+const sortActiveSuppliers = memoLast((suppliers, order) => sortSuppliersByOrder(
+  suppliers.filter(s => s.active !== false),
+  order,
+  supplierLabel,
+));
 function activeSuppliers() {
   // The venue's own order (Settings → Supplier order); alphabetical when none was chosen.
-  return sortSuppliersByOrder(
-    state.suppliers.filter(s => s.active !== false),
-    ordersConfig.supplierOrder,
-    supplierLabel,
-  );
+  return sortActiveSuppliers(state.suppliers, ordersConfig.supplierOrder);
 }
 
 // The real active suppliers, plus "No supplier" at the end when something is
-// filed under it.
+// filed under it. The pseudo supplier's NAME is in today's language, so the word is part of
+// the key: a language change must not keep serving the old one.
+const buildSupplierList = memoLast((active, lens) => {
+  const list = orderSuppliers(active, lens);
+  return { list, byId: new Map(list.map(s => [s.id, s])) };
+});
+function orderSupplierEntry() {
+  return buildSupplierList(activeSuppliers(), orderIngredients(), t('orders.noSupplier'));
+}
 function orderSupplierList() {
-  return orderSuppliers(activeSuppliers(), orderIngredients());
+  return orderSupplierEntry().list;
 }
 
 // A supplier by id, the pseudo one included — state.suppliers.find would return
 // undefined for it and silently do nothing.
 function findOrderSupplier(supplierId) {
-  return orderSupplierList().find(s => s.id === supplierId);
+  return orderSupplierEntry().byId.get(supplierId);
 }
 
+const groupLensBySupplier = memoLast(lens => groupBy(lens.filter(i => i.active !== false), 'supplierId'));
 function ingredientsBySupplier() {
-  return groupBy(orderIngredients().filter(i => i.active !== false), 'supplierId');
+  return groupLensBySupplier(orderIngredients());
+}
+
+const indexLens = memoLast(lens => indexById(lens));
+function lensById() {
+  return indexLens(orderIngredients());
 }
 
 // The rows a supplier's OWN screen draws: everything it usually sells, plus the lines
@@ -298,7 +325,7 @@ function ingredientsBySupplier() {
 //   * a line sent here is marked `usualSupplierId` (its row says «di solito da …»).
 // Counts and totals do NOT read this — they read the lens, where a line is in one order.
 function screenRowsFor(supplierId) {
-  const lens = indexById(orderIngredients());
+  const lens = lensById();
   const label = id => supplierLabel(findOrderSupplier(id)) || '';
   const own = (groupBy(catalogueIngredients().filter(i => i.active !== false), 'supplierId')[supplierId] || [])
     .map(ing => {
@@ -413,6 +440,58 @@ function render() {
   renderOpenSupplier();
   renderSupplierItems();
   renderSummary();
+}
+
+// ── One drawing pass per frame, for everything a LISTENER changes ────────────────────────
+//
+// The listeners at the foot of this file store their data at once and then only RECORD which
+// screens it touches; flushRender draws the union once, in the next animation frame (see
+// render-scheduler.js for why). ⚠️ USER ACTIONS DO NOT COME THROUGH HERE: a keystroke, a tap,
+// a screen opening or an order being placed still draws synchronously (afterChange, openSupplier,
+// placeOrder, …) — the person is looking at that screen at that moment.
+//
+// The parts: list (the order screen, which also redraws Incoming and the open screens), sync
+// (typed values back into the inputs), money, history, incoming, alerts, reminders, untold,
+// summary, requestList, openRequest.
+const scheduler = createRenderScheduler({
+  flush: flushRender,
+  raf: callback => requestAnimationFrame(callback),
+});
+
+function scheduleRender(...parts) {
+  scheduler.schedule(...parts);
+}
+
+// Not imported anywhere yet: the hook for a kiosk-style display. While paused nothing is drawn
+// and everything asked for is kept; un-pausing draws once.
+export function setRenderPaused(paused) {
+  scheduler.setPaused(paused);
+}
+
+// The order of the old direct calls, with the repeats folded: render() already redraws Incoming
+// (and the open summary) when it gets that far, and a sync already repaints the money.
+// ⚠️ EACH PART IS DRAWN ON ITS OWN (review of 4 Oct 2026): one part that throws must not stop
+// the others. Before the scheduler every listener drew its own pieces, so a bug in one list
+// left the banners, History and Incoming alone; in one shared pass an uncaught error would
+// skip everything after it until the next snapshot (P17). The error is still logged.
+function drawPart(name, draw) {
+  try { draw(); } catch (err) { console.error(`Orders: drawing «${name}» failed`, err); }
+}
+
+function flushRender(parts) {
+  const incomingBefore = incomingDrawCount;
+  if (parts.has('list')) drawPart('list', render);
+  const incomingDrawn = incomingDrawCount !== incomingBefore;
+  if (parts.has('sync')) drawPart('sync', syncInputsFromState);
+  else if (parts.has('money')) drawPart('money', paintMoney);
+  if (parts.has('history')) drawPart('history', renderHistory);
+  if (parts.has('incoming') && !incomingDrawn) drawPart('incoming', renderIncoming);
+  if (parts.has('reminders')) drawPart('reminders', renderReminders);
+  // renderReminders already redraws the untold banner when suppliers are in.
+  if (parts.has('untold') && !(parts.has('reminders') && state.loaded.suppliers)) drawPart('untold', renderUntoldChanges);
+  if (parts.has('summary')) drawPart('summary', renderSummary);
+  if (parts.has('requestList') && requestListView) drawPart('requestList', renderRequestList);
+  if (parts.has('openRequest')) drawPart('openRequest', renderOpenRequest);
 }
 
 // Both list views own nodes inside the shared container, so whenever it is wiped or
@@ -944,9 +1023,10 @@ function setOrderFilter(active) {
 // ── Rendering: history tab ────────────────────────────────────────────────────
 function applyHistory(list) {
   state.history = list;
-  renderHistory();
-  renderIncoming();
-  render(); // refresh order-tab suggestions now that history is available
+  // The data is stored above; the drawing is one pass in the next frame. `list` refreshes the
+  // order-tab suggestions now that history is available, and render() draws Incoming itself, so
+  // 'incoming' only draws it when render() gave up early (suppliers or ingredients not in yet).
+  scheduleRender('history', 'incoming', 'list');
 }
 
 // ── Rendering: what has been ordered and has not arrived ─────────────────────
@@ -954,10 +1034,43 @@ function applyHistory(list) {
 // ⚠️ REDRAWN FROM THE HISTORY SNAPSHOT, never from a local flag. Two phones in one
 // kitchen confirm deliveries independently, and the screen that shows what is still
 // coming is exactly the screen that must not disagree with the other person's tap.
+//
+// ⚠️ TWO HALVES, TOLD APART BY WHETHER ANYBODY CAN SEE THEM. The banners (what is owed, what to
+// re-order) and the tab's badge are on the main screen and follow every redraw. The list of
+// deliveries is the BODY of the Incoming tab: while that tab is not the open one it is only
+// marked out of date and drawn when the tab is opened (setupTabs), so a hidden list is not
+// rebuilt on every snapshot.
+let deliveriesDirty = false;
+let incomingDrawCount = 0;   // lets the scheduler's flush see that render() already drew Incoming
+
+function deliveriesVisible() {
+  return document.getElementById('tab-deliveries')?.classList.contains('active') === true;
+}
+
+function drawDeliveries(ctx = incomingContext()) {
+  deliveriesDirty = false;
+  renderDeliveries(document.getElementById('deliveries-list'), ctx);
+}
+
 function renderIncoming() {
+  incomingDrawCount += 1;
+  const ctx = incomingContext();
+  if (deliveriesVisible()) drawDeliveries(ctx);
+  else deliveriesDirty = true;
+  const owedCount = renderOwedBanner(document.getElementById('orders-owed'), ctx);
+  renderReorderButton(document.getElementById('orders-reorder-btn'),
+    document.getElementById('orders-reorder-count'), ctx);
+  // ⚠️ TABLET ONLY IN LOOKS (orders.css), but kept in step unconditionally —
+  // the badge span exists on every screen size and CSS alone decides whether
+  // it is ever seen, the same split every other tablet-only control in this
+  // file uses.
+  refreshDeliveriesBadge(owedCount);
+}
+
+function incomingContext() {
   const suppliersById = {};
   (state.suppliers || []).forEach(s => { suppliersById[s.id] = s; });
-  const ingredientsById = indexById(orderIngredients());
+  const ingredientsById = lensById();
 
   const ctx = {
     history: state.history,
@@ -1026,15 +1139,7 @@ function renderIncoming() {
     onResolve: async (item) => { await resolveMissing(item.recordId, item.id); },
   };
 
-  renderDeliveries(document.getElementById('deliveries-list'), ctx);
-  const owedCount = renderOwedBanner(document.getElementById('orders-owed'), ctx);
-  renderReorderButton(document.getElementById('orders-reorder-btn'),
-    document.getElementById('orders-reorder-count'), ctx);
-  // ⚠️ TABLET ONLY IN LOOKS (orders.css), but kept in step unconditionally —
-  // the badge span exists on every screen size and CSS alone decides whether
-  // it is ever seen, the same split every other tablet-only control in this
-  // file uses.
-  refreshDeliveriesBadge(owedCount);
+  return ctx;
 }
 
 // The debt count on the Incoming tab — the same number renderOwedBanner just
@@ -1070,7 +1175,26 @@ function allHistory() {
   return mergeHistory(state.history, olderState().records);
 }
 
+// ⚠️ A HIDDEN SCREEN IS NOT DRAWN. History is a full-screen overlay opened from Settings; while it
+// is closed every snapshot (and every config change) used to rebuild one card per order in it.
+// Now a closed History is only marked out of date, and openHistory() draws it when it opens.
+let historyDirty = false;
+
+function historyVisible() {
+  const overlay = document.getElementById('history-overlay');
+  return Boolean(overlay) && !overlay.hidden;
+}
+
+function openHistory() {
+  const overlay = document.getElementById('history-overlay');
+  if (!overlay) return;
+  overlay.hidden = false;
+  if (historyDirty) renderHistory();
+}
+
 function renderHistory() {
+  if (!historyVisible()) { historyDirty = true; return; }
+  historyDirty = false;
   const older = olderState();
   renderHistoryView(
     document.getElementById('history-list'),
@@ -1434,7 +1558,7 @@ function renderOpenRequest() {
   }
 
   const next = buildRequestScreen(request, {
-    ingredientsById: indexById(orderIngredients()),
+    ingredientsById: lensById(),
     entries: state.entries,
     // ⚠️ WHAT WAS ACTUALLY BOUGHT, beside what was asked for. The person who sent
     // the list can otherwise only find out by asking. The two documents are joined
@@ -2082,7 +2206,7 @@ function entriesToRecord(supplierId, ingredients, confirmed, units = null) {
 // ⚠️ NONE FOR A LINE IN A NON-DEFAULT UNIT: the history the «usual» is worked out from
 // counts cartoni, so «usually about 4» beside 4 buste would compare two different things.
 function usualFor(id, qty) {
-  const ing = state.ingredients.find(i => i.id === id);
+  const ing = ingredientMap(state.ingredients).get(id);
   if (ing && !isDefaultUnit(state.entries[id], ing)) return null;
   const result = suggestFor(id, 0);
   return result?.active && isUnusualQuantity(qty, result.par) ? result.par : null;
@@ -2159,9 +2283,20 @@ async function askToConfirmPlacement(supplier, date) {
 // The suggestion engine bound to the history currently in memory. ONE definition,
 // shared by every row on every screen and by the unusual-quantity check, so the
 // number a row shows and the number the confirmation quotes are the same number.
+//
+// ⚠️ BOTH LOOKUPS ARE BUILT ONCE PER SNAPSHOT, not once per row: the history is cut into one
+// list per ingredient and the cards are indexed by id, each keyed on the array it came from
+// (both are replaced, never edited — see the lens above). A screen asks this once per row,
+// and every ask used to filter and sort the whole four-month history.
+const historyIndex = memoLast(indexHistoryByIngredient);
+const ingredientMap = memoLast(list => {
+  const map = new Map();
+  list.forEach(i => { if (!map.has(i.id)) map.set(i.id, i); });   // the first, as find() answered
+  return map;
+});
 function suggestFor(id, stock) {
-  const ing = state.ingredients.find(i => i.id === id) || null;
-  return computeSuggestion(id, stock, state.history, ing);
+  const ing = ingredientMap(state.ingredients).get(id) || null;
+  return computeSuggestion(id, stock, historyIndex(state.history).get(id) || [], ing);
 }
 
 // ── Reminders (today's orders / an order left from an earlier day) ────────────
@@ -2252,7 +2387,9 @@ function checkPendingOnce() {
     fallbackDay: localDayOf(state.draftUpdatedAt),
     today: todayISO(),
   });
-  renderReminders();
+  // state.pending is stored above; the banner is drawn with the rest of the burst. Only ever
+  // called from a listener, so there is no tap waiting on it.
+  scheduleRender('reminders');
 }
 
 function dismissPending(supplierId) {
@@ -2376,8 +2513,7 @@ function openManagement() {
       // it.
       openHistory: () => {
         closeAlertsPanel();     // the panel must never sit on top of a full screen
-        const overlay = document.getElementById('history-overlay');
-        if (overlay) overlay.hidden = false;
+        openHistory();
       },
       // Takes a PATCH, not one flag: config/orders now holds two settings and saveDoc
       // merges, so writing `{ showStock }` alone would leave historyDays untouched —
@@ -2418,6 +2554,8 @@ function setupTabs() {
       // A class on <body>, read by a small number of scoped rules, is what
       // decides between the two — never a rebuild of either banner.
       document.body.dataset.ordersTab = panel === 'tab-deliveries' ? 'deliveries' : 'order';
+      // The list body is not drawn while its tab is closed (renderIncoming): catch up now.
+      if (panel === 'tab-deliveries' && deliveriesDirty) drawDeliveries();
     });
   });
   // The screen always opens on Order.
@@ -2605,14 +2743,14 @@ async function init() {
     state.days = draft.days || {};
     state.draftUpdatedAt = draft.updatedAt;
     state.loaded.draft = true;
-    if (overrideSignature(state.entries) !== overridesBefore) render();
-    syncInputsFromState();
-    renderReminders();
+    // Everything below is stored at once and drawn in one pass next frame (scheduleRender).
+    if (overrideSignature(state.entries) !== overridesBefore) scheduleRender('list');
+    scheduleRender('sync', 'reminders');
     checkPendingOnce();
     // ⚠️ AND THE OPEN SUMMARY SHEET, for the same reason as the open list just
     // below: it shows quantities from this very draft, and a change made on
     // another phone must not leave it showing yesterday's numbers.
-    renderSummary();
+    scheduleRender('summary');
     // ⚠️ THE OPEN LIST DEPENDS ON THE SHARED ORDER, NOT ONLY ON ITSELF. Its
     // "now in the list: 6" marks are a comparison against these very entries, so
     // without this the warning appeared only if the LIST document happened to
@@ -2620,7 +2758,7 @@ async function init() {
     // shared order while a manager reads the frozen numbers, showed nothing at
     // all. Found by driving the app; the model's own tests were green throughout,
     // because the comparison was right and nobody was asking it again.
-    renderOpenRequest();
+    scheduleRender('openRequest');
   }, liveDataLost(() => t('orders.live.draft')));
 
   // ⚠️ THE LIVE WINDOW ONLY — see the COST NOTE in firebase-orders.js. The start is kept in
@@ -2635,7 +2773,7 @@ async function init() {
   watchRecentHistory(state.historyFrom, list => {
     state.loaded.history = true;
     applyHistory(list);
-    renderReminders();
+    scheduleRender('reminders');
   }, liveDataLost(() => t('orders.live.history')));
 
   // ⚠️ A BOUNDED query, not watchCollection: this collection grows for ever and
@@ -2651,12 +2789,10 @@ async function init() {
     // ⚠️ AND THE UNTOLD BANNER, because sending the list again is one of the two
     // things that answers it. Without this it would keep saying "you have added
     // something" for the rest of the day to somebody who had just sent it.
-    renderUntoldChanges();
-    // ⚠️ renderRequestList, NOT openRequestList: the latter resets the "show
+    // ⚠️ requestList (renderRequestList), NOT openRequestList: the latter resets the "show
     // older" choice, so a snapshot arriving while somebody was looking at the
     // older lists would fold them away under their thumb.
-    if (requestListView) renderRequestList();
-    renderOpenRequest();
+    scheduleRender('untold', 'requestList', 'openRequest');
   }, liveDataLost(() => t('orders.live.requests')));
 
   // Suppliers and ingredients stay unbounded: they are a handful of documents and
@@ -2664,17 +2800,17 @@ async function init() {
   watchCollection(COLLECTIONS.suppliers, list => {
     state.suppliers = list;
     state.loaded.suppliers = true;
-    render();
-    renderHistory();
-    // ⚠️ REDRAWN HERE TOO, AND THE FIRST DRIVEN RUN IS WHY. Incoming was painted
+    // ⚠️ REDRAWN HERE TOO ('incoming'), AND THE FIRST DRIVEN RUN IS WHY. Incoming was painted
     // only when history arrived; suppliers land in a SEPARATE snapshot, so on a
     // cold open every order read "no delivery days set for this supplier" — for
     // suppliers that had them — and stayed wrong until something else forced a
     // repaint. Two live collections feed one screen, so both must redraw it. Same
     // shape as the recipe cost that computed once and said "no cost yet" (v247).
-    renderIncoming();
+    scheduleRender('list', 'history', 'incoming', 'reminders');
+    // NOT deferred: showAlerts() also raises the browser notification for a holiday or a
+    // delivery clash (notifications.js maybeNotify), which must fire even while this page is
+    // in the background, where animation frames do not run. It is cheap.
     showAlerts();
-    renderReminders();
     checkPendingOnce();
   }, liveDataLost(() => t('orders.live.suppliers')));
   // ⚠️ THE PRICES ARE A SECOND COLLECTION AND ARRIVE SEPARATELY. They moved off
@@ -2692,16 +2828,13 @@ async function init() {
     if (state.loaded.ingredients) {
       state.ingredients = withPrices(state.rawIngredients, map);
     }
-    paintMoney();
-    renderSummary();
+    scheduleRender('money', 'summary');
   });
   watchCollection(COLLECTIONS.ingredients, list => {
     state.rawIngredients = list;
     state.ingredients = withPrices(list, state.ingredientPrices);
     state.loaded.ingredients = true;
-    render();
-    renderHistory();
-    renderReminders();
+    scheduleRender('list', 'history', 'reminders');
     checkPendingOnce();
   }, liveDataLost(() => t('orders.live.ingredients')));
 }
