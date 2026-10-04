@@ -12,9 +12,10 @@ test('the header Back of every level goes through guardedLeave', () => {
   assert.match(js, /onClick: \(\) => guardedLeave\(entry, onBack\)/);
 });
 
-test('the ingredient and supplier forms\' Cancel go through guardedLeave', () => {
-  assert.match(js, /onCancel: \(\) => guardedLeave\(entry, \(\) => popEntry\(entry\)\)/);
-  assert.match(js, /onCancel: \(\) => guardedLeave\(entry, close\)/);
+test('the forms have no Cancel any more: Back (guardedLeave) closes them, the ingredient by popEntry and the supplier by close', () => {
+  assert.doesNotMatch(js, /onCancel/);
+  assert.match(js, /function overlay\(entry, title, body, onBack = \(\) => popEntry\(entry\), headerAction = null\)/);
+  assert.match(js, /body, close, form\.headerSave\)/);
 });
 
 test('guardedLeave asks only when the level holds unsaved typing, and the pane keeps the unguarded close', () => {

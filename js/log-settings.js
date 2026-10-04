@@ -4,11 +4,11 @@
 // kept in Firestore; these only decide what the on-screen list shows.
 //
 // Edits are made on a WORKING COPY and applied only on Save (with a confirm). Leaving
-// with unsaved changes asks to discard (P20). local-first via saveConfig, which
-// re-renders and best-effort syncs to Firestore.
+// with unsaved changes asks to discard (P20). Saved through saveConfigOrSay: a write that
+// does not reach the server says so and leaves this screen as it was.
 
 import { t } from './i18n.js';
-import { getConfig, saveConfig } from './calculator-config-store.js';
+import { getConfig, saveConfigOrSay } from './calculator-config-store.js';
 import {
   cloneConfig, getRecipes, isLogVisible, getLogRetentionForDough,
   LOG_RETENTION_OPTIONS, getTabProducts,
@@ -16,6 +16,10 @@ import {
 import { el } from './calculator-render.js';
 import { confirmDiscard } from './calculator-confirm.js';
 import { confirmDialog } from './confirm-dialog.js';
+import { createSaveGuard } from './save-guard.js';
+
+// While the save is in flight the header Save is disabled and Back / Home wait (js/save-guard.js).
+const saveGuard = createSaveGuard(() => document.getElementById('logsettings-save-btn'));
 
 let working = null; // { visibility: {recipeId:bool}, retention: {recipeId:hours} } or null
 let dirty = false;
@@ -42,9 +46,6 @@ function render() {
     t('calc.forEachRecipeChoose') +
     t('calc.logsAreAlwaysKept')));
   getRecipes(getConfig()).forEach(r => c.appendChild(recipeCard(r)));
-  const save = el('button', { class: 'cp-save-bottom', type: 'button' }, t('calc.saveChanges'));
-  save.addEventListener('click', saveAll);
-  c.appendChild(save);
 }
 
 // One card per recipe: its products (for context) + the two editable settings.
@@ -65,8 +66,8 @@ function recipeCard(recipe) {
   card.appendChild(visRow);
 
   const durRow = el('label', { class: 'extra-toggle-row' }, [el('span', {}, t('calc.keepVisibleFor'))]);
-  const sel = el('select', { class: 'extra-unit-select', 'aria-label': t('calc.logDurationFor') + recipe.name });
-  LOG_RETENTION_OPTIONS.forEach(h => sel.appendChild(el('option', { value: String(h) }, h + ' hours')));
+  const sel = el('select', { class: 'extra-unit-select', 'aria-label': t('calc.logDurationForRecipe', { name: recipe.name }) });
+  LOG_RETENTION_OPTIONS.forEach(h => sel.appendChild(el('option', { value: String(h) }, t('calc.logKeepHours', { n: h }))));
   sel.value = String(working.retention[recipe.id]);
   sel.addEventListener('change', () => { working.retention[recipe.id] = Number(sel.value); dirty = true; });
   durRow.appendChild(sel);
@@ -75,25 +76,30 @@ function recipeCard(recipe) {
   return card;
 }
 
-async function saveAll() {
+function saveAll() { return saveGuard.run(doSaveAll); }
+
+async function doSaveAll() {
   if (!(await confirmDialog({ message: t('calc.saveTheseLogSettings'), okLabel: t('ui.save'), cancelLabel: t('ui.cancel') }))) return;
   const cfg = cloneConfig(getConfig());
   cfg.logVisibility = { ...working.visibility };
   cfg.logRetentionByDough = { ...working.retention };
-  saveConfig(cfg);
+  if (!(await saveConfigOrSay(cfg))) return;
   dirty = false;
   hide('logsettings-overlay');
 }
 
 async function closeLogSettings() {
+  if (saveGuard.saving) return;
   if (!(await confirmDiscard(dirty))) return;
   dirty = false;
   hide('logsettings-overlay');
 }
 
 document.getElementById('open-logsettings-btn').addEventListener('click', openLogSettings);
+document.getElementById('logsettings-save-btn').addEventListener('click', saveAll);
 document.querySelector('.logsettings-back-btn').addEventListener('click', closeLogSettings);
 document.getElementById('logsettings-home-btn').addEventListener('click', async () => {
+  if (saveGuard.saving) return;
   if (!(await confirmDiscard(dirty))) return;
   window.location.href = 'index.html';
 });

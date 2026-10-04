@@ -1,10 +1,11 @@
 // recipes.js — the Recipes editor (#recipe-overlay), now editing config.recipes[].
 //
 // Recipes are the base of the calculator. This editor manages the full list: add a
-// new (empty) recipe, edit one (name, calc logic, ingredients with autocomplete from
+// new (empty) recipe, edit one (name, source, ingredients with autocomplete from
 // the ingredient registry, the designated leavening + its default % and show-knob
-// flag, and whether it appears as a calculator tab — max 4), or delete one (blocked
-// while products still point at it).
+// flag), or delete one (blocked while products still point at it). How a recipe
+// calculates and whether it shows as a calculator tab (max 4) are set in the list itself:
+// tapping a row opens it in place (an accordion, one row at a time).
 //
 // It works on a deep copy of the live config and touches nothing until Save (with a
 // confirm), which persists through the config store (Firestore + cache) and re-renders
@@ -14,10 +15,16 @@
 import { t } from './i18n.js';
 import { confirmDiscard } from './calculator-confirm.js';
 import { confirmDialog, alertDialog } from './confirm-dialog.js';
+import { createSaveGuard } from './save-guard.js';
+import { revealField } from './reveal-field.js';
+
+// While the write is in flight the header Save is disabled and Back / Home wait (js/save-guard.js).
+const saveGuard = createSaveGuard(() => document.getElementById('recipe-save-btn'));
 import { recipeTotal } from './calculator-dough-math.js';
-import { getConfig, saveConfig } from './calculator-config-store.js';
+import { getConfig, saveConfigOrSay } from './calculator-config-store.js';
 import {
   cloneConfig, getRecipes, getIngredients, getProducts, LOGICS, MAX_VISIBLE_RECIPES,
+  usesOrders, usesTrays, isValidTrayWeight, DEFAULT_TRAY_WEIGHT, MAX_TRAY_WEIGHT, MIN_TRAY_WEIGHT,
 } from './calculator-config.js';
 import { el } from './calculator-render.js';
 import { icon } from './calculator-icons.js';
@@ -31,10 +38,15 @@ export { recipeTotal };
 
 // Keys, resolved at draw time — see the note in js/calculator-render.js. A phrase put
 // here directly is frozen in whatever language the app started in.
-const LOGIC_LABELS = { orders: 'calc.fromOrders', total: 'calc.fromATotal', both: 'calc.bothOrdersTotal' };
+const LOGIC_LABELS = {
+  orders: 'calc.fromOrders', total: 'calc.fromATotal', both: 'calc.bothOrdersTotal',
+  trays: 'calc.byTray', traysTotal: 'calc.byTrayPlusTotal',
+};
 
 let working = null;       // deep copy being edited
 let activeRecipe = null;  // null = the recipe list, an index = a recipe's detail
+let openRow = null;       // the list row opened in place (an index), at most one
+let focusRow = null;      // the row whose head takes keyboard focus when the list is next drawn
 let freshlyAdded = false;
 let showErrors = false;
 let dirty = false;
@@ -51,7 +63,7 @@ function recipes() {
 
 function setHomeVisible(visible) {
   const btn = document.getElementById('recipe-home-btn');
-  if (btn) btn.style.display = visible ? '' : 'none';
+  if (btn) btn.hidden = !visible;
 }
 
 function markDirty() { dirty = true; }
@@ -66,6 +78,8 @@ function visibleCount() { return recipes().filter(r => r.visible !== false).leng
 export function openRecipes() {
   working = cloneConfig(getConfig());
   activeRecipe = null;
+  openRow = null;
+  focusRow = null;
   freshlyAdded = false;
   showErrors = false;
   dirty = false;
@@ -78,11 +92,17 @@ function isEmptyRecipe(r) {
 }
 
 export async function closeRecipes() {
+  if (saveGuard.saving) return;
   if (activeRecipe !== null) {
     const r = recipes()[activeRecipe];
     if (freshlyAdded && isEmptyRecipe(r)) {
       if (!(await confirmDialog({ message: t('calc.discardThisNewRecipe'), okLabel: t('ui.discard'), danger: true, cancelLabel: t('ui.cancel') }))) return;
       recipes().splice(activeRecipe, 1);
+      openRow = null;
+    } else {
+      // Back lands on the same row, still open: the logic and the switch live there.
+      openRow = activeRecipe;
+      focusRow = activeRecipe;
     }
     freshlyAdded = false;
     activeRecipe = null;
@@ -94,6 +114,7 @@ export async function closeRecipes() {
 }
 
 export async function goHomeFromRecipes() {
+  if (saveGuard.saving) return;
   if (!(await confirmDiscard(dirty))) return;
   window.location.href = 'index.html';
 }
@@ -124,7 +145,9 @@ function findInvalid() {
   return null;
 }
 
-async function saveRecipes() {
+export function saveRecipes() { return saveGuard.run(doSaveRecipes); }
+
+async function doSaveRecipes() {
   const invalid = findInvalid();
   if (invalid !== null) {
     showErrors = true;
@@ -133,13 +156,28 @@ async function saveRecipes() {
     alertDialog(t('calc.pleaseGiveEveryRecipe'));
     return;
   }
+  // A trays recipe needs a tray weight: block, open that recipe's row, mark the box and jump to it.
+  const badTray = recipes().findIndex(r => usesTrays(logicOf(r)) && !isValidTrayWeight(r.trayWeight));
+  if (badTray !== -1) {
+    showErrors = true;
+    activeRecipe = null;
+    openRow = badTray;
+    renderEditor();
+    revealField(document.getElementById('rc-tray-weight-' + badTray));
+    return;
+  }
   if (!(await confirmDialog({ message: t('calc.saveTheseChanges'), okLabel: t('ui.save'), cancelLabel: t('ui.cancel') }))) return;
   try {
-    await saveConfig(working);
+    // A refused write has already been explained; the screen then stays as it is, edits and
+    // dirty flag included, and the guard gives Save back.
+    if (!(await saveConfigOrSay(working))) return;
     showErrors = false;
     dirty = false;
     freshlyAdded = false;
+    // The list is rebuilt: keyboard focus goes back to the row that was being edited.
+    focusRow = activeRecipe;
     activeRecipe = null;
+    openRow = null;
     // Re-sync from the normalised, saved config (ids/keys may have been tidied).
     working = cloneConfig(getConfig());
     renderEditor();
@@ -156,30 +194,60 @@ function renderRecipeList() {
   const content = contentEl();
   content.textContent = '';
   content.appendChild(el('p', { class: 'extra-help' },
-    t('calc.yourRecipesTheBase') + MAX_VISIBLE_RECIPES + t('calc.canShowAsCalculator')));
+    t('calc.recipesIntro', { n: MAX_VISIBLE_RECIPES })));
+
+  // One entry per row: the frame, its head button and its panel. Opening one closes the
+  // others, in place (no repaint, so focus stays on the head that was tapped).
+  const rows = [];
+  const paintOpen = () => rows.forEach(row => {
+    const isOpen = openRow === row.ri;
+    row.card.classList.toggle('is-open', isOpen);
+    row.head.setAttribute('aria-expanded', String(isOpen));
+    row.panel.hidden = !isOpen;
+  });
 
   recipes().forEach((r, ri) => {
-    const ings = (r.ingredients || []).length;
-    const sub = t(LOGIC_LABELS[r.logic]) + '  ·  ' + t('calc.ingredientCount', { n: ings })
-      + (r.visible !== false ? t('calc.shown') : t('calc.hidden'));
-    const open = el('button', { class: 'drill-item wa-entry-open', type: 'button' }, [
+    const panelId = 'rc-panel-' + ri;
+    const subEl = el('span', { class: 'wa-entry-sub' }, recipeSubLine(r));
+    const head = el('button', {
+      class: 'drill-item wa-entry-open', type: 'button',
+      'aria-expanded': 'false', 'aria-controls': panelId,
+    }, [
       el('span', { class: 'wa-entry-text' }, [
         el('span', { class: 'wa-entry-name' }, r.name || t('calc.unnamedRecipe')),
-        el('span', { class: 'wa-entry-sub' }, sub),
+        subEl,
       ]),
       el('span', { class: 'drill-chevron' }, icon('chevronRight', 18)),
     ]);
-    open.addEventListener('click', () => { freshlyAdded = false; activeRecipe = ri; renderEditor(); });
-    const del = deleteIcon(t('calc.deleteRecipe'), () => deleteRecipe(ri));
-    content.appendChild(el('div', { class: 'wa-entry-card' }, [open, del]));
+    const panel = recipePanel(r, ri, panelId, subEl);
+    const card = el('div', { class: 'wa-entry-card rc-row' }, [
+      el('div', { class: 'rc-head' }, [head, deleteIcon(t('calc.deleteRecipe'), () => deleteRecipe(ri))]),
+      panel,
+    ]);
+    head.addEventListener('click', () => {
+      openRow = openRow === ri ? null : ri;
+      paintOpen();
+    });
+    rows.push({ ri, card, head, panel });
+    content.appendChild(card);
   });
+  paintOpen();
+  if (focusRow !== null && rows[focusRow]) rows[focusRow].head.focus();
+  focusRow = null;
 
-  const add = el('button', { class: 'cp-add-client', type: 'button' }, t('calc.addRecipe'));
-  add.addEventListener('click', () => {
+  const add =el('button', { class: 'cp-add-client', type: 'button' }, t('calc.addRecipe'));
+  add.addEventListener('click', async () => {
+    // At the limit the new recipe can only be created hidden: say so before making it.
+    const full = visibleCount() >= MAX_VISIBLE_RECIPES;
+    if (full && !(await confirmDialog({
+      message: t('calc.recipe.addLimitConfirm', { n: MAX_VISIBLE_RECIPES }),
+      okLabel: t('calc.recipe.createHidden'),
+      cancelLabel: t('ui.cancel'),
+    }))) return;
     recipes().push({
-      id: genId('r'), name: '', logic: 'orders', ingredients: [],
+      id: genId('r'), name: '', logic: 'orders', trayWeight: DEFAULT_TRAY_WEIGHT, ingredients: [],
       leaveningKey: null, leaveningDefaultPct: 0, showLeavening: true, baselinePct: null,
-      order: recipes().length, visible: visibleCount() < MAX_VISIBLE_RECIPES,
+      order: recipes().length, visible: !full,
     });
     markDirty();
     freshlyAdded = true;
@@ -187,24 +255,123 @@ function renderRecipeList() {
     renderEditor();
   });
   content.appendChild(add);
+  // The list itself can be saved (e.g. after a delete or a visibility change): the
+  // header Save (#recipe-save-btn, wired in app.js) is on both levels.
+}
 
-  // The list itself can be saved (e.g. after a delete or a visibility change).
-  const save = el('button', { class: 'cp-save-bottom', type: 'button' }, t('ui.save'));
-  save.addEventListener('click', saveRecipes);
-  content.appendChild(save);
+function logicOf(r) { return LOGICS.includes(r.logic) ? r.logic : 'orders'; }
+
+// «From a total · 16 ingredients · shown» — kept in step live by the open row.
+function recipeSubLine(r) {
+  return t(LOGIC_LABELS[logicOf(r)]) + '  ·  ' + t('calc.ingredientCount', { n: (r.ingredients || []).length })
+    + (r.visible !== false ? t('calc.shown') : t('calc.hidden'));
+}
+
+// What opens under a row: how the recipe calculates, whether it shows in the calculator,
+// and the way into the full recipe. Everything edits the working copy; nothing is saved
+// until the header Save (+ confirm), so the switch does NOT save on the tap (P20: this is
+// a list with a Save, unlike a settings switch).
+function recipePanel(r, ri, panelId, subEl) {
+  // How it calculates: a dropdown, and the sentence for the CHOSEN option right under it.
+  //
+  // ⚠️ THIS USED TO BE THREE EXPLAINED ROWS, because a dropdown can only explain the
+  // option already chosen and the question is what the DIFFERENCE is. Federico asked for
+  // a dropdown instead (4 Oct 2026), so the explanation is kept by showing the chosen
+  // option's sentence under it, live. A tooltip was never an option: hovering needs a
+  // mouse, and an open dropdown on a phone is drawn by the operating system, so the app
+  // cannot put a word inside it (the v236 lesson, "Chromium is not the phone").
+  // On a computer the arrow keys on a closed select fire `change` per keystroke —
+  // harmless here: it only edits the working copy, nothing saves until Save.
+  const selectId = 'rc-logic-' + ri;
+  const hintId = 'rc-logic-hint-' + ri;
+  const select = el('select', { class: 'cp-prod-dough rc-logic', id: selectId, 'aria-describedby': hintId });
+  LOGICS.forEach(l => select.appendChild(el('option', { value: l }, t(LOGIC_LABELS[l]))));
+  select.value = logicOf(r);
+  const hint = el('div', { class: 'cp-hint rc-logic-hint', id: hintId }, t(`calc.logicHint.${logicOf(r)}`));
+  // Weight of one tray, only for the two tray logics. The value is kept on the recipe when the
+  // logic is switched away and back (the field is hidden, never cleared). The working copy holds
+  // what was TYPED (so an empty box can be refused on Save); the saved config normalises it.
+  const trayId = 'rc-tray-weight-' + ri;
+  const trayInput = el('input', {
+    type: 'number', id: trayId, class: 'cp-prod-weight rc-tray-weight', min: String(MIN_TRAY_WEIGHT), max: String(MAX_TRAY_WEIGHT),
+    step: '1', inputmode: 'numeric', value: String(r.trayWeight === undefined ? DEFAULT_TRAY_WEIGHT : r.trayWeight),
+  });
+  const trayError = el('div', { class: 'logday-hint', role: 'alert', id: trayId + '-error', hidden: '' }, t('calc.trayWeightMissing'));
+  const paintTrayError = () => {
+    const bad = showErrors && usesTrays(logicOf(r)) && !isValidTrayWeight(r.trayWeight);
+    trayInput.classList.toggle('cp-invalid', bad);
+    trayError.hidden = !bad;
+    // An empty box and a weight that looks like kilos are different mistakes: say which.
+    trayError.textContent = t(r.trayWeight === '' || r.trayWeight === undefined ? 'calc.trayWeightMissing' : 'calc.trayWeightTooLight');
+    if (bad) trayInput.setAttribute('aria-describedby', trayId + '-error'); else trayInput.removeAttribute('aria-describedby');
+  };
+  const trayField = el('div', { class: 'cp-field rc-tray-field' }, [
+    el('label', { class: 'cp-label', for: trayId }, t('calc.trayWeightG')),
+    el('div', { class: 'cp-prod-card-row' }, [trayInput, el('span', { class: 'cp-unit' }, 'g')]),
+    trayError,
+  ]);
+  trayField.hidden = !usesTrays(logicOf(r));
+  trayInput.addEventListener('input', () => {
+    r.trayWeight = trayInput.value === '' ? '' : Number(trayInput.value);
+    markDirty();
+    if (isValidTrayWeight(r.trayWeight)) { trayInput.classList.remove('cp-invalid'); trayError.hidden = true; }
+  });
+  paintTrayError();
+
+  select.addEventListener('change', () => {
+    r.logic = select.value;
+    markDirty();
+    hint.textContent = t(`calc.logicHint.${logicOf(r)}`);
+    subEl.textContent = recipeSubLine(r);
+    trayField.hidden = !usesTrays(logicOf(r));
+    paintTrayError();
+  });
+
+  // Show in the calculator (≤ MAX_VISIBLE_RECIPES).
+  const titleId = 'rc-show-title-' + ri;
+  const showCb = el('input', { type: 'checkbox', role: 'switch', 'aria-labelledby': titleId });
+  showCb.checked = r.visible !== false;
+  showCb.addEventListener('change', () => {
+    if (showCb.checked && r.visible === false && visibleCount() >= MAX_VISIBLE_RECIPES) {
+      showCb.checked = false;
+      alertDialog(t('calc.recipe.limitReached', { n: MAX_VISIBLE_RECIPES }));
+      return;
+    }
+    r.visible = showCb.checked;
+    markDirty();
+    subEl.textContent = recipeSubLine(r);
+  });
+
+  const edit = el('button', { class: 'btn-secondary rc-edit-btn', type: 'button' }, t('calc.editRecipe'));
+  edit.addEventListener('click', () => { freshlyAdded = false; openRow = ri; activeRecipe = ri; renderEditor(); });
+
+  return el('div', { class: 'rc-panel', id: panelId, role: 'group', 'aria-label': r.name || t('calc.unnamedRecipe'), hidden: '' }, [
+    el('div', { class: 'cp-field' }, [
+      el('label', { class: 'cp-label', for: selectId }, t('calc.howItCalculates')),
+      select,
+      hint,
+    ]),
+    trayField,
+    el('div', { class: 'extra-toggle-row' }, [
+      el('span', { id: titleId }, t('calc.recipe.showInCalculator')),
+      el('label', { class: 'set-switch' }, [showCb, el('span', { class: 'set-switch-track', 'aria-hidden': 'true' })]),
+    ]),
+    edit,
+  ]);
 }
 
 async function deleteRecipe(ri) {
   const r = recipes()[ri];
   const used = productCountFor(r.id);
   if (used > 0) {
-    alertDialog(t('calc.thisRecipeIsUsed') + used + (used === 1 ? ' product' : ' products') + '. Reassign or delete them in Settings → Products first.');
+    alertDialog(t('calc.recipeUsedByProducts', { n: used }));
     return;
   }
-  if (!(await confirmDialog({ message: t('calc.deleteThe') + (r.name || 'this') + t('calc.recipe'), okLabel: t('ui.delete'), danger: true, cancelLabel: t('ui.cancel') }))) return;
+  if (!(await confirmDialog({ message: r.name ? t('calc.deleteRecipeNamed', { name: r.name }) : t('calc.deleteThisRecipe'), okLabel: t('ui.delete'), danger: true, cancelLabel: t('ui.cancel') }))) return;
   recipes().splice(ri, 1);
   markDirty();
   activeRecipe = null;
+  openRow = null;
   renderEditor();
 }
 
@@ -232,45 +399,11 @@ function renderRecipeDetail(ri) {
     el('div', { class: 'cp-name-row' }, [nameInput, deleteIcon(t('calc.deleteRecipe'), () => deleteRecipe(ri))]),
   ]));
 
-  // ── How it calculates: three rows, each explaining itself ───────────────────
-  //
-  // ⚠️ A DROPDOWN CAN ONLY EXPLAIN THE OPTION ALREADY CHOSEN, and the question
-  // here is what the DIFFERENCE is. Opened side by side, the three answers can be
-  // compared BEFORE deciding rather than after.
-  //
-  // ⚠️ AND A TOOLTIP WAS NEVER AN OPTION: hovering needs a mouse, and an open
-  // dropdown on a phone is drawn by the operating system, so the app cannot put a
-  // word inside it. That would be an explanation invisible exactly where the app
-  // is used — the v236 lesson, "Chromium is not the phone".
-  const logicField = el('div', { class: 'cp-field' }, [
-    el('label', { class: 'cp-label' }, t('calc.howItCalculates')),
-  ]);
-  const current = LOGICS.includes(r.logic) ? r.logic : 'orders';
-  LOGICS.forEach(l => {
-    const chosen = l === current;
-    const row = el('button', {
-      type: 'button',
-      class: 'cp-choice' + (chosen ? ' cp-choice--on' : ''),
-      'aria-pressed': String(chosen),
-    }, [
-      el('span', { class: 'cp-choice-name' }, t(LOGIC_LABELS[l])),
-      el('span', { class: 'cp-choice-why' }, t(`calc.logicHint.${l}`)),
-    ]);
-    row.addEventListener('click', () => {
-      if (r.logic === l) return;
-      r.logic = l;
-      markDirty();
-      renderEditor();
-    });
-    logicField.appendChild(row);
-  });
-  content.appendChild(logicField);
-
   // Ingredients.
   // Where this recipe's ingredients come from: its own list, or the Catalogue.
   content.appendChild(sourceBox(r));
 
-  const showLeaveningPicker = (r.logic === 'orders' || r.logic === 'both');
+  const showLeaveningPicker = usesOrders(r.logic);
   const linked = isLinked(r);
   const resolved = effectiveRecipe(r);
 
@@ -314,26 +447,6 @@ function renderRecipeDetail(ri) {
   if (showLeaveningPicker) {
     content.appendChild(leaveningBox(r));
   }
-
-  // Show as a calculator tab (≤4).
-  const visCb = el('input', { type: 'checkbox' });
-  visCb.checked = r.visible !== false;
-  visCb.addEventListener('change', () => {
-    if (visCb.checked && r.visible === false && visibleCount() >= MAX_VISIBLE_RECIPES) {
-      visCb.checked = false;
-      alertDialog('Only ' + MAX_VISIBLE_RECIPES + t('calc.recipesCanShowAs'));
-      return;
-    }
-    r.visible = visCb.checked;
-    markDirty();
-  });
-  content.appendChild(el('div', { class: 'cp-field' }, [
-    el('label', { class: 'cp-crate-label' }, [visCb, el('span', {}, t('calc.showAsACalculator') + MAX_VISIBLE_RECIPES + ')')]),
-  ]));
-
-  const save = el('button', { class: 'cp-save-bottom', type: 'button' }, t('ui.save'));
-  save.addEventListener('click', saveRecipes);
-  content.appendChild(save);
 }
 
 // One ingredient row: name (autocomplete) + grams + optional "leavening" radio + remove.

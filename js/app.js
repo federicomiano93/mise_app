@@ -5,7 +5,7 @@ import {
   restoreRevealed, clearRevealed, restoreLock, clearLock, getLock,
 } from './calc.js';
 import { saveDay, editTab, renderLog } from './log.js';
-import { openRecipes, closeRecipes, goHomeFromRecipes } from './recipes.js';
+import { openRecipes, closeRecipes, goHomeFromRecipes, saveRecipes } from './recipes.js';
 import { openSettings } from './calculator-settings.js';
 import './log-settings.js';
 import { shareMarketOrder, closeLoafModal, sendWithLoaves, closeListPicker, closeWhoPicker } from './whatsapp.js';
@@ -15,7 +15,7 @@ import { initLogs } from './log-store.js';
 import { renderTab, buildRecipePanel, buildEmptyPanel, el } from './calculator-render.js';
 import {
   getVisibleRecipes, getRecipeById, getTabProducts, isExtraDoughEnabled,
-  calculatorEmptyReason,
+  calculatorEmptyReason, showsClientOrdersButton, settledTraysText,
 } from './calculator-config.js';
 import { workDayIndex } from './log-model.js';
 import { confirmDialog } from './confirm-dialog.js';
@@ -261,7 +261,27 @@ function wireRecipe(recipe) {
     });
   }
 
-  // Typed total (total/both logic) — persisted like quantities.
+  // Number of trays (trays/traysTotal logic) — persisted, expired and reset exactly like the
+  // typed total below: the 'trays-' key is stamped by touchTab and dropped by forgetTabStorage.
+  const traysInput = document.getElementById(id + '-trays-input');
+  if (traysInput) {
+    const saved = localStorage.getItem('trays-' + id);
+    if (saved !== null) traysInput.value = settledTraysText(saved) ?? saved;
+    traysInput.addEventListener('input', () => { calc(id); localStorage.setItem('trays-' + id, traysInput.value); touchTab(id); });
+    wireNumberUX(traysInput, id);
+    // Whole trays only: a fraction is replaced by the whole number the maths used, so the box
+    // always says what was computed (`change` fires on blur and on Enter).
+    traysInput.addEventListener('change', () => {
+      const whole = settledTraysText(traysInput.value);
+      if (whole === null) return;
+      traysInput.value = whole;
+      calc(id);
+      localStorage.setItem('trays-' + id, whole);
+      touchTab(id);
+    });
+  }
+
+  // Typed total (total/both/traysTotal logic) — persisted like quantities.
   const totalInput = document.getElementById(id + '-total-input');
   if (totalInput) {
     const saved = localStorage.getItem('total-' + id);
@@ -303,6 +323,12 @@ function wireRecipe(recipe) {
 // config change.
 function renderAll() {
   const recipes = getVisibleRecipes(getConfig());
+
+  // The bottom-bar Orders button follows the venue-wide switch in Settings. Only the
+  // button: the banner above the tabs announcing a new client order is a different thing.
+  // The bar itself never empties (Dough history and Settings are always there).
+  const ordersBtn = document.getElementById('clientorders-footer-btn');
+  if (ordersBtn) ordersBtn.hidden = !showsClientOrdersButton(getConfig());
 
   // Tab bar.
   const bar = document.getElementById('tab-bar');
@@ -371,6 +397,7 @@ function forgetTabStorage(recipeId) {
   clearQty(recipeId);
   localStorage.removeItem('param-' + recipeId);
   localStorage.removeItem('total-' + recipeId);
+  localStorage.removeItem('trays-' + recipeId);
   localStorage.removeItem('extra-' + recipeId);
   localStorage.removeItem('extra-unit-' + recipeId);
   localStorage.removeItem('touched-' + recipeId);
@@ -441,6 +468,7 @@ document.getElementById('header-back-btn').addEventListener('click', () => {
 document.getElementById('log-footer-btn').addEventListener('click', () => switchTab('log'));
 document.getElementById('settings-footer-btn').addEventListener('click', openSettings);
 document.querySelector('.recipe-back-btn').addEventListener('click', closeRecipes);
+document.getElementById('recipe-save-btn').addEventListener('click', saveRecipes);
 document.getElementById('recipe-home-btn').addEventListener('click', goHomeFromRecipes);
 document.querySelector('.loaf-modal-cancel').addEventListener('click', closeLoafModal);
 document.querySelector('.loaf-modal-send').addEventListener('click', sendWithLoaves);

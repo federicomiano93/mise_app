@@ -64,32 +64,6 @@
 }
 
 /* ── from orders.css ── */
-.rec-host .btn-primary {
-  width: 100%;
-  padding: 15px;
-  margin-top: 16px;
-  background: var(--accent);
-  border: none;
-  border-radius: 14px;
-  font-family: 'Manrope', sans-serif;
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--on-brand);
-  cursor: pointer;
-}
-.rec-host .btn-primary {
-  transition: transform .06s ease;
-}
-.rec-host .btn-primary:active {
-  background: var(--brand-press);
-  box-shadow: none;
-  transform: scale(.97);
-}
-.rec-host .btn-primary:disabled {
-  opacity: 0.5;
-  cursor: default;
-  box-shadow: none;
-}
 .rec-host .btn-secondary {
   padding: 12px 18px;
   background: var(--surface2);
@@ -322,13 +296,6 @@
   display: flex;
   gap: 10px;
   margin-top: 6px;
-}
-.rec-host .mgmt-form-actions .btn-secondary {
-  flex: 1;
-}
-.rec-host .mgmt-form-actions .btn-primary {
-  flex: 2;
-  margin-top: 0;
 }
 .rec-host .mgmt-form-actions .mgmt-delete-btn {
   flex: 0 0 44px;

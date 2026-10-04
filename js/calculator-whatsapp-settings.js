@@ -19,7 +19,7 @@
 //   • Level 3  → add to the message: this client's own products, then everyone
 //                else's, then a box for a name that is in neither list
 //
-// PERSISTENCE MODEL: each item is saved from ITS OWN detail screen (a bottom Save).
+// PERSISTENCE MODEL: each item is saved from ITS OWN detail screen (the Save in the header).
 // The top screen has NO Save — it only lists items and deletes them, and a delete is
 // applied immediately (with confirmation). Leaving a detail with unsaved edits prompts
 // to discard. Returning to the top re-reads the saved config, so unsaved edits never
@@ -27,7 +27,7 @@
 // representative product id is stored). Names resolve live from the address book.
 
 import { t } from './i18n.js';
-import { getConfig, saveConfig } from './calculator-config-store.js';
+import { getConfig, saveConfigOrSay } from './calculator-config-store.js';
 import {
   cloneConfig, getClients, getClientById, getProductById, getAllProducts,
   getOrderPrefillWindow, ORDER_PREFILL_WINDOWS, orderPrefillLabel,
@@ -35,6 +35,10 @@ import {
 import { el } from './calculator-render.js';
 import { icon } from './calculator-icons.js';
 import { confirmDialog, alertDialog } from './confirm-dialog.js';
+import { createSaveGuard } from './save-guard.js';
+
+// While the write is in flight the header Save is disabled and Back / Home wait (js/save-guard.js).
+const saveGuard = createSaveGuard(() => document.getElementById('wa-save-btn'));
 
 let working = null;          // deep copy being edited (re-synced from live at the top)
 let activeList = null;       // null = top screen, else the edited list's index
@@ -66,7 +70,7 @@ function waTitle() { return document.querySelector('#wa-overlay .recipe-overlay-
 // accidental exit mid-edit), matching the Clients editor.
 function setHomeVisible(visible) {
   const btn = document.getElementById('wa-home-btn');
-  if (btn) btn.style.display = visible ? '' : 'none';
+  if (btn) btn.hidden = !visible;
 }
 
 function markDirty() { dirty = true; }
@@ -110,6 +114,7 @@ export function openWhatsapp() {
 // copy); leaving a detail to the top prompts to discard unsaved edits; from the top
 // it exits the overlay (nothing is pending there — the top re-reads the saved config).
 async function backWhatsapp() {
+  if (saveGuard.saving) return;
   const discardOk = () => confirmDialog({ message: t('calc.discardUnsavedChanges'), okLabel: t('ui.discard'), danger: true, cancelLabel: t('ui.cancel') });
   if (activeDirect !== null) {
     if (addingProduct) { addingProduct = false; renderEditor(); return; }
@@ -134,10 +139,12 @@ async function backWhatsapp() {
   hide('wa-overlay');
 }
 
-function goHome() { window.location.href = 'index.html'; }
+function goHome() { if (saveGuard.saving) return; window.location.href = 'index.html'; }
 
 // ── Render dispatch ────────────────────────────────────────────────────────────
 function renderEditor() {
+  // The header Save belongs to the three detail levels only; each of them turns it on.
+  setSaveVisible(false);
   if (activeDirect !== null) {
     if (addingProduct) { renderProductPicker(); return; }
     renderDirectDetail();
@@ -150,10 +157,9 @@ function renderEditor() {
   renderEntryDetail();
 }
 
-function saveBottomButton() {
-  const btn = el('button', { class: 'cp-save-bottom', type: 'button' }, t('ui.save'));
-  btn.addEventListener('click', saveDetail);
-  return btn;
+function setSaveVisible(visible) {
+  const btn = document.getElementById('wa-save-btn');
+  if (btn) btn.hidden = !visible;
 }
 
 function deleteIcon(label, onDelete) {
@@ -164,7 +170,9 @@ function deleteIcon(label, onDelete) {
 
 // Save the currently-edited top-level item (a list or a direct client). The name is
 // required; on success the whole config is persisted and we return to the top screen.
-async function saveDetail() {
+function saveDetail() { return saveGuard.run(doSaveDetail); }
+
+async function doSaveDetail() {
   if (activeDirect !== null) {
     if (isBlank(directClients()[activeDirect].name)) {
       showErrors = true; renderEditor();
@@ -180,7 +188,7 @@ async function saveDetail() {
   }
   if (!(await confirmDialog({ message: t('calc.saveTheseChanges'), okLabel: t('ui.save'), cancelLabel: t('ui.cancel') }))) return;
   try {
-    await saveConfig(working);
+    if (!(await saveConfigOrSay(working))) return;
     showErrors = false;
     dirty = false;
     activeList = null;
@@ -254,12 +262,10 @@ function renderTopScreen() {
 // reason as the Orders "Show stock" toggle: nothing is lost by getting it wrong, the
 // numbers are still shown before anything is sent, and one more tap undoes it.
 //
-// ⚠️ THE BOX IS NEVER PUT BACK ON A FAILED SYNC, and that is deliberate. saveConfig
-// is LOCAL-FIRST: it applies the change to memory and the cache before it sends
-// anything, and it never rejects — it resolves saying whether the write reached
-// Firestore. Reverting the box would therefore make the screen disagree with the
-// setting the app is actually using. What is owed instead is the truth: the change
-// works on this phone, and has not reached the others yet.
+// ⚠️ THE BOX IS PUT BACK ON A FAILED SAVE. saveConfig applies the change to memory first,
+// but when the write does not reach Firestore it takes the app back to what the server
+// has (nothing would ever re-send it), so the box goes back with it and the person is
+// told «not saved» — see saveConfigOrSay.
 function buildPrefillWindowField() {
   const sel = el('select', { class: 'extra-unit-select', 'aria-label': t('calc.fillTheOrderFrom') });
   ORDER_PREFILL_WINDOWS.forEach(w => sel.appendChild(el('option', { value: w }, orderPrefillLabel(w))));
@@ -271,13 +277,9 @@ function buildPrefillWindowField() {
     sel.disabled = true;
     const cfg = cloneConfig(getConfig());
     cfg.orderPrefillWindow = wanted;
-    const result = await saveConfig(cfg);
+    const before = getOrderPrefillWindow(getConfig());
+    await saveConfigOrSay(cfg, { onFail: () => { sel.value = before; } });
     sel.disabled = false;
-    // 'no-server-answer' has already explained itself inside saveConfig; saying it
-    // twice would be noise.
-    if (result && result.synced === false && result.reason === 'write-failed') {
-      await alertDialog(t('calc.savedNotSent'));
-    }
   });
 
   const row = el('label', { class: 'extra-toggle-row' }, [el('span', {}, t('calc.fillTheOrderFrom'))]);
@@ -305,13 +307,15 @@ function topRow(label, onOpen, delLabel, onDelete) {
 async function deleteList(li) {
   if (!(await confirmDialog({ message: t('calc.deleteThisList'), okLabel: t('ui.delete'), danger: true, cancelLabel: t('ui.cancel') }))) return;
   lists().splice(li, 1);
-  saveConfig(working);
+  // On a refused save the app is back on the server's copy and the top screen re-reads it,
+  // so the deleted list reappears — after the message says it was not deleted.
+  await saveConfigOrSay(working);
   renderEditor();
 }
 async function deleteDirect(di) {
   if (!(await confirmDialog({ message: t('calc.deleteThisClient'), okLabel: t('ui.delete'), danger: true, cancelLabel: t('ui.cancel') }))) return;
   directClients().splice(di, 1);
-  saveConfig(working);
+  await saveConfigOrSay(working);
   renderEditor();
 }
 
@@ -344,7 +348,7 @@ function renderListDetail() {
   addClient.addEventListener('click', () => { choosingClient = true; renderEditor(); });
   content.appendChild(addClient);
 
-  content.appendChild(saveBottomButton());
+  setSaveVisible(true);
 }
 
 // One client-entry card: the client's name (from the address book), a summary of its
@@ -461,7 +465,7 @@ function freeLinesField(target) {
     const input = el('input', {
       class: 'cp-client-name', type: 'text', value: line.name || '',
       placeholder: t('calc.eGLoavesOf'),
-      'aria-label': t('calc.extraLine') + (i + 1),
+      'aria-label': t('calc.extraLineN', { i: i + 1 }),
     });
     // ⚠️ The id is NOT recomputed as the name is typed. It keys the quantity box in
     // the order modal, so changing it mid-edit would move somebody's typed number to
@@ -484,14 +488,14 @@ function renderEntryDetail() {
   const entry = lists()[activeList].clients[activeEntry];
   if (!Array.isArray(entry.products)) entry.products = [];
   const client = getClientById(getConfig(), entry.clientId);
-  waTitle().textContent = client ? (client.name || 'Client') : 'Client';
+  waTitle().textContent = client ? (client.name || t('calc.unnamedClient')) : t('calc.unknownClient');
   setHomeVisible(false);
   const content = document.getElementById('wa-content');
   content.textContent = '';
   content.appendChild(productsField(entry));
   content.appendChild(addProductButton());
   content.appendChild(freeLinesField(entry));
-  content.appendChild(saveBottomButton());
+  setSaveVisible(true);
 }
 
 function renderDirectDetail() {
@@ -513,7 +517,7 @@ function renderDirectDetail() {
   content.appendChild(productsField(dc));
   content.appendChild(addProductButton());
   content.appendChild(freeLinesField(dc));
-  content.appendChild(saveBottomButton());
+  setSaveVisible(true);
 }
 
 // One added-product row: the product name and a small remove icon. Removing a single
@@ -665,4 +669,5 @@ function byHandField(target, added) {
 
 // ── Static wiring (elements exist in calculator.html) ──────────────────────────
 document.querySelector('.wa-back-btn').addEventListener('click', backWhatsapp);
+document.getElementById('wa-save-btn').addEventListener('click', saveDetail);
 document.getElementById('wa-home-btn').addEventListener('click', goHome);

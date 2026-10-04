@@ -67,8 +67,8 @@ function dayLabel(iso) {
   const days = Math.round(
     (date - new Date(today.getFullYear(), today.getMonth(), today.getDate())) / 86400000);
   const full = date.toLocaleDateString(localeTag(), { weekday: 'long', day: 'numeric', month: 'long' });
-  if (days === 0) return `Today · ${full}`;
-  if (days === 1) return `Tomorrow · ${full}`;
+  if (days === 0) return t('calc.co.whenToday', { date: full });
+  if (days === 1) return t('calc.co.whenTomorrow', { date: full });
   return full;
 }
 
@@ -268,7 +268,7 @@ function historyCard(order) {
   const card = el('div', { class: 'co-card co-card--past' }, [
     el('div', { class: 'co-card-head' }, [
       el('span', { class: 'co-card-client' },
-        (client && client.name) || order.clientName || 'Client'),
+        (client && client.name) || order.clientName || t('calc.clientFallback')),
       el('span', { class: 'co-card-when' }, linesLabel(order)),
     ]),
   ]);
@@ -322,11 +322,11 @@ function orderCard(order) {
 
   const card = el('div', { class: `co-card${changed ? ' co-card--changed' : ''}${used ? ' co-card--used' : ''}` }, [
     el('div', { class: 'co-card-head' }, [
-      el('span', { class: 'co-card-client' }, (client && client.name) || order.clientName || 'Client'),
+      el('span', { class: 'co-card-client' }, (client && client.name) || order.clientName || t('calc.clientFallback')),
       el('span', { class: 'co-card-when' }, dayLabel(order.date)),
     ]),
     el('p', { class: 'co-card-arrived' },
-      `Sent ${arrivedLabel(order)}${used ? ' · already in the calculator' : ''}`),
+      t(used ? 'calc.co.sentUsed' : 'calc.co.sent', { when: arrivedLabel(order) })),
   ]);
 
   // ⚠️ A LATE ARRIVAL IS SHOWN, NOT REFUSED. The security rules keep only a coarse
@@ -490,8 +490,10 @@ function renderCutoffSettings() {
       t('calc.cutoff.empty')),
   ]));
 
-  const save = el('button', { class: 'cp-add-prod', type: 'button' }, t('ui.save'));
-  save.addEventListener('click', async () => {
+  // The Save lives in the header (static in calculator.html). The screen is redrawn
+  // on every open, and a property handler replaces the old one instead of stacking.
+  const save = document.getElementById('cosettings-save-btn');
+  save.onclick = async () => {
     const wanted = normalizeCutoff(input.value);
     if (input.value && !CUTOFF_PATTERN.test(input.value)) {
       await alertDialog(t('calc.thatIsNotA'));
@@ -513,8 +515,7 @@ function renderCutoffSettings() {
       await alertDialog(t('calc.notSavedCheckYour'));
     }
     save.disabled = false;
-  });
-  content.appendChild(save);
+  };
 }
 
 export function initClientOrders(injected) {

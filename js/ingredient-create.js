@@ -63,7 +63,8 @@ function ingredientList(ingredients) {
 // styles to, so they reach these cards and nothing else on the page. Hosted in Orders'
 // `.mgmt-overlay` the header wears Orders' classes (the ones registry.js overlay() draws), so
 // the card looks like every other level of «Fornitori e ingredienti».
-function layer({ title, body, onBack, layerClass }) {
+// `action` is the card's ONE Save, the header pill the form hands up as `form.headerSave`.
+function layer({ title, body, onBack, layerClass, action = null }) {
   const orders = layerClass.split(' ').includes('mgmt-overlay');
   const node = el('div', {
     class: layerClass, role: 'dialog', 'aria-modal': 'true', 'aria-label': title,
@@ -76,7 +77,7 @@ function layer({ title, body, onBack, layerClass }) {
         }),
       ]),
       el('div', { class: orders ? 'app-header-title orders-header-title' : 'app-header-title' }, [el('h1', { text: title })]),
-      el('span', { class: 'app-header-slot' }),
+      el('span', { class: 'app-header-slot' }, action ? [action] : []),
     ]),
     el('div', { class: 'mgmt-scroll' }, [body]),
   ]);
@@ -95,26 +96,34 @@ function createSupplier(layers, layerClass) {
       if (at >= 0) layers.splice(at, 1);
       resolve(value);
     };
+    const form = buildSupplierForm({
+      item: null,
+      save: saveSupplierRecord,
+      onDone: saved => close(saved),
+    });
+    // P20: Back with typing asks first, like every other level here. It used to close at
+    // once — and so did the Cancel beside Save — losing a half-typed supplier silently.
+    let snapshot = null;
     node = layer({
       layerClass,
       title: t('orders.newSupplier'),
-      onBack: () => close(null),
-      body: buildSupplierForm({
-        item: null,
-        save: saveSupplierRecord,
-        onDone: saved => close(saved),
-        onCancel: () => close(null),
-      }),
+      onBack: async () => {
+        if (typedInto(snapshot, node) && !(await confirmDiscard())) return;
+        close(null);
+      },
+      body: form,
+      action: form.headerSave,
     });
+    snapshot = snapshotFields(form);
     layers.push(node);
   });
 }
 
-// P20: Back or Cancel never throws typing away without asking — the same question, and the same
+// P20: Back never throws typing away without asking — the same question, and the same
 // snapshot helper, registry.js uses. A save in flight is typing being saved, so it is not
-// «unsaved» (the Save button is disabled while it runs).
+// «unsaved» (the header Save is disabled while it runs).
 function typedInto(snapshot, layerNode) {
-  if (!snapshot || layerNode?.querySelector('.mgmt-form .btn-primary:disabled')) return false;
+  if (!snapshot || layerNode?.querySelector('.app-header-save:disabled')) return false;
   return snapshotChanged(snapshot);
 }
 
@@ -153,7 +162,7 @@ export function openIngredientCreate({
     const location = currentSession().location;
     const language = outputLanguage(location);
     const known = ingredientList(ingredients);
-    // Assigned below, once the layer exists; both Back and Cancel only run after that.
+    // Assigned below, once the layer exists; Back only runs after that.
     let snapshot = null;
     let cardLayer = null;
     const leave = async () => {
@@ -191,7 +200,6 @@ export function openIngredientCreate({
         createSupplier: () => createSupplier(layers, layerClass),
       },
       onDone: finish,
-      onCancel: leave,
     });
 
     cardLayer = layer({
@@ -199,6 +207,7 @@ export function openIngredientCreate({
       title: t('orders.newIngredient'),
       body: form,
       onBack: leave,
+      action: form.headerSave,
     });
     layers.push(cardLayer);
     // Taken once the form is in place, to tell «typed into» from «just opened».
@@ -290,7 +299,6 @@ export async function openIngredientEdit({
         ...(typeof actions.deleteIngredient === 'function' ? { deleteIngredient: actions.deleteIngredient } : {}),
       },
       onDone: finish,
-      onCancel: leave,
     });
 
     cardLayer = layer({
@@ -298,6 +306,7 @@ export async function openIngredientEdit({
       title: isPackaging(stored) ? t('orders.editPackaging') : t('orders.editIngredient'),
       body: form,
       onBack: leave,
+      action: form.headerSave,
     });
     layers.push(cardLayer);
     snapshot = snapshotFields(form);

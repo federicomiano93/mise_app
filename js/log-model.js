@@ -40,7 +40,9 @@
 
 import { t } from './i18n.js';
 import { scaleRecipe } from './calculator-dough-math.js';
-import { recipeSpec } from './calculator-config.js';
+import {
+  recipeSpec, usesTrays, isProRata, normalizeTrays, normalizeTrayWeight, traysGrams,
+} from './calculator-config.js';
 
 export const FOR_DAYS = ['today', 'tomorrow'];
 
@@ -65,24 +67,31 @@ function safeForDay(d) { return FOR_DAYS.includes(d) ? d : 'today'; }
 // `recipe` is the CONFIG recipe (id, name, logic, ingredients[{key,label,grams}],
 // leaveningKey, leaveningDefaultPct, baselinePct). The target is computed by the
 // recipe's logic (orders → items + extra; total → typed total; both → items + total
-// + extra), then the recipe is scaled to it with the unified scaleRecipe — so the
+// + extra; trays → trays × tray weight; traysTotal → that + typed total), then the recipe is scaled to it with the unified scaleRecipe — so the
 // stored sheet is faithful and independent of any later config change.
 //   items:   [{ id, name, clientName, qty, weightG, kind, crate }]
 //   divisor: { includedIds: [...], n: 0..4 }  (optional, display-only crate split)
-export function buildSheet({ recipe, items, extraGrams = 0, totalInput = 0, leaveningPct, divisor }) {
+//   trays:   whole trays for the 'trays' / 'traysTotal' logics; the tray weight is the
+//            recipe's own, and BOTH are stored on the sheet (`trays`, `trayWeight_g`) so the
+//            log keeps what it was made with even if the recipe's tray weight changes later.
+export function buildSheet({ recipe, items, extraGrams = 0, totalInput = 0, trays = 0, leaveningPct, divisor }) {
   const lines = Array.isArray(items) ? items : [];
   const productsTotal = lines.reduce((s, it) => s + num(it.qty) * num(it.weightG), 0);
   const extra = Math.max(0, num(extraGrams));
   const typed = Math.max(0, num(totalInput));
   const logic = (recipe && recipe.logic) || 'orders';
+  const trayCount = usesTrays(logic) ? normalizeTrays(trays) : 0;
+  const trayWeight = normalizeTrayWeight(recipe && recipe.trayWeight);
   const total = logic === 'total' ? typed
+    : logic === 'trays' ? traysGrams(recipe, trayCount)
+    : logic === 'traysTotal' ? traysGrams(recipe, trayCount) + typed
     : logic === 'both' ? (productsTotal + typed + extra)
     : (productsTotal + extra);
 
   const recipeIngs = (recipe && Array.isArray(recipe.ingredients)) ? recipe.ingredients : [];
   const pct = Number.isFinite(Number(leaveningPct)) ? Number(leaveningPct) : (recipe ? num(recipe.leaveningDefaultPct) : 0);
   const spec = recipeSpec(recipe || {});
-  if (logic === 'total') spec.leaveningKey = null; // pure pro-rata
+  if (isProRata(logic)) spec.leaveningKey = null; // pure pro-rata
   let amounts = [];
   if (total > 0 && recipeIngs.length) amounts = scaleRecipe(spec, total, pct);
   const ingredients = recipeIngs.map((ing, i) => ({ name: ing.label, grams: Math.round(num(amounts[i])) }));
@@ -117,16 +126,59 @@ export function buildSheet({ recipe, items, extraGrams = 0, totalInput = 0, leav
     crates.push({ name: it.name, count: Math.round((qty / perBox) * 10) / 10, eachBoxG: Math.round(perBox * num(it.weightG)) });
   }
 
-  return {
+  const sheet = {
     dough: recipe ? safeDough(recipe.name) : 'Recipe',
     recipeId: recipe ? recipe.id : '',
     param: paramOut,
     total_g: Math.round(total),
     extra_g: Math.round(extra),
+    // The typed part of the target, kept so an edit can read it back exactly.
+    // Only for the logics that use a typed total.
+    ...(logic === 'total' || logic === 'both' ? { typed_g: Math.round(typed) } : {}),
     ingredients,
     divisor: divisorOut,
     crates,
   };
+  // Only a trays dough carries these; a sheet saved with another logic stays as it was.
+  if (usesTrays(logic)) { sheet.trays = trayCount; sheet.trayWeight_g = trayWeight; }
+  return sheet;
+}
+
+// What the edit screen starts from for a trays dough: the trays and the weight of a tray the
+// log was MADE with (the sheet's, falling back to the frozen recipe's), and for «trays + total»
+// the grams typed on top. The recipe's CURRENT tray weight never enters: re-weighing a tray
+// later must not rewrite an old log.
+export function traysEditState(sheet, recipe) {
+  const s = sheet || {};
+  const trayWeight = normalizeTrayWeight(s.trayWeight_g || (recipe && recipe.trayWeight));
+  const trays = normalizeTrays(s.trays);
+  const typedTotal = recipe && recipe.logic === 'traysTotal' ? Math.max(0, num(s.total_g) - trays * trayWeight) : 0;
+  return { trays, trayWeight, typedTotal };
+}
+
+// The recipe to rebuild an edited sheet with: a trays recipe carries the tray weight the log
+// was made with; any other recipe is passed through as it is.
+export function traysSheetRecipe(recipe, trayWeight) {
+  return recipe && usesTrays(recipe.logic) ? { ...recipe, trayWeight } : recipe;
+}
+
+// The typed total a saved version was made with, for a re-calculation (an edit
+// changes quantities only and must keep this part). New sheets carry typed_g. The
+// derivation below exists ONLY for 'both' sheets saved before typed_g: the typed part
+// is what is left of total_g after the product lines (occasional ones included) and
+// the extra. For 'total' the sheet's total_g IS the typed amount.
+export function typedTotalOf(recipe, version) {
+  const logic = (recipe && recipe.logic) || 'orders';
+  const sheet = (version && version.sheet) || null;
+  if (!sheet || (logic !== 'total' && logic !== 'both')) return 0;
+  if (logic === 'total') return Math.max(0, num(sheet.total_g));
+  if (Number.isFinite(Number(sheet.typed_g)) && sheet.typed_g !== null && sheet.typed_g !== '') return Math.max(0, num(sheet.typed_g));
+  let products = 0;
+  for (const it of (version.items || [])) products += num(it.qty) * num(it.weightG);
+  for (const o of (version.occasional || [])) {
+    for (const p of (o.products || [])) products += num(p.qty) * num(p.weightG);
+  }
+  return Math.max(0, Math.round(num(sheet.total_g) - products - num(sheet.extra_g)));
 }
 
 // Human-readable grouped text (client header + indented product lines + extra),
@@ -171,6 +223,8 @@ export function recipeSnapshot(recipe) {
     id: String(recipe.id || ''),
     name: safeDough(recipe.name),
     logic: recipe.logic || 'orders',
+    // Only a trays recipe has a tray weight worth freezing; the other snapshots keep their shape.
+    ...(usesTrays(recipe.logic) ? { trayWeight: normalizeTrayWeight(recipe.trayWeight) } : {}),
     ingredients: (Array.isArray(recipe.ingredients) ? recipe.ingredients : [])
       .map(ing => ({ key: String(ing.key || ''), label: String(ing.label || ''), grams: num(ing.grams) })),
     leaveningKey: recipe.leaveningKey || null,
@@ -420,7 +474,7 @@ export function dayLabel(log, nowMs) {
   // today read "Today" — and whoever picked up the log believed it had just been made.
   const text = made === target
     ? dayName(made)
-    : dayName(made) + ' for ' + dayName(target).toLowerCase();
+    : t('day.madeFor', { made: dayName(made), target: dayName(target, true) });
 
   // The colour still follows the day the dough is FOR: it answers "do I need this
   // now?", while the words tell the story. A dough for today stays green even when it

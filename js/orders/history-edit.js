@@ -99,7 +99,7 @@ export function buildHistoryEditor(record, ingredients, actions) {
   ]);
 
   const saveBtn = el('button', {
-    type: 'button', class: 'app-icon-btn orders-icon-btn hist-edit-save', 'aria-label': t('ui.save'), onClick: save,
+    type: 'button', class: 'app-header-save', onClick: save,
   }, t('ui.save'));
 
   // Opened only from History, so it carries .over-history (see orders.css).

@@ -161,20 +161,22 @@ function openMissingPickerScreen(entry, ctx, done) {
       el('div', { class: 'app-header-title orders-header-title' }, [
         el('h1', { text: t('orders.deliveries.whatArrived') }),
       ]),
-      el('span', { class: 'app-header-slot' }),
+      // The screen's ONE Save, in the green header (4 Oct 2026). The tap removes the overlay first,
+      // so a second tap has nothing left to press.
+      el('span', { class: 'app-header-slot' }, [
+        el('button', {
+          class: 'app-header-save', type: 'button', text: t('ui.save'),
+          onclick: async () => {
+            overlay.remove();
+            await confirm(entry, [...missing], ctx);
+            done(true);
+          },
+        }),
+      ]),
     ]),
     el('div', { class: 'scroll-area' }, [
       el('p', { class: 'missing-hint', text: t('orders.deliveries.untickHint') }),
       list,
-      el('button', {
-        class: 'btn-primary missing-save', type: 'button',
-        text: t('orders.deliveries.saveArrival'),
-        onclick: async () => {
-          overlay.remove();
-          await confirm(entry, [...missing], ctx);
-          done(true);
-        },
-      }),
     ]),
   ]);
 

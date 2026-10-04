@@ -85,7 +85,7 @@ function openList(config, list) {
     return;
   }
   selectedEntries = entries;
-  selectedTitle = list.title || 'Order';
+  selectedTitle = list.title || t('calc.orderFallback');
   openOrderModal();
 }
 
@@ -94,7 +94,7 @@ function openList(config, list) {
 function openDirect(config, dc) {
   const resolved = resolveDirectClient(config, dc);
   selectedEntries = [{ client: { name: resolved.name }, products: resolved.products }];
-  selectedTitle = resolved.name || 'Order';
+  selectedTitle = resolved.name || t('calc.orderFallback');
   openOrderModal();
 }
 
@@ -143,7 +143,7 @@ function openOrderModal() {
 // Rebuild the modal body (one section per client entry, one row per chosen
 // product) from the resolved list. CSP-safe DOM building, no innerHTML.
 function renderOrderModal() {
-  document.getElementById('loaf-modal-title').textContent = selectedTitle || 'Order';
+  document.getElementById('loaf-modal-title').textContent = selectedTitle || t('calc.orderFallback');
   const body = document.getElementById('loaf-order-body');
   body.textContent = '';
 

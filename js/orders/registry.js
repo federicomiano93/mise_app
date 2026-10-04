@@ -432,15 +432,13 @@ export function buildRegistry(data, actions, hooks = {}) {
   function openSupplierForm(item, { onSaved = null, onClosed = null } = {}) {
     push((entry) => {
       const close = () => { popEntry(entry); onClosed?.(); };
-      const body = el('div', { class: 'mgmt-scroll' }, [
-        buildSupplierForm({
-          item,
-          save: actions.saveSupplier,
-          onDone: (saved) => { popAfterSave(entry); onSaved?.(saved); },
-          onCancel: () => guardedLeave(entry, close),
-        }),
-      ]);
-      return overlay(entry, item ? t('orders.editSupplier') : t('orders.newSupplier'), body, close);
+      const form = buildSupplierForm({
+        item,
+        save: actions.saveSupplier,
+        onDone: (saved) => { popAfterSave(entry); onSaved?.(saved); },
+      });
+      const body = el('div', { class: 'mgmt-scroll' }, [form]);
+      return overlay(entry, item ? t('orders.editSupplier') : t('orders.newSupplier'), body, close, form.headerSave);
     });
   }
 
@@ -486,34 +484,32 @@ export function buildRegistry(data, actions, hooks = {}) {
 
   function showIngredientForm(item, presetSupplierId, presetKind = null) {
     push((entry) => {
-      const body = el('div', { class: 'mgmt-scroll' }, [
-        buildIngredientForm({
-          item,
-          suppliers: data.suppliers(),
-          preset: presetSupplierId,
-          presetKind,
-          // The menus' words, from the page's live data — the card imports no feature code.
-          categories: data.categories?.(item?.category) || [],
-          orderUnits: data.orderUnits?.(item?.unit) || [],
-          packs: data.packs?.(item?.packUnit) || [],
-          // ⚠️ DECIDED HERE AND HANDED IN, since the card moved to js/ root: whether the
-          // price is drawn (the role AND Food cost — see mayWritePrices) and which panels
-          // this venue uses. The card itself reads neither.
-          mayPrice: mayWritePrices(),
-          panels: ingredientPanels(),
-          // ⚠️ THE PHOTO SCREEN IS HANDED IN AS AN ACTION, not imported by the form.
-          // The form then knows nothing about overlays and this file stays the only
-          // one that navigates — the same seam saveIngredient and priceHistory use.
-          actions: { ...actions, capturePackPhoto, packPhotoOn: () => ingredientPanels().packPhoto, createSupplier },
-          onDone: () => popAfterSave(entry),
-          onCancel: () => guardedLeave(entry, () => popEntry(entry)),
-        }),
-      ]);
+      const form = buildIngredientForm({
+        item,
+        suppliers: data.suppliers(),
+        preset: presetSupplierId,
+        presetKind,
+        // The menus' words, from the page's live data — the card imports no feature code.
+        categories: data.categories?.(item?.category) || [],
+        orderUnits: data.orderUnits?.(item?.unit) || [],
+        packs: data.packs?.(item?.packUnit) || [],
+        // ⚠️ DECIDED HERE AND HANDED IN, since the card moved to js/ root: whether the
+        // price is drawn (the role AND Food cost — see mayWritePrices) and which panels
+        // this venue uses. The card itself reads neither.
+        mayPrice: mayWritePrices(),
+        panels: ingredientPanels(),
+        // ⚠️ THE PHOTO SCREEN IS HANDED IN AS AN ACTION, not imported by the form.
+        // The form then knows nothing about overlays and this file stays the only
+        // one that navigates — the same seam saveIngredient and priceHistory use.
+        actions: { ...actions, capturePackPhoto, packPhotoOn: () => ingredientPanels().packPhoto, createSupplier },
+        onDone: () => popAfterSave(entry),
+      });
+      const body = el('div', { class: 'mgmt-scroll' }, [form]);
       const packaging = item ? isPackaging(item) : presetKind === 'packaging';
       const title = packaging
         ? (item ? t('orders.editPackaging') : t('orders.newPackaging'))
         : (item ? t('orders.editIngredient') : t('orders.newIngredient'));
-      return overlay(entry, title, body);
+      return overlay(entry, title, body, undefined, form.headerSave);
     }, { selects: item ? `ingredient:${item.id}` : null });
   }
 
@@ -601,14 +597,16 @@ export function buildRegistry(data, actions, hooks = {}) {
   // the form it came from, and a Back that only popped would leave that promise pending
   // for ever — with the button that opened it disabled for the life of the form, and
   // nothing on screen saying why.
-  function overlay(entry, title, body, onBack = () => popEntry(entry)) {
+  // `headerAction` (optional) is the level's ONE Save, drawn in the header's right-hand slot: the record
+  // forms own the button (they disable it while a write runs) and hand it up as `form.headerSave`.
+  function overlay(entry, title, body, onBack = () => popEntry(entry), headerAction = null) {
     const node = el('div', { class: 'mgmt-overlay' }, [
       el('header', { class: 'app-header orders-header' }, [
         el('span', { class: 'app-header-slot' }, [
           el('button', { type: 'button', class: 'app-icon-btn orders-icon-btn', 'aria-label': t('ui.back'), icon: BACK_ICON, onClick: () => guardedLeave(entry, onBack) }),
         ]),
         el('div', { class: 'app-header-title orders-header-title' }, [el('h1', { text: title })]),
-        el('span', { class: 'app-header-slot' }),
+        el('span', { class: 'app-header-slot' }, headerAction ? [headerAction] : []),
       ]),
       body,
     ]);
@@ -747,11 +745,11 @@ export function buildRegistry(data, actions, hooks = {}) {
 
   // ⚠️ P20 — TYPED WORK IS NEVER LOST SILENTLY. True when any level of the pane holds a form
   // whose fields differ from what they held when it opened.
-  // ⚠️ EXCEPT A FORM WHOSE SAVE IS IN FLIGHT (its Save button is disabled while the write
+  // ⚠️ EXCEPT A FORM WHOSE SAVE IS IN FLIGHT (its Save button, in the level's header, is disabled while the write
   // runs): that typing IS being saved, so «not saved» would be a lie. Replacing it is safe;
   // its late answer closes only its own level (popEntry).
   function saveInFlight(entry) {
-    return !!entry.overlay?.querySelector('.mgmt-form .btn-primary:disabled');
+    return !!entry.overlay?.querySelector('.mgmt-form') && !!entry.overlay.querySelector('.app-header-save:disabled');
   }
 
   function entryDirty(entry) {

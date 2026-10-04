@@ -9,6 +9,7 @@ import { t } from './i18n.js';
 import { el } from './calculator-render.js';
 import { icon } from './calculator-icons.js';
 import { dayLabel } from './log-model.js';
+import { formatGrams } from './calculator-config.js';
 
 const num = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
 
@@ -32,7 +33,7 @@ function renderItems(version) {
   const order = [];
   for (const it of (version.items || [])) {
     if (num(it.qty) <= 0) continue;
-    const key = it.clientName || 'Client';
+    const key = it.clientName || t('calc.clientFallback');
     if (!groups.has(key)) { groups.set(key, []); order.push(key); }
     groups.get(key).push(it);
   }
@@ -49,6 +50,16 @@ function renderItems(version) {
     for (const p of prods) {
       wrap.appendChild(el('div', { class: 'log-item' }, [p.name + ': ', el('strong', {}, num(p.qty) + (p.unit === 'kg' ? ' kg' : ' pz'))]));
     }
+  }
+  // A trays dough: «5 trays × 1,000 g», and the grams typed by hand on top of them, if any.
+  const sh = version.sheet;
+  if (sh && num(sh.trayWeight_g) > 0 && sh.trays !== undefined) {
+    const trays = num(sh.trays);
+    wrap.appendChild(el('div', { class: 'log-item' }, [
+      el('strong', {}, t('calc.traysOfWeight', { n: trays, trays: formatGrams(trays), g: formatGrams(num(sh.trayWeight_g)) })),
+    ]));
+    const typed = num(sh.total_g) - trays * num(sh.trayWeight_g);
+    if (typed > 0) wrap.appendChild(el('div', { class: 'log-item' }, t('calc.traysTypedPart', { g: formatGrams(typed) })));
   }
   if (version.sheet && num(version.sheet.extra_g) > 0) {
     wrap.appendChild(el('div', { class: 'log-item' }, t('calc.extraDough') + num(version.sheet.extra_g) + ' g'));
@@ -77,8 +88,8 @@ export function renderSheetCard(sheet) {
 
   const children = [
     el('div', { class: 'result-header' }, [
-      el('h3', {}, sheet.dough + ' dough'),
-      el('span', { class: 'result-badge' }, num(sheet.total_g) + ' g raw'),
+      el('h3', {}, t('calc.doughTitle', { name: sheet.dough })),
+      el('span', { class: 'result-badge' }, t('calc.gramsRaw', { g: num(sheet.total_g) })),
     ]),
     el('div', {}, rows),
     el('div', { class: 'ing-separator' }),
@@ -108,9 +119,9 @@ export function renderSheetCard(sheet) {
       el('div', { class: 'crate-box-title' }, c.name),
       el('div', { class: 'crate-count' }, [
         el('span', { class: 'crate-count-val' }, String(num(c.count))),
-        el('span', { class: 'crate-count-unit' }, ' box'),
+        el('span', { class: 'crate-count-unit' }, ' ' + t('calc.crateUnit', { n: num(c.count) })),
       ]),
-      el('div', { class: 'crate-sub' }, num(c.eachBoxG) + 'g each box'),
+      el('div', { class: 'crate-sub' }, t('calc.gramsEachBox', { g: num(c.eachBoxG) })),
     ]));
   }
 
@@ -125,7 +136,7 @@ export function renderVersion(version, log) {
   const day = dayLabel(log, Date.now());
 
   frag.appendChild(el('div', { class: 'logview-head' }, [
-    el('span', { class: 'logview-dough' }, log ? log.dough : (v.sheet ? v.sheet.dough : t('ui.log'))),
+    el('span', { class: 'logview-dough' }, log ? log.dough : (v.sheet ? v.sheet.dough : t('ui.doughFallback'))),
     el('span', { class: 'logday-badge ' + day.tone }, day.text),
   ]));
   const at = v.at || {};

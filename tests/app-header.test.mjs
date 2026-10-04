@@ -155,7 +155,7 @@ test('no feature stylesheet redefines the shape or colour of its own header', ()
   assert.deepEqual(offenders, []);
 });
 
-test('the round buttons in the Calculator overlay bars carry the shared class', () => {
+test('the round buttons in the Calculator overlay bars carry the shared class (the Save pill is the other shared one)', () => {
   const calculator = read('calculator.html').replace(/<!--[\s\S]*?-->/g, '');
   const bars = calculator.split('class="recipe-overlay-header"').slice(1);
   assert.ok(bars.length >= 13, `only ${bars.length} overlay bars found`);
@@ -163,7 +163,8 @@ test('the round buttons in the Calculator overlay bars carry the shared class', 
   for (const bar of bars) {
     const body = bar.slice(0, bar.indexOf('</div>'));
     for (const m of body.matchAll(/<(button|a)\s[^>]*class="([^"]*)"/g)) {
-      if (!m[2].split(/\s+/).includes('app-icon-btn')) bare.push(m[2]);
+      const classes = m[2].split(/\s+/);
+      if (!classes.includes('app-icon-btn') && !classes.includes('app-header-save')) bare.push(m[2]);
     }
   }
   assert.deepEqual(bare, []);

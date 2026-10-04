@@ -327,21 +327,9 @@ select.fc-input, .fc-select {
 .fc-footer-btn:focus-visible { outline: 2px solid var(--fc-accent); outline-offset: 2px; }
 .fc-footer-btn[hidden] { display: none; }
 
-/* ── Actions. Save is prominent, Delete is low-key (P20). ─────────────────── */
+/* ── Actions. Save is in the green header (.app-header-save); what is left here — the
+   margin history and Delete — is low-key (P20). ───────────────────────────── */
 .fc-actions { display: flex; flex-direction: column; gap: 10px; margin-top: 18px; }
-.fc-save {
-  width: 100%;
-  min-height: 48px;
-  border: 0;
-  border-radius: var(--fc-radius);
-  background: var(--fc-brand);
-  color: var(--fc-brand-ink);
-  font-family: var(--fc-font);
-  font-size: 1rem;
-  font-weight: 600;
-  cursor: pointer;
-}
-.fc-save:active { transform: scale(.97); }
 .fc-link {
   align-self: center;
   border: 0;

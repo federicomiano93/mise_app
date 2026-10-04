@@ -7,7 +7,7 @@ import { showResult, hideResult, markRevealed, clearRevealed, getLock, setLock }
 import { getConfig } from './calculator-config-store.js';
 import {
   getTabProducts, getDivisorIncluded, isExtraDoughEnabled, doughExtraGrams,
-  isLogVisible, getLogRetentionForDough, getRecipes, getRecipeById, showsLeaveningKnob,
+  isLogVisible, getLogRetentionForDough, getRecipes, getRecipeById, showsLeaveningKnob, normalizeTrays,
 } from './calculator-config.js';
 import { logTimestamp } from './log-time.js';
 import { el } from './calculator-render.js';
@@ -17,7 +17,8 @@ import { getLogs, getLogById, createAndSave, appendAndSave, genLogId, deleteLog 
 import { renderOrder, renderVersion } from './log-view.js';
 import { openLogEdit, openLogHistory } from './log-edit.js';
 import { openLogAdd } from './log-add.js';
-import { confirmDialog } from './confirm-dialog.js';
+import { confirmDialog, alertDialog } from './confirm-dialog.js';
+import { recipeToSave } from './calculator-catalogue-link.js';
 
 function qtyOf(id) { const e = document.getElementById(id); return e ? (+e.value || 0) : 0; }
 
@@ -30,10 +31,16 @@ function leaveningPctFor(recipe) {
   return recipe.leaveningDefaultPct || 0;
 }
 
-// The typed total (grams) for a 'total'/'both' recipe; 0 when the field is absent.
+// The typed total (grams) for a 'total'/'both'/'traysTotal' recipe; 0 when the field is absent.
 function totalInputFor(recipeId) {
   const e = document.getElementById(recipeId + '-total-input');
   return e ? Math.max(0, +e.value || 0) : 0;
+}
+
+// The typed number of trays for a trays recipe (whole trays); 0 when the field is absent.
+function traysFor(recipeId) {
+  const e = document.getElementById(recipeId + '-trays-input');
+  return e ? normalizeTrays(e.value) : 0;
 }
 
 // ── Gather the current calculator state for a dough tab ───────────────────────
@@ -87,8 +94,13 @@ function commitLog() {
   const tab = pendingTab;
   if (!tab || !pendingDay) return;
   const config = getConfig();
-  const recipe = getRecipeById(config, tab);
-  if (!recipe) return;
+  const tabRecipe = getRecipeById(config, tab);
+  if (!tabRecipe) return;
+  // The dough is saved from what the screen shows (a linked tab's Catalogue
+  // ingredients), and refused when the screen refuses — never a sheet of zeros.
+  const toSave = recipeToSave(tabRecipe);
+  if (!toSave.recipe) { alertDialog(toSave.problem); pendingTab = null; pendingDay = null; return; }
+  const recipe = toSave.recipe;
   const items = gatherItems(tab);
   const extra = gatherExtra(tab);
   const leaveningPct = leaveningPctFor(recipe);
@@ -96,7 +108,7 @@ function commitLog() {
   const divEl = document.getElementById(tab + '-divisor-div');
   const divisor = { includedIds: getDivisorIncluded(config, tab), n: divEl ? (+divEl.value || 0) : 0 };
   const at = logTimestamp();
-  const sheet = buildSheet({ recipe, items, extraGrams: extra.grams, totalInput, leaveningPct, divisor });
+  const sheet = buildSheet({ recipe, items, extraGrams: extra.grams, totalInput, trays: traysFor(tab), leaveningPct, divisor });
   const text = buildLogText(items, [], extra);
 
   // Update the linked log, or create a fresh one. The link is dropped only by Reset;
@@ -169,7 +181,7 @@ function logCard(log) {
   ]));
   const at = v.at || {};
   body.appendChild(el('div', { class: 'log-timestamp' }, [icon('calendar', 14), ' ' + (at.date || '') + ' — ' + (at.time || '')]));
-  if (v.calculatedBy) body.appendChild(el('div', { class: 'logview-by' }, 'by ' + v.calculatedBy));
+  if (v.calculatedBy) body.appendChild(el('div', { class: 'logview-by' }, t('calc.byName', { name: v.calculatedBy })));
   if ((log.versions || []).length > 1) body.appendChild(el('div', { class: 'log-ver-count' }, 'v' + log.versions.length + t('calc.edited')));
   body.appendChild(renderOrder(v));
   card.appendChild(body);
@@ -195,7 +207,7 @@ function openLogView(id) {
   if (!log) return;
   const c = document.getElementById('logview-content');
   c.textContent = '';
-  document.getElementById('logview-title').textContent = log.dough + ' log';
+  document.getElementById('logview-title').textContent = log.dough;
   c.appendChild(renderVersion(latestVersion(log), log));
   document.getElementById('logview-overlay').classList.add('visible');
 }
@@ -221,7 +233,7 @@ document.getElementById('log-content').addEventListener('click', async e => {
   if (delB) {
     const id = delB.dataset.id;
     const log = getLogById(id);
-    const msg = t('calc.deleteThis') + (log ? log.dough : '') + t('calc.logThisCannotBe');
+    const msg = log && log.dough ? t('calc.deleteDoughConfirm', { name: log.dough }) : t('calc.deleteThisDough');
     if (await confirmDialog({ message: msg, okLabel: t('ui.delete'), danger: true, cancelLabel: t('ui.cancel') })) deleteLog(id);
     return;
   }
