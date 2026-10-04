@@ -413,6 +413,11 @@ test('⚠⚠ the cached body is exactly the downloaded bytes, stamped with its f
   assert.equal(await stored.text(), `asset:${abs('./orders.css')}`);
   assert.equal(stored.status, 200);
   assert.equal(stored.headers.get('x-mise-hash'), w.read('ASSET_HASHES')['./orders.css']);
+  // ⚠️⚠️ The network's content-type survives the rebuild: without it a cached module or
+  // stylesheet is refused and no page boots offline — and every other test stays green.
+  const sent = new Response(`asset:${abs('./orders.css')}`).headers.get('content-type');
+  assert.ok(sent, 'the mock network sends a content-type');
+  assert.equal(stored.headers.get('content-type'), sent);
 });
 
 test('⚠ a donor copy with the matching hash is copied through the pool, not fetched', async () => {

@@ -722,9 +722,9 @@ const ASSET_HASHES = {
 // partial worker destroys the last COMPLETE copy on its way in.
 //
 // ⚠️ THE RETRY IS WHAT MAKES STRICTNESS AFFORDABLE, and it guards a failure this
-// project has observed rather than imagined: the whole list leaves in one burst, and
-// GitHub Pages has answered 503 to one file of such a burst and 200 five times on
-// retry (v1.63.0). Failing on the first refusal would turn an ordinary throttle into
+// project has observed rather than imagined: when the whole list left in one burst
+// (before A3 capped it at 6 in flight, below), GitHub Pages answered 503 to one file of
+// such a burst and 200 five times on retry (v1.63.0). Failing on the first refusal would turn an ordinary throttle into
 // a release nobody receives.
 //
 // ⚠️⚠️ AND THE PRICE OF STRICTNESS, WHICH IS REAL AND MUST NOT BE LOST: a phone that
@@ -770,14 +770,19 @@ async function blobHashOf(body) {
   return [...digest].map(b => b.toString(16).padStart(2, '0')).join('').slice(0, 16);
 }
 
+// ⚠️ KEPT FOR tests/sw-asset-hashes.test.mjs, which runs the REAL SHA-1 through it; the
+// install itself goes through download() below. Not dead code — deleting it turns that
+// test red.
 async function blobHash(response) {
   return blobHashOf(new Uint8Array(await response.clone().arrayBuffer()));
 }
 
 // ⚠️ A DOWNLOADED BODY IS READ ONCE (weak-tablet plan A3). It used to be cloned for the
-// hash and streamed again for the cache, which buffers every file twice on a 1.5 GB
-// tablet. The bytes are read here, hashed, and the cached Response is built from the
-// very same bytes.
+// hash and streamed again for the cache (a tee that buffers the body). The bytes are read
+// here, hashed, and the cached Response is built from the same bytes — hashing and the
+// Response still copy them briefly, so the real memory saving is the 6-at-a-time limit
+// below, not this. ⚠️ stamped() must keep the network's headers: a cached JS/CSS without
+// its content-type is refused as a module/stylesheet and no page would boot offline.
 async function download(response) {
   const bytes = new Uint8Array(await response.arrayBuffer());
   return { response, bytes, hash: await blobHashOf(bytes) };
