@@ -1912,6 +1912,9 @@ input.cp-prod-weight {
   body[data-card="calculator"] #recipe-tabs > .content,
   body[data-card="calculator"] #tab-log,
   body[data-card="calculator"] .scroll-area > #tab-bar {
+    /* width:100% — .scroll-area is a flex column, where auto margins alone shrink an item
+       to its content (the tab bar measured 32px wide, its tabs one word per line). */
+    width: 100%;
     max-width: 620px;
     margin-inline: auto;
   }
@@ -1925,15 +1928,16 @@ input.cp-prod-weight {
      620px column above is the same one an unconfirmed tab uses, so nothing jumps sideways on
      Confirm. */
 
-  /* The «Total dough (g)» box: label + one field, so it sits LEFT and is about one and a
+  /* The «Total dough (g)» box: label + one field, so it sits LEFT and is about two and a
      half recipe tabs wide instead of a 590px card with an empty middle. A tab is a quarter
-     of the bar less three 8px gaps, and the bar is the 620px column less 16px a side (the
-     280px floor below wins today). Phones are untouched: this
+     of the bar less three 8px gaps, and the bar is the 620px column less 16px a side
+     (≈141px a tab, so ≈370px: «Numero di teglie» stays on one line beside its 150px field —
+     at one and a half tabs it wrapped, measured 5 Oct 2026). Phones are untouched: this
      whole block only applies to a tablet. ⚠️ EVERY .param-row (leavening, trays, total) takes
      this width, not only the total: the leavening row used to keep the full column, so its
      box ended ~200px right of the trays and total boxes (4 Oct 2026). One width, one right edge. */
   body[data-card="calculator"] #recipe-tabs .param-row {
-    width: calc(1.5 * (620px - 32px - 3 * 8px) / 4);
+    width: calc(2.5 * (620px - 32px - 3 * 8px) / 4 + 2 * 8px);
     min-width: 280px;
     max-width: 100%;
     margin-right: auto;

@@ -150,7 +150,7 @@ test('S3: render source has no unit span in the param rows, and the tablet width
   const panel = js.slice(js.indexOf('export function buildRecipePanel'), js.indexOf("if (hasOrders) {"));
   assert.doesNotMatch(panel, /class: 'unit'/);
   const css = strip(read('style.css'));
-  assert.match(css, /body\[data-card="calculator"\] #recipe-tabs \.param-row \{[^}]*width: calc\(1\.5/);
+  assert.match(css, /body\[data-card="calculator"\] #recipe-tabs \.param-row \{[^}]*width: calc\(2\.5/);
   // the group is right-aligned, so a lone input ends at the row's right padding
   assert.match(css, /\.qty-group \{[^}]*justify-content: flex-end/);
 });

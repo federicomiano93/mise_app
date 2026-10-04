@@ -113,7 +113,7 @@ test('the total-dough box is compact and left only inside the tablet query', () 
   const rule = css.match(/body\[data-card="calculator"\] #recipe-tabs \.param-row \{[^}]*\}/);
   assert.ok(rule, 'rule exists');
   assert.match(rule[0], /margin-right: auto/);
-  assert.match(rule[0], /1\.5/);
+  assert.match(rule[0], /2\.5/); // two and a half tabs (5 Oct 2026: one and a half wrapped the labels)
   const at = css.indexOf(rule[0]);
   const query = css.lastIndexOf('@media (min-width: 900px) and (min-height: 600px)', at);
   assert.ok(query >= 0, 'sits under the tablet query');

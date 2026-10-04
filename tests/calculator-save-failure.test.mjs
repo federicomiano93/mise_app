@@ -80,7 +80,7 @@ const strip = s => s.replace(/\/\*[\s\S]*?\*\//g, '');
 
 test('on a tablet the recipe column, the Log and the tab bar are one centred 620px column (5 Oct 2026)', () => {
   const rules = strip(css);
-  assert.match(rules, /#recipe-tabs > \.content,\s*body\[data-card="calculator"\] #tab-log,\s*body\[data-card="calculator"\] \.scroll-area > #tab-bar \{\s*max-width: 620px;\s*margin-inline: auto;\s*\}/);
+  assert.match(rules, /#recipe-tabs > \.content,\s*body\[data-card="calculator"\] #tab-log,\s*body\[data-card="calculator"\] \.scroll-area > #tab-bar \{\s*width: 100%;\s*max-width: 620px;\s*margin-inline: auto;\s*\}/);
   // No rule pushes a recipe tab's column back to the left.
   assert.doesNotMatch(rules, /#recipe-tabs > \.content[^{]*\{ margin-inline: 0 auto; \}/);
   assert.match(read('js/calculator-render.js'), /id: 'tab-empty'/);
