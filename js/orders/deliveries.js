@@ -85,6 +85,8 @@ export function expectedDeliveryOn(order, supplier) {
 // window; this is not. An order whose expected day went by three weeks ago and was
 // never confirmed is the single most important row on the screen, and any window at
 // all would eventually swallow it. It is also why `late` is listed FIRST.
+// In practice it is bounded by what Orders reads live (HISTORY_LIVE_MONTHS, two months
+// since 4 Oct 2026): an order never confirmed for longer than that leaves the list.
 //
 // ⚠️ AN ORDER WITH NO EXPECTED DATE IS NEVER "late" — we do not know that it is. It
 // sits at the end of `coming`, visible, waiting for somebody to confirm it.
