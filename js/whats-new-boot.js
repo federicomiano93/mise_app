@@ -31,7 +31,6 @@ function writeSeen(id) {
 // used on this device before, whatever the service worker is doing.
 const FOOTPRINTS = [
   'calculator-config',    // the Calculator's config cache — written on every load
-  'lastHiddenAt',         // idle-reset, written whenever any page is backgrounded
   'logs-cache',
   'catalogue-recipes',
   'uk-bank-holidays',     // the bank-holiday calendar the Orders alerts use
