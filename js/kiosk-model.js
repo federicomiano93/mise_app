@@ -18,8 +18,6 @@ const MINUTE = 60 * 1000;
 const HOUR = 60 * MINUTE;
 // The work day rolls at 4am, as the pastries do (DAY_START_HOUR in js/log-model.js).
 const DAY_START_HOUR = 4;
-// The nightly safety reload happens from 03:00 local time, once the tablet is resting.
-const RELOAD_FROM_HOUR = 3;
 
 // A JSON string (or null) → safe settings. Never NaN, unknown values → defaults.
 export function readKioskSettings(raw) {
@@ -75,12 +73,25 @@ export function workDayDate(now) {
   return dayString(d);
 }
 
-// Once per calendar day: the first time the tablet is resting and free at/after 03:00.
-// Returns { reload, day } — `day` is what to store as kiosk-last-reload.
-export function shouldNightlyReload({ state, busy, now, lastReloadDay } = {}) {
-  const d = new Date(Number(now));
-  const day = dayString(d);
-  const resting = state === 'rest' || state === 'night';
-  const reload = resting && !busy && d.getHours() >= RELOAD_FROM_HOUR && lastReloadDay !== day;
-  return { reload, day };
+// The daily safety reload — once per calendar day, and only while nobody is looking:
+//  • at the moment the tablet ENTERS night (rest → night) it reloads and comes back dark
+//    (resume 'night', no wake lock);
+//  • with nightHours 0 («never») there is no night, so after REST_RELOAD_MINUTES of
+//    continuous rest it reloads and comes back resting (resume 'rest').
+// Never in 'active'. ⚠️ NOT «the first rest after 03:00»: that reloaded in front of a baker
+// reading a recipe at 03:10, and with the screen off Android freezes timers, so it fired
+// when somebody lit the screen in the morning.
+// `busy` here includes a focused text field; `visible` is the page's visibility.
+// Returns { reload, day, resume } — `day` is what to store as kiosk-last-reload.
+export const REST_RELOAD_MINUTES = 60;
+export function shouldDailyReload({ prevState, state, restSince, now, busy, signedIn, visible, nightHours, lastReloadDay } = {}) {
+  const day = dayString(new Date(Number(now)));
+  const no = { reload: false, day, resume: null };
+  if (busy || !signedIn || !visible || lastReloadDay === day) return no;
+  if (prevState === 'rest' && state === 'night') return { reload: true, day, resume: 'night' };
+  if (Number(nightHours) === 0 && state === 'rest'
+      && Number(now) - Number(restSince) >= REST_RELOAD_MINUTES * MINUTE) {
+    return { reload: true, day, resume: 'rest' };
+  }
+  return no;
 }

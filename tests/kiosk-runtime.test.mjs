@@ -64,12 +64,44 @@ test('the waking tap never reaches what is underneath', () => {
   assert.equal(state.woke, 1);
 });
 
-test('without a click it wakes after the wait', () => {
+test('without a click it wakes a moment after the finger LIFTS, never during a long press', () => {
   const { win, overlay, timers, state } = setup();
+  win.fire('touchstart', overlay);
   win.fire('pointerdown', overlay);
+  assert.equal(timers.fns.length, 0, 'the wait does not start while the finger is down');
+  win.fire('touchend', overlay);
+  assert.equal(timers.fns.length, 1);
   assert.equal(state.woke, 0);
   timers.fns[0]();
   assert.equal(state.woke, 1);
+});
+
+test('a key aimed at a dialog above the cover passes through untouched', () => {
+  const { win, state } = setup();
+  const e = win.fire('keydown', { id: 'some-dialog-button' });
+  assert.equal(e.prevented, false);
+  assert.equal(e.stopped, false);
+  assert.equal(state.woke, 0);
+});
+
+test('⚠ the DEFAULT timers work when setTimeout refuses a foreign `this` (Illegal invocation)', async () => {
+  const realSet = globalThis.setTimeout;
+  globalThis.setTimeout = function (fn, ms) {
+    if (this !== undefined && this !== globalThis) throw new TypeError('Illegal invocation');
+    return realSet(fn, ms);
+  };
+  try {
+    const win = fakeWindow();
+    const overlay = { contains: n => n === overlay };
+    let woke = 0;
+    armWakeTap(win, overlay, () => { woke++; });   // default timers
+    win.fire('touchstart', overlay);
+    assert.doesNotThrow(() => win.fire('touchend', overlay));
+    await new Promise(r => realSet(r, 900));
+    assert.equal(woke, 1, 'the lift timer woke the cover');
+  } finally {
+    globalThis.setTimeout = realSet;
+  }
 });
 
 test('a tap elsewhere (the update banner) is not swallowed', () => {

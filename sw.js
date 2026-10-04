@@ -1,4 +1,4 @@
-const CACHE_NAME = 'theitalianclub-v562';
+const CACHE_NAME = 'theitalianclub-v563';
 // Firebase SDK modules (loaded from gstatic) are cached SEPARATELY from CACHE_NAME
 // so they survive the cache-version bump that happens on every deploy — otherwise
 // the offline SDK would be wiped each release until the next online load. The name
@@ -421,7 +421,7 @@ const ASSET_HASHES = {
   "./install-guide.html": '155cc21e1c1dc524',
   "./qr.png": '761a95e5bc25e2ba',
   "./js/install-guide.js": '17fcd0c0fec489c2',
-  "./tokens.css": '6a7a3a4297e21659',
+  "./tokens.css": '3e4ae7af42d85d96',
   "./auth.css": 'e4ba63eda208115b',
   "./style.css": '2e10bd937e5e4509',
   "./orders.css": '550912deaebd0064',
@@ -485,8 +485,8 @@ const ASSET_HASHES = {
   "./js/help-button.js": '74575dcd436e06cc',
   "./js/sw-update.js": '645f66a2c7f40a6a',
   "./js/update-gate.js": '2387259480385bfb',
-  "./js/kiosk.js": '87e9c9c3883c5697',
-  "./js/kiosk-model.js": 'df8cc17349069b70',
+  "./js/kiosk.js": '4d52fe77fd20d092',
+  "./js/kiosk-model.js": 'd1ebfdfbdb6d7a0b',
   "./js/wake-lock.js": '3cc98d18c5e2cbab',
   "./js/install-version.js": 'a35dbefbbbaa3acf',
   "./js/install-version-boot.js": '0e0cea81512abcec',
@@ -503,7 +503,7 @@ const ASSET_HASHES = {
   "./js/location.js": '6aaf53615a8739d1',
   "./js/sections.js": 'abcfdecb2bd5766d',
   "./js/roles.js": '2b491770c4b6165b',
-  "./js/i18n.js": '8fe07845183205b7',
+  "./js/i18n.js": '3669bd32ae6200af',
   "./js/i18n-dom.js": '24249af4367511e5',
   "./js/keyboard-done.js": 'de05a6dd1f3aac26',
   "./js/join-code.js": '5b89de65db5c102f',

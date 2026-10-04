@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  readKioskSettings, nextKioskState, shouldAutoUpdate, shouldNightlyReload, workDayDate,
+  readKioskSettings, nextKioskState, shouldAutoUpdate, workDayDate,
   KIOSK_STORAGE_KEY, DEFAULT_KIOSK_SETTINGS,
 } from '../js/kiosk-model.js';
 
@@ -50,17 +50,6 @@ test('auto-update only when resting, free and an update is waiting', () => {
   assert.equal(shouldAutoUpdate({ ...ok, updateWaiting: false }), false);
 });
 
-test('nightly reload: once per day, from 03:00, resting and free', () => {
-  const at = (h, m = 0) => new Date(2026, 9, 5, h, m).getTime();
-  const rest = { state: 'rest', busy: false, lastReloadDay: '2026-10-04' };
-  assert.equal(shouldNightlyReload({ ...rest, now: at(2, 59) }).reload, false);
-  assert.deepEqual(shouldNightlyReload({ ...rest, now: at(3, 0) }), { reload: true, day: '2026-10-05' });
-  assert.equal(shouldNightlyReload({ ...rest, now: at(14), lastReloadDay: '2026-10-05' }).reload, false);
-  assert.equal(shouldNightlyReload({ ...rest, now: at(3, 30), busy: true }).reload, false);
-  assert.equal(shouldNightlyReload({ ...rest, now: at(3, 30), state: 'active' }).reload, false);
-  assert.equal(shouldNightlyReload({ ...rest, now: at(3, 30), state: 'night' }).reload, true);
-  assert.equal(shouldNightlyReload({ ...rest, now: at(3, 30), lastReloadDay: null }).reload, true);
-});
 
 test('work day rolls at 04:00', () => {
   assert.equal(workDayDate(new Date(2026, 9, 5, 3, 59).getTime()), '2026-10-04');

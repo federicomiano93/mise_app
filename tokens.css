@@ -891,7 +891,7 @@ body[data-card="suppliers"] .app-header {
   flex-direction: column;
   align-items: center;
   gap: 6px;
-  padding: 16px;
+  padding: var(--space-4);
 }
 .kiosk-rest-time {
   font-size: 72px;
@@ -900,7 +900,7 @@ body[data-card="suppliers"] .app-header {
   font-variant-numeric: tabular-nums;
 }
 .kiosk-rest-line { font-size: 16px; line-height: 1.3; margin: 0; }
-.kiosk-rest-tap { font-size: 14px; margin: 12px 0 0; }
+.kiosk-rest-tap { font-size: 14px; margin: var(--space-3) 0 0; }
 
 /* ── "Who can get in", and the join-code field ──────────────────────────────
    In tokens.css because it is not one feature's screen: the roster is opened
