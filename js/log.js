@@ -17,7 +17,8 @@ import { getLogs, getLogById, createAndSave, appendAndSave, genLogId, deleteLog 
 import { renderOrder, renderVersion } from './log-view.js';
 import { openLogEdit, openLogHistory } from './log-edit.js';
 import { openLogAdd } from './log-add.js';
-import { confirmDialog } from './confirm-dialog.js';
+import { confirmDialog, alertDialog } from './confirm-dialog.js';
+import { recipeToSave } from './calculator-catalogue-link.js';
 
 function qtyOf(id) { const e = document.getElementById(id); return e ? (+e.value || 0) : 0; }
 
@@ -87,8 +88,13 @@ function commitLog() {
   const tab = pendingTab;
   if (!tab || !pendingDay) return;
   const config = getConfig();
-  const recipe = getRecipeById(config, tab);
-  if (!recipe) return;
+  const tabRecipe = getRecipeById(config, tab);
+  if (!tabRecipe) return;
+  // The dough is saved from what the screen shows (a linked tab's Catalogue
+  // ingredients), and refused when the screen refuses — never a sheet of zeros.
+  const toSave = recipeToSave(tabRecipe);
+  if (!toSave.recipe) { alertDialog(toSave.problem); pendingTab = null; pendingDay = null; return; }
+  const recipe = toSave.recipe;
   const items = gatherItems(tab);
   const extra = gatherExtra(tab);
   const leaveningPct = leaveningPctFor(recipe);

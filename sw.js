@@ -1,4 +1,4 @@
-const CACHE_NAME = 'theitalianclub-v568';
+const CACHE_NAME = 'theitalianclub-v569';
 // Firebase SDK modules (loaded from gstatic) are cached SEPARATELY from CACHE_NAME
 // so they survive the cache-version bump that happens on every deploy — otherwise
 // the offline SDK would be wiped each release until the next online load. The name
@@ -476,8 +476,8 @@ const ASSET_HASHES = {
   "./js/home-client-orders-badge.js": '2d1ebe03f89f0699',
   "./js/home-order-requests-badge.js": '3c3f93da00331b92',
   "./js/away-model.js": '95c90de8e2b5ab7a',
-  "./js/calculator-recipe-source.js": 'efacab52a1256b8c',
-  "./js/calculator-catalogue-link.js": '4824f7bc8b76b71c',
+  "./js/calculator-recipe-source.js": '01a649ab954dbf31',
+  "./js/calculator-catalogue-link.js": '41710bee4cba59f8',
   "./js/away-screen.js": 'e9d001178c51a4e7',
   "./js/away-reminder.js": 'bdd9d8cec3f44033',
   "./js/home-away.js": 'd791865d4ec8e8b1',
@@ -530,14 +530,14 @@ const ASSET_HASHES = {
   "./js/calc.js": '3c9dbd187a60501c',
   "./js/calculator-recipe-text.js": 'aa41a24dba41595f',
   "./js/calculator-dough-math.js": '85008bf4375927f4',
-  "./js/log.js": 'efca95d743e7267a',
+  "./js/log.js": '9bbf79b69f285b88',
   "./js/log-time.js": '0374bcb500904055',
   "./js/log-model.js": '625b88c5e5336bb4',
   "./js/log-store.js": '9b53edc064b6f29c',
   "./js/log-view.js": '1042bc5d8f8f8939',
   "./js/log-edit.js": '47a7ede51add7f49',
   "./js/log-qty.js": '2aae575dfdaec907',
-  "./js/log-add.js": 'c5eccb926adfb3ae',
+  "./js/log-add.js": '5808a87804b6a789',
   "./js/log-settings.js": 'cebf8412a51f8506',
   "./js/whatsapp.js": 'bae7621de9542fc1',
   "./js/calculator-confirm.js": '68a8ecb9ef0f0ab9',
