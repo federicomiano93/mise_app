@@ -132,6 +132,19 @@ export function resolveRecipe(recipe, catalogueById) {
   };
 }
 
+// The recipe a SAVED dough is built and frozen from: the tab with its ingredients
+// and leavening swapped for the resolved ones.
+//
+// ⚠️ THE LOG MUST SAVE WHAT THE SCREEN SHOWED. The screen scales from the resolved
+// recipe; buildSheet and recipeSnapshot read recipe.ingredients, which on a linked
+// tab is only the stale leftover copy — so a corrected Catalogue recipe showed new
+// grams while Dough history stored the old ones (or zeros). An unlinked tab is
+// returned untouched. The tab keeps its own name, id, logic and percentages.
+export function sheetRecipe(recipe, resolved) {
+  if (!recipe || !isLinked(recipe) || !resolved) return recipe;
+  return { ...recipe, ingredients: resolved.ingredients, leaveningKey: resolved.leaveningKey };
+}
+
 // ⚠️ A TAB THAT CANNOT BE CALCULATED MUST BE ASKED ABOUT, NOT GUESSED AT. This is
 // the one function every screen should call before showing a number — the same
 // shape as canLabel() on the allergen sheet, and for the same reason: an answer
