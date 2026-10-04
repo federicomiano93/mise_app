@@ -1,4 +1,4 @@
-const CACHE_NAME = 'theitalianclub-v554';
+const CACHE_NAME = 'theitalianclub-v555';
 // Firebase SDK modules (loaded from gstatic) are cached SEPARATELY from CACHE_NAME
 // so they survive the cache-version bump that happens on every deploy — otherwise
 // the offline SDK would be wiped each release until the next online load. The name
@@ -416,7 +416,7 @@ const ASSET_HASHES = {
   "./install-guide.html": '155cc21e1c1dc524',
   "./qr.png": '761a95e5bc25e2ba',
   "./js/install-guide.js": '17fcd0c0fec489c2',
-  "./tokens.css": '1d50afb480edc5ee',
+  "./tokens.css": '15a90c6c1535077b',
   "./auth.css": 'e4ba63eda208115b',
   "./style.css": '2e10bd937e5e4509',
   "./orders.css": '550912deaebd0064',
@@ -433,7 +433,7 @@ const ASSET_HASHES = {
   "./js/app.js": '52b427fa0153b133',
   "./js/confirm-dialog.js": '61a7f580f37c5ff8',
   "./js/calculator-icons.js": '6bb803c39eabc4e0',
-  "./js/hold-to-zoom.js": '730cfc69f7aee84a',
+  "./js/hold-to-zoom.js": 'e077890cd7ba70de',
   "./js/price-model.js": 'a68cbd60d71d814b',
   "./js/vat-rates.js": 'a3d073040b1d8490',
   "./js/vat-number.js": '097b915810c4d39a',
@@ -478,7 +478,7 @@ const ASSET_HASHES = {
   "./js/home-away.js": 'd791865d4ec8e8b1',
   "./js/help-content.js": '6ea7f0e9586c250d',
   "./js/help-button.js": '74575dcd436e06cc',
-  "./js/sw-update.js": '971df8aa68b91103',
+  "./js/sw-update.js": '9e91681c1b13a564',
   "./js/update-gate.js": '2387259480385bfb',
   "./js/install-version.js": 'a35dbefbbbaa3acf',
   "./js/install-version-boot.js": '0e0cea81512abcec',
@@ -497,7 +497,7 @@ const ASSET_HASHES = {
   "./js/roles.js": '2b491770c4b6165b',
   "./js/i18n.js": '8c6c285d8ffe406e',
   "./js/i18n-dom.js": '24249af4367511e5',
-  "./js/keyboard-done.js": '45bb802861a5f6c0',
+  "./js/keyboard-done.js": 'de05a6dd1f3aac26',
   "./js/join-code.js": '5b89de65db5c102f',
   "./js/join-link.js": 'a90ea53c7ba51614',
   "./js/credentials.js": '5d9eece15a3a969a',
@@ -607,7 +607,7 @@ const ASSET_HASHES = {
   "./js/orders/order-cost-view.js": '4b03fed043e88d39',
   "./js/orders/order-summary-view.js": '2ab80dbb8b7fa26f',
   "./catalogue.html": '90fb703beea7eac1',
-  "./catalogue.css": '9dd1efd51091f007',
+  "./catalogue.css": '24bc9da19a432bb4',
   "./label-print.css": 'ffbcdf4e7a627a2d',
   "./records.css": 'd9c17ed942d57f13',
   "./js/catalogue/confirm-dialog.js": '61a7f580f37c5ff8',
@@ -632,7 +632,7 @@ const ASSET_HASHES = {
   "./js/catalogue/ingredient-suggest.js": 'ddf3ca8acc2ed799',
   "./js/catalogue/firebase-catalogue.js": 'e560966537c00cae',
   "./js/catalogue/catalogue-store.js": '32d3ef5ccfb6da26',
-  "./js/catalogue/catalogue-main.js": '124082fa0e1f4b51',
+  "./js/catalogue/catalogue-main.js": '0cdbbfab3cb8e356',
   "./js/catalogue/catalogue-list.js": 'e3884564b29e8a7c',
   "./js/catalogue/tablet.js": 'fed91ff5d4aa2da4',
   "./js/catalogue/search-box.js": '188bbe833ccbde26',
@@ -657,7 +657,7 @@ const ASSET_HASHES = {
   "./js/pastries/pastries-editor.js": 'cd75520a81601466',
   "./js/pastries/pastries-log-model.js": '6e3160b978365672',
   "./js/pastries/pastries-lock.js": 'adfbaeea4bd7c845',
-  "./js/pastries/pastries-logs-store.js": '90a39e8f3844403f',
+  "./js/pastries/pastries-logs-store.js": '85cc1ec0c21baa30',
   "./js/pastries/pastries-logs.js": '91b2ec2a8704c3e5',
   "./js/pastries/tablet.js": 'c4b527a125c07873',
   "./foodcost.html": '6b4ee431ef03f17b',

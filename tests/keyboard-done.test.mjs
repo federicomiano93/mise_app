@@ -42,6 +42,23 @@ test('focusing a box gives it the hint, in the capturing phase, with no observer
   assert.equal(next.getAttribute('enterkeyhint'), 'next');
 });
 
+test('a pointerdown also gives the hint, capturing and passive, before the keyboard is asked for', () => {
+  const calls = [];
+  const d = { addEventListener: (type, fn, opts) => calls.push({ type, fn, opts }) };
+  installKeyboardDone(d);
+  const down = calls.find((c) => c.type === 'pointerdown');
+  assert.deepEqual(down.opts, { capture: true, passive: true });
+  const input = fakeNode('input', { type: 'text' });
+  down.fn({ target: input });
+  assert.equal(input.getAttribute('enterkeyhint'), 'done');
+  const next = fakeNode('input', { enterkeyhint: 'next' });
+  const area = fakeNode('textarea');
+  const div = { tagName: 'DIV' };
+  for (const n of [next, area, div]) down.fn({ target: n });
+  assert.equal(next.getAttribute('enterkeyhint'), 'next');
+  assert.equal(area.getAttribute('enterkeyhint'), null);
+});
+
 const touch = () => ({ matches: true });
 const setup = (media = touch) => { const d = fakeDoc(); installKeyboardDone(d, media); return d; };
 

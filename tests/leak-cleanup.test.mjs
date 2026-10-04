@@ -29,8 +29,15 @@ test('catalogue-main clears Settings only through the helper that disposes it', 
 
 test('the catalogue photo screen is disposed by the next swap()', () => {
   const main = read('js/catalogue/catalogue-main.js');
-  assert.match(main, /function swap\(node, dispose = null\) \{\r?\n\s*disposeScreen\?\.\(\);\r?\n\s*disposeScreen = dispose;/);
+  assert.match(main, /function swap\(node, dispose = null\) \{\r?\n\s*releaseScreen\(\);\r?\n\s*disposeScreen = dispose;/);
   assert.match(main, /swap\(capture\.root, capture\.dispose\);/);
+});
+
+test('the two split-pane paths that skip swap() also release the current screen', () => {
+  const main = read('js/catalogue/catalogue-main.js');
+  assert.match(main, /function releaseScreen\(\) \{[\s\S]*?dispose\?\.\(\);/);
+  assert.match(main, /releaseScreen\(\);\r?\n\s*screen\.replaceChildren\(paneEmpty\);/);
+  assert.match(main, /releaseScreen\(\);\r?\n\s*screen\.replaceChildren\(head, body\);/);
 });
 
 for (const file of ['js/catalogue/photo-capture.js', 'js/orders/photo-capture.js']) {
@@ -74,6 +81,8 @@ test('watchConfirmations never orphans the listener of an earlier, slower call',
   const body = store.slice(store.indexOf('export async function watchConfirmations'));
   assert.match(body, /confirmationsSeq \+= 1;\r?\n\s*const mine = confirmationsSeq;/);
   assert.match(body, /if \(mine !== confirmationsSeq\) \{\r?\n\s*try \{ unsub\(\); \}/);
+  // The failure path is guarded by the same sequence check as the success path.
+  assert.match(body, /catch \(err\) \{[\s\S]*?if \(mine !== confirmationsSeq\) return;\r?\n\s*confirmed = new Set\(\);/);
   // The previous subscription is dropped BEFORE the await.
   assert.ok(body.indexOf('unsubConfirmed()') < body.indexOf('await watchPastryLogsForDate'));
 });

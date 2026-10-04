@@ -660,14 +660,16 @@ body.cat-zoom-lock { overflow: hidden; }
    its transform and opacity move, which the compositor does without repainting. */
 .guided-card--due { background: var(--cat-crust-bg); border-color: var(--cat-crust); }
 .guided-card--due::after {
-  content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
-  box-shadow: 0 0 0 8px color-mix(in srgb, var(--cat-crust) 45%, transparent);
-  opacity: 0;
+  /* A 4px band OUTSIDE the card edge (inset -5px = 1px card border + 4px band), so it
+     never overlaps the card's content. Like the old shadow it starts at the edge at
+     45% and drifts outward while fading. */
+  content: ''; position: absolute; inset: -5px; border-radius: inherit; pointer-events: none;
+  border: 4px solid color-mix(in srgb, var(--cat-crust) 45%, transparent);
   animation: guided-pulse 1s ease-in-out infinite;
 }
 @keyframes guided-pulse {
-  0%, 100% { transform: scale(.97); opacity: 0; }
-  50%      { transform: scale(1);   opacity: .6; }
+  0%, 100% { transform: scale(1);    opacity: 1; }
+  50%      { transform: scale(1.04); opacity: 0; }
 }
 
 /* Which step this is, ABOVE the card rather than inside it. Needs its own
@@ -757,8 +759,10 @@ body.cat-zoom-lock { overflow: hidden; }
    (an animated box-shadow repaints every frame); the pill itself still scales. */
 .guided-speed--changed.guided-speed--flash { position: relative; animation: guided-speed-alert 420ms ease-out 3; }
 .guided-speed--changed.guided-speed--flash::after {
-  content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
-  box-shadow: 0 0 0 12px color-mix(in srgb, var(--cat-crust-ink) 55%, transparent);
+  /* A thin band hugging the pill (inset -5px = 1px border + 4px band) that grows
+     outward by scaling while it fades, like the old 0 to 12px shadow. */
+  content: ''; position: absolute; inset: -5px; border-radius: inherit; pointer-events: none;
+  border: 4px solid color-mix(in srgb, var(--cat-crust-ink) 55%, transparent);
   opacity: 0;
   animation: guided-speed-ring 420ms ease-out 3;
 }
@@ -768,9 +772,9 @@ body.cat-zoom-lock { overflow: hidden; }
   100% { transform: scale(1); }
 }
 @keyframes guided-speed-ring {
-  0%   { transform: scale(.85); opacity: 1; }
-  70%  { transform: scale(1);   opacity: 0; }
-  100% { transform: scale(1);   opacity: 0; }
+  0%   { transform: scale(1);    opacity: 1; }
+  70%  { transform: scale(1.12); opacity: 0; }
+  100% { transform: scale(1.12); opacity: 0; }
 }
 .guided-due { margin: 14px 0 0; font-size: .95rem; font-weight: 600; color: var(--cat-crust-ink); }
 

@@ -165,7 +165,9 @@ function placeAboveBottomBar(host) {
 // a new service worker is waiting, which cannot be arranged from a test; the
 // alternative is a driver that re-implements the placement, which would prove the
 // driver works and nothing else. Underscored: nothing in the app may call it.
-export function __keepAboveBottomBar(host) { keepAboveBottomBar(host); }
+// It uses its own tracker and leaves the real banner's alone; the returned function
+// stops the driver's.
+export function __keepAboveBottomBar(host) { return trackAboveBottomBar(host); }
 
 // ⚠️ The observer and the resize listener are let go the moment the banner is taken
 // away for good (showGate removes it), not "on the next mutation after it left" — a
@@ -181,6 +183,12 @@ function stopKeepingAboveBottomBar() {
 
 function keepAboveBottomBar(host) {
   stopKeepingAboveBottomBar();
+  stopKeepingAbove = trackAboveBottomBar(host);
+}
+
+// Starts a tracker and RETURNS its stop function, touching no module state — so the
+// driver seam can run one without stopping the real banner's tracker.
+function trackAboveBottomBar(host) {
   placeAboveBottomBar(host);
   const reposition = () => {
     if (!host.isConnected) { stopKeepingAboveBottomBar(); return; }
@@ -189,7 +197,7 @@ function keepAboveBottomBar(host) {
   const observer = new MutationObserver(reposition);
   observer.observe(document.body, { subtree: true, attributes: true, attributeFilter: ['hidden', 'class', 'style'] });
   window.addEventListener('resize', reposition);
-  stopKeepingAbove = () => {
+  return () => {
     observer.disconnect();
     window.removeEventListener('resize', reposition);
   };
