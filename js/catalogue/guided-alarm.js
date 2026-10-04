@@ -27,6 +27,9 @@
 // wake lock below has kept it on) and vibrates where that exists. If the beep
 // never arrives, the guided mix still works.
 
+import { acquireWakeLock, releaseWakeLock, canKeepScreenAwake } from '../wake-lock.js';
+
+const WAKE_OWNER = 'guided-mix';
 const ALARM_SRC = './sounds/alarm.wav';
 
 // Stop after a minute. An alarm nobody is coming back to should not still be
@@ -153,53 +156,15 @@ export function stopAlarm() {
 // what turns this from a page into a kitchen timer: the phone sits on the bench,
 // lit, showing the countdown.
 //
-// ⚠️ THE LOCK IS RELEASED BY THE BROWSER WHENEVER THE PAGE IS HIDDEN, and it does
-// NOT come back by itself. Without the visibilitychange listener below, glancing
-// at another app once would leave the screen free to sleep for the rest of the
-// dough — which looks exactly like the feature not working.
-//
-// Absent on older iOS (before 16.4) and on any browser that does not offer it.
-// Nothing here fails in that case; the screen simply sleeps as it always did, and
-// the countdown is still correct when it is woken, because nothing here counts.
-
-let sentinel = null;
-let wanted = false;
-
-async function acquire() {
-  if (!wanted || sentinel) return;
-  const api = typeof navigator !== 'undefined' ? navigator.wakeLock : null;
-  if (!api || typeof api.request !== 'function') return;
-  try {
-    sentinel = await api.request('screen');
-    sentinel.addEventListener('release', () => { sentinel = null; });
-  } catch (e) {
-    // Refused (a battery-saver, a background tab, an unsupported context).
-    sentinel = null;
-  }
-}
-
-function onVisible() {
-  if (document.visibilityState === 'visible') acquire();
-}
+// The lock itself (and why it must be re-requested when the page becomes visible
+// again) lives in js/wake-lock.js, shared with kiosk mode and counted by owner.
 
 export function keepScreenAwake() {
-  if (wanted) return;
-  wanted = true;
-  document.addEventListener('visibilitychange', onVisible);
-  acquire();
+  acquireWakeLock(WAKE_OWNER);
 }
 
 export function releaseScreen() {
-  wanted = false;
-  document.removeEventListener('visibilitychange', onVisible);
-  const held = sentinel;
-  sentinel = null;
-  if (held) { try { held.release(); } catch (e) {} }
+  releaseWakeLock(WAKE_OWNER);
 }
 
-// True when this device can hold the screen on, so the screen can say what it
-// actually does rather than promising something that will not happen.
-export function canKeepScreenAwake() {
-  return typeof navigator !== 'undefined'
-    && !!navigator.wakeLock && typeof navigator.wakeLock.request === 'function';
-}
+export { canKeepScreenAwake };
