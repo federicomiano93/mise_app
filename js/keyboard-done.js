@@ -62,35 +62,25 @@ export function hintTree(node) {
   }
 }
 
-// On Android the keyboard may be configured before or as focus lands, so the
-// hint is also set as boxes are ADDED: one scan at install, then one observer
-// (childList + subtree, no attribute watching) that walks only the added nodes.
-// The focusin path stays as a backstop. `Observer` is injectable for tests.
 export function isCoarsePointer(media = typeof matchMedia === 'function' ? matchMedia : null) {
   try { return !!(media && media('(pointer: coarse)').matches); } catch { return false; }
 }
 
+// The hint is set on the box the moment it takes focus — a capturing `focusin`
+// listener, just before the keyboard opens. It used to be set as boxes were ADDED,
+// by a childList+subtree MutationObserver on the whole page that stayed on for the
+// life of the tab and woke on every row the app drew; on a weak tablet left open for
+// days that was pure waste, because only a focused box ever opens a keyboard.
 export function installKeyboardDone(
   doc,
-  Observer = typeof MutationObserver !== 'undefined' ? MutationObserver : null,
   media = typeof matchMedia === 'function' ? matchMedia : null,
 ) {
   if (!doc || typeof doc.addEventListener !== 'function') return;
-  doc.addEventListener('focusin', (event) => hint(event.target));
+  doc.addEventListener('focusin', (event) => hint(event.target), true);
   doc.addEventListener('keydown', (event) => {
     const node = event.target;
     if (shouldBlurOnEnter(node, event, isCoarsePointer(media))) node.blur();
   });
-  if (typeof doc.querySelectorAll === 'function') {
-    for (const input of doc.querySelectorAll('input')) hint(input);
-  }
-  if (Observer && doc.documentElement) {
-    new Observer((records) => {
-      for (const record of records) {
-        for (const added of record.addedNodes) hintTree(added);
-      }
-    }).observe(doc.documentElement, { childList: true, subtree: true });
-  }
 }
 
 installKeyboardDone(typeof document !== 'undefined' ? document : null);
