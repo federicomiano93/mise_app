@@ -36,6 +36,14 @@ function num(value, locale) {
   return new Intl.NumberFormat(locale, { maximumFractionDigits: 3 }).format(value);
 }
 
+// ⚠️ A BOX A PERSON EDITS NEVER SHOWS A THOUSANDS SEPARATOR (4 Oct 2026). num() above writes
+// 1234.5 as «1,234.5» (English) or «1.234,5» (Italian); readCount() reads ONE mark as the decimal,
+// so the grouped text came back unreadable («not counted»), or worse — «1,234.5» edited to «1,235»
+// was read as 1.235, a thousand times less, with nothing on screen to say so.
+function boxNum(value, locale) {
+  return new Intl.NumberFormat(locale, { maximumFractionDigits: 3, useGrouping: false }).format(value);
+}
+
 // ⚠️ `money` IS FALSE FOR AN EMPLOYEE (Federico, 13 Sep 2026: they count, they see no
 // money). Then this screen draws no value, no price in the pack note, and no pack-weight
 // box — the weight is what turns a count into money, and firestore.rules refuses an
@@ -149,7 +157,7 @@ export function renderDetail({ month, ingredient, locale, onCount, readOnly, clo
       class: 'inv-input', type: 'text', inputmode: 'decimal',
       autocomplete: 'off',
       id: `inv-${map}`,
-      value: value === null || value === undefined ? '' : num(value, locale),
+      value: value === null || value === undefined ? '' : boxNum(value, locale),
       disabled: readOnly ? 'disabled' : null,
       onchange: (e) => { onCount(map, ingredient.id, e.target.value); },
     });
@@ -171,10 +179,10 @@ export function renderDetail({ month, ingredient, locale, onCount, readOnly, clo
   const packInput = el('input', {
     class: 'inv-input', type: 'text', inputmode: 'decimal',
     autocomplete: 'off', id: 'inv-packKg',
-    value: stored === null || stored === undefined ? '' : num(stored, locale),
+    value: stored === null || stored === undefined ? '' : boxNum(stored, locale),
     // No suggestion on a closed month: it would offer a weight the month will
     // never use, in a box that cannot be typed into.
-    placeholder: closed || parsed === null ? '' : num(parsed, locale),
+    placeholder: closed || parsed === null ? '' : boxNum(parsed, locale),
     disabled: readOnly ? 'disabled' : null,
     onchange: (e) => { onCount('packKg', ingredient.id, e.target.value); },
   });
