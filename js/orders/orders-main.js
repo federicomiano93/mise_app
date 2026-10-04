@@ -50,7 +50,7 @@ import {
 } from './untold-changes.js';
 import { renderUntold } from './untold-view.js';
 import { buildManagement, isAdmin } from './management.js';
-import { computeSuggestion, isUnusualQuantity } from './suggestions.js';
+import { computeSuggestion, isUnusualQuantity, indexHistoryByIngredient } from './suggestions.js';
 import { refreshHolidays } from './holidays.js';
 import { countryOf, outputLanguage } from '../market.js';
 import { renderAlerts } from './notifications.js';
@@ -77,6 +77,7 @@ import { todayOrders, pendingSuppliers } from './reminders.js';
 import { renderTodayOrders, renderPending } from './reminder-view.js';
 import { resolveSuppliers, orderSuppliers, NO_SUPPLIER_ID } from './no-supplier.js';
 import { overrideSignature } from './line-supplier.js';
+import { memoLast } from './memo.js';
 import { openIngredientCreate, openIngredientEdit } from '../ingredient-create.js';
 import { normalizeOrdersConfig } from './orders-config.js';
 import { sortSuppliersByOrder } from './supplier-order.js';
@@ -254,40 +255,65 @@ function watchOrdersConfig() {
 // order only) filed under that supplier. This is THE lens of the order flow: the lists,
 // the counts, the message, the summary, the archive and the clearing all read it, so they
 // cannot disagree about whose line a line is (js/orders/line-supplier.js).
+//
+// ⚠️ THE FIVE DERIVED VIEWS BELOW ARE MEMOISED BY THEIR INPUTS (memo.js), and what they return
+// is SHARED: a caller must never sort, push to or edit it (every caller filters or maps into
+// a copy first). state.ingredients, state.suppliers and ordersConfig are only ever REPLACED
+// (the snapshot handlers assign a fresh array/object), so their references are valid keys.
+// state.entries is the exception — mutated in place — which is why the key is the override
+// signature, the only part of it this lens reads (line-supplier.js withLineSuppliers).
+const resolveLens = memoLast(resolveSuppliers);
 function orderIngredients() {
-  return resolveSuppliers(state.ingredients, state.suppliers, state.loaded.suppliers, state.entries);
+  return resolveLens(state.ingredients, state.suppliers, state.loaded.suppliers, state.entries,
+    overrideSignature(state.entries));
 }
 
 // The same ingredients WITHOUT the per-order overrides: what each supplier SELLS. The
 // read-only product list wants this, and so does a supplier's own screen for the rows it
 // keeps showing when one of them is ordered elsewhere this time.
+const resolveCatalogue = memoLast(resolveSuppliers);
 function catalogueIngredients() {
-  return resolveSuppliers(state.ingredients, state.suppliers, state.loaded.suppliers);
+  return resolveCatalogue(state.ingredients, state.suppliers, state.loaded.suppliers);
 }
 
+const sortActiveSuppliers = memoLast((suppliers, order) => sortSuppliersByOrder(
+  suppliers.filter(s => s.active !== false),
+  order,
+  supplierLabel,
+));
 function activeSuppliers() {
   // The venue's own order (Settings → Supplier order); alphabetical when none was chosen.
-  return sortSuppliersByOrder(
-    state.suppliers.filter(s => s.active !== false),
-    ordersConfig.supplierOrder,
-    supplierLabel,
-  );
+  return sortActiveSuppliers(state.suppliers, ordersConfig.supplierOrder);
 }
 
 // The real active suppliers, plus "No supplier" at the end when something is
-// filed under it.
+// filed under it. The pseudo supplier's NAME is in today's language, so the word is part of
+// the key: a language change must not keep serving the old one.
+const buildSupplierList = memoLast((active, lens) => {
+  const list = orderSuppliers(active, lens);
+  return { list, byId: new Map(list.map(s => [s.id, s])) };
+});
+function orderSupplierEntry() {
+  return buildSupplierList(activeSuppliers(), orderIngredients(), t('orders.noSupplier'));
+}
 function orderSupplierList() {
-  return orderSuppliers(activeSuppliers(), orderIngredients());
+  return orderSupplierEntry().list;
 }
 
 // A supplier by id, the pseudo one included — state.suppliers.find would return
 // undefined for it and silently do nothing.
 function findOrderSupplier(supplierId) {
-  return orderSupplierList().find(s => s.id === supplierId);
+  return orderSupplierEntry().byId.get(supplierId);
 }
 
+const groupLensBySupplier = memoLast(lens => groupBy(lens.filter(i => i.active !== false), 'supplierId'));
 function ingredientsBySupplier() {
-  return groupBy(orderIngredients().filter(i => i.active !== false), 'supplierId');
+  return groupLensBySupplier(orderIngredients());
+}
+
+const indexLens = memoLast(lens => indexById(lens));
+function lensById() {
+  return indexLens(orderIngredients());
 }
 
 // The rows a supplier's OWN screen draws: everything it usually sells, plus the lines
@@ -298,7 +324,7 @@ function ingredientsBySupplier() {
 //   * a line sent here is marked `usualSupplierId` (its row says «di solito da …»).
 // Counts and totals do NOT read this — they read the lens, where a line is in one order.
 function screenRowsFor(supplierId) {
-  const lens = indexById(orderIngredients());
+  const lens = lensById();
   const label = id => supplierLabel(findOrderSupplier(id)) || '';
   const own = (groupBy(catalogueIngredients().filter(i => i.active !== false), 'supplierId')[supplierId] || [])
     .map(ing => {
@@ -957,7 +983,7 @@ function applyHistory(list) {
 function renderIncoming() {
   const suppliersById = {};
   (state.suppliers || []).forEach(s => { suppliersById[s.id] = s; });
-  const ingredientsById = indexById(orderIngredients());
+  const ingredientsById = lensById();
 
   const ctx = {
     history: state.history,
@@ -1434,7 +1460,7 @@ function renderOpenRequest() {
   }
 
   const next = buildRequestScreen(request, {
-    ingredientsById: indexById(orderIngredients()),
+    ingredientsById: lensById(),
     entries: state.entries,
     // ⚠️ WHAT WAS ACTUALLY BOUGHT, beside what was asked for. The person who sent
     // the list can otherwise only find out by asking. The two documents are joined
@@ -2082,7 +2108,7 @@ function entriesToRecord(supplierId, ingredients, confirmed, units = null) {
 // ⚠️ NONE FOR A LINE IN A NON-DEFAULT UNIT: the history the «usual» is worked out from
 // counts cartoni, so «usually about 4» beside 4 buste would compare two different things.
 function usualFor(id, qty) {
-  const ing = state.ingredients.find(i => i.id === id);
+  const ing = ingredientMap(state.ingredients).get(id);
   if (ing && !isDefaultUnit(state.entries[id], ing)) return null;
   const result = suggestFor(id, 0);
   return result?.active && isUnusualQuantity(qty, result.par) ? result.par : null;
@@ -2159,9 +2185,20 @@ async function askToConfirmPlacement(supplier, date) {
 // The suggestion engine bound to the history currently in memory. ONE definition,
 // shared by every row on every screen and by the unusual-quantity check, so the
 // number a row shows and the number the confirmation quotes are the same number.
+//
+// ⚠️ BOTH LOOKUPS ARE BUILT ONCE PER SNAPSHOT, not once per row: the history is cut into one
+// list per ingredient and the cards are indexed by id, each keyed on the array it came from
+// (both are replaced, never edited — see the lens above). A screen asks this once per row,
+// and every ask used to filter and sort the whole four-month history.
+const historyIndex = memoLast(indexHistoryByIngredient);
+const ingredientMap = memoLast(list => {
+  const map = new Map();
+  list.forEach(i => { if (!map.has(i.id)) map.set(i.id, i); });   // the first, as find() answered
+  return map;
+});
 function suggestFor(id, stock) {
-  const ing = state.ingredients.find(i => i.id === id) || null;
-  return computeSuggestion(id, stock, state.history, ing);
+  const ing = ingredientMap(state.ingredients).get(id) || null;
+  return computeSuggestion(id, stock, historyIndex(state.history).get(id) || [], ing);
 }
 
 // ── Reminders (today's orders / an order left from an earlier day) ────────────
