@@ -578,3 +578,83 @@ test('S5: the words, in both languages; each feature has its own storage key', (
   const sw = read('sw.js');
   for (const f of ['./js/zoom-steps.js', './js/calc-fullscreen.js', './js/catalogue/zoom-steps.js']) assert.ok(sw.includes(`'${f}'`), f);
 });
+
+// ── S6: actions are solid green; choices and names never are ──────────────────────────
+function cssRules(css) {
+  const out = [];
+  for (const m of strip(css).matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+    out.push({ selectors: m[1].split(',').map(s => s.trim().replace(/\s+/g, ' ')), body: m[2].replace(/\s+/g, ' ').trim() });
+  }
+  return out;
+}
+const SOLID_GREEN = /background(?:-color)?:\s*var\(--(?:brand|accent|cat-brand|cat-accent|fc-brand|inv-brand|pas-brand)\)/;
+
+// Each selected state of a CHOICE, the file that draws it, and whether its border is 1px or none.
+const CHOICES = [
+  ['style.css', '.tab.active'],
+  ['style.css', '.co-view--on'],
+  ['pastries.css', '.pas-chip[aria-selected="true"]'],
+  ['tokens.css', '.set-seg-btn[aria-pressed="true"]'],
+  ['inventory.css', '.inv-filter.on'],
+  ['orders.css', '.invimp-filter[aria-pressed="true"]'],
+  ['catalogue.css', '.lab-switch-btn--on'],
+  ['catalogue.css', '.alg-sheet-pill--ok'], // a NAME (state word), same pair
+];
+
+test('S6: no selected state of a choice, and no state chip, has a solid green background', () => {
+  for (const [file, selector] of CHOICES) {
+    const rule = cssRules(read(file)).find(r => r.selectors.includes(selector));
+    assert.ok(rule, `${file}: ${selector} exists`);
+    assert.doesNotMatch(rule.body, SOLID_GREEN, `${selector} must not be a solid green fill`);
+    assert.match(rule.body, /background: var\(--accent-light\)/, `${selector} is the tint`);
+    assert.match(rule.body, /color: var\(--brand\)/, `${selector} has brand text`);
+    assert.doesNotMatch(rule.body, /color: var\(--on-brand\)|-ink\)/, `${selector} has no on-brand text`);
+  }
+});
+
+test('S6: the frame is 2px of brand, drawn without changing the box size', () => {
+  for (const [file, selector] of CHOICES.filter(([, s]) => s !== '.alg-sheet-pill--ok')) {
+    const rule = cssRules(read(file)).find(r => r.selectors.includes(selector));
+    // either an inset 2px ring (borderless controls), or the control's own border turned brand plus
+    // an inset ring that tops it up to 2px
+    const ring = rule.body.match(/box-shadow: inset 0 0 0 (\.5px|1px|2px) var\(--brand\)/);
+    assert.ok(ring, `${selector}: an inset brand ring`);
+    if (ring[1] !== '2px') assert.match(rule.body, /border-color: var\(--brand\)/, `${selector}: its border turns brand`);
+    assert.doesNotMatch(rule.body, /(?:^|[; ])border(?:-width)?:\s*2px/, `${selector}: a real 2px border would shift the layout`);
+  }
+});
+
+test('S6: brand text on the tint reads at least 4.5:1 (it is ~8.6:1)', () => {
+  const tokens = read('tokens.css');
+  const hex = name => tokens.match(new RegExp('--' + name + ':\\s*(#[0-9A-Fa-f]{6})'))[1];
+  const lum = h => {
+    const c = [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16) / 255).map(v => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4));
+    return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+  };
+  const ratio = (a, b) => { const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x); return (hi + 0.05) / (lo + 0.05); };
+  assert.ok(ratio(hex('brand'), hex('accent-light')) >= 4.5, String(ratio(hex('brand'), hex('accent-light'))));
+  assert.ok(ratio(hex('brand'), hex('accent-light')) > 8);
+});
+
+test('S6: actions KEEP the solid fill (Confirm, the day buttons, Save in the header, the − / + pair)', () => {
+  const style = cssRules(read('style.css'));
+  for (const sel of ['.confirm-btn-primary', '.day-btn']) {
+    assert.match(style.find(r => r.selectors.includes(sel)).body, SOLID_GREEN, sel);
+  }
+  const tokens = cssRules(read('tokens.css'));
+  assert.match(tokens.find(r => r.selectors.includes('.app-dialog-btn-solid')).body, /background: var\(--brand\)/);
+  assert.match(tokens.find(r => r.selectors.includes('.zoom-step-btn')).body, SOLID_GREEN);
+  // the switch track is the standard switch: still green when on
+  assert.ok(tokens.find(r => r.selectors.some(s => s.startsWith('.set-switch input:checked'))), 'switch rule exists');
+});
+
+test('S6: the orders tab badge no longer forces white on the (now pale) active tab', () => {
+  assert.doesNotMatch(strip(read('orders.css')), /\.tab\.active \.tab-badge/);
+});
+
+test('S6: the focus ring still shows on the selected look', () => {
+  assert.match(strip(read('tokens.css')), /\.set-seg-btn:focus-visible \{ outline: 3px solid var\(--accent-2\); outline-offset: 2px; \}/);
+  assert.match(strip(read('style.css')), /:focus-visible \{ outline: 2px solid var\(--accent\)|:focus-visible \{ outline: 2px solid var\(--accent-2\)/);
+  // inside the pastries strip the ring is drawn inward, so it is moved off the selected frame
+  assert.match(strip(read('pastries.css')), /\.pas-chip\[aria-selected="true"\]:focus-visible \{ outline-offset: -4px; \}/);
+});

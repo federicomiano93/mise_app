@@ -1,4 +1,4 @@
-const CACHE_NAME = 'theitalianclub-v596';
+const CACHE_NAME = 'theitalianclub-v597';
 // Firebase SDK modules (loaded from gstatic) are cached SEPARATELY from CACHE_NAME
 // so they survive the cache-version bump that happens on every deploy — otherwise
 // the offline SDK would be wiped each release until the next online load. The name
@@ -434,10 +434,10 @@ const ASSET_HASHES = {
   "./js/reset-password-boot.js": '9c3e1fca587f872c',
   "./qr.png": '761a95e5bc25e2ba',
   "./js/install-guide.js": '17fcd0c0fec489c2',
-  "./tokens.css": '8431e49254876bbf',
+  "./tokens.css": '9bec41764fe56171',
   "./auth.css": '55b0bc1d41af5718',
-  "./style.css": '325e49e019e8921f',
-  "./orders.css": '645ae3d74e83bb8f',
+  "./style.css": 'a63a6d5a0c9ef21c',
+  "./orders.css": 'd15acfef1e289715',
   "./sounds/alarm.wav": '0d1465974f5be95b',
   "./fonts/manrope-latin.woff2": '71eb731d55804619',
   "./fonts/manrope-latin-ext.woff2": 'bd24140af06f1b58',
@@ -636,7 +636,7 @@ const ASSET_HASHES = {
   "./js/orders/order-cost-view.js": '4b03fed043e88d39',
   "./js/orders/order-summary-view.js": '2ab80dbb8b7fa26f',
   "./catalogue.html": 'd8e083ace20db70f',
-  "./catalogue.css": 'f8efc4ca720c7793',
+  "./catalogue.css": 'cd81d12ad271c434',
   "./label-print.css": 'ffbcdf4e7a627a2d',
   "./records.css": '8398289629b4233d',
   "./js/catalogue/confirm-dialog.js": '61a7f580f37c5ff8',
@@ -675,7 +675,7 @@ const ASSET_HASHES = {
   "./js/catalogue/guided-editor.js": '54166ebcffc295b7',
   "./js/catalogue/import-to-calculator.js": '509d83f39384e106',
   "./pastries.html": '1235bcabca392b9b',
-  "./pastries.css": '547bad0bff6f28e2',
+  "./pastries.css": '3392bc6fd72be603',
   "./js/pastries/confirm-dialog.js": '61a7f580f37c5ff8',
   "./js/pastries/dom.js": '84e0623e447bb7ab',
   "./js/pastries/pastries-model.js": 'd162282f04d5287d',
@@ -708,7 +708,7 @@ const ASSET_HASHES = {
   "./js/foodcost/product-limits.js": 'd73e12634551ea98',
   "./js/foodcost/foodcost-settings.js": '8299df0496767f9a',
   "./inventory.html": 'd9762babb2ebdec6',
-  "./inventory.css": 'd80b7de1b5da298e',
+  "./inventory.css": '01904205569af145',
   "./js/inventory/confirm-dialog.js": '61a7f580f37c5ff8',
   "./js/inventory/dom.js": '5971dfbbb1e223ec',
   "./js/inventory/inventory-model.js": '7cc2935526d50a88',
