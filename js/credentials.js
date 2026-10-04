@@ -103,3 +103,13 @@ export function passwordProblem(value, email) {
 
   return null;
 }
+
+// What is wrong with the repeated password — or null. Typed twice because the first
+// password is typed into dots: one slip and somebody holds an account whose password they
+// have never actually seen (Federico, 4 Oct 2026: «come sono ormai tutti i moduli»).
+// Compared exactly — no trimming — since the first box is sent exactly as typed.
+export function confirmProblem(value, repeated) {
+  if (typeof repeated !== 'string' || !repeated) return t('help.repeatThePassword');
+  if (repeated !== value) return t('help.passwordsDoNotMatch');
+  return null;
+}

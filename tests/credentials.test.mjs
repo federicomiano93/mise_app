@@ -13,7 +13,9 @@ import {
   cleanName,
   nameProblem,
   passwordProblem,
+  confirmProblem,
 } from '../js/credentials.js';
+import { readFileSync } from 'node:fs';
 
 // ── The name ─────────────────────────────────────────────────────────────────
 
@@ -132,4 +134,28 @@ test('a good password is accepted quietly', () => {
 test('no email given still validates everything else', () => {
   assert.equal(passwordProblem('abcdefghij'), null);
   assert.ok(passwordProblem('short'));
+});
+
+// ── The password typed twice (4 Oct 2026) ────────────────────────────────────
+
+test('the repeated password must be there and match exactly', () => {
+  assert.equal(confirmProblem('Pane-di-casa-7', 'Pane-di-casa-7'), null);
+  assert.ok(confirmProblem('Pane-di-casa-7', ''), 'empty second box');
+  assert.ok(confirmProblem('Pane-di-casa-7', undefined), 'missing second box');
+  assert.ok(confirmProblem('Pane-di-casa-7', 'Pane-di-casa-8'), 'one character off');
+  assert.ok(confirmProblem('Pane-di-casa-7', 'pane-di-casa-7'), 'case matters');
+  // The first box is sent exactly as typed, so a trailing space is a real difference.
+  assert.ok(confirmProblem('Pane-di-casa-7', 'Pane-di-casa-7 '), 'no trimming');
+  assert.notEqual(confirmProblem('a', ''), confirmProblem('a', 'b'), 'two different messages');
+});
+
+test('the invitation form asks for the password twice and checks it before anything is sent', () => {
+  const gate = readFileSync(new URL('../js/auth-gate.js', import.meta.url), 'utf8');
+  assert.match(gate, /password2\.id = 'join-password2';/);
+  assert.match(gate, /password2\.autocomplete = 'new-password';/);
+  assert.match(gate, /form\.append\(emailLabel, email, passLabel, password, pass2Label, password2\)/);
+  // Inside problem(), which runs before the network and before the account is created.
+  const start = gate.indexOf('const problem = () => {');
+  const problem = gate.slice(start, gate.indexOf("form.addEventListener('submit'", start));
+  assert.match(problem, /confirmProblem\(password\.value, password2\.value\)/);
 });

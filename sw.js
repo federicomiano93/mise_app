@@ -1,4 +1,4 @@
-const CACHE_NAME = 'theitalianclub-v567';
+const CACHE_NAME = 'theitalianclub-v568';
 // Firebase SDK modules (loaded from gstatic) are cached SEPARATELY from CACHE_NAME
 // so they survive the cache-version bump that happens on every deploy — otherwise
 // the offline SDK would be wiped each release until the next online load. The name
@@ -503,12 +503,12 @@ const ASSET_HASHES = {
   "./js/location.js": '6aaf53615a8739d1',
   "./js/sections.js": 'abcfdecb2bd5766d',
   "./js/roles.js": '2b491770c4b6165b',
-  "./js/i18n.js": '3669bd32ae6200af',
+  "./js/i18n.js": '44fda952fd459ab5',
   "./js/i18n-dom.js": '24249af4367511e5',
   "./js/keyboard-done.js": 'de05a6dd1f3aac26',
   "./js/join-code.js": '5b89de65db5c102f',
   "./js/join-link.js": 'a90ea53c7ba51614',
-  "./js/credentials.js": '5d9eece15a3a969a',
+  "./js/credentials.js": 'b805f88d003ea918',
   "./js/staff/dom.js": 'e700814a373b85e9',
   "./js/staff/confirm-dialog.js": '61a7f580f37c5ff8',
   "./js/staff/firebase-staff.js": '556b93b42a530ad5',
@@ -520,7 +520,7 @@ const ASSET_HASHES = {
   "./js/staff/home-cards-screen.js": 'a53963420fed4227',
   "./js/local-data.js": '15240f20e96af7e0',
   "./js/unsent-guard.js": 'd75b23b7ad361133',
-  "./js/auth-gate.js": '087bd4f627f12197',
+  "./js/auth-gate.js": '1ba0756de8dcc9cc',
   "./js/preview-ribbon.js": 'ee39b7ee13f78c02',
   "./js/home-session.js": '4066767af86b6601',
   "./js/home-settings.js": '22977f1f07dd9ad8',
