@@ -169,7 +169,7 @@ function logCard(log) {
   ]));
   const at = v.at || {};
   body.appendChild(el('div', { class: 'log-timestamp' }, [icon('calendar', 14), ' ' + (at.date || '') + ' — ' + (at.time || '')]));
-  if (v.calculatedBy) body.appendChild(el('div', { class: 'logview-by' }, 'by ' + v.calculatedBy));
+  if (v.calculatedBy) body.appendChild(el('div', { class: 'logview-by' }, t('calc.byName', { name: v.calculatedBy })));
   if ((log.versions || []).length > 1) body.appendChild(el('div', { class: 'log-ver-count' }, 'v' + log.versions.length + t('calc.edited')));
   body.appendChild(renderOrder(v));
   card.appendChild(body);
@@ -195,7 +195,7 @@ function openLogView(id) {
   if (!log) return;
   const c = document.getElementById('logview-content');
   c.textContent = '';
-  document.getElementById('logview-title').textContent = log.dough + ' log';
+  document.getElementById('logview-title').textContent = t('calc.logTitle', { dough: log.dough });
   c.appendChild(renderVersion(latestVersion(log), log));
   document.getElementById('logview-overlay').classList.add('visible');
 }
@@ -221,7 +221,7 @@ document.getElementById('log-content').addEventListener('click', async e => {
   if (delB) {
     const id = delB.dataset.id;
     const log = getLogById(id);
-    const msg = t('calc.deleteThis') + (log ? log.dough : '') + t('calc.logThisCannotBe');
+    const msg = log && log.dough ? t('calc.deleteLogNamed', { dough: log.dough }) : t('calc.deleteThisLog');
     if (await confirmDialog({ message: msg, okLabel: t('ui.delete'), danger: true, cancelLabel: t('ui.cancel') })) deleteLog(id);
     return;
   }

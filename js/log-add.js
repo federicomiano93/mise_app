@@ -106,7 +106,7 @@ function render() {
     for (const it of state.items) {
       if (it.clientName !== lastClient || card === null) {
         lastClient = it.clientName;
-        card = el('div', { class: 'card' }, [el('div', { class: 'card-title' }, it.clientName || 'Client')]);
+        card = el('div', { class: 'card' }, [el('div', { class: 'card-title' }, it.clientName || t('calc.unnamedClient'))]);
         c.appendChild(card);
       }
       card.appendChild(qtyRow(it, (q) => { it.qty = q; }));

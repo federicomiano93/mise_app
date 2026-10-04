@@ -32,7 +32,7 @@ function renderItems(version) {
   const order = [];
   for (const it of (version.items || [])) {
     if (num(it.qty) <= 0) continue;
-    const key = it.clientName || 'Client';
+    const key = it.clientName || t('calc.unnamedClient');
     if (!groups.has(key)) { groups.set(key, []); order.push(key); }
     groups.get(key).push(it);
   }
@@ -77,8 +77,8 @@ export function renderSheetCard(sheet) {
 
   const children = [
     el('div', { class: 'result-header' }, [
-      el('h3', {}, sheet.dough + ' dough'),
-      el('span', { class: 'result-badge' }, num(sheet.total_g) + ' g raw'),
+      el('h3', {}, t('calc.doughTitle', { name: sheet.dough })),
+      el('span', { class: 'result-badge' }, t('calc.gramsRaw', { g: num(sheet.total_g) })),
     ]),
     el('div', {}, rows),
     el('div', { class: 'ing-separator' }),

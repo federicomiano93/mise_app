@@ -268,7 +268,7 @@ function historyCard(order) {
   const card = el('div', { class: 'co-card co-card--past' }, [
     el('div', { class: 'co-card-head' }, [
       el('span', { class: 'co-card-client' },
-        (client && client.name) || order.clientName || 'Client'),
+        (client && client.name) || order.clientName || t('calc.unnamedClient')),
       el('span', { class: 'co-card-when' }, linesLabel(order)),
     ]),
   ]);
@@ -322,7 +322,7 @@ function orderCard(order) {
 
   const card = el('div', { class: `co-card${changed ? ' co-card--changed' : ''}${used ? ' co-card--used' : ''}` }, [
     el('div', { class: 'co-card-head' }, [
-      el('span', { class: 'co-card-client' }, (client && client.name) || order.clientName || 'Client'),
+      el('span', { class: 'co-card-client' }, (client && client.name) || order.clientName || t('calc.unnamedClient')),
       el('span', { class: 'co-card-when' }, dayLabel(order.date)),
     ]),
     el('p', { class: 'co-card-arrived' },

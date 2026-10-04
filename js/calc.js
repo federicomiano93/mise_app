@@ -259,7 +259,7 @@ export function calc(id) {
   const disp = document.getElementById(id + '-param-display');
   if (disp) disp.textContent = pct;
   const badge = document.getElementById(id + '-badge');
-  if (badge) badge.textContent = Math.round(target) + ' g raw';
+  if (badge) badge.textContent = t('calc.gramsRaw', { g: Math.round(target) });
   const totalEl = document.getElementById(id + '-total');
   if (totalEl) totalEl.textContent = Math.round(target);
 
