@@ -14,13 +14,18 @@ import { buildSheet, buildLogText, recipeSnapshot } from './log-model.js';
 import { createAndSave } from './log-store.js';
 import { qtyRow } from './log-qty.js';
 import { confirmDialog } from './confirm-dialog.js';
+import { createSaveGuard } from './save-guard.js';
+import { revealField } from './reveal-field.js';
+
+// While the save is in flight the header Save is disabled and Back waits (js/save-guard.js).
+const saveGuard = createSaveGuard(() => document.getElementById('logadd-save-btn'));
 
 const num = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
 
-let state = null; // { recipeId, forDay, items[], totalInput } or null when closed
+let state = null; // { recipeId, forDay, items[], totalInput, dayMissing } or null when closed
 
 export function openLogAdd() {
-  state = { recipeId: null, forDay: null, items: [], totalInput: 0 };
+  state = { recipeId: null, forDay: null, items: [], totalInput: 0, dayMissing: false };
   render();
   document.getElementById('logadd-overlay').classList.add('visible');
 }
@@ -31,6 +36,7 @@ function isDirty() {
 }
 
 async function close(saved) {
+  if (!saved && saveGuard.saving) return;
   if (!saved && !(await confirmDiscard(isDirty()))) return;
   document.getElementById('logadd-overlay').classList.remove('visible');
   state = null;
@@ -82,10 +88,14 @@ function render() {
 
   // Today / Tomorrow (required).
   c.appendChild(el('div', { class: 'cp-label' }, t('calc.whenIsThisDough')));
-  const dayChoices = el('div', { class: 'logday-choices' });
+  // ⚠️ Save is in the header from the moment a recipe is picked, so it can be tapped with no
+  // day chosen: commit() then says so HERE, above the two buttons, and they turn red.
+  const dayMissing = state.dayMissing && !state.forDay;
+  if (dayMissing) c.appendChild(el('div', { class: 'logday-hint', role: 'alert' }, t('calc.chooseDayFirst')));
+  const dayChoices = el('div', { class: 'logday-choices' + (dayMissing ? ' logday-choices--missing' : '') });
   for (const d of ['today', 'tomorrow']) {
     const btn = el('button', { class: 'logday-choice' + (state.forDay === d ? ' selected' : ''), type: 'button' }, d === 'today' ? t('ui.today') : t('ui.tomorrow'));
-    btn.addEventListener('click', () => { state.forDay = d; render(); });
+    btn.addEventListener('click', () => { state.forDay = d; state.dayMissing = false; render(); });
     dayChoices.appendChild(btn);
   }
   c.appendChild(dayChoices);
@@ -120,8 +130,16 @@ function render() {
 }
 
 // Build and save a brand-new log — same generic math/shape as a calculator Confirm.
-async function commit() {
-  if (!state || !state.recipeId || !state.forDay) return;
+function commit() { return saveGuard.run(doCommit); }
+
+async function doCommit() {
+  if (!state || !state.recipeId) return;
+  if (!state.forDay) {
+    state.dayMissing = true;
+    render();
+    revealField(document.querySelector('#logadd-content .logday-choices--missing .logday-choice'));
+    return;
+  }
   if (!(await confirmDialog({ message: t('calc.saveThisLog'), okLabel: t('ui.save'), cancelLabel: t('ui.cancel') }))) return;
   const recipe = getRecipeById(getConfig(), state.recipeId);
   if (!recipe) return;

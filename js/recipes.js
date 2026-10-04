@@ -14,6 +14,10 @@
 import { t } from './i18n.js';
 import { confirmDiscard } from './calculator-confirm.js';
 import { confirmDialog, alertDialog } from './confirm-dialog.js';
+import { createSaveGuard } from './save-guard.js';
+
+// While the write is in flight the header Save is disabled and Back / Home wait (js/save-guard.js).
+const saveGuard = createSaveGuard(() => document.getElementById('recipe-save-btn'));
 import { recipeTotal } from './calculator-dough-math.js';
 import { getConfig, saveConfig } from './calculator-config-store.js';
 import {
@@ -78,6 +82,7 @@ function isEmptyRecipe(r) {
 }
 
 export async function closeRecipes() {
+  if (saveGuard.saving) return;
   if (activeRecipe !== null) {
     const r = recipes()[activeRecipe];
     if (freshlyAdded && isEmptyRecipe(r)) {
@@ -94,6 +99,7 @@ export async function closeRecipes() {
 }
 
 export async function goHomeFromRecipes() {
+  if (saveGuard.saving) return;
   if (!(await confirmDiscard(dirty))) return;
   window.location.href = 'index.html';
 }
@@ -124,7 +130,9 @@ function findInvalid() {
   return null;
 }
 
-export async function saveRecipes() {
+export function saveRecipes() { return saveGuard.run(doSaveRecipes); }
+
+async function doSaveRecipes() {
   const invalid = findInvalid();
   if (invalid !== null) {
     showErrors = true;

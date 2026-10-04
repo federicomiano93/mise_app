@@ -1,4 +1,4 @@
-const CACHE_NAME = 'theitalianclub-v574';
+const CACHE_NAME = 'theitalianclub-v576';
 // Firebase SDK modules (loaded from gstatic) are cached SEPARATELY from CACHE_NAME
 // so they survive the cache-version bump that happens on every deploy — otherwise
 // the offline SDK would be wiped each release until the next online load. The name
@@ -12,7 +12,7 @@ const CACHE_NAME = 'theitalianclub-v574';
 // the fetch handler below, on the first load that has a network.
 // So between activate() and that first load, a phone that is OFFLINE cannot boot:
 // the code asks for the new version and nothing has it. In practice the window is very
-// small — activate() only happens after a successful 292-file precache, i.e.
+// small — activate() only happens after a successful 294-file precache, i.e.
 // online, and tapping the update banner reloads the page immediately — but it is
 // not zero, and it is the reason to bump the SDK deliberately rather than often.
 // Leaving the name unchanged would close the window and cost ~1 MB of dead
@@ -123,6 +123,8 @@ const ASSETS = [
   // its cache never received. It is also the file that decides whether a label may
   // be printed at all, so its absence would look like the app refusing every label.
   './js/market.js',
+  './js/reveal-field.js',
+  './js/save-guard.js',
   './js/push-model.js',
   './js/push.js',
   './js/client-order-model.js',
@@ -423,7 +425,7 @@ const ASSET_HASHES = {
   "./js/install-guide.js": '17fcd0c0fec489c2',
   "./tokens.css": 'c5f9671d84b8a7fa',
   "./auth.css": 'e4ba63eda208115b',
-  "./style.css": '19cfdba054d201cf',
+  "./style.css": 'd736512e4431448f',
   "./orders.css": '645ae3d74e83bb8f',
   "./sounds/alarm.wav": '0d1465974f5be95b',
   "./fonts/manrope-latin.woff2": '71eb731d55804619',
@@ -467,6 +469,8 @@ const ASSET_HASHES = {
   "./js/ingredient-name.js": '9045e25fc169d2ff',
   "./js/photo-model.js": '67d1d83755bbd33a',
   "./js/market.js": '4b3979c5ca8128f7',
+  "./js/reveal-field.js": 'f311c75f44e632d8',
+  "./js/save-guard.js": '361b8200f7935368',
   "./js/push-model.js": '40c90e5a6229cb3f',
   "./js/push.js": 'd7aad3c3bd098461',
   "./js/client-order-model.js": '01afe2d8a045dbe8',
@@ -503,7 +507,7 @@ const ASSET_HASHES = {
   "./js/location.js": '6aaf53615a8739d1',
   "./js/sections.js": 'abcfdecb2bd5766d',
   "./js/roles.js": '2b491770c4b6165b',
-  "./js/i18n.js": 'aa4873153de2e6a6',
+  "./js/i18n.js": 'ad0bdb7b8b747a67',
   "./js/i18n-dom.js": '24249af4367511e5',
   "./js/keyboard-done.js": 'de05a6dd1f3aac26',
   "./js/join-code.js": '5b89de65db5c102f',
@@ -526,7 +530,7 @@ const ASSET_HASHES = {
   "./js/home-settings.js": '22977f1f07dd9ad8',
   "./js/app-version.js": '2ed7f01712161130',
   "./js/location-title.js": '296d2d7d3d04d7f3',
-  "./js/recipes.js": 'b7cb156c5a7b8ec3',
+  "./js/recipes.js": 'eb092449b1c4ef8c',
   "./js/calc.js": '3c9dbd187a60501c',
   "./js/calculator-recipe-text.js": 'aa41a24dba41595f',
   "./js/calculator-dough-math.js": '85008bf4375927f4',
@@ -535,10 +539,10 @@ const ASSET_HASHES = {
   "./js/log-model.js": '625b88c5e5336bb4',
   "./js/log-store.js": '9b53edc064b6f29c',
   "./js/log-view.js": '1042bc5d8f8f8939',
-  "./js/log-edit.js": '7c9a05e1c90235c6',
+  "./js/log-edit.js": '430f945e265cece9',
   "./js/log-qty.js": '2aae575dfdaec907',
-  "./js/log-add.js": '36c266ffe7f0eb31',
-  "./js/log-settings.js": 'e46626754d2856d6',
+  "./js/log-add.js": 'da3d24631136bcfb',
+  "./js/log-settings.js": '87f7bc8d22c56457',
   "./js/whatsapp.js": 'bae7621de9542fc1',
   "./js/calculator-confirm.js": '68a8ecb9ef0f0ab9',
   "./js/calculator-config.js": '233fcda48cb469ce',
@@ -546,8 +550,8 @@ const ASSET_HASHES = {
   "./js/calculator-order-prefill.js": '28c00f4fea7d43b7',
   "./js/calculator-order-text.js": '3eabd34a0df19321',
   "./js/calculator-render.js": 'bb2486b164490152',
-  "./js/calculator-settings.js": 'c7e8843d6c507c8a',
-  "./js/calculator-whatsapp-settings.js": '0d7a95974bce6d41',
+  "./js/calculator-settings.js": '616af8313325e9da',
+  "./js/calculator-whatsapp-settings.js": 'cacc6b716a121de0',
   "./js/vendor/sortable.esm.js": '824d48148fc5b469',
   "./js/orders/boot.js": '53dba081d29270d8',
   "./js/orders/category-batches.js": '03d72f63c4fa4a8a',
@@ -648,7 +652,7 @@ const ASSET_HASHES = {
   "./js/catalogue/search-box.js": '188bbe833ccbde26',
   "./js/catalogue/catalogue-settings.js": '085573368700207f',
   "./js/catalogue/catalogue-detail.js": '52ab290f2feb8f75',
-  "./js/catalogue/catalogue-editor.js": '73eb22d64042d817',
+  "./js/catalogue/catalogue-editor.js": '6d7fd6f1b73d9958',
   "./js/catalogue/guided-model.js": '60902e8129430dd7',
   "./js/catalogue/guided-alarm.js": '9104e391cb96f5ef',
   "./js/catalogue/guided-run.js": 'da10dcad21f5e8d8',
@@ -664,7 +668,7 @@ const ASSET_HASHES = {
   "./js/pastries/pastries-main.js": 'fbe7465d10be717e',
   "./js/pastries/pastries-strip.js": '9cfc62e2edf9a343',
   "./js/pastries/pastries-day.js": '66d6b8f0478f7b2c',
-  "./js/pastries/pastries-editor.js": '648fc6f64a163a72',
+  "./js/pastries/pastries-editor.js": '3135e7f4d00f3efb',
   "./js/pastries/pastries-log-model.js": '6e3160b978365672',
   "./js/pastries/pastries-lock.js": 'adfbaeea4bd7c845',
   "./js/pastries/pastries-logs-store.js": '85cc1ec0c21baa30',
@@ -681,7 +685,7 @@ const ASSET_HASHES = {
   "./js/foodcost/foodcost-list.js": '897a6bf3b9e0e95d',
   "./js/foodcost/tablet.js": '2eb3e7cad10ca3fc',
   "./js/foodcost/crossing-route.js": '2993db36c98800ae',
-  "./js/foodcost/foodcost-editor.js": 'f6a3fbe68f7b5da0',
+  "./js/foodcost/foodcost-editor.js": 'b650b8ec5e98c192',
   "./js/foodcost/foodcost-weighing.js": 'cb2f9dfafec4d739',
   "./js/foodcost/vat-guide.js": '59257253ecddb640',
   "./js/foodcost/vat-guide-view.js": '34ce4c1f2df472ed',
@@ -734,7 +738,7 @@ const ASSET_HASHES = {
 // code against rules that deployed instantly, which is the very thing the gate exists
 // to prevent. Two things stand between that and a release: the test that every ASSETS
 // entry EXISTS (a mistyped path being the likeliest permanent cause), and this
-// project's post-deploy sweep, which already asks the live site for all 292 files.
+// project's post-deploy sweep, which already asks the live site for all 294 files.
 // ⚠️ NEITHER covers a device-specific failure — nobody has yet confirmed an update
 // landing on a real iPhone under this code.
 //

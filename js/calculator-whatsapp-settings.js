@@ -35,6 +35,10 @@ import {
 import { el } from './calculator-render.js';
 import { icon } from './calculator-icons.js';
 import { confirmDialog, alertDialog } from './confirm-dialog.js';
+import { createSaveGuard } from './save-guard.js';
+
+// While the write is in flight the header Save is disabled and Back / Home wait (js/save-guard.js).
+const saveGuard = createSaveGuard(() => document.getElementById('wa-save-btn'));
 
 let working = null;          // deep copy being edited (re-synced from live at the top)
 let activeList = null;       // null = top screen, else the edited list's index
@@ -110,6 +114,7 @@ export function openWhatsapp() {
 // copy); leaving a detail to the top prompts to discard unsaved edits; from the top
 // it exits the overlay (nothing is pending there — the top re-reads the saved config).
 async function backWhatsapp() {
+  if (saveGuard.saving) return;
   const discardOk = () => confirmDialog({ message: t('calc.discardUnsavedChanges'), okLabel: t('ui.discard'), danger: true, cancelLabel: t('ui.cancel') });
   if (activeDirect !== null) {
     if (addingProduct) { addingProduct = false; renderEditor(); return; }
@@ -134,7 +139,7 @@ async function backWhatsapp() {
   hide('wa-overlay');
 }
 
-function goHome() { window.location.href = 'index.html'; }
+function goHome() { if (saveGuard.saving) return; window.location.href = 'index.html'; }
 
 // ── Render dispatch ────────────────────────────────────────────────────────────
 function renderEditor() {
@@ -165,7 +170,9 @@ function deleteIcon(label, onDelete) {
 
 // Save the currently-edited top-level item (a list or a direct client). The name is
 // required; on success the whole config is persisted and we return to the top screen.
-async function saveDetail() {
+function saveDetail() { return saveGuard.run(doSaveDetail); }
+
+async function doSaveDetail() {
   if (activeDirect !== null) {
     if (isBlank(directClients()[activeDirect].name)) {
       showErrors = true; renderEditor();

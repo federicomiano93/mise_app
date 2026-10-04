@@ -10,6 +10,7 @@
 // asks first.
 
 import { t } from '../i18n.js';
+import { revealField } from '../reveal-field.js';
 import { ingredientDisplayName } from '../ingredient-name.js';
 import { canManageHere } from './firebase-foodcost.js';
 import { el } from './dom.js';
@@ -786,7 +787,7 @@ export function renderEditor({ product, draft = null, app }) {
     if (!String(working.name || '').trim()) {
       showErrors = true;
       validateUI();
-      nameInput.focus();
+      revealField(nameInput);
       app.toast(t('fc.pleaseEnterAProduct'));
       return;
     }
@@ -803,7 +804,7 @@ export function renderEditor({ product, draft = null, app }) {
     if (invalid) {
       const [box, labelKey] = NUMBER_BOXES[invalid] || [null, null];
       box?.classList.add('fc-invalid');
-      try { box?.focus(); } catch (e) { /* focus is best-effort */ }
+      revealField(box);
       app.toast(t('fc.checkNumber', { field: labelKey ? t(labelKey) : invalid }));
       return;
     }

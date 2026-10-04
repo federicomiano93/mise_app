@@ -5,6 +5,7 @@
 
 import { weekdayLabel } from './pastries-model.js';
 import { t } from '../i18n.js';
+import { revealField } from '../reveal-field.js';
 import { el } from './dom.js';
 import {
   cleanItems, findInvalidItems, cleanNote,
@@ -162,7 +163,7 @@ export function renderEditor({ day, items, note, allDays, app }) {
       app.toast(problemMessage(problem.problem, problem.name));
       const rows = [...rowsContainer.children];
       const bad = rows[problem.index] && rows[problem.index].querySelector('.pas-invalid');
-      if (bad) { try { bad.focus(); } catch (e) { /* focus is best-effort */ } }
+      revealField(bad);
       return;
     }
 

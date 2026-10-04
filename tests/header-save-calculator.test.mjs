@@ -5,7 +5,7 @@
 //     button in the log history is not a save and keeps the class);
 //   • the shared style exists in tokens.css with the 44px touch area and the on-brand ring;
 //   • the title gives way to the Save (style.css), and Home is hidden with `hidden`
-//     (that rule reads it through :has()).
+//     (the sibling selectors in style.css, `.app-header-save:not([hidden]) ~ … ~ .recipe-overlay-title`, read it; no :has()).
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';

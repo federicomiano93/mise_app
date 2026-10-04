@@ -16,6 +16,10 @@ import {
 import { el } from './calculator-render.js';
 import { confirmDiscard } from './calculator-confirm.js';
 import { confirmDialog } from './confirm-dialog.js';
+import { createSaveGuard } from './save-guard.js';
+
+// While the save is in flight the header Save is disabled and Back / Home wait (js/save-guard.js).
+const saveGuard = createSaveGuard(() => document.getElementById('logsettings-save-btn'));
 
 let working = null; // { visibility: {recipeId:bool}, retention: {recipeId:hours} } or null
 let dirty = false;
@@ -72,7 +76,9 @@ function recipeCard(recipe) {
   return card;
 }
 
-async function saveAll() {
+function saveAll() { return saveGuard.run(doSaveAll); }
+
+async function doSaveAll() {
   if (!(await confirmDialog({ message: t('calc.saveTheseLogSettings'), okLabel: t('ui.save'), cancelLabel: t('ui.cancel') }))) return;
   const cfg = cloneConfig(getConfig());
   cfg.logVisibility = { ...working.visibility };
@@ -83,6 +89,7 @@ async function saveAll() {
 }
 
 async function closeLogSettings() {
+  if (saveGuard.saving) return;
   if (!(await confirmDiscard(dirty))) return;
   dirty = false;
   hide('logsettings-overlay');
@@ -92,6 +99,7 @@ document.getElementById('open-logsettings-btn').addEventListener('click', openLo
 document.getElementById('logsettings-save-btn').addEventListener('click', saveAll);
 document.querySelector('.logsettings-back-btn').addEventListener('click', closeLogSettings);
 document.getElementById('logsettings-home-btn').addEventListener('click', async () => {
+  if (saveGuard.saving) return;
   if (!(await confirmDiscard(dirty))) return;
   window.location.href = 'index.html';
 });

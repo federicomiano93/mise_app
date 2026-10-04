@@ -10,6 +10,7 @@
 import { t } from '../i18n.js';
 import { supplierLabel } from '../supplier-label.js';
 import { ingredientDisplayName } from '../ingredient-name.js';
+import { revealField } from '../reveal-field.js';
 import { canManageHere } from './firebase-catalogue.js';
 import { el } from './dom.js';
 import {
@@ -392,15 +393,26 @@ export function renderEditor({ recipe, draft, allRecipes, app, getLabelProfile =
       .filter(Boolean).join('  ·  ');
   }
 
-  // Highlight the empty required fields (name, and every ingredient missing a label).
+  // Highlight the empty required fields (name, and every ingredient missing a label) and,
+  // when no named ingredient has an amount, the amount boxes of the named rows.
   function validateUI() {
     nameInput.classList.toggle('cat-invalid', showErrors && !String(working.name || '').trim());
     const labelInputs = rowsContainer.querySelectorAll('.cat-lbl');
+    const amountInputs = rowsContainer.querySelectorAll('.cat-grm');
+    const noAmount = showErrors && findInvalidRecipe(cleanWorking()) === 'weight';
     working.ingredients.forEach((ing, i) => {
-      if (labelInputs[i]) {
-        labelInputs[i].classList.toggle('cat-invalid', showErrors && !String(ing.label || '').trim());
-      }
+      const named = !!String(ing.label || '').trim();
+      if (labelInputs[i]) labelInputs[i].classList.toggle('cat-invalid', showErrors && !named);
+      if (amountInputs[i]) amountInputs[i].classList.toggle('cat-invalid', noAmount && named);
     });
+  }
+
+  // The first field that is wrong for `problem`, scrolled into view with the cursor in it
+  // (P20). Save is at the top of the screen, so the row can be far below the fold.
+  function revealProblem(problem) {
+    if (problem === 'name') { revealField(nameInput); return; }
+    const sel = problem === 'weight' ? '.cat-grm.cat-invalid:not([hidden])' : '.cat-lbl.cat-invalid';
+    revealField(rowsContainer.querySelector(sel) || rowsContainer.querySelector('.cat-lbl'));
   }
 
   // Trim labels, coerce grams to non-negative numbers, drop rows with no name.
@@ -427,7 +439,7 @@ export function renderEditor({ recipe, draft, allRecipes, app, getLabelProfile =
       if (reordering) setReordering(false);
       renderIngredientRows();
       validateUI();
-      if (problem === 'name') nameInput.focus();
+      revealProblem(problem);
       app.toast(
         problem === 'name' ? t('cat.pleaseEnterARecipe')
           : problem === 'weight' ? t('cat.enterAnAmountFor')
@@ -609,7 +621,8 @@ export function renderEditor({ recipe, draft, allRecipes, app, getLabelProfile =
     // ⚠️ LAST, UNDER DELETE. Federico, 13 Sep 2026: «il compila da una foto mettilo sotto
     // alla fine della pagina». It sat under the name, between the one field every recipe
     // starts from and the ingredients it is typed into — in the way of the job it is an
-    // alternative to. On a new recipe there is no Delete, so it is directly under Save.
+    // alternative to. Save lives in the header now, and a new recipe has no
+    // Delete, so the photo button is the last thing on the page, under the label fields.
     photoBtn,
   ]);
 }

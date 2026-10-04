@@ -23,6 +23,10 @@ import { getLogById, appendAndSave, restoreAndSave } from './log-store.js';
 import { renderVersion } from './log-view.js';
 import { qtyRow } from './log-qty.js';
 import { confirmDialog } from './confirm-dialog.js';
+import { createSaveGuard } from './save-guard.js';
+
+// While the save is in flight the header Save is disabled and Back waits (js/save-guard.js).
+const saveGuard = createSaveGuard(() => document.getElementById('logedit-save-btn'));
 
 const num = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
 
@@ -102,7 +106,9 @@ function render() {
 
 // ── Save (append a new version) ───────────────────────────────────────────────
 
-async function save() {
+function save() { return saveGuard.run(doSave); }
+
+async function doSave() {
   if (!(await confirmDialog({ message: t('calc.saveTheseChangesAs'), okLabel: t('ui.save'), cancelLabel: t('ui.cancel') }))) return;
   const tab = working.tab;
 
@@ -149,6 +155,7 @@ async function save() {
 }
 
 async function closeEdit(saved) {
+  if (!saved && saveGuard.saving) return;
   if (!saved && !(await confirmDiscard(dirty))) return; // "continue editing" on cancel
   document.getElementById('logedit-overlay').classList.remove('visible');
   working = null;

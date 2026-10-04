@@ -1611,6 +1611,10 @@ input.cp-prod-weight {
   font-family: 'Manrope', sans-serif; font-size: 15px; font-weight: 600;
 }
 .logday-choice.selected { border-color: var(--accent); background: var(--accent-light); color: var(--accent); }
+/* «Choose Today or Tomorrow first.» — Save was tapped with no day: the message sits above the
+   two buttons and the buttons wear the invalid border (the same red as .cp-invalid). */
+.logday-hint { color: var(--danger); font-size: 14px; font-weight: 600; padding: 0 2px 8px; margin: 0; }
+.logday-choices--missing .logday-choice { border-color: var(--danger); }
 
 /* Log overlays (read-only view, edit screen, history) — same shell as #recipe-overlay. */
 .log-overlay {

@@ -31,6 +31,14 @@ import { openRecipes } from './recipes.js';
 import { openWhatsapp } from './calculator-whatsapp-settings.js';
 import { confirmDiscard } from './calculator-confirm.js';
 import { confirmDialog, alertDialog } from './confirm-dialog.js';
+import { createSaveGuard } from './save-guard.js';
+
+// One guard per header Save: while a write is in flight the button is disabled, a second
+// tap does nothing and Back / Home are ignored until it settles (js/save-guard.js).
+// The idle state of Extra and Divisor is «disabled until something changed».
+const clientsSaveGuard = createSaveGuard(() => document.getElementById('cp-save-btn'));
+const extraSaveGuard = createSaveGuard(() => document.getElementById('extra-save-btn'), () => !extraDirty);
+const divisorSaveGuard = createSaveGuard(() => document.getElementById('divisor-save-btn'), () => !divisorDirty);
 import {
   listOrderingAccounts, createOrderingLink, revokeOrderingLink, orderingLinkFor,
 } from './client-orders-data.js';
@@ -103,6 +111,7 @@ function isEmptyClient(c) {
 }
 
 async function closeClients() {
+  if (clientsSaveGuard.saving) return;
   if (activeClient !== null) {
     const client = clients()[activeClient];
     if (freshlyAdded && isEmptyClient(client)) {
@@ -119,6 +128,7 @@ async function closeClients() {
 }
 
 async function goHomeFromClients() {
+  if (clientsSaveGuard.saving) return;
   if (!(await confirmDiscard(dirty))) return;
   window.location.href = 'index.html';
 }
@@ -138,7 +148,9 @@ function findInvalid() {
   return null;
 }
 
-async function saveClients() {
+function saveClients() { return clientsSaveGuard.run(doSaveClients); }
+
+async function doSaveClients() {
   const invalid = findInvalid();
   if (invalid !== null) {
     showErrors = true;
@@ -588,7 +600,7 @@ let extraDirty = false;
 function updateExtraSaveBtn() {
   const btn = document.getElementById('extra-save-btn');
   if (!btn) return;
-  btn.disabled = !extraDirty;
+  btn.disabled = extraSaveGuard.saving || !extraDirty;
   btn.classList.toggle('dirty', extraDirty);
 }
 
@@ -620,11 +632,14 @@ function openExtra() {
   show('extra-overlay');
 }
 async function closeExtra() {
+  if (extraSaveGuard.saving) return;
   if (!(await confirmDiscard(extraDirty))) return;
   hide('extra-overlay');
 }
 
-async function saveExtra() {
+function saveExtra() { return extraSaveGuard.run(doSaveExtra); }
+
+async function doSaveExtra() {
   if (!(await confirmDialog({ message: t('calc.saveTheseChanges'), okLabel: t('ui.save'), cancelLabel: t('ui.cancel') }))) return;
   try {
     await saveConfig(extraWorking);
@@ -639,6 +654,7 @@ document.getElementById('open-extra-btn').addEventListener('click', openExtra);
 document.querySelector('.extra-back-btn').addEventListener('click', closeExtra);
 document.getElementById('extra-save-btn').addEventListener('click', saveExtra);
 document.getElementById('extra-home-btn').addEventListener('click', async () => {
+  if (extraSaveGuard.saving) return;
   if (!(await confirmDiscard(extraDirty))) return;
   window.location.href = 'index.html';
 });
@@ -656,6 +672,7 @@ function openDivisor() {
 function closeDivisor() { hide('divisor-overlay'); }
 
 async function backDivisor() {
+  if (divisorSaveGuard.saving) return;
   if (divisorTab !== null) {
     if (!(await confirmDiscard(divisorDirty))) return;
     divisorTab = null; divisorWorking = null; divisorDirty = false;
@@ -683,7 +700,7 @@ function setDivisorSaveVisible(visible) {
 function updateDivisorSaveBtn() {
   const btn = document.getElementById('divisor-save-btn');
   if (!btn) return;
-  btn.disabled = !divisorDirty;
+  btn.disabled = divisorSaveGuard.saving || !divisorDirty;
   btn.classList.toggle('dirty', divisorDirty);
 }
 
@@ -763,7 +780,9 @@ function clearDivisorTab(tab) {
   renderDivisorSettings();
 }
 
-async function saveDivisor() {
+function saveDivisor() { return divisorSaveGuard.run(doSaveDivisor); }
+
+async function doSaveDivisor() {
   if (!(await confirmDialog({ message: t('calc.saveTheseChanges'), okLabel: t('ui.save'), cancelLabel: t('ui.cancel') }))) return;
   try {
     await saveConfig(divisorWorking);
@@ -779,6 +798,7 @@ document.getElementById('open-divisor-btn').addEventListener('click', openDiviso
 document.querySelector('.divisor-back-btn').addEventListener('click', backDivisor);
 document.getElementById('divisor-save-btn').addEventListener('click', saveDivisor);
 document.getElementById('divisor-home-btn').addEventListener('click', async () => {
+  if (divisorSaveGuard.saving) return;
   if (!(await confirmDiscard(divisorDirty))) return;
   window.location.href = 'index.html';
 });
