@@ -1826,9 +1826,10 @@ input.cp-prod-weight {
      half recipe tabs wide instead of a 590px card with an empty middle. A tab is a quarter
      of the bar less three 8px gaps, and the bar is min(viewport − 2×16px, 1180px) wide
      (tokens.css widens the page to 1180px), hence the min(). Phones are untouched: this
-     whole block only applies to a tablet. Only this row carries the class — the leavening
-     knob row (also .param-row) keeps the full column. */
-  body[data-card="calculator"] #recipe-tabs .param-row--total {
+     whole block only applies to a tablet. ⚠️ EVERY .param-row (leavening, trays, total) takes
+     this width, not only the total: the leavening row used to keep the full column, so its
+     box ended ~200px right of the trays and total boxes (4 Oct 2026). One width, one right edge. */
+  body[data-card="calculator"] #recipe-tabs .param-row {
     width: calc(1.5 * (min(100vw - 32px, 1180px) - 3 * 8px) / 4);
     min-width: 280px;
     max-width: 100%;

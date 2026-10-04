@@ -121,14 +121,14 @@ export function buildRecipePanel(recipe) {
       el('span', { class: 'param-label' }, [
         label + ' % (', el('span', { id: id + '-param-display' }, String(def)), '%)',
       ]),
-      el('div', { class: 'qty-group' }, [input, el('span', { class: 'unit' }, '%')]),
+      el('div', { class: 'qty-group' }, [input]),
     ]));
   }
 
   // Trays first, then the typed total. The grams the trays make are written under the label
   // and kept up to date by calc.js (id `<recipe>-trays-grams`).
   if (hasTrays) {
-    content.appendChild(el('div', { class: 'param-row param-row--total' }, [
+    content.appendChild(el('div', { class: 'param-row' }, [
       // The «= N g» line sits BESIDE the label, not inside it: inside, the field's accessible
       // name changed on every keystroke. aria-describedby links it; it stays polite-live.
       el('div', { class: 'param-label-stack' }, [
@@ -141,13 +141,16 @@ export function buildRecipePanel(recipe) {
     ]));
   }
 
+  // ⚠️ NO UNIT SPAN AFTER THE BOX in the three param rows (leavening, trays, total): the label
+  // already says «(g)» / «%», and a 20px «g» beside only ONE of the boxes pushed it 24px
+  // left of the others. With the input alone in its right-aligned group every box ends on
+  // the same edge (tests/calculator-work-view.test.mjs).
   if (hasTotalInput) {
-    content.appendChild(el('div', { class: 'param-row param-row--total' }, [
+    content.appendChild(el('div', { class: 'param-row' }, [
       // A real <label for>: it was a plain span, so a screen reader could not name the box.
       el('label', { class: 'param-label', for: id + '-total-input' }, t('calc.totalDoughG')),
       el('div', { class: 'qty-group' }, [
         el('input', { type: 'number', id: id + '-total-input', value: '0', min: '0', step: '1', inputmode: 'numeric' }),
-        el('span', { class: 'unit' }, 'g'),
       ]),
     ]));
   }

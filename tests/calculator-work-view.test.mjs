@@ -7,6 +7,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runConfirm } from '../js/confirm-flow.js';
 import { _dictionaries, translate } from '../js/i18n.js';
+import { installDom, Node, walk } from './helpers/form-dom.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const read = f => readFileSync(join(root, f), 'utf8');
@@ -107,4 +108,47 @@ test('S2: the centred box arrives with the dialog fade + scale (killed by reduce
   assert.match(css, /#day-modal\.visible #day-modal-box \{ animation: app-dialog-in \.16s ease-out; \}/);
   assert.match(strip(read('tokens.css')), /@keyframes app-dialog-in/);
   assert.match(strip(read('tokens.css')), /prefers-reduced-motion: reduce\) \{\s*\*, \*::before, \*::after \{\s*animation-duration: \.01ms !important/);
+});
+
+// ── S3: the boxes of the param rows end on one edge ──────────────────────────────────
+// The project's small fake DOM (tests/helpers/form-dom.mjs), plus the SVG factory the send arrow needs.
+function useDom() {
+  installDom();
+  globalThis.document.createElementNS = (ns, tag) => new Node(tag);
+}
+const classesOf = n => n.className.split(' ').filter(Boolean);
+
+test('S3: no unit span follows the box of a leavening, trays or total row', async () => {
+  useDom();
+  const { buildRecipePanel } = await import('../js/calculator-render.js');
+  const recipe = {
+    id: 'r1', name: 'Pizza', logic: 'both', trayWeight: 1000,
+    ingredients: [{ key: 'flour', label: 'Flour', grams: 600 }, { key: 'yeast', label: 'Yeast', grams: 6 }],
+    leaveningKey: 'yeast', leaveningDefaultPct: 1, showLeavening: true,
+  };
+  for (const logic of ['both', 'traysTotal']) {
+    const panel = buildRecipePanel({ ...recipe, logic });
+    const rows = [];
+    walk(panel).forEach(n => { if (classesOf(n).includes('param-row')) rows.push(n); });
+    assert.ok(rows.length >= 2, `${logic}: param rows drawn`);
+    for (const row of rows) {
+      for (const n of walk(row)) {
+        if (n.className === 'qty-group') {
+          assert.deepEqual(n.children.map(c => c.tagName), ['INPUT'], `${logic}: only the input in the group`);
+        }
+        assert.notEqual(n.className, 'unit', `${logic}: no .unit inside a param row`);
+      }
+    }
+  }
+  delete globalThis.document;
+});
+
+test('S3: render source has no unit span in the param rows, and the tablet width applies to every param row', () => {
+  const js = read('js/calculator-render.js');
+  const panel = js.slice(js.indexOf('export function buildRecipePanel'), js.indexOf("if (hasOrders) {"));
+  assert.doesNotMatch(panel, /class: 'unit'/);
+  const css = strip(read('style.css'));
+  assert.match(css, /body\[data-card="calculator"\] #recipe-tabs \.param-row \{[^}]*width: calc\(1\.5/);
+  // the group is right-aligned, so a lone input ends at the row's right padding
+  assert.match(css, /\.qty-group \{[^}]*justify-content: flex-end/);
 });
