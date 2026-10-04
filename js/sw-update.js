@@ -61,27 +61,6 @@ export async function updateNow(button) {
   } catch { /* no service worker: nothing to update */ }
 }
 
-// Which release is THIS page running? Asked of the worker that controls it, over a
-// private channel. null = no worker, no controller, or no answer in time. Never throws.
-export async function askRunningVersion(timeoutMs = 1500) {
-  try {
-    const controller = navigator.serviceWorker && navigator.serviceWorker.controller;
-    if (!controller) return null;
-    return await new Promise(resolve => {
-      const channel = new MessageChannel();
-      const timer = setTimeout(() => resolve(null), timeoutMs);
-      channel.port1.onmessage = event => {
-        clearTimeout(timer);
-        const version = event.data && event.data.version;
-        resolve(typeof version === 'string' ? version : null);
-      };
-      controller.postMessage({ action: 'version' }, [channel.port2]);
-    });
-  } catch {
-    return null;
-  }
-}
-
 function watchForUpdates(reg) {
   if (!reg) return;
 

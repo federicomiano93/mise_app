@@ -1523,6 +1523,8 @@ body[data-card="suppliers"] .app-header {
 }
 .set-row .set-select { flex-shrink: 0; max-width: 55%; }
 /* A compact button at the end of a row (btn-primary is full width by default). */
+/* 44px button + the row's 12px padding top and bottom, held from the first paint. */
+.set-row--version { min-height: 68px; }
 .set-row .set-action { flex-shrink: 0; width: auto; min-height: 44px; margin-top: 0; padding: 10px 16px; font-size: 15px; }
 .set-saved {
   flex-shrink: 0;
