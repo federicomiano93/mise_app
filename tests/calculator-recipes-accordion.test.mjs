@@ -184,7 +184,7 @@ test('the list of confirmed doughs is «Dough history» / «Storico impasti»', 
   assert.doesNotMatch(html, /data-i18n="ui\.log">Log</);
   assert.match(html, /id="log-footer-btn"[\s\S]*?data-i18n="ui\.log">Dough history</);
   for (const k of ['ui.chooseWhichRecipesLogs', 'calc.noLogsToShow', 'calc.noLogsYetCalculate',
-    'calc.forEachRecipeChoose', 'calc.logsAreAlwaysKept', 'calc.keepLogsVisible', 'calc.logDurationFor',
+    'calc.forEachRecipeChoose', 'calc.logsAreAlwaysKept', 'calc.keepLogsVisible', 'calc.logDurationForRecipe',
     'calc.saveTheseLogSettings', 'help.confirmSavesTheSheet']) {
     assert.doesNotMatch(D.en[k], /\bLog\b/, `en ${k}`);
     assert.doesNotMatch(D.it[k], /\bRegistro\b/, `it ${k}`);

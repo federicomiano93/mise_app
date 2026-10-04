@@ -15,7 +15,8 @@ import { saveFailureKey } from '../js/calculator-config.js';
 import { _dictionaries } from '../js/i18n.js';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
-const read = f => readFileSync(join(root, f), 'utf8');
+// A Windows checkout serves CRLF; the CSS assertions below are written with \n.
+const read = f => readFileSync(join(root, f), 'utf8').replace(/\r\n/g, '\n');
 const D = _dictionaries();
 
 // ── The failure helper ────────────────────────────────────────────────────────────────
@@ -130,10 +131,12 @@ test('no entry title is built from «dough + log», and the fallback name is not
 
 // ── The Recipes list ──────────────────────────────────────────────────────────────────────
 test('«Tap one to open it» — the rows open in place now', () => {
-  assert.match(D.en['calc.yourRecipesTheBase'], /Tap one to open it/);
-  assert.match(D.it['calc.yourRecipesTheBase'], /Toccane una per aprirla/);
-  assert.doesNotMatch(D.en['calc.yourRecipesTheBase'], /to edit it/);
-  assert.match(D.en['calc.yourRecipesTheBase'], /Up to $/);
+  for (const form of ['one', 'other']) {
+    assert.match(D.en['calc.recipesIntro'][form], /Tap one to open it/);
+    assert.match(D.it['calc.recipesIntro'][form], /Toccane una per aprirla/);
+    assert.doesNotMatch(D.en['calc.recipesIntro'][form], /to edit it/);
+    assert.match(D.en['calc.recipesIntro'][form], /Up to \{n\}/);
+  }
 });
 
 test('Back and Save give focus back to the head of the row they return to', () => {

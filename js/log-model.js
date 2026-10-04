@@ -123,10 +123,32 @@ export function buildSheet({ recipe, items, extraGrams = 0, totalInput = 0, leav
     param: paramOut,
     total_g: Math.round(total),
     extra_g: Math.round(extra),
+    // The typed part of the target, kept so an edit can read it back exactly.
+    // Only for the logics that use a typed total.
+    ...(logic === 'total' || logic === 'both' ? { typed_g: Math.round(typed) } : {}),
     ingredients,
     divisor: divisorOut,
     crates,
   };
+}
+
+// The typed total a saved version was made with, for a re-calculation (an edit
+// changes quantities only and must keep this part). New sheets carry typed_g. The
+// derivation below exists ONLY for 'both' sheets saved before typed_g: the typed part
+// is what is left of total_g after the product lines (occasional ones included) and
+// the extra. For 'total' the sheet's total_g IS the typed amount.
+export function typedTotalOf(recipe, version) {
+  const logic = (recipe && recipe.logic) || 'orders';
+  const sheet = (version && version.sheet) || null;
+  if (!sheet || (logic !== 'total' && logic !== 'both')) return 0;
+  if (logic === 'total') return Math.max(0, num(sheet.total_g));
+  if (Number.isFinite(Number(sheet.typed_g)) && sheet.typed_g !== null && sheet.typed_g !== '') return Math.max(0, num(sheet.typed_g));
+  let products = 0;
+  for (const it of (version.items || [])) products += num(it.qty) * num(it.weightG);
+  for (const o of (version.occasional || [])) {
+    for (const p of (o.products || [])) products += num(p.qty) * num(p.weightG);
+  }
+  return Math.max(0, Math.round(num(sheet.total_g) - products - num(sheet.extra_g)));
 }
 
 // Human-readable grouped text (client header + indented product lines + extra),
@@ -420,7 +442,7 @@ export function dayLabel(log, nowMs) {
   // today read "Today" — and whoever picked up the log believed it had just been made.
   const text = made === target
     ? dayName(made)
-    : dayName(made) + ' for ' + dayName(target).toLowerCase();
+    : t('day.madeFor', { made: dayName(made), target: dayName(target, true) });
 
   // The colour still follows the day the dough is FOR: it answers "do I need this
   // now?", while the words tell the story. A dough for today stays green even when it

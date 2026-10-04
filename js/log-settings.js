@@ -66,8 +66,8 @@ function recipeCard(recipe) {
   card.appendChild(visRow);
 
   const durRow = el('label', { class: 'extra-toggle-row' }, [el('span', {}, t('calc.keepVisibleFor'))]);
-  const sel = el('select', { class: 'extra-unit-select', 'aria-label': t('calc.logDurationFor') + recipe.name });
-  LOG_RETENTION_OPTIONS.forEach(h => sel.appendChild(el('option', { value: String(h) }, h + ' hours')));
+  const sel = el('select', { class: 'extra-unit-select', 'aria-label': t('calc.logDurationForRecipe', { name: recipe.name }) });
+  LOG_RETENTION_OPTIONS.forEach(h => sel.appendChild(el('option', { value: String(h) }, t('calc.logKeepHours', { n: h }))));
   sel.value = String(working.retention[recipe.id]);
   sel.addEventListener('change', () => { working.retention[recipe.id] = Number(sel.value); dirty = true; });
   durRow.appendChild(sel);

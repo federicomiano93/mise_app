@@ -18,7 +18,7 @@ import { getConfig } from './calculator-config-store.js';
 import { getTabProducts, getDivisorIncluded, getRecipes, getRecipeById } from './calculator-config.js';
 import { logTimestamp } from './log-time.js';
 import { confirmDiscard } from './calculator-confirm.js';
-import { buildSheet, buildLogText, latestVersion, recipeSnapshot, editRows } from './log-model.js';
+import { buildSheet, buildLogText, typedTotalOf, latestVersion, recipeSnapshot, editRows } from './log-model.js';
 import { getLogById, appendAndSave, restoreAndSave } from './log-store.js';
 import { renderVersion } from './log-view.js';
 import { qtyRow } from './log-qty.js';
@@ -97,7 +97,7 @@ function render() {
   for (const it of working.items) {
     if (it.clientName !== lastClient || card === null) {
       lastClient = it.clientName;
-      card = el('div', { class: 'card' }, [el('div', { class: 'card-title' }, it.clientName || 'Client')]);
+      card = el('div', { class: 'card' }, [el('div', { class: 'card-title' }, it.clientName || t('calc.clientFallback'))]);
       c.appendChild(card);
     }
     card.appendChild(qtyRow(it, (q) => { it.qty = q; markDirty(); }));
@@ -135,10 +135,11 @@ async function doSave() {
   // edits quantities only); recompute the sheet faithfully for the new quantities,
   // using the recipe the log was MADE with, not today's.
   const recipe = working.recipe;
-  const prevSheet = (latestVersion(getLogById(working.logId)) || {}).sheet;
+  const prevVersion = latestVersion(getLogById(working.logId)) || {};
+  const prevSheet = prevVersion.sheet;
   const leaveningPct = prevSheet && prevSheet.param ? prevSheet.param.value : (recipe ? recipe.leaveningDefaultPct : 0);
   const extraG = prevSheet ? num(prevSheet.extra_g) : 0;
-  const totalInput = recipe && recipe.logic === 'total' ? num(prevSheet && prevSheet.total_g) : 0;
+  const totalInput = typedTotalOf(recipe, prevVersion);
   const divisor = { includedIds: getDivisorIncluded(getConfig(), tab), n: prevSheet && prevSheet.divisor ? prevSheet.divisor.n : 0 };
 
   const sheet = buildSheet({ recipe, items: items.concat(occLines), extraGrams: extraG, totalInput, leaveningPct, divisor });
@@ -173,9 +174,9 @@ export function openLogHistory(logId) {
 function closeHistory() { document.getElementById('loghistory-overlay').classList.remove('visible'); }
 
 function kindLabel(v, i, last) {
-  if (v.kind === 'restore') return t('calc.restoredFromV') + ((num(v.restoredFrom) || 0) + 1);
-  if (i === 0) return 'Created';
-  return 'Edited';
+  if (v.kind === 'restore') return t('calc.restoredFromVersion', { v: (num(v.restoredFrom) || 0) + 1 });
+  if (i === 0) return t('calc.versionCreated');
+  return t('calc.versionEdited');
 }
 
 function renderHistoryList() {
@@ -183,7 +184,7 @@ function renderHistoryList() {
   const c = document.getElementById('loghistory-content');
   c.textContent = '';
   if (!log) { c.appendChild(el('p', { class: 'log-empty' }, t('calc.logNotFound'))); return; }
-  c.appendChild(el('div', { class: 'logedit-dough' }, log.dough + t('calc.editHistory')));
+  c.appendChild(el('div', { class: 'logedit-dough' }, t('calc.logEditHistory', { dough: log.dough })));
   const vs = log.versions || [];
   for (let i = vs.length - 1; i >= 0; i--) {
     const v = vs[i];
