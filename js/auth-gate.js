@@ -22,7 +22,7 @@ import { onSession, signIn, signUp, sendReset, chooseLocation, signOutNow,
 import { showPreviewRibbon } from './preview-ribbon.js';
 import { normalizeTyped } from './join-code.js';
 import { kindOfTyped, readJoinToken, codeShapeHint } from './join-link.js';
-import { nameProblem, passwordProblem, MIN_PASSWORD_LENGTH } from './credentials.js';
+import { nameProblem, passwordProblem, confirmProblem, MIN_PASSWORD_LENGTH } from './credentials.js';
 import { isSectionAllowed, isSectionAllowedFor } from './sections.js';
 import { cardVisibleTo } from './home-cards.js';
 
@@ -365,7 +365,7 @@ function joinScreen({ needsAccount, prefill = '' }) {
 
   form.append(firstLabel, firstName, lastLabel, lastName);
 
-  let email = null, password = null;
+  let email = null, password = null, password2 = null;
   if (needsAccount) {
     const emailLabel = el('label', 'auth-label', t('join.email'));
     emailLabel.htmlFor = 'join-email';
@@ -382,7 +382,15 @@ function joinScreen({ needsAccount, prefill = '' }) {
     password.type = 'password';
     password.autocomplete = 'new-password';
 
-    form.append(emailLabel, email, passLabel, password);
+    // The same password again: it is typed into dots, so a slip would go unseen.
+    const pass2Label = el('label', 'auth-label', t('join.repeatPassword'));
+    pass2Label.htmlFor = 'join-password2';
+    password2 = el('input', 'auth-input');
+    password2.id = 'join-password2';
+    password2.type = 'password';
+    password2.autocomplete = 'new-password';
+
+    form.append(emailLabel, email, passLabel, password, pass2Label, password2);
   }
 
   const codeLabel = el('label', 'auth-label', t('join.code'));
@@ -482,6 +490,8 @@ function joinScreen({ needsAccount, prefill = '' }) {
       if (!email.value.trim()) return [t('auth.enterEmail'), email];
       const pass = passwordProblem(password.value, email.value);
       if (pass) return [pass, password];
+      const again = confirmProblem(password.value, password2.value);
+      if (again) return [again, password2];
     }
     // ⚠️ TWO SHAPES REACH THIS BOX, NOT ONE. Six digits are read down a phone;
     // the owner of a brand-new business is sent a 32-character link instead,
