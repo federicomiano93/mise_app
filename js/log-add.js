@@ -7,7 +7,7 @@
 import { t } from './i18n.js';
 import { el } from './calculator-render.js';
 import { getConfig } from './calculator-config-store.js';
-import { getRecipes, getRecipeById, getTabProducts, getDivisorIncluded, usesOrders, usesTypedTotal, usesTrays, normalizeTrays } from './calculator-config.js';
+import { getRecipes, getRecipeById, getTabProducts, getDivisorIncluded, usesOrders, usesTypedTotal, usesTrays, normalizeTrays, settledTraysText, traysGrams, formatGrams } from './calculator-config.js';
 import { logTimestamp } from './log-time.js';
 import { confirmDiscard } from './calculator-confirm.js';
 import { buildSheet, buildLogText, recipeSnapshot } from './log-model.js';
@@ -104,11 +104,21 @@ function render() {
 
   // Number of trays (trays/traysTotal logic): whole trays, the recipe's own tray weight.
   if (hasTrays) {
-    const input = el('input', { type: 'number', id: 'logadd-trays', class: 'cp-prod-weight', min: '0', step: '1', value: String(num(state.trays)), inputmode: 'numeric' });
-    input.addEventListener('input', () => { state.trays = normalizeTrays(input.value); });
+    const input = el('input', { type: 'number', id: 'logadd-trays', class: 'cp-prod-weight', min: '0', step: '1', value: String(num(state.trays)), inputmode: 'numeric', 'aria-describedby': 'logadd-trays-grams' });
+    // «= 5,000 g» under the box, as on the Calculator; kept OUT of the label so the field's name stays put.
+    const grams = el('span', { class: 'trays-grams', id: 'logadd-trays-grams', 'aria-live': 'polite' }, '');
+    const paintGrams = () => { grams.textContent = t('calc.traysEquals', { g: formatGrams(traysGrams(recipe, state.trays)) }); };
+    input.addEventListener('input', () => { state.trays = normalizeTrays(input.value); paintGrams(); });
+    // Whole trays only: a fraction is replaced by the whole number that is computed.
+    input.addEventListener('change', () => {
+      const whole = settledTraysText(input.value);
+      if (whole !== null) input.value = whole;
+    });
+    paintGrams();
     c.appendChild(el('div', { class: 'cp-field' }, [
       el('label', { class: 'cp-label', for: 'logadd-trays' }, t('calc.trayCount')),
       el('div', { class: 'cp-prod-card-row' }, [input]),
+      grams,
     ]));
   }
 

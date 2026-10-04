@@ -251,12 +251,16 @@ export function isProRata(logic) { return logic === 'total' || usesTrays(logic);
 // kitchen does not show tenths, and a whole number keeps «5 × 1,000 g» readable.
 export const DEFAULT_TRAY_WEIGHT = 1000;
 export const MAX_TRAY_WEIGHT = 100000;
+// Below this a typed weight is almost surely kilos («1.2» meant as 1.2 kg): Save refuses it.
+export const MIN_TRAY_WEIGHT = 50;
 export const MAX_TRAYS = 10000;
 
-// A typed tray weight → whole grams in 1…MAX_TRAY_WEIGHT; missing, text, NaN or ≤ 0 → 1000.
+// A tray weight → whole grams in MIN_TRAY_WEIGHT…MAX_TRAY_WEIGHT; missing, text, NaN or under
+// the minimum → 1000. A stored weight under 50 g can only come from somewhere other than the
+// Recipes screen (which refuses it); 1000 is the safe reading, never 1 g per tray.
 export function normalizeTrayWeight(v) {
   const n = Math.round(Number(v));
-  if (!Number.isFinite(n) || n < 1) return DEFAULT_TRAY_WEIGHT;
+  if (!Number.isFinite(n) || n < MIN_TRAY_WEIGHT) return DEFAULT_TRAY_WEIGHT;
   return Math.min(n, MAX_TRAY_WEIGHT);
 }
 
@@ -264,7 +268,7 @@ export function normalizeTrayWeight(v) {
 export function isValidTrayWeight(v) {
   if (v === '' || v === null || v === undefined) return false;
   const n = Number(v);
-  return Number.isFinite(n) && n >= 1 && n <= MAX_TRAY_WEIGHT;
+  return Number.isFinite(n) && n >= MIN_TRAY_WEIGHT && n <= MAX_TRAY_WEIGHT;
 }
 
 // A typed number of trays → a whole number in 0…MAX_TRAYS. WHOLE TRAYS ONLY, decided in this
@@ -273,6 +277,14 @@ export function normalizeTrays(v) {
   const n = Math.floor(Number(v));
   if (!Number.isFinite(n) || n < 0) return 0;
   return Math.min(n, MAX_TRAYS);
+}
+
+// What a trays box must show so that it equals what is computed: the whole number used, or
+// null when the box already says it (or is empty, which is left alone while typing).
+export function settledTraysText(raw) {
+  if (raw === '' || raw === null || raw === undefined) return null;
+  const used = String(normalizeTrays(raw));
+  return used === String(raw).trim() ? null : used;
 }
 
 // The grams a number of trays makes with this recipe's tray weight.

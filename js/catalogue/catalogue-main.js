@@ -21,7 +21,7 @@ import { renderEditor } from './catalogue-editor.js';
 import { renderGuidedEditor } from './guided-editor.js';
 import { renderRun, resumableSession, clearSession } from './guided-run.js';
 import { importRecipeIntoCalculator, isRecipeLinkedToCalculator } from './import-to-calculator.js';
-import { nonWeighableLabels, weighableTotalGrams } from './catalogue-model.js';
+import { nonWeighableLabels, weighableTotalGrams, importFailureKey } from './catalogue-model.js';
 import { normalizeSteps, progressText } from './guided-model.js';
 import { confirmDialog } from './confirm-dialog.js';
 // The session, for the venue's own document: its country decides what language a
@@ -827,7 +827,7 @@ const app = {
         : t('cat.addedToCalculator', { name: recipe.name }));
     } catch (err) {
       console.error('Import into Calculator failed:', err);
-      toast(t('cat.importFailedCheckYour'));
+      toast(t(importFailureKey(err)));
     }
   },
 };

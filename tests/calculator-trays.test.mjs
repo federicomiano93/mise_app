@@ -14,9 +14,10 @@ import { fileURLToPath } from 'node:url';
 import {
   LOGICS, CONFIG_MODEL, DEFAULT_TRAY_WEIGHT, MAX_TRAY_WEIGHT, MAX_TRAYS,
   computeRecipeTarget, normalizeConfig, normalizeTrayWeight, normalizeTrays, isValidTrayWeight,
-  traysGrams, formatGrams, showsLeaveningKnob, usesOrders, usesTrays, usesTypedTotal, isProRata,
+  MIN_TRAY_WEIGHT, settledTraysText, traysGrams, formatGrams, showsLeaveningKnob, usesOrders, usesTrays, usesTypedTotal, isProRata,
 } from '../js/calculator-config.js';
-import { buildSheet, recipeSnapshot } from '../js/log-model.js';
+import { buildSheet, recipeSnapshot, traysEditState, traysSheetRecipe } from '../js/log-model.js';
+import { mergeImportedRecipe, importFailureKey } from '../js/catalogue/catalogue-model.js';
 import { translate, _dictionaries } from '../js/i18n.js';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -107,9 +108,9 @@ test('normalizeTrayWeight: missing, text, NaN, zero or negative → 1000; whole 
   assert.equal(normalizeTrayWeight(1e9), MAX_TRAY_WEIGHT);
 });
 
-test('isValidTrayWeight: only a real number from 1 to the cap is an answer', () => {
-  for (const ok of [1, 1000, '750', MAX_TRAY_WEIGHT]) assert.equal(isValidTrayWeight(ok), true, String(ok));
-  for (const bad of ['', null, undefined, 0, '0', -1, 'abc', NaN, MAX_TRAY_WEIGHT + 1]) {
+test('isValidTrayWeight: only a real number from 50 g to the cap is an answer', () => {
+  for (const ok of [50, 1000, '750', MAX_TRAY_WEIGHT]) assert.equal(isValidTrayWeight(ok), true, String(ok));
+  for (const bad of ['', null, undefined, 0, '0', 1, 1.2, 30, 49.9, -1, 'abc', NaN, MAX_TRAY_WEIGHT + 1]) {
     assert.equal(isValidTrayWeight(bad), false, String(bad));
   }
 });
@@ -206,10 +207,10 @@ test('both dictionaries carry every tray string', () => {
 
 test('«5 trays × 1,000 g»: plural handled by the dictionary, singular too', () => {
   const d = _dictionaries();
-  assert.equal(translate(d, 'en', 'calc.traysOfWeight', { n: 5, g: '1,000' }), '5 trays × 1,000 g');
-  assert.equal(translate(d, 'en', 'calc.traysOfWeight', { n: 1, g: '1,000' }), '1 tray × 1,000 g');
-  assert.equal(translate(d, 'it', 'calc.traysOfWeight', { n: 5, g: '1.000' }), '5 teglie × 1.000 g');
-  assert.equal(translate(d, 'it', 'calc.traysOfWeight', { n: 1, g: '1.000' }), '1 teglia × 1.000 g');
+  assert.equal(translate(d, 'en', 'calc.traysOfWeight', { n: 5, trays: '5', g: '1,000' }), '5 trays × 1,000 g');
+  assert.equal(translate(d, 'en', 'calc.traysOfWeight', { n: 1, trays: '1', g: '1,000' }), '1 tray × 1,000 g');
+  assert.equal(translate(d, 'it', 'calc.traysOfWeight', { n: 5, trays: '5', g: '1.000' }), '5 teglie × 1.000 g');
+  assert.equal(translate(d, 'it', 'calc.traysOfWeight', { n: 1, trays: '1', g: '1.000' }), '1 teglia × 1.000 g');
 });
 
 test('formatGrams groups four-digit numbers (Italian Intl would not by default)', () => {
@@ -252,4 +253,90 @@ test('manual add and edit of a dough know the tray logics', () => {
   assert.match(edit, /usesTrays\(working\.recipe\.logic\)/);
   assert.match(edit, /totalInput, trays, leaveningPct, divisor/);
   assert.match(read('js/log-view.js'), /calc\.traysOfWeight/);
+});
+
+// ── The review fixes ────────────────────────────────────────────────────────────────
+test('a tray weight under 50 g is refused on Save and never read as grams per tray', () => {
+  assert.equal(MIN_TRAY_WEIGHT, 50);
+  assert.equal(isValidTrayWeight(49), false);
+  assert.equal(isValidTrayWeight(50), true);
+  // A stored weight under 50 (from anywhere but the Recipes screen) reads as the default.
+  for (const low of [1, 1.2, 30, 49]) assert.equal(normalizeTrayWeight(low), 1000, String(low));
+  assert.equal(normalizeTrayWeight(50), 50);
+  assert.equal(normalizeConfig({ clients: [], recipes: [{ id: 'a', name: 'A', logic: 'trays', trayWeight: 1.2, ingredients: INGS }] }).recipes[0].trayWeight, 1000);
+  const d = _dictionaries();
+  assert.equal(translate(d, 'en', 'calc.trayWeightTooLight'), 'That is very light for a tray: write the weight in grams (e.g. 1000).');
+  assert.equal(translate(d, 'it', 'calc.trayWeightTooLight'), 'È molto leggera per una teglia: scrivi il peso in grammi (per es. 1000).');
+  assert.match(read('js/recipes.js'), /calc\.trayWeightTooLight/);
+});
+
+test('the trays box shows what is computed: a fraction is replaced by the whole number used', () => {
+  assert.equal(settledTraysText('2.9'), '2');
+  assert.equal(settledTraysText('007'), '7');
+  assert.equal(settledTraysText('-3'), '0');
+  assert.equal(settledTraysText('99999'), String(MAX_TRAYS));
+  assert.equal(settledTraysText('5'), null, 'already whole: left alone');
+  assert.equal(settledTraysText(''), null, 'empty is left alone while typing');
+  assert.equal(settledTraysText('2.9') === String(normalizeTrays('2.9')), true);
+  for (const f of ['js/app.js', 'js/log-add.js', 'js/log-edit.js']) assert.match(read(f), /settledTraysText\(/, f);
+});
+
+test('Add and Edit show the «= N g» line under the trays field, outside the label', () => {
+  for (const f of ['js/log-add.js', 'js/log-edit.js']) {
+    const src = read(f);
+    assert.match(src, /calc\.traysEquals/, f);
+    assert.match(src, /'aria-describedby': '(logadd|logedit)-trays-grams'/, f);
+  }
+  const render = read('js/calculator-render.js');
+  assert.match(render, /'aria-describedby': id \+ '-trays-grams'/);
+  assert.doesNotMatch(render, /el\('label', \{ class: 'param-label', for: id \+ '-trays-input' \}, \[/, 'the label holds text only');
+});
+
+test('editing a trays log keeps the weight and the typed part it was made with', () => {
+  const sheet = { trays: 4, trayWeight_g: 900, total_g: 3700 };
+  const frozen = recipe({ logic: 'traysTotal', trayWeight: 1200 });
+  const st = traysEditState(sheet, frozen);
+  assert.deepEqual(st, { trays: 4, trayWeight: 900, typedTotal: 100 });
+  const rebuild = (trays) => buildSheet({ recipe: traysSheetRecipe(frozen, st.trayWeight), items: [], totalInput: st.typedTotal, trays, leaveningPct: 0 });
+  const same = rebuild(st.trays);
+  assert.equal(same.total_g, 3700);
+  assert.equal(same.trayWeight_g, 900);
+  const more = rebuild(5);
+  assert.equal(more.total_g, 4600);
+  assert.equal(more.trays, 5);
+  assert.equal(more.trayWeight_g, 900);
+  // A plain «trays» log has no typed part; another logic's recipe is passed through untouched.
+  assert.equal(traysEditState({ trays: 2, trayWeight_g: 800, total_g: 1600 }, recipe({ logic: 'trays' })).typedTotal, 0);
+  const orders = recipe({ logic: 'orders' });
+  assert.equal(traysSheetRecipe(orders, 900), orders);
+});
+
+test('re-importing from the Catalogue keeps how the tab calculates, and refreshes the rest', () => {
+  const existing = { id: 'cat-x', name: 'Old', logic: 'traysTotal', trayWeight: 1200, order: 3, visible: false, ingredients: INGS };
+  const imported = { id: 'cat-x', name: 'New', logic: 'total', ingredients: [INGS[0]] };
+  const { config, action } = mergeImportedRecipe({ recipes: [existing] }, imported);
+  const r = config.recipes[0];
+  assert.equal(action, 'updated');
+  assert.equal(r.name, 'New');
+  assert.equal(r.ingredients.length, 1);
+  assert.equal(r.logic, 'traysTotal');
+  assert.equal(r.trayWeight, 1200);
+  assert.equal(r.order, 3);
+  assert.equal(r.visible, false);
+  // A recipe without a stored weight does not get an invented one.
+  const bare = mergeImportedRecipe({ recipes: [{ id: 'cat-x', order: 0, visible: true }] }, imported).config.recipes[0];
+  assert.equal('trayWeight' in bare, false);
+  assert.equal(bare.logic, 'total');
+});
+
+test('a refused Catalogue import says «out of date», any other failure says «connection»', () => {
+  assert.equal(importFailureKey({ code: 'permission-denied' }), 'calc.notSavedOutOfDate');
+  for (const e of [{ code: 'unavailable' }, new Error('x'), null, undefined]) assert.equal(importFailureKey(e), 'cat.importFailedCheckYour');
+  assert.match(read('js/catalogue/catalogue-main.js'), /t\(importFailureKey\(err\)\)/);
+});
+
+test('the tray count is grouped like grams when it is large', () => {
+  assert.match(read('js/log-view.js'), /trays: formatGrams\(trays\)/);
+  const d = _dictionaries();
+  assert.equal(translate(d, 'en', 'calc.traysOfWeight', { n: 1200, trays: '1,200', g: '1,000' }), '1,200 trays × 1,000 g');
 });

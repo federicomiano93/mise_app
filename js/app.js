@@ -15,7 +15,7 @@ import { initLogs } from './log-store.js';
 import { renderTab, buildRecipePanel, buildEmptyPanel, el } from './calculator-render.js';
 import {
   getVisibleRecipes, getRecipeById, getTabProducts, isExtraDoughEnabled,
-  calculatorEmptyReason, showsClientOrdersButton,
+  calculatorEmptyReason, showsClientOrdersButton, settledTraysText,
 } from './calculator-config.js';
 import { workDayIndex } from './log-model.js';
 import { confirmDialog } from './confirm-dialog.js';
@@ -266,9 +266,19 @@ function wireRecipe(recipe) {
   const traysInput = document.getElementById(id + '-trays-input');
   if (traysInput) {
     const saved = localStorage.getItem('trays-' + id);
-    if (saved !== null) traysInput.value = saved;
+    if (saved !== null) traysInput.value = settledTraysText(saved) ?? saved;
     traysInput.addEventListener('input', () => { calc(id); localStorage.setItem('trays-' + id, traysInput.value); touchTab(id); });
     wireNumberUX(traysInput, id);
+    // Whole trays only: a fraction is replaced by the whole number the maths used, so the box
+    // always says what was computed (`change` fires on blur and on Enter).
+    traysInput.addEventListener('change', () => {
+      const whole = settledTraysText(traysInput.value);
+      if (whole === null) return;
+      traysInput.value = whole;
+      calc(id);
+      localStorage.setItem('trays-' + id, whole);
+      touchTab(id);
+    });
   }
 
   // Typed total (total/both/traysTotal logic) — persisted like quantities.

@@ -317,7 +317,10 @@ select.qty-select:focus { outline: none; border-color: var(--crust); background:
 }
 .param-label { flex: 1; font-size: var(--field-label-size); color: var(--field-label-color); font-weight: var(--field-label-weight); }
 /* «= 5,000 g» under «Number of trays»: what the trays alone make, a plain line, not a label. */
-.trays-grams { display: block; margin-top: 2px; font-size: 14px; font-weight: 500; color: var(--text2); font-variant-numeric: tabular-nums; }
+.param-label-stack { flex: 1; }
+.param-label-stack > .param-label { display: block; }
+/* No small-text size token exists: three steps under the field-label size (14px today). */
+.trays-grams { display: block; margin-top: var(--space-1); font-size: calc(var(--field-label-size) - 3px); font-weight: normal; color: var(--text-2); font-variant-numeric: tabular-nums; }
 
 /* Extra-dough box: a free amount of dough (g or kg) added on top of the products,
    present in every dough tab. Dashed border marks it as a separate, optional add-on. */
@@ -983,7 +986,6 @@ input.cp-prod-weight {
 .cp-prod-card-row > select,
 .cp-prod-card-row > input:not([type="checkbox"]) { min-height: 40px; }
 .cp-prod-card-row > input.rc-tray-weight { min-height: 44px; }
-.rc-tray-field { margin-top: 4px; }
 
 /* ── A product's four fields: label | field | unit ──────────────────────────────
    A three-column grid, so every label starts on one line and every field starts AND
@@ -1697,6 +1699,8 @@ input.cp-prod-weight {
   background: var(--surface);
 }
 .rc-panel .cp-field { margin-top: 14px; }
+/* The tray weight sits close under the logic hint it belongs to (this must out-rank the rule above). */
+.rc-panel .cp-field.rc-tray-field { margin-top: var(--space-1); }
 .rc-panel select.rc-logic { width: 100%; min-height: 44px; font-size: 15px; padding: 8px 10px; }
 /* ⚠️ --text-2, not --text-3: the sentence under the select is the whole point of the
    control, and --text-3 measures under the 4.5:1 normal text needs on this ground. */

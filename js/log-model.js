@@ -141,6 +141,24 @@ export function buildSheet({ recipe, items, extraGrams = 0, totalInput = 0, tray
   return sheet;
 }
 
+// What the edit screen starts from for a trays dough: the trays and the weight of a tray the
+// log was MADE with (the sheet's, falling back to the frozen recipe's), and for «trays + total»
+// the grams typed on top. The recipe's CURRENT tray weight never enters: re-weighing a tray
+// later must not rewrite an old log.
+export function traysEditState(sheet, recipe) {
+  const s = sheet || {};
+  const trayWeight = normalizeTrayWeight(s.trayWeight_g || (recipe && recipe.trayWeight));
+  const trays = normalizeTrays(s.trays);
+  const typedTotal = recipe && recipe.logic === 'traysTotal' ? Math.max(0, num(s.total_g) - trays * trayWeight) : 0;
+  return { trays, trayWeight, typedTotal };
+}
+
+// The recipe to rebuild an edited sheet with: a trays recipe carries the tray weight the log
+// was made with; any other recipe is passed through as it is.
+export function traysSheetRecipe(recipe, trayWeight) {
+  return recipe && usesTrays(recipe.logic) ? { ...recipe, trayWeight } : recipe;
+}
+
 // Human-readable grouped text (client header + indented product lines + extra),
 // matching the old log text so sharing/preview keep the same look.
 export function buildLogText(items, occasional, extra) {

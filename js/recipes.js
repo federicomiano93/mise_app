@@ -24,7 +24,7 @@ import { recipeTotal } from './calculator-dough-math.js';
 import { getConfig, saveConfigOrSay } from './calculator-config-store.js';
 import {
   cloneConfig, getRecipes, getIngredients, getProducts, LOGICS, MAX_VISIBLE_RECIPES,
-  usesOrders, usesTrays, isValidTrayWeight, DEFAULT_TRAY_WEIGHT, MAX_TRAY_WEIGHT,
+  usesOrders, usesTrays, isValidTrayWeight, DEFAULT_TRAY_WEIGHT, MAX_TRAY_WEIGHT, MIN_TRAY_WEIGHT,
 } from './calculator-config.js';
 import { el } from './calculator-render.js';
 import { icon } from './calculator-icons.js';
@@ -293,7 +293,7 @@ function recipePanel(r, ri, panelId, subEl) {
   // what was TYPED (so an empty box can be refused on Save); the saved config normalises it.
   const trayId = 'rc-tray-weight-' + ri;
   const trayInput = el('input', {
-    type: 'number', id: trayId, class: 'cp-prod-weight rc-tray-weight', min: '1', max: String(MAX_TRAY_WEIGHT),
+    type: 'number', id: trayId, class: 'cp-prod-weight rc-tray-weight', min: String(MIN_TRAY_WEIGHT), max: String(MAX_TRAY_WEIGHT),
     step: '1', inputmode: 'numeric', value: String(r.trayWeight === undefined ? DEFAULT_TRAY_WEIGHT : r.trayWeight),
   });
   const trayError = el('div', { class: 'logday-hint', role: 'alert', id: trayId + '-error', hidden: '' }, t('calc.trayWeightMissing'));
@@ -301,6 +301,8 @@ function recipePanel(r, ri, panelId, subEl) {
     const bad = showErrors && usesTrays(logicOf(r)) && !isValidTrayWeight(r.trayWeight);
     trayInput.classList.toggle('cp-invalid', bad);
     trayError.hidden = !bad;
+    // An empty box and a weight that looks like kilos are different mistakes: say which.
+    trayError.textContent = t(r.trayWeight === '' || r.trayWeight === undefined ? 'calc.trayWeightMissing' : 'calc.trayWeightTooLight');
     if (bad) trayInput.setAttribute('aria-describedby', trayId + '-error'); else trayInput.removeAttribute('aria-describedby');
   };
   const trayField = el('div', { class: 'cp-field rc-tray-field' }, [

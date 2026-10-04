@@ -129,12 +129,14 @@ export function buildRecipePanel(recipe) {
   // and kept up to date by calc.js (id `<recipe>-trays-grams`).
   if (hasTrays) {
     content.appendChild(el('div', { class: 'param-row param-row--total' }, [
-      el('label', { class: 'param-label', for: id + '-trays-input' }, [
-        t('calc.trayCount'),
+      // The «= N g» line sits BESIDE the label, not inside it: inside, the field's accessible
+      // name changed on every keystroke. aria-describedby links it; it stays polite-live.
+      el('div', { class: 'param-label-stack' }, [
+        el('label', { class: 'param-label', for: id + '-trays-input' }, t('calc.trayCount')),
         el('span', { class: 'trays-grams', id: id + '-trays-grams', 'aria-live': 'polite' }, ''),
       ]),
       el('div', { class: 'qty-group' }, [
-        el('input', { type: 'number', id: id + '-trays-input', value: '0', min: '0', step: '1', inputmode: 'numeric' }),
+        el('input', { type: 'number', id: id + '-trays-input', value: '0', min: '0', step: '1', inputmode: 'numeric', 'aria-describedby': id + '-trays-grams' }),
       ]),
     ]));
   }

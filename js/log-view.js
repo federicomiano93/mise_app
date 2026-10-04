@@ -56,7 +56,7 @@ function renderItems(version) {
   if (sh && num(sh.trayWeight_g) > 0 && sh.trays !== undefined) {
     const trays = num(sh.trays);
     wrap.appendChild(el('div', { class: 'log-item' }, [
-      el('strong', {}, t('calc.traysOfWeight', { n: trays, g: formatGrams(num(sh.trayWeight_g)) })),
+      el('strong', {}, t('calc.traysOfWeight', { n: trays, trays: formatGrams(trays), g: formatGrams(num(sh.trayWeight_g)) })),
     ]));
     const typed = num(sh.total_g) - trays * num(sh.trayWeight_g);
     if (typed > 0) wrap.appendChild(el('div', { class: 'log-item' }, t('calc.traysTypedPart', { g: formatGrams(typed) })));

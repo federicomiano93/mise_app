@@ -15,10 +15,10 @@ import { t } from './i18n.js';
 import { el } from './calculator-render.js';
 import { icon } from './calculator-icons.js';
 import { getConfig } from './calculator-config-store.js';
-import { getTabProducts, getDivisorIncluded, getRecipes, getRecipeById, usesTrays, normalizeTrays, normalizeTrayWeight } from './calculator-config.js';
+import { getTabProducts, getDivisorIncluded, getRecipes, getRecipeById, usesTrays, normalizeTrays, settledTraysText, traysGrams, formatGrams } from './calculator-config.js';
 import { logTimestamp } from './log-time.js';
 import { confirmDiscard } from './calculator-confirm.js';
-import { buildSheet, buildLogText, latestVersion, recipeSnapshot, editRows } from './log-model.js';
+import { buildSheet, buildLogText, latestVersion, recipeSnapshot, editRows, traysEditState, traysSheetRecipe } from './log-model.js';
 import { getLogById, appendAndSave, restoreAndSave } from './log-store.js';
 import { renderVersion } from './log-view.js';
 import { qtyRow } from './log-qty.js';
@@ -72,9 +72,7 @@ export function openLogEdit(logId) {
   // A trays dough is edited by its trays (and, for «trays + total», the grams typed on top):
   // the weight of a tray stays the one the dough was MADE with (the frozen recipe's).
   const sheet = v.sheet || {};
-  const trayWeight = normalizeTrayWeight(sheet.trayWeight_g || (recipe && recipe.trayWeight));
-  const trays = normalizeTrays(sheet.trays);
-  const typedTotal = recipe && recipe.logic === 'traysTotal' ? Math.max(0, num(sheet.total_g) - trays * trayWeight) : 0;
+  const { trays, trayWeight, typedTotal } = traysEditState(sheet, recipe);
 
   working = { logId, dough: log.dough, recipeId: tab, tab, recipe, items, occasional, calculatedBy: v.calculatedBy || '', trays, typedTotal, trayWeight };
   dirty = false;
@@ -96,11 +94,21 @@ function render() {
   c.appendChild(el('div', { class: 'cp-field' }, [el('label', { class: 'cp-label' }, t('calc.calculatedBy2')), by]));
 
   if (working.recipe && usesTrays(working.recipe.logic)) {
-    const trays = el('input', { type: 'number', id: 'logedit-trays', class: 'cp-prod-weight', min: '0', step: '1', value: String(working.trays), inputmode: 'numeric' });
-    trays.addEventListener('input', () => { working.trays = normalizeTrays(trays.value); markDirty(); });
+    const trays = el('input', { type: 'number', id: 'logedit-trays', class: 'cp-prod-weight', min: '0', step: '1', value: String(working.trays), inputmode: 'numeric', 'aria-describedby': 'logedit-trays-grams' });
+    // «= 5,000 g» at the weight the dough was MADE with; outside the label so the field's name stays put.
+    const grams = el('span', { class: 'trays-grams', id: 'logedit-trays-grams', 'aria-live': 'polite' }, '');
+    const paintGrams = () => { grams.textContent = t('calc.traysEquals', { g: formatGrams(traysGrams({ trayWeight: working.trayWeight }, working.trays)) }); };
+    trays.addEventListener('input', () => { working.trays = normalizeTrays(trays.value); paintGrams(); markDirty(); });
+    // Whole trays only: a fraction is replaced by the whole number that is computed.
+    trays.addEventListener('change', () => {
+      const whole = settledTraysText(trays.value);
+      if (whole !== null) trays.value = whole;
+    });
+    paintGrams();
     c.appendChild(el('div', { class: 'cp-field' }, [
       el('label', { class: 'cp-label', for: 'logedit-trays' }, t('calc.trayCount')),
       el('div', { class: 'cp-prod-card-row' }, [trays]),
+      grams,
     ]));
     if (working.recipe.logic === 'traysTotal') {
       const typed = el('input', { type: 'number', id: 'logedit-total', class: 'cp-prod-weight', min: '0', step: '1', value: String(working.typedTotal), inputmode: 'numeric' });
@@ -169,7 +177,7 @@ async function doSave() {
   const trays = recipe && usesTrays(recipe.logic) ? working.trays : 0;
   const divisor = { includedIds: getDivisorIncluded(getConfig(), tab), n: prevSheet && prevSheet.divisor ? prevSheet.divisor.n : 0 };
 
-  const sheet = buildSheet({ recipe: recipe && usesTrays(recipe.logic) ? { ...recipe, trayWeight: working.trayWeight } : recipe, items: items.concat(occLines), extraGrams: extraG, totalInput, trays, leaveningPct, divisor });
+  const sheet = buildSheet({ recipe: traysSheetRecipe(recipe, working.trayWeight), items: items.concat(occLines), extraGrams: extraG, totalInput, trays, leaveningPct, divisor });
   const extra = { grams: extraG, value: extraG, unit: 'g' };
   const text = buildLogText(items, occClean, extra);
   const version = {

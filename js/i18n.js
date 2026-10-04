@@ -567,11 +567,12 @@ const DICTIONARIES = Object.freeze({
     'calc.byTrayPlusTotal': 'Trays + total',
     'calc.trayWeightG': 'Weight per tray (g)',
     'calc.trayWeightMissing': 'Type how much one tray weighs.',
+    'calc.trayWeightTooLight': 'That is very light for a tray: write the weight in grams (e.g. 1000).',
     'calc.trayCount': 'Number of trays',
     'calc.traysEquals': '= {g} g',
     'calc.traysOfWeight': {
-      one: '{n} tray × {g} g',
-      other: '{n} trays × {g} g',
+      one: '{trays} tray × {g} g',
+      other: '{trays} trays × {g} g',
     },
     'calc.traysTypedPart': '+ {g} g typed by hand',
 
@@ -3327,11 +3328,12 @@ const DICTIONARIES = Object.freeze({
     'calc.byTrayPlusTotal': 'A teglie + totale',
     'calc.trayWeightG': 'Peso per teglia (g)',
     'calc.trayWeightMissing': 'Scrivi quanto pesa una teglia.',
+    'calc.trayWeightTooLight': 'È molto leggera per una teglia: scrivi il peso in grammi (per es. 1000).',
     'calc.trayCount': 'Numero di teglie',
     'calc.traysEquals': '= {g} g',
     'calc.traysOfWeight': {
-      one: '{n} teglia × {g} g',
-      other: '{n} teglie × {g} g',
+      one: '{trays} teglia × {g} g',
+      other: '{trays} teglie × {g} g',
     },
     'calc.traysTypedPart': '+ {g} g scritti a mano',
 
