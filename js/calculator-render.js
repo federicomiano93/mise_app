@@ -143,7 +143,8 @@ export function buildRecipePanel(recipe) {
 
   if (hasTotalInput) {
     content.appendChild(el('div', { class: 'param-row param-row--total' }, [
-      el('span', { class: 'param-label' }, t('calc.totalDoughG')),
+      // A real <label for>: it was a plain span, so a screen reader could not name the box.
+      el('label', { class: 'param-label', for: id + '-total-input' }, t('calc.totalDoughG')),
       el('div', { class: 'qty-group' }, [
         el('input', { type: 'number', id: id + '-total-input', value: '0', min: '0', step: '1', inputmode: 'numeric' }),
         el('span', { class: 'unit' }, 'g'),
