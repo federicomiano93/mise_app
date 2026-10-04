@@ -57,7 +57,8 @@ test('a confirmed recipe tab is ONE column on a tablet: no grid, no :has() (4 Oc
   assert.ok(!strip(sheet).includes(':has('), 'no :has() rule anywhere in style.css');
   assert.doesNotMatch(inside, /display:\s*grid|grid-template|grid-column|grid-row/);
   assert.doesNotMatch(outside, /body\[data-card="calculator"\]/, 'no Calculator body rule outside the tablet query');
-  assert.ok(inside.includes('body[data-card="calculator"] #recipe-tabs > .content:not(#tab-empty) { margin-inline: 0 auto; }'));
+  // Centred since 5 Oct 2026 (owner: «centra la ricetta sul tablet»): no left override.
+  assert.ok(!inside.includes('margin-inline: 0 auto'));
 });
 
 test('every tablet rule of this section is scoped to the Calculator', () => {

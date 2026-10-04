@@ -1898,22 +1898,26 @@ input.cp-prod-weight {
 
 /* ══ The Calculator on a tablet (29 Sep 2026) ════════════════════════════════════════
    The page is wide (tokens.css widens body[data-card="calculator"]); a recipe tab is one
-   620px column, left, with kitchen-sized fields and buttons. (Until 4 Oct 2026 a confirmed
+   620px column, CENTRED, with kitchen-sized fields and buttons. (Until 4 Oct 2026 a confirmed
    tab split into two columns; it is one column again, result first.) LAYOUT ONLY: when the
    result is computed, what Confirm writes and the Confirm / Edit lock are untouched.
    ⚠️ EVERY rule is scoped to body[data-card="calculator"]: orders.html and suppliers.html
    load this sheet too. ⚠️ .ing-row and .cp-* are not touched. */
 @media (min-width: 900px) and (min-height: 600px) {
   /* A tab is ONE comfortable column, confirmed or not; so are the empty state and the Log.
-     ⚠️ A RECIPE TAB'S COLUMN SITS LEFT, under the first tab, not centred (owner, 4 Oct 2026:
-     «Impasto totale» to the left). The empty state (#tab-empty, a card with no entry column)
-     and the Log stay centred. */
+     ⚠️ THE COLUMN IS CENTRED (owner, 5 Oct 2026: «centra la ricetta sul tablet, non lasciarla a
+     sinistra»). The tab bar and the lone-recipe title take the same 620px column, so the tabs
+     sit right above the recipe; inside it the boxes stay LEFT, under the first tab (owner,
+     4 Oct 2026: «Impasto totale» to the left). */
   body[data-card="calculator"] #recipe-tabs > .content,
-  body[data-card="calculator"] #tab-log {
+  body[data-card="calculator"] #tab-log,
+  body[data-card="calculator"] .scroll-area > #tab-bar {
     max-width: 620px;
     margin-inline: auto;
   }
-  body[data-card="calculator"] #recipe-tabs > .content:not(#tab-empty) { margin-inline: 0 auto; }
+  /* A centred column moves by half a scrollbar when one tab scrolls and the next does not
+     (7.5px, measured switching recipes at 1280×800): keep the scrollbar's room always. */
+  body[data-card="calculator"] .scroll-area { scrollbar-gutter: stable; }
 
   /* ⚠️ NO SECOND COLUMN (4 Oct 2026). A confirmed recipe used to move to a right-hand column
      beside its greyed entries; it is now ONE column on a tablet exactly as on a phone, the
@@ -1923,14 +1927,13 @@ input.cp-prod-weight {
 
   /* The «Total dough (g)» box: label + one field, so it sits LEFT and is about one and a
      half recipe tabs wide instead of a 590px card with an empty middle. A tab is a quarter
-     of the bar less three 8px gaps, and the bar is min(viewport − 2×16px, 1148px) wide
-     (tokens.css widens the page to 1180px; the bar sits inside it with 16px a side), hence
-     the min(). Phones are untouched: this
+     of the bar less three 8px gaps, and the bar is the 620px column less 16px a side (the
+     280px floor below wins today). Phones are untouched: this
      whole block only applies to a tablet. ⚠️ EVERY .param-row (leavening, trays, total) takes
      this width, not only the total: the leavening row used to keep the full column, so its
      box ended ~200px right of the trays and total boxes (4 Oct 2026). One width, one right edge. */
   body[data-card="calculator"] #recipe-tabs .param-row {
-    width: calc(1.5 * (min(100vw - 32px, 1148px) - 3 * 8px) / 4);
+    width: calc(1.5 * (620px - 32px - 3 * 8px) / 4);
     min-width: 280px;
     max-width: 100%;
     margin-right: auto;

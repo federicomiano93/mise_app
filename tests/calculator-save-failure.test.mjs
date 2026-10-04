@@ -78,10 +78,11 @@ test('a screen that fails to save returns before touching its state; the switche
 const css = read('style.css');
 const strip = s => s.replace(/\/\*[\s\S]*?\*\//g, '');
 
-test('the tablet left-alignment of a recipe tab leaves the empty card centred', () => {
+test('on a tablet the recipe column, the Log and the tab bar are one centred 620px column (5 Oct 2026)', () => {
   const rules = strip(css);
-  assert.match(rules, /#recipe-tabs > \.content:not\(#tab-empty\) \{ margin-inline: 0 auto; \}/);
-  assert.doesNotMatch(rules, /#recipe-tabs > \.content \{ margin-inline: 0 auto; \}/);
+  assert.match(rules, /#recipe-tabs > \.content,\s*body\[data-card="calculator"\] #tab-log,\s*body\[data-card="calculator"\] \.scroll-area > #tab-bar \{\s*max-width: 620px;\s*margin-inline: auto;\s*\}/);
+  // No rule pushes a recipe tab's column back to the left.
+  assert.doesNotMatch(rules, /#recipe-tabs > \.content[^{]*\{ margin-inline: 0 auto; \}/);
   assert.match(read('js/calculator-render.js'), /id: 'tab-empty'/);
 });
 
