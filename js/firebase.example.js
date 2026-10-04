@@ -30,6 +30,8 @@ import {
   createUserWithEmailAndPassword,
   signOut,
   sendPasswordResetEmail,
+  verifyPasswordResetCode,
+  confirmPasswordReset,
   connectAuthEmulator,
 } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js';
 import {
@@ -670,6 +672,17 @@ export function signIn(email, password) {
 
 export function sendReset(email) {
   return sendPasswordResetEmail(auth, String(email || '').trim());
+}
+
+// «Forgot your password?» lands on reset-password.html (js/reset-password.js), which asks
+// Firebase whether the code is still good (the answer is the account's email) and then sets
+// the new password. Neither call signs anybody in.
+export function checkResetCode(code) {
+  return verifyPasswordResetCode(auth, String(code || ''));
+}
+
+export function setNewPassword(code, password) {
+  return confirmPasswordReset(auth, String(code || ''), String(password || ''));
 }
 
 // Signing out wipes this device's cached copies of the location's data — the

@@ -70,6 +70,11 @@
 
 .auth-form { display: flex; flex-direction: column; }
 
+/* ⚠️ A PAGE THAT LOADS ONLY tokens.css + auth.css (reset-password.html) HAS NO BODY FONT:
+   the app's body rule lives in style.css, and every field and button here inherits — the
+   first drive showed the whole form in the browser's Times (4 Oct 2026). */
+.auth-page { font-family: var(--font); color: var(--text); }
+
 .auth-label {
   font-size: var(--field-label-size);
   font-weight: var(--field-label-weight);
@@ -108,6 +113,24 @@
   padding: 15px 18px;
   cursor: pointer;
   min-height: 48px;       /* comfortable tap target */
+}
+
+/* The same button as a link (reset-password.html: «Open Mise» is a navigation, not an action). */
+a.auth-btn-link {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 18px;
+  text-decoration: none;
+}
+
+/* The account's email, present for password managers and invisible to everybody else. */
+.auth-hidden-username {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
 }
 
 .auth-btn:hover { background: var(--brand-2); }

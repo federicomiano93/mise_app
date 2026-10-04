@@ -97,8 +97,9 @@ function appPages() {
     .filter(f => f.endsWith('.html'))
     // home.html is a redirect stub for old installed PWAs; install-guide.html is
     // itself an explanation; order.html is the CLIENT's page, which is one screen
-    // long and explains itself by being that short.
-    .filter(f => !['home.html', 'install-guide.html', 'order.html'].includes(f));
+    // long and explains itself by being that short; reset-password.html is the same
+    // shape — one card with two boxes, reached from an email, no venue open.
+    .filter(f => !['home.html', 'install-guide.html', 'order.html', 'reset-password.html'].includes(f));
 }
 
 // ⚠️ ONE PAGE KEEPS ITS HELP ONE TAP DEEPER, ON PURPOSE (28 Sep 2026): the Orders
