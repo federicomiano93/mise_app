@@ -67,3 +67,44 @@ test('S1: app.js wires Confirm through runConfirm, and «today» is the same sav
   assert.match(app, /function saveForToday\(recipeId\) \{\s*saveDay\(recipeId, 'today'\);\s*touchTab\(recipeId\);/);
   assert.doesNotMatch(app, /addEventListener\('click', \(\) => openDayModal\(id\)\)/);
 });
+
+// ── S2: the four bottom sheets are centred dialogs on a tablet ───────────────────────
+const strip = css => css.replace(/\/\*[\s\S]*?\*\//g, '');
+function ruleBodies(css, selectorPart) {
+  const out = [];
+  for (const m of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+    if (m[1].includes(selectorPart)) out.push({ sel: m[1], body: m[2] });
+  }
+  return out;
+}
+
+test('S2: under the tablet query the four sheets centre; on a phone they stay bottom sheets', () => {
+  const css = strip(read('style.css'));
+  // phone rule: anchored to the bottom edge
+  const phone = css.match(/\n#loaf-modal, #list-select-modal, #day-modal, #send-who-modal \{[^}]*\}/);
+  assert.ok(phone);
+  assert.match(phone[0], /align-items: flex-end/);
+  // tablet block
+  const at = css.indexOf('body[data-card="calculator"] #loaf-modal, ');
+  assert.ok(at > 0, 'tablet rule exists');
+  const query = css.lastIndexOf('@media (min-width: 900px) and (min-height: 600px)', at);
+  assert.ok(query > css.indexOf('#loaf-modal-box, #list-select-box'), 'after the phone rules, so it wins');
+  const centred = ruleBodies(css.slice(query), '#day-modal,')[0];
+  assert.match(centred.body, /align-items: center/);
+  const box = ruleBodies(css.slice(query), '#day-modal-box')[0];
+  assert.match(box.body, /border-radius: var\(--radius\)(?!\s+var)/, 'full radius, not top-only');
+  assert.match(box.body, /padding: 20px/);
+  for (const id of ['#loaf-modal', '#list-select-modal', '#day-modal', '#send-who-modal']) {
+    assert.ok(centred.sel.includes(id), id);
+  }
+  for (const id of ['#loaf-modal-box', '#list-select-box', '#day-modal-box', '#send-who-box']) {
+    assert.ok(box.sel.includes(id), id);
+  }
+});
+
+test('S2: the centred box arrives with the dialog fade + scale (killed by reduced-motion in tokens.css)', () => {
+  const css = strip(read('style.css'));
+  assert.match(css, /#day-modal\.visible #day-modal-box \{ animation: app-dialog-in \.16s ease-out; \}/);
+  assert.match(strip(read('tokens.css')), /@keyframes app-dialog-in/);
+  assert.match(strip(read('tokens.css')), /prefers-reduced-motion: reduce\) \{\s*\*, \*::before, \*::after \{\s*animation-duration: \.01ms !important/);
+});

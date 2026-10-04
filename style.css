@@ -1425,6 +1425,27 @@ input.cp-prod-weight {
   overflow-y: auto;
   text-align: left;
 }
+/* ⚠️ ON A TABLET THE SAME FOUR SHEETS ARE CENTRED DIALOGS (4 Oct 2026). A sheet that
+   rises from the bottom edge of a 1280px-wide screen is a thumb's reach away on a
+   phone and a long way from anyone's eyes on a kitchen tablet. Same breakpoint as the
+   Calculator's tablet layout below; phones keep the bottom sheet. The box takes the
+   shared dialog's look (full radius, 20px padding, the 16px radius token) and its
+   fade + scale arrival; the reduced-motion switch in tokens.css still turns it off. */
+@media (min-width: 900px) and (min-height: 600px) {
+  body[data-card="calculator"] #loaf-modal, body[data-card="calculator"] #list-select-modal, body[data-card="calculator"] #day-modal, body[data-card="calculator"] #send-who-modal {
+    align-items: center;
+    padding: 24px;
+  }
+  body[data-card="calculator"] #loaf-modal-box, body[data-card="calculator"] #list-select-box, body[data-card="calculator"] #day-modal-box, body[data-card="calculator"] #send-who-box {
+    border-radius: var(--radius);
+    padding: 20px;
+    max-height: calc(100dvh - 48px);
+  }
+  body[data-card="calculator"] #loaf-modal.visible #loaf-modal-box,
+  body[data-card="calculator"] #list-select-modal.visible #list-select-box,
+  body[data-card="calculator"] #send-who-modal.visible #send-who-box,
+  body[data-card="calculator"] #day-modal.visible #day-modal-box { animation: app-dialog-in .16s ease-out; }
+}
 .loaf-modal-title { font-size: 17px; font-weight: 700; color: var(--text); margin-bottom: 20px; text-align: center; }
 /* Section labels ("Groups" / "Clients") inside the Send-order picker. */
 .send-picker-label { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text2); margin: 6px 2px 8px; }
