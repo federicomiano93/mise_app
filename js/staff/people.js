@@ -35,9 +35,9 @@ const BACK_ICON = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" w
 // ⚠️ THESE SENTENCES ARE THE ONLY PLACE ANYBODY IS EVER TOLD what a role does.
 // Nothing else in the app explains it, so a wrong one here is a wrong decision
 // about a real person's access — made confidently, because the screen said so.
-// ⚠️ KEYED BY THE PILL, NOT BY THE ROLE, because two pills share one role.
+// ⚠️ KEYED BY THE CHOICE, NOT BY THE ROLE, because two choices share one role.
 // "Head chef" has to state plainly that it is the manager level under another
-// name — four pills with four different-sounding sentences would read as four
+// name — four choices with four different-sounding sentences would read as four
 // levels of power, and somebody would pick between them believing it mattered.
 // ⚠️ KEYS, NOT WORDS, AND LOOKED UP AT DRAW TIME. These are module-level tables:
 // a translated sentence written here would be fixed at import — the language the
@@ -83,13 +83,20 @@ export function openPeople(session) {
   let members = [];
   let stop = null;
   let pending = null;      // the invitation being shown, if any
-  // Which pill the next code will invite as. It starts at Employee — the least
+  // Which role the next code will invite as. It starts at Employee — the least
   // power — so a distracted tap grants nothing.
   let newChoice = ROLE_CHOICES.find(c => c.key === 'staff');
   let renaming = null;     // the uid whose row is currently two input boxes
 
-  const list = el('div', { class: 'people-list' });
-  const codeBox = el('div', { class: 'people-code' });
+  // ⚠️ TWO SEPARATE CARDS, in the settings kit (.set-section), because the screen
+  // answers two different questions: "who do I let in?" and "who is in already?".
+  // One long stack of both was what the owner found unclear.
+  const list = el('div', { class: 'people-roster' });
+  const codeBox = el('div', { class: 'set-block' });
+  const membersTitle = el('h3');
+  // Hidden while a link or a code is on screen: those carry their own instructions,
+  // and two paragraphs of directions above six digits is one too many.
+  const inviteIntro = el('p', { text: t('people.invite.intro') });
 
   const overlay = el('div', { class: 'people-overlay' }, [
     el('header', { class: 'app-header orders-header' }, [
@@ -102,7 +109,19 @@ export function openPeople(session) {
       el('div', { class: 'app-header-title orders-header-title' }, [el('h1', { text: t('people.title') })]),
       el('span', { class: 'app-header-slot' }),
     ]),
-    el('div', { class: 'people-scroll' }, [codeBox, list]),
+    el('div', { class: 'people-scroll' }, [
+      el('section', { class: 'set-section' }, [
+        el('div', { class: 'set-head' }, [
+          el('h3', { text: t('people.section.invite') }),
+          inviteIntro,
+        ]),
+        codeBox,
+      ]),
+      el('section', { class: 'set-section' }, [
+        el('div', { class: 'set-head' }, [membersTitle]),
+        list,
+      ]),
+    ]),
   ]);
 
   function close() {
@@ -112,35 +131,64 @@ export function openPeople(session) {
 
   // ── Choosing a role ────────────────────────────────────────────────────────
   //
-  // ⚠️ THREE PILLS, NOT A TWO-WAY TOGGLE. With three roles a single button saying
-  // "Make owner" cannot express where somebody is going, and a toggle that cycles
-  // is worse: it puts a real person's access one mis-tap away from a role nobody
-  // chose. Every pill states its destination, and the current one is disabled —
-  // so the only taps that reach the server are real changes.
+  // ⚠️ A SELECT PER PERSON, NOT A TWO-WAY TOGGLE AND NOT A BLOCK OF BUTTONS. With
+  // three roles a single button saying "Make owner" cannot express where somebody
+  // is going, and a toggle that cycles puts a real person's access one mis-tap
+  // away from a role nobody chose. Every option states its destination; picking
+  // one changes NOTHING by itself — the confirmation (change() below) does — and
+  // cancelling puts the select back on the role the person really holds, so what
+  // the screen shows is never a role the server has not been told about. Four
+  // buttons per member was also what made this screen read as a wall.
   // ⚠️ FOUR WORDS, THREE LEVELS OF POWER. "Manager" and "Head chef" are the same
   // level under two names — Federico's own words for it since 11 Aug, and the
   // reason it is a title rather than a fourth role is in js/roles.js. The
-  // confirmation below has to say so out loud, or four pills read as four levels.
-  function rolePills(current, onPick) {
-    const wrap = el('div', { class: 'people-pills', role: 'group', 'aria-label': t('people.roleGroup') });
+  // confirmation below has to say so out loud, or four options read as four levels.
+  // ⚠️ NATIVE, so the phone draws its own picker and the keyboard works untouched.
+  // One <option> per ROLE_CHOICES entry, the single list the whole app shares.
+  function roleSelect(currentKey, extra) {
+    const select = el('select', { class: 'set-select', ...extra });
     for (const choice of ROLE_CHOICES) {
-      const chosen = choice.key === current;
-      const pill = el('button', {
-        type: 'button',
-        class: `people-pill${chosen ? ' people-pill--on' : ''}`,
-        'aria-pressed': chosen ? 'true' : 'false',
-      }, choiceLabel(choice));
-      if (chosen) pill.disabled = true;
-      else pill.addEventListener('click', () => onPick(choice));
-      wrap.appendChild(pill);
+      const option = el('option', { value: choice.key }, choiceLabel(choice));
+      option.selected = choice.key === currentKey;
+      select.appendChild(option);
     }
-    return wrap;
+    select.value = currentKey;
+    return select;
+  }
+
+  // ⚠️ ON A COMPUTER, AN ARROW KEY ON A CLOSED SELECT IS ALREADY A CHOICE. Chrome and
+  // Edge on Windows fire `change` at every ArrowUp/Down, Home/End, PageUp/Down and
+  // typed letter — measured. On a roster select that opened «Make Marco a head chef?»
+  // at the first keystroke, so an owner arrowing towards Owner could never get past
+  // the neighbouring role, and an Enter out of habit confirmed the wrong one (WCAG
+  // 3.2.2, P18). Those keys open the list instead, where moving changes nothing until
+  // a role is picked. Phones draw their own picker and never see this.
+  const STEP_KEYS = new Set(['ArrowUp', 'ArrowDown', 'Home', 'End', 'PageUp', 'PageDown']);
+  function pickFromOpenList(event) {
+    const typed = event.key && event.key.length === 1 && event.key !== ' ';
+    if (event.altKey || event.ctrlKey || event.metaKey) return;
+    if (!STEP_KEYS.has(event.key) && !typed) return;
+    event.preventDefault();
+    try { event.currentTarget.showPicker(); } catch { /* an old browser: Space and Alt+Down still open it */ }
   }
 
   // ── The list ───────────────────────────────────────────────────────────────
 
   function paint() {
+    // ⚠️ THE ROSTER IS REBUILT ON EVERY CHANGE — including the one this screen just
+    // made, since the server rewrites the member's document. Without this, the
+    // select the confirmation handed focus back to is gone and a keyboard or
+    // screen-reader user lands at the top of the page (same fix as home-cards-screen).
+    const focused = document.activeElement;
+    const focusUid = focused && list.contains(focused) && focused.dataset ? focused.dataset.uid : null;
     list.textContent = '';
+
+    // The count is read at every paint: the roster arrives after the screen is
+    // drawn and changes while it is open. Without one (failed read, nobody yet)
+    // the title simply has no number rather than saying "0".
+    membersTitle.textContent = members && members.length
+      ? t('people.section.members', { n: members.length })
+      : t('people.section.membersPlain');
 
     if (members === null) {
       list.appendChild(el('p', { class: 'people-empty', text:
@@ -163,22 +211,39 @@ export function openPeople(session) {
         continue;
       }
 
-      const row = el('div', { class: 'people-row' }, [
-        el('div', { class: 'people-row-main' }, [
-          el('span', { class: 'people-name', text: displayName(person) + (isMe ? t('people.you') : '') }),
-          el('span', { class: 'people-email', text: person.email || t('people.noEmailParen') }),
-        ]),
+      const main = el('div', { class: 'people-row-main' }, [
+        el('span', { class: 'people-name', text: displayName(person) + (isMe ? t('people.you') : '') }),
+        el('span', { class: 'people-email', text: person.email || t('people.noEmailParen') }),
       ]);
+      const row = el('div', { class: 'people-member' }, [main]);
 
       // ⚠️ NO CONTROLS ON YOUR OWN ROW. Demoting yourself is the one action here
       // that cannot be undone by the person who took it — you would need somebody
-      // else to put you back — so the buttons simply are not there. The server
+      // else to put you back — so the controls simply are not there. The server
       // refuses the last owner as well, but a screen that offers a tap and then
       // explains why not is a worse screen than one that does not offer it.
       if (isMe) {
         row.appendChild(el('span', { class: 'people-role', text: personLabel(person.role, person.title) }));
       } else {
-        row.appendChild(rolePills(choiceKey(person.role, person.title), next => change(person, next)));
+        const currentKey = choiceKey(person.role, person.title);
+        // Named by the email when the person has no name yet: two selects both read
+        // out as «Role of (no name yet)» would leave a screen reader guessing.
+        const named = [cleanName(person.firstName), cleanName(person.lastName)].filter(Boolean).join(' ');
+        const select = roleSelect(currentKey, {
+          'aria-label': t('people.roleOf', { name: named || person.email || displayName(person) }),
+        });
+        select.dataset.uid = person.uid;
+        select.addEventListener('keydown', pickFromOpenList);
+        select.addEventListener('change', async () => {
+          const next = ROLE_CHOICES.find(c => c.key === select.value);
+          const applied = next ? await change(person, next) : false;
+          // Cancelled or failed: the select must not keep showing a role nobody has.
+          if (!applied) select.value = currentKey;
+        });
+        // The select sits beside the name; Rename and Remove take the line below
+        // both, so on a narrow phone (where the select drops under the name) the
+        // order still reads name → role → actions.
+        row.appendChild(select);
         row.appendChild(el('div', { class: 'people-row-actions' }, [
           el('button', {
             type: 'button', class: 'mgmt-link',
@@ -195,6 +260,11 @@ export function openPeople(session) {
 
     if (!sorted.length) {
       list.appendChild(el('p', { class: 'people-empty', text: t('people.empty') }));
+    }
+
+    if (focusUid) {
+      const again = [...list.querySelectorAll('select')].find(x => x.dataset.uid === focusUid);
+      if (again) again.focus();
     }
   }
 
@@ -242,8 +312,8 @@ export function openPeople(session) {
     const cancel = el('button', { type: 'button', class: 'btn-secondary people-save' }, t('people.cancel'));
     cancel.addEventListener('click', () => { renaming = null; paint(); });
 
-    const row = el('div', { class: 'people-row people-row--editing' }, [
-      el('span', { class: 'people-email', text: person.email || '(no email)' }),
+    const row = el('div', { class: 'people-member people-member--editing' }, [
+      el('span', { class: 'people-email', text: person.email || t('people.noEmailParen') }),
       first, last, status,
       el('div', { class: 'people-row-actions' }, [save, cancel]),
     ]);
@@ -263,11 +333,13 @@ export function openPeople(session) {
       // Taking power away is the direction that surprises somebody mid-shift.
       danger: choice.role === 'staff',
     });
-    if (!ok) return;
+    if (!ok) return false;
     try { await setMemberRole(person.uid, choice.role, choice.title); }
     catch (err) {
       await alertDialog(callFailureText(err, t('people.err.change')));
+      return false;
     }
+    return true;
   }
 
   async function remove(person) {
@@ -290,16 +362,25 @@ export function openPeople(session) {
 
   function paintCode() {
     codeBox.textContent = '';
+    inviteIntro.hidden = !!pending;
 
     if (!pending) {
-      codeBox.appendChild(el('p', { class: 'people-hint', text:
-        t('people.invite.intro') }));
       // ⚠️ THE ROLE IS CHOSEN BEFORE THE INVITATION, not after they arrive. Going
       // back to change somebody's role afterwards is a second errand nobody
       // remembers. It starts at Employee — the least power — so a distracted tap
       // grants nothing.
-      codeBox.appendChild(rolePills(newChoice.key, choice => { newChoice = choice; paintCode(); }));
-      codeBox.appendChild(el('p', { class: 'people-note', text: t(ROLE_MEANS[newChoice.key]) }));
+      // ⚠️ ON CHANGE ONLY THE SENTENCE IS REWRITTEN, never the select: rebuilding
+      // it would drop the keyboard's focus in the middle of choosing.
+      const selectId = 'people-invite-role';
+      const roleNote = el('p', { class: 'people-note', text: t(ROLE_MEANS[newChoice.key]) });
+      const roleField = roleSelect(newChoice.key, { id: selectId });
+      roleField.addEventListener('change', () => {
+        newChoice = ROLE_CHOICES.find(c => c.key === roleField.value) || newChoice;
+        roleNote.textContent = t(ROLE_MEANS[newChoice.key]);
+      });
+      codeBox.appendChild(el('label', { class: 'set-label', for: selectId, text: t('people.roleGroup') }));
+      codeBox.appendChild(roleField);
+      codeBox.appendChild(roleNote);
 
       // ⚠️⚠️ TWO WAYS TO HAND OVER THE SAME INVITATION, AND NEITHER REPLACES THE
       // OTHER. A link is right when the person is not in front of you, which for
@@ -314,17 +395,17 @@ export function openPeople(session) {
       // into a button label is a hole no translator can fill well. It is stated
       // twice instead, in whole sentences: by the note directly above, and by the
       // result screen the owner reads before sending anything.
-      codeBox.appendChild(el('p', { class: 'people-label', text: t('people.sendHow') }));
-
+      // The two buttons sit side by side and fall one under the other by
+      // themselves when the screen is too narrow (.people-add-row).
       const byLink = el('button', { type: 'button', class: 'btn-primary people-add' },
         t('people.add.link'));
       byLink.addEventListener('click', () => mint('link'));
-      codeBox.appendChild(byLink);
 
       const byDigits = el('button', { type: 'button', class: 'btn-secondary people-add' },
         t('people.add.digits'));
       byDigits.addEventListener('click', () => mint('digits'));
-      codeBox.appendChild(byDigits);
+
+      codeBox.appendChild(el('div', { class: 'people-add-row' }, [byLink, byDigits]));
       return;
     }
 
@@ -407,7 +488,13 @@ export function openPeople(session) {
 
   function doneButton() {
     const done = el('button', { type: 'button', class: 'btn-secondary people-add' }, t('people.done'));
-    done.addEventListener('click', () => { pending = null; paintCode(); });
+    // ⚠️ AND THE NEXT INVITATION STARTS ON EMPLOYEE AGAIN. Kept from the last one, a
+    // co-owner invited first made the kitchen porter invited next an owner too.
+    done.addEventListener('click', () => {
+      pending = null;
+      newChoice = ROLE_CHOICES.find(c => c.key === 'staff');
+      paintCode();
+    });
     return done;
   }
 

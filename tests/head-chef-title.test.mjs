@@ -103,14 +103,14 @@ test('the screen really sends the title, through the data layer', () => {
     'the data layer must accept it');
   assert.match(CLIENT, /createJoinCode\(role = 'staff', title = null, kind = 'digits'\)/);
   assert.match(SCREEN, /setMemberRole\(person\.uid, choice\.role, choice\.title\)/,
-    'the roster pills must pass it');
+    'the roster role menus must pass it');
   assert.match(SCREEN, /createJoinCode\(newChoice\.role, newChoice\.title, kind\)/,
     'and so must the invite panel');
 });
 
 // ⚠️ FOUR PILLS THAT LOOK LIKE FOUR LEVELS ARE WORSE THAN NO TITLE AT ALL.
 // Somebody would choose between Manager and Head chef believing it changed what
-// the person can do. The sentence under the pills is the only place anybody is
+// the person can do. The sentence under the role menu is the only place anybody is
 // ever told, so it has to say they are the same.
 //
 // ⚠️ THE SENTENCE MOVED INTO THE DICTIONARY, THE RULE DID NOT — and the test got
