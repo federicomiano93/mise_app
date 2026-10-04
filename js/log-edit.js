@@ -18,7 +18,7 @@ import { getConfig } from './calculator-config-store.js';
 import { getTabProducts, getDivisorIncluded, getRecipes, getRecipeById } from './calculator-config.js';
 import { logTimestamp } from './log-time.js';
 import { confirmDiscard } from './calculator-confirm.js';
-import { buildSheet, buildLogText, latestVersion, recipeSnapshot, editRows } from './log-model.js';
+import { buildSheet, buildLogText, typedTotalOf, latestVersion, recipeSnapshot, editRows } from './log-model.js';
 import { getLogById, appendAndSave, restoreAndSave } from './log-store.js';
 import { renderVersion } from './log-view.js';
 import { qtyRow } from './log-qty.js';
@@ -136,10 +136,11 @@ async function save() {
   // edits quantities only); recompute the sheet faithfully for the new quantities,
   // using the recipe the log was MADE with, not today's.
   const recipe = working.recipe;
-  const prevSheet = (latestVersion(getLogById(working.logId)) || {}).sheet;
+  const prevVersion = latestVersion(getLogById(working.logId)) || {};
+  const prevSheet = prevVersion.sheet;
   const leaveningPct = prevSheet && prevSheet.param ? prevSheet.param.value : (recipe ? recipe.leaveningDefaultPct : 0);
   const extraG = prevSheet ? num(prevSheet.extra_g) : 0;
-  const totalInput = recipe && recipe.logic === 'total' ? num(prevSheet && prevSheet.total_g) : 0;
+  const totalInput = typedTotalOf(recipe, prevVersion);
   const divisor = { includedIds: getDivisorIncluded(getConfig(), tab), n: prevSheet && prevSheet.divisor ? prevSheet.divisor.n : 0 };
 
   const sheet = buildSheet({ recipe, items: items.concat(occLines), extraGrams: extraG, totalInput, leaveningPct, divisor });
