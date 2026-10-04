@@ -1,7 +1,7 @@
 import './firebase.js';
 import { t } from './i18n.js';
 import {
-  calc, copyRecipe, sendRecipe, buildDivisorBox,
+  calc, copyRecipe, sendRecipe, buildDivisorBox, recipeModelFor,
   restoreRevealed, clearRevealed, restoreLock, clearLock, getLock,
 } from './calc.js';
 import { saveDay, editTab, renderLog } from './log.js';
@@ -21,6 +21,7 @@ import { workDayIndex } from './log-model.js';
 import { confirmDialog } from './confirm-dialog.js';
 import { initClientOrders } from './calculator-client-orders.js';
 import { runConfirm } from './confirm-flow.js';
+import { openRecipeFullScreen } from './calc-fullscreen.js';
 
 // Service-worker registration and the update banner live in js/sw-update.js,
 // shared by every page — nothing to do here.
@@ -320,6 +321,20 @@ function wireRecipe(recipe) {
   if (editBtn) editBtn.addEventListener('click', () => editTab(id));
   const copyBtn = document.getElementById(id + '-copy-btn');
   if (copyBtn) copyBtn.addEventListener('click', () => copyRecipe(id));
+  // Full screen: the visible button, and a tap on the ingredient list or the total line. The copy
+  // and send buttons sit in .copy-row, outside both, so they never open it. The list is not a
+  // control for the keyboard (that is the button's job, and it keeps the rows readable to a
+  // screen reader); focus goes back to the button either way.
+  const fsBtn = document.getElementById(id + '-fullscreen-btn');
+  const openFullScreen = () => {
+    const model = recipeModelFor(id);
+    if (model) openRecipeFullScreen({ ...model, opener: fsBtn });
+  };
+  if (fsBtn) fsBtn.addEventListener('click', openFullScreen);
+  const listEl = document.getElementById(id + '-ingredients');
+  if (listEl) listEl.addEventListener('click', openFullScreen);
+  const totalRow = document.querySelector('#tab-' + id + ' .total-dough-row');
+  if (totalRow) totalRow.addEventListener('click', openFullScreen);
   const waBtn = document.getElementById(id + '-wa-recipe-btn');
   if (waBtn) waBtn.addEventListener('click', () => sendRecipe(id));
   const resetBtn = document.querySelector('#tab-' + id + ' .reset-btn');

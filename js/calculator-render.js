@@ -195,6 +195,9 @@ export function buildRecipePanel(recipe) {
       el('div', { class: 'result-header' }, [
         el('h3', {}, t('calc.doughTitle', { name: recipe.name })),
         el('span', { class: 'result-badge', id: id + '-badge' }, ''),
+        // The visible way into the full-screen view; tapping the list itself does the same (app.js).
+        el('button', { class: 'calc-fullscreen-btn', id: id + '-fullscreen-btn', type: 'button',
+          title: t('calc.fullScreen'), 'aria-label': t('calc.fullScreen') }, [icon('maximize', 20)]),
       ]),
       el('div', { id: id + '-ingredients' }),
       el('div', { class: 'ing-separator' }),

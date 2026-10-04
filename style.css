@@ -395,6 +395,88 @@ select.qty-select:focus { outline: none; border-color: var(--crust); background:
 }
 .result-header h3 { font-family: var(--font-display); font-size: 22px; font-weight: 400; }
 .result-badge { display: none; }
+/* «Full screen» — a quiet icon button at the right of the result's title (an action that is
+   not THE action: Confirm already happened). The icon sits in a flex box, never on a baseline. */
+.calc-fullscreen-btn {
+  margin-left: auto;
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-2);
+  cursor: pointer;
+}
+.calc-fullscreen-btn:active { background: var(--accent-light); transform: scale(.97); }
+/* Tapping the list or the total opens the same view; the pointer says so. */
+.result-card .total-dough-row, .result-card [id$="-ingredients"] { cursor: zoom-in; }
+
+/* ══ The confirmed recipe, full screen (js/calc-fullscreen.js) ═══════════════════════════
+   A fixed overlay over the whole page, like the Ricettario's full-screen list. The rows are
+   centred with AUTO margins (never justify-content: center, which would clip the top of a recipe
+   taller than the screen), the bottom is padded so the − / + pair never covers the last row, and
+   the size is the view's own base times --zoom-scale (js/zoom-steps.js, 0.8 … 2.1).
+   A row WRAPS when it does not fit: a long name takes its own line and the grams drop below it,
+   right-aligned — nothing scrolls sideways at 296px even at the largest step. */
+.calc-zoom {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  background: var(--surface);
+  color: var(--text);
+  padding: var(--space-4) clamp(16px, 6vw, 56px);
+  padding-bottom: var(--zoom-steps-room);
+  font-size: clamp(1.1rem, 4.4vw, 1.6rem);
+}
+.calc-zoom-close {
+  position: fixed;
+  top: var(--space-3);
+  right: var(--space-3);
+  z-index: 2;
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text-2);
+  cursor: pointer;
+}
+.calc-zoom-close:active { transform: scale(.97); }
+.calc-zoom-rows { margin: auto 0; width: 100%; padding-top: 48px; }
+.calc-zoom-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 2px 12px;
+  padding: .45em 0;
+  border-bottom: 1px solid var(--border);
+  font-size: calc(1em * var(--zoom-scale, 1));
+}
+.calc-zoom-name { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; font-weight: 500; }
+.calc-zoom-val {
+  flex: 0 0 auto;
+  margin-left: auto;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.calc-zoom-total { border-bottom: 0; margin-top: .25em; }
+.calc-zoom-total .calc-zoom-name { font-weight: 700; }
+.calc-zoom-total .calc-zoom-val { color: var(--accent); }
+/* Freeze the page behind it: the scroller is .scroll-area (the body itself never scrolls). */
+body.calc-zoom-lock .scroll-area { overflow: hidden; }
 
 .ing-row {
   display: flex;
@@ -1858,6 +1940,8 @@ input.cp-prod-weight {
   /* Square again beside the 52px Copy button (it measured 46×52). */
   body[data-card="calculator"] #recipe-tabs .copy-send-btn { width: var(--tap-min); height: var(--tap-min); }
   body[data-card="calculator"] #tab-bar .tab { min-height: var(--tap-min); }
+  /* The full-screen recipe is a reading column too: 620px, centred, however wide the screen. */
+  body[data-card="calculator"] .calc-zoom-rows { max-width: 620px; margin: auto; }
 }
 
 /* ⚠️ THE FIXED SCREENS KEEP THEIR 620px COLUMN even though this page is wide. They are

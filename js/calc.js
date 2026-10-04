@@ -301,6 +301,14 @@ export function calc(id) {
   if (revealed[id]) showResult(resultId); else hideResult(resultId);
 }
 
+// What the full-screen view shows: the same rows the result card shows, from the same model.
+// null when nothing is calculated (the view has nothing to say then).
+export function recipeModelFor(id) {
+  const model = lastRecipe[id];
+  if (!model) return null;
+  return { name: model.name, rows: model.rows.map(r => ({ name: r.name, grams: r.grams })), totalG: model.totalG };
+}
+
 // Recipe text for the Copy/WhatsApp export, from the in-memory ingredient model.
 function recipeTextFor(id) {
   const model = lastRecipe[id];

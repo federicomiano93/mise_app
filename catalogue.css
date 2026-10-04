@@ -125,8 +125,16 @@ body {
 .cat-ing-list--zoom { position: fixed; inset: 0; z-index: 50; margin: 0; border: 0; border-radius: 0; overflow-y: auto; cursor: zoom-out; display: flex; flex-direction: column; padding: 20px clamp(16px, 6vw, 56px); padding-inline: max(clamp(16px, 6vw, 56px), var(--app-gutter)); }
 .cat-ing-list--zoom .cat-ing-rows { margin: auto 0; width: 100%; }
 .cat-ing-list--zoom .cat-ing-row { padding: clamp(14px, 3.2vh, 30px) 6px; }
+/* The − / + text size (js/catalogue/zoom-steps.js): each step multiplies the base size above.
+   A row WRAPS when it does not fit, the grams dropping under a long name, right-aligned, so the
+   largest step never scrolls sideways at 296px. The bottom is padded so the pair (tokens.css)
+   never covers the last row. */
+.cat-ing-list--zoom { padding-bottom: var(--zoom-steps-room); }
 .cat-ing-list--zoom .cat-ing-name,
-.cat-ing-list--zoom .cat-ing-amt { font-size: clamp(1.4rem, 6.4vw, 2.2rem); }
+.cat-ing-list--zoom .cat-ing-amt { font-size: calc(clamp(1.4rem, 6.4vw, 2.2rem) * var(--zoom-scale, 1)); }
+.cat-ing-list--zoom .cat-ing-row { flex-wrap: wrap; row-gap: 2px; }
+.cat-ing-list--zoom .cat-ing-amt { margin-left: auto; }
+.cat-ing-list:not(.cat-ing-list--zoom) .zoom-steps { display: none; }
 /* Freeze the page behind the overlay so it can't scroll underneath. */
 body.cat-zoom-lock { overflow: hidden; }
 
