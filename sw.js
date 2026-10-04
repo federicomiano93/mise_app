@@ -1,4 +1,4 @@
-const CACHE_NAME = 'theitalianclub-v550';
+const CACHE_NAME = 'theitalianclub-v551';
 // Firebase SDK modules (loaded from gstatic) are cached SEPARATELY from CACHE_NAME
 // so they survive the cache-version bump that happens on every deploy — otherwise
 // the offline SDK would be wiped each release until the next online load. The name
@@ -416,8 +416,8 @@ const ASSET_HASHES = {
   "./js/install-guide.js": '17fcd0c0fec489c2',
   "./tokens.css": '1d50afb480edc5ee',
   "./auth.css": 'e4ba63eda208115b',
-  "./style.css": '011704cc77f2029b',
-  "./orders.css": '0dcc278f040c12d9',
+  "./style.css": '2e10bd937e5e4509',
+  "./orders.css": '550912deaebd0064',
   "./sounds/alarm.wav": '0d1465974f5be95b',
   "./fonts/manrope-latin.woff2": '71eb731d55804619',
   "./fonts/manrope-latin-ext.woff2": 'bd24140af06f1b58',
@@ -555,8 +555,8 @@ const ASSET_HASHES = {
   "./js/orders/history-window.js": 'f080bfc32d981c5a',
   "./js/orders/reminders.js": 'e9c255f18abea237',
   "./js/orders/reminder-view.js": '8fef47478579d97e',
-  "./js/orders/suppliers.js": '7b1dc10c7a5df5ae',
-  "./js/orders/ingredients.js": '2d25173d4fc6f56c',
+  "./js/orders/suppliers.js": 'b1fb5923228df1a8',
+  "./js/orders/ingredients.js": 'cdcb74e00643cc06',
   "./js/orders/no-supplier.js": '185050fd12a0a2b0',
   "./js/orders/line-supplier.js": '3d9d21bdc79b2955',
   "./js/orders/ingredient-search.js": 'b205e1d0d4d5185c',
@@ -603,7 +603,7 @@ const ASSET_HASHES = {
   "./js/orders/order-cost-view.js": '4b03fed043e88d39',
   "./js/orders/order-summary-view.js": '2ab80dbb8b7fa26f',
   "./catalogue.html": '90fb703beea7eac1',
-  "./catalogue.css": 'd92cf3afef699fe4',
+  "./catalogue.css": '9dd1efd51091f007',
   "./label-print.css": 'ffbcdf4e7a627a2d',
   "./records.css": 'd9c17ed942d57f13',
   "./js/catalogue/confirm-dialog.js": '61a7f580f37c5ff8',

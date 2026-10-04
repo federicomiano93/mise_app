@@ -86,9 +86,14 @@ body {
   appearance: none; text-align: left; width: 100%; cursor: pointer;
   background: var(--cat-surface); border: 1px solid var(--cat-border); border-radius: var(--cat-radius);
   padding: 15px 16px; display: flex; align-items: center; gap: 12px;
-  transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease;
+  transition: transform .12s ease;
 }
-.cat-card:hover { transform: translateY(-1px); box-shadow: var(--cat-shadow); border-color: color-mix(in srgb, var(--cat-accent) 40%, var(--cat-border)); }
+/* Only a real pointer hovers: on a touch screen :hover sticks after a tap and the
+   card stayed lifted. The shadow and border change at once (no transition on them) —
+   transitioning a shadow repaints the card every frame; the lift is transform only. */
+@media (hover: hover) {
+  .cat-card:hover { transform: translateY(-1px); box-shadow: var(--cat-shadow); border-color: color-mix(in srgb, var(--cat-accent) 40%, var(--cat-border)); }
+}
 .cat-card:focus-visible { outline: 2px solid var(--cat-accent); outline-offset: 2px; }
 .cat-card .name { flex: 1; min-width: 0; font-family: var(--cat-font-round); font-weight: 600; font-size: 1.12rem; color: var(--cat-text); }
 /* The arrow is an SVG now: a flex box, so it centres on the row and never rests on a
@@ -645,14 +650,24 @@ body.cat-zoom-lock { overflow: hidden; }
 
 /* ── The run ─────────────────────────────────────────────────────────────── */
 .guided-run { padding: 2px 0 8px; }
-.guided-card { background: var(--cat-surface); border: 1px solid var(--cat-border); border-radius: var(--cat-radius); padding: 20px 16px; text-align: center; box-shadow: var(--shadow-card); }
+.guided-card { position: relative; background: var(--cat-surface); border: 1px solid var(--cat-border); border-radius: var(--cat-radius); padding: 20px 16px; text-align: center; box-shadow: var(--shadow-card); }
 /* Time is up. The card takes the app's attention colour and breathes once a
    second so a glance from across the room catches it; the app-wide
-   prefers-reduced-motion switch in tokens.css neutralises the pulse. */
-.guided-card--due { background: var(--cat-crust-bg); border-color: var(--cat-crust); animation: guided-pulse 1s ease-in-out infinite; }
+   prefers-reduced-motion switch in tokens.css neutralises the pulse.
+   ⚠️ THE BREATH IS A RING ON A PSEUDO-ELEMENT, NOT AN ANIMATED box-shadow. Animating
+   box-shadow repaints the card on every frame of an animation that runs for as long as
+   the timer is due — a weak tablet's GPU pays for it. The ring is drawn once and only
+   its transform and opacity move, which the compositor does without repainting. */
+.guided-card--due { background: var(--cat-crust-bg); border-color: var(--cat-crust); }
+.guided-card--due::after {
+  content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+  box-shadow: 0 0 0 8px color-mix(in srgb, var(--cat-crust) 45%, transparent);
+  opacity: 0;
+  animation: guided-pulse 1s ease-in-out infinite;
+}
 @keyframes guided-pulse {
-  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--cat-crust) 45%, transparent); }
-  50%      { box-shadow: 0 0 0 8px color-mix(in srgb, var(--cat-crust) 0%, transparent); }
+  0%, 100% { transform: scale(.97); opacity: 0; }
+  50%      { transform: scale(1);   opacity: .6; }
 }
 
 /* Which step this is, ABOVE the card rather than inside it. Needs its own
@@ -737,12 +752,25 @@ body.cat-zoom-lock { overflow: hidden; }
   border-color: var(--cat-crust-ink);
   color: var(--cat-brand-ink);
 }
-/* The louder announcement, chosen by the combination rather than by the caller. */
-.guided-speed--changed.guided-speed--flash { animation: guided-speed-alert 420ms ease-out 3; }
+/* The louder announcement, chosen by the combination rather than by the caller.
+   The ring is a pseudo-element drawn once, with only transform and opacity animated
+   (an animated box-shadow repaints every frame); the pill itself still scales. */
+.guided-speed--changed.guided-speed--flash { position: relative; animation: guided-speed-alert 420ms ease-out 3; }
+.guided-speed--changed.guided-speed--flash::after {
+  content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+  box-shadow: 0 0 0 12px color-mix(in srgb, var(--cat-crust-ink) 55%, transparent);
+  opacity: 0;
+  animation: guided-speed-ring 420ms ease-out 3;
+}
 @keyframes guided-speed-alert {
-  0%   { transform: scale(1.16); box-shadow: 0 0 0 0  color-mix(in srgb, var(--cat-crust-ink) 55%, transparent); }
-  70%  { transform: scale(1);    box-shadow: 0 0 0 12px color-mix(in srgb, var(--cat-crust-ink) 0%, transparent); }
-  100% { transform: scale(1);    box-shadow: 0 0 0 0  color-mix(in srgb, var(--cat-crust-ink) 0%, transparent); }
+  0%   { transform: scale(1.16); }
+  70%  { transform: scale(1); }
+  100% { transform: scale(1); }
+}
+@keyframes guided-speed-ring {
+  0%   { transform: scale(.85); opacity: 1; }
+  70%  { transform: scale(1);   opacity: 0; }
+  100% { transform: scale(1);   opacity: 0; }
 }
 .guided-due { margin: 14px 0 0; font-size: .95rem; font-weight: 600; color: var(--cat-crust-ink); }
 
