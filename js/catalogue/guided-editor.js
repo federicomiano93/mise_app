@@ -278,6 +278,8 @@ export function renderGuidedEditor({ recipe, app }) {
     });
   });
 
+  app.setHeaderSave(onSave);
+
   paint();
 
   return el('div', { class: 'cat-view guided-edit' }, [
@@ -285,8 +287,5 @@ export function renderGuidedEditor({ recipe, app }) {
     list,
     el('button', { class: 'cat-add-row', type: 'button', text: t('cat.addStep'), onclick: add }),
     endNoteBlock,
-    el('div', { class: 'cat-editor-actions' }, [
-      el('button', { class: 'cat-save-btn', type: 'button', text: t('ui.save'), onclick: onSave }),
-    ]),
   ]);
 }

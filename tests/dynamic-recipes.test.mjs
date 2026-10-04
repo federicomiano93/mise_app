@@ -208,8 +208,8 @@ test('getVisibleRecipes caps at MAX_VISIBLE_RECIPES and honours order + visible'
   assert.deepEqual(visible, ['a', 'b', 'c', 'd']); // hidden excluded, sorted by order, capped at 4
 });
 
-test('LOGICS lists the three calc logics', () => {
-  assert.deepEqual(LOGICS, ['orders', 'total', 'both']);
+test('LOGICS lists the five calc logics', () => {
+  assert.deepEqual(LOGICS, ['orders', 'total', 'both', 'trays', 'traysTotal']);
 });
 
 // ── computeRecipeTarget (per-logic target, the dangerous math) ──────────────────

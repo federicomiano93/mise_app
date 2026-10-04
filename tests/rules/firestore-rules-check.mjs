@@ -1322,6 +1322,33 @@ async function configAndLogs() {
       products: [{ id: 'p1', name: 'Pizzas' }], groups: {},
     }));
 
+  // ── The Orders-button switch and the old-phone guard (4 Oct 2026) ──
+  await expectAllowed('config: the Orders button switched off', () =>
+    mergeWrite(`${A}/config/calculator`, { bakery: 'main', showClientOrdersButton: false }));
+  await expectDenied('config: the Orders button switch sent as text', () =>
+    mergeWrite(`${A}/config/calculator`, { bakery: 'main', showClientOrdersButton: 'no' }));
+  await expectDenied('config: a model sent as text', () =>
+    mergeWrite(`${A}/config/calculator`, { bakery: 'main', configModel: '2' }));
+  await expectDenied('config: a model of zero', () =>
+    mergeWrite(`${A}/config/calculator`, { bakery: 'main', configModel: 0 }));
+  await seedDoc(`${A}/config/calculator`, {
+    bakery: 'main', configRev: 5, configModel: 2, clients: [], recipes: [], showClientOrdersButton: false,
+  });
+  await expectDenied('⚠️⚠️ an out-of-date phone saving a model-2 config WITHOUT the model', () =>
+    wholeWrite(`${A}/config/calculator`, { bakery: 'main', configRev: 6, clients: [], recipes: [] }));
+  await expectDenied('…nor saving it back as an older model', () =>
+    wholeWrite(`${A}/config/calculator`, { bakery: 'main', configRev: 6, configModel: 1, clients: [], recipes: [] }));
+  await expectAllowed('…while the current app saves it', () =>
+    wholeWrite(`${A}/config/calculator`, {
+      bakery: 'main', configRev: 6, configModel: 2, clients: [], recipes: [], showClientOrdersButton: false,
+    }));
+  await expectAllowed('…and a merge that does not send the model keeps the stored one', () =>
+    mergeWrite(`${A}/config/calculator`, { bakery: 'main', orderPrefillWindow: 'today' }));
+  await expectAllowed('…and a newer app may raise it', () =>
+    wholeWrite(`${A}/config/calculator`, { bakery: 'main', configRev: 7, configModel: 3, clients: [], recipes: [] }));
+  await expectAllowed('config/orders is untouched by the calculator model', () =>
+    mergeWrite(`${A}/config/orders`, { bakery: 'main', showStock: true }));
+
   // ── ...and nothing else ──
   await expectDenied('config: a key nobody declared', () =>
     mergeWrite(`${A}/config/calculator`, { bakery: 'main', surprise: 'anything' }));

@@ -186,10 +186,10 @@ function openCard(item, mayPrice = true) {
     item, suppliers: [{ id: 'S1', name: 'Molino' }], mayPrice, categories: ['Panetteria'], packs: ['busta'],
     panels: { allergens: false, nutrition: false },
     actions: { saveIngredient: async (id, payload) => { saves.push(payload); }, priceHistory: async () => [], packPhotoOn: () => false },
-    onDone: () => {}, onCancel: () => {},
+    onDone: () => {},
   });
   const inputs = walk(root).filter(n => n.tagName === 'INPUT' && n.classList.contains('mgmt-input'));
-  const save = walk(root).find(n => n.tagName === 'BUTTON' && n.classList.contains('btn-primary'));
+  const save = root.headerSave;
   return { root, saves, name: inputs[0], shortName: inputs[1], async save() { click(save); await new Promise(r => setImmediate(r)); return saves[saves.length - 1]; } };
 }
 

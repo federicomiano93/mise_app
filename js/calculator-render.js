@@ -12,7 +12,7 @@
 // attributes), matching the page's strict Content-Security-Policy.
 
 import { t } from './i18n.js';
-import { getTabProducts, showsLeaveningKnob } from './calculator-config.js';
+import { getTabProducts, showsLeaveningKnob, usesOrders, usesTypedTotal, usesTrays } from './calculator-config.js';
 import { icon } from './calculator-icons.js';
 import { SEND_PATHS, svgElement } from './send-icon.js';
 
@@ -97,12 +97,15 @@ function knobRange(defaultPct) {
 //   orders → leavening knob (if shown) + Orders + extra + Confirm/Edit + result
 //   total  → "Total dough (g)" + Confirm/Edit + result (no orders/leavening/extra)
 //   both   → leavening knob (if shown) + Orders + total + extra + Confirm/Edit + result
+//   trays      → "Number of trays" (+ the grams they make) + Confirm/Edit + result
+//   traysTotal → "Number of trays" + "Total dough (g)" + Confirm/Edit + result
 // CSP-safe (DOM API, no innerHTML/inline styles). No event listeners here — app.js
 // wires them after inserting the panel, exactly like the old static markup.
 export function buildRecipePanel(recipe) {
   const id = recipe.id;
-  const hasOrders = recipe.logic === 'orders' || recipe.logic === 'both';
-  const hasTotalInput = recipe.logic === 'total' || recipe.logic === 'both';
+  const hasOrders = usesOrders(recipe.logic);
+  const hasTotalInput = usesTypedTotal(recipe.logic);
+  const hasTrays = usesTrays(recipe.logic);
   const content = el('div', { class: 'content', id: 'tab-' + id });
 
   if (showsLeaveningKnob(recipe)) {
@@ -122,9 +125,26 @@ export function buildRecipePanel(recipe) {
     ]));
   }
 
+  // Trays first, then the typed total. The grams the trays make are written under the label
+  // and kept up to date by calc.js (id `<recipe>-trays-grams`).
+  if (hasTrays) {
+    content.appendChild(el('div', { class: 'param-row param-row--total' }, [
+      // The «= N g» line sits BESIDE the label, not inside it: inside, the field's accessible
+      // name changed on every keystroke. aria-describedby links it; it stays polite-live.
+      el('div', { class: 'param-label-stack' }, [
+        el('label', { class: 'param-label', for: id + '-trays-input' }, t('calc.trayCount')),
+        el('span', { class: 'trays-grams', id: id + '-trays-grams', 'aria-live': 'polite' }, ''),
+      ]),
+      el('div', { class: 'qty-group' }, [
+        el('input', { type: 'number', id: id + '-trays-input', value: '0', min: '0', step: '1', inputmode: 'numeric', 'aria-describedby': id + '-trays-grams' }),
+      ]),
+    ]));
+  }
+
   if (hasTotalInput) {
-    content.appendChild(el('div', { class: 'param-row' }, [
-      el('span', { class: 'param-label' }, t('calc.totalDoughG')),
+    content.appendChild(el('div', { class: 'param-row param-row--total' }, [
+      // A real <label for>: it was a plain span, so a screen reader could not name the box.
+      el('label', { class: 'param-label', for: id + '-total-input' }, t('calc.totalDoughG')),
       el('div', { class: 'qty-group' }, [
         el('input', { type: 'number', id: id + '-total-input', value: '0', min: '0', step: '1', inputmode: 'numeric' }),
         el('span', { class: 'unit' }, 'g'),
@@ -153,7 +173,7 @@ export function buildRecipePanel(recipe) {
   content.appendChild(el('div', { class: 'result-block', id: id + '-result' }, [
     el('div', { class: 'result-card' }, [
       el('div', { class: 'result-header' }, [
-        el('h3', {}, recipe.name + ' dough'),
+        el('h3', {}, t('calc.doughTitle', { name: recipe.name })),
         el('span', { class: 'result-badge', id: id + '-badge' }, ''),
       ]),
       el('div', { id: id + '-ingredients' }),

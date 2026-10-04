@@ -429,7 +429,7 @@ test('editing an order in History carries missing, deliveredAt and missingResolv
   const saved = [];
   const editor = buildHistoryEditor(record, [{ id: 'flour', name: 'Flour' }, { id: 'yeast', name: 'Yeast' }],
     { onClose() {}, onSave: (id, next) => saved.push([id, next]), onDelete() {} });
-  const pending = withClass('hist-edit-save', editor)[0].click();
+  const pending = withClass('app-header-save', editor)[0].click();
   await tick();
   await dialogButton('app-dialog-btn-solid').click();
   await pending;

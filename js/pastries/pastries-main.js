@@ -31,6 +31,8 @@ const subEl = document.getElementById('pasSub');
 const homeBtn = document.getElementById('pasHome');
 const backBtn = document.getElementById('pasBack');
 const editBtn = document.getElementById('pasEdit');
+const saveBtn = document.getElementById('pasSave');
+const headerEl = saveBtn.closest('.app-header');
 const footer = document.getElementById('pasFooter');
 const logsBtn = document.getElementById('pasLogs');
 
@@ -46,6 +48,8 @@ let dayView = null;       // { node, update } while the day view is on screen
 let logsView = null;      // { node, update } while the records are on screen
 let logsStarted = false;  // the records listener is attached on first use, not at boot
 let leaveGuard = null;    // async () => boolean; blocks Back when there are unsaved edits
+// The editor's Save, shown in the green header (app.setHeaderSave); setHeader() clears it.
+let headerSave = null;
 
 // ── Header + view helpers ────────────────────────────────────────────────────
 
@@ -55,6 +59,9 @@ function setHeader({ title, sub, back, edit }) {
   homeBtn.hidden = back;   // Home shows on the day view; Back replaces it in the editor
   backBtn.hidden = !back;
   editBtn.hidden = !edit;
+  headerSave = null;
+  saveBtn.hidden = true;
+  headerEl.classList.remove('app-header--save');
 }
 
 // `focus` is false when the strip changed the day.
@@ -322,6 +329,12 @@ const app = {
   requestEdit,
   removeLog,
   setLeaveGuard: (fn) => { leaveGuard = fn; },
+  // The editor's one Save lives in the header, not under a list that can run long.
+  setHeaderSave: (fn) => {
+    headerSave = fn;
+    saveBtn.hidden = !fn;
+    headerEl.classList.toggle('app-header--save', !!fn);
+  },
 };
 
 // ── Boot ─────────────────────────────────────────────────────────────────────
@@ -332,6 +345,7 @@ backBtn.addEventListener('click', handleBack);
 // goes through the SAME gate as a row. Leaving it open would have made the lock
 // cosmetic: the one screen that can change everything would have been the one
 // screen that never asked.
+saveBtn.addEventListener('click', () => headerSave?.());
 editBtn.addEventListener('click', async () => {
   if (view !== 'day') return;
   if (!(await requestEdit(shownDay))) return;

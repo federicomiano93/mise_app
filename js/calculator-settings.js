@@ -20,10 +20,10 @@ import { t } from './i18n.js';
 import { copyToClipboard } from './share.js';
 import { chooseHowToSend } from './send-sheet.js';
 import { SEND_PATHS, svgElement } from './send-icon.js';
-import { getConfig, saveConfig } from './calculator-config-store.js';
+import { getConfig, saveConfigOrSay, canSyncConfig } from './calculator-config-store.js';
 import {
   WEIGHT_MIN, WEIGHT_MAX, cloneConfig, isExtraDoughEnabled, getTabProducts, isInDivisor,
-  getRecipes, getRecipeById, pairId,
+  getRecipes, getRecipeById, pairId, showsClientOrdersButton,
 } from './calculator-config.js';
 import { el } from './calculator-render.js';
 import { icon } from './calculator-icons.js';
@@ -31,6 +31,14 @@ import { openRecipes } from './recipes.js';
 import { openWhatsapp } from './calculator-whatsapp-settings.js';
 import { confirmDiscard } from './calculator-confirm.js';
 import { confirmDialog, alertDialog } from './confirm-dialog.js';
+import { createSaveGuard } from './save-guard.js';
+
+// One guard per header Save: while a write is in flight the button is disabled, a second
+// tap does nothing and Back / Home are ignored until it settles (js/save-guard.js).
+// The idle state of Extra and Divisor is «disabled until something changed».
+const clientsSaveGuard = createSaveGuard(() => document.getElementById('cp-save-btn'));
+const extraSaveGuard = createSaveGuard(() => document.getElementById('extra-save-btn'), () => !extraDirty);
+const divisorSaveGuard = createSaveGuard(() => document.getElementById('divisor-save-btn'), () => !divisorDirty);
 import {
   listOrderingAccounts, createOrderingLink, revokeOrderingLink, orderingLinkFor,
 } from './client-orders-data.js';
@@ -64,8 +72,45 @@ function genId(prefix) {
 function isBlank(s) { return !s || !String(s).trim(); }
 
 // ── Hub ───────────────────────────────────────────────────────────────────────
-export function openSettings() { show('settings-overlay'); }
+export function openSettings() {
+  paintOrdersButtonSwitch();
+  show('settings-overlay');
+}
 function closeSettings() { hide('settings-overlay'); }
+
+// ── The bottom-bar «Orders» button switch ─────────────────────────────────────
+// VENUE-WIDE (config/calculator.showClientOrdersButton), and a switch: it saves on the
+// tap with «Saved ✓» like every settings switch, not through a Save + confirm form.
+// The banner that announces a new client order is NOT governed by it. app.js hides or
+// shows the button itself on every config change, so the tap only has to save.
+function paintOrdersButtonSwitch() {
+  const cb = document.getElementById('orders-button-switch');
+  if (cb) cb.checked = showsClientOrdersButton(getConfig());
+}
+
+let ordersSavedTimer = null;
+function flashOrdersButtonSaved() {
+  const tag = document.getElementById('orders-button-saved');
+  if (!tag) return;
+  tag.hidden = false;
+  clearTimeout(ordersSavedTimer);
+  ordersSavedTimer = setTimeout(() => { tag.hidden = true; }, 2000);
+}
+
+async function onOrdersButtonSwitch() {
+  const cb = document.getElementById('orders-button-switch');
+  const cfg = cloneConfig(getConfig());
+  const wanted = cb.checked;
+  cfg.showClientOrdersButton = wanted;
+  // A refused write puts the switch back where it was (the app already went back to the
+  // server's copy) and says why — no «Saved ✓». 'no-server-answer' explains itself inside
+  // saveConfig and is not a confirmation either, hence canSyncConfig().
+  const saved = await saveConfigOrSay(cfg, { onFail: () => { cb.checked = !wanted; } });
+  if (saved && canSyncConfig()) flashOrdersButtonSaved();
+}
+
+const ordersButtonSwitch = document.getElementById('orders-button-switch');
+if (ordersButtonSwitch) ordersButtonSwitch.addEventListener('change', onOrdersButtonSwitch);
 
 // ── Clients editor ─────────────────────────────────────────────────────────────
 function clients() {
@@ -78,7 +123,7 @@ function cpTitle() { return document.querySelector('#cp-overlay .recipe-overlay-
 // The header Home button is hidden on detail screens, shown on the list.
 function setHomeVisible(visible) {
   const btn = document.getElementById('cp-home-btn');
-  if (btn) btn.style.display = visible ? '' : 'none';
+  if (btn) btn.hidden = !visible;
 }
 
 function openClients() {
@@ -103,6 +148,7 @@ function isEmptyClient(c) {
 }
 
 async function closeClients() {
+  if (clientsSaveGuard.saving) return;
   if (activeClient !== null) {
     const client = clients()[activeClient];
     if (freshlyAdded && isEmptyClient(client)) {
@@ -119,12 +165,13 @@ async function closeClients() {
 }
 
 async function goHomeFromClients() {
+  if (clientsSaveGuard.saving) return;
   if (!(await confirmDiscard(dirty))) return;
   window.location.href = 'index.html';
 }
 
-// `dirty` no longer drives a button — the green Save at the bottom is always
-// pressable — but it is still what asks "Discard unsaved changes?" on the way out.
+// `dirty` does not drive the header Save (#cp-save-btn) — it is always pressable —
+// but it is still what asks "Discard unsaved changes?" on the way out.
 function markDirty() { dirty = true; }
 
 // The index of the first client that is invalid (a blank name, or a product with no
@@ -138,7 +185,9 @@ function findInvalid() {
   return null;
 }
 
-async function saveClients() {
+function saveClients() { return clientsSaveGuard.run(doSaveClients); }
+
+async function doSaveClients() {
   const invalid = findInvalid();
   if (invalid !== null) {
     showErrors = true;
@@ -149,7 +198,7 @@ async function saveClients() {
   }
   if (!(await confirmDialog({ message: t('calc.saveTheseChanges'), okLabel: t('ui.save'), cancelLabel: t('ui.cancel') }))) return;
   try {
-    await saveConfig(working);
+    if (!(await saveConfigOrSay(working))) return;
     forgetPausedQuantities();
     showErrors = false;
     dirty = false;
@@ -180,12 +229,6 @@ function forgetPausedQuantities() {
 function renderEditor() {
   if (activeClient === null) renderClientList();
   else renderClientDetail(activeClient);
-}
-
-function saveBottomButton(onSave) {
-  const btn = el('button', { class: 'cp-save-bottom', type: 'button' }, t('ui.save'));
-  btn.addEventListener('click', onSave);
-  return btn;
 }
 
 function deleteIcon(label, onDelete) {
@@ -243,8 +286,7 @@ function renderClientList() {
   content.appendChild(add);
 
   // ⚠️ The list is savable in its own right: dragging a client to reorder marks
-  // changes, and with the header Save gone this is the only way to keep a reorder.
-  content.appendChild(saveBottomButton(saveClients));
+  // changes, so the header Save (#cp-save-btn) stays on this level too.
 }
 
 function clientBox(client, ci) {
@@ -315,7 +357,6 @@ function renderClientDetail(ci) {
   content.appendChild(field);
 
   content.appendChild(orderingLinkField(client));
-  content.appendChild(saveBottomButton(saveClients));
 }
 
 // ── The client's own ordering link ────────────────────────────────────────────
@@ -596,7 +637,7 @@ let extraDirty = false;
 function updateExtraSaveBtn() {
   const btn = document.getElementById('extra-save-btn');
   if (!btn) return;
-  btn.disabled = !extraDirty;
+  btn.disabled = extraSaveGuard.saving || !extraDirty;
   btn.classList.toggle('dirty', extraDirty);
 }
 
@@ -628,14 +669,17 @@ function openExtra() {
   show('extra-overlay');
 }
 async function closeExtra() {
+  if (extraSaveGuard.saving) return;
   if (!(await confirmDiscard(extraDirty))) return;
   hide('extra-overlay');
 }
 
-async function saveExtra() {
+function saveExtra() { return extraSaveGuard.run(doSaveExtra); }
+
+async function doSaveExtra() {
   if (!(await confirmDialog({ message: t('calc.saveTheseChanges'), okLabel: t('ui.save'), cancelLabel: t('ui.cancel') }))) return;
   try {
-    await saveConfig(extraWorking);
+    if (!(await saveConfigOrSay(extraWorking))) return;
     extraDirty = false;
     updateExtraSaveBtn();
   } catch (e) {
@@ -647,6 +691,7 @@ document.getElementById('open-extra-btn').addEventListener('click', openExtra);
 document.querySelector('.extra-back-btn').addEventListener('click', closeExtra);
 document.getElementById('extra-save-btn').addEventListener('click', saveExtra);
 document.getElementById('extra-home-btn').addEventListener('click', async () => {
+  if (extraSaveGuard.saving) return;
   if (!(await confirmDiscard(extraDirty))) return;
   window.location.href = 'index.html';
 });
@@ -664,6 +709,7 @@ function openDivisor() {
 function closeDivisor() { hide('divisor-overlay'); }
 
 async function backDivisor() {
+  if (divisorSaveGuard.saving) return;
   if (divisorTab !== null) {
     if (!(await confirmDiscard(divisorDirty))) return;
     divisorTab = null; divisorWorking = null; divisorDirty = false;
@@ -679,13 +725,19 @@ function setDivisorTitle(text) {
 }
 function setDivisorHomeVisible(visible) {
   const btn = document.getElementById('divisor-home-btn');
-  if (btn) btn.style.display = visible ? '' : 'none';
+  if (btn) btn.hidden = !visible;
+}
+
+// The header Save exists only on the detail level (and only when it lists products).
+function setDivisorSaveVisible(visible) {
+  const btn = document.getElementById('divisor-save-btn');
+  if (btn) btn.hidden = !visible;
 }
 
 function updateDivisorSaveBtn() {
   const btn = document.getElementById('divisor-save-btn');
   if (!btn) return;
-  btn.disabled = !divisorDirty;
+  btn.disabled = divisorSaveGuard.saving || !divisorDirty;
   btn.classList.toggle('dirty', divisorDirty);
 }
 
@@ -697,6 +749,7 @@ function renderDivisorSettings() {
 function renderDivisorTabChooser() {
   setDivisorTitle(t('ui.divisor'));
   setDivisorHomeVisible(true);
+  setDivisorSaveVisible(false);
   const content = document.getElementById('divisor-content');
   content.textContent = '';
   content.appendChild(el('p', { class: 'extra-help' },
@@ -712,7 +765,7 @@ function renderDivisorTabChooser() {
 }
 
 function renderDivisorTabDetail(tab) {
-  setDivisorTitle(recipeLabel(tab) + ' divisor');
+  setDivisorTitle(t('calc.divisorTitle', { recipe: recipeLabel(tab) }));
   setDivisorHomeVisible(false);
   if (divisorWorking === null) { divisorWorking = cloneConfig(getConfig()); divisorDirty = false; }
   const content = document.getElementById('divisor-content');
@@ -728,15 +781,14 @@ function renderDivisorTabDetail(tab) {
   });
   if (products.length === 0) {
     content.appendChild(el('div', { class: 'cp-empty-hint' }, t('calc.noProductsInThis3')));
+    setDivisorSaveVisible(false);
     return;
   }
   products.forEach(p => content.appendChild(divisorProductRow(tab, p)));
   const clearBtn = el('button', { class: 'divisor-clear-btn', type: 'button' }, t('calc.untickAll'));
   clearBtn.addEventListener('click', () => clearDivisorTab(tab));
   content.appendChild(clearBtn);
-  const saveBtn = el('button', { class: 'cp-save-bottom', id: 'divisor-save-btn', type: 'button' }, t('ui.save'));
-  saveBtn.addEventListener('click', saveDivisor);
-  content.appendChild(saveBtn);
+  setDivisorSaveVisible(true);
   updateDivisorSaveBtn();
 }
 
@@ -765,10 +817,12 @@ function clearDivisorTab(tab) {
   renderDivisorSettings();
 }
 
-async function saveDivisor() {
+function saveDivisor() { return divisorSaveGuard.run(doSaveDivisor); }
+
+async function doSaveDivisor() {
   if (!(await confirmDialog({ message: t('calc.saveTheseChanges'), okLabel: t('ui.save'), cancelLabel: t('ui.cancel') }))) return;
   try {
-    await saveConfig(divisorWorking);
+    if (!(await saveConfigOrSay(divisorWorking))) return;
     divisorWorking = cloneConfig(getConfig());
     divisorDirty = false;
     updateDivisorSaveBtn();
@@ -779,7 +833,9 @@ async function saveDivisor() {
 
 document.getElementById('open-divisor-btn').addEventListener('click', openDivisor);
 document.querySelector('.divisor-back-btn').addEventListener('click', backDivisor);
+document.getElementById('divisor-save-btn').addEventListener('click', saveDivisor);
 document.getElementById('divisor-home-btn').addEventListener('click', async () => {
+  if (divisorSaveGuard.saving) return;
   if (!(await confirmDiscard(divisorDirty))) return;
   window.location.href = 'index.html';
 });
@@ -790,4 +846,5 @@ document.getElementById('open-clients-btn').addEventListener('click', openClient
 document.getElementById('open-whatsapp-btn').addEventListener('click', openWhatsapp);
 document.getElementById('open-recipes-btn').addEventListener('click', openRecipes);
 document.querySelector('.cp-back-btn').addEventListener('click', closeClients);
+document.getElementById('cp-save-btn').addEventListener('click', saveClients);
 document.getElementById('cp-home-btn').addEventListener('click', goHomeFromClients);

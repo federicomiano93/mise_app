@@ -65,7 +65,7 @@ import {
   clearIndexedDbPersistence,
   waitForPendingWrites,
 } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js';
-import { reconcileConfigWrite } from './calculator-config.js';
+import { reconcileConfigWrite, CONFIG_MODEL } from './calculator-config.js';
 import {
   currentLocationId,
   pathFor,
@@ -1039,7 +1039,9 @@ export function saveCalculatorConfig(config) {
       const snap = await tx.get(ref);
       const server = snap.exists() ? snap.data() : null;
       const { recipes, configRev } = reconcileConfigWrite(config, server);
-      tx.set(ref, { ...config, recipes, configRev, bakery: currentLocationId() });
+      // configModel is stamped here too, after the spread: whatever the caller built, the
+      // document leaves with this build's number (see CONFIG_MODEL).
+      tx.set(ref, { ...config, recipes, configRev, configModel: CONFIG_MODEL, bakery: currentLocationId() });
     }))
     .catch(err => { console.error('saveCalculatorConfig failed:', err); throw err; });
 }

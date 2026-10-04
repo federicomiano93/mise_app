@@ -10,6 +10,7 @@
 // asks first.
 
 import { t } from '../i18n.js';
+import { revealField } from '../reveal-field.js';
 import { ingredientDisplayName } from '../ingredient-name.js';
 import { canManageHere } from './firebase-foodcost.js';
 import { el } from './dom.js';
@@ -786,7 +787,7 @@ export function renderEditor({ product, draft = null, app }) {
     if (!String(working.name || '').trim()) {
       showErrors = true;
       validateUI();
-      nameInput.focus();
+      revealField(nameInput);
       app.toast(t('fc.pleaseEnterAProduct'));
       return;
     }
@@ -803,7 +804,7 @@ export function renderEditor({ product, draft = null, app }) {
     if (invalid) {
       const [box, labelKey] = NUMBER_BOXES[invalid] || [null, null];
       box?.classList.add('fc-invalid');
-      try { box?.focus(); } catch (e) { /* focus is best-effort */ }
+      revealField(box);
       app.toast(t('fc.checkNumber', { field: labelKey ? t(labelKey) : invalid }));
       return;
     }
@@ -911,8 +912,9 @@ export function renderEditor({ product, draft = null, app }) {
       t('fc.thePriceOnThe')),
     suggestion,
 
-    el('div', { class: 'fc-actions' }, [
-      el('button', { class: 'fc-save', type: 'button', text: t('ui.save'), onclick: onSave }),
+    // Save is in the header (foodcost-main.js asks the editor's save()). History and Delete
+    // stay here, small and low-key; a new product has neither, so no empty row.
+    historyBtn || (product && canManageHere()) ? el('div', { class: 'fc-actions' }, [
       historyBtn,
       // ⚠️ Owner only. Deleting a product takes its margin history with it, and
       // that history cannot be rebuilt — a snapshot exists only where somebody
@@ -922,11 +924,12 @@ export function renderEditor({ product, draft = null, app }) {
       product && canManageHere() ? el('button', { class: 'fc-delete', type: 'button', onclick: onDelete }, [
         el('span', { icon: TRASH_SVG, 'aria-hidden': 'true' }), t('fc.deleteProduct2'),
       ]) : null,
-    ]),
+    ]) : null,
   ]);
 
   return {
     root,
+    save: onSave,
     // Still exactly as it arrived: nothing typed ever, and no Save under way.
     isUntouched: () => !touched && !busy,
     // ⚠️ WITHOUT THIS THE LINES ARE DRAWN ONCE, FROM WHATEVER HAD ARRIVED.
