@@ -36,6 +36,12 @@ export function readKioskSettings(raw) {
   };
 }
 
+// The text to store for a (possibly partial) change: whatever is stored is read first and
+// clamped, so toggling the switch keeps restMinutes/nightHours and vice versa.
+export function serializeKioskSettings(stored, change) {
+  return JSON.stringify(readKioskSettings({ ...readKioskSettings(stored), ...(change || {}) }));
+}
+
 // What state the tablet should be in now, and whether the screen lock should be held.
 // Input is handled by the caller (an input sets lastInputAt and state back to 'active');
 // here a state of 'rest'/'night' only moves forward with time.
