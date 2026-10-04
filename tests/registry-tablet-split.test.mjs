@@ -167,15 +167,15 @@ test('no level closes «the top»: every done / cancel / delete is bound to its 
   // uncovers (29 Sep 2026: the supplier's screen kept its old title after a save).
   assert.match(REGISTRY, /onDone:\s*\(\) => popAfterSave\(entry\)/);
   assert.match(bodyOf(REGISTRY, 'popAfterSave'), /popEntry\(entry\);\s*refresh\(\);/);
-  // Cancel asks first when there is typing (P20, 30 Sep 2026), then closes ITS OWN entry.
-  assert.match(REGISTRY, /onCancel:\s*\(\) => guardedLeave\(entry, \(\) => popEntry\(entry\)\)/);
+  // Back asks first when there is typing (P20, 30 Sep 2026), then closes ITS OWN entry (Cancel is gone, 4 Oct 2026).
+  assert.match(REGISTRY, /onBack = \(\) => popEntry\(entry\)/);
   assert.match(REGISTRY, /await actions\.deleteSupplier\(supplier\.id\); popEntry\(entry\)/);
   assert.match(REGISTRY, /onDone:\s*\(saved\) => \{ popAfterSave\(entry\)/);
   assert.match(bodyOf(REGISTRY, 'popEntry'), /removeLevel\(stack, entry\)/);
 });
 
 test('a form whose save is in flight is not called unsaved', () => {
-  assert.match(bodyOf(REGISTRY, 'saveInFlight'), /\.btn-primary:disabled/);
+  assert.match(bodyOf(REGISTRY, 'saveInFlight'), /\.app-header-save:disabled/);
   assert.match(bodyOf(REGISTRY, 'paneDirty'), /entryDirty\(entry\)/);
   assert.match(bodyOf(REGISTRY, 'entryDirty'), /!saveInFlight\(entry\)/);
 });

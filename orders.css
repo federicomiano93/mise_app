@@ -1716,8 +1716,6 @@ body[data-section="orders"] .ing-filter .view-switch-btn:not(.active) { color: v
 }
 .day-check input { width: 18px; height: 18px; accent-color: var(--accent); }
 .mgmt-form-actions { display: flex; gap: 10px; margin-top: 6px; }
-.mgmt-form-actions .btn-secondary { flex: 1; }
-.mgmt-form-actions .btn-primary { flex: 2; margin-top: 0; }
 /* The bin on an existing record's card: small and quiet — danger-red icon, no fill, no border —
    so it never competes with Save (P20). 44px is the target; the 20px icon is centred in it. */
 .mgmt-form-actions .mgmt-delete-btn {
@@ -2502,7 +2500,6 @@ a.home-reminder {
 .missing-check { width: 22px; height: 22px; flex-shrink: 0; accent-color: var(--brand); }
 .missing-name { flex: 1; min-width: 0; font-size: 15px; }
 .missing-qty { font-variant-numeric: tabular-nums; color: var(--text3); font-size: 14px; }
-.missing-save { width: 100%; margin-top: 16px; }
 
 /* ── «To re-order» list ──────────────────────────────────────────────────────
    Shares .missing-overlay (z-index 950: above .supplier-detail 600, below dialogs 10000).

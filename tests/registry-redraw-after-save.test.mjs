@@ -20,6 +20,6 @@ test('the supplier form and the ingredient form both use it when a save is done'
 });
 
 test('backing out without saving is still a plain pop', () => {
-  assert.match(src, /onCancel: \(\) => guardedLeave\(entry, \(\) => popEntry\(entry\)\)/);
+  assert.match(src, /function overlay\(entry, title, body, onBack = \(\) => popEntry\(entry\)/);
   assert.match(src, /const close = \(\) => \{ popEntry\(entry\); onClosed\?\.\(\); \};/);
 });

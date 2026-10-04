@@ -120,9 +120,9 @@ test('⚠️⚠️ the Catalogue opens the same card, OVER the editor, and backi
     'a layer on top: swapping the screen would destroy the recipe rows typed so far');
   assert.doesNotMatch(create, /\bswap\(|replaceChildren\(/);
   assert.match(create, /saved = \{ id: newId, name: payload\.name, kind: payload\.kind \};/);
-  // Cancel and Back share ONE leave(): it asks first when something was typed, then forgets
-  // any save result and closes.
-  assert.match(create, /onCancel: leave,/);
+  // Back is the only way out besides Save (Cancel was removed, 4 Oct 2026): leave() asks first
+  // when something was typed, then forgets any save result and closes.
+  assert.doesNotMatch(create, /onCancel/);
   assert.match(create, /onBack: leave,/);
   assert.match(create, /const leave = async \(\) => \{\s*if \(typedInto\(snapshot, cardLayer\) && !\(await confirmDiscard\(\)\)\) return;\s*saved = null;\s*finish\(\);\s*\};/);
   assert.match(create, /packPhotoOn: \(\) => false,/, 'the paid photograph stays where it is switched on');
