@@ -17,7 +17,8 @@ import { getLogs, getLogById, createAndSave, appendAndSave, genLogId, deleteLog 
 import { renderOrder, renderVersion } from './log-view.js';
 import { openLogEdit, openLogHistory } from './log-edit.js';
 import { openLogAdd } from './log-add.js';
-import { confirmDialog } from './confirm-dialog.js';
+import { confirmDialog, alertDialog } from './confirm-dialog.js';
+import { recipeToSave } from './calculator-catalogue-link.js';
 
 function qtyOf(id) { const e = document.getElementById(id); return e ? (+e.value || 0) : 0; }
 
@@ -87,8 +88,13 @@ function commitLog() {
   const tab = pendingTab;
   if (!tab || !pendingDay) return;
   const config = getConfig();
-  const recipe = getRecipeById(config, tab);
-  if (!recipe) return;
+  const tabRecipe = getRecipeById(config, tab);
+  if (!tabRecipe) return;
+  // The dough is saved from what the screen shows (a linked tab's Catalogue
+  // ingredients), and refused when the screen refuses — never a sheet of zeros.
+  const toSave = recipeToSave(tabRecipe);
+  if (!toSave.recipe) { alertDialog(toSave.problem); pendingTab = null; pendingDay = null; return; }
+  const recipe = toSave.recipe;
   const items = gatherItems(tab);
   const extra = gatherExtra(tab);
   const leaveningPct = leaveningPctFor(recipe);
@@ -169,7 +175,7 @@ function logCard(log) {
   ]));
   const at = v.at || {};
   body.appendChild(el('div', { class: 'log-timestamp' }, [icon('calendar', 14), ' ' + (at.date || '') + ' — ' + (at.time || '')]));
-  if (v.calculatedBy) body.appendChild(el('div', { class: 'logview-by' }, 'by ' + v.calculatedBy));
+  if (v.calculatedBy) body.appendChild(el('div', { class: 'logview-by' }, t('calc.byName', { name: v.calculatedBy })));
   if ((log.versions || []).length > 1) body.appendChild(el('div', { class: 'log-ver-count' }, 'v' + log.versions.length + t('calc.edited')));
   body.appendChild(renderOrder(v));
   card.appendChild(body);
@@ -195,7 +201,7 @@ function openLogView(id) {
   if (!log) return;
   const c = document.getElementById('logview-content');
   c.textContent = '';
-  document.getElementById('logview-title').textContent = log.dough + ' log';
+  document.getElementById('logview-title').textContent = t('calc.logTitle', { dough: log.dough });
   c.appendChild(renderVersion(latestVersion(log), log));
   document.getElementById('logview-overlay').classList.add('visible');
 }
@@ -221,7 +227,7 @@ document.getElementById('log-content').addEventListener('click', async e => {
   if (delB) {
     const id = delB.dataset.id;
     const log = getLogById(id);
-    const msg = t('calc.deleteThis') + (log ? log.dough : '') + t('calc.logThisCannotBe');
+    const msg = log && log.dough ? t('calc.deleteLogNamed', { dough: log.dough }) : t('calc.deleteThisLog');
     if (await confirmDialog({ message: msg, okLabel: t('ui.delete'), danger: true, cancelLabel: t('ui.cancel') })) deleteLog(id);
     return;
   }

@@ -13,7 +13,8 @@ import { confirmDiscard } from './calculator-confirm.js';
 import { buildSheet, buildLogText, recipeSnapshot } from './log-model.js';
 import { createAndSave } from './log-store.js';
 import { qtyRow } from './log-qty.js';
-import { confirmDialog } from './confirm-dialog.js';
+import { confirmDialog, alertDialog } from './confirm-dialog.js';
+import { recipeToSave } from './calculator-catalogue-link.js';
 import { createSaveGuard } from './save-guard.js';
 import { revealField } from './reveal-field.js';
 
@@ -119,7 +120,7 @@ function render() {
     for (const it of state.items) {
       if (it.clientName !== lastClient || card === null) {
         lastClient = it.clientName;
-        card = el('div', { class: 'card' }, [el('div', { class: 'card-title' }, it.clientName || 'Client')]);
+        card = el('div', { class: 'card' }, [el('div', { class: 'card-title' }, it.clientName || t('calc.clientFallback'))]);
         c.appendChild(card);
       }
       card.appendChild(qtyRow(it, (q) => { it.qty = q; }));
@@ -141,8 +142,11 @@ async function doCommit() {
     return;
   }
   if (!(await confirmDialog({ message: t('calc.saveThisLog'), okLabel: t('ui.save'), cancelLabel: t('ui.cancel') }))) return;
-  const recipe = getRecipeById(getConfig(), state.recipeId);
-  if (!recipe) return;
+  const tabRecipe = getRecipeById(getConfig(), state.recipeId);
+  if (!tabRecipe) return;
+  const toSave = recipeToSave(tabRecipe);
+  if (!toSave.recipe) { await alertDialog(toSave.problem); return; }
+  const recipe = toSave.recipe;
   const items = state.items.map(it => ({
     id: it.id, name: it.name, clientName: it.clientName,
     qty: num(it.qty), weightG: num(it.weightG), kind: it.kind, crate: it.crate,

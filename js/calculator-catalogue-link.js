@@ -10,7 +10,8 @@
 
 import { watchCatalogueRecipe } from './firebase.js';
 import { getRecipes } from './calculator-config.js';
-import { linkedRecipeIds, resolveRecipe } from './calculator-recipe-source.js';
+import { linkedRecipeIds, resolveRecipe, sheetRecipe, canCalculate, isLinked } from './calculator-recipe-source.js';
+import { t } from './i18n.js';
 
 // id → the Catalogue recipe, or null when it cannot be read.
 //
@@ -54,4 +55,21 @@ export function effectiveRecipe(recipe) {
 export function isStillLoading(recipe) {
   const id = String(recipe?.catalogueId || '').trim();
   return !!id && !loaded.has(id);
+}
+
+// The recipe a dough is SAVED from, or the sentence saying why it cannot be.
+// { recipe } when the tab can be calculated, { problem: text } when it cannot —
+// the same refusal the screen gives, so Confirm never saves a dough of zero.
+export function recipeToSave(recipe) {
+  if (!isLinked(recipe)) return { recipe };
+  const resolved = effectiveRecipe(recipe);
+  if (!canCalculate(resolved)) return { problem: problemMessage(resolved) };
+  return { recipe: sheetRecipe(recipe, resolved) };
+}
+
+// Read the language here, at draw time, never at module level.
+export function problemMessage(resolved) {
+  if (resolved.problem === 'unweighable') return t('calc.sourceUnweighable', { row: resolved.problemRow });
+  if (resolved.problem === 'empty') return t('calc.sourceEmpty');
+  return t('calc.sourceMissing');
 }

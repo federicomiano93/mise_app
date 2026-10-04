@@ -728,7 +728,7 @@ function renderDivisorTabChooser() {
 }
 
 function renderDivisorTabDetail(tab) {
-  setDivisorTitle(recipeLabel(tab) + ' divisor');
+  setDivisorTitle(t('calc.divisorTitle', { recipe: recipeLabel(tab) }));
   setDivisorHomeVisible(false);
   if (divisorWorking === null) { divisorWorking = cloneConfig(getConfig()); divisorDirty = false; }
   const content = document.getElementById('divisor-content');
