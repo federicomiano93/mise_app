@@ -72,6 +72,7 @@ export function renderPhotoCapture({ app, onDraft }) {
   // The working set. Each entry is { dataUrl } — one string, used twice.
   const photos = [];
   let busy = false;
+  let closed = false;
 
   const root = el('div', { class: 'cat-view cat-photo' });
 
@@ -152,7 +153,8 @@ export function renderPhotoCapture({ app, onDraft }) {
 
     for (const file of chosen.slice(0, room)) {
       try {
-        photos.push({ dataUrl: await shrink(file) });
+        const dataUrl = await shrink(file);
+        if (!closed) photos.push({ dataUrl });   // a late answer must not refill a closed screen
       } catch (err) {
         setStatus(photoErrorKey(err.message === 'undecodable'
           ? { details: { key: 'undecodable' } } : err), 'bad');
@@ -209,9 +211,17 @@ export function renderPhotoCapture({ app, onDraft }) {
   // `root.isConnected` is the guard: swap() in catalogue-main.js replaces the
   // screen's children with no teardown hook, so a listener registered here outlives
   // the view. Repainting a detached node is harmless but pointless.
-  onLanguageChange(() => { if (root.isConnected) paint(); });
+  const stopPaintOnLanguage = onLanguageChange(() => { if (root.isConnected) paint(); });
+
+  // Called by catalogue-main.js whenever another screen replaces this one: the
+  // language listener is released and the shrunk photographs are dropped.
+  const dispose = () => {
+    closed = true;
+    stopPaintOnLanguage();
+    photos.length = 0;
+  };
 
   paint();
   root.append(lead, strip, status, addBtn, readBtn, input, note);
-  return { root };
+  return { root, dispose };
 }

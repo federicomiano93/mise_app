@@ -99,6 +99,7 @@ export function renderPackPhotoCapture({ onText }) {
   // The working set. Each entry is { dataUrl } — one string, used twice.
   const photos = [];
   let busy = false;
+  let closed = false;
 
   // ⚠️ NO CLASS OF ITS OWN BEYOND reg-page. A hook nothing styles is a class name
   // that reads as styling and is not — which is the family of defect this screen's
@@ -183,7 +184,8 @@ export function renderPackPhotoCapture({ onText }) {
 
     for (const file of chosen.slice(0, room)) {
       try {
-        photos.push({ dataUrl: await shrink(file) });
+        const dataUrl = await shrink(file);
+        if (!closed) photos.push({ dataUrl });   // a late answer must not refill a closed screen
       } catch (err) {
         setStatus(errorKey(err.message === 'undecodable'
           ? { details: { key: 'undecodable' } } : err, BY_KEY), 'bad');
@@ -240,9 +242,18 @@ export function renderPackPhotoCapture({ onText }) {
   // is removed with no teardown hook, so a listener registered here outlives the view;
   // `root.isConnected` is the guard. Repainting a detached node is harmless but
   // pointless.
-  onLanguageChange(() => { if (root.isConnected) paint(); });
+  const stopPaintOnLanguage = onLanguageChange(() => { if (root.isConnected) paint(); });
+
+  // Called by the caller on EVERY way out of the overlay (registry.js settle()): the
+  // language listener is released and the shrunk photographs — a few hundred KB of
+  // data URLs each — are dropped instead of living as long as the closure does.
+  const dispose = () => {
+    closed = true;
+    stopPaintOnLanguage();
+    photos.length = 0;
+  };
 
   paint();
   root.append(lead, strip, status, addBtn, readBtn, input, note);
-  return { root };
+  return { root, dispose };
 }
