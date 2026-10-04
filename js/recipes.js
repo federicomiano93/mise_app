@@ -156,7 +156,7 @@ function renderRecipeList() {
   const content = contentEl();
   content.textContent = '';
   content.appendChild(el('p', { class: 'extra-help' },
-    t('calc.yourRecipesTheBase') + MAX_VISIBLE_RECIPES + t('calc.canShowAsCalculator')));
+    t('calc.recipesIntro', { n: MAX_VISIBLE_RECIPES })));
 
   recipes().forEach((r, ri) => {
     const ings = (r.ingredients || []).length;
@@ -198,10 +198,10 @@ async function deleteRecipe(ri) {
   const r = recipes()[ri];
   const used = productCountFor(r.id);
   if (used > 0) {
-    alertDialog(t('calc.thisRecipeIsUsed') + used + (used === 1 ? ' product' : ' products') + '. Reassign or delete them in Settings → Products first.');
+    alertDialog(t('calc.recipeUsedByProducts', { n: used }));
     return;
   }
-  if (!(await confirmDialog({ message: t('calc.deleteThe') + (r.name || 'this') + t('calc.recipe'), okLabel: t('ui.delete'), danger: true, cancelLabel: t('ui.cancel') }))) return;
+  if (!(await confirmDialog({ message: r.name ? t('calc.deleteRecipeNamed', { name: r.name }) : t('calc.deleteThisRecipe'), okLabel: t('ui.delete'), danger: true, cancelLabel: t('ui.cancel') }))) return;
   recipes().splice(ri, 1);
   markDirty();
   activeRecipe = null;
@@ -321,14 +321,14 @@ function renderRecipeDetail(ri) {
   visCb.addEventListener('change', () => {
     if (visCb.checked && r.visible === false && visibleCount() >= MAX_VISIBLE_RECIPES) {
       visCb.checked = false;
-      alertDialog('Only ' + MAX_VISIBLE_RECIPES + t('calc.recipesCanShowAs'));
+      alertDialog(t('calc.tooManyVisibleRecipes', { n: MAX_VISIBLE_RECIPES }));
       return;
     }
     r.visible = visCb.checked;
     markDirty();
   });
   content.appendChild(el('div', { class: 'cp-field' }, [
-    el('label', { class: 'cp-crate-label' }, [visCb, el('span', {}, t('calc.showAsACalculator') + MAX_VISIBLE_RECIPES + ')')]),
+    el('label', { class: 'cp-crate-label' }, [visCb, el('span', {}, t('calc.showAsTabMax', { n: MAX_VISIBLE_RECIPES }))]),
   ]));
 
   const save = el('button', { class: 'cp-save-bottom', type: 'button' }, t('ui.save'));
