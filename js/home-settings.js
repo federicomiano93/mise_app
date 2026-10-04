@@ -64,13 +64,15 @@ function item(title, sub, onClick) {
   return btn;
 }
 
-// A card of rows under one title. A card with no rows is not drawn.
-function section(title, rows) {
+// A card of rows under one title. A card with no rows is not drawn. `headExtra` sits on
+// the title line (the kiosk card's one «Saved ✓»).
+function section(title, rows, headExtra = null) {
   const inner = rows.filter(Boolean);
   if (!inner.length) return null;
   const card = node('section', 'set-section');
   const head = node('div', 'set-head');
   head.append(node('h3', '', title));
+  if (headExtra) head.append(headExtra);
   card.append(head, ...inner);
   return card;
 }
@@ -140,7 +142,7 @@ export function openHomeSettings(session) {
         !session.isAppAdmin && options.length > 1 ? item(t('home.switch'), t('settings.switch.sub'), switchVenue) : null,
       ]),
       // «This device»: what is true of THIS tablet or phone, not of a person or a venue.
-      section(t('settings.home.device'), [versionRow(), ...(session.canManage ? kioskRows() : [])]),
+      section(t('settings.home.device'), [versionRow(), ...(session.canManage ? kioskRows() : [])], kioskSaved),
     ].filter(Boolean));
 
     // Log out: the quiet destructive action at the foot, never a row (P20).
@@ -336,6 +338,12 @@ export function openHomeSettings(session) {
   // event below and switches on or off at once. A switch or single choice saves on the
   // tap with «Saved ✓»; the two choices appear and vanish in place (hidden), so the rows
   // above never move.
+  //
+  // ⚠️ ONE «Saved ✓», ON THE CARD'S TITLE LINE. Placed in a row or beside a choice's label it
+  // covered «Tablet del laboratorio» and «Spegni lo schermo dopo» at 296px (measured, 4 Oct
+  // 2026), and in the flow it would make the row taller for two seconds under a moving
+  // finger. The title line has free room on the right in both languages.
+  let kioskSaved = null;
   function kioskRows() {
     const read = () => { try { return localStorage.getItem(KIOSK_STORAGE_KEY); } catch { return null; } };
     // False when the device refused the write; the caller puts its control back.
@@ -349,17 +357,15 @@ export function openHomeSettings(session) {
       window.dispatchEvent(new Event('kiosk-settings-changed'));
       return true;
     }
-    function savedChip(host) {
-      const chip = node('span', 'set-saved', t('settings.saved'));
-      chip.hidden = true;
-      let timer = null;
-      host.flash = () => {
-        chip.hidden = false;
-        clearTimeout(timer);
-        timer = setTimeout(() => { chip.hidden = true; }, 2000);
-      };
-      return chip;
-    }
+    kioskSaved = node('span', 'set-saved', t('settings.saved'));
+    kioskSaved.setAttribute('role', 'status');
+    kioskSaved.hidden = true;
+    let savedTimer = null;
+    const flash = () => {
+      kioskSaved.hidden = false;
+      clearTimeout(savedTimer);
+      savedTimer = setTimeout(() => { kioskSaved.hidden = true; }, 2000);
+    };
 
     const current = readKioskSettings(read());
 
@@ -369,24 +375,21 @@ export function openHomeSettings(session) {
     cb.setAttribute('role', 'switch');
     cb.setAttribute('aria-label', t('kiosk.settings.title'));
     cb.checked = current.enabled;
-    const rowHost = {};
-    const rowSaved = savedChip(rowHost);
     const text = node('span', 'set-text');
     text.append(node('span', 'set-title', t('kiosk.settings.title')), node('span', 'set-sub', t('kiosk.settings.sub')));
     const track = node('span', 'set-switch-track');
     track.setAttribute('aria-hidden', 'true');
     const switchLabel = node('label', 'set-switch');
     switchLabel.append(cb, track);
-    const switchRow = node('div', 'set-row set-row--kiosk');
-    switchRow.append(text, rowSaved, switchLabel);
+    const switchRow = node('div', 'set-row');
+    switchRow.append(text, switchLabel);
 
     // The two choices and the note, one wrapper so they show and hide together.
     const details = node('div');
     details.hidden = !current.enabled;
 
     function choice(labelKey, subKey, field, options, labelOf) {
-      const host = {};
-      const block = node('div', 'set-block set-block--kiosk');
+      const block = node('div', 'set-block');
       const label = node('p', 'set-label', t(labelKey));
       block.append(label);
       if (subKey) block.append(node('span', 'set-sub', t(subKey)));
@@ -402,14 +405,14 @@ export function openHomeSettings(session) {
           if (was === value) return;
           if (!store({ [field]: value })) return;
           paint(value);
-          host.flash();
+          flash();
         });
         seg.append(btn);
         return btn;
       });
       const paint = value => buttons.forEach(b => b.setAttribute('aria-pressed', String(b.dataset.value === String(value))));
       paint(current[field]);
-      block.append(seg, savedChip(host));
+      block.append(seg);
       return block;
     }
 
@@ -427,7 +430,7 @@ export function openHomeSettings(session) {
       const wanted = cb.checked;
       if (!store({ enabled: wanted })) { cb.checked = !wanted; return; }
       details.hidden = !wanted;
-      rowHost.flash();
+      flash();
     });
 
     return [switchRow, details];

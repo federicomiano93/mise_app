@@ -36,11 +36,13 @@ test('the «What’s new» notice waits for the cover to come off, announced by 
   assert.match(read('js/kiosk.js'), /new Event\('kiosk-awake'\)/);
 });
 
-test('the kiosk «Saved ✓» chips are out of the flow, so a row never changes height', () => {
+// In a row it covered «Tablet del laboratorio» at 296px (measured 4 Oct 2026); one chip on
+// the card's title line, out of the flow, covers nothing and moves nothing.
+test('the kiosk card has ONE «Saved ✓», on its title line and out of the flow', () => {
   const css = read('tokens.css');
-  assert.match(css, /\.set-row--kiosk \.set-saved \{\s*position: absolute;/);
-  assert.match(css, /\.set-block--kiosk \.set-saved \{\s*position: absolute;/);
+  assert.match(css, /\.set-head > \.set-saved \{\s*position: absolute;/);
   const home = read('js/home-settings.js');
-  assert.match(home, /set-row set-row--kiosk/);
-  assert.match(home, /set-block set-block--kiosk/);
+  assert.match(home, /section\(t\('settings\.home\.device'\), \[[^\n]*\], kioskSaved\)/);
+  assert.equal((home.match(/node\('span', 'set-saved'/g) || []).length, 1);
+  assert.doesNotMatch(home, /set-row--kiosk|set-block--kiosk/);
 });
