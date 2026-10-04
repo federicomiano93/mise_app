@@ -1,4 +1,4 @@
-const CACHE_NAME = 'theitalianclub-v600';
+const CACHE_NAME = 'theitalianclub-v601';
 // Firebase SDK modules (loaded from gstatic) are cached SEPARATELY from CACHE_NAME
 // so they survive the cache-version bump that happens on every deploy — otherwise
 // the offline SDK would be wiped each release until the next online load. The name
@@ -448,7 +448,7 @@ const ASSET_HASHES = {
   "./fonts/instrument-serif-latin.woff2": '0ad69719cac6f45e',
   "./fonts/instrument-serif-latin-ext.woff2": '0caad588cab430ca',
   "./fonts/atkinson-next-digits.woff2": '99ffa5b0e9a45a2b',
-  "./js/app.js": '751d79f292d1b62e',
+  "./js/app.js": '18aa452e597c6920',
   "./js/confirm-dialog.js": '61a7f580f37c5ff8',
   "./js/calculator-icons.js": 'c0b185a137195263',
   "./js/hold-to-zoom.js": 'e077890cd7ba70de',
@@ -558,8 +558,8 @@ const ASSET_HASHES = {
   "./js/calculator-confirm.js": '68a8ecb9ef0f0ab9',
   "./js/calculator-config.js": '65e76f83f8458dbb',
   "./js/confirm-flow.js": '350a9b206670e6bd',
-  "./js/zoom-steps.js": '7d6e1d46151b58e4',
-  "./js/calc-fullscreen.js": '6af51e2b62fec85b',
+  "./js/zoom-steps.js": '5cb5e5ce31bcde85',
+  "./js/calc-fullscreen.js": '710fb02eecbed586',
   "./js/result-place.js": '01dfd5a297ba5c9c',
   "./js/calculator-config-store.js": 'e1fe72337b0b2bf3',
   "./js/calculator-order-prefill.js": '28c00f4fea7d43b7',
@@ -667,7 +667,7 @@ const ASSET_HASHES = {
   "./js/catalogue/search-box.js": '188bbe833ccbde26',
   "./js/catalogue/catalogue-settings.js": '085573368700207f',
   "./js/catalogue/catalogue-detail.js": '47bc797fb462567b',
-  "./js/catalogue/zoom-steps.js": '7d6e1d46151b58e4',
+  "./js/catalogue/zoom-steps.js": '5cb5e5ce31bcde85',
   "./js/catalogue/catalogue-editor.js": '6d7fd6f1b73d9958',
   "./js/catalogue/guided-model.js": '60902e8129430dd7',
   "./js/catalogue/guided-alarm.js": '9104e391cb96f5ef',

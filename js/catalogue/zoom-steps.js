@@ -19,7 +19,7 @@ const LAST_STEP = ZOOM_SCALES.length - 1;
 // A step the buttons computed: held inside the range, a non-number answers the default.
 export function clampStep(step) {
   const isNumber = typeof step === 'number';
-  const isDigits = typeof step === 'string' && /^-?d+$/.test(step.trim());
+  const isDigits = typeof step === 'string' && /^-?\d+$/.test(step.trim());
   if (!isNumber && !isDigits) return DEFAULT_ZOOM_STEP;
   const n = Number(step);
   if (!Number.isInteger(n)) return DEFAULT_ZOOM_STEP;
@@ -81,7 +81,10 @@ export function buildZoomControls({ storageKey, target, labels }) {
       saveZoomStep(storageKey, step);
       paint();
     });
-    btn.addEventListener('keydown', (e) => e.stopPropagation());
+    // Only the keys that PRESS the button stay here (the Ricettario's list toggles its view on
+    // Enter/Space). Tab and Escape must reach the dialog's own handlers, or Tab walks out of
+    // the full-screen view and Escape does nothing (review, 5 Oct 2026).
+    btn.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') e.stopPropagation(); });
     return btn;
   }
 

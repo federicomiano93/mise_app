@@ -660,3 +660,42 @@ test('S6: the focus ring still shows on the selected look', () => {
   // inside the pastries strip the ring is drawn inward, so it is moved off the selected frame
   assert.match(strip(read('pastries.css')), /\.pas-chip\[aria-selected="true"\]:focus-visible \{ outline-offset: -4px; \}/);
 });
+
+// ── Review fixes (5 Oct 2026) ────────────────────────────────────────────────────────────
+test('S5: on − / + only Enter and Space stay on the button; Tab and Escape reach the dialog', async () => {
+  const w = viewWorld();
+  const { openRecipeFullScreen } = await import('../js/calc-fullscreen.js');
+  const api = openRecipeFullScreen({ name: 'Pizza', rows: ROWS, totalG: 980, opener: w.opener });
+  const plus = api.controls.node.children[1];
+  const stopped = (key) => { let s = false; plus.fire('keydown', { key, stopPropagation() { s = true; }, preventDefault() {} }); return s; };
+  assert.equal(stopped('Enter'), true);
+  assert.equal(stopped(' '), true);
+  assert.equal(stopped('Tab'), false, 'Tab must bubble to the focus trap');
+  assert.equal(stopped('Escape'), false, 'Escape must bubble to close');
+  api.close();
+  delete globalThis.localStorage;
+});
+
+test('S5: a step written as digits is read as that step (the regex has its backslash)', async () => {
+  for (const file of ['../js/zoom-steps.js', '../js/catalogue/zoom-steps.js']) {
+    const { clampStep } = await import(file);
+    assert.equal(clampStep('3'), 3, file);
+    assert.equal(clampStep(' 2 '), 2, file);
+    assert.equal(clampStep('d'), 1, file);
+  }
+});
+
+test('S5: a re-render closes the full screen, and a detached opener is never focused', async () => {
+  const w = viewWorld();
+  const { openRecipeFullScreen, closeRecipeFullScreen } = await import('../js/calc-fullscreen.js');
+  w.opener.isConnected = false; // renderAll replaced the button
+  const before = w.opener.focused;
+  openRecipeFullScreen({ name: 'Pizza', rows: ROWS, totalG: 980, opener: w.opener });
+  closeRecipeFullScreen();
+  assert.equal(globalThis.document.body.children.length, 0, 'closed');
+  assert.equal(globalThis.document.body.classList.contains('calc-zoom-lock'), false);
+  assert.equal(w.opener.focused, before, 'focus not handed to a removed node');
+  closeRecipeFullScreen(); // nothing open: harmless
+  assert.match(read('js/app.js'), /function renderAll\(\) \{\s*\/\/[^\n]*\n\s*closeRecipeFullScreen\(\);/);
+  delete globalThis.localStorage;
+});

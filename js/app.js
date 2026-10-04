@@ -21,7 +21,7 @@ import { workDayIndex } from './log-model.js';
 import { confirmDialog } from './confirm-dialog.js';
 import { initClientOrders } from './calculator-client-orders.js';
 import { runConfirm } from './confirm-flow.js';
-import { openRecipeFullScreen } from './calc-fullscreen.js';
+import { openRecipeFullScreen, closeRecipeFullScreen } from './calc-fullscreen.js';
 
 // Service-worker registration and the update banner live in js/sw-update.js,
 // shared by every page — nothing to do here.
@@ -345,6 +345,8 @@ function wireRecipe(recipe) {
 // panel, then restore quantities/state and recalc. Called on first paint and on any
 // config change.
 function renderAll() {
+  // The full-screen recipe is a copy of the old grams: close it before they change.
+  closeRecipeFullScreen();
   const recipes = getVisibleRecipes(getConfig());
 
   // The bottom-bar Orders button follows the venue-wide switch in Settings. Only the

@@ -22,6 +22,13 @@ const LOCK_CLASS = 'calc-zoom-lock';
 
 let current = null; // the one open view, if any
 
+// Close the open view, if any. renderAll() calls it: the view is a COPY of the grams, and a
+// config change from another device recalculates the card underneath — a baker must never
+// keep weighing from the old numbers (review, 5 Oct 2026).
+export function closeRecipeFullScreen() {
+  if (current) current.close();
+}
+
 // rows: [{ name, grams }], totalG: number, opener: the element to give focus back to.
 export function openRecipeFullScreen({ name, rows, totalG, opener }) {
   if (current) return current;
@@ -64,7 +71,8 @@ export function openRecipeFullScreen({ name, rows, totalG, opener }) {
     document.removeEventListener('keydown', onKey);
     document.body.classList.remove(LOCK_CLASS);
     view.remove();
-    if (opener && typeof opener.focus === 'function') {
+    // A re-render (renderAll) may have replaced the opener: never focus a detached node.
+    if (opener && typeof opener.focus === 'function' && opener.isConnected !== false) {
       try { opener.focus({ preventScroll: true }); } catch (e) { /* best-effort */ }
     }
   }
