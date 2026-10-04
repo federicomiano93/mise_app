@@ -20,10 +20,10 @@ import { t } from './i18n.js';
 import { copyToClipboard } from './share.js';
 import { chooseHowToSend } from './send-sheet.js';
 import { SEND_PATHS, svgElement } from './send-icon.js';
-import { getConfig, saveConfig } from './calculator-config-store.js';
+import { getConfig, saveConfigOrSay, canSyncConfig } from './calculator-config-store.js';
 import {
   WEIGHT_MIN, WEIGHT_MAX, cloneConfig, isExtraDoughEnabled, getTabProducts, isInDivisor,
-  getRecipes, getRecipeById, pairId,
+  getRecipes, getRecipeById, pairId, showsClientOrdersButton,
 } from './calculator-config.js';
 import { el } from './calculator-render.js';
 import { icon } from './calculator-icons.js';
@@ -72,8 +72,45 @@ function genId(prefix) {
 function isBlank(s) { return !s || !String(s).trim(); }
 
 // ── Hub ───────────────────────────────────────────────────────────────────────
-export function openSettings() { show('settings-overlay'); }
+export function openSettings() {
+  paintOrdersButtonSwitch();
+  show('settings-overlay');
+}
 function closeSettings() { hide('settings-overlay'); }
+
+// ── The bottom-bar «Orders» button switch ─────────────────────────────────────
+// VENUE-WIDE (config/calculator.showClientOrdersButton), and a switch: it saves on the
+// tap with «Saved ✓» like every settings switch, not through a Save + confirm form.
+// The banner that announces a new client order is NOT governed by it. app.js hides or
+// shows the button itself on every config change, so the tap only has to save.
+function paintOrdersButtonSwitch() {
+  const cb = document.getElementById('orders-button-switch');
+  if (cb) cb.checked = showsClientOrdersButton(getConfig());
+}
+
+let ordersSavedTimer = null;
+function flashOrdersButtonSaved() {
+  const tag = document.getElementById('orders-button-saved');
+  if (!tag) return;
+  tag.hidden = false;
+  clearTimeout(ordersSavedTimer);
+  ordersSavedTimer = setTimeout(() => { tag.hidden = true; }, 2000);
+}
+
+async function onOrdersButtonSwitch() {
+  const cb = document.getElementById('orders-button-switch');
+  const cfg = cloneConfig(getConfig());
+  const wanted = cb.checked;
+  cfg.showClientOrdersButton = wanted;
+  // A refused write puts the switch back where it was (the app already went back to the
+  // server's copy) and says why — no «Saved ✓». 'no-server-answer' explains itself inside
+  // saveConfig and is not a confirmation either, hence canSyncConfig().
+  const saved = await saveConfigOrSay(cfg, { onFail: () => { cb.checked = !wanted; } });
+  if (saved && canSyncConfig()) flashOrdersButtonSaved();
+}
+
+const ordersButtonSwitch = document.getElementById('orders-button-switch');
+if (ordersButtonSwitch) ordersButtonSwitch.addEventListener('change', onOrdersButtonSwitch);
 
 // ── Clients editor ─────────────────────────────────────────────────────────────
 function clients() {
@@ -161,7 +198,7 @@ async function doSaveClients() {
   }
   if (!(await confirmDialog({ message: t('calc.saveTheseChanges'), okLabel: t('ui.save'), cancelLabel: t('ui.cancel') }))) return;
   try {
-    await saveConfig(working);
+    if (!(await saveConfigOrSay(working))) return;
     forgetPausedQuantities();
     showErrors = false;
     dirty = false;
@@ -642,7 +679,7 @@ function saveExtra() { return extraSaveGuard.run(doSaveExtra); }
 async function doSaveExtra() {
   if (!(await confirmDialog({ message: t('calc.saveTheseChanges'), okLabel: t('ui.save'), cancelLabel: t('ui.cancel') }))) return;
   try {
-    await saveConfig(extraWorking);
+    if (!(await saveConfigOrSay(extraWorking))) return;
     extraDirty = false;
     updateExtraSaveBtn();
   } catch (e) {
@@ -785,7 +822,7 @@ function saveDivisor() { return divisorSaveGuard.run(doSaveDivisor); }
 async function doSaveDivisor() {
   if (!(await confirmDialog({ message: t('calc.saveTheseChanges'), okLabel: t('ui.save'), cancelLabel: t('ui.cancel') }))) return;
   try {
-    await saveConfig(divisorWorking);
+    if (!(await saveConfigOrSay(divisorWorking))) return;
     divisorWorking = cloneConfig(getConfig());
     divisorDirty = false;
     updateDivisorSaveBtn();

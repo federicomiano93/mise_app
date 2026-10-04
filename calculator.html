@@ -170,7 +170,7 @@
          handlers (js/calculator-settings.js), same screens behind them. -->
     <div class="settings-menu set-screen">
       <section class="set-section">
-        <div class="set-head"><h3 data-i18n="settings.calc.clients">Clients and orders</h3></div>
+        <div class="set-head"><h3 data-i18n="settings.calc.clients">Clients and orders</h3><span class="set-saved" id="orders-button-saved" role="status" hidden data-i18n="settings.saved">Saved ✓</span></div>
         <button id="open-clients-btn" class="set-row set-door" type="button">
           <span class="set-text">
             <span class="set-title" data-i18n="ui.clients">Clients</span>
@@ -189,6 +189,15 @@
             <span class="set-sub" data-i18n="ui.whenOrdersSentFrom">When orders sent from a client’s own link close</span>
           </span>
         </button>
+        <!-- Saves on the tap (a switch, the settings kit's rule), venue-wide, in
+             config/calculator.showClientOrdersButton (js/calculator-settings.js). -->
+        <div class="set-row">
+          <span class="set-text">
+            <span class="set-title" id="orders-button-title" data-i18n="settings.calc.ordersButton">Show the Orders button</span>
+            <span class="set-sub" id="orders-button-sub" data-i18n="settings.calc.ordersButton.sub">The button at the bottom that opens the orders your clients sent.</span>
+          </span>
+          <label class="set-switch"><input type="checkbox" role="switch" id="orders-button-switch" aria-labelledby="orders-button-title" aria-describedby="orders-button-sub" checked><span class="set-switch-track" aria-hidden="true"></span></label>
+        </div>
       </section>
       <section class="set-section">
         <div class="set-head"><h3 data-i18n="ui.recipes">Recipes</h3></div>
@@ -212,10 +221,10 @@
         </button>
       </section>
       <section class="set-section">
-        <div class="set-head"><h3 data-i18n="ui.log">Log</h3></div>
+        <div class="set-head"><h3 data-i18n="ui.log">Dough history</h3></div>
         <button id="open-logsettings-btn" class="set-row set-door" type="button">
           <span class="set-text">
-            <span class="set-title" data-i18n="ui.log">Log</span>
+            <span class="set-title" data-i18n="ui.log">Dough history</span>
             <span class="set-sub" data-i18n="ui.chooseWhichRecipesLogs">Choose which recipes’ logs to show, and how long they stay</span>
           </span>
         </button>
@@ -276,7 +285,7 @@
     <button class="app-icon-btn" id="logsettings-home-btn" type="button" data-i18n="ui.home" data-i18n-attr="aria-label" aria-label="Home">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 9.5V21h14V9.5"/></svg>
     </button>
-    <span class="recipe-overlay-title" data-i18n="ui.log">Log</span>
+    <span class="recipe-overlay-title" data-i18n="ui.log">Dough history</span>
   </div>
   <div class="recipe-scroll">
     <div id="logsettings-content"></div>
@@ -344,7 +353,7 @@
   </div>
 
   <div class="recipe-footer">
-    <button class="recipe-footer-btn" id="log-footer-btn"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8"/><path d="M8 17h8"/><path d="M8 9h2"/></svg><span data-i18n="ui.log">Log</span></button>
+    <button class="recipe-footer-btn" id="log-footer-btn"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8"/><path d="M8 17h8"/><path d="M8 9h2"/></svg><span data-i18n="ui.log">Dough history</span></button>
     <!-- The way into the client orders that is ALWAYS there. The banner above the
          tabs is an ALARM and goes quiet once every order has been used — which left
          no door at all to look at what a client had asked for. Alarm and doorway are
@@ -410,7 +419,7 @@
 <div id="logview-overlay" class="log-overlay">
   <div class="recipe-overlay-header">
     <button class="app-icon-btn logview-back-btn"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
-    <span class="recipe-overlay-title" id="logview-title" data-i18n="ui.log">Log</span>
+    <span class="recipe-overlay-title" id="logview-title" data-i18n="ui.log">Dough history</span>
     <button class="app-icon-btn logview-home-btn" type="button" data-i18n="ui.home" data-i18n-attr="aria-label" aria-label="Home">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 9.5V21h14V9.5"/></svg>
     </button>

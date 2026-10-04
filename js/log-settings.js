@@ -4,11 +4,11 @@
 // kept in Firestore; these only decide what the on-screen list shows.
 //
 // Edits are made on a WORKING COPY and applied only on Save (with a confirm). Leaving
-// with unsaved changes asks to discard (P20). local-first via saveConfig, which
-// re-renders and best-effort syncs to Firestore.
+// with unsaved changes asks to discard (P20). Saved through saveConfigOrSay: a write that
+// does not reach the server says so and leaves this screen as it was.
 
 import { t } from './i18n.js';
-import { getConfig, saveConfig } from './calculator-config-store.js';
+import { getConfig, saveConfigOrSay } from './calculator-config-store.js';
 import {
   cloneConfig, getRecipes, isLogVisible, getLogRetentionForDough,
   LOG_RETENTION_OPTIONS, getTabProducts,
@@ -83,7 +83,7 @@ async function doSaveAll() {
   const cfg = cloneConfig(getConfig());
   cfg.logVisibility = { ...working.visibility };
   cfg.logRetentionByDough = { ...working.retention };
-  saveConfig(cfg);
+  if (!(await saveConfigOrSay(cfg))) return;
   dirty = false;
   hide('logsettings-overlay');
 }

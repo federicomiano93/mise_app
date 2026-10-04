@@ -15,7 +15,7 @@ import { initLogs } from './log-store.js';
 import { renderTab, buildRecipePanel, buildEmptyPanel, el } from './calculator-render.js';
 import {
   getVisibleRecipes, getRecipeById, getTabProducts, isExtraDoughEnabled,
-  calculatorEmptyReason,
+  calculatorEmptyReason, showsClientOrdersButton,
 } from './calculator-config.js';
 import { workDayIndex } from './log-model.js';
 import { confirmDialog } from './confirm-dialog.js';
@@ -303,6 +303,12 @@ function wireRecipe(recipe) {
 // config change.
 function renderAll() {
   const recipes = getVisibleRecipes(getConfig());
+
+  // The bottom-bar Orders button follows the venue-wide switch in Settings. Only the
+  // button: the banner above the tabs announcing a new client order is a different thing.
+  // The bar itself never empties (Dough history and Settings are always there).
+  const ordersBtn = document.getElementById('clientorders-footer-btn');
+  if (ordersBtn) ordersBtn.hidden = !showsClientOrdersButton(getConfig());
 
   // Tab bar.
   const bar = document.getElementById('tab-bar');

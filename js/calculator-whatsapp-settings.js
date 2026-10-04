@@ -27,7 +27,7 @@
 // representative product id is stored). Names resolve live from the address book.
 
 import { t } from './i18n.js';
-import { getConfig, saveConfig } from './calculator-config-store.js';
+import { getConfig, saveConfigOrSay } from './calculator-config-store.js';
 import {
   cloneConfig, getClients, getClientById, getProductById, getAllProducts,
   getOrderPrefillWindow, ORDER_PREFILL_WINDOWS, orderPrefillLabel,
@@ -188,7 +188,7 @@ async function doSaveDetail() {
   }
   if (!(await confirmDialog({ message: t('calc.saveTheseChanges'), okLabel: t('ui.save'), cancelLabel: t('ui.cancel') }))) return;
   try {
-    await saveConfig(working);
+    if (!(await saveConfigOrSay(working))) return;
     showErrors = false;
     dirty = false;
     activeList = null;
@@ -262,12 +262,10 @@ function renderTopScreen() {
 // reason as the Orders "Show stock" toggle: nothing is lost by getting it wrong, the
 // numbers are still shown before anything is sent, and one more tap undoes it.
 //
-// ⚠️ THE BOX IS NEVER PUT BACK ON A FAILED SYNC, and that is deliberate. saveConfig
-// is LOCAL-FIRST: it applies the change to memory and the cache before it sends
-// anything, and it never rejects — it resolves saying whether the write reached
-// Firestore. Reverting the box would therefore make the screen disagree with the
-// setting the app is actually using. What is owed instead is the truth: the change
-// works on this phone, and has not reached the others yet.
+// ⚠️ THE BOX IS PUT BACK ON A FAILED SAVE. saveConfig applies the change to memory first,
+// but when the write does not reach Firestore it takes the app back to what the server
+// has (nothing would ever re-send it), so the box goes back with it and the person is
+// told «not saved» — see saveConfigOrSay.
 function buildPrefillWindowField() {
   const sel = el('select', { class: 'extra-unit-select', 'aria-label': t('calc.fillTheOrderFrom') });
   ORDER_PREFILL_WINDOWS.forEach(w => sel.appendChild(el('option', { value: w }, orderPrefillLabel(w))));
@@ -279,13 +277,9 @@ function buildPrefillWindowField() {
     sel.disabled = true;
     const cfg = cloneConfig(getConfig());
     cfg.orderPrefillWindow = wanted;
-    const result = await saveConfig(cfg);
+    const before = getOrderPrefillWindow(getConfig());
+    await saveConfigOrSay(cfg, { onFail: () => { sel.value = before; } });
     sel.disabled = false;
-    // 'no-server-answer' has already explained itself inside saveConfig; saying it
-    // twice would be noise.
-    if (result && result.synced === false && result.reason === 'write-failed') {
-      await alertDialog(t('calc.savedNotSent'));
-    }
   });
 
   const row = el('label', { class: 'extra-toggle-row' }, [el('span', {}, t('calc.fillTheOrderFrom'))]);
@@ -313,13 +307,15 @@ function topRow(label, onOpen, delLabel, onDelete) {
 async function deleteList(li) {
   if (!(await confirmDialog({ message: t('calc.deleteThisList'), okLabel: t('ui.delete'), danger: true, cancelLabel: t('ui.cancel') }))) return;
   lists().splice(li, 1);
-  saveConfig(working);
+  // On a refused save the app is back on the server's copy and the top screen re-reads it,
+  // so the deleted list reappears — after the message says it was not deleted.
+  await saveConfigOrSay(working);
   renderEditor();
 }
 async function deleteDirect(di) {
   if (!(await confirmDialog({ message: t('calc.deleteThisClient'), okLabel: t('ui.delete'), danger: true, cancelLabel: t('ui.cancel') }))) return;
   directClients().splice(di, 1);
-  saveConfig(working);
+  await saveConfigOrSay(working);
   renderEditor();
 }
 

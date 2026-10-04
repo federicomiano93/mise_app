@@ -195,7 +195,7 @@ function openLogView(id) {
   if (!log) return;
   const c = document.getElementById('logview-content');
   c.textContent = '';
-  document.getElementById('logview-title').textContent = log.dough + ' log';
+  document.getElementById('logview-title').textContent = log.dough;
   c.appendChild(renderVersion(latestVersion(log), log));
   document.getElementById('logview-overlay').classList.add('visible');
 }
@@ -221,7 +221,7 @@ document.getElementById('log-content').addEventListener('click', async e => {
   if (delB) {
     const id = delB.dataset.id;
     const log = getLogById(id);
-    const msg = t('calc.deleteThis') + (log ? log.dough : '') + t('calc.logThisCannotBe');
+    const msg = t('calc.deleteDoughConfirm', { name: log ? log.dough : '' });
     if (await confirmDialog({ message: msg, okLabel: t('ui.delete'), danger: true, cancelLabel: t('ui.cancel') })) deleteLog(id);
     return;
   }

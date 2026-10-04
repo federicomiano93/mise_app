@@ -784,7 +784,10 @@ export function readOldLogsOnce() {
 //     whatsappLists: [ { id, title,
 //                        clients: [ { clientId, products: [productId, ...] } ] } ],
 //     extraDough:      { <recipeId>: bool, ... },
-//     divisorIncluded: { <recipeId>: [productIds], ... } }
+//     divisorIncluded: { <recipeId>: [productIds], ... },
+//     showClientOrdersButton: bool  (the bottom-bar Orders button; missing = true),
+//     configModel: number  (the shape version; the app always writes its own, and the
+//                           rules refuse a lower one, so an older build cannot drop keys) }
 // A product belongs to the CLIENT that orders it — there is no shared catalogue. Two
 // clients ordering the same thing hold independent copies (which may share an id, from
 // the migration off the old catalogue: divisor ticks, WhatsApp lists, saved log rows

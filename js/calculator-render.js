@@ -123,7 +123,7 @@ export function buildRecipePanel(recipe) {
   }
 
   if (hasTotalInput) {
-    content.appendChild(el('div', { class: 'param-row' }, [
+    content.appendChild(el('div', { class: 'param-row param-row--total' }, [
       el('span', { class: 'param-label' }, t('calc.totalDoughG')),
       el('div', { class: 'qty-group' }, [
         el('input', { type: 'number', id: id + '-total-input', value: '0', min: '0', step: '1', inputmode: 'numeric' }),

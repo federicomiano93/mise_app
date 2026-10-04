@@ -47,6 +47,17 @@ import { t } from './i18n.js';
 
 export const TABS = ['focaccia', 'brioche', 'sourdough'];
 
+// ⚠️ THE SHAPE NUMBER OF config/calculator, like `model: 2` on a food-cost product.
+// assemble() rebuilds the document from a FIXED list of keys, so a phone still running an
+// older build that saves the config silently DROPS every key added since (the Orders-button
+// switch flips back on; a later «per tray» recipe would be rewritten as «from orders»).
+// The app therefore always writes EXACTLY this number — never Math.max(stored, this): a
+// build that knows less must write a LOWER number, and the rules refuse a write that
+// lowers configModel, so the older build gets «could not save» instead of deleting data.
+// Raise it (here and in the rules) the day a new key or recipe logic is added.
+// 1 = the document before the field existed; 2 = adds showClientOrdersButton.
+export const CONFIG_MODEL = 2;
+
 // Allowed weight range, in grams. Guards against a typo turning 150 into 15000
 // and silently producing ten times the intended dough.
 export const WEIGHT_MIN = 1;
@@ -104,7 +115,17 @@ export const DEFAULT_CONFIG = {
   // Which days the WhatsApp order form fills itself from. Default: both, because a
   // day's order is normally assembled from two days' work.
   orderPrefillWindow: 'both',
+  // The bottom-bar «Orders» button. ON by default (read as `!== false`, see
+  // showsClientOrdersButton): a venue that never heard of the key sees no change.
+  showClientOrdersButton: true,
+  configModel: CONFIG_MODEL,
 };
+
+// Whether the bottom bar offers the Orders button. Missing, corrupt or anything but a
+// literal false = ON, so a typo can never remove the only door to the clients' orders.
+export function showsClientOrdersButton(config) {
+  return !(config && config.showClientOrdersButton === false);
+}
 
 const KINDS = ['number', 'dropdown', 'kg'];
 
@@ -895,6 +916,9 @@ function assemble(clients, raw) {
     // An unknown or missing value falls back to 'both' — the widest window, so a
     // corrupt setting never silently narrows what the order form offers.
     orderPrefillWindow: getOrderPrefillWindow(raw),
+    showClientOrdersButton: showsClientOrdersButton(raw),
+    // Always this build's own number (see CONFIG_MODEL), never the stored one.
+    configModel: CONFIG_MODEL,
   };
 }
 
@@ -1039,4 +1063,14 @@ export function reconcileConfigWrite(config, server) {
     if (importedMissing.length) recipes = recipes.concat(importedMissing);
   }
   return { recipes, configRev: serverRev + 1 };
+}
+
+// Which sentence tells a person that a config save did NOT reach the server (a key of
+// js/i18n.js), or null when it did. `result` is what saveConfig resolves with.
+// permission-denied is the server REFUSING: since the configModel guard that means this
+// device runs an older app than the data. Anything else (offline, network, timeout) is the
+// connection. 'no-server-answer' explains itself inside saveConfig, so it has no key here.
+export function saveFailureKey(result) {
+  if (!result || result.reason !== 'write-failed') return null;
+  return result.code === 'permission-denied' ? 'calc.notSavedOutOfDate' : 'calc.notSavedCheckConnection';
 }

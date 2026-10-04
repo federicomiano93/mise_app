@@ -82,7 +82,7 @@ function markDirty() { dirty = true; }
 function render() {
   const c = document.getElementById('logedit-content');
   c.textContent = '';
-  c.appendChild(el('div', { class: 'logedit-dough' }, working.dough + ' log'));
+  c.appendChild(el('div', { class: 'logedit-dough' }, working.dough));
 
   const by = el('input', { class: 'cp-client-name', type: 'text', value: working.calculatedBy, placeholder: t('calc.nameOptional') });
   by.addEventListener('input', () => { working.calculatedBy = by.value; markDirty(); });
