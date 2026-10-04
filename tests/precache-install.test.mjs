@@ -49,7 +49,7 @@ const abs = asset => new URL(asset, SW_URL).href;
 // stores only those — so without this the storing half of that branch never runs here.
 function loadWorker({ fails = () => false, stale = () => false, existingCaches = [], donors = {}, hostname = 'example.test', responseType = null, latency = 0 } = {}) {
   const listeners = new Map();
-  const record = { puts: [], attempts: [], inits: [], opened: [], deleted: [], skipWaiting: 0, inFlight: 0, maxInFlight: 0 };
+  const record = { puts: [], attempts: [], inits: [], fetchInits: [], opened: [], deleted: [], skipWaiting: 0, inFlight: 0, maxInFlight: 0 };
   const attemptsFor = new Map();
   const stores = new Map();
   let context;
@@ -104,12 +104,13 @@ function loadWorker({ fails = () => false, stale = () => false, existingCaches =
       match: () => Promise.resolve(undefined),
     },
     Request: class { constructor(url, init) { this.url = new URL(url, SW_URL).href; this.init = init; } },
-    fetch: (request) => {
+    fetch: (request, init) => {
       const url = typeof request === 'string' ? request : request.url;
       const attempt = (attemptsFor.get(url) || 0) + 1;
       attemptsFor.set(url, attempt);
       record.attempts.push(url);
       record.inits.push(request.init);
+      record.fetchInits.push(init);
       if (fails(url, attempt)) return Promise.reject(new TypeError('Failed to fetch ' + url));
       const res = new Response(stale(url, attempt) ? `stale:${url}` : `asset:${url}`, { status: 200 });
       if (responseType) Object.defineProperty(res, 'type', { value: responseType });
@@ -562,6 +563,7 @@ test('⚠⚠ online, the reset link is answered from the network and NOTHING is 
   assert.equal(res.status, 200);
   assert.equal(w.record.attempts.length, before + 1, 'it must come from the network');
   assert.ok(w.record.attempts.includes(RESET_LINK));
+  assert.equal(w.record.fetchInits.at(-1)?.cache, 'no-store', "the browser's HTTP cache must not keep the address either");
   assert.deepEqual(w.record.puts, [], 'no cache may be written: the address carries the code');
   for (const store of w.stores.values()) {
     assert.ok(![...store.keys()].some(k => k.includes('oobCode')), 'no cache key may hold the code');

@@ -12,7 +12,7 @@ import { dirname, join } from 'node:path';
 import {
   readAction, pickLanguage, errorKeyFor, start, REQUIRED_KEYS, DONE_KEY,
 } from '../js/reset-password.js';
-import { boot, forwardUrl, wordsFor } from '../js/reset-password-boot.js';
+import { boot, forwardUrl, wordsFor, languageOf, showNeedsUpdate } from '../js/reset-password-boot.js';
 import { t, setLanguage, _dictionaries } from '../js/i18n.js';
 import { Node, walk } from './helpers/form-dom.mjs';
 
@@ -35,6 +35,7 @@ function fakeDocument() {
   const root = new FakeNode('div');
   return {
     root,
+    documentElement: { lang: 'en' },
     createElement: tag => new FakeNode(tag),
     getElementById: id => (id === 'auth-gate' ? root : null),
   };
@@ -169,6 +170,7 @@ test('the boot file\'s own sentences are word for word the dictionary\'s, so the
     const words = wordsFor(lang);
     assert.equal(words.checking, dictionaries[lang]['reset.checking'], lang);
     assert.equal(words.broken, dictionaries[lang]['reset.unavailable'], lang);
+    assert.equal(words.needsUpdate, dictionaries[lang]['reset.needsUpdate'], lang);
   }
 });
 
@@ -198,17 +200,69 @@ test('a loaded page is started, and nothing is forwarded', async () => {
   assert.deepEqual(replaced, []);
 });
 
-test('⚠ a module that fails to load hands the link to Firebase\'s own page', async () => {
-  const { replaced, done } = bootWith({ load: async () => { throw new TypeError('does not provide an export named confirmProblem'); } });
-  await done;
-  assert.deepEqual(replaced, ['https://bakery-app-ebf90.firebaseapp.com/__/auth/action' + LINK]);
+const NEEDS_UPDATE = {
+  en: 'This link needs the latest version of Mise. Open the Mise app, tap “Update now” if it appears, then tap the link in the email again.',
+  it: 'Questo link richiede la versione più recente di Mise. Apri l’app Mise, tocca “Aggiorna ora” se compare, poi tocca di nuovo il link nell’email.',
+};
+
+test('the needs-update sentence is the agreed wording, and names the button the update prompt really has', () => {
+  assert.equal(wordsFor('en').needsUpdate, NEEDS_UPDATE.en);
+  assert.equal(wordsFor('it').needsUpdate, NEEDS_UPDATE.it);
+  const d = _dictionaries();
+  assert.ok(NEEDS_UPDATE.en.includes('“' + d.en['help.updateNow'] + '”'));
+  assert.ok(NEEDS_UPDATE.it.includes('“' + d.it['help.updateNow'] + '”'));
 });
 
-test('⚠ a start that rejects (an old firebase.js or dictionary) hands the link on too', async () => {
-  const { replaced, done } = bootWith({ load: async () => ({ start: async () => { throw new Error('too old'); } }) });
-  await done;
-  assert.equal(replaced.length, 1);
-  assert.match(replaced[0], /^https:\/\/bakery-app-ebf90\.firebaseapp\.com\/__\/auth\/action\?mode=resetPassword&oobCode=code-123/);
+for (const hostname of ['federicomiano93.github.io', 'localhost']) {
+  test(`⚠ a reset whose module fails to load says «update the app» on ${hostname}, never forwarded`, async () => {
+    const { doc, replaced, done } = bootWith({ hostname, language: 'it-IT', load: async () => { throw new TypeError('does not provide an export named confirmProblem'); } });
+    await done;
+    assert.deepEqual(replaced, [], 'Firebase\'s own page cannot work: the API key is referrer-restricted');
+    const message = withText(doc, NEEDS_UPDATE.it);
+    assert.ok(message);
+    assert.equal(message.getAttribute('role'), 'alert');
+    assert.equal(message.getAttribute('tabindex'), '-1');
+    assert.equal(message.focused, 1);
+  });
+
+  test(`⚠ a reset whose start rejects (old firebase.js or dictionary) says «update the app» on ${hostname}`, async () => {
+    const { doc, replaced, done } = bootWith({ hostname, load: async () => ({ start: async () => { throw new Error('too old'); } }) });
+    await done;
+    assert.deepEqual(replaced, []);
+    assert.ok(withText(doc, NEEDS_UPDATE.en));
+  });
+}
+
+// The real dictionary is frozen, so «an old dictionary» is a copy of the page's source wired to a
+// stand-in i18n.js whose t() answers with the key itself for one missing sentence — exactly what
+// an old precached i18n.js does.
+async function pageWithDictionaryMissing(missingKey) {
+  const stub = 'data:text/javascript,' + encodeURIComponent(
+    `export const t = k => (k === ${JSON.stringify(missingKey)} ? k : 'word');
+     export const setLanguage = () => {};
+     export const languageFromTag = () => 'en';`);
+  const credentials = new URL('../js/credentials.js', import.meta.url).href;
+  const code = source
+    .replace("'./i18n.js'", JSON.stringify(stub))
+    .replace("'./credentials.js'", JSON.stringify(credentials));
+  assert.notEqual(code, source);
+  return import('data:text/javascript;base64,' + Buffer.from(code).toString('base64'));
+}
+
+test('⚠ a dictionary too old for the page: start() rejects, and through the boot it ends in «update the app»', async () => {
+  for (const key of REQUIRED_KEYS) {
+    const page = await pageWithDictionaryMissing(key);
+    const args = { fb: fakeFirebase(), doc: fakeDocument(), loc: { search: LINK }, nav: { language: 'en-GB' }, storage: fakeStorage() };
+    await assert.rejects(page.start(args), /dictionary/, key);
+    const doc = fakeDocument();
+    const replaced = [];
+    await boot({
+      doc, loc: { hostname: 'federicomiano93.github.io', search: LINK, replace: u => replaced.push(u) }, nav: { language: 'en-GB' },
+      load: async () => ({ start: () => page.start({ ...args, doc }) }),
+    });
+    assert.deepEqual(replaced, [], key);
+    assert.ok(withText(doc, NEEDS_UPDATE.en), key);
+  }
 });
 
 test('every mode but resetPassword is forwarded without loading the page at all', async () => {
@@ -220,13 +274,51 @@ test('every mode but resetPassword is forwarded without loading the page at all'
   assert.deepEqual(replaced, ['https://bakery-app-ebf90.firebaseapp.com/__/auth/action' + search]);
 });
 
-test('on localhost a failure shows a plain message instead of navigating', async () => {
-  const { doc, replaced, done } = bootWith({
-    hostname: 'localhost', language: 'it-IT', load: async () => { throw new Error('nope'); },
-  });
+test('another mode on localhost shows the plain «unavailable» message instead of navigating', async () => {
+  const { doc, replaced, done } = bootWith({ hostname: 'localhost', search: '?mode=verifyEmail&oobCode=zz', language: 'it-IT', load: async () => ({ start: async () => {} }) });
   await done;
   assert.deepEqual(replaced, []);
   assert.ok(withText(doc, wordsFor('it').broken));
+});
+
+test('the boot sets the page language to the phone\'s before any dictionary loads', async () => {
+  assert.equal(languageOf('it-IT'), 'it');
+  assert.equal(languageOf('fr'), 'en');
+  const it = bootWith({ language: 'it-IT', load: async () => ({ start: async () => {} }) });
+  assert.equal(it.doc.documentElement.lang, 'it');
+  await it.done;
+  const en = bootWith({ language: 'de-DE', load: async () => ({ start: async () => {} }) });
+  assert.equal(en.doc.documentElement.lang, 'en');
+  await en.done;
+});
+
+test('the last-resort message never throws, even on a page with nothing to draw into', () => {
+  assert.doesNotThrow(() => showNeedsUpdate({ getElementById: () => { throw new Error('no dom'); } }, { language: 'it' }));
+  assert.doesNotThrow(() => showNeedsUpdate(undefined, undefined));
+});
+
+test('⚠ the boot module RUNS when it is loaded: it draws the card, and a failure ends in the message', async () => {
+  const doc = fakeDocument();
+  const names = ['document', 'location', 'navigator'];
+  const saved = names.map(k => [k, Object.getOwnPropertyDescriptor(globalThis, k)]);
+  const define = (k, value) => Object.defineProperty(globalThis, k, { value, configurable: true, writable: true });
+  define('document', doc);
+  define('location', { hostname: 'localhost', search: LINK, replace() { throw new Error('must not forward'); } });
+  define('navigator', { language: 'it-IT' });
+  try {
+    await import('../js/reset-password-boot.js?runs-at-import');
+    assert.ok(withText(doc, 'Mise'), 'the card must be drawn by importing the module alone');
+    assert.equal(doc.documentElement.lang, 'it');
+    // The real page cannot start in Node (no Firebase CDN): exactly a failed load.
+    for (let i = 0; i < 100 && !withText(doc, NEEDS_UPDATE.it); i += 1) await tick();
+    assert.ok(withText(doc, NEEDS_UPDATE.it), 'never stuck on «Checking your link…»');
+  } finally {
+    for (const [k, d] of saved) { if (d) Object.defineProperty(globalThis, k, d); else delete globalThis[k]; }
+  }
+});
+
+test('the top-level call is guarded by the environment and has a last-resort catch', () => {
+  assert.match(bootSource, /if \(typeof document !== 'undefined' && typeof location !== 'undefined'\) \{\s*boot\(\{ doc: document, loc: location, nav: navigator \}\)\s*\.catch\(\(\) => showNeedsUpdate\(document, navigator\)\);/);
 });
 
 // ── The page itself, against a fake Firebase ─────────────────────────────────
@@ -433,4 +525,28 @@ test('the reset page sets the app font on its body', () => {
   const css = read('auth.css');
   assert.match(html, /<body class="auth-page">/);
   assert.match(css, /\.auth-page \{ font-family: var\(--font\);/);
+});
+
+test('⚠ after «Try again» the button is gone and the cursor lands on the «Checking…» line, not the page', async () => {
+  let attempt = 0;
+  let release;
+  const gate = new Promise(resolve => { release = resolve; });
+  const fb = fakeFirebase({
+    checkResetCode: async () => {
+      attempt += 1;
+      if (attempt === 1) { const e = new Error('x'); e.code = 'auth/network-request-failed'; throw e; }
+      await gate;
+      return 'ana@example.test';
+    },
+  });
+  const { doc } = await open({ fb });
+  find(doc, n => n.tagName === 'BUTTON' && n.textContent === 'Try again').fire('click');
+  await tick();
+  assert.equal(find(doc, n => n.tagName === 'BUTTON'), undefined, 'the retry button is removed');
+  const checking = withText(doc, t('reset.checking'));
+  assert.ok(checking);
+  assert.equal(checking.getAttribute('tabindex'), '-1');
+  assert.equal(checking.focused, 1, 'focus must not drop to the body');
+  release();
+  await tick();
 });

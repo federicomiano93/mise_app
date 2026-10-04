@@ -7,8 +7,11 @@
 // ⚠️ THE PAGE LOADS js/reset-password-boot.js, NOT THIS FILE. The boot file draws the card at
 // once, hands every email action that is not `resetPassword` on to Firebase's own page, and
 // loads this module dynamically so that ANY failure here (an old cached dictionary, a missing
-// export, a rejected start) ends in that same hand-over instead of a blank page. So start()
-// refuses to run — by throwing — when the files it sits beside are too old for it.
+// export, a rejected start) ends in a «update the app and tap the link again» message instead
+// of a blank page. It does NOT forward a failed reset to Firebase's page: that page calls the
+// API with the production key, which is referrer-restricted to github.io + localhost, so it
+// cannot work. So start() refuses to run — by throwing — when the files it sits beside are too
+// old for it.
 //
 // ⚠️ THE CODE AND THE EMAIL NEVER LEAVE THIS PAGE: not into a URL, not into a log (P17), and
 // sw.js never stores the page's address (it carries the code). Nothing here signs anybody in —
@@ -224,8 +227,14 @@ export async function start({ fb, doc = document, loc = location, nav = navigato
 
   // Asking Firebase whether the code is still good. A failure that is the connection's, not the
   // link's, gets its own sentence and a way to ask again — never the «could not save» wording.
-  const check = async () => {
-    show(el('p', 'auth-sub', t('reset.checking')));
+  // `refocus` is true after «Try again»: that button is removed, and focus must land on the
+  // «Checking…» line rather than drop to the page.
+  const check = async (refocus = false) => {
+    const checking = el('p', 'auth-sub', t('reset.checking'));
+    checking.setAttribute('role', 'status');
+    checking.setAttribute('tabindex', '-1');
+    show(checking);
+    if (refocus) checking.focus();
     let email;
     try {
       email = await firebase.checkResetCode(code);
@@ -241,7 +250,7 @@ export async function start({ fb, doc = document, loc = location, nav = navigato
       const failure = message(t('reset.checkFailed'), 'bad', 'alert');
       const retry = el('button', 'auth-btn', t('reset.retry'));
       retry.type = 'button';
-      retry.addEventListener('click', check);
+      retry.addEventListener('click', () => check(true));
       show(failure, retry, openMiseLink(t('auth.signIn'), false));
       failure.focus();
       return;

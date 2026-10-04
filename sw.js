@@ -1,4 +1,4 @@
-const CACHE_NAME = 'theitalianclub-v587';
+const CACHE_NAME = 'theitalianclub-v588';
 // Firebase SDK modules (loaded from gstatic) are cached SEPARATELY from CACHE_NAME
 // so they survive the cache-version bump that happens on every deploy — otherwise
 // the offline SDK would be wiped each release until the next online load. The name
@@ -424,9 +424,9 @@ const ASSET_HASHES = {
   "./orders.html": 'e1cc2322509dfbe5',
   "./suppliers.html": 'd0d861102a8e44b4',
   "./install-guide.html": '155cc21e1c1dc524',
-  "./reset-password.html": '78dfc11b1cbce6af',
-  "./js/reset-password.js": '751b612a75e87b6b',
-  "./js/reset-password-boot.js": 'b252b4f3033c0561',
+  "./reset-password.html": '6210ead049967293',
+  "./js/reset-password.js": '82c76584ef73d006',
+  "./js/reset-password-boot.js": '9c3e1fca587f872c',
   "./qr.png": '761a95e5bc25e2ba',
   "./js/install-guide.js": '17fcd0c0fec489c2',
   "./tokens.css": '464bba6f602dc374',
@@ -513,7 +513,7 @@ const ASSET_HASHES = {
   "./js/location.js": '6aaf53615a8739d1',
   "./js/sections.js": 'abcfdecb2bd5766d',
   "./js/roles.js": '7a7c5cf34d57f511',
-  "./js/i18n.js": 'efa363046e9b00f1',
+  "./js/i18n.js": 'abb9054a0aa76868',
   "./js/i18n-dom.js": '24249af4367511e5',
   "./js/keyboard-done.js": 'de05a6dd1f3aac26',
   "./js/join-code.js": '5b89de65db5c102f',
@@ -987,7 +987,9 @@ self.addEventListener('fetch', e => {
   // purpose: a query string would otherwise route it there.
   if (p.endsWith('/reset-password.html')) {
     e.respondWith(
-      fetch(e.request).catch(() =>
+      // no-store: the browser's own HTTP cache (GitHub Pages says max-age=600) must not keep
+      // the address with the code either.
+      fetch(e.request, { cache: 'no-store' }).catch(() =>
         caches.open(CACHE_NAME)
           .then(cache => cache.match(url.origin + p))
           .then(hit => hit || Response.error())
