@@ -40,6 +40,7 @@ import { copyToClipboard } from '../share.js';
 import { chooseHowToSend } from '../send-sheet.js';
 import { SEND_PATHS, svgElement } from '../send-icon.js';
 import { hasProcedure, normalizeSteps, unassignedRows, progressText, formatDuration } from './guided-model.js';
+import { buildZoomControls } from './zoom-steps.js';
 
 // The one arrow: the same chevron every other list in the app draws.
 const CHEVRON_SVG =
@@ -470,8 +471,18 @@ export function renderDetail({ recipe, app }) {
     },
   }, [ingRows, closeBtn]);
 
+  // The − / + text size, inside the zoomed view (js/catalogue/zoom-steps.js). Its buttons stop their
+  // own clicks and keys, so sizing the text never closes the view.
+  const zoomControls = buildZoomControls({
+    storageKey: 'mise.catZoomStep',
+    target: ingList,
+    labels: { group: t('ui.textSize'), smaller: t('ui.textSmaller'), larger: t('ui.textLarger') },
+  });
+  ingList.appendChild(zoomControls.node);
+
   function setZoom(on) {
     zoomed = on;
+    if (on) zoomControls.sync();
     ingList.classList.toggle('cat-ing-list--zoom', on);
     ingList.setAttribute('aria-pressed', on ? 'true' : 'false');
     ingList.setAttribute('aria-label', on ? t('cat.exitFullScreen') : t('cat.viewRecipeFullScreen'));

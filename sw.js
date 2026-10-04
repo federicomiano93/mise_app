@@ -1,4 +1,4 @@
-const CACHE_NAME = 'theitalianclub-v588';
+const CACHE_NAME = 'theitalianclub-v603';
 // Firebase SDK modules (loaded from gstatic) are cached SEPARATELY from CACHE_NAME
 // so they survive the cache-version bump that happens on every deploy — otherwise
 // the offline SDK would be wiped each release until the next online load. The name
@@ -12,7 +12,7 @@ const CACHE_NAME = 'theitalianclub-v588';
 // the fetch handler below, on the first load that has a network.
 // So between activate() and that first load, a phone that is OFFLINE cannot boot:
 // the code asks for the new version and nothing has it. In practice the window is very
-// small — activate() only happens after a successful 297-file precache, i.e.
+// small — activate() only happens after a successful 302-file precache, i.e.
 // online, and tapping the update banner reloads the page immediately — but it is
 // not zero, and it is the reason to bump the SDK deliberately rather than often.
 // Leaving the name unchanged would close the window and cost ~1 MB of dead
@@ -235,6 +235,10 @@ const ASSETS = [
   './js/whatsapp.js',
   './js/calculator-confirm.js',
   './js/calculator-config.js',
+  './js/confirm-flow.js',
+  './js/zoom-steps.js',
+  './js/calc-fullscreen.js',
+  './js/result-place.js',
   './js/calculator-config-store.js',
   './js/calculator-order-prefill.js',
   './js/calculator-order-text.js',
@@ -347,6 +351,7 @@ const ASSETS = [
   './js/catalogue/search-box.js',
   './js/catalogue/catalogue-settings.js',
   './js/catalogue/catalogue-detail.js',
+  './js/catalogue/zoom-steps.js',
   './js/catalogue/catalogue-editor.js',
   './js/catalogue/guided-model.js',
   './js/catalogue/guided-alarm.js',
@@ -420,7 +425,7 @@ const ASSET_HASHES = {
   "./": 'fb6d4386faa840f8',
   "./index.html": 'fb6d4386faa840f8',
   "./home.html": 'a4401ab28cb28eb9',
-  "./calculator.html": '004fb03110e8eb87',
+  "./calculator.html": '1342c7f5093e1664',
   "./orders.html": 'e1cc2322509dfbe5',
   "./suppliers.html": 'd0d861102a8e44b4',
   "./install-guide.html": '155cc21e1c1dc524',
@@ -429,10 +434,10 @@ const ASSET_HASHES = {
   "./js/reset-password-boot.js": '9c3e1fca587f872c',
   "./qr.png": '761a95e5bc25e2ba',
   "./js/install-guide.js": '17fcd0c0fec489c2',
-  "./tokens.css": '464bba6f602dc374',
+  "./tokens.css": '9bec41764fe56171',
   "./auth.css": '55b0bc1d41af5718',
-  "./style.css": '794471a9295621bb',
-  "./orders.css": '645ae3d74e83bb8f',
+  "./style.css": '7dbb0e3020d277ec',
+  "./orders.css": 'd15acfef1e289715',
   "./sounds/alarm.wav": '0d1465974f5be95b',
   "./fonts/manrope-latin.woff2": '71eb731d55804619',
   "./fonts/manrope-latin-ext.woff2": 'bd24140af06f1b58',
@@ -443,9 +448,9 @@ const ASSET_HASHES = {
   "./fonts/instrument-serif-latin.woff2": '0ad69719cac6f45e',
   "./fonts/instrument-serif-latin-ext.woff2": '0caad588cab430ca',
   "./fonts/atkinson-next-digits.woff2": '99ffa5b0e9a45a2b',
-  "./js/app.js": '5ac1157ca9afc546',
+  "./js/app.js": '18aa452e597c6920',
   "./js/confirm-dialog.js": '61a7f580f37c5ff8',
-  "./js/calculator-icons.js": '6bb803c39eabc4e0',
+  "./js/calculator-icons.js": 'c0b185a137195263',
   "./js/hold-to-zoom.js": 'e077890cd7ba70de',
   "./js/price-model.js": 'a68cbd60d71d814b',
   "./js/vat-rates.js": 'a3d073040b1d8490',
@@ -513,7 +518,7 @@ const ASSET_HASHES = {
   "./js/location.js": '6aaf53615a8739d1',
   "./js/sections.js": 'abcfdecb2bd5766d',
   "./js/roles.js": '7a7c5cf34d57f511',
-  "./js/i18n.js": 'abb9054a0aa76868',
+  "./js/i18n.js": '88634e462670d3ac',
   "./js/i18n-dom.js": '24249af4367511e5',
   "./js/keyboard-done.js": 'de05a6dd1f3aac26',
   "./js/join-code.js": '5b89de65db5c102f',
@@ -537,7 +542,7 @@ const ASSET_HASHES = {
   "./js/app-version.js": '2ed7f01712161130',
   "./js/location-title.js": '296d2d7d3d04d7f3',
   "./js/recipes.js": 'd078db16391046b7',
-  "./js/calc.js": '1e76dfefa9546ea5',
+  "./js/calc.js": '4eaff92e58966666',
   "./js/calculator-recipe-text.js": 'aa41a24dba41595f',
   "./js/calculator-dough-math.js": '85008bf4375927f4',
   "./js/log.js": '386a3720e891f9ae',
@@ -551,12 +556,16 @@ const ASSET_HASHES = {
   "./js/log-settings.js": '2878595500c2fea5',
   "./js/whatsapp.js": '85499983381f4136',
   "./js/calculator-confirm.js": '68a8ecb9ef0f0ab9',
-  "./js/calculator-config.js": '83efc5cb8c4196bd',
+  "./js/calculator-config.js": '65e76f83f8458dbb',
+  "./js/confirm-flow.js": '350a9b206670e6bd',
+  "./js/zoom-steps.js": '5cb5e5ce31bcde85',
+  "./js/calc-fullscreen.js": '710fb02eecbed586',
+  "./js/result-place.js": '01dfd5a297ba5c9c',
   "./js/calculator-config-store.js": 'e1fe72337b0b2bf3',
   "./js/calculator-order-prefill.js": '28c00f4fea7d43b7',
   "./js/calculator-order-text.js": '3eabd34a0df19321',
-  "./js/calculator-render.js": '6a96c5f18b157f3e',
-  "./js/calculator-settings.js": 'b1c6abf08f4ec749',
+  "./js/calculator-render.js": 'd956e1fab1078099',
+  "./js/calculator-settings.js": 'b60e28ec7bea4d76',
   "./js/calculator-whatsapp-settings.js": '39823bea666c3471',
   "./js/vendor/sortable.esm.js": '824d48148fc5b469',
   "./js/orders/boot.js": '53dba081d29270d8',
@@ -627,7 +636,7 @@ const ASSET_HASHES = {
   "./js/orders/order-cost-view.js": '4b03fed043e88d39',
   "./js/orders/order-summary-view.js": '2ab80dbb8b7fa26f',
   "./catalogue.html": 'd8e083ace20db70f',
-  "./catalogue.css": '24bc9da19a432bb4',
+  "./catalogue.css": 'cd81d12ad271c434',
   "./label-print.css": 'ffbcdf4e7a627a2d',
   "./records.css": '8398289629b4233d',
   "./js/catalogue/confirm-dialog.js": '61a7f580f37c5ff8',
@@ -657,7 +666,8 @@ const ASSET_HASHES = {
   "./js/catalogue/tablet.js": 'fed91ff5d4aa2da4',
   "./js/catalogue/search-box.js": '188bbe833ccbde26',
   "./js/catalogue/catalogue-settings.js": '085573368700207f',
-  "./js/catalogue/catalogue-detail.js": '52ab290f2feb8f75',
+  "./js/catalogue/catalogue-detail.js": '47bc797fb462567b',
+  "./js/catalogue/zoom-steps.js": '5cb5e5ce31bcde85',
   "./js/catalogue/catalogue-editor.js": '6d7fd6f1b73d9958',
   "./js/catalogue/guided-model.js": '60902e8129430dd7',
   "./js/catalogue/guided-alarm.js": '9104e391cb96f5ef',
@@ -665,7 +675,7 @@ const ASSET_HASHES = {
   "./js/catalogue/guided-editor.js": '54166ebcffc295b7',
   "./js/catalogue/import-to-calculator.js": '509d83f39384e106',
   "./pastries.html": '1235bcabca392b9b',
-  "./pastries.css": '547bad0bff6f28e2',
+  "./pastries.css": '3392bc6fd72be603',
   "./js/pastries/confirm-dialog.js": '61a7f580f37c5ff8',
   "./js/pastries/dom.js": '84e0623e447bb7ab',
   "./js/pastries/pastries-model.js": 'd162282f04d5287d',
@@ -698,7 +708,7 @@ const ASSET_HASHES = {
   "./js/foodcost/product-limits.js": 'd73e12634551ea98',
   "./js/foodcost/foodcost-settings.js": '8299df0496767f9a',
   "./inventory.html": 'd9762babb2ebdec6',
-  "./inventory.css": 'd80b7de1b5da298e',
+  "./inventory.css": '01904205569af145',
   "./js/inventory/confirm-dialog.js": '61a7f580f37c5ff8',
   "./js/inventory/dom.js": '5971dfbbb1e223ec',
   "./js/inventory/inventory-model.js": '7cc2935526d50a88',
@@ -744,7 +754,7 @@ const ASSET_HASHES = {
 // code against rules that deployed instantly, which is the very thing the gate exists
 // to prevent. Two things stand between that and a release: the test that every ASSETS
 // entry EXISTS (a mistyped path being the likeliest permanent cause), and this
-// project's post-deploy sweep, which already asks the live site for all 297 files.
+// project's post-deploy sweep, which already asks the live site for all 302 files.
 // ⚠️ NEITHER covers a device-specific failure — nobody has yet confirmed an update
 // landing on a real iPhone under this code.
 //

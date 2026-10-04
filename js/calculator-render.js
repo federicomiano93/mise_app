@@ -92,6 +92,23 @@ function knobRange(defaultPct) {
   return { min: 0.1, max: 3, step: 0.05, inputmode: 'decimal' };
 }
 
+// The strip above the recipe panels. TWO OR MORE recipes → one tab each. ONE recipe → its name
+// as a plain title: a lone tab is a button that switches to the screen you are already on, and
+// its solid look says «tap me» about a name (4 Oct 2026). The title is not focusable and takes no
+// tap; app.js hides it while the Log is open (the header Back leaves the Log, there is no tab).
+export function buildTabBar(bar, recipes, onPick) {
+  bar.textContent = '';
+  if (recipes.length === 1) {
+    bar.appendChild(el('h2', { class: 'calc-recipe-title', 'data-recipe': recipes[0].id }, recipes[0].name));
+    return;
+  }
+  recipes.forEach(r => {
+    const btn = el('button', { class: 'tab', type: 'button', 'data-recipe': r.id }, r.name);
+    btn.addEventListener('click', () => onPick(r.id));
+    bar.appendChild(btn);
+  });
+}
+
 // Build one recipe's calculator tab panel (a .content div, id `tab-<recipeId>`),
 // laid out by the recipe's logic:
 //   orders → leavening knob (if shown) + Orders + extra + Confirm/Edit + result
@@ -121,14 +138,14 @@ export function buildRecipePanel(recipe) {
       el('span', { class: 'param-label' }, [
         label + ' % (', el('span', { id: id + '-param-display' }, String(def)), '%)',
       ]),
-      el('div', { class: 'qty-group' }, [input, el('span', { class: 'unit' }, '%')]),
+      el('div', { class: 'qty-group' }, [input]),
     ]));
   }
 
   // Trays first, then the typed total. The grams the trays make are written under the label
   // and kept up to date by calc.js (id `<recipe>-trays-grams`).
   if (hasTrays) {
-    content.appendChild(el('div', { class: 'param-row param-row--total' }, [
+    content.appendChild(el('div', { class: 'param-row' }, [
       // The «= N g» line sits BESIDE the label, not inside it: inside, the field's accessible
       // name changed on every keystroke. aria-describedby links it; it stays polite-live.
       el('div', { class: 'param-label-stack' }, [
@@ -141,13 +158,16 @@ export function buildRecipePanel(recipe) {
     ]));
   }
 
+  // ⚠️ NO UNIT SPAN AFTER THE BOX in the three param rows (leavening, trays, total): the label
+  // already says «(g)» / «%», and a 20px «g» beside only ONE of the boxes pushed it 24px
+  // left of the others. With the input alone in its right-aligned group every box ends on
+  // the same edge (tests/calculator-work-view.test.mjs).
   if (hasTotalInput) {
-    content.appendChild(el('div', { class: 'param-row param-row--total' }, [
+    content.appendChild(el('div', { class: 'param-row' }, [
       // A real <label for>: it was a plain span, so a screen reader could not name the box.
       el('label', { class: 'param-label', for: id + '-total-input' }, t('calc.totalDoughG')),
       el('div', { class: 'qty-group' }, [
         el('input', { type: 'number', id: id + '-total-input', value: '0', min: '0', step: '1', inputmode: 'numeric' }),
-        el('span', { class: 'unit' }, 'g'),
       ]),
     ]));
   }
@@ -175,6 +195,9 @@ export function buildRecipePanel(recipe) {
       el('div', { class: 'result-header' }, [
         el('h3', {}, t('calc.doughTitle', { name: recipe.name })),
         el('span', { class: 'result-badge', id: id + '-badge' }, ''),
+        // The visible way into the full-screen view; tapping the list itself does the same (app.js).
+        el('button', { class: 'calc-fullscreen-btn', id: id + '-fullscreen-btn', type: 'button',
+          title: t('calc.fullScreen'), 'aria-label': t('calc.fullScreen') }, [icon('maximize', 20)]),
       ]),
       el('div', { id: id + '-ingredients' }),
       el('div', { class: 'ing-separator' }),

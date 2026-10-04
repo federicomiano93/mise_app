@@ -198,6 +198,15 @@
           </span>
           <label class="set-switch"><input type="checkbox" role="switch" id="orders-button-switch" aria-labelledby="orders-button-title" aria-describedby="orders-button-sub" checked><span class="set-switch-track" aria-hidden="true"></span></label>
         </div>
+        <!-- Saves on the tap too, venue-wide, in config/calculator.askDoughDay; read by
+             js/confirm-flow.js when Confirm is tapped. -->
+        <div class="set-row">
+          <span class="set-text">
+            <span class="set-title" id="ask-day-title" data-i18n="settings.calc.askDay">Ask which day the dough is for</span>
+            <span class="set-sub" id="ask-day-sub" data-i18n="settings.calc.askDay.sub">When off, Confirm saves the dough for today without asking.</span>
+          </span>
+          <label class="set-switch"><input type="checkbox" role="switch" id="ask-day-switch" aria-labelledby="ask-day-title" aria-describedby="ask-day-sub" checked><span class="set-switch-track" aria-hidden="true"></span></label>
+        </div>
       </section>
       <section class="set-section">
         <div class="set-head"><h3 data-i18n="ui.recipes">Recipes</h3></div>
@@ -341,9 +350,12 @@
   </div>
 </div>
 
-<div class="tab-bar" id="tab-bar"></div>
-
 <div class="scroll-area scroll-with-bar">
+
+  <!-- ⚠️ THE RECIPE NAMES SCROLL WITH THE PAGE (4 Oct 2026): the bar sits INSIDE the scroll
+       area, at its top. Pinned above it, the names stayed on screen while a long recipe
+       scrolled under them. A lone recipe is drawn as a plain title (js/calculator-render.js). -->
+  <div class="tab-bar" id="tab-bar"></div>
 
   <div id="recipe-tabs"></div>
 

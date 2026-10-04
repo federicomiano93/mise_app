@@ -235,6 +235,10 @@
   --space-2: 8px;
   --space-3: 12px;
   --space-4: 16px;
+  /* Room a full-screen recipe leaves under its last row for the − / + pair (48px button + 16px
+     above and below): the pair never covers a row. */
+  --zoom-scale: 1;   /* set on a full-screen recipe by js/zoom-steps.js (0.8 … 2.1) */
+  --zoom-steps-room: calc(48px + 2 * var(--space-4) + env(safe-area-inset-bottom, 0px));
 
   /* ── Layout: how wide a column of content may ever get ───────────────────
      The app is phone-first and, until this token existed, had exactly ONE
@@ -613,6 +617,39 @@ input:is([type="number"], [inputmode="decimal"], [inputmode="numeric"]) {
 .app-dialog-btn-ghost { background: var(--surface-2); border: 1px solid var(--border); color: var(--text); }
 .app-dialog-btn-solid { background: var(--brand); border: 0; color: var(--on-brand); }
 .app-dialog-btn-danger { background: var(--danger); border: 0; color: var(--on-brand); }
+
+/* ── The − / + text-size pair of a full-screen recipe (js/zoom-steps.js, one copy per
+   feature: the Calculator's and the Ricettario's). Fixed at the bottom-right of the view that
+   holds it. A view that exists before it is shown (the Ricettario's list) hides the pair itself
+   until it is zoomed (catalogue.css); the Calculator's view is built on opening.
+   Round, 48px, the solid brand fill: these are ACTIONS. At either end of the range the button is
+   aria-disabled (dimmed, inert) rather than disabled, so it keeps keyboard focus. */
+.zoom-steps {
+  display: flex;
+  position: fixed;
+  right: var(--space-4);
+  bottom: calc(var(--space-4) + env(safe-area-inset-bottom, 0px));
+  z-index: 3;
+  gap: var(--space-3);
+}
+.zoom-step-btn {
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 50%;
+  background: var(--brand);
+  color: var(--on-brand);
+  box-shadow: var(--shadow-brand);
+  cursor: pointer;
+  transition: transform .06s ease;
+}
+.zoom-step-btn:active { background: var(--brand-press); transform: scale(.97); }
+.zoom-step-btn:focus-visible { outline: 3px solid var(--accent-2); outline-offset: 2px; }
+.zoom-step-btn[aria-disabled="true"] { opacity: .4; cursor: default; box-shadow: none; }
+.zoom-step-btn[aria-disabled="true"]:active { background: var(--brand); transform: none; }
 
 @keyframes app-fade-in { from { opacity: 0; } }
 @keyframes app-dialog-in { from { opacity: 0; transform: scale(.96); } }
@@ -1648,10 +1685,13 @@ body[data-card="foodcost"] .app-header.app-header--save {
   font-weight: 600;
   cursor: pointer;
 }
-/* ⚠️ SOLID, as the label screen's own choice always was: a pale tint read 1.08:1
-   against its neighbours, on the one choice here that can harm somebody (use by /
-   best before). --text-2 unselected is 5.9:1 on --surface-2. */
-.set-seg-btn[aria-pressed="true"] { background: var(--brand); color: var(--on-brand); }
+/* ⚠️ A CHOICE, NOT AN ACTION (4 Oct 2026, the owner's rule for the whole app): the picked option
+   is the tint with a 2px brand frame and brand text — never the solid fill, which means «tap to
+   do». It was solid until then because a tint ALONE read 1.08:1 against its neighbours, on the
+   one choice here that can harm somebody (use by / best before); the 2px frame is what carries
+   the difference now (an inset ring, so the button keeps its size), brand on tint is ~8.6:1, and
+   --text-2 unselected is 5.9:1 on --surface-2. */
+.set-seg-btn[aria-pressed="true"] { background: var(--accent-light); color: var(--brand); box-shadow: inset 0 0 0 2px var(--brand); }
 .set-seg-btn:focus-visible { outline: 3px solid var(--accent-2); outline-offset: 2px; }
 .set-seg-btn:active { transform: scale(.97); }
 .set-select,

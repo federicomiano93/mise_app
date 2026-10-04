@@ -111,15 +111,19 @@ body {
 .pas-chip--empty { color: var(--text-3); }
 
 /* The selected day. */
+/* A choice, not an action: tint, brand text, a 2px brand frame drawn INSIDE the chip (an inset
+   ring, so no size changes) — never the solid fill. The focus ring moves in beside it. */
 .pas-chip[aria-selected="true"] {
-  background: var(--pas-brand);
-  color: var(--pas-brand-ink);
+  background: var(--accent-light);
+  color: var(--brand);
+  box-shadow: inset 0 0 0 2px var(--brand);
 }
+.pas-chip[aria-selected="true"]:focus-visible { outline-offset: -4px; }
 
 /* The day the screen OPENED on — tomorrow. A crust dot under the label, so the
    day you actually came for stays findable after browsing away from it. It is
    the one place on this screen that is not green: on the selected chip the dot
-   sits on brand green, where an accent green would disappear. */
+   sits on the pale tint, where the crust colour reads clearly. */
 .pas-chip-dot {
   width: 5px; height: 5px; border-radius: 50%;
   background: var(--pas-crust);

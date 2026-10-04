@@ -102,8 +102,10 @@ test('every row carries its state as a word', () => {
   // ratio itself.
   assert.doesNotMatch(css, /\.alg-sheet-pill--ok\s*\{[^}]*background:\s*var\(--cat-brand-2\)/,
     '--cat-brand-2 is a darker green, not a tint — that pairing measures 1.63:1');
-  assert.match(css, /\.alg-sheet-pill--ok\s*\{[^}]*color:\s*var\(--cat-brand-ink\)/,
-    'the declared pill must use the on-brand ink, as every solid brand element does');
+  // 4 Oct 2026: a state word is a name, never a solid green chip — the pale tint with brand text (~8.6:1).
+  const pill = css.match(/\.alg-sheet-pill--ok\s*\{([^}]*)\}/)[1];
+  assert.match(pill, /color:\s*var\(--brand\)/, 'the declared pill has brand text');
+  assert.match(pill, /background:\s*var\(--accent-light\)/, 'the declared pill sits on the tint');
 });
 
 // ── The law card ─────────────────────────────────────────────────────────────

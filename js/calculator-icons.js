@@ -33,6 +33,8 @@ const PATHS = {
   send: SEND_PATHS,
   chevronRight: ['M9 18l6-6-6-6'],                                // mirrors the shared back arrow
   chevronLeft: ['M15 18l-6-6 6-6'],
+  // Four corners: «show this full screen».
+  maximize: ['M8 3H5a2 2 0 00-2 2v3', 'M21 8V5a2 2 0 00-2-2h-3', 'M3 16v3a2 2 0 002 2h3', 'M16 21h3a2 2 0 002-2v-3'],
 };
 
 // icon(name, size) → an <svg> element, coloured by whatever `color` the parent has.

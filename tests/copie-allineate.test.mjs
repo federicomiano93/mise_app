@@ -335,3 +335,25 @@ test(`el() is the same code in all ${DOM_SNAPSHOT.length} copies of dom.js`, () 
     );
   }
 });
+
+// ---------------------------------------------------------------------------
+// 4. zoom-steps.js — the − / + text size of a full-screen recipe (4 Oct 2026)
+// ---------------------------------------------------------------------------
+
+// The Calculator's full-screen recipe and the Ricettario's share one small helper: six sizes,
+// the per-device memory and the round buttons. A feature may not import another feature's
+// folder, so each has its own copy, and the storage key is passed IN so the two stay identical.
+test('the Calculator and the Ricettario share ONE zoom-steps.js, byte for byte', () => {
+  const reference = read('js/zoom-steps.js');
+  const copy = read('js/catalogue/zoom-steps.js');
+  const diff = firstDifference(reference, copy);
+  assert.equal(
+    diff,
+    null,
+    diff &&
+      `js/catalogue/zoom-steps.js has drifted from js/zoom-steps.js at line ${diff.line}.\n` +
+        `  js/zoom-steps.js:           ${diff.expected}\n` +
+        `  js/catalogue/zoom-steps.js: ${diff.actual}\n` +
+        'Apply the change to both copies.',
+  );
+});

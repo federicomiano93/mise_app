@@ -1468,6 +1468,8 @@ service cloud.firestore {
                // The old-phone guard (see below) and the switch for the bottom-bar
                // Orders button (4 Oct 2026).
                'configModel', 'showClientOrdersButton',
+               // Whether Confirm asks «today or tomorrow?» (5 Oct 2026). Absent = asks.
+               'askDoughDay',
                'whatsappLists', 'whatsappClients',
                'extraDough', 'divisorIncluded',
                'logVisibility', 'logRetentionHours', 'logRetentionByDough',
@@ -1508,6 +1510,9 @@ service cloud.firestore {
           // Whether the bottom bar shows the Orders button. Absent = shown.
           && (!('showClientOrdersButton' in request.resource.data)
               || request.resource.data.showClientOrdersButton is bool)
+          // Whether Confirm asks which day the dough is for. Absent = asks.
+          && (!('askDoughDay' in request.resource.data)
+              || request.resource.data.askDoughDay is bool)
           && (!('clients' in request.resource.data)
               || (request.resource.data.clients is list
                   && request.resource.data.clients.size() <= 200))

@@ -1,7 +1,7 @@
 import './firebase.js';
 import { t } from './i18n.js';
 import {
-  calc, copyRecipe, sendRecipe, buildDivisorBox,
+  calc, copyRecipe, sendRecipe, buildDivisorBox, recipeModelFor,
   restoreRevealed, clearRevealed, restoreLock, clearLock, getLock,
 } from './calc.js';
 import { saveDay, editTab, renderLog } from './log.js';
@@ -12,7 +12,7 @@ import { shareMarketOrder, closeLoafModal, sendWithLoaves, closeListPicker, clos
 import { syncLinkedRecipes } from './calculator-catalogue-link.js';
 import { getConfig, initConfig, canSyncConfig } from './calculator-config-store.js';
 import { initLogs } from './log-store.js';
-import { renderTab, buildRecipePanel, buildEmptyPanel, el } from './calculator-render.js';
+import { renderTab, buildRecipePanel, buildEmptyPanel, buildTabBar, el } from './calculator-render.js';
 import {
   getVisibleRecipes, getRecipeById, getTabProducts, isExtraDoughEnabled,
   calculatorEmptyReason, showsClientOrdersButton, settledTraysText,
@@ -20,6 +20,8 @@ import {
 import { workDayIndex } from './log-model.js';
 import { confirmDialog } from './confirm-dialog.js';
 import { initClientOrders } from './calculator-client-orders.js';
+import { runConfirm } from './confirm-flow.js';
+import { openRecipeFullScreen, closeRecipeFullScreen } from './calc-fullscreen.js';
 
 // Service-worker registration and the update banner live in js/sw-update.js,
 // shared by every page — nothing to do here.
@@ -59,6 +61,9 @@ function switchTab(name) {
   document.querySelectorAll('#tab-bar .tab').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.recipe === name);
   });
+  // A lone recipe is a title, not a tab (buildTabBar): it names the recipe on screen, so it
+  // steps aside while the Log is open.
+  document.querySelectorAll('#tab-bar .calc-recipe-title').forEach(h => { h.hidden = h.dataset.recipe !== name; });
   const scroll = document.querySelector('.scroll-area');
   if (scroll) scroll.scrollTop = 0;
   // Footer "Log" is a no-op while the Log is open; hide it there (the tab-bar still leaves).
@@ -307,11 +312,29 @@ function wireRecipe(recipe) {
 
   // Confirm (opens the shared day picker), Edit, Copy, WhatsApp, Reset.
   const confirmBtn = document.getElementById(id + '-day-confirm');
-  if (confirmBtn) confirmBtn.addEventListener('click', () => openDayModal(id));
+  if (confirmBtn) confirmBtn.addEventListener('click', () => runConfirm(id, {
+    config: getConfig(),
+    openDayPicker: openDayModal,
+    saveToday: saveForToday,
+  }));
   const editBtn = document.getElementById(id + '-edit-btn');
   if (editBtn) editBtn.addEventListener('click', () => editTab(id));
   const copyBtn = document.getElementById(id + '-copy-btn');
   if (copyBtn) copyBtn.addEventListener('click', () => copyRecipe(id));
+  // Full screen: the visible button, and a tap on the ingredient list or the total line. The copy
+  // and send buttons sit in .copy-row, outside both, so they never open it. The list is not a
+  // control for the keyboard (that is the button's job, and it keeps the rows readable to a
+  // screen reader); focus goes back to the button either way.
+  const fsBtn = document.getElementById(id + '-fullscreen-btn');
+  const openFullScreen = () => {
+    const model = recipeModelFor(id);
+    if (model) openRecipeFullScreen({ ...model, opener: fsBtn });
+  };
+  if (fsBtn) fsBtn.addEventListener('click', openFullScreen);
+  const listEl = document.getElementById(id + '-ingredients');
+  if (listEl) listEl.addEventListener('click', openFullScreen);
+  const totalRow = document.querySelector('#tab-' + id + ' .total-dough-row');
+  if (totalRow) totalRow.addEventListener('click', openFullScreen);
   const waBtn = document.getElementById(id + '-wa-recipe-btn');
   if (waBtn) waBtn.addEventListener('click', () => sendRecipe(id));
   const resetBtn = document.querySelector('#tab-' + id + ' .reset-btn');
@@ -322,6 +345,8 @@ function wireRecipe(recipe) {
 // panel, then restore quantities/state and recalc. Called on first paint and on any
 // config change.
 function renderAll() {
+  // The full-screen recipe is a copy of the old grams: close it before they change.
+  closeRecipeFullScreen();
   const recipes = getVisibleRecipes(getConfig());
 
   // The bottom-bar Orders button follows the venue-wide switch in Settings. Only the
@@ -332,14 +357,7 @@ function renderAll() {
 
   // Tab bar.
   const bar = document.getElementById('tab-bar');
-  if (bar) {
-    bar.textContent = '';
-    recipes.forEach(r => {
-      const btn = el('button', { class: 'tab', type: 'button', 'data-recipe': r.id }, r.name);
-      btn.addEventListener('click', () => switchTab(r.id));
-      bar.appendChild(btn);
-    });
-  }
+  if (bar) buildTabBar(bar, recipes, switchTab);
 
   // Panels — or, when there is not one recipe to draw, the panel that says so.
   const emptyReason = calculatorEmptyReason(getConfig(), canSyncConfig());
@@ -432,6 +450,11 @@ const dayModal = document.getElementById('day-modal');
 let dayModalTab = null;
 function openDayModal(recipeId) { dayModalTab = recipeId; dayModal.classList.add('visible'); }
 function closeDayModal() { dayModal.classList.remove('visible'); dayModalTab = null; }
+// Confirm with «Ask which day» switched off: the same save the Today button makes.
+function saveForToday(recipeId) {
+  saveDay(recipeId, 'today');
+  touchTab(recipeId);
+}
 if (dayModal) {
   dayModal.querySelectorAll('.day-btn').forEach(btn => {
     btn.addEventListener('click', () => {

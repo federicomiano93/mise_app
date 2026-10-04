@@ -46,6 +46,7 @@ const EXEMPT = {
   },
   'calculator.html': {
     'recipe-tabs': 'holds the recipe panels, and every one of them IS a .content',
+    'tab-bar': 'pads itself: `.scroll-area > #tab-bar { padding-inline: 16px }` (style.css, pinned by tests/calculator-work-view.test.mjs)',
   },
   'suppliers.html': {
     'registry-split': 'the tablet split\'s wrapper: it pads nothing itself because BOTH of its columns do — the list is a .reg-page, the pane keeps its own margin (tests/registry-tablet-split.test.mjs)',

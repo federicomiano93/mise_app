@@ -114,10 +114,16 @@ header p {
   cursor: pointer;
   transition: color 0.15s, background-color 0.15s, border-color 0.15s;
 }
+/* ⚠️ A CHOICE, NOT AN ACTION (4 Oct 2026): the selected tab wears the «picked row» look — tint,
+   brand text, a 2px brand frame — never the solid green fill, which is reserved for things you
+   TAP TO DO (Confirm, Save, Send). The frame is the 1px border plus a 1px inset ring, so the box
+   keeps its size between the two states. Same rule on every choice in the app (tests/
+   calculator-work-view.test.mjs lists them). */
 .tab.active {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--on-brand);
+  background: var(--accent-light);
+  border-color: var(--brand);
+  box-shadow: inset 0 0 0 1px var(--brand);
+  color: var(--brand);
   font-weight: 600;
 }
 /* ⚠️ THE CALCULATOR'S RECIPE TABS ONLY (#tab-bar exists on calculator.html alone; Orders and
@@ -129,6 +135,27 @@ header p {
 #tab-bar .tab {
   flex: 0 1 calc((100% - 3 * 8px) / 4);
 }
+/* The bar lives INSIDE .scroll-area (calculator.html), which already carries the page gutter:
+   the floor here is the same 16px every .content has, so tabs, title and fields share
+   their left edge. (Orders and the management panel keep the rule above.) */
+.scroll-area > #tab-bar { padding-inline: 16px; }
+/* A lone recipe: its name as a TITLE, never a button — not focusable, no fill, the display
+   face the result card's heading uses. The only thing on a lone-recipe screen that is not
+   tappable and is the biggest word on it. */
+.calc-recipe-title {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  padding: var(--space-1) 2px 0;
+  font-family: var(--font-display);
+  font-size: 28px;
+  font-weight: 400;
+  line-height: 1.15;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+.calc-recipe-title[hidden] { display: none; }
+
 /* ⚠️ ON A NARROW PHONE FOUR TABS MUST STILL FIT. A tab could not shrink below its longest
    word (min-width: auto), so four real names — «Biscotti al cacao e cioccolato fondente»
    beside three others — added up to more than a 296px bar and the fourth tab was cut off
@@ -374,6 +401,98 @@ select.qty-select:focus { outline: none; border-color: var(--crust); background:
 }
 .result-header h3 { font-family: var(--font-display); font-size: 22px; font-weight: 400; }
 .result-badge { display: none; }
+/* «Full screen» — a quiet icon button at the right of the result's title (an action that is
+   not THE action: Confirm already happened). The icon sits in a flex box, never on a baseline. */
+.calc-fullscreen-btn {
+  margin-left: auto;
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-2);
+  cursor: pointer;
+}
+.calc-fullscreen-btn:active { background: var(--accent-light); transform: scale(.97); }
+/* The grams never break across two lines, whatever the ingredient's name (a long name wraps instead). */
+.result-card .ing-val { white-space: nowrap; }
+/* Tapping the list or the total opens the same view; the pointer says so. */
+.result-card .total-dough-row, .result-card [id$="-ingredients"] { cursor: zoom-in; }
+
+/* ══ The confirmed recipe, full screen (js/calc-fullscreen.js) ═══════════════════════════
+   A fixed overlay over the whole page, like the Ricettario's full-screen list. The rows are
+   centred with AUTO margins (never justify-content: center, which would clip the top of a recipe
+   taller than the screen), the bottom is padded so the − / + pair never covers the last row, and
+   the size is the view's own base times --zoom-scale (js/zoom-steps.js, 0.8 … 2.1).
+   A row WRAPS when it does not fit: a long name takes its own line and the grams drop below it,
+   right-aligned — nothing scrolls sideways at 296px even at the largest step. */
+.calc-zoom {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  color: var(--text);
+  font-size: clamp(1.1rem, 4.4vw, 1.6rem);
+}
+/* The × has a strip of its own: the rows scroll BELOW it, never under it. */
+.calc-zoom-top {
+  flex: none;
+  display: flex;
+  justify-content: flex-end;
+  padding: var(--space-3) clamp(16px, 6vw, 56px) 0;
+}
+.calc-zoom-close {
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text-2);
+  cursor: pointer;
+}
+.calc-zoom-close:active { transform: scale(.97); }
+.calc-zoom-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  padding: 0 clamp(16px, 6vw, 56px) var(--zoom-steps-room);
+}
+.calc-zoom-rows { margin: auto 0; width: 100%; }
+.calc-zoom-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 2px 12px;
+  padding: .45em 0;
+  border-bottom: 1px solid var(--border);
+  font-size: calc(1em * var(--zoom-scale, 1));
+}
+.calc-zoom-name { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; font-weight: 500; }
+.calc-zoom-val {
+  flex: 0 0 auto;
+  margin-left: auto;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.calc-zoom-total { border-bottom: 0; margin-top: .25em; }
+.calc-zoom-total .calc-zoom-name { font-weight: 700; }
+.calc-zoom-total .calc-zoom-val { color: var(--accent); }
+/* Freeze the page behind it: the scroller is .scroll-area (the body itself never scrolls). */
+body.calc-zoom-lock .scroll-area { overflow: hidden; }
 
 .ing-row {
   display: flex;
@@ -842,7 +961,7 @@ input.cp-prod-weight {
   font-weight: 600;
   cursor: pointer;
 }
-.co-view--on { background: var(--brand); color: var(--on-brand); }
+.co-view--on { background: var(--accent-light); color: var(--brand); box-shadow: inset 0 0 0 2px var(--brand); }
 .co-view:focus-visible { outline: 3px solid var(--accent-2); outline-offset: 2px; }
 
 /* The day a past order was FOR. The heading is the thing being looked up, so it is
@@ -1425,6 +1544,27 @@ input.cp-prod-weight {
   overflow-y: auto;
   text-align: left;
 }
+/* ⚠️ ON A TABLET THE SAME FOUR SHEETS ARE CENTRED DIALOGS (4 Oct 2026). A sheet that
+   rises from the bottom edge of a 1280px-wide screen is a thumb's reach away on a
+   phone and a long way from anyone's eyes on a kitchen tablet. Same breakpoint as the
+   Calculator's tablet layout below; phones keep the bottom sheet. The box takes the
+   shared dialog's look (full radius, 20px padding, the 16px radius token) and its
+   fade + scale arrival; the reduced-motion switch in tokens.css still turns it off. */
+@media (min-width: 900px) and (min-height: 600px) {
+  body[data-card="calculator"] #loaf-modal, body[data-card="calculator"] #list-select-modal, body[data-card="calculator"] #day-modal, body[data-card="calculator"] #send-who-modal {
+    align-items: center;
+    padding: 24px;
+  }
+  body[data-card="calculator"] #loaf-modal-box, body[data-card="calculator"] #list-select-box, body[data-card="calculator"] #day-modal-box, body[data-card="calculator"] #send-who-box {
+    border-radius: var(--radius);
+    padding: 20px;
+    max-height: calc(100dvh - 48px);
+  }
+  body[data-card="calculator"] #loaf-modal.visible #loaf-modal-box,
+  body[data-card="calculator"] #list-select-modal.visible #list-select-box,
+  body[data-card="calculator"] #send-who-modal.visible #send-who-box,
+  body[data-card="calculator"] #day-modal.visible #day-modal-box { animation: app-dialog-in .16s ease-out; }
+}
 .loaf-modal-title { font-size: 17px; font-weight: 700; color: var(--text); margin-bottom: 20px; text-align: center; }
 /* Section labels ("Groups" / "Clients") inside the Send-order picker. */
 .send-picker-label { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text2); margin: 6px 2px 8px; }
@@ -1757,58 +1897,47 @@ input.cp-prod-weight {
 }
 
 /* ══ The Calculator on a tablet (29 Sep 2026) ════════════════════════════════════════
-   The page is wide (tokens.css widens body[data-card="calculator"]); a recipe tab shows
-   its quantities on the left and, once it has been confirmed, the calculated recipe on
-   the right. LAYOUT ONLY: when the result is computed, what Confirm writes and the
-   Confirm / Edit lock are untouched — a confirmed tab keeps its fields (greyed, locked)
-   and its result, both in the same panel, which is what lets two columns work at all.
+   The page is wide (tokens.css widens body[data-card="calculator"]); a recipe tab is one
+   620px column, CENTRED, with kitchen-sized fields and buttons. (Until 4 Oct 2026 a confirmed
+   tab split into two columns; it is one column again, result first.) LAYOUT ONLY: when the
+   result is computed, what Confirm writes and the Confirm / Edit lock are untouched.
    ⚠️ EVERY rule is scoped to body[data-card="calculator"]: orders.html and suppliers.html
    load this sheet too. ⚠️ .ing-row and .cp-* are not touched. */
 @media (min-width: 900px) and (min-height: 600px) {
-  /* Until there is a result (or where :has() is unknown) a tab is ONE comfortable column;
-     so are the empty state and the Log. ⚠️ A RECIPE TAB'S COLUMN SITS LEFT, under the
-     first tab, not centred (owner, 4 Oct 2026: «Impasto totale» to the left): it is the
-     same place the entry column takes once a result appears beside it, so the fields no
-     longer jump from the middle to the left on the first calculation. The empty state
-     (#tab-empty, a card with no entry column) and the Log stay centred. */
+  /* A tab is ONE comfortable column, confirmed or not; so are the empty state and the Log.
+     ⚠️ THE COLUMN IS CENTRED (owner, 5 Oct 2026: «centra la ricetta sul tablet, non lasciarla a
+     sinistra»). The tab bar and the lone-recipe title take the same 620px column, so the tabs
+     sit right above the recipe; inside it the boxes stay LEFT, under the first tab (owner,
+     4 Oct 2026: «Impasto totale» to the left). */
   body[data-card="calculator"] #recipe-tabs > .content,
-  body[data-card="calculator"] #tab-log {
+  body[data-card="calculator"] #tab-log,
+  body[data-card="calculator"] .scroll-area > #tab-bar {
+    /* width:100% — .scroll-area is a flex column, where auto margins alone shrink an item
+       to its content (the tab bar measured 32px wide, its tabs one word per line). */
+    width: 100%;
     max-width: 620px;
     margin-inline: auto;
   }
-  body[data-card="calculator"] #recipe-tabs > .content:not(#tab-empty) { margin-inline: 0 auto; }
+  /* A centred column moves by half a scrollbar when one tab scrolls and the next does not
+     (7.5px, measured switching recipes at 1280×800): keep the scrollbar's room always. */
+  body[data-card="calculator"] .scroll-area { scrollbar-gutter: stable; }
 
-  /* With a result: entry left, recipe right. The rows are named so that the right column
-     spans them all and its extra height lands on the last (flexible) row, never between
-     the entry rows. Up to 9 entry children exist (see buildRecipePanel) but Confirm and
-     Edit are never shown together (applyTabState), so at most 8 take a row — tests/
-     calculator-tablet.test.mjs pins the 8 and that pairing. */
-  body[data-card="calculator"] #recipe-tabs > .content.active:has(> .result-block.visible) {
-    max-width: none;
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    grid-template-rows: repeat(8, auto) 1fr;
-    column-gap: 24px;
-    row-gap: 0;
-    align-items: start;
-  }
-  body[data-card="calculator"] #recipe-tabs > .content.active:has(> .result-block.visible) > * {
-    grid-column: 1;
-  }
-  body[data-card="calculator"] #recipe-tabs > .content.active:has(> .result-block.visible) > .result-block {
-    grid-column: 2;
-    grid-row: 1 / -1;
-    margin-top: 0;
-  }
+  /* ⚠️ NO SECOND COLUMN (4 Oct 2026). A confirmed recipe used to move to a right-hand column
+     beside its greyed entries; it is now ONE column on a tablet exactly as on a phone, the
+     recipe FIRST, then the quantities (js/calc.js moves the result block in the DOM). The
+     620px column above is the same one an unconfirmed tab uses, so nothing jumps sideways on
+     Confirm. */
 
-  /* The «Total dough (g)» box: label + one field, so it sits LEFT and is about one and a
+  /* The «Total dough (g)» box: label + one field, so it sits LEFT and is about two and a
      half recipe tabs wide instead of a 590px card with an empty middle. A tab is a quarter
-     of the bar less three 8px gaps, and the bar is min(viewport − 2×16px, 1180px) wide
-     (tokens.css widens the page to 1180px), hence the min(). Phones are untouched: this
-     whole block only applies to a tablet. Only this row carries the class — the leavening
-     knob row (also .param-row) keeps the full column. */
-  body[data-card="calculator"] #recipe-tabs .param-row--total {
-    width: calc(1.5 * (min(100vw - 32px, 1180px) - 3 * 8px) / 4);
+     of the bar less three 8px gaps, and the bar is the 620px column less 16px a side
+     (≈141px a tab, so ≈370px: «Numero di teglie» stays on one line beside its 150px field —
+     at one and a half tabs it wrapped, measured 5 Oct 2026). Phones are untouched: this
+     whole block only applies to a tablet. ⚠️ EVERY .param-row (leavening, trays, total) takes
+     this width, not only the total: the leavening row used to keep the full column, so its
+     box ended ~200px right of the trays and total boxes (4 Oct 2026). One width, one right edge. */
+  body[data-card="calculator"] #recipe-tabs .param-row {
+    width: calc(2.5 * (620px - 32px - 3 * 8px) / 4 + 2 * 8px);
     min-width: 280px;
     max-width: 100%;
     margin-right: auto;
@@ -1834,6 +1963,8 @@ input.cp-prod-weight {
   /* Square again beside the 52px Copy button (it measured 46×52). */
   body[data-card="calculator"] #recipe-tabs .copy-send-btn { width: var(--tap-min); height: var(--tap-min); }
   body[data-card="calculator"] #tab-bar .tab { min-height: var(--tap-min); }
+  /* The full-screen recipe is a reading column too: 620px, centred, however wide the screen. */
+  body[data-card="calculator"] .calc-zoom-rows { max-width: 620px; margin: auto; }
 }
 
 /* ⚠️ THE FIXED SCREENS KEEP THEIR 620px COLUMN even though this page is wide. They are

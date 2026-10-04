@@ -137,9 +137,9 @@ test('the config keeps trayWeight on every recipe, whatever the logic, and defau
   assert.deepEqual(normalizeConfig(normalizeConfig(raw)).recipes, normalizeConfig(raw).recipes);
 });
 
-test('configModel is 3: an older app cannot overwrite a trays recipe', () => {
-  assert.equal(CONFIG_MODEL, 3);
-  assert.equal(normalizeConfig({ clients: [], configModel: 1 }).configModel, 3);
+test('configModel is at least 3: an older app cannot overwrite a trays recipe', () => {
+  assert.ok(CONFIG_MODEL >= 3);
+  assert.equal(normalizeConfig({ clients: [], configModel: 1 }).configModel, CONFIG_MODEL);
   assert.match(read('js/calculator-config.js'), /3 = adds the 'trays' \/ 'traysTotal'/);
 });
 

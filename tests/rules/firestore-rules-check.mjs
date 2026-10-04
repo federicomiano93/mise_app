@@ -1327,6 +1327,11 @@ async function configAndLogs() {
     mergeWrite(`${A}/config/calculator`, { bakery: 'main', showClientOrdersButton: false }));
   await expectDenied('config: the Orders button switch sent as text', () =>
     mergeWrite(`${A}/config/calculator`, { bakery: 'main', showClientOrdersButton: 'no' }));
+  // ── «Ask which day the dough is for» (5 Oct 2026) ──
+  await expectAllowed('config: the day question switched off', () =>
+    mergeWrite(`${A}/config/calculator`, { bakery: 'main', askDoughDay: false }));
+  await expectDenied('config: the day question switch sent as text', () =>
+    mergeWrite(`${A}/config/calculator`, { bakery: 'main', askDoughDay: 'no' }));
   await expectDenied('config: a model sent as text', () =>
     mergeWrite(`${A}/config/calculator`, { bakery: 'main', configModel: '2' }));
   await expectDenied('config: a model of zero', () =>
@@ -1346,6 +1351,12 @@ async function configAndLogs() {
     mergeWrite(`${A}/config/calculator`, { bakery: 'main', orderPrefillWindow: 'today' }));
   await expectAllowed('…and a newer app may raise it', () =>
     wholeWrite(`${A}/config/calculator`, { bakery: 'main', configRev: 7, configModel: 3, clients: [], recipes: [] }));
+  await expectAllowed('…up to model 4, which carries the day question', () =>
+    wholeWrite(`${A}/config/calculator`, {
+      bakery: 'main', configRev: 8, configModel: 4, clients: [], recipes: [], askDoughDay: false,
+    }));
+  await expectDenied('…and a model-3 phone may then no longer save it', () =>
+    wholeWrite(`${A}/config/calculator`, { bakery: 'main', configRev: 9, configModel: 3, clients: [], recipes: [] }));
   await expectAllowed('config/orders is untouched by the calculator model', () =>
     mergeWrite(`${A}/config/orders`, { bakery: 'main', showStock: true }));
 

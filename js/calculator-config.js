@@ -60,7 +60,9 @@ export const TABS = ['focaccia', 'brioche', 'sourdough'];
 // know them would rewrite a trays recipe as «from orders» and drop its tray weight.
 // The rules need no change: they refuse a LOWER number, and the recipes are a list they
 // do not look inside.
-export const CONFIG_MODEL = 3;
+// 4 = adds askDoughDay (whether Confirm asks «today or tomorrow?»): an app that does not
+// know it would switch the question back on with every save.
+export const CONFIG_MODEL = 4;
 
 // Allowed weight range, in grams. Guards against a typo turning 150 into 15000
 // and silently producing ten times the intended dough.
@@ -122,6 +124,9 @@ export const DEFAULT_CONFIG = {
   // The bottom-bar «Orders» button. ON by default (read as `!== false`, see
   // showsClientOrdersButton): a venue that never heard of the key sees no change.
   showClientOrdersButton: true,
+  // Whether Confirm asks which day the dough is for. ON by default (read as `!== false`,
+  // see asksDoughDay): off, Confirm saves the dough for today at once.
+  askDoughDay: true,
   configModel: CONFIG_MODEL,
 };
 
@@ -129,6 +134,12 @@ export const DEFAULT_CONFIG = {
 // literal false = ON, so a typo can never remove the only door to the clients' orders.
 export function showsClientOrdersButton(config) {
   return !(config && config.showClientOrdersButton === false);
+}
+
+// Whether Confirm asks «today or tomorrow?». Missing, corrupt or anything but a literal
+// false = ON: the question is the safe side (a wrong day is worse than one more tap).
+export function asksDoughDay(config) {
+  return !(config && config.askDoughDay === false);
 }
 
 const KINDS = ['number', 'dropdown', 'kg'];
@@ -1007,6 +1018,7 @@ function assemble(clients, raw) {
     // corrupt setting never silently narrows what the order form offers.
     orderPrefillWindow: getOrderPrefillWindow(raw),
     showClientOrdersButton: showsClientOrdersButton(raw),
+    askDoughDay: asksDoughDay(raw),
     // Always this build's own number (see CONFIG_MODEL), never the stored one.
     configModel: CONFIG_MODEL,
   };
