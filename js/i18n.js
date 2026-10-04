@@ -225,6 +225,9 @@ const DICTIONARIES = Object.freeze({
     'reset.badLink': 'This link has expired or has already been used. Ask for a new one from “Forgot your password?” on the sign-in page.',
     'reset.inactive': 'This account is no longer active. Ask whoever runs your venue.',
     'reset.failed': 'Could not save — check the connection and try again.',
+    'reset.checkFailed': 'Could not check the link — check your connection and try again.',
+    'reset.retry': 'Try again',
+    'reset.unavailable': 'Something went wrong opening this page. Please try again in a moment.',
     'join.badCode': 'That code does not work. Ask for a new one.',
     // ⚠️ NOT A FAULT WITH THE CODE, AND IT MUST NOT SOUND LIKE ONE. This is what
     // an owner sees on opening an invitation to their own business — which is how
@@ -3111,6 +3114,9 @@ const DICTIONARIES = Object.freeze({
     'reset.badLink': 'Questo link è scaduto o è già stato usato. Chiedine uno nuovo da “Password dimenticata?” nella pagina di accesso.',
     'reset.inactive': 'Questo account non è più attivo. Chiedi a chi gestisce il locale.',
     'reset.failed': 'Non è stato possibile salvare. Controlla la connessione e riprova.',
+    'reset.checkFailed': 'Non riesco a controllare il link: controlla la connessione e riprova.',
+    'reset.retry': 'Riprova',
+    'reset.unavailable': 'Qualcosa è andato storto aprendo questa pagina. Riprova tra un momento.',
     'join.badCode': 'Questo codice non funziona. Chiedine uno nuovo.',
     'join.alreadyMember': 'Sei già dentro questa attività. Un codice non può cambiare cosa puoi fare qui.',
     'join.digitsPaused': 'Per sicurezza i codici di sei cifre sono sospesi per un po’. Chiedi un link d’invito.',

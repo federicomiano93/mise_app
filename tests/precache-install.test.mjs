@@ -531,3 +531,71 @@ test('on a local server the fingerprint is not checked — and everywhere else i
   await install(live);
   assert.ok(live.record.attempts.some(u => u.includes('/orders.css?fp=')), 'the live site checks, and asks again');
 });
+
+// ── The password-reset page is never cached with its one-time code ───────────
+//
+// ⚠️⚠️ reset-password.html?mode=resetPassword&oobCode=… used to fall into the network-first
+// branch, which cache.put()s the page under that address — the code written to the phone's
+// storage inside the cache key. It now goes to the network and is never stored; offline, the
+// precached copy WITHOUT the query is what answers. The control case below proves the harness
+// would have SEEN a put, so a green result is not an artefact of it.
+
+// Like serve(), but proves respondWith() was handed a promise before anything is asserted.
+async function serveChecked(w, url) {
+  const handler = w.listeners.get('fetch');
+  assert.ok(handler, 'sw.js must register a fetch handler');
+  let responded = null;
+  handler({ request: { url, method: 'GET' }, respondWith(p) { responded = p; } });
+  assert.ok(responded && typeof responded.then === 'function', 'respondWith must get a promise');
+  return responded;
+}
+
+const RESET_LINK = `${abs('./reset-password.html')}?mode=resetPassword&oobCode=secret-code&apiKey=k`;
+
+test('⚠⚠ online, the reset link is answered from the network and NOTHING is stored', async () => {
+  const w = loadWorker();
+  await install(w);
+  w.record.puts.length = 0;
+  const before = w.record.attempts.length;
+  const res = await serveChecked(w, RESET_LINK);
+  await new Promise(r => setTimeout(r, 0));   // a best-effort put would land here
+  assert.equal(res.status, 200);
+  assert.equal(w.record.attempts.length, before + 1, 'it must come from the network');
+  assert.ok(w.record.attempts.includes(RESET_LINK));
+  assert.deepEqual(w.record.puts, [], 'no cache may be written: the address carries the code');
+  for (const store of w.stores.values()) {
+    assert.ok(![...store.keys()].some(k => k.includes('oobCode')), 'no cache key may hold the code');
+  }
+});
+
+test('the control: another page with a query string IS stored, so the check above can fail', async () => {
+  const w = loadWorker();
+  await install(w);
+  w.record.puts.length = 0;
+  await serveChecked(w, `${abs('./order.html')}?x=1`);
+  await new Promise(r => setTimeout(r, 0));
+  assert.equal(w.record.puts.length, 1, 'the generic network-first branch stores what it fetches');
+});
+
+test('⚠⚠ offline, the reset link is answered with this worker\'s precached copy, query dropped', async () => {
+  const w = loadWorker({ fails: url => url.includes('/reset-password.html?') });
+  await install(w);
+  w.record.puts.length = 0;
+  const res = await serveChecked(w, RESET_LINK);
+  assert.equal(await res.text(), `asset:${abs('./reset-password.html')}`, 'the clean precached copy');
+  assert.deepEqual(w.record.puts, [], 'and still nothing written');
+});
+
+test('offline with no precached copy the reset link fails cleanly rather than hanging', async () => {
+  const w = loadWorker({ fails: url => url.includes('/reset-password.html?') });
+  const res = await serveChecked(w, RESET_LINK);
+  assert.equal(res.type, 'error');
+});
+
+test('the reset page is matched in THIS worker\'s cache, never through caches.match()', () => {
+  const branch = SW.slice(SW.indexOf("p.endsWith('/reset-password.html')"));
+  const block = branch.slice(0, branch.indexOf('return;'));
+  assert.match(block, /caches\.open\(CACHE_NAME\)/);
+  assert.doesNotMatch(block, /caches\.match/);
+  assert.doesNotMatch(block, /cache\.put/);
+});

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'theitalianclub-v585';
+const CACHE_NAME = 'theitalianclub-v587';
 // Firebase SDK modules (loaded from gstatic) are cached SEPARATELY from CACHE_NAME
 // so they survive the cache-version bump that happens on every deploy — otherwise
 // the offline SDK would be wiped each release until the next online load. The name
@@ -12,7 +12,7 @@ const CACHE_NAME = 'theitalianclub-v585';
 // the fetch handler below, on the first load that has a network.
 // So between activate() and that first load, a phone that is OFFLINE cannot boot:
 // the code asks for the new version and nothing has it. In practice the window is very
-// small — activate() only happens after a successful 296-file precache, i.e.
+// small — activate() only happens after a successful 297-file precache, i.e.
 // online, and tapping the update banner reloads the page immediately — but it is
 // not zero, and it is the reason to bump the SDK deliberately rather than often.
 // Leaving the name unchanged would close the window and cost ~1 MB of dead
@@ -55,6 +55,7 @@ const ASSETS = [
   './install-guide.html',
   './reset-password.html',
   './js/reset-password.js',
+  './js/reset-password-boot.js',
   './qr.png',
   './js/install-guide.js',
   './tokens.css',
@@ -423,8 +424,9 @@ const ASSET_HASHES = {
   "./orders.html": 'e1cc2322509dfbe5',
   "./suppliers.html": 'd0d861102a8e44b4',
   "./install-guide.html": '155cc21e1c1dc524',
-  "./reset-password.html": '612d752205b055cc',
-  "./js/reset-password.js": 'ad2ef18fb4dc141a',
+  "./reset-password.html": '78dfc11b1cbce6af',
+  "./js/reset-password.js": '751b612a75e87b6b',
+  "./js/reset-password-boot.js": 'b252b4f3033c0561',
   "./qr.png": '761a95e5bc25e2ba',
   "./js/install-guide.js": '17fcd0c0fec489c2',
   "./tokens.css": '464bba6f602dc374',
@@ -492,7 +494,7 @@ const ASSET_HASHES = {
   "./js/help-content.js": '6ea7f0e9586c250d',
   "./js/help-button.js": '74575dcd436e06cc',
   "./js/sw-update.js": '645f66a2c7f40a6a',
-  "./js/update-gate.js": '2387259480385bfb',
+  "./js/update-gate.js": '1801738b3e6def2d',
   "./js/kiosk.js": '68fc99ee7dad95c0',
   "./js/kiosk-model.js": '11735770388b0a44',
   "./js/wake-lock.js": '3cc98d18c5e2cbab',
@@ -511,7 +513,7 @@ const ASSET_HASHES = {
   "./js/location.js": '6aaf53615a8739d1',
   "./js/sections.js": 'abcfdecb2bd5766d',
   "./js/roles.js": '7a7c5cf34d57f511',
-  "./js/i18n.js": '365c4a7315a948a0',
+  "./js/i18n.js": 'efa363046e9b00f1',
   "./js/i18n-dom.js": '24249af4367511e5',
   "./js/keyboard-done.js": 'de05a6dd1f3aac26',
   "./js/join-code.js": '5b89de65db5c102f',
@@ -742,7 +744,7 @@ const ASSET_HASHES = {
 // code against rules that deployed instantly, which is the very thing the gate exists
 // to prevent. Two things stand between that and a release: the test that every ASSETS
 // entry EXISTS (a mistyped path being the likeliest permanent cause), and this
-// project's post-deploy sweep, which already asks the live site for all 296 files.
+// project's post-deploy sweep, which already asks the live site for all 297 files.
 // ⚠️ NEITHER covers a device-specific failure — nobody has yet confirmed an update
 // landing on a real iPhone under this code.
 //
@@ -976,6 +978,23 @@ self.addEventListener('fetch', e => {
     return;
   }
   if (e.request.method !== 'GET') return;
+
+  // ⚠️⚠️ THE PASSWORD-RESET PAGE IS NEVER WRITTEN TO ANY CACHE. Its address carries the
+  // one-time code (`?mode=resetPassword&oobCode=…`), and the network-first branch below would
+  // store it with the code in the cache key. So: the network, always; offline, THIS worker's
+  // precached copy of the page, matched on the address WITHOUT the query (the code is not
+  // needed to draw the page, and it is not in the cache). Before the generic branches on
+  // purpose: a query string would otherwise route it there.
+  if (p.endsWith('/reset-password.html')) {
+    e.respondWith(
+      fetch(e.request).catch(() =>
+        caches.open(CACHE_NAME)
+          .then(cache => cache.match(url.origin + p))
+          .then(hit => hit || Response.error())
+      )
+    );
+    return;
+  }
 
   // ⚠️⚠️ A PRECACHED FILE COMES FROM THIS WORKER'S OWN CACHE, AND NOTHING ELSE (speed
   // audit, 23 Sep 2026). It used to be served from the cache AND fetched again behind
