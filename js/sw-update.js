@@ -53,6 +53,14 @@ if ('serviceWorker' in navigator) {
   });
 }
 
+// The Settings row's way in: the same update path as the banner and the modal.
+export async function updateNow(button) {
+  try {
+    const reg = await navigator.serviceWorker.getRegistration();
+    if (reg) applyUpdate(reg, button);
+  } catch { /* no service worker: nothing to update */ }
+}
+
 function watchForUpdates(reg) {
   if (!reg) return;
 
