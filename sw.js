@@ -1,4 +1,4 @@
-const CACHE_NAME = 'theitalianclub-v570';
+const CACHE_NAME = 'theitalianclub-v571';
 // Firebase SDK modules (loaded from gstatic) are cached SEPARATELY from CACHE_NAME
 // so they survive the cache-version bump that happens on every deploy — otherwise
 // the offline SDK would be wiped each release until the next online load. The name
@@ -476,8 +476,8 @@ const ASSET_HASHES = {
   "./js/home-client-orders-badge.js": '2d1ebe03f89f0699',
   "./js/home-order-requests-badge.js": '3c3f93da00331b92',
   "./js/away-model.js": '95c90de8e2b5ab7a',
-  "./js/calculator-recipe-source.js": 'efacab52a1256b8c',
-  "./js/calculator-catalogue-link.js": '4824f7bc8b76b71c',
+  "./js/calculator-recipe-source.js": '01a649ab954dbf31',
+  "./js/calculator-catalogue-link.js": '41710bee4cba59f8',
   "./js/away-screen.js": 'e9d001178c51a4e7',
   "./js/away-reminder.js": 'bdd9d8cec3f44033',
   "./js/home-away.js": 'd791865d4ec8e8b1',
@@ -530,18 +530,18 @@ const ASSET_HASHES = {
   "./js/calc.js": '014e39067e9ac4a2',
   "./js/calculator-recipe-text.js": 'aa41a24dba41595f',
   "./js/calculator-dough-math.js": '85008bf4375927f4',
-  "./js/log.js": 'bb3139749d6eafdb',
+  "./js/log.js": '8f1baecf955097d6',
   "./js/log-time.js": '0374bcb500904055',
-  "./js/log-model.js": 'ae5fd39dc1d23ffd',
+  "./js/log-model.js": 'fc3f9d4744dd4ae6',
   "./js/log-store.js": '9b53edc064b6f29c',
   "./js/log-view.js": 'ba9b38aaa98a6426',
-  "./js/log-edit.js": '172e04c03ffe20eb',
+  "./js/log-edit.js": '5df9ef297889fe00',
   "./js/log-qty.js": '2aae575dfdaec907',
-  "./js/log-add.js": 'c984687fc41e9868',
+  "./js/log-add.js": '146240c2a04b4e89',
   "./js/log-settings.js": '25ad792342b4f9e8',
   "./js/whatsapp.js": '85499983381f4136',
   "./js/calculator-confirm.js": '68a8ecb9ef0f0ab9',
-  "./js/calculator-config.js": '233fcda48cb469ce',
+  "./js/calculator-config.js": '23350db41fb440c5',
   "./js/calculator-config-store.js": '05b4d1f7b091fd60',
   "./js/calculator-order-prefill.js": '28c00f4fea7d43b7',
   "./js/calculator-order-text.js": '3eabd34a0df19321',
