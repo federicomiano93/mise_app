@@ -32,7 +32,7 @@ function renderItems(version) {
   const order = [];
   for (const it of (version.items || [])) {
     if (num(it.qty) <= 0) continue;
-    const key = it.clientName || t('calc.unnamedClient');
+    const key = it.clientName || t('calc.clientFallback');
     if (!groups.has(key)) { groups.set(key, []); order.push(key); }
     groups.get(key).push(it);
   }
@@ -108,9 +108,9 @@ export function renderSheetCard(sheet) {
       el('div', { class: 'crate-box-title' }, c.name),
       el('div', { class: 'crate-count' }, [
         el('span', { class: 'crate-count-val' }, String(num(c.count))),
-        el('span', { class: 'crate-count-unit' }, ' box'),
+        el('span', { class: 'crate-count-unit' }, ' ' + t('calc.crateUnit', { n: num(c.count) })),
       ]),
-      el('div', { class: 'crate-sub' }, num(c.eachBoxG) + 'g each box'),
+      el('div', { class: 'crate-sub' }, t('calc.gramsEachBox', { g: num(c.eachBoxG) })),
     ]));
   }
 

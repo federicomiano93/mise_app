@@ -93,7 +93,7 @@ function render() {
   for (const it of working.items) {
     if (it.clientName !== lastClient || card === null) {
       lastClient = it.clientName;
-      card = el('div', { class: 'card' }, [el('div', { class: 'card-title' }, it.clientName || t('calc.unnamedClient'))]);
+      card = el('div', { class: 'card' }, [el('div', { class: 'card-title' }, it.clientName || t('calc.clientFallback'))]);
       c.appendChild(card);
     }
     card.appendChild(qtyRow(it, (q) => { it.qty = q; markDirty(); }));

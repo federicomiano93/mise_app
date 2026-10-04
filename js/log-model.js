@@ -420,7 +420,7 @@ export function dayLabel(log, nowMs) {
   // today read "Today" — and whoever picked up the log believed it had just been made.
   const text = made === target
     ? dayName(made)
-    : t('calc.dayMadeFor', { made: dayName(made), target: dayName(target, true) });
+    : t('day.madeFor', { made: dayName(made), target: dayName(target, true) });
 
   // The colour still follows the day the dough is FOR: it answers "do I need this
   // now?", while the words tell the story. A dough for today stays green even when it

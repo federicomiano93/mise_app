@@ -208,9 +208,9 @@ function renderCrateBoxes(id) {
       el('div', { class: 'crate-box-title' }, p.name),
       el('div', { class: 'crate-count' }, [
         el('span', { class: 'crate-count-val' }, String(Math.round(crates * 10) / 10)),
-        el('span', { class: 'crate-count-unit' }, ' box'),
+        el('span', { class: 'crate-count-unit' }, ' ' + t('calc.crateUnit', { n: crates })),
       ]),
-      el('div', { class: 'crate-sub' }, (perBox * p.weight) + 'g each box'),
+      el('div', { class: 'crate-sub' }, t('calc.gramsEachBox', { g: perBox * p.weight })),
     ]));
   }
 }

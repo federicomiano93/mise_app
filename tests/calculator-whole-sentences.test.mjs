@@ -2,7 +2,9 @@
 //
 // A review found English that bypassed t() in the Calculator — «Only 4 …», « log»,
 // « divisor», «Client», «Created», «Edited», « products. Reassign or delete them in
-// Settings → Products first.» — so an Italian venue read half-English messages. The
+// Settings → Products first.», and on the client-order cards and the crate box «Tomorrow ·»,
+// «Sent … · already in the calculator», «box», «g each box» — so an Italian venue read
+// half-English messages. The
 // neighbouring keys were glued too: 'Delete the ' + name + ' recipe?' cannot be
 // translated, because Italian puts the words in another order (see the comment above
 // the dictionaries in js/i18n.js). Each one is now one entry with a hole in it.
@@ -45,19 +47,26 @@ const NEW_KEYS = {
   'calc.doughTitle': { holes: ['name'] },
   'calc.gramsRaw': { holes: ['g'] },
   'calc.divisorTitle': { holes: ['recipe'] },
-  'calc.dayMadeFor': { holes: ['made', 'target'] },
+  'day.madeFor': { holes: ['made', 'target'] },
   'calc.logEditHistory': { holes: ['dough'] },
   'calc.logDurationForRecipe': { holes: ['name'] },
   'calc.logKeepHours': { holes: ['n'], plural: true },
   'calc.extraLineN': { holes: ['i'] },
-  'calc.unnamedClient': { holes: [] },
+  'calc.clientFallback': { holes: [] },
+  'calc.orderFallback': { holes: [] },
+  'calc.crateUnit': { holes: [], plural: true },
+  'calc.gramsEachBox': { holes: ['g'] },
+  'calc.co.whenToday': { holes: ['date'] },
+  'calc.co.whenTomorrow': { holes: ['date'] },
+  'calc.co.sent': { holes: ['when'] },
+  'calc.co.sentUsed': { holes: ['when'] },
 };
 
 const RETIRED_FRAGMENTS = [
   'calc.yourRecipesTheBase', 'calc.canShowAsCalculator', 'calc.thisRecipeIsUsed',
   'calc.deleteThe', 'calc.recipe', 'calc.recipesCanShowAs', 'calc.showAsACalculator',
   'calc.deleteThis', 'calc.logThisCannotBe', 'calc.restoredFromV', 'calc.editHistory',
-  'calc.logDurationFor', 'calc.extraLine',
+  'calc.logDurationFor', 'calc.extraLine', 'calc.dayMadeFor',
 ];
 
 const holesOf = (text) => [...text.matchAll(/\{(\w+)\}/g)].map(m => m[1]).sort();
@@ -99,7 +108,12 @@ test('Italian: the messages from the review read as Italian sentences', () => {
     assert.equal(t('calc.logTitle', { dough: 'Pizza' }), 'Registro di Pizza');
     assert.equal(t('calc.versionCreated'), 'Creata');
     assert.equal(t('calc.versionEdited'), 'Modificata');
-    assert.equal(t('calc.unnamedClient'), 'Cliente senza nome');
+    assert.equal(t('calc.clientFallback'), 'Cliente');
+    assert.equal(t('calc.crateUnit', { n: 1 }), 'cassa');
+    assert.equal(t('calc.crateUnit', { n: 2.5 }), 'casse');
+    assert.equal(t('calc.gramsEachBox', { g: 2400 }), '2400 g per cassa');
+    assert.equal(t('calc.co.whenTomorrow', { date: 'martedì 11 agosto' }), 'Domani · martedì 11 agosto');
+    assert.equal(t('calc.co.sentUsed', { when: '20 min fa' }), 'Inviato 20 min fa · già nel calcolatore');
     assert.equal(t('calc.logKeepHours', { n: 24 }), '24 ore');
   });
 });
@@ -114,6 +128,11 @@ test('English: the same messages keep their wording, with the right screen named
     assert.equal(t('calc.deleteRecipeNamed', { name: 'Focaccia' }), 'Delete the Focaccia recipe?');
     assert.equal(t('calc.logTitle', { dough: 'Pizza' }), 'Pizza log');
     assert.equal(t('calc.logKeepHours', { n: 1 }), '1 hour');
+    // English venues keep the words they had before the fix.
+    assert.equal(t('calc.clientFallback'), 'Client');
+    assert.equal(t('calc.crateUnit', { n: 3 }), 'box');
+    assert.equal(t('calc.gramsEachBox', { g: 2400 }), '2400g each box');
+    assert.equal(t('calc.co.sent', { when: '20 min ago' }), 'Sent 20 min ago');
   });
 });
 
@@ -132,11 +151,12 @@ test('Italian: the log day badge is one sentence, with the second day in its in-
 const FILES = [
   'js/recipes.js', 'js/calculator-settings.js', 'js/log-edit.js', 'js/log-add.js', 'js/log.js',
   'js/log-view.js', 'js/log-settings.js', 'js/log-model.js', 'js/calc.js', 'js/calculator-render.js',
-  'js/calculator-whatsapp-settings.js', 'js/calculator-client-orders.js',
+  'js/calculator-whatsapp-settings.js', 'js/calculator-client-orders.js', 'js/whatsapp.js',
 ];
 const FOUND_LITERALS = [
   "'Only '", "' product'", "' products'", "Settings → Products", "|| 'this'", "' divisor'",
   "' log'", "'Created'", "'Edited'", "' dough'", "' g raw'", "' hours'", "' for '", "'by '",
+  "' box'", "g each box", "`Today ·", "`Tomorrow ·", "`Sent ", "already in the calculator", "|| 'Order'",
 ];
 
 test('the Calculator files no longer carry the English literals the review found', () => {
@@ -157,5 +177,19 @@ test('«Client» is never a fallback drawn on screen in the Calculator', () => {
     const code = readFileSync(join(ROOT, file), 'utf8').replace(/^[ \t]*\/\/.*$/gm, '');
     assert.ok(!code.includes("|| 'Client'"), `${file} still draws 'Client'`);
     assert.ok(!code.includes(": 'Client'"), `${file} still draws 'Client'`);
+  }
+});
+
+// The other half of the pin: a key the dictionaries hold but no screen asks for is a
+// sentence that silently stopped being drawn (a deleted call passes every check above).
+test('every new key is asked for by a Calculator file', () => {
+  const code = FILES.map(f => readFileSync(join(ROOT, f), 'utf8').replace(/^[ \t]*\/\/.*$/gm, '')).join('\n');
+  for (const key of Object.keys(NEW_KEYS)) {
+    if (key === 'calc.co.sent' || key === 'calc.co.sentUsed') {
+      // Chosen by a ternary at the call site: t(used ? 'calc.co.sentUsed' : 'calc.co.sent', …).
+      assert.ok(code.includes(`'${key}'`), `${key} is not used`);
+      continue;
+    }
+    assert.ok(code.includes(`t('${key}'`), `${key} is not asked for by any Calculator file`);
   }
 });

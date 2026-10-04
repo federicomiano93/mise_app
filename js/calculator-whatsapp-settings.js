@@ -484,7 +484,7 @@ function renderEntryDetail() {
   const entry = lists()[activeList].clients[activeEntry];
   if (!Array.isArray(entry.products)) entry.products = [];
   const client = getClientById(getConfig(), entry.clientId);
-  waTitle().textContent = (client && client.name) || t('calc.unnamedClient');
+  waTitle().textContent = client ? (client.name || t('calc.unnamedClient')) : t('calc.unknownClient');
   setHomeVisible(false);
   const content = document.getElementById('wa-content');
   content.textContent = '';
