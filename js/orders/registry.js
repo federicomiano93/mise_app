@@ -546,6 +546,7 @@ export function buildRegistry(data, actions, hooks = {}) {
       };
       push((entry) => {
         mine = entry;
+        entry.keepAlive = true;   // refresh() must not rebuild this screen
         const { root, dispose } = renderPackPhotoCapture({
           onText: (text, notes) => settle({ text, notes }),
         });
@@ -651,6 +652,7 @@ export function buildRegistry(data, actions, hooks = {}) {
     if (!removed) return;
     removed.overlay?.remove();
     stackChanged();
+    if (removed.keepAlive && redrawOwed) { redrawOwed = false; refresh(); }
   }
 
   // ⚠️ AFTER A SAVE, THE LEVEL UNDERNEATH IS REDRAWN. The saved document's snapshot lands while
@@ -859,11 +861,16 @@ export function buildRegistry(data, actions, hooks = {}) {
   // is exactly where somebody adding sixty-seven of them is standing. Only the
   // first render was ever checked in this project before v1.60.1 deleted an
   // allergen card on the second one.
+  let redrawOwed = false;
   function refresh() {
     paintList();
     const top = stack[stack.length - 1];
     if (!top || !top.overlay) return;
     if (top.overlay.querySelector('.mgmt-form')) return;   // a form: leave it be
+    // ⚠️ THE PHOTO SCREEN IS LEFT BE TOO: its photos and its «reading in flight» marker live
+    // only in that node, and a rebuild would drop both (and let the update gate reload over
+    // a paid reading). One redraw is owed and runs when the level closes (popEntry).
+    if (top.keepAlive) { redrawOwed = true; return; }
     const next = top.build(top);
     if (!next) return;                                     // build() popped it
     top.overlay.replaceWith(next);
