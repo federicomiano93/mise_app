@@ -97,10 +97,13 @@ const DICTIONARIES = Object.freeze({
     // its own entry, and the translator decides what it looks like.
     'people.make': 'Make {role}',
     'people.roleGroup': 'Role',
+    'people.section.invite': 'Invite someone',
+    'people.section.members': 'People with access · {n}',
+    'people.section.membersPlain': 'People with access',
+    'people.roleOf': 'Role of {name}',
     // ⚠️ NO ROLE IN THESE TWO. 'Add {role}' worked while there was one button;
     // with two, English needs an article Italian does not take, and the role is
     // already stated by the note above them and by the result screen below.
-    'people.sendHow': 'How do you want to send it?',
     'people.add.link': 'Send a link',
     'people.add.digits': 'Read out a code',
     'role.owner.inSentence': 'owner',
@@ -112,7 +115,7 @@ const DICTIONARIES = Object.freeze({
     // can do. Nothing else in the app explains it, so a translation that softens
     // one is a wrong decision about a real person's access, made confidently
     // because the screen said so. «Head chef» must keep saying out loud that it
-    // is the manager level under another name, or four pills read as four levels.
+    // is the manager level under another name, or four choices read as four levels.
     'role.means.owner': 'Everything, including adding people and setting their roles.',
     'role.means.manager': 'Runs this location: can delete suppliers, ingredients, recipes and products. Cannot add people.',
     'role.means.headChef': 'The same as Manager — it is only the job title that differs. Runs this location: can delete suppliers, ingredients, recipes and products. Cannot add people.',
@@ -3002,7 +3005,10 @@ const DICTIONARIES = Object.freeze({
     // site. «Rendi responsabile», not «Fai responsabile».
     'people.make': 'Rendi {role}',
     'people.roleGroup': 'Ruolo',
-    'people.sendHow': 'Come vuoi mandarlo?',
+    'people.section.invite': 'Invita una persona',
+    'people.section.members': 'Chi ha già accesso · {n}',
+    'people.section.membersPlain': 'Chi ha già accesso',
+    'people.roleOf': 'Ruolo di {name}',
     'people.add.link': 'Manda un link',
     'people.add.digits': 'Detta un codice',
     'role.owner.inSentence': 'titolare',

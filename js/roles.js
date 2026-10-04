@@ -144,7 +144,7 @@ export function personLabel(role, title) {
   return titleLabel(title);
 }
 
-// The pills on "Who can get in": FOUR words, THREE levels of power.
+// The role choices on "Who can get in": FOUR words, THREE levels of power.
 //
 // ⚠️ Two of them grant exactly the same thing, and the screen has to say so out
 // loud — a row of four that looks like four levels is worse than no title at all.
@@ -162,7 +162,7 @@ export const ROLE_CHOICES = Object.freeze([
   { key: 'staff', role: 'staff', title: null, labelKey: 'role.staff' },
 ]);
 
-// The word for a pill, asked for now rather than remembered from import time.
+// The word for a choice, asked for now rather than remembered from import time.
 export function choiceLabel(choice) {
   return t(choice.labelKey);
 }
@@ -184,7 +184,7 @@ export function choiceLabelInSentence(choice) {
   return t(`${choice.labelKey}.inSentence`);
 }
 
-// Which pill is lit for somebody who currently holds this role and title.
+// Which choice is selected for somebody who currently holds this role and title.
 export function choiceKey(role, title) {
   if (role === MANAGER && title === 'head-chef') return 'head-chef';
   return role;

@@ -1022,6 +1022,60 @@ body[data-card="foodcost"] .app-header.app-header--save {
 
 .people-add { align-self: stretch; }
 
+/* ── "Who can get in": two settings cards (.set-section) ───────────────────
+   Only this screen uses the classes below; .people-row / .people-list / .people-code
+   stay untouched because four other screens draw with them. */
+
+/* The two invitation buttons side by side; each falls onto its own line when the
+   screen cannot give both 130px. ⚠️ .btn-primary carries margin-top:16px and
+   width:100% for its stacked uses elsewhere — both would break the grid. */
+.people-add-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: var(--space-2);
+}
+/* ⚠️ ONE SIZE FOR BOTH. .btn-primary is 16px with 15px padding and .btn-secondary
+   14px with 18px sides, so side by side they read as a big and a small button and
+   «Read out a code» wrapped to two lines at 360px. */
+.people-add-row .people-add {
+  width: 100%;
+  min-height: 48px;
+  margin-top: 0;
+  padding: 10px 12px;
+  font-size: 15px;
+  line-height: 1.25;
+}
+
+/* ⚠️ THE CARDS MUST NOT SHRINK. .people-scroll is a flex column and .set-section
+   clips its content (overflow: hidden, for its rounded corners), so a card taller
+   than the screen was squeezed to fit and CUT: at 296px both invitation buttons
+   vanished below the card's edge. Measured, not reported by any overflow check —
+   nothing scrolled sideways, the buttons were simply clipped away. */
+.people-scroll > .set-section { flex-shrink: 0; }
+
+/* The roster: one card, a hairline between people (none under the title). */
+.people-roster { display: flex; flex-direction: column; }
+
+.people-member {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  padding: 12px 16px;
+  border-top: 1px solid var(--border);
+}
+.people-roster > :first-child { border-top: 0; }
+
+/* ⚠️ THE NAME KEEPS 120px AT LEAST: below that the select drops UNDER it instead of
+   squeezing the name to a sliver. At 360px name and select share the line; at
+   296px the select takes its own line. Rename / Remove always take the last line. */
+.people-member .people-row-main { flex: 1 1 120px; gap: 2px; }
+.people-member .set-select { flex: 0 0 150px; min-width: 0; max-width: 100%; }
+.people-member > .people-row-actions { width: 100%; }
+
+.people-member--editing { flex-direction: column; align-items: stretch; }
+.people-roster > .people-empty { padding: 12px 16px; }
+
 /* ── New customer ──────────────────────────────────────────────────────────
    The first screen of every sale. Shares the .people-* shell; only the pieces
    that screen does not have are defined here.
@@ -1140,10 +1194,9 @@ body[data-card="foodcost"] .app-header.app-header--save {
   overflow-wrap: anywhere;
 }
 
+/* The owner's own row: the role as a plain word where everybody else has a select. */
 .people-role {
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
+  font-size: 13px;
   color: var(--text-2);
 }
 
@@ -1156,8 +1209,9 @@ body[data-card="foodcost"] .app-header.app-header--save {
    line, and with two controls beside them .people-row-main (flex: 1; min-width: 0)
    shrinks rather than wrapping, so the sections ran to three wrapped lines.
    .people-row is already flex-wrap, so a full-width child drops to its own line.
-   ⚠️ SCOPED TO .bz-row. .people-row and .people-row-actions also draw "Who can get
-   in", where a name and one action DO sit together comfortably — changing a shared
+   ⚠️ SCOPED TO .bz-row. .people-row and .people-row-actions also draw the Language,
+   Home cards and supplier-order screens (and .people-row-actions "Who can get in"),
+   where a name and one action DO sit together comfortably — changing a shared
    rule always touches at least two screens (the .cp-* lesson, v234/v235). */
 .bz-row .people-row-actions { width: 100%; justify-content: flex-end; }
 
@@ -1187,20 +1241,13 @@ body[data-card="foodcost"] .app-header.app-header--save {
 .bz-del-icon:disabled { opacity: 0.5; cursor: default; }
 .bz-del-icon:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 2px; }
 
-/* ── Choosing a role ──────────────────────────────────────────────────────
-   Three pills, each stating where a tap sends this person. They WRAP on
-   purpose: at 320px "Owner Manager Employee" does not fit on one line, and a
-   row that scrolls sideways hides the third option — which is the one that
-   takes power away, so it is the one that must never be hard to find. */
-.people-pills {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-  width: 100%;
-}
-
+/* ── Pills (Language and Home cards screens) ──────────────────────────────
+   The role choice on "Who can get in" is a select now; the pill stays for the
+   screens that still draw one. */
 .people-pill {
-  /* ⚠️ TWO PER LINE, so four pills form a 2x2 block instead of 3 + 1.
+  /* ⚠️ TWO PER LINE, so four pills form a 2x2 block instead of 3 + 1. (Written for
+     the role pills «Who can get in» used to have; kept for any screen that lines
+     several pills up.)
      With `flex: 1 1 auto` the fourth wrapped alone and GREW to the full width —
      which made "Employee", the choice that takes power AWAY, by far the largest
      and most inviting target on the row (P20 says the opposite). Found by
@@ -1269,7 +1316,6 @@ body[data-card="foodcost"] .app-header.app-header--save {
 /* Editing a name in the row rather than in a pop-up: the browser's prompt() is
    the grey system box this app removed in PR #28, and confirm-dialog.js is
    byte-identical across six copies and only asks yes or no. */
-.people-row--editing { flex-direction: column; align-items: stretch; }
 
 .people-input {
   width: 100%;
