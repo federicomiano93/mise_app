@@ -18,8 +18,9 @@ import { dropDeletedIngredientFromDraft, freezeUnitInDraft } from './draft.js';
 import {
   COLLECTIONS, watchCollection, watchIngredientPrices, canManageHere,
   saveDoc, removeDoc, saveIngredientWithPrice, saveSupplierRecord, getPriceHistory,
-  watchDoc, setCategoryOnMany, deleteIngredientWithPrice, mayWritePrices,
+  watchDoc, setCategoryOnMany, deleteIngredientWithPrice, mayWritePrices, setFavouriteSupplier,
 } from './firebase-orders.js';
+import { normalizeFavourites } from './favourite-suppliers.js';
 import { readIngredientPrice } from '../record-data.js';
 import { openInvoiceImport } from './invoice-import-screen.js';
 
@@ -31,6 +32,8 @@ const state = {
   // The venue's saved category list (config/orders). null = never saved one, or not
   // loaded yet: both mean «offer the defaults».
   ingredientCategories: null,
+  // The venue's starred suppliers (config/orders.favouriteSuppliers), ids only.
+  favouriteSuppliers: [],
   loaded: { suppliers: false, ingredients: false, config: false },
   // Whether the live prices have really answered (watchIngredientPrices' second argument): until
   // then an ingredient card reads its own price document before it opens (registry.js).
@@ -46,6 +49,7 @@ const screen = buildRegistry(
   {
     suppliers: () => state.suppliers,
     ingredients: () => state.ingredients,
+    favouriteSuppliers: () => state.favouriteSuppliers,
     // ⚠️ THE LANGUAGE IS READ HERE, AT CALL TIME: no venue is open when this module loads.
     // The words are the venue's OUTPUT language, not the screen's (js/record-choices.js).
     // `current` is the item being edited, whose own value is always offered.
@@ -105,6 +109,12 @@ const screen = buildRegistry(
           dropDeletedIngredientFromDraft(id);
         }
         : undefined;
+    },
+    // ⚠️ A GETTER, AND THE GATE LIVES HERE, for the same reason as deleteIngredient above: the star in a
+    // supplier's header is drawn only when this is a function, so it follows the session (which arrives
+    // after this module runs) and is absent for staff. The rules decide either way (P2).
+    get toggleFavouriteSupplier() {
+      return canManageHere() ? (id, on) => setFavouriteSupplier(id, on) : undefined;
     },
     // The shortened list and «no category» on every ingredient that used it — one batch.
     deleteCategory: (list, ids) => setCategoryOnMany(ids, 'Other',
@@ -216,6 +226,7 @@ watchIngredientPrices((map, readable) => {
 // back to the defaults plus whatever ingredients already use, which is a usable screen.
 watchDoc(COLLECTIONS.config, 'orders', (doc, fromCache) => {
   state.ingredientCategories = Array.isArray(doc?.ingredientCategories) ? doc.ingredientCategories : null;
+  state.favouriteSuppliers = normalizeFavourites(doc?.favouriteSuppliers);
   // ⚠️ «MISSING» COUNTS ONLY WHEN THE SERVER SAID IT. A cold start offline reports a missing
   // document from an empty cache; treating that as «loaded» would let a delete write the
   // defaults-minus-one over the venue's real list.
