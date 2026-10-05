@@ -593,7 +593,7 @@ async function ingredientPrices() {
   await expectAllowed('another line of the same invoice', () =>
     wholeWrite(`${PRICES}/inv-18000000072-7`, fromInvoice({ pricePerUnit: 0.85 })));
   await expectAllowed('an invoice price that says which pack it was', () =>
-    wholeWrite(`${PRICES}/inv-18000000072-8`, fromInvoice({ packLabel: 'Lievito Zeus 1 kg' })));
+    wholeWrite(`${PRICES}/inv-18000000072-8`, fromInvoice({ packLabel: 'Lievito pacco 1 kg' })));
   await expectDenied('a pack label longer than 120',
     () => wholeWrite(`${PRICES}/inv-18000000072-9`, fromInvoice({ packLabel: bigString(121) })));
   await expectDenied('a pack label that is not text',
