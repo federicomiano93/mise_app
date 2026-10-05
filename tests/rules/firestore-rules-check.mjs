@@ -2838,6 +2838,42 @@ async function roles() {
   await expectAllowed('a manager undoes one',
     () => deleteWrite(`${L}/invoice-decisions/${DEC}`, asAccount(MAYA)));
 
+  // ── How a price moved from one invoice to the next (5 Oct 2026) ──
+  const change = {
+    ...stamp, ingredientId: 'I3', supplierId: 'S1', name: 'Farina 00', priceUnit: 'kg',
+    oldPrice: 0.57, newPrice: 0.62, oldDate: '2026-08-31', date: '2026-09-30',
+    invoiceId: '18000000002', line: 5, pct: 8.77, oldPack: '25 kg', newPack: '25 kg',
+    recordedAt: '2026-10-05T10:00:00.000Z',
+  };
+  const CH = `${L}/price-changes/inv-18000000002-5-I3`;
+  await expectAllowed('a manager records a price change',
+    () => wholeWrite(CH, change, asAccount(MAYA)));
+  await expectAllowed('a manager reads it', readAs(MAYA, CH));
+  await expectAllowed('the owner reads it', readAs(ALICE, CH));
+  await expectDenied('an employee cannot read it', readAs(SAM, CH));
+  await expectDenied('a change is never edited',
+    () => mergeWrite(CH, { ...change, newPrice: 0.5 }, asAccount(MAYA)));
+  await expectDenied('an employee cannot record one',
+    () => wholeWrite(`${L}/price-changes/inv-18000000002-6-I3`, { ...change, line: 6 }, asAccount(SAM)));
+  await expectDenied('a member of ANOTHER venue cannot record one here',
+    () => wholeWrite(`${L}/price-changes/inv-18000000002-6-I3`, { ...change, line: 6 }, asAccount(BOB)));
+  await expectDenied('the id must name the invoice line and the ingredient it holds',
+    () => wholeWrite(`${L}/price-changes/inv-18000000002-7-I4`, { ...change, line: 7 }, asAccount(MAYA)));
+  await expectDenied('…not a free id',
+    () => wholeWrite(`${L}/price-changes/whatever`, change, asAccount(MAYA)));
+  await expectDenied('a price must be above zero',
+    () => wholeWrite(`${L}/price-changes/inv-18000000002-8-I3`, { ...change, line: 8, oldPrice: 0 }, asAccount(MAYA)));
+  await expectDenied('the unit is kg, l or pcs',
+    () => wholeWrite(`${L}/price-changes/inv-18000000002-8-I3`, { ...change, line: 8, priceUnit: 'box' }, asAccount(MAYA)));
+  await expectDenied('the date is YYYY-MM-DD',
+    () => wholeWrite(`${L}/price-changes/inv-18000000002-8-I3`, { ...change, line: 8, date: '30/09/2026' }, asAccount(MAYA)));
+  await expectDenied('no other keys',
+    () => wholeWrite(`${L}/price-changes/inv-18000000002-8-I3`, { ...change, line: 8, note: 'x' }, asAccount(MAYA)));
+  await expectDenied('stamped with another venue',
+    () => wholeWrite(`${L}/price-changes/inv-18000000002-8-I3`, { ...change, line: 8, bakery: 'trattoria-x' }, asAccount(MAYA)));
+  await expectDenied('an employee cannot delete one', () => deleteWrite(CH, asAccount(SAM)));
+  await expectAllowed('a manager deletes one', () => deleteWrite(CH, asAccount(MAYA)));
+
   // ── Deleting an ingredient (1 Oct 2026): the ingredient AND its price in ONE batch ──
   //
   // ⚠️ THE APP INCLUDES THE PRICE DELETE ONLY FOR SOMEBODY ALLOWED TO MAKE IT
