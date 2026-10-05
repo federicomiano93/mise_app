@@ -215,3 +215,19 @@ test('replanRow hands back the matched ingredient and its stored points from the
   assert.equal(pointReads, 1);
   assert.equal(ingredientDisplayName(out.ingredient), 'Fa');
 });
+
+test('the pack of a stored point and of the new points is carried into oldPack / newPack', async () => {
+  const [point] = pointsOfDocs([
+    { id: 'inv-100-1', data: { invoiceId: '100', invoiceDate: '2026-01-10', pricePerUnit: 4, priceUnit: 'kg', packLabel: 'Lievito Pegaso 5 kg' } },
+  ]);
+  assert.equal(point.pack, 'Lievito Pegaso 5 kg');
+  assert.equal(pointsOfDocs([{ id: 'inv-100-2', data: { invoiceId: '100', invoiceDate: '2026-01-10', pricePerUnit: 4, priceUnit: 'kg' } }])[0].pack, undefined);
+  const ops = await planPriceChanges({
+    ...base,
+    storedPoints: [point],
+    newPoints: [{ id: 'inv-200-1', invoiceId: '200', line: 1, invoiceDate: '2026-02-10', pricePerUnit: 6, qty: 1 }],
+    packLabel: 'Lievito Zeus 1 kg',
+  });
+  assert.equal(ops.create[0].data.oldPack, 'Lievito Pegaso 5 kg');
+  assert.equal(ops.create[0].data.newPack, 'Lievito Zeus 1 kg');
+});

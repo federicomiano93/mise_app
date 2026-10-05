@@ -852,6 +852,10 @@ function priceHistoryBlock(item, actions) {
             entry.source === 'invoice' ? el('span', { class: 'mgmt-price-tag', text: t('orders.priceFromInvoice') }) : null,
             shortDate(entry.recordedAt),
           ]),
+          // Which pack the price was paid for (the invoice's own name: a word of the data, not translated).
+          // On its own line, so a long name wraps instead of pushing the date off a 296 px screen.
+          typeof entry.packLabel === 'string' && entry.packLabel
+            ? el('span', { class: 'mgmt-price-pack', text: entry.packLabel }) : null,
         ]));
       });
     } catch (err) {
@@ -878,6 +882,12 @@ function priceHistoryBlock(item, actions) {
     el('span', { class: 'mgmt-history-label', text: t('orders.priceHistory') }),
     button,
     list,
+    // ⚠️ HANDED IN AS AN ACTION, never imported: the merge belongs to Orders, which this file may not import.
+    // The caller passes `openMerge` only to somebody who may write prices AND manage the venue (registry-main.js),
+    // and only for an ingredient (never packaging) that already exists.
+    typeof actions?.openMerge === 'function'
+      ? el('button', { type: 'button', class: 'mgmt-link', onClick: () => actions.openMerge(), text: t('orders.merge.button') })
+      : null,
   ]);
 }
 

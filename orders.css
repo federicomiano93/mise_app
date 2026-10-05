@@ -1683,6 +1683,14 @@ body[data-section="orders"] .ing-filter .view-switch-btn:not(.active) { color: v
   border-bottom: 1px solid var(--border);
 }
 .mgmt-price-row:last-child { border-bottom: none; }
+/* The pack a price was paid for, under the rate and the date. */
+.mgmt-price-row { flex-wrap: wrap; }
+.mgmt-price-pack {
+  flex: 0 0 100%;
+  color: var(--text3);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
 .mgmt-price-rate { color: var(--text); font-weight: 600; }
 .mgmt-price-when { color: var(--text3); flex-shrink: 0; }
 /* «invoice» / «fattura» beside the date of a price that came from an invoice import. */

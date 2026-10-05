@@ -253,6 +253,15 @@
 .rec-host .mgmt-price-row:last-child {
   border-bottom: none;
 }
+.rec-host .mgmt-price-row {
+  flex-wrap: wrap;
+}
+.rec-host .mgmt-price-pack {
+  flex: 0 0 100%;
+  color: var(--text3);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
 .rec-host .mgmt-price-rate {
   color: var(--text);
   font-weight: 600;

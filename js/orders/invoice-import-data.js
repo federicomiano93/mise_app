@@ -44,7 +44,7 @@ function importError(code) {
   return err;
 }
 
-function refuseOffline() {
+export function refuseOffline() {
   if (typeof navigator !== 'undefined' && navigator.onLine === false) {
     throw importError('offline');
   }
@@ -127,7 +127,7 @@ export async function freshPrice(ingredientId) {
 
 // ── Writing one row ──────────────────────────────────────────────────────────────
 
-function withTimeout(promise) {
+export function withTimeout(promise) {
   let timer;
   const timeout = new Promise((_, reject) => {
     timer = setTimeout(() => reject(importError('timeout')), IMPORT_COMMIT_TIMEOUT_MS);

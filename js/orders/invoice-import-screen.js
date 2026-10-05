@@ -24,7 +24,7 @@ import { el } from './dom.js';
 import { confirmDialog, alertDialog } from './confirm-dialog.js';
 import { BACK_ICON } from './mgmt-ui.js';
 import {
-  parseImportFile, planSuppliers, supplierWrites, planIngredients, ingredientWrites,
+  parseImportFile, planSuppliers, supplierWrites, planIngredients, ingredientWrites, packLabelOf,
 } from './invoice-import-model.js';
 import {
   applyDecisions, bucketOf, filterCounts, visibleFilters, entriesFor, waitingCount, importTotals, idsToCheck,
@@ -137,6 +137,7 @@ const REASON_KEYS = Object.freeze({
   'duplicate-vat': 'invoiceImport.reason.duplicateVat',
   'code-differs': 'invoiceImport.reason.codeDiffers',
   'unit-differs': 'invoiceImport.reason.unitDiffers',
+  'codes-full': 'invoiceImport.reason.codesFull',
 });
 
 const FILE_ERROR_KEYS = Object.freeze({
@@ -816,6 +817,7 @@ export function openInvoiceImport(data) {
     const why = row.reason || planned.reason;
     if (why) children.push(el('p', { class: 'invimp-reason', text: reasonText(why) }));
     if (planned.priceCheck) children.push(el('p', { class: 'invimp-reason', text: codesText(planned.priceCheck) }));
+    if (row.codesFull) children.push(el('p', { class: 'invimp-reason', text: reasonText('codes-full') }));
     // A NEW ingredient from the invoices: create it (the default, never blocking the button) or leave it out and
     // remember that, so the next import does not offer it again.
     if (s.built && planned.status === 'new') {
@@ -1053,9 +1055,9 @@ export function openInvoiceImport(data) {
     // never undoes a price that is already in. → { added, failed }.
     // ⚠️ A FAILURE HERE IS NEVER THE ROW'S: the row's prices are already in, so the row keeps its real outcome, the
     // run goes on, and the summary counts the ingredients whose changes are missing (a second load completes them).
-    const recordChanges = async (info) => {
+    const recordChanges = async ({ file, ...info }) => {
       try {
-        const ops = await planPriceChanges({ ...info, read, nowIso });
+        const ops = await planPriceChanges({ ...info, read, nowIso, packLabel: file ? packLabelOf(file) : undefined });
         const batches = priceChangeBatches(ops);
         if (batches.length > 0) await runImportBatches(batches);
         return { added: ops.create.length, failed: 0 };
@@ -1135,17 +1137,25 @@ export function openInvoiceImport(data) {
         if (fresh.waiting) {
           results.push({ key: planned.key, name: planned.name, outcome: 'failed', reason: t('invoiceImport.reason.changed'), retry: true });
         } else if (fresh.row.status === 'unchanged') {
+          // Every price is in already, but the file may carry a pack code the ingredient has not learnt yet.
+          const codeBatches = ingredientWrites(fresh.row, fileIngredient, new Date().toISOString(), { language });
+          if (codeBatches.length > 0) await runImportBatches(codeBatches);
           const recorded = await recordChanges({
+            file: fileIngredient,
             ingredientId: fresh.row.ingredientId, supplierId: fresh.row.supplierId, name: ingredientDisplayName(fresh.ingredient),
             storedPoints: fresh.storedPoints, newPoints: [], priceUnit: fileIngredient.priceUnit, isNew: false,
           });
-          results.push({ key: planned.key, name: planned.name, outcome: 'unchanged', changesAdded: recorded.added, changesFailed: recorded.failed });
+          results.push({
+            key: planned.key, name: planned.name, outcome: 'unchanged', changesAdded: recorded.added,
+            changesFailed: recorded.failed, codesFull: fresh.row.codesFull === true,
+          });
         } else if (['new', 'update-price', 'history-only'].includes(fresh.row.status)) {
           const batches = ingredientWrites(fresh.row, fileIngredient, new Date().toISOString(), { language });
           const isNew = fresh.row.status === 'new';
           const writtenId = batches.length > 0 ? await runImportBatches(batches) : fresh.row.ingredientId;
           if (isNew && writtenId) createdThisRun.set(writtenId, codeKey(fileIngredient.supplierCode));
           const recorded = await recordChanges({
+            file: fileIngredient,
             ingredientId: writtenId, supplierId: fresh.row.supplierId,
             name: isNew ? fileIngredient.name : ingredientDisplayName(fresh.ingredient),
             storedPoints: isNew ? [] : fresh.storedPoints, newPoints: fresh.row.newPoints,
@@ -1153,7 +1163,7 @@ export function openInvoiceImport(data) {
           });
           results.push({
             key: planned.key, name: planned.name, pricesAdded: fresh.row.newPoints.length,
-            changesAdded: recorded.added, changesFailed: recorded.failed,
+            changesAdded: recorded.added, changesFailed: recorded.failed, codesFull: fresh.row.codesFull === true,
             outcome: batches.length === 0 ? 'unchanged' : (fresh.row.status === 'new' ? 'created' : 'updated'),
           });
         } else {
@@ -1185,11 +1195,32 @@ export function openInvoiceImport(data) {
       // Nothing here can fail the row (it writes nothing of its own) nor stop the run: a point read or a change
       // write that fails is counted in the summary, and the next ingredient is tried.
       let recorded;
+      let codesFull = false;
       try {
         const known = s.ctx && s.ctx.invoicePointIds ? s.ctx.invoicePointIds[row.ingredientId] : null;
         const points = known && Array.isArray(known.points) ? known.points : (await read.pointIds(row.ingredientId)).points || [];
         const stored = data.ingredients().find(x => x.id === row.ingredientId);
+        // A pack code the ingredient has not learnt yet is written from a FRESH plan, never the one on screen:
+        // another row of this run may have added a code to the same ingredient a moment ago. A failure here is
+        // logged only: the price changes below are still recorded.
+        const fileIngredient = s.fileByKey.get(planned.key);
+        if (fileIngredient && (row.patchSupplierCode || row.setSupplierCodes || row.codesFull)) {
+          try {
+            const fresh = await replanRow({
+              fileIngredient, decision: s.ingredientDecisions[planned.key], supplierIdByKey: s.supplierIdByKey,
+              read: readFor(fileIngredient),
+            });
+            if (fresh.row.status === 'unchanged') {
+              const codeBatches = ingredientWrites(fresh.row, fileIngredient, new Date().toISOString(), { language });
+              if (codeBatches.length > 0) await runImportBatches(codeBatches);
+              codesFull = fresh.row.codesFull === true;
+            }
+          } catch (err) {
+            console.error('Remembering a pack code failed:', err);
+          }
+        }
         recorded = await recordChanges({
+          file: fileIngredient,
           ingredientId: row.ingredientId, supplierId: row.supplierId, name: ingredientDisplayName(stored) || planned.name,
           storedPoints: points, newPoints: [], priceUnit: row.priceUnit, isNew: false,
         });
@@ -1197,7 +1228,7 @@ export function openInvoiceImport(data) {
         console.error('Reading the stored prices of one ingredient failed:', err);
         recorded = { added: 0, failed: 1 };
       }
-      results.push({ key: planned.key, name: planned.name, outcome: 'unchanged', changesAdded: recorded.added, changesFailed: recorded.failed });
+      results.push({ key: planned.key, name: planned.name, outcome: 'unchanged', changesAdded: recorded.added, changesFailed: recorded.failed, codesFull });
     }
 
     s.summary = summarizeRun(results, { stopped, notRun });
@@ -1233,6 +1264,7 @@ export function openInvoiceImport(data) {
       ['invoiceImport.summary.skipped', sum.skipped],
     ];
     if (s.decisionsWritten > 0) lines.push(['invoiceImport.summary.decisions', s.decisionsWritten]);
+    if (sum.codesFull > 0) lines.push(['invoiceImport.summary.codesFull', sum.codesFull]);
     body.push(el('div', { class: 'set-section' }, lines.map(([key, n]) => el('div', { class: 'set-row' }, [
       el('div', { class: 'set-text' }, [el('span', { class: 'set-title', text: t(key, { n }) })]),
     ]))));

@@ -75,6 +75,8 @@ export function pointsOfDocs(docs) {
       invoiceDate: data.invoiceDate,
       pricePerUnit: data.pricePerUnit,
       priceUnit: data.priceUnit,
+      // Which pack the price was paid for (changesFromPoints reads it as oldPack / newPack).
+      ...(typeof data.packLabel === 'string' && data.packLabel ? { pack: data.packLabel } : {}),
     });
   });
   return out;
@@ -101,11 +103,14 @@ const sameChange = (stored, c) => stored.oldPrice === c.oldPrice && stored.newPr
 // the same file therefore plans nothing. `isNew`: the ingredient was created a moment ago, so it cannot have any
 // (no read). read = { changeIds(ingredientId) → [{ id, oldPrice, newPrice, oldDate, date, priceUnit }] } — a server
 // read, refused offline; not made when nothing is expected and nothing new is written.
-export async function planPriceChanges({ ingredientId, supplierId, name, storedPoints, newPoints, priceUnit, isNew, read, nowIso }) {
+// `packLabel` is the pack the NEW points were paid for (packLabelOf in the model); packs alone never make a
+// stored change differ.
+export async function planPriceChanges({ ingredientId, supplierId, name, storedPoints, newPoints, priceUnit, isNew, read, nowIso, packLabel }) {
   const none = { create: [], remove: [] };
   if (typeof ingredientId !== 'string' || !ingredientId || ingredientId.length > MAX_ID) return none;
   const fresh = (newPoints || []).map(p => ({
     invoiceId: p.invoiceId, line: p.line, invoiceDate: p.invoiceDate, pricePerUnit: p.pricePerUnit, priceUnit,
+    ...(packLabel ? { pack: packLabel } : {}),
   }));
   const label = String(name ?? '').trim().slice(0, MAX_NAME);
   const found = changesFromPoints({ id: ingredientId, supplierId, name: label }, [...(storedPoints || []), ...fresh])
@@ -313,8 +318,10 @@ export async function replanRow({ fileIngredient, decision, supplierIdByKey, rea
 //             retry? }] — `retry` is true when loading the same file again can fix the failure (a write that
 // failed, a timeout, a catalogue that changed); a file entry that is invalid cannot be fixed that way.
 export function summarizeRun(results, { stopped = null, notRun = 0 } = {}) {
-  const totals = { created: 0, updated: 0, pricesAdded: 0, changesAdded: 0, changesFailed: 0, unchanged: 0, skipped: 0, failed: [], stopped, notRun };
+  const totals = { created: 0, updated: 0, pricesAdded: 0, changesAdded: 0, changesFailed: 0, unchanged: 0, skipped: 0, codesFull: 0, failed: [], stopped, notRun };
   (results || []).forEach(r => {
+    // An ingredient whose list of pack codes is full: the new code was NOT remembered (the summary says so).
+    if (r.codesFull) totals.codesFull += 1;
     if (r.outcome === 'failed') totals.failed.push({ key: r.key, name: r.name, reason: r.reason || '', retry: r.retry === true });
     else totals[r.outcome] += 1;
     totals.pricesAdded += r.pricesAdded || 0;

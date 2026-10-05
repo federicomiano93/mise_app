@@ -111,6 +111,12 @@ const screen = buildRegistry(
         }
         : undefined;
     },
+    // ⚠️ A GETTER FOR THE SAME REASON: the card draws «Unisci un'altra confezione…» only when this is truthy, and
+    // it follows the session. The merge moves prices and deletes an ingredient, so it needs the role AND the Food
+    // cost section (the same pair as the invoice import); the rules decide either way (P2).
+    get mergePacks() {
+      return canManageHere() && mayWritePrices() ? true : undefined;
+    },
     // The shortened list and «no category» on every ingredient that used it — one batch.
     deleteCategory: (list, ids) => setCategoryOnMany(ids, 'Other',
       { name: COLLECTIONS.config, id: 'orders', data: { ingredientCategories: list } }),

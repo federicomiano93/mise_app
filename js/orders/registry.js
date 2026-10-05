@@ -56,6 +56,7 @@ import { mayWritePrices } from './firebase-orders.js';
 // allergens at all», which is the same answer for everybody standing in the building.
 import { ingredientPanels, setIngredientPanel, setPackPhoto } from './firebase-features.js';
 import { renderPackPhotoCapture } from './photo-capture.js';
+import { buildMergeChooser, runMergeFlow } from './ingredient-merge-screen.js';
 import { buildRegistrySettings } from './registry-settings.js';
 import {
   BACK_ICON, mgmtRow,
@@ -479,11 +480,11 @@ export function buildRegistry(data, actions, hooks = {}) {
         opening = false;
       }
     }
-    showIngredientForm(shown, presetSupplierId, presetKind);
+    return showIngredientForm(shown, presetSupplierId, presetKind);
   }
 
   function showIngredientForm(item, presetSupplierId, presetKind = null) {
-    push((entry) => {
+    return push((entry) => {
       const form = buildIngredientForm({
         item,
         suppliers: data.suppliers(),
@@ -501,7 +502,15 @@ export function buildRegistry(data, actions, hooks = {}) {
         // ⚠️ THE PHOTO SCREEN IS HANDED IN AS AN ACTION, not imported by the form.
         // The form then knows nothing about overlays and this file stays the only
         // one that navigates — the same seam saveIngredient and priceHistory use.
-        actions: { ...actions, capturePackPhoto, packPhotoOn: () => ingredientPanels().packPhoto, createSupplier },
+        // ⚠️ `openMerge` ONLY FOR AN EXISTING INGREDIENT (never packaging) AND ONLY WHEN registry-main.js says this
+        // person may merge (`mergePacks`, a getter like `deleteIngredient`: owner or manager with Food cost).
+        actions: {
+          ...actions,
+          capturePackPhoto,
+          packPhotoOn: () => ingredientPanels().packPhoto,
+          createSupplier,
+          ...(item && !isPackaging(item) && actions.mergePacks ? { openMerge: () => openMergeChooser(item, entry) } : {}),
+        },
         onDone: () => popAfterSave(entry),
       });
       const body = el('div', { class: 'mgmt-scroll' }, [form]);
@@ -511,6 +520,42 @@ export function buildRegistry(data, actions, hooks = {}) {
         : (item ? t('orders.editIngredient') : t('orders.newIngredient'));
       return overlay(entry, title, body, undefined, form.headerSave);
     }, { selects: item ? `ingredient:${item.id}` : null });
+  }
+
+  // ── «Unisci un'altra confezione…» ───────────────────────────────────────────
+  // A level ABOVE the ingredient's card (which stays mounted underneath, like the photo screen): the list of the
+  // supplier's other ingredients, then the flow of ingredient-merge-screen.js. Back steps up one level (P20).
+  // ⚠️ TYPING IN THE CARD IS NEVER LOST: with edits not saved yet it refuses to start, because after a merge the
+  // card is closed and opened again on the merged history.
+  let merging = false;
+  async function openMergeChooser(a, cardEntry) {
+    if (entryDirty(cardEntry)) { await alertDialog(t('orders.merge.saveFirst')); return; }
+    push((entry) => {
+      entry.keepAlive = true;   // refresh() must not rebuild the list under a typed search
+      const body = buildMergeChooser({
+        a,
+        list: () => data.ingredients(),
+        onPick: (b) => mergeInto(a, b, entry, cardEntry),
+      });
+      return overlay(entry, t('orders.merge.title'), body);
+    });
+  }
+
+  async function mergeInto(a, b, chooserEntry, cardEntry) {
+    if (merging) return;           // a second tap while the first is being checked or written
+    merging = true;
+    try {
+      const stored = data.ingredients().find(i => i.id === b.id) || b;
+      if (await runMergeFlow({ a, b: stored }) !== 'merged') return;
+      popEntry(chooserEntry);
+      popEntry(cardEntry);
+      // The card of A again, on the merged history, with the one word that says it worked.
+      const reopened = await openIngredientForm(a, null);
+      reopened?.overlay?.querySelector('.mgmt-scroll')
+        ?.prepend(el('p', { class: 'orders-status ok', role: 'status', text: t('orders.merge.done') }));
+    } finally {
+      merging = false;
+    }
   }
 
   // ── Photograph the packet ───────────────────────────────────────────────────

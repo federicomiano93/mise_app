@@ -1,4 +1,4 @@
-const CACHE_NAME = 'theitalianclub-v608';
+const CACHE_NAME = 'theitalianclub-v612';
 // Firebase SDK modules (loaded from gstatic) are cached SEPARATELY from CACHE_NAME
 // so they survive the cache-version bump that happens on every deploy — otherwise
 // the offline SDK would be wiped each release until the next online load. The name
@@ -12,7 +12,7 @@ const CACHE_NAME = 'theitalianclub-v608';
 // the fetch handler below, on the first load that has a network.
 // So between activate() and that first load, a phone that is OFFLINE cannot boot:
 // the code asks for the new version and nothing has it. In practice the window is very
-// small — activate() only happens after a successful 315-file precache, i.e.
+// small — activate() only happens after a successful 318-file precache, i.e.
 // online, and tapping the update banner reloads the page immediately — but it is
 // not zero, and it is the reason to bump the SDK deliberately rather than often.
 // Leaving the name unchanged would close the window and cost ~1 MB of dead
@@ -301,6 +301,10 @@ const ASSETS = [
   './js/orders/invoice-import-plan.js',
   './js/orders/invoice-import-data.js',
   './js/orders/invoice-import-screen.js',
+  // «Unisci un'altra confezione…» on the ingredient card: the pure planning, the data layer and the screen.
+  './js/orders/ingredient-merge.js',
+  './js/orders/ingredient-merge-data.js',
+  './js/orders/ingredient-merge-screen.js',
   // The same screen reads the supplier zip itself: the invoice reader (pure) and the zip library it needs.
   './js/orders/invoice-zip/build-import.js',
   './js/orders/invoice-zip/classify.js',
@@ -452,7 +456,7 @@ const ASSET_HASHES = {
   "./tokens.css": '9bec41764fe56171',
   "./auth.css": '55b0bc1d41af5718',
   "./style.css": '7dbb0e3020d277ec',
-  "./orders.css": 'e684d9feae803329',
+  "./orders.css": 'ecf0928f59932818',
   "./sounds/alarm.wav": '0d1465974f5be95b',
   "./fonts/manrope-latin.woff2": '71eb731d55804619',
   "./fonts/manrope-latin-ext.woff2": 'bd24140af06f1b58',
@@ -489,7 +493,7 @@ const ASSET_HASHES = {
   "./js/supplier-label.js": '9601ceed020c0205',
   "./js/order-unit.js": '8de5f5c0c76d5ff9',
   "./js/record-data.js": '4055f2a4cc82a953',
-  "./js/ingredient-record-form.js": '125d345d918611c9',
+  "./js/ingredient-record-form.js": '53b50946825302a5',
   "./js/supplier-record-form.js": 'ea6bde005d398345',
   "./js/ingredient-kind.js": 'b5ea1d7ec8255fd6',
   "./js/ingredient-name.js": '9045e25fc169d2ff',
@@ -533,7 +537,7 @@ const ASSET_HASHES = {
   "./js/location.js": '6aaf53615a8739d1',
   "./js/sections.js": 'abcfdecb2bd5766d',
   "./js/roles.js": '7a7c5cf34d57f511',
-  "./js/i18n.js": '8b629d97433534f2',
+  "./js/i18n.js": 'e37ae885f2a817cf',
   "./js/i18n-dom.js": '24249af4367511e5',
   "./js/keyboard-done.js": 'de05a6dd1f3aac26',
   "./js/join-code.js": '5b89de65db5c102f',
@@ -629,13 +633,16 @@ const ASSET_HASHES = {
   "./js/orders/alert-dismissal.js": 'fbfe034ffa9f6620',
   "./js/orders/management.js": '21dd583fe32255d8',
   "./js/orders/mgmt-ui.js": '8894b23fd41e8a66',
-  "./js/orders/registry.js": '7dd45341e1923a78',
-  "./js/orders/registry-main.js": '1d601237da544c09',
+  "./js/orders/registry.js": '33b2ae1c91215a1f',
+  "./js/orders/registry-main.js": '911a5ca646042f57',
   "./js/orders/registry-settings.js": '74c80116276527d1',
-  "./js/orders/invoice-import-model.js": '40b0f97860289452',
-  "./js/orders/invoice-import-plan.js": '276317e4b4c0591b',
-  "./js/orders/invoice-import-data.js": '9d2a6d15e45de337',
-  "./js/orders/invoice-import-screen.js": '9e1e72cbfaee9976',
+  "./js/orders/invoice-import-model.js": '122cae94b98554fd',
+  "./js/orders/invoice-import-plan.js": '0aec42c5f5017e45',
+  "./js/orders/invoice-import-data.js": 'd135f9af7f608b00',
+  "./js/orders/invoice-import-screen.js": '3a4c6b9e2d4fd4e1',
+  "./js/orders/ingredient-merge.js": '1fb403d11925e665',
+  "./js/orders/ingredient-merge-data.js": '638f6d1643e5957f',
+  "./js/orders/ingredient-merge-screen.js": '30be7c0e0156bb20',
   "./js/orders/invoice-zip/build-import.js": '60b6027548152451',
   "./js/orders/invoice-zip/classify.js": '9d4f1d8f97d4adbc',
   "./js/orders/invoice-zip/fatturapa.js": '528a08dfabe28535',
@@ -666,7 +673,7 @@ const ASSET_HASHES = {
   "./catalogue.html": 'd8e083ace20db70f',
   "./catalogue.css": 'cd81d12ad271c434',
   "./label-print.css": 'ffbcdf4e7a627a2d',
-  "./records.css": '8398289629b4233d',
+  "./records.css": 'b78a9673bee5519f',
   "./js/catalogue/confirm-dialog.js": '61a7f580f37c5ff8',
   "./js/catalogue/dom.js": '9878ae7c750afd79',
   "./js/catalogue/catalogue-model.js": 'b4da069a0283ee7a',
@@ -782,7 +789,7 @@ const ASSET_HASHES = {
 // code against rules that deployed instantly, which is the very thing the gate exists
 // to prevent. Two things stand between that and a release: the test that every ASSETS
 // entry EXISTS (a mistyped path being the likeliest permanent cause), and this
-// project's post-deploy sweep, which already asks the live site for all 315 files.
+// project's post-deploy sweep, which already asks the live site for all 318 files.
 // ⚠️ NEITHER covers a device-specific failure — nobody has yet confirmed an update
 // landing on a real iPhone under this code.
 //
