@@ -40,6 +40,7 @@ export function openPriceChanges(data) {
     period: periodOf('month', todayISO(), weekStartsOn()),
     status: 'loading',      // 'loading' | 'ready' | 'error'
     changes: [],
+    fromCache: false,       // the last answer came from the cache (no connection): changes may be missing
     anyAtAll: true,         // false only when the collection is known to be empty
     started: false,         // the newest change has been read, so a retry only reloads the period
     ticket: 0,              // a late answer for a period no longer on show is dropped
@@ -47,6 +48,8 @@ export function openPriceChanges(data) {
 
   const scroll = el('div', { class: 'mgmt-scroll' });
   const backBtn = el('button', { type: 'button', class: 'app-icon-btn orders-icon-btn', icon: BACK_ICON, onClick: () => close() });
+  // ONE live region for the period, kept across every redraw so its text is UPDATED (and announced), never recreated.
+  const periodEl = el('span', { class: 'pchg-period', 'aria-live': 'polite', tabindex: '-1' });
   const titleHeading = el('h1', { id: 'pchg-title', tabindex: '-1' });
   const node = el('div', { class: 'mgmt-overlay', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'pchg-title' }, [
     el('header', { class: 'app-header orders-header' }, [
@@ -76,9 +79,10 @@ export function openPriceChanges(data) {
     s.status = 'loading';
     render();
     try {
-      const list = await listPriceChanges(s.period.from, s.period.to);
+      const answer = await listPriceChanges(s.period.from, s.period.to);
       if (ticket !== s.ticket) return;
-      s.changes = list;
+      s.changes = answer.docs;
+      s.fromCache = answer.fromCache === true;
       s.status = 'ready';
     } catch (err) {
       if (ticket !== s.ticket) return;
@@ -93,7 +97,7 @@ export function openPriceChanges(data) {
     render();
     let latest = '';
     try {
-      latest = await latestPriceChangeDate();
+      latest = (await latestPriceChangeDate()).date;
     } catch (err) {
       if (ticket !== s.ticket) return;
       console.error('The latest price change could not be read:', err);
@@ -196,6 +200,10 @@ export function openPriceChanges(data) {
       ]);
     }
     const { increases, decreases, counts } = summarize(s.changes);
+    // ⚠️ An empty answer from the cache is not «no changes»: the cache may simply not hold them.
+    if (counts.total === 0 && s.fromCache) {
+      return el('div', { class: 'pchg-empty' }, [el('p', { class: 'orders-status error', role: 'status', text: t('priceChanges.needConnection') })]);
+    }
     if (counts.total === 0) {
       return el('div', { class: 'pchg-empty' }, [
         el('p', { class: 'invimp-note', text: t('priceChanges.empty') }),
@@ -203,6 +211,7 @@ export function openPriceChanges(data) {
       ]);
     }
     return el('div', { class: 'pchg-results' }, [
+      s.fromCache ? el('p', { class: 'invimp-note', role: 'status', text: t('priceChanges.cacheNote') }) : null,
       el('p', { class: 'pchg-summary', text: `${t('priceChanges.up', { n: counts.increases })} · ${t('priceChanges.down', { n: counts.decreases })}` }),
       section('priceChanges.increases', increases),
       section('priceChanges.decreases', decreases),
@@ -215,6 +224,7 @@ export function openPriceChanges(data) {
     titleHeading.textContent = t('priceChanges.title');
     backBtn.setAttribute('aria-label', t('ui.back'));
     const nextDisabled = periodContains(s.period, todayISO());
+    periodEl.textContent = periodLabel(s.period, currentLanguage());
     scroll.replaceChildren(el('div', { class: 'invimp-screen' }, [
       el('div', { class: 'set-seg', role: 'group', 'aria-label': t('priceChanges.groupBy') }, [
         kindButton('week', 'priceChanges.week'),
@@ -222,14 +232,17 @@ export function openPriceChanges(data) {
       ]),
       el('div', { class: 'pchg-nav' }, [
         navButton(PREV_ICON, 'priceChanges.previous', -1, false),
-        el('span', { class: 'pchg-period', 'aria-live': 'polite', text: periodLabel(s.period, currentLanguage()) }),
+        periodEl,
         navButton(NEXT_ICON, 'priceChanges.next', 1, nextDisabled),
       ]),
       drawBody(),
     ]));
     if (focusedId) {
       const again = node.querySelector(`[data-fid="${focusedId}"]`);
+      // The button under the focus is gone («Next» became disabled on the current period, «Try again» was replaced
+      // by the loading note): the focus goes to the period label, never to the page.
       if (again && !again.disabled) again.focus({ preventScroll: true });
+      else periodEl.focus({ preventScroll: true });
     }
   }
 

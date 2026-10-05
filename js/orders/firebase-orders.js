@@ -28,6 +28,7 @@ import {
   getDoc,
   getDocs,
   getDocsFromServer,
+  getDocsFromCache,
   setDoc,
   addDoc,
   updateDoc,
@@ -371,30 +372,43 @@ export async function getPriceHistory(ingredientId, max = 20) {
 }
 
 // The price changes whose invoice date falls in [from, to] (inclusive YYYY-MM-DD), oldest first.
-// A range AND an orderBy on the SAME single field need no composite index. getDocs, not
-// getDocsFromServer: online it asks the server, offline it answers from the cache, which is what this
-// read-only report wants (a partial cache is shown, never a false «nothing changed» — the caller says
-// which one it got through the error path when nothing could be read at all).
+// ⚠️ NEVER A FALSE «NO CHANGES». getDocs would answer from the cache while the server is unreachable, and an empty
+// or partial cache reads as «prices did not move». So the server is asked first (getDocsFromServer, when the phone
+// thinks it is online); only if that fails, or the phone is offline, the cache answers — and the answer says so
+// (`fromCache: true`), so the screen can warn that changes may be missing.
+async function readServerFirst(q) {
+  if (typeof navigator === 'undefined' || navigator.onLine !== false) {
+    try {
+      return { snap: await getDocsFromServer(q), fromCache: false };
+    } catch (err) {
+      console.warn('Price changes: the server could not be read, using the cache:', err);
+    }
+  }
+  return { snap: await getDocsFromCache(q), fromCache: true };
+}
+
+// The price changes whose invoice date falls in [from, to] (inclusive YYYY-MM-DD), oldest first →
+// { docs, fromCache }. A range AND an orderBy on the SAME single field need no composite index.
 export async function listPriceChanges(from, to) {
   await authReady;
-  const snap = await getDocs(query(
+  const { snap, fromCache } = await readServerFirst(query(
     collection(db, pathFor(COLLECTIONS.priceChanges)),
     where('date', '>=', from),
     where('date', '<=', to),
     orderBy('date'),
   ));
-  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  return { docs: snap.docs.map(d => ({ id: d.id, ...d.data() })), fromCache };
 }
 
-// The date of the newest price change, or '' when there is none yet.
+// The date of the newest price change ('' when there is none yet) → { date, fromCache }.
 export async function latestPriceChangeDate() {
   await authReady;
-  const snap = await getDocs(query(
+  const { snap, fromCache } = await readServerFirst(query(
     collection(db, pathFor(COLLECTIONS.priceChanges)),
     orderBy('date', 'desc'),
     limit(1),
   ));
-  return snap.empty ? '' : String(snap.docs[0].data().date || '');
+  return { date: snap.empty ? '' : String(snap.docs[0].data().date || ''), fromCache };
 }
 
 // One-off read of a single document. Returns { id, ...data } or null.

@@ -76,3 +76,43 @@ test('the new files are precached', () => {
   assert.match(SW, /'\.\/js\/orders\/price-changes-model\.js'/);
   assert.match(SW, /'\.\/js\/orders\/price-changes-screen\.js'/);
 });
+
+test('⚠️ never a false «no changes»: the server is asked first, the cache only as a flagged fallback', () => {
+  assert.match(DATA, /getDocsFromCache,/, 'the cache read is imported');
+  const first = DATA.match(/async function readServerFirst[\s\S]*?\n\}/)[0];
+  assert.match(first, /navigator\.onLine !== false/);
+  assert.match(first, /getDocsFromServer\(q\)[\s\S]*?fromCache: false/);
+  assert.match(first, /getDocsFromCache\(q\)[\s\S]*?fromCache: true/);
+  const list = DATA.match(/export async function listPriceChanges[\s\S]*?\n\}/)[0];
+  const latest = DATA.match(/export async function latestPriceChangeDate[\s\S]*?\n\}/)[0];
+  for (const body of [list, latest]) {
+    assert.match(body, /readServerFirst\(/);
+    assert.doesNotMatch(body, /\bgetDocs\(/, 'a plain getDocs would answer from a stale cache without saying so');
+    assert.match(body, /fromCache/);
+  }
+  assert.match(list, /docs: snap\.docs/);
+  assert.match(latest, /\{ date:/);
+});
+
+test('an answer from the cache is flagged on screen, and an EMPTY cached answer asks for the connection instead of saying «no changes»', () => {
+  assert.match(SCREEN, /s\.fromCache = answer\.fromCache === true/);
+  assert.match(SCREEN, /\(await latestPriceChangeDate\(\)\)\.date/);
+  assert.match(SCREEN, /counts\.total === 0 && s\.fromCache[\s\S]*?t\('priceChanges\.needConnection'\)/);
+  assert.match(SCREEN, /s\.fromCache \? el\('p'[\s\S]*?t\('priceChanges\.cacheNote'\)/);
+  const empty = SCREEN.indexOf("t('priceChanges.empty')");
+  const needs = SCREEN.indexOf("t('priceChanges.needConnection')");
+  assert.ok(needs > 0 && needs < empty, 'the connection message wins over «no changes»');
+  const en = _dictionaries().en;
+  const it = _dictionaries().it;
+  assert.equal(it['priceChanges.cacheNote'], 'Senza connessione: potrebbero mancare delle variazioni.');
+  assert.equal(it['priceChanges.needConnection'], 'Serve la connessione per vedere le variazioni.');
+  assert.ok(en['priceChanges.cacheNote'] && en['priceChanges.needConnection']);
+});
+
+test('the period label is ONE live element that is updated, and the focus lands on it when the button under it goes away', () => {
+  assert.equal([...SCREEN.matchAll(/'aria-live': 'polite'/g)].length, 1, 'one live region only');
+  assert.match(SCREEN, /const periodEl = el\('span', \{ class: 'pchg-period', 'aria-live': 'polite', tabindex: '-1' \}\)/);
+  assert.match(SCREEN, /periodEl\.textContent = periodLabel\(/);
+  assert.doesNotMatch(SCREEN, /el\('span', \{ class: 'pchg-period'[^}]*text:/, 'never recreated with its text');
+  assert.match(SCREEN, /else periodEl\.focus\(\{ preventScroll: true \}\)/);
+});
