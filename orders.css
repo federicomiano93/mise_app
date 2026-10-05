@@ -1684,7 +1684,7 @@ body[data-section="orders"] .ing-filter .view-switch-btn:not(.active) { color: v
 }
 .mgmt-price-row:last-child { border-bottom: none; }
 /* The pack a price was paid for, under the rate and the date. */
-.mgmt-price-row { flex-wrap: wrap; }
+.mgmt-price-row--pack { flex-wrap: wrap; }
 .mgmt-price-pack {
   flex: 0 0 100%;
   color: var(--text3);

@@ -845,7 +845,7 @@ function priceHistoryBlock(item, actions) {
         return;
       }
       entries.forEach(entry => {
-        list.appendChild(el('div', { class: 'mgmt-price-row' }, [
+        list.appendChild(el('div', { class: 'mgmt-price-row' + (typeof entry.packLabel === 'string' && entry.packLabel ? ' mgmt-price-row--pack' : '') }, [
           el('span', { class: 'mgmt-price-rate', text: formatPricePerUnit(entry) }),
           // ⚠️ A WORD, NOT A COLOUR: a point read from an invoice says so beside its date.
           el('span', { class: 'mgmt-price-when' }, [

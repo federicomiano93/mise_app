@@ -253,7 +253,7 @@
 .rec-host .mgmt-price-row:last-child {
   border-bottom: none;
 }
-.rec-host .mgmt-price-row {
+.rec-host .mgmt-price-row--pack {
   flex-wrap: wrap;
 }
 .rec-host .mgmt-price-pack {
