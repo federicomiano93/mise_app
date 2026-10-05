@@ -2870,6 +2870,8 @@ const DICTIONARIES = Object.freeze({
     'priceChanges.error': 'The price changes could not be loaded. Try again.',
     'priceChanges.offline': 'You are offline. Price changes need the connection.',
     'priceChanges.retry': 'Try again',
+    'priceChanges.cacheNote': 'No connection: some changes may be missing.',
+    'priceChanges.needConnection': 'The connection is needed to see the changes.',
     'invoiceImport.open': 'Import from invoices',
     'invoiceImport.title': 'Import from invoices',
     'invoiceImport.stepOf': 'Step {n} of {total}',
@@ -2971,6 +2973,11 @@ const DICTIONARIES = Object.freeze({
     },
     'invoiceImport.ing.confirmTitle': 'Import these ingredients?',
     'invoiceImport.ing.confirmOk': 'Import',
+    'invoiceImport.ing.confirmChanges': 'Price changes are recorded too.',
+    'invoiceImport.ing.recordChanges': 'Record price changes',
+    'invoiceImport.ing.recordChangesTitle': 'Record the price changes?',
+    'invoiceImport.ing.recordChangesOk': 'Record',
+    'invoiceImport.ing.recordChangesConfirm': 'No ingredient or price changes: only the price changes found in the invoices are recorded.',
     'invoiceImport.ing.confirmNew': {
       one: '{n} new ingredient will be created.',
       other: '{n} new ingredients will be created.',
@@ -2998,6 +3005,10 @@ const DICTIONARIES = Object.freeze({
     'invoiceImport.summary.changes': {
       one: 'Price changes recorded: {n}',
       other: 'Price changes recorded: {n}',
+    },
+    'invoiceImport.summary.changesFailed': {
+      one: 'Price changes could not be recorded for {n} ingredient: load the same file again to complete them.',
+      other: 'Price changes could not be recorded for {n} ingredients: load the same file again to complete them.',
     },
     'invoiceImport.summary.skipped': {
       one: '{n} skipped',
@@ -5500,6 +5511,8 @@ const DICTIONARIES = Object.freeze({
     'priceChanges.error': 'Non riesco a caricare le variazioni. Riprova.',
     'priceChanges.offline': 'Sei offline. Le variazioni dei prezzi richiedono la connessione.',
     'priceChanges.retry': 'Riprova',
+    'priceChanges.cacheNote': 'Senza connessione: potrebbero mancare delle variazioni.',
+    'priceChanges.needConnection': 'Serve la connessione per vedere le variazioni.',
     'invoiceImport.open': 'Importa da fatture',
     'invoiceImport.title': 'Importa da fatture',
     'invoiceImport.stepOf': 'Passo {n} di {total}',
@@ -5601,6 +5614,11 @@ const DICTIONARIES = Object.freeze({
     },
     'invoiceImport.ing.confirmTitle': 'Vuoi importare questi ingredienti?',
     'invoiceImport.ing.confirmOk': 'Importa',
+    'invoiceImport.ing.confirmChanges': 'Vengono registrate anche le variazioni di prezzo.',
+    'invoiceImport.ing.recordChanges': 'Registra le variazioni di prezzo',
+    'invoiceImport.ing.recordChangesTitle': 'Vuoi registrare le variazioni di prezzo?',
+    'invoiceImport.ing.recordChangesOk': 'Registra',
+    'invoiceImport.ing.recordChangesConfirm': 'Nessun ingrediente o prezzo cambia: vengono solo registrate le variazioni di prezzo trovate nelle fatture.',
     'invoiceImport.ing.confirmNew': {
       one: 'Verrà creato {n} nuovo ingrediente.',
       other: 'Verranno creati {n} nuovi ingredienti.',
@@ -5628,6 +5646,10 @@ const DICTIONARIES = Object.freeze({
     'invoiceImport.summary.changes': {
       one: 'Variazioni di prezzo registrate: {n}',
       other: 'Variazioni di prezzo registrate: {n}',
+    },
+    'invoiceImport.summary.changesFailed': {
+      one: 'Variazioni di prezzo non registrate per {n} ingrediente: carica di nuovo lo stesso file per completarle.',
+      other: 'Variazioni di prezzo non registrate per {n} ingredienti: carica di nuovo lo stesso file per completarle.',
     },
     'invoiceImport.summary.skipped': {
       one: '{n} saltato',

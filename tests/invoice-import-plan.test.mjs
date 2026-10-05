@@ -328,7 +328,7 @@ test('the summary counts every outcome and keeps each failure with its reason', 
     { key: 'e', name: 'E', outcome: 'failed', reason: 'nope' },
   ], { stopped: 'offline', notRun: 3 });
   assert.deepEqual(sum, {
-    created: 1, updated: 1, pricesAdded: 3, changesAdded: 0, unchanged: 1, skipped: 1,
+    created: 1, updated: 1, pricesAdded: 3, changesAdded: 0, changesFailed: 0, unchanged: 1, skipped: 1,
     failed: [{ key: 'e', name: 'E', reason: 'nope', retry: false }], stopped: 'offline', notRun: 3,
     retryable: 0, notFixableByRetry: 1,
   });

@@ -91,7 +91,11 @@ function makeDb() {
       set.points = pointsOfDocs(Object.entries(db.pointDocs[id] || {}).map(([pid, data]) => ({ id: pid, data })));
       return set;
     },
-    async storedPriceChangeIds(id) { db.changeReads += 1; return new Set(db.changes.filter(c => c.ingredientId === id).map(c => c.id)); },
+    async storedPriceChangeIds(id) {
+      db.changeReads += 1;
+      return db.changes.filter(c => c.ingredientId === id)
+        .map(({ id: changeId, oldPrice, newPrice, oldDate, date, priceUnit }) => ({ id: changeId, oldPrice, newPrice, oldDate, date, priceUnit }));
+    },
     async freshPrice(id) { return db.prices[id] ? { ...db.prices[id] } : null; },
     async loadInvoiceDecisions() {
       if (db.failDecisionsLoad) throw failure(db.failDecisionsLoad);
@@ -110,9 +114,14 @@ function makeDb() {
     async runImportBatches(batches) {
       db.batches += 1;
       if (db.beforeBatch) db.beforeBatch(batches);
-      if (db.failOn) { const code = db.failOn(db.batches); if (code) throw failure(code); }
+      if (db.failOn) { const code = db.failOn(db.batches, batches); if (code) throw failure(code); }
       const plan = planBatchWrites(batches, { mintId: () => `ing-${++db.n}`, bakery: 'loc-test' });
-      plan.batches.flat().forEach(({ path, data, merge }) => {
+      plan.batches.flat().forEach(({ path, data, merge, remove }) => {
+        if (remove) {
+          db.calls.push(['remove', path.join('/')]);
+          db.changes = db.changes.filter(c => c.id !== path[1]);
+          return;
+        }
         db.calls.push(['write', path.join('/')]);
         if (path[0] === 'ingredients' && path.length === 2) {
           const at = db.ingredients.findIndex(i => i.id === path[1]);
@@ -244,7 +253,7 @@ test('a file goes through every step and writes suppliers and ingredients, each 
   assert.equal(db.ingredients.length, 0, 'nothing is written before the ingredients are confirmed');
   await press(root, 'Import 2 ingredients');
   const confirm = globalThis.__dialogs.at(-1);
-  assert.equal(confirm.message, '2 new ingredients will be created.\n2 prices will be added.');
+  assert.equal(confirm.message, '2 new ingredients will be created.\n2 prices will be added.\nPrice changes are recorded too.');
 
   assert.match(textOf(root), /Import finished/);
   assert.match(textOf(root), /2 ingredients created/);
@@ -276,13 +285,15 @@ test('⚠️ loading the same file again plans no write at all: everything is Un
   assert.match(textOf(root), /2 unchanged ingredients/);
   assert.match(textOf(root), /Nothing to import/);
   assert.ok(!buttonWith(root, 'Import'), 'there is nothing to import');
+  assert.ok(!buttonWith(root, 'Record price changes'), 'a .json file has no price-change button');
+  const readsBefore = db.changeReads;
   await press(root, 'Done');
-  assert.match(textOf(root), /Price changes recorded: 0/, 'rows already in Mise are looked at for changes, and the summary says none');
-  await press(root, 'Done');
+  assert.equal(overlay(), null, '⚠️ «Done» only closes: nothing is written, nothing is asked, nothing is read');
+  assert.equal(globalThis.__dialogs.length, 0);
+  assert.equal(db.changeReads, readsBefore);
   assert.equal(db.calls.length, written, 'not one more write');
   assert.equal(db.batches, batches);
   assert.equal(db.ingredients.length, 2, 'and no copy');
-  assert.equal(overlay(), null);
 });
 
 // ── The questions ───────────────────────────────────────────────────────────────
@@ -725,7 +736,7 @@ test('the whole way from the zip: price-less ingredients are asked about in thei
   assert.match(textOf(root), /The price looks wrong for this product/);
   assert.match(textOf(root), /Farina tipo 00/);
   await press(root, 'Import 2 ingredients');
-  assert.equal(globalThis.__dialogs.at(-1).message, '2 new ingredients will be created.\n1 price will be added.');
+  assert.equal(globalThis.__dialogs.at(-1).message, '2 new ingredients will be created.\n1 price will be added.\nPrice changes are recorded too.');
   assert.match(textOf(root), /2 ingredients created/);
   assert.equal(db.ingredients.length, 2);
   const strong = db.ingredients.find(i => i.name === 'Spezia forte');
@@ -926,35 +937,74 @@ test('⚠️ three invoices at 1.00 → 1.10 → 1.10 write exactly ONE price ch
   await toIngredients(root);
   assert.match(textOf(root), /1 unchanged ingredient/);
   await press(root, 'Done');
-  await press(root, 'Done');
+  assert.equal(overlay(), null, 'Done only closes');
   assert.equal(db.changes.length, 1);
   assert.equal(db.calls.length, before, 'not one more write');
 });
 
-test('⚠️ an «unchanged» row whose stored points already show a change writes it once', async () => {
+// An ingredient already in Mise whose stored invoice history holds a change nobody recorded: a first zip imported
+// it, then an OLDER invoice point was added by hand (the shape of «last year's zips loaded after this year's»).
+async function dbWithUnrecordedChange() {
   const db = makeDb();
-  db.suppliers.push({ id: 's1', name: 'Fornitore', vatNumber: 'IT00000000001' });
-  db.ingredients.push({ id: 'i1', name: 'Burro', shortName: 'Burro 1 kg', supplierId: 's1', kind: 'ingredient', supplierCode: '' });
-  const stored = [['18000000001', 1, '2026-01-10'], ['18000000002', 2, '2026-02-10']];
-  db.points.i1 = stored.map(([inv]) => `inv-${inv}-1`);
-  stored.forEach(([inv, rate, date]) => {
-    (db.pointDocs.i1 ||= {})[`inv-${inv}-1`] = { invoiceId: inv, invoiceDate: date, pricePerUnit: rate, priceUnit: 'kg', source: 'invoice' };
-  });
-  const text = fileText([ing({ name: 'Burro', supplierCode: '', prices: [stepPrice('18000000001', 1, '2026-01-10'), stepPrice('18000000002', 2, '2026-02-10')] })]);
+  let root = await openWithZip(db, [invoiceZip([FLOUR_LINE])]);
+  await toIngredients(root);
+  await press(root, 'Import 1 ingredient');
+  await closeOverlay(root);
+  const id = db.ingredients[0].id;
+  db.points[id].push('inv-1-1');
+  db.pointDocs[id]['inv-1-1'] = { invoiceId: '1', invoiceDate: '2000-01-01', pricePerUnit: 0.4, priceUnit: 'kg', source: 'invoice' };
+  db.changes = [];
+  return { db, id };
+}
 
-  let root = await open(db, text);
+test('⚠️ nothing is written without a confirmation: «Done» on a file with nothing new only closes, the price-change button asks first', async () => {
+  const { db, id } = await dbWithUnrecordedChange();
+  const written = db.calls.length;
+  let root = await openWithZip(db, [invoiceZip([FLOUR_LINE])]);
   await toIngredients(root);
   assert.match(textOf(root), /1 unchanged ingredient/);
+  assert.ok(buttonWith(root, 'Record price changes'), 'the zip path offers it');
   await press(root, 'Done');
-  assert.match(textOf(root), /Price changes recorded: 1/);
-  await press(root, 'Done');
-  assert.deepEqual(db.changes.map(c => [c.id, c.name, c.pct]), [['inv-18000000002-1-i1', 'Burro 1 kg', 100]]);
+  assert.equal(overlay(), null, 'Done closes');
+  assert.equal(db.calls.length, written, 'and writes nothing');
+  assert.equal(db.changes.length, 0);
 
-  root = await open(db, text);
+  root = await openWithZip(db, [invoiceZip([FLOUR_LINE])]);
   await toIngredients(root);
+  globalThis.__confirmAnswer = false;
+  await press(root, 'Record price changes');
+  assert.equal(globalThis.__dialogs.at(-1).message, 'No ingredient or price changes: only the price changes found in the invoices are recorded.');
+  assert.equal(db.calls.length, written, 'declined: nothing written');
+  assert.ok(overlay(), 'and the screen stays');
+
+  globalThis.__confirmAnswer = true;
+  await press(root, 'Record price changes');
+  assert.match(textOf(root), /Price changes recorded: 1/);
+  assert.deepEqual(db.changes.map(c => [c.ingredientId, c.oldPrice, c.newPrice, c.oldDate]), [[id, 0.4, 0.57, '2000-01-01']]);
   await press(root, 'Done');
-  await press(root, 'Done');
-  assert.equal(db.changes.length, 1, 'the second load adds nothing');
+
+  root = await openWithZip(db, [invoiceZip([FLOUR_LINE])]);
+  await toIngredients(root);
+  await press(root, 'Record price changes');
+  assert.match(textOf(root), /Price changes recorded: 0/, 'the second time adds nothing');
+  assert.equal(db.changes.length, 1);
+  assert.ok(!db.calls.some(c => c[0] === 'remove'));
+});
+
+test('⚠️ a late invoice makes a stored change wrong: the import REMOVES it and writes the two right ones', async () => {
+  const { db, id } = await dbWithUnrecordedChange();
+  // A stale change that compares the wrong two prices (recorded before an older invoice existed).
+  const flourPoint = Object.values(db.pointDocs[id]).find(p => p.invoiceDate !== '2000-01-01');
+  db.changes.push({
+    id: `${Object.keys(db.pointDocs[id]).find(k => k !== 'inv-1-1')}-${id}`, ingredientId: id, oldPrice: 0.3, newPrice: 0.57, oldDate: '1999-01-01',
+    date: flourPoint.invoiceDate, priceUnit: 'kg',
+  });
+  const root = await openWithZip(db, [invoiceZip([FLOUR_LINE])]);
+  await toIngredients(root);
+  await press(root, 'Record price changes');
+  assert.ok(db.calls.some(c => c[0] === 'remove'), 'the wrong change was deleted');
+  assert.ok(db.calls.findIndex(c => c[0] === 'remove') < db.calls.findIndex(c => c[0] === 'write' && c[1].startsWith('price-changes/')), 'before the new one is created');
+  assert.deepEqual(db.changes.map(c => [c.oldPrice, c.newPrice]), [[0.4, 0.57]]);
 });
 
 test('the summary shows the changes recorded, also when there are none', async () => {
@@ -967,15 +1017,51 @@ test('the summary shows the changes recorded, also when there are none', async (
   assert.equal(db.changeReads, 0, 'a new ingredient reads no stored changes');
 });
 
-test('a refused change leaves the prices of the row in and says the row failed, so a second load can finish it', async () => {
+const isChangeBatch = (batches) => batches[0][0].type === 'add-price-change' || batches[0][0].type === 'remove-price-change';
+const twoStepRows = () => fileText([
+  ing({ key: 'k-a', name: 'Burro', prices: [stepPrice('18000000001', 1, '2026-01-10'), stepPrice('18000000002', 1.1, '2026-02-10')] }),
+  ing({ key: 'k-b', name: 'Panna', prices: [stepPrice('18000000003', 2, '2026-01-10'), stepPrice('18000000004', 2.2, '2026-02-10')] }),
+]);
+
+test('⚠️ a refused price change never fails the row nor stops the run: the summary counts it and says to load the file again', async () => {
   const db = makeDb();
-  const root = await open(db, stepFile());
+  const root = await open(db, twoStepRows());
   await toIngredients(root);
-  db.failOn = (n) => (n === 2 ? 'invalid-argument' : null);
-  await press(root, 'Import 1 ingredient');
-  assert.equal(db.ingredients.length, 1);
-  assert.equal(db.points[db.ingredients[0].id].length, 3, 'the prices are in');
+  db.failOn = (n, batches) => (isChangeBatch(batches) ? 'permission-denied' : null);
+  await press(root, 'Import 2 ingredients');
+  assert.equal(db.ingredients.length, 2, 'both rows were written, the second after the first change was refused');
+  db.ingredients.forEach(i => assert.equal(db.points[i.id].length, 2, 'the prices are in'));
   assert.equal(db.changes.length, 0);
-  assert.match(textOf(root), /1 ingredient not imported/);
-  assert.match(textOf(root), /Could not be saved \(invalid-argument\)\./);
+  assert.match(textOf(root), /2 ingredients created/);
+  assert.doesNotMatch(textOf(root), /not imported/);
+  assert.doesNotMatch(textOf(root), /Mise was not allowed to save this/);
+  assert.doesNotMatch(textOf(root), /were not tried/);
+  assert.match(textOf(root), /Price changes could not be recorded for 2 ingredients: load the same file again to complete them\./);
+});
+
+test('a lost connection while recording the changes of rows already in Mise fails no row either', async () => {
+  const { db } = await dbWithUnrecordedChange();
+  const root = await openWithZip(db, [invoiceZip([FLOUR_LINE])]);
+  await toIngredients(root);
+  db.failOn = (n, batches) => (isChangeBatch(batches) ? 'unavailable' : null);
+  await press(root, 'Record price changes');
+  assert.doesNotMatch(textOf(root), /not imported/);
+  assert.match(textOf(root), /1 unchanged/);
+  assert.match(textOf(root), /Price changes could not be recorded for 1 ingredient: load the same file again to complete them\./);
+  assert.doesNotMatch(textOf(root), /There is no connection/);
+});
+
+test('the progress line never says «1 of 0» when only rows already in Mise are looked at, and it moves', async () => {
+  const { db } = await dbWithUnrecordedChange();
+  const root = await openWithZip(db, [invoiceZip([FLOUR_LINE])]);
+  await toIngredients(root);
+  const seen = [];
+  const live = () => walk(root).find(n => n.attributes && n.attributes['aria-live'] === 'polite' && n.attributes.role === 'status');
+  db.beforeBatch = () => {};
+  const read = globalThis.__inv.invoicePointIds;
+  globalThis.__inv.invoicePointIds = async (id) => { seen.push(live() && live().textContent); return read(id); };
+  globalThis.__inv.storedPriceChangeIds = ((orig) => async (id) => { seen.push(live() && live().textContent); return orig(id); })(globalThis.__inv.storedPriceChangeIds);
+  await press(root, 'Record price changes');
+  assert.ok(seen.length > 0);
+  seen.forEach(text => assert.equal(text, 'Importing 1 of 1…'));
 });

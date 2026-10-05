@@ -51,6 +51,10 @@ export function planBatchWrites(batches, { mintId, bakery } = {}) {
       if (typeof op.changeId !== 'string' || !op.changeId) throw new Error('A price change has no id');
       return write([PRICE_CHANGES, op.changeId], op.data, false, bakery);
     }
+    if (op.type === 'remove-price-change') {
+      if (typeof op.changeId !== 'string' || !op.changeId) throw new Error('A price change has no id');
+      return { path: [PRICE_CHANGES, op.changeId], remove: true };
+    }
     throw new Error(`Unknown import write: ${op.type}`);
   }));
   return { batches: out, ingredientId };
@@ -78,32 +82,60 @@ export function pointsOfDocs(docs) {
 
 // ⚠️ What the rules accept of a change, checked HERE too: one refused document in a batch would stop the run.
 const CHANGE_UNITS = ['kg', 'l', 'pcs'];
-const acceptable = (c) => /^\d{1,20}$/.test(c.invoiceId) && c.line <= 999999 && CHANGE_UNITS.includes(c.priceUnit);
+const MAX_NAME = 200;
+const MAX_ID = 100;
+const acceptable = (c) => /^\d{1,20}$/.test(c.invoiceId) && c.line <= 999999 && CHANGE_UNITS.includes(c.priceUnit)
+  && (c.supplierId === undefined || (typeof c.supplierId === 'string' && c.supplierId.length <= MAX_ID));
 
-// The price-change writes a row's ingredient still needs → [{ type: 'add-price-change', ingredientId, changeId,
-// data }], in date order. Points = those ALREADY stored as invoice points + the ones this row is about to write
-// (a point in both counts once). Changes whose id is already stored are left out, so a second import writes
-// nothing new. `isNew`: the ingredient was created a moment ago, so it cannot have any (no read).
-// read = { changeIds(ingredientId) → Set } — a server read, refused offline.
+// A stored change is the same fact as an expected one when every field a later import could move is equal.
+const sameChange = (stored, c) => stored.oldPrice === c.oldPrice && stored.newPrice === c.newPrice
+  && stored.oldDate === c.oldDate && stored.priceUnit === c.priceUnit;
+
+// The price-change writes a row's ingredient needs → { create, remove }.
+//   create — [{ type: 'add-price-change', ingredientId, changeId, data }], in date order
+//   remove — [{ type: 'remove-price-change', ingredientId, changeId }]
+// Points = those ALREADY stored as invoice points + the ones this row is about to write (a point in both counts
+// once). ⚠️ A change is create-only, so an invoice that arrives OUT OF ORDER (a February one after March's was
+// recorded) would leave March's change comparing the wrong two prices for ever: every stored change that is no
+// longer expected, or whose old/new price, old date or unit differ, is REMOVED and written again. A second import of
+// the same file therefore plans nothing. `isNew`: the ingredient was created a moment ago, so it cannot have any
+// (no read). read = { changeIds(ingredientId) → [{ id, oldPrice, newPrice, oldDate, date, priceUnit }] } — a server
+// read, refused offline; not made when nothing is expected and nothing new is written.
 export async function planPriceChanges({ ingredientId, supplierId, name, storedPoints, newPoints, priceUnit, isNew, read, nowIso }) {
-  if (typeof ingredientId !== 'string' || !ingredientId) return [];
+  const none = { create: [], remove: [] };
+  if (typeof ingredientId !== 'string' || !ingredientId || ingredientId.length > MAX_ID) return none;
   const fresh = (newPoints || []).map(p => ({
     invoiceId: p.invoiceId, line: p.line, invoiceDate: p.invoiceDate, pricePerUnit: p.pricePerUnit, priceUnit,
   }));
-  const found = changesFromPoints({ id: ingredientId, supplierId, name }, [...(storedPoints || []), ...fresh])
+  const label = String(name ?? '').trim().slice(0, MAX_NAME);
+  const found = changesFromPoints({ id: ingredientId, supplierId, name: label }, [...(storedPoints || []), ...fresh])
     .filter(acceptable);
-  if (found.length === 0) return [];
-  const have = isNew ? new Set() : await read.changeIds(ingredientId);
-  return found.filter(c => !have.has(c.id)).map(({ id, ...data }) => ({
+  if (found.length === 0 && (isNew || fresh.length === 0)) return none;
+  const stored = isNew ? [] : [...(await read.changeIds(ingredientId))];
+  const storedById = new Map(stored.map(x => [x.id, x]));
+  const expectedById = new Map(found.map(c => [c.id, c]));
+  const remove = stored
+    .filter(x => !expectedById.has(x.id) || !sameChange(x, expectedById.get(x.id)))
+    .map(x => ({ type: 'remove-price-change', ingredientId, changeId: x.id }));
+  const gone = new Set(remove.map(r => r.changeId));
+  const create = found.filter(c => !storedById.has(c.id) || gone.has(c.id)).map(({ id, ...data }) => ({
     type: 'add-price-change', ingredientId, changeId: id, data: { ...data, recordedAt: nowIso },
   }));
+  return { create, remove };
 }
 
 // Change ops → batches of at most MAX_DOCS_PER_BATCH, to run AFTER the row's own writes: a refused change
-// must never undo the prices that went in before it.
+// must never undo the prices that went in before it. Accepts the { create, remove } of planPriceChanges: the
+// removals come FIRST (a change removed and written again keeps its id), then the creations.
 export function priceChangeBatches(ops) {
+  const list = Array.isArray(ops) ? ops : [...(ops.remove || []), ...(ops.create || [])];
   const out = [];
-  for (let i = 0; i < ops.length; i += MAX_DOCS_PER_BATCH) out.push(ops.slice(i, i + MAX_DOCS_PER_BATCH));
+  const flush = (kind) => {
+    const group = list.filter(op => (op.type === 'remove-price-change') === (kind === 'remove'));
+    for (let i = 0; i < group.length; i += MAX_DOCS_PER_BATCH) out.push(group.slice(i, i + MAX_DOCS_PER_BATCH));
+  };
+  flush('remove');
+  flush('create');
   return out;
 }
 
@@ -281,12 +313,13 @@ export async function replanRow({ fileIngredient, decision, supplierIdByKey, rea
 //             retry? }] — `retry` is true when loading the same file again can fix the failure (a write that
 // failed, a timeout, a catalogue that changed); a file entry that is invalid cannot be fixed that way.
 export function summarizeRun(results, { stopped = null, notRun = 0 } = {}) {
-  const totals = { created: 0, updated: 0, pricesAdded: 0, changesAdded: 0, unchanged: 0, skipped: 0, failed: [], stopped, notRun };
+  const totals = { created: 0, updated: 0, pricesAdded: 0, changesAdded: 0, changesFailed: 0, unchanged: 0, skipped: 0, failed: [], stopped, notRun };
   (results || []).forEach(r => {
     if (r.outcome === 'failed') totals.failed.push({ key: r.key, name: r.name, reason: r.reason || '', retry: r.retry === true });
     else totals[r.outcome] += 1;
     totals.pricesAdded += r.pricesAdded || 0;
     totals.changesAdded += r.changesAdded || 0;
+    totals.changesFailed += r.changesFailed || 0;
   });
   totals.retryable = totals.failed.filter(f => f.retry).length;
   totals.notFixableByRetry = totals.failed.length - totals.retryable;

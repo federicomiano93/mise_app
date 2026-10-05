@@ -349,3 +349,16 @@ test('the words the owner reads on the invoices path are the agreed ones, in bot
   assert.equal(it['invoiceImport.status.priceCheck'], 'Prezzo da controllare');
   assert.equal(it['invoiceImport.summary.decisions'].other, 'Decisioni ricordate: {n}');
 });
+
+test('⚠️ recording price changes is its own try/catch and never sets `stopped`; «Done» never runs the import', () => {
+  const run = SCREEN.slice(SCREEN.indexOf('async function runImport'));
+  const record = run.slice(run.indexOf('const recordChanges'), run.indexOf('const createdThisRun'));
+  assert.match(record, /try \{[\s\S]*?planPriceChanges[\s\S]*?\} catch \(err\) \{[\s\S]*?failed: 1/);
+  assert.doesNotMatch(record, /stopped|stopKind/);
+  const finish = SCREEN.slice(SCREEN.indexOf('async function finishWithoutRows'), SCREEN.indexOf('const quietRows'));
+  assert.doesNotMatch(finish, /runImport\(/, '«Done» writes nothing but the confirmed decisions');
+  const only = SCREEN.slice(SCREEN.indexOf('async function recordChangesOnly'), SCREEN.indexOf('// ── Writing, row by row'));
+  assert.match(only, /await confirmDialog\([\s\S]*?if \(!ok\) return;\s*await runImport/);
+  assert.match(SCREEN, /s\.selection && quietRows\(entries\)\.length > 0/);
+  assert.match(SCREEN, /t\('invoiceImport\.ing\.confirmChanges'\)/);
+});

@@ -101,7 +101,9 @@ export async function invoicePointIds(ingredientId) {
   return ids;
 }
 
-// The ids of the price changes already stored for one ingredient (server read, refused offline like the rest).
+// The price changes already stored for one ingredient (server read, refused offline like the rest) →
+// [{ id, oldPrice, newPrice, oldDate, date, priceUnit }]: the fields too, because an invoice that arrives out of
+// order makes a stored change wrong, and the plan has to see that to remove it.
 export async function storedPriceChangeIds(ingredientId) {
   refuseOffline();
   await sessionReady;
@@ -109,7 +111,10 @@ export async function storedPriceChangeIds(ingredientId) {
     collection(db, pathFor(PRICE_CHANGES)),
     where('ingredientId', '==', ingredientId),
   )));
-  return new Set(snap.docs.map(d => d.id));
+  return snap.docs.map((d) => {
+    const { oldPrice, newPrice, oldDate, date, priceUnit } = d.data();
+    return { id: d.id, oldPrice, newPrice, oldDate, date, priceUnit };
+  });
 }
 
 // The ingredient's price document, or null when it has none. From the server, and it THROWS when it
@@ -144,9 +149,10 @@ export async function runImportBatches(batches) {
   for (const step of steps) {
     refuseOffline();
     const batch = writeBatch(db);
-    step.forEach(({ path, data, merge }) => {
+    step.forEach(({ path, data, merge, remove }) => {
       const ref = doc(db, pathFor(path[0]), ...path.slice(1));
-      if (merge) batch.set(ref, data, { merge: true });
+      if (remove) batch.delete(ref);
+      else if (merge) batch.set(ref, data, { merge: true });
       else batch.set(ref, data);
     });
     await withTimeout(batch.commit());

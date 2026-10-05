@@ -1,4 +1,4 @@
-const CACHE_NAME = 'theitalianclub-v607';
+const CACHE_NAME = 'theitalianclub-v608';
 // Firebase SDK modules (loaded from gstatic) are cached SEPARATELY from CACHE_NAME
 // so they survive the cache-version bump that happens on every deploy — otherwise
 // the offline SDK would be wiped each release until the next online load. The name
@@ -533,7 +533,7 @@ const ASSET_HASHES = {
   "./js/location.js": '6aaf53615a8739d1',
   "./js/sections.js": 'abcfdecb2bd5766d',
   "./js/roles.js": '7a7c5cf34d57f511',
-  "./js/i18n.js": '08c941f3d0f0de60',
+  "./js/i18n.js": '8b629d97433534f2',
   "./js/i18n-dom.js": '24249af4367511e5',
   "./js/keyboard-done.js": 'de05a6dd1f3aac26',
   "./js/join-code.js": '5b89de65db5c102f',
@@ -586,7 +586,7 @@ const ASSET_HASHES = {
   "./js/orders/boot.js": '53dba081d29270d8',
   "./js/orders/category-batches.js": '03d72f63c4fa4a8a',
   "./js/orders/confirm-dialog.js": '61a7f580f37c5ff8',
-  "./js/orders/firebase-orders.js": '7ed538ebd3f4ae5f',
+  "./js/orders/firebase-orders.js": 'c88b306e4a7f498c',
   "./js/orders/orders-main.js": '33e62d806a80332b',
   "./js/orders/dom.js": '7ec966d71c5356cd',
   "./js/orders/day.js": '107abcbdf353c709',
@@ -633,9 +633,9 @@ const ASSET_HASHES = {
   "./js/orders/registry-main.js": '1d601237da544c09',
   "./js/orders/registry-settings.js": '74c80116276527d1',
   "./js/orders/invoice-import-model.js": '40b0f97860289452',
-  "./js/orders/invoice-import-plan.js": 'a65d9daec71cb382',
-  "./js/orders/invoice-import-data.js": 'dcd746053b692c39',
-  "./js/orders/invoice-import-screen.js": '0756e3aab37d87e6',
+  "./js/orders/invoice-import-plan.js": '276317e4b4c0591b',
+  "./js/orders/invoice-import-data.js": '9d2a6d15e45de337',
+  "./js/orders/invoice-import-screen.js": '9e1e72cbfaee9976',
   "./js/orders/invoice-zip/build-import.js": '60b6027548152451',
   "./js/orders/invoice-zip/classify.js": '9d4f1d8f97d4adbc',
   "./js/orders/invoice-zip/fatturapa.js": '528a08dfabe28535',
@@ -648,7 +648,7 @@ const ASSET_HASHES = {
   "./js/orders/invoice-zip/zip-read.js": '0e64ad8014847517',
   "./js/vendor/fflate.esm.js": '522c5e85569f270b',
   "./js/orders/price-changes-model.js": '864d19a7030508c2',
-  "./js/orders/price-changes-screen.js": 'd4f4612bd1e6ee15',
+  "./js/orders/price-changes-screen.js": 'e5b3a91867e1f1c2',
   "./js/form-dirty.js": '27dce3718a33d438',
   "./js/orders/level-stack.js": '6832e37854829455',
   "./js/orders/firebase-features.js": 'a0c27a97d6eb7747',

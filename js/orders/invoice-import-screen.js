@@ -914,9 +914,14 @@ export function openInvoiceImport(data) {
       setFooter([hint, button('btn-primary', t('invoiceImport.ing.import', { n: totals.rows }), () => {},
         { disabled: true, describedBy: 'invimp-hint', fid: 'invimp-primary' })]);
     } else if (totals.rows === 0) {
+      // «Done» writes nothing (but the remembered answers, behind their own confirmation). Recording the price
+      // changes of rows already in Mise is a SECOND, explicit button, and only on the invoices path.
       setFooter([
         el('p', { class: 'invimp-hint', text: t('invoiceImport.ing.nothing') }),
         button('btn-primary', t('invoiceImport.done'), () => finishWithoutRows(entries), { fid: 'invimp-primary' }),
+        s.selection && quietRows(entries).length > 0
+          ? button('btn-secondary', t('invoiceImport.ing.recordChanges'), () => recordChangesOnly(entries), { fid: 'invimp-record-changes' })
+          : null,
       ]);
     } else {
       setFooter([button('btn-primary', t('invoiceImport.ing.import', { n: totals.rows }), () => confirmAndRun(entries, totals),
@@ -932,6 +937,7 @@ export function openInvoiceImport(data) {
     const lines = [
       totals.newIngredients > 0 ? t('invoiceImport.ing.confirmNew', { n: totals.newIngredients }) : '',
       totals.pricesAdded > 0 ? t('invoiceImport.ing.confirmPrices', { n: totals.pricesAdded }) : '',
+      t('invoiceImport.ing.confirmChanges'),
       decisionCount() > 0 ? t('invoiceImport.decisions.confirmLine', { n: decisionCount() }) : '',
     ].filter(Boolean);
     const ok = await confirmDialog({
@@ -946,13 +952,11 @@ export function openInvoiceImport(data) {
 
   // Nothing is left to import (everything is already in Mise, skipped or left out): the person's «do not import»
   // answers are still worth keeping, so they are confirmed and saved before the screen closes.
-  // ⚠️ Rows already in Mise still go through the run: their stored history may hold price changes nobody
-  // recorded yet (a file loaded again, last year's zips). That run ends on the summary, which says how many.
+  // ⚠️ NOTHING IS WRITTEN WITHOUT A CONFIRMATION (P20): «Done» on a file with nothing new closes the screen, exactly
+  // as before price changes existed. Recording the changes of the rows already in Mise is `recordChangesOnly`.
   async function finishWithoutRows(entries) {
     const n = decisionCount();
     const offline = typeof navigator !== 'undefined' && navigator.onLine === false;
-    // Offline, the changes are simply not looked for: a file with nothing new can still be closed.
-    const hasQuiet = !offline && entries.some(e => e.row.status === 'unchanged' && e.row.ingredientId);
     if (n > 0 && offline) {
       await alertDialog(t('invoiceImport.stop.offline'));
       return;
@@ -965,10 +969,6 @@ export function openInvoiceImport(data) {
         cancelLabel: t('ui.cancel'),
       });
       if (!ok) return;
-    }
-    if (hasQuiet) {
-      await runImport(entries);
-      return;
     }
     if (n > 0) {
       s.busy = true;
@@ -986,6 +986,30 @@ export function openInvoiceImport(data) {
     }
     s.finished = true;
     close();
+  }
+
+  // The rows already in Mise: their stored history may hold price changes nobody recorded yet (a file loaded again,
+  // last year's zips).
+  const quietRows = (entries) => entries.filter(e => e.row.status === 'unchanged' && e.row.ingredientId);
+
+  // The second footer button of a file with nothing new: asks, then runs the pass over the rows already in Mise and
+  // ends on the summary, which says how many changes were recorded.
+  async function recordChangesOnly(entries) {
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+      await alertDialog(t('invoiceImport.stop.offline'));
+      return;
+    }
+    const ok = await confirmDialog({
+      title: t('invoiceImport.ing.recordChangesTitle'),
+      message: [
+        t('invoiceImport.ing.recordChangesConfirm'),
+        decisionCount() > 0 ? t('invoiceImport.decisions.confirmLine', { n: decisionCount() }) : '',
+      ].filter(Boolean).join('\n'),
+      okLabel: t('invoiceImport.ing.recordChangesOk'),
+      cancelLabel: t('ui.cancel'),
+    });
+    if (!ok) return;
+    await runImport(entries);
   }
 
   // ── Writing, row by row ───────────────────────────────────────────────────────
@@ -1026,12 +1050,19 @@ export function openInvoiceImport(data) {
     };
     const nowIso = new Date().toISOString();
     // The price changes of one ingredient, written in their OWN batches after the row's prices: a refused change
-    // never undoes a price that is already in. → how many were written.
+    // never undoes a price that is already in. → { added, failed }.
+    // ⚠️ A FAILURE HERE IS NEVER THE ROW'S: the row's prices are already in, so the row keeps its real outcome, the
+    // run goes on, and the summary counts the ingredients whose changes are missing (a second load completes them).
     const recordChanges = async (info) => {
-      const ops = await planPriceChanges({ ...info, read, nowIso });
-      const batches = priceChangeBatches(ops);
-      if (batches.length > 0) await runImportBatches(batches);
-      return ops.length;
+      try {
+        const ops = await planPriceChanges({ ...info, read, nowIso });
+        const batches = priceChangeBatches(ops);
+        if (batches.length > 0) await runImportBatches(batches);
+        return { added: ops.create.length, failed: 0 };
+      } catch (err) {
+        console.error('Recording the price changes of one ingredient failed:', err);
+        return { added: 0, failed: 1 };
+      }
     };
     // ⚠️ THE RE-CHECK MUST NOT TRIP OVER THIS VERY RUN (5 Oct 2026, the first real zip: 43 of 238 rows
     // came back «a similar ingredient appeared»). Two invoice products of one supplier with DIFFERENT
@@ -1058,8 +1089,11 @@ export function openInvoiceImport(data) {
     s.busy = true;
     // Rows already in Mise are read too (their history may hold changes nobody recorded): they count in the bar.
     const quiet = entries.filter(e => e.row.status === 'unchanged' && e.row.ingredientId);
-    s.progress = { done: 0, total: writing.length + quiet.length };
-    live.textContent = t('invoiceImport.progress', { done: 1, total: writing.length });
+    const total = writing.length + quiet.length;
+    s.progress = { done: 0, total };
+    // «n of total» counts every row that is looked at, so a run of unchanged rows alone never says «1 of 0».
+    const say = (done) => { if (total > 0) live.textContent = t('invoiceImport.progress', { done: Math.min(done, total), total }); };
+    say(1);
     render();
 
     // ⚠️ THE REMEMBERED ANSWERS GO FIRST, in small batches: a run that stops half-way must not lose what the person
@@ -1087,7 +1121,7 @@ export function openInvoiceImport(data) {
       const { planned } = writing[i];
       const fileIngredient = s.fileByKey.get(planned.key);
       s.progress.done = i;
-      live.textContent = t('invoiceImport.progress', { done: i + 1, total: writing.length });
+      say(i + 1);
       const bar = scroll.querySelector('progress');
       if (bar) bar.value = i;
       try {
@@ -1101,24 +1135,25 @@ export function openInvoiceImport(data) {
         if (fresh.waiting) {
           results.push({ key: planned.key, name: planned.name, outcome: 'failed', reason: t('invoiceImport.reason.changed'), retry: true });
         } else if (fresh.row.status === 'unchanged') {
-          const changesAdded = await recordChanges({
+          const recorded = await recordChanges({
             ingredientId: fresh.row.ingredientId, supplierId: fresh.row.supplierId, name: ingredientDisplayName(fresh.ingredient),
             storedPoints: fresh.storedPoints, newPoints: [], priceUnit: fileIngredient.priceUnit, isNew: false,
           });
-          results.push({ key: planned.key, name: planned.name, outcome: 'unchanged', changesAdded });
+          results.push({ key: planned.key, name: planned.name, outcome: 'unchanged', changesAdded: recorded.added, changesFailed: recorded.failed });
         } else if (['new', 'update-price', 'history-only'].includes(fresh.row.status)) {
           const batches = ingredientWrites(fresh.row, fileIngredient, new Date().toISOString(), { language });
           const isNew = fresh.row.status === 'new';
           const writtenId = batches.length > 0 ? await runImportBatches(batches) : fresh.row.ingredientId;
           if (isNew && writtenId) createdThisRun.set(writtenId, codeKey(fileIngredient.supplierCode));
-          const changesAdded = await recordChanges({
+          const recorded = await recordChanges({
             ingredientId: writtenId, supplierId: fresh.row.supplierId,
             name: isNew ? fileIngredient.name : ingredientDisplayName(fresh.ingredient),
             storedPoints: isNew ? [] : fresh.storedPoints, newPoints: fresh.row.newPoints,
             priceUnit: fileIngredient.priceUnit, isNew,
           });
           results.push({
-            key: planned.key, name: planned.name, pricesAdded: fresh.row.newPoints.length, changesAdded,
+            key: planned.key, name: planned.name, pricesAdded: fresh.row.newPoints.length,
+            changesAdded: recorded.added, changesFailed: recorded.failed,
             outcome: batches.length === 0 ? 'unchanged' : (fresh.row.status === 'new' ? 'created' : 'updated'),
           });
         } else {
@@ -1144,26 +1179,25 @@ export function openInvoiceImport(data) {
       const { planned, row } = quiet[i];
       if (stopped) { results.push({ key: planned.key, name: planned.name, outcome: 'unchanged' }); continue; }
       s.progress.done = writing.length + i;
+      say(writing.length + i + 1);
       const bar = scroll.querySelector('progress');
       if (bar) bar.value = writing.length + i;
+      // Nothing here can fail the row (it writes nothing of its own) nor stop the run: a point read or a change
+      // write that fails is counted in the summary, and the next ingredient is tried.
+      let recorded;
       try {
         const known = s.ctx && s.ctx.invoicePointIds ? s.ctx.invoicePointIds[row.ingredientId] : null;
         const points = known && Array.isArray(known.points) ? known.points : (await read.pointIds(row.ingredientId)).points || [];
         const stored = data.ingredients().find(x => x.id === row.ingredientId);
-        const changesAdded = await recordChanges({
+        recorded = await recordChanges({
           ingredientId: row.ingredientId, supplierId: row.supplierId, name: ingredientDisplayName(stored) || planned.name,
           storedPoints: points, newPoints: [], priceUnit: row.priceUnit, isNew: false,
         });
-        results.push({ key: planned.key, name: planned.name, outcome: 'unchanged', changesAdded });
       } catch (err) {
-        console.error('Recording the price changes of one ingredient failed:', err);
-        const kind = stopKind(err);
-        results.push({
-          key: planned.key, name: planned.name, outcome: 'failed', retry: true,
-          reason: kind ? failureMessage(err) : t('invoiceImport.reason.writeFailed', { code: String(err && err.code ? err.code : 'unknown') }),
-        });
-        if (kind) stopped = kind;
+        console.error('Reading the stored prices of one ingredient failed:', err);
+        recorded = { added: 0, failed: 1 };
       }
+      results.push({ key: planned.key, name: planned.name, outcome: 'unchanged', changesAdded: recorded.added, changesFailed: recorded.failed });
     }
 
     s.summary = summarizeRun(results, { stopped, notRun });
@@ -1202,6 +1236,7 @@ export function openInvoiceImport(data) {
     body.push(el('div', { class: 'set-section' }, lines.map(([key, n]) => el('div', { class: 'set-row' }, [
       el('div', { class: 'set-text' }, [el('span', { class: 'set-title', text: t(key, { n }) })]),
     ]))));
+    if (sum.changesFailed > 0) body.push(el('p', { class: 'orders-status error', role: 'alert', text: t('invoiceImport.summary.changesFailed', { n: sum.changesFailed }) }));
     if (s.decisionsFailed) body.push(el('p', { class: 'orders-status error', role: 'alert', text: t('invoiceImport.decisions.failed') }));
     if (sum.failed.length > 0) {
       body.push(el('h3', { class: 'mgmt-section-title', text: t('invoiceImport.summary.failed', { n: sum.failed.length }) }));
