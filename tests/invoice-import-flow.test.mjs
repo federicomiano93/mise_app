@@ -452,6 +452,21 @@ test('⚠️ a row that matches an ingredient created moments ago becomes a ques
   assert.match(textOf(root), /Farina 00 Premium/);
 });
 
+// 5 Oct 2026, the first real zip: 43 of 238 rows came back «a similar ingredient appeared» — two products of
+// one supplier, both new, created one after the other in the same run.
+test('⚠️ two NEW products with different article codes are both created, however alike their names', async () => {
+  const db = makeDb();
+  const root = await open(db, fileText([
+    ing({ key: 'IT00000000001|code:AC-B', supplierCode: 'AC-B', name: 'Aceto bianco 1 l', prices: [price({ line: 1 })] }),
+    ing({ key: 'IT00000000001|code:AC-R', supplierCode: 'AC-R', name: 'Aceto rosso 1 l', prices: [price({ line: 2 })] }),
+  ]));
+  await toIngredients(root);
+  await press(root, 'Import 2 ingredients');
+  assert.equal(db.ingredients.length, 2, 'both created');
+  assert.doesNotMatch(textOf(root), /A similar ingredient appeared/);
+  assert.deepEqual(db.ingredients.map(i => i.supplierCode).sort(), ['AC-B', 'AC-R']);
+});
+
 test('a plan drawn before the lists have arrived is refused, not drawn with everything new', async () => {
   const db = makeDb();
   globalThis.__dialogs = [];

@@ -39,6 +39,9 @@ import { buildImportFromInvoices } from './invoice-zip/build-import.js';
 import { domToTree } from './invoice-zip/fatturapa.js';
 import { selectImport, decisionChanges } from './invoice-zip/selection.js';
 
+// An article code the way the model compares them (invoice-import-model.js codeOf): trimmed, lower case.
+const codeKey = (code) => (typeof code === 'string' ? code.trim().toLowerCase() : '');
+
 // The browser's own XML parser, the way build-import.js asks for one: text → tree. domToTree throws when the
 // parser answered with a <parsererror> document (a broken file is skipped by the reader, never a crash).
 function browserParseXml(text) {
@@ -1009,6 +1012,25 @@ export function openInvoiceImport(data) {
       pointIds: (id) => invoicePointIds(id),
       price: (id) => freshPrice(id),
     };
+    // ⚠️ THE RE-CHECK MUST NOT TRIP OVER THIS VERY RUN (5 Oct 2026, the first real zip: 43 of 238 rows
+    // came back «a similar ingredient appeared»). Two invoice products of one supplier with DIFFERENT
+    // article codes are two products by the supplier's own numbering — «Aceto bianco» and «Aceto rosso» —
+    // and both were planned «new» on the screen the owner confirmed. So an ingredient created by this run
+    // is hidden from the re-check of a row whose code differs from its own. Without a code on either side
+    // (or a «unisci con» row) nothing is hidden: then a similar name really may be the same product, and
+    // the row still becomes a question rather than a duplicate.
+    const createdThisRun = new Map();   // ingredient id → its article code (normalised), created by this run
+    const readFor = (fileIngredient) => {
+      const code = codeKey(fileIngredient.supplierCode);
+      if (!code || fileIngredient.mergeWith) return read;
+      return {
+        ...read,
+        ingredients: async (supplierId) => (await read.ingredients(supplierId)).filter((i) => {
+          const created = createdThisRun.get(i.id);
+          return created === undefined || !created || created === code;
+        }),
+      };
+    };
     const results = [];
     let stopped = null;
     let notRun = 0;
@@ -1051,7 +1073,8 @@ export function openInvoiceImport(data) {
         // catalogue. Plan this one row again on what the server holds NOW, so a name that now matches an
         // ingredient created a moment ago becomes an update, never a second copy.
         const fresh = await replanRow({
-          fileIngredient, decision: s.ingredientDecisions[planned.key], supplierIdByKey: s.supplierIdByKey, read,
+          fileIngredient, decision: s.ingredientDecisions[planned.key], supplierIdByKey: s.supplierIdByKey,
+          read: readFor(fileIngredient),
         });
         if (fresh.waiting) {
           results.push({ key: planned.key, name: planned.name, outcome: 'failed', reason: t('invoiceImport.reason.changed'), retry: true });
@@ -1059,7 +1082,8 @@ export function openInvoiceImport(data) {
           results.push({ key: planned.key, name: planned.name, outcome: 'unchanged' });
         } else if (['new', 'update-price', 'history-only'].includes(fresh.row.status)) {
           const batches = ingredientWrites(fresh.row, fileIngredient, new Date().toISOString(), { language });
-          if (batches.length > 0) await runImportBatches(batches);
+          const writtenId = batches.length > 0 ? await runImportBatches(batches) : null;
+          if (fresh.row.status === 'new' && writtenId) createdThisRun.set(writtenId, codeKey(fileIngredient.supplierCode));
           results.push({
             key: planned.key, name: planned.name, pricesAdded: fresh.row.newPoints.length,
             outcome: batches.length === 0 ? 'unchanged' : (fresh.row.status === 'new' ? 'created' : 'updated'),
