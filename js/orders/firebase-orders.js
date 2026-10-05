@@ -65,6 +65,9 @@ export const COLLECTIONS = {
   ingredientPrices: 'ingredient-prices',
   drafts: 'drafts',
   history: 'orders-history',
+  // One document per supplier price move found in the invoices («Variazioni prezzi»); create-only,
+  // read by whoever may manage Food cost.
+  priceChanges: 'price-changes',
   // An order list one person prepared and sent to whoever runs the place.
   orderRequests: 'order-requests',
   // The roster. Orders reads exactly ONE document from it — the sender's own row,
@@ -365,6 +368,33 @@ export async function getPriceHistory(ingredientId, max = 20) {
     limit(max),
   ));
   return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+
+// The price changes whose invoice date falls in [from, to] (inclusive YYYY-MM-DD), oldest first.
+// A range AND an orderBy on the SAME single field need no composite index. getDocs, not
+// getDocsFromServer: online it asks the server, offline it answers from the cache, which is what this
+// read-only report wants (a partial cache is shown, never a false «nothing changed» — the caller says
+// which one it got through the error path when nothing could be read at all).
+export async function listPriceChanges(from, to) {
+  await authReady;
+  const snap = await getDocs(query(
+    collection(db, pathFor(COLLECTIONS.priceChanges)),
+    where('date', '>=', from),
+    where('date', '<=', to),
+    orderBy('date'),
+  ));
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+
+// The date of the newest price change, or '' when there is none yet.
+export async function latestPriceChangeDate() {
+  await authReady;
+  const snap = await getDocs(query(
+    collection(db, pathFor(COLLECTIONS.priceChanges)),
+    orderBy('date', 'desc'),
+    limit(1),
+  ));
+  return snap.empty ? '' : String(snap.docs[0].data().date || '');
 }
 
 // One-off read of a single document. Returns { id, ...data } or null.
