@@ -254,7 +254,7 @@ test('the message to the other supplier carries the line under the INVOICE name;
   const itemsFor = id => orderedItems(ingredientsOf(id, lens), entries);
 
   const toBruno = buildOrderMessage([{ supplierName: 'Bruno', items: itemsFor('bruno') }]);
-  assert.match(toBruno, /Flour Invoice Name 25kg: 4/);
+  assert.match(toBruno, /Flour Invoice Name: 4/);
   assert.doesNotMatch(toBruno, /Yeast/);
 
   const toAldo = buildOrderMessage([{ supplierName: 'Aldo', items: itemsFor('aldo') }]);

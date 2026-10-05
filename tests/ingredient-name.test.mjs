@@ -101,7 +101,7 @@ test('the All-ingredients list shows the display name and is found by BOTH names
 
 test('⚠️ the message to a supplier keeps the invoice name', () => {
   const text = buildOrderMessage([{ supplierName: 'Molino', items: orderedItems([FLOUR], { f: { qty: 2 } }) }]);
-  assert.match(text, /Caputo Rosso 00 25kg/);
+  assert.match(text, /- Caputo Rosso 00: 2/);
   assert.doesNotMatch(text, /Farina/);
   const summary = supplierSummary(SUPPLIER, [FLOUR], { f: { qty: 2 } });
   assert.match(summary.lines[0].label, /Caputo Rosso 00/, 'the lines stay the message\'s own text');

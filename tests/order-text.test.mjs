@@ -33,8 +33,8 @@ test('a one-supplier message is the title, a blank line and the lines', () => {
   ], CLUB);
   assert.equal(text,
     '*Order — The Italian Club*\n\n' +
-    '- Bacon 2.27kg: 5\n' +
-    '- Mozzarella 1kg: 2');
+    '- Bacon: 5\n' +
+    '- Mozzarella: 2');
 });
 
 test('several suppliers are separated by a blank line', () => {
@@ -44,7 +44,7 @@ test('several suppliers are separated by a blank line', () => {
   ], CLUB);
   assert.equal(text,
     '*Order — The Italian Club*\n\n' +
-    '*Etna*\n- Flour 25kg: 4\n\n' +
+    '*Etna*\n- Flour: 4\n\n' +
     '*Alba*\n- Olives: 1');
 });
 
@@ -58,7 +58,7 @@ test('the order unit never reaches the supplier for an ingredient WITHOUT a unit
     { supplierName: 'S', items: [{ name: 'Bacon', weight: '2.27kg', qty: 3 }] },
   ], CLUB);
   assert.ok(!text.includes('casse'), 'the order unit is a private reminder');
-  assert.ok(text.includes('- Bacon 2.27kg: 3'));
+  assert.ok(text.includes('- Bacon: 3'));
 });
 
 test('a supplier with no items is dropped, and an empty order builds no message', () => {
@@ -147,7 +147,7 @@ test('the builder sorts the lines itself, whatever order the caller passes', () 
     ],
   }], CLUB);
   assert.equal(shuffled,
-    '*Order — The Italian Club*\n\n- Bacon 2.27kg: 5\n- Mozzarella 1kg: 2');
+    '*Order — The Italian Club*\n\n- Bacon: 5\n- Mozzarella: 2');
 });
 
 test('sortItems does not mutate the caller\'s array', () => {
@@ -171,9 +171,9 @@ const THREE_SUPPLIERS = [
 test('One list drops every supplier heading and sorts the whole order A-Z', () => {
   assert.equal(buildOrderMessage(THREE_SUPPLIERS, { grouped: false, ...CLUB }),
     '*Order — The Italian Club*\n\n' +
-    '- Bacon 2.27kg: 4\n' +
+    '- Bacon: 4\n' +
     '- Baking Paper: 2\n' +
-    '- Mozzarella 5kg: 2');
+    '- Mozzarella: 2');
 });
 
 test('the By supplier format is byte-identical with or without the option', () => {
@@ -181,8 +181,8 @@ test('the By supplier format is byte-identical with or without the option', () =
   // a second format must not have moved a single character of it.
   const golden =
     '*Order — The Italian Club*\n\n' +
-    '*Cielo*\n- Bacon 2.27kg: 4\n\n' +
-    '*Alba*\n- Mozzarella 5kg: 2\n\n' +
+    '*Cielo*\n- Bacon: 4\n\n' +
+    '*Alba*\n- Mozzarella: 2\n\n' +
     '*No supplier*\n- Baking Paper: 2';
   assert.equal(buildOrderMessage(THREE_SUPPLIERS, CLUB), golden);
   assert.equal(buildOrderMessage(THREE_SUPPLIERS, { ...CLUB }), golden);
@@ -195,7 +195,7 @@ test('One list adds up two lines carrying the same label', () => {
     { supplierName: 'Etna', items: [{ name: 'Flour', weight: '25kg', qty: 4 }] },
     { supplierName: 'Alba', items: [{ name: 'Flour', weight: '25kg', qty: 3 }] },
   ], { grouped: false, ...CLUB });
-  assert.equal(text, '*Order — The Italian Club*\n\n- Flour 25kg: 7');
+  assert.equal(text, '*Order — The Italian Club*\n\n- Flour: 7');
 });
 
 test('…while the By supplier format keeps them apart, one line per supplier', () => {
@@ -204,7 +204,7 @@ test('…while the By supplier format keeps them apart, one line per supplier', 
     { supplierName: 'Alba', items: [{ name: 'Flour', weight: '25kg', qty: 3 }] },
   ], CLUB);
   assert.equal(text,
-    '*Order — The Italian Club*\n\n*Etna*\n- Flour 25kg: 4\n\n*Alba*\n- Flour 25kg: 3');
+    '*Order — The Italian Club*\n\n*Etna*\n- Flour: 4\n\n*Alba*\n- Flour: 3');
 });
 
 test('One list distinguishes two weights of the same product', () => {
@@ -282,25 +282,61 @@ const PLAIN = { id: 'b', name: 'Bacon', weight: '2.27kg', unit: 'casse' };
 test('a line with a unit choice says its unit; the default choice says it too', () => {
   const chosen = orderedItems([CHOICE], { f: { qty: 2, stock: 0, unit: 'busta' } });
   assert.equal(buildOrderMessage([{ supplierName: 'S', items: chosen }], CLUB),
-    '*Order — The Italian Club*\n\n- Flour 2.5kg: 2 × busta');
+    '*Order — The Italian Club*\n\n- Flour: 2 × busta');
   const dflt = orderedItems([CHOICE], { f: { qty: 2, stock: 0 } });
   assert.equal(buildOrderMessage([{ supplierName: 'S', items: dflt }], CLUB),
-    '*Order — The Italian Club*\n\n- Flour 2.5kg: 2 × cartone');
+    '*Order — The Italian Club*\n\n- Flour: 2 × cartone');
 });
 
 test('lines of ingredients WITHOUT a choice are byte-identical to before', () => {
   const items = orderedItems([PLAIN], { b: { qty: 3, stock: 0 } });
   assert.deepEqual(items, [{ name: 'Bacon', weight: '2.27kg', qty: 3 }]);
   assert.equal(buildOrderMessage([{ supplierName: 'S', items }], CLUB),
-    '*Order — The Italian Club*\n\n- Bacon 2.27kg: 3');
+    '*Order — The Italian Club*\n\n- Bacon: 3');
 });
 
 test('summary lines and message lines stay the same thing for a unit line', () => {
   const items = orderedItems([CHOICE, PLAIN], { f: { qty: 2, unit: 'busta' }, b: { qty: 1 } });
   const text = buildOrderMessage([{ supplierName: 'S', items }], CLUB);
+  // The summary keeps the weight (the tablet matches lines to ingredients by it); the
+  // message drops it — same lines, same order, same quantities and units.
   const fromSummary = summaryLines(items).map(({ label, qty, unit }) =>
-    `- ${label}: ${unit ? `${qty} × ${unit}` : qty}`);
+    `- ${label.replace(/ [0-9.]+kg$/, '')}: ${unit ? `${qty} × ${unit}` : qty}`);
   assert.deepEqual(text.split('\n').slice(2), fromSummary);
+  assert.deepEqual(summaryLines(items).map(l => l.label), ['Bacon 2.27kg', 'Flour 2.5kg']);
+});
+
+test('the weight is not in the message, and the lines keep their order', () => {
+  const text = buildOrderMessage([{ supplierName: 'S', items: [
+    { name: 'Mozzarella', weight: '1kg', qty: 2 },
+    { name: 'Bacon', weight: '2.27kg', qty: 5 },
+  ] }], CLUB);
+  assert.equal(text, '*Order — The Italian Club*\n\n- Bacon: 5\n- Mozzarella: 2');
+});
+
+test('same name twice in one supplier: those lines keep their weights, a third item does not', () => {
+  const text = buildOrderMessage([{ supplierName: 'S', items: [
+    { name: 'Flour', weight: '25kg', qty: 3 },
+    { name: 'Bacon', weight: '2.27kg', qty: 1 },
+    { name: 'FLOUR', weight: '5kg', qty: 2 },
+  ] }], CLUB);
+  assert.equal(text, '*Order — The Italian Club*\n\n- Bacon: 1\n- FLOUR 5kg: 2\n- Flour 25kg: 3');
+});
+
+test('the same name in two DIFFERENT suppliers does not keep the weight (grouped)', () => {
+  const text = buildOrderMessage([
+    { supplierName: 'Etna', items: [{ name: 'Flour', weight: '25kg', qty: 4 }] },
+    { supplierName: 'Alba', items: [{ name: 'Flour', weight: '5kg', qty: 3 }] },
+  ], CLUB);
+  assert.equal(text, '*Order — The Italian Club*\n\n*Etna*\n- Flour: 4\n\n*Alba*\n- Flour: 3');
+});
+
+test('the same name from two suppliers keeps the weight in the flat list', () => {
+  const text = buildOrderMessage([
+    { supplierName: 'Etna', items: [{ name: 'Flour', weight: '25kg', qty: 4 }, { name: 'Bacon', weight: '1kg', qty: 1 }] },
+    { supplierName: 'Alba', items: [{ name: 'Flour', weight: '5kg', qty: 3 }] },
+  ], { grouped: false, ...CLUB });
+  assert.equal(text, '*Order — The Italian Club*\n\n- Bacon: 1\n- Flour 25kg: 4\n- Flour 5kg: 3');
 });
 
 test('one shopping list never adds different units together, and does add equal ones', () => {
@@ -347,19 +383,19 @@ test('an unknown country falls back to English, and a nameless Italian order is 
 
 test('the One list format takes the title word too', () => {
   assert.equal(buildOrderMessage(TWO, { grouped: false, locationName: 'Panificio Miano', language: 'it' }),
-    '*Ordine — Panificio Miano*\n\n- Flour 25kg: 1\n- Olives: 2');
+    '*Ordine — Panificio Miano*\n\n- Flour: 1\n- Olives: 2');
 });
 
 test('a message for ONE supplier has no supplier heading', () => {
-  assert.equal(buildOrderMessage(ONE, CLUB), '*Order — The Italian Club*\n\n- Flour 25kg: 1');
+  assert.equal(buildOrderMessage(ONE, CLUB), '*Order — The Italian Club*\n\n- Flour: 1');
   // A second supplier with nothing in it does not count as a second supplier.
   const withEmpty = [...ONE, { supplierName: 'Empty', items: [] }];
-  assert.equal(buildOrderMessage(withEmpty, CLUB), '*Order — The Italian Club*\n\n- Flour 25kg: 1');
+  assert.equal(buildOrderMessage(withEmpty, CLUB), '*Order — The Italian Club*\n\n- Flour: 1');
 });
 
 test('a grouped message for SEVERAL suppliers keeps every heading', () => {
   assert.equal(buildOrderMessage(TWO, CLUB),
-    '*Order — The Italian Club*\n\n*Etna*\n- Flour 25kg: 1\n\n*Alba*\n- Olives: 2');
+    '*Order — The Italian Club*\n\n*Etna*\n- Flour: 1\n\n*Alba*\n- Olives: 2');
 });
 
 // ── The other words a supplier reads follow the country too (1 Oct 2026) ─────
