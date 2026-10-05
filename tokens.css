@@ -1694,6 +1694,10 @@ body[data-card="foodcost"] .app-header.app-header--save {
 .set-seg-btn[aria-pressed="true"] { background: var(--accent-light); color: var(--brand); box-shadow: inset 0 0 0 2px var(--brand); }
 .set-seg-btn:focus-visible { outline: 3px solid var(--accent-2); outline-offset: 2px; }
 .set-seg-btn:active { transform: scale(.97); }
+/* Read-only (the kiosk card for an employee): the picked choice still reads as picked, at full
+   contrast — only the pointer and the press feedback go. */
+.set-seg-btn:disabled { cursor: default; }
+.set-seg-btn:disabled:active { transform: none; }
 .set-select,
 .set-input {
   min-height: 44px;
