@@ -1006,7 +1006,7 @@ service cloud.firestore {
           && (!('name' in request.resource.data)
               || (request.resource.data.name is string
                   && request.resource.data.name.size() <= 200))
-          // Which pack each invoice line was («Pegaso 5 kg» → «Zeus 1 kg»), so a change
+          // Which pack each invoice line was («sacco 5 kg» → «pacco 1 kg»), so a change
           // of pack is never read as a change of price. Optional.
           && (!('oldPack' in request.resource.data)
               || (request.resource.data.oldPack is string
