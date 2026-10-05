@@ -598,6 +598,10 @@ async function ingredientPrices() {
     () => wholeWrite(`${PRICES}/inv-18000000072-9`, fromInvoice({ packLabel: bigString(121) })));
   await expectDenied('a pack label that is not text',
     () => wholeWrite(`${PRICES}/inv-18000000072-9`, fromInvoice({ packLabel: 5 })));
+  await expectAllowed('an invoice price with its pack article code', () =>
+    wholeWrite(`${PRICES}/inv-18000000072-10`, fromInvoice({ packLabel: 'Lievito 1 kg', packCode: 'LV-1' })));
+  await expectDenied('a pack code longer than 60',
+    () => wholeWrite(`${PRICES}/inv-18000000072-11`, fromInvoice({ packCode: bigString(61) })));
   await expectAllowed('an invoice price without the quantity bought', () => {
     const e = fromInvoice({ invoiceId: '18000000073' }); delete e.invoiceQty;
     return wholeWrite(`${PRICES}/inv-18000000073-1`, e);
