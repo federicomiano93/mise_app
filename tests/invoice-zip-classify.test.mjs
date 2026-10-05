@@ -121,6 +121,25 @@ test('classify: beverages and ready-made are resale', () => {
   assert.equal(kind('FECOLA DI PATATE')[0], 'ingrediente');
 });
 
+// Mirrored word for word in invoice-import/tests/test_classify.py.
+test('classify: bar, shelf and non-food goods are not ingredients', () => {
+  for (const text of ['YOG. GR.125X2 FRAGOLA', 'KEFIR GR.150 FRAGOLA', 'DOLCIFICANTE PZ.150',
+    'CAPS BAR DECAFF 7GX80', "CAFFE'CIALDEX15 ESEMPIO"]) {
+    assert.equal(kind(text)[0], 'rivendita', text);
+  }
+  for (const text of ['ROT. ALLUMINIO KG 1 CM. 33', 'SET GREMBIULE PASTICCERIA', 'PALETTE BAMBOO 50X200',
+    '500 COPRIVASSOI 18X24', '100 CARTE PIZZO D35', 'SHOPPER BIO 35X10X65',
+    'BORSA SPESA 45X37', 'ECO BAGS ROSSO SMALL', 'CARAFFA GRADUATA 2 LT',
+    'COPPETTA CONICA CM 20', 'L2 ANTICALCARE ESEMPIO', 'DETERSIVO PAVIMENTI 5 L',
+    'PENNELLO 60MM', 'ASCIUGAMANI RIPIEGATI', 'PADEL ALLUMINIO 24CM', 'GUANTI NITRILE M']) {
+    assert.equal(kind(text)[0], 'packaging', text);
+  }
+  // Food words still win, and a word inside another word is not the keyword.
+  for (const text of ['OLIO EVO ML10X102', 'ZUCCHERO BUSTINA 4G', 'PAN DI SPUGNA KG 1', 'PEPERONI CAPSICUM']) {
+    assert.equal(kind(text)[0], 'ingrediente', text);
+  }
+});
+
 test('classify: a food word glued to an accented letter is a different word, as in Python', () => {
   assert.equal(kind('SALÈ BUSTE')[0], 'packaging'); // «salè» is not the food word «sale»
   assert.equal(kind('SALE GROSSO')[0], 'ingrediente');

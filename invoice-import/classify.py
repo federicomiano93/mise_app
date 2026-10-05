@@ -52,13 +52,21 @@ FOOD_RE = re.compile(
 # food word is often only the filling («cornetto alla crema»).
 READY_RE = re.compile(
     r"(?<!fecola di )patate|cornetto|panzerott|pasticciotto|treccia|sg\.cr|cr\.integrale|mini cr"
-    r"|tm cr|tm-midi|cipolle fette",
+    r"|tm cr|tm-midi|cipolle fette"
+    # Bar and shelf goods sold as they are (5 Oct 2026, from the first real import).
+    r"|\byog\.|yogurt|kefir|dolcificante|capsul|\bcaps\b|caff\S*\s*cialde",
     re.I,
 )
 PACKAGING_RE = re.compile(
     r"sh\. ml|b\.sch|grattugia|flacone|posate|asciugamano|vasch\.caldo|rotolo|buste|carta |carta$"
     r"|sacch|cont\. plastica|fogli pol|pellicola|stagnola|vaschette|box +pizza|velina|bicch|tappo"
-    r"|bobina|laccetti|black nitro|carta forno|staccante",
+    r"|bobina|laccetti|black nitro|carta forno|staccante"
+    # Not food at all — tools, clothing, cleaning, shop bags (5 Oct 2026, from the first real
+    # import). Never imported, like packaging. Food words are checked first, so «olio … ml10»
+    # or «zucchero … bustina» never land here.
+    r"|alluminio|grembiul|palett|coprivassoi|carte pizzo|shopper|\bborsa\b|\bbags\b|caraffa"
+    r"|coppetta|anticalcare|detersiv|sgrassa|igienizz|candeggin|pennello|asciugaman|organza"
+    r"|spolett|pentol|padell|\bpadel\b|guanti",
     re.I,
 )
 # Beverages are bought to be sold: resale, whatever the liquid.

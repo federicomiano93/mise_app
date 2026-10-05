@@ -41,11 +41,19 @@ const FOOD_RE = new RegExp(
 // food word is often only the filling («cornetto alla crema»).
 const READY_RE = new RegExp(
   '(?<!fecola di )patate|cornetto|panzerott|pasticciotto|treccia|sg\\.cr|cr\\.integrale|mini cr'
-  + '|tm cr|tm-midi|cipolle fette', 'iu');
+  + '|tm cr|tm-midi|cipolle fette'
+  // Bar and shelf goods sold as they are (5 Oct 2026, from the first real import).
+  + `|${B_START}yog\\.|yogurt|kefir|dolcificante|capsul|${B_START}caps${B_END}|caff\\S*\\s*cialde`, 'iu');
 const PACKAGING_RE = new RegExp(
   'sh\\. ml|b\\.sch|grattugia|flacone|posate|asciugamano|vasch\\.caldo|rotolo|buste|carta |carta$'
   + '|sacch|cont\\. plastica|fogli pol|pellicola|stagnola|vaschette|box +pizza|velina|bicch|tappo'
-  + '|bobina|laccetti|black nitro|carta forno|staccante', 'iu');
+  + '|bobina|laccetti|black nitro|carta forno|staccante'
+  // Not food at all — tools, clothing, cleaning, shop bags (5 Oct 2026, from the first real
+  // import). Never imported, like packaging. Food words are checked first, so «olio … ml10»
+  // or «zucchero … bustina» never land here.
+  + `|alluminio|grembiul|palett|coprivassoi|carte pizzo|shopper|${B_START}borsa${B_END}|${B_START}bags${B_END}|caraffa`
+  + `|coppetta|anticalcare|detersiv|sgrassa|igienizz|candeggin|pennello|asciugaman|organza`
+  + `|spolett|pentol|padell|${B_START}padel${B_END}|guanti`, 'iu');
 // Beverages are bought to be sold: resale, whatever the liquid.
 const BEVERAGE_RE = new RegExp(
   ['coca cola', `${B_START}acqua${B_END}`, 'birra', 'redbull', 'succo', `${B_START}the${B_END}`, 'fanta', 'sprite',
