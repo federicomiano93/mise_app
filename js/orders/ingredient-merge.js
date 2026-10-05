@@ -1,5 +1,5 @@
 // ingredient-merge.js — «Unisci un'altra confezione…»: two ingredients that are really ONE product bought in two
-// packs (Lievito Pegaso 5 kg, Lievito Zeus 1 kg) become one, and the history of the second moves onto the first.
+// packs (a 5 kg sack, a 1 kg bag) become one, and the history of the second moves onto the first.
 // PURE (P15): no Firebase, no DOM, no dictionary — the data layer (ingredient-merge-data.js) reads and writes,
 // the registry draws, and every rule that decides WHAT happens is here, where node --test can run it.
 //
@@ -9,15 +9,17 @@
 // the job: invoice points keep their `inv-…` id and every other point gets an id derived from B's, so a point
 // already copied is skipped, never doubled.
 //
-// ⚠️ NOTHING THAT NAMES B MAY SURVIVE IT. B is refused (nothing written) while a product, a recipe row, the open
-// stocktake or the order in progress still points at it: those would turn into «missing ingredient» and block
+// ⚠️ NOTHING THAT NAMES B MAY SURVIVE IT. B is refused (nothing written) while a product, a recipe row, an open
+// stocktake (this month's or last month's), the order in progress or an order list not yet done still points at it: those would turn into «missing ingredient» and block
 // labels. Moving them to A first is the owner's job — the merge never rewrites a recipe.
 
 import { kindOf } from '../ingredient-kind.js';
 import { ingredientDisplayName } from '../ingredient-name.js';
 import { pricePatch } from '../price-model.js';
+import { sameUnitWeight } from './price-changes-model.js';
+import { remainingIds } from './order-request-model.js';
 import {
-  MAX_DOCS_PER_BATCH, MAX_SUPPLIER_CODES, MAX_PACK_LABEL, extraCodesOf, nameSimilarity, normalizeIngredientName, packLabelOf,
+  MAX_DOCS_PER_BATCH, MAX_SUPPLIER_CODES, MAX_PACK_LABEL, MAX_SUPPLIER_CODE, extraCodesOf, nameSimilarity, normalizeIngredientName, packLabelOf,
 } from './invoice-import-model.js';
 
 const INGREDIENTS = 'ingredients';
@@ -27,7 +29,7 @@ const PRICES = 'prices';
 // The keys a price point may carry (firestore.rules /prices/{priceId}); a copy never carries anything else.
 const POINT_KEYS = Object.freeze([
   'recordedAt', 'priceUnit', 'pricePerUnit', 'packPrice', 'packSize', 'unitWeightKg', 'supplierId', 'source',
-  'invoiceId', 'invoiceDate', 'invoiceQty', 'packLabel',
+  'invoiceId', 'invoiceDate', 'invoiceQty', 'packLabel', 'packCode',
 ]);
 
 const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
@@ -65,12 +67,21 @@ export function monthKeyOf(nowMs = Date.now()) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 }
 
+// The month BEFORE the one holding that moment: the stocktake of last month stays open until somebody closes it.
+export function previousMonthKeyOf(nowMs = Date.now()) {
+  const d = new Date(nowMs);
+  if (Number.isNaN(d.getTime())) return null;
+  return monthKeyOf(new Date(d.getFullYear(), d.getMonth() - 1, 1).getTime());
+}
+
 const COUNT_MAPS = ['opening', 'purchased', 'closing'];
 
 // sources = { products: [{ name, components, packaging }], recipes: [{ name, ingredients }],
-//             inventory: { closedAt, opening, purchased, closing } | null, month: '2026-10', draft: { entries } | null }
-// → [{ kind: 'product' | 'recipe' | 'inventory' | 'draft', name?, month? }], empty when B is free.
-// ⚠️ A closed month is history: nothing there blocks. «Not counted» is a missing key, never zero (CLAUDE.md).
+//             inventories: [{ month: '2026-10', data: { closedAt, opening, purchased, closing } | null }]  (this month AND
+//             last month), draft: { entries } | null, requests: [order-requests documents] }
+// → [{ kind: 'product' | 'recipe' | 'inventory' | 'draft' | 'request', name?, month? }], empty when B is free.
+// ⚠️ A closed month is history: nothing there blocks; an OPEN one (closedAt empty or missing) that counts B does.
+// An order list not yet done blocks while one of its lines naming B is still unticked. «Not counted» is a missing key, never zero (CLAUDE.md).
 export function findUsage(id, sources) {
   const found = [];
   if (typeof id !== 'string' || !id) return found;
@@ -83,10 +94,15 @@ export function findUsage(id, sources) {
     const rows = Array.isArray(r?.ingredients) ? r.ingredients : [];
     if (rows.some(row => row && row.refId === id && row.kind !== 'recipe')) found.push({ kind: 'recipe', name: text(r.name) });
   });
-  const inv = s.inventory;
-  if (isObject(inv) && text(inv.closedAt) === ''
-    && COUNT_MAPS.some(map => isObject(inv[map]) && Object.hasOwn(inv[map], id) && inv[map][id] !== null && inv[map][id] !== undefined)) {
-    found.push({ kind: 'inventory', month: s.month || '' });
+  const months = Array.isArray(s.inventories) ? s.inventories : [{ month: s.month, data: s.inventory }];
+  months.forEach(({ month, data: inv }) => {
+    if (isObject(inv) && text(inv.closedAt) === ''
+      && COUNT_MAPS.some(map => isObject(inv[map]) && Object.hasOwn(inv[map], id) && inv[map][id] !== null && inv[map][id] !== undefined)) {
+      found.push({ kind: 'inventory', month: month || '' });
+    }
+  });
+  if ((Array.isArray(s.requests) ? s.requests : []).some(r => isObject(r) && isObject(r.quantities) && remainingIds(r).includes(id))) {
+    found.push({ kind: 'request' });
   }
   const qty = isObject(s.draft) && isObject(s.draft.entries) && isObject(s.draft.entries[id]) ? Number(s.draft.entries[id].qty) : 0;
   if (qty > 0) found.push({ kind: 'draft' });
@@ -124,18 +140,23 @@ export function mergedCodes(a, b) {
 const MAX_NAME_FOR_LABEL = 200;
 
 // The copy of one of B's price points as it lands on A: only the keys the rules know, the supplier A has, and
-// the pack it was paid for (kept, or B's name + weight).
+// the pack it was paid for: its own code and label when it has them, else B's article code and B's name + weight
+// (what tells the price changes that the pack changed).
 function copyOf(bPoint, a, b) {
   const data = {};
   POINT_KEYS.forEach(key => { if (bPoint.data[key] !== undefined) data[key] = bPoint.data[key]; });
   if (typeof data.supplierId !== 'string' || !data.supplierId) data.supplierId = a.supplierId || b.supplierId || '';
   const label = text(bPoint.data.packLabel) || packLabelOf({ name: String(b.name || '').slice(0, MAX_NAME_FOR_LABEL), weight: b.weight });
   if (label) data.packLabel = label.slice(0, MAX_PACK_LABEL);
+  const code = (text(bPoint.data.packCode) || text(b.supplierCode)).slice(0, MAX_SUPPLIER_CODE);
+  if (code) data.packCode = code;
+  else delete data.packCode;
   return data;
 }
 
 // A's current price after the merge, or null when it stays. B's takes over only when it is NEWER and in the SAME
-// unit as A's (a rate per kilo laid over a rate per piece would silently re-price every recipe).
+// unit as A's (a rate per kilo laid over a rate per piece would silently re-price every recipe) — and a rate per
+// PIECE only when the piece weighs the same: the piece of a 5 kg sack is not the piece of a 1 kg bag.
 // The patch is pricePatch's own, so the retired keys and the case keys drain as on every save.
 function priceTakeover(aPrice, bPrice) {
   if (!isObject(bPrice) || typeof bPrice.pricePerUnit !== 'number' || !(bPrice.pricePerUnit > 0)) return null;
@@ -143,6 +164,7 @@ function priceTakeover(aPrice, bPrice) {
   if (!stamp || !['kg', 'l', 'pcs'].includes(bPrice.priceUnit)) return null;
   if (isObject(aPrice) && typeof aPrice.pricePerUnit === 'number') {
     if (aPrice.priceUnit !== bPrice.priceUnit) return null;
+    if (bPrice.priceUnit === 'pcs' && !sameUnitWeight(aPrice.unitWeightKg, bPrice.unitWeightKg)) return null;
     const aStamp = text(aPrice.priceUpdatedAt);
     if (aStamp && aStamp >= stamp) return null;
   }
@@ -163,16 +185,22 @@ function chunk(list) {
 // → {
 //     batches   — [[{ path, data, merge }]] each at most MAX_DOCS_PER_BATCH documents, in commit order:
 //                 the points first (oldest first), then A's codes, then A's current price. `bakery` is stamped by the writer.
-//     counts    — { prices, codes, droppedCodes } for the confirmation («N prezzi e M codici …»)
+//     counts    — { prices (only the points that will really be COPIED), codes, droppedCodes } for the confirmation
+//     takeover  — A's current price becomes B's (the patch is in the batches)
+//     bLostPrice — B has a current price the merge does NOT carry over: 'history' when a point of its history holds
+//                 the same price, 'lost' when none does (it goes with B), null when B has none or it is taken over
+//     hasChanges — B has price changes (they go with it and are recomputed by the next import)
 //   }
-export function planMerge({ a, b, bPoints, aPointIds, aPrice, bPrice }) {
+export function planMerge({ a, b, bPoints, aPointIds, aPrice, bPrice, changeIds }) {
   const have = aPointIds instanceof Set ? aPointIds : new Set(Array.isArray(aPointIds) ? aPointIds : []);
   const points = (Array.isArray(bPoints) ? bPoints : []).filter(p => p && typeof p.id === 'string' && isObject(p.data));
   const ordered = points.slice().sort((x, y) => String(x.data.recordedAt || '').localeCompare(String(y.data.recordedAt || '')) || x.id.localeCompare(y.id));
   const ops = [];
+  let copied = 0;
   ordered.forEach(p => {
     const id = pointIdOnA(b.id, p.id, p.data);
     if (have.has(id)) return;
+    copied += 1;
     ops.push({ path: [INGREDIENTS, a.id, PRICES, id], data: copyOf(p, a, b), merge: false });
   });
 
@@ -187,8 +215,20 @@ export function planMerge({ a, b, bPoints, aPointIds, aPrice, bPrice }) {
 
   return {
     batches: chunk(ops),
-    counts: { prices: points.length, codes: codes.added, droppedCodes: codes.dropped },
+    counts: { prices: copied, codes: codes.added, droppedCodes: codes.dropped },
+    takeover: Boolean(takeover),
+    bLostPrice: takeover ? null : keptPriceState(bPrice, points),
+    hasChanges: Array.isArray(changeIds) && changeIds.length > 0,
   };
+}
+
+// B has a current price that the merge does not carry over: is it still somewhere in B's history (which moves to A)?
+function keptPriceState(bPrice, points) {
+  if (!isObject(bPrice) || typeof bPrice.pricePerUnit !== 'number' || !(bPrice.pricePerUnit > 0)) return null;
+  const same = (p) => isObject(p.data) && p.data.priceUnit === bPrice.priceUnit && typeof p.data.pricePerUnit === 'number'
+    && Math.abs(p.data.pricePerUnit - bPrice.pricePerUnit) <= 1e-6 * Math.max(1, bPrice.pricePerUnit)
+    && (bPrice.priceUnit !== 'pcs' || sameUnitWeight(p.data.unitWeightKg, bPrice.unitWeightKg));
+  return points.some(same) ? 'history' : 'lost';
 }
 
 // The documents to delete once everything above has landed: B's price changes, then B (and its price document).

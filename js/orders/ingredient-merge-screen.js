@@ -19,12 +19,16 @@ import { stopKind } from './invoice-import-plan.js';
 const CHEVRON_SVG =
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>';
 
-// The body of the chooser level: a hint, a search box and the candidates, most alike first.
+// The body of the chooser level: a status line, a hint, a search box and the candidates, most alike first.
 //   a        — the ingredient that STAYS (the card that was open)
 //   list()   — the live ingredients (with their prices merged in, so each row can say what it costs)
 //   onPick(b) — called with the stored ingredient that was tapped
+// The returned node carries `setBusy(message | null)`: while a merge is being written the rows are DISABLED (a
+// tap is refused, not silently ignored) and the message is announced in the polite status region at the top.
 export function buildMergeChooser({ a, list, onPick }) {
   let query = '';
+  let busy = false;
+  const status = el('p', { class: 'orders-status', role: 'status', 'aria-live': 'polite' });
   const rows = el('div', { class: 'mgmt-list' });
   const empty = el('p', { class: 'mgmt-empty' });
 
@@ -37,6 +41,7 @@ export function buildMergeChooser({ a, list, onPick }) {
       rows.appendChild(el('button', {
         type: 'button', class: 'mgmt-item reg-drill' + (ingredient.active === false ? ' inactive' : ''),
         onClick: () => onPick(ingredient),
+        ...(busy ? { disabled: 'disabled' } : {}),
       }, [
         el('div', { class: 'mgmt-item-main' }, [
           el('span', { class: 'mgmt-item-name', text: label }),
@@ -57,12 +62,19 @@ export function buildMergeChooser({ a, list, onPick }) {
     onChange: paint,
   });
   paint();
-  return el('div', { class: 'mgmt-scroll' }, [
+  const body = el('div', { class: 'mgmt-scroll' }, [
+    status,
     el('p', { class: 'notif-note', text: t('orders.merge.hint', { name: ingredientDisplayName(a) }) }),
     search.node,
     rows,
     empty,
   ]);
+  body.setBusy = (message) => {
+    busy = Boolean(message);
+    status.textContent = message || '';
+    rows.querySelectorAll('button').forEach(b => { b.disabled = busy; });
+  };
+  return body;
 }
 
 // «Marzo 2026» for '2026-03', in the INTERFACE language (a date is read by the person reading the screen).
@@ -77,16 +89,36 @@ function usageWords(use) {
   if (use.kind === 'product') return t('orders.merge.usedProduct', { name: use.name });
   if (use.kind === 'recipe') return t('orders.merge.usedRecipe', { name: use.name });
   if (use.kind === 'inventory') return t('orders.merge.usedInventory', { month: monthWords(use.month) });
+  if (use.kind === 'request') return t('orders.merge.usedRequest');
   return t('orders.merge.usedDraft');
 }
 
+// Why a merge that could not finish is told the way it is. ⚠️ «Nothing changed» is said ONLY when no batch landed:
+// after the first commit the honest words are «stopped half way, the copied prices are safe, try again».
 function failureText(err) {
+  if (err && err.mergeStop === 'gone') return t('orders.merge.gone');
+  if (err && err.mergeCommitted === true) return t('orders.merge.interrupted');
   return t(stopKind(err) === 'offline' ? 'orders.merge.offline' : 'orders.merge.failed');
+}
+
+// The lines of the confirmation that say what the merge does besides moving prices and codes.
+function detailLines(preview, keep, gone) {
+  const lines = [];
+  if (preview.takeover) {
+    lines.push(t('orders.merge.lineTakeover', { keep, name: gone, price: formatPricePerUnit(preview.bPrice) }));
+  } else if (preview.bLostPrice === 'history') {
+    lines.push(t('orders.merge.lineKept', { name: gone, price: formatPricePerUnit(preview.bPrice) }));
+  } else if (preview.bLostPrice === 'lost') {
+    lines.push(t('orders.merge.lineLost', { name: gone, price: formatPricePerUnit(preview.bPrice) }));
+  }
+  if (preview.hasChanges) lines.push(t('orders.merge.lineChanges', { name: gone }));
+  return lines;
 }
 
 // The flow after a tap on B. → 'merged' | 'cancelled' | 'blocked' | 'failed'. It always ends with the person
 // told what happened, and writes nothing until the confirmation is answered «yes».
-export async function runMergeFlow({ a, b }) {
+// onBusy(message | null) is called around the write so the screen can show «Sto unendo…» and lock itself.
+export async function runMergeFlow({ a, b, onBusy = () => {} }) {
   const keep = ingredientDisplayName(a);
   const gone = ingredientDisplayName(b);
 
@@ -103,14 +135,15 @@ export async function runMergeFlow({ a, b }) {
     return 'blocked';
   }
 
-  let counts;
+  let preview;
   try {
-    counts = await previewMerge(a, b);
+    preview = await previewMerge(a, b);
   } catch (err) {
     console.error('The merge could not read what it would move:', err);
     await alertDialog(failureText(err));
     return 'failed';
   }
+  const counts = preview.counts;
   const lines = [t('orders.merge.confirmMessage', {
     prices: t('orders.merge.countPrices', { n: counts.prices }),
     codes: t('orders.merge.countCodes', { n: counts.codes }),
@@ -118,6 +151,7 @@ export async function runMergeFlow({ a, b }) {
     keep,
   })];
   if (counts.droppedCodes > 0) lines.push(t('orders.merge.droppedCodes', { n: counts.droppedCodes }));
+  lines.push(...detailLines(preview, keep, gone));
   const ok = await confirmDialog({
     title: t('orders.merge.confirmTitle', { name: gone, keep }),
     message: lines.join(' '),
@@ -127,12 +161,21 @@ export async function runMergeFlow({ a, b }) {
   });
   if (!ok) return 'cancelled';
 
+  onBusy(t('orders.merge.working'));
   try {
     await mergeIngredients(a, b);
     return 'merged';
   } catch (err) {
-    console.error('The merge stopped half way (nothing is lost; a second try finishes it):', err);
+    if (err && err.mergeStop === 'used') {
+      onBusy(null);
+      await alertDialog(t('orders.merge.used', { name: gone, where: err.used.map(usageWords).join(', '), keep }));
+      return 'blocked';
+    }
+    console.error('The merge stopped (nothing is lost; a second try finishes it):', err);
+    onBusy(null);
     await alertDialog(failureText(err));
     return 'failed';
+  } finally {
+    onBusy(null);
   }
 }

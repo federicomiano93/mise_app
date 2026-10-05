@@ -535,24 +535,33 @@ export function buildRegistry(data, actions, hooks = {}) {
       const body = buildMergeChooser({
         a,
         list: () => data.ingredients(),
-        onPick: (b) => mergeInto(a, b, entry, cardEntry),
+        onPick: (b) => mergeInto(a, b, entry, cardEntry, body),
       });
       return overlay(entry, t('orders.merge.title'), body);
     });
   }
 
-  async function mergeInto(a, b, chooserEntry, cardEntry) {
+  async function mergeInto(a, b, chooserEntry, cardEntry, chooserBody) {
     if (merging) return;           // a second tap while the first is being checked or written
     merging = true;
+    // While the batches are written the list is disabled and Back too (a level closed mid-write would hide the
+    // «half way» message), and the status line says what is going on.
+    const back = chooserEntry.overlay?.querySelector('.orders-header .orders-icon-btn');
+    const onBusy = (message) => {
+      chooserBody?.setBusy?.(message);
+      if (back) back.disabled = Boolean(message);
+    };
     try {
       const stored = data.ingredients().find(i => i.id === b.id) || b;
-      if (await runMergeFlow({ a, b: stored }) !== 'merged') return;
+      if (await runMergeFlow({ a, b: stored, onBusy }) !== 'merged') return;
       popEntry(chooserEntry);
       popEntry(cardEntry);
-      // The card of A again, on the merged history, with the one word that says it worked.
+      // The card of A again, on the merged history, with the one word that says it worked. ⚠️ THE STATUS GOES IN
+      // EMPTY and gets its words on the next frame: a live region announces a CHANGE, never text it was born with.
       const reopened = await openIngredientForm(a, null);
-      reopened?.overlay?.querySelector('.mgmt-scroll')
-        ?.prepend(el('p', { class: 'orders-status ok', role: 'status', text: t('orders.merge.done') }));
+      const done = el('p', { class: 'orders-status ok', role: 'status', 'aria-live': 'polite' });
+      reopened?.overlay?.querySelector('.mgmt-scroll')?.prepend(done);
+      requestAnimationFrame(() => { done.textContent = t('orders.merge.done'); });
     } finally {
       merging = false;
     }
