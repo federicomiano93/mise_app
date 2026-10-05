@@ -142,7 +142,7 @@ export function openHomeSettings(session) {
         !session.isAppAdmin && options.length > 1 ? item(t('home.switch'), t('settings.switch.sub'), switchVenue) : null,
       ]),
       // «This device»: what is true of THIS tablet or phone, not of a person or a venue.
-      section(t('settings.home.device'), [versionRow(), ...(session.canManage ? kioskRows() : [])], kioskSaved),
+      section(t('settings.home.device'), [versionRow(), ...kioskRows(session.canManage)], kioskSaved),
     ].filter(Boolean));
 
     // Log out: the quiet destructive action at the foot, never a row (P20).
@@ -333,7 +333,11 @@ export function openHomeSettings(session) {
 
   // ── Kiosk mode (this device only) ───────────────────────────────────────────
   //
-  // Owner and manager only — the same gate as the language row. Stored in THIS device's
+  // Changed by owner and manager only — the same gate as the language row. EVERYBODY ELSE
+  // SEES IT, READ-ONLY (Federico, 5 Oct 2026): the lab tablet signs in with an employee
+  // account, and a switch that simply was not there left him unable to tell whether kiosk
+  // mode was on or where to find it. So an employee sees the switch and the two choices as
+  // they stand, disabled, with one line saying who can change them. Stored in THIS device's
   // localStorage (js/kiosk-model.js), never in Firestore; js/kiosk.js listens for the
   // event below and switches on or off at once. A switch or single choice saves on the
   // tap with «Saved ✓»; the two choices appear and vanish in place (hidden), so the rows
@@ -344,7 +348,7 @@ export function openHomeSettings(session) {
   // 2026), and in the flow it would make the row taller for two seconds under a moving
   // finger. The title line has free room on the right in both languages.
   let kioskSaved = null;
-  function kioskRows() {
+  function kioskRows(canEdit) {
     const read = () => { try { return localStorage.getItem(KIOSK_STORAGE_KEY); } catch { return null; } };
     // False when the device refused the write; the caller puts its control back.
     function store(change) {
@@ -375,8 +379,10 @@ export function openHomeSettings(session) {
     cb.setAttribute('role', 'switch');
     cb.setAttribute('aria-label', t('kiosk.settings.title'));
     cb.checked = current.enabled;
+    cb.disabled = !canEdit;
     const text = node('span', 'set-text');
     text.append(node('span', 'set-title', t('kiosk.settings.title')), node('span', 'set-sub', t('kiosk.settings.sub')));
+    if (!canEdit) text.append(node('span', 'set-sub', t('kiosk.settings.managersOnly')));
     const track = node('span', 'set-switch-track');
     track.setAttribute('aria-hidden', 'true');
     const switchLabel = node('label', 'set-switch');
@@ -400,6 +406,7 @@ export function openHomeSettings(session) {
         const btn = node('button', 'set-seg-btn', labelOf(value));
         btn.type = 'button';
         btn.dataset.value = String(value);
+        btn.disabled = !canEdit;
         btn.addEventListener('click', () => {
           const was = readKioskSettings(read())[field];
           if (was === value) return;
@@ -422,9 +429,12 @@ export function openHomeSettings(session) {
       choice('kiosk.settings.offAfter', 'kiosk.settings.offAfter.sub', 'nightHours', NIGHT_HOURS_CHOICES,
         n => (n === 0 ? t('kiosk.settings.never') : t('kiosk.settings.hours', { n }))),
     );
-    const noteBlock = node('div', 'set-block');
-    noteBlock.append(node('p', 'set-note', t('kiosk.settings.note')));
-    details.append(noteBlock);
+    // The note tells whoever SETS the tablet up what to do in Android: not for a read-only view.
+    if (canEdit) {
+      const noteBlock = node('div', 'set-block');
+      noteBlock.append(node('p', 'set-note', t('kiosk.settings.note')));
+      details.append(noteBlock);
+    }
 
     cb.addEventListener('change', () => {
       const wanted = cb.checked;

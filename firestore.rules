@@ -1597,6 +1597,8 @@ service cloud.firestore {
                'ingredientCategories',
                // The order of the supplier list, dragged in Orders settings (4 Oct 2026).
                'supplierOrder',
+               // The venue's favourite suppliers, shown first on Fornitori (5 Oct 2026).
+               'favouriteSuppliers',
                // Retired, still writable by an un-updated phone (see above)
                'products', 'groups', 'focaccia', 'brioche', 'sourdough', 'market'
              ])
@@ -1666,6 +1668,14 @@ service cloud.firestore {
           && (!('supplierOrder' in request.resource.data)
               || (request.resource.data.supplierOrder is list
                   && request.resource.data.supplierOrder.size() <= 300))
+          // The supplier ids starred as favourites, for the whole venue (Federico, 5 Oct
+          // 2026: «fornitori in preferiti … in alto, subito sotto la barra per cercare»).
+          // The same shape and the same writer as supplierOrder: a capped list, its ids not
+          // judged (a stale one is ignored by the app), canManage via the block above.
+          // OPTIONAL in both directions: a phone on the previous version never sends it.
+          && (!('favouriteSuppliers' in request.resource.data)
+              || (request.resource.data.favouriteSuppliers is list
+                  && request.resource.data.favouriteSuppliers.size() <= 300))
           // Which roads an order may leave by. A map of four booleans, and a
           // preferred one.
           //

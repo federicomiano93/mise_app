@@ -2605,6 +2605,28 @@ async function roles() {
   await expectDenied('staff cannot change the supplier order',
     () => mergeWrite(`${L}/config/orders`, { ...stamp, supplierOrder: ['s1'] }, asAccount(SAM)));
 
+  // ── Favourite suppliers (5 Oct 2026): the same shape and writer as the supplier order.
+  await expectAllowed('a manager stars favourite suppliers',
+    () => mergeWrite(`${L}/config/orders`, { ...stamp, favouriteSuppliers: ['s2', 's1'] }, asAccount(MAYA)));
+  await expectAllowed('…the owner too',
+    () => mergeWrite(`${L}/config/orders`, { ...stamp, favouriteSuppliers: ['s1'] }, asAccount(ALICE)));
+  await expectAllowed('…no favourites at all',
+    () => mergeWrite(`${L}/config/orders`, { ...stamp, favouriteSuppliers: [] }, asAccount(MAYA)));
+  await expectAllowed('…exactly 300 favourites',
+    () => mergeWrite(`${L}/config/orders`,
+      { ...stamp, favouriteSuppliers: Array.from({ length: 300 }, (_, i) => 's' + i) }, asAccount(MAYA)));
+  await expectDenied('…but not 301',
+    () => mergeWrite(`${L}/config/orders`,
+      { ...stamp, favouriteSuppliers: Array.from({ length: 301 }, (_, i) => 's' + i) }, asAccount(MAYA)));
+  await expectDenied('the favourites must be a list, not a map',
+    () => mergeWrite(`${L}/config/orders`, { ...stamp, favouriteSuppliers: { s1: true } }, asAccount(MAYA)));
+  await expectDenied('staff cannot star a favourite supplier',
+    () => mergeWrite(`${L}/config/orders`, { ...stamp, favouriteSuppliers: ['s1'] }, asAccount(SAM)));
+  await expectDenied('a member of ANOTHER venue cannot star favourites here',
+    () => mergeWrite(`${L}/config/orders`, { ...stamp, favouriteSuppliers: ['s1'] }, asAccount(BOB)));
+  await expectDenied('an account with no venue cannot star favourites',
+    () => mergeWrite(`${L}/config/orders`, { ...stamp, favouriteSuppliers: ['s1'] }, asAccount(NOBODY)));
+
   // ⚠️ THE PROOF THE TIGHTENING DID NOT INVADE THE CALCULATOR.
   await expectAllowed('staff CAN still save the Calculator config',
     () => mergeWrite(`${L}/config/calculator`, { ...stamp, extraDough: 5 }, asAccount(SAM)));

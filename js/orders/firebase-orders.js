@@ -34,6 +34,8 @@ import {
   updateDoc,
   deleteDoc,
   deleteField,
+  arrayUnion,
+  arrayRemove,
   onSnapshot,
   runTransaction,
   writeBatch,
@@ -215,6 +217,15 @@ export async function getHistoryForDay(date) {
 export async function saveDoc(name, id, data) {
   await authReady;
   return setDoc(doc(db, pathFor(name), id), withBakery(data), { merge: true });
+}
+
+// Star or unstar a supplier for the whole venue (config/orders.favouriteSuppliers).
+// ⚠️ arrayUnion / arrayRemove, never a read-modify-write of the whole list: two managers starring
+// at the same moment must not overwrite each other. The rules let only owner/manager write it.
+export function setFavouriteSupplier(id, on) {
+  return saveDoc(COLLECTIONS.config, 'orders', {
+    favouriteSuppliers: on ? arrayUnion(id) : arrayRemove(id),
+  });
 }
 
 // Overwrite a document WHOLE — no merge. saveDoc's { merge: true } deep-merges

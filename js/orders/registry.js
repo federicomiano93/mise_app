@@ -57,18 +57,20 @@ import { mayWritePrices } from './firebase-orders.js';
 import { ingredientPanels, setIngredientPanel, setPackPhoto } from './firebase-features.js';
 import { renderPackPhotoCapture } from './photo-capture.js';
 import { buildMergeChooser, runMergeFlow } from './ingredient-merge-screen.js';
+import { normalizeFavourites, splitByFavourite } from './favourite-suppliers.js';
 import { buildRegistrySettings } from './registry-settings.js';
 import {
   BACK_ICON, mgmtRow,
 } from './mgmt-ui.js';
 
-// data:    { suppliers(): [], ingredients(): [], categories(current): [], orderUnits(current): [],
+// data:    { suppliers(): [], favouriteSuppliers(): [supplierId], ingredients(): [], categories(current): [], orderUnits(current): [],
 //            packs(current): [], categoriesLoaded(): boolean, pricesLoaded(): boolean,
 //            readPrice(id): Promise<price doc | null> } — live getters; categories,
 //            orderUnits and packs are the words the ingredient card's menus offer (orderUnits only
 //            for the card of before, which an old stored price shape opens)
 // actions: { saveSupplier, saveIngredient, priceHistory, setSupplierActive,
-//            setIngredientActive, deleteSupplier, deleteIngredient, deleteCategory(list, ids) }
+//            setIngredientActive, deleteSupplier, deleteIngredient, deleteCategory(list, ids),
+//            toggleFavouriteSupplier(id, on) — a function only for owner/manager }
 // hooks:   { onChrome({ addLabel }) } — told on every paint which word the page
 //            header's «+» should carry, because it follows the active tab.
 //          { pane } — the element beside the list where a level opens on a TABLET
@@ -249,9 +251,8 @@ export function buildRegistry(data, actions, hooks = {}) {
     // ⚠️ THE ROW OPENS THE SUPPLIER, IT DOES NOT OPEN A FORM. That is the whole
     // point of this screen existing: one level at a time, so what a supplier SELLS
     // is reachable without going through its address details first.
-    const list = el('div', { class: 'mgmt-list' });
     const counts = countBySupplier();
-    visible.forEach(s => list.appendChild(drillRow(
+    const supplierRow = (s) => drillRow(
       supplierLabel(s),
       // ⚠️ THE PLURAL IS IN THE DICTIONARY, never an `if` here: Italian and English
       // do not agree about when one form becomes the other, and a ternary in code
@@ -260,8 +261,26 @@ export function buildRegistry(data, actions, hooks = {}) {
       s.active !== false,
       () => openFromList(() => openSupplier(s.id), `supplier:${s.id}`),
       `supplier:${s.id}`,
-    )));
-    listHost.appendChild(list);
+    );
+    const listOf = (suppliers) => {
+      const list = el('div', { class: 'mgmt-list' });
+      suppliers.forEach(s => list.appendChild(supplierRow(s)));
+      return list;
+    };
+
+    // The starred suppliers, split out of what the search left visible. No favourite in view =
+    // the plain list, no headings, exactly as before.
+    const { favourites, others } = splitByFavourite(visible, data.favouriteSuppliers());
+    if (!favourites.length) {
+      listHost.appendChild(listOf(visible));
+      return;
+    }
+    listHost.appendChild(el('h3', { class: 'mgmt-section-title', text: t('orders.favourites.title') }));
+    listHost.appendChild(listOf(favourites));
+    if (others.length) {
+      listHost.appendChild(el('h3', { class: 'mgmt-section-title', text: t('orders.favourites.others') }));
+      listHost.appendChild(listOf(others));
+    }
   }
 
   // Every ingredient — or every piece of packaging — A–Z, whoever sells it. ⚠️ NOT A
@@ -422,7 +441,35 @@ export function buildRegistry(data, actions, hooks = {}) {
         body.appendChild(list);
       }
 
-      return overlay(entry, supplierLabel(supplier), body);
+      // ⚠️ THE STAR IS DRAWN ONLY WHEN THE ACTION EXISTS (the gate is in registry-main.js, owner/manager).
+      // Local-first: the button flips at once and the write is NOT awaited — offline, a write resolves
+      // only when the server answers. A refusal puts it back and says so.
+      let star = null;
+      if (typeof actions.toggleFavouriteSupplier === 'function') {
+        const isFav = normalizeFavourites(data.favouriteSuppliers()).includes(supplier.id);
+        star = el('button', {
+          type: 'button', class: 'app-icon-btn orders-icon-btn',
+          'aria-label': t('orders.favourite.label'), 'aria-pressed': String(isFav),
+          icon: isFav ? STAR_FILLED_SVG : STAR_SVG,
+        });
+        const paintStar = (on) => {
+          star.setAttribute('aria-pressed', String(on));
+          star.innerHTML = on ? STAR_FILLED_SVG : STAR_SVG;
+        };
+        star.addEventListener('click', () => {
+          const was = star.getAttribute('aria-pressed') === 'true';
+          paintStar(!was);
+          Promise.resolve()
+            .then(() => actions.toggleFavouriteSupplier(supplier.id, !was))
+            .catch((err) => {
+              console.error('Could not save the favourite:', err);
+              paintStar(was);
+              alertDialog(t('orders.favourite.err'));
+            });
+        });
+      }
+
+      return overlay(entry, supplierLabel(supplier), body, undefined, star);
     }, { selects: `supplier:${id}` });
   }
 
@@ -940,6 +987,12 @@ export function buildRegistry(data, actions, hooks = {}) {
 // The placeholder's icon: an arrow pointing back at the list.
 const POINTER_SVG =
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="44" height="44" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/><path d="M21 12H9"/></svg>';
+
+const STAR_PATH = '<path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>';
+const STAR_SVG =
+  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${STAR_PATH}</svg>`;
+const STAR_FILLED_SVG =
+  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${STAR_PATH}</svg>`;
 
 const CHEVRON_SVG =
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>';
