@@ -12,6 +12,10 @@ import assert from 'node:assert/strict';
 import { registerHooks } from 'node:module';
 import { pathToFileURL, fileURLToPath } from 'node:url';
 import { Node, walk } from './helpers/form-dom.mjs';
+import { zipSync, strToU8 } from '../js/vendor/fflate.esm.js';
+import { parseXmlTree } from './helpers/xml-tree.mjs';
+import { invoiceXml, metadataXml } from './helpers/invoice-builders.mjs';
+import { decisionId } from '../js/orders/invoice-zip/selection.js';
 
 // The screen logs a failed row for diagnosis (console.error); the tests below fail rows on purpose.
 console.error = () => {};
@@ -62,6 +66,7 @@ function makeDb() {
   const db = {
     suppliers: [], ingredients: [], prices: {}, points: {},
     calls: [], batches: 0, failOn: null, beforeBatch: null, beforeSuppliers: null, failSupplier: null, n: 0,
+    decisions: [], failDecisionsLoad: null, failDecisionsWrite: null,
   };
   const failure = (code) => Object.assign(new Error(code), { code });
   globalThis.__inv = {
@@ -83,6 +88,20 @@ function makeDb() {
     async freshIngredientsForSupplier(supplierId) { return db.ingredients.filter(i => i.supplierId === supplierId).map(i => ({ ...i })); },
     async invoicePointIds(id) { return new Set(db.points[id] || []); },
     async freshPrice(id) { return db.prices[id] ? { ...db.prices[id] } : null; },
+    async loadInvoiceDecisions() {
+      if (db.failDecisionsLoad) throw failure(db.failDecisionsLoad);
+      return db.decisions.map(d => ({ ...d }));
+    },
+    async writeInvoiceDecisions(changes) {
+      db.calls.push(['decisions', changes.set.length, changes.remove.length]);
+      if (db.failDecisionsWrite) throw failure(db.failDecisionsWrite);
+      changes.remove.forEach(id => { db.decisions = db.decisions.filter(d => d.id !== id); });
+      changes.set.forEach(c => {
+        db.decisions = db.decisions.filter(d => d.id !== c.id);
+        db.decisions.push({ id: c.id, decision: c.decision, label: c.label });
+      });
+      return changes.set.length + changes.remove.length;
+    },
     async runImportBatches(batches) {
       db.batches += 1;
       if (db.beforeBatch) db.beforeBatch(batches);
@@ -115,6 +134,8 @@ const dataOf = (db) => ({
   prices: () => db.prices,
   ready: () => true,
   language: () => 'it',
+  parseXml: parseXmlTree,
+  venueId: () => 'loc-test',
 });
 
 // ── Driving it ──────────────────────────────────────────────────────────────────
@@ -618,4 +639,231 @@ test('a chip with a count of zero is hidden unless it is All or the one that is 
   buttons(root).find(b => b.className === 'invimp-filter' && b.textContent.startsWith('To decide')).fire('click');
   await settle();
   assert.deepEqual(chips(), ['All (2)', 'To decide (1)', 'Errors (1)'], 'answered rows stay under To decide');
+});
+
+// ── Invoices straight from the zip ──────────────────────────────────────────────
+
+const FLOUR_LINE = { desc: 'FARINA TIPO 00 SACCO KG 25', code: 'F00', qty: 25, unit: 'KG', total: 14.25 };
+const COLA_LINE = { desc: 'COCA COLA LATTINA 33 CL', code: 'COLA', qty: 24, unit: 'PZ', total: 12 };
+const STRONG_LINE = { desc: 'SPEZIA FORTE', code: 'SP', qty: 100, unit: 'KG', total: 4 };
+const K_FLOUR = 'IT00000000001|code:F00';
+const K_COLA = 'IT00000000001|code:COLA';
+
+const fileOf = (name, bytes) => ({ name, arrayBuffer: async () => bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) });
+function invoiceZip(lines = [FLOUR_LINE, COLA_LINE, STRONG_LINE], options = {}, sdi = '9000000001') {
+  const members = { 'inv1.xml': invoiceXml(lines, options), 'inv1_MT_001.xml': metadataXml(sdi) };
+  return fileOf('fatture.zip', zipSync(Object.fromEntries(Object.entries(members).map(([n, x]) => [n, strToU8(x)]))));
+}
+async function loadFiles(root, files) {
+  const input = walk(root).find(n => n.tagName === 'INPUT' && n.attributes.type === 'file');
+  input.files = files;
+  input.fire('change');
+  await settle();
+}
+async function openWithZip(db, files = [invoiceZip()]) {
+  const root = await open(db);
+  await loadFiles(root, files);
+  return root;
+}
+const byFid = (root, id) => walk(root).find(n => n.attributes['data-fid'] === id);
+const tick = async (root, id, on = true) => {
+  const box = byFid(root, id);
+  assert.ok(box, `no tick-box ${id}`);
+  box.checked = on;
+  box.fire('change');
+  await settle();
+};
+const newSelects = (root, prefix) => walk(root).filter(n => n.tagName === 'SELECT' && (n.attributes.id || '').startsWith(prefix));
+
+test('⚠️ a zip is read in the app: a summary, groups for what is left out, and NOTHING is written', async () => {
+  const db = makeDb();
+  const root = await openWithZip(db);
+  assert.match(textOf(root), /Chosen file: fatture\.zip/);
+  assert.match(textOf(root), /1 invoice read · 1 supplier found · 2 ingredients found/);
+  assert.match(textOf(root), /Packaging and resale \(1\)/);
+  assert.match(textOf(root), /COCA COLA LATTINA 33 CL/);
+  assert.match(textOf(root), /Import as an ingredient/);
+  assert.doesNotMatch(textOf(root), /Left out by you/);
+  assert.equal(db.calls.length, 0);
+  assert.equal(db.decisions.length, 0);
+  const input = walk(root).find(n => n.tagName === 'INPUT' && n.attributes.type === 'file');
+  assert.equal(input.attributes.accept, '.zip,.xml,.json,application/zip,application/json');
+  assert.equal(input.attributes.multiple, '');
+});
+
+test('the whole way from the zip: price-less ingredients are asked about in their own group, and rows are written', async () => {
+  const db = makeDb();
+  const root = await openWithZip(db);
+  await toIngredients(root);
+  assert.match(textOf(root), /Price to check \(1\)/);
+  assert.match(textOf(root), /The price looks wrong for this product/);
+  assert.match(textOf(root), /Farina tipo 00/);
+  await press(root, 'Import 2 ingredients');
+  assert.equal(globalThis.__dialogs.at(-1).message, '2 new ingredients will be created.\n1 price will be added.');
+  assert.match(textOf(root), /2 ingredients created/);
+  assert.equal(db.ingredients.length, 2);
+  const strong = db.ingredients.find(i => i.name === 'Spezia forte');
+  assert.ok(strong, 'the price-less ingredient is created');
+  assert.equal(db.prices[strong.id], undefined, 'with no price document');
+  assert.equal(db.points[strong.id], undefined, 'and no price points');
+  assert.equal(db.decisions.length, 0, 'nothing to remember');
+  assert.ok(!db.calls.some(c => c[0] === 'decisions'));
+});
+
+test('⚠️ ticking a product re-runs the selection at once, and the decision is written BEFORE the rows', async () => {
+  const db = makeDb();
+  const root = await openWithZip(db);
+  await tick(root, 'invimp-tick-notImported-0');
+  assert.match(textOf(root), /3 ingredients found/);
+  assert.equal(db.calls.length, 0, 'ticking writes nothing');
+  await tick(root, 'invimp-tick-notImported-0', false);
+  assert.match(textOf(root), /2 ingredients found/);
+  await tick(root, 'invimp-tick-notImported-0');
+  await toIngredients(root);
+  await press(root, 'Import 3 ingredients');
+  assert.match(globalThis.__dialogs.at(-1).message, /1 choice will be remembered for the next imports\./);
+  const firstDecision = db.calls.findIndex(c => c[0] === 'decisions');
+  const firstWrite = db.calls.findIndex(c => c[0] === 'write');
+  assert.ok(firstDecision >= 0 && firstDecision < firstWrite, 'the answers go first');
+  assert.deepEqual(db.decisions, [{ id: decisionId(K_COLA), decision: 'ingredient', label: 'COCA COLA LATTINA 33 CL' }]);
+  assert.match(textOf(root), /Choices remembered: 1/);
+  assert.equal(db.ingredients.length, 3);
+});
+
+test('a remembered skip is listed, ticking «Import again» imports it and DELETES the decision', async () => {
+  const db = makeDb();
+  db.decisions.push({ id: decisionId(K_FLOUR), decision: 'skip', label: 'Farina' });
+  const root = await openWithZip(db);
+  assert.match(textOf(root), /Left out by you \(1\)/);
+  assert.match(textOf(root), /1 ingredient found/, 'only the strong spice is left');
+  assert.match(textOf(root), /Import again/);
+  await tick(root, 'invimp-tick-skippedByYou-0');
+  assert.match(textOf(root), /2 ingredients found/);
+  await toIngredients(root);
+  await press(root, 'Import 2 ingredients');
+  assert.deepEqual(db.calls.find(c => c[0] === 'decisions'), ['decisions', 0, 1]);
+  assert.deepEqual(db.decisions, [], 'the remembered skip is gone');
+  assert.ok(db.ingredients.some(i => i.name === 'Farina tipo 00'));
+});
+
+test('a NEW row can be left out and remembered: «Create» is the default and never blocks the button', async () => {
+  const db = makeDb();
+  const root = await openWithZip(db);
+  await toIngredients(root);
+  const selects3 = newSelects(root, 'invimp-new-');
+  assert.equal(selects3.length, 2);
+  assert.deepEqual(selects3[0].options.map(o => o.textContent), ['Create', 'Do not import (remember)']);
+  assert.equal(selects3[0].value, 'create');
+  assert.ok(!isDisabled(buttonWith(root, 'Import 2 ingredients')));
+  const flourSelect = selects3.find(sel => /Farina/.test(textOf(sel.parentNode.parentNode)));
+  await pick(flourSelect, 'forget');
+  await press(root, 'Import 1 ingredient');
+  assert.match(globalThis.__dialogs.at(-1).message, /1 choice will be remembered/);
+  const firstDecision = db.calls.findIndex(c => c[0] === 'decisions');
+  assert.ok(firstDecision >= 0 && firstDecision < db.calls.findIndex(c => c[0] === 'write'));
+  assert.deepEqual(db.decisions, [{ id: decisionId(K_FLOUR), decision: 'skip', label: 'FARINA TIPO 00 SACCO KG 25' }]);
+  assert.ok(!db.ingredients.some(i => i.name === 'Farina tipo 00'), 'the left-out ingredient was not created');
+  assert.match(textOf(root), /1 ingredient created/);
+});
+
+test('⚠️ a supplier chosen «do not import anything» is dropped with all its products, remembered, and next time listed', async () => {
+  const db = makeDb();
+  const root = await openWithZip(db);
+  await press(root, 'Next');
+  const [select] = newSelects(root, 'invimp-supnew-');
+  assert.deepEqual(select.options.map(o => o.textContent), ['Import', 'Do not import anything from this supplier (remember)']);
+  await pick(select, 'forget');
+  const primary = buttons(root).find(b => b.className === 'btn-primary');
+  assert.equal(primary.textContent, 'Next', 'no supplier left to create');
+  await press(root, 'Next');
+  assert.match(textOf(root), /Nothing to import/);
+  assert.ok(!db.calls.some(c => c[0] === 'createSupplier'), 'the supplier was not created');
+  assert.equal(db.calls.length, 0, 'nothing is written until Done is confirmed');
+  await press(root, 'Done');
+  assert.equal(globalThis.__dialogs.at(-1).kind, 'confirm');
+  assert.match(globalThis.__dialogs.at(-1).message, /1 choice will be remembered/);
+  assert.deepEqual(db.decisions, [{ id: decisionId('supplier:IT00000000001'), decision: 'skip', label: 'FORNITORE ESEMPIO SRL' }]);
+  assert.equal(overlay(), null, 'the screen closed');
+
+  // the next import
+  const again = await openWithZip(db);
+  assert.match(textOf(again), /Suppliers left out by you \(1\)/);
+  assert.match(textOf(again), /3 products/);
+  assert.match(textOf(again), /0 ingredients found/);
+  await tick(again, 'invimp-tick-supplier-0');
+  assert.match(textOf(again), /2 ingredients found/);
+});
+
+test('declining the question on Done keeps the screen and writes nothing', async () => {
+  const db = makeDb();
+  const root = await openWithZip(db);
+  await press(root, 'Next');
+  await pick(newSelects(root, 'invimp-supnew-')[0], 'forget');
+  await press(root, 'Next');
+  globalThis.__confirmAnswer = false;
+  await press(root, 'Done');
+  assert.ok(overlay(), 'still open');
+  assert.equal(db.decisions.length, 0);
+  globalThis.__confirmAnswer = true;
+});
+
+test('the remembered decisions are read from the server: offline refuses the file, with a message', async () => {
+  const db = makeDb();
+  db.failDecisionsLoad = 'offline';
+  const root = await openWithZip(db);
+  assert.match(textOf(root), /There is no connection/);
+  assert.doesNotMatch(textOf(root), /ingredients found/);
+  assert.ok(!buttonWith(root, 'Next'), 'no way on without the decisions');
+});
+
+test('a failure while remembering stops nothing else and is reported in the summary', async () => {
+  const db = makeDb();
+  db.failDecisionsWrite = 'unavailable';
+  const root = await openWithZip(db);
+  await tick(root, 'invimp-tick-notImported-0');
+  await toIngredients(root);
+  await press(root, 'Import 3 ingredients');
+  assert.equal(db.ingredients.length, 3, 'the rows were written anyway');
+  assert.match(textOf(root), /Your choices could not be remembered/);
+  assert.doesNotMatch(textOf(root), /Choices remembered/);
+});
+
+test('an update shows the price in force, the new one and the change; another unit shows only the new one', async () => {
+  const db = makeDb();
+  db.suppliers.push({ id: 's1', name: 'Fornitore', vatNumber: 'IT00000000001' });
+  db.ingredients.push({ id: 'i1', name: 'Farina tipo 00', shortName: '', supplierId: 's1', kind: 'ingredient', supplierCode: 'F00' });
+  db.prices.i1 = { priceUnit: 'kg', pricePerUnit: 0.5, priceUpdatedAt: '2026-01-01T12:00:00.000Z' };
+  let root = await openWithZip(db, [invoiceZip([FLOUR_LINE])]);
+  await toIngredients(root);
+  assert.match(textOf(root), /0\.50 \/ kg → .*0\.57 \/ kg \(\+14%\)/);
+  buttons(root).find(b => b.attributes['aria-label'] === 'Back').fire('click');
+  await settle();
+
+  db.prices.i1 = { priceUnit: 'pcs', pricePerUnit: 3, priceUpdatedAt: '2026-01-01T12:00:00.000Z' };
+  root = await openWithZip(db, [invoiceZip([FLOUR_LINE])]);
+  await toIngredients(root);
+  assert.doesNotMatch(textOf(root), /→/);
+  assert.match(textOf(root), /0\.57 \/ kg/);
+});
+
+test('one .json beside zips (or two .json) is refused with a message; a bad zip is a friendly error', async () => {
+  const db = makeDb();
+  const root = await openWithZip(db, [invoiceZip(), { name: 'a.json', text: async () => '{}' }]);
+  assert.match(textOf(root), /Choose either one \.json file or the invoice files/);
+  await loadFiles(root, [{ name: 'a.json', text: async () => '{}' }, { name: 'b.json', text: async () => '{}' }]);
+  assert.match(textOf(root), /Choose either one \.json file/);
+  await loadFiles(root, [{ name: 'x.zip', arrayBuffer: async () => { throw new Error('disk'); } }]);
+  assert.match(textOf(root), /The invoices could not be read/);
+  assert.equal(db.calls.length, 0);
+});
+
+test('a .json file still takes the old path: no remembered decisions are read or offered', async () => {
+  const db = makeDb();
+  db.failDecisionsLoad = 'offline';
+  const root = await open(db, fileText());
+  assert.match(textOf(root), /2 ingredients found/);
+  await toIngredients(root);
+  assert.equal(newSelects(root, 'invimp-new-').length, 0, 'no «Do not import (remember)» on this path');
+  await press(root, 'Import 2 ingredients');
+  assert.ok(!db.calls.some(c => c[0] === 'decisions'));
 });

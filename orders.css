@@ -3386,6 +3386,10 @@ body:not([data-orders-tab="deliveries"]) #orders-owed { display: none; }
 .invimp-choice { display: flex; flex-direction: column; gap: 4px; }
 .invimp-choice-label { font-size: 13px; font-weight: 600; color: var(--text-2); }
 .invimp-select { width: 100%; }
+/* A tick-box row on the first screen: the whole label is the target, 44 px tall. */
+.invimp-check { display: flex; align-items: center; gap: 10px; min-height: 44px; font-size: 14px; color: var(--text); cursor: pointer; }
+.invimp-check input { flex-shrink: 0; width: 22px; height: 22px; margin: 0; accent-color: var(--brand); }
+.invimp-check input:focus-visible { outline: 3px solid var(--accent-2); outline-offset: 2px; }
 .invimp-filters { display: flex; flex-wrap: wrap; gap: 8px; }
 .invimp-filter {
   min-height: 40px;

@@ -16,6 +16,7 @@ import { currentLocationId, pathFor } from '../location.js';
 import { saveSupplierRecord } from '../record-data.js';
 import { db } from './firebase-orders.js';
 import { planBatchWrites } from './invoice-import-plan.js';
+import { planDecisionBatches } from './invoice-zip/selection.js';
 import {
   collection,
   doc,
@@ -30,6 +31,7 @@ const SUPPLIERS = 'suppliers';
 const INGREDIENTS = 'ingredients';
 const INGREDIENT_PRICES = 'ingredient-prices';
 const PRICES = 'prices';
+const DECISIONS = 'invoice-decisions';
 
 export const IMPORT_COMMIT_TIMEOUT_MS = 30000;
 
@@ -134,4 +136,38 @@ export async function runImportBatches(batches) {
     await withTimeout(batch.commit());
   }
   return ingredientId;
+}
+
+// ── What the owner decided about invoice products and suppliers ───────────────────
+
+// The venue's remembered decisions, read from the SERVER (a cache answer would hide a decision made on another
+// phone), refused offline like every read of this import. → [{ id, decision, label, updatedAt, … }]
+export async function loadInvoiceDecisions() {
+  refuseOffline();
+  await sessionReady;
+  const snap = await withTimeout(getDocsFromServer(collection(db, pathFor(DECISIONS))));
+  return snap.docs.map(d => ({ ...d.data(), id: d.id }));
+}
+
+// changes = decisionChanges() of invoice-zip/selection.js → how many documents were written or deleted.
+// Small batches (at most 20 operations), each bounded by the same timeout as a row. The ids are SHA-256 hex of the
+// decision key; the data is exactly what the rules accept.
+export async function writeInvoiceDecisions(changes) {
+  refuseOffline();
+  await sessionReady;
+  const batches = planDecisionBatches(changes, { bakery: currentLocationId(), nowIso: new Date().toISOString() });
+  const folder = collection(db, pathFor(DECISIONS));
+  let count = 0;
+  for (const ops of batches) {
+    refuseOffline();
+    const batch = writeBatch(db);
+    ops.forEach((op) => {
+      const ref = doc(folder, op.id);
+      if (op.type === 'set') batch.set(ref, op.data, { merge: true });
+      else batch.delete(ref);
+    });
+    await withTimeout(batch.commit());
+    count += ops.length;
+  }
+  return count;
 }

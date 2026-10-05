@@ -11,6 +11,7 @@
 import { t } from '../i18n.js';
 import { onSession, currentSession } from '../firebase.js';
 import { outputLanguage } from '../market.js';
+import { currentLocationId } from '../location.js';
 import { categoryChoices, unitChoices, packChoices } from '../record-choices.js';
 import { withPrices } from '../price-model.js';
 import { buildRegistry } from './registry.js';
@@ -166,6 +167,8 @@ importBtn?.addEventListener('click', () => {
     opener: importBtn,
     // The venue's OUTPUT language, read when the import runs: the carton word on a new ingredient is food.
     language: () => outputLanguage(currentSession().location),
+    // Salts the key of a supplier with no VAT number (the same supplier gets the same key in this venue only).
+    venueId: () => currentLocationId() || '',
   });
 });
 

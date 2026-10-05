@@ -1,5 +1,12 @@
 # Mise invoice import — the local script
 
+> **The app now reads the zip itself.** In «Importa da fatture» the owner picks the zip(s)
+> downloaded from the Agenzia delle Entrate (or loose .xml files) and the app does what this
+> script does — no Python, no Excel (`js/orders/invoice-zip/`; what the owner decides is
+> remembered per product and per supplier in `invoice-decisions`). **This script is kept as
+> a fallback**, and its `.json` file is still accepted by the same screen; the contract below
+> is unchanged.
+
 Turns the supplier e-invoices (FatturaPA XML, as downloaded from the Agenzia delle
 Entrate portal) into a file the **«Import from invoices»** screen of Mise can read.
 

@@ -22,3 +22,5 @@ export const freshIngredientsForSupplier = (...a) => globalThis.__inv.freshIngre
 export const invoicePointIds = (...a) => globalThis.__inv.invoicePointIds(...a);
 export const freshPrice = (...a) => globalThis.__inv.freshPrice(...a);
 export const runImportBatches = (...a) => globalThis.__inv.runImportBatches(...a);
+export const loadInvoiceDecisions = (...a) => globalThis.__inv.loadInvoiceDecisions(...a);
+export const writeInvoiceDecisions = (...a) => globalThis.__inv.writeInvoiceDecisions(...a);
