@@ -1025,6 +1025,8 @@ test('the model imports no Firebase, no DOM and nothing from another feature\'s 
   const imports = [...source.matchAll(/^import .* from '([^']+)'/gm)].map(m => m[1]);
   assert.ok(imports.length >= 4);
   for (const spec of imports) {
+    // The reason codes of the zip reader (a pure constants file of this same feature) are the one sibling allowed.
+    if (spec === './invoice-zip/reasons.js') continue;
     assert.ok(spec.startsWith('../') && !spec.slice(3).includes('/'), `${spec}: only js/ root modules`);
     assert.ok(!/firebase|dom\.js|firebase-/.test(spec), spec);
   }
@@ -1145,4 +1147,62 @@ test('an «unisci con» row that points at nobody is remembered the same way', (
   const row = planOne(oneIngredient({ mergeWith: 'Nowhere' }), ctx);
   assert.equal(row.status, 'unchanged');
   assert.equal(row.ingredientId, 'far');
+});
+
+// ── An ingredient the invoices state no trustworthy price for (priceCheck) ──────
+test('prices: [] is valid ONLY together with a priceCheck code', () => {
+  const withCode = oneIngredient({ prices: [], priceCheck: 'price-out-of-scale' });
+  assert.equal(withCode.invalid, undefined);
+  assert.equal(withCode.priceCheck, 'price-out-of-scale');
+  assert.deepEqual(withCode.prices, []);
+
+  assert.equal(oneIngredient({ prices: [] }).invalid, 'no-prices', 'a file from the script never has empty prices');
+  assert.equal(oneIngredient({ prices: [], priceCheck: '' }).invalid, 'no-prices');
+  assert.equal(oneIngredient({ prices: [], priceCheck: 'not-a-code' }).invalid, 'no-prices');
+  assert.equal(oneIngredient({ prices: [], priceCheck: 42 }).invalid, 'no-prices');
+  assert.equal('priceCheck' in oneIngredient(), false, 'an ordinary entry carries none');
+  // a code beside real prices is meaningless and dropped
+  assert.equal('priceCheck' in oneIngredient({ priceCheck: 'price-out-of-scale' }), false);
+});
+
+test('every reason a price is «da verificare» is an accepted priceCheck code', async () => {
+  const { NOTE, LEFT_OUT } = await import('../js/orders/invoice-zip/reasons.js');
+  const { PRICE_CHECK_CODES } = await import('../js/orders/invoice-import-model.js');
+  assert.ok(PRICE_CHECK_CODES.includes(NOTE.PRICE_OUT_OF_SCALE));
+  assert.ok(PRICE_CHECK_CODES.includes(NOTE.UNATTRIBUTED_DISCOUNT));
+  assert.ok(PRICE_CHECK_CODES.includes(LEFT_OUT.NEEDS_CHECKING));
+  assert.ok(!PRICE_CHECK_CODES.includes(NOTE.BY_WEIGHT), 'a note that is not a doubt is not a code');
+});
+
+test('a NEW priceCheck row creates the ingredient with no price document and no points', () => {
+  const file = oneIngredient({ prices: [], priceCheck: 'price-out-of-scale' });
+  const row = planOne(file, ctxOf());
+  assert.equal(row.status, 'new');
+  assert.equal(row.priceCheck, 'price-out-of-scale');
+  assert.deepEqual(row.newPoints, []);
+  const ops = flat(ingredientWrites(row, file, '2026-10-05T10:00:00.000Z', { language: 'it' }));
+  assert.deepEqual(ops.map(o => o.type), ['create-ingredient']);
+  assert.equal(ops[0].data.name, 'Farina tipo 00');
+  assert.equal(ops[0].data.supplierId, SUPPLIER_ID);
+  assertNoNaN(ops);
+  for (const key of ['allergens', 'mayContain', 'allergensCheckedAt', 'nutrition', 'packIngredients']) assert.ok(!(key in ops[0].data));
+});
+
+test('a priceCheck row matched to an existing ingredient writes nothing', () => {
+  const file = oneIngredient({ prices: [], priceCheck: 'unattributed-discount' });
+  const row = planOne(file, ctxOf({ ingredients: [existingIng({ name: 'Farina tipo 00', supplierCode: 'F00-25' })] }));
+  assert.equal(row.status, 'unchanged');
+  assert.equal(row.ingredientId, 'ing-1');
+  assert.deepEqual(ingredientWrites(row, file, '2026-10-05T10:00:00.000Z', { language: 'it' }), []);
+});
+
+test('an ordinary row with no new points still writes nothing, and a row without priceCheck is untouched by the change', () => {
+  const file = oneIngredient();
+  const row = planOne(file, ctxOf());
+  assert.equal(row.priceCheck, '');
+  assert.ok(flat(ingredientWrites(row, file, '', { language: 'it' })).some(o => o.type === 'set-current-price'));
+  const known = planOne(file, ctxOf({
+    ingredients: [existingIng({ name: 'Farina tipo 00' })], invoicePointIds: new Map([['ing-1', new Set(['inv-18000000001-5'])]]),
+  }));
+  assert.deepEqual(ingredientWrites(known, file, '', { language: 'it' }), []);
 });

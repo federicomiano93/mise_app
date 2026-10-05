@@ -25,6 +25,7 @@ import { formatPatch, looseUnit } from '../pack-format.js';
 import { cartonWordFor, defaultPackFor } from '../record-choices.js';
 import { supplierLabel } from '../supplier-label.js';
 import { normalizeVat } from '../vat-number.js';
+import { NOTE, LEFT_OUT } from './invoice-zip/reasons.js';
 
 export const IMPORT_FORMAT = 'mise-invoice-import';
 export const IMPORT_VERSION = 1;
@@ -46,6 +47,14 @@ const PACK_COUNT_MAX = 10000;
 const RATE_DECIMALS = 4;
 const PIECE_DECIMALS = 6;
 const NO_VAT_PREFIX = 'NOVAT:';
+// Why an ingredient comes with no price at all (invoice-zip/build-import.js): the reasons a price is «da verificare».
+// A file made by the script never carries one, so an entry with no prices and none of these stays invalid.
+export const PRICE_CHECK_CODES = Object.freeze([
+  NOTE.EGG_QUANTITY_UNCLEAR, NOTE.PRICE_OUT_OF_SCALE, NOTE.UNATTRIBUTED_DISCOUNT, NOTE.MIXED_UNITS,
+  NOTE.NO_WEIGHT_ON_INVOICE, NOTE.NO_PRICE_UNIT, NOTE.NO_PIECE_WEIGHT, NOTE.QUANTITY_ZERO_OR_NEGATIVE,
+  NOTE.AMOUNT_ZERO_OR_NEGATIVE, NOTE.PRICE_UNIT_DIFFERS_FROM_INVOICE, NOTE.PRICE_UNIT_PACK_MISMATCH,
+  NOTE.PRICE_UNIT_UNREADABLE, NOTE.PACK_WEIGHT_UNREADABLE, NOTE.PACK_COUNT_UNREADABLE, LEFT_OUT.NEEDS_CHECKING,
+]);
 const DEFAULT_LANGUAGE = 'it';
 
 // ── Small helpers ───────────────────────────────────────────────────────────────
@@ -211,6 +220,8 @@ function parseIngredient(raw, seen) {
   parsed.forEach(p => { if (p && !unique.has(`${p.invoiceId}-${p.line}`)) unique.set(`${p.invoiceId}-${p.line}`, p); });
   const prices = [...unique.values()].sort(comparePoints);
 
+  // ⚠️ `prices: []` IS LEGAL ONLY WITH A priceCheck CODE: the ingredient is wanted, its price is not.
+  const priceCheck = rawPrices.length === 0 && PRICE_CHECK_CODES.includes(o.priceCheck) ? o.priceCheck : '';
   const entry = {
     key,
     supplierKey: clean(o.supplierKey, MAX_KEY),
@@ -226,6 +237,7 @@ function parseIngredient(raw, seen) {
     unitWeightKg,
     vatRate: vatRateOf(o.vatRate),
     prices,
+    ...(priceCheck ? { priceCheck } : {}),
   };
 
   let invalid = null;
@@ -237,7 +249,7 @@ function parseIngredient(raw, seen) {
   else if (!priceUnit) invalid = 'price-unit';
   else if (priceUnit === 'pcs' && unitWeightKg === null) invalid = 'unit-weight-missing';
   else if (countGiven && packCount === null) invalid = 'pack-count';
-  else if (rawPrices.length === 0) invalid = 'no-prices';
+  else if (rawPrices.length === 0 && !priceCheck) invalid = 'no-prices';
   else if (parsed.some(p => p === null)) invalid = 'price-invalid';
   if (key) seen.add(key);
   return invalid ? { ...entry, invalid } : entry;
@@ -459,6 +471,8 @@ export function planIngredients(fileIngredients, ctx) {
       priceUnit: file.priceUnit || null,
       vatRate: file.vatRate === undefined ? null : file.vatRate,
       allPoints,
+      // Set when the file wants the ingredient but states no price for it (see PRICE_CHECK_CODES).
+      priceCheck: file.priceCheck || '',
     };
     if (file.invalid) return { ...base, reason: file.invalid };
     const supplierId = lookup(context.supplierIdByKey, file.supplierKey);
@@ -605,7 +619,8 @@ export function ingredientWrites(row, fileIngredient, nowIso, options) {
   const isNew = row.status === 'new';
   const ingredientId = isNew ? null : row.ingredientId;
   const points = row.newPoints || [];
-  if (points.length === 0) return [];
+  // A NEW ingredient the file states no price for is still created (and nothing else); a matched one has nothing to write.
+  if (points.length === 0 && !(isNew && row.priceCheck)) return [];
   const ops = [];
 
   if (isNew) {
@@ -616,7 +631,7 @@ export function ingredientWrites(row, fileIngredient, nowIso, options) {
 
   const latest = points[points.length - 1];
   const pieceKg = fileIngredient.priceUnit === 'pcs' ? fileIngredient.unitWeightKg : null;
-  if (row.updateCurrent) {
+  if (row.updateCurrent && latest) {
     // pricePatch is the card's own: it nulls the retired pack keys AND the four case keys, so a stale
     // case cannot survive beside a new rate.
     const data = pricePatch(

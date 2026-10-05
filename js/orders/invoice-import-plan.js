@@ -75,25 +75,42 @@ const WAITING = ['maybe-duplicate', 'choose'];
 
 // planned rows + the person's decisions → [{ planned, row, waiting }]. `row` is the effective row (what
 // would be written); `waiting` is true while somebody still has to answer.
-export function applyDecisions(plannedRows, decisions, ctx) {
+// `forgetKeys` (a Set of keys) are NEW rows the person answered «Do not import (remember)»: they become skipped.
+export function applyDecisions(plannedRows, decisions, ctx, forgetKeys) {
   return (plannedRows || []).map(planned => {
     const decision = decisions ? decisions[planned.key] : undefined;
-    const row = decision ? resolveRow(planned, decision, ctx) : planned;
+    let row = decision ? resolveRow(planned, decision, ctx) : planned;
+    if (forgetKeys && forgetKeys.has(planned.key) && row.status === 'new') {
+      row = { ...row, status: 'skipped', newPoints: [], updateCurrent: false };
+    }
     return { planned, row, waiting: WAITING.includes(row.status) };
   });
 }
 
 // The chip a row is counted under. ⚠️ BY WHAT IT WAS PLANNED AS: a row that waits for an answer stays under
-// «To decide» once answered, so it does not jump to another chip under the finger that just answered it.
+// «To decide» once answered, so it does not jump to another chip under the finger that just answered it. The
+// same for a NEW row answered «Do not import»: it stays under «New» (or «Price to check»).
 export function bucketOf(entry) {
   if (WAITING.includes(entry.planned.status)) return 'decide';
+  // A wanted ingredient with no price of its own: its own group, asked to be looked at.
+  if (entry.planned.priceCheck && ['new', 'unchanged'].includes(entry.planned.status)) return 'check';
+  if (entry.planned.status === 'new' && entry.row.status === 'skipped') return 'new';
   return entry.row.status;   // new · update-price · history-only · unchanged · error
 }
 
-export const FILTERS = Object.freeze(['all', 'new', 'update-price', 'history-only', 'unchanged', 'decide', 'error']);
+export const FILTERS = Object.freeze(['all', 'new', 'update-price', 'history-only', 'unchanged', 'check', 'decide', 'error']);
+
+// What a price rise or fall looks like: { percent } (whole number, signed), or null when the two cannot be
+// compared (another unit, a missing or zero side). Within half a percent is «equal» (percent 0).
+export function priceChange(stored, nextRate, nextUnit) {
+  const was = stored && typeof stored.pricePerUnit === 'number' ? stored.pricePerUnit : null;
+  if (!(was > 0) || !(nextRate > 0) || !stored.priceUnit || stored.priceUnit !== nextUnit) return null;
+  const raw = ((nextRate - was) / was) * 100;
+  return { percent: Math.abs(raw) < 0.5 ? 0 : Math.round(raw) };
+}
 
 export function filterCounts(entries) {
-  const counts = { all: entries.length, new: 0, 'update-price': 0, 'history-only': 0, unchanged: 0, decide: 0, error: 0 };
+  const counts = { all: entries.length, new: 0, 'update-price': 0, 'history-only': 0, unchanged: 0, check: 0, decide: 0, error: 0 };
   entries.forEach(entry => { counts[bucketOf(entry)] += 1; });
   return counts;
 }
