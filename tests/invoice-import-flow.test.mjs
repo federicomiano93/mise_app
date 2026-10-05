@@ -925,7 +925,6 @@ test('⚠️ three invoices at 1.00 → 1.10 → 1.10 write exactly ONE price ch
   assert.deepEqual(change, {
     id: change.id, ingredientId, supplierId: 'sup-1', name: 'Burro', priceUnit: 'kg', oldPrice: 1, newPrice: 1.1,
     oldDate: '2026-01-10', date: '2026-02-10', invoiceId: '18000000002', line: 1, pct: 10,
-    oldPack: 'Burro 25 kg', newPack: 'Burro 25 kg',
     recordedAt: change.recordedAt, bakery: 'loc-test',
   });
   assert.match(change.recordedAt, /^\d{4}-\d{2}-\d{2}T/);
@@ -1069,28 +1068,28 @@ test('the progress line never says «1 of 0» when only rows already in Mise are
 
 // ── One ingredient, several packs (5 Oct 2026) ──────────────────────────────────
 
-const zeusFile = (over = {}) => fileText([ing({
-  key: 'IT00000000001|code:ZEUS', name: 'Lievito baking Zeus', supplierCode: 'ZEUS', weight: '1 kg',
+const paccoFile = (over = {}) => fileText([ing({
+  key: 'IT00000000001|code:PACCO', name: 'Lievito baking pacco', supplierCode: 'PACCO', weight: '1 kg',
   prices: [price({ invoiceId: '18000000050', line: 1, invoiceDate: '2026-09-10', pricePerUnit: 6 })], ...over,
 })]);
 
 test('⚠️ a new pack code answered «Same as» is learnt: the next file matches by it, asks nothing and writes no code again', async () => {
   const db = makeDb();
   db.suppliers.push({ id: 's1', name: 'Fornitore', vatNumber: 'IT00000000001' });
-  db.ingredients.push({ id: 'i1', name: 'Lievito baking Pegaso', shortName: '', supplierId: 's1', kind: 'ingredient', supplierCode: 'PEGASO' });
+  db.ingredients.push({ id: 'i1', name: 'Lievito baking sacco', shortName: '', supplierId: 's1', kind: 'ingredient', supplierCode: 'SACCO' });
 
-  let root = await open(db, zeusFile());
+  let root = await open(db, paccoFile());
   await toIngredients(root);
   await pick(selects(root)[0], 'same:i1');
   await press(root, 'Import 1 ingredient');
   assert.equal(db.ingredients.length, 1, 'one ingredient, not two');
-  assert.deepEqual(db.ingredients[0].supplierCodes, ['ZEUS'], 'the new pack code is remembered');
-  assert.equal(db.ingredients[0].supplierCode, 'PEGASO', 'the main code stays');
-  assert.equal(db.pointDocs.i1['inv-18000000050-1'].packLabel, 'Lievito baking Zeus 1 kg', 'the point says which pack it paid for');
+  assert.deepEqual(db.ingredients[0].supplierCodes, ['PACCO'], 'the new pack code is remembered');
+  assert.equal(db.ingredients[0].supplierCode, 'SACCO', 'the main code stays');
+  assert.equal(db.pointDocs.i1['inv-18000000050-1'].packLabel, 'Lievito baking pacco 1 kg', 'the point says which pack it paid for');
   await closeOverlay(root);
 
   // Another month, another invoice, the supplier's description changed: the code alone finds it.
-  const next = zeusFile({ name: 'Lievito secco di birra', prices: [price({ invoiceId: '18000000051', line: 1, invoiceDate: '2026-10-02', pricePerUnit: 6.5 })] });
+  const next = paccoFile({ name: 'Lievito secco di birra', prices: [price({ invoiceId: '18000000051', line: 1, invoiceDate: '2026-10-02', pricePerUnit: 6.5 })] });
   const writtenBefore = db.calls.length;
   root = await open(db, next);
   await toIngredients(root);
@@ -1098,7 +1097,7 @@ test('⚠️ a new pack code answered «Same as» is learnt: the next file match
   assert.equal(selects(root).length, 0);
   await press(root, 'Import 1 ingredient');
   assert.equal(db.ingredients.length, 1);
-  assert.deepEqual(db.ingredients[0].supplierCodes, ['ZEUS'], 'no second copy of the code');
+  assert.deepEqual(db.ingredients[0].supplierCodes, ['PACCO'], 'no second copy of the code');
   assert.ok(db.calls.length > writtenBefore);
   assert.ok(db.pointDocs.i1['inv-18000000051-1'], 'the price went to the same ingredient');
 });
@@ -1106,16 +1105,16 @@ test('⚠️ a new pack code answered «Same as» is learnt: the next file match
 test('a price change between two packs carries both pack names', async () => {
   const db = makeDb();
   db.suppliers.push({ id: 's1', name: 'Fornitore', vatNumber: 'IT00000000001' });
-  db.ingredients.push({ id: 'i1', name: 'Lievito baking Pegaso', shortName: '', supplierId: 's1', kind: 'ingredient', supplierCode: 'PEGASO' });
+  db.ingredients.push({ id: 'i1', name: 'Lievito baking sacco', shortName: '', supplierId: 's1', kind: 'ingredient', supplierCode: 'SACCO' });
   db.points.i1 = ['inv-18000000001-1'];
   db.pointDocs.i1 = { 'inv-18000000001-1': {
-    invoiceId: '18000000001', invoiceDate: '2026-08-10', pricePerUnit: 4, priceUnit: 'kg', source: 'invoice', packLabel: 'Lievito baking Pegaso 5 kg',
+    invoiceId: '18000000001', invoiceDate: '2026-08-10', pricePerUnit: 4, priceUnit: 'kg', source: 'invoice', packLabel: 'Lievito baking sacco 5 kg',
   } };
-  const root = await open(db, zeusFile());
+  const root = await open(db, paccoFile());
   await toIngredients(root);
   await pick(selects(root)[0], 'same:i1');
   await press(root, 'Import 1 ingredient');
   const [change] = db.changes;
-  assert.equal(change.oldPack, 'Lievito baking Pegaso 5 kg');
-  assert.equal(change.newPack, 'Lievito baking Zeus 1 kg');
+  assert.equal(change.oldPack, 'Lievito baking sacco 5 kg');
+  assert.equal(change.newPack, 'Lievito baking pacco 1 kg');
 });

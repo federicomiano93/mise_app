@@ -12,7 +12,7 @@
 // ⚠️ NO ALLERGEN, NUTRITION OR PACK-INGREDIENT KEY CAN PASS planBatchWrites: the model never builds one
 // (an invoice line says nothing about what a product contains), and this refuses one anyway.
 
-import { planIngredients, resolveRow, MAX_DOCS_PER_BATCH } from './invoice-import-model.js';
+import { planIngredients, resolveRow, packLabelOf, MAX_DOCS_PER_BATCH } from './invoice-import-model.js';
 import { changesFromPoints } from './price-changes-model.js';
 
 const INGREDIENTS = 'ingredients';
@@ -75,7 +75,11 @@ export function pointsOfDocs(docs) {
       invoiceDate: data.invoiceDate,
       pricePerUnit: data.pricePerUnit,
       priceUnit: data.priceUnit,
-      // Which pack the price was paid for (changesFromPoints reads it as oldPack / newPack).
+      // Which pack the price was paid for: its article code decides «another pack», its label is only words
+      // (changesFromPoints). A point stored before packs existed has neither: planPriceChanges fills them in
+      // from the ingredient.
+      ...(typeof data.unitWeightKg === 'number' ? { unitWeightKg: data.unitWeightKg } : {}),
+      ...(typeof data.packCode === 'string' && data.packCode ? { packCode: data.packCode } : {}),
       ...(typeof data.packLabel === 'string' && data.packLabel ? { pack: data.packLabel } : {}),
     });
   });
@@ -103,17 +107,30 @@ const sameChange = (stored, c) => stored.oldPrice === c.oldPrice && stored.newPr
 // the same file therefore plans nothing. `isNew`: the ingredient was created a moment ago, so it cannot have any
 // (no read). read = { changeIds(ingredientId) → [{ id, oldPrice, newPrice, oldDate, date, priceUnit }] } — a server
 // read, refused offline; not made when nothing is expected and nothing new is written.
-// `packLabel` is the pack the NEW points were paid for (packLabelOf in the model); packs alone never make a
+// `packLabel`, `packCode` and `unitWeightKg` describe the pack the NEW points were paid for (the file's);
+// `ingredient` is the STORED ingredient: a stored point with no pack code takes its main article code, and one
+// with no label takes its name + weight as they are NOW (computed, never written). Packs alone never make a
 // stored change differ.
-export async function planPriceChanges({ ingredientId, supplierId, name, storedPoints, newPoints, priceUnit, isNew, read, nowIso, packLabel }) {
+export async function planPriceChanges({
+  ingredientId, supplierId, name, storedPoints, newPoints, priceUnit, isNew, read, nowIso, packLabel, packCode, unitWeightKg, ingredient,
+}) {
   const none = { create: [], remove: [] };
   if (typeof ingredientId !== 'string' || !ingredientId || ingredientId.length > MAX_ID) return none;
+  const mainCode = typeof ingredient?.supplierCode === 'string' ? ingredient.supplierCode.trim() : '';
+  const ownLabel = ingredient ? packLabelOf({ name: String(ingredient.name || '').slice(0, MAX_NAME), weight: ingredient.weight }) : '';
+  const known = (storedPoints || []).map(p => ({
+    ...p,
+    ...(!p.packCode && mainCode ? { packCode: mainCode } : {}),
+    ...(!p.pack && ownLabel ? { pack: ownLabel } : {}),
+  }));
   const fresh = (newPoints || []).map(p => ({
     invoiceId: p.invoiceId, line: p.line, invoiceDate: p.invoiceDate, pricePerUnit: p.pricePerUnit, priceUnit,
+    ...(priceUnit === 'pcs' && typeof unitWeightKg === 'number' ? { unitWeightKg } : {}),
+    ...(packCode ? { packCode } : {}),
     ...(packLabel ? { pack: packLabel } : {}),
   }));
   const label = String(name ?? '').trim().slice(0, MAX_NAME);
-  const found = changesFromPoints({ id: ingredientId, supplierId, name: label }, [...(storedPoints || []), ...fresh])
+  const found = changesFromPoints({ id: ingredientId, supplierId, name: label }, [...known, ...fresh])
     .filter(acceptable);
   if (found.length === 0 && (isNew || fresh.length === 0)) return none;
   const stored = isNew ? [] : [...(await read.changeIds(ingredientId))];

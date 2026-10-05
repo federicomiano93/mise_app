@@ -137,6 +137,7 @@ const REASON_KEYS = Object.freeze({
   'duplicate-vat': 'invoiceImport.reason.duplicateVat',
   'code-differs': 'invoiceImport.reason.codeDiffers',
   'unit-differs': 'invoiceImport.reason.unitDiffers',
+  'piece-differs': 'invoiceImport.reason.pieceDiffers',
   'codes-full': 'invoiceImport.reason.codesFull',
 });
 
@@ -1057,7 +1058,10 @@ export function openInvoiceImport(data) {
     // run goes on, and the summary counts the ingredients whose changes are missing (a second load completes them).
     const recordChanges = async ({ file, ...info }) => {
       try {
-        const ops = await planPriceChanges({ ...info, read, nowIso, packLabel: file ? packLabelOf(file) : undefined });
+        const ops = await planPriceChanges({
+          ...info, read, nowIso, packLabel: file ? packLabelOf(file) : undefined,
+          packCode: file ? file.supplierCode : undefined, unitWeightKg: file ? file.unitWeightKg : undefined,
+        });
         const batches = priceChangeBatches(ops);
         if (batches.length > 0) await runImportBatches(batches);
         return { added: ops.create.length, failed: 0 };
@@ -1143,7 +1147,7 @@ export function openInvoiceImport(data) {
           const recorded = await recordChanges({
             file: fileIngredient,
             ingredientId: fresh.row.ingredientId, supplierId: fresh.row.supplierId, name: ingredientDisplayName(fresh.ingredient),
-            storedPoints: fresh.storedPoints, newPoints: [], priceUnit: fileIngredient.priceUnit, isNew: false,
+            storedPoints: fresh.storedPoints, newPoints: [], priceUnit: fileIngredient.priceUnit, isNew: false, ingredient: fresh.ingredient,
           });
           results.push({
             key: planned.key, name: planned.name, outcome: 'unchanged', changesAdded: recorded.added,
@@ -1158,7 +1162,7 @@ export function openInvoiceImport(data) {
             file: fileIngredient,
             ingredientId: writtenId, supplierId: fresh.row.supplierId,
             name: isNew ? fileIngredient.name : ingredientDisplayName(fresh.ingredient),
-            storedPoints: isNew ? [] : fresh.storedPoints, newPoints: fresh.row.newPoints,
+            storedPoints: isNew ? [] : fresh.storedPoints, newPoints: fresh.row.newPoints, ingredient: isNew ? null : fresh.ingredient,
             priceUnit: fileIngredient.priceUnit, isNew,
           });
           results.push({
@@ -1222,7 +1226,7 @@ export function openInvoiceImport(data) {
         recorded = await recordChanges({
           file: fileIngredient,
           ingredientId: row.ingredientId, supplierId: row.supplierId, name: ingredientDisplayName(stored) || planned.name,
-          storedPoints: points, newPoints: [], priceUnit: row.priceUnit, isNew: false,
+          storedPoints: points, newPoints: [], priceUnit: row.priceUnit, isNew: false, ingredient: stored,
         });
       } catch (err) {
         console.error('Reading the stored prices of one ingredient failed:', err);

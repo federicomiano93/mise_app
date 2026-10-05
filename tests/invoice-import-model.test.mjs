@@ -880,7 +880,7 @@ test('a point is exactly what the history rule describes', () => {
   assert.deepEqual(point.data, {
     recordedAt: '2026-08-31T12:00:00.000Z', priceUnit: 'kg', pricePerUnit: 0.57,
     supplierId: SUPPLIER_ID, source: 'invoice', invoiceId: '18000000001', invoiceDate: '2026-08-31', invoiceQty: 25,
-    packLabel: 'Farina tipo 00 25 kg',
+    packLabel: 'Farina tipo 00 25 kg', packCode: 'F00-25',
   });
   assert.equal(point.pointId, 'inv-18000000001-5');
   assert.match(point.pointId, new RegExp(`^inv-${point.data.invoiceId}-[0-9]{1,6}$`));
@@ -1029,6 +1029,8 @@ test('the model imports no Firebase, no DOM and nothing from another feature\'s 
   for (const spec of imports) {
     // The reason codes of the zip reader (a pure constants file of this same feature) are the one sibling allowed.
     if (spec === './invoice-zip/reasons.js') continue;
+    // The pure piece-weight comparison, shared with the price-changes model (no imports of its own but a date helper).
+    if (spec === './price-changes-model.js') continue;
     assert.ok(spec.startsWith('../') && !spec.slice(3).includes('/'), `${spec}: only js/ root modules`);
     assert.ok(!/firebase|dom\.js|firebase-/.test(spec), spec);
   }
@@ -1097,6 +1099,35 @@ test('a current price kept in ANOTHER unit is never replaced: the new prices go 
   const updated = planOne(file, ctxOf({ ingredients: [existingIng({ id: 'i1', name: 'Farina tipo 00' })], pricesById: sameUnit }));
   assert.equal(updated.status, 'update-price');
   assert.equal(updated.reason, undefined);
+});
+
+test('⚠️ a per-piece price of a piece of ANOTHER weight never becomes the current price: history only', () => {
+  const stored = (kg) => new Map([['i1', { priceUnit: 'pcs', pricePerUnit: 5, unitWeightKg: kg, priceUpdatedAt: '2026-01-01T12:00:00.000Z', vatRate: 4 }]]);
+  const file = oneIngredient({ supplierCode: '', priceUnit: 'pcs', unitWeightKg: 1, weight: '1 kg', prices: [price({ invoiceDate: '2026-08-31', pricePerUnit: 1.2 })] });
+  const run = (kg) => planOne(file, ctxOf({ ingredients: [existingIng({ id: 'i1', name: 'Farina tipo 00' })], pricesById: stored(kg) }));
+  const sack = run(5);
+  assert.equal(sack.status, 'history-only');
+  assert.equal(sack.reason, 'piece-differs');
+  assert.equal(sack.updateCurrent, false);
+  assert.equal(sack.newPoints.length, 1, 'the point still joins the history');
+  assert.deepEqual(flat(ingredientWrites(sack, file, '')).map(o => o.type), ['add-price-point'], 'no set-current-price');
+  assert.equal(run(undefined).status, 'history-only', 'a stored piece with no weight is not «equal» either');
+  const same = run(1.0005);
+  assert.equal(same.status, 'update-price', 'the same piece (within 0.1%) updates it');
+  assert.equal(same.reason, undefined);
+  // Per kilo is comparable across packs: nothing changes there.
+  const perKg = planOne(oneIngredient({ supplierCode: '', prices: [price({ invoiceDate: '2026-08-31' })] }), ctxOf({
+    ingredients: [existingIng({ id: 'i1', name: 'Farina tipo 00' })],
+    pricesById: new Map([['i1', { priceUnit: 'kg', pricePerUnit: 0.5, priceUpdatedAt: '2026-01-01T12:00:00.000Z' }]]),
+  }));
+  assert.equal(perKg.status, 'update-price');
+});
+
+test('every point the import writes carries the article code of its pack (when the file has one)', () => {
+  const withCode = flat(writesFor(oneIngredient({ supplierCode: 'PACCO-1' })).batches).find(o => o.type === 'add-price-point');
+  assert.equal(withCode.data.packCode, 'PACCO-1');
+  const without = flat(writesFor(oneIngredient({ supplierCode: '' })).batches).find(o => o.type === 'add-price-point');
+  assert.equal('packCode' in without.data, false);
 });
 
 test('a rate the file does not state keeps the one stored; one it does state replaces it', () => {
@@ -1213,13 +1244,13 @@ test('an ordinary row with no new points still writes nothing, and a row without
 // ── One ingredient, several packs (5 Oct 2026) ──────────────────────────────────
 
 test('matching by article code reads the main code AND every extra pack code, case and spaces ignored', () => {
-  const ctx = ctxOf({ ingredients: [existingIng({ id: 'x', name: 'Lievito Pegaso', supplierCode: 'PEG', supplierCodes: [' zeus ', 'Zeus', ''] })] });
-  const zeus = planOne(oneIngredient({ name: 'Qualcosa di diverso', supplierCode: 'ZEUS' }), ctx);
-  assert.equal(zeus.ingredientId, 'x');
-  assert.notEqual(zeus.status, 'maybe-duplicate');
-  assert.equal(zeus.patchSupplierCode, null);
-  assert.equal(zeus.setSupplierCodes, null, 'it already knows that code');
-  const main = planOne(oneIngredient({ name: 'Altro ancora', supplierCode: 'peg' }), ctx);
+  const ctx = ctxOf({ ingredients: [existingIng({ id: 'x', name: 'Lievito sacco', supplierCode: 'SACCO', supplierCodes: [' pacco ', 'pacco', ''] })] });
+  const pacco = planOne(oneIngredient({ name: 'Qualcosa di diverso', supplierCode: 'PACCO' }), ctx);
+  assert.equal(pacco.ingredientId, 'x');
+  assert.notEqual(pacco.status, 'maybe-duplicate');
+  assert.equal(pacco.patchSupplierCode, null);
+  assert.equal(pacco.setSupplierCodes, null, 'it already knows that code');
+  const main = planOne(oneIngredient({ name: 'Altro ancora', supplierCode: 'sacco' }), ctx);
   assert.equal(main.ingredientId, 'x');
 });
 
@@ -1271,9 +1302,9 @@ test('an «unchanged» row (every price already in) still learns a new pack code
 });
 
 test('every invoice point says which pack it paid for: the name, plus the weight unless the name has it', () => {
-  assert.equal(packLabelOf({ name: 'Lievito Zeus', weight: '1 kg' }), 'Lievito Zeus 1 kg');
-  assert.equal(packLabelOf({ name: 'Lievito Zeus 1kg', weight: '1 kg' }), 'Lievito Zeus 1kg');
-  assert.equal(packLabelOf({ name: 'Lievito Zeus', weight: '' }), 'Lievito Zeus');
+  assert.equal(packLabelOf({ name: 'Lievito pacco', weight: '1 kg' }), 'Lievito pacco 1 kg');
+  assert.equal(packLabelOf({ name: 'Lievito pacco 1kg', weight: '1 kg' }), 'Lievito pacco 1kg');
+  assert.equal(packLabelOf({ name: 'Lievito pacco', weight: '' }), 'Lievito pacco');
   assert.equal(packLabelOf({ name: 'x'.repeat(200), weight: '1 kg' }).length, 120);
   const points = flat(writesFor(oneIngredient({ weight: '25 kg', name: 'Farina tipo 00' })).batches).filter(o => o.type === 'add-price-point');
   assert.ok(points.length > 0);

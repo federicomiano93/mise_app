@@ -57,9 +57,21 @@ function usable(point) {
   return typeof point.priceUnit === 'string' && point.priceUnit !== '';
 }
 
+// ⚠️ TWO PER-PIECE PRICES ARE COMPARABLE ONLY WHEN THE PIECE IS THE SAME: the price of a piece of a 5 kg sack and
+// of a 1 kg bag are not one price that moved. Both weights must be there and within 0.1% of each other; a missing
+// weight is «not the same», never «equal» (refuse, don't guess).
+export function sameUnitWeight(a, b) {
+  if (typeof a !== 'number' || typeof b !== 'number' || !(a > 0) || !(b > 0)) return false;
+  return Math.abs(a - b) / Math.max(a, b) <= 0.001;
+}
+
+const codeKey = (v) => (typeof v === 'string' ? v.trim().toLowerCase() : '');
+
 // `ingredient`: { id, supplierId, name }. `points`: { invoiceId, line, invoiceDate, pricePerUnit, priceUnit,
-// pack? } in any order, possibly twice. Returns the documents to write (without `bakery` and `recordedAt`,
-// which the writer stamps), each with its `id`.
+// unitWeightKg?, packCode?, pack? } in any order, possibly twice. Returns the documents to write (without
+// `bakery` and `recordedAt`, which the writer stamps), each with its `id`.
+// ⚠️ A PACK IS KNOWN BY ITS ARTICLE CODE, never by how a label is worded: oldPack / newPack are written only when
+// both points carry a code and the two differ. A per-piece step across two piece sizes restarts the chain.
 export function changesFromPoints(ingredient, points, { minPct = 0.5 } = {}) {
   const seen = new Set();
   const clean = [];
@@ -80,6 +92,7 @@ export function changesFromPoints(ingredient, points, { minPct = 0.5 } = {}) {
     const prev = clean[i - 1];
     const next = clean[i];
     if (prev.priceUnit !== next.priceUnit) continue;
+    if (next.priceUnit === 'pcs' && !sameUnitWeight(prev.unitWeightKg, next.unitWeightKg)) continue;
     if (next.pricePerUnit === prev.pricePerUnit) continue;
     const pct = Math.round(((next.pricePerUnit - prev.pricePerUnit) / prev.pricePerUnit) * 10000) / 100;
     if (!Number.isFinite(pct) || Math.abs(pct) < minPct) continue;
@@ -97,8 +110,12 @@ export function changesFromPoints(ingredient, points, { minPct = 0.5 } = {}) {
       pct,
     };
     if (typeof ingredient.supplierId === 'string' && ingredient.supplierId) change.supplierId = ingredient.supplierId;
-    if (typeof prev.pack === 'string' && prev.pack) change.oldPack = prev.pack;
-    if (typeof next.pack === 'string' && next.pack) change.newPack = next.pack;
+    const oldCode = codeKey(prev.packCode);
+    const newCode = codeKey(next.packCode);
+    if (oldCode && newCode && oldCode !== newCode) {
+      if (typeof prev.pack === 'string' && prev.pack) change.oldPack = prev.pack;
+      if (typeof next.pack === 'string' && next.pack) change.newPack = next.pack;
+    }
     out.push(change);
   }
   return out;

@@ -41,19 +41,45 @@ test('a drop is negative, rounded to two decimals; below minPct is ignored', () 
 
 test('a unit switch restarts the chain instead of comparing kg with pieces', () => {
   const list = changesFromPoints(ING, [
-    pt('1', 1, '2026-09-01', 2), pt('2', 1, '2026-09-08', 20, { priceUnit: 'pcs' }), pt('3', 1, '2026-09-15', 22, { priceUnit: 'pcs' }),
+    pt('1', 1, '2026-09-01', 2), pt('2', 1, '2026-09-08', 20, { priceUnit: 'pcs', unitWeightKg: 0.05 }), pt('3', 1, '2026-09-15', 22, { priceUnit: 'pcs', unitWeightKg: 0.05 }),
   ]);
   assert.equal(list.length, 1);
   assert.equal(list[0].priceUnit, 'pcs');
   assert.equal(list[0].pct, 10);
 });
 
-test('packs are carried only when given', () => {
-  const [a] = changesFromPoints(ING, [pt('1', 1, '2026-09-01', 2, { pack: '25 kg' }), pt('2', 1, '2026-09-08', 3, { pack: '10 kg' })]);
+test('packs are carried only when the two article codes differ', () => {
+  const [a] = changesFromPoints(ING, [
+    pt('1', 1, '2026-09-01', 2, { pack: '25 kg', packCode: 'A-25' }), pt('2', 1, '2026-09-08', 3, { pack: '10 kg', packCode: 'A-10' }),
+  ]);
   assert.equal(a.oldPack, '25 kg');
   assert.equal(a.newPack, '10 kg');
   const [b] = changesFromPoints(ING, [pt('1', 1, '2026-09-01', 2), pt('2', 1, '2026-09-08', 3)]);
   assert.ok(!('oldPack' in b) && !('newPack' in b));
+});
+
+test('⚠️ labels worded differently under the SAME code are not another pack', () => {
+  const [c] = changesFromPoints(ING, [
+    pt('1', 1, '2026-09-01', 2, { pack: 'Lievito sacco 5 kg', packCode: 'S5' }), pt('2', 1, '2026-09-08', 3, { pack: 'LIEVITO SACCO (5kg)', packCode: 's5' }),
+  ]);
+  assert.ok(c);
+  assert.ok(!('oldPack' in c) && !('newPack' in c));
+  // One side without a code is not «another pack» either: nothing proves it.
+  const [d] = changesFromPoints(ING, [pt('1', 1, '2026-09-01', 2, { pack: 'x', packCode: 'S5' }), pt('2', 1, '2026-09-08', 3, { pack: 'y' })]);
+  assert.ok(!('oldPack' in d));
+});
+
+test('⚠️ per-piece prices of pieces of another weight never make a change; the same piece does', () => {
+  const pcs = (id, date, price, kg) => pt(id, 1, date, price, { priceUnit: 'pcs', unitWeightKg: kg });
+  assert.equal(changesFromPoints(ING, [pcs('1', '2026-09-01', 5, 5), pcs('2', '2026-09-08', 1, 1)]).length, 0, '5 kg then 1 kg');
+  // The chain restarts: the next point of the 1 kg piece is compared with the 1 kg piece, not with the sack.
+  const list = changesFromPoints(ING, [pcs('1', '2026-09-01', 5, 5), pcs('2', '2026-09-08', 1, 1), pcs('3', '2026-09-15', 1.2, 1)]);
+  assert.equal(list.length, 1);
+  assert.equal(list[0].oldPrice, 1);
+  assert.equal(changesFromPoints(ING, [pcs('1', '2026-09-01', 5, 1), pcs('2', '2026-09-08', 6, 1.0005)]).length, 1, 'within 0.1%');
+  assert.equal(changesFromPoints(ING, [pt('1', 1, '2026-09-01', 5, { priceUnit: 'pcs' }), pcs('2', '2026-09-08', 6, 1)]).length, 0, 'a missing weight is not «equal»');
+  // Per kilo stays comparable across packs: that is the point of the feature.
+  assert.equal(changesFromPoints(ING, [pt('1', 1, '2026-09-01', 4, { packCode: 'S5' }), pt('2', 1, '2026-09-08', 5, { packCode: 'B1' })]).length, 1);
 });
 
 test('never NaN: unusable points are skipped, the chain goes on across them', () => {

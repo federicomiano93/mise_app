@@ -218,16 +218,40 @@ test('replanRow hands back the matched ingredient and its stored points from the
 
 test('the pack of a stored point and of the new points is carried into oldPack / newPack', async () => {
   const [point] = pointsOfDocs([
-    { id: 'inv-100-1', data: { invoiceId: '100', invoiceDate: '2026-01-10', pricePerUnit: 4, priceUnit: 'kg', packLabel: 'Lievito Pegaso 5 kg' } },
+    { id: 'inv-100-1', data: { invoiceId: '100', invoiceDate: '2026-01-10', pricePerUnit: 4, priceUnit: 'kg', packLabel: 'Lievito sacco 5 kg' } },
   ]);
-  assert.equal(point.pack, 'Lievito Pegaso 5 kg');
+  assert.equal(point.pack, 'Lievito sacco 5 kg');
   assert.equal(pointsOfDocs([{ id: 'inv-100-2', data: { invoiceId: '100', invoiceDate: '2026-01-10', pricePerUnit: 4, priceUnit: 'kg' } }])[0].pack, undefined);
   const ops = await planPriceChanges({
     ...base,
-    storedPoints: [point],
+    storedPoints: [{ ...point, packCode: 'SACCO' }],
     newPoints: [{ id: 'inv-200-1', invoiceId: '200', line: 1, invoiceDate: '2026-02-10', pricePerUnit: 6, qty: 1 }],
-    packLabel: 'Lievito Zeus 1 kg',
+    packLabel: 'Lievito pacco 1 kg',
+    packCode: 'PACCO',
   });
-  assert.equal(ops.create[0].data.oldPack, 'Lievito Pegaso 5 kg');
-  assert.equal(ops.create[0].data.newPack, 'Lievito Zeus 1 kg');
+  assert.equal(ops.create[0].data.oldPack, 'Lievito sacco 5 kg');
+  assert.equal(ops.create[0].data.newPack, 'Lievito pacco 1 kg');
+});
+
+test('⚠️ an OLD unlabelled point takes the ingredient\'s main code and its name + weight; a new pack code makes the note', async () => {
+  const stored = pointsOfDocs([
+    { id: 'inv-100-1', data: { invoiceId: '100', invoiceDate: '2026-01-10', pricePerUnit: 4, priceUnit: 'kg' } },
+  ]);
+  assert.equal(stored[0].packCode, undefined, 'nothing is invented in the reader');
+  const ingredient = { name: 'Lievito sacco', weight: '5 kg', supplierCode: 'SACCO' };
+  const newPoints = [{ id: 'inv-200-1', invoiceId: '200', line: 1, invoiceDate: '2026-02-10', pricePerUnit: 6, qty: 1 }];
+  const other = await planPriceChanges({ ...base, storedPoints: stored, newPoints, packLabel: 'Lievito pacco 1 kg', packCode: 'PACCO', ingredient });
+  assert.equal(other.create[0].data.oldPack, 'Lievito sacco 5 kg');
+  assert.equal(other.create[0].data.newPack, 'Lievito pacco 1 kg');
+  // The same code, worded differently: a price change, no pack note.
+  const same = await planPriceChanges({ ...base, storedPoints: stored, newPoints, packLabel: 'LIEVITO SACCO', packCode: 'sacco', ingredient });
+  assert.equal(same.create.length, 1);
+  assert.ok(!('oldPack' in same.create[0].data) && !('newPack' in same.create[0].data));
+  // Per piece: a 5 kg piece then a 1 kg piece is no change at all.
+  const pieces = await planPriceChanges({
+    ...base,
+    storedPoints: [{ invoiceId: '100', line: 1, invoiceDate: '2026-01-10', pricePerUnit: 5, priceUnit: 'pcs', unitWeightKg: 5 }],
+    newPoints, priceUnit: 'pcs', unitWeightKg: 1, ingredient,
+  });
+  assert.equal(pieces.create.length, 0);
 });

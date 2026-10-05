@@ -26,6 +26,7 @@ import { formatPatch, looseUnit } from '../pack-format.js';
 import { cartonWordFor, defaultPackFor } from '../record-choices.js';
 import { supplierLabel } from '../supplier-label.js';
 import { normalizeVat } from '../vat-number.js';
+import { sameUnitWeight } from './price-changes-model.js';
 import { NOTE, LEFT_OUT } from './invoice-zip/reasons.js';
 
 export const IMPORT_FORMAT = 'mise-invoice-import';
@@ -37,7 +38,7 @@ export const MAX_DOCS_PER_BATCH = 5;
 
 // The caps the rules put on each text (firestore.rules), and a few of ours.
 const MAX_NAME = 200;
-const MAX_SUPPLIER_CODE = 60;
+export const MAX_SUPPLIER_CODE = 60;
 // How many article codes (one per pack) an ingredient may remember besides its main one (the rules' cap).
 export const MAX_SUPPLIER_CODES = 20;
 // The rules' cap on a price point's `packLabel`.
@@ -406,7 +407,7 @@ const codeOf = (ing) => (typeof ing?.supplierCode === 'string' ? ing.supplierCod
 const compact = (text) => foldText(text).replace(/ /g, '');
 
 // Which pack a price was paid for: the invoice's own name, plus the weight when the name does not already
-// say it («Lievito Zeus» + «1 kg» → «Lievito Zeus 1 kg»). A word of the invoice, never translated.
+// say it («Lievito» + «1 kg» → «Lievito 1 kg»). A word of the invoice, never translated.
 export function packLabelOf(item) {
   const name = clean(item?.name, MAX_NAME);
   const weight = clean(item?.weight, MAX_WEIGHT);
@@ -449,8 +450,12 @@ function matchedRow(base, existing, ctx) {
   // rate per piece would silently change what every recipe costs. The new prices go to the history only.
   const storedUnit = PRICE_UNITS.includes(doc?.priceUnit) ? doc.priceUnit : null;
   const unitDiffers = newPoints.length > 0 && storedUnit !== null && storedUnit !== base.priceUnit;
+  // ⚠️ THE SAME HOLDS FOR A PIECE OF ANOTHER SIZE: a per-piece price of a 5 kg sack never replaces the per-piece
+  // price of a 1 kg bag (the two packs of one ingredient). Only an equal piece weight (0.1%) may update it.
+  const pieceDiffers = newPoints.length > 0 && !unitDiffers && storedUnit === 'pcs' && base.priceUnit === 'pcs'
+    && !sameUnitWeight(base.unitWeightKg, doc?.unitWeightKg);
   // An invoice older than the price in force only feeds the history.
-  const updateCurrent = newPoints.length > 0 && !unitDiffers && (!doc || !stamp || latest.invoiceDate > stamp.slice(0, 10));
+  const updateCurrent = newPoints.length > 0 && !unitDiffers && !pieceDiffers && (!doc || !stamp || latest.invoiceDate > stamp.slice(0, 10));
   const status = newPoints.length === 0 ? 'unchanged' : (updateCurrent ? 'update-price' : 'history-only');
   // ⚠️ THE FILE'S CODE IS A NEW PACK OF THIS INGREDIENT when it does not answer to it yet: the main code when
   // it has none, else a place in `supplierCodes` — unless the list is full, which is said, never overwritten.
@@ -474,6 +479,7 @@ function matchedRow(base, existing, ctx) {
     updateCurrent,
     vatRate,
     ...(unitDiffers ? { reason: 'unit-differs' } : {}),
+    ...(pieceDiffers ? { reason: 'piece-differs' } : {}),
     patchSupplierCode,
     setSupplierCodes,
     ...(codesFull ? { codesFull: true } : {}),
@@ -529,6 +535,7 @@ export function planIngredients(fileIngredients, ctx) {
       setSupplierCodes: null,
       // What the file says about the price: matching a stored price against it needs both (matchedRow).
       priceUnit: file.priceUnit || null,
+      unitWeightKg: typeof file.unitWeightKg === 'number' ? file.unitWeightKg : null,
       vatRate: file.vatRate === undefined ? null : file.vatRate,
       allPoints,
       // Set when the file wants the ingredient but states no price for it (see PRICE_CHECK_CODES).
@@ -698,6 +705,8 @@ export function ingredientWrites(row, fileIngredient, nowIso, options) {
     ops.push({ type: 'patch-ingredient', ingredientId, data: codePatch });
   }
   const packLabel = packLabelOf(fileIngredient);
+  // The article code of the pack the price was paid for: what tells a change of pack from a change of price.
+  const packCode = clean(fileIngredient.supplierCode, MAX_SUPPLIER_CODE);
 
   const latest = points[points.length - 1];
   const pieceKg = fileIngredient.priceUnit === 'pcs' ? fileIngredient.unitWeightKg : null;
@@ -734,6 +743,7 @@ export function ingredientWrites(row, fileIngredient, nowIso, options) {
         ...(p.qty !== null && p.qty !== undefined ? { invoiceQty: p.qty } : {}),
         // Which pack this price was paid for, so a change of pack is never read as a change of price.
         ...(packLabel ? { packLabel } : {}),
+        ...(packCode ? { packCode } : {}),
       },
     });
   });
