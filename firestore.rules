@@ -968,8 +968,10 @@ service cloud.firestore {
       // so loading the same zip twice can never count a change twice, and it is
       // pinned below to the fields it names. Money, so the same gate as writing a
       // price (canManage Food cost) for reading too. Never edited: a change is a
-      // fact about two invoices. Deletable by the same people (an ingredient merged
-      // or removed takes its changes with it).
+      // fact about two invoices. Deletable by the same people: the merge tool
+      // removes the changes of an ingredient it merges, and the invoice import
+      // removes one that a late-arriving invoice made wrong; the changes of a
+      // deleted ingredient stay as history under their frozen name.
       match /price-changes/{id} {
         allow read: if canManage(lid, 'foodcost');
 
