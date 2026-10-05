@@ -15,7 +15,7 @@ import { sessionReady } from '../firebase.js';
 import { currentLocationId, pathFor } from '../location.js';
 import { saveSupplierRecord } from '../record-data.js';
 import { db } from './firebase-orders.js';
-import { planBatchWrites } from './invoice-import-plan.js';
+import { planBatchWrites, pointsOfDocs } from './invoice-import-plan.js';
 import { planDecisionBatches } from './invoice-zip/selection.js';
 import {
   collection,
@@ -31,6 +31,7 @@ const SUPPLIERS = 'suppliers';
 const INGREDIENTS = 'ingredients';
 const INGREDIENT_PRICES = 'ingredient-prices';
 const PRICES = 'prices';
+const PRICE_CHANGES = 'price-changes';
 const DECISIONS = 'invoice-decisions';
 
 export const IMPORT_COMMIT_TIMEOUT_MS = 30000;
@@ -89,10 +90,25 @@ export async function freshIngredientsForSupplier(supplierId) {
 
 // The ids of the history points that already came from an invoice, for one ingredient — what makes a
 // second import of the same file plan nothing. Single-field equality: no composite index.
+// ⚠️ The Set also carries `.points` — the same documents read as { invoiceId, line, invoiceDate, pricePerUnit,
+// priceUnit } — so the price changes need no second read of the folder.
 export async function invoicePointIds(ingredientId) {
   await sessionReady;
   const ref = doc(collection(db, pathFor(INGREDIENTS)), ingredientId);
   const snap = await getDocsFromServer(query(collection(ref, PRICES), where('source', '==', 'invoice')));
+  const ids = new Set(snap.docs.map(d => d.id));
+  ids.points = pointsOfDocs(snap.docs.map(d => ({ id: d.id, data: d.data() })));
+  return ids;
+}
+
+// The ids of the price changes already stored for one ingredient (server read, refused offline like the rest).
+export async function storedPriceChangeIds(ingredientId) {
+  refuseOffline();
+  await sessionReady;
+  const snap = await withTimeout(getDocsFromServer(query(
+    collection(db, pathFor(PRICE_CHANGES)),
+    where('ingredientId', '==', ingredientId),
+  )));
   return new Set(snap.docs.map(d => d.id));
 }
 

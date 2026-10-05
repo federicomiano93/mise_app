@@ -58,13 +58,13 @@ registerHooks({
 });
 
 const { openInvoiceImport } = await import('../js/orders/invoice-import-screen.js');
-const { planBatchWrites } = await import('../js/orders/invoice-import-plan.js');
+const { planBatchWrites, pointsOfDocs } = await import('../js/orders/invoice-import-plan.js');
 
 // ── The in-memory «database» ────────────────────────────────────────────────────
 
 function makeDb() {
   const db = {
-    suppliers: [], ingredients: [], prices: {}, points: {},
+    suppliers: [], ingredients: [], prices: {}, points: {}, pointDocs: {}, changes: [], changeReads: 0,
     calls: [], batches: 0, failOn: null, beforeBatch: null, beforeSuppliers: null, failSupplier: null, n: 0,
     decisions: [], failDecisionsLoad: null, failDecisionsWrite: null,
   };
@@ -86,7 +86,12 @@ function makeDb() {
       return db.suppliers.map(s => ({ ...s }));
     },
     async freshIngredientsForSupplier(supplierId) { return db.ingredients.filter(i => i.supplierId === supplierId).map(i => ({ ...i })); },
-    async invoicePointIds(id) { return new Set(db.points[id] || []); },
+    async invoicePointIds(id) {
+      const set = new Set(db.points[id] || []);
+      set.points = pointsOfDocs(Object.entries(db.pointDocs[id] || {}).map(([pid, data]) => ({ id: pid, data })));
+      return set;
+    },
+    async storedPriceChangeIds(id) { db.changeReads += 1; return new Set(db.changes.filter(c => c.ingredientId === id).map(c => c.id)); },
     async freshPrice(id) { return db.prices[id] ? { ...db.prices[id] } : null; },
     async loadInvoiceDecisions() {
       if (db.failDecisionsLoad) throw failure(db.failDecisionsLoad);
@@ -115,12 +120,16 @@ function makeDb() {
           else db.ingredients[at] = { ...db.ingredients[at], ...data };
         } else if (path[0] === 'ingredient-prices') {
           db.prices[path[1]] = { ...(db.prices[path[1]] || {}), ...data };
+        } else if (path[0] === 'price-changes') {
+          if (db.changes.some(c => c.id === path[1])) throw failure('permission-denied');   // create-only, like the rules
+          db.changes.push({ id: path[1], ...data });
         } else {
           const list = (db.points[path[1]] ||= []);
           if (list.includes(path[3])) throw failure('permission-denied');   // create-only, like the rules
           list.push(path[3]);
+          (db.pointDocs[path[1]] ||= {})[path[3]] = data;
         }
-        assert.equal(merge, !(path[2] === 'prices'));
+        assert.equal(merge, !(path[2] === 'prices' || path[0] === 'price-changes'));
       });
       return plan.ingredientId;
     },
@@ -267,6 +276,8 @@ test('⚠️ loading the same file again plans no write at all: everything is Un
   assert.match(textOf(root), /2 unchanged ingredients/);
   assert.match(textOf(root), /Nothing to import/);
   assert.ok(!buttonWith(root, 'Import'), 'there is nothing to import');
+  await press(root, 'Done');
+  assert.match(textOf(root), /Price changes recorded: 0/, 'rows already in Mise are looked at for changes, and the summary says none');
   await press(root, 'Done');
   assert.equal(db.calls.length, written, 'not one more write');
   assert.equal(db.batches, batches);
@@ -881,4 +892,90 @@ test('a .json file still takes the old path: no remembered decisions are read or
   assert.equal(newSelects(root, 'invimp-new-').length, 0, 'no «Do not import (remember)» on this path');
   await press(root, 'Import 2 ingredients');
   assert.ok(!db.calls.some(c => c[0] === 'decisions'));
+});
+
+// ── Price changes found by the import ───────────────────────────────────────────
+
+const stepPrice = (invoiceId, pricePerUnit, invoiceDate) => price({ invoiceId, line: 1, invoiceDate, pricePerUnit });
+const stepFile = () => fileText([ing({
+  key: 'k-step', name: 'Burro', supplierCode: '',
+  prices: [stepPrice('18000000001', 1, '2026-01-10'), stepPrice('18000000002', 1.1, '2026-02-10'), stepPrice('18000000003', 1.1, '2026-03-10')],
+})]);
+
+test('⚠️ three invoices at 1.00 → 1.10 → 1.10 write exactly ONE price change, and the same file again writes nothing new', async () => {
+  const db = makeDb();
+  let root = await open(db, stepFile());
+  await toIngredients(root);
+  await press(root, 'Import 1 ingredient');
+  assert.equal(db.changes.length, 1);
+  const [change] = db.changes;
+  const ingredientId = db.ingredients[0].id;
+  assert.equal(change.id, `inv-18000000002-1-${ingredientId}`);
+  assert.deepEqual(change, {
+    id: change.id, ingredientId, supplierId: 'sup-1', name: 'Burro', priceUnit: 'kg', oldPrice: 1, newPrice: 1.1,
+    oldDate: '2026-01-10', date: '2026-02-10', invoiceId: '18000000002', line: 1, pct: 10,
+    recordedAt: change.recordedAt, bakery: 'loc-test',
+  });
+  assert.match(change.recordedAt, /^\d{4}-\d{2}-\d{2}T/);
+  assert.match(textOf(root), /Price changes recorded: 1/);
+  assert.ok(db.calls.findIndex(c => c[1] && c[1].startsWith('price-changes/')) > db.calls.findIndex(c => c[1] && c[1].includes('/prices/')), 'after the prices of the row itself');
+  await closeOverlay(root);
+
+  const before = db.calls.length;
+  root = await open(db, stepFile());
+  await toIngredients(root);
+  assert.match(textOf(root), /1 unchanged ingredient/);
+  await press(root, 'Done');
+  await press(root, 'Done');
+  assert.equal(db.changes.length, 1);
+  assert.equal(db.calls.length, before, 'not one more write');
+});
+
+test('⚠️ an «unchanged» row whose stored points already show a change writes it once', async () => {
+  const db = makeDb();
+  db.suppliers.push({ id: 's1', name: 'Fornitore', vatNumber: 'IT00000000001' });
+  db.ingredients.push({ id: 'i1', name: 'Burro', shortName: 'Burro 1 kg', supplierId: 's1', kind: 'ingredient', supplierCode: '' });
+  const stored = [['18000000001', 1, '2026-01-10'], ['18000000002', 2, '2026-02-10']];
+  db.points.i1 = stored.map(([inv]) => `inv-${inv}-1`);
+  stored.forEach(([inv, rate, date]) => {
+    (db.pointDocs.i1 ||= {})[`inv-${inv}-1`] = { invoiceId: inv, invoiceDate: date, pricePerUnit: rate, priceUnit: 'kg', source: 'invoice' };
+  });
+  const text = fileText([ing({ name: 'Burro', supplierCode: '', prices: [stepPrice('18000000001', 1, '2026-01-10'), stepPrice('18000000002', 2, '2026-02-10')] })]);
+
+  let root = await open(db, text);
+  await toIngredients(root);
+  assert.match(textOf(root), /1 unchanged ingredient/);
+  await press(root, 'Done');
+  assert.match(textOf(root), /Price changes recorded: 1/);
+  await press(root, 'Done');
+  assert.deepEqual(db.changes.map(c => [c.id, c.name, c.pct]), [['inv-18000000002-1-i1', 'Burro 1 kg', 100]]);
+
+  root = await open(db, text);
+  await toIngredients(root);
+  await press(root, 'Done');
+  await press(root, 'Done');
+  assert.equal(db.changes.length, 1, 'the second load adds nothing');
+});
+
+test('the summary shows the changes recorded, also when there are none', async () => {
+  const db = makeDb();
+  const root = await open(db, fileText());
+  await toIngredients(root);
+  await press(root, 'Import 2 ingredients');
+  assert.match(textOf(root), /Price changes recorded: 0/);
+  assert.equal(db.changes.length, 0);
+  assert.equal(db.changeReads, 0, 'a new ingredient reads no stored changes');
+});
+
+test('a refused change leaves the prices of the row in and says the row failed, so a second load can finish it', async () => {
+  const db = makeDb();
+  const root = await open(db, stepFile());
+  await toIngredients(root);
+  db.failOn = (n) => (n === 2 ? 'invalid-argument' : null);
+  await press(root, 'Import 1 ingredient');
+  assert.equal(db.ingredients.length, 1);
+  assert.equal(db.points[db.ingredients[0].id].length, 3, 'the prices are in');
+  assert.equal(db.changes.length, 0);
+  assert.match(textOf(root), /1 ingredient not imported/);
+  assert.match(textOf(root), /Could not be saved \(invalid-argument\)\./);
 });

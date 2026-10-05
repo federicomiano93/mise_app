@@ -20,6 +20,7 @@ export const linkSupplierVat = (...a) => globalThis.__inv.linkSupplierVat(...a);
 export const freshSuppliers = (...a) => globalThis.__inv.freshSuppliers(...a);
 export const freshIngredientsForSupplier = (...a) => globalThis.__inv.freshIngredientsForSupplier(...a);
 export const invoicePointIds = (...a) => globalThis.__inv.invoicePointIds(...a);
+export const storedPriceChangeIds = (...a) => globalThis.__inv.storedPriceChangeIds(...a);
 export const freshPrice = (...a) => globalThis.__inv.freshPrice(...a);
 export const runImportBatches = (...a) => globalThis.__inv.runImportBatches(...a);
 export const loadInvoiceDecisions = (...a) => globalThis.__inv.loadInvoiceDecisions(...a);

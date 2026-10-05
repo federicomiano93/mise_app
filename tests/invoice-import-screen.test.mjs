@@ -80,7 +80,7 @@ test('leaving asks first (danger), is off while writing, and nothing is written 
 test('⚠️ each row is planned AGAIN on fresh server data before anything is written, and the run stops only on a refusal or no connection', () => {
   const run = SCREEN.slice(SCREEN.indexOf('async function runImport'));
   const replan = run.indexOf('await replanRow(');
-  const write = run.indexOf('await runImportBatches(');
+  const write = run.indexOf('await runImportBatches(batches)', replan);
   assert.ok(replan > 0 && write > replan, 'replanRow must run before runImportBatches');
   assert.match(run, /freshIngredientsForSupplier\(supplierId\)/);
   assert.match(run, /invoicePointIds\(id\)/);

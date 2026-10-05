@@ -2995,6 +2995,10 @@ const DICTIONARIES = Object.freeze({
       one: '{n} unchanged',
       other: '{n} unchanged',
     },
+    'invoiceImport.summary.changes': {
+      one: 'Price changes recorded: {n}',
+      other: 'Price changes recorded: {n}',
+    },
     'invoiceImport.summary.skipped': {
       one: '{n} skipped',
       other: '{n} skipped',
@@ -5620,6 +5624,10 @@ const DICTIONARIES = Object.freeze({
     'invoiceImport.summary.unchanged': {
       one: '{n} invariato',
       other: '{n} invariati',
+    },
+    'invoiceImport.summary.changes': {
+      one: 'Variazioni di prezzo registrate: {n}',
+      other: 'Variazioni di prezzo registrate: {n}',
     },
     'invoiceImport.summary.skipped': {
       one: '{n} saltato',

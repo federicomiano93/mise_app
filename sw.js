@@ -1,4 +1,4 @@
-const CACHE_NAME = 'theitalianclub-v606';
+const CACHE_NAME = 'theitalianclub-v607';
 // Firebase SDK modules (loaded from gstatic) are cached SEPARATELY from CACHE_NAME
 // so they survive the cache-version bump that happens on every deploy — otherwise
 // the offline SDK would be wiped each release until the next online load. The name
@@ -533,7 +533,7 @@ const ASSET_HASHES = {
   "./js/location.js": '6aaf53615a8739d1',
   "./js/sections.js": 'abcfdecb2bd5766d',
   "./js/roles.js": '7a7c5cf34d57f511',
-  "./js/i18n.js": 'aa17f5e334d773e5',
+  "./js/i18n.js": '08c941f3d0f0de60',
   "./js/i18n-dom.js": '24249af4367511e5',
   "./js/keyboard-done.js": 'de05a6dd1f3aac26',
   "./js/join-code.js": '5b89de65db5c102f',
@@ -633,9 +633,9 @@ const ASSET_HASHES = {
   "./js/orders/registry-main.js": '1d601237da544c09',
   "./js/orders/registry-settings.js": '74c80116276527d1',
   "./js/orders/invoice-import-model.js": '40b0f97860289452',
-  "./js/orders/invoice-import-plan.js": '49d9fe33095fe4a5',
-  "./js/orders/invoice-import-data.js": 'e62cfcc6e806b9cf',
-  "./js/orders/invoice-import-screen.js": '6cbaeb4973c0cbd7',
+  "./js/orders/invoice-import-plan.js": 'a65d9daec71cb382',
+  "./js/orders/invoice-import-data.js": 'dcd746053b692c39',
+  "./js/orders/invoice-import-screen.js": '0756e3aab37d87e6',
   "./js/orders/invoice-zip/build-import.js": '60b6027548152451',
   "./js/orders/invoice-zip/classify.js": '9d4f1d8f97d4adbc',
   "./js/orders/invoice-zip/fatturapa.js": '528a08dfabe28535',

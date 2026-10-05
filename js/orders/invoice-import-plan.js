@@ -12,9 +12,11 @@
 // ⚠️ NO ALLERGEN, NUTRITION OR PACK-INGREDIENT KEY CAN PASS planBatchWrites: the model never builds one
 // (an invoice line says nothing about what a product contains), and this refuses one anyway.
 
-import { planIngredients, resolveRow } from './invoice-import-model.js';
+import { planIngredients, resolveRow, MAX_DOCS_PER_BATCH } from './invoice-import-model.js';
+import { changesFromPoints } from './price-changes-model.js';
 
 const INGREDIENTS = 'ingredients';
+const PRICE_CHANGES = 'price-changes';
 const INGREDIENT_PRICES = 'ingredient-prices';
 const PRICES = 'prices';
 
@@ -45,10 +47,68 @@ export function planBatchWrites(batches, { mintId, bakery } = {}) {
       if (typeof op.pointId !== 'string' || !op.pointId) throw new Error('A price point has no id');
       return write([INGREDIENTS, id, PRICES, op.pointId], op.data, false, bakery);
     }
+    if (op.type === 'add-price-change') {
+      if (typeof op.changeId !== 'string' || !op.changeId) throw new Error('A price change has no id');
+      return write([PRICE_CHANGES, op.changeId], op.data, false, bakery);
+    }
     throw new Error(`Unknown import write: ${op.type}`);
   }));
   return { batches: out, ingredientId };
 }
+
+// ── The price changes an import finds ────────────────────────────────────────────
+
+// The stored history points of an ingredient (docs = [{ id, data }], each `inv-<invoice>-<line>`) → what
+// changesFromPoints reads. The line is not stored in the point, only in its id.
+export function pointsOfDocs(docs) {
+  const out = [];
+  (docs || []).forEach(({ id, data }) => {
+    const m = /^inv-(\d+)-(\d+)$/.exec(String(id));
+    if (!m || !data) return;
+    out.push({
+      invoiceId: typeof data.invoiceId === 'string' && data.invoiceId ? data.invoiceId : m[1],
+      line: Number(m[2]),
+      invoiceDate: data.invoiceDate,
+      pricePerUnit: data.pricePerUnit,
+      priceUnit: data.priceUnit,
+    });
+  });
+  return out;
+}
+
+// ⚠️ What the rules accept of a change, checked HERE too: one refused document in a batch would stop the run.
+const CHANGE_UNITS = ['kg', 'l', 'pcs'];
+const acceptable = (c) => /^\d{1,20}$/.test(c.invoiceId) && c.line <= 999999 && CHANGE_UNITS.includes(c.priceUnit);
+
+// The price-change writes a row's ingredient still needs → [{ type: 'add-price-change', ingredientId, changeId,
+// data }], in date order. Points = those ALREADY stored as invoice points + the ones this row is about to write
+// (a point in both counts once). Changes whose id is already stored are left out, so a second import writes
+// nothing new. `isNew`: the ingredient was created a moment ago, so it cannot have any (no read).
+// read = { changeIds(ingredientId) → Set } — a server read, refused offline.
+export async function planPriceChanges({ ingredientId, supplierId, name, storedPoints, newPoints, priceUnit, isNew, read, nowIso }) {
+  if (typeof ingredientId !== 'string' || !ingredientId) return [];
+  const fresh = (newPoints || []).map(p => ({
+    invoiceId: p.invoiceId, line: p.line, invoiceDate: p.invoiceDate, pricePerUnit: p.pricePerUnit, priceUnit,
+  }));
+  const found = changesFromPoints({ id: ingredientId, supplierId, name }, [...(storedPoints || []), ...fresh])
+    .filter(acceptable);
+  if (found.length === 0) return [];
+  const have = isNew ? new Set() : await read.changeIds(ingredientId);
+  return found.filter(c => !have.has(c.id)).map(({ id, ...data }) => ({
+    type: 'add-price-change', ingredientId, changeId: id, data: { ...data, recordedAt: nowIso },
+  }));
+}
+
+// Change ops → batches of at most MAX_DOCS_PER_BATCH, to run AFTER the row's own writes: a refused change
+// must never undo the prices that went in before it.
+export function priceChangeBatches(ops) {
+  const out = [];
+  for (let i = 0; i < ops.length; i += MAX_DOCS_PER_BATCH) out.push(ops.slice(i, i + MAX_DOCS_PER_BATCH));
+  return out;
+}
+
+// The name a screen shows for a stored ingredient (its short name when it has one).
+export const ingredientDisplayName = (ing) => (String(ing?.shortName || '').trim() || String(ing?.name || ''));
 
 function write(path, data, merge, bakery) {
   const keys = Object.keys(data || {});
@@ -207,7 +267,12 @@ export async function replanRow({ fileIngredient, decision, supplierIdByKey, rea
     const price = await read.price(matched);
     row = plan({ invoicePointIds, pricesById: { [matched]: price } }).row;
   }
-  return { row, waiting: WAITING.includes(row.status) };
+  // The matched ingredient and its stored invoice points come out of the reads above (the reader hangs the
+  // points on the Set it returns): the price changes need them and must not read the same folder twice.
+  const ingredient = matched ? ingredients.find(i => i.id === matched) || null : null;
+  const storedPoints = matched && invoicePointIds[matched] && Array.isArray(invoicePointIds[matched].points)
+    ? invoicePointIds[matched].points : [];
+  return { row, waiting: WAITING.includes(row.status), ingredient, storedPoints };
 }
 
 // ── The end-of-run summary ───────────────────────────────────────────────────────
@@ -216,11 +281,12 @@ export async function replanRow({ fileIngredient, decision, supplierIdByKey, rea
 //             retry? }] — `retry` is true when loading the same file again can fix the failure (a write that
 // failed, a timeout, a catalogue that changed); a file entry that is invalid cannot be fixed that way.
 export function summarizeRun(results, { stopped = null, notRun = 0 } = {}) {
-  const totals = { created: 0, updated: 0, pricesAdded: 0, unchanged: 0, skipped: 0, failed: [], stopped, notRun };
+  const totals = { created: 0, updated: 0, pricesAdded: 0, changesAdded: 0, unchanged: 0, skipped: 0, failed: [], stopped, notRun };
   (results || []).forEach(r => {
     if (r.outcome === 'failed') totals.failed.push({ key: r.key, name: r.name, reason: r.reason || '', retry: r.retry === true });
     else totals[r.outcome] += 1;
     totals.pricesAdded += r.pricesAdded || 0;
+    totals.changesAdded += r.changesAdded || 0;
   });
   totals.retryable = totals.failed.filter(f => f.retry).length;
   totals.notFixableByRetry = totals.failed.length - totals.retryable;
