@@ -2805,6 +2805,39 @@ async function roles() {
     () => mergeWrite(`${L}/ingredient-prices/I9`,
       { ...stamp, priceUnit: 'kg', pricePerUnit: 1 }, asAccount(MAYA)));
 
+  // ── What the owner decided about an invoice product (5 Oct 2026) ──
+  // «Do not import this» / «import it as an ingredient», remembered for next month.
+  const DEC = 'a'.repeat(64);
+  const decision = { ...stamp, decision: 'skip', label: 'DETERSIVO PAVIMENTI 5 L', updatedAt: '2026-10-05T10:00:00.000Z' };
+  await expectAllowed('a manager remembers «do not import»',
+    () => mergeWrite(`${L}/invoice-decisions/${DEC}`, decision, asAccount(MAYA)));
+  await expectAllowed('the owner switches it to «import as an ingredient»',
+    () => mergeWrite(`${L}/invoice-decisions/${DEC}`, { ...decision, decision: 'ingredient' }, asAccount(ALICE)));
+  await expectAllowed('a manager reads the decisions',
+    readAs(MAYA, `${L}/invoice-decisions/${DEC}`));
+  await expectDenied('an employee cannot read them',
+    readAs(SAM, `${L}/invoice-decisions/${DEC}`));
+  await expectDenied('an employee cannot write one',
+    () => mergeWrite(`${L}/invoice-decisions/${'b'.repeat(64)}`, decision, asAccount(SAM)));
+  await expectDenied('a member of ANOTHER venue cannot write one here',
+    () => mergeWrite(`${L}/invoice-decisions/${'b'.repeat(64)}`, decision, asAccount(BOB)));
+  await expectDenied('a decision must be skip or ingredient',
+    () => mergeWrite(`${L}/invoice-decisions/${'c'.repeat(64)}`, { ...decision, decision: 'maybe' }, asAccount(MAYA)));
+  await expectDenied('…and must say it',
+    () => mergeWrite(`${L}/invoice-decisions/${'c'.repeat(64)}`, { ...stamp, label: 'x' }, asAccount(MAYA)));
+  await expectDenied('the id must be a SHA-256 hex, not the raw key',
+    () => mergeWrite(`${L}/invoice-decisions/IT01234567890-code-F00`, decision, asAccount(MAYA)));
+  await expectDenied('no other keys',
+    () => mergeWrite(`${L}/invoice-decisions/${'d'.repeat(64)}`, { ...decision, vatNumber: 'IT01234567890' }, asAccount(MAYA)));
+  await expectDenied('a label is capped at 300 characters',
+    () => mergeWrite(`${L}/invoice-decisions/${'d'.repeat(64)}`, { ...decision, label: 'x'.repeat(301) }, asAccount(MAYA)));
+  await expectDenied('stamped with another venue',
+    () => mergeWrite(`${L}/invoice-decisions/${'d'.repeat(64)}`, { ...decision, bakery: 'trattoria-x' }, asAccount(MAYA)));
+  await expectDenied('an employee cannot undo one',
+    () => deleteWrite(`${L}/invoice-decisions/${DEC}`, asAccount(SAM)));
+  await expectAllowed('a manager undoes one',
+    () => deleteWrite(`${L}/invoice-decisions/${DEC}`, asAccount(MAYA)));
+
   // ── Deleting an ingredient (1 Oct 2026): the ingredient AND its price in ONE batch ──
   //
   // ⚠️ THE APP INCLUDES THE PRICE DELETE ONLY FOR SOMEBODY ALLOWED TO MAKE IT

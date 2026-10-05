@@ -959,6 +959,35 @@ service cloud.firestore {
         }
       }
 
+      // ── What the owner decided about an invoice product (5 Oct 2026) ─────
+      // The invoice import reads the supplier zip in the app; a product the owner
+      // said «do not import» (a detergent, a resale chocolate bar) or «import it
+      // as an ingredient» (a flour the keyword rules took for packaging) must not
+      // be asked again next month. One document per product (or per supplier),
+      // its id the SHA-256 hex of the product's invoice key — the key holds the
+      // supplier's VAT number and article code, never a person's tax code, and
+      // hashing keeps the id a fixed, safe shape. Same gate as the import itself
+      // (canManage Food cost: it decides what feeds the prices).
+      match /invoice-decisions/{id} {
+        allow read: if canManage(lid, 'foodcost');
+
+        allow create, update: if canManage(lid, 'foodcost')
+          && stampedFor(lid)
+          && id.matches('^[0-9a-f]{64}$')
+          && request.resource.data.keys().hasOnly(['bakery', 'decision', 'label', 'updatedAt'])
+          && request.resource.data.decision in ['skip', 'ingredient']
+          // What the row said when it was decided, so the screen can name it.
+          && (!('label' in request.resource.data)
+              || (request.resource.data.label is string
+                  && request.resource.data.label.size() <= 300))
+          && (!('updatedAt' in request.resource.data)
+              || (request.resource.data.updatedAt is string
+                  && request.resource.data.updatedAt.size() <= 40));
+
+        // Undoing a decision («import it after all») removes it.
+        allow delete: if canManage(lid, 'foodcost');
+      }
+
       // ── The order in progress ───────────────────────────────────────────
       // One document, drafts/current, merge-written on every keystroke and
       // cleared per supplier with deleteField. `weekId` is retired but still on
