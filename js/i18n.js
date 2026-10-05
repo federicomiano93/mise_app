@@ -5842,7 +5842,7 @@ const DICTIONARIES = Object.freeze({
       other: 'Prezzo da controllare ({n})',
     },
     'invoiceImport.status.priceCheck': 'Prezzo da controllare',
-    'invoiceImport.decisions.confirmTitle': 'Ricordare le tue scelte?',
+    'invoiceImport.decisions.confirmTitle': 'Vuoi ricordare le tue scelte?',
     'invoiceImport.decisions.confirmLine': {
       one: '{n} scelta verrà ricordata per le prossime importazioni.',
       other: '{n} scelte verranno ricordate per le prossime importazioni.',
