@@ -3438,3 +3438,35 @@ body:not([data-orders-tab="deliveries"]) #orders-owed { display: none; }
 }
 .invimp-footer .btn-primary { margin-top: 0; }
 .invimp-hint { margin: 0; font-size: 13px; line-height: 1.4; color: var(--text-2); text-align: center; }
+
+/* ── Price changes («Variazioni prezzi») ─────────────────────────────────────────────────────────────
+   Reuses the import screen's row and pill (.invimp-row, .invimp-status) and the .set-seg switch; only what
+   those do not give is here. Tokens only. */
+.pchg-nav { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.pchg-nav-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+}
+.pchg-nav-btn:active { transform: scale(.97); }
+.pchg-nav-btn:focus-visible { outline: 3px solid var(--accent-2); outline-offset: 2px; }
+.pchg-nav-btn:disabled { color: var(--text-3); cursor: default; opacity: .6; }
+.pchg-nav-btn:disabled:active { transform: none; }
+.pchg-period { flex: 1; min-width: 0; text-align: center; font-size: 16px; font-weight: 600; color: var(--text); }
+.pchg-results, .pchg-empty, .pchg-error { display: flex; flex-direction: column; gap: 12px; }
+.pchg-summary { margin: 0; font-size: 14px; font-weight: 600; color: var(--text-2); }
+.pchg-section { display: flex; flex-direction: column; gap: 8px; }
+.pchg-list { display: flex; flex-direction: column; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.pchg-name { margin: 0; font-size: 15px; font-weight: 600; color: var(--text); overflow-wrap: anywhere; }
+.pchg-meta { margin: 2px 0 0; font-size: 13px; color: var(--text-2); }
+.pchg-price { margin: 0; font-size: 14px; font-variant-numeric: tabular-nums; color: var(--text); }
+.pchg-pack { margin: 0; font-size: 13px; color: var(--text-2); }

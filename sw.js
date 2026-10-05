@@ -12,7 +12,7 @@ const CACHE_NAME = 'theitalianclub-v606';
 // the fetch handler below, on the first load that has a network.
 // So between activate() and that first load, a phone that is OFFLINE cannot boot:
 // the code asks for the new version and nothing has it. In practice the window is very
-// small — activate() only happens after a successful 313-file precache, i.e.
+// small — activate() only happens after a successful 315-file precache, i.e.
 // online, and tapping the update banner reloads the page immediately — but it is
 // not zero, and it is the reason to bump the SDK deliberately rather than often.
 // Leaving the name unchanged would close the window and cost ~1 MB of dead
@@ -313,6 +313,9 @@ const ASSETS = [
   './js/orders/invoice-zip/sha256.js',
   './js/orders/invoice-zip/zip-read.js',
   './js/vendor/fflate.esm.js',
+  // «Variazioni prezzi»: how prices moved between invoices, by week or month (suppliers.html).
+  './js/orders/price-changes-model.js',
+  './js/orders/price-changes-screen.js',
   './js/form-dirty.js',
   './js/orders/level-stack.js',
   './js/orders/firebase-features.js',
@@ -439,7 +442,7 @@ const ASSET_HASHES = {
   "./home.html": 'a4401ab28cb28eb9',
   "./calculator.html": '1342c7f5093e1664',
   "./orders.html": 'e1cc2322509dfbe5',
-  "./suppliers.html": 'd0d861102a8e44b4',
+  "./suppliers.html": '04a9bf2f40386c29',
   "./install-guide.html": '155cc21e1c1dc524',
   "./reset-password.html": '6210ead049967293',
   "./js/reset-password.js": '82c76584ef73d006',
@@ -449,7 +452,7 @@ const ASSET_HASHES = {
   "./tokens.css": '9bec41764fe56171',
   "./auth.css": '55b0bc1d41af5718',
   "./style.css": '7dbb0e3020d277ec',
-  "./orders.css": 'f5da5a93847686e5',
+  "./orders.css": 'e684d9feae803329',
   "./sounds/alarm.wav": '0d1465974f5be95b',
   "./fonts/manrope-latin.woff2": '71eb731d55804619',
   "./fonts/manrope-latin-ext.woff2": 'bd24140af06f1b58',
@@ -530,7 +533,7 @@ const ASSET_HASHES = {
   "./js/location.js": '6aaf53615a8739d1',
   "./js/sections.js": 'abcfdecb2bd5766d',
   "./js/roles.js": '7a7c5cf34d57f511',
-  "./js/i18n.js": '22e115219ed52150',
+  "./js/i18n.js": 'aa17f5e334d773e5',
   "./js/i18n-dom.js": '24249af4367511e5',
   "./js/keyboard-done.js": 'de05a6dd1f3aac26',
   "./js/join-code.js": '5b89de65db5c102f',
@@ -583,7 +586,7 @@ const ASSET_HASHES = {
   "./js/orders/boot.js": '53dba081d29270d8',
   "./js/orders/category-batches.js": '03d72f63c4fa4a8a',
   "./js/orders/confirm-dialog.js": '61a7f580f37c5ff8',
-  "./js/orders/firebase-orders.js": 'de887575159d9af2',
+  "./js/orders/firebase-orders.js": '7ed538ebd3f4ae5f',
   "./js/orders/orders-main.js": '33e62d806a80332b',
   "./js/orders/dom.js": '7ec966d71c5356cd',
   "./js/orders/day.js": '107abcbdf353c709',
@@ -627,7 +630,7 @@ const ASSET_HASHES = {
   "./js/orders/management.js": '21dd583fe32255d8',
   "./js/orders/mgmt-ui.js": '8894b23fd41e8a66',
   "./js/orders/registry.js": '7dd45341e1923a78',
-  "./js/orders/registry-main.js": '2a1f80f497841d38',
+  "./js/orders/registry-main.js": '1d601237da544c09',
   "./js/orders/registry-settings.js": '74c80116276527d1',
   "./js/orders/invoice-import-model.js": '40b0f97860289452',
   "./js/orders/invoice-import-plan.js": '49d9fe33095fe4a5',
@@ -644,6 +647,8 @@ const ASSET_HASHES = {
   "./js/orders/invoice-zip/sha256.js": '585f64e861ba11d9',
   "./js/orders/invoice-zip/zip-read.js": '0e64ad8014847517',
   "./js/vendor/fflate.esm.js": '522c5e85569f270b',
+  "./js/orders/price-changes-model.js": '864d19a7030508c2',
+  "./js/orders/price-changes-screen.js": 'd4f4612bd1e6ee15',
   "./js/form-dirty.js": '27dce3718a33d438',
   "./js/orders/level-stack.js": '6832e37854829455',
   "./js/orders/firebase-features.js": 'a0c27a97d6eb7747',
@@ -777,7 +782,7 @@ const ASSET_HASHES = {
 // code against rules that deployed instantly, which is the very thing the gate exists
 // to prevent. Two things stand between that and a release: the test that every ASSETS
 // entry EXISTS (a mistyped path being the likeliest permanent cause), and this
-// project's post-deploy sweep, which already asks the live site for all 313 files.
+// project's post-deploy sweep, which already asks the live site for all 315 files.
 // ⚠️ NEITHER covers a device-specific failure — nobody has yet confirmed an update
 // landing on a real iPhone under this code.
 //

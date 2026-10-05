@@ -23,6 +23,8 @@ import {
 } from './firebase-orders.js';
 import { readIngredientPrice } from '../record-data.js';
 import { openInvoiceImport } from './invoice-import-screen.js';
+import { openPriceChanges } from './price-changes-screen.js';
+import { weekStartOf } from './work-week.js';
 
 const state = {
   suppliers: [],
@@ -32,6 +34,8 @@ const state = {
   // The venue's saved category list (config/orders). null = never saved one, or not
   // loaded yet: both mean «offer the defaults».
   ingredientCategories: null,
+  // Where the venue's working week starts (config/orders); the price-changes screen cuts its weeks there.
+  weekStartsOn: weekStartOf(null),
   loaded: { suppliers: false, ingredients: false, config: false },
   // Whether the live prices have really answered (watchIngredientPrices' second argument): until
   // then an ingredient card reads its own price document before it opens (registry.js).
@@ -149,6 +153,7 @@ const footerEl = document.getElementById('registry-footer');
 const settingsBtn = document.getElementById('registry-settings-btn');
 
 const importBtn = document.getElementById('registry-import-btn');
+const priceChangesBtn = document.getElementById('registry-price-changes-btn');
 
 settingsBtn?.addEventListener('click', () => screen.openSettings());
 
@@ -172,10 +177,23 @@ importBtn?.addEventListener('click', () => {
   });
 });
 
+// ⚠️ SAME PAIR AS THE IMPORT: the report is read behind Food cost (the rules' price-changes block). The click
+// asks again; the rules decide (P2).
+priceChangesBtn?.addEventListener('click', () => {
+  if (!(canManageHere() && mayWritePrices())) return;
+  openPriceChanges({
+    suppliers: () => state.suppliers,
+    ingredients: () => state.ingredients,
+    weekStartsOn: () => state.weekStartsOn,
+    opener: priceChangesBtn,
+  });
+});
+
 onSession(() => {
   if (!footerEl || !settingsBtn) return;
   settingsBtn.hidden = !canManageHere();
   if (importBtn) importBtn.hidden = !(canManageHere() && mayWritePrices());
+  if (priceChangesBtn) priceChangesBtn.hidden = !(canManageHere() && mayWritePrices());
   footerEl.hidden = ![...footerEl.children].some(child => !child.hidden);
 });
 
@@ -219,6 +237,7 @@ watchIngredientPrices((map, readable) => {
 // back to the defaults plus whatever ingredients already use, which is a usable screen.
 watchDoc(COLLECTIONS.config, 'orders', (doc, fromCache) => {
   state.ingredientCategories = Array.isArray(doc?.ingredientCategories) ? doc.ingredientCategories : null;
+  state.weekStartsOn = weekStartOf(doc);
   // ⚠️ «MISSING» COUNTS ONLY WHEN THE SERVER SAID IT. A cold start offline reports a missing
   // document from an empty cache; treating that as «loaded» would let a delete write the
   // defaults-minus-one over the venue's real list.
