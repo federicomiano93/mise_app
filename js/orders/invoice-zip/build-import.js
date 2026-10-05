@@ -23,6 +23,7 @@ export const IMPORTED_TYPE = 'ingrediente';
 export const NOT_IMPORTED_REASON = LEFT_OUT.NOT_AN_INGREDIENT;
 export { NO_SDI_REASON };
 
+const NEEDS_CHECK = 'da verificare';
 const cmp = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
 
 function generatedAt(now) {
@@ -71,6 +72,7 @@ function describeProduct(catalogue, product) {
     note: evaluation.note,
     prices: points.map((p) => ({
       invoiceId: p.invoiceId, line: p.line, invoiceDate: p.date, pricePerUnit: p.price, qty: p.qty,
+      good: p.reliability !== NEEDS_CHECK,
     })),
     lastPrice: points.length ? points[points.length - 1].price : null,
     minPrice: points.length ? Math.min(...points.map((p) => p.price)) : null,
@@ -82,48 +84,51 @@ function describeProduct(catalogue, product) {
     leftOutReason: '',
   };
 
-  const leave = (reason) => {
-    row.leftOutReason = reason;
-    return { row, ingredient: null };
-  };
-
-  if (row.type !== IMPORTED_TYPE) return leave(NOT_IMPORTED_REASON);
-  if (problems.length) return leave(problems.join('; '));
+  // Why the product cannot be turned into an ingredient at all (null = it can, whatever its type).
   const invoicedByPieces = unitClass(latestLine.unit)[0] === PIECES;
-  if (params.priceUnit === null) {
-    return leave(invoicedByPieces ? LEFT_OUT.PIECES_NEED_UNIT_AND_WEIGHT : NOTE.NO_PRICE_UNIT);
-  }
-  if (invoicedByPieces && (params.priceUnit === 'kg' || params.priceUnit === 'l') && params.pack === null) {
-    return leave(LEFT_OUT.PIECES_NEED_PACK_WEIGHT);
-  }
-  if (!points.length) {
+  let unreadable = null;
+  if (problems.length) unreadable = problems.join('; ');
+  else if (params.priceUnit === null) {
+    unreadable = invoicedByPieces ? LEFT_OUT.PIECES_NEED_UNIT_AND_WEIGHT : NOTE.NO_PRICE_UNIT;
+  } else if (invoicedByPieces && (params.priceUnit === 'kg' || params.priceUnit === 'l') && params.pack === null) {
+    unreadable = LEFT_OUT.PIECES_NEED_PACK_WEIGHT;
+  } else if (!points.length) {
     const last = evaluation.results[evaluation.results.length - 1];
-    return leave(last ? last.computed.note : LEFT_OUT.NO_COMPUTABLE_PRICE);
+    unreadable = last ? last.computed.note : LEFT_OUT.NO_COMPUTABLE_PRICE;
   }
-  // A price nobody could vouch for is not offered for import: the screen shows it with its reason.
-  if (evaluation.reliability === 'da verificare') return leave(evaluation.note || LEFT_OUT.NEEDS_CHECKING);
+  row.canImport = unreadable === null;
+  if (row.type !== IMPORTED_TYPE) row.leftOutReason = NOT_IMPORTED_REASON;
+  else if (unreadable !== null) row.leftOutReason = unreadable;
+  if (unreadable !== null) {
+    row.unreadableReason = unreadable;
+    return { row, ingredient: null };
+  }
 
-  row.inImport = true;
-  return {
-    row,
-    ingredient: {
-      key: product.key,
-      supplierKey: product.supplierKey,
-      mergeWith: '',
-      name,
-      brand: '',
-      category: '',
-      supplierCode: product.code,
-      weight: row.weight,
-      // An egg tray still needs the egg word, or the app names the 30 eggs «bags».
-      packUnit: packUnit || (params.egg && params.packCount ? EGG_PACK_WORD : ''),
-      packCount: params.packCount,
-      priceUnit: params.priceUnit,
-      unitWeightKg: row.unitWeightKg,
-      vatRate: row.vatRate,
-      prices: row.prices.map((p) => ({ ...p })),
-    },
+  // ⚠️ A PRICE NOBODY COULD VOUCH FOR IS NEVER IMPORTED, BUT THE PRODUCT IS: only the points of invoices that are
+  // not «da verificare» go in. With none left the ingredient is still created (the recipes and the order list
+  // need it), with no price, and `priceCheck` says why so the screen can ask for a look.
+  const good = row.prices.filter((p) => p.good);
+  const checkReason = evaluation.reliability === NEEDS_CHECK ? (evaluation.note || LEFT_OUT.NEEDS_CHECKING) : '';
+  const ingredient = {
+    key: product.key,
+    supplierKey: product.supplierKey,
+    mergeWith: '',
+    name,
+    brand: '',
+    category: '',
+    supplierCode: product.code,
+    weight: row.weight,
+    // An egg tray still needs the egg word, or the app names the 30 eggs «bags».
+    packUnit: packUnit || (params.egg && params.packCount ? EGG_PACK_WORD : ''),
+    packCount: params.packCount,
+    priceUnit: params.priceUnit,
+    unitWeightKg: row.unitWeightKg,
+    vatRate: row.vatRate,
+    prices: good.map(({ good: _good, ...p }) => p),
+    ...(checkReason && good.length === 0 ? { priceCheck: checkReason.split('; ')[0] } : {}),
   };
+  row.inImport = row.type === IMPORTED_TYPE;
+  return { row, ingredient };
 }
 
 const rowOrder = (catalogue) => (a, b) => (
@@ -145,7 +150,9 @@ export function buildImportFromInvoices(files, options = {}) {
   const described = [...catalogue.products.values()].map((product) => describeProduct(catalogue, product));
   const products = described.map((d) => d.row).sort(rowOrder(catalogue));
 
-  const ingredients = described.map((d) => d.ingredient).filter(Boolean).sort((a, b) => cmp(a.key, b.key));
+  const candidates = described.map((d) => d.ingredient).filter(Boolean).sort((a, b) => cmp(a.key, b.key));
+  const typeByKey = new Map(described.map((d) => [d.row.key, d.row.type]));
+  const ingredients = candidates.filter((i) => typeByKey.get(i.key) === IMPORTED_TYPE);
   const used = [...new Set(ingredients.map((i) => i.supplierKey))].sort();
   const suppliers = used.map((key) => {
     const s = catalogue.suppliers.get(key);
@@ -176,6 +183,9 @@ export function buildImportFromInvoices(files, options = {}) {
       ingredients,
     },
     products,
+    // Every product that COULD be imported, whatever it was taken for: what a person may still promote to an
+    // ingredient (selection.js). importFile.ingredients is the subset proposed as ingredients.
+    candidates,
     excluded: catalogue.excluded,
     skippedFiles: load.skipped,
     p7mCount: load.p7mCount,

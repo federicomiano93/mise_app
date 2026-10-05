@@ -135,35 +135,74 @@ test('a pieces line with no weight stays out with its reason', () => {
   assert.deepEqual(spice.prices, []);
 });
 
-test('a price «da verificare» is not in the file, it stays in products with its reason', () => {
+test('a price «da verificare» keeps the product in the file with no price and a priceCheck code', () => {
   const c = newCase();
   c.add([FLOUR, { desc: 'SPEZIA FORTE', qty: 100, unit: 'KG', total: 4 }]);
   const result = c.build();
-  assert.deepEqual(result.importFile.ingredients.map((i) => i.key), [KEY_FLOUR]);
+  assert.deepEqual(result.importFile.ingredients.map((i) => i.key), [KEY_FLOUR, 'IT00000000001|name:spezia forte']);
+  const entry = ingredient(result, 'spezia');
+  assert.deepEqual(entry.prices, [], 'the doubtful price is not imported');
+  assert.equal(entry.priceCheck, 'price-out-of-scale');
+  assert.equal('priceCheck' in ingredient(result, 'F00-25'), false, 'a good product carries no priceCheck');
   const strong = product(result, 'spezia');
   assert.equal(strong.reliability, 'da verificare');
   assert.equal(strong.note, 'price-out-of-scale');
-  assert.equal(strong.leftOutReason, 'price-out-of-scale');
+  assert.equal(strong.inImport, true);
   assert.equal(strong.prices.length, 1, 'its price points are still shown');
+  assert.equal(strong.prices[0].good, false);
 });
 
-test('a product with a discount line on its invoice is «da verificare» and out of the file', () => {
+test('a product with a discount line on its invoice is imported without a price', () => {
   const c = newCase();
   c.add([{ desc: 'FARINA', qty: 10, unit: 'KG', total: 10 }, { desc: 'SCONTO', total: -3 }]);
   const result = c.build();
-  assert.deepEqual(result.importFile.ingredients, []);
+  assert.equal(result.importFile.ingredients.length, 1);
+  assert.deepEqual(result.importFile.ingredients[0].prices, []);
+  assert.equal(result.importFile.ingredients[0].priceCheck, 'unattributed-discount');
   assert.equal(result.products[0].note, 'unattributed-discount');
   assert.equal(result.excluded.filter((e) => e.level === 'line').length, 1);
 });
 
-test('the product with one bad invoice and one good one is not offered', () => {
+test('one bad invoice and one good one: the product keeps the good point', () => {
   const c = newCase();
   c.add([{ desc: 'FARINA', code: 'F', qty: 10, unit: 'KG', total: 6 }], { date: '2026-09-10' });
   c.add([{ desc: 'FARINA', code: 'F', qty: 0, unit: 'KG', total: 5 }], { date: '2026-09-01' });
   const result = c.build();
-  assert.deepEqual(result.importFile.ingredients, []);
-  assert.equal(result.products[0].prices.length, 1);
+  assert.equal(result.importFile.ingredients.length, 1);
+  assert.deepEqual(result.importFile.ingredients[0].prices.map((p) => p.invoiceDate), ['2026-09-10']);
+  assert.equal('priceCheck' in result.importFile.ingredients[0], false);
   assert.equal(result.products[0].reliability, 'da verificare');
+});
+
+test('a product with a good and an out-of-scale invoice keeps only the good point', () => {
+  const c = newCase();
+  c.add([{ desc: 'FARINA', code: 'F', qty: 10, unit: 'KG', total: 6 }], { date: '2026-09-01' });
+  c.add([{ desc: 'FARINA', code: 'F', qty: 10, unit: 'KG', total: 6000 }], { date: '2026-09-10' });
+  const [entry] = c.build().importFile.ingredients;
+  assert.deepEqual(entry.prices.map((p) => p.invoiceDate), ['2026-09-01']);
+  assert.equal('priceCheck' in entry, false);
+});
+
+test('candidates also holds the packaging and resale that could be imported, but the file does not', () => {
+  const c = newCase();
+  c.add([FLOUR, BAGS, COLA]);
+  const result = c.build();
+  assert.deepEqual(result.importFile.ingredients.map((i) => i.key), [KEY_FLOUR]);
+  assert.deepEqual(result.candidates.map((i) => i.key).sort(), [KEY_FLOUR, 'IT00000000001|name:coca cola lattina 33 cl']);
+  const cola = product(result, 'coca');
+  assert.equal(cola.canImport, true);
+  assert.equal(cola.inImport, false);
+  assert.equal(cola.leftOutReason, 'not-an-ingredient');
+  assert.equal(product(result, 'buste').canImport, false, 'bags counted by piece have no weight to price by');
+});
+
+test('a product that cannot be read has no candidate and says why', () => {
+  const c = newCase();
+  c.add([SPICE]);
+  const result = c.build();
+  assert.deepEqual(result.candidates, []);
+  assert.equal(product(result, 'spezia').canImport, false);
+  assert.equal(product(result, 'spezia').unreadableReason, 'pieces-need-price-unit-and-weight');
 });
 
 test('the same inputs give the same file apart from generatedAt', () => {

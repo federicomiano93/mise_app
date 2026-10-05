@@ -179,6 +179,10 @@ export function evaluate(product, p, catalogue, problems = null) {
         price: roundHalfUp(computed.price, 4),
         qty: roundHalfUp(computed.qty, 3),
         vatRate: computed.vatRate,
+        // How far THIS invoice's price can be trusted: the import keeps the good points of a product whose
+        // worst invoice is «da verificare» (selection.js, build-import.js).
+        reliability: computed.reliability,
+        note: computed.note,
       });
     }
   }
