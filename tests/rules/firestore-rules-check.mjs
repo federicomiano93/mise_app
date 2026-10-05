@@ -320,6 +320,17 @@ async function ingredients() {
     () => mergeWrite('locations/main/ingredients/ING_MODERN', { supplierCode: bigString(61), bakery: 'main' }));
   await expectDenied('a supplier article code sent as a number',
     () => mergeWrite('locations/main/ingredients/ING_MODERN', { supplierCode: 12345, bakery: 'main' }));
+  // «Un ingrediente, più confezioni» (5 Oct 2026): the article codes of its other packs.
+  await expectAllowed('an ingredient with the codes of its other packs', () =>
+    mergeWrite('locations/main/ingredients/ING_MODERN', { supplierCodes: ['ZEUS-1', 'PEG-5'], bakery: 'main' }));
+  await expectAllowed('…none any more', () =>
+    mergeWrite('locations/main/ingredients/ING_MODERN', { supplierCodes: [], bakery: 'main' }));
+  await expectAllowed('…exactly 20', () =>
+    mergeWrite('locations/main/ingredients/ING_MODERN', { supplierCodes: Array.from({ length: 20 }, (_, i) => 'C' + i), bakery: 'main' }));
+  await expectDenied('…but not 21',
+    () => mergeWrite('locations/main/ingredients/ING_MODERN', { supplierCodes: Array.from({ length: 21 }, (_, i) => 'C' + i), bakery: 'main' }));
+  await expectDenied('the other codes must be a list, not text',
+    () => mergeWrite('locations/main/ingredients/ING_MODERN', { supplierCodes: 'ZEUS-1,PEG-5', bakery: 'main' }));
 
   await expectDenied('an unknown key on an ingredient',
     () => mergeWrite('locations/main/ingredients/ING_MODERN', { evil: 'x', bakery: 'main' }));
@@ -581,6 +592,12 @@ async function ingredientPrices() {
     () => wholeWrite(`${PRICES}/inv-18000000072-5`, fromInvoice()));
   await expectAllowed('another line of the same invoice', () =>
     wholeWrite(`${PRICES}/inv-18000000072-7`, fromInvoice({ pricePerUnit: 0.85 })));
+  await expectAllowed('an invoice price that says which pack it was', () =>
+    wholeWrite(`${PRICES}/inv-18000000072-8`, fromInvoice({ packLabel: 'Lievito Zeus 1 kg' })));
+  await expectDenied('a pack label longer than 120',
+    () => wholeWrite(`${PRICES}/inv-18000000072-9`, fromInvoice({ packLabel: bigString(121) })));
+  await expectDenied('a pack label that is not text',
+    () => wholeWrite(`${PRICES}/inv-18000000072-9`, fromInvoice({ packLabel: 5 })));
   await expectAllowed('an invoice price without the quantity bought', () => {
     const e = fromInvoice({ invoiceId: '18000000073' }); delete e.invoiceQty;
     return wholeWrite(`${PRICES}/inv-18000000073-1`, e);

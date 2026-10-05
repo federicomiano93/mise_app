@@ -725,7 +725,7 @@ service cloud.firestore {
                'priceUnit', 'pricePerUnit', 'packPrice', 'packSize',
                'unitWeightKg', 'priceUpdatedAt',
                'allergens', 'mayContain', 'allergensCheckedAt', 'nutrition',
-               'packIngredients', 'packUnit', 'packCount', 'supplierCode'
+               'packIngredients', 'packUnit', 'packCount', 'supplierCode', 'supplierCodes'
              ])
           // The supplier's own article code for this item (3 Oct 2026, invoice import): how next
           // month's invoice line finds the same ingredient even when its description changes.
@@ -734,6 +734,14 @@ service cloud.firestore {
           && (!('supplierCode' in request.resource.data)
               || (request.resource.data.supplierCode is string
                   && request.resource.data.supplierCode.size() <= 60))
+          // The OTHER packs of the same ingredient (5 Oct 2026, «un ingrediente, più confezioni»:
+          // the supplier sends Pegaso 5 kg one week and Zeus 1 kg the next, both «Lievito baking»).
+          // Their article codes, so next month's invoice finds this ingredient by any of them. A
+          // list capped at 20 — the rules cannot look inside it, the app keeps each code ≤60.
+          // Optional in both directions: an older phone never sends it.
+          && (!('supplierCodes' in request.resource.data)
+              || (request.resource.data.supplierCodes is list
+                  && request.resource.data.supplierCodes.size() <= 20))
           && (!('name' in request.resource.data)
               || (request.resource.data.name is string
                   && request.resource.data.name.size() <= 200))
@@ -901,8 +909,13 @@ service cloud.firestore {
             && request.resource.data.keys().hasOnly([
                  'bakery', 'recordedAt', 'priceUnit', 'pricePerUnit',
                  'packPrice', 'packSize', 'unitWeightKg', 'supplierId', 'source',
-                 'invoiceId', 'invoiceDate', 'invoiceQty'
+                 'invoiceId', 'invoiceDate', 'invoiceQty', 'packLabel'
                ])
+            // Which pack this price was paid for («Zeus 1 kg»), so a change of pack is never read as
+            // a change of price (5 Oct 2026). Optional.
+            && (!('packLabel' in request.resource.data)
+                || (request.resource.data.packLabel is string
+                    && request.resource.data.packLabel.size() <= 120))
             && request.resource.data.recordedAt is string
             && request.resource.data.recordedAt.size() > 0
             && request.resource.data.recordedAt.size() <= 64
