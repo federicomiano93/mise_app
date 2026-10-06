@@ -769,6 +769,9 @@ export function openInvoiceImport(data) {
 
   // Why a price waits for a look (invoice-import-model.js checkOf): one sentence, the date in the person's format.
   function checkText(row, planned) {
+    if (row.checkReason === CHECK_REASONS.INVOICE_NAME_CHANGED) {
+      return t('invoiceImport.check.invoiceNameChanged', { old: row.checkStored, new: row.checkFile });
+    }
     if (row.checkReason === CHECK_REASONS.WEIGHT_UNREADABLE) return t('invoiceImport.check.weightUnreadable');
     if (row.checkReason === CHECK_REASONS.WEIGHT_RESCALED) {
       return t('invoiceImport.check.weightRescaled', { stored: row.checkStored, file: row.checkFile });
@@ -901,9 +904,10 @@ export function openInvoiceImport(data) {
     // A matched row whose price needs a look writes nothing until the person says «Use this price». It comes AFTER
     // the «same as» question (a question answered «Same as X» can get a reason too).
     if (row.checkReason && (row.held || needsConfirmation(row))) {
-      children.push(choice(`invimp-confirm-${index}`, t('invoiceImport.ing.confirm.label'), [
+      children.push(choice(`invimp-confirm-${index}`, t(row.checkReason === CHECK_REASONS.INVOICE_NAME_CHANGED ? 'invoiceImport.ing.confirm.labelName' : 'invoiceImport.ing.confirm.label'), [
         { value: 'hold', label: t('invoiceImport.ing.confirm.hold') },
-        { value: 'use', label: t('invoiceImport.ing.confirm.use') },
+        // A row held ONLY for a renamed product is not about a price: the option says what saving does.
+        { value: 'use', label: t(row.checkReason === CHECK_REASONS.INVOICE_NAME_CHANGED ? 'invoiceImport.ing.confirm.useName' : 'invoiceImport.ing.confirm.use') },
       ], s.confirmKeys.has(planned.key) ? 'use' : 'hold', (picked) => {
         if (picked === 'use') s.confirmKeys.add(planned.key); else s.confirmKeys.delete(planned.key);
         render();
@@ -1272,13 +1276,14 @@ export function openInvoiceImport(data) {
         // another row of this run may have added a code to the same ingredient a moment ago. A failure here is
         // logged only: the price changes below are still recorded.
         const fileIngredient = s.fileByKey.get(planned.key);
-        if (fileIngredient && (row.patchSupplierCode || row.setSupplierCodes || row.codesFull)) {
+        if (fileIngredient && (row.patchSupplierCode || row.setSupplierCodes || row.codesFull || row.patchInvoiceName)) {
           try {
             const fresh = await replanRow({
               fileIngredient, decision: s.ingredientDecisions[planned.key], supplierIdByKey: s.supplierIdByKey,
               read: readFor(fileIngredient),
             });
-            if (fresh.row.status === 'unchanged') {
+            // A renamed product the person did not confirm is left alone (the fresh read may show one the screen did not).
+            if (fresh.row.status === 'unchanged' && !(needsConfirmation(fresh.row) && !s.confirmKeys.has(planned.key))) {
               const codeBatches = ingredientWrites(fresh.row, fileIngredient, new Date().toISOString(), { language });
               if (codeBatches.length > 0) await runImportBatches(codeBatches);
               codesFull = fresh.row.codesFull === true;

@@ -265,6 +265,13 @@ const PACK_NOISE_RE = new RegExp(
 const DANGLING_RE = /(?:^|\s)(?:DA|IN|DI|CON|X)\s*$/iu;
 const TRIM_CHARS = ' \t-.,;:*/';
 
+// «Nome in fattura»: the description exactly as the supplier wrote it, with ONLY the {…} lot blocks taken away and the
+// whitespace collapsed — case and everything else kept. It is how the import tells a product it already holds
+// from a new one, so it must never be «cleaned» further.
+export function invoiceNameOf(description) {
+  return String(description || '').replace(/\{.*?\}/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
 // The proposed «Nome in Mise»: sizes, pack words, codes and lot text taken away,
 // only the first letter in capitals.
 export function cleanName(description, articleCode = '') {

@@ -13,7 +13,8 @@
 //
 // ⚠️ AN EXISTING SUPPLIER OR INGREDIENT IS NEVER OVERWRITTEN. The only field ever written onto one is
 // the supplier's `vatNumber` (when linked) and the ingredient's article codes: `supplierCode` when it had
-// none, else the file's code is added to `supplierCodes` (one ingredient, several packs — 5 Oct 2026).
+// none, else the file's code is added to `supplierCodes` (one ingredient, several packs — 5 Oct 2026), and its
+// `invoiceName` (the description as on the invoice) when it had none — or a new one the person confirmed.
 // Name, brand, category and weight stay as the owner typed them.
 //
 // ⚠️ A SECOND IMPORT OF THE SAME FILE WRITES NOTHING. Every price read from an invoice has the id
@@ -38,6 +39,8 @@ export const MAX_DOCS_PER_BATCH = 5;
 
 // The caps the rules put on each text (firestore.rules), and a few of ours.
 const MAX_NAME = 200;
+// The rules' cap on an ingredient's `invoiceName` (the invoice description, lot blocks removed).
+export const MAX_INVOICE_NAME = 1000;
 export const MAX_SUPPLIER_CODE = 60;
 // How many article codes (one per pack) an ingredient may remember besides its main one (the rules' cap).
 export const MAX_SUPPLIER_CODES = 20;
@@ -74,6 +77,7 @@ export const CHECK_REASONS = Object.freeze({
   PRICE_JUMP: 'price-jump',
   OLDER_INVOICE: 'older-invoice',
   WEIGHT_RESCALED: 'weight-rescaled',
+  INVOICE_NAME_CHANGED: 'invoice-name-changed',
 });
 
 // ── Small helpers ───────────────────────────────────────────────────────────────
@@ -256,6 +260,8 @@ function parseIngredient(raw, seen) {
     supplierKey: clean(o.supplierKey, MAX_KEY),
     mergeWith: clean(o.mergeWith, MAX_NAME),
     name: clean(o.name, MAX_NAME),
+    // «Nome in fattura»: only the zip import knows it; the Python .json path never carries one.
+    ...(clean(o.invoiceName, MAX_INVOICE_NAME) ? { invoiceName: clean(o.invoiceName, MAX_INVOICE_NAME) } : {}),
     brand: clean(o.brand, MAX_NAME),
     category: clean(o.category, MAX_NAME),
     supplierCode: clean(o.supplierCode, MAX_SUPPLIER_CODE),
@@ -534,10 +540,16 @@ function matchedRow(base, existing, ctx) {
   // ⚠️ A rate the file does not state never wipes one the owner did: «not stated» is null, and the stored
   // rate stays when the file says nothing.
   const vatRate = base.vatRate !== null && base.vatRate !== undefined ? base.vatRate : vatRateOf(doc?.vatRate);
-  const check = newPoints.length === 0 ? null : checkOf({
+  const nameRead = invoiceNameRead(base, existing);
+  const priceCheck = newPoints.length === 0 ? null : checkOf({
     weightUnreadable: weightRead.unreadable === true, rescaled: factor !== 1 ? weightRead : null,
     updateCurrent, latest, base, doc, storedUnit,
   });
+  // The invoice name is the last reason: a row with a price to look at is held for that first, and confirming it
+  // writes the new name too (`patchInvoiceName` stays on the row).
+  const check = priceCheck || (nameRead.changed
+    ? { reason: CHECK_REASONS.INVOICE_NAME_CHANGED, stored: nameRead.stored, file: nameRead.file }
+    : null);
   return {
     ...base,
     status,
@@ -555,8 +567,29 @@ function matchedRow(base, existing, ctx) {
     ...(pieceDiffers ? { reason: 'piece-differs' } : {}),
     patchSupplierCode,
     setSupplierCodes,
+    patchInvoiceName: nameRead.write,
     ...(codesFull ? { codesFull: true } : {}),
   };
+}
+
+// «Nome in fattura» of a row against the ingredient it is matched with → { write, changed, stored?, file? }:
+//   write   — the name to save on the ingredient, or null;
+//   changed — the ingredient holds ANOTHER invoice name and the file's article code is its MAIN code: the same
+//             product, renamed by the supplier. A person confirms it; it is never written silently.
+// ⚠️ A file code that is one of the ingredient's EXTRA codes is another pack: its name is never compared or
+// saved (it would overwrite the name of the main pack). A row a person resolved to an ingredient with a
+// different invoice name leaves it alone for the same reason; an empty name is filled in.
+function invoiceNameRead(base, existing) {
+  const file = typeof base.invoiceName === 'string' ? base.invoiceName : '';
+  const none = { write: null, changed: false };
+  if (!file) return none;
+  const code = base.supplierCode ? base.supplierCode.toLowerCase() : '';
+  if (code && extraCodesOf(existing).some(c => c.toLowerCase() === code)) return none;
+  const stored = typeof existing.invoiceName === 'string' ? existing.invoiceName.trim() : '';
+  if (!stored) return { write: file, changed: false };
+  if (stored === file) return none;
+  const viaMainCode = code !== '' && codeOf(existing) === code;
+  return viaMainCode ? { write: file, changed: true, stored, file } : none;
 }
 
 // Why a row that would write a price must wait for a person: { reason, date? } or null. Only ONE reason is given,
@@ -630,6 +663,9 @@ export function planIngredients(fileIngredients, ctx) {
       supplierCode: file.supplierCode || '',
       patchSupplierCode: null,
       setSupplierCodes: null,
+      patchInvoiceName: null,
+      // The description as on the invoice (lot blocks removed): how an ingredient is recognised without a code.
+      ...(file.invoiceName ? { invoiceName: file.invoiceName } : {}),
       // What the file says about the price: matching a stored price against it needs both (matchedRow).
       priceUnit: file.priceUnit || null,
       unitWeightKg: typeof file.unitWeightKg === 'number' ? file.unitWeightKg : null,
@@ -667,6 +703,21 @@ export function planIngredients(fileIngredients, ctx) {
       if (hits.length === 1) return matchedRow(row, hits[0], context);
       if (hits.length > 1) {
         return questionOrRemembered(row, 'maybe-duplicate', hits.map(candidateOf).sort(byLabel), 'code-ambiguous', pool, context);
+      }
+    }
+
+    // b2. the same invoice name, character for character: the supplier's own words for the product.
+    if (row.invoiceName) {
+      const same = pool.filter(i => typeof i.invoiceName === 'string' && i.invoiceName.trim() === row.invoiceName);
+      if (same.length === 1) {
+        // ⚠️ Same rule as the name below: a different article code is another product, so it is a question.
+        const known = codesOf(same[0]);
+        const clash = row.supplierCode && known.size > 0 && !known.has(row.supplierCode.toLowerCase());
+        if (!clash) return matchedRow(row, same[0], context);
+        return questionOrRemembered(row, 'maybe-duplicate', [candidateOf(same[0])], 'code-differs', pool, context);
+      }
+      if (same.length > 1) {
+        return questionOrRemembered(row, 'maybe-duplicate', same.map(candidateOf).sort(byLabel), 'name-ambiguous', pool, context);
       }
     }
 
@@ -709,7 +760,7 @@ export function resolveRow(row, decision, ctx) {
   if (decision.skip === true) return { ...base, status: 'skipped', newPoints: [], updateCurrent: false };
   if (decision.createNew === true) {
     if (row.mergeWith) return row;
-    return newRow({ ...base, patchSupplierCode: null, setSupplierCodes: null });
+    return newRow({ ...base, patchSupplierCode: null, setSupplierCodes: null, patchInvoiceName: null });
   }
   if (typeof decision.sameAs === 'string') {
     const target = poolFor(context.ingredients, row.supplierId).find(i => i.id === decision.sameAs);
@@ -761,6 +812,7 @@ function newIngredientData(file, supplierId, language) {
     // A Singola carries no package word, exactly like the card (it never shows one there).
     ...(carton ? format : {}),
     ...(file.supplierCode ? { supplierCode: file.supplierCode } : {}),
+    ...(file.invoiceName ? { invoiceName: file.invoiceName } : {}),
     active: true,
     kind: 'ingredient',
   };
@@ -794,6 +846,8 @@ export function ingredientWrites(row, fileIngredient, nowIso, options) {
   const codePatch = {};
   if (!isNew && row.patchSupplierCode) codePatch.supplierCode = row.patchSupplierCode;
   if (!isNew && Array.isArray(row.setSupplierCodes)) codePatch.supplierCodes = row.setSupplierCodes;
+  // The invoice name of an ingredient that had none, or one the person confirmed as renamed.
+  if (!isNew && row.patchInvoiceName) codePatch.invoiceName = row.patchInvoiceName;
   const hasCodePatch = Object.keys(codePatch).length > 0;
   // A NEW ingredient the file states no price for is still created (and nothing else); a matched one has
   // nothing to write unless it learnt a code.

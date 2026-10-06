@@ -187,9 +187,10 @@ export function stopKind(err) {
 const WRITES = ['new', 'update-price', 'history-only'];
 const WAITING = ['maybe-duplicate', 'choose'];
 
-// ⚠️ A MATCHED ROW THAT CARRIES A `checkReason` (the price comes from a reading a person must look at) WRITES NOTHING
-// UNTIL THE PERSON CONFIRMS IT. A NEW row keeps its own «create / do not import» answer instead.
-export const needsConfirmation = (row) => Boolean(row && row.checkReason) && ['update-price', 'history-only'].includes(row.status);
+// ⚠️ A MATCHED ROW THAT CARRIES A `checkReason` (the price comes from a reading a person must look at, or the supplier
+// renamed the product) WRITES NOTHING UNTIL THE PERSON CONFIRMS IT. A NEW row keeps its own «create / do not import»
+// answer instead. An 'unchanged' row can carry one too: a renamed product whose prices are all in already.
+export const needsConfirmation = (row) => Boolean(row && row.checkReason) && ['update-price', 'history-only', 'unchanged'].includes(row.status);
 
 // planned rows + the person's decisions → [{ planned, row, waiting }]. `row` is the effective row (what
 // would be written); `waiting` is true while somebody still has to answer.

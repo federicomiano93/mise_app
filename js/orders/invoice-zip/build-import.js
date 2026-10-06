@@ -5,7 +5,7 @@
 // beside it (`products`) so a screen can show what was left out and why.
 // Pure: no DOM, no Firebase, no clock (`options.now` is injected), no file names or tax codes in the output.
 
-import { formatPackSize } from './classify.js';
+import { formatPackSize, invoiceNameOf } from './classify.js';
 import { loadInvoices } from './fatturapa.js';
 import { roundHalfUp, PIECES, unitClass } from './pricing.js';
 import {
@@ -122,6 +122,8 @@ function describeProduct(catalogue, product) {
     supplierKey: product.supplierKey,
     mergeWith: '',
     name,
+    // The description of the NEWEST invoice, as the supplier wrote it (only the lot blocks removed).
+    ...(invoiceNameOf(row.description) ? { invoiceName: invoiceNameOf(row.description) } : {}),
     brand: '',
     category: '',
     supplierCode: product.code,

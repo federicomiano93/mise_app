@@ -1462,6 +1462,24 @@ function section({ title, body, data = false }) {
   ]);
 }
 
+// «Nome in fattura»: the product's description exactly as on the supplier's invoice, written by the invoice import
+// and never typed. A labelled, read-only text (a group named by its label and described by its hint, so a screen
+// reader says both) — not an input. Nothing at all when the ingredient has none.
+function invoiceNameBlock(value) {
+  const text = typeof value === 'string' ? value.trim() : '';
+  if (!text) return [];
+  messageCount += 1;
+  const labelId = `mgmt-invoice-name-label-${messageCount}`;
+  const hintId = `mgmt-invoice-name-hint-${messageCount}`;
+  return [
+    el('div', { class: 'mgmt-field', role: 'group', 'aria-labelledby': labelId, 'aria-describedby': hintId }, [
+      el('span', { class: 'mgmt-field-label', id: labelId, text: t('orders.ingredient.field.invoiceName') }),
+      el('p', { class: 'mgmt-readonly', 'data-fid': 'ing-invoice-name', text }),
+    ]),
+    el('p', { class: 'notif-note', id: hintId, text: t('orders.ingredient.field.invoiceNameHint') }),
+  ];
+}
+
 function fold({ title, state, above, body, help }) {
   const inner = el('div', { class: 'mgmt-fold-body', hidden: 'hidden' }, body);
   const btn = el('button', {
@@ -1713,6 +1731,8 @@ export function buildIngredientForm({
   const legacyCard = Boolean(mayPrice && item && usesLegacyCard(item));
   const name = el('input', { type: 'text', class: 'mgmt-input', value: item?.name || presetName || '' });
   // «Nome da mostrare»: what every screen shows instead of the invoice name (js/ingredient-name.js).
+  const nameHintId = `mgmt-name-hint-${++messageCount}`;
+  name.setAttribute('aria-describedby', nameHintId);
   const shortNameHintId = `mgmt-short-name-hint-${++messageCount}`;
   const shortName = el('input', {
     type: 'text', class: 'mgmt-input', maxlength: '60', value: item?.shortName || '',
@@ -2179,9 +2199,13 @@ export function buildIngredientForm({
       title: t('orders.section.productData'),
       data: true,
       body: [
-        field(t('orders.field.name'), name),
-        field(t('orders.field.shortName'), shortName),
-        el('p', { class: 'notif-note', id: shortNameHintId, text: t('orders.field.ingredientShortNameHint') }),
+        // «Nome in fattura»: written by the invoice import, shown here read-only. It is not part of any payload
+        // below, so a save (a merge) can never drop or change it.
+        ...invoiceNameBlock(item?.invoiceName),
+        field(t('orders.ingredient.field.messageName'), name),
+        el('p', { class: 'notif-note', id: nameHintId, text: t('orders.ingredient.field.messageNameHint') }),
+        field(t('orders.ingredient.field.listName'), shortName),
+        el('p', { class: 'notif-note', id: shortNameHintId, text: t('orders.ingredient.field.listNameHint') }),
         field(t('orders.field.supplier'), supplierSelect),
         // ⚠️ HALF-WIDTH PAIRS (Federico, 29 Sep 2026): the short fields two to a row. Name and
         // supplier stay whole; the last pair has an empty right cell on purpose. Below 360px

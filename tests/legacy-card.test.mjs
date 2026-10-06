@@ -362,7 +362,7 @@ test('the words of the card of before are the old ones, in Italian too', () => {
 
 test('the things both cards share are still there on the card of before: supplier, brand, category, weight', async () => {
   const card = openCard({ item: KG_CASE });
-  for (const word of ['Name', 'Supplier', 'Brand', 'Category', 'Weight']) {
+  for (const word of ['Name in the message', 'Supplier', 'Brand', 'Category', 'Weight']) {
     assert.ok(card.all().some(n => n.classList.contains('mgmt-field-label') && n.textContent === word), word);
   }
   const { payload } = await card.save();

@@ -994,10 +994,16 @@ const DICTIONARIES = Object.freeze({
     // `field('Name', input)` — which is the one shape tests/no-hardcoded-english
     // could not see, so the whole ingredient form stayed English on an Italian
     // phone while four i18n suites passed. The scan now knows that shape.
-    'orders.field.name': 'Name',
-    'orders.field.shortName': 'Name to show',
-    'orders.field.shortNameHint': 'Optional — the shorter name the app shows. Empty: the name above.',
-    'orders.field.ingredientShortNameHint': 'Optional — the name the app shows. The message to the supplier always uses the name above.',
+    // The supplier card's two names. ⚠️ The ingredient card has three names and its own keys below.
+    'orders.field.name': 'Name on invoices',
+    'orders.field.shortName': 'Name in lists',
+    'orders.field.shortNameHint': 'Optional — shorter, for the app’s lists and the order heading. Empty: the name on invoices.',
+    'orders.ingredient.field.invoiceName': 'Name on the invoice',
+    'orders.ingredient.field.invoiceNameHint': 'Written by the invoice import, exactly as on the invoice: it is how Mise recognises this product.',
+    'orders.ingredient.field.messageName': 'Name in the message',
+    'orders.ingredient.field.messageNameHint': 'What the supplier reads in your order.',
+    'orders.ingredient.field.listName': 'Name in lists',
+    'orders.ingredient.field.listNameHint': 'Optional — shorter, for the app’s lists. Empty: the name in the message.',
     'orders.field.category': 'Category',
     'orders.field.email': 'Email',
     'orders.field.supplier': 'Supplier',
@@ -3161,6 +3167,9 @@ const DICTIONARIES = Object.freeze({
     'invoiceImport.check.priceJump': 'The price moves by more than {limit}% and was worked out from the invoice description, not read directly. Check it.',
     'invoiceImport.check.olderInvoice': 'Price from the invoice of {date}: the most recent one needs checking.',
     'invoiceImport.ing.confirm.use': 'Use this price',
+    'invoiceImport.ing.confirm.useName': 'Save the new name',
+    'invoiceImport.ing.confirm.labelName': 'This name?',
+    'invoiceImport.check.invoiceNameChanged': 'The name on the invoice has changed: «{old}» → «{new}». Same article code: confirming saves the new name.',
     'invoiceImport.ing.confirm.hold': 'Leave it for now',
     'invoiceImport.decisions.confirmTitle': 'Remember your choices?',
     'invoiceImport.decisions.confirmLine': {
@@ -3918,10 +3927,15 @@ const DICTIONARIES = Object.freeze({
 
     // Le schede. ⚠️ Erano scritte in inglese dentro il codice, in una forma che il
     // controllo automatico non sapeva vedere.
-    'orders.field.name': 'Nome',
-    'orders.field.shortName': 'Nome da mostrare',
-    'orders.field.shortNameHint': 'Facoltativo — il nome più corto che vedi nell’app. Vuoto: il nome qui sopra.',
-    'orders.field.ingredientShortNameHint': 'Facoltativo — il nome che vedi nell’app. Il messaggio al fornitore usa sempre il nome qui sopra.',
+    'orders.field.name': 'Nome in fattura',
+    'orders.field.shortName': 'Nome nelle liste',
+    'orders.field.shortNameHint': 'Facoltativo — più corto, per le liste dell’app e l’intestazione dell’ordine. Vuoto: si usa il nome in fattura.',
+    'orders.ingredient.field.invoiceName': 'Nome in fattura',
+    'orders.ingredient.field.invoiceNameHint': 'Scritto dall’import fatture, identico alla fattura: serve a Mise per riconoscere il prodotto.',
+    'orders.ingredient.field.messageName': 'Nome nel messaggio',
+    'orders.ingredient.field.messageNameHint': 'Quello che il fornitore legge nel tuo ordine.',
+    'orders.ingredient.field.listName': 'Nome nelle liste',
+    'orders.ingredient.field.listNameHint': 'Facoltativo — più corto, per le liste dell’app. Vuoto: si usa il nome nel messaggio.',
     'orders.field.category': 'Categoria',
     'orders.field.email': 'Email',
     'orders.field.supplier': 'Fornitore',
@@ -5865,6 +5879,9 @@ const DICTIONARIES = Object.freeze({
     'invoiceImport.check.priceJump': 'Il prezzo cambia di più del {limit}% ed è stato calcolato dalla descrizione della fattura, non letto direttamente. Controllalo.',
     'invoiceImport.check.olderInvoice': 'Prezzo dalla fattura del {date}: la più recente è da verificare.',
     'invoiceImport.ing.confirm.use': 'Usa questo prezzo',
+    'invoiceImport.ing.confirm.useName': 'Salva il nome nuovo',
+    'invoiceImport.ing.confirm.labelName': 'Questo nome?',
+    'invoiceImport.check.invoiceNameChanged': 'Il nome in fattura è cambiato: «{old}» → «{new}». Stesso codice articolo: confermando, Mise salva il nome nuovo.',
     'invoiceImport.ing.confirm.hold': 'Lascia per ora',
     'invoiceImport.decisions.confirmTitle': 'Vuoi ricordare le tue scelte?',
     'invoiceImport.decisions.confirmLine': {

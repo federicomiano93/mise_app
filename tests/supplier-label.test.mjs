@@ -124,7 +124,7 @@ test('the form saves a trimmed shortName, and hands back the label to show', asy
   assert.equal(saved[0].name, 'Aldo Legacy Foods Ltd');
   assert.equal(saved[0].shortName, 'Aldo');
   assert.equal(done[0].name, 'Aldo');
-  assert.equal(shortName.attrs.maxlength, '40');
+  assert.equal(shortName.attrs.maxlength, '60');
 });
 
 test('⚠️ a blank short name is saved as an empty string, so a merge write CLEARS it', async () => {

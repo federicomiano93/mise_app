@@ -484,7 +484,7 @@ test('10 · the confirm select comes AFTER the «same as» question and has its 
   const src = codeOf(read('js/orders/invoice-import-screen.js'));
   const row = src.slice(src.indexOf('function ingredientRow'), src.indexOf('function drawIngredients'));
   assert.ok(row.indexOf('invimp-ing-') < row.indexOf('invimp-confirm-'), 'question first, then «This price?»');
-  assert.match(row, /choice\(`invimp-confirm-\$\{index\}`, t\('invoiceImport\.ing\.confirm\.label'\)/);
+  assert.match(row, /choice\(`invimp-confirm-\$\{index\}`, t\(row\.checkReason === CHECK_REASONS\.INVOICE_NAME_CHANGED \? 'invoiceImport\.ing\.confirm\.labelName' : 'invoiceImport\.ing\.confirm\.label'\)/);
   assert.equal(DICT.en['invoiceImport.ing.confirm.label'], 'This price?');
   assert.equal(DICT.it['invoiceImport.ing.confirm.label'], 'Questo prezzo?');
 });

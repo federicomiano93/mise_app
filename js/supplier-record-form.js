@@ -28,7 +28,7 @@ import { field, formActions, makeDayChecks, checkedDays, reportFailure } from '.
 // header cannot drift from it. Back is the screen's own and does what Cancel used to.
 export function buildSupplierForm({ item, save, onDone }) {
   const name = el('input', { type: 'text', class: 'mgmt-input', value: item?.name || '' });
-  const shortName = el('input', { type: 'text', class: 'mgmt-input', maxlength: '40', value: item?.shortName || '', 'aria-describedby': 'supplier-short-name-hint' });
+  const shortName = el('input', { type: 'text', class: 'mgmt-input', maxlength: '60', value: item?.shortName || '', 'aria-describedby': 'supplier-short-name-hint' });
   const category = el('input', { type: 'text', class: 'mgmt-input', value: item?.category || '' });
   const phone = el('input', { type: 'tel', class: 'mgmt-input', value: item?.phone || '', placeholder: t('orders.eg.phone') });
   const email = el('input', { type: 'email', class: 'mgmt-input', value: item?.email || '' });
