@@ -825,11 +825,14 @@ export function openInvoiceImport(data) {
   // «2,10 €/kg → 2,31 €/kg (+10%)» — only when both prices are in the same unit.
   function priceText(planned, row) {
     const fileIng = s.fileByKey.get(planned.key);
-    const last = planned.allPoints[planned.allPoints.length - 1];
+    // ⚠️ THE PRICE SHOWN IS THE ONE THE ANSWERED ROW WOULD WRITE: a question answered «Same as X» is re-planned on X
+    // (its points may be re-read with X's pack), and a row held back for a look keeps that row as `heldRow`. The
+    // planned row's own points are only the fallback (a question nobody answered).
+    const effective = row && row.heldRow ? row.heldRow : row;
+    const points = (effective && effective.allPoints && effective.allPoints.length > 0) ? effective.allPoints : planned.allPoints;
+    const last = points[points.length - 1];
     if (!fileIng || !last) return '';
     const now = formatPricePerUnit({ pricePerUnit: last.pricePerUnit, priceUnit: fileIng.priceUnit });
-    // A row held back for a look shows the comparison of the row it WOULD be, so the person sees the old price.
-    const effective = row && row.heldRow ? row.heldRow : row;
     if (effective && effective.status === 'update-price' && s.ctx) {
       const stored = (s.ctx.pricesById || {})[effective.ingredientId];
       const next = effective.newPoints[effective.newPoints.length - 1];
@@ -879,6 +882,7 @@ export function openInvoiceImport(data) {
         { value: 'create', label: t('invoiceImport.ing.create') },
         { value: 'forget', label: t('invoiceImport.ing.forget') },
       ], s.forgetKeys.has(planned.key) ? 'forget' : 'create', (picked) => {
+        s.confirmKeys.delete(planned.key);
         if (picked === 'forget') s.forgetKeys.add(planned.key); else s.forgetKeys.delete(planned.key);
         render();
       }));
@@ -894,6 +898,8 @@ export function openInvoiceImport(data) {
       if (!planned.mergeWith) options.push({ value: 'new', label: t('invoiceImport.ing.createNew') });
       options.push({ value: 'skip', label: t('invoiceImport.skip') });
       children.push(choice(`invimp-ing-${index}`, t('invoiceImport.choose'), options, value, (picked) => {
+        // ⚠️ A NEW ANSWER IS A NEW PRICE: «Use this price» given to the old answer never carries over.
+        s.confirmKeys.delete(planned.key);
         if (!picked) delete s.ingredientDecisions[planned.key];
         else if (picked === 'new') s.ingredientDecisions[planned.key] = { createNew: true };
         else if (picked === 'skip') s.ingredientDecisions[planned.key] = { skip: true };
