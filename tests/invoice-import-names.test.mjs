@@ -8,7 +8,7 @@ import { _dictionaries } from '../js/i18n.js';
 import {
   IMPORT_FORMAT, IMPORT_VERSION, CHECK_REASONS, parseImportFile, planIngredients, resolveRow, ingredientWrites,
 } from '../js/orders/invoice-import-model.js';
-import { applyDecisions, bucketOf, needsConfirmation } from '../js/orders/invoice-import-plan.js';
+import { applyDecisions, bucketOf, importTotals, rowToWrite, withRename, writesRow } from '../js/orders/invoice-import-plan.js';
 import { invoiceNameOf } from '../js/orders/invoice-zip/classify.js';
 import { newCase } from './helpers/invoice-builders.mjs';
 
@@ -101,10 +101,14 @@ test('3 · the exact invoice name finds the ingredient when the file has no arti
   assert.equal(row.ingredientId, 'ing-1');
 });
 
-test('3 · the invoice name is compared character for character: another case is another name', () => {
+test('3 · the invoice name is compared ignoring letter case and spacing, nothing else: digits and punctuation still count', () => {
   const raw = rawIngredient({ supplierCode: '', key: `${SUPPLIER_KEY}|name:farina`, name: 'Impasto speciale' });
-  const row = planOne(raw, ctxOf({ ingredients: [stored({ supplierCode: '', name: 'Altro', invoiceName: 'farina tipo 00 sacco kg 25' })] }));
-  assert.notEqual(row.ingredientId, 'ing-1');
+  const same = planOne(raw, ctxOf({ ingredients: [stored({ supplierCode: '', name: 'Altro', invoiceName: 'farina  tipo 00 sacco kg 25' })] }));
+  assert.equal(same.ingredientId, 'ing-1', 'case and spaces are not a different product');
+  const other = planOne(raw, ctxOf({ ingredients: [stored({ supplierCode: '', name: 'Altro', invoiceName: 'farina tipo 00 sacco kg 5' })] }));
+  assert.notEqual(other.ingredientId, 'ing-1', 'a different weight is a different name');
+  const punct = planOne(raw, ctxOf({ ingredients: [stored({ supplierCode: '', name: 'Altro', invoiceName: 'farina tipo 00, sacco kg 25' })] }));
+  assert.notEqual(punct.ingredientId, 'ing-1');
 });
 
 test('3 · the same invoice name under ANOTHER article code is a question, never a silent match', () => {
@@ -131,90 +135,112 @@ test('3 · an ingredient of ANOTHER supplier is never found by its invoice name'
   assert.equal(row.status, 'new');
 });
 
-// ── 4 · a code match fills in or checks the invoice name ─────────────────────────
+// ── 4 · a code match fills in or proposes the invoice name ───────────────────────
 
 test('4 · a code match fills in an EMPTY invoice name silently', () => {
   const raw = rawIngredient();
   const row = planOne(raw, ctxOf({ ingredients: [stored({ invoiceName: '' })] }));
   assert.equal(row.patchInvoiceName, 'FARINA TIPO 00 SACCO KG 25');
   assert.equal(row.checkReason, undefined, 'no question for a name that was never there');
+  assert.equal(row.invoiceRename, undefined);
   const patch = writesOf(row, raw).find(op => op.type === 'patch-ingredient');
   assert.deepEqual(patch.data, { invoiceName: 'FARINA TIPO 00 SACCO KG 25' });
   assert.ok(writesOf(row, raw).some(op => op.type === 'set-current-price'), 'the price goes in with it');
 });
 
-test('4 · an otherwise UNCHANGED row still writes the invoice name, and only that', () => {
+test('4 · an otherwise UNCHANGED row still writes the invoice name, counts as a write, and writes only that', () => {
   const raw = rawIngredient();
   const row = planOne(raw, ctxOf({ ingredients: [stored({ invoiceName: '' })], invoicePointIds: known(raw) }));
   assert.equal(row.status, 'unchanged');
   const ops = writesOf(row, raw);
   assert.equal(ops.length, 1);
   assert.deepEqual(ops[0], { type: 'patch-ingredient', ingredientId: 'ing-1', data: { invoiceName: 'FARINA TIPO 00 SACCO KG 25' } });
+  assert.equal(writesRow({ row }), true, 'the primary action counts it: «Done» never discards it');
+  assert.equal(importTotals([{ row }]).rows, 1);
+  assert.equal(writesRow({ row: { ...row, patchInvoiceName: null } }), false);
 });
 
-test('4 · the same invoice name writes nothing at all', () => {
+test('4 · the same invoice name writes nothing at all, and neither does another CASE or spacing of it', () => {
   const raw = rawIngredient();
   const row = planOne(raw, ctxOf({ invoicePointIds: known(raw) }));
   assert.equal(row.status, 'unchanged');
   assert.equal(row.patchInvoiceName, null);
   assert.deepEqual(writesOf(row, raw), []);
+  const shouted = planOne(rawIngredient({ invoiceName: 'Farina  tipo 00 sacco KG 25' }), ctxOf({ invoicePointIds: known(raw) }));
+  assert.equal(shouted.invoiceRename, undefined, 'a supplier switching case is not a rename');
+  assert.equal(shouted.patchInvoiceName, null);
+  assert.equal(bucketOf({ planned: shouted, row: shouted }), 'unchanged');
 });
 
-test('4 · a DIFFERENT invoice name under the same main code is held, and writes nothing until confirmed', () => {
-  const raw = rawIngredient({ invoiceName: 'Farina 00 sacco da kg 25 (nuova ricetta)' });
+const RENAMED = 'Farina 00 sacco da kg 25 (nuova ricetta)';
+
+test('4 · a DIFFERENT invoice name under the same main code NEVER holds the prices: they are written, the rename is a choice', () => {
+  const raw = rawIngredient({ invoiceName: RENAMED });
   const row = planOne(raw, ctxOf());
   assert.equal(row.status, 'update-price');
-  assert.equal(row.checkReason, CHECK_REASONS.INVOICE_NAME_CHANGED);
-  assert.equal(row.checkStored, 'FARINA TIPO 00 SACCO KG 25');
-  assert.equal(row.checkFile, 'Farina 00 sacco da kg 25 (nuova ricetta)');
-  assert.equal(needsConfirmation(row), true);
-  const held = entryOf(row);
-  assert.equal(held.row.status, 'skipped');
-  assert.equal(held.row.held, true);
-  assert.equal(bucketOf(held), 'check');
-  assert.deepEqual(writesOf(held.row, raw), [], 'nothing is written while it is held');
+  assert.equal(row.checkReason, undefined, 'no price is held for a name');
+  assert.deepEqual(row.invoiceRename, { stored: 'FARINA TIPO 00 SACCO KG 25', file: RENAMED });
+  assert.equal(row.patchInvoiceName, null);
+  const entry = entryOf(row);
+  assert.equal(entry.row.status, 'update-price');
+  assert.equal(bucketOf(entry), 'check', 'visible under «To check», not held');
+  const ops = writesOf(entry.row, raw);
+  assert.ok(ops.some(op => op.type === 'set-current-price') && ops.some(op => op.type === 'add-price-point'));
+  assert.equal(ops.some(op => op.type === 'patch-ingredient'), false, 'the old name is kept by default');
 });
 
-test('4 · confirming a renamed product writes the price AND the new invoice name', () => {
-  const raw = rawIngredient({ invoiceName: 'Farina 00 sacco da kg 25 (nuova ricetta)' });
+test('4 · the rename is written only when the person chose it for THAT old → new pair', () => {
+  const raw = rawIngredient({ invoiceName: RENAMED });
   const row = planOne(raw, ctxOf());
-  const confirmed = entryOf(row, new Set([row.key]));
-  assert.equal(confirmed.row.status, 'update-price');
-  const ops = writesOf(confirmed.row, raw);
-  assert.deepEqual(ops.find(op => op.type === 'patch-ingredient').data, { invoiceName: 'Farina 00 sacco da kg 25 (nuova ricetta)' });
-  assert.ok(ops.some(op => op.type === 'set-current-price'));
-  assert.ok(ops.some(op => op.type === 'add-price-point'));
+  const pair = { stored: 'FARINA TIPO 00 SACCO KG 25', file: RENAMED };
+  const chosen = applyDecisions([row], {}, ctxOf(), new Set(), new Set(), new Map([[row.key, pair]]))[0];
+  assert.deepEqual(writesOf(chosen.row, raw).find(op => op.type === 'patch-ingredient').data, { invoiceName: RENAMED });
+  const other = applyDecisions([row], {}, ctxOf(), new Set(), new Set(), new Map([[row.key, { ...pair, file: 'Another' }]]))[0];
+  assert.equal(writesOf(other.row, raw).some(op => op.type === 'patch-ingredient'), false, 'another pair is not what was chosen');
+  assert.equal(withRename(row, null), row);
+  assert.equal(withRename({ ...row, invoiceRename: { ...pair, stored: 'moved' } }, pair).patchInvoiceName, null);
 });
 
-test('4 · a renamed product whose prices are all in already writes only the name once confirmed', () => {
-  const raw = rawIngredient({ invoiceName: 'Farina 00 sacco da kg 25 (nuova ricetta)' });
+test('4 · a renamed product whose prices are all in already is a write only once the rename is chosen', () => {
+  const raw = rawIngredient({ invoiceName: RENAMED });
   const row = planOne(raw, ctxOf({ invoicePointIds: known(raw) }));
   assert.equal(row.status, 'unchanged');
-  assert.equal(row.checkReason, CHECK_REASONS.INVOICE_NAME_CHANGED);
-  assert.equal(needsConfirmation(row), true, 'an unchanged row can be held too');
-  const held = entryOf(row);
-  assert.equal(held.row.status, 'skipped');
-  assert.equal(bucketOf(held), 'check');
-  const confirmed = entryOf(row, new Set([row.key]));
-  assert.equal(confirmed.row.status, 'unchanged');
-  const ops = writesOf(confirmed.row, raw);
+  assert.equal(bucketOf(entryOf(row)), 'check');
+  assert.equal(writesRow(entryOf(row)), false);
+  const chosen = applyDecisions([row], {}, ctxOf(), new Set(), new Set(), new Map([[row.key, row.invoiceRename]]))[0];
+  assert.equal(writesRow(chosen), true);
+  const ops = writesOf(chosen.row, raw);
   assert.equal(ops.length, 1);
-  assert.deepEqual(ops[0].data, { invoiceName: 'Farina 00 sacco da kg 25 (nuova ricetta)' });
+  assert.deepEqual(ops[0].data, { invoiceName: RENAMED });
 });
 
-test('4 · a row with another reason first shows that one, and confirming still writes the new name', () => {
-  const raw = rawIngredient({
-    invoiceName: 'Farina 00 sacco da kg 25 (nuova ricetta)',
-    prices: [point({ pricePerUnit: 1.4, reliability: 'media' })],
-  });
+test('4 · a price reason AND a rename are both on the row; confirming the price never saves the name', () => {
+  const raw = rawIngredient({ invoiceName: RENAMED, prices: [point({ pricePerUnit: 1.4, reliability: 'media' })] });
   const row = planOne(raw, ctxOf({
     pricesById: { 'ing-1': { priceUnit: 'kg', pricePerUnit: 1, priceUpdatedAt: '2026-01-01T12:00:00.000Z' } },
   }));
-  assert.equal(row.checkReason, CHECK_REASONS.PRICE_JUMP, 'the price reason comes first');
-  assert.equal(row.patchInvoiceName, 'Farina 00 sacco da kg 25 (nuova ricetta)');
-  assert.deepEqual(writesOf(entryOf(row).row, raw), []);
+  assert.equal(row.checkReason, CHECK_REASONS.PRICE_JUMP);
+  assert.ok(row.invoiceRename, 'the name sentence is not hidden by the price reason');
+  assert.deepEqual(writesOf(entryOf(row).row, raw), [], 'the price is held');
   const confirmed = writesOf(entryOf(row, new Set([row.key])).row, raw);
-  assert.equal(confirmed.find(op => op.type === 'patch-ingredient').data.invoiceName, 'Farina 00 sacco da kg 25 (nuova ricetta)');
+  assert.ok(confirmed.some(op => op.type === 'set-current-price'));
+  assert.equal(confirmed.some(op => op.type === 'patch-ingredient'), false, 'a price confirmation never authorises a rename');
+});
+
+test('4 · a file OLDER than what the venue holds never proposes a rename (an empty name is still filled in)', () => {
+  const raw = rawIngredient({ invoiceName: RENAMED, prices: [point({ invoiceDate: '2026-03-01' })] });
+  const price = { 'ing-1': { priceUnit: 'kg', pricePerUnit: 1, priceUpdatedAt: '2026-06-01T12:00:00.000Z' } };
+  const old = planOne(raw, ctxOf({ pricesById: price }));
+  assert.equal(old.invoiceRename, undefined);
+  assert.equal(old.patchInvoiceName, null);
+  const points = new Set();
+  points.points = [{ invoiceDate: '2026-07-01' }];
+  const byPoint = planOne(raw, ctxOf({ invoicePointIds: { 'ing-1': points } }));
+  assert.equal(byPoint.invoiceRename, undefined, 'the newest stored invoice point counts too');
+  const filled = planOne(raw, ctxOf({ ingredients: [stored({ invoiceName: '' })], pricesById: price }));
+  assert.equal(filled.patchInvoiceName, RENAMED);
+  const newer = planOne(rawIngredient({ invoiceName: RENAMED, prices: [point({ invoiceDate: '2026-09-01' })] }), ctxOf({ pricesById: price }));
+  assert.ok(newer.invoiceRename);
 });
 
 test('4 · a hit through an EXTRA code (another pack) never compares nor fills in the invoice name', () => {
@@ -223,9 +249,69 @@ test('4 · a hit through an EXTRA code (another pack) never compares nor fills i
   const different = planOne(raw, ctxOf({ ingredients: [other] }));
   assert.equal(different.ingredientId, 'ing-1');
   assert.equal(different.patchInvoiceName, null);
-  assert.equal(different.checkReason, undefined);
+  assert.equal(different.invoiceRename, undefined);
   const empty = planOne(raw, ctxOf({ ingredients: [{ ...other, invoiceName: '' }] }));
-  assert.equal(empty.patchInvoiceName, null, 'an empty name is not filled with another pack\'s name either');
+  assert.equal(empty.patchInvoiceName, null, 'an empty name is not filled with the name of another pack either');
+});
+
+// ── 4b · a new pack must never put its name on the main pack ──────────────────────
+
+test('4b · a NEW pack added through «Same as» writes its code, never its description; the main pack on the next file is no rename', () => {
+  const pack5 = rawIngredient({ supplierCode: 'F00-5', key: `${SUPPLIER_KEY}|code:F00-5`, name: 'Farina tipo 00', invoiceName: 'FARINA TIPO 00 SACCHETTO KG 5', weight: '5 kg' });
+  const main = rawIngredient({ prices: [point({ invoiceId: '18000000002', invoiceDate: '2026-10-01' })] });
+  const catalogue = { ingredients: [stored({ invoiceName: '', name: 'Farina tipo 00' })], pricesById: {}, invoicePointIds: {} };
+  const ctx = () => ({ supplierIdByKey: { [SUPPLIER_KEY]: SUPPLIER_ID }, ...catalogue });
+  const asked = planIngredients(fileOf([pack5]).ingredients, ctx())[0];
+  assert.equal(asked.status, 'maybe-duplicate');
+  assert.equal(asked.reason, 'code-differs');
+  const answered = resolveRow(asked, { sameAs: 'ing-1' }, ctx());
+  assert.deepEqual(answered.setSupplierCodes, ['F00-5']);
+  assert.equal(answered.patchInvoiceName, null, 'the 5 kg description is not the name of the main pack');
+  apply([answered], fileOf([pack5]), catalogue);
+  assert.equal(catalogue.ingredients[0].invoiceName, '');
+  assert.deepEqual(catalogue.ingredients[0].supplierCodes, ['F00-5']);
+  // The main pack arrives on the next file: its name fills the empty name, no rename, prices are written.
+  const next = planIngredients(fileOf([main]).ingredients, ctx())[0];
+  assert.equal(next.invoiceRename, undefined);
+  assert.equal(next.checkReason, undefined);
+  assert.equal(next.patchInvoiceName, 'FARINA TIPO 00 SACCO KG 25');
+  assert.ok(writesOf(next, main).some(op => op.type === 'set-current-price'));
+});
+
+test('4b · the same RUN: the new pack row first, then the main pack row, each planned on what the first wrote', () => {
+  const pack5 = rawIngredient({ supplierCode: 'F00-5', key: `${SUPPLIER_KEY}|code:F00-5`, name: 'Farina tipo 00', invoiceName: 'FARINA TIPO 00 SACCHETTO KG 5', weight: '5 kg', prices: [point({ invoiceId: '18000000003', line: 2 })] });
+  const main = rawIngredient();
+  const file = fileOf([pack5, main]);
+  const catalogue = { ingredients: [stored({ invoiceName: '', name: 'Farina tipo 00' })], pricesById: {}, invoicePointIds: {}, created: null };
+  const ctx = () => ({ supplierIdByKey: { [SUPPLIER_KEY]: SUPPLIER_ID }, ...catalogue });
+  const first = resolveRow(planIngredients([file.ingredients[0]], ctx())[0], { sameAs: 'ing-1' }, ctx());
+  apply([first], file, catalogue);
+  const second = planIngredients([file.ingredients[1]], ctx())[0];
+  assert.equal(second.checkReason, undefined);
+  assert.equal(second.invoiceRename, undefined);
+  assert.ok(writesOf(rowToWrite(second, {}), main).some(op => op.type === 'add-price-point'), 'its prices are written, not dropped');
+});
+
+test('4b · a row with NO code answered «Same as» onto an ingredient that has a main code leaves its name alone', () => {
+  const raw = rawIngredient({ supplierCode: '', key: `${SUPPLIER_KEY}|name:farina`, name: 'Farina tipo 00 speciale', invoiceName: 'FARINA SPECIALE KG 25' });
+  const target = stored({ invoiceName: '', name: 'Farina tipo 00' });
+  const asked = planOne(raw, ctxOf({ ingredients: [target] }));
+  assert.equal(asked.status, 'maybe-duplicate');
+  assert.equal(resolveRow(asked, { sameAs: 'ing-1' }, ctxOf({ ingredients: [target] })).patchInvoiceName, null);
+});
+
+// ── 4c · the write-time gate ──────────────────────────────────────────────────────
+
+test('4c · rowToWrite: a fresh plan with a price reason nobody confirmed is not written; a rename not chosen is not written', () => {
+  const raw = rawIngredient({ invoiceName: RENAMED, prices: [point({ pricePerUnit: 1.4, reliability: 'media' })] });
+  const row = planOne(raw, ctxOf({ pricesById: { 'ing-1': { priceUnit: 'kg', pricePerUnit: 1, priceUpdatedAt: '2026-01-01T12:00:00.000Z' } } }));
+  assert.equal(rowToWrite(row, { confirmed: false }), null, 'the price needs a look and nobody gave it');
+  assert.equal(rowToWrite(row, { confirmed: true }).patchInvoiceName, null, 'a confirmed price never carries a rename');
+  const pair = row.invoiceRename;
+  assert.equal(rowToWrite(row, { confirmed: true, rename: pair }).patchInvoiceName, RENAMED);
+  assert.equal(rowToWrite(row, { confirmed: true, rename: { ...pair, stored: 'was something else' } }).patchInvoiceName, null,
+    'the pair changed since the person looked: nothing is written');
+  assert.equal(rowToWrite(null, {}), null);
 });
 
 // ── 5 · a person's answer ────────────────────────────────────────────────────────
@@ -322,6 +408,8 @@ test('6 · the same product on a later invoice with another LOT number is still 
   const catalogue = { ingredients: [], pricesById: {}, invoicePointIds: {}, created: null };
   const ctx = () => ({ supplierIdByKey: { [a.suppliers[0].key]: SUPPLIER_ID }, ...catalogue });
   apply(planIngredients(a.ingredients, ctx()), a, catalogue);
+  // The owner retyped «Name in the message»: only the invoice name can still find the ingredient (no article code).
+  catalogue.ingredients[0].name = 'Farina del mulino';
   const row = planIngredients(b.ingredients, ctx())[0];
   assert.equal(row.ingredientId, catalogue.ingredients[0].id, 'found by its invoice name, with no article code to go by');
   assert.equal(row.status, 'update-price');
@@ -331,7 +419,8 @@ test('6 · the same product on a later invoice with another LOT number is still 
 
 test('7 · every new label and reason exists in English and Italian', () => {
   const keys = [
-    'invoiceImport.check.invoiceNameChanged', 'invoiceImport.ing.confirm.useName', 'invoiceImport.ing.confirm.labelName',
+    'invoiceImport.check.invoiceNameChanged', 'invoiceImport.ing.rename.label', 'invoiceImport.ing.rename.keep', 'invoiceImport.ing.rename.save',
+
     'orders.ingredient.field.invoiceName', 'orders.ingredient.field.invoiceNameHint',
     'orders.ingredient.field.messageName', 'orders.ingredient.field.messageNameHint',
     'orders.ingredient.field.listName', 'orders.ingredient.field.listNameHint',
@@ -342,8 +431,14 @@ test('7 · every new label and reason exists in English and Italian', () => {
   }
   assert.match(DICT.en['invoiceImport.check.invoiceNameChanged'], /\{old\}.*\{new\}/);
   assert.match(DICT.it['invoiceImport.check.invoiceNameChanged'], /\{old\}.*\{new\}/);
-  assert.equal(DICT.en['invoiceImport.ing.confirm.useName'], 'Save the new name');
-  assert.equal(DICT.it['invoiceImport.ing.confirm.useName'], 'Salva il nome nuovo');
+  assert.equal(DICT.en['invoiceImport.ing.rename.keep'], 'Keep the old name');
+  assert.equal(DICT.it['invoiceImport.ing.rename.keep'], 'Tieni il nome vecchio');
+  assert.equal(DICT.en['invoiceImport.ing.rename.save'], 'Save the new name');
+  assert.equal(DICT.it['invoiceImport.ing.rename.save'], 'Salva il nome nuovo');
+  assert.equal(DICT.en['invoiceImport.ing.group.check'].other, 'To check ({n})');
+  assert.equal(DICT.it['invoiceImport.ing.group.check'].other, 'Da controllare ({n})');
+  assert.equal(DICT.en['invoiceImport.summary.names'].other, '{n} names on the invoice saved');
+  assert.equal(DICT.it['invoiceImport.summary.names'].one, '{n} nome in fattura salvato');
 });
 
 // ── 8 · the merge tool never touches the survivor's invoice name ──────────────────

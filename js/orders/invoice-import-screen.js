@@ -28,7 +28,7 @@ import {
   AVERAGED_PRICE_JUMP_LIMIT, CHECK_REASONS,
 } from './invoice-import-model.js';
 import {
-  needsConfirmation, applyDecisions, bucketOf, filterCounts, visibleFilters, entriesFor, waitingCount, importTotals, idsToCheck,
+  needsConfirmation, rowToWrite, applyDecisions, bucketOf, filterCounts, visibleFilters, entriesFor, waitingCount, importTotals, idsToCheck,
   invoiceCount, replanRow, summarizeRun, stopKind, writesRow, changedSupplierKeys, isRetryableReason,
   rememberHints, priceChange, planPriceChanges, priceChangeBatches, ingredientDisplayName,
 } from './invoice-import-plan.js';
@@ -188,6 +188,7 @@ export function openInvoiceImport(data) {
     supplierSkips: new Set(),// step 2: «do not import anything from this supplier (remember)»
     forgetKeys: new Set(),   // step 3: «do not import (remember)»
     confirmKeys: new Set(),  // step 3: a price with a `checkReason` the person answered «Use this price»
+    renames: new Map(),      // step 3: key → { stored, file }, the renamed invoice names the person chose to save
     decisionsWritten: 0,
     decisionsFailed: false,
     // suppliers
@@ -476,6 +477,7 @@ export function openInvoiceImport(data) {
     s.supplierSkips = new Set();
     s.forgetKeys = new Set();
     s.confirmKeys = new Set();
+    s.renames = new Map();
     s.supplierDecisions = {};
     s.supplierProgress = { created: {}, linked: new Set() };
     s.ingredientDecisions = {};
@@ -759,7 +761,7 @@ export function openInvoiceImport(data) {
     render();
   }
 
-  const entriesNow = () => applyDecisions(s.plannedRows, s.ingredientDecisions, s.ctx, s.forgetKeys, s.confirmKeys);
+  const entriesNow = () => applyDecisions(s.plannedRows, s.ingredientDecisions, s.ctx, s.forgetKeys, s.confirmKeys, s.renames);
 
   const shortDate = (iso) => {
     const [y, m, d] = String(iso).split('-').map(Number);
@@ -769,9 +771,6 @@ export function openInvoiceImport(data) {
 
   // Why a price waits for a look (invoice-import-model.js checkOf): one sentence, the date in the person's format.
   function checkText(row, planned) {
-    if (row.checkReason === CHECK_REASONS.INVOICE_NAME_CHANGED) {
-      return t('invoiceImport.check.invoiceNameChanged', { old: row.checkStored, new: row.checkFile });
-    }
     if (row.checkReason === CHECK_REASONS.WEIGHT_UNREADABLE) return t('invoiceImport.check.weightUnreadable');
     if (row.checkReason === CHECK_REASONS.WEIGHT_RESCALED) {
       return t('invoiceImport.check.weightRescaled', { stored: row.checkStored, file: row.checkFile });
@@ -860,7 +859,7 @@ export function openInvoiceImport(data) {
     // A wanted ingredient with no price of its own is told apart by a pill of its own and says why.
     // (A «do not import» answer on such a row keeps the Skipped pill it always had.)
     const needsCheck = bucketOf(entry) === 'check'
-      && (['new', 'unchanged'].includes(row.status) || row.held === true || needsConfirmation(row));
+      && (['new', 'unchanged'].includes(row.status) || row.held === true || needsConfirmation(row) || Boolean(row.invoiceRename));
     const children = [
       el('div', { class: 'invimp-row-top' }, [
         el('div', { class: 'invimp-row-main' }, [
@@ -883,6 +882,7 @@ export function openInvoiceImport(data) {
         { value: 'forget', label: t('invoiceImport.ing.forget') },
       ], s.forgetKeys.has(planned.key) ? 'forget' : 'create', (picked) => {
         s.confirmKeys.delete(planned.key);
+        s.renames.delete(planned.key);
         if (picked === 'forget') s.forgetKeys.add(planned.key); else s.forgetKeys.delete(planned.key);
         render();
       }));
@@ -900,6 +900,7 @@ export function openInvoiceImport(data) {
       children.push(choice(`invimp-ing-${index}`, t('invoiceImport.choose'), options, value, (picked) => {
         // ⚠️ A NEW ANSWER IS A NEW PRICE: «Use this price» given to the old answer never carries over.
         s.confirmKeys.delete(planned.key);
+        s.renames.delete(planned.key);
         if (!picked) delete s.ingredientDecisions[planned.key];
         else if (picked === 'new') s.ingredientDecisions[planned.key] = { createNew: true };
         else if (picked === 'skip') s.ingredientDecisions[planned.key] = { skip: true };
@@ -910,12 +911,25 @@ export function openInvoiceImport(data) {
     // A matched row whose price needs a look writes nothing until the person says «Use this price». It comes AFTER
     // the «same as» question (a question answered «Same as X» can get a reason too).
     if (row.checkReason && (row.held || needsConfirmation(row))) {
-      children.push(choice(`invimp-confirm-${index}`, t(row.checkReason === CHECK_REASONS.INVOICE_NAME_CHANGED ? 'invoiceImport.ing.confirm.labelName' : 'invoiceImport.ing.confirm.label'), [
+      children.push(choice(`invimp-confirm-${index}`, t('invoiceImport.ing.confirm.label'), [
         { value: 'hold', label: t('invoiceImport.ing.confirm.hold') },
-        // A row held ONLY for a renamed product is not about a price: the option says what saving does.
-        { value: 'use', label: t(row.checkReason === CHECK_REASONS.INVOICE_NAME_CHANGED ? 'invoiceImport.ing.confirm.useName' : 'invoiceImport.ing.confirm.use') },
+        { value: 'use', label: t('invoiceImport.ing.confirm.use') },
       ], s.confirmKeys.has(planned.key) ? 'use' : 'hold', (picked) => {
         if (picked === 'use') s.confirmKeys.add(planned.key); else s.confirmKeys.delete(planned.key);
+        render();
+      }));
+    }
+    // ⚠️ THE SUPPLIER RENAMED THE PRODUCT (same main article code): said in its own sentence, whatever else the row says,
+    // and saved only if the person picks it. A price confirmation above never saves a name.
+    if (row.invoiceRename) {
+      const pair = row.invoiceRename;
+      children.push(el('p', { class: 'invimp-reason', text: t('invoiceImport.check.invoiceNameChanged', { old: pair.stored, new: pair.file }) }));
+      const chosen = s.renames.get(planned.key);
+      children.push(choice(`invimp-rename-${index}`, t('invoiceImport.ing.rename.label'), [
+        { value: 'keep', label: t('invoiceImport.ing.rename.keep') },
+        { value: 'save', label: t('invoiceImport.ing.rename.save') },
+      ], chosen && chosen.stored === pair.stored && chosen.file === pair.file ? 'save' : 'keep', (picked) => {
+        if (picked === 'save') s.renames.set(planned.key, { stored: pair.stored, file: pair.file }); else s.renames.delete(planned.key);
         render();
       }));
     }
@@ -1064,7 +1078,7 @@ export function openInvoiceImport(data) {
 
   // The rows already in Mise: their stored history may hold price changes nobody recorded yet (a file loaded again,
   // last year's zips).
-  const quietRows = (entries) => entries.filter(e => e.row.status === 'unchanged' && e.row.ingredientId);
+  const quietRows = (entries) => entries.filter(e => e.row.status === 'unchanged' && e.row.ingredientId && !writesRow(e));
 
   // The second footer button of a file with nothing new: asks, then runs the pass over the rows already in Mise and
   // ends on the summary, which says how many changes were recorded.
@@ -1165,7 +1179,7 @@ export function openInvoiceImport(data) {
     let notRun = 0;
     s.busy = true;
     // Rows already in Mise are read too (their history may hold changes nobody recorded): they count in the bar.
-    const quiet = entries.filter(e => e.row.status === 'unchanged' && e.row.ingredientId);
+    const quiet = entries.filter(e => e.row.status === 'unchanged' && e.row.ingredientId && !writesRow(e));
     const total = writing.length + quiet.length;
     s.progress = { done: 0, total };
     // «n of total» counts every row that is looked at, so a run of unchanged rows alone never says «1 of 0».
@@ -1209,40 +1223,43 @@ export function openInvoiceImport(data) {
           fileIngredient, decision: s.ingredientDecisions[planned.key], supplierIdByKey: s.supplierIdByKey,
           read: readFor(fileIngredient),
         });
+        const wrow = fresh.waiting ? null : rowToWrite(fresh.row, { confirmed: s.confirmKeys.has(planned.key), rename: s.renames.get(planned.key) });
         if (fresh.waiting) {
           results.push({ key: planned.key, name: planned.name, outcome: 'failed', reason: t('invoiceImport.reason.changed'), retry: true });
-        } else if (needsConfirmation(fresh.row) && !s.confirmKeys.has(planned.key)) {
+        } else if (!wrow) {
           // The fresh read found a price that needs a look which the screen did not show: nobody confirmed it.
           results.push({ key: planned.key, name: planned.name, outcome: 'skipped' });
-        } else if (fresh.row.status === 'unchanged') {
+        } else if (wrow.status === 'unchanged') {
           // Every price is in already, but the file may carry a pack code the ingredient has not learnt yet.
-          const codeBatches = ingredientWrites(fresh.row, fileIngredient, new Date().toISOString(), { language });
+          const codeBatches = ingredientWrites(wrow, fileIngredient, new Date().toISOString(), { language });
           if (codeBatches.length > 0) await runImportBatches(codeBatches);
           const recorded = await recordChanges({
             file: fileIngredient,
-            ingredientId: fresh.row.ingredientId, supplierId: fresh.row.supplierId, name: ingredientDisplayName(fresh.ingredient),
+            ingredientId: wrow.ingredientId, supplierId: wrow.supplierId, name: ingredientDisplayName(fresh.ingredient),
             storedPoints: fresh.storedPoints, newPoints: [], priceUnit: fileIngredient.priceUnit, isNew: false, ingredient: fresh.ingredient,
           });
           results.push({
             key: planned.key, name: planned.name, outcome: 'unchanged', changesAdded: recorded.added,
-            changesFailed: recorded.failed, codesFull: fresh.row.codesFull === true,
+            changesFailed: recorded.failed, codesFull: wrow.codesFull === true,
+            namesSaved: wrow.patchInvoiceName && codeBatches.length > 0 ? 1 : 0,
           });
-        } else if (['new', 'update-price', 'history-only'].includes(fresh.row.status)) {
-          const batches = ingredientWrites(fresh.row, fileIngredient, new Date().toISOString(), { language });
-          const isNew = fresh.row.status === 'new';
-          const writtenId = batches.length > 0 ? await runImportBatches(batches) : fresh.row.ingredientId;
+        } else if (['new', 'update-price', 'history-only'].includes(wrow.status)) {
+          const batches = ingredientWrites(wrow, fileIngredient, new Date().toISOString(), { language });
+          const isNew = wrow.status === 'new';
+          const writtenId = batches.length > 0 ? await runImportBatches(batches) : wrow.ingredientId;
           if (isNew && writtenId) createdThisRun.set(writtenId, codeKey(fileIngredient.supplierCode));
           const recorded = await recordChanges({
             file: fileIngredient,
-            ingredientId: writtenId, supplierId: fresh.row.supplierId,
+            ingredientId: writtenId, supplierId: wrow.supplierId,
             name: isNew ? fileIngredient.name : ingredientDisplayName(fresh.ingredient),
-            storedPoints: isNew ? [] : fresh.storedPoints, newPoints: fresh.row.newPoints, ingredient: isNew ? null : fresh.ingredient,
+            storedPoints: isNew ? [] : fresh.storedPoints, newPoints: wrow.newPoints, ingredient: isNew ? null : fresh.ingredient,
             priceUnit: fileIngredient.priceUnit, isNew,
           });
           results.push({
-            key: planned.key, name: planned.name, pricesAdded: fresh.row.newPoints.length,
-            changesAdded: recorded.added, changesFailed: recorded.failed, codesFull: fresh.row.codesFull === true,
-            outcome: batches.length === 0 ? 'unchanged' : (fresh.row.status === 'new' ? 'created' : 'updated'),
+            key: planned.key, name: planned.name, pricesAdded: wrow.newPoints.length,
+            changesAdded: recorded.added, changesFailed: recorded.failed, codesFull: wrow.codesFull === true,
+            namesSaved: wrow.status !== 'new' && wrow.patchInvoiceName && batches.length > 0 ? 1 : 0,
+            outcome: batches.length === 0 ? 'unchanged' : (wrow.status === 'new' ? 'created' : 'updated'),
           });
         } else {
           results.push({
@@ -1288,11 +1305,12 @@ export function openInvoiceImport(data) {
               fileIngredient, decision: s.ingredientDecisions[planned.key], supplierIdByKey: s.supplierIdByKey,
               read: readFor(fileIngredient),
             });
-            // A renamed product the person did not confirm is left alone (the fresh read may show one the screen did not).
-            if (fresh.row.status === 'unchanged' && !(needsConfirmation(fresh.row) && !s.confirmKeys.has(planned.key))) {
-              const codeBatches = ingredientWrites(fresh.row, fileIngredient, new Date().toISOString(), { language });
+            // A row whose fresh plan needs a confirmation nobody gave is left alone.
+            const wrow = rowToWrite(fresh.row, { confirmed: s.confirmKeys.has(planned.key), rename: s.renames.get(planned.key) });
+            if (wrow && wrow.status === 'unchanged') {
+              const codeBatches = ingredientWrites(wrow, fileIngredient, new Date().toISOString(), { language });
               if (codeBatches.length > 0) await runImportBatches(codeBatches);
-              codesFull = fresh.row.codesFull === true;
+              codesFull = wrow.codesFull === true;
             }
           } catch (err) {
             console.error('Remembering a pack code failed:', err);
@@ -1342,6 +1360,7 @@ export function openInvoiceImport(data) {
       ['invoiceImport.summary.unchanged', sum.unchanged],
       ['invoiceImport.summary.skipped', sum.skipped],
     ];
+    if (sum.namesSaved > 0) lines.splice(3, 0, ['invoiceImport.summary.names', sum.namesSaved]);
     if (s.decisionsWritten > 0) lines.push(['invoiceImport.summary.decisions', s.decisionsWritten]);
     if (sum.codesFull > 0) lines.push(['invoiceImport.summary.codesFull', sum.codesFull]);
     body.push(el('div', { class: 'set-section' }, lines.map(([key, n]) => el('div', { class: 'set-row' }, [

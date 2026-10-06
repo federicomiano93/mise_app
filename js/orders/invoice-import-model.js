@@ -77,7 +77,6 @@ export const CHECK_REASONS = Object.freeze({
   PRICE_JUMP: 'price-jump',
   OLDER_INVOICE: 'older-invoice',
   WEIGHT_RESCALED: 'weight-rescaled',
-  INVOICE_NAME_CHANGED: 'invoice-name-changed',
 });
 
 // ── Small helpers ───────────────────────────────────────────────────────────────
@@ -540,16 +539,16 @@ function matchedRow(base, existing, ctx) {
   // ⚠️ A rate the file does not state never wipes one the owner did: «not stated» is null, and the stored
   // rate stays when the file says nothing.
   const vatRate = base.vatRate !== null && base.vatRate !== undefined ? base.vatRate : vatRateOf(doc?.vatRate);
-  const nameRead = invoiceNameRead(base, existing);
-  const priceCheck = newPoints.length === 0 ? null : checkOf({
+  const check = newPoints.length === 0 ? null : checkOf({
     weightUnreadable: weightRead.unreadable === true, rescaled: factor !== 1 ? weightRead : null,
     updateCurrent, latest, base, doc, storedUnit,
   });
-  // The invoice name is the last reason: a row with a price to look at is held for that first, and confirming it
-  // writes the new name too (`patchInvoiceName` stays on the row).
-  const check = priceCheck || (nameRead.changed
-    ? { reason: CHECK_REASONS.INVOICE_NAME_CHANGED, stored: nameRead.stored, file: nameRead.file }
-    : null);
+  // ⚠️ THE INVOICE NAME NEVER HOLDS A PRICE: a backfill (`patchInvoiceName`) is written with the row, and a rename
+  // (`invoiceRename`) is a separate choice of the person (invoice-import-plan.js withRename).
+  const nameRead = invoiceNameRead(base, existing, {
+    patchSupplierCode, newest: allPoints.length > 0 ? allPoints[allPoints.length - 1].invoiceDate : '',
+    floor: newestStored(known, stamp),
+  });
   return {
     ...base,
     status,
@@ -568,28 +567,44 @@ function matchedRow(base, existing, ctx) {
     patchSupplierCode,
     setSupplierCodes,
     patchInvoiceName: nameRead.write,
+    ...(nameRead.rename ? { invoiceRename: nameRead.rename } : {}),
     ...(codesFull ? { codesFull: true } : {}),
   };
 }
 
-// «Nome in fattura» of a row against the ingredient it is matched with → { write, changed, stored?, file? }:
-//   write   — the name to save on the ingredient, or null;
-//   changed — the ingredient holds ANOTHER invoice name and the file's article code is its MAIN code: the same
-//             product, renamed by the supplier. A person confirms it; it is never written silently.
-// ⚠️ A file code that is one of the ingredient's EXTRA codes is another pack: its name is never compared or
-// saved (it would overwrite the name of the main pack). A row a person resolved to an ingredient with a
-// different invoice name leaves it alone for the same reason; an empty name is filled in.
-function invoiceNameRead(base, existing) {
+// Letter case and runs of spaces are not a different name; punctuation and digits still are.
+export const foldInvoiceName = (text) => String(text ?? '').toLowerCase().replace(/\s+/g, ' ').trim();
+
+// The newest date the venue already holds for an ingredient: its price in force, or its newest stored invoice point.
+function newestStored(known, stamp) {
+  const dates = [typeof stamp === 'string' ? stamp.slice(0, 10) : ''];
+  (Array.isArray(known?.points) ? known.points : []).forEach(p => dates.push(typeof p?.invoiceDate === 'string' ? p.invoiceDate : ''));
+  return dates.reduce((a, b) => (b > a ? b : a), '');
+}
+
+// «Nome in fattura» of a row against the ingredient it is matched with → { write, rename }:
+//   write  — the name to save silently on an ingredient that has none;
+//   rename — { stored, file }: the supplier renamed the product (same MAIN article code, another name). Never written
+//            unless the person chooses it, and never proposed from a file older than what the venue already holds.
+// ⚠️ THE NAME BELONGS TO THE MAIN PACK. It is written or compared ONLY when the row's code IS the ingredient's main
+// code, or is about to become it (an ingredient with no main code yet), or — for a row with no code — onto an
+// ingredient that has no main code at all. An extra pack (another code in `supplierCodes`, or a code that is about
+// to be added there) never touches it: it would put the 5 kg description on the 25 kg product.
+function invoiceNameRead(base, existing, { patchSupplierCode, newest, floor }) {
   const file = typeof base.invoiceName === 'string' ? base.invoiceName : '';
-  const none = { write: null, changed: false };
+  const none = { write: null, rename: null };
   if (!file) return none;
   const code = base.supplierCode ? base.supplierCode.toLowerCase() : '';
-  if (code && extraCodesOf(existing).some(c => c.toLowerCase() === code)) return none;
+  const main = codeOf(existing);
+  const isMain = code !== '' && main === code;
+  const becomesMain = code !== '' && Boolean(patchSupplierCode);
+  const codeless = code === '' && main === '';
+  if (!isMain && !becomesMain && !codeless) return none;
   const stored = typeof existing.invoiceName === 'string' ? existing.invoiceName.trim() : '';
-  if (!stored) return { write: file, changed: false };
-  if (stored === file) return none;
-  const viaMainCode = code !== '' && codeOf(existing) === code;
-  return viaMainCode ? { write: file, changed: true, stored, file } : none;
+  if (!stored) return { write: file, rename: null };
+  if (!isMain || foldInvoiceName(stored) === foldInvoiceName(file)) return none;
+  if (newest && floor && newest < floor) return none;
+  return { write: null, rename: { stored, file } };
 }
 
 // Why a row that would write a price must wait for a person: { reason, date? } or null. Only ONE reason is given,
@@ -708,7 +723,8 @@ export function planIngredients(fileIngredients, ctx) {
 
     // b2. the same invoice name, character for character: the supplier's own words for the product.
     if (row.invoiceName) {
-      const same = pool.filter(i => typeof i.invoiceName === 'string' && i.invoiceName.trim() === row.invoiceName);
+      const wantedInvoice = foldInvoiceName(row.invoiceName);
+      const same = pool.filter(i => typeof i.invoiceName === 'string' && foldInvoiceName(i.invoiceName) === wantedInvoice);
       if (same.length === 1) {
         // ⚠️ Same rule as the name below: a different article code is another product, so it is a question.
         const known = codesOf(same[0]);

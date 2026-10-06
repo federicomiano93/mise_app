@@ -3152,8 +3152,8 @@ const DICTIONARIES = Object.freeze({
     'invoiceImport.ing.forget': 'Do not import (remember)',
     'invoiceImport.ing.priceChange': '{from} → {to} ({change})',
     'invoiceImport.ing.group.check': {
-      one: 'Price to check ({n})',
-      other: 'Price to check ({n})',
+      one: 'To check ({n})',
+      other: 'To check ({n})',
     },
     'invoiceImport.status.priceCheck': 'To check',
     'invoiceImport.zip.sales': {
@@ -3167,9 +3167,14 @@ const DICTIONARIES = Object.freeze({
     'invoiceImport.check.priceJump': 'The price moves by more than {limit}% and was worked out from the invoice description, not read directly. Check it.',
     'invoiceImport.check.olderInvoice': 'Price from the invoice of {date}: the most recent one needs checking.',
     'invoiceImport.ing.confirm.use': 'Use this price',
-    'invoiceImport.ing.confirm.useName': 'Save the new name',
-    'invoiceImport.ing.confirm.labelName': 'This name?',
-    'invoiceImport.check.invoiceNameChanged': 'The name on the invoice has changed: «{old}» → «{new}». Same article code: confirming saves the new name.',
+    'invoiceImport.ing.rename.label': 'Name on the invoice',
+    'invoiceImport.ing.rename.keep': 'Keep the old name',
+    'invoiceImport.ing.rename.save': 'Save the new name',
+    'invoiceImport.check.invoiceNameChanged': 'The name on the invoice has changed: «{old}» → «{new}». Same article code, so it is the same product.',
+    'invoiceImport.summary.names': {
+      one: '{n} name on the invoice saved',
+      other: '{n} names on the invoice saved',
+    },
     'invoiceImport.ing.confirm.hold': 'Leave it for now',
     'invoiceImport.decisions.confirmTitle': 'Remember your choices?',
     'invoiceImport.decisions.confirmLine': {
@@ -5864,8 +5869,8 @@ const DICTIONARIES = Object.freeze({
     'invoiceImport.ing.forget': 'Non importare (ricordalo)',
     'invoiceImport.ing.priceChange': '{from} → {to} ({change})',
     'invoiceImport.ing.group.check': {
-      one: 'Prezzo da controllare ({n})',
-      other: 'Prezzo da controllare ({n})',
+      one: 'Da controllare ({n})',
+      other: 'Da controllare ({n})',
     },
     'invoiceImport.status.priceCheck': 'Da controllare',
     'invoiceImport.zip.sales': {
@@ -5879,9 +5884,14 @@ const DICTIONARIES = Object.freeze({
     'invoiceImport.check.priceJump': 'Il prezzo cambia di più del {limit}% ed è stato calcolato dalla descrizione della fattura, non letto direttamente. Controllalo.',
     'invoiceImport.check.olderInvoice': 'Prezzo dalla fattura del {date}: la più recente è da verificare.',
     'invoiceImport.ing.confirm.use': 'Usa questo prezzo',
-    'invoiceImport.ing.confirm.useName': 'Salva il nome nuovo',
-    'invoiceImport.ing.confirm.labelName': 'Questo nome?',
-    'invoiceImport.check.invoiceNameChanged': 'Il nome in fattura è cambiato: «{old}» → «{new}». Stesso codice articolo: confermando, Mise salva il nome nuovo.',
+    'invoiceImport.ing.rename.label': 'Nome in fattura',
+    'invoiceImport.ing.rename.keep': 'Tieni il nome vecchio',
+    'invoiceImport.ing.rename.save': 'Salva il nome nuovo',
+    'invoiceImport.check.invoiceNameChanged': 'Il nome in fattura è cambiato: «{old}» → «{new}». Stesso codice articolo, quindi è lo stesso prodotto.',
+    'invoiceImport.summary.names': {
+      one: '{n} nome in fattura salvato',
+      other: '{n} nomi in fattura salvati',
+    },
     'invoiceImport.ing.confirm.hold': 'Lascia per ora',
     'invoiceImport.decisions.confirmTitle': 'Vuoi ricordare le tue scelte?',
     'invoiceImport.decisions.confirmLine': {

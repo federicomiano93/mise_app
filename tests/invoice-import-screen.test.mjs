@@ -85,7 +85,8 @@ test('⚠️ each row is planned AGAIN on fresh server data before anything is w
   assert.match(run, /freshIngredientsForSupplier\(supplierId\)/);
   assert.match(run, /invoicePointIds\(id\)/);
   assert.match(run, /freshPrice\(id\)/);
-  assert.match(run, /ingredientWrites\(fresh\.row, fileIngredient, new Date\(\)\.toISOString\(\), \{ language \}\)/);
+  assert.match(run, /rowToWrite\(fresh\.row, \{ confirmed: s\.confirmKeys\.has\(planned\.key\), rename: s\.renames\.get\(planned\.key\) \}\)/);
+  assert.match(run, /ingredientWrites\(wrow, fileIngredient, new Date\(\)\.toISOString\(\), \{ language \}\)/);
   assert.match(run, /if \(kind\) \{ stopped = kind; notRun = writing\.length - i - 1; break; \}/);
   assert.match(run, /if \(fresh\.waiting\)/, 'a row that became a question is never guessed');
 });

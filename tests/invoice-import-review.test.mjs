@@ -484,14 +484,14 @@ test('10 · the confirm select comes AFTER the «same as» question and has its 
   const src = codeOf(read('js/orders/invoice-import-screen.js'));
   const row = src.slice(src.indexOf('function ingredientRow'), src.indexOf('function drawIngredients'));
   assert.ok(row.indexOf('invimp-ing-') < row.indexOf('invimp-confirm-'), 'question first, then «This price?»');
-  assert.match(row, /choice\(`invimp-confirm-\$\{index\}`, t\(row\.checkReason === CHECK_REASONS\.INVOICE_NAME_CHANGED \? 'invoiceImport\.ing\.confirm\.labelName' : 'invoiceImport\.ing\.confirm\.label'\)/);
+  assert.match(row, /choice\(`invimp-confirm-\$\{index\}`, t\('invoiceImport\.ing\.confirm\.label'\)/);
   assert.equal(DICT.en['invoiceImport.ing.confirm.label'], 'This price?');
   assert.equal(DICT.it['invoiceImport.ing.confirm.label'], 'Questo prezzo?');
 });
 
 test('11 · a «do not import» answer on a priceCheck row keeps the Skipped pill', () => {
   const src = codeOf(read('js/orders/invoice-import-screen.js'));
-  assert.match(src, /bucketOf\(entry\) === 'check'\s*&& \(\['new', 'unchanged'\]\.includes\(row\.status\) \|\| row\.held === true \|\| needsConfirmation\(row\)\)/);
+  assert.match(src, /bucketOf\(entry\) === 'check'\s*&& \(\['new', 'unchanged'\]\.includes\(row\.status\) \|\| row\.held === true \|\| needsConfirmation\(row\) \|\| Boolean\(row\.invoiceRename\)\)/);
 });
 
 // ── review round 3: a factor other than 1 is never applied silently ──────────────────
@@ -608,8 +608,8 @@ test('S3 · the screen takes the shown price from the effective row, with the pl
 test('S4 · a new answer clears the «Use this price» of the row, so a confirmation never reaches another price', () => {
   const src = codeOf(read('js/orders/invoice-import-screen.js'));
   const question = src.slice(src.indexOf("choice(`invimp-ing-"), src.indexOf('A matched row whose price needs a look') > 0 ? src.indexOf('A matched row whose price') : undefined);
-  assert.match(src, /\(picked\) => \{\s*s\.confirmKeys\.delete\(planned\.key\);\s*if \(!picked\)/);
-  assert.match(src, /\(picked\) => \{\s*s\.confirmKeys\.delete\(planned\.key\);\s*if \(picked === 'forget'\)/);
+  assert.match(src, /\(picked\) => \{\s*s\.confirmKeys\.delete\(planned\.key\);\s*s\.renames\.delete\(planned\.key\);\s*if \(!picked\)/);
+  assert.match(src, /\(picked\) => \{\s*s\.confirmKeys\.delete\(planned\.key\);\s*s\.renames\.delete\(planned\.key\);\s*if \(picked === 'forget'\)/);
   assert.ok(question.length > 0);
   // and the model agrees: answering the other ingredient gives another price, which was never confirmed
   const ingredients = [stored({ weight: '1 kg' }), stored({ id: 'ing-2', name: 'Burro doppio', weight: '10 kg' })];

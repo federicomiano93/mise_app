@@ -732,7 +732,7 @@ test('the whole way from the zip: price-less ingredients are asked about in thei
   const db = makeDb();
   const root = await openWithZip(db);
   await toIngredients(root);
-  assert.match(textOf(root), /Price to check \(1\)/);
+  assert.match(textOf(root), /To check \(1\)/);
   assert.match(textOf(root), /The price looks wrong for this product/);
   assert.match(textOf(root), /Farina tipo 00/);
   await press(root, 'Import 2 ingredients');
