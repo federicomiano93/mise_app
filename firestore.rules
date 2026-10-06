@@ -651,8 +651,17 @@ service cloud.firestore {
                'bakery', 'priceUnit', 'pricePerUnit',
                'packPrice', 'packSize', 'unitWeightKg', 'priceUpdatedAt',
                'vatRate',
-               'casePrice', 'caseCount', 'caseItemSize', 'caseItemUnit'
+               'casePrice', 'caseCount', 'caseItemSize', 'caseItemUnit',
+               'priceBasis'
              ])
+          // What the number typed in the ingredient card's price box REFERS to (7 Oct 2026): a
+          // pack's price, a carton's, or a price per kilo / litre. A memory of the owner's choice
+          // and nothing more — the money above keeps its shape whatever it says, so no reader of
+          // prices looks at it. A closed list; absent or null = the form's default. It lives HERE
+          // ONLY: the ingredients rule has no such key (js/price-model.js PRICE_ONLY_FIELDS).
+          && (!('priceBasis' in request.resource.data)
+              || request.resource.data.priceBasis == null
+              || request.resource.data.priceBasis in ['pack', 'case', 'rate'])
           // A price quoted PER CASE (30 Sep 2026): what the case costs, how many it
           // holds, and how big each one is. The rate above is derived from them by the
           // app at save time and stored beside them. Each is absent, null, or — for the

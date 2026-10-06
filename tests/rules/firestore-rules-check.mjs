@@ -2860,6 +2860,32 @@ async function roles() {
     () => mergeWrite(`${L}/ingredient-prices/I9`,
       { ...stamp, priceUnit: 'kg', pricePerUnit: 1 }, asAccount(MAYA)));
 
+  // ── What the number in the price box refers to (7 Oct 2026): priceBasis ──
+  for (const basis of ['pack', 'case', 'rate', null]) {
+    await expectAllowed(`a manager saves a price with priceBasis ${basis}`,
+      () => mergeWrite(`${L}/ingredient-prices/IB1`,
+        { ...stamp, priceUnit: 'kg', pricePerUnit: 9.6, priceBasis: basis }, asAccount(MAYA)));
+  }
+  await expectDenied('a priceBasis outside the closed list is refused',
+    () => mergeWrite(`${L}/ingredient-prices/IB2`,
+      { ...stamp, priceUnit: 'pcs', pricePerUnit: 9.6, priceBasis: 'kilo' }, asAccount(MAYA)));
+  await expectDenied('a priceBasis that is not a string is refused',
+    () => mergeWrite(`${L}/ingredient-prices/IB3`,
+      { ...stamp, priceUnit: 'pcs', pricePerUnit: 9.6, priceBasis: 5 }, asAccount(MAYA)));
+  // The older-phone path: a save (an invoice import, a merge) that does not mention priceBasis, onto a
+  // document that already carries 'rate', must go through and must not need the key.
+  await seedDoc(`${L}/ingredient-prices/IB6`,
+    { ...stamp, priceUnit: 'pcs', pricePerUnit: 9.6, unitWeightKg: 10, priceBasis: 'rate' });
+  await expectAllowed('a manager\'s write WITHOUT priceBasis onto a document that has «rate»',
+    () => mergeWrite(`${L}/ingredient-prices/IB6`,
+      { ...stamp, priceUnit: 'pcs', pricePerUnit: 9.9, unitWeightKg: 10, priceUpdatedAt: '2026-10-07T10:00:00.000Z' }, asAccount(MAYA)));
+  // priceBasis belongs to ingredient-prices only: the ingredient document refuses the key.
+  await seedDoc(`${L}/ingredients/IB5`, { ...stamp, name: 'Flour' });
+  await expectAllowed('control: an ordinary write to that ingredient goes through',
+    () => mergeWrite(`${L}/ingredients/IB5`, { ...stamp, shortName: 'Flour' }, asAccount(MAYA)));
+  await expectDenied('an ingredient write carrying priceBasis is refused',
+    () => mergeWrite(`${L}/ingredients/IB5`, { ...stamp, shortName: 'Flour', priceBasis: 'rate' }, asAccount(MAYA)));
+
   // ── What the owner decided about an invoice product (5 Oct 2026) ──
   // «Do not import this» / «import it as an ingredient», remembered for next month.
   const DEC = 'a'.repeat(64);
