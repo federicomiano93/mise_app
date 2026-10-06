@@ -544,7 +544,7 @@ export function openInvoiceImport(data) {
   }
 
   function focusAfterRead() {
-    const target = node.querySelector('[data-fid="invimp-next"]') || node.querySelector('.orders-status[tabindex]');
+    const target = node.querySelector('.orders-status[tabindex]') || node.querySelector('[data-fid="invimp-next"]');
     if (target && node.isConnected) target.focus({ preventScroll: true });
   }
 
@@ -770,12 +770,15 @@ export function openInvoiceImport(data) {
   // Why a price waits for a look (invoice-import-model.js checkOf): one sentence, the date in the person's format.
   function checkText(row, planned) {
     if (row.checkReason === CHECK_REASONS.WEIGHT_UNREADABLE) return t('invoiceImport.check.weightUnreadable');
+    if (row.checkReason === CHECK_REASONS.WEIGHT_RESCALED) {
+      return t('invoiceImport.check.weightRescaled', { stored: row.checkStored, file: row.checkFile });
+    }
     if (row.checkReason === CHECK_REASONS.PRICE_JUMP) {
       return t('invoiceImport.check.priceJump', { limit: Math.round(AVERAGED_PRICE_JUMP_LIMIT * 100) });
     }
     if (row.checkReason === CHECK_REASONS.OLDER_INVOICE) {
       // A NEW ingredient is still created, so its sentence says so.
-      if (planned && planned.status === 'new') return t('invoiceImport.check.olderInvoiceNew', { date: shortDate(row.checkDate) });
+      if (row.status === 'new') return t('invoiceImport.check.olderInvoiceNew', { date: shortDate(row.checkDate) });
       return t('invoiceImport.check.olderInvoice', { date: shortDate(row.checkDate) });
     }
     return '';

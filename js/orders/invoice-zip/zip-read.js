@@ -39,7 +39,7 @@ const EOCD_SEARCH_WINDOW = 65559;
 // ZIP64 record (which holds its own, 64-bit count) when that count is 0xFFFF or the directory offset (EOCD+16) is
 // 0xFFFFFFFF. So: the record is searched in the same window fflate uses (it tries every position down to 65559 bytes
 // from the end); the LARGER of the two counts is returned; and a ZIP64 marker returns Infinity — an invoice zip never
-// needs ZIP64, so it is refused. null when no record is found: fflate then refuses the archive as unreadable.
+// needs ZIP64, so readZip refuses it as unreadable. null when no record is found: fflate then refuses the archive as unreadable.
 export function declaredEntryCount(bytes) {
   if (!bytes || bytes.length < EOCD_MIN_BYTES) return null;
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
@@ -58,6 +58,8 @@ export function declaredEntryCount(bytes) {
 // Every `.xml` entry is read; `.p7m` entries are counted; PDFs and everything else are ignored.
 function readZip(bytes, limits, skipped) {
   const entryCount = declaredEntryCount(bytes);
+  // A ZIP64 marker is not «too many entries»: an invoice zip never needs the format, so it is simply unreadable.
+  if (entryCount === Infinity) return { refused: SKIPPED.ZIP_UNREADABLE };
   if (entryCount !== null && entryCount > limits.maxEntries) {
     return { refused: SKIPPED.TOO_MANY_ENTRIES, detail: String(limits.maxEntries) };
   }

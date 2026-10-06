@@ -73,6 +73,7 @@ export const CHECK_REASONS = Object.freeze({
   WEIGHT_UNREADABLE: 'weight-unreadable',
   PRICE_JUMP: 'price-jump',
   OLDER_INVOICE: 'older-invoice',
+  WEIGHT_RESCALED: 'weight-rescaled',
 });
 
 // ── Small helpers ───────────────────────────────────────────────────────────────
@@ -478,9 +479,16 @@ function storedWeightFactor(base, existing) {
   // ⚠️ THE WHOLE PACK, NOT ONE ITEM: a Cartone stores the weight of ONE item beside its packCount, and the invoice
   // price was worked out over pieces × size × count (pricing.js). «10 kg» Singola and 10 × 1 kg Cartone are the
   // same pack; comparing the item weights alone would turn 8 per kg into 80.
-  const total = (size, count) => size * (Number.isInteger(count) && count >= 1 ? count : 1);
+  const countOf = (count) => (Number.isInteger(count) && count >= 1 ? count : 1);
+  const total = (size, count) => size * countOf(count);
   const factor = total(file.size, base.packCount) / total(stored.size, existing.packCount);
-  return { factor: Math.abs(factor - 1) <= 0.001 ? 1 : factor };
+  // The two packs as a person reads them («10 × 1 kg», «1 kg»): the reason of a rescaled row names both.
+  const label = (text, count) => (countOf(count) > 1 ? `${countOf(count)} × ${text}` : text);
+  return {
+    factor: Math.abs(factor - 1) <= 0.001 ? 1 : factor,
+    storedLabel: label(storedText, existing.packCount),
+    fileLabel: label(clean(base.weight, MAX_WEIGHT), base.packCount),
+  };
 }
 
 // The point as it would have been with the stored weight: the same total over (packs × stored weight).
@@ -527,7 +535,8 @@ function matchedRow(base, existing, ctx) {
   // rate stays when the file says nothing.
   const vatRate = base.vatRate !== null && base.vatRate !== undefined ? base.vatRate : vatRateOf(doc?.vatRate);
   const check = newPoints.length === 0 ? null : checkOf({
-    weightUnreadable: weightRead.unreadable === true, updateCurrent, latest, base, doc, storedUnit,
+    weightUnreadable: weightRead.unreadable === true, rescaled: factor !== 1 ? weightRead : null,
+    updateCurrent, latest, base, doc, storedUnit,
   });
   return {
     ...base,
@@ -537,7 +546,11 @@ function matchedRow(base, existing, ctx) {
     newPoints,
     updateCurrent,
     vatRate,
-    ...(check ? { checkReason: check.reason, ...(check.date ? { checkDate: check.date } : {}) } : {}),
+    ...(check ? {
+      checkReason: check.reason,
+      ...(check.date ? { checkDate: check.date } : {}),
+      ...(check.stored ? { checkStored: check.stored, checkFile: check.file } : {}),
+    } : {}),
     ...(unitDiffers ? { reason: 'unit-differs' } : {}),
     ...(pieceDiffers ? { reason: 'piece-differs' } : {}),
     patchSupplierCode,
@@ -547,9 +560,13 @@ function matchedRow(base, existing, ctx) {
 }
 
 // Why a row that would write a price must wait for a person: { reason, date? } or null. Only ONE reason is given,
-// the first that holds: an unreadable stored weight, a big move from a «media» reading, an older invoice's price.
-function checkOf({ weightUnreadable, updateCurrent, latest, base, doc, storedUnit }) {
+// the first that holds: an unreadable stored weight, a price re-read with another pack, a big move from a «media»
+// reading, an older invoice's price.
+function checkOf({ weightUnreadable, rescaled: rescale, updateCurrent, latest, base, doc, storedUnit }) {
   if (weightUnreadable) return { reason: CHECK_REASONS.WEIGHT_UNREADABLE };
+  // ⚠️ A FACTOR OTHER THAN 1 IS NEVER APPLIED SILENTLY, whatever the status of the row (even with no price in force):
+  // the card's Singola/Cartone may not describe the packaging of the invoice line at all.
+  if (rescale) return { reason: CHECK_REASONS.WEIGHT_RESCALED, stored: rescale.storedLabel, file: rescale.fileLabel };
   if (!updateCurrent || !latest) return null;
   const was = typeof doc?.pricePerUnit === 'number' ? doc.pricePerUnit : null;
   // Rounded to 6 decimals first: 1.3 against 1 is 0.30000000000000004 in floating point, and +30% is not MORE than 30%.
