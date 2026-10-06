@@ -263,19 +263,18 @@ function readMetadata(entries, parseXml) {
 }
 
 // The VAT number every invoice of the zip was ISSUED TO most often: the owner's own (the zip is his purchases).
-// '' when no invoice names a buyer, or when two numbers tie (nothing can then be said about whose zip it is).
+// ⚠️ ONLY A STRICT MAJORITY of the invoices that name a buyer counts: a zip of two venues (or a tie) says nothing
+// about whose it is, and then nothing is skipped. '' when no invoice names a buyer.
 export function ownerVatOf(documents) {
   const counts = new Map();
   for (const doc of documents) {
     if (doc.buyerVat) counts.set(doc.buyerVat, (counts.get(doc.buyerVat) || 0) + 1);
   }
-  let best = '';
-  let bestCount = 0;
-  let tie = false;
+  const naming = [...counts.values()].reduce((sum, n) => sum + n, 0);
   for (const [vat, count] of counts) {
-    if (count > bestCount) { best = vat; bestCount = count; tie = false; } else if (count === bestCount) tie = true;
+    if (count * 2 > naming) return vat;
   }
-  return tie ? '' : best;
+  return '';
 }
 
 // `read` is what readInvoiceArchives() returns: { containers: [{ entries: { name: bytes } }], p7mCount, skipped }.

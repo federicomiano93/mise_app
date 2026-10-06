@@ -31,18 +31,25 @@ const byLowerName = (a, b) => {
 
 const EOCD_SIGNATURE = 0x06054b50;
 const EOCD_MIN_BYTES = 22;
-const EOCD_MAX_COMMENT = 0xffff;
+// fflate's own search window: it examines every position until the end is 65559 bytes away.
+const EOCD_SEARCH_WINDOW = 65559;
 
-// The entry count the End Of Central Directory record DECLARES, read before fflate walks the directory (a
-// hostile archive could otherwise make that walk build a listing of any length). null when no record is found:
-// fflate then refuses the archive as unreadable. A count of 0xFFFF means «see the ZIP64 record»: it is far above
-// any limit, so it is simply returned as it is.
+// The entry count the End Of Central Directory record DECLARES, read BEFORE fflate walks the directory.
+// ⚠️ IT MUST SEE WHAT fflate WILL SEE: fflate loops on «entries on this disk» (EOCD+8, not +10), and switches to the
+// ZIP64 record (which holds its own, 64-bit count) when that count is 0xFFFF or the directory offset (EOCD+16) is
+// 0xFFFFFFFF. So: the record is searched in the same window fflate uses (it tries every position down to 65559 bytes
+// from the end); the LARGER of the two counts is returned; and a ZIP64 marker returns Infinity — an invoice zip never
+// needs ZIP64, so it is refused. null when no record is found: fflate then refuses the archive as unreadable.
 export function declaredEntryCount(bytes) {
   if (!bytes || bytes.length < EOCD_MIN_BYTES) return null;
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  const lowest = Math.max(0, bytes.length - EOCD_MIN_BYTES - EOCD_MAX_COMMENT);
+  const lowest = Math.max(0, bytes.length - EOCD_SEARCH_WINDOW);
   for (let at = bytes.length - EOCD_MIN_BYTES; at >= lowest; at--) {
-    if (view.getUint32(at, true) === EOCD_SIGNATURE) return view.getUint16(at + 10, true);
+    if (view.getUint32(at, true) !== EOCD_SIGNATURE) continue;
+    const onDisk = view.getUint16(at + 8, true);
+    const total = view.getUint16(at + 10, true);
+    if (onDisk === 0xffff || total === 0xffff || view.getUint32(at + 16, true) === 0xffffffff) return Infinity;
+    return Math.max(onDisk, total);
   }
   return null;
 }

@@ -204,7 +204,7 @@ export function applyDecisions(plannedRows, decisions, ctx, forgetKeys, confirmK
       row = { ...row, status: 'skipped', newPoints: [], updateCurrent: false };
     }
     if (needsConfirmation(row) && !(confirmKeys && confirmKeys.has(planned.key))) {
-      row = { ...row, status: 'skipped', newPoints: [], updateCurrent: false, held: true };
+      row = { ...row, status: 'skipped', newPoints: [], updateCurrent: false, held: true, heldRow: row };
     }
     return { planned, row, waiting: WAITING.includes(row.status) };
   });

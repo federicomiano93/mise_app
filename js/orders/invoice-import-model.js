@@ -475,7 +475,11 @@ function storedWeightFactor(base, existing) {
   const file = packBaseOf(base.weight);
   if (!stored || !file || !(stored.size > 0) || !(file.size > 0)
     || stored.priceUnit !== base.priceUnit || file.priceUnit !== base.priceUnit) return { unreadable: true };
-  const factor = file.size / stored.size;
+  // ⚠️ THE WHOLE PACK, NOT ONE ITEM: a Cartone stores the weight of ONE item beside its packCount, and the invoice
+  // price was worked out over pieces × size × count (pricing.js). «10 kg» Singola and 10 × 1 kg Cartone are the
+  // same pack; comparing the item weights alone would turn 8 per kg into 80.
+  const total = (size, count) => size * (Number.isInteger(count) && count >= 1 ? count : 1);
+  const factor = total(file.size, base.packCount) / total(stored.size, existing.packCount);
   return { factor: Math.abs(factor - 1) <= 0.001 ? 1 : factor };
 }
 
@@ -616,6 +620,7 @@ export function planIngredients(fileIngredients, ctx) {
       allPoints,
       // The pack weight the price was worked out with, and whether the newest invoice was left out as unreliable.
       ...(file.weight ? { weight: file.weight } : {}),
+      ...(file.packCount ? { packCount: file.packCount } : {}),
       ...(file.latestUnverified === true ? { latestUnverified: true } : {}),
       // Set when the file wants the ingredient but states no price for it (see PRICE_CHECK_CODES).
       priceCheck: file.priceCheck || '',

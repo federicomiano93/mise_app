@@ -307,7 +307,7 @@ test('⚠️ the remembered decisions are written BEFORE the rows, and a failure
 
 test('the invoices are read in memory after the browser has painted «reading», with the platform parser', () => {
   assert.match(SCREEN, /new DOMParser\(\)\.parseFromString\(text, 'application\/xml'\)/);
-  assert.match(SCREEN, /await new Promise\(resolve => setTimeout\(resolve, 0\)\);\s*try \{/);
+  assert.match(SCREEN, /await new Promise\(resolve => setTimeout\(resolve, 0\)\);\s*const inputs = \[\];/);
   assert.match(SCREEN, /new Uint8Array\(await file\.arrayBuffer\(\)\)/);
   assert.match(SCREEN, /buildImportFromInvoices\(inputs, \{ parseXml, now: new Date\(\), salt \}\)/);
   assert.match(SCREEN, /await file\.text\(\)/, 'a .json file keeps its old path');
