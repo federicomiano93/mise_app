@@ -346,7 +346,7 @@ test('the words the owner reads on the invoices path are the agreed ones, in bot
   assert.equal(it['invoiceImport.zip.importAsIngredient'], 'Importa come ingrediente');
   assert.equal(it['invoiceImport.zip.importAgain'], 'Importa di nuovo');
   assert.equal(it['invoiceImport.ing.forget'], 'Non importare (ricordalo)');
-  assert.equal(it['invoiceImport.status.priceCheck'], 'Prezzo da controllare');
+  assert.equal(it['invoiceImport.status.priceCheck'], 'Da controllare');
   assert.equal(it['invoiceImport.summary.decisions'].other, 'Decisioni ricordate: {n}');
 });
 
