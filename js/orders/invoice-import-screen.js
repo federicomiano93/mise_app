@@ -25,7 +25,7 @@ import { confirmDialog, alertDialog } from './confirm-dialog.js';
 import { BACK_ICON } from './mgmt-ui.js';
 import {
   parseImportFile, planSuppliers, supplierWrites, planIngredients, ingredientWrites, packLabelOf,
-  AVERAGED_PRICE_JUMP_LIMIT, CHECK_REASONS,
+  AVERAGED_PRICE_JUMP_LIMIT, CHECK_REASONS, foldInvoiceName,
 } from './invoice-import-model.js';
 import {
   needsConfirmation, rowToWrite, applyDecisions, bucketOf, filterCounts, visibleFilters, entriesFor, waitingCount, importTotals, idsToCheck,
@@ -1210,7 +1210,7 @@ export function openInvoiceImport(data) {
     });
 
     for (let i = 0; i < writing.length; i++) {
-      const { planned } = writing[i];
+      const { planned, row: shown } = writing[i];
       const fileIngredient = s.fileByKey.get(planned.key);
       s.progress.done = i;
       say(i + 1);
@@ -1224,7 +1224,7 @@ export function openInvoiceImport(data) {
           fileIngredient, decision: s.ingredientDecisions[planned.key], supplierIdByKey: s.supplierIdByKey,
           read: readFor(fileIngredient),
         });
-        const wrow = fresh.waiting ? null : rowToWrite(fresh.row, { confirmed: s.confirmKeys.has(planned.key), rename: s.renames.get(planned.key) });
+        const wrow = fresh.waiting ? null : rowToWrite(fresh.row, { confirmed: s.confirmKeys.has(planned.key), rename: s.renames.get(planned.key), held: shown.held === true });
         if (fresh.waiting) {
           results.push({ key: planned.key, name: planned.name, outcome: 'failed', reason: t('invoiceImport.reason.changed'), retry: true });
         } else if (!wrow) {
@@ -1240,7 +1240,8 @@ export function openInvoiceImport(data) {
             storedPoints: fresh.storedPoints, newPoints: [], priceUnit: fileIngredient.priceUnit, isNew: false, ingredient: fresh.ingredient,
           });
           results.push({
-            key: planned.key, name: planned.name, outcome: 'unchanged', changesAdded: recorded.added,
+            // A row held for its price whose name was saved is a held row, not an unchanged one.
+            key: planned.key, name: planned.name, outcome: wrow.held ? 'skipped' : 'unchanged', changesAdded: recorded.added,
             changesFailed: recorded.failed, codesFull: wrow.codesFull === true,
             namesSaved: wrow.patchInvoiceName && codeBatches.length > 0 ? 1 : 0,
           });
@@ -1270,7 +1271,12 @@ export function openInvoiceImport(data) {
         }
         // A rename the person chose that is not going to be written (the name or the file moved since they looked):
         // the summary says so, never silently.
-        if (s.renames.has(planned.key) && !fresh.waiting && !(wrow && wrow.patchInvoiceName)) results[results.length - 1].namesLost = 1;
+        if (s.renames.has(planned.key) && !fresh.waiting && !(wrow && wrow.patchInvoiceName)) {
+          // Somebody saved the very same name meanwhile: nothing to write, and nothing lost.
+          const now = fresh.ingredient && typeof fresh.ingredient.invoiceName === 'string' ? fresh.ingredient.invoiceName : '';
+          const last = results[results.length - 1];
+          if (foldInvoiceName(now) === foldInvoiceName(s.renames.get(planned.key).file)) last.namesSaved = 1; else last.namesLost = 1;
+        }
       } catch (err) {
         console.error('Importing one ingredient failed:', err);
         const kind = stopKind(err);
@@ -1310,7 +1316,7 @@ export function openInvoiceImport(data) {
               read: readFor(fileIngredient),
             });
             // A row whose fresh plan needs a confirmation nobody gave is left alone.
-            const wrow = rowToWrite(fresh.row, { confirmed: s.confirmKeys.has(planned.key), rename: s.renames.get(planned.key) });
+            const wrow = rowToWrite(fresh.row, { confirmed: s.confirmKeys.has(planned.key), rename: s.renames.get(planned.key), held: row.held === true });
             if (wrow && wrow.status === 'unchanged') {
               const codeBatches = ingredientWrites(wrow, fileIngredient, new Date().toISOString(), { language });
               if (codeBatches.length > 0) await runImportBatches(codeBatches);

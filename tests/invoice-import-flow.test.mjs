@@ -1201,3 +1201,59 @@ test('⚠️ a held price with a chosen rename saves the NAME and leaves the pri
   assert.equal(db.prices['ing-9'].pricePerUnit, 1, 'the held price was not applied');
   assert.deepEqual(db.points['ing-9'], [], 'and no price point leaked');
 });
+
+const heldRenamed = () => renamedVenue({
+  prices: [price({ line: 6, invoiceId: '18000000002', invoiceDate: '2026-10-01', pricePerUnit: 1.4, reliability: 'media' })],
+}, { pricePerUnit: 1, priceUpdatedAt: '2026-08-31T12:00:00.000Z' });
+
+test('⚠️ a held price stays held when the fresh plan loses its reason (the stored price moved meanwhile): only the name is written', async () => {
+  const { db, text } = heldRenamed();
+  db.points['ing-9'] = [];
+  const root = await open(db, text);
+  await press(root, 'Next');
+  await press(root, 'Next');
+  await pick(renameSelect(root), 'save');
+  // Another phone moved the price: 1.4 is now only 7% away, so the fresh plan has no reason to hold it.
+  db.prices['ing-9'].pricePerUnit = 1.3;
+  await press(root, 'Import 1 ingredient');
+  assert.equal(db.prices['ing-9'].pricePerUnit, 1.3, 'the unconfirmed price was not written');
+  assert.deepEqual(db.points['ing-9'], [], 'no price point leaked');
+  assert.equal(db.ingredients[0].invoiceName, NEW_NAME);
+  assert.match(textOf(root), /1 name on the invoice saved/);
+  assert.match(textOf(root), /1 skipped/, 'a row held for its price is not «unchanged»');
+  assert.ok(!/1 unchanged/.test(textOf(root)));
+});
+
+test('⚠️ the same run: another pack of the ingredient writes a newer shared price first, and the held main row still writes only its name', async () => {
+  const { db } = heldRenamed();
+  db.points['ing-9'] = [];
+  db.ingredients[0].supplierCodes = ['F00-5'];
+  const pack = ing({
+    key: 'IT00000000001|code:F00-5', supplierCode: 'F00-5', invoiceName: 'FARINA TIPO 00 SACCHETTO KG 5', weight: '5 kg',
+    prices: [price({ line: 7, invoiceId: '18000000003', invoiceDate: '2026-10-05', pricePerUnit: 0.9 })],
+  });
+  const main = ing({
+    key: 'IT00000000001|code:F00-25', supplierCode: 'F00-25', invoiceName: NEW_NAME,
+    prices: [price({ line: 6, invoiceId: '18000000002', invoiceDate: '2026-10-01', pricePerUnit: 1.4, reliability: 'media' })],
+  });
+  const root = await open(db, fileText([pack, main]));
+  await press(root, 'Next');
+  await press(root, 'Next');
+  await pick(renameSelect(root), 'save');
+  await press(root, 'Import 2 ingredients');
+  assert.ok(db.points['ing-9'].includes('inv-18000000003-7'), 'the 5 kg price went in');
+  assert.ok(!db.points['ing-9'].includes('inv-18000000002-6'), 'the held 25 kg price did not');
+  assert.equal(db.ingredients[0].invoiceName, NEW_NAME);
+});
+
+test('a chosen rename that somebody else already saved meanwhile is not reported as lost', async () => {
+  const { db, text } = renamedVenue();
+  const root = await open(db, text);
+  await press(root, 'Next');
+  await press(root, 'Next');
+  await pick(renameSelect(root), 'save');
+  db.ingredients[0].invoiceName = NEW_NAME;
+  await press(root, 'Import 1 ingredient');
+  assert.ok(!/not saved/.test(textOf(root)));
+  assert.match(textOf(root), /1 name on the invoice saved/);
+});

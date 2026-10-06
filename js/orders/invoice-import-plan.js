@@ -214,10 +214,12 @@ function nameOnly(row) {
 // The row as it must be written, from the plan made again right before the write: null when there is nothing to write
 // (a price that needs a look which nobody confirmed, and no rename chosen), the name-only row when only the rename was
 // chosen, else the row with the rename if the person chose it.
-export function rowToWrite(fresh, { confirmed = false, rename = null } = {}) {
+// ⚠️ `held` is whether the SCREEN held this row for its price: a fresh plan that has lost its reason (another row of this
+// run moved the shared price, another phone changed the stored one) must not write what nobody confirmed.
+export function rowToWrite(fresh, { confirmed = false, rename = null, held = false } = {}) {
   if (!fresh) return null;
   const chosen = withRename(fresh, rename);
-  if (needsConfirmation(fresh) && !confirmed) return chosen !== fresh ? nameOnly(chosen) : null;
+  if ((needsConfirmation(fresh) || held) && !confirmed) return chosen !== fresh ? nameOnly(chosen) : null;
   return chosen;
 }
 

@@ -86,7 +86,7 @@ test('⚠️ each row is planned AGAIN on fresh server data before anything is w
   assert.match(run, /invoicePointIds\(id\)/);
   assert.match(run, /freshPrice\(id\)/);
   // ⚠️ BOTH loops gate on rowToWrite, each pinned in its OWN loop (one line in the other would satisfy a whole-file match).
-  const gate = /const wrow = (?:fresh\.waiting \? null : )?rowToWrite\(fresh\.row, \{ confirmed: s\.confirmKeys\.has\(planned\.key\), rename: s\.renames\.get\(planned\.key\) \}\)/;
+  const gate = /const wrow = (?:fresh\.waiting \? null : )?rowToWrite\(fresh\.row, \{ confirmed: s\.confirmKeys\.has\(planned\.key\), rename: s\.renames\.get\(planned\.key\), held: (?:shown|row)\.held === true \}\)/;
   const writingLoop = run.slice(run.indexOf('for (let i = 0; i < writing.length'), run.indexOf('for (let i = 0; i < quiet.length'));
   const quietLoop = run.slice(run.indexOf('for (let i = 0; i < quiet.length'));
   assert.match(writingLoop, gate, 'the writing loop gates its fresh plan');
