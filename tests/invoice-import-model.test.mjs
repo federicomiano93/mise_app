@@ -7,6 +7,7 @@ import {
   IMPORT_FORMAT, IMPORT_VERSION, MAX_DOCS_PER_BATCH,
   parseImportFile, normalizeVat, normalizeSupplierName, normalizeIngredientName,
   planSuppliers, supplierWrites, planIngredients, resolveRow, ingredientWrites, summarize,
+  packLabelOf, extraCodesOf, MAX_SUPPLIER_CODES,
 } from '../js/orders/invoice-import-model.js';
 import { INGREDIENT_DRAINED_FIELDS } from '../js/price-model.js';
 
@@ -879,6 +880,7 @@ test('a point is exactly what the history rule describes', () => {
   assert.deepEqual(point.data, {
     recordedAt: '2026-08-31T12:00:00.000Z', priceUnit: 'kg', pricePerUnit: 0.57,
     supplierId: SUPPLIER_ID, source: 'invoice', invoiceId: '18000000001', invoiceDate: '2026-08-31', invoiceQty: 25,
+    packLabel: 'Farina tipo 00 25 kg', packCode: 'F00-25',
   });
   assert.equal(point.pointId, 'inv-18000000001-5');
   assert.match(point.pointId, new RegExp(`^inv-${point.data.invoiceId}-[0-9]{1,6}$`));
@@ -1025,6 +1027,10 @@ test('the model imports no Firebase, no DOM and nothing from another feature\'s 
   const imports = [...source.matchAll(/^import .* from '([^']+)'/gm)].map(m => m[1]);
   assert.ok(imports.length >= 4);
   for (const spec of imports) {
+    // The reason codes of the zip reader (a pure constants file of this same feature) are the one sibling allowed.
+    if (spec === './invoice-zip/reasons.js') continue;
+    // The pure piece-weight comparison, shared with the price-changes model (no imports of its own but a date helper).
+    if (spec === './price-changes-model.js') continue;
     assert.ok(spec.startsWith('../') && !spec.slice(3).includes('/'), `${spec}: only js/ root modules`);
     assert.ok(!/firebase|dom\.js|firebase-/.test(spec), spec);
   }
@@ -1095,6 +1101,35 @@ test('a current price kept in ANOTHER unit is never replaced: the new prices go 
   assert.equal(updated.reason, undefined);
 });
 
+test('⚠️ a per-piece price of a piece of ANOTHER weight never becomes the current price: history only', () => {
+  const stored = (kg) => new Map([['i1', { priceUnit: 'pcs', pricePerUnit: 5, unitWeightKg: kg, priceUpdatedAt: '2026-01-01T12:00:00.000Z', vatRate: 4 }]]);
+  const file = oneIngredient({ supplierCode: '', priceUnit: 'pcs', unitWeightKg: 1, weight: '1 kg', prices: [price({ invoiceDate: '2026-08-31', pricePerUnit: 1.2 })] });
+  const run = (kg) => planOne(file, ctxOf({ ingredients: [existingIng({ id: 'i1', name: 'Farina tipo 00' })], pricesById: stored(kg) }));
+  const sack = run(5);
+  assert.equal(sack.status, 'history-only');
+  assert.equal(sack.reason, 'piece-differs');
+  assert.equal(sack.updateCurrent, false);
+  assert.equal(sack.newPoints.length, 1, 'the point still joins the history');
+  assert.deepEqual(flat(ingredientWrites(sack, file, '')).map(o => o.type), ['add-price-point'], 'no set-current-price');
+  assert.equal(run(undefined).status, 'history-only', 'a stored piece with no weight is not «equal» either');
+  const same = run(1.0005);
+  assert.equal(same.status, 'update-price', 'the same piece (within 0.1%) updates it');
+  assert.equal(same.reason, undefined);
+  // Per kilo is comparable across packs: nothing changes there.
+  const perKg = planOne(oneIngredient({ supplierCode: '', prices: [price({ invoiceDate: '2026-08-31' })] }), ctxOf({
+    ingredients: [existingIng({ id: 'i1', name: 'Farina tipo 00' })],
+    pricesById: new Map([['i1', { priceUnit: 'kg', pricePerUnit: 0.5, priceUpdatedAt: '2026-01-01T12:00:00.000Z' }]]),
+  }));
+  assert.equal(perKg.status, 'update-price');
+});
+
+test('every point the import writes carries the article code of its pack (when the file has one)', () => {
+  const withCode = flat(writesFor(oneIngredient({ supplierCode: 'PACCO-1' })).batches).find(o => o.type === 'add-price-point');
+  assert.equal(withCode.data.packCode, 'PACCO-1');
+  const without = flat(writesFor(oneIngredient({ supplierCode: '' })).batches).find(o => o.type === 'add-price-point');
+  assert.equal('packCode' in without.data, false);
+});
+
 test('a rate the file does not state keeps the one stored; one it does state replaces it', () => {
   const stored = new Map([['i1', { priceUnit: 'kg', pricePerUnit: 0.5, priceUpdatedAt: '2026-01-01T12:00:00.000Z', vatRate: 10 }]]);
   const ctx = ctxOf({ ingredients: [existingIng({ id: 'i1', name: 'Farina tipo 00' })], pricesById: stored });
@@ -1145,4 +1180,139 @@ test('an «unisci con» row that points at nobody is remembered the same way', (
   const row = planOne(oneIngredient({ mergeWith: 'Nowhere' }), ctx);
   assert.equal(row.status, 'unchanged');
   assert.equal(row.ingredientId, 'far');
+});
+
+// ── An ingredient the invoices state no trustworthy price for (priceCheck) ──────
+test('prices: [] is valid ONLY together with a priceCheck code', () => {
+  const withCode = oneIngredient({ prices: [], priceCheck: 'price-out-of-scale' });
+  assert.equal(withCode.invalid, undefined);
+  assert.equal(withCode.priceCheck, 'price-out-of-scale');
+  assert.deepEqual(withCode.prices, []);
+
+  assert.equal(oneIngredient({ prices: [] }).invalid, 'no-prices', 'a file from the script never has empty prices');
+  assert.equal(oneIngredient({ prices: [], priceCheck: '' }).invalid, 'no-prices');
+  assert.equal(oneIngredient({ prices: [], priceCheck: 'not-a-code' }).invalid, 'no-prices');
+  assert.equal(oneIngredient({ prices: [], priceCheck: 42 }).invalid, 'no-prices');
+  assert.equal('priceCheck' in oneIngredient(), false, 'an ordinary entry carries none');
+  // a code beside real prices is meaningless and dropped
+  assert.equal('priceCheck' in oneIngredient({ priceCheck: 'price-out-of-scale' }), false);
+});
+
+test('every reason a price is «da verificare» is an accepted priceCheck code', async () => {
+  const { NOTE, LEFT_OUT } = await import('../js/orders/invoice-zip/reasons.js');
+  const { PRICE_CHECK_CODES } = await import('../js/orders/invoice-import-model.js');
+  assert.ok(PRICE_CHECK_CODES.includes(NOTE.PRICE_OUT_OF_SCALE));
+  assert.ok(PRICE_CHECK_CODES.includes(NOTE.UNATTRIBUTED_DISCOUNT));
+  assert.ok(PRICE_CHECK_CODES.includes(LEFT_OUT.NEEDS_CHECKING));
+  assert.ok(!PRICE_CHECK_CODES.includes(NOTE.BY_WEIGHT), 'a note that is not a doubt is not a code');
+});
+
+test('a NEW priceCheck row creates the ingredient with no price document and no points', () => {
+  const file = oneIngredient({ prices: [], priceCheck: 'price-out-of-scale' });
+  const row = planOne(file, ctxOf());
+  assert.equal(row.status, 'new');
+  assert.equal(row.priceCheck, 'price-out-of-scale');
+  assert.deepEqual(row.newPoints, []);
+  const ops = flat(ingredientWrites(row, file, '2026-10-05T10:00:00.000Z', { language: 'it' }));
+  assert.deepEqual(ops.map(o => o.type), ['create-ingredient']);
+  assert.equal(ops[0].data.name, 'Farina tipo 00');
+  assert.equal(ops[0].data.supplierId, SUPPLIER_ID);
+  assertNoNaN(ops);
+  for (const key of ['allergens', 'mayContain', 'allergensCheckedAt', 'nutrition', 'packIngredients']) assert.ok(!(key in ops[0].data));
+});
+
+test('a priceCheck row matched to an existing ingredient writes nothing', () => {
+  const file = oneIngredient({ prices: [], priceCheck: 'unattributed-discount' });
+  const row = planOne(file, ctxOf({ ingredients: [existingIng({ name: 'Farina tipo 00', supplierCode: 'F00-25' })] }));
+  assert.equal(row.status, 'unchanged');
+  assert.equal(row.ingredientId, 'ing-1');
+  assert.deepEqual(ingredientWrites(row, file, '2026-10-05T10:00:00.000Z', { language: 'it' }), []);
+});
+
+test('an ordinary row with no new points still writes nothing, and a row without priceCheck is untouched by the change', () => {
+  const file = oneIngredient();
+  const row = planOne(file, ctxOf());
+  assert.equal(row.priceCheck, '');
+  assert.ok(flat(ingredientWrites(row, file, '', { language: 'it' })).some(o => o.type === 'set-current-price'));
+  const known = planOne(file, ctxOf({
+    ingredients: [existingIng({ name: 'Farina tipo 00', supplierCode: 'F00-25' })], invoicePointIds: new Map([['ing-1', new Set(['inv-18000000001-5'])]]),
+  }));
+  assert.equal(known.status, 'unchanged');
+  assert.deepEqual(ingredientWrites(known, file, '', { language: 'it' }), []);
+});
+
+// ── One ingredient, several packs (5 Oct 2026) ──────────────────────────────────
+
+test('matching by article code reads the main code AND every extra pack code, case and spaces ignored', () => {
+  const ctx = ctxOf({ ingredients: [existingIng({ id: 'x', name: 'Lievito sacco', supplierCode: 'SACCO', supplierCodes: [' pacco ', 'pacco', ''] })] });
+  const pacco = planOne(oneIngredient({ name: 'Qualcosa di diverso', supplierCode: 'PACCO' }), ctx);
+  assert.equal(pacco.ingredientId, 'x');
+  assert.notEqual(pacco.status, 'maybe-duplicate');
+  assert.equal(pacco.patchSupplierCode, null);
+  assert.equal(pacco.setSupplierCodes, null, 'it already knows that code');
+  const main = planOne(oneIngredient({ name: 'Altro ancora', supplierCode: 'sacco' }), ctx);
+  assert.equal(main.ingredientId, 'x');
+});
+
+test('a code the ingredient does not know yet is added to supplierCodes (the main code stays), and never twice', () => {
+  const ctx = ctxOf({ ingredients: [existingIng({ id: 'x', name: 'Farina tipo 00', supplierCode: 'OLD', supplierCodes: ['B'] })] });
+  const row = planOne(oneIngredient({ supplierCode: 'NEW', mergeWith: 'Farina tipo 00' }), ctx);
+  assert.equal(row.ingredientId, 'x');
+  assert.equal(row.patchSupplierCode, null);
+  assert.deepEqual(row.setSupplierCodes, ['B', 'NEW']);
+  const ops = flat(ingredientWrites(row, oneIngredient({ supplierCode: 'NEW', mergeWith: 'Farina tipo 00' }), ''));
+  assert.deepEqual(ops[0], { type: 'patch-ingredient', ingredientId: 'x', data: { supplierCodes: ['B', 'NEW'] } });
+  assert.ok(INGREDIENT_KEYS.includes('supplierCodes'), 'the rules accept the key');
+});
+
+test('an ingredient with no main code takes the file code as its main code, as before', () => {
+  const row = planOne(oneIngredient({ supplierCode: 'NEW' }), ctxOf({ ingredients: [existingIng({ id: 'x', name: 'Farina tipo 00', supplierCode: '' })] }));
+  assert.equal(row.patchSupplierCode, 'NEW');
+  assert.equal(row.setSupplierCodes, null);
+});
+
+test('a full list (20 extra codes) adds nothing, says so, and the write has no code patch', () => {
+  const full = Array.from({ length: MAX_SUPPLIER_CODES }, (_, i) => `C${i}`);
+  const ctx = ctxOf({ ingredients: [existingIng({ id: 'x', name: 'Farina tipo 00', supplierCode: 'OLD', supplierCodes: full })] });
+  const file = oneIngredient({ supplierCode: 'NEW', mergeWith: 'Farina tipo 00' });
+  const row = planOne(file, ctx);
+  assert.equal(row.codesFull, true);
+  assert.equal(row.setSupplierCodes, null);
+  assert.equal(flat(ingredientWrites(row, file, '')).some(o => o.type === 'patch-ingredient'), false);
+});
+
+test('a «Same as» answer to a code-differs question teaches the ingredient the new code', () => {
+  const ctx = ctxOf({ ingredients: [existingIng({ id: 'x', name: 'Farina tipo 00', supplierCode: 'OLD' })] });
+  const file = oneIngredient({ supplierCode: 'NEW' });
+  const asked = planOne(file, ctx);
+  assert.equal(asked.status, 'maybe-duplicate');
+  const answered = resolveRow(asked, { sameAs: 'x' }, ctx);
+  assert.deepEqual(answered.setSupplierCodes, ['NEW']);
+});
+
+test('an «unchanged» row (every price already in) still learns a new pack code, and writes nothing else', () => {
+  const file = oneIngredient({ supplierCode: 'NEW' });
+  const ctx = ctxOf({
+    ingredients: [existingIng({ id: 'x', name: 'Farina tipo 00', supplierCode: 'OLD' })],
+    invoicePointIds: new Map([['x', new Set(['inv-18000000001-5'])]]),
+  });
+  const row = planOne(file, ctx);
+  assert.equal(row.status, 'unchanged');
+  assert.deepEqual(flat(ingredientWrites(row, file, '')), [{ type: 'patch-ingredient', ingredientId: 'x', data: { supplierCodes: ['NEW'] } }]);
+});
+
+test('every invoice point says which pack it paid for: the name, plus the weight unless the name has it', () => {
+  assert.equal(packLabelOf({ name: 'Lievito pacco', weight: '1 kg' }), 'Lievito pacco 1 kg');
+  assert.equal(packLabelOf({ name: 'Lievito pacco 1kg', weight: '1 kg' }), 'Lievito pacco 1kg');
+  assert.equal(packLabelOf({ name: 'Lievito pacco', weight: '' }), 'Lievito pacco');
+  assert.equal(packLabelOf({ name: 'x'.repeat(200), weight: '1 kg' }).length, 120);
+  const points = flat(writesFor(oneIngredient({ weight: '25 kg', name: 'Farina tipo 00' })).batches).filter(o => o.type === 'add-price-point');
+  assert.ok(points.length > 0);
+  points.forEach(p => assert.equal(p.data.packLabel, 'Farina tipo 00 25 kg'));
+  assert.ok(POINT_KEYS.includes('packLabel'), 'the rules accept the key');
+});
+
+test('extraCodesOf cleans the list: texts only, trimmed, no repeats, never the main code', () => {
+  assert.deepEqual(extraCodesOf({ supplierCode: 'A', supplierCodes: ['a', ' B ', 'b', 4, '', 'C'] }), ['B', 'C']);
+  assert.deepEqual(extraCodesOf({}), []);
 });

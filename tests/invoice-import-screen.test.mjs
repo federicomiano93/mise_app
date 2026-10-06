@@ -3,7 +3,7 @@
 // The pure parts are tested in invoice-import-plan.test.mjs and invoice-import-model.test.mjs.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { _dictionaries } from '../js/i18n.js';
 
 const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
@@ -80,7 +80,7 @@ test('leaving asks first (danger), is off while writing, and nothing is written 
 test('⚠️ each row is planned AGAIN on fresh server data before anything is written, and the run stops only on a refusal or no connection', () => {
   const run = SCREEN.slice(SCREEN.indexOf('async function runImport'));
   const replan = run.indexOf('await replanRow(');
-  const write = run.indexOf('await runImportBatches(');
+  const write = run.indexOf('await runImportBatches(batches)', replan);
   assert.ok(replan > 0 && write > replan, 'replanRow must run before runImportBatches');
   assert.match(run, /freshIngredientsForSupplier\(supplierId\)/);
   assert.match(run, /invoicePointIds\(id\)/);
@@ -95,7 +95,7 @@ test('accessibility: real controls, chips with aria-pressed, a live region, focu
   assert.match(SCREEN, /role: 'status', 'aria-live': 'polite'/);
   assert.match(SCREEN, /el\('label', \{ class: 'invimp-choice-label', for: id/);
   assert.match(SCREEN, /h\.focus\(\{ preventScroll: true \}\)/);
-  assert.match(SCREEN, /accept: '\.json,application\/json'/);
+  assert.match(SCREEN, /accept: '\.zip,\.xml,\.json,application\/zip,application\/json', multiple: ''/);
   assert.match(SCREEN, /await file\.text\(\)/);
   // the status is always a word, the colour only repeats it
   assert.match(SCREEN, /pill\(TONES\[row\.status\], t\(STATUS_KEYS\[row\.status\]\)\)/);
@@ -277,4 +277,88 @@ test('the labels the owner agreed are the ones on screen', () => {
   assert.equal(en['invoiceImport.suppliers.changed'], 'The supplier list changed: check again.');
   assert.match(en['invoiceImport.summary.remember'], /“unisci con \{target\}”/);
   assert.match(it['invoiceImport.summary.remember'], /«unisci con \{target\}»/);
+});
+
+// ── The invoices path: remembered decisions, reason codes, precache ──────────────
+
+test('⚠️ the decisions data layer reads from the SERVER, refuses offline, writes small bounded batches through pathFor', () => {
+  assert.match(DATA, /const DECISIONS = 'invoice-decisions';/);
+  const load = DATA.slice(DATA.indexOf('export async function loadInvoiceDecisions'), DATA.indexOf('export async function writeInvoiceDecisions'));
+  assert.match(load, /refuseOffline\(\);/);
+  assert.match(load, /withTimeout\(getDocsFromServer\(collection\(db, pathFor\(DECISIONS\)\)\)\)/);
+  assert.doesNotMatch(load, /\bgetDocs\(/);
+  const write = DATA.slice(DATA.indexOf('export async function writeInvoiceDecisions'));
+  assert.match(write, /refuseOffline\(\);/);
+  assert.match(write, /planDecisionBatches\(changes, \{ bakery: currentLocationId\(\), nowIso: new Date\(\)\.toISOString\(\) \}\)/);
+  assert.match(write, /batch\.set\(ref, op\.data, \{ merge: true \}\)/);
+  assert.match(write, /else batch\.delete\(ref\)/);
+  assert.match(write, /await withTimeout\(batch\.commit\(\)\)/);
+  assert.match(write, /collection\(db, pathFor\(DECISIONS\)\)/, 'the path is built by location.js, like every collection');
+});
+
+test('⚠️ the remembered decisions are written BEFORE the rows, and a failure there stops nothing else', () => {
+  const run = SCREEN.slice(SCREEN.indexOf('async function runImport'));
+  const decisions = run.indexOf('await writeInvoiceDecisions(');
+  assert.ok(decisions > 0 && decisions < run.indexOf('await replanRow('), 'decisions first');
+  assert.match(run, /catch \(err\) \{\s*console\.error\('Remembering the decisions failed:', err\);\s*s\.decisionsFailed = true;/);
+  assert.match(SCREEN, /async function finishWithoutRows[\s\S]*?const ok = await confirmDialog\([\s\S]*?if \(!ok\) return;[\s\S]*?await writeInvoiceDecisions/,
+    'a run that ends with nothing to import still asks before it remembers');
+});
+
+test('the invoices are read in memory after the browser has painted «reading», with the platform parser', () => {
+  assert.match(SCREEN, /new DOMParser\(\)\.parseFromString\(text, 'application\/xml'\)/);
+  assert.match(SCREEN, /await new Promise\(resolve => setTimeout\(resolve, 0\)\);\s*try \{/);
+  assert.match(SCREEN, /new Uint8Array\(await file\.arrayBuffer\(\)\)/);
+  assert.match(SCREEN, /buildImportFromInvoices\(inputs, \{ parseXml, now: new Date\(\), salt \}\)/);
+  assert.match(SCREEN, /await file\.text\(\)/, 'a .json file keeps its old path');
+});
+
+test('every reason code of the invoice reader that can reach the screen has a phrase', async () => {
+  const { NOTE, LEFT_OUT, SKIPPED } = await import('../js/orders/invoice-zip/reasons.js');
+  const dict = _dictionaries();
+  const codes = [...Object.values(NOTE).slice(Object.values(NOTE).indexOf('egg-quantity-unclear')), ...Object.values(LEFT_OUT), ...Object.values(SKIPPED)]
+    .filter(code => code !== LEFT_OUT.NOT_AN_INGREDIENT);
+  assert.ok(codes.length >= 20);
+  for (const code of codes) {
+    const hit = SCREEN.match(new RegExp(`'${code}': '(invoiceImport\.code\.[A-Za-z]+)'`));
+    assert.ok(hit, `${code} has no phrase in the screen's table`);
+    for (const lang of ['en', 'it']) assert.ok(dict[lang][hit[1]], `${hit[1]} is missing in ${lang}`);
+  }
+});
+
+test('the new files are precached, spelled like the real files', () => {
+  const files = readdirSync(new URL('../js/orders/invoice-zip/', import.meta.url)).map(f => `js/orders/invoice-zip/${f}`);
+  assert.ok(files.includes('js/orders/invoice-zip/selection.js'));
+  for (const file of [...files, 'js/vendor/fflate.esm.js']) {
+    assert.ok(SW.includes(`'./${file}'`), `sw.js must precache ./${file}`);
+    assert.ok(existsSync(new URL(`../${file}`, import.meta.url)), `${file} does not exist`);
+  }
+});
+
+test('the words the owner reads on the invoices path are the agreed ones, in both languages', () => {
+  const { en, it } = _dictionaries();
+  assert.match(en['invoiceImport.file.explain'], /zip of the invoices .* Agenzia delle Entrate .* \.json/);
+  assert.match(it['invoiceImport.file.explain'], /zip delle fatture .*Agenzia delle Entrate .* \.json/);
+  assert.equal(it['invoiceImport.file.reading'], 'Sto leggendo le fatture…');
+  assert.equal(it['invoiceImport.zip.group.notImported'].other, 'Imballaggi e rivendita ({n})');
+  assert.equal(it['invoiceImport.zip.group.skippedByYou'].other, 'Esclusi da te ({n})');
+  assert.equal(it['invoiceImport.zip.group.skippedSuppliers'].other, 'Fornitori esclusi da te ({n})');
+  assert.equal(it['invoiceImport.zip.importAsIngredient'], 'Importa come ingrediente');
+  assert.equal(it['invoiceImport.zip.importAgain'], 'Importa di nuovo');
+  assert.equal(it['invoiceImport.ing.forget'], 'Non importare (ricordalo)');
+  assert.equal(it['invoiceImport.status.priceCheck'], 'Prezzo da controllare');
+  assert.equal(it['invoiceImport.summary.decisions'].other, 'Decisioni ricordate: {n}');
+});
+
+test('⚠️ recording price changes is its own try/catch and never sets `stopped`; «Done» never runs the import', () => {
+  const run = SCREEN.slice(SCREEN.indexOf('async function runImport'));
+  const record = run.slice(run.indexOf('const recordChanges'), run.indexOf('const createdThisRun'));
+  assert.match(record, /try \{[\s\S]*?planPriceChanges[\s\S]*?\} catch \(err\) \{[\s\S]*?failed: 1/);
+  assert.doesNotMatch(record, /stopped|stopKind/);
+  const finish = SCREEN.slice(SCREEN.indexOf('async function finishWithoutRows'), SCREEN.indexOf('const quietRows'));
+  assert.doesNotMatch(finish, /runImport\(/, '«Done» writes nothing but the confirmed decisions');
+  const only = SCREEN.slice(SCREEN.indexOf('async function recordChangesOnly'), SCREEN.indexOf('// ── Writing, row by row'));
+  assert.match(only, /await confirmDialog\([\s\S]*?if \(!ok\) return;\s*await runImport/);
+  assert.match(SCREEN, /s\.selection && quietRows\(entries\)\.length > 0/);
+  assert.match(SCREEN, /t\('invoiceImport\.ing\.confirmChanges'\)/);
 });

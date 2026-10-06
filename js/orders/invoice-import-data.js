@@ -15,7 +15,8 @@ import { sessionReady } from '../firebase.js';
 import { currentLocationId, pathFor } from '../location.js';
 import { saveSupplierRecord } from '../record-data.js';
 import { db } from './firebase-orders.js';
-import { planBatchWrites } from './invoice-import-plan.js';
+import { planBatchWrites, pointsOfDocs } from './invoice-import-plan.js';
+import { planDecisionBatches } from './invoice-zip/selection.js';
 import {
   collection,
   doc,
@@ -30,6 +31,8 @@ const SUPPLIERS = 'suppliers';
 const INGREDIENTS = 'ingredients';
 const INGREDIENT_PRICES = 'ingredient-prices';
 const PRICES = 'prices';
+const PRICE_CHANGES = 'price-changes';
+const DECISIONS = 'invoice-decisions';
 
 export const IMPORT_COMMIT_TIMEOUT_MS = 30000;
 
@@ -41,7 +44,7 @@ function importError(code) {
   return err;
 }
 
-function refuseOffline() {
+export function refuseOffline() {
   if (typeof navigator !== 'undefined' && navigator.onLine === false) {
     throw importError('offline');
   }
@@ -87,11 +90,31 @@ export async function freshIngredientsForSupplier(supplierId) {
 
 // The ids of the history points that already came from an invoice, for one ingredient — what makes a
 // second import of the same file plan nothing. Single-field equality: no composite index.
+// ⚠️ The Set also carries `.points` — the same documents read as { invoiceId, line, invoiceDate, pricePerUnit,
+// priceUnit } — so the price changes need no second read of the folder.
 export async function invoicePointIds(ingredientId) {
   await sessionReady;
   const ref = doc(collection(db, pathFor(INGREDIENTS)), ingredientId);
   const snap = await getDocsFromServer(query(collection(ref, PRICES), where('source', '==', 'invoice')));
-  return new Set(snap.docs.map(d => d.id));
+  const ids = new Set(snap.docs.map(d => d.id));
+  ids.points = pointsOfDocs(snap.docs.map(d => ({ id: d.id, data: d.data() })));
+  return ids;
+}
+
+// The price changes already stored for one ingredient (server read, refused offline like the rest) →
+// [{ id, oldPrice, newPrice, oldDate, date, priceUnit }]: the fields too, because an invoice that arrives out of
+// order makes a stored change wrong, and the plan has to see that to remove it.
+export async function storedPriceChangeIds(ingredientId) {
+  refuseOffline();
+  await sessionReady;
+  const snap = await withTimeout(getDocsFromServer(query(
+    collection(db, pathFor(PRICE_CHANGES)),
+    where('ingredientId', '==', ingredientId),
+  )));
+  return snap.docs.map((d) => {
+    const { oldPrice, newPrice, oldDate, date, priceUnit } = d.data();
+    return { id: d.id, oldPrice, newPrice, oldDate, date, priceUnit };
+  });
 }
 
 // The ingredient's price document, or null when it has none. From the server, and it THROWS when it
@@ -104,7 +127,7 @@ export async function freshPrice(ingredientId) {
 
 // ── Writing one row ──────────────────────────────────────────────────────────────
 
-function withTimeout(promise) {
+export function withTimeout(promise) {
   let timer;
   const timeout = new Promise((_, reject) => {
     timer = setTimeout(() => reject(importError('timeout')), IMPORT_COMMIT_TIMEOUT_MS);
@@ -126,12 +149,47 @@ export async function runImportBatches(batches) {
   for (const step of steps) {
     refuseOffline();
     const batch = writeBatch(db);
-    step.forEach(({ path, data, merge }) => {
+    step.forEach(({ path, data, merge, remove }) => {
       const ref = doc(db, pathFor(path[0]), ...path.slice(1));
-      if (merge) batch.set(ref, data, { merge: true });
+      if (remove) batch.delete(ref);
+      else if (merge) batch.set(ref, data, { merge: true });
       else batch.set(ref, data);
     });
     await withTimeout(batch.commit());
   }
   return ingredientId;
+}
+
+// ── What the owner decided about invoice products and suppliers ───────────────────
+
+// The venue's remembered decisions, read from the SERVER (a cache answer would hide a decision made on another
+// phone), refused offline like every read of this import. → [{ id, decision, label, updatedAt, … }]
+export async function loadInvoiceDecisions() {
+  refuseOffline();
+  await sessionReady;
+  const snap = await withTimeout(getDocsFromServer(collection(db, pathFor(DECISIONS))));
+  return snap.docs.map(d => ({ ...d.data(), id: d.id }));
+}
+
+// changes = decisionChanges() of invoice-zip/selection.js → how many documents were written or deleted.
+// Small batches (at most 20 operations), each bounded by the same timeout as a row. The ids are SHA-256 hex of the
+// decision key; the data is exactly what the rules accept.
+export async function writeInvoiceDecisions(changes) {
+  refuseOffline();
+  await sessionReady;
+  const batches = planDecisionBatches(changes, { bakery: currentLocationId(), nowIso: new Date().toISOString() });
+  const folder = collection(db, pathFor(DECISIONS));
+  let count = 0;
+  for (const ops of batches) {
+    refuseOffline();
+    const batch = writeBatch(db);
+    ops.forEach((op) => {
+      const ref = doc(folder, op.id);
+      if (op.type === 'set') batch.set(ref, op.data, { merge: true });
+      else batch.delete(ref);
+    });
+    await withTimeout(batch.commit());
+    count += ops.length;
+  }
+  return count;
 }

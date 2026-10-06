@@ -11,6 +11,7 @@
 import { t } from '../i18n.js';
 import { onSession, currentSession } from '../firebase.js';
 import { outputLanguage } from '../market.js';
+import { currentLocationId } from '../location.js';
 import { categoryChoices, unitChoices, packChoices } from '../record-choices.js';
 import { withPrices } from '../price-model.js';
 import { buildRegistry } from './registry.js';
@@ -23,6 +24,8 @@ import {
 import { normalizeFavourites } from './favourite-suppliers.js';
 import { readIngredientPrice } from '../record-data.js';
 import { openInvoiceImport } from './invoice-import-screen.js';
+import { openPriceChanges } from './price-changes-screen.js';
+import { weekStartOf } from './work-week.js';
 
 const state = {
   suppliers: [],
@@ -32,6 +35,8 @@ const state = {
   // The venue's saved category list (config/orders). null = never saved one, or not
   // loaded yet: both mean «offer the defaults».
   ingredientCategories: null,
+  // Where the venue's working week starts (config/orders); the price-changes screen cuts its weeks there.
+  weekStartsOn: weekStartOf(null),
   // The venue's starred suppliers (config/orders.favouriteSuppliers), ids only.
   favouriteSuppliers: [],
   loaded: { suppliers: false, ingredients: false, config: false },
@@ -110,6 +115,12 @@ const screen = buildRegistry(
         }
         : undefined;
     },
+    // ⚠️ A GETTER FOR THE SAME REASON: the card draws «Unisci un'altra confezione…» only when this is truthy, and
+    // it follows the session. The merge moves prices and deletes an ingredient, so it needs the role AND the Food
+    // cost section (the same pair as the invoice import); the rules decide either way (P2).
+    get mergePacks() {
+      return canManageHere() && mayWritePrices() ? true : undefined;
+    },
     // ⚠️ A GETTER, AND THE GATE LIVES HERE, for the same reason as deleteIngredient above: the star in a
     // supplier's header is drawn only when this is a function, so it follows the session (which arrives
     // after this module runs) and is absent for staff. The rules decide either way (P2).
@@ -158,6 +169,7 @@ const footerEl = document.getElementById('registry-footer');
 const settingsBtn = document.getElementById('registry-settings-btn');
 
 const importBtn = document.getElementById('registry-import-btn');
+const priceChangesBtn = document.getElementById('registry-price-changes-btn');
 
 settingsBtn?.addEventListener('click', () => screen.openSettings());
 
@@ -176,6 +188,20 @@ importBtn?.addEventListener('click', () => {
     opener: importBtn,
     // The venue's OUTPUT language, read when the import runs: the carton word on a new ingredient is food.
     language: () => outputLanguage(currentSession().location),
+    // Salts the key of a supplier with no VAT number (the same supplier gets the same key in this venue only).
+    venueId: () => currentLocationId() || '',
+  });
+});
+
+// ⚠️ SAME PAIR AS THE IMPORT: the report is read behind Food cost (the rules' price-changes block). The click
+// asks again; the rules decide (P2).
+priceChangesBtn?.addEventListener('click', () => {
+  if (!(canManageHere() && mayWritePrices())) return;
+  openPriceChanges({
+    suppliers: () => state.suppliers,
+    ingredients: () => state.ingredients,
+    weekStartsOn: () => state.weekStartsOn,
+    opener: priceChangesBtn,
   });
 });
 
@@ -183,6 +209,7 @@ onSession(() => {
   if (!footerEl || !settingsBtn) return;
   settingsBtn.hidden = !canManageHere();
   if (importBtn) importBtn.hidden = !(canManageHere() && mayWritePrices());
+  if (priceChangesBtn) priceChangesBtn.hidden = !(canManageHere() && mayWritePrices());
   footerEl.hidden = ![...footerEl.children].some(child => !child.hidden);
 });
 
@@ -226,6 +253,7 @@ watchIngredientPrices((map, readable) => {
 // back to the defaults plus whatever ingredients already use, which is a usable screen.
 watchDoc(COLLECTIONS.config, 'orders', (doc, fromCache) => {
   state.ingredientCategories = Array.isArray(doc?.ingredientCategories) ? doc.ingredientCategories : null;
+  state.weekStartsOn = weekStartOf(doc);
   state.favouriteSuppliers = normalizeFavourites(doc?.favouriteSuppliers);
   // ⚠️ «MISSING» COUNTS ONLY WHEN THE SERVER SAID IT. A cold start offline reports a missing
   // document from an empty cache; treating that as «loaded» would let a delete write the

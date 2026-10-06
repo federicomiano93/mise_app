@@ -156,8 +156,8 @@ test('the chips count every row once, and Errors and Unchanged are told apart', 
   assert.deepEqual(rows.map(r => r.status), ['new', 'unchanged', 'maybe-duplicate', 'error', 'error']);
   const entries = applyDecisions(rows, {}, ctx);
   const counts = filterCounts(entries);
-  assert.deepEqual(counts, { all: 5, new: 1, 'update-price': 0, 'history-only': 0, unchanged: 1, decide: 1, error: 2 });
-  assert.deepEqual(FILTERS, ['all', 'new', 'update-price', 'history-only', 'unchanged', 'decide', 'error']);
+  assert.deepEqual(counts, { all: 5, new: 1, 'update-price': 0, 'history-only': 0, unchanged: 1, check: 0, decide: 1, error: 2 });
+  assert.deepEqual(FILTERS, ['all', 'new', 'update-price', 'history-only', 'unchanged', 'check', 'decide', 'error']);
   assert.deepEqual(entriesFor(entries, 'error').map(e => e.planned.key), ['k-bad', 'k-nosup']);
   assert.equal(entriesFor(entries, 'all').length, 5);
   assert.equal(waitingCount(entries), 1);
@@ -328,7 +328,7 @@ test('the summary counts every outcome and keeps each failure with its reason', 
     { key: 'e', name: 'E', outcome: 'failed', reason: 'nope' },
   ], { stopped: 'offline', notRun: 3 });
   assert.deepEqual(sum, {
-    created: 1, updated: 1, pricesAdded: 3, unchanged: 1, skipped: 1,
+    created: 1, updated: 1, pricesAdded: 3, changesAdded: 0, changesFailed: 0, unchanged: 1, skipped: 1, codesFull: 0,
     failed: [{ key: 'e', name: 'E', reason: 'nope', retry: false }], stopped: 'offline', notRun: 3,
     retryable: 0, notFixableByRetry: 1,
   });
@@ -429,4 +429,46 @@ test('every row answered by hand with no article code gets a «unisci con» line
   assert.deepEqual(rememberHints(entries, decisions, labelOf), [{ name: 'Farina 00 Premium', target: 'Farina 00 Esempio' }]);
   assert.deepEqual(rememberHints(entries, {}, labelOf), []);
   assert.deepEqual(rememberHints(entries, decisions, () => ''), [], 'a target with no label is not promised');
+});
+
+// ── The price change shown on a row, the «price to check» group and «do not import (remember)» ────
+import { priceChange, applyDecisions as applyAll, bucketOf as bucket, filterCounts as countOf } from '../js/orders/invoice-import-plan.js';
+
+test('priceChange: a signed whole percent, «equal» within half a percent, nothing across units or with a missing side', () => {
+  assert.deepEqual(priceChange({ pricePerUnit: 2.1, priceUnit: 'kg' }, 2.31, 'kg'), { percent: 10 });
+  assert.deepEqual(priceChange({ pricePerUnit: 2.1, priceUnit: 'kg' }, 1.89, 'kg'), { percent: -10 });
+  assert.deepEqual(priceChange({ pricePerUnit: 2.1, priceUnit: 'kg' }, 2.105, 'kg'), { percent: 0 });
+  assert.deepEqual(priceChange({ pricePerUnit: 2, priceUnit: 'kg' }, 2.009, 'kg'), { percent: 0 });
+  assert.deepEqual(priceChange({ pricePerUnit: 2, priceUnit: 'kg' }, 2.02, 'kg'), { percent: 1 });
+  assert.equal(priceChange({ pricePerUnit: 2.1, priceUnit: 'kg' }, 2.31, 'l'), null);
+  assert.equal(priceChange({ pricePerUnit: 2.1, priceUnit: 'kg' }, 2.31, 'pcs'), null);
+  assert.equal(priceChange(null, 2.31, 'kg'), null);
+  assert.equal(priceChange({ priceUnit: 'kg' }, 2.31, 'kg'), null);
+  assert.equal(priceChange({ pricePerUnit: 0, priceUnit: 'kg' }, 2.31, 'kg'), null);
+  assert.equal(priceChange({ pricePerUnit: 2, priceUnit: 'kg' }, 0, 'kg'), null);
+});
+
+test('a row with a priceCheck code is counted under «Price to check», new or matched', () => {
+  const planned = [
+    { key: 'a', status: 'new', priceCheck: 'price-out-of-scale', newPoints: [], allPoints: [] },
+    { key: 'b', status: 'unchanged', priceCheck: 'mixed-units', newPoints: [], allPoints: [] },
+    { key: 'c', status: 'new', priceCheck: '', newPoints: [{}], allPoints: [{}] },
+  ];
+  const entries = applyAll(planned, {}, {});
+  assert.deepEqual(entries.map(bucket), ['check', 'check', 'new']);
+  const counts = countOf(entries);
+  assert.deepEqual([counts.check, counts.new, counts.unchanged], [2, 1, 0]);
+});
+
+test('«Do not import (remember)» turns a NEW row into a skipped one that stays under its chip', () => {
+  const planned = [
+    { key: 'a', status: 'new', priceCheck: '', newPoints: [{}], allPoints: [{}], updateCurrent: true },
+    { key: 'b', status: 'update-price', priceCheck: '', newPoints: [{}], allPoints: [{}], updateCurrent: true },
+  ];
+  const entries = applyAll(planned, {}, {}, new Set(['a', 'b']));
+  assert.equal(entries[0].row.status, 'skipped');
+  assert.deepEqual(entries[0].row.newPoints, []);
+  assert.equal(bucket(entries[0]), 'new');
+  assert.equal(entries[1].row.status, 'update-price', 'only a NEW row can be left out this way');
+  assert.equal(countOf(entries).new, 1);
 });

@@ -1,5 +1,8 @@
 // invoice-import-screen.js — «Import from invoices»: suppliers and ingredients, with their prices, from
-// the file the owner's local script made out of the supplier e-invoices (invoice-import/README.md).
+// the supplier e-invoices. The owner picks the zip(s) downloaded from the Agenzia delle Entrate and the app reads
+// them itself (invoice-zip/, selection.js); a .json file made by the local script (invoice-import/README.md) is
+// still accepted. On the zip path what the owner decides is remembered in `invoice-decisions`, written only
+// when the import is confirmed.
 //
 // THE SCREEN DECIDES NOTHING ABOUT THE DATA. invoice-import-model.js matches the file against what the
 // venue holds and lists the writes; invoice-import-plan.js applies the person's answers and re-checks each
@@ -21,24 +24,69 @@ import { el } from './dom.js';
 import { confirmDialog, alertDialog } from './confirm-dialog.js';
 import { BACK_ICON } from './mgmt-ui.js';
 import {
-  parseImportFile, planSuppliers, supplierWrites, planIngredients, ingredientWrites,
+  parseImportFile, planSuppliers, supplierWrites, planIngredients, ingredientWrites, packLabelOf,
 } from './invoice-import-model.js';
 import {
   applyDecisions, bucketOf, filterCounts, visibleFilters, entriesFor, waitingCount, importTotals, idsToCheck,
   invoiceCount, replanRow, summarizeRun, stopKind, writesRow, changedSupplierKeys, isRetryableReason,
-  rememberHints,
+  rememberHints, priceChange, planPriceChanges, priceChangeBatches, ingredientDisplayName,
 } from './invoice-import-plan.js';
 import {
   createImportedSupplier, linkSupplierVat, freshSuppliers, freshIngredientsForSupplier, invoicePointIds,
-  freshPrice, runImportBatches,
+  freshPrice, runImportBatches, loadInvoiceDecisions, writeInvoiceDecisions, storedPriceChangeIds,
 } from './invoice-import-data.js';
+import { buildImportFromInvoices } from './invoice-zip/build-import.js';
+import { domToTree } from './invoice-zip/fatturapa.js';
+import { selectImport, decisionChanges } from './invoice-zip/selection.js';
+
+// An article code the way the model compares them (invoice-import-model.js codeOf): trimmed, lower case.
+const codeKey = (code) => (typeof code === 'string' ? code.trim().toLowerCase() : '');
+
+// The browser's own XML parser, the way build-import.js asks for one: text → tree. domToTree throws when the
+// parser answered with a <parsererror> document (a broken file is skipped by the reader, never a crash).
+function browserParseXml(text) {
+  return domToTree(new DOMParser().parseFromString(text, 'application/xml'));
+}
+
+// The words for every code the invoice reader can hand the screen (invoice-zip/reasons.js). A note that holds
+// several reasons joins their codes with «; » (codesText).
+const CODE_KEYS = Object.freeze({
+  // why a price needs checking, or has none
+  'egg-quantity-unclear': 'invoiceImport.code.eggQuantityUnclear',
+  'price-out-of-scale': 'invoiceImport.code.priceOutOfScale',
+  'unattributed-discount': 'invoiceImport.code.unattributedDiscount',
+  'mixed-units': 'invoiceImport.code.mixedUnits',
+  'no-weight-on-invoice': 'invoiceImport.code.noWeightOnInvoice',
+  'no-price-unit': 'invoiceImport.code.noPriceUnit',
+  'no-piece-weight': 'invoiceImport.code.noPieceWeight',
+  'quantity-zero-or-negative': 'invoiceImport.code.quantityZero',
+  'amount-zero-or-negative': 'invoiceImport.code.amountZero',
+  'price-unit-differs-from-invoice-unit': 'invoiceImport.code.unitDiffers',
+  'price-unit-pack-mismatch': 'invoiceImport.code.packMismatch',
+  'price-unit-unreadable': 'invoiceImport.code.unitUnreadable',
+  'pack-weight-unreadable': 'invoiceImport.code.packWeightUnreadable',
+  'pack-count-unreadable': 'invoiceImport.code.packCountUnreadable',
+  // why a product could not be read
+  'pieces-need-price-unit-and-weight': 'invoiceImport.code.piecesNeedUnit',
+  'pieces-need-pack-weight': 'invoiceImport.code.piecesNeedWeight',
+  'no-computable-price': 'invoiceImport.code.noComputablePrice',
+  'needs-checking': 'invoiceImport.code.needsChecking',
+  // why a file was skipped
+  'file-too-large': 'invoiceImport.code.fileTooLarge',
+  'dtd-not-allowed': 'invoiceImport.code.dtdNotAllowed',
+  'xml-unreadable': 'invoiceImport.code.xmlUnreadable',
+  'too-many-invoices-in-file': 'invoiceImport.code.tooManyInvoices',
+  'zip-unreadable': 'invoiceImport.code.zipUnreadable',
+  'too-many-entries': 'invoiceImport.code.tooManyEntries',
+  'archive-too-large': 'invoiceImport.code.archiveTooLarge',
+});
 
 // A row's status or bucket → the tone of its pill and the word it carries. The word is ALWAYS there: the
 // colour only repeats it (P18).
 const TONES = Object.freeze({
   new: 'ok', present: 'ok', 'update-price': 'ok',
   'history-only': 'quiet', unchanged: 'quiet', skipped: 'quiet',
-  maybe: 'warn', 'maybe-duplicate': 'warn', choose: 'warn', decide: 'warn',
+  maybe: 'warn', 'maybe-duplicate': 'warn', choose: 'warn', decide: 'warn', check: 'warn',
   error: 'error',
 });
 
@@ -53,6 +101,7 @@ const STATUS_KEYS = Object.freeze({
   'maybe-duplicate': 'invoiceImport.status.decide',
   choose: 'invoiceImport.status.decide',
   skipped: 'invoiceImport.status.skipped',
+  check: 'invoiceImport.status.priceCheck',
 });
 
 const FILTER_KEYS = Object.freeze({
@@ -61,6 +110,7 @@ const FILTER_KEYS = Object.freeze({
   'update-price': 'invoiceImport.status.updatePrice',
   'history-only': 'invoiceImport.status.historyOnly',
   unchanged: 'invoiceImport.status.unchanged',
+  check: 'invoiceImport.status.priceCheck',
   decide: 'invoiceImport.status.decide',
   error: 'invoiceImport.filter.errors',
 });
@@ -87,6 +137,8 @@ const REASON_KEYS = Object.freeze({
   'duplicate-vat': 'invoiceImport.reason.duplicateVat',
   'code-differs': 'invoiceImport.reason.codeDiffers',
   'unit-differs': 'invoiceImport.reason.unitDiffers',
+  'piece-differs': 'invoiceImport.reason.pieceDiffers',
+  'codes-full': 'invoiceImport.reason.codesFull',
 });
 
 const FILE_ERROR_KEYS = Object.freeze({
@@ -95,6 +147,12 @@ const FILE_ERROR_KEYS = Object.freeze({
   'wrong-version': 'invoiceImport.file.wrongVersion',
   invalid: 'invoiceImport.file.invalid',
 });
+
+// The first-screen groups of what is NOT imported: [selection group, title key, tick-box key].
+const FILE_GROUPS = Object.freeze([
+  ['notImported', 'invoiceImport.zip.group.notImported', 'invoiceImport.zip.importAsIngredient'],
+  ['skippedByYou', 'invoiceImport.zip.group.skippedByYou', 'invoiceImport.zip.importAgain'],
+]);
 
 // Reading the pages of one-by-one invoice-point lists at the same time is fine; a hundred at once is not.
 const READ_CHUNK = 8;
@@ -119,6 +177,17 @@ export function openInvoiceImport(data) {
     fileName: '',
     fileByKey: new Map(),
     fileError: '',
+    // the invoices path (zip / xml): what was read, what the venue remembered, and what the person ticked
+    reading: false,
+    built: null,             // buildImportFromInvoices() result; null on the .json path
+    selection: null,         // selectImport() of the state on screen
+    storedDecisions: [],     // invoice-decisions as they were when the files were read
+    overrides: {},           // { [productKey]: 'ingredient' } ticked on the first screen
+    supplierOverrides: {},   // { [supplierKey]: 'import' } a remembered supplier ticked «import again»
+    supplierSkips: new Set(),// step 2: «do not import anything from this supplier (remember)»
+    forgetKeys: new Set(),   // step 3: «do not import (remember)»
+    decisionsWritten: 0,
+    decisionsFailed: false,
     // suppliers
     supplierPlan: [],
     supplierDecisions: {},
@@ -132,7 +201,10 @@ export function openInvoiceImport(data) {
     checking: false,
     checkError: '',
     filter: 'all',
-    open: { unchanged: false, error: false },
+    open: {
+      unchanged: false, error: false, check: false,
+      notImported: false, skippedByYou: false, skippedSuppliers: false, unreadable: false, skippedFiles: false,
+    },
     // the end
     summary: null,
     remember: [],
@@ -143,9 +215,9 @@ export function openInvoiceImport(data) {
   // ONE input for the life of the screen: redrawing it would forget the file it holds.
   const fileInput = el('input', {
     type: 'file', class: 'invimp-file-input', id: 'invimp-file', 'data-fid': 'invimp-file',
-    accept: '.json,application/json',
+    accept: '.zip,.xml,.json,application/zip,application/json', multiple: '',
   });
-  fileInput.addEventListener('change', () => onFileChosen(fileInput.files && fileInput.files[0]));
+  fileInput.addEventListener('change', () => onFileChosen(Array.from(fileInput.files || [])));
   const scroll = el('div', { class: 'mgmt-scroll' });
   const footer = el('div', { class: 'invimp-footer', hidden: '' });
   const live = el('div', { class: 'invimp-live', role: 'status', 'aria-live': 'polite' });
@@ -189,6 +261,17 @@ export function openInvoiceImport(data) {
   // ── Small pieces ──────────────────────────────────────────────────────────────
 
   const reasonText = (code) => (REASON_KEYS[code] ? t(REASON_KEYS[code]) : t('invoiceImport.reason.unknown'));
+
+  // One or several reader codes («a; b») → the sentence(s) a person reads.
+  const codesText = (text) => String(text || '').split('; ').filter(Boolean)
+    .map(code => (CODE_KEYS[code] ? t(CODE_KEYS[code]) : t('invoiceImport.reason.unknown'))).join(' · ');
+
+  function checkbox(id, labelText, checked, onChange) {
+    const box = el('input', { type: 'checkbox', id, 'data-fid': id, checked: checked ? '' : null });
+    box.checked = checked;
+    box.addEventListener('change', () => onChange(box.checked));
+    return el('label', { class: 'invimp-check', for: id }, [box, el('span', { text: labelText })]);
+  }
 
   function pill(tone, text) {
     return el('span', { class: `invimp-status invimp-status--${tone}`, text });
@@ -273,23 +356,141 @@ export function openInvoiceImport(data) {
         s.fileName ? el('p', { class: 'invimp-file-name', text: t('invoiceImport.file.chosen', { name: s.fileName }) }) : null,
       ]),
     ];
+    if (s.reading) body.push(el('p', { class: 'invimp-note', role: 'status', text: t('invoiceImport.file.reading') }));
     if (s.fileError) body.push(el('p', { class: 'orders-status error', role: 'alert', text: s.fileError }));
     if (s.file) {
       body.push(el('p', { class: 'orders-status ok', role: 'status' }, [
+        s.selection ? `${t('invoiceImport.zip.invoices', { n: s.selection.counts.invoices })} · ` : '',
         t('invoiceImport.file.found.suppliers', { n: s.file.suppliers.length }),
         ' · ',
         t('invoiceImport.file.found.ingredients', { n: s.file.ingredients.length }),
       ]));
     }
+    if (s.selection) body.push(...drawSelection());
     scroll.replaceChildren(el('div', { class: 'invimp-screen' }, body));
-    setFooter([s.file ? button('btn-primary', t('invoiceImport.next'), startSuppliers, { fid: 'invimp-next' }) : null]);
+    setFooter([s.file && !s.reading ? button('btn-primary', t('invoiceImport.next'), startSuppliers, { fid: 'invimp-next' }) : null]);
   }
 
-  async function onFileChosen(file) {
-    s.fileError = '';
+  // What the invoices held that is NOT in this import, in groups that stay closed until opened: each product with
+  // a tick-box that puts it back (or, for a remembered choice, takes it out of the memory). Ticking changes the
+  // selection at once, in memory — nothing is saved before the import is confirmed.
+  function drawSelection() {
+    const { groups, counts } = s.selection;
+    const out = [];
+    const facts = [
+      counts.excludedDocuments > 0 ? t('invoiceImport.zip.excluded', { n: counts.excludedDocuments }) : '',
+      counts.p7m > 0 ? t('invoiceImport.zip.signed', { n: counts.p7m }) : '',
+    ].filter(Boolean);
+    if (facts.length > 0) out.push(el('p', { class: 'invimp-note', text: facts.join(' · ') }));
+
+    const group = (id, title, children) => {
+      const details = el('details', { class: 'invimp-group', open: s.open[id] ? '' : null }, [
+        el('summary', { class: 'invimp-group-title', text: title }),
+        el('div', { class: 'invimp-list' }, children),
+      ]);
+      details.addEventListener('toggle', () => { s.open[id] = details.open; });
+      return details;
+    };
+    const productRow = (item, groupId, tickKey, index) => {
+      const rowChildren = [
+        el('div', { class: 'invimp-row-main' }, [
+          el('span', { class: 'mgmt-item-name', text: item.name || item.key }),
+          el('span', { class: 'mgmt-item-meta', text: [item.supplierName, item.description].filter(Boolean).join(' · ') }),
+        ]),
+      ];
+      if (item.canImport) {
+        rowChildren.push(checkbox(`invimp-tick-${groupId}-${index}`, t(tickKey), item.checked, (on) => {
+          if (on) s.overrides[item.key] = 'ingredient'; else delete s.overrides[item.key];
+          applySelection();
+          render();
+        }));
+      } else if (item.reason) {
+        rowChildren.push(el('p', { class: 'invimp-reason', text: codesText(item.reason) }));
+      }
+      return el('div', { class: 'invimp-row' }, rowChildren);
+    };
+    FILE_GROUPS.forEach(([id, titleKey, tickKey]) => {
+      const list = groups[id];
+      if (list.length > 0) out.push(group(id, t(titleKey, { n: list.length }), list.map((item, i) => productRow(item, id, tickKey, i))));
+    });
+    if (groups.skippedSuppliers.length > 0) {
+      out.push(group('skippedSuppliers', t('invoiceImport.zip.group.skippedSuppliers', { n: groups.skippedSuppliers.length }),
+        groups.skippedSuppliers.map((sup, i) => el('div', { class: 'invimp-row' }, [
+          el('div', { class: 'invimp-row-main' }, [
+            el('span', { class: 'mgmt-item-name', text: sup.name || sup.key }),
+            el('span', { class: 'mgmt-item-meta', text: t('invoiceImport.zip.supplierProducts', { n: sup.products }) }),
+          ]),
+          checkbox(`invimp-tick-supplier-${i}`, t('invoiceImport.zip.importAgain'), sup.checked, (on) => {
+            if (on) s.supplierOverrides[sup.key] = 'import'; else delete s.supplierOverrides[sup.key];
+            applySelection();
+            render();
+          }),
+        ]))));
+    }
+    if (groups.unreadable.length > 0) {
+      out.push(group('unreadable', t('invoiceImport.zip.group.unreadable', { n: groups.unreadable.length }),
+        groups.unreadable.map((item, i) => productRow(item, 'unreadable', 'invoiceImport.zip.importAsIngredient', i))));
+    }
+    if (groups.skippedFiles.length > 0) {
+      out.push(group('skippedFiles', t('invoiceImport.zip.group.skippedFiles', { n: groups.skippedFiles.length }),
+        groups.skippedFiles.map(f => el('div', { class: 'invimp-row' }, [
+          el('span', { class: 'mgmt-item-name', text: f.name }),
+          el('p', { class: 'invimp-reason', text: codesText(f.reason) }),
+        ]))));
+    }
+    return out;
+  }
+
+  // The selection of the invoices path, drawn again from what was read, what the venue remembered and what the
+  // person ticked; then the plain import file the rest of the screen reads.
+  function applySelection() {
+    s.selection = selectImport(s.built, {
+      decisions: s.storedDecisions,
+      existingSuppliers: data.suppliers(),
+      existingIngredients: data.ingredients(),
+      overrides: s.overrides,
+      supplierOverrides: s.supplierOverrides,
+    });
+    const parsed = parseImportFile(JSON.stringify(s.selection.importFile));
+    s.file = parsed.ok ? parsed.file : null;
+    s.fileByKey = new Map((s.file ? s.file.ingredients : []).map(i => [i.key, i]));
+  }
+
+  function resetImport() {
     s.file = null;
-    s.fileName = file ? file.name : '';
-    if (!file) { render(); return; }
+    s.built = null;
+    s.selection = null;
+    s.storedDecisions = [];
+    s.overrides = {};
+    s.supplierOverrides = {};
+    s.supplierSkips = new Set();
+    s.forgetKeys = new Set();
+    s.supplierDecisions = {};
+    s.supplierProgress = { created: {}, linked: new Set() };
+    s.ingredientDecisions = {};
+    s.decisionsWritten = 0;
+    s.decisionsFailed = false;
+  }
+
+  const isJson = (file) => /\.json$/i.test(file.name || '');
+
+  async function onFileChosen(files) {
+    s.fileError = '';
+    s.reading = false;
+    resetImport();
+    s.fileName = files.map(f => f.name).join(', ');
+    if (files.length === 0) { render(); return; }
+    // One .json file keeps the way it always was; anything else is invoices (zip or xml), one or many.
+    if (files.some(isJson) && (files.length > 1 || !isJson(files[0]))) {
+      s.fileError = t('invoiceImport.file.mixed');
+      render();
+      return;
+    }
+    if (isJson(files[0])) await readImportFile(files[0]);
+    else await readInvoices(files);
+  }
+
+  async function readImportFile(file) {
     let text;
     try { text = await file.text(); }
     catch (err) {
@@ -306,9 +507,41 @@ export function openInvoiceImport(data) {
     }
     s.file = parsed.file;
     s.fileByKey = new Map(parsed.file.ingredients.map(i => [i.key, i]));
-    s.supplierDecisions = {};
-    s.supplierProgress = { created: {}, linked: new Set() };
-    s.ingredientDecisions = {};
+    render();
+  }
+
+  // The invoices the owner downloaded: read in memory, then the venue's remembered decisions (from the server, so
+  // offline refuses like every other read of this import). Nothing is written.
+  async function readInvoices(files) {
+    s.reading = true;
+    render();
+    // Let the browser paint the «reading» line before the heavy, synchronous part starts.
+    await new Promise(resolve => setTimeout(resolve, 0));
+    try {
+      const inputs = [];
+      for (const file of files) inputs.push({ name: file.name, bytes: new Uint8Array(await file.arrayBuffer()) });
+      const parseXml = typeof data.parseXml === 'function' ? data.parseXml : browserParseXml;
+      const salt = typeof data.venueId === 'function' ? data.venueId() : '';
+      s.built = buildImportFromInvoices(inputs, { parseXml, now: new Date(), salt });
+    } catch (err) {
+      console.error('The invoices could not be read:', err);
+      s.reading = false;
+      s.fileError = t('invoiceImport.file.invoicesUnreadable');
+      render();
+      return;
+    }
+    try {
+      s.storedDecisions = await loadInvoiceDecisions();
+    } catch (err) {
+      console.error('The remembered decisions could not be read:', err);
+      s.reading = false;
+      s.built = null;
+      s.fileError = failureMessage(err, 'invoiceImport.file.decisionsFailed');
+      render();
+      return;
+    }
+    s.reading = false;
+    applySelection();
     render();
   }
 
@@ -322,6 +555,8 @@ export function openInvoiceImport(data) {
       render();
       return;
     }
+    // The lists have arrived now: what an article code already in Mise promotes is read again before planning.
+    if (s.built) applySelection();
     s.supplierPlan = planSuppliers(s.file.suppliers, data.suppliers());
     s.supplierError = '';
     goTo('suppliers');
@@ -364,11 +599,29 @@ export function openInvoiceImport(data) {
         render();
       }));
     }
+    // A supplier that is not in Mise yet may be one that sells nothing to import (a honey producer, a cleaning firm):
+    // «do not import anything from this supplier» drops it and every product of it, now and in the next imports.
+    if (s.built && entry.status === 'new') {
+      children.push(choice(`invimp-supnew-${index}`, t('invoiceImport.choose'), [
+        { value: 'import', label: t('invoiceImport.suppliers.import') },
+        { value: 'forget', label: t('invoiceImport.suppliers.forget') },
+      ], s.supplierSkips.has(entry.key) ? 'forget' : 'import', (picked) => {
+        if (picked === 'forget') s.supplierSkips.add(entry.key); else s.supplierSkips.delete(entry.key);
+        render();
+      }));
+    }
     return el('div', { class: 'invimp-row' }, children);
   }
 
+  // The person's answers, with every «do not import anything from this supplier» as a skip.
+  function supplierDecisionsNow() {
+    const out = { ...s.supplierDecisions };
+    s.supplierSkips.forEach(key => { out[key] = { skip: true }; });
+    return out;
+  }
+
   function drawSuppliers() {
-    const writes = supplierWrites(s.supplierPlan, s.supplierDecisions);
+    const writes = supplierWrites(s.supplierPlan, supplierDecisionsNow());
     const pending = pendingSupplierOps(writes.ops);
     const body = [...heading(2, 'invoiceImport.step.suppliers')];
     if (s.supplierError) body.push(el('p', { class: 'orders-status error', role: 'alert', text: s.supplierError }));
@@ -415,7 +668,7 @@ export function openInvoiceImport(data) {
       const settled = [...Object.keys(s.supplierProgress.created), ...s.supplierProgress.linked];
       const changed = changedSupplierKeys(s.supplierPlan, fresh, settled);
       if (changed.length > 0) {
-        changed.forEach(key => { delete s.supplierDecisions[key]; });
+        changed.forEach(key => { delete s.supplierDecisions[key]; s.supplierSkips.delete(key); });
         s.supplierPlan = fresh;
         s.supplierError = t('invoiceImport.suppliers.changed');
         s.busy = false;
@@ -464,7 +717,8 @@ export function openInvoiceImport(data) {
     live.textContent = t('invoiceImport.ing.checking');
     goTo('ingredients');
     try {
-      const first = planIngredients(s.file.ingredients, ctxFor({}));
+      const active = s.file.ingredients.filter(i => !s.supplierSkips.has(i.supplierKey));
+      const first = planIngredients(active, ctxFor({}));
       const ids = idsToCheck(first);
       const known = {};
       for (let i = 0; i < ids.length; i += READ_CHUNK) {
@@ -473,7 +727,7 @@ export function openInvoiceImport(data) {
         part.forEach((id, k) => { known[id] = sets[k]; });
       }
       s.ctx = ctxFor(known);
-      s.plannedRows = planIngredients(s.file.ingredients, s.ctx);
+      s.plannedRows = planIngredients(active, s.ctx);
     } catch (err) {
       console.error('Checking the recorded invoice prices failed:', err);
       s.checkError = failureMessage(err, 'invoiceImport.ing.checkFailed');
@@ -483,7 +737,32 @@ export function openInvoiceImport(data) {
     render();
   }
 
-  const entriesNow = () => applyDecisions(s.plannedRows, s.ingredientDecisions, s.ctx);
+  const entriesNow = () => applyDecisions(s.plannedRows, s.ingredientDecisions, s.ctx, s.forgetKeys);
+
+  // What the person's answers of this import would leave in the remembered decisions (nothing on the .json path).
+  function decisionChangesNow() {
+    if (!s.built) return { set: [], remove: [] };
+    const nameOf = (key) => {
+      const sup = s.file.suppliers.find(x => x.key === key);
+      return sup ? sup.name : key;
+    };
+    const itemLabel = (key) => {
+      const info = s.selection.byKey.get(key);
+      const ing = s.fileByKey.get(key);
+      return info ? info.label : (ing ? ing.name : key);
+    };
+    return decisionChanges({
+      selection: s.selection,
+      decisions: s.storedDecisions,
+      overrides: s.overrides,
+      supplierOverrides: s.supplierOverrides,
+      supplierSkips: [...s.supplierSkips].map(key => ({ key, name: nameOf(key) })),
+      itemSkips: [...s.forgetKeys]
+        .filter(key => { const ing = s.fileByKey.get(key); return ing && !s.supplierSkips.has(ing.supplierKey); })
+        .map(key => ({ key, label: itemLabel(key) })),
+    });
+  }
+  const decisionCount = () => { const c = decisionChangesNow(); return c.set.length + c.remove.length; };
 
   function supplierNameOf(planned) {
     const fileIng = s.fileByKey.get(planned.key);
@@ -494,11 +773,27 @@ export function openInvoiceImport(data) {
     return fromFile ? fromFile.name : '';
   }
 
-  function priceText(planned) {
+  // The price on a row. A row that replaces the price in force says what it replaces and by how much:
+  // «2,10 €/kg → 2,31 €/kg (+10%)» — only when both prices are in the same unit.
+  function priceText(planned, row) {
     const fileIng = s.fileByKey.get(planned.key);
     const last = planned.allPoints[planned.allPoints.length - 1];
     if (!fileIng || !last) return '';
-    return formatPricePerUnit({ pricePerUnit: last.pricePerUnit, priceUnit: fileIng.priceUnit });
+    const now = formatPricePerUnit({ pricePerUnit: last.pricePerUnit, priceUnit: fileIng.priceUnit });
+    if (row && row.status === 'update-price' && s.ctx) {
+      const stored = (s.ctx.pricesById || {})[row.ingredientId];
+      const next = row.newPoints[row.newPoints.length - 1];
+      const change = next ? priceChange(stored, next.pricePerUnit, fileIng.priceUnit) : null;
+      if (change) {
+        const sign = change.percent === 0 ? '=' : `${change.percent > 0 ? '+' : '-'}${Math.abs(change.percent)}%`;
+        return t('invoiceImport.ing.priceChange', {
+          from: formatPricePerUnit({ pricePerUnit: stored.pricePerUnit, priceUnit: stored.priceUnit }),
+          to: formatPricePerUnit({ pricePerUnit: next.pricePerUnit, priceUnit: fileIng.priceUnit }),
+          change: sign,
+        });
+      }
+    }
+    return now;
   }
 
   function ingredientRow(entry, index) {
@@ -506,20 +801,35 @@ export function openInvoiceImport(data) {
     const invoices = invoiceCount(planned);
     const meta = [
       supplierNameOf(planned),
-      priceText(planned),
+      priceText(planned, row),
       invoices > 0 ? t('invoiceImport.invoices', { n: invoices }) : '',
     ].filter(Boolean).join(' · ');
+    // A wanted ingredient with no price of its own is told apart by a pill of its own and says why.
+    const needsCheck = bucketOf(entry) === 'check' && ['new', 'unchanged'].includes(row.status);
     const children = [
       el('div', { class: 'invimp-row-top' }, [
         el('div', { class: 'invimp-row-main' }, [
           el('span', { class: 'mgmt-item-name', text: planned.name || planned.key }),
           el('span', { class: 'mgmt-item-meta', text: meta }),
         ]),
-        pill(TONES[row.status], t(STATUS_KEYS[row.status])),
+        needsCheck ? pill(TONES.check, t(STATUS_KEYS.check)) : pill(TONES[row.status], t(STATUS_KEYS[row.status])),
       ]),
     ];
     const why = row.reason || planned.reason;
     if (why) children.push(el('p', { class: 'invimp-reason', text: reasonText(why) }));
+    if (planned.priceCheck) children.push(el('p', { class: 'invimp-reason', text: codesText(planned.priceCheck) }));
+    if (row.codesFull) children.push(el('p', { class: 'invimp-reason', text: reasonText('codes-full') }));
+    // A NEW ingredient from the invoices: create it (the default, never blocking the button) or leave it out and
+    // remember that, so the next import does not offer it again.
+    if (s.built && planned.status === 'new') {
+      children.push(choice(`invimp-new-${index}`, t('invoiceImport.choose'), [
+        { value: 'create', label: t('invoiceImport.ing.create') },
+        { value: 'forget', label: t('invoiceImport.ing.forget') },
+      ], s.forgetKeys.has(planned.key) ? 'forget' : 'create', (picked) => {
+        if (picked === 'forget') s.forgetKeys.add(planned.key); else s.forgetKeys.delete(planned.key);
+        render();
+      }));
+    }
     if (planned.status === 'maybe-duplicate' || planned.status === 'choose') {
       const d = s.ingredientDecisions[planned.key];
       const value = !d ? '' : d.sameAs ? `same:${d.sameAs}` : d.createNew ? 'new' : 'skip';
@@ -576,9 +886,13 @@ export function openInvoiceImport(data) {
       chips,
     ];
     if (s.filter === 'all') {
-      const active = entries.filter(e => !['unchanged', 'error'].includes(bucketOf(e)));
+      const active = entries.filter(e => !['unchanged', 'check', 'error'].includes(bucketOf(e)));
       body.push(el('div', { class: 'invimp-list' }, rowsOf(active)));
-      [['unchanged', 'invoiceImport.ing.group.unchanged'], ['error', 'invoiceImport.ing.group.errors']].forEach(([bucket, key]) => {
+      [
+        ['unchanged', 'invoiceImport.ing.group.unchanged'],
+        ['check', 'invoiceImport.ing.group.check'],
+        ['error', 'invoiceImport.ing.group.errors'],
+      ].forEach(([bucket, key]) => {
         const list = entriesFor(entries, bucket);
         if (list.length === 0) return;
         const group = el('details', { class: 'invimp-group', open: s.open[bucket] ? '' : null }, [
@@ -603,9 +917,14 @@ export function openInvoiceImport(data) {
       setFooter([hint, button('btn-primary', t('invoiceImport.ing.import', { n: totals.rows }), () => {},
         { disabled: true, describedBy: 'invimp-hint', fid: 'invimp-primary' })]);
     } else if (totals.rows === 0) {
+      // «Done» writes nothing (but the remembered answers, behind their own confirmation). Recording the price
+      // changes of rows already in Mise is a SECOND, explicit button, and only on the invoices path.
       setFooter([
         el('p', { class: 'invimp-hint', text: t('invoiceImport.ing.nothing') }),
-        button('btn-primary', t('invoiceImport.done'), () => { s.finished = true; close(); }, { fid: 'invimp-primary' }),
+        button('btn-primary', t('invoiceImport.done'), () => finishWithoutRows(entries), { fid: 'invimp-primary' }),
+        s.selection && quietRows(entries).length > 0
+          ? button('btn-secondary', t('invoiceImport.ing.recordChanges'), () => recordChangesOnly(entries), { fid: 'invimp-record-changes' })
+          : null,
       ]);
     } else {
       setFooter([button('btn-primary', t('invoiceImport.ing.import', { n: totals.rows }), () => confirmAndRun(entries, totals),
@@ -621,11 +940,75 @@ export function openInvoiceImport(data) {
     const lines = [
       totals.newIngredients > 0 ? t('invoiceImport.ing.confirmNew', { n: totals.newIngredients }) : '',
       totals.pricesAdded > 0 ? t('invoiceImport.ing.confirmPrices', { n: totals.pricesAdded }) : '',
+      t('invoiceImport.ing.confirmChanges'),
+      decisionCount() > 0 ? t('invoiceImport.decisions.confirmLine', { n: decisionCount() }) : '',
     ].filter(Boolean);
     const ok = await confirmDialog({
       title: t('invoiceImport.ing.confirmTitle'),
       message: lines.join('\n'),
       okLabel: t('invoiceImport.ing.confirmOk'),
+      cancelLabel: t('ui.cancel'),
+    });
+    if (!ok) return;
+    await runImport(entries);
+  }
+
+  // Nothing is left to import (everything is already in Mise, skipped or left out): the person's «do not import»
+  // answers are still worth keeping, so they are confirmed and saved before the screen closes.
+  // ⚠️ NOTHING IS WRITTEN WITHOUT A CONFIRMATION (P20): «Done» on a file with nothing new closes the screen, exactly
+  // as before price changes existed. Recording the changes of the rows already in Mise is `recordChangesOnly`.
+  async function finishWithoutRows(entries) {
+    const n = decisionCount();
+    const offline = typeof navigator !== 'undefined' && navigator.onLine === false;
+    if (n > 0 && offline) {
+      await alertDialog(t('invoiceImport.stop.offline'));
+      return;
+    }
+    if (n > 0) {
+      const ok = await confirmDialog({
+        title: t('invoiceImport.decisions.confirmTitle'),
+        message: t('invoiceImport.decisions.confirmLine', { n }),
+        okLabel: t('ui.save'),
+        cancelLabel: t('ui.cancel'),
+      });
+      if (!ok) return;
+    }
+    if (n > 0) {
+      s.busy = true;
+      render();
+      try {
+        await writeInvoiceDecisions(decisionChangesNow());
+      } catch (err) {
+        console.error('Remembering the decisions failed:', err);
+        s.busy = false;
+        render();
+        await alertDialog(failureMessage(err, 'invoiceImport.decisions.failed'));
+        return;
+      }
+      s.busy = false;
+    }
+    s.finished = true;
+    close();
+  }
+
+  // The rows already in Mise: their stored history may hold price changes nobody recorded yet (a file loaded again,
+  // last year's zips).
+  const quietRows = (entries) => entries.filter(e => e.row.status === 'unchanged' && e.row.ingredientId);
+
+  // The second footer button of a file with nothing new: asks, then runs the pass over the rows already in Mise and
+  // ends on the summary, which says how many changes were recorded.
+  async function recordChangesOnly(entries) {
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+      await alertDialog(t('invoiceImport.stop.offline'));
+      return;
+    }
+    const ok = await confirmDialog({
+      title: t('invoiceImport.ing.recordChangesTitle'),
+      message: [
+        t('invoiceImport.ing.recordChangesConfirm'),
+        decisionCount() > 0 ? t('invoiceImport.decisions.confirmLine', { n: decisionCount() }) : '',
+      ].filter(Boolean).join('\n'),
+      okLabel: t('invoiceImport.ing.recordChangesOk'),
       cancelLabel: t('ui.cancel'),
     });
     if (!ok) return;
@@ -666,20 +1049,75 @@ export function openInvoiceImport(data) {
       ingredients: (supplierId) => freshIngredientsForSupplier(supplierId),
       pointIds: (id) => invoicePointIds(id),
       price: (id) => freshPrice(id),
+      changeIds: (id) => storedPriceChangeIds(id),
+    };
+    const nowIso = new Date().toISOString();
+    // The price changes of one ingredient, written in their OWN batches after the row's prices: a refused change
+    // never undoes a price that is already in. → { added, failed }.
+    // ⚠️ A FAILURE HERE IS NEVER THE ROW'S: the row's prices are already in, so the row keeps its real outcome, the
+    // run goes on, and the summary counts the ingredients whose changes are missing (a second load completes them).
+    const recordChanges = async ({ file, ...info }) => {
+      try {
+        const ops = await planPriceChanges({
+          ...info, read, nowIso, packLabel: file ? packLabelOf(file) : undefined,
+          packCode: file ? file.supplierCode : undefined, unitWeightKg: file ? file.unitWeightKg : undefined,
+        });
+        const batches = priceChangeBatches(ops);
+        if (batches.length > 0) await runImportBatches(batches);
+        return { added: ops.create.length, failed: 0 };
+      } catch (err) {
+        console.error('Recording the price changes of one ingredient failed:', err);
+        return { added: 0, failed: 1 };
+      }
+    };
+    // ⚠️ THE RE-CHECK MUST NOT TRIP OVER THIS VERY RUN (5 Oct 2026, the first real zip: 43 of 238 rows
+    // came back «a similar ingredient appeared»). Two invoice products of one supplier with DIFFERENT
+    // article codes are two products by the supplier's own numbering — «Aceto bianco» and «Aceto rosso» —
+    // and both were planned «new» on the screen the owner confirmed. So an ingredient created by this run
+    // is hidden from the re-check of a row whose code differs from its own. Without a code on either side
+    // (or a «unisci con» row) nothing is hidden: then a similar name really may be the same product, and
+    // the row still becomes a question rather than a duplicate.
+    const createdThisRun = new Map();   // ingredient id → its article code (normalised), created by this run
+    const readFor = (fileIngredient) => {
+      const code = codeKey(fileIngredient.supplierCode);
+      if (!code || fileIngredient.mergeWith) return read;
+      return {
+        ...read,
+        ingredients: async (supplierId) => (await read.ingredients(supplierId)).filter((i) => {
+          const created = createdThisRun.get(i.id);
+          return created === undefined || !created || created === code;
+        }),
+      };
     };
     const results = [];
     let stopped = null;
     let notRun = 0;
     s.busy = true;
-    s.progress = { done: 0, total: writing.length };
-    live.textContent = t('invoiceImport.progress', { done: 1, total: writing.length });
+    // Rows already in Mise are read too (their history may hold changes nobody recorded): they count in the bar.
+    const quiet = entries.filter(e => e.row.status === 'unchanged' && e.row.ingredientId);
+    const total = writing.length + quiet.length;
+    s.progress = { done: 0, total };
+    // «n of total» counts every row that is looked at, so a run of unchanged rows alone never says «1 of 0».
+    const say = (done) => { if (total > 0) live.textContent = t('invoiceImport.progress', { done: Math.min(done, total), total }); };
+    say(1);
     render();
+
+    // ⚠️ THE REMEMBERED ANSWERS GO FIRST, in small batches: a run that stops half-way must not lose what the person
+    // decided. A failure here stops nothing else; the summary says so.
+    const changes = decisionChangesNow();
+    if (changes.set.length + changes.remove.length > 0) {
+      try {
+        s.decisionsWritten = await writeInvoiceDecisions(changes);
+      } catch (err) {
+        console.error('Remembering the decisions failed:', err);
+        s.decisionsFailed = true;
+      }
+    }
 
     // Everything that is not written is accounted for first: nothing is dropped silently.
     entries.forEach(entry => {
       const { planned, row } = entry;
-      if (row.status === 'unchanged') results.push({ key: planned.key, name: planned.name, outcome: 'unchanged' });
-      else if (row.status === 'skipped') results.push({ key: planned.key, name: planned.name, outcome: 'skipped' });
+      if (row.status === 'skipped') results.push({ key: planned.key, name: planned.name, outcome: 'skipped' });
       else if (row.status === 'error') {
         results.push({ key: planned.key, name: planned.name, outcome: 'failed', reason: reasonText(row.reason), retry: isRetryableReason(row.reason) });
       }
@@ -689,7 +1127,7 @@ export function openInvoiceImport(data) {
       const { planned } = writing[i];
       const fileIngredient = s.fileByKey.get(planned.key);
       s.progress.done = i;
-      live.textContent = t('invoiceImport.progress', { done: i + 1, total: writing.length });
+      say(i + 1);
       const bar = scroll.querySelector('progress');
       if (bar) bar.value = i;
       try {
@@ -697,17 +1135,39 @@ export function openInvoiceImport(data) {
         // catalogue. Plan this one row again on what the server holds NOW, so a name that now matches an
         // ingredient created a moment ago becomes an update, never a second copy.
         const fresh = await replanRow({
-          fileIngredient, decision: s.ingredientDecisions[planned.key], supplierIdByKey: s.supplierIdByKey, read,
+          fileIngredient, decision: s.ingredientDecisions[planned.key], supplierIdByKey: s.supplierIdByKey,
+          read: readFor(fileIngredient),
         });
         if (fresh.waiting) {
           results.push({ key: planned.key, name: planned.name, outcome: 'failed', reason: t('invoiceImport.reason.changed'), retry: true });
         } else if (fresh.row.status === 'unchanged') {
-          results.push({ key: planned.key, name: planned.name, outcome: 'unchanged' });
+          // Every price is in already, but the file may carry a pack code the ingredient has not learnt yet.
+          const codeBatches = ingredientWrites(fresh.row, fileIngredient, new Date().toISOString(), { language });
+          if (codeBatches.length > 0) await runImportBatches(codeBatches);
+          const recorded = await recordChanges({
+            file: fileIngredient,
+            ingredientId: fresh.row.ingredientId, supplierId: fresh.row.supplierId, name: ingredientDisplayName(fresh.ingredient),
+            storedPoints: fresh.storedPoints, newPoints: [], priceUnit: fileIngredient.priceUnit, isNew: false, ingredient: fresh.ingredient,
+          });
+          results.push({
+            key: planned.key, name: planned.name, outcome: 'unchanged', changesAdded: recorded.added,
+            changesFailed: recorded.failed, codesFull: fresh.row.codesFull === true,
+          });
         } else if (['new', 'update-price', 'history-only'].includes(fresh.row.status)) {
           const batches = ingredientWrites(fresh.row, fileIngredient, new Date().toISOString(), { language });
-          if (batches.length > 0) await runImportBatches(batches);
+          const isNew = fresh.row.status === 'new';
+          const writtenId = batches.length > 0 ? await runImportBatches(batches) : fresh.row.ingredientId;
+          if (isNew && writtenId) createdThisRun.set(writtenId, codeKey(fileIngredient.supplierCode));
+          const recorded = await recordChanges({
+            file: fileIngredient,
+            ingredientId: writtenId, supplierId: fresh.row.supplierId,
+            name: isNew ? fileIngredient.name : ingredientDisplayName(fresh.ingredient),
+            storedPoints: isNew ? [] : fresh.storedPoints, newPoints: fresh.row.newPoints, ingredient: isNew ? null : fresh.ingredient,
+            priceUnit: fileIngredient.priceUnit, isNew,
+          });
           results.push({
             key: planned.key, name: planned.name, pricesAdded: fresh.row.newPoints.length,
+            changesAdded: recorded.added, changesFailed: recorded.failed, codesFull: fresh.row.codesFull === true,
             outcome: batches.length === 0 ? 'unchanged' : (fresh.row.status === 'new' ? 'created' : 'updated'),
           });
         } else {
@@ -725,6 +1185,54 @@ export function openInvoiceImport(data) {
         });
         if (kind) { stopped = kind; notRun = writing.length - i - 1; break; }
       }
+    }
+
+    // Rows that were already in Mise: their stored history may hold changes nobody recorded yet (a file loaded
+    // again, last year's zips). The points come from the read made when the plan was drawn.
+    for (let i = 0; i < quiet.length; i++) {
+      const { planned, row } = quiet[i];
+      if (stopped) { results.push({ key: planned.key, name: planned.name, outcome: 'unchanged' }); continue; }
+      s.progress.done = writing.length + i;
+      say(writing.length + i + 1);
+      const bar = scroll.querySelector('progress');
+      if (bar) bar.value = writing.length + i;
+      // Nothing here can fail the row (it writes nothing of its own) nor stop the run: a point read or a change
+      // write that fails is counted in the summary, and the next ingredient is tried.
+      let recorded;
+      let codesFull = false;
+      try {
+        const known = s.ctx && s.ctx.invoicePointIds ? s.ctx.invoicePointIds[row.ingredientId] : null;
+        const points = known && Array.isArray(known.points) ? known.points : (await read.pointIds(row.ingredientId)).points || [];
+        const stored = data.ingredients().find(x => x.id === row.ingredientId);
+        // A pack code the ingredient has not learnt yet is written from a FRESH plan, never the one on screen:
+        // another row of this run may have added a code to the same ingredient a moment ago. A failure here is
+        // logged only: the price changes below are still recorded.
+        const fileIngredient = s.fileByKey.get(planned.key);
+        if (fileIngredient && (row.patchSupplierCode || row.setSupplierCodes || row.codesFull)) {
+          try {
+            const fresh = await replanRow({
+              fileIngredient, decision: s.ingredientDecisions[planned.key], supplierIdByKey: s.supplierIdByKey,
+              read: readFor(fileIngredient),
+            });
+            if (fresh.row.status === 'unchanged') {
+              const codeBatches = ingredientWrites(fresh.row, fileIngredient, new Date().toISOString(), { language });
+              if (codeBatches.length > 0) await runImportBatches(codeBatches);
+              codesFull = fresh.row.codesFull === true;
+            }
+          } catch (err) {
+            console.error('Remembering a pack code failed:', err);
+          }
+        }
+        recorded = await recordChanges({
+          file: fileIngredient,
+          ingredientId: row.ingredientId, supplierId: row.supplierId, name: ingredientDisplayName(stored) || planned.name,
+          storedPoints: points, newPoints: [], priceUnit: row.priceUnit, isNew: false, ingredient: stored,
+        });
+      } catch (err) {
+        console.error('Reading the stored prices of one ingredient failed:', err);
+        recorded = { added: 0, failed: 1 };
+      }
+      results.push({ key: planned.key, name: planned.name, outcome: 'unchanged', changesAdded: recorded.added, changesFailed: recorded.failed, codesFull });
     }
 
     s.summary = summarizeRun(results, { stopped, notRun });
@@ -755,12 +1263,17 @@ export function openInvoiceImport(data) {
       ['invoiceImport.summary.created', sum.created],
       ['invoiceImport.summary.updated', sum.updated],
       ['invoiceImport.summary.prices', sum.pricesAdded],
+      ['invoiceImport.summary.changes', sum.changesAdded],
       ['invoiceImport.summary.unchanged', sum.unchanged],
       ['invoiceImport.summary.skipped', sum.skipped],
     ];
+    if (s.decisionsWritten > 0) lines.push(['invoiceImport.summary.decisions', s.decisionsWritten]);
+    if (sum.codesFull > 0) lines.push(['invoiceImport.summary.codesFull', sum.codesFull]);
     body.push(el('div', { class: 'set-section' }, lines.map(([key, n]) => el('div', { class: 'set-row' }, [
       el('div', { class: 'set-text' }, [el('span', { class: 'set-title', text: t(key, { n }) })]),
     ]))));
+    if (sum.changesFailed > 0) body.push(el('p', { class: 'orders-status error', role: 'alert', text: t('invoiceImport.summary.changesFailed', { n: sum.changesFailed }) }));
+    if (s.decisionsFailed) body.push(el('p', { class: 'orders-status error', role: 'alert', text: t('invoiceImport.decisions.failed') }));
     if (sum.failed.length > 0) {
       body.push(el('h3', { class: 'mgmt-section-title', text: t('invoiceImport.summary.failed', { n: sum.failed.length }) }));
       body.push(el('div', { class: 'invimp-list' }, sum.failed.map(f => el('div', { class: 'invimp-row' }, [

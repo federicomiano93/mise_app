@@ -96,6 +96,21 @@ class ClassifyTest(unittest.TestCase):
         self.assertEqual(self.kind("CORNETTO ALLA CREMA")[0], "rivendita")
         self.assertEqual(self.kind("FECOLA DI PATATE")[0], "ingrediente")
 
+    def test_bar_shelf_and_non_food_goods_are_not_ingredients(self):
+        # Mirrored word for word in tests/invoice-zip-classify.test.mjs.
+        for text in ("YOG. GR.125X2 FRAGOLA", "KEFIR GR.150 FRAGOLA", "DOLCIFICANTE PZ.150",
+                     "CAPS BAR DECAFF 7GX80", "CAFFE'CIALDEX15 ESEMPIO"):
+            self.assertEqual(self.kind(text)[0], "rivendita", text)
+        for text in ("ROT. ALLUMINIO KG 1 CM. 33", "SET GREMBIULE PASTICCERIA", "PALETTE BAMBOO 50X200",
+                     "500 COPRIVASSOI 18X24", "100 CARTE PIZZO D35", "SHOPPER BIO 35X10X65",
+                     "BORSA SPESA 45X37", "ECO BAGS ROSSO SMALL", "CARAFFA GRADUATA 2 LT",
+                     "COPPETTA CONICA CM 20", "L2 ANTICALCARE ESEMPIO", "DETERSIVO PAVIMENTI 5 L",
+                     "PENNELLO 60MM", "ASCIUGAMANI RIPIEGATI", "PADEL ALLUMINIO 24CM", "GUANTI NITRILE M"):
+            self.assertEqual(self.kind(text)[0], "packaging", text)
+        # Food words still win, and a word inside another word is not the keyword.
+        for text in ("OLIO EVO ML10X102", "ZUCCHERO BUSTINA 4G", "PAN DI SPUGNA KG 1", "PEPERONI CAPSICUM"):
+            self.assertEqual(self.kind(text)[0], "ingrediente", text)
+
     def test_noise_and_costs_are_excluded(self):
         self.assertEqual(classify("LOTTO 12345", None, None), ("excluded", "riga informativa"))
         self.assertEqual(classify("", 1, 5), ("excluded", "riga informativa"))

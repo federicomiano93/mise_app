@@ -12,7 +12,8 @@
 // send somebody to hospital.
 //
 // ⚠️ AN EXISTING SUPPLIER OR INGREDIENT IS NEVER OVERWRITTEN. The only field ever written onto one is
-// the supplier's `vatNumber` (when linked) and the ingredient's `supplierCode` (when it had none).
+// the supplier's `vatNumber` (when linked) and the ingredient's article codes: `supplierCode` when it had
+// none, else the file's code is added to `supplierCodes` (one ingredient, several packs — 5 Oct 2026).
 // Name, brand, category and weight stay as the owner typed them.
 //
 // ⚠️ A SECOND IMPORT OF THE SAME FILE WRITES NOTHING. Every price read from an invoice has the id
@@ -25,6 +26,8 @@ import { formatPatch, looseUnit } from '../pack-format.js';
 import { cartonWordFor, defaultPackFor } from '../record-choices.js';
 import { supplierLabel } from '../supplier-label.js';
 import { normalizeVat } from '../vat-number.js';
+import { sameUnitWeight } from './price-changes-model.js';
+import { NOTE, LEFT_OUT } from './invoice-zip/reasons.js';
 
 export const IMPORT_FORMAT = 'mise-invoice-import';
 export const IMPORT_VERSION = 1;
@@ -35,7 +38,11 @@ export const MAX_DOCS_PER_BATCH = 5;
 
 // The caps the rules put on each text (firestore.rules), and a few of ours.
 const MAX_NAME = 200;
-const MAX_SUPPLIER_CODE = 60;
+export const MAX_SUPPLIER_CODE = 60;
+// How many article codes (one per pack) an ingredient may remember besides its main one (the rules' cap).
+export const MAX_SUPPLIER_CODES = 20;
+// The rules' cap on a price point's `packLabel`.
+export const MAX_PACK_LABEL = 120;
 const MAX_WEIGHT = 100;
 const MAX_PACK_UNIT = 40;
 const MAX_VAT = 30;
@@ -46,6 +53,14 @@ const PACK_COUNT_MAX = 10000;
 const RATE_DECIMALS = 4;
 const PIECE_DECIMALS = 6;
 const NO_VAT_PREFIX = 'NOVAT:';
+// Why an ingredient comes with no price at all (invoice-zip/build-import.js): the reasons a price is «da verificare».
+// A file made by the script never carries one, so an entry with no prices and none of these stays invalid.
+export const PRICE_CHECK_CODES = Object.freeze([
+  NOTE.EGG_QUANTITY_UNCLEAR, NOTE.PRICE_OUT_OF_SCALE, NOTE.UNATTRIBUTED_DISCOUNT, NOTE.MIXED_UNITS,
+  NOTE.NO_WEIGHT_ON_INVOICE, NOTE.NO_PRICE_UNIT, NOTE.NO_PIECE_WEIGHT, NOTE.QUANTITY_ZERO_OR_NEGATIVE,
+  NOTE.AMOUNT_ZERO_OR_NEGATIVE, NOTE.PRICE_UNIT_DIFFERS_FROM_INVOICE, NOTE.PRICE_UNIT_PACK_MISMATCH,
+  NOTE.PRICE_UNIT_UNREADABLE, NOTE.PACK_WEIGHT_UNREADABLE, NOTE.PACK_COUNT_UNREADABLE, LEFT_OUT.NEEDS_CHECKING,
+]);
 const DEFAULT_LANGUAGE = 'it';
 
 // ── Small helpers ───────────────────────────────────────────────────────────────
@@ -145,6 +160,11 @@ function bestSimilarity(fileNormalised, record, normalize) {
   );
 }
 
+// The same measure for two ingredient names that are not normalised yet (the merge tool ranks with it).
+export function nameSimilarity(a, b) {
+  return similarity(normalizeIngredientName(a), normalizeIngredientName(b));
+}
+
 const byLabel = (a, b) => a.label.localeCompare(b.label) || a.id.localeCompare(b.id);
 
 function rankedCandidates(scored) {
@@ -211,6 +231,8 @@ function parseIngredient(raw, seen) {
   parsed.forEach(p => { if (p && !unique.has(`${p.invoiceId}-${p.line}`)) unique.set(`${p.invoiceId}-${p.line}`, p); });
   const prices = [...unique.values()].sort(comparePoints);
 
+  // ⚠️ `prices: []` IS LEGAL ONLY WITH A priceCheck CODE: the ingredient is wanted, its price is not.
+  const priceCheck = rawPrices.length === 0 && PRICE_CHECK_CODES.includes(o.priceCheck) ? o.priceCheck : '';
   const entry = {
     key,
     supplierKey: clean(o.supplierKey, MAX_KEY),
@@ -226,6 +248,7 @@ function parseIngredient(raw, seen) {
     unitWeightKg,
     vatRate: vatRateOf(o.vatRate),
     prices,
+    ...(priceCheck ? { priceCheck } : {}),
   };
 
   let invalid = null;
@@ -237,7 +260,7 @@ function parseIngredient(raw, seen) {
   else if (!priceUnit) invalid = 'price-unit';
   else if (priceUnit === 'pcs' && unitWeightKg === null) invalid = 'unit-weight-missing';
   else if (countGiven && packCount === null) invalid = 'pack-count';
-  else if (rawPrices.length === 0) invalid = 'no-prices';
+  else if (rawPrices.length === 0 && !priceCheck) invalid = 'no-prices';
   else if (parsed.some(p => p === null)) invalid = 'price-invalid';
   if (key) seen.add(key);
   return invalid ? { ...entry, invalid } : entry;
@@ -377,6 +400,45 @@ function poolFor(ingredients, supplierId) {
 
 const namesOf = (ing) => [normalizeIngredientName(ing.name), normalizeIngredientName(ing.shortName)].filter(Boolean);
 
+// ── One ingredient, several packs ────────────────────────────────────────────────
+
+const codeOf = (ing) => (typeof ing?.supplierCode === 'string' ? ing.supplierCode.trim().toLowerCase() : '');
+
+const compact = (text) => foldText(text).replace(/ /g, '');
+
+// Which pack a price was paid for: the invoice's own name, plus the weight when the name does not already
+// say it («Lievito» + «1 kg» → «Lievito 1 kg»). A word of the invoice, never translated.
+export function packLabelOf(item) {
+  const name = clean(item?.name, MAX_NAME);
+  const weight = clean(item?.weight, MAX_WEIGHT);
+  const label = weight && !compact(name).includes(compact(weight)) ? `${name} ${weight}` : name;
+  return label.slice(0, MAX_PACK_LABEL).trim();
+}
+
+// The extra codes an ingredient holds, cleaned: texts only, trimmed, no empties, no repeats (case-blind), and
+// never the main code again.
+export function extraCodesOf(ing) {
+  const main = codeOf(ing);
+  const seen = new Set(main ? [main] : []);
+  const out = [];
+  (Array.isArray(ing?.supplierCodes) ? ing.supplierCodes : []).forEach(raw => {
+    const code = clean(raw, MAX_SUPPLIER_CODE);
+    const key = code.toLowerCase();
+    if (!code || seen.has(key)) return;
+    seen.add(key);
+    out.push(code);
+  });
+  return out;
+}
+
+// Every article code the ingredient answers to, lower case.
+function codesOf(ing) {
+  const all = new Set(extraCodesOf(ing).map(c => c.toLowerCase()));
+  const main = codeOf(ing);
+  if (main) all.add(main);
+  return all;
+}
+
 // The row of an ingredient that IS this existing one.
 function matchedRow(base, existing, ctx) {
   const known = asSet(lookup(ctx.invoicePointIds, existing.id));
@@ -388,10 +450,24 @@ function matchedRow(base, existing, ctx) {
   // rate per piece would silently change what every recipe costs. The new prices go to the history only.
   const storedUnit = PRICE_UNITS.includes(doc?.priceUnit) ? doc.priceUnit : null;
   const unitDiffers = newPoints.length > 0 && storedUnit !== null && storedUnit !== base.priceUnit;
+  // ⚠️ THE SAME HOLDS FOR A PIECE OF ANOTHER SIZE: a per-piece price of a 5 kg sack never replaces the per-piece
+  // price of a 1 kg bag (the two packs of one ingredient). Only an equal piece weight (0.1%) may update it.
+  const pieceDiffers = newPoints.length > 0 && !unitDiffers && storedUnit === 'pcs' && base.priceUnit === 'pcs'
+    && !sameUnitWeight(base.unitWeightKg, doc?.unitWeightKg);
   // An invoice older than the price in force only feeds the history.
-  const updateCurrent = newPoints.length > 0 && !unitDiffers && (!doc || !stamp || latest.invoiceDate > stamp.slice(0, 10));
+  const updateCurrent = newPoints.length > 0 && !unitDiffers && !pieceDiffers && (!doc || !stamp || latest.invoiceDate > stamp.slice(0, 10));
   const status = newPoints.length === 0 ? 'unchanged' : (updateCurrent ? 'update-price' : 'history-only');
-  const hasCode = typeof existing.supplierCode === 'string' && existing.supplierCode.trim() !== '';
+  // ⚠️ THE FILE'S CODE IS A NEW PACK OF THIS INGREDIENT when it does not answer to it yet: the main code when
+  // it has none, else a place in `supplierCodes` — unless the list is full, which is said, never overwritten.
+  const hasCode = codeOf(existing) !== '';
+  let patchSupplierCode = null;
+  let setSupplierCodes = null;
+  let codesFull = false;
+  if (base.supplierCode && !codesOf(existing).has(base.supplierCode.toLowerCase())) {
+    if (!hasCode) patchSupplierCode = base.supplierCode;
+    else if (extraCodesOf(existing).length >= MAX_SUPPLIER_CODES) codesFull = true;
+    else setSupplierCodes = [...extraCodesOf(existing), base.supplierCode];
+  }
   // ⚠️ A rate the file does not state never wipes one the owner did: «not stated» is null, and the stored
   // rate stays when the file says nothing.
   const vatRate = base.vatRate !== null && base.vatRate !== undefined ? base.vatRate : vatRateOf(doc?.vatRate);
@@ -403,7 +479,10 @@ function matchedRow(base, existing, ctx) {
     updateCurrent,
     vatRate,
     ...(unitDiffers ? { reason: 'unit-differs' } : {}),
-    patchSupplierCode: !hasCode && base.supplierCode ? base.supplierCode : null,
+    ...(pieceDiffers ? { reason: 'piece-differs' } : {}),
+    patchSupplierCode,
+    setSupplierCodes,
+    ...(codesFull ? { codesFull: true } : {}),
   };
 }
 
@@ -429,8 +508,6 @@ function questionOrRemembered(base, status, candidates, reason, pool, ctx) {
   return target ? matchedRow(base, target, ctx) : undecidedRow(base, status, candidates, reason);
 }
 
-const codeOf = (ing) => (typeof ing?.supplierCode === 'string' ? ing.supplierCode.trim().toLowerCase() : '');
-
 // One row per file ingredient: { key, name, supplierId, status, ingredientId?, candidates?, newPoints,
 // updateCurrent, reason?, … }. status:
 //   new             — nothing like it under this supplier
@@ -455,10 +532,14 @@ export function planIngredients(fileIngredients, ctx) {
       mergeWith: file.mergeWith || '',
       supplierCode: file.supplierCode || '',
       patchSupplierCode: null,
+      setSupplierCodes: null,
       // What the file says about the price: matching a stored price against it needs both (matchedRow).
       priceUnit: file.priceUnit || null,
+      unitWeightKg: typeof file.unitWeightKg === 'number' ? file.unitWeightKg : null,
       vatRate: file.vatRate === undefined ? null : file.vatRate,
       allPoints,
+      // Set when the file wants the ingredient but states no price for it (see PRICE_CHECK_CODES).
+      priceCheck: file.priceCheck || '',
     };
     if (file.invalid) return { ...base, reason: file.invalid };
     const supplierId = lookup(context.supplierIdByKey, file.supplierKey);
@@ -481,7 +562,7 @@ export function planIngredients(fileIngredients, ctx) {
     // b. the supplier's own article code: it survives a changed description.
     if (row.supplierCode) {
       const code = row.supplierCode.toLowerCase();
-      const hits = pool.filter(i => codeOf(i) === code);
+      const hits = pool.filter(i => codesOf(i).has(code));
       if (hits.length === 1) return matchedRow(row, hits[0], context);
       if (hits.length > 1) {
         return questionOrRemembered(row, 'maybe-duplicate', hits.map(candidateOf).sort(byLabel), 'code-ambiguous', pool, context);
@@ -494,7 +575,8 @@ export function planIngredients(fileIngredients, ctx) {
     if (named.length === 1) {
       // ⚠️ THE SAME NAME UNDER ANOTHER ARTICLE CODE IS A QUESTION, never a silent match: «farina 00» in a 25 kg
       // sack and in a 5 kg bag are two products of the same supplier, and one price must not land on the other.
-      const clash = row.supplierCode && codeOf(named[0]) && codeOf(named[0]) !== row.supplierCode.toLowerCase();
+      const known = codesOf(named[0]);
+      const clash = row.supplierCode && known.size > 0 && !known.has(row.supplierCode.toLowerCase());
       if (!clash) return matchedRow(row, named[0], context);
       return questionOrRemembered(row, 'maybe-duplicate', [candidateOf(named[0])], 'code-differs', pool, context);
     }
@@ -526,7 +608,7 @@ export function resolveRow(row, decision, ctx) {
   if (decision.skip === true) return { ...base, status: 'skipped', newPoints: [], updateCurrent: false };
   if (decision.createNew === true) {
     if (row.mergeWith) return row;
-    return newRow({ ...base, patchSupplierCode: null });
+    return newRow({ ...base, patchSupplierCode: null, setSupplierCodes: null });
   }
   if (typeof decision.sameAs === 'string') {
     const target = poolFor(context.ingredients, row.supplierId).find(i => i.id === decision.sameAs);
@@ -600,23 +682,35 @@ function chunk(ops) {
 // stays in the signature the screen was agreed with. options.language is the venue's OUTPUT language
 // (market.js outputLanguage): the carton word and the loose unit are food words.
 export function ingredientWrites(row, fileIngredient, nowIso, options) {
-  if (!row || !fileIngredient || !['new', 'update-price', 'history-only'].includes(row.status)) return [];
+  if (!row || !fileIngredient || !['new', 'update-price', 'history-only', 'unchanged'].includes(row.status)) return [];
   const language = options?.language || DEFAULT_LANGUAGE;
   const isNew = row.status === 'new';
   const ingredientId = isNew ? null : row.ingredientId;
-  const points = row.newPoints || [];
-  if (points.length === 0) return [];
+  // An «unchanged» row has every price in already: only a new pack code can still be written.
+  const points = row.status === 'unchanged' ? [] : (row.newPoints || []);
+  // The article code of a pack the ingredient did not know yet — written even when every price is already in
+  // (a row that is «unchanged» still teaches the ingredient its new code, so the next file matches by it).
+  const codePatch = {};
+  if (!isNew && row.patchSupplierCode) codePatch.supplierCode = row.patchSupplierCode;
+  if (!isNew && Array.isArray(row.setSupplierCodes)) codePatch.supplierCodes = row.setSupplierCodes;
+  const hasCodePatch = Object.keys(codePatch).length > 0;
+  // A NEW ingredient the file states no price for is still created (and nothing else); a matched one has
+  // nothing to write unless it learnt a code.
+  if (points.length === 0 && !(isNew && row.priceCheck) && !hasCodePatch) return [];
   const ops = [];
 
   if (isNew) {
     ops.push({ type: 'create-ingredient', data: newIngredientData(fileIngredient, row.supplierId, language) });
-  } else if (row.patchSupplierCode) {
-    ops.push({ type: 'patch-ingredient', ingredientId, data: { supplierCode: row.patchSupplierCode } });
+  } else if (hasCodePatch) {
+    ops.push({ type: 'patch-ingredient', ingredientId, data: codePatch });
   }
+  const packLabel = packLabelOf(fileIngredient);
+  // The article code of the pack the price was paid for: what tells a change of pack from a change of price.
+  const packCode = clean(fileIngredient.supplierCode, MAX_SUPPLIER_CODE);
 
   const latest = points[points.length - 1];
   const pieceKg = fileIngredient.priceUnit === 'pcs' ? fileIngredient.unitWeightKg : null;
-  if (row.updateCurrent) {
+  if (row.updateCurrent && latest) {
     // pricePatch is the card's own: it nulls the retired pack keys AND the four case keys, so a stale
     // case cannot survive beside a new rate.
     const data = pricePatch(
@@ -647,6 +741,9 @@ export function ingredientWrites(row, fileIngredient, nowIso, options) {
         invoiceId: p.invoiceId,
         invoiceDate: p.invoiceDate,
         ...(p.qty !== null && p.qty !== undefined ? { invoiceQty: p.qty } : {}),
+        // Which pack this price was paid for, so a change of pack is never read as a change of price.
+        ...(packLabel ? { packLabel } : {}),
+        ...(packCode ? { packCode } : {}),
       },
     });
   });

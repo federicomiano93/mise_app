@@ -56,6 +56,7 @@ import { mayWritePrices } from './firebase-orders.js';
 // allergens at all», which is the same answer for everybody standing in the building.
 import { ingredientPanels, setIngredientPanel, setPackPhoto } from './firebase-features.js';
 import { renderPackPhotoCapture } from './photo-capture.js';
+import { buildMergeChooser, runMergeFlow } from './ingredient-merge-screen.js';
 import { normalizeFavourites, splitByFavourite } from './favourite-suppliers.js';
 import { buildRegistrySettings } from './registry-settings.js';
 import {
@@ -526,11 +527,11 @@ export function buildRegistry(data, actions, hooks = {}) {
         opening = false;
       }
     }
-    showIngredientForm(shown, presetSupplierId, presetKind);
+    return showIngredientForm(shown, presetSupplierId, presetKind);
   }
 
   function showIngredientForm(item, presetSupplierId, presetKind = null) {
-    push((entry) => {
+    return push((entry) => {
       const form = buildIngredientForm({
         item,
         suppliers: data.suppliers(),
@@ -548,7 +549,15 @@ export function buildRegistry(data, actions, hooks = {}) {
         // ⚠️ THE PHOTO SCREEN IS HANDED IN AS AN ACTION, not imported by the form.
         // The form then knows nothing about overlays and this file stays the only
         // one that navigates — the same seam saveIngredient and priceHistory use.
-        actions: { ...actions, capturePackPhoto, packPhotoOn: () => ingredientPanels().packPhoto, createSupplier },
+        // ⚠️ `openMerge` ONLY FOR AN EXISTING INGREDIENT (never packaging) AND ONLY WHEN registry-main.js says this
+        // person may merge (`mergePacks`, a getter like `deleteIngredient`: owner or manager with Food cost).
+        actions: {
+          ...actions,
+          capturePackPhoto,
+          packPhotoOn: () => ingredientPanels().packPhoto,
+          createSupplier,
+          ...(item && !isPackaging(item) && actions.mergePacks ? { openMerge: () => openMergeChooser(item, entry) } : {}),
+        },
         onDone: () => popAfterSave(entry),
       });
       const body = el('div', { class: 'mgmt-scroll' }, [form]);
@@ -558,6 +567,51 @@ export function buildRegistry(data, actions, hooks = {}) {
         : (item ? t('orders.editIngredient') : t('orders.newIngredient'));
       return overlay(entry, title, body, undefined, form.headerSave);
     }, { selects: item ? `ingredient:${item.id}` : null });
+  }
+
+  // ── «Unisci un'altra confezione…» ───────────────────────────────────────────
+  // A level ABOVE the ingredient's card (which stays mounted underneath, like the photo screen): the list of the
+  // supplier's other ingredients, then the flow of ingredient-merge-screen.js. Back steps up one level (P20).
+  // ⚠️ TYPING IN THE CARD IS NEVER LOST: with edits not saved yet it refuses to start, because after a merge the
+  // card is closed and opened again on the merged history.
+  let merging = false;
+  async function openMergeChooser(a, cardEntry) {
+    if (entryDirty(cardEntry)) { await alertDialog(t('orders.merge.saveFirst')); return; }
+    push((entry) => {
+      entry.keepAlive = true;   // refresh() must not rebuild the list under a typed search
+      const body = buildMergeChooser({
+        a,
+        list: () => data.ingredients(),
+        onPick: (b) => mergeInto(a, b, entry, cardEntry, body),
+      });
+      return overlay(entry, t('orders.merge.title'), body);
+    });
+  }
+
+  async function mergeInto(a, b, chooserEntry, cardEntry, chooserBody) {
+    if (merging) return;           // a second tap while the first is being checked or written
+    merging = true;
+    // While the batches are written the list is disabled and Back too (a level closed mid-write would hide the
+    // «half way» message), and the status line says what is going on.
+    const back = chooserEntry.overlay?.querySelector('.orders-header .orders-icon-btn');
+    const onBusy = (message) => {
+      chooserBody?.setBusy?.(message);
+      if (back) back.disabled = Boolean(message);
+    };
+    try {
+      const stored = data.ingredients().find(i => i.id === b.id) || b;
+      if (await runMergeFlow({ a, b: stored, onBusy }) !== 'merged') return;
+      popEntry(chooserEntry);
+      popEntry(cardEntry);
+      // The card of A again, on the merged history, with the one word that says it worked. ⚠️ THE STATUS GOES IN
+      // EMPTY and gets its words on the next frame: a live region announces a CHANGE, never text it was born with.
+      const reopened = await openIngredientForm(a, null);
+      const done = el('p', { class: 'orders-status ok', role: 'status', 'aria-live': 'polite' });
+      reopened?.overlay?.querySelector('.mgmt-scroll')?.prepend(done);
+      requestAnimationFrame(() => { done.textContent = t('orders.merge.done'); });
+    } finally {
+      merging = false;
+    }
   }
 
   // ── Photograph the packet ───────────────────────────────────────────────────

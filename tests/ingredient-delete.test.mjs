@@ -142,7 +142,7 @@ test('Fornitori hands the action in only to an owner or manager, read when each 
   assert.match(REG_MAIN, /import \{ dropDeletedIngredientFromDraft, freezeUnitInDraft \} from '\.\/draft\.js';/);
   // registry.js spreads the actions object each time it opens a card, which runs the getter then.
   const registry = codeOf(read('js/orders/registry.js'));
-  assert.match(registry, /actions: \{ \.\.\.actions, capturePackPhoto,/);
+  assert.match(registry, /actions: \{\s*\.\.\.actions,\s*capturePackPhoto,/);
   assert.doesNotMatch(registry, /\bcanManageHere\b|\bcanManage\b/, 'registry.js still gates nothing itself');
 });
 
