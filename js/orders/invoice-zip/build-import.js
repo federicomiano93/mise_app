@@ -5,7 +5,7 @@
 // beside it (`products`) so a screen can show what was left out and why.
 // Pure: no DOM, no Firebase, no clock (`options.now` is injected), no file names or tax codes in the output.
 
-import { formatPackSize } from './classify.js';
+import { formatPackSize, invoiceNameOf } from './classify.js';
 import { loadInvoices } from './fatturapa.js';
 import { roundHalfUp, PIECES, unitClass } from './pricing.js';
 import {
@@ -73,6 +73,10 @@ function describeProduct(catalogue, product) {
     prices: points.map((p) => ({
       invoiceId: p.invoiceId, line: p.line, invoiceDate: p.date, pricePerUnit: p.price, qty: p.qty,
       good: p.reliability !== NEEDS_CHECK,
+      // How far this price can be trusted, and whether it was worked out from the pack weight written in the
+      // invoice description: the app re-reads such a price with the weight the venue keeps (invoice-import-model.js).
+      reliability: p.reliability,
+      ...(p.note === NOTE.WEIGHT_FROM_DESCRIPTION ? { fromPack: true } : {}),
     })),
     lastPrice: points.length ? points[points.length - 1].price : null,
     minPrice: points.length ? Math.min(...points.map((p) => p.price)) : null,
@@ -108,12 +112,18 @@ function describeProduct(catalogue, product) {
   // not «da verificare» go in. With none left the ingredient is still created (the recipes and the order list
   // need it), with no price, and `priceCheck` says why so the screen can ask for a look.
   const good = row.prices.filter((p) => p.good);
+  // ⚠️ THE NEWEST INVOICE CANNOT BE VOUCHED FOR WHILE OLDER ONES CAN: the current price would then come from an
+  // older invoice without anybody being told. The import file says so, and the app asks (planIngredients).
+  const newest = evaluation.results[evaluation.results.length - 1];
+  const latestUnverified = good.length > 0 && Boolean(newest) && newest.computed.reliability === NEEDS_CHECK;
   const checkReason = evaluation.reliability === NEEDS_CHECK ? (evaluation.note || LEFT_OUT.NEEDS_CHECKING) : '';
   const ingredient = {
     key: product.key,
     supplierKey: product.supplierKey,
     mergeWith: '',
     name,
+    // The description of the NEWEST invoice, as the supplier wrote it (only the lot blocks removed).
+    ...(invoiceNameOf(row.description) ? { invoiceName: invoiceNameOf(row.description) } : {}),
     brand: '',
     category: '',
     supplierCode: product.code,
@@ -125,6 +135,7 @@ function describeProduct(catalogue, product) {
     unitWeightKg: row.unitWeightKg,
     vatRate: row.vatRate,
     prices: good.map(({ good: _good, ...p }) => p),
+    ...(latestUnverified ? { latestUnverified: true } : {}),
     ...(checkReason && good.length === 0 ? { priceCheck: checkReason.split('; ')[0] } : {}),
   };
   row.inImport = row.type === IMPORTED_TYPE;
@@ -189,6 +200,8 @@ export function buildImportFromInvoices(files, options = {}) {
     excluded: catalogue.excluded,
     skippedFiles: load.skipped,
     p7mCount: load.p7mCount,
+    // Invoices the owner issued himself (he is the seller): dropped before any price is read (fatturapa.js).
+    salesSkipped: load.salesSkipped || 0,
     documents,
     duplicates: load.duplicates,
     otherXml: load.otherXml,

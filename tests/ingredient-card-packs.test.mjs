@@ -45,7 +45,7 @@ test('the supplier menu ends with «+ Nuovo fornitore…» and the old link butt
 });
 
 test('the short fields sit two to a row, name and supplier stay whole', () => {
-  assert.match(FORM, /field\(t\('orders\.field\.name'\), name\),\s*field\(t\('orders\.field\.shortName'\), shortName\),\s*el\('p', \{[^}]*\}\),\s*field\(t\('orders\.field\.supplier'\), supplierSelect\),/);
+  assert.match(FORM, /\.\.\.invoiceNameBlock\(item\?\.invoiceName\),\s*field\(t\('orders\.ingredient\.field\.messageName'\), name\),\s*el\('p', \{[^}]*\}\),\s*field\(t\('orders\.ingredient\.field\.listName'\), shortName\),\s*el\('p', \{[^}]*\}\),\s*field\(t\('orders\.field\.supplier'\), supplierSelect\),/);
   assert.match(FORM, /mgmt-pair mgmt-pair--data' \}, \[\s*field\(t\('orders\.field\.brand'\), brand\),\s*field\(t\('orders\.field\.category'\), category\.node\),\s*\]\)/);
   // [Peso | Confezione: Singola · Cartone] then, for a carton only, «Contiene [n] × [busta ▾]»
   assert.match(FORM, /mgmt-pair mgmt-pair--data' \}, \[\s*field\(t\('orders\.field\.weight'\), weight\.node\),\s*el\('div', \{ class: 'mgmt-field' \}, \[\s*el\('span', \{ class: 'mgmt-field-label', id: segLabelId, text: t\('orders\.field\.pack'\) \}\),\s*el\('div', \{ class: 'set-seg', role: 'group', 'aria-labelledby': segLabelId \}, \[segSingle, segCarton\]\),\s*\]\),\s*\]\),\s*containsBlock,/);

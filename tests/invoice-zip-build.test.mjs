@@ -42,10 +42,12 @@ test('the file has the agreed shape and only ingredients are in it', () => {
     { key: 'IT00000000001', vatNumber: 'IT00000000001', name: 'FORNITORE ESEMPIO SRL' }]);
   assert.deepEqual(importFile.ingredients.map((i) => i.key), [KEY_FLOUR, 'IT00000000001|name:zucchero sacchi da kg 25']);
   assert.deepEqual(importFile.ingredients[0], {
-    key: KEY_FLOUR, supplierKey: 'IT00000000001', mergeWith: '', name: 'Farina tipo 00', brand: '', category: '',
+    key: KEY_FLOUR, supplierKey: 'IT00000000001', mergeWith: '', name: 'Farina tipo 00', invoiceName: 'FARINA TIPO 00 SACCO KG 25', brand: '', category: '',
     supplierCode: 'F00-25', weight: '25 kg', packUnit: 'sacco', packCount: null, priceUnit: 'kg', unitWeightKg: null,
     vatRate: 4,
-    prices: [{ invoiceId: '9000000001', line: 1, invoiceDate: '2026-09-01', pricePerUnit: 0.57, qty: 25 }],
+    prices: [{
+      invoiceId: '9000000001', line: 1, invoiceDate: '2026-09-01', pricePerUnit: 0.57, qty: 25, reliability: 'alta',
+    }],
   });
 });
 

@@ -187,15 +187,62 @@ export function stopKind(err) {
 const WRITES = ['new', 'update-price', 'history-only'];
 const WAITING = ['maybe-duplicate', 'choose'];
 
+// ⚠️ A MATCHED ROW THAT CARRIES A `checkReason` (the price comes from a reading a person must look at) WRITES NOTHING
+// UNTIL THE PERSON CONFIRMS IT. A NEW row keeps its own «create / do not import» answer instead.
+export const needsConfirmation = (row) => Boolean(row && row.checkReason) && ['update-price', 'history-only'].includes(row.status);
+
+// ⚠️ A RENAME IS ITS OWN CHOICE, NEVER PART OF A PRICE CONFIRMATION. The model proposes it as `row.invoiceRename`
+// ({ stored, file }); it is written only when the person picked «Save the new name» for exactly THAT old → new pair.
+// `choice` is the pair the person saw. A row that now shows another pair (the catalogue or the file moved) writes
+// nothing of it.
+export function withRename(row, choice) {
+  const pair = row && row.invoiceRename;
+  if (!pair || !choice || choice.stored !== pair.stored || choice.file !== pair.file) return row;
+  return { ...row, patchInvoiceName: pair.file };
+}
+
+// ⚠️ A RENAME THE PERSON CHOSE IS SAVED EVEN WHILE ITS PRICE IS HELD: the rename is its own choice and never depends on
+// the price. The held row becomes a row that writes ONLY the name (no price, no point, no code); `heldRow` keeps what
+// was held, for the screen.
+function nameOnly(row) {
+  return {
+    ...row, status: 'unchanged', newPoints: [], updateCurrent: false, patchSupplierCode: null, setSupplierCodes: null,
+    held: true, heldRow: row,
+  };
+}
+
+// The row as it must be written, from the plan made again right before the write: null when there is nothing to write
+// (a price that needs a look which nobody confirmed, and no rename chosen), the name-only row when only the rename was
+// chosen, else the row with the rename if the person chose it.
+// ⚠️ `held` is whether the SCREEN held this row for its price: a fresh plan that has lost its reason (another row of this
+// run moved the shared price, another phone changed the stored one) must not write what nobody confirmed.
+export function rowToWrite(fresh, { confirmed = false, rename = null, held = false } = {}) {
+  if (!fresh) return null;
+  const chosen = withRename(fresh, rename);
+  if ((needsConfirmation(fresh) || held) && !confirmed) return chosen !== fresh ? nameOnly(chosen) : null;
+  return chosen;
+}
+
 // planned rows + the person's decisions → [{ planned, row, waiting }]. `row` is the effective row (what
 // would be written); `waiting` is true while somebody still has to answer.
 // `forgetKeys` (a Set of keys) are NEW rows the person answered «Do not import (remember)»: they become skipped.
-export function applyDecisions(plannedRows, decisions, ctx, forgetKeys) {
+// `confirmKeys` (a Set of keys) are the rows with a `checkReason` the person answered «Use this price»; the others
+// are held back (status 'skipped', `held: true`) — they come back on the next import.
+export function applyDecisions(plannedRows, decisions, ctx, forgetKeys, confirmKeys, renames) {
   return (plannedRows || []).map(planned => {
     const decision = decisions ? decisions[planned.key] : undefined;
     let row = decision ? resolveRow(planned, decision, ctx) : planned;
     if (forgetKeys && forgetKeys.has(planned.key) && row.status === 'new') {
       row = { ...row, status: 'skipped', newPoints: [], updateCurrent: false };
+    }
+    const chosen = withRename(row, renames ? renames.get(planned.key) : null);
+    if (needsConfirmation(row) && !(confirmKeys && confirmKeys.has(planned.key))) {
+      // Held for its price; a rename the person chose is still saved (nameOnly), the price waits.
+      row = chosen !== row
+        ? nameOnly(chosen)
+        : { ...row, status: 'skipped', newPoints: [], updateCurrent: false, held: true, heldRow: row };
+    } else {
+      row = chosen;
     }
     return { planned, row, waiting: WAITING.includes(row.status) };
   });
@@ -208,6 +255,8 @@ export function bucketOf(entry) {
   if (WAITING.includes(entry.planned.status)) return 'decide';
   // A wanted ingredient with no price of its own: its own group, asked to be looked at.
   if (entry.planned.priceCheck && ['new', 'unchanged'].includes(entry.planned.status)) return 'check';
+  // A price that waits for a person's look (a weight that cannot be read, a big move, an older invoice's price).
+  if (entry.planned.checkReason || entry.row.checkReason || entry.planned.invoiceRename || entry.row.invoiceRename) return 'check';
   if (entry.planned.status === 'new' && entry.row.status === 'skipped') return 'new';
   return entry.row.status;   // new · update-price · history-only · unchanged · error
 }
@@ -241,7 +290,9 @@ export function entriesFor(entries, filter) {
 
 export const waitingCount = (entries) => entries.filter(entry => entry.waiting).length;
 
-export const writesRow = (entry) => WRITES.includes(entry.row.status);
+// A row already in Mise still WRITES when it teaches the ingredient its invoice name: that is a write like any other,
+// so the primary action counts it and «Done» never discards it.
+export const writesRow = (entry) => WRITES.includes(entry.row.status) || (entry.row.status === 'unchanged' && Boolean(entry.row.patchInvoiceName));
 
 // What the confirmation says: how many rows write, how many ingredients are created, how many prices.
 export function importTotals(entries) {
@@ -250,6 +301,8 @@ export function importTotals(entries) {
     rows: writing.length,
     newIngredients: writing.filter(e => e.row.status === 'new').length,
     pricesAdded: writing.reduce((sum, e) => sum + e.row.newPoints.length, 0),
+    // The invoice names of ingredients already in Mise that this import will save (a backfill or a chosen rename).
+    namesSaved: writing.filter(e => e.row.status !== 'new' && Boolean(e.row.patchInvoiceName)).length,
   };
 }
 
@@ -335,13 +388,15 @@ export async function replanRow({ fileIngredient, decision, supplierIdByKey, rea
 //             retry? }] — `retry` is true when loading the same file again can fix the failure (a write that
 // failed, a timeout, a catalogue that changed); a file entry that is invalid cannot be fixed that way.
 export function summarizeRun(results, { stopped = null, notRun = 0 } = {}) {
-  const totals = { created: 0, updated: 0, pricesAdded: 0, changesAdded: 0, changesFailed: 0, unchanged: 0, skipped: 0, codesFull: 0, failed: [], stopped, notRun };
+  const totals = { namesSaved: 0, namesLost: 0, created: 0, updated: 0, pricesAdded: 0, changesAdded: 0, changesFailed: 0, unchanged: 0, skipped: 0, codesFull: 0, failed: [], stopped, notRun };
   (results || []).forEach(r => {
     // An ingredient whose list of pack codes is full: the new code was NOT remembered (the summary says so).
     if (r.codesFull) totals.codesFull += 1;
     if (r.outcome === 'failed') totals.failed.push({ key: r.key, name: r.name, reason: r.reason || '', retry: r.retry === true });
     else totals[r.outcome] += 1;
     totals.pricesAdded += r.pricesAdded || 0;
+    totals.namesSaved += r.namesSaved || 0;
+    totals.namesLost += r.namesLost || 0;
     totals.changesAdded += r.changesAdded || 0;
     totals.changesFailed += r.changesFailed || 0;
   });

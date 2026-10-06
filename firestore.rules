@@ -725,7 +725,8 @@ service cloud.firestore {
                'priceUnit', 'pricePerUnit', 'packPrice', 'packSize',
                'unitWeightKg', 'priceUpdatedAt',
                'allergens', 'mayContain', 'allergensCheckedAt', 'nutrition',
-               'packIngredients', 'packUnit', 'packCount', 'supplierCode', 'supplierCodes'
+               'packIngredients', 'packUnit', 'packCount', 'supplierCode', 'supplierCodes',
+               'invoiceName'
              ])
           // The supplier's own article code for this item (3 Oct 2026, invoice import): how next
           // month's invoice line finds the same ingredient even when its description changes.
@@ -745,6 +746,14 @@ service cloud.firestore {
           && (!('name' in request.resource.data)
               || (request.resource.data.name is string
                   && request.resource.data.name.size() <= 200))
+          // The product's description EXACTLY as the supplier's invoice writes it (7 Oct 2026,
+          // «nome in fattura»): how the invoice import tells an ingredient already in Mise from a
+          // new one when a line carries no article code. Written by the import, never typed.
+          // Optional in both directions: an older phone never sends it; '' means «not known».
+          // 1000 = the longest Descrizione FatturaPA allows, so the copy is never cut.
+          && (!('invoiceName' in request.resource.data)
+              || (request.resource.data.invoiceName is string
+                  && request.resource.data.invoiceName.size() <= 1000))
           // The name the app SHOWS on screen (2 Oct 2026, «nome da mostrare»), beside the invoice
           // name that every message to a supplier keeps. Same shape as suppliers.shortName:
           // optional, '' or absent means «show the name». PRODUCT DATA: it lives here, never in

@@ -135,6 +135,13 @@ function supplierOf(root, noVatKeyOf) {
   return { key: noVatKeyOf(taxCode, name), name, vat: '', taxCode };
 }
 
+// The BUYER's VAT number (CessionarioCommittente), normalised like the seller's; '' when the invoice states none
+// (a private buyer is known by tax code only, which is never read here).
+function buyerVatOf(root) {
+  const anag = find(root, 'FatturaElettronicaHeader/CessionarioCommittente/DatiAnagrafici');
+  return anag ? normaliseVat(text(anag, 'IdFiscaleIVA/IdPaese'), text(anag, 'IdFiscaleIVA/IdCodice')) : '';
+}
+
 function linesOf(body, offset = 0) {
   return findAll(body, 'DatiBeniServizi/DettaglioLinee').map((el, index) => {
     const quantity = number(text(el, 'Quantita'));
@@ -181,6 +188,7 @@ function redact(name, taxCode) {
 export function parseInvoice(root, base, sdiId, reception, noVatKeyOf) {
   const { key, name, vat, taxCode } = supplierOf(root, noVatKeyOf);
   const shown = redact(base, taxCode);
+  const buyerVat = buyerVatOf(root);
   return findAll(root, 'FatturaElettronicaBody').map((body, i) => {
     const general = find(body, 'DatiGenerali/DatiGeneraliDocumento');
     let docId = sdiId || shown;
@@ -191,6 +199,7 @@ export function parseInvoice(root, base, sdiId, reception, noVatKeyOf) {
       supplierKey: key,
       supplierName: name,
       vatNumber: vat,
+      buyerVat,
       docType: text(general, 'TipoDocumento').toUpperCase(),
       date: isoDate(text(general, 'Data')),
       number: text(general, 'Numero'),
@@ -253,9 +262,27 @@ function readMetadata(entries, parseXml) {
   return { sdi, reception };
 }
 
+// The VAT number every invoice of the zip was ISSUED TO most often: the owner's own (the zip is his purchases).
+// ⚠️ ONLY A STRICT MAJORITY of the invoices that name a buyer counts: a zip of two venues (or a tie) says nothing
+// about whose it is, and then nothing is skipped. '' when no invoice names a buyer.
+export function ownerVatOf(documents) {
+  const counts = new Map();
+  for (const doc of documents) {
+    if (doc.buyerVat) counts.set(doc.buyerVat, (counts.get(doc.buyerVat) || 0) + 1);
+  }
+  const naming = [...counts.values()].reduce((sum, n) => sum + n, 0);
+  for (const [vat, count] of counts) {
+    if (count * 2 > naming) return vat;
+  }
+  return '';
+}
+
 // `read` is what readInvoiceArchives() returns: { containers: [{ entries: { name: bytes } }], p7mCount, skipped }.
 // options.parseXml (required), options.noVatKey(taxCode, fallbackName) -> key, options.salt (for the default key).
-// -> { documents, skipped: [{ name, reason }], p7mCount, duplicates, otherXml }
+// -> { documents, skipped: [{ name, reason }], p7mCount, duplicates, otherXml, salesSkipped }
+// ⚠️ A SALES INVOICE IS NOT A PRICE: an invoice whose SELLER is the owner (the VAT number most invoices of the zip
+// were issued to) is the owner's own sale to somebody, so its lines are what he charges, never what he pays. It is
+// dropped here and only counted (`salesSkipped`). With no owner to be found nothing is dropped.
 export function loadInvoices(read, options = {}) {
   const { parseXml } = options;
   if (typeof parseXml !== 'function') throw new Error('loadInvoices needs options.parseXml');
@@ -267,6 +294,7 @@ export function loadInvoices(read, options = {}) {
     p7mCount: read.p7mCount,
     duplicates: 0,
     otherXml: 0,
+    salesSkipped: 0,
   };
 
   const seen = new Set();
@@ -308,6 +336,12 @@ export function loadInvoices(read, options = {}) {
         result.documents.push(doc);
       }
     }
+  }
+  const owner = ownerVatOf(result.documents);
+  if (owner) {
+    const kept = result.documents.filter((doc) => doc.vatNumber !== owner);
+    result.salesSkipped = result.documents.length - kept.length;
+    result.documents = kept;
   }
   return result;
 }

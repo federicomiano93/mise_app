@@ -293,7 +293,7 @@ export function buildRegistry(data, actions, hooks = {}) {
     data.suppliers().forEach(s => { supById[s.id] = supplierLabel(s); });
     const all = data.ingredients().filter(i => isPackaging(i) === packaging)
       .sort((a, b) => ingredientDisplayName(a).localeCompare(ingredientDisplayName(b)));
-    const visible = all.filter(i => matches(i.name) || matches(i.shortName));
+    const visible = all.filter(i => matches(i.name) || matches(i.shortName) || matches(i.invoiceName));
 
     if (!all.length) {
       listHost.appendChild(emptyState(packaging ? 'packaging' : 'ingredients'));

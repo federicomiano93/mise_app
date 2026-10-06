@@ -200,10 +200,10 @@ test('the card draws «Name to show» right under «Name», with the note, and c
   assert.equal(card.shortName.attributes.maxlength, '60');
   assert.equal(card.shortName.value, 'Farina');
   const texts = walk(card.root).map(n => n.textContent);
-  assert.ok(texts.some(s => s === 'Name to show'));
-  assert.ok(texts.some(s => /message to the supplier always uses the name above/.test(s)));
+  assert.ok(texts.some(s => s === 'Name in lists'));
+  assert.ok(texts.some(s => /Optional — shorter, for the app’s lists/.test(s)));
   const labels = walk(card.root).filter(n => n.classList.contains('mgmt-field-label')).map(n => n.textContent);
-  assert.ok(labels.indexOf('Name to show') === labels.indexOf('Name') + 1, 'right under Name');
+  assert.ok(labels.indexOf('Name in lists') === labels.indexOf('Name in the message') + 1, 'right under the name in the message');
 });
 
 test('Save sends a trimmed shortName on the card, and \'\' to clear it (a merge write must be able to clear)', async () => {
@@ -264,4 +264,46 @@ test('the card gives each hint a counter id, never a fixed one', () => {
 test('a supplier screen with no products points to the Ingredients tab, with its own key in both languages', () => {
   assert.match(read('js/orders/registry.js'), /orders\.noIngredientsYetAddPlus/);
   assert.equal(read('js/i18n.js').split("'orders.noIngredientsYetAddPlus':").length - 1, 2);
+});
+
+// ── «Nome in fattura»: shown read-only, never saved by the card ──────────────
+
+const WITH_INVOICE_NAME = { ...STORED, invoiceName: 'CAPUTO FARINA 00 ROSSO SACCO KG 25' };
+
+test('the card shows the invoice name as labelled read-only text, not as an input, above the other two names', () => {
+  const card = openCard(WITH_INVOICE_NAME);
+  const nodes = walk(card.root);
+  const label = nodes.find(n => n.classList.contains('mgmt-field-label') && n.textContent === 'Name on the invoice');
+  assert.ok(label, 'the label is there');
+  const value = nodes.find(n => n.classList.contains('mgmt-readonly'));
+  assert.equal(value.textContent, 'CAPUTO FARINA 00 ROSSO SACCO KG 25');
+  assert.notEqual(value.tagName, 'INPUT');
+  assert.equal(nodes.filter(n => n.tagName === 'INPUT' && n.value === 'CAPUTO FARINA 00 ROSSO SACCO KG 25').length, 0, 'nobody can type into it');
+  const group = nodes.find(n => n.attributes && n.attributes['aria-labelledby'] === label.attributes.id);
+  assert.ok(group, 'the group is named by its label');
+  assert.ok(nodes.some(n => n.attributes && n.attributes.id === group.attributes['aria-describedby'] && /exactly as on the invoice/.test(n.textContent)));
+  const labels = nodes.filter(n => n.classList.contains('mgmt-field-label')).map(n => n.textContent);
+  assert.ok(labels.indexOf('Name on the invoice') < labels.indexOf('Name in the message'));
+});
+
+test('the card has no invoice-name block when the ingredient has none', () => {
+  const card = openCard(STORED);
+  assert.equal(walk(card.root).some(n => n.classList.contains('mgmt-readonly')), false);
+  assert.equal(walk(card.root).some(n => n.textContent === 'Name on the invoice'), false);
+});
+
+test('saving never sends invoiceName: the merge write leaves the one the import wrote exactly as it was', async () => {
+  const card = openCard(WITH_INVOICE_NAME);
+  type(card.name, 'Farina per il fornitore');
+  const payload = await card.save();
+  assert.equal(payload.name, 'Farina per il fornitore');
+  assert.equal('invoiceName' in payload, false);
+  const legacy = openCard({ ...WITH_INVOICE_NAME, priceUnit: 'kg', pricePerUnit: 2, casePrice: 20, caseCount: 4, caseItemSize: 2.5, caseItemUnit: 'kg', weight: '2.5kg', unit: 'cartone' });
+  assert.equal('invoiceName' in await legacy.save(), false);
+});
+
+test('search finds an ingredient by its invoice name too', () => {
+  const ing = { name: 'Farina', shortName: '', invoiceName: 'CAPUTO ROSSO SACCO KG 25' };
+  assert.ok(ingredientNameMatches(ing, 'caputo', normalizeText));
+  assert.ok(matchesQuery({ label: 'Farina', ingredient: ing, supplierName: 'Molino', supplier: { name: 'Molino' } }, 'caputo rosso'));
 });

@@ -65,7 +65,7 @@ test('⚠️ no phrase is frozen at module load: every t() sits inside a functio
     const code = codeOf(read(file));
     assert.doesNotMatch(code, /^(const|let|var)\s+\w+\s*=\s*t\(/m, `${file} reads the language at module load`);
   }
-  assert.match(SCREEN, /import \{ t \} from '\.\.\/i18n\.js';/);
+  assert.match(SCREEN, /import \{ t, localeTag \} from '\.\.\/i18n\.js';/);
 });
 
 test('leaving asks first (danger), is off while writing, and nothing is written before a confirmation', () => {
@@ -85,7 +85,14 @@ test('⚠️ each row is planned AGAIN on fresh server data before anything is w
   assert.match(run, /freshIngredientsForSupplier\(supplierId\)/);
   assert.match(run, /invoicePointIds\(id\)/);
   assert.match(run, /freshPrice\(id\)/);
-  assert.match(run, /ingredientWrites\(fresh\.row, fileIngredient, new Date\(\)\.toISOString\(\), \{ language \}\)/);
+  // ⚠️ BOTH loops gate on rowToWrite, each pinned in its OWN loop (one line in the other would satisfy a whole-file match).
+  const gate = /const wrow = (?:fresh\.waiting \? null : )?rowToWrite\(fresh\.row, \{ confirmed: s\.confirmKeys\.has\(planned\.key\), rename: s\.renames\.get\(planned\.key\), held: (?:shown|row)\.held === true \}\)/;
+  const writingLoop = run.slice(run.indexOf('for (let i = 0; i < writing.length'), run.indexOf('for (let i = 0; i < quiet.length'));
+  const quietLoop = run.slice(run.indexOf('for (let i = 0; i < quiet.length'));
+  assert.match(writingLoop, gate, 'the writing loop gates its fresh plan');
+  assert.match(quietLoop, gate, 'the quiet loop gates its fresh plan');
+  assert.match(run, /e\.row\.status === 'unchanged' && e\.row\.ingredientId && !writesRow\(e\)/, 'a row that writes is never also a quiet row');
+  assert.match(run, /ingredientWrites\(wrow, fileIngredient, new Date\(\)\.toISOString\(\), \{ language \}\)/);
   assert.match(run, /if \(kind\) \{ stopped = kind; notRun = writing\.length - i - 1; break; \}/);
   assert.match(run, /if \(fresh\.waiting\)/, 'a row that became a question is never guessed');
 });
@@ -307,7 +314,7 @@ test('⚠️ the remembered decisions are written BEFORE the rows, and a failure
 
 test('the invoices are read in memory after the browser has painted «reading», with the platform parser', () => {
   assert.match(SCREEN, /new DOMParser\(\)\.parseFromString\(text, 'application\/xml'\)/);
-  assert.match(SCREEN, /await new Promise\(resolve => setTimeout\(resolve, 0\)\);\s*try \{/);
+  assert.match(SCREEN, /await new Promise\(resolve => setTimeout\(resolve, 0\)\);\s*const inputs = \[\];/);
   assert.match(SCREEN, /new Uint8Array\(await file\.arrayBuffer\(\)\)/);
   assert.match(SCREEN, /buildImportFromInvoices\(inputs, \{ parseXml, now: new Date\(\), salt \}\)/);
   assert.match(SCREEN, /await file\.text\(\)/, 'a .json file keeps its old path');
@@ -346,7 +353,7 @@ test('the words the owner reads on the invoices path are the agreed ones, in bot
   assert.equal(it['invoiceImport.zip.importAsIngredient'], 'Importa come ingrediente');
   assert.equal(it['invoiceImport.zip.importAgain'], 'Importa di nuovo');
   assert.equal(it['invoiceImport.ing.forget'], 'Non importare (ricordalo)');
-  assert.equal(it['invoiceImport.status.priceCheck'], 'Prezzo da controllare');
+  assert.equal(it['invoiceImport.status.priceCheck'], 'Da controllare');
   assert.equal(it['invoiceImport.summary.decisions'].other, 'Decisioni ricordate: {n}');
 });
 

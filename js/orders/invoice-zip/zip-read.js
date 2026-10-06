@@ -29,9 +29,40 @@ const byLowerName = (a, b) => {
   return x < y ? -1 : x > y ? 1 : 0;
 };
 
+const EOCD_SIGNATURE = 0x06054b50;
+const EOCD_MIN_BYTES = 22;
+// fflate's own search window: it examines every position until the end is 65559 bytes away.
+const EOCD_SEARCH_WINDOW = 65559;
+
+// The entry count the End Of Central Directory record DECLARES, read BEFORE fflate walks the directory.
+// ⚠️ IT MUST SEE WHAT fflate WILL SEE: fflate loops on «entries on this disk» (EOCD+8, not +10), and switches to the
+// ZIP64 record (which holds its own, 64-bit count) when that count is 0xFFFF or the directory offset (EOCD+16) is
+// 0xFFFFFFFF. So: the record is searched in the same window fflate uses (it tries every position down to 65559 bytes
+// from the end); the LARGER of the two counts is returned; and a ZIP64 marker returns Infinity — an invoice zip never
+// needs ZIP64, so readZip refuses it as unreadable. null when no record is found: fflate then refuses the archive as unreadable.
+export function declaredEntryCount(bytes) {
+  if (!bytes || bytes.length < EOCD_MIN_BYTES) return null;
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const lowest = Math.max(0, bytes.length - EOCD_SEARCH_WINDOW);
+  for (let at = bytes.length - EOCD_MIN_BYTES; at >= lowest; at--) {
+    if (view.getUint32(at, true) !== EOCD_SIGNATURE) continue;
+    const onDisk = view.getUint16(at + 8, true);
+    const total = view.getUint16(at + 10, true);
+    if (onDisk === 0xffff || total === 0xffff || view.getUint32(at + 16, true) === 0xffffffff) return Infinity;
+    return Math.max(onDisk, total);
+  }
+  return null;
+}
+
 // One zip -> { entries: { baseName: bytes }, p7m } or { refused: reason }.
 // Every `.xml` entry is read; `.p7m` entries are counted; PDFs and everything else are ignored.
 function readZip(bytes, limits, skipped) {
+  const entryCount = declaredEntryCount(bytes);
+  // A ZIP64 marker is not «too many entries»: an invoice zip never needs the format, so it is simply unreadable.
+  if (entryCount === Infinity) return { refused: SKIPPED.ZIP_UNREADABLE };
+  if (entryCount !== null && entryCount > limits.maxEntries) {
+    return { refused: SKIPPED.TOO_MANY_ENTRIES, detail: String(limits.maxEntries) };
+  }
   let listing;
   try {
     // Pass 1: the central directory only. The filter answers false, so nothing is inflated.

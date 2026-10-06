@@ -141,6 +141,14 @@
   outline: none;
   border-color: var(--accent);
 }
+.rec-host .mgmt-readonly {
+  margin: 0;
+  font-family: 'Manrope', sans-serif;
+  font-size: 15px;
+  color: var(--text);
+  overflow-wrap: anywhere;
+  user-select: text;
+}
 .rec-host .mgmt-form .mgmt-input[inputmode="decimal"] {
   font-weight: 600;
 }
