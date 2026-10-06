@@ -1361,10 +1361,12 @@ export function openInvoiceImport(data) {
     if (sum.retryable > 0 || sum.stopped) {
       body.push(el('p', { class: 'invimp-note', text: t('invoiceImport.summary.again') }));
     }
-    if (sum.notFixableByRetry > 0) {
+    // ⚠️ THE WORKBOOK ADVICE BELONGS TO THE .json PATH ONLY (s.built is null there): an invoice zip has no workbook,
+    // and an answer given here is remembered by the price points it leaves on the ingredient.
+    if (!s.built && sum.notFixableByRetry > 0) {
       body.push(el('p', { class: 'invimp-note', text: t('invoiceImport.summary.fixFile') }));
     }
-    if (s.remember.length > 0) {
+    if (!s.built && s.remember.length > 0) {
       body.push(el('div', { class: 'invimp-list' }, s.remember.map(r => el('p', { class: 'invimp-note', text:
         t('invoiceImport.summary.remember', { target: r.target, item: r.name }) }))));
     }

@@ -357,3 +357,19 @@ test('8 · merging two ingredients writes no invoiceName onto the survivor', asy
   assert.ok(ops.every(op => !('invoiceName' in op.data)));
   assert.deepEqual(ops.find(op => op.path.length === 2 && op.path[1] === 'ing-1').data, { supplierCodes: ['F00-5'] });
 });
+
+// The workbook advice («correct it in the workbook», «write “unisci con …” in Azione») belongs to the .json path:
+// an invoice zip has no workbook, and its answers are remembered by the price points they leave.
+test('the summary gives the workbook advice only on the .json path', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const src = await readFile(new URL('../js/orders/invoice-import-screen.js', import.meta.url), 'utf8');
+  assert.match(src, /if \(!s\.built && sum\.notFixableByRetry > 0\)/);
+  assert.match(src, /if \(!s\.built && s\.remember\.length > 0\)/);
+});
+
+test('the note on ingredients already in Mise says what the import adds to them', () => {
+  const { en, it } = DICT;
+  assert.match(en['invoiceImport.ing.note'], /name on the invoice/);
+  assert.match(it['invoiceImport.ing.note'], /nome in fattura/);
+  assert.equal(it['invoiceImport.status.priceCheck'], 'Da controllare');
+});

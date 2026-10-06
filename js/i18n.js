@@ -3002,7 +3002,7 @@ const DICTIONARIES = Object.freeze({
     'invoiceImport.filter.errors': 'Errors',
     'invoiceImport.ing.checking': 'Checking what is already in Mise…',
     'invoiceImport.ing.checkFailed': 'Could not check what is already recorded. Check your connection and try again.',
-    'invoiceImport.ing.note': 'New ingredients start with allergens not declared: check them afterwards. Ingredients you already have keep everything except their price.',
+    'invoiceImport.ing.note': 'New ingredients start with allergens not declared: check them afterwards. Ingredients you already have stay as they are: they only receive the new prices, their article codes and their name on the invoice.',
     'invoiceImport.ing.createNew': 'Create a new ingredient',
     'invoiceImport.ing.emptyFilter': 'Nothing here.',
     'invoiceImport.ing.group.unchanged': {
@@ -3155,7 +3155,7 @@ const DICTIONARIES = Object.freeze({
       one: 'Price to check ({n})',
       other: 'Price to check ({n})',
     },
-    'invoiceImport.status.priceCheck': 'Price to check',
+    'invoiceImport.status.priceCheck': 'To check',
     'invoiceImport.zip.sales': {
       one: '{n} sales invoice skipped',
       other: '{n} sales invoices skipped',
@@ -5714,7 +5714,7 @@ const DICTIONARIES = Object.freeze({
     'invoiceImport.filter.errors': 'Errori',
     'invoiceImport.ing.checking': 'Controllo cosa c’è già in Mise…',
     'invoiceImport.ing.checkFailed': 'Non sono riuscito a controllare cosa è già registrato. Controlla la connessione e riprova.',
-    'invoiceImport.ing.note': 'I nuovi ingredienti partono con gli allergeni non dichiarati: controllali dopo. Gli ingredienti che hai già restano come sono, tranne il prezzo.',
+    'invoiceImport.ing.note': 'I nuovi ingredienti partono con gli allergeni non dichiarati: controllali dopo. Gli ingredienti che hai già restano come sono: ricevono solo i prezzi nuovi, i codici articolo e il nome in fattura.',
     'invoiceImport.ing.createNew': 'Crea un nuovo ingrediente',
     'invoiceImport.ing.emptyFilter': 'Non c’è niente qui.',
     'invoiceImport.ing.group.unchanged': {
@@ -5867,7 +5867,7 @@ const DICTIONARIES = Object.freeze({
       one: 'Prezzo da controllare ({n})',
       other: 'Prezzo da controllare ({n})',
     },
-    'invoiceImport.status.priceCheck': 'Prezzo da controllare',
+    'invoiceImport.status.priceCheck': 'Da controllare',
     'invoiceImport.zip.sales': {
       one: '{n} fattura di vendita ignorata',
       other: '{n} fatture di vendita ignorate',

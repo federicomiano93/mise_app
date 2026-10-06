@@ -1,4 +1,4 @@
-const CACHE_NAME = 'theitalianclub-v622';
+const CACHE_NAME = 'theitalianclub-v623';
 // Firebase SDK modules (loaded from gstatic) are cached SEPARATELY from CACHE_NAME
 // so they survive the cache-version bump that happens on every deploy — otherwise
 // the offline SDK would be wiped each release until the next online load. The name
@@ -538,7 +538,7 @@ const ASSET_HASHES = {
   "./js/location.js": '6aaf53615a8739d1',
   "./js/sections.js": 'abcfdecb2bd5766d',
   "./js/roles.js": '7a7c5cf34d57f511',
-  "./js/i18n.js": '5f41d492c092862a',
+  "./js/i18n.js": '19b9f725bdbf8a07',
   "./js/i18n-dom.js": '24249af4367511e5',
   "./js/keyboard-done.js": 'de05a6dd1f3aac26',
   "./js/join-code.js": '5b89de65db5c102f',
@@ -641,7 +641,7 @@ const ASSET_HASHES = {
   "./js/orders/invoice-import-model.js": 'e7d220523f80fd04',
   "./js/orders/invoice-import-plan.js": '61ae8ad47b6f9d0c',
   "./js/orders/invoice-import-data.js": 'd135f9af7f608b00',
-  "./js/orders/invoice-import-screen.js": '731f95b2c83caf7b',
+  "./js/orders/invoice-import-screen.js": 'aa400c249ef43a09',
   "./js/orders/ingredient-merge.js": 'a98b4274e4201757',
   "./js/orders/ingredient-merge-data.js": '8189e03534165550',
   "./js/orders/ingredient-merge-screen.js": 'f4dd5c085f97eb4e',
