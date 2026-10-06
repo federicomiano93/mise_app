@@ -345,10 +345,15 @@ export {
 // Orders screen with no ingredients at all. Every other watcher in this file
 // awaits it; this one did not, and only driving the real page said so: the checks
 // were green because they called it by hand AFTER signing in.
+// ⚠️ includeMetadataChanges IS WHAT LETS AN EMPTY COLLECTION BECOME «READABLE» (6 Oct 2026). Without it the
+// server's confirmation of an EMPTY cached answer changes no document, so Firestore never calls back again:
+// the first (cached, empty) answer was the last, `readable` stayed false for ever and the invoice import of a
+// venue with no prices yet said «still loading» however long one waited.
 export async function watchIngredientPrices(onChange) {
   await authReady;
   return onSnapshot(
     collection(db, pathFor(COLLECTIONS.ingredientPrices)),
+    { includeMetadataChanges: true },
     snap => {
       const map = {};
       snap.forEach(d => { map[d.id] = d.data(); });

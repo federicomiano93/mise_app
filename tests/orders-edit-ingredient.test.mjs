@@ -422,3 +422,14 @@ test('Fornitori counts the prices as loaded only when the watcher says they are 
   assert.match(REGISTRY_MAIN, /readPrice: \(id\) => readIngredientPrice\(id\),/);
   assert.match(REGISTRY_MAIN, /pricesReadable: false,/, 'not loaded until the watcher answers');
 });
+
+// A venue with NO prices (a new venue, or a catalogue emptied before a re-import): the first answer is the empty
+// cache, and the server confirming it changes no document — without metadata changes Firestore never calls back,
+// `readable` stays false and the invoice import says «still loading» for ever (6 Oct 2026, Panificio Miano).
+test('the price watcher hears the server confirm an EMPTY collection', () => {
+  const src = codeOf(read('js/orders/firebase-orders.js'));
+  const watcher = src.slice(src.indexOf('export async function watchIngredientPrices('), src.indexOf('export async function getPriceHistory('));
+  assert.ok(watcher.length > 0, 'the watcher exists');
+  assert.match(watcher, /onSnapshot\(\s*collection\(db, pathFor\(COLLECTIONS\.ingredientPrices\)\),\s*\{ includeMetadataChanges: true \},/);
+  assert.match(watcher, /onChange\(map, !snap\.metadata\.fromCache \|\| !snap\.empty\)/, 'a server answer counts even when empty');
+});
