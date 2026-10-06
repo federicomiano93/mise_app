@@ -3364,6 +3364,7 @@ body:not([data-orders-tab="deliveries"]) #orders-owed { display: none; }
 }
 .invimp-file-btn { display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; min-height: 44px; }
 .invimp-file-input:focus-visible + .invimp-file-btn { outline: 3px solid var(--accent-2); outline-offset: 2px; }
+.invimp-file-input:disabled + .invimp-file-btn { opacity: .5; cursor: default; }
 .invimp-file-name { margin: 0; font-size: 13px; line-height: 1.4; color: var(--text-2); overflow-wrap: anywhere; }
 .invimp-list { display: flex; flex-direction: column; gap: 8px; }
 .invimp-row {

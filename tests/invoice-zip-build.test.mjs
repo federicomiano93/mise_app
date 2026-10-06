@@ -45,7 +45,9 @@ test('the file has the agreed shape and only ingredients are in it', () => {
     key: KEY_FLOUR, supplierKey: 'IT00000000001', mergeWith: '', name: 'Farina tipo 00', brand: '', category: '',
     supplierCode: 'F00-25', weight: '25 kg', packUnit: 'sacco', packCount: null, priceUnit: 'kg', unitWeightKg: null,
     vatRate: 4,
-    prices: [{ invoiceId: '9000000001', line: 1, invoiceDate: '2026-09-01', pricePerUnit: 0.57, qty: 25 }],
+    prices: [{
+      invoiceId: '9000000001', line: 1, invoiceDate: '2026-09-01', pricePerUnit: 0.57, qty: 25, reliability: 'alta',
+    }],
   });
 });
 

@@ -37,7 +37,7 @@ test('the program\'s own proposal is the starting point: ingredients in, resale 
   assert.deepEqual(sel.groups.skippedByYou, []);
   assert.deepEqual(sel.groups.skippedSuppliers, []);
   assert.deepEqual(sel.counts, {
-    invoices: 1, excludedDocuments: 0, skippedFiles: 0, p7m: 0, suppliers: 1, ingredients: 1,
+    invoices: 1, excludedDocuments: 0, skippedFiles: 0, p7m: 0, salesSkipped: 0, suppliers: 1, ingredients: 1,
   });
 });
 

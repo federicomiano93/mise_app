@@ -29,9 +29,31 @@ const byLowerName = (a, b) => {
   return x < y ? -1 : x > y ? 1 : 0;
 };
 
+const EOCD_SIGNATURE = 0x06054b50;
+const EOCD_MIN_BYTES = 22;
+const EOCD_MAX_COMMENT = 0xffff;
+
+// The entry count the End Of Central Directory record DECLARES, read before fflate walks the directory (a
+// hostile archive could otherwise make that walk build a listing of any length). null when no record is found:
+// fflate then refuses the archive as unreadable. A count of 0xFFFF means «see the ZIP64 record»: it is far above
+// any limit, so it is simply returned as it is.
+export function declaredEntryCount(bytes) {
+  if (!bytes || bytes.length < EOCD_MIN_BYTES) return null;
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const lowest = Math.max(0, bytes.length - EOCD_MIN_BYTES - EOCD_MAX_COMMENT);
+  for (let at = bytes.length - EOCD_MIN_BYTES; at >= lowest; at--) {
+    if (view.getUint32(at, true) === EOCD_SIGNATURE) return view.getUint16(at + 10, true);
+  }
+  return null;
+}
+
 // One zip -> { entries: { baseName: bytes }, p7m } or { refused: reason }.
 // Every `.xml` entry is read; `.p7m` entries are counted; PDFs and everything else are ignored.
 function readZip(bytes, limits, skipped) {
+  const entryCount = declaredEntryCount(bytes);
+  if (entryCount !== null && entryCount > limits.maxEntries) {
+    return { refused: SKIPPED.TOO_MANY_ENTRIES, detail: String(limits.maxEntries) };
+  }
   let listing;
   try {
     // Pass 1: the central directory only. The filter answers false, so nothing is inflated.

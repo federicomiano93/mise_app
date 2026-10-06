@@ -17,7 +17,7 @@
 // ⚠️ EVERY WORD IS ASKED INSIDE A FUNCTION (the venue's language arrives after this module loads), and
 // this screen names no food: ingredient names are the file's own.
 
-import { t } from '../i18n.js';
+import { t, localeTag } from '../i18n.js';
 import { supplierLabel } from '../supplier-label.js';
 import { formatPricePerUnit } from '../price-model.js';
 import { el } from './dom.js';
@@ -25,9 +25,10 @@ import { confirmDialog, alertDialog } from './confirm-dialog.js';
 import { BACK_ICON } from './mgmt-ui.js';
 import {
   parseImportFile, planSuppliers, supplierWrites, planIngredients, ingredientWrites, packLabelOf,
+  AVERAGED_PRICE_JUMP_LIMIT, CHECK_REASONS,
 } from './invoice-import-model.js';
 import {
-  applyDecisions, bucketOf, filterCounts, visibleFilters, entriesFor, waitingCount, importTotals, idsToCheck,
+  needsConfirmation, applyDecisions, bucketOf, filterCounts, visibleFilters, entriesFor, waitingCount, importTotals, idsToCheck,
   invoiceCount, replanRow, summarizeRun, stopKind, writesRow, changedSupplierKeys, isRetryableReason,
   rememberHints, priceChange, planPriceChanges, priceChangeBatches, ingredientDisplayName,
 } from './invoice-import-plan.js';
@@ -186,6 +187,7 @@ export function openInvoiceImport(data) {
     supplierOverrides: {},   // { [supplierKey]: 'import' } a remembered supplier ticked «import again»
     supplierSkips: new Set(),// step 2: «do not import anything from this supplier (remember)»
     forgetKeys: new Set(),   // step 3: «do not import (remember)»
+    confirmKeys: new Set(),  // step 3: a price with a `checkReason` the person answered «Use this price»
     decisionsWritten: 0,
     decisionsFailed: false,
     // suppliers
@@ -345,6 +347,10 @@ export function openInvoiceImport(data) {
   // ── Step 1 of 3 · Choose the file ─────────────────────────────────────────────
 
   function drawFile() {
+    // ⚠️ WHILE A ZIP IS BEING READ THE PICKER IS OFF: a second file chosen now would start a second read over the
+    // first one's state. It comes back on every way out of the read (readInvoices' finally).
+    fileInput.disabled = s.reading;
+    if (s.reading) fileInput.setAttribute('aria-busy', 'true'); else fileInput.removeAttribute('aria-busy');
     const body = [
       ...heading(1, 'invoiceImport.step.file'),
       el('p', { class: 'invimp-note', text: t('invoiceImport.file.explain') }),
@@ -352,7 +358,10 @@ export function openInvoiceImport(data) {
       // and a label dressed as a button opens it (the focus ring is drawn on the label, orders.css).
       el('div', { class: 'invimp-file' }, [
         fileInput,
-        el('label', { class: 'btn-secondary invimp-file-btn', for: 'invimp-file', text: t('invoiceImport.file.label') }),
+        el('label', {
+          class: 'btn-secondary invimp-file-btn', for: 'invimp-file', text: t('invoiceImport.file.label'),
+          'aria-disabled': s.reading ? 'true' : null,
+        }),
         s.fileName ? el('p', { class: 'invimp-file-name', text: t('invoiceImport.file.chosen', { name: s.fileName }) }) : null,
       ]),
     ];
@@ -379,6 +388,7 @@ export function openInvoiceImport(data) {
     const out = [];
     const facts = [
       counts.excludedDocuments > 0 ? t('invoiceImport.zip.excluded', { n: counts.excludedDocuments }) : '',
+      counts.salesSkipped > 0 ? t('invoiceImport.zip.sales', { n: counts.salesSkipped }) : '',
       counts.p7m > 0 ? t('invoiceImport.zip.signed', { n: counts.p7m }) : '',
     ].filter(Boolean);
     if (facts.length > 0) out.push(el('p', { class: 'invimp-note', text: facts.join(' · ') }));
@@ -465,6 +475,7 @@ export function openInvoiceImport(data) {
     s.supplierOverrides = {};
     s.supplierSkips = new Set();
     s.forgetKeys = new Set();
+    s.confirmKeys = new Set();
     s.supplierDecisions = {};
     s.supplierProgress = { created: {}, linked: new Set() };
     s.ingredientDecisions = {};
@@ -515,6 +526,18 @@ export function openInvoiceImport(data) {
   async function readInvoices(files) {
     s.reading = true;
     render();
+    try {
+      await readInvoicesNow(files);
+    } finally {
+      // The picker (off while reading) comes back on success AND on every failure, whatever threw.
+      if (s.reading) {
+        s.reading = false;
+        render();
+      }
+    }
+  }
+
+  async function readInvoicesNow(files) {
     // Let the browser paint the «reading» line before the heavy, synchronous part starts.
     await new Promise(resolve => setTimeout(resolve, 0));
     try {
@@ -737,7 +760,25 @@ export function openInvoiceImport(data) {
     render();
   }
 
-  const entriesNow = () => applyDecisions(s.plannedRows, s.ingredientDecisions, s.ctx, s.forgetKeys);
+  const entriesNow = () => applyDecisions(s.plannedRows, s.ingredientDecisions, s.ctx, s.forgetKeys, s.confirmKeys);
+
+  const shortDate = (iso) => {
+    const [y, m, d] = String(iso).split('-').map(Number);
+    return new Intl.DateTimeFormat(localeTag(), { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'UTC' })
+      .format(new Date(Date.UTC(y, m - 1, d)));
+  };
+
+  // Why a price waits for a look (invoice-import-model.js checkOf): one sentence, the date in the person's format.
+  function checkText(row) {
+    if (row.checkReason === CHECK_REASONS.WEIGHT_UNREADABLE) return t('invoiceImport.check.weightUnreadable');
+    if (row.checkReason === CHECK_REASONS.PRICE_JUMP) {
+      return t('invoiceImport.check.priceJump', { limit: Math.round(AVERAGED_PRICE_JUMP_LIMIT * 100) });
+    }
+    if (row.checkReason === CHECK_REASONS.OLDER_INVOICE) {
+      return t('invoiceImport.check.olderInvoice', { date: shortDate(row.checkDate) });
+    }
+    return '';
+  }
 
   // What the person's answers of this import would leave in the remembered decisions (nothing on the .json path).
   function decisionChangesNow() {
@@ -805,7 +846,7 @@ export function openInvoiceImport(data) {
       invoices > 0 ? t('invoiceImport.invoices', { n: invoices }) : '',
     ].filter(Boolean).join(' · ');
     // A wanted ingredient with no price of its own is told apart by a pill of its own and says why.
-    const needsCheck = bucketOf(entry) === 'check' && ['new', 'unchanged'].includes(row.status);
+    const needsCheck = bucketOf(entry) === 'check';
     const children = [
       el('div', { class: 'invimp-row-top' }, [
         el('div', { class: 'invimp-row-main' }, [
@@ -818,6 +859,17 @@ export function openInvoiceImport(data) {
     const why = row.reason || planned.reason;
     if (why) children.push(el('p', { class: 'invimp-reason', text: reasonText(why) }));
     if (planned.priceCheck) children.push(el('p', { class: 'invimp-reason', text: codesText(planned.priceCheck) }));
+    if (row.checkReason) children.push(el('p', { class: 'invimp-reason', text: checkText(row) }));
+    // A matched row whose price needs a look writes nothing until the person says «Use this price».
+    if (row.checkReason && (row.held || needsConfirmation(row))) {
+      children.push(choice(`invimp-confirm-${index}`, t('invoiceImport.choose'), [
+        { value: 'hold', label: t('invoiceImport.ing.confirm.hold') },
+        { value: 'use', label: t('invoiceImport.ing.confirm.use') },
+      ], s.confirmKeys.has(planned.key) ? 'use' : 'hold', (picked) => {
+        if (picked === 'use') s.confirmKeys.add(planned.key); else s.confirmKeys.delete(planned.key);
+        render();
+      }));
+    }
     if (row.codesFull) children.push(el('p', { class: 'invimp-reason', text: reasonText('codes-full') }));
     // A NEW ingredient from the invoices: create it (the default, never blocking the button) or leave it out and
     // remember that, so the next import does not offer it again.
@@ -1140,6 +1192,9 @@ export function openInvoiceImport(data) {
         });
         if (fresh.waiting) {
           results.push({ key: planned.key, name: planned.name, outcome: 'failed', reason: t('invoiceImport.reason.changed'), retry: true });
+        } else if (needsConfirmation(fresh.row) && !s.confirmKeys.has(planned.key)) {
+          // The fresh read found a price that needs a look which the screen did not show: nobody confirmed it.
+          results.push({ key: planned.key, name: planned.name, outcome: 'skipped' });
         } else if (fresh.row.status === 'unchanged') {
           // Every price is in already, but the file may carry a pack code the ingredient has not learnt yet.
           const codeBatches = ingredientWrites(fresh.row, fileIngredient, new Date().toISOString(), { language });

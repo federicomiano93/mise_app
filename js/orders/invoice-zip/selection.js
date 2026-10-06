@@ -160,6 +160,7 @@ export function selectImport(built, options = {}) {
       excludedDocuments: documents.filter((d) => d.status === 'excluded').length,
       skippedFiles: groups.skippedFiles.length,
       p7m: built.p7mCount || 0,
+      salesSkipped: built.salesSkipped || 0,
       suppliers: suppliers.size,
       ingredients: ingredients.length,
     },
@@ -198,6 +199,9 @@ export function decisionChanges({
     const key = supplierDecisionKey(supplierKey);
     if (value === 'import' && stored.get(decisionId(key)) === DECISION_SKIP) remove(key);
   });
+  // ⚠️ PERSONAL DATA (P13): a skipped SUPPLIER is stored with its NAME as `label` (a sole trader's name is a
+  // person's). It is stored only so the screen can list «skipped by you» in words, and it is kept until the person
+  // ticks «import again» on that supplier and confirms (the key above is then removed); nothing expires it.
   supplierSkips.forEach((s) => setTo(supplierDecisionKey(s.key), DECISION_SKIP, s.name));
   itemSkips.forEach((s) => setTo(s.key, DECISION_SKIP, s.label));
 

@@ -3150,6 +3150,15 @@ const DICTIONARIES = Object.freeze({
       other: 'Price to check ({n})',
     },
     'invoiceImport.status.priceCheck': 'Price to check',
+    'invoiceImport.zip.sales': {
+      one: '{n} sales invoice skipped',
+      other: '{n} sales invoices skipped',
+    },
+    'invoiceImport.check.weightUnreadable': 'The pack weight kept in Mise cannot be read, so the price per kilo or litre was not worked out. Check it.',
+    'invoiceImport.check.priceJump': 'The price moves by more than {limit}% and was worked out from the invoice description, not read directly. Check it.',
+    'invoiceImport.check.olderInvoice': 'Price from the invoice of {date}: the most recent one needs checking.',
+    'invoiceImport.ing.confirm.use': 'Use this price',
+    'invoiceImport.ing.confirm.hold': 'Leave it for now',
     'invoiceImport.decisions.confirmTitle': 'Remember your choices?',
     'invoiceImport.decisions.confirmLine': {
       one: '{n} choice will be remembered for the next imports.',
@@ -5842,6 +5851,15 @@ const DICTIONARIES = Object.freeze({
       other: 'Prezzo da controllare ({n})',
     },
     'invoiceImport.status.priceCheck': 'Prezzo da controllare',
+    'invoiceImport.zip.sales': {
+      one: '{n} fattura di vendita ignorata',
+      other: '{n} fatture di vendita ignorate',
+    },
+    'invoiceImport.check.weightUnreadable': 'Il peso della confezione salvato in Mise non si legge, quindi il prezzo al chilo o al litro non è stato calcolato. Controllalo.',
+    'invoiceImport.check.priceJump': 'Il prezzo cambia di più del {limit}% ed è stato calcolato dalla descrizione della fattura, non letto direttamente. Controllalo.',
+    'invoiceImport.check.olderInvoice': 'Prezzo dalla fattura del {date}: la più recente è da verificare.',
+    'invoiceImport.ing.confirm.use': 'Usa questo prezzo',
+    'invoiceImport.ing.confirm.hold': 'Lascia per ora',
     'invoiceImport.decisions.confirmTitle': 'Vuoi ricordare le tue scelte?',
     'invoiceImport.decisions.confirmLine': {
       one: '{n} scelta verrà ricordata per le prossime importazioni.',

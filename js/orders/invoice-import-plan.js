@@ -187,15 +187,24 @@ export function stopKind(err) {
 const WRITES = ['new', 'update-price', 'history-only'];
 const WAITING = ['maybe-duplicate', 'choose'];
 
+// ⚠️ A MATCHED ROW THAT CARRIES A `checkReason` (the price comes from a reading a person must look at) WRITES NOTHING
+// UNTIL THE PERSON CONFIRMS IT. A NEW row keeps its own «create / do not import» answer instead.
+export const needsConfirmation = (row) => Boolean(row && row.checkReason) && ['update-price', 'history-only'].includes(row.status);
+
 // planned rows + the person's decisions → [{ planned, row, waiting }]. `row` is the effective row (what
 // would be written); `waiting` is true while somebody still has to answer.
 // `forgetKeys` (a Set of keys) are NEW rows the person answered «Do not import (remember)»: they become skipped.
-export function applyDecisions(plannedRows, decisions, ctx, forgetKeys) {
+// `confirmKeys` (a Set of keys) are the rows with a `checkReason` the person answered «Use this price»; the others
+// are held back (status 'skipped', `held: true`) — they come back on the next import.
+export function applyDecisions(plannedRows, decisions, ctx, forgetKeys, confirmKeys) {
   return (plannedRows || []).map(planned => {
     const decision = decisions ? decisions[planned.key] : undefined;
     let row = decision ? resolveRow(planned, decision, ctx) : planned;
     if (forgetKeys && forgetKeys.has(planned.key) && row.status === 'new') {
       row = { ...row, status: 'skipped', newPoints: [], updateCurrent: false };
+    }
+    if (needsConfirmation(row) && !(confirmKeys && confirmKeys.has(planned.key))) {
+      row = { ...row, status: 'skipped', newPoints: [], updateCurrent: false, held: true };
     }
     return { planned, row, waiting: WAITING.includes(row.status) };
   });
@@ -208,6 +217,8 @@ export function bucketOf(entry) {
   if (WAITING.includes(entry.planned.status)) return 'decide';
   // A wanted ingredient with no price of its own: its own group, asked to be looked at.
   if (entry.planned.priceCheck && ['new', 'unchanged'].includes(entry.planned.status)) return 'check';
+  // A price that waits for a person's look (a weight that cannot be read, a big move, an older invoice's price).
+  if (entry.planned.checkReason || entry.row.checkReason) return 'check';
   if (entry.planned.status === 'new' && entry.row.status === 'skipped') return 'new';
   return entry.row.status;   // new · update-price · history-only · unchanged · error
 }

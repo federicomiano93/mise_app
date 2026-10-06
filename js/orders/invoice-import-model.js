@@ -63,6 +63,18 @@ export const PRICE_CHECK_CODES = Object.freeze([
 ]);
 const DEFAULT_LANGUAGE = 'it';
 
+// ⚠️ A PRICE WORKED OUT FROM THE INVOICE DESCRIPTION («media») THAT MOVES THE CURRENT PRICE BY MORE THAN THIS
+// SHARE (0.3 = ±30%) IS NEVER APPLIED SILENTLY: the row waits in «Price to check» for a person to confirm it.
+export const AVERAGED_PRICE_JUMP_LIMIT = 0.3;
+// The readings a price point may carry from the invoice reader (a «da verificare» price never reaches the file).
+const TRUSTED_READINGS = ['alta', 'media'];
+// The codes a row's `checkReason` takes, and what the screen asks for each.
+export const CHECK_REASONS = Object.freeze({
+  WEIGHT_UNREADABLE: 'weight-unreadable',
+  PRICE_JUMP: 'price-jump',
+  OLDER_INVOICE: 'older-invoice',
+});
+
 // ── Small helpers ───────────────────────────────────────────────────────────────
 
 const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
@@ -204,7 +216,12 @@ function parsePrice(raw) {
   const rate = positive(raw.pricePerUnit);
   const pricePerUnit = rate === null ? 0 : roundTo(rate, RATE_DECIMALS);
   if (!(pricePerUnit > 0)) return null;
-  return { invoiceId, line, invoiceDate: raw.invoiceDate, pricePerUnit, qty: positive(raw.qty) };
+  const reliability = TRUSTED_READINGS.includes(raw.reliability) ? raw.reliability : '';
+  return {
+    invoiceId, line, invoiceDate: raw.invoiceDate, pricePerUnit, qty: positive(raw.qty),
+    ...(reliability ? { reliability } : {}),
+    ...(raw.fromPack === true ? { fromPack: true } : {}),
+  };
 }
 
 // Oldest first; the same day by invoice number, then line — so «the latest» is always the last.
@@ -249,6 +266,7 @@ function parseIngredient(raw, seen) {
     vatRate: vatRateOf(o.vatRate),
     prices,
     ...(priceCheck ? { priceCheck } : {}),
+    ...(o.latestUnverified === true && prices.length > 0 ? { latestUnverified: true } : {}),
   };
 
   let invalid = null;
@@ -440,9 +458,42 @@ function codesOf(ing) {
 }
 
 // The row of an ingredient that IS this existing one.
+// ⚠️ THE WEIGHT THE VENUE KEEPS WINS OVER THE ONE IN THE INVOICE DESCRIPTION (the old script read the weight the
+// owner had corrected in the workbook). A price per kilo or litre worked out from the pack weight written in the
+// description («SACCO KG 25») is re-read with the stored weight of the ingredient, but ONLY when the file's article
+// code is the ingredient's MAIN code: a code in `supplierCodes` is another pack, not a correction.
+// → { factor } (the stored weight is empty, or equal to the file's: 1) | { unreadable: true } when the stored weight
+// is text that cannot be read as a weight in the same unit — never a guess.
+function storedWeightFactor(base, existing) {
+  const mainCode = codeOf(existing);
+  const isMain = mainCode !== '' && base.supplierCode !== '' && mainCode === base.supplierCode.toLowerCase();
+  const fromPack = base.allPoints.some(p => p.fromPack === true);
+  if (!isMain || !fromPack || (base.priceUnit !== 'kg' && base.priceUnit !== 'l')) return { factor: 1 };
+  const storedText = typeof existing.weight === 'string' ? existing.weight.trim() : '';
+  if (!storedText) return { factor: 1 };
+  const stored = packBaseOf(storedText);
+  const file = packBaseOf(base.weight);
+  if (!stored || !file || !(stored.size > 0) || !(file.size > 0)
+    || stored.priceUnit !== base.priceUnit || file.priceUnit !== base.priceUnit) return { unreadable: true };
+  const factor = file.size / stored.size;
+  return { factor: Math.abs(factor - 1) <= 0.001 ? 1 : factor };
+}
+
+// The point as it would have been with the stored weight: the same total over (packs × stored weight).
+const rescaled = (p, factor) => (p.fromPack === true && factor !== 1
+  ? {
+    ...p,
+    pricePerUnit: roundTo(p.pricePerUnit * factor, RATE_DECIMALS),
+    ...(typeof p.qty === 'number' && p.qty > 0 ? { qty: p.qty / factor } : {}),
+  }
+  : p);
+
 function matchedRow(base, existing, ctx) {
   const known = asSet(lookup(ctx.invoicePointIds, existing.id));
-  const newPoints = base.allPoints.filter(p => !known.has(p.id));
+  const weightRead = storedWeightFactor(base, existing);
+  const factor = weightRead.factor || 1;
+  const allPoints = factor === 1 ? base.allPoints : base.allPoints.map(p => rescaled(p, factor));
+  const newPoints = allPoints.filter(p => !known.has(p.id));
   const doc = lookup(ctx.pricesById, existing.id);
   const latest = newPoints[newPoints.length - 1];
   const stamp = typeof doc?.priceUpdatedAt === 'string' ? doc.priceUpdatedAt : '';
@@ -471,13 +522,18 @@ function matchedRow(base, existing, ctx) {
   // ⚠️ A rate the file does not state never wipes one the owner did: «not stated» is null, and the stored
   // rate stays when the file says nothing.
   const vatRate = base.vatRate !== null && base.vatRate !== undefined ? base.vatRate : vatRateOf(doc?.vatRate);
+  const check = newPoints.length === 0 ? null : checkOf({
+    weightUnreadable: weightRead.unreadable === true, updateCurrent, latest, base, doc, storedUnit,
+  });
   return {
     ...base,
     status,
     ingredientId: existing.id,
+    allPoints,
     newPoints,
     updateCurrent,
     vatRate,
+    ...(check ? { checkReason: check.reason, ...(check.date ? { checkDate: check.date } : {}) } : {}),
     ...(unitDiffers ? { reason: 'unit-differs' } : {}),
     ...(pieceDiffers ? { reason: 'piece-differs' } : {}),
     patchSupplierCode,
@@ -486,8 +542,28 @@ function matchedRow(base, existing, ctx) {
   };
 }
 
+// Why a row that would write a price must wait for a person: { reason, date? } or null. Only ONE reason is given,
+// the first that holds: an unreadable stored weight, a big move from a «media» reading, an older invoice's price.
+function checkOf({ weightUnreadable, updateCurrent, latest, base, doc, storedUnit }) {
+  if (weightUnreadable) return { reason: CHECK_REASONS.WEIGHT_UNREADABLE };
+  if (!updateCurrent || !latest) return null;
+  const was = typeof doc?.pricePerUnit === 'number' ? doc.pricePerUnit : null;
+  // Rounded to 6 decimals first: 1.3 against 1 is 0.30000000000000004 in floating point, and +30% is not MORE than 30%.
+  if (latest.reliability === 'media' && was > 0 && storedUnit === base.priceUnit
+    && roundTo(Math.abs(latest.pricePerUnit - was) / was, 6) > AVERAGED_PRICE_JUMP_LIMIT) {
+    return { reason: CHECK_REASONS.PRICE_JUMP };
+  }
+  if (base.latestUnverified === true) return { reason: CHECK_REASONS.OLDER_INVOICE, date: latest.invoiceDate };
+  return null;
+}
+
 function newRow(base) {
-  return { ...base, status: 'new', newPoints: base.allPoints.slice(), updateCurrent: true };
+  const latest = base.allPoints[base.allPoints.length - 1];
+  const check = base.latestUnverified === true && latest ? { reason: CHECK_REASONS.OLDER_INVOICE, date: latest.invoiceDate } : null;
+  return {
+    ...base, status: 'new', newPoints: base.allPoints.slice(), updateCurrent: true,
+    ...(check ? { checkReason: check.reason, checkDate: check.date } : {}),
+  };
 }
 
 // A row that waits for a person: it carries everything needed to recompute it (resolveRow).
@@ -538,6 +614,9 @@ export function planIngredients(fileIngredients, ctx) {
       unitWeightKg: typeof file.unitWeightKg === 'number' ? file.unitWeightKg : null,
       vatRate: file.vatRate === undefined ? null : file.vatRate,
       allPoints,
+      // The pack weight the price was worked out with, and whether the newest invoice was left out as unreliable.
+      ...(file.weight ? { weight: file.weight } : {}),
+      ...(file.latestUnverified === true ? { latestUnverified: true } : {}),
       // Set when the file wants the ingredient but states no price for it (see PRICE_CHECK_CODES).
       priceCheck: file.priceCheck || '',
     };

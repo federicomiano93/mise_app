@@ -28,16 +28,20 @@ export function lineXml(n, spec) {
 }
 
 export function invoiceXml(lines, {
-  name = 'FORNITORE ESEMPIO SRL', vat = '00000000001', taxCode = null, docType = 'TD01', date = '2026-09-01', number = '1',
+  name = 'FORNITORE ESEMPIO SRL', vat = '00000000001', taxCode = null, docType = 'TD01', date = '2026-09-01', number = '1', buyerVat = null,
 } = {}) {
   const ident = vat ? `<IdFiscaleIVA><IdPaese>IT</IdPaese><IdCodice>${vat}</IdCodice></IdFiscaleIVA>` : '';
   const cf = taxCode ? `<CodiceFiscale>${taxCode}</CodiceFiscale>` : '';
+  const buyer = buyerVat
+    ? `<CessionarioCommittente><DatiAnagrafici><IdFiscaleIVA><IdPaese>IT</IdPaese><IdCodice>${buyerVat}</IdCodice></IdFiscaleIVA>`
+      + '<Anagrafica><Denominazione>CLIENTE ESEMPIO</Denominazione></Anagrafica></DatiAnagrafici></CessionarioCommittente>'
+    : '';
   const body = lines.map((spec, i) => lineXml(i + 1, spec)).join('');
   return '<?xml version="1.0" encoding="UTF-8"?>'
     + '<p:FatturaElettronica xmlns:p="http://ivaservizi.agenziaentrate.gov.it/docs/xsd/fatture/v1.2">'
     + `<FatturaElettronicaHeader><CedentePrestatore><DatiAnagrafici>${ident}${cf}`
     + `<Anagrafica><Denominazione>${escapeXml(name)}</Denominazione></Anagrafica></DatiAnagrafici>`
-    + '</CedentePrestatore></FatturaElettronicaHeader>'
+    + `</CedentePrestatore>${buyer}</FatturaElettronicaHeader>`
     + '<FatturaElettronicaBody><DatiGenerali><DatiGeneraliDocumento>'
     + `<TipoDocumento>${docType}</TipoDocumento><Data>${date}</Data><Numero>${number}</Numero>`
     + '<ImportoTotaleDocumento>1.00</ImportoTotaleDocumento></DatiGeneraliDocumento></DatiGenerali>'

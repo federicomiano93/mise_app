@@ -65,7 +65,7 @@ test('⚠️ no phrase is frozen at module load: every t() sits inside a functio
     const code = codeOf(read(file));
     assert.doesNotMatch(code, /^(const|let|var)\s+\w+\s*=\s*t\(/m, `${file} reads the language at module load`);
   }
-  assert.match(SCREEN, /import \{ t \} from '\.\.\/i18n\.js';/);
+  assert.match(SCREEN, /import \{ t, localeTag \} from '\.\.\/i18n\.js';/);
 });
 
 test('leaving asks first (danger), is off while writing, and nothing is written before a confirmation', () => {
