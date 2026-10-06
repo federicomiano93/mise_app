@@ -14,13 +14,18 @@
 // one's lines sit under a bold *Supplier name* heading):
 //   *Order — The Italian Club*
 //
-//   - Bacon 2.27kg: 5
-//   - Mozzarella 1kg: 2
+//   - Bacon: 5
+//   - Mozzarella: 2
+//
+// The pack weight is NOT in the message (the owner's decision, 5 Oct 2026: «togli il peso
+// dal messaggio whatsapp»). ⚠️ ONE EXCEPTION, ours: two lines of the same block with the same
+// name keep their weights — «- Flour 5kg: 2», «- Flour 25kg: 3» — or nobody could tell them
+// apart (messageLabels). The screens still show the weight everywhere.
 //
 // The order unit (casse/box) is a private reminder on the order screen and is NOT in
-// the message — the supplier gets the number only. An empty weight is skipped.
+// the message — the supplier gets the number only.
 // ⚠️ ONE EXCEPTION: a line of an ingredient that can be ordered in more than one unit
-// («cartone» or «busta») says which — «- Flour 2.5kg: 2 × busta» — because 2 of the
+// («cartone» or «busta») says which — «- Flour: 2 × busta» — because 2 of the
 // wrong one is a different order. The item carries `unit` only for those lines
 // (js/order-unit.js decides), so every other line stays byte-identical.
 //
@@ -89,6 +94,19 @@ export function summaryLines(items) {
   });
 }
 
+// The label each line of ONE block carries in the MESSAGE a supplier receives: the name
+// alone. Owner's decision, 5 Oct 2026 — the pack weight is not sent. ⚠️ ONE EXCEPTION: when
+// two lines of the same block read the same name (trimmed, case-insensitive), those lines
+// — and only those — keep their weight, because «- Flour: 2» and «- Flour: 3» could not be
+// told apart. Screens (summaryLines, itemLabel) keep the weight everywhere.
+// `entries`: [{ name, weight }] → labels, same order.
+export function messageLabels(entries) {
+  const key = e => String(e.name || '').trim().toLowerCase();
+  const counts = new Map();
+  entries.forEach(e => counts.set(key(e), (counts.get(key(e)) || 0) + 1));
+  return entries.map(e => (counts.get(key(e)) > 1 ? itemLabel(e.name, e.weight) : String(e.name || '')));
+}
+
 // One supplier's block: bold name, then "- label: qty" lines, BY NAME.
 //
 // The sort lives here, in the one place every message passes through, and not in the
@@ -103,7 +121,9 @@ export function summaryLines(items) {
 // `heading` false leaves the bold supplier line out: a message that carries ONE supplier
 // is addressed to that supplier, who needs no reminder of their own name.
 function sectionFor({ supplierName, items }, heading = true, language = null) {
-  const lines = summaryLines(items).map(({ label, qty, unit }) => `- ${label}: ${qtyWithUnit(qty, unit)}`).join('\n');
+  const sorted = sortItems(items);
+  const labels = messageLabels(sorted);
+  const lines = sorted.map((it, i) => `- ${labels[i]}: ${qtyWithUnit(num(it.qty), cleanUnit(it.unit))}`).join('\n');
   return heading ? `*${supplierName || fallbackSupplierName(language)}*\n${lines}` : lines;
 }
 
@@ -143,13 +163,14 @@ function flatLines(groups) {
     // is the first spelling met. A NUL separator cannot occur in a typed label.
     const key = `${label}\u0000${unit.toLowerCase()}`;
     const seen = totals.get(key);
-    totals.set(key, { label, unit: seen ? seen.unit : unit, qty: (seen?.qty || 0) + num(item.qty) });
+    totals.set(key, { label, name: item.name, weight: item.weight, unit: seen ? seen.unit : unit, qty: (seen?.qty || 0) + num(item.qty) });
   }));
 
-  return [...totals.values()]
+  const sorted = [...totals.values()]
     .filter(line => line.qty > 0)
-    .sort((a, b) => a.label.localeCompare(b.label) || a.unit.localeCompare(b.unit))
-    .map(({ label, unit, qty }) => `- ${label}: ${qtyWithUnit(qty, unit)}`);
+    .sort((a, b) => a.label.localeCompare(b.label) || a.unit.localeCompare(b.unit));
+  const labels = messageLabels(sorted);
+  return sorted.map(({ unit, qty }, i) => `- ${labels[i]}: ${qtyWithUnit(qty, unit)}`);
 }
 
 // The whole message, in one of two formats.

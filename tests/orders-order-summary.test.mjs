@@ -74,7 +74,7 @@ test('a null supplier still returns a shape — never throws', () => {
 // the comparison come from the one real code path rather than two separate
 // re-implementations of "what is in this supplier's order" agreeing with
 // each other by coincidence.
-test('the summary lines equal the message section lines — exactly, in order', () => {
+test('the summary lines equal the message section lines — same lines, same order (the message drops the weight)', () => {
   const { lines } = supplierSummary(SUPPLIER, INGREDIENTS, ENTRIES);
   const items = orderedItems(INGREDIENTS, ENTRIES);
   const message = buildOrderMessage([{ supplierName: SUPPLIER.name, items }]);
@@ -84,8 +84,11 @@ test('the summary lines equal the message section lines — exactly, in order', 
   const section = message.split('\n\n')[1];
   const messageLines = section.split('\n');
 
+  // The summary label keeps the weight (it is matched to ingredients by it); the message
+  // omits it, so compare through the ingredient's name.
   const summaryLines = lines.map(({ label, qty }) => `- ${label}: ${qty}`);
-  assert.deepEqual(summaryLines, messageLines);
+  assert.deepEqual(summaryLines, ['- Bacon 2.27kg: 5', '- Flour 25kg: 3', '- Mozzarella 1kg: 2']);
+  assert.deepEqual(messageLines, ['- Bacon: 5', '- Flour: 3', '- Mozzarella: 2']);
 });
 
 test('a supplier with nothing ordered: the summary is empty and the message carries no section for it', () => {
