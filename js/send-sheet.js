@@ -8,7 +8,9 @@
 // l'app». Orders already had exactly that — a send arrow that opens a list of roads —
 // so this is not a new mechanism, it is that one made reachable from anywhere.
 //
-// ⚠️ NOT navigator.share(), AND THAT IS HIS DECISION AS WELL AS THE FILE'S. Asked
+// ⚠️ NOT navigator.share() FOR TEXT, AND THAT IS HIS DECISION AS WELL AS THE FILE'S. (7 Oct 2026:
+// he reversed it for ONE thing only, the order shown as a PICTURE — a supplier can open it and
+// zoom; see js/orders/order-image.js. Everything this sheet sends stays text through wa.me.) Asked
 // between the phone's own share sheet and the app's, he chose the app's: the phone's
 // looks different on every device, does not exist in some desktop browsers, and would
 // be a SECOND mechanism standing beside the one Orders uses for every order — the

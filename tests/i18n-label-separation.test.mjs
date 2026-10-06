@@ -32,6 +32,7 @@ const read = p => readFileSync(join(ROOT, p), 'utf8');
 // says so, by asking the app instead of trusting this list.
 const LABEL_FILES = [
   'js/market.js',
+  'js/orders/order-image.js',
   'js/catalogue/recipe-label-model.js',
   'js/catalogue/label-view.js',
   // ⚠️ ADDED 22 Aug 2026, AND THE GUARD BELOW FOUND IT RATHER THAN A PERSON. The

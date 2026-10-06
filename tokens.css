@@ -1415,8 +1415,10 @@ body[data-card="foodcost"] .app-header.app-header--save {
   font-family: inherit;
   cursor: pointer;
 }
-.send-route:active { background: var(--accent-light); }
+.send-route:active { background: var(--accent-light); transform: scale(.97); }
 .send-route:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 2px; }
+.send-route-primary { border-color: var(--brand); background: var(--accent-light); }
+.send-route-primary:active { background: var(--accent-border); transform: scale(.97); }
 .send-route-icon { display: flex; align-items: center; color: var(--brand); flex-shrink: 0; }
 .send-route-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .send-route-name { font-size: 15px; font-weight: 600; }

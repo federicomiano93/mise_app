@@ -49,8 +49,9 @@ const osPrint = {
 // clipboard, and on the shop PC it is dropped onto the printer. If the ZPL were
 // wrong it is found here, for free, instead of underneath a second program.
 //
-// ⚠️ NO FILE DOWNLOAD. Blob, createObjectURL and `download=` are absent from this
-// whole repo and the CSP is `default-src 'self'`; introducing one is a decision of
+// ⚠️ NO FILE DOWNLOAD. createObjectURL and `download=` are absent from this
+// whole repo (7 Oct 2026: a File made from a canvas blob now exists in js/orders/order-image.js,
+// for sharing the order picture only, never a download) and the CSP is `default-src 'self'`; introducing one is a decision of
 // its own, not a detail of this road. The clipboard is enough to prove a printer.
 //
 // ⚠️ IT IS OFFERED ONLY WHEN THE VENUE HAS SAID ITS PRINTER SPEAKS ZPL. Handing
