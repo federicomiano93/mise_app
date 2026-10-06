@@ -320,6 +320,17 @@ async function ingredients() {
     () => mergeWrite('locations/main/ingredients/ING_MODERN', { supplierCode: bigString(61), bakery: 'main' }));
   await expectDenied('a supplier article code sent as a number',
     () => mergeWrite('locations/main/ingredients/ING_MODERN', { supplierCode: 12345, bakery: 'main' }));
+  // «Un ingrediente, più confezioni» (5 Oct 2026): the article codes of its other packs.
+  await expectAllowed('an ingredient with the codes of its other packs', () =>
+    mergeWrite('locations/main/ingredients/ING_MODERN', { supplierCodes: ['ZEUS-1', 'PEG-5'], bakery: 'main' }));
+  await expectAllowed('…none any more', () =>
+    mergeWrite('locations/main/ingredients/ING_MODERN', { supplierCodes: [], bakery: 'main' }));
+  await expectAllowed('…exactly 20', () =>
+    mergeWrite('locations/main/ingredients/ING_MODERN', { supplierCodes: Array.from({ length: 20 }, (_, i) => 'C' + i), bakery: 'main' }));
+  await expectDenied('…but not 21',
+    () => mergeWrite('locations/main/ingredients/ING_MODERN', { supplierCodes: Array.from({ length: 21 }, (_, i) => 'C' + i), bakery: 'main' }));
+  await expectDenied('the other codes must be a list, not text',
+    () => mergeWrite('locations/main/ingredients/ING_MODERN', { supplierCodes: 'ZEUS-1,PEG-5', bakery: 'main' }));
 
   await expectDenied('an unknown key on an ingredient',
     () => mergeWrite('locations/main/ingredients/ING_MODERN', { evil: 'x', bakery: 'main' }));
@@ -581,6 +592,16 @@ async function ingredientPrices() {
     () => wholeWrite(`${PRICES}/inv-18000000072-5`, fromInvoice()));
   await expectAllowed('another line of the same invoice', () =>
     wholeWrite(`${PRICES}/inv-18000000072-7`, fromInvoice({ pricePerUnit: 0.85 })));
+  await expectAllowed('an invoice price that says which pack it was', () =>
+    wholeWrite(`${PRICES}/inv-18000000072-8`, fromInvoice({ packLabel: 'Lievito pacco 1 kg' })));
+  await expectDenied('a pack label longer than 120',
+    () => wholeWrite(`${PRICES}/inv-18000000072-9`, fromInvoice({ packLabel: bigString(121) })));
+  await expectDenied('a pack label that is not text',
+    () => wholeWrite(`${PRICES}/inv-18000000072-9`, fromInvoice({ packLabel: 5 })));
+  await expectAllowed('an invoice price with its pack article code', () =>
+    wholeWrite(`${PRICES}/inv-18000000072-10`, fromInvoice({ packLabel: 'Lievito 1 kg', packCode: 'LV-1' })));
+  await expectDenied('a pack code longer than 60',
+    () => wholeWrite(`${PRICES}/inv-18000000072-11`, fromInvoice({ packCode: bigString(61) })));
   await expectAllowed('an invoice price without the quantity bought', () => {
     const e = fromInvoice({ invoiceId: '18000000073' }); delete e.invoiceQty;
     return wholeWrite(`${PRICES}/inv-18000000073-1`, e);
@@ -2826,6 +2847,75 @@ async function roles() {
   await expectAllowed('a manager can write one',
     () => mergeWrite(`${L}/ingredient-prices/I9`,
       { ...stamp, priceUnit: 'kg', pricePerUnit: 1 }, asAccount(MAYA)));
+
+  // ── What the owner decided about an invoice product (5 Oct 2026) ──
+  // «Do not import this» / «import it as an ingredient», remembered for next month.
+  const DEC = 'a'.repeat(64);
+  const decision = { ...stamp, decision: 'skip', label: 'DETERSIVO PAVIMENTI 5 L', updatedAt: '2026-10-05T10:00:00.000Z' };
+  await expectAllowed('a manager remembers «do not import»',
+    () => mergeWrite(`${L}/invoice-decisions/${DEC}`, decision, asAccount(MAYA)));
+  await expectAllowed('the owner switches it to «import as an ingredient»',
+    () => mergeWrite(`${L}/invoice-decisions/${DEC}`, { ...decision, decision: 'ingredient' }, asAccount(ALICE)));
+  await expectAllowed('a manager reads the decisions',
+    readAs(MAYA, `${L}/invoice-decisions/${DEC}`));
+  await expectDenied('an employee cannot read them',
+    readAs(SAM, `${L}/invoice-decisions/${DEC}`));
+  await expectDenied('an employee cannot write one',
+    () => mergeWrite(`${L}/invoice-decisions/${'b'.repeat(64)}`, decision, asAccount(SAM)));
+  await expectDenied('a member of ANOTHER venue cannot write one here',
+    () => mergeWrite(`${L}/invoice-decisions/${'b'.repeat(64)}`, decision, asAccount(BOB)));
+  await expectDenied('a decision must be skip or ingredient',
+    () => mergeWrite(`${L}/invoice-decisions/${'c'.repeat(64)}`, { ...decision, decision: 'maybe' }, asAccount(MAYA)));
+  await expectDenied('…and must say it',
+    () => mergeWrite(`${L}/invoice-decisions/${'c'.repeat(64)}`, { ...stamp, label: 'x' }, asAccount(MAYA)));
+  await expectDenied('the id must be a SHA-256 hex, not the raw key',
+    () => mergeWrite(`${L}/invoice-decisions/IT01234567890-code-F00`, decision, asAccount(MAYA)));
+  await expectDenied('no other keys',
+    () => mergeWrite(`${L}/invoice-decisions/${'d'.repeat(64)}`, { ...decision, vatNumber: 'IT01234567890' }, asAccount(MAYA)));
+  await expectDenied('a label is capped at 300 characters',
+    () => mergeWrite(`${L}/invoice-decisions/${'d'.repeat(64)}`, { ...decision, label: 'x'.repeat(301) }, asAccount(MAYA)));
+  await expectDenied('stamped with another venue',
+    () => mergeWrite(`${L}/invoice-decisions/${'d'.repeat(64)}`, { ...decision, bakery: 'trattoria-x' }, asAccount(MAYA)));
+  await expectDenied('an employee cannot undo one',
+    () => deleteWrite(`${L}/invoice-decisions/${DEC}`, asAccount(SAM)));
+  await expectAllowed('a manager undoes one',
+    () => deleteWrite(`${L}/invoice-decisions/${DEC}`, asAccount(MAYA)));
+
+  // ── How a price moved from one invoice to the next (5 Oct 2026) ──
+  const change = {
+    ...stamp, ingredientId: 'I3', supplierId: 'S1', name: 'Farina 00', priceUnit: 'kg',
+    oldPrice: 0.57, newPrice: 0.62, oldDate: '2026-08-31', date: '2026-09-30',
+    invoiceId: '18000000002', line: 5, pct: 8.77, oldPack: '25 kg', newPack: '25 kg',
+    recordedAt: '2026-10-05T10:00:00.000Z',
+  };
+  const CH = `${L}/price-changes/inv-18000000002-5-I3`;
+  await expectAllowed('a manager records a price change',
+    () => wholeWrite(CH, change, asAccount(MAYA)));
+  await expectAllowed('a manager reads it', readAs(MAYA, CH));
+  await expectAllowed('the owner reads it', readAs(ALICE, CH));
+  await expectDenied('an employee cannot read it', readAs(SAM, CH));
+  await expectDenied('a change is never edited',
+    () => mergeWrite(CH, { ...change, newPrice: 0.5 }, asAccount(MAYA)));
+  await expectDenied('an employee cannot record one',
+    () => wholeWrite(`${L}/price-changes/inv-18000000002-6-I3`, { ...change, line: 6 }, asAccount(SAM)));
+  await expectDenied('a member of ANOTHER venue cannot record one here',
+    () => wholeWrite(`${L}/price-changes/inv-18000000002-6-I3`, { ...change, line: 6 }, asAccount(BOB)));
+  await expectDenied('the id must name the invoice line and the ingredient it holds',
+    () => wholeWrite(`${L}/price-changes/inv-18000000002-7-I4`, { ...change, line: 7 }, asAccount(MAYA)));
+  await expectDenied('…not a free id',
+    () => wholeWrite(`${L}/price-changes/whatever`, change, asAccount(MAYA)));
+  await expectDenied('a price must be above zero',
+    () => wholeWrite(`${L}/price-changes/inv-18000000002-8-I3`, { ...change, line: 8, oldPrice: 0 }, asAccount(MAYA)));
+  await expectDenied('the unit is kg, l or pcs',
+    () => wholeWrite(`${L}/price-changes/inv-18000000002-8-I3`, { ...change, line: 8, priceUnit: 'box' }, asAccount(MAYA)));
+  await expectDenied('the date is YYYY-MM-DD',
+    () => wholeWrite(`${L}/price-changes/inv-18000000002-8-I3`, { ...change, line: 8, date: '30/09/2026' }, asAccount(MAYA)));
+  await expectDenied('no other keys',
+    () => wholeWrite(`${L}/price-changes/inv-18000000002-8-I3`, { ...change, line: 8, note: 'x' }, asAccount(MAYA)));
+  await expectDenied('stamped with another venue',
+    () => wholeWrite(`${L}/price-changes/inv-18000000002-8-I3`, { ...change, line: 8, bakery: 'trattoria-x' }, asAccount(MAYA)));
+  await expectDenied('an employee cannot delete one', () => deleteWrite(CH, asAccount(SAM)));
+  await expectAllowed('a manager deletes one', () => deleteWrite(CH, asAccount(MAYA)));
 
   // ── Deleting an ingredient (1 Oct 2026): the ingredient AND its price in ONE batch ──
   //

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'theitalianclub-v607';
+const CACHE_NAME = 'theitalianclub-v617';
 // Firebase SDK modules (loaded from gstatic) are cached SEPARATELY from CACHE_NAME
 // so they survive the cache-version bump that happens on every deploy — otherwise
 // the offline SDK would be wiped each release until the next online load. The name
@@ -12,7 +12,7 @@ const CACHE_NAME = 'theitalianclub-v607';
 // the fetch handler below, on the first load that has a network.
 // So between activate() and that first load, a phone that is OFFLINE cannot boot:
 // the code asks for the new version and nothing has it. In practice the window is very
-// small — activate() only happens after a successful 303-file precache, i.e.
+// small — activate() only happens after a successful 319-file precache, i.e.
 // online, and tapping the update banner reloads the page immediately — but it is
 // not zero, and it is the reason to bump the SDK deliberately rather than often.
 // Leaving the name unchanged would close the window and cost ~1 MB of dead
@@ -302,6 +302,25 @@ const ASSETS = [
   './js/orders/invoice-import-plan.js',
   './js/orders/invoice-import-data.js',
   './js/orders/invoice-import-screen.js',
+  // «Unisci un'altra confezione…» on the ingredient card: the pure planning, the data layer and the screen.
+  './js/orders/ingredient-merge.js',
+  './js/orders/ingredient-merge-data.js',
+  './js/orders/ingredient-merge-screen.js',
+  // The same screen reads the supplier zip itself: the invoice reader (pure) and the zip library it needs.
+  './js/orders/invoice-zip/build-import.js',
+  './js/orders/invoice-zip/classify.js',
+  './js/orders/invoice-zip/fatturapa.js',
+  './js/orders/invoice-zip/pricing.js',
+  './js/orders/invoice-zip/products.js',
+  './js/orders/invoice-zip/py-compat.js',
+  './js/orders/invoice-zip/reasons.js',
+  './js/orders/invoice-zip/selection.js',
+  './js/orders/invoice-zip/sha256.js',
+  './js/orders/invoice-zip/zip-read.js',
+  './js/vendor/fflate.esm.js',
+  // «Variazioni prezzi»: how prices moved between invoices, by week or month (suppliers.html).
+  './js/orders/price-changes-model.js',
+  './js/orders/price-changes-screen.js',
   './js/form-dirty.js',
   './js/orders/level-stack.js',
   './js/orders/firebase-features.js',
@@ -428,7 +447,7 @@ const ASSET_HASHES = {
   "./home.html": 'a4401ab28cb28eb9',
   "./calculator.html": 'efa1f673a19b203e',
   "./orders.html": 'e3b56b336e30dbce',
-  "./suppliers.html": 'e8b067136ecace3d',
+  "./suppliers.html": '946e16aac9d17ecc',
   "./install-guide.html": '87c4b99799a967db',
   "./reset-password.html": '278e67d11c8b4a50',
   "./js/reset-password.js": '82c76584ef73d006',
@@ -438,7 +457,7 @@ const ASSET_HASHES = {
   "./tokens.css": '23d7ae79d73f67ca',
   "./auth.css": '55b0bc1d41af5718',
   "./style.css": '7dbb0e3020d277ec',
-  "./orders.css": 'd15acfef1e289715',
+  "./orders.css": 'b05fc0486b29a771',
   "./sounds/alarm.wav": '0d1465974f5be95b',
   "./fonts/manrope-latin.woff2": '71eb731d55804619',
   "./fonts/manrope-latin-ext.woff2": 'bd24140af06f1b58',
@@ -475,7 +494,7 @@ const ASSET_HASHES = {
   "./js/supplier-label.js": '9601ceed020c0205',
   "./js/order-unit.js": '8de5f5c0c76d5ff9',
   "./js/record-data.js": '4055f2a4cc82a953',
-  "./js/ingredient-record-form.js": '125d345d918611c9',
+  "./js/ingredient-record-form.js": '5b55f4599e342198',
   "./js/supplier-record-form.js": 'ea6bde005d398345',
   "./js/ingredient-kind.js": 'b5ea1d7ec8255fd6',
   "./js/ingredient-name.js": '9045e25fc169d2ff',
@@ -519,7 +538,7 @@ const ASSET_HASHES = {
   "./js/location.js": '6aaf53615a8739d1',
   "./js/sections.js": 'abcfdecb2bd5766d',
   "./js/roles.js": '7a7c5cf34d57f511',
-  "./js/i18n.js": '9af302b083f77279',
+  "./js/i18n.js": 'e1f600ef8ecfb4ea',
   "./js/i18n-dom.js": '24249af4367511e5',
   "./js/keyboard-done.js": 'de05a6dd1f3aac26',
   "./js/join-code.js": '5b89de65db5c102f',
@@ -572,7 +591,7 @@ const ASSET_HASHES = {
   "./js/orders/boot.js": '53dba081d29270d8',
   "./js/orders/category-batches.js": '03d72f63c4fa4a8a',
   "./js/orders/confirm-dialog.js": '61a7f580f37c5ff8',
-  "./js/orders/firebase-orders.js": '56e7750483ea1856',
+  "./js/orders/firebase-orders.js": '02134db5e25b85e6',
   "./js/orders/orders-main.js": '33e62d806a80332b',
   "./js/orders/dom.js": '7ec966d71c5356cd',
   "./js/orders/day.js": '107abcbdf353c709',
@@ -615,14 +634,30 @@ const ASSET_HASHES = {
   "./js/orders/alert-dismissal.js": 'fbfe034ffa9f6620',
   "./js/orders/management.js": '21dd583fe32255d8',
   "./js/orders/mgmt-ui.js": '8894b23fd41e8a66',
-  "./js/orders/registry.js": '0a6fa0a8e56bcb6d',
-  "./js/orders/registry-main.js": '5eeb3eeb9bfcffef',
+  "./js/orders/registry.js": '7723898c8032ebeb',
+  "./js/orders/registry-main.js": 'e2021f54bf628fd5',
   "./js/orders/registry-settings.js": '74c80116276527d1',
   "./js/orders/favourite-suppliers.js": '40bf26f7911b2624',
-  "./js/orders/invoice-import-model.js": '83fc9ef6febd7d36',
-  "./js/orders/invoice-import-plan.js": '5dd52c0716adfa9d',
-  "./js/orders/invoice-import-data.js": '6f2dfd88c7417e3f',
-  "./js/orders/invoice-import-screen.js": '5b049f460332eea7',
+  "./js/orders/invoice-import-model.js": '837c58cde0d70203',
+  "./js/orders/invoice-import-plan.js": '104b2af344f39952',
+  "./js/orders/invoice-import-data.js": 'd135f9af7f608b00',
+  "./js/orders/invoice-import-screen.js": 'a93b2b2ab905bf99',
+  "./js/orders/ingredient-merge.js": 'a98b4274e4201757',
+  "./js/orders/ingredient-merge-data.js": '8189e03534165550',
+  "./js/orders/ingredient-merge-screen.js": 'f4dd5c085f97eb4e',
+  "./js/orders/invoice-zip/build-import.js": '60b6027548152451',
+  "./js/orders/invoice-zip/classify.js": '9d4f1d8f97d4adbc',
+  "./js/orders/invoice-zip/fatturapa.js": '528a08dfabe28535',
+  "./js/orders/invoice-zip/pricing.js": '56d81d4728eb8e8d',
+  "./js/orders/invoice-zip/products.js": '07f9de97edb28610',
+  "./js/orders/invoice-zip/py-compat.js": '61b7d63672853c52',
+  "./js/orders/invoice-zip/reasons.js": 'a1e29833cb9877e5',
+  "./js/orders/invoice-zip/selection.js": '5746ebc4ab21b292',
+  "./js/orders/invoice-zip/sha256.js": '585f64e861ba11d9',
+  "./js/orders/invoice-zip/zip-read.js": '0e64ad8014847517',
+  "./js/vendor/fflate.esm.js": '522c5e85569f270b',
+  "./js/orders/price-changes-model.js": '9ab13aee8a5340aa',
+  "./js/orders/price-changes-screen.js": 'e5b3a91867e1f1c2',
   "./js/form-dirty.js": '27dce3718a33d438',
   "./js/orders/level-stack.js": '6832e37854829455',
   "./js/orders/firebase-features.js": 'a0c27a97d6eb7747',
@@ -640,7 +675,7 @@ const ASSET_HASHES = {
   "./catalogue.html": 'b3362ac85a03e8a1',
   "./catalogue.css": 'cd81d12ad271c434',
   "./label-print.css": 'ffbcdf4e7a627a2d',
-  "./records.css": '8398289629b4233d',
+  "./records.css": 'b1f48cc5240b4f09',
   "./js/catalogue/confirm-dialog.js": '61a7f580f37c5ff8',
   "./js/catalogue/dom.js": '9878ae7c750afd79',
   "./js/catalogue/catalogue-model.js": 'b4da069a0283ee7a',
@@ -756,7 +791,7 @@ const ASSET_HASHES = {
 // code against rules that deployed instantly, which is the very thing the gate exists
 // to prevent. Two things stand between that and a release: the test that every ASSETS
 // entry EXISTS (a mistyped path being the likeliest permanent cause), and this
-// project's post-deploy sweep, which already asks the live site for all 303 files.
+// project's post-deploy sweep, which already asks the live site for all 319 files.
 // ⚠️ NEITHER covers a device-specific failure — nobody has yet confirmed an update
 // landing on a real iPhone under this code.
 //
