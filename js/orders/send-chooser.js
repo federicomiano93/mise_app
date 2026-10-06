@@ -57,10 +57,17 @@ export function offerFor({ settings, canManage, suppliers }) {
   });
 }
 
+// The roads that can be taken now. `supplierRoadsOnly` is «Send it now» (sent-check.js): it means
+// putting the order in a SUPPLIER's hands, so the in-app list for a manager is not offered.
+export function sendOffers({ settings, canManage, suppliers, supplierRoadsOnly = false }) {
+  return offerFor({ settings, canManage, suppliers })
+    .filter(o => o.usable && (!supplierRoadsOnly || routeSendsToSupplier(o.route)));
+}
+
 // Ask, then act. `rows` are the picked suppliers ({ id, name, items }).
 export function chooseAndSend({ rows, settings, canManage, suppliers, locationName, language, grouped,
-                               onSendToManager, onSent, beforeSend }) {
-  const offers = offerFor({ settings, canManage, suppliers }).filter(o => o.usable);
+                               onSendToManager, onSent, beforeSend, supplierRoadsOnly = false }) {
+  const offers = sendOffers({ settings, canManage, suppliers, supplierRoadsOnly });
 
   if (!offers.length) {
     // Cannot happen through the settings screen, which refuses to close the last
@@ -133,7 +140,13 @@ export function chooseAndSend({ rows, settings, canManage, suppliers, locationNa
       const url = offer.route === 'email'
         ? mailto(supplier.email, emailSubject(locationName, language), text)
         : `https://wa.me/${digitsOf(supplier.phone)}?text=${encodeURIComponent(text)}`;
-      window.open(url, '_blank');
+      // ⚠️ ONLY A WINDOW THAT REALLY OPENED COUNTS AS SENT: a blocked pop-up answers null, and
+      // recording that supplier would archive an order that never left. (No 'noopener' feature
+      // here — with it open() always answers null and nothing could be told apart.) A mailto:
+      // hands over to the mail app and some browsers answer null for it although it worked,
+      // so email is trusted as before.
+      const opened = window.open(url, '_blank');
+      if (!opened && offer.route !== 'email') return;
       sent.push(supplier.id);
     });
     if (sent.length) onSent?.(sent);

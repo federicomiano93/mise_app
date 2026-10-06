@@ -20,6 +20,7 @@ import { acquireWakeLock, releaseWakeLock } from './wake-lock.js';
 import {
   KIOSK_STORAGE_KEY, KIOSK_LAST_RELOAD_KEY, KIOSK_RESUME_KEY,
   readKioskSettings, nextKioskState, shouldAutoUpdate, shouldDailyReload, workDayDate,
+  shouldRestNow, wakeArmDelay, REST_NOW_GUARD_MS,
 } from './kiosk-model.js';
 
 const TICK_MS = 15 * 1000;
@@ -103,6 +104,8 @@ let sessionStatus = 'loading';
 let overlay = null;
 let overlayParts = null;
 let disarmWake = null;
+let armTimer = null;
+let wakeGuardUntil = 0;
 let tickTimer = null;
 let lockHeld = false;
 let updating = false;
@@ -208,10 +211,21 @@ function showRest() {
   if (reducedMotion() || typeof requestAnimationFrame !== 'function') overlay.classList.add('kiosk-rest--shown');
   else requestAnimationFrame(() => requestAnimationFrame(() => overlay && overlay.classList.add('kiosk-rest--shown')));
   try { overlay.focus({ preventScroll: true }); } catch { /* ignore */ }
-  disarmWake = armWakeTap(window, overlay, wake);
+  // Raised by the Home button: the tap that did it must not wake the cover (see REST_NOW_GUARD_MS).
+  const delay = wakeArmDelay(wakeGuardUntil, Date.now());
+  if (delay > 0) {
+    const cover = overlay;
+    armTimer = setTimeout(() => {
+      armTimer = null;
+      if (overlay === cover) disarmWake = armWakeTap(window, overlay, wake);
+    }, delay);
+  } else {
+    disarmWake = armWakeTap(window, overlay, wake);
+  }
 }
 
 function hideRest() {
+  if (armTimer !== null) { clearTimeout(armTimer); armTimer = null; }
   if (disarmWake) { disarmWake(); disarmWake = null; }
   const gone = overlay;
   overlay = null;
@@ -436,8 +450,19 @@ function applySettings() {
   else stop();
 }
 
+// The Home's «Rest» button. Both pages sit on the same window, so a window event is the only
+// bridge (no import between js/ files and the Home).
+function restNow() {
+  if (!shouldRestNow({ enabled: !!(settings && settings.enabled), signedIn: started && isSignedIn(), state })) return;
+  wakeGuardUntil = Date.now() + REST_NOW_GUARD_MS;
+  enter('rest');
+  syncLock(lockWanted());
+  paintRest();
+}
+
 function init() {
   applySettings();
+  window.addEventListener('kiosk-rest-now', restNow);
   window.addEventListener('storage', event => {
     if (event.key === null || event.key === KIOSK_STORAGE_KEY) applySettings();
   });
@@ -451,6 +476,7 @@ export const __testing = {
   tick,
   session: onSessionChange,
   applySettings,
+  restNow,
   state: () => state,
   hasLock: () => lockHeld,
   setUpdater(fn) { updateNowImpl = fn; },
