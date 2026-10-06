@@ -183,10 +183,10 @@ test('answering a question keeps the row under «To decide» but changes what wo
 test('the confirmation quotes the rows that write, the ingredients created and the prices added', () => {
   const { ctx, rows } = mixedRows();
   const entries = applyDecisions(rows, { 'k-maybe': { createNew: true } }, ctx);
-  assert.deepEqual(importTotals(entries), { rows: 2, newIngredients: 2, pricesAdded: 2 });
+  assert.deepEqual(importTotals(entries), { rows: 2, newIngredients: 2, pricesAdded: 2, namesSaved: 0 });
   const sameAs = applyDecisions(rows, { 'k-maybe': { sameAs: 'ing-near' } }, ctx);
-  assert.deepEqual(importTotals(sameAs), { rows: 2, newIngredients: 1, pricesAdded: 2 });
-  assert.deepEqual(importTotals(applyDecisions(rows, {}, ctx)), { rows: 1, newIngredients: 1, pricesAdded: 1 });
+  assert.deepEqual(importTotals(sameAs), { rows: 2, newIngredients: 1, pricesAdded: 2, namesSaved: 0 });
+  assert.deepEqual(importTotals(applyDecisions(rows, {}, ctx)), { rows: 1, newIngredients: 1, pricesAdded: 1, namesSaved: 0 });
 });
 
 test('the invoice-point reads are made only for ingredients a row could be matched with', () => {
@@ -328,7 +328,7 @@ test('the summary counts every outcome and keeps each failure with its reason', 
     { key: 'e', name: 'E', outcome: 'failed', reason: 'nope' },
   ], { stopped: 'offline', notRun: 3 });
   assert.deepEqual(sum, {
-    namesSaved: 0, created: 1, updated: 1, pricesAdded: 3, changesAdded: 0, changesFailed: 0, unchanged: 1, skipped: 1, codesFull: 0,
+    namesSaved: 0, namesLost: 0, created: 1, updated: 1, pricesAdded: 3, changesAdded: 0, changesFailed: 0, unchanged: 1, skipped: 1, codesFull: 0,
     failed: [{ key: 'e', name: 'E', reason: 'nope', retry: false }], stopped: 'offline', notRun: 3,
     retryable: 0, notFixableByRetry: 1,
   });
