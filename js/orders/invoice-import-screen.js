@@ -1025,6 +1025,7 @@ export function openInvoiceImport(data) {
     const lines = [
       totals.newIngredients > 0 ? t('invoiceImport.ing.confirmNew', { n: totals.newIngredients }) : '',
       totals.pricesAdded > 0 ? t('invoiceImport.ing.confirmPrices', { n: totals.pricesAdded }) : '',
+      totals.namesSaved > 0 ? t('invoiceImport.ing.confirmNames', { n: totals.namesSaved }) : '',
       t('invoiceImport.ing.confirmChanges'),
       decisionCount() > 0 ? t('invoiceImport.decisions.confirmLine', { n: decisionCount() }) : '',
     ].filter(Boolean);
@@ -1267,6 +1268,9 @@ export function openInvoiceImport(data) {
             retry: isRetryableReason(fresh.row.reason),
           });
         }
+        // A rename the person chose that is not going to be written (the name or the file moved since they looked):
+        // the summary says so, never silently.
+        if (s.renames.has(planned.key) && !fresh.waiting && !(wrow && wrow.patchInvoiceName)) results[results.length - 1].namesLost = 1;
       } catch (err) {
         console.error('Importing one ingredient failed:', err);
         const kind = stopKind(err);
@@ -1361,6 +1365,7 @@ export function openInvoiceImport(data) {
       ['invoiceImport.summary.skipped', sum.skipped],
     ];
     if (sum.namesSaved > 0) lines.splice(3, 0, ['invoiceImport.summary.names', sum.namesSaved]);
+    if (sum.namesLost > 0) lines.push(['invoiceImport.summary.namesLost', sum.namesLost]);
     if (s.decisionsWritten > 0) lines.push(['invoiceImport.summary.decisions', s.decisionsWritten]);
     if (sum.codesFull > 0) lines.push(['invoiceImport.summary.codesFull', sum.codesFull]);
     body.push(el('div', { class: 'set-section' }, lines.map(([key, n]) => el('div', { class: 'set-row' }, [

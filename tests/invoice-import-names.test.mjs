@@ -8,7 +8,7 @@ import { _dictionaries } from '../js/i18n.js';
 import {
   IMPORT_FORMAT, IMPORT_VERSION, CHECK_REASONS, parseImportFile, planIngredients, resolveRow, ingredientWrites,
 } from '../js/orders/invoice-import-model.js';
-import { applyDecisions, bucketOf, importTotals, rowToWrite, withRename, writesRow } from '../js/orders/invoice-import-plan.js';
+import { applyDecisions, bucketOf, importTotals, rowToWrite, summarizeRun, withRename, writesRow } from '../js/orders/invoice-import-plan.js';
 import { invoiceNameOf } from '../js/orders/invoice-zip/classify.js';
 import { newCase } from './helpers/invoice-builders.mjs';
 
@@ -229,17 +229,15 @@ test('4 · a price reason AND a rename are both on the row; confirming the price
 
 test('4 · a file OLDER than what the venue holds never proposes a rename (an empty name is still filled in)', () => {
   const raw = rawIngredient({ invoiceName: RENAMED, prices: [point({ invoiceDate: '2026-03-01' })] });
-  const price = { 'ing-1': { priceUnit: 'kg', pricePerUnit: 1, priceUpdatedAt: '2026-06-01T12:00:00.000Z' } };
-  const old = planOne(raw, ctxOf({ pricesById: price }));
-  assert.equal(old.invoiceRename, undefined);
-  assert.equal(old.patchInvoiceName, null);
   const points = new Set();
   points.points = [{ invoiceDate: '2026-07-01' }];
-  const byPoint = planOne(raw, ctxOf({ invoicePointIds: { 'ing-1': points } }));
-  assert.equal(byPoint.invoiceRename, undefined, 'the newest stored invoice point counts too');
-  const filled = planOne(raw, ctxOf({ ingredients: [stored({ invoiceName: '' })], pricesById: price }));
+  const ids = { 'ing-1': points };
+  const old = planOne(raw, ctxOf({ invoicePointIds: ids }));
+  assert.equal(old.invoiceRename, undefined, 'the newest stored invoice point of the main pack counts');
+  assert.equal(old.patchInvoiceName, null);
+  const filled = planOne(raw, ctxOf({ ingredients: [stored({ invoiceName: '' })], invoicePointIds: ids }));
   assert.equal(filled.patchInvoiceName, RENAMED);
-  const newer = planOne(rawIngredient({ invoiceName: RENAMED, prices: [point({ invoiceDate: '2026-09-01' })] }), ctxOf({ pricesById: price }));
+  const newer = planOne(rawIngredient({ invoiceName: RENAMED, prices: [point({ invoiceDate: '2026-09-01' })] }), ctxOf({ invoicePointIds: ids }));
   assert.ok(newer.invoiceRename);
 });
 
@@ -467,4 +465,89 @@ test('the note on ingredients already in Mise says what the import adds to them'
   assert.match(en['invoiceImport.ing.note'], /name on the invoice/);
   assert.match(it['invoiceImport.ing.note'], /nome in fattura/);
   assert.equal(it['invoiceImport.status.priceCheck'], 'Da controllare');
+});
+
+// ── 9 · the second review ────────────────────────────────────────────────────────
+
+test('9 · the «older file» floor comes only from the MAIN pack: another pack\'s newer invoice never drops the rename', () => {
+  const raw = rawIngredient({ invoiceName: RENAMED, prices: [point({ invoiceDate: '2026-09-10' })] });
+  const other = stored({ supplierCodes: ['F00-5'] });
+  const withPoints = (points) => {
+    const set = new Set();
+    set.points = points;
+    return { 'ing-1': set };
+  };
+  const price = { 'ing-1': { priceUnit: 'kg', pricePerUnit: 1, priceUpdatedAt: '2026-10-01T12:00:00.000Z' } };
+  // The 5 kg pack wrote its October invoice first: the shared price date and its point are both newer.
+  const row = planOne(raw, ctxOf({
+    ingredients: [other], pricesById: price,
+    invoicePointIds: withPoints([{ invoiceDate: '2026-10-01', packCode: 'F00-5' }, { invoiceDate: '2026-08-01', packCode: 'F00-25' }]),
+  }));
+  assert.ok(row.invoiceRename, 'the 25 kg rename is still proposed');
+  // A point with no pack code is the main pack\'s, and a newer one of the main pack does make the file old.
+  const legacy = planOne(raw, ctxOf({ ingredients: [other], invoicePointIds: withPoints([{ invoiceDate: '2026-09-20' }]) }));
+  assert.equal(legacy.invoiceRename, undefined);
+  const mainNewer = planOne(raw, ctxOf({ ingredients: [other], invoicePointIds: withPoints([{ invoiceDate: '2026-09-20', packCode: 'F00-25' }]) }));
+  assert.equal(mainNewer.invoiceRename, undefined);
+});
+
+test('9 · a held PRICE with a chosen rename still saves the name, and nothing else leaks', () => {
+  const raw = rawIngredient({
+    invoiceName: RENAMED, supplierCode: 'F00-25', prices: [point({ pricePerUnit: 1.4, reliability: 'media' })],
+  });
+  const ctx = ctxOf({
+    ingredients: [stored({ supplierCode: 'F00-25' })],
+    pricesById: { 'ing-1': { priceUnit: 'kg', pricePerUnit: 1, priceUpdatedAt: '2026-01-01T12:00:00.000Z' } },
+  });
+  const row = planOne(raw, ctx);
+  assert.equal(row.checkReason, CHECK_REASONS.PRICE_JUMP);
+  const renames = new Map([[row.key, row.invoiceRename]]);
+  const entry = applyDecisions([row], {}, ctx, new Set(), new Set(), renames)[0];
+  assert.equal(writesRow(entry), true);
+  assert.equal(entry.row.held, true, 'the price is still held');
+  assert.equal(entry.row.heldRow.status, 'update-price');
+  const ops = writesOf(entry.row, raw);
+  assert.equal(ops.length, 1, 'one write: the name');
+  assert.deepEqual(ops[0], { type: 'patch-ingredient', ingredientId: 'ing-1', data: { invoiceName: RENAMED } });
+  const fresh = rowToWrite(row, { confirmed: false, rename: row.invoiceRename });
+  assert.deepEqual(writesOf(fresh, raw).map(op => op.type), ['patch-ingredient']);
+  assert.equal(importTotals([entry]).pricesAdded, 0);
+  assert.equal(importTotals([entry]).namesSaved, 1);
+});
+
+test('9 · M13: an ingredient taking its FIRST main code takes the invoice name too', () => {
+  const raw = rawIngredient({ name: 'Farina tipo 00' });
+  const row = planOne(raw, ctxOf({ ingredients: [stored({ supplierCode: '', invoiceName: '', name: 'Farina tipo 00' })] }));
+  assert.equal(row.patchSupplierCode, 'F00-25');
+  assert.equal(row.patchInvoiceName, 'FARINA TIPO 00 SACCO KG 25');
+});
+
+test('9 · M14: a rename is proposed only through the MAIN code, never on the first-code or the no-code paths', () => {
+  const different = 'ALTRO NOME DIVERSO';
+  const first = planOne(rawIngredient({ name: 'Farina tipo 00' }), ctxOf({
+    ingredients: [stored({ supplierCode: '', invoiceName: different, name: 'Farina tipo 00' })],
+  }));
+  assert.equal(first.patchSupplierCode, 'F00-25');
+  assert.equal(first.invoiceRename, undefined);
+  assert.equal(first.patchInvoiceName, null);
+  const codeless = planOne(rawIngredient({ supplierCode: '', key: `${SUPPLIER_KEY}|name:farina`, name: 'Farina tipo 00' }), ctxOf({
+    ingredients: [stored({ supplierCode: '', invoiceName: different, name: 'Farina tipo 00' })],
+  }));
+  assert.equal(codeless.ingredientId, 'ing-1');
+  assert.equal(codeless.invoiceRename, undefined);
+  assert.equal(codeless.patchInvoiceName, null);
+});
+
+test('9 · the summary counts the chosen renames that could not be written, with plural forms', () => {
+  const sum = summarizeRun([{ key: 'a', name: 'A', outcome: 'unchanged', namesSaved: 1 }, { key: 'b', name: 'B', outcome: 'unchanged', namesLost: 1 }]);
+  assert.equal(sum.namesSaved, 1);
+  assert.equal(sum.namesLost, 1);
+  for (const lang of ['en', 'it']) {
+    for (const key of ['invoiceImport.summary.namesLost', 'invoiceImport.ing.confirmNames']) {
+      assert.equal(typeof DICT[lang][key].one, 'string', `${lang} ${key}`);
+      assert.equal(typeof DICT[lang][key].other, 'string', `${lang} ${key}`);
+    }
+  }
+  assert.equal(DICT.it['invoiceImport.summary.namesLost'].other, '{n} nomi in fattura non salvati: sono cambiati durante l’importazione — carica di nuovo il file');
+  assert.equal(DICT.it['invoiceImport.ing.confirmNames'].other, '{n} nomi in fattura verranno salvati');
 });

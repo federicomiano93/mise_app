@@ -3175,6 +3175,14 @@ const DICTIONARIES = Object.freeze({
       one: '{n} name on the invoice saved',
       other: '{n} names on the invoice saved',
     },
+    'invoiceImport.summary.namesLost': {
+      one: '{n} name on the invoice not saved: it changed while importing — load the file again',
+      other: '{n} names on the invoice not saved: they changed while importing — load the file again',
+    },
+    'invoiceImport.ing.confirmNames': {
+      one: '{n} name on the invoice will be saved',
+      other: '{n} names on the invoice will be saved',
+    },
     'invoiceImport.ing.confirm.hold': 'Leave it for now',
     'invoiceImport.decisions.confirmTitle': 'Remember your choices?',
     'invoiceImport.decisions.confirmLine': {
@@ -5891,6 +5899,14 @@ const DICTIONARIES = Object.freeze({
     'invoiceImport.summary.names': {
       one: '{n} nome in fattura salvato',
       other: '{n} nomi in fattura salvati',
+    },
+    'invoiceImport.summary.namesLost': {
+      one: '{n} nome in fattura non salvato: è cambiato durante l’importazione — carica di nuovo il file',
+      other: '{n} nomi in fattura non salvati: sono cambiati durante l’importazione — carica di nuovo il file',
+    },
+    'invoiceImport.ing.confirmNames': {
+      one: '{n} nome in fattura verrà salvato',
+      other: '{n} nomi in fattura verranno salvati',
     },
     'invoiceImport.ing.confirm.hold': 'Lascia per ora',
     'invoiceImport.decisions.confirmTitle': 'Vuoi ricordare le tue scelte?',

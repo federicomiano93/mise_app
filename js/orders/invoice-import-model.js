@@ -547,7 +547,7 @@ function matchedRow(base, existing, ctx) {
   // (`invoiceRename`) is a separate choice of the person (invoice-import-plan.js withRename).
   const nameRead = invoiceNameRead(base, existing, {
     patchSupplierCode, newest: allPoints.length > 0 ? allPoints[allPoints.length - 1].invoiceDate : '',
-    floor: newestStored(known, stamp),
+    floor: newestStored(known, codeOf(existing)),
   });
   return {
     ...base,
@@ -575,11 +575,17 @@ function matchedRow(base, existing, ctx) {
 // Letter case and runs of spaces are not a different name; punctuation and digits still are.
 export const foldInvoiceName = (text) => String(text ?? '').toLowerCase().replace(/\s+/g, ' ').trim();
 
-// The newest date the venue already holds for an ingredient: its price in force, or its newest stored invoice point.
-function newestStored(known, stamp) {
-  const dates = [typeof stamp === 'string' ? stamp.slice(0, 10) : ''];
-  (Array.isArray(known?.points) ? known.points : []).forEach(p => dates.push(typeof p?.invoiceDate === 'string' ? p.invoiceDate : ''));
-  return dates.reduce((a, b) => (b > a ? b : a), '');
+// The newest invoice date the venue already holds for the MAIN pack of an ingredient: its stored invoice points that
+// carry the main code, or no code at all (stored before packs existed). ⚠️ NEVER the shared price date nor another
+// pack's points: a 5 kg invoice of October must not make the 25 kg rename of September look old.
+function newestStored(known, mainCode) {
+  let newest = '';
+  (Array.isArray(known?.points) ? known.points : []).forEach(p => {
+    const code = typeof p?.packCode === 'string' ? p.packCode.trim().toLowerCase() : '';
+    if (code && code !== mainCode) return;
+    if (typeof p?.invoiceDate === 'string' && p.invoiceDate > newest) newest = p.invoiceDate;
+  });
+  return newest;
 }
 
 // «Nome in fattura» of a row against the ingredient it is matched with → { write, rename }:

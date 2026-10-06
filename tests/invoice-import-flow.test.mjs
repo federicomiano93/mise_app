@@ -1118,3 +1118,86 @@ test('a price change between two packs carries both pack names', async () => {
   assert.equal(change.oldPack, 'Lievito baking sacco 5 kg');
   assert.equal(change.newPack, 'Lievito baking pacco 1 kg');
 });
+
+// ── The name on the invoice: a renamed product is a choice of the person ───────────────────────────────────────
+
+const OLD_NAME = 'FARINA TIPO 00 SACCO KG 25';
+const NEW_NAME = 'Farina 00 sacco da kg 25 (nuova ricetta)';
+
+// A venue that already holds the product (main code F00-25, its first invoice price recorded) and a file that
+// brings the same price again under a NEW invoice name.
+function renamedVenue(fileOver = {}, priceOver = {}) {
+  const db = makeDb();
+  db.suppliers.push({ id: 's9', name: 'FORNITORE ESEMPIO SRL', shortName: '', vatNumber: 'IT00000000001' });
+  db.ingredients.push({
+    id: 'ing-9', name: 'Farina tipo 00', shortName: '', supplierId: 's9', supplierCode: 'F00-25', invoiceName: OLD_NAME,
+    weight: '25 kg', kind: 'ingredient', active: true,
+  });
+  db.points['ing-9'] = ['inv-18000000001-5'];
+  db.prices['ing-9'] = { priceUnit: 'kg', pricePerUnit: 0.57, priceUpdatedAt: '2026-08-31T12:00:00.000Z', ...priceOver };
+  const text = fileText([ing({
+    key: 'IT00000000001|code:F00-25', supplierCode: 'F00-25', invoiceName: NEW_NAME, ...fileOver,
+  })]);
+  return { db, text };
+}
+const renameSelect = (root) => selects(root).find(s => s.options.some(o => o.textContent === 'Save the new name'));
+
+test('⚠️ a renamed product writes nothing by default; choosing «Save the new name» is a write of the primary action, and the summary says so', async () => {
+  const { db, text } = renamedVenue();
+  const root = await open(db, text);
+  await press(root, 'Next');
+  await press(root, 'Next');
+  assert.match(textOf(root), /The name on the invoice has changed: «FARINA TIPO 00 SACCO KG 25» → «Farina 00 sacco da kg 25 \(nuova ricetta\)»/);
+  assert.match(textOf(root), /To check \(1\)/, 'visible, not held');
+  const select = renameSelect(root);
+  assert.deepEqual(select.options.map(o => o.textContent), ['Keep the old name', 'Save the new name']);
+  assert.equal(select.value, 'keep', 'the old name is the default');
+  assert.ok(!buttonWith(root, 'Import'), 'a kept name is nothing to import');
+
+  await pick(select, 'save');
+  assert.ok(buttonWith(root, 'Import 1 ingredient'), 'a name-only write counts as a write');
+  await press(root, 'Import 1 ingredient');
+  assert.match(globalThis.__dialogs.at(-1).message, /1 name on the invoice will be saved/);
+  assert.equal(db.ingredients[0].invoiceName, NEW_NAME);
+  assert.equal(db.calls.filter(c => c[0] === 'write' && c[1] === 'ingredients/ing-9').length, 1, 'written once, not twice');
+  assert.match(textOf(root), /1 name on the invoice saved/);
+  assert.equal(db.ingredients[0].name, 'Farina tipo 00', 'nothing else changed');
+});
+
+test('a renamed product left on «Keep the old name» is never written', async () => {
+  const { db, text } = renamedVenue();
+  const root = await open(db, text);
+  await press(root, 'Next');
+  await press(root, 'Next');
+  await press(root, 'Done');
+  assert.equal(db.ingredients[0].invoiceName, OLD_NAME);
+  assert.equal(db.calls.length, 0);
+});
+
+test('a chosen rename whose old name changed while importing is not written, and the summary says it', async () => {
+  const { db, text } = renamedVenue();
+  const root = await open(db, text);
+  await press(root, 'Next');
+  await press(root, 'Next');
+  await pick(renameSelect(root), 'save');
+  db.ingredients[0].invoiceName = 'SOMEBODY ELSE CHANGED IT';
+  await press(root, 'Import 1 ingredient');
+  assert.equal(db.ingredients[0].invoiceName, 'SOMEBODY ELSE CHANGED IT');
+  assert.match(textOf(root), /1 name on the invoice not saved: it changed while importing — load the file again/);
+});
+
+test('⚠️ a held price with a chosen rename saves the NAME and leaves the price held', async () => {
+  const { db, text } = renamedVenue({
+    prices: [price({ line: 6, invoiceId: '18000000002', invoiceDate: '2026-10-01', pricePerUnit: 1.4, reliability: 'media' })],
+  }, { pricePerUnit: 1, priceUpdatedAt: '2026-08-31T12:00:00.000Z' });
+  db.points['ing-9'] = [];
+  const root = await open(db, text);
+  await press(root, 'Next');
+  await press(root, 'Next');
+  assert.ok(renameSelect(root), 'the rename is offered next to the held price');
+  await pick(renameSelect(root), 'save');
+  await press(root, 'Import 1 ingredient');
+  assert.equal(db.ingredients[0].invoiceName, NEW_NAME);
+  assert.equal(db.prices['ing-9'].pricePerUnit, 1, 'the held price was not applied');
+  assert.deepEqual(db.points['ing-9'], [], 'and no price point leaked');
+});

@@ -85,7 +85,13 @@ test('⚠️ each row is planned AGAIN on fresh server data before anything is w
   assert.match(run, /freshIngredientsForSupplier\(supplierId\)/);
   assert.match(run, /invoicePointIds\(id\)/);
   assert.match(run, /freshPrice\(id\)/);
-  assert.match(run, /rowToWrite\(fresh\.row, \{ confirmed: s\.confirmKeys\.has\(planned\.key\), rename: s\.renames\.get\(planned\.key\) \}\)/);
+  // ⚠️ BOTH loops gate on rowToWrite, each pinned in its OWN loop (one line in the other would satisfy a whole-file match).
+  const gate = /const wrow = (?:fresh\.waiting \? null : )?rowToWrite\(fresh\.row, \{ confirmed: s\.confirmKeys\.has\(planned\.key\), rename: s\.renames\.get\(planned\.key\) \}\)/;
+  const writingLoop = run.slice(run.indexOf('for (let i = 0; i < writing.length'), run.indexOf('for (let i = 0; i < quiet.length'));
+  const quietLoop = run.slice(run.indexOf('for (let i = 0; i < quiet.length'));
+  assert.match(writingLoop, gate, 'the writing loop gates its fresh plan');
+  assert.match(quietLoop, gate, 'the quiet loop gates its fresh plan');
+  assert.match(run, /e\.row\.status === 'unchanged' && e\.row\.ingredientId && !writesRow\(e\)/, 'a row that writes is never also a quiet row');
   assert.match(run, /ingredientWrites\(wrow, fileIngredient, new Date\(\)\.toISOString\(\), \{ language \}\)/);
   assert.match(run, /if \(kind\) \{ stopped = kind; notRun = writing\.length - i - 1; break; \}/);
   assert.match(run, /if \(fresh\.waiting\)/, 'a row that became a question is never guessed');

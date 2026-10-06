@@ -201,12 +201,24 @@ export function withRename(row, choice) {
   return { ...row, patchInvoiceName: pair.file };
 }
 
-// The row as it must be written, from the plan made again right before the write: null when it must not be written
-// (a price that needs a look which nobody confirmed), else the row with the rename only if the person chose it.
+// ⚠️ A RENAME THE PERSON CHOSE IS SAVED EVEN WHILE ITS PRICE IS HELD: the rename is its own choice and never depends on
+// the price. The held row becomes a row that writes ONLY the name (no price, no point, no code); `heldRow` keeps what
+// was held, for the screen.
+function nameOnly(row) {
+  return {
+    ...row, status: 'unchanged', newPoints: [], updateCurrent: false, patchSupplierCode: null, setSupplierCodes: null,
+    held: true, heldRow: row,
+  };
+}
+
+// The row as it must be written, from the plan made again right before the write: null when there is nothing to write
+// (a price that needs a look which nobody confirmed, and no rename chosen), the name-only row when only the rename was
+// chosen, else the row with the rename if the person chose it.
 export function rowToWrite(fresh, { confirmed = false, rename = null } = {}) {
   if (!fresh) return null;
-  if (needsConfirmation(fresh) && !confirmed) return null;
-  return withRename(fresh, rename);
+  const chosen = withRename(fresh, rename);
+  if (needsConfirmation(fresh) && !confirmed) return chosen !== fresh ? nameOnly(chosen) : null;
+  return chosen;
 }
 
 // planned rows + the person's decisions → [{ planned, row, waiting }]. `row` is the effective row (what
@@ -221,9 +233,14 @@ export function applyDecisions(plannedRows, decisions, ctx, forgetKeys, confirmK
     if (forgetKeys && forgetKeys.has(planned.key) && row.status === 'new') {
       row = { ...row, status: 'skipped', newPoints: [], updateCurrent: false };
     }
-    row = withRename(row, renames ? renames.get(planned.key) : null);
+    const chosen = withRename(row, renames ? renames.get(planned.key) : null);
     if (needsConfirmation(row) && !(confirmKeys && confirmKeys.has(planned.key))) {
-      row = { ...row, status: 'skipped', newPoints: [], updateCurrent: false, held: true, heldRow: row };
+      // Held for its price; a rename the person chose is still saved (nameOnly), the price waits.
+      row = chosen !== row
+        ? nameOnly(chosen)
+        : { ...row, status: 'skipped', newPoints: [], updateCurrent: false, held: true, heldRow: row };
+    } else {
+      row = chosen;
     }
     return { planned, row, waiting: WAITING.includes(row.status) };
   });
@@ -282,6 +299,8 @@ export function importTotals(entries) {
     rows: writing.length,
     newIngredients: writing.filter(e => e.row.status === 'new').length,
     pricesAdded: writing.reduce((sum, e) => sum + e.row.newPoints.length, 0),
+    // The invoice names of ingredients already in Mise that this import will save (a backfill or a chosen rename).
+    namesSaved: writing.filter(e => e.row.status !== 'new' && Boolean(e.row.patchInvoiceName)).length,
   };
 }
 
@@ -367,7 +386,7 @@ export async function replanRow({ fileIngredient, decision, supplierIdByKey, rea
 //             retry? }] — `retry` is true when loading the same file again can fix the failure (a write that
 // failed, a timeout, a catalogue that changed); a file entry that is invalid cannot be fixed that way.
 export function summarizeRun(results, { stopped = null, notRun = 0 } = {}) {
-  const totals = { namesSaved: 0, created: 0, updated: 0, pricesAdded: 0, changesAdded: 0, changesFailed: 0, unchanged: 0, skipped: 0, codesFull: 0, failed: [], stopped, notRun };
+  const totals = { namesSaved: 0, namesLost: 0, created: 0, updated: 0, pricesAdded: 0, changesAdded: 0, changesFailed: 0, unchanged: 0, skipped: 0, codesFull: 0, failed: [], stopped, notRun };
   (results || []).forEach(r => {
     // An ingredient whose list of pack codes is full: the new code was NOT remembered (the summary says so).
     if (r.codesFull) totals.codesFull += 1;
@@ -375,6 +394,7 @@ export function summarizeRun(results, { stopped = null, notRun = 0 } = {}) {
     else totals[r.outcome] += 1;
     totals.pricesAdded += r.pricesAdded || 0;
     totals.namesSaved += r.namesSaved || 0;
+    totals.namesLost += r.namesLost || 0;
     totals.changesAdded += r.changesAdded || 0;
     totals.changesFailed += r.changesFailed || 0;
   });
