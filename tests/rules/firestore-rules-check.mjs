@@ -331,6 +331,18 @@ async function ingredients() {
     () => mergeWrite('locations/main/ingredients/ING_MODERN', { supplierCodes: Array.from({ length: 21 }, (_, i) => 'C' + i), bakery: 'main' }));
   await expectDenied('the other codes must be a list, not text',
     () => mergeWrite('locations/main/ingredients/ING_MODERN', { supplierCodes: 'ZEUS-1,PEG-5', bakery: 'main' }));
+  // «Nome in fattura» (7 Oct 2026): the invoice's own description, written by the import.
+  await expectAllowed('an ingredient with its name on the invoice', () =>
+    mergeWrite('locations/main/ingredients/ING_MODERN', { invoiceName: 'FARINA TIPO 00 SACCO KG 25', bakery: 'main' }));
+  await expectAllowed('…cleared back to empty', () =>
+    mergeWrite('locations/main/ingredients/ING_MODERN', { invoiceName: '', bakery: 'main' }));
+  await expectAllowed('…the longest description an invoice allows (1000)', () =>
+    mergeWrite('locations/main/ingredients/ING_MODERN', { invoiceName: bigString(1000), bakery: 'main' }));
+  await expectDenied('a name on the invoice longer than 1000',
+    () => mergeWrite('locations/main/ingredients/ING_MODERN', { invoiceName: bigString(1001), bakery: 'main' }));
+  await expectDenied('a name on the invoice that is not text',
+    () => mergeWrite('locations/main/ingredients/ING_MODERN', { invoiceName: 42, bakery: 'main' }));
+  await mergeWrite('locations/main/ingredients/ING_MODERN', { invoiceName: '', bakery: 'main' });
 
   await expectDenied('an unknown key on an ingredient',
     () => mergeWrite('locations/main/ingredients/ING_MODERN', { evil: 'x', bakery: 'main' }));
