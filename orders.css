@@ -3482,3 +3482,37 @@ body:not([data-orders-tab="deliveries"]) #orders-owed { display: none; }
 .pchg-meta { margin: 2px 0 0; font-size: 13px; color: var(--text-2); }
 .pchg-price { margin: 0; font-size: 14px; font-variant-numeric: tabular-nums; color: var(--text); }
 .pchg-pack { margin: 0; font-size: 13px; color: var(--text-2); }
+
+/* ── The way back to the Ricettario (7 Oct 2026) ────────────────────────────
+   Opened from the Ricettario (#from=…), Orders offers a way back in TWO forms of one control,
+   chosen by width (the app has one wide-screen query, so both rules are max-width: the button is
+   hidden below 440px, the row is shown only there). From 440px up: the round button in the green
+   bar beside Back. Below it the bar
+   has no room — Back, this button and four on the right squeezed the title to 0px at 296 and 360
+   — so the button goes and a full-width row under the bar takes over. orders-main.js shows both
+   (or neither, without the hash); only these two rules decide which one is seen. */
+body .orders-return-row {
+  display: none;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  box-sizing: border-box;
+  margin: 8px 8px 4px;
+  padding: 0 12px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-2);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  text-decoration: none;
+}
+.orders-return-row svg { flex: none; }
+.orders-return-row:active { transform: scale(.97); }
+.orders-return-row:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 2px; }
+@media (max-width: 439px) {
+  #orders-to-catalogue { display: none; }
+}
+@media (max-width: 439px) {
+  body .orders-return-row { display: flex; }
+}

@@ -41,7 +41,7 @@ test('a corrupt value leaves the screen alone rather than emptying it', () => {
 // appears without a line in this test has arrived by accident.
 test('it returns only the keys the screen uses, whatever else the document carries', () => {
   const out = normalizeOrdersConfig({ bakery: 'main', showStock: false, somethingElse: 42 });
-  assert.deepEqual(Object.keys(out), ['showStock', 'historyDays', 'sendSettings', 'orderLists', 'weekStartsOn', 'supplierOrder']);
+  assert.deepEqual(Object.keys(out), ['showStock', 'historyDays', 'sendSettings', 'orderLists', 'weekStartsOn', 'supplierOrder', 'favouriteSuppliers']);
 });
 
 // ⚠️ AND IT IS ALWAYS USABLE, whatever the document says. An order that cannot leave
