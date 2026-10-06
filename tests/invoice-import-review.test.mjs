@@ -572,3 +572,55 @@ test('R7 · a new row answered «do not import» does not say it will be created
   assert.doesNotMatch(src, /planned && planned\.status === 'new'\) return t\('invoiceImport\.check\.olderInvoiceNew'/);
   assert.match(src, /if \(row\.status === 'new'\) return t\('invoiceImport\.check\.olderInvoiceNew'/, 'the row\'s CURRENT status decides');
 });
+
+// ── review round 4: the price shown and the confirmation follow the ANSWER ───────────
+
+test('S1 · «Same as A» on a code-ambiguous question: the row shown and held carries the rescaled 80, not the file\'s 8', () => {
+  const ingredients = [stored({ weight: '1 kg' }), stored({ id: 'ing-2', name: 'Burro doppio', weight: '10 kg' })];
+  const ctx = ctxOf({ ingredients });
+  const asked = planOne(cartonOnInvoice(), ctx);
+  assert.equal(asked.status, 'maybe-duplicate');
+  assert.equal(asked.allPoints[0].pricePerUnit, 8, 'the question row itself is not re-read');
+  const entry = applyDecisions([asked], { [asked.key]: { sameAs: 'ing-1' } }, ctx, new Set(), new Set())[0];
+  assert.equal(entry.row.held, true);
+  assert.equal(entry.row.checkReason, CHECK_REASONS.WEIGHT_RESCALED);
+  assert.equal(entry.row.allPoints[0].pricePerUnit, 80, 'what the screen shows comes from here (heldRow / row.allPoints)');
+  assert.equal(entry.row.heldRow.allPoints[0].pricePerUnit, 80);
+  assert.equal(entry.planned.allPoints[0].pricePerUnit, 8);
+});
+
+test('S2 · the same on the «choose» path (a «unisci con» name that matches nothing)', () => {
+  const ctx = ctxOf({ ingredients: [stored({ weight: '1 kg' })] });
+  const asked = planOne({ ...cartonOnInvoice(), mergeWith: 'Nome che non esiste' }, ctx);
+  assert.equal(asked.status, 'choose');
+  const entry = applyDecisions([asked], { [asked.key]: { sameAs: 'ing-1' } }, ctx, new Set(), new Set())[0];
+  assert.equal(entry.row.heldRow.allPoints[0].pricePerUnit, 80);
+  assert.equal(entry.row.allPoints[0].pricePerUnit, 80);
+});
+
+test('S3 · the screen takes the shown price from the effective row, with the planned row as the fallback', () => {
+  const src = codeOf(read('js/orders/invoice-import-screen.js'));
+  const fn = src.slice(src.indexOf('function priceText'), src.indexOf('function ingredientRow'));
+  assert.match(fn, /const effective = row && row\.heldRow \? row\.heldRow : row;\s*const points = \(effective && effective\.allPoints && effective\.allPoints\.length > 0\) \? effective\.allPoints : planned\.allPoints;/);
+  assert.doesNotMatch(fn, /const last = planned\.allPoints/);
+});
+
+test('S4 · a new answer clears the «Use this price» of the row, so a confirmation never reaches another price', () => {
+  const src = codeOf(read('js/orders/invoice-import-screen.js'));
+  const question = src.slice(src.indexOf("choice(`invimp-ing-"), src.indexOf('A matched row whose price needs a look') > 0 ? src.indexOf('A matched row whose price') : undefined);
+  assert.match(src, /\(picked\) => \{\s*s\.confirmKeys\.delete\(planned\.key\);\s*if \(!picked\)/);
+  assert.match(src, /\(picked\) => \{\s*s\.confirmKeys\.delete\(planned\.key\);\s*if \(picked === 'forget'\)/);
+  assert.ok(question.length > 0);
+  // and the model agrees: answering the other ingredient gives another price, which was never confirmed
+  const ingredients = [stored({ weight: '1 kg' }), stored({ id: 'ing-2', name: 'Burro doppio', weight: '10 kg' })];
+  const ctx = ctxOf({ ingredients });
+  const asked = planOne(cartonOnInvoice(), ctx);
+  const confirmed = new Set([asked.key]);
+  const a = applyDecisions([asked], { [asked.key]: { sameAs: 'ing-1' } }, ctx, new Set(), confirmed)[0].row;
+  assert.equal(a.newPoints[0].pricePerUnit, 80);
+  confirmed.delete(asked.key);
+  const b = applyDecisions([asked], { [asked.key]: { sameAs: 'ing-2' } }, ctx, new Set(), confirmed)[0].row;
+  assert.equal(b.status, 'update-price', 'the other ingredient is the same pack: 10 kg = 10 x 1 kg');
+  assert.equal(b.checkReason, undefined);
+  assert.equal(b.newPoints[0].pricePerUnit, 8, 'another answer, another price');
+});
