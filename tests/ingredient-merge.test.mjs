@@ -405,3 +405,13 @@ test('the button is drawn only for somebody who may merge: a getter on the role 
   assert.match(registry, /entryDirty\(cardEntry\)/, 'typing in the card is never lost');
   assert.match(card, /entry\.packLabel/, 'the history shows which pack each price was paid for');
 });
+
+test('⚠️ a merge never writes priceBasis: the surviving ingredient keeps the basis it chose', () => {
+  const [op] = flat(planMerge({
+    a: A, b: B, bPoints: [], aPointIds: new Set(),
+    aPrice: { priceUnit: 'pcs', pricePerUnit: 9.6, unitWeightKg: 10, priceUpdatedAt: '2026-09-01T12:00:00.000Z', priceBasis: 'rate' },
+    bPrice: { priceUnit: 'pcs', pricePerUnit: 9.9, unitWeightKg: 10, priceUpdatedAt: '2026-10-01T12:00:00.000Z', priceBasis: 'case' },
+  })).filter(o => o.path[0] === 'ingredient-prices');
+  assert.ok(op, 'B\'s newer price takes over');
+  assert.equal('priceBasis' in op.data, false, 'neither copied from B nor reset to null');
+});

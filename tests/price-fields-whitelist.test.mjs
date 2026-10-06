@@ -124,3 +124,18 @@ test('every key the format adds to a payload is one the ingredients rule accepts
     assert.ok(INGREDIENT_KEYS.includes(key), key);
   }
 });
+
+// ── priceBasis (7 Oct 2026): what the typed price refers to — price document only, like vatRate ──
+test('priceBasis is on the ingredient-prices whitelist, off the ingredients one, and never drained onto an ingredient', () => {
+  assert.ok(PRICE_KEYS.includes('priceBasis'), 'ingredient-prices must accept it');
+  assert.ok(PRICE_FIELDS.includes('priceBasis'), 'splitPriceFields must route it to the price document');
+  assert.equal(INGREDIENT_KEYS.includes('priceBasis'), false, 'the ingredients rule has no such key');
+  assert.equal(INGREDIENT_DRAINED_FIELDS.includes('priceBasis'), false, 'writing it null on an ingredient would refuse every save');
+});
+
+test('the price-history subcollection does not carry priceBasis', () => {
+  const start = RULES.indexOf('/prices/{');
+  assert.notEqual(start, -1);
+  const m = RULES.slice(start).match(/hasOnly\(\[([\s\S]*?)\]\)/);
+  assert.equal(m[1].includes('priceBasis'), false);
+});
