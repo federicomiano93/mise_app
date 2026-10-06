@@ -55,7 +55,7 @@ test('1 · a price worked out from the description is re-read with the weight th
   // 0.57 €/kg over 25 kg = 14.25 per sack; the venue says the sack is 20 kg: 14.25 / 20 = 0.7125
   assert.equal(row.newPoints[0].pricePerUnit, 0.7125);
   assert.equal(row.newPoints[0].qty, 40, 'the quantity follows the weight too: 50 kg of 25 kg sacks = 40 kg of 20 kg sacks');
-  assert.equal(row.checkReason, undefined);
+  assert.equal(row.checkReason, CHECK_REASONS.WEIGHT_RESCALED, 'a rescaled price is never applied silently');
   const set = ingredientWrites(row, fileOf([rawIngredient()]).ingredients[0], '2026-10-06T10:00:00Z', {}).flat()
     .find(op => op.type === 'set-current-price');
   assert.equal(set.data.pricePerUnit, 0.7125, 'the current price written is the re-read one');
@@ -300,22 +300,34 @@ test('5 · the entry count is read from the End Of Central Directory record', ()
   assert.equal(declaredEntryCount(strToU8('not a zip, only long enough to be looked at, no record in it')), null);
 });
 
-// ⚠️ These tests must go RED if the pre-check in readZip is removed: without it fflate walks a directory that does
-// not match its record and the archive comes back as «zip-unreadable», never «too-many-entries».
-test('5 · a record that declares too many entries on THIS disk (the count fflate loops on) is refused first', () => {
+// ⚠️ WHICH CASES PROVE THE PRE-CHECK (measured by removing it): a forged +8 count of 60000, 6000/6000 and the 0xFFFF
+// count are ALSO caught by the check made after fflate has walked the directory. Only the two below are not — a
+// SMALL +8 count with a huge +10 count, and the ZIP64 offset — fflate reads those archives without complaint, so
+// without the pre-check they would be accepted.
+test('5 · a record that declares too many entries is refused first (+8 is what fflate loops on, +10 must not hide it)', () => {
   const real = zipOfEntries(1);
-  assert.deepEqual(refusal(forge(real, { onDisk: 60000, total: 1 })), ['too-many-entries', '5000'],
-    'fflate loops on the +8 count, so a small +10 count must not hide it');
+  assert.deepEqual(refusal(forge(real, { onDisk: 1, total: 60000 })), ['too-many-entries', '5000'],
+    'PROVES THE PRE-CHECK: without it this archive is read as if it were honest');
+  assert.deepEqual(refusal(forge(real, { onDisk: 60000, total: 1 })), ['too-many-entries', '5000']);
   assert.deepEqual(refusal(forge(real, { onDisk: 6000, total: 6000 })), ['too-many-entries', '5000']);
-  assert.deepEqual(refusal(forge(real, { onDisk: 1, total: 60000 })), ['too-many-entries', '5000']);
   assert.equal(declaredEntryCount(forge(real, { onDisk: 60000, total: 1 })), 60000);
 });
 
-test('5 · a ZIP64 marker is refused: an invoice zip never needs it, and fflate would trust the 64-bit record', () => {
+test('5 · a ZIP64 marker is «zip unreadable» (not «too many entries»): an invoice zip never needs the format', () => {
   const real = zipOfEntries(1);
-  assert.deepEqual(refusal(forge(real, { offset: 0xffffffff })), ['too-many-entries', '5000'], 'offset 0xFFFFFFFF');
-  assert.deepEqual(refusal(forge(real, { onDisk: 0xffff, total: 0xffff })), ['too-many-entries', '5000'], 'count 0xFFFF');
+  assert.deepEqual(refusal(forge(real, { offset: 0xffffffff })), ['zip-unreadable', ''],
+    'PROVES THE PRE-CHECK: without it fflate reads this archive as an honest one');
+  assert.deepEqual(refusal(forge(real, { onDisk: 0xffff, total: 0xffff })), ['zip-unreadable', '']);
   assert.equal(declaredEntryCount(forge(real, { offset: 0xffffffff })), Infinity);
+});
+
+test('5 · the record is searched down to exactly 65559 bytes from the end, like fflate', () => {
+  const real = zipOfEntries(1);
+  const padded = (extra) => { const out = new Uint8Array(real.length + extra); out.set(real); return out; };
+  const exact = padded(65559 - 22);
+  assert.equal(exact.length - (real.length - 22), 65559);
+  assert.equal(declaredEntryCount(exact), 1, 'at len - 65559: found');
+  assert.equal(declaredEntryCount(padded(65559 - 22 + 1)), null, 'at len - 65560: not found');
 });
 
 test('5 · the limit is the one the caller gives, and an honest archive is read', () => {
@@ -349,11 +361,12 @@ test('6 · the picker is off and busy while a zip is read, and comes back on eve
   assert.match(read('orders.css'), /\.invimp-file-input:disabled \+ \.invimp-file-btn \{/);
 });
 
-test('6 · after a read the focus goes to the Next button, else to the status line, inside the dialog (P18)', () => {
+test('6 · after a read the focus goes to the result status line, else to the Next button, inside the dialog (P18)', () => {
   const src = codeOf(read('js/orders/invoice-import-screen.js'));
   const focus = src.slice(src.indexOf('function focusAfterRead'), src.indexOf('async function readInvoicesNow'));
   assert.match(focus, /\[data-fid="invimp-next"\]/);
   assert.match(focus, /\.orders-status\[tabindex\]/);
+  assert.ok(focus.indexOf('.orders-status[tabindex]') < focus.indexOf('invimp-next'), 'the result line first, Next as the fallback');
   assert.match(focus, /\.focus\(/);
   assert.match(focus, /node\.querySelector/, 'looked up inside the dialog, never the page');
   assert.match(src, /'orders-status ok', role: 'status', tabindex: '-1'/);
@@ -447,7 +460,7 @@ test('7 · a NEW row with the older-invoice reason says it WILL BE CREATED', () 
   assert.equal(DICT.it['invoiceImport.check.olderInvoiceNew'],
     'Verrà creato con il prezzo della fattura del {date}: la più recente è da verificare.');
   const src = codeOf(read('js/orders/invoice-import-screen.js'));
-  assert.match(src, /planned && planned\.status === 'new'\) return t\('invoiceImport\.check\.olderInvoiceNew'/);
+  assert.match(src, /row\.status === 'new'\) return t\('invoiceImport\.check\.olderInvoiceNew'/);
   assert.match(src, /checkText\(row, planned\)/);
 });
 
@@ -479,4 +492,83 @@ test('10 · the confirm select comes AFTER the «same as» question and has its 
 test('11 · a «do not import» answer on a priceCheck row keeps the Skipped pill', () => {
   const src = codeOf(read('js/orders/invoice-import-screen.js'));
   assert.match(src, /bucketOf\(entry\) === 'check'\s*&& \(\['new', 'unchanged'\]\.includes\(row\.status\) \|\| row\.held === true \|\| needsConfirmation\(row\)\)/);
+});
+
+// ── review round 3: a factor other than 1 is never applied silently ──────────────────
+
+const cartonOnInvoice = () => rawIngredient({ weight: '1 kg', packCount: 10, prices: [point({ pricePerUnit: 8, qty: 80 })] });
+const FILE_ING = () => fileOf([cartonOnInvoice()]).ingredients[0];
+const NOW = '2026-10-06T10:00:00Z';
+
+function assertHeldUntilConfirmed(row, { rescaledPrice, stored, file }) {
+  assert.equal(row.checkReason, CHECK_REASONS.WEIGHT_RESCALED);
+  assert.equal(row.checkStored, stored);
+  assert.equal(row.checkFile, file);
+  const held = entryOf(row);
+  assert.equal(bucketOf(held), 'check');
+  assert.equal(held.row.held, true);
+  assert.equal(importTotals([held]).rows, 0);
+  assert.deepEqual(ingredientWrites(held.row, FILE_ING(), NOW, {}), [], 'nothing is written while it is held');
+  assert.equal(held.row.heldRow.newPoints[0].pricePerUnit, rescaledPrice, 'the held comparison is the rescaled price');
+  const confirmed = entryOf(row, { confirm: new Set([row.key]) });
+  assert.equal(confirmed.row.held, undefined);
+  assert.equal(confirmed.row.newPoints[0].pricePerUnit, rescaledPrice);
+  assert.ok(ingredientWrites(confirmed.row, FILE_ING(), NOW, {}).length > 0);
+}
+
+test('R1 · a Singola card against an invoice «10 × 1 kg»: 80, never silently — no price in force (update-price)', () => {
+  const row = planOne(cartonOnInvoice(), ctxOf({ ingredients: [stored({ weight: '1 kg' })] }));
+  assert.equal(row.status, 'update-price');
+  assertHeldUntilConfirmed(row, { rescaledPrice: 80, stored: '1 kg', file: '10 × 1 kg' });
+});
+
+test('R2 · the same with a stored price in ANOTHER unit (history-only)', () => {
+  const doc = { priceUnit: 'pcs', pricePerUnit: 3, unitWeightKg: 1, priceUpdatedAt: '2026-01-01T12:00:00.000Z' };
+  const row = planOne(cartonOnInvoice(), ctxOf({ ingredients: [stored({ weight: '1 kg' })], pricesById: { 'ing-1': doc } }));
+  assert.equal(row.status, 'history-only');
+  assertHeldUntilConfirmed(row, { rescaledPrice: 80, stored: '1 kg', file: '10 × 1 kg' });
+});
+
+test('R3 · the same with a stored price NEWER than the invoice (history-only)', () => {
+  const doc = priceDoc({ priceUpdatedAt: '2026-12-01T12:00:00.000Z' });
+  const row = planOne(cartonOnInvoice(), ctxOf({ ingredients: [stored({ weight: '1 kg' })], pricesById: { 'ing-1': doc } }));
+  assert.equal(row.status, 'history-only');
+  assertHeldUntilConfirmed(row, { rescaledPrice: 80, stored: '1 kg', file: '10 × 1 kg' });
+});
+
+test('R4 · the mirror: a Cartone 10 × 1 kg card against an invoice for one 1 kg item: 0.8, held', () => {
+  const single = rawIngredient({ weight: '1 kg', packCount: null, prices: [point({ pricePerUnit: 8, qty: 8 })] });
+  const row = planOne(single, ctxOf({ ingredients: [stored({ weight: '1 kg', packCount: 10 })] }));
+  assert.equal(row.status, 'update-price');
+  assert.equal(row.checkReason, CHECK_REASONS.WEIGHT_RESCALED);
+  assert.equal(row.checkStored, '10 × 1 kg');
+  assert.equal(row.checkFile, '1 kg');
+  assert.equal(entryOf(row).row.heldRow.newPoints[0].pricePerUnit, 0.8);
+  assert.equal(entryOf(row).row.held, true);
+  assert.equal(entryOf(row, { confirm: new Set([row.key]) }).row.newPoints[0].pricePerUnit, 0.8);
+});
+
+test('R5 · priority: unreadable weight, then rescaled, then price jump, then older invoice', () => {
+  const doc = priceDoc();
+  const both = planOne(rawIngredient({ prices: [point({ pricePerUnit: 3 })], latestUnverified: true }),
+    ctxOf({ ingredients: [stored({ weight: '20 kg' })], pricesById: { 'ing-1': doc } }));
+  assert.equal(both.checkReason, CHECK_REASONS.WEIGHT_RESCALED, 'rescaled beats a jump and an older invoice');
+  const unreadable = planOne(rawIngredient({ prices: [point({ pricePerUnit: 3 })] }),
+    ctxOf({ ingredients: [stored({ weight: 'sacco' })], pricesById: { 'ing-1': doc } }));
+  assert.equal(unreadable.checkReason, CHECK_REASONS.WEIGHT_UNREADABLE);
+});
+
+test('R6 · the rescaled sentence names both packs, in English and Italian, and the screen passes them', () => {
+  assert.equal(DICT.en['invoiceImport.check.weightRescaled'],
+    'Price worked out with the pack saved in Mise ({stored}) instead of the one on the invoice ({file}). Check it.');
+  assert.equal(DICT.it['invoiceImport.check.weightRescaled'],
+    'Prezzo calcolato con la confezione salvata in Mise ({stored}) invece di quella in fattura ({file}). Controllalo.');
+  const src = codeOf(read('js/orders/invoice-import-screen.js'));
+  assert.match(src, /t\('invoiceImport\.check\.weightRescaled', \{ stored: row\.checkStored, file: row\.checkFile \}\)/);
+});
+
+test('R7 · a new row answered «do not import» does not say it will be created', () => {
+  const src = codeOf(read('js/orders/invoice-import-screen.js'));
+  assert.doesNotMatch(src, /planned && planned\.status === 'new'\) return t\('invoiceImport\.check\.olderInvoiceNew'/);
+  assert.match(src, /if \(row\.status === 'new'\) return t\('invoiceImport\.check\.olderInvoiceNew'/, 'the row\'s CURRENT status decides');
 });
