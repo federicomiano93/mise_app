@@ -976,21 +976,55 @@ body[data-card="foodcost"] .app-header.app-header--save {
 }
 .kiosk-rest--shown { opacity: 1; }
 .kiosk-rest:focus-visible { outline: 2px solid var(--kiosk-text); outline-offset: -6px; }
+/* The block fills the cover and is what the burn-in shift moves (transform from kiosk.js):
+   the small clock/venue/date corner on top-left, the Orders sections in the centre. */
 .kiosk-rest-block {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-4);
+  box-sizing: border-box;
+}
+.kiosk-rest-corner {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  text-align: left;
+}
+.kiosk-rest-time {
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.3;
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+.kiosk-rest-line { font-size: 1rem; line-height: 1.3; margin: 0; }
+.kiosk-rest-centre {
+  flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
-  padding: var(--space-4);
+  justify-content: safe center;   /* overflow clips at the bottom, never the first title */
+  gap: calc(var(--space-4) * 2);
+  overflow: hidden;
+  text-align: center;
 }
-.kiosk-rest-time {
-  font-size: 72px;
-  font-weight: 300;
-  line-height: 1;
-  font-variant-numeric: tabular-nums;
+.kiosk-rest-section { margin: 0; max-width: 100%; }
+.kiosk-rest-section-title { font-size: 1.5rem; font-weight: 600; line-height: 1.3; margin: 0 0 var(--space-2); }
+.kiosk-rest-names {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  /* «più evidenti e grandi» (Federico, 6 Oct 2026): up to 48px on the lab tablet,
+     still ~25px on a 296px phone so four names and «+N» fit. */
+  font-size: clamp(1.5rem, 3vw + 1rem, 3rem);
+  font-weight: 600;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
 }
-.kiosk-rest-line { font-size: 16px; line-height: 1.3; margin: 0; }
-.kiosk-rest-tap { font-size: 14px; margin: var(--space-3) 0 0; }
 
 /* ── "Who can get in", and the join-code field ──────────────────────────────
    In tokens.css because it is not one feature's screen: the roster is opened
@@ -1415,8 +1449,10 @@ body[data-card="foodcost"] .app-header.app-header--save {
   font-family: inherit;
   cursor: pointer;
 }
-.send-route:active { background: var(--accent-light); }
+.send-route:active { background: var(--accent-light); transform: scale(.97); }
 .send-route:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 2px; }
+.send-route-primary { border-color: var(--brand); background: var(--accent-light); }
+.send-route-primary:active { background: var(--accent-border); transform: scale(.97); }
 .send-route-icon { display: flex; align-items: center; color: var(--brand); flex-shrink: 0; }
 .send-route-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .send-route-name { font-size: 15px; font-weight: 600; }

@@ -127,6 +127,8 @@
 
   <!-- Once-a-day "order to place today" reminder, filled by js/home-orders-badge.js.
        Empty (and hidden) when no order is due or it has already shown today. -->
+  <!-- Rest / Exit, shown only while kiosk mode is on for this device (js/home-kiosk-band.js). -->
+  <div id="home-kiosk-band" class="home-kiosk-band" role="group" hidden></div>
   <div id="home-reminder"></div>
 
   <nav class="home-grid" data-i18n="aria.mainSections" data-i18n-attr="aria-label" aria-label="Main sections">
@@ -262,6 +264,7 @@
   <script type="module" src="js/install-hint-boot.js"></script>
 <script type="module" src="js/location-title.js"></script>
 <script type="module" src="js/home-session.js"></script>
+<script type="module" src="js/home-kiosk-band.js"></script>
 <script type="module" src="js/home-orders-badge.js"></script>
 <script type="module" src="js/help-button.js"></script>
 <script type="module" src="js/home-client-orders-badge.js"></script>

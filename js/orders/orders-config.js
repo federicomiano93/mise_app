@@ -4,6 +4,7 @@
 import { normalizeSendRoutes } from './send-routes.js';
 import { weekStartOf } from './work-week.js';
 import { normalizeSupplierOrder } from './supplier-order.js';
+import { normalizeFavourites } from './favourite-suppliers.js';
 
 // This is the first setting Orders has ever had. It lives in Firestore at
 // config/orders so it applies to every phone in the bakery — "we do not track stock
@@ -52,6 +53,9 @@ export function normalizeOrdersConfig(doc) {
     // The order the suppliers are listed in, chosen in Settings (supplier-order.js).
     // Empty = alphabetical, exactly as before the setting existed.
     supplierOrder: normalizeSupplierOrder(doc?.supplierOrder),
+    // The starred suppliers, shown first in the Orders list. READ ONLY here: starring is done
+    // in Fornitori with arrayUnion/arrayRemove, and no Orders save ever sends this field.
+    favouriteSuppliers: normalizeFavourites(doc?.favouriteSuppliers),
   };
 }
 

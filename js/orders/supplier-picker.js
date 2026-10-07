@@ -20,6 +20,30 @@ const BACK_ICON =
 // here and in history.js, and both wrote the English plural by hand — so an
 // Italian app counted "3 items" beside every translated word around them. Real
 // plurals via Intl, like every other counted phrase in the app.
+// Wrap `fn` so a call made while the previous one's promise is still pending is ignored.
+// `onChange(pending)` lets the caller show it. A synchronous result is never "pending".
+export function ignoreWhilePending(fn, onChange = () => {}) {
+  let pending = false;
+  return (...args) => {
+    if (pending) return undefined;
+    const result = fn(...args);
+    if (result && typeof result.then === 'function') {
+      pending = true;
+      onChange(true);
+      const settle = () => { pending = false; onChange(false); };
+      result.then(settle, settle);
+    }
+    return result;
+  };
+}
+
+// Where focus should go when a busy send ends: nowhere if it is already somewhere real,
+// else the button when it is usable, else the picker's heading. Never left on <body>.
+export function focusAfterBusy(active, body, button, fallback) {
+  if (active && active !== body) return null;
+  return button && !button.disabled ? button : fallback;
+}
+
 export function itemsLabel(count) {
   return t('orders.itemsCount', { n: count });
 }
@@ -170,10 +194,23 @@ export function buildSupplierPicker(rows, options, callbacks) {
     return checks.filter(c => c.input.checked).map(c => c.row);
   }
 
+  // ⚠️ A SEND THAT TAKES TIME (the order pictures are drawn first) IS NOT STARTED TWICE: a
+  // second tap while the first is still pending is ignored, and the button shows it.
+  const confirmOnce = ignoreWhilePending(
+    (selected, opts) => callbacks.onConfirm(selected, opts),
+    pending => {
+      actionBtn.disabled = pending || !checks.some(c => c.input.checked);
+      // A dialog that closed while the button was disabled could not give focus back to it
+      // (focus() on a disabled button does nothing), so it is restored here, on release.
+      if (!pending && overlay.isConnected) {
+        focusAfterBusy(document.activeElement, document.body, actionBtn,
+          overlay.querySelector('h1'))?.focus();
+      }
+    });
   actionBtn.addEventListener('click', () => {
     const selected = selection();
     if (!selected.length) return;
-    callbacks.onConfirm(selected, { grouped: formatSwitch ? formatSwitch.grouped : true });
+    confirmOnce(selected, { grouped: formatSwitch ? formatSwitch.grouped : true });
   });
 
   // ⚠️ NO `grouped` IS PASSED HERE, AND THAT IS THE POINT. The format chooser
@@ -193,7 +230,7 @@ export function buildSupplierPicker(rows, options, callbacks) {
           icon: BACK_ICON, onClick: () => callbacks.onBack(),
         }),
       ]),
-      el('div', { class: 'app-header-title orders-header-title' }, [el('h1', { text: title })]),
+      el('div', { class: 'app-header-title orders-header-title' }, [el('h1', { text: title, tabindex: '-1' })]),
       el('span', { class: 'app-header-slot' }),
     ]),
     scroll,

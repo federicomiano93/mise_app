@@ -152,16 +152,33 @@ test('⚠️ it answers Escape and gives focus back — which the chooser it cop
 
 // ── 3. The two bans this release is allowed to state ─────────────────────────
 
-test('⚠️⚠️ no navigator.share, anywhere in the app', () => {
+test('⚠️⚠️ no navigator.share anywhere in the app — except the order picture', () => {
+  // 7 Oct 2026: the owner reversed «one mechanism» for ONE thing, the order shown as a
+  // picture (a supplier can open it and zoom). Exactly js/orders/order-image.js may call it;
+  // tests/order-image.test.mjs pins that what it shares is a File, never a link or a download.
   // ⚠️ REPO-WIDE, NOT TWO FILES. Until 24 Aug 2026 this was asserted about js/share.js
   // and one screen; a third file could have reached for the platform API and nothing
   // would have said so. Federico was asked between the phone's own share sheet and the
   // app's and chose the app's: the phone's looks different on every device, is absent
   // in some desktop browsers, and would stand beside the one Orders already uses.
-  const offenders = APP_FILES.filter(([rel, src]) => rel.endsWith('.js') && /navigator\.share/.test(codeOf(src)))
+  const offenders = APP_FILES.filter(([rel, src]) => rel.endsWith('.js')
+    && rel !== 'js/orders/order-image.js' && /navigator\.share/.test(codeOf(src)))
     .map(([rel]) => rel);
   assert.deepEqual(offenders, [], 'one mechanism, or the same errand behaves two ways on '
     + 'the same phone');
+});
+
+test('⚠️ canShare and .share( are used by the order picture module and nowhere else', () => {
+  const offenders = APP_FILES.filter(([rel, src]) => rel.endsWith('.js')
+    && rel !== 'js/orders/order-image.js' && /\bcanShare\b|\.share\(/.test(codeOf(src)))
+    .map(([rel]) => rel);
+  assert.deepEqual(offenders, []);
+});
+
+test('⚠️ only the send chooser imports the order picture module', () => {
+  const importers = APP_FILES.filter(([rel, src]) => rel.endsWith('.js')
+    && /from\s+['"][^'"]*order-image\.js['"]/.test(codeOf(src))).map(([rel]) => rel);
+  assert.deepEqual(importers, ['js/orders/send-chooser.js']);
 });
 
 test('⚠️ every clipboard write is raced against a clock, in ONE place', () => {

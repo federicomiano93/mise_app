@@ -22,6 +22,7 @@ import { supplierLabel } from '../supplier-label.js';
 import { el } from './dom.js';
 import { buildSearchBox } from './search-box.js';
 import { filterSuppliers } from './ingredient-search.js';
+import { favouriteGroups } from './favourite-suppliers.js';
 import { itemsLabel, summaryBarLabel } from './supplier-picker.js';
 import { spellShortDate } from './day.js';
 import { nextDeliveryAfter } from './order-day.js';
@@ -192,7 +193,14 @@ export function mountSupplierList(container, ctx) {
       }));
       return;
     }
-    rows.forEach(s => list.appendChild(buildSupplierRow(s, data, ctx)));
+    // Search and filter have already cut `rows`; the starred ones go first under their own
+    // heading. Each group keeps the venue's supplier order. None in view = no headings.
+    for (const group of favouriteGroups(rows, ctx.favourites?.() || [])) {
+      if (group.headingKey) {
+        list.appendChild(el('h3', { class: 'mgmt-section-title', text: t(group.headingKey) }));
+      }
+      group.suppliers.forEach(s => list.appendChild(buildSupplierRow(s, data, ctx)));
+    }
   }
 
   // `ctx.searchExtras` is the "⇄ Ingredienti" swap button orders-main.js builds

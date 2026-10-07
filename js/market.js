@@ -149,6 +149,9 @@ const LABEL_WORDS = Object.freeze({
     // The title of the order message a SUPPLIER receives (js/orders/order-text.js): it
     // is read in the venue's country, not on the owner's screen.
     orderTitle: 'Order',
+    // The word in the picture's file name: lower case and plain letters, so nothing has to
+    // reshape a translated word (case is the dictionary's, never the code's).
+    orderFileWord: 'order',
     // The other words of that message: the heading of a supplier with no name, the
     // stand-in for an ingredient deleted since the order, and the email subject.
     deletedIngredient: 'Deleted ingredient',
@@ -167,6 +170,7 @@ const LABEL_WORDS = Object.freeze({
     bestBefore: 'Da consumarsi preferibilmente entro il',
     storage: 'Conservazione',
     orderTitle: 'Ordine',
+    orderFileWord: 'ordine',
     deletedIngredient: 'Ingrediente eliminato',
     emailSubject: 'Ordine da {name}',
   },
