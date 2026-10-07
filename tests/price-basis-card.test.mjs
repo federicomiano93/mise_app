@@ -275,3 +275,100 @@ test('choosing a segment counts as a change for the leave-without-saving check (
   click(card.basisNamed('per kg'));
   assert.equal(snapshotChanged(snapshot), true);
 });
+
+// ── The box shows a ROUNDED figure (8 Oct 2026): what is saved and what is shown must still agree ───────────
+// The Singola | Cartone segment, and the weight amount box.
+const formButton = (card, text) => card.all().find(n => n.tagName === 'BUTTON'
+  && n.classList.contains('set-seg-btn') && n.textContent === text && shown(n));
+const weightAmount = (card) => card.all().find(n => n.tagName === 'INPUT' && n.attributes['aria-label'] === 'Weight amount');
+const CASE_12 = {
+  ...BASE, unit: 'cartone', packUnit: 'busta', packCount: 12, weight: '2.27kg',
+  priceUnit: 'pcs', pricePerUnit: 2, unitWeightKg: 2.27, casePrice: 24, caseCount: 12, caseItemUnit: 'pcs',
+};
+
+test('a pack of 2.27 kg at 10 shows 4.41 per kg, and comes back to exactly 10', async () => {
+  const card = openCard({ ...BASE, unit: 'sacco', weight: '2.27kg', priceUnit: 'pcs', pricePerUnit: 9, unitWeightKg: 2.27 });
+  type(card.priceBox(), '10');
+  click(card.basisNamed('per kg'));
+  assert.equal(card.priceBox().value, '4.41');
+  click(card.basisNamed('per pack'));
+  assert.equal(card.priceBox().value, '10');
+  click(card.basisNamed('per kg'));
+  const { payload } = await card.save();
+  assert.equal(payload.pricePerUnit, 10, 'the rounded 4.41 never reaches the price');
+  assert.equal(payload.priceBasis, 'rate');
+});
+
+test('a case typed, shown per kg, then made a Singola saves the exact pack price, not the rounded box', async () => {
+  const card = openCard(CASE_12);
+  type(card.priceBox(), '30');
+  click(card.basisNamed('per kg'));
+  assert.equal(card.priceBox().value, '1.1');
+  click(formButton(card, 'Single'));
+  const { payload } = await card.save();
+  assert.equal(payload.priceBasis, 'rate');
+  assert.equal(payload.pricePerUnit, 2.5, 'not 2.497 from the shown 1.1');
+});
+
+test('a case of 1000 cups typed, shown per pack, then made a Singola saves 0.012 and shows it', async () => {
+  const card = openCard({
+    ...BASE, unit: 'cartone', packUnit: 'busta', packCount: 1000, weight: '5g',
+    priceUnit: 'pcs', pricePerUnit: 0.01, unitWeightKg: 0.005, casePrice: 10, caseCount: 1000, caseItemUnit: 'pcs',
+  });
+  type(card.priceBox(), '12');
+  click(card.basisNamed('per pack'));
+  assert.equal(card.priceBox().value, '0.012');
+  click(formButton(card, 'Single'));
+  const { payload } = await card.save();
+  assert.equal(payload.priceUnit, 'pcs');
+  assert.equal(payload.pricePerUnit, 0.012);
+});
+
+test('control: the same case shown per kg and saved as a Cartone keeps 30', async () => {
+  const card = openCard(CASE_12);
+  type(card.priceBox(), '30');
+  click(card.basisNamed('per kg'));
+  const { payload } = await card.save();
+  assert.equal(payload.casePrice, 30);
+  assert.equal(payload.pricePerUnit, 2.5);
+  assert.equal(payload.priceBasis, 'rate');
+});
+
+test('typed per kg, shown per pack, then the weight changes: the box follows and agrees with the save', async () => {
+  const card = openCard({ ...BASE, unit: 'sacco', weight: '2.27kg', priceUnit: 'pcs', pricePerUnit: 9, unitWeightKg: 2.27 });
+  click(card.basisNamed('per kg'));
+  assert.equal(card.priceBox().value, '3.96');
+  type(card.priceBox(), '4.40');
+  click(card.basisNamed('per pack'));
+  assert.equal(card.priceBox().value, '9.99');
+  type(weightAmount(card), '2.5');
+  assert.equal(card.priceBox().value, '11', 'the box says what Save will write');
+  const { payload } = await card.save();
+  assert.equal(payload.pricePerUnit, 11);
+  assert.equal(payload.unitWeightKg, 2.5);
+});
+
+test('typed per case, shown per pack, then the count changes: the box follows and the case stays 30', async () => {
+  const card = openCard(CARTON);
+  type(card.priceBox(), '30');
+  click(card.basisNamed('per pack'));
+  assert.equal(card.priceBox().value, '5');
+  const count = card.all().find(n => n.tagName === 'INPUT' && n.attributes['aria-label'] === 'How many in the case');
+  type(count, '10');
+  assert.equal(card.priceBox().value, '3');
+  const { payload } = await card.save();
+  assert.equal(payload.casePrice, 30);
+  assert.equal(payload.pricePerUnit, 3);
+});
+
+test('a number typed over a figure a tap wrote is what the person typed', async () => {
+  const card = openCard({ ...BASE, unit: 'sacco', weight: '2.27kg', priceUnit: 'pcs', pricePerUnit: 9, unitWeightKg: 2.27 });
+  type(card.priceBox(), '10');
+  click(card.basisNamed('per kg'));
+  type(card.priceBox(), '5');
+  type(weightAmount(card), '2');
+  assert.equal(card.priceBox().value, '5', 'a typed box is never refilled');
+  const { payload } = await card.save();
+  assert.equal(payload.pricePerUnit, 10);
+  assert.equal(payload.unitWeightKg, 2);
+});

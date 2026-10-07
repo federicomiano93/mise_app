@@ -320,9 +320,21 @@ function priceBlock(item, actions, defaultUnit = null, ctx) {
   //   boxCanon  — while the box was only FILLED (refresh), the figure behind it in the form's own terms
   //               (the pack or case price), unrounded: another field that makes the price dirty (the piece
   //               weight, «Ricalcola») must not re-read the rounded text.
+  //   written   — what a segment tap WROTE in the box: its text, the exact figure behind it and its basis. Two
+  //               jobs (review of 8 Oct 2026): when the anchor's basis is no longer offered (a Cartone typed «per
+  //               case», tapped «per pack», then turned into a Singola) the save converts from this exact figure,
+  //               not from the rounded text; and when the weight or the count changes, refresh() re-derives the
+  //               box from the anchor, so the box never says one price while Save writes another. Typing in the
+  //               box clears it (the box then holds what was typed).
   let boxTyped = false;
   let anchor = null;
   let boxCanon = null;
+  let written = null;
+  const writeBox = (exact, basisWritten) => {
+    const text = localNumber(shownPrice(exact), false);
+    casePriceBox.value = text;
+    written = { text, value: exact, basis: basisWritten };
+  };
   const usableAnchor = () => (boxTyped && anchor && basisOptions(currentForm()).includes(anchor.basis)
     && positiveNumber(anchor.value) !== null ? anchor : null);
 
@@ -336,9 +348,9 @@ function priceBlock(item, actions, defaultUnit = null, ctx) {
     // carton count) the tap does NOTHING: the typed number stays and so does the segment.
     const a = usableAnchor();
     if (a) {
-      const converted = convertBasisPrice(form, a.basis, next, a.value, fmt, weight);
+      const converted = convertBasisPrice(form, a.basis, next, a.value, fmt, weight, 12);
       if (converted === null) return;
-      casePriceBox.value = localNumber(shownPrice(converted), false);
+      writeBox(converted, next);
     }
     basis = next;
     refresh();
@@ -418,6 +430,10 @@ function priceBlock(item, actions, defaultUnit = null, ctx) {
     } else if (a) {
       const exact = convertBasisPrice(currentForm(), a.basis, basisOf(currentForm(), basis), a.value, now().fmt, now().weight, 12);
       if (exact !== null) price = exact;
+    } else if (written && casePriceBox.value === written.text && basisOptions(currentForm()).includes(written.basis)) {
+      // The anchor's basis left with the form, but the box still shows what a tap wrote: its exact figure.
+      const exact = convertBasisPrice(currentForm(), written.basis, basisOf(currentForm(), basis), written.value, now().fmt, now().weight, 12);
+      if (exact !== null) price = exact;
     }
     return {
       ...formatPriceInput(now().fmt, now().weight, {
@@ -456,7 +472,14 @@ function priceBlock(item, actions, defaultUnit = null, ctx) {
     // The box speaks in the chosen basis: the stored figure (a pack or a case price) is re-expressed in it.
     const basisNow = basisOf(form, basis);
     const inBasis = (figure) => (figure === null ? null : shownPrice(storedPriceToBasis(form, basisNow, figure, fmt, weight)));
+    // A figure a tap wrote follows the weight and the count: re-derived from what was typed, in the basis shown.
+    const a = usableAnchor();
+    if (priceTyped && written && a && casePriceBox.value === written.text) {
+      const exact = convertBasisPrice(form, a.basis, basisNow, a.value, fmt, weight, 12);
+      if (exact !== null) writeBox(exact, basisNow);
+    }
     if (!priceTyped) {
+      written = null;
       boxCanon = recomputed ? start.suggestion : start.value;
       const shown = inBasis(recomputed ? start.suggestion : start.value);
       const suggested = inBasis(start.suggestion);
@@ -578,6 +601,7 @@ function priceBlock(item, actions, defaultUnit = null, ctx) {
   // What the person typed in the price box, unrounded, under the basis it was typed in (see boxTyped).
   const anchorBox = () => {
     boxTyped = true;
+    written = null;
     anchor = { value: typedDecimal(casePriceBox.value), basis: basisOf(currentForm(), basis) };
   };
   casePriceBox.addEventListener('input', anchorBox);
