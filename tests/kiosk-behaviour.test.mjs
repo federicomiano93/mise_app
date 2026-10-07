@@ -238,6 +238,65 @@ test('no second reload the same day', () => inEnv({ local: { 'kiosk-last-reload'
   assert.equal(e.reloads.n, 0);
 }));
 
+// The Orders lines on the cover: the feed (js/kiosk-orders.js, loaded lazily) is started when
+// the cover goes up and stopped on wake and on night. Deleting the syncRestFeed() call from
+// enter() makes this fail.
+function fakeOrdersModule() {
+  const log = [];
+  return {
+    log,
+    mod: {
+      fetchRestSections: async () => [],
+      createRestOrdersFeed: () => ({
+        start: () => log.push('start'), stop: () => log.push('stop'),
+        current: () => [], refreshIfStale: () => log.push('stale'),
+      }),
+    },
+  };
+}
+
+test('the Orders feed starts on rest and stops on wake', () => inEnv({}, async e => {
+  const fake = fakeOrdersModule();
+  let loads = 0;
+  e.k.setOrdersLoader(async () => { loads++; return fake.mod; });
+  assert.equal(loads, 0, 'not loaded while active');
+  await e.tick();
+  assert.equal(loads, 0);
+  e.advance(3 * MIN); await e.tick();
+  assert.equal(e.k.state(), 'rest');
+  assert.equal(loads, 1, 'loaded the first time it is needed');
+  assert.equal(fake.log.filter(x => x === 'start').length, 1);
+  e.k.session({ status: 'signed-out' });   // a wake path
+  assert.equal(e.k.state(), 'active');
+  assert.equal(fake.log.at(-1), 'stop');
+}));
+
+test('the Orders feed stops when the night begins', () => inEnv({}, async e => {
+  const fake = fakeOrdersModule();
+  e.k.setOrdersLoader(async () => fake.mod);
+  e.advance(3 * MIN); await e.tick();
+  assert.equal(fake.log.at(-1), 'start');
+  e.advance(61 * MIN); await e.tick();
+  assert.equal(e.k.state(), 'night');
+  assert.equal(fake.log.at(-1), 'stop');
+}));
+
+test('a module that fails to load leaves the kiosk working, and is not retried in a loop', () => inEnv({}, async e => {
+  let loads = 0;
+  e.k.setOrdersLoader(async () => { loads++; throw new Error('Jane Doe'); });
+  const warn = console.warn;
+  const logged = [];
+  console.warn = (...a) => logged.push(a);
+  try {
+    e.advance(3 * MIN); await e.tick();
+    assert.equal(e.k.state(), 'rest');
+    assert.ok(e.cover());
+    await e.tick();
+    assert.equal(loads, 1);
+    assert.ok(!JSON.stringify(logged).includes('Jane'));
+  } finally { console.warn = warn; }
+}));
+
 test('waking while a reload is on its way drops the resume marker', () => inEnv({}, async e => {
   e.advance(3 * MIN); await e.tick();
   e.waiting.value = true;

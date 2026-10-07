@@ -58,10 +58,17 @@ export function offerFor({ settings, canManage, suppliers }) {
   });
 }
 
+// The roads that can be taken now. `supplierRoadsOnly` is «Send it now» (sent-check.js): it means
+// putting the order in a SUPPLIER's hands, so the in-app list for a manager is not offered.
+export function sendOffers({ settings, canManage, suppliers, supplierRoadsOnly = false }) {
+  return offerFor({ settings, canManage, suppliers })
+    .filter(o => o.usable && (!supplierRoadsOnly || routeSendsToSupplier(o.route)));
+}
+
 // Ask, then act. `rows` are the picked suppliers ({ id, name, items }).
 export function chooseAndSend({ rows, settings, canManage, suppliers, locationName, language, grouped,
-                               onSendToManager, onSent, beforeSend }) {
-  const offers = offerFor({ settings, canManage, suppliers }).filter(o => o.usable);
+                               onSendToManager, onSent, beforeSend, supplierRoadsOnly = false }) {
+  const offers = sendOffers({ settings, canManage, suppliers, supplierRoadsOnly });
 
   if (!offers.length) {
     // Cannot happen through the settings screen, which refuses to close the last

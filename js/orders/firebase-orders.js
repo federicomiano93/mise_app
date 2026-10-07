@@ -212,6 +212,20 @@ export async function getHistoryForDay(date) {
   return snap.docs.map(d => ({ id: d.id, ...d.data() }));
 }
 
+// The orders recorded from `fromDate` onwards, read ONCE (no listener). The kiosk rest
+// screen (js/kiosk-orders.js) asks for the current work week only — a bounded `date >=`
+// query, a handful of documents, never the archive (P14). getDocs on purpose, not
+// getDocsFromServer: a resting tablet that lost its connection may answer from the offline
+// cache, which is better than an empty screen.
+export async function getHistoryFrom(fromDate) {
+  await authReady;
+  const snap = await getDocs(query(
+    collection(db, pathFor(COLLECTIONS.history)),
+    where('date', '>=', fromDate),
+  ));
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+
 // Create or merge a document. The bakery field is always stamped server-side
 // of the client (rules also enforce that it matches the location folder).
 export async function saveDoc(name, id, data) {
