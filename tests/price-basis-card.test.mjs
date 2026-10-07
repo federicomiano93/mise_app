@@ -324,6 +324,35 @@ test('a case of 1000 cups typed, shown per pack, then made a Singola saves 0.012
   assert.equal(payload.pricePerUnit, 0.012);
 });
 
+const CUPS = {
+  ...BASE, unit: 'cartone', packUnit: 'busta', packCount: 1000, weight: '5g',
+  priceUnit: 'pcs', pricePerUnit: 0.01, unitWeightKg: 0.005, casePrice: 10, caseCount: 1000, caseItemUnit: 'pcs',
+};
+
+test('after Cartone → Singola a tap still CONVERTS: «per kg» shows 2.4 and saves 0.012 a pack', async () => {
+  const card = openCard(CUPS);
+  type(card.priceBox(), '12');
+  click(card.basisNamed('per pack'));
+  click(formButton(card, 'Single'));
+  assert.equal(card.priceBox().value, '0.012');
+  click(card.basisNamed('per kg'));
+  assert.equal(card.priceBox().value, '2.4', 'the label changed, so the number must too');
+  const { payload } = await card.save();
+  assert.equal(payload.pricePerUnit, 0.012);
+  assert.equal(payload.priceBasis, 'rate');
+});
+
+test('a case price left in the box by Cartone → Singola is read as shown, and a tap converts it', async () => {
+  const card = openCard(CUPS);
+  type(card.priceBox(), '12');
+  click(formButton(card, 'Single'));
+  assert.equal(card.priceBox().value, '12');
+  click(card.basisNamed('per kg'));
+  assert.equal(card.priceBox().value, '2400');
+  const { payload } = await card.save();
+  assert.equal(payload.pricePerUnit, 12, 'what the box said a pack costs, before the tap');
+});
+
 test('control: the same case shown per kg and saved as a Cartone keeps 30', async () => {
   const card = openCard(CASE_12);
   type(card.priceBox(), '30');

@@ -337,6 +337,21 @@ function priceBlock(item, actions, defaultUnit = null, ctx) {
   };
   const usableAnchor = () => (boxTyped && anchor && basisOptions(currentForm()).includes(anchor.basis)
     && positiveNumber(anchor.value) !== null ? anchor : null);
+  // The exact figure behind a TYPED box, with its basis — the one source for a tap and for the save, so the two
+  // can never part: the anchor while its basis is still offered; else what a tap wrote, while the box still shows
+  // it; else the box's own figure under the basis it is shown in. null for a box nobody typed in.
+  const typedFigure = () => {
+    const a = usableAnchor();
+    if (a) return a;
+    if (!boxTyped) return null;
+    const form = currentForm();
+    if (written && casePriceBox.value === written.text && basisOptions(form).includes(written.basis)) {
+      return { value: written.value, basis: written.basis };
+    }
+    const shownFigure = positiveNumber(typedDecimal(casePriceBox.value));
+    const shownBasis = basisOf(form, basis);
+    return shownFigure !== null && shownBasis !== null ? { value: shownFigure, basis: shownBasis } : null;
+  };
 
   function chooseBasis(next) {
     const { fmt, weight } = now();
@@ -346,7 +361,7 @@ function priceBlock(item, actions, defaultUnit = null, ctx) {
     // A number already typed is CONVERTED, not kept: the same money in the new basis. A price nobody
     // touched is re-shown by refresh() from the stored one. ⚠️ When the conversion is impossible (an empty
     // carton count) the tap does NOTHING: the typed number stays and so does the segment.
-    const a = usableAnchor();
+    const a = typedFigure();
     if (a) {
       const converted = convertBasisPrice(form, a.basis, next, a.value, fmt, weight, 12);
       if (converted === null) return;
@@ -423,16 +438,12 @@ function priceBlock(item, actions, defaultUnit = null, ctx) {
     // behind it in the form's own terms (no basis to apply), a typed one is converted from what was typed.
     let price = typedDecimal(casePriceBox.value);
     let priceFor = basis;
-    const a = usableAnchor();
+    const a = typedFigure();
     if (!boxTyped && boxCanon !== null) {
       price = boxCanon;
       priceFor = null;
     } else if (a) {
       const exact = convertBasisPrice(currentForm(), a.basis, basisOf(currentForm(), basis), a.value, now().fmt, now().weight, 12);
-      if (exact !== null) price = exact;
-    } else if (written && casePriceBox.value === written.text && basisOptions(currentForm()).includes(written.basis)) {
-      // The anchor's basis left with the form, but the box still shows what a tap wrote: its exact figure.
-      const exact = convertBasisPrice(currentForm(), written.basis, basisOf(currentForm(), basis), written.value, now().fmt, now().weight, 12);
       if (exact !== null) price = exact;
     }
     return {
