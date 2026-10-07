@@ -68,6 +68,20 @@ export const DAILY_IMAGES_PER_PERSON = 40;
 export const DAILY_IMAGES_PER_VENUE = 150;
 export const WINDOW_MS = 24 * 60 * 60 * 1000;
 
+// What a failed reader call may put in the server log: the error's kind and its HTTP
+// status, never its message — the SDK's message can carry a fragment of the API key
+// (security audit, 7 Oct 2026). Shared with the pack reader.
+export function safeErrorLabel(err) {
+  // ⚠️ THE CLASS NAME FIRST: the Anthropic SDK's error classes (AuthenticationError,
+  // RateLimitError, APIConnectionTimeoutError…) never set `err.name`, which stays «Error».
+  const cls = err && err.constructor && typeof err.constructor.name === 'string'
+    ? err.constructor.name : '';
+  const raw = cls && cls !== 'Error' ? cls : (err && typeof err.name === 'string' ? err.name : '');
+  const name = raw ? raw.slice(0, 60) : 'Error';
+  const status = err && Number.isInteger(err.status) ? ` ${err.status}` : '';
+  return name + status;
+}
+
 // ── The payload ──────────────────────────────────────────────────────────────
 
 const BASE64 = /^[A-Za-z0-9+/]+={0,2}$/;
@@ -363,9 +377,10 @@ export async function readRecipe({ uid, locationId, images, store, ask, now }) {
     message = await ask(images);
   } catch (err) {
     // ⚠️ THE READER'S OWN MESSAGE IS NEVER PASSED ON. It is written for a developer,
-    // it is English, and it can contain a fragment of the API key.
+    // it is English, and it can contain a fragment of the API key. ⚠️ Not into the server
+    // log either (security audit, 7 Oct 2026): only the error's kind and HTTP status.
     return { error: { code: 'internal', key: 'read-failed', message: 'The photo could not be read. Try again.' },
-      logged: String(err && err.message) };
+      logged: safeErrorLabel(err) };
   }
 
   const result = readToolResult(message);

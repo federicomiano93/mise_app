@@ -222,7 +222,8 @@ test('⚠️ the allowance is charged BEFORE the reader runs, and KEPT when it t
   assert.equal(out.error.code, 'internal');
   assert.ok(!/boom/.test(out.error.message),
     '⚠️ the reader\'s own message is never passed on: it can carry a fragment of the key');
-  assert.equal(out.logged, 'boom', 'it is logged instead');
+  // ⚠️ Nor into the server log (security audit, 7 Oct 2026): only the kind and status.
+  assert.equal(out.logged, 'Error', 'the log gets the error kind, never its message');
   // ⚠️ THE STAMPS, NOT MERELY THE DOCUMENT. A refund written as `{ at: [] }` leaves a
   // document behind and would pass a mere existence check.
   assert.equal(store.saved['recipe-photo-limits/u1'].at.length, 1, 'the person still paid');
