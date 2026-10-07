@@ -409,7 +409,8 @@ export function openPeople(session) {
       // digits can be guessed — rarely, but a guessed manager or owner code is a stranger
       // running the venue. A link cannot be guessed. The server refuses it as well
       // (functions/onboarding.js createJoinCode); this only spares the owner the error.
-      const digitsNote = el('p', { class: 'people-note', text: t('people.add.digitsStaffOnly') });
+      // aria-live: a screen reader hears why the code button has just gone (P18).
+      const digitsNote = el('p', { class: 'people-note', 'aria-live': 'polite', text: t('people.add.digitsStaffOnly') });
       const showDigits = () => {
         const staff = newChoice.role === 'staff';
         byDigits.hidden = !staff;

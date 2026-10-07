@@ -106,7 +106,7 @@ const DICTIONARIES = Object.freeze({
     // already stated by the note above them and by the result screen below.
     'people.add.link': 'Send a link',
     'people.add.digits': 'Read out a code',
-    'people.add.digitsStaffOnly': 'A manager or an owner is invited with a link. A six-digit code is for employees only.',
+    'people.add.digitsStaffOnly': 'A manager, a head chef or an owner is invited with a link. A six-digit code is for employees only.',
     'role.owner.inSentence': 'owner',
     'role.manager.inSentence': 'manager',
     'role.headChef.inSentence': 'head chef',
@@ -3269,7 +3269,7 @@ const DICTIONARIES = Object.freeze({
     'people.roleOf': 'Ruolo di {name}',
     'people.add.link': 'Manda un link',
     'people.add.digits': 'Detta un codice',
-    'people.add.digitsStaffOnly': 'Un responsabile o un titolare si invita con un link. Il codice di 6 cifre è solo per i dipendenti.',
+    'people.add.digitsStaffOnly': 'Un responsabile, uno chef di cucina o un titolare si invita con un link. Il codice di sei cifre è solo per i dipendenti.',
     'role.owner.inSentence': 'titolare',
     'role.manager.inSentence': 'responsabile',
     'role.headChef.inSentence': 'chef di cucina',
