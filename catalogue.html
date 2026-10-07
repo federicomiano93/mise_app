@@ -85,7 +85,8 @@
 
 
 <!-- Three fixed tracks (left slot · title · right slot) so the title is TRULY
-     centred: only one button of each slot is ever visible, and an empty slot must
+     centred: each slot is 84px, room for at most TWO buttons (the left one holds
+     Home/Back plus the «Go to Orders» shortcut), and an empty slot must
      still hold its column or the title drifts off-centre. -->
 <header class="app-header">
   <span class="app-header-slot">
@@ -94,6 +95,12 @@
     </a>
     <button class="app-icon-btn" id="catBack" data-i18n="ui.back" data-i18n-attr="aria-label" aria-label="Back" hidden>
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+    </button>
+    <!-- The shortcut to Orders: only on the list and a recipe, only for whoever may open Orders
+         (catalogue-main.js decides; `hidden` here so it never flashes). The icon is the Orders
+         card's on Home. -->
+    <button type="button" class="app-icon-btn" id="catOrders" data-i18n="catalogue.openOrders" data-i18n-attr="aria-label" aria-label="Go to Orders" hidden>
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4h6a1 1 0 0 1 1 1v0a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1v0a1 1 0 0 1 1-1z"/><path d="M8 5H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><path d="M9 11h6M9 15h6"/></svg>
     </button>
   </span>
   <div class="app-header-title">

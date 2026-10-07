@@ -33,7 +33,9 @@ import { currentSession, onSession, sessionReady } from '../firebase.js';
 import { allergensOn } from '../venue-features.js';
 // The way to a recipe's Food cost product, and the one judgement of who may take it.
 // From js/ root: the catalogue and Food cost share an address, never a folder.
-import { mayOpenFoodCost, foodCostHref, recipeIdFromHash } from '../recipe-link.js';
+import {
+  mayOpenFoodCost, foodCostHref, recipeIdFromHash, mayOpenOrders, ordersHref,
+} from '../recipe-link.js';
 // Whether this person may add an ingredient to the records from here — the same answer the
 // records page itself gives. From js/ root: the records belong to Orders.
 import { mayEditRecords } from '../records.js';
@@ -52,6 +54,8 @@ const titleEl = document.getElementById('catTitle');
 const subEl = document.getElementById('catSub');
 const homeBtn = document.getElementById('catHome');
 const backBtn = document.getElementById('catBack');
+const ordersBtn = document.getElementById('catOrders');
+ordersBtn.addEventListener('click', () => openOrders());
 const addBtn = document.getElementById('catAdd');
 const editBtn = document.getElementById('catEdit');
 const saveBtn = document.getElementById('catSave');
@@ -107,7 +111,25 @@ let listUsage = null;
 
 // ── Header + view helpers ───────────────────────────────────────────────────────
 
-function setHeader({ title, sub, back, add, edit = false, footer = false }) {
+// The shortcut to Orders. ⚠️ SHOWN ONLY ON THE LIST AND A RECIPE (`orders: true`, passed by
+// those two routes alone) and only to whoever may open Orders — hidden, never disabled. It is
+// painted again when the session lands (the venue may not be known when the header is first
+// drawn) and when the language changes (the tooltip is a word).
+let ordersWanted = false;
+function paintOrdersBtn() {
+  const session = currentSession();
+  ordersBtn.hidden = !(ordersWanted && mayOpenOrders(session.location, session.canManage));
+  ordersBtn.title = t('catalogue.openOrders');
+}
+// Decided at the tap, not when the header was drawn: on a tablet the header stays the list's
+// while a recipe is open beside it, so only the current view knows where the person is.
+function openOrders() {
+  window.location.href = ordersHref(view === 'detail' && currentRecipe ? currentRecipe.id : null);
+}
+
+function setHeader({ title, sub, back, add, edit = false, footer = false, orders = false }) {
+  ordersWanted = orders;
+  paintOrdersBtn();
   // ⚠️⚠️ THE data-i18n ATTRIBUTES HAVE TO GO, AND THIS WAS A REAL DEFECT ON EVERY
   // SCREEN OF THIS PAGE. catalogue.html marks both elements `data-i18n` so they read
   // correctly before any JavaScript runs — but js/i18n-dom.js rewrites EVERY
@@ -224,7 +246,7 @@ function leaveSplit() {
 // 360px phone between two buttons on each side (ui-check, 29 Sep 2026), and a cut
 // line reads as a fault. The title alone names the screen.
 function setListHeader() {
-  setHeader({ title: t('section.catalogue'), sub: '', back: false, add: true, footer: true });
+  setHeader({ title: t('section.catalogue'), sub: '', back: false, add: true, footer: true, orders: true });
 }
 
 // The list into the left column (tablet). ⚠️ NOT re-run when a recipe is opened while the
@@ -451,7 +473,7 @@ function showAllergenSheet() {
 function showDetailPhone(recipe) {
   leaveSplit();
   activeList = null;
-  setHeader({ title: recipe.name || t('cat.recipe'), sub: t('cat.recipe'), back: true, add: false, edit: true });
+  setHeader({ title: recipe.name || t('cat.recipe'), sub: t('cat.recipe'), back: true, add: false, edit: true, orders: true });
   activeDetail = renderDetail({ recipe, app });
   swap(activeDetail.root);
 }
@@ -912,6 +934,7 @@ let paintedWithSession = false;
 onSession((s) => {
   if (s.status !== 'ready' || paintedWithSession) return;
   paintedWithSession = true;
+  paintOrdersBtn();
   if (view === 'list') showList();
   // ⚠️ AN OPEN RECIPE IS REBUILT WHOLE, since 13 Sep 2026. Two things on it are decided by
   // the session — the «Apri nel Food cost» card (whoever may open Food cost) and the
@@ -941,6 +964,7 @@ onSession((s) => {
 });
 
 onLanguageChange(() => {
+  paintOrdersBtn();
   if (view === 'list') showList();
   else if (view === 'detail' && splitOn) {
     // The list beside the recipe and the page header are words too; the recipe itself is
