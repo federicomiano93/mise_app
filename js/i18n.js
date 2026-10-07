@@ -106,6 +106,7 @@ const DICTIONARIES = Object.freeze({
     // already stated by the note above them and by the result screen below.
     'people.add.link': 'Send a link',
     'people.add.digits': 'Read out a code',
+    'people.add.digitsStaffOnly': 'A manager, a head chef or an owner is invited with a link. A six-digit code is for employees only.',
     'role.owner.inSentence': 'owner',
     'role.manager.inSentence': 'manager',
     'role.headChef.inSentence': 'head chef',
@@ -290,7 +291,7 @@ const DICTIONARIES = Object.freeze({
     // on the join form to make it obvious later.
     'people.invite.intro': 'Add someone who works here. They install the app and create their own account, with their own email and password — you never choose it for them.',
     'people.remove.title': 'Remove this person?',
-    'people.remove.message': '{name} ({email}) will lose access to this location immediately. Everything they have entered stays.',
+    'people.remove.message': '{name} ({email}) will lose access to this location immediately. Everything they have entered stays. If they knew your clients’ ordering links, give those clients a new one (“Replace with a new link”).',
     'people.err.read': 'Could not read who works here. Check your connection.',
     'people.err.name': 'Could not save that name. Check your connection.',
     'people.err.change': 'Could not change that. Check your connection and try again.',
@@ -3268,6 +3269,7 @@ const DICTIONARIES = Object.freeze({
     'people.roleOf': 'Ruolo di {name}',
     'people.add.link': 'Manda un link',
     'people.add.digits': 'Detta un codice',
+    'people.add.digitsStaffOnly': 'Un responsabile, uno chef di cucina o un titolare si invita con un link. Il codice di sei cifre è solo per i dipendenti.',
     'role.owner.inSentence': 'titolare',
     'role.manager.inSentence': 'responsabile',
     'role.headChef.inSentence': 'chef di cucina',
@@ -3401,7 +3403,7 @@ const DICTIONARIES = Object.freeze({
     'people.readOut': 'Leggilo a voce a loro:',
     'people.invite.intro': 'Aggiungi qualcuno che lavora qui. Installa l’app e crea il suo account, con la sua email e la sua password: non le scegli tu.',
     'people.remove.title': 'Vuoi rimuovere questa persona?',
-    'people.remove.message': '{name} ({email}) perderà subito l’accesso a questo locale. Tutto quello che ha inserito resta.',
+    'people.remove.message': '{name} ({email}) perderà subito l’accesso a questo locale. Tutto quello che ha inserito resta. Se conosceva i link per ordinare dei tuoi clienti, dai a quei clienti un link nuovo («Sostituisci con un nuovo link»).',
     'people.err.read': 'Non è stato possibile leggere chi lavora qui. Controlla la connessione.',
     'people.err.name': 'Non è stato possibile salvare quel nome. Controlla la connessione.',
     'people.err.change': 'Non è stato possibile cambiarlo. Controlla la connessione e riprova.',
