@@ -125,9 +125,13 @@ export function priceUnitLabel(unit) {
 // ingredient-prices ONLY — see the two lists below.
 const CASE_FIELDS = Object.freeze(['casePrice', 'caseCount', 'caseItemSize', 'caseItemUnit']);
 
+// ⚠️ `priceBasis` JOINED THIS LIST 7 Oct 2026: what the number typed in the ingredient card's price box
+// REFERS to ('pack' | 'case' | 'rate'; null = the form's default). It is a memory of the person's
+// choice and nothing else — the stored price shape is the same whatever it says. Like `vatRate` it
+// lives on ingredient-prices ONLY (PRICE_ONLY_FIELDS below).
 export const PRICE_FIELDS = Object.freeze([
   'priceUnit', 'pricePerUnit', 'packPrice', 'packSize', 'unitWeightKg', 'priceUpdatedAt', 'vatRate',
-  ...CASE_FIELDS,
+  ...CASE_FIELDS, 'priceBasis',
 ]);
 
 // The price keys an INGREDIENT document may still carry from before prices moved
@@ -138,7 +142,7 @@ export const PRICE_FIELDS = Object.freeze([
 // null — makes the rules refuse EVERY ingredient save, for every role (review of 28
 // Sep 2026, caught before it shipped). tests/price-fields-whitelist.test.mjs pins both
 // lists against firestore.rules.
-const PRICE_ONLY_FIELDS = Object.freeze(['vatRate', ...CASE_FIELDS]);
+const PRICE_ONLY_FIELDS = Object.freeze(['vatRate', ...CASE_FIELDS, 'priceBasis']);
 export const INGREDIENT_DRAINED_FIELDS = Object.freeze(
   PRICE_FIELDS.filter(key => !PRICE_ONLY_FIELDS.includes(key)),
 );
@@ -446,11 +450,8 @@ export const CASE_MODE = 'case';
 // authoritative and the weight text is not read at all. It is how an UNTOUCHED save writes a stored
 // case back verbatim (storedPriceInput) — copying the weight into it would re-price a case that
 // somebody without the price section had only re-weighed.
-export function pricePatch(
-  { priceUnit, pricePerUnit, unitWeightKg, vatRate, casePrice, caseCount, caseItemSize, caseItemUnit, packBasis, keepRate },
-  nowIso,
-  weightText = '',
-) {
+export function pricePatch(input, nowIso, weightText = '') {
+  const { priceUnit, pricePerUnit, unitWeightKg, vatRate, casePrice, caseCount, caseItemSize, caseItemUnit, packBasis, keepRate, priceBasis } = input;
   const inCase = priceUnit === CASE_MODE;
   const knownBasis = inCase && caseItemUnit === PACK_ITEM && (packBasis === 'kg' || packBasis === 'l') ? packBasis : null;
   const base = inCase && caseItemUnit === PACK_ITEM && !knownBasis ? packBaseOf(weightText) : null;
@@ -494,6 +495,10 @@ export function pricePatch(
     // rate an accountant quoted is a fact worth keeping even mid-edit of the
     // price itself.
     vatRate: normalizedVatRate(vatRate),
+    // ⚠️ ONLY WHEN THE CALLER SAYS SO: the ingredient card passes its choice (null = the default, which clears
+    // an older one); the invoice import, the ingredient merge and every other writer pass none, so the key is
+    // ABSENT and a merge write leaves the stored basis alone. A memory only: no price, no basis.
+    ...('priceBasis' in input ? { priceBasis: result.ok && PRICE_BASES.includes(priceBasis) ? priceBasis : null } : {}),
   };
 }
 
@@ -532,10 +537,100 @@ export function priceFormOf(fmt, weightText, ownPiece = false) {
   return readable ? PRICE_FORMS.singlePack : PRICE_FORMS.typed;
 }
 
+// ── What the number in the price box REFERS to (7 Oct 2026) ─────────────────────────────────────────────
+// The owner chooses it per ingredient: the price of a pack, of a carton, or per kilo / litre. It is a way of
+// TYPING and SHOWING one number — the stored price keeps its shape (a pack price per piece, or a case), so
+// food cost, stocktake, orders and the invoice import never learn the basis exists.
+//   single-pack   'pack' (default) | 'rate'
+//   carton-pack   'case' (default) | 'pack' | 'rate'
+//   carton-pieces 'case' (default) | 'pack'
+// Any other form (the typed rate, a legacy card) has no basis: the box means what it always meant.
+export const PRICE_BASES = Object.freeze(['pack', 'case', 'rate']);
+
+export function basisOptions(form) {
+  if (form === PRICE_FORMS.singlePack) return ['pack', 'rate'];
+  if (form === PRICE_FORMS.cartonPack) return ['case', 'pack', 'rate'];
+  if (form === PRICE_FORMS.cartonPieces) return ['case', 'pack'];
+  return [];
+}
+
+export function defaultBasis(form) {
+  return basisOptions(form)[0] || null;
+}
+
+// The basis a form shows: the stored one when this form offers it, else the default. null for a form with none.
+export function basisOf(form, stored) {
+  const options = basisOptions(form);
+  return options.includes(stored) ? stored : (options[0] || null);
+}
+
+// What goes into the stored `priceBasis`: null for the default (absent = default) and for a form with none.
+export function basisToStore(form, basis) {
+  const chosen = basisOf(form, basis);
+  return chosen === null || chosen === defaultBasis(form) ? null : chosen;
+}
+
+// 'kg' | 'l' — what «per rate» means for this weight; null when the weight does not read.
+export function rateBaseOf(weightText) {
+  return packBaseOf(weightText)?.priceUnit ?? null;
+}
+
+// How many of the form's own money one unit of `basis` is worth: a price per kilo × this = the pack price,
+// a price per pack × this = the case price. null when something it needs is missing (an empty count, a weight
+// that does not read) — never a guess.
+function basisFactor(form, basis, fmt, weightText) {
+  const options = basisOptions(form);
+  if (!options.includes(basis)) return null;
+  if (basis === options[0]) return 1;
+  const size = packBaseOf(weightText)?.size ?? null;
+  const count = form === PRICE_FORMS.singlePack ? 1 : positiveNumber(fmt && fmt.count);
+  if (basis === 'pack') return count;
+  if (basis === 'rate') return size === null || count === null ? null : size * count;
+  return null;
+}
+
+// The number as typed in `basis` → the form's own price (pack for a Singola, case for a Cartone), or null
+// when it cannot be worked out. The default basis passes the number through untouched; a derived one is
+// rounded to four decimals, as every stored price is.
+export function basisToStoredPrice(form, basis, value, fmt, weightText) {
+  const chosen = basisOf(form, basis);
+  if (chosen === null || chosen === defaultBasis(form)) return value;
+  const n = positiveNumber(value);
+  if (n === null) return value;
+  const factor = basisFactor(form, chosen, fmt, weightText);
+  return factor === null ? null : roundTo(n * factor, RATE_DECIMALS);
+}
+
+// The form's own price → the number to SHOW in `basis` (six decimals, so a stored price reads back as typed).
+export function storedPriceToBasis(form, basis, price, fmt, weightText) {
+  const chosen = basisOf(form, basis);
+  const n = positiveNumber(price);
+  if (chosen === null || chosen === defaultBasis(form) || n === null) return price;
+  const factor = basisFactor(form, chosen, fmt, weightText);
+  return factor === null ? null : roundTo(n / factor, CASE_RATE_DECIMALS);
+}
+
+// A number typed under one basis, re-expressed under another (the segment was tapped): the SAME money.
+// null when it cannot be worked out (no count, no readable weight): the caller then does NOTHING — the box and
+// the chosen segment stay as they were, so a typed number is never wiped. `decimals` is six for what is SHOWN;
+// the card asks for twelve when it needs the figure itself, so no rounding of a shown number ever feeds a price.
+export function convertBasisPrice(form, from, to, value, fmt, weightText, decimals = CASE_RATE_DECIMALS) {
+  const a = basisOf(form, from);
+  const b = basisOf(form, to);
+  if (a === b) return value;
+  const n = positiveNumber(value);
+  if (n === null || a === null || b === null) return value;
+  const fa = basisFactor(form, a, fmt, weightText);
+  const fb = basisFactor(form, b, fmt, weightText);
+  return fa === null || fb === null ? null : roundTo((n * fa) / fb, decimals);
+}
+
 // The boxes → pricePatch's input, for a price a person TYPED (or re-typed).
 // boxes = { price, rate, unit, pieceKg, vat }.
-export function formatPriceInput(fmt, weightText, { price, rate, unit, pieceKg, vat, ownPiece = false } = {}) {
+export function formatPriceInput(fmt, weightText, { price: typedPrice, rate, unit, pieceKg, vat, ownPiece = false, basis = null } = {}) {
   const form = priceFormOf(fmt, weightText, ownPiece);
+  // The number typed is in the person's chosen basis; everything below is in the form's own (pack or case).
+  const price = basisToStoredPrice(form, basis, typedPrice, fmt, weightText);
   // ⚠️ A PRICE TYPED FOR FORMATTED GOODS IS STORED PER ITEM (1 Oct 2026, review): priceUnit 'pcs', the
   // rate is the price of ONE item, and `unitWeightKg` is one item's weight in kilos when the weight
   // reads (litres read 1:1 as kilos, the app's standing approximation). The old way — a case of ONE

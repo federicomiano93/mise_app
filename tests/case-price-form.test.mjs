@@ -54,14 +54,15 @@ test('the price box means what the format and the weight say, and shows only the
   assert.match(FORM, /const typedForm = form === PRICE_FORMS\.typed;/);
   assert.match(FORM, /unitField\.hidden = !typedForm;\s*rateField\.hidden = !typedForm;\s*casePriceField\.hidden = typedForm;/);
   assert.match(FORM, /const pricePair = el\('div', \{ class: 'mgmt-pair' \}, \[unitField, rateField, casePriceField\]\);/);
-  assert.match(FORM, /casePriceLabel\.textContent = fmt\.kind === 'carton'\s*\? t\('orders\.case\.price'/);
-  assert.match(FORM, /: t\('orders\.case\.packPrice'/);
+  // The label follows the BASIS (price-basis.test.mjs); with none chosen it is the Cartone / Singola pair as before.
+  assert.match(FORM, /casePriceLabel\.textContent = basisNow === 'rate'/);
+  assert.match(FORM, /\(fmt\.kind === 'carton' \? t\('orders\.case\.price', \{ currency \}\) : t\('orders\.case\.packPrice', \{ currency \}\)\)/);
   assert.match(FORM, /pieceField\.hidden = needsSize \|\| !\(\(typedForm && unit === 'pcs'\) \|\| form === PRICE_FORMS\.cartonPieces\);/);
 });
 
 test('⚠️ UNTOUCHED MEANS UNCHANGED: read() hands pricePatch the stored price until a person touches something', () => {
   assert.match(FORM, /if \(!dirty\(\)\) \{\s*const input = convertsCase\(\) \? singleFromCaseInput\(item, vat\) : storedPriceInput\(item, vat\);/);
-  assert.match(FORM, /return formatPriceInput\(now\(\)\.fmt, now\(\)\.weight, \{/);
+  assert.match(FORM, /\.\.\.formatPriceInput\(now\(\)\.fmt, now\(\)\.weight, \{/);
   // dirty() is: a new item, a typed price box, «Ricalcola» — and NOTHING else (review, rule B): moving the
   // format or the weight never rewrites a stored price
   assert.match(FORM, /const dirty = \(\) => !item \|\| priceTyped \|\| recomputed;/);
@@ -79,8 +80,8 @@ test('every price box a person can type in sets the flag, BEFORE the live line r
 
 test('the box shows the stored figure only while it still means the same thing; otherwise empty, with the carried price as placeholder', () => {
   assert.match(FORM, /const start = priceBoxStart\(item, fmt, weight, Boolean\(changed\)\);/);
-  assert.match(FORM, /const shown = recomputed \? start\.suggestion : start\.value;/);
-  assert.match(FORM, /casePriceBox\.setAttribute\('placeholder', shown === null && start\.suggestion !== null \? localNumber\(start\.suggestion, false\) : ''\);/);
+  assert.match(FORM, /const shown = inBasis\(recomputed \? start\.suggestion : start\.value\);/);
+  assert.match(FORM, /casePriceBox\.setAttribute\('placeholder', shown === null && suggested !== null \? localNumber\(suggested, false\) : ''\);/);
   assert.match(FORM, /keepsNote\.hidden = !keeps;/);
 });
 

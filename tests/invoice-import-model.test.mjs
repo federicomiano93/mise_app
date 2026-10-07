@@ -852,6 +852,15 @@ test('the current price carries the rate, the unit, the VAT, the date — and cl
     packPrice: null, packSize: null, unitWeightKg: null,
     priceUpdatedAt: '2026-08-31T12:00:00.000Z', vatRate: 4,
   });
+  // ⚠️ NO priceBasis KEY: a merge write must leave the basis an owner chose on the card alone.
+  assert.equal('priceBasis' in set.data, false);
+});
+
+test('no import price write of any kind carries priceBasis', () => {
+  const file = oneIngredient({ vatRate: 4, prices: [price(), price({ invoiceId: '18000000002', line: 1, invoiceDate: '2026-09-30' })] });
+  for (const c of [ctxOf(), ctxOf({ ingredients: [existingIng({ id: 'i1', name: 'Farina tipo 00' })] })]) {
+    for (const op of flat(writesFor(file, c).batches)) assert.equal('priceBasis' in op.data, false, op.type);
+  }
 });
 
 test('an unstated VAT rate is written null, never 0', () => {

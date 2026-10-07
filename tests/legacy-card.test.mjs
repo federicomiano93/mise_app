@@ -122,7 +122,8 @@ function openCard({ item = null, mayPrice = true } = {}) {
   const card = {
     root, saves, all, byAria, labelled,
     // the new card's two buttons — absent on the card of before
-    segButtons: () => all().filter(n => n.tagName === 'BUTTON' && n.classList.contains('set-seg-btn')),
+    // (the price block's «per pack | per carton | per kg» choice is a second segmented control, not the format)
+    segButtons: () => all().filter(n => n.tagName === 'BUTTON' && n.classList.contains('set-seg-btn') && n.attributes['data-basis'] === undefined),
     get orderUnit() { return labelled(/^(Order unit|Unità d’ordine)/); },
     get howBought() { return labelled(/^(How it is bought|Come si acquista)/); },
     get packMenu() { return labelled(/^(Package|Confezione)$/); },

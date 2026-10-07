@@ -245,7 +245,8 @@ test('an untouched save never touches an item with no price at all', () => {
   const patch = untouchedPatch(none);
   assert.equal(patch.pricePerUnit, null);
   assert.equal(patch.priceUnit, null);
-  for (const key of PRICE_FIELDS) assert.ok(key in patch, `${key} is written as null so a merge cannot keep an old value`);
+  // (priceBasis is the ingredient card's own: absent unless the card names it, so no other writer resets it)
+  for (const key of PRICE_FIELDS.filter(k => k !== 'priceBasis')) assert.ok(key in patch, `${key} is written as null so a merge cannot keep an old value`);
 });
 
 // ── The summary line ─────────────────────────────────────────────────────────

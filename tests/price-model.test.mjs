@@ -213,7 +213,11 @@ test('a complete form produces every field, so nothing stale is left behind', ()
   });
   // Every field this module owns is present in the patch — a merge write leaves
   // out what it does not mention, so an omitted field would keep its old value.
-  assert.deepEqual(Object.keys(patch).sort(), [...PRICE_FIELDS].sort());
+  // The one exception is priceBasis, present only when the caller (the ingredient card) names it.
+  assert.deepEqual(Object.keys(patch).sort(), PRICE_FIELDS.filter(k => k !== 'priceBasis').sort());
+  assert.equal('priceBasis' in pricePatch({ priceUnit: 'kg', pricePerUnit: 7.2, priceBasis: null }, AT), true);
+  assert.equal(pricePatch({ priceUnit: 'kg', pricePerUnit: 7.2, priceBasis: 'rate' }, AT).priceBasis, 'rate');
+  assert.equal(pricePatch({ priceUnit: 'kg', pricePerUnit: '', priceBasis: 'rate' }, AT).priceBasis, null);
 });
 
 test('saving clears the retired pack fields off an ingredient that still carries them', () => {
@@ -229,7 +233,7 @@ test('clearing the price box really clears the stored price', () => {
   const patch = pricePatch({ priceUnit: 'kg', pricePerUnit: '' }, AT);
   assert.equal(patch.pricePerUnit, null);
   assert.equal(patch.priceUpdatedAt, null);
-  assert.deepEqual(Object.keys(patch).sort(), [...PRICE_FIELDS].sort());
+  assert.deepEqual(Object.keys(patch).sort(), PRICE_FIELDS.filter(k => k !== 'priceBasis').sort());
 });
 
 test('the weight of one piece survives a half-filled price', () => {
@@ -433,7 +437,7 @@ test('a price for an ingredient that is not there is simply not used', () => {
 // no price document of its own. The rules now refuse anything but null there, and
 // this refuses to read one, so neither half leans on the other.
 test('a price sitting on the ingredient itself is never used', () => {
-  const planted = { id: 'I1', name: 'Flour', priceUnit: 'kg', pricePerUnit: 0.01, packPrice: 1, packSize: 100, unitWeightKg: 1, priceUpdatedAt: 'x', vatRate: 4, casePrice: 1, caseCount: 1, caseItemSize: 1, caseItemUnit: 'kg' };
+  const planted = { id: 'I1', name: 'Flour', priceUnit: 'kg', pricePerUnit: 0.01, packPrice: 1, packSize: 100, unitWeightKg: 1, priceUpdatedAt: 'x', vatRate: 4, casePrice: 1, caseCount: 1, caseItemSize: 1, caseItemUnit: 'kg', priceBasis: 'rate' };
   const [alone] = withPrices([planted], {});
   for (const key of PRICE_FIELDS) assert.equal(alone[key], null, `${key} leaked through from the ingredient`);
   assert.equal(alone.name, 'Flour', 'everything else on the ingredient survives');

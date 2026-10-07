@@ -35,6 +35,7 @@ import {
   weightNeededForPrice, positiveNumber, packBaseOf, storedCaseOf,
   pricePatch, priceChanged, priceRecord, pricePerKg,
   formatPricePerUnit, formatRate, costReasonText, formatMoney,
+  basisOptions, basisOf, basisToStore, rateBaseOf, storedPriceToBasis, convertBasisPrice,
 } from './price-model.js';
 // legacy-card:begin
 // What the card of before (an old stored price shape) needs and the new card does not: the «A cartone» mode
@@ -287,8 +288,61 @@ function priceBlock(item, actions, defaultUnit = null, ctx) {
   const unitField = field(t('orders.howItIsBought'), unitSelect);
   // ⚠️ THE CASE PRICE TAKES THE RATE BOX'S PLACE in the same row (Federico, 29 Sep 2026); it
   // carries one of two names by the format, set by refresh().
-  const casePriceLabel = el('span', { class: 'mgmt-field-label' });
+  messageCount += 1;
+  const casePriceLabelId = `mgmt-price-basis-label-${messageCount}`;
+  const casePriceLabel = el('span', { class: 'mgmt-field-label', id: casePriceLabelId });
   const casePriceField = el('label', { class: 'mgmt-field' }, [casePriceLabel, casePriceBox, casePriceRefusal.node]);
+
+  // ⚠️ WHAT THE NUMBER REFERS TO (7 Oct 2026, price-model.js «What the number in the price box REFERS to»).
+  // Only a way of typing and showing it: choosing never makes the price dirty, and the stored price
+  // keeps its shape. `basis` is the stored choice until a segment is tapped; the form on screen decides
+  // which choices it offers (basisOf), so a basis its form does not know falls back to the default.
+  let basis = item ? item.priceBasis ?? null : null;
+  const currentForm = () => priceFormOf(now().fmt, now().weight, ownPieceWeight(item, now().weight, ctx.initialWeight));
+  const basisButtons = new Map();
+  const basisGroup = el('div', { class: 'set-seg', role: 'group', 'aria-labelledby': casePriceLabelId });
+  ['case', 'pack', 'rate'].forEach(value => {
+    const button = el('button', {
+      type: 'button', class: 'set-seg-btn', 'data-basis': value, 'aria-pressed': 'false', onClick: () => chooseBasis(value),
+    });
+    basisButtons.set(value, button);
+    basisGroup.appendChild(button);
+  });
+  // js/form-dirty.js only sees values: a segment alone would be a change Back throws away without asking (P20).
+  const basisMirror = el('input', { type: 'hidden', value: '' });
+  const basisField = el('div', { class: 'mgmt-field', hidden: 'hidden' }, [basisGroup, basisMirror]);
+
+  // ⚠️ NO DRIFT FROM A ROUNDED FIGURE. The box shows a number rounded for the eye, so the money is never read
+  // back from its text unless the person typed that text:
+  //   boxTyped  — the person typed in the price box; `anchor` is what they typed, unrounded, with the basis it
+  //               was typed under. Every segment tap and every read converts from the anchor, never from the
+  //               text a previous tap wrote (Cartone 1.00 → per kg → Cartone comes back as exactly 1).
+  //   boxCanon  — while the box was only FILLED (refresh), the figure behind it in the form's own terms
+  //               (the pack or case price), unrounded: another field that makes the price dirty (the piece
+  //               weight, «Ricalcola») must not re-read the rounded text.
+  let boxTyped = false;
+  let anchor = null;
+  let boxCanon = null;
+  const usableAnchor = () => (boxTyped && anchor && basisOptions(currentForm()).includes(anchor.basis)
+    && positiveNumber(anchor.value) !== null ? anchor : null);
+
+  function chooseBasis(next) {
+    const { fmt, weight } = now();
+    const form = currentForm();
+    const from = basisOf(form, basis);
+    if (from === next || !basisOptions(form).includes(next)) return;
+    // A number already typed is CONVERTED, not kept: the same money in the new basis. A price nobody
+    // touched is re-shown by refresh() from the stored one. ⚠️ When the conversion is impossible (an empty
+    // carton count) the tap does NOTHING: the typed number stays and so does the segment.
+    const a = usableAnchor();
+    if (a) {
+      const converted = convertBasisPrice(form, a.basis, next, a.value, fmt, weight);
+      if (converted === null) return;
+      casePriceBox.value = localNumber(converted, false);
+    }
+    basis = next;
+    refresh();
+  }
 
   // ⚠️ THE FORMAT CHANGED SINCE THE LAST PRICE (employee, or this card, changed the count or the
   // weight): a price stands on the format it was typed under, so the line says both and asks for a
@@ -345,20 +399,42 @@ function priceBlock(item, actions, defaultUnit = null, ctx) {
 
   function read() {
     const vat = vatSelect.value;
+    // ⚠️ The choice rides along in BOTH paths: an untouched price keeps its money verbatim and still remembers
+    // a segment that was tapped (the whole of a basis-only save).
+    const priceBasis = basisToSave();
     if (!dirty()) {
       const input = convertsCase() ? singleFromCaseInput(item, vat) : storedPriceInput(item, vat);
       const synced = syncedWeightKg();
-      return synced === null ? input : { ...input, unitWeightKg: synced };
+      return { ...input, ...(synced === null ? {} : { unitWeightKg: synced }), priceBasis };
     }
-    return formatPriceInput(now().fmt, now().weight, {
-      ownPiece: ownPieceWeight(item, now().weight, ctx.initialWeight),
-      price: typedDecimal(casePriceBox.value),
-      rate: typedDecimal(rate.value),
-      unit: unitSelect.value || null,
-      pieceKg: typedDecimal(pieceWeight.value),
-      vat,
-    });
+    // The price box's figure, unrounded (see boxTyped / boxCanon): a filled-only box hands over the figure
+    // behind it in the form's own terms (no basis to apply), a typed one is converted from what was typed.
+    let price = typedDecimal(casePriceBox.value);
+    let priceFor = basis;
+    const a = usableAnchor();
+    if (!boxTyped && boxCanon !== null) {
+      price = boxCanon;
+      priceFor = null;
+    } else if (a) {
+      const exact = convertBasisPrice(currentForm(), a.basis, basisOf(currentForm(), basis), a.value, now().fmt, now().weight, 12);
+      if (exact !== null) price = exact;
+    }
+    return {
+      ...formatPriceInput(now().fmt, now().weight, {
+        ownPiece: ownPieceWeight(item, now().weight, ctx.initialWeight),
+        price,
+        basis: priceFor,
+        rate: typedDecimal(rate.value),
+        unit: unitSelect.value || null,
+        pieceKg: typedDecimal(pieceWeight.value),
+        vat,
+      }),
+      priceBasis,
+    };
   }
+
+  // What to remember about the basis: null for the form's default and for a form with none.
+  const basisToSave = () => basisToStore(currentForm(), basis);
 
   // The live line under the boxes. It answers the only question that matters —
   // what does a kilo of this cost — while the boxes are still being typed into,
@@ -377,17 +453,36 @@ function priceBlock(item, actions, defaultUnit = null, ctx) {
     // the same price carried to this format as its placeholder (never a value: nothing is written until
     // somebody types or taps «Ricalcola», which fills it in and keeps following the format).
     const start = priceBoxStart(item, fmt, weight, Boolean(changed));
+    // The box speaks in the chosen basis: the stored figure (a pack or a case price) is re-expressed in it.
+    const basisNow = basisOf(form, basis);
+    const inBasis = (figure) => (figure === null ? null : storedPriceToBasis(form, basisNow, figure, fmt, weight));
     if (!priceTyped) {
-      const shown = recomputed ? start.suggestion : start.value;
+      boxCanon = recomputed ? start.suggestion : start.value;
+      const shown = inBasis(recomputed ? start.suggestion : start.value);
+      const suggested = inBasis(start.suggestion);
       casePriceBox.value = shown === null ? '' : localNumber(shown, false);
-      casePriceBox.setAttribute('placeholder', shown === null && start.suggestion !== null ? localNumber(start.suggestion, false) : '');
+      casePriceBox.setAttribute('placeholder', shown === null && suggested !== null ? localNumber(suggested, false) : '');
     }
     unitField.hidden = !typedForm;
     rateField.hidden = !typedForm;
     casePriceField.hidden = typedForm;
-    casePriceLabel.textContent = fmt.kind === 'carton'
-      ? t('orders.case.price', { currency: currentCurrency() })
-      : t('orders.case.packPrice', { currency: currentCurrency() });
+    const rateBase = rateBaseOf(weight);
+    const options = basisOptions(form);
+    basisField.hidden = options.length === 0;
+    basisMirror.value = basisNow || '';
+    basisButtons.forEach((button, value) => {
+      button.hidden = !options.includes(value);
+      button.setAttribute('aria-pressed', String(value === basisNow));
+      button.textContent = value === 'pack' ? t('orders.basis.pack')
+        : value === 'case' ? t('orders.basis.case')
+          : (rateBase === 'l' ? t('orders.basis.perLitre') : t('orders.basis.perKg'));
+    });
+    const currency = currentCurrency();
+    casePriceLabel.textContent = basisNow === 'rate'
+      ? (rateBase === 'l' ? t('orders.pricePerLitre', { currency }) : t('orders.pricePerKg', { currency }))
+      : (basisNow === 'pack' ? t('orders.case.packPrice', { currency })
+        : basisNow === 'case' ? t('orders.case.price', { currency })
+          : (fmt.kind === 'carton' ? t('orders.case.price', { currency }) : t('orders.case.packPrice', { currency })));
     // ⚠️ A CASE PRICED BY WEIGHT WHOSE WEIGHT NO LONGER READS (a legacy 4 × 2.5 kg case on a card with
     // an empty weight) is NOT a case of pieces: the piece-weight box stays away and the note below says
     // what the price was for. A touched price is refused on the weight box (weightNeededForPrice).
@@ -436,8 +531,21 @@ function priceBlock(item, actions, defaultUnit = null, ctx) {
     // left to be worked out from a piece weight.
     // For a case the derived rate leads, with what one item costs, so a misplaced
     // decimal or a wrong count is visible before Save.
-    const parts = [typedForm ? formatPricePerUnit(draft) : caseSummary(draft, fmt, form)];
-    if (draft.priceUnit === 'pcs' && perKg !== null) parts.push(`${formatRate(perKg)} / kg`);
+    // ⚠️ TYPED PER KILO OR LITRE, the line says the OTHER figures instead — what a pack and a carton cost —
+    // so the person always sees the money the rate works out to. Nothing to add when they cannot be worked out.
+    const equals = [];
+    if (basisNow === 'rate') {
+      const size = packBaseOf(weight)?.size ?? null;
+      const packPrice = form === PRICE_FORMS.cartonPack
+        ? (draft.casePrice > 0 && draft.caseCount > 0 ? draft.casePrice / draft.caseCount : null)
+        : (draft.priceUnit === 'pcs' ? draft.pricePerUnit : (size === null ? null : draft.pricePerUnit * size));
+      if (form === PRICE_FORMS.cartonPack && draft.casePrice > 0) {
+        equals.push(t('orders.basis.caseEquals', { price: formatMoney(draft.casePrice) }));
+      }
+      if (packPrice !== null) equals.push(t('orders.basis.packEquals', { price: formatMoney(packPrice) }));
+    }
+    const parts = equals.length ? equals : [typedForm ? formatPricePerUnit(draft) : caseSummary(draft, fmt, form)];
+    if (!equals.length && draft.priceUnit === 'pcs' && perKg !== null) parts.push(`${formatRate(perKg)} / kg`);
     summaryMain.textContent = parts.filter(Boolean).join('  ·  ');
     // Empty whenever the ingredient IS costable, so the note only ever appears
     // when there is something left to do.
@@ -467,6 +575,13 @@ function priceBlock(item, actions, defaultUnit = null, ctx) {
     input.addEventListener('input', () => { priceTyped = true; });
     input.addEventListener('change', () => { priceTyped = true; });
   });
+  // What the person typed in the price box, unrounded, under the basis it was typed in (see boxTyped).
+  const anchorBox = () => {
+    boxTyped = true;
+    anchor = { value: typedDecimal(casePriceBox.value), basis: basisOf(currentForm(), basis) };
+  };
+  casePriceBox.addEventListener('input', anchorBox);
+  casePriceBox.addEventListener('change', anchorBox);
   [unitSelect, rate, pieceWeight, vatSelect, casePriceBox].forEach(input => {
     input.addEventListener('input', refresh);
     input.addEventListener('change', refresh);
@@ -502,6 +617,7 @@ function priceBlock(item, actions, defaultUnit = null, ctx) {
     // ⚠️ «Peso di un pezzo» STAYS FULL WIDTH. It appears only for a price per piece, and a
     // column that comes and goes would make the row above it jump.
     pricePair,
+    basisField,
     changedNote,
     keepsNote,
     priceAgainNote,
@@ -2054,6 +2170,8 @@ export function buildIngredientForm({
     // empty price document — and saveIngredientWithPrice is told not to write
     // one, because a batch is all-or-nothing and a refused price write would
     // fail the whole save of an ordinary rename.
+    // `priceBasis` (price.read() carries it into pricePatch) is the memory of what the number was typed against;
+    // it is saved by itself when only the segment moved (priceChanged compares money: no history entry).
     const patch = mayPrice ? pricePatch(price.read(), new Date().toISOString(), weight.read()) : {};
     // ⚠️ THE FORMAT ADDS KEYS ONLY WHEN IT WAS TOUCHED (pack-format.js formatPatch → {} otherwise):
     // the write is a merge, so an untouched save leaves `unit`, `packUnit` and `packCount` exactly as
