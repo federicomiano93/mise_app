@@ -9,7 +9,7 @@ import {
   shouldAskSent, sentCheckPhrases, outcomeOf, suppliersToRecord, confirmedRows,
 } from '../js/orders/sent-check.js';
 import { sentCheckDialog } from '../js/orders/sent-check-dialog.js';
-import { sendOffers } from '../js/orders/send-chooser.js';
+import { sendOffers, sendTexts } from '../js/orders/send-chooser.js';
 import { orderedItems, buildOrderMessage } from '../js/orders/order-text.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -133,9 +133,14 @@ test('«Send it now» is offered only when a road to a SUPPLIER is open for this
   assert.match(src, /sendNowLabel: canSendNow \? t\(phrases\.sendNowKey\) : ''/);
 });
 
+// «Send it now» records only the suppliers it reached. Since the photo road (PR #310) every
+// WhatsApp chat — per supplier included — goes through sendTexts / runPhotoBatch, which count a
+// chat only when its window really opened; e-mail is trusted (a mailto: may answer null).
 test('a per-supplier road records only a window that really opened (a blocked pop-up does not)', () => {
+  const jobs = [{ ids: ['a'], url: 'url-a' }, { ids: ['b'], url: 'url-b' }];
+  assert.deepEqual(sendTexts(jobs, u => (u === 'url-b' ? null : {})), ['a']);
   const src = read('js/orders/send-chooser.js');
-  assert.match(src, /const opened = window\.open\(url, '_blank'\);\s*if \(!opened && offer\.route !== 'email'\) return;/);
+  assert.match(src, /if \(offer\.route !== 'email'\) return viaWhatsapp\(jobs\);/);
   assert.doesNotMatch(src, /window\.open\([^)]*noopener/);
 });
 
