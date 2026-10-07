@@ -5,16 +5,20 @@
 // OFF BY DEFAULT, and when it is off this file does nothing beyond reading one
 // localStorage key. The setting belongs to the DEVICE (localStorage, kept across
 // sign-out — see KEEP_PREFIXES in js/local-data.js), never to a venue or a person.
-// No Firestore reads or writes anywhere here.
+// No Firestore writes anywhere here; the only reads (the Orders lines of the rest cover) live
+// in js/kiosk-orders.js and run only while the cover is up.
 //
 // After a few minutes without a touch a black rest screen covers the app; after a longer
 // while the screen lock is let go so Android can switch the backlight off. One tap wakes
 // it WITHOUT reaching what is underneath.
 //
 // Pause drawing while resting: deliberately NOT coupled to the Orders render scheduler.
-// The cover is enough, and Orders keeps its live data so the rest screen is fresh.
+// The cover is enough. The Orders page answers the rest screen from its live data; every
+// other page gets the same answer from js/kiosk-orders.js (a few reads while resting).
 
 import { t, onLanguageChange, localeTag } from './i18n.js';
+import { isSectionAllowed } from './sections.js';
+import { cardVisibleTo } from './home-cards.js';
 import { BUSY_SELECTORS, MAX_ATTEMPTS, readAttempts } from './update-gate.js';
 import { acquireWakeLock, releaseWakeLock } from './wake-lock.js';
 import {
@@ -101,6 +105,7 @@ let lastInputAt = 0;
 let restSince = 0;
 let venueName = '';
 let sessionStatus = 'loading';
+let currentSession = null;
 let overlay = null;
 let overlayParts = null;
 let disarmWake = null;
@@ -140,11 +145,88 @@ function line(className, text) {
   return p;
 }
 
-// Pages add lines with no import between features: a window event, handled synchronously.
-function collectExtraLines() {
-  const detail = { lines: [] };
+// A page adds its sections with no import between features: a window event, handled
+// synchronously. A page that fills `detail.sections` and sets `detail.live = true` is the
+// source (the Orders page, from its live data) and the reads of js/kiosk-orders.js stay off.
+function askPage() {
+  const detail = { sections: [], live: false };
   try { window.dispatchEvent(new CustomEvent('kiosk-rest-info', { detail })); } catch { /* ignore */ }
-  return detail.lines.filter(x => typeof x === 'string' && x !== '');
+  return detail;
+}
+
+// What to draw in the centre: [{ titleKey, names, more }]. The page's own answer when it
+// gives one, otherwise the last answer of the rest feed.
+function collectSections() {
+  const detail = askPage();
+  const sections = detail.live ? detail.sections : (restFeed ? restFeed.current() : []);
+  return (Array.isArray(sections) ? sections : [])
+    .filter(s => s && typeof s.titleKey === 'string' && Array.isArray(s.names) && s.names.length > 0);
+}
+
+// The same gate as the Home badge (js/home-orders-badge.js): the venue must have Orders AND
+// the Orders card must be visible to this person; otherwise no reads and no lines.
+export function restOrdersAllowed(session) {
+  if (!session || session.status !== 'ready') return false;
+  if (!isSectionAllowed(session.location, 'orders')) return false;
+  return cardVisibleTo(session.location, session.canManage, 'orders');
+}
+
+// ⚠️ js/kiosk-orders.js (and with it the Orders data layer) is loaded with a dynamic import,
+// the first time the feed must start — never statically: with the kiosk off this file does
+// nothing beyond reading one localStorage key, and a page's first paint never waits for
+// Firestore code. A failed import leaves the kiosk working without order lines.
+let restFeed = null;
+let feedLoading = false;
+let feedFailed = false;
+let loadOrdersModule = () => import('./kiosk-orders.js');
+
+async function ensureRestFeed() {
+  if (restFeed || feedLoading || feedFailed) return;
+  feedLoading = true;
+  try {
+    const mod = await loadOrdersModule();
+    restFeed = mod.createRestOrdersFeed({
+      allowed: () => restOrdersAllowed(currentSession),
+      pageAnswers: () => askPage().live,
+      fetchSections: mod.fetchRestSections,
+      onChange: () => { if (overlay) paintRest(); },
+    });
+  } catch (err) {
+    feedFailed = true;   // never retried in a loop; no data in the log
+    console.warn('The kiosk Orders lines are unavailable:', err && err.code ? err.code : 'import');
+  } finally {
+    feedLoading = false;
+  }
+  syncRestFeed();   // the state may have moved while the module was loading
+}
+
+function syncRestFeed() {
+  if (state === 'rest' && started && restOrdersAllowed(currentSession)) {
+    if (restFeed) restFeed.start();
+    else ensureRestFeed();
+  } else if (restFeed) {
+    restFeed.stop();
+  }
+}
+
+function sectionBlock(section) {
+  const wrap = document.createElement('section');
+  wrap.className = 'kiosk-rest-section';
+  wrap.append(line('kiosk-rest-section-title', t(section.titleKey)));
+  const list = document.createElement('ul');
+  list.className = 'kiosk-rest-names';
+  section.names.forEach(name => {
+    const li = document.createElement('li');
+    li.textContent = name;
+    list.append(li);
+  });
+  if (section.more > 0) {
+    const li = document.createElement('li');
+    li.textContent = `+${section.more}`;
+    list.append(li);
+  }
+  wrap.append(list);
+  return wrap;
 }
 
 function paintRest() {
@@ -165,11 +247,10 @@ function paintRest() {
   const offline = typeof navigator !== 'undefined' && navigator.onLine === false;
   parts.offline.hidden = !offline;
   parts.offline.textContent = offline ? t('kiosk.rest.offline') : '';
-  parts.extra.textContent = '';
-  collectExtraLines().forEach(text => parts.extra.append(line('kiosk-rest-line', text)));
-  const tap = t('kiosk.rest.tap');
-  parts.tap.textContent = tap;
-  overlay.setAttribute('aria-label', tap);
+  parts.centre.textContent = '';
+  collectSections().forEach(section => parts.centre.append(sectionBlock(section)));
+  // The tap hint is no longer drawn; it stays as the cover's accessible name.
+  overlay.setAttribute('aria-label', t('kiosk.rest.tap'));
   // Burn-in: the block moves a few pixels when the MINUTE changes (the paint itself runs
   // on every 15 s tick), by transform only.
   const minute = Math.floor(now.getTime() / 60000);
@@ -195,16 +276,21 @@ function showRest() {
   overlay.tabIndex = 0;
   const block = document.createElement('div');
   block.className = 'kiosk-rest-block';
+  // Top-left: the clock, the venue and the date (then the work day and «offline» when they
+  // apply). Centre: the Orders sections. The burn-in shift moves the whole block.
+  const corner = document.createElement('div');
+  corner.className = 'kiosk-rest-corner';
   const time = line('kiosk-rest-time', '');
-  const date = line('kiosk-rest-line', '');
   const venue = line('kiosk-rest-line', '');
+  const date = line('kiosk-rest-line', '');
   const workDay = line('kiosk-rest-line', '');
   const offline = line('kiosk-rest-line', '');
-  const extra = document.createElement('div');
-  const tap = line('kiosk-rest-tap', '');
-  block.append(time, date, venue, workDay, offline, extra, tap);
+  corner.append(time, venue, date, workDay, offline);
+  const centre = document.createElement('div');
+  centre.className = 'kiosk-rest-centre';
+  block.append(corner, centre);
   overlay.append(block);
-  overlayParts = { block, time, date, venue, workDay, offline, extra, tap };
+  overlayParts = { block, time, date, venue, workDay, offline, centre };
   lastShiftMinute = -1;
   document.body.append(overlay);
   paintRest();
@@ -293,6 +379,7 @@ function enter(next) {
   state = next;
   if (state === 'active') hideRest();
   else showRest();
+  syncRestFeed();
 }
 
 function wake(viaKey) {
@@ -374,8 +461,11 @@ function tick() {
 function onSessionChange(session) {
   sessionStatus = (session && session.status) || 'loading';
   venueName = (sessionStatus === 'ready' && (session.name || session.locationId)) || '';
+  currentSession = session || null;
   if (state !== 'active' && sessionStatus !== 'loading' && sessionStatus !== 'ready') wake(false);
   else if (overlay) paintRest();
+  // The venue may have just opened while the cover was already up (a resumed page).
+  syncRestFeed();
   if (started && sessionStatus !== 'loading') syncLock(lockWanted());
 }
 
@@ -388,6 +478,8 @@ function onVisible() {
   // Coming back from another app is not idleness: the clock starts again.
   lastInputAt = Date.now();
   tick();
+  // Back in view while resting: read only if the last answer is stale (see the feed).
+  if (restFeed && state === 'rest') restFeed.refreshIfStale();
 }
 
 // ── Starting and stopping ────────────────────────────────────────────────────
@@ -423,6 +515,7 @@ function start() {
     restSince = Date.now();
     state = resume;
     showRest();
+    syncRestFeed();
     syncLock(resume !== 'night');
   } else {
     syncLock(true);
@@ -441,6 +534,7 @@ function stop() {
   if (unsubSession) { unsubSession(); unsubSession = null; }
   hideRest();
   state = 'active';
+  syncRestFeed();
   syncLock(false);
 }
 
@@ -480,6 +574,7 @@ export const __testing = {
   state: () => state,
   hasLock: () => lockHeld,
   setUpdater(fn) { updateNowImpl = fn; },
+  setOrdersLoader(fn) { loadOrdersModule = fn; },
 };
 
 // Runs only in a browser; importing this file in node (tests) does nothing.
