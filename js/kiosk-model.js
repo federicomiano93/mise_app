@@ -59,6 +59,25 @@ export function nextKioskState({ state, now, lastInputAt, restSince, busy, signe
   return { state: next, wakeLock: next !== 'night' && !!signedIn };
 }
 
+// The Home's «Rest» button (window event 'kiosk-rest-now'): cover the screen at once, but only
+// for a device where kiosk mode is on, a person is signed in, and the cover is not already up.
+export function shouldRestNow({ enabled, signedIn, state } = {}) {
+  return enabled === true && signedIn === true && state === 'active';
+}
+
+// ⚠️ THE TAP THAT PUTS THE SCREEN TO REST MUST NOT WAKE IT. The cover is shown from inside
+// that tap's own click, and a key press on the button (Enter fires the click on keydown, so
+// a repeat keydown follows) or a late touch event of the same gesture would reach the new
+// cover and wake it at once. So the waking tap is armed only after this pause.
+export const REST_NOW_GUARD_MS = 400;
+
+// How long to wait before arming the waking tap: 0 normally, the rest of the pause when the
+// cover was raised by the button.
+export function wakeArmDelay(guardUntil, now) {
+  const left = Number(guardUntil) - Number(now);
+  return left > 0 ? left : 0;
+}
+
 // An update may be applied only while nobody is looking at the screen.
 export function shouldAutoUpdate({ state, busy, updateWaiting } = {}) {
   return (state === 'rest' || state === 'night') && !busy && !!updateWaiting;
@@ -96,4 +115,17 @@ export function shouldDailyReload({ prevState, state, restSince, now, busy, sign
     return { reload: true, day, resume: 'rest' };
   }
   return no;
+}
+
+// The Home's kiosk band (Rest / Exit) is shown only where kiosk mode is on, whoever signs in.
+export function kioskBandVisible(raw) {
+  return readKioskSettings(raw).enabled;
+}
+
+// «Exit» asks the browser to close the page; an installed PWA on many tablets refuses. After
+// this pause the page being STILL there (open and visible) means it refused, and the person is
+// told how to close it by hand — kiosk mode itself is never switched off by that button.
+export const EXIT_CHECK_MS = 500;
+export function exitRefused({ visibilityState, closed } = {}) {
+  return visibilityState === 'visible' && closed !== true;
 }

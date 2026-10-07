@@ -25,6 +25,7 @@ import {
 } from './firebase-orders.js';
 import { withPrices } from '../price-model.js';
 import { currentSession } from '../firebase.js';
+import { catalogueOriginFromHash } from '../recipe-link.js';
 import { el, groupBy } from './dom.js';
 import { mountSupplierList, refreshSupplierDerived, supplierStats } from './suppliers.js';
 import { buildSupplierDetail } from './supplier-detail.js';
@@ -55,6 +56,9 @@ import { refreshHolidays } from './holidays.js';
 import { countryOf, outputLanguage } from '../market.js';
 import { renderAlerts } from './notifications.js';
 import { routesFor } from './send-routes.js';
+import { chooseAndSend, sendOffers } from './send-chooser.js';
+import { sentCheckDialog } from './sent-check-dialog.js';
+import { shouldAskSent, sentCheckPhrases, outcomeOf, suppliersToRecord, confirmedRows } from './sent-check.js';
 import { confirmDialog, alertDialog } from './confirm-dialog.js';
 import { mayEditRecords } from '../records.js';
 import {
@@ -211,6 +215,24 @@ function readCachedConfig() {
   }
 }
 
+// ── The way back to the Ricettario ───────────────────────────────────────────
+// The Catalogue opens this page as orders.html#from=catalogue or #from=recipe:<id>. Then, and
+// only then, a second round button sits beside Back and returns to that place. Back itself
+// still goes Home. The hash is left in the URL, so a reload keeps the button; anything that is
+// not exactly one of the two shapes shows no button (js/recipe-link.js).
+function setupCatalogueBack() {
+  const origin = catalogueOriginFromHash(window.location.hash);
+  if (!origin) return;
+  // Two forms of ONE control, same address: the round button in the green bar, and a row under
+  // it. Both are shown here; orders.css leaves exactly one visible by width (440px).
+  for (const id of ['orders-to-catalogue', 'orders-to-catalogue-row']) {
+    const link = document.getElementById(id);
+    if (!link) continue;
+    link.href = origin.href;
+    link.hidden = false;
+  }
+}
+
 function applyOrdersConfig(config) {
   ordersConfig = config;
   // A class on <body>, not a rebuild: the rows are built by one shared function used by
@@ -224,7 +246,8 @@ function watchOrdersConfig() {
   return watchDoc(COLLECTIONS.config, 'orders', doc => {
     const config = normalizeOrdersConfig(doc);
     try { localStorage.setItem(CONFIG_KEY, JSON.stringify(config)); } catch { /* private mode */ }
-    const orderChanged = config.supplierOrder.join('\n') !== ordersConfig.supplierOrder.join('\n');
+    const orderChanged = config.supplierOrder.join('\n') !== ordersConfig.supplierOrder.join('\n')
+      || config.favouriteSuppliers.join('\n') !== ordersConfig.favouriteSuppliers.join('\n');
     applyOrdersConfig(config);
     // The list is redrawn only when the supplier order really changed (on this phone or
     // another one): a redraw while somebody is typing in a row must stay rare.
@@ -524,6 +547,7 @@ function renderSupplierList(container, suppliers) {
       onView: openSupplierItems,
       onSummary: openSummary,
       searchExtras: buildOrderTools(),
+      favourites: () => ordersConfig.favouriteSuppliers,
     });
   }
   cardsView.repaint({
@@ -1692,6 +1716,22 @@ async function recordSuppliers(supplierIds, { title, okLabel }) {
   );
   if (!confirmed) return;
 
+  // ⚠️ «DID YOU SEND IT?» COMES BEFORE ANYTHING IS ARCHIVED, ALWAYS — after a send too:
+  // opening WhatsApp is not sending. Only suppliers with something confirmed are asked
+  // about (a supplier set to 0 on the review screen is «not this one»).
+  const askedAbout = suppliers.filter(s => Object.keys(confirmed.quantities[s.id] || {}).length);
+  let recordable = new Set(askedAbout.map(s => s.id));
+  let notReached = [];
+  if (askedAbout.length) {
+    const asked = await askSentCheck(askedAbout, confirmed);
+    notReached = asked.notReached;
+    if (!asked.ids.length) {           // cancelled, or the send road was backed out of
+      if (notReached.length) setStatus(notReachedLine(notReached), 'warn', 8000);
+      return;
+    }
+    recordable = new Set(asked.ids);
+  }
+
   // Sequentially: each archive writes and then clears its own rows, and the draft
   // is one shared document — overlapping writes would race on it.
   const saved = [];
@@ -1707,6 +1747,8 @@ async function recordSuppliers(supplierIds, { title, okLabel }) {
       skipped.push(supplierLabel(supplier));
       continue;
     }
+    // Not reached by the send road (no number or address): its rows stay.
+    if (!recordable.has(supplier.id)) continue;
     const done = await placeOrder(supplier.id, {
       confirm: false, quantities, units: confirmed.units[supplier.id],
     });
@@ -1721,7 +1763,8 @@ async function recordSuppliers(supplierIds, { title, okLabel }) {
   if (failed.length) {
     setStatus(
       `${t('orders.notRecordedRowsStillThere', { names: listNames(failed) })} ` +
-      (saved.length ? t('orders.andSaved', { names: listNames(saved) }) : t('orders.tryAgain')),
+      (saved.length ? t('orders.andSaved', { names: listNames(saved) }) : t('orders.tryAgain')) +
+      (notReached.length ? ` ${notReachedLine(notReached)}` : ''),
       'error',
     );
     return;
@@ -1730,7 +1773,70 @@ async function recordSuppliers(supplierIds, { title, okLabel }) {
     setStatus(t('orders.confirm.noneRecorded', { names: listNames(skipped) }), 'warn', 5000);
     return;
   }
-  if (saved.length) setStatus(t('orders.orderSavedToHistory', { names: listNames(saved) }), 'ok', 5000);
+  if (saved.length) {
+    const tail = notReached.length ? ` ${notReachedLine(notReached)}` : '';
+    setStatus(t('orders.orderSavedToHistory', { names: listNames(saved) }) + tail,
+      notReached.length ? 'warn' : 'ok', notReached.length ? 8000 : 5000);
+  }
+}
+
+// «Did you send the order to X?» for these suppliers, with what the review screen
+// CONFIRMED (`confirmed` = { quantities, units } keyed by supplier id). Resolves to
+// { ids, notReached }: `ids` are the suppliers to record — all of them on «Yes, sent»; on
+// «Send it now» the ones the chosen road reached; none when it was cancelled — and
+// `notReached` the names of those «Send it now» did not reach (their rows stay).
+//
+// ⚠️ THE MESSAGE IS THE ONE THE NORMAL SEND SCREEN WOULD BUILD FOR THE SAME NUMBERS. The
+// review screen allows corrections and writes nothing back to the draft, so the rows are
+// built with orderedItems() — the send screen's own selection, with its lineUnit() rule
+// (a unit appears only where the card offers a choice or the line is in a non-default
+// unit) — over entries made from `confirmed`. itemsFromQuantities is for FROZEN record
+// units and would put a unit on every line.
+async function askSentCheck(suppliers, confirmed) {
+  const ids = suppliers.map(s => s.id);
+  const phrases = sentCheckPhrases(suppliers.length, listNames(suppliers.map(s => supplierLabel(s))));
+  const sendSettings = ordersConfig.sendSettings;
+  const canManage = canManageHere();
+  // «Send it now» means putting the order in a SUPPLIER's hands: without such a road open for
+  // this person it is not offered at all.
+  const canSendNow = sendOffers({ settings: sendSettings, canManage, suppliers, supplierRoadsOnly: true }).length > 0;
+  const answer = await sentCheckDialog({
+    title: t(phrases.titleKey, phrases.titleVars),
+    yesLabel: t(phrases.yesKey),
+    sendNowLabel: canSendNow ? t(phrases.sendNowKey) : '',
+    cancelLabel: t('ui.cancel'),
+  });
+  const outcome = outcomeOf(answer);
+  if (!outcome.record) return { ids: [], notReached: [] };
+  if (!outcome.sendFirst) return { ids, notReached: [] };
+
+  const sendLanguage = outputLanguage(currentSession().location);
+  const rows = confirmedRows(suppliers.map(s => ({ id: s.id, name: supplierLabel(s) })),
+    ingredientsBySupplier(), confirmed);
+
+  let sent = [];
+  await chooseAndSend({
+    rows,
+    settings: sendSettings,
+    canManage,
+    suppliers: rows.map(r => suppliers.find(s => s.id === r.id)),
+    locationName: currentSession().name,
+    language: sendLanguage,
+    grouped: GROUPED_BY_DEFAULT,
+    supplierRoadsOnly: true,
+    // Same unit-clash check as the send screen.
+    beforeSend: sendRows => refuseOnUnitConflict(sendRows.map(r => ({ supplierId: r.id, date: dayForSupplier(r.id) }))),
+    onSent: sentIds => { sent = sentIds; },
+  });
+  const toRecord = suppliersToRecord(ids, sent);
+  const notReached = suppliers.filter(s => !toRecord.includes(s.id)).map(s => supplierLabel(s));
+  return { ids: toRecord, notReached };
+}
+
+// The line that says which suppliers «Send it now» did not reach — appended to whatever the
+// recording says, or shown alone.
+function notReachedLine(names) {
+  return names.length ? t('orders.sentCheck.notReached', { names: listNames(names) }) : '';
 }
 
 // ── Order placed for several suppliers at once ────────────────────────────────
@@ -1956,7 +2062,9 @@ function forgetSupplierLocally(supplierId) {
 // because a keystroke on that supplier's rows restamps state.days[supplierId] (to today
 // or to its next order day) — so reading it here would file a "Placed yesterday" order
 // under the wrong day, which is precisely the mistake this whole feature exists to prevent.
-async function placeOrder(supplierId, { confirm = true, date: pinnedDate, quantities = null, units = null } = {}) {
+// `alreadySent` is the unfinished-order banner («Placed yesterday»): that order went
+// out, so «did you send it?» is not asked there (sent-check.js shouldAskSent).
+async function placeOrder(supplierId, { confirm = true, date: pinnedDate, quantities = null, units = null, alreadySent = false } = {}) {
   const supplier = findOrderSupplier(supplierId);
   if (!supplier) return false;
   const ingredients = orderIngredients();
@@ -1995,6 +2103,15 @@ async function placeOrder(supplierId, { confirm = true, date: pinnedDate, quanti
     if (!answer) return false;
     confirmed = answer.quantities;
     confirmedUnits = answer.units;
+    if (shouldAskSent({ confirm, alreadySent })) {
+      const asked = await askSentCheck([supplier], {
+        quantities: { [supplierId]: confirmed }, units: { [supplierId]: confirmedUnits },
+      });
+      if (!asked.ids.includes(supplierId)) {
+        if (asked.notReached.length) setStatus(notReachedLine(asked.notReached), 'warn', 8000);
+        return false;
+      }
+    }
   }
   if (placing.has(supplierId)) return false; // the screen was open a while — re-check
 
@@ -2406,7 +2523,7 @@ function dismissPending(supplierId) {
 // today, or to its next order day), so the record would land under the wrong day while
 // the button still said "Placed yesterday".
 async function recordPending(supplierId, day) {
-  const done = await placeOrder(supplierId, { date: day });
+  const done = await placeOrder(supplierId, { date: day, alreadySent: true });
   if (done) dismissPending(supplierId);
   renderSummary();               // the open summary sheet must not go stale
 }
@@ -2648,6 +2765,7 @@ async function init() {
 
   setupTabs();
   setupViewSwitch();
+  setupCatalogueBack();
   trackStickyHead(document.querySelector('.order-box-head'));
   document.getElementById('orders-wa-btn')?.addEventListener('click', openSendScreen);
 

@@ -92,11 +92,11 @@ test('saving a change keeps the other kiosk settings', () => {
     { enabled: true, restMinutes: 5, nightHours: 4 });
 });
 
-test('Home settings: the device card, changed by canManage only, saves on the tap and tells kiosk.js', () => {
+test('Home settings: the device card, changed by everybody, saves on the tap and tells kiosk.js', () => {
   const src = read('js/home-settings.js');
   assert.match(src, /settings\.home\.device/);
   assert.doesNotMatch(src, /settings\.home\.app'/);
-  assert.match(src, /\.\.\.kioskRows\(session\.canManage\)/);
+  assert.match(src, /\.\.\.kioskRows\(\)/);
   assert.match(src, /role', 'switch'/);
   assert.match(src, /new Event\('kiosk-settings-changed'\)/);
   assert.match(src, /alertDialog\(t\('kiosk\.settings\.notSaved'\)\)/);
@@ -104,17 +104,15 @@ test('Home settings: the device card, changed by canManage only, saves on the ta
   assert.match(src, /details\.hidden = !wanted/);
 });
 
-// Federico, 5 Oct 2026: the lab tablet signs in as an EMPLOYEE and could not find the switch.
-// Everybody sees the card; only owner and manager can change it — every control is disabled
-// and a line says who can, and the Android set-up note is for whoever sets it up.
-test('Home settings: an employee sees the kiosk card read-only, with who can change it', () => {
+// Federico, 7 Oct 2026: the lab tablet signs in as an EMPLOYEE, and the people at that tablet
+// must be able to switch kiosk mode on or off — so nothing in the card is gated on a role.
+test('Home settings: an employee can change the kiosk card (no role gate, no managers-only note)', () => {
   const src = read('js/home-settings.js');
-  assert.match(src, /function kioskRows\(canEdit\)/);
-  assert.match(src, /cb\.disabled = !canEdit;/);
-  assert.match(src, /btn\.disabled = !canEdit;/);
-  assert.match(src, /if \(!canEdit\) text\.append\(node\('span', 'set-sub', t\('kiosk\.settings\.managersOnly'\)\)\)/);
-  assert.match(src, /if \(canEdit\) \{\s*const noteBlock/);
-  const i18n = read('js/i18n.js');
-  assert.match(i18n, /'kiosk\.settings\.managersOnly': 'Only an owner or a manager can change it\.'/);
-  assert.match(i18n, /'kiosk\.settings\.managersOnly': 'Può cambiarla solo un titolare o un responsabile\.'/);
+  assert.match(src, /function kioskRows\(\)/);
+  assert.doesNotMatch(src, /canEdit/);
+  assert.doesNotMatch(src, /managersOnly/);
+  assert.doesNotMatch(src, /cb\.disabled/);
+  assert.doesNotMatch(src, /btn\.disabled = /);
+  assert.match(src, /noteBlock\.append\(node\('p', 'set-note', t\('kiosk\.settings\.note'\)\)\)/);
+  assert.doesNotMatch(read('js/i18n.js'), /kiosk\.settings\.managersOnly/);
 });

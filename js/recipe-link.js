@@ -42,6 +42,36 @@ export function recipeIdFromHash(hash) {
   return cleanId(params.get(KEY));
 }
 
+// The Catalogue → Orders shortcut and the way back (Federico, 7 Oct 2026). The Catalogue sends
+// `orders.html#from=catalogue` (from the list) or `orders.html#from=recipe:<id>` (from a
+// recipe); Orders reads that address and offers a button back to where the person came from.
+// A fragment for the same reason as above.
+export function ordersHref(recipeId) {
+  const id = cleanId(recipeId);
+  return id ? `orders.html#from=recipe:${encodeURIComponent(id)}` : 'orders.html#from=catalogue';
+}
+
+// Where Orders was opened from: `{ href }` of the Catalogue place to return to, or null.
+// ⚠️ STRICT: only the two shapes above. Anything else — an unknown word, an id with a slash,
+// `#` or `?`, a stray parameter — is «no button», never a guess.
+export function catalogueOriginFromHash(hash) {
+  const match = /^#from=(catalogue|recipe:([^&#?]+))$/.exec(String(hash ?? ''));
+  if (!match) return null;
+  if (match[1] === 'catalogue') return { href: 'catalogue.html' };
+  let id;
+  try { id = decodeURIComponent(match[2]); } catch (e) { return null; }
+  if (!id || id !== id.trim() || /[/#?]/.test(id) || !cleanId(id)) return null;
+  return { href: recipeHref(id) };
+}
+
+// May this person open Orders in this venue? The same question js/auth-gate.js asks for
+// orders.html: its section AND its card.
+export function mayOpenOrders(locationDoc, canManage) {
+  if (!locationDoc || typeof locationDoc !== 'object') return false;
+  return isSectionAllowed(locationDoc, 'orders')
+    && cardVisibleTo(locationDoc, canManage === true, 'orders');
+}
+
 // May this person open Food cost in this venue?
 //
 // ⚠️ THE SAME QUESTION js/auth-gate.js ASKS BEFORE IT LETS ANYBODY STAY ON foodcost.html —

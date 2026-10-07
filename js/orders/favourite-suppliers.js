@@ -29,3 +29,14 @@ export function splitByFavourite(suppliers, favouriteIds) {
   }
   return { favourites, others };
 }
+
+// The groups a supplier list is drawn in, from rows the search and the filter have ALREADY
+// cut down. No starred supplier in view = one group with no heading (the plain list). The
+// heading is an i18n key, so the caller translates it inside its drawing code.
+export function favouriteGroups(visible, favouriteIds) {
+  const { favourites, others } = splitByFavourite(visible, favouriteIds);
+  if (!favourites.length) return [{ headingKey: null, suppliers: others }];
+  const groups = [{ headingKey: 'orders.favourites.title', suppliers: favourites }];
+  if (others.length) groups.push({ headingKey: 'orders.favourites.others', suppliers: others });
+  return groups;
+}
