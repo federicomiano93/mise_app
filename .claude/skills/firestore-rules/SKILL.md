@@ -1,6 +1,6 @@
 ---
 name: firestore-rules
-description: How to change Firestore security rules or the data shape they guard in Mise. Use BEFORE editing firestore.rules, adding a Firestore collection, adding/renaming/retiring a field the app saves, adding a key to a locations/{lid} or users/{uid} document, adding a membership role, or changing who may read or delete something. Covers the venue boundary, roles, the read budget, the retired-field trap, the tests, and the rules-first deploy with read-back.
+description: How to change Firestore security rules or the data shape they guard in Mise, plus the full data model (every collection and field). Use BEFORE editing firestore.rules, adding a Firestore collection, adding/renaming/retiring a field the app saves, adding a key to a locations/{lid} or users/{uid} document, adding a membership role, or changing who may read or delete something; also before writing a Firestore query or a feature's data layer. Covers the venue boundary, roles, the read budget, the retired-field trap, the tests, and the rules-first deploy with read-back.
 ---
 
 # Firestore rules — Mise
@@ -8,6 +8,9 @@ description: How to change Firestore security rules or the data shape they guard
 `firestore.rules` is the ONLY real security in this app (P2): hidden buttons are courtesy.
 It is long and heavily commented — **read the comment above the block you touch**; most of
 them record a bug that already happened once.
+
+The full data model — every collection and field, with the reason behind each odd one — is
+`data-model.md` beside this file. Read it before changing a collection, a saved field or a query.
 
 ## The shape — three separate questions
 

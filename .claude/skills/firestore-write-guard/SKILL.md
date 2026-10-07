@@ -16,7 +16,7 @@ orders, real prices). Which database a write reaches is decided by the **hostnam
 | `localhost` / `127.0.0.1` / `::1` | yes | **emulator — safe, write freely** |
 | `localhost` / `127.0.0.1` / `::1` | no | **nowhere** — writes fail, production untouched, the test is INVALID |
 | `federicomiano93.github.io` (the live site) | — | **PRODUCTION** |
-| anything else: a PR preview link, a LAN IP (a phone on Wi-Fi), a tunnel | — | **PRODUCTION until PR #244 is live; since then the PREVIEW project** (fake data, `js/firebase-target.js`) — never the emulator, and never a valid local test |
+| anything else: a PR preview link, a LAN IP (a phone on Wi-Fi), a tunnel | — | **the PREVIEW project** (fake data, `js/firebase-target.js`; its key refuses LAN addresses, so the app will not even sign in there) — never the emulator, and never a valid local test |
 
 There is no fallback and no check that the emulator is up. Confirm it: the console prints
 "LOCAL EMULATOR mode", and the emulator UI answers on http://127.0.0.1:4000.

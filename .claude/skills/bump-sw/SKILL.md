@@ -1,6 +1,6 @@
 ---
 name: bump-sw
-description: Bump the service worker cache version and keep the precache list complete. Use whenever any cached file (HTML, CSS, JS under js/, icons, fonts, manifest) has been added, edited, or removed in Mise, before committing. Installed PWAs keep serving the old cache until CACHE_NAME changes, so always run this when finishing a change that touches a file listed in sw.js.
+description: Bump the service worker cache version and keep the precache list complete. Use whenever any cached file (HTML, CSS, JS under js/, icons, fonts, manifest) has been added, edited, or removed in Mise, before committing. Installed PWAs keep serving the old cache until CACHE_NAME changes, so always run this when finishing a change that touches a file listed in sw.js. Also read it BEFORE changing sw.js itself (fetch, install, activate, the SDK cache) — it holds how the cache behaves and why.
 ---
 
 # Bump the service worker
@@ -34,3 +34,25 @@ style.css, orders.css, anything under js/, manifest.json, or icons.
 - Stacked branches each change the fingerprints: after merging `main` into a branch,
   run the script again rather than resolving the `ASSET_HASHES` block by hand.
 - Never touch the fetch logic or the cross-origin skip — only `ASSETS`.
+
+## How the cache behaves (since `v1.86.0`) — read before changing sw.js
+- ⚠️ **A precached file is served from THIS worker's cache alone** — no background re-fetch (it once
+  wrote new files into the old cache after a deploy) and no `caches.match` (a waiting release's
+  cache must never answer the current page). Files not precached (the client page) go
+  network-first.
+- Every download is checked against its fingerprint (git's blob SHA-1). A mismatch is fetched once
+  more with `?fp=`; a copy that still mismatches is STORED, never refused — refusing would stop a
+  device behind an HTML-rewriting antivirus from ever updating. Not checked on localhost (a Windows
+  checkout serves CRLF).
+- An update copies unchanged files out of the previous cache (matched by `x-mise-hash`) and
+  downloads only what changed.
+- The precache is all-or-nothing: `install()` retries failures (3 attempts) and rejects if any
+  remain, because `activate()` deletes every other cache. The price, accepted: a phone that can
+  never complete the precache stops updating silently. Revisit at the first release really skipped
+  for that reason.
+- `firebase-sdk-12-19-0` — a separate persistent cache for the gstatic SDK, whitelisted in
+  `activate`. Its name must track the SDK version (a test enforces it) or phones carry both copies
+  forever. Pin the SDK to what gstatic actually serves, probing one version at a time. Fonts are
+  self-hosted (`./fonts/`), so `style-src`/`font-src` are `'self'`.
+- It bumps on every run that finds a change, so a release can skip numbers — harmless.
+- A count one short is not a diagnosis: diff the list, never compare a number.

@@ -80,7 +80,7 @@ goes through `supplierLabel()`.
   zero (`unreadablePrice`, never saved as «no price»). The weight box is NOT localised: the
   weight is stored as TEXT, so showing «2,5» would rewrite every stored weight on save.
 - The allergen dictionary: a phrase that overrides a stem AND names an allergen needs its
-  own tier (`burro di arachidi` must still say peanuts). The specific cereal/nut is named
+  own tier (`burro di arachidi` must still say peanuts; `farina` alone is not wheat). The specific cereal/nut is named
   (`gluten-wheat`), and `mayContain` is never merged into `allergens`.
 
 ## Exceptions, on purpose

@@ -13,9 +13,11 @@ defect you fail to name ships.
 ## The skills are your checklists too
 
 Open with Read the ones the diff touches, and check the change against them:
-`.claude/skills/firestore-rules/SKILL.md` (rules, collections, saved fields, roles) ·
+`.claude/skills/firestore-rules/SKILL.md` (rules, collections, saved fields, roles) and
+`data-model.md` beside it (every collection and field) ·
+`.claude/skills/ui-design/SKILL.md` (any screen, dialog, icon or stylesheet) ·
 `.claude/skills/i18n-labels/SKILL.md` (any on-screen text, allergens, units, prices) ·
-`.claude/skills/bump-sw/SKILL.md` (any precached file) ·
+`.claude/skills/bump-sw/SKILL.md` (any precached file, and `sw.js` itself) ·
 `.claude/skills/firestore-write-guard/SKILL.md` (scripts that write to Firestore).
 
 ## What to read
