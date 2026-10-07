@@ -89,6 +89,12 @@
     <a class="app-icon-btn orders-icon-btn" href="index.html" data-i18n="ui.back" data-i18n-attr="aria-label" aria-label="Back">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
     </a>
+    <!-- Only when the page was opened from the Ricettario (#from=…): orders-main.js fills the
+         address and shows it. `hidden` here, so it never flashes. The icon is the Ricettario
+         card's on Home. -->
+    <a class="app-icon-btn orders-icon-btn" id="orders-to-catalogue" href="catalogue.html" hidden data-i18n="orders.backToCatalogue" data-i18n-attr="aria-label" aria-label="Back to Recipe catalogue">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15.5H6.5A2.5 2.5 0 0 0 4 21z"/><path d="M4 21V5.5"/><path d="M9 7.5h7M9 11h5"/></svg>
+    </a>
   </span>
   <div class="app-header-title orders-header-title">
     <h1 data-i18n="section.orders">Orders</h1>
@@ -171,6 +177,12 @@
        restructure. It is the guard written for the v1.70.0 defect — rows flush against
        both edges of the phone — and it works. -->
   <div class="orders-column">
+  <!-- The way back to the Ricettario on a NARROW phone (< 440px), where the green bar has no room for a second left button (orders.css). Same address as #orders-to-catalogue; orders-main.js shows both, CSS shows one. -->
+  <a class="orders-return-row" id="orders-to-catalogue-row" href="catalogue.html" hidden>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
+    <span data-i18n="orders.backToCatalogue">Back to Recipe catalogue</span>
+  </a>
+
 
   <!-- Action feedback only (e.g. "Order saved ✓"): starts empty/hidden. The
        connection state is NOT shown here — see #orders-offline below. -->

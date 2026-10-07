@@ -25,6 +25,7 @@ import {
 } from './firebase-orders.js';
 import { withPrices } from '../price-model.js';
 import { currentSession } from '../firebase.js';
+import { catalogueOriginFromHash } from '../recipe-link.js';
 import { el, groupBy } from './dom.js';
 import { mountSupplierList, refreshSupplierDerived, supplierStats } from './suppliers.js';
 import { buildSupplierDetail } from './supplier-detail.js';
@@ -215,6 +216,24 @@ function readCachedConfig() {
   }
 }
 
+// ── The way back to the Ricettario ───────────────────────────────────────────
+// The Catalogue opens this page as orders.html#from=catalogue or #from=recipe:<id>. Then, and
+// only then, a second round button sits beside Back and returns to that place. Back itself
+// still goes Home. The hash is left in the URL, so a reload keeps the button; anything that is
+// not exactly one of the two shapes shows no button (js/recipe-link.js).
+function setupCatalogueBack() {
+  const origin = catalogueOriginFromHash(window.location.hash);
+  if (!origin) return;
+  // Two forms of ONE control, same address: the round button in the green bar, and a row under
+  // it. Both are shown here; orders.css leaves exactly one visible by width (440px).
+  for (const id of ['orders-to-catalogue', 'orders-to-catalogue-row']) {
+    const link = document.getElementById(id);
+    if (!link) continue;
+    link.href = origin.href;
+    link.hidden = false;
+  }
+}
+
 function applyOrdersConfig(config) {
   ordersConfig = config;
   // A class on <body>, not a rebuild: the rows are built by one shared function used by
@@ -228,7 +247,8 @@ function watchOrdersConfig() {
   return watchDoc(COLLECTIONS.config, 'orders', doc => {
     const config = normalizeOrdersConfig(doc);
     try { localStorage.setItem(CONFIG_KEY, JSON.stringify(config)); } catch { /* private mode */ }
-    const orderChanged = config.supplierOrder.join('\n') !== ordersConfig.supplierOrder.join('\n');
+    const orderChanged = config.supplierOrder.join('\n') !== ordersConfig.supplierOrder.join('\n')
+      || config.favouriteSuppliers.join('\n') !== ordersConfig.favouriteSuppliers.join('\n');
     applyOrdersConfig(config);
     // The list is redrawn only when the supplier order really changed (on this phone or
     // another one): a redraw while somebody is typing in a row must stay rare.
@@ -528,6 +548,7 @@ function renderSupplierList(container, suppliers) {
       onView: openSupplierItems,
       onSummary: openSummary,
       searchExtras: buildOrderTools(),
+      favourites: () => ordersConfig.favouriteSuppliers,
     });
   }
   cardsView.repaint({
@@ -2745,6 +2766,7 @@ async function init() {
 
   setupTabs();
   setupViewSwitch();
+  setupCatalogueBack();
   trackStickyHead(document.querySelector('.order-box-head'));
   document.getElementById('orders-wa-btn')?.addEventListener('click', openSendScreen);
 

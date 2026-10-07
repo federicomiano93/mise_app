@@ -323,6 +323,8 @@ const DICTIONARIES = Object.freeze({
     // bar, where three buttons share a 320px phone and this label would wrap it.
     'section.suppliersAndIngredients': 'Ingredients & suppliers',
     'section.catalogue': 'Recipe catalogue',
+    'catalogue.openOrders': 'Go to Orders',
+    'orders.backToCatalogue': 'Back to Recipe catalogue',
     'section.pastries': 'Pastries',
     'section.foodcost': 'Food cost',
     'section.inventory': 'Stocktake',
@@ -3403,6 +3405,8 @@ const DICTIONARIES = Object.freeze({
     'section.suppliers': 'Fornitori',
     'section.suppliersAndIngredients': 'Ingredienti e fornitori',
     'section.catalogue': 'Ricettario',
+    'catalogue.openOrders': 'Vai agli Ordini',
+    'orders.backToCatalogue': 'Torna al Ricettario',
     'section.pastries': 'Paste',
     'section.foodcost': 'Food cost',
     'section.inventory': 'Magazzino',
