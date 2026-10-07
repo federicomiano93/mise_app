@@ -1390,6 +1390,12 @@ async function configAndLogs() {
     }));
   await expectDenied('…and a model-3 phone may then no longer save it', () =>
     wholeWrite(`${A}/config/calculator`, { bakery: 'main', configRev: 9, configModel: 3, clients: [], recipes: [] }));
+  // ⚠️⚠️ The ceiling: a member saving a higher model by hand would lock every phone out of
+  // the Calculator for ever (delete is false) — found by the 7 Oct 2026 security audit.
+  await expectDenied('⚠️⚠️ a member raising the model past the app\'s (5) by hand', () =>
+    mergeWrite(`${A}/config/calculator`, { bakery: 'main', configModel: 5 }));
+  await expectDenied('…nor to 100, the old ceiling', () =>
+    wholeWrite(`${A}/config/calculator`, { bakery: 'main', configRev: 9, configModel: 100, clients: [], recipes: [] }));
   await expectAllowed('config/orders is untouched by the calculator model', () =>
     mergeWrite(`${A}/config/orders`, { bakery: 'main', showStock: true }));
 
@@ -1946,6 +1952,11 @@ async function products() {
     wholeWrite(`${P}/P1`, product({ sellingMode: 'pack', packSize: '250', packUnit: 'g', model: 2 })));
   await expectDenied('a product model sent as text', () => wholeWrite(`${P}/P1`, product({ model: '2' })));
   await expectDenied('a product model of zero', () => wholeWrite(`${P}/P1`, product({ model: 0 })));
+  // ⚠️⚠️ The ceiling: a product saved by hand with a higher model could never be saved by
+  // any phone again (7 Oct 2026 security audit).
+  await expectDenied('⚠️⚠️ a product model above the app\'s (3)', () =>
+    wholeWrite(`${P}/P1`, product({ model: 3 })));
+  await expectDenied('…nor 100, the old ceiling', () => createWrite(P, product({ model: 100 })));
 
   // ⚠️⚠️ THE OLD-PHONE GUARD. A product is written WHOLE; a phone on the version before
   // ingredient lines and packs would save one back without them and delete them.

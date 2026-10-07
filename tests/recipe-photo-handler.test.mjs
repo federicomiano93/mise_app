@@ -200,7 +200,22 @@ test('⚠️ the reader’s own error text never reaches the phone', async () =>
   const out = await call({ ask: async () => { throw new Error('401 invalid x-api-key sk-ant-XYZ'); } });
   assert.doesNotMatch(out.error.message, /sk-ant|401|x-api-key/,
     'a key fragment must never be shown to anybody');
-  assert.match(out.logged, /sk-ant/, 'but it is written to the log, where it is needed');
+  // ⚠️ Nor the server log (global P17; security audit, 7 Oct 2026): only the kind and status.
+  assert.doesNotMatch(out.logged, /sk-ant|x-api-key/, 'a key fragment never reaches the log either');
+  assert.equal(out.logged, 'Error');
+});
+
+test('the log keeps what a failure needs: the error kind and its HTTP status', async () => {
+  const err = Object.assign(new Error('401 invalid x-api-key sk-ant-XYZ'), { name: 'AuthenticationError', status: 401 });
+  const out = await call({ ask: async () => { throw err; } });
+  assert.equal(out.logged, 'AuthenticationError 401');
+});
+
+test('…and the kind comes from the error CLASS, as the Anthropic SDK never sets `name`', async () => {
+  class RateLimitError extends Error {}
+  const err = Object.assign(new RateLimitError('429 slow down, key sk-ant-XYZ'), { status: 429 });
+  const out = await call({ ask: async () => { throw err; } });
+  assert.equal(out.logged, 'RateLimitError 429');
 });
 
 test('each photo is charged, not each call', async () => {

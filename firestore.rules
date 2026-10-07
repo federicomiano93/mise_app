@@ -1631,10 +1631,14 @@ service cloud.firestore {
           // phone is refused («could not save») until it updates, and the settings
           // survive. A merge that does not send the key keeps the stored one, so it
           // passes. A document nobody has saved since stays writable by everyone.
+          // ⚠️ The ceiling is the app's CONFIG_MODEL exactly (js/calculator-config.js,
+          // pinned by tests/model-ceiling.test.mjs). With a looser ceiling one member
+          // could save a higher number by hand and every phone's save would be refused
+          // for ever (delete is false). Raising CONFIG_MODEL = raise this first, deployed.
           && (!('configModel' in request.resource.data)
               || (request.resource.data.configModel is int
                   && request.resource.data.configModel >= 1
-                  && request.resource.data.configModel <= 100))
+                  && request.resource.data.configModel <= 4))
           && (resource == null
               || !('configModel' in resource.data)
               || request.resource.data.get('configModel', 0) >= resource.data.configModel)
@@ -2214,10 +2218,13 @@ service cloud.firestore {
           && (!('packUnit' in request.resource.data)
               || request.resource.data.packUnit == null
               || request.resource.data.packUnit in ['g', 'kg', 'pcs'])
+          // ⚠️ The ceiling is the app's PRODUCT_MODEL exactly (js/foodcost/foodcost-model.js,
+          // pinned by tests/model-ceiling.test.mjs): a higher number saved by hand would make
+          // the product unsaveable by every phone. Raising PRODUCT_MODEL = raise this first.
           && (!('model' in request.resource.data)
               || (request.resource.data.model is int
                   && request.resource.data.model >= 1
-                  && request.resource.data.model <= 100))
+                  && request.resource.data.model <= 2))
           && (!('labourMinutes' in request.resource.data)
               || request.resource.data.labourMinutes == null
               || (request.resource.data.labourMinutes is number

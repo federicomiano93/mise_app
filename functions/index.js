@@ -33,6 +33,7 @@ import {
 } from './push-model.js';
 import { isAway } from './away-model.js';
 import { isHiddenForStaff, mayBeTold } from './home-cards.js';
+import { membershipIn } from './onboarding.js';
 
 initializeApp();
 
@@ -234,9 +235,19 @@ export const notifyClientOrder = onDocumentCreated(
     // buzzed about is the busiest one. The ORDER is untouched: it sits in the app
     // with its banner and its badge, exactly as before.
     const onHoliday = await awaySet(lid);
-    const targets = tokens.docs.filter(d => !onHoliday.has(d.data().uid));
-    if (!targets.length) {
+    const here = tokens.docs.filter(d => !onHoliday.has(d.data().uid));
+    if (!here.length) {
       logger.info('An order arrived, but everybody with notifications on is away', { lid });
+      return;
+    }
+
+    // ⚠️ ONLY PEOPLE STILL IN THE VENUE (security audit, 7 Oct 2026). A phone's
+    // registration outlives its owner's membership — removal now deletes it, but not one
+    // left over from before — and the client's name and date are the venue's business.
+    const members = await stillMembers(lid, here.map(d => d.data().uid));
+    const targets = here.filter(d => members.has(d.data().uid));
+    if (!targets.length) {
+      logger.info('An order arrived, but no phone here belongs to a current member', { lid });
       return;
     }
 
@@ -363,6 +374,23 @@ async function uidsPastHiddenCard(lid, kind, uids) {
   }));
   // ⚠️ THE DECISION IS NOT MADE HERE — it is functions/home-cards.js, which a test RUNS.
   return mayBeTold(location, card, uids, accessByUid);
+}
+
+// The uids among `uids` that are still members of `lid` — the same membership values the
+// rules accept (membershipIn, onboarding.js). Each uid is read ONCE (P14). ⚠️ A failed read
+// leaves the phone out: a missed buzz is an order still sitting in the app with its banner.
+async function stillMembers(lid, uids) {
+  const db = getFirestore();
+  const inside = new Set();
+  await Promise.all([...new Set(uids.filter(Boolean))].map(async uid => {
+    try {
+      const snap = await db.doc(`users/${uid}`).get();
+      if (membershipIn(snap.exists ? snap.data() : null, lid) !== false) inside.add(uid);
+    } catch (err) {
+      logger.warn('Could not read a membership; that phone is skipped', { uid });
+    }
+  }));
+  return inside;
 }
 
 // ⚠️ ONLY THE PEOPLE IT WAS ADDRESSED TO. Every other notification in this app
