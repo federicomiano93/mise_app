@@ -49,6 +49,13 @@ test('stillMembers asks the same membership question as the rules', () => {
 test('every callable that names a venue checks its id format before building a path', () => {
   assert.equal(/typeof locationId !== 'string' \|\| !locationId\)/.test(onboarding), false,
     'no callable may accept any non-empty string as a venue id');
+  const check = "!/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(locationId)";
+  for (const name of ['setLocationLanguage', 'setRecipePhoto', 'setPackPhoto', 'setIngredientPanels']) {
+    const fn = body(onboarding, `export const ${name}`);
+    const at = fn.indexOf(check);
+    assert.ok(at > 0, `${name} checks the venue id`);
+    assert.ok(at < fn.indexOf('locations/${locationId}'), `${name} checks it before building a path`);
+  }
 });
 
 test('a person named by uid is checked to be a uid', () => {

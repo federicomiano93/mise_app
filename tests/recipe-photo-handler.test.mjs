@@ -211,6 +211,13 @@ test('the log keeps what a failure needs: the error kind and its HTTP status', a
   assert.equal(out.logged, 'AuthenticationError 401');
 });
 
+test('…and the kind comes from the error CLASS, as the Anthropic SDK never sets `name`', async () => {
+  class RateLimitError extends Error {}
+  const err = Object.assign(new RateLimitError('429 slow down, key sk-ant-XYZ'), { status: 429 });
+  const out = await call({ ask: async () => { throw err; } });
+  assert.equal(out.logged, 'RateLimitError 429');
+});
+
 test('each photo is charged, not each call', async () => {
   const store = fakeStore(MEMBER);
   await call({ store, images: [IMAGE, IMAGE, IMAGE] });

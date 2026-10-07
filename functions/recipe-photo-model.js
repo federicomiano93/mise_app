@@ -72,7 +72,12 @@ export const WINDOW_MS = 24 * 60 * 60 * 1000;
 // status, never its message — the SDK's message can carry a fragment of the API key
 // (security audit, 7 Oct 2026). Shared with the pack reader.
 export function safeErrorLabel(err) {
-  const name = err && typeof err.name === 'string' ? err.name.slice(0, 60) : 'Error';
+  // ⚠️ THE CLASS NAME FIRST: the Anthropic SDK's error classes (AuthenticationError,
+  // RateLimitError, APIConnectionTimeoutError…) never set `err.name`, which stays «Error».
+  const cls = err && err.constructor && typeof err.constructor.name === 'string'
+    ? err.constructor.name : '';
+  const raw = cls && cls !== 'Error' ? cls : (err && typeof err.name === 'string' ? err.name : '');
+  const name = raw ? raw.slice(0, 60) : 'Error';
   const status = err && Number.isInteger(err.status) ? ` ${err.status}` : '';
   return name + status;
 }
