@@ -1,6 +1,6 @@
 ---
 name: go-live
-description: The release sequence for Mise — from a green PR to a verified live app with its tag, GitHub Release and records. Use when a piece of work is finished and ready to publish, when Federico says to go live / merge / publish / «vai live» / «fai il merge», when preparing the «ready — when do you want it live?» question, or when rolling back a broken release.
+description: The release sequence for Mise — from a green PR to a verified live app with its tag, GitHub Release and records. Use when a piece of work is finished and ready to publish, when Federico says to go live / merge / publish / «vai live» / «fai il merge», when preparing the «ready — when do you want it live?» question, or when rolling back a broken release. Its appendix covers the preview project (the PR link on his phone, seed-preview, the preview workflow).
 ---
 
 # Going live — Mise
@@ -120,3 +120,24 @@ live?»* and tell him to **expect two clicks** if rules change (the harness asks
 - ⚠️ Every phone must update (the update banner / reopen the app) — and when a change alters
   what is saved, nobody should use the new feature until their phone has updated.
 - The decisions taken for him during the work, FIRST in the list (global P10).
+
+## Appendix — the preview project (a PR on his phone before it goes live)
+
+The rules that must hold without this file (production is an allowlist, `_site/` only, never
+real data) are in the project CLAUDE.md. The working details:
+- **`mise-app-preview`** — free plan, FAKE data only: the emulator's demo world via
+  `node scripts/seed-preview.mjs`, which can reach no other project. Its `*@club.test` accounts get
+  their own random password, printed once, given to him in chat only; re-run it for a fresh
+  password if he loses it. Email/Password sign-in is ON there (his click, 1 Oct 2026).
+- Preview pages wear a «Preview · test data» ribbon (`js/preview-ribbon.js`).
+- **`.github/workflows/preview.yml`** (not a required check): per PR it deploys the PR's rules to
+  the preview project and its pages to channel `pr-<n>` (14 days), then comments the link. All PRs
+  share one preview database: the last PR to deploy sets its rules.
+- A post-deploy check takes the channel down if anything internal answers
+  (`tests/preview-hosting.test.mjs`). Keyless sign-in: pool `github-pool`, provider `github-oidc`,
+  service account `preview-deploy@mise-app-preview` (that project only); trust pinned to the repo
+  in two places.
+- The preview API key is restricted to `*.web.app/*` + its firebaseapp.com and to Auth/Firestore
+  (it reaches fake data only). Full set-up history: `ARCHIVIO-BACKLOG.md`.
+- Does NOT work on a preview: anything served by Cloud Functions (join codes, some settings
+  switches, notifications, the photo reader).

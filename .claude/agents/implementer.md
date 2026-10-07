@@ -18,10 +18,12 @@ that no test fully catches. Read every one your change touches:
 | If the change touches… | Read first |
 |---|---|
 | `firestore.rules`, a collection, a field the app saves, `locations/{lid}` or `users/{uid}`, a role | `.claude/skills/firestore-rules/SKILL.md` |
+| a Firestore query, a data layer, any saved document's shape | `.claude/skills/firestore-rules/data-model.md` (every collection and field) |
 | any text a person reads, `js/i18n.js`, `js/market.js`, allergens, units, prices, dates, labels | `.claude/skills/i18n-labels/SKILL.md` |
 | any file listed in `sw.js` `ASSETS` (HTML, CSS, JS, icons, fonts, manifest) | `.claude/skills/bump-sw/SKILL.md` |
 | driving the app, a probe or seed script, anything that could write to Firestore | `.claude/skills/firestore-write-guard/SKILL.md` (and `.claude/skills/drive-app/SKILL.md` if it exists — it is local-only) |
-| a screen, a stylesheet or `tokens.css` | `.claude/skills/ui-check/SKILL.md` — say in your report that it should be run |
+| `sw.js` itself (fetch, install, activate, the SDK cache) | `.claude/skills/bump-sw/SKILL.md` — «How the cache behaves» |
+| a screen, an overlay, a dialog, a header, an icon, a stylesheet or `tokens.css` | `.claude/skills/ui-design/SKILL.md` BEFORE building, then `.claude/skills/ui-check/SKILL.md` — say in your report that it should be run |
 
 ## The stack, in one breath
 
