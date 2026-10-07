@@ -28,6 +28,7 @@ import {
   limitError,
   usageOf,
   sectionOn,
+  safeErrorLabel,
   DAILY_IMAGES_PER_PERSON,
   DAILY_IMAGES_PER_VENUE,
 } from './recipe-photo-model.js';
@@ -193,10 +194,11 @@ export async function readPackText({ uid, locationId, images, store, ask, now })
     message = await ask(images);
   } catch (err) {
     // The reader's own message is never passed on: it is written for a developer, it
-    // is English, and it can carry a fragment of the API key.
+    // is English, and it can carry a fragment of the API key. ⚠️ Not into the server log
+    // either (security audit, 7 Oct 2026): only the error's kind and HTTP status.
     return {
       error: { code: 'internal', key: 'read-failed', message: 'The photo could not be read. Try again.' },
-      logged: String(err && err.message),
+      logged: safeErrorLabel(err),
     };
   }
 

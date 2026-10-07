@@ -750,7 +750,9 @@ export const setMemberRole = onCall(CALL, async (request) => {
   const { locationId, uid: targetUid, role, title } = request.data || {};
   await requireOwner(uid, locationId);
 
-  if (typeof targetUid !== 'string' || !targetUid) {
+  // ⚠️ A UID, NOTHING ELSE (security audit, 7 Oct 2026): the value becomes part of a
+  // document path, so a `/` would point the read and the write somewhere deeper.
+  if (typeof targetUid !== 'string' || !/^[A-Za-z0-9]{1,128}$/.test(targetUid)) {
     throw new HttpsError('invalid-argument', 'Which person?');
   }
   // ⚠️ REFUSED RATHER THAN IGNORED, for the same reason as the role below it: a
@@ -826,7 +828,21 @@ export const setMemberRole = onCall(CALL, async (request) => {
       'This is the only owner. Make somebody else an owner first.');
   }
   if (outcome.removed) {
-    logger.info('Member removed', { locationId, targetUid, by: uid });
+    // ⚠️ THE PHONES GO WITH THE PERSON (security audit, 7 Oct 2026). Their notification
+    // registrations stayed behind, so a removed employee kept being told about every
+    // client order, and could not stop it — deleting one needs membership. Done after
+    // the transaction and never fatal: the removal is what matters, and the client-order
+    // notification also re-checks membership before it sends.
+    let phones = 0;
+    try {
+      const mine = await db().collection(`locations/${locationId}/fcm-tokens`)
+        .where('uid', '==', targetUid).get();
+      await Promise.all(mine.docs.map(d => d.ref.delete()));
+      phones = mine.size;
+    } catch (err) {
+      logger.warn('Member removed, but their phones could not be forgotten', { locationId, targetUid });
+    }
+    logger.info('Member removed', { locationId, targetUid, phones, by: uid });
     return { removed: true };
   }
   logger.info('Member role changed', { locationId, targetUid, role, title: nextTitle, by: uid });
@@ -850,7 +866,9 @@ export const setMemberName = onCall(CALL, async (request) => {
   const { locationId, uid: targetUid, firstName, lastName } = request.data || {};
   await requireOwner(uid, locationId);
 
-  if (typeof targetUid !== 'string' || !targetUid) {
+  // ⚠️ A UID, NOTHING ELSE (security audit, 7 Oct 2026): the value becomes part of a
+  // document path, so a `/` would point the read and the write somewhere deeper.
+  if (typeof targetUid !== 'string' || !/^[A-Za-z0-9]{1,128}$/.test(targetUid)) {
     throw new HttpsError('invalid-argument', 'Which person?');
   }
 
@@ -902,7 +920,7 @@ export const setLocationLanguage = onCall(CALL, async (request) => {
   const uid = requireAuth(request);
   const { locationId, language } = request.data || {};
 
-  if (typeof locationId !== 'string' || !locationId) {
+  if (typeof locationId !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(locationId)) {
     throw new HttpsError('invalid-argument', 'Which location?');
   }
   if (!INTERFACE_LANGUAGES.includes(language)) {
@@ -942,7 +960,7 @@ export const setRecipePhoto = onCall(CALL, async (request) => {
   const uid = requireAuth(request);
   const { locationId, enabled } = request.data || {};
 
-  if (typeof locationId !== 'string' || !locationId) {
+  if (typeof locationId !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(locationId)) {
     throw new HttpsError('invalid-argument', 'Which location?');
   }
   if (typeof enabled !== 'boolean') {
@@ -977,7 +995,7 @@ export const setPackPhoto = onCall(CALL, async (request) => {
   const uid = requireAuth(request);
   const { locationId, enabled } = request.data || {};
 
-  if (typeof locationId !== 'string' || !locationId) {
+  if (typeof locationId !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(locationId)) {
     throw new HttpsError('invalid-argument', 'Which location?');
   }
   if (typeof enabled !== 'boolean') {
@@ -1015,7 +1033,7 @@ export const setIngredientPanels = onCall(CALL, async (request) => {
   const uid = requireAuth(request);
   const { locationId, showAllergens, showNutrition } = request.data || {};
 
-  if (typeof locationId !== 'string' || !locationId) {
+  if (typeof locationId !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(locationId)) {
     throw new HttpsError('invalid-argument', 'Which location?');
   }
 
