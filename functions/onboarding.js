@@ -546,6 +546,16 @@ export const createJoinCode = onCall(CALL, async (request) => {
   // is not the word 'link' is read as digits, so a garbled field cannot invent a
   // long-lived key nobody asked for.
   const kind = (request.data && request.data.kind) === 'link' ? 'link' : 'digits';
+  // ⚠️⚠️ SIX DIGITS ONLY FOR AN EMPLOYEE (security audit, 7 Oct 2026, his choice). The
+  // per-code «five wrong guesses» limit never fires (a wrong guess hashes to another
+  // document), so what holds is the per-account hourly cap — and a guessed manager or
+  // owner code is a stranger running somebody else's venue. A link (192 random bits)
+  // cannot be guessed. Refused, not quietly turned into a link: an old phone would draw
+  // a 40-character token as if it were six digits.
+  if (kind === 'digits' && role !== 'staff') {
+    throw new HttpsError('failed-precondition',
+      'A manager or an owner is invited with a link. Six digits are for employees.');
+  }
   const code = kind === 'link' ? mintLinkToken() : mintDigits();
   // ⚠️ 'staff' WHATEVER THE SHAPE. A link minted here is an invitation into a
   // location that already exists — it lives a day, not the customer link's week.

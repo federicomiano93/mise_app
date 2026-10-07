@@ -62,8 +62,11 @@ const HOUR = 60 * 60 * 1000;
 export const PURPOSES = Object.freeze(['staff', 'customer']);
 export const TTL_MS = Object.freeze({ staff: 24 * HOUR, customer: 7 * 24 * HOUR });
 
-// Per CODE. Five wrong guesses and it is dead — the owner reads out another one,
-// which costs ten seconds, while an attacker has to start again from nothing.
+// Per CODE. ⚠️ It does NOT stop a search (security audit, 7 Oct 2026): codes are stored
+// under their hash, so a wrong guess never reaches the real code's document. It only
+// counts tries of the RIGHT code after it has expired. What bounds a search is the
+// per-account limit below and the app-wide six-digit pause (digits-guard.js) — which
+// is why six digits only ever make an employee.
 export const MAX_FAILED_ATTEMPTS = 5;
 
 // Per ACCOUNT per hour, which is the limit that actually bounds a search: the
