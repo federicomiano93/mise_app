@@ -3483,6 +3483,28 @@ body:not([data-orders-tab="deliveries"]) #orders-owed { display: none; }
 .pchg-price { margin: 0; font-size: 14px; font-variant-numeric: tabular-nums; color: var(--text); }
 .pchg-pack { margin: 0; font-size: 13px; color: var(--text-2); }
 
+/* «Did you send the order?» (js/orders/sent-check-dialog.js): three answers, stacked so
+   each label has the whole width — the Italian ones are long. Reuses .app-dialog-*. */
+.sent-check-actions { flex-direction: column; }
+.sent-check-actions .app-dialog-btn { flex: none; min-height: 44px; }
+
+/* The Home's kiosk band (js/home-kiosk-band.js): Rest and Exit side by side, quiet buttons.
+   Aligned with the cards (16px) and the reminder bands under it. Icon + text is a flex row. */
+.home-kiosk-band { display: flex; gap: 10px; margin: 16px 16px 0; }
+.home-kiosk-btn {
+  flex: 1;
+  min-width: 0;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: transform .06s ease;
+}
+.home-kiosk-btn:active { transform: scale(.97); }
+.home-kiosk-btn:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 2px; }
+.home-kiosk-btn svg { flex-shrink: 0; }
+
 /* ── The way back to the Ricettario (7 Oct 2026) ────────────────────────────
    Opened from the Ricettario (#from=…), Orders offers a way back in TWO forms of one control,
    chosen by width (the app has one wide-screen query, so both rules are max-width: the button is
