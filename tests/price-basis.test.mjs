@@ -8,7 +8,7 @@ import { readFileSync } from 'node:fs';
 import { newCardSource, legacyCardSource } from './helpers/card-source.mjs';
 import {
   PRICE_FORMS, priceFormOf, basisOptions, defaultBasis, basisOf, basisToStore, rateBaseOf,
-  basisToStoredPrice, storedPriceToBasis, convertBasisPrice,
+  basisToStoredPrice, storedPriceToBasis, convertBasisPrice, shownPrice,
   formatPriceInput, storedPriceInput, pricePatch, priceChanged, priceBoxStart, splitPriceFields,
 } from '../js/price-model.js';
 
@@ -234,4 +234,33 @@ test('the old card never asks for a basis', () => {
   const legacy = codeOf(legacyCardSource());
   assert.equal(legacy.includes('basis'), false);
   assert.equal(legacy.includes('priceBasis'), false);
+});
+
+// His choice (7 Oct 2026): the box shows two decimals — three significant figures below one unit of money,
+// so packaging bought by the thousand is not distorted (review, 8 Oct 2026). Only the shown text is rounded:
+// the card keeps the exact figure behind it (executed in price-basis-card.test.mjs).
+test('the price box shows two decimals, three significant figures below 1, never a positive price as 0', () => {
+  assert.equal(shownPrice(convertBasisPrice(PRICE_FORMS.singlePack, 'pack', 'rate', 10, single, '2.27 kg')), 4.41);
+  assert.equal(shownPrice(9.6), 9.6);
+  assert.equal(shownPrice(1.005), 1.01);
+  assert.equal(shownPrice(3.333333), 3.33);
+  assert.equal(shownPrice(1), 1);
+  assert.equal(shownPrice(0.96), 0.96);
+  assert.equal(shownPrice(0.125), 0.125, 'not 0.13');
+  assert.equal(shownPrice(0.012), 0.012, 'not 0.01 (17% out)');
+  assert.equal(shownPrice(0.031293), 0.0313);
+  assert.equal(shownPrice(0.0085), 0.0085);
+  assert.equal(shownPrice(0.004), 0.004, 'a real cost too small for pence is not shown as free');
+  assert.ok(shownPrice(0.0000001) > 0, 'never a free 0');
+  assert.equal(shownPrice(''), '');
+  assert.equal(shownPrice(null), null);
+});
+
+test('the places that fill the price box go through shownPrice', () => {
+  const form = read('js/ingredient-record-form.js');
+  assert.ok(form.includes('const text = localNumber(shownPrice(exact), false);'), 'a figure a tap writes');
+  assert.ok(form.includes('writeBox(converted, next);'), 'a segment tap');
+  assert.ok(form.includes('shownPrice(storedPriceToBasis(form, basisNow, figure, fmt, weight))'), 'a stored price re-shown');
+  assert.ok(form.includes('convertBasisPrice(currentForm(), a.basis, basisOf(currentForm(), basis), a.value, now().fmt, now().weight, 12)'),
+    'the saved figure is still converted exactly from what was typed');
 });

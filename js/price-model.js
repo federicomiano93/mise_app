@@ -625,6 +625,20 @@ export function convertBasisPrice(form, from, to, value, fmt, weightText, decima
   return fa === null || fb === null ? null : roundTo((n * fa) / fb, decimals);
 }
 
+// What the price box SHOWS: two decimals, the way money is read (Federico, 7 Oct 2026 — «4.405286» per kg
+// read as noise). Below one unit of money, three significant figures instead: packaging bought by the
+// thousand costs 0.012 a cup, and two decimals would show 0.01 (17% out) in a box a person may correct
+// by hand (review of 8 Oct 2026). Only for the eye: the card keeps the exact figure behind the box
+// (anchor / boxCanon / written), so this rounding never feeds a saved price, and «per kg» → «per pack»
+// still gives back exactly what was typed. Never a positive price shown as a free 0.
+export function shownPrice(value) {
+  const n = positiveNumber(value);
+  if (n === null) return value;
+  const decimals = Math.min(CASE_RATE_DECIMALS, Math.max(MONEY_DECIMALS, Math.ceil(-Math.log10(n)) + 2));
+  const shown = roundTo(n, decimals);
+  return shown > 0 ? shown : n;
+}
+
 // The boxes → pricePatch's input, for a price a person TYPED (or re-typed).
 // boxes = { price, rate, unit, pieceKg, vat }.
 export function formatPriceInput(fmt, weightText, { price: typedPrice, rate, unit, pieceKg, vat, ownPiece = false, basis = null } = {}) {
