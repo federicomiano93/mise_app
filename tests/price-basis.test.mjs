@@ -8,7 +8,7 @@ import { readFileSync } from 'node:fs';
 import { newCardSource, legacyCardSource } from './helpers/card-source.mjs';
 import {
   PRICE_FORMS, priceFormOf, basisOptions, defaultBasis, basisOf, basisToStore, rateBaseOf,
-  basisToStoredPrice, storedPriceToBasis, convertBasisPrice,
+  basisToStoredPrice, storedPriceToBasis, convertBasisPrice, shownPrice,
   formatPriceInput, storedPriceInput, pricePatch, priceChanged, priceBoxStart, splitPriceFields,
 } from '../js/price-model.js';
 
@@ -234,4 +234,25 @@ test('the old card never asks for a basis', () => {
   const legacy = codeOf(legacyCardSource());
   assert.equal(legacy.includes('basis'), false);
   assert.equal(legacy.includes('priceBasis'), false);
+});
+
+// His choice (7 Oct 2026): the box shows two decimals. Only the shown text is rounded — the card keeps
+// the exact figure behind it, so a converted price saves and converts back with no drift.
+test('the price box shows two decimals, never a positive price as 0, and keeps empty and null as they are', () => {
+  assert.equal(shownPrice(convertBasisPrice(PRICE_FORMS.singlePack, 'pack', 'rate', 10, single, '2.27 kg')), 4.41);
+  assert.equal(shownPrice(9.6), 9.6);
+  assert.equal(shownPrice(1.005), 1.01);
+  assert.equal(shownPrice(0.004), 0.004, 'a real cost too small for pence is not shown as free');
+  assert.equal(shownPrice(''), '');
+  assert.equal(shownPrice(null), null);
+  // The exact figure the card saves is untouched by what is shown.
+  assert.equal(convertBasisPrice(PRICE_FORMS.singlePack, 'rate', 'pack', 10 / 2.27, single, '2.27 kg', 12), 10);
+});
+
+test('both places that fill the price box go through shownPrice', () => {
+  const form = read('js/ingredient-record-form.js');
+  assert.ok(form.includes('casePriceBox.value = localNumber(shownPrice(converted), false);'), 'a segment tap');
+  assert.ok(form.includes('shownPrice(storedPriceToBasis(form, basisNow, figure, fmt, weight))'), 'a stored price re-shown');
+  assert.ok(form.includes('convertBasisPrice(currentForm(), a.basis, basisOf(currentForm(), basis), a.value, now().fmt, now().weight, 12)'),
+    'the saved figure is still converted exactly from what was typed');
 });

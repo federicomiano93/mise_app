@@ -35,7 +35,7 @@ import {
   weightNeededForPrice, positiveNumber, packBaseOf, storedCaseOf,
   pricePatch, priceChanged, priceRecord, pricePerKg,
   formatPricePerUnit, formatRate, costReasonText, formatMoney,
-  basisOptions, basisOf, basisToStore, rateBaseOf, storedPriceToBasis, convertBasisPrice,
+  basisOptions, basisOf, basisToStore, rateBaseOf, storedPriceToBasis, convertBasisPrice, shownPrice,
 } from './price-model.js';
 // legacy-card:begin
 // What the card of before (an old stored price shape) needs and the new card does not: the «A cartone» mode
@@ -338,7 +338,7 @@ function priceBlock(item, actions, defaultUnit = null, ctx) {
     if (a) {
       const converted = convertBasisPrice(form, a.basis, next, a.value, fmt, weight);
       if (converted === null) return;
-      casePriceBox.value = localNumber(converted, false);
+      casePriceBox.value = localNumber(shownPrice(converted), false);
     }
     basis = next;
     refresh();
@@ -455,7 +455,7 @@ function priceBlock(item, actions, defaultUnit = null, ctx) {
     const start = priceBoxStart(item, fmt, weight, Boolean(changed));
     // The box speaks in the chosen basis: the stored figure (a pack or a case price) is re-expressed in it.
     const basisNow = basisOf(form, basis);
-    const inBasis = (figure) => (figure === null ? null : storedPriceToBasis(form, basisNow, figure, fmt, weight));
+    const inBasis = (figure) => (figure === null ? null : shownPrice(storedPriceToBasis(form, basisNow, figure, fmt, weight)));
     if (!priceTyped) {
       boxCanon = recomputed ? start.suggestion : start.value;
       const shown = inBasis(recomputed ? start.suggestion : start.value);
