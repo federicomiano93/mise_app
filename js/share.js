@@ -16,6 +16,8 @@
 // is to stop copies would be the wrong reading of it. Root, pure, no DOM state — the
 // shape js/price-model.js and js/photo-model.js already have.
 //
+// (7 Oct 2026: the owner reversed «one mechanism» for the ORDER IMAGE ONLY, so a supplier can
+// open the picture and zoom — js/orders/order-image.js. Everything below stays wa.me.)
 // ⚠️ WHATSAPP AND NOT navigator.share(). The platform API is the right instinct
 // (P19) and it is genuinely better where it exists — but this app sends every
 // order, every client link and every supplier message through wa.me already, so
