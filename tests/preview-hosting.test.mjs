@@ -56,9 +56,14 @@ test('every deploy is followed by a check that takes the channel down if anythin
   assert.match(check, /firebase hosting:channel:delete "\$CHANNEL" --project mise-app-preview --force\n\s+exit 1/);
 });
 
-test('only the preview project maps a hosting target; production maps none and has no alias beside it', () => {
-  assert.deepEqual(firebaserc.projects, { default: 'bakery-app-ebf90' },
-    'a "preview" alias would let `firebase use preview` send a production rules deploy to the wrong project');
+// The default is the FAKE-DATA project: a command typed without --project (a bare `firebase
+// deploy`, a `firestore:delete`) then lands where nothing real lives. Production is always named
+// on the command line (the go-live and firestore-rules skills, test.yml). No "prod" alias either:
+// `firebase use prod` would store production as this folder's active project, which overrides
+// this file for every later command.
+test('only the preview project maps a hosting target; the default is the preview project, with no alias beside it', () => {
+  assert.deepEqual(firebaserc.projects, { default: 'mise-app-preview' },
+    'a bare firebase command must reach the fake-data project, never production');
   assert.deepEqual(Object.keys(firebaserc.targets || {}), ['mise-app-preview']);
   assert.deepEqual(firebaserc.targets['mise-app-preview'].hosting, { preview: ['mise-app-preview'] });
 });
