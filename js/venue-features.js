@@ -44,6 +44,17 @@ export function nutritionOn(locationDoc) {
   return read(locationDoc, 'showNutrition');
 }
 
+// Does this venue let its people write a note to Claude from the «?» sheet?
+//
+// ⚠️ THE DEFAULT IS OFF, THE OPPOSITE DIRECTION FROM showAllergens. This switch opens a
+// WRITE path (locations/{lid}/feedback), so only a literal `true` counts: a missing
+// document, a missing key, 'yes' or 1 all answer OFF. The rules check the same flag, and
+// no callable sets it — it is switched on by hand on a venue's document — which is why
+// it is not in FEATURE_KEYS.
+export function feedbackOn(locationDoc) {
+  return !!locationDoc && typeof locationDoc === 'object' && locationDoc.feedbackToClaude === true;
+}
+
 // The keys, in one place, so the callable and its tests cannot drift from the app.
 export const FEATURE_KEYS = Object.freeze(['showAllergens', 'showNutrition']);
 
