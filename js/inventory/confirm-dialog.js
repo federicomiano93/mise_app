@@ -79,9 +79,11 @@ function open({ title = '', message = '', okLabel = 'OK', cancelLabel = 'Cancel'
     const onKey = (e) => {
       if (e.key === 'Escape') { e.preventDefault(); done(false); }
       else if (e.key === 'Tab') {
-        // Trap focus inside the dialog: Tab just bounces between the two buttons.
+        // Trap focus inside the dialog. It cycles through EVERY control in the box in
+        // document order — a field passed as `node` included — not just the two buttons.
         e.preventDefault();
-        (cancel && document.activeElement === ok ? cancel : ok).focus();
+        const target = nextInTrap(focusables(box), document.activeElement, e.shiftKey);
+        if (target) target.focus();
       }
     };
     ok.addEventListener('click', () => done(true));
@@ -91,6 +93,21 @@ function open({ title = '', message = '', okLabel = 'OK', cancelLabel = 'Cancel'
     document.body.appendChild(backdrop);
     ok.focus();
   });
+}
+
+// The controls Tab may reach inside the dialog, in document order.
+function focusables(box) {
+  return [...box.querySelectorAll('input, textarea, select, button')]
+    .filter((el) => !el.disabled && !el.hidden && el.type !== 'hidden');
+}
+
+// Where Tab (or Shift+Tab) goes next in a cycle. Pure, so a test can run it.
+// A focus that is not in the list (the page behind) enters at the first/last control.
+export function nextInTrap(list, active, backwards) {
+  if (!list.length) return null;
+  const i = list.indexOf(active);
+  if (i === -1) return backwards ? list[list.length - 1] : list[0];
+  return list[(i + (backwards ? list.length - 1 : 1)) % list.length];
 }
 
 function make(tag, cls, text) {
