@@ -60,6 +60,10 @@ export const KEEP_PREFIXES = Object.freeze([
   // every sign-out or venue switch, one phone would count as a new device each time.
   'device-id',
   'device-ping-',
+  // The error reports' daily throttle (js/error-report.js): a device's own count of what it
+  // already told the owner today. Wiped on a sign-out, signing out and in again would be a
+  // way round the daily cap.
+  'error-reports',
 ]);
 
 // Given every key currently in storage, which ones must go.

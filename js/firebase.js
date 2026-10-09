@@ -1011,6 +1011,26 @@ export function pingDevice(payload, id) {
   });
 }
 
+// The error reports (js/error-report.js): one line per error a member's device met,
+// locations/{lid}/errors/{autoId}, create-only — the rules refuse every read and the owner's
+// script (scripts/read-errors.mjs) is the only reader. The record is spread FIRST so it can
+// never overwrite bakery, uid or createdAt: uid MUST be the signed-in account's and createdAt
+// MUST be serverTimestamp(), the rules compare them with request.auth.uid and request.time.
+// Signed out → reject with 'unauthenticated' (the caller drops it quietly: P17).
+export function reportError(record) {
+  return authReady.then(() => {
+    if (!auth.currentUser) {
+      throw Object.assign(new Error('unauthenticated'), { code: 'unauthenticated' });
+    }
+    return addDoc(collection(db, pathFor('errors')), {
+      ...record,
+      bakery: currentLocationId(),
+      uid: auth.currentUser.uid,
+      createdAt: serverTimestamp(),
+    });
+  });
+}
+
 // Delete one whole log document (the user explicitly deleted that log).
 export function deleteLogDoc(id) {
   return authReady

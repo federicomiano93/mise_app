@@ -801,6 +801,20 @@ export function pingDevice(payload, id) {
   });
 }
 
+export function reportError(record) {
+  return authReady.then(() => {
+    if (!auth.currentUser) {
+      throw Object.assign(new Error('unauthenticated'), { code: 'unauthenticated' });
+    }
+    return addDoc(collection(db, pathFor('errors')), {
+      ...record,
+      bakery: currentLocationId(),
+      uid: auth.currentUser.uid,
+      createdAt: serverTimestamp(),
+    });
+  });
+}
+
 export function deleteLogDoc(id) {
   return authReady
     .then(() => deleteDoc(doc(db, pathFor('logs'), String(id))))
