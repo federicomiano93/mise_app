@@ -131,7 +131,7 @@ test('the Catalogue picker shows the display name, searches both, and still HAND
   const all = linkOptions({ ingredients, query: '' }).ingredients;
   const flour = all.find(o => o.id === 'f');
   assert.equal(flour.displayName, 'Farina');
-  assert.equal(flour.name, 'Caputo Rosso 00', 'the name that fills a recipe row stays the invoice name');
+  assert.equal(flour.name, 'Caputo Rosso 00', 'the chooser still hands back the invoice name (the row then takes the display name)');
   assert.deepEqual(linkOptions({ ingredients, query: 'farina' }).ingredients.map(o => o.id), ['f']);
   assert.deepEqual(linkOptions({ ingredients, query: 'caputo' }).ingredients.map(o => o.id), ['f']);
   const hits = suggestLinks({ ingredients, query: 'far' }).items;

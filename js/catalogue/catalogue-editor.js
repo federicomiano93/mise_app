@@ -9,13 +9,12 @@
 
 import { t } from '../i18n.js';
 import { supplierLabel } from '../supplier-label.js';
-import { ingredientDisplayName } from '../ingredient-name.js';
 import { revealField } from '../reveal-field.js';
 import { canManageHere } from './firebase-catalogue.js';
 import { el } from './dom.js';
 import {
   findInvalidRecipe, unitOf, unitText, CATALOGUE_UNITS, isWeighableUnit, weighableTotalGrams,
-  linkOf, applyLink, normalizeWeight, normalizeShelfLifeDays, moveRow,
+  linkOf, applyLink, linkedItemName, isSameLink, normalizeWeight, normalizeShelfLifeDays, moveRow,
 } from './catalogue-model.js';
 // Drag to reorder the rows — the library the Calculator's clients and the Home cards use,
 // vendored into the repo and precached (P19).
@@ -212,8 +211,9 @@ export function renderEditor({ recipe, draft, allRecipes, app, getLabelProfile =
         oninput: (e) => { ing.label = e.target.value; markDirty(); updateTotal(); if (showErrors) validateUI(); },
       });
       // Under the name, while it is typed: catalogue ingredients to link THIS row to.
-      // ⚠️ A tap links the row and leaves the name exactly as typed (applyLink), then
-      // moves on to the amount — the next thing a person fills in. ingredient-suggest.js.
+      // ⚠️ A tap links the row and SETS its name to the linked item's display name — the
+      // same words the link line under the row shows (9 Oct 2026, linkTo) — then moves on
+      // to the amount — the next thing a person fills in. ingredient-suggest.js.
       const suggest = attachLinkSuggestions(labelInput, {
         options: () => ({
           ingredients: app.ingredients(), recipes: app.allRecipes(), suppliers: app.suppliers(),
@@ -350,11 +350,21 @@ export function renderEditor({ recipe, draft, allRecipes, app, getLabelProfile =
   }
 
   // Link row `idx` to what was chosen; null removes the link.
-  // ⚠️ applyLink() IS THE ONE PLACE A ROW'S LINK IS WRITTEN, and it never overwrites a
-  // name somebody typed: that wording is chosen for THIS recipe ("strong flour" for an
-  // article filed as "Flour T55"), and Federico writes it himself on purpose.
+  // ⚠️ applyLink() IS THE ONE PLACE A ROW'S LINK IS WRITTEN.
+  // ⚠️ THE NAME FOLLOWS THE PICK (9 Oct 2026). Federico had said on 13 Sep 2026 «il nome
+  // dell'ingrediente lo scrivo io» and a typed name was never overwritten; on 9 Oct 2026 he
+  // reversed it: «quando inserisco un ingrediente in una ricetta, sotto mi compare il nome
+  // del ingrediente correlato, fai in modo che il nome dell'ingrediente si autocompila con
+  // il nome del ingrediente correlato». Every pick by a person (suggestion, chooser,
+  // «+ Crea») sets the name to what linkText() shows under it. The field stays editable,
+  // saved recipes are not renamed on opening, and removing a link keeps the name.
   function linkTo(idx, chosen) {
-    applyLink(working.ingredients[idx], chosen);
+    const row = working.ingredients[idx];
+    const before = linkOf(row);
+    // Only a pick that CHANGES the link sets the name: looking at the chooser and choosing what
+    // is already there, or tapping the ticked suggestion, must not undo a name typed since.
+    const same = isSameLink(before, chosen);
+    applyLink(row, chosen, same ? {} : { label: linkedItemName(chosen, app.ingredients(), app.allRecipes()) });
     markDirty();
     renderIngredientRows();
     if (showErrors) validateUI();
@@ -380,16 +390,16 @@ export function renderEditor({ recipe, draft, allRecipes, app, getLabelProfile =
     if (!link) return t('cat.linkToAnIngredient');
 
     if (link.kind === 'recipe') {
-      const sub = app.allRecipes().find(r => r.id === link.refId);
+      const subName = linkedItemName(link, {}, app.allRecipes());
       // ⚠️ «recipe» used to be English written into the code, on an Italian venue too.
-      return sub ? `→ ${sub.name}  ·  ${t('cat.recipe')}` : t('cat.aRecipeThatNo');
+      return subName ? `→ ${subName}  ·  ${t('cat.recipe')}` : t('cat.aRecipeThatNo');
     }
 
     const ingredient = app.ingredients()[link.refId];
     if (!ingredient) return t('cat.anIngredientThatNo');
     const supplier = supplierLabel(app.suppliers()[ingredient.supplierId]);
     const weight = String(ingredient.weight || '').trim();
-    return ['→ ' + (ingredientDisplayName(ingredient) || t('cat.ingredient')), weight, supplier]
+    return ['→ ' + (linkedItemName(link, app.ingredients(), []) || t('cat.ingredient')), weight, supplier]
       .filter(Boolean).join('  ·  ');
   }
 
