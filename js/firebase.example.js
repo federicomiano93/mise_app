@@ -815,6 +815,23 @@ export function reportError(record) {
   });
 }
 
+export function saveUsage(payload, id) {
+  return authReady.then(() => {
+    if (!auth.currentUser) {
+      throw Object.assign(new Error('unauthenticated'), { code: 'unauthenticated' });
+    }
+    return setDoc(
+      doc(db, pathFor('usage'), id),
+      {
+        ...payload,
+        bakery: currentLocationId(),
+        uid: auth.currentUser.uid,
+        updatedAt: serverTimestamp(),
+      },
+    );
+  });
+}
+
 export function deleteLogDoc(id) {
   return authReady
     .then(() => deleteDoc(doc(db, pathFor('logs'), String(id))))

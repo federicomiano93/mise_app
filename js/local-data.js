@@ -64,6 +64,9 @@ export const KEEP_PREFIXES = Object.freeze([
   // already told the owner today. Wiped on a sign-out, signing out and in again would be a
   // way round the daily cap.
   'error-reports',
+  // The usage record (js/usage.js): the day's accumulator IS the truth. Wiped on a sign-out, the
+  // next write of the day would carry smaller totals and replace the bigger line on the server.
+  'usage-',
 ]);
 
 // Given every key currently in storage, which ones must go.

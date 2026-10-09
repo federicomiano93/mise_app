@@ -29,6 +29,9 @@ import { cardVisibleTo } from './home-cards.js';
 import './device-ping.js';
 // The error reports: catches this page's errors and tells the owner (js/error-report.js).
 import './error-report.js';
+// The usage record: screens, routes and key actions, kept on the device and sent now and then
+// (js/usage.js).
+import './usage.js';
 
 const HOME = 'index.html';
 
