@@ -188,6 +188,7 @@ async function doSave() {
   };
 
   appendAndSave(working.logId, version);
+  globalThis.window?.dispatchEvent(new CustomEvent('mise:action', { detail: 'log-edited' }));
   dirty = false;
   closeEdit(true);
 }
@@ -207,8 +208,9 @@ export function openLogHistory(logId) {
   historyLogId = logId;
   renderHistoryList();
   document.getElementById('loghistory-overlay').classList.add('visible');
+  globalThis.window?.dispatchEvent(new CustomEvent('mise:screen', { detail: 'log-history' }));
 }
-function closeHistory() { document.getElementById('loghistory-overlay').classList.remove('visible'); }
+function closeHistory() { document.getElementById('loghistory-overlay').classList.remove('visible'); globalThis.window?.dispatchEvent(new CustomEvent('mise:screen', { detail: 'log' })); }
 
 function kindLabel(v, i, last) {
   if (v.kind === 'restore') return t('calc.restoredFromVersion', { v: (num(v.restoredFrom) || 0) + 1 });

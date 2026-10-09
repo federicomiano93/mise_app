@@ -144,6 +144,7 @@ const state = {
 };
 
 let olderLoader = null;          // pages of orders older than the live window; made when that listener starts
+let quietSummaryClose = false;   // closeSupplier() closing its own summary: no screen announcement
 let mgmt = null;                // open management panel handle, or null
 let pendingChecked = false;     // the unfinished-order check runs once per page load
 let ordersConfig = normalizeOrdersConfig(null);   // config/orders, mirrored locally — see below
@@ -583,6 +584,7 @@ function openSupplier(supplierId) {
   closeAlertsPanel();           // the panel must never sit on top of a full screen
   state.openSupplier = supplierId;
   renderOpenSupplier();
+  globalThis.window?.dispatchEvent(new CustomEvent('mise:screen', { detail: 'supplier' }));
 }
 
 function closeSupplier() {
@@ -592,10 +594,13 @@ function closeSupplier() {
   // screen is still there to be made interactive again.
   const id = state.openSupplier;
   const hadSummary = state.summaryOverSupplier === true;
-  if (hadSummary) closeSummary();
+  // The summary goes with the screen: only the final screen is reported, not the hop between.
+  quietSummaryClose = true;
+  try { if (hadSummary) closeSummary(); } finally { quietSummaryClose = false; }
   state.openSupplier = null;
   detailView?.overlay.remove();
   detailView = null;
+  if (id) globalThis.window?.dispatchEvent(new CustomEvent('mise:screen', { detail: '' }));
   // closeSummary() just focused the bar's button, which went with the screen: hand focus to the
   // list row instead, or a keyboard user is dropped on the page body (leaveSupplier does the same).
   if (hadSummary && id) document.getElementById(`open-${id}`)?.focus();
@@ -814,6 +819,7 @@ function openSummary(supplierId) {
   state.summaryOverSupplier = false;
   state.summarySupplier = supplierId;
   renderSummary();
+  if (summaryView) globalThis.window?.dispatchEvent(new CustomEvent('mise:screen', { detail: 'summary' }));
 }
 
 // ⚠️ FROM THE BAR AT THE FOOT OF THE SUPPLIER'S SCREEN the summary opens ON TOP of it and
@@ -831,6 +837,7 @@ function openSummaryOverSupplier(supplierId) {
   // reader's reach (aria-modal alone is not honoured everywhere). Cleared by closeSummary.
   // Only once the sheet really opened: renderSummary() gives up when the supplier is gone.
   if (detailView && summaryView) detailView.overlay.inert = true;
+  if (summaryView) globalThis.window?.dispatchEvent(new CustomEvent('mise:screen', { detail: 'summary' }));
 }
 
 // `openerId`, not read from state: closeSummary() clears state.summarySupplier
@@ -840,6 +847,8 @@ function openSummaryOverSupplier(supplierId) {
 function closeSummary() {
   const openerId = state.summarySupplier;
   const fromBar = state.summaryOverSupplier === true;
+  // Back to the supplier screen it was opened over, or to the list.
+  if (openerId && !quietSummaryClose) globalThis.window?.dispatchEvent(new CustomEvent('mise:screen', { detail: fromBar ? 'supplier' : '' }));
   state.summarySupplier = null;
   state.summaryOverSupplier = false;
   if (detailView) detailView.overlay.inert = false;
@@ -1215,6 +1224,7 @@ function openHistory() {
   if (!overlay) return;
   overlay.hidden = false;
   if (historyDirty) renderHistory();
+  globalThis.window?.dispatchEvent(new CustomEvent('mise:screen', { detail: 'history' }));
 }
 
 function renderHistory() {
@@ -1391,20 +1401,23 @@ function openSendScreen() {
     // decides what to draw.
     sendSettings: ordersConfig.sendSettings,
     canManage: canManageHere(),
-    onBack: () => overlay.remove(),
+    onBack: () => { overlay.remove(); globalThis.window?.dispatchEvent(new CustomEvent('mise:screen', { detail: '' })); },
     // Asked by the chooser once the road is known, and only for roads that reach the supplier.
     beforeSend: rows => refuseOnUnitConflict(rows.map(r => ({ supplierId: r.id, date: dayForSupplier(r.id) }))),
     onSent: supplierIds => {
       overlay.remove();
+      globalThis.window?.dispatchEvent(new CustomEvent('mise:screen', { detail: '' }));
       offerToRecordSent(supplierIds);
     },
     // The same ticked suppliers, sent inside the app instead of to a chat.
     onSendToManager: supplierIds => {
       overlay.remove();
+      globalThis.window?.dispatchEvent(new CustomEvent('mise:screen', { detail: '' }));
       sendListToManagers(supplierIds);
     },
   }, messageFormatOption());
   document.body.appendChild(overlay);
+  globalThis.window?.dispatchEvent(new CustomEvent('mise:screen', { detail: 'send' }));
 }
 
 // ── Sending the list to whoever runs the place ────────────────────────────────
@@ -1455,6 +1468,7 @@ async function sendListToManagers(supplierIds) {
 
   try {
     await sendOrderRequest(payload);
+    globalThis.window?.dispatchEvent(new CustomEvent('mise:action', { detail: 'order-request' }));
     // ⚠️ IT SAYS WHO WILL BE TOLD. The whole risk of this feature is a list that
     // reaches nobody: the sender used to know their order had gone because they
     // sent it themselves, and now they do not.
@@ -1507,6 +1521,7 @@ async function confirmIfNobodyIsListening(senderUid) {
 function openRequestList() {
   resetRequestWindow();
   renderRequestList();
+  globalThis.window?.dispatchEvent(new CustomEvent('mise:screen', { detail: 'requests' }));
 }
 
 // ⚠️⚠️ IT REPLACES IN PLACE, IT DOES NOT REMOVE AND RE-APPEND — and that one word
@@ -1530,6 +1545,7 @@ function renderRequestList() {
 }
 
 function closeRequestList() {
+  if (requestListView) globalThis.window?.dispatchEvent(new CustomEvent('mise:screen', { detail: '' }));
   requestListView?.remove();
   requestListView = null;
 }
@@ -1867,9 +1883,10 @@ function openPlaceAllScreen() {
     actionLabel: t('orders.orderPlaced'),
     emptyText: t('orders.noQuantitiesTypedYet'),
   }, {
-    onBack: () => overlay.remove(),
+    onBack: () => { overlay.remove(); globalThis.window?.dispatchEvent(new CustomEvent('mise:screen', { detail: '' })); },
     onConfirm: rows => {
       overlay.remove();
+      globalThis.window?.dispatchEvent(new CustomEvent('mise:screen', { detail: '' }));
       recordSuppliers(rows.map(r => r.id), {
         title: t('orders.recordTheseOrders'),
         okLabel: t('orders.orderPlaced'),
@@ -1877,6 +1894,7 @@ function openPlaceAllScreen() {
     },
   });
   document.body.appendChild(overlay);
+  globalThis.window?.dispatchEvent(new CustomEvent('mise:screen', { detail: 'place-all' }));
 }
 
 // In the by-supplier view this button only earns its place from TWO suppliers up:
@@ -2159,6 +2177,7 @@ async function placeOrder(supplierId, { confirm = true, date: pinnedDate, quanti
   // queued a draft save, and that save holds state.entries BY REFERENCE. Dropping
   // the keys before it fires is what stops it writing them back after the clear.
   forgetSupplierLocally(supplierId);
+  globalThis.window?.dispatchEvent(new CustomEvent('mise:action', { detail: 'order-sent' }));
   // Recorded, so there is nothing left on that supplier's screen — back to the list
   // (P20: a successful save returns you to where you came from).
   if (state.openSupplier === supplierId) closeSupplier();
@@ -2610,6 +2629,7 @@ function expandSupplier(supplierId) {
 function openManagement() {
   if (mgmt) return;
   closeAlertsPanel();           // the panel must never sit on top of a full screen
+  globalThis.window?.dispatchEvent(new CustomEvent('mise:screen', { detail: 'management' }));
   // ⚠️ ONLY config/orders REACHES IT NOW. The supplier and ingredient records moved
   // to their own screen (suppliers.html), so this panel no longer needs — or gets —
   // either list.
@@ -2618,7 +2638,7 @@ function openManagement() {
       ordersConfig: () => ordersConfig,
     },
     {
-      onClose: () => { mgmt.overlay.remove(); mgmt = null; },
+      onClose: () => { mgmt.overlay.remove(); mgmt = null; globalThis.window?.dispatchEvent(new CustomEvent('mise:screen', { detail: '' })); },
       // ⚠️ HISTORY IS A DESTINATION, NOT A SETTING, and it is passed in rather than
       // reached for: management.js knows nothing about this page's markup, and the
       // overlay it opens sits at a higher z-index than the panel, so the panel stays
@@ -2821,6 +2841,8 @@ async function init() {
   document.getElementById('history-back-btn')?.addEventListener('click', () => {
     const overlay = document.getElementById('history-overlay');
     if (overlay) overlay.hidden = true;
+    // History opened from the management panel leaves the panel underneath.
+    globalThis.window?.dispatchEvent(new CustomEvent('mise:screen', { detail: mgmt ? 'management' : '' }));
   });
 
   setupOfflineIndicator();

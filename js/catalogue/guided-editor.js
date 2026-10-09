@@ -263,6 +263,7 @@ export function renderGuidedEditor({ recipe, app }) {
     // is dropped.
     const saved = { ...recipe, ingredients, steps: clean, endNote: normalizeEndNote(endNote) };
     app.saveRecipe(saved);
+    globalThis.window?.dispatchEvent(new CustomEvent('mise:action', { detail: 'procedure-saved' }));
     app.toast(t('cat.procedureSaved'));
     app.openDetail(saved);
     busy = false;

@@ -110,6 +110,7 @@ function paintFooter() {
 
 function showList() {
   view = 'list';
+  globalThis.window?.dispatchEvent(new CustomEvent('mise:screen', { detail: '' }));
   activeDetail = null;
   activeIngredient = null;
   builtClosed = readOnly();
@@ -135,6 +136,7 @@ function showList() {
 
 function openIngredient(ingredient) {
   view = 'detail';
+  globalThis.window?.dispatchEvent(new CustomEvent('mise:screen', { detail: 'detail' }));
   activeList = null;
   activeIngredient = ingredient;
   builtClosed = readOnly();
@@ -179,6 +181,7 @@ function costOfMonth() {
 function showUsage() {
   if (!mayManage) { showList(); return; }
   view = 'usage';
+  globalThis.window?.dispatchEvent(new CustomEvent('mise:screen', { detail: 'usage' }));
   activeList = null;
   activeDetail = null;
   activeIngredient = null;
@@ -323,6 +326,7 @@ async function handleClose() {
     if (kg !== null) packKg[i.id] = kg;
   });
   const opened = await closeMonth({ names, unitPrice, packKg });
+  globalThis.window?.dispatchEvent(new CustomEvent('mise:action', { detail: 'month-closed' }));
   toast(opened ? t('inv.closedAndOpened', { month: monthName(opened) }) : t('inv.closed'));
   showList();
 }
@@ -331,6 +335,7 @@ async function handleClose() {
 // a closed month, or one still carrying frozen prices, is not theirs.
 function showUnavailable() {
   view = 'unavailable';
+  globalThis.window?.dispatchEvent(new CustomEvent('mise:screen', { detail: 'unavailable' }));
   activeList = null;
   activeDetail = null;
   activeIngredient = null;

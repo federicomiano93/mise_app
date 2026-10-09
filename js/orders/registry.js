@@ -483,7 +483,11 @@ export function buildRegistry(data, actions, hooks = {}) {
       const form = buildSupplierForm({
         item,
         save: actions.saveSupplier,
-        onDone: (saved) => { popAfterSave(entry); onSaved?.(saved); },
+        onDone: (saved) => {
+          globalThis.window?.dispatchEvent(new CustomEvent('mise:action', { detail: 'supplier-saved' }));
+          popAfterSave(entry);
+          onSaved?.(saved);
+        },
       });
       const body = el('div', { class: 'mgmt-scroll' }, [form]);
       return overlay(entry, item ? t('orders.editSupplier') : t('orders.newSupplier'), body, close, form.headerSave);

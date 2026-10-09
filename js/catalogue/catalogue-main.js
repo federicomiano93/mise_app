@@ -377,6 +377,7 @@ function showDetailNode(recipe, node) {
 function showList() {
   stopRun();
   view = 'list';
+  globalThis.window?.dispatchEvent(new CustomEvent('mise:screen', { detail: '' }));
   activeDetail = null;
   setActiveSettings(null);
   activeSheet = null;
@@ -403,6 +404,7 @@ function openLabel(recipe) {
   stopRun();
   leaveSplit();
   view = 'label';
+  globalThis.window?.dispatchEvent(new CustomEvent('mise:screen', { detail: 'label' }));
   activeList = null;
   activeDetail = null;
   setActiveSettings(null);
@@ -447,6 +449,7 @@ function showAllergenSheet() {
   stopRun();
   leaveSplit();
   view = 'allergens';
+  globalThis.window?.dispatchEvent(new CustomEvent('mise:screen', { detail: 'allergens' }));
   activeList = null;
   activeDetail = null;
   setActiveSettings(null);
@@ -500,6 +503,7 @@ function openDetail(recipe, { force = false } = {}) {
   if (!force && splitOn && view === 'detail' && currentRecipe && currentRecipe.id === recipe.id) return;
   stopRun();
   view = 'detail';
+  globalThis.window?.dispatchEvent(new CustomEvent('mise:screen', { detail: 'detail' }));
   currentRecipe = recipe;
   leaveGuard = null;
   if (!force) bumpUsage(recipe.id);
@@ -511,6 +515,7 @@ function openEditor(recipe, draft) {
   stopRun();
   leaveSplit();
   view = 'editor';
+  globalThis.window?.dispatchEvent(new CustomEvent('mise:screen', { detail: 'editor' }));
   activeList = null;
   activeDetail = null;
   setActiveSettings(null);
@@ -589,6 +594,7 @@ function showSettings() {
   stopRun();
   leaveSplit();
   view = 'settings';
+  globalThis.window?.dispatchEvent(new CustomEvent('mise:screen', { detail: 'settings' }));
   activeList = null;
   activeDetail = null;
   setActiveSettings(null);
@@ -640,6 +646,7 @@ function showPhotoCapture(fromEditor = false, keepDraft = null) {
   stopRun();
   leaveSplit();
   view = 'photo';
+  globalThis.window?.dispatchEvent(new CustomEvent('mise:screen', { detail: 'photo' }));
   activeList = null;
   activeDetail = null;
   setActiveSettings(null);
@@ -667,6 +674,7 @@ function openGuidedEditor(recipe) {
   stopRun();
   leaveSplit();
   view = 'steps';
+  globalThis.window?.dispatchEvent(new CustomEvent('mise:screen', { detail: 'steps' }));
   activeList = null;
   activeDetail = null;
   setActiveSettings(null);
@@ -685,6 +693,7 @@ function openRun(recipe, targetGrams, resume) {
   stopRun();
   leaveSplit();
   view = 'run';
+  globalThis.window?.dispatchEvent(new CustomEvent('mise:screen', { detail: 'run' }));
   activeList = null;
   activeDetail = null;
   setActiveSettings(null);

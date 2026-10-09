@@ -184,6 +184,7 @@ async function doCommit() {
     items, occasional: [], sheet, text, recipe: recipeSnapshot(recipe),
   };
   createAndSave({ dough: recipe.name, recipeId: state.recipeId, forDay: state.forDay, version, createdAtMs: Date.now(), origin: 'manual' });
+  globalThis.window?.dispatchEvent(new CustomEvent('mise:action', { detail: 'log-added' }));
   close(true);
 }
 

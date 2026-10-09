@@ -1346,6 +1346,7 @@ export function openInvoiceImport(data) {
     s.busy = false;
     s.finished = true;
     live.textContent = '';
+    if (!s.summary.stopped) globalThis.window?.dispatchEvent(new CustomEvent('mise:action', { detail: 'invoice-imported' }));
     goTo('summary');
   }
 

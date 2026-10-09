@@ -369,6 +369,7 @@ export function renderRun({ recipe, targetGrams, app, resume = null }) {
   function startTimer() {
     const current = step();
     if (!current || current.seconds <= 0) return;
+    globalThis.window?.dispatchEvent(new CustomEvent('mise:action', { detail: 'timer-started' }));
     // The tap that starts a timer is a real gesture, which is the only moment a
     // browser will let the alarm be authorised. See unlockAlarm().
     unlockAlarm();

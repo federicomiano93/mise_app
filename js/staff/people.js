@@ -127,6 +127,8 @@ export function openPeople(session) {
   function close() {
     if (stop) stop();
     overlay.remove();
+    // Home settings stays open underneath (People is only opened from there).
+    globalThis.window?.dispatchEvent(new CustomEvent('mise:screen', { detail: 'settings' }));
   }
 
   // ── Choosing a role ────────────────────────────────────────────────────────
@@ -521,6 +523,7 @@ export function openPeople(session) {
       // what was ASKED for could promise a manager where an employee was made, or
       // draw a link screen for six digits. Ask, then show the answer.
       pending = await createJoinCode(newChoice.role, newChoice.title, kind);
+      globalThis.window?.dispatchEvent(new CustomEvent('mise:action', { detail: 'join-code-made' }));
       paintCode();
     } catch (err) {
       await alertDialog(callFailureText(err, t('people.err.code')));
@@ -530,6 +533,7 @@ export function openPeople(session) {
   paintCode();
   paint();
   document.body.appendChild(overlay);
+  globalThis.window?.dispatchEvent(new CustomEvent('mise:screen', { detail: 'people' }));
 
   watchMembers(next => { members = next; paint(); })
     .then(unsub => { stop = unsub; })

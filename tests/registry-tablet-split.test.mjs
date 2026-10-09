@@ -170,7 +170,7 @@ test('no level closes «the top»: every done / cancel / delete is bound to its 
   // Back asks first when there is typing (P20, 30 Sep 2026), then closes ITS OWN entry (Cancel is gone, 4 Oct 2026).
   assert.match(REGISTRY, /onBack = \(\) => popEntry\(entry\)/);
   assert.match(REGISTRY, /await actions\.deleteSupplier\(supplier\.id\); popEntry\(entry\)/);
-  assert.match(REGISTRY, /onDone:\s*\(saved\) => \{ popAfterSave\(entry\)/);
+  assert.match(REGISTRY, /onDone:\s*\(saved\) => \{[\s\S]*?popAfterSave\(entry\)/);
   assert.match(bodyOf(REGISTRY, 'popEntry'), /removeLevel\(stack, entry\)/);
 });
 

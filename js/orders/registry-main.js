@@ -90,6 +90,8 @@ const screen = buildRegistry(
     // the save: if it fails the ingredient is already saved, and only the log says so.
     saveIngredient: async (id, payload, record, writePrice, meta) => {
       const savedId = await saveIngredientWithPrice(id, payload, record, writePrice);
+      globalThis.window?.dispatchEvent(new CustomEvent('mise:action', { detail: 'ingredient-saved' }));
+      if (record) globalThis.window?.dispatchEvent(new CustomEvent('mise:action', { detail: 'price-saved' }));
       if (meta && meta.unitChangedFrom) {
         freezeUnitInDraft({ id: savedId, from: meta.unitChangedFrom, item: payload })
           .catch(err => console.error('The draft line kept an old unit:', err));

@@ -169,6 +169,7 @@ document.addEventListener('visibilitychange', () => {
 
 function showDay(day, opts = {}) {
   view = 'day';
+  globalThis.window?.dispatchEvent(new CustomEvent('mise:screen', { detail: '' }));
   shownDay = day;
   leaveGuard = null;
   stripHost.hidden = false;
@@ -200,6 +201,7 @@ function showDay(day, opts = {}) {
 
 function openEditor(day) {
   view = 'editor';
+  globalThis.window?.dispatchEvent(new CustomEvent('mise:screen', { detail: 'editor' }));
   dayView = null;
   footer.hidden = true;
   // The strip is hidden rather than left live: changing day mid-edit would need
@@ -217,6 +219,7 @@ function openEditor(day) {
 
 function showLogs() {
   view = 'logs';
+  globalThis.window?.dispatchEvent(new CustomEvent('mise:screen', { detail: 'logs' }));
   dayView = null;
   leaveGuard = null;
   stripHost.hidden = true;
@@ -305,6 +308,7 @@ async function confirmToday(day, items, note) {
 
   const saved = await confirmDay(day, list, note);
   if (!saved) return;
+  globalThis.window?.dispatchEvent(new CustomEvent('mise:action', { detail: 'pastry-day-confirmed' }));
   // ⚠️ Confirming SPENDS any permission to edit. Without this the day stays
   // green after a Confirm → Edit → Confirm, because the permission still names
   // tonight — which is exactly what it should mean, right up until the list is

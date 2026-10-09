@@ -125,6 +125,9 @@ export async function openFeedback(screenId, draft = '', deps = {}) {
     if (!payload) { showError = true; continue; }
 
     const outcome = await sendAndWait(d.sendFeedback, payload, d.waitMs);
+    if (outcome === 'sent' || outcome === 'queued') {
+      globalThis.window?.dispatchEvent(new CustomEvent('mise:action', { detail: 'feedback-sent' }));
+    }
     if (outcome === 'sent') { await d.alertDialog(t('feedback.sent')); return; }
     if (outcome === 'queued') { await d.alertDialog(t('feedback.queued')); return; }
     await d.alertDialog(t('feedback.failed'));

@@ -51,10 +51,12 @@ function readStored() {
 }
 
 function restNow() {
+  globalThis.window?.dispatchEvent(new CustomEvent('mise:action', { detail: 'kiosk-rest' }));
   window.dispatchEvent(new Event('kiosk-rest-now'));
 }
 
 function exitApp() {
+  globalThis.window?.dispatchEvent(new CustomEvent('mise:action', { detail: 'kiosk-exit' }));
   try { window.close(); } catch { /* refused: handled below */ }
   setTimeout(() => {
     if (exitRefused({ visibilityState: document.visibilityState, closed: window.closed })) {
