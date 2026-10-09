@@ -2678,6 +2678,32 @@ service cloud.firestore {
                   && request.resource.data.appVersion.size() <= 12));
         allow read, update, delete: if false;
       }
+
+      // One anonymous line per device that opens this venue, refreshed at most once a day
+      // (js/device-ping.js): what kind of screen, which release, installed or not, last seen.
+      // It exists so the owner can count devices — nothing else in the app does (P8).
+      //
+      // ⚠️ ANONYMOUS ON PURPOSE: no uid, no name, no model string. The id is a random one
+      // made on the device; it says which line is whose to nobody. Write-only from the app,
+      // like feedback: read and pruned by scripts/read-devices.mjs with the owner's login.
+      // One read: users/{uid} in member().
+      match /devices/{id} {
+        allow create, update: if id.matches('^[A-Za-z0-9]{20}$')
+          && member(lid)
+          && stampedFor(lid)
+          && request.resource.data.keys().hasOnly(['bakery', 'kind', 'appVersion', 'installed', 'lastSeen'])
+          && request.resource.data.keys().hasAll(['bakery', 'kind', 'lastSeen'])
+          && request.resource.data.kind in ['phone', 'tablet', 'computer']
+          // The server's clock: a phone with the wrong date cannot look active or stale.
+          && request.resource.data.lastSeen == request.time
+          && (!('installed' in request.resource.data)
+              || request.resource.data.installed is bool)
+          && (!('appVersion' in request.resource.data)
+              || request.resource.data.appVersion == null
+              || (request.resource.data.appVersion is string
+                  && request.resource.data.appVersion.size() <= 12));
+        allow read, delete: if false;
+      }
     }
 
     // The OLD FLAT COLLECTIONS (suppliers/…, ingredients/…, config/…) are gone
