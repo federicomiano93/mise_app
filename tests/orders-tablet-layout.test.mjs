@@ -14,7 +14,7 @@ import {
 test('TABLET_QUERY is the exact text tokens.css and orders.css already carry', () => {
   // tests/tablet-width.test.mjs pins the CSS side of this; this only pins that
   // the JS side matches it, so the two can never drift apart in silence.
-  assert.equal(TABLET_QUERY, '(min-width: 900px) and (min-height: 600px)');
+  assert.equal(TABLET_QUERY, '(min-width: 900px) and (min-height: 600px), (min-width: 1000px)');
 });
 
 test('every host names a real slot, and no host is listed twice', () => {

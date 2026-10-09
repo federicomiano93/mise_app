@@ -10,7 +10,8 @@
 // as English prose to tests/nothing-stays-english.test.mjs.
 const MIN_WIDTH = '(min-width: 900px)';
 const MIN_HEIGHT = '(min-height: 600px)';
-export const TABLET_QUERY = `${MIN_WIDTH} and ${MIN_HEIGHT}`;
+const WIDE_ENOUGH = '(min-width: 1000px)';
+export const TABLET_QUERY = `${MIN_WIDTH} and ${MIN_HEIGHT}, ${WIDE_ENOUGH}`;
 
 export function isTabletNow() {
   return window.matchMedia(TABLET_QUERY).matches;

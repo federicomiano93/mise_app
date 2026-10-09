@@ -412,7 +412,7 @@ test('⚠ the catalogue\'s bottom bar is the page, and its buttons are the raise
 // change; and a tablet-sized rule written outside the query, which would apply
 // to every screen at every width.
 
-const TABLET_QUERY = '@media (min-width: 900px) and (min-height: 600px)';
+const TABLET_QUERY = '@media (min-width: 900px) and (min-height: 600px), (min-width: 1000px)';
 
 // Finds every `@media (...) { ... }` block in a stylesheet whose prelude
 // matches `marker`, and returns each one's inner text (braces excluded).
@@ -464,6 +464,8 @@ test('the tablet query keeps its min-height guard, so a phone turned sideways st
   const q = tokens.match(/@media[^{]*min-width:\s*900px[^{]*(?=\{)/);
   assert.ok(q, 'tokens.css must carry the tablet query');
   assert.match(q[0], /min-height:\s*600px/);
+  assert.match(q[0], /\(min-width:\s*1000px\)/,
+    'the width half is what keeps a keyboard from flipping a wide tablet');
 });
 
 // 29 Sep 2026, the owner's decision: every section goes wide on a tablet, list left /

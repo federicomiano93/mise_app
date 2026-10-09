@@ -1375,7 +1375,7 @@ body.cat-zoom-lock { overflow: hidden; }
    generic look — the pane's light head, the placeholder, the picked row — is
    `.app-split*` in tokens.css. ⚠️ The query text is the app's one tablet switch,
    tests/tablet-width.test.mjs pins it. */
-@media (min-width: 900px) and (min-height: 600px) {
+@media (min-width: 900px) and (min-height: 600px), (min-width: 1000px) {
   .cat-split[data-split="on"] {
     display: grid;
     grid-template-columns: 400px minmax(0, 1fr);
@@ -1412,7 +1412,7 @@ body.cat-zoom-lock { overflow: hidden; }
    the editor (records.css, GENERATED — never edited here) and the toast. A custom property
    is resolved where it is declared, so both are re-declared ON these layers; the
    descendants inherit the 620px answer. Screen only: label printing has its own sheet. */
-@media (min-width: 900px) and (min-height: 600px) {
+@media (min-width: 900px) and (min-height: 600px), (min-width: 1000px) {
   body[data-section="catalogue"] .cat-ing-list--zoom,
   body[data-section="catalogue"] .rec-host,
   body[data-section="catalogue"] .pick-overlay,

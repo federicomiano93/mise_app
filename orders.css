@@ -151,7 +151,7 @@
    ⚠️ Hidden/reordered cards (js/home-cards.js) keep working unmodified: a grid
    only lays out the cards that are actually in the DOM, in whatever order
    they arrive in — nothing here assumes a fixed set of seven. */
-@media (min-width: 900px) and (min-height: 600px) {
+@media (min-width: 900px) and (min-height: 600px), (min-width: 1000px) {
   body[data-page="home"] .home-grid {
     grid-template-columns: repeat(3, 1fr);
     gap: 20px;
@@ -912,7 +912,7 @@ input.ing-stock {
    ⚠️ SCOPED AS `.ingredient-list` / `.ing-flat-list`, NEVER BARE `.ing-row` — see the
    long note above this file: `.ing-row` is also the Calculator's, and both stylesheets
    load on both pages. */
-@media (min-width: 900px) and (min-height: 600px) {
+@media (min-width: 900px) and (min-height: 600px), (min-width: 1000px) {
   /* Both ingredient lists: a supplier's (A→Z) and the flat
      «Ingredienti» view (by letter, js/orders/ingredient-list.js). Wider boxes; the
      rows and the header both read these, so the words stay over their boxes. */
@@ -1431,7 +1431,7 @@ body[data-section="orders"] .order-tools-icon svg { width: 16px; height: 16px; }
    but every option keeps a 44px tap target. */
 body[data-section="orders"] .ing-filter .view-switch-btn { font-size: 14px; min-height: 44px; }
 /* On a tablet every tap target grows to the same floor, this one too. */
-@media (min-width: 900px) and (min-height: 600px) {
+@media (min-width: 900px) and (min-height: 600px), (min-width: 1000px) {
   body[data-section="orders"] .ing-filter .view-switch-btn { min-height: var(--tap-min); }
 }
 body[data-section="orders"] .ing-filter .view-switch-btn:not(.active) { color: var(--text-2); }
@@ -1521,7 +1521,7 @@ body[data-section="orders"] .ing-filter .view-switch-btn:not(.active) { color: v
 /* ⚠️ ON A TABLET THE HOST IS ITSELF THE SCROLLER (.app-split-list), and a sticky box
    stops at the scroller's PADDING edge — 14px down, with rows showing through the gap
    above it (measured 29 Sep 2026). Sticking 14px higher puts it back on the edge. */
-@media (min-width: 900px) and (min-height: 600px) {
+@media (min-width: 900px) and (min-height: 600px), (min-width: 1000px) {
   .app-split-list .reg-sticky-head { top: -14px; }
 }
 
@@ -3015,7 +3015,7 @@ body:not([data-orders-tab="deliveries"]) #orders-owed { display: none; }
   body[data-card="orders"] > .orders-header .orders-header-title p { display: none; }
 }
 
-@media (min-width: 900px) and (min-height: 600px) {
+@media (min-width: 900px) and (min-height: 600px), (min-width: 1000px) {
   /* The strip is the same as on a phone (above), with the tablet's wider gaps. */
   body[data-section="orders"] #orders-tablet-strip { gap: 12px; margin-bottom: 12px; }
 

@@ -26,7 +26,14 @@ import { t } from '../i18n.js';
 // ⚠️ ONE QUERY, THE SAME TEXT tokens.css and orders.css already carry —
 // tests/tablet-width.test.mjs fails the moment any of the three drifts apart.
 //
-// ⚠️ BUILT FROM TWO HALVES, NOT WRITTEN AS ONE STRING. Not a translatable
+// ⚠️ THE QUERY IS AN OR: (900 wide AND 600 tall) OR 1000 wide. The second half is the
+// keyboard guard (9 Oct 2026): on the SM-T550 the on-screen keyboard shrinks the page to
+// ~1024×420, which fails the height floor and used to flip the layout to the phone one
+// while a box was being typed in. The keyboard never changes the width, so 1000+ wide is
+// always a tablet. Phones sideways are ≤ ~932 wide and stay on the phone layout. Not
+// device detection, not an orientation lock. Details: tokens.css.
+//
+// ⚠️ BUILT FROM HALVES, NOT WRITTEN AS ONE STRING. Not a translatable
 // sentence — it is CSS syntax, exactly like the values already passed to
 // matchMedia() elsewhere in this app — but written whole it reads as English
 // prose with "and" in it and tests/nothing-stays-english.test.mjs cannot tell
@@ -35,7 +42,8 @@ import { t } from '../i18n.js';
 // the join itself is a single word and never trips it.
 const MIN_WIDTH = '(min-width: 900px)';
 const MIN_HEIGHT = '(min-height: 600px)';
-export const TABLET_QUERY = `${MIN_WIDTH} and ${MIN_HEIGHT}`;
+const WIDE_ENOUGH = '(min-width: 1000px)';
+export const TABLET_QUERY = `${MIN_WIDTH} and ${MIN_HEIGHT}, ${WIDE_ENOUGH}`;
 
 // host id -> the tablet slot it moves into. Order matters: within one slot,
 // hosts are appended in the order they appear here.

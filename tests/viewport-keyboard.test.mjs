@@ -13,6 +13,11 @@
 // its height, so a keyboard can never cross the tablet query again. Browsers that do not
 // know the key ignore it.
 //
+// 9 Oct 2026: the meta was NOT enough on the real tablet — the SM-T550 browser still
+// resized the layout viewport to ~1024×420 and the Ricettario «Calcola» bounced. So the
+// tablet query has a width half, `(min-width: 1000px)`, that does not depend on the browser
+// honouring anything: a keyboard changes the height, never the width (tests/tablet-keyboard-width.test.mjs).
+//
 // The second guard already exists: a form moved by a REAL crossing (a rotation) gets its
 // focus and caret back — js/orders/registry.js moveOverlay, js/foodcost/foodcost-main.js
 // moveEditor.

@@ -30,8 +30,8 @@ function fnBody(name) {
 
 test('the catalogue\'s tablet query is the app\'s one query, word for word', () => {
   assert.equal(TABLET_QUERY, ORDERS_QUERY);
-  assert.equal(TABLET_QUERY, '(min-width: 900px) and (min-height: 600px)');
-  assert.ok(read('tokens.css').includes(`@media (min-width: 900px) and (min-height: 600px)`));
+  assert.equal(TABLET_QUERY, '(min-width: 900px) and (min-height: 600px), (min-width: 1000px)');
+  assert.ok(read('tokens.css').includes(`@media (min-width: 900px) and (min-height: 600px), (min-width: 1000px)`));
   assert.ok(read('catalogue.css').includes(`@media ${TABLET_QUERY}`));
 });
 

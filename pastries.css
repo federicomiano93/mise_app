@@ -652,7 +652,7 @@ input.pas-qty.pas-invalid {
    and the list side by side, then the bottom bar across. ⚠️ The query text is the app's one
    tablet switch, tests/tablet-width.test.mjs pins it.
    The 4am roll and the lock live in JS and are not touched by any of this. */
-@media (min-width: 900px) and (min-height: 600px) {
+@media (min-width: 900px) and (min-height: 600px), (min-width: 1000px) {
   body[data-card="pastries"] {
     display: grid;
     /* --app-gutter is a percentage, and in a track list it is a share of the body's width:
@@ -715,7 +715,7 @@ input.pas-qty.pas-invalid {
 /* ⚠️ THE TOAST STAYS AT THE 620px COLUMN even though this page is wide on a tablet: it is
    position: fixed, so it computes --app-gutter from the VIEWPORT. A custom property is
    resolved where it is declared, so both are re-declared ON the layer. */
-@media (min-width: 900px) and (min-height: 600px) {
+@media (min-width: 900px) and (min-height: 600px), (min-width: 1000px) {
   body[data-card="pastries"] .pas-toast {
     --app-max-width: 620px;
     --app-gutter: max(0px, calc((100% - var(--app-max-width)) / 2));

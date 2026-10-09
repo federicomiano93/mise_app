@@ -321,10 +321,19 @@ input:is([type="number"], [inputmode="decimal"], [inputmode="numeric"]) {
 .app-split-pane { display: none; }
 
 /* ── The tablet switch itself — Home + Orders only ────────────────────────
-   ⚠️ ONE QUERY, EVERYWHERE. `min-width: 900px AND min-height: 600px`. The
-   min-height keeps a PHONE TURNED SIDEWAYS (844×390 CSS) on the phone layout —
-   390 sits below the 600px floor — while a tablet in real landscape
-   (1024–1366 wide, 768px+ tall) gets the wide column. Every later tablet rule,
+   ⚠️ ONE QUERY, EVERYWHERE. `(min-width: 900px AND min-height: 600px) OR
+   min-width: 1000px`. The min-height keeps a PHONE TURNED SIDEWAYS (844×390 CSS)
+   on the phone layout — 390 sits below the 600px floor — while a tablet in real
+   landscape (1024–1366 wide, 768px+ tall) gets the wide column.
+   The second half (9 Oct 2026): the keyboard on the SM-T550 shrinks the page to
+   ~1024×420, under the 600px floor, so the layout flipped to the phone one, the
+   focused box was rebuilt and the keyboard closed — the Ricettario «Calcola»
+   bounce. The `interactive-widget` meta of 5 Oct did not take on that tablet.
+   A keyboard changes the height, never the width, so any viewport 1000px wide
+   or more stays a tablet whatever its height. Phones sideways are at most ~932
+   wide, so they stay on the phone layout; a phone set to the smallest display
+   size could cross 1000 and get two columns — readable, not broken. Not device
+   detection and not an orientation lock. Every later tablet rule,
    here and in orders.css, repeats this exact string;
    tests/tablet-width.test.mjs fails the moment the wording drifts apart.
    No JS device detection and no orientation lock — both are forbidden by that
@@ -347,7 +356,7 @@ input:is([type="number"], [inputmode="decimal"], [inputmode="numeric"]) {
    consumer of --app-gutter (.scroll-area, .orders-column,
    .supplier-detail-body, .supplier-items-body, …) widens for free, with no
    new CSS of its own. */
-@media (min-width: 900px) and (min-height: 600px) {
+@media (min-width: 900px) and (min-height: 600px), (min-width: 1000px) {
   body[data-page="home"],
   body[data-section="orders"],
   body[data-section="catalogue"],
