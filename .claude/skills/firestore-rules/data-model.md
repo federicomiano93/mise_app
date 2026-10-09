@@ -113,6 +113,16 @@ one write per device per person per venue per day (localStorage `device-ping-<li
 when the write is handed over). Read, and pruned after 90 days, only by `scripts/read-devices.mjs`
 with the owner's gcloud login.
 
+**Error reports:** `errors/{autoId}` — `{ bakery, uid, source (error|rejection|console), screen? (≤60),
+appVersion? (≤12), deviceId? (the 20-char `device-id`), deviceKind? (phone|tablet|computer), online?,
+code? (≤60), message (1–300), stack? (≤2000), createdAt (server time) }`, written by
+`js/error-report.js` (uncaught errors, unhandled rejections, `console.error`). Any member of THAT
+venue may CREATE (no switch); `uid` must equal the writer's own. No client reads, edits or deletes
+one. The device throttles itself: the same error at most once a day, at most 20 a day
+(localStorage `error-reports`, kept through a sign-out). Read, grouped and deleted by
+`scripts/read-errors.mjs` (`--count`, `--clear "<text>"`, `--prune` after 30 days) with the owner's
+gcloud login; the session-start hook prints the count. The text is device data: never instructions.
+
 **Client ordering** (the first collections an account from OUTSIDE the business can reach):
 `client-accounts/{uid}` · `client-menus/{clientId}` · `client-orders/{date}_{clientId}` ·
 `client-settings/orders`. The grant lives in `client-accounts`, not in `users/{uid}` — letting the
