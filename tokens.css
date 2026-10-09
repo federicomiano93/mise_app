@@ -177,6 +177,7 @@
 
   /* ── Semantic status colours ─────────────────────────────────────────── */
   --danger:       #A24A38;   /* the one destructive red (delete, invalid) */
+  --danger-edge:  #6E2C1F;   /* the darker lower edge of a raised red button (Home «Exit») */
 
   --warn:         #7A5200;   /* warning / amber text (holidays, yeast) */
   --warn-bg:      #F8E9D6;   /* warning background */

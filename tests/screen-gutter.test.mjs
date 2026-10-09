@@ -41,7 +41,6 @@ const GUTTER = ['content', 'home-grid', 'install-host',
 // IS checkable (the overlay's `position: fixed`, the panels' own class) it is checked.
 const EXEMPT = {
   'index.html': {
-    'home-kiosk-band': 'a flex row with its own 16px side margins, aligned with the cards (.home-kiosk-band, orders.css)',
     'home-reminder': 'the card it holds aligns itself with the grid above (a.home-reminder)',
     'session-logout-host': 'holds the Settings bar, a .recipe-footer that pads itself, and — only while somebody is on holiday — a .session-logout notice, which is `margin: 28px auto`, centred',
   },
