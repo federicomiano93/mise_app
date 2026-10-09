@@ -785,6 +785,22 @@ export function sendFeedback({ text, screen, appVersion }) {
   }));
 }
 
+export function pingDevice(payload, id) {
+  return authReady.then(() => {
+    if (!auth.currentUser) {
+      throw Object.assign(new Error('unauthenticated'), { code: 'unauthenticated' });
+    }
+    return setDoc(
+      doc(db, pathFor('devices'), id),
+      {
+        ...payload,
+        uid: auth.currentUser.uid,
+        lastSeen: serverTimestamp(),
+      },
+    );
+  });
+}
+
 export function deleteLogDoc(id) {
   return authReady
     .then(() => deleteDoc(doc(db, pathFor('logs'), String(id))))

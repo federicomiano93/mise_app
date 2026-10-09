@@ -3457,6 +3457,54 @@ async function feedbackNotes() {
 }
 
 
+// ── The device count (js/device-ping.js) ─────────────────────────────────────
+// Write-only, any member, at most the six keys; the uid is always the writer's own.
+async function deviceCount() {
+  await wipe();
+  await seedAccess();
+  const L = 'locations/main';
+  const ID = 'Dev1ce2Id3Abc4Def5Gh';
+  const line = { bakery: 'main', uid: SAM.uid, kind: 'phone', appVersion: '649', installed: true };
+  // setDoc(…, { …, lastSeen: serverTimestamp() }) — a write with a REQUEST_TIME transform.
+  const ping = (data, headers, { id = ID, serverTime = true, at = null } = {}) => fetch(
+    `${FS.replace(/\/documents$/, '')}/documents:commit`, {
+      method: 'POST', headers,
+      body: JSON.stringify({ writes: [{
+        update: {
+          name: `projects/${PROJECT}/databases/(default)/documents/${L}/devices/${id}`,
+          fields: { ...toFields(data), ...(at ? { lastSeen: { timestampValue: at } } : {}) },
+        },
+        ...(serverTime ? { updateTransforms: [{ fieldPath: 'lastSeen', setToServerValue: 'REQUEST_TIME' }] } : {}),
+      }] }),
+    });
+
+  await expectAllowed('an employee\'s phone says it is here', () => ping(line, asAccount(SAM)));
+  await expectAllowed('…and again the next day (an update)', () => ping({ ...line, appVersion: '650' }, asAccount(SAM)));
+  await expectAllowed('a tablet whose version could not be read', () => ping({ ...line, uid: MAYA.uid, kind: 'tablet', appVersion: null }, asAccount(MAYA), { id: 'Tab1et2Id3Abc4Def5Gh' }));
+  await expectAllowed('the bare minimum', () => ping({ bakery: 'main', uid: ALICE.uid, kind: 'computer' }, asAccount(ALICE), { id: 'Pc0000000000000000Ab' }));
+
+  await expectDenied('a name cannot ride along', () => ping({ ...line, name: 'Sam' }, asAccount(SAM)));
+  await expectDenied('a line signed with somebody else’s uid', () => ping({ ...line, uid: MAYA.uid }, asAccount(SAM)));
+  await expectDenied('a line with no uid', () => { const { uid, ...rest } = line; return ping(rest, asAccount(SAM)); });
+  await expectDenied('a kind nobody listed', () => ping({ ...line, kind: 'fridge' }, asAccount(SAM)));
+  await expectDenied('a date from the phone\'s clock', () => ping(line, asAccount(SAM), { serverTime: false, at: '2026-10-09T10:00:00Z' }));
+  await expectDenied('installed must be a yes or a no', () => ping({ ...line, installed: 'yes' }, asAccount(SAM)));
+  await expectDenied('a runaway version', () => ping({ ...line, appVersion: 'x'.repeat(13) }, asAccount(SAM)));
+  await expectDenied('stamped for another venue', () => ping({ ...line, bakery: 'trattoria-x' }, asAccount(SAM)));
+  await expectDenied('a hand-picked id', () => ping(line, asAccount(SAM), { id: 'my-phone' }));
+  await expectDenied('another venue\'s employee', () => ping({ ...line, uid: BOB.uid }, asAccount(BOB)));
+  await seedDoc(`${L}/client-accounts/${CLIENT_A.uid}`,
+    { bakery: 'main', clientId: 'c-one', clientName: 'CLIENT A', createdAt: '2026-08-10T09:00:00.000Z' });
+  await expectDenied('a client ordering account', () => ping({ ...line, uid: CLIENT_A.uid }, asAccount(CLIENT_A)));
+  await expectDenied('an account with no access', () => ping({ ...line, uid: NOBODY.uid }, asAccount(NOBODY)));
+  await expectDenied('signed out', () => ping(line, noAuth()));
+
+  await expectDenied('nobody reads a device line back', () => fetch(`${FS}/${L}/devices/${ID}`, { headers: asAccount(ALICE) }));
+  await expectDenied('…nor lists them', () => fetch(`${FS}/${L}/devices`, { headers: asAccount(ALICE) }));
+  await expectDenied('…nor deletes one', () => deleteWrite(`${L}/devices/${ID}`, asAccount(ALICE)));
+}
+
+
 // ── The monthly stocktake ────────────────────────────────────────────────────
 // A new collection on an OLD gate: it rides on 'foodcost', so the interesting
 // checks are the two the shortcut has to survive — an ordinary employee is
@@ -3729,7 +3777,7 @@ async function staffCards() {
 for (const scenario of [suppliers, ingredients, ingredientPrices, drafts, history, neighbours,
                         locationTree, isolation, configAndLogs, pastries, pastryLogs,
                         products, stocktake, staffCards, clientOrders, orderRequests, awayDays,
-                        pushNotifications, feedbackNotes,
+                        pushNotifications, feedbackNotes, deviceCount,
                         roles, onboardingCollections]) {
   await scenario();
 }

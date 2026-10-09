@@ -988,6 +988,29 @@ export function sendFeedback({ text, screen, appVersion }) {
   }));
 }
 
+// The device count (js/device-ping.js): one line per device per venue,
+// locations/{lid}/devices/{id}, written at most once a day and never read back by the app.
+// The id is made on the device; the line carries the signed-in account's uid and no name.
+// A WHOLE-document set, no merge: the rules want every field present on every write. uid MUST
+// be the signed-in account's and lastSeen MUST be serverTimestamp() — the rules compare them
+// with request.auth.uid and request.time. Signed out → reject with 'unauthenticated' (a passing
+// failure, tried again later) instead of guessing a uid the rules would refuse for good.
+export function pingDevice(payload, id) {
+  return authReady.then(() => {
+    if (!auth.currentUser) {
+      throw Object.assign(new Error('unauthenticated'), { code: 'unauthenticated' });
+    }
+    return setDoc(
+      doc(db, pathFor('devices'), id),
+      {
+        ...payload,
+        uid: auth.currentUser.uid,
+        lastSeen: serverTimestamp(),
+      },
+    );
+  });
+}
+
 // Delete one whole log document (the user explicitly deleted that log).
 export function deleteLogDoc(id) {
   return authReady

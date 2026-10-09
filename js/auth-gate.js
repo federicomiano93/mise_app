@@ -25,6 +25,8 @@ import { kindOfTyped, readJoinToken, codeShapeHint } from './join-link.js';
 import { nameProblem, passwordProblem, confirmProblem, MIN_PASSWORD_LENGTH } from './credentials.js';
 import { isSectionAllowed, isSectionAllowedFor } from './sections.js';
 import { cardVisibleTo } from './home-cards.js';
+// The device count: starts itself, reports once a day per venue and account (js/device-ping.js).
+import './device-ping.js';
 
 const HOME = 'index.html';
 

@@ -1,7 +1,8 @@
 // app-version.js — pure helpers for the «App version» row in Home → Settings.
 //
-// The app records no per-device version on the server (privacy, by design), so each
-// device answers for itself: the running cache name comes from its own service worker.
+// Each device answers for itself: the running cache name comes from its own service worker.
+// (A device also reports its release once a day to locations/{lid}/devices, js/device-ping.js,
+// but only the owner's script can read that; the app never does.)
 
 // 'theitalianclub-v546' → '546'. Anything else → null, never a guess.
 export function versionNumber(cacheName) {
