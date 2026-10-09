@@ -114,10 +114,32 @@ test('each suggestion carries what the screen shows, and a tick on the current l
 
 // ── The tap ──────────────────────────────────────────────────────────────────
 
-test('⚠️⚠️ a tap links the row and leaves the typed name exactly as it was', () => {
+test('without a label the typed name is left as it was (the old rule, for any other caller)', () => {
   const row = { label: 'burro', grams: 250, unit: 'g' };
   applyLink(row, { kind: 'ingredient', refId: 'B1', name: 'Burro Occelli' });
   assert.deepEqual(row, { label: 'burro', grams: 250, unit: 'g', kind: 'ingredient', refId: 'B1' });
+});
+
+test('⚠️⚠️ a pick sets the name to the one the link line shows — what was typed is overwritten (9 Oct 2026)', () => {
+  const row = { label: 'burro', grams: 250, unit: 'g' };
+  applyLink(row, { kind: 'ingredient', refId: 'B1', name: 'Burro Président' }, { label: 'Burro P.' });
+  assert.deepEqual(row, { label: 'Burro P.', grams: 250, unit: 'g', kind: 'ingredient', refId: 'B1' });
+  const plain = { label: 'burro' };
+  applyLink(plain, { kind: 'ingredient', refId: 'B2', name: 'Burro Occelli' }, { label: 'Burro Occelli' });
+  assert.equal(plain.label, 'Burro Occelli', 'no short name: the ingredient name');
+  const rec = { label: 'crema' };
+  applyLink(rec, { kind: 'recipe', refId: 'R1', name: 'Crema al burro' }, { label: 'Crema al burro' });
+  assert.equal(rec.label, 'Crema al burro');
+  assert.equal(rec.kind, 'recipe');
+});
+
+test('an empty label option, or a choice that is not one, never blanks or renames the row', () => {
+  const row = { label: 'burro', kind: 'ingredient', refId: 'B1' };
+  applyLink(row, { kind: 'ingredient', refId: 'B2', name: 'X' }, { label: '  ' });
+  assert.equal(row.label, 'burro');
+  applyLink(row, { kind: 'supplier', refId: 'S1' }, { label: 'Nope' });
+  assert.equal(row.label, 'burro');
+  assert.equal(row.refId, 'B2');
 });
 
 test('a row with no name at all takes the chosen one', () => {
@@ -131,7 +153,7 @@ test('a row with no name at all takes the chosen one', () => {
 
 test('null removes the link and keeps the name', () => {
   const row = { label: 'burro', kind: 'ingredient', refId: 'B1' };
-  applyLink(row, null);
+  applyLink(row, null, { label: 'Burro P.' });
   assert.deepEqual(row, { label: 'burro' });
 });
 
@@ -155,9 +177,11 @@ test('⚠️ the name field has no native suggestion list stacked on top of this
 
 test('⚠️ every link in the form goes through applyLink — no second way of writing one', () => {
   const editor = codeOf(read('js/catalogue/catalogue-editor.js'));
-  assert.match(editor, /applyLink\(working\.ingredients\[idx\], chosen\)/);
+  assert.match(editor, /applyLink\(working\.ingredients\[idx\], chosen, \{ label: linkedName\(chosen\) \}\)/,
+    'the name set on a pick is the one linkText() shows');
+  assert.match(editor, /ingredientDisplayName\(ingredient\)\) \|\| chosen\.name/, 'an ingredient: its display name');
   assert.doesNotMatch(editor, /\.refId\s*=|\.kind\s*=[^=]|\.label\s*=\s*chosen/,
-    'a link written by hand here could overwrite a typed name');
+    'a link written by hand here would skip the one place that writes it');
 });
 
 test('⚠️ the list never chooses by itself, and a tap is not lost to the keyboard', () => {

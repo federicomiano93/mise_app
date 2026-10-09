@@ -212,8 +212,9 @@ export function renderEditor({ recipe, draft, allRecipes, app, getLabelProfile =
         oninput: (e) => { ing.label = e.target.value; markDirty(); updateTotal(); if (showErrors) validateUI(); },
       });
       // Under the name, while it is typed: catalogue ingredients to link THIS row to.
-      // ⚠️ A tap links the row and leaves the name exactly as typed (applyLink), then
-      // moves on to the amount — the next thing a person fills in. ingredient-suggest.js.
+      // ⚠️ A tap links the row and SETS its name to the linked item's display name — the
+      // same words the link line under the row shows (9 Oct 2026, linkTo) — then moves on
+      // to the amount — the next thing a person fills in. ingredient-suggest.js.
       const suggest = attachLinkSuggestions(labelInput, {
         options: () => ({
           ingredients: app.ingredients(), recipes: app.allRecipes(), suppliers: app.suppliers(),
@@ -350,14 +351,31 @@ export function renderEditor({ recipe, draft, allRecipes, app, getLabelProfile =
   }
 
   // Link row `idx` to what was chosen; null removes the link.
-  // ⚠️ applyLink() IS THE ONE PLACE A ROW'S LINK IS WRITTEN, and it never overwrites a
-  // name somebody typed: that wording is chosen for THIS recipe ("strong flour" for an
-  // article filed as "Flour T55"), and Federico writes it himself on purpose.
+  // ⚠️ applyLink() IS THE ONE PLACE A ROW'S LINK IS WRITTEN.
+  // ⚠️ THE NAME FOLLOWS THE PICK (9 Oct 2026). Federico had said on 13 Sep 2026 «il nome
+  // dell'ingrediente lo scrivo io» and a typed name was never overwritten; on 9 Oct 2026 he
+  // reversed it: «quando inserisco un ingrediente in una ricetta, sotto mi compare il nome
+  // del ingrediente correlato, fai in modo che il nome dell'ingrediente si autocompila con
+  // il nome del ingrediente correlato». Every pick by a person (suggestion, chooser,
+  // «+ Crea») sets the name to what linkText() shows under it. The field stays editable,
+  // saved recipes are not renamed on opening, and removing a link keeps the name.
   function linkTo(idx, chosen) {
-    applyLink(working.ingredients[idx], chosen);
+    applyLink(working.ingredients[idx], chosen, { label: linkedName(chosen) });
     markDirty();
     renderIngredientRows();
     if (showErrors) validateUI();
+  }
+
+  // The name the link line shows for `chosen`: an ingredient's display name (the chosen
+  // name when it is not loaded yet, e.g. just created), or the recipe's name.
+  function linkedName(chosen) {
+    if (!chosen) return '';
+    if (chosen.kind === 'recipe') {
+      const sub = app.allRecipes().find(r => r.id === chosen.refId);
+      return (sub && sub.name) || chosen.name || '';
+    }
+    const ingredient = app.ingredients()[chosen.refId];
+    return (ingredient && ingredientDisplayName(ingredient)) || chosen.name || '';
   }
 
   // After a link from the suggestion list, on to that row's amount. The rows were just

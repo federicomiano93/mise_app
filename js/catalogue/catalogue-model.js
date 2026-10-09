@@ -429,10 +429,15 @@ export function suggestLinks({
 // link is written: the suggestion list and the full chooser both come through here, so
 // the two cannot treat a row differently.
 //
-// ⚠️⚠️ WHAT WAS TYPED IS NEVER OVERWRITTEN. Federico, 13 Sep 2026: «il nome
-// dell'ingrediente lo scrivo io perché potrebbe essere diverso dall'ingrediente a cui è
-// collegato». The chosen name fills the row only when it has no name at all.
-export function applyLink(row, chosen) {
+// ⚠️⚠️ THE NAME FOLLOWS A PERSON'S PICK (9 Oct 2026). Federico, 13 Sep 2026, had said «il
+// nome dell'ingrediente lo scrivo io», and applyLink then never overwrote a typed name. On
+// 9 Oct 2026 he reversed it: «quando inserisco un ingrediente in una ricetta, sotto mi
+// compare il nome del ingrediente correlato, fai in modo che il nome dell'ingrediente si
+// autocompila con il nome del ingrediente correlato». So a caller that passes `{ label }`
+// (the name the link line under the row shows) gets the row's name SET to it, whatever was
+// typed. Without `label` the old rule holds: the chosen name fills the row only when it has
+// no name at all. Removing a link (null) never touches the name.
+export function applyLink(row, chosen, { label } = {}) {
   if (!row || typeof row !== 'object') return row;
   if (chosen === null) {
     delete row.kind;
@@ -443,7 +448,9 @@ export function applyLink(row, chosen) {
   if (!chosen || !ROW_KINDS.includes(chosen.kind) || !refId) return row;
   row.kind = chosen.kind;
   row.refId = refId;
-  if (!String(row.label ?? '').trim() && chosen.name) row.label = String(chosen.name);
+  const setTo = String(label ?? '').trim();
+  if (setTo) row.label = setTo;
+  else if (!String(row.label ?? '').trim() && chosen.name) row.label = String(chosen.name);
   return row;
 }
 

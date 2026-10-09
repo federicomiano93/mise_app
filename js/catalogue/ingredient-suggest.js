@@ -4,8 +4,10 @@
 // Federico, 13 Sep 2026: «quando compilo una ricetta ed inserisco un ingrediente fammi
 // comparire una piccola lista per collegare agli ingredienti disponibili nel catalogo,
 // ad esempio digito burro subito dopo mi si apre la piccola finestra dove scelgo tra i
-// burri che abbiamo a disposizione». And, asked what the row should then say: «il nome
-// dell'ingrediente lo scrivo io» — the list LINKS; it never changes what was typed.
+// burri che abbiamo a disposizione». He first said «il nome dell'ingrediente lo scrivo io»
+// (a pick never changed what was typed); on 9 Oct 2026 he REVERSED it: «fai in modo che il
+// nome dell'ingrediente si autocompila con il nome del ingrediente correlato» — a pick now
+// sets the row's name to the linked item's display name (catalogue-editor.js, linkTo).
 //
 // ⚠️ THE LIST ITSELF IS SHARED since 13 Sep 2026 (js/pick-suggest.js), because Food cost
 // needs the same one under a product's name. Its behaviour rules live there. This file is
