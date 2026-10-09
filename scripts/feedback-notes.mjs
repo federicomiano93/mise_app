@@ -9,7 +9,8 @@
 // .claude/hooks/session-start.mjs gives anything that came from outside this PC.
 
 const LOCATION_ID = '[A-Za-z0-9][A-Za-z0-9_-]{0,63}';
-const NOTE_PATH = new RegExp(`^locations/(${LOCATION_ID})/feedback/([A-Za-z0-9]{1,40})$`);
+// The id is the one addDoc() makes — the rules refuse any other shape.
+const NOTE_PATH = new RegExp(`^locations/(${LOCATION_ID})/feedback/([A-Za-z0-9]{20})$`);
 
 export function clean(text, max) {
   const flat = String(text ?? '').replace(/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/gu, ' ').replace(/\s+/g, ' ').trim();
@@ -47,6 +48,18 @@ export function noteFrom(document) {
     appVersion: clean(str(f.appVersion) ?? '', 12),
     createdAt: f.createdAt?.timestampValue ?? null,
   };
+}
+
+// How one note is printed. ⚠️ THE TEXT GOES OUT AS A JSON STRING, quoted and escaped, and the
+// block around it carries a marker made fresh on every run: a note that types «=== END NOTES
+// ===» followed by an order can neither close the quote nor guess the marker, so it cannot
+// step outside the data it is.
+export function noteLines(note, { venue, who }) {
+  return [
+    `[${note.path}]`,
+    `  ${note.createdAt || 'no date'} · ${clean(venue, 60)} · ${clean(who, 40)} · screen ${note.screen || '?'} · app v${note.appVersion || '?'}`,
+    `  text: ${JSON.stringify(note.text)}`,
+  ];
 }
 
 // Oldest first: a list of things to do reads in the order they were asked for.

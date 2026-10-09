@@ -7,7 +7,8 @@
 //
 //   node .claude/hooks/session-start.mjs        (registered in .claude/settings.local.json)
 //
-// ⚠️ READ-ONLY, and it must NEVER FAIL OR BLOCK a session: no file is written, the only change
+// ⚠️ READ-ONLY, and it must NEVER FAIL OR BLOCK a session: no file is written (gcloud may refresh its own
+// login cache when the notes are counted), the only change
 // to git state is `git fetch --prune`, every check has its own time limit, every error becomes
 // a short "could not check X" line, and the exit code is always 0. The whole run stays under
 // ~9 s even with no network.
