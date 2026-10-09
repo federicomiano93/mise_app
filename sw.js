@@ -1,4 +1,4 @@
-const CACHE_NAME = 'theitalianclub-v645';
+const CACHE_NAME = 'theitalianclub-v647';
 // Firebase SDK modules (loaded from gstatic) are cached SEPARATELY from CACHE_NAME
 // so they survive the cache-version bump that happens on every deploy — otherwise
 // the offline SDK would be wiped each release until the next online load. The name
@@ -688,7 +688,7 @@ const ASSET_HASHES = {
   "./records.css": 'aeaddb44ba386bf2',
   "./js/catalogue/confirm-dialog.js": '61a7f580f37c5ff8',
   "./js/catalogue/dom.js": '9878ae7c750afd79',
-  "./js/catalogue/catalogue-model.js": 'fba8d7b0ee04815e',
+  "./js/catalogue/catalogue-model.js": '9e41b463f27b749d',
   "./js/catalogue/recipe-cost-model.js": 'd29f16ee37c017a5',
   "./js/catalogue/recipe-allergen-model.js": 'b2a59adbdd259fb1',
   "./js/catalogue/allergen-sheet.js": 'b82e723ddeee0224',
@@ -705,7 +705,7 @@ const ASSET_HASHES = {
   "./js/catalogue/ingredient-picker.js": 'b3c9b4170e679af9',
   "./js/ingredient-create.js": '195adf62c59c2564',
   "./js/ingredient-edit-model.js": '75b571a45585a715',
-  "./js/catalogue/ingredient-suggest.js": 'b331b2d0dcec965d',
+  "./js/catalogue/ingredient-suggest.js": 'f813dbb63fa3c04f',
   "./js/catalogue/firebase-catalogue.js": 'e560966537c00cae',
   "./js/catalogue/catalogue-store.js": '32d3ef5ccfb6da26',
   "./js/catalogue/catalogue-main.js": '96638e1320c43fe3',
@@ -715,7 +715,7 @@ const ASSET_HASHES = {
   "./js/catalogue/catalogue-settings.js": '085573368700207f',
   "./js/catalogue/catalogue-detail.js": '47bc797fb462567b',
   "./js/catalogue/zoom-steps.js": '5cb5e5ce31bcde85',
-  "./js/catalogue/catalogue-editor.js": 'f51eab3077e8cfdc',
+  "./js/catalogue/catalogue-editor.js": '90d9d952602fe007',
   "./js/catalogue/guided-model.js": '60902e8129430dd7',
   "./js/catalogue/guided-alarm.js": '9104e391cb96f5ef',
   "./js/catalogue/guided-run.js": 'da10dcad21f5e8d8',

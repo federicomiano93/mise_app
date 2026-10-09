@@ -44,7 +44,8 @@ export function attachLinkSuggestions(input, { options, linked, onPick, onSeeAll
       return {
         total: result.total,
         items: result.items.map(item => ({
-          // The list SHOWS the name to show; the value keeps the invoice name (it fills a row's label).
+          // The list SHOWS the name to show; the value keeps the invoice name (the fallback when the
+          // row takes the linked item's name).
           name: item.displayName ?? item.name,
           // ⚠️ NO PRICE: the catalogue shows no money (tests/catalogue-no-money.test.mjs).
           meta: item.kind === 'recipe'

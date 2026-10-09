@@ -10,7 +10,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
-import { suggestLinks, applyLink, linkOptions, SUGGEST_MIN_CHARS, SUGGEST_LIMIT } from '../js/catalogue/catalogue-model.js';
+import { suggestLinks, applyLink, linkedItemName, isSameLink, linkOptions, SUGGEST_MIN_CHARS, SUGGEST_LIMIT } from '../js/catalogue/catalogue-model.js';
 
 const read = rel => readFileSync(new URL(`../${rel}`, import.meta.url), 'utf8');
 
@@ -177,9 +177,10 @@ test('⚠️ the name field has no native suggestion list stacked on top of this
 
 test('⚠️ every link in the form goes through applyLink — no second way of writing one', () => {
   const editor = codeOf(read('js/catalogue/catalogue-editor.js'));
-  assert.match(editor, /applyLink\(working\.ingredients\[idx\], chosen, \{ label: linkedName\(chosen\) \}\)/,
-    'the name set on a pick is the one linkText() shows');
-  assert.match(editor, /ingredientDisplayName\(ingredient\)\) \|\| chosen\.name/, 'an ingredient: its display name');
+  assert.match(editor, /applyLink\(row, chosen, same \? \{\} : \{ label: linkedItemName\(chosen,/,
+    'the name set on a pick comes from the same function linkText() uses');
+  assert.match(editor, /linkedItemName\(link, app\.ingredients\(\), \[\]\)/, 'linkText() uses it too');
+  assert.match(editor, /isSameLink\(before, chosen\)/, 'choosing the link a row already has keeps its name');
   assert.doesNotMatch(editor, /\.refId\s*=|\.kind\s*=[^=]|\.label\s*=\s*chosen/,
     'a link written by hand here would skip the one place that writes it');
 });
@@ -240,3 +241,24 @@ function codeOf(src) {
     .map(line => { const at = line.indexOf('//'); return at === -1 ? line : line.slice(0, at); })
     .join('\n');
 }
+
+test('linkedItemName: the one name a link line shows and a pick sets', () => {
+  const ingredients = { B1: { id: 'B1', name: 'Burro Président', shortName: 'Burro P.' }, B2: { id: 'B2', name: 'Burro Occelli' } };
+  const recipes = [{ id: 'R1', name: 'Crema al burro' }];
+  assert.equal(linkedItemName({ kind: 'ingredient', refId: 'B1', name: 'Burro Président' }, ingredients, recipes), 'Burro P.');
+  assert.equal(linkedItemName({ kind: 'ingredient', refId: 'B2', name: 'x' }, ingredients, recipes), 'Burro Occelli');
+  assert.equal(linkedItemName({ kind: 'recipe', refId: 'R1' }, ingredients, recipes), 'Crema al burro');
+  assert.equal(linkedItemName({ kind: 'ingredient', refId: 'NEW', name: 'Lievito' }, ingredients, recipes), 'Lievito', 'not loaded yet: the chosen name');
+  assert.equal(linkedItemName({ kind: 'ingredient', refId: 'GONE' }, ingredients, recipes), '', 'nothing to show');
+  assert.equal(linkedItemName({ kind: 'recipe', refId: 'GONE' }, ingredients, recipes), '');
+  assert.equal(linkedItemName(null, ingredients, recipes), '');
+});
+
+test('⚠️ choosing the link a row already has is not a new pick: it must not rename the row', () => {
+  const ing = { kind: 'ingredient', refId: 'B1' };
+  assert.ok(isSameLink(ing, { kind: 'ingredient', refId: 'B1', name: 'Burro' }));
+  assert.ok(!isSameLink(ing, { kind: 'ingredient', refId: 'B2' }));
+  assert.ok(!isSameLink(ing, { kind: 'recipe', refId: 'B1' }), 'same id, other kind');
+  assert.ok(!isSameLink(null, ing), 'a row with no link: every pick is new');
+  assert.ok(!isSameLink(ing, null));
+});

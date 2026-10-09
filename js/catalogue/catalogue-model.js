@@ -337,8 +337,8 @@ export function linkOptions({ ingredients, recipes, suppliers, query, excludeRec
     .filter(ing => ing && ing.active !== false && ing.kind !== 'packaging')
     .map(ing => ({
       id: ing.id,
-      // `name` stays the invoice name (it is what fills a recipe row's printed label); `displayName`
-      // is what the lists SHOW and sort by (js/ingredient-name.js).
+      // `name` stays the invoice name (what the chooser hands back, and the fallback for a row's
+      // name); `displayName` is what the lists SHOW and sort by (js/ingredient-name.js).
       name: String(ing.name || '').trim(),
       displayName: ingredientDisplayName(ing).trim(),
       shortName: String(ing.shortName || '').trim(),
@@ -423,6 +423,30 @@ export function suggestLinks({
 
   const every = [...ranked(all.ingredients, 'ingredient'), ...ranked(all.recipes, 'recipe')];
   return { items: every.slice(0, max), total: every.length };
+}
+
+// The name a link line shows for a link — and the name a row takes when it is picked (9 Oct
+// 2026): an ingredient's display name (short name, else name), a recipe's name; the chosen
+// name when the item is not loaded (just created); '' when there is nothing to show.
+// `ingredients` is the id -> ingredient map, `recipes` the list.
+export function linkedItemName(link, ingredients, recipes) {
+  if (!link || typeof link !== 'object') return '';
+  const refId = link.refId != null ? String(link.refId) : '';
+  const fallback = String(link.name ?? '').trim();
+  if (link.kind === 'recipe') {
+    const sub = (Array.isArray(recipes) ? recipes : []).find(r => r && r.id === refId);
+    return String((sub && sub.name) || '').trim() || fallback;
+  }
+  if (link.kind !== 'ingredient') return '';
+  const ing = ingredients && ingredients[refId];
+  return (ing ? ingredientDisplayName(ing).trim() : '') || fallback;
+}
+
+// Is `chosen` the very link the row already has (same kind, same id)? Choosing it again
+// changes nothing — and so must not rename the row.
+export function isSameLink(current, chosen) {
+  if (!current || !chosen) return false;
+  return current.kind === chosen.kind && String(current.refId) === String(chosen.refId);
 }
 
 // Point a recipe row at what was chosen — `null` removes the link. The ONE place a row's
