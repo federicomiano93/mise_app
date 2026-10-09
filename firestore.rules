@@ -2635,6 +2635,49 @@ service cloud.firestore {
           && request.resource.data.active is bool;
         allow delete: if member(lid) && resource.data.uid == request.auth.uid;
       }
+
+      // A note for Claude, written from the «?» sheet: a problem, or a change wanted.
+      //
+      // ⚠️ WRITE-ONLY FROM THE APP. Nobody — not even the person who wrote it —
+      // reads, edits or deletes one from a phone: they are collected at the start
+      // of a Claude Code session with the project owner's own Google credentials,
+      // which bypass these rules (.claude/hooks/session-start.mjs), and deleted
+      // there once handled. So a colleague's complaint is never shown to the
+      // rest of the kitchen.
+      //
+      // ⚠️ ONLY WHERE THE VENUE ASKED FOR IT, and the default is OFF: the switch is
+      // `feedbackToClaude == true` on locations/{lid}, which no client can write.
+      // Off is the safe direction here — the opposite of sectionOn() — because a
+      // missing key must never open a write path into a customer's venue.
+      // Two reads: users/{uid} in member(), locations/{lid} here.
+      match /feedback/{id} {
+        // The id addDoc() makes (20 letters and digits) and nothing else: the owner's script
+        // lists and deletes notes by that shape, so a hand-picked id would sit in production
+        // invisible to it and impossible for it to delete.
+        allow create: if id.matches('^[A-Za-z0-9]{20}$')
+          && member(lid)
+          && get(/databases/$(database)/documents/locations/$(lid))
+               .data.get('feedbackToClaude', false) == true
+          && stampedFor(lid)
+          && request.resource.data.keys().hasOnly(
+               ['bakery', 'uid', 'text', 'screen', 'appVersion', 'createdAt'])
+          && request.resource.data.keys().hasAll(['bakery', 'uid', 'text', 'createdAt'])
+          && request.resource.data.uid == request.auth.uid
+          && request.resource.data.text is string
+          && request.resource.data.text.size() > 0
+          && request.resource.data.text.size() <= 2000
+          // The server's clock, never the phone's: a note queued offline still
+          // gets the moment it actually arrived.
+          && request.resource.data.createdAt == request.time
+          && (!('screen' in request.resource.data)
+              || (request.resource.data.screen is string
+                  && request.resource.data.screen.size() <= 40))
+          && (!('appVersion' in request.resource.data)
+              || request.resource.data.appVersion == null
+              || (request.resource.data.appVersion is string
+                  && request.resource.data.appVersion.size() <= 12));
+        allow read, update, delete: if false;
+      }
     }
 
     // The OLD FLAT COLLECTIONS (suppliers/…, ingredients/…, config/…) are gone

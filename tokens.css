@@ -628,6 +628,29 @@ input:is([type="number"], [inputmode="decimal"], [inputmode="numeric"]) {
 .app-dialog-btn-solid { background: var(--brand); border: 0; color: var(--on-brand); }
 .app-dialog-btn-danger { background: var(--danger); border: 0; color: var(--on-brand); }
 
+/* The note form of «Write to Claude» (js/feedback.js), carried inside .app-dialog as its
+   `node`. The field is 16px so iOS does not zoom the page on focus, and it keeps the
+   dialog's column: the form may shrink and scroll rather than push the buttons away. */
+.fb-form { margin: 0 0 18px; display: flex; flex-direction: column; gap: var(--space-2); min-height: 0; }
+.fb-label { font-size: 14px; font-weight: 600; color: var(--text); }
+.fb-area {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 120px;
+  padding: 10px 12px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 16px;
+  line-height: 1.4;
+  resize: vertical;
+}
+.fb-area:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 2px; }
+.fb-area-invalid { border-color: var(--danger); background: color-mix(in srgb, var(--danger) 8%, var(--surface)); }
+.fb-error { margin: 0; font-size: 14px; font-weight: 600; color: var(--error); }
+
 /* ── The − / + text-size pair of a full-screen recipe (js/zoom-steps.js, one copy per
    feature: the Calculator's and the Ricettario's). Fixed at the bottom-right of the view that
    holds it. A view that exists before it is shown (the Ricettario's list) hides the pair itself

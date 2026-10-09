@@ -3373,6 +3373,90 @@ async function awayDays() {
 }
 
 
+// ── Notes for Claude (the «?» sheet) ─────────────────────────────────────────
+// Write-only from the app, and only where the venue switched it on. The interesting
+// checks are the default (a venue that never heard of the switch refuses) and that
+// nobody — the writer included — can read a note back from a phone.
+async function feedbackNotes() {
+  await wipe();
+  await seedAccess();
+  const L = 'locations/main';
+  const note = { bakery: 'main', uid: SAM.uid, text: 'The Save button is hidden', screen: 'orders', appVersion: '644' };
+
+  // addDoc(…, { createdAt: serverTimestamp() }) — a create carrying a REQUEST_TIME
+  // transform, which is the only way `createdAt == request.time` can hold.
+  // An id shaped like addDoc()'s: 20 letters and digits.
+  const autoId = () => Array.from({ length: 20 }, () => 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'[Math.floor(Math.random() * 62)]).join('');
+  const create = (data, headers, { serverTime = true, id = autoId() } = {}) => fetch(
+    `${FS.replace(/\/documents$/, '')}/documents:commit`,
+    {
+      method: 'POST', headers,
+      body: JSON.stringify({
+        writes: [{
+          update: { name: `projects/${PROJECT}/databases/(default)/documents/${L}/feedback/${id}`, fields: toFields(data) },
+          currentDocument: { exists: false },
+          ...(serverTime ? { updateTransforms: [{ fieldPath: 'createdAt', setToServerValue: 'REQUEST_TIME' }] } : {}),
+        }],
+      }),
+    });
+
+  // ⚠️ OFF UNTIL THE VENUE SAYS YES — a missing key must not open a write path.
+  await expectDenied('a venue that never switched it on refuses a note', () => create(note, asAccount(SAM)));
+  await seedDoc(L, { name: 'The Italian Club Bakery', feedbackToClaude: false });
+  await expectDenied('…and so does one that switched it off', () => create(note, asAccount(SAM)));
+  await seedDoc(L, { name: 'The Italian Club Bakery', feedbackToClaude: 'yes' });
+  await expectDenied('…and one whose switch is not literally true', () => create(note, asAccount(SAM)));
+
+  await seedDoc(L, { name: 'The Italian Club Bakery', feedbackToClaude: true });
+  await expectAllowed('an employee sends a note', () => create(note, asAccount(SAM)));
+  await expectAllowed('…so does the manager', () => create({ ...note, uid: MAYA.uid }, asAccount(MAYA)));
+  await expectAllowed('…and the owner', () => create({ ...note, uid: ALICE.uid }, asAccount(ALICE)));
+  await expectAllowed('a note whose version could not be read', () => create({ ...note, appVersion: null }, asAccount(SAM)));
+  const { screen, appVersion, ...bare } = note;
+  await expectAllowed('a note with only the text', () => create(bare, asAccount(SAM)));
+
+  await expectDenied('a note signed with somebody else\'s uid', () => create({ ...note, uid: MAYA.uid }, asAccount(SAM)));
+  await expectDenied('an empty note', () => create({ ...note, text: '' }, asAccount(SAM)));
+  await expectDenied('a runaway note', () => create({ ...note, text: 'x'.repeat(2001) }, asAccount(SAM)));
+  await expectAllowed('…but 2000 characters is fine', () => create({ ...note, text: 'x'.repeat(2000) }, asAccount(SAM)));
+  await expectDenied('a stray field nobody validated', () => create({ ...note, name: 'Sam' }, asAccount(SAM)));
+  await expectDenied('a note stamped for another venue', () => create({ ...note, bakery: 'trattoria-x' }, asAccount(SAM)));
+  // A real timestamp, so a rule weakened to `createdAt is timestamp` would be caught.
+  await expectDenied('a note dated by the phone, not the server', () => fetch(
+    `${FS.replace(/\/documents$/, '')}/documents:commit`, {
+      method: 'POST', headers: asAccount(SAM),
+      body: JSON.stringify({ writes: [{
+        update: {
+          name: `projects/${PROJECT}/databases/(default)/documents/${L}/feedback/${autoId()}`,
+          fields: { ...toFields(note), createdAt: { timestampValue: '2026-10-09T10:00:00Z' } },
+        },
+        currentDocument: { exists: false },
+      }] }),
+    }));
+  await expectDenied('a hand-picked id the owner\'s script could not list or delete',
+    () => create(note, asAccount(SAM), { id: 'my_note-1' }));
+  await expectDenied('a runaway screen name', () => create({ ...note, screen: 's'.repeat(41) }, asAccount(SAM)));
+  await expectDenied('a version that is not text', () => create({ ...note, appVersion: 644 }, asAccount(SAM)));
+
+  await expectDenied('another venue\'s employee cannot write here', () => create({ ...note, uid: BOB.uid }, asAccount(BOB)));
+  // A REAL ordering account of this venue — holding its grant — so the refusal is about what
+  // it is, not about having no access at all (NOBODY, below).
+  await seedDoc(`${L}/client-accounts/${CLIENT_A.uid}`,
+    { bakery: 'main', clientId: 'c-one', clientName: 'CLIENT A', createdAt: '2026-08-10T09:00:00.000Z' });
+  await expectDenied('a client ordering account cannot write one', () => create({ ...note, uid: CLIENT_A.uid }, asAccount(CLIENT_A)));
+  await expectDenied('an account with no access cannot write one', () => create({ ...note, uid: NOBODY.uid }, asAccount(NOBODY)));
+  await expectDenied('signed out, nothing', () => create(note, noAuth()));
+
+  // ⚠️ NOBODY READS ONE BACK FROM A PHONE — not even its author.
+  await seedDoc(`${L}/feedback/N1`, { ...note, createdAt: '2026-10-09T10:00:00Z' });
+  await expectDenied('the author cannot read their own note', () => fetch(`${FS}/${L}/feedback/N1`, { headers: asAccount(SAM) }));
+  await expectDenied('the owner cannot read a note either', () => fetch(`${FS}/${L}/feedback/N1`, { headers: asAccount(ALICE) }));
+  await expectDenied('…nor list them', () => fetch(`${FS}/${L}/feedback`, { headers: asAccount(ALICE) }));
+  await expectDenied('a note cannot be rewritten', () => mergeWrite(`${L}/feedback/N1`, { text: 'changed' }, asAccount(SAM)));
+  await expectDenied('a note cannot be deleted from a phone', () => deleteWrite(`${L}/feedback/N1`, asAccount(ALICE)));
+}
+
+
 // ── The monthly stocktake ────────────────────────────────────────────────────
 // A new collection on an OLD gate: it rides on 'foodcost', so the interesting
 // checks are the two the shortcut has to survive — an ordinary employee is
@@ -3645,7 +3729,7 @@ async function staffCards() {
 for (const scenario of [suppliers, ingredients, ingredientPrices, drafts, history, neighbours,
                         locationTree, isolation, configAndLogs, pastries, pastryLogs,
                         products, stocktake, staffCards, clientOrders, orderRequests, awayDays,
-                        pushNotifications,
+                        pushNotifications, feedbackNotes,
                         roles, onboardingCollections]) {
   await scenario();
 }

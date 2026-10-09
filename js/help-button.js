@@ -15,7 +15,8 @@
 // dialog already has, and there is no second component to keep in step.
 
 import { t, onLanguageChange } from './i18n.js';
-import { alertDialog } from './confirm-dialog.js';
+import { alertDialog, confirmDialog } from './confirm-dialog.js';
+import { feedbackOn } from './venue-features.js';
 import { helpText, helpTitle, helpFor } from './help-content.js';
 
 // 24×24 box, stroked, 2px, round caps, currentColor — the app's icon convention.
@@ -49,12 +50,30 @@ function questionIcon() {
   return svg;
 }
 
-export function showHelp(id) {
+export async function showHelp(id) {
   const entry = helpFor(id);
-  if (!entry) return Promise.resolve();
+  if (!entry) return;
+  // Loaded when asked, not at import: this module is also pulled into node tests, which
+  // cannot fetch the Firebase SDK from its CDN.
+  const { currentSession } = await import('./firebase.js');
   // "Got it" rather than "OK": nothing has been decided or agreed to, and a button
   // that sounds like a decision on a screen that only explains makes people hesitate.
-  return alertDialog(helpText(id), { title: helpTitle(id), okLabel: t('help.gotIt') });
+  if (!feedbackOn(currentSession().location)) {
+    return alertDialog(helpText(id), { title: helpTitle(id), okLabel: t('help.gotIt') });
+  }
+  // A venue that switched on «Write to Claude». ⚠️ THE NOTE BUTTON IS THE OK (true) ONE and
+  // «Got it» the cancel: Escape and a tap on the backdrop resolve false, and they must only
+  // close the sheet, never open a form nobody asked for.
+  return confirmDialog({
+    title: helpTitle(id),
+    message: helpText(id),
+    okLabel: t('feedback.write'),
+    cancelLabel: t('help.gotIt'),
+  }).then(async (write) => {
+    if (!write) return;
+    const { openFeedback } = await import('./feedback.js');
+    await openFeedback(id);
+  });
 }
 
 function build(id) {

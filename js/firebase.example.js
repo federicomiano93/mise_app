@@ -45,6 +45,8 @@ import {
   getDocFromCache,
   getDocFromServer,
   setDoc,
+  addDoc,
+  serverTimestamp,
   deleteDoc,
   onSnapshot,
   getDocs,
@@ -765,6 +767,22 @@ export function saveLogDoc(log) {
   return authReady
     .then(() => setDoc(doc(db, pathFor('logs'), log.id), { ...log, bakery: currentLocationId() }))
     .catch(err => { console.error('saveLogDoc failed:', err); throw err; });
+}
+
+// «Write to Claude»: one note from a person to the app's owner, in a venue that switched
+// it on (locations/{lid}/feedback, create-only — the rules refuse every read). The promise
+// resolves when the SERVER has it; offline, Firestore queues the write and keeps the
+// promise pending, which the caller reads as «saved on this device». createdAt MUST be
+// serverTimestamp(): the rules compare it with request.time.
+export function sendFeedback({ text, screen, appVersion }) {
+  return authReady.then(() => addDoc(collection(db, pathFor('feedback')), {
+    bakery: currentLocationId(),
+    uid: auth.currentUser ? auth.currentUser.uid : null,
+    text,
+    ...(screen ? { screen } : {}),
+    appVersion: appVersion ?? null,
+    createdAt: serverTimestamp(),
+  }));
 }
 
 export function deleteLogDoc(id) {

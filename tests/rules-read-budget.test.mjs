@@ -176,3 +176,23 @@ test('the most expensive gated rule stays well inside the budget of 10', () => {
     'Past 6 there is no room for the next feature, and the failure when it runs out is a ' +
     '403 that looks exactly like an ordinary refusal.');
 });
+
+test('the feedback create rule costs exactly 2 reads — member()\'s users get and one locations get', () => {
+  const MATCH = 'match /feedback/{id}';
+  const start = CODE.indexOf(MATCH);
+  assert.notEqual(start, -1, 'firestore.rules has no match /feedback/{id} — this test is checking nothing');
+  const open = CODE.indexOf('{', start + MATCH.length);
+  let depth = 0;
+  let end = -1;
+  for (let i = open; i < CODE.length; i++) {
+    if (CODE[i] === '{') depth++;
+    else if (CODE[i] === '}' && --depth === 0) { end = i; break; }
+  }
+  const block = CODE.slice(open + 1, end);
+  const own = accessesIn(block).map(a => a.path);
+  assert.deepEqual(own, ['/databases/$(database)/documents/locations/$(lid)'],
+    'the feedback rule must read locations/{lid} exactly once itself');
+  assert.match(block, /\bmember\(lid\)/, 'the feedback rule must go through member(lid)');
+  assert.equal(accessesIn(bodyOf('stampedFor')).length, 0, 'stampedFor() must not read a document');
+  assert.equal(costOf('member') + own.length, 2, 'the feedback create rule must cost exactly 2 document reads');
+});
