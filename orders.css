@@ -63,6 +63,7 @@
    is the venue's own name with its "HOME" eyebrow, read left to right. The auto
    margin moves to the title block instead, which keeps the "?" at the right edge. */
 .home-header .home-up-btn { margin-right: 8px; }
+.home-header .home-rest-btn { margin-right: 8px; } /* the kiosk moon, beside Back (js/home-kiosk-band.js) */
 .home-header .home-up-btn:active { transform: scale(.92); }
 /* The app's green focus ring is invisible on the green header. */
 .home-header .home-up-btn:focus-visible { outline: 2px solid var(--on-brand); outline-offset: 2px; }
@@ -3488,22 +3489,47 @@ body:not([data-orders-tab="deliveries"]) #orders-owed { display: none; }
 .sent-check-actions { flex-direction: column; }
 .sent-check-actions .app-dialog-btn { flex: none; min-height: 44px; }
 
-/* The Home's kiosk band (js/home-kiosk-band.js): Rest and Exit side by side, quiet buttons.
-   Aligned with the cards (16px) and the reminder bands under it. Icon + text is a flex row. */
-.home-kiosk-band { display: flex; gap: 10px; margin: 16px 16px 0; }
-.home-kiosk-btn {
-  flex: 1;
-  min-width: 0;
-  min-height: 44px;
+/* Kiosk mode on the Home (js/home-kiosk-band.js). «Rest» is the round moon button in the green
+   header (.home-rest-btn shares .home-header .home-up-btn above). «Exit» is a red, raised bar
+   under the scroll area: a sibling of it in the body's flex column, so it never covers a card. */
+.home-kiosk-footer {
+  flex: none;
+  display: flex;
+  justify-content: center;
+  padding: 10px 16px calc(10px + var(--safe-bot));
+  padding-inline: max(16px, var(--app-gutter));
+  background: var(--bg);
+  border-top: 1px solid var(--border);
+}
+.home-kiosk-exit {
+  min-width: 200px;
+  min-height: 48px;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  transition: transform .06s ease;
+  gap: 10px;
+  padding: 8px 24px;
+  background: var(--danger);
+  color: var(--on-brand);
+  border: 0;
+  border-bottom: 4px solid var(--danger-edge);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-sheet);
+  font-family: 'Manrope', sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform .06s ease, box-shadow .06s ease, border-bottom-width .06s ease;
 }
-.home-kiosk-btn:active { transform: scale(.97); }
-.home-kiosk-btn:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 2px; }
-.home-kiosk-btn svg { flex-shrink: 0; }
+.home-kiosk-exit span { display: flex; align-items: center; }
+.home-kiosk-exit svg { flex-shrink: 0; }
+/* Pressed: it sinks into its edge. The 4px of edge becomes 1px, the button moves down 3px. */
+.home-kiosk-exit:active {
+  transform: translateY(3px);
+  border-bottom-width: 1px;
+  box-shadow: var(--shadow-card);
+}
+.home-kiosk-exit:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 3px; }
 
 /* ── The way back to the Ricettario (7 Oct 2026) ────────────────────────────
    Opened from the Ricettario (#from=…), Orders offers a way back in TWO forms of one control,

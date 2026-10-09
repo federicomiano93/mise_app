@@ -110,6 +110,12 @@
           data-i18n="aria.allMyBusinesses" data-i18n-attr="aria-label" aria-label="All my businesses" hidden>
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
   </button>
+  <!-- Rest (kiosk mode only, js/home-kiosk-band.js): same round button as the one above,
+       after it, before the venue name. Hidden by default, like #home-up-btn. -->
+  <button id="home-rest-btn" class="app-icon-btn overlay-back-btn home-up-btn home-rest-btn" type="button"
+          data-i18n="kiosk.home.rest" data-i18n-attr="aria-label" aria-label="Rest" hidden>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+  </button>
   <div>
     <!-- Replaced with the location's own name once a location is open
          (js/location-title.js). The text here is only what a browser shows
@@ -127,8 +133,6 @@
 
   <!-- Once-a-day "order to place today" reminder, filled by js/home-orders-badge.js.
        Empty (and hidden) when no order is due or it has already shown today. -->
-  <!-- Rest / Exit, shown only while kiosk mode is on for this device (js/home-kiosk-band.js). -->
-  <div id="home-kiosk-band" class="home-kiosk-band" role="group" hidden></div>
   <div id="home-reminder"></div>
 
   <nav class="home-grid" data-i18n="aria.mainSections" data-i18n-attr="aria-label" aria-label="Main sections">
@@ -251,6 +255,10 @@
        at the top, where it answers "where am I writing?" before you tap. -->
   <div id="session-logout-host"></div>
 </div>
+
+<!-- Exit, pinned under the scroll area so it never covers a card and is always in reach.
+     Shown only while kiosk mode is on for this device (js/home-kiosk-band.js). -->
+<footer id="home-kiosk-footer" class="home-kiosk-footer" hidden></footer>
 
 <script type="module" src="js/i18n-dom.js"></script>
 <script type="module" src="js/auth-gate.js"></script>
