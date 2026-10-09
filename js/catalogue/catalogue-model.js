@@ -337,8 +337,8 @@ export function linkOptions({ ingredients, recipes, suppliers, query, excludeRec
     .filter(ing => ing && ing.active !== false && ing.kind !== 'packaging')
     .map(ing => ({
       id: ing.id,
-      // `name` stays the invoice name (it is what fills a recipe row's printed label); `displayName`
-      // is what the lists SHOW and sort by (js/ingredient-name.js).
+      // `name` stays the invoice name (what the chooser hands back, and the fallback for a row's
+      // name); `displayName` is what the lists SHOW and sort by (js/ingredient-name.js).
       name: String(ing.name || '').trim(),
       displayName: ingredientDisplayName(ing).trim(),
       shortName: String(ing.shortName || '').trim(),
@@ -425,14 +425,43 @@ export function suggestLinks({
   return { items: every.slice(0, max), total: every.length };
 }
 
+// The name a link line shows for a link — and the name a row takes when it is picked (9 Oct
+// 2026): an ingredient's display name (short name, else name), a recipe's name; the chosen
+// name when the item is not loaded (just created); '' when there is nothing to show.
+// `ingredients` is the id -> ingredient map, `recipes` the list.
+export function linkedItemName(link, ingredients, recipes) {
+  if (!link || typeof link !== 'object') return '';
+  const refId = link.refId != null ? String(link.refId) : '';
+  const fallback = String(link.name ?? '').trim();
+  if (link.kind === 'recipe') {
+    const sub = (Array.isArray(recipes) ? recipes : []).find(r => r && r.id === refId);
+    return String((sub && sub.name) || '').trim() || fallback;
+  }
+  if (link.kind !== 'ingredient') return '';
+  const ing = ingredients && ingredients[refId];
+  return (ing ? ingredientDisplayName(ing).trim() : '') || fallback;
+}
+
+// Is `chosen` the very link the row already has (same kind, same id)? Choosing it again
+// changes nothing — and so must not rename the row.
+export function isSameLink(current, chosen) {
+  if (!current || !chosen) return false;
+  return current.kind === chosen.kind && String(current.refId) === String(chosen.refId);
+}
+
 // Point a recipe row at what was chosen — `null` removes the link. The ONE place a row's
 // link is written: the suggestion list and the full chooser both come through here, so
 // the two cannot treat a row differently.
 //
-// ⚠️⚠️ WHAT WAS TYPED IS NEVER OVERWRITTEN. Federico, 13 Sep 2026: «il nome
-// dell'ingrediente lo scrivo io perché potrebbe essere diverso dall'ingrediente a cui è
-// collegato». The chosen name fills the row only when it has no name at all.
-export function applyLink(row, chosen) {
+// ⚠️⚠️ THE NAME FOLLOWS A PERSON'S PICK (9 Oct 2026). Federico, 13 Sep 2026, had said «il
+// nome dell'ingrediente lo scrivo io», and applyLink then never overwrote a typed name. On
+// 9 Oct 2026 he reversed it: «quando inserisco un ingrediente in una ricetta, sotto mi
+// compare il nome del ingrediente correlato, fai in modo che il nome dell'ingrediente si
+// autocompila con il nome del ingrediente correlato». So a caller that passes `{ label }`
+// (the name the link line under the row shows) gets the row's name SET to it, whatever was
+// typed. Without `label` the old rule holds: the chosen name fills the row only when it has
+// no name at all. Removing a link (null) never touches the name.
+export function applyLink(row, chosen, { label } = {}) {
   if (!row || typeof row !== 'object') return row;
   if (chosen === null) {
     delete row.kind;
@@ -443,7 +472,9 @@ export function applyLink(row, chosen) {
   if (!chosen || !ROW_KINDS.includes(chosen.kind) || !refId) return row;
   row.kind = chosen.kind;
   row.refId = refId;
-  if (!String(row.label ?? '').trim() && chosen.name) row.label = String(chosen.name);
+  const setTo = String(label ?? '').trim();
+  if (setTo) row.label = setTo;
+  else if (!String(row.label ?? '').trim() && chosen.name) row.label = String(chosen.name);
   return row;
 }
 

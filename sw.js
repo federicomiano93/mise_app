@@ -1,4 +1,4 @@
-const CACHE_NAME = 'theitalianclub-v646';
+const CACHE_NAME = 'theitalianclub-v648';
 // Firebase SDK modules (loaded from gstatic) are cached SEPARATELY from CACHE_NAME
 // so they survive the cache-version bump that happens on every deploy — otherwise
 // the offline SDK would be wiped each release until the next online load. The name
@@ -449,8 +449,8 @@ const ASSETS = [
 // hash (first 16 characters): the phone checks every download against it, and an update
 // copies a file whose hash has not changed out of the previous cache instead of fetching it.
 const ASSET_HASHES = {
-  "./": '5359bdb6b48dfd73',
-  "./index.html": '5359bdb6b48dfd73',
+  "./": 'cf2fd2cec8f354be',
+  "./index.html": 'cf2fd2cec8f354be',
   "./home.html": 'a4401ab28cb28eb9',
   "./calculator.html": 'efa1f673a19b203e',
   "./orders.html": '70c974df6a5ef693',
@@ -461,10 +461,10 @@ const ASSET_HASHES = {
   "./js/reset-password-boot.js": '9c3e1fca587f872c',
   "./qr.png": '761a95e5bc25e2ba',
   "./js/install-guide.js": '17fcd0c0fec489c2',
-  "./tokens.css": '34bf2de81ff8a1cc',
+  "./tokens.css": 'abeb621f95374e83',
   "./auth.css": '55b0bc1d41af5718',
   "./style.css": '1bb57bc3ae9b3666',
-  "./orders.css": '899c7586f79c7fe5',
+  "./orders.css": '64003553203242c9',
   "./sounds/alarm.wav": '0d1465974f5be95b',
   "./fonts/manrope-latin.woff2": '71eb731d55804619',
   "./fonts/manrope-latin-ext.woff2": 'bd24140af06f1b58',
@@ -527,12 +527,12 @@ const ASSET_HASHES = {
   "./js/help-button.js": '6a973883d08c7cb7',
   "./js/feedback.js": 'd191e0cb7ef92060',
   "./js/feedback-model.js": '4c05fd834133f2bc',
-  "./js/sw-update.js": '645f66a2c7f40a6a',
+  "./js/sw-update.js": '2ffc253aa03eff0f',
   "./js/update-gate.js": '1801738b3e6def2d',
   "./js/kiosk.js": '8b5985a1d4dc13e1',
   "./js/kiosk-model.js": '0507646ee88b1abc',
   "./js/kiosk-orders.js": '5e6db3c0dbadd8d6',
-  "./js/home-kiosk-band.js": '177b516f050f8ea0',
+  "./js/home-kiosk-band.js": 'a629259788befc18',
   "./js/wake-lock.js": '3cc98d18c5e2cbab',
   "./js/install-version.js": 'a35dbefbbbaa3acf',
   "./js/install-version-boot.js": '0e0cea81512abcec',
@@ -692,7 +692,7 @@ const ASSET_HASHES = {
   "./records.css": 'aeaddb44ba386bf2',
   "./js/catalogue/confirm-dialog.js": 'dde439ff506fbdfa',
   "./js/catalogue/dom.js": '9878ae7c750afd79',
-  "./js/catalogue/catalogue-model.js": 'b4da069a0283ee7a',
+  "./js/catalogue/catalogue-model.js": '9e41b463f27b749d',
   "./js/catalogue/recipe-cost-model.js": 'd29f16ee37c017a5',
   "./js/catalogue/recipe-allergen-model.js": 'b2a59adbdd259fb1',
   "./js/catalogue/allergen-sheet.js": 'b82e723ddeee0224',
@@ -709,7 +709,7 @@ const ASSET_HASHES = {
   "./js/catalogue/ingredient-picker.js": 'b3c9b4170e679af9',
   "./js/ingredient-create.js": '195adf62c59c2564',
   "./js/ingredient-edit-model.js": '75b571a45585a715',
-  "./js/catalogue/ingredient-suggest.js": 'ddf3ca8acc2ed799',
+  "./js/catalogue/ingredient-suggest.js": 'f813dbb63fa3c04f',
   "./js/catalogue/firebase-catalogue.js": 'e560966537c00cae',
   "./js/catalogue/catalogue-store.js": '32d3ef5ccfb6da26',
   "./js/catalogue/catalogue-main.js": '96638e1320c43fe3',
@@ -719,7 +719,7 @@ const ASSET_HASHES = {
   "./js/catalogue/catalogue-settings.js": '085573368700207f',
   "./js/catalogue/catalogue-detail.js": '47bc797fb462567b',
   "./js/catalogue/zoom-steps.js": '5cb5e5ce31bcde85',
-  "./js/catalogue/catalogue-editor.js": '6d7fd6f1b73d9958',
+  "./js/catalogue/catalogue-editor.js": '90d9d952602fe007',
   "./js/catalogue/guided-model.js": '60902e8129430dd7',
   "./js/catalogue/guided-alarm.js": '9104e391cb96f5ef',
   "./js/catalogue/guided-run.js": 'da10dcad21f5e8d8',
