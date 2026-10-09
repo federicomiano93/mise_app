@@ -60,7 +60,10 @@ python -m http.server <fresh-port> --bind 127.0.0.1
 - ⚠️ Only a `localhost` URL writes to the emulator; ANY other hostname is PRODUCTION.
   The console must print "LOCAL EMULATOR mode".
 - Widths: phone 360px and 296×668, and tablet 1180×820 (the split layouts start at
-  900px wide and 600px tall). Both languages if any text changed.
+  900px wide and 600px tall, OR at 1000px wide whatever the height). A screen with a
+  text box in a split: also 1024×420 — a landscape tablet with its keyboard open must
+  stay on two columns with the same box focused (`algprobe/mise-drive/drive-tablet-keyboard.mjs`).
+  Both languages if any text changed.
 - Walk the change's own path, then its EMPTY state, an ERROR (a refused save) and the
   longest real text. No console errors — no JS error, no `permission-denied`.
 

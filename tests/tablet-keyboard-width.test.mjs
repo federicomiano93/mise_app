@@ -35,6 +35,11 @@ const CASES = [
   ['tablet portrait 768×1024', 768, 1024, false],
   ['768×600', 768, 600, false],
   ['phone portrait 360×800', 360, 800, false],
+  // The exact edges, so retuning either number fails here and not only on the text pins.
+  ['one pixel short of the width half 999×420', 999, 420, false],
+  ['the width half itself 1000×420', 1000, 420, true],
+  ['the old corner 900×600', 900, 600, true],
+  ['one pixel short of the old corner 899×600', 899, 600, false],
 ];
 
 for (const [name, w, h, expected] of CASES) {
