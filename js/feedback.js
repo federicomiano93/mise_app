@@ -11,13 +11,21 @@
 
 import { t } from './i18n.js';
 import { confirmDialog, alertDialog } from './confirm-dialog.js';
-import { sendFeedback } from './firebase.js';
 import { feedbackPayload, FEEDBACK_MAX } from './feedback-model.js';
 import { askVersionOf, versionNumber } from './app-version.js';
 
-// How long to wait for the server before saying «saved on this device». Offline,
+// The real collaborators. firebase.js is loaded when a note is sent, not at import, so
+// this module (and its tests) never need the Firebase SDK from its CDN just to be read.
+const REAL = {
+  confirmDialog,
+  alertDialog,
+  sendFeedback: (payload) => import('./firebase.js').then((m) => m.sendFeedback(payload)),
+  runningVersion,
+  waitMs: 4000,
+};
+
+// waitMs: how long to wait for the server before saying «saved on this device». Offline,
 // Firestore keeps the write and sends it by itself; the promise just stays pending.
-const SEND_WAIT_MS = 4000;
 let fieldSeq = 0;
 
 function make(tag, className, text) {
@@ -64,10 +72,10 @@ async function runningVersion() {
 }
 
 // 'sent' | 'queued' | { failed: error }
-function sendAndWait(payload) {
+function sendAndWait(send, payload, waitMs) {
   return new Promise((resolve) => {
-    const timer = setTimeout(() => resolve('queued'), SEND_WAIT_MS);
-    sendFeedback(payload).then(
+    const timer = setTimeout(() => resolve('queued'), waitMs);
+    Promise.resolve().then(() => send(payload)).then(
       () => { clearTimeout(timer); resolve('sent'); },
       (err) => {
         clearTimeout(timer);
@@ -79,12 +87,14 @@ function sendAndWait(payload) {
   });
 }
 
-export async function openFeedback(screenId, draft = '') {
+// `deps` exists so the flows can be tested without a browser; production passes nothing.
+export async function openFeedback(screenId, draft = '', deps = {}) {
+  const d = { ...REAL, ...deps };
   let text = draft;
   let showError = false;
   for (;;) {
     const { wrap, area } = buildForm(text, showError);
-    const answer = confirmDialog({
+    const answer = d.confirmDialog({
       title: t('feedback.title'),
       message: t('feedback.intro'),
       node: wrap,
@@ -99,7 +109,7 @@ export async function openFeedback(screenId, draft = '') {
 
     if (!confirmed) {
       if (!text.trim()) return;
-      const discard = await confirmDialog({
+      const discard = await d.confirmDialog({
         message: t('feedback.discard.message'),
         okLabel: t('feedback.discard.ok'),
         cancelLabel: t('feedback.discard.keep'),
@@ -110,13 +120,13 @@ export async function openFeedback(screenId, draft = '') {
     }
 
     const payload = feedbackPayload({
-      text, screen: screenId, appVersion: await runningVersion(),
+      text, screen: screenId, appVersion: await d.runningVersion(),
     });
     if (!payload) { showError = true; continue; }
 
-    const outcome = await sendAndWait(payload);
-    if (outcome === 'sent') { await alertDialog(t('feedback.sent')); return; }
-    if (outcome === 'queued') { await alertDialog(t('feedback.queued')); return; }
-    await alertDialog(t('feedback.failed'));
+    const outcome = await sendAndWait(d.sendFeedback, payload, d.waitMs);
+    if (outcome === 'sent') { await d.alertDialog(t('feedback.sent')); return; }
+    if (outcome === 'queued') { await d.alertDialog(t('feedback.queued')); return; }
+    await d.alertDialog(t('feedback.failed'));
   }
 }

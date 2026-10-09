@@ -95,10 +95,14 @@ function open({ title = '', message = '', okLabel = 'OK', cancelLabel = 'Cancel'
   });
 }
 
+const CONTROLS = ['input', 'textarea', 'select', 'button', 'a[href]'].join(',');
+
 // The controls Tab may reach inside the dialog, in document order.
 function focusables(box) {
-  return [...box.querySelectorAll('input, textarea, select, button')]
-    .filter((el) => !el.disabled && !el.hidden && el.type !== 'hidden');
+  // getClientRects() is empty for anything not rendered (display:none, a hidden parent).
+  return [...box.querySelectorAll(CONTROLS)]
+    .filter((el) => !el.disabled && !el.hidden && el.type !== 'hidden'
+      && el.getClientRects().length > 0);
 }
 
 // Where Tab (or Shift+Tab) goes next in a cycle. Pure, so a test can run it.
