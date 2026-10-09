@@ -114,6 +114,20 @@ test('Exit is a red raised flex button, 44px+, tokens only, with a press state',
   assert.match(src, /viewBox: '0 0 24 24'/);
 });
 
+test('the wiring is pinned: Rest, Exit and the language all reach their handlers', () => {
+  const src = read('js/home-kiosk-band.js');
+  assert.match(src, /restBtn\.addEventListener\('click', restNow\)/);
+  assert.match(src, /btn\.addEventListener\('click', onClick\)/);
+  assert.match(src, /exitButton\(t\('kiosk\.home\.exit'\), exitApp\)/);
+  assert.match(src, /onLanguageChange\(render\)/);
+  assert.match(src, /function restNow\(\) \{\s*window\.dispatchEvent\(new Event\('kiosk-rest-now'\)\);\s*\}/);
+});
+
+test('the update banner clears the Exit bar', () => {
+  const src = read('js/sw-update.js');
+  assert.match(src.match(/const BOTTOM_BARS = \[[^\]]*\]/)[0], /'\.home-kiosk-footer'/);
+});
+
 test('the kiosk words exist in both languages', () => {
   const i18n = read('js/i18n.js');
   for (const key of ['kiosk.home.rest', 'kiosk.home.exit', 'kiosk.home.cannotClose', 'kiosk.home.aria']) {
