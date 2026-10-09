@@ -2,7 +2,9 @@
 // (`locations/{lid}/errors/{id}`, js/error-report.js) out of PRODUCTION, for Claude to fix.
 //
 //   node scripts/read-errors.mjs                 group by «same error», most frequent first
-//   node scripts/read-errors.mjs --count         just how many lines, counted by Firestore (the
+//   node scripts/read-errors.mjs --json FILE     also write the groups (no stacks, no ids) and the
+//                                                errors per day to FILE, for the stats page
+//   node scripts/read-errors.mjs --count        just how many lines, counted by Firestore (the
 //                                                session-start hook)
 //   node scripts/read-errors.mjs --clear "<text>"  delete every error whose message contains
 //                                                that exact text, 8+ characters (once fixed)
@@ -25,8 +27,9 @@
 // useful (P13).
 import { execSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
+import { writeFileSync } from 'node:fs';
 import {
-  errorsFrom, groupErrors, groupLines, errorPath, isOld, messageMatches, clearTextProblem, countFrom, clean,
+  errorsFrom, groupErrors, groupLines, errorsJson, errorPath, isOld, messageMatches, clearTextProblem, countFrom, clean,
 } from './error-summary.mjs';
 
 const PROJECT = 'bakery-app-ebf90';
@@ -115,11 +118,15 @@ async function venueName(locationId) {
   }
 }
 
-async function list() {
+async function list(jsonFile) {
   const { errors, capped } = await readErrors();
-  if (errors.length === 0) { console.log('No errors from the app.'); return; }
   const names = new Map();
   for (const lid of new Set(errors.map(e => e.locationId))) names.set(lid, await venueName(lid));
+  if (jsonFile) {
+    writeFileSync(jsonFile, `${JSON.stringify(errorsJson(errors, names, Date.now()), null, 2)}\n`);
+    console.log(`Numbers written to ${jsonFile}`);
+  }
+  if (errors.length === 0) { console.log('No errors from the app.'); return; }
   const groups = groupErrors(errors);
   // A marker nobody can know in advance: the block cannot be closed from inside.
   const marker = randomUUID();
@@ -146,7 +153,8 @@ async function removeAll(read, keep, what) {
 try {
   const args = process.argv.slice(2);
   if (args.length === 1 && args[0] === '--count') console.log(String(await countErrors()));
-  else if (args.length === 0) await list();
+  else if (args.length === 0) await list(null);
+  else if (args.length === 2 && args[0] === '--json' && args[1]) await list(args[1]);
   else if (args.length === 2 && args[0] === '--clear') {
     const problem = clearTextProblem(args[1]);
     if (problem) throw new Error(problem);
@@ -154,7 +162,7 @@ try {
   } else if (args.length === 1 && args[0] === '--prune') {
     const now = Date.now();
     await removeAll(await readErrors(), e => isOld(e, now), 'older than 30 days');
-  } else throw new Error('Usage: node scripts/read-errors.mjs [--count | --clear "<text>" | --prune]');
+  } else throw new Error('Usage: node scripts/read-errors.mjs [--json FILE | --count | --clear "<text>" | --prune]');
 } catch (error) {
   console.error(error.message);
   process.exit(1);

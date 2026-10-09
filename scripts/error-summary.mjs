@@ -170,3 +170,42 @@ export function countFrom(rows) {
   const n = Number(value);
   return Number.isInteger(n) && n >= 0 && value !== undefined ? n : null;
 }
+
+const TREND_DAYS = 30;
+
+// The groups of groupErrors as a plain object for the stats page, plus the number of error
+// lines per UTC day for the last 30 days (oldest first, empty days included). `names`: Map
+// locationId → venue name. No stack, uid or device id is ever copied in.
+export function errorsJson(errors, names = new Map(), now = Date.now()) {
+  const counts = list => list.map(([k, n]) => ({ name: clean(k, 60), count: n }));
+  const groups = groupErrors(errors).map(g => ({
+    label: clean(String(g.message).split(/\r?\n/)[0], 160),
+    source: clean(g.source, 12),
+    count: g.count,
+    firstSeen: g.firstMs === null ? null : new Date(g.firstMs).toISOString(),
+    lastSeen: g.lastMs === null ? null : new Date(g.lastMs).toISOString(),
+    venues: g.venues.map(([lid, n]) => ({ name: clean(names.get(lid) ?? '', 60) || lid, count: n })),
+    screens: counts(g.screens),
+    appVersions: counts(g.versions),
+    deviceKinds: counts(g.kinds),
+    online: g.online,
+    offline: g.offline,
+    people: g.people,
+    code: g.codes.length ? clean(g.codes[0][0], 60) : null,
+  }));
+  const today = Math.floor(now / DAY_MS);
+  const perDay = new Map();
+  for (let i = TREND_DAYS - 1; i >= 0; i -= 1) perDay.set(new Date((today - i) * DAY_MS).toISOString().slice(0, 10), 0);
+  for (const e of errors) {
+    if (e.createdMs === null) continue;
+    const key = new Date(e.createdMs).toISOString().slice(0, 10);
+    if (perDay.has(key)) perDay.set(key, perDay.get(key) + 1);
+  }
+  return {
+    generatedAt: new Date(now).toISOString(),
+    scope: 'production',
+    total: errors.length,
+    groups,
+    perDay: [...perDay.entries()].map(([date, count]) => ({ date, count })),
+  };
+}

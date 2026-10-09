@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import {
   errorPath, errorFrom, errorsFrom, groupErrors, groupLines, isOld, messageMatches, KEEP_DAYS,
-  clearTextProblem, countFrom, MIN_CLEAR_LENGTH,
+  clearTextProblem, countFrom, MIN_CLEAR_LENGTH, errorsJson,
 } from '../scripts/error-summary.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -170,4 +170,37 @@ test('the aggregation answer is read as a count, anything else as no answer', ()
 test('the hook counts the errors after the notes, never beside them (one gcloud token fetch at a time)', () => {
   const src = readFileSync(join(ROOT, '.claude/hooks/session-start.mjs'), 'utf8');
   assert.match(src, /notesCheck\.then\(\(\) => report\('the errors from the app', checkAppErrors\)\)/);
+});
+
+test('errorsJson: groups and a 30-day trend, with no stack, uid or device id', () => {
+  const errors = errorsFrom([
+    doc('bakery', 1, { message: { stringValue: 'save failed: offline\nsecond line' }, code: { stringValue: 'unavailable' } }),
+    doc('bakery', 2, { createdAt: { timestampValue: '2026-10-08T10:00:00Z' }, online: { booleanValue: false }, message: { stringValue: 'save failed: offline\nsecond line' } }),
+    doc('bakery', 3, { createdAt: { timestampValue: '2026-08-01T10:00:00Z' }, message: { stringValue: 'something else entirely' } }),
+  ]);
+  const json = errorsJson(errors, new Map([['bakery', 'The Bakery']]), NOW);
+  assert.equal(json.scope, 'production');
+  assert.equal(json.generatedAt, new Date(NOW).toISOString());
+  assert.equal(json.total, 3);
+  const g = json.groups[0];
+  assert.equal(g.label, 'save failed: offline second line');
+  assert.equal(g.count, 2);
+  assert.equal(g.firstSeen, '2026-10-08T10:00:00.000Z');
+  assert.equal(g.lastSeen, '2026-10-09T10:00:00.000Z');
+  assert.deepEqual(g.venues, [{ name: 'The Bakery', count: 2 }]);
+  assert.deepEqual([g.online, g.offline, g.people, g.code], [1, 1, 1, 'unavailable']);
+  assert.deepEqual(g.deviceKinds, [{ name: 'phone', count: 2 }]);
+  assert.equal(json.perDay.length, 30);
+  assert.deepEqual(json.perDay.at(-1), { date: '2026-10-09', count: 1 });
+  assert.deepEqual(json.perDay.at(-2), { date: '2026-10-08', count: 1 });
+  assert.equal(json.perDay.reduce((n, d) => n + d.count, 0), 2);
+  const text = JSON.stringify(json);
+  for (const secret of ['uid-secret', 'DeviceSecret', 'orders.js', 'stack', 'Error: x']) assert.ok(!text.includes(secret), secret);
+});
+
+test('errorsJson: a long message is cut to 160 characters; empty input is a valid empty structure', () => {
+  const long = errorsFrom([doc('bakery', 1, { message: { stringValue: 'x'.repeat(300) } })]);
+  assert.ok(errorsJson(long, new Map(), NOW).groups[0].label.length <= 160);
+  const empty = errorsJson([], new Map(), NOW);
+  assert.deepEqual([empty.total, empty.groups, empty.perDay.length, empty.scope], [0, [], 30, 'production']);
 });

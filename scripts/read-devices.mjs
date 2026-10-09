@@ -5,7 +5,8 @@
 //   node scripts/read-devices.mjs            per venue: devices seen in 7 / 30 days / on file,
 //                                            split by kind, installed vs browser, app version,
 //                                            and devices per person (first name)
-//   node scripts/read-devices.mjs --prune    delete the lines not seen for 90 days
+//   node scripts/read-devices.mjs --json FILE  also write the same numbers (first names only) to FILE
+//   node scripts/read-devices.mjs --prune   delete the lines not seen for 90 days
 //
 // ⚠️ WHY HERE AND NOT IN THE APP. The rules let a device WRITE its own line and nothing else —
 // not even read it back. This script reads with the owner's own Google login
@@ -17,7 +18,8 @@
 // pattern (device-summary.mjs) before the request is made. Lines are kept no longer than they
 // are useful (P13).
 import { execSync } from 'node:child_process';
-import { devicesFrom, summarise, summaryLines, isStale, devicePath } from './device-summary.mjs';
+import { writeFileSync } from 'node:fs';
+import { devicesFrom, summarise, summaryLines, summaryJson, isStale, devicePath } from './device-summary.mjs';
 import { clean } from './feedback-notes.mjs';
 
 const PROJECT = 'bakery-app-ebf90';
@@ -85,15 +87,24 @@ async function firstName(locationId, uid) {
   }
 }
 
-async function report() {
+async function report(jsonFile) {
   const devices = await readDevices();
-  if (devices.length === 0) { console.log('No devices counted yet.'); return; }
+  if (devices.length === 0) console.log('No devices counted yet.');
   if (devices.length >= 1000) console.log('⚠️ 1000 lines read: the list may be longer — run --prune, or raise the limit.');
   const venues = summarise(devices, Date.now());
+  const venueNames = new Map();
+  const firstNames = new Map();
   for (const venue of venues) {
     const names = new Map();
     for (const [uid] of venue.people) names.set(uid, await firstName(venue.locationId, uid));
-    console.log(summaryLines(venue, await venueName(venue.locationId), names).join('\n'));
+    const display = await venueName(venue.locationId);
+    venueNames.set(venue.locationId, display);
+    firstNames.set(venue.locationId, names);
+    console.log(summaryLines(venue, display, names).join('\n'));
+  }
+  if (jsonFile) {
+    writeFileSync(jsonFile, `${JSON.stringify(summaryJson(venues, venueNames, firstNames, Date.now()), null, 2)}\n`);
+    console.log(`Numbers written to ${jsonFile}`);
   }
 }
 
@@ -112,9 +123,10 @@ async function prune() {
 
 try {
   const args = process.argv.slice(2);
-  if (args.length === 0) await report();
+  if (args.length === 0) await report(null);
+  else if (args[0] === '--json' && args.length === 2 && args[1]) await report(args[1]);
   else if (args[0] === '--prune' && args.length === 1) await prune();
-  else throw new Error('Usage: node scripts/read-devices.mjs [--prune]');
+  else throw new Error('Usage: node scripts/read-devices.mjs [--json FILE | --prune]');
 } catch (error) {
   console.error(error.message);
   process.exit(1);
