@@ -3587,6 +3587,108 @@ async function errorReports() {
 }
 
 
+// ── The usage record (js/usage.js) ───────────────────────────────────────────
+// One line per person per device per day, sent whole now and then: any member, a closed shape,
+// the id <deviceId>_<YYYYMMDD>_<uid> proves whose it is, updatedAt is the server's clock and the
+// maps are bounded. Nobody reads, lists or deletes one from a phone.
+async function usageStats() {
+  await wipe();
+  await seedAccess();
+  const L = 'locations/main';
+  const DEV = 'Dev1ce2Id3Abc4Def5Gh';
+  const DAY = '20261009';
+  const idFor = (uid, device = DEV, day = DAY) => `${device}_${day}_${uid}`;
+  const line = (uid, over = {}) => ({
+    bakery: 'main', uid, deviceId: DEV, dayKey: DAY, kind: 'phone', appVersion: '649',
+    screens: { index: 2, orders: 3, 'orders:supplier': 1 },
+    seconds: { orders: 300 },
+    taps: { orders: 12 },
+    routes: { 'index>orders': 2, 'orders>orders:supplier': 1 },
+    actions: { 'order-sent': 1 },
+    loads: { orders: 2 },
+    loadMs: { orders: 1800 },
+    firstMinute: 480, lastMinute: 1020, offlineSeconds: 30,
+    ...over,
+  });
+  const manyKeys = (n, prefix = 'k') => Object.fromEntries(Array.from({ length: n }, (_, i) => [`${prefix}${i}`, 1]));
+  // setDoc(…, { …, updatedAt: serverTimestamp() }) — a whole-document write with a REQUEST_TIME transform.
+  const save = (id, data, headers, { serverTime = true, at = null } = {}) => fetch(
+    `${FS.replace(/\/documents$/, '')}/documents:commit`, {
+      method: 'POST', headers,
+      body: JSON.stringify({ writes: [{
+        update: {
+          name: `projects/${PROJECT}/databases/(default)/documents/${L}/usage/${id}`,
+          fields: { ...toFields(data), ...(at ? { updatedAt: { timestampValue: at } } : {}) },
+        },
+        ...(serverTime ? { updateTransforms: [{ fieldPath: 'updatedAt', setToServerValue: 'REQUEST_TIME' }] } : {}),
+      }] }),
+    });
+
+  await expectAllowed('an employee\'s phone sends the day', () => save(idFor(SAM.uid), line(SAM.uid), asAccount(SAM)));
+  await expectAllowed('…and again later the same day (a whole update)', () => save(idFor(SAM.uid), line(SAM.uid, { taps: { orders: 40 } }), asAccount(SAM)));
+  await expectAllowed('…so does the manager', () => save(idFor(MAYA.uid), line(MAYA.uid), asAccount(MAYA)));
+  await expectAllowed('…and the owner', () => save(idFor(ALICE.uid), line(ALICE.uid), asAccount(ALICE)));
+  await expectAllowed('the bare minimum', () => save(idFor(SAM.uid, 'Pc0000000000000000Ab'), { bakery: 'main', uid: SAM.uid, deviceId: 'Pc0000000000000000Ab', dayKey: DAY }, asAccount(SAM)));
+  await expectAllowed('a version that could not be read', () => save(idFor(SAM.uid, 'Dev2ce2Id3Abc4Def5Gh'), line(SAM.uid, { deviceId: 'Dev2ce2Id3Abc4Def5Gh', appVersion: null }), asAccount(SAM)));
+  await expectAllowed('empty maps and no minutes', () => {
+    const { firstMinute, lastMinute, ...rest } = line(SAM.uid, {
+      deviceId: 'Dev3ce2Id3Abc4Def5Gh', screens: {}, seconds: {}, taps: {}, routes: {}, actions: {}, loads: {}, loadMs: {},
+    });
+    return save(idFor(SAM.uid, 'Dev3ce2Id3Abc4Def5Gh'), rest, asAccount(SAM));
+  });
+  await expectAllowed('300 routes are the most', () => save(idFor(SAM.uid, 'Dev4ce2Id3Abc4Def5Gh'), line(SAM.uid, { deviceId: 'Dev4ce2Id3Abc4Def5Gh', routes: manyKeys(300) }), asAccount(SAM)));
+  await expectAllowed('80 screens, 40 actions and 20 loads are the most', () => save(idFor(SAM.uid, 'Dev5ce2Id3Abc4Def5Gh'), line(SAM.uid, {
+    deviceId: 'Dev5ce2Id3Abc4Def5Gh', screens: manyKeys(80), seconds: manyKeys(80), taps: manyKeys(80),
+    actions: manyKeys(40), loads: manyKeys(20), loadMs: manyKeys(20),
+  }), asAccount(SAM)));
+  await expectAllowed('the last minute of the day and a full day offline', () => save(idFor(SAM.uid, 'Dev6ce2Id3Abc4Def5Gh'), line(SAM.uid, {
+    deviceId: 'Dev6ce2Id3Abc4Def5Gh', firstMinute: 0, lastMinute: 1439, offlineSeconds: 86400,
+  }), asAccount(SAM)));
+  await expectAllowed('a tablet shared by a second person, same device and day', () => save(idFor(MAYA.uid), line(MAYA.uid, { kind: 'tablet' }), asAccount(MAYA)));
+
+  await expectDenied('an id that names another uid', () => save(idFor(MAYA.uid, 'Dev7ce2Id3Abc4Def5Gh'), line(SAM.uid, { deviceId: 'Dev7ce2Id3Abc4Def5Gh' }), asAccount(SAM)));
+  await expectDenied('a line signed with somebody else’s uid (and their id)', () => save(idFor(MAYA.uid, 'Dev7ce2Id3Abc4Def5Gh'), line(MAYA.uid, { deviceId: 'Dev7ce2Id3Abc4Def5Gh' }), asAccount(SAM)));
+  await expectDenied('a day key that does not match the id', () => save(idFor(SAM.uid), line(SAM.uid, { dayKey: '20261010' }), asAccount(SAM)));
+  await expectDenied('a device id that does not match the id', () => save(idFor(SAM.uid), line(SAM.uid, { deviceId: 'Dev9ce2Id3Abc4Def5Gh' }), asAccount(SAM)));
+  await expectDenied('a hand-picked id', () => save('my-phone', line(SAM.uid), asAccount(SAM)));
+  await expectDenied('a device id of the wrong shape', () => save(idFor(SAM.uid, 'my-phone'), line(SAM.uid, { deviceId: 'my-phone' }), asAccount(SAM)));
+  await expectDenied('a day key of the wrong shape', () => save(idFor(SAM.uid, DEV, '2026-10-09'), line(SAM.uid, { dayKey: '2026-10-09' }), asAccount(SAM)));
+  await expectDenied('a date from the phone\'s clock', () => save(idFor(SAM.uid), line(SAM.uid), asAccount(SAM), { serverTime: false, at: '2026-10-09T10:00:00Z' }));
+  await expectDenied('a line with no clock at all', () => save(idFor(SAM.uid), line(SAM.uid), asAccount(SAM), { serverTime: false }));
+  await expectDenied('301 routes', () => save(idFor(SAM.uid), line(SAM.uid, { routes: manyKeys(301) }), asAccount(SAM)));
+  await expectDenied('81 screens', () => save(idFor(SAM.uid), line(SAM.uid, { screens: manyKeys(81) }), asAccount(SAM)));
+  await expectDenied('81 seconds entries', () => save(idFor(SAM.uid), line(SAM.uid, { seconds: manyKeys(81) }), asAccount(SAM)));
+  await expectDenied('81 tap entries', () => save(idFor(SAM.uid), line(SAM.uid, { taps: manyKeys(81) }), asAccount(SAM)));
+  await expectDenied('41 actions', () => save(idFor(SAM.uid), line(SAM.uid, { actions: manyKeys(41) }), asAccount(SAM)));
+  await expectDenied('21 loads', () => save(idFor(SAM.uid), line(SAM.uid, { loads: manyKeys(21) }), asAccount(SAM)));
+  await expectDenied('21 load times', () => save(idFor(SAM.uid), line(SAM.uid, { loadMs: manyKeys(21) }), asAccount(SAM)));
+  await expectDenied('a map that is a list', () => save(idFor(SAM.uid), line(SAM.uid, { routes: ['a>b'] }), asAccount(SAM)));
+  await expectDenied('a minute that is not whole', () => save(idFor(SAM.uid), line(SAM.uid, { firstMinute: 90.5 }), asAccount(SAM)));
+  await expectDenied('minute 1440', () => save(idFor(SAM.uid), line(SAM.uid, { lastMinute: 1440 }), asAccount(SAM)));
+  await expectDenied('a negative minute', () => save(idFor(SAM.uid), line(SAM.uid, { firstMinute: -1 }), asAccount(SAM)));
+  await expectDenied('more than a day offline', () => save(idFor(SAM.uid), line(SAM.uid, { offlineSeconds: 86401 }), asAccount(SAM)));
+  await expectDenied('offline time that is not whole', () => save(idFor(SAM.uid), line(SAM.uid, { offlineSeconds: 1.5 }), asAccount(SAM)));
+  await expectDenied('a kind nobody listed', () => save(idFor(SAM.uid), line(SAM.uid, { kind: 'fridge' }), asAccount(SAM)));
+  await expectDenied('a runaway version', () => save(idFor(SAM.uid), line(SAM.uid, { appVersion: 'x'.repeat(13) }), asAccount(SAM)));
+  await expectDenied('a name cannot ride along', () => save(idFor(SAM.uid), line(SAM.uid, { name: 'Sam' }), asAccount(SAM)));
+  await expectDenied('stamped for another venue', () => save(idFor(SAM.uid), line(SAM.uid, { bakery: 'trattoria-x' }), asAccount(SAM)));
+  await expectDenied('a line with no uid', () => { const { uid, ...rest } = line(SAM.uid); return save(idFor(SAM.uid), rest, asAccount(SAM)); });
+  await expectDenied('a line with no day key', () => { const { dayKey, ...rest } = line(SAM.uid); return save(idFor(SAM.uid), rest, asAccount(SAM)); });
+  await expectDenied('another venue\'s employee', () => save(idFor(BOB.uid), line(BOB.uid), asAccount(BOB)));
+  await seedDoc(`${L}/client-accounts/${CLIENT_A.uid}`,
+    { bakery: 'main', clientId: 'c-one', clientName: 'CLIENT A', createdAt: '2026-08-10T09:00:00.000Z' });
+  await expectDenied('a client ordering account', () => save(idFor(CLIENT_A.uid), line(CLIENT_A.uid), asAccount(CLIENT_A)));
+  await expectDenied('an account with no access', () => save(idFor(NOBODY.uid), line(NOBODY.uid), asAccount(NOBODY)));
+  await expectDenied('signed out', () => save(idFor(SAM.uid), line(SAM.uid), noAuth()));
+
+  // ⚠️ NOBODY READS, LISTS OR DELETES ONE FROM A PHONE — not even its author or the owner.
+  await expectDenied('the author cannot read their own line', () => fetch(`${FS}/${L}/usage/${idFor(SAM.uid)}`, { headers: asAccount(SAM) }));
+  await expectDenied('the owner cannot read one either', () => fetch(`${FS}/${L}/usage/${idFor(SAM.uid)}`, { headers: asAccount(ALICE) }));
+  await expectDenied('…nor list them', () => fetch(`${FS}/${L}/usage`, { headers: asAccount(ALICE) }));
+  await expectDenied('a line cannot be deleted from a phone', () => deleteWrite(`${L}/usage/${idFor(SAM.uid)}`, asAccount(ALICE)));
+}
+
+
 // ── The monthly stocktake ────────────────────────────────────────────────────
 // A new collection on an OLD gate: it rides on 'foodcost', so the interesting
 // checks are the two the shortcut has to survive — an ordinary employee is
@@ -3859,7 +3961,7 @@ async function staffCards() {
 for (const scenario of [suppliers, ingredients, ingredientPrices, drafts, history, neighbours,
                         locationTree, isolation, configAndLogs, pastries, pastryLogs,
                         products, stocktake, staffCards, clientOrders, orderRequests, awayDays,
-                        pushNotifications, feedbackNotes, deviceCount, errorReports,
+                        pushNotifications, feedbackNotes, deviceCount, errorReports, usageStats,
                         roles, onboardingCollections]) {
   await scenario();
 }

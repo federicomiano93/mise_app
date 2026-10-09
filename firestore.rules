@@ -2759,6 +2759,65 @@ service cloud.firestore {
                   && request.resource.data.stack.size() <= 2000));
         allow read, update, delete: if false;
       }
+
+      // How one person used the app on one device on one day (js/usage.js): which screens they
+      // opened and for how long, the moves from one screen to the next (to find the routes that
+      // deserve a shortcut), taps per screen, the key actions, first and last minute of work,
+      // time offline and page load times. Built on the device and sent WHOLE now and then, so
+      // the last write of the day carries the day's totals.
+      //
+      // ⚠️ WHO, BY THE OWNER'S CHOICE (9 Oct 2026, internal use): the uid of the account signed
+      // in, only ever the writer's own, and the id says so: <deviceId>_<YYYYMMDD>_<uid>. So a
+      // shared tablet keeps one line per person per day, and nobody can write another's line.
+      // Write-only from the app, like devices; read and pruned by scripts/read-usage.mjs with
+      // the owner's login. The maps cannot be checked key by key: their size is bounded, which
+      // with the 1 MiB document limit caps what a device can send. One read: users/{uid}.
+      match /usage/{id} {
+        allow create, update: if member(lid)
+          && stampedFor(lid)
+          && request.resource.data.keys().hasOnly(['bakery', 'uid', 'deviceId', 'dayKey', 'kind',
+               'appVersion', 'screens', 'seconds', 'taps', 'routes', 'actions', 'loads', 'loadMs',
+               'firstMinute', 'lastMinute', 'offlineSeconds', 'updatedAt'])
+          && request.resource.data.keys().hasAll(['bakery', 'uid', 'deviceId', 'dayKey', 'updatedAt'])
+          && request.resource.data.uid == request.auth.uid
+          && request.resource.data.deviceId is string
+          && request.resource.data.deviceId.matches('^[A-Za-z0-9]{20}$')
+          && request.resource.data.dayKey is string
+          && request.resource.data.dayKey.matches('^20[0-9]{6}$')
+          && id == request.resource.data.deviceId + '_' + request.resource.data.dayKey + '_' + request.auth.uid
+          && request.resource.data.updatedAt == request.time
+          && (!('kind' in request.resource.data)
+              || request.resource.data.kind in ['phone', 'tablet', 'computer'])
+          && (!('appVersion' in request.resource.data)
+              || request.resource.data.appVersion == null
+              || (request.resource.data.appVersion is string
+                  && request.resource.data.appVersion.size() <= 12))
+          && (!('screens' in request.resource.data)
+              || (request.resource.data.screens is map && request.resource.data.screens.size() <= 80))
+          && (!('seconds' in request.resource.data)
+              || (request.resource.data.seconds is map && request.resource.data.seconds.size() <= 80))
+          && (!('taps' in request.resource.data)
+              || (request.resource.data.taps is map && request.resource.data.taps.size() <= 80))
+          && (!('routes' in request.resource.data)
+              || (request.resource.data.routes is map && request.resource.data.routes.size() <= 300))
+          && (!('actions' in request.resource.data)
+              || (request.resource.data.actions is map && request.resource.data.actions.size() <= 40))
+          && (!('loads' in request.resource.data)
+              || (request.resource.data.loads is map && request.resource.data.loads.size() <= 20))
+          && (!('loadMs' in request.resource.data)
+              || (request.resource.data.loadMs is map && request.resource.data.loadMs.size() <= 20))
+          && (!('firstMinute' in request.resource.data)
+              || (request.resource.data.firstMinute is int
+                  && request.resource.data.firstMinute >= 0 && request.resource.data.firstMinute < 1440))
+          && (!('lastMinute' in request.resource.data)
+              || (request.resource.data.lastMinute is int
+                  && request.resource.data.lastMinute >= 0 && request.resource.data.lastMinute < 1440))
+          && (!('offlineSeconds' in request.resource.data)
+              || (request.resource.data.offlineSeconds is int
+                  && request.resource.data.offlineSeconds >= 0
+                  && request.resource.data.offlineSeconds <= 86400));
+        allow read, delete: if false;
+      }
     }
 
     // The OLD FLAT COLLECTIONS (suppliers/…, ingredients/…, config/…) are gone
