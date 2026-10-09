@@ -2651,7 +2651,11 @@ service cloud.firestore {
       // missing key must never open a write path into a customer's venue.
       // Two reads: users/{uid} in member(), locations/{lid} here.
       match /feedback/{id} {
-        allow create: if member(lid)
+        // The id addDoc() makes (20 letters and digits) and nothing else: the owner's script
+        // lists and deletes notes by that shape, so a hand-picked id would sit in production
+        // invisible to it and impossible for it to delete.
+        allow create: if id.matches('^[A-Za-z0-9]{20}$')
+          && member(lid)
           && get(/databases/$(database)/documents/locations/$(lid))
                .data.get('feedbackToClaude', false) == true
           && stampedFor(lid)

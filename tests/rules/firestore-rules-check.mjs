@@ -3385,7 +3385,9 @@ async function feedbackNotes() {
 
   // addDoc(…, { createdAt: serverTimestamp() }) — a create carrying a REQUEST_TIME
   // transform, which is the only way `createdAt == request.time` can hold.
-  const create = (data, headers, { serverTime = true, id = `n${Math.random().toString(36).slice(2, 10)}` } = {}) => fetch(
+  // An id shaped like addDoc()'s: 20 letters and digits.
+  const autoId = () => Array.from({ length: 20 }, () => 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'[Math.floor(Math.random() * 62)]).join('');
+  const create = (data, headers, { serverTime = true, id = autoId() } = {}) => fetch(
     `${FS.replace(/\/documents$/, '')}/documents:commit`,
     {
       method: 'POST', headers,
@@ -3419,12 +3421,28 @@ async function feedbackNotes() {
   await expectAllowed('…but 2000 characters is fine', () => create({ ...note, text: 'x'.repeat(2000) }, asAccount(SAM)));
   await expectDenied('a stray field nobody validated', () => create({ ...note, name: 'Sam' }, asAccount(SAM)));
   await expectDenied('a note stamped for another venue', () => create({ ...note, bakery: 'trattoria-x' }, asAccount(SAM)));
-  await expectDenied('a note dated by the phone, not the server',
-    () => create({ ...note, createdAt: '2026-10-09T10:00:00Z' }, asAccount(SAM), { serverTime: false }));
+  // A real timestamp, so a rule weakened to `createdAt is timestamp` would be caught.
+  await expectDenied('a note dated by the phone, not the server', () => fetch(
+    `${FS.replace(/\/documents$/, '')}/documents:commit`, {
+      method: 'POST', headers: asAccount(SAM),
+      body: JSON.stringify({ writes: [{
+        update: {
+          name: `projects/${PROJECT}/databases/(default)/documents/${L}/feedback/${autoId()}`,
+          fields: { ...toFields(note), createdAt: { timestampValue: '2026-10-09T10:00:00Z' } },
+        },
+        currentDocument: { exists: false },
+      }] }),
+    }));
+  await expectDenied('a hand-picked id the owner\'s script could not list or delete',
+    () => create(note, asAccount(SAM), { id: 'my_note-1' }));
   await expectDenied('a runaway screen name', () => create({ ...note, screen: 's'.repeat(41) }, asAccount(SAM)));
   await expectDenied('a version that is not text', () => create({ ...note, appVersion: 644 }, asAccount(SAM)));
 
   await expectDenied('another venue\'s employee cannot write here', () => create({ ...note, uid: BOB.uid }, asAccount(BOB)));
+  // A REAL ordering account of this venue — holding its grant — so the refusal is about what
+  // it is, not about having no access at all (NOBODY, below).
+  await seedDoc(`${L}/client-accounts/${CLIENT_A.uid}`,
+    { bakery: 'main', clientId: 'c-one', clientName: 'CLIENT A', createdAt: '2026-08-10T09:00:00.000Z' });
   await expectDenied('a client ordering account cannot write one', () => create({ ...note, uid: CLIENT_A.uid }, asAccount(CLIENT_A)));
   await expectDenied('an account with no access cannot write one', () => create({ ...note, uid: NOBODY.uid }, asAccount(NOBODY)));
   await expectDenied('signed out, nothing', () => create(note, noAuth()));
