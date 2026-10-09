@@ -3505,6 +3505,88 @@ async function deviceCount() {
 }
 
 
+// ── The error reports (js/error-report.js) ───────────────────────────────────
+// Create-only, any member of the venue, a closed shape; the uid is always the writer's own and
+// createdAt is the server's clock. Nobody reads, edits or deletes one from a phone.
+async function errorReports() {
+  await wipe();
+  await seedAccess();
+  const L = 'locations/main';
+  const line = {
+    bakery: 'main', uid: SAM.uid, source: 'error', screen: 'orders', appVersion: '649',
+    deviceId: 'Dev1ce2Id3Abc4Def5Gh', deviceKind: 'phone', online: true, code: 'unavailable',
+    message: 'x is not a function', stack: 'TypeError: x is not a function\n    at a (orders.js:1:1)',
+  };
+  const autoId = () => Array.from({ length: 20 }, () => 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'[Math.floor(Math.random() * 62)]).join('');
+  // addDoc(…, { createdAt: serverTimestamp() }) — a create carrying a REQUEST_TIME transform.
+  const create = (data, headers, { serverTime = true, id = autoId(), at = null } = {}) => fetch(
+    `${FS.replace(/\/documents$/, '')}/documents:commit`, {
+      method: 'POST', headers,
+      body: JSON.stringify({ writes: [{
+        update: {
+          name: `projects/${PROJECT}/databases/(default)/documents/${L}/errors/${id}`,
+          fields: { ...toFields(data), ...(at ? { createdAt: { timestampValue: at } } : {}) },
+        },
+        currentDocument: { exists: false },
+        ...(serverTime ? { updateTransforms: [{ fieldPath: 'createdAt', setToServerValue: 'REQUEST_TIME' }] } : {}),
+      }] }),
+    });
+
+  await expectAllowed('an employee\'s phone reports an error', () => create(line, asAccount(SAM)));
+  await expectAllowed('…so does the manager', () => create({ ...line, uid: MAYA.uid }, asAccount(MAYA)));
+  await expectAllowed('…and the owner', () => create({ ...line, uid: ALICE.uid }, asAccount(ALICE)));
+  await expectAllowed('a rejection', () => create({ ...line, source: 'rejection' }, asAccount(SAM)));
+  await expectAllowed('a console error', () => create({ ...line, source: 'console' }, asAccount(SAM)));
+  await expectAllowed('every optional field null', () => create(
+    { ...line, screen: null, appVersion: null, deviceId: null, code: null, stack: null }, asAccount(SAM)));
+  await expectAllowed('the bare minimum', () => create(
+    { bakery: 'main', uid: SAM.uid, source: 'error', message: 'boom' }, asAccount(SAM)));
+  await expectAllowed('300 characters of message are fine', () => create({ ...line, message: 'm'.repeat(300) }, asAccount(SAM)));
+  await expectAllowed('2000 characters of stack are fine', () => create({ ...line, stack: 's'.repeat(2000) }, asAccount(SAM)));
+  await expectAllowed('an offline phone', () => create({ ...line, online: false, deviceKind: 'tablet' }, asAccount(SAM)));
+
+  await expectDenied('another venue\'s employee', () => create({ ...line, uid: BOB.uid }, asAccount(BOB)));
+  await seedDoc(`${L}/client-accounts/${CLIENT_A.uid}`,
+    { bakery: 'main', clientId: 'c-one', clientName: 'CLIENT A', createdAt: '2026-08-10T09:00:00.000Z' });
+  await expectDenied('a client ordering account', () => create({ ...line, uid: CLIENT_A.uid }, asAccount(CLIENT_A)));
+  await expectDenied('an account with no access', () => create({ ...line, uid: NOBODY.uid }, asAccount(NOBODY)));
+  await expectDenied('signed out', () => create(line, noAuth()));
+
+  await expectDenied('a line signed with somebody else’s uid', () => create({ ...line, uid: MAYA.uid }, asAccount(SAM)));
+  await expectDenied('a line with no message', () => { const { message, ...rest } = line; return create(rest, asAccount(SAM)); });
+  await expectDenied('an empty message', () => create({ ...line, message: '' }, asAccount(SAM)));
+  await expectDenied('a runaway message', () => create({ ...line, message: 'm'.repeat(301) }, asAccount(SAM)));
+  await expectDenied('a message that is not text', () => create({ ...line, message: 12 }, asAccount(SAM)));
+  await expectDenied('a runaway stack', () => create({ ...line, stack: 's'.repeat(2001) }, asAccount(SAM)));
+  await expectDenied('a source nobody listed', () => create({ ...line, source: 'log' }, asAccount(SAM)));
+  await expectDenied('a kind nobody listed', () => create({ ...line, deviceKind: 'fridge' }, asAccount(SAM)));
+  await expectDenied('a device id of the wrong shape', () => create({ ...line, deviceId: 'my-phone' }, asAccount(SAM)));
+  await expectDenied('online must be a yes or a no', () => create({ ...line, online: 'yes' }, asAccount(SAM)));
+  await expectDenied('a runaway screen name', () => create({ ...line, screen: 's'.repeat(61) }, asAccount(SAM)));
+  await expectDenied('a runaway version', () => create({ ...line, appVersion: 'x'.repeat(13) }, asAccount(SAM)));
+  await expectDenied('a runaway code', () => create({ ...line, code: 'c'.repeat(61) }, asAccount(SAM)));
+  await expectDenied('a date from the phone\'s clock', () => create(line, asAccount(SAM), { serverTime: false, at: '2026-10-09T10:00:00Z' }));
+  await expectDenied('stamped for another venue', () => create({ ...line, bakery: 'trattoria-x' }, asAccount(SAM)));
+  await expectDenied('a hand-picked id the owner\'s script could not list or delete',
+    () => create(line, asAccount(SAM), { id: 'my_error-1' }));
+  await expectDenied('a stray field nobody validated', () => create({ ...line, name: 'Sam' }, asAccount(SAM)));
+  await expectDenied('a code that is a number', () => create({ ...line, code: 404 }, asAccount(SAM)));
+  await expectDenied('a stack that is a number', () => create({ ...line, stack: 12 }, asAccount(SAM)));
+  await expectDenied('a screen that is a number', () => create({ ...line, screen: 7 }, asAccount(SAM)));
+  await expectDenied('a line with no uid', () => { const { uid, ...rest } = line; return create(rest, asAccount(SAM)); });
+  await expectDenied('a line with no bakery stamp', () => { const { bakery, ...rest } = line; return create(rest, asAccount(SAM)); });
+  await expectDenied('a line with no source', () => { const { source, ...rest } = line; return create(rest, asAccount(SAM)); });
+
+  // ⚠️ NOBODY READS, EDITS OR DELETES ONE FROM A PHONE — not even its author or the owner.
+  await seedDoc(`${L}/errors/E1`, { ...line, createdAt: '2026-10-09T10:00:00Z' });
+  await expectDenied('the author cannot read their own line', () => fetch(`${FS}/${L}/errors/E1`, { headers: asAccount(SAM) }));
+  await expectDenied('the owner cannot read one either', () => fetch(`${FS}/${L}/errors/E1`, { headers: asAccount(ALICE) }));
+  await expectDenied('…nor list them', () => fetch(`${FS}/${L}/errors`, { headers: asAccount(ALICE) }));
+  await expectDenied('a line cannot be rewritten', () => mergeWrite(`${L}/errors/E1`, { message: 'changed' }, asAccount(SAM)));
+  await expectDenied('a line cannot be deleted from a phone', () => deleteWrite(`${L}/errors/E1`, asAccount(ALICE)));
+}
+
+
 // ── The monthly stocktake ────────────────────────────────────────────────────
 // A new collection on an OLD gate: it rides on 'foodcost', so the interesting
 // checks are the two the shortcut has to survive — an ordinary employee is
@@ -3777,7 +3859,7 @@ async function staffCards() {
 for (const scenario of [suppliers, ingredients, ingredientPrices, drafts, history, neighbours,
                         locationTree, isolation, configAndLogs, pastries, pastryLogs,
                         products, stocktake, staffCards, clientOrders, orderRequests, awayDays,
-                        pushNotifications, feedbackNotes, deviceCount,
+                        pushNotifications, feedbackNotes, deviceCount, errorReports,
                         roles, onboardingCollections]) {
   await scenario();
 }
