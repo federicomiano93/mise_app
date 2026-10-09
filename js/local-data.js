@@ -55,6 +55,11 @@ export const KEEP_PREFIXES = Object.freeze([
   // a venue, and it holds no personal data. Signing out must not switch the tablet's
   // kiosk off — the next person to sign in finds it as it was left.
   'kiosk-',
+  // The device count (js/device-ping.js): this device's random id and the day each account
+  // last reported to each venue. They belong to the DEVICE and hold no name or email; wiped on
+  // every sign-out or venue switch, one phone would count as a new device each time.
+  'device-id',
+  'device-ping-',
 ]);
 
 // Given every key currently in storage, which ones must go.
