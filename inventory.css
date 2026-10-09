@@ -426,7 +426,7 @@ body {
    ⚠️ LAYOUT ONLY. The rows are the same DOM in the same order (grid auto-flow is by ROW,
    so Tab and the keyboard's Next key walk left then right, then down — the reading order);
    how a box is read, saved or cleared is not touched here. */
-@media (min-width: 900px) and (min-height: 600px) {
+@media (min-width: 900px) and (min-height: 600px), (min-width: 1000px) {
   /* Any screen that is not the list — a product's detail, what the month cost, the notice
      an employee gets — is a form or a short read, not a list: it keeps the 620px column. */
   .inv-view:not(.inv-view--list) { max-width: 620px; }
@@ -471,7 +471,7 @@ body {
 /* ⚠️ THE TOAST STAYS AT THE 620px COLUMN even though this page is wide on a tablet: it is
    position: fixed, so it computes --app-gutter from the VIEWPORT. A custom property is
    resolved where it is declared, so both are re-declared ON the layer. */
-@media (min-width: 900px) and (min-height: 600px) {
+@media (min-width: 900px) and (min-height: 600px), (min-width: 1000px) {
   body[data-card="inventory"] .inv-toast {
     --app-max-width: 620px;
     --app-gutter: max(0px, calc((100% - var(--app-max-width)) / 2));

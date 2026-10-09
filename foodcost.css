@@ -496,7 +496,7 @@ select.fc-input, .fc-select {
    row — is `.app-split*` in tokens.css. Scoped by data-card, NOT data-section: Magazzino
    shares the section and is not part of this. ⚠️ The query text is the app's one tablet
    switch, tests/tablet-width.test.mjs pins it. */
-@media (min-width: 900px) and (min-height: 600px) {
+@media (min-width: 900px) and (min-height: 600px), (min-width: 1000px) {
   .fc-split[data-split="on"] {
     display: grid;
     grid-template-columns: 400px minmax(0, 1fr);
@@ -529,7 +529,7 @@ select.fc-input, .fc-select {
    the VIEWPORT, and so does the toast — and the ingredient chooser (js/pick-screen.js,
    .pick-overlay), which the editor opens. A custom property is resolved where it is declared,
    so both are re-declared ON the layer; its descendants inherit the 620px answer. */
-@media (min-width: 900px) and (min-height: 600px) {
+@media (min-width: 900px) and (min-height: 600px), (min-width: 1000px) {
   body[data-card="foodcost"] .fc-overlay,
   body[data-card="foodcost"] .pick-overlay,
   body[data-card="foodcost"] .fc-toast {

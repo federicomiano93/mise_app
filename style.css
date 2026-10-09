@@ -1550,7 +1550,7 @@ input.cp-prod-weight {
    Calculator's tablet layout below; phones keep the bottom sheet. The box takes the
    shared dialog's look (full radius, 20px padding, the 16px radius token) and its
    fade + scale arrival; the reduced-motion switch in tokens.css still turns it off. */
-@media (min-width: 900px) and (min-height: 600px) {
+@media (min-width: 900px) and (min-height: 600px), (min-width: 1000px) {
   body[data-card="calculator"] #loaf-modal, body[data-card="calculator"] #list-select-modal, body[data-card="calculator"] #day-modal, body[data-card="calculator"] #send-who-modal {
     align-items: center;
     padding: 24px;
@@ -1903,7 +1903,7 @@ input.cp-prod-weight {
    result is computed, what Confirm writes and the Confirm / Edit lock are untouched.
    ⚠️ EVERY rule is scoped to body[data-card="calculator"]: orders.html and suppliers.html
    load this sheet too. ⚠️ .ing-row and .cp-* are not touched. */
-@media (min-width: 900px) and (min-height: 600px) {
+@media (min-width: 900px) and (min-height: 600px), (min-width: 1000px) {
   /* A tab is ONE comfortable column, confirmed or not; so are the empty state and the Log.
      ⚠️ THE COLUMN IS CENTRED (owner, 5 Oct 2026: «centra la ricetta sul tablet, non lasciarla a
      sinistra»). The tab bar and the lone-recipe title take the same 620px column, so the tabs
@@ -1971,7 +1971,7 @@ input.cp-prod-weight {
    position: fixed and compute --app-gutter from the VIEWPORT, so the wide token would
    stretch their headers and bodies to 1180px. A custom property is resolved where it is
    declared, so it is re-declared ON each layer; descendants inherit the 620px answer. */
-@media (min-width: 900px) and (min-height: 600px) {
+@media (min-width: 900px) and (min-height: 600px), (min-width: 1000px) {
   body[data-card="calculator"] #recipe-overlay,
   body[data-card="calculator"] #settings-overlay,
   body[data-card="calculator"] #extra-overlay,
