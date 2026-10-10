@@ -31,7 +31,43 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # ── Mise 2, built where no credential exists ───────────────────────────────────────────────
+  #
+  # ⚠️ THE NEW APP IS BUILT IN ITS OWN JOB, WITH NO GOOGLE IDENTITY. Building it installs a few
+  # hundred npm packages and runs their code (Vite and its plugins). The `preview` job below can
+  # mint a credential for the preview project (`id-token: write`), and any code running there
+  # could ask for one too. Here nothing can: this job may only read the repository, and what it
+  # hands on is the built files, nothing else. Never merge the two jobs to save a minute.
+  build-mise2:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+      # The lockfiles decide; no package may run code while it installs.
+      - run: npm ci --ignore-scripts
+        working-directory: shared
+      - run: npm ci --ignore-scripts
+        working-directory: app
+      # Served at /mise2/ on the preview, beside the current app at the root.
+      - run: npm run build -- --base=/mise2/
+        working-directory: app
+      - uses: actions/upload-artifact@v7
+        with:
+          name: mise2-site
+          path: app/dist
+          if-no-files-found: error
+          retention-days: 1
+
   preview:
+    needs: build-mise2
     # A PR from a fork gets no identity token, and must not get a public link to our code path.
     if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
@@ -50,15 +86,22 @@ jobs:
         with:
           node-version: '22'
 
+      # Mise 2's built files from the job above — outside the workspace until staged below.
+      - uses: actions/download-artifact@v8
+        with:
+          name: mise2-site
+          path: ${{ runner.temp }}/mise2-site
+
       # The app, and nothing else: the pages, their stylesheets, sw.js, the manifest, js/, dist/
       # (the bundles every page loads: without it each page's script is a 404) and the static folders — exactly what GitHub Pages serves the app from. `:(glob)` keeps
-      # `*.html` / `*.css` to the top level.
+      # `*.html` / `*.css` to the top level. Then Mise 2's BUILT files (never its source) at /mise2/.
       - name: Stage only the app's files
         run: |
           rm -rf _site && mkdir _site
           git archive --format=tar HEAD -- \
             ':(glob)*.html' ':(glob)*.css' sw.js manifest.json qr.png js dist icons fonts sounds \
             | tar -x -C _site
+          mv "$RUNNER_TEMP/mise2-site" _site/mise2
           # ⚠️ No symlinks: firebase-tools FOLLOWS them when it uploads, so a committed
           # `js/x -> ../..` would publish the workspace — credentials file included.
           if [ -n "$(find _site -type l)" ]; then
@@ -119,7 +162,9 @@ jobs:
             leaked=""
             for path in .git/config .git/HEAD .github/workflows/preview.yml .claude/settings.json \
                         firebase.json firestore.rules package.json functions/index.js \
-                        scripts/seed-preview.mjs tests/firebase-target.test.mjs README.md; do
+                        scripts/seed-preview.mjs tests/firebase-target.test.mjs README.md \
+                        app/package.json app/src/main.tsx shared/package.json \
+                        mise2/package.json mise2/src/main.tsx; do
               [ "$(code "$path")" = 404 ] || leaked="$leaked $path"
             done
             for creds in gha-creds-*.json; do
@@ -131,6 +176,7 @@ jobs:
               exit 1
             fi
             [ "$(code index.html)" = 200 ] || { echo "::error::index.html is not served on $CHANNEL"; exit 1; }
+            [ "$(code mise2/index.html)" = 200 ] || { echo "::error::Mise 2 is not served on $CHANNEL"; exit 1; }
           }
           check "$PR_CHANNEL" "$PR_URL"
           check anteprima "$FIXED_URL"

@@ -38,6 +38,43 @@ test('_site is built from git by an allowlist, never copied from the workspace',
   assert.match(workflow, /if \[ -n "\$\(find _site -type l\)" \]; then/);
 });
 
+// ⚠️ MISE 2 IS BUILT WHERE NO CREDENTIAL EXISTS. Building it installs and runs hundreds of npm
+// packages; the job that deploys can mint a Google credential (`id-token: write`), so any of that
+// code running there could ask for one. The build therefore lives in its own job that may only
+// read the repository, and the deploy job receives the built files — never the source, never an
+// install. Merging the two "to save a minute" is exactly the change these assertions refuse.
+test('Mise 2 is built in a job with no Google identity, and only its built files reach the site', () => {
+  const [beforePreview, fromPreview] = workflow.split('\n  preview:\n');
+  const buildJob = beforePreview.slice(beforePreview.indexOf('\n  build-mise2:\n'));
+  const deployJob = fromPreview.split('\n  comment:\n')[0];
+  assert.match(buildJob, /permissions:\n\s+contents: read\n\s+steps:/);
+  assert.doesNotMatch(buildJob, /id-token|google-github-actions|firebase/);
+  assert.match(buildJob, /npm ci --ignore-scripts\n\s+working-directory: shared/);
+  assert.match(buildJob, /npm ci --ignore-scripts\n\s+working-directory: app/);
+  assert.match(buildJob, /npm run build -- --base=\/mise2\//);
+  assert.match(buildJob, /uses: actions\/checkout@v5\n\s+with:\n\s+persist-credentials: false/);
+
+  assert.match(deployJob, /^\s+needs: build-mise2\n/);
+  assert.doesNotMatch(deployJob, /npm (ci|run)\b|\bnpx\b|\bvite\b/,
+    'the job holding the credential builds nothing');
+  assert.deepEqual([...deployJob.matchAll(/npm install[^\n]*/g)].map(m => m[0]),
+    ['npm install --global firebase-tools@15.26.0'],
+    'the one package the credential job installs is the pinned firebase-tools');
+  assert.match(deployJob, /uses: actions\/download-artifact@v8\n\s+with:\n\s+name: mise2-site\n\s+path: \$\{\{ runner\.temp \}\}\/mise2-site/);
+  // Moved in BEFORE the symlink check, so the check covers it too.
+  const stage = deployJob.slice(deployJob.indexOf('Stage only the app\'s files'));
+  assert.ok(stage.indexOf('mv "$RUNNER_TEMP/mise2-site" _site/mise2') > 0);
+  assert.ok(stage.indexOf('mv "$RUNNER_TEMP/mise2-site" _site/mise2') < stage.indexOf('find _site -type l'));
+});
+
+test('the leak check also proves Mise 2\'s source is not served and its page is', () => {
+  const check = workflow.slice(workflow.indexOf('Prove nothing internal is being served'));
+  for (const path of ['app/package.json', 'app/src/main.tsx', 'shared/package.json', 'mise2/package.json']) {
+    assert.ok(check.includes(path), path);
+  }
+  assert.match(check, /\[ "\$\(code mise2\/index\.html\)" = 200 \]/);
+});
+
 test('the deploy job cannot hang for hours', () => {
   assert.match(workflow, /timeout-minutes: 15/);
   assert.match(workflow, /curl -s --max-time 15/);
