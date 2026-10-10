@@ -6,7 +6,7 @@
   "description": "Mise 2: the tablet-first single-page app (React + TypeScript + Vite). Not served to staff until the switch (step 5 of the Mise 2 plan).",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "tsc --noEmit -p . && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit -p .",
     "test": "vitest run"
