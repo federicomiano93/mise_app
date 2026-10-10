@@ -59,6 +59,18 @@ export const en = {
   'auth.err.offline': 'No connection. The first sign-in on a device needs internet.',
   'auth.err.generic': 'Could not sign in. Please try again.',
 
+  'auth.logOut': 'Log out',
+  'auth.logOut.title': 'Log out?',
+  'auth.logOut.message': 'You will need your email and password to get back in.',
+  // Asked only when something typed on this phone is still waiting for signal: signing out or
+  // switching venue clears the copy it is waiting in.
+  'unsent.title': 'Not sent yet',
+  'unsent.message': 'Some changes made on this phone have not reached the server yet — usually because there is no signal. If you go on now, they will be lost.',
+  'unsent.leave': 'Go on anyway',
+  'unsent.stay': 'Stay',
+
+  'account.switchVenue': 'Switch venue',
+
   'placeholder.title': 'This section will arrive in one of the next steps of Mise 2.',
   'placeholder.body': 'Until then, keep using the app you use today.',
 

@@ -41,6 +41,16 @@ export const it: Messages = {
   'auth.err.offline': 'Nessuna connessione. Il primo accesso su un dispositivo richiede internet.',
   'auth.err.generic': 'Accesso non riuscito. Riprova.',
 
+  'auth.logOut': 'Esci',
+  'auth.logOut.title': 'Vuoi uscire?',
+  'auth.logOut.message': 'Per rientrare ti serviranno email e password.',
+  'unsent.title': 'Non ancora inviato',
+  'unsent.message': 'Alcune modifiche fatte su questo telefono non sono ancora arrivate al server, di solito perché manca la rete. Se continui adesso, andranno perse.',
+  'unsent.leave': 'Continua lo stesso',
+  'unsent.stay': 'Resta qui',
+
+  'account.switchVenue': 'Cambia locale',
+
   'placeholder.title': 'Questa sezione arriverà in uno dei prossimi passi di Mise 2.',
   'placeholder.body': 'Nel frattempo continua a usare l’app di sempre.',
 
