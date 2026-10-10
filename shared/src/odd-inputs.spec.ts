@@ -9,7 +9,7 @@
 // Nothing here says what the right answer is (the behaviour specs do that). It only says the two
 // agree, so it never needs updating when the rules of a model change on purpose in both.
 
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test, vi } from 'vitest';
 import * as joinCode from './join-code';
 import * as pushModel from './push-model';
 import * as homeCards from './home-cards';
@@ -18,6 +18,9 @@ import * as allergenModel from './allergen-model';
 import * as sections from './sections';
 import * as firebaseTarget from './firebase-target';
 import * as localData from './local-data';
+import * as errorModel from './error-model';
+import * as deviceModel from './device-model';
+import * as usageModel from './usage-model';
 import * as legacyJoinCodeJs from '../../js/join-code.js';
 import * as legacyPushModelJs from '../../js/push-model.js';
 import * as legacyHomeCardsJs from '../../js/home-cards.js';
@@ -26,6 +29,9 @@ import * as legacyAllergenModelJs from '../../js/allergen-model.js';
 import * as legacySectionsJs from '../../js/sections.js';
 import * as legacyFirebaseTargetJs from '../../js/firebase-target.js';
 import * as legacyLocalDataJs from '../../js/local-data.js';
+import * as legacyErrorModelJs from '../../js/error-model.js';
+import * as legacyDeviceModelJs from '../../js/device-model.js';
+import * as legacyUsageModelJs from '../../js/usage-model.js';
 
 const legacyJoinCode = legacyJoinCodeJs as unknown as typeof joinCode;
 const legacyPushModel = legacyPushModelJs as unknown as typeof pushModel;
@@ -35,6 +41,9 @@ const legacyAllergenModel = legacyAllergenModelJs as unknown as typeof allergenM
 const legacySections = legacySectionsJs as unknown as typeof sections;
 const legacyFirebaseTarget = legacyFirebaseTargetJs as unknown as typeof firebaseTarget;
 const legacyLocalData = legacyLocalDataJs as unknown as typeof localData;
+const legacyErrorModel = legacyErrorModelJs as unknown as typeof errorModel;
+const legacyDeviceModel = legacyDeviceModelJs as unknown as typeof deviceModel;
+const legacyUsageModel = legacyUsageModelJs as unknown as typeof usageModel;
 
 // ── The machinery ────────────────────────────────────────────────────────────
 
@@ -515,4 +524,384 @@ describe('local-data: odd inputs', () => {
     }
     expect(disagreements).toStrictEqual([]);
   });
+});
+
+// ── Shared by the three telemetry models below ───────────────────────────────
+
+// `base` with one field at a time replaced by each of that field's values.
+const varying = (base: Record<string, unknown>, fields: Record<string, readonly unknown[]>): Record<string, unknown>[] =>
+  Object.entries(fields).flatMap(([field, values]) => values.map(value => ({ ...base, [field]: value })));
+
+// Something that is meant to be a Date, and things that are not. `undefined` is left out on
+// purpose: the parameter defaults to the clock, and the clock is tried below with a fixed one.
+const DATES: readonly unknown[] = [
+  new Date(2026, 0, 5, 23, 59), new Date(2026, 9, 9, 0, 1), new Date(2026, 11, 31, 23, 59, 59), new Date(2024, 1, 29),
+  new Date(NOW), new Date(0), new Date(NaN), new Date(8.64e15), new Date(-8.64e15), new Date(9999, 11, 31),
+  new Date(12345, 0, 1), new Date(-1, 0, 1),
+  ...ODD.filter(value => value !== undefined), 42, NOW, '2026-01-05',
+  { getFullYear: () => 2026, getMonth: () => 0, getDate: () => 5 },
+  { getFullYear: () => 'x', getMonth: () => NaN, getDate: () => undefined },
+  Object.create(Date.prototype), new Proxy(new Date(NOW), {}),
+];
+
+const DEVICE_IDS: readonly unknown[] = [...ODD, 'Ab3dEf6hIj9lMn2pQr5t', 'AbCdEfGhIjKlMnOpQrSt', 'Dev1ce2Id3Abc4Def5Gh', '', 'short',
+  'Ab3dEf6hIj9lMn2pQr5tX', 'Ab3dEf6hIj9lMn2pQr5', 'Ab3dEf6hIj9lMn2pQr5-', 'Ab3dEf6hIj9lMn2pQr5t\n', ' Ab3dEf6hIj9lMn2pQr5t',
+  'Ab3dEf6hIj9lMn2pQr5ü', '０１２３４５６７８９０１２３４５６７８９', 'a'.repeat(20), '0'.repeat(20),
+  new String('Ab3dEf6hIj9lMn2pQr5t')];
+const KIND_VALUES: readonly unknown[] = [...ODD, 'phone', 'tablet', 'computer', 'fridge', 'Phone', 'phone ', ' tablet', 'watch',
+  'toString', '__proto__', ['phone']];
+const VERSIONS: readonly unknown[] = [...ODD, '649', '643', '1', 'x'.repeat(12), 'x'.repeat(13), '123456789012', '1234567890123',
+  ' ', ' 649 ', 649, new String('649')];
+const LONG_STACK = Array.from({ length: 30 }, (_, i) => `    at f${i} (a.js:${i}:1)`).join('\n');
+const STACKS: readonly unknown[] = [...ODD, 'Error\n at x', 'a\r\nb\r\n', '   \n  \n', '\n\n\n', '  indented  \n trailing   \n',
+  LONG_STACK,
+  `Error\n${'x'.repeat(5000)}`, 'x'.repeat(2001), `${'x'.repeat(1999)}\ny`, new Error('with a real stack').stack, 12];
+const CODES: readonly unknown[] = [...ODD, 'unavailable', 'permission-denied', ' padded ', 'c'.repeat(60), 'c'.repeat(61),
+  `${'c'.repeat(60)} `, ' '.repeat(5), '\tx\n', 404, new Error('x')];
+
+// ── error-model ──────────────────────────────────────────────────────────────
+
+describe('error-model: odd inputs', () => {
+  const m = errorModel;
+  const l = legacyErrorModel;
+
+  const ERR = Object.assign(new Error('Missing   or\n insufficient permissions.'), { code: 'permission-denied' });
+  // Everything a window 'error', an 'unhandledrejection' or a console.error call could hand over.
+  const CAUGHT: readonly unknown[] = [...ODD, 'text', 'a'.repeat(400), '  ', '\n', '[2026-10-09T10:00:01Z]  x', 42, ERR,
+    new Error(''), new TypeError('x'),
+    Object.assign(new Error('e'), { code: 'c'.repeat(61) }), Object.assign(new Error('e'), { code: ' spaced ' }),
+    Object.assign(new Error('e'), { code: 404 }), { message: 'm' }, { message: 5 }, { message: '  ' },
+    { message: 'a'.repeat(400) }, { stack: 'Error\n at a' }, { stack: 5 },
+    { message: 'x', stack: LONG_STACK, code: 'unavailable' }, { message: 'x', code: 5 },
+    { client: 'Mrs Rossi', total: 12 }, () => 1, function named() { return 1; }, Symbol('s'), 5n,
+    new Date(NOW), /re/, Object.create(null), new Map(),
+    { get message(): string { throw new Error('boom'); } }];
+
+  const CONTEXTS = [undefined, {}, { filename: 'https://x.test/js/a.js' }, { filename: '' }, { filename: 5 }, { filename: null },
+    { message: 'Script error.' }, { message: 5 }, { message: '' }, { message: null }, { message: '  spaced  ', filename: 'f.js' },
+    null, 'text', 5];
+  agree('recordFromError', m.recordFromError, l.recordFromError, product(CAUGHT, CONTEXTS));
+  agree('recordFromRejection', m.recordFromRejection, l.recordFromRejection, product(CAUGHT));
+
+  const ARG_LISTS: readonly unknown[] = [...ODD, 'text', 42, [ERR], ['saveLogDoc failed:', ERR],
+    ['order', { client: 'Mrs Rossi', total: 12 }, 7], ['  ', '\n'], ['a'.repeat(400)],
+    ['[2026-10-09T10:00:01.123Z]  @firebase/firestore: Firestore (10.7.1): Could not reach Cloud Firestore backend.'],
+    ['saved at [2026-10-09T10:00:01Z]  ok'], [42, '[2026-10-09T10:00:01Z]  x'], ['[2026-10-09T10:00:01Z]'],
+    ['[2026-10-09T10:00:01Z]  '], ['[2026-10-09T10:00:01Z]  [2026-10-09T10:00:02Z]  twice'],
+    [ERR, 'second'], [null, undefined], [undefined, ERR], [() => 1, Symbol('s'), 5n], [, 'a'],
+    ...CAUGHT.map(item => [item]), ...CAUGHT.map(item => ['first', item])];
+  agree('recordFromConsole', m.recordFromConsole, l.recordFromConsole, product(ARG_LISTS));
+
+  agree('trimStack', m.trimStack, l.trimStack, product(STACKS));
+  agree('cleanCode', m.cleanCode, l.cleanCode, product(CODES));
+
+  const TRACE = 'TypeError: x\n    at render (orders.js:10:2)\n    at other (b.js:1:1)';
+  const SIGNED: readonly unknown[] = [...ODD, 'record', 42,
+    { source: 'error', message: 'm'.repeat(200), stack: TRACE }, { source: 'console', message: 'x', stack: null },
+    { source: 'error', message: 'x', stack: 'fn@https://a.test/x.js:1:1' }, { message: 'x' }, { source: 'error' },
+    { source: 5, message: 5, stack: 5 }, { stack: 'no frame\njust text' }, { stack: '  at   spaced  \n' },
+    { stack: `at ${'x'.repeat(300)}` }, { source: null }, { source: undefined, message: undefined }, { message: 0 },
+    { message: '' }, { message: ['a'] }, { message: { toString: () => 'obj' } },
+    { message: { toString() { throw new Error('boom'); } } }, { source: 'rejection', message: 'm', stack: 'x@y\nat z' },
+    ...varying({ source: 'error', message: 'm', stack: TRACE }, { stack: STACKS, message: ['', 'x'.repeat(130), 7, null] })];
+  agree('signature', m.signature, l.signature, product(SIGNED));
+
+  const NOISY: readonly unknown[] = [...ODD, 'record', 42,
+    { message: 'ResizeObserver loop limit exceeded' }, { message: 'ResizeObserver loop completed with undelivered notifications.' },
+    { message: 'Script error.', stack: null }, { message: 'Script error.', stack: 'at x' }, { message: 'script error' },
+    { message: '  SCRIPT ERROR.  ' }, { message: 'Script error..' }, { message: 'Script error.', stack: '' },
+    { message: 'boom' }, { message: 'real problem', stack: 'at x' },
+    ...[null, undefined, '', 5, 'chrome-extension://abc/content.js', 'https://app.test', 'https://app.test/',
+      'https://app.test/js/a.js', 'https://app.test.evil.com/a.js', 'https://other.test/a.js', 'app.test', '/js/a.js',
+      'https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js', 'https://www.gstatic.com.evil.test/firebasejs/x.js',
+      'https://www.gstatic.com/other/x.js', 'https://www.gstatic.com/firebasejs/', { toString: () => 'https://app.test/a.js' }]
+      .map(filename => ({ message: 'boom', filename }))];
+  const ORIGINS = [undefined, {}, { origin: 'https://app.test' }, { origin: 'https://app.test/' }, { origin: '' },
+    { origin: null }, { origin: 5 }, { origin: 'app.test' }, { origin: ['https://app.test'] }, null, 'text', 5];
+  agree('isNoise', m.isNoise, l.isNoise, product(NOISY, ORIGINS));
+
+  const DAY = '2026-10-09';
+  const MANY = Array.from({ length: 30 }, (_, i) => `s${i}`);
+  const STATES: readonly unknown[] = [...ODD, 'text', 5, { day: DAY }, { day: DAY, count: 1, sigs: ['a'] },
+    { day: DAY, count: -3, sigs: [1, 'a'] }, { day: DAY, count: 'many', sigs: 'no' }, { day: DAY, count: 500, sigs: [] },
+    { day: DAY, count: 1.5, sigs: [] }, { day: DAY, count: NaN }, { day: DAY, count: Infinity },
+    { day: DAY, count: 3, sigs: ['a'] }, { day: DAY, count: 0, sigs: ['a', 'b', 'c'] }, { day: DAY, sigs: MANY },
+    { day: DAY, count: 30, sigs: MANY }, { day: DAY, count: 19, sigs: ['a'] }, { day: DAY, count: 20, sigs: ['a'] },
+    { day: '2026-10-08', count: 5, sigs: ['a'] }, { day: DAY, sigs: [null, undefined, 5, 'x'] }, { day: DAY, count: 5n },
+    { day: DAY, count: '5' }, { day: DAY, count: -0 }, { day: DAY, count: 2 ** 53 }, { day: DAY, sigs: { length: 2 } },
+    { day: DAY, sigs: ['a', 'a'] }, { day: DAY, sigs: new Set(['a']) }, { day: DAY, sigs: [, 'a'] }, { day: undefined },
+    { day: 5 }, Object.create({ day: DAY, count: 3 }), Object.assign(['a'], { day: DAY })];
+  const TODAYS = [DAY, '2026-10-10', '', undefined, null, 5];
+  agree('normaliseState', m.normaliseState, l.normaliseState, product(STATES, TODAYS));
+  agree('shouldSend', m.shouldSend, l.shouldSend,
+    product(STATES, ['sig-a', 'a', 'b', 's29', '', undefined, 5, null, 'x'.repeat(500)], TODAYS));
+
+  const PATHS: readonly unknown[] = [...ODD, '/mise_app/orders.html', '/mise_app/', '/', '/mise_app/orders.HTML', '/mise_app/we ird.html',
+    '/mise_app/orders', 'orders.html', 'index.html', '/a/b/c.html', '/a//', '/mise_app/orders.html.html', '/mise_app/ünï.html',
+    `/mise_app/${'a'.repeat(100)}.html`, '/mise_app/a-b_c.html', '/mise_app/.html', 'C:\\x\\y.html',
+    '/mise_app/orders.html?x=1', '/mise_app/orders.html#a', { toString: () => '/mise_app/orders.html' }, ['x.html'],
+    Symbol('p'), 5n, Object.create(null)];
+  const HASHES: readonly unknown[] = [...ODD, '', '#suppliers', '#Sam-Rossi', '#a-very-long-hash-that-may-be-a-token',
+    '#a=b', '#', '#a', `#${'a'.repeat(20)}`, `#${'a'.repeat(21)}`, '#a b', '#-', 'suppliers', '#suppliers\n', '#ünï', '#a_b',
+    new String('#suppliers')];
+  agree('screenName', m.screenName, l.screenName, product(PATHS, HASHES));
+
+  const RECORD = { source: 'console', message: 'boom', code: 'unavailable', stack: 'Error\n at x', filename: 'secret.js' };
+  const WHO = { screen: 'orders', appVersion: '649', deviceId: 'Dev1ce2Id3Abc4Def5Gh', kind: 'tablet', online: true };
+  const RECORDS: readonly unknown[] = [...ODD, 'record', 42, RECORD, { source: 'log', message: 'x' }, { source: 'error', message: '' },
+    { source: 'error', message: 5 }, { source: 'error', message: 'm'.repeat(400) }, { source: 'rejection', message: 'x', code: 5, stack: 5 },
+    { source: 'toString', message: 'x' }, { source: ['error'], message: 'x' }, { source: 'Error', message: 'x' },
+    { source: 'error ', message: 'x' }, { source: 'error', message: new String('x') },
+    ...varying(RECORD, { source: ['error', 'rejection', 'console', ...ODD], message: ['x', ' spaced ', ...ODD, 'm'.repeat(300), 'm'.repeat(301)],
+      code: CODES, stack: STACKS })];
+  agree('errorPayload', m.errorPayload, l.errorPayload, [
+    [], [undefined], [null], [RECORD, null], [RECORD, 'text'], [RECORD, 5],
+    ...product(RECORDS, [undefined, {}, WHO]),
+    ...varying(WHO, {
+      screen: [...ODD, 'orders', 's'.repeat(60), 's'.repeat(61), ' '],
+      appVersion: VERSIONS,
+      deviceId: DEVICE_IDS,
+      kind: KIND_VALUES,
+      online: [...ODD, true, 'true', 1],
+    }).map(who => [RECORD, who]),
+  ]);
+});
+
+// ── device-model ─────────────────────────────────────────────────────────────
+
+describe('device-model: odd inputs', () => {
+  const m = deviceModel;
+  const l = legacyDeviceModel;
+
+  // Sides and pointers nobody planned for: the 600 edge, text that reads as a number, signs, other
+  // types, a value that cannot be turned into a number at all.
+  const SIDES: readonly unknown[] = [...ODD, 360, 599, 599.9, 600, 600.1, 800, 1024, 1920, '600', ' 600 ', '0x258', '1e3', -600,
+    [600], [], new Date(600), 600n, Symbol('side')];
+  const COARSE = [...ODD, 'coarse', 'false', 1];
+  agree('deviceKind', m.deviceKind, l.deviceKind, [[], [undefined], [null], ['text'], [5],
+    ...product(SIDES, SIDES, COARSE).map(([width, height, coarse]) => [{ width, height, coarse }]),
+    ...product(SIDES, COARSE).map(([width, coarse]) => [{ width, coarse }]),
+    ...product(SIDES, COARSE).map(([height, coarse]) => [{ height, coarse }])]);
+
+  const BYTES: readonly unknown[] = [...ODD, 'abc', 'a'.repeat(30), Uint8Array.from({ length: 64 }, (_, i) => (i * 3) % 256),
+    new Uint8Array(64).fill(255), new Uint8Array(20), new Uint8Array(19), new Uint8Array(21),
+    [255, 250, 248, ...Array(20).fill(0)], [1, 2, 3], Array(20).fill(247), Array(20).fill(248), Array(20).fill(61),
+    Array(20).fill(62), Array(25).fill(-1), Array(20).fill(1.5), Array(20).fill('1'), Array(20).fill(NaN),
+    Array(40).fill(null), Array(30), { length: 20 }, { length: 30, 0: 5 }, { length: '20' },
+    Array.from({ length: 20 }, (_, i) => i), Array.from({ length: 64 }, (_, i) => i * 4),
+    Float64Array.from({ length: 30 }, (_, i) => i * 2), new Set([1]), new Map(), Array(30).fill(5n), Array(30).fill(true)];
+  agree('newDeviceId', m.newDeviceId, l.newDeviceId, product(BYTES));
+  agree('isValidDeviceId', m.isValidDeviceId, l.isValidDeviceId, product(DEVICE_IDS));
+
+  agree('localDayKey', m.localDayKey, l.localDayKey, product(DATES));
+
+  // The default is the clock, so it is tried with a fixed one: the day just before midnight.
+  test('localDayKey: the same answer with no date, at a fixed clock', () => {
+    vi.useFakeTimers();
+    try {
+      for (const now of [new Date(2026, 9, 9, 23, 59, 59), new Date(2026, 0, 1, 0, 0, 0), new Date(2024, 1, 29, 12)]) {
+        vi.setSystemTime(now);
+        expect(outcome(() => m.localDayKey())).toStrictEqual(outcome(() => l.localDayKey()));
+      }
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // Sessions nobody planned for: not ready, no venue, no person, a person without a uid, the right
+  // shape with the wrong types.
+  const READY = { status: 'ready', locationId: 'bakery', user: { uid: 'u1' } };
+  const SESSIONS: readonly unknown[] = [...ODD, 'session', 42, READY, { ...READY, user: { uid: 'u1', email: 'a@b.c' } },
+    ...varying(READY, {
+      status: [...ODD, 'loading', 'ready ', 'Ready', 'signed-out'],
+      locationId: [...ODD, 'restaurant', ' bakery', 'bakery ', 'Bakery', 'loc-e015733e55e7', new String('bakery')],
+      user: [...ODD, {}, { uid: '' }, { uid: 'u2' }, { uid: 5 }, { uid: 0 }, { uid: ' u1' }, { uid: 'U1' }, { uid: ['u1'] }, 'u1'],
+    })];
+  agree('sameSession', m.sameSession, l.sameSession, product(SESSIONS, SESSIONS));
+
+  const STAMPS: readonly unknown[] = [...ODD, '2026-10-09', '2026-10-08', '2026-10-09 ', 20261009, new Date(NOW), '20261009'];
+  const KEYS: readonly unknown[] = [...ODD, '2026-10-09', '2026-10-08', '2026-1-9', '2026-10-09\n', ' 2026-10-09', '２０２６-10-09',
+    '2026-10-09T10:00', '0000-00-00', '9999-99-99', '2026/10/09', new String('2026-10-09')];
+  agree('dueToday', m.dueToday, l.dueToday, product(STAMPS, KEYS));
+
+  const FACTS = { locationId: 'bakery', uid: 'u1', kind: 'tablet', appVersion: '643', installed: true };
+  agree('devicePayload', m.devicePayload, l.devicePayload, [
+    [], [undefined], [null], [{}], ['text'], [5], [FACTS], [{ ...FACTS, email: 'a@b.c', name: 'X' }],
+    ...varying(FACTS, {
+      locationId: [...ODD, 'restaurant', 'x'.repeat(200), 'a/b', 'loc-e015733e55e7', ' bakery', new String('bakery')],
+      uid: [...ODD, 'u2', ' u1 ', 'x'.repeat(200), new String('u1')],
+      kind: KIND_VALUES,
+      appVersion: VERSIONS,
+      installed: [...ODD, true, 'true', 'yes', 1, new Boolean(true)],
+    }).map(facts => [facts]),
+  ]);
+});
+
+// ── usage-model ──────────────────────────────────────────────────────────────
+
+describe('usage-model: odd inputs', () => {
+  const m = usageModel;
+  const l = legacyUsageModel;
+
+  agree('newAcc', m.newAcc, l.newAcc, [[], [undefined], [{ screens: { orders: 1 } }], ['text']]);
+
+  // Accumulators to start from. The functions that change one are given a FRESH copy per
+  // implementation, and both the answer and what is left in it must match: caps (a map one short
+  // of full sends a new key to 'other'), damaged numbers, a frozen object, and things that are not
+  // an accumulator at all.
+  const counts = (size: number, key: (i: number) => string): Record<string, number> =>
+    Object.fromEntries(Array.from({ length: size }, (_, i) => [key(i), 1]));
+  const emptyAcc = (): Record<string, unknown> => ({
+    screens: {}, seconds: {}, taps: {}, routes: {}, actions: {}, loads: {}, loadMs: {},
+    firstMinute: null, lastMinute: null, offlineSeconds: 0,
+  });
+  const nearlyFull = (): Record<string, unknown> => ({
+    ...emptyAcc(),
+    screens: counts(79, i => `p${i}`), seconds: counts(79, i => `p${i}`), taps: counts(79, i => `p${i}`),
+    routes: counts(299, i => `s${i}>t${i}`), actions: counts(39, i => `act-${i}`),
+    loads: counts(19, i => `pg${i}`), loadMs: counts(19, i => `pg${i}`),
+  });
+  const ACC_MAKERS: readonly (readonly [string, () => unknown])[] = [
+    ['empty', emptyAcc],
+    ['already counting', () => ({
+      ...emptyAcc(), screens: { orders: 3, index: 1 }, seconds: { orders: 30 }, taps: { orders: 2 },
+      routes: { 'index>orders': 2, other: 1 }, actions: { 'order-sent': 2 }, loads: { orders: 4 }, loadMs: { orders: 4000 },
+    })],
+    ['every map one short of its cap', nearlyFull],
+    ['every map one short of its cap, with other', () => {
+      const acc = nearlyFull();
+      for (const name of ['screens', 'seconds', 'taps', 'routes', 'actions', 'loads', 'loadMs']) {
+        (acc[name] as Record<string, number>).other = 5;
+      }
+      return acc;
+    }],
+    ['minutes and offline set', () => ({ ...emptyAcc(), firstMinute: 100, lastMinute: 200, offlineSeconds: 86399 })],
+    ['offline at the ceiling', () => ({ ...emptyAcc(), offlineSeconds: 86400 })],
+    ['minutes at the edges', () => ({ ...emptyAcc(), firstMinute: 0, lastMinute: 1439 })],
+    ['damaged counts', () => ({
+      ...emptyAcc(), screens: { orders: 'x', index: undefined, nul: null }, seconds: { orders: 'x' }, taps: { orders: NaN },
+      routes: { 'a>b': 'x' }, actions: { 'order-sent': undefined }, loads: { orders: 'x' }, loadMs: { orders: null },
+    })],
+    ['damaged minutes and offline', () => ({ ...emptyAcc(), firstMinute: 'x', lastMinute: undefined, offlineSeconds: 'lots' })],
+    ['offline undefined', () => ({ ...emptyAcc(), offlineSeconds: undefined })],
+    ['frozen', () => Object.freeze(emptyAcc())],
+    ['maps missing', () => ({})],
+    ['maps null', () => ({ ...emptyAcc(), screens: null, routes: null })],
+    ['null', () => null],
+    ['undefined', () => undefined],
+    ['a string', () => 'text'],
+    ['a number', () => 5],
+    ['an array', () => []],
+  ];
+
+  type AnyAccFn = (...args: any[]) => unknown;
+  function agreeOnAcc(name: string, mine: AnyAccFn, theirs: AnyAccFn, argLists: readonly (readonly unknown[])[]): void {
+    test(`${name}: the same answer and the same accumulator for ${argLists.length} odd inputs on ${ACC_MAKERS.length} accumulators`, () => {
+      const disagreements: string[] = [];
+      for (const [label, make] of ACC_MAKERS) {
+        for (const args of argLists) {
+          const accMine = make();
+          const accTheirs = make();
+          const a = { result: outcome(() => mine(accMine, ...args)), acc: accMine };
+          const b = { result: outcome(() => theirs(accTheirs, ...args)), acc: accTheirs };
+          try {
+            expect(a).toStrictEqual(b);
+          } catch {
+            disagreements.push(`${name}(${label}, ${args.map(show).join(', ')}): ported ${show(a)} / current ${show(b)}`);
+          }
+        }
+      }
+      expect(disagreements.slice(0, 10)).toStrictEqual([]);
+    });
+  }
+
+  // Names nobody planned for: the regex edges, case, spaces, a trailing newline, a name already in
+  // the full map's keys, names that sit on the prototype chain, other types.
+  const NAMES: readonly unknown[] = [...ODD, 'orders', 'orders:supplier', 'Orders', 'a'.repeat(40), 'a'.repeat(41), 'has space',
+    'orders\n', ' orders', 'a-b:c-9', '-', ':', 'constructor', '__proto__', 'toString', 'hasOwnProperty', 'other', 'ünï',
+    'new-screen', 'p0', 'p78', 'index', 42, Symbol('name'), new String('orders')];
+  const SHORT_NAMES = [undefined, null, 42, '', 'orders', 'Orders', 'bad name', 'a'.repeat(41), 'new-screen', 'other', 'p0'];
+  agreeOnAcc('addScreen', m.addScreen, l.addScreen, product(NAMES));
+  agreeOnAcc('addTap', m.addTap, l.addTap, product(NAMES));
+
+  const ENDS: readonly unknown[] = [...ODD, 'index', 'orders', 'orders:supplier', 'Bad Name', 'a'.repeat(40), 'a'.repeat(41), '-',
+    'a>b', 'a>', '>b', 'x\n', 's0', 't0', 'new-screen', 'other', 5];
+  agreeOnAcc('addRoute', m.addRoute, l.addRoute, product(ENDS, ENDS));
+
+  // Amounts nobody planned for: halves (Math.round), signs, exponents, text, other types, and one
+  // that cannot be turned into a number at all.
+  const AMOUNTS: readonly unknown[] = [...ODD, 14.6, 14.5, 15.5, 0.4, 0.5, -0.5, -5, 1e21, 1e309, '15', ' 15 ', '1e2', '0x10',
+    '1,5', 30.4, 999999, 86399, 86400, 86401, 2 ** 53, [5], [5, 6], new Date(5), 5n, new Number(7), Symbol('amount')];
+  agreeOnAcc('addSeconds', m.addSeconds, l.addSeconds, product(SHORT_NAMES, AMOUNTS));
+  agreeOnAcc('addLoad', m.addLoad, l.addLoad, product(SHORT_NAMES, [...AMOUNTS, 59999, 60000, 60001, 1200.4]));
+  agreeOnAcc('addOffline', m.addOffline, l.addOffline, product(AMOUNTS));
+
+  const ACTIONS: readonly unknown[] = [...ODD, 'order-sent', 'Order-Sent', '1st', 'has space', 'a'.repeat(40), 'a'.repeat(41), 'a',
+    'a-', '-a', 'act-0', 'act-38', 'new-action', 'other', 'a_b', 'a\n', 5];
+  agreeOnAcc('addAction', m.addAction, l.addAction, product(ACTIONS));
+
+  const MOMENTS: readonly unknown[] = [...ODD, new Date(2026, 9, 9, 10, 30), new Date(2026, 9, 9, 7, 5), new Date(2026, 9, 9, 23, 59),
+    new Date(2026, 9, 9, 0, 0), new Date(2026, 9, 9, 0, 1), new Date('nope'), new Date(NaN), { getTime: () => 1 }, NOW,
+    '2026-10-09', Object.create(Date.prototype), new Proxy(new Date(NOW), {})];
+  agreeOnAcc('touchMinute', m.touchMinute, l.touchMinute, product(MOMENTS));
+
+  // What a stored accumulator could have turned into, one field at a time and a few together.
+  const MAP_NAMES = ['screens', 'seconds', 'taps', 'routes', 'actions', 'loads', 'loadMs'];
+  const MAP_VALUES: readonly unknown[] = [null, undefined, 'text', 5, true, [], ['orders'], [1, 2], {}, { orders: 1 }, { orders: '2' },
+    { orders: -1 }, { orders: 0.4 }, { orders: 2.5 }, { orders: NaN }, { orders: Infinity }, { orders: null }, { orders: [3] },
+    { 'a>b': 1, other: 2 }, { other: 3 }, { 'BAD KEY': 1 }, { 'new-key': 1, 'a>b': 1, 'order-sent': 1 }, { constructor: 1 },
+    JSON.parse('{"__proto__":{"orders":1}}'), Object.create({ orders: 5 }), counts(100, i => `p${i}`),
+    counts(400, i => `s${i}>t${i}`), counts(50, i => `act-${i}`), counts(25, i => `pg${i}`)];
+  const MINUTES: readonly unknown[] = [...ODD, 0, 1, 7, 480, 1020, 1439, 1440, -1, 100.5, '100', 570, 2 ** 31, new Date(0)];
+  const GOOD_EXTRA = {
+    screens: { orders: 2, index: 1 }, seconds: { orders: 30 }, taps: { orders: 2 }, routes: { 'index>orders': 2 },
+    actions: { 'order-sent': 1 }, loads: { orders: 4 }, loadMs: { orders: 4000 }, firstMinute: 480, lastMinute: 1020, offlineSeconds: 20,
+  };
+  const DIRTY_EXTRA = {
+    screens: { ok: 3, 'BAD KEY': 5, neg: -2, nan: 'x', frac: 2.6 }, routes: { 'a>b': 1, nothing: 4, other: 2 },
+    actions: { 'good-one': 1, Bad: 2 }, firstMinute: 1440, lastMinute: -3, offlineSeconds: 'lots', extra: { whatever: 1 },
+  };
+  const EXTRAS: readonly unknown[] = [...ODD, 'junk', 42, GOOD_EXTRA, DIRTY_EXTRA, emptyAcc(),
+    ...MAP_NAMES.flatMap(name => MAP_VALUES.map(value => ({ [name]: value }))),
+    ...MINUTES.map(firstMinute => ({ firstMinute })), ...MINUTES.map(lastMinute => ({ lastMinute })),
+    ...MINUTES.map(firstMinute => ({ firstMinute, lastMinute: 1000 })), ...MINUTES.map(lastMinute => ({ firstMinute: 100, lastMinute })),
+    ...AMOUNTS.map(offlineSeconds => ({ offlineSeconds }))];
+  agreeOnAcc('mergeAcc', m.mergeAcc, l.mergeAcc, product(EXTRAS));
+  agree('cleanAcc', m.cleanAcc, l.cleanAcc, product(EXTRAS));
+
+  agree('isEmptyAcc', m.isEmptyAcc, l.isEmptyAcc, [
+    ...ACC_MAKERS.map(([, make]) => [make()]),
+    ...[GOOD_EXTRA, DIRTY_EXTRA, ...MAP_NAMES.map(name => ({ [name]: { orders: 1 } }))].map(extra => [m.cleanAcc(extra)]),
+    ...ODD.map(value => [value]), [], ['text'], [5],
+  ]);
+
+  agree('dayKeyOf', m.dayKeyOf, l.dayKeyOf, product(DATES));
+  test('dayKeyOf: the same answer with no date, at a fixed clock', () => {
+    vi.useFakeTimers();
+    try {
+      for (const now of [new Date(2026, 9, 9, 23, 59, 59), new Date(2026, 0, 1, 0, 0, 0), new Date(2024, 1, 29, 12)]) {
+        vi.setSystemTime(now);
+        expect(outcome(() => m.dayKeyOf())).toStrictEqual(outcome(() => l.dayKeyOf()));
+      }
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  const DAY_KEYS: readonly unknown[] = [...ODD, '20261009', '2026-10-09', '19991231', '20000101', '20991231', '2100010', '201234567',
+    '20261009\n', '2026100', '202610090', ' 20261009', '２０２６１００９', new String('20261009')];
+  const UIDS: readonly unknown[] = [...ODD, 'u1', 'a/b', 'x'.repeat(128), 'x'.repeat(129), 'ABC123', 'u-1', 'u_1', 'u1\n', ' u1',
+    new String('u1')];
+  agree('docId', m.docId, l.docId, product(DEVICE_IDS, DAY_KEYS, UIDS));
+
+  const WHO = { deviceId: 'AbCdEfGhIjKlMnOpQrSt', dayKey: '20261009', kind: 'phone', appVersion: '649' };
+  const ACC_VALUES: readonly unknown[] = [...ODD, 'junk', 42, ...ACC_MAKERS.map(([, make]) => make()), GOOD_EXTRA, DIRTY_EXTRA,
+    ...MAP_NAMES.map(name => ({ [name]: { 'a>b': 1, orders: 2, 'order-sent': 3, other: 4, 'BAD KEY': 5 } })),
+    { ...GOOD_EXTRA, firstMinute: 1000, lastMinute: 100 }, { ...GOOD_EXTRA, offlineSeconds: 99999 }];
+  agree('payloadOf', m.payloadOf, l.payloadOf, [
+    ...product(ACC_VALUES, [undefined, {}, null, 'text', 5, WHO]),
+    ...varying(WHO, { deviceId: DEVICE_IDS, dayKey: DAY_KEYS, kind: KIND_VALUES, appVersion: VERSIONS })
+      .flatMap(who => [[GOOD_EXTRA, who], [emptyAcc(), who]]),
+    ...ACC_VALUES.map(acc => [acc, WHO]),
+  ]);
 });
