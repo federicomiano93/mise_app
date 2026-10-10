@@ -1,4 +1,4 @@
-const CACHE_NAME = 'theitalianclub-v659';
+const CACHE_NAME = 'theitalianclub-v661';
 // Firebase SDK modules (loaded from gstatic) are cached SEPARATELY from CACHE_NAME
 // so they survive the cache-version bump that happens on every deploy — otherwise
 // the offline SDK would be wiped each release until the next online load. The name
@@ -15,7 +15,7 @@ const CACHE_NAME = 'theitalianclub-v659';
 // itself failed.
 // So between activate() and that first load, a phone that is OFFLINE cannot boot:
 // the code asks for the new version and nothing has it. In practice the window is very
-// small — activate() only happens after a successful 48-file precache, i.e.
+// small — activate() only happens after a successful 67-file precache, i.e.
 // online, and tapping the update banner reloads the page immediately — but it is
 // not zero, and it is the reason to bump the SDK deliberately rather than often.
 // Leaving the name unchanged would close the window and cost ~1 MB of dead
@@ -70,7 +70,30 @@ const ASSETS = [
   './dist/orders.js',
   './dist/suppliers.js',
   './dist/install-guide.js',
-  './dist/reset-password.js',
+  // reset-password.html is DELIBERATELY NOT BUNDLED (bundle-lib NATIVE_MODULE_PAGES): its boot file
+  // must draw «Checking your link…» and forward other email actions without the Firebase SDK, which a
+  // bundle would make it wait for. So its own modules are listed one by one, as before the bundles —
+  // everything its three module tags and the lazy reset-password.js reach.
+  './js/allergen-model.js',
+  './js/calculator-config.js',
+  './js/credentials.js',
+  './js/currency.js',
+  './js/firebase-target.js',
+  './js/firebase.js',
+  './js/i18n-dom.js',
+  './js/i18n.js',
+  './js/keyboard-done.js',
+  './js/local-data.js',
+  './js/location.js',
+  './js/market.js',
+  './js/preview-ribbon.js',
+  './js/reset-password-boot.js',
+  './js/reset-password.js',
+  './js/roles.js',
+  './js/same-data.js',
+  './js/sections.js',
+  './js/sw-update.js',
+  './js/update-gate.js',
   './dist/catalogue.js',
   './dist/pastries.js',
   './dist/foodcost.js',
@@ -125,18 +148,37 @@ const ASSET_HASHES = {
   "./orders.html": '6fed1c46f516e18d',
   "./suppliers.html": '9626d903f397696e',
   "./install-guide.html": '322c79acf63896ef',
-  "./reset-password.html": '9972348a97c1cde0',
+  "./reset-password.html": '278e67d11c8b4a50',
   "./dist/i18n.js": '2e8c3410faf22cf1',
-  "./dist/index.js": '7308a5c3ab17b47c',
-  "./dist/calculator.js": '27a97cd35ccc0fe0',
-  "./dist/orders.js": '077dfe129d69b2dd',
-  "./dist/suppliers.js": 'c30ac5fdeaddb7e0',
-  "./dist/install-guide.js": '9ff9090c9964f07c',
-  "./dist/reset-password.js": '394f7297cd16e7e5',
-  "./dist/catalogue.js": '7e1e34a6e3ff54f9',
-  "./dist/pastries.js": '6c3a234f116fabe0',
-  "./dist/foodcost.js": 'caf94da421d899ca',
-  "./dist/inventory.js": '0d726b0a42e99651',
+  "./dist/index.js": '9a2bec34d7a908ee',
+  "./dist/calculator.js": '5fe9d84bfa7dffbd',
+  "./dist/orders.js": '9fa06696e7d42d9e',
+  "./dist/suppliers.js": '13749f4d39b1918f',
+  "./dist/install-guide.js": '86df880954faeae9',
+  "./js/allergen-model.js": 'a9ad7592da832a56',
+  "./js/calculator-config.js": '65e76f83f8458dbb',
+  "./js/credentials.js": 'b805f88d003ea918',
+  "./js/currency.js": '241b1dbdf4cc465f',
+  "./js/firebase-target.js": 'b3759997e54ddbc3',
+  "./js/firebase.js": '3652fda906848824',
+  "./js/i18n-dom.js": '24249af4367511e5',
+  "./js/i18n.js": '662cbbc54446f157',
+  "./js/keyboard-done.js": 'de05a6dd1f3aac26',
+  "./js/local-data.js": '91aa7f1699c897a1',
+  "./js/location.js": '6aaf53615a8739d1',
+  "./js/market.js": 'b9b3e27e43e99dd4',
+  "./js/preview-ribbon.js": 'ee39b7ee13f78c02',
+  "./js/reset-password-boot.js": '9c3e1fca587f872c',
+  "./js/reset-password.js": '82c76584ef73d006',
+  "./js/roles.js": '7a7c5cf34d57f511',
+  "./js/same-data.js": '11ff91c9b0192d20',
+  "./js/sections.js": 'abcfdecb2bd5766d',
+  "./js/sw-update.js": '2ffc253aa03eff0f',
+  "./js/update-gate.js": '1801738b3e6def2d',
+  "./dist/catalogue.js": 'fc22ccf20e2c0b58',
+  "./dist/pastries.js": '4f4a93cc17d49c3e',
+  "./dist/foodcost.js": 'f95d88260daae5e0',
+  "./dist/inventory.js": '39aca9c1cb76ccd5',
   "./qr.png": '761a95e5bc25e2ba',
   "./tokens.css": 'abeb621f95374e83',
   "./auth.css": '55b0bc1d41af5718',
@@ -152,7 +194,7 @@ const ASSET_HASHES = {
   "./fonts/instrument-serif-latin.woff2": '0ad69719cac6f45e',
   "./fonts/instrument-serif-latin-ext.woff2": '0caad588cab430ca',
   "./fonts/atkinson-next-digits.woff2": '99ffa5b0e9a45a2b',
-  "./js/splash-init.js": '0982bbf1d8228eab',
+  "./js/splash-init.js": 'c68474ad53893e48',
   "./catalogue.html": '6f3b2e2b9024e62e',
   "./catalogue.css": 'fdfd0ad245c37c26',
   "./label-print.css": 'ffbcdf4e7a627a2d',
@@ -196,7 +238,7 @@ const ASSET_HASHES = {
 // code against rules that deployed instantly, which is the very thing the gate exists
 // to prevent. Two things stand between that and a release: the test that every ASSETS
 // entry EXISTS (a mistyped path being the likeliest permanent cause), and this
-// project's post-deploy sweep, which already asks the live site for all 48 files.
+// project's post-deploy sweep, which already asks the live site for all 67 files.
 // ⚠️ NEITHER covers a device-specific failure — nobody has yet confirmed an update
 // landing on a real iPhone under this code.
 //
@@ -226,17 +268,22 @@ const SDK_MODULES = [
 // Never rejects: every failure is swallowed, so it can sit inside waitUntil beside the precache
 // without being able to fail or block the install. A module already in SDK_CACHE is not fetched
 // again; a download is stored under the same acceptance rule the fetch handler uses.
+// Each download is cut off after this long: a stalled gstatic connection must not hold the install.
+const SDK_WARM_TIMEOUT_MS = 30000;
+
 function warmSdkCache() {
   return caches.open(SDK_CACHE).then(cache => Promise.allSettled(SDK_MODULES.map(url =>
     cache.match(url).then(hit => {
       if (hit) return null;
-      return fetch(url, { mode: 'cors' }).then(res => {
+      const stop = new AbortController();
+      const timer = setTimeout(() => stop.abort(), SDK_WARM_TIMEOUT_MS);
+      return fetch(url, { mode: 'cors', signal: stop.signal }).then(res => {
         if (res && res.status === 200 && !res.redirected &&
             (res.type === 'cors' || res.type === 'basic')) {
           return cache.put(url, res.clone());
         }
         return null;
-      });
+      }).finally(() => clearTimeout(timer));
     })
   ))).catch(() => {});
 }

@@ -22,9 +22,11 @@ export function scriptsOfEntry(name) {
   return [...text.matchAll(LOADER)].map(m => posix.normalize(posix.join('js/pages', m[1])));
 }
 
-// html is the page's text. Every script its bundle tag(s) run.
+// html is the page's text. Every script it runs, in order: a bundle tag stands for its entry's
+// scripts; a page on the native-module allowlist (reset-password.html) lists them in its own tags.
 export function pageScripts(html) {
-  return [...String(html).matchAll(BUNDLE_TAG)].flatMap(m => scriptsOfEntry(m[1]));
+  const either = new RegExp(`${BUNDLE_TAG.source}|<script\\b[^>]*type="module"[^>]*\\bsrc="(js/[^"]+)"[^>]*>`, 'g');
+  return [...String(html).matchAll(either)].flatMap(m => (m[1] ? scriptsOfEntry(m[1]) : [m[2]]));
 }
 
 export function pageScriptsOf(pageFile) {

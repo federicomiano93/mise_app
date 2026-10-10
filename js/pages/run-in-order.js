@@ -11,9 +11,20 @@
 // in microtasks, with no network in between. All the scripts therefore still run before
 // DOMContentLoaded, exactly as deferred module tags did; an `await` at the top of an entry
 // would instead make the whole bundle one long module evaluation that other code cannot see.
-const report = globalThis.reportError || (err => setTimeout(() => { throw err; }));
+//
+// ⚠️ TWO THINGS THAT ARE NOT THE SAME AS SEPARATE TAGS, both accepted (10 Oct 2026):
+//  • A bundle imports the Firebase SDK at the top. If the SDK cannot load, NO script of the page
+//    runs — sw-update.js (the update banner) included. The splash failsafe therefore lives in the
+//    classic js/splash-init.js, which needs none of this. A fix still arrives: the browser checks
+//    for a new service worker by itself, and a waiting worker activates once the app is closed.
+//  • esbuild wraps each module in a lazy initialiser (`__esm`) that marks it DONE even when its
+//    top level threw. Natively a module that threw re-throws the same error to every importer;
+//    here a later script sees the module half-initialised and may fail with a secondary TypeError
+//    instead. The first error is still reported, and it is the one to read.
+const defaultReport = globalThis.reportError || (err => setTimeout(() => { throw err; }));
 
-export function runInOrder(loaders) {
+// report: where a failure goes (injected by the tests); the page uses the default above.
+export function runInOrder(loaders, report = defaultReport) {
   let chain = Promise.resolve();
   for (const load of loaders) chain = chain.then(load).catch(report);
   return chain;

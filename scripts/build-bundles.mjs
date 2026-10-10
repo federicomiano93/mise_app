@@ -27,16 +27,14 @@ import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as esbuild from 'esbuild';
 import {
-  ROOT, DIST_DIR, MANIFEST_FILE, PAGES_DIR, entryPages, readManifest, shaOfText, shaOfFile, toLF,
+  ROOT, DIST_DIR, MANIFEST_FILE, PAGES_DIR, BUILD_CONFIG as C, configSha, entryPages, readManifest, shaOfText,
+  shaOfFile, toLF,
 } from './bundle-lib.mjs';
 
-const I18N_SOURCE = 'js/i18n.js';
-const MINIFY = { minifyWhitespace: true, minifySyntax: true, minifyIdentifiers: false };
-// The oldest browsers the app already needs are 2020-era (optional chaining and nullish
-// coalescing are in the Firebase SDK itself), so nothing newer may be written into a bundle:
-// with a newer target the minifier would turn `a = a || b` into `a ||= b`, which those
-// browsers cannot parse.
-const TARGET = 'es2020';
+// Every option lives in BUILD_CONFIG (bundle-lib), whose fingerprint the manifest records.
+const I18N_SOURCE = C.i18nSource;
+const MINIFY = { minifyWhitespace: C.minifyWhitespace, minifySyntax: C.minifySyntax, minifyIdentifiers: C.minifyIdentifiers };
+const TARGET = C.target;
 
 const readLF = file => toLF(readFileSync(file, 'utf8'));
 const rel = abs => abs.replace(/\\/g, '/').slice(ROOT.replace(/\\/g, '/').length);
@@ -45,12 +43,12 @@ const plugins = [{
   name: 'mise-bundles',
   setup(build) {
     // The Firebase SDK (and any other https import) is loaded by the browser, as before.
-    build.onResolve({ filter: /^https?:\/\// }, args => ({ path: args.path, external: true }));
+    build.onResolve({ filter: new RegExp(C.externalUrlPattern) }, args => ({ path: args.path, external: true }));
     // Anything that lands on js/i18n.js becomes the sibling dist/i18n.js.
     build.onResolve({ filter: /i18n\.js$/ }, args => {
       if (args.kind === 'entry-point') return null;
       const abs = resolve(args.resolveDir, args.path);
-      return rel(abs) === I18N_SOURCE ? { path: './i18n.js', external: true } : null;
+      return rel(abs) === I18N_SOURCE ? { path: C.i18nExternalPath, external: true } : null;
     });
     // Every source is read with LF endings, whatever this checkout has.
     build.onLoad({ filter: /\.js$/, namespace: 'file' }, args => ({
@@ -72,14 +70,14 @@ export async function buildAll() {
     absWorkingDir: ROOT,
     entryPoints: pages.map(p => `${PAGES_DIR}/${p}.js`),
     outdir: DIST_DIR,
-    bundle: true,
-    format: 'esm',
-    splitting: false,
+    bundle: C.bundle,
+    format: C.format,
+    splitting: C.splitting,
     target: TARGET,
     ...MINIFY,
-    legalComments: 'eof',
-    sourcemap: 'linked',
-    sourcesContent: false,
+    legalComments: C.legalComments,
+    sourcemap: C.sourcemap,
+    sourcesContent: C.sourcesContent,
     metafile: true,
     write: false,
     logLevel: 'silent',
@@ -95,8 +93,8 @@ export async function buildAll() {
     throw new Error('js/i18n.js has imports now; it can no longer be written as a file of its own');
   }
   const i18n = await esbuild.transform(i18nSource, {
-    loader: 'js', target: TARGET, ...MINIFY, legalComments: 'eof',
-    sourcemap: 'external', sourcefile: '../js/i18n.js', sourcesContent: false,
+    loader: 'js', target: TARGET, ...MINIFY, legalComments: C.legalComments,
+    sourcemap: 'external', sourcefile: '../js/i18n.js', sourcesContent: C.sourcesContent,
   });
   files[`${DIST_DIR}/i18n.js`] = toLF(i18n.code) + '//# sourceMappingURL=i18n.js.map\n';
   files[`${DIST_DIR}/i18n.js.map`] = toLF(i18n.map);
@@ -104,14 +102,15 @@ export async function buildAll() {
   const outputs = {};
   for (const [out, meta] of Object.entries(result.metafile.outputs)) {
     if (!out.endsWith('.js')) continue;
-    outputs[out] = { sha: shaOfText(files[out]), inputs: sortedInputs(Object.keys(meta.inputs)) };
+    outputs[out] = { sha: shaOfText(files[out]), mapSha: shaOfText(files[`${out}.map`]), inputs: sortedInputs(Object.keys(meta.inputs)) };
   }
   outputs[`${DIST_DIR}/i18n.js`] = {
     sha: shaOfText(files[`${DIST_DIR}/i18n.js`]),
+    mapSha: shaOfText(files[`${DIST_DIR}/i18n.js.map`]),
     inputs: sortedInputs([I18N_SOURCE]),
   };
   const sorted = Object.fromEntries(Object.entries(outputs).sort(([a], [b]) => (a < b ? -1 : 1)));
-  files[MANIFEST_FILE] = JSON.stringify({ esbuild: esbuild.version, outputs: sorted }, null, 2) + '\n';
+  files[MANIFEST_FILE] = JSON.stringify({ esbuild: esbuild.version, config: configSha(), outputs: sorted }, null, 2) + '\n';
   return files;
 }
 

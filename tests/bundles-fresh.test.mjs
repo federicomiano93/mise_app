@@ -17,7 +17,9 @@ import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import {
   ROOT, entryPages, readManifest, manifestProblems, shaOfText, bundleTagsByPage, MANIFEST_FILE,
+  BUILD_CONFIG, configSha, pinnedEsbuild, NATIVE_MODULE_PAGES,
 } from '../scripts/bundle-lib.mjs';
+import { readAssets } from '../scripts/sw-hashes.mjs';
 import { scriptsOfEntry } from './helpers/page-scripts.mjs';
 
 test('⚠️ dist/ is up to date with js/ — if this fails, run: node scripts/build-bundles.mjs', () => {
@@ -80,7 +82,12 @@ function fixture() {
   for (const f of ['js/pages/home.js', 'js/pages/run-in-order.js', 'js/util.js']) {
     inputs[f] = shaOfText(readFileSync(join(root, f), 'utf8'));
   }
-  put(MANIFEST_FILE, JSON.stringify({ esbuild: 'x', outputs: { 'dist/home.js': { sha: shaOfText('var x=1;\n'), inputs } } }));
+  put('package.json', JSON.stringify({ devDependencies: { esbuild: '1.2.3' } }));
+  put(MANIFEST_FILE, JSON.stringify({
+    esbuild: '1.2.3',
+    config: configSha(),
+    outputs: { 'dist/home.js': { sha: shaOfText('var x=1;\n'), mapSha: shaOfText('{}'), inputs } },
+  }));
   return { root, put };
 }
 
@@ -106,11 +113,66 @@ test('a fresh checkout has no problems, and each kind of staleness is named', ()
     assert.match(manifestProblems(root).join('\n'), /home\.html loads dist\/gone\.js, which does not exist/);
     put('home.html', '<script type="module" src="dist/home.js"></script>\n');
 
+    put('dist/home.js.map', '{"edited":1}');
+    assert.match(manifestProblems(root).join('\n'), /dist\/home\.js\.map was edited by hand/);
+    put('dist/home.js.map', '{}');
+
+    put('package.json', JSON.stringify({ devDependencies: { esbuild: '9.9.9' } }));
+    assert.match(manifestProblems(root).join('\n'), /built with esbuild 1\.2\.3, package\.json pins 9\.9\.9/);
+    put('package.json', JSON.stringify({ devDependencies: { esbuild: '1.2.3' } }));
+
+    const manifest = JSON.parse(readFileSync(join(root, MANIFEST_FILE), 'utf8'));
+    put(MANIFEST_FILE, JSON.stringify({ ...manifest, config: 'deadbeefdeadbeef' }));
+    assert.match(manifestProblems(root).join('\n'), /build configuration \(BUILD_CONFIG\) changed/);
+    put(MANIFEST_FILE, JSON.stringify(manifest));
+
+    put('other.html', '<script type="module" src="js/util.js"></script>\n');
+    assert.match(manifestProblems(root).join('\n'), /other\.html has native module tags but is not on the NATIVE_MODULE_PAGES allowlist/);
+    rmSync(join(root, 'other.html'));
+
+    put('home.html', '<p>no tag</p>\n');
+    assert.match(manifestProblems(root).join('\n'), /js\/pages\/home\.js exists but home\.html does not load dist\/home\.js/);
+    put('home.html', '<script type="module" src="dist/home.js"></script>\n');
+
     rmSync(join(root, 'dist/home.js'));
     assert.match(manifestProblems(root).join('\n'), /dist\/home\.js is listed but missing/);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
+});
+
+test('the manifest records the pinned esbuild, the configuration fingerprint and a fingerprint per map', () => {
+  const manifest = readManifest();
+  assert.equal(manifest.esbuild, pinnedEsbuild(), 'built with the version package.json pins');
+  assert.equal(pinnedEsbuild(), JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')).devDependencies.esbuild);
+  assert.match(pinnedEsbuild(), /^\d+\.\d+\.\d+$/, 'pinned exactly, no range');
+  assert.equal(manifest.config, configSha());
+  assert.equal(BUILD_CONFIG.splitting, false, 'splitting can reorder module evaluation');
+  for (const [out, info] of Object.entries(manifest.outputs)) assert.match(info.mapSha, /^[0-9a-f]{16}$/, out);
+});
+
+test('a page that keeps native module tags is on an explicit allowlist, and is not bundled', () => {
+  assert.deepEqual([...NATIVE_MODULE_PAGES], ['reset-password.html']);
+  assert.ok(!entryPages().includes('reset-password'), 'no entry for a native page');
+  const html = readFileSync(join(ROOT, 'reset-password.html'), 'utf8');
+  assert.deepEqual([...html.matchAll(/<script type="module" src="(js\/[^"]+)"/g)].map(m => m[1]),
+    ['js/i18n-dom.js', 'js/reset-password-boot.js', 'js/sw-update.js']);
+});
+
+test('⚠️ every precached page\'s bundle is in sw.js ASSETS (an installed phone offline would get a blank page)', () => {
+  const assets = new Set(readAssets(readFileSync(join(ROOT, 'sw.js'), 'utf8')));
+  const pages = readdirSync(ROOT).filter(n => n.endsWith('.html') && assets.has(`./${n}`));
+  assert.ok(pages.length >= 8, `only ${pages.length} precached pages found`);
+  let checked = 0;
+  for (const page of pages) {
+    for (const tag of bundleTagsByPage()[page] || []) {
+      checked += 1;
+      assert.ok(assets.has(`./${tag}`), `${page} loads ${tag}, which sw.js does not precache`);
+    }
+  }
+  assert.ok(checked >= 8, `only ${checked} bundle tags checked`);
+  assert.ok(assets.has('./dist/i18n.js'), 'the dictionary every bundle imports');
+  assert.ok(!assets.has('./order.html') && !assets.has('./dist/order.js'), 'the client page stays out');
 });
 
 test('line endings do not change a fingerprint: a Windows checkout and CI agree', () => {

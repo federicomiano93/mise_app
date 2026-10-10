@@ -47,7 +47,7 @@ const abs = asset => new URL(asset, SW_URL).href;
 // responseType: what the network's answers claim to be. Node builds every Response as
 // 'default'; a browser's cross-origin fetch answers 'cors', and the SDK branch of sw.js
 // stores only those — so without this the storing half of that branch never runs here.
-function loadWorker({ fails = () => false, stale = () => false, existingCaches = [], donors = {}, hostname = 'example.test', responseType = null, latency = 0, sdkStatus = 200 } = {}) {
+function loadWorker({ fails = () => false, stale = () => false, existingCaches = [], donors = {}, hostname = 'example.test', responseType = null, latency = 0, sdkStatus = 200, sdkHangs = false } = {}) {
   const listeners = new Map();
   const record = { puts: [], sdkAttempts: [], sdkInits: [], attempts: [], inits: [], fetchInits: [], opened: [], deleted: [], skipWaiting: 0, inFlight: 0, maxInFlight: 0 };
   const attemptsFor = new Map();
@@ -114,6 +114,14 @@ function loadWorker({ fails = () => false, stale = () => false, existingCaches =
         record.sdkAttempts.push(url);
         record.sdkInits.push(init);
         if (fails(url, attempt)) return Promise.reject(new TypeError('Failed to fetch ' + url));
+        if (sdkHangs) {
+          // A stalled connection: it answers only when the worker's own timeout aborts it.
+          return new Promise((_, reject) => {
+            const signal = init && init.signal;
+            if (!signal) return;
+            signal.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')));
+          });
+        }
         const sdk = new Response(`sdk:${url}`, { status: sdkStatus });
         if (responseType) Object.defineProperty(sdk, 'type', { value: responseType });
         return Promise.resolve(sdk);
@@ -142,8 +150,10 @@ function loadWorker({ fails = () => false, stale = () => false, existingCaches =
       },
     },
     TextEncoder, Headers, Response,
-    setTimeout,
+    // The SDK warm-up's 30 s cut-off is shortened to 20 ms; every other timer is real.
+    setTimeout: (fn, ms, ...rest) => setTimeout(fn, ms === 30000 ? 20 : ms, ...rest),
     clearTimeout,
+    AbortController,
     console,
     URL,
   };
@@ -649,6 +659,16 @@ test('⚠⚠ the install SUCCEEDS when every SDK download answers 500, and store
   assert.equal(w.record.sdkAttempts.length, w.read('SDK_MODULES').length, 'it did try each one');
   assert.equal(w.record.added.length, w.read('ASSETS').length, 'and the precache is still complete');
   assert.ok(!w.record.puts.some(([name]) => name === w.read('SDK_CACHE')), 'a 500 is never stored');
+});
+
+test('⚠⚠ an SDK download that never answers is cut off, and the install still completes', async () => {
+  const w = loadWorker({ responseType: 'cors', sdkHangs: true });
+  assert.equal(w.read('SDK_WARM_TIMEOUT_MS'), 30000, 'the real cut-off is 30 s');
+  await install(w);      // would hang for ever if the warm-up waited on the stalled fetches
+  assert.equal(w.record.sdkAttempts.length, w.read('SDK_MODULES').length);
+  assert.ok(w.record.sdkInits.every(i => i && i.signal), 'each fetch carries an abort signal');
+  assert.equal(w.record.added.length, w.read('ASSETS').length, 'and the precache completed');
+  assert.ok(!w.record.puts.some(([name]) => name === w.read('SDK_CACHE')));
 });
 
 test('a module already in SDK_CACHE is not fetched again', async () => {
