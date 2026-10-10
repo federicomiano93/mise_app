@@ -36,6 +36,29 @@ export const en = {
   'section.settings': 'Settings',
   'section.more': 'More',
 
+  'common.cancel': 'Cancel',
+
+  // Signing in. Copied from the current app's js/i18n.js, key for key. «Mise» is the product's
+  // name, not a phrase, so it is not here.
+  'auth.signIn.sub': 'Sign in to open your location.',
+  'auth.email': 'Email',
+  'auth.password': 'Password',
+  'auth.signIn': 'Sign in',
+  'auth.forgot': 'Forgot your password?',
+  'auth.enterEmail': 'Enter your email.',
+  'auth.enterPassword': 'Enter your password.',
+  'auth.signingIn': 'Signing in…',
+  'auth.typeEmailFirst': 'Type your email above first, then tap this.',
+  // Deliberately does not reveal whether the address has an account.
+  'auth.resetSent': 'If {address} has an account, a reset link is on its way.',
+  // ⚠️ FOUR FIREBASE CODES SHARE auth.err.badPair ON PURPOSE (session/authErrors.ts).
+  'auth.err.badPair': 'That email and password do not match an account.',
+  'auth.err.badEmail': 'That does not look like an email address.',
+  'auth.err.disabled': 'This account has been turned off. Ask the owner to re-enable it.',
+  'auth.err.tooMany': 'Too many attempts. Wait a minute and try again.',
+  'auth.err.offline': 'No connection. The first sign-in on a device needs internet.',
+  'auth.err.generic': 'Could not sign in. Please try again.',
+
   'placeholder.title': 'This section will arrive in one of the next steps of Mise 2.',
   'placeholder.body': 'Until then, keep using the app you use today.',
 

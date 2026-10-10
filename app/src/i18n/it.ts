@@ -22,6 +22,25 @@ export const it: Messages = {
   'section.settings': 'Impostazioni',
   'section.more': 'Altro',
 
+  'common.cancel': 'Annulla',
+
+  'auth.signIn.sub': 'Accedi per aprire il tuo locale.',
+  'auth.email': 'Email',
+  'auth.password': 'Password',
+  'auth.signIn': 'Accedi',
+  'auth.forgot': 'Password dimenticata?',
+  'auth.enterEmail': 'Inserisci la tua email.',
+  'auth.enterPassword': 'Inserisci la tua password.',
+  'auth.signingIn': 'Accesso in corso…',
+  'auth.typeEmailFirst': 'Scrivi prima la tua email qui sopra, poi tocca qui.',
+  'auth.resetSent': 'Se {address} ha un account, il link per reimpostare la password sta arrivando.',
+  'auth.err.badPair': 'Email e password non corrispondono a nessun account.',
+  'auth.err.badEmail': 'Questo non sembra un indirizzo email.',
+  'auth.err.disabled': 'Questo account è stato disattivato. Chiedi al titolare di riattivarlo.',
+  'auth.err.tooMany': 'Troppi tentativi. Aspetta un minuto e riprova.',
+  'auth.err.offline': 'Nessuna connessione. Il primo accesso su un dispositivo richiede internet.',
+  'auth.err.generic': 'Accesso non riuscito. Riprova.',
+
   'placeholder.title': 'Questa sezione arriverà in uno dei prossimi passi di Mise 2.',
   'placeholder.body': 'Nel frattempo continua a usare l’app di sempre.',
 
