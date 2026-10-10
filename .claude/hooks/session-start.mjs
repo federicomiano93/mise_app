@@ -159,9 +159,15 @@ async function httpStatus(url) {
 }
 
 async function checkLiveSite() {
-  // The pages load the committed bundles (dist/), not js/ files: a 404 on dist/index.js or dist/i18n.js
-  // is what breaks the app for a new visitor.
-  const pages = ['index.html', 'dist/index.js', 'dist/i18n.js'];
+  // The pages load the committed bundles (dist/): a 404 on dist/index.js or dist/i18n.js breaks the
+  // app for a new visitor. js/firebase.js is still loaded by reset-password.html (native tags).
+  // ⚠️ THIS PROBES THE LIVE SITE, WHICH IS MAIN. Until the branch that introduced dist/ is merged,
+  // main has no dist/ and the live site rightly answers 404 for it, so the bundle probes are made
+  // only when origin/main already contains them (local git, no network): otherwise every session
+  // on that branch would print a false alarm.
+  const bundled = await run('git', ['cat-file', '-e', 'origin/main:dist/index.js'], STATUS_MS)
+    .then(() => true, () => false);
+  const pages = ['index.html', 'js/firebase.js', ...(bundled ? ['dist/index.js', 'dist/i18n.js'] : [])];
   const statuses = await Promise.all(pages.map(page => httpStatus(`${SITE}${page}`)));
   const text = pages.map((page, i) => `${page} ${statuses[i] ?? 'unreachable'}`).join(', ');
   if (statuses.some(s => s !== null && s !== 200)) {
