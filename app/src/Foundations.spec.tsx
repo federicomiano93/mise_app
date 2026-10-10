@@ -9,7 +9,7 @@ describe('Foundations', () => {
     expect(screen.getByRole('main')).toBeInTheDocument();
     const h1s = screen.getAllByRole('heading', { level: 1 });
     expect(h1s).toHaveLength(1);
-    expect(h1s[0]).toHaveTextContent('Mise 2');
+    expect(h1s[0]).toHaveTextContent(/^Mise 2$/);
   });
 
   it('shows the three sections as level-2 headings', () => {
@@ -41,9 +41,9 @@ describe('Foundations', () => {
     const counter = screen.getByText('Not tapped yet');
 
     await user.click(button);
-    expect(counter).toHaveTextContent('Tapped 1 time');
+    expect(counter).toHaveTextContent(/^Tapped 1 time$/);
     await user.click(button);
-    expect(counter).toHaveTextContent('Tapped 2 times');
+    expect(counter).toHaveTextContent(/^Tapped 2 times$/);
   });
 
   it('can be operated from the keyboard with Enter and Space', async () => {
@@ -60,9 +60,9 @@ describe('Foundations', () => {
     expect(button).toHaveFocus();
 
     await user.keyboard('{Enter}');
-    expect(counter).toHaveTextContent('Tapped 1 time');
+    expect(counter).toHaveTextContent(/^Tapped 1 time$/);
     await user.keyboard(' ');
-    expect(counter).toHaveTextContent('Tapped 2 times');
+    expect(counter).toHaveTextContent(/^Tapped 2 times$/);
   });
 
   it('announces the count politely to screen readers', () => {

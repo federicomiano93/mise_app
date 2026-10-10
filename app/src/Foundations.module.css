@@ -1,5 +1,7 @@
 /* The foundations page. Every colour, radius, shadow and font size is a var(--…) from
-   tokens.css; only layout measures (a 48px swatch, a 640px column) are written here. */
+   tokens.css; only layout measures (a 48px swatch, a 640px column) are written here — and
+   the mark's 20px letter, which is the design's own `.rail-mark` measure (no type token is
+   20px; the mark becomes a shared component with the rail in the next step). */
 
 .page {
   max-width: 640px;

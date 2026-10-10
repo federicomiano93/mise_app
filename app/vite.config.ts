@@ -23,5 +23,8 @@ export default defineConfig({
     // *.spec.*, never *.test.*: see shared/vitest.config.ts.
     include: ['src/**/*.spec.{ts,tsx}'],
     setupFiles: ['src/testing/setup.ts'],
+    // Vitest replaces every CSS file with an empty string unless told otherwise — `?raw`
+    // included — so src/css-modules.spec.ts would check nothing and pass.
+    css: true,
   },
 });
