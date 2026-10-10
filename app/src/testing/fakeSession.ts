@@ -6,7 +6,7 @@ import type { Session, SessionStore } from '../session/session';
 // A SessionStore for the specs of screens: every method is a spy, and the snapshot can be moved
 // between statuses with set(). The real store (session.ts) is covered by session.spec.ts against
 // a fake backend; a screen's spec only needs to know what the store SAYS and what it was ASKED.
-export type FakeStore = SessionStore & {
+type FakeStore = SessionStore & {
   // Updates the snapshot and tells every subscriber, like the real store does.
   set(partial: Partial<Session>): void;
   signIn: Mock<SessionStore['signIn']>;
