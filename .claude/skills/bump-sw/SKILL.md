@@ -17,14 +17,15 @@ After adding, editing, or removing any file the app serves: any *.html,
 style.css, orders.css, anything under js/, manifest.json, or icons.
 
 ## The order since the pages were bundled (10 Oct 2026)
-**change sources → `node scripts/build-bundles.mjs` → `node scripts/sw-hashes.mjs`.**
+**change sources → `node scripts/build-bundles.mjs` → `node scripts/sw-hashes.mjs`** (and `node scripts/build-records-css.mjs` BEFORE the build if `records.css` sources changed: the build minifies whatever `records.css` holds).
+Stylesheets follow the same road: every page links `dist/<name>.css`, the esbuild-minified copy of the root `<name>.css` (relative `url()`s rewritten one folder up). Edit a stylesheet → rebuild, or `tests/bundles-fresh.test.mjs` fails; the root `.css` stays as the source and is not precached.
 Every page loads ONE committed bundle, `dist/<page>.js` (esbuild, run on the developer's machine
 only; `js/pages/<page>.js` lists the scripts the page runs), plus `dist/i18n.js` shared by all.
 A module under `js/` reaches a phone only INSIDE a bundle, so:
 - Edit a module → rebuild first. `tests/bundles-fresh.test.mjs` fails until you do (it compares the
   fingerprints in `dist/build-manifest.json` with the sources), and the bundle's new bytes are what
   `sw-hashes.mjs` must then fingerprint — which is why the build goes BEFORE it.
-- `ASSETS` lists the bundles (`./dist/<page>.js`, `./dist/i18n.js`), the pages, the stylesheets and the
+- `ASSETS` lists the bundles (`./dist/<page>.js`, `./dist/i18n.js`), the pages, the minified stylesheets (`./dist/<name>.css`) and the
   classic script `js/splash-init.js` — **not** the modules. A new module needs no `ASSETS` line; a
   new PAGE needs an entry in `js/pages/`, its `./dist/<page>.js` line (unless it is deliberately not
   precached, like `order.html`), and its `<script type="module" src="dist/<page>.js">`.

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'theitalianclub-v661';
+const CACHE_NAME = 'theitalianclub-v662';
 // Firebase SDK modules (loaded from gstatic) are cached SEPARATELY from CACHE_NAME
 // so they survive the cache-version bump that happens on every deploy — otherwise
 // the offline SDK would be wiped each release until the next online load. The name
@@ -99,10 +99,10 @@ const ASSETS = [
   './dist/foodcost.js',
   './dist/inventory.js',
   './qr.png',
-  './tokens.css',
-  './auth.css',
-  './style.css',
-  './orders.css',
+  './dist/tokens.css',
+  './dist/auth.css',
+  './dist/style.css',
+  './dist/orders.css',
   // The guided-mixing alarm. ⚠️ It has to be HERE, not merely on the server: the
   // one moment it is needed is a phone on a bench in a bakery, and a kitchen is
   // exactly where the signal is worst. A sound that only rings online is a sound
@@ -119,18 +119,18 @@ const ASSETS = [
   './fonts/atkinson-next-digits.woff2',
   './js/splash-init.js',
   './catalogue.html',
-  './catalogue.css',
-  './label-print.css',
-  './records.css',
+  './dist/catalogue.css',
+  './dist/label-print.css',
+  './dist/records.css',
   './pastries.html',
-  './pastries.css',
+  './dist/pastries.css',
   './foodcost.html',
-  './foodcost.css',
+  './dist/foodcost.css',
   // The monthly stocktake. A page of the Food Cost section (it carries
   // data-section="foodcost"), but its own folder, because it owns its own
   // collection and imports nothing from js/foodcost/.
   './inventory.html',
-  './inventory.css',
+  './dist/inventory.css',
   './manifest.json',
   './icons/icon-192.png',
   './icons/icon-512.png'
@@ -141,14 +141,14 @@ const ASSETS = [
 // hash (first 16 characters): the phone checks every download against it, and an update
 // copies a file whose hash has not changed out of the previous cache instead of fetching it.
 const ASSET_HASHES = {
-  "./": 'f82630fff2530d55',
-  "./index.html": 'f82630fff2530d55',
+  "./": '9f05ef9ab6042a80',
+  "./index.html": '9f05ef9ab6042a80',
   "./home.html": 'a4401ab28cb28eb9',
-  "./calculator.html": '3a19225ac7e2bf1e',
-  "./orders.html": '6fed1c46f516e18d',
-  "./suppliers.html": '9626d903f397696e',
+  "./calculator.html": '0467352c8443dc7a',
+  "./orders.html": '2fb9da5722dd7aca',
+  "./suppliers.html": '0f24580d8d5a1e05',
   "./install-guide.html": '322c79acf63896ef',
-  "./reset-password.html": '278e67d11c8b4a50',
+  "./reset-password.html": '298724d76511df05',
   "./dist/i18n.js": '2e8c3410faf22cf1',
   "./dist/index.js": '9a2bec34d7a908ee',
   "./dist/calculator.js": '5fe9d84bfa7dffbd',
@@ -180,10 +180,10 @@ const ASSET_HASHES = {
   "./dist/foodcost.js": 'f95d88260daae5e0',
   "./dist/inventory.js": '39aca9c1cb76ccd5',
   "./qr.png": '761a95e5bc25e2ba',
-  "./tokens.css": 'abeb621f95374e83',
-  "./auth.css": '55b0bc1d41af5718',
-  "./style.css": '1bb57bc3ae9b3666',
-  "./orders.css": '64003553203242c9',
+  "./dist/tokens.css": 'a4f37273bf55b63f',
+  "./dist/auth.css": '58cd14bdbf808ecc',
+  "./dist/style.css": '1580de8c8c205539',
+  "./dist/orders.css": 'a51af9d47d76ff97',
   "./sounds/alarm.wav": '0d1465974f5be95b',
   "./fonts/manrope-latin.woff2": '71eb731d55804619',
   "./fonts/manrope-latin-ext.woff2": 'bd24140af06f1b58',
@@ -195,16 +195,16 @@ const ASSET_HASHES = {
   "./fonts/instrument-serif-latin-ext.woff2": '0caad588cab430ca',
   "./fonts/atkinson-next-digits.woff2": '99ffa5b0e9a45a2b',
   "./js/splash-init.js": 'c68474ad53893e48',
-  "./catalogue.html": '6f3b2e2b9024e62e',
-  "./catalogue.css": 'fdfd0ad245c37c26',
-  "./label-print.css": 'ffbcdf4e7a627a2d',
-  "./records.css": 'aeaddb44ba386bf2',
-  "./pastries.html": '06018742937e8035',
-  "./pastries.css": '0689cee72e1f5468',
-  "./foodcost.html": '984ccded950e5e41',
-  "./foodcost.css": '5b64f3f388a38eef',
-  "./inventory.html": 'c66c725a6f990fc3',
-  "./inventory.css": '1d262ed4a6109aa8',
+  "./catalogue.html": 'd7e133a7e7180865',
+  "./dist/catalogue.css": 'ac6b5f2843dc7902',
+  "./dist/label-print.css": 'c96c56dfef069675',
+  "./dist/records.css": 'e15955849eb3fde0',
+  "./pastries.html": '7f35bf54c3ee54db',
+  "./dist/pastries.css": 'bd6b926af0a75ce7',
+  "./foodcost.html": '59bab773b490ded3',
+  "./dist/foodcost.css": '92d3e004797ffba6',
+  "./inventory.html": '4caee7fc2b8256a8',
+  "./dist/inventory.css": 'a8b2099f8fb78d09',
   "./manifest.json": 'b3afdecd54f14f64',
   "./icons/icon-192.png": '16eed7827b42285d',
   "./icons/icon-512.png": '30e4120be12274a1',

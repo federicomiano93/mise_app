@@ -19,6 +19,10 @@
 //  • The Firebase SDK (https://…) stays an import from gstatic, exactly as before.
 //  • Identifiers are NOT minified, so a function name in an error report stays readable; source
 //    maps (without sources) point back at ../js/…, which GitHub Pages serves.
+//  • Stylesheets: every root .css a page links is minified to dist/<name>.css (esbuild's CSS minifier
+//    never drops a selector, so the run-time-built classes survive; tests/minified-css.test.mjs pins
+//    it). A relative url() moves one folder up with the file. Run scripts/build-records-css.mjs
+//    FIRST: records.css is itself generated, and this build minifies what it finds.
 //  • Every source is read with LF line endings, so this Windows checkout and CI's Linux produce
 //    the same bytes.
 
@@ -28,7 +32,7 @@ import { fileURLToPath } from 'node:url';
 import * as esbuild from 'esbuild';
 import {
   ROOT, DIST_DIR, MANIFEST_FILE, PAGES_DIR, BUILD_CONFIG as C, BUILD_SCRIPTS, configSha, entryPages, readManifest, shaOfText,
-  shaOfFile, toLF,
+  shaOfFile, toLF, linkedSheets, rewriteCssUrls,
 } from './bundle-lib.mjs';
 
 // Every option lives in BUILD_CONFIG (bundle-lib), whose fingerprint the manifest records.
@@ -99,10 +103,22 @@ export async function buildAll() {
   files[`${DIST_DIR}/i18n.js`] = toLF(i18n.code) + '//# sourceMappingURL=i18n.js.map\n';
   files[`${DIST_DIR}/i18n.js.map`] = toLF(i18n.map);
 
+  // Stylesheets: minified, their relative url() rewritten for the folder they now sit in.
+  const sheets = linkedSheets();
+  for (const sheet of sheets) {
+    const css = await esbuild.transform(readLF(join(ROOT, sheet)), {
+      loader: 'css', minify: C.cssMinify, target: C.cssTarget, legalComments: C.legalComments,
+    });
+    files[`${DIST_DIR}/${sheet}`] = rewriteCssUrls(toLF(css.code), { root: ROOT });
+  }
+
   const outputs = {};
   for (const [out, meta] of Object.entries(result.metafile.outputs)) {
     if (!out.endsWith('.js')) continue;
     outputs[out] = { sha: shaOfText(files[out]), mapSha: shaOfText(files[`${out}.map`]), inputs: sortedInputs(Object.keys(meta.inputs)) };
+  }
+  for (const sheet of sheets) {
+    outputs[`${DIST_DIR}/${sheet}`] = { sha: shaOfText(files[`${DIST_DIR}/${sheet}`]), inputs: sortedInputs([sheet]) };
   }
   outputs[`${DIST_DIR}/i18n.js`] = {
     sha: shaOfText(files[`${DIST_DIR}/i18n.js`]),
@@ -114,12 +130,12 @@ export async function buildAll() {
   return files;
 }
 
-// The files of dist/ that a build owns: bundles, their maps and the manifest.
+// The files of dist/ that a build owns: bundles, their maps, the stylesheets and the manifest.
 function ownedFiles() {
   const dir = join(ROOT, DIST_DIR);
   if (!existsSync(dir)) return [];
   return readdirSync(dir)
-    .filter(n => /\.js(\.map)?$/.test(n) || n === 'build-manifest.json')
+    .filter(n => /\.(js(\.map)?|css)$/.test(n) || n === 'build-manifest.json')
     .map(n => `${DIST_DIR}/${n}`);
 }
 
@@ -153,7 +169,7 @@ async function main() {
   }
   const manifest = readManifest();
   const bundles = Object.keys(manifest.outputs);
-  console.log(`dist/: ${bundles.length} bundles built with esbuild ${manifest.esbuild}.`);
+  console.log(`dist/: ${bundles.length} files built with esbuild ${manifest.esbuild}.`);
   for (const b of bundles) console.log(`  ${b}  ${(files[b].length / 1024).toFixed(1)} KB`);
 }
 

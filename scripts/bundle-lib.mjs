@@ -47,6 +47,10 @@ export const BUILD_CONFIG = Object.freeze({
   externalUrlPattern: '^https?://',   // the Firebase SDK stays an import from gstatic
   i18nSource: 'js/i18n.js',           // one instance per page, written once as dist/i18n.js
   i18nExternalPath: './i18n.js',
+  // Stylesheets: the same floor as the scripts (Chrome 80 / Safari 13.1, see sw.js), written for
+  // CSS. esbuild's CSS minifier merges and shortens rules; it never drops a selector as unused.
+  cssTarget: ['chrome80', 'safari13.1'],
+  cssMinify: true,
 });
 
 export const configSha = (config = BUILD_CONFIG) => shaOfText(JSON.stringify(config));
@@ -79,6 +83,62 @@ export function entryPages(root = ROOT) {
 export function readManifest(root = ROOT) {
   const file = join(root, MANIFEST_FILE);
   return existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : null;
+}
+
+// ── Stylesheets ───────────────────────────────────────────────────────────────────────────
+// Every page links its CSS from the root; the browser gets the minified copy dist/<name>.css.
+
+const LINK_TAG = /<link\b[^>]*>/g;
+const isSheetTag = tag => /\brel="stylesheet"/.test(tag);
+const hrefOf = tag => (tag.match(/\bhref="([^"]*)"/) || [])[1];
+
+// The href of every <link rel="stylesheet"> in a page's text, in order.
+export const stylesheetHrefs = html =>
+  [...String(html).matchAll(LINK_TAG)].filter(m => isSheetTag(m[0])).map(m => hrefOf(m[0])).filter(Boolean);
+
+// The same page with each root stylesheet pointed at its dist copy; every other attribute and tag
+// is left exactly as it was.
+export const pointSheetsAtDist = html =>
+  String(html).replace(LINK_TAG, tag => (isSheetTag(tag)
+    ? tag.replace(/\bhref="([^"/]+\.css)"/, `href="${DIST_DIR}/$1"`)
+    : tag));
+
+// { 'index.html': ['tokens.css', …] } — the ROOT stylesheets each page links, whether the link
+// names the source (before the swap) or its dist copy.
+export function sheetsByPage(root = ROOT) {
+  const out = {};
+  for (const name of readdirSync(root).filter(n => n.endsWith('.html'))) {
+    const hrefs = stylesheetHrefs(readFileSync(join(root, name), 'utf8'));
+    if (hrefs.length) out[name] = hrefs;
+  }
+  return out;
+}
+
+// The distinct root stylesheet files the build must minify. A link to anything that is not a plain
+// root file (a folder, a URL) is an error: this build would not know to produce it.
+export function linkedSheets(root = ROOT) {
+  const names = new Set();
+  for (const [page, hrefs] of Object.entries(sheetsByPage(root))) {
+    for (const href of hrefs) {
+      const m = href.match(/^(?:dist\/)?([^/:]+\.css)$/);
+      if (!m) throw new Error(`${page} links ${href}, which is not a stylesheet at the root of the repo`);
+      if (!existsSync(join(root, m[1]))) throw new Error(`${page} links ${href}, but ${m[1]} does not exist`);
+      names.add(m[1]);
+    }
+  }
+  return [...names].sort();
+}
+
+// dist/ sits one folder below the sources, so a RELATIVE url() moves one folder up. Absolute,
+// protocol, data: and #fragment urls stay. Throws on a target that is not on disk.
+export function rewriteCssUrls(css, { root = ROOT, from = '' } = {}) {
+  return String(css).replace(/url\(\s*(["']?)([^"')]*?)\1\s*\)/g, (whole, quote, target) => {
+    if (!target || /^(?:[a-z][a-z0-9+.-]*:|\/|#)/i.test(target)) return whole;
+    const file = target.split(/[?#]/)[0];
+    const abs = join(root, from, file);
+    if (!existsSync(abs)) throw new Error(`a stylesheet points at ${target}, which does not exist`);
+    return `url(${quote}../${target}${quote})`;
+  });
 }
 
 // Every `dist/<name>.js` a page loads with a <script> tag: { 'index.html': ['dist/index.js'] }.
@@ -117,11 +177,22 @@ export function manifestProblems(root = ROOT) {
   for (const [out, info] of Object.entries(outputs)) {
     if (!existsSync(join(root, out))) { problems.push(`${out} is listed but missing`); continue; }
     if (shaOfFile(out, root) !== info.sha) problems.push(`${out} was edited by hand or is out of date`);
-    if (!existsSync(join(root, `${out}.map`))) problems.push(`${out}.map is missing`);
-    else if (shaOfFile(`${out}.map`, root) !== info.mapSha) problems.push(`${out}.map was edited by hand or is out of date`);
+    if (out.endsWith('.js')) {
+      if (!existsSync(join(root, `${out}.map`))) problems.push(`${out}.map is missing`);
+      else if (shaOfFile(`${out}.map`, root) !== info.mapSha) problems.push(`${out}.map was edited by hand or is out of date`);
+    }
     for (const [input, sha] of Object.entries(info.inputs || {})) {
       if (!existsSync(join(root, input))) problems.push(`${out} was built from ${input}, which no longer exists`);
       else if (shaOfFile(input, root) !== sha) problems.push(`${input} changed since ${out} was built`);
+    }
+  }
+  // A stylesheet is served from dist/ only: a page that links the root source skips the minified
+  // copy, and one that links a dist copy nobody built is a page with no styling at all.
+  for (const [page, hrefs] of Object.entries(sheetsByPage(root))) {
+    for (const href of hrefs) {
+      if (!href.startsWith(`${DIST_DIR}/`)) problems.push(`${page} links the source stylesheet ${href} instead of ${DIST_DIR}/${href}`);
+      else if (!existsSync(join(root, href))) problems.push(`${page} links ${href}, which does not exist`);
+      else if (!outputs[href]) problems.push(`${page} links ${href}, which is not in the manifest`);
     }
   }
   const tagged = bundleTagsByPage(root);

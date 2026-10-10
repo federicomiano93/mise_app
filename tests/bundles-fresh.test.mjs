@@ -158,6 +158,41 @@ test('a fresh checkout has no problems, and each kind of staleness is named', ()
   }
 });
 
+test('⚠️ a stylesheet is fingerprinted with its source, and a page must link the dist copy', () => {
+  const { root, put } = fixture();
+  try {
+    const manifest = JSON.parse(readFileSync(join(root, MANIFEST_FILE), 'utf8'));
+    put('home.css', 'a { color: red; }\n');
+    put('dist/home.css', 'a{color:red}\n');
+    manifest.outputs['dist/home.css'] = {
+      sha: shaOfText('a{color:red}\n'), inputs: { 'home.css': shaOfText('a { color: red; }\n') },
+    };
+    put(MANIFEST_FILE, JSON.stringify(manifest));
+    const page = '<link rel="stylesheet" href="dist/home.css">\n<script type="module" src="dist/home.js"></script>\n';
+    put('home.html', page);
+    assert.deepEqual(manifestProblems(root), [], 'a css output has no map and needs none');
+
+    put('home.css', 'a { color: blue; }\n');
+    assert.match(manifestProblems(root).join('\n'), /home\.css changed since dist\/home\.css was built/);
+    put('home.css', 'a { color: red; }\n');
+
+    put('dist/home.css', 'a{color:blue}\n');
+    assert.match(manifestProblems(root).join('\n'), /dist\/home\.css was edited by hand or is out of date/);
+    put('dist/home.css', 'a{color:red}\n');
+
+    put('home.html', page.replace('dist/home.css', 'home.css'));
+    assert.match(manifestProblems(root).join('\n'), /home\.html links the source stylesheet home\.css instead of dist\/home\.css/);
+
+    put('home.html', page.replace('dist/home.css', 'dist/gone.css'));
+    assert.match(manifestProblems(root).join('\n'), /home\.html links dist\/gone\.css, which does not exist/);
+
+    put('dist/gone.css', 'b{}\n');
+    assert.match(manifestProblems(root).join('\n'), /home\.html links dist\/gone\.css, which is not in the manifest/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('the manifest records the pinned esbuild, the configuration fingerprint and a fingerprint per map', () => {
   const manifest = readManifest();
   assert.equal(manifest.esbuild, pinnedEsbuild(), 'built with the version package.json pins');
@@ -166,7 +201,10 @@ test('the manifest records the pinned esbuild, the configuration fingerprint and
   assert.equal(manifest.config, configSha());
   assert.deepEqual(Object.keys(manifest.buildScripts).sort(), [...BUILD_SCRIPTS].sort(), 'the build\'s own code is fingerprinted');
   assert.equal(BUILD_CONFIG.splitting, false, 'splitting can reorder module evaluation');
-  for (const [out, info] of Object.entries(manifest.outputs)) assert.match(info.mapSha, /^[0-9a-f]{16}$/, out);
+  for (const [out, info] of Object.entries(manifest.outputs)) {
+    if (out.endsWith('.js')) assert.match(info.mapSha, /^[0-9a-f]{16}$/, out);
+    else assert.equal(info.mapSha, undefined, `${out} is a stylesheet and has no map`);
+  }
 });
 
 test('a page that keeps native module tags is on an explicit allowlist, and is not bundled', () => {

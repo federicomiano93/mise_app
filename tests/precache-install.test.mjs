@@ -348,19 +348,19 @@ test('⚠⚠ a stale copy from the CDN is asked for again past it, and the RIGHT
   const w = loadWorker({ stale: url => url.endsWith('/orders.css') });
   await install(w);
   assert.ok(w.record.attempts.some(u => u.includes('/orders.css?fp=')), 'the file must be asked for again past the CDN');
-  const stored = w.stores.get(w.read('CACHE_NAME')).get(abs('./orders.css'));
-  assert.equal(await stored.text(), `asset:${abs('./orders.css')}?fp=${w.read('ASSET_HASHES')['./orders.css']}`,
+  const stored = w.stores.get(w.read('CACHE_NAME')).get(abs('./dist/orders.css'));
+  assert.equal(await stored.text(), `asset:${abs('./dist/orders.css')}?fp=${w.read('ASSET_HASHES')['./dist/orders.css']}`,
     'the copy stored must be the one that matched');
-  assert.equal(stored.headers.get('x-mise-hash'), w.read('ASSET_HASHES')['./orders.css']);
+  assert.equal(stored.headers.get('x-mise-hash'), w.read('ASSET_HASHES')['./dist/orders.css']);
 });
 
 test('⚠⚠ a copy that NEVER matches is stored as received, so the phone keeps updating', async () => {
   // An antivirus or a proxy rewriting every copy: refusing would fail every install for ever.
   const w = loadWorker({ stale: url => url.includes('/orders.css') });
   await install(w);
-  const stored = w.stores.get(w.read('CACHE_NAME')).get(abs('./orders.css'));
+  const stored = w.stores.get(w.read('CACHE_NAME')).get(abs('./dist/orders.css'));
   assert.ok(stored, 'the install must complete');
-  assert.notEqual(stored.headers.get('x-mise-hash'), w.read('ASSET_HASHES')['./orders.css'],
+  assert.notEqual(stored.headers.get('x-mise-hash'), w.read('ASSET_HASHES')['./dist/orders.css'],
     'stored under the hash it really has, so the next release does not copy it forward');
 });
 
@@ -369,7 +369,7 @@ test('every stored file carries its fingerprint, so the next update can recognis
   await install(w);
   const hashes = w.read('ASSET_HASHES');
   const store = w.stores.get(w.read('CACHE_NAME'));
-  for (const asset of ['./', './index.html', './orders.css', './dist/orders.js', './dist/i18n.js']) {
+  for (const asset of ['./', './index.html', './dist/orders.css', './dist/orders.js', './dist/i18n.js']) {
     assert.equal(store.get(abs(asset)).headers.get('x-mise-hash'), hashes[asset], asset);
   }
 });
@@ -380,12 +380,12 @@ test('⚠ an unchanged file is copied from the previous release, not downloaded'
   const names = loadWorker();
   const hashes = names.read('ASSET_HASHES');
   const w = loadWorker({
-    donors: { 'theitalianclub-v1': { './index.html': hashes['./index.html'], './orders.css': 'deadbeefdeadbeef' } },
+    donors: { 'theitalianclub-v1': { './index.html': hashes['./index.html'], './dist/orders.css': 'deadbeefdeadbeef' } },
   });
   const assets = w.read('ASSETS');
   await install(w);
   assert.ok(!w.record.attempts.includes(abs('./index.html')), 'an unchanged file must not travel again');
-  assert.ok(w.record.attempts.includes(abs('./orders.css')), 'a CHANGED file must be downloaded');
+  assert.ok(w.record.attempts.includes(abs('./dist/orders.css')), 'a CHANGED file must be downloaded');
   assert.equal(w.record.attempts.length, assets.length - 1);
   assert.deepEqual([...w.record.added].sort(), [...assets].map(abs).sort(), 'and the cache is still complete');
 });
@@ -432,13 +432,13 @@ test('⚠ one file failing on every attempt still refuses the install and names 
 test('⚠⚠ the cached body is exactly the downloaded bytes, stamped with its fingerprint', async () => {
   const w = loadWorker();
   await install(w);
-  const stored = w.stores.get(w.read('CACHE_NAME')).get(abs('./orders.css'));
-  assert.equal(await stored.text(), `asset:${abs('./orders.css')}`);
+  const stored = w.stores.get(w.read('CACHE_NAME')).get(abs('./dist/orders.css'));
+  assert.equal(await stored.text(), `asset:${abs('./dist/orders.css')}`);
   assert.equal(stored.status, 200);
-  assert.equal(stored.headers.get('x-mise-hash'), w.read('ASSET_HASHES')['./orders.css']);
+  assert.equal(stored.headers.get('x-mise-hash'), w.read('ASSET_HASHES')['./dist/orders.css']);
   // ⚠️⚠️ The network's content-type survives the rebuild: without it a cached module or
   // stylesheet is refused and no page boots offline — and every other test stays green.
-  const sent = new Response(`asset:${abs('./orders.css')}`).headers.get('content-type');
+  const sent = new Response(`asset:${abs('./dist/orders.css')}`).headers.get('content-type');
   assert.ok(sent, 'the mock network sends a content-type');
   assert.equal(stored.headers.get('content-type'), sent);
 });
@@ -468,17 +468,17 @@ test('⚠⚠ a precached file is served from this worker\'s cache, with no netwo
   const w = loadWorker();
   await install(w);
   const before = w.record.attempts.length;
-  const res = await serve(w, abs('./orders.css'));
+  const res = await serve(w, abs('./dist/orders.css'));
   assert.ok(res, 'the worker must answer');
-  assert.equal(await res.text(), `asset:${abs('./orders.css')}`);
+  assert.equal(await res.text(), `asset:${abs('./dist/orders.css')}`);
   assert.equal(w.record.attempts.length, before, 'no request may go to the network behind it');
 });
 
 test('a precached file missing from the cache (a hole) is fetched rather than failing', async () => {
   const w = loadWorker();
-  const res = await serve(w, abs('./orders.css'));
+  const res = await serve(w, abs('./dist/orders.css'));
   assert.ok(res);
-  assert.ok(w.record.attempts.includes(abs('./orders.css')));
+  assert.ok(w.record.attempts.includes(abs('./dist/orders.css')));
 });
 
 test('a file that is NOT precached goes to the network first: nothing versions it', async () => {
@@ -493,7 +493,7 @@ test('a precached path with a query string is not answered from the cache', asyn
   const w = loadWorker();
   await install(w);
   const before = w.record.attempts.length;
-  await serve(w, `${abs('./orders.css')}?v=2`);
+  await serve(w, `${abs('./dist/orders.css')}?v=2`);
   assert.equal(w.record.attempts.length, before + 1);
 });
 
@@ -547,7 +547,7 @@ test('an opaque or redirected SDK answer is never saved: it could not run as a m
 test('on a local server the fingerprint is not checked — and everywhere else it is', async () => {
   const local = loadWorker({ hostname: '127.0.0.1', stale: url => url.endsWith('/orders.css') });
   await install(local);
-  assert.ok(local.record.added.includes(abs('./orders.css')), 'a local server must still install');
+  assert.ok(local.record.added.includes(abs('./dist/orders.css')), 'a local server must still install');
   assert.ok(!local.record.attempts.some(u => u.includes('?fp=')), 'and nothing is asked for twice');
 
   const live = loadWorker({ hostname: 'federicomiano93.github.io', stale: url => url.endsWith('/orders.css') });

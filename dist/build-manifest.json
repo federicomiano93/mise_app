@@ -1,11 +1,17 @@
 {
   "esbuild": "0.25.10",
-  "config": "79e25912b590551d",
+  "config": "11637fabc7a8b43e",
   "buildScripts": {
-    "scripts/build-bundles.mjs": "e58d48c3c6542f25",
-    "scripts/bundle-lib.mjs": "bb49a79a12cf0daf"
+    "scripts/build-bundles.mjs": "664791e4a217f4bf",
+    "scripts/bundle-lib.mjs": "016a53e50cb8bdd8"
   },
   "outputs": {
+    "dist/auth.css": {
+      "sha": "44597482433b4bf0",
+      "inputs": {
+        "auth.css": "9c22840ab9c8ee8f"
+      }
+    },
     "dist/calculator.js": {
       "sha": "e9523f256e69e65d",
       "mapSha": "f104fad1413e8644",
@@ -119,6 +125,12 @@
         "js/whatsapp.js": "cacb8a66a1a0967f",
         "js/workspace-row.js": "2a2fb474351f90d9",
         "js/zoom-steps.js": "027da1e4fc29f6dc"
+      }
+    },
+    "dist/catalogue.css": {
+      "sha": "428fe057a7f948f6",
+      "inputs": {
+        "catalogue.css": "99d74cb44f6d470c"
       }
     },
     "dist/catalogue.js": {
@@ -250,6 +262,12 @@
         "js/venue-features.js": "d1dd442e6767bba8",
         "js/wake-lock.js": "160d7312777808ea",
         "js/workspace-row.js": "2a2fb474351f90d9"
+      }
+    },
+    "dist/foodcost.css": {
+      "sha": "9f179b4ad402a03f",
+      "inputs": {
+        "foodcost.css": "774f21d3a0cdd7d7"
       }
     },
     "dist/foodcost.js": {
@@ -481,6 +499,12 @@
         "js/share.js": "85dda5863e4eea85"
       }
     },
+    "dist/inventory.css": {
+      "sha": "805ef3ad56fb4536",
+      "inputs": {
+        "inventory.css": "16d92dcc5df28dc3"
+      }
+    },
     "dist/inventory.js": {
       "sha": "aac2811fa55674a3",
       "mapSha": "a053e97119aef63f",
@@ -569,6 +593,18 @@
         "js/workspace-row.js": "2a2fb474351f90d9"
       }
     },
+    "dist/label-print.css": {
+      "sha": "d0f2b692acbf3534",
+      "inputs": {
+        "label-print.css": "924ddecfcc7dbd14"
+      }
+    },
+    "dist/order.css": {
+      "sha": "f639fc4fa6b402af",
+      "inputs": {
+        "order.css": "79e8f0efefd915ca"
+      }
+    },
     "dist/order.js": {
       "sha": "c067df3c69595f87",
       "mapSha": "c2bfc7071df9c1a3",
@@ -596,6 +632,12 @@
         "js/same-data.js": "f86f5defaed51eaf",
         "js/sections.js": "3c8ee410aa212b2c",
         "js/update-gate.js": "4abdd66640ea294d"
+      }
+    },
+    "dist/orders.css": {
+      "sha": "c5b8d002a5bb868d",
+      "inputs": {
+        "orders.css": "c8020af94200708f"
       }
     },
     "dist/orders.js": {
@@ -742,6 +784,12 @@
         "js/workspace-row.js": "2a2fb474351f90d9"
       }
     },
+    "dist/pastries.css": {
+      "sha": "ba7e40828302bf77",
+      "inputs": {
+        "pastries.css": "9e4cb12aa70746d0"
+      }
+    },
     "dist/pastries.js": {
       "sha": "aae12ab641fbc680",
       "mapSha": "7d12d675d8e7b9ec",
@@ -831,6 +879,18 @@
         "js/venue-features.js": "d1dd442e6767bba8",
         "js/wake-lock.js": "160d7312777808ea",
         "js/workspace-row.js": "2a2fb474351f90d9"
+      }
+    },
+    "dist/records.css": {
+      "sha": "a3b0214d698d45f0",
+      "inputs": {
+        "records.css": "ebc8f2b69d47ba65"
+      }
+    },
+    "dist/style.css": {
+      "sha": "ef40ad989c746533",
+      "inputs": {
+        "style.css": "c00f8c357734310a"
       }
     },
     "dist/suppliers.js": {
@@ -961,6 +1021,12 @@
         "js/venue-features.js": "d1dd442e6767bba8",
         "js/wake-lock.js": "160d7312777808ea",
         "js/workspace-row.js": "2a2fb474351f90d9"
+      }
+    },
+    "dist/tokens.css": {
+      "sha": "586eaea9bdfb0595",
+      "inputs": {
+        "tokens.css": "8ca2371d2b3aab83"
       }
     }
   }

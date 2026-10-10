@@ -29,6 +29,17 @@ export function pageScripts(html) {
   return [...String(html).matchAll(either)].flatMap(m => (m[1] ? scriptsOfEntry(m[1]) : [m[2]]));
 }
 
+// The stylesheets a page loads, as the SOURCE files they are built from: 'dist/style.css' → 'style.css'.
+// A page links the minified copy in dist/; a test that asks «which rules does this page get?» reads
+// the source, so it maps the link back (same files, same order).
+export function pageSheets(html) {
+  return [...String(html).matchAll(/<link\b[^>]*>/g)]
+    .filter(m => /rel="stylesheet"/.test(m[0]))
+    .map(m => (m[0].match(/href="([^"]+)"/) || [])[1])
+    .filter(Boolean)
+    .map(href => href.replace(/^dist\//, ''));
+}
+
 export function pageScriptsOf(pageFile) {
   return pageScripts(readFileSync(`${ROOT}${pageFile}`, 'utf8'));
 }

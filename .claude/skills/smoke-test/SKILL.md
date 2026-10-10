@@ -71,7 +71,7 @@ python -m http.server <fresh-port> --bind 127.0.0.1
 
 A change in one feature must not silently break another. Shared files
 (`js/i18n.js`, `tokens.css`, `auth-gate.js`, `firebase.js`, `sw.js`, `js/pages/run-in-order.js`,
-`scripts/build-bundles.mjs` + `scripts/bundle-lib.mjs` (every page's bundle), the byte-copied
+`scripts/build-bundles.mjs` + `scripts/bundle-lib.mjs` (every page's bundle and minified stylesheet), the byte-copied
 `dom.js` / `confirm-dialog.js`) → run every line; otherwise the touched section plus Home.
 Sign in with a ONE-venue account. Labels are English, with the Italian in brackets.
 
