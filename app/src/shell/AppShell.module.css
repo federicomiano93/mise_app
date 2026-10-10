@@ -111,6 +111,13 @@
   color: var(--on-accent);
 }
 
+/* base.css's ring is the accent colour: about 2.8:1 against the dark rail, under the 3:1 a focus
+   indicator needs, and it would not show at all around the current item, which is accent
+   itself. The ring sits 2px outside the item, on the rail, so the light ink clears both. */
+.railItem:focus-visible {
+  outline-color: var(--rail-ink-strong);
+}
+
 /* The main column */
 
 .main {
