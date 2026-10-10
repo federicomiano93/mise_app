@@ -95,6 +95,64 @@ jobs:
       # defaults to the same id (tests/rules/seed-emulator.mjs).
       - run: firebase emulators:exec --only auth,firestore --project demo-theitalianclub "npm run test:rules"
 
+  # ── Mise 2: the rewrite (app/ + shared/) ─────────────────────────────────────
+  #
+  # ITS OWN JOB, so the two checks above stay exactly what they were: `test` installs
+  # nothing, while this one installs the new app's packages from its two lockfiles
+  # (app/package-lock.json, shared/package-lock.json — never the root one).
+  #
+  # NOT A REQUIRED CHECK YET: nothing under app/ reaches a phone before the switch (step 5
+  # of the Mise 2 plan), so a red run here cannot break the live app. It must become
+  # required before that step — a change to main's branch protection, which is his click.
+  mise2:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+
+      # The lockfiles decide, and no package may run code while it installs (each folder's
+      # .npmrc says the same; the flag makes it true even if a .npmrc is lost).
+      - name: Install shared/
+        run: npm ci --ignore-scripts
+        working-directory: shared
+      - name: Install app/
+        run: npm ci --ignore-scripts
+        working-directory: app
+
+      - name: shared/ — types
+        run: npm run typecheck
+        working-directory: shared
+      # Each spec runs against the TypeScript port AND the current app's js/ model, so a fix
+      # made to one and forgotten in the other turns this red.
+      - name: shared/ — tests
+        run: npm test
+        working-directory: shared
+
+      - name: app/ — types
+        run: npm run typecheck
+        working-directory: app
+      - name: app/ — tests
+        run: npm test
+        working-directory: app
+      - name: app/ — build
+        run: npm run build
+        working-directory: app
+
+      # Same level and reasoning as the two audits in the `test` job.
+      - name: Vulnerability check of shared/ (P11)
+        run: npm audit --audit-level=high
+        working-directory: shared
+      - name: Vulnerability check of app/ (P11)
+        run: npm audit --audit-level=high
+        working-directory: app
+
   # ── The server half of the notifications ────────────────────────────────────
   #
   # ⚠️ `needs: [test, rules]` IS THE ENTIRE GUARANTEE OF THIS JOB, and it is the
