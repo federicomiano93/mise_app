@@ -1,11 +1,17 @@
 import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
+import { miseVersion } from './build-version.ts';
 
 // The address the app is served under is given at build time (`vite build --base=/mise2/`
 // on the preview), so the same source serves the preview path today and /mise_app/ at the
 // switch. Locally (`npm run dev`) it is the root.
 export default defineConfig({
   plugins: [react()],
+  // The release stamp the telemetry carries (src/telemetry/version.ts). Computed once, when the
+  // config loads; Vitest reads this same file, so specs see the same constant.
+  define: {
+    __MISE2_VERSION__: JSON.stringify(miseVersion()),
+  },
   resolve: {
     // One React for the app AND for anything it links from ../shared: two copies would
     // break hooks with no error at build time.
