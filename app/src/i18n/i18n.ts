@@ -28,12 +28,12 @@ export function localeOf(lang: Language): string {
   return lang === 'it' ? 'it-IT' : 'en-GB';
 }
 
-// Which form of a plural message a count selects. CLDR decides (Italian has a `many` form
+// Which form of a plural message a number selects. CLDR decides (Italian has a `many` form
 // for millions, English has no `few`), and a language whose rule picks a form the message does
 // not carry falls back to `other`, which every PluralMessage must have.
-function pluralForm(lang: Language, message: PluralMessage, count: unknown): string {
-  if (typeof count !== 'number') return message.other;
-  const category = new Intl.PluralRules(localeOf(lang)).select(count);
+function pluralForm(lang: Language, message: PluralMessage, n: unknown): string {
+  if (typeof n !== 'number') return message.other;
+  const category = new Intl.PluralRules(localeOf(lang)).select(n);
   return message[category] ?? message.other;
 }
 
@@ -41,10 +41,15 @@ const PLACEHOLDER = /\{(\w+)\}/g;
 
 // Fills a message in. ⚠️ A placeholder nobody supplied stays visible as «{name}» instead of
 // becoming «undefined» or throwing: a missing word is a bug a person can read out loud, a
-// thrown error is a blank screen. Numbers are formatted for the language, so 1000 reads
-// «1,000» in English and «1.000» in Italian.
+// thrown error is a blank screen. Numbers are formatted for the language, so 12000 reads
+// «12,000» in English and «12.000» in Italian.
+//
+// ⚠️ THE NUMBER THAT PICKS A PLURAL FORM IS CALLED `n` — `t(key, { n })`, with `{n}` in the
+// text — exactly as in the current app (translate() in js/i18n.js). Mise 2 ports that app's
+// messages in step 3, so a different name here would silently pick the `other` form for every
+// ported count and leave a literal «{n}» on screen. A `{ count }` is NOT read as the number.
 export function format(lang: Language, message: Message, params?: MessageParams): string {
-  const text = typeof message === 'string' ? message : pluralForm(lang, message, params?.['count']);
+  const text = typeof message === 'string' ? message : pluralForm(lang, message, params?.['n']);
   if (!params) return text;
   let numbers: Intl.NumberFormat | undefined;
   return text.replace(PLACEHOLDER, (placeholder, name: string) => {

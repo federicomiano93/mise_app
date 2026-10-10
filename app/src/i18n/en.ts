@@ -2,7 +2,8 @@
 // match it exactly — a missing or an extra key there is a TYPE error, and `npm run build`
 // type-checks before it builds, so an untranslated message cannot reach a phone.
 //
-// A message is a string, or a PluralMessage when its wording depends on a count. Keys are
+// A message is a string, or a PluralMessage when its wording depends on a count — and that
+// count is passed as `n`: t(key, { n }), `{n}` in the text, as in the current app. Keys are
 // flat and grouped by prefix (nav., section., placeholder. …); a `{name}` in a message is
 // filled in by format() in i18n.ts.
 

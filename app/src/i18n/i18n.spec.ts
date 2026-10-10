@@ -120,47 +120,55 @@ describe('format', () => {
   });
 
   describe('plurals', () => {
-    const items: PluralMessage = { one: '{count} item', other: '{count} items' };
+    const items: PluralMessage = { one: '{n} item', other: '{n} items' };
 
     it('picks one and other in English', () => {
-      expect(format('en', items, { count: 1 })).toBe('1 item');
-      expect(format('en', items, { count: 0 })).toBe('0 items');
-      expect(format('en', items, { count: 2 })).toBe('2 items');
+      expect(format('en', items, { n: 1 })).toBe('1 item');
+      expect(format('en', items, { n: 0 })).toBe('0 items');
+      expect(format('en', items, { n: 2 })).toBe('2 items');
     });
 
     it('picks one and other in Italian (zero is «other»)', () => {
-      const elementi: PluralMessage = { one: '{count} elemento', other: '{count} elementi' };
-      expect(format('it', elementi, { count: 1 })).toBe('1 elemento');
-      expect(format('it', elementi, { count: 0 })).toBe('0 elementi');
-      expect(format('it', elementi, { count: 2 })).toBe('2 elementi');
+      const elementi: PluralMessage = { one: '{n} elemento', other: '{n} elementi' };
+      expect(format('it', elementi, { n: 1 })).toBe('1 elemento');
+      expect(format('it', elementi, { n: 0 })).toBe('0 elementi');
+      expect(format('it', elementi, { n: 2 })).toBe('2 elementi');
     });
 
-    it('formats the count in the plural form it selects', () => {
-      expect(format('en', items, { count: 1200 })).toBe('1,200 items');
+    it('formats the number in the plural form it selects', () => {
+      expect(format('en', items, { n: 1200 })).toBe('1,200 items');
     });
 
-    it('follows the language\'s rule, not the number: English never selects «zero»', () => {
-      expect(format('en', { ...items, zero: 'no items' }, { count: 0 })).toBe('0 items');
+    it('follows the rule of the language, not the number: English never selects «zero»', () => {
+      expect(format('en', { ...items, zero: 'no items' }, { n: 0 })).toBe('0 items');
     });
 
     it('falls back to «other» when the selected form is missing', () => {
       // Italian selects `many` for 1,000,000; a message without it must not print «undefined».
-      const elementi: PluralMessage = { one: '{count} elemento', other: '{count} elementi' };
-      expect(format('it', elementi, { count: 1_000_000 })).toBe('1.000.000 elementi');
+      const elementi: PluralMessage = { one: '{n} elemento', other: '{n} elementi' };
+      expect(format('it', elementi, { n: 1_000_000 })).toBe('1.000.000 elementi');
     });
 
     it('uses the provided form when the language selects it', () => {
       const elementi: PluralMessage = {
-        one: '{count} elemento',
-        many: '{count} di elementi',
-        other: '{count} elementi',
+        one: '{n} elemento',
+        many: '{n} di elementi',
+        other: '{n} elementi',
       };
-      expect(format('it', elementi, { count: 1_000_000 })).toBe('1.000.000 di elementi');
+      expect(format('it', elementi, { n: 1_000_000 })).toBe('1.000.000 di elementi');
     });
 
-    it('uses «other» when there is no numeric count', () => {
-      expect(format('en', items)).toBe('{count} items');
-      expect(format('en', items, { count: '1' })).toBe('1 items');
+    it('uses «other» when there is no numeric n', () => {
+      expect(format('en', items)).toBe('{n} items');
+      expect(format('en', items, { n: '1' })).toBe('1 items');
+    });
+
+    // ⚠️ THE NAME IS `n`, as in the current app (js/i18n.js translate()). `{ count }` is not
+    // the number that picks the form: the message falls to «other» and keeps a literal «{n}».
+    // Pinned so a port of the current app's counted messages (step 3) cannot silently break.
+    it('does not read a number called count: it is n', () => {
+      expect(format('en', items, { count: 1 })).toBe('{n} items');
+      expect(format('it', { one: '{n} elemento', other: '{n} elementi' }, { count: 1 })).toBe('{n} elementi');
     });
   });
 });
