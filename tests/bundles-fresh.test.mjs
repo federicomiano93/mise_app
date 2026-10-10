@@ -17,7 +17,7 @@ import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import {
   ROOT, entryPages, readManifest, manifestProblems, shaOfText, bundleTagsByPage, MANIFEST_FILE,
-  BUILD_CONFIG, configSha, pinnedEsbuild, NATIVE_MODULE_PAGES,
+  BUILD_CONFIG, BUILD_SCRIPTS, configSha, pinnedEsbuild, NATIVE_MODULE_PAGES,
 } from '../scripts/bundle-lib.mjs';
 import { readAssets } from '../scripts/sw-hashes.mjs';
 import { scriptsOfEntry } from './helpers/page-scripts.mjs';
@@ -83,9 +83,15 @@ function fixture() {
     inputs[f] = shaOfText(readFileSync(join(root, f), 'utf8'));
   }
   put('package.json', JSON.stringify({ devDependencies: { esbuild: '1.2.3' } }));
+  const buildScripts = {};
+  for (const file of BUILD_SCRIPTS) {
+    put(file, `// ${file}\n`);
+    buildScripts[file] = shaOfText(`// ${file}\n`);
+  }
   put(MANIFEST_FILE, JSON.stringify({
     esbuild: '1.2.3',
     config: configSha(),
+    buildScripts,
     outputs: { 'dist/home.js': { sha: shaOfText('var x=1;\n'), mapSha: shaOfText('{}'), inputs } },
   }));
   return { root, put };
@@ -126,6 +132,17 @@ test('a fresh checkout has no problems, and each kind of staleness is named', ()
     assert.match(manifestProblems(root).join('\n'), /build configuration \(BUILD_CONFIG\) changed/);
     put(MANIFEST_FILE, JSON.stringify(manifest));
 
+    put('scripts/build-bundles.mjs', '// the build changed\n');
+    assert.match(manifestProblems(root).join('\n'), /scripts\/build-bundles\.mjs changed since dist\/ was built/);
+    put('scripts/build-bundles.mjs', '// scripts/build-bundles.mjs\n');
+    assert.deepEqual(manifestProblems(root), []);
+
+    put('other.html', '<script src="js/util.js" type="module"></script>\n');
+    assert.match(manifestProblems(root).join('\n'), /other\.html has native module tags/, 'type after src is caught too');
+    put('other.html', '<script type="module">import "./x.js";</script>\n');
+    assert.match(manifestProblems(root).join('\n'), /other\.html has an inline <script type="module">/);
+    rmSync(join(root, 'other.html'));
+
     put('other.html', '<script type="module" src="js/util.js"></script>\n');
     assert.match(manifestProblems(root).join('\n'), /other\.html has native module tags but is not on the NATIVE_MODULE_PAGES allowlist/);
     rmSync(join(root, 'other.html'));
@@ -147,6 +164,7 @@ test('the manifest records the pinned esbuild, the configuration fingerprint and
   assert.equal(pinnedEsbuild(), JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')).devDependencies.esbuild);
   assert.match(pinnedEsbuild(), /^\d+\.\d+\.\d+$/, 'pinned exactly, no range');
   assert.equal(manifest.config, configSha());
+  assert.deepEqual(Object.keys(manifest.buildScripts).sort(), [...BUILD_SCRIPTS].sort(), 'the build\'s own code is fingerprinted');
   assert.equal(BUILD_CONFIG.splitting, false, 'splitting can reorder module evaluation');
   for (const [out, info] of Object.entries(manifest.outputs)) assert.match(info.mapSha, /^[0-9a-f]{16}$/, out);
 });

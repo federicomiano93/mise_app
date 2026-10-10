@@ -25,10 +25,12 @@ export const SHA_LENGTH = 16;
 //   wait for it and die with it.
 export const NATIVE_MODULE_PAGES = Object.freeze(['reset-password.html']);
 
-// Everything that decides what the build writes, in ONE object: scripts/build-bundles.mjs builds
-// its esbuild options from it, and the manifest records its fingerprint, so changing any option
-// without rebuilding turns tests/bundles-fresh.test.mjs red (the sources would be unchanged, and
-// the stale bundle would otherwise pass).
+// The build's OPTIONS, in ONE object: scripts/build-bundles.mjs builds its esbuild options from it,
+// and the manifest records its fingerprint, so changing any option without rebuilding turns
+// tests/bundles-fresh.test.mjs red (the sources would be unchanged, and the stale bundle would
+// otherwise pass). The build's CODE (the plugins, the manifest format) is not an option: the
+// manifest fingerprints the two build scripts themselves (BUILD_SCRIPTS) for that.
+export const BUILD_SCRIPTS = Object.freeze(['scripts/build-bundles.mjs', 'scripts/bundle-lib.mjs']);
 export const BUILD_CONFIG = Object.freeze({
   bundle: true,
   format: 'esm',
@@ -102,6 +104,11 @@ export function manifestProblems(root = ROOT) {
   if (pin && manifest.esbuild !== pin) {
     problems.push(`dist/ was built with esbuild ${manifest.esbuild}, package.json pins ${pin}`);
   }
+  for (const file of BUILD_SCRIPTS) {
+    if (!manifest.buildScripts || manifest.buildScripts[file] !== shaOfFile(file, root)) {
+      problems.push(`${file} changed since dist/ was built`);
+    }
+  }
   if (manifest.config !== configSha()) problems.push('the build configuration (BUILD_CONFIG) changed since dist/ was built');
 
   for (const page of entryPages(root)) {
@@ -126,7 +133,13 @@ export function manifestProblems(root = ROOT) {
   // that fell out of bundling.
   for (const name of readdirSync(root).filter(n => n.endsWith('.html'))) {
     const html = readFileSync(join(root, name), 'utf8');
-    const native = /<script\b[^>]*type="module"[^>]*\bsrc="js\//.test(html);
+    // A module tag with a src into js/, in either attribute order, is a native page; an inline
+    // module script (no src) cannot be bundled or precached-by-name at all, so it is a fault.
+    const native = [...html.matchAll(/<script\b[^>]*>/g)].some(m =>
+      /\btype="module"/.test(m[0]) && /\bsrc="js\//.test(m[0]));
+    if ([...html.matchAll(/<script\b[^>]*>/g)].some(m => /\btype="module"/.test(m[0]) && !/\bsrc=/.test(m[0]))) {
+      problems.push(`${name} has an inline <script type="module">, which no bundle or precache covers`);
+    }
     if (native && !NATIVE_MODULE_PAGES.includes(name)) problems.push(`${name} has native module tags but is not on the NATIVE_MODULE_PAGES allowlist`);
     if (NATIVE_MODULE_PAGES.includes(name) && !native) problems.push(`${name} is on the native-module allowlist but has no module tag`);
   }

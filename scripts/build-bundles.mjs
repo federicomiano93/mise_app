@@ -27,7 +27,7 @@ import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as esbuild from 'esbuild';
 import {
-  ROOT, DIST_DIR, MANIFEST_FILE, PAGES_DIR, BUILD_CONFIG as C, configSha, entryPages, readManifest, shaOfText,
+  ROOT, DIST_DIR, MANIFEST_FILE, PAGES_DIR, BUILD_CONFIG as C, BUILD_SCRIPTS, configSha, entryPages, readManifest, shaOfText,
   shaOfFile, toLF,
 } from './bundle-lib.mjs';
 
@@ -110,7 +110,7 @@ export async function buildAll() {
     inputs: sortedInputs([I18N_SOURCE]),
   };
   const sorted = Object.fromEntries(Object.entries(outputs).sort(([a], [b]) => (a < b ? -1 : 1)));
-  files[MANIFEST_FILE] = JSON.stringify({ esbuild: esbuild.version, config: configSha(), outputs: sorted }, null, 2) + '\n';
+  files[MANIFEST_FILE] = JSON.stringify({ esbuild: esbuild.version, config: configSha(), buildScripts: sortedInputs(BUILD_SCRIPTS), outputs: sorted }, null, 2) + '\n';
   return files;
 }
 

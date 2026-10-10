@@ -1,6 +1,10 @@
 {
   "esbuild": "0.25.10",
   "config": "79e25912b590551d",
+  "buildScripts": {
+    "scripts/build-bundles.mjs": "e58d48c3c6542f25",
+    "scripts/bundle-lib.mjs": "bb49a79a12cf0daf"
+  },
   "outputs": {
     "dist/calculator.js": {
       "sha": "e9523f256e69e65d",
