@@ -15,6 +15,7 @@
 // that is a human decision as well.
 
 import { t } from '../i18n.js';
+import { guarded } from '../guard.js';
 import {
   normalizeLogs, sortLogs, buildLog, isLogVisible,
 } from './pastries-log-model.js';
@@ -71,7 +72,7 @@ export function stopPastryLogs() {
 // Start syncing. onUpdate() fires whenever the records change. Attach this only
 // when the Records screen opens — never at page boot.
 export function initPastryLogs(onUpdate, onStreamError) {
-  notify = typeof onUpdate === 'function' ? onUpdate : null;
+  notify = guarded('Pastries log: screen refresh', onUpdate);
   stopPastryLogs();           // never two listeners: a second start replaces the first
   const mine = logsWatchSeq;
   watchPastryLogs(
@@ -117,17 +118,21 @@ let confirmationsSeq = 0;
 export async function watchConfirmations(workDate, onChange) {
   confirmationsSeq += 1;
   const mine = confirmationsSeq;
+  // ⚠️ THE SCREEN'S REPAINT IS GUARDED HERE, not at the call site: the first call below
+  // runs before the await, so a throw would reject this async function unawaited and the
+  // listener would never be attached — lists confirmed tonight would never lock.
+  const paint = guarded('Pastries log: confirmations refresh', onChange);
   if (unsubConfirmed) {
     try { unsubConfirmed(); } catch (e) { /* already gone */ }
     unsubConfirmed = null;
   }
   confirmed = new Set();
-  if (onChange) onChange();
+  if (paint) paint();
   try {
     const unsub = await watchPastryLogsForDate(
       workDate,
-      docs => { if (mine === confirmationsSeq) { confirmed = confirmedDaysFrom(docs); if (onChange) onChange(); } },
-      () => { if (mine === confirmationsSeq) { confirmed = new Set(); if (onChange) onChange(); } },
+      docs => { if (mine === confirmationsSeq) { confirmed = confirmedDaysFrom(docs); if (paint) paint(); } },
+      () => { if (mine === confirmationsSeq) { confirmed = new Set(); if (paint) paint(); } },
     );
     if (mine !== confirmationsSeq) {
       try { unsub(); } catch (e) { /* already gone */ }
@@ -139,7 +144,7 @@ export async function watchConfirmations(workDate, onChange) {
     // An older call that failed must not empty a newer call's set.
     if (mine !== confirmationsSeq) return;
     confirmed = new Set();
-    if (onChange) onChange();
+    if (paint) paint();
   }
 }
 

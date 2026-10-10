@@ -8,6 +8,7 @@
 // best-effort, and a REJECTED write is rolled back and surfaced.
 
 import { t } from '../i18n.js';
+import { guarded } from '../guard.js';
 import { normalizeProduct, normalizeProducts, PRODUCT_MODEL } from './foodcost-model.js';
 import {
   watchProducts, watchRecipes, watchIngredients,
@@ -88,7 +89,7 @@ export function hasLiveProducts() { return liveProducts; }
 export function hasLiveRecipes() { return liveRecipes; }
 
 export function initFoodCost(onUpdate, onError) {
-  notify = typeof onUpdate === 'function' ? onUpdate : null;
+  notify = guarded('Food cost: screen refresh', onUpdate);
 
   watchProducts(
     remote => {

@@ -12,6 +12,7 @@ import { watchCatalogueRecipe } from './firebase.js';
 import { getRecipes } from './calculator-config.js';
 import { linkedRecipeIds, resolveRecipe, sheetRecipe, canCalculate, isLinked } from './calculator-recipe-source.js';
 import { t } from './i18n.js';
+import { guarded } from './guard.js';
 
 // id → the Catalogue recipe, or null when it cannot be read.
 //
@@ -25,7 +26,10 @@ let notify = () => {};
 // Called whenever the config changes. Starts a listener for every newly linked
 // recipe and stops the ones nothing points at any more.
 export function syncLinkedRecipes(config, onChange) {
-  if (onChange) notify = onChange;
+  // Guarded: notify() runs inside a Firestore listener, and a throw from the screen's
+  // redraw must not stop the recipe from being stored. Not a function → keep the no-op.
+  const refresh = guarded('Calculator: linked recipe refresh', onChange);
+  if (refresh) notify = refresh;
   const wanted = new Set(linkedRecipeIds(getRecipes(config)));
 
   for (const [id, stop] of stops) {

@@ -23,6 +23,7 @@
 // to explain it.
 
 import { t } from '../i18n.js';
+import { guarded } from '../guard.js';
 import { currentLocationId } from '../location.js';
 import {
   normalizeMonth, carryOver, toDocument, readCount, isMonthId, nextMonth,
@@ -144,7 +145,7 @@ function announce() {
 
 export function initInventory(id, onUpdate, onError) {
   monthId = isMonthId(id) ? id : null;
-  notify = typeof onUpdate === 'function' ? onUpdate : null;
+  notify = guarded('Inventory: screen refresh', onUpdate);
   if (!monthId) return null;
 
   // An empty month of the right shape, so the screen can paint before anything

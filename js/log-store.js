@@ -6,6 +6,7 @@
 // to memory + cache immediately, then synced best-effort (a sync failure never
 // loses the local change or blocks the UI).
 
+import { guarded } from './guard.js';
 import {
   watchLogs, saveLogDoc, deleteLogDoc, anyLogExists, readOldLogsOnce,
 } from './firebase.js';
@@ -41,7 +42,7 @@ export function getLogById(id) { return current.find(l => l.id === id) || null; 
 // Start syncing. onUpdate(logs) fires whenever the set of logs changes. Returns the
 // synchronous cached list so the first paint never waits on the network.
 export function initLogs(onUpdate) {
-  notify = typeof onUpdate === 'function' ? onUpdate : null;
+  notify = guarded('Calculator log: screen refresh', onUpdate);
   watchLogs(logs => { current = logs; writeCache(current); if (notify) notify(getLogs()); });
   migrateIfNeeded();
   return getLogs();

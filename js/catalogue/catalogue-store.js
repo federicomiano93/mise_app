@@ -12,6 +12,7 @@
 // extra Firestore writes) — see the usage helpers below.
 
 import { t } from '../i18n.js';
+import { guarded } from '../guard.js';
 import {
   normalizeCatalogueRecipe, normalizeCatalogueRecipes, isScaledEntryFresh, labelFieldsOf,
 } from './catalogue-model.js';
@@ -93,7 +94,7 @@ export function setSyncErrorHandler(fn) {
 // Returns the synchronous cached list so the first paint never waits on the
 // network. The listener is attached here (page open), not at app boot.
 export function initCatalogue(onUpdate, onError) {
-  notify = typeof onUpdate === 'function' ? onUpdate : null;
+  notify = guarded('Catalogue: screen refresh', onUpdate);
   watchRecipes(
     remote => {
       recipes = normalizeCatalogueRecipes(remote);
