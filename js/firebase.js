@@ -393,7 +393,9 @@ function setSession(next) {
 // Subscribe to session changes. Calls back immediately with the current state.
 export function onSession(callback) {
   sessionListeners.add(callback);
-  callback(session);
+  // The first call is guarded exactly like the later ones in setSession(): a screen
+  // that throws on its first paint must not stop the page's other scripts.
+  try { callback(session); } catch (err) { console.error('Session listener failed:', err); }
   return () => sessionListeners.delete(callback);
 }
 

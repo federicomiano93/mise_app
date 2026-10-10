@@ -6063,7 +6063,13 @@ export function setLanguage(lang) {
   const next = LANGUAGES.includes(lang) ? lang : DEFAULT_LANGUAGE;
   const changed = next !== current;
   current = next;
-  if (changed) for (const fn of listeners) { try { fn(current); } catch { /* one screen must not stop the others */ } }
+  if (changed) {
+    for (const fn of listeners) {
+      // One screen must not stop the others — but it is reported, not swallowed:
+      // js/error-report.js records every console.error.
+      try { fn(current); } catch (err) { console.error('Language listener failed:', err); }
+    }
+  }
   return current;
 }
 

@@ -7,6 +7,7 @@
 // and, when it has data, updates the cache and notifies the app to re-render.
 
 import { t } from './i18n.js';
+import { guarded } from './guard.js';
 import { DEFAULT_CONFIG, cloneConfig, normalizeConfig, getClients, saveFailureKey } from './calculator-config.js';
 import { watchCalculatorConfig, saveCalculatorConfig } from './firebase.js';
 import { alertDialog } from './confirm-dialog.js';
@@ -60,7 +61,7 @@ export function getConfig() {
 // config changes so the app can re-render. Returns the synchronous initial
 // config so the first paint never waits on the network.
 export function initConfig(onUpdate) {
-  notify = typeof onUpdate === 'function' ? onUpdate : null;
+  notify = guarded('Calculator config: screen refresh', onUpdate);
   watchCalculatorConfig(remote => {
     const firstAnswer = !serverAnswered;
     // Set BEFORE the early return: "there is no document" is an answer, and a

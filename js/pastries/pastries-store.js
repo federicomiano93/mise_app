@@ -16,6 +16,7 @@
 // location into another.
 
 import { t } from '../i18n.js';
+import { guarded } from '../guard.js';
 import {
   normalizeDays, normalizeDay, daysFromCache, cleanNote, setQuantityAt, WEEKDAYS,
   weekdayLabel,
@@ -88,7 +89,7 @@ export function setSyncErrorHandler(fn) {
 // Returns the synchronous cached map, so the first paint never waits on the
 // network.
 export function initPastries(onUpdate, onError) {
-  notify = typeof onUpdate === 'function' ? onUpdate : null;
+  notify = guarded('Pastries: screen refresh', onUpdate);
   watchPastryDays(
     remote => {
       days = normalizeDays(remote);

@@ -15,6 +15,7 @@
 // that is a human decision as well.
 
 import { t } from '../i18n.js';
+import { guarded } from '../guard.js';
 import {
   normalizeLogs, sortLogs, buildLog, isLogVisible,
 } from './pastries-log-model.js';
@@ -71,7 +72,7 @@ export function stopPastryLogs() {
 // Start syncing. onUpdate() fires whenever the records change. Attach this only
 // when the Records screen opens — never at page boot.
 export function initPastryLogs(onUpdate, onStreamError) {
-  notify = typeof onUpdate === 'function' ? onUpdate : null;
+  notify = guarded('Pastries log: screen refresh', onUpdate);
   stopPastryLogs();           // never two listeners: a second start replaces the first
   const mine = logsWatchSeq;
   watchPastryLogs(
