@@ -53,7 +53,8 @@ live?»* and tell him to **expect two clicks** if rules change (the harness asks
    hand: `gh api -X POST repos/federicomiano93/mise_app/pages/builds`.
 4. **Verify live** (P6), on an updated local main (`git switch main && git pull`):
    - `curl -s -o /dev/null -w "%{http_code}" https://federicomiano93.github.io/mise_app/`
-     and `…/js/firebase.js` → both `200`.
+     `…/dist/index.js` and `…/dist/i18n.js` → all `200` (no page loads `js/firebase.js` any more; a 404 on
+     `dist/index.js` is what breaks the app for new visitors).
    - `node scripts/verify-live-assets.mjs` → `sameRelease: true`, `problems: []`
      (right after the merge Pages may still serve the old sw.js: wait and re-run).
    - `node scripts/rules-live-diff.mjs origin/main` → `identical: true` (live rules = main).
