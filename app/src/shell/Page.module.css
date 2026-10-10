@@ -23,9 +23,11 @@
   padding: var(--s4);
 }
 
+/* From tablet width the content also keeps clear of a notch on the right (see the rail in
+   AppShell.module.css for the left; below 700px nothing changes). */
 @media (min-width: 700px) {
   .head {
-    padding: var(--s6) var(--s8) var(--s4);
+    padding: var(--s6) calc(var(--s8) + env(safe-area-inset-right)) var(--s4) var(--s8);
     border-bottom: 0;
     background: none;
   }
@@ -35,6 +37,6 @@
   }
 
   .body {
-    padding: 0 var(--s8) var(--s8);
+    padding: 0 calc(var(--s8) + env(safe-area-inset-right)) var(--s8) var(--s8);
   }
 }

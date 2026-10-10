@@ -45,11 +45,15 @@
 
 /* The rail (tablet) */
 
+/* ⚠️ index.html says viewport-fit=cover, so the page reaches under the notch: an iPhone held in
+   landscape (or a tablet with a camera cut-out) would cover the left of the rail. The shell
+   gives the rail's column the inset on top of its width (see the 700px query) and the rail
+   pads its items by the same amount, so the items keep their 76px and clear the notch. */
 .rail {
   display: none;
   flex-direction: column;
   gap: var(--s1);
-  padding: var(--s4) var(--s2);
+  padding: var(--s4) var(--s2) var(--s4) calc(var(--s2) + env(safe-area-inset-left));
   /* A landscape phone is 700px wide yet only about 390px tall. */
   overflow-y: auto;
   background: var(--rail);
@@ -145,7 +149,8 @@
   align-items: center;
   gap: var(--s4);
   height: 60px;
-  padding: 0 var(--s6);
+  /* The right inset keeps the connection status clear of a notch on that side. */
+  padding: 0 calc(var(--s6) + env(safe-area-inset-right)) 0 var(--s6);
   border-bottom: 1px solid var(--line);
   background: var(--surface);
 }
@@ -237,7 +242,7 @@
    above has its `display` here — a rule written for one side only leaves the other blank. */
 @media (min-width: 700px) {
   .shell {
-    grid-template-columns: var(--rail-w) minmax(0, 1fr);
+    grid-template-columns: calc(var(--rail-w) + env(safe-area-inset-left)) minmax(0, 1fr);
     grid-template-rows: minmax(0, 1fr);
   }
 
