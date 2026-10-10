@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { MockInstance } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { MemoryRouter } from 'react-router';
 import { it as italian } from '../i18n/it';
 import { I18nProvider } from '../i18n/I18nProvider';
 import { PartBoundary } from './PartBoundary';
@@ -97,6 +98,86 @@ describe('PartBoundary', () => {
     }
     render(<PartBoundary><ThrowsNothing /></PartBoundary>);
     expect(screen.getByRole('status')).toBeInTheDocument();
+  });
+
+  it('draws no heading of its own without a title: it is a part of a screen', () => {
+    render(<PartBoundary><Flaky /></PartBoundary>);
+    expect(screen.queryByRole('heading')).not.toBeInTheDocument();
+  });
+
+  it('keeps the screen named when it has a title: one h1 and the tab title', () => {
+    render(
+      <MemoryRouter>
+        <PartBoundary title="Recipes"><Flaky /></PartBoundary>
+      </MemoryRouter>,
+    );
+    const headings = screen.getAllByRole('heading', { level: 1 });
+    expect(headings).toHaveLength(1);
+    expect(headings[0]).toHaveTextContent('Recipes');
+    expect(document.title).toBe('Recipes · Mise');
+    expect(screen.getByRole('status')).toHaveTextContent('This part didn’t load.');
+  });
+
+  describe('focus', () => {
+    function Screen() {
+      if (broken) throw failure;
+      return <h1 tabIndex={-1}>the screen</h1>;
+    }
+
+    it('goes to the first heading of the restored children after Reload', async () => {
+      const user = userEvent.setup();
+      render(<PartBoundary><Screen /></PartBoundary>);
+      expect(screen.getByRole('button', { name: 'Reload' })).toBeInTheDocument();
+
+      broken = false;
+      await user.click(screen.getByRole('button', { name: 'Reload' }));
+
+      expect(screen.getByRole('heading', { name: 'the screen' })).toHaveFocus();
+    });
+
+    it('makes a heading focusable when it carries no tabindex', async () => {
+      const user = userEvent.setup();
+      function PlainScreen() {
+        if (broken) throw failure;
+        return <h1>a plain heading</h1>;
+      }
+      render(<PartBoundary><PlainScreen /></PartBoundary>);
+
+      broken = false;
+      await user.click(screen.getByRole('button', { name: 'Reload' }));
+
+      expect(screen.getByRole('heading', { name: 'a plain heading' })).toHaveFocus();
+    });
+
+    it('goes to the container when the restored children have no heading', async () => {
+      const user = userEvent.setup();
+      render(<PartBoundary><Flaky /></PartBoundary>);
+
+      broken = false;
+      await user.click(screen.getByRole('button', { name: 'Reload' }));
+
+      const container = screen.getByText('the part works').parentElement;
+      expect(container).toHaveAttribute('tabindex', '-1');
+      expect(container).toHaveFocus();
+    });
+
+    it('stays on the Reload button when the part fails again', async () => {
+      const user = userEvent.setup();
+      render(<PartBoundary><Flaky /></PartBoundary>);
+
+      await user.click(screen.getByRole('button', { name: 'Reload' }));
+
+      expect(screen.getByRole('button', { name: 'Reload' })).toHaveFocus();
+    });
+
+    it('is left alone when resetKey clears the failure: that is a navigation, Page moves it', () => {
+      const { rerender } = render(<PartBoundary resetKey="boom"><Screen /></PartBoundary>);
+      broken = false;
+      rerender(<PartBoundary resetKey="orders"><Screen /></PartBoundary>);
+
+      expect(screen.getByRole('heading', { name: 'the screen' })).not.toHaveFocus();
+      expect(document.body).toHaveFocus();
+    });
   });
 
   it('speaks the language of the provider', () => {

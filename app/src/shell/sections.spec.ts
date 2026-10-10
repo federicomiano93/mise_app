@@ -10,6 +10,7 @@ import {
   TAB_SECTIONS,
   moreIsCurrent,
   sectionById,
+  titleKeyFor,
 } from './sections';
 
 describe('the section list', () => {
@@ -68,5 +69,23 @@ describe('moreIsCurrent', () => {
     ['/suppliers-archive', false],
   ])('%s → %s', (pathname, expected) => {
     expect(moreIsCurrent(pathname)).toBe(expected);
+  });
+});
+
+describe('titleKeyFor', () => {
+  it.each([
+    ['/orders', 'section.orders'],
+    ['/food-cost', 'section.foodcost'],
+    ['/settings/language', 'section.settings'],
+    ['/more', 'section.more'],
+    ['/', 'notFound.title'],
+    ['/no-such-section', 'notFound.title'],
+    ['/suppliers-archive', 'notFound.title'],
+  ])('%s → %s', (pathname, expected) => {
+    expect(titleKeyFor(pathname)).toBe(expected);
+  });
+
+  it('names every section by its own label', () => {
+    for (const section of SECTIONS) expect(titleKeyFor(section.path)).toBe(section.label);
   });
 });

@@ -66,6 +66,15 @@ function isUnder(pathname: string, path: string): boolean {
   return pathname === path || pathname.startsWith(`${path}/`);
 }
 
+// The message key naming the screen at a path: the section's label, «More» for its own page,
+// «Page not found» for anything else. The shell uses it to name a screen that failed to draw
+// (the section never got to print its own title), so it must agree with the route table.
+export function titleKeyFor(pathname: string): MessageKey {
+  if (isUnder(pathname, MORE.path)) return MORE.label;
+  const section = SECTIONS.find(candidate => isUnder(pathname, candidate.path));
+  return section ? section.label : 'notFound.title';
+}
+
 // «More» is the current tab on its own page AND on every section it holds: standing on
 // Suppliers on a phone, the tab bar must still say where you are, and the only tab that
 // leads there is «More».

@@ -1,8 +1,9 @@
-import { Component } from 'react';
-import type { ErrorInfo, ReactNode } from 'react';
+import { Component, createRef } from 'react';
+import type { ErrorInfo, ReactNode, RefObject } from 'react';
 import { Button } from 'react-aria-components';
 import { CloudOff, RotateCw } from 'lucide-react';
 import { useT } from '../i18n/useT';
+import { Page } from '../shell/Page';
 import styles from './PartBoundary.module.css';
 
 type Props = {
@@ -10,6 +11,11 @@ type Props = {
   // When this changes while the fallback is showing, the boundary tries its children again.
   // The shell passes the section's path, so moving to another section recovers by itself.
   resetKey?: string;
+  // The name of the screen this boundary guards. Given, the fallback is drawn inside a Page
+  // with it: the screen keeps its h1, its browser-tab title and the focus move after a
+  // navigation. Left out, the fallback is just the box — for a part INSIDE a screen, whose own
+  // heading is already on show.
+  title?: string;
   // 2b-2 connects the error report here.
   onError?: (error: unknown, info: ErrorInfo) => void;
 };
@@ -26,6 +32,10 @@ type State = { failed: boolean; resetKey: string | undefined };
 export class PartBoundary extends Component<Props, State> {
   override state: State = { failed: false, resetKey: this.props.resetKey };
 
+  private container = createRef<HTMLDivElement>();
+  private fallback = createRef<HTMLDivElement>();
+  private focusAfterReload = false;
+
   static getDerivedStateFromError(): Partial<State> {
     return { failed: true };
   }
@@ -41,22 +51,58 @@ export class PartBoundary extends Component<Props, State> {
     this.props.onError?.(error, info);
   }
 
+  // ⚠️ THE «RELOAD» BUTTON IS UNMOUNTED WHEN THE CHILDREN COME BACK, AND THE FOCUS GOES WITH
+  // IT: to <body>, where a keyboard user is lost and a screen reader says nothing. So the focus
+  // is put back on the restored screen's heading (its first h1), or on the container if it has
+  // none. Only after THIS button: a recovery through resetKey is a navigation, and Page moves
+  // the focus after those itself.
+  //
+  // ⚠️ A PART THAT FAILS AGAIN LOSES THE FOCUS TOO: when a boundary catches an error React
+  // throws away the fallback it showed and builds a new one, so the button the person just
+  // pressed is a different element. The new button takes the focus.
+  override componentDidUpdate(_previous: Props, previousState: State): void {
+    if (!this.focusAfterReload) return;
+    this.focusAfterReload = false;
+    if (!previousState.failed) return;
+    if (this.state.failed) this.fallback.current?.querySelector('button')?.focus();
+    else focusRestored(this.container.current);
+  }
+
   private reload = (): void => {
+    this.focusAfterReload = true;
     this.setState({ failed: false });
   };
 
   override render(): ReactNode {
-    if (this.state.failed) return <PartFailed onReload={this.reload} />;
-    return this.props.children;
+    if (this.state.failed) return <PartFailed title={this.props.title} onReload={this.reload} boxRef={this.fallback} />;
+    return <div ref={this.container} tabIndex={-1}>{this.props.children}</div>;
   }
+}
+
+function focusRestored(container: HTMLElement | null): void {
+  if (!container) return;
+  const heading = container.querySelector('h1');
+  if (!heading) {
+    container.focus();
+    return;
+  }
+  // A heading is not focusable unless it carries a tabindex; Page's does, anybody else's may not.
+  if (!heading.hasAttribute('tabindex')) heading.tabIndex = -1;
+  heading.focus();
 }
 
 // A function component, so it can read the language from the context like every other
 // screen; the class above cannot call a hook.
-function PartFailed({ onReload }: { onReload: () => void }) {
+type FailedProps = {
+  title: string | undefined;
+  onReload: () => void;
+  boxRef: RefObject<HTMLDivElement | null>;
+};
+
+function PartFailed({ title, onReload, boxRef }: FailedProps) {
   const { t } = useT();
-  return (
-    <div role="status" className={styles.failed}>
+  const box = (
+    <div ref={boxRef} role="status" className={styles.failed}>
       <CloudOff className={styles.icon} aria-hidden="true" />
       <div className={styles.text}>
         <p className={styles.title}>{t('part.failed.title')}</p>
@@ -68,4 +114,5 @@ function PartFailed({ onReload }: { onReload: () => void }) {
       </Button>
     </div>
   );
+  return title === undefined ? box : <Page title={title}>{box}</Page>;
 }

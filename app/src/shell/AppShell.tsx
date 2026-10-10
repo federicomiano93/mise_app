@@ -4,7 +4,7 @@ import { Link, NavLink, Outlet, useHref, useLocation, useNavigate } from 'react-
 import { RouterProvider as AriaRouterProvider } from 'react-aria-components';
 import { PartBoundary } from '../errors/PartBoundary';
 import { useT } from '../i18n/useT';
-import { MORE, RAIL_BOTTOM, RAIL_TOP, TAB_SECTIONS, moreIsCurrent } from './sections';
+import { MORE, RAIL_BOTTOM, RAIL_TOP, TAB_SECTIONS, moreIsCurrent, titleKeyFor } from './sections';
 import type { Section } from './sections';
 import { useOnline } from './useOnline';
 import { useToday } from './useToday';
@@ -18,6 +18,7 @@ import styles from './AppShell.module.css';
 // changes the layout with no render at all, and `display: none` keeps the hidden one out of the
 // tab order and away from screen readers.
 export function AppShell() {
+  const { t } = useT();
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const contentRef = useRef<HTMLElement>(null);
@@ -38,8 +39,10 @@ export function AppShell() {
         <div className={styles.main}>
           <TopBar />
           <main id="main" ref={contentRef} tabIndex={-1} className={styles.content}>
-            {/* Keyed on the section, so moving to another one clears a failure. */}
-            <PartBoundary resetKey={pathname.split('/')[1] ?? ''}>
+            {/* Keyed on the section, so moving to another one clears a failure. A section that
+                fails never got to print its own title, so the shell names it from the address:
+                the fallback then has an h1 and the tab title of the screen it replaces. */}
+            <PartBoundary resetKey={pathname.split('/')[1] ?? ''} title={t(titleKeyFor(pathname))}>
               <Outlet />
             </PartBoundary>
           </main>

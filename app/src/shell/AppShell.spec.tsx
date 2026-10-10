@@ -303,8 +303,11 @@ describe('AppShell: Italian', () => {
 
 describe('AppShell: a section that fails', () => {
   let logged: MockInstance;
+  // The Recipes route throws while this is true; a spec "repairs" it by setting it false.
+  let broken = true;
 
   beforeEach(() => {
+    broken = true;
     // React and React Router log every render error they catch; this one is expected.
     logged = vi.spyOn(console, 'error').mockImplementation(() => undefined);
   });
@@ -313,8 +316,9 @@ describe('AppShell: a section that fails', () => {
     logged.mockRestore();
   });
 
-  function Boom(): never {
-    throw new Error('this section is broken');
+  function BrokenRecipes() {
+    if (broken) throw new Error('this section is broken');
+    return <SectionPlaceholder sectionId="recipes" />;
   }
 
   const routes: RouteObject[] = [{
@@ -323,12 +327,14 @@ describe('AppShell: a section that fails', () => {
     errorElement: <RootError />,
     children: [
       { path: 'orders', element: <SectionPlaceholder sectionId="orders" /> },
-      { path: 'boom', element: <Boom /> },
+      { path: 'recipes', element: <BrokenRecipes /> },
     ],
   }];
 
   it('says so inside the content, keeps the navigation, and recovers on another section', async () => {
-    const { user } = renderApp('/boom', { routes });
+    const { user } = renderApp('/orders', { routes });
+
+    await user.click(rail().getByRole('link', { name: 'Recipes' }));
 
     const main = within(screen.getByRole('main'));
     expect(main.getByRole('status')).toHaveTextContent('This part didn’t load.');
@@ -341,5 +347,38 @@ describe('AppShell: a section that fails', () => {
 
     expect(await screen.findByRole('heading', { level: 1, name: 'Orders' })).toBeInTheDocument();
     expect(within(screen.getByRole('main')).queryByText('This part didn’t load.')).not.toBeInTheDocument();
+  });
+
+  it('keeps the title of the screen, its one h1 and the focus move while the section is down', async () => {
+    const { user } = renderApp('/orders', { routes });
+    expect(document.title).toBe('Orders · Mise');
+
+    await user.click(rail().getByRole('link', { name: 'Recipes' }));
+
+    expect(document.title).toBe('Recipes · Mise');
+    const headings = screen.getAllByRole('heading', { level: 1 });
+    expect(headings).toHaveLength(1);
+    expect(headings[0]).toHaveTextContent('Recipes');
+    expect(headings[0]).toHaveFocus();
+  });
+
+  it('names a section that fails in Italian too', () => {
+    renderApp('/recipes', { routes, lang: 'it' });
+    expect(screen.getByRole('heading', { level: 1, name: 'Ricette' })).toBeInTheDocument();
+    expect(document.title).toBe('Ricette · Mise');
+  });
+
+  it('puts the focus on the heading of the restored screen after Reload, not on the page body', async () => {
+    // Opened directly (a first load), so no navigation moved the focus anywhere yet.
+    const { user } = renderApp('/recipes', { routes });
+    expect(within(screen.getByRole('main')).getByRole('status')).toBeInTheDocument();
+
+    broken = false;
+    await user.click(screen.getByRole('button', { name: 'Reload' }));
+
+    const heading = await screen.findByRole('heading', { level: 1, name: 'Recipes' });
+    expect(within(screen.getByRole('main')).queryByRole('status')).not.toBeInTheDocument();
+    expect(document.activeElement).toBe(heading);
+    expect(document.title).toBe('Recipes · Mise');
   });
 });
