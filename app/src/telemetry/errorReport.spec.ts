@@ -22,6 +22,7 @@ import {
   NO_STORAGE_PAGE_CAP, type ConsoleLike, type ListenerTarget, type ReporterDeps,
 } from './errorReport';
 import type { SessionSource, TelemetrySession } from './common';
+import { fakeSessionSource } from '../testing/fakeSessionSource';
 import { MISE2_VERSION } from './version';
 
 interface MemoryStorage {
@@ -332,25 +333,6 @@ describe('the keys', () => {
 
 // ── What Mise 2 adds: the real browser answers, and the start-up wiring ─────────────────────
 
-function fakeSource(initial: TelemetrySession) {
-  let current = initial;
-  const listeners = new Set<() => void>();
-  const source: SessionSource & { set(next: TelemetrySession): void; calls: string[] } = {
-    calls: [],
-    getSnapshot: () => current,
-    subscribe(listener) {
-      source.calls.push('subscribe');
-      listeners.add(listener);
-      return () => { listeners.delete(listener); };
-    },
-    set(next) {
-      current = next;
-      listeners.forEach(listener => listener());
-    },
-  };
-  return source;
-}
-
 describe('browserErrorDeps', () => {
   beforeEach(() => { window.localStorage.clear(); });
   afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); window.localStorage.clear(); });
@@ -400,7 +382,7 @@ describe('startErrorReports', () => {
 
   function wiring() {
     const handlers: Record<string, (event: unknown) => void> = {};
-    const source = fakeSource({ status: 'loading' });
+    const source = fakeSessionSource({ status: 'loading' });
     const target: ListenerTarget = {
       addEventListener: (type, fn) => { source.calls.push(`listen:${type}`); handlers[type] = fn; },
     };

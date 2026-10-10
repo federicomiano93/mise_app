@@ -21,6 +21,7 @@ import {
 } from './devicePing';
 import type { KeyValueStorage } from '../session/backend';
 import type { SessionSource, TelemetrySession } from './common';
+import { fakeSessionSource } from '../testing/fakeSessionSource';
 import { MISE2_VERSION } from './version';
 
 interface MemoryStorage extends KeyValueStorage {
@@ -274,29 +275,11 @@ describe('startDevicePing', () => {
   beforeEach(() => { vi.useFakeTimers(); });
   afterEach(() => { vi.useRealTimers(); });
 
-  function fakeSource(initial: TelemetrySession) {
-    let current = initial;
-    const listeners = new Set<() => void>();
-    const source: SessionSource & { set(next: TelemetrySession): void; listening(): number } = {
-      getSnapshot: () => current,
-      subscribe(listener) {
-        listeners.add(listener);
-        return () => { listeners.delete(listener); };
-      },
-      set(next) {
-        current = next;
-        listeners.forEach(listener => listener());
-      },
-      listening: () => listeners.size,
-    };
-    return source;
-  }
-
-  const session = (uid: string, locationId = 'bakery'): TelemetrySession => ({ status: 'ready', locationId, user: { uid } });
+  const session =(uid: string, locationId = 'bakery'): TelemetrySession => ({ status: 'ready', locationId, user: { uid } });
 
   test('it waits for the page to settle, then pings once for the open venue', async () => {
     const d = deps();
-    startDevicePing(fakeSource(session('start-a')), d);
+    startDevicePing(fakeSessionSource(session('start-a')), d);
     await vi.advanceTimersByTimeAsync(START_DELAY_MS - 1);
     expect(d.sent).toHaveLength(0);
     await vi.advanceTimersByTimeAsync(2);
@@ -306,7 +289,7 @@ describe('startDevicePing', () => {
 
   test('nothing happens while no venue is open; the ping follows once one opens', async () => {
     const d = deps();
-    const source = fakeSource({ status: 'loading' });
+    const source = fakeSessionSource({ status: 'loading' });
     startDevicePing(source, d);
     source.set({ status: 'choose-location' });
     await vi.advanceTimersByTimeAsync(START_DELAY_MS * 2);
@@ -318,7 +301,7 @@ describe('startDevicePing', () => {
 
   test('⚠️ the session is re-read when the timer fires: a person who signed out in the meantime is not pinged', async () => {
     const d = deps();
-    const source = fakeSource(session('start-c'));
+    const source = fakeSessionSource(session('start-c'));
     startDevicePing(source, d);
     await vi.advanceTimersByTimeAsync(1000);
     source.set({ status: 'signed-out' });
@@ -328,7 +311,7 @@ describe('startDevicePing', () => {
 
   test('⚠️ nor is the line written under the wrong venue or account: whoever is signed in NOW is the one pinged', async () => {
     const d = deps();
-    const source = fakeSource(session('start-d'));
+    const source = fakeSessionSource(session('start-d'));
     startDevicePing(source, d);
     await vi.advanceTimersByTimeAsync(1000);
     source.set(session('start-e', 'loc-b'));
@@ -339,7 +322,7 @@ describe('startDevicePing', () => {
 
   test('the same session announced twice is still pinged once', async () => {
     const d = deps();
-    const source = fakeSource(session('start-f'));
+    const source = fakeSessionSource(session('start-f'));
     startDevicePing(source, d);
     source.set(session('start-f'));
     source.set(session('start-f'));
@@ -349,7 +332,7 @@ describe('startDevicePing', () => {
 
   test('the stop function takes the listener away and cancels a ping that has not fired', async () => {
     const d = deps();
-    const source = fakeSource(session('start-g'));
+    const source = fakeSessionSource(session('start-g'));
     const stop = startDevicePing(source, d);
     expect(source.listening()).toBe(1);
     stop();
