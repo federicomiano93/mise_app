@@ -214,7 +214,7 @@ jobs:
           MISE2: ${{ needs.build-mise2.result }}
         run: |
           if [ "$MISE2" = success ]; then
-            mise2="**Mise 2**, la nuova app in costruzione (per ora solo la pagina delle fondamenta, senza dati): $FIXED_URL/mise2/"
+            mise2="**Mise 2**, la nuova app in costruzione (le sezioni arrivano una alla volta): $FIXED_URL/mise2/"
           else
             mise2="**Mise 2**: in questa PR la nuova app non si è costruita, quindi manca dall'anteprima. L'app di oggi qui sopra non ne risente."
           fi
