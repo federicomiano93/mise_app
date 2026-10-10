@@ -1,10 +1,12 @@
 // The stores' screen-refresh callback goes through guarded() (safety net, step 0).
 //
-// Seven stores keep ONE module-level `notify` and call it bare, in the middle of a live
+// Eight modules keep ONE module-level `notify` and call it bare, in the middle of a live
 // Firestore listener and — in catalogue-store.js upsertLocal — BEFORE the network write. A
 // throw from a screen's refresh escaped into the store: the listener died half-way and a
-// recipe could fail to reach the database at all. The fix is one line per store: the callback
+// recipe could fail to reach the database at all. The fix is one line per module: the callback
 // is wrapped when it is handed over, so every call site is covered without being touched.
+// watchConfirmations() takes its callback as a parameter, not a module-level variable, and is
+// wrapped once at its top for the same reason.
 //
 // These files load the Firebase SDK from a CDN and cannot run in node, so the wiring is
 // pinned as source text (the executed behaviour is tests/guard.test.mjs). Each check first
@@ -12,37 +14,82 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, readFileSync } from 'node:fs';
-import { join, dirname, resolve } from 'node:path';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { join, dirname, resolve, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const read = f => readFileSync(join(ROOT, f), 'utf8').replace(/\r\n/g, '\n');
 
-const STORES = [
-  { file: 'js/catalogue/catalogue-store.js', label: 'Catalogue: screen refresh' },
-  { file: 'js/foodcost/foodcost-store.js', label: 'Food cost: screen refresh' },
-  { file: 'js/inventory/inventory-store.js', label: 'Inventory: screen refresh' },
-  { file: 'js/log-store.js', label: 'Calculator log: screen refresh' },
-  { file: 'js/pastries/pastries-store.js', label: 'Pastries: screen refresh' },
-  { file: 'js/pastries/pastries-logs-store.js', label: 'Pastries log: screen refresh' },
-  { file: 'js/calculator-config-store.js', label: 'Calculator config: screen refresh' },
+// The list is explicit on purpose: the discovery test below fails when a module declares a
+// module-level `notify` that is not named here, so a ninth one cannot slip past unguarded.
+// `lines` are the exact (trimmed) lines that must each appear once; every other line that
+// assigns notify is a failure.
+const guardedStore = (file, label) => ({
+  file,
+  declaration: 'let notify = null;',
+  lines: [`notify = guarded('${label}', onUpdate);`],
+});
+
+const MODULES = [
+  guardedStore('js/catalogue/catalogue-store.js', 'Catalogue: screen refresh'),
+  guardedStore('js/foodcost/foodcost-store.js', 'Food cost: screen refresh'),
+  guardedStore('js/inventory/inventory-store.js', 'Inventory: screen refresh'),
+  guardedStore('js/log-store.js', 'Calculator log: screen refresh'),
+  guardedStore('js/pastries/pastries-store.js', 'Pastries: screen refresh'),
+  guardedStore('js/pastries/pastries-logs-store.js', 'Pastries log: screen refresh'),
+  guardedStore('js/calculator-config-store.js', 'Calculator config: screen refresh'),
+  {
+    // Starts as a no-op, not null, and only takes the screen's function when it is one.
+    file: 'js/calculator-catalogue-link.js',
+    declaration: 'let notify = () => {};',
+    lines: [
+      "const refresh = guarded('Calculator: linked recipe refresh', onChange);",
+      'if (refresh) notify = refresh;',
+    ],
+  },
 ];
 
-test('the check lists the seven stores that keep a module-level notify', () => {
-  assert.equal(STORES.length, 7);
-  for (const { file } of STORES) {
+function everyJsFile(dir) {
+  return readdirSync(dir).flatMap((entry) => {
+    const abs = join(dir, entry);
+    if (statSync(abs).isDirectory()) return entry === 'vendor' ? [] : everyJsFile(abs);
+    return entry.endsWith('.js') ? [abs] : [];
+  });
+}
+
+test('the check lists the eight modules that keep a module-level notify', () => {
+  assert.equal(MODULES.length, 8);
+  for (const { file, declaration } of MODULES) {
     assert.ok(existsSync(join(ROOT, file)), `${file} is gone — update this test`);
-    assert.match(read(file), /^let notify = null;/m, `${file} no longer declares a module-level notify`);
+    const declarations = read(file).split('\n').filter(l => l.startsWith('let notify'));
+    assert.equal(declarations.length, 1, `${file}: exactly one module-level notify expected`);
+    assert.ok(declarations[0].startsWith(declaration), `${file} declares notify differently: ${declarations[0]}`);
   }
 });
 
-for (const { file, label } of STORES) {
+test('⚠ no module under js/ declares a module-level notify that this file does not list', () => {
+  const found = everyJsFile(join(ROOT, 'js'))
+    .filter(abs => /^let notify\b/m.test(readFileSync(abs, 'utf8').replace(/\r\n/g, '\n')))
+    .map(abs => relative(ROOT, abs).split(sep).join('/'))
+    .sort();
+  assert.ok(found.length >= 8, 'the scan found fewer modules than are listed — the pattern is broken');
+  assert.deepEqual(found, MODULES.map(m => m.file).sort(),
+    'a module keeps a notify that is not guarded: add it to MODULES and wrap it with guarded()');
+});
+
+for (const { file, lines } of MODULES) {
   test(`${file}: the screen's callback is stored through guarded()`, () => {
     const src = read(file);
-    const assignments = src.match(/^\s*notify = .*$/gm) || [];
-    assert.equal(assignments.length, 1, `exactly one assignment to notify expected in ${file}: ${assignments.join(' | ')}`);
-    assert.equal(assignments[0].trim(), `notify = guarded('${label}', onUpdate);`);
+    const trimmed = src.split('\n').map(l => l.trim());
+    for (const line of lines) {
+      assert.equal(trimmed.filter(l => l === line).length, 1, `expected exactly once in ${file}: ${line}`);
+    }
+    const assigning = trimmed.filter(l => /\bnotify = /.test(l) && !l.startsWith('let notify') && !l.startsWith('//'));
+    for (const l of assigning) {
+      assert.ok(lines.includes(l), `${file} assigns notify in an unguarded way: ${l}`);
+    }
+    assert.ok(assigning.length >= 1, `${file}: no assignment to notify found`);
     assert.ok(!/\? onUpdate : null/.test(src), 'the bare `? onUpdate : null` form must be gone');
   });
 
@@ -72,7 +119,24 @@ test('⚠ catalogue-store: upsertLocal still calls notify before the network wri
   assert.match(upsert[0], /if \(notify\) notify\(recipes\);/);
   // saveRecipe() calls upsertLocal() ahead of saveRecipeDoc(): if notify could throw, the
   // write would never be reached. The guard is what makes that order safe.
-  assert.ok(src.indexOf('upsertLocal({ ...kept, id, ...data });') < src.indexOf('saveRecipeDoc(id, data)'));
+  const upsertCall = src.indexOf('upsertLocal({ ...kept, id, ...data });');
+  const writeCall = src.indexOf('saveRecipeDoc(id, data)');
+  assert.ok(upsertCall >= 0, 'the upsertLocal call in saveRecipe was not found — update this test');
+  assert.ok(writeCall >= 0, 'the saveRecipeDoc call in saveRecipe was not found — update this test');
+  assert.ok(upsertCall < writeCall);
+});
+
+test('⚠ pastries-logs-store: watchConfirmations() never calls the screen\'s repaint directly', () => {
+  const src = read('js/pastries/pastries-logs-store.js');
+  const watch = /export async function watchConfirmations\(workDate, onChange\) \{[\s\S]*?\n\}\n/.exec(src);
+  assert.ok(watch, 'watchConfirmations not found — update this test');
+  const body = watch[0];
+  // The first repaint runs BEFORE the await: a throw there rejected the whole async function
+  // unawaited, so the listener was never attached and lists confirmed tonight never locked.
+  assert.match(body, /const paint = guarded\('Pastries log: confirmations refresh', onChange\);/);
+  assert.ok(!/\bonChange\(/.test(body), 'a direct onChange() call is back');
+  assert.equal((body.match(/\bpaint\(\)/g) || []).length, 4, 'the four repaints must all go through paint()');
+  assert.ok(body.indexOf('const paint') < body.indexOf('await watchPastryLogsForDate'));
 });
 
 test('js/guard.js imports nothing, so any module can use it', () => {
@@ -81,19 +145,21 @@ test('js/guard.js imports nothing, so any module can use it', () => {
   assert.match(src, /export function guarded\(label, fn\)/);
 });
 
-test('⚠ js/firebase.js: onSession() guards its first, immediate call like setSession() guards the rest', () => {
-  const src = read('js/firebase.js');
-  const onSession = /export function onSession\(callback\) \{[\s\S]*?\n\}/.exec(src);
-  assert.ok(onSession, 'onSession not found — update this test');
-  assert.match(
-    onSession[0],
-    /try \{ callback\(session\); \} catch \(err\) \{ console\.error\('Session listener failed:', err\); \}/,
-  );
-  assert.ok(!/^\s*callback\(session\);/m.test(onSession[0]), 'a bare callback(session) must not come back');
-  assert.match(onSession[0], /return \(\) => sessionListeners\.delete\(callback\);/);
-  // setSession() wraps the later calls with the same message: both stay.
-  assert.equal((src.match(/Session listener failed:/g) || []).length, 2);
-});
+const ON_SESSION_GUARD =
+  /try \{ callback\(session\); \} catch \(err\) \{ console\.error\('Session listener failed:', err\); \}/;
+
+for (const file of ['js/firebase.js', 'js/firebase.example.js']) {
+  test(`⚠ ${file}: onSession() guards its first, immediate call like setSession() guards the rest`, () => {
+    const src = read(file);
+    const onSession = /export function onSession\(callback\) \{[\s\S]*?\n\}/.exec(src);
+    assert.ok(onSession, 'onSession not found — update this test');
+    assert.match(onSession[0], ON_SESSION_GUARD);
+    assert.ok(!/^\s*callback\(session\);/m.test(onSession[0]), 'a bare callback(session) must not come back');
+    assert.match(onSession[0], /return \(\) => sessionListeners\.delete\(callback\);/);
+    // setSession() wraps the later calls with the same message: both stay.
+    assert.equal((src.match(/Session listener failed:/g) || []).length, 2);
+  });
+}
 
 test('⚠ js/i18n.js: setLanguage() reports a failing listener instead of swallowing it', () => {
   const src = read('js/i18n.js');
