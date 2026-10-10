@@ -13,8 +13,8 @@
       }
     },
     "dist/calculator.js": {
-      "sha": "f43b4f72325a8773",
-      "mapSha": "4c01b15e3dd5bc1b",
+      "sha": "c799144c36aea502",
+      "mapSha": "b4b5f178e3db4708",
       "inputs": {
         "js/allergen-model.js": "50434c6cea85b7de",
         "js/app-version.js": "4ef897a205fdec91",
@@ -22,7 +22,7 @@
         "js/auth-gate.js": "5bc4dc671165cecd",
         "js/calc-fullscreen.js": "c665122603b01cb6",
         "js/calc.js": "8ea59323de894231",
-        "js/calculator-catalogue-link.js": "a3ec52209515fe95",
+        "js/calculator-catalogue-link.js": "21b6d2cb54f087b7",
         "js/calculator-client-orders.js": "75b6b34cf168ed73",
         "js/calculator-config-store.js": "b4ee0932871e785e",
         "js/calculator-config.js": "9bdba7a8bc3d8761",
@@ -795,8 +795,8 @@
       }
     },
     "dist/pastries.js": {
-      "sha": "6096d912c6d5b0dc",
-      "mapSha": "68c0af848e0a6d84",
+      "sha": "162e3f8aa98a3b75",
+      "mapSha": "634bf52f602317d2",
       "inputs": {
         "js/allergen-model.js": "50434c6cea85b7de",
         "js/app-version.js": "4ef897a205fdec91",
@@ -852,7 +852,7 @@
         "js/pastries/pastries-editor.js": "4ef9b27eb633c795",
         "js/pastries/pastries-lock.js": "2a6043cb6111bb9a",
         "js/pastries/pastries-log-model.js": "de0511e490f1eecc",
-        "js/pastries/pastries-logs-store.js": "800844103a8e7579",
+        "js/pastries/pastries-logs-store.js": "743bcbf4aa6e2d80",
         "js/pastries/pastries-logs.js": "8d7da71b5e15d624",
         "js/pastries/pastries-main.js": "4d8377dff4a685e1",
         "js/pastries/pastries-model.js": "c5db9ff5ca0408a4",
