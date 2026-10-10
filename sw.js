@@ -8,8 +8,11 @@ const CACHE_NAME = 'theitalianclub-v659';
 // ONCE PER SDK UPGRADE. activate() deletes every cache that is neither CACHE_NAME
 // nor this one, so renaming it throws the old modules away — and the new ones are
 // NOT precached (they are cross-origin; a gstatic hiccup would fail the whole
-// all-or-nothing install and stop the phone updating at all). They arrive through
-// the fetch handler below, on the first load that has a network.
+// all-or-nothing install and stop the phone updating at all). They are WARMED
+// best-effort by the install handler (warmSdkCache, below — never able to fail the
+// install) and otherwise arrive through the fetch handler, on the first load that has
+// a network. So the window described here is now only the one where that download
+// itself failed.
 // So between activate() and that first load, a phone that is OFFLINE cannot boot:
 // the code asks for the new version and nothing has it. In practice the window is very
 // small — activate() only happens after a successful 48-file precache, i.e.
@@ -201,6 +204,43 @@ const ASSET_HASHES = {
 // ~10-minute max-age), so a brand-new worker can never precache stale copies.
 const PRECACHE_ATTEMPTS = 3;
 
+// The Firebase SDK modules the page bundles import from gstatic (exactly the URLs in dist/*.js;
+// tests/precache-install.test.mjs holds this list to them, and to SDK_CACHE's version).
+//
+// ⚠️ WHY THE INSTALL WARMS THEM. A bundle imports every one of these at the top, even those a
+// page used to reach only through a lazy import (firebase-functions.js, firebase-messaging.js).
+// Many phones never fetched those, so they are not in SDK_CACHE. Scenario: the new worker
+// installs in the background while online, the person closes the app, and next morning opens it
+// OFFLINE: the waiting worker activates, the bundle imports a module nobody cached, and the WHOLE
+// page fails — a blank Home on a phone that opened fine offline before the release. The SDK
+// cannot be part of the all-or-nothing precache (a gstatic hiccup would stop the phone updating),
+// so it is fetched on the side, best effort.
+const SDK_MODULES = [
+  'https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js',
+  'https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js',
+  'https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js',
+  'https://www.gstatic.com/firebasejs/12.19.0/firebase-functions.js',
+  'https://www.gstatic.com/firebasejs/12.19.0/firebase-messaging.js',
+];
+
+// Never rejects: every failure is swallowed, so it can sit inside waitUntil beside the precache
+// without being able to fail or block the install. A module already in SDK_CACHE is not fetched
+// again; a download is stored under the same acceptance rule the fetch handler uses.
+function warmSdkCache() {
+  return caches.open(SDK_CACHE).then(cache => Promise.allSettled(SDK_MODULES.map(url =>
+    cache.match(url).then(hit => {
+      if (hit) return null;
+      return fetch(url, { mode: 'cors' }).then(res => {
+        if (res && res.status === 200 && !res.redirected &&
+            (res.type === 'cors' || res.type === 'basic')) {
+          return cache.put(url, res.clone());
+        }
+        return null;
+      });
+    })
+  ))).catch(() => {});
+}
+
 // ── Fingerprints (see ASSET_HASHES and scripts/sw-hashes.mjs) ────────────────
 //
 // ⚠️⚠️ EVERY FILE DOWNLOADED HERE IS CHECKED AGAINST ITS FINGERPRINT (speed audit, 23 Sep
@@ -355,7 +395,8 @@ self.addEventListener('install', e => {
   // NO skipWaiting() here: the new worker must WAIT so js/sw-update.js can show
   // the update banner; it activates when the user taps it (skipWaiting message
   // below) or when the app is next opened with no pages left from the old one.
-  e.waitUntil(precache());
+  // The SDK warm-up runs beside the precache and cannot reject (see warmSdkCache).
+  e.waitUntil(Promise.all([precache(), warmSdkCache()]));
 });
 
 self.addEventListener('activate', e => {
