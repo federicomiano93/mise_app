@@ -39,13 +39,13 @@ export const en = {
   'placeholder.body': 'Until then, keep using the app you use today.',
 
   'notFound.title': 'Page not found',
-  'notFound.body': "This address doesn't lead to any section.",
+  'notFound.body': 'This address doesn’t lead to any section.',
   'notFound.action': 'Go to Orders',
 
   'status.online': 'Online',
   'status.offline': 'No connection',
 
-  'part.failed.title': "This part didn't load.",
+  'part.failed.title': 'This part didn’t load.',
   'part.failed.body': 'The rest of the screen works.',
   'part.failed.action': 'Reload',
 

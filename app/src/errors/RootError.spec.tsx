@@ -40,6 +40,6 @@ describe('RootError', () => {
       </I18nProvider>,
     );
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Mise si è fermata.');
-    expect(screen.getByRole('button', { name: "Ricarica l'app" })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Ricarica l’app' })).toBeInTheDocument();
   });
 });

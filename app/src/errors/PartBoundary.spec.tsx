@@ -39,7 +39,7 @@ describe('PartBoundary', () => {
   it('shows the fallback, in words and with a Reload button, when a child throws', () => {
     render(<PartBoundary><Flaky /></PartBoundary>);
     const fallback = screen.getByRole('status');
-    expect(fallback).toHaveTextContent("This part didn't load.");
+    expect(fallback).toHaveTextContent('This part didn’t load.');
     expect(fallback).toHaveTextContent('The rest of the screen works.');
     expect(screen.getByRole('button', { name: 'Reload' })).toBeInTheDocument();
     expect(screen.queryByText('the part works')).not.toBeInTheDocument();

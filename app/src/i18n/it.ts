@@ -23,7 +23,7 @@ export const it: Messages = {
   'section.more': 'Altro',
 
   'placeholder.title': 'Questa sezione arriverà in uno dei prossimi passi di Mise 2.',
-  'placeholder.body': "Nel frattempo continua a usare l'app di sempre.",
+  'placeholder.body': 'Nel frattempo continua a usare l’app di sempre.',
 
   'notFound.title': 'Pagina non trovata',
   'notFound.body': 'Questo indirizzo non porta a nessuna sezione.',
@@ -38,5 +38,5 @@ export const it: Messages = {
 
   'app.failed.title': 'Mise si è fermata.',
   'app.failed.body': 'Di solito ricaricando si risolve. Quello che hai salvato non va perso.',
-  'app.failed.action': "Ricarica l'app",
+  'app.failed.action': 'Ricarica l’app',
 };

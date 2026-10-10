@@ -47,6 +47,19 @@ describe('the message catalogues', () => {
     expect([missing, extra]).toHaveLength(2);
   });
 
+  // The current app's dictionary prints ’ (U+2019), never the typewriter ' (U+0027): the two
+  // look different in Geist, and a screen that mixes them reads as careless.
+  it('no message contains a straight apostrophe', () => {
+    const straight: string[] = [];
+    for (const [language, messages] of [['en', en], ['it', italian]] as const) {
+      for (const [key, message] of Object.entries<Message>(messages)) {
+        const texts = typeof message === 'string' ? [message] : Object.values(message);
+        if (texts.some(text => text.includes("'"))) straight.push(`${language}: ${key}`);
+      }
+    }
+    expect(straight).toEqual([]);
+  });
+
   it('no message is empty', () => {
     for (const messages of [en, italian]) {
       for (const [key, message] of Object.entries<Message>(messages)) {

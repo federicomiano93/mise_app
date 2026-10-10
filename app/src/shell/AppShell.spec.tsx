@@ -92,7 +92,7 @@ describe('AppShell: navigation', () => {
   it('shows «Page not found» for an unknown address, with a way back to Orders', async () => {
     const { router, user } = renderApp('/no-such-section');
     expect(screen.getByRole('heading', { level: 1, name: 'Page not found' })).toBeInTheDocument();
-    expect(screen.getByText("This address doesn't lead to any section.")).toBeInTheDocument();
+    expect(screen.getByText('This address doesn’t lead to any section.')).toBeInTheDocument();
     // The navigation is still around it.
     expect(rail().getAllByRole('link')).toHaveLength(8);
 
@@ -331,7 +331,7 @@ describe('AppShell: a section that fails', () => {
     const { user } = renderApp('/boom', { routes });
 
     const main = within(screen.getByRole('main'));
-    expect(main.getByRole('status')).toHaveTextContent("This part didn't load.");
+    expect(main.getByRole('status')).toHaveTextContent('This part didn’t load.');
     expect(main.getByRole('button', { name: 'Reload' })).toBeInTheDocument();
     // The whole-app error screen is NOT what is showing.
     expect(screen.queryByRole('heading', { name: 'Mise stopped working.' })).not.toBeInTheDocument();
@@ -340,6 +340,6 @@ describe('AppShell: a section that fails', () => {
     await user.click(rail().getByRole('link', { name: 'Orders' }));
 
     expect(await screen.findByRole('heading', { level: 1, name: 'Orders' })).toBeInTheDocument();
-    expect(within(screen.getByRole('main')).queryByText("This part didn't load.")).not.toBeInTheDocument();
+    expect(within(screen.getByRole('main')).queryByText('This part didn’t load.')).not.toBeInTheDocument();
   });
 });
