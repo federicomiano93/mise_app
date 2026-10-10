@@ -27,10 +27,11 @@
 // useful (P13).
 import { execSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { writeFileSync } from 'node:fs';
+import { writeFileSync, readFileSync } from 'node:fs';
 import {
   errorsFrom, groupErrors, groupLines, errorsJson, errorPath, isOld, messageMatches, clearTextProblem, countFrom, clean,
 } from './error-summary.mjs';
+import { mapStack, currentCacheVersion } from './source-map.mjs';
 
 const PROJECT = 'bakery-app-ebf90';
 const DOCS = `https://firestore.googleapis.com/v1/projects/${PROJECT}/databases/(default)/documents`;
@@ -128,6 +129,21 @@ async function list(jsonFile) {
   }
   if (errors.length === 0) { console.log('No errors from the app.'); return; }
   const groups = groupErrors(errors);
+  // A frame inside dist/<page>.js is a column in a minified line: look it up in this checkout's
+  // source map and print the js/ file and line beside it (the original frame stays).
+  const repo = new URL('..', import.meta.url);
+  const maps = new Map();
+  const loadMap = file => {
+    if (!maps.has(file)) {
+      try { maps.set(file, JSON.parse(readFileSync(new URL(file, repo), 'utf8'))); } catch { maps.set(file, null); }
+    }
+    return maps.get(file);
+  };
+  let currentVersion = null;
+  try { currentVersion = currentCacheVersion(readFileSync(new URL('sw.js', repo), 'utf8')); } catch { /* unmapped is fine */ }
+  for (const group of groups) {
+    group.stack = mapStack(group.stack, { loadMap, appVersion: group.stackVersion, currentVersion });
+  }
   // A marker nobody can know in advance: the block cannot be closed from inside.
   const marker = randomUUID();
   console.log(`${errors.length}${capped ? '+' : ''} error line${errors.length === 1 ? '' : 's'} from the app, ${groups.length}${capped ? '+' : ''} different.`);
