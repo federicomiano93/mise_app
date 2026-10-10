@@ -1,4 +1,4 @@
-// The eight TypeScript models and the js/ files the live app runs today must stay the SAME
+// The nine TypeScript models and the js/ files the live app runs today must stay the SAME
 // thing, until the switch to Mise 2 retires the js/ ones. The behaviour specs next to each model
 // run every test against both; this file checks what a behaviour test cannot see — that the two
 // export the same names, the same constants, the same frozen-ness and the same function shapes.
@@ -20,6 +20,7 @@ import * as allergenModel from './allergen-model';
 import * as sections from './sections';
 import * as firebaseTarget from './firebase-target';
 import * as localData from './local-data';
+import * as sameData from './same-data';
 import * as legacyJoinCode from '../../js/join-code.js';
 import * as legacyPushModel from '../../js/push-model.js';
 import * as legacyHomeCards from '../../js/home-cards.js';
@@ -28,6 +29,7 @@ import * as legacyAllergenModel from '../../js/allergen-model.js';
 import * as legacySections from '../../js/sections.js';
 import * as legacyFirebaseTarget from '../../js/firebase-target.js';
 import * as legacyLocalData from '../../js/local-data.js';
+import * as legacySameData from '../../js/same-data.js';
 
 const PAIRS: readonly (readonly [string, object, object])[] = [
   ['join-code', joinCode, legacyJoinCode],
@@ -38,6 +40,7 @@ const PAIRS: readonly (readonly [string, object, object])[] = [
   ['sections', sections, legacySections],
   ['firebase-target', firebaseTarget, legacyFirebaseTarget],
   ['local-data', localData, legacyLocalData],
+  ['same-data', sameData, legacySameData],
 ];
 
 const exportsOf = (module: object): Record<string, unknown> => module as Record<string, unknown>;
@@ -96,7 +99,7 @@ describe.each(PAIRS)('parity: %s', (_name, tsModule, jsModule) => {
   });
 });
 
-test('all eight models are compared', () => {
+test('all nine models are compared', () => {
   expect(PAIRS.map(([name]) => name)).toStrictEqual(
-    ['join-code', 'push-model', 'home-cards', 'away-model', 'allergen-model', 'sections', 'firebase-target', 'local-data']);
+    ['join-code', 'push-model', 'home-cards', 'away-model', 'allergen-model', 'sections', 'firebase-target', 'local-data', 'same-data']);
 });
