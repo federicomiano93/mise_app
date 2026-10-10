@@ -89,14 +89,14 @@ describe('AppShell: navigation', () => {
     expect(tabs().getByRole('link', { name: 'More' })).toHaveAttribute('aria-current', 'page');
   });
 
-  it('shows «Page not found» for an unknown address, with a way back to Orders', async () => {
+  it('shows «Page not found» for an unknown address, with a way back to the start', async () => {
     const { router, user } = renderApp('/no-such-section');
     expect(screen.getByRole('heading', { level: 1, name: 'Page not found' })).toBeInTheDocument();
     expect(screen.getByText('This address doesn’t lead to any section.')).toBeInTheDocument();
     // The navigation is still around it.
     expect(rail().getAllByRole('link')).toHaveLength(8);
 
-    await user.click(screen.getByRole('link', { name: 'Go to Orders' }));
+    await user.click(screen.getByRole('link', { name: 'Go to the start' }));
 
     expect(await screen.findByRole('heading', { level: 1, name: 'Orders' })).toBeInTheDocument();
     expect(router.state.location.pathname).toBe('/orders');

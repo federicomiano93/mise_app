@@ -1,11 +1,10 @@
-import { Navigate } from 'react-router';
 import type { RouteObject } from 'react-router';
 import { RootError } from './errors/RootError';
+import { SettingsPage } from './settings/SettingsPage';
 import { AppShell } from './shell/AppShell';
 import { MorePage } from './shell/MorePage';
 import { NotFound } from './shell/NotFound';
-import { KEEP_FOCUS } from './shell/Page';
-import { SectionPlaceholder } from './shell/SectionPlaceholder';
+import { SectionRoute, StartRedirect } from './shell/SectionRoute';
 import { MORE, SECTIONS } from './shell/sections';
 
 // The route table, separate from the router that serves it: the app builds a hash router from
@@ -19,12 +18,13 @@ export const routes: RouteObject[] = [
     // shell's PartBoundary catches it first and the navigation stays on screen.
     errorElement: <RootError />,
     children: [
-      // The address with no section in it lands on Orders. KEEP_FOCUS: that is the app
-      // arranging itself on first load, not a person asking to move.
-      { index: true, element: <Navigate to="/orders" replace state={KEEP_FOCUS} /> },
+      // The address with no section in it lands on the first section this person is shown.
+      { index: true, element: <StartRedirect /> },
       ...SECTIONS.map(section => ({
         path: section.path,
-        element: <SectionPlaceholder sectionId={section.id} />,
+        // Settings is every signed-in person's own (their account, the way out), so it has no
+        // gate; every other section is on only for those the venue shows it to.
+        element: section.id === 'settings' ? <SettingsPage /> : <SectionRoute sectionId={section.id} />,
       })),
       { path: MORE.path, element: <MorePage /> },
       { path: '*', element: <NotFound /> },

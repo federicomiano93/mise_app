@@ -35,8 +35,9 @@ export type Section = {
 
 // ⚠️ THE SINGLE SOURCE BOTH NAVIGATIONS READ FROM, in the order a person sees them. The rail,
 // the tab bar, the «More» page and the routes are all built from this list, so a section can
-// never be in one and forgotten in another. Step 2b-2 filters it by role and venue features
-// (a shown section is a gate on everything behind it); until then everything is listed.
+// never be in one and forgotten in another. This is EVERY section there is; which of them a
+// person is shown depends on the venue and the role (arrangeSections below, fed by
+// session/visibility.ts) — and a shown section is a gate on everything later put behind it.
 export const SECTIONS: readonly Section[] = [
   { id: 'orders', path: '/orders', label: 'section.orders', icon: ShoppingCart, inRail: 'top', inTabs: true },
   { id: 'suppliers', path: '/suppliers', label: 'section.suppliers', icon: Truck, inRail: 'top', inTabs: false },
@@ -51,10 +52,34 @@ export const SECTIONS: readonly Section[] = [
 // The fifth tab on a phone: a page listing every section that has no tab of its own.
 export const MORE = { path: '/more', label: 'section.more', icon: LayoutGrid } as const;
 
-export const RAIL_TOP = SECTIONS.filter(section => section.inRail === 'top');
-export const RAIL_BOTTOM = SECTIONS.filter(section => section.inRail === 'bottom');
-export const TAB_SECTIONS = SECTIONS.filter(section => section.inTabs);
-export const MORE_SECTIONS = SECTIONS.filter(section => !section.inTabs);
+type ArrangedSections = {
+  readonly railTop: readonly Section[];
+  readonly railBottom: readonly Section[];
+  // The phone's tabs, WITHOUT «More» (that one is not a section).
+  readonly tabs: readonly Section[];
+  // What «More» holds: every shown section that has no tab of its own.
+  readonly more: readonly Section[];
+  // Where the address with no section in it lands: the first section a person is shown.
+  readonly first: Section;
+};
+
+// The sections a person is shown, split between the rail, the tab bar and «More», in list order.
+//
+// ⚠️ A FUNCTION OF WHO IS ASKING, NEVER A CONSTANT. These lists used to be module-level
+// constants; a constant is evaluated when the file is loaded, when no venue is open, so it
+// would freeze one list for every venue and every role for the life of the page.
+//
+// Settings is always shown (session/visibility.ts), so `first` always exists.
+export function arrangeSections(visible: ReadonlySet<SectionId>): ArrangedSections {
+  const shown = SECTIONS.filter(section => visible.has(section.id));
+  return {
+    railTop: shown.filter(section => section.inRail === 'top'),
+    railBottom: shown.filter(section => section.inRail === 'bottom'),
+    tabs: shown.filter(section => section.inTabs),
+    more: shown.filter(section => !section.inTabs),
+    first: shown[0] ?? sectionById('settings'),
+  };
+}
 
 export function sectionById(id: SectionId): Section {
   const section = SECTIONS.find(candidate => candidate.id === id);
@@ -77,7 +102,7 @@ export function titleKeyFor(pathname: string): MessageKey {
 
 // «More» is the current tab on its own page AND on every section it holds: standing on
 // Suppliers on a phone, the tab bar must still say where you are, and the only tab that
-// leads there is «More».
-export function moreIsCurrent(pathname: string): boolean {
-  return isUnder(pathname, MORE.path) || MORE_SECTIONS.some(section => isUnder(pathname, section.path));
+// leads there is «More». `more` is the list THIS person's «More» holds (arrangeSections).
+export function moreIsCurrent(pathname: string, more: readonly Section[]): boolean {
+  return isUnder(pathname, MORE.path) || more.some(section => isUnder(pathname, section.path));
 }

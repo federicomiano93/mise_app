@@ -43,7 +43,7 @@
   box-shadow: var(--shadow-2);
 }
 
-/* The rail (tablet) */
+/* The rail (tablet): a column holding the navigation, then the account's avatar under it. */
 
 /* ⚠️ index.html says viewport-fit=cover, so the page reaches under the notch: an iPhone held in
    landscape (or a tablet with a camera cut-out) would cover the left of the rail. The shell
@@ -58,6 +58,13 @@
   overflow-y: auto;
   background: var(--rail);
   color: var(--rail-ink);
+}
+
+.railNav {
+  display: flex;
+  flex: 1 0 auto;
+  flex-direction: column;
+  gap: var(--s1);
 }
 
 .mark {
@@ -122,6 +129,39 @@
   outline-color: var(--rail-ink-strong);
 }
 
+/* The account's avatar, under Settings. The link is a 48px touch target; the circle in it is 40px. */
+.avatarLink {
+  display: grid;
+  flex: none;
+  place-items: center;
+  align-self: center;
+  width: var(--hit);
+  height: var(--hit);
+  margin-top: var(--s2);
+  border-radius: var(--r-pill);
+}
+
+.avatarLink:focus-visible {
+  outline-color: var(--rail-ink-strong);
+}
+
+.avatar {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--r-pill);
+  background: var(--rail-hover);
+  color: var(--rail-ink-strong);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+
+.avatarLink:hover .avatar {
+  background: var(--rail-ink);
+  color: var(--rail);
+}
+
 /* The main column */
 
 .main {
@@ -160,6 +200,54 @@
   font-size: var(--fs-sm);
 }
 
+/* The venue (the design's `.venue`), left of the date: a name with its first letter in a small
+   square. With several venues it is a button — 48px tall, a finger's size, where the design drew
+   40 — and with one it is the same name without the box. Several properties are repeated
+   between the two on purpose: the button is `bare`, so everything about how it looks is here. */
+.venue,
+.venueStatic {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  min-height: var(--hit);
+  padding: 0 var(--s3) 0 var(--s2);
+  border-radius: var(--r-sm);
+  color: var(--ink);
+  font: 600 var(--fs-md)/1.2 var(--font);
+}
+
+.venue {
+  border: 1px solid var(--line);
+  background: var(--surface);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.venue[data-hovered] {
+  background: var(--bg);
+}
+
+.venue[data-pressed] {
+  background: var(--sunken);
+}
+
+.venueDot {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--r-sm);
+  background: var(--sunken);
+  color: var(--ink-2);
+  font-size: var(--fs-xs);
+  font-weight: 700;
+}
+
+.venue .venueChevron {
+  color: var(--ink-3);
+}
+
 .grow {
   flex: 1;
 }
@@ -188,7 +276,9 @@
 
 .tabbar {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  /* As many equal columns as there are tabs: a venue with fewer sections has no empty ones. */
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
   padding: 6px 6px calc(6px + env(safe-area-inset-bottom));
   border-top: 1px solid var(--line);
   background: var(--surface);

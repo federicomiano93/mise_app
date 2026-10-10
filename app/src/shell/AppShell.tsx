@@ -1,13 +1,17 @@
 import { useEffect, useRef } from 'react';
 import type { MouseEvent, RefObject } from 'react';
+import { ChevronDown } from 'lucide-react';
 import { Link, NavLink, Outlet, useHref, useLocation, useNavigate } from 'react-router';
 import { RouterProvider as AriaRouterProvider } from 'react-aria-components';
 import { PartBoundary } from '../errors/PartBoundary';
 import { useT } from '../i18n/useT';
-import { MORE, RAIL_BOTTOM, RAIL_TOP, TAB_SECTIONS, moreIsCurrent, titleKeyFor } from './sections';
+import { useSession } from '../session/SessionContext';
+import { SwitchVenueButton } from '../session/SwitchVenueButton';
+import { MORE, moreIsCurrent, sectionById, titleKeyFor } from './sections';
 import type { Section } from './sections';
 import { useOnline } from './useOnline';
 import { useToday } from './useToday';
+import { useVisibleSections } from './useVisibleSections';
 import styles from './AppShell.module.css';
 
 // The frame around every screen: a rail on a tablet, a tab bar on a phone, a top bar on a
@@ -72,16 +76,38 @@ function SkipLink({ target }: { target: RefObject<HTMLElement | null> }) {
   );
 }
 
+// The rail is a plain box holding TWO things: the navigation (sections only) and, under it, the
+// account's avatar. The avatar is a link to the person's account but not one of the app's
+// sections, so it sits OUTSIDE the `nav` landmark — a screen reader announces «All sections»
+// with exactly the sections in it.
 function Rail() {
   const { t } = useT();
+  const { railTop, railBottom } = useVisibleSections();
 
   return (
-    <nav className={styles.rail} aria-label={t('nav.rail')}>
-      <div className={styles.mark} aria-hidden="true">{t('app.name').charAt(0)}</div>
-      {RAIL_TOP.map(section => <RailLink key={section.id} section={section} />)}
-      <div className={styles.spacer} />
-      {RAIL_BOTTOM.map(section => <RailLink key={section.id} section={section} />)}
-    </nav>
+    <div className={styles.rail}>
+      <nav className={styles.railNav} aria-label={t('nav.rail')}>
+        <div className={styles.mark} aria-hidden="true">{t('app.name').charAt(0)}</div>
+        {railTop.map(section => <RailLink key={section.id} section={section} />)}
+        <div className={styles.spacer} />
+        {railBottom.map(section => <RailLink key={section.id} section={section} />)}
+      </nav>
+      <AccountAvatar />
+    </div>
+  );
+}
+
+// Who is signed in, as the first letter of their email, under Settings. It leads to the Account
+// card in Settings, so the name is «Account», not the letter (which is decoration).
+function AccountAvatar() {
+  const { t } = useT();
+  const { user } = useSession();
+  const letter = Array.from(user?.email || user?.uid || '?')[0]?.toUpperCase();
+  // The link is 48px so a finger finds it; the circle inside is 40px.
+  return (
+    <Link to={sectionById('settings').path} className={styles.avatarLink} aria-label={t('account.title')}>
+      <span className={styles.avatar} aria-hidden="true">{letter}</span>
+    </Link>
   );
 }
 
@@ -104,6 +130,7 @@ function TopBar() {
 
   return (
     <header className={styles.topbar}>
+      <Venue />
       <p className={styles.date}>{today}</p>
       <div className={styles.grow} />
       <p className={styles.sync} role="status">
@@ -115,13 +142,38 @@ function TopBar() {
   );
 }
 
+// The venue this person is working on, left of the date. With more than one venue it is a button
+// that opens the list of the others; with one it is just its name.
+function Venue() {
+  const { name, options } = useSession();
+  // The first letter, by code point: a name that starts with an emoji or an accented capital
+  // must not be cut in half.
+  const initial = Array.from(name)[0]?.toUpperCase() ?? '';
+  const label = (
+    <>
+      <span className={styles.venueDot} aria-hidden="true">{initial}</span>
+      <span>{name}</span>
+    </>
+  );
+
+  if (options.length < 2) return <p className={styles.venueStatic}>{label}</p>;
+
+  return (
+    <SwitchVenueButton variant="bare" className={styles.venue}>
+      {label}
+      <ChevronDown className={styles.venueChevron} aria-hidden="true" />
+    </SwitchVenueButton>
+  );
+}
+
 function TabBar({ pathname }: { pathname: string }) {
   const { t } = useT();
+  const { tabs, more } = useVisibleSections();
   const MoreIcon = MORE.icon;
 
   return (
     <nav className={styles.tabbar} aria-label={t('nav.tabs')}>
-      {TAB_SECTIONS.map(section => {
+      {tabs.map(section => {
         const Icon = section.icon;
         return (
           <NavLink key={section.id} to={section.path} className={styles.tab}>
@@ -131,15 +183,18 @@ function TabBar({ pathname }: { pathname: string }) {
         );
       })}
       {/* A plain Link, not a NavLink: NavLink marks only the page it points at as current, and
-          «More» also stands for every section it holds. */}
-      <Link
-        to={MORE.path}
-        className={styles.tab}
-        aria-current={moreIsCurrent(pathname) ? 'page' : undefined}
-      >
-        <MoreIcon className={styles.tabIcon} />
-        <span>{t(MORE.label)}</span>
-      </Link>
+          «More» also stands for every section it holds. It is there only when it holds
+          something (Settings is always in it, so in practice always). */}
+      {more.length === 0 ? null : (
+        <Link
+          to={MORE.path}
+          className={styles.tab}
+          aria-current={moreIsCurrent(pathname, more) ? 'page' : undefined}
+        >
+          <MoreIcon className={styles.tabIcon} />
+          <span>{t(MORE.label)}</span>
+        </Link>
+      )}
     </nav>
   );
 }

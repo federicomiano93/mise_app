@@ -81,14 +81,22 @@ export const en = {
   'unsent.leave': 'Go on anyway',
   'unsent.stay': 'Stay',
 
+  'account.title': 'Account',
+  'account.signedInAs': 'Signed in as {email}',
+  'account.venue': 'Venue',
   'account.switchVenue': 'Switch venue',
+  'settings.more': 'The other settings arrive in the next steps of Mise 2.',
 
   'placeholder.title': 'This section will arrive in one of the next steps of Mise 2.',
   'placeholder.body': 'Until then, keep using the app you use today.',
 
   'notFound.title': 'Page not found',
   'notFound.body': 'This address doesn’t lead to any section.',
-  'notFound.action': 'Go to Orders',
+  // «The start» is the first section the person is shown, which is not always Orders.
+  'notFound.action': 'Go to the start',
+
+  'notAvailable.body': 'This section is not on for you at this venue.',
+  'notAvailable.action': 'Go to the start',
 
   'status.online': 'Online',
   'status.offline': 'No connection',

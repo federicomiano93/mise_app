@@ -59,14 +59,21 @@ export const it: Messages = {
   'unsent.leave': 'Continua lo stesso',
   'unsent.stay': 'Resta qui',
 
+  'account.title': 'Account',
+  'account.signedInAs': 'Hai effettuato l’accesso come {email}',
+  'account.venue': 'Locale',
   'account.switchVenue': 'Cambia locale',
+  'settings.more': 'Le altre impostazioni arrivano nei prossimi passi di Mise 2.',
 
   'placeholder.title': 'Questa sezione arriverà in uno dei prossimi passi di Mise 2.',
   'placeholder.body': 'Nel frattempo continua a usare l’app di sempre.',
 
   'notFound.title': 'Pagina non trovata',
   'notFound.body': 'Questo indirizzo non porta a nessuna sezione.',
-  'notFound.action': 'Vai agli Ordini',
+  'notFound.action': 'Vai all’inizio',
+
+  'notAvailable.body': 'Questa sezione non è attiva per te in questo locale.',
+  'notAvailable.action': 'Vai all’inizio',
 
   'status.online': 'Online',
   'status.offline': 'Nessuna connessione',
