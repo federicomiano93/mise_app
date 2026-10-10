@@ -1,0 +1,19 @@
+{
+  "name": "@mise/shared",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Mise 2: the pure logic shared by the app and, later, the Cloud Functions. TypeScript source, consumed as is (no build step of its own).",
+  "exports": {
+    "./*": "./src/*.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p .",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "typescript": "7.0.2",
+    "vite": "8.3.1",
+    "vitest": "5.0.2"
+  }
+}

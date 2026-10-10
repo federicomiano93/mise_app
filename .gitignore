@@ -41,6 +41,11 @@ print-agent/print-agent.json
 # Staged by .github/workflows/preview.yml for a preview channel; never committed.
 _site/
 
+# Mise 2's build output: built by CI from app/, never committed (unlike the current app's
+# root dist/, which GitHub Pages serves and which therefore IS committed — hence the anchor).
+/app/dist/
+*.tsbuildinfo
+
 # ⚠️ INVOICE IMPORT (3 Oct 2026): real invoices, the decisions workbook and the import
 # file hold real supplier names and prices, and this repository is public and served by
 # GitHub Pages. They live in ..\import-fatture\, outside the repo; these lines are the

@@ -1,0 +1,24 @@
+{
+  // shared/ runs in two places (the browser app and, later, the Cloud Functions on Node),
+  // so it may use neither the DOM nor Node's own modules: plain ES2022 only.
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "verbatimModuleSyntax": true,
+    "isolatedModules": true,
+    "moduleDetection": "force",
+    "noEmit": true,
+    "skipLibCheck": true,
+    // The parity specs import the CURRENT app's js/ models to prove the port behaves the
+    // same; allowJs lets the compiler read them (it does not type-check them).
+    "allowJs": true,
+    "types": []
+  },
+  "include": ["src", "vitest.config.ts"]
+}
