@@ -27,8 +27,8 @@ function resolve(from: string, relative: string): string {
 
 describe('CSS modules', () => {
   test('the scan finds the components and their modules', () => {
-    expect(Object.keys(components)).toContain('./Foundations.tsx');
-    expect(Object.keys(modules)).toContain('./Foundations.module.css');
+    expect(Object.keys(components)).toContain('./shell/AppShell.tsx');
+    expect(Object.keys(modules)).toContain('./shell/AppShell.module.css');
     expect(classesIn('.a { } /* .ghost */ .b-c:hover { }')).toEqual(new Set(['a', 'b-c']));
   });
 
