@@ -3,7 +3,7 @@ import { en } from './en';
 import type { Messages } from './en';
 import type { Language } from './i18n';
 
-export type I18nValue = {
+type I18nValue = {
   readonly lang: Language;
   readonly messages: Messages;
   // Swaps the language once its messages are loaded (a venue opening is what will call it).

@@ -32,6 +32,17 @@ describe('CSS modules', () => {
     expect(classesIn('.a { } /* .ghost */ .b-c:hover { }')).toEqual(new Set(['a', 'b-c']));
   });
 
+  // ⚠️ Without CSS processing for `?raw` (vite.config.ts) every file reads as an empty string.
+  // The var(--x) check below would then pass with nothing to look at, so say it outright.
+  test('every stylesheet is read as real text, not as an empty string', () => {
+    const empty = [...Object.entries(modules), ...Object.entries(tokens)]
+      .filter(([, css]) => css.trim() === '')
+      .map(([file]) => file);
+    expect(Object.keys(modules).length).toBeGreaterThan(0);
+    expect(Object.keys(tokens)).toEqual(['./styles/tokens.css']);
+    expect(empty).toEqual([]);
+  });
+
   test('every styles.x a component reads is a class its module defines', () => {
     const missing: string[] = [];
     for (const [file, source] of Object.entries(components)) {

@@ -5,8 +5,8 @@ import { en } from './en';
 import type { Message, Messages, PluralMessage } from './en';
 
 export type Language = 'en' | 'it';
-export const LANGUAGES: readonly Language[] = ['en', 'it'];
-export const DEFAULT_LANGUAGE: Language = 'en';
+const LANGUAGES: readonly Language[] = ['en', 'it'];
+const DEFAULT_LANGUAGE: Language = 'en';
 
 export type MessageParams = Readonly<Record<string, string | number>>;
 
