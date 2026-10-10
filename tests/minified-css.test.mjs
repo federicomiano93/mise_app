@@ -16,9 +16,10 @@ import assert from 'node:assert/strict';
 import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import {
-  ROOT, DIST_DIR, rewriteCssUrls, pointSheetsAtDist, stylesheetHrefs, sheetsByPage, linkedSheets,
+  ROOT, DIST_DIR, rewriteCssUrls, stylesheetHrefs, sheetsByPage, linkedSheets,
 } from '../scripts/bundle-lib.mjs';
 import { readAssets } from '../scripts/sw-hashes.mjs';
+import { pageSheets } from './helpers/page-scripts.mjs';
 
 const read = file => readFileSync(join(ROOT, file), 'utf8').replace(/\r\n/g, '\n');
 const SHEETS = linkedSheets();
@@ -47,14 +48,13 @@ test('⚠️ every page links the minified copy, never the root source', () => {
   }
 });
 
-test('pointing a page at dist/ changes only the href of a stylesheet link', () => {
+test('⚠️ a stylesheet link is found whatever its attribute order, quoting or case', () => {
   const html = '<link rel="preload" href="fonts/a.woff2" as="font">\n'
     + '<link rel="stylesheet" href="style.css" media="print">\n<link href="x.css" rel="stylesheet">\n'
+    + "<link href='q.css' rel=stylesheet>\n<link REL=\"Stylesheet\" HREF=u.css>\n<link rel=\"alternate stylesheet\" href=\"alt.css\">\n"
     + '<link rel="icon" href="icons/i.png">\n<a href="y.css">z</a>\n<link rel="stylesheet" href="https://e.test/a.css">\n';
-  assert.equal(pointSheetsAtDist(html), html
-    .replace('href="style.css"', 'href="dist/style.css"').replace('href="x.css"', 'href="dist/x.css"'));
-  assert.deepEqual(stylesheetHrefs(html), ['style.css', 'x.css', 'https://e.test/a.css']);
-  assert.equal(pointSheetsAtDist(pointSheetsAtDist(html)), pointSheetsAtDist(html), 'running it twice changes nothing more');
+  assert.deepEqual(stylesheetHrefs(html), ['style.css', 'x.css', 'q.css', 'u.css', 'alt.css', 'https://e.test/a.css']);
+  assert.deepEqual(pageSheets(html.replace('href="style.css"', 'href="dist/style.css"')).slice(0, 2), ['style.css', 'x.css']);
 });
 
 test('⚠️ a relative url() moves one folder up with the file; nothing else is touched', () => {
@@ -66,6 +66,15 @@ test('⚠️ a relative url() moves one folder up with the file; nothing else is
     assert.equal(from(`a{b:${keep}}`), `a{b:${keep}}`, keep);
   }
   assert.throws(() => from('a{src:url(fonts/not-there.woff2)}'), /does not exist/);
+  // Upper case, a quoted url holding a ")", several on one line: all handled, none skipped.
+  assert.equal(from('a{src:URL(fonts/manrope-latin.woff2)}'), 'a{src:url(../fonts/manrope-latin.woff2)}');
+  assert.throws(() => from('a{src:URL(fonts/not-there.woff2)}'), /does not exist/, 'URL( is not skipped');
+  assert.throws(() => from('a{src:url("fonts/we)ird.woff2")}'), /does not exist/, 'a ")" inside quotes is read as part of the path');
+  assert.equal(from('a{src:url("data:image/svg+xml,%3csvg(1)%3e")}'), 'a{src:url("data:image/svg+xml,%3csvg(1)%3e")}');
+  assert.equal(from('a{b:url(#x)} c{d:url(fonts/manrope-latin.woff2)}'), 'a{b:url(#x)} c{d:url(../fonts/manrope-latin.woff2)}');
+  for (const bad of ['a{src:url(fonts/a b.woff2)}', 'a{src:url("fonts/a.woff2}', 'a{src:url(fonts/a(1).woff2)}', 'a{src:url(}']) {
+    assert.throws(() => from(bad), /cannot parse|does not exist/, bad);
+  }
 });
 
 test('⚠️ dist/tokens.css points at fonts that exist, from dist/', () => {

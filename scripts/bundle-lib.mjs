@@ -89,19 +89,18 @@ export function readManifest(root = ROOT) {
 // Every page links its CSS from the root; the browser gets the minified copy dist/<name>.css.
 
 const LINK_TAG = /<link\b[^>]*>/g;
-const isSheetTag = tag => /\brel="stylesheet"/.test(tag);
-const hrefOf = tag => (tag.match(/\bhref="([^"]*)"/) || [])[1];
+// A tag's attributes, names lower-cased: double-quoted, single-quoted or bare values, any order.
+const ATTR = /([^\s"'<>/=]+)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'<>=`]+))/g;
+export const linkAttrs = tag => {
+  const out = {};
+  for (const m of tag.matchAll(ATTR)) out[m[1].toLowerCase()] ??= m[2] ?? m[3] ?? m[4];
+  return out;
+};
+const isSheetTag = tag => String(linkAttrs(tag).rel || '').toLowerCase().split(/\s+/).includes('stylesheet');
 
 // The href of every <link rel="stylesheet"> in a page's text, in order.
 export const stylesheetHrefs = html =>
-  [...String(html).matchAll(LINK_TAG)].filter(m => isSheetTag(m[0])).map(m => hrefOf(m[0])).filter(Boolean);
-
-// The same page with each root stylesheet pointed at its dist copy; every other attribute and tag
-// is left exactly as it was.
-export const pointSheetsAtDist = html =>
-  String(html).replace(LINK_TAG, tag => (isSheetTag(tag)
-    ? tag.replace(/\bhref="([^"/]+\.css)"/, `href="${DIST_DIR}/$1"`)
-    : tag));
+  [...String(html).matchAll(LINK_TAG)].filter(m => isSheetTag(m[0])).map(m => linkAttrs(m[0]).href).filter(Boolean);
 
 // { 'index.html': ['tokens.css', …] } — the ROOT stylesheets each page links, whether the link
 // names the source (before the swap) or its dist copy.
@@ -131,14 +130,41 @@ export function linkedSheets(root = ROOT) {
 
 // dist/ sits one folder below the sources, so a RELATIVE url() moves one folder up. Absolute,
 // protocol, data: and #fragment urls stay. Throws on a target that is not on disk.
+// ⚠️ A url() this cannot parse THROWS, it is never skipped: a skipped one would keep a path that now
+// points into dist/ and the font or image would silently vanish.
 export function rewriteCssUrls(css, { root = ROOT, from = '' } = {}) {
-  return String(css).replace(/url\(\s*(["']?)([^"')]*?)\1\s*\)/g, (whole, quote, target) => {
-    if (!target || /^(?:[a-z][a-z0-9+.-]*:|\/|#)/i.test(target)) return whole;
-    const file = target.split(/[?#]/)[0];
-    const abs = join(root, from, file);
-    if (!existsSync(abs)) throw new Error(`a stylesheet points at ${target}, which does not exist`);
-    return `url(${quote}../${target}${quote})`;
-  });
+  const text = String(css);
+  const open = /url\(/gi;
+  let out = '';
+  let last = 0;
+  for (let m = open.exec(text); m; m = open.exec(text)) {
+    let i = m.index + m[0].length;
+    while (/\s/.test(text[i] || '')) i += 1;
+    const quote = text[i] === '"' || text[i] === "'" ? text[i] : '';
+    let target = '';
+    if (quote) {
+      i += 1;
+      while (i < text.length && text[i] !== quote) {
+        if (text[i] === '\\') throw new Error(`cannot parse a url() near: ${text.slice(m.index, m.index + 60)}`);
+        target += text[i];
+        i += 1;
+      }
+      i += 1;
+    } else {
+      while (i < text.length && !/[\s)"'(]/.test(text[i])) { target += text[i]; i += 1; }
+    }
+    while (/\s/.test(text[i] || '')) i += 1;
+    if (text[i] !== ')') throw new Error(`cannot parse a url() near: ${text.slice(m.index, m.index + 60)}`);
+    i += 1;
+    open.lastIndex = i;
+    if (!target || /^(?:[a-z][a-z0-9+.-]*:|\/|#)/i.test(target)) continue;
+    if (!existsSync(join(root, from, target.split(/[?#]/)[0]))) {
+      throw new Error(`a stylesheet points at ${target}, which does not exist`);
+    }
+    out += `${text.slice(last, m.index)}url(${quote}../${target}${quote})`;
+    last = i;
+  }
+  return out + text.slice(last);
 }
 
 // Every `dist/<name>.js` a page loads with a <script> tag: { 'index.html': ['dist/index.js'] }.

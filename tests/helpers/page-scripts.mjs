@@ -7,7 +7,7 @@
 
 import { readFileSync, existsSync } from 'node:fs';
 import { posix } from 'node:path';
-import { ROOT } from '../../scripts/bundle-lib.mjs';
+import { ROOT, stylesheetHrefs } from '../../scripts/bundle-lib.mjs';
 
 const BUNDLE_TAG = /<script\b[^>]*\bsrc="dist\/([^"/]+)\.js"[^>]*>/g;
 const LOADER = /\(\)\s*=>\s*import\(\s*'([^']+)'\s*\)/g;
@@ -33,11 +33,7 @@ export function pageScripts(html) {
 // A page links the minified copy in dist/; a test that asks «which rules does this page get?» reads
 // the source, so it maps the link back (same files, same order).
 export function pageSheets(html) {
-  return [...String(html).matchAll(/<link\b[^>]*>/g)]
-    .filter(m => /rel="stylesheet"/.test(m[0]))
-    .map(m => (m[0].match(/href="([^"]+)"/) || [])[1])
-    .filter(Boolean)
-    .map(href => href.replace(/^dist\//, ''));
+  return stylesheetHrefs(html).map(href => href.replace(/^dist\//, ''));
 }
 
 export function pageScriptsOf(pageFile) {

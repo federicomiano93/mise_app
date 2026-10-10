@@ -3,7 +3,7 @@
   "config": "11637fabc7a8b43e",
   "buildScripts": {
     "scripts/build-bundles.mjs": "664791e4a217f4bf",
-    "scripts/bundle-lib.mjs": "016a53e50cb8bdd8"
+    "scripts/bundle-lib.mjs": "8fddda14e7458e6a"
   },
   "outputs": {
     "dist/auth.css": {

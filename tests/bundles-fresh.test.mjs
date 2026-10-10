@@ -183,6 +183,9 @@ test('⚠️ a stylesheet is fingerprinted with its source, and a page must link
     put('home.html', page.replace('dist/home.css', 'home.css'));
     assert.match(manifestProblems(root).join('\n'), /home\.html links the source stylesheet home\.css instead of dist\/home\.css/);
 
+    put('home.html', `<link href='home.css' rel=stylesheet>\n<script type="module" src="dist/home.js"></script>\n`);
+    assert.match(manifestProblems(root).join('\n'), /home\.html links the source stylesheet home\.css/, 'single quotes, bare rel, href first');
+
     put('home.html', page.replace('dist/home.css', 'dist/gone.css'));
     assert.match(manifestProblems(root).join('\n'), /home\.html links dist\/gone\.css, which does not exist/);
 
