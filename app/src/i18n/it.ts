@@ -41,6 +41,16 @@ export const it: Messages = {
   'auth.err.offline': 'Nessuna connessione. Il primo accesso su un dispositivo richiede internet.',
   'auth.err.generic': 'Accesso non riuscito. Riprova.',
 
+  'auth.tryAgain': 'Riprova',
+
+  'session.loading': 'Caricamento…',
+  'picker.title': 'Scegli il locale',
+  'picker.sub': 'Hai accesso a più di uno.',
+  'noAccess.title': 'Nessun locale',
+  'noAccess.body': 'Questo account non è collegato a nessun locale. Se ti hanno dato un codice, digitalo qui.',
+  'help.couldNotCheckYour': 'Non è stato possibile verificare il tuo accesso',
+  'help.thisUsuallyMeansNo': 'Di solito vuol dire che manca la connessione. Controllala e riprova.',
+
   'auth.logOut': 'Esci',
   'auth.logOut.title': 'Vuoi uscire?',
   'auth.logOut.message': 'Per rientrare ti serviranno email e password.',

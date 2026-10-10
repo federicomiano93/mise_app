@@ -59,6 +59,18 @@ export const en = {
   'auth.err.offline': 'No connection. The first sign-in on a device needs internet.',
   'auth.err.generic': 'Could not sign in. Please try again.',
 
+  'auth.tryAgain': 'Try again',
+
+  'session.loading': 'Loading…',
+  'picker.title': 'Choose location',
+  'picker.sub': 'You have access to more than one.',
+  // ⚠️ «type it here» points at the join-code entrance, which Mise 2 brings in step 3g; until
+  // then this screen has no field for a code. The words are the current app's, copied as they are.
+  'noAccess.title': 'No location yet',
+  'noAccess.body': 'This account is not linked to a location. If you were given a code, type it here.',
+  'help.couldNotCheckYour': 'Could not check your access',
+  'help.thisUsuallyMeansNo': 'This usually means no connection. Check it and try again.',
+
   'auth.logOut': 'Log out',
   'auth.logOut.title': 'Log out?',
   'auth.logOut.message': 'You will need your email and password to get back in.',
