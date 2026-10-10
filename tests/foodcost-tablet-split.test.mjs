@@ -13,6 +13,7 @@ import { readFileSync } from 'node:fs';
 import { _dictionaries } from '../js/i18n.js';
 import { TABLET_QUERY } from '../js/foodcost/tablet.js';
 import { TABLET_QUERY as ORDERS_QUERY } from '../js/orders/tablet-layout.js';
+import { missingFromPrecache } from './helpers/precache.mjs';
 
 const DICT = _dictionaries();
 const root = new URL('../', import.meta.url);
@@ -40,10 +41,10 @@ test('Food cost never imports from another feature\'s screens', () => {
   }
 });
 
-test('tablet.js is in the service worker\'s ASSETS and fingerprinted', () => {
-  const sw = read('sw.js');
-  assert.match(sw, /'\.\/js\/foodcost\/tablet\.js'/);
-  assert.match(sw, /"\.\/js\/foodcost\/tablet\.js":/);
+// «Fingerprinted» now means: inside a bundle that sw.js fingerprints (tests/sw-asset-hashes.test.mjs
+// holds the bundle to sw.js, tests/bundles-fresh.test.mjs holds the module to the bundle).
+test('tablet.js is precached, inside a bundle the service worker fingerprints', () => {
+  assert.deepEqual(missingFromPrecache(['js/foodcost/tablet.js']), []);
 });
 
 test('the page holds the split: a hidden list column beside the screen, the split OFF', () => {
@@ -289,5 +290,5 @@ test('the ingredient chooser keeps the 620px column on both tablets', () => {
     ['catalogue.css', 'body[data-section="catalogue"] .pick-overlay']]) {
     assert.ok(read(css).includes(sel), `${css} must re-scope .pick-overlay`);
   }
-  assert.match(read('sw.js'), /'\.\/js\/foodcost\/crossing-route\.js'/);
+  assert.deepEqual(missingFromPrecache(['js/foodcost/crossing-route.js']), []);
 });

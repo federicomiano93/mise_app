@@ -9,6 +9,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { missingFromPrecache } from './helpers/precache.mjs';
 import { readFileSync } from 'node:fs';
 import { TABLET_QUERY } from '../js/pastries/tablet.js';
 import { TABLET_QUERY as ORDERS_QUERY } from '../js/orders/tablet-layout.js';
@@ -57,10 +58,10 @@ test('Pastries widens on its data-card', () => {
   assert.match(read('pastries.html'), /<body data-section="pastries" data-card="pastries">/);
 });
 
-test('tablet.js is in the service worker\'s ASSETS and fingerprinted', () => {
-  const sw = read('sw.js');
-  assert.match(sw, /'\.\/js\/pastries\/tablet\.js'/);
-  assert.match(sw, /"\.\/js\/pastries\/tablet\.js":/);
+// «Fingerprinted» now means: inside a bundle that sw.js fingerprints (tests/sw-asset-hashes.test.mjs
+// holds the bundle to sw.js, tests/bundles-fresh.test.mjs holds the module to the bundle).
+test('tablet.js is precached, inside a bundle the service worker fingerprints', () => {
+  assert.deepEqual(missingFromPrecache(['js/pastries/tablet.js']), []);
 });
 
 test('Pastries never imports from another feature\'s folder', () => {

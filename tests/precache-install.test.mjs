@@ -47,9 +47,9 @@ const abs = asset => new URL(asset, SW_URL).href;
 // responseType: what the network's answers claim to be. Node builds every Response as
 // 'default'; a browser's cross-origin fetch answers 'cors', and the SDK branch of sw.js
 // stores only those — so without this the storing half of that branch never runs here.
-function loadWorker({ fails = () => false, stale = () => false, existingCaches = [], donors = {}, hostname = 'example.test', responseType = null, latency = 0 } = {}) {
+function loadWorker({ fails = () => false, stale = () => false, existingCaches = [], donors = {}, hostname = 'example.test', responseType = null, latency = 0, sdkStatus = 200, sdkHangs = false } = {}) {
   const listeners = new Map();
-  const record = { puts: [], attempts: [], inits: [], fetchInits: [], opened: [], deleted: [], skipWaiting: 0, inFlight: 0, maxInFlight: 0 };
+  const record = { puts: [], sdkAttempts: [], sdkInits: [], attempts: [], inits: [], fetchInits: [], opened: [], deleted: [], skipWaiting: 0, inFlight: 0, maxInFlight: 0 };
   const attemptsFor = new Map();
   const stores = new Map();
   let context;
@@ -108,11 +108,30 @@ function loadWorker({ fails = () => false, stale = () => false, existingCaches =
       const url = typeof request === 'string' ? request : request.url;
       const attempt = (attemptsFor.get(url) || 0) + 1;
       attemptsFor.set(url, attempt);
+      // The SDK warm-up goes to gstatic beside the precache; it is counted on its own so the
+      // precache's numbers (attempts, concurrency, retries) stay about the precache.
+      if (url.startsWith('https://www.gstatic.com/')) {
+        record.sdkAttempts.push(url);
+        record.sdkInits.push(init);
+        if (fails(url, attempt)) return Promise.reject(new TypeError('Failed to fetch ' + url));
+        if (sdkHangs) {
+          // A stalled connection: it answers only when the worker's own timeout aborts it.
+          return new Promise((_, reject) => {
+            const signal = init && init.signal;
+            if (!signal) return;
+            signal.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')));
+          });
+        }
+        const sdk = new Response(`sdk:${url}`, { status: sdkStatus });
+        if (responseType) Object.defineProperty(sdk, 'type', { value: responseType });
+        return Promise.resolve(sdk);
+      }
       record.attempts.push(url);
       record.inits.push(request.init);
       record.fetchInits.push(init);
       if (fails(url, attempt)) return Promise.reject(new TypeError('Failed to fetch ' + url));
-      const res = new Response(stale(url, attempt) ? `stale:${url}` : `asset:${url}`, { status: 200 });
+      const res = new Response(stale(url, attempt) ? `stale:${url}` : `asset:${url}`,
+        { status: 200 });
       if (responseType) Object.defineProperty(res, 'type', { value: responseType });
       if (!latency) return Promise.resolve(res);
       // A download that takes a moment, so the number in flight at once can be measured.
@@ -131,8 +150,10 @@ function loadWorker({ fails = () => false, stale = () => false, existingCaches =
       },
     },
     TextEncoder, Headers, Response,
-    setTimeout,
+    // The SDK warm-up's 30 s cut-off is shortened to 20 ms; every other timer is real.
+    setTimeout: (fn, ms, ...rest) => setTimeout(fn, ms === 30000 ? 20 : ms, ...rest),
     clearTimeout,
+    AbortController,
     console,
     URL,
   };
@@ -166,7 +187,7 @@ const install = worker => run(worker, 'install');
 test('the harness really runs sw.js: it exposes the worker’s own constants', () => {
   const w = loadWorker();
   assert.match(w.read('CACHE_NAME'), /^theitalianclub-v\d+$/);
-  assert.ok(Array.isArray(w.read('ASSETS')) && w.read('ASSETS').length > 100);
+  assert.ok(Array.isArray(w.read('ASSETS')) && w.read('ASSETS').length > 30);
   assert.equal(typeof w.read('PRECACHE_ATTEMPTS'), 'number');
 });
 
@@ -181,7 +202,8 @@ test('when every asset caches, the install resolves and the cache holds all of t
 test('it fills the versioned cache, not some other one', async () => {
   const w = loadWorker();
   await install(w);
-  assert.deepEqual(w.record.opened, [w.read('CACHE_NAME')]);
+  assert.deepEqual(w.record.opened.filter(n => n !== w.read('SDK_CACHE')), [w.read('CACHE_NAME')],
+    'the release cache is the only one the precache opens (the SDK cache is used by the warm-up)');
   assert.ok(w.record.puts.every(([name]) => name === w.read('CACHE_NAME')));
 });
 
@@ -243,7 +265,7 @@ test('⚠⚠ every name in ASSETS is a file that exists, or no phone can ever fi
   // prototypes — an empty vm array against an empty host array fails, reporting
   // "actual [] expected []", which reads as a broken test rather than a realm mismatch.
   const assets = [...loadWorker().read('ASSETS')];
-  assert.ok(assets.length > 100, 'the list must not be empty');
+  assert.ok(assets.length > 30, 'the list must not be empty');
   const missing = assets
     .filter(a => a !== './')
     .filter(a => !existsSync(join(ROOT, a.replace(/^\.\//, ''))));
@@ -347,7 +369,7 @@ test('every stored file carries its fingerprint, so the next update can recognis
   await install(w);
   const hashes = w.read('ASSET_HASHES');
   const store = w.stores.get(w.read('CACHE_NAME'));
-  for (const asset of ['./', './index.html', './orders.css', './js/firebase.js']) {
+  for (const asset of ['./', './index.html', './orders.css', './dist/orders.js', './dist/i18n.js']) {
     assert.equal(store.get(abs(asset)).headers.get('x-mise-hash'), hashes[asset], asset);
   }
 });
@@ -388,7 +410,7 @@ test('⚠⚠ at most PRECACHE_CONCURRENCY downloads are in flight at once, yet s
   const limit = w.read('PRECACHE_CONCURRENCY');
   assert.equal(limit, 6);
   await install(w);
-  assert.ok(w.record.attempts.length > 50, 'the slice must be big enough to burst');
+  assert.ok(w.record.attempts.length > 30, 'the slice must be big enough to burst');
   assert.ok(w.record.maxInFlight <= limit, `${w.record.maxInFlight} downloads were in flight at once`);
   assert.ok(w.record.maxInFlight > 1, 'the install must still download in parallel');
 });
@@ -404,7 +426,7 @@ test('⚠ the limit holds on a retry too, and a file failing twice then succeedi
 test('⚠ one file failing on every attempt still refuses the install and names it, among others that succeeded', async () => {
   const w = loadWorker({ latency: 1, fails: url => url.endsWith('/orders.css') });
   await assert.rejects(install(w), /precache incomplete: 1 of \d+ assets failed — .*orders\.css/);
-  assert.ok(w.record.added.length > 100, 'one failure must not stop the others');
+  assert.ok(w.record.added.length > 30, 'one failure must not stop the others');
 });
 
 test('⚠⚠ the cached body is exactly the downloaded bytes, stamped with its fingerprint', async () => {
@@ -491,7 +513,7 @@ test('⚠⚠ a cached Firebase SDK module is served from its cache, with no down
   const res = await serve(w, SDK_MODULE);
   assert.ok(res, 'the worker must answer');
   assert.equal(await res.text(), `donated:${SDK_MODULE}`);
-  assert.ok(!w.record.attempts.includes(SDK_MODULE), 'no request may go to the network behind it');
+  assert.ok(!w.record.sdkAttempts.includes(SDK_MODULE), 'no request may go to the network behind it');
   assert.ok(!w.record.puts.some(([, url]) => url === SDK_MODULE), 'and nothing may be written back');
 });
 
@@ -499,7 +521,7 @@ test('an SDK module not cached yet is downloaded — a new SDK version is a new 
   const w = loadWorker();
   const res = await serve(w, SDK_MODULE);
   assert.ok(res, 'the worker must answer');
-  assert.ok(w.record.attempts.includes(SDK_MODULE));
+  assert.ok(w.record.sdkAttempts.includes(SDK_MODULE));
 });
 
 // ⚠️ Nothing re-downloads a cached module any more, so this first download is the ONLY
@@ -600,4 +622,78 @@ test('the reset page is matched in THIS worker\'s cache, never through caches.ma
   assert.match(block, /caches\.open\(CACHE_NAME\)/);
   assert.doesNotMatch(block, /caches\.match/);
   assert.doesNotMatch(block, /cache\.put/);
+});
+
+// ── The SDK warm-up (10 Oct 2026) ────────────────────────────────────────────
+// A bundle imports every Firebase SDK module at the top, including ones phones used to reach only
+// lazily. Offline next morning with one of them uncached = a blank page. The install therefore
+// fetches them on the side, and may NEVER fail because of it.
+
+test('⚠ SDK_MODULES is exactly the set of SDK URLs the precached bundles import, at the cache\'s version', async () => {
+  const { readAssets } = await import('../scripts/sw-hashes.mjs');
+  const w = loadWorker();
+  const listed = [...w.read('SDK_MODULES')].sort();
+  const imported = new Set();
+  const bundles = readAssets(SW).filter(a => /^\.\/dist\/[^/]+\.js$/.test(a));
+  assert.ok(bundles.length >= 10, 'the bundles must be precached');
+  for (const bundle of bundles) {
+    const text = readFileSync(join(ROOT, bundle), 'utf8');
+    for (const m of text.matchAll(/(?:\bfrom|\bimport)\s*"(https:\/\/www\.gstatic\.com\/firebasejs\/[^"]+)"/g)) imported.add(m[1]);
+  }
+  assert.ok(imported.size >= 5, `only ${imported.size} SDK modules found in the bundles — the scan is broken`);
+  assert.deepEqual(listed, [...imported].sort(), 'add/remove the URL in SDK_MODULES (and bump SDK_CACHE with a new version)');
+  const version = w.read('SDK_CACHE').replace('firebase-sdk-', '').replace(/-/g, '.');
+  for (const url of listed) assert.ok(url.includes(`/firebasejs/${version}/`), `${url} is not at SDK_CACHE's version ${version}`);
+});
+
+test('⚠⚠ the install SUCCEEDS when every SDK download rejects', async () => {
+  const w = loadWorker({ fails: url => url.startsWith('https://www.gstatic.com/') });
+  await install(w);
+  assert.equal(w.record.sdkAttempts.length, w.read('SDK_MODULES').length, 'it did try each one');
+  assert.equal(w.record.added.length, w.read('ASSETS').length, 'and the precache is still complete');
+});
+
+test('⚠⚠ the install SUCCEEDS when every SDK download answers 500, and stores nothing', async () => {
+  const w = loadWorker({ responseType: 'cors', sdkStatus: 500 });
+  await install(w);
+  assert.equal(w.record.sdkAttempts.length, w.read('SDK_MODULES').length, 'it did try each one');
+  assert.equal(w.record.added.length, w.read('ASSETS').length, 'and the precache is still complete');
+  assert.ok(!w.record.puts.some(([name]) => name === w.read('SDK_CACHE')), 'a 500 is never stored');
+});
+
+test('⚠⚠ an SDK download that never answers is cut off, and the install still completes', async () => {
+  const w = loadWorker({ responseType: 'cors', sdkHangs: true });
+  assert.equal(w.read('SDK_WARM_TIMEOUT_MS'), 30000, 'the real cut-off is 30 s');
+  await install(w);      // would hang for ever if the warm-up waited on the stalled fetches
+  assert.equal(w.record.sdkAttempts.length, w.read('SDK_MODULES').length);
+  assert.ok(w.record.sdkInits.every(i => i && i.signal), 'each fetch carries an abort signal');
+  assert.equal(w.record.added.length, w.read('ASSETS').length, 'and the precache completed');
+  assert.ok(!w.record.puts.some(([name]) => name === w.read('SDK_CACHE')));
+});
+
+test('a module already in SDK_CACHE is not fetched again', async () => {
+  const probe = loadWorker();
+  const urls = probe.read('SDK_MODULES');
+  const donors = { [probe.read('SDK_CACHE')]: Object.fromEntries(urls.map(u => [u, null])) };
+  const w = loadWorker({ donors, responseType: 'cors' });
+  await install(w);
+  assert.deepEqual(w.record.sdkAttempts, []);
+});
+
+test('⚠ a good SDK download is stored in SDK_CACHE, never in the release cache', async () => {
+  const w = loadWorker({ responseType: 'cors' });
+  await install(w);
+  const urls = w.read('SDK_MODULES');
+  for (const url of urls) {
+    assert.ok(w.record.puts.some(([name, u]) => name === w.read('SDK_CACHE') && u === url), `${url} must land in SDK_CACHE`);
+    assert.ok(!w.record.puts.some(([name, u]) => name === w.read('CACHE_NAME') && u === url), `${url} must not land in CACHE_NAME`);
+  }
+  assert.equal(w.record.sdkAttempts.length, urls.length);
+  assert.ok(w.record.sdkInits.every(i => i && i.mode === 'cors'), 'fetched in cors mode');
+});
+
+test('an opaque SDK answer is not stored by the warm-up either', async () => {
+  const w = loadWorker({ responseType: 'opaque' });
+  await install(w);
+  assert.ok(!w.record.puts.some(([name]) => name === w.read('SDK_CACHE')));
 });

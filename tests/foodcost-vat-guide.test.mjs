@@ -15,6 +15,7 @@ import { VAT_GUIDE_BY_COUNTRY, vatGuideFor } from '../js/foodcost/vat-guide.js';
 import { vatRatesFor } from '../js/foodcost/foodcost-model.js';
 import { COUNTRIES } from '../js/market.js';
 import { _dictionaries } from '../js/i18n.js';
+import { missingFromPrecache } from './helpers/precache.mjs';
 
 const raw = p => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
 const codeOf = src => src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
@@ -108,7 +109,5 @@ test('the screen around the guide speaks the interface language, in both', () =>
 });
 
 test('the precache carries both files, or the guide is missing offline', () => {
-  const sw = raw('sw.js');
-  assert.ok(sw.includes("'./js/foodcost/vat-guide.js'"));
-  assert.ok(sw.includes("'./js/foodcost/vat-guide-view.js'"));
+  assert.deepEqual(missingFromPrecache(['js/foodcost/vat-guide.js', 'js/foodcost/vat-guide-view.js']), []);
 });

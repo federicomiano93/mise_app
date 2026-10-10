@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { missingFromPrecache } from './helpers/precache.mjs';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -225,5 +226,5 @@ test('both languages carry the section titles', () => {
 });
 
 test('the new module is precached', () => {
-  assert.ok(read('sw.js').includes("'./js/kiosk-orders.js',"));
+  assert.deepEqual(missingFromPrecache(['js/kiosk-orders.js']), []);
 });

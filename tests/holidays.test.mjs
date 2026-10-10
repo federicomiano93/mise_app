@@ -19,6 +19,7 @@ import {
 } from '../js/orders/holidays.js';
 import { COUNTRIES } from '../js/market.js';
 import { _dictionaries } from '../js/i18n.js';
+import { missingFromPrecache } from './helpers/precache.mjs';
 
 const root = new URL('../', import.meta.url);
 const read = (name) => readFileSync(new URL(name, root), 'utf8');
@@ -270,10 +271,9 @@ test('⚠️ the Italian calendar imports nothing at all', () => {
 });
 
 test('both new modules are precached, or an offline phone 404s on them', () => {
-  const sw = read('sw.js');
-  assert.ok(sw.includes("'./js/orders/holidays.js'"));
-  assert.ok(sw.includes("'./js/orders/holidays-it.js'"));
-  assert.ok(!sw.includes("'./js/orders/bank-holidays.js'"), 'the renamed file must go');
+  assert.deepEqual(missingFromPrecache(['js/orders/holidays.js', 'js/orders/holidays-it.js']), []);
+  assert.deepEqual(missingFromPrecache(['js/orders/bank-holidays.js']), ['js/orders/bank-holidays.js'],
+    'the renamed file must go');
 });
 
 // ── The fetch, and who it is for ─────────────────────────────────────────────

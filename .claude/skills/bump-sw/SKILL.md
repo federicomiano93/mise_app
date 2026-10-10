@@ -16,15 +16,32 @@ copies unchanged files from the previous release instead of downloading them.
 After adding, editing, or removing any file the app serves: any *.html,
 style.css, orders.css, anything under js/, manifest.json, or icons.
 
+## The order since the pages were bundled (10 Oct 2026)
+**change sources → `node scripts/build-bundles.mjs` → `node scripts/sw-hashes.mjs`.**
+Every page loads ONE committed bundle, `dist/<page>.js` (esbuild, run on the developer's machine
+only; `js/pages/<page>.js` lists the scripts the page runs), plus `dist/i18n.js` shared by all.
+A module under `js/` reaches a phone only INSIDE a bundle, so:
+- Edit a module → rebuild first. `tests/bundles-fresh.test.mjs` fails until you do (it compares the
+  fingerprints in `dist/build-manifest.json` with the sources), and the bundle's new bytes are what
+  `sw-hashes.mjs` must then fingerprint — which is why the build goes BEFORE it.
+- `ASSETS` lists the bundles (`./dist/<page>.js`, `./dist/i18n.js`), the pages, the stylesheets and the
+  classic script `js/splash-init.js` — **not** the modules. A new module needs no `ASSETS` line; a
+  new PAGE needs an entry in `js/pages/`, its `./dist/<page>.js` line (unless it is deliberately not
+  precached, like `order.html`), and its `<script type="module" src="dist/<page>.js">`.
+- `dist/*.map` and `dist/build-manifest.json` are served but never precached.
+- `node scripts/build-bundles.mjs --check` changes nothing and exits 1 listing what is stale.
+- After merging `main` into a branch, rebuild as well as re-running `sw-hashes.mjs`: `dist/` is generated,
+  never merged by hand.
+
 ## Steps
-1. If a file was ADDED or REMOVED: edit the `ASSETS` array in `sw.js` (with the
-   `./` prefix, e.g. `'./js/orders/new-module.js'`). A new file a page imports at
-   load MUST be listed, or an installed phone offline after the deploy cannot open
-   that page.
-2. Run `node scripts/sw-hashes.mjs`. It rewrites `ASSET_HASHES`, bumps `CACHE_NAME`
+1. If a PAGE or other served file was ADDED or REMOVED: edit the `ASSETS` array in `sw.js` (with the
+   `./` prefix, e.g. `'./dist/newpage.js'`). A bundle or file a page loads at start MUST be listed,
+   or an installed phone offline after the deploy cannot open that page.
+2. If anything under `js/` changed: run `node scripts/build-bundles.mjs`.
+3. Run `node scripts/sw-hashes.mjs`. It rewrites `ASSET_HASHES`, bumps `CACHE_NAME`
    by one whenever any fingerprint changed, and keeps the precache counts in the
    prose in step with `ASSETS`.
-3. Tell the user the new CACHE_NAME value and any ASSETS lines added or removed.
+4. Tell the user the new CACHE_NAME value and any ASSETS lines added or removed.
 
 ## Notes
 - Never edit `ASSET_HASHES` or bump `CACHE_NAME` by hand: the script does both, and

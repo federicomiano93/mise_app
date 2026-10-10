@@ -12,6 +12,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { missingFromPrecache } from './helpers/precache.mjs';
 import { readFileSync } from 'node:fs';
 
 import { offlineCacheVerdict, OFFLINE_CACHE_OWNER_KEY, KEEP_PREFIXES, keysToClear } from '../js/local-data.js';
@@ -112,5 +113,5 @@ test('the question exists in both languages', () => {
 });
 
 test('the guard is precached, or the Home would not open offline', () => {
-  assert.match(read('sw.js'), /'\.\/js\/unsent-guard\.js'/);
+  assert.deepEqual(missingFromPrecache(['js/unsent-guard.js']), []);
 });

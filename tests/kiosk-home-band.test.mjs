@@ -1,6 +1,7 @@
 // The Home's kiosk band (Rest / Exit) and the «rest now» event.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { pageScripts } from './helpers/page-scripts.mjs';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -29,7 +30,7 @@ test('the band follows the setting live: both change events re-render it', () =>
   assert.doesNotMatch(src, /canManage|onSession|firebase/);
   const html = read('index.html');
   assert.doesNotMatch(html, /home-kiosk-band"/);
-  assert.match(html, /<script type="module" src="js\/home-kiosk-band\.js"><\/script>/);
+  assert.ok(pageScripts(html).includes('js/home-kiosk-band.js'), 'the Home runs the band');
 });
 
 test('rest-now enters rest only when enabled, signed in and not already covered', () => {

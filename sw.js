@@ -1,4 +1,4 @@
-const CACHE_NAME = 'theitalianclub-v658';
+const CACHE_NAME = 'theitalianclub-v661';
 // Firebase SDK modules (loaded from gstatic) are cached SEPARATELY from CACHE_NAME
 // so they survive the cache-version bump that happens on every deploy — otherwise
 // the offline SDK would be wiped each release until the next online load. The name
@@ -8,11 +8,14 @@ const CACHE_NAME = 'theitalianclub-v658';
 // ONCE PER SDK UPGRADE. activate() deletes every cache that is neither CACHE_NAME
 // nor this one, so renaming it throws the old modules away — and the new ones are
 // NOT precached (they are cross-origin; a gstatic hiccup would fail the whole
-// all-or-nothing install and stop the phone updating at all). They arrive through
-// the fetch handler below, on the first load that has a network.
+// all-or-nothing install and stop the phone updating at all). They are WARMED
+// best-effort by the install handler (warmSdkCache, below — never able to fail the
+// install) and otherwise arrive through the fetch handler, on the first load that has
+// a network. So the window described here is now only the one where that download
+// itself failed.
 // So between activate() and that first load, a phone that is OFFLINE cannot boot:
 // the code asks for the new version and nothing has it. In practice the window is very
-// small — activate() only happens after a successful 332-file precache, i.e.
+// small — activate() only happens after a successful 67-file precache, i.e.
 // online, and tapping the update banner reloads the page immediately — but it is
 // not zero, and it is the reason to bump the SDK deliberately rather than often.
 // Leaving the name unchanged would close the window and cost ~1 MB of dead
@@ -54,10 +57,48 @@ const ASSETS = [
   './suppliers.html',
   './install-guide.html',
   './reset-password.html',
-  './js/reset-password.js',
+  // The page scripts. Each page loads ONE bundle (js/pages/<page>.js, built by
+  // scripts/build-bundles.mjs) holding every module it imports, the lazy ones too, so the
+  // old per-module list is gone: a module is cached by being inside a bundle. dist/i18n.js is
+  // the one file shared by all of them (the dictionary and the current language).
+  // ⚠️ A bundle missing from this list is a blank screen offline after the deploy, so every
+  // precached page has its own. order.html (the wholesale CLIENT page, deliberately not
+  // precached: no staff phone navigates to it) has dist/order.js and is served from the network.
+  './dist/i18n.js',
+  './dist/index.js',
+  './dist/calculator.js',
+  './dist/orders.js',
+  './dist/suppliers.js',
+  './dist/install-guide.js',
+  // reset-password.html is DELIBERATELY NOT BUNDLED (bundle-lib NATIVE_MODULE_PAGES): its boot file
+  // must draw «Checking your link…» and forward other email actions without the Firebase SDK, which a
+  // bundle would make it wait for. So its own modules are listed one by one, as before the bundles —
+  // everything its three module tags and the lazy reset-password.js reach.
+  './js/allergen-model.js',
+  './js/calculator-config.js',
+  './js/credentials.js',
+  './js/currency.js',
+  './js/firebase-target.js',
+  './js/firebase.js',
+  './js/i18n-dom.js',
+  './js/i18n.js',
+  './js/keyboard-done.js',
+  './js/local-data.js',
+  './js/location.js',
+  './js/market.js',
+  './js/preview-ribbon.js',
   './js/reset-password-boot.js',
+  './js/reset-password.js',
+  './js/roles.js',
+  './js/same-data.js',
+  './js/sections.js',
+  './js/sw-update.js',
+  './js/update-gate.js',
+  './dist/catalogue.js',
+  './dist/pastries.js',
+  './dist/foodcost.js',
+  './dist/inventory.js',
   './qr.png',
-  './js/install-guide.js',
   './tokens.css',
   './auth.css',
   './style.css',
@@ -76,381 +117,20 @@ const ASSETS = [
   './fonts/instrument-serif-latin.woff2',
   './fonts/instrument-serif-latin-ext.woff2',
   './fonts/atkinson-next-digits.woff2',
-  './js/app.js',
-  './js/confirm-dialog.js',
-  './js/calculator-icons.js',
-  './js/hold-to-zoom.js',
-  './js/price-model.js',
-  './js/vat-rates.js',
-  './js/vat-number.js',
-  './js/pack-size.js',
-  './js/pack-format.js',
-  './js/record-choices.js',
-  './js/order-cost.js',
-  // ⚠️ NEW, AND js/firebase.js IMPORTS IT — which every page loads before anything
-  // else. Missing from this list, an installed phone that goes offline after the
-  // deploy would fail to boot ANY screen, not merely lose a price.
-  './js/currency.js',
-  './js/allergen-model.js',
-  './js/allergen-terms.js',
-  './js/allergen-match.js',
-  './js/venue-features.js',
-  // ⚠️ js/auth-gate.js IMPORTS IT, and every page loads that — so a phone missing it
-  // offline would fail to boot any screen at all, not merely lose a card.
-  './js/home-cards.js',
-  // The way from a recipe to its Food cost product and back (13 Sep 2026). Both
-  // catalogue.html and foodcost.html import it at load, so offline without it neither
-  // page would open at all.
-  './js/recipe-link.js',
-  // The suggestion list under a field and the full-screen search chooser, SHARED by the
-  // Catalogue and Food cost since 13 Sep 2026, with their own copy of el(). Both pages
-  // import them at load, so offline without them neither form would open.
-  './js/dom.js',
-  './js/pick-suggest.js',
-  './js/pick-screen.js',
-  // The two record cards and what they share, opened from «Fornitori e ingredienti» and
-  // from a recipe row in the Catalogue (13 Sep 2026).
-  './js/records.js',
-  './js/record-ui.js',
-  './js/supplier-label.js',
-  './js/order-unit.js',
-  './js/record-data.js',
-  './js/ingredient-record-form.js',
-  './js/supplier-record-form.js',
-  // Is an item food or packaging? Asked by the registry, the Catalogue and Food cost.
-  './js/ingredient-kind.js',
-  './js/ingredient-name.js',
-  './js/photo-model.js',
-  // ⚠️ A NEW FILE, AND THE ONE FAILURE THAT DOES NOT HEAL ITSELF. An installed
-  // phone that goes offline after a deploy finds a file the new HTML asks for and
-  // its cache never received. It is also the file that decides whether a label may
-  // be printed at all, so its absence would look like the app refusing every label.
-  './js/market.js',
-  './js/reveal-field.js',
-  './js/save-guard.js',
-  './js/push-model.js',
-  './js/push.js',
-  './js/client-order-model.js',
-  './js/client-order-history.js',
-  './js/client-orders-data.js',
-  './js/calculator-client-orders.js',
-  './js/home-client-orders-badge.js',
-  './js/home-order-requests-badge.js',
-  './js/away-model.js',
-  './js/calculator-recipe-source.js',
-  './js/calculator-catalogue-link.js',
-  './js/away-screen.js',
-  './js/away-reminder.js',
-  './js/home-away.js',
-  './js/help-content.js',
-  './js/help-button.js',
-  './js/feedback.js',
-  './js/feedback-model.js',
-  // ⚠️ js/auth-gate.js IMPORTS device-ping.js, and every page loads the gate: missing here, an
-  // installed phone offline after the deploy would boot no screen at all.
-  './js/device-ping.js',
-  './js/device-model.js',
-  // ⚠️ js/auth-gate.js IMPORTS error-report.js too (and that imports error-model.js): same
-  // warning as above, a missing name is a blank screen offline after the deploy.
-  './js/error-report.js',
-  './js/error-model.js',
-  // ⚠️ js/auth-gate.js IMPORTS usage.js too (and that imports usage-model.js): same warning as
-  // above, a missing name is a blank screen offline after the deploy.
-  './js/usage.js',
-  './js/usage-model.js',
-  // ⚠️ order.html AND js/client-orders/* ARE DELIBERATELY ABSENT FROM THIS LIST.
-  // They are the page a wholesale CLIENT opens from their own link — not part of the
-  // installed app, and no staff phone ever navigates to them. Precaching them would
-  // put a copy of the client page on every phone in the bakery for nothing, and the
-  // one failure this list exists to prevent (an installed user going offline and
-  // finding a newly added file missing) cannot happen to a page installed users never
-  // open. The two files above ARE listed: they are the Calculator's own half.
-  './js/sw-update.js',
-  './js/update-gate.js',
-  './js/kiosk.js',
-  './js/kiosk-model.js',
-  './js/kiosk-orders.js',
-  './js/home-kiosk-band.js',
-  './js/wake-lock.js',
-  './js/install-version.js',
-  './js/install-version-boot.js',
-  './js/install-hint.js',
-  './js/install-hint-boot.js',
-  './js/install.js',
-  './js/home-orders-badge.js',
   './js/splash-init.js',
-  './js/whats-new.js',
-  './js/whats-new-boot.js',
-  './js/firebase.js',
-  // Imported by js/firebase.js on every page: it picks the Firebase project by hostname.
-  './js/firebase-target.js',
-  // ⚠️ js/firebase.js IMPORTS IT, and every page loads that first: missing here, an
-  // installed phone offline after the deploy would boot no screen at all.
-  './js/same-data.js',
-  './js/location.js',
-  './js/sections.js',
-  './js/roles.js',
-  './js/i18n.js',
-  './js/i18n-dom.js',
-  './js/keyboard-done.js',
-  './js/join-code.js',
-  './js/join-link.js',
-  './js/credentials.js',
-  './js/staff/dom.js',
-  './js/staff/confirm-dialog.js',
-  './js/staff/firebase-staff.js',
-  // ⚠️ share.js IS LISTED EVEN THOUGH TWO OF ITS THREE CALLERS ARE NOT. The two
-  // that are absent are the app owner's back office; people.js is not, and it now
-  // needs this to hand over an invitation link. A dependency of a precached file
-  // has to be precached, or an installed owner who goes offline finds the import
-  // missing — the one failure this list exists to prevent, and the one that does
-  // not repair itself on the next load.
-  './js/share.js',
-  './js/send-icon.js',
-  './js/send-sheet.js',
-  // people.js IS listed: "Who can get in" belongs to the OWNER OF EVERY CUSTOMER'S
-  // venue, not to whoever runs this app. The files above are its dependencies.
-  './js/staff/people.js',
-  './js/staff/language.js',
-  './js/staff/home-cards-screen.js',
-  // ⚠️ js/staff/businesses.js, js/staff/new-customer.js AND js/workspace-row.js ARE
-  // DELIBERATELY ABSENT FROM THIS LIST. They are the app owner's own back office —
-  // one person, on one phone — and the server refuses them to everybody else, so
-  // precaching them puts code on every customer's device that none of those devices
-  // can ever use. All three are reached through a dynamic import(), and the fetch
-  // handler below caches whatever it fetches, so the first open still works offline
-  // afterwards; only the very first open after a deploy needs the network, and
-  // creating a business needs it anyway. The failure this list exists to prevent —
-  // an installed user going offline and finding a newly added file missing — cannot
-  // happen to screens no installed user can open.
-  './js/local-data.js',
-  // "Not sent yet" before a sign-out or a venue switch clears the offline copy. Loaded
-  // on the tap by auth-gate.js and at load by home-settings.js (the Home), so offline
-  // without it the Home would not open.
-  './js/unsent-guard.js',
-  './js/auth-gate.js',
-  // Imported by the gate on every page (drawn only on a preview link).
-  './js/preview-ribbon.js',
-  './js/home-session.js',
-  './js/home-settings.js',
-  './js/app-version.js',
-  './js/location-title.js',
-  './js/recipes.js',
-  './js/calc.js',
-  './js/calculator-recipe-text.js',
-  './js/calculator-dough-math.js',
-  './js/log.js',
-  './js/log-time.js',
-  './js/log-model.js',
-  './js/log-store.js',
-  './js/log-view.js',
-  './js/log-edit.js',
-  './js/log-qty.js',
-  './js/log-add.js',
-  './js/log-settings.js',
-  './js/whatsapp.js',
-  './js/calculator-confirm.js',
-  './js/calculator-config.js',
-  './js/confirm-flow.js',
-  './js/zoom-steps.js',
-  './js/calc-fullscreen.js',
-  './js/result-place.js',
-  './js/calculator-config-store.js',
-  './js/calculator-order-prefill.js',
-  './js/calculator-order-text.js',
-  './js/calculator-render.js',
-  './js/calculator-settings.js',
-  './js/calculator-whatsapp-settings.js',
-  './js/vendor/sortable.esm.js',
-  './js/orders/boot.js',
-  './js/orders/category-batches.js',
-  './js/orders/confirm-dialog.js',
-  './js/orders/firebase-orders.js',
-  './js/orders/orders-main.js',
-  './js/orders/dom.js',
-  './js/orders/day.js',
-  './js/orders/order-day.js',
-  './js/orders/deliveries.js',
-  './js/orders/deliveries-view.js',
-  './js/orders/send-routes.js',
-  './js/orders/send-chooser.js',
-  './js/orders/sent-check.js',
-  './js/orders/sent-check-dialog.js',
-  './js/orders/work-week.js',
-  './js/orders/archive.js',
-  './js/orders/history-window.js',
-  './js/orders/reminders.js',
-  './js/orders/kiosk-lines.js',
-  './js/orders/reminder-view.js',
-  './js/orders/suppliers.js',
-  './js/orders/ingredients.js',
-  './js/orders/no-supplier.js',
-  './js/orders/line-supplier.js',
-  './js/orders/memo.js',
-  './js/orders/render-scheduler.js',
-  './js/orders/ingredient-search.js',
-  './js/orders/ingredient-list.js',
-  './js/orders/search-box.js',
-  './js/orders/supplier-detail.js',
-  './js/orders/supplier-items.js',
-  './js/orders/orders-config.js',
-  './js/orders/supplier-order.js',
-  './js/orders/supplier-order-screen.js',
-  './js/orders/draft.js',
-  './js/orders/preview.js',
-  './js/orders/order-text.js',
-  './js/orders/order-image.js',
-  './js/orders/supplier-picker.js',
-  './js/orders/order-request-model.js',
-  './js/orders/order-requests.js',
-  './js/orders/history.js',
-  './js/orders/history-edit.js',
-  './js/orders/place-confirm.js',
-  './js/orders/untold-changes.js',
-  './js/orders/untold-view.js',
-  './js/orders/alert-dismissal.js',
-  './js/orders/management.js',
-  // The records screen: what the Settings panel used to hold, on a page of its own.
-  './js/orders/mgmt-ui.js',
-  './js/orders/registry.js',
-  './js/orders/registry-main.js',
-  './js/orders/registry-settings.js',
-  './js/orders/favourite-suppliers.js',
-  // «Import from invoices»: the pure model and plan, the data layer and the screen (suppliers.html).
-  './js/orders/invoice-import-model.js',
-  './js/orders/invoice-import-plan.js',
-  './js/orders/invoice-import-data.js',
-  './js/orders/invoice-import-screen.js',
-  // «Unisci un'altra confezione…» on the ingredient card: the pure planning, the data layer and the screen.
-  './js/orders/ingredient-merge.js',
-  './js/orders/ingredient-merge-data.js',
-  './js/orders/ingredient-merge-screen.js',
-  // The same screen reads the supplier zip itself: the invoice reader (pure) and the zip library it needs.
-  './js/orders/invoice-zip/build-import.js',
-  './js/orders/invoice-zip/classify.js',
-  './js/orders/invoice-zip/fatturapa.js',
-  './js/orders/invoice-zip/pricing.js',
-  './js/orders/invoice-zip/products.js',
-  './js/orders/invoice-zip/py-compat.js',
-  './js/orders/invoice-zip/reasons.js',
-  './js/orders/invoice-zip/selection.js',
-  './js/orders/invoice-zip/sha256.js',
-  './js/orders/invoice-zip/zip-read.js',
-  './js/vendor/fflate.esm.js',
-  // «Variazioni prezzi»: how prices moved between invoices, by week or month (suppliers.html).
-  './js/orders/price-changes-model.js',
-  './js/orders/price-changes-screen.js',
-  './js/form-dirty.js',
-  './js/orders/level-stack.js',
-  './js/orders/firebase-features.js',
-  './js/orders/firebase-photo.js',
-  './js/orders/photo-capture.js',
-  './js/orders/holidays.js',
-  './js/orders/holidays-it.js',
-  './js/orders/suggestions.js',
-  './js/orders/notifications.js',
-  './js/orders/tablet-layout.js',
-  './js/orders/sticky-offset.js',
-  './js/orders/order-summary.js',
-  './js/orders/order-cost-view.js',
-  './js/orders/order-summary-view.js',
   './catalogue.html',
   './catalogue.css',
   './label-print.css',
   './records.css',
-  './js/catalogue/confirm-dialog.js',
-  './js/catalogue/dom.js',
-  './js/catalogue/catalogue-model.js',
-  './js/catalogue/recipe-cost-model.js',
-  './js/catalogue/recipe-allergen-model.js',
-  './js/catalogue/allergen-sheet.js',
-  // Reading a recipe from a photograph. The screen needs the network to WORK,
-  // but it must still LOAD offline — otherwise an installed phone that goes
-  // offline after this deploy finds a file the new code asks for and its cache
-  // never received, which is the one failure that does not heal itself.
-  './js/catalogue/photo-model.js',
-  './js/catalogue/photo-capture.js',
-  './js/catalogue/firebase-photo.js',
-  './js/catalogue/recipe-label-model.js',
-  './js/catalogue/label-view.js',
-  './js/catalogue/label-template-model.js',
-  './js/catalogue/label-print.js',
-  './js/catalogue/label-zpl.js',
-  './js/print-queue-model.js',
-  './js/catalogue/print-transports.js',
-  './js/catalogue/ingredient-picker.js',
-  './js/ingredient-create.js',
-  './js/ingredient-edit-model.js',
-  './js/catalogue/ingredient-suggest.js',
-  './js/catalogue/firebase-catalogue.js',
-  './js/catalogue/catalogue-store.js',
-  './js/catalogue/catalogue-main.js',
-  './js/catalogue/catalogue-list.js',
-  './js/catalogue/tablet.js',
-  './js/catalogue/search-box.js',
-  './js/catalogue/catalogue-settings.js',
-  './js/catalogue/catalogue-detail.js',
-  './js/catalogue/zoom-steps.js',
-  './js/catalogue/catalogue-editor.js',
-  './js/catalogue/guided-model.js',
-  './js/catalogue/guided-alarm.js',
-  './js/catalogue/guided-run.js',
-  './js/catalogue/guided-editor.js',
-  './js/catalogue/import-to-calculator.js',
   './pastries.html',
   './pastries.css',
-  './js/pastries/confirm-dialog.js',
-  './js/pastries/dom.js',
-  './js/pastries/pastries-model.js',
-  './js/pastries/firebase-pastries.js',
-  './js/pastries/pastries-store.js',
-  './js/pastries/pastries-main.js',
-  './js/pastries/pastries-strip.js',
-  './js/pastries/pastries-day.js',
-  './js/pastries/pastries-editor.js',
-  './js/pastries/pastries-log-model.js',
-  './js/pastries/pastries-lock.js',
-  './js/pastries/pastries-logs-store.js',
-  './js/pastries/pastries-logs.js',
-  './js/pastries/tablet.js',
   './foodcost.html',
   './foodcost.css',
-  './js/foodcost/confirm-dialog.js',
-  './js/foodcost/dom.js',
-  './js/foodcost/foodcost-model.js',
-  './js/foodcost/firebase-foodcost.js',
-  './js/foodcost/foodcost-store.js',
-  './js/foodcost/foodcost-main.js',
-  './js/foodcost/foodcost-list.js',
-  './js/foodcost/tablet.js',
-  './js/foodcost/crossing-route.js',
-  './js/foodcost/foodcost-editor.js',
-  './js/foodcost/foodcost-weighing.js',
-  // «Which products take which VAT rate» (13 Sep 2026): the guide's words, per country,
-  // and the screen that shows them — opened from the product editor.
-  './js/foodcost/vat-guide.js',
-  './js/foodcost/vat-guide-view.js',
-  // The numbers the rules accept on a product, checked before a save (14 Sep 2026).
-  './js/foodcost/product-limits.js',
-  // The Food cost settings — the hourly labour cost (13 Sep 2026).
-  './js/foodcost/foodcost-settings.js',
   // The monthly stocktake. A page of the Food Cost section (it carries
   // data-section="foodcost"), but its own folder, because it owns its own
   // collection and imports nothing from js/foodcost/.
   './inventory.html',
   './inventory.css',
-  './js/inventory/confirm-dialog.js',
-  './js/inventory/dom.js',
-  './js/inventory/inventory-model.js',
-  './js/inventory/firebase-inventory.js',
-  './js/inventory/inventory-outbox.js',
-  './js/inventory/inventory-store.js',
-  './js/inventory/inventory-purchases.js',
-  './js/inventory/inventory-value.js',
-  './js/inventory/inventory-usage.js',
-  './js/inventory/inventory-list.js',
-  './js/inventory/inventory-detail.js',
-  './js/inventory/inventory-main.js',
   './manifest.json',
   './icons/icon-192.png',
   './icons/icon-512.png'
@@ -461,18 +141,45 @@ const ASSETS = [
 // hash (first 16 characters): the phone checks every download against it, and an update
 // copies a file whose hash has not changed out of the previous cache instead of fetching it.
 const ASSET_HASHES = {
-  "./": 'cf2fd2cec8f354be',
-  "./index.html": 'cf2fd2cec8f354be',
+  "./": 'f82630fff2530d55',
+  "./index.html": 'f82630fff2530d55',
   "./home.html": 'a4401ab28cb28eb9',
-  "./calculator.html": 'efa1f673a19b203e',
-  "./orders.html": '70c974df6a5ef693',
-  "./suppliers.html": '946e16aac9d17ecc',
-  "./install-guide.html": '87c4b99799a967db',
+  "./calculator.html": '3a19225ac7e2bf1e',
+  "./orders.html": '6fed1c46f516e18d',
+  "./suppliers.html": '9626d903f397696e',
+  "./install-guide.html": '322c79acf63896ef',
   "./reset-password.html": '278e67d11c8b4a50',
-  "./js/reset-password.js": '82c76584ef73d006',
+  "./dist/i18n.js": '2e8c3410faf22cf1',
+  "./dist/index.js": '9a2bec34d7a908ee',
+  "./dist/calculator.js": '5fe9d84bfa7dffbd',
+  "./dist/orders.js": '9fa06696e7d42d9e',
+  "./dist/suppliers.js": '13749f4d39b1918f',
+  "./dist/install-guide.js": '86df880954faeae9',
+  "./js/allergen-model.js": 'a9ad7592da832a56',
+  "./js/calculator-config.js": '65e76f83f8458dbb',
+  "./js/credentials.js": 'b805f88d003ea918',
+  "./js/currency.js": '241b1dbdf4cc465f',
+  "./js/firebase-target.js": 'b3759997e54ddbc3',
+  "./js/firebase.js": '3652fda906848824',
+  "./js/i18n-dom.js": '24249af4367511e5',
+  "./js/i18n.js": '662cbbc54446f157',
+  "./js/keyboard-done.js": 'de05a6dd1f3aac26',
+  "./js/local-data.js": '91aa7f1699c897a1',
+  "./js/location.js": '6aaf53615a8739d1',
+  "./js/market.js": 'b9b3e27e43e99dd4',
+  "./js/preview-ribbon.js": 'ee39b7ee13f78c02',
   "./js/reset-password-boot.js": '9c3e1fca587f872c',
+  "./js/reset-password.js": '82c76584ef73d006',
+  "./js/roles.js": '7a7c5cf34d57f511',
+  "./js/same-data.js": '11ff91c9b0192d20',
+  "./js/sections.js": 'abcfdecb2bd5766d',
+  "./js/sw-update.js": '2ffc253aa03eff0f',
+  "./js/update-gate.js": '1801738b3e6def2d',
+  "./dist/catalogue.js": 'fc22ccf20e2c0b58',
+  "./dist/pastries.js": '4f4a93cc17d49c3e',
+  "./dist/foodcost.js": 'f95d88260daae5e0',
+  "./dist/inventory.js": '39aca9c1cb76ccd5',
   "./qr.png": '761a95e5bc25e2ba',
-  "./js/install-guide.js": '17fcd0c0fec489c2',
   "./tokens.css": 'abeb621f95374e83',
   "./auth.css": '55b0bc1d41af5718',
   "./style.css": '1bb57bc3ae9b3666',
@@ -487,309 +194,17 @@ const ASSET_HASHES = {
   "./fonts/instrument-serif-latin.woff2": '0ad69719cac6f45e',
   "./fonts/instrument-serif-latin-ext.woff2": '0caad588cab430ca',
   "./fonts/atkinson-next-digits.woff2": '99ffa5b0e9a45a2b',
-  "./js/app.js": 'fd6136e0c0ef0a23',
-  "./js/confirm-dialog.js": 'dde439ff506fbdfa',
-  "./js/calculator-icons.js": 'c0b185a137195263',
-  "./js/hold-to-zoom.js": 'e077890cd7ba70de',
-  "./js/price-model.js": '1ba9b419406004c3',
-  "./js/vat-rates.js": 'a3d073040b1d8490',
-  "./js/vat-number.js": '097b915810c4d39a',
-  "./js/pack-size.js": 'e5aae95d8c7b03d5',
-  "./js/pack-format.js": 'c1b3a80d0921eb39',
-  "./js/record-choices.js": '38da7c93b6f723a2',
-  "./js/order-cost.js": 'a89d555ef365227d',
-  "./js/currency.js": '241b1dbdf4cc465f',
-  "./js/allergen-model.js": 'a9ad7592da832a56',
-  "./js/allergen-terms.js": '554df7742c345ca6',
-  "./js/allergen-match.js": '049c14d576539d26',
-  "./js/venue-features.js": '09a87ded231a129c',
-  "./js/home-cards.js": '0c4699f44e5079bb',
-  "./js/recipe-link.js": '9000f58092062726',
-  "./js/dom.js": '71ca1a65c3f97c25',
-  "./js/pick-suggest.js": '34261899d5cc4fa6',
-  "./js/pick-screen.js": '013297871d531869',
-  "./js/records.js": '6a0ae8b13241abcb',
-  "./js/record-ui.js": '57bd203aced98f84',
-  "./js/supplier-label.js": '9601ceed020c0205',
-  "./js/order-unit.js": '8de5f5c0c76d5ff9',
-  "./js/record-data.js": '4055f2a4cc82a953',
-  "./js/ingredient-record-form.js": 'b814ec4e93f1a2a0',
-  "./js/supplier-record-form.js": 'babfca7b5386b43b',
-  "./js/ingredient-kind.js": 'b5ea1d7ec8255fd6',
-  "./js/ingredient-name.js": '6f227b6fe03bf515',
-  "./js/photo-model.js": '67d1d83755bbd33a',
-  "./js/market.js": 'b9b3e27e43e99dd4',
-  "./js/reveal-field.js": 'f311c75f44e632d8',
-  "./js/save-guard.js": '361b8200f7935368',
-  "./js/push-model.js": '40c90e5a6229cb3f',
-  "./js/push.js": 'd7aad3c3bd098461',
-  "./js/client-order-model.js": '01afe2d8a045dbe8',
-  "./js/client-order-history.js": 'c2939671de6d8112',
-  "./js/client-orders-data.js": 'fe05d6e0f3d6d31e',
-  "./js/calculator-client-orders.js": '04708e7a0b63635d',
-  "./js/home-client-orders-badge.js": '2d1ebe03f89f0699',
-  "./js/home-order-requests-badge.js": '3c3f93da00331b92',
-  "./js/away-model.js": '95c90de8e2b5ab7a',
-  "./js/calculator-recipe-source.js": '01a649ab954dbf31',
-  "./js/calculator-catalogue-link.js": '41710bee4cba59f8',
-  "./js/away-screen.js": 'e9d001178c51a4e7',
-  "./js/away-reminder.js": 'bdd9d8cec3f44033',
-  "./js/home-away.js": 'd791865d4ec8e8b1',
-  "./js/help-content.js": '6ea7f0e9586c250d',
-  "./js/help-button.js": '6a973883d08c7cb7',
-  "./js/feedback.js": 'd8c109a526c57f9a',
-  "./js/feedback-model.js": '4c05fd834133f2bc',
-  "./js/device-ping.js": '8622b9e30a8701d4',
-  "./js/device-model.js": 'd93af2b229303ad9',
-  "./js/error-report.js": 'f4da6a28f86b1dfb',
-  "./js/error-model.js": '4effd804068c097a',
-  "./js/usage.js": 'f5ba8bcb177d2963',
-  "./js/usage-model.js": '7be2736bdf3ab907',
-  "./js/sw-update.js": '2ffc253aa03eff0f',
-  "./js/update-gate.js": '1801738b3e6def2d',
-  "./js/kiosk.js": '8b5985a1d4dc13e1',
-  "./js/kiosk-model.js": '0507646ee88b1abc',
-  "./js/kiosk-orders.js": '5e6db3c0dbadd8d6',
-  "./js/home-kiosk-band.js": 'f1107a2338f8fda8',
-  "./js/wake-lock.js": '3cc98d18c5e2cbab',
-  "./js/install-version.js": 'a35dbefbbbaa3acf',
-  "./js/install-version-boot.js": '0e0cea81512abcec',
-  "./js/install-hint.js": 'ff453ada2a444fee',
-  "./js/install-hint-boot.js": '1dda92943f6c4017',
-  "./js/install.js": '3a547433c9c0afc0',
-  "./js/home-orders-badge.js": 'b41b71d1d04f6ff8',
-  "./js/splash-init.js": '0982bbf1d8228eab',
-  "./js/whats-new.js": '28a18a0146f90592',
-  "./js/whats-new-boot.js": 'fc298a84a183238b',
-  "./js/firebase.js": '3652fda906848824',
-  "./js/firebase-target.js": 'b3759997e54ddbc3',
-  "./js/same-data.js": '11ff91c9b0192d20',
-  "./js/location.js": '6aaf53615a8739d1',
-  "./js/sections.js": 'abcfdecb2bd5766d',
-  "./js/roles.js": '7a7c5cf34d57f511',
-  "./js/i18n.js": '662cbbc54446f157',
-  "./js/i18n-dom.js": '24249af4367511e5',
-  "./js/keyboard-done.js": 'de05a6dd1f3aac26',
-  "./js/join-code.js": 'd2b6d8e01190a00a',
-  "./js/join-link.js": 'a90ea53c7ba51614',
-  "./js/credentials.js": 'b805f88d003ea918',
-  "./js/staff/dom.js": 'e700814a373b85e9',
-  "./js/staff/confirm-dialog.js": 'dde439ff506fbdfa',
-  "./js/staff/firebase-staff.js": '556b93b42a530ad5',
-  "./js/share.js": 'a1f914c45b21b268',
-  "./js/send-icon.js": '3690291475f44a99',
-  "./js/send-sheet.js": '158b144855196cd1',
-  "./js/staff/people.js": '10c936fbf24076b3',
-  "./js/staff/language.js": '3e4c115f6cfe2bd2',
-  "./js/staff/home-cards-screen.js": 'a53963420fed4227',
-  "./js/local-data.js": '91aa7f1699c897a1',
-  "./js/unsent-guard.js": 'd75b23b7ad361133',
-  "./js/auth-gate.js": '83d8e4ef5c3951d4',
-  "./js/preview-ribbon.js": 'ee39b7ee13f78c02',
-  "./js/home-session.js": '4066767af86b6601',
-  "./js/home-settings.js": 'b25962f0bb49c72b',
-  "./js/app-version.js": '659c19809b327422',
-  "./js/location-title.js": '296d2d7d3d04d7f3',
-  "./js/recipes.js": 'd078db16391046b7',
-  "./js/calc.js": '4eaff92e58966666',
-  "./js/calculator-recipe-text.js": 'aa41a24dba41595f',
-  "./js/calculator-dough-math.js": '85008bf4375927f4',
-  "./js/log.js": 'e3cc6abea02af3fa',
-  "./js/log-time.js": '0374bcb500904055',
-  "./js/log-model.js": 'c9facc3202c2e8fe',
-  "./js/log-store.js": '9b53edc064b6f29c',
-  "./js/log-view.js": '34bd6b667b68a054',
-  "./js/log-edit.js": '38d7098c657e2559',
-  "./js/log-qty.js": '2aae575dfdaec907',
-  "./js/log-add.js": 'fd9cc9687597e64a',
-  "./js/log-settings.js": '2878595500c2fea5',
-  "./js/whatsapp.js": '85499983381f4136',
-  "./js/calculator-confirm.js": '68a8ecb9ef0f0ab9',
-  "./js/calculator-config.js": '65e76f83f8458dbb',
-  "./js/confirm-flow.js": '350a9b206670e6bd',
-  "./js/zoom-steps.js": '5cb5e5ce31bcde85',
-  "./js/calc-fullscreen.js": '710fb02eecbed586',
-  "./js/result-place.js": '01dfd5a297ba5c9c',
-  "./js/calculator-config-store.js": 'e1fe72337b0b2bf3',
-  "./js/calculator-order-prefill.js": '28c00f4fea7d43b7',
-  "./js/calculator-order-text.js": '3eabd34a0df19321',
-  "./js/calculator-render.js": 'd956e1fab1078099',
-  "./js/calculator-settings.js": 'f3f7a36cddd550b4',
-  "./js/calculator-whatsapp-settings.js": '39823bea666c3471',
-  "./js/vendor/sortable.esm.js": '824d48148fc5b469',
-  "./js/orders/boot.js": '53dba081d29270d8',
-  "./js/orders/category-batches.js": '03d72f63c4fa4a8a',
-  "./js/orders/confirm-dialog.js": 'dde439ff506fbdfa',
-  "./js/orders/firebase-orders.js": '0436575ac779321d',
-  "./js/orders/orders-main.js": '577316f66d1fecd5',
-  "./js/orders/dom.js": '7ec966d71c5356cd',
-  "./js/orders/day.js": '107abcbdf353c709',
-  "./js/orders/order-day.js": '1194fbe02f9a9686',
-  "./js/orders/deliveries.js": 'c3808bbad1620aff',
-  "./js/orders/deliveries-view.js": '70f521b241e2c17e',
-  "./js/orders/send-routes.js": '88562d53be92460e',
-  "./js/orders/send-chooser.js": 'af808bddea2fd04a',
-  "./js/orders/sent-check.js": '25292201295da868',
-  "./js/orders/sent-check-dialog.js": '2a2082455e75b21f',
-  "./js/orders/work-week.js": '0ad139be5b53ea69',
-  "./js/orders/archive.js": '3c1dab75b1779247',
-  "./js/orders/history-window.js": '5c1fd1dd0e61ab85',
-  "./js/orders/reminders.js": 'e9c255f18abea237',
-  "./js/orders/kiosk-lines.js": '63bde9bbc45fe00b',
-  "./js/orders/reminder-view.js": '8fef47478579d97e',
-  "./js/orders/suppliers.js": '11630c45617f5974',
-  "./js/orders/ingredients.js": 'cdcb74e00643cc06',
-  "./js/orders/no-supplier.js": '185050fd12a0a2b0',
-  "./js/orders/line-supplier.js": '3d9d21bdc79b2955',
-  "./js/orders/memo.js": '5629ad18c45095f2',
-  "./js/orders/render-scheduler.js": 'ba85c95abb13b359',
-  "./js/orders/ingredient-search.js": 'b205e1d0d4d5185c',
-  "./js/orders/ingredient-list.js": 'bd69097d0d4af250',
-  "./js/orders/search-box.js": '471bb6f217d97442',
-  "./js/orders/supplier-detail.js": '46e792a492fff53a',
-  "./js/orders/supplier-items.js": 'f435e2c2fb1a4f1b',
-  "./js/orders/orders-config.js": '5848ba5480f81900',
-  "./js/orders/supplier-order.js": 'b3e5dad1f8190137',
-  "./js/orders/supplier-order-screen.js": '85fb2d2d66f06f6d',
-  "./js/orders/draft.js": '0a3c9a4ee9682f89',
-  "./js/orders/preview.js": '24e6f6170cbb0fec',
-  "./js/orders/order-text.js": '92940f298ec3c4fb',
-  "./js/orders/order-image.js": '85cf68e76ccafcd0',
-  "./js/orders/supplier-picker.js": '45965a885db189c4',
-  "./js/orders/order-request-model.js": 'e4e3365a72660bff',
-  "./js/orders/order-requests.js": 'a46a3166f2d88536',
-  "./js/orders/history.js": '6660ceac1bf8054a',
-  "./js/orders/history-edit.js": '8ae63a82dff3413f',
-  "./js/orders/place-confirm.js": '71eaa5ff7ea0fa87',
-  "./js/orders/untold-changes.js": 'a96e0c1c65ec6191',
-  "./js/orders/untold-view.js": '6868bf06ff110f58',
-  "./js/orders/alert-dismissal.js": 'fbfe034ffa9f6620',
-  "./js/orders/management.js": '21dd583fe32255d8',
-  "./js/orders/mgmt-ui.js": '8894b23fd41e8a66',
-  "./js/orders/registry.js": 'e71628b8e0ebe330',
-  "./js/orders/registry-main.js": '4d84e418f7263419',
-  "./js/orders/registry-settings.js": '74c80116276527d1',
-  "./js/orders/favourite-suppliers.js": '0bd82c507875746f',
-  "./js/orders/invoice-import-model.js": '2a5e7b4e27795e91',
-  "./js/orders/invoice-import-plan.js": '25fe08da052b688d',
-  "./js/orders/invoice-import-data.js": 'd135f9af7f608b00',
-  "./js/orders/invoice-import-screen.js": '139bed44947c4256',
-  "./js/orders/ingredient-merge.js": 'a98b4274e4201757',
-  "./js/orders/ingredient-merge-data.js": '8189e03534165550',
-  "./js/orders/ingredient-merge-screen.js": 'f4dd5c085f97eb4e',
-  "./js/orders/invoice-zip/build-import.js": '1813dc02c367fd8c',
-  "./js/orders/invoice-zip/classify.js": '6a89c985060fbb5b',
-  "./js/orders/invoice-zip/fatturapa.js": 'd67a9a556a356af6',
-  "./js/orders/invoice-zip/pricing.js": '56d81d4728eb8e8d',
-  "./js/orders/invoice-zip/products.js": '07f9de97edb28610',
-  "./js/orders/invoice-zip/py-compat.js": '61b7d63672853c52',
-  "./js/orders/invoice-zip/reasons.js": 'a1e29833cb9877e5',
-  "./js/orders/invoice-zip/selection.js": '2495b80aa3a8de63',
-  "./js/orders/invoice-zip/sha256.js": '585f64e861ba11d9',
-  "./js/orders/invoice-zip/zip-read.js": 'e152b1261f540e00',
-  "./js/vendor/fflate.esm.js": '522c5e85569f270b',
-  "./js/orders/price-changes-model.js": '9ab13aee8a5340aa',
-  "./js/orders/price-changes-screen.js": 'e5b3a91867e1f1c2',
-  "./js/form-dirty.js": '27dce3718a33d438',
-  "./js/orders/level-stack.js": '6832e37854829455',
-  "./js/orders/firebase-features.js": 'a0c27a97d6eb7747',
-  "./js/orders/firebase-photo.js": '03e602401453f7c5',
-  "./js/orders/photo-capture.js": 'e73f18bf389267f9',
-  "./js/orders/holidays.js": '93d9c22d24769c1c',
-  "./js/orders/holidays-it.js": '7b57e4698b5f299f',
-  "./js/orders/suggestions.js": '7175c7fd940e1c4b',
-  "./js/orders/notifications.js": '72fe5c2caeeb5a3b',
-  "./js/orders/tablet-layout.js": '51bc983df5378ad8',
-  "./js/orders/sticky-offset.js": 'a0c2e623a591b6ba',
-  "./js/orders/order-summary.js": '0e2d3ad98ec27217',
-  "./js/orders/order-cost-view.js": '4b03fed043e88d39',
-  "./js/orders/order-summary-view.js": '2ab80dbb8b7fa26f',
-  "./catalogue.html": '30303782038b60f5',
+  "./js/splash-init.js": 'c68474ad53893e48',
+  "./catalogue.html": '6f3b2e2b9024e62e',
   "./catalogue.css": 'fdfd0ad245c37c26',
   "./label-print.css": 'ffbcdf4e7a627a2d',
   "./records.css": 'aeaddb44ba386bf2',
-  "./js/catalogue/confirm-dialog.js": 'dde439ff506fbdfa',
-  "./js/catalogue/dom.js": '9878ae7c750afd79',
-  "./js/catalogue/catalogue-model.js": '9e41b463f27b749d',
-  "./js/catalogue/recipe-cost-model.js": 'd29f16ee37c017a5',
-  "./js/catalogue/recipe-allergen-model.js": 'b2a59adbdd259fb1',
-  "./js/catalogue/allergen-sheet.js": 'b82e723ddeee0224',
-  "./js/catalogue/photo-model.js": '437ecaf7df453145',
-  "./js/catalogue/photo-capture.js": '43968960b32fb5dc',
-  "./js/catalogue/firebase-photo.js": '6f642c842cd16a3b',
-  "./js/catalogue/recipe-label-model.js": '8790302faf981b5a',
-  "./js/catalogue/label-view.js": '4cfa95636b9761da',
-  "./js/catalogue/label-template-model.js": '480a35fa8bd788e3',
-  "./js/catalogue/label-print.js": 'b01a3743eb4bccc8',
-  "./js/catalogue/label-zpl.js": '843e46ac6bb50597',
-  "./js/print-queue-model.js": '52602cad051dbba0',
-  "./js/catalogue/print-transports.js": '7fcd39745e230a18',
-  "./js/catalogue/ingredient-picker.js": 'b3c9b4170e679af9',
-  "./js/ingredient-create.js": 'acd02a1fc869719a',
-  "./js/ingredient-edit-model.js": '75b571a45585a715',
-  "./js/catalogue/ingredient-suggest.js": 'f813dbb63fa3c04f',
-  "./js/catalogue/firebase-catalogue.js": 'e560966537c00cae',
-  "./js/catalogue/catalogue-store.js": '32d3ef5ccfb6da26',
-  "./js/catalogue/catalogue-main.js": '48acd0487a208313',
-  "./js/catalogue/catalogue-list.js": 'e3884564b29e8a7c',
-  "./js/catalogue/tablet.js": '1d7df8fe599d75c6',
-  "./js/catalogue/search-box.js": '188bbe833ccbde26',
-  "./js/catalogue/catalogue-settings.js": '085573368700207f',
-  "./js/catalogue/catalogue-detail.js": '47bc797fb462567b',
-  "./js/catalogue/zoom-steps.js": '5cb5e5ce31bcde85',
-  "./js/catalogue/catalogue-editor.js": 'd3bd7d51c67331fb',
-  "./js/catalogue/guided-model.js": '60902e8129430dd7',
-  "./js/catalogue/guided-alarm.js": '9104e391cb96f5ef',
-  "./js/catalogue/guided-run.js": '8011b2808264e344',
-  "./js/catalogue/guided-editor.js": '7ff3a7fb11edb5ca',
-  "./js/catalogue/import-to-calculator.js": '509d83f39384e106',
-  "./pastries.html": '4782292c42bf923e',
+  "./pastries.html": '06018742937e8035',
   "./pastries.css": '0689cee72e1f5468',
-  "./js/pastries/confirm-dialog.js": 'dde439ff506fbdfa',
-  "./js/pastries/dom.js": '84e0623e447bb7ab',
-  "./js/pastries/pastries-model.js": 'd162282f04d5287d',
-  "./js/pastries/firebase-pastries.js": '89d43ccad1e099b2',
-  "./js/pastries/pastries-store.js": '07fcca1ec0717a80',
-  "./js/pastries/pastries-main.js": '0bb17bae6752442c',
-  "./js/pastries/pastries-strip.js": '9cfc62e2edf9a343',
-  "./js/pastries/pastries-day.js": '66d6b8f0478f7b2c',
-  "./js/pastries/pastries-editor.js": '3135e7f4d00f3efb',
-  "./js/pastries/pastries-log-model.js": '6e3160b978365672',
-  "./js/pastries/pastries-lock.js": 'adfbaeea4bd7c845',
-  "./js/pastries/pastries-logs-store.js": '85cc1ec0c21baa30',
-  "./js/pastries/pastries-logs.js": '91b2ec2a8704c3e5',
-  "./js/pastries/tablet.js": '3265623a5cf354e0',
-  "./foodcost.html": '77194d703b7746b3',
+  "./foodcost.html": '984ccded950e5e41',
   "./foodcost.css": '5b64f3f388a38eef',
-  "./js/foodcost/confirm-dialog.js": 'dde439ff506fbdfa',
-  "./js/foodcost/dom.js": '911105da04a03481',
-  "./js/foodcost/foodcost-model.js": '24b84dc23a6182f4',
-  "./js/foodcost/firebase-foodcost.js": '48eee23e4556b3f3',
-  "./js/foodcost/foodcost-store.js": '784c7844dfd80044',
-  "./js/foodcost/foodcost-main.js": 'c045196a6333298a',
-  "./js/foodcost/foodcost-list.js": '897a6bf3b9e0e95d',
-  "./js/foodcost/tablet.js": '94394136e373017b',
-  "./js/foodcost/crossing-route.js": '2993db36c98800ae',
-  "./js/foodcost/foodcost-editor.js": '51f5b240aa24bf86',
-  "./js/foodcost/foodcost-weighing.js": 'cb2f9dfafec4d739',
-  "./js/foodcost/vat-guide.js": '59257253ecddb640',
-  "./js/foodcost/vat-guide-view.js": '34ce4c1f2df472ed',
-  "./js/foodcost/product-limits.js": 'd73e12634551ea98',
-  "./js/foodcost/foodcost-settings.js": '8299df0496767f9a',
-  "./inventory.html": '86ebd3870eec6eb1',
+  "./inventory.html": 'c66c725a6f990fc3',
   "./inventory.css": '1d262ed4a6109aa8',
-  "./js/inventory/confirm-dialog.js": 'dde439ff506fbdfa',
-  "./js/inventory/dom.js": '5971dfbbb1e223ec',
-  "./js/inventory/inventory-model.js": '7cc2935526d50a88',
-  "./js/inventory/firebase-inventory.js": '14b4c710163c0408',
-  "./js/inventory/inventory-outbox.js": '396a5be9a9069278',
-  "./js/inventory/inventory-store.js": '3ea0528fdec4eabb',
-  "./js/inventory/inventory-purchases.js": '703db62f90a981c9',
-  "./js/inventory/inventory-value.js": '3c975c413f752b2e',
-  "./js/inventory/inventory-usage.js": 'a213666d0119c6b5',
-  "./js/inventory/inventory-list.js": 'e7902452c885770a',
-  "./js/inventory/inventory-detail.js": '3b0eafbf21c40b48',
-  "./js/inventory/inventory-main.js": '66c798a19dd0636f',
   "./manifest.json": 'b3afdecd54f14f64',
   "./icons/icon-192.png": '16eed7827b42285d',
   "./icons/icon-512.png": '30e4120be12274a1',
@@ -823,13 +238,55 @@ const ASSET_HASHES = {
 // code against rules that deployed instantly, which is the very thing the gate exists
 // to prevent. Two things stand between that and a release: the test that every ASSETS
 // entry EXISTS (a mistyped path being the likeliest permanent cause), and this
-// project's post-deploy sweep, which already asks the live site for all 332 files.
+// project's post-deploy sweep, which already asks the live site for all 67 files.
 // ⚠️ NEITHER covers a device-specific failure — nobody has yet confirmed an update
 // landing on a real iPhone under this code.
 //
 // cache: 'reload' bypasses the browser's HTTP cache (GitHub Pages serves
 // ~10-minute max-age), so a brand-new worker can never precache stale copies.
 const PRECACHE_ATTEMPTS = 3;
+
+// The Firebase SDK modules the page bundles import from gstatic (exactly the URLs in dist/*.js;
+// tests/precache-install.test.mjs holds this list to them, and to SDK_CACHE's version).
+//
+// ⚠️ WHY THE INSTALL WARMS THEM. A bundle imports every one of these at the top, even those a
+// page used to reach only through a lazy import (firebase-functions.js, firebase-messaging.js).
+// Many phones never fetched those, so they are not in SDK_CACHE. Scenario: the new worker
+// installs in the background while online, the person closes the app, and next morning opens it
+// OFFLINE: the waiting worker activates, the bundle imports a module nobody cached, and the WHOLE
+// page fails — a blank Home on a phone that opened fine offline before the release. The SDK
+// cannot be part of the all-or-nothing precache (a gstatic hiccup would stop the phone updating),
+// so it is fetched on the side, best effort.
+const SDK_MODULES = [
+  'https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js',
+  'https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js',
+  'https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js',
+  'https://www.gstatic.com/firebasejs/12.19.0/firebase-functions.js',
+  'https://www.gstatic.com/firebasejs/12.19.0/firebase-messaging.js',
+];
+
+// Never rejects: every failure is swallowed, so it can sit inside waitUntil beside the precache
+// without being able to fail or block the install. A module already in SDK_CACHE is not fetched
+// again; a download is stored under the same acceptance rule the fetch handler uses.
+// Each download is cut off after this long: a stalled gstatic connection must not hold the install.
+const SDK_WARM_TIMEOUT_MS = 30000;
+
+function warmSdkCache() {
+  return caches.open(SDK_CACHE).then(cache => Promise.allSettled(SDK_MODULES.map(url =>
+    cache.match(url).then(hit => {
+      if (hit) return null;
+      const stop = new AbortController();
+      const timer = setTimeout(() => stop.abort(), SDK_WARM_TIMEOUT_MS);
+      return fetch(url, { mode: 'cors', signal: stop.signal }).then(res => {
+        if (res && res.status === 200 && !res.redirected &&
+            (res.type === 'cors' || res.type === 'basic')) {
+          return cache.put(url, res.clone());
+        }
+        return null;
+      }).finally(() => clearTimeout(timer));
+    })
+  ))).catch(() => {});
+}
 
 // ── Fingerprints (see ASSET_HASHES and scripts/sw-hashes.mjs) ────────────────
 //
@@ -985,7 +442,8 @@ self.addEventListener('install', e => {
   // NO skipWaiting() here: the new worker must WAIT so js/sw-update.js can show
   // the update banner; it activates when the user taps it (skipWaiting message
   // below) or when the app is next opened with no pages left from the old one.
-  e.waitUntil(precache());
+  // The SDK warm-up runs beside the precache and cannot reject (see warmSdkCache).
+  e.waitUntil(Promise.all([precache(), warmSdkCache()]));
 });
 
 self.addEventListener('activate', e => {
@@ -1040,7 +498,7 @@ self.addEventListener('fetch', e => {
   // Install guide assets: always network-first (fresh from server), falling back
   // to cache only when offline. Avoids serving a stale guide after an update.
   const p = url.pathname;
-  if (p.endsWith('/install-guide.html') || p.endsWith('/qr.png') || p.endsWith('/js/install-guide.js')) {
+  if (p.endsWith('/install-guide.html') || p.endsWith('/qr.png') || p.endsWith('/dist/install-guide.js')) {
     e.respondWith(
       fetch(e.request, { cache: 'no-store' }).then(res => {
         if (res.ok) {

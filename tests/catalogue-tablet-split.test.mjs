@@ -12,6 +12,7 @@ import { readFileSync } from 'node:fs';
 import { _dictionaries } from '../js/i18n.js';
 import { TABLET_QUERY } from '../js/catalogue/tablet.js';
 import { TABLET_QUERY as ORDERS_QUERY } from '../js/orders/tablet-layout.js';
+import { missingFromPrecache } from './helpers/precache.mjs';
 
 const DICT = _dictionaries();
 const root = new URL('../', import.meta.url);
@@ -41,10 +42,10 @@ test('the catalogue never imports from another feature\'s folder', () => {
   }
 });
 
-test('tablet.js is in the service worker\'s ASSETS and fingerprinted', () => {
-  const sw = read('sw.js');
-  assert.match(sw, /'\.\/js\/catalogue\/tablet\.js'/);
-  assert.match(sw, /"\.\/js\/catalogue\/tablet\.js":/);
+// «Fingerprinted» now means: inside a bundle that sw.js fingerprints (tests/sw-asset-hashes.test.mjs
+// holds the bundle to sw.js, tests/bundles-fresh.test.mjs holds the module to the bundle).
+test('tablet.js is precached, inside a bundle the service worker fingerprints', () => {
+  assert.deepEqual(missingFromPrecache(['js/catalogue/tablet.js']), []);
 });
 
 test('the page holds the split: a hidden list column beside the screen, the split OFF', () => {

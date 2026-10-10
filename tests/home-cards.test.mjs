@@ -13,6 +13,7 @@ import {
   isHiddenForStaff, cardVisibleTo, mayBeTold, cleanOrder, isValidOrder, orderedCardIds,
 } from '../js/home-cards.js';
 import { PUSH_KINDS, cardForKind, targetPage } from '../js/push-model.js';
+import { missingFromPrecache } from './helpers/precache.mjs';
 
 const read = p => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
 const withoutComments = src => src.split('\n').filter(l => !l.trim().startsWith('//')).join('\n');
@@ -240,9 +241,7 @@ test('the client call waits for the venue, like every call made inside one', () 
 });
 
 test('both new files are precached — auth-gate.js imports one of them on every page', () => {
-  const sw = read('sw.js');
-  assert.match(sw, /'\.\/js\/home-cards\.js'/);
-  assert.match(sw, /'\.\/js\/staff\/home-cards-screen\.js'/);
+  assert.deepEqual(missingFromPrecache(['js/home-cards.js', 'js/staff/home-cards-screen.js']), []);
 });
 
 // ── 5. What the code review found (13 Sep 2026) ──────────────────────────────

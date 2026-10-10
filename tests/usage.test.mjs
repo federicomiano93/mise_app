@@ -2,6 +2,8 @@
 // hold even if the flow is rewritten.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { missingFromPrecache } from './helpers/precache.mjs';
+import { pageScripts } from './helpers/page-scripts.mjs';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -12,7 +14,8 @@ import {
 import { KEEP_PREFIXES, keysToClear } from '../js/local-data.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const read = rel => readFileSync(join(ROOT, rel), 'utf8');
+// LF only: a Windows checkout has CRLF, and the slices below look for a bare newline.
+const read = rel => readFileSync(join(ROOT, rel), 'utf8').replace(/\r\n/g, '\n');
 
 const DEVICE = 'AbCdEfGhIjKlMnOpQrSt';
 const READY = { status: 'ready', locationId: 'bakery', user: { uid: 'u1' } };
@@ -546,6 +549,7 @@ test('the staff door starts it; the client ordering page and the password page d
     const html = read(page).replace(/<!--[\s\S]*?-->/g, '');
     assert.ok(!/usage/.test(html), `${page} must not load usage`);
     assert.ok(!/auth-gate\.js/.test(html), `${page} must not load the gate`);
+    assert.ok(!pageScripts(read(page)).some(s => /auth-gate|usage/.test(s)), `${page}'s bundle must not run the gate or usage`);
   }
 });
 
@@ -605,7 +609,5 @@ test('saveUsage writes the whole line under the signed-in uid with the server cl
 });
 
 test('both files are precached', () => {
-  const sw = read('sw.js');
-  assert.match(sw, /'\.\/js\/usage\.js'/);
-  assert.match(sw, /'\.\/js\/usage-model\.js'/);
+  assert.deepEqual(missingFromPrecache(['js/usage.js', 'js/usage-model.js']), []);
 });

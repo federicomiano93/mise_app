@@ -6,6 +6,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { pageScripts } from './helpers/page-scripts.mjs';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, relative, sep } from 'node:path';
@@ -62,7 +63,7 @@ test('no stylesheet sets touch-action: pan-x pan-y on html (it would reach pages
 test('pages without the magnifier keep the browser pinch-zoom', () => {
   const pages = readdirSync(ROOT).filter((f) => f.endsWith('.html'));
   const withZoom = pages
-    .filter((f) => /hold-to-zoom\.js/.test(readFileSync(join(ROOT, f), 'utf8')))
+    .filter((f) => pageScripts(readFileSync(join(ROOT, f), 'utf8')).includes('js/hold-to-zoom.js'))
     .sort();
   assert.deepEqual(withZoom, [
     'calculator.html', 'catalogue.html', 'index.html', 'orders.html', 'pastries.html', 'suppliers.html',
@@ -70,6 +71,7 @@ test('pages without the magnifier keep the browser pinch-zoom', () => {
   for (const page of ['foodcost.html', 'inventory.html', 'order.html']) {
     const html = readFileSync(join(ROOT, page), 'utf8');
     assert.doesNotMatch(html, /hold-to-zoom/);
+    assert.ok(!pageScripts(html).includes('js/hold-to-zoom.js'), `${page}'s bundle must not run the magnifier`);
     assert.doesNotMatch(html, /touch-action/);
     const viewport = html.match(/<meta name="viewport" content="([^"]*)"/)[1];
     assert.doesNotMatch(viewport, /user-scalable\s*=\s*(no|0)|maximum-scale/);
