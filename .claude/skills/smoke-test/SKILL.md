@@ -6,8 +6,9 @@ description: The gates a Mise change must pass before a PR is opened or merged �
 # Smoke test — the gates before a PR or a merge
 
 Federico reviews the APP, not the code, so these gates are the net in front of him.
-`main` accepts only a pull request whose two required GitHub checks, `test` and
-`rules`, are green (`enforce_admins: true`: nobody merges past a red one). A merge IS
+`main` accepts only a pull request whose three required GitHub checks, `test`,
+`rules` and `mise2` (the Mise 2 rewrite, since 10 Oct 2026), are green
+(`enforce_admins: true`: nobody merges past a red one). A merge IS
 going live — the release sequence is the `go-live` skill, not repeated here.
 
 Run the gates in order; a change skips a gate only when it cannot affect it, and the

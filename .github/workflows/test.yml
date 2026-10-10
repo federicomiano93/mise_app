@@ -101,9 +101,10 @@ jobs:
   # nothing, while this one installs the new app's packages from its two lockfiles
   # (app/package-lock.json, shared/package-lock.json — never the root one).
   #
-  # NOT A REQUIRED CHECK YET: nothing under app/ reaches a phone before the switch (step 5
-  # of the Mise 2 plan), so a red run here cannot break the live app. It must become
-  # required before that step — a change to main's branch protection, which is his click.
+  # A REQUIRED CHECK on main since 10 Oct 2026, beside `test` and `rules` (his decision): a
+  # red Mise 2 cannot be merged even though nothing under app/ reaches a phone before the
+  # switch. `deploy-functions` below still needs only `test` and `rules` — this job never
+  # gates the server deploy.
   mise2:
     runs-on: ubuntu-latest
     timeout-minutes: 15
