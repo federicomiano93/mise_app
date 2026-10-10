@@ -8,6 +8,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { missingFromPrecache } from './helpers/precache.mjs';
 
 const read = p => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
 const code = p => read(p).split('\n').filter(l => !l.trim().startsWith('//')).join('\n');
@@ -100,5 +101,5 @@ test('⚠️ the sentence under a Settings row is in the same typeface as its ti
 });
 
 test('the Settings screen is precached', () => {
-  assert.match(read('sw.js'), /'\.\/js\/home-settings\.js'/);
+  assert.deepEqual(missingFromPrecache(['js/home-settings.js']), []);
 });

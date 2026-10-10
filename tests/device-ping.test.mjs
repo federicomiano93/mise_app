@@ -8,6 +8,7 @@ import { dirname, join } from 'node:path';
 import { pingIfDue, deviceIdFrom, DEVICE_ID_KEY, PING_DAY_KEY_PREFIX } from '../js/device-ping.js';
 import { sameSession } from '../js/device-model.js';
 import { KEEP_PREFIXES, keysToClear } from '../js/local-data.js';
+import { missingFromPrecache } from './helpers/precache.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const read = rel => readFileSync(join(ROOT, rel), 'utf8');
@@ -227,7 +228,5 @@ test('only the two real prefixes are kept, not everything that starts with devic
 });
 
 test('both new files are precached', () => {
-  const sw = read('sw.js');
-  assert.match(sw, /'\.\/js\/device-ping\.js'/);
-  assert.match(sw, /'\.\/js\/device-model\.js'/);
+  assert.deepEqual(missingFromPrecache(['js/device-ping.js', 'js/device-model.js']), []);
 });

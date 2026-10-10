@@ -69,11 +69,11 @@
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <link rel="icon" type="image/png" href="icons/icon-192.png">
 <link rel="preload" href="fonts/manrope-latin.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="tokens.css">
-<link rel="stylesheet" href="auth.css">
-<link rel="stylesheet" href="catalogue.css">
-<link rel="stylesheet" href="records.css">
-<link rel="stylesheet" href="label-print.css">
+<link rel="stylesheet" href="dist/tokens.css">
+<link rel="stylesheet" href="dist/auth.css">
+<link rel="stylesheet" href="dist/catalogue.css">
+<link rel="stylesheet" href="dist/records.css">
+<link rel="stylesheet" href="dist/label-print.css">
 <title data-i18n="title.catalogue">Recipe catalogue — Mise</title>
 </head>
 <body data-section="catalogue" data-card="catalogue">
@@ -154,12 +154,6 @@
 
 <div class="cat-toast" id="catToast"></div>
 
-<script type="module" src="js/i18n-dom.js"></script>
-<script type="module" src="js/auth-gate.js"></script>
-<script type="module" src="js/sw-update.js"></script>
-<script type="module" src="js/kiosk.js"></script>
-<script type="module" src="js/catalogue/catalogue-main.js"></script>
-<script type="module" src="js/help-button.js"></script>
-<script type="module" src="js/hold-to-zoom.js"></script>
+<script type="module" src="dist/catalogue.js"></script>
 </body>
 </html>

@@ -95,6 +95,7 @@ interaction between the change and the lines around it, not in the diff hunk.
 - Any rules change needs `firebase deploy --only firestore:rules`. Say so.
 
 **Deploy hygiene**
+- `js/` changed → `node scripts/build-bundles.mjs` run first (`dist/` is committed and generated), then:
 - Cached file changed → `node scripts/sw-hashes.mjs` run (fingerprints + `CACHE_NAME`,
   never by hand). File added or renamed → also in `ASSETS`, spelled like the real file.
 - New behaviour has a test (P15). A guard that pins HOW a call is shaped is satisfied

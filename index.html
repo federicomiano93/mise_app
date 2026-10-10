@@ -73,10 +73,10 @@
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <link rel="icon" type="image/png" href="icons/icon-192.png">
 <link rel="preload" href="fonts/manrope-latin.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="tokens.css">
-<link rel="stylesheet" href="auth.css">
-<link rel="stylesheet" href="style.css">
-<link rel="stylesheet" href="orders.css">
+<link rel="stylesheet" href="dist/tokens.css">
+<link rel="stylesheet" href="dist/auth.css">
+<link rel="stylesheet" href="dist/style.css">
+<link rel="stylesheet" href="dist/orders.css">
 <title>Mise</title>
 </head>
 <body data-page="home">
@@ -260,24 +260,6 @@
      Shown only while kiosk mode is on for this device (js/home-kiosk-band.js). -->
 <footer id="home-kiosk-footer" class="home-kiosk-footer" hidden></footer>
 
-<script type="module" src="js/i18n-dom.js"></script>
-<script type="module" src="js/auth-gate.js"></script>
-<script type="module" src="js/sw-update.js"></script>
-<script type="module" src="js/kiosk.js"></script>
-<script type="module" src="js/orders/boot.js"></script>
-<!-- "What's new" after an update. Home only, and it waits for boot.js above to
-     take the splash down before it opens. -->
-<script type="module" src="js/whats-new-boot.js"></script>
-  <script type="module" src="js/install-version-boot.js"></script>
-  <script type="module" src="js/install-hint-boot.js"></script>
-<script type="module" src="js/location-title.js"></script>
-<script type="module" src="js/home-session.js"></script>
-<script type="module" src="js/home-kiosk-band.js"></script>
-<script type="module" src="js/home-orders-badge.js"></script>
-<script type="module" src="js/help-button.js"></script>
-<script type="module" src="js/home-client-orders-badge.js"></script>
-<script type="module" src="js/home-order-requests-badge.js"></script>
-<script type="module" src="js/hold-to-zoom.js"></script>
-<script type="module" src="js/install.js"></script>
+<script type="module" src="dist/index.js"></script>
 </body>
 </html>

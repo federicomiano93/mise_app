@@ -44,12 +44,12 @@ test('the rules the card cannot do without are in it', () => {
 });
 
 test('⚠️ loaded by the Catalogue, precached, and by no page that already loads orders.css', () => {
-  assert.match(read('catalogue.html'), /<link rel="stylesheet" href="records\.css">/);
-  assert.match(read('sw.js'), /'\.\/records\.css'/);
+  assert.match(read('catalogue.html'), /<link rel="stylesheet" href="dist\/records\.css">/);
+  assert.match(read('sw.js'), /'\.\/dist\/records\.css'/);
   for (const page of readdirSync(new URL('../', import.meta.url)).filter(n => n.endsWith('.html'))) {
     const html = read(page);
-    if (/href="orders\.css"/.test(html)) {
-      assert.doesNotMatch(html, /href="records\.css"/,
+    if (/href="dist\/orders\.css"/.test(html)) {
+      assert.doesNotMatch(html, /href="dist\/records\.css"/,
         `${page} loads orders.css: a second copy of the same rules there would only fight it`);
     }
   }

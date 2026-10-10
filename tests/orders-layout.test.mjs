@@ -10,6 +10,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { missingFromPrecache } from './helpers/precache.mjs';
 import { readFileSync } from 'node:fs';
 import { _dictionaries } from '../js/i18n.js';
 
@@ -179,7 +180,7 @@ test('every new phrase exists in BOTH languages', () => {
 });
 
 test('the new module is precached, or an offline phone 404s on it', () => {
-  assert.ok(read('sw.js').includes("'./js/orders/alert-dismissal.js'"));
+  assert.deepEqual(missingFromPrecache(['js/orders/alert-dismissal.js']), []);
 });
 
 // ── A supplier's order is full screen on a tablet too (30 Sep 2026) ─────────

@@ -16,6 +16,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { missingFromPrecache } from './helpers/precache.mjs';
 import { readFileSync } from 'node:fs';
 import { untoldChanges, orderedToday } from '../js/orders/untold-changes.js';
 import { _dictionaries } from '../js/i18n.js';
@@ -234,9 +235,7 @@ test('⚠️⚠️ a row that has been ordered is not also asked whether the ord
 });
 
 test('the new modules are precached, or an offline phone 404s on them', () => {
-  const sw = read('sw.js');
-  ['js/orders/untold-changes.js', 'js/orders/untold-view.js']
-    .forEach(f => assert.ok(sw.includes(`'./${f}'`), f + ' is missing from ASSETS'));
+  assert.deepEqual(missingFromPrecache(['js/orders/untold-changes.js', 'js/orders/untold-view.js']), []);
 });
 
 test('the banner has somewhere to be drawn', () => {

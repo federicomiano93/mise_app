@@ -22,6 +22,7 @@ import assert from 'node:assert/strict';
 import { readdirSync, statSync, readFileSync } from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, join } from 'node:path';
+import { spawnSync } from 'node:child_process';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -42,12 +43,18 @@ function isSyntaxError(err) {
 }
 
 const files = [];
+// ⚠️ js/pages/ HOLDS THE PAGE ENTRIES, AND IMPORTING ONE RUNS THE WHOLE PAGE: its job is to import()
+// every script of that page, so loading it here would start the app's browser code under Node (and
+// report each failure to the process). They are parsed, not run — see the test after this one.
+const entries = [];
 const walk = dir => {
   for (const name of readdirSync(dir)) {
     if (name === 'vendor' || name === 'node_modules') continue;
     const full = join(dir, name);
     if (statSync(full).isDirectory()) { walk(full); continue; }
-    if (name.endsWith('.js')) files.push(full);
+    if (!name.endsWith('.js')) continue;
+    if (full.replace(/\\/g, '/').includes('/js/pages/')) entries.push(full);
+    else files.push(full);
   }
 };
 walk(join(ROOT, 'js'));
@@ -67,10 +74,26 @@ test('every module parses', async () => {
   assert.deepEqual(broken, [], 'these files cannot be read by the engine at all');
 });
 
+// The page entries, and the bundles built from everything, are parsed by the engine without
+// running a line: `node --check` reads a file as the module it is and stops there.
+test('every page entry and every bundle parses (parsed, never run)', () => {
+  const targets = [...entries];
+  const dist = join(ROOT, 'dist');
+  for (const name of readdirSync(dist)) if (name.endsWith('.js')) targets.push(join(dist, name));
+  assert.ok(entries.length >= 10, `only ${entries.length} page entries found`);
+  assert.ok(targets.length >= entries.length + 10, 'the bundles in dist/ were not found');
+  const broken = [];
+  for (const full of targets) {
+    const run = spawnSync(process.execPath, ['--check', full], { encoding: 'utf8' });
+    if (run.status !== 0) broken.push(`${full.slice(ROOT.length + 1)}: ${run.stderr.split('\n').find(l => /Error/.test(l)) || 'does not parse'}`);
+  }
+  assert.deepEqual(broken, []);
+});
+
 // The specific shape that caused it, named so a reader knows what to look for.
 test('no module imports the same binding twice', () => {
   const offenders = [];
-  for (const full of files) {
+  for (const full of [...files, ...entries]) {
     const rel = full.slice(ROOT.length + 1).replace(/\\/g, '/');
     const seen = new Set();
     for (const m of readFileSync(full, 'utf8').matchAll(/^import\s*\{([^}]*)\}\s*from\s*'([^']+)'/gm)) {

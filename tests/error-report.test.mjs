@@ -8,6 +8,8 @@ import { dirname, join } from 'node:path';
 import { createReporter, install, THROTTLE_KEY, BUFFER_MAX, NO_STORAGE_PAGE_CAP } from '../js/error-report.js';
 import { recordFromConsole } from '../js/error-model.js';
 import { KEEP_PREFIXES, keysToClear } from '../js/local-data.js';
+import { missingFromPrecache } from './helpers/precache.mjs';
+import { pageScripts } from './helpers/page-scripts.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const read = rel => readFileSync(join(ROOT, rel), 'utf8');
@@ -304,15 +306,14 @@ test('the staff door starts it; the client ordering page and the reset page do n
     const html = read(page).replace(/<!--[\s\S]*?-->/g, '');
     assert.ok(!/error-report/.test(html), page);
     assert.ok(!/auth-gate\.js/.test(html), page);
+    assert.ok(!pageScripts(read(page)).some(s => /error-report|auth-gate/.test(s)), `${page}'s bundle runs neither`);
   }
 });
 
 test('the throttle key survives a sign-out; the files are precached', () => {
   assert.deepEqual(keysToClear([THROTTLE_KEY, 'device-id', 'some-cache']), ['some-cache']);
   assert.ok(KEEP_PREFIXES.includes('error-reports'));
-  const sw = read('sw.js');
-  assert.match(sw, /'\.\/js\/error-report\.js'/);
-  assert.match(sw, /'\.\/js\/error-model\.js'/);
+  assert.deepEqual(missingFromPrecache(['js/error-report.js', 'js/error-model.js']), []);
 });
 
 test('pins: the real sender calls reportError, and start() wires the session into the reporter', () => {

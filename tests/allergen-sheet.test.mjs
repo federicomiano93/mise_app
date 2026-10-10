@@ -12,6 +12,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { missingFromPrecache } from './helpers/precache.mjs';
 
 const read = (p) => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
 const SHEET = read('js/catalogue/allergen-sheet.js');
@@ -256,6 +257,6 @@ test('both catalogue screens use the same search builder', () => {
     'only the repaint may be debounced');
   assert.match(box, /debounceMs = 140/, 'the repaint delay must match the rest of the app');
   // A new file is the one failure that does not self-heal for an offline install.
-  assert.match(read('sw.js'), /'\.\/js\/catalogue\/search-box\.js'/,
+  assert.deepEqual(missingFromPrecache(['js/catalogue/search-box.js']), [],
     'the new file is not precached — install() is all-or-nothing');
 });

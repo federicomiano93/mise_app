@@ -12,7 +12,9 @@ const read = f => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8');
 const PAGES = ['index', 'orders', 'suppliers', 'catalogue', 'calculator', 'foodcost', 'inventory', 'pastries'];
 const PRELOAD = /<link rel="preload" href="([^"]+)" as="font" type="font\/woff2" crossorigin>/;
 
-// tokens.css sits at the site root, like the pages, so both resolve fonts/ the same way.
+// The SOURCE tokens.css sits at the site root, so its url(fonts/…) matches the preload href. The copy a
+// page actually loads is dist/tokens.css, whose urls are rewritten to ../fonts/… (same files; pinned by
+// tests/minified-css.test.mjs).
 const faceSrc = read('tokens.css').match(/font-family:\s*'Manrope';[^}]*?src:\s*url\(([^)]+)\)/)[1];
 
 for (const page of PAGES) {

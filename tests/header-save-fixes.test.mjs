@@ -12,6 +12,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createSaveGuard } from '../js/save-guard.js';
 import { revealField } from '../js/reveal-field.js';
+import { missingFromPrecache } from './helpers/precache.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const read = f => readFileSync(join(root, f), 'utf8');
@@ -158,7 +159,5 @@ test('Extra and Divisor give the button back as «disabled until dirty»', () =>
 });
 
 test('the new modules are precached', () => {
-  const sw = read('sw.js');
-  assert.ok(sw.includes("'./js/reveal-field.js'"));
-  assert.ok(sw.includes("'./js/save-guard.js'"));
+  assert.deepEqual(missingFromPrecache(['js/reveal-field.js', 'js/save-guard.js']), []);
 });

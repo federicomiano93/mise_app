@@ -2,6 +2,7 @@
 // both languages. The pure parts are in price-changes-model.test.mjs.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { missingFromPrecache } from './helpers/precache.mjs';
 import { readFileSync } from 'node:fs';
 import { _dictionaries } from '../js/i18n.js';
 
@@ -73,8 +74,7 @@ test('every word exists in both languages', () => {
 });
 
 test('the new files are precached', () => {
-  assert.match(SW, /'\.\/js\/orders\/price-changes-model\.js'/);
-  assert.match(SW, /'\.\/js\/orders\/price-changes-screen\.js'/);
+  assert.deepEqual(missingFromPrecache(['js/orders/price-changes-model.js', 'js/orders/price-changes-screen.js']), []);
 });
 
 test('⚠️ never a false «no changes»: the server is asked first, the cache only as a flagged fallback', () => {

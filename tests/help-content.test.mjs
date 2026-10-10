@@ -13,6 +13,8 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { HELP, SECTIONS, helpFor, helpText, helpTitle } from '../js/help-content.js';
 import { t, setLanguage } from '../js/i18n.js';
+import { missingFromPrecache } from './helpers/precache.mjs';
+import { pageScripts } from './helpers/page-scripts.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const read = rel => readFileSync(join(ROOT, rel), 'utf8');
@@ -119,12 +121,12 @@ test('every page of the app carries a help button', () => {
   for (const page of appPages()) {
     const html = read(page);
     if (HELP_IN_SETTINGS[page]) {
-      assert.match(html, /js\/help-button\.js|js\/orders\/orders-main\.js/, `${page} loads its scripts`);
+      assert.ok(pageScripts(html).some(s => /^js\/help-button\.js$|^js\/orders\/orders-main\.js$/.test(s)), `${page} loads its scripts`);
       continue;
     }
     assert.match(html, /data-help="[a-z-]+"/,
       `${page} has no data-help host — every screen must be able to explain itself`);
-    assert.match(html, /js\/help-button\.js/, `${page} does not load js/help-button.js`);
+    assert.ok(pageScripts(html).includes('js/help-button.js'), `${page} does not load js/help-button.js`);
   }
 });
 
@@ -162,9 +164,7 @@ test('the two files that must both know about a section agree', () => {
 });
 
 test('the help is precached, or an offline phone loses it', () => {
-  const sw = read('sw.js');
-  assert.match(sw, /'\.\/js\/help-content\.js'/);
-  assert.match(sw, /'\.\/js\/help-button\.js'/);
+  assert.deepEqual(missingFromPrecache(['js/help-content.js', 'js/help-button.js']), []);
 });
 
 // This repo is public, so the list of names a help text must never contain cannot be

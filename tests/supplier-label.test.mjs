@@ -7,6 +7,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { missingFromPrecache } from './helpers/precache.mjs';
 import { readFileSync } from 'node:fs';
 import { supplierLabel, supplierMatches } from '../js/supplier-label.js';
 import { filterSuppliers, flatRows, matchesQuery, normalizeText } from '../js/orders/ingredient-search.js';
@@ -181,5 +182,5 @@ test('the new labels exist in both languages', () => {
 });
 
 test('supplier-label.js is precached', () => {
-  assert.match(read('sw.js'), /'\.\/js\/supplier-label\.js'/);
+  assert.deepEqual(missingFromPrecache(['js/supplier-label.js']), []);
 });

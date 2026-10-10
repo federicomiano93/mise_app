@@ -494,8 +494,8 @@ test('the page loads the BOOT file as a module, plus the update prompt, and no k
   assert.doesNotMatch(html, /src="js\/reset-password\.js"/);
   assert.match(html, /<script type="module" src="js\/sw-update\.js"><\/script>/);
   assert.doesNotMatch(html, /kiosk\.js/);
-  assert.match(html, /href="tokens\.css"/);
-  assert.match(html, /href="auth\.css"/);
+  assert.match(html, /href="dist\/tokens\.css"/);
+  assert.match(html, /href="dist\/auth\.css"/);
 });
 
 test('⚠ the referrer is strict-origin: no-referrer would get the API key refused', () => {

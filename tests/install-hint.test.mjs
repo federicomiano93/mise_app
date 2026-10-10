@@ -17,6 +17,8 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { missingFromPrecache } from './helpers/precache.mjs';
+import { pageScripts } from './helpers/page-scripts.mjs';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -129,12 +131,10 @@ test('joining marks the flag, and does it before the reload throws the page away
 });
 
 test('the Home loads the notice, and both files are precached', () => {
-  assert.match(HOME, /js\/install-hint-boot\.js/,
+  assert.ok(pageScripts(HOME).includes('js/install-hint-boot.js'),
     'index.html does not load the notice, so it can never appear');
-  for (const file of ['./js/install-hint.js', './js/install-hint-boot.js']) {
-    assert.ok(SW.includes(`'${file}'`),
-      `${file} is not in the precache list — an offline install would be missing it`);
-  }
+  assert.deepEqual(missingFromPrecache(['./js/install-hint.js', './js/install-hint-boot.js']), [],
+    'not in the precache — an offline install would be missing it');
 });
 
 // ── The words ────────────────────────────────────────────────────────────────

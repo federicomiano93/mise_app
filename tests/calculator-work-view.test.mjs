@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { runConfirm } from '../js/confirm-flow.js';
 import { _dictionaries, translate } from '../js/i18n.js';
 import { installDom, Node, walk } from './helpers/form-dom.mjs';
+import { missingFromPrecache } from './helpers/precache.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const read = f => readFileSync(join(root, f), 'utf8');
@@ -279,7 +280,7 @@ test('S4: calc.js moves the result on show and hide, and scrolls to the top on t
   assert.match(calcJs, /e\.classList\.add\('visible'\);\s*placeResult\(e, true\);/);
   assert.match(calcJs, /e\.classList\.remove\('visible'\);\s*placeResult\(e, false\);/);
   assert.match(calcJs, /if \(wasHidden\) \{\s*const scroll = document\.querySelector\('\.scroll-area'\);\s*if \(scroll\) scroll\.scrollTop = 0;/);
-  assert.match(read('sw.js'), /'\.\/js\/result-place\.js'/);
+  assert.deepEqual(missingFromPrecache(['js/result-place.js']), []);
 });
 
 // ── S5: the full-screen recipe and the − / + text size ────────────────────────────────
@@ -577,8 +578,7 @@ test('S5: the words, in both languages; each feature has its own storage key', (
   }
   assert.match(read('js/calc-fullscreen.js'), /ZOOM_STORAGE_KEY = 'mise\.calcZoomStep'/);
   assert.match(read('js/catalogue/catalogue-detail.js'), /'mise\.catZoomStep'/);
-  const sw = read('sw.js');
-  for (const f of ['./js/zoom-steps.js', './js/calc-fullscreen.js', './js/catalogue/zoom-steps.js']) assert.ok(sw.includes(`'${f}'`), f);
+  assert.deepEqual(missingFromPrecache(['./js/zoom-steps.js', './js/calc-fullscreen.js', './js/catalogue/zoom-steps.js']), []);
 });
 
 // ── S6: actions are solid green; choices and names never are ──────────────────────────

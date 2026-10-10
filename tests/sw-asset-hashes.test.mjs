@@ -20,7 +20,7 @@ const ROOT = new URL('..', import.meta.url);
 
 test('⚠⚠ every precached file\'s fingerprint in sw.js matches the file', () => {
   const assets = readAssets(SW);
-  assert.ok(assets.length > 100, 'ASSETS could not be read');
+  assert.ok(assets.length > 30, 'ASSETS could not be read');
   const recorded = currentHashes(SW);
   assert.ok(recorded, 'sw.js carries no ASSET_HASHES — run: node scripts/sw-hashes.mjs');
   const actual = computeHashes(assets);

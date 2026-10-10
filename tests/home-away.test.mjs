@@ -10,6 +10,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { reminderDue, dayFromISO, AWAY_REMINDER_KEY } from '../js/away-reminder.js';
 import { KEEP_PREFIXES } from '../js/local-data.js';
+import { missingFromPrecache } from './helpers/precache.mjs';
 
 const read = p => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
 const code = p => read(p).split('\n').filter(l => !l.trim().startsWith('//')).join('\n');
@@ -111,7 +112,5 @@ test('the Home reads the holiday when the venue opens and again whenever it chan
 });
 
 test('both new files are precached', () => {
-  const sw = read('sw.js');
-  assert.match(sw, /'\.\/js\/away-reminder\.js'/);
-  assert.match(sw, /'\.\/js\/home-away\.js'/);
+  assert.deepEqual(missingFromPrecache(['js/away-reminder.js', 'js/home-away.js']), []);
 });

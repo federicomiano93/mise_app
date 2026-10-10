@@ -32,7 +32,7 @@ test('hosting publishes the staged _site folder, bound to the "preview" target',
 });
 
 test('_site is built from git by an allowlist, never copied from the workspace', () => {
-  assert.match(workflow, /git archive --format=tar HEAD -- \\\n\s+':\(glob\)\*\.html' ':\(glob\)\*\.css' sw\.js manifest\.json qr\.png js icons fonts sounds \\\n\s+\| tar -x -C _site/);
+  assert.match(workflow, /git archive --format=tar HEAD -- \\\n\s+':\(glob\)\*\.html' ':\(glob\)\*\.css' sw\.js manifest\.json qr\.png js dist icons fonts sounds \\\n\s+\| tar -x -C _site/);
   assert.doesNotMatch(workflow, /cp -r|rsync/);
   // firebase-tools follows symlinks on upload: one committed link could publish the workspace
   assert.match(workflow, /if \[ -n "\$\(find _site -type l\)" \]; then/);

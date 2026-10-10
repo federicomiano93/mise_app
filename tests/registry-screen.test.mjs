@@ -18,6 +18,8 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { missingFromPrecache } from './helpers/precache.mjs';
+import { pageScripts } from './helpers/page-scripts.mjs';
 import { readFileSync } from 'node:fs';
 import { SECTIONS } from '../js/sections.js';
 import { SECTIONS as HELP_SECTIONS } from '../js/help-content.js';
@@ -384,15 +386,16 @@ test('each moved piece has exactly one home, and is opened by the two screens th
 test('⚠️ the page and its four modules are precached, or an offline install gets nothing', () => {
   // install() is all-or-nothing: one missing entry and NOTHING is cached for this
   // version. This is the single failure in this project that does not self-heal.
-  for (const asset of ['./suppliers.html', './js/orders/registry.js', './js/orders/registry-main.js',
-    './js/ingredient-record-form.js', './js/orders/mgmt-ui.js']) {
-    assert.ok(SW.includes(`'${asset}'`), `sw.js must precache ${asset}`);
-  }
+  assert.ok(SW.includes("'./suppliers.html'"), 'sw.js must precache ./suppliers.html');
+  assert.deepEqual(missingFromPrecache(['./js/orders/registry.js', './js/orders/registry-main.js',
+    './js/ingredient-record-form.js', './js/orders/mgmt-ui.js']), []);
   // Every script the page loads has to be in there too — a new one added later would
-  // otherwise be fetched from the network on a phone that has none.
+  // otherwise be fetched from the network on a phone that has none. The page's bundle is
+  // one such script, and so is each script that bundle runs.
   for (const m of PAGE.matchAll(/<script[^>]*\bsrc="([^"]+)"/g)) {
-    assert.ok(SW.includes(`'./${m[1]}'`), `suppliers.html loads ${m[1]}, which sw.js does not precache`);
+    assert.deepEqual(missingFromPrecache([m[1]]), [], `suppliers.html loads ${m[1]}, which sw.js does not precache`);
   }
+  assert.deepEqual(missingFromPrecache(pageScripts(PAGE)), []);
 });
 
 test('the cache version moved, or no phone will ever fetch the new page', () => {

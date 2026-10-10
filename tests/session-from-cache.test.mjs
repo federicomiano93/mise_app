@@ -14,6 +14,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { missingFromPrecache } from './helpers/precache.mjs';
 import { readFileSync } from 'node:fs';
 
 import { sameData } from '../js/same-data.js';
@@ -117,5 +118,5 @@ test('every call that changes the venue document refreshes this phone\'s copy of
 });
 
 test('the comparison is precached, or an installed phone offline would boot nothing', () => {
-  assert.match(read('sw.js'), /'\.\/js\/same-data\.js'/);
+  assert.deepEqual(missingFromPrecache(['js/same-data.js']), []);
 });

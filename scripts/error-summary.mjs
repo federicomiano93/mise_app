@@ -95,7 +95,7 @@ export function groupErrors(errors) {
         message: e.message, source: e.source, count: 0, firstMs: null, lastMs: null,
         venues: new Map(), screens: new Map(), versions: new Map(), kinds: new Map(),
         online: 0, offline: 0, people: new Set(), codes: new Map(),
-        stack: null, stackMs: -1, paths: [],
+        stack: null, stackMs: -1, stackVersion: null, paths: [],
       });
     }
     const g = groups.get(key);
@@ -114,7 +114,11 @@ export function groupErrors(errors) {
     if (e.person) g.people.add(e.person);
     if (e.code) bump(g.codes, e.code);
     // ONE sample stack: the most recent one that has any.
-    if (e.stack && (e.createdMs ?? 0) >= g.stackMs) { g.stack = e.stack; g.stackMs = e.createdMs ?? 0; }
+    // The release it came from travels with it: a bundled frame can only be mapped back with
+    // today's build (scripts/source-map.mjs), and says so when this is not today's release.
+    if (e.stack && (e.createdMs ?? 0) >= g.stackMs) {
+      g.stack = e.stack; g.stackMs = e.createdMs ?? 0; g.stackVersion = e.appVersion ?? null;
+    }
   }
   return [...groups.values()]
     .map(g => ({

@@ -1,6 +1,8 @@
 // What can be proved without a browser: the waking tap's swallowing, and the wiring pins.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { missingFromPrecache } from './helpers/precache.mjs';
+import { pageScripts } from './helpers/page-scripts.mjs';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -133,17 +135,15 @@ test('every page with the update worker loads kiosk.js, the client page does not
   const pages = ['calculator', 'catalogue', 'foodcost', 'index', 'inventory', 'orders', 'pastries', 'suppliers'];
   for (const p of pages) {
     const html = read(`${p}.html`);
-    assert.ok(html.includes('<script type="module" src="js/sw-update.js"></script>'), p);
-    assert.ok(html.includes('<script type="module" src="js/kiosk.js"></script>'), `${p}.html loads kiosk.js`);
+    assert.ok(pageScripts(html).includes('js/sw-update.js'), p);
+    assert.ok(pageScripts(html).includes('js/kiosk.js'), `${p}.html loads kiosk.js`);
   }
   assert.ok(!read('order.html').includes('kiosk.js'));
+  assert.ok(!pageScripts(read('order.html')).includes('js/kiosk.js'), 'and its bundle does not run it');
 });
 
 test('the new modules are precached', () => {
-  const sw = read('sw.js');
-  for (const f of ['kiosk.js', 'kiosk-model.js', 'wake-lock.js']) {
-    assert.ok(sw.includes(`'./js/${f}',`), f);
-  }
+  assert.deepEqual(missingFromPrecache(['kiosk.js', 'kiosk-model.js', 'wake-lock.js'].map(f => `js/${f}`)), []);
 });
 
 test('the cover is wired the way the brief says (source pins)', () => {

@@ -12,6 +12,8 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { missingFromPrecache } from './helpers/precache.mjs';
+import { pageScripts } from './helpers/page-scripts.mjs';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -327,7 +329,7 @@ test('⚠️⚠️ EVERY module a precached page STATICALLY needs is precached t
   // office is reached only through a dynamic import() so no customer's phone ever asks
   // for it. All three fall out of "start at the precached pages and follow the STATIC
   // imports" — no exemption has to be typed, and none can go stale.
-  const missing = [...staticallyReachable()].filter(rel => !SW.includes(`'./${rel}'`)).sort();
+  const missing = missingFromPrecache([...staticallyReachable()]).sort();
   assert.deepEqual(missing, [], 'these would 404 for an installed phone that goes offline');
 });
 
@@ -340,7 +342,7 @@ test('the walk actually reaches the app, and stops at what is not precached', ()
   assert.ok(!reached.has('js/client-orders/order-main.js'),
     'order.html is not precached, so nothing behind it should be');
   assert.ok(!reached.has('js/staff/businesses.js'),
-    'the back office is reached only by dynamic import()');
+    'the back office is reached only by dynamic import(), which the walk does not follow');
 });
 
 test('the cache was bumped, because files were added', () => {
@@ -366,21 +368,20 @@ function allJsFiles() {
   return out.sort();
 }
 
-// Start at every HTML page the service worker precaches, take the modules its
-// <script type="module"> tags load, and follow STATIC imports from there.
+// Start at every HTML page the service worker precaches, take the scripts its bundle entry
+// (js/pages/<page>.js) runs, and follow STATIC imports from there.
 //
-// ⚠️ STATIC ONLY. `await import('./staff/businesses.js')` is deliberately not
-// followed: a dynamic import happens when somebody opens a screen, so the fetch
-// handler can cache it then — which is exactly why those files may be absent.
+// ⚠️ STATIC ONLY, BEYOND THE ENTRY. `await import('./staff/businesses.js')` inside a module is
+// deliberately not followed. (Since the pages are bundled every such file IS inside the bundle
+// anyway, so this is now a floor, not a loophole: whatever the walk reaches must be in a
+// precached bundle's inputs.)
 function staticallyReachable() {
   const seen = new Set();
   const queue = [];
 
   for (const page of readdirSync(ROOT).filter(n => n.endsWith('.html'))) {
     if (!SW.includes(`'./${page}'`)) continue;          // order.html stops here
-    for (const m of read(page).matchAll(/<script[^>]*type="module"[^>]*src="([^"]+)"/g)) {
-      queue.push(m[1].replace(/^\.\//, ''));
-    }
+    queue.push(...pageScripts(read(page)));
   }
 
   while (queue.length) {

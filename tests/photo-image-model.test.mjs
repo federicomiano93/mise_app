@@ -10,6 +10,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
+import { pageSheets } from './helpers/page-scripts.mjs';
 import {
   MAX_EDGE, MAX_PHOTOS, MAX_IMAGE_BYTES, MAX_TOTAL_BYTES,
   fitWithin, base64Of, mediaTypeOf, approxBytes, payloadProblem,
@@ -232,7 +233,7 @@ test('⚠️ every class the CATALOGUE uses is one this page actually defines', 
   // Deriving the list from the <link> tags makes the test true by construction and
   // means the NEXT stylesheet needs no edit here at all.
   const page = read('catalogue.html');
-  const sheets = [...page.matchAll(/<link[^>]+rel="stylesheet"[^>]+href="([^"]+)"/g)].map(m => m[1]);
+  const sheets = pageSheets(page);
   assert.ok(sheets.includes('catalogue.css'),
     'the <link> scan found no catalogue.css — the page changed shape and this test is reading nothing');
   const css = sheets.map(read).join('\n');

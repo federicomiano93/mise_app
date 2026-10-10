@@ -3,6 +3,8 @@
 // box asks for the numeric keypad in its source.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { missingFromPrecache } from './helpers/precache.mjs';
+import { pageScripts } from './helpers/page-scripts.mjs';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { installKeyboardDone } from '../js/keyboard-done.js';
@@ -140,14 +142,14 @@ const read = (p) => readFileSync(join(ROOT, p), 'utf8');
 
 test('every precached page loads the module through the shared entry', () => {
   assert.match(read('js/i18n-dom.js'), /import '\.\/keyboard-done\.js'/);
-  assert.match(read('sw.js'), /'\.\/js\/keyboard-done\.js'/);
+  assert.deepEqual(missingFromPrecache(['js/keyboard-done.js']), []);
   const pages = readdirSync(ROOT).filter((f) => f.endsWith('.html') && f !== 'home.html');
   assert.ok(pages.length >= 9);
   for (const page of pages) {
     const html = read(page);
-    const direct = /src="js\/i18n-dom\.js"/.test(html);
-    const viaMain = [...html.matchAll(/<script type="module" src="(js\/[^"]+)"/g)]
-      .some(([, src]) => /import '(?:\.\.?\/)+i18n-dom\.js'/.test(read(src)));
+    const scripts = pageScripts(html);
+    const direct = scripts.includes('js/i18n-dom.js');
+    const viaMain = scripts.some(src => /import '(?:\.\.?\/)+i18n-dom\.js'/.test(read(src)));
     assert.ok(direct || viaMain, `${page} never loads js/i18n-dom.js`);
   }
 });
