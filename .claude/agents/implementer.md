@@ -85,6 +85,8 @@ For each step of the plan:
 - `npm test` green, and the rules checks green if anything touched Firestore.
 - **New behaviour has a test.** A change with no test is not finished (P15) — the
   owner cannot read code, so the tests are the only safety net.
+- **`js/` changed**: `node scripts/build-bundles.mjs` has been run FIRST (pages load the committed
+  `dist/` bundles; `tests/bundles-fresh.test.mjs` fails until it is), then sw-hashes.
 - **`sw.js`**: if any cached file changed, `node scripts/sw-hashes.mjs` has been run (it
   rewrites the fingerprints and bumps `CACHE_NAME` — never edit either by hand); if a file
   was ADDED or RENAMED it is also in the `ASSETS` array, spelled exactly like the real file.
