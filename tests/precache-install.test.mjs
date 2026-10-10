@@ -166,7 +166,7 @@ const install = worker => run(worker, 'install');
 test('the harness really runs sw.js: it exposes the worker’s own constants', () => {
   const w = loadWorker();
   assert.match(w.read('CACHE_NAME'), /^theitalianclub-v\d+$/);
-  assert.ok(Array.isArray(w.read('ASSETS')) && w.read('ASSETS').length > 100);
+  assert.ok(Array.isArray(w.read('ASSETS')) && w.read('ASSETS').length > 30);
   assert.equal(typeof w.read('PRECACHE_ATTEMPTS'), 'number');
 });
 
@@ -243,7 +243,7 @@ test('⚠⚠ every name in ASSETS is a file that exists, or no phone can ever fi
   // prototypes — an empty vm array against an empty host array fails, reporting
   // "actual [] expected []", which reads as a broken test rather than a realm mismatch.
   const assets = [...loadWorker().read('ASSETS')];
-  assert.ok(assets.length > 100, 'the list must not be empty');
+  assert.ok(assets.length > 30, 'the list must not be empty');
   const missing = assets
     .filter(a => a !== './')
     .filter(a => !existsSync(join(ROOT, a.replace(/^\.\//, ''))));
@@ -347,7 +347,7 @@ test('every stored file carries its fingerprint, so the next update can recognis
   await install(w);
   const hashes = w.read('ASSET_HASHES');
   const store = w.stores.get(w.read('CACHE_NAME'));
-  for (const asset of ['./', './index.html', './orders.css', './js/firebase.js']) {
+  for (const asset of ['./', './index.html', './orders.css', './dist/orders.js', './dist/i18n.js']) {
     assert.equal(store.get(abs(asset)).headers.get('x-mise-hash'), hashes[asset], asset);
   }
 });
@@ -388,7 +388,7 @@ test('⚠⚠ at most PRECACHE_CONCURRENCY downloads are in flight at once, yet s
   const limit = w.read('PRECACHE_CONCURRENCY');
   assert.equal(limit, 6);
   await install(w);
-  assert.ok(w.record.attempts.length > 50, 'the slice must be big enough to burst');
+  assert.ok(w.record.attempts.length > 30, 'the slice must be big enough to burst');
   assert.ok(w.record.maxInFlight <= limit, `${w.record.maxInFlight} downloads were in flight at once`);
   assert.ok(w.record.maxInFlight > 1, 'the install must still download in parallel');
 });
@@ -404,7 +404,7 @@ test('⚠ the limit holds on a retry too, and a file failing twice then succeedi
 test('⚠ one file failing on every attempt still refuses the install and names it, among others that succeeded', async () => {
   const w = loadWorker({ latency: 1, fails: url => url.endsWith('/orders.css') });
   await assert.rejects(install(w), /precache incomplete: 1 of \d+ assets failed — .*orders\.css/);
-  assert.ok(w.record.added.length > 100, 'one failure must not stop the others');
+  assert.ok(w.record.added.length > 30, 'one failure must not stop the others');
 });
 
 test('⚠⚠ the cached body is exactly the downloaded bytes, stamped with its fingerprint', async () => {

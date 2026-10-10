@@ -6,6 +6,8 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { missingFromPrecache } from './helpers/precache.mjs';
+import { pageScripts } from './helpers/page-scripts.mjs';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -489,11 +491,13 @@ test('the boot file imports nothing that an older cached release could be missin
 });
 
 test('the page loads the BOOT file as a module, plus the update prompt, and no kiosk', () => {
-  assert.match(html, /<script type="module" src="js\/i18n-dom\.js"><\/script>/);
-  assert.match(html, /<script type="module" src="js\/reset-password-boot\.js"><\/script>/);
+  // The page's one bundle tag, and the scripts that bundle's entry runs, in order.
+  assert.match(html, /<script type="module" src="dist\/reset-password\.js"><\/script>/);
+  assert.deepEqual(pageScripts(html),
+    ['js/i18n-dom.js', 'js/reset-password-boot.js', 'js/sw-update.js']);
   assert.doesNotMatch(html, /src="js\/reset-password\.js"/);
-  assert.match(html, /<script type="module" src="js\/sw-update\.js"><\/script>/);
   assert.doesNotMatch(html, /kiosk\.js/);
+  assert.ok(!pageScripts(html).includes('js/kiosk.js'));
   assert.match(html, /href="tokens\.css"/);
   assert.match(html, /href="auth\.css"/);
 });
@@ -506,8 +510,8 @@ test('⚠ the referrer is strict-origin: no-referrer would get the API key refus
 test('the page and both its scripts are precached together', () => {
   const sw = read('sw.js');
   assert.match(sw, /'\.\/reset-password\.html',/);
-  assert.match(sw, /'\.\/js\/reset-password\.js',/);
-  assert.match(sw, /'\.\/js\/reset-password-boot\.js',/);
+  assert.match(sw, /'\.\/dist\/reset-password\.js',/);
+  assert.deepEqual(missingFromPrecache(['js/reset-password.js', 'js/reset-password-boot.js']), []);
 });
 
 test('firebase.js and its example both export the two reset helpers', () => {

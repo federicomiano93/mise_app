@@ -3,6 +3,7 @@
 // The pure parts are tested in invoice-import-plan.test.mjs and invoice-import-model.test.mjs.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { missingFromPrecache } from './helpers/precache.mjs';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { _dictionaries } from '../js/i18n.js';
 
@@ -162,7 +163,7 @@ test('the data layer exports what the screen and the brief name', async () => {
 test('⚠️ the new files are precached, spelled like the real files', () => {
   for (const file of ['js/orders/invoice-import-model.js', 'js/orders/invoice-import-plan.js',
     'js/orders/invoice-import-data.js', 'js/orders/invoice-import-screen.js', 'js/pack-format.js', 'js/vat-number.js']) {
-    assert.ok(SW.includes(`'./${file}'`), `sw.js must precache ./${file}`);
+    assert.deepEqual(missingFromPrecache([file]), [], `${file} must be precached`);
     assert.ok(existsSync(new URL(`../${file}`, import.meta.url)), `${file} does not exist`);
   }
 });
@@ -337,7 +338,7 @@ test('the new files are precached, spelled like the real files', () => {
   const files = readdirSync(new URL('../js/orders/invoice-zip/', import.meta.url)).map(f => `js/orders/invoice-zip/${f}`);
   assert.ok(files.includes('js/orders/invoice-zip/selection.js'));
   for (const file of [...files, 'js/vendor/fflate.esm.js']) {
-    assert.ok(SW.includes(`'./${file}'`), `sw.js must precache ./${file}`);
+    assert.deepEqual(missingFromPrecache([file]), [], `${file} must be precached`);
     assert.ok(existsSync(new URL(`../${file}`, import.meta.url)), `${file} does not exist`);
   }
 });

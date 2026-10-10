@@ -26,6 +26,7 @@ import assert from 'node:assert/strict';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { pageScripts } from './helpers/page-scripts.mjs';
 
 const root = new URL('../', import.meta.url);
 const read = (name) => readFileSync(new URL(name, root), 'utf8');
@@ -306,7 +307,7 @@ test('⚠⚠ every page-level bottom bar is one the update banner knows about', 
   const missing = [];
   for (const page of readdirSync(root).filter((n) => n.endsWith('.html'))) {
     const html = read(page);
-    if (!html.includes('sw-update.js')) continue;
+    if (!pageScripts(html).includes('js/sw-update.js')) continue;
     for (const m of html.matchAll(/class="([^"]*)"/g)) {
       for (const cls of m[1].split(/\s+/)) {
         if (!/^[a-z]+-footer$/.test(cls)) continue;

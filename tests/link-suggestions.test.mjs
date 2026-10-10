@@ -8,6 +8,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { missingFromPrecache } from './helpers/precache.mjs';
 import { readFileSync } from 'node:fs';
 
 import { suggestLinks, applyLink, linkedItemName, isSameLink, linkOptions, SUGGEST_MIN_CHARS, SUGGEST_LIMIT } from '../js/catalogue/catalogue-model.js';
@@ -212,10 +213,7 @@ test('⚠️ the shared chooser tells «dismissed» apart from a choice, and hol
 });
 
 test('it is in the precache, or the recipe form breaks offline', () => {
-  const sw = read('sw.js');
-  for (const file of ['js/catalogue/ingredient-suggest.js', 'js/pick-suggest.js', 'js/pick-screen.js', 'js/dom.js']) {
-    assert.ok(sw.includes(`'./${file}'`), `${file} must be precached`);
-  }
+  assert.deepEqual(missingFromPrecache(['js/catalogue/ingredient-suggest.js', 'js/pick-suggest.js', 'js/pick-screen.js', 'js/dom.js']), []);
 });
 
 test('⚠️ packaging is never offered as a recipe ingredient', () => {

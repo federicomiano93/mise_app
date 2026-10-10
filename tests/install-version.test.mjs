@@ -18,6 +18,8 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { missingFromPrecache } from './helpers/precache.mjs';
+import { pageScripts } from './helpers/page-scripts.mjs';
 import { readFileSync, readdirSync } from 'node:fs';
 import {
   fingerprint, shouldWarn, checkInstall, isStandalone, FIELDS_NEEDING_REINSTALL,
@@ -149,11 +151,13 @@ test('both ways of telling an installed app from a tab are honoured', () => {
 });
 
 test('the notice is wired into the Home, and ONLY the Home', () => {
-  assert.match(read('index.html'), /js\/install-version-boot\.js/, 'the Home must load it');
+  assert.ok(pageScripts(read('index.html')).includes('js/install-version-boot.js'), 'the Home must load it');
   assert.ok(PAGES.length >= 8, `only found ${PAGES.length} pages — the scan is not finding them`);
   for (const page of PAGES.filter((n) => n !== 'index.html')) {
     assert.doesNotMatch(read(page), /install-version-boot/,
       `${page} must not: a dialog in the middle of the work interrupts the one thing the app is for`);
+    assert.ok(!pageScripts(read(page)).includes('js/install-version-boot.js'),
+      `${page}'s bundle must not run it either`);
   }
 });
 
@@ -187,10 +191,8 @@ test('the notice waits for sign-in, the splash, and any other dialog', () => {
 });
 
 test('both files are precached', () => {
-  const sw = read('sw.js');
-  for (const f of ['./js/install-version.js', './js/install-version-boot.js']) {
-    assert.ok(sw.includes(`'${f}'`), `${f} must be in the ASSETS list`);
-  }
+  assert.deepEqual(missingFromPrecache(['./js/install-version.js', './js/install-version-boot.js']), [],
+    'must be in the ASSETS list or inside a bundle that is');
 });
 
 // ── the ban ────────────────────────────────────────────────────────────────────
