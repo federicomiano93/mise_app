@@ -350,6 +350,7 @@ export function renderLabel({
         } finally {
           actions.printBtn.disabled = false;
         }
+        if (done && done.ok) globalThis.window?.dispatchEvent(new CustomEvent('mise:action', { detail: 'label-printed' }));
         // ⚠️ A ROAD THAT HANDS SOMETHING OVER HAS TO SAY IT DID. The print dialog is
         // its own receipt — it appears — but a copy to the clipboard, and a job put
         // in a queue, both look exactly like a button that did nothing.

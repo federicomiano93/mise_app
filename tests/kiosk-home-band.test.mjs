@@ -120,7 +120,7 @@ test('the wiring is pinned: Rest, Exit and the language all reach their handlers
   assert.match(src, /btn\.addEventListener\('click', onClick\)/);
   assert.match(src, /exitButton\(t\('kiosk\.home\.exit'\), exitApp\)/);
   assert.match(src, /onLanguageChange\(render\)/);
-  assert.match(src, /function restNow\(\) \{\s*window\.dispatchEvent\(new Event\('kiosk-rest-now'\)\);\s*\}/);
+  assert.match(src, /function restNow\(\) \{\s*(?:globalThis\.window\?\.dispatchEvent\(new CustomEvent\('mise:action', \{ detail: 'kiosk-rest' \}\)\);\s*)?window\.dispatchEvent\(new Event\('kiosk-rest-now'\)\);\s*\}/);
 });
 
 test('the update banner clears the Exit bar', () => {

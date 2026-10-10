@@ -834,6 +834,7 @@ export function renderEditor({ product, draft = null, app }) {
 
     dirty = false;
     app.saveProduct(clean, snapshot, patches);
+    globalThis.window?.dispatchEvent(new CustomEvent('mise:action', { detail: 'foodcost-saved' }));
     app.toast(product ? t('fc.productSaved') : t('fc.productAdded'));
     app.showList();
   }

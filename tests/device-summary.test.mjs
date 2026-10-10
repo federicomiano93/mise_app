@@ -2,7 +2,7 @@
 // never run by the tests.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { devicePath, deviceFrom, devicesFrom, isStale, summarise, summaryLines, relativePath } from '../scripts/device-summary.mjs';
+import { devicePath, deviceFrom, devicesFrom, isStale, summarise, summaryLines, summaryJson, relativePath } from '../scripts/device-summary.mjs';
 
 const NOW = Date.parse('2026-10-09T12:00:00Z');
 const DAY = 24 * 60 * 60 * 1000;
@@ -124,4 +124,35 @@ test('no uid and no device id ever appears in the printout', () => {
   for (const text of [summaryLines(people(), 'The Bakery', names).join('\n'), summaryLines(people(), 'The Bakery').join('\n')]) {
     for (const secret of [UID_A, UID_B, UID_C, 'Aaaaaaaaaaaaaaaaaaaa', 'Bbbbbbbbbbbbbbbbbbbb']) assert.ok(!text.includes(secret), secret);
   }
+});
+
+test('summaryJson: venue numbers and first names, never a uid or a device id', () => {
+  const DEV2 = 'Zz3dEf6hIj9lMn2pQr5t';
+  const devices = devicesFrom([
+    row('bakery', 1, { uid: 'uidSecretAAA', kind: 'tablet', installed: true }),
+    row('bakery', 2, { uid: 'uidSecretBBB', id: DEV2 }),
+    row('bakery', 40, { uid: 'uidSecretAAA', id: 'Qq3dEf6hIj9lMn2pQr5t' }),
+  ]);
+  const venues = summarise(devices, NOW);
+  const json = summaryJson(venues, new Map([['bakery', 'The Bakery']]),
+    new Map([['bakery', new Map([['uidSecretAAA', 'Anna'], ['uidSecretBBB', 'Anna']])]]), NOW);
+  assert.equal(json.scope, 'production');
+  assert.equal(json.generatedAt, new Date(NOW).toISOString());
+  const v = json.venues[0];
+  assert.equal(v.venue, 'The Bakery');
+  assert.deepEqual([v.seen7Days, v.seen30Days, v.onFile, v.installed, v.browser], [2, 2, 3, 1, 1]);
+  assert.deepEqual(v.byKind, [{ name: 'phone', devices: 1 }, { name: 'tablet', devices: 1 }]);
+  assert.deepEqual(v.byAppVersion, [{ name: '643', devices: 2 }]);
+  assert.deepEqual(v.perPerson, [{ person: 'Anna', devices: 1 }, { person: 'Anna (2)', devices: 1 }]);
+  const text = JSON.stringify(json);
+  for (const secret of ['uidSecret', ID, DEV2, 'Qq3dEf']) assert.ok(!text.includes(secret), secret);
+});
+
+test('summaryJson: no names known → venue id and «someone»; no devices → an empty venue list', () => {
+  const venues = summarise(devicesFrom([row('bakery', 1, { uid: 'uidSecretAAA' })]), NOW);
+  const json = summaryJson(venues, new Map(), new Map(), NOW);
+  assert.equal(json.venues[0].venue, 'bakery');
+  assert.deepEqual(json.venues[0].perPerson, [{ person: 'someone', devices: 1 }]);
+  const empty = summaryJson([], new Map(), new Map(), NOW);
+  assert.deepEqual(empty, { generatedAt: new Date(NOW).toISOString(), scope: 'production', venues: [] });
 });

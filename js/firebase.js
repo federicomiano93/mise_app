@@ -1011,6 +1011,50 @@ export function pingDevice(payload, id) {
   });
 }
 
+// The error reports (js/error-report.js): one line per error a member's device met,
+// locations/{lid}/errors/{autoId}, create-only — the rules refuse every read and the owner's
+// script (scripts/read-errors.mjs) is the only reader. The record is spread FIRST so it can
+// never overwrite bakery, uid or createdAt: uid MUST be the signed-in account's and createdAt
+// MUST be serverTimestamp(), the rules compare them with request.auth.uid and request.time.
+// Signed out → reject with 'unauthenticated' (the caller drops it quietly: P17).
+export function reportError(record) {
+  return authReady.then(() => {
+    if (!auth.currentUser) {
+      throw Object.assign(new Error('unauthenticated'), { code: 'unauthenticated' });
+    }
+    return addDoc(collection(db, pathFor('errors')), {
+      ...record,
+      bakery: currentLocationId(),
+      uid: auth.currentUser.uid,
+      createdAt: serverTimestamp(),
+    });
+  });
+}
+
+// The usage record (js/usage.js): one line per person per device per day,
+// locations/{lid}/usage/<deviceId>_<YYYYMMDD>_<uid>, sent WHOLE now and then (the last write of
+// the day carries the day's totals) and never read back by the app. A whole-document set: the
+// rules want the key set exactly. The payload is spread FIRST so it can never
+// overwrite bakery, uid or updatedAt: uid MUST be the signed-in account's (the id ends with it)
+// and updatedAt MUST be serverTimestamp() — the rules compare them with request.auth.uid and
+// request.time. Signed out → reject with 'unauthenticated' (a passing failure, tried again later).
+export function saveUsage(payload, id) {
+  return authReady.then(() => {
+    if (!auth.currentUser) {
+      throw Object.assign(new Error('unauthenticated'), { code: 'unauthenticated' });
+    }
+    return setDoc(
+      doc(db, pathFor('usage'), id),
+      {
+        ...payload,
+        bakery: currentLocationId(),
+        uid: auth.currentUser.uid,
+        updatedAt: serverTimestamp(),
+      },
+    );
+  });
+}
+
 // Delete one whole log document (the user explicitly deleted that log).
 export function deleteLogDoc(id) {
   return authReady

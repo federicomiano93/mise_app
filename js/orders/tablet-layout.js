@@ -178,8 +178,12 @@ export function initAlertsPanel() {
   if (!btn || !panel || !countEl) return;
 
   function setOpen(open) {
+    const changed = panel.hidden === open;
     panel.hidden = !open;
     btn.setAttribute('aria-expanded', String(open));
+    // Announced only when the panel really opened or closed: closeAlertsPanel() is called by
+    // every full screen, whether the panel was open or not.
+    if (changed) globalThis.window?.dispatchEvent(new CustomEvent('mise:screen', { detail: open ? 'alerts' : '' }));
   }
   closePanel = () => setOpen(false);
 

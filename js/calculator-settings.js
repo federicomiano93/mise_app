@@ -76,8 +76,9 @@ export function openSettings() {
   paintOrdersButtonSwitch();
   paintAskDaySwitch();
   show('settings-overlay');
+  globalThis.window?.dispatchEvent(new CustomEvent('mise:screen', { detail: 'settings' }));
 }
-function closeSettings() { hide('settings-overlay'); }
+function closeSettings() { hide('settings-overlay'); globalThis.window?.dispatchEvent(new CustomEvent('mise:screen', { detail: '' })); }
 
 // ── The bottom-bar «Orders» button switch ─────────────────────────────────────
 // VENUE-WIDE (config/calculator.showClientOrdersButton), and a switch: it saves on the

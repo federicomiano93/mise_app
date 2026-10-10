@@ -27,6 +27,11 @@ import { isSectionAllowed, isSectionAllowedFor } from './sections.js';
 import { cardVisibleTo } from './home-cards.js';
 // The device count: starts itself, reports once a day per venue and account (js/device-ping.js).
 import './device-ping.js';
+// The error reports: catches this page's errors and tells the owner (js/error-report.js).
+import './error-report.js';
+// The usage record: screens, routes and key actions, kept on the device and sent now and then
+// (js/usage.js).
+import './usage.js';
 
 const HOME = 'index.html';
 

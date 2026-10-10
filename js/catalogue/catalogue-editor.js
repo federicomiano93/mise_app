@@ -464,6 +464,7 @@ export function renderEditor({ recipe, draft, allRecipes, app, getLabelProfile =
     // Local-first: the store updates the list instantly and syncs in the background;
     // a rejected write is rolled back and surfaced by the store (no freeze here).
     app.saveRecipe(clean);
+    globalThis.window?.dispatchEvent(new CustomEvent('mise:action', { detail: 'recipe-saved' }));
     app.toast(recipe ? t('cat.recipeSaved') : t('cat.recipeAdded'));
     app.showList();
   }

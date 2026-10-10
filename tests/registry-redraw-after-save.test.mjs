@@ -15,7 +15,7 @@ test('popAfterSave pops the level and then redraws the one it uncovers', () => {
 });
 
 test('the supplier form and the ingredient form both use it when a save is done', () => {
-  assert.match(src, /onDone: \(saved\) => \{ popAfterSave\(entry\); onSaved\?\.\(saved\); \}/);
+  assert.match(src, /onDone: \(saved\) => \{\s*globalThis\.window\?\.dispatchEvent\(new CustomEvent\('mise:action', \{ detail: 'supplier-saved' \}\)\);\s*popAfterSave\(entry\);\s*onSaved\?\.\(saved\);\s*\}/);
   assert.match(src, /onDone: \(\) => popAfterSave\(entry\),/);
 });
 

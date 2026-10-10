@@ -263,6 +263,7 @@ async function requestShowAll() {
 
 function showList() {
   view = 'list';
+  globalThis.window?.dispatchEvent(new CustomEvent('mise:screen', { detail: '' }));
   activeEditor = null;
   currentProduct = null;
   leaveGuard = null;
@@ -299,6 +300,7 @@ function setEditorHeaderPhone(product) {
 
 function openProduct(product, draft = null) {
   view = 'editor';
+  globalThis.window?.dispatchEvent(new CustomEvent('mise:screen', { detail: 'editor' }));
   draftRecipeId = null;
   currentProduct = product;
   leaveGuard = null;
@@ -329,6 +331,7 @@ function openProduct(product, draft = null) {
 function backToProduct() {
   if (!heldEditor) { openProduct(currentProduct); return; }
   view = 'editor';
+  globalThis.window?.dispatchEvent(new CustomEvent('mise:screen', { detail: 'editor' }));
   activeEditor = heldEditor;
   heldEditor = null;
   historyBody = null;
@@ -407,6 +410,7 @@ function clearAddress() {
 // The margin over time. Read on demand, never watched.
 async function openHistory(product) {
   view = 'history';
+  globalThis.window?.dispatchEvent(new CustomEvent('mise:screen', { detail: 'history' }));
   // ⚠️ ON A TABLET THE EDITOR IS SET ASIDE, NOT DROPPED: its node, its working copy and its
   // guard stay alive, and the pane's Back returns to exactly what was typed. A phone drops
   // it, as it always did.

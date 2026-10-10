@@ -190,6 +190,8 @@ export function openIngredientCreate({
       actions: {
         saveIngredient: async (id, payload, record, writePrice) => {
           const newId = await saveIngredientWithPrice(id, payload, record, writePrice);
+          globalThis.window?.dispatchEvent(new CustomEvent('mise:action', { detail: 'ingredient-saved' }));
+          if (record) globalThis.window?.dispatchEvent(new CustomEvent('mise:action', { detail: 'price-saved' }));
           saved = { id: newId, name: payload.name, kind: payload.kind };
         },
         // A new ingredient has no history to show, and the card asks only for an existing one.
@@ -284,6 +286,8 @@ export async function openIngredientEdit({
       actions: {
         saveIngredient: async (id, payload, record, writePrice, meta) => {
           const savedId = await saveIngredientWithPrice(id, payload, record, writePrice);
+          globalThis.window?.dispatchEvent(new CustomEvent('mise:action', { detail: 'ingredient-saved' }));
+          if (record) globalThis.window?.dispatchEvent(new CustomEvent('mise:action', { detail: 'price-saved' }));
           saved = { id: savedId, name: payload.name };
           // The calling feature owns the draft; this file may not import it. Its failure is only logged.
           if (meta && meta.unitChangedFrom && typeof actions.unitChanged === 'function') {

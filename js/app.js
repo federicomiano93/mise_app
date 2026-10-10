@@ -71,6 +71,7 @@ function switchTab(name) {
   if (logFooterBtn) logFooterBtn.style.display = name === 'log' ? 'none' : '';
   if (name !== 'log') lastRecipeTab = name;
   currentTab = name;
+  globalThis.window?.dispatchEvent(new CustomEvent('mise:screen', { detail: name === 'log' ? 'log' : '' }));
   if (name === 'log') renderLog();
 }
 

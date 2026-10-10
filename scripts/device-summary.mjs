@@ -100,17 +100,22 @@ export function summarise(devices, now) {
     .sort((a, b) => a.locationId.localeCompare(b.locationId));
 }
 
-// `firstNames`: Map uid → first name (never a surname or email). An unknown person is
-// «someone»; two people with the same first name are told apart by a number, never by the uid.
-export function summaryLines(venue, name, firstNames = new Map()) {
-  const pairs = list => (list.length ? list.map(([k, n]) => `${k} ${n}`).join(', ') : 'none');
+// [[label, devices], …] — `firstNames`: Map uid → first name (never a surname or email). An
+// unknown person is «someone»; two people with the same first name are told apart by a number,
+// never by the uid.
+function peopleLabels(venue, firstNames) {
   const used = new Map();
-  const perPerson = venue.people.map(([uid, n]) => {
+  return venue.people.map(([uid, n]) => {
     const first = clean(firstNames.get(uid) ?? '', 40) || 'someone';
     const seen = (used.get(first) || 0) + 1;
     used.set(first, seen);
     return [seen > 1 ? `${first} (${seen})` : first, n];
   });
+}
+
+export function summaryLines(venue, name, firstNames = new Map()) {
+  const pairs = list => (list.length ? list.map(([k, n]) => `${k} ${n}`).join(', ') : 'none');
+  const perPerson = peopleLabels(venue, firstNames);
   return [
     `${name || venue.locationId} (${venue.locationId})`,
     `  devices seen: last 7 days ${venue.last7} · last 30 days ${venue.last30} · on file ${venue.total}`,
@@ -119,4 +124,27 @@ export function summaryLines(venue, name, firstNames = new Map()) {
     `  by app version (newest first): ${pairs(venue.versions.map(([k, n]) => [k === 'unknown' ? 'unknown' : `v${k}`, n]))}`,
     `  devices per person: ${pairs(perPerson)}`,
   ];
+}
+
+// The same numbers as summaryLines, as a plain object for the stats page. `names`: Map
+// locationId → venue name; `firstNamesByVenue`: Map locationId → Map uid → first name. No device
+// id and no uid is ever copied in.
+export function summaryJson(venues, names = new Map(), firstNamesByVenue = new Map(), now = Date.now()) {
+  const counts = list => list.map(([k, n]) => ({ name: k, devices: n }));
+  return {
+    generatedAt: new Date(now).toISOString(),
+    scope: 'production',
+    venues: venues.map(v => ({
+      venue: clean(names.get(v.locationId) ?? '', 60) || v.locationId,
+      seen7Days: v.last7,
+      seen30Days: v.last30,
+      onFile: v.total,
+      byKind: counts(v.kinds),
+      installed: v.installed.installed,
+      browser: v.installed.browser,
+      byAppVersion: counts(v.versions),
+      perPerson: peopleLabels(v, firstNamesByVenue.get(v.locationId) ?? new Map())
+        .map(([person, n]) => ({ person, devices: n })),
+    })),
+  };
 }

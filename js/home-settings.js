@@ -443,11 +443,13 @@ export function openHomeSettings(session) {
     window.removeEventListener('away-changed', onAwayChanged);
     versionCleanup();
     overlay.remove();
+    globalThis.window?.dispatchEvent(new CustomEvent('mise:screen', { detail: '' }));
   }
 
   paint();
   window.addEventListener('away-changed', onAwayChanged);
   onAwayChanged();
   document.body.appendChild(overlay);
+  globalThis.window?.dispatchEvent(new CustomEvent('mise:screen', { detail: 'settings' }));
   return { close };
 }

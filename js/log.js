@@ -131,6 +131,7 @@ function commitLog() {
   // save updates this same log.
   markRevealed(tab);
   showResult(tab + '-result');
+  globalThis.window?.dispatchEvent(new CustomEvent('mise:action', { detail: 'dough-confirmed' }));
   setLock(tab, true, logId);
   pendingTab = null;
   pendingDay = null;

@@ -215,3 +215,41 @@ test('the devices create/update rule costs exactly 1 read — member()\'s users 
   assert.equal(costOf('member'), 1, 'member() must cost exactly one read for this to hold');
   assert.equal(costOf('member') + accessesIn(block).length, 1, 'the devices rule must cost exactly 1 document read');
 });
+
+test('the errors create rule costs exactly 1 read — member()\'s users get, nothing else', () => {
+  const MATCH = 'match /errors/{id}';
+  const start = CODE.indexOf(MATCH);
+  assert.notEqual(start, -1, 'firestore.rules has no match /errors/{id} — this test is checking nothing');
+  const open = CODE.indexOf('{', start + MATCH.length);
+  let depth = 0;
+  let end = -1;
+  for (let i = open; i < CODE.length; i++) {
+    if (CODE[i] === '{') depth++;
+    else if (CODE[i] === '}' && --depth === 0) { end = i; break; }
+  }
+  const block = CODE.slice(open + 1, end);
+  assert.deepEqual(accessesIn(block), [], 'the errors rule must not read a document itself');
+  assert.match(block, /\bmember\(lid\)/, 'the errors rule must go through member(lid)');
+  assert.equal(accessesIn(bodyOf('stampedFor')).length, 0, 'stampedFor() must not read a document');
+  assert.equal(costOf('member'), 1, 'member() must cost exactly one read for this to hold');
+  assert.equal(costOf('member') + accessesIn(block).length, 1, 'the errors rule must cost exactly 1 document read');
+});
+
+test('the usage create/update rule costs exactly 1 read — member()\'s users get, nothing else', () => {
+  const MATCH = 'match /usage/{id}';
+  const start = CODE.indexOf(MATCH);
+  assert.notEqual(start, -1, 'firestore.rules has no match /usage/{id} — this test is checking nothing');
+  const open = CODE.indexOf('{', start + MATCH.length);
+  let depth = 0;
+  let end = -1;
+  for (let i = open; i < CODE.length; i++) {
+    if (CODE[i] === '{') depth++;
+    else if (CODE[i] === '}' && --depth === 0) { end = i; break; }
+  }
+  const block = CODE.slice(open + 1, end);
+  assert.deepEqual(accessesIn(block), [], 'the usage rule must not read a document itself');
+  assert.match(block, /\bmember\(lid\)/, 'the usage rule must go through member(lid)');
+  assert.equal(accessesIn(bodyOf('stampedFor')).length, 0, 'stampedFor() must not read a document');
+  assert.equal(costOf('member'), 1, 'member() must cost exactly one read for this to hold');
+  assert.equal(costOf('member') + accessesIn(block).length, 1, 'the usage rule must cost exactly 1 document read');
+});
