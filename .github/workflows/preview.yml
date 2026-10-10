@@ -50,14 +50,14 @@ jobs:
         with:
           node-version: '22'
 
-      # The app, and nothing else: the pages, their stylesheets, sw.js, the manifest, js/ and
-      # the static folders — exactly what GitHub Pages serves the app from. `:(glob)` keeps
+      # The app, and nothing else: the pages, their stylesheets, sw.js, the manifest, js/, dist/
+      # (the bundles every page loads: without it each page's script is a 404) and the static folders — exactly what GitHub Pages serves the app from. `:(glob)` keeps
       # `*.html` / `*.css` to the top level.
       - name: Stage only the app's files
         run: |
           rm -rf _site && mkdir _site
           git archive --format=tar HEAD -- \
-            ':(glob)*.html' ':(glob)*.css' sw.js manifest.json qr.png js icons fonts sounds \
+            ':(glob)*.html' ':(glob)*.css' sw.js manifest.json qr.png js dist icons fonts sounds \
             | tar -x -C _site
           # ⚠️ No symlinks: firebase-tools FOLLOWS them when it uploads, so a committed
           # `js/x -> ../..` would publish the workspace — credentials file included.

@@ -50,6 +50,11 @@ jobs:
         run: npm audit --audit-level=high
         working-directory: functions
 
+      # The one build tool (esbuild, developer machine only) is a devDependency of the root
+      # package; `npm audit` reads package-lock.json, so this needs no install.
+      - name: Vulnerability check of the build tool (P11)
+        run: npm audit --audit-level=high
+
   # The security rules are the app's ONLY boundary between two businesses sharing
   # one database, and until now their suite ran only when somebody remembered to
   # run it by hand. It needs the Firebase emulator, so it cannot ride in the job
