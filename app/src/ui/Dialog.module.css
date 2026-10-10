@@ -6,15 +6,16 @@
   inset: 0;
   z-index: 200;
   display: flex;
-  align-items: center;
-  justify-content: center;
   padding: var(--s4);
   overflow-y: auto;
   background: var(--scrim);
 }
 
+/* The auto margin centres the card and, unlike centring with align-items, never pushes the top
+   of a tall card (a phone on its side) out of reach above the scrollable area. */
 .modal {
   width: 100%;
+  margin: auto;
   max-width: 440px;
   border-radius: var(--r-lg);
   background: var(--surface);
