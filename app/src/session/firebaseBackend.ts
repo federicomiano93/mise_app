@@ -21,7 +21,7 @@
 import { initializeApp } from 'firebase/app';
 import {
   initializeAuth, indexedDBLocalPersistence, browserLocalPersistence, browserSessionPersistence,
-  onAuthStateChanged, signInWithEmailAndPassword, sendPasswordResetEmail, signOut, connectAuthEmulator,
+  onAuthStateChanged, signInWithEmailAndPassword, sendPasswordResetEmail, signOut, connectAuthEmulator, type Auth,
 } from 'firebase/auth';
 import {
   initializeFirestore, getFirestore, persistentLocalCache, persistentMultipleTabManager,
@@ -35,6 +35,8 @@ export interface FirebaseBackend extends SessionBackend {
   // Firestore, for the data layers of the sections (step 3). Started here, first, because its
   // settings are fixed by its first use.
   readonly db: Firestore;
+  // Auth, for the writes that must carry the signed-in account's uid (telemetry/sinks.ts).
+  readonly auth: Auth;
   readonly isEmulator: boolean;
 }
 
@@ -71,6 +73,7 @@ export function createFirebaseBackend(hostname: string): FirebaseBackend {
 
   return {
     db,
+    auth,
     isEmulator,
     onAuthChange: callback => onAuthStateChanged(auth, user => {
       callback(user ? { uid: user.uid, email: user.email, isAnonymous: user.isAnonymous } : null);
