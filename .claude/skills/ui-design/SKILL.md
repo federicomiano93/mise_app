@@ -8,6 +8,9 @@ description: The one design system of Mise — tokens, header, bottom footer, na
 Build it right with this; measure it afterwards with the `ui-check` skill. Whether a screen reads
 well is only Federico, on a phone.
 
+- ⚠️ **Pages load `dist/<name>.css`, the minified copy of each root stylesheet.** After editing ANY
+  stylesheet run `node scripts/build-bundles.mjs` before ui-check, a screenshot or a phone preview,
+  or you measure the old CSS (then `node scripts/sw-hashes.mjs`). The root `.css` is the source.
 - **`tokens.css`** (colour, type, spacing, shadows, radii) loads before every stylesheet; every
   screen uses `var(--…)`. Other stylesheets keep local names only as aliases onto it. No screen
   defines its own tokens; a new need extends `tokens.css` for every screen.

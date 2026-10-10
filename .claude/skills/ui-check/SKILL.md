@@ -12,6 +12,10 @@ button with no name, a row wider than the phone.
 
 ## Run it
 
+⚠️ **Rebuild first.** Pages load the committed `dist/*.css` and `dist/*.js`, not the root sources: after
+editing ANY stylesheet (or `js/`) run `node scripts/build-bundles.mjs` BEFORE this check, a screenshot
+or a phone preview, or you measure the old CSS.
+
 Three things running, all LOCAL (the driver refuses any non-localhost URL):
 
 ```bash
