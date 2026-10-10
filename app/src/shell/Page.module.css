@@ -1,0 +1,40 @@
+/* The frame every screen sits in: a title, then the content. On a phone the title is a bar
+   (the design's `.phone-head`); from tablet width it is large type on the page ground. */
+
+.head {
+  padding: var(--s3) var(--s4);
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.title {
+  font-size: var(--fs-xl);
+  font-weight: 650;
+}
+
+/* The heading takes focus from script after a navigation. A person who tapped or clicked
+   does not need a ring around it; one who used the keyboard still gets base.css's
+   :focus-visible outline, because this rule does not match then. */
+.title:focus:not(:focus-visible) {
+  outline: none;
+}
+
+.body {
+  padding: var(--s4);
+}
+
+@media (min-width: 700px) {
+  .head {
+    padding: var(--s6) var(--s8) var(--s4);
+    border-bottom: 0;
+    background: none;
+  }
+
+  .title {
+    font-size: var(--fs-2xl);
+  }
+
+  .body {
+    padding: 0 var(--s8) var(--s8);
+  }
+}
