@@ -1,0 +1,76 @@
+/* Mise 2 — design tokens. The ONLY place a colour, a size, a radius or a shadow is defined:
+   every component reads var(--…). Source: the Claude Design project «Mise 2 — design
+   tablet-first» (mise2.css), https://claude.ai/design/p/326b31df-d02f-4c27-bce6-f015fa95b820
+   — change a value there first, then here.
+
+   One accent (cobalt) for selection and the one primary action per screen. Red, amber and
+   green are reserved for MEANING (danger/allergen, to-check, done) and never decorate.
+   Light theme only, his choice. */
+
+:root {
+  /* Ground and ink: warm "flour" neutrals */
+  --bg: oklch(0.970 0.006 85);
+  --surface: oklch(0.996 0.002 85);
+  --sunken: oklch(0.945 0.008 85);
+  --ink: oklch(0.205 0.012 60);
+  --ink-2: oklch(0.420 0.012 60);
+  --ink-3: oklch(0.530 0.010 60);
+  --line: oklch(0.900 0.008 85);
+  --line-2: oklch(0.820 0.010 85);
+
+  /* Navigation rail */
+  --rail: oklch(0.225 0.012 60);
+  --rail-hover: oklch(0.290 0.012 60);
+  --rail-ink: oklch(0.800 0.008 85);
+  --rail-ink-strong: oklch(0.985 0.004 85);
+
+  /* Accent: cobalt — selection and the one primary action per screen */
+  --accent: oklch(0.500 0.170 262);
+  --accent-hover: oklch(0.450 0.170 262);
+  --accent-press: oklch(0.400 0.160 262);
+  --accent-tint: oklch(0.945 0.028 262);
+  --accent-tint-2: oklch(0.900 0.050 262);
+  --accent-ink: oklch(0.400 0.150 262);
+  --on-accent: oklch(0.990 0.004 262);
+
+  /* Meaning */
+  --danger: oklch(0.550 0.190 27);
+  --danger-ink: oklch(0.460 0.170 27);
+  --danger-tint: oklch(0.955 0.025 27);
+  --warn: oklch(0.780 0.150 78);
+  --warn-ink: oklch(0.470 0.100 65);
+  --warn-tint: oklch(0.965 0.045 88);
+  --ok: oklch(0.580 0.130 152);
+  --ok-ink: oklch(0.430 0.110 152);
+  --ok-tint: oklch(0.955 0.035 152);
+  --scrim: oklch(0.2 0.01 60 / 0.38);
+
+  /* Type. Geist and Geist Mono (SIL OFL) are bundled with the app from @fontsource-variable,
+     never fetched from Google Fonts: the app must start offline, and no third party learns
+     who opens it. */
+  --font: "Geist Variable", ui-sans-serif, system-ui, sans-serif;
+  --mono: "Geist Mono Variable", ui-monospace, "SFMono-Regular", monospace;
+  --fs-xs: 12px;
+  --fs-sm: 14px;
+  --fs-md: 16px;
+  --fs-lg: 18px;
+  --fs-xl: 22px;
+  --fs-2xl: 28px;
+  --fs-3xl: 36px;
+
+  /* Space, shape, touch */
+  --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s5: 20px; --s6: 24px; --s8: 32px; --s10: 40px; --s12: 48px;
+  --r-sm: 8px;
+  --r-md: 12px;
+  --r-lg: 16px;
+  --r-pill: 999px;
+  --hit: 48px;
+  --hit-lg: 56px;
+  --rail-w: 92px;
+  --list-w: 384px;
+
+  --shadow-1: 0 1px 2px oklch(0.2 0.01 60 / 0.06), 0 1px 1px oklch(0.2 0.01 60 / 0.04);
+  --shadow-2: 0 8px 24px oklch(0.2 0.01 60 / 0.10), 0 2px 6px oklch(0.2 0.01 60 / 0.06);
+  --shadow-3: 0 24px 64px oklch(0.2 0.01 60 / 0.20);
+  --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+}

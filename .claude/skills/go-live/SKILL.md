@@ -10,7 +10,7 @@ for Federico**, and the question is about TIMING, not content: he picks the hour
 
 ## 1. Before asking him (do all of it, silently)
 
-- [ ] PR open from a feature branch; `gh pr checks <n>` → `test` and `rules` green.
+- [ ] PR open from a feature branch; `gh pr checks <n>` → `test`, `rules` and `mise2` green.
 - [ ] `code-reviewer` has reviewed the branch; its findings fixed or listed.
 - [ ] `smoke-test` gates run; the changed screens driven on the emulator (`drive-app`).
 - [ ] Precached files changed → `node scripts/sw-hashes.mjs` was run (its test is green).

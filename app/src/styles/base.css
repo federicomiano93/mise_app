@@ -1,0 +1,23 @@
+/* Mise 2 — the few rules that apply to every element. Everything else belongs to a
+   component's own CSS module (Name.module.css), so a class name can never mean two things
+   on two screens — the current app's `.ing-row` trap. */
+
+*, *::before, *::after { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  font-family: var(--font);
+  font-size: var(--fs-md);
+  line-height: 1.45;
+  color: var(--ink);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+  text-wrap: pretty;
+}
+a { color: var(--accent-ink); text-decoration-thickness: 1px; text-underline-offset: 3px; }
+a:hover { color: var(--accent-press); }
+h1, h2, h3, h4 { margin: 0; letter-spacing: -0.015em; line-height: 1.15; }
+p { margin: 0; }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+/* Lucide icons: 20px by default, stroked 1.8, never shrinking inside a flex row. */
+svg.lucide { width: 20px; height: 20px; stroke-width: 1.8; flex: none; }

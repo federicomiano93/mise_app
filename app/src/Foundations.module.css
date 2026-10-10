@@ -1,0 +1,174 @@
+/* The foundations page. Every colour, radius, shadow and font size is a var(--…) from
+   tokens.css; only layout measures (a 48px swatch, a 640px column) are written here — and
+   the mark's 20px letter, which is the design's own `.rail-mark` measure (no type token is
+   20px; the mark becomes a shared component with the rail in the next step). */
+
+.page {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: var(--s8) var(--s6);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: var(--s4);
+  margin-bottom: var(--s4);
+}
+
+.mark {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--r-md);
+  background: var(--rail);
+  color: var(--rail-ink-strong);
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.04em;
+}
+
+.title {
+  font-size: var(--fs-3xl);
+  font-weight: 650;
+  letter-spacing: -0.03em;
+}
+
+.lead {
+  margin-bottom: var(--s6);
+  color: var(--ink-2);
+  font-size: var(--fs-lg);
+}
+
+.cards {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s4);
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+  padding: var(--s5) var(--s6);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+}
+
+.kicker {
+  color: var(--ink-3);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* Colours */
+
+.swatches {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+  gap: var(--s3);
+}
+
+.swatch {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+  min-width: 0;
+}
+
+.block {
+  height: 48px;
+  margin-bottom: var(--s1);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+}
+
+.swatchName {
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.swatchToken {
+  color: var(--ink-2);
+  font-family: var(--mono);
+  font-size: var(--fs-xs);
+  overflow-wrap: anywhere;
+}
+
+/* Type */
+
+.sample {
+  font-size: var(--fs-2xl);
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+
+.sampleMono {
+  font-family: var(--mono);
+  font-size: var(--fs-lg);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.note {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
+/* Touch */
+
+.touchRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s4);
+}
+
+/* React Aria's Button: state comes from its data attributes, not :hover / :active, so a
+   touch screen never keeps a stuck hover after a tap. Icon and text sit on one flex row,
+   centred on each other. */
+.primary {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  min-height: var(--hit-lg);
+  padding: 0 var(--s6);
+  border: 0;
+  border-radius: var(--r-lg);
+  background: var(--accent);
+  color: var(--on-accent);
+  font: 600 var(--fs-lg)/1 var(--font);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.primary[data-hovered] {
+  background: var(--accent-hover);
+}
+
+.primary[data-pressed] {
+  background: var(--accent-press);
+  transform: translateY(1px);
+}
+
+.primary[data-focus-visible] {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.counter {
+  color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 479.98px) {
+  .page {
+    padding: var(--s6) var(--s4);
+  }
+}

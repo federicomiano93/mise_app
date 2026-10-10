@@ -72,7 +72,7 @@ node scripts/sw-hashes.mjs  # after changing any precached file
 
 ## Releases
 
-`main` accepts only pull requests whose `test` and `rules` checks pass. Every pull
+`main` accepts only pull requests whose `test`, `rules` and `mise2` checks pass. Every pull
 request also gets a preview link that runs on a separate project with test data.
 Merging to `main` publishes the app and deploys the Cloud Functions. Releases are git
 tags (`vMAJOR.MINOR.PATCH`), each with its GitHub Release.

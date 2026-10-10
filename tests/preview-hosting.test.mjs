@@ -38,13 +38,69 @@ test('_site is built from git by an allowlist, never copied from the workspace',
   assert.match(workflow, /if \[ -n "\$\(find _site -type l\)" \]; then/);
 });
 
+// ⚠️ MISE 2 IS BUILT WHERE NO CREDENTIAL EXISTS. Building it installs and runs hundreds of npm
+// packages; the job that deploys can mint a Google credential (`id-token: write`), so any of that
+// code running there could ask for one. The build therefore lives in its own job that may only
+// read the repository, and the deploy job receives the built files — never the source, never an
+// install. Merging the two "to save a minute" is exactly the change these assertions refuse.
+test('Mise 2 is built in a job with no Google identity, and only its built files reach the site', () => {
+  const [beforePreview, fromPreview] = workflow.split('\n  preview:\n');
+  const buildJob = beforePreview.slice(beforePreview.indexOf('\n  build-mise2:\n'));
+  const deployJob = fromPreview.split('\n  comment:\n')[0];
+  assert.match(buildJob, /permissions:\n\s+contents: read\n\s+steps:/);
+  assert.doesNotMatch(buildJob, /id-token|google-github-actions|firebase/);
+  assert.match(buildJob, /npm ci --ignore-scripts\n\s+working-directory: shared/);
+  assert.match(buildJob, /npm ci --ignore-scripts\n\s+working-directory: app/);
+  assert.match(buildJob, /npm run build -- --base=\/mise2\//);
+  assert.match(buildJob, /uses: actions\/checkout@v5\n\s+with:\n\s+persist-credentials: false/);
+
+  assert.match(deployJob, /^\s+needs: build-mise2\n/);
+  // A failed Mise 2 build must never take away the current app's preview (his only check of a
+  // fix before it goes live): the job runs unless cancelled, and only /mise2/ is left out.
+  assert.match(deployJob, /\n {4}if: \$\{\{ !cancelled\(\) && github\.event\.pull_request\.head\.repo\.full_name == github\.repository \}\}\n/);
+  assert.match(deployJob, /- if: needs\.build-mise2\.result == 'success'\n\s+uses: actions\/download-artifact@v8/);
+  assert.match(deployJob, /if \[ -d "\$RUNNER_TEMP\/mise2-site" \]; then\n\s+mv "\$RUNNER_TEMP\/mise2-site" _site\/mise2\n\s+fi/);
+  assert.doesNotMatch(deployJob, /npm (ci|run)\b|\bnpx\b|\bvite\b/,
+    'the job holding the credential builds nothing');
+  assert.deepEqual([...deployJob.matchAll(/npm install[^\n]*/g)].map(m => m[0]),
+    ['npm install --global firebase-tools@15.26.0'],
+    'the one package the credential job installs is the pinned firebase-tools');
+  assert.match(deployJob, /uses: actions\/download-artifact@v8\n\s+with:\n\s+name: mise2-site\n\s+path: \$\{\{ runner\.temp \}\}\/mise2-site/);
+  // Moved in BEFORE the symlink check, so the check covers it too.
+  const stage = deployJob.slice(deployJob.indexOf('Stage only the app\'s files'));
+  assert.ok(stage.indexOf('mv "$RUNNER_TEMP/mise2-site" _site/mise2') > 0);
+  assert.ok(stage.indexOf('mv "$RUNNER_TEMP/mise2-site" _site/mise2') < stage.indexOf('find _site -type l'));
+});
+
+test('the leak check also proves Mise 2\'s source is not served and its page is', () => {
+  const check = workflow.slice(workflow.indexOf('Prove nothing internal is being served'));
+  for (const path of ['app/package.json', 'app/src/main.tsx', 'shared/package.json', 'mise2/package.json']) {
+    assert.ok(check.includes(path), path);
+  }
+  assert.match(check, /MISE2_BUILT: \$\{\{ needs\.build-mise2\.result == 'success' \}\}/);
+  assert.match(check, /if \[ "\$MISE2_BUILT" = true \]; then\n\s+\[ "\$\(code mise2\/index\.html\)" = 200 \]/);
+});
+
+test('the PR comment gives the Mise 2 address, or says it was not built', () => {
+  const commentJob = workflow.split('\n  comment:\n')[1];
+  assert.match(commentJob, /^\s+needs: \[build-mise2, preview\]\n\s+if: \$\{\{ !cancelled\(\) && needs\.preview\.result == 'success' \}\}\n/);
+  assert.match(commentJob, /\$FIXED_URL\/mise2\//);
+  assert.match(commentJob, /non si è costruita/);
+});
+
 test('the deploy job cannot hang for hours', () => {
   assert.match(workflow, /timeout-minutes: 15/);
   assert.match(workflow, /curl -s --max-time 15/);
 });
 
+// EVERY checkout, not the first one found: once a second job (build-mise2) came first in the
+// file, a whole-file match was satisfied by it and stopped watching the job that holds the
+// credential — the one the 30 Sep leak came from.
 test('no credential is left in the workspace for anything to pick up', () => {
-  assert.match(workflow, /uses: actions\/checkout@v5\n\s+with:\n\s+persist-credentials: false/);
+  const checkouts = workflow.match(/uses: actions\/checkout@[^\n]*/g) || [];
+  const safe = workflow.match(/uses: actions\/checkout@v5\n\s+with:\n\s+persist-credentials: false/g) || [];
+  assert.equal(checkouts.length, 2, 'build-mise2 and preview each check out once');
+  assert.equal(safe.length, checkouts.length, 'every checkout must say persist-credentials: false');
   assert.match(workflow, /--json > "\$RUNNER_TEMP\/channel\.json"/);
 });
 
