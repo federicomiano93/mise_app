@@ -433,6 +433,10 @@ export function markLoaded(): void {
 // The shell calls this on every route change, with the id of the section now shown (`orders`,
 // `recipes`, `more`, `settings`, `not-found`…); '' means the app's own front. Nothing is thrown
 // where there is no window.
+//
+// ⚠️ THE RECORD ACCEPTS ONLY lower-case letters, digits, «:» and «-», and at most 40 characters
+// for the whole name, «m2:» included: a section id must be 37 characters or fewer. Anything else
+// is silently not counted, so a new section's id is checked when the section is added.
 export function announceScreen(view: string): void {
   globalThis.window?.dispatchEvent(new CustomEvent(SCREEN_EVENT, { detail: view }));
 }
