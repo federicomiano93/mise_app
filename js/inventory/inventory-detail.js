@@ -37,7 +37,8 @@ function num(value, locale) {
 }
 
 // ⚠️ A BOX A PERSON EDITS NEVER SHOWS A THOUSANDS SEPARATOR (4 Oct 2026). num() above writes
-// 1234.5 as «1,234.5» (English) or «1.234,5» (Italian); readCount() reads ONE mark as the decimal,
+// 1234.5 as «1,234.5» (English) and 12345.5 as «12.345,5» (Italian groups only from five digits);
+// readCount() reads ONE mark as the decimal,
 // so the grouped text came back unreadable («not counted»), or worse — «1,234.5» edited to «1,235»
 // was read as 1.235, a thousand times less, with nothing on screen to say so.
 function boxNum(value, locale) {
