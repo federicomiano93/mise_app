@@ -52,13 +52,13 @@ test('Mise 2 is built in a job with no Google identity, and only its built files
   assert.match(buildJob, /npm ci --ignore-scripts\n\s+working-directory: shared/);
   assert.match(buildJob, /npm ci --ignore-scripts\n\s+working-directory: app/);
   assert.match(buildJob, /npm run build -- --base=\/mise2\//);
-  assert.match(buildJob, /uses: actions\/checkout@v5\n\s+with:\n\s+persist-credentials: false/);
+  assert.match(buildJob, /uses: actions\/checkout@[^\n]*\n\s+with:\n\s+persist-credentials: false/);
 
   assert.match(deployJob, /^\s+needs: build-mise2\n/);
   // A failed Mise 2 build must never take away the current app's preview (his only check of a
   // fix before it goes live): the job runs unless cancelled, and only /mise2/ is left out.
-  assert.match(deployJob, /\n {4}if: \$\{\{ !cancelled\(\) && github\.event\.pull_request\.head\.repo\.full_name == github\.repository \}\}\n/);
-  assert.match(deployJob, /- if: needs\.build-mise2\.result == 'success'\n\s+uses: actions\/download-artifact@v8/);
+  assert.match(deployJob, /\n {4}if: \$\{\{ !cancelled\(\) && github\.event\.pull_request\.head\.repo\.full_name == github\.repository && github\.event\.pull_request\.user\.login != 'dependabot\[bot\]' \}\}\n/);
+  assert.match(deployJob, /- if: needs\.build-mise2\.result == 'success'\n\s+uses: actions\/download-artifact@/);
   assert.match(deployJob, /if \[ -d "\$RUNNER_TEMP\/mise2-site" \]; then\n\s+mv "\$RUNNER_TEMP\/mise2-site" _site\/mise2\n\s+fi/);
   assert.doesNotMatch(deployJob, /npm (install|run)\b|\bnpx\b|\bvite\b/,
     'the job holding the credential builds nothing');
@@ -68,7 +68,7 @@ test('Mise 2 is built in a job with no Google identity, and only its built files
      'ln -s "$PWD/node_modules/.bin/firebase" "$RUNNER_TEMP/firebase-cli/firebase" ' +
      'echo "$RUNNER_TEMP/firebase-cli" >> "$GITHUB_PATH" working-directory: ci/firebase-tools'],
     'the one thing the credential job installs is firebase-tools from its lockfile, with no install scripts');
-  assert.match(deployJob, /uses: actions\/download-artifact@v8\n\s+with:\n\s+name: mise2-site\n\s+path: \$\{\{ runner\.temp \}\}\/mise2-site/);
+  assert.match(deployJob, /uses: actions\/download-artifact@[^\n]*\n\s+with:\n\s+name: mise2-site\n\s+path: \$\{\{ runner\.temp \}\}\/mise2-site/);
   // Moved in BEFORE the symlink check, so the check covers it too.
   const stage = deployJob.slice(deployJob.indexOf('Stage only the app\'s files'));
   assert.ok(stage.indexOf('mv "$RUNNER_TEMP/mise2-site" _site/mise2') > 0);
@@ -103,7 +103,7 @@ test('the deploy job cannot hang for hours', () => {
 // credential — the one the 30 Sep leak came from.
 test('no credential is left in the workspace for anything to pick up', () => {
   const checkouts = workflow.match(/uses: actions\/checkout@[^\n]*/g) || [];
-  const safe = workflow.match(/uses: actions\/checkout@v5\n\s+with:\n\s+persist-credentials: false/g) || [];
+  const safe = workflow.match(/uses: actions\/checkout@[^\n]*\n\s+with:\n\s+persist-credentials: false/g) || [];
   assert.equal(checkouts.length, 2, 'build-mise2 and preview each check out once');
   assert.equal(safe.length, checkouts.length, 'every checkout must say persist-credentials: false');
   assert.match(workflow, /--json > "\$RUNNER_TEMP\/channel\.json"/);
