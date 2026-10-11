@@ -21,6 +21,8 @@ name: Preview
 # that fails — and takes the channel down — if anything internal answers.
 #
 # This job is NOT a required check: a broken preview must never block a fix from shipping.
+#
+# Every `uses:` is pinned to a commit, never a tag (why: the top of test.yml).
 
 on:
   pull_request:
@@ -38,17 +40,24 @@ jobs:
   # mint a credential for the preview project (`id-token: write`), and any code running there
   # could ask for one too. Here nothing can: this job may only read the repository, and what it
   # hands on is the built files, nothing else. Never merge the two jobs to save a minute.
+  #
+  # The monthly ACTIONS pull request (.github/dependabot.yml, branch `dependabot/github_actions/…`)
+  # gets no preview: it moves only the actions this file and test.yml run, so there is nothing to
+  # see on a phone, and it would take over the fixed `anteprima` link below on the first of every
+  # month. Its `test`, `rules` and `mise2` checks still run. Dependabot's npm SECURITY pull
+  # requests keep their preview — for ci/firebase-tools/ it is the run that proves the deploy
+  # commands before production's.
   build-mise2:
-    if: github.event.pull_request.head.repo.full_name == github.repository
+    if: github.event.pull_request.head.repo.full_name == github.repository && !startsWith(github.head_ref, 'dependabot/github_actions/')
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           persist-credentials: false
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version: '22'
       # The lockfiles decide; no package may run code while it installs.
@@ -59,7 +68,7 @@ jobs:
       # Served at /mise2/ on the preview, beside the current app at the root.
       - run: npm run build -- --base=/mise2/
         working-directory: app
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: mise2-site
           path: app/dist
@@ -76,7 +85,8 @@ jobs:
     # Mise 2 build (or an npm registry blip) would take away the preview link of every fix to
     # the app staff use today — and that link is how he checks a fix on his phone before it
     # goes live. A failed build only leaves /mise2/ out; `cancelled` still stops everything.
-    if: ${{ !cancelled() && github.event.pull_request.head.repo.full_name == github.repository }}
+    # The monthly actions pull request is left out here too (why: above build-mise2).
+    if: ${{ !cancelled() && github.event.pull_request.head.repo.full_name == github.repository && !startsWith(github.head_ref, 'dependabot/github_actions/') }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -86,16 +96,16 @@ jobs:
       url: ${{ steps.deploy.outputs.url }}
       fixed_url: ${{ steps.deploy.outputs.fixed_url }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           persist-credentials: false
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version: '22'
 
       # Mise 2's built files from the job above — outside the workspace until staged below.
       - if: needs.build-mise2.result == 'success'
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: mise2-site
           path: ${{ runner.temp }}/mise2-site
@@ -153,7 +163,7 @@ jobs:
       # and the service account's IAM policy (…/attribute.repository/federicomiano93/mise_app).
       # Renaming the repository breaks this job until BOTH are repointed.
       - name: Sign in to Google (no key) — the PREVIEW project only
-        uses: google-github-actions/auth@v2
+        uses: google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed # v2.1.13
         with:
           project_id: mise-app-preview
           workload_identity_provider: projects/863348756512/locations/global/workloadIdentityPools/github-pool/providers/github-oidc
