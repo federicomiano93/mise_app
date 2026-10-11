@@ -128,12 +128,15 @@ jobs:
       # lockfile, those packages were resolved afresh on every run. `--ignore-scripts` is the
       # protection, the order only helps; both are pinned by tests/ci-install-before-sign-in.test.mjs.
       # Not covered: firebase-tools' own code still runs with the credential during the deploy —
-      # it is the deploy tool. `ci/` is never staged into _site (the allowlist above does not name
-      # it), and the leak check below proves it.
+      # it is the deploy tool. Only the `firebase` command goes on PATH, never the whole
+      # node_modules/.bin (why: test.yml, deploy-functions). `ci/` is never staged into _site (the
+      # allowlist above does not name it), and the leak check below proves it.
       - name: Install firebase-tools from its lockfile (before the sign-in, no install scripts)
         run: |
           npm ci --ignore-scripts
-          echo "$GITHUB_WORKSPACE/ci/firebase-tools/node_modules/.bin" >> "$GITHUB_PATH"
+          mkdir -p "$RUNNER_TEMP/firebase-cli"
+          ln -s "$PWD/node_modules/.bin/firebase" "$RUNNER_TEMP/firebase-cli/firebase"
+          echo "$RUNNER_TEMP/firebase-cli" >> "$GITHUB_PATH"
         working-directory: ci/firebase-tools
 
       # ⚠️ The trust is pinned to this repository on Google's side, in TWO places, exactly like

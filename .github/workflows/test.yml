@@ -55,19 +55,17 @@ jobs:
       - name: Vulnerability check of the build tool (P11)
         run: npm audit --audit-level=high
 
-      # ⚠️ CI's OWN firebase-tools (ci/firebase-tools/, the copy the three jobs below run) is
-      # checked at `critical`, NOT `high` — ON PURPOSE. Its tree carries 7 HIGH advisories in
-      # every firebase-tools release up to the newest (15.33.0, measured 11 Oct 2026), all of
-      # them denial of service: basic-ftp (reached only through an FTP proxy setting) and braces
-      # (file-watch patterns) — code CI never feeds hostile input, with no fixed release to move
-      # to, so `high` would be red for ever and teach everybody to ignore it. What that lockfile
-      # exists to stop is a HIJACKED package, and an advisory for a malicious package is
-      # published as critical: it turns every PR and the push to main red, and deploy-functions
-      # (which needs this job) cannot run. It only knows what has been reported — the lockfile
-      # itself is the protection. Dependabot reads the same lockfile and reports every level.
+      # ⚠️ CI's OWN firebase-tools (ci/firebase-tools/ — the copy `rules` and deploy-functions
+      # below and preview.yml run) needs a gate of its own, NOT `npm audit --audit-level=…`:
+      # `high` is red for ever (two denial-of-service advisories no firebase-tools release
+      # fixes), and `critical` misses a HIJACKED package — the September 2025 takeovers of
+      # debug and color-convert were published as HIGH. The script fails on any «malicious
+      # code» advisory at any severity and on any high or critical except the two it names
+      # with their reasons; why each is harmless to CI is written there. A failure turns every
+      # PR and the push to main red, and deploy-functions (which needs this job) cannot run.
+      # It reads the lockfile only, no install. Dependabot reports every level as well.
       - name: Vulnerability check of CI's firebase-tools (P11)
-        run: npm audit --audit-level=critical
-        working-directory: ci/firebase-tools
+        run: node scripts/audit-ci-firebase-tools.mjs
 
   # The security rules are the app's ONLY boundary between two businesses sharing
   # one database, and until now their suite ran only when somebody remembered to
@@ -105,15 +103,17 @@ jobs:
       # re-run the suite locally when you do.
       #
       # Exactly the install the two jobs that hold a Google credential use
-      # (deploy-functions below, preview.yml) — the lockfile, no install scripts —
-      # so this job proves on every push that the locked firebase-tools still runs
+      # (deploy-functions below, preview.yml) — the lockfile, no install scripts,
+      # only `firebase` on PATH (why: deploy-functions) — so this job proves on every push that the locked firebase-tools still runs
       # the emulator without its install scripts. (The deploy commands are proven by
       # each PR's Preview run and, for functions, by deploy-functions after the
       # merge.) Change one, change all three.
       - name: Install firebase-tools from its lockfile (no install scripts)
         run: |
           npm ci --ignore-scripts
-          echo "$GITHUB_WORKSPACE/ci/firebase-tools/node_modules/.bin" >> "$GITHUB_PATH"
+          mkdir -p "$RUNNER_TEMP/firebase-cli"
+          ln -s "$PWD/node_modules/.bin/firebase" "$RUNNER_TEMP/firebase-cli/firebase"
+          echo "$RUNNER_TEMP/firebase-cli" >> "$GITHUB_PATH"
         working-directory: ci/firebase-tools
 
       # --project demo-theitalianclub: firebase-tools treats a `demo-` prefix as
@@ -280,9 +280,15 @@ jobs:
       # ⚠️ AND THE LOCKFILE IS WHAT KEEPS A NEW VERSION OUT. firebase-tools ships
       # no npm-shrinkwrap.json, so the global `npm install firebase-tools@15.26.0`
       # this step replaced (October 2026) resolved its ~670 packages afresh on every
-      # run: a hijacked new patch of any of them would have RUN during the deploy
+      # run: a hijacked new patch of any of them could have run during the deploy
       # below, with the credential. ci/firebase-tools/package-lock.json fixes every
       # version and its integrity hash; a new one arrives only through a reviewed PR.
+      #
+      # ⚠️ ONLY THE `firebase` COMMAND GOES ON PATH — a link in $RUNNER_TEMP, never
+      # the whole node_modules/.bin. GITHUB_PATH puts a folder AHEAD of the system's
+      # for every later step, post-steps included, and that folder holds ~30 other
+      # names (glob, semver, rimraf, node-gyp…): one day's tree could carry a `git`
+      # or a `curl` and silently replace it in the steps that hold the credential.
       #
       # What it does NOT cover: the code of firebase-tools and of the functions'
       # packages still RUNS with the credential during the deploy — it is the
@@ -290,7 +296,9 @@ jobs:
       - name: Install firebase-tools from its lockfile (before the sign-in, no install scripts)
         run: |
           npm ci --ignore-scripts
-          echo "$GITHUB_WORKSPACE/ci/firebase-tools/node_modules/.bin" >> "$GITHUB_PATH"
+          mkdir -p "$RUNNER_TEMP/firebase-cli"
+          ln -s "$PWD/node_modules/.bin/firebase" "$RUNNER_TEMP/firebase-cli/firebase"
+          echo "$RUNNER_TEMP/firebase-cli" >> "$GITHUB_PATH"
         working-directory: ci/firebase-tools
 
       # ⚠️ THE TRUST IS PINNED TO THIS REPOSITORY, on Google's side, in TWO

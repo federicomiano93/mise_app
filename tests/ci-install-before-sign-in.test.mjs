@@ -94,8 +94,17 @@ test('every install in those jobs is npm ci / npm install with --ignore-scripts'
 });
 
 // The one way CI gets firebase-tools: a step of its own that installs the locked tree with no
-// install scripts and puts its binaries on PATH for the steps after it.
-const LOCKED_INSTALL = /\n {6}- name: [^\n]+\n {8}run: \|\n {10}npm ci --ignore-scripts\n {10}echo "\$GITHUB_WORKSPACE\/ci\/firebase-tools\/node_modules\/\.bin" >> "\$GITHUB_PATH"\n {8}working-directory: ci\/firebase-tools\n/g;
+// install scripts and puts ONLY the `firebase` command on PATH for the steps after it — never the
+// whole node_modules/.bin, whose other names would sit ahead of the system's commands.
+const LOCKED_INSTALL = new RegExp([
+  '\\n {6}- name: [^\\n]+',
+  ' {8}run: \\|',
+  ' {10}npm ci --ignore-scripts',
+  ' {10}mkdir -p "\\$RUNNER_TEMP/firebase-cli"',
+  ' {10}ln -s "\\$PWD/node_modules/\\.bin/firebase" "\\$RUNNER_TEMP/firebase-cli/firebase"',
+  ' {10}echo "\\$RUNNER_TEMP/firebase-cli" >> "\\$GITHUB_PATH"',
+  ' {8}working-directory: ci/firebase-tools\\n',
+].join('\\n'), 'g');
 // A step that RUNS the CLI (not a path or a cache key that merely names firebase-tools).
 const RUNS_FIREBASE = /(^|[\s;&|(])firebase\s/m;
 
@@ -125,8 +134,9 @@ test('every job that runs firebase installs it from the lockfile first, and noth
   for (const w of workflows) {
     const all = code(w.yaml);
     assert.doesNotMatch(all, /firebase-tools@/, `${w.file}: firebase-tools by version, outside its lockfile`);
-    assert.doesNotMatch(all, /\bnpx\b[^\n]*\bfirebase/, `${w.file}: npx fetches firebase-tools with no lockfile`);
-    assert.doesNotMatch(all, /\bnpm (install|i|add)\b[^\n]*\s(-g|--global)\b/, `${w.file}: a global install has no lockfile`);
+    assert.doesNotMatch(all, /\b(npx|pnpx|bunx|npm (exec|x))\b[^\n]*\bfirebase/, `${w.file}: fetches firebase-tools with no lockfile`);
+    assert.doesNotMatch(all, /\bnpm\b[^\n]*\s(-g|--global|--location[= ]global)\b/, `${w.file}: a global install has no lockfile`);
+    assert.doesNotMatch(all, /node_modules\/\.bin["']? >> ["']?\$GITHUB_PATH/, `${w.file}: a whole .bin folder on PATH`);
   }
 });
 
@@ -157,6 +167,8 @@ test('the lockfile matches package.json, and every package comes from the npm re
   assert.ok(entries.length > 500, `only ${entries.length} packages — is this the whole tree?`);
   for (const [path, entry] of entries) {
     assert.ok(path.startsWith('node_modules/') && !entry.link, `${path}: not a registry package`);
+    // `npm install --package-lock-only` once left one behind; `npm prune` removes it.
+    assert.ok(!entry.extraneous, `${path}: extraneous — nothing depends on it`);
     assert.match(entry.resolved ?? '', /^https:\/\/registry\.npmjs\.org\//, `${path}: ${entry.resolved}`);
     assert.match(entry.integrity ?? '', /^sha512-/, `${path}: no sha512 integrity hash`);
   }
@@ -166,11 +178,21 @@ test('the emulator cache key follows the locked version', () => {
   assert.match(read('.github/workflows/test.yml'), new RegExp(`\\n {10}key: firebase-emulators-${version.replace(/\./g, '\\.')}\\n`));
 });
 
-// At `critical`, not `high`: why is written beside the step (7 unfixable denial-of-service HIGHs
-// in firebase-tools' own tree; a hijacked package is published as critical).
-test('the test job audits the lockfile, so deploy-functions cannot run past a critical advisory', () => {
-  const testJob = workflows.find((w) => w.file === 'test.yml').jobs.find((job) => job.id === 'test.yml: test');
-  assert.match(code(testJob.text), /\n {8}run: npm audit --audit-level=critical\n {8}working-directory: ci\/firebase-tools\n/);
-  const deploy = workflows.find((w) => w.file === 'test.yml').jobs.find((job) => job.id === 'test.yml: deploy-functions');
+// Its own gate, not `npm audit --audit-level=…` (why: scripts/audit-ci-firebase-tools.mjs and
+// tests/audit-ci-firebase-tools.test.mjs). The WHOLE step is pinned, line by line: an `if:` or a
+// `continue-on-error:` slipped into it would keep the step and drop the gate.
+test('the test job runs the firebase-tools gate, unconditionally, so deploy-functions cannot run past it', () => {
+  const testYml = workflows.find((w) => w.file === 'test.yml');
+  const testJob = code(testYml.jobs.find((job) => job.id === 'test.yml: test').text);
+  const start = testJob.indexOf("\n      - name: Vulnerability check of CI's firebase-tools (P11)\n");
+  assert.ok(start >= 0, 'no firebase-tools vulnerability step in the test job');
+  const next = testJob.slice(start + 1).search(/\n {6}- /);
+  const step = (next < 0 ? testJob.slice(start + 1) : testJob.slice(start + 1, start + 1 + next))
+    .split('\n').filter((line) => line.trim() !== '');
+  assert.deepEqual(step.map((line) => line.trim()),
+    ["- name: Vulnerability check of CI's firebase-tools (P11)", 'run: node scripts/audit-ci-firebase-tools.mjs']);
+  // Nor at the job's level.
+  assert.doesNotMatch(testJob, /^ {4}(if|continue-on-error):/m);
+  const deploy = testYml.jobs.find((job) => job.id === 'test.yml: deploy-functions');
   assert.match(deploy.text, /\n {4}needs: \[test, rules\]\n/);
 });
