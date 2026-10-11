@@ -84,7 +84,7 @@ globalThis.document = {
 // Imported AFTER the document exists: js/inventory/dom.js calls
 // document.createElement the moment the list is built.
 const { renderList } = await import('../js/inventory/inventory-list.js');
-const { normalizeMonth } = await import('../js/inventory/inventory-model.js');
+const { normalizeMonth, readCount } = await import('../js/inventory/inventory-model.js');
 
 // Everything in the tree, so a row can be found without a real querySelector.
 function walk(node, out = []) {
@@ -115,7 +115,7 @@ function mount(products = THREE, options = {}) {
   const list = renderList({
     month: current,
     ingredients: products,
-    locale: 'it-IT',
+    locale: options.locale || 'it-IT',
     readOnly: false,
     onOpen: () => {},
     onCarry: () => {},
@@ -192,6 +192,26 @@ test('the count box is written back in the venue\'s own format, once the finger 
   const box = boxesOf(list.root)[0];
   box.fire('change', { target: { value: '3.5' } });
   assert.equal(box.value, '3,5', 'Italian reads three and a half with a comma');
+});
+
+test('⚠️ a count of a thousand or more that lands by a refresh is written without grouping', () => {
+  // A save landing, or another phone counting, rewrites a box nobody is typing into — and
+  // that box is the next one somebody edits. readCount() takes ONE mark as the decimal, so a
+  // grouped «1,234» edited to «1,235» was saved as 1.235 (tests/inventory-count-box.test.mjs).
+  // ⚠️ Italian groups only from FIVE digits: 1234.5 is «1234,5» even through the grouping
+  // formatter, so only 12345.5 catches the defect coming back for an Italian venue.
+  for (const [locale, value, shown] of [
+    ['en-GB', 1234.5, '1234.5'], ['it-IT', 1234.5, '1234,5'],
+    ['en-GB', 12345.5, '12345.5'], ['it-IT', 12345.5, '12345,5'],
+  ]) {
+    const { list, ingredients } = mount(THREE, { locale });
+    const box = boxesOf(list.root)[0];
+    list.refresh(month({ flour: value }), ingredients);
+    assert.equal(boxesOf(list.root)[0], box,
+      'the same box, rewritten in place — the refresh path, not the first paint');
+    assert.equal(box.value, shown, `${locale} ${value}`);
+    assert.equal(readCount(box.value), value, `${locale}: what the box shows reads back as the count`);
+  }
 });
 
 test('⚠️ the box being typed into is never written into while it has the focus', () => {
