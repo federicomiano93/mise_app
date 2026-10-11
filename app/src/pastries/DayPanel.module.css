@@ -1,0 +1,194 @@
+/* One day: its name, its list, its note, and the Confirm button. A card on every width; from
+   1000px it is the right-hand pane of the split (the design's `.detail`), with the room of one. */
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+}
+
+.head {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s4);
+  padding: var(--s4) var(--s4) var(--s3);
+}
+
+.headText {
+  flex: 1;
+  min-width: 0;
+}
+
+.title {
+  font-size: var(--fs-xl);
+  font-weight: 650;
+}
+
+.meta {
+  margin-top: 6px;
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
+/* The pencil: an icon button, the same family as the secondary button. `bare` gives it the keyboard
+   and press behaviour and none of the look, which is all here. */
+.pencil {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: var(--hit);
+  min-height: var(--hit);
+  padding: 0;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.pencil[data-hovered] {
+  background: var(--bg);
+}
+
+.pencil[data-pressed] {
+  background: var(--sunken);
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s4);
+  padding: 0 var(--s4) var(--s4);
+}
+
+.list {
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--line);
+  list-style: none;
+}
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+  padding: var(--s6) 0;
+}
+
+.emptyTitle {
+  font-weight: 600;
+}
+
+.emptyHint {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
+/* The standing note of the day. Its line breaks are the writer's own. */
+.note {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+  padding: var(--s3) var(--s4);
+  border-radius: var(--r-md);
+  background: var(--sunken);
+}
+
+.noteLabel {
+  color: var(--ink-2);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.noteText {
+  overflow-wrap: anywhere;
+  white-space: pre-line;
+}
+
+/* The bottom row (the design's `.sumbar`): Confirm, or the «Confirmed» mark and Edit. It sticks to
+   the bottom of the scrolling area at every width, so Confirm is always on screen.
+
+   ⚠️ IT STICKS BECAUSE NOTHING BETWEEN IT AND THE SCROLL AREA CLIPS. The scroll area is the shell's
+   `main` (AppShell.module.css `.content`: `overflow: auto`), which ends where the phone's tab bar
+   begins, so the row can never sit behind the bar. An `overflow` set on the panel, the layout or
+   a boundary around it would silently turn this into an ordinary row at the end of a long list:
+   pastries-css.spec.ts pins it. */
+.bar {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  padding: var(--s4);
+  border-top: 1px solid var(--line);
+  background: var(--surface);
+}
+
+/* After the bottom row, in the normal flow: the end of the panel. */
+.foot {
+  display: flex;
+  justify-content: center;
+  padding: var(--s2) var(--s4) var(--s4);
+}
+
+/* «Confirmed» and the Edit button: shown in place of Confirm once the day is recorded. */
+.done {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+}
+
+.doneMark {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  color: var(--ok-ink);
+  font-weight: 600;
+}
+
+/* A quiet link to Records, centred under the button: a place to go, not an action of this day. */
+.records {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s2);
+  min-height: var(--hit);
+  border-radius: var(--r-md);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+@media (hover: hover) {
+  .records:hover {
+    background: var(--sunken);
+  }
+}
+
+@media (min-width: 1000px) {
+  .head {
+    padding: var(--s6) var(--s8) var(--s4);
+  }
+
+  .title {
+    font-size: var(--fs-2xl);
+  }
+
+  .body {
+    padding: 0 var(--s8) var(--s6);
+  }
+
+  .bar {
+    padding: var(--s4) var(--s8);
+  }
+
+  .foot {
+    padding: var(--s2) var(--s8) var(--s4);
+  }
+}

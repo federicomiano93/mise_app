@@ -1,0 +1,134 @@
+/* One row of a day's list. The name is read, the number is read down a column: tabular digits,
+   and bigger from 1000px, where the tablet stands on a bench and is read from an arm's length. */
+
+.row {
+  border-bottom: 1px solid var(--line);
+}
+
+.row[data-open="true"] {
+  background: var(--accent-tint);
+}
+
+.main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s4);
+  width: 100%;
+  min-height: 64px;
+  padding: var(--s2) var(--s2);
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: var(--fs-lg);
+  font-weight: 600;
+}
+
+.qty {
+  flex: none;
+  font-size: var(--fs-xl);
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (hover: hover) {
+  .row[data-open="false"] .main:not([aria-disabled="true"]):hover {
+    background: var(--sunken);
+  }
+}
+
+/* Waiting for the first live answer: drawn as usual, but a tap does nothing. */
+.main[aria-disabled="true"] {
+  cursor: default;
+}
+
+/* The box, the tick and the hint under an open row. */
+.edit {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s3);
+  padding: 0 var(--s2) var(--s3);
+}
+
+.arrow {
+  color: var(--ink-2);
+  font-size: var(--fs-lg);
+  font-variant-numeric: tabular-nums;
+}
+
+.input {
+  width: 120px;
+  min-height: var(--hit);
+  padding: 0 var(--s4);
+  border: 1.5px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink);
+  font: 450 var(--fs-lg) var(--font);
+  font-variant-numeric: tabular-nums;
+}
+
+.input::placeholder {
+  color: var(--ink-3);
+}
+
+.input:focus {
+  border-color: var(--accent);
+}
+
+.tick {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--hit);
+  height: var(--hit);
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-md);
+  background: var(--accent);
+  color: var(--on-accent);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+@media (hover: hover) {
+  .tick:hover {
+    background: var(--accent-hover);
+  }
+}
+
+/* The line is kept even when it says nothing, so the row does not change height under a finger. */
+.hint {
+  flex-basis: 100%;
+  min-height: calc(var(--fs-sm) * 1.45);
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
+@media (min-width: 1000px) {
+  .row {
+    padding: 0 var(--s2);
+  }
+
+  .main {
+    min-height: 72px;
+  }
+
+  .name {
+    font-size: var(--fs-xl);
+  }
+
+  .qty {
+    font-size: var(--fs-3xl);
+  }
+}

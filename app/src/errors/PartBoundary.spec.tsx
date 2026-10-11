@@ -6,6 +6,7 @@ import { MemoryRouter } from 'react-router';
 import { it as italian } from '../i18n/it';
 import { I18nProvider } from '../i18n/I18nProvider';
 import { PartBoundary } from './PartBoundary';
+import { ScreenLoadError } from './ScreenLoadError';
 
 // The child throws while `broken` is true. A flag, not a prop, so a test can "fix" the part
 // without re-rendering the boundary — which is what pressing Reload has to cope with.
@@ -177,6 +178,77 @@ describe('PartBoundary', () => {
 
       expect(screen.getByRole('heading', { name: 'the screen' })).not.toHaveFocus();
       expect(document.body).toHaveFocus();
+    });
+  });
+
+  // ⚠️ React.lazy and the browser both remember a failed dynamic import for the life of the page, so
+  // drawing a screen whose download failed again only rethrows the same error: «Reload» has to
+  // reload the page for it, and only for it.
+  describe('a screen that could not be downloaded', () => {
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
+
+    function Gone(): never {
+      throw new ScreenLoadError(new Error('Failed to fetch dynamically imported module'));
+    }
+
+    it('reloads the PAGE when Reload is pressed, and does not redraw the screen', async () => {
+      const reload = vi.fn();
+      vi.stubGlobal('location', { ...window.location, reload });
+      const user = userEvent.setup();
+      render(<PartBoundary><Gone /></PartBoundary>);
+
+      await user.click(screen.getByRole('button', { name: 'Reload' }));
+
+      expect(reload).toHaveBeenCalledTimes(1);
+      expect(screen.getByRole('status')).toHaveTextContent('This part didn’t load.');
+    });
+
+    it('says the same words as for any other failure', () => {
+      render(<PartBoundary><Gone /></PartBoundary>);
+      expect(screen.getByRole('status')).toHaveTextContent('This part didn’t load.');
+      expect(screen.getByRole('status')).toHaveTextContent('The rest of the screen works.');
+      expect(screen.getByRole('button', { name: 'Reload' })).toBeInTheDocument();
+    });
+
+    it('keeps the download error as its cause, for whoever reads the report', () => {
+      const original = new Error('Failed to fetch dynamically imported module');
+      expect(new ScreenLoadError(original).cause).toBe(original);
+    });
+
+    it('does NOT reload the page for any other failure: that one is redrawn', async () => {
+      const reload = vi.fn();
+      vi.stubGlobal('location', { ...window.location, reload });
+      const user = userEvent.setup();
+      render(<PartBoundary><Flaky /></PartBoundary>);
+
+      broken = false;
+      await user.click(screen.getByRole('button', { name: 'Reload' }));
+
+      expect(reload).not.toHaveBeenCalled();
+      expect(screen.getByText('the part works')).toBeInTheDocument();
+    });
+
+    it('goes back to redrawing once another section has cleared the failure with resetKey', async () => {
+      const reload = vi.fn();
+      vi.stubGlobal('location', { ...window.location, reload });
+      const user = userEvent.setup();
+      let gone = true;
+      function Sometimes() {
+        if (gone) return <Gone />;
+        if (broken) throw failure;
+        return <p>the part works</p>;
+      }
+      const { rerender } = render(<PartBoundary resetKey="pastries"><Sometimes /></PartBoundary>);
+      expect(screen.getByRole('status')).toBeInTheDocument();
+
+      gone = false;
+      rerender(<PartBoundary resetKey="orders"><Sometimes /></PartBoundary>);
+      expect(screen.getByRole('status')).toBeInTheDocument();
+
+      await user.click(screen.getByRole('button', { name: 'Reload' }));
+      expect(reload).not.toHaveBeenCalled();
     });
   });
 

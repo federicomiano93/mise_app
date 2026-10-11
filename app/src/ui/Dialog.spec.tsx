@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Dialog } from './Dialog';
 
@@ -21,6 +21,19 @@ describe('Dialog', () => {
     draw({ role: 'alertdialog', message: 'You will lose it.' });
     const dialog = screen.getByRole('alertdialog', { name: 'Discard?' });
     expect(dialog).toHaveAccessibleDescription('You will lose it.');
+  });
+
+  it('shows several sentences as paragraphs of their own, all describing the dialog', () => {
+    draw({ role: 'alertdialog', message: ['First sentence.', 'Second sentence.'] });
+    const dialog = screen.getByRole('alertdialog', { name: 'Discard?' });
+    expect(within(dialog).getByText('First sentence.').tagName).toBe('P');
+    expect(within(dialog).getByText('Second sentence.').tagName).toBe('P');
+    expect(dialog).toHaveAccessibleDescription(/First sentence\.\s+Second sentence\./);
+  });
+
+  it('is not described by anything when it has no message', () => {
+    draw({ role: 'alertdialog' });
+    expect(screen.getByRole('alertdialog')).not.toHaveAttribute('aria-describedby');
   });
 
   it('shows its body and its actions', () => {
