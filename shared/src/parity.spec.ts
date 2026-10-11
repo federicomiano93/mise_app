@@ -1,11 +1,14 @@
-// The twelve TypeScript models and the js/ files the live app runs today must stay the SAME
+// The fourteen TypeScript models and the js/ files the live app runs today must stay the SAME
 // thing, until the switch to Mise 2 retires the js/ ones. The behaviour specs next to each model
 // run every test against both; this file checks what a behaviour test cannot see — that the two
 // export the same names, the same constants, the same frozen-ness and the same function shapes.
 //
-// membership.ts and location-id.ts are NOT paired here: they are partial ports (the pure half of
-// js/roles.js and js/location.js), so the js/ files export more by design; their specs run every
-// test against both files instead.
+// membership.ts, location-id.ts and pastries-model.ts are NOT paired here: they are partial ports
+// (the pure half of js/roles.js and js/location.js; and everything in js/pastries/pastries-model.js
+// except weekdayLabel and weekdayShortLabel, which look a word up in the interface dictionary that
+// in Mise 2 belongs to the app), so the js/ files export more by design; their specs run every
+// test against both files instead (pastries-model.spec.ts also compares the names, constants,
+// frozen-ness and function shapes of everything it does port).
 //
 // ⚠️ IT IS WHAT CATCHES A FIX MADE TO js/ AND FORGOTTEN HERE. A constant changed in one file
 // (a new allergen, a new push kind, a new card) is invisible to every behavioural test that does
@@ -24,6 +27,8 @@ import * as sameData from './same-data';
 import * as errorModel from './error-model';
 import * as deviceModel from './device-model';
 import * as usageModel from './usage-model';
+import * as pastriesLogModel from './pastries-log-model';
+import * as pastriesLock from './pastries-lock';
 import * as legacyJoinCode from '../../js/join-code.js';
 import * as legacyPushModel from '../../js/push-model.js';
 import * as legacyHomeCards from '../../js/home-cards.js';
@@ -36,6 +41,8 @@ import * as legacySameData from '../../js/same-data.js';
 import * as legacyErrorModel from '../../js/error-model.js';
 import * as legacyDeviceModel from '../../js/device-model.js';
 import * as legacyUsageModel from '../../js/usage-model.js';
+import * as legacyPastriesLogModel from '../../js/pastries/pastries-log-model.js';
+import * as legacyPastriesLock from '../../js/pastries/pastries-lock.js';
 
 const PAIRS: readonly (readonly [string, object, object])[] = [
   ['join-code', joinCode, legacyJoinCode],
@@ -50,6 +57,8 @@ const PAIRS: readonly (readonly [string, object, object])[] = [
   ['error-model', errorModel, legacyErrorModel],
   ['device-model', deviceModel, legacyDeviceModel],
   ['usage-model', usageModel, legacyUsageModel],
+  ['pastries-log-model', pastriesLogModel, legacyPastriesLogModel],
+  ['pastries-lock', pastriesLock, legacyPastriesLock],
 ];
 
 const exportsOf = (module: object): Record<string, unknown> => module as Record<string, unknown>;
@@ -108,8 +117,8 @@ describe.each(PAIRS)('parity: %s', (_name, tsModule, jsModule) => {
   });
 });
 
-test('all twelve models are compared', () => {
+test('all fourteen models are compared', () => {
   expect(PAIRS.map(([name]) => name)).toStrictEqual(
     ['join-code', 'push-model', 'home-cards', 'away-model', 'allergen-model', 'sections', 'firebase-target', 'local-data', 'same-data',
-      'error-model', 'device-model', 'usage-model']);
+      'error-model', 'device-model', 'usage-model', 'pastries-log-model', 'pastries-lock']);
 });

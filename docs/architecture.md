@@ -97,10 +97,12 @@ Pure logic only, no DOM types. Each module is a PORT of a `js/` file, and its sp
 against BOTH files (`describe.each` over the TypeScript port and the `js/` original), so the two
 apps cannot drift apart while both are live. `parity.spec.ts` compares the full ports export by
 export (names, constants, frozen-ness, function names and arity); a partial port (`membership`,
-`location-id`) is not paired and its spec says why. `odd-inputs.spec.ts` feeds every export odd
-inputs and compares the two. Today: join-code, push-model, home-cards, away-model, allergen-model,
-sections, firebase-target, local-data, same-data, error-model, device-model, usage-model,
-membership, location-id.
+`location-id`, `pastries-model`) is not paired and its spec says why. `odd-inputs.spec.ts` feeds every
+export odd inputs and compares the two. A quirk of the original that no real input can reach is
+copied, not tidied, and marked where it sits: fixing it is a bug fix to BOTH files at once, and
+`odd-inputs.spec.ts` fails until they agree. Today: join-code, push-model, home-cards, away-model,
+allergen-model, sections, firebase-target, local-data, same-data, error-model, device-model,
+usage-model, membership, location-id, pastries-model, pastries-log-model, pastries-lock.
 
 ## The session
 
