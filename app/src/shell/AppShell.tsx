@@ -7,7 +7,8 @@ import { PartBoundary } from '../errors/PartBoundary';
 import { useT } from '../i18n/useT';
 import { useSession } from '../session/SessionContext';
 import { SwitchVenueButton } from '../session/SwitchVenueButton';
-import { MORE, moreIsCurrent, sectionById, titleKeyFor } from './sections';
+import { announceScreen, markLoaded } from '../telemetry/usage';
+import { MORE, moreIsCurrent, screenNameFor, sectionById, titleKeyFor } from './sections';
 import type { Section } from './sections';
 import { useOnline } from './useOnline';
 import { useToday } from './useToday';
@@ -32,6 +33,19 @@ export function AppShell() {
   useEffect(() => {
     if (contentRef.current) contentRef.current.scrollTop = 0;
   }, [pathname]);
+
+  // Tells the usage record and the error report which screen this is (telemetry/usage.ts). On
+  // every move, but not for `/`: that redirects at once and the section it lands on announces
+  // itself.
+  useEffect(() => {
+    const name = screenNameFor(pathname);
+    if (name !== null) announceScreen(name);
+  }, [pathname]);
+
+  // The page is ready when the shell is first drawn: that is the load time the usage record keeps.
+  useEffect(() => {
+    markLoaded();
+  }, []);
 
   return (
     // Lets React Aria components that take an `href` navigate through the router instead of

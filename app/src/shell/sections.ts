@@ -100,6 +100,22 @@ export function titleKeyFor(pathname: string): MessageKey {
   return section ? section.label : 'notFound.title';
 }
 
+// The name the usage record and the error report give the screen at a path (announceScreen):
+// the section's id, `more` for its own page, `not-found` for anything else.
+//
+// null for `/` itself: the address with no section in it redirects at once to the first section
+// (StartRedirect), and that section announces itself. Counting `/` as «not found» would put a
+// bogus screen and a bogus route at the start of every single visit.
+//
+// ⚠️ THESE NAMES ARE WHAT THE OWNER'S STATISTICS GROUP BY, so renaming a section's id renames
+// its history. The record accepts only [a-z0-9:-] and 40 characters with «m2:» in front.
+export function screenNameFor(pathname: string): string | null {
+  if (pathname === '/') return null;
+  if (isUnder(pathname, MORE.path)) return 'more';
+  const section = SECTIONS.find(candidate => isUnder(pathname, candidate.path));
+  return section ? section.id : 'not-found';
+}
+
 // «More» is the current tab on its own page AND on every section it holds: standing on
 // Suppliers on a phone, the tab bar must still say where you are, and the only tab that
 // leads there is «More». `more` is the list THIS person's «More» holds (arrangeSections).

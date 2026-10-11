@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { SCREEN_RE } from '@mise/shared/usage-model';
 import { routes } from '../routes';
 import { en } from '../i18n/en';
 import {
@@ -6,6 +7,7 @@ import {
   SECTIONS,
   arrangeSections,
   moreIsCurrent,
+  screenNameFor,
   sectionById,
   titleKeyFor,
 } from './sections';
@@ -107,6 +109,36 @@ describe('moreIsCurrent', () => {
     expect(moreIsCurrent('/suppliers', restaurant.more)).toBe(true);
     expect(moreIsCurrent('/pastries', restaurant.more)).toBe(false);
     expect(moreIsCurrent('/more', restaurant.more)).toBe(true);
+  });
+});
+
+describe('screenNameFor', () => {
+  it.each([
+    ['/orders', 'orders'],
+    ['/food-cost', 'foodcost'],
+    ['/suppliers/42', 'suppliers'],
+    ['/settings', 'settings'],
+    ['/more', 'more'],
+    ['/no-such-section', 'not-found'],
+    ['/suppliers-archive', 'not-found'],
+    ['/orders/', 'orders'],
+  ])('%s → %s', (pathname, expected) => {
+    expect(screenNameFor(pathname)).toBe(expected);
+  });
+
+  it('says nothing for the address with no section in it, which redirects at once', () => {
+    expect(screenNameFor('/')).toBeNull();
+  });
+
+  it('names every section by its id', () => {
+    for (const section of SECTIONS) expect(screenNameFor(section.path)).toBe(section.id);
+  });
+
+  // The usage record silently drops a name it does not accept: a new section whose id broke the
+  // rule would simply never be counted.
+  it('only ever gives a name the usage record accepts, «m2:» included', () => {
+    const names = [...SECTIONS.map(section => section.id), 'more', 'not-found'];
+    for (const name of names) expect(`m2:${name}`).toMatch(SCREEN_RE);
   });
 });
 

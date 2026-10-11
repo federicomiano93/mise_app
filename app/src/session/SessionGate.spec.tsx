@@ -1,10 +1,12 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { SCREEN_RE } from '@mise/shared/usage-model';
 import { act, render, screen, waitFor } from '@testing-library/react';
 import { en } from '../i18n/en';
 import { I18nProvider } from '../i18n/I18nProvider';
 import { loadLanguage } from '../i18n/i18n';
 import type { Language } from '../i18n/i18n';
 import { useT } from '../i18n/useT';
+import { SCREEN_EVENT } from '../telemetry/usage';
 import { fakeStore } from '../testing/fakeSession';
 import { SessionGate } from './SessionGate';
 import { SessionProvider } from './SessionContext';
@@ -139,5 +141,59 @@ describe('SessionGate: the venue\'s language comes first', () => {
 
     expect(await screen.findByText('the app: Orders')).toBeInTheDocument();
     await waitFor(() => { expect(screen.queryByRole('status')).not.toBeInTheDocument(); });
+  });
+});
+
+// The gate's screens tell the usage record (and, through it, the error report) where the person
+// is. `loading` is a wait and `ready` belongs to the shell, which names the section.
+describe('SessionGate: it announces its screens', () => {
+  let heard: string[];
+  const listener = (event: Event) => { heard.push(String((event as CustomEvent).detail)); };
+
+  beforeEach(() => {
+    heard = [];
+    window.addEventListener(SCREEN_EVENT, listener);
+  });
+
+  afterEach(() => {
+    window.removeEventListener(SCREEN_EVENT, listener);
+  });
+
+  it.each([
+    ['signed-out', 'sign-in'],
+    ['choose-location', 'choose-venue'],
+    ['no-access', 'no-access'],
+    ['error', 'session-error'],
+  ] as const)('%s is announced as «%s»', (status, name) => {
+    draw({ status, user: null, options: ['a', 'b'], optionNames: { a: 'A', b: 'B' } });
+    expect(heard).toEqual([name]);
+  });
+
+  it('says nothing while the session is loading, and nothing when the app is let through', () => {
+    const { store } = draw({ status: 'loading' });
+    expect(heard).toEqual([]);
+
+    act(() => { store.set({ status: 'ready' }); });
+    expect(screen.getByText('the app: Orders')).toBeInTheDocument();
+    expect(heard).toEqual([]);
+  });
+
+  it('announces each screen the session moves through, once', () => {
+    const { store } = draw({ status: 'loading' });
+
+    act(() => { store.set({ status: 'signed-out', user: null }); });
+    // A change that keeps the same status is the same screen.
+    act(() => { store.set({ status: 'signed-out', user: null, name: 'again' }); });
+    act(() => { store.set({ status: 'choose-location', options: ['a', 'b'], optionNames: { a: 'A', b: 'B' } }); });
+    act(() => { store.set({ status: 'ready' }); });
+
+    expect(heard).toEqual(['sign-in', 'choose-venue']);
+  });
+
+  // The record accepts only [a-z0-9:-], 40 characters in all with «m2:» in front.
+  it('only uses names the usage record accepts', () => {
+    for (const name of ['sign-in', 'choose-venue', 'no-access', 'session-error']) {
+      expect(`m2:${name}`).toMatch(SCREEN_RE);
+    }
   });
 });

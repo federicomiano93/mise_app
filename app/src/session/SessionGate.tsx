@@ -2,12 +2,23 @@ import { useContext, useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import { I18nContext } from '../i18n/I18nContext';
 import type { Language } from '../i18n/i18n';
+import { announceScreen } from '../telemetry/usage';
 import { ChooseVenueScreen } from './ChooseVenueScreen';
 import { LoadingScreen } from './LoadingScreen';
 import { NoAccessScreen } from './NoAccessScreen';
 import { useSession } from './SessionContext';
 import { SessionErrorScreen } from './SessionErrorScreen';
+import type { SessionStatus } from './session';
 import { SignInScreen } from './SignInScreen';
+
+// What the usage record calls each screen of the gate (announceScreen). Lower-case letters,
+// digits and hyphens only: anything else is silently not counted.
+const GATE_SCREENS: Partial<Record<SessionStatus, string>> = {
+  'signed-out': 'sign-in',
+  'choose-location': 'choose-venue',
+  'no-access': 'no-access',
+  error: 'session-error',
+};
 
 // The door. One screen per thing the session can be, and only `ready` lets the app through.
 //
@@ -17,6 +28,13 @@ import { SignInScreen } from './SignInScreen';
 // a venue that is not open yet.
 export function SessionGate({ children }: { children: ReactNode }) {
   const session = useSession();
+
+  // The screens of the gate tell the usage record where the person is. `loading` is a wait, not a
+  // screen, and `ready` is the shell's: it names the section.
+  useEffect(() => {
+    const name = GATE_SCREENS[session.status];
+    if (name) announceScreen(name);
+  }, [session.status]);
 
   switch (session.status) {
     case 'loading':
