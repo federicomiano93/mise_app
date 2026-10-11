@@ -1,5 +1,5 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { it as italian } from '../i18n/it';
 import { ACTION_EVENT } from '../telemetry/usage';
 import { fakeStocktakeSource } from '../testing/fakeStocktakeSource';
@@ -526,6 +526,39 @@ describe('Close the month', () => {
     const thisMonth = fake.saved.find(save => save.monthId === '2026-10');
     expect(thisMonth?.patch.unitPrice).toEqual({ flour: 20, butter: 8 });
     expect(fake.saved.find(save => save.monthId === '2026-11')?.patch.opening).toEqual({ flour: 4, sugar: 2, butter: 6 });
+  });
+
+  // ⚠️ Another phone closes the month while this one reads the question: the store refuses and
+  // writes nothing, so this phone must not claim «Month closed.» nor put `month-closed` in the usage
+  // record.
+  it('says nothing and records nothing when another phone closed the month while the question was open', async () => {
+    const fake = source([counted()]);
+    const heard: string[] = [];
+    const listener = (event: Event) => { heard.push(String((event as CustomEvent).detail)); };
+    window.addEventListener(ACTION_EVENT, listener);
+    try {
+      const { user } = await loaded(fake);
+      await ready();
+      await user.click(button('Close the month'));
+      const ask = await dialog('Close the month?');
+      fake.months.set('2026-10', {
+        ...(fake.months.get('2026-10') ?? monthDoc('2026-10')),
+        closedAt: '2026-10-14T20:30:00.000Z',
+      });
+      act(() => { fake.push(); });
+      await user.click(within(ask).getByRole('button', { name: 'Close the month' }));
+      await waitFor(() => { expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument(); });
+      // Whatever would be said is said as the answer arrives; give it the time.
+      await new Promise(resolve => { setTimeout(resolve, 300); });
+
+      expect(screen.queryByText(/^Month closed\./)).not.toBeInTheDocument();
+      expect(noMessage()).toBe(true);
+      expect(heard).toEqual([]);
+      expect(fake.saved).toHaveLength(0);
+      expect(button('Reopen the month')).toBeVisible();
+    } finally {
+      window.removeEventListener(ACTION_EVENT, listener);
+    }
   });
 
   it('shuts the boxes, shows the closed month and swaps the month button, keeping the focus on it', async () => {

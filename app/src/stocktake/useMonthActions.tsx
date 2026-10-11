@@ -148,9 +148,14 @@ export function useMonthActions(monthId: string): MonthActions {
     const now = store.getSnapshot();
     if (now.monthId !== monthId || now.month === null) return false;
     const frozen = frozenFor(now.month, productsOfMonth<Product>(now.month, now.ingredients));
-    const opened = await store.closeMonth(frozen);
+    const result = await store.closeMonth(frozen);
+    // ⚠️ A REFUSED CLOSE IS NOT SAID, NOR RECORDED: another phone closed the month while this one's
+    // question was open, and the store wrote nothing. «Month closed.» (and a `month-closed` in the
+    // usage record) would be a claim about something this phone did not do. The month on screen is
+    // already the closed one, so there is nothing to follow with the focus either: false.
+    if (result.refused) return false;
     announceAction('month-closed');
-    say(opened ? t('stock.closedAndOpened', { month: monthName(opened, locale) }) : t('stock.closed'));
+    say(result.opened ? t('stock.closedAndOpened', { month: monthName(result.opened, locale) }) : t('stock.closed'));
     return true;
   });
 

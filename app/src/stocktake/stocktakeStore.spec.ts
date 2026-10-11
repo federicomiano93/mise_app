@@ -312,7 +312,7 @@ describe('a closed month', () => {
     expect(store.setCount('closing', 'flour', '5')).toBe(false);
     expect(store.applyPurchases({ flour: 4 })).toBe(0);
     expect(await store.pullOpeningFromPrevious('2026-09')).toBe(0);
-    expect(await store.closeMonth({ names: {}, unitPrice: {}, packKg: {} })).toBeNull();
+    expect(await store.closeMonth({ names: {}, unitPrice: {}, packKg: {} })).toEqual({ refused: true });
     await advance(SETTLE_MS * 2);
     expect(store.getSnapshot().month).toMatchObject({ closing: { flour: 2 }, purchased: { flour: 1 }, opening: {} });
     expect(saves).toEqual([]);
@@ -336,8 +336,8 @@ describe('closing a month', () => {
     const { store, saves } = await ready({ month: '2026-10', opening: { flour: 4 }, packKg: { flour: 25, salt: 1 } });
     store.setCount('closing', 'flour', '2');
     store.setCount('closing', 'salt', '');
-    const opened = await store.closeMonth(FROZEN);
-    expect(opened).toBe('2026-11');
+    const result = await store.closeMonth(FROZEN);
+    expect(result).toEqual({ refused: false, opened: '2026-11' });
     const iso = new Date(NOW).toISOString();
     expect(saves.map(s => [s.monthId, s.patch])).toEqual([
       ['2026-10', { month: '2026-10', updatedAt: iso, createdAt: iso, closing: { flour: 2 } }],
@@ -352,12 +352,12 @@ describe('closing a month', () => {
     const { store, setMode, advance, saves } = await ready();
     setMode('never');
     store.setCount('closing', 'flour', '2');
-    let opened: string | null | undefined;
-    void store.closeMonth(FROZEN).then(value => { opened = value; });
+    let result: Awaited<ReturnType<typeof store.closeMonth>> | undefined;
+    void store.closeMonth(FROZEN).then(value => { result = value; });
     await advance(SETTLE_MS - 1);
-    expect(opened).toBeUndefined();
+    expect(result).toBeUndefined();
     await advance(1);
-    expect(opened).toBe('2026-11');
+    expect(result).toEqual({ refused: false, opened: '2026-11' });
     // Every write was still handed over, in order.
     expect(saves.map(s => s.monthId)).toEqual(['2026-10', '2026-11', '2026-10']);
     expect(store.getSnapshot().month?.closedAt).not.toBe('');
@@ -366,8 +366,29 @@ describe('closing a month', () => {
   test('a failed write says «not saved yet» and never throws loose', async () => {
     const { store, source, messages } = await ready();
     source.saveMonthFields.mockImplementation(() => Promise.reject(new Error('offline')));
-    await expect(store.closeMonth(FROZEN)).resolves.toBe('2026-11');
+    await expect(store.closeMonth(FROZEN)).resolves.toEqual({ refused: false, opened: '2026-11' });
     expect(messages).toContainEqual({ kind: 'not-saved-yet' });
+  });
+
+  // ⚠️ The screen says «Month closed.» and records `month-closed` only for a close that happened, so
+  // the answer must tell a close from a refusal — a refusal used to be the same `null` as a close
+  // with no next month.
+  test('⚠️ reports «refused» for a month that is already closed, and writes nothing', async () => {
+    // Another phone closed it while this phone's question was open.
+    const { store, saves, advance } = await ready({ month: '2026-10', closedAt: '2026-10-14T19:00:00.000Z', closing: { flour: 2 } });
+    expect(await store.closeMonth(FROZEN)).toEqual({ refused: true });
+    await advance(SETTLE_MS * 2);
+    expect(saves).toEqual([]);
+    expect(store.getSnapshot().month).toMatchObject({ closedAt: '2026-10-14T19:00:00.000Z', closing: { flour: 2 } });
+  });
+
+  test('reports «refused» before the month has answered, and writes nothing', async () => {
+    const { store, saves, advance } = setup();
+    store.start();
+    store.openMonth('2026-10');
+    expect(await store.closeMonth(FROZEN)).toEqual({ refused: true });
+    await advance(SETTLE_MS * 2);
+    expect(saves).toEqual([]);
   });
 });
 

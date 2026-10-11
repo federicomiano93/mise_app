@@ -82,6 +82,18 @@ export type ProposedPurchases = {
   readonly failed: boolean;
 };
 
+// How closing a month ended. ⚠️ THE STORE SAYS WHETHER IT DID ANYTHING, because the screen must not
+// announce — to the person or to the usage record — a close that never happened: another phone can
+// close the month while this phone's question is still open, and a store that has refused wrote
+// nothing.
+export type CloseResult =
+  // Nothing was written: the month is closed already, has not answered yet, or is no longer the one
+  // being watched.
+  | { readonly refused: true }
+  // Closed. `opened` is the id of the month that was opened after it, or null when there was nothing
+  // to carry into one.
+  | { readonly refused: false; readonly opened: string | null };
+
 // What closing a month freezes into it (stocktakeModel.ts frozenFor works it out from the screen's rows).
 export type Frozen = {
   readonly names: Readonly<Record<string, string>>;
@@ -118,8 +130,9 @@ export interface StocktakeStore {
   flush(): Promise<void>;
   // Sends what is waiting and answers within SETTLE_MS whatever the network is doing.
   flushBeforeLeaving(): Promise<void>;
-  // The new month's id (opened with this one's closings), or null.
-  closeMonth(frozen: Frozen): Promise<string | null>;
+  // Closes the month; the answer tells a close that happened (and the new month's id, opened with
+  // this one's closings, or null) from one that was refused and wrote nothing.
+  closeMonth(frozen: Frozen): Promise<CloseResult>;
   reopenMonth(): Promise<void>;
   readProposedPurchases(): Promise<ProposedPurchases>;
   // How many products were filled in.
@@ -377,11 +390,11 @@ export function createStocktakeStore(source: StocktakeSource, locationId: string
   // this month closed and the next one missing — and its openings only ever existed as this month's
   // closings. This order fails towards «closed nothing, lost nothing». It is the order of SENDING
   // that matters: offline neither write is confirmed, and the SDK sends them in the order made.
-  async function closeMonth(frozen: Frozen): Promise<string | null> {
+  async function closeMonth(frozen: Frozen): Promise<CloseResult> {
     // Only an open month that has answered: closing it twice would freeze today's prices over the
     // ones it was closed with (the original leaves this to the screen; here the store says no too).
     const s = writable();
-    if (!s) return null;
+    if (!s) return { refused: true };
     const deadline = deadlineFromNow();
     const nowIso = new Date(deps.now()).toISOString();
     await settled(flushSession(s), deadline);
@@ -409,7 +422,7 @@ export function createStocktakeStore(source: StocktakeSource, locationId: string
     s.month = { ...s.month, closedAt: nowIso, names: patch.names, unitPrice: patch.unitPrice, packKg: patch.packKg };
     writeCache(s);
     publish(s);
-    return next ? next.month : null;
+    return { refused: false, opened: next ? next.month : null };
   }
 
   // Unfreeze a month closed too early. ⚠️ IT DOES NOT UNDO THE NEXT MONTH: its openings were COPIED
