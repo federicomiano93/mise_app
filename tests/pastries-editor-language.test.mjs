@@ -15,7 +15,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { installDom, walk } from './helpers/form-dom.mjs';
-import { setLanguage, DEFAULT_LANGUAGE } from '../js/i18n.js';
+import { t, setLanguage, DEFAULT_LANGUAGE } from '../js/i18n.js';
 
 // The editor builds nodes with `document`, so the fake goes in BEFORE the editor is loaded.
 installDom();
@@ -99,4 +99,21 @@ test('⚠️ the editor writes no plural rule and no English sentence of its own
   assert.ok(!src.includes("'1 pastry'"));
   assert.ok(!src.includes('`How many '));
   assert.ok(!src.includes('`Remove '));
+});
+
+test('the guided-step and business labels exist in Italian', () => {
+  inLanguage('it', () => {
+    assert.equal(t('cat.stepInstruction', { n: 2 }), 'Istruzione del passaggio 2');
+    assert.equal(t('cat.stepMinutes', { n: 2 }), 'Minuti del passaggio 2');
+    assert.equal(t('cat.stepSeconds', { n: 2 }), 'Secondi del passaggio 2');
+    assert.equal(t('cat.stepSpeed', { n: 2 }), 'Velocità del passaggio 2');
+    assert.equal(t('cat.removeStep', { n: 2 }), 'Rimuovi il passaggio 2');
+    assert.equal(t('cat.speedPlaceholder'), 'es. 1');
+    assert.equal(t('bz.deleteName', { name: 'Bar Roma' }), 'Elimina Bar Roma');
+  });
+  inLanguage('en', () => {
+    assert.equal(t('cat.removeStep', { n: 2 }), 'Remove step 2');
+    assert.equal(t('cat.speedPlaceholder'), 'e.g. 1');
+    assert.equal(t('bz.deleteName', { name: 'Bar Roma' }), 'Delete Bar Roma');
+  });
 });
