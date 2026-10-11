@@ -101,6 +101,26 @@ interaction between the change and the lines around it, not in the diff hunk.
 - New behaviour has a test (P15). A guard that pins HOW a call is shaped is satisfied
   by DELETING the call — something must also pin that the call exists.
 
+**Mise 2 (`app/`, `shared/`) — read `docs/architecture.md` first.** The defects found there so far:
+- **One origin with the current app.** A storage key outside `KEEP_PREFIXES` (in BOTH
+  `js/local-data.js` and `shared/src/local-data.ts`) is wiped by the other app's sign-out; a
+  different Firebase SDK version, persistence list or Firestore cache setting breaks the other
+  app's IndexedDB or signs every phone out (`tests/mise2-ci.test.mjs`, `tests/auth-start.test.mjs`).
+- **One page that never reloads.** What the current app fixes on the next page load (a different
+  person's cached data, a day rolling over, a device ping) Mise 2 must do while open: check every
+  "at boot" decision ported from `js/`.
+- **Firestore only through the backend** (`backend.firestore()`), never `getFirestore()`; an
+  editor without `markBusy()`; a part outside a `PartBoundary`; a frozen module-level list where
+  the venue or role can change it.
+- **Ports must equal their `js/` originals**, odd inputs included, and their specs must run
+  against both files; a partial port says why it is not in `parity.spec.ts`.
+- **Errors reported twice or never** (React logs caught render errors; the router's boundary
+  logs too unless `onError` is given) and telemetry queued offline (it trips «Not sent yet»).
+- **Accessibility**: one `main` and one `h1` per screen, labelled landmarks (content outside every
+  landmark), live regions present before they change, 48px targets, focus never lost to `<body>`.
+- Specs named `*.test.*`, a `{{` or `{%` in committed Markdown (Jekyll), a CSS custom property
+  invented in a component (the token guard), a package added without the plan.
+
 ## How to report
 
 Findings ranked most severe first. For each: the file and line as `path:line`, one
