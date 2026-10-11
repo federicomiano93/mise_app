@@ -194,7 +194,9 @@ describe('the split of the frame', () => {
     expect(declaration(detail, 'position')).toBe('sticky');
     expect(declaration(detail, 'top')).toBe('var(--s4)');
     expect(declaration(detail, 'overflow-y')).toBe('auto');
-    expect(declaration(detail, 'overscroll-behavior')).toBe('contain');
+    // None: with `contain` a swipe on the pane could never scroll the page to show the pane's bottom
+    // lines, which are under the screen's edge at scroll 0.
+    expect(declaration(detail, 'overscroll-behavior')).toBeUndefined();
     // Never taller than the scroll area: the screen less the top bar and the gap above and below.
     // Two declarations, `vh` first: Chrome 107 (the lab tablet's floor) has no `dvh`.
     const heights = [...detail.matchAll(/max-height:\s*([^;]+);/g)].map(([, value = '']) => value.trim());

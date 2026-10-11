@@ -46,7 +46,12 @@
      at every product. Stuck to the top of the scroll area, it is always in view and the focus
      moves nothing. It is never taller than the scroll area (the screen less the top bar, which is
      always drawn from 700px), so it scrolls on its own, and the form bar of a product sticks to
-     ITS top; a scroll that reaches its end stops there instead of moving the list behind it. */
+     ITS top.
+
+     ⚠️ NO `overscroll-behavior: contain`: a scroll that reaches the pane's end goes on to the page,
+     which brings the pane's last lines up. At scroll 0 the pane starts BELOW the page title, so its
+     bottom ~45px are under the screen's edge, and with `contain` a swipe on the pane could never
+     scroll the page to show them. */
   .detail {
     position: sticky;
     top: var(--s4);
@@ -54,6 +59,5 @@
     max-height: calc(100vh - var(--topbar-h) - 2 * var(--s4));
     max-height: calc(100dvh - var(--topbar-h) - 2 * var(--s4));
     overflow-y: auto;
-    overscroll-behavior: contain;
   }
 }
