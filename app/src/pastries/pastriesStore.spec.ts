@@ -125,6 +125,34 @@ describe('the live days', () => {
     days[0]!.onError(new Error('permission-denied'));
     expect(messages).toEqual([{ kind: 'days-stream-broken' }]);
   });
+
+  // ⚠️ The editor copies a day once and never repaints, so it must not copy the local copy while the
+  // real answer is still on its way: the first paint is not «loaded».
+  test('are loaded once the first answer arrives, not before', () => {
+    const storage = memoryStorage({ [DAYS_CACHE_KEY]: JSON.stringify({ Tuesday: { items: [{ name: 'Cornetti', qty: 24 }], note: '' } }) });
+    const { store, days } = setup({ storage });
+    expect(store.getSnapshot().daysLoaded).toBe(false);
+    store.start();
+    expect(store.getSnapshot().daysLoaded).toBe(false);
+    days[0]!.onChange([]);
+    expect(store.getSnapshot().daysLoaded).toBe(true);
+  });
+
+  test('count as loaded when the stream dies before it answered, so nothing waits for ever', () => {
+    const { store, days } = setup();
+    store.start();
+    days[0]!.onError(new Error('unavailable'));
+    expect(store.getSnapshot().daysLoaded).toBe(true);
+  });
+
+  test('stay loaded across a stop and a start', () => {
+    const { store, days } = setup();
+    store.start();
+    days[0]!.onChange([]);
+    store.stop();
+    store.start();
+    expect(store.getSnapshot().daysLoaded).toBe(true);
+  });
 });
 
 describe('saving a day', () => {

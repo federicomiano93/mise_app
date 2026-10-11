@@ -28,3 +28,23 @@ p { margin: 0; }
 
 /* Lucide icons: 20px by default, stroked 1.8, never shrinking inside a flex row. */
 svg.lucide { width: 20px; height: 20px; stroke-width: 1.8; flex: none; }
+
+/* ⚠️ THE ONE RECIPE FOR TEXT THAT IS THERE FOR ASSISTIVE TECHNOLOGY AND FOR NOBODY ELSE. Use it
+   by its plain class name (className="visually-hidden"), never copy the declarations. It is NOT
+   `display: none` or `hidden`: those remove the text from the accessible name too. It positions
+   against the nearest positioned ancestor, so give a container that clips `position: relative`.
+   An element that is hidden here in one layout and drawn in another (the days of Pastries) undoes
+   the recipe in its own stylesheet, with a selector of two classes so the order of the
+   stylesheets does not matter. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

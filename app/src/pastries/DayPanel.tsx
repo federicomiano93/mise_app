@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import type { RefObject } from 'react';
 import { Check, History, Pencil } from 'lucide-react';
 import { Link, useNavigate } from 'react-router';
 import { MAX_QTY } from '@mise/shared/pastries-model';
@@ -10,15 +11,21 @@ import { Button } from '../ui/Button';
 import { useStatusMessage } from '../ui/StatusMessage';
 import { useConfirm } from '../ui/useConfirm';
 import { usePastries, usePastriesStore } from './PastriesContext';
+import { FROM_DAY } from './pastriesNav';
 import { PastryRow } from './PastryRow';
 import { proposedQuantity, typedKey } from './quantityEdit';
-import { PANEL_ID, RECORDS_PATH, editorPath, tabId, weekdayLabel } from './weekdays';
+import { PANEL_ID, RECORDS_PATH, editorPath, weekdayLabel } from './weekdays';
 import styles from './DayPanel.module.css';
+
+const TITLE_ID = `${PANEL_ID}-title`;
 
 type Props = {
   day: Weekday;
   // The day the section opened on: only it is subtitled «Tomorrow · to prove».
   opening: Weekday;
+  // Set by the editor or Records when they hand the person back to the day: the pencil that
+  // opened the editor takes the focus, so a keyboard or screen-reader user lands where they left.
+  handBackFocus: RefObject<boolean>;
 };
 
 // One day's list and the fast way to correct one number. The screen somebody reads standing up at
@@ -29,7 +36,7 @@ type Props = {
 // values are kept by day AND pastry name (never by position — a snapshot can reorder the list),
 // the open row is kept by the same key, and the rows are keyed by name and position so React
 // updates them in place — the scroll position and the focus in the box survive too.
-export function DayPanel({ day, opening }: Props) {
+export function DayPanel({ day, opening, handBackFocus }: Props) {
   const { t } = useT();
   const store = usePastriesStore();
   const { days } = usePastries();
@@ -45,6 +52,7 @@ export function DayPanel({ day, opening }: Props) {
   const [typed, setTyped] = useState<Readonly<Record<string, string>>>({});
   const [openKey, setOpenKey] = useState<string | null>(null);
   const openInput = useRef<HTMLInputElement>(null);
+  const pencil = useRef<HTMLButtonElement>(null);
   const confirming = useRef(false);
   // The day this panel shows NOW, for an answer that arrives after the person has moved on.
   const shownDay = useRef(day);
@@ -57,6 +65,13 @@ export function DayPanel({ day, opening }: Props) {
   if (openKey !== null && (locked || !items.some(item => typedKey(day, item.name) === openKey))) {
     setOpenKey(null);
   }
+
+  // Back from the editor or Records: the pencil takes the focus (once).
+  useEffect(() => {
+    if (!handBackFocus.current) return;
+    handBackFocus.current = false;
+    pencil.current?.focus();
+  }, [handBackFocus]);
 
   // The box takes the focus when its row opens.
   useEffect(() => {
@@ -99,7 +114,7 @@ export function DayPanel({ day, opening }: Props) {
   // SAME gate as a row. Left open, the lock would be cosmetic.
   async function pressPencil() {
     if (!(await requestEdit()) || shownDay.current !== day) return;
-    void navigate(editorPath(day));
+    void navigate(editorPath(day), { state: FROM_DAY });
   }
 
   function commit(index: number, key: string) {
@@ -151,13 +166,15 @@ export function DayPanel({ day, opening }: Props) {
   }
 
   return (
-    <section role="tabpanel" id={PANEL_ID} aria-labelledby={tabId(day)} className={styles.panel}>
+    // Named by its own heading: the tab's name is a whole sentence («Tuesday 2 pastries Tomorrow»).
+    <section role="tabpanel" id={PANEL_ID} aria-labelledby={TITLE_ID} className={styles.panel}>
       <header className={styles.head}>
         <div className={styles.headText}>
-          <h2 className={styles.title}>{label}</h2>
+          <h2 id={TITLE_ID} className={styles.title}>{label}</h2>
           <p className={styles.meta}>{day === opening ? t('past.tomorrowToProve') : t('past.toProve')}</p>
         </div>
         <Button
+          ref={pencil}
           variant="bare"
           className={styles.pencil}
           aria-label={t('past.editDay', { day: label })}
@@ -202,7 +219,10 @@ export function DayPanel({ day, opening }: Props) {
         )}
       </div>
 
-      <div className={styles.foot}>
+      {/* ⚠️ THE BOTTOM ROW STICKS TO THE BOTTOM OF THE SCREEN, at every width: a long list must
+          never push Confirm off a tablet that stands on a bench (1024 x 768). Records stays in the
+          flow after it, at the end of the panel. */}
+      <div className={styles.bar}>
         {/* ⚠️ BOTH ARE ALWAYS BUILT and one is hidden, never one built only when the day is
             confirmed: the data changes live, and a control built conditionally would appear and
             vanish at random as other phones wrote. */}
@@ -219,7 +239,9 @@ export function DayPanel({ day, opening }: Props) {
             {t('ui.edit')}
           </Button>
         </div>
-        <Link to={RECORDS_PATH} className={styles.records}>
+      </div>
+      <div className={styles.foot}>
+        <Link to={RECORDS_PATH} state={FROM_DAY} className={styles.records}>
           <History aria-hidden="true" />
           {t('past.records')}
         </Link>

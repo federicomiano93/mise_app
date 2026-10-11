@@ -41,7 +41,32 @@ export const en = {
   'ui.edit': 'Edit',
   'ui.note': 'Note',
   'ui.back': 'Back',
+  'ui.save': 'Save',
+  'ui.remove': 'Remove',
+  'ui.discard': 'Discard',
   'day.tomorrow': 'Tomorrow',
+  // A date spelled out, as «Wed 5 Aug» — built by hand from these words so it reads the same on
+  // every device (Records). getDay() and getMonth() are the index: Sunday is 0.
+  'day.spelledNoYear': '{weekday} {d} {month}',
+  'day.weekdayShort.0': 'Sun',
+  'day.weekdayShort.1': 'Mon',
+  'day.weekdayShort.2': 'Tue',
+  'day.weekdayShort.3': 'Wed',
+  'day.weekdayShort.4': 'Thu',
+  'day.weekdayShort.5': 'Fri',
+  'day.weekdayShort.6': 'Sat',
+  'day.monthShort.0': 'Jan',
+  'day.monthShort.1': 'Feb',
+  'day.monthShort.2': 'Mar',
+  'day.monthShort.3': 'Apr',
+  'day.monthShort.4': 'May',
+  'day.monthShort.5': 'Jun',
+  'day.monthShort.6': 'Jul',
+  'day.monthShort.7': 'Aug',
+  'day.monthShort.8': 'Sep',
+  'day.monthShort.9': 'Oct',
+  'day.monthShort.10': 'Nov',
+  'day.monthShort.11': 'Dec',
 
   // Pastries. Every key that the current app also has carries ITS name and ITS text, copied
   // from js/i18n.js; the ones marked «new» exist only in Mise 2.
@@ -98,9 +123,53 @@ export const en = {
   'past.couldnTRemoveThat': 'Couldn’t remove that record — check your connection.',
   'past.liveSyncInterruptedThis': 'Live sync interrupted — this list may be out of date.',
   'past.liveSyncInterruptedThese': 'Live sync interrupted — these records may be out of date.',
-  // new, for the two screens that arrive in the next step.
-  'past.editorSoon': 'Editing {day} will arrive in the next step of Mise 2.',
-  'past.recordsSoon': 'Records will arrive in the next step of Mise 2.',
+
+  // The editor.
+  'past.toProveFor': 'To prove for {day}',
+  'past.pastryPlaceholder': 'Pastry',
+  'past.pastryName': 'Pastry name',
+  'past.thisRow': 'this row',
+  'past.addPastry': 'Add pastry',
+  'past.removeThisPastry': 'Remove this pastry?',
+  'past.removeRowFrom': 'Remove {name} from {day}?',
+  'past.noteStays': 'Note — stays on {day} until you change it',
+  'past.anythingWorthRememberingAbout': 'Anything worth remembering about this day…',
+  // new: the small line under the editor's title once something has been typed (the design's
+  // «Unsaved changes»).
+  'past.unsavedChanges': 'Unsaved changes',
+  // new: the names of the quantity box and of the bin were English on every venue. The two
+  // «how many» labels are whole phrases, not a name slotted into one, so Italian can agree the
+  // word with the noun («Quante paste»).
+  'past.howManyOf': 'How many {name}',
+  'past.howManyPastries': 'How many pastries',
+  'past.removeRow': 'Remove {name}',
+  // What stops a save. The quantity limit is passed as text, so it reads «9999», never «9,999».
+  'past.onListTwice': '{name} is on this list twice.',
+  'past.howMany': 'How many {name}?',
+  'past.thatNameIsToo': 'That name is too long.',
+  'past.mostItCanHold': '{n} is the most this can hold.',
+  'past.thatIsMorePastries': 'That is more pastries than one day can hold.',
+  'past.thatCannotBeSaved': 'That cannot be saved yet.',
+  'past.saveDay': 'Save {day}?',
+  'past.saveThese': { one: 'Save this pastry for {day}?', other: 'Save these {n} pastries for {day}?' },
+  'past.saveEmpty': '{day} will have nothing to prove. Save that?',
+  'past.daySaved': '{day} saved.',
+  'past.discardChanges': 'Discard changes?',
+  'past.unsavedFor': 'You have unsaved changes to {day}. Discard them?',
+
+  // Records.
+  'past.lastNDays': { one: 'Last day', other: 'Last {n} days' },
+  'past.nothingWasProved': 'Nothing was proved.',
+  'past.removeRecordFor': 'Remove the record for {day}, {date}',
+  'past.removeThisRecord': 'Remove this record?',
+  'past.removeRecordForQ': 'Remove the record for {day}, {date}? This cannot be undone.',
+  'past.recordRemoved': 'Record removed.',
+  'past.noRecordsYet': 'No records yet.',
+  'past.tapConfirmAtThe': 'Tap Confirm at the bottom of a day to keep one.',
+  'past.olderRecordsKept': {
+    one: 'Older records are kept — this screen shows the last day.',
+    other: 'Older records are kept — this screen shows the last {n} days.',
+  },
 
   // Signing in. Copied from the current app's js/i18n.js, key for key. «Mise» is the product's
   // name, not a phrase, so it is not here.

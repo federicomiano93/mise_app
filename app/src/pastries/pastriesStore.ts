@@ -35,6 +35,13 @@ export type PastriesMessage =
 export interface PastriesSnapshot {
   // Always all seven.
   readonly days: PastryDays;
+  // Whether the seven days have been answered for, live or from the device's own cache (or the
+  // stream failed): until then `days` is only the local copy, which may be empty or old.
+  //
+  // ⚠️ THE EDITOR WAITS FOR IT. It copies the day once, when it opens, and never repaints; opened by
+  // its address (a reload, a bookmark) on a phone with no local copy, it would copy an EMPTY day and
+  // a Save would write that over the real one.
+  readonly daysLoaded: boolean;
   // The lists confirmed for the work date being watched.
   readonly confirmed: ReadonlySet<Weekday>;
   // This phone's permission to change a confirmed list: the work date it was given on, or null.
@@ -102,6 +109,7 @@ export function createPastriesStore(source: PastriesSource, deps: PastriesDeps):
 
   let snapshot: PastriesSnapshot = Object.freeze({
     days: readCache(),
+    daysLoaded: false,
     confirmed: new Set<Weekday>(),
     grants: readGrants(storage),
     logs: [],
@@ -313,9 +321,14 @@ export function createPastriesStore(source: PastriesSource, deps: PastriesDeps):
         docs => {
           const days = normalizeDays(docs);
           writeCache(days);
-          update({ days });
+          update({ days, daysLoaded: true });
         },
-        () => say({ kind: 'days-stream-broken' }),
+        // A stream that dies before it ever answered must not keep the editor waiting for ever: the
+        // local copy is all there is, and the notice says the list may be out of date.
+        () => {
+          update({ daysLoaded: true });
+          say({ kind: 'days-stream-broken' });
+        },
       );
       refreshConfirmations();
       scheduleRoll();

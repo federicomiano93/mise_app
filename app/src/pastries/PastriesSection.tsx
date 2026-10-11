@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import type { RefObject } from 'react';
 import { Navigate, useLocation, useNavigate, useParams } from 'react-router';
 import { provingDayFor } from '@mise/shared/pastries-model';
 import type { Weekday } from '@mise/shared/pastries-model';
@@ -8,18 +9,19 @@ import { KEEP_FOCUS, Page } from '../shell/Page';
 import { StatusMessageProvider, useStatusMessage } from '../ui/StatusMessage';
 import { DayPanel } from './DayPanel';
 import { DaysNav } from './DaysNav';
+import { Editor } from './Editor';
 import { PastriesProvider, usePastriesStore } from './PastriesContext';
-import { EditorSoon, RecordsSoon } from './PastriesSoon';
 import { messageText } from './pastriesMessages';
 import { parsePastriesPath } from './pastriesPath';
 import type { PastriesView } from './pastriesPath';
+import { Records } from './Records';
 import { PANEL_ID, PASTRIES_PATH, dayPath } from './weekdays';
 import styles from './PastriesSection.module.css';
 
 type ShownView = Exclude<PastriesView, { kind: 'unknown' }>;
 
 // Pastries: the seven days (a strip above the day on a phone, a list on its left from 1000px) and
-// the chosen day. Loaded only when somebody opens it (shell/sectionScreens.ts), and only for a
+// the chosen day, its editor, or Records. Loaded only when somebody opens it (shell/sectionScreens.ts), and only for a
 // person the venue shows it to (SectionRoute).
 //
 // Its data lives exactly as long as it is on screen: PastriesProvider starts the seven-day
@@ -54,6 +56,9 @@ function PastriesScreen({ opening }: { opening: Weekday }) {
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const view = parsePastriesPath(useParams()['*']);
+  // Set by the editor and Records when they hand the person back to the day, read once by the day
+  // panel that mounts next (it gives the focus back to the pencil).
+  const handBackFocus = useRef(false);
 
   // A day that is not a weekday, or an address that leads nowhere: back to the start of Pastries.
   if (view.kind === 'unknown') return <Navigate to={PASTRIES_PATH} replace state={KEEP_FOCUS} />;
@@ -82,7 +87,7 @@ function PastriesScreen({ opening }: { opening: Weekday }) {
         </div>
         <div className={styles.detail}>
           <PartBoundary resetKey={pathname}>
-            <Detail view={view} opening={opening} />
+            <Detail view={view} opening={opening} handBackFocus={handBackFocus} />
           </PartBoundary>
         </div>
       </div>
@@ -90,13 +95,16 @@ function PastriesScreen({ opening }: { opening: Weekday }) {
   );
 }
 
-function Detail({ view, opening }: { view: ShownView; opening: Weekday }) {
+type DetailProps = { view: ShownView; opening: Weekday; handBackFocus: RefObject<boolean> };
+
+function Detail({ view, opening, handBackFocus }: DetailProps) {
   switch (view.kind) {
     case 'day':
-      return <DayPanel day={view.day ?? opening} opening={opening} />;
+      return <DayPanel day={view.day ?? opening} opening={opening} handBackFocus={handBackFocus} />;
+    // Keyed on the day: another day's editor is a fresh working copy, never the old one renamed.
     case 'editor':
-      return <EditorSoon day={view.day} />;
+      return <Editor key={view.day} day={view.day} handBackFocus={handBackFocus} />;
     case 'records':
-      return <RecordsSoon />;
+      return <Records handBackFocus={handBackFocus} />;
   }
 }

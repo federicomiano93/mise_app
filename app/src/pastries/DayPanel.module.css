@@ -112,12 +112,28 @@
   white-space: pre-line;
 }
 
-.foot {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s3);
+/* The bottom row (the design's `.sumbar`): Confirm, or the «Confirmed» mark and Edit. It sticks to
+   the bottom of the scrolling area at every width, so Confirm is always on screen.
+
+   ⚠️ IT STICKS BECAUSE NOTHING BETWEEN IT AND THE SCROLL AREA CLIPS. The scroll area is the shell's
+   `main` (AppShell.module.css `.content`: `overflow: auto`), which ends where the phone's tab bar
+   begins, so the row can never sit behind the bar. An `overflow` set on the panel, the layout or
+   a boundary around it would silently turn this into an ordinary row at the end of a long list:
+   pastries-css.spec.ts pins it. */
+.bar {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
   padding: var(--s4);
   border-top: 1px solid var(--line);
+  background: var(--surface);
+}
+
+/* After the bottom row, in the normal flow: the end of the panel. */
+.foot {
+  display: flex;
+  justify-content: center;
+  padding: var(--s2) var(--s4) var(--s4);
 }
 
 /* «Confirmed» and the Edit button: shown in place of Confirm once the day is recorded. */
@@ -168,7 +184,11 @@
     padding: 0 var(--s8) var(--s6);
   }
 
-  .foot {
+  .bar {
     padding: var(--s4) var(--s8);
+  }
+
+  .foot {
+    padding: var(--s2) var(--s8) var(--s4);
   }
 }

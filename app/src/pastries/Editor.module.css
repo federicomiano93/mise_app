@@ -1,0 +1,243 @@
+/* One day's editor: a card holding the form bar (Back · title · Save), the notice for a blocked save,
+   the rows, "Add pastry" and the note. On the split it is the right-hand pane, like the day it
+   edits; below 1000px it replaces the day.
+
+   ⚠️ NOTHING ON THE CARD MAY CLIP (no `overflow`): the form bar sticks to the top of the shell's
+   scrolling area, and a clipping ancestor would turn it into an ordinary row. */
+
+.editor {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+}
+
+/* While the day is on its way (Editor.tsx waits for it). */
+.loading {
+  padding: var(--s6);
+  color: var(--ink-2);
+}
+
+/* The Save button: the big primary action (the design's `.btn-lg`). Two classes, so the order in
+   which the button's stylesheet and this one load does not decide its height. Narrower padding on a
+   phone, where the title needs the room. */
+.editor .save {
+  min-height: var(--hit-lg);
+  padding: 0 var(--s4);
+  border-radius: var(--r-lg);
+  font-size: var(--fs-lg);
+}
+
+/* «Unsaved changes», under the title. The line is always there (an empty live region, so the words
+   are announced when they come) and keeps its height, so the title does not jump on the first key. */
+.dirty {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: calc(var(--fs-sm) * 1.45);
+  color: var(--warn-ink);
+  font-size: var(--fs-sm);
+  font-weight: 550;
+}
+
+.dirty[data-dirty="true"]::before {
+  content: "";
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: var(--r-pill);
+  background: var(--warn);
+}
+
+/* The notice for a blocked save (the design's `.banner-danger`). The region around it is on the
+   page empty, with no height; the notice carries the room around itself. */
+.banner {
+  margin: var(--s4) var(--s4) 0;
+  padding: var(--s3) var(--s4);
+  border-radius: var(--r-md);
+  background: var(--danger-tint);
+  color: var(--danger-ink);
+  font-size: var(--fs-sm);
+  font-weight: 500;
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s4);
+  padding: var(--s4);
+}
+
+.head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s3);
+}
+
+.kicker {
+  color: var(--ink-3);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.count {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* One row: its boxes, then (only when a save is blocked on it) the sentence that says why. */
+.row {
+  display: flex;
+  flex-direction: column;
+}
+
+/* The name, then the quantity and the bin. They share a line when it is wide enough for all three;
+   when it is not (a phone) the quantity and the bin drop together to a line of their own, under
+   the name, so neither is ever squeezed to nothing. No media query decides it. */
+.line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2);
+}
+
+.end {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--s2);
+  margin-left: auto;
+}
+
+.input {
+  width: 100%;
+  min-height: var(--hit);
+  padding: 0 var(--s4);
+  border: 1.5px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink);
+  font: 450 var(--fs-md) var(--font);
+}
+
+.input::placeholder {
+  color: var(--ink-3);
+}
+
+.input:focus {
+  border-color: var(--accent);
+}
+
+/* The field a blocked save points at. Two classes, after :focus above, so the red stays while the
+   cursor is in it. */
+.input.isError {
+  border-color: var(--danger);
+  box-shadow: 0 0 0 3px var(--danger-tint);
+}
+
+.name {
+  flex: 1 1 176px;
+  width: auto;
+  min-width: 0;
+}
+
+.qty {
+  flex: none;
+  width: 96px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Under the row it belongs to: the same sentence as the notice, next to the box to fix. */
+.err {
+  margin-top: var(--s1);
+  color: var(--danger-ink);
+  font-size: var(--fs-sm);
+  font-weight: 550;
+}
+
+/* The quiet bin (the design's `.btn-quiet-danger`): grey until it is the thing under the finger, so
+   a column of them does not shout. */
+.bin {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: var(--hit);
+  height: var(--hit);
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-md);
+  background: transparent;
+  color: var(--ink-3);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.bin[data-hovered],
+.bin[data-pressed] {
+  background: var(--danger-tint);
+  color: var(--danger-ink);
+}
+
+.add {
+  align-self: flex-start;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.label {
+  color: var(--ink);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+
+.textarea {
+  width: 100%;
+  min-height: 120px;
+  padding: var(--s3) var(--s4);
+  border: 1.5px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink);
+  font: 450 var(--fs-md)/1.45 var(--font);
+  resize: vertical;
+}
+
+.textarea::placeholder {
+  color: var(--ink-3);
+}
+
+.textarea:focus {
+  border-color: var(--accent);
+}
+
+@media (min-width: 1000px) {
+  .editor .save {
+    padding: 0 var(--s6);
+  }
+
+  .banner {
+    margin: var(--s6) var(--s6) 0;
+  }
+
+  .body {
+    padding: var(--s6);
+  }
+}

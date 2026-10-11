@@ -1,21 +1,27 @@
 /* The seven days. ONE set of buttons in two layouts, chosen here and nowhere else: a strip of
    chips above the day (a phone, a tablet held upright), and from 1000px a list of rows on the
-   left of it (the design's `.row`, the lab tablet held sideways). Every element that exists for
-   one layout only is hidden in the other, and each `display: none` below has its `display` in the
-   other half of the file. */
+   left of it (the design's `.row`, the lab tablet held sideways). An element that exists for one
+   layout only is hidden in the other, and each `display: none` below has its `display` in the
+   other half of the file.
+
+   ⚠️ THE WORDS OF A TAB ARE ITS NAME, so an element that carries them is never `display: none`
+   (that would take it out of the name): in the strip it is `visually-hidden` (base.css), and the
+   split undoes that recipe. Only what is `aria-hidden` in the markup is `display: none`. */
 
 .list {
   display: grid;
-  grid-template-columns: repeat(7, minmax(44px, 1fr));
+  /* The seven chips SHARE the width: on a 360px phone the strip is 328px, and 7 x 40 + 6 x 4 = 304
+     fits it. Below that (a 296px phone) the strip scrolls rather than squeezing a day into a
+     sliver. pastries-css.spec.ts adds it up. */
+  grid-template-columns: repeat(7, minmax(40px, 1fr));
   gap: var(--s1);
-  /* At 296px seven chips do not fit at their smallest width: the strip scrolls rather than
-     squeezing a day into a sliver. */
   overflow-x: auto;
 }
 
 .tab {
   position: relative;
   display: flex;
+  min-width: 0;
   flex-direction: column;
   align-items: center;
   justify-content: center;
@@ -66,18 +72,10 @@
   line-height: 1.2;
 }
 
-.full {
-  display: none;
-}
-
 .number {
   font-size: var(--fs-xs);
   font-variant-numeric: tabular-nums;
   line-height: 1.2;
-}
-
-.sub {
-  display: none;
 }
 
 /* Under the number: the opening day's dot and the confirmed tick. The height is kept even when
@@ -110,31 +108,10 @@
   stroke-width: 2.1;
 }
 
-/* The strip says «tomorrow» with the dot, and «confirmed» with the tick alone. */
-.chipTomorrow {
-  display: none;
-}
-
+/* The strip says «tomorrow» with the dot, and «confirmed» with the tick alone: the words
+   (.chipTomorrow, .chipWord) are visually-hidden here. */
 .chipOk {
   color: var(--ok-ink);
-}
-
-.chipWord {
-  display: none;
-}
-
-/* Said once, in words, as the tab's description; drawn nowhere. */
-.sr {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  margin: -1px;
-  padding: 0;
-  overflow: hidden;
-  border: 0;
-  clip: rect(0 0 0 0);
-  clip-path: inset(50%);
-  white-space: nowrap;
 }
 
 @media (min-width: 1000px) {
@@ -175,6 +152,32 @@
   .short,
   .number {
     display: none;
+  }
+
+  /* The words of the tab, undone from the strip's `visually-hidden`. Two classes, so base.css
+     loading before or after this file does not matter. White space is left alone on the chips:
+     they are `nowrap` themselves. */
+  .tab .full,
+  .tab .sub,
+  .tab .chipTomorrow,
+  .tab .chipWord {
+    position: static;
+    width: auto;
+    height: auto;
+    margin: 0;
+    overflow: visible;
+    clip: auto;
+    clip-path: none;
+  }
+
+  .tab .full,
+  .tab .sub {
+    white-space: normal;
+  }
+
+  /* The recipe also zeroes the padding, which would beat .chip's once base.css loads last. */
+  .tab .chipTomorrow {
+    padding: 0 10px;
   }
 
   .full {

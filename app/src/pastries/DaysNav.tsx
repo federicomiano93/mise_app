@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import type { KeyboardEvent } from 'react';
 import { Check } from 'lucide-react';
 import { WEEKDAYS } from '@mise/shared/pastries-model';
@@ -9,6 +9,9 @@ import { usePastries } from './PastriesContext';
 import { SPLIT_QUERY } from './split';
 import { tabId, weekdayLabel, weekdayShortLabel } from './weekdays';
 import styles from './DaysNav.module.css';
+
+// The global recipe in styles/base.css. A plain class name: a CSS module would rename it.
+const VISUALLY_HIDDEN = 'visually-hidden';
 
 type Props = {
   // The day shown; null on Records, where no day is.
@@ -46,9 +49,16 @@ function targetOf(key: string, index: number): number | null {
 // screen reader meets is the same at every width, and a tablet turned sideways does not rebuild it.
 //
 // It is a tab list: only the selected day is in the Tab order, the arrows move the selection AND the
-// focus, and a day's name for a screen reader is the full weekday («Tuesday»), never the three
-// letters drawn. What is drawn (count, marker, tick) is hidden from assistive technology and said
-// once, in words, as the tab's description.
+// focus.
+//
+// ⚠️ A TAB'S NAME COMES FROM ITS CONTENT, NEVER FROM AN aria-label. An aria-label that does not
+// contain the words drawn on the tab («Tuesday» against «Tue 6») is an accessibility failure (axe
+// `label-content-name-mismatch`, WCAG 2.5.3: a person who says what they see must reach it). So
+// the name is the words themselves, in reading order: the weekday, how many pastries, «Tomorrow»,
+// «Confirmed». Where the strip draws only the short label, the digits and a tick, the words are
+// there as `visually-hidden` text and what is drawn instead (the short label, the digits) is
+// `aria-hidden`; on the split the same words are drawn in full, so nothing is said twice. A plain
+// space between the parts keeps «Tuesday» and «6 pastries» two words in every browser.
 //
 // ⚠️ PICKING A DAY DOES NOT PULL THE FOCUS INTO THE PANEL. The focus belongs on the tab that was
 // pressed: moved into the panel, there would be nothing in the list for the next arrow key to move
@@ -58,7 +68,6 @@ export function DaysNav({ selected, opening, onPick, panelId }: Props) {
   const { days, confirmed } = usePastries();
   const vertical = useMediaQuery(SPLIT_QUERY);
   const tabs = useRef(new Map<Weekday, HTMLButtonElement>());
-  const base = useId();
   // With no day selected (Records) the list is still one stop of the keyboard: on the opening day.
   const stop = selected ?? opening;
 
@@ -92,12 +101,6 @@ export function DaysNav({ selected, opening, onPick, panelId }: Props) {
         const isOpening = day === opening;
         const isConfirmed = confirmed.has(day);
         const countText = count > 0 ? t('past.count', { n: count }) : t('past.nothingYet');
-        const description = [
-          countText,
-          isOpening ? t('day.tomorrow') : null,
-          isConfirmed ? t('past.confirmedMark') : null,
-        ].filter(part => part !== null).join(', ');
-        const descriptionId = `${base}-${day}`;
 
         return (
           <button
@@ -111,29 +114,29 @@ export function DaysNav({ selected, opening, onPick, panelId }: Props) {
             id={tabId(day)}
             aria-selected={isSelected}
             aria-controls={isSelected ? panelId : undefined}
-            aria-label={weekdayLabel(t, day)}
-            aria-describedby={descriptionId}
             tabIndex={day === stop ? 0 : -1}
             data-empty={count === 0}
             className={styles.tab}
             onClick={() => onPick(day)}
             onKeyDown={event => onKeyDown(event, index)}
           >
-            <span className={styles.short} aria-hidden="true">{weekdayShortLabel(t, day)}</span>
-            <span className={styles.full} aria-hidden="true">{weekdayLabel(t, day)}</span>
-            <span className={styles.number} aria-hidden="true">{count}</span>
-            <span className={styles.sub} aria-hidden="true">{countText}</span>
-            <span className={styles.marks} aria-hidden="true">
-              {isOpening ? <span className={styles.dot} /> : null}
-              {isOpening ? <span className={`${styles.chip} ${styles.chipTomorrow}`}>{t('day.tomorrow')}</span> : null}
+            <span className={styles.short} aria-hidden="true">{weekdayShortLabel(t, day)}</span>{' '}
+            <span className={`${styles.full} ${VISUALLY_HIDDEN}`}>{weekdayLabel(t, day)}</span>{' '}
+            <span className={styles.number} aria-hidden="true">{count}</span>{' '}
+            <span className={`${styles.sub} ${VISUALLY_HIDDEN}`}>{countText}</span>{' '}
+            <span className={styles.marks}>
+              {isOpening ? <span className={styles.dot} aria-hidden="true" /> : null}
+              {isOpening ? (
+                <span className={`${styles.chip} ${styles.chipTomorrow} ${VISUALLY_HIDDEN}`}>{t('day.tomorrow')}</span>
+              ) : null}
+              {isOpening && isConfirmed ? ' ' : null}
               {isConfirmed ? (
                 <span className={`${styles.chip} ${styles.chipOk}`}>
-                  <Check />
-                  <span className={styles.chipWord}>{t('past.confirmedMark')}</span>
+                  <Check aria-hidden="true" />
+                  <span className={`${styles.chipWord} ${VISUALLY_HIDDEN}`}>{t('past.confirmedMark')}</span>
                 </span>
               ) : null}
             </span>
-            <span id={descriptionId} className={styles.sr}>{description}</span>
           </button>
         );
       })}

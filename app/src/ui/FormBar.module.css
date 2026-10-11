@@ -1,0 +1,51 @@
+/* The bar at the top of an editor or a record list (the design's `.form-bar`). It sticks to the top
+   of the scrolling area (the shell's `main`), so the primary action stays in reach. Nothing between
+   it and that area may clip (no `overflow` on the card it sits in). */
+
+.bar {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  padding: var(--s3);
+  border-bottom: 1px solid var(--line);
+  border-radius: var(--r-lg) var(--r-lg) 0 0;
+  background: var(--surface);
+}
+
+/* The Back icon button: the secondary look, square. Two classes, so the order in which the button
+   and this file load does not decide the padding. */
+.bar .back {
+  flex: none;
+  width: var(--hit);
+  padding: 0;
+}
+
+.text {
+  flex: 1;
+  min-width: 0;
+}
+
+.title {
+  font-size: var(--fs-lg);
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+
+/* A title takes the focus from script when its screen opens; a tap does not need a ring around it. */
+.title:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* From tablet width (the shell's own 700px: the rail appears), as the design draws it. */
+@media (min-width: 700px) {
+  .bar {
+    padding: var(--s3) var(--s6);
+  }
+
+  .title {
+    font-size: var(--fs-xl);
+  }
+}

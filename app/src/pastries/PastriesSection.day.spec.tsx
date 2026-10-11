@@ -105,7 +105,7 @@ describe('a day\'s list', () => {
       days: [dayDoc('Thursday', THURSDAY), dayDoc('Monday', [['Brioche', 6]])],
     });
     const { user } = await open(source);
-    await user.click(screen.getByRole('tab', { name: 'Monday' }));
+    await user.click(screen.getByRole('tab', { name: /^Monday/ }));
     expect(await rowReady('Brioche')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^Cornetti/ })).not.toBeInTheDocument();
   });
@@ -423,7 +423,7 @@ describe('Confirm', () => {
       expect(doneMark()).toBeVisible();
       expect(editButton()).toBeInTheDocument();
       expect(confirmButton()).not.toBeInTheDocument();
-      expect(screen.getByRole('tab', { name: 'Thursday' })).toHaveAccessibleDescription(/Confirmed/);
+      expect(screen.getByRole('tab', { name: /^Thursday/ })).toHaveAccessibleName(/Confirmed/);
     } finally {
       window.removeEventListener(ACTION_EVENT, listener);
     }

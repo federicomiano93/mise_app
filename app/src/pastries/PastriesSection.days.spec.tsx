@@ -26,7 +26,10 @@ afterEach(() => {
 
 const LOAD = { timeout: 10_000 };
 const days = () => screen.findByRole('tablist', { name: 'Days' }, LOAD);
-const tab = (name: string) => screen.getByRole('tab', { name });
+// ⚠️ A TAB'S NAME IS ITS CONTENT, in reading order: «Tuesday 6 pastries Tomorrow Confirmed» (the
+// weekday, how many, then the marks that apply). So a day is found by the weekday it STARTS with.
+const named = (label: string) => new RegExp(`^${label}( |$)`);
+const tab = (label: string) => screen.getByRole('tab', { name: named(label) });
 const selectedTab = () => screen.getByRole('tab', { selected: true });
 const panel = () => screen.getByRole('tabpanel');
 
@@ -34,7 +37,7 @@ describe('Pastries: which day opens', () => {
   it('opens on the day being proved for: tomorrow, said so', async () => {
     renderPastries('/pastries');
     await days();
-    expect(selectedTab()).toHaveAccessibleName('Thursday');
+    expect(selectedTab()).toHaveAccessibleName(named('Thursday'));
     expect(within(panel()).getByRole('heading', { level: 2, name: 'Thursday' })).toBeInTheDocument();
     expect(within(panel()).getByText('Tomorrow · to prove')).toBeInTheDocument();
   });
@@ -43,14 +46,14 @@ describe('Pastries: which day opens', () => {
     freezeClock(new Date(2026, 9, 15, 5, 0, 0));
     renderPastries('/pastries');
     await days();
-    expect(selectedTab()).toHaveAccessibleName('Friday');
+    expect(selectedTab()).toHaveAccessibleName(named('Friday'));
   });
 
   it('is still the work day before 4am: 02:00 opens on the same day as the evening before', async () => {
     freezeClock(new Date(2026, 9, 15, 2, 0, 0));
     renderPastries('/pastries');
     await days();
-    expect(selectedTab()).toHaveAccessibleName('Thursday');
+    expect(selectedTab()).toHaveAccessibleName(named('Thursday'));
   });
 
   it('subtitles every other day «To prove»', async () => {
@@ -63,7 +66,7 @@ describe('Pastries: which day opens', () => {
   it('opens on the day in the address', async () => {
     renderPastries('/pastries/Tuesday');
     await days();
-    expect(selectedTab()).toHaveAccessibleName('Tuesday');
+    expect(selectedTab()).toHaveAccessibleName(named('Tuesday'));
     expect(within(panel()).getByRole('heading', { level: 2, name: 'Tuesday' })).toBeInTheDocument();
   });
 
@@ -71,14 +74,14 @@ describe('Pastries: which day opens', () => {
   it('keeps the opening day marked after 4am passes while it is open', async () => {
     const { user } = renderPastries('/pastries');
     await days();
-    expect(tab('Thursday')).toHaveAccessibleDescription(/Tomorrow/);
+    expect(tab('Thursday')).toHaveAccessibleName(/Tomorrow/);
 
     vi.setSystemTime(new Date(2026, 9, 15, 5, 0, 0));
     await user.click(tab('Friday'));
     await user.click(tab('Thursday'));
 
-    expect(tab('Thursday')).toHaveAccessibleDescription(/Tomorrow/);
-    expect(tab('Friday')).not.toHaveAccessibleDescription(/Tomorrow/);
+    expect(tab('Thursday')).toHaveAccessibleName(/Tomorrow/);
+    expect(tab('Friday')).not.toHaveAccessibleName(/Tomorrow/);
     expect(within(panel()).getByText('Tomorrow · to prove')).toBeInTheDocument();
   });
 
@@ -88,24 +91,73 @@ describe('Pastries: which day opens', () => {
       const { router } = renderPastries(path);
       await days();
       expect(router.state.location.pathname).toBe('/pastries');
-      expect(selectedTab()).toHaveAccessibleName('Thursday');
+      expect(selectedTab()).toHaveAccessibleName(named('Thursday'));
     },
   );
 });
 
 describe('Pastries: the days', () => {
-  it('lists the seven days, Monday first, as a tab list with a name', async () => {
+  it('lists the seven days, Monday first, as a tab list, each named by what it says', async () => {
     renderPastries();
     const list = await days();
-    expect(within(list).getAllByRole('tab').map(node => node.getAttribute('aria-label')))
-      .toEqual(['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']);
+    const expected = [
+      'Monday Nothing yet', 'Tuesday Nothing yet', 'Wednesday Nothing yet', 'Thursday Nothing yet Tomorrow',
+      'Friday Nothing yet', 'Saturday Nothing yet', 'Sunday Nothing yet',
+    ];
+    const tabs = within(list).getAllByRole('tab');
+    expect(tabs).toHaveLength(7);
+    tabs.forEach((node, index) => { expect(node).toHaveAccessibleName(expected[index]); });
   });
 
-  it('draws the short label from the dictionary and names the tab by the full weekday', async () => {
+  // ⚠️ A TAB'S NAME COMES FROM ITS CONTENT. An aria-label that does not contain the words drawn on
+  // the tab («Tuesday» against «Tue 6») is axe's `label-content-name-mismatch` (serious): a person
+  // who says what they see must reach it.
+  describe('the name of a tab is its content', () => {
+    it('carries no aria-label, aria-labelledby or aria-describedby, on any of the seven', async () => {
+      renderPastries();
+      const list = await days();
+      for (const node of within(list).getAllByRole('tab')) {
+        const day = node.id;
+        expect(node, day).not.toHaveAttribute('aria-label');
+        expect(node, day).not.toHaveAttribute('aria-labelledby');
+        expect(node, day).not.toHaveAttribute('aria-describedby');
+      }
+    });
+
+    it('is the weekday in full, how many, «Tomorrow» and «Confirmed», in reading order', async () => {
+      const source = fakePastriesSource({
+        days: [dayDoc('Thursday', [['Cornetti', 24], ['Krapfen', 12]]), dayDoc('Tuesday', [['Brioche', 6]])],
+        logs: [logDoc('Thursday', [['Cornetti', 24]])],
+      });
+      renderPastries('/pastries', { source });
+      await days();
+      await vi.waitFor(() => { expect(tab('Thursday')).toHaveAccessibleName('Thursday 2 pastries Tomorrow Confirmed'); });
+      expect(tab('Tuesday')).toHaveAccessibleName('Tuesday 1 pastry');
+      expect(tab('Friday')).toHaveAccessibleName('Friday Nothing yet');
+    });
+
+    // What the strip draws («Tue», the digits) is hidden from assistive technology, and the words
+    // that carry the name are there as hidden text: nothing is said twice, nothing is missing.
+    it('hides what the strip draws and keeps the words as visually hidden text', async () => {
+      const source = fakePastriesSource({ days: [dayDoc('Thursday', [['Cornetti', 24]])], logs: [logDoc('Thursday')] });
+      renderPastries('/pastries', { source });
+      await days();
+      await vi.waitFor(() => { expect(tab('Thursday')).toHaveAccessibleName(/Confirmed/); });
+      const thursday = tab('Thursday');
+      expect(within(thursday).getByText('Thu')).toHaveAttribute('aria-hidden', 'true');
+      expect(within(thursday).getByText('1', { selector: 'span' })).toHaveAttribute('aria-hidden', 'true');
+      for (const word of ['Thursday', '1 pastry', 'Tomorrow', 'Confirmed']) {
+        expect(within(thursday).getByText(word), word).toHaveClass('visually-hidden');
+      }
+    });
+  });
+
+  it('draws the short label from the dictionary, hidden from assistive technology', async () => {
     renderPastries();
     await days();
-    expect(within(tab('Wednesday')).getByText('Wed')).toBeInTheDocument();
-    expect(tab('Wednesday')).toHaveAccessibleName('Wednesday');
+    const short = within(tab('Wednesday')).getByText('Wed');
+    expect(short).toBeInTheDocument();
+    expect(short).toHaveAttribute('aria-hidden', 'true');
   });
 
   it('puts only the selected day in the Tab order', async () => {
@@ -119,7 +171,9 @@ describe('Pastries: the days', () => {
     renderPastries('/pastries/Tuesday');
     await days();
     expect(tab('Tuesday')).toHaveAttribute('aria-controls', panel().id);
-    expect(panel()).toHaveAttribute('aria-labelledby', tab('Tuesday').id);
+    // The panel is named by its own heading («Tuesday»), not by the tab: the tab's name is the whole
+    // sentence («Tuesday 2 pastries Tomorrow»).
+    expect(panel()).toHaveAccessibleName('Tuesday');
     expect(tab('Monday')).not.toHaveAttribute('aria-controls');
   });
 
@@ -160,9 +214,9 @@ describe('Pastries: the days', () => {
       });
       renderPastries('/pastries', { source });
       await days();
-      await vi.waitFor(() => { expect(tab('Monday')).toHaveAccessibleDescription('3 pastries'); });
-      expect(tab('Tuesday')).toHaveAccessibleDescription('1 pastry');
-      expect(tab('Wednesday')).toHaveAccessibleDescription('Nothing yet');
+      await vi.waitFor(() => { expect(tab('Monday')).toHaveAccessibleName('Monday 3 pastries'); });
+      expect(tab('Tuesday')).toHaveAccessibleName('Tuesday 1 pastry');
+      expect(tab('Wednesday')).toHaveAccessibleName('Wednesday Nothing yet');
       expect(within(tab('Monday')).getByText('3', { selector: 'span[aria-hidden]' })).toBeInTheDocument();
     });
 
@@ -173,19 +227,19 @@ describe('Pastries: the days', () => {
       expect(tab('Tuesday')).toHaveAttribute('data-empty', 'true');
     });
 
-    it('marks the opening day, and says so in its description', async () => {
+    it('marks the opening day, and says so in its name', async () => {
       renderPastries();
       await days();
-      expect(tab('Thursday')).toHaveAccessibleDescription(/Tomorrow/);
+      expect(tab('Thursday')).toHaveAccessibleName('Thursday Nothing yet Tomorrow');
       expect(within(tab('Thursday')).getByText('Tomorrow')).toBeInTheDocument();
-      expect(tab('Friday')).not.toHaveAccessibleDescription(/Tomorrow/);
+      expect(tab('Friday')).not.toHaveAccessibleName(/Tomorrow/);
     });
 
     it('ticks a day that is recorded tonight', async () => {
       renderPastries('/pastries', { source: fakePastriesSource({ logs: [logDoc('Monday', [['Cornetti', 24]])] }) });
       await days();
-      await vi.waitFor(() => { expect(tab('Monday')).toHaveAccessibleDescription(/Confirmed/); });
-      expect(tab('Tuesday')).not.toHaveAccessibleDescription(/Confirmed/);
+      await vi.waitFor(() => { expect(tab('Monday')).toHaveAccessibleName('Monday Nothing yet Confirmed'); });
+      expect(tab('Tuesday')).not.toHaveAccessibleName(/Confirmed/);
       expect(within(tab('Monday')).getByText('Confirmed')).toBeInTheDocument();
     });
 
@@ -193,12 +247,12 @@ describe('Pastries: the days', () => {
       const source = fakePastriesSource();
       renderPastries('/pastries', { source });
       await days();
-      expect(tab('Tuesday')).toHaveAccessibleDescription('Nothing yet');
+      expect(tab('Tuesday')).toHaveAccessibleName('Tuesday Nothing yet');
 
       source.days.set('Tuesday', dayDoc('Tuesday', [['Cornetti', 24], ['Krapfen', 6]]));
       act(() => { source.push(); });
 
-      expect(tab('Tuesday')).toHaveAccessibleDescription('2 pastries');
+      expect(tab('Tuesday')).toHaveAccessibleName('Tuesday 2 pastries');
     });
   });
 });
@@ -210,7 +264,7 @@ describe('Pastries: picking a day', () => {
     await user.click(tab('Tuesday'));
     expect(router.state.location.pathname).toBe('/pastries/Tuesday');
     expect(router.state.historyAction).toBe('REPLACE');
-    expect(selectedTab()).toHaveAccessibleName('Tuesday');
+    expect(selectedTab()).toHaveAccessibleName(named('Tuesday'));
     expect(within(panel()).getByRole('heading', { level: 2, name: 'Tuesday' })).toBeInTheDocument();
   });
 
@@ -263,7 +317,7 @@ describe('Pastries: the days with the keyboard', () => {
   ])('%s from Wednesday selects %s and moves the focus there', async (keys, expected) => {
     const { user } = await focusTab('Wednesday');
     await user.keyboard(keys);
-    expect(selectedTab()).toHaveAccessibleName(expected);
+    expect(selectedTab()).toHaveAccessibleName(named(expected));
     expect(tab(expected)).toHaveFocus();
     expect(tab(expected).tabIndex).toBe(0);
     expect(tab('Wednesday').tabIndex).toBe(-1);
@@ -274,11 +328,11 @@ describe('Pastries: the days with the keyboard', () => {
     await days();
     act(() => { tab('Sunday').focus(); });
     await user.keyboard('{ArrowRight}');
-    expect(selectedTab()).toHaveAccessibleName('Monday');
+    expect(selectedTab()).toHaveAccessibleName(named('Monday'));
     expect(tab('Monday')).toHaveFocus();
 
     await user.keyboard('{ArrowLeft}');
-    expect(selectedTab()).toHaveAccessibleName('Sunday');
+    expect(selectedTab()).toHaveAccessibleName(named('Sunday'));
     expect(tab('Sunday')).toHaveFocus();
   });
 
@@ -294,14 +348,14 @@ describe('Pastries: the days with the keyboard', () => {
     const { user, router } = await focusTab('Wednesday');
     await user.keyboard('{Alt>}{ArrowLeft}{/Alt}');
     expect(router.state.location.pathname).toBe('/pastries/Wednesday');
-    expect(selectedTab()).toHaveAccessibleName('Wednesday');
+    expect(selectedTab()).toHaveAccessibleName(named('Wednesday'));
   });
 
   it('does not take the Tab key', async () => {
     const { user } = await focusTab('Wednesday');
     await user.tab();
     expect(tab('Wednesday')).not.toHaveFocus();
-    expect(selectedTab()).toHaveAccessibleName('Wednesday');
+    expect(selectedTab()).toHaveAccessibleName(named('Wednesday'));
   });
 });
 
@@ -319,13 +373,16 @@ describe('Pastries: in Italian', () => {
   it('draws the days, the short labels and the subtitle in Italian', async () => {
     renderPastries('/pastries', { lang: 'it' });
     const list = await screen.findByRole('tablist', { name: 'Giorni' }, LOAD);
-    expect(within(list).getAllByRole('tab').map(node => node.getAttribute('aria-label')))
-      .toEqual(['Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato', 'Domenica']);
+    const expected = [
+      'Lunedì Ancora niente', 'Martedì Ancora niente', 'Mercoledì Ancora niente', 'Giovedì Ancora niente Domani',
+      'Venerdì Ancora niente', 'Sabato Ancora niente', 'Domenica Ancora niente',
+    ];
+    within(list).getAllByRole('tab').forEach((node, index) => { expect(node).toHaveAccessibleName(expected[index]); });
     expect(within(tab('Giovedì')).getByText('Gio')).toBeInTheDocument();
-    expect(selectedTab()).toHaveAccessibleName('Giovedì');
+    expect(selectedTab()).toHaveAccessibleName(named('Giovedì'));
     expect(within(panel()).getByRole('heading', { level: 2, name: 'Giovedì' })).toBeInTheDocument();
     expect(within(panel()).getByText('Domani · da mettere')).toBeInTheDocument();
-    expect(tab('Giovedì')).toHaveAccessibleDescription('Ancora niente, Domani');
+    expect(tab('Giovedì')).toHaveAccessibleName('Giovedì Ancora niente Domani');
   });
 
   it('says the count in Italian, one and many', async () => {
@@ -336,8 +393,8 @@ describe('Pastries: in Italian', () => {
       }),
     });
     await screen.findByRole('tablist', { name: 'Giorni' }, LOAD);
-    await vi.waitFor(() => { expect(tab('Lunedì')).toHaveAccessibleDescription('1 pasta'); });
-    expect(tab('Martedì')).toHaveAccessibleDescription('2 paste');
+    await vi.waitFor(() => { expect(tab('Lunedì')).toHaveAccessibleName('Lunedì 1 pasta'); });
+    expect(tab('Martedì')).toHaveAccessibleName('Martedì 2 paste');
   });
 });
 
@@ -372,14 +429,16 @@ describe('Pastries: what the usage record hears', () => {
   });
 });
 
-describe('Pastries: the screens that arrive in the next slice', () => {
-  it('opens Records from the day, says it is coming, and Back returns to the same day', async () => {
+// The editor and Records have specs of their own (PastriesSection.editor.spec.tsx, .records.spec.tsx);
+// what is checked here is how they sit in the frame of the section.
+describe('Pastries: the screens one level down, in the frame', () => {
+  it('opens Records from the day, and Back returns to the same day', async () => {
     const { router, user } = renderPastries('/pastries/Tuesday');
     await days();
     await user.click(screen.getByRole('link', { name: 'Records' }));
 
     expect(router.state.location.pathname).toBe('/pastries/records');
-    expect(await screen.findByText('Records will arrive in the next step of Mise 2.')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { level: 2, name: 'Records' })).toBeInTheDocument();
     expect(screen.queryByRole('tabpanel')).not.toBeInTheDocument();
     // No day is chosen on Records, but the list is still one stop of the keyboard.
     expect(screen.queryByRole('tab', { selected: true })).not.toBeInTheDocument();
@@ -387,27 +446,20 @@ describe('Pastries: the screens that arrive in the next slice', () => {
 
     await user.click(screen.getByRole('button', { name: 'Back' }));
     expect(router.state.location.pathname).toBe('/pastries/Tuesday');
-    expect(selectedTab()).toHaveAccessibleName('Tuesday');
+    expect(selectedTab()).toHaveAccessibleName(named('Tuesday'));
   });
 
-  it('opens the editor of a day, says it is coming, and Back returns to the day', async () => {
+  it('opens the editor of a day, and Back returns to the day', async () => {
     const { router, user } = renderPastries('/pastries/Tuesday');
     await days();
     await user.click(screen.getByRole('button', { name: 'Edit Tuesday' }));
 
     expect(router.state.location.pathname).toBe('/pastries/Tuesday/edit');
-    expect(await screen.findByText('Editing Tuesday will arrive in the next step of Mise 2.')).toBeInTheDocument();
-    expect(selectedTab()).toHaveAccessibleName('Tuesday');
+    expect(await screen.findByRole('heading', { level: 2, name: 'Edit Tuesday' })).toBeInTheDocument();
+    expect(selectedTab()).toHaveAccessibleName(named('Tuesday'));
 
     await user.click(screen.getByRole('button', { name: 'Back' }));
     expect(router.state.location.pathname).toBe('/pastries/Tuesday');
-  });
-
-  it('goes to the day when Records was opened by its address and there is nothing to go back to', async () => {
-    const { router, user } = renderPastries('/pastries/records');
-    await days();
-    await user.click(screen.getByRole('button', { name: 'Back' }));
-    expect(router.state.location.pathname).toBe('/pastries');
   });
 
   it('picks a day from Records, replacing it', async () => {
@@ -422,7 +474,7 @@ describe('Pastries: the screens that arrive in the next slice', () => {
     renderPastries('/pastries/Sunday/edit');
     await days();
     expect(screen.getAllByRole('tab')).toHaveLength(WEEKDAYS.length);
-    expect(selectedTab()).toHaveAccessibleName('Sunday');
+    expect(selectedTab()).toHaveAccessibleName(named('Sunday'));
     expect(selectedTab()).not.toHaveAttribute('aria-controls');
   });
 });

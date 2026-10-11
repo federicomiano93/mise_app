@@ -60,9 +60,9 @@ describe('Pastries: a part that fails', () => {
     expect(main().getByRole('button', { name: 'Reload' })).toBeInTheDocument();
     expect(within(list).getAllByRole('tab')).toHaveLength(7);
 
-    await user.click(within(list).getByRole('tab', { name: 'Friday' }));
+    await user.click(within(list).getByRole('tab', { name: /^Friday/ }));
     expect(router.state.location.pathname).toBe('/pastries/Friday');
-    expect(screen.getByRole('tab', { name: 'Friday', selected: true })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /^Friday/, selected: true })).toBeInTheDocument();
     // The screen is still one screen: one h1, the rail still there.
     expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
     expect(screen.getByRole('navigation', { name: 'All sections' })).toBeInTheDocument();
