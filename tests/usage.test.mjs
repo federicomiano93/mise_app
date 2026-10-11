@@ -574,6 +574,8 @@ test('⚠️ midnight, two tabs: counts filed for yesterday AFTER its line was s
   x.tracker.tick();
   assert.equal(stored(x.storage, yesterday).acc.actions['order-sent'], 1);
   assert.deepEqual(stored(x.storage, yesterday).acc.screens, { orders: 1, catalogue: 1 }, 'added to the full record');
+  assert.equal(stored(x.storage, yesterday).dirty, true);
+  assert.equal(stored(x.storage, yesterday).lastSentAt, new Date(2026, 9, 10, 0, 0, 3).getTime(), 'the clock of the last attempt is kept');
 
   at(10, 0, 10, 30);
   assert.equal(await x.tracker.flush('timer'), 'sent');
@@ -646,6 +648,8 @@ test('it starts itself at load, wired to the session, and sends through saveUsag
   assert.match(fn, /tracker\.begin\(page\)/);
   assert.match(fn, /onSession\(/);
   assert.match(fn, /tracker\.setSession\(session\)/);
+  // The only thing that ever removes a record: without it every day piles up in storage.
+  assert.match(fn, /tracker\.prune\(\)/);
   assert.match(fn, /setTimeout\(/);
   assert.match(fn, /sameSession\(session, currentSession\(\)\)/);
   assert.match(fn, /tracker\.flush\('load'\)/);

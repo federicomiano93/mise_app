@@ -32,7 +32,8 @@
 // the same document id and the whole document, so repeating it is harmless.
 // ⚠️ A RECORD THAT NEVER REACHED A SEND THRESHOLD is still sent: today's on the first check
 // ten minutes after it was made, a past day's on the next page load. Every record, sent or
-// not, is pruned after seven days — and only then.
+// not, is removed by the prune (run at each signed-in page load) once seven days old, and by
+// nothing else.
 // ⚠️ A PAST DAY'S RECORD IS KEPT, CLEAN, AFTER IT IS SENT, never deleted: another tab may file
 // that day's last few seconds AFTER the send (midnight with two tabs open). A record made afresh
 // would hold only those, and its send would replace the whole line on the server (same document
