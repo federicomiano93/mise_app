@@ -64,10 +64,10 @@ export const en = {
   'session.loading': 'Loading…',
   'picker.title': 'Choose location',
   'picker.sub': 'You have access to more than one.',
-  // ⚠️ «type it here» points at the join-code entrance, which Mise 2 brings in step 3g; until
-  // then this screen has no field for a code. The words are the current app's, copied as they are.
+  // ⚠️ The current app adds «If you were given a code, type it here.», pointing at its join-code
+  // field. Mise 2 brings that field in step 3g; until then the screen says who can let you in.
   'noAccess.title': 'No location yet',
-  'noAccess.body': 'This account is not linked to a location. If you were given a code, type it here.',
+  'noAccess.body': 'This account is not linked to a location. Ask the owner of your venue to add you.',
   'help.couldNotCheckYour': 'Could not check your access',
   'help.thisUsuallyMeansNo': 'This usually means no connection. Check it and try again.',
 

@@ -47,7 +47,7 @@ export const it: Messages = {
   'picker.title': 'Scegli il locale',
   'picker.sub': 'Hai accesso a più di uno.',
   'noAccess.title': 'Nessun locale',
-  'noAccess.body': 'Questo account non è collegato a nessun locale. Se ti hanno dato un codice, digitalo qui.',
+  'noAccess.body': 'Questo account non è collegato a nessun locale. Chiedi al titolare del tuo locale di aggiungerti.',
   'help.couldNotCheckYour': 'Non è stato possibile verificare il tuo accesso',
   'help.thisUsuallyMeansNo': 'Di solito vuol dire che manca la connessione. Controllala e riprova.',
 

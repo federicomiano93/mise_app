@@ -78,8 +78,9 @@ function SkipLink({ target }: { target: RefObject<HTMLElement | null> }) {
 
 // The rail is a plain box holding TWO things: the navigation (sections only) and, under it, the
 // account's avatar. The avatar is a link to the person's account but not one of the app's
-// sections, so it sits OUTSIDE the `nav` landmark — a screen reader announces «All sections»
-// with exactly the sections in it.
+// sections, so it sits OUTSIDE the «All sections» landmark — a screen reader announces that one
+// with exactly the sections in it — and in a small landmark of its own, «Account», because content
+// outside every landmark is skipped by people who move from landmark to landmark (axe «region»).
 function Rail() {
   const { t } = useT();
   const { railTop, railBottom } = useVisibleSections();
@@ -105,9 +106,11 @@ function AccountAvatar() {
   const letter = Array.from(user?.email || user?.uid || '?')[0]?.toUpperCase();
   // The link is 48px so a finger finds it; the circle inside is 40px.
   return (
-    <Link to={sectionById('settings').path} className={styles.avatarLink} aria-label={t('account.title')}>
-      <span className={styles.avatar} aria-hidden="true">{letter}</span>
-    </Link>
+    <nav aria-label={t('account.title')}>
+      <Link to={sectionById('settings').path} className={styles.avatarLink} aria-label={t('account.title')}>
+        <span className={styles.avatar} aria-hidden="true">{letter}</span>
+      </Link>
+    </nav>
   );
 }
 

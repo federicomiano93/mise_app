@@ -15,8 +15,8 @@ describe.each([
     name: 'NoAccessScreen',
     screenElement: <NoAccessScreen />,
     status: 'no-access',
-    english: ['No location yet', 'This account is not linked to a location. If you were given a code, type it here.'],
-    italian: ['Nessun locale', 'Questo account non è collegato a nessun locale. Se ti hanno dato un codice, digitalo qui.'],
+    english: ['No location yet', 'This account is not linked to a location. Ask the owner of your venue to add you.'],
+    italian: ['Nessun locale', 'Questo account non è collegato a nessun locale. Chiedi al titolare del tuo locale di aggiungerti.'],
   },
   {
     name: 'SessionErrorScreen',
