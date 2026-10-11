@@ -1,14 +1,18 @@
-// The fourteen TypeScript models and the js/ files the live app runs today must stay the SAME
+// The eighteen TypeScript models and the js/ files the live app runs today must stay the SAME
 // thing, until the switch to Mise 2 retires the js/ ones. The behaviour specs next to each model
 // run every test against both; this file checks what a behaviour test cannot see — that the two
 // export the same names, the same constants, the same frozen-ness and the same function shapes.
 //
-// membership.ts, location-id.ts and pastries-model.ts are NOT paired here: they are partial ports
-// (the pure half of js/roles.js and js/location.js; and everything in js/pastries/pastries-model.js
-// except weekdayLabel and weekdayShortLabel, which look a word up in the interface dictionary that
-// in Mise 2 belongs to the app), so the js/ files export more by design; their specs run every
-// test against both files instead (pastries-model.spec.ts also compares the names, constants,
-// frozen-ness and function shapes of everything it does port).
+// membership.ts, location-id.ts, pastries-model.ts, market.ts, price-model.ts and currency.ts are
+// NOT paired here: they are partial or adapted ports (the pure half of js/roles.js and
+// js/location.js; everything in js/pastries/pastries-model.js except weekdayLabel and
+// weekdayShortLabel, which look a word up in the interface dictionary that in Mise 2 belongs to the
+// app; the country and money half of js/market.js, without the label vocabulary; the reading half of
+// js/price-model.js, without the writing half and the dictionary lookups; and js/currency.js without
+// the module variable that holds the venue's money, which Mise 2 hands to the functions instead), so
+// the js/ files export more or differently by design; their specs run every test against both files
+// instead (pastries-model.spec.ts, market.spec.ts, price-model.spec.ts and currency.spec.ts also
+// compare the names, constants, frozen-ness and function shapes of everything they do port).
 //
 // ⚠️ IT IS WHAT CATCHES A FIX MADE TO js/ AND FORGOTTEN HERE. A constant changed in one file
 // (a new allergen, a new push kind, a new card) is invisible to every behavioural test that does
@@ -29,6 +33,10 @@ import * as deviceModel from './device-model';
 import * as usageModel from './usage-model';
 import * as pastriesLogModel from './pastries-log-model';
 import * as pastriesLock from './pastries-lock';
+import * as packSize from './pack-size';
+import * as orderUnit from './order-unit';
+import * as ingredientName from './ingredient-name';
+import * as orderCost from './order-cost';
 import * as legacyJoinCode from '../../js/join-code.js';
 import * as legacyPushModel from '../../js/push-model.js';
 import * as legacyHomeCards from '../../js/home-cards.js';
@@ -43,6 +51,10 @@ import * as legacyDeviceModel from '../../js/device-model.js';
 import * as legacyUsageModel from '../../js/usage-model.js';
 import * as legacyPastriesLogModel from '../../js/pastries/pastries-log-model.js';
 import * as legacyPastriesLock from '../../js/pastries/pastries-lock.js';
+import * as legacyPackSize from '../../js/pack-size.js';
+import * as legacyOrderUnit from '../../js/order-unit.js';
+import * as legacyIngredientName from '../../js/ingredient-name.js';
+import * as legacyOrderCost from '../../js/order-cost.js';
 
 const PAIRS: readonly (readonly [string, object, object])[] = [
   ['join-code', joinCode, legacyJoinCode],
@@ -59,6 +71,10 @@ const PAIRS: readonly (readonly [string, object, object])[] = [
   ['usage-model', usageModel, legacyUsageModel],
   ['pastries-log-model', pastriesLogModel, legacyPastriesLogModel],
   ['pastries-lock', pastriesLock, legacyPastriesLock],
+  ['pack-size', packSize, legacyPackSize],
+  ['order-unit', orderUnit, legacyOrderUnit],
+  ['ingredient-name', ingredientName, legacyIngredientName],
+  ['order-cost', orderCost, legacyOrderCost],
 ];
 
 const exportsOf = (module: object): Record<string, unknown> => module as Record<string, unknown>;
@@ -117,8 +133,9 @@ describe.each(PAIRS)('parity: %s', (_name, tsModule, jsModule) => {
   });
 });
 
-test('all fourteen models are compared', () => {
+test('all eighteen models are compared', () => {
   expect(PAIRS.map(([name]) => name)).toStrictEqual(
     ['join-code', 'push-model', 'home-cards', 'away-model', 'allergen-model', 'sections', 'firebase-target', 'local-data', 'same-data',
-      'error-model', 'device-model', 'usage-model', 'pastries-log-model', 'pastries-lock']);
+      'error-model', 'device-model', 'usage-model', 'pastries-log-model', 'pastries-lock', 'pack-size', 'order-unit', 'ingredient-name',
+      'order-cost']);
 });

@@ -113,12 +113,21 @@ Pure logic only, no DOM types. Each module is a PORT of a `js/` file, and its sp
 against BOTH files (`describe.each` over the TypeScript port and the `js/` original), so the two
 apps cannot drift apart while both are live. `parity.spec.ts` compares the full ports export by
 export (names, constants, frozen-ness, function names and arity); a partial port (`membership`,
-`location-id`, `pastries-model`) is not paired and its spec says why. `odd-inputs.spec.ts` feeds every
-export odd inputs and compares the two. A quirk of the original that no real input can reach is
+`location-id`, `pastries-model`, `market`, `price-model`) is not paired and its spec says why, and
+compares what it does port with the `js/` file itself. `currency` is an ADAPTED port, also not paired:
+the original keeps the venue's money in a module variable (`setCurrency`), and Mise 2 never keeps a
+venue fact in a module variable, so the port is stateless (`moneyOf(symbol, layout)` returns the
+`Money` that the formatting functions are handed, as `formatMoney` and `formatRate` of `price-model`
+are); its spec runs each case against the `js/` module after `setCurrency` and against the port with
+`moneyOf`, and demands the same text. `odd-inputs.spec.ts` feeds every export odd inputs and compares
+the two. A quirk of the original that no real input can reach is
 copied, not tidied, and marked where it sits: fixing it is a bug fix to BOTH files at once, and
 `odd-inputs.spec.ts` fails until they agree. Today: join-code, push-model, home-cards, away-model,
 allergen-model, sections, firebase-target, local-data, same-data, error-model, device-model,
-usage-model, membership, location-id, pastries-model, pastries-log-model, pastries-lock.
+usage-model, membership, location-id, pastries-model, pastries-log-model, pastries-lock, pack-size,
+order-unit, ingredient-name, order-cost, market (partial: the country and the money, not the label
+vocabulary), price-model (partial: the reading half, not the writing half or the dictionary lookups),
+currency (adapted, stateless).
 
 ## The session
 
