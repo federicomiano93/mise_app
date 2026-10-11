@@ -350,7 +350,7 @@ test('⚠️ on hide the write is handed over at once, with nothing awaited, and
   assert.equal(JSON.parse(storage.data[old]).dirty, true);
 });
 
-test('the timer check sends a past day too, and deletes it only after the answer', async () => {
+test('the timer check sends a past day too, and marks it clean only after the answer', async () => {
   const storage = memoryStorage();
   const old = storeKey('bakery', 'u1', '20261008');
   storage.setItem(old, JSON.stringify({ acc: { screens: { orders: 3 } }, dirty: true, lastSentAt: 0, rev: 1 }));
@@ -361,10 +361,11 @@ test('the timer check sends a past day too, and deletes it only after the answer
   tracker.setSession(READY);
   assert.equal(await tracker.flush('timer'), 'sent');
   assert.equal(sent2[0], `${DEVICE}_20261008_u1`);
-  assert.equal(old in storage.data, true, 'not deleted at the handover');
+  assert.equal(JSON.parse(storage.data[old]).dirty, true, 'not clean at the handover');
   answer();
   await new Promise(r => setImmediate(r));
-  assert.equal(old in storage.data, false);
+  assert.equal(JSON.parse(storage.data[old]).dirty, false);
+  assert.equal(JSON.parse(storage.data[old]).acc.screens.orders, 3, 'kept for the prune, counts and all');
 });
 
 test('counts made before midnight are filed under the day they were made', () => {
@@ -509,7 +510,7 @@ test('a storage that throws never breaks a page', async () => {
   assert.equal(await tracker.flush('timer'), 'nothing');
 });
 
-test('a past day still dirty is sent at once, and its record is deleted when handed over', async () => {
+test('a past day still dirty is sent at once, and its record is kept, clean, once answered', async () => {
   const storage = memoryStorage();
   const old = storeKey('bakery', 'u1', '20261008');
   storage.setItem(old, JSON.stringify({ acc: { screens: { orders: 3 } }, dirty: true, lastSentAt: 0 }));
@@ -519,21 +520,66 @@ test('a past day still dirty is sent at once, and its record is deleted when han
   assert.equal(sent[0].id, `${DEVICE}_20261008_u1`);
   assert.equal(sent[0].payload.dayKey, '20261008');
   assert.equal(sent[0].payload.screens.orders, 3);
-  assert.equal(old in storage.data, false);
+  await new Promise(r => setImmediate(r));
+  assert.equal(JSON.parse(storage.data[old]).dirty, false);
 });
 
-test('a past day that was already sent is simply deleted; another person\'s past day is left alone', async () => {
+test('a past day that was already sent is not sent again and stays for the prune; another person\'s past day is left alone', async () => {
   const storage = memoryStorage();
   const sentDay = storeKey('bakery', 'u1', '20261007');
   const other = storeKey('bakery', 'u2', '20261007');
-  storage.setItem(sentDay, JSON.stringify({ acc: {}, dirty: false, lastSentAt: 1 }));
+  storage.setItem(sentDay, JSON.stringify({ acc: { screens: { orders: 2 } }, dirty: false, lastSentAt: 1 }));
   storage.setItem(other, JSON.stringify({ acc: { screens: { orders: 1 } }, dirty: true, lastSentAt: 0 }));
   const { tracker, sent } = setup({ storage });
   tracker.setSession(READY);
-  await tracker.flush('load');
-  assert.equal(sentDay in storage.data, false);
+  assert.equal(await tracker.flush('load'), 'nothing');
+  assert.equal(JSON.parse(storage.data[sentDay]).acc.screens.orders, 2);
   assert.equal(other in storage.data, true);
   assert.equal(sent.length, 0);
+});
+
+test('⚠️ midnight, two tabs: counts filed for yesterday AFTER its line was sent join the full line, never replace it', async () => {
+  // Tab X still holds a few uncommitted seconds of yesterday when tab Y, just after midnight,
+  // sends yesterday's line; Y then moves to another page (a new tracker, same storage) before X
+  // files its seconds. Yesterday's record must still be there for X to add to: a record made
+  // afresh would hold only X's delta, and its send would replace the whole line on the server.
+  const x = setup();
+  const y = setup({ storage: x.storage });
+  const at = (day, h, m, s) => { x.clock.t = y.clock.t = new Date(2026, 9, day, h, m, s).getTime(); };
+  const yesterday = storeKey('bakery', 'u1', '20261009');
+  at(9, 23, 59, 0);
+  x.tracker.setSession(READY);
+  x.tracker.begin('orders');
+  x.tracker.setSession(READY);
+  y.tracker.setSession(READY);
+  y.tracker.begin('catalogue');
+  y.tracker.setSession(READY);
+  at(9, 23, 59, 55);
+  x.tracker.action('order-sent');
+  assert.deepEqual(x.tracker.pending().actions, { 'order-sent': 1 }, 'not yet filed');
+
+  at(10, 0, 0, 3);
+  assert.equal(await y.tracker.flush('load'), 'sent');
+  await new Promise(r => setImmediate(r));
+  assert.deepEqual(y.sent[0].payload.screens, { orders: 1, catalogue: 1 });
+
+  at(10, 0, 0, 6);
+  const y2 = setup({ storage: x.storage });
+  y2.clock.t = x.clock.t;
+  y2.tracker.setSession(READY);
+  await y2.tracker.flush('load');
+  assert.equal(yesterday in x.storage.data, true, 'the next page in tab Y leaves the clean record alone');
+
+  at(10, 0, 0, 10);
+  x.tracker.tick();
+  assert.equal(stored(x.storage, yesterday).acc.actions['order-sent'], 1);
+  assert.deepEqual(stored(x.storage, yesterday).acc.screens, { orders: 1, catalogue: 1 }, 'added to the full record');
+
+  at(10, 0, 10, 30);
+  assert.equal(await x.tracker.flush('timer'), 'sent');
+  const line = x.sent.find(s => s.payload.dayKey === '20261009');
+  assert.deepEqual(line.payload.screens, { orders: 1, catalogue: 1 }, 'the resend is the whole day');
+  assert.deepEqual(line.payload.actions, { 'order-sent': 1 });
 });
 
 test('a past day that fails passingly is put back for the next try', async () => {

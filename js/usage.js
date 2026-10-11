@@ -31,8 +31,12 @@
 // minutes; a write that never settles (offline, or a page that died) is sent again later,
 // the same document id and the whole document, so repeating it is harmless.
 // ⚠️ A RECORD THAT NEVER REACHED A SEND THRESHOLD is still sent: today's on the first check
-// ten minutes after it was made, a past day's on the next page load. It is pruned only
-// after seven days unsent.
+// ten minutes after it was made, a past day's on the next page load. Every record, sent or
+// not, is pruned after seven days — and only then.
+// ⚠️ A PAST DAY'S RECORD IS KEPT, CLEAN, AFTER IT IS SENT, never deleted: another tab may file
+// that day's last few seconds AFTER the send (midnight with two tabs open). A record made afresh
+// would hold only those, and its send would replace the whole line on the server (same document
+// id, whole-document write).
 // ⚠️ NOTHING TO RECORD, NOTHING WRITTEN: no target of a tap, no text, no value is ever read —
 // only the name of the screen the tap happened on.
 
@@ -263,14 +267,13 @@ export function createTracker(deps = {}) {
   }
 
   // The write came back (or was refused for good): the record is clean ONLY if nothing was added
-  // while it was in flight, and a past day's record is then deleted.
-  function settle(key, sentRev, past) {
+  // while it was in flight. A past day's record is kept too (see the header): the prune removes it.
+  function settle(key, sentRev) {
     try {
       const again = readJson(d.storage, key);
       if (!again) return;
       if ((Number.isFinite(again.rev) ? again.rev : 0) !== sentRev) return;
-      if (past) d.storage.removeItem(key);
-      else writeJson(d.storage, key, { ...again, dirty: false });
+      writeJson(d.storage, key, { ...again, dirty: false });
     } catch { /* it stays dirty: one more send, same document id */ }
   }
 
@@ -308,10 +311,8 @@ export function createTracker(deps = {}) {
         const rec = readJson(d.storage, key);
         if (!rec) continue;
         const past = p.dayKey < today;
-        if (!rec.dirty) {
-          if (past) { try { d.storage.removeItem(key); } catch { /* next time */ } }
-          continue;
-        }
+        // Already sent: a past day stays for the prune (see the header).
+        if (!rec.dirty) continue;
         const nowMs = d.now().getTime();
         const since = nowMs - (Number.isFinite(rec.lastSentAt) ? rec.lastSentAt : 0);
         const due = past
@@ -327,10 +328,10 @@ export function createTracker(deps = {}) {
         let sending;
         try { sending = Promise.resolve(d.send(payload, id)); } catch (err) { sending = Promise.reject(err); }
         sent += 1;
-        sending.then(() => settle(key, sentRev, past), err => {
+        sending.then(() => settle(key, sentRev), err => {
           // A refusal by the rules would only repeat itself: leave it be. A passing failure
           // (offline, busy) keeps the record dirty for the next attempt.
-          if (isFinalRefusal(err)) settle(key, sentRev, past);
+          if (isFinalRefusal(err)) settle(key, sentRev);
           warn(err);
         });
       }
