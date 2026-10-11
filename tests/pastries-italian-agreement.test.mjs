@@ -3,7 +3,8 @@
 // wrong on Sunday — which is how the Italian Pastries screen read until Oct 2026. A weekday is the
 // subject of no adjective or participle: the sentence is about «la lista di {day}», or puts the day
 // last («Salvato: {day}.»). The same goes for a pastry name, which can be feminine or plural
-// («Quanti Sfogliatelle?»). Mise 2 carries the same guard (app/src/i18n/i18n.spec.ts).
+// («Quanti Sfogliatelle?»). Mise 2 carries a narrower copy of this guard (app/src/i18n/i18n.spec.ts,
+// branch feature/mise2-pastries until it merges).
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -26,10 +27,12 @@ const withName = italianPastries.filter(([, text]) => text.includes('{name}'));
 // Words that would have to agree with the day: masculine participles and adjectives, and the
 // pronoun «lo» that points back at it. A word followed by a colon is a label with the day after it
 // («Salvato: {day}.»), which agrees with nothing.
-const MASCULINE = /\b(fatto|detto|messo|preso|chiuso|aperto|vuoto|pieno|pronto|registrato|salvato|confermato|modificato|cambiato|aggiornato|completato)\b(?!:)|\b(cambiarlo|modificarlo|toglierlo|salvarlo|registrarlo|confermarlo)\b/i;
+const MASCULINE = /\b(fatto|detto|messo|preso|tolto|scritto|chiuso|aperto|vuoto|pieno|pronto|completo|registrato|salvato|confermato|modificato|cambiato|aggiornato|completato)\b(?!:)|\b(cambiarlo|modificarlo|toglierlo|salvarlo|registrarlo|confermarlo)\b/i;
 // A regular masculine participle (-ato, -ito, -uto) anywhere after the day, the irregular ones
 // being in the list above.
 const PARTICIPLE_AFTER_DAY = /\{day\}.*?\b([a-zà-ù]+(?:at|it|ut)o)\b(?!:)/is;
+// A masculine article in front of the day: «del Domenica», «il Domenica».
+const ARTICLE_BEFORE_DAY = /\b(il|lo|del|dello|al|allo|dal|nel|sul|un)\s+\{day\}/i;
 
 test('the guard below is looking at the Pastries sentences, not at nothing', () => {
   assert.ok(withDay.length > 10, `only ${withDay.length} Italian past.* sentences name a day`);
@@ -47,16 +50,20 @@ test('no Italian Pastries sentence makes a word agree with the day', () => {
     const participle = PARTICIPLE_AFTER_DAY.exec(text);
     assert.equal(participle, null,
       `${key}: «${text}» has «${participle?.[1]}» after the day — wrong for Domenica.`);
+    assert.doesNotMatch(text, ARTICLE_BEFORE_DAY,
+      `${key}: «${text}» puts a masculine article before the day — «del Domenica» is wrong.`);
   }
 });
 
 test('the guard catches the sentences that read wrong on Sunday', () => {
-  const caught = text => MASCULINE.test(text) || PARTICIPLE_AFTER_DAY.test(text);
+  const caught = text => MASCULINE.test(text) || PARTICIPLE_AFTER_DAY.test(text) || ARTICLE_BEFORE_DAY.test(text);
   assert.ok(caught('{day} salvato.'));
   assert.ok(caught('{day} è già registrato per stanotte. Modificare queste quantità?'));
   assert.ok(caught('{day} risulterà fatto. Puoi ancora cambiarlo — te lo chiederà prima.'));
   assert.ok(caught('{day} è stato aggiornato.'));
   assert.ok(caught('{day} è sparito.'));
+  assert.ok(caught('{day} tolto.'));
+  assert.ok(caught('La lista del {day} è pronta.'));
   assert.ok(!caught('Salvato: {day}.'));
   assert.ok(!caught('Non è stato possibile salvare {day} — controlla la connessione.'));
 });
