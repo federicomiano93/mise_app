@@ -7,7 +7,7 @@ import { PartBoundary } from '../errors/PartBoundary';
 import { useT } from '../i18n/useT';
 import { useSession } from '../session/SessionContext';
 import { SwitchVenueButton } from '../session/SwitchVenueButton';
-import { announceScreen, markLoaded } from '../telemetry/usage';
+import { announceScreen } from '../telemetry/usage';
 import { OfflineBanner } from './OfflineBanner';
 import { MORE, moreIsCurrent, screenNameFor, sectionById, titleKeyFor } from './sections';
 import type { Section } from './sections';
@@ -42,11 +42,6 @@ export function AppShell() {
     const name = screenNameFor(pathname);
     if (name !== null) announceScreen(name);
   }, [pathname]);
-
-  // The page is ready when the shell is first drawn: that is the load time the usage record keeps.
-  useEffect(() => {
-    markLoaded();
-  }, []);
 
   return (
     // Lets React Aria components that take an `href` navigate through the router instead of

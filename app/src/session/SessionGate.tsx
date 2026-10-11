@@ -2,7 +2,7 @@ import { useContext, useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import { I18nContext } from '../i18n/I18nContext';
 import type { Language } from '../i18n/i18n';
-import { announceScreen } from '../telemetry/usage';
+import { announceScreen, markLoaded } from '../telemetry/usage';
 import { ChooseVenueScreen } from './ChooseVenueScreen';
 import { LoadingScreen } from './LoadingScreen';
 import { NoAccessScreen } from './NoAccessScreen';
@@ -31,9 +31,16 @@ export function SessionGate({ children }: { children: ReactNode }) {
 
   // The screens of the gate tell the usage record where the person is. `loading` is a wait, not a
   // screen, and `ready` is the shell's: it names the section.
+  //
+  // ⚠️ THE PAGE IS LOADED WHEN THE FIRST SCREEN IS UP, signing in or not. Marked at the shell's
+  // first render instead, a visit that starts signed out would count the time it takes to type
+  // a password as «load time». markLoaded keeps the first call (the shell's own is in
+  // InVenueLanguage below).
   useEffect(() => {
     const name = GATE_SCREENS[session.status];
-    if (name) announceScreen(name);
+    if (!name) return;
+    announceScreen(name);
+    markLoaded();
   }, [session.status]);
 
   switch (session.status) {
@@ -72,6 +79,14 @@ function InVenueLanguage({ language, children }: { language: Language | null; ch
     return () => { current = false; };
   }, [language, lang, setLanguage]);
 
-  if (language !== null && language !== lang && asked !== language) return <LoadingScreen />;
+  const waiting = language !== null && language !== lang && asked !== language;
+
+  // The shell is on screen once nothing holds it back: that is the load time of a visit that
+  // starts already signed in. (A visit that started signed out marked it at the sign-in screen.)
+  useEffect(() => {
+    if (!waiting) markLoaded();
+  }, [waiting]);
+
+  if (waiting) return <LoadingScreen />;
   return children;
 }

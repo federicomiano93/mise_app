@@ -625,7 +625,8 @@ describe('the keys', () => {
 
 // ── Mise 2: one page, many views ────────────────────────────────────────────────────────────
 // What changes in a single-page app: the page is always «m2»; the shell announces the section it
-// shows with announceScreen(); the load time is the shell's first render (markLoaded()).
+// shows with announceScreen(); the load time is when the first screen is up (markLoaded(), which
+// the session gate calls).
 
 describe('Mise 2: one page, many views', () => {
   const stops: Array<() => void> = [];

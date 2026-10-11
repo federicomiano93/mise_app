@@ -224,7 +224,7 @@ export function createTracker(deps: UsageDeps): Tracker {
   }
 
   // The page finished loading: its load time, once. Not known at begin() — Mise 2 is ready only
-  // when the shell has first rendered (markLoaded()), which is after the tracker starts.
+  // when its first screen is up (markLoaded()), which is after the tracker starts.
   function recordLoad(): void {
     if (loadRecorded || !page) return;
     const ms = d.navigationMs();
@@ -416,11 +416,13 @@ export function createTracker(deps: UsageDeps): Tracker {
 // ── What Mise 2 adds around the tracker ─────────────────────────────────────────────────────
 
 // Mise 2's own first paint: milliseconds since the page opened (performance.now() counts from
-// there), taken the first time the shell calls markLoaded(). null until then.
+// there), taken the first time markLoaded() is called. null until then.
 let loadedAtMs: number | null = null;
 const loadWaiters = new Set<() => void>();
 
-// Called ONCE by the shell when it first renders. It is the load time the usage record keeps for
+// Called by the session gate when the FIRST screen is up (the sign-in form, the venue picker, an
+// error screen or the shell, whichever comes first: a visit that starts signed out must not count
+// the time it takes to type a password). It is the load time the usage record keeps for
 // the page «m2»; later calls change nothing.
 export function markLoaded(): void {
   if (loadedAtMs !== null) return;
@@ -511,7 +513,7 @@ export function startUsage({ source, send, deps }: UsageStart): () => void {
     on(window, SCREEN_EVENT, event => tracker.view(MISE2_PAGE, (event as CustomEvent).detail));
     on(window, ACTION_EVENT, event => tracker.action((event as CustomEvent).detail));
 
-    // The load time is known when the shell first renders, which may be before or after this.
+    // The load time is known when the first screen is up, which may be before or after this.
     const noteLoad = (): void => tracker.recordLoad();
     loadWaiters.add(noteLoad);
     stops.push(() => { loadWaiters.delete(noteLoad); });
