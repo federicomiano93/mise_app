@@ -4,7 +4,7 @@ import { isBusy } from '../session/busy';
 import { ACTION_EVENT } from '../telemetry/usage';
 import { fakePastriesSource } from '../testing/fakePastriesSource';
 import type { FakePastriesSource } from '../testing/fakePastriesSource';
-import { holdDays } from '../testing/holdAnswers';
+import { holdConfirmations, holdDays } from '../testing/holdAnswers';
 import { WORK_DATE, dayDoc, freezeClock, logDoc, renderPastries } from '../testing/renderPastries';
 import type { PastriesStore } from './pastriesStore';
 
@@ -756,6 +756,84 @@ describe('before the days have answered', () => {
   });
 });
 
+// ⚠️ ON A NEW PHONE the list is not «empty» until the database has said so: an empty answer from the
+// phone's own offline copy is not an answer.
+describe('on a phone that has never seen the list', () => {
+  it('says the list has not arrived, never «Nothing to prove», until the real answer', async () => {
+    const source = seeded();
+    const { answer, fromCache } = holdDays(source);
+    renderPastries('/pastries', { source });
+    expect(await screen.findByText('The list hasn’t arrived yet.', undefined, LOAD)).toBeInTheDocument();
+    expect(screen.queryByText(/Nothing to prove/)).not.toBeInTheDocument();
+    expect(screen.queryByText('Tap the pencil to add.')).not.toBeInTheDocument();
+
+    act(() => { fromCache(); });
+    expect(screen.getByText('The list hasn’t arrived yet.')).toBeInTheDocument();
+    expect(screen.queryByText(/Nothing to prove/)).not.toBeInTheDocument();
+
+    act(() => { answer(); });
+    expect(await rowReady('Cornetti')).toBeInTheDocument();
+    expect(screen.queryByText('The list hasn’t arrived yet.')).not.toBeInTheDocument();
+  });
+
+  it('says «Nothing to prove» once the real answer is an empty day', async () => {
+    const source = fakePastriesSource();
+    const { answer } = holdDays(source);
+    renderPastries('/pastries', { source });
+    await screen.findByText('The list hasn’t arrived yet.', undefined, LOAD);
+
+    act(() => { answer(); });
+    expect(await screen.findByText('Nothing to prove for Thursday yet.', undefined, LOAD)).toBeInTheDocument();
+    expect(screen.getByText('Tap the pencil to add.')).toBeInTheDocument();
+    expect(screen.queryByText('The list hasn’t arrived yet.')).not.toBeInTheDocument();
+  });
+});
+
+// ⚠️ UNTIL TONIGHT'S CONFIRMATIONS HAVE ANSWERED «not confirmed» only means «nobody has said yet».
+describe('before the confirmations have answered', () => {
+  it('ignores a row tap and disables Confirm, then works once they answer', async () => {
+    const source = seeded();
+    const { answer } = holdConfirmations(source);
+    const { user } = renderPastries('/pastries', { source });
+    await rowReady('Cornetti');
+    await waitFor(() => { expect(source.watchLogsForDate).toHaveBeenCalled(); });
+
+    expect(confirmButton()).toBeDisabled();
+    expect(row('Cornetti')).toHaveAttribute('aria-disabled', 'true');
+    await user.click(row('Cornetti'));
+    expect(screen.queryByRole('spinbutton')).not.toBeInTheDocument();
+    await user.click(confirmButton()!);
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+
+    act(() => { answer(); });
+    await waitFor(() => { expect(confirmButton()).toBeEnabled(); });
+    await user.click(row('Cornetti'));
+    expect(box('Cornetti')).toBeInTheDocument();
+    await user.click(confirmButton()!);
+    expect(await dialog('Confirm Thursday?')).toBeInTheDocument();
+  });
+
+  it('opens nothing on a recorded day before they arrive, then asks «Edit Thursday?»', async () => {
+    const source = fakePastriesSource({
+      days: [dayDoc('Thursday', THURSDAY)],
+      logs: [logDoc('Thursday', THURSDAY)],
+    });
+    const { answer } = holdConfirmations(source);
+    const { user } = renderPastries('/pastries', { source });
+    await rowReady('Cornetti');
+    await waitFor(() => { expect(source.watchLogsForDate).toHaveBeenCalled(); });
+
+    await user.click(row('Cornetti'));
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    expect(screen.queryByRole('spinbutton')).not.toBeInTheDocument();
+
+    act(() => { answer(); });
+    await waitFor(() => { expect(editButton()).toBeInTheDocument(); });
+    await user.click(row('Cornetti'));
+    expect(await dialog('Edit Thursday?')).toBeInTheDocument();
+  });
+});
+
 // ⚠️ THE BUTTON THAT WAS PRESSED HIDES ITSELF, and a hidden element cannot keep the focus: it would
 // fall to <body>. The focus goes to the control that takes its place — but only the press that
 // causes the swap asks for it.
@@ -930,6 +1008,13 @@ describe('in Italian', () => {
     await user.click(within(ask).getByRole('button', { name: 'Annulla' }));
     await waitFor(() => { expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument(); });
     expect(within(screen.getByRole('tabpanel')).getByText('Confermato')).toBeVisible();
+  });
+
+  it('says the list has not arrived yet in Italian', async () => {
+    const source = seeded();
+    holdDays(source);
+    renderPastries('/pastries', { source, lang: 'it' });
+    expect(await screen.findByText('La lista non è ancora arrivata.', undefined, LOAD)).toBeInTheDocument();
   });
 
   it('says a refused save in Italian', async () => {

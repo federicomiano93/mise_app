@@ -27,7 +27,10 @@ Differences from the current app are listed at the end, each with its reason.
 6. **Saving is local-first**: the screen changes at once; if the server refuses, the day is put
    back as it was and «Couldn't save {day} — check your connection.» is shown.
 7. **One live listener on the seven days**, started when Pastries opens (seven reads per opening).
-   If the stream dies: «Live sync interrupted — this list may be out of date.»
+   If the stream dies: «Live sync interrupted — this list may be out of date.» An EMPTY answer
+   from Firestore's own offline copy is not believed, unless the phone's local copy said the venue
+   never had a pastry (PR #341); the listener asks for metadata changes, so the server's answer
+   still arrives. **spec**
 8. **Records** are `pastry-logs/{YYYY-MM-DD}_{Weekday}`, at most one per work date per day. They
    are read only while the Records screen is open (`orderBy('date','desc')`, `limit(120)`), and the
    listener is stopped on leaving it. Stream error: «Live sync interrupted — these records may be
@@ -67,7 +70,8 @@ Differences from the current app are listed at the end, each with its reason.
     «That row has changed — check the list.» On success: «{name}: {n}.» **spec** (`setQuantityAt`)
 18. **What this phone has typed survives a snapshot** from another phone (kept by pastry name),
     as do the scroll position and the focus in the box.
-19. Empty day: «Nothing to prove for {day} yet.» / «Tap the pencil to add.»
+19. Empty day: «Nothing to prove for {day} yet.» / «Tap the pencil to add.» Before the first answer
+    of the days, an empty list says «The list hasn’t arrived yet.» instead. **spec**
 20. The day's standing note is shown under the list when there is one.
 21. The opening day is subtitled «Tomorrow · to prove», every other day «To prove».
 22. **Confirm** reads tonight's record once, then asks «Confirm {day}?» with «Keep this list as a
@@ -151,14 +155,18 @@ Differences from the current app are listed at the end, each with its reason.
   editor can be reached by a reload or a bookmark, which comes through no door: once the seven days
   AND tonight's confirmations have answered, a recorded day asks «Edit {day}?» once (the words of 23).
   Edit grants the permission and the form opens; Cancel goes to the day, replacing the editor in the
-  history. Until both answers are in, the editor shows «Loading…», never the form. It is not asked
+  history. Until both answers are in it never shows the form: «The list hasn’t arrived yet — it opens as
+  soon as it does.» while the days are missing, «Loading…» after. It is not asked
   again while editing (a colleague confirming meanwhile changes nothing, as in the current app), and
   not at all from the pencil, whose door has already asked.
-- **Quick edit and Confirm wait for the first live answer of the seven days.** Until it comes (the
-  device's own cache counts, so working offline is unaffected) the list on screen is only the
-  phone's old copy, possibly days old. It is drawn at once, but a row ignores a tap (it is
+- **Quick edit and Confirm wait for BOTH first answers: the seven days and tonight's
+  confirmations.** Until they come (the device's own cache counts, so working offline is
+  unaffected) the list on screen is only the phone's old copy, possibly days old, and «not
+  confirmed» only means «nobody has said yet». It is drawn at once, but a row ignores a tap (it is
   `aria-disabled`, not removed from the keyboard's path) and Confirm is disabled, so nothing can be
-  written or recorded from a stale list.
+  written or recorded from a stale list, and a recorded day cannot be edited without its question.
+  Since PR #341 the current app does the same; the difference left is that Mise 2's pencil opens
+  the editor, which waits, where the current app's pencil waits on the day with a message.
 - **The opening day follows a return to the app.** Line 13 stands: the day is worked out when
   Pastries opens and does not move while the app is on screen. But Mise 2 never reloads by itself, so
   a tablet left open across 4am would keep saying «Tomorrow» of the day it was opened on. When the

@@ -38,7 +38,10 @@ type Phase = 'waiting' | 'asking' | 'open';
 // Opened by its address (a reload, a bookmark) on a phone with nothing stored, the seven days are
 // still on their way: a copy taken now would be an EMPTY day, and a Save would write that over the
 // real one. It waits for the first answer (store.daysLoaded; a stream that fails counts as an answer,
-// so it never waits for ever). Opened from the day, the days are long loaded and this is one render.
+// so it never waits for ever; an EMPTY answer from the device's own cache does not count as the first
+// answer — see believable() in pastriesStore.ts). While the days are missing it says «The list hasn't
+// arrived yet — it opens as soon as it does.»; once only the confirmations are missing, «Loading…».
+// Opened from the day, the days are long loaded and this is one render.
 //
 // ⚠️ THE EDITOR ASKS THE LOCK QUESTION ITSELF, ONCE. From the day, the pencil has already asked it
 // (DayPanel's gate) and by the time the editor opens the permission is stored, so it opens straight.
@@ -91,7 +94,7 @@ export function Editor(props: Props) {
   if (phase !== 'open') {
     return (
       <section className={styles.editor} aria-busy="true">
-        <p className={styles.loading}>{t('session.loading')}</p>
+        <p className={styles.loading}>{daysLoaded ? t('session.loading') : t('past.listNotLoadedYet')}</p>
         {confirmDialog}
       </section>
     );
