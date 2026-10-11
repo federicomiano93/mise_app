@@ -31,9 +31,11 @@ function goOnline() {
 }
 
 describe('OfflineBanner', () => {
-  it('is not there while the phone is online', () => {
+  // ⚠️ The live region is on the page BEFORE there is anything to say: a status element inserted
+  // already filled in is announced unreliably (VoiceOver on iOS), text added to one is.
+  it('keeps an empty live region while the phone is online, and shows nothing', () => {
     renderWithSession(<OfflineBanner />);
-    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    expect(screen.getByRole('status')).toBeEmptyDOMElement();
     expect(screen.queryByText(ENGLISH)).not.toBeInTheDocument();
   });
 
@@ -50,8 +52,19 @@ describe('OfflineBanner', () => {
     expect(screen.getByRole('status')).toHaveTextContent(ENGLISH);
 
     goOnline();
-    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    expect(screen.getByRole('status')).toBeEmptyDOMElement();
     expect(screen.queryByText(ENGLISH)).not.toBeInTheDocument();
+  });
+
+  it('puts the words into the SAME live region that was on the page, never a new one', () => {
+    renderWithSession(<OfflineBanner />);
+    const region = screen.getByRole('status');
+
+    goOffline();
+    expect(screen.getByRole('status')).toBe(region);
+
+    goOnline();
+    expect(screen.getByRole('status')).toBe(region);
   });
 
   it('speaks Italian in an Italian venue', () => {
@@ -91,6 +104,17 @@ describe('OfflineBanner in the shell', () => {
     const banner = main.getByText(ENGLISH);
     const heading = main.getByRole('heading', { level: 1, name: 'Orders' });
     expect(banner.compareDocumentPosition(heading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('keeps its empty live region at the top of the content while online', () => {
+    renderApp('/orders');
+
+    const main = screen.getByRole('main');
+    const region = main.querySelector('[role="status"]');
+    expect(region).not.toBeNull();
+    expect(region).toBeEmptyDOMElement();
+    const heading = within(main).getByRole('heading', { level: 1, name: 'Orders' });
+    expect((region?.compareDocumentPosition(heading) ?? 0) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it('follows the connection while a screen is open, and the top bar still says it too', () => {

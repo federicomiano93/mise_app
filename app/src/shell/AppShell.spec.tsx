@@ -339,7 +339,8 @@ describe('AppShell: a section that fails', () => {
     await user.click(rail().getByRole('link', { name: 'Recipes' }));
 
     const main = within(screen.getByRole('main'));
-    expect(main.getByRole('status')).toHaveTextContent('This part didn’t load.');
+    // Not getByRole('status') alone: the offline banner keeps an (empty) status region of its own.
+    expect(main.getByText('This part didn’t load.').closest('[role="status"]')).not.toBeNull();
     expect(main.getByRole('button', { name: 'Reload' })).toBeInTheDocument();
     // The whole-app error screen is NOT what is showing.
     expect(screen.queryByRole('heading', { name: 'Mise stopped working.' })).not.toBeInTheDocument();
@@ -373,13 +374,13 @@ describe('AppShell: a section that fails', () => {
   it('puts the focus on the heading of the restored screen after Reload, not on the page body', async () => {
     // Opened directly (a first load), so no navigation moved the focus anywhere yet.
     const { user } = renderApp('/recipes', { routes });
-    expect(within(screen.getByRole('main')).getByRole('status')).toBeInTheDocument();
+    expect(within(screen.getByRole('main')).getByText('This part didn’t load.')).toBeInTheDocument();
 
     broken = false;
     await user.click(screen.getByRole('button', { name: 'Reload' }));
 
     const heading = await screen.findByRole('heading', { level: 1, name: 'Recipes' });
-    expect(within(screen.getByRole('main')).queryByRole('status')).not.toBeInTheDocument();
+    expect(within(screen.getByRole('main')).queryByText('This part didn’t load.')).not.toBeInTheDocument();
     expect(document.activeElement).toBe(heading);
     expect(document.title).toBe('Recipes · Mise');
   });
