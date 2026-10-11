@@ -8,7 +8,7 @@ import { useOwnScrollArea } from '../shell/scrollArea';
 import { SPLIT_QUERY } from '../ui/split';
 import { StatusMessageProvider, useStatusMessage } from '../ui/StatusMessage';
 import { useMediaQuery } from '../ui/useMediaQuery';
-import { HandBackProvider, useHandBackState } from './handBack';
+import { COST_OPENER, HandBackProvider, productOpener, useHandBackState } from './handBack';
 import { StocktakeProvider, useStocktakeStore } from './StocktakeContext';
 import { StocktakeDetail } from './StocktakeDetail';
 import { StocktakeList } from './StocktakeList';
@@ -105,8 +105,10 @@ function MonthScreen({ view, current }: { view: ShownView; current: string }) {
   // ⚠️ CHANGING MONTH IS LATERAL: it replaces the address, like picking a day in Pastries, so Back
   // does not walk through every month that was looked at. What is still unsent is handed to
   // Firestore first and NEVER awaited — with no signal in a storeroom the answer would never come.
-  // KEEP_FOCUS: the focus stays on the arrow that was pressed.
+  // KEEP_FOCUS: the focus stays on the arrow that was pressed — and no row is owed it, even with a
+  // product open beside the list (the split), which the new month's list replaces.
   const moveTo = (other: string) => {
+    handBack.forget();
     void store.flushBeforeLeaving();
     void navigate(monthPath(other), { replace: true, state: KEEP_FOCUS });
   };
@@ -124,8 +126,14 @@ function MonthScreen({ view, current }: { view: ShownView; current: string }) {
       void navigate(to, { state: FROM_LIST });
     }
   };
-  const openProduct = (id: string) => { openScreen(productPath(month, id)); };
-  const openCost = () => { openScreen(costPath(month)); };
+  const openProduct = (id: string) => {
+    handBack.expect(productOpener(id));
+    openScreen(productPath(month, id));
+  };
+  const openCost = () => {
+    handBack.expect(COST_OPENER);
+    openScreen(costPath(month));
+  };
 
   // Where the scroll area goes at every move inside the section. Before the hand-back below, so
   // the place is back when the row's button takes the focus: focusing a row that is in view
@@ -154,8 +162,9 @@ function MonthScreen({ view, current }: { view: ShownView; current: string }) {
     }
   }, [pathname]);
 
-  // Back out of a product or «What it cost»: the button that opened it takes the focus, once the
-  // list is on screen again (on a phone it was hidden behind the screen, not unmounted).
+  // Back out of a product or «What it cost» (its own Back, or the phone's back gesture): the button
+  // that opened it takes the focus, once the list is on screen again (on a phone it was hidden
+  // behind the screen, not unmounted).
   useLayoutEffect(() => {
     if (view.kind === 'list') handBack.deliver();
   }, [view.kind, handBack]);

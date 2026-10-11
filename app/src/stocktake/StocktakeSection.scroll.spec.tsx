@@ -1,5 +1,5 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { screen, within } from '@testing-library/react';
+import { act, screen, waitFor, within } from '@testing-library/react';
 import { fakeStocktakeSource } from '../testing/fakeStocktakeSource';
 import { freezeClock, ingredient, monthDoc, renderStocktake } from '../testing/renderStocktake';
 
@@ -24,9 +24,9 @@ afterEach(() => {
 
 const LOAD = { timeout: 10_000 };
 
-function source() {
+function source(months = [monthDoc('2026-10')]) {
   return fakeStocktakeSource({
-    months: [monthDoc('2026-10')],
+    months,
     ingredients: [
       ingredient('flour', { name: 'Farina 00', category: 'Dispensa' }),
       ingredient('butter', { name: 'Burro', category: 'Frigo' }),
@@ -38,8 +38,8 @@ function source() {
 const openButton = (name: string) => screen.getByRole('button', { name: `Open ${name}` });
 const tabs = () => within(screen.getByRole('navigation', { name: 'Main sections' }));
 
-async function loaded(path = '/stocktake/2026-10') {
-  const view = renderStocktake(path, { source: source() });
+async function loaded(path = '/stocktake/2026-10', fake = source()) {
+  const view = renderStocktake(path, { source: fake });
   await screen.findAllByRole('heading', { level: 3 }, LOAD);
   return view;
 }
@@ -132,5 +132,45 @@ describe('the Stocktake\'s scroll on a phone', () => {
 
     expect(await screen.findByRole('heading', { level: 3, name: 'Frigo' }, LOAD)).toBeInTheDocument();
     expect(main.scrollTop).toBe(0);
+  });
+});
+
+// The phone's own back gesture is the browser's Back: it runs no code of the screen it leaves, so
+// the row that opened it is owed the focus from the moment it opened.
+describe('the focus when the Stocktake comes back to its list', () => {
+  it('goes back to the row when the phone\'s own Back leaves a product', async () => {
+    const { router, user } = await loaded();
+    await user.click(openButton('Burro'));
+    await screen.findByRole('region', { name: 'Burro' }, LOAD);
+
+    await act(async () => { await router.navigate(-1); });
+
+    expect(router.state.location.pathname).toBe('/stocktake/2026-10');
+    await waitFor(() => { expect(openButton('Burro')).toHaveFocus(); });
+  });
+
+  it('goes back to «What it cost» when the phone\'s own Back leaves it', async () => {
+    const { router, user } = await loaded();
+    await user.click(screen.getByRole('button', { name: 'What it cost' }));
+    await screen.findByRole('heading', { level: 2, name: 'What the month cost' }, LOAD);
+
+    await act(async () => { await router.navigate(-1); });
+
+    await waitFor(() => { expect(screen.getByRole('button', { name: 'What it cost' })).toHaveFocus(); });
+  });
+
+  it('stays on the month\'s arrow when another month replaces a product open beside the list', async () => {
+    split();
+    // September answers at once, so its rows (Burro's among them) are on the page as it comes in.
+    const { user } = await loaded('/stocktake/2026-10', source([monthDoc('2026-09'), monthDoc('2026-10')]));
+    await user.click(openButton('Burro'));
+    await screen.findByRole('region', { name: 'Burro' }, LOAD);
+
+    const before = screen.getByRole('button', { name: 'The month before' });
+    await user.click(before);
+    await screen.findByRole('heading', { level: 2, name: 'September 2026' }, LOAD);
+    await screen.findByRole('button', { name: 'Open Burro' }, LOAD);
+
+    expect(before).toHaveFocus();
   });
 });
