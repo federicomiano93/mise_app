@@ -19,7 +19,7 @@ import assert from 'node:assert/strict';
 
 import {
   EMPTY_OUTBOX, stage, stageMany, hasWork, take, confirm, restore, applyOver, answered,
-  isSending, echoed, unsaved, hasUnsaved, revive,
+  isSending, echoed, unsaved, hasUnsaved, revive, hasHeld, release,
 } from '../js/inventory/inventory-outbox.js';
 
 const MAPS = ['opening', 'purchased', 'closing', 'packKg'];
@@ -91,6 +91,7 @@ test('nothing is mutated: the outbox before a change is still itself afterwards'
   assert.deepEqual(EMPTY_OUTBOX, {
     pending: {}, cleared: {}, inFlight: null, writes: 0, failed: false,
     handed: { pending: {}, cleared: {} },
+    held: { pending: {}, cleared: {} },
   },
     'and the shared empty one above all is never written into');
 });
@@ -113,13 +114,23 @@ test('⚠️ a removal in the air is not undone by a snapshot that still has the
   assert.deepEqual(incoming.closing, {}, 'the box was emptied; the snapshot is behind');
 });
 
-test('a second save while the first is unanswered carries both', () => {
+test('⚠️ a second save while the first is unanswered carries only what is new', () => {
+  // Carrying the first one's values again would write a stored count once more over
+  // a correction another phone made in between — and on a weak signal every write
+  // would grow by all the ones before it (code review, 11 Oct 2026).
   const first = take(stage(EMPTY_OUTBOX, 'closing', 'flour', 1));
   const second = take(stage(first.outbox, 'closing', 'salt', 2));
-  assert.deepEqual(second.values, { closing: { flour: 1, salt: 2 } },
-    'nothing waiting may be dropped because an earlier write is still out');
+  assert.deepEqual(second.values, { closing: { salt: 2 } });
   const incoming = applyOver(second.outbox, doc(), MAPS);
-  assert.deepEqual(incoming.closing, { flour: 1, salt: 2 });
+  assert.deepEqual(incoming.closing, { flour: 1, salt: 2 },
+    'but the screen still shows both until they have answered');
+});
+
+test('a box re-typed while its first write is out goes again with the new number', () => {
+  const first = take(stage(EMPTY_OUTBOX, 'closing', 'flour', 1));
+  const second = take(stage(first.outbox, 'closing', 'flour', 4));
+  assert.deepEqual(second.values, { closing: { flour: 4 } });
+  assert.deepEqual(applyOver(second.outbox, doc(), MAPS).closing, { flour: 4 });
 });
 
 test('confirming keeps what was typed after the write left', () => {
@@ -301,25 +312,57 @@ test('confirmed by the server, nothing is left handed', () => {
     'a failed write is waiting again, and waiting is unsaved');
 });
 
-test('⚠⚠ what a torn-down page left behind is laid back in, to be sent again', () => {
+test('⚠⚠ what a torn-down page left behind is laid back in: shown and kept, sent once released', () => {
   const left = unsaved(take(stage(stage(EMPTY_OUTBOX, 'closing', 'flour', 3), 'closing', 'salt', null)).outbox);
   const stored = JSON.parse(JSON.stringify(left));   // through localStorage and back
   const back = revive(EMPTY_OUTBOX, stored, MAPS);
-  const out = take(back);
+  assert.equal(hasHeld(back), true);
+  assert.equal(hasWork(back), false, 'HELD: nothing goes until the server says the month is open');
+  assert.deepEqual(applyOver(back, doc({ closing: { salt: 2 } }), MAPS).closing, { flour: 3 },
+    'but it is on screen, and the first snapshot cannot take it back off');
+  assert.deepEqual(unsaved(back), stored, 'and it is still written down');
+
+  const out = take(release(back));
   assert.deepEqual(out.values, { closing: { flour: 3 } });
   assert.deepEqual(out.clear, { closing: { salt: true } });
-  assert.deepEqual(applyOver(back, doc({ closing: { salt: 2 } }), MAPS).closing, { flour: 3 },
-    'and the first snapshot cannot take it back off the screen');
+  assert.equal(hasHeld(release(back)), false);
+});
+
+test('⚠⚠ held survives the writes of this visit answering, and is never sent by them', () => {
+  // The month may have been closed elsewhere while the phone held these: only release()
+  // may send them, never a save of something else typed meanwhile.
+  const back = revive(EMPTY_OUTBOX, { pending: { closing: { salt: 1 } }, cleared: {} }, MAPS);
+  const sent = take(stage(back, 'closing', 'flour', 4));
+  assert.deepEqual(sent.values, { closing: { flour: 4 } }, 'the held count does not ride along');
+  assert.equal(hasHeld(answered(sent.outbox, true)), true);
+  assert.equal(hasHeld(answered(sent.outbox, false)), true);
+  assert.deepEqual(unsaved(answered(sent.outbox, true)).pending, { closing: { salt: 1 } });
 });
 
 test('⚠ a number typed since the page came back wins over what it left behind', () => {
   const typed = stage(EMPTY_OUTBOX, 'closing', 'flour', 9);
   const back = revive(typed, { pending: { closing: { flour: 3, salt: 1 } }, cleared: {} }, MAPS);
-  assert.deepEqual(take(back).values, { closing: { flour: 9, salt: 1 } });
+  assert.deepEqual(take(release(back)).values, { closing: { flour: 9, salt: 1 } });
   const emptied = stage(EMPTY_OUTBOX, 'closing', 'flour', null);
-  const back2 = take(revive(emptied, { pending: { closing: { flour: 3 } }, cleared: {} }, MAPS));
+  const back2 = take(release(revive(emptied, { pending: { closing: { flour: 3 } }, cleared: {} }, MAPS)));
   assert.deepEqual(back2.values, {}, 'emptied since: the old number may not come back');
   assert.deepEqual(back2.clear, { closing: { flour: true } });
+});
+
+test('⚠⚠ a box already SENT this visit is not overwritten by what an earlier one left', () => {
+  // Sent, it is no longer waiting — released behind «waiting» alone, the older number
+  // would follow it to Firestore and undo it.
+  const sent = take(stage(EMPTY_OUTBOX, 'closing', 'flour', 9)).outbox;
+  const back = revive(sent, { pending: { closing: { flour: 3 } }, cleared: {} }, MAPS);
+  assert.equal(hasHeld(back), false);
+  assert.equal(hasWork(release(back)), false);
+});
+
+test('a box typed after the page came back leaves held at once', () => {
+  const back = revive(EMPTY_OUTBOX, { pending: { closing: { flour: 3, salt: 1 } }, cleared: {} }, MAPS);
+  const typed = stage(back, 'closing', 'flour', 7);
+  assert.deepEqual(unsaved(typed).pending, { closing: { flour: 7, salt: 1 } });
+  assert.deepEqual(take(release(typed)).values, { closing: { flour: 7, salt: 1 } });
 });
 
 test('⚠ revive trusts nothing it reads: only counts a person could have typed', () => {
@@ -330,7 +373,7 @@ test('⚠ revive trusts nothing it reads: only counts a person could have typed'
     },
     cleared: { closing: { i: 'yes', j: true }, notAMap: { k: true } },
   };
-  const out = take(revive(EMPTY_OUTBOX, junk, MAPS));
+  const out = take(release(revive(EMPTY_OUTBOX, junk, MAPS)));
   assert.deepEqual(out.values, { closing: { e: 2 } });
   assert.deepEqual(out.clear, { closing: { j: true } });
   for (const nothing of [undefined, null, 42, 'x', [], { pending: 'no' }]) {

@@ -353,10 +353,24 @@ function showUnavailable() {
 
 function handleBack() {
   if (view === 'detail' || view === 'usage') { showList(); return; }
-  // ⚠️ flushBeforeLeaving(), as for the month arrows: the last count typed is handed
-  // to Firestore and given the moment it needs to reach the browser's own database
-  // before the page goes — in a storeroom it is the only copy there is.
+  leaveForHome();
+}
+
+// ⚠️ flushBeforeLeaving(), as for the month arrows: the last count typed is handed to
+// Firestore and given the moment it needs to reach the browser's own database before
+// the page goes — in a storeroom it is the only copy there is. Otherwise it waits on
+// this phone until this same month is opened here again (code review, 11 Oct 2026).
+function leaveForHome() {
   flushBeforeLeaving().finally(() => { location.href = 'index.html'; });
+}
+
+// The Home link is a real link (it still works before this script has run), so it is
+// caught here: a plain tap leaves through leaveForHome(); a modified click (a new tab
+// on a computer) is left to the browser, since this page stays open.
+function handleHomeLink(e) {
+  if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+  e.preventDefault();
+  leaveForHome();
 }
 
 function toast(msg) {
@@ -368,6 +382,7 @@ function toast(msg) {
 }
 
 backBtn.addEventListener('click', handleBack);
+homeBtn.addEventListener('click', handleHomeLink);
 costBtn.addEventListener('click', showUsage);
 prevBtn.addEventListener('click', () => goToMonth(previousMonth(openMonthId)));
 nextBtn.addEventListener('click', () => goToMonth(nextMonth(openMonthId)));

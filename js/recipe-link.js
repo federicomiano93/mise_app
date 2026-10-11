@@ -6,11 +6,12 @@
 // pure, together with the one judgement both sides must make identically: may this
 // person open Food cost at all.
 //
-// ⚠️ A FRAGMENT (#recipe=<id>), NEVER A QUERY (?recipe=<id>). The service worker looks a
-// page up in its cache by the exact request (sw.js), and a query string is part of the
-// request: offline, `foodcost.html?recipe=x` would find nothing and show the browser's
-// own error page. A fragment never leaves the browser, so the cached page is found —
-// the same reason the join link carries its code after a `#`.
+// ⚠️ A FRAGMENT (#recipe=<id>), NEVER A QUERY (?recipe=<id>). The service worker used to
+// look a page up in its cache by the exact request, and a query string is part of the
+// request: offline, `foodcost.html?recipe=x` found nothing and showed the browser's own
+// error page. Workers since 11 Oct 2026 answer a precached page whatever its query
+// (sw.js offlineCopy), but a phone can still run an older one — and a fragment never
+// leaves the browser at all, the same reason the join link carries its code after a `#`.
 
 import { isSectionAllowed } from './sections.js';
 import { cardVisibleTo } from './home-cards.js';

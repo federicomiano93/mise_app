@@ -31,7 +31,7 @@ import {
 } from './inventory-model.js';
 import {
   EMPTY_OUTBOX, stage, stageMany, hasWork, take, answered, applyOver,
-  echoed, unsaved, hasUnsaved, revive,
+  echoed, unsaved, hasUnsaved, revive, isSending, hasHeld, release,
 } from './inventory-outbox.js';
 import { purchasesInMonth } from './inventory-purchases.js';
 import {
@@ -132,6 +132,9 @@ const inAir = new Set();
 // Whether Firestore has answered at all yet. Until it has, the local copy is the
 // only thing there is; afterwards it is a mirror.
 let remoteArrived = false;
+// The month exactly as Firestore last sent it, before anything of this phone's was
+// laid over it — so the screen can be drawn again once the writes have answered.
+let lastRemote = null;
 
 export function getMonth() { return month; }
 export function getMonthId() { return monthId; }
@@ -189,19 +192,15 @@ export function initInventory(id, onUpdate, onError) {
 
   watchMonth(
     monthId,
-    remote => {
+    (remote, meta) => {
       remoteArrived = true;
-      const merged = normalizeMonth(remote, monthId) || normalizeMonth({ month: monthId });
+      lastRemote = remote;
       // What the snapshot shows back is in the browser's database: no longer only
       // in this page's memory. Judged on the document AS IT ARRIVED.
-      outbox = echoed(outbox, merged, COUNT_MAPS);
+      outbox = echoed(outbox, remoteMonth(), COUNT_MAPS);
       keepUnsaved();
-      // A remote change never discards what has not been sent yet: the local
-      // values for still-unsent boxes are laid back over the incoming document.
-      applyOver(outbox, merged, COUNT_MAPS);
-      month = merged;
-      cacheMonth();
-      announce();
+      adoptRemote();
+      if (meta && meta.fromServer) releaseHeld();
     },
     err => { if (onError) onError(err); },
   ).catch(err => {
@@ -217,6 +216,29 @@ export function initInventory(id, onUpdate, onError) {
   return month;
 }
 
+// A fresh copy of the month as Firestore last sent it.
+function remoteMonth() {
+  return normalizeMonth(lastRemote, monthId) || normalizeMonth({ month: monthId });
+}
+
+// The month on screen = what Firestore last sent + what this phone has not had
+// confirmed yet.
+//
+// A remote change never discards what has not been sent yet: the local values for
+// still-unsent boxes are laid back over the incoming document.
+// ⚠️⚠️ EXCEPT OVER A CLOSED MONTH. It is shown as it was closed, and what this phone
+// still holds for it stays held — not drawn, not sent (flush) — until the month is
+// reopened. Otherwise a count left on one phone would change a closed month's
+// figures weeks later, after the next month had already copied them (code review,
+// 11 Oct 2026). The SDK has already laid its own unanswered writes into `remote`.
+function adoptRemote() {
+  const merged = remoteMonth();
+  if (!isClosed(merged)) applyOver(outbox, merged, COUNT_MAPS);
+  month = merged;
+  cacheMonth();
+  announce();
+}
+
 // What this phone kept for this month, once the venue is open (its name is in
 // both keys): the month as it was last seen, then what had not reached the
 // browser's database when the page last went away.
@@ -225,9 +247,9 @@ function fromThisPhone() {
   reviveUnsaved();
 }
 
-// Numbers a torn-down page left behind (keepUnsaved), laid back over the month and
-// sent again. Anything typed since is newer and wins (revive()). Sending one that
-// did reach Firestore after all writes the same number twice and loses nothing.
+// Numbers a torn-down page left behind (keepUnsaved), laid back over the month as
+// HELD: on screen and kept, not sent (releaseHeld). Anything typed since is newer
+// and wins (revive()).
 function reviveUnsaved() {
   if (!monthId || !month) return;
   const saved = readJson(unsavedKey(monthId), null);
@@ -236,11 +258,24 @@ function reviveUnsaved() {
   }
   // Written down now in any case: the venue was not known until this moment.
   keepUnsaved();
-  if (!saved || !hasWork(outbox)) return;
+  // Not over a month known to be closed (adoptRemote says why): kept for its reopening.
+  if (!saved || !hasHeld(outbox) || isClosed(month)) return;
   applyOver(outbox, month, COUNT_MAPS);
   cacheMonth();
-  scheduleSave();
   announce();
+}
+
+// ⚠️⚠️ WHAT AN EARLIER VISIT LEFT GOES ONLY ONCE THE SERVER SAYS THE MONTH IS OPEN —
+// never on the strength of this phone's own copy, which can be days old. Driven on
+// the emulator (11 Oct 2026): a count left on the phone, the month closed from
+// another device, the phone back online — sent at once from its stale copy, the
+// count landed in the closed month. Sending one that did reach Firestore after all
+// writes the same number twice and loses nothing.
+function releaseHeld() {
+  if (!hasHeld(outbox) || isClosed(month)) return;
+  outbox = release(outbox);
+  keepUnsaved();
+  scheduleSave();
 }
 
 // The counts this phone saved last time, put back on screen.
@@ -296,10 +331,13 @@ function scheduleSave() {
 // 2026). Handed over at once, every count is in that queue and goes up, in order,
 // when there is signal. The outbox keeps the books for several writes at once
 // (answered(), js/inventory/inventory-outbox.js).
+//
+// ⚠️⚠️ NOTHING IS SENT INTO A CLOSED MONTH, the same promise setCount() keeps: what
+// is waiting stays waiting until the month is reopened (adoptRemote says why).
 export function flush() {
   clearTimeout(saveTimer);
   if (!month || !monthId) return Promise.resolve();
-  if (hasWork(outbox)) send();
+  if (hasWork(outbox) && !isClosed(month)) send();
   return Promise.all([...inAir]).then(() => {});
 }
 
@@ -326,6 +364,10 @@ function send() {
     outbox = answered(outbox, ok);
     keepUnsaved();
     inAir.delete(write);
+    // Every write has answered: nothing of this phone's is in the air any more, so
+    // the screen is drawn again from what Firestore last sent. Until now its own
+    // numbers were laid over that, hiding a correction another phone made meanwhile.
+    if (!isSending(outbox) && lastRemote) adoptRemote();
   });
   inAir.add(write);
 }
@@ -447,6 +489,14 @@ export async function reopenMonth(nowIso = new Date().toISOString()) {
     deadlineFromNow(),
   );
   month.closedAt = '';
+  // What this phone was holding while the month was closed comes back, and goes:
+  // reopened here, this phone has just told the server so.
+  outbox = release(outbox);
+  keepUnsaved();
+  if (hasWork(outbox)) {
+    applyOver(outbox, month, COUNT_MAPS);
+    scheduleSave();
+  }
   cacheMonth();
   announce();
 }
