@@ -23,6 +23,23 @@ export default defineConfig({
     // (CSS nesting, for one, needs Chrome 120).
     target: ['chrome107', 'edge107', 'firefox104', 'safari16'],
     cssTarget: ['chrome107', 'edge107', 'firefox104', 'safari16'],
+    rollupOptions: {
+      output: {
+        // The libraries in chunks of their own (step 2c). A release of Mise 2 changes its own
+        // code far more often than React or Firebase: kept apart, a phone on 4G re-downloads the
+        // ~60 KB that changed, not the whole megabyte, and the browser can keep the libraries'
+        // compiled code. Firestore is not listed: it is loaded on first use
+        // (session/firebaseBackend.ts) and Vite already gives it a chunk of its own.
+        manualChunks(id: string) {
+          if (!id.includes('node_modules')) return undefined;
+          if (/[\\/]node_modules[\\/](react|react-dom|scheduler)[\\/]/.test(id)) return 'react';
+          if (/[\\/]node_modules[\\/](react-aria-components|react-aria|react-stately|@react-aria|@react-stately|@react-types|@internationalized|@swc)[\\/]/.test(id)) return 'react-aria';
+          if (/[\\/]node_modules[\\/](react-router|@remix-run|cookie-es)[\\/]/.test(id)) return 'router';
+          if (/[\\/]node_modules[\\/]@firebase[\\/](app|auth|component|logger|util)[\\/]|[\\/]node_modules[\\/]firebase[\\/](app|auth)[\\/]/.test(id)) return 'firebase-auth';
+          return undefined;
+        },
+      },
+    },
   },
   test: {
     environment: 'jsdom',
