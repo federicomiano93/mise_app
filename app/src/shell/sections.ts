@@ -10,6 +10,7 @@ import {
   Warehouse,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
+import { isMonthId } from '@mise/shared/inventory-model';
 import { isWeekday } from '@mise/shared/pastries-model';
 import type { MessageKey } from '../i18n/en';
 
@@ -115,8 +116,25 @@ export function screenNameFor(pathname: string): string | null {
   if (isUnder(pathname, MORE.path)) return 'more';
   const section = SECTIONS.find(candidate => isUnder(pathname, candidate.path));
   if (!section) return 'not-found';
-  return section.id === 'pastries' ? pastriesScreenName(pathname, section.path) : section.id;
+  if (section.id === 'pastries') return pastriesScreenName(pathname, section.path);
+  if (section.id === 'stocktake') return stocktakeScreenName(pathname, section.path);
+  return section.id;
 }
+
+// The Stocktake is three screens that share one section: the month's counting list (whichever
+// month), one product, and «What the month cost». Changing month is not a new screen, so every
+// month's list is plain `stocktake`. (The sentence an employee gets where a month cannot be opened
+// for them is a fourth, announced by the section itself when it arises: the address does not change.)
+function stocktakeScreenName(pathname: string, base: string): string {
+  const rest = pathname.slice(base.length).split('/').filter(part => part !== '');
+  if (rest.length === 3 && isMonthId(rest[0]) && rest[1] === 'product') return 'stocktake-product';
+  if (rest.length === 2 && isMonthId(rest[0]) && rest[1] === 'cost') return 'stocktake-cost';
+  return 'stocktake';
+}
+
+// What the usage record calls the sentence an employee gets in place of a month the rules refuse
+// them (a closed month, or the Stocktake no longer shown to employees). Announced by the section.
+export const STOCKTAKE_UNAVAILABLE_SCREEN = 'stocktake-unavailable';
 
 // Pastries is three screens that share one section: the day (the list, whichever day), its editor
 // and Records. Picking another day is not a new screen, so every day is plain `pastries`.
