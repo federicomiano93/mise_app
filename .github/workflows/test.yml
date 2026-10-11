@@ -55,6 +55,20 @@ jobs:
       - name: Vulnerability check of the build tool (P11)
         run: npm audit --audit-level=high
 
+      # ⚠️ CI's OWN firebase-tools (ci/firebase-tools/, the copy the three jobs below run) is
+      # checked at `critical`, NOT `high` — ON PURPOSE. Its tree carries 7 HIGH advisories in
+      # every firebase-tools release up to the newest (15.33.0, measured 11 Oct 2026), all of
+      # them denial of service: basic-ftp (reached only through an FTP proxy setting) and braces
+      # (file-watch patterns) — code CI never feeds hostile input, with no fixed release to move
+      # to, so `high` would be red for ever and teach everybody to ignore it. What that lockfile
+      # exists to stop is a HIJACKED package, and an advisory for a malicious package is
+      # published as critical: it turns every PR and the push to main red, and deploy-functions
+      # (which needs this job) cannot run. It only knows what has been reported — the lockfile
+      # itself is the protection. Dependabot reads the same lockfile and reports every level.
+      - name: Vulnerability check of CI's firebase-tools (P11)
+        run: npm audit --audit-level=critical
+        working-directory: ci/firebase-tools
+
   # The security rules are the app's ONLY boundary between two businesses sharing
   # one database, and until now their suite ran only when somebody remembered to
   # run it by hand. It needs the Firebase emulator, so it cannot ride in the job
@@ -75,25 +89,32 @@ jobs:
 
       # The emulator jars are downloaded on first use (~100 MB) and never change
       # for a given firebase-tools release, so they are cached against the pinned
-      # version. A cache miss only costs time, never correctness.
+      # version (ci/firebase-tools/package.json — tests/ci-install-before-sign-in.test.mjs
+      # keeps the two equal). A cache miss only costs time, never correctness.
       - uses: actions/cache@v5
         with:
           path: ~/.cache/firebase/emulators
           key: firebase-emulators-15.26.0
 
-      # PINNED ON PURPOSE. firebase-tools ships the emulator itself, so an
-      # unpinned `@latest` would silently change the thing under test between two
+      # PINNED ON PURPOSE, AND LOCKED. firebase-tools ships the emulator itself, so
+      # an unpinned `@latest` would silently change the thing under test between two
       # runs of the same commit — a red build nobody changed anything to cause,
-      # and the opposite of what a safety net is for. 15.26.0 is the version the
-      # checks were verified against locally before this workflow was written.
-      # Raise it deliberately, and re-run the suite locally when you do.
+      # and the opposite of what a safety net is for. The version lives in
+      # ci/firebase-tools/package.json and every package under it in that folder's
+      # lockfile (its README says how to raise it). Raise it deliberately, and
+      # re-run the suite locally when you do.
       #
-      # `--ignore-scripts`: exactly the install the two jobs that hold a Google
-      # credential use (deploy-functions below, preview.yml), so this job proves on
-      # every push that firebase-tools still runs the emulator without its install
-      # scripts. (The deploy commands are proven by each PR's Preview run and, for
-      # functions, by deploy-functions after the merge.) Change one, change all three.
-      - run: npm install --global --ignore-scripts firebase-tools@15.26.0
+      # Exactly the install the two jobs that hold a Google credential use
+      # (deploy-functions below, preview.yml) — the lockfile, no install scripts —
+      # so this job proves on every push that the locked firebase-tools still runs
+      # the emulator without its install scripts. (The deploy commands are proven by
+      # each PR's Preview run and, for functions, by deploy-functions after the
+      # merge.) Change one, change all three.
+      - name: Install firebase-tools from its lockfile (no install scripts)
+        run: |
+          npm ci --ignore-scripts
+          echo "$GITHUB_WORKSPACE/ci/firebase-tools/node_modules/.bin" >> "$GITHUB_PATH"
+        working-directory: ci/firebase-tools
 
       # --project demo-theitalianclub: firebase-tools treats a `demo-` prefix as
       # offline-only — it looks for no credentials and can reach no real Firebase
@@ -235,15 +256,14 @@ jobs:
         run: npm audit --audit-level=high
         working-directory: functions
 
-      # ⚠️ NO PACKAGE IN THIS JOB RUNS CODE WHILE IT INSTALLS, AND EVERYTHING IS
-      # INSTALLED BEFORE THE SIGN-IN. The sign-in below writes a short-lived
-      # credential to the LIVE project into the workspace and points
-      # GOOGLE_APPLICATION_CREDENTIALS at it. This global install has no lockfile
-      # (firebase-tools ships none), so its ~670 packages are resolved afresh on
-      # every run, and npm runs install scripts by default — the usual way a
-      # hijacked npm package steals whatever it finds on the machine. Until
-      # October 2026 this install ran inside the Deploy step, and the `npm ci`
-      # above ran, AFTER the sign-in.
+      # ⚠️ NO PACKAGE IN THIS JOB RUNS CODE WHILE IT INSTALLS, EVERYTHING IS
+      # INSTALLED BEFORE THE SIGN-IN, AND EVERY VERSION COMES FROM A LOCKFILE. The
+      # sign-in below writes a short-lived credential to the LIVE project into the
+      # workspace and points GOOGLE_APPLICATION_CREDENTIALS at it, and npm runs
+      # install scripts by default — the usual way a hijacked npm package steals
+      # whatever it finds on the machine. Until October 2026 firebase-tools was
+      # installed inside the Deploy step, and the `npm ci` above ran, AFTER the
+      # sign-in.
       #
       # ⚠️ `--ignore-scripts` IS THE PROTECTION, THE ORDER ONLY HELPS. A script
       # allowed to run before the sign-in could leave a process behind that waits
@@ -257,13 +277,21 @@ jobs:
       # JavaScript's own) and fsevents's (macOS only). The `rules` job installs it
       # the same way, which proves on every push that the emulator still runs.
       #
+      # ⚠️ AND THE LOCKFILE IS WHAT KEEPS A NEW VERSION OUT. firebase-tools ships
+      # no npm-shrinkwrap.json, so the global `npm install firebase-tools@15.26.0`
+      # this step replaced (October 2026) resolved its ~670 packages afresh on every
+      # run: a hijacked new patch of any of them would have RUN during the deploy
+      # below, with the credential. ci/firebase-tools/package-lock.json fixes every
+      # version and its integrity hash; a new one arrives only through a reviewed PR.
+      #
       # What it does NOT cover: the code of firebase-tools and of the functions'
       # packages still RUNS with the credential during the deploy — it is the
-      # deploy. The functions' lockfile fixes every version under them; for
-      # firebase-tools the pin fixes only firebase-tools itself, not the ~670
-      # packages under it.
-      - name: Install firebase-tools (before the sign-in, no install scripts)
-        run: npm install --global --ignore-scripts firebase-tools@15.26.0
+      # deploy. The two lockfiles fix WHICH code that is; neither proves it harmless.
+      - name: Install firebase-tools from its lockfile (before the sign-in, no install scripts)
+        run: |
+          npm ci --ignore-scripts
+          echo "$GITHUB_WORKSPACE/ci/firebase-tools/node_modules/.bin" >> "$GITHUB_PATH"
+        working-directory: ci/firebase-tools
 
       # ⚠️ THE TRUST IS PINNED TO THIS REPOSITORY, on Google's side, in TWO
       # PLACES. Both must name it or the exchange fails:

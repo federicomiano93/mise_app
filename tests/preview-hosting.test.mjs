@@ -60,11 +60,12 @@ test('Mise 2 is built in a job with no Google identity, and only its built files
   assert.match(deployJob, /\n {4}if: \$\{\{ !cancelled\(\) && github\.event\.pull_request\.head\.repo\.full_name == github\.repository \}\}\n/);
   assert.match(deployJob, /- if: needs\.build-mise2\.result == 'success'\n\s+uses: actions\/download-artifact@v8/);
   assert.match(deployJob, /if \[ -d "\$RUNNER_TEMP\/mise2-site" \]; then\n\s+mv "\$RUNNER_TEMP\/mise2-site" _site\/mise2\n\s+fi/);
-  assert.doesNotMatch(deployJob, /npm (ci|run)\b|\bnpx\b|\bvite\b/,
+  assert.doesNotMatch(deployJob, /npm (install|run)\b|\bnpx\b|\bvite\b/,
     'the job holding the credential builds nothing');
-  assert.deepEqual([...deployJob.matchAll(/npm install[^\n]*/g)].map(m => m[0]),
-    ['npm install --global --ignore-scripts firebase-tools@15.26.0'],
-    'the one package the credential job installs is the pinned firebase-tools, with no install scripts');
+  assert.equal((deployJob.match(/\bnpm ci\b/g) || []).length, 1, 'one install in the credential job');
+  assert.deepEqual([...deployJob.matchAll(/npm ci[^\n]*\n[^\n]*\n\s+working-directory: [^\n]*/g)].map(m => m[0].replace(/\n\s+/g, ' ')),
+    ['npm ci --ignore-scripts echo "$GITHUB_WORKSPACE/ci/firebase-tools/node_modules/.bin" >> "$GITHUB_PATH" working-directory: ci/firebase-tools'],
+    'the one thing the credential job installs is firebase-tools from its lockfile, with no install scripts');
   assert.match(deployJob, /uses: actions\/download-artifact@v8\n\s+with:\n\s+name: mise2-site\n\s+path: \$\{\{ runner\.temp \}\}\/mise2-site/);
   // Moved in BEFORE the symlink check, so the check covers it too.
   const stage = deployJob.slice(deployJob.indexOf('Stage only the app\'s files'));
@@ -74,7 +75,9 @@ test('Mise 2 is built in a job with no Google identity, and only its built files
 
 test('the leak check also proves Mise 2\'s source is not served and its page is', () => {
   const check = workflow.slice(workflow.indexOf('Prove nothing internal is being served'));
-  for (const path of ['app/package.json', 'app/src/main.tsx', 'shared/package.json', 'mise2/package.json']) {
+  // ci/firebase-tools/ is installed in this job's workspace: the allowlist leaves it out, this proves it.
+  for (const path of ['app/package.json', 'app/src/main.tsx', 'shared/package.json', 'mise2/package.json',
+    'ci/firebase-tools/package.json']) {
     assert.ok(check.includes(path), path);
   }
   assert.match(check, /MISE2_BUILT: \$\{\{ needs\.build-mise2\.result == 'success' \}\}/);
