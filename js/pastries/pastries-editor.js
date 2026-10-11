@@ -64,12 +64,14 @@ export function renderEditor({ day, items, note, allDays, app }) {
 
   function updateCount() {
     const n = cleanItems(working).length;
-    countEl.textContent = n === 1 ? '1 pastry' : `${n} pastries`;
+    countEl.textContent = t('past.count', { n });
   }
 
   function renderRows() {
     rowsContainer.replaceChildren();
     working.forEach((row, idx) => {
+      // Trimmed, like the confirm in removeRow() below: «  Cornetto  » is «Cornetto» to a reader.
+      const label = (row.name || '').trim();
       const nameInput = el('input', {
         class: 'pas-name',
         type: 'text',
@@ -91,14 +93,14 @@ export function renderEditor({ day, items, note, allDays, app }) {
         max: String(MAX_QTY),
         step: '1',
         inputmode: 'numeric',
-        'aria-label': `How many ${row.name || 'pastries'}`,
+        'aria-label': label ? t('past.howManyOf', { name: label }) : t('past.howManyPastries'),
         oninput: (e) => { row.qty = e.target.value; markDirty(); if (showErrors) validate(); },
       });
 
       const del = el('button', {
         class: 'pas-del-icon',
         type: 'button',
-        'aria-label': `Remove ${row.name || 'this row'}`,
+        'aria-label': t('past.removeRow', { name: label || t('past.thisRow') }),
         icon: TRASH_SVG,
         onclick: () => removeRow(idx),
       });
