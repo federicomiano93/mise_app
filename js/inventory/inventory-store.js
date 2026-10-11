@@ -396,6 +396,13 @@ export function flushBeforeLeaving() {
 export async function closeMonth(frozen, nowIso = new Date().toISOString()) {
   if (!month || !monthId) return null;
   const deadline = deadlineFromNow();
+  // ⚠️ WHAT IS HELD GOES FIRST. It is on screen, so the next month's opening is
+  // copied from it below; closing here is this phone's own word that the month was
+  // open — unsent, the closed month and the next one's opening would disagree, and
+  // the closed month would show those products as not counted (code review, 11 Oct
+  // 2026).
+  outbox = release(outbox);
+  keepUnsaved();
   await settled(flush(), deadline);
 
   const next = carryOver(month, nextMonth(monthId), nowIso);

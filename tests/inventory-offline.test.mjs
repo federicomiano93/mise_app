@@ -296,6 +296,12 @@ test('⚠️⚠️ and the store refuses every change to a closed month, whateve
   assert.match(bodyOf(STORE, 'function adoptRemote'), /if \(!isClosed\(merged\)\) applyOver\(/);
   assert.match(bodyOf(STORE, 'function reviveUnsaved'), /\|\| isClosed\(month\)\) return;/);
   assert.match(bodyOf(STORE, 'function releaseHeld'), /isClosed\(month\)\) return;/);
+  // Closing here sends what is held FIRST: it is on screen, and the next month's
+  // opening is copied from the screen's month.
+  const close = bodyOf(STORE, 'export async function closeMonth');
+  const released = close.indexOf('outbox = release(outbox);');
+  assert.ok(released > 0 && released < close.indexOf('flush()') && released < close.indexOf('carryOver('),
+    'released before the flush that sends it and before the copy into next month');
   // And reopening brings it back and sends it.
   const reopen = bodyOf(STORE, 'export async function reopenMonth');
   assert.match(reopen, /outbox = release\(outbox\);/);
