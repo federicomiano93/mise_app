@@ -79,6 +79,7 @@ export const it: Messages = {
 
   'status.online': 'Online',
   'status.offline': 'Nessuna connessione',
+  'offline.banner': 'Nessuna connessione. Quello che cambi resta sul telefono e parte appena torna la rete.',
 
   'part.failed.title': 'Questa parte non si è caricata.',
   'part.failed.body': 'Il resto della schermata funziona.',

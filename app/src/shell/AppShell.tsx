@@ -8,6 +8,7 @@ import { useT } from '../i18n/useT';
 import { useSession } from '../session/SessionContext';
 import { SwitchVenueButton } from '../session/SwitchVenueButton';
 import { announceScreen, markLoaded } from '../telemetry/usage';
+import { OfflineBanner } from './OfflineBanner';
 import { MORE, moreIsCurrent, screenNameFor, sectionById, titleKeyFor } from './sections';
 import type { Section } from './sections';
 import { useOnline } from './useOnline';
@@ -57,6 +58,8 @@ export function AppShell() {
         <div className={styles.main}>
           <TopBar />
           <main id="main" ref={contentRef} tabIndex={-1} className={styles.content}>
+            {/* The phone's «no connection» notice; the tablet's top bar says it with a dot. */}
+            <OfflineBanner />
             {/* Keyed on the section, so moving to another one clears a failure. A section that
                 fails never got to print its own title, so the shell names it from the address:
                 the fallback then has an h1 and the tab title of the screen it replaces. */}
