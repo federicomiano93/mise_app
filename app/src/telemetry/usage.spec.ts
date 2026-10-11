@@ -384,7 +384,7 @@ describe('createTracker', () => {
     expect(JSON.parse(storage.data[old] as string).dirty).toBe(true);
   });
 
-  test('the timer check sends a past day too, and deletes it only after the answer', async () => {
+  test('the timer check sends a past day too, and marks it clean only after the answer', async () => {
     const storage = memoryStorage();
     const old = storeKey('bakery', 'u1', '20261008');
     storage.setItem(old, JSON.stringify({ acc: { screens: { orders: 3 } }, dirty: true, lastSentAt: 0, rev: 1 }));
@@ -397,10 +397,11 @@ describe('createTracker', () => {
     tracker.setSession(READY);
     expect(await tracker.flush('timer')).toBe('sent');
     expect(ids[0]).toBe(`${DEVICE}_20261008_u1`);
-    expect(old in storage.data, 'not deleted at the handover').toBe(true);
+    expect(JSON.parse(storage.data[old] as string).dirty, 'not clean at the handover').toBe(true);
     answer();
     await nextMacrotask();
-    expect(old in storage.data).toBe(false);
+    expect(JSON.parse(storage.data[old] as string).dirty).toBe(false);
+    expect(JSON.parse(storage.data[old] as string).acc.screens.orders, 'kept for the prune, counts and all').toBe(3);
   });
 
   test('counts made before midnight are filed under the day they were made', () => {
@@ -527,7 +528,7 @@ describe('createTracker', () => {
     expect(await tracker.flush('timer')).toBe('nothing');
   });
 
-  test('a past day still dirty is sent at once, and its record is deleted when handed over', async () => {
+  test('a past day still dirty is sent at once, and its record is kept, clean, once answered', async () => {
     const storage = memoryStorage();
     const old = storeKey('bakery', 'u1', '20261008');
     storage.setItem(old, JSON.stringify({ acc: { screens: { orders: 3 } }, dirty: true, lastSentAt: 0 }));
@@ -538,21 +539,79 @@ describe('createTracker', () => {
     expect(sent[0]?.id).toBe(`${DEVICE}_20261008_u1`);
     expect(sent[0]?.payload.dayKey).toBe('20261008');
     expect(sent[0]?.payload.screens.orders).toBe(3);
-    expect(old in storage.data).toBe(false);
+    await nextMacrotask();
+    expect(JSON.parse(storage.data[old] as string).dirty).toBe(false);
   });
 
-  test('a past day that was already sent is simply deleted; another person\'s past day is left alone', async () => {
+  test('a past day that was already sent is not sent again and stays for the prune; another person\'s past day is left alone', async () => {
     const storage = memoryStorage();
     const sentDay = storeKey('bakery', 'u1', '20261007');
     const other = storeKey('bakery', 'u2', '20261007');
-    storage.setItem(sentDay, JSON.stringify({ acc: {}, dirty: false, lastSentAt: 1 }));
+    storage.setItem(sentDay, JSON.stringify({ acc: { screens: { orders: 2 } }, dirty: false, lastSentAt: 1 }));
     storage.setItem(other, JSON.stringify({ acc: { screens: { orders: 1 } }, dirty: true, lastSentAt: 0 }));
     const { tracker, sent } = setup({ storage });
     tracker.setSession(READY);
-    await tracker.flush('load');
-    expect(sentDay in storage.data).toBe(false);
+    expect(await tracker.flush('load')).toBe('nothing');
+    expect(JSON.parse(storage.data[sentDay] as string).acc.screens.orders).toBe(2);
     expect(other in storage.data).toBe(true);
     expect(sent).toHaveLength(0);
+  });
+
+  test('a clean past day written by the current app is left in place by a Mise 2 load', async () => {
+    // Both apps share the same keys: a Mise 2 tab must not undo the midnight fix.
+    const storage = memoryStorage();
+    const key = storeKey('bakery', 'u1', '20261008');
+    storage.setItem(key, JSON.stringify({ acc: { screens: { orders: 4 } }, dirty: false, lastSentAt: 1 }));
+    const { tracker, sent } = setup({ storage });
+    tracker.setSession(READY);
+    expect(await tracker.flush('load')).toBe('nothing');
+    await nextMacrotask();
+    expect(JSON.parse(storage.data[key] as string).acc.screens.orders).toBe(4);
+    expect(sent).toHaveLength(0);
+  });
+
+  test('⚠️ midnight, two tabs: counts filed for yesterday AFTER its line was sent join the full line, never replace it', async () => {
+    // Tab X still holds a few uncommitted seconds of yesterday when tab Y, just after midnight,
+    // sends yesterday's line; Y then moves to another page (a new tracker, same storage) before X
+    // files its seconds. Yesterday's record must still be there for X to add to: a record made
+    // afresh would hold only X's delta, and its send would replace the whole line on the server.
+    const x = setup();
+    const y = setup({ storage: x.storage });
+    const at = (day: number, h: number, m: number, s: number) => { x.clock.t = y.clock.t = new Date(2026, 9, day, h, m, s).getTime(); };
+    const yesterday = storeKey('bakery', 'u1', '20261009');
+    at(9, 23, 59, 0);
+    x.tracker.setSession(READY);
+    x.tracker.begin('orders');
+    x.tracker.setSession(READY);
+    y.tracker.setSession(READY);
+    y.tracker.begin('catalogue');
+    y.tracker.setSession(READY);
+    at(9, 23, 59, 55);
+    x.tracker.action('order-sent');
+    expect(x.tracker.pending().actions, 'not yet filed').toEqual({ 'order-sent': 1 });
+
+    at(10, 0, 0, 3);
+    expect(await y.tracker.flush('load')).toBe('sent');
+    await nextMacrotask();
+    expect(y.sent[0]?.payload.screens).toEqual({ orders: 1, catalogue: 1 });
+
+    at(10, 0, 0, 6);
+    const y2 = setup({ storage: x.storage });
+    y2.clock.t = x.clock.t;
+    y2.tracker.setSession(READY);
+    await y2.tracker.flush('load');
+    expect(yesterday in x.storage.data, 'the next page in tab Y leaves the clean record alone').toBe(true);
+
+    at(10, 0, 0, 10);
+    x.tracker.tick();
+    expect(stored(x.storage, yesterday).acc.actions).toEqual({ 'order-sent': 1 });
+    expect(stored(x.storage, yesterday).acc.screens, 'added to the full record').toEqual({ orders: 1, catalogue: 1 });
+
+    at(10, 0, 10, 30);
+    expect(await x.tracker.flush('timer')).toBe('sent');
+    const line = x.sent.find(s => s.payload.dayKey === '20261009');
+    expect(line?.payload.screens, 'the resend is the whole day').toEqual({ orders: 1, catalogue: 1 });
+    expect(line?.payload.actions).toEqual({ 'order-sent': 1 });
   });
 
   test('a past day that fails passingly is put back for the next try', async () => {
