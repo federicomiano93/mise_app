@@ -123,6 +123,37 @@ describe('pingIfDue', () => {
     } finally { warn.mockRestore(); }
   });
 
+  // ⚠️ Vitest fails the run on an unhandled rejection, so this test is red without the guard in
+  // pingIfDue even though every assertion in it holds: the write was handed to the SDK, the day
+  // could not be stamped, nobody awaited the write, and its later failure had no handler.
+  test('a full storage cannot leave the write it already handed over as an unhandled rejection', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const storage = memoryStorage();
+      const full: KeyValueStorage = {
+        ...storage,
+        setItem(key, value) {
+          if (key.startsWith(PING_DAY_KEY_PREFIX)) throw new Error('QuotaExceededError');
+          storage.setItem(key, value);
+        },
+      };
+      const calls: DevicePayload[] = [];
+      const d = deps({
+        storage: full,
+        send: async payload => {
+          calls.push(payload);
+          await new Promise(r => setTimeout(r, 5));
+          throw Object.assign(new Error('x'), { code: 'unavailable' });
+        },
+      });
+      expect(await pingIfDue({ ...READY, user: { uid: 'full' } }, d)).toBe('failed');
+      expect(calls).toHaveLength(1);
+      // Long enough for the write to fail, and for the runtime to notice nobody was listening.
+      await new Promise(r => setTimeout(r, 50));
+      expect(warn).toHaveBeenCalledWith('Device count not sent:', 'unknown');
+    } finally { warn.mockRestore(); }
+  });
+
   test('the same venue and account is never sent twice at the same moment', async () => {
     let release: () => void = () => {};
     const calls: DevicePayload[] = [];

@@ -107,6 +107,11 @@ export async function pingIfDue(session: TelemetrySession | null | undefined, d:
       // with the offline cache a write made offline never settles, and stamping only after the
       // answer would queue one more write on every page opened offline (P14).
       const sending = Promise.resolve().then(() => d.send(payload, id));
+      // ⚠️ A branch that only marks the write as «looked after». If stamping the day throws
+      // (a full storage) the line below is never reached, nobody awaits `sending`, and its later
+      // failure would be an unhandled rejection — which the error report itself would then send.
+      // The await below still sees the failure: this does not change `sending`.
+      sending.catch(() => {});
       storage.setItem(dayKey, today);
       try {
         await sending;
