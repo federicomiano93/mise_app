@@ -1,0 +1,26 @@
+/* The month's bottom bar: «What it cost» and the month's own button. It sticks to the bottom of the
+   scrolling area (the shell's `main`, which ends where the phone's tab bar begins), so the buttons
+   are always on screen.
+
+   ⚠️ IT STICKS BECAUSE NOTHING BETWEEN IT AND THE SCROLL AREA CLIPS. An `overflow` set on the list,
+   its column or the section's frame would silently turn this into an ordinary row at the end of a
+   long list: stocktakeCss.spec.ts pins it. */
+
+.bar {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s3);
+  padding: var(--s3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-1);
+}
+
+/* Two buttons side by side while they fit, one under the other on the narrowest phone. */
+.action {
+  flex: 1 1 140px;
+}

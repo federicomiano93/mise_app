@@ -7,12 +7,15 @@ import { KEEP_FOCUS, Page } from '../shell/Page';
 import { SPLIT_QUERY } from '../ui/split';
 import { StatusMessageProvider, useStatusMessage } from '../ui/StatusMessage';
 import { useMediaQuery } from '../ui/useMediaQuery';
+import { HandBackProvider, useHandBackState } from './handBack';
 import { StocktakeProvider, useStocktakeStore } from './StocktakeContext';
 import { StocktakeDetail } from './StocktakeDetail';
 import { StocktakeList } from './StocktakeList';
 import { messageText } from './stocktakeMessages';
 import { FROM_LIST, cameFromList } from './stocktakeNav';
-import { STOCKTAKE_PATH, currentMonthId, monthPath, productPath, resolveStocktakePath } from './stocktakePath';
+import {
+  STOCKTAKE_PATH, costPath, currentMonthId, monthPath, productPath, resolveStocktakePath,
+} from './stocktakePath';
 import type { ShownView } from './stocktakePath';
 import styles from './StocktakeSection.module.css';
 
@@ -83,6 +86,7 @@ function MonthScreen({ view, current }: { view: ShownView; current: string }) {
   const { pathname, state } = useLocation();
   const store = useStocktakeStore();
   const split = useMediaQuery(SPLIT_QUERY);
+  const handBack = useHandBackState();
   const month = view.month;
 
   // The store watches the month in the address. A layout effect, so the month's local copy is in the
@@ -98,45 +102,48 @@ function MonthScreen({ view, current }: { view: ShownView; current: string }) {
     void navigate(monthPath(other), { replace: true, state: KEEP_FOCUS });
   };
 
-  // A product opens one level down, so Back steps up to the list. On the split, with a product (or
-  // «What it cost») already open beside the list, picking another is lateral and replaces it — and
-  // keeps whatever the entry it replaces knew about where Back goes.
-  const openProduct = (id: string) => {
-    const to = productPath(month, id);
+  // A product, or «What it cost», opens one level down, so Back steps up to the list. On the split,
+  // with a product (or «What it cost») already open beside the list, picking another is lateral and
+  // replaces it — and keeps whatever the entry it replaces knew about where Back goes.
+  const openScreen = (to: string) => {
     if (split && view.kind !== 'list') {
       void navigate(to, { replace: true, state: cameFromList(state) ? FROM_LIST : KEEP_FOCUS });
     } else {
       void navigate(to, { state: FROM_LIST });
     }
   };
+  const openProduct = (id: string) => { openScreen(productPath(month, id)); };
+  const openCost = () => { openScreen(costPath(month)); };
+
+  // Back out of a product or «What it cost»: the button that opened it takes the focus, once the
+  // list is on screen again (on a phone it was hidden behind the screen, not unmounted).
+  useLayoutEffect(() => {
+    if (view.kind === 'list') handBack.deliver();
+  }, [view.kind, handBack]);
 
   return (
-    <Page title={t('section.stocktake')}>
-      <div className={styles.layout} data-view={view.kind}>
-        <div className={styles.list}>
-          <PartBoundary>
-            <StocktakeList
-              month={month}
-              current={current}
-              openProductId={view.kind === 'product' ? view.id : null}
-              onMove={moveTo}
-              onOpenProduct={openProduct}
-              // The two fill-in actions arrive with the dialogs in the next slice.
-              onCarry={noop}
-              onPurchases={noop}
-            />
-          </PartBoundary>
+    <HandBackProvider value={handBack}>
+      <Page title={t('section.stocktake')}>
+        <div className={styles.layout} data-view={view.kind}>
+          <div className={styles.list}>
+            <PartBoundary>
+              <StocktakeList
+                month={month}
+                current={current}
+                openProductId={view.kind === 'product' ? view.id : null}
+                onMove={moveTo}
+                onOpenProduct={openProduct}
+                onOpenCost={openCost}
+              />
+            </PartBoundary>
+          </div>
+          <div className={styles.detail}>
+            <PartBoundary resetKey={pathname}>
+              <StocktakeDetail view={view} />
+            </PartBoundary>
+          </div>
         </div>
-        <div className={styles.detail}>
-          <PartBoundary resetKey={pathname}>
-            <StocktakeDetail view={view} />
-          </PartBoundary>
-        </div>
-      </div>
-    </Page>
+      </Page>
+    </HandBackProvider>
   );
-}
-
-function noop(): void {
-  // Replaced by the fill-in dialogs of the next slice.
 }

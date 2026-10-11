@@ -5,8 +5,10 @@ import { useSession } from '../session/SessionContext';
 import { STOCKTAKE_UNAVAILABLE_SCREEN } from '../shell/sections';
 import { announceScreen } from '../telemetry/usage';
 import { CountList } from './CountList';
+import { MonthActions } from './MonthActions';
 import { MonthBar } from './MonthBar';
 import { useStocktake } from './StocktakeContext';
+import { useMonthActions } from './useMonthActions';
 import styles from './StocktakeList.module.css';
 
 type Props = {
@@ -15,11 +17,11 @@ type Props = {
   openProductId: string | null;
   onMove: (month: string) => void;
   onOpenProduct: (id: string) => void;
-  onCarry: () => void;
-  onPurchases: () => void;
+  onOpenCost: () => void;
 };
 
-// The left column: the month bar, and under it the month's counting list.
+// The left column: the month bar, under it the month's counting list and, for whoever runs the
+// place, the month's bottom bar.
 //
 // ⚠️ FOR AN EMPLOYEE A REFUSED MONTH IS THE ANSWER, NOT A HICCUP. The rules keep a closed month (and
 // one still carrying frozen prices) from them, and «live updates interrupted» over an empty list
@@ -27,11 +29,14 @@ type Props = {
 // else; the bar stays, because its arrows are the way to a month that can be opened. Whoever runs
 // the place sees the list from the phone's own copy, and the notice (StoreMessages).
 //
-// Nothing that is money is drawn here for anybody: the money parts come later, behind `canManage`.
-export function StocktakeList({ month, current, openProductId, onMove, onOpenProduct, onCarry, onPurchases }: Props) {
+// ⚠️ THE MONEY AND THE END OF A MONTH ARE THE MANAGER'S: «What it cost», «Close the month» and
+// «Carry forward» are drawn only behind `canManage`. A month is refused to an employee only, so the
+// bottom bar is never on the refused-month sentence either.
+export function StocktakeList({ month, current, openProductId, onMove, onOpenProduct, onOpenCost }: Props) {
   const { t } = useT();
   const { canManage } = useSession();
   const snapshot = useStocktake();
+  const actions = useMonthActions(month);
   const named = snapshot.monthId === month && snapshot.month !== null;
   const refused = named && snapshot.monthFailed && !canManage;
 
@@ -41,12 +46,14 @@ export function StocktakeList({ month, current, openProductId, onMove, onOpenPro
     if (refused) announceScreen(STOCKTAKE_UNAVAILABLE_SCREEN);
   }, [refused]);
 
+  const closed = named ? isClosed(snapshot.month) : false;
+
   return (
     <div className={styles.column}>
       <MonthBar
         month={month}
         current={current}
-        closed={named ? isClosed(snapshot.month) : null}
+        closed={named ? closed : null}
         onMove={onMove}
       />
       {refused ? (
@@ -58,10 +65,20 @@ export function StocktakeList({ month, current, openProductId, onMove, onOpenPro
           monthId={month}
           openProductId={openProductId}
           onOpenProduct={onOpenProduct}
-          onCarry={canManage ? onCarry : undefined}
-          onPurchases={onPurchases}
+          onCarry={canManage ? actions.carry : undefined}
+          onPurchases={actions.purchases}
         />
       )}
+      {canManage ? (
+        <MonthActions
+          closed={closed}
+          ready={named && snapshot.monthLoaded && snapshot.ingredientsLoaded}
+          onSeeCost={onOpenCost}
+          onClose={actions.close}
+          onReopen={actions.reopen}
+        />
+      ) : null}
+      {actions.dialogs}
     </div>
   );
 }

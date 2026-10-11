@@ -3,9 +3,12 @@ import tokensCss from '../styles/tokens.css?raw';
 import shellCss from '../shell/AppShell.module.css?raw';
 import pageCss from '../shell/Page.module.css?raw';
 import boxCss from './CountBox.module.css?raw';
+import costCss from './StocktakeCost.module.css?raw';
 import detailCss from './StocktakeDetail.module.css?raw';
 import listCss from './CountList.module.css?raw';
+import monthActionsCss from './MonthActions.module.css?raw';
 import monthBarCss from './MonthBar.module.css?raw';
+import productCss from './StocktakeProduct.module.css?raw';
 import rowCss from './ProductRow.module.css?raw';
 import columnCss from './StocktakeList.module.css?raw';
 import sectionCss from './StocktakeSection.module.css?raw';
@@ -140,16 +143,18 @@ describe('the month bar', () => {
 });
 
 describe('the frame keeps a bottom bar able to stick', () => {
-  // ⚠️ A STICKY BAR (the month's bottom actions, in the next slice) STICKS ONLY IF NOTHING BETWEEN IT
-  // AND THE SCROLL AREA CLIPS. An `overflow` on any of these would turn it into an ordinary row at
-  // the end of a long list.
+  // ⚠️ A STICKY BAR (the month's bottom actions; the form bar of a product or of «What it cost»
+  // sticks to the top) STICKS ONLY IF NOTHING BETWEEN IT AND THE SCROLL AREA CLIPS. An `overflow` on
+  // any of these would turn it into an ordinary row at the end of a long list.
   it('has nothing that clips between a bar and the scroll area', () => {
     const clippers: string[] = [];
     const sheets: [string, string, string[]][] = [
       ['StocktakeSection', sectionCss, ['.layout', '.list', '.detail']],
       ['StocktakeList', columnCss, ['.column']],
       ['CountList', listCss, ['.list', '.group']],
-      ['StocktakeDetail', detailCss, ['.prompt', '.placeholder']],
+      ['StocktakeDetail', detailCss, ['.prompt']],
+      ['StocktakeProduct', productCss, ['.product', '.body', '.answer', '.field']],
+      ['StocktakeCost', costCss, ['.cost', '.body', '.rows']],
       ['Page', pageCss, ['.body']],
     ];
     for (const [name, css, selectors] of sheets) {
@@ -193,5 +198,56 @@ describe('the split of the frame', () => {
     expect(hiddenOnPhone).toContain('.layout[data-view="product"] .list');
     expect(hiddenOnPhone).toContain('.layout[data-view="cost"] .list');
     expect(split).not.toContain('display: none');
+  });
+});
+
+describe('the month\'s bottom bar', () => {
+  const bar = rule(monthActionsCss, '.bar');
+
+  it('sticks to the bottom of the scrolling area, above the rows that pass under it', () => {
+    expect(declaration(bar, 'position')).toBe('sticky');
+    expect(declaration(bar, 'bottom')).toBe('0');
+    expect(Number(declaration(bar, 'z-index'))).toBeGreaterThan(0);
+    expect(declaration(bar, 'background')).toBe('var(--surface)');
+  });
+
+  it('lets its buttons wrap onto a second line on the narrowest phone, instead of squeezing a word', () => {
+    expect(declaration(bar, 'display')).toBe('flex');
+    expect(declaration(bar, 'flex-wrap')).toBe('wrap');
+    expect(declaration(rule(monthActionsCss, '.action'), 'flex')).toBe('1 1 140px');
+  });
+});
+
+describe('the answer of a product', () => {
+  it('is quiet while it is not known, and in the warning colours when it cannot be right', () => {
+    expect(declaration(rule(productCss, '.answer[data-state="unknown"]'), 'border-style')).toBe('dashed');
+    const negative = rule(productCss, '.answer[data-state="negative"]');
+    expect(declaration(negative, 'background')).toBe('var(--warn-tint)');
+    expect(declaration(rule(productCss, '.answerWarn'), 'color')).toBe('var(--warn-ink)');
+  });
+
+  it('keeps the number in same-width digits and lets a long unit wrap', () => {
+    const value = rule(productCss, '.answerValue');
+    expect(declaration(value, 'font-variant-numeric')).toBe('tabular-nums');
+    expect(declaration(value, 'overflow-wrap')).toBe('anywhere');
+  });
+});
+
+describe('what it cost', () => {
+  it('sets the money on the right in same-width digits and never lets it shrink', () => {
+    const value = rule(costCss, '.value');
+    expect(declaration(value, 'flex')).toBe('none');
+    expect(declaration(value, 'font-variant-numeric')).toBe('tabular-nums');
+  });
+
+  it('lets the name take what is left and wrap, so a long name never pushes the money off a 296px phone', () => {
+    expect(declaration(rule(costCss, '.main'), 'min-width')).toBe('0');
+    expect(declaration(rule(costCss, '.name'), 'overflow-wrap')).toBe('anywhere');
+  });
+
+  it('draws a row with no value quieter than one with', () => {
+    const quiet = rule(costCss, '.row[data-unvalued="true"] .name');
+    expect(declaration(quiet, 'color')).toBe('var(--ink-2)');
+    expect(declaration(quiet, 'font-weight')).toBe('500');
   });
 });

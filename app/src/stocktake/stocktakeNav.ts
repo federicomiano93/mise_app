@@ -17,13 +17,17 @@ export function cameFromList(state: unknown): boolean {
 // list, so Back is `navigate(-1)` and the browser's own Back keeps meaning the same thing. Opened
 // by its address (a bookmark, a reload with nothing behind it) there is nothing to step back to,
 // so it goes to `fallback` by REPLACING itself.
-export function useLeave(fallback: string): () => void {
+//
+// `onLeaving` runs first: the screen says which button opened it, so the focus can be handed back
+// to that button once the list is on screen (handBack.ts).
+export function useLeave(fallback: string, onLeaving: () => void): () => void {
   const navigate = useNavigate();
   const { state } = useLocation();
   const fromList = cameFromList(state);
 
   return useCallback(() => {
+    onLeaving();
     if (fromList) void navigate(-1);
     else void navigate(fallback, { replace: true, state: KEEP_FOCUS });
-  }, [navigate, fromList, fallback]);
+  }, [navigate, fromList, fallback, onLeaving]);
 }

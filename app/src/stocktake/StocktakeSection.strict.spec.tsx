@@ -1,5 +1,5 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { configure, screen, waitFor } from '@testing-library/react';
+import { configure, screen, waitFor, within } from '@testing-library/react';
 import { fakeStocktakeSource } from '../testing/fakeStocktakeSource';
 import { freezeClock, ingredient, monthDoc, renderStocktake } from '../testing/renderStocktake';
 
@@ -74,5 +74,41 @@ describe('under StrictMode: the Stocktake', () => {
     await screen.findByRole('heading', { level: 2, name: 'September 2026' }, LOAD);
     await waitFor(() => { expect(screen.getByRole('textbox', { name: 'How many of Burro are left' })).toBeEnabled(); }, LOAD);
     expect(screen.getByRole('textbox', { name: 'How many of Burro are left' })).toHaveValue('');
+  });
+
+  // The question and the notice are hooks that settle their answer when their component goes away:
+  // the simulated remount must not answer «no» to a question asked afterwards, nor write twice.
+  it('closes the month once: the next month, then this one', async () => {
+    const fake = seeded();
+    const { user } = renderStocktake('/stocktake/2026-10', { source: fake });
+    const close = await screen.findByRole('button', { name: 'Close the month' }, LOAD);
+    await waitFor(() => { expect(close).toBeEnabled(); }, LOAD);
+
+    await user.click(close);
+    const ask = await screen.findByRole('alertdialog', { name: 'Close the month?' }, LOAD);
+    await user.click(within(ask).getByRole('button', { name: 'Close the month' }));
+
+    expect(await screen.findByText(
+      'Month closed. November 2026 is open, with what was left as its opening.',
+      undefined,
+      LOAD,
+    )).toBeInTheDocument();
+    expect(fake.saved.map(save => save.monthId)).toEqual(['2026-11', '2026-10']);
+  });
+
+  it('fills in the purchases once, and tells what could not be counted', async () => {
+    const fake = seeded();
+    fake.orders.push({ id: 'o1', date: '2026-10-03', quantities: { flour: 2, butter: 1 }, units: { butter: 'busta' } });
+    const { user } = renderStocktake('/stocktake/2026-10', { source: fake });
+    await user.click(await screen.findByRole('button', { name: 'From the orders' }, LOAD));
+    const ask = await screen.findByRole('alertdialog', { name: 'Fill in what was bought?' }, LOAD);
+    await user.click(within(ask).getByRole('button', { name: 'Fill them in' }));
+
+    expect(await screen.findByText('1 product filled in from the orders.', undefined, LOAD)).toBeInTheDocument();
+    const notice = await screen.findByRole('alertdialog', { name: /^Burro: not counted here/ }, LOAD);
+    await user.click(within(notice).getByRole('button', { name: 'OK' }));
+    await waitFor(() => { expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument(); });
+    await waitFor(() => { expect(fake.saved).toHaveLength(1); }, SAVED);
+    expect(fake.saved[0]?.patch.purchased).toEqual({ flour: 2 });
   });
 });

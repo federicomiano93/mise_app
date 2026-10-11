@@ -1,8 +1,10 @@
+import { useCallback } from 'react';
 import { consumption } from '@mise/shared/inventory-model';
 import type { InventoryMonth } from '@mise/shared/inventory-model';
 import { useT } from '../i18n/useT';
 import { CountBox } from './CountBox';
 import type { Product } from './countListModel';
+import { productOpener, useHandBack } from './handBack';
 import { displayNumber } from './stocktakeFormat';
 import { productLabel } from './stocktakeModel';
 import styles from './ProductRow.module.css';
@@ -32,6 +34,12 @@ type Props = {
 // reached for is still there when the finger lands, and the box being typed into keeps its text.
 export function ProductRow({ product, month, shut, isOpen, onOpen, register, onEnter }: Props) {
   const { t, locale } = useT();
+  const handBack = useHandBack();
+  const productId = product.id;
+  // Back from this product's screen hands the focus back to this button.
+  const opener = useCallback((node: HTMLButtonElement | null) => {
+    handBack.register(productOpener(productId), node);
+  }, [handBack, productId]);
   const line = consumption(month, product.id);
   const name = productLabel(product) || t('stock.unnamedProduct');
   const unit = typeof product.unit === 'string' && product.unit !== '' ? product.unit : t('stock.packsShort');
@@ -53,6 +61,7 @@ export function ProductRow({ product, month, shut, isOpen, onOpen, register, onE
     <li className={styles.row} data-open={isOpen}>
       <div className={styles.main}>
         <button
+          ref={opener}
           type="button"
           className={styles.open}
           aria-label={t('stock.openProduct', { name })}

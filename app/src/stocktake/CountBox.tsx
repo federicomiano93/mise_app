@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import type { CountMap } from '@mise/shared/inventory-model';
 import { useT } from '../i18n/useT';
 import { markBusy } from '../session/busy';
 import { useStocktakeStore } from './StocktakeContext';
@@ -6,16 +7,26 @@ import { boxText } from './stocktakeFormat';
 import styles from './CountBox.module.css';
 
 type Props = {
-  // The product the box counts, and what the box is called for a screen reader.
+  // The product the box counts.
   id: string;
-  label: string;
+  // The map of the month the box writes to: a row of the list counts what is LEFT (`closing`); a
+  // product's own screen has a box for each map.
+  map?: CountMap;
+  // What the box is called for a screen reader, when the screen draws no <label> of its own. A
+  // screen that does passes `inputId` instead and points its <label htmlFor> at it.
+  label?: string;
+  inputId?: string;
+  // The id of the hint written under the box.
+  describedBy?: string;
+  // A suggestion shown in an empty box (the pack weight read from the pack text).
+  placeholder?: string;
   // What the month holds for it: null when nobody has counted it.
   value: number | null;
   // Closed month, or the month has not answered yet: nothing can be typed.
   disabled: boolean;
   // The list keeps the boxes by product, to move the focus on from one to the next.
-  register: (id: string, node: HTMLInputElement | null) => void;
-  onEnter: () => void;
+  register?: (id: string, node: HTMLInputElement | null) => void;
+  onEnter?: () => void;
 };
 
 // What a person has typed into a box they are in: the text it started with and the text now.
@@ -37,7 +48,9 @@ type Edit = { readonly start: string; readonly draft: string };
 // on to the next row's box). Compared with the text the box started with, not with the store's
 // number now: a colleague's count that arrived while the box was open is not overwritten by a
 // number nobody typed.
-export function CountBox({ id, label, value, disabled, register, onEnter }: Props) {
+export function CountBox({
+  id, map = 'closing', label, inputId, describedBy, placeholder, value, disabled, register, onEnter,
+}: Props) {
   const { locale } = useT();
   const store = useStocktakeStore();
   const stored = boxText(value, locale);
@@ -71,7 +84,7 @@ export function CountBox({ id, label, value, disabled, register, onEnter }: Prop
   const commit = (keepEditing: boolean) => {
     const current = live.current;
     if (current === null) return;
-    if (current.draft !== current.start && !disabled) store.setCount('closing', id, current.draft);
+    if (current.draft !== current.start && !disabled) store.setCount(map, id, current.draft);
     setEdit(keepEditing ? { start: current.draft, draft: current.draft } : null);
   };
 
@@ -82,10 +95,10 @@ export function CountBox({ id, label, value, disabled, register, onEnter }: Prop
   // takes it, and the stop sends it.
   useLayoutEffect(() => () => {
     const current = live.current;
-    if (current !== null && current.draft !== current.start) store.setCount('closing', id, current.draft);
-  }, [store, id]);
+    if (current !== null && current.draft !== current.start) store.setCount(map, id, current.draft);
+  }, [store, id, map]);
 
-  const ref = useCallback((node: HTMLInputElement | null) => { register(id, node); }, [register, id]);
+  const ref = useCallback((node: HTMLInputElement | null) => { register?.(id, node); }, [register, id]);
 
   return (
     <input
@@ -93,9 +106,12 @@ export function CountBox({ id, label, value, disabled, register, onEnter }: Prop
       type="text"
       inputMode="decimal"
       autoComplete="off"
-      enterKeyHint="next"
+      enterKeyHint={onEnter ? 'next' : 'done'}
       className={styles.box}
+      id={inputId}
       aria-label={label}
+      aria-describedby={describedBy}
+      placeholder={placeholder}
       disabled={disabled}
       value={editing ? edit.draft : stored}
       onFocus={() => { setEdit({ start: stored, draft: stored }); }}
@@ -108,7 +124,7 @@ export function CountBox({ id, label, value, disabled, register, onEnter }: Prop
         if (event.key !== 'Enter' || event.nativeEvent.isComposing) return;
         event.preventDefault();
         commit(true);
-        onEnter();
+        onEnter?.();
       }}
     />
   );

@@ -16,6 +16,11 @@
   text-align: right;
 }
 
+/* The weight read from the pack text, offered in an empty box. */
+.box::placeholder {
+  color: var(--ink-3);
+}
+
 .box:focus {
   border-color: var(--accent);
 }

@@ -1,0 +1,127 @@
+/* «What the month cost»: a card holding the form bar (Back · the title · the month), the total and
+   one row per product that was counted. On the split it is the right-hand pane; below 1000px it
+   replaces the list.
+
+   ⚠️ NOTHING ON THE CARD MAY CLIP (no `overflow`): the form bar sticks to the top of the shell's
+   scrolling area, and a clipping ancestor would turn it into an ordinary row. */
+
+.cost {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+}
+
+.month {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
+.loading {
+  padding: var(--s6);
+  color: var(--ink-2);
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s4);
+  padding: var(--s4);
+}
+
+.summary {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+  padding: var(--s4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--sunken);
+}
+
+.summaryLabel {
+  color: var(--ink-2);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.summaryValue {
+  font-size: var(--fs-2xl);
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.summaryNote {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
+.rows {
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--line);
+  list-style: none;
+}
+
+/* A name and what was used on the left, the money on the right in same-width digits, so a column
+   reads down. */
+.row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--s4);
+  padding: var(--s3) 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.main {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--s1);
+  min-width: 0;
+}
+
+.name {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.sub {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  overflow-wrap: anywhere;
+}
+
+.value {
+  flex: none;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+/* A row with no value is a data-entry job, not an answer: quieter, so it does not compete with the
+   rows that are. */
+.row[data-unvalued="true"] .name,
+.row[data-unvalued="true"] .value {
+  color: var(--ink-2);
+  font-weight: 500;
+}
+
+.empty {
+  padding: var(--s6) 0;
+  color: var(--ink-2);
+}
+
+.caveat {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
+@media (min-width: 1000px) {
+  .body {
+    padding: var(--s6);
+  }
+}
