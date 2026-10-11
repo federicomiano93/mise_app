@@ -373,10 +373,10 @@
       }
     },
     "dist/i18n.js": {
-      "sha": "05b8f4a7adb3d212",
-      "mapSha": "13125fe42e6f68ed",
+      "sha": "d8a758bc21c9c9b6",
+      "mapSha": "b59d57d5a4027c19",
       "inputs": {
-        "js/i18n.js": "8c8fd70b84671c42"
+        "js/i18n.js": "ac62148ef52d2a67"
       }
     },
     "dist/index.js": {
@@ -789,14 +789,14 @@
       }
     },
     "dist/pastries.css": {
-      "sha": "ba7e40828302bf77",
+      "sha": "e11254fca7dd9eda",
       "inputs": {
-        "pastries.css": "9e4cb12aa70746d0"
+        "pastries.css": "796d88509bf4f47a"
       }
     },
     "dist/pastries.js": {
-      "sha": "7bbe9c70c4098523",
-      "mapSha": "c82447dc82d15101",
+      "sha": "9849fef5fa6fe318",
+      "mapSha": "257ab0c792a8677e",
       "inputs": {
         "js/allergen-model.js": "50434c6cea85b7de",
         "js/app-version.js": "4ef897a205fdec91",
@@ -847,16 +847,16 @@
         "js/pages/run-in-order.js": "5bc8e0b92802e22c",
         "js/pastries/confirm-dialog.js": "83f2ab3c9c69025d",
         "js/pastries/dom.js": "247525e429f4ec4a",
-        "js/pastries/firebase-pastries.js": "44fa684618e4347b",
-        "js/pastries/pastries-day.js": "26adcbaa7b7a8c2c",
+        "js/pastries/firebase-pastries.js": "18a4973c36f3391f",
+        "js/pastries/pastries-day.js": "118c5d1cd60f777c",
         "js/pastries/pastries-editor.js": "4ef9b27eb633c795",
         "js/pastries/pastries-lock.js": "2a6043cb6111bb9a",
         "js/pastries/pastries-log-model.js": "de0511e490f1eecc",
-        "js/pastries/pastries-logs-store.js": "743bcbf4aa6e2d80",
+        "js/pastries/pastries-logs-store.js": "e3555053c1b80b2a",
         "js/pastries/pastries-logs.js": "8d7da71b5e15d624",
-        "js/pastries/pastries-main.js": "4d8377dff4a685e1",
+        "js/pastries/pastries-main.js": "e124cb2d8f9abc37",
         "js/pastries/pastries-model.js": "c5db9ff5ca0408a4",
-        "js/pastries/pastries-store.js": "65a23922a74dece4",
+        "js/pastries/pastries-store.js": "4f7be5376f1ce0ef",
         "js/pastries/pastries-strip.js": "48b7a416a6e0f78d",
         "js/pastries/tablet.js": "464601a358a0978e",
         "js/preview-ribbon.js": "6c0264eb5d075e5b",
