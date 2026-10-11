@@ -165,8 +165,9 @@ sign-in form is usable, on the preview's CDN, medians of 2 runs:
 | later visits | 1.56 s | 1.96 s |
 
 Mise 2's first visit is faster (5 files instead of 18). Later visits are slower by 0.2 to 0.4 s:
-the cost is running the code (about 1 s of script at that CPU), half of it Firestore (460 KB of a
-1 MB bundle: Firestore 460, React 211, Firebase Auth 97, router 93, React Aria 78, the app 58).
+the cost is running the code (about 1 s of script at that CPU), over half of it Firestore (its
+file is 554 KB of about 1.1 MB: Firestore 554, React 219, Firebase Auth 97, router 93, React Aria
+81, the app 67).
 
 What step 2c changed:
 - **Firestore is loaded only when it is needed** (`session/firebaseBackend.ts`): the sign-in form

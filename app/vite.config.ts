@@ -23,11 +23,14 @@ export default defineConfig({
     // (CSS nesting, for one, needs Chrome 120).
     target: ['chrome107', 'edge107', 'firefox104', 'safari16'],
     cssTarget: ['chrome107', 'edge107', 'firefox104', 'safari16'],
+    // Firestore's lazy chunk is ~554 KB by itself and expected (session/firebaseBackend.ts): the
+    // default 500 KB warning would print on every build and hide a real one.
+    chunkSizeWarningLimit: 600,
     rollupOptions: {
       output: {
         // The libraries in chunks of their own (step 2c). A release of Mise 2 changes its own
         // code far more often than React or Firebase: kept apart, a phone on 4G re-downloads the
-        // ~60 KB that changed, not the whole megabyte, and the browser can keep the libraries'
+        // ~67 KB that changed, not the whole megabyte, and the browser can keep the libraries'
         // compiled code. Firestore is not listed: it is loaded on first use
         // (session/firebaseBackend.ts) and Vite already gives it a chunk of its own.
         manualChunks(id: string) {

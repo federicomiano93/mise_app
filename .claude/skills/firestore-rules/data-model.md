@@ -145,7 +145,8 @@ preview until the switch): the same shapes, ids, throttles and localStorage keys
 one `device-id`, one daily ping and one usage line per person per day for BOTH apps (the two merge
 the same local accumulator). Its screens are `m2` and `m2:<section>` (`m2:orders`, `m2:sign-in`…),
 its `appVersion` is `m2-<7-char commit>` or `m2-dev`, and it hands no write to Firestore while the
-phone is offline (it waits for the signal, so «Not sent yet» only ever means the person's edits).
+phone is offline (it waits for the signal, so «Not sent yet» means the person's edits — except on
+«lie-fi», online with no data getting through, which `navigator.onLine` cannot see).
 
 **Client ordering** (the first collections an account from OUTSIDE the business can reach):
 `client-accounts/{uid}` · `client-menus/{clientId}` · `client-orders/{date}_{clientId}` ·

@@ -18,7 +18,8 @@ file `mise2.css`: change a value there first, then in `app/src/styles/tokens.css
   ONE accent (cobalt) for selection and the one primary action per screen; red, amber and green
   only for MEANING (danger/allergen, to check, done). Geist + Geist Mono, bundled. Light only.
 - **Layout:** below 700px one pane and a bottom tab bar (four sections + «More»); from 700px the
-  dark rail (92px) and a top bar (venue, date, connection); from 1000px list (384px) + detail.
+  dark rail (92px) and a top bar (venue, date, connection); from 1000px the TARGET is list (384px,
+  `--list-w`) + detail, built with the first sections in step 3.
   CSS media queries only; both navigations stay in the DOM.
 - **Components:** one `Name.module.css` per component (`css-modules.spec.ts` refuses an undefined
   class or token). Controls from React Aria Components (`ui/Button`, `ui/Dialog`); icons from

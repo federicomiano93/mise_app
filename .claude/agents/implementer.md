@@ -27,8 +27,9 @@ that no test fully catches. Read every one your change touches:
 
 ## The stack, in one breath
 
-Plain HTML + CSS + vanilla ES modules. **No framework, no bundler, no build step, no
-TypeScript, no npm runtime dependencies.** Firebase comes from the official CDN;
+Plain HTML + CSS + vanilla ES modules. **No framework, no TypeScript, no npm runtime
+dependencies.** The one build tool is esbuild, run on this PC to make the committed `dist/`
+bundles (project CLAUDE.md «Bundles»). Firebase comes from the official CDN;
 `js/vendor/` holds the one vendored library. If a change seems to need a package, that
 is a decision to escalate, not to make.
 
@@ -51,8 +52,12 @@ contract. In short:
   `var(--token)` from `app/src/styles/tokens.css` (`css-modules.spec.ts` enforces both).
 - Firestore only through the session's backend (`backend.firestore()`), never `getFirestore()`.
   An editor calls `markBusy()` while it holds unsaved edits. Every part sits in a `PartBoundary`.
-- Mise 2 shares the current app's origin, localStorage and IndexedDB: never invent a storage key
-  outside `KEEP_PREFIXES`, never change the Firebase start-up (`tests/auth-start.test.mjs`).
+- Mise 2 shares the current app's origin, localStorage and IndexedDB. `KEEP_PREFIXES` (in BOTH
+  `js/local-data.js` and `shared/src/local-data.ts`) lists the keys that SURVIVE a sign-out or a
+  venue switch; every other key is wiped on purpose, so the next person on a shared phone never
+  sees the previous one's data. A key holding a person's or a venue's data must NOT start with a
+  kept prefix; only a fact about the device may, and then it is added to both lists. Never change
+  the Firebase start-up (`tests/auth-start.test.mjs`, `app/src/firestore-access.spec.ts`).
 - The Mise 2 rules above do not apply to `js/`, and `js/`'s rules (bundles, `sw-hashes`, no
   framework) do not apply to `app/`.
 
