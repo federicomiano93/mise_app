@@ -130,6 +130,13 @@ describe('the Stocktake for an employee', () => {
       expect(router.state.location.pathname).toBe('/stocktake/2026-10');
     });
 
+    it('says neither «Open» nor «Closed» under a month it could not read', async () => {
+      renderStocktake('/stocktake/2026-09', { session: EMPLOYEE, source: refused() });
+      await screen.findByText(SENTENCE, undefined, LOAD);
+      expect(within(bar()).queryByText('Open')).not.toBeInTheDocument();
+      expect(within(bar()).queryByText('Closed')).not.toBeInTheDocument();
+    });
+
     it('does not repaint the refusal away when an ingredient changes later', async () => {
       const fake = refused();
       renderStocktake('/stocktake/2026-09', { session: EMPLOYEE, source: fake });

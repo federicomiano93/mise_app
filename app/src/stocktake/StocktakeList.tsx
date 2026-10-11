@@ -50,10 +50,12 @@ export function StocktakeList({ month, current, openProductId, onMove, onOpenPro
 
   return (
     <div className={styles.column}>
+      {/* A refused month was never read: whether it is open or closed is not known here, and an
+          «Open» badge over the sentence that says it may be closed would contradict it. */}
       <MonthBar
         month={month}
         current={current}
-        closed={named ? closed : null}
+        closed={named && !refused ? closed : null}
         onMove={onMove}
       />
       {refused ? (
