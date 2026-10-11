@@ -13,8 +13,8 @@
       }
     },
     "dist/calculator.js": {
-      "sha": "c799144c36aea502",
-      "mapSha": "b4b5f178e3db4708",
+      "sha": "bc0681e2a733820b",
+      "mapSha": "1fb6a79798882b3d",
       "inputs": {
         "js/allergen-model.js": "50434c6cea85b7de",
         "js/app-version.js": "4ef897a205fdec91",
@@ -119,7 +119,7 @@
         "js/unsent-guard.js": "3fd97838bf0b8e7f",
         "js/update-gate.js": "4abdd66640ea294d",
         "js/usage-model.js": "d6703bc466f26817",
-        "js/usage.js": "05e57ba55636fbed",
+        "js/usage.js": "e181b1ae849a06f0",
         "js/vendor/sortable.esm.js": "6c9b20f666b97a0d",
         "js/venue-features.js": "d1dd442e6767bba8",
         "js/wake-lock.js": "160d7312777808ea",
@@ -135,8 +135,8 @@
       }
     },
     "dist/catalogue.js": {
-      "sha": "ad9f96c64827fccf",
-      "mapSha": "802dde3314223e50",
+      "sha": "2074a243ebfc8713",
+      "mapSha": "d88d6357996edac9",
       "inputs": {
         "js/allergen-match.js": "ee85eebef7fd7052",
         "js/allergen-model.js": "50434c6cea85b7de",
@@ -257,7 +257,7 @@
         "js/unsent-guard.js": "3fd97838bf0b8e7f",
         "js/update-gate.js": "4abdd66640ea294d",
         "js/usage-model.js": "d6703bc466f26817",
-        "js/usage.js": "05e57ba55636fbed",
+        "js/usage.js": "e181b1ae849a06f0",
         "js/vat-number.js": "7dda6577bbf5aedf",
         "js/vat-rates.js": "1c08624a241026df",
         "js/vendor/sortable.esm.js": "6c9b20f666b97a0d",
@@ -273,8 +273,8 @@
       }
     },
     "dist/foodcost.js": {
-      "sha": "456bda10489cc33b",
-      "mapSha": "f61d2faafb33096e",
+      "sha": "19c8fc8cc2142d70",
+      "mapSha": "021d5b70e393fcdd",
       "inputs": {
         "js/allergen-model.js": "50434c6cea85b7de",
         "js/app-version.js": "4ef897a205fdec91",
@@ -365,7 +365,7 @@
         "js/unsent-guard.js": "3fd97838bf0b8e7f",
         "js/update-gate.js": "4abdd66640ea294d",
         "js/usage-model.js": "d6703bc466f26817",
-        "js/usage.js": "05e57ba55636fbed",
+        "js/usage.js": "e181b1ae849a06f0",
         "js/vat-rates.js": "1c08624a241026df",
         "js/venue-features.js": "d1dd442e6767bba8",
         "js/wake-lock.js": "160d7312777808ea",
@@ -380,8 +380,8 @@
       }
     },
     "dist/index.js": {
-      "sha": "cf5a627767dfaddb",
-      "mapSha": "9cb50b6eb13d10fc",
+      "sha": "bf68d3e63d7cded6",
+      "mapSha": "c5e31b45938b4479",
       "inputs": {
         "js/allergen-model.js": "50434c6cea85b7de",
         "js/app-version.js": "4ef897a205fdec91",
@@ -481,7 +481,7 @@
         "js/unsent-guard.js": "3fd97838bf0b8e7f",
         "js/update-gate.js": "4abdd66640ea294d",
         "js/usage-model.js": "d6703bc466f26817",
-        "js/usage.js": "05e57ba55636fbed",
+        "js/usage.js": "e181b1ae849a06f0",
         "js/vendor/sortable.esm.js": "6c9b20f666b97a0d",
         "js/venue-features.js": "d1dd442e6767bba8",
         "js/wake-lock.js": "160d7312777808ea",
@@ -509,8 +509,8 @@
       }
     },
     "dist/inventory.js": {
-      "sha": "320050e3ce59a030",
-      "mapSha": "4e41fbf73b30d1aa",
+      "sha": "e2c2d6bf10a4961e",
+      "mapSha": "1f0e7188e416596a",
       "inputs": {
         "js/allergen-model.js": "50434c6cea85b7de",
         "js/app-version.js": "4ef897a205fdec91",
@@ -591,7 +591,7 @@
         "js/unsent-guard.js": "3fd97838bf0b8e7f",
         "js/update-gate.js": "4abdd66640ea294d",
         "js/usage-model.js": "d6703bc466f26817",
-        "js/usage.js": "05e57ba55636fbed",
+        "js/usage.js": "e181b1ae849a06f0",
         "js/venue-features.js": "d1dd442e6767bba8",
         "js/wake-lock.js": "160d7312777808ea",
         "js/workspace-row.js": "2a2fb474351f90d9"
@@ -645,8 +645,8 @@
       }
     },
     "dist/orders.js": {
-      "sha": "f9ca88679959e06f",
-      "mapSha": "ceccee5dd2a4ff84",
+      "sha": "d1a15a5ce31c721f",
+      "mapSha": "9212a705be60559a",
       "inputs": {
         "js/allergen-match.js": "ee85eebef7fd7052",
         "js/allergen-model.js": "50434c6cea85b7de",
@@ -779,7 +779,7 @@
         "js/unsent-guard.js": "3fd97838bf0b8e7f",
         "js/update-gate.js": "4abdd66640ea294d",
         "js/usage-model.js": "d6703bc466f26817",
-        "js/usage.js": "05e57ba55636fbed",
+        "js/usage.js": "e181b1ae849a06f0",
         "js/vat-number.js": "7dda6577bbf5aedf",
         "js/vat-rates.js": "1c08624a241026df",
         "js/vendor/sortable.esm.js": "6c9b20f666b97a0d",
@@ -795,8 +795,8 @@
       }
     },
     "dist/pastries.js": {
-      "sha": "162e3f8aa98a3b75",
-      "mapSha": "634bf52f602317d2",
+      "sha": "7bbe9c70c4098523",
+      "mapSha": "78db62167f4cd4d4",
       "inputs": {
         "js/allergen-model.js": "50434c6cea85b7de",
         "js/app-version.js": "4ef897a205fdec91",
@@ -880,7 +880,7 @@
         "js/unsent-guard.js": "3fd97838bf0b8e7f",
         "js/update-gate.js": "4abdd66640ea294d",
         "js/usage-model.js": "d6703bc466f26817",
-        "js/usage.js": "05e57ba55636fbed",
+        "js/usage.js": "e181b1ae849a06f0",
         "js/venue-features.js": "d1dd442e6767bba8",
         "js/wake-lock.js": "160d7312777808ea",
         "js/workspace-row.js": "2a2fb474351f90d9"
@@ -899,8 +899,8 @@
       }
     },
     "dist/suppliers.js": {
-      "sha": "15962f5ad4023273",
-      "mapSha": "7b583c3a45cd227a",
+      "sha": "f626ef921a6798c0",
+      "mapSha": "f761182aba32248b",
       "inputs": {
         "js/allergen-match.js": "ee85eebef7fd7052",
         "js/allergen-model.js": "50434c6cea85b7de",
@@ -1019,7 +1019,7 @@
         "js/unsent-guard.js": "3fd97838bf0b8e7f",
         "js/update-gate.js": "4abdd66640ea294d",
         "js/usage-model.js": "d6703bc466f26817",
-        "js/usage.js": "05e57ba55636fbed",
+        "js/usage.js": "e181b1ae849a06f0",
         "js/vat-number.js": "7dda6577bbf5aedf",
         "js/vat-rates.js": "1c08624a241026df",
         "js/vendor/fflate.esm.js": "71c4d7d689b851e5",
