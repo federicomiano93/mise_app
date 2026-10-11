@@ -154,13 +154,19 @@ describe.each(COMPARED_IN_FULL)('parity: %s', (_name, tsModule, jsModule) => {
 
 if (!legacyOutboxHasTheFix) {
   describe('parity: inventory-outbox (the fix of 11 Oct 2026, PR #343, is not in js/ in this checkout yet)', () => {
-    test('the port still exports everything the current app’s file does, with the same arity, and its exports that are not functions are the same kind of thing', () => {
+    // TO DELETE, with `legacyOutboxHasTheFix`, once PR #343 is on main and merged into this branch.
+    test('the port still exports everything the current app’s file does, with the same name and arity, and its exports that are not functions are the same kind of thing', () => {
       const ts = exportsOf(inventoryOutbox);
       const js = exportsOf(legacyInventoryOutbox);
       for (const name of Object.keys(js)) {
         expect(name in ts, `${name} is exported by js/ and not by the port`).toBe(true);
         expect(typeof ts[name], name).toBe(typeof js[name]);
-        if (typeof js[name] === 'function') expect((ts[name] as () => void).name, name).toBe((js[name] as () => void).name);
+        if (typeof js[name] === 'function') {
+          const mine = ts[name] as { name: string; length: number };
+          const theirs = js[name] as { name: string; length: number };
+          expect(mine.name, name).toBe(theirs.name);
+          expect(mine.length, `${name}: arity`).toBe(theirs.length);
+        }
       }
     });
   });

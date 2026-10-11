@@ -10,7 +10,7 @@ import type { SnapshotMeta, StocktakeSource, StoredDoc } from '../stocktake/stoc
 type MonthListener = { monthId: string; onChange: (doc: StoredDoc | null, meta: SnapshotMeta) => void; onError: (err: unknown) => void };
 // This fake is a database that is online: every answer comes from the server.
 const FROM_SERVER: SnapshotMeta = { fromServer: true };
-type IngredientListener ={ onChange: (list: StoredDoc[]) => void; onError: (err: unknown) => void };
+type IngredientListener = { onChange: (list: StoredDoc[]) => void; onError: (err: unknown) => void };
 
 export type FakeStocktakeSource = StocktakeSource & {
   months: Map<string, StoredDoc>;

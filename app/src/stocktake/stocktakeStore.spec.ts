@@ -48,12 +48,15 @@ function merged(doc: Doc | null, save: Pick<Save, 'patch' | 'clear'>): Doc {
 }
 
 // A source that behaves like the SDK where it matters to the store:
-//   • a write is shown back in a snapshot BEFORE its promise settles (and, offline, from the cache:
-//     `fromServer` false) — unless `setEcho(false)`, the moment the SDK has not put it in its own
-//     database yet, which `show()` ends;
+//   • a write is shown back in a snapshot BEFORE its promise settles, but not at once: the SDK shows
+//     it only after its own database (IndexedDB) has it, so the echo comes a moment after the call
+//     has returned (and, offline, from the cache: `fromServer` false). `setEcho(false)` holds it back
+//     until `show()` — the moment the SDK has not put it in its database yet;
 //   • a refused write is taken back out of the next snapshot;
 //   • `answer()` is the raw document the server sends, laid over nothing — so a spec can send a
-//     snapshot that does not have this phone's number in it.
+//     snapshot that does not have this phone's number in it;
+//   • `fail()` ends a month's stream the way the SDK does when the rules refuse it: the error is
+//     delivered once and nothing is ever heard from that listener again.
 function fakeSource() {
   const months = new Map<string, Watch[]>();
   const ingredients: IngredientWatch[] = [];
@@ -99,8 +102,10 @@ function fakeSource() {
           },
         };
         saves.push(save);
-        if (echoOn) tell(monthId, view(monthId), mode !== 'never');
-        if (mode === 'resolve') save.resolve();
+        const echoes = echoOn;
+        const fromServer = mode !== 'never';
+        queueMicrotask(() => { if (echoes && !save.answered) tell(monthId, view(monthId), fromServer); });
+        if (mode === 'resolve') queueMicrotask(() => save.resolve());
       })),
     getOrdersInMonth: vi.fn<StocktakeSource['getOrdersInMonth']>(() => Promise.resolve([])),
     watchIngredients: vi.fn((onChange: IngredientWatch['onChange'], onError: IngredientWatch['onError']) => {
@@ -122,6 +127,13 @@ function fakeSource() {
     },
     // The SDK has now put what was handed over in its own database: the next snapshot shows it.
     show(monthId: string, fromServer = mode !== 'never') { tell(monthId, view(monthId), fromServer); },
+    // The month's stream dies (the rules refuse it): the error is delivered, then nothing more.
+    fail(monthId: string, err: unknown) {
+      for (const w of liveMonth(monthId)) {
+        w.stopped = true;
+        w.onError(err);
+      }
+    },
     setEcho(on: boolean) { echoOn = on; },
     setMode(next: typeof mode) { mode = next; },
   };
@@ -511,6 +523,58 @@ describe('several writes in the air (a storeroom with no signal)', () => {
     ]);
   });
 
+  // ⚠️ THE SDK SHOWS A WRITE BACK ONLY AFTER ITS OWN DATABASE HAS IT, a moment after the call. A month
+  // left at once used to stop listening before that: the copy kept the batch as unseen, the month opened
+  // again laid it back as held, and the server's word sent it a second time.
+  test('⚠️ changing month offline keeps listening until the SDK shows the batch back: the copy ends clean, nothing is sent twice', async () => {
+    const { store, saves, storage, liveMonth, setMode, setEcho, show, answer, advance } = await ready();
+    setMode('never');
+    setEcho(false);
+    store.setCount('closing', 'flour', '3');
+    store.openMonth('2026-09');
+    expect(saves).toHaveLength(1);
+    expect(liveMonth('2026-10'), 'still listening to the month just left').toHaveLength(1);
+    expect(storage.map.has(SAVED_KEY)).toBe(true);
+    // The SDK has put it in its database now.
+    show('2026-10');
+    expect(storage.map.has(SAVED_KEY)).toBe(false);
+    expect(liveMonth('2026-10'), 'and it stops once there is nothing left to see back').toEqual([]);
+    // Back to October: nothing is held, so the server's word sends nothing.
+    store.openMonth('2026-10');
+    show('2026-10');
+    expect(store.getSnapshot().month?.closing).toEqual({ flour: 3 });
+    answer('2026-10', { month: '2026-10', closing: { flour: 3 } }, true);
+    await advance(SAVE_DELAY_MS * 2);
+    expect(saves).toHaveLength(1);
+  });
+
+  test('a month left stops being listened to after SETTLE_MS even if the SDK never shows the batch back', async () => {
+    const { store, storage, liveMonth, setMode, setEcho, advance } = await ready();
+    setMode('never');
+    setEcho(false);
+    store.setCount('closing', 'flour', '3');
+    store.openMonth('2026-09');
+    await advance(SETTLE_MS - 1);
+    expect(liveMonth('2026-10')).toHaveLength(1);
+    await advance(1);
+    expect(liveMonth('2026-10')).toEqual([]);
+    expect(storage.map.has(SAVED_KEY), 'what was never seen back stays in the copy').toBe(true);
+  });
+
+  test('⚠️ a month left, while it still listens, draws nothing and never sends what it holds', async () => {
+    const storage = await leftBehind([['closing', 'flour', '3']]);
+    const { store, saves, liveMonth, answer, advance } = openedAgain(storage);
+    answer('2026-10', { month: '2026-10' }, false);
+    store.openMonth('2026-09');
+    expect(liveMonth('2026-10')).toHaveLength(1);
+    // The server says October is open: not this session's word to act on any more.
+    answer('2026-10', { month: '2026-10', closing: { salt: 9 } }, true);
+    await advance(SAVE_DELAY_MS * 2);
+    expect(saves).toEqual([]);
+    expect(storage.map.has(SAVED_KEY)).toBe(true);
+    expect(store.getSnapshot()).toMatchObject({ monthId: '2026-09', month: { closing: {} } });
+  });
+
   test('a month that was left does not rewrite its local copy from an older view when its write answers late', async () => {
     const { store, saves, storage, setMode } = await ready({ month: '2026-10', closing: { flour: 1 } });
     setMode('manual');
@@ -591,6 +655,57 @@ describe('what exists only in memory is written down at once', () => {
     saves[0]!.resolve();
     await microtasks();
     expect(JSON.parse(storage.map.get(SAVED_KEY)!)).toEqual(typed);
+  });
+
+  test('⚠️⚠️ only the NEWEST session of a month writes its copy: an older one’s late answer cannot put back a count that was corrected', async () => {
+    // October is left and opened again twice, offline, while the first visit's write is still out.
+    const storage = memoryStorage({ [SAVED_KEY]: JSON.stringify({ pending: { closing: { flour: 3 } }, cleared: {} }) });
+    const t = setup({ storage });
+    t.setMode('never');
+    t.setEcho(false);
+    t.store.start();
+    // A: October, with the flour 3 of an earlier visit held; salt is typed and handed over.
+    t.store.openMonth('2026-10');
+    t.answer('2026-10', { month: '2026-10' }, false);
+    t.store.setCount('closing', 'salt', '2');
+    t.store.openMonth('2026-11');
+    // C: October again; the flour is corrected to 7, and handed over on leaving.
+    t.store.openMonth('2026-10');
+    t.answer('2026-10', { month: '2026-10' }, false);
+    t.store.setCount('closing', 'flour', '7');
+    t.store.openMonth('2026-11');
+    expect(t.saves.map(s => s.patch.closing)).toEqual([{ salt: 2 }, { flour: 7 }]);
+    // A brief signal: A's write is acknowledged.
+    t.saves[0]!.resolve();
+    await microtasks();
+    const copy = storage.map.get(SAVED_KEY) ?? '';
+    expect(copy, 'the copy still holds the salt that nothing has shown back').toContain('"salt":2');
+    expect(copy, 'and never the flour 3 that was corrected').not.toContain('"flour":3');
+    // October once more, before C's write is acknowledged: the 7 is on screen, and the 3 is never sent.
+    t.store.openMonth('2026-10');
+    t.show('2026-10', false);
+    expect(t.store.getSnapshot().month?.closing).toEqual({ flour: 7, salt: 2 });
+    t.answer('2026-10', { month: '2026-10' }, true);
+    await t.advance(SAVE_DELAY_MS);
+    expect(t.saves.map(s => (s.patch.closing as Record<string, number> | undefined)?.flour)).not.toContain(3);
+  });
+
+  test('⚠️ and across store instances: leaving the Stocktake builds a new store while the old one’s writes are still out', async () => {
+    const storage = memoryStorage();
+    const old = await ready(null, { storage });
+    old.setMode('never');
+    old.setEcho(false);
+    old.store.setCount('closing', 'flour', '3');
+    await old.advance(SAVE_DELAY_MS);
+    old.store.stop();
+    const fresh = openedAgain(storage);
+    fresh.answer('2026-10', { month: '2026-10' }, false);
+    expect(fresh.store.getSnapshot().month?.closing).toEqual({ flour: 3 });
+    fresh.store.setCount('closing', 'flour', '7');
+    // The OLD store's write is finally acknowledged: it knows nothing of the correction.
+    old.saves[0]!.resolve();
+    await microtasks();
+    expect(JSON.parse(storage.map.get(SAVED_KEY)!).pending).toEqual({ closing: { flour: 7 } });
   });
 
   test('a storage that refuses the write does not break the count', async () => {
@@ -757,7 +872,7 @@ describe('what a torn-down page left behind', () => {
 });
 
 describe('a closed month', () => {
-  const CLOSED ={ month: '2026-10', closedAt: '2026-10-31T20:00:00.000Z', closing: { flour: 2 }, purchased: { flour: 1 } };
+  const CLOSED = { month: '2026-10', closedAt: '2026-10-31T20:00:00.000Z', closing: { flour: 2 }, purchased: { flour: 1 } };
 
   test('⚠️⚠️ refuses every change in the store, whatever the screen drew', async () => {
     const { store, saves, source, advance } = await ready(CLOSED);
@@ -956,6 +1071,27 @@ describe('the streams', () => {
     liveMonth('2026-10')[0]!.onError(Object.assign(new Error('denied'), { code: 'permission-denied' }));
     expect(store.getSnapshot()).toMatchObject({ monthLoaded: true, monthFailed: true });
     expect(messages).toEqual([{ kind: 'month-stream-broken' }]);
+  });
+
+  // ⚠️ A MONTH THAT A MANAGER CLOSES WHILE AN EMPLOYEE IS COUNTING: the rules cancel the employee's
+  // listener («this month is unavailable»). What was last heard says OPEN, and will never be corrected —
+  // so the last write answering must not redraw from it, undo the notice, or rewrite the local copy.
+  test.each(['lands', 'is refused'])('⚠️⚠️ once the stream has died, the last write that %s redraws nothing and keeps «unavailable»', async outcome => {
+    const { store, saves, storage, setMode, setEcho, fail, advance } = await ready({ month: '2026-10', closing: { flour: 1 } });
+    setMode('manual');
+    setEcho(false);
+    store.setCount('closing', 'flour', '3');
+    await advance(SAVE_DELAY_MS);
+    const copy = storage.map.get(monthCacheKey(LID, '2026-10'));
+    fail('2026-10', Object.assign(new Error('denied'), { code: 'permission-denied' }));
+    expect(store.getSnapshot()).toMatchObject({ monthLoaded: true, monthFailed: true });
+    if (outcome === 'lands') saves[0]!.resolve();
+    else saves[0]!.reject(new Error('denied'));
+    await microtasks();
+    expect(store.getSnapshot()).toMatchObject({ monthLoaded: true, monthFailed: true });
+    // Not drawn again from the flour 1 heard before the stream died.
+    expect(store.getSnapshot().month?.closing).toEqual({ flour: 3 });
+    expect(storage.map.get(monthCacheKey(LID, '2026-10'))).toBe(copy);
   });
 
   test('the ingredients are loaded once they answer — or fail, so the list never waits for ever', () => {

@@ -1795,7 +1795,16 @@ describe('inventory-outbox: odd inputs', () => {
     agree('release', m.release, l.release, product(BOXES));
     agree('revive', m.revive as AnyFn, l.revive as AnyFn, product(BOXES, SAVED, MAP_LISTS));
   } else {
-    test.skip('inventory-outbox: the fix of 11 Oct 2026 (PR #343) is not in js/ in this checkout yet — only hasWork, isSending and applyOver are compared', () => {});
+    // ⚠️ Only hasWork, isSending and applyOver are compared while js/ is the file before the fix, and
+    // this pins that it is exactly that file: any other shape turns it red instead of being skipped in
+    // silence. TO DELETE, with the `legacyOutboxHasTheFix` conditionals, once PR #343 is on main and
+    // merged into this branch.
+    test('inventory-outbox: js/ is exactly the file before the fix of 11 Oct 2026 (PR #343)', () => {
+      expect(Object.keys(legacyInventoryOutboxJs).sort()).toStrictEqual(
+        ['EMPTY_OUTBOX', 'applyOver', 'confirm', 'hasWork', 'isSending', 'restore', 'stage', 'stageMany', 'take'],
+      );
+      expect(Object.keys(l.EMPTY_OUTBOX).sort()).toStrictEqual(['cleared', 'inFlight', 'pending']);
+    });
   }
 
   // Whole histories: every sequence of up to four of these steps is run from the empty outbox, and what

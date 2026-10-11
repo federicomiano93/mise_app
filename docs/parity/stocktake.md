@@ -67,7 +67,10 @@ reason.
     the call returns, and removed once a snapshot shows every number back. Not under `KEEP_PREFIXES`
     either. A write handed to Firestore reaches the browser's database a moment later, and a page
     torn down inside that moment (the last number typed, the back gesture straight after) took the
-    number with it (emulator, 11 Oct 2026). **spec** (both apps; PR #343 for the current app)
+    number with it (emulator, 11 Oct 2026). In Mise 2, where a month that was left stays alive, the
+    copy of a LEFT month is removed when its last write is seen back or answered; and the NEWEST
+    session of a month owns the copy (an older one, even of a previous store, never touches it).
+    **spec** (both apps; PR #343 for the current app)
 
 ## Saving a count
 
@@ -232,7 +235,15 @@ reason.
 - **A month that was left is not redrawn when its last write answers.** The current app reloads to
   change month, so nothing of the old page survives; in Mise 2 the left month keeps writing until it
   answers, and drawing it from what it last heard (older than its own write) would put a stale month
-  in its local copy. It keeps the copy written when the count was typed.
+  in its local copy. It keeps the copy written when the count was typed. Nor after the month's stream
+  has died (an employee's month that a manager has just closed): what was last heard is out of date
+  for good, and a late answer must neither redraw it open nor clear the «unavailable» notice.
+- **A month that was left keeps listening for at most 1.2 seconds.** The current app's page stays
+  alive for its `flushBeforeLeaving` wait, listener included. In Mise 2 the left month is listened to
+  until the SDK has shown the batch just handed over back (it does so only after its own database
+  has it) or `SETTLE_MS` has passed, whichever is first; that snapshot only settles the unsaved copy
+  of 15b — it draws nothing and never sends what is held. Stopped at once, the copy would keep the
+  batch as unseen, the month opened again would hold it, and the server's word would send it twice.
 - **One product and «What it cost» have addresses** (`/stocktake/<month>/product/<id>`,
   `/stocktake/<month>/cost`), so a reload comes back to them. Opened by address by an employee,
   «What it cost» is not available.

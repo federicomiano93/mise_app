@@ -617,7 +617,16 @@ describe.each(WITH_THE_FIX)('%s — several writes in the air, counts held for t
   });
 });
 
-// Reported as skipped, so nobody reads a green run as «both files were compared».
+// ⚠️ WHILE THE TESTS ABOVE RUN AGAINST THE PORT ALONE, THIS PINS WHAT THEY ARE NOT COMPARED WITH: the
+// exact file before the fix. Any other shape of js/inventory/inventory-outbox.js — half of the fix, a
+// different fix — turns this red, instead of the comparison being skipped in silence.
+// TO DELETE once PR #343 is on main and merged into this branch: this test, and the `legacyHasTheFix`
+// conditionals of this file, of parity.spec.ts (`legacyOutboxHasTheFix`) and of odd-inputs.spec.ts.
 if (!legacyHasTheFix) {
-  test.skip('js/ (current app): the fix of 11 Oct 2026 (PR #343) is not in this checkout yet — its tests ran against the port alone', () => {});
+  test('js/ (current app) is exactly the file before the fix of 11 Oct 2026 (PR #343)', () => {
+    expect(Object.keys(legacyJs).sort()).toStrictEqual(
+      ['EMPTY_OUTBOX', 'applyOver', 'confirm', 'hasWork', 'isSending', 'restore', 'stage', 'stageMany', 'take'],
+    );
+    expect(Object.keys(legacy.EMPTY_OUTBOX).sort()).toStrictEqual(['cleared', 'inFlight', 'pending']);
+  });
 }

@@ -168,9 +168,21 @@ type MonthSession = {
   // while the document does not exist.
   lastRemote: StoredDoc | null;
   stopWatch: (() => void) | null;
+  // Ends the listening of a month that was left, if the SDK has not shown its last write back by then.
+  watchTimer: unknown;
+  // The month's stream died (the rules refused it, or it could not start): nothing will be heard
+  // again, so what was last heard is out of date for good.
+  streamFailed: boolean;
   // Still the month on screen: a left month keeps writing, but never touches the snapshot.
   current: boolean;
 };
+
+// ⚠️ THE NEWEST SESSION OF A MONTH OWNS ITS UNSAVED COPY (keepUnsaved) — module-level, not per store:
+// leaving the Stocktake and coming back builds a NEW store while the old one's sessions still have
+// writes in the air, and an old session's late answer knows nothing of what the newer one holds (it
+// would put a count the newer session has since corrected back in the copy, to be sent over the
+// correction on the server's word). Keyed by the storage first: two storages never share an owner.
+const unsavedOwner = new WeakMap<KeyValueStorage, Map<string, MonthSession>>();
 
 function wait(deps: StocktakeDeps, ms: number): Promise<void> {
   return new Promise(resolve => { deps.setTimer(resolve, Math.max(0, ms)); });
@@ -260,18 +272,28 @@ export function createStocktakeStore(source: StocktakeSource, locationId: string
   // shown every number back.
   // ⚠️ NOT the month copy above: the first snapshot rewrites that one, which is exactly how the
   // counts used to vanish.
-  // ⚠️ A MONTH THAT WAS LEFT AND OPENED AGAIN LEAVES THE COPY TO THE NEW SESSION (Mise 2 only: the
-  // current app reloads to change month). The new one took everything the old one had handed over
-  // when it opened (openSession); the old one's late answers know nothing of what has been typed
-  // since, and would erase it.
+  // ⚠️ A MONTH THAT WAS LEFT AND OPENED AGAIN LEAVES THE COPY TO THE NEWER SESSION (Mise 2 only: the
+  // current app reloads to change month). The newer one took everything the older one had handed over
+  // when it opened (openSession); the older one's late answers know nothing of what has been typed
+  // since, and would erase it or put back what has been corrected. Only the owner writes.
   function keepUnsaved(s: MonthSession): void {
-    if (!storage) return;
-    if (session !== null && session !== s && session.id === s.id) return;
+    if (!storage || unsavedOwner.get(storage)?.get(unsavedCacheKey(locationId, s.id)) !== s) return;
     try {
       const key = unsavedCacheKey(locationId, s.id);
       if (hasUnsaved(s.outbox)) storage.setItem(key, JSON.stringify(unsaved(s.outbox)));
       else storage.removeItem(key);
     } catch { /* storage full or unavailable: the SDK's own queue still has every write */ }
+  }
+
+  // This session is now the newest of its month: from here on it alone writes the unsaved copy.
+  function claimUnsaved(s: MonthSession): void {
+    if (!storage) return;
+    let owners = unsavedOwner.get(storage);
+    if (!owners) {
+      owners = new Map();
+      unsavedOwner.set(storage, owners);
+    }
+    owners.set(unsavedCacheKey(locationId, s.id), s);
   }
 
   // ── One month ──────────────────────────────────────────────────────────────────────────────
@@ -309,12 +331,22 @@ export function createStocktakeStore(source: StocktakeSource, locationId: string
   // count left on one phone would change a closed month's figures weeks later, after the next month
   // had already copied them (code review, 11 Oct 2026). The SDK has already laid its own unanswered
   // writes into `remote`.
-  function adopt(s: MonthSession): void {
+  // ⚠️ ONLY THE WATCH CALLBACK SAYS WHETHER THE MONTH HAS LOADED OR FAILED (`extra`): a redraw after
+  // the last write has answered draws, and touches neither flag.
+  function adopt(s: MonthSession, extra: Partial<StocktakeSnapshot> = {}): void {
     const merged = remoteMonth(s);
     if (!isClosed(merged)) applyOver(s.outbox, merged, COUNT_MAPS);
     s.month = merged;
     writeCache(s);
-    publish(s, { monthLoaded: true, monthFailed: false });
+    publish(s, extra);
+  }
+
+  // A month that was left stops being listened to.
+  function stopWatching(s: MonthSession): void {
+    if (s.watchTimer !== null) deps.clearTimer(s.watchTimer);
+    s.watchTimer = null;
+    s.stopWatch?.();
+    s.stopWatch = null;
   }
 
   // ⚠️⚠️ WHAT AN EARLIER VISIT LEFT GOES ONLY ONCE THE SERVER SAYS THE MONTH IS OPEN — never on the
@@ -343,11 +375,14 @@ export function createStocktakeStore(source: StocktakeSource, locationId: string
       remoteArrived: false,
       lastRemote: null,
       stopWatch: null,
+      watchTimer: null,
+      streamFailed: false,
       current: true,
     };
     // Then what the page last torn down left behind, laid back over it as HELD: on screen and kept,
     // NOT SENT from here (releaseHeld says why). Not over a month known to be closed (adopt says
-    // why): kept for its reopening.
+    // why): kept for its reopening. From here on this session owns that copy (claimUnsaved).
+    claimUnsaved(s);
     s.outbox = revive(s.outbox, readUnsaved(monthId), COUNT_MAPS);
     keepUnsaved(s);
     if (hasHeld(s.outbox) && !isClosed(s.month)) {
@@ -365,11 +400,20 @@ export function createStocktakeStore(source: StocktakeSource, locationId: string
         // memory. Judged on the document AS IT ARRIVED, before anything is laid over it.
         s.outbox = echoed(s.outbox, remoteMonth(s), COUNT_MAPS);
         keepUnsaved(s);
-        adopt(s);
+        // ⚠️ A MONTH THAT WAS LEFT IS LISTENED TO ONLY UNTIL THE SDK HAS SHOWN ITS LAST WRITE BACK
+        // (leave): that settles the unsaved copy and nothing else. It draws nothing, and it never
+        // sends what is held — the month on screen now is another one's to say.
+        if (!s.current) {
+          if (!hasUnsaved(s.outbox)) stopWatching(s);
+          return;
+        }
+        s.streamFailed = false;
+        adopt(s, { monthLoaded: true, monthFailed: false });
         // Released by a snapshot the server sent, never by the phone's own copy.
         if (meta?.fromServer) releaseHeld(s);
       },
       () => {
+        s.streamFailed = true;
         // A stream that dies before it ever answered must not keep the boxes shut for ever: the
         // local copy is all there is, and the notice (or, for an employee, the sentence) says why.
         publish(s, { monthLoaded: true, monthFailed: true });
@@ -446,9 +490,11 @@ export function createStocktakeStore(source: StocktakeSource, locationId: string
       // Every write has answered: nothing of this phone's is in the air any more, so the screen is
       // drawn again from what Firestore last sent. Until now its own numbers were laid over that,
       // hiding a correction another phone made meanwhile (code review, 11 Oct 2026). ⚠️ NOT FOR A
-      // MONTH THAT WAS LEFT: nothing listens to it any more, so what it last heard is older than its
-      // own write, and drawing from that would put a stale month in its local copy.
-      if (s.current && !isSending(s.outbox) && s.lastRemote !== null) adopt(s);
+      // MONTH THAT WAS LEFT: it is not on screen, and what it last heard may be older than its own
+      // write, so drawing from that would put a stale month in its local copy. ⚠️ NOR AFTER THE STREAM
+      // DIED: nothing will be heard again, so what was last heard is out of date for good (an employee's
+      // month that a manager has just closed would come back open, and typable).
+      if (s.current && !s.streamFailed && !isSending(s.outbox) && s.lastRemote !== null) adopt(s);
       publish(s);
     });
     s.inAir.add(write);
@@ -457,10 +503,20 @@ export function createStocktakeStore(source: StocktakeSource, locationId: string
 
   function leave(s: MonthSession): void {
     s.current = false;
-    s.stopWatch?.();
-    s.stopWatch = null;
     // Handed to Firestore now; nobody waits for the answer (no signal in a storeroom).
     void flushSession(s);
+    // ⚠️ BUT STILL LISTENED TO until the SDK has shown the batch just handed over back (its handler
+    // settles the unsaved copy) or SETTLE_MS has passed, whichever is first — the SDK shows a write
+    // only after its own database has it, a moment after this call. Stopped at once, the copy keeps
+    // that batch as unseen, the month opened again lays it back as held, and it is sent a second time.
+    if (s.stopWatch && hasUnsaved(s.outbox)) {
+      s.watchTimer = deps.setTimer(() => {
+        s.watchTimer = null;
+        stopWatching(s);
+      }, SETTLE_MS);
+    } else {
+      stopWatching(s);
+    }
   }
 
   // ── The ingredients ────────────────────────────────────────────────────────────────────────
