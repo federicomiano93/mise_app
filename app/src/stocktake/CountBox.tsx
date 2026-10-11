@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { readCount } from '@mise/shared/inventory-model';
 import type { CountMap } from '@mise/shared/inventory-model';
 import { useT } from '../i18n/useT';
 import { markBusy } from '../session/busy';
@@ -32,6 +33,15 @@ type Props = {
 // What a person has typed into a box they are in: the text it started with and the text now.
 type Edit = { readonly start: string; readonly draft: string };
 
+// ⚠️ TEXT THAT CANNOT BE READ IS NOT AN EMPTIED BOX. The store turns «5 kg», «1/2» and «-2» into null
+// — «nobody has counted this» — and a null REMOVES the entry, so junk typed over a saved 5 would
+// delete the count. Only a box with nothing in it (blanks included, as readCount trims them) clears
+// a count; text the store would not read is refused here, before it gets there. The same reader the
+// store uses, so the two can never disagree about what is readable.
+function unreadable(draft: string): boolean {
+  return draft.trim() !== '' && readCount(draft) === null;
+}
+
 // The box a count is typed into, on the row.
 //
 // ⚠️ A BOX BEING TYPED INTO HOLDS ITS OWN TEXT AND IS NEVER WRITTEN INTO FROM THE STORE. The month
@@ -47,7 +57,7 @@ type Edit = { readonly start: string; readonly draft: string };
 // The count is committed when the text CHANGED, on leaving the box or on Enter (which also moves
 // on to the next row's box). Compared with the text the box started with, not with the store's
 // number now: a colleague's count that arrived while the box was open is not overwritten by a
-// number nobody typed.
+// number nobody typed. Text that cannot be read as a count is not committed at all (unreadable()).
 export function CountBox({
   id, map = 'closing', label, inputId, describedBy, placeholder, value, disabled, register, onEnter,
 }: Props) {
@@ -84,7 +94,14 @@ export function CountBox({
   const commit = (keepEditing: boolean) => {
     const current = live.current;
     if (current === null) return;
-    if (current.draft !== current.start && !disabled) store.setCount(map, id, current.draft);
+    const changed = current.draft !== current.start && !disabled;
+    if (changed && unreadable(current.draft)) {
+      // Refused, and the count is untouched: the box goes back to the number the month holds. On Enter
+      // the box stays open to be typed into again, starting from that number.
+      setEdit(keepEditing ? { start: stored, draft: stored } : null);
+      return;
+    }
+    if (changed) store.setCount(map, id, current.draft);
     setEdit(keepEditing ? { start: current.draft, draft: current.draft } : null);
   };
 
@@ -95,7 +112,9 @@ export function CountBox({
   // takes it, and the stop sends it.
   useLayoutEffect(() => () => {
     const current = live.current;
-    if (current !== null && current.draft !== current.start) store.setCount(map, id, current.draft);
+    if (current !== null && current.draft !== current.start && !unreadable(current.draft)) {
+      store.setCount(map, id, current.draft);
+    }
   }, [store, id, map]);
 
   const ref = useCallback((node: HTMLInputElement | null) => { register?.(id, node); }, [register, id]);

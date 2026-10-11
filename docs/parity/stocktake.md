@@ -211,6 +211,11 @@ reason.
   an updated count back WITH grouping into a box that does not have the focus (`updateRows()` uses
   `num()`), so «1,234» edited to «1,235» is read as 1.235 — the v1.107.0 defect on its second path.
   Fixed separately in the current app.
+- **Text a count box cannot read is refused, and the box shows the saved number again** («5 kg»,
+  «1/2», «-2» typed over a saved 5 leave the 5 in place). The current app hands any changed text to
+  `setCount`, whose `readCount` turns it into «nothing said», which REMOVES the count: junk typed
+  over a saved number deleted it. A box emptied on purpose (nothing in it, blanks included) still
+  removes the count. Covers the list's boxes, the product's three and the pack-weight box.
 - **Enter in a count box moves to the next row's box**, which is what the keyboard's «next» promises.
 - **Messages** are announced in a status region that exists before it changes, instead of a toast.
 - **The other-unit sentence** is a dialog with one button, «OK», as the current app's alert.

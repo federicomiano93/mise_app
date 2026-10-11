@@ -300,6 +300,25 @@ describe('one product: the three boxes', () => {
     expect(fake.months.get('2026-10')?.purchased).toEqual({});
   });
 
+  // ⚠️ The same box as the list's: text it cannot read is refused, never taken for an emptied box.
+  it.each([
+    ['opening', openingBox, 30],
+    ['purchased', purchasedBox, 5],
+    ['closing', closingBox, 8],
+  ] as const)('keeps the saved %s count when text that cannot be read is typed over it', async (map, box, value) => {
+    const fake = source([monthDoc('2026-10', { [map]: { flour: value } })]);
+    const { user } = await open('flour', 'Farina 25kg', fake);
+    await enabled(box);
+    await user.clear(box());
+    await user.type(box(), '5 kg');
+    await user.tab();
+
+    expect(box()).toHaveValue(String(value));
+    await new Promise(resolve => { setTimeout(resolve, 900); });
+    expect(fake.saved).toHaveLength(0);
+    expect(fake.months.get('2026-10')?.[map]).toEqual({ flour: value });
+  });
+
   it('never shows a thousands separator, whatever the language', async () => {
     await open('flour', 'Farina 25kg', source([monthDoc('2026-10', { opening: { flour: 1234.5 } })]), { lang: 'it' });
     expect(screen.getByRole('textbox', { name: italian['stock.openingCount'] })).toHaveValue('1234,5');
@@ -416,6 +435,21 @@ describe('one product: the weight of a pack', () => {
     // 2 sacks at 16.
     expect(within(answerOf('Farina 25kg')).getByText('£32.00')).toBeInTheDocument();
     expect(packBox()).toHaveAccessibleDescription('One pack is read as 20 kg, and costs about £16.00.');
+  });
+
+  // The weight is what turns a count into money: «20 kg» typed over a saved 20 must not remove it.
+  it('keeps the saved weight when text that cannot be read is typed over it', async () => {
+    const fake = source([monthDoc('2026-10', { packKg: { flour: 20 } })]);
+    const { user } = await open('flour', 'Farina 25kg', fake);
+    await enabled(packBox);
+    await user.clear(packBox());
+    await user.type(packBox(), '20 kg');
+    await user.tab();
+
+    expect(packBox()).toHaveValue('20');
+    await new Promise(resolve => { setTimeout(resolve, 900); });
+    expect(fake.saved).toHaveLength(0);
+    expect(inRegion('Farina 25kg').getByText('One pack is read as 20 kg, and costs about £16.00.')).toBeInTheDocument();
   });
 
   it('is left out for a product priced by the piece, whose note stands alone', async () => {

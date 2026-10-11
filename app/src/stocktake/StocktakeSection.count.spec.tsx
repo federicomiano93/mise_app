@@ -254,14 +254,16 @@ describe('a count box: leaving it saves the count', () => {
     expect(screen.getByText('0 of 3')).toBeInTheDocument();
   });
 
-  it('refuses a negative count rather than turning it into a zero', async () => {
-    const { user } = await loaded(source([monthDoc('2026-10', { closing: { flour: 4 } })]));
+  it('refuses a negative count rather than turning it into a zero: the box shows the saved number again', async () => {
+    const { user, fake } = await loaded(source([monthDoc('2026-10', { closing: { flour: 4 } })]));
     await enabled('Farina');
     await user.clear(boxOf('Farina'));
     await user.type(boxOf('Farina'), '-2');
     await user.tab();
-    expect(boxOf('Farina')).toHaveValue('');
-    expect(screen.getByText('0 of 3')).toBeInTheDocument();
+    expect(boxOf('Farina')).toHaveValue('4');
+    expect(screen.getByText('1 of 3')).toBeInTheDocument();
+    await new Promise(resolve => { setTimeout(resolve, 900); });
+    expect(fake.saved).toHaveLength(0);
   });
 
   it('sends nothing for a box that was entered and left unchanged', async () => {
@@ -308,6 +310,101 @@ describe('a count box: leaving it saves the count', () => {
     await user.tab();
     const stored = JSON.parse(window.localStorage.getItem('inventory-bakery-2026-10') ?? '{}') as { closing?: unknown };
     expect(stored.closing).toEqual({ flour: 6 });
+  });
+});
+
+// ⚠️ TEXT THAT CANNOT BE READ IS NOT AN EMPTIED BOX: the store turns «5 kg», «1/2» and «-2» into
+// «nobody has counted this», and that removes the entry, so junk typed over a saved 5 deleted the
+// count. It is refused instead, and the box shows the saved number again.
+describe('a count box: text that cannot be read does not wipe a saved count', () => {
+  const FIVE = () => source([monthDoc('2026-10', { closing: { flour: 5 } })]);
+
+  it.each([['5 kg'], ['1/2'], ['-2'], ['abc']])('keeps the 5 when «%s» is typed over it and the box is left', async text => {
+    const { user, fake } = await loaded(FIVE());
+    await enabled('Farina');
+    await user.clear(boxOf('Farina'));
+    await user.type(boxOf('Farina'), text);
+    await user.tab();
+
+    expect(boxOf('Farina')).toHaveValue('5');
+    expect(screen.getByText('1 of 3')).toBeInTheDocument();
+    await new Promise(resolve => { setTimeout(resolve, 900); });
+    expect(fake.saved).toHaveLength(0);
+    expect(fake.months.get('2026-10')?.closing).toEqual({ flour: 5 });
+  });
+
+  it('does not count it as unsent work either: nothing is left to lose', async () => {
+    const { user } = await loaded(FIVE());
+    await enabled('Farina');
+    await user.clear(boxOf('Farina'));
+    await user.type(boxOf('Farina'), '5 kg');
+    expect(isBusy()).toBe(true);
+    await user.tab();
+    expect(isBusy()).toBe(false);
+  });
+
+  it('on Enter keeps the box open, starting again from the saved number', async () => {
+    const fake = source([monthDoc('2026-10', { closing: { butter: 2 } })]);
+    const { user } = await loaded(fake);
+    await enabled('Burro');
+    await user.clear(boxOf('Burro'));
+    await user.type(boxOf('Burro'), 'two{Enter}');
+    // The last row: the focus stays, and the box says what the month holds.
+    expect(boxOf('Burro')).toHaveFocus();
+    expect(boxOf('Burro')).toHaveValue('2');
+    expect(isBusy()).toBe(false);
+
+    await user.type(boxOf('Burro'), '0');
+    await user.tab();
+    await waitFor(() => { expect(fake.saved).toHaveLength(1); }, SAVED);
+    expect(fake.saved[0]?.patch.closing).toEqual({ butter: 20 });
+  });
+
+  it('writes nothing either when the screen is left with the unreadable text still in the box', async () => {
+    const { router, user, fake } = await loaded(FIVE());
+    await enabled('Farina');
+    await user.clear(boxOf('Farina'));
+    await user.type(boxOf('Farina'), '5 kg');
+
+    await act(async () => { await router.navigate('/orders'); });
+
+    await new Promise(resolve => { setTimeout(resolve, 900); });
+    expect(fake.saved).toHaveLength(0);
+    expect(fake.months.get('2026-10')?.closing).toEqual({ flour: 5 });
+  });
+
+  it('still removes the count when the box is emptied', async () => {
+    const { user, fake } = await loaded(FIVE());
+    await enabled('Farina');
+    await user.clear(boxOf('Farina'));
+    await user.tab();
+
+    expect(boxOf('Farina')).toHaveValue('');
+    await waitFor(() => { expect(fake.saved).toHaveLength(1); }, SAVED);
+    expect(fake.saved[0]?.clear).toEqual({ closing: { flour: true } });
+  });
+
+  it('treats a box holding only blanks as emptied, as it always did', async () => {
+    const { user, fake } = await loaded(FIVE());
+    await enabled('Farina');
+    await user.clear(boxOf('Farina'));
+    await user.type(boxOf('Farina'), '  ');
+    await user.tab();
+
+    await waitFor(() => { expect(fake.saved).toHaveLength(1); }, SAVED);
+    expect(fake.saved[0]?.clear).toEqual({ closing: { flour: true } });
+  });
+
+  it('still saves a readable number typed over it, comma included', async () => {
+    const { user, fake } = await loaded(FIVE());
+    await enabled('Farina');
+    await user.clear(boxOf('Farina'));
+    await user.type(boxOf('Farina'), '3,5');
+    await user.tab();
+
+    expect(boxOf('Farina')).toHaveValue('3.5');
+    await waitFor(() => { expect(fake.saved).toHaveLength(1); }, SAVED);
+    expect(fake.saved[0]?.patch.closing).toEqual({ flour: 3.5 });
   });
 });
 
