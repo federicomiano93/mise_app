@@ -98,6 +98,16 @@ Aria does not support Preact. The numbers are below.
   (`PastriesContext.tsx`), and the screens: `PastriesSection` (the frame and the address),
   `DaysNav`, `DayPanel`, `Editor`, `Records`. `shell/sectionScreens.ts` lists it, so its code is
   fetched only when somebody opens it. Its parity list is `docs/parity/pastries.md`.
+- `stocktake/` — the Stocktake («Magazzino»), the second section, built the same way: a source
+  (`stocktakeSource.ts`, a port of `js/inventory/firebase-inventory.js`: one month's document, the
+  ingredients, their prices, a month's orders read once), a store (`stocktakeStore.ts`: ONE month at
+  a time — `openMonth()` follows the month in the address — with the outbox of `inventory-outbox`,
+  local-first and never rolled back, a closed month refusing every change, and nothing typed into
+  a box until the month has answered once), a context (`StocktakeContext.tsx`), and the screens:
+  `StocktakeSection` (the frame, the address `/stocktake/<YYYY-MM>[/product/<id>|/cost]`, the
+  split from 1000px), `MonthBar`, `CountList` with `ProductRow` and `CountBox`, `StocktakeProduct`,
+  `StocktakeCost`, `MonthActions`. The money comes from the venue's country through
+  `session/useMoney.ts`. Its parity list is `docs/parity/stocktake.md`.
 - `ui/` — the shared controls: `Button`, `Dialog` and `useConfirm` (a question that waits for an
   answer; never the browser's `confirm()`), `StatusMessage` (one short message at a time, in a
   live region that exists before it speaks), `FormBar` (Back, title, the one primary action: the
@@ -254,6 +264,15 @@ step 5. Verdict of step 2c: no change of framework; go on with the sections.
   store may still hold only an empty local copy (`daysLoaded` in the Pastries store).
 - A screen that blocks leaving (unsaved edits) uses the router's `useBlocker`, which covers every
   way out (Back, the browser's Back, the rail, a day picked in a list), not the Back button alone.
+- On a split, the right-hand side sticks to the top of the scroll area and scrolls on its own
+  (never taller than the screen less `--topbar-h`): otherwise a detail opened from far down a long
+  list opens out of sight (`stocktake/StocktakeSection.module.css`).
+- The focus owed to the button that opened a detail is promised when the detail OPENS, not when
+  its own Back is pressed: a phone's back gesture is the browser's Back and runs no code of the
+  screen it leaves (`stocktake/handBack.ts`).
+- A bar stuck to the bottom of a phone takes the rows' room: at 296×668 the Stocktake's month bar
+  hid every product of the first screen. Stick a bar on a phone only for the screen's primary
+  action (Pastries' Confirm); secondary actions go after the list.
 
 - Vitest empties CSS, even `?raw`, unless told otherwise.
 - Git Bash rewrites `--base=/mise2/` into a Windows path.
