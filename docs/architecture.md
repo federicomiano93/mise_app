@@ -186,7 +186,18 @@ Measured locally (served by `vite preview`, emulator; 3 runs, medians):
 | later visits | 3.4 s | 2.3 s |
 | sign-in until the shell | 2.6 s | 2.6 s |
 
-On the preview's CDN after 2c: see the table that follows.
+On the preview's CDN after 2c, both apps measured in the same session (3 runs, medians; the PC
+was busier than for the first table, so compare the two columns, not the tables):
+
+| | current app | Mise 2 after 2c |
+|---|---|---|
+| first visit | 4.99 s | 3.24 s |
+| second visit | 1.80 s | 2.11 s |
+| later visits | 1.96 s | 1.80 s |
+
+Mise 2 is now faster on a first visit and level afterwards; the remaining 0.3 s on a second visit
+is the compiled-code cache the current app gets from its service worker, which Mise 2 gets in
+step 5. Verdict of step 2c: no change of framework; go on with the sections.
 
 ## Traps already paid for
 
