@@ -286,18 +286,22 @@ export function createTracker(deps = {}) {
   async function flush(reason) {
     try {
       if (!isReady(session) || !d.storage) return 'skipped';
+      // The records below are collected for THIS session; `session` itself may follow somebody
+      // else by the time the version arrives.
+      const openSession = session;
       commit();
       const hidden = reason === 'hidden';
       const today = dayKeyOf(d.now());
       const mine = d.keys().map(parseStoreKey)
-        .filter(p => p && p.lid === session.locationId && p.uid === session.user.uid)
+        .filter(p => p && p.lid === openSession.locationId && p.uid === openSession.user.uid)
         .filter(p => !hidden || p.dayKey === today);
       if (mine.length === 0) return 'nothing';
       const deviceId = d.deviceId();
       if (!deviceId) return 'no-device';
       const appVersion = hidden ? cachedVersion : await version();
-      // Who is signed in NOW: the person may have left during the wait for the version.
-      if (!sameSession(session, d.currentSession())) return 'skipped';
+      // Is the person (and venue) the records belong to still the one signed in? Sent under
+      // somebody else, the rules would refuse them for good and the counts would be lost.
+      if (!sameSession(openSession, d.currentSession())) return 'skipped';
       let sent = 0;
       for (const p of mine) {
         const key = storeKey(p.lid, p.uid, p.dayKey);

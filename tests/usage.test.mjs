@@ -434,6 +434,46 @@ test('⚠️ nothing is sent for somebody who is no longer signed in', async () 
   assert.equal(sent.length, 0);
 });
 
+test('⚠️ nor when the tracker itself moved to somebody else while the release was being asked for', async () => {
+  // The records collected are the first session's; the check after the wait must be about THEM,
+  // not about whoever the tracker follows by then. Sent under the next person, the rules refuse
+  // them for good, the refusal marks them clean, and the first person's counts are lost; sent
+  // after a switch of venue, they would be filed under the other venue.
+  const others = [
+    { status: 'ready', locationId: 'bakery', user: { uid: 'u2' } },
+    { status: 'ready', locationId: 'restaurant', user: { uid: 'u1' } },
+  ];
+  for (const next of others) {
+    let release;
+    const attempts = [];
+    const { tracker, clock, storage, state } = setup({
+      deps: {
+        version: () => new Promise(resolve => { release = resolve; }),
+        // Like the rules: a line whose uid is not the signed-in one is refused.
+        send: async (payload, id) => {
+          attempts.push(id);
+          if (!id.endsWith(`_${state.session.user.uid}`)) throw Object.assign(new Error('x'), { code: 'permission-denied' });
+        },
+      },
+    });
+    tracker.setSession(READY);
+    tracker.begin('orders');
+    tracker.setSession(READY);
+    clock.t += SEND_EVERY_MS + 1000;
+    const flushing = tracker.flush('timer');
+    // Let the question about the release reach the (pretend) service worker.
+    await new Promise(r => setImmediate(r));
+    tracker.setSession(next);
+    state.session = next;
+    release('649');
+    assert.equal(await flushing, 'skipped', `${next.locationId}/${next.user.uid}`);
+    await new Promise(r => setImmediate(r));
+    assert.deepEqual(attempts, []);
+    assert.equal(stored(storage).dirty, true, 'the first person\'s day is still to be sent');
+    assert.equal(stored(storage).acc.screens.orders, 1);
+  }
+});
+
 test('without a device id nothing is sent', async () => {
   const { tracker, clock, sent } = setup({ deps: { deviceId: () => null } });
   tracker.setSession(READY);
