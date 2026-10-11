@@ -4,6 +4,7 @@ import { PartBoundary } from '../errors/PartBoundary';
 import { useT } from '../i18n/useT';
 import { useSession } from '../session/SessionContext';
 import { KEEP_FOCUS, Page } from '../shell/Page';
+import { useOwnScrollArea } from '../shell/scrollArea';
 import { SPLIT_QUERY } from '../ui/split';
 import { StatusMessageProvider, useStatusMessage } from '../ui/StatusMessage';
 import { useMediaQuery } from '../ui/useMediaQuery';
@@ -89,6 +90,14 @@ function MonthScreen({ view, current }: { view: ShownView; current: string }) {
   const handBack = useHandBackState();
   const month = view.month;
 
+  // ⚠️ THE STOCKTAKE OWNS THE SCROLL for the moves inside itself (shell/scrollArea.tsx), because its
+  // list and its product are separate addresses: the shell's reset to the top at every address
+  // sent the list back to the top at each product on the split, and brought Back on a phone to the
+  // top of the list while the focus went to a row far below. The effects below handle every move.
+  const scrollArea = useOwnScrollArea();
+  // Where the list was scrolled to when a screen opened over it on a phone, until Back restores it.
+  const listTop = useRef<number | null>(null);
+
   // The store watches the month in the address. A layout effect, so the month's local copy is in the
   // very first paint of a new month instead of one frame of «Loading…» before it.
   useLayoutEffect(() => { store.openMonth(month); }, [store, month]);
@@ -109,11 +118,41 @@ function MonthScreen({ view, current }: { view: ShownView; current: string }) {
     if (split && view.kind !== 'list') {
       void navigate(to, { replace: true, state: cameFromList(state) ? FROM_LIST : KEEP_FOCUS });
     } else {
+      // On a phone the list is hidden behind what opens, and the page shrinks to it: the place in
+      // the list is written down now, while the list is what is on screen.
+      if (!split && view.kind === 'list') listTop.current = scrollArea()?.scrollTop ?? null;
       void navigate(to, { state: FROM_LIST });
     }
   };
   const openProduct = (id: string) => { openScreen(productPath(month, id)); };
   const openCost = () => { openScreen(costPath(month)); };
+
+  // Where the scroll area goes at every move inside the section. Before the hand-back below, so
+  // the place is back when the row's button takes the focus: focusing a row that is in view
+  // scrolls nothing.
+  //  - On the split the list keeps its place (the right-hand side starts at its own top, below).
+  //  - On a phone, Back to the list restores the place written down when the product opened; any
+  //    other move is a new screen and starts at the top: a product or «What it cost» opening, a
+  //    month's arrow, Back to a list nobody scrolled (a product opened by its address).
+  //  - The first render does nothing: the shell reset the area when the section was entered. (So it
+  //    did for `/stocktake` landing on the month: while that redirect is drawn this screen is gone
+  //    and nothing owns the scroll, so the shell resets it.)
+  const shown = useRef<{ pathname: string; kind: ShownView['kind'] } | null>(null);
+  useLayoutEffect(() => {
+    const before = shown.current;
+    shown.current = { pathname, kind: view.kind };
+    const area = scrollArea();
+    // The same address twice is StrictMode running the effect again, not a move.
+    if (before === null || before.pathname === pathname || area === null) return;
+    if (split) {
+      listTop.current = null;
+    } else if (view.kind === 'list' && before.kind !== 'list' && listTop.current !== null) {
+      area.scrollTop = listTop.current;
+      listTop.current = null;
+    } else {
+      area.scrollTop = 0;
+    }
+  }, [pathname]);
 
   // Back out of a product or «What it cost»: the button that opened it takes the focus, once the
   // list is on screen again (on a phone it was hidden behind the screen, not unmounted).

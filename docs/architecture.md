@@ -169,6 +169,16 @@ and where each comes from:
    `node --test` would run them and fail. A port runs its tests against both apps.
 8. **Load sections lazily** once they are real, so the first screen stays light: a built section is
    listed in `shell/sectionScreens.ts`, which loads it on first use, behind `SectionRoute`'s gate.
+9. **The shell has ONE scroll area (its `main`) and resets it to the top at every address.** That
+   is right between sections and wrong inside one whose list and detail are separate addresses
+   (the Stocktake: a product opened from a long list). Such a section owns the scroll with
+   `useOwnScrollArea()` (`shell/scrollArea.tsx`): the shell then resets only when the SECTION
+   changes (leaving an owner for another section resets as ever), and the section must handle EVERY
+   move inside itself. On a phone, where the detail replaces the list: write the list's place down
+   before opening the detail, restore it on Back, and put every other new screen at the top. On the
+   split, where both are on screen: leave the list alone. A section that does not own the scroll
+   needs nothing. Specs plant the position on the `main` element (jsdom does not scroll):
+   `StocktakeSection.scroll.spec.tsx`.
 
 ## Testing and CI
 
