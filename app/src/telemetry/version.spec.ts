@@ -44,7 +44,8 @@ describe('miseVersion (the stamp vite.config.ts defines)', () => {
     expect(DEV_VERSION.length).toBeLessThanOrEqual(RULES_LIMIT);
   });
 
+  // It runs the real git: on a busy PC that alone has taken more than Vitest's default 5 s.
   test('with the real git of this checkout it is a commit stamp or the fallback', () => {
     expect(miseVersion()).toMatch(/^m2-([0-9a-f]{7}|dev)$/);
-  });
+  }, 20_000);
 });
