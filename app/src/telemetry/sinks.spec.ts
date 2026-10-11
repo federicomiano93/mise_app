@@ -1,7 +1,8 @@
-import { beforeEach, describe, expect, test, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
+import type { MockInstance } from 'vitest';
 import type { Auth } from 'firebase/auth';
 import { addDoc, setDoc, type Firestore } from 'firebase/firestore';
-import { createTelemetrySinks } from './sinks';
+import { browserConnectivity, createTelemetrySinks, type Connectivity } from './sinks';
 
 // sinks.ts is the only place the telemetry reaches Firestore, and firestore.rules accept exactly
 // the shapes it writes (see its header). Firestore itself is replaced: what is pinned here is
@@ -147,5 +148,179 @@ describe('who is writing, and where', () => {
     const attempt = sinks.reportError({ message: 'x' });
     await expect(attempt).rejects.toThrow('Invalid location id');
     expect(addDoc).not.toHaveBeenCalled();
+  });
+});
+
+// ── No signal, no write ─────────────────────────────────────────────────────────────────────
+// A write made offline sits in Firestore's queue, and signing out or switching venue then warns
+// «your changes will be lost» about something the person never typed (see sinks.ts).
+
+function fakeConnectivity(startsOnline: boolean) {
+  let online = startsOnline;
+  const waiters: Array<() => void> = [];
+  const connectivity: Connectivity = {
+    online: () => online,
+    whenOnline: () => (online ? Promise.resolve() : new Promise<void>(resolve => { waiters.push(resolve); })),
+  };
+  return {
+    connectivity,
+    waiting: () => waiters.length,
+    goOnline() {
+      online = true;
+      waiters.splice(0).forEach(resolve => resolve());
+    },
+  };
+}
+
+const flush = () => new Promise(resolve => setTimeout(resolve, 0));
+
+describe('no signal, no write', () => {
+  function offlineSetup() {
+    const network = fakeConnectivity(false);
+    const state = { user: { uid: 'u1' } as { uid: string } | null, lid: 'bakery' as string | null };
+    const auth = { get currentUser() { return state.user; } } as unknown as Auth;
+    return { network, state, sinks: createTelemetrySinks({ db, auth }, () => state.lid, network.connectivity) };
+  }
+
+  test('offline, nothing reaches Firestore; when the signal is back each write goes exactly once', async () => {
+    const { network, sinks } = offlineSetup();
+    const sent = [
+      sinks.reportError({ message: 'x' }),
+      sinks.pingDevice({}, 'Dev1ce2Id3Abc4Def5Gh'),
+      sinks.saveUsage({}, 'id'),
+    ];
+    await flush();
+    expect(addDoc).not.toHaveBeenCalled();
+    expect(setDoc).not.toHaveBeenCalled();
+
+    network.goOnline();
+    await Promise.all(sent);
+
+    expect(addDoc).toHaveBeenCalledTimes(1);
+    expect(setDoc).toHaveBeenCalledTimes(2);
+  });
+
+  test('a send that stays pending is a promise that stays pending: nothing throws and nothing is dropped', async () => {
+    const { network, sinks } = offlineSetup();
+    let settled = false;
+    void sinks.reportError({ message: 'x' }).then(() => { settled = true; }, () => { settled = true; });
+    await flush();
+    await flush();
+    expect(settled).toBe(false);
+    expect(network.waiting()).toBe(1);
+  });
+
+  test('online, the write is handed over in the same tick — nothing waits, not even a microtask', () => {
+    const network = fakeConnectivity(true);
+    const auth = { currentUser: { uid: 'u1' } } as unknown as Auth;
+    const sinks = createTelemetrySinks({ db, auth }, () => 'bakery', network.connectivity);
+
+    void sinks.reportError({ message: 'x' });
+    void sinks.pingDevice({}, 'Dev1ce2Id3Abc4Def5Gh');
+    void sinks.saveUsage({}, 'id');
+
+    expect(addDoc).toHaveBeenCalledTimes(1);
+    expect(setDoc).toHaveBeenCalledTimes(2);
+    expect(network.waiting()).toBe(0);
+  });
+
+  // ⚠️ ASKED AFTER THE WAIT: whoever is signed in when the signal comes back is who writes.
+  test('the account is read after the wait, so a person who signed out meanwhile writes nothing', async () => {
+    const { network, state, sinks } = offlineSetup();
+    const attempt = sinks.saveUsage({}, 'id');
+    state.user = null;
+
+    network.goOnline();
+
+    await expect(attempt).rejects.toMatchObject({ code: 'unauthenticated' });
+    expect(setDoc).not.toHaveBeenCalled();
+  });
+});
+
+describe('browserConnectivity', () => {
+  let onLine: MockInstance<() => boolean>;
+
+  beforeEach(() => {
+    onLine = vi.spyOn(window.navigator, 'onLine', 'get').mockReturnValue(true);
+  });
+
+  afterEach(() => {
+    onLine.mockRestore();
+    vi.restoreAllMocks();
+  });
+
+  const goOnline = () => {
+    onLine.mockReturnValue(true);
+    window.dispatchEvent(new Event('online'));
+  };
+
+  test('online is false only when the device KNOWS it has no signal', () => {
+    const network = browserConnectivity();
+    expect(network.online()).toBe(true);
+    onLine.mockReturnValue(false);
+    expect(network.online()).toBe(false);
+  });
+
+  test('online, whenOnline resolves at once and listens to nothing', async () => {
+    const listen = vi.spyOn(window, 'addEventListener');
+    await browserConnectivity().whenOnline();
+    expect(listen).not.toHaveBeenCalledWith('online', expect.anything(), expect.anything());
+  });
+
+  test('offline, whenOnline waits for the window\'s online event', async () => {
+    onLine.mockReturnValue(false);
+    const network = browserConnectivity();
+    let resolved = false;
+    void network.whenOnline().then(() => { resolved = true; });
+    await flush();
+    expect(resolved).toBe(false);
+
+    goOnline();
+    await flush();
+    expect(resolved).toBe(true);
+  });
+
+  test('however many writes wait, they share one listener and all go on the one event', async () => {
+    onLine.mockReturnValue(false);
+    const listen = vi.spyOn(window, 'addEventListener');
+    const network = browserConnectivity();
+    const resolved: number[] = [];
+    [1, 2, 3].forEach(n => { void network.whenOnline().then(() => { resolved.push(n); }); });
+
+    expect(listen.mock.calls.filter(([type]) => type === 'online')).toHaveLength(1);
+    goOnline();
+    await flush();
+    expect(resolved).toEqual([1, 2, 3]);
+  });
+
+  test('a second spell offline waits again', async () => {
+    onLine.mockReturnValue(false);
+    const network = browserConnectivity();
+    void network.whenOnline();
+    goOnline();
+    await flush();
+
+    onLine.mockReturnValue(false);
+    let resolved = false;
+    void network.whenOnline().then(() => { resolved = true; });
+    await flush();
+    expect(resolved).toBe(false);
+    goOnline();
+    await flush();
+    expect(resolved).toBe(true);
+  });
+
+  test('the sinks use it by default: offline, the write waits for the real online event', async () => {
+    onLine.mockReturnValue(false);
+    const auth = { currentUser: { uid: 'u1' } } as unknown as Auth;
+    const sinks = createTelemetrySinks({ db, auth }, () => 'bakery');
+
+    const sent = sinks.reportError({ message: 'x' });
+    await flush();
+    expect(addDoc).not.toHaveBeenCalled();
+
+    goOnline();
+    await sent;
+    expect(addDoc).toHaveBeenCalledTimes(1);
   });
 });

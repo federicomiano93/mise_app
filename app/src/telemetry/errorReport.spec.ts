@@ -251,6 +251,34 @@ describe('createReporter', () => {
     expect(d.sent[0]?.code).toBe('failed-precondition');
   });
 
+  // With no signal the sink (sinks.ts) WAITS for it, so a send can stay pending for hours: the
+  // line is then held by the promise, in memory, and goes when the signal is back.
+  test('a send that stays pending (no signal) blocks nothing, is not sent twice, and goes once it settles', async () => {
+    const releases: Array<() => void> = [];
+    const calls: string[] = [];
+    const d = deps({
+      send: payload => new Promise<void>(resolve => { calls.push(payload.message); releases.push(resolve); }),
+    });
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const r = createReporter(d);
+      r.setSession(READY);
+      r.report(err('first'));
+      r.report(err('second'));
+      r.report(err('first'));
+      await settle();
+
+      // Both different errors were handed over; the repeat was throttled, not queued again.
+      expect(calls).toEqual(['first', 'second']);
+      expect(r.buffered()).toBe(0);
+
+      releases.forEach(release => release());
+      await settle();
+      expect(calls).toEqual(['first', 'second']);
+      expect(warn).not.toHaveBeenCalled();
+    } finally { warn.mockRestore(); }
+  });
+
   test('the session may change while the version is asked for: nothing is sent for a signed-out person', async () => {
     // The check after the await in dispatch(): the line belongs to who is signed in NOW.
     const d = deps({ version: () => new Promise<string>(resolve => setTimeout(() => resolve('649'), 5)) });
