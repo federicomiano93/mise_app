@@ -34,8 +34,12 @@
 // minutes; a write that never settles (offline, or a page that died) is sent again later,
 // the same document id and the whole document, so repeating it is harmless.
 // ⚠️ A RECORD THAT NEVER REACHED A SEND THRESHOLD is still sent: today's on the first check
-// ten minutes after it was made, a past day's on the next page load. It is pruned only
-// after seven days unsent.
+// ten minutes after it was made, a past day's on the next page load. Every record, sent or
+// not, is pruned after seven days — and only then.
+// ⚠️ A PAST DAY'S RECORD IS KEPT, CLEAN, AFTER IT IS SENT, never deleted: another tab may file
+// that day's last few seconds AFTER the send (midnight with two tabs open). A record made afresh
+// would hold only those, and its send would replace the whole line on the server (same document
+// id, whole-document write).
 // ⚠️ NOTHING TO RECORD, NOTHING WRITTEN: no target of a tap, no text, no value is ever read —
 // only the name of the screen the tap happened on.
 
@@ -317,14 +321,13 @@ export function createTracker(deps: UsageDeps): Tracker {
   }
 
   // The write came back (or was refused for good): the record is clean ONLY if nothing was added
-  // while it was in flight, and a past day's record is then deleted.
-  function settle(storage: KeyValueStorage, key: string, sentRev: number, past: boolean): void {
+  // while it was in flight. A past day's record is kept too (see the header): the prune removes it.
+  function settle(storage: KeyValueStorage, key: string, sentRev: number): void {
     try {
       const again = readJson(storage, key) as StoredRecord | null;
       if (!again) return;
       if (finiteOr(again.rev, 0) !== sentRev) return;
-      if (past) storage.removeItem(key);
-      else writeJson(storage, key, { ...again, dirty: false });
+      writeJson(storage, key, { ...again, dirty: false });
     } catch { /* it stays dirty: one more send, same document id */ }
   }
 
@@ -361,10 +364,8 @@ export function createTracker(deps: UsageDeps): Tracker {
         const rec = readJson(storage, key) as StoredRecord | null;
         if (!rec) continue;
         const past = p.dayKey < today;
-        if (!rec.dirty) {
-          if (past) { try { storage.removeItem(key); } catch { /* next time */ } }
-          continue;
-        }
+        // Already sent: a past day stays for the prune (see the header).
+        if (!rec.dirty) continue;
         const nowMs = d.now().getTime();
         const since = nowMs - finiteOr(rec.lastSentAt, 0);
         const due = past
@@ -380,10 +381,10 @@ export function createTracker(deps: UsageDeps): Tracker {
         let sending: Promise<unknown>;
         try { sending = Promise.resolve(d.send(payload, id)); } catch (err) { sending = Promise.reject(err); }
         sent += 1;
-        sending.then(() => settle(storage, key, sentRev, past), (err: unknown) => {
+        sending.then(() => settle(storage, key, sentRev), (err: unknown) => {
           // A refusal by the rules would only repeat itself: leave it be. A passing failure
           // (offline, busy) keeps the record dirty for the next attempt.
-          if (isFinalRefusal(err)) settle(storage, key, sentRev, past);
+          if (isFinalRefusal(err)) settle(storage, key, sentRev);
           warn(err);
         });
       }
