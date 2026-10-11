@@ -133,3 +133,19 @@ test('the guided-step and business labels exist in Italian', () => {
     assert.equal(t('bz.deleteName', { name: 'Bar Roma' }), 'Delete Bar Roma');
   });
 });
+
+// ⚠️ The phrases existing is not enough: the screens must ASK for them. The «e.g. 1» placeholder
+// is invisible to both English scans (no capital, no two letters in a row), and a dropped
+// `{ n: i + 1 }` would read «Velocità del passaggio {n}» with every dictionary test green.
+test('the guided-step editor and the business bin ask for those phrases', () => {
+  const read = p => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8')
+    .split('\n').filter(l => !l.trim().startsWith('//')).join('\n');
+  const guided = read('js/catalogue/guided-editor.js');
+  for (const key of ['stepInstruction', 'stepMinutes', 'stepSeconds', 'stepSpeed', 'removeStep']) {
+    assert.ok(guided.includes(`'aria-label': t('cat.${key}', { n: i + 1 })`), `cat.${key} with the step number`);
+  }
+  assert.ok(guided.includes("placeholder: t('cat.speedPlaceholder')"));
+  assert.ok(!guided.includes("'e.g."), 'the speed hint is a dictionary phrase');
+  const businesses = read('js/staff/businesses.js');
+  assert.ok(businesses.includes("'aria-label': t('bz.deleteName', { name: row.name })"));
+});
