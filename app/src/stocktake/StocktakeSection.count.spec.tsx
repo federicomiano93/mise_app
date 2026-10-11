@@ -1,5 +1,5 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { isBusy } from '../session/busy';
 import { fakeStocktakeSource } from '../testing/fakeStocktakeSource';
 import {
@@ -550,6 +550,34 @@ describe('a count box: leaving with the box still open', () => {
     await waitFor(() => { expect(fake.saved).toHaveLength(1); }, SAVED);
     expect(fake.saved[0]?.monthId).toBe('2026-10');
     expect(fake.saved[0]?.patch.closing).toEqual({ flour: 5 });
+  });
+
+  // ⚠️ iPhone Safari does not blur a box when a button is tapped, and on a phone the list stays
+  // mounted (hidden) behind the product: a draft left in the box would land later, possibly over a
+  // newer number typed on the product screen. `fireEvent.click` moves no focus, as that tap; a
+  // `user.click` would blur the box first and prove nothing. The product screen focuses its title
+  // right after it opens, which blurs the box too, so what is looked at is the ORDER: the count
+  // must be in the phone's copy the moment the address changes, before that screen exists.
+  it('commits a half-typed count before a product opens over the list', async () => {
+    const { router, user } = await loaded();
+    await enabled('Farina');
+    await user.type(boxOf('Farina'), '5');
+    expect(boxOf('Farina')).toHaveFocus();
+
+    const cachedClosing = () => (
+      JSON.parse(window.localStorage.getItem('inventory-bakery-2026-10') ?? '{}') as { closing?: unknown }
+    ).closing;
+    let atNavigation: unknown = 'the address never changed';
+    const stop = router.subscribe(state => {
+      if (state.location.pathname.includes('/product/')) atNavigation = cachedClosing();
+    });
+    try {
+      fireEvent.click(screen.getByRole('button', { name: 'Open Zucchero' }));
+      await waitFor(() => { expect(router.state.location.pathname).toBe('/stocktake/2026-10/product/sugar'); });
+    } finally {
+      stop();
+    }
+    expect(atNavigation).toEqual({ flour: 5 });
   });
 
   // ⚠️ THE BOXES ARE THE SAME PRODUCTS IN EVERY MONTH. A number typed in September's box and not yet

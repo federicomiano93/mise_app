@@ -128,6 +128,15 @@ function MonthScreen({ view, current }: { view: ShownView; current: string }) {
   // with a product (or «What it cost») already open beside the list, picking another is lateral and
   // replaces it — and keeps whatever the entry it replaces knew about where Back goes.
   const openScreen = (to: string) => {
+    // ⚠️ A HALF-TYPED COUNT IS COMMITTED BEFORE THE LIST IS HIDDEN. On a phone the list stays mounted
+    // but hidden behind what opens, and iPhone Safari does not blur a box when a button is tapped:
+    // a draft left in a row's box would stay uncommitted behind the hidden list and land later,
+    // possibly over a newer number typed on the product screen. Blurring commits it now (CountBox
+    // commits on blur). ONLY A TEXT FIELD: a button that has the focus is the row just pressed, and
+    // on the split it must keep it (picking another product leaves the focus on its row —
+    // StocktakeSection.product.spec.tsx fails if every focused element is blurred).
+    const active = document.activeElement;
+    if (active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement) active.blur();
     if (split && view.kind !== 'list') {
       void navigate(to, { replace: true, state: cameFromList(state) ? FROM_LIST : KEEP_FOCUS });
     } else {
