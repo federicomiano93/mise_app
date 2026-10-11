@@ -25,8 +25,10 @@ export type StoredDoc = { readonly id: string } & Record<string, unknown>;
 
 export interface PastriesSource {
   // The seven days, live. Returns the unsubscribe function at once (Firestore may still be
-  // loading; a stop before it has loaded means it never subscribes).
-  watchDays(onChange: (docs: StoredDoc[]) => void, onError: (err: unknown) => void): () => void;
+  // loading; a stop before it has loaded means it never subscribes). `fromCache` says the answer
+  // came from Firestore's own offline copy rather than the server: the store needs it to tell
+  // «nothing here» from «nothing known yet» (pastriesStore.ts, believable()).
+  watchDays(onChange: (docs: StoredDoc[], fromCache: boolean) => void, onError: (err: unknown) => void): () => void;
   // One whole day. Resolves when the server has it; rejects when it is refused.
   saveDay(day: Weekday, items: readonly PastryItem[], note: string): Promise<void>;
   // The records, newest first, bounded (see LOG_READ_LIMIT).
@@ -66,11 +68,14 @@ export function createFirestorePastriesSource(
   //
   // ⚠️ onSnapshot does NOT resubscribe after an error, so a dropped stream would leave the screen
   // looking like a venue with nothing in it; onError lets the screen say so.
+  //
+  // `withMetadata` asks for metadata changes too (see watchDays for why only the days do).
   function watch(
     target: (kit: FirestoreKit) => Query,
-    onChange: (docs: StoredDoc[]) => void,
+    onChange: (docs: StoredDoc[], fromCache: boolean) => void,
     onError: (err: unknown) => void,
     what: string,
+    withMetadata = false,
   ): () => void {
     let stopped = false;
     let unsubscribe: (() => void) | null = null;
@@ -78,7 +83,8 @@ export function createFirestorePastriesSource(
       if (stopped) return;
       unsubscribe = kit.fs.onSnapshot(
         target(kit),
-        snap => onChange(snap.docs.map(d => ({ ...d.data(), id: d.id }))),
+        { includeMetadataChanges: withMetadata },
+        snap => onChange(snap.docs.map(d => ({ ...d.data(), id: d.id })), snap.metadata.fromCache),
         err => {
           console.error(`${what} failed:`, err);
           onError(err);
@@ -95,9 +101,14 @@ export function createFirestorePastriesSource(
   }
 
   return {
+    // ⚠️ WITH METADATA CHANGES, because the store sets an empty from-cache answer aside and waits
+    // for the server: when the server then says the same nothing, only the metadata changes, and
+    // without this option that answer would never be delivered — the editor would wait on every
+    // opening (the current app's code review, 11 Oct 2026). It costs no reads: a few extra
+    // answers with the same documents (a save confirmed, going offline or back online).
     watchDays: (onChange, onError) => watch(
       ({ fs, db }) => fs.collection(db, daysPath),
-      onChange, onError, 'watchDays',
+      onChange, onError, 'watchDays', true,
     ),
 
     // ⚠️ setDoc WITHOUT merge, on purpose: the screen always holds the whole day, and replacing

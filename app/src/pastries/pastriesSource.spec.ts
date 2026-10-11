@@ -13,7 +13,7 @@ type Ref = { kind: string; path: string; parts?: unknown[] };
 function fakeKit() {
   const calls: { fn: string; args: unknown[] }[] = [];
   const record = (fn: string) => (...args: unknown[]) => { calls.push({ fn, args }); };
-  const snapshots: { target: Ref; next: (snap: unknown) => void; error: (err: unknown) => void; stopped: boolean }[] = [];
+  const snapshots: { target: Ref; options: unknown; next: (snap: unknown) => void; error: (err: unknown) => void; stopped: boolean }[] = [];
   let stored: Record<string, unknown> | null = null;
   const fs = {
     collection: (_db: unknown, path: string): Ref => ({ kind: 'collection', path }),
@@ -22,8 +22,8 @@ function fakeKit() {
     limit: (n: number) => ({ limit: n }),
     where: (field: string, op: string, value: unknown) => ({ where: [field, op, value] }),
     query: (ref: Ref, ...parts: unknown[]): Ref => ({ ...ref, kind: 'query', parts }),
-    onSnapshot: vi.fn((target: Ref, next: (snap: unknown) => void, error: (err: unknown) => void) => {
-      const entry = { target, next, error, stopped: false };
+    onSnapshot: vi.fn((target: Ref, options: unknown, next: (snap: unknown) => void, error: (err: unknown) => void) => {
+      const entry = { target, options, next, error, stopped: false };
       snapshots.push(entry);
       return () => { entry.stopped = true; };
     }),
@@ -125,9 +125,32 @@ describe('the Pastries source, as firestore.rules expect it', () => {
     source.watchDays(seen, () => {});
     await flush();
     expect(snapshots[0]!.target).toEqual({ kind: 'collection', path: 'locations/bakery/pastries' });
-    snapshots[0]!.next({ docs: [{ id: 'Monday', data: () => ({ items: [], note: '', id: 'forged' }) }] });
+    snapshots[0]!.next({ docs: [{ id: 'Monday', data: () => ({ items: [], note: '', id: 'forged' }) }], metadata: { fromCache: false } });
     // The document's name wins over any `id` field stored inside it.
-    expect(seen).toHaveBeenCalledWith([{ items: [], note: '', id: 'Monday' }]);
+    expect(seen).toHaveBeenCalledWith([{ items: [], note: '', id: 'Monday' }], false);
+  });
+
+  // ⚠️ The store sets an empty from-cache answer aside and waits for the server; when the server
+  // then says the same nothing only the metadata changes, and without the option that answer would
+  // never arrive — the editor would wait on every opening.
+  test('the seven days are watched WITH metadata changes, and say whether the answer came from the cache', async () => {
+    const { kit, snapshots } = fakeKit();
+    const source = createFirestorePastriesSource(() => Promise.resolve(kit), 'bakery');
+    const seen = vi.fn();
+    source.watchDays(seen, () => {});
+    await flush();
+    expect(snapshots[0]!.options).toEqual({ includeMetadataChanges: true });
+    snapshots[0]!.next({ docs: [], metadata: { fromCache: true } });
+    expect(seen).toHaveBeenCalledWith([], true);
+  });
+
+  test('the records are watched without metadata changes (no extra repaints for nothing)', async () => {
+    const { kit, snapshots } = fakeKit();
+    const source = createFirestorePastriesSource(() => Promise.resolve(kit), 'bakery');
+    source.watchLogs(() => {}, () => {});
+    source.watchLogsForDate('2026-10-14', () => {}, () => {});
+    await flush();
+    expect(snapshots.map(s => s.options)).toEqual([{ includeMetadataChanges: false }, { includeMetadataChanges: false }]);
   });
 
   test('a stop before Firestore has loaded never subscribes; a stop after unsubscribes', async () => {

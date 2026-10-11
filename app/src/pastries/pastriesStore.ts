@@ -36,7 +36,9 @@ export interface PastriesSnapshot {
   // Always all seven.
   readonly days: PastryDays;
   // Whether the seven days have been answered for, live or from the device's own cache (or the
-  // stream failed): until then `days` is only the local copy, which may be empty or old.
+  // stream failed): until then `days` is only the local copy, which may be empty or old. An EMPTY
+  // answer from the device's cache does not count, unless the local copy agreed the venue never had
+  // a pastry (see believable() in the store).
   //
   // ⚠️ THE EDITOR WAITS FOR IT. It copies the day once, when it opens, and never repaints; opened by
   // its address (a reload, a bookmark) on a phone with no local copy, it would copy an EMPTY day and
@@ -116,8 +118,37 @@ export function createPastriesStore(source: PastriesSource, deps: PastriesDeps):
     try { storage?.setItem(DAYS_CACHE_KEY, JSON.stringify(days)); } catch { /* full: memory still works */ }
   }
 
+  function hasLocalCopy(): boolean {
+    try {
+      return storage !== null && storage.getItem(DAYS_CACHE_KEY) !== null;
+    } catch {
+      return false;   // blocked site data: no copy this phone can show
+    }
+  }
+
+  const bootDays = readCache();
+  // What this phone's own copy said when the store was made: whether there was one at all, and if
+  // so whether it held no pastry on any day.
+  const bootCopyEmpty = hasLocalCopy() && !WEEKDAYS.some(day => bootDays[day].items.length > 0);
+
+  // ⚠️ A FROM-CACHE ANSWER WITH NO DOCUMENTS AT ALL IS «NOTHING KNOWN», NOT «NOTHING HERE».
+  // Firestore says it about a list it has never fetched on this phone, once it decides it is offline
+  // (about ten seconds without a signal) — so a new phone on bad Wi-Fi would open an empty editor,
+  // and the Save, queued, would replace the real list when the signal came back (found in the
+  // current app, 11 Oct 2026, PR #341). The seven documents are never deleted, so once any day has
+  // been saved a real answer always holds documents: an empty one from the cache is believed only
+  // when this phone's own copy agreed that the venue has never had a pastry. Otherwise it is
+  // ignored — not even drawn, so it cannot wipe the copy on screen either — and the server's answer
+  // is awaited (the source asks for metadata changes, so that answer arrives even when it is the
+  // same nothing).
+  function believable(docs: readonly StoredDoc[], fromCache: boolean): boolean {
+    if (!fromCache) return true;
+    if (docs.length > 0) return true;
+    return bootCopyEmpty;
+  }
+
   let snapshot: PastriesSnapshot = Object.freeze({
-    days: readCache(),
+    days: bootDays,
     daysLoaded: false,
     confirmedLoaded: false,
     confirmed: new Set<Weekday>(),
@@ -329,7 +360,8 @@ export function createPastriesStore(source: PastriesSource, deps: PastriesDeps):
     start() {
       stopDays?.();
       stopDays = source.watchDays(
-        docs => {
+        (docs, fromCache) => {
+          if (!believable(docs, fromCache)) return;
           const days = normalizeDays(docs);
           writeCache(days);
           update({ days, daysLoaded: true });

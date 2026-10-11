@@ -5,7 +5,7 @@ import type { PastriesSource, StoredDoc } from '../pastries/pastriesSource';
 // documents in two maps, every write lands at once (or is refused, with `refuse`), and every
 // live watcher is told, like Firestore would. The store itself is covered against its own fake
 // in pastriesStore.spec.ts; a screen's spec only needs a database that behaves.
-type Listener = { onChange: (docs: StoredDoc[]) => void; onError: (err: unknown) => void; date?: string };
+type Listener = { onChange: (docs: StoredDoc[], fromCache: boolean) => void; onError: (err: unknown) => void; date?: string };
 
 export type FakePastriesSource = PastriesSource & {
   days: Map<string, StoredDoc>;
@@ -14,6 +14,10 @@ export type FakePastriesSource = PastriesSource & {
   refuse: { saveDay: boolean; confirmLog: boolean; deleteLog: boolean };
   // Tells every watcher again (as another phone's write would).
   push(): void;
+  // Tells the day watchers what Firestore's own offline copy holds (`fromCache` true): by default
+  // NOTHING, which is what Firestore says about a list it has never fetched on this phone once it
+  // decides it is offline.
+  pushDaysFromCache(docs?: StoredDoc[]): void;
   // Kills every live stream with an error.
   breakStreams(): void;
 };
@@ -27,9 +31,9 @@ export function fakePastriesSource(seed: { days?: StoredDoc[]; logs?: StoredDoc[
 
   const sortedLogs = () => [...logs.values()].sort((a, b) => String(b.date).localeCompare(String(a.date)));
   function push(): void {
-    for (const w of dayWatchers) w.onChange([...days.values()]);
+    for (const w of dayWatchers) w.onChange([...days.values()], false);
     for (const w of logWatchers) {
-      w.onChange(w.date === undefined ? sortedLogs() : sortedLogs().filter(doc => doc.date === w.date));
+      w.onChange(w.date === undefined ? sortedLogs() : sortedLogs().filter(doc => doc.date === w.date), false);
     }
   }
   function watch(set: Set<Listener>, listener: Listener): () => void {
@@ -45,6 +49,9 @@ export function fakePastriesSource(seed: { days?: StoredDoc[]; logs?: StoredDoc[
     logs,
     refuse,
     push,
+    pushDaysFromCache(docs = []) {
+      for (const w of dayWatchers) w.onChange([...docs], true);
+    },
     breakStreams() {
       for (const w of [...dayWatchers, ...logWatchers]) w.onError(new Error('unavailable'));
       dayWatchers.clear();

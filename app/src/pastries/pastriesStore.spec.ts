@@ -10,7 +10,7 @@ import type { PastriesDeps, PastriesMessage } from './pastriesStore';
 // pastries-store.js, pastries-logs-store.js and the lock half of pastries-main.js, one test each.
 
 type Watch = {
-  onChange: (docs: StoredDoc[]) => void;
+  onChange: (docs: StoredDoc[], fromCache?: boolean) => void;
   onError: (err: unknown) => void;
   stopped: boolean;
   date?: string;
@@ -143,6 +143,59 @@ describe('the live days', () => {
     store.start();
     days[0]!.onError(new Error('unavailable'));
     expect(store.getSnapshot().daysLoaded).toBe(true);
+  });
+
+  // ⚠️ Firestore answers «nothing» from its own offline copy about a list it has never fetched on
+  // this phone, once it decides it is offline: a new phone on bad Wi-Fi. Believed, the editor would
+  // open on an empty day and a Save would replace the real list when the signal came back.
+  test('an EMPTY answer from the device cache is not believed on a phone with no local copy', () => {
+    const { store, days, storage } = setup();
+    store.start();
+    days[0]!.onChange([], true);
+    expect(store.getSnapshot().daysLoaded).toBe(false);
+    // Not even drawn or remembered: the copy on screen stays what it was.
+    expect(storage.map.has(DAYS_CACHE_KEY)).toBe(false);
+    // The server's answer, even the same nothing, is believed.
+    days[0]!.onChange([], false);
+    expect(store.getSnapshot().daysLoaded).toBe(true);
+  });
+
+  test('an EMPTY answer from the device cache does not wipe a local copy that holds pastries', () => {
+    const storage = memoryStorage({ [DAYS_CACHE_KEY]: JSON.stringify({ Tuesday: { items: [{ name: 'Cornetti', qty: 24 }], note: '' } }) });
+    const { store, days } = setup({ storage });
+    store.start();
+    days[0]!.onChange([], true);
+    expect(store.getSnapshot().daysLoaded).toBe(false);
+    expect(store.getSnapshot().days.Tuesday.items).toEqual([{ name: 'Cornetti', qty: 24 }]);
+    expect(JSON.parse(storage.map.get(DAYS_CACHE_KEY)!).Tuesday.items).toEqual([{ name: 'Cornetti', qty: 24 }]);
+  });
+
+  test('an EMPTY answer from the device cache is believed when the local copy said the venue never had a pastry', () => {
+    const storage = memoryStorage({ [DAYS_CACHE_KEY]: JSON.stringify({}) });
+    const { store, days } = setup({ storage });
+    store.start();
+    days[0]!.onChange([], true);
+    expect(store.getSnapshot().daysLoaded).toBe(true);
+  });
+
+  // Working offline from Firestore's own copy is the app's local-first choice, unchanged.
+  test('an answer from the device cache WITH documents is believed', () => {
+    const { store, days } = setup();
+    store.start();
+    days[0]!.onChange([{ id: 'Friday', items: [{ name: 'Krapfen', qty: 6 }], note: '' }], true);
+    expect(store.getSnapshot().daysLoaded).toBe(true);
+    expect(store.getSnapshot().days.Friday.items).toEqual([{ name: 'Krapfen', qty: 6 }]);
+  });
+
+  test('a local copy written after the store was made does not change what the cache is believed about', () => {
+    const storage = memoryStorage();
+    const { store, days } = setup({ storage });
+    store.start();
+    store.saveDay('Monday', [], '');
+    // The save wrote an (empty) local copy; the store still remembers the phone had none when it opened.
+    expect(storage.map.has(DAYS_CACHE_KEY)).toBe(true);
+    days[0]!.onChange([], true);
+    expect(store.getSnapshot().daysLoaded).toBe(false);
   });
 
   test('stay loaded across a stop and a start', () => {
