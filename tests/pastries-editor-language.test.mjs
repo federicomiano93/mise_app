@@ -108,6 +108,16 @@ test('the labels follow the name as it is typed', () => {
   });
 });
 
+test('typing renames only its own row', () => {
+  inLanguage('it', () => {
+    const root = open([{ name: 'Cornetto', qty: 2 }]);
+    withClass(root, 'pas-add-row')[0].fire('click');
+    type(withClass(root, 'pas-name')[1], 'Sfogliatelle');
+    assert.deepEqual(qtyLabels(root), ['Quantità di Cornetto', 'Quantità di Sfogliatelle']);
+    assert.deepEqual(binLabels(root), ['Rimuovi Cornetto', 'Rimuovi Sfogliatelle']);
+  });
+});
+
 test('⚠️ the editor writes no plural rule and no English sentence of its own', () => {
   const src = readFileSync(new URL('../js/pastries/pastries-editor.js', import.meta.url), 'utf8')
     .split('\n').filter(l => !l.trim().startsWith('//')).join('\n');
