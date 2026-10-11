@@ -328,7 +328,8 @@ describe('From the orders', () => {
     await fill(user);
     const sentence = 'Farina 00 25kg: not counted here — the app cannot tell how many of the counted unit they make. Add them by hand.';
     const alert = await dialog(sentence);
-    expect(alert).toHaveAccessibleDescription(sentence);
+    // Named by the sentence and not also described by it (a screen reader would read it twice).
+    expect(alert).not.toHaveAttribute('aria-describedby');
     expect(within(alert).getAllByRole('button')).toHaveLength(1);
     expect(within(alert).getByRole('button', { name: 'OK' })).toHaveFocus();
     expect(screen.queryByRole('alertdialog', { name: 'Fill in what was bought?' })).not.toBeInTheDocument();

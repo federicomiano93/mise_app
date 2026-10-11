@@ -32,11 +32,12 @@ describe('useAlert', () => {
     expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
   });
 
-  it('is named and described by its message when it has no title', async () => {
+  // Named by its message and NOT also described by it: a screen reader would read it twice.
+  it('is named by its message when it has no title, and has no description of its own', async () => {
     const { user } = draw();
     await user.click(tell());
     const dialog = await screen.findByRole('alertdialog', { name: 'Flour: not counted here.' });
-    expect(dialog).toHaveAccessibleDescription('Flour: not counted here.');
+    expect(dialog).not.toHaveAttribute('aria-describedby');
     expect(within(dialog).queryByRole('heading')).not.toBeInTheDocument();
   });
 
