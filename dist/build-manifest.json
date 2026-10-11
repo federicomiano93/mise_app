@@ -509,8 +509,8 @@
       }
     },
     "dist/inventory.js": {
-      "sha": "79223d61c8b1ae77",
-      "mapSha": "4e5f43cab9b1575c",
+      "sha": "0c5c13a61aaf883d",
+      "mapSha": "92faea606bf6c533",
       "inputs": {
         "js/allergen-model.js": "50434c6cea85b7de",
         "js/app-version.js": "4ef897a205fdec91",
@@ -540,11 +540,11 @@
         "js/inventory/firebase-inventory.js": "8de17b4f95e88989",
         "js/inventory/inventory-detail.js": "f0619d73cb5efe7f",
         "js/inventory/inventory-list.js": "707c3500fbbef98b",
-        "js/inventory/inventory-main.js": "4fbcddc827b88ab0",
+        "js/inventory/inventory-main.js": "27f97173e99482c4",
         "js/inventory/inventory-model.js": "3931e39de227a8fa",
-        "js/inventory/inventory-outbox.js": "2f91c5a2c4578b44",
+        "js/inventory/inventory-outbox.js": "b57586aedd60d54d",
         "js/inventory/inventory-purchases.js": "639d19b4fc0bc4d3",
-        "js/inventory/inventory-store.js": "0174c26327b60d88",
+        "js/inventory/inventory-store.js": "77e2b7ae9e6103da",
         "js/inventory/inventory-usage.js": "5cc561e12035afe6",
         "js/inventory/inventory-value.js": "fe714a0057753b63",
         "js/join-code.js": "ebf5b5e52507b80b",

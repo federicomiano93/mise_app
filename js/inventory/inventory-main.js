@@ -353,7 +353,10 @@ function showUnavailable() {
 
 function handleBack() {
   if (view === 'detail' || view === 'usage') { showList(); return; }
-  location.href = 'index.html';
+  // ⚠️ flushBeforeLeaving(), as for the month arrows: the last count typed is handed
+  // to Firestore and given the moment it needs to reach the browser's own database
+  // before the page goes — in a storeroom it is the only copy there is.
+  flushBeforeLeaving().finally(() => { location.href = 'index.html'; });
 }
 
 function toast(msg) {
@@ -374,7 +377,13 @@ setSyncErrorHandler(msg => toast(msg));
 // ⚠️ WHAT IS TYPED IS SENT BEFORE THE PAGE GOES AWAY. The save is debounced, so
 // closing the app a moment after the last number would otherwise lose it — and it
 // is the one number somebody walked across a storeroom for.
+// ⚠️ AND WHEN IT IS HIDDEN, which on a phone comes first: switching app or locking
+// the screen hides the page while it is still alive, with time for the write to
+// reach the browser's own database; pagehide may come only as it is torn down.
 window.addEventListener('pagehide', () => { flush(); });
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') flush();
+});
 
 initInventory(
   openMonthId,

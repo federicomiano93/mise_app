@@ -8,16 +8,18 @@
 // count nobody typed, and the person who typed it has already walked away from the
 // shelf. Nothing about using the app can show that it works.
 //
-// The three cases that cost real numbers, and each has a test named for it:
+// The four cases that cost real numbers, and each has a test named for it:
 //   1. a write is in the air and a snapshot arrives without it
 //   2. a write fails and the same box has been re-typed since
 //   3. a write fails and the same box has been EMPTIED since
+//   4. with no signal, several writes are in the air at once (11 Oct 2026)
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  EMPTY_OUTBOX, stage, stageMany, hasWork, take, confirm, restore, applyOver,
+  EMPTY_OUTBOX, stage, stageMany, hasWork, take, confirm, restore, applyOver, answered,
+  isSending, echoed, unsaved, hasUnsaved, revive,
 } from '../js/inventory/inventory-outbox.js';
 
 const MAPS = ['opening', 'purchased', 'closing', 'packKg'];
@@ -86,7 +88,10 @@ test('nothing is mutated: the outbox before a change is still itself afterwards'
   take(before);
   restore(before);
   assert.equal(JSON.stringify(before), snapshot);
-  assert.deepEqual(EMPTY_OUTBOX, { pending: {}, cleared: {}, inFlight: null },
+  assert.deepEqual(EMPTY_OUTBOX, {
+    pending: {}, cleared: {}, inFlight: null, writes: 0, failed: false,
+    handed: { pending: {}, cleared: {} },
+  },
     'and the shared empty one above all is never written into');
 });
 
@@ -173,6 +178,166 @@ test('a failed write leaves untouched boxes of the same map alone', () => {
   assert.deepEqual(out.values, { closing: { flour: 3, salt: 1, sugar: 2 } });
 });
 
+// ── 4. Several writes in the air: a storeroom with no signal ─────────────────
+//
+// With no signal a write never answers. The store used to keep every later count
+// in memory behind the first, so only the first reached the SDK's own queue (the
+// one that outlasts the page): closing the app before signal lost the rest. Every
+// save now goes at once, and these are the rules that make that safe.
+
+test('⚠️⚠️ the first of two answers does NOT settle what the second is still carrying', () => {
+  const first = take(stage(EMPTY_OUTBOX, 'closing', 'flour', 1));
+  const second = take(stage(first.outbox, 'closing', 'salt', 2));
+  assert.equal(second.outbox.writes, 2, 'two writes are out');
+
+  const one = answered(second.outbox, true);
+  assert.equal(isSending(one), true, 'the second write has not answered yet');
+  assert.deepEqual(applyOver(one, doc(), MAPS).closing, { flour: 1, salt: 2 },
+    'a snapshot arriving now must still show both numbers');
+
+  const both = answered(one, true);
+  assert.equal(isSending(both), false);
+  assert.equal(hasWork(both), false, 'both landed: nothing left to send');
+});
+
+test('⚠️⚠️ a failed FIRST write is sent again even though the second one landed', () => {
+  // The reason there used to be only one write in the air: the second one landing
+  // must not count as the first one landing.
+  const first = take(stage(EMPTY_OUTBOX, 'closing', 'flour', 1));
+  const second = take(stage(first.outbox, 'closing', 'salt', 2));
+  const afterFailure = answered(second.outbox, false);
+  assert.equal(isSending(afterFailure), true, 'still waiting for the second answer');
+  const settled = answered(afterFailure, true);
+  assert.equal(isSending(settled), false);
+  assert.deepEqual(take(settled).values, { closing: { flour: 1, salt: 2 } },
+    'everything that was in the air goes again; a number sent twice loses nothing');
+});
+
+test('a failed LAST write is sent again too', () => {
+  const first = take(stage(EMPTY_OUTBOX, 'closing', 'flour', 1));
+  const second = take(stage(first.outbox, 'closing', 'salt', 2));
+  const settled = answered(answered(second.outbox, true), new Error('refused'));
+  assert.equal(hasWork(settled), true);
+  assert.deepEqual(take(settled).values, { closing: { flour: 1, salt: 2 } });
+});
+
+test('⚠️ a number typed while the writes were out wins over what comes back', () => {
+  const first = take(stage(EMPTY_OUTBOX, 'closing', 'flour', 1));
+  const second = take(stage(first.outbox, 'closing', 'salt', 2));
+  const retyped = stage(second.outbox, 'closing', 'flour', 9);
+  const settled = answered(answered(retyped, false), false);
+  assert.deepEqual(take(settled).values, { closing: { flour: 9, salt: 2 } });
+});
+
+test('one write answered with nothing else out settles at once, as before', () => {
+  const sent = take(stage(EMPTY_OUTBOX, 'closing', 'flour', 3));
+  assert.equal(sent.outbox.writes, 1);
+  const landed = answered(sent.outbox, true);
+  assert.equal(isSending(landed), false);
+  assert.equal(hasWork(landed), false);
+  const refused = answered(sent.outbox, false);
+  assert.deepEqual(take(refused).values, { closing: { flour: 3 } });
+});
+
+test('a layer in the air with no count is still one write out', () => {
+  // Whatever an outbox was built from, a layer in the air is never forgotten by the
+  // count: answered() settles it on the first answer, never ignores it.
+  const legacy = { pending: {}, cleared: {}, inFlight: { pending: { closing: { flour: 4 } }, cleared: {} } };
+  assert.equal(isSending(legacy), true);
+  assert.equal(hasWork(answered(legacy, true)), false);
+  assert.deepEqual(take(answered(legacy, false)).values, { closing: { flour: 4 } });
+});
+
+// ── 5. Handed to Firestore is not yet safe ───────────────────────────────────
+//
+// The SDK puts a write in the browser's database a moment after it is handed over.
+// Typed, and the page left at once (a back gesture): on the emulator the last count
+// was gone (11 Oct 2026). So what is not yet seen back is kept, and laid back in.
+
+test('⚠⚠ a count sent but not yet seen back is still unsaved; seen back, it is safe', () => {
+  const sent = take(stage(EMPTY_OUTBOX, 'closing', 'flour', 3));
+  assert.equal(hasWork(sent.outbox), false, 'nothing is waiting to be sent');
+  assert.deepEqual(unsaved(sent.outbox).pending, { closing: { flour: 3 } },
+    'but until the browser database shows it back, a torn-down page would lose it');
+
+  const notYet = echoed(sent.outbox, doc({ closing: { salt: 1 } }), MAPS);
+  assert.equal(hasUnsaved(notYet), true, 'a snapshot without the number proves nothing');
+
+  const seen = echoed(sent.outbox, doc({ closing: { flour: 3 } }), MAPS);
+  assert.equal(hasUnsaved(seen), false, 'the snapshot shows it: the SDK has stored it');
+  assert.equal(isSending(seen), true, 'and it is still in the air: echoed() settles nothing else');
+});
+
+test('a snapshot with a DIFFERENT number does not count as the echo', () => {
+  const sent = take(stage(EMPTY_OUTBOX, 'closing', 'flour', 3));
+  assert.equal(hasUnsaved(echoed(sent.outbox, doc({ closing: { flour: 2 } }), MAPS)), true);
+});
+
+test('an emptied box is seen back when the snapshot no longer has it', () => {
+  const sent = take(stage(EMPTY_OUTBOX, 'closing', 'flour', null));
+  assert.equal(hasUnsaved(echoed(sent.outbox, doc({ closing: { flour: 4 } }), MAPS)), true);
+  assert.equal(hasUnsaved(echoed(sent.outbox, doc(), MAPS)), false);
+});
+
+test('what is typed and not sent yet is unsaved too', () => {
+  const box = stage(EMPTY_OUTBOX, 'closing', 'flour', 5);
+  assert.deepEqual(unsaved(box).pending, { closing: { flour: 5 } });
+  assert.equal(hasUnsaved(EMPTY_OUTBOX), false);
+});
+
+test('⚠ the newer number wins in what is kept: re-typed after sending, the new one', () => {
+  const sent = take(stage(EMPTY_OUTBOX, 'closing', 'flour', 3));
+  const retyped = stage(sent.outbox, 'closing', 'flour', 8);
+  assert.deepEqual(unsaved(retyped).pending, { closing: { flour: 8 } });
+  const emptied = stage(sent.outbox, 'closing', 'flour', null);
+  assert.deepEqual(unsaved(emptied), { pending: {}, cleared: { closing: { flour: true } } });
+});
+
+test('confirmed by the server, nothing is left handed', () => {
+  const sent = take(stage(EMPTY_OUTBOX, 'closing', 'flour', 3));
+  assert.equal(hasUnsaved(answered(sent.outbox, true)), false);
+  const failed = answered(sent.outbox, false);
+  assert.deepEqual(unsaved(failed).pending, { closing: { flour: 3 } },
+    'a failed write is waiting again, and waiting is unsaved');
+});
+
+test('⚠⚠ what a torn-down page left behind is laid back in, to be sent again', () => {
+  const left = unsaved(take(stage(stage(EMPTY_OUTBOX, 'closing', 'flour', 3), 'closing', 'salt', null)).outbox);
+  const stored = JSON.parse(JSON.stringify(left));   // through localStorage and back
+  const back = revive(EMPTY_OUTBOX, stored, MAPS);
+  const out = take(back);
+  assert.deepEqual(out.values, { closing: { flour: 3 } });
+  assert.deepEqual(out.clear, { closing: { salt: true } });
+  assert.deepEqual(applyOver(back, doc({ closing: { salt: 2 } }), MAPS).closing, { flour: 3 },
+    'and the first snapshot cannot take it back off the screen');
+});
+
+test('⚠ a number typed since the page came back wins over what it left behind', () => {
+  const typed = stage(EMPTY_OUTBOX, 'closing', 'flour', 9);
+  const back = revive(typed, { pending: { closing: { flour: 3, salt: 1 } }, cleared: {} }, MAPS);
+  assert.deepEqual(take(back).values, { closing: { flour: 9, salt: 1 } });
+  const emptied = stage(EMPTY_OUTBOX, 'closing', 'flour', null);
+  const back2 = take(revive(emptied, { pending: { closing: { flour: 3 } }, cleared: {} }, MAPS));
+  assert.deepEqual(back2.values, {}, 'emptied since: the old number may not come back');
+  assert.deepEqual(back2.clear, { closing: { flour: true } });
+});
+
+test('⚠ revive trusts nothing it reads: only counts a person could have typed', () => {
+  const junk = {
+    pending: {
+      closing: { a: -1, b: 'x', c: NaN, d: Infinity, e: 2, f: null, g: {} },
+      notAMap: { h: 1 },
+    },
+    cleared: { closing: { i: 'yes', j: true }, notAMap: { k: true } },
+  };
+  const out = take(revive(EMPTY_OUTBOX, junk, MAPS));
+  assert.deepEqual(out.values, { closing: { e: 2 } });
+  assert.deepEqual(out.clear, { closing: { j: true } });
+  for (const nothing of [undefined, null, 42, 'x', [], { pending: 'no' }]) {
+    assert.equal(hasWork(revive(EMPTY_OUTBOX, nothing, MAPS)), false);
+  }
+});
+
 // ── The shape of what it holds ───────────────────────────────────────────────
 
 test('⚠️ an ingredient id containing a dot survives, because nothing splits on one', () => {
@@ -216,6 +381,8 @@ test('junk in, no throw out', () => {
     assert.deepEqual(take(junk).values, {});
     assert.equal(hasWork(restore(junk)), false);
     assert.equal(hasWork(confirm(junk)), false);
+    assert.equal(hasWork(answered(junk, true)), false);
+    assert.equal(isSending(answered(junk, false)), false);
   }
   assert.equal(hasWork(stage(EMPTY_OUTBOX, '', 'flour', 1)), false, 'a nameless map stages nothing');
   assert.equal(hasWork(stage(EMPTY_OUTBOX, 'closing', '', 1)), false, 'nor a nameless product');

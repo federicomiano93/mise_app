@@ -30,7 +30,8 @@ import {
   monthBounds, COUNT_MAPS, isClosed,
 } from './inventory-model.js';
 import {
-  EMPTY_OUTBOX, stage, stageMany, hasWork, take, confirm, restore, applyOver,
+  EMPTY_OUTBOX, stage, stageMany, hasWork, take, answered, applyOver,
+  echoed, unsaved, hasUnsaved, revive,
 } from './inventory-outbox.js';
 import { purchasesInMonth } from './inventory-purchases.js';
 import {
@@ -51,6 +52,12 @@ const SETTLE_MS = 1200;
 // rather than per location.
 function cacheKey(monthId) {
   return `inventory-${currentLocationId() || 'none'}-${monthId}`;
+}
+
+// What was typed here and is not yet in the browser's own database (see
+// keepUnsaved). The venue is in it for the same reason.
+function unsavedKey(monthId) {
+  return `inventory-unsaved-${currentLocationId() || 'none'}-${monthId}`;
 }
 
 function readJson(key, fallback) {
@@ -119,8 +126,9 @@ let onSyncError = null;
 // (js/inventory/inventory-outbox.js holds the whole reasoning).
 let outbox = EMPTY_OUTBOX;
 let saveTimer = null;
-// The write currently in the air, if any. Exactly one at a time.
-let sending = null;
+// The writes in the air, each one settling (never rejecting) once Firestore has
+// answered it — which with no signal is never.
+const inAir = new Set();
 // Whether Firestore has answered at all yet. Until it has, the local copy is the
 // only thing there is; afterwards it is a mirror.
 let remoteArrived = false;
@@ -137,6 +145,25 @@ function cacheMonth() {
   // ⚠️ NOT BEFORE THE VENUE IS KNOWN: the key names it, so a write made while the
   // session is still opening would file the counts under a key nothing ever reads.
   if (month && currentLocationId()) writeJson(cacheKey(month.id), toDocument(month));
+}
+
+// ⚠️⚠️ WHAT EXISTS ONLY IN THIS PAGE'S MEMORY IS WRITTEN DOWN AT ONCE, on every
+// change to the outbox. A write handed to Firestore reaches the browser's own
+// database a moment later, and a page torn down inside that moment — the last
+// number typed and the back gesture straight after — took the number with it
+// (emulator, 11 Oct 2026). localStorage is written before this line returns; the
+// copy is laid back in when the month is next opened (reviveUnsaved), and removed
+// once a snapshot has shown every number back.
+// ⚠️ NOT the month copy above: the first snapshot rewrites that one, which is
+// exactly how the counts used to vanish.
+function keepUnsaved() {
+  if (!monthId || !currentLocationId()) return;
+  try {
+    if (hasUnsaved(outbox)) localStorage.setItem(unsavedKey(monthId), JSON.stringify(unsaved(outbox)));
+    else localStorage.removeItem(unsavedKey(monthId));
+  } catch (e) {
+    // Storage full or unavailable — the SDK's own queue still has every write.
+  }
 }
 
 function announce() {
@@ -158,15 +185,19 @@ export function initInventory(id, onUpdate, onError) {
   // `inventory-none-2026-09` while every write of the evening went to
   // `inventory-loc-abc-2026-09`. The safety copy was written faithfully and never
   // read once.
-  authReady.then(hydrateFromCache).catch(() => {});
+  authReady.then(fromThisPhone).catch(() => {});
 
   watchMonth(
     monthId,
     remote => {
       remoteArrived = true;
+      const merged = normalizeMonth(remote, monthId) || normalizeMonth({ month: monthId });
+      // What the snapshot shows back is in the browser's database: no longer only
+      // in this page's memory. Judged on the document AS IT ARRIVED.
+      outbox = echoed(outbox, merged, COUNT_MAPS);
+      keepUnsaved();
       // A remote change never discards what has not been sent yet: the local
       // values for still-unsent boxes are laid back over the incoming document.
-      const merged = normalizeMonth(remote, monthId) || normalizeMonth({ month: monthId });
       applyOver(outbox, merged, COUNT_MAPS);
       month = merged;
       cacheMonth();
@@ -184,6 +215,32 @@ export function initInventory(id, onUpdate, onError) {
   }, () => {}).catch(() => {});
 
   return month;
+}
+
+// What this phone kept for this month, once the venue is open (its name is in
+// both keys): the month as it was last seen, then what had not reached the
+// browser's database when the page last went away.
+function fromThisPhone() {
+  hydrateFromCache();
+  reviveUnsaved();
+}
+
+// Numbers a torn-down page left behind (keepUnsaved), laid back over the month and
+// sent again. Anything typed since is newer and wins (revive()). Sending one that
+// did reach Firestore after all writes the same number twice and loses nothing.
+function reviveUnsaved() {
+  if (!monthId || !month) return;
+  const saved = readJson(unsavedKey(monthId), null);
+  if (saved) {
+    outbox = revive(outbox, saved, COUNT_MAPS);
+  }
+  // Written down now in any case: the venue was not known until this moment.
+  keepUnsaved();
+  if (!saved || !hasWork(outbox)) return;
+  applyOver(outbox, month, COUNT_MAPS);
+  cacheMonth();
+  scheduleSave();
+  announce();
 }
 
 // The counts this phone saved last time, put back on screen.
@@ -215,6 +272,7 @@ export function setCount(map, ingredientId, value) {
   if (n === null) delete month[map][ingredientId];
   else month[map][ingredientId] = n;
   outbox = stage(outbox, map, ingredientId, n);
+  keepUnsaved();
 
   cacheMonth();
   scheduleSave();
@@ -227,19 +285,28 @@ function scheduleSave() {
 }
 
 // Send everything that has changed. Kept as ONE write so a count and a cleared
-// box beside it can never half-land.
+// box beside it can never half-land. Answers when every write sent so far has
+// answered — which with no signal is never, hence flushBeforeLeaving().
 //
-// ⚠️ EXACTLY ONE WRITE IN THE AIR AT A TIME. With two, the second's success would
-// confirm the first one's values as landed as well — and a failed first write
-// would then never be sent again.
+// ⚠️⚠️ IT NEVER WAITS FOR AN EARLIER WRITE. It used to keep one write in the air
+// and hold every later count in memory behind it; with no signal that write never
+// answers, so only the FIRST count of a storeroom reached the SDK's own queue —
+// the one in the browser's database, which outlasts the page. Closing the app,
+// changing month or going Home before signal lost all the others (found 11 Oct
+// 2026). Handed over at once, every count is in that queue and goes up, in order,
+// when there is signal. The outbox keeps the books for several writes at once
+// (answered(), js/inventory/inventory-outbox.js).
 export function flush() {
   clearTimeout(saveTimer);
   if (!month || !monthId) return Promise.resolve();
-  if (sending) return sending.then(() => flush());
-  if (!hasWork(outbox)) return Promise.resolve();
+  if (hasWork(outbox)) send();
+  return Promise.all([...inAir]).then(() => {});
+}
 
+function send() {
   const taken = take(outbox);
   outbox = taken.outbox;
+  keepUnsaved();
 
   const patch = { month: monthId, updatedAt: new Date().toISOString() };
   if (!month.createdAt) {
@@ -248,23 +315,28 @@ export function flush() {
   }
   for (const [map, values] of Object.entries(taken.values)) patch[map] = { ...values };
 
-  sending = saveMonthFields(monthId, patch, taken.clear).then(
-    () => { outbox = confirm(outbox); },
+  const write = saveMonthFields(monthId, patch, taken.clear).then(
+    () => true,
     err => {
       console.warn('The stocktake did not reach Firestore:', err);
-      outbox = restore(outbox);
       reportSyncFailure();
+      return false;
     },
-  ).finally(() => { sending = null; });
-  return sending;
+  ).then(ok => {
+    outbox = answered(outbox, ok);
+    keepUnsaved();
+    inAir.delete(write);
+  });
+  inAir.add(write);
 }
 
 // Send what is waiting and answer within the bound, whatever the network is doing.
 //
 // ⚠️ FOR THE CALLER THAT IS ABOUT TO TAKE THE PAGE AWAY — changing month reloads
-// it. flush() answers when the WRITE does, which with no signal is never, so
-// chaining a navigation onto it makes the month arrows dead buttons. The count is
-// safe either way: it is in the browser's own database and in the local copy.
+// it, going Home leaves it. flush() answers when the WRITE does, which with no
+// signal is never, so chaining a navigation onto it makes the month arrows dead
+// buttons. The wait is still worth having: it gives the SDK the moment it needs to
+// put the write in the browser's own database before the page is gone.
 export function flushBeforeLeaving() {
   return settled(flush(), deadlineFromNow());
 }
@@ -354,6 +426,7 @@ export function applyPurchases(totals) {
   gone.forEach(id => { delete month.purchased[id]; });
   Object.entries(wanted).forEach(([id, n]) => { month.purchased[id] = n; });
   outbox = stageMany(outbox, 'purchased', wanted, gone);
+  keepUnsaved();
 
   cacheMonth();
   scheduleSave();
@@ -403,6 +476,7 @@ export async function pullOpeningFromPrevious(previousId) {
 
   month.opening = { ...month.opening, ...opening };
   outbox = stageMany(outbox, 'opening', opening);
+  keepUnsaved();
   cacheMonth();
   scheduleSave();
   announce();
