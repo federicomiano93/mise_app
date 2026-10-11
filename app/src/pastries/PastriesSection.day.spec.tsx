@@ -4,6 +4,7 @@ import { isBusy } from '../session/busy';
 import { ACTION_EVENT } from '../telemetry/usage';
 import { fakePastriesSource } from '../testing/fakePastriesSource';
 import type { FakePastriesSource } from '../testing/fakePastriesSource';
+import { holdDays } from '../testing/holdAnswers';
 import { WORK_DATE, dayDoc, freezeClock, logDoc, renderPastries } from '../testing/renderPastries';
 import type { PastriesStore } from './pastriesStore';
 
@@ -322,6 +323,57 @@ describe('correcting one number', () => {
       );
     });
 
+    // ⚠️ A row keyed by its place is rebuilt when an earlier one goes: the number survives (kept by
+    // name) but the box is a new element, the focus drops to <body> and the phone's keyboard closes.
+    it('keeps the very same box, with its focus and text, when a row ABOVE it is taken off the list', async () => {
+      const source = seeded();
+      const { user } = await open(source);
+      await user.click(row('Sfogliatelle'));
+      await user.type(box('Sfogliatelle'), '30');
+      const before = box('Sfogliatelle');
+
+      source.days.set('Thursday', dayDoc('Thursday', [['Krapfen', 12], ['Sfogliatelle', 8]]));
+      act(() => { source.push(); });
+
+      expect(rowsShown()).toEqual(['Krapfen12', 'Sfogliatelle8']);
+      expect(box('Sfogliatelle')).toBe(before);
+      expect(box('Sfogliatelle')).toHaveFocus();
+      expect(box('Sfogliatelle')).toHaveValue(30);
+    });
+
+    // A reordered row is the same element in a new place (React moves it and puts the focus back):
+    // keyed by its place it would be rebuilt, and the box would lose the focus.
+    it('keeps the very same box, with its focus and text, when the list is reordered', async () => {
+      const source = seeded();
+      const { user } = await open(source);
+      await user.click(row('Cornetti'));
+      await user.type(box('Cornetti'), '30');
+      const before = box('Cornetti');
+
+      source.days.set('Thursday', dayDoc('Thursday', [['Krapfen', 12], ['Sfogliatelle', 8], ['Cornetti', 24]]));
+      act(() => { source.push(); });
+
+      expect(rowsShown()).toEqual(['Krapfen12', 'Sfogliatelle8', 'Cornetti24']);
+      expect(box('Cornetti')).toBe(before);
+      expect(box('Cornetti')).toHaveFocus();
+      expect(box('Cornetti')).toHaveValue(30);
+    });
+
+    it('does not take the focus for the box when the person had left it', async () => {
+      const source = seeded();
+      const { user } = await open(source);
+      await user.click(row('Krapfen'));
+      await user.type(box('Krapfen'), '20');
+      const pencil = screen.getByRole('button', { name: 'Edit Thursday' });
+      act(() => { pencil.focus(); });
+      expect(box('Krapfen')).not.toHaveFocus();
+
+      source.days.set('Thursday', dayDoc('Thursday', [['Sfogliatelle', 8], ['Krapfen', 12], ['Cornetti', 24]]));
+      act(() => { source.push(); });
+
+      expect(pencil).toHaveFocus();
+    });
+
     it('closes the box when its row is taken off the list', async () => {
       const source = seeded();
       const { user } = await open(source);
@@ -611,7 +663,9 @@ describe('the lock on a recorded day', () => {
   it('locks a day recorded after 4am even though last night\'s permission is still stored', async () => {
     const source = recorded();
     window.localStorage.setItem('pastries-edit-Thursday', WORK_DATE);
-    await open(source);
+    // By its address: coming back after 4am moves the day `/pastries` opens on (it is Friday's list
+    // that is proved for then), but not a day somebody asked for by name.
+    await open(source, '/pastries/Thursday');
     expect(confirmButton()).toBeInTheDocument();
 
     vi.setSystemTime(new Date(2026, 9, 15, 5, 0, 0));
@@ -637,6 +691,192 @@ describe('the lock on a recorded day', () => {
     expect(editButton()).toBeInTheDocument();
     expect(confirmButton()).not.toBeInTheDocument();
     expect(isBusy()).toBe(false);
+  });
+});
+
+// ⚠️ UNTIL THE DAYS HAVE ANSWERED the list is the phone's old copy, possibly days old: it is drawn, but
+// a tick on a row or a Confirm from it could write or record a list nobody has any more.
+describe('before the days have answered', () => {
+  function oldCopyOnThePhone() {
+    window.localStorage.setItem('pastries-days', JSON.stringify({ Thursday: { items: THURSDAY.map(([name, qty]) => ({ name, qty })), note: '' } }));
+    const source = seeded();
+    return { source, ...holdDays(source) };
+  }
+
+  it('draws the old copy at once, but Confirm is disabled and a row does not open', async () => {
+    const { source } = oldCopyOnThePhone();
+    const { user } = renderPastries('/pastries', { source });
+    await rowReady('Cornetti');
+
+    expect(rowsShown()).toEqual(['Cornetti24', 'Krapfen12', 'Sfogliatelle8']);
+    expect(confirmButton()).toBeDisabled();
+    expect(row('Cornetti')).toHaveAttribute('aria-disabled', 'true');
+
+    await user.click(row('Cornetti'));
+    expect(screen.queryByRole('spinbutton')).not.toBeInTheDocument();
+    expect(row('Cornetti')).toHaveAttribute('aria-expanded', 'false');
+    await user.click(confirmButton()!);
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    expect(source.getLog).not.toHaveBeenCalled();
+  });
+
+  it('keeps a row reachable by the keyboard while it waits: aria-disabled, never disabled', async () => {
+    const { source } = oldCopyOnThePhone();
+    renderPastries('/pastries', { source });
+    await rowReady('Cornetti');
+    expect(row('Cornetti')).not.toBeDisabled();
+  });
+
+  it('opens a row and confirms as soon as the first answer is in', async () => {
+    const { source, answer } = oldCopyOnThePhone();
+    const { user } = renderPastries('/pastries', { source });
+    await rowReady('Cornetti');
+    expect(confirmButton()).toBeDisabled();
+
+    act(() => { answer(); });
+    await waitFor(() => { expect(confirmButton()).toBeEnabled(); });
+    expect(row('Cornetti')).not.toHaveAttribute('aria-disabled');
+
+    await user.click(row('Cornetti'));
+    expect(box('Cornetti')).toBeInTheDocument();
+    await user.click(confirmButton()!);
+    expect(await dialog('Confirm Thursday?')).toBeInTheDocument();
+  });
+
+  it('counts the stream dying as an answer, so a phone with no connection can still work', async () => {
+    const { source, fail } = oldCopyOnThePhone();
+    const { user } = renderPastries('/pastries', { source });
+    await rowReady('Cornetti');
+    expect(confirmButton()).toBeDisabled();
+
+    act(() => { fail(); });
+    await waitFor(() => { expect(confirmButton()).toBeEnabled(); });
+    await user.click(row('Cornetti'));
+    expect(box('Cornetti')).toBeInTheDocument();
+  });
+});
+
+// ⚠️ THE BUTTON THAT WAS PRESSED HIDES ITSELF, and a hidden element cannot keep the focus: it would
+// fall to <body>. The focus goes to the control that takes its place — but only the press that
+// causes the swap asks for it.
+describe('where the focus goes when a bottom button hides itself', () => {
+  // The dialog gives the focus back to its opener a frame after it closes, if the focus is nowhere.
+  const aFrame = () => new Promise(resolve => { setTimeout(resolve, 60); });
+  const recorded = () => fakePastriesSource({
+    days: [dayDoc('Thursday', THURSDAY)],
+    logs: [logDoc('Thursday', THURSDAY)],
+  });
+
+  it('puts it on the Edit button of the confirmed row when Confirm lands', async () => {
+    const { user } = await open(seeded());
+    await user.click(confirmButton()!);
+    await user.click(within(await dialog('Confirm Thursday?')).getByRole('button', { name: 'Confirm' }));
+
+    expect(await screen.findByText('Thursday recorded.')).toBeInTheDocument();
+    await aFrame();
+    expect(editButton()).toBeInTheDocument();
+    expect(editButton()).toHaveFocus();
+  });
+
+  it('leaves it on Confirm when the record could not be written and Confirm stays', async () => {
+    const source = seeded();
+    source.refuse.confirmLog = true;
+    const { user } = await open(source);
+    await user.click(confirmButton()!);
+    await user.click(within(await dialog('Confirm Thursday?')).getByRole('button', { name: 'Confirm' }));
+
+    expect(await screen.findByText('Couldn’t record Thursday — check your connection.')).toBeInTheDocument();
+    await aFrame();
+    expect(confirmButton()).toHaveFocus();
+  });
+
+  it('puts it on Confirm when the Edit button unlocks the day', async () => {
+    const { user } = await open(recorded());
+    await waitFor(() => { expect(editButton()).toBeInTheDocument(); });
+    await user.click(editButton()!);
+    await user.click(within(await dialog('Edit Thursday?')).getByRole('button', { name: 'Edit' }));
+
+    await waitFor(() => { expect(confirmButton()).toBeInTheDocument(); });
+    await aFrame();
+    expect(confirmButton()).toHaveFocus();
+  });
+
+  it('keeps it on the Edit button when the question is answered with Cancel', async () => {
+    const { user } = await open(recorded());
+    await waitFor(() => { expect(editButton()).toBeInTheDocument(); });
+    await user.click(editButton()!);
+    await user.click(within(await dialog('Edit Thursday?')).getByRole('button', { name: 'Cancel' }));
+
+    await aFrame();
+    expect(editButton()).toHaveFocus();
+    expect(confirmButton()).not.toBeInTheDocument();
+  });
+
+  it('does not move it to Confirm when the day is unlocked from a row: the box has it', async () => {
+    const { user } = await open(recorded());
+    await waitFor(() => { expect(editButton()).toBeInTheDocument(); });
+    await user.click(row('Krapfen'));
+    await user.click(within(await dialog('Edit Thursday?')).getByRole('button', { name: 'Edit' }));
+
+    expect(await screen.findByRole('spinbutton', { name: 'New quantity for Krapfen' })).toHaveFocus();
+    await aFrame();
+    expect(box('Krapfen')).toHaveFocus();
+    expect(confirmButton()).not.toHaveFocus();
+  });
+
+  it('moves nobody\'s focus when a colleague confirms the day', async () => {
+    const source = seeded();
+    const { user } = await open(source);
+    const records = screen.getByRole('link', { name: 'Records' });
+    await user.click(row('Cornetti'));
+    act(() => { records.focus(); });
+
+    source.logs.set(`${WORK_DATE}_Thursday`, logDoc('Thursday', THURSDAY));
+    act(() => { source.push(); });
+
+    await waitFor(() => { expect(editButton()).toBeInTheDocument(); });
+    await aFrame();
+    expect(records).toHaveFocus();
+    expect(editButton()).not.toHaveFocus();
+  });
+
+  it('moves nothing when the focus was nowhere and a colleague confirms the day', async () => {
+    const source = seeded();
+    await open(source);
+    expect(document.body).toHaveFocus();
+
+    source.logs.set(`${WORK_DATE}_Thursday`, logDoc('Thursday', THURSDAY));
+    act(() => { source.push(); });
+
+    await waitFor(() => { expect(editButton()).toBeInTheDocument(); });
+    await aFrame();
+    expect(document.body).toHaveFocus();
+  });
+
+  it('leaves the focus where the person put it when they moved on while the record was being written', async () => {
+    const source = seeded();
+    let land: () => void = () => undefined;
+    vi.mocked(source.confirmLog).mockImplementationOnce((id, build) => new Promise<void>(resolve => {
+      land = () => {
+        const { id: _id, ...payload } = build(null);
+        source.logs.set(id, { ...payload, id, bakery: 'bakery' });
+        source.push();
+        resolve();
+      };
+    }));
+    const { user } = await open(source);
+    await user.click(confirmButton()!);
+    await user.click(within(await dialog('Confirm Thursday?')).getByRole('button', { name: 'Confirm' }));
+    await waitFor(() => { expect(source.confirmLog).toHaveBeenCalled(); });
+    await aFrame();
+    const records = screen.getByRole('link', { name: 'Records' });
+    act(() => { records.focus(); });
+
+    await act(async () => { land(); await Promise.resolve(); });
+
+    expect(await screen.findByText('Thursday recorded.')).toBeInTheDocument();
+    await aFrame();
+    expect(records).toHaveFocus();
   });
 });
 
@@ -686,7 +926,7 @@ describe('in Italian', () => {
 
     await user.click(screen.getByRole('button', { name: /^Cornetti/ }));
     const ask = await dialog('Modificare Giovedì?');
-    expect(ask).toHaveAccessibleDescription('Giovedì è già registrato per stanotte. Modificare queste quantità?');
+    expect(ask).toHaveAccessibleDescription('La lista di Giovedì è già registrata per stanotte. Modificare queste quantità?');
     await user.click(within(ask).getByRole('button', { name: 'Annulla' }));
     await waitFor(() => { expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument(); });
     expect(within(screen.getByRole('tabpanel')).getByText('Confermato')).toBeVisible();

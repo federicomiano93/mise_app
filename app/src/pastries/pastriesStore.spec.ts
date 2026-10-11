@@ -268,6 +268,75 @@ describe('tonight\'s confirmations and the lock', () => {
     expect(forDate[0]!.stopped).toBe(true);
   });
 
+  // ⚠️ Until tonight's confirmations have answered, «nothing is confirmed» is only «nobody has said».
+  // The editor opened by its address asks the lock question once it knows.
+  describe('confirmedLoaded', () => {
+    test('is false until the first answer, then true', () => {
+      const { store, forDate } = setup();
+      expect(store.getSnapshot().confirmedLoaded).toBe(false);
+      store.start();
+      expect(store.getSnapshot().confirmedLoaded).toBe(false);
+      forDate[0]!.onChange([]);
+      expect(store.getSnapshot().confirmedLoaded).toBe(true);
+    });
+
+    test('is true after an answer that confirms something, and still true when it changes', () => {
+      const { store, forDate } = setup();
+      store.start();
+      forDate[0]!.onChange([{ id: '2026-10-14_Thursday', date: '2026-10-14', day: 'Thursday' }]);
+      forDate[0]!.onChange([]);
+      expect(store.getSnapshot().confirmedLoaded).toBe(true);
+    });
+
+    test('counts a failed watch as an answer, with nothing confirmed, so nothing waits for ever', () => {
+      const { store, forDate } = setup();
+      store.start();
+      forDate[0]!.onError(new Error('unavailable'));
+      expect(store.getSnapshot().confirmedLoaded).toBe(true);
+      expect(store.getSnapshot().confirmed.size).toBe(0);
+      expect(store.isLocked('Thursday')).toBe(false);
+    });
+
+    test('goes back to false when the roll at 4am starts a new watch, and true again at its answer', () => {
+      const { store, forDate, liveTimers, setClock } = setup();
+      store.start();
+      forDate[0]!.onChange([]);
+      expect(store.getSnapshot().confirmedLoaded).toBe(true);
+
+      const [timer] = liveTimers();
+      setClock(new Date(2026, 9, 15, 4, 0, 1).getTime());
+      timer!.callback();
+      expect(store.getSnapshot().confirmedLoaded).toBe(false);
+      forDate[1]!.onChange([]);
+      expect(store.getSnapshot().confirmedLoaded).toBe(true);
+    });
+
+    test('goes back to false when the app comes back after 4am, and an old date\'s answer cannot set it', () => {
+      const { store, forDate, foreground, setClock } = setup();
+      store.start();
+      forDate[0]!.onChange([]);
+      setClock(new Date(2026, 9, 15, 9, 0, 0).getTime());
+      foreground[0]!();
+      expect(store.getSnapshot().confirmedLoaded).toBe(false);
+
+      forDate[0]!.onChange([]);
+      expect(store.getSnapshot().confirmedLoaded).toBe(false);
+      forDate[1]!.onChange([]);
+      expect(store.getSnapshot().confirmedLoaded).toBe(true);
+    });
+
+    test('is false again after a stop and a start, until the new watch answers', () => {
+      const { store, forDate } = setup();
+      store.start();
+      forDate[0]!.onChange([]);
+      store.stop();
+      store.start();
+      expect(store.getSnapshot().confirmedLoaded).toBe(false);
+      forDate[1]!.onChange([]);
+      expect(store.getSnapshot().confirmedLoaded).toBe(true);
+    });
+  });
+
   test('an answer about an old date never overwrites the new one', () => {
     const { store, forDate, setClock, foreground } = setup();
     store.start();

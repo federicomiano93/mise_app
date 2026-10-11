@@ -14,6 +14,23 @@ export function typedKey(day: Weekday, name: string): string {
   return `${day} ${name.trim().toLowerCase()}`;
 }
 
+// The React key of every row of a day's list: the pastry's name and WHICH occurrence of that name
+// the row is (two rows may share a name). Never the position.
+//
+// ⚠️ A KEY BY POSITION REBUILDS A ROW WHEN ANOTHER PHONE REMOVES AN EARLIER ONE: the row being typed
+// into slides up one place, React throws its element away and builds a new one, and the focus drops
+// to <body> — the phone's keyboard closes under the thumb. Keyed by name, the element is the same
+// one before and after the snapshot.
+export function rowKeys(day: Weekday, names: readonly string[]): string[] {
+  const seen = new Map<string, number>();
+  return names.map(name => {
+    const key = typedKey(day, name);
+    const occurrence = seen.get(key) ?? 0;
+    seen.set(key, occurrence + 1);
+    return `${key}#${occurrence}`;
+  });
+}
+
 // What was typed as a whole number, or null when it is nothing usable to talk about (empty, or
 // not a finite number). 0.4 is 0, 1e999 is nothing.
 export function proposedQuantity(raw: string | undefined): number | null {

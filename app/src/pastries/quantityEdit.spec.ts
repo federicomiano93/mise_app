@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { MAX_QTY } from '@mise/shared/pastries-model';
-import { checkQuantity, proposedQuantity, typedKey } from './quantityEdit';
+import { checkQuantity, proposedQuantity, rowKeys, typedKey } from './quantityEdit';
 
 describe('typedKey', () => {
   it('is the same for the same pastry however it is cased or spaced', () => {
@@ -11,6 +11,24 @@ describe('typedKey', () => {
   it('is different for another pastry or another day', () => {
     expect(typedKey('Tuesday', 'Cornetti')).not.toBe(typedKey('Tuesday', 'Krapfen'));
     expect(typedKey('Tuesday', 'Cornetti')).not.toBe(typedKey('Wednesday', 'Cornetti'));
+  });
+});
+
+describe('rowKeys', () => {
+  it('keys a row by its name, not by its place: an earlier row going does not rename the others', () => {
+    const before = rowKeys('Tuesday', ['Cornetti', 'Krapfen', 'Sfogliatelle']);
+    const after = rowKeys('Tuesday', ['Krapfen', 'Sfogliatelle']);
+    expect(after).toEqual([before[1], before[2]]);
+  });
+
+  it('tells two rows with the same name apart by which occurrence they are', () => {
+    const keys = rowKeys('Tuesday', ['Cornetti', 'Krapfen', ' cornetti ']);
+    expect(new Set(keys).size).toBe(3);
+    expect(keys[0]).not.toBe(keys[2]);
+  });
+
+  it('is different on another day, so a day that is picked builds its rows afresh', () => {
+    expect(rowKeys('Tuesday', ['Cornetti'])).not.toEqual(rowKeys('Wednesday', ['Cornetti']));
   });
 });
 

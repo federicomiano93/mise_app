@@ -41,9 +41,14 @@
 }
 
 @media (hover: hover) {
-  .row[data-open="false"] .main:hover {
+  .row[data-open="false"] .main:not([aria-disabled="true"]):hover {
     background: var(--sunken);
   }
+}
+
+/* Waiting for the first live answer: drawn as usual, but a tap does nothing. */
+.main[aria-disabled="true"] {
+  cursor: default;
 }
 
 /* The box, the tick and the hint under an open row. */

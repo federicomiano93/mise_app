@@ -4,7 +4,7 @@
 // of js/pastries/pastries-main.js, decision for decision, as plain TypeScript with no React and
 // no Firebase in it: the source (pastriesSource.ts) and the browser (deps) are injected, so every
 // trap below is a spec with fakes (pastriesStore.spec.ts). Screens read it through
-// usePastries.ts.
+// PastriesContext.tsx (usePastries, usePastriesStore).
 //
 // It says nothing in words: a failure is a PastriesMessage, and the screen puts it in the
 // person's language.
@@ -42,6 +42,15 @@ export interface PastriesSnapshot {
   // its address (a reload, a bookmark) on a phone with no local copy, it would copy an EMPTY day and
   // a Save would write that over the real one.
   readonly daysLoaded: boolean;
+  // Whether tonight's confirmations have been answered for (or the question failed) since the
+  // watch last STARTED — at start, and again at every refresh (4am, the app coming back after it).
+  // Until then `confirmed` is empty only because nobody has said otherwise, so `isLocked` cannot be
+  // trusted to say «no».
+  //
+  // ⚠️ THE EDITOR WAITS FOR IT TOO. Opened by its address it has not come through the day panel's
+  // gate, so it must know whether the day is recorded before it lets anybody type
+  // (docs/parity/pastries.md, 23).
+  readonly confirmedLoaded: boolean;
   // The lists confirmed for the work date being watched.
   readonly confirmed: ReadonlySet<Weekday>;
   // This phone's permission to change a confirmed list: the work date it was given on, or null.
@@ -110,6 +119,7 @@ export function createPastriesStore(source: PastriesSource, deps: PastriesDeps):
   let snapshot: PastriesSnapshot = Object.freeze({
     days: readCache(),
     daysLoaded: false,
+    confirmedLoaded: false,
     confirmed: new Set<Weekday>(),
     grants: readGrants(storage),
     logs: [],
@@ -174,17 +184,18 @@ export function createPastriesStore(source: PastriesSource, deps: PastriesDeps):
 
   // ⚠️ A FAILURE LEAVES NOTHING CONFIRMED, so nothing is locked: the worst case is the app as it
   // was before the lock existed. Locking on data nobody could read would leave somebody unable
-  // to correct a list at 4am with nothing on screen to explain why.
+  // to correct a list at 4am with nothing on screen to explain why. A failure still counts as an
+  // answer for `confirmedLoaded`: nothing may wait for ever on a question that cannot be answered.
   function refreshConfirmations(): void {
     confirmationsSeq += 1;
     const mine = confirmationsSeq;
     stopConfirmed?.();
     watchedDate = workDate(deps.now());
-    update({ confirmed: new Set(), grants: readGrants(storage) });
+    update({ confirmed: new Set(), confirmedLoaded: false, grants: readGrants(storage) });
     stopConfirmed = source.watchLogsForDate(
       watchedDate,
-      docs => { if (mine === confirmationsSeq) update({ confirmed: confirmedDaysFrom(docs) }); },
-      () => { if (mine === confirmationsSeq) update({ confirmed: new Set() }); },
+      docs => { if (mine === confirmationsSeq) update({ confirmed: confirmedDaysFrom(docs), confirmedLoaded: true }); },
+      () => { if (mine === confirmationsSeq) update({ confirmed: new Set(), confirmedLoaded: true }); },
     );
   }
 

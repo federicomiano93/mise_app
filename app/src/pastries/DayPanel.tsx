@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { RefObject } from 'react';
 import { Check, History, Pencil } from 'lucide-react';
 import { Link, useNavigate } from 'react-router';
@@ -10,10 +10,11 @@ import { announceAction } from '../telemetry/usage';
 import { Button } from '../ui/Button';
 import { useStatusMessage } from '../ui/StatusMessage';
 import { useConfirm } from '../ui/useConfirm';
+import { editRecordedDayQuestion } from './lockQuestion';
 import { usePastries, usePastriesStore } from './PastriesContext';
 import { FROM_DAY } from './pastriesNav';
 import { PastryRow } from './PastryRow';
-import { proposedQuantity, typedKey } from './quantityEdit';
+import { proposedQuantity, rowKeys, typedKey } from './quantityEdit';
 import { PANEL_ID, RECORDS_PATH, editorPath, weekdayLabel } from './weekdays';
 import styles from './DayPanel.module.css';
 
@@ -34,17 +35,29 @@ type Props = {
 // ⚠️ WHAT THIS PHONE HAS TYPED SURVIVES A SNAPSHOT. The data arrives live from the other phones,
 // several times a minute, and a half-typed number must not be eaten by one of them: the typed
 // values are kept by day AND pastry name (never by position — a snapshot can reorder the list),
-// the open row is kept by the same key, and the rows are keyed by name and position so React
-// updates them in place — the scroll position and the focus in the box survive too.
+// the open row is kept by the same key, and the rows are keyed by name (and which occurrence of that
+// name they are), never by position, so React updates them in place — the scroll position and the
+// focus in the box survive too, even when another phone removes a row ABOVE the one being typed in.
+// (The current app's update() has to put the focus back by hand because it rebuilds every row. Here
+// nothing is rebuilt: an element React only has to MOVE, for a reordered list, gets its focus back
+// from React itself when the commit is done — it remembers the focused element before and restores
+// it after. A row that is REMOVED and built again is what loses it, which is what the keys prevent.)
+//
+// ⚠️ UNTIL THE DAYS HAVE ANSWERED, THE LIST IS ONLY THIS PHONE'S OLD COPY (it can be days old): it
+// is drawn, so the first paint is instant, but nothing may be WRITTEN from it. A tick on a stale
+// row would write a list that other phones have long since changed, and Confirm would record it as
+// tonight's. So until the first live answer (store.daysLoaded — the device's own cache counts, so
+// working offline is untouched) a row ignores a tap and Confirm is disabled.
 export function DayPanel({ day, opening, handBackFocus }: Props) {
   const { t } = useT();
   const store = usePastriesStore();
-  const { days } = usePastries();
+  const { days, daysLoaded } = usePastries();
   const navigate = useNavigate();
   const say = useStatusMessage();
   const [confirm, confirmDialog] = useConfirm();
 
   const { items, note } = days[day];
+  const reactKeys = rowKeys(day, items.map(item => item.name));
   const label = weekdayLabel(t, day);
   // Read from the clock every time (store.isLocked): the lock releases itself at 4am.
   const locked = store.isLocked(day);
@@ -53,10 +66,17 @@ export function DayPanel({ day, opening, handBackFocus }: Props) {
   const [openKey, setOpenKey] = useState<string | null>(null);
   const openInput = useRef<HTMLInputElement>(null);
   const pencil = useRef<HTMLButtonElement>(null);
+  const confirmButton = useRef<HTMLButtonElement>(null);
+  const editButton = useRef<HTMLButtonElement>(null);
   const confirming = useRef(false);
   // The day this panel shows NOW, for an answer that arrives after the person has moved on.
   const shownDay = useRef(day);
-  useEffect(() => { shownDay.current = day; }, [day]);
+  // A swap of the two bottom buttons this phone asked for and is waiting to see (see below).
+  const swapFocus = useRef<{ day: Weekday; to: 'edit' | 'confirm' } | null>(null);
+  useEffect(() => {
+    shownDay.current = day;
+    swapFocus.current = null;
+  }, [day]);
 
   // ⚠️ A ROW THAT IS GONE CANNOT STAY OPEN, and neither can any row once the day is confirmed —
   // here or on a colleague's phone: a box left open over a locked list would accept a number and
@@ -78,6 +98,27 @@ export function DayPanel({ day, opening, handBackFocus }: Props) {
     if (openKey !== null) openInput.current?.focus();
   }, [openKey]);
 
+  // ⚠️ THE BUTTON THAT WAS PRESSED HIDES ITSELF, with the focus on it: Confirm when the record has
+  // landed (the «Confirmed» row takes its place), Edit when the day unlocks (Confirm comes back).
+  // A hidden element cannot keep the focus, so it would fall to <body> — a keyboard user is lost and
+  // a screen reader says nothing. The focus goes to the control that takes the button's place.
+  //
+  // Asked for by the press that causes the swap (swapFocus), done when the swap is on the page: a
+  // colleague's Confirm sets nothing, so it never moves anybody's focus. And only when the focus is
+  // still on the button that goes, or nowhere (while a question closes, the focus is on <body> until
+  // the dialog's own restore runs a frame later): somebody who has moved on keeps the focus where
+  // they put it.
+  useLayoutEffect(() => {
+    const want = swapFocus.current;
+    if (!want || want.day !== day) return;
+    if (want.to === 'edit' ? !locked : locked) return;
+    swapFocus.current = null;
+    const arriving = want.to === 'edit' ? editButton.current : confirmButton.current;
+    const leaving = want.to === 'edit' ? confirmButton.current : editButton.current;
+    const active = document.activeElement;
+    if (active === null || active === document.body || active === leaving) arriving?.focus();
+  });
+
   // A number typed and not yet written is an unsaved edit: a reload the app starts by itself
   // waits until it is written or dropped (session/busy.ts).
   const typing = openKey !== null && (typed[openKey] ?? '').trim() !== '';
@@ -89,16 +130,17 @@ export function DayPanel({ day, opening, handBackFocus }: Props) {
   // something already recorded, not to make every edit slower.
   async function requestEdit(): Promise<boolean> {
     if (!store.isLocked(day)) return true;
-    const ok = await confirm({
-      title: t('past.editDayQ', { day: label }),
-      message: t('past.alreadyRecordedTonight', { day: label }),
-      okLabel: t('ui.edit'),
-      cancelLabel: t('common.cancel'),
-    });
+    const ok = await confirm(editRecordedDayQuestion(t, label));
     if (!ok) return false;
     // The permission carries tonight's work date, so 4am spends it — and so does the next Confirm.
     store.grantEdit(day);
     return true;
+  }
+
+  // The Edit button of a confirmed day: the same question, then only unlocks the list.
+  async function pressEdit() {
+    swapFocus.current = { day, to: 'confirm' };
+    if (!(await requestEdit())) swapFocus.current = null;
   }
 
   async function pressRow(key: string) {
@@ -156,8 +198,13 @@ export function DayPanel({ day, opening, handBackFocus }: Props) {
         cancelLabel: t('common.cancel'),
       });
       if (!ok) return;
+      // Landing locks the day, which swaps the buttons: ask for the focus to follow (see above).
+      swapFocus.current = { day, to: 'edit' };
       const saved = await store.confirmDay(day, items, note);
-      if (!saved) return;
+      if (!saved) {
+        swapFocus.current = null;
+        return;
+      }
       announceAction('pastry-day-confirmed');
       say(t('past.dayRecorded', { day: label }));
     } finally {
@@ -197,9 +244,10 @@ export function DayPanel({ day, opening, handBackFocus }: Props) {
               const open = openKey === key;
               return (
                 <PastryRow
-                  key={`${key}#${index}`}
+                  key={reactKeys[index]}
                   item={item}
                   open={open}
+                  disabled={!daysLoaded}
                   typed={typed[key] ?? ''}
                   inputRef={open ? openInput : undefined}
                   onToggle={() => { void pressRow(key); }}
@@ -226,7 +274,14 @@ export function DayPanel({ day, opening, handBackFocus }: Props) {
         {/* ⚠️ BOTH ARE ALWAYS BUILT and one is hidden, never one built only when the day is
             confirmed: the data changes live, and a control built conditionally would appear and
             vanish at random as other phones wrote. */}
-        <Button variant="primary" block hidden={locked} onPress={() => { void confirmToday(); }}>
+        <Button
+          ref={confirmButton}
+          variant="primary"
+          block
+          hidden={locked}
+          isDisabled={!daysLoaded}
+          onPress={() => { void confirmToday(); }}
+        >
           {t('past.confirm')}
         </Button>
         <div className={styles.done} hidden={!locked}>
@@ -234,7 +289,7 @@ export function DayPanel({ day, opening, handBackFocus }: Props) {
             <Check aria-hidden="true" />
             {t('past.confirmedMark')}
           </span>
-          <Button onPress={() => { void requestEdit(); }}>
+          <Button ref={editButton} onPress={() => { void pressEdit(); }}>
             <Pencil aria-hidden="true" />
             {t('ui.edit')}
           </Button>

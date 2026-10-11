@@ -91,6 +91,7 @@ export const en = {
   'past.daysLabel': 'Days',
   // new: under a day's name on the tablet's list. The count is the number of KINDS of pastry.
   'past.count': { one: '{n} pastry', other: '{n} pastries' },
+  // new: a day with nothing on it, in the list of days (a tab says it in words as well).
   'past.nothingYet': 'Nothing yet',
   'past.tomorrowToProve': 'Tomorrow · to prove',
   'past.toProve': 'To prove',

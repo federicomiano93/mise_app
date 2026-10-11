@@ -85,6 +85,88 @@ describe('Pastries: which day opens', () => {
     expect(within(panel()).getByText('Tomorrow · to prove')).toBeInTheDocument();
   });
 
+  // ...but Mise 2 never reloads by itself: a tablet left open across days must follow the work date
+  // when somebody comes back to it, or «Tomorrow» and `/pastries` would stay on the day it was
+  // opened on for as long as the tablet is not restarted.
+  describe('when the app comes back to the foreground', () => {
+    const comesBack = () => { act(() => { document.dispatchEvent(new Event('visibilitychange')); }); };
+
+    it('moves the opening day on once the work day has rolled over at 4am since', async () => {
+      renderPastries('/pastries');
+      await days();
+      expect(selectedTab()).toHaveAccessibleName(named('Thursday'));
+
+      vi.setSystemTime(new Date(2026, 9, 15, 5, 0, 0));
+      // Still frozen while the app stays on screen.
+      expect(selectedTab()).toHaveAccessibleName(named('Thursday'));
+
+      comesBack();
+      expect(selectedTab()).toHaveAccessibleName(named('Friday'));
+      expect(tab('Friday')).toHaveAccessibleName(/Tomorrow/);
+      expect(tab('Thursday')).not.toHaveAccessibleName(/Tomorrow/);
+      expect(within(panel()).getByRole('heading', { level: 2, name: 'Friday' })).toBeInTheDocument();
+      expect(within(panel()).getByText('Tomorrow · to prove')).toBeInTheDocument();
+    });
+
+    it('moves only the marker, not the day somebody chose, when the address names a day', async () => {
+      renderPastries('/pastries/Monday');
+      await days();
+      expect(tab('Thursday')).toHaveAccessibleName(/Tomorrow/);
+
+      vi.setSystemTime(new Date(2026, 9, 15, 5, 0, 0));
+      comesBack();
+
+      expect(selectedTab()).toHaveAccessibleName(named('Monday'));
+      expect(tab('Friday')).toHaveAccessibleName(/Tomorrow/);
+      expect(tab('Thursday')).not.toHaveAccessibleName(/Tomorrow/);
+      expect(within(panel()).getByText('To prove')).toBeInTheDocument();
+    });
+
+    it('changes nothing when the work day has not rolled over', async () => {
+      renderPastries('/pastries');
+      await days();
+      vi.setSystemTime(new Date(2026, 9, 14, 23, 30, 0));
+      comesBack();
+      expect(selectedTab()).toHaveAccessibleName(named('Thursday'));
+      expect(tab('Thursday')).toHaveAccessibleName(/Tomorrow/);
+    });
+
+    it('does nothing while the app is going to the background', async () => {
+      renderPastries('/pastries');
+      await days();
+      vi.setSystemTime(new Date(2026, 9, 15, 5, 0, 0));
+      const hidden = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
+      try {
+        comesBack();
+        expect(selectedTab()).toHaveAccessibleName(named('Thursday'));
+      } finally {
+        hidden.mockRestore();
+      }
+    });
+
+    it('stops listening when Pastries is closed', async () => {
+      const added = vi.spyOn(document, 'addEventListener');
+      const removed = vi.spyOn(document, 'removeEventListener');
+      // The listeners that are on the document now: those added minus those taken away.
+      const live = () => added.mock.calls.filter(([type]) => type === 'visibilitychange').length
+        - removed.mock.calls.filter(([type]) => type === 'visibilitychange').length;
+      try {
+        const { user } = renderPastries('/orders');
+        await screen.findByRole('heading', { level: 1, name: 'Orders' });
+        const without = live();
+        await user.click(within(screen.getByRole('navigation', { name: 'All sections' })).getByRole('link', { name: 'Pastries' }));
+        await days();
+        expect(live()).toBeGreaterThan(without);
+        await user.click(within(screen.getByRole('navigation', { name: 'All sections' })).getByRole('link', { name: 'Orders' }));
+        await screen.findByRole('heading', { level: 1, name: 'Orders' });
+        expect(live()).toBe(without);
+      } finally {
+        added.mockRestore();
+        removed.mockRestore();
+      }
+    });
+  });
+
   it.each(['/pastries/Funday', '/pastries/tuesday', '/pastries/Tuesday/delete', '/pastries/records/edit'])(
     'sends %s back to the start of Pastries',
     async path => {

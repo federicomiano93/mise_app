@@ -47,7 +47,8 @@ Differences from the current app are listed at the end, each with its reason.
 12. **The work day rolls at 4am**, computed with `setHours` on the local calendar (right on both
     clock-change Sundays and in a zone with no daylight saving). **spec**
 13. **The opening day** is the day after the work day under way («tomorrow»), computed once when
-    Pastries is opened, so it never jumps under a finger at 4am. **spec** (`provingDayFor`)
+    Pastries is opened, so it never jumps under a finger at 4am (Mise 2 also recomputes it when the
+    app comes back to the foreground: see the differences). **spec** (`provingDayFor`)
 14. **The lock follows the clock**: at 4am the confirmations are asked again for the new work
     date (a timer to the next 4am, plus a check when the app comes back to the foreground,
     because a phone in a pocket throttles timers). **spec** (`msUntilWorkDayEnd`)
@@ -145,3 +146,43 @@ Differences from the current app are listed at the end, each with its reason.
   English on every venue.
 - **Messages** are announced in a status region that exists before it changes, instead of a toast
   inserted already filled.
+- **The editor asks the lock question itself when it is opened by its address.** The current app's
+  editor has no address, so its only doors are the pencil and the Edit button, and each asks. Mise 2's
+  editor can be reached by a reload or a bookmark, which comes through no door: once the seven days
+  AND tonight's confirmations have answered, a recorded day asks «Edit {day}?» once (the words of 23).
+  Edit grants the permission and the form opens; Cancel goes to the day, replacing the editor in the
+  history. Until both answers are in, the editor shows «Loading…», never the form. It is not asked
+  again while editing (a colleague confirming meanwhile changes nothing, as in the current app), and
+  not at all from the pencil, whose door has already asked.
+- **Quick edit and Confirm wait for the first live answer of the seven days.** Until it comes (the
+  device's own cache counts, so working offline is unaffected) the list on screen is only the
+  phone's old copy, possibly days old. It is drawn at once, but a row ignores a tap (it is
+  `aria-disabled`, not removed from the keyboard's path) and Confirm is disabled, so nothing can be
+  written or recorded from a stale list.
+- **The opening day follows a return to the app.** Line 13 stands: the day is worked out when
+  Pastries opens and does not move while the app is on screen. But Mise 2 never reloads by itself, so
+  a tablet left open across 4am would keep saying «Tomorrow» of the day it was opened on. When the
+  app comes back to the foreground and the work date has moved on, «Tomorrow» and the address
+  `/pastries` follow it. A day named in the address stays where it is.
+- **A failed download of the section reloads the page.** «This part didn't load» with «Reload» is as
+  in every part, but for a section whose code could not be downloaded «Reload» reloads the whole page:
+  the browser remembers a failed import until the page is loaded again, so drawing the part again
+  would only fail again. Any other failure is still drawn again.
+- **The focus follows the bottom buttons and the days.** When Confirm lands, the «Confirmed» row takes
+  Confirm's place and the focus goes to its Edit button; when Edit unlocks the day, it goes to
+  Confirm. Only when the focus was on the button that goes (or nowhere): a colleague's Confirm moves
+  nobody's focus. After an arrow key or a tap on a day is refused («Discard changes?» → Cancel), the
+  focus goes back to the day being edited. A number being typed keeps the box and its focus when
+  another phone removes a row above it.
+- **Italian sentences reworded so they read right with «Domenica»** (a feminine day; the other six
+  are masculine). Only in Mise 2's dictionary; the current app's copy is fixed separately. A
+  spec reads every Italian Pastries sentence that names a day.
+  - `past.daySaved`: «{day} salvato.» becomes «Salvato: {day}.»
+  - `past.alreadyRecordedTonight`: «{day} è già registrato per stanotte. Modificare queste quantità?»
+    becomes «La lista di {day} è già registrata per stanotte. Modificare queste quantità?»
+  - `past.willShowAsDone`: «{day} risulterà fatto. Puoi ancora cambiarlo — te lo chiederà prima.»
+    becomes «La lista di {day} risulterà fatta. Puoi ancora cambiarla — te lo chiederà prima.»
+- **Italian quantity prompts reworded so they fit any pastry name** (a name can be feminine or
+  plural: «Quanti Sfogliatelle?» is wrong). Only in Mise 2's dictionary, like the line above.
+  - `past.howMany`: «Quanti {name}?» becomes «Manca la quantità di {name}.»
+  - `past.howManyOf` (the quantity box's name, Mise 2 only): «Quantità di {name}»

@@ -15,9 +15,10 @@ import { useStatusMessage } from '../ui/StatusMessage';
 import { useConfirm } from '../ui/useConfirm';
 import { blankRow, fieldOf, isUntouched, namesOnOtherDays, problemMessage, rowsFrom, workingItems } from './editorModel';
 import type { EditorField, EditorRow } from './editorModel';
+import { editRecordedDayQuestion } from './lockQuestion';
 import { usePastries, usePastriesStore } from './PastriesContext';
 import { cameFromDay, useLeave } from './pastriesNav';
-import { dayPath, weekdayLabel } from './weekdays';
+import { dayPath, tabId, weekdayLabel } from './weekdays';
 import styles from './Editor.module.css';
 
 type Props = {
@@ -31,32 +32,82 @@ type FocusRequest = { readonly row: 'last' } | { readonly row: number };
 
 const inputKey = (id: number, field: EditorField): string => `${id}-${field}`;
 
+type Phase = 'waiting' | 'asking' | 'open';
+
 // ⚠️ THE EDITOR COPIES THE DAY ONCE AND NEVER REPAINTS, so it must not open before the day is there.
 // Opened by its address (a reload, a bookmark) on a phone with nothing stored, the seven days are
 // still on their way: a copy taken now would be an EMPTY day, and a Save would write that over the
 // real one. It waits for the first answer (store.daysLoaded; a stream that fails counts as an answer,
 // so it never waits for ever). Opened from the day, the days are long loaded and this is one render.
+//
+// ⚠️ THE EDITOR ASKS THE LOCK QUESTION ITSELF, ONCE. From the day, the pencil has already asked it
+// (DayPanel's gate) and by the time the editor opens the permission is stored, so it opens straight.
+// But opened by its address it has come through no gate: without this, typing the address of a
+// recorded day would be a way round the lock. So when BOTH answers are in (the days, and tonight's
+// confirmations — until the second one, «not recorded» only means «nobody has said») it asks, once,
+// the same question as the day panel. Edit grants the permission and the form opens; Cancel leaves
+// for the day (no discard question: nothing has been typed, the form is not there yet). Once decided
+// it is never asked again: a colleague confirming the day while it is open changes nothing here, as
+// in the current app.
 export function Editor(props: Props) {
+  const { day, handBackFocus } = props;
   const { t } = useT();
-  const { daysLoaded } = usePastries();
-  if (!daysLoaded) {
+  const store = usePastriesStore();
+  const { daysLoaded, confirmedLoaded } = usePastries();
+  const [confirm, confirmDialog] = useConfirm();
+  const [phase, setPhase] = useState<Phase>('waiting');
+  const label = weekdayLabel(t, day);
+  const handBack = useCallback(() => { handBackFocus.current = true; }, [handBackFocus]);
+  const leave = useLeave(dayPath(day), handBack);
+  // The latest of both, read by the question below, which must not start over when they change.
+  const latest = useRef({ leave, label });
+  useEffect(() => { latest.current = { leave, label }; });
+
+  // Decided while drawing, not in an effect, so the form is never on the page for a frame before the
+  // question. The lock is read from the clock, like the day panel does (store.isLocked).
+  if (phase === 'waiting' && daysLoaded && confirmedLoaded) {
+    setPhase(store.isLocked(day) ? 'asking' : 'open');
+  }
+
+  // Started by the phase, and dropped with the editor (a way out of the page while it is open; React's
+  // development mode, which mounts everything twice, starts it again).
+  useEffect(() => {
+    if (phase !== 'asking') return;
+    let cancelled = false;
+    void (async () => {
+      const ok = await confirm(editRecordedDayQuestion(t, latest.current.label));
+      if (cancelled) return;
+      if (ok) {
+        // The permission carries tonight's work date, so 4am spends it — and so does the next Confirm.
+        store.grantEdit(day);
+        setPhase('open');
+      } else {
+        latest.current.leave();
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [phase, confirm, store, day, t]);
+
+  if (phase !== 'open') {
     return (
       <section className={styles.editor} aria-busy="true">
         <p className={styles.loading}>{t('session.loading')}</p>
+        {confirmDialog}
       </section>
     );
   }
   return <EditorForm {...props} />;
 }
 
-// One day's list, edited (the form; Editor above waits for the day).
+// One day's list, edited (the form; Editor above waits for the day and for the lock question).
 //
 // ⚠️ EVERYTHING HAPPENS ON A WORKING COPY (P20): nothing touches the stored day until Save is
 // pressed and confirmed, and leaving with something typed asks first.
 //
-// ⚠️ THE EDITOR DOES NOT CHECK THE LOCK. A confirmed day is guarded where the editor is entered
-// from (the pencil and the Edit button in DayPanel, through the same `requestEdit` as a row): the
-// question belongs next to the tap that causes it. The editor itself only edits what it was given.
+// ⚠️ THE FORM DOES NOT CHECK THE LOCK. A confirmed day is guarded where the editor is entered: from
+// the day, by the pencil in DayPanel (through the same `requestEdit` as a row); by its address, by
+// the question Editor asks above, before this form exists. The form itself only edits what it was
+// given.
 //
 // ⚠️ A SNAPSHOT FROM ANOTHER PHONE DOES NOT REPAINT IT. It reads the stored day once, when it opens
 // (store.getSnapshot(), never usePastries()): replacing the rows would delete what somebody is in
@@ -153,6 +204,9 @@ function EditorForm({ day, handBackFocus }: Props) {
     latestBlocker.current = blocker;
     if (blocker.state !== 'blocked' || askingLeave.current) return;
     askingLeave.current = true;
+    // A day picked from the list of days has already put the focus on the day aimed at (DaysNav moves
+    // it with the key, before the router answers): note it, because a refusal leaves it there.
+    const pickedFromDays = document.activeElement?.closest('[role="tab"]') != null;
     void (async () => {
       try {
         const discard = await confirm({
@@ -174,6 +228,11 @@ function EditorForm({ day, handBackFocus }: Props) {
           // nobody is going there. Left set, the next day panel to open would grab the focus.
           handBackFocus.current = false;
           current.reset();
+          // ⚠️ A REFUSED PICK LEAVES THE FOCUS ON A DAY THAT IS NOT SELECTED (and out of the Tab
+          // order): the arrow keys would carry on from the wrong place. Back to the day being edited.
+          // Done now, while the focus is nowhere: the dialog's own restore, a frame later, only acts
+          // on a focus that is lost, and would put it back on the day that was aimed at.
+          if (pickedFromDays) document.getElementById(tabId(day))?.focus();
         }
       } finally {
         askingLeave.current = false;

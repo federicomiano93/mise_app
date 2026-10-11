@@ -27,10 +27,24 @@ type ShownView = Exclude<PastriesView, { kind: 'unknown' }>;
 // Its data lives exactly as long as it is on screen: PastriesProvider starts the seven-day
 // listener and tonight's confirmations on mount and stops them on unmount (P14).
 export default function PastriesSection() {
-  // ⚠️ THE OPENING DAY IS WORKED OUT ONCE, WHEN PASTRIES OPENS, and kept while it stays open.
+  // ⚠️ THE OPENING DAY IS WORKED OUT WHEN PASTRIES OPENS, and kept while the app is on screen.
   // Recomputed on a redraw it would let the marked day jump under somebody's finger at 4am — the
   // one minute of the day they are most likely to be looking at it.
-  const [opening] = useState(() => provingDayFor(Date.now()));
+  //
+  // ⚠️ BUT NOT FOR EVER: Mise 2 never reloads by itself, so a tablet left open on the bench across
+  // days would still say «Tomorrow» of the day it was opened on, and `/pastries` would still land
+  // there. When the app COMES BACK to the foreground (the screen woken, the tab switched back to)
+  // nobody was looking at it a moment ago, so nothing can jump under a finger: the day is worked
+  // out again, and it moves only if the work day has rolled over at 4am since. It is the same moment
+  // at which the store asks again who is confirmed.
+  const [opening, setOpening] = useState(() => provingDayFor(Date.now()));
+  useEffect(() => {
+    const onForeground = () => {
+      if (document.visibilityState === 'visible') setOpening(provingDayFor(Date.now()));
+    };
+    document.addEventListener('visibilitychange', onForeground);
+    return () => document.removeEventListener('visibilitychange', onForeground);
+  }, []);
 
   return (
     <PastriesProvider>

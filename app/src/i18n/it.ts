@@ -86,12 +86,15 @@ export const it: Messages = {
   'past.keepAsRecord': 'Tenere questa lista come registrazione di {day}?',
   'past.nothingToProveRecord': '{day} non ha niente da far lievitare. Registrare così?',
   'past.tonightsRecordReplaced': 'La registrazione di stanotte per {day} verrà sostituita.',
-  'past.willShowAsDone': '{day} risulterà fatto. Puoi ancora cambiarlo — te lo chiederà prima.',
-  // Not «{day} registrato»: domenica is feminine, and the sentence must fit all seven.
+  // ⚠️ A SENTENCE WITH A WEEKDAY IN IT MUST FIT ALL SEVEN, and domenica is feminine while the other
+  // six are masculine: no adjective or participle may agree with {day}. «La lista di {day} …» (lista
+  // is feminine whatever the day) or «Registrato: {day}.» — never «{day} registrato» or «{day} fatto».
+  // i18n.spec.ts pins it for every sentence of Pastries.
+  'past.willShowAsDone': 'La lista di {day} risulterà fatta. Puoi ancora cambiarla — te lo chiederà prima.',
   'past.dayRecorded': 'Registrato: {day}.',
   'past.confirmedMark': 'Confermato',
   'past.editDayQ': 'Modificare {day}?',
-  'past.alreadyRecordedTonight': '{day} è già registrato per stanotte. Modificare queste quantità?',
+  'past.alreadyRecordedTonight': 'La lista di {day} è già registrata per stanotte. Modificare queste quantità?',
   'past.records': 'Registri',
   'past.couldNotSaveDay': 'Non è stato possibile salvare {day} — controlla la connessione.',
   'past.couldNotRecord': 'Non è stato possibile registrare {day} — controlla la connessione.',
@@ -109,11 +112,11 @@ export const it: Messages = {
   'past.noteStays': 'Nota — resta su {day} finché non la cambi',
   'past.anythingWorthRememberingAbout': 'Qualcosa da ricordare su questa giornata…',
   'past.unsavedChanges': 'Modifiche non salvate',
-  'past.howManyOf': 'Quanti {name}',
+  'past.howManyOf': 'Quantità di {name}',
   'past.howManyPastries': 'Quante paste',
   'past.removeRow': 'Rimuovi {name}',
   'past.onListTwice': '{name} è due volte in questa lista.',
-  'past.howMany': 'Quanti {name}?',
+  'past.howMany': 'Manca la quantità di {name}.',
   'past.thatNameIsToo': 'Quel nome è troppo lungo.',
   'past.mostItCanHold': '{n} è il massimo che può contenere.',
   'past.thatIsMorePastries': 'Sono più paste di quante ne possa contenere una giornata.',
@@ -121,7 +124,7 @@ export const it: Messages = {
   'past.saveDay': 'Vuoi salvare {day}?',
   'past.saveThese': { one: 'Vuoi salvare questa pasta per {day}?', other: 'Vuoi salvare queste {n} paste per {day}?' },
   'past.saveEmpty': '{day} non avrà niente da mettere. Vuoi salvare così?',
-  'past.daySaved': '{day} salvato.',
+  'past.daySaved': 'Salvato: {day}.',
   'past.discardChanges': 'Vuoi scartare le modifiche?',
   'past.unsavedFor': 'Hai modifiche non salvate per {day}. Vuoi scartarle?',
 

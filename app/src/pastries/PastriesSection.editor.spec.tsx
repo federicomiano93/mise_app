@@ -4,7 +4,8 @@ import { MAX_ITEMS } from '@mise/shared/pastries-model';
 import { isBusy } from '../session/busy';
 import { fakePastriesSource } from '../testing/fakePastriesSource';
 import type { FakePastriesSource } from '../testing/fakePastriesSource';
-import { dayDoc, freezeClock, logDoc, renderPastries } from '../testing/renderPastries';
+import { holdConfirmations, holdDays } from '../testing/holdAnswers';
+import { WORK_DATE, dayDoc, freezeClock, logDoc, renderPastries } from '../testing/renderPastries';
 
 // The editor of a day: the working copy, the rows, the notice for a blocked save, Save, and every
 // way out. Everything runs against the real store on an in-memory source; the clock is Wednesday
@@ -60,18 +61,7 @@ async function openFromDay(source: FakePastriesSource = seeded(), day = 'Thursda
 // says so. This is a phone that was just reloaded on the editor's address with nothing stored.
 function lateSource() {
   const source = seeded();
-  const original = vi.mocked(source.watchDays).getMockImplementation();
-  const waiting: { answer: () => void; fail: () => void }[] = [];
-  vi.mocked(source.watchDays).mockImplementation((onChange, onError) => {
-    let stop: (() => void) | undefined;
-    waiting.push({ answer: () => { stop = original?.(onChange, onError); }, fail: () => onError(new Error('unavailable')) });
-    return () => stop?.();
-  });
-  return {
-    source,
-    answer: () => waiting.forEach(each => each.answer()),
-    fail: () => waiting.forEach(each => each.fail()),
-  };
+  return { source, ...holdDays(source) };
 }
 
 describe('the editor: opening it', () => {
@@ -139,7 +129,8 @@ describe('the editor: opening it', () => {
 
   it('puts the focus on its title when it is opened from the day', async () => {
     await openFromDay();
-    expect(screen.getByRole('heading', { level: 2, name: 'Edit Thursday' })).toHaveFocus();
+    // The focus is set by an effect that runs just after the heading is drawn.
+    await waitFor(() => { expect(screen.getByRole('heading', { level: 2, name: 'Edit Thursday' })).toHaveFocus(); });
   });
 
   it('has the Back button, the title, and a Save with its icon at the top', async () => {
@@ -160,6 +151,159 @@ describe('the editor: opening it', () => {
   it('counts one pastry as «1 pastry», and a blank row as nothing', async () => {
     await openByAddress(fakePastriesSource({ days: [dayDoc('Thursday', [['Cornetti', 4]])] }));
     expect(within(card()).getByText('1 pastry')).toBeInTheDocument();
+  });
+});
+
+// ⚠️ OPENED BY ITS ADDRESS the editor has come through no gate: without its own question, typing the
+// address of a recorded day would be a way round the lock. It asks ONCE, when it knows both the days
+// and tonight's confirmations — and until then shows «Loading…», never the form.
+describe('the editor: a recorded day opened by its address', () => {
+  const recorded = () => fakePastriesSource({
+    days: [dayDoc('Thursday', THURSDAY)],
+    logs: [logDoc('Thursday', THURSDAY)],
+  });
+  const askedFirst = () => screen.findByRole('alertdialog', { name: 'Edit Thursday?' }, LOAD);
+  const aFrame = () => new Promise(resolve => { setTimeout(resolve, 60); });
+
+  it('asks the same question as the day panel, with no form behind it', async () => {
+    renderPastries('/pastries/Thursday/edit', { source: recorded() });
+    const ask = await askedFirst();
+
+    expect(ask).toHaveAccessibleDescription('Thursday is already recorded for tonight. Edit these quantities?');
+    expect(within(ask).getByRole('button', { name: 'Edit' })).toBeInTheDocument();
+    expect(within(ask).getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
+    expect(document.querySelector('[aria-busy="true"]')).toHaveTextContent('Loading…');
+  });
+
+  it('leaves for the day, replacing the editor, on Cancel; nothing is stored and no second question', async () => {
+    const { router, user } = renderPastries('/pastries/Thursday/edit', { source: recorded() });
+    await user.click(within(await askedFirst()).getByRole('button', { name: 'Cancel' }));
+
+    await waitFor(() => { expect(router.state.location.pathname).toBe('/pastries/Thursday'); });
+    expect(router.state.historyAction).toBe('REPLACE');
+    expect(await screen.findByRole('tabpanel')).toBeInTheDocument();
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { level: 2, name: 'Edit Thursday' })).not.toBeInTheDocument();
+    expect(window.localStorage.getItem('pastries-edit-Thursday')).toBeNull();
+    // Still locked: the day shows «Confirmed» and Edit.
+    expect(within(screen.getByRole('tabpanel')).getByText('Confirmed')).toBeVisible();
+    // Where Back would have left them: the pencil has the focus.
+    await aFrame();
+    expect(screen.getByRole('button', { name: 'Edit Thursday' })).toHaveFocus();
+  });
+
+  it('grants tonight\'s permission on Edit and shows the form, on the same address', async () => {
+    const { router, user } = renderPastries('/pastries/Thursday/edit', { source: recorded() });
+    await user.click(within(await askedFirst()).getByRole('button', { name: 'Edit' }));
+
+    expect(await screen.findByRole('heading', { level: 2, name: 'Edit Thursday' })).toBeInTheDocument();
+    expect(rowsShown()).toEqual([['Cornetti', '24'], ['Krapfen', '12'], ['Sfogliatelle', '8']]);
+    expect(router.state.location.pathname).toBe('/pastries/Thursday/edit');
+    expect(window.localStorage.getItem('pastries-edit-Thursday')).toBe(WORK_DATE);
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    expect(document.querySelector('[aria-busy="true"]')).toBeNull();
+  });
+
+  it('opens straight on a day that is not recorded', async () => {
+    await openByAddress(seeded());
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+  });
+
+  it('opens straight on a day recorded on another night', async () => {
+    const source = fakePastriesSource({
+      days: [dayDoc('Thursday', THURSDAY)],
+      logs: [logDoc('Thursday', THURSDAY, '2026-10-13')],
+    });
+    await openByAddress(source);
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+  });
+
+  it('opens straight when tonight\'s permission is already stored', async () => {
+    window.localStorage.setItem('pastries-edit-Thursday', WORK_DATE);
+    await openByAddress(recorded());
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+  });
+
+  it('waits for tonight\'s confirmations before it decides: «Loading…», no form, no question', async () => {
+    const source = recorded();
+    const { answer } = holdConfirmations(source);
+    renderPastries('/pastries/Thursday/edit', { source });
+    await screen.findByRole('tablist', { name: 'Days' }, LOAD);
+    await waitFor(() => { expect(source.watchLogsForDate).toHaveBeenCalled(); });
+    await aFrame();
+
+    expect(document.querySelector('[aria-busy="true"]')).toHaveTextContent('Loading…');
+    expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+
+    act(() => { answer(); });
+    expect(await askedFirst()).toBeInTheDocument();
+  });
+
+  it('opens the form once the confirmations say the day is not recorded', async () => {
+    const source = seeded();
+    const { answer } = holdConfirmations(source);
+    renderPastries('/pastries/Thursday/edit', { source });
+    await screen.findByRole('tablist', { name: 'Days' }, LOAD);
+    await aFrame();
+    expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
+
+    act(() => { answer(); });
+    expect(await screen.findByRole('heading', { level: 2, name: 'Edit Thursday' })).toBeInTheDocument();
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+  });
+
+  it('opens on what it knows when the confirmations cannot be read, rather than waiting for ever', async () => {
+    const source = recorded();
+    const { fail } = holdConfirmations(source);
+    renderPastries('/pastries/Thursday/edit', { source });
+    await screen.findByRole('tablist', { name: 'Days' }, LOAD);
+    await aFrame();
+    expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
+
+    act(() => { fail(); });
+    expect(await screen.findByRole('heading', { level: 2, name: 'Edit Thursday' })).toBeInTheDocument();
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+  });
+
+  it('never asks again while editing: a colleague confirming the day changes nothing', async () => {
+    const source = seeded();
+    const { user } = await openByAddress(source);
+    await user.type(nameBoxes()[0] as HTMLElement, '!');
+
+    source.logs.set(`${WORK_DATE}_Thursday`, logDoc('Thursday', THURSDAY));
+    act(() => { source.push(); });
+    await aFrame();
+
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    expect(nameBoxes()[0]?.value).toBe('Cornetti!');
+  });
+
+  it('never asks a second time after Edit was answered', async () => {
+    const source = recorded();
+    const { user } = renderPastries('/pastries/Thursday/edit', { source });
+    await user.click(within(await askedFirst()).getByRole('button', { name: 'Edit' }));
+    await screen.findByRole('heading', { level: 2, name: 'Edit Thursday' });
+
+    source.push();
+    act(() => { source.push(); });
+    await aFrame();
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    expect(rowsShown()).toHaveLength(3);
+  });
+
+  it('asks in Italian, in the words of a feminine day too', async () => {
+    const source = fakePastriesSource({
+      days: [dayDoc('Sunday', [['Cornetti', 24]])],
+      logs: [logDoc('Sunday', [['Cornetti', 24]])],
+    });
+    renderPastries('/pastries/Sunday/edit', { source, lang: 'it' });
+    const ask = await screen.findByRole('alertdialog', { name: 'Modificare Domenica?' }, LOAD);
+    expect(ask).toHaveAccessibleDescription('La lista di Domenica è già registrata per stanotte. Modificare queste quantità?');
+    expect(within(ask).getByRole('button', { name: 'Modifica' })).toBeInTheDocument();
   });
 });
 
@@ -645,6 +789,54 @@ describe('the editor: leaving with unsaved changes', () => {
     await waitFor(() => { expect(router.state.location.pathname).toBe('/pastries/Monday'); });
   });
 
+  // ⚠️ DaysNav moves the focus with the key, before the router answers. A refused pick would leave it
+  // on a day that is not selected (and out of the Tab order), so the arrows carry on from the wrong
+  // place: it goes back to the day being edited.
+  it('puts the focus back on the SELECTED day when an arrow key was refused', async () => {
+    const { router, user } = await openByAddress();
+    await user.type(noteBox(), 'x');
+    act(() => { tab('Thursday').focus(); });
+    await user.keyboard('{ArrowRight}');
+    const ask = await dialog(discardTitle);
+    expect(router.state.location.pathname).toBe('/pastries/Thursday/edit');
+    await user.click(within(ask).getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => { expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument(); });
+    await new Promise(resolve => { setTimeout(resolve, 60); });
+
+    expect(tab('Thursday')).toHaveFocus();
+    expect(tab('Thursday').tabIndex).toBe(0);
+    expect(tab('Friday')).not.toHaveFocus();
+
+    // And the keyboard carries on from the day being edited: Left is aimed at Wednesday.
+    await user.keyboard('{ArrowLeft}');
+    expect(await dialog(discardTitle)).toBeInTheDocument();
+    await user.click(within(await dialog(discardTitle)).getByRole('button', { name: 'Discard' }));
+    await waitFor(() => { expect(router.state.location.pathname).toBe('/pastries/Wednesday'); });
+  });
+
+  it('puts the focus back on the SELECTED day when a day clicked was refused too', async () => {
+    const { user } = await openByAddress();
+    await user.type(noteBox(), 'x');
+    await user.click(tab('Monday'));
+    await user.click(within(await dialog(discardTitle)).getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => { expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument(); });
+    await new Promise(resolve => { setTimeout(resolve, 60); });
+
+    expect(tab('Thursday')).toHaveFocus();
+  });
+
+  it('does not take the focus when the question came from somewhere else (the rail)', async () => {
+    const { user } = await openByAddress();
+    await user.type(nameBoxes()[0] as HTMLElement, '!');
+    const orders = within(screen.getByRole('navigation', { name: 'All sections' })).getByRole('link', { name: 'Orders' });
+    await user.click(orders);
+    await user.click(within(await dialog(discardTitle)).getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => { expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument(); });
+    await new Promise(resolve => { setTimeout(resolve, 60); });
+
+    expect(tab('Thursday')).not.toHaveFocus();
+  });
+
   it('asks when another section is picked in the rail', async () => {
     const { router, user } = await openByAddress();
     await user.type(nameBoxes()[0] as HTMLElement, '!');
@@ -769,7 +961,7 @@ describe('the editor: in Italian', () => {
     expect(screen.getByRole('button', { name: 'Indietro' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Salva' })).toBeInTheDocument();
     expect(screen.getAllByRole('combobox', { name: 'Nome della pasta' })).toHaveLength(2);
-    expect(screen.getByRole('spinbutton', { name: 'Quanti Cornetti' })).toBeInTheDocument();
+    expect(screen.getByRole('spinbutton', { name: 'Quantità di Cornetti' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Rimuovi Cornetti' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Aggiungi pasta' })).toBeInTheDocument();
     expect(nameBoxes()[0]).toHaveAttribute('placeholder', 'Pasta');
