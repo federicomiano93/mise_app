@@ -7,7 +7,9 @@ type Props = {
   isOpen: boolean;
   // Escape, or the dialog being dismissed any other way: the same as its cancel button.
   onClose: () => void;
-  title: string;
+  // The dialog's name. A one-sentence notice (useAlert) has none, and its message names it
+  // instead, as the current app's alert does.
+  title?: string;
   // A sentence under the title, or several (one paragraph each). Given, the dialog is described
   // by all of it for assistive technology.
   message?: string | readonly string[];
@@ -37,10 +39,13 @@ export function Dialog({ isOpen, onClose, title, message, role = 'dialog', child
       <Modal className={styles.modal}>
         <AriaDialog
           role={role}
+          // ⚠️ WITHOUT A TITLE THE MESSAGE IS THE NAME: an unnamed dialog is announced as just
+          // «dialog» and the sentence is never read out.
+          aria-labelledby={title === undefined && paragraphs.length > 0 ? messageId : undefined}
           aria-describedby={paragraphs.length === 0 ? undefined : messageId}
           className={styles.dialog}
         >
-          <Heading slot="title" className={styles.title}>{title}</Heading>
+          {title === undefined ? null : <Heading slot="title" className={styles.title}>{title}</Heading>}
           {paragraphs.length === 0 ? null : (
             <div id={messageId} className={styles.message}>
               {paragraphs.map((text, index) => <p key={index}>{text}</p>)}
