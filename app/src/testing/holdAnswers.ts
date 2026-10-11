@@ -28,16 +28,20 @@ export type HeldDays = HeldAnswer & { fromCache(docs?: StoredDoc[]): void };
 export function holdDays(source: FakePastriesSource): HeldDays {
   const original = vi.mocked(source.watchDays).getMockImplementation();
   const waiting: Waiting[] = [];
-  const listeners: Array<(docs: StoredDoc[], fromCache: boolean) => void> = [];
+  // Only the watchers still subscribed: React's development mode starts, stops and starts again.
+  const listeners = new Set<(docs: StoredDoc[], fromCache: boolean) => void>();
   vi.mocked(source.watchDays).mockImplementation((onChange, onError) => {
     let stop: (() => void) | undefined;
-    listeners.push(onChange);
+    listeners.add(onChange);
     waiting.push({ answer: () => { stop = original?.(onChange, onError); }, fail: () => onError(new Error('unavailable')) });
-    return () => stop?.();
+    return () => {
+      listeners.delete(onChange);
+      stop?.();
+    };
   });
   return {
     ...held(waiting),
-    fromCache: docs => listeners.forEach(onChange => onChange(docs ?? [], true)),
+    fromCache: docs => [...listeners].forEach(onChange => onChange(docs ?? [], true)),
   };
 }
 

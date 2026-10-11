@@ -53,14 +53,17 @@ function memoryStorage(initial: Record<string, string> = {}): KeyValueStorage & 
 // Wednesday 14 Oct 2026, 21:00 local: the work date is 2026-10-14.
 const EVENING = new Date(2026, 9, 14, 21, 0, 0).getTime();
 
-function setup({ storage = memoryStorage(), now = EVENING }: { storage?: ReturnType<typeof memoryStorage>; now?: number } = {}) {
+// `deviceStorage` replaces what the browser gives (null: blocked site data) when a spec needs that.
+function setup({ storage = memoryStorage(), now = EVENING, deviceStorage }: {
+  storage?: ReturnType<typeof memoryStorage>; now?: number; deviceStorage?: KeyValueStorage | null;
+} = {}) {
   const fake = fakeSource();
   let clock = now;
   const timers: { callback: () => void; ms: number; cleared: boolean }[] = [];
   // A timer that has fired is spent, like a cleared one.
   const foreground: (() => void)[] = [];
   const deps: PastriesDeps = {
-    storage,
+    storage: deviceStorage === undefined ? storage : deviceStorage,
     now: () => clock,
     setTimer: (callback, ms) => {
       const timer = { callback: () => { timer.cleared = true; callback(); }, ms, cleared: false };
@@ -198,6 +201,27 @@ describe('the live days', () => {
     expect(store.getSnapshot().daysLoaded).toBe(false);
   });
 
+  // No storage (blocked site data) or one that throws: there is no local copy to agree with, so an
+  // empty answer from the cache is never believed — the safe direction.
+  test('an EMPTY answer from the device cache is not believed when the browser gives no storage', () => {
+    const { store, days } = setup({ deviceStorage: null });
+    store.start();
+    days[0]!.onChange([], true);
+    expect(store.getSnapshot().daysLoaded).toBe(false);
+  });
+
+  test('an EMPTY answer from the device cache is not believed when the storage throws', () => {
+    const throwing = {
+      getItem: () => { throw new Error('SecurityError'); },
+      setItem: () => { throw new Error('SecurityError'); },
+      removeItem: () => { throw new Error('SecurityError'); },
+    };
+    const { store, days } = setup({ deviceStorage: throwing });
+    store.start();
+    days[0]!.onChange([], true);
+    expect(store.getSnapshot().daysLoaded).toBe(false);
+  });
+
   test('stay loaded across a stop and a start', () => {
     const { store, days } = setup();
     store.start();
@@ -308,6 +332,26 @@ describe('tonight\'s confirmations and the lock', () => {
     expect(live(forDate).map(w => w.date)).toEqual(['2026-10-15']);
     expect(store.isLocked('Thursday')).toBe(false);
     expect(liveTimers()).toHaveLength(1);
+  });
+
+  // The day panel's rows and Confirm wait for the first answer only: a refresh must not turn them off.
+  test('a refresh resets confirmedLoaded but never confirmedAnsweredOnce', () => {
+    const { store, forDate, foreground, setClock } = setup();
+    store.start();
+    expect(store.getSnapshot().confirmedAnsweredOnce).toBe(false);
+    forDate[0]!.onChange([]);
+    expect(store.getSnapshot().confirmedAnsweredOnce).toBe(true);
+    setClock(new Date(2026, 9, 15, 9, 0, 0).getTime());
+    foreground[0]!();
+    expect(store.getSnapshot().confirmedLoaded).toBe(false);
+    expect(store.getSnapshot().confirmedAnsweredOnce).toBe(true);
+  });
+
+  test('a failed question counts as the first answer too', () => {
+    const { store, forDate } = setup();
+    store.start();
+    forDate[0]!.onError(new Error('unavailable'));
+    expect(store.getSnapshot().confirmedAnsweredOnce).toBe(true);
   });
 
   test('⚠️ coming back to the foreground after 4am asks again; before it, nothing happens', () => {

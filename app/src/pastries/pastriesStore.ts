@@ -53,6 +53,12 @@ export interface PastriesSnapshot {
   // gate, so it must know whether the day is recorded before it lets anybody type
   // (docs/parity/pastries.md, 23).
   readonly confirmedLoaded: boolean;
+  // Whether tonight's confirmations have answered (or failed) at least ONCE since the store was made.
+  // Unlike `confirmedLoaded` it is never reset by a refresh: the day panel's rows and Confirm wait for
+  // it, and turning them off at 4am would close nothing but would drop the focus from Confirm to the
+  // page for the moment the new answer takes — the current app made the same choice (PR #341). A
+  // refresh that has not answered yet locks nothing, the safe direction (see refreshConfirmations).
+  readonly confirmedAnsweredOnce: boolean;
   // The lists confirmed for the work date being watched.
   readonly confirmed: ReadonlySet<Weekday>;
   // This phone's permission to change a confirmed list: the work date it was given on, or null.
@@ -151,6 +157,7 @@ export function createPastriesStore(source: PastriesSource, deps: PastriesDeps):
     days: bootDays,
     daysLoaded: false,
     confirmedLoaded: false,
+    confirmedAnsweredOnce: false,
     confirmed: new Set<Weekday>(),
     grants: readGrants(storage),
     logs: [],
@@ -225,8 +232,12 @@ export function createPastriesStore(source: PastriesSource, deps: PastriesDeps):
     update({ confirmed: new Set(), confirmedLoaded: false, grants: readGrants(storage) });
     stopConfirmed = source.watchLogsForDate(
       watchedDate,
-      docs => { if (mine === confirmationsSeq) update({ confirmed: confirmedDaysFrom(docs), confirmedLoaded: true }); },
-      () => { if (mine === confirmationsSeq) update({ confirmed: new Set(), confirmedLoaded: true }); },
+      docs => {
+        if (mine === confirmationsSeq) {
+          update({ confirmed: confirmedDaysFrom(docs), confirmedLoaded: true, confirmedAnsweredOnce: true });
+        }
+      },
+      () => { if (mine === confirmationsSeq) update({ confirmed: new Set(), confirmedLoaded: true, confirmedAnsweredOnce: true }); },
     );
   }
 

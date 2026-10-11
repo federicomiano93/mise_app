@@ -47,16 +47,18 @@ type Props = {
 // is drawn, so the first paint is instant, but nothing may be WRITTEN from it. A tick on a stale
 // row would write a list that other phones have long since changed, and Confirm would record it as
 // tonight's. So until BOTH first answers are in — the days (store.daysLoaded) and tonight's
-// confirmations (store.confirmedLoaded; until that one, «not confirmed» only means «nobody has said
-// yet», so a tap could skip the «Edit {day}?» question and Confirm could record over tonight's
-// record) — a row ignores a tap and Confirm is disabled. The device's own cache counts as an
-// answer, so working offline is untouched. The wording of an EMPTY day follows the days only:
-// confirmations reset at every 4am refresh, and an empty day must not flash «not arrived» then.
+// confirmations (store.confirmedAnsweredOnce; until that one, «not confirmed» only means «nobody has
+// said yet», so a tap could skip the «Edit {day}?» question and Confirm could record over tonight's
+// record) — a row ignores a tap, the tick of a box writes nothing and Confirm is disabled. Both stay
+// in once in (a 4am refresh does not turn the rows off again, as in the current app). The device's
+// own cache counts as an answer, so working offline is untouched — except an EMPTY answer from it on
+// a phone that never had the list (pastriesStore.ts, believable()). The wording of an empty day
+// follows the days only.
 export function DayPanel({ day, opening, handBackFocus }: Props) {
   const { t } = useT();
   const store = usePastriesStore();
-  const { days, daysLoaded, confirmedLoaded } = usePastries();
-  const ready = daysLoaded && confirmedLoaded;
+  const { days, daysLoaded, confirmedAnsweredOnce } = usePastries();
+  const ready = daysLoaded && confirmedAnsweredOnce;
   const navigate = useNavigate();
   const say = useStatusMessage();
   const [confirm, confirmDialog] = useConfirm();
@@ -165,6 +167,7 @@ export function DayPanel({ day, opening, handBackFocus }: Props) {
   }
 
   function commit(index: number, key: string) {
+    if (!ready) return;
     const item = items[index];
     if (!item) return;
     const n = proposedQuantity(typed[key]);

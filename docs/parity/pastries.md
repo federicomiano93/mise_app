@@ -165,8 +165,9 @@ Differences from the current app are listed at the end, each with its reason.
   confirmed» only means «nobody has said yet». It is drawn at once, but a row ignores a tap (it is
   `aria-disabled`, not removed from the keyboard's path) and Confirm is disabled, so nothing can be
   written or recorded from a stale list, and a recorded day cannot be edited without its question.
-  Since PR #341 the current app does the same; the difference left is that Mise 2's pencil opens
-  the editor, which waits, where the current app's pencil waits on the day with a message.
+  Once in, they stay in: a 4am refresh does not turn the rows off again. Since PR #341 the current
+  app does the same; the difference left is that Mise 2's pencil opens the editor, which waits, where
+  the current app's pencil waits on the day with a message. **spec**
 - **The opening day follows a return to the app.** Line 13 stands: the day is worked out when
   Pastries opens and does not move while the app is on screen. But Mise 2 never reloads by itself, so
   a tablet left open across 4am would keep saying «Tomorrow» of the day it was opened on. When the
