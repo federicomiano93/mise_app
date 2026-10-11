@@ -1,4 +1,4 @@
-const CACHE_NAME = 'theitalianclub-v666';
+const CACHE_NAME = 'theitalianclub-v668';
 // Firebase SDK modules (loaded from gstatic) are cached SEPARATELY from CACHE_NAME
 // so they survive the cache-version bump that happens on every deploy — otherwise
 // the offline SDK would be wiped each release until the next online load. The name
@@ -149,11 +149,11 @@ const ASSET_HASHES = {
   "./suppliers.html": '0f24580d8d5a1e05',
   "./install-guide.html": '322c79acf63896ef',
   "./reset-password.html": '298724d76511df05',
-  "./dist/i18n.js": 'ea6405e58166871b',
-  "./dist/index.js": '57a736a03901c5dd',
-  "./dist/calculator.js": '66049fa8210652c2',
-  "./dist/orders.js": '1f8f1d0ce2cc02d8',
-  "./dist/suppliers.js": '63831e51cfc1d9b3',
+  "./dist/i18n.js": 'e9bca6ddc1d19c17',
+  "./dist/index.js": '260b3eb5d851b110',
+  "./dist/calculator.js": '4cd4d38b03c76eba',
+  "./dist/orders.js": 'd79182a8b954ed39',
+  "./dist/suppliers.js": 'f4e67d7fa8e4cf75',
   "./dist/install-guide.js": '86df880954faeae9',
   "./js/allergen-model.js": 'a9ad7592da832a56',
   "./js/calculator-config.js": '65e76f83f8458dbb',
@@ -162,7 +162,7 @@ const ASSET_HASHES = {
   "./js/firebase-target.js": 'b3759997e54ddbc3',
   "./js/firebase.js": '4aeddee49dce8a21',
   "./js/i18n-dom.js": '24249af4367511e5',
-  "./js/i18n.js": 'd100e54533c7389b',
+  "./js/i18n.js": '6b37315414021421',
   "./js/keyboard-done.js": 'de05a6dd1f3aac26',
   "./js/local-data.js": '91aa7f1699c897a1',
   "./js/location.js": '6aaf53615a8739d1',
@@ -175,10 +175,10 @@ const ASSET_HASHES = {
   "./js/sections.js": 'abcfdecb2bd5766d',
   "./js/sw-update.js": '2ffc253aa03eff0f',
   "./js/update-gate.js": '1801738b3e6def2d',
-  "./dist/catalogue.js": '0a8e3408ca466c86',
-  "./dist/pastries.js": 'f28377a9f3adcd4e',
-  "./dist/foodcost.js": '7084a84a14fb48ef',
-  "./dist/inventory.js": '5952b7ff9ac45124',
+  "./dist/catalogue.js": '1314437064560d52',
+  "./dist/pastries.js": 'af90f3fdb4fbdc2d',
+  "./dist/foodcost.js": 'cd10ca0b1375841e',
+  "./dist/inventory.js": '90550c649201f762',
   "./qr.png": '761a95e5bc25e2ba',
   "./dist/tokens.css": 'a4f37273bf55b63f',
   "./dist/auth.css": '58cd14bdbf808ecc',

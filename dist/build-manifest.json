@@ -13,8 +13,8 @@
       }
     },
     "dist/calculator.js": {
-      "sha": "bc0681e2a733820b",
-      "mapSha": "97844ceb09b21d8a",
+      "sha": "9f1d70408ea8c48c",
+      "mapSha": "d4e8561bcaf9f0a3",
       "inputs": {
         "js/allergen-model.js": "50434c6cea85b7de",
         "js/app-version.js": "4ef897a205fdec91",
@@ -109,7 +109,7 @@
         "js/send-icon.js": "8ed666e9294de282",
         "js/send-sheet.js": "8b455d524bd2ac3b",
         "js/share.js": "85dda5863e4eea85",
-        "js/staff/businesses.js": "b6c336a8a488ae8d",
+        "js/staff/businesses.js": "cdad0aa7bbf5b075",
         "js/staff/confirm-dialog.js": "83f2ab3c9c69025d",
         "js/staff/dom.js": "0eb18ed08c4e6bcb",
         "js/staff/firebase-staff.js": "9bf71140ddb1b2c9",
@@ -135,8 +135,8 @@
       }
     },
     "dist/catalogue.js": {
-      "sha": "2074a243ebfc8713",
-      "mapSha": "34f05594b513264b",
+      "sha": "54d3cd9102aed677",
+      "mapSha": "82d7f0a20e2689c5",
       "inputs": {
         "js/allergen-match.js": "ee85eebef7fd7052",
         "js/allergen-model.js": "50434c6cea85b7de",
@@ -157,7 +157,7 @@
         "js/catalogue/firebase-catalogue.js": "30bd1c2f26d01f76",
         "js/catalogue/firebase-photo.js": "38b16af4b97630a5",
         "js/catalogue/guided-alarm.js": "5abbc05b8da5804c",
-        "js/catalogue/guided-editor.js": "aae4d3ed73cf8e93",
+        "js/catalogue/guided-editor.js": "3d9fc4f2a9563751",
         "js/catalogue/guided-model.js": "6a7e0f736c63b6e6",
         "js/catalogue/guided-run.js": "96feec068b30a355",
         "js/catalogue/import-to-calculator.js": "29685691137f2e9a",
@@ -246,7 +246,7 @@
         "js/send-icon.js": "8ed666e9294de282",
         "js/send-sheet.js": "8b455d524bd2ac3b",
         "js/share.js": "85dda5863e4eea85",
-        "js/staff/businesses.js": "b6c336a8a488ae8d",
+        "js/staff/businesses.js": "cdad0aa7bbf5b075",
         "js/staff/confirm-dialog.js": "83f2ab3c9c69025d",
         "js/staff/dom.js": "0eb18ed08c4e6bcb",
         "js/staff/firebase-staff.js": "9bf71140ddb1b2c9",
@@ -273,8 +273,8 @@
       }
     },
     "dist/foodcost.js": {
-      "sha": "19c8fc8cc2142d70",
-      "mapSha": "16773b174853089a",
+      "sha": "cbc0152133d1887a",
+      "mapSha": "d9564b3a8bbaef9c",
       "inputs": {
         "js/allergen-model.js": "50434c6cea85b7de",
         "js/app-version.js": "4ef897a205fdec91",
@@ -355,7 +355,7 @@
         "js/send-icon.js": "8ed666e9294de282",
         "js/send-sheet.js": "8b455d524bd2ac3b",
         "js/share.js": "85dda5863e4eea85",
-        "js/staff/businesses.js": "b6c336a8a488ae8d",
+        "js/staff/businesses.js": "cdad0aa7bbf5b075",
         "js/staff/confirm-dialog.js": "83f2ab3c9c69025d",
         "js/staff/dom.js": "0eb18ed08c4e6bcb",
         "js/staff/firebase-staff.js": "9bf71140ddb1b2c9",
@@ -373,15 +373,15 @@
       }
     },
     "dist/i18n.js": {
-      "sha": "05b8f4a7adb3d212",
-      "mapSha": "13125fe42e6f68ed",
+      "sha": "98bcefc914a02740",
+      "mapSha": "d7cd5e356e579fd8",
       "inputs": {
-        "js/i18n.js": "8c8fd70b84671c42"
+        "js/i18n.js": "48aaf0c63aafdab9"
       }
     },
     "dist/index.js": {
-      "sha": "bf68d3e63d7cded6",
-      "mapSha": "65f8ef2412c66574",
+      "sha": "c981388bad260c29",
+      "mapSha": "8175dd18d64ca8b7",
       "inputs": {
         "js/allergen-model.js": "50434c6cea85b7de",
         "js/app-version.js": "4ef897a205fdec91",
@@ -468,7 +468,7 @@
         "js/send-icon.js": "8ed666e9294de282",
         "js/send-sheet.js": "8b455d524bd2ac3b",
         "js/share.js": "85dda5863e4eea85",
-        "js/staff/businesses.js": "b6c336a8a488ae8d",
+        "js/staff/businesses.js": "cdad0aa7bbf5b075",
         "js/staff/confirm-dialog.js": "83f2ab3c9c69025d",
         "js/staff/dom.js": "0eb18ed08c4e6bcb",
         "js/staff/firebase-staff.js": "9bf71140ddb1b2c9",
@@ -509,8 +509,8 @@
       }
     },
     "dist/inventory.js": {
-      "sha": "79223d61c8b1ae77",
-      "mapSha": "4e5f43cab9b1575c",
+      "sha": "0717fcb9d321e117",
+      "mapSha": "c43ceb7fbf3fad0a",
       "inputs": {
         "js/allergen-model.js": "50434c6cea85b7de",
         "js/app-version.js": "4ef897a205fdec91",
@@ -581,7 +581,7 @@
         "js/send-icon.js": "8ed666e9294de282",
         "js/send-sheet.js": "8b455d524bd2ac3b",
         "js/share.js": "85dda5863e4eea85",
-        "js/staff/businesses.js": "b6c336a8a488ae8d",
+        "js/staff/businesses.js": "cdad0aa7bbf5b075",
         "js/staff/confirm-dialog.js": "83f2ab3c9c69025d",
         "js/staff/dom.js": "0eb18ed08c4e6bcb",
         "js/staff/firebase-staff.js": "9bf71140ddb1b2c9",
@@ -645,8 +645,8 @@
       }
     },
     "dist/orders.js": {
-      "sha": "d1a15a5ce31c721f",
-      "mapSha": "3effe94ae58456da",
+      "sha": "e7246a66a48321e8",
+      "mapSha": "3e337361cc0a7670",
       "inputs": {
         "js/allergen-match.js": "ee85eebef7fd7052",
         "js/allergen-model.js": "50434c6cea85b7de",
@@ -768,7 +768,7 @@
         "js/send-icon.js": "8ed666e9294de282",
         "js/send-sheet.js": "8b455d524bd2ac3b",
         "js/share.js": "85dda5863e4eea85",
-        "js/staff/businesses.js": "b6c336a8a488ae8d",
+        "js/staff/businesses.js": "cdad0aa7bbf5b075",
         "js/staff/confirm-dialog.js": "83f2ab3c9c69025d",
         "js/staff/dom.js": "0eb18ed08c4e6bcb",
         "js/staff/firebase-staff.js": "9bf71140ddb1b2c9",
@@ -795,8 +795,8 @@
       }
     },
     "dist/pastries.js": {
-      "sha": "7bbe9c70c4098523",
-      "mapSha": "c82447dc82d15101",
+      "sha": "76570d614f089366",
+      "mapSha": "94f2924ffe2aef3f",
       "inputs": {
         "js/allergen-model.js": "50434c6cea85b7de",
         "js/app-version.js": "4ef897a205fdec91",
@@ -849,7 +849,7 @@
         "js/pastries/dom.js": "247525e429f4ec4a",
         "js/pastries/firebase-pastries.js": "44fa684618e4347b",
         "js/pastries/pastries-day.js": "26adcbaa7b7a8c2c",
-        "js/pastries/pastries-editor.js": "4ef9b27eb633c795",
+        "js/pastries/pastries-editor.js": "46797e4a563fdca9",
         "js/pastries/pastries-lock.js": "2a6043cb6111bb9a",
         "js/pastries/pastries-log-model.js": "de0511e490f1eecc",
         "js/pastries/pastries-logs-store.js": "743bcbf4aa6e2d80",
@@ -870,7 +870,7 @@
         "js/send-icon.js": "8ed666e9294de282",
         "js/send-sheet.js": "8b455d524bd2ac3b",
         "js/share.js": "85dda5863e4eea85",
-        "js/staff/businesses.js": "b6c336a8a488ae8d",
+        "js/staff/businesses.js": "cdad0aa7bbf5b075",
         "js/staff/confirm-dialog.js": "83f2ab3c9c69025d",
         "js/staff/dom.js": "0eb18ed08c4e6bcb",
         "js/staff/firebase-staff.js": "9bf71140ddb1b2c9",
@@ -899,8 +899,8 @@
       }
     },
     "dist/suppliers.js": {
-      "sha": "f626ef921a6798c0",
-      "mapSha": "3f2ad27c2cb34056",
+      "sha": "afe7d47491468c97",
+      "mapSha": "20050deca875e68f",
       "inputs": {
         "js/allergen-match.js": "ee85eebef7fd7052",
         "js/allergen-model.js": "50434c6cea85b7de",
@@ -1008,7 +1008,7 @@
         "js/send-icon.js": "8ed666e9294de282",
         "js/send-sheet.js": "8b455d524bd2ac3b",
         "js/share.js": "85dda5863e4eea85",
-        "js/staff/businesses.js": "b6c336a8a488ae8d",
+        "js/staff/businesses.js": "cdad0aa7bbf5b075",
         "js/staff/confirm-dialog.js": "83f2ab3c9c69025d",
         "js/staff/dom.js": "0eb18ed08c4e6bcb",
         "js/staff/firebase-staff.js": "9bf71140ddb1b2c9",
