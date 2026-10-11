@@ -14,7 +14,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { installDom, walk } from './helpers/form-dom.mjs';
+import { installDom, walk, type } from './helpers/form-dom.mjs';
 import { t, setLanguage, DEFAULT_LANGUAGE } from '../js/i18n.js';
 
 // The editor builds nodes with `document`, so the fake goes in BEFORE the editor is loaded.
@@ -89,6 +89,22 @@ test('a name with spaces around it is named without them', () => {
     const root = open([{ name: '  Cornetto  ', qty: 2 }]);
     assert.deepEqual(qtyLabels(root), ['Quantità di Cornetto']);
     assert.deepEqual(binLabels(root), ['Rimuovi Cornetto']);
+  });
+});
+
+// The labels are written when the rows are drawn AND as a name is typed: a row typed into a
+// moment ago is not redrawn, and it used to keep the blank row's «Quante paste».
+test('the labels follow the name as it is typed', () => {
+  inLanguage('it', () => {
+    const root = open([]);
+    const name = withClass(root, 'pas-name')[0];
+    type(name, 'Sfogliatelle');
+    assert.deepEqual(qtyLabels(root), ['Quantità di Sfogliatelle']);
+    assert.deepEqual(binLabels(root), ['Rimuovi Sfogliatelle']);
+    assert.equal(count(root), '1 pasta');
+    type(name, '   ');
+    assert.deepEqual(qtyLabels(root), ['Quante paste'], 'only spaces is a blank row again');
+    assert.deepEqual(binLabels(root), ['Rimuovi questa riga']);
   });
 });
 
