@@ -3,8 +3,9 @@ name: Preview
 # One link per pull request, so Federico can open the change on his phone BEFORE it goes live.
 # It publishes the PR's pages to a Firebase Hosting preview channel of the PREVIEW project
 # (mise-app-preview — fake data only), deploys the PR's Firestore rules THERE, and writes the
-# link on the pull request. js/firebase-target.js makes those pages talk to the preview project
-# and draw the «preview · test data» ribbon.
+# link on the pull request; when the PR closes, it deletes that channel (job `delete-channel`).
+# js/firebase-target.js makes those pages talk to the preview project and draw the «preview ·
+# test data» ribbon.
 #
 # ⚠️ IT CANNOT TOUCH PRODUCTION, and not by convention: the Google credential below belongs to
 # the preview project (its own workload identity pool, its own service account, whose roles are
@@ -22,10 +23,13 @@ name: Preview
 #
 # This job is NOT a required check: a broken preview must never block a fix from shipping.
 
+# `closed` runs ONLY `delete-channel`; every other job is skipped on it by its own `if:`.
 on:
   pull_request:
-    types: [opened, synchronize, reopened]
+    types: [opened, synchronize, reopened, closed]
 
+# One run per PR at a time: a close cancels a deploy still running for the same PR, so the
+# channel is deleted after its last upload, never before it.
 concurrency:
   group: preview-${{ github.event.pull_request.number }}
   cancel-in-progress: true
@@ -39,7 +43,7 @@ jobs:
   # could ask for one too. Here nothing can: this job may only read the repository, and what it
   # hands on is the built files, nothing else. Never merge the two jobs to save a minute.
   build-mise2:
-    if: github.event.pull_request.head.repo.full_name == github.repository
+    if: github.event.action != 'closed' && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -76,7 +80,9 @@ jobs:
     # Mise 2 build (or an npm registry blip) would take away the preview link of every fix to
     # the app staff use today — and that link is how he checks a fix on his phone before it
     # goes live. A failed build only leaves /mise2/ out; `cancelled` still stops everything.
-    if: ${{ !cancelled() && github.event.pull_request.head.repo.full_name == github.repository }}
+    # ⚠️ And `!cancelled()` also runs this job when build-mise2 was SKIPPED — which it is on
+    # `closed` — so the close must be refused here too, or a merged PR would be redeployed.
+    if: ${{ !cancelled() && github.event.action != 'closed' && github.event.pull_request.head.repo.full_name == github.repository }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -157,12 +163,16 @@ jobs:
         run: |
           firebase deploy --only firestore:rules --project mise-app-preview --non-interactive
           link() { node -e "const r=require(process.argv[1]);const hit=Object.values(r.result||{}).find(v=>v&&v.url);if(!hit){console.error(JSON.stringify(r).slice(0,500));process.exit(1)}console.log(hit.url)" "$1"; }
+          # `--json` writes a failed deploy's error INTO the file, and `bash -e` stops before
+          # `link` reads it: on 11 Oct 2026 a full channel quota failed every new PR's preview
+          # with nothing in the log but «exit 1». So a failed deploy prints Google's answer.
+          failed() { echo "::error::channel $1 was not deployed: $(head -c 500 "$2" | tr -s '\n ' ' ')"; exit 1; }
           firebase hosting:channel:deploy "$CHANNEL" --only preview --project mise-app-preview \
-            --expires 14d --non-interactive --json > "$RUNNER_TEMP/channel.json"
+            --expires 14d --non-interactive --json > "$RUNNER_TEMP/channel.json" || failed "$CHANNEL" "$RUNNER_TEMP/channel.json"
           url=$(link "$RUNNER_TEMP/channel.json")
           echo "url=$url" >> "$GITHUB_OUTPUT"
           firebase hosting:channel:deploy anteprima --only preview --project mise-app-preview \
-            --expires 30d --non-interactive --json > "$RUNNER_TEMP/fixed.json"
+            --expires 30d --non-interactive --json > "$RUNNER_TEMP/fixed.json" || failed anteprima "$RUNNER_TEMP/fixed.json"
           fixed=$(link "$RUNNER_TEMP/fixed.json")
           echo "fixed_url=$fixed" >> "$GITHUB_OUTPUT"
 
@@ -230,6 +240,60 @@ jobs:
           fi
           body="**Anteprima di questa PR** (dati di prova, non i tuoi): $URL
           **Link fisso**, sempre l'ultima PR aggiornata — entri una volta per telefono e resti dentro: $FIXED_URL
-          Aprila sul telefono ed entra con un account di prova. Il link della PR si aggiorna a ogni modifica e scade dopo 14 giorni; quello fisso cambia solo dopo 30 giorni senza PR. In anteprima non funziona ciò che passa dal server: codici d'invito, alcuni interruttori delle impostazioni, notifiche, lettura da foto.
+          Aprila sul telefono ed entra con un account di prova. Il link della PR si aggiorna a ogni modifica e scade dopo 14 giorni, o appena la PR si chiude; quello fisso cambia solo dopo 30 giorni senza PR. In anteprima non funziona ciò che passa dal server: codici d'invito, alcuni interruttori delle impostazioni, notifiche, lettura da foto.
           $mise2"
           gh pr comment "$PR" --edit-last --body "$body" || gh pr comment "$PR" --body "$body"
+
+  # ── When the PR closes, its own channel goes ───────────────────────────────────────────────
+  #
+  # ⚠️ FIREBASE HOSTING ALLOWS 50 PREVIEW CHANNELS PER SITE, AND A FULL QUOTA FAILS THE PREVIEW OF
+  # EVERY NEW PR. Each `pr-<n>` used to outlive its PR by up to 14 days; with several PRs a day
+  # the site reached 50 on 11 Oct 2026, and creating a channel answered «429 … channel quota
+  # reached». So a closed PR — merged or not — takes its own channel down at once. The fixed
+  # `anteprima` channel is never deleted here. A channel already gone (expired, deleted by hand,
+  # never created because its deploy failed) is not an error. The 14-day expiry stays as the
+  # net: GitHub runs no pull_request workflow for a PR closed while it has a merge conflict.
+  #
+  # ⚠️ NOTHING IS CHECKED OUT AND NOTHING IS INSTALLED: one call to the Hosting API with the
+  # short-lived token the sign-in hands back, so no third-party code runs next to the credential
+  # (the deploy job cannot avoid firebase-tools; this job can). firebase-tools' own channel delete
+  # would also need firebase.json, so a checkout of a PR that is already closed. It would also
+  # try to remove the channel's address from Firebase Auth's authorized domains, but none is
+  # ever there: the account may not change Auth settings, so the deploy's attempt to add it
+  # fails quietly (the list held only localhost and the project's own two addresses, 11 Oct 2026).
+  delete-channel:
+    if: github.event.action == 'closed' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      id-token: write
+    steps:
+      # The same trust and the same service account as the preview job (pinned in TWO places on
+      # Google's side — see that job). No credentials file and nothing exported: the token goes
+      # only to the step below, masked in the log, and dies within five minutes.
+      - name: Sign in to Google (no key) — the PREVIEW project only
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          project_id: mise-app-preview
+          workload_identity_provider: projects/863348756512/locations/global/workloadIdentityPools/github-pool/providers/github-oidc
+          service_account: preview-deploy@mise-app-preview.iam.gserviceaccount.com
+          token_format: access_token
+          access_token_lifetime: 300s
+          create_credentials_file: false
+          export_environment_variables: false
+
+      # 200 = deleted, 404 = already gone; any other answer fails the job and prints Google's.
+      - name: Delete this PR's channel (never the fixed one)
+        env:
+          CHANNEL: pr-${{ github.event.pull_request.number }}
+          TOKEN: ${{ steps.auth.outputs.access_token }}
+        run: |
+          code=$(curl -sS --max-time 30 --retry 3 -X DELETE -o "$RUNNER_TEMP/delete.json" -w "%{http_code}" \
+            -H "Authorization: Bearer $TOKEN" -H "x-goog-user-project: mise-app-preview" \
+            "https://firebasehosting.googleapis.com/v1beta1/sites/mise-app-preview/channels/$CHANNEL")
+          case "$code" in
+            200) echo "$CHANNEL deleted" ;;
+            404) echo "$CHANNEL was already gone" ;;
+            *) echo "::error::$CHANNEL was not deleted (HTTP $code): $(head -c 500 "$RUNNER_TEMP/delete.json" | tr -s '\n ' ' ')"; exit 1 ;;
+          esac

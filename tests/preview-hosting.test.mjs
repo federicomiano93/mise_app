@@ -21,6 +21,20 @@ const firebaserc = JSON.parse(read('.firebaserc'));
 const workflow = read('.github/workflows/preview.yml');
 const hosting = [].concat(firebaseJson.hosting || []);
 
+// One job's own lines: under its header, up to the next line at the jobs' indent (the next
+// header, or the comment above it). Never «everything after X»: once `delete-channel` came after
+// `comment`, a split at the comment header took it in silently.
+const jobsText = workflow.slice(workflow.indexOf('\njobs:\n'));
+const jobNames = [...jobsText.matchAll(/^ {2}([A-Za-z0-9_-]+):$/gm)].map((m) => m[1]);
+function job(name) {
+  const header = `\n  ${name}:\n`;
+  const start = jobsText.indexOf(header);
+  assert.ok(start >= 0, `preview.yml has no job "${name}"`);
+  const body = jobsText.slice(start + header.length);
+  const end = body.search(/^ {2}\S/m);
+  return end < 0 ? body : body.slice(0, end);
+}
+
 test('hosting publishes the staged _site folder, bound to the "preview" target', () => {
   assert.equal(hosting.length, 1);
   assert.equal(hosting[0].target, 'preview');
@@ -44,9 +58,8 @@ test('_site is built from git by an allowlist, never copied from the workspace',
 // read the repository, and the deploy job receives the built files — never the source, never an
 // install. Merging the two "to save a minute" is exactly the change these assertions refuse.
 test('Mise 2 is built in a job with no Google identity, and only its built files reach the site', () => {
-  const [beforePreview, fromPreview] = workflow.split('\n  preview:\n');
-  const buildJob = beforePreview.slice(beforePreview.indexOf('\n  build-mise2:\n'));
-  const deployJob = fromPreview.split('\n  comment:\n')[0];
+  const buildJob = job('build-mise2');
+  const deployJob = job('preview');
   assert.match(buildJob, /permissions:\n\s+contents: read\n\s+steps:/);
   assert.doesNotMatch(buildJob, /id-token|google-github-actions|firebase/);
   assert.match(buildJob, /npm ci --ignore-scripts\n\s+working-directory: shared/);
@@ -56,8 +69,9 @@ test('Mise 2 is built in a job with no Google identity, and only its built files
 
   assert.match(deployJob, /^\s+needs: build-mise2\n/);
   // A failed Mise 2 build must never take away the current app's preview (his only check of a
-  // fix before it goes live): the job runs unless cancelled, and only /mise2/ is left out.
-  assert.match(deployJob, /\n {4}if: \$\{\{ !cancelled\(\) && github\.event\.pull_request\.head\.repo\.full_name == github\.repository \}\}\n/);
+  // fix before it goes live): the job runs unless cancelled, and only /mise2/ is left out. A
+  // closed PR is refused by name, because `!cancelled()` runs it with build-mise2 skipped too.
+  assert.match(deployJob, /\n {4}if: \$\{\{ !cancelled\(\) && github\.event\.action != 'closed' && github\.event\.pull_request\.head\.repo\.full_name == github\.repository \}\}\n/);
   assert.match(deployJob, /- if: needs\.build-mise2\.result == 'success'\n\s+uses: actions\/download-artifact@v8/);
   assert.match(deployJob, /if \[ -d "\$RUNNER_TEMP\/mise2-site" \]; then\n\s+mv "\$RUNNER_TEMP\/mise2-site" _site\/mise2\n\s+fi/);
   assert.doesNotMatch(deployJob, /npm (ci|run)\b|\bnpx\b|\bvite\b/,
@@ -82,7 +96,7 @@ test('the leak check also proves Mise 2\'s source is not served and its page is'
 });
 
 test('the PR comment gives the Mise 2 address, or says it was not built', () => {
-  const commentJob = workflow.split('\n  comment:\n')[1];
+  const commentJob = job('comment');
   assert.match(commentJob, /^\s+needs: \[build-mise2, preview\]\n\s+if: \$\{\{ !cancelled\(\) && needs\.preview\.result == 'success' \}\}\n/);
   assert.match(commentJob, /\$FIXED_URL\/mise2\//);
   assert.match(commentJob, /non si è costruita/);
@@ -133,11 +147,24 @@ test('the workflow signs in to, and deploys to, the preview project only', () =>
   assert.match(workflow, /providers\/github-oidc\n/,
     'the PREVIEW project\'s github-provider was disabled after the 30 Sep leak (production\'s own ' +
     'github-provider, in bakery-app-ebf90, is a different one and must stay enabled)');
+  // Both sign-ins (deploy, channel cleanup) are that one trust and that one account.
+  for (const key of ['project_id', 'workload_identity_provider', 'service_account']) {
+    const values = workflow.match(new RegExp(`\\n\\s+${key}: [^\\n]+`, 'g')) || [];
+    assert.equal(values.length, 2, key);
+    assert.equal(new Set(values.map((v) => v.trim())).size, 1, key);
+  }
+  // Every call made straight to a Google API names the preview project's site, and bills it.
+  const apiCalls = workflow.match(/https:\/\/[a-z]+\.googleapis\.com\/[^\s"]+/g) || [];
+  assert.ok(apiCalls.length > 0);
+  for (const url of apiCalls) assert.match(url, /\/sites\/mise-app-preview\//, url);
+  assert.doesNotMatch(workflow, /x-goog-user-project: (?!mise-app-preview")/);
 });
 
 test('only the comment job may write on the PR, and it runs nothing but gh', () => {
-  const [deployJob, commentJob] = workflow.split('\n  comment:\n');
-  assert.doesNotMatch(deployJob, /pull-requests: write/);
+  for (const name of jobNames.filter((n) => n !== 'comment')) {
+    assert.doesNotMatch(job(name), /pull-requests:/, name);
+  }
+  const commentJob = job('comment');
   assert.match(commentJob, /permissions:\n\s+pull-requests: write\n/);
   assert.doesNotMatch(commentJob, /npm|npx|firebase|checkout/);
 });
@@ -154,4 +181,43 @@ test('every deploy also refreshes the fixed «anteprima» channel, and both chan
   assert.match(check, /check anteprima "\$FIXED_URL"/);
   assert.match(workflow, /\*\*Link fisso\*\*/);
   assert.doesNotMatch(workflow, /password|PREVIEW_PASSWORD/i, 'no credential is ever baked into the preview');
+});
+
+// ⚠️ A CLOSED PR DELETES ITS OWN CHANNEL. Firebase Hosting allows 50 preview channels per site;
+// each `pr-<n>` used to outlive its PR by up to 14 days, and on 11 Oct 2026 the site was full —
+// every new PR's preview failed with «channel quota reached». Only that PR's channel goes (never
+// the fixed link), a channel already gone is fine, anything else turns the job red.
+test('a closed PR deletes its own channel, and nothing else runs on the close', () => {
+  assert.match(workflow, /\non:\n {2}pull_request:\n {4}types: \[opened, synchronize, reopened, closed\]\n/);
+  // A close cancels that PR's deploy if it is still running, so the delete comes after it.
+  assert.match(workflow, /\nconcurrency:\n {2}group: preview-\$\{\{ github\.event\.pull_request\.number \}\}\n {2}cancel-in-progress: true\n/);
+  assert.deepEqual(jobNames, ['build-mise2', 'preview', 'comment', 'delete-channel']);
+  // The deploy's own refusal of `closed` is pinned with its `if:` above; the comment needs it.
+  assert.match(job('build-mise2'), /^ {4}if: github\.event\.action != 'closed' && github\.event\.pull_request\.head\.repo\.full_name == github\.repository\n/);
+
+  const cleanup = job('delete-channel');
+  assert.match(cleanup, /^ {4}if: github\.event\.action == 'closed' && github\.event\.pull_request\.head\.repo\.full_name == github\.repository\n/);
+  assert.match(cleanup, /\n {4}permissions:\n {6}id-token: write\n {4}steps:\n/);
+  assert.match(cleanup, /\n {4}timeout-minutes: 5\n/);
+  assert.doesNotMatch(cleanup, /checkout|contents:/);
+  // A token handed to the next step only: no credentials file, nothing exported to the job.
+  assert.match(cleanup, /\n\s+id: auth\n\s+uses: google-github-actions\/auth@v2\n\s+with:\n(\s+[a-z_]+: [^\n]+\n)*?\s+token_format: access_token\n\s+access_token_lifetime: 300s\n\s+create_credentials_file: false\n\s+export_environment_variables: false\n/);
+  assert.match(cleanup, /\n\s+TOKEN: \$\{\{ steps\.auth\.outputs\.access_token \}\}\n/);
+  // This PR's channel, on the preview site, and no other address.
+  assert.match(cleanup, /\n\s+CHANNEL: pr-\$\{\{ github\.event\.pull_request\.number \}\}\n/);
+  assert.deepEqual([...cleanup.matchAll(/https?:\/\/[^\s"]+/g)].map((m) => m[0]),
+    ['https://firebasehosting.googleapis.com/v1beta1/sites/mise-app-preview/channels/$CHANNEL']);
+  assert.match(cleanup, /curl -sS --max-time 30 --retry 3 -X DELETE /);
+  assert.doesNotMatch(cleanup, /anteprima/);
+  assert.match(cleanup, /\n\s+case "\$code" in\n\s+200\) echo "\$CHANNEL deleted" ;;\n\s+404\) echo "\$CHANNEL was already gone" ;;\n\s+\*\) echo "::error::[^\n]*\$\(head -c 500 "\$RUNNER_TEMP\/delete\.json"[^\n]*; exit 1 ;;\n\s+esac\n/);
+});
+
+// `--json` writes a failed deploy's error into the file, and `bash -e` stopped before anything
+// read it: the full quota of 11 Oct 2026 showed nothing in the log but «exit 1».
+test('a failed channel deploy prints Google\'s answer in the log', () => {
+  const deploy = job('preview');
+  assert.match(deploy, /\n\s+failed\(\) \{ echo "::error::channel \$1 was not deployed: \$\(head -c 500 "\$2" \| tr -s '\\n ' ' '\)"; exit 1; \}\n/);
+  assert.match(deploy, /--json > "\$RUNNER_TEMP\/channel\.json" \|\| failed "\$CHANNEL" "\$RUNNER_TEMP\/channel\.json"\n/);
+  assert.match(deploy, /--json > "\$RUNNER_TEMP\/fixed\.json" \|\| failed anteprima "\$RUNNER_TEMP\/fixed\.json"\n/);
+  assert.match(job('comment'), /scade dopo 14 giorni, o appena la PR si chiude/);
 });
