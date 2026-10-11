@@ -176,7 +176,6 @@ export const it: Messages = {
   'stock.purchasedHint': 'Se la lasci vuota, conta come nessun acquisto.',
   'stock.closingCount': 'Quanti ne hai adesso',
   'stock.closingHint': 'Mezza confezione si scrive 0,5.',
-  'stock.onePackIs': 'Una confezione è {pack}.',
   'stock.carryShort': 'Porta avanti',
   'stock.purchasesShort': 'Dagli ordini',
   'stock.seeCost': 'Quanto è costato',

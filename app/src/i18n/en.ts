@@ -177,8 +177,9 @@ export const en = {
 
   // The Stocktake. Every key that the current app also has carries ITS name with `inv.` turned into
   // `stock.`, and ITS text, copied from js/i18n.js; the ones marked «new» exist only in Mise 2. The
-  // keys for the product and «What it cost» screens, and for the dialogs, are here already: the
-  // screens that use them come in the next slices.
+  // screens that use them are in stocktake/ (the list, the product, «What it cost», the month's
+  // actions and their dialogs). A key no screen uses is removed, not kept for later: the current
+  // app's `inv.onePackIs` has no counterpart here for that reason.
   // new: the name of the month's arrows, as a group (a screen reader says it on reaching them).
   'stock.monthNav': 'Month',
   'stock.monthOpen': 'Open',
@@ -215,7 +216,6 @@ export const en = {
   'stock.purchasedHint': 'Left empty it counts as none bought.',
   'stock.closingCount': 'How many there are now',
   'stock.closingHint': 'Half a pack is 0.5.',
-  'stock.onePackIs': 'One pack is {pack}.',
   'stock.carryShort': 'Carry forward',
   'stock.purchasesShort': 'From the orders',
   'stock.seeCost': 'What it cost',
