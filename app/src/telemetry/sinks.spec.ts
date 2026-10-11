@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import type { MockInstance } from 'vitest';
 import type { Auth } from 'firebase/auth';
+import * as firestoreSdk from 'firebase/firestore';
 import { addDoc, setDoc, type Firestore } from 'firebase/firestore';
+import type { FirestoreKit } from '../session/firebaseBackend';
 import { browserConnectivity, createTelemetrySinks, type Connectivity } from './sinks';
 
 // sinks.ts is the only place the telemetry reaches Firestore, and firestore.rules accept exactly
@@ -18,11 +20,14 @@ vi.mock('firebase/firestore', () => ({
 }));
 
 const db = {} as Firestore;
+// What the backend hands over: the (mocked) SDK and the client, already loaded.
+const kit: FirestoreKit = { fs: firestoreSdk as unknown as FirestoreKit['fs'], db };
+const loaded = { firestore: async () => kit, firestoreIfReady: () => kit };
 
 function setup(uid: string | null = 'u1', lid: string | null = 'bakery') {
   const state = { user: uid === null ? null : { uid }, lid };
   const auth = { get currentUser() { return state.user; } } as unknown as Auth;
-  return { state, sinks: createTelemetrySinks({ db, auth }, () => state.lid) };
+  return { state, sinks: createTelemetrySinks({ ...loaded, auth }, () => state.lid) };
 }
 
 beforeEach(() => {
@@ -179,7 +184,7 @@ describe('no signal, no write', () => {
     const network = fakeConnectivity(false);
     const state = { user: { uid: 'u1' } as { uid: string } | null, lid: 'bakery' as string | null };
     const auth = { get currentUser() { return state.user; } } as unknown as Auth;
-    return { network, state, sinks: createTelemetrySinks({ db, auth }, () => state.lid, network.connectivity) };
+    return { network, state, sinks: createTelemetrySinks({ ...loaded, auth }, () => state.lid, network.connectivity) };
   }
 
   test('offline, nothing reaches Firestore; when the signal is back each write goes exactly once', async () => {
@@ -213,7 +218,7 @@ describe('no signal, no write', () => {
   test('online, the write is handed over in the same tick — nothing waits, not even a microtask', () => {
     const network = fakeConnectivity(true);
     const auth = { currentUser: { uid: 'u1' } } as unknown as Auth;
-    const sinks = createTelemetrySinks({ db, auth }, () => 'bakery', network.connectivity);
+    const sinks = createTelemetrySinks({ ...loaded, auth }, () => 'bakery', network.connectivity);
 
     void sinks.reportError({ message: 'x' });
     void sinks.pingDevice({}, 'Dev1ce2Id3Abc4Def5Gh');
@@ -313,7 +318,7 @@ describe('browserConnectivity', () => {
   test('the sinks use it by default: offline, the write waits for the real online event', async () => {
     onLine.mockReturnValue(false);
     const auth = { currentUser: { uid: 'u1' } } as unknown as Auth;
-    const sinks = createTelemetrySinks({ db, auth }, () => 'bakery');
+    const sinks = createTelemetrySinks({ ...loaded, auth }, () => 'bakery');
 
     const sent = sinks.reportError({ message: 'x' });
     await flush();
@@ -322,5 +327,24 @@ describe('browserConnectivity', () => {
     goOnline();
     await sent;
     expect(addDoc).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('Firestore not loaded yet', () => {
+  // The backend loads Firestore on first use (session/firebaseBackend.ts). A telemetry write that
+  // comes first waits for it and is written once — never lost, never sent twice.
+  test('the write waits for Firestore to load, then goes exactly once', async () => {
+    let release: (k: FirestoreKit) => void = () => {};
+    const loading = new Promise<FirestoreKit>(resolve => { release = resolve; });
+    const auth = { currentUser: { uid: 'u1' } } as unknown as Auth;
+    const network: Connectivity = { online: () => true, whenOnline: async () => {} };
+    const sinks = createTelemetrySinks({ firestore: () => loading, firestoreIfReady: () => null, auth }, () => 'bakery', network);
+    vi.mocked(addDoc).mockClear();
+    const sent = sinks.reportError({ message: 'x' });
+    await Promise.resolve();
+    expect(vi.mocked(addDoc)).not.toHaveBeenCalled();
+    release(kit);
+    await sent;
+    expect(vi.mocked(addDoc)).toHaveBeenCalledOnce();
   });
 });

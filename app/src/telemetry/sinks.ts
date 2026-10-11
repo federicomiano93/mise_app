@@ -32,8 +32,8 @@
 // The account and the venue are asked AFTER the wait, at the moment of writing.
 
 import type { Auth } from 'firebase/auth';
-import { addDoc, collection, doc, serverTimestamp, setDoc, type Firestore } from 'firebase/firestore';
 import { buildPath } from '@mise/shared/location-id';
+import type { FirestoreKit } from '../session/firebaseBackend';
 
 export interface TelemetrySinks {
   reportError(record: Record<string, unknown>): Promise<unknown>;
@@ -73,7 +73,12 @@ function failure(code: string): Error {
 }
 
 export function createTelemetrySinks(
-  { db, auth }: { db: Firestore; auth: Auth },
+  // Firestore comes from the backend, which loads it on first use (session/firebaseBackend.ts).
+  { firestore, firestoreIfReady, auth }: {
+    firestore(): Promise<FirestoreKit>;
+    firestoreIfReady(): FirestoreKit | null;
+    auth: Auth;
+  },
   currentLocationId: () => string | null,
   connectivity: Connectivity = browserConnectivity(),
 ): TelemetrySinks {
@@ -89,32 +94,35 @@ export function createTelemetrySinks(
 
   // Waits for the signal only when there is none: with one, `write` runs in the same tick, so a
   // write handed over as the page is hidden is not a microtask late.
-  async function whenConnected<T>(write: () => Promise<T>): Promise<T> {
+  // Firestore is normally loaded long before the first telemetry write (the session reads with
+  // it first); when it is, the write still happens in the same tick.
+  async function whenConnected<T>(write: (kit: FirestoreKit) => Promise<T>): Promise<T> {
     if (!connectivity.online()) await connectivity.whenOnline();
-    return write();
+    const kit = firestoreIfReady();
+    return write(kit ?? await firestore());
   }
 
   return {
     // locations/{lid}/errors/{autoId}, create-only.
-    reportError: record => whenConnected(() => {
+    reportError: record => whenConnected(({ fs, db }) => {
       const { uid, lid } = who();
-      return addDoc(collection(db, buildPath(lid, 'errors')), {
-        ...record, bakery: lid, uid, createdAt: serverTimestamp(),
+      return fs.addDoc(fs.collection(db, buildPath(lid, 'errors')), {
+        ...record, bakery: lid, uid, createdAt: fs.serverTimestamp(),
       });
     }),
     // locations/{lid}/devices/{deviceId}: a WHOLE-document set, no merge — the rules want every
     // field present on every write. `bakery` comes from devicePayload (the venue it was made for).
-    pingDevice: (payload, id) => whenConnected(() => {
+    pingDevice: (payload, id) => whenConnected(({ fs, db }) => {
       const { uid, lid } = who();
-      return setDoc(doc(db, buildPath(lid, 'devices'), id), {
-        ...payload, uid, lastSeen: serverTimestamp(),
+      return fs.setDoc(fs.doc(db, buildPath(lid, 'devices'), id), {
+        ...payload, uid, lastSeen: fs.serverTimestamp(),
       });
     }),
     // locations/{lid}/usage/<deviceId>_<YYYYMMDD>_<uid>: the whole day's record each time.
-    saveUsage: (payload, id) => whenConnected(() => {
+    saveUsage: (payload, id) => whenConnected(({ fs, db }) => {
       const { uid, lid } = who();
-      return setDoc(doc(db, buildPath(lid, 'usage'), id), {
-        ...payload, bakery: lid, uid, updatedAt: serverTimestamp(),
+      return fs.setDoc(fs.doc(db, buildPath(lid, 'usage'), id), {
+        ...payload, bakery: lid, uid, updatedAt: fs.serverTimestamp(),
       });
     }),
   };

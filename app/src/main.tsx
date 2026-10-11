@@ -37,6 +37,12 @@ const sinks = createTelemetrySinks(backend, () => {
 // keeps it in memory and sends it once a venue is open.
 startTelemetry({ store, sinks });
 
+// Nobody signed in: the sign-in form needs no Firestore (firebaseBackend.ts loads it lazily), so
+// it is fetched while the password is being typed. Signed in, the session's first read loads it.
+store.subscribe(() => {
+  if (store.getSnapshot().status === 'signed-out') backend.preloadFirestore();
+});
+
 // The session starts listening NOW, in parallel with the language loading below: by the time
 // the first screen is drawn the session has often already answered who is signed in.
 store.start();

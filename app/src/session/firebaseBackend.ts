@@ -17,30 +17,48 @@
 // ⚠️ NO APP CHECK, NO reCAPTCHA (his decision, PR #212): no client sends a token, so never switch
 // either on in the console. initializeAuth, not getAuth: getAuth() also installs the Google
 // pop-up machinery, which phones would load on every screen for a sign-in method nobody uses.
+//
+// ⚠️ FIRESTORE IS LOADED ONLY WHEN IT IS NEEDED (step 2c, measured). It is almost half of the
+// app's code (460 KB of 1 MB), and the sign-in form needs none of it: on the lab-tablet profile
+// running it delayed every opening by the better part of a second. So `firestore()` imports it on
+// the first call — the first read of a signed-in session, or `preloadFirestore()` once the sign-in
+// form is on screen — and starts it exactly once, emulator included. Every part of the app gets
+// Firestore from here and NEVER from getFirestore(): its settings are fixed by its first use, and
+// a getFirestore() elsewhere would start a second, memory-only client.
 
-import { initializeApp } from 'firebase/app';
+import { initializeApp, type FirebaseApp } from 'firebase/app';
 import {
   initializeAuth, indexedDBLocalPersistence, browserLocalPersistence, browserSessionPersistence,
   onAuthStateChanged, signInWithEmailAndPassword, sendPasswordResetEmail, signOut, connectAuthEmulator, type Auth,
 } from 'firebase/auth';
-import {
-  initializeFirestore, getFirestore, persistentLocalCache, persistentMultipleTabManager,
-  connectFirestoreEmulator, doc, getDoc, getDocFromCache, getDocFromServer, terminate,
-  clearIndexedDbPersistence, waitForPendingWrites, type Firestore,
-} from 'firebase/firestore';
+import type { Firestore } from 'firebase/firestore';
 import { configForHost, LOCAL_HOSTS } from '@mise/shared/firebase-target';
 import type { DocData, SessionBackend } from './backend';
 
-export interface FirebaseBackend extends SessionBackend {
-  // Firestore, for the data layers of the sections (step 3). Started here, first, because its
-  // settings are fixed by its first use.
+// The Firestore SDK's functions, from the lazily loaded module, and the one client.
+export type FirestoreSdk = typeof import('firebase/firestore');
+export interface FirestoreKit {
+  readonly fs: FirestoreSdk;
   readonly db: Firestore;
+}
+
+export interface FirebaseBackend extends SessionBackend {
+  // Firestore, loaded and started on the first call (see the header). The data layers of the
+  // sections (step 3) and the telemetry writes get it from here, and only from here.
+  firestore(): Promise<FirestoreKit>;
+  // The same, but only if it is already loaded — so a write handed over as the page is being
+  // hidden is not a microtask late. null before the first load has finished.
+  firestoreIfReady(): FirestoreKit | null;
+  // Starts loading Firestore when the browser is idle; called once the sign-in form is drawn, so
+  // it is ready by the time the password is typed. Calling it again does nothing.
+  preloadFirestore(): void;
   // Auth, for the writes that must carry the signed-in account's uid (telemetry/sinks.ts).
   readonly auth: Auth;
   readonly isEmulator: boolean;
 }
 
-function startFirestore(app: ReturnType<typeof initializeApp>): Firestore {
+function startFirestore(fs: FirestoreSdk, app: FirebaseApp): Firestore {
+  const { initializeFirestore, getFirestore, persistentLocalCache, persistentMultipleTabManager } = fs;
   try {
     return initializeFirestore(app, {
       localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
@@ -58,43 +76,78 @@ export function createFirebaseBackend(hostname: string): FirebaseBackend {
   const auth = initializeAuth(app, {
     persistence: [indexedDBLocalPersistence, browserLocalPersistence, browserSessionPersistence],
   });
-  const db = startFirestore(app);
 
   const isEmulator = LOCAL_HOSTS.includes(hostname);
   if (isEmulator) {
-    // Before any sign-in and any read: both settle on first use.
+    // Before any sign-in: Auth settles on first use. (Firestore is pointed at the emulator the
+    // moment it is started, below, before its first read.)
     connectAuthEmulator(auth, 'http://localhost:9099', { disableWarnings: true });
-    connectFirestoreEmulator(db, 'localhost', 8080);
     console.info('%c[Firebase] LOCAL EMULATOR mode — production data is NOT touched.', 'color:#0a0;font-weight:bold');
+  }
+
+  let loading: Promise<FirestoreKit> | null = null;
+  let ready: FirestoreKit | null = null;
+  function firestore(): Promise<FirestoreKit> {
+    if (!loading) {
+      loading = import('firebase/firestore').then(fs => {
+        const db = startFirestore(fs, app);
+        if (isEmulator) fs.connectFirestoreEmulator(db, 'localhost', 8080);
+        ready = { fs, db };
+        return ready;
+      });
+      // A failed download (offline on a first visit) must be retried on the next call, not
+      // remembered for the life of the page.
+      loading.catch(() => { loading = null; });
+    }
+    return loading;
+  }
+
+  let preloadAsked = false;
+  function preloadFirestore(): void {
+    if (preloadAsked) return;
+    preloadAsked = true;
+    const start = () => { firestore().catch(() => { /* the first real read will try again */ }); };
+    const idle = (globalThis as { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => void }).requestIdleCallback;
+    if (idle) idle(start, { timeout: 2000 });
+    else setTimeout(start, 300);
   }
 
   const dataOf = (snap: { exists(): boolean; data(): unknown }): DocData | null =>
     snap.exists() ? (snap.data() as DocData) : null;
 
   return {
-    db,
+    firestore,
+    firestoreIfReady: () => ready,
+    preloadFirestore,
     auth,
     isEmulator,
     onAuthChange: callback => onAuthStateChanged(auth, user => {
       callback(user ? { uid: user.uid, email: user.email, isAnonymous: user.isAnonymous } : null);
     }),
     async readPreferCache(path, { trustMissing = false } = {}) {
-      const ref = doc(db, path);
+      const { fs, db } = await firestore();
+      const ref = fs.doc(db, path);
       try {
-        const snap = await getDocFromCache(ref);
+        const snap = await fs.getDocFromCache(ref);
         if (snap.exists() || trustMissing) return { data: dataOf(snap), cached: true };
       } catch { /* not on this phone yet */ }
-      return { data: dataOf(await getDoc(ref)), cached: false };
+      return { data: dataOf(await fs.getDoc(ref)), cached: false };
     },
-    readFromServer: async path => dataOf(await getDocFromServer(doc(db, path))),
+    async readFromServer(path) {
+      const { fs, db } = await firestore();
+      return dataOf(await fs.getDocFromServer(fs.doc(db, path)));
+    },
     signIn: async (email, password) => { await signInWithEmailAndPassword(auth, email, password); },
     sendReset: email => sendPasswordResetEmail(auth, email),
     signOut: () => signOut(auth),
     // ⚠️ terminate() stops every listener, which is why every caller reloads straight after.
+    // ⚠️ It starts Firestore if this page never did: the offline database may still hold a
+    // previous session's data (or the current app's, on this same origin).
     async wipeOfflineCache() {
       try {
-        await terminate(db);
-        await clearIndexedDbPersistence(db);
+        const { fs, db } = await firestore();
+        await fs.terminate(db);
+        await fs.clearIndexedDbPersistence(db);
         return true;
       } catch (err) {
         console.warn('Could not clear the offline copy of the data:', err);
@@ -104,8 +157,9 @@ export function createFirebaseBackend(hostname: string): FirebaseBackend {
     async changesStillWaiting(ms = 4000) {
       let timer: ReturnType<typeof setTimeout> | undefined;
       try {
+        const { fs, db } = await firestore();
         const sent = await Promise.race([
-          waitForPendingWrites(db).then(() => true),
+          fs.waitForPendingWrites(db).then(() => true),
           new Promise<boolean>(resolve => { timer = setTimeout(() => resolve(false), ms); }),
         ]);
         return !sent;
