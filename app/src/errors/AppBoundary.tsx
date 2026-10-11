@@ -4,7 +4,9 @@ import { RootError } from './RootError';
 
 type Props = {
   children: ReactNode;
-  // 2b-2 connects the error report here.
+  // Not how the error report hears of a failure: React already logs what a boundary catches with
+  // console.error, which the report wraps (telemetry/startTelemetry.ts). Calling the report from
+  // here too would send every render error twice. For a part that wants to know for its own sake.
   onError?: (error: unknown, info: ErrorInfo) => void;
 };
 

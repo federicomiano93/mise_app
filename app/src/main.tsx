@@ -14,15 +14,30 @@ import { createFirebaseBackend } from './session/firebaseBackend';
 import { createSession } from './session/session';
 import { SessionGate } from './session/SessionGate';
 import { SessionProvider } from './session/SessionContext';
+import { createTelemetrySinks } from './telemetry/sinks';
+import { startTelemetry } from './telemetry/startTelemetry';
 
 const container = document.getElementById('root');
 if (!container) {
   throw new Error('Mise 2 cannot start: index.html has no element with id="root".');
 }
 
+// ONE backend: the session reads through it, and the telemetry writes through the same Firestore
+// and Auth (a second one would be a second connection and a second offline cache).
+const backend = createFirebaseBackend(location.hostname);
+const store = createSession(backend, createBrowserEnv());
+const sinks = createTelemetrySinks(backend, () => {
+  const session = store.getSnapshot();
+  return session.status === 'ready' ? session.locationId : null;
+});
+
+// ⚠️ THE TELEMETRY STARTS BEFORE THE SESSION (main.spec.ts pins the order). Its error
+// listeners must be on before anything else runs, or an error during boot is lost: the reporter
+// keeps it in memory and sends it once a venue is open.
+startTelemetry({ store, sinks });
+
 // The session starts listening NOW, in parallel with the language loading below: by the time
 // the first screen is drawn the session has often already answered who is signed in.
-const store = createSession(createFirebaseBackend(location.hostname), createBrowserEnv());
 store.start();
 
 // The screens above a venue follow the phone's language (his decision, 1 Oct 2026); the
