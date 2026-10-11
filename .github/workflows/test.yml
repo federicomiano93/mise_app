@@ -104,14 +104,15 @@ jobs:
       #
       # Exactly the install the two jobs that hold a Google credential use
       # (deploy-functions below, preview.yml) — the lockfile, no install scripts,
-      # only `firebase` on PATH (why: deploy-functions) — so this job proves on every push that the locked firebase-tools still runs
-      # the emulator without its install scripts. (The deploy commands are proven by
+      # only `firebase` on PATH (why: deploy-functions) — so this job proves on
+      # every push that the locked firebase-tools still runs the emulator without
+      # its install scripts. (The deploy commands are proven by
       # each PR's Preview run and, for functions, by deploy-functions after the
       # merge.) Change one, change all three.
       - name: Install firebase-tools from its lockfile (no install scripts)
         run: |
           npm ci --ignore-scripts
-          mkdir -p "$RUNNER_TEMP/firebase-cli"
+          mkdir "$RUNNER_TEMP/firebase-cli"
           ln -s "$PWD/node_modules/.bin/firebase" "$RUNNER_TEMP/firebase-cli/firebase"
           echo "$RUNNER_TEMP/firebase-cli" >> "$GITHUB_PATH"
         working-directory: ci/firebase-tools
@@ -296,7 +297,7 @@ jobs:
       - name: Install firebase-tools from its lockfile (before the sign-in, no install scripts)
         run: |
           npm ci --ignore-scripts
-          mkdir -p "$RUNNER_TEMP/firebase-cli"
+          mkdir "$RUNNER_TEMP/firebase-cli"
           ln -s "$PWD/node_modules/.bin/firebase" "$RUNNER_TEMP/firebase-cli/firebase"
           echo "$RUNNER_TEMP/firebase-cli" >> "$GITHUB_PATH"
         working-directory: ci/firebase-tools

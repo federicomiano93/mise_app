@@ -8,7 +8,8 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { judge, ALLOWED } from '../scripts/audit-ci-firebase-tools.mjs';
+import { readFileSync } from 'node:fs';
+import { judge, main, ALLOWED } from '../scripts/audit-ci-firebase-tools.mjs';
 
 const advisory = (id, severity, cwe, title = 'an advisory') =>
   ({ source: 1, name: 'pkg', dependency: 'pkg', title, url: `https://github.com/advisories/${id}`, severity, cwe, range: '*' });
@@ -42,9 +43,12 @@ test('a hijacked package fails even though it is only HIGH (debug@4.4.2, Septemb
 
 test('malicious code fails at ANY severity, and the allowlist never excuses it', () => {
   for (const severity of ['low', 'moderate', 'high', 'critical']) {
-    assert.equal(judge(report({ x: { severity, via: [advisory('GHSA-aaaa-bbbb-cccc', severity, ['CWE-506'])] } })).ok, false, severity);
+    const v = judge(report({ ...today(), x: { severity, via: [advisory('GHSA-aaaa-bbbb-cccc', severity, ['CWE-506'])] } }));
+    assert.deepEqual(v.problems, [`MALICIOUS CODE — GHSA-aaaa-bbbb-cccc ${severity} x: an advisory`], severity);
   }
-  assert.equal(judge(report({ x: { severity: 'high', via: [advisory('GHSA-vfj7-8cjw-p6xm', 'high', ['CWE-674', 'CWE-506'])] } })).ok, false);
+  const tree = today();
+  tree.braces.via[0].cwe = ['CWE-674', 'CWE-506'];
+  assert.match(judge(report(tree)).problems.join('\n'), /MALICIOUS CODE — GHSA-vfj7-8cjw-p6xm/);
 });
 
 test('a NEW high or critical fails until somebody looks at it; a plain moderate does not', () => {
@@ -55,8 +59,24 @@ test('a NEW high or critical fails until somebody looks at it; a plain moderate 
 
 // An advisory with no GHSA link is judged by its npm id, which no allowlist entry can match.
 test('a high with no GHSA link cannot slip through the allowlist', () => {
-  const v = judge(report({ z: { severity: 'high', via: [{ source: 99, name: 'z', title: 't', url: '', severity: 'high', cwe: [] }] } }));
-  assert.equal(v.ok, false);
+  const v = judge(report({ ...today(), z: { severity: 'high', via: [{ source: 99, name: 'z', title: 't', url: '', severity: 'high', cwe: [] }] } }));
+  assert.deepEqual(v.problems, ['99 high z: t']);
+});
+
+// The review proved it: offline mode, or dev packages omitted (firebase-tools is a devDependency),
+// gives a well-formed report with NOTHING in it — which, unchecked, reads as «clean».
+test('an audit that saw nothing fails: the two accepted advisories must be reported every run', () => {
+  const blind = judge(report({}));
+  assert.equal(blind.ok, false);
+  assert.equal(blind.problems.filter((p) => /was not reported: the audit checked nothing/.test(p)).length, 2);
+  const tree = today();
+  delete tree.braces;
+  assert.deepEqual(judge(report(tree)).problems,
+    ['GHSA-vfj7-8cjw-p6xm was not reported: the audit checked nothing, or this ALLOWED entry is stale — remove it']);
+  // Seen at a lower severity after a re-rating, it still proves the audit looked.
+  const rerated = today();
+  rerated.braces.via[0].severity = 'moderate';
+  assert.equal(judge(report(rerated)).ok, true);
 });
 
 test('an npm or registry failure is a failure, never «nothing found»', () => {
@@ -69,9 +89,32 @@ test('an npm or registry failure is a failure, never «nothing found»', () => {
     { auditReportVersion: 2, metadata: { dependencies: { total: 673 } } },
     { auditReportVersion: 2, vulnerabilities: {}, metadata: { dependencies: { total: 0 } } },
     { auditReportVersion: 2, vulnerabilities: {} },
+    // npm said it failed, even if the rest looks complete.
+    { ...report(today()), error: { code: 'EAUDITBULK', summary: 'audit endpoint returned an error' } },
   ]) {
     assert.equal(judge(bad).ok, false, JSON.stringify(bad));
   }
+});
+
+// The part that runs npm and sets the exit code, driven with a fake npm.
+test('the script exits 1 on a problem, 0 on today\'s tree, and says why npm failed', () => {
+  const lines = [];
+  const say = (line) => lines.push(line);
+  const fake = (body, stderr = '') => () => ({ stdout: typeof body === 'string' ? body : JSON.stringify(body), stderr });
+  assert.equal(main(fake(report(today())), say, say), 0);
+  assert.equal(main(fake(report({ ...today(), d: { severity: 'high', via: [advisory('GHSA-4x49-vf9v-38px', 'high', ['CWE-506'])] } })), say, say), 1);
+  assert.equal(main(fake(report({})), say, say), 1);
+  assert.equal(main(fake(''), say, say), 1);
+  lines.length = 0;
+  assert.equal(main(fake({ error: { code: 'ENOLOCK', summary: 'This command requires an existing lockfile.' } }, 'npm error audit ENOLOCK'), say, say), 1);
+  assert.ok(lines.includes('npm: This command requires an existing lockfile.'), lines.join('\n'));
+  assert.ok(lines.includes('npm error audit ENOLOCK'));
+  // Run as a script, the code main() returns is the process's — nothing else ends it.
+  const source = readFileSync(new URL('../scripts/audit-ci-firebase-tools.mjs', import.meta.url), 'utf8').replace(/\r\n/g, '\n');
+  assert.match(source, /\nif \(process\.argv\[1\] && import\.meta\.url === pathToFileURL\(process\.argv\[1\]\)\.href\) process\.exitCode = main\(\);\n$/);
+  assert.doesNotMatch(source, /process\.exit\(/);
+  // The flags that keep offline mode and an omitted dev tree from blinding it.
+  assert.match(source, /'npm audit --json --include=dev --offline=false'/);
 });
 
 test('the allowlist is exactly the two measured advisories, each with its reason', () => {

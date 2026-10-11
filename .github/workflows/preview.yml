@@ -119,6 +119,14 @@ jobs:
           fi
           find _site -maxdepth 1 | sort
 
+      # ⚠️ THE SAME VULNERABILITY GATE AS test.yml's `test` job, HERE BEFORE THE INSTALL: this
+      # workflow does not wait for `test`, so without it a PR whose lockfile carries a package
+      # newly reported as malicious would run it below with the preview credential before the
+      # gate's verdict. It reads the lockfile and asks the registry; it installs nothing and runs no
+      # package code. Why it is a script and not `npm audit --audit-level=…`: the script's header.
+      - name: Vulnerability check of CI's firebase-tools (P11)
+        run: node scripts/audit-ci-firebase-tools.mjs
+
       # ⚠️ firebase-tools RUNS NO CODE WHILE IT INSTALLS, IS INSTALLED IN ITS OWN STEP BEFORE THE
       # SIGN-IN, AND EVERY VERSION UNDER IT COMES FROM ITS LOCKFILE (ci/firebase-tools/) — the
       # same rule, and the same measurement, as production's deploy job (test.yml,
@@ -134,7 +142,7 @@ jobs:
       - name: Install firebase-tools from its lockfile (before the sign-in, no install scripts)
         run: |
           npm ci --ignore-scripts
-          mkdir -p "$RUNNER_TEMP/firebase-cli"
+          mkdir "$RUNNER_TEMP/firebase-cli"
           ln -s "$PWD/node_modules/.bin/firebase" "$RUNNER_TEMP/firebase-cli/firebase"
           echo "$RUNNER_TEMP/firebase-cli" >> "$GITHUB_PATH"
         working-directory: ci/firebase-tools

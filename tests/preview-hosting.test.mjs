@@ -64,7 +64,7 @@ test('Mise 2 is built in a job with no Google identity, and only its built files
     'the job holding the credential builds nothing');
   assert.equal((deployJob.match(/\bnpm ci\b/g) || []).length, 1, 'one install in the credential job');
   assert.deepEqual([...deployJob.matchAll(/npm ci[^\n]*(\n {10}[^\n]*)*\n {8}working-directory: [^\n]*/g)].map(m => m[0].replace(/\n\s+/g, ' ')),
-    ['npm ci --ignore-scripts mkdir -p "$RUNNER_TEMP/firebase-cli" ' +
+    ['npm ci --ignore-scripts mkdir "$RUNNER_TEMP/firebase-cli" ' +
      'ln -s "$PWD/node_modules/.bin/firebase" "$RUNNER_TEMP/firebase-cli/firebase" ' +
      'echo "$RUNNER_TEMP/firebase-cli" >> "$GITHUB_PATH" working-directory: ci/firebase-tools'],
     'the one thing the credential job installs is firebase-tools from its lockfile, with no install scripts');

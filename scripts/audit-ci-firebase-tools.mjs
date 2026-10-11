@@ -1,6 +1,7 @@
 // audit-ci-firebase-tools.mjs — the vulnerability gate on CI's own firebase-tools
-// (ci/firebase-tools/package-lock.json), run by the `test` job: `node scripts/audit-ci-firebase-tools.mjs`.
-// Exit code 1 on any problem; deploy-functions needs `test`, so a problem here stops the deploy.
+// (ci/firebase-tools/package-lock.json): `node scripts/audit-ci-firebase-tools.mjs`. Run by the
+// `test` job (deploy-functions needs it, so a problem here stops the deploy) and by preview.yml's
+// deploy job before its install (that workflow does not wait for `test`). Exit code 1 on any problem.
 //
 // ⚠️ WHY NOT PLAIN `npm audit --audit-level=…`. Neither level works for this tree:
 // - `high` is red for ever: firebase-tools' own tree carries two HIGH advisories that no
@@ -10,9 +11,15 @@
 // - `critical` misses the very thing this lockfile is for. A HIJACKED package is not published
 //   as critical: debug@4.4.2 and color-convert@3.1.1 (the September 2025 account takeover —
 //   GHSA-4x49-vf9v-38px, GHSA-pxx3-g568-hxr4) are HIGH, CWE-506 «embedded malicious code», and
-//   this tree carries both families one patch later.
+//   this tree carries both packages, at later versions.
 // So: ANY advisory marked CWE-506 fails, whatever its severity; any HIGH or CRITICAL fails unless
 // it is one of the two named below. A new high therefore turns CI red until somebody looks at it.
+//
+// ⚠️ AND THE TWO ACCEPTED ADVISORIES MUST BE SEEN, EVERY RUN. An audit that checked nothing
+// (offline mode, dev packages omitted — firebase-tools is a devDependency — or an empty answer
+// from the registry) still prints a well-formed report with zero findings: it would read «clean».
+// The two known findings are the proof the audit looked; when one disappears, its entry is stale
+// and must go. `--include=dev --offline=false` override the settings that would blind it.
 //
 // It only knows what has been REPORTED. The lockfile itself is the protection; this catches a
 // locked version that is reported as bad after it was locked. Dependabot reports every level.
@@ -20,7 +27,7 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 // Each entry: the advisory, why it cannot hurt CI, and why it cannot be fixed. Re-measure on every
-// firebase-tools raise; remove an entry the moment its advisory is gone from the tree.
+// firebase-tools raise; an entry whose advisory is gone from the tree fails the gate until removed.
 export const ALLOWED = new Map([
   ['GHSA-c475-qrg2-pj4r', 'basic-ftp: slow parsing of a hostile FTP directory listing. Reached only through ' +
     'proxy-agent → pac-proxy-agent → get-uri, i.e. an ftp:// proxy setting CI does not have; get-uri ' +
@@ -49,27 +56,41 @@ export function judge(report) {
       const id = ghsaOf(via.url) ?? String(via.source ?? via.url ?? 'unknown advisory');
       const label = `${id} ${via.severity} ${name}: ${via.title}`;
       if ((via.cwe ?? []).includes(MALICIOUS)) problems.add(`MALICIOUS CODE — ${label}`);
-      else if (BLOCKING.has(via.severity) && !ALLOWED.has(id)) problems.add(label);
-      else if (BLOCKING.has(via.severity)) accepted.add(id);
+      else if (ALLOWED.has(id)) accepted.add(id);
+      else if (BLOCKING.has(via.severity)) problems.add(label);
     }
+  }
+  for (const id of ALLOWED.keys()) {
+    if (!accepted.has(id)) problems.add(`${id} was not reported: the audit checked nothing, or this ALLOWED entry is stale — remove it`);
   }
   return { ok: problems.size === 0, problems: [...problems], accepted: [...accepted] };
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+export function runNpmAudit() {
   const dir = fileURLToPath(new URL('../ci/firebase-tools/', import.meta.url));
   // `npm audit` exits 1 whenever it finds anything, so its exit code says nothing here: the
   // verdict is judge()'s. One fixed command string through a shell: npm is a .cmd on Windows.
-  const run = spawnSync('npm audit --json', { cwd: dir, encoding: 'utf8', shell: true, maxBuffer: 64 * 1024 * 1024 });
-  let report;
-  try { report = JSON.parse(run.stdout); } catch { report = null; }
-  const { ok, problems, accepted } = judge(report);
-  for (const id of accepted) console.log(`accepted (scripts/audit-ci-firebase-tools.mjs ALLOWED): ${id}`);
-  if (ok) {
-    console.log('ci/firebase-tools: no malicious-code advisory, no high or critical beyond the accepted ones.');
-  } else {
-    for (const p of problems) console.error(`::error::ci/firebase-tools: ${p}`);
-    if (!report) console.error(run.stderr);
-    process.exit(1);
-  }
+  return spawnSync('npm audit --json --include=dev --offline=false',
+    { cwd: dir, encoding: 'utf8', shell: true, maxBuffer: 64 * 1024 * 1024 });
 }
+
+// Returns the exit code, so the tests can drive it with a fake npm.
+export function main(run = runNpmAudit, out = console.log, err = console.error) {
+  const result = run();
+  let report;
+  try { report = JSON.parse(result.stdout); } catch { report = null; }
+  const { ok, problems, accepted } = judge(report);
+  for (const id of accepted) out(`accepted (scripts/audit-ci-firebase-tools.mjs ALLOWED): ${id}`);
+  if (ok) {
+    out('ci/firebase-tools: no malicious-code advisory, no high or critical beyond the accepted ones.');
+    return 0;
+  }
+  for (const p of problems) err(`::error::ci/firebase-tools: ${p}`);
+  // Say WHY when npm itself failed: its error comes back as JSON, not as a crash.
+  const cause = report?.error?.summary ?? report?.message;
+  if (cause) err(`npm: ${cause}`);
+  if (result.stderr) err(String(result.stderr).trim());
+  return 1;
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) process.exitCode = main();

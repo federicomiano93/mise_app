@@ -6,7 +6,7 @@ The copy of firebase-tools that GitHub Actions runs — the `rules` job (the emu
 
 **Why a lockfile:** firebase-tools ships no `npm-shrinkwrap.json`, so a global
 `npm install firebase-tools@x` resolved its ~670 packages afresh on every run. A hijacked new
-version of any of them would have run during `firebase deploy` with the production credential.
+version of any of them could have run during `firebase deploy` with the production credential.
 Here every version and its integrity hash are fixed; a new one arrives only through a reviewed PR.
 
 Nothing in this folder reaches a phone: the preview stages `_site/` from an allowlist that does not

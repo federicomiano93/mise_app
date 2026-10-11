@@ -11,7 +11,7 @@
 //
 // And every version comes from a lockfile. firebase-tools ships no npm-shrinkwrap.json, so the
 // global `npm install firebase-tools@x` resolved its ~670 packages afresh on every run, and a
-// hijacked new patch of any of them would have RUN during the deploy, credential in hand. Since
+// hijacked new patch of any of them could have run during the deploy, credential in hand. Since
 // October 2026 CI installs it from ci/firebase-tools/package-lock.json (`npm ci`), and the
 // checks at the end of this file pin that folder.
 //
@@ -100,7 +100,8 @@ const LOCKED_INSTALL = new RegExp([
   '\\n {6}- name: [^\\n]+',
   ' {8}run: \\|',
   ' {10}npm ci --ignore-scripts',
-  ' {10}mkdir -p "\\$RUNNER_TEMP/firebase-cli"',
+  // Plain `mkdir`: a folder already there (planted by anything earlier in the job) fails the step.
+  ' {10}mkdir "\\$RUNNER_TEMP/firebase-cli"',
   ' {10}ln -s "\\$PWD/node_modules/\\.bin/firebase" "\\$RUNNER_TEMP/firebase-cli/firebase"',
   ' {10}echo "\\$RUNNER_TEMP/firebase-cli" >> "\\$GITHUB_PATH"',
   ' {8}working-directory: ci/firebase-tools\\n',
@@ -131,12 +132,23 @@ test('every job that runs firebase installs it from the lockfile first, and noth
     assert.equal(steps.length, 1, `${job.id}: installs firebase-tools from ci/firebase-tools once`);
     assert.ok(steps[0].index < body.search(RUNS_FIREBASE), `${job.id}: runs firebase before installing it`);
   }
-  for (const w of workflows) {
-    const all = code(w.yaml);
-    assert.doesNotMatch(all, /firebase-tools@/, `${w.file}: firebase-tools by version, outside its lockfile`);
-    assert.doesNotMatch(all, /\b(npx|pnpx|bunx|npm (exec|x))\b[^\n]*\bfirebase/, `${w.file}: fetches firebase-tools with no lockfile`);
-    assert.doesNotMatch(all, /\bnpm\b[^\n]*\s(-g|--global|--location[= ]global)\b/, `${w.file}: a global install has no lockfile`);
-    assert.doesNotMatch(all, /node_modules\/\.bin["']? >> ["']?\$GITHUB_PATH/, `${w.file}: a whole .bin folder on PATH`);
+  // ALLOWLISTS, not lists of bad spellings (`npm --yes exec`, `pnpm dlx`, `yarn dlx`, `pnpm add -g`,
+  // `tee -a "$GITHUB_PATH"`… a review found each one a list of bad spellings had missed).
+  const allLines = workflows.flatMap((w) => lines(w.yaml).map((line) => ({ file: w.file, line: line.trim() })));
+  const MAY_NAME_FIREBASE_TOOLS = new Set([
+    'working-directory: ci/firebase-tools',
+    'run: node scripts/audit-ci-firebase-tools.mjs',
+    'mise2/package.json mise2/src/main.tsx ci/firebase-tools/package.json; do', // the preview leak probe
+  ]);
+  for (const { file, line } of allLines.filter(({ line }) => /firebase-tools/.test(line) && !/^(- )?name:/.test(line))) {
+    assert.ok(MAY_NAME_FIREBASE_TOOLS.has(line), `${file}: firebase-tools reached another way — ${line}`);
+  }
+  const pathLines = allLines.filter(({ line }) => /GITHUB_PATH/.test(line));
+  assert.deepEqual(pathLines.map(({ line }) => line), Array(3).fill('echo "$RUNNER_TEMP/firebase-cli" >> "$GITHUB_PATH"'),
+    'the only thing ever put on PATH is the firebase-cli folder, once per job that runs firebase');
+  for (const { file, line } of allLines) {
+    assert.doesNotMatch(line, /\b(npm|pnpm|yarn|bun)\b.*\s(-g|--global|--location[= ]global)\b|\byarn global\b/,
+      `${file}: a global install has no lockfile — ${line}`);
   }
 });
 
@@ -179,20 +191,33 @@ test('the emulator cache key follows the locked version', () => {
 });
 
 // Its own gate, not `npm audit --audit-level=…` (why: scripts/audit-ci-firebase-tools.mjs and
-// tests/audit-ci-firebase-tools.test.mjs). The WHOLE step is pinned, line by line: an `if:` or a
-// `continue-on-error:` slipped into it would keep the step and drop the gate.
+// tests/audit-ci-firebase-tools.test.mjs). The WHOLE step is pinned, line by line: an `if:`, an
+// `env:` or a `continue-on-error:` slipped into it would keep the step and drop the gate.
+const GATE = "\n      - name: Vulnerability check of CI's firebase-tools (P11)\n";
+function gateStep(jobText) {
+  const start = jobText.indexOf(GATE);
+  if (start < 0) return { start, lines: [] };
+  const rest = jobText.slice(start + 1);
+  const next = rest.search(/\n {6}- /);
+  return { start, lines: (next < 0 ? rest : rest.slice(0, next)).split('\n').map((l) => l.trim()).filter(Boolean) };
+}
+const GATE_LINES = ["- name: Vulnerability check of CI's firebase-tools (P11)", 'run: node scripts/audit-ci-firebase-tools.mjs'];
+const jobOf = (id) => workflows.flatMap((w) => w.jobs).find((job) => job.id === id);
+
 test('the test job runs the firebase-tools gate, unconditionally, so deploy-functions cannot run past it', () => {
-  const testYml = workflows.find((w) => w.file === 'test.yml');
-  const testJob = code(testYml.jobs.find((job) => job.id === 'test.yml: test').text);
-  const start = testJob.indexOf("\n      - name: Vulnerability check of CI's firebase-tools (P11)\n");
-  assert.ok(start >= 0, 'no firebase-tools vulnerability step in the test job');
-  const next = testJob.slice(start + 1).search(/\n {6}- /);
-  const step = (next < 0 ? testJob.slice(start + 1) : testJob.slice(start + 1, start + 1 + next))
-    .split('\n').filter((line) => line.trim() !== '');
-  assert.deepEqual(step.map((line) => line.trim()),
-    ["- name: Vulnerability check of CI's firebase-tools (P11)", 'run: node scripts/audit-ci-firebase-tools.mjs']);
+  const testJob = code(jobOf('test.yml: test').text);
+  assert.deepEqual(gateStep(testJob).lines, GATE_LINES);
   // Nor at the job's level.
   assert.doesNotMatch(testJob, /^ {4}(if|continue-on-error):/m);
-  const deploy = testYml.jobs.find((job) => job.id === 'test.yml: deploy-functions');
-  assert.match(deploy.text, /\n {4}needs: \[test, rules\]\n/);
+  assert.match(jobOf('test.yml: deploy-functions').text, /\n {4}needs: \[test, rules\]\n/);
+});
+
+// preview.yml does not wait for `test`: without its own gate, a PR's lockfile would run with the
+// preview credential before the verdict.
+test('the preview job runs the same gate before it installs firebase-tools', () => {
+  const preview = code(jobOf('preview.yml: preview').text);
+  const gate = gateStep(preview);
+  assert.deepEqual(gate.lines, GATE_LINES);
+  assert.ok(gate.start < preview.search(LOCKED_INSTALL), 'the gate must come BEFORE the install');
+  assert.doesNotMatch(preview, /^ {4}continue-on-error:/m);
 });
