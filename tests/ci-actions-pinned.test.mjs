@@ -23,16 +23,20 @@ const workflows = readdirSync(new URL('../.github/workflows/', import.meta.url))
 const PINNED = /^[\w.-]+\/[\w.-]+(\/[\w./-]+)?@[0-9a-f]{40} # v\d+\.\d+\.\d+$/;
 const USES = /^\s*(?:- )?uses:\s*(.*?)\s*$/;
 
-// Every `uses:` that is not a comment — a step's or a job's (reusable workflows), with or without
-// the step's leading dash.
+// Every line that is not a comment and names `uses` as a key — a step's or a job's (reusable
+// workflows), with or without the step's dash, and in the spellings YAML also accepts (`"uses":`,
+// `uses :`). Only the plain spelling is read; any other is refused below rather than skipped.
 const uses = workflows.flatMap(({ file, text }) => text.split('\n').flatMap((line, i) => {
-  if (/^\s*#/.test(line) || !/\buses:/.test(line)) return [];
+  if (/^\s*#/.test(line) || !/\buses['"]?\s*:/.test(line)) return [];
   const m = line.match(USES);
   return [{ where: `${file}:${i + 1}`, line, value: m ? m[1] : null }];
 }));
 
 test('the scan sees both workflows and every action in them', () => {
-  assert.deepEqual(workflows.map((w) => w.file).sort(), ['preview.yml', 'test.yml']);
+  // A new workflow is scanned too; these two hold the credentials and must never drop out.
+  for (const file of ['preview.yml', 'test.yml']) {
+    assert.ok(workflows.some((w) => w.file === file), `.github/workflows/${file} is gone — has the layout moved?`);
+  }
   // 19 on 11 Oct 2026; far fewer would mean the scan stopped seeing them, not that they left.
   assert.ok(uses.length >= 15, `only ${uses.length} uses: lines found`);
   for (const u of uses) {
@@ -49,8 +53,8 @@ test('every action is pinned to a full commit SHA, with its version beside it', 
   }
 });
 
-// The jobs holding a credential run exactly what the credential-free jobs ran and passed with —
-// a hand edit or a half-applied bump cannot leave one job on another commit.
+// A hand edit or a half-applied bump cannot leave one job on another commit: an action shared with
+// the credential-free jobs runs in the credential jobs exactly as it ran and passed there.
 test('one action, one commit: every job runs the same version of it', () => {
   const seen = new Map();
   for (const u of uses) {
@@ -74,14 +78,23 @@ test('Dependabot keeps the pinned actions current, once a month, a week after ea
     'a major version is a task of its own, never part of the monthly bump');
 });
 
-// Its pull requests only move the actions: nothing to show on a phone, and an action version
-// nobody has reviewed must not run in the job that can mint the preview credential.
-test('Dependabot\'s pull requests get no preview', () => {
+// It only moves the actions: nothing to show on a phone, and it would take over the fixed
+// `anteprima` link every month. Dependabot's npm security pull requests keep their preview.
+test('the monthly actions pull request gets no preview, and nothing else is left out', () => {
   const preview = workflows.find((w) => w.file === 'preview.yml').text;
-  const notDependabot = "github.event.pull_request.user.login != 'dependabot[bot]'";
-  for (const job of ['build-mise2', 'preview']) {
-    const body = preview.slice(preview.indexOf(`\n  ${job}:\n`));
-    const ifLine = body.split('\n').find((l) => /^ {4}if: /.test(l));
-    assert.ok(ifLine && ifLine.includes(notDependabot), `${job}: ${ifLine}`);
+  const sameRepo = 'github.event.pull_request.head.repo.full_name == github.repository';
+  const notActionsBump = "!startsWith(github.head_ref, 'dependabot/github_actions/')";
+  const expected = {
+    'build-mise2': `    if: ${sameRepo} && ${notActionsBump}`,
+    preview: `    if: \${{ !cancelled() && ${sameRepo} && ${notActionsBump} }}`,
+  };
+  for (const [job, line] of Object.entries(expected)) {
+    const start = preview.indexOf(`\n  ${job}:\n`);
+    assert.ok(start > 0, `preview.yml has no ${job} job`);
+    // This job only: up to the next line at the jobs' own indent.
+    const rest = preview.slice(start + 1);
+    const next = rest.slice(1).search(/\n {2}\S/);
+    const body = next < 0 ? rest : rest.slice(0, next + 1);
+    assert.deepEqual(body.split('\n').filter((l) => /^ {4}if:/.test(l)), [line], job);
   }
 });

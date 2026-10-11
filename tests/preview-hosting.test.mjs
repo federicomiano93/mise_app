@@ -57,7 +57,7 @@ test('Mise 2 is built in a job with no Google identity, and only its built files
   assert.match(deployJob, /^\s+needs: build-mise2\n/);
   // A failed Mise 2 build must never take away the current app's preview (his only check of a
   // fix before it goes live): the job runs unless cancelled, and only /mise2/ is left out.
-  assert.match(deployJob, /\n {4}if: \$\{\{ !cancelled\(\) && github\.event\.pull_request\.head\.repo\.full_name == github\.repository && github\.event\.pull_request\.user\.login != 'dependabot\[bot\]' \}\}\n/);
+  assert.match(deployJob, /\n {4}if: \$\{\{ !cancelled\(\) && github\.event\.pull_request\.head\.repo\.full_name == github\.repository && !startsWith\(github\.head_ref, 'dependabot\/github_actions\/'\) \}\}\n/);
   assert.match(deployJob, /- if: needs\.build-mise2\.result == 'success'\n\s+uses: actions\/download-artifact@/);
   assert.match(deployJob, /if \[ -d "\$RUNNER_TEMP\/mise2-site" \]; then\n\s+mv "\$RUNNER_TEMP\/mise2-site" _site\/mise2\n\s+fi/);
   assert.doesNotMatch(deployJob, /npm (install|run)\b|\bnpx\b|\bvite\b/,

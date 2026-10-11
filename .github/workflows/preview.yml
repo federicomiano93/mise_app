@@ -41,12 +41,14 @@ jobs:
   # could ask for one too. Here nothing can: this job may only read the repository, and what it
   # hands on is the built files, nothing else. Never merge the two jobs to save a minute.
   #
-  # Dependabot's pull requests (.github/dependabot.yml) get no preview: they only move the actions
-  # this file and test.yml run, so there is nothing to see on a phone, and an action version nobody
-  # has reviewed yet must not run in the job that can mint the preview credential. They would also
-  # take over the fixed `anteprima` link below. Their `test`, `rules` and `mise2` checks still run.
+  # The monthly ACTIONS pull request (.github/dependabot.yml, branch `dependabot/github_actions/…`)
+  # gets no preview: it moves only the actions this file and test.yml run, so there is nothing to
+  # see on a phone, and it would take over the fixed `anteprima` link below on the first of every
+  # month. Its `test`, `rules` and `mise2` checks still run. Dependabot's npm SECURITY pull
+  # requests keep their preview — for ci/firebase-tools/ it is the run that proves the deploy
+  # commands before production's.
   build-mise2:
-    if: github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]'
+    if: github.event.pull_request.head.repo.full_name == github.repository && !startsWith(github.head_ref, 'dependabot/github_actions/')
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -83,8 +85,8 @@ jobs:
     # Mise 2 build (or an npm registry blip) would take away the preview link of every fix to
     # the app staff use today — and that link is how he checks a fix on his phone before it
     # goes live. A failed build only leaves /mise2/ out; `cancelled` still stops everything.
-    # Dependabot's pull requests are left out here too (why: above build-mise2).
-    if: ${{ !cancelled() && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' }}
+    # The monthly actions pull request is left out here too (why: above build-mise2).
+    if: ${{ !cancelled() && github.event.pull_request.head.repo.full_name == github.repository && !startsWith(github.head_ref, 'dependabot/github_actions/') }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
