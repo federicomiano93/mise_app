@@ -46,12 +46,19 @@ type Props = {
 // ⚠️ UNTIL THE DAYS HAVE ANSWERED, THE LIST IS ONLY THIS PHONE'S OLD COPY (it can be days old): it
 // is drawn, so the first paint is instant, but nothing may be WRITTEN from it. A tick on a stale
 // row would write a list that other phones have long since changed, and Confirm would record it as
-// tonight's. So until the first live answer (store.daysLoaded — the device's own cache counts, so
-// working offline is untouched) a row ignores a tap and Confirm is disabled.
+// tonight's. So until BOTH first answers are in — the days (store.daysLoaded) and tonight's
+// confirmations (store.confirmedAnsweredOnce; until that one, «not confirmed» only means «nobody has
+// said yet», so a tap could skip the «Edit {day}?» question and Confirm could record over tonight's
+// record) — a row ignores a tap, the tick of a box writes nothing and Confirm is disabled. Both stay
+// in once in (a 4am refresh does not turn the rows off again, as in the current app). The device's
+// own cache counts as an answer, so working offline is untouched — except an EMPTY answer from it on
+// a phone that never had the list (pastriesStore.ts, believable()). The wording of an empty day
+// follows the days only.
 export function DayPanel({ day, opening, handBackFocus }: Props) {
   const { t } = useT();
   const store = usePastriesStore();
-  const { days, daysLoaded } = usePastries();
+  const { days, daysLoaded, confirmedAnsweredOnce } = usePastries();
+  const ready = daysLoaded && confirmedAnsweredOnce;
   const navigate = useNavigate();
   const say = useStatusMessage();
   const [confirm, confirmDialog] = useConfirm();
@@ -160,6 +167,7 @@ export function DayPanel({ day, opening, handBackFocus }: Props) {
   }
 
   function commit(index: number, key: string) {
+    if (!ready) return;
     const item = items[index];
     if (!item) return;
     const n = proposedQuantity(typed[key]);
@@ -234,8 +242,14 @@ export function DayPanel({ day, opening, handBackFocus }: Props) {
       <div className={styles.body}>
         {items.length === 0 ? (
           <div className={styles.empty}>
-            <p className={styles.emptyTitle}>{t('past.nothingToProveFor', { day: label })}</p>
-            <p className={styles.emptyHint}>{t('past.tapThePencilTo')}</p>
+            {daysLoaded ? (
+              <>
+                <p className={styles.emptyTitle}>{t('past.nothingToProveFor', { day: label })}</p>
+                <p className={styles.emptyHint}>{t('past.tapThePencilTo')}</p>
+              </>
+            ) : (
+              <p className={styles.emptyTitle}>{t('past.listNotArrivedYet')}</p>
+            )}
           </div>
         ) : (
           <ul className={styles.list}>
@@ -247,7 +261,7 @@ export function DayPanel({ day, opening, handBackFocus }: Props) {
                   key={reactKeys[index]}
                   item={item}
                   open={open}
-                  disabled={!daysLoaded}
+                  disabled={!ready}
                   typed={typed[key] ?? ''}
                   inputRef={open ? openInput : undefined}
                   onToggle={() => { void pressRow(key); }}
@@ -279,7 +293,7 @@ export function DayPanel({ day, opening, handBackFocus }: Props) {
           variant="primary"
           block
           hidden={locked}
-          isDisabled={!daysLoaded}
+          isDisabled={!ready}
           onPress={() => { void confirmToday(); }}
         >
           {t('past.confirm')}

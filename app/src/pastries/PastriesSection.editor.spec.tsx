@@ -72,15 +72,32 @@ describe('the editor: opening it', () => {
     renderPastries('/pastries/Thursday/edit', { source });
     await screen.findByRole('tablist', { name: 'Days' }, LOAD);
 
-    expect(document.querySelector('[aria-busy="true"]')).toHaveTextContent('Loading…');
+    expect(document.querySelector('[aria-busy="true"]')).toHaveTextContent('The list hasn’t arrived yet — it opens as soon as it does.');
     expect(screen.queryByRole('heading', { level: 2, name: 'Edit Thursday' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument();
     expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
 
     act(() => { answer(); });
-    await screen.findByRole('heading', { level: 2, name: 'Edit Thursday' });
+    await screen.findByRole('heading', { level: 2, name: 'Edit Thursday' }, LOAD);
     expect(rowsShown()).toEqual([['Cornetti', '24'], ['Krapfen', '12'], ['Sfogliatelle', '8']]);
     expect(document.querySelector('[aria-busy="true"]')).toBeNull();
+  });
+
+  // An empty answer from the phone's own offline copy is not the first answer.
+  it('keeps waiting through an empty answer from the device\'s cache, then opens on the real rows', async () => {
+    const source = fakePastriesSource({ days: [dayDoc('Thursday', [['Cornetti', 24], ['Krapfen', 12]])] });
+    const { answer, fromCache } = holdDays(source);
+    renderPastries('/pastries/Thursday/edit', { source });
+    await screen.findByRole('tablist', { name: 'Days' }, LOAD);
+
+    act(() => { fromCache(); });
+    expect(document.querySelector('[aria-busy="true"]')).toHaveTextContent('The list hasn’t arrived yet — it opens as soon as it does.');
+    expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument();
+
+    act(() => { answer(); });
+    await screen.findByRole('heading', { level: 2, name: 'Edit Thursday' }, LOAD);
+    expect(rowsShown()).toEqual([['Cornetti', '24'], ['Krapfen', '12']]);
   });
 
   it('opens on what there is when the seven days cannot be read, rather than waiting for ever', async () => {

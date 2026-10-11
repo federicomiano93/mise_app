@@ -100,6 +100,8 @@ export const en = {
   'past.toProve': 'To prove',
   'past.editDay': 'Edit {day}',
   'past.nothingToProveFor': 'Nothing to prove for {day} yet.',
+  'past.listNotArrivedYet': 'The list hasn’t arrived yet.',
+  'past.listNotLoadedYet': 'The list hasn’t arrived yet — it opens as soon as it does.',
   'past.tapThePencilTo': 'Tap the pencil to add.',
   'past.newQuantityFor': 'New quantity for {name}',
   'past.confirmNewQuantityFor': 'Confirm the new quantity for {name}',

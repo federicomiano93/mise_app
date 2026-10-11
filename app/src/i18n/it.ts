@@ -73,6 +73,8 @@ export const it: Messages = {
   'past.toProve': 'Da mettere',
   'past.editDay': 'Modifica {day}',
   'past.nothingToProveFor': 'Ancora niente da mettere per {day}.',
+  'past.listNotArrivedYet': 'La lista non è ancora arrivata.',
+  'past.listNotLoadedYet': 'La lista non è ancora arrivata: si apre appena arriva.',
   'past.tapThePencilTo': 'Tocca la matita per aggiungere.',
   'past.newQuantityFor': 'Nuova quantità per {name}',
   'past.confirmNewQuantityFor': 'Conferma la nuova quantità per {name}',

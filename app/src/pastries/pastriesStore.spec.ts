@@ -10,7 +10,7 @@ import type { PastriesDeps, PastriesMessage } from './pastriesStore';
 // pastries-store.js, pastries-logs-store.js and the lock half of pastries-main.js, one test each.
 
 type Watch = {
-  onChange: (docs: StoredDoc[]) => void;
+  onChange: (docs: StoredDoc[], fromCache?: boolean) => void;
   onError: (err: unknown) => void;
   stopped: boolean;
   date?: string;
@@ -53,14 +53,17 @@ function memoryStorage(initial: Record<string, string> = {}): KeyValueStorage & 
 // Wednesday 14 Oct 2026, 21:00 local: the work date is 2026-10-14.
 const EVENING = new Date(2026, 9, 14, 21, 0, 0).getTime();
 
-function setup({ storage = memoryStorage(), now = EVENING }: { storage?: ReturnType<typeof memoryStorage>; now?: number } = {}) {
+// `deviceStorage` replaces what the browser gives (null: blocked site data) when a spec needs that.
+function setup({ storage = memoryStorage(), now = EVENING, deviceStorage }: {
+  storage?: ReturnType<typeof memoryStorage>; now?: number; deviceStorage?: KeyValueStorage | null;
+} = {}) {
   const fake = fakeSource();
   let clock = now;
   const timers: { callback: () => void; ms: number; cleared: boolean }[] = [];
   // A timer that has fired is spent, like a cleared one.
   const foreground: (() => void)[] = [];
   const deps: PastriesDeps = {
-    storage,
+    storage: deviceStorage === undefined ? storage : deviceStorage,
     now: () => clock,
     setTimer: (callback, ms) => {
       const timer = { callback: () => { timer.cleared = true; callback(); }, ms, cleared: false };
@@ -143,6 +146,80 @@ describe('the live days', () => {
     store.start();
     days[0]!.onError(new Error('unavailable'));
     expect(store.getSnapshot().daysLoaded).toBe(true);
+  });
+
+  // ⚠️ Firestore answers «nothing» from its own offline copy about a list it has never fetched on
+  // this phone, once it decides it is offline: a new phone on bad Wi-Fi. Believed, the editor would
+  // open on an empty day and a Save would replace the real list when the signal came back.
+  test('an EMPTY answer from the device cache is not believed on a phone with no local copy', () => {
+    const { store, days, storage } = setup();
+    store.start();
+    days[0]!.onChange([], true);
+    expect(store.getSnapshot().daysLoaded).toBe(false);
+    // Not even drawn or remembered: the copy on screen stays what it was.
+    expect(storage.map.has(DAYS_CACHE_KEY)).toBe(false);
+    // The server's answer, even the same nothing, is believed.
+    days[0]!.onChange([], false);
+    expect(store.getSnapshot().daysLoaded).toBe(true);
+  });
+
+  test('an EMPTY answer from the device cache does not wipe a local copy that holds pastries', () => {
+    const storage = memoryStorage({ [DAYS_CACHE_KEY]: JSON.stringify({ Tuesday: { items: [{ name: 'Cornetti', qty: 24 }], note: '' } }) });
+    const { store, days } = setup({ storage });
+    store.start();
+    days[0]!.onChange([], true);
+    expect(store.getSnapshot().daysLoaded).toBe(false);
+    expect(store.getSnapshot().days.Tuesday.items).toEqual([{ name: 'Cornetti', qty: 24 }]);
+    expect(JSON.parse(storage.map.get(DAYS_CACHE_KEY)!).Tuesday.items).toEqual([{ name: 'Cornetti', qty: 24 }]);
+  });
+
+  test('an EMPTY answer from the device cache is believed when the local copy said the venue never had a pastry', () => {
+    const storage = memoryStorage({ [DAYS_CACHE_KEY]: JSON.stringify({}) });
+    const { store, days } = setup({ storage });
+    store.start();
+    days[0]!.onChange([], true);
+    expect(store.getSnapshot().daysLoaded).toBe(true);
+  });
+
+  // Working offline from Firestore's own copy is the app's local-first choice, unchanged.
+  test('an answer from the device cache WITH documents is believed', () => {
+    const { store, days } = setup();
+    store.start();
+    days[0]!.onChange([{ id: 'Friday', items: [{ name: 'Krapfen', qty: 6 }], note: '' }], true);
+    expect(store.getSnapshot().daysLoaded).toBe(true);
+    expect(store.getSnapshot().days.Friday.items).toEqual([{ name: 'Krapfen', qty: 6 }]);
+  });
+
+  test('a local copy written after the store was made does not change what the cache is believed about', () => {
+    const storage = memoryStorage();
+    const { store, days } = setup({ storage });
+    store.start();
+    store.saveDay('Monday', [], '');
+    // The save wrote an (empty) local copy; the store still remembers the phone had none when it opened.
+    expect(storage.map.has(DAYS_CACHE_KEY)).toBe(true);
+    days[0]!.onChange([], true);
+    expect(store.getSnapshot().daysLoaded).toBe(false);
+  });
+
+  // No storage (blocked site data) or one that throws: there is no local copy to agree with, so an
+  // empty answer from the cache is never believed — the safe direction.
+  test('an EMPTY answer from the device cache is not believed when the browser gives no storage', () => {
+    const { store, days } = setup({ deviceStorage: null });
+    store.start();
+    days[0]!.onChange([], true);
+    expect(store.getSnapshot().daysLoaded).toBe(false);
+  });
+
+  test('an EMPTY answer from the device cache is not believed when the storage throws', () => {
+    const throwing = {
+      getItem: () => { throw new Error('SecurityError'); },
+      setItem: () => { throw new Error('SecurityError'); },
+      removeItem: () => { throw new Error('SecurityError'); },
+    };
+    const { store, days } = setup({ deviceStorage: throwing });
+    store.start();
+    days[0]!.onChange([], true);
+    expect(store.getSnapshot().daysLoaded).toBe(false);
   });
 
   test('stay loaded across a stop and a start', () => {
@@ -255,6 +332,26 @@ describe('tonight\'s confirmations and the lock', () => {
     expect(live(forDate).map(w => w.date)).toEqual(['2026-10-15']);
     expect(store.isLocked('Thursday')).toBe(false);
     expect(liveTimers()).toHaveLength(1);
+  });
+
+  // The day panel's rows and Confirm wait for the first answer only: a refresh must not turn them off.
+  test('a refresh resets confirmedLoaded but never confirmedAnsweredOnce', () => {
+    const { store, forDate, foreground, setClock } = setup();
+    store.start();
+    expect(store.getSnapshot().confirmedAnsweredOnce).toBe(false);
+    forDate[0]!.onChange([]);
+    expect(store.getSnapshot().confirmedAnsweredOnce).toBe(true);
+    setClock(new Date(2026, 9, 15, 9, 0, 0).getTime());
+    foreground[0]!();
+    expect(store.getSnapshot().confirmedLoaded).toBe(false);
+    expect(store.getSnapshot().confirmedAnsweredOnce).toBe(true);
+  });
+
+  test('a failed question counts as the first answer too', () => {
+    const { store, forDate } = setup();
+    store.start();
+    forDate[0]!.onError(new Error('unavailable'));
+    expect(store.getSnapshot().confirmedAnsweredOnce).toBe(true);
   });
 
   test('⚠️ coming back to the foreground after 4am asks again; before it, nothing happens', () => {
