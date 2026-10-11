@@ -2,6 +2,7 @@ import { useT } from '../i18n/useT';
 import { Button } from '../ui/Button';
 import { useSessionStore } from './SessionContext';
 import { LeaveDialog } from './LeaveDialog';
+import { LeaveFailed } from './LeaveFailed';
 import { useLeaveFlow } from './useLeaveFlow';
 
 // «Log out», with the two questions that come before it: «Log out?» (signing out clears this
@@ -18,6 +19,7 @@ export function SignOutButton({ variant = 'secondary' }: { variant?: 'secondary'
   return (
     <>
       <Button variant={variant} onPress={flow.open}>{t('auth.logOut')}</Button>
+      <LeaveFailed failed={flow.failed} />
       <LeaveDialog
         flow={flow}
         role="alertdialog"

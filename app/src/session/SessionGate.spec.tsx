@@ -110,7 +110,9 @@ describe('SessionGate: the venue\'s language comes first', () => {
     expect(screen.getByRole('status')).toBeInTheDocument();
     expect(screen.queryByText(/the app/)).not.toBeInTheDocument();
 
-    expect(await screen.findByText('the app: Ordini')).toBeInTheDocument();
+    // The Italian messages are a dynamic import: under a loaded CI machine it can take longer than
+    // findBy's default second, which made this spec flaky.
+    expect(await screen.findByText('the app: Ordini', {}, { timeout: 5000 })).toBeInTheDocument();
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
     // ⚠️ and not once in between.
     expect(drawn).not.toContain('Orders');

@@ -1,7 +1,8 @@
 import type { MessageKey } from '../i18n/en';
 
 // Firebase's error codes, in words that tell you what to DO about it. A port of MESSAGES in
-// js/auth-gate.js (the current app), entry for entry.
+// js/auth-gate.js (the current app), entry for entry — except the two sign-up codes
+// (`auth/email-already-in-use`, `auth/weak-password`), which arrive with joining in step 3g.
 //
 // ⚠️ FOUR CODES SHARE ONE SENTENCE ON PURPOSE. Firebase reports a bad sign-in under several
 // codes depending on whether the project has email-enumeration protection switched on, and the

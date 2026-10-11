@@ -48,7 +48,7 @@ export const en = {
   'auth.enterEmail': 'Enter your email.',
   'auth.enterPassword': 'Enter your password.',
   'auth.signingIn': 'Signing in…',
-  'auth.typeEmailFirst': 'Type your email above first, then tap this.',
+  'auth.typeEmailFirst': 'Type your email here, then tap “Forgot your password?” again.',
   // Deliberately does not reveal whether the address has an account.
   'auth.resetSent': 'If {address} has an account, a reset link is on its way.',
   // ⚠️ FOUR FIREBASE CODES SHARE auth.err.badPair ON PURPOSE (session/authErrors.ts).
@@ -85,6 +85,11 @@ export const en = {
   'account.signedInAs': 'Signed in as {email}',
   'account.venue': 'Venue',
   'account.switchVenue': 'Switch venue',
+  // The top bar's venue chip: its visible text is the venue's name, so the spoken name starts
+  // with it (WCAG 2.5.3) and then says what the button does.
+  'account.switchVenueChip': '{name}, switch venue',
+  // A sign-out or a venue switch that did not happen (rare: it needs no server).
+  'leave.failed': 'That did not work. Check the connection and try again.',
   'settings.more': 'The other settings arrive in the next steps of Mise 2.',
 
   'placeholder.title': 'This section will arrive in one of the next steps of Mise 2.',

@@ -148,6 +148,7 @@ function TopBar() {
 // The venue this person is working on, left of the date. With more than one venue it is a button
 // that opens the list of the others; with one it is just its name.
 function Venue() {
+  const { t } = useT();
   const { name, options } = useSession();
   // The first letter, by code point: a name that starts with an emoji or an accented capital
   // must not be cut in half.
@@ -162,7 +163,7 @@ function Venue() {
   if (options.length < 2) return <p className={styles.venueStatic}>{label}</p>;
 
   return (
-    <SwitchVenueButton variant="bare" className={styles.venue}>
+    <SwitchVenueButton variant="bare" className={styles.venue} aria-label={t('account.switchVenueChip', { name })}>
       {label}
       <ChevronDown className={styles.venueChevron} aria-hidden="true" />
     </SwitchVenueButton>

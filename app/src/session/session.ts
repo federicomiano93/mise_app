@@ -104,9 +104,6 @@ export function createSession(backend: SessionBackend, env: SessionEnv): Session
   let session: Session = INITIAL_SESSION;
   let userDoc: DocData | null = null;
   let isAppAdmin = false;
-  // The FIRST answer about who is signed in is the one this page opened with — the only moment
-  // nothing has been read yet (see the wipe below).
-  let bootAnswered = false;
   const listeners = new Set<() => void>();
 
   function setSession(next: Partial<Session>): void {
@@ -208,7 +205,10 @@ export function createSession(backend: SessionBackend, env: SessionEnv): Session
   }
 
   async function resolveMembership(user: SessionUser): Promise<void> {
-    setSession({ status: 'loading', user });
+    // ⚠️ FROM SCRATCH, not merged into the previous session: when the person changes inside the
+    // page, nothing of the previous one's venue, role or powers may survive into a screen — or
+    // into a usage line or an error report credited to the wrong venue.
+    setSession({ ...INITIAL_SESSION, status: 'loading', user });
     // ⚠️ BOTH AT ONCE, and from this phone first. A cached "admins/{uid} does not exist" is
     // trusted (it is everybody's normal answer); a cached "users/{uid} does not exist" is NOT —
     // a new person's phone keeps that from before the join code made it exist, and trusting it
@@ -237,18 +237,18 @@ export function createSession(backend: SessionBackend, env: SessionEnv): Session
     const pick = pickStart(userDoc, {
       isAppAdmin, hubPassed: true, remembered: read(env.local, ACTIVE_LOCATION_KEY) ?? '',
     });
-    if (pick.status === 'none' || pick.status === 'hub' && pick.options.length === 0) {
+    if (pick.status === 'ready') {
+      await enterLocation(pick.locationId, pick.options, user);
+      return;
+    }
+    if (pick.options.length === 0) {
       setSession({ status: 'no-access', user, options: [], isAppAdmin });
       return;
     }
-    if (pick.status === 'choose' || pick.status === 'hub') {
-      setSession({
-        status: 'choose-location', user, options: pick.options,
-        optionNames: await readLocationNames(pick.options), isAppAdmin,
-      });
-      return;
-    }
-    await enterLocation(pick.locationId, pick.options, user);
+    setSession({
+      status: 'choose-location', user, options: pick.options,
+      optionNames: await readLocationNames(pick.options), isAppAdmin,
+    });
   }
 
   function signedOut(): void {
@@ -259,8 +259,6 @@ export function createSession(backend: SessionBackend, env: SessionEnv): Session
   }
 
   function onAuth(user: SessionUser | null): void {
-    const atBoot = !bootAnswered;
-    bootAnswered = true;
     if (!user) { signedOut(); return; }
 
     // ⚠️ A LEFTOVER ANONYMOUS SESSION IS NOT A SIGNED-IN PERSON. Phones that used the app before
@@ -271,12 +269,21 @@ export function createSession(backend: SessionBackend, env: SessionEnv): Session
       return;
     }
 
-    // ⚠️⚠️ SOMEBODY ELSE'S DATA IN THE OFFLINE CACHE, AND THEY NEVER SIGNED OUT. Cleared at BOOT,
-    // before a single read, then the app starts again clean. The new owner is recorded only
-    // after a clear that WORKED; a failed one is tried once per opening, never in a loop.
+    // ⚠️⚠️ SOMEBODY ELSE'S DATA IN THE OFFLINE CACHE, AND THEY NEVER SIGNED OUT (an expired or
+    // revoked session, then a different person on the sign-in form of a shared tablet). Cleared
+    // before a single read of theirs, then the app starts again clean. The new owner is recorded
+    // only after a clear that WORKED; a failed one is tried once per opening, never in a loop.
+    //
+    // ⚠️ AT ANY SIGN-IN, NOT ONLY AT BOOT — the one place Mise 2 differs from js/firebase.js. The
+    // current app asks only when a page boots, and every tap on a Home card boots a page, so the
+    // next tap clears it. Mise 2 is ONE page that never reloads by itself: asked only at boot,
+    // the previous person's prices and stocktakes would be served from the cache to the next one
+    // for the whole shift (code review, 11 Oct 2026). The current app's reason for waiting — a
+    // join replacing the person mid-page — does not exist here until step 3g brings the join,
+    // which must then finish and reload so this check runs on a clean page.
     const verdict = offlineCacheVerdict(read(env.local, OFFLINE_CACHE_OWNER_KEY), user.uid);
     if (verdict === 'claim') write(env.local, OFFLINE_CACHE_OWNER_KEY, user.uid);
-    if (verdict === 'wipe' && atBoot && read(env.session, WIPE_FAILED_KEY) !== user.uid) {
+    if (verdict === 'wipe' && read(env.session, WIPE_FAILED_KEY) !== user.uid) {
       clearLocalData();
       void backend.wipeOfflineCache().then(cleared => {
         if (cleared) write(env.local, OFFLINE_CACHE_OWNER_KEY, user.uid);
@@ -286,7 +293,12 @@ export function createSession(backend: SessionBackend, env: SessionEnv): Session
       return;
     }
 
-    void resolveMembership(user);
+    // ⚠️ NEVER A LOADING SCREEN FOR EVER: anything unexpected becomes the «could not check your
+    // access» screen, which says what to do (P17).
+    resolveMembership(user).catch(err => {
+      env.warn('The session could not be resolved', err);
+      setSession({ ...INITIAL_SESSION, status: 'error', user });
+    });
   }
 
   function assertMine(locationId: string): void {

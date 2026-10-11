@@ -162,14 +162,47 @@ describe('somebody else\'s offline copy', () => {
     expect(again.store.getSnapshot().status).toBe('ready');
   });
 
-  test('a different person signing in INSIDE a page is not wiped until the next boot', async () => {
-    const s = setup(world({ ...docs, 'users/bob': { locations: { bakery: true } } }), { local: { [OFFLINE_CACHE_OWNER_KEY]: 'bob' } });
+  // ⚠️ THE ONE PLACE MISE 2 DIFFERS FROM js/firebase.js: one page that never reloads by itself,
+  // so waiting for "the next boot" would serve Bob's cached data to Alice for the whole shift.
+  test('a different person signing in INSIDE the page (Bob’s session expired, Alice on the form) is wiped too', async () => {
+    const s = setup(world({ ...docs, 'users/bob': { locations: { bakery: 'manager' } } }), { local: { [OFFLINE_CACHE_OWNER_KEY]: 'bob', 'prices-cache': 'x' } });
     s.auth({ uid: 'bob', email: null, isAnonymous: false });
+    await settle();
+    expect(s.backend.wipeOfflineCache).not.toHaveBeenCalled();
+    s.auth(null);
     await settle();
     s.auth(ALICE);
     await settle();
-    expect(s.backend.wipeOfflineCache).not.toHaveBeenCalled();
-    expect(s.localStore.getItem(OFFLINE_CACHE_OWNER_KEY)).toBe('bob');
+    expect(s.backend.wipeOfflineCache).toHaveBeenCalledOnce();
+    expect(s.localStore.getItem('prices-cache')).toBeNull();
+    expect(s.localStore.getItem(OFFLINE_CACHE_OWNER_KEY)).toBe('alice');
+    expect(s.calls.at(-1)).toBe('reload');
+  });
+
+  test('the person changing directly (no sign-out in between) carries nothing of the previous one', async () => {
+    const w = world({ ...docs, 'users/bob': { locations: { bakery: 'owner' } } });
+    const s = setup(w);
+    s.auth({ uid: 'bob', email: null, isAnonymous: false });
+    await settle();
+    expect(s.store.getSnapshot()).toMatchObject({ status: 'ready', isOwner: true, locationId: 'bakery' });
+    // A wipe that failed earlier in this opening: Alice then goes through membership directly.
+    s.sessionStore.setItem(WIPE_FAILED_KEY, 'alice');
+    w.server.set('users/alice', { locations: {} });
+    s.auth(ALICE);
+    await settle();
+    expect(s.store.getSnapshot()).toMatchObject({
+      status: 'no-access', locationId: null, location: null, role: 'staff', canManage: false, isOwner: false, name: '', language: null,
+    });
+  });
+
+  test('anything unexpected while resolving shows the error screen, never an endless loading', async () => {
+    // A users/{uid} document whose `locations` cannot even be read: the throw comes from the
+    // venue choice, outside every inner try.
+    const strange = Object.defineProperty({}, 'locations', { get() { throw new Error('corrupt'); } });
+    const s = setup(world({ 'users/alice': strange as DocData }));
+    s.auth(ALICE);
+    await settle();
+    expect(s.store.getSnapshot()).toMatchObject({ status: 'error', user: ALICE, locationId: null });
   });
 });
 

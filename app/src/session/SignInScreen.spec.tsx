@@ -227,7 +227,7 @@ describe('SignInScreen: «Forgot your password?»', () => {
 
     await user.click(forgot());
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('Type your email above first, then tap this.');
+    expect(await screen.findByRole('alert')).toHaveTextContent('Type your email here, then tap “Forgot your password?” again.');
     expect(email()).toHaveFocus();
     expect(store.sendReset).not.toHaveBeenCalled();
   });

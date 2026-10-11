@@ -4,6 +4,7 @@ import { useT } from '../i18n/useT';
 import { Button } from '../ui/Button';
 import { useSession, useSessionStore } from './SessionContext';
 import { LeaveDialog } from './LeaveDialog';
+import { LeaveFailed } from './LeaveFailed';
 import { useLeaveFlow } from './useLeaveFlow';
 import styles from './SwitchVenueButton.module.css';
 
@@ -11,6 +12,8 @@ type Props = {
   // How the button looks. The top bar's venue chip is `bare` with its own className.
   variant?: 'secondary' | 'bare';
   className?: string;
+  // The spoken name, when the visible text alone does not say what the button does.
+  'aria-label'?: string;
   children: ReactNode;
 };
 
@@ -20,7 +23,7 @@ type Props = {
 // survive the switch, and this phone's copy of its data is cleared on the way — so, as for
 // signing out, the database is asked first whether something typed here is still waiting to
 // reach the server.
-export function SwitchVenueButton({ variant = 'secondary', className, children }: Props) {
+export function SwitchVenueButton({ variant = 'secondary', className, 'aria-label': ariaLabel, children }: Props) {
   const { t } = useT();
   const store = useSessionStore();
   const session = useSession();
@@ -29,9 +32,10 @@ export function SwitchVenueButton({ variant = 'secondary', className, children }
 
   return (
     <>
-      <Button variant={variant} className={className} aria-haspopup="dialog" onPress={flow.open}>
+      <Button variant={variant} className={className} aria-label={ariaLabel} aria-haspopup="dialog" onPress={flow.open}>
         {children}
       </Button>
+      <LeaveFailed failed={flow.failed} />
       <LeaveDialog
         flow={flow}
         role="dialog"

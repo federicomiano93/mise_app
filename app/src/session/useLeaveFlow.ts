@@ -27,6 +27,9 @@ export function useLeaveFlow<Arg = void>(leave: (value: Arg) => void | Promise<v
   const [step, setStep] = useState<LeaveStep['step']>('closed');
   const [checking, setChecking] = useState(false);
   const [target, setTarget] = useState<{ value: Arg } | null>(null);
+  // The last attempt failed: the caller shows `leave.failed` beside its button (P17 — a tap that
+  // does nothing, with only the console knowing why, reads as a broken app).
+  const [failed, setFailed] = useState(false);
   // Bumped whenever the dialog is closed, so an answer that arrives after the person pressed
   // Cancel or Escape does not open the dialog again.
   const generation = useRef(0);
@@ -37,6 +40,7 @@ export function useLeaveFlow<Arg = void>(leave: (value: Arg) => void | Promise<v
       await leave(value);
     } catch (error) {
       console.error('Could not leave:', error);
+      setFailed(true);
     }
   }
 
@@ -71,5 +75,5 @@ export function useLeaveFlow<Arg = void>(leave: (value: Arg) => void | Promise<v
     if (pending) void run(pending.value);
   }
 
-  return { step, checking, open: () => { setStep('ask'); }, close, proceed, goOn };
+  return { step, checking, failed, open: () => { setFailed(false); setStep('ask'); }, close, proceed, goOn };
 }

@@ -32,7 +32,7 @@ export const it: Messages = {
   'auth.enterEmail': 'Inserisci la tua email.',
   'auth.enterPassword': 'Inserisci la tua password.',
   'auth.signingIn': 'Accesso in corso…',
-  'auth.typeEmailFirst': 'Scrivi prima la tua email qui sopra, poi tocca qui.',
+  'auth.typeEmailFirst': 'Scrivi qui la tua email, poi tocca di nuovo «Password dimenticata?».',
   'auth.resetSent': 'Se {address} ha un account, il link per reimpostare la password sta arrivando.',
   'auth.err.badPair': 'Email e password non corrispondono a nessun account.',
   'auth.err.badEmail': 'Questo non sembra un indirizzo email.',
@@ -63,6 +63,8 @@ export const it: Messages = {
   'account.signedInAs': 'Hai effettuato l’accesso come {email}',
   'account.venue': 'Locale',
   'account.switchVenue': 'Cambia locale',
+  'account.switchVenueChip': '{name}, cambia locale',
+  'leave.failed': 'Non è riuscito. Controlla la connessione e riprova.',
   'settings.more': 'Le altre impostazioni arrivano nei prossimi passi di Mise 2.',
 
   'placeholder.title': 'Questa sezione arriverà in uno dei prossimi passi di Mise 2.',

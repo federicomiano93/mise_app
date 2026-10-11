@@ -180,7 +180,7 @@ describe('the venue in the top bar', () => {
   it('is a button that opens the other venues when the account has several', async () => {
     const { user } = renderApp('/orders', { session: TWO });
 
-    const chip = topBar().getByRole('button', { name: 'The Bakery' });
+    const chip = topBar().getByRole('button', { name: 'The Bakery, switch venue' });
     expect(chip).toHaveAttribute('aria-haspopup', 'dialog');
     await user.click(chip);
 
@@ -190,7 +190,7 @@ describe('the venue in the top bar', () => {
 
   it('switches to the venue picked, after asking whether anything is waiting to be sent', async () => {
     const { store, user } = renderApp('/orders', { session: TWO });
-    await user.click(topBar().getByRole('button', { name: 'The Bakery' }));
+    await user.click(topBar().getByRole('button', { name: 'The Bakery, switch venue' }));
     await user.click(await screen.findByRole('button', { name: 'The Restaurant' }));
 
     await waitFor(() => { expect(store.switchLocation).toHaveBeenCalledWith('restaurant'); });
@@ -200,7 +200,7 @@ describe('the venue in the top bar', () => {
   it('warns first, and does not switch, when something has not reached the server', async () => {
     const { store, user } = renderApp('/orders', { session: TWO });
     store.changesStillWaiting.mockResolvedValue(true);
-    await user.click(topBar().getByRole('button', { name: 'The Bakery' }));
+    await user.click(topBar().getByRole('button', { name: 'The Bakery, switch venue' }));
     await user.click(await screen.findByRole('button', { name: 'The Restaurant' }));
 
     expect(await screen.findByRole('alertdialog', { name: 'Not sent yet' })).toBeInTheDocument();
