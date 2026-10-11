@@ -31,6 +31,10 @@ import * as market from './market';
 import * as currency from './currency';
 import * as priceModel from './price-model';
 import * as orderCost from './order-cost';
+import * as inventoryModel from './inventory-model';
+import * as inventoryOutbox from './inventory-outbox';
+import * as inventoryPurchases from './inventory-purchases';
+import * as inventoryValue from './inventory-value';
 import * as legacyJoinCodeJs from '../../js/join-code.js';
 import * as legacyPushModelJs from '../../js/push-model.js';
 import * as legacyHomeCardsJs from '../../js/home-cards.js';
@@ -52,6 +56,10 @@ import * as legacyMarketJs from '../../js/market.js';
 import * as legacyCurrencyJs from '../../js/currency.js';
 import * as legacyPriceModelJs from '../../js/price-model.js';
 import * as legacyOrderCostJs from '../../js/order-cost.js';
+import * as legacyInventoryModelJs from '../../js/inventory/inventory-model.js';
+import * as legacyInventoryOutboxJs from '../../js/inventory/inventory-outbox.js';
+import * as legacyInventoryPurchasesJs from '../../js/inventory/inventory-purchases.js';
+import * as legacyInventoryValueJs from '../../js/inventory/inventory-value.js';
 
 const legacyJoinCode = legacyJoinCodeJs as unknown as typeof joinCode;
 const legacyPushModel = legacyPushModelJs as unknown as typeof pushModel;
@@ -73,6 +81,10 @@ const legacyIngredientName = legacyIngredientNameJs as unknown as typeof ingredi
 const legacyMarket = legacyMarketJs as unknown as typeof market;
 const legacyPriceModel = legacyPriceModelJs as unknown as typeof priceModel;
 const legacyOrderCost = legacyOrderCostJs as unknown as typeof orderCost;
+const legacyInventoryModel = legacyInventoryModelJs as unknown as typeof inventoryModel;
+const legacyInventoryOutbox = legacyInventoryOutboxJs as unknown as typeof inventoryOutbox;
+const legacyInventoryPurchases = legacyInventoryPurchasesJs as unknown as typeof inventoryPurchases;
+const legacyInventoryValue = legacyInventoryValueJs as unknown as typeof inventoryValue;
 
 // ── The machinery ────────────────────────────────────────────────────────────
 
@@ -1533,4 +1545,354 @@ describe('order-cost: odd inputs', () => {
     MIXED.slice().reverse(), MIXED.slice(0, 4), [null, undefined, 0, '', 'x', LINE], Object.freeze([LINE]), A_GENERATOR,
     ...ONE_LINE.map(line => [line])];
   agree('orderCost', (lines: unknown) => m.orderCost(fresh(lines) as never), (lines: unknown) => l.orderCost(fresh(lines) as never), product(LINE_LISTS));
+});
+
+// ── inventory-model ──────────────────────────────────────────────────────────
+
+// Month ids and near-misses: the real shape, the months 00 and 13, a missing zero, a day on the end,
+// stray spaces and a trailing newline, digits that are not ASCII, and values that are not text.
+const MONTH_IDS: readonly unknown[] = [...ODD, '2026-09', '2026-01', '2026-12', '2027-01', '0000-01', '9999-12', '2026-13', '2026-00', '2026-9',
+  '2026-009', '2026-09-01', ' 2026-09', '2026-09 ', '2026-09\n', '2026/09', '202609', '٢٠٢٦-٠٩', '２０２６-０９', 'later', 202609,
+  new String('2026-09'), ['2026-09'], { toString: () => '2026-09' }];
+
+// What can be typed into a count box, or read back out of a document in that place.
+const COUNT_VALUES: readonly unknown[] = [...ODD, 3, 3.5, 0.1 + 0.2, 1e21, 1e-7, -0, 0.0005, 0.0004, 3.14159, '3', '3,5', '3.5', ' 3 ', '3 5',
+  '-2', '+3', '0', '0,0', '00.5', '.5', '5.', '1e3', '1,2,3', '1.2.3', '0x10', 'Infinity', '٣', '３', '１,５', '3\n', '\t4', 'HELLO', '1_000',
+  '1e999', '3,', ',5', ',', '9'.repeat(400), new Number(2), new String('2'), [2], ['2'], { valueOf: () => 2 }, { toString: () => '2' }, 5n,
+  Symbol('count'), Number.MAX_SAFE_INTEGER, Number.MAX_VALUE, Number.MIN_VALUE];
+
+// A map of counts (or of prices) as a document may hold it, and everything near one.
+const COUNT_MAP_VALUES: readonly unknown[] = [...ODD, { flour: 3 }, { flour: '3,5', butter: -1, salt: 'HELLO' }, { flour: 0 }, { 'olio.extra': 2 },
+  { flour: 1e21 }, { flour: null, butter: undefined }, { flour: [3] }, { flour: 0.0004 }, { flour: 3.14159 },
+  JSON.parse('{"__proto__": 5, "flour": 1}'), Object.create({ flour: 1 }), 'not a map', [3], [[1]], new Map([['flour', 1]])];
+const NAME_MAP_VALUES: readonly unknown[] = [...ODD, { flour: 'Flour' }, { flour: '  Farina 00 25kg ', butter: 7 }, { flour: 'x'.repeat(250) },
+  { flour: 'y'.repeat(200) }, { flour: '   ' }, { flour: ['x'] }, { flour: new String('x') }, JSON.parse('{"__proto__": "x", "flour": "F"}'),
+  'not a map', ['a']];
+const STAMPS: readonly unknown[] = [...ODD, '', '2026-10-01T09:00:00.000Z', 'x', ' ', new String('x'), 5, new Date(0)];
+
+const GOOD_MONTH = {
+  month: '2026-09', opening: { flour: 3 }, purchased: { flour: 12 }, closing: { flour: 4 }, packKg: { flour: 25 }, names: { flour: 'Flour 25kg' },
+  unitPrice: { flour: 12.5 }, closedAt: '2026-10-01T09:00:00.000Z', createdAt: '2026-09-01T09:00:00.000Z', updatedAt: '2026-09-30T09:00:00.000Z',
+};
+// A month document as it may arrive: the real one, each of its fields replaced by odd values, and shapes that are not one.
+const MONTH_DOCS: readonly unknown[] = [...ODD, 'doc', 42, GOOD_MONTH, { ...GOOD_MONTH, closedAt: '' }, { month: '2026-09' }, { id: '2026-08' },
+  { id: '2026-08', month: 'junk' }, { month: 'junk', id: 'junk' }, Object.create(GOOD_MONTH), { get month(): string { throw new Error('boom'); } },
+  ...varying(GOOD_MONTH, {
+    month: MONTH_IDS, opening: COUNT_MAP_VALUES, purchased: COUNT_MAP_VALUES, closing: COUNT_MAP_VALUES, packKg: COUNT_MAP_VALUES,
+    unitPrice: COUNT_MAP_VALUES, names: NAME_MAP_VALUES, closedAt: STAMPS, createdAt: STAMPS, updatedAt: STAMPS,
+  })];
+
+// The ids a box is looked up by: the real ones, a dotted one, the prototype's own names, and keys that are not text.
+const BOX_IDS: readonly unknown[] = ['flour', 'butter', 'olio.extra', 'ghost', 0, 1, undefined, null, '', '__proto__', 'constructor', 'toString',
+  'length', ['flour'], { toString: () => 'flour' }, Symbol('flour'), 5n];
+
+// Products as a list may hold them.
+const PRODUCT = { id: 'flour', name: 'Flour', weight: '25kg' };
+const PRODUCT_NAMES: readonly unknown[] = [...ODD, 'Salt', '   ', ' Flour ', 5, ['x'], new String('x'), { toString: () => 'x' }, 'ünï', 0, 1n, Symbol('name')];
+const PRODUCT_FLAGS: readonly unknown[] = [...ODD, false, true, 'false', 0, null];
+const SPARSE_PRODUCTS = ((): unknown[] => { const list: unknown[] = [PRODUCT]; list[3] = { ...PRODUCT, id: 'salt' }; return list; })();
+const PRODUCT_LISTS: readonly unknown[] = [undefined, null, [], 'abc', 5, {}, true, [null], [undefined, 0, '', false], [PRODUCT],
+  [PRODUCT, { ...PRODUCT, id: 'salt', name: 'Salt' }],
+  [PRODUCT, { ...PRODUCT, id: 'old', name: 'Retired', active: false }, { ...PRODUCT, id: 'blank', name: '   ' }, null],
+  [PRODUCT, PRODUCT], Object.freeze([PRODUCT]), SPARSE_PRODUCTS, new Set([PRODUCT]), { length: 1, 0: PRODUCT }, Object.assign([PRODUCT], { extra: 1 }),
+  ...ODD.map(value => [value]),
+  ...varying(PRODUCT, { name: PRODUCT_NAMES, active: PRODUCT_FLAGS, id: BOX_IDS }).map(product_ => [product_])];
+
+// A closed month and the maps it may carry, for the lists above to be read against.
+const CLOSED_MONTH = { closedAt: 'yes', names: { flour: 'Flour 25kg', salt: 'Salt 1kg' }, closing: { flour: 2 } };
+const PRODUCT_MONTHS: readonly unknown[] = [...ODD, 'month', 42, { closedAt: '' }, { closedAt: 'yes' }, { closedAt: 'yes', names: {} },
+  CLOSED_MONTH, { ...CLOSED_MONTH, closedAt: '' }, { closedAt: 'yes', names: {}, closing: { ghost: 3 }, opening: { older: 1 } },
+  { closedAt: 'yes', names: { flour: 'Flour' }, packKg: { flour: 25, salt: 1 } }, { closedAt: 'yes', closing: { flour: 1 }, purchased: { salt: 1 } },
+  ...varying(CLOSED_MONTH, {
+    closedAt: STAMPS, names: [...NAME_MAP_VALUES, 'abc', 5, { 0: 'x' }], closing: COUNT_MAP_VALUES, opening: COUNT_MAP_VALUES,
+    purchased: COUNT_MAP_VALUES, packKg: COUNT_MAP_VALUES,
+  })];
+
+describe('inventory-model: odd inputs', () => {
+  const m = inventoryModel;
+  const l = legacyInventoryModel;
+
+  agree('isMonthId', m.isMonthId, l.isMonthId, product(MONTH_IDS));
+
+  // `undefined` is left out on purpose: the parameter defaults to the clock, and the clock is tried below with a fixed one.
+  const MOMENTS: readonly unknown[] = [NOW, MIDNIGHT, LATE, NEXT_DAY, 0, NaN, new Date(2026, 0, 1, 0, 0).getTime(),
+    new Date(2026, 11, 31, 23, 59, 59).getTime(), new Date(2024, 1, 29, 12).getTime(), new Date(2026, 9, 1, 0, 30).getTime(), 8.64e15,
+    8.64e15 + 1, -8.64e15, 1e21, '2026-09-15', '2026-09-15T00:30:00', new Date(2026, 8, 15), new Date(NaN), '', 'abc', [NOW],
+    { valueOf: () => NOW }, 5n, Symbol('moment'), ...ODD.filter(value => value !== undefined)];
+  agree('monthKey', m.monthKey as AnyFn, l.monthKey as AnyFn, product(MOMENTS));
+
+  test('monthKey: the same answer with no moment, at a fixed clock', () => {
+    vi.useFakeTimers();
+    try {
+      for (const now of [new Date(2026, 9, 1, 0, 30), new Date(2026, 8, 30, 23, 59), new Date(2026, 11, 31, 23, 59, 59), new Date(2024, 1, 29, 12)]) {
+        vi.setSystemTime(now);
+        expect(outcome(() => m.monthKey())).toStrictEqual(outcome(() => l.monthKey()));
+      }
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  const DELTAS: readonly unknown[] = [...ODD, -12, -1, 12, 13, 1.5, -0, 24, 1000, 1e9, 1e21, 5n, '1', new Number(1), [1]];
+  agree('shiftMonth', m.shiftMonth, l.shiftMonth, product(MONTH_IDS, DELTAS));
+  agree('previousMonth', m.previousMonth, l.previousMonth, product(MONTH_IDS));
+  agree('nextMonth', m.nextMonth, l.nextMonth, product(MONTH_IDS));
+  agree('monthBounds', m.monthBounds, l.monthBounds, product(MONTH_IDS));
+
+  agree('readCount', m.readCount, l.readCount, product(COUNT_VALUES));
+
+  agree('normalizeMonth', m.normalizeMonth, l.normalizeMonth, [...product(MONTH_DOCS), ...product(MONTH_DOCS.slice(0, 40), MONTH_IDS)]);
+  agree('isClosed', m.isClosed, l.isClosed, product(MONTH_DOCS));
+  agree('toDocument', m.toDocument, l.toDocument, product(MONTH_DOCS));
+  agree('carryOver', m.carryOver, l.carryOver, [...product(MONTH_DOCS.slice(0, 60), MONTH_IDS, [undefined, '2026-10-01T09:00:00.000Z', 5, null]),
+    ...product(MONTH_DOCS.slice(60), ['2026-10', 'later'])]);
+
+  agree('consumption', m.consumption, l.consumption, product(MONTH_DOCS, BOX_IDS));
+  const ID_LISTS: readonly unknown[] = [...ODD, ['flour'], ['flour', 'butter'], ['flour', 'flour'], [null, undefined], 'flour', new Set(['flour']),
+    { length: 1, 0: 'flour' }, Object.freeze(['flour']), ['__proto__'], ['flour', 'olio.extra', 'ghost'], [0, 1]];
+  agree('progressOf', m.progressOf, l.progressOf, product(MONTH_DOCS.slice(0, 120), ID_LISTS));
+
+  agree('countableProducts', m.countableProducts as AnyFn, l.countableProducts as AnyFn, product(PRODUCT_LISTS));
+  agree('productsOfMonth', m.productsOfMonth as AnyFn, l.productsOfMonth as AnyFn,
+    [...product(PRODUCT_MONTHS, PRODUCT_LISTS.slice(0, 20)), ...product(PRODUCT_MONTHS.slice(0, 30), PRODUCT_LISTS.slice(20))]);
+});
+
+// ── inventory-outbox ─────────────────────────────────────────────────────────
+
+describe('inventory-outbox: odd inputs', () => {
+  const m = inventoryOutbox;
+  const l = legacyInventoryOutbox;
+
+  // Outboxes as they are built, as a cache may give them back, and everything that is not one.
+  const LAYER = { pending: { closing: { flour: 3 } }, cleared: { closing: { salt: true } } };
+  const OUTBOXES: readonly unknown[] = [...ODD, 'outbox', 42, { pending: {}, cleared: {}, inFlight: null }, LAYER, { ...LAYER, inFlight: LAYER },
+    { pending: { closing: { flour: 3 } }, cleared: {}, inFlight: { pending: { closing: { flour: 1, salt: 2 } }, cleared: { opening: { a: true } } } },
+    { pending: {}, cleared: {}, inFlight: {} }, { inFlight: 'x' }, { inFlight: 0 }, { inFlight: true }, { inFlight: [] },
+    { pending: 'no' }, { pending: { closing: 5 } }, { pending: { closing: null } }, { pending: { closing: [1] } }, { pending: { closing: 'str' } },
+    { cleared: { closing: { a: true } } }, { cleared: { closing: 5 } }, { cleared: 'x' },
+    { pending: { closing: { flour: 3 } }, cleared: { closing: { flour: true } } },
+    { pending: { closing: { 'olio.extra': 1 } }, cleared: { closing: { 'olio.extra': true, other: true } } },
+    { pending: { closing: { a: 0, b: null, c: undefined, d: '', e: false } } },
+    JSON.parse('{"pending":{"__proto__":{"a":1},"closing":{"flour":1}}}'), Object.create(LAYER),
+    { get pending(): unknown { throw new Error('boom'); } }, { get inFlight(): unknown { throw new Error('boom'); } },
+    Object.freeze({ pending: Object.freeze({ closing: Object.freeze({ flour: 1 }) }), cleared: {}, inFlight: null }),
+    new Map(), () => 1];
+
+  agree('hasWork', m.hasWork, l.hasWork, product(OUTBOXES));
+  agree('isSending', m.isSending, l.isSending, product(OUTBOXES));
+  agree('confirm', m.confirm, l.confirm, product(OUTBOXES));
+  agree('restore', m.restore, l.restore, product(OUTBOXES));
+  agree('take', m.take, l.take, product(OUTBOXES));
+
+  // Names of maps and of boxes: the real ones, a dotted id, the prototype's own names (a plain object
+  // answers to them), nothing, and keys that are not text.
+  // ⚠️ 'constructor' is not in this list, and the reason is the comparison, not the code: an object with an
+  // OWN key called «constructor» can never be strictly equal to another one, because toStrictEqual compares
+  // the two `.constructor` values and they are two different objects. It is tried below, compared as text.
+  const KEYS: readonly unknown[] = ['closing', 'opening', 'purchased', 'packKg', 'flour', 'olio.extra', '', ' ', undefined, null, 5, 0, true, '__proto__',
+    'toString', 'hasOwnProperty', ['closing'], { toString: () => 'closing' }, Symbol('key')];
+  const VALUES: readonly unknown[] = [null, undefined, 0, 3, -1, '', 'x', NaN, 1e21, 0.1, true, false, {}, [], { a: 1 }, 5n, Symbol('v')];
+  agree('stage', m.stage as AnyFn, l.stage as AnyFn, [...product(OUTBOXES.slice(0, 40), KEYS.slice(0, 10), KEYS.slice(4, 14), VALUES),
+    ...product(OUTBOXES.slice(0, 12), KEYS, KEYS, [3, null])]);
+  const asText = (value: unknown): string => JSON.stringify(value) ?? String(value);
+  agree('stage (a map or a box called «constructor», compared as text)', (...args: unknown[]) => asText((m.stage as AnyFn)(...args)),
+    (...args: unknown[]) => asText((l.stage as AnyFn)(...args)),
+    product(OUTBOXES.slice(0, 12), ['constructor', 'closing'], ['constructor', 'flour'], [3, null, undefined, 'x']));
+
+  const VALUE_MAPS: readonly unknown[] = [undefined, {}, { a: 1 }, { a: null }, { a: undefined }, { a: 0, b: 2 }, null, 'abc', 5, ['x'],
+    { 'olio.extra': 1 }, Object.create({ inherited: 1 })];
+  const CLEAR_LISTS: readonly unknown[] = [undefined, [], ['a'], ['a', 'b'], 'ab', null, 5, new Set(['a']), [null], [''], ['olio.extra'], { length: 1, 0: 'a' }];
+  agree('stageMany', m.stageMany as AnyFn, l.stageMany as AnyFn,
+    product(OUTBOXES.slice(0, 40), ['closing', 'purchased', '', undefined, 5], VALUE_MAPS, CLEAR_LISTS));
+
+  // applyOver changes the document it is given, so each call is handed a fresh one, by its index: the two
+  // sides must never share a target, or the first would hand the second a document already laid over.
+  const MAKE_TARGETS: readonly (() => unknown)[] = [
+    () => ({ opening: {}, purchased: {}, closing: {}, packKg: {} }),
+    () => ({ opening: { flour: 1 }, purchased: { flour: 2 }, closing: { flour: 1, salt: 5, 'olio.extra': 2 }, packKg: { flour: 25 } }),
+    () => ({ closing: { flour: 1 } }), () => ({}), () => null, () => undefined, () => 'abc', () => 5, () => [],
+    () => ({ closing: 'str' }), () => ({ closing: 5 }), () => ({ closing: null }), () => ({ closing: [] }),
+    () => Object.freeze({ closing: Object.freeze({}) }), () => Object.freeze({ closing: {} }),
+    () => ({ get closing(): unknown { throw new Error('boom'); } }),
+  ];
+  const MAP_LISTS: readonly unknown[] = [undefined, null, [], ['closing'], ['opening', 'purchased', 'closing', 'packKg'], 'closing', ['closing', 'closing'],
+    ['packKg'], 5, {}, [null], ['closing', 5], new Set(['closing'])];
+  const target = (make: unknown): unknown => (MAKE_TARGETS[make as number] as () => unknown)();
+  // The answer is the target itself, and one target has a getter that throws, so what is compared is whether the
+  // answer IS the target and what the target reads as text (a throwing getter reads as «unreadable» on both sides).
+  const readAs = (value: unknown): string => {
+    try {
+      return JSON.stringify(value) ?? String(value);
+    } catch {
+      return 'unreadable';
+    }
+  };
+  const laidOver = (apply: (box: unknown, into: object, maps: unknown) => unknown) => (box: unknown, make: unknown, maps: unknown) => {
+    const into = target(make) as object;
+    const answer = apply(box, into, maps);
+    return { theTarget: answer === into, text: readAs(answer) };
+  };
+  agree('applyOver', laidOver(m.applyOver), laidOver(l.applyOver), product(OUTBOXES, MAKE_TARGETS.map((_, index) => index), MAP_LISTS));
+
+  // Whole histories: every sequence of up to four of these steps is run from the empty outbox, and what
+  // each step answered (the outbox, what was taken, the document laid over) must be the same.
+  type Step = readonly ['stage', string, string, unknown] | readonly ['take'] | readonly ['confirm'] | readonly ['restore'] | readonly ['apply'];
+  const STEPS: readonly Step[] = [['stage', 'closing', 'flour', 3], ['stage', 'closing', 'flour', null], ['stage', 'closing', 'flour', 8],
+    ['stage', 'closing', 'salt', 0], ['stage', 'opening', 'flour', 2], ['take'], ['confirm'], ['restore'], ['apply']];
+  const MAPS = ['opening', 'purchased', 'closing', 'packKg'];
+  function history(mod: typeof inventoryOutbox, steps: readonly Step[]): unknown[] {
+    let box: inventoryOutbox.Outbox = mod.EMPTY_OUTBOX;
+    const trace: unknown[] = [];
+    for (const step of steps) {
+      if (step[0] === 'stage') box = mod.stage(box, step[1], step[2], step[3]);
+      else if (step[0] === 'take') { const taken = mod.take(box); box = taken.outbox; trace.push(taken); continue; }
+      else if (step[0] === 'confirm') box = mod.confirm(box);
+      else if (step[0] === 'restore') box = mod.restore(box);
+      else { trace.push(mod.applyOver(box, { opening: { flour: 1 }, purchased: {}, closing: { flour: 1, salt: 5 }, packKg: {} }, MAPS)); continue; }
+      trace.push(box, mod.hasWork(box), mod.isSending(box));
+    }
+    return trace;
+  }
+  test(`histories: the same answers at every step of the ${STEPS.length ** 4 + STEPS.length ** 3 + STEPS.length ** 2 + STEPS.length} sequences of up to four steps`, () => {
+    const disagreements: string[] = [];
+    let sequences: Step[][] = [[]];
+    for (let length = 1; length <= 4; length += 1) {
+      sequences = sequences.flatMap(sequence => STEPS.map(step => [...sequence, step]));
+      for (const sequence of sequences) {
+        try {
+          expect(history(m, sequence)).toStrictEqual(history(l, sequence));
+        } catch {
+          disagreements.push(sequence.map(step => step.join(' ')).join(' / '));
+        }
+      }
+    }
+    expect(disagreements.slice(0, 10)).toStrictEqual([]);
+  }, 120_000);
+});
+
+// ── inventory-purchases ──────────────────────────────────────────────────────
+
+describe('inventory-purchases: odd inputs', () => {
+  const m = inventoryPurchases;
+  const l = legacyInventoryPurchases;
+
+  // Order records as the history holds them: the real shape, each field replaced by odd values, and the
+  // retired weekly record that has no date.
+  const BASE_RECORD = { date: '2026-09-04', quantities: { flour: 10, butter: 2 }, missing: {}, units: {}, supplierId: 'alba' };
+  const DATES_OF_ORDERS: readonly unknown[] = [...ODD, '2026-09-04', '2026-09-31', '2026-9-4', '2026-09-04T10:00', '20260904', 20260904, new String('2026-09-04'),
+    ' 2026-09-04', '2026-09-04\n', '2026-08-31', '2026-10-01', '2026-09-01', '2026-09-30', '٢٠٢٦-٠٩-٠٤', '9999-99-99', new Date(2026, 8, 4), ['2026-09-04']];
+  const QUANTITY_MAPS: readonly unknown[] = [...ODD, { flour: 10 }, { a: 0, b: -3, c: 'HELLO', d: Infinity, e: null, f: 2 }, { flour: '3' }, { flour: ' 3 ' },
+    { flour: '3,5' }, { flour: [3] }, { flour: 5n }, { flour: Symbol('q') }, { flour: new Number(2) }, { flour: 1e21 }, { flour: 0.1, butter: 0.2 },
+    { flour: true }, { 'olio.extra': 4 }, JSON.parse('{"__proto__": 3, "flour": 1}'), Object.create({ flour: 7 }), 'abc', ['x']];
+  const MISSING_MAPS: readonly unknown[] = [...ODD, { flour: true }, { flour: 'yes' }, { flour: 1 }, { butter: true }, { flour: new Boolean(true) },
+    'flour', ['flour'], { flour: true, butter: true }];
+  const UNIT_MAPS: readonly unknown[] = [...ODD, { flour: 'busta' }, { flour: ' Busta ' }, { flour: 5 }, { flour: '' }, { flour: '   ' }, 'abc', ['x'],
+    { butter: 'sacco' }, { flour: 'cartone' }, { flour: 'sacco' }, { flour: null }];
+  const RECORDS: readonly unknown[] = [...ODD, 'record', 42, BASE_RECORD, { weekStart: '2026-07-06', quantities: { flour: 9 }, stock: {} },
+    { ...BASE_RECORD, units: { flour: 'busta' }, quantities: { flour: 2 } }, { ...BASE_RECORD, units: { flour: 'busta' }, missing: { flour: true } },
+    Object.create(BASE_RECORD), { get quantities(): unknown { throw new Error('boom'); } },
+    ...varying(BASE_RECORD, { date: DATES_OF_ORDERS, quantities: QUANTITY_MAPS, missing: MISSING_MAPS, units: UNIT_MAPS })];
+
+  agree('isInMonth', m.isInMonth, l.isInMonth, product(RECORDS, MONTH_IDS));
+  agree('receivedFrom', m.receivedFrom, l.receivedFrom, product(RECORDS));
+
+  // Cards as the priced ingredients: a plain one, a carton, a stored case of packages and the near-misses.
+  const CASED = { id: 'flour', unit: 'cartone', packUnit: 'busta', priceUnit: 'kg', pricePerUnit: 2, casePrice: 20, caseCount: 4, caseItemSize: 2.5, caseItemUnit: 'pack' };
+  const CARTON = { id: 'flour', unit: 'cartone', packUnit: 'busta', packCount: 4 };
+  const CARD_UNITS: readonly unknown[] = [undefined, null, '', ' ', 'cartone', 'Cartone', 'busta', ' Busta. ', 'sacco', 'kg', 'pz', 5, {}, ['busta'], new String('busta')];
+  const CARDS: readonly unknown[] = [...ODD, 'card', 42, CASED, CARTON, { id: 'flour', unit: 'cartone', packUnit: 'busta' }, { id: 'flour' },
+    { ...CASED, caseItemUnit: 'pcs', caseItemSize: null }, { ...CASED, pricePerUnit: 9 }, { ...CASED, packCount: 8 }, { ...CASED, caseCount: 3, casePrice: 30, pricePerUnit: 4 },
+    { unit: 'cartone', packUnit: 'pezzo', priceUnit: 'pcs', pricePerUnit: 0.4, casePrice: 20, caseCount: 50, caseItemUnit: 'pcs' },
+    Object.create(CASED), { get unit(): unknown { throw new Error('boom'); } },
+    ...varying(CARTON, { unit: CARD_UNITS, packUnit: CARD_UNITS, packCount: PACK_COUNTS }),
+    ...varying(CASED, { unit: CARD_UNITS, packUnit: CARD_UNITS, packCount: PACK_COUNTS, caseCount: PRICE_VALUES.slice(0, 25), casePrice: PRICE_VALUES.slice(0, 25) })];
+  const QUANTITIES: readonly unknown[] = [1, 2, 3, 8, 0.5, 100, 0, -1, NaN, Infinity, '3', undefined, null, 5n];
+  const LINE_UNITS: readonly unknown[] = [...CARD_UNITS, 'Busta', 'CARTONE', 'x'.repeat(150)];
+  agree('qtyInCardUnit', m.qtyInCardUnit as AnyFn, l.qtyInCardUnit as AnyFn, product(QUANTITIES, LINE_UNITS, CARDS));
+
+  const CARD_MAPS: readonly unknown[] = [undefined, null, {}, 'abc', 5, [], true, { flour: CASED }, { flour: CARTON }, { flour: { id: 'flour', unit: 'cartone', packUnit: 'busta' } },
+    { flour: null }, { flour: 5 }, { flour: 'str' }, { flour: CASED, butter: CARTON }, { constructor: CASED }, Object.create({ flour: CASED }),
+    { flour: { ...CASED, caseItemUnit: 'pcs', caseItemSize: null } }, { flour: { ...CASED, pricePerUnit: 9 } }, { flour: { unit: 'cartone', packUnit: 'busta', packCount: 4 } }];
+  const MIXED_RECORDS = [BASE_RECORD, { ...BASE_RECORD, date: '2026-09-18', quantities: { flour: 6, butter: 2 } }, { ...BASE_RECORD, date: '2026-08-30' },
+    { ...BASE_RECORD, date: '2026-10-02' }, { ...BASE_RECORD, units: { flour: 'busta' }, quantities: { flour: 2 } },
+    { ...BASE_RECORD, units: { flour: 'cartone' }, quantities: { flour: 3 } }, { ...BASE_RECORD, units: { flour: 'sacco' }, quantities: { flour: 1 } },
+    { ...BASE_RECORD, units: { flour: 'busta' }, missing: { flour: true } }, { ...BASE_RECORD, quantities: { flour: 0.1 } }, { ...BASE_RECORD, quantities: { flour: 0.2 } },
+    { weekStart: '2026-07-06', quantities: { flour: 9 } }, null];
+  const RECORD_LISTS: readonly unknown[] = [undefined, null, [], 'abc', 5, {}, true, new Set(MIXED_RECORDS), { length: 1, 0: BASE_RECORD }, Object.freeze([BASE_RECORD]),
+    MIXED_RECORDS, MIXED_RECORDS.slice().reverse(), MIXED_RECORDS.slice(0, 5), MIXED_RECORDS.slice(4, 8), [undefined, 0, '', false],
+    ...RECORDS.map(record => [record])];
+  agree('purchasesInMonth', m.purchasesInMonth as AnyFn, l.purchasesInMonth as AnyFn,
+    product(RECORD_LISTS, ['2026-09', '2026-08', '2026-10', 'junk', undefined, 202609], CARD_MAPS));
+});
+
+// ── inventory-value ──────────────────────────────────────────────────────────
+
+describe('inventory-value: odd inputs', () => {
+  // A partial port: only what it exports is compared (formatTotal stays in js/; Mise 2 writes money with
+  // price-model's formatMoney).
+  const m = inventoryValue;
+  const l = legacyInventoryValue;
+
+  const FLOUR = { id: 'flour', name: 'Flour', weight: '25kg', priceUnit: 'kg', pricePerUnit: 0.8 };
+  const PIECE = { id: 'box', name: 'Box', weight: '', priceUnit: 'pcs', pricePerUnit: 0.15 };
+  const CARTON = { id: 'flour', unit: 'cartone', packUnit: 'busta', packCount: 4, weight: '2.5kg', priceUnit: 'kg', pricePerUnit: 2 };
+  const PACK_CASE = { id: 'flour', unit: 'cartone', packUnit: 'busta', weight: 'sacco', priceUnit: 'kg', pricePerUnit: 2, casePrice: 20, caseCount: 4, caseItemSize: 2.5, caseItemUnit: 'pack' };
+  const EGG_CASE = { id: 'e', unit: 'pz', casePrice: 54, caseCount: 360, caseItemUnit: 'pcs', priceUnit: 'pcs', pricePerUnit: 0.15 };
+  const WEIGHED_EGG = { id: 'e', unit: 'cartone', packUnit: 'uovo', packCount: 30, weight: '60g', priceUnit: 'pcs', pricePerUnit: 0.25, unitWeightKg: 0.06 };
+  const CARD_WEIGHTS: readonly unknown[] = [undefined, '', '25kg', '2.5kg', '2,27 kg', '500g', '750ml', '1L', '6x1kg', '6x1l', '12 x 500 g', 'sacco', '360 g', '60g',
+    'kg 5', '0kg', '-2kg', 25, null, {}, ['25kg'], new String('25kg')];
+  const CARD_UNITS: readonly unknown[] = [undefined, null, '', 'kg', 'g', 'l', 'ml', 'pz', 'pezzi', 'cartone', 'Cassa', 'busta', 'sacco', 'scatola', 'vaschetta',
+    'constructor', 5, {}, ['kg']];
+  const CARD_PACK_UNITS: readonly unknown[] = [undefined, null, '', 'busta', 'Busta.', 'pezzo', 'scatola', 'sacco', 'uovo', 5];
+  const CARD_RATES: readonly unknown[] = [undefined, null, 0, -1, 0.15, 0.8, 2, 3.2, 0.000049, 1e21, '2', ' 2 ', 'free', NaN, Infinity, {}, [2], true, 5n];
+  const CARDS: readonly unknown[] = [...ODD, 'card', 42, FLOUR, PIECE, CARTON, PACK_CASE, EGG_CASE, WEIGHED_EGG, { ...CARTON, unit: 'busta' }, { ...CARTON, weight: '6x1kg' },
+    { ...CARTON, weight: '6x1l', priceUnit: 'pcs', pricePerUnit: 0.4, packCount: 6 }, { ...CARTON, packCount: undefined }, { ...PIECE, packCount: 6, unit: 'cartone', weight: '' },
+    { ...PACK_CASE, pricePerUnit: 3 }, { ...PACK_CASE, unit: 'busta' }, { ...PACK_CASE, unit: 'kg' }, { ...PACK_CASE, priceUnit: null, pricePerUnit: null },
+    { ...PACK_CASE, caseItemSize: null }, { ...EGG_CASE, unit: 'cartone' }, { ...EGG_CASE, casePrice: 0.49, caseCount: 10000, pricePerUnit: 0.000049 },
+    { id: 'e', unit: 'vaschetta', packUnit: 'vaschetta', priceUnit: 'pcs', pricePerUnit: 0.4, casePrice: 12, caseCount: 30, caseItemUnit: 'pcs' },
+    Object.create(FLOUR), { id: 'x', get weight(): unknown { throw new Error('boom'); } }, { get id(): unknown { throw new Error('boom'); } },
+    ...varying(FLOUR, { id: BOX_IDS, weight: CARD_WEIGHTS, priceUnit: PRICE_UNIT_WORDS, pricePerUnit: CARD_RATES, unit: CARD_UNITS, packCount: PACK_COUNTS }),
+    ...varying(CARTON, { unit: CARD_UNITS, packUnit: CARD_PACK_UNITS, packCount: PACK_COUNTS, weight: CARD_WEIGHTS, pricePerUnit: CARD_RATES, priceUnit: PRICE_UNIT_WORDS }),
+    ...varying(PIECE, { pricePerUnit: CARD_RATES, priceUnit: PRICE_UNIT_WORDS, packCount: PACK_COUNTS, unit: CARD_UNITS }),
+    ...varying(PACK_CASE, { casePrice: PRICE_VALUES.slice(0, 25), caseCount: PRICE_VALUES.slice(0, 25), caseItemSize: PRICE_VALUES.slice(0, 25), unit: CARD_UNITS, packUnit: CARD_PACK_UNITS }),
+  ];
+  const SOME_CARDS: readonly unknown[] = [...CARDS.slice(0, 40), ...CARDS.slice(40).filter((_, index) => index % 4 === 0)];
+
+  // Months as the screens hold them, whole or not: the weight typed in, the price frozen at the close, and what is near.
+  const MONTHS: readonly unknown[] = [...ODD, 'month', 42, { packKg: {} }, { packKg: { flour: 20 } }, { packKg: { flour: 'HELLO' } }, { packKg: { flour: 0 } },
+    { packKg: { flour: -5 } }, { packKg: { flour: '25' } }, { packKg: { flour: 1e21 } }, { packKg: 'abc' }, { packKg: null }, { packKg: [] }, { packKg: { x: 12 } },
+    { packKg: { flour: 12 }, unitPrice: { flour: 12.5, box: 0.11 } }, { packKg: { flour: 25 }, unitPrice: { flour: 12.5 } }, { unitPrice: {} }, { unitPrice: { flour: 12.5 } },
+    { unitPrice: { flour: 0 } }, { unitPrice: { flour: 'x' } }, { unitPrice: { flour: '12.5' } }, { unitPrice: [] }, { unitPrice: 'abc' }, { unitPrice: { flour: 1e21 } },
+    { unitPrice: { e: 18, flour: 20 } }, Object.create({ packKg: { flour: 20 } }), { get packKg(): unknown { throw new Error('boom'); } },
+    { get unitPrice(): unknown { throw new Error('boom'); } }];
+  const CLOSED_FLAGS: readonly unknown[] = [undefined, true, false, 0, 1, '', 'closed', null];
+
+  // Every month with the cards written by hand and every fifth of the one-field-at-a-time variations; then the
+  // first months with every card. The functions that read a month and a card meet every combination of the two.
+  const READERS = [...product(MONTHS, SOME_CARDS, CLOSED_FLAGS), ...product(MONTHS.slice(0, 12), CARDS, CLOSED_FLAGS.slice(0, 3))];
+  agree('packKgFor', m.packKgFor as AnyFn, l.packKgFor as AnyFn, READERS);
+  agree('packPrice', m.packPrice as AnyFn, l.packPrice as AnyFn, READERS);
+  agree('valueBlocker', m.valueBlocker as AnyFn, l.valueBlocker as AnyFn, READERS);
+  agree('casePackNote', m.casePackNote, l.casePackNote, product(CARDS));
+  agree('parsePackSize (the re-export)', m.parsePackSize, l.parsePackSize, product(WEIGHT_TEXTS));
+
+  const USED: readonly unknown[] = [...ODD, 3, 0.5, -2, 1e21, 0.1 + 0.2, '3', ' 3 ', 5n, new Number(3), [3], { valueOf: () => 3 }, Symbol('used')];
+  agree('lineValue', m.lineValue as AnyFn, l.lineValue as AnyFn, product(MONTHS.slice(0, 12), SOME_CARDS.slice(0, 50), USED, CLOSED_FLAGS.slice(0, 3)));
+
+  // monthCost is handed one object. The consumers answer with numbers, with nothing and with things that
+  // are not numbers; the lists hold the usual, ties and holes.
+  const TIES = [{ id: 'b', name: 'Beta' }, { id: 'a', name: 'Alpha' }, { id: 'c', name: 'Zed', shortName: 'Alpha' }, { id: 'd', name: 'alpha' }, { id: 'e', name: 'Éclair' },
+    { id: 'f', name: 'eclair' }, { id: 'g', name: '' }, { id: 'h' }].map(card => ({ weight: '1kg', priceUnit: 'kg', pricePerUnit: 1, ...card }));
+  const OIL = { ...FLOUR, id: 'oil', name: 'Oil', weight: 'damigiana', priceUnit: 'l', pricePerUnit: 3 };
+  const COST_LISTS: readonly unknown[] = [undefined, null, [], 'abc', 5, {}, [FLOUR], [FLOUR, PIECE], [PIECE, FLOUR, OIL], [null, FLOUR], [FLOUR, FLOUR],
+    [CARTON], [PACK_CASE, EGG_CASE], TIES, TIES.slice().reverse(), [{ id: 'flour', name: 'Flour 25kg', weight: '' }], Object.freeze([FLOUR]), new Set([FLOUR])];
+  const COST_USED: readonly unknown[] = [() => 3, () => null, () => undefined, () => 0, () => -2, () => 0.5, () => '3', () => NaN, () => Infinity, () => ({}), () => [2],
+    (ing: unknown) => ((ing as { id?: unknown } | null)?.id === 'flour' ? 3 : null), (ing: unknown) => ((ing as { id?: unknown } | null)?.id === 'box' ? 100 : 2),
+    () => { throw new Error('boom'); }, undefined, null, 5];
+  const COST_MONTHS: readonly unknown[] = [undefined, null, {}, { packKg: {} }, { packKg: { flour: 25 }, unitPrice: { flour: 12.5, box: 0.11, e: 18 } },
+    { packKg: { flour: 12 } }, { unitPrice: {} }, 'month'];
+  agree('monthCost', m.monthCost as AnyFn, l.monthCost as AnyFn, [
+    ...product(COST_MONTHS, COST_LISTS, COST_USED, [undefined, true, false]).map(([month, ingredients, consumptionOf, closed]) => [{ month, ingredients, consumptionOf, closed }]),
+    [undefined], [null], [{}], [5], ['abc'], [{ month: {}, ingredients: [FLOUR] }], [{ ingredients: [FLOUR], consumptionOf: () => 1 }],
+  ]);
 });

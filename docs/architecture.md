@@ -113,7 +113,7 @@ Pure logic only, no DOM types. Each module is a PORT of a `js/` file, and its sp
 against BOTH files (`describe.each` over the TypeScript port and the `js/` original), so the two
 apps cannot drift apart while both are live. `parity.spec.ts` compares the full ports export by
 export (names, constants, frozen-ness, function names and arity); a partial port (`membership`,
-`location-id`, `pastries-model`, `market`, `price-model`) is not paired and its spec says why, and
+`location-id`, `pastries-model`, `market`, `price-model`, `inventory-value`) is not paired and its spec says why, and
 compares what it does port with the `js/` file itself. `currency` is an ADAPTED port, also not paired:
 the original keeps the venue's money in a module variable (`setCurrency`), and Mise 2 never keeps a
 venue fact in a module variable, so the port is stateless (`moneyOf(symbol, layout)` returns the
@@ -125,9 +125,11 @@ copied, not tidied, and marked where it sits: fixing it is a bug fix to BOTH fil
 `odd-inputs.spec.ts` fails until they agree. Today: join-code, push-model, home-cards, away-model,
 allergen-model, sections, firebase-target, local-data, same-data, error-model, device-model,
 usage-model, membership, location-id, pastries-model, pastries-log-model, pastries-lock, pack-size,
-order-unit, ingredient-name, order-cost, market (partial: the country and the money, not the label
+order-unit, ingredient-name, order-cost, inventory-model, inventory-outbox, inventory-purchases,
+market (partial: the country and the money, not the label
 vocabulary), price-model (partial: the reading half, not the writing half or the dictionary lookups),
-currency (adapted, stateless).
+inventory-value (partial: everything but `formatTotal`, which reads the money from a module variable;
+the app writes money with `formatMoney(value, money)` of `price-model`), currency (adapted, stateless).
 
 ## The session
 
