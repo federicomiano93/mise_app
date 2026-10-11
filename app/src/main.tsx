@@ -6,6 +6,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { RouterProvider } from 'react-router/dom';
 import { AppBoundary } from './errors/AppBoundary';
+import { onRouteError } from './errors/routeErrors';
 import { I18nProvider } from './i18n/I18nProvider';
 import { loadLanguage, pickLanguage } from './i18n/i18n';
 import { router } from './router';
@@ -52,7 +53,7 @@ void loadLanguage(wanted).then(({ lang, messages }) => {
         <I18nProvider initialLanguage={lang} initialMessages={messages}>
           <SessionProvider store={store}>
             <SessionGate>
-              <RouterProvider router={router} />
+              <RouterProvider router={router} onError={onRouteError} />
             </SessionGate>
           </SessionProvider>
         </I18nProvider>

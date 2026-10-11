@@ -3,6 +3,7 @@ import type { RouteObject } from 'react-router';
 import { RouterProvider } from 'react-router/dom';
 import { render } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { onRouteError } from '../errors/routeErrors';
 import { en } from '../i18n/en';
 import { it as italian } from '../i18n/it';
 import { I18nProvider } from '../i18n/I18nProvider';
@@ -35,7 +36,7 @@ export function renderApp(path: string, { lang = 'en', routes = appRoutes, sessi
   render(
     <I18nProvider initialLanguage={lang} initialMessages={messages}>
       <SessionProvider store={store}>
-        <RouterProvider router={router} />
+        <RouterProvider router={router} onError={onRouteError} />
       </SessionProvider>
     </I18nProvider>,
   );

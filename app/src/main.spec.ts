@@ -33,6 +33,12 @@ describe('main.tsx', () => {
     expect(main).not.toMatch(/onCaughtError|onUncaughtError|onRecoverableError/);
   });
 
+  // Without it React Router writes a second line for every render error of the shell's frame, and
+  // the error report counts it as a second error (errors/routeErrors.ts).
+  test('gives the router the handler that stops it logging render errors a second time', () => {
+    expect(main).toMatch(/<RouterProvider router=\{router\} onError=\{onRouteError\} \/>/);
+  });
+
   test('the venue the telemetry writes under is the open one, and none before that', () => {
     expect(main).toMatch(/status === 'ready' \? session\.locationId : null/);
   });

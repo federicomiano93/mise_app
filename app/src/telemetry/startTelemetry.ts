@@ -14,6 +14,10 @@
 // Passing `onCaughtError` / `onUncaughtError` to createRoot would REPLACE that logging: the same
 // error would then be reported twice (by our callback and by the wrapped console) or not at all
 // (a callback that forgets to log). startTelemetry.spec.tsx pins both routes.
+// ⚠️ THE ROUTER IS THE ONE OTHER LOGGER: for a render error inside a route (the shell's own
+// frame is one) React Router's boundary logs a second line of its own, unless the router is given
+// an onError (errors/routeErrors.ts, passed in main.tsx). AppShell.chrome.spec.tsx pins that one
+// failing part gives ONE report.
 //
 // ⚠️ NEVER VISIBLE, NEVER BLOCKING (P17). Each part is started on its own, so one that cannot
 // start (a blocked storage, a broken source) does not stop the others, and none can stop the app
