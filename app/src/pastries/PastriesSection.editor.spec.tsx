@@ -78,7 +78,7 @@ describe('the editor: opening it', () => {
     expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
 
     act(() => { answer(); });
-    await screen.findByRole('heading', { level: 2, name: 'Edit Thursday' });
+    await screen.findByRole('heading', { level: 2, name: 'Edit Thursday' }, LOAD);
     expect(rowsShown()).toEqual([['Cornetti', '24'], ['Krapfen', '12'], ['Sfogliatelle', '8']]);
     expect(document.querySelector('[aria-busy="true"]')).toBeNull();
   });
@@ -96,7 +96,7 @@ describe('the editor: opening it', () => {
     expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument();
 
     act(() => { answer(); });
-    await screen.findByRole('heading', { level: 2, name: 'Edit Thursday' });
+    await screen.findByRole('heading', { level: 2, name: 'Edit Thursday' }, LOAD);
     expect(rowsShown()).toEqual([['Cornetti', '24'], ['Krapfen', '12']]);
   });
 
