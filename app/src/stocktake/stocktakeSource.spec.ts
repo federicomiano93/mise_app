@@ -14,7 +14,9 @@ type Snap = { id: string; data: () => Record<string, unknown> };
 const DELETE = { sentinel: 'deleteField' };
 
 function fakeKit() {
-  const listeners: { target: Ref; next: (snap: unknown) => void; error: (err: unknown) => void; stopped: boolean }[] = [];
+  const listeners: {
+    target: Ref; options: unknown; next: (snap: unknown) => void; error: (err: unknown) => void; stopped: boolean;
+  }[] = [];
   let stored: Record<string, Record<string, unknown> | null> = {};
   let orderDocs: Snap[] = [];
   const fs = {
@@ -23,8 +25,11 @@ function fakeKit() {
     where: (field: string, op: string, value: unknown) => ({ where: [field, op, value] }),
     query: (ref: Ref, ...parts: unknown[]): Ref => ({ ...ref, kind: 'query', parts }),
     deleteField: vi.fn(() => DELETE),
-    onSnapshot: vi.fn((target: Ref, next: (snap: unknown) => void, error: (err: unknown) => void) => {
-      const entry = { target, next, error, stopped: false };
+    // Like the SDK's: the options, when there are any, come second.
+    onSnapshot: vi.fn((target: Ref, ...rest: unknown[]) => {
+      const options = typeof rest[0] === 'function' ? undefined : rest.shift();
+      const [next, error] = rest as [(snap: unknown) => void, (err: unknown) => void];
+      const entry = { target, options, next, error, stopped: false };
       listeners.push(entry);
       return () => { entry.stopped = true; };
     }),
@@ -127,11 +132,31 @@ describe('the Stocktake source, as firestore.rules expect it', () => {
     const stop = source.watchMonth('2026-10', doc => seen.push(doc), () => {});
     await settle();
     const [listener] = live('locations/bakery/inventory/2026-10');
-    listener!.next({ id: '2026-10', exists: () => false, data: () => undefined });
-    listener!.next({ id: '2026-10', exists: () => true, data: () => ({ month: '2026-10', closing: { a: 1 } }) });
+    listener!.next({ id: '2026-10', exists: () => false, data: () => undefined, metadata: { fromCache: false } });
+    listener!.next({
+      id: '2026-10', exists: () => true, data: () => ({ month: '2026-10', closing: { a: 1 } }), metadata: { fromCache: false },
+    });
     expect(seen).toEqual([null, { id: '2026-10', month: '2026-10', closing: { a: 1 } }]);
     stop();
     expect(live('locations/bakery/inventory/2026-10')).toEqual([]);
+  });
+
+  test('⚠️ every snapshot says whether the SERVER sent it, and metadata changes are asked for', async () => {
+    // A count held from an earlier visit is sent only on the server's word that the month is open.
+    // Without includeMetadataChanges an answer identical to the phone's own copy is never reported,
+    // so the held counts would wait for ever.
+    const { kit, live } = fakeKit();
+    const source = createFirestoreStocktakeSource(() => Promise.resolve(kit), 'bakery');
+    const seen: [StoredDoc | null, { fromServer: boolean }][] = [];
+    source.watchMonth('2026-10', (doc, meta) => seen.push([doc, meta]), () => {});
+    await settle();
+    const [listener] = live('locations/bakery/inventory/2026-10');
+    expect(listener!.options).toEqual({ includeMetadataChanges: true });
+    const month = { id: '2026-10', exists: () => true, data: () => ({ month: '2026-10' }) };
+    listener!.next({ ...month, metadata: { fromCache: true } });
+    listener!.next({ ...month, metadata: { fromCache: false } });
+    listener!.next({ id: '2026-10', exists: () => false, data: () => undefined, metadata: { fromCache: false } });
+    expect(seen.map(([, meta]) => meta)).toEqual([{ fromServer: false }, { fromServer: true }, { fromServer: true }]);
   });
 
   test('a watch stopped before Firestore has loaded never subscribes', async () => {

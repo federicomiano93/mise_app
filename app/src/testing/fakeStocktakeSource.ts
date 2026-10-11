@@ -1,14 +1,16 @@
 import { vi } from 'vitest';
 import { withPrices } from '@mise/shared/price-model';
-import type { StocktakeSource, StoredDoc } from '../stocktake/stocktakeSource';
+import type { SnapshotMeta, StocktakeSource, StoredDoc } from '../stocktake/stocktakeSource';
 
 // A Stocktake source for the specs of screens, in memory: the months, the ingredients, their prices
 // and the orders are plain maps; a save MERGES into the month at once (or is refused, with
 // `refuse`), a `true` in `clear` removes the key like deleteField(), and every live watcher is told,
 // like Firestore would. The store itself is covered against its own fake in stocktakeStore.spec.ts;
 // a screen's spec only needs a database that behaves.
-type MonthListener = { monthId: string; onChange: (doc: StoredDoc | null) => void; onError: (err: unknown) => void };
-type IngredientListener = { onChange: (list: StoredDoc[]) => void; onError: (err: unknown) => void };
+type MonthListener = { monthId: string; onChange: (doc: StoredDoc | null, meta: SnapshotMeta) => void; onError: (err: unknown) => void };
+// This fake is a database that is online: every answer comes from the server.
+const FROM_SERVER: SnapshotMeta = { fromServer: true };
+type IngredientListener ={ onChange: (list: StoredDoc[]) => void; onError: (err: unknown) => void };
 
 export type FakeStocktakeSource = StocktakeSource & {
   months: Map<string, StoredDoc>;
@@ -47,7 +49,7 @@ export function fakeStocktakeSource(seed: {
 
   function push(): void {
     if (!held) {
-      for (const w of monthWatchers) w.onChange(months.get(w.monthId) ?? null);
+      for (const w of monthWatchers) w.onChange(months.get(w.monthId) ?? null, FROM_SERVER);
     }
     for (const w of ingredientWatchers) w.onChange(priced());
   }
@@ -73,7 +75,7 @@ export function fakeStocktakeSource(seed: {
           monthWatchers.delete(listener);
           onError(refused());
         } else if (!held) {
-          onChange(months.get(monthId) ?? null);
+          onChange(months.get(monthId) ?? null, FROM_SERVER);
         }
       });
       return () => { monthWatchers.delete(listener); };

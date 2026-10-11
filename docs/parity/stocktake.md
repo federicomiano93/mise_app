@@ -60,6 +60,14 @@ reason.
     written on every change, painted before the network answers, and never laid over something
     newer (a snapshot already arrived, or a count already typed). Not under `KEEP_PREFIXES`: a
     venue switch wipes it. **spec**
+15b. **Unsaved copy** `inventory-unsaved-{lid}-{YYYY-MM}` (also the current app's key and shape: either
+    app may open the month next, and each must find the other's copy). Everything that exists only in
+    this page's memory — typed and not sent, sent and not yet shown back by the browser's own
+    database, or held from an earlier visit — is written to it on EVERY change of the outbox, before
+    the call returns, and removed once a snapshot shows every number back. Not under `KEEP_PREFIXES`
+    either. A write handed to Firestore reaches the browser's database a moment later, and a page
+    torn down inside that moment (the last number typed, the back gesture straight after) took the
+    number with it (emulator, 11 Oct 2026). **spec** (both apps; PR #343 for the current app)
 
 ## Saving a count
 
@@ -67,19 +75,42 @@ reason.
     refused or failed write says «Not saved online yet. The count is safe on this phone and goes up
     on its own.» and the unsent change waits to go with the next save. **spec**
 17. **Sent 700ms after the last change**, as ONE write (a count and a cleared box beside it never
-    half-land); exactly one write in the air at a time. Before leaving the page or the section,
-    everything waiting is sent. **spec**
+    half-land). **A save never waits behind an earlier write**: with no signal a write's promise never
+    answers, and holding every later count in memory behind the first meant only the FIRST count of a
+    storeroom reached the SDK's own queue (the one in the browser's database, which outlasts the
+    page) — three counts typed offline, one survived (emulator, 11 Oct 2026). Every save is handed
+    over at once, each carrying only what is new (a stored count is never written again over a
+    correction another phone made meanwhile). Before leaving the page or the section, everything
+    waiting is sent. **spec** (both apps; PR #343 for the current app)
 18. **The outbox** (`inventory-outbox`): a write is taken out of «waiting» before it is sent; a
     snapshot arriving mid-write never takes the number back; a failed write goes back behind
     anything typed since (the newer answer for a box wins, a failed removal never resurrects a
-    number, a failed number never undoes an emptying). **spec**
+    number, a failed number never undoes an emptying). **Several writes may be in the air, and
+    nothing is settled until the LAST of them has answered**: the first answer must not confirm
+    values another write still carries, and a failed write behind it is sent again with the rest
+    (a number sent twice loses nothing). Once every write has answered, the screen is drawn again
+    from what Firestore last sent, so a correction another phone made meanwhile shows. **spec**
+18b. **Counts held from an earlier visit** are laid back on screen when the month is opened (read
+    from the unsaved copy of 15b, only what a person could have typed: a finite number not below
+    zero, only the four count maps) but NOT SENT until the SERVER says the month is still open — a
+    snapshot the server sent, never the phone's own copy of the month, which can be days old. A
+    month closed meanwhile on another device must not take a count afterwards: the next month has
+    already copied its figures (driven on the emulator, 11 Oct 2026: sent on the strength of the
+    stale copy, the count landed in the closed month). A snapshot asked for with metadata changes
+    reports a server answer identical to the phone's copy too; a box typed again before then is
+    newer and leaves the held set at once; shown over a month that turns out to be closed they are
+    NOT drawn, NOT sent and kept, until it is reopened. **Closing the month sends what it holds
+    first** (it is on screen, and the next month's opening is copied from the screen), and reopening
+    it brings back and sends whatever was held or waiting. Held counts are not «unsent» (they are
+    already in localStorage). **spec** (both apps; PR #343 for the current app)
 19. **Nothing the screen does waits for a server.** Closing, reopening and changing month wait at
     most 1.2 seconds for the whole sequence (one deadline, not one per write), then carry on: an
     offline write is already safe in the browser's database. A write nobody waits for still reports
     its failure and never throws loose. **spec**
 20. **A closed month refuses every change in the store**, whatever the screen drew: counts, the
     purchases fill-in and carry forward. The rules cannot tell a count from the reopening write, so
-    the app is the only guard. **spec**
+    the app is the only guard. **Nothing waiting is sent into it either**: what a phone still holds
+    for a month that turns out to be closed stays waiting until the month is reopened. **spec**
 
 ## The list
 
@@ -198,6 +229,10 @@ reason.
   figures.». On a phone each is its own screen, as today.
 - **Changing month does not reload the page.** The address changes at once and the new month is
   watched; what was still unsent for the old month has already been handed to Firestore.
+- **A month that was left is not redrawn when its last write answers.** The current app reloads to
+  change month, so nothing of the old page survives; in Mise 2 the left month keeps writing until it
+  answers, and drawing it from what it last heard (older than its own write) would put a stale month
+  in its local copy. It keeps the copy written when the count was typed.
 - **One product and «What it cost» have addresses** (`/stocktake/<month>/product/<id>`,
   `/stocktake/<month>/cost`), so a reload comes back to them. Opened by address by an employee,
   «What it cost» is not available.

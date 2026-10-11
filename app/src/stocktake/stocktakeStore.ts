@@ -28,7 +28,8 @@ import {
 } from '@mise/shared/inventory-model';
 import type { CountMap, InventoryMonth } from '@mise/shared/inventory-model';
 import {
-  EMPTY_OUTBOX, applyOver, confirm, hasWork, restore, stage, stageMany, take,
+  EMPTY_OUTBOX, answered, applyOver, echoed, hasHeld, hasUnsaved, hasWork, isSending, release, revive,
+  stage, stageMany, take, unsaved,
 } from '@mise/shared/inventory-outbox';
 import type { Outbox } from '@mise/shared/inventory-outbox';
 import { purchasesInMonth } from '@mise/shared/inventory-purchases';
@@ -46,6 +47,14 @@ export const SETTLE_MS = 1200;
 // one phone can hold two businesses. Not under KEEP_PREFIXES, so a venue switch wipes it.
 export function monthCacheKey(locationId: string, monthId: string): string {
   return `inventory-${locationId || 'none'}-${monthId}`;
+}
+
+// ⚠️ THE CURRENT APP'S KEY TOO, FOR THE SAME REASON: what was typed here and is not yet in the
+// browser's own database (keepUnsaved below). Either app may open the month next, and each must
+// find the other's copy. The venue is in it; not under KEEP_PREFIXES either, so a venue switch
+// wipes it.
+export function unsavedCacheKey(locationId: string, monthId: string): string {
+  return `inventory-unsaved-${locationId || 'none'}-${monthId}`;
 }
 
 export type StocktakeMessage =
@@ -149,10 +158,15 @@ type MonthSession = {
   month: InventoryMonth;
   outbox: Outbox;
   saveTimer: unknown;
-  // The write currently in the air, if any. Exactly one at a time.
-  sending: Promise<void> | null;
+  // The writes in the air, each one settling (never rejecting) once Firestore has answered it —
+  // which with no signal is never.
+  inAir: Set<Promise<void>>;
   // Whether Firestore has answered at all yet; until then the local copy is all there is.
   remoteArrived: boolean;
+  // The month exactly as Firestore last sent it, before anything of this phone's was laid over it —
+  // so the screen can be drawn again once the writes have answered. null until it has answered, and
+  // while the document does not exist.
+  lastRemote: StoredDoc | null;
   stopWatch: (() => void) | null;
   // Still the month on screen: a left month keeps writing, but never touches the snapshot.
   current: boolean;
@@ -209,6 +223,10 @@ export function createStocktakeStore(source: StocktakeSource, locationId: string
     });
   }
 
+  // The month being watched. A month that was left keeps its own MonthSession until its last write
+  // answers, so this is not always the one a function was handed.
+  let session: MonthSession | null = null;
+
   // ── The local copy ─────────────────────────────────────────────────────────────────────────
 
   function readCache(monthId: string): InventoryMonth | null {
@@ -225,18 +243,91 @@ export function createStocktakeStore(source: StocktakeSource, locationId: string
     } catch { /* storage full or unavailable: memory still works this session */ }
   }
 
+  // What a page that was torn down left behind (keepUnsaved), or nothing.
+  function readUnsaved(monthId: string): unknown {
+    try {
+      const raw = storage?.getItem(unsavedCacheKey(locationId, monthId));
+      if (raw) return JSON.parse(raw);
+    } catch { /* corrupt or unavailable: nothing was left */ }
+    return null;
+  }
+
+  // ⚠️⚠️ WHAT EXISTS ONLY IN THIS PAGE'S MEMORY IS WRITTEN DOWN AT ONCE, on every change to the
+  // outbox. A write handed to Firestore reaches the browser's own database a moment later, and a page
+  // torn down inside that moment — the last number typed and the back gesture straight after — took
+  // the number with it (emulator, 11 Oct 2026). localStorage is written before the call returns; the
+  // copy is laid back in when the month is next opened (openSession), and removed once a snapshot has
+  // shown every number back.
+  // ⚠️ NOT the month copy above: the first snapshot rewrites that one, which is exactly how the
+  // counts used to vanish.
+  // ⚠️ A MONTH THAT WAS LEFT AND OPENED AGAIN LEAVES THE COPY TO THE NEW SESSION (Mise 2 only: the
+  // current app reloads to change month). The new one took everything the old one had handed over
+  // when it opened (openSession); the old one's late answers know nothing of what has been typed
+  // since, and would erase it.
+  function keepUnsaved(s: MonthSession): void {
+    if (!storage) return;
+    if (session !== null && session !== s && session.id === s.id) return;
+    try {
+      const key = unsavedCacheKey(locationId, s.id);
+      if (hasUnsaved(s.outbox)) storage.setItem(key, JSON.stringify(unsaved(s.outbox)));
+      else storage.removeItem(key);
+    } catch { /* storage full or unavailable: the SDK's own queue still has every write */ }
+  }
+
   // ── One month ──────────────────────────────────────────────────────────────────────────────
 
-  let session: MonthSession | null = null;
-
+  // Held is NOT unsent: it is already in localStorage and goes only on the server's word.
   function publish(s: MonthSession, extra: Partial<StocktakeSnapshot> = {}): void {
     if (!s.current) return;
-    update({ month: s.month, unsent: hasWork(s.outbox) || s.sending !== null, ...extra });
+    update({ month: s.month, unsent: hasWork(s.outbox) || isSending(s.outbox), ...extra });
   }
 
   function emptyMonth(monthId: string): InventoryMonth {
     // A month id that passed isMonthId always normalises.
     return normalizeMonth({ month: monthId }) as InventoryMonth;
+  }
+
+  // The month with its count maps copied, to lay the outbox over: applyOver writes into the maps it
+  // is given, and the ones on screen belong to a snapshot already published.
+  function withCountsCopied(month: InventoryMonth): InventoryMonth {
+    const copy = { ...month };
+    for (const map of COUNT_MAPS) copy[map] = { ...month[map] };
+    return copy;
+  }
+
+  // A fresh copy of the month as Firestore last sent it.
+  function remoteMonth(s: MonthSession): InventoryMonth {
+    return normalizeMonth(s.lastRemote, s.id) ?? emptyMonth(s.id);
+  }
+
+  // The month on screen = what Firestore last sent + what this phone has not had confirmed yet.
+  //
+  // ⚠️ A REMOTE CHANGE NEVER DISCARDS WHAT HAS NOT BEEN SENT: the local values of still-unsent
+  // boxes (held, waiting AND in the air) are laid back over the incoming document.
+  // ⚠️⚠️ EXCEPT OVER A CLOSED MONTH. It is shown as it was closed, and what this phone still holds
+  // for it stays held — not drawn, not sent (flushSession) — until the month is reopened. Otherwise a
+  // count left on one phone would change a closed month's figures weeks later, after the next month
+  // had already copied them (code review, 11 Oct 2026). The SDK has already laid its own unanswered
+  // writes into `remote`.
+  function adopt(s: MonthSession): void {
+    const merged = remoteMonth(s);
+    if (!isClosed(merged)) applyOver(s.outbox, merged, COUNT_MAPS);
+    s.month = merged;
+    writeCache(s);
+    publish(s, { monthLoaded: true, monthFailed: false });
+  }
+
+  // ⚠️⚠️ WHAT AN EARLIER VISIT LEFT GOES ONLY ONCE THE SERVER SAYS THE MONTH IS OPEN — never on the
+  // strength of this phone's own copy, which can be days old. Driven on the emulator (11 Oct 2026): a
+  // count left on the phone, the month closed from another device, the phone back online — sent at
+  // once from its stale copy, the count landed in the closed month. Sending one that did reach
+  // Firestore after all writes the same number twice and loses nothing.
+  function releaseHeld(s: MonthSession): void {
+    if (!hasHeld(s.outbox) || isClosed(s.month)) return;
+    s.outbox = release(s.outbox);
+    keepUnsaved(s);
+    scheduleSave(s);
+    publish(s);
   }
 
   function openSession(monthId: string): MonthSession {
@@ -248,22 +339,35 @@ export function createStocktakeStore(source: StocktakeSource, locationId: string
       month: readCache(monthId) ?? emptyMonth(monthId),
       outbox: EMPTY_OUTBOX,
       saveTimer: null,
-      sending: null,
+      inAir: new Set(),
       remoteArrived: false,
+      lastRemote: null,
       stopWatch: null,
       current: true,
     };
+    // Then what the page last torn down left behind, laid back over it as HELD: on screen and kept,
+    // NOT SENT from here (releaseHeld says why). Not over a month known to be closed (adopt says
+    // why): kept for its reopening.
+    s.outbox = revive(s.outbox, readUnsaved(monthId), COUNT_MAPS);
+    keepUnsaved(s);
+    if (hasHeld(s.outbox) && !isClosed(s.month)) {
+      const shown = withCountsCopied(s.month);
+      applyOver(s.outbox, shown, COUNT_MAPS);
+      s.month = shown;
+      writeCache(s);
+    }
     s.stopWatch = source.watchMonth(
       monthId,
-      remote => {
+      (remote, meta) => {
         s.remoteArrived = true;
-        // ⚠️ A REMOTE CHANGE NEVER DISCARDS WHAT HAS NOT BEEN SENT: the local values of still-unsent
-        // boxes (waiting AND in the air) are laid back over the incoming document.
-        const merged = normalizeMonth(remote, monthId) ?? emptyMonth(monthId);
-        applyOver(s.outbox, merged, COUNT_MAPS);
-        s.month = merged;
-        writeCache(s);
-        publish(s, { monthLoaded: true, monthFailed: false });
+        s.lastRemote = remote;
+        // ⚠️ WHAT THE SNAPSHOT SHOWS BACK is in the browser's database: no longer only in this page's
+        // memory. Judged on the document AS IT ARRIVED, before anything is laid over it.
+        s.outbox = echoed(s.outbox, remoteMonth(s), COUNT_MAPS);
+        keepUnsaved(s);
+        adopt(s);
+        // Released by a snapshot the server sent, never by the phone's own copy.
+        if (meta?.fromServer) releaseHeld(s);
       },
       () => {
         // A stream that dies before it ever answered must not keep the boxes shut for ever: the
@@ -284,18 +388,32 @@ export function createStocktakeStore(source: StocktakeSource, locationId: string
   }
 
   // Send everything that has changed, as ONE write so a count and a cleared box beside it can
-  // never half-land.
+  // never half-land. Answers when every write sent so far has answered — which with no signal is
+  // never, hence flushBeforeLeaving().
   //
-  // ⚠️ EXACTLY ONE WRITE IN THE AIR AT A TIME. With two, the second's success would confirm the
-  // first's values as landed too — and a failed first write would then never be sent again.
+  // ⚠️⚠️ IT NEVER WAITS FOR AN EARLIER WRITE. It used to keep one write in the air and hold every
+  // later count in memory behind it; with no signal that write never answers, so only the FIRST count
+  // of a storeroom reached the SDK's own queue — the one in the browser's database, which outlasts the
+  // page. Closing the app, changing month or going Home before signal lost all the others (found 11
+  // Oct 2026, reproduced on the emulator: three counts typed, one survived). Handed over at once,
+  // every count is in that queue and goes up, in order, when there is signal. The outbox keeps the
+  // books for several writes at once: nothing is settled until the LAST one has answered, or the
+  // first answer would confirm values another write still carries (answered() in
+  // @mise/shared/inventory-outbox).
+  //
+  // ⚠️⚠️ NOTHING IS SENT INTO A CLOSED MONTH, the same promise setCount() keeps: what is waiting stays
+  // waiting until the month is reopened (adopt says why).
   function flushSession(s: MonthSession): Promise<void> {
     if (s.saveTimer !== null) deps.clearTimer(s.saveTimer);
     s.saveTimer = null;
-    if (s.sending) return s.sending.then(() => flushSession(s));
-    if (!hasWork(s.outbox)) return Promise.resolve();
+    if (hasWork(s.outbox) && !isClosed(s.month)) send(s);
+    return Promise.all([...s.inAir]).then(() => {});
+  }
 
+  function send(s: MonthSession): void {
     const taken = take(s.outbox);
     s.outbox = taken.outbox;
+    keepUnsaved(s);
 
     const nowIso = new Date(deps.now()).toISOString();
     const patch: Record<string, unknown> = { month: s.id, updatedAt: nowIso };
@@ -311,20 +429,30 @@ export function createStocktakeStore(source: StocktakeSource, locationId: string
     } catch (err) {
       sent = Promise.reject(err);
     }
-    s.sending = sent.then(
-      () => { s.outbox = confirm(s.outbox); },
+    const write: Promise<void> = sent.then(
+      () => true,
       err => {
         deps.warn('The stocktake did not reach Firestore:', err);
-        // ⚠️ NOT A PUT-BACK: what went out is older than anything typed since, and per box the
-        // newer answer wins (@mise/shared/inventory-outbox restore()).
-        s.outbox = restore(s.outbox);
         say({ kind: 'not-saved-yet' });
+        return false;
       },
-    ).finally(() => {
-      s.sending = null;
+    ).then(ok => {
+      // ⚠️ NOT A PUT-BACK, AND NOT SETTLED ON THIS ANSWER ALONE: a failed write goes back behind
+      // anything typed since, and only when the last write in the air has answered
+      // (@mise/shared/inventory-outbox answered()).
+      s.outbox = answered(s.outbox, ok);
+      keepUnsaved(s);
+      s.inAir.delete(write);
+      // Every write has answered: nothing of this phone's is in the air any more, so the screen is
+      // drawn again from what Firestore last sent. Until now its own numbers were laid over that,
+      // hiding a correction another phone made meanwhile (code review, 11 Oct 2026). ⚠️ NOT FOR A
+      // MONTH THAT WAS LEFT: nothing listens to it any more, so what it last heard is older than its
+      // own write, and drawing from that would put a stale month in its local copy.
+      if (s.current && !isSending(s.outbox) && s.lastRemote !== null) adopt(s);
       publish(s);
     });
-    return s.sending;
+    s.inAir.add(write);
+    publish(s);
   }
 
   function leave(s: MonthSession): void {
@@ -367,6 +495,7 @@ export function createStocktakeStore(source: StocktakeSource, locationId: string
     else values[ingredientId] = n;
     s.month = { ...s.month, [map]: values };
     s.outbox = stage(s.outbox, map, ingredientId, n);
+    keepUnsaved(s);
     writeCache(s);
     scheduleSave(s);
     publish(s);
@@ -397,6 +526,12 @@ export function createStocktakeStore(source: StocktakeSource, locationId: string
     if (!s) return { refused: true };
     const deadline = deadlineFromNow();
     const nowIso = new Date(deps.now()).toISOString();
+    // ⚠️ WHAT IS HELD GOES FIRST. It is on screen, so the next month's opening is copied from it
+    // below; closing here is this phone's own word that the month was open — unsent, the closed month
+    // and the next one's opening would disagree, and the closed month would show those products as
+    // not counted (code review, 11 Oct 2026).
+    s.outbox = release(s.outbox);
+    keepUnsaved(s);
     await settled(flushSession(s), deadline);
 
     const next = carryOver(s.month, nextMonth(s.id), nowIso);
@@ -436,6 +571,16 @@ export function createStocktakeStore(source: StocktakeSource, locationId: string
       deadlineFromNow(),
     );
     s.month = { ...s.month, closedAt: '' };
+    // What this phone was holding while the month was closed comes back, and goes: reopened here,
+    // this phone has just told the server so.
+    s.outbox = release(s.outbox);
+    keepUnsaved(s);
+    if (hasWork(s.outbox)) {
+      const shown = withCountsCopied(s.month);
+      applyOver(s.outbox, shown, COUNT_MAPS);
+      s.month = shown;
+      scheduleSave(s);
+    }
     writeCache(s);
     publish(s);
   }
@@ -475,6 +620,7 @@ export function createStocktakeStore(source: StocktakeSource, locationId: string
     const gone = Object.keys(s.month.purchased).filter(id => !(id in wanted));
     s.month = { ...s.month, purchased: { ...wanted } };
     s.outbox = stageMany(s.outbox, 'purchased', wanted, gone);
+    keepUnsaved(s);
     writeCache(s);
     scheduleSave(s);
     publish(s);
@@ -502,6 +648,7 @@ export function createStocktakeStore(source: StocktakeSource, locationId: string
     if (!count) return 0;
     s.month = { ...s.month, opening: { ...s.month.opening, ...opening } };
     s.outbox = stageMany(s.outbox, 'opening', opening);
+    keepUnsaved(s);
     writeCache(s);
     scheduleSave(s);
     publish(s);

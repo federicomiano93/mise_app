@@ -33,9 +33,26 @@ export type StoredDoc = { readonly id: string } & Record<string, unknown>;
 // id and may legally contain a dot; splitting on it would delete the wrong key, or nothing.
 export type Clearing = Readonly<Record<string, Readonly<Record<string, unknown>>>>;
 
+// What a snapshot of the month says about where it came from.
+export interface SnapshotMeta {
+  // true when the SERVER sent it, false when it came from the browser's own database (an old copy,
+  // or this phone's own write shown back before a server has heard of it).
+  readonly fromServer: boolean;
+}
+
 export interface StocktakeSource {
   // One month, live. null while the document does not exist. Returns the unsubscribe at once.
-  watchMonth(monthId: string, onChange: (doc: StoredDoc | null) => void, onError: (err: unknown) => void): () => void;
+  //
+  // ⚠️ `meta.fromServer` IS WHAT LETS A COUNT HELD FROM AN EARLIER VISIT BE SENT. It goes only on
+  // the SERVER's word that the month is still open, never on the phone's own copy of it, which can
+  // be days old (the store's releaseHeld). Snapshots are asked for with includeMetadataChanges:
+  // without it an answer from the server that is IDENTICAL to the phone's copy is never reported
+  // at all, and the held counts would wait for ever.
+  watchMonth(
+    monthId: string,
+    onChange: (doc: StoredDoc | null, meta: SnapshotMeta) => void,
+    onError: (err: unknown) => void,
+  ): () => void;
   // One month, read once (the month before, for «Carry forward»). Rejects when it cannot be read.
   getMonthOnce(monthId: string): Promise<StoredDoc | null>;
   // Part of a month, merged. Resolves when the server has it — which offline is NEVER (see the
@@ -104,7 +121,11 @@ export function createFirestoreStocktakeSource(
     // one in the office without either being reloaded.
     watchMonth: (monthId, onChange, onError) => listen(kit => kit.fs.onSnapshot(
       monthRef(kit, monthId),
-      snap => onChange(snap.exists() ? { ...snap.data(), id: snap.id } : null),
+      { includeMetadataChanges: true },
+      snap => onChange(
+        snap.exists() ? { ...snap.data(), id: snap.id } : null,
+        { fromServer: !snap.metadata.fromCache },
+      ),
       err => {
         console.error(`watchMonth(${monthId}) failed:`, err);
         onError(err);
