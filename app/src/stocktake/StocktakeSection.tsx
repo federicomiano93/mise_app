@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router';
 import { PartBoundary } from '../errors/PartBoundary';
 import { useT } from '../i18n/useT';
@@ -121,6 +121,14 @@ function MonthScreen({ view, current }: { view: ShownView; current: string }) {
     if (view.kind === 'list') handBack.deliver();
   }, [view.kind, handBack]);
 
+  // On the split the right-hand side scrolls on its own (StocktakeSection.module.css), and it stays
+  // mounted from one product to the next: another product, or «What it cost», starts at its top
+  // instead of where the last one was left. On a phone it is not a scroll area and this is a no-op.
+  const detail = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    if (detail.current) detail.current.scrollTop = 0;
+  }, [pathname]);
+
   return (
     <HandBackProvider value={handBack}>
       <Page title={t('section.stocktake')}>
@@ -137,7 +145,7 @@ function MonthScreen({ view, current }: { view: ShownView; current: string }) {
               />
             </PartBoundary>
           </div>
-          <div className={styles.detail}>
+          <div ref={detail} className={styles.detail}>
             <PartBoundary resetKey={pathname}>
               <StocktakeDetail view={view} />
             </PartBoundary>

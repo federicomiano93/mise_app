@@ -3,9 +3,11 @@
    wide): the design's split, the list on the left (`--list-w`) and the chosen product or cost on
    the right, with a line saying what to do while nothing is chosen.
 
-   ⚠️ NOTHING IN THE CHAIN FROM THE SCROLL AREA DOWN CLIPS (no `overflow` on .layout, .list or
-   .detail): the month's bottom actions stick to the bottom of the screen, and a clipping ancestor
-   would turn them into an ordinary row at the end of a long list. stocktakeCss.spec.ts pins it. */
+   ⚠️ NOTHING IN THE CHAIN FROM THE SCROLL AREA DOWN TO THE LIST CLIPS (no `overflow` on .layout or
+   .list): the month's bottom actions stick to the bottom of the screen, and a clipping ancestor
+   would turn them into an ordinary row at the end of a long list. On a phone .detail does not clip
+   either (the form bar of a product sticks to the top of the screen); on the split it is its own
+   scroll area, on purpose (below). stocktakeCss.spec.ts pins both. */
 
 .layout {
   display: grid;
@@ -36,5 +38,22 @@
     grid-template-columns: var(--list-w) minmax(0, 1fr);
     gap: var(--s6);
     align-items: start;
+  }
+
+  /* ⚠️ THE RIGHT-HAND SIDE STAYS ON SCREEN WHILE THE LIST SCROLLS. A real storeroom has eighty
+     products: without this, a product tapped far down the list opened at the top of the page, and
+     its title taking the focus scrolled the whole page back up, so the place in the list was lost
+     at every product. Stuck to the top of the scroll area, it is always in view and the focus
+     moves nothing. It is never taller than the scroll area (the screen less the top bar, which is
+     always drawn from 700px), so it scrolls on its own, and the form bar of a product sticks to
+     ITS top; a scroll that reaches its end stops there instead of moving the list behind it. */
+  .detail {
+    position: sticky;
+    top: var(--s4);
+    /* Two declarations: Chrome 107 (the lab tablet's floor) has no dvh and keeps the first. */
+    max-height: calc(100vh - var(--topbar-h) - 2 * var(--s4));
+    max-height: calc(100dvh - var(--topbar-h) - 2 * var(--s4));
+    overflow-y: auto;
+    overscroll-behavior: contain;
   }
 }

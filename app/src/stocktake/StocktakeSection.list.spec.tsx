@@ -519,6 +519,20 @@ describe('the counting list on the tablet\'s split', () => {
     await user.click(await screen.findByRole('button', { name: 'Back' }, LOAD));
     expect(router.state.location.pathname).toBe('/stocktake/2026-10');
   });
+
+  // The right-hand side scrolls on its own on the split (StocktakeSection.module.css) and stays
+  // mounted from one product to the next. jsdom does not scroll, so the position is planted.
+  it('starts the next product at the top of the right-hand side, not where the last was left', async () => {
+    split();
+    const { user } = await loaded();
+    await user.click(openButton('Burro'));
+    const detail = screen.getByRole('region', { name: 'Burro' }).closest('[data-view] > *') as HTMLElement;
+    Object.defineProperty(detail, 'scrollTop', { value: 300, writable: true });
+
+    await user.click(openButton('Lievito'));
+    await screen.findByRole('region', { name: 'Lievito' }, LOAD);
+    expect(detail.scrollTop).toBe(0);
+  });
 });
 
 describe('the counting list in Italian', () => {

@@ -145,11 +145,14 @@ describe('the month bar', () => {
 describe('the frame keeps a bottom bar able to stick', () => {
   // ⚠️ A STICKY BAR (the month's bottom actions; the form bar of a product or of «What it cost»
   // sticks to the top) STICKS ONLY IF NOTHING BETWEEN IT AND THE SCROLL AREA CLIPS. An `overflow` on
-  // any of these would turn it into an ordinary row at the end of a long list.
+  // any of these would turn it into an ordinary row at the end of a long list. The one scroll area
+  // on purpose, the right-hand side of the split, is pinned under «the split of the frame».
   it('has nothing that clips between a bar and the scroll area', () => {
     const clippers: string[] = [];
+    const phoneSection = sectionCss.slice(0, sectionCss.indexOf('@media (min-width: 1000px)'));
     const sheets: [string, string, string[]][] = [
-      ['StocktakeSection', sectionCss, ['.layout', '.list', '.detail']],
+      ['StocktakeSection', sectionCss, ['.layout', '.list']],
+      ['StocktakeSection on a phone', phoneSection, ['.detail']],
       ['StocktakeList', columnCss, ['.column']],
       ['CountList', listCss, ['.list', '.group']],
       ['StocktakeDetail', detailCss, ['.prompt']],
@@ -182,6 +185,28 @@ describe('the split of the frame', () => {
     expect(at).toBeGreaterThan(0);
     expect(declaration(rule(split, '.layout'), 'grid-template-columns')).toBe('var(--list-w) minmax(0, 1fr)');
     expect(token('--list-w')).toBe(384);
+  });
+
+  // ⚠️ A product tapped far down a long list opened at the top of the page, and its title taking the
+  // focus scrolled the page back up: the place in the list was lost at every product.
+  it('keeps the right-hand side on screen while the list scrolls, scrolling on its own', () => {
+    const detail = rule(split, '.detail');
+    expect(declaration(detail, 'position')).toBe('sticky');
+    expect(declaration(detail, 'top')).toBe('var(--s4)');
+    expect(declaration(detail, 'overflow-y')).toBe('auto');
+    expect(declaration(detail, 'overscroll-behavior')).toBe('contain');
+    // Never taller than the scroll area: the screen less the top bar and the gap above and below.
+    // Two declarations, `vh` first: Chrome 107 (the lab tablet's floor) has no `dvh`.
+    const heights = [...detail.matchAll(/max-height:\s*([^;]+);/g)].map(([, value = '']) => value.trim());
+    expect(heights).toEqual([
+      'calc(100vh - var(--topbar-h) - 2 * var(--s4))',
+      'calc(100dvh - var(--topbar-h) - 2 * var(--s4))',
+    ]);
+  });
+
+  it('takes the top bar\'s height from the token the top bar is drawn at', () => {
+    expect(declaration(rule(shellCss, '.topbar'), 'height')).toBe('var(--topbar-h)');
+    expect(token('--topbar-h')).toBe(60);
   });
 
   it('makes both sides able to shrink, so a long name never pushes the box off the screen', () => {

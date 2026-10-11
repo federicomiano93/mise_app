@@ -188,7 +188,8 @@
   display: none;
   align-items: center;
   gap: var(--s4);
-  height: 60px;
+  /* A token: a split screen's right-hand side works out its height from it (StocktakeSection). */
+  height: var(--topbar-h);
   /* The right inset keeps the connection status clear of a notch on that side. */
   padding: 0 calc(var(--s6) + env(safe-area-inset-right)) 0 var(--s6);
   border-bottom: 1px solid var(--line);
