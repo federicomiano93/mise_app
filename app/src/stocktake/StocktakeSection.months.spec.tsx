@@ -1,5 +1,6 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, screen, waitFor, within } from '@testing-library/react';
+import { KEEP_FOCUS } from '../shell/Page';
 import { fakeStocktakeSource } from '../testing/fakeStocktakeSource';
 import {
   THIS_MONTH, closedMonthDoc, freezeClock, ingredient, monthDoc, renderStocktake,
@@ -81,6 +82,36 @@ describe('Stocktake: which month opens', () => {
     renderStocktake('/stocktake');
     await month('October 2026');
     expect(screen.getByRole('heading', { level: 1 })).not.toHaveFocus();
+  });
+
+  // ⚠️ `/stocktake` redirects to a month, and the page decides about the focus on the address it
+  // ends on: a redirect marked KEEP_FOCUS left the focus on the rail link just pressed and a screen
+  // reader announced nothing.
+  it('puts the focus on the title when a person opens the Stocktake from the rail', async () => {
+    const { router, user } = renderStocktake('/orders');
+    await user.click(
+      within(screen.getByRole('navigation', { name: 'All sections' })).getByRole('link', { name: 'Stocktake' }),
+    );
+    await month('October 2026');
+    expect(router.state.location.pathname).toBe('/stocktake/2026-10');
+    expect(screen.getByRole('heading', { level: 1, name: 'Stocktake' })).toHaveFocus();
+  });
+
+  it('puts the focus on the title when a person opens the Stocktake from the tab bar', async () => {
+    const { user } = renderStocktake('/orders');
+    await user.click(
+      within(screen.getByRole('navigation', { name: 'Main sections' })).getByRole('link', { name: 'Stocktake' }),
+    );
+    await month('October 2026');
+    expect(screen.getByRole('heading', { level: 1, name: 'Stocktake' })).toHaveFocus();
+  });
+
+  it('still keeps the focus when the move that needed the redirect was marked KEEP_FOCUS', async () => {
+    const { router } = renderStocktake('/orders');
+    await act(async () => { await router.navigate('/stocktake', { state: KEEP_FOCUS }); });
+    await month('October 2026');
+    expect(router.state.location.pathname).toBe('/stocktake/2026-10');
+    expect(screen.getByRole('heading', { level: 1, name: 'Stocktake' })).not.toHaveFocus();
   });
 });
 

@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { Navigate, useLocation, useNavigate } from 'react-router';
+import { Navigate, useLocation, useNavigate, useNavigationType } from 'react-router';
 import { PartBoundary } from '../errors/PartBoundary';
 import { useT } from '../i18n/useT';
 import { useSession } from '../session/SessionContext';
@@ -71,13 +71,24 @@ function useCurrentMonth(): string {
 
 function StocktakeScreen() {
   const current = useCurrentMonth();
-  const { pathname } = useLocation();
+  const { pathname, state } = useLocation();
+  const navigationType = useNavigationType();
   // The address as it is written, not React Router's «*»: a product id is split before it is
   // decoded (stocktakePath.ts).
   const resolved = resolveStocktakePath(pathname.slice(STOCKTAKE_PATH.length), current);
 
-  // KEEP_FOCUS: the app arranging itself, not a person asking to go somewhere.
-  if ('redirect' in resolved) return <Navigate to={resolved.redirect} replace state={KEEP_FOCUS} />;
+  // ⚠️ THE REDIRECT MUST KEEP THE MEANING OF THE MOVE THAT CAUSED IT. `/stocktake` always lands on a
+  // month, and Page (shell/Page.tsx) decides about the focus only on the address the person ends up
+  // on, never on the one they tapped:
+  //  - On a POP (the first load, the browser's Back or Forward) the person asked for no move, so the
+  //    redirect is the app arranging itself: KEEP_FOCUS, and the skip link stays the first Tab stop.
+  //  - On any other move the state of the address being redirected is passed on. A tap on the rail
+  //    or the tab bar carries none, so the h1 takes the focus and a screen reader says where it is
+  //    (a KEEP_FOCUS here, as there once was, left the focus on the link just pressed and announced
+  //    nothing); a move the app made itself and marked KEEP_FOCUS still keeps it.
+  if ('redirect' in resolved) {
+    return <Navigate to={resolved.redirect} replace state={navigationType === 'POP' ? KEEP_FOCUS : state} />;
+  }
   return <MonthScreen view={resolved.view} current={current} />;
 }
 
