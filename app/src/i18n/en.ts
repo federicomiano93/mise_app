@@ -37,6 +37,70 @@ export const en = {
   'section.more': 'More',
 
   'common.cancel': 'Cancel',
+  // The three button words below keep the current app's key names and texts (js/i18n.js).
+  'ui.edit': 'Edit',
+  'ui.note': 'Note',
+  'ui.back': 'Back',
+  'day.tomorrow': 'Tomorrow',
+
+  // Pastries. Every key that the current app also has carries ITS name and ITS text, copied
+  // from js/i18n.js; the ones marked «new» exist only in Mise 2.
+  // ⚠️ A weekday shown is its label (weekday.*), never its id: the ids are Firestore document
+  // names and stay English everywhere. The short labels are entries of their own, never the
+  // first three letters of the full name.
+  'weekday.monday': 'Monday',
+  'weekday.tuesday': 'Tuesday',
+  'weekday.wednesday': 'Wednesday',
+  'weekday.thursday': 'Thursday',
+  'weekday.friday': 'Friday',
+  'weekday.saturday': 'Saturday',
+  'weekday.sunday': 'Sunday',
+  'weekday.monday.short': 'Mon',
+  'weekday.tuesday.short': 'Tue',
+  'weekday.wednesday.short': 'Wed',
+  'weekday.thursday.short': 'Thu',
+  'weekday.friday.short': 'Fri',
+  'weekday.saturday.short': 'Sat',
+  'weekday.sunday.short': 'Sun',
+  // new: the name of the row of days (a screen reader says it on reaching the first one).
+  'past.daysLabel': 'Days',
+  // new: under a day's name on the tablet's list. The count is the number of KINDS of pastry.
+  'past.count': { one: '{n} pastry', other: '{n} pastries' },
+  'past.nothingYet': 'Nothing yet',
+  'past.tomorrowToProve': 'Tomorrow · to prove',
+  'past.toProve': 'To prove',
+  'past.editDay': 'Edit {day}',
+  'past.nothingToProveFor': 'Nothing to prove for {day} yet.',
+  'past.tapThePencilTo': 'Tap the pencil to add.',
+  'past.newQuantityFor': 'New quantity for {name}',
+  'past.confirmNewQuantityFor': 'Confirm the new quantity for {name}',
+  'past.hint.typeANumber': 'type a number',
+  'past.hint.sameAsNow': 'same as now',
+  'past.hint.atLeastOne': 'must be at least 1',
+  'past.hint.tooMany': 'too many',
+  'past.thatRowHasChanged': 'That row has changed — check the list.',
+  // new: «Cornetti: 24.» — what was set, said back. The quantity is passed as text so it is
+  // never grouped («1,234»): the list shows it plain.
+  'past.quantitySet': '{name}: {qty}.',
+  'past.confirm': 'Confirm',
+  'past.confirmDay': 'Confirm {day}?',
+  'past.keepAsRecord': 'Keep this list as a record for {day}?',
+  'past.nothingToProveRecord': '{day} has nothing to prove. Record that?',
+  'past.tonightsRecordReplaced': 'Tonight’s record for {day} will be replaced.',
+  'past.willShowAsDone': '{day} will show as done. You can still change it — it will ask first.',
+  'past.dayRecorded': '{day} recorded.',
+  'past.confirmedMark': 'Confirmed',
+  'past.editDayQ': 'Edit {day}?',
+  'past.alreadyRecordedTonight': '{day} is already recorded for tonight. Edit these quantities?',
+  'past.records': 'Records',
+  'past.couldNotSaveDay': 'Couldn’t save {day} — check your connection.',
+  'past.couldNotRecord': 'Couldn’t record {day} — check your connection.',
+  'past.couldnTRemoveThat': 'Couldn’t remove that record — check your connection.',
+  'past.liveSyncInterruptedThis': 'Live sync interrupted — this list may be out of date.',
+  'past.liveSyncInterruptedThese': 'Live sync interrupted — these records may be out of date.',
+  // new, for the two screens that arrive in the next step.
+  'past.editorSoon': 'Editing {day} will arrive in the next step of Mise 2.',
+  'past.recordsSoon': 'Records will arrive in the next step of Mise 2.',
 
   // Signing in. Copied from the current app's js/i18n.js, key for key. «Mise» is the product's
   // name, not a phrase, so it is not here.

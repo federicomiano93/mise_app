@@ -1,0 +1,231 @@
+import { useEffect, useRef, useState } from 'react';
+import { Check, History, Pencil } from 'lucide-react';
+import { Link, useNavigate } from 'react-router';
+import { MAX_QTY } from '@mise/shared/pastries-model';
+import type { Weekday } from '@mise/shared/pastries-model';
+import { useT } from '../i18n/useT';
+import { markBusy } from '../session/busy';
+import { announceAction } from '../telemetry/usage';
+import { Button } from '../ui/Button';
+import { useStatusMessage } from '../ui/StatusMessage';
+import { useConfirm } from '../ui/useConfirm';
+import { usePastries, usePastriesStore } from './PastriesContext';
+import { PastryRow } from './PastryRow';
+import { proposedQuantity, typedKey } from './quantityEdit';
+import { PANEL_ID, RECORDS_PATH, editorPath, tabId, weekdayLabel } from './weekdays';
+import styles from './DayPanel.module.css';
+
+type Props = {
+  day: Weekday;
+  // The day the section opened on: only it is subtitled «Tomorrow · to prove».
+  opening: Weekday;
+};
+
+// One day's list and the fast way to correct one number. The screen somebody reads standing up at
+// 4am, so it stays plain: big names, big numbers, and nothing is a field until a row is tapped.
+//
+// ⚠️ WHAT THIS PHONE HAS TYPED SURVIVES A SNAPSHOT. The data arrives live from the other phones,
+// several times a minute, and a half-typed number must not be eaten by one of them: the typed
+// values are kept by day AND pastry name (never by position — a snapshot can reorder the list),
+// the open row is kept by the same key, and the rows are keyed by name and position so React
+// updates them in place — the scroll position and the focus in the box survive too.
+export function DayPanel({ day, opening }: Props) {
+  const { t } = useT();
+  const store = usePastriesStore();
+  const { days } = usePastries();
+  const navigate = useNavigate();
+  const say = useStatusMessage();
+  const [confirm, confirmDialog] = useConfirm();
+
+  const { items, note } = days[day];
+  const label = weekdayLabel(t, day);
+  // Read from the clock every time (store.isLocked): the lock releases itself at 4am.
+  const locked = store.isLocked(day);
+
+  const [typed, setTyped] = useState<Readonly<Record<string, string>>>({});
+  const [openKey, setOpenKey] = useState<string | null>(null);
+  const openInput = useRef<HTMLInputElement>(null);
+  const confirming = useRef(false);
+  // The day this panel shows NOW, for an answer that arrives after the person has moved on.
+  const shownDay = useRef(day);
+  useEffect(() => { shownDay.current = day; }, [day]);
+
+  // ⚠️ A ROW THAT IS GONE CANNOT STAY OPEN, and neither can any row once the day is confirmed —
+  // here or on a colleague's phone: a box left open over a locked list would accept a number and
+  // then refuse to keep it. Closing is derived while drawing, not in an effect, so the stale box
+  // is never on screen for a frame.
+  if (openKey !== null && (locked || !items.some(item => typedKey(day, item.name) === openKey))) {
+    setOpenKey(null);
+  }
+
+  // The box takes the focus when its row opens.
+  useEffect(() => {
+    if (openKey !== null) openInput.current?.focus();
+  }, [openKey]);
+
+  // A number typed and not yet written is an unsaved edit: a reload the app starts by itself
+  // waits until it is written or dropped (session/busy.ts).
+  const typing = openKey !== null && (typed[openKey] ?? '').trim() !== '';
+  useEffect(() => (typing ? markBusy() : undefined), [typing]);
+
+  // ⚠️ THE ONE GATE, whichever way a confirmed list is reached: a row, the pencil, or the Edit
+  // button. A locked row does not silently ignore the tap — that would read as a broken screen —
+  // it asks. An unlocked day passes straight through: the gate exists to catch a change to
+  // something already recorded, not to make every edit slower.
+  async function requestEdit(): Promise<boolean> {
+    if (!store.isLocked(day)) return true;
+    const ok = await confirm({
+      title: t('past.editDayQ', { day: label }),
+      message: t('past.alreadyRecordedTonight', { day: label }),
+      okLabel: t('ui.edit'),
+      cancelLabel: t('common.cancel'),
+    });
+    if (!ok) return false;
+    // The permission carries tonight's work date, so 4am spends it — and so does the next Confirm.
+    store.grantEdit(day);
+    return true;
+  }
+
+  async function pressRow(key: string) {
+    if (!store.isLocked(day)) {
+      setOpenKey(current => (current === key ? null : key));
+      return;
+    }
+    // Said yes: open the row that was tapped, rather than making them find it again.
+    if ((await requestEdit()) && shownDay.current === day) setOpenKey(key);
+  }
+
+  // The pencil opens the full editor, which can rewrite the whole list — so it goes through the
+  // SAME gate as a row. Left open, the lock would be cosmetic.
+  async function pressPencil() {
+    if (!(await requestEdit()) || shownDay.current !== day) return;
+    void navigate(editorPath(day));
+  }
+
+  function commit(index: number, key: string) {
+    const item = items[index];
+    if (!item) return;
+    const n = proposedQuantity(typed[key]);
+    if (n === null || n <= 0 || n > MAX_QTY || n === item.qty) return;
+    // The STORE composes the payload from the list as it is now and refuses if the row has moved
+    // since it was drawn.
+    const ok = store.setItemQuantity(day, index, item.name, n);
+    setTyped(current => {
+      const { [key]: _dropped, ...rest } = current;
+      return rest;
+    });
+    setOpenKey(null);
+    say(ok ? t('past.quantitySet', { name: item.name, qty: String(n) }) : t('past.thatRowHasChanged'));
+  }
+
+  // Keeping tonight's list as a record asks first, because it writes something permanent — unlike
+  // the tick on a row, which changes a number that can be changed straight back.
+  async function confirmToday() {
+    // The dialog takes time to read, and taps keep arriving.
+    if (confirming.current) return;
+    confirming.current = true;
+    try {
+      // One read, only here: it lets the question say «will be replaced» truthfully. null when it
+      // cannot be established — then nothing is promised.
+      const existing = await store.tonightsRecord(day);
+      const base = items.length > 0
+        ? t('past.keepAsRecord', { day: label })
+        : t('past.nothingToProveRecord', { day: label });
+      const ok = await confirm({
+        title: t('past.confirmDay', { day: label }),
+        message: [
+          base,
+          existing ? t('past.tonightsRecordReplaced', { day: label }) : t('past.willShowAsDone', { day: label }),
+        ],
+        okLabel: t('past.confirm'),
+        cancelLabel: t('common.cancel'),
+      });
+      if (!ok) return;
+      const saved = await store.confirmDay(day, items, note);
+      if (!saved) return;
+      announceAction('pastry-day-confirmed');
+      say(t('past.dayRecorded', { day: label }));
+    } finally {
+      confirming.current = false;
+    }
+  }
+
+  return (
+    <section role="tabpanel" id={PANEL_ID} aria-labelledby={tabId(day)} className={styles.panel}>
+      <header className={styles.head}>
+        <div className={styles.headText}>
+          <h2 className={styles.title}>{label}</h2>
+          <p className={styles.meta}>{day === opening ? t('past.tomorrowToProve') : t('past.toProve')}</p>
+        </div>
+        <Button
+          variant="bare"
+          className={styles.pencil}
+          aria-label={t('past.editDay', { day: label })}
+          onPress={() => { void pressPencil(); }}
+        >
+          <Pencil aria-hidden="true" />
+        </Button>
+      </header>
+
+      <div className={styles.body}>
+        {items.length === 0 ? (
+          <div className={styles.empty}>
+            <p className={styles.emptyTitle}>{t('past.nothingToProveFor', { day: label })}</p>
+            <p className={styles.emptyHint}>{t('past.tapThePencilTo')}</p>
+          </div>
+        ) : (
+          <ul className={styles.list}>
+            {items.map((item, index) => {
+              const key = typedKey(day, item.name);
+              const open = openKey === key;
+              return (
+                <PastryRow
+                  key={`${key}#${index}`}
+                  item={item}
+                  open={open}
+                  typed={typed[key] ?? ''}
+                  inputRef={open ? openInput : undefined}
+                  onToggle={() => { void pressRow(key); }}
+                  onType={value => setTyped(current => ({ ...current, [key]: value }))}
+                  onCommit={() => commit(index, key)}
+                />
+              );
+            })}
+          </ul>
+        )}
+
+        {note === '' ? null : (
+          <div className={styles.note}>
+            <p className={styles.noteLabel}>{t('ui.note')}</p>
+            <p className={styles.noteText}>{note}</p>
+          </div>
+        )}
+      </div>
+
+      <div className={styles.foot}>
+        {/* ⚠️ BOTH ARE ALWAYS BUILT and one is hidden, never one built only when the day is
+            confirmed: the data changes live, and a control built conditionally would appear and
+            vanish at random as other phones wrote. */}
+        <Button variant="primary" block hidden={locked} onPress={() => { void confirmToday(); }}>
+          {t('past.confirm')}
+        </Button>
+        <div className={styles.done} hidden={!locked}>
+          <span className={styles.doneMark}>
+            <Check aria-hidden="true" />
+            {t('past.confirmedMark')}
+          </span>
+          <Button onPress={() => { void requestEdit(); }}>
+            <Pencil aria-hidden="true" />
+            {t('ui.edit')}
+          </Button>
+        </div>
+        <Link to={RECORDS_PATH} className={styles.records}>
+          <History aria-hidden="true" />
+          {t('past.records')}
+        </Link>
+      </div>
+
+      {confirmDialog}
+    </section>
+  );
+}
