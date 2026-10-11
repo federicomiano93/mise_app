@@ -83,6 +83,11 @@ const legacyPriceModel = legacyPriceModelJs as unknown as typeof priceModel;
 const legacyOrderCost = legacyOrderCostJs as unknown as typeof orderCost;
 const legacyInventoryModel = legacyInventoryModelJs as unknown as typeof inventoryModel;
 const legacyInventoryOutbox = legacyInventoryOutboxJs as unknown as typeof inventoryOutbox;
+// ⚠️ The outbox of the current app got the fix of 11 Oct 2026 (several writes in the air, counts held for
+// the server's word) in PR #343, and this branch can be older than that. Until js/inventory/inventory-outbox.js
+// in THIS checkout has it (it exports `answered`), the two files differ BY DESIGN and only what both do the
+// same is compared; the day it has it everything is, with no edit (see inventory-outbox.spec.ts).
+const legacyOutboxHasTheFix = typeof (legacyInventoryOutboxJs as unknown as { answered?: unknown }).answered === 'function';
 const legacyInventoryPurchases = legacyInventoryPurchasesJs as unknown as typeof inventoryPurchases;
 const legacyInventoryValue = legacyInventoryValueJs as unknown as typeof inventoryValue;
 
@@ -1678,11 +1683,37 @@ describe('inventory-outbox: odd inputs', () => {
     Object.freeze({ pending: Object.freeze({ closing: Object.freeze({ flour: 1 }) }), cleared: {}, inFlight: null }),
     new Map(), () => 1];
 
-  agree('hasWork', m.hasWork, l.hasWork, product(OUTBOXES));
-  agree('isSending', m.isSending, l.isSending, product(OUTBOXES));
-  agree('confirm', m.confirm, l.confirm, product(OUTBOXES));
-  agree('restore', m.restore, l.restore, product(OUTBOXES));
-  agree('take', m.take, l.take, product(OUTBOXES));
+  // The shapes the fix added: how many writes are out, whether one was refused, what was handed over and
+  // not yet seen back, what is held from an earlier visit — whole, half-written and wrong.
+  const HANDED = { pending: { closing: { flour: 3 } }, cleared: { closing: { salt: true } } };
+  const HELD = { pending: { closing: { flour: 1, sugar: 2 }, opening: { a: 4 } }, cleared: { closing: { oil: true } } };
+  const FIXED_ONLY: readonly unknown[] = [
+    { pending: {}, cleared: {}, inFlight: LAYER, writes: 2, failed: true, handed: HANDED, held: HELD },
+    { pending: { closing: { flour: 9 } }, cleared: {}, inFlight: LAYER, writes: 1, failed: false, handed: HANDED, held: HELD },
+    { pending: { closing: { flour: 9 } }, cleared: { closing: { sugar: true } }, inFlight: null, writes: 0, failed: false, handed: {}, held: HELD },
+    { pending: {}, cleared: {}, inFlight: null, writes: 3, failed: true, handed: HANDED, held: { pending: {}, cleared: {} } },
+    { inFlight: LAYER, writes: 0 }, { inFlight: LAYER, writes: -1 }, { inFlight: LAYER, writes: 1.5 }, { inFlight: LAYER, writes: '2' },
+    { inFlight: LAYER, writes: NaN }, { inFlight: LAYER, writes: Infinity }, { inFlight: LAYER, writes: 2 ** 40 }, { inFlight: LAYER },
+    { inFlight: LAYER, writes: 2, failed: 'yes' }, { inFlight: LAYER, writes: 2, failed: 1 }, { inFlight: LAYER, writes: 2, failed: true },
+    { writes: 3, failed: true }, { failed: true }, { writes: 2 },
+    { held: 'x' }, { held: 5 }, { held: null }, { held: [] }, { held: { pending: 'no' } }, { held: { pending: { closing: 5 } } },
+    { held: { pending: { closing: { flour: -1, salt: 'x', sugar: 2 } }, cleared: { closing: { oil: 'yes', ham: true } } } },
+    { handed: 'x' }, { handed: 5 }, { handed: null }, { handed: { cleared: 'x' } }, { handed: { pending: { closing: null } } },
+    { handed: HANDED, held: HANDED }, { pending: { closing: { flour: 3 } }, held: { pending: { closing: { flour: 1 } }, cleared: {} } },
+    { inFlight: LAYER, held: { cleared: { closing: { flour: true } }, pending: {} } },
+    Object.freeze({ pending: {}, cleared: {}, inFlight: null, writes: 0, failed: false, handed: Object.freeze({ pending: {}, cleared: {} }), held: Object.freeze({ pending: {}, cleared: {} }) }),
+    { get held(): unknown { throw new Error('boom'); } }, { get handed(): unknown { throw new Error('boom'); } },
+    { get writes(): unknown { throw new Error('boom'); }, inFlight: LAYER }, { get failed(): unknown { throw new Error('boom'); }, inFlight: LAYER }];
+  // Without the fix in js/ only the shapes both files read the same way are compared.
+  const BOXES: readonly unknown[] = legacyOutboxHasTheFix ? [...OUTBOXES, ...FIXED_ONLY] : OUTBOXES;
+
+  agree('hasWork', m.hasWork, l.hasWork, product(BOXES));
+  agree('isSending', m.isSending, l.isSending, product(BOXES));
+  if (legacyOutboxHasTheFix) {
+    agree('confirm', m.confirm, l.confirm, product(BOXES));
+    agree('restore', m.restore, l.restore, product(BOXES));
+    agree('take', m.take, l.take, product(BOXES));
+  }
 
   // Names of maps and of boxes: the real ones, a dotted id, the prototype's own names (a plain object
   // answers to them), nothing, and keys that are not text.
@@ -1692,18 +1723,23 @@ describe('inventory-outbox: odd inputs', () => {
   const KEYS: readonly unknown[] = ['closing', 'opening', 'purchased', 'packKg', 'flour', 'olio.extra', '', ' ', undefined, null, 5, 0, true, '__proto__',
     'toString', 'hasOwnProperty', ['closing'], { toString: () => 'closing' }, Symbol('key')];
   const VALUES: readonly unknown[] = [null, undefined, 0, 3, -1, '', 'x', NaN, 1e21, 0.1, true, false, {}, [], { a: 1 }, 5n, Symbol('v')];
-  agree('stage', m.stage as AnyFn, l.stage as AnyFn, [...product(OUTBOXES.slice(0, 40), KEYS.slice(0, 10), KEYS.slice(4, 14), VALUES),
-    ...product(OUTBOXES.slice(0, 12), KEYS, KEYS, [3, null])]);
   const asText = (value: unknown): string => JSON.stringify(value) ?? String(value);
-  agree('stage (a map or a box called «constructor», compared as text)', (...args: unknown[]) => asText((m.stage as AnyFn)(...args)),
-    (...args: unknown[]) => asText((l.stage as AnyFn)(...args)),
-    product(OUTBOXES.slice(0, 12), ['constructor', 'closing'], ['constructor', 'flour'], [3, null, undefined, 'x']));
-
   const VALUE_MAPS: readonly unknown[] = [undefined, {}, { a: 1 }, { a: null }, { a: undefined }, { a: 0, b: 2 }, null, 'abc', 5, ['x'],
     { 'olio.extra': 1 }, Object.create({ inherited: 1 })];
   const CLEAR_LISTS: readonly unknown[] = [undefined, [], ['a'], ['a', 'b'], 'ab', null, 5, new Set(['a']), [null], [''], ['olio.extra'], { length: 1, 0: 'a' }];
-  agree('stageMany', m.stageMany as AnyFn, l.stageMany as AnyFn,
-    product(OUTBOXES.slice(0, 40), ['closing', 'purchased', '', undefined, 5], VALUE_MAPS, CLEAR_LISTS));
+  // What stage and stageMany answer is an outbox, whose shape the fix changed.
+  if (legacyOutboxHasTheFix) {
+    agree('stage', m.stage as AnyFn, l.stage as AnyFn, [...product(OUTBOXES.slice(0, 40), KEYS.slice(0, 10), KEYS.slice(4, 14), VALUES),
+      ...product(OUTBOXES.slice(0, 12), KEYS, KEYS, [3, null]),
+      ...product(FIXED_ONLY, ['closing', 'opening', 'packKg', undefined], ['flour', 'sugar', 'oil', 'a', ''], [3, null, 0, undefined, 'x'])]);
+    agree('stage (a map or a box called «constructor», compared as text)', (...args: unknown[]) => asText((m.stage as AnyFn)(...args)),
+      (...args: unknown[]) => asText((l.stage as AnyFn)(...args)),
+      [...product(OUTBOXES.slice(0, 12), ['constructor', 'closing'], ['constructor', 'flour'], [3, null, undefined, 'x']),
+        ...product(FIXED_ONLY.slice(0, 8), ['constructor', 'closing'], ['constructor', 'flour'], [3, null])]);
+    agree('stageMany', m.stageMany as AnyFn, l.stageMany as AnyFn,
+      [...product(OUTBOXES.slice(0, 40), ['closing', 'purchased', '', undefined, 5], VALUE_MAPS, CLEAR_LISTS),
+        ...product(FIXED_ONLY, ['closing', 'opening'], VALUE_MAPS.slice(0, 6), CLEAR_LISTS.slice(0, 4))]);
+  }
 
   // applyOver changes the document it is given, so each call is handed a fresh one, by its index: the two
   // sides must never share a target, or the first would hand the second a document already laid over.
@@ -1732,14 +1768,49 @@ describe('inventory-outbox: odd inputs', () => {
     const answer = apply(box, into, maps);
     return { theTarget: answer === into, text: readAs(answer) };
   };
-  agree('applyOver', laidOver(m.applyOver), laidOver(l.applyOver), product(OUTBOXES, MAKE_TARGETS.map((_, index) => index), MAP_LISTS));
+  agree('applyOver', laidOver(m.applyOver), laidOver(l.applyOver), product(BOXES, MAKE_TARGETS.map((_, index) => index), MAP_LISTS));
+
+  // The functions the fix added.
+  const OKS: readonly unknown[] = [true, false, undefined, null, 0, 1, '', 'ok', 'yes', {}, [], NaN, new Error('refused'), 'true', Symbol('ok')];
+  const SHOWN_DOCS: readonly unknown[] = [...ODD, 'doc', 42, { closing: { flour: 3 } }, { closing: { flour: 3, salt: 1 } }, { closing: { flour: 2 } },
+    { closing: {} }, { opening: { flour: 3 } }, { opening: { flour: 2 }, closing: { flour: 3 } }, { closing: { flour: 0 } }, { closing: { 'olio.extra': 1 } },
+    { closing: { flour: 3 }, opening: { a: 4 }, purchased: {}, packKg: {} }, { closing: 5 }, { closing: null }, { closing: [3] }, { closing: 'flour' },
+    JSON.parse('{"closing":{"__proto__":3,"flour":3}}'), Object.create({ closing: { flour: 3 } }), { get closing(): unknown { throw new Error('boom'); } },
+    Object.freeze({ closing: Object.freeze({ flour: 3 }) })];
+  const SAVED: readonly unknown[] = [...ODD, 'saved', 42, LAYER, HANDED, HELD, { pending: {}, cleared: {} },
+    { pending: { closing: { flour: -1, salt: 'x', sugar: 2, a: NaN, b: Infinity, c: null, d: {}, e: 0, f: 0.1, g: true } }, cleared: {} },
+    { pending: {}, cleared: { closing: { x: true, y: 'yes', z: 1, w: false, v: null } } },
+    { pending: { closing: { flour: 3 } }, cleared: { closing: { flour: true } } },
+    { pending: { notAMap: { h: 1 }, opening: { h: 1 }, constructor: { h: 1 } }, cleared: { notAMap: { k: true }, packKg: { k: true } } },
+    { pending: { closing: { '': 3, 'olio.extra': 3 } }, cleared: { closing: { '': true, 'olio.extra': false } } },
+    { pending: 'no' }, { cleared: 'no' }, { pending: { closing: 5 } }, { pending: { closing: [1] } }, { pending: { closing: 'str' } },
+    JSON.parse('{"pending":{"closing":{"__proto__":3,"flour":1}},"cleared":{}}'), Object.create(LAYER),
+    { get pending(): unknown { throw new Error('boom'); } }, Object.freeze({ pending: Object.freeze({ closing: Object.freeze({ flour: 1 }) }), cleared: {} })];
+  if (legacyOutboxHasTheFix) {
+    agree('answered', m.answered as AnyFn, l.answered as AnyFn, product(BOXES, OKS));
+    agree('echoed', m.echoed as AnyFn, l.echoed as AnyFn, product(BOXES, SHOWN_DOCS, MAP_LISTS));
+    agree('unsaved', m.unsaved, l.unsaved, product(BOXES));
+    agree('hasUnsaved', m.hasUnsaved, l.hasUnsaved, product(BOXES));
+    agree('hasHeld', m.hasHeld, l.hasHeld, product(BOXES));
+    agree('release', m.release, l.release, product(BOXES));
+    agree('revive', m.revive as AnyFn, l.revive as AnyFn, product(BOXES, SAVED, MAP_LISTS));
+  } else {
+    test.skip('inventory-outbox: the fix of 11 Oct 2026 (PR #343) is not in js/ in this checkout yet — only hasWork, isSending and applyOver are compared', () => {});
+  }
 
   // Whole histories: every sequence of up to four of these steps is run from the empty outbox, and what
   // each step answered (the outbox, what was taken, the document laid over) must be the same.
-  type Step = readonly ['stage', string, string, unknown] | readonly ['take'] | readonly ['confirm'] | readonly ['restore'] | readonly ['apply'];
+  type Step = readonly ['stage', string, string, unknown] | readonly ['take'] | readonly ['confirm'] | readonly ['restore'] | readonly ['apply']
+    | readonly ['answer', boolean] | readonly ['echo'] | readonly ['revive'] | readonly ['release'];
   const STEPS: readonly Step[] = [['stage', 'closing', 'flour', 3], ['stage', 'closing', 'flour', null], ['stage', 'closing', 'flour', 8],
     ['stage', 'closing', 'salt', 0], ['stage', 'opening', 'flour', 2], ['take'], ['confirm'], ['restore'], ['apply']];
+  // The fix: several writes, their answers, what a snapshot shows back, what an earlier visit left, and its release.
+  const FIX_STEPS: readonly Step[] = [['stage', 'closing', 'flour', 3], ['stage', 'closing', 'flour', null], ['stage', 'closing', 'salt', 0],
+    ['take'], ['answer', true], ['answer', false], ['echo'], ['revive'], ['release'], ['apply']];
   const MAPS = ['opening', 'purchased', 'closing', 'packKg'];
+  // What a snapshot shows back, and what an earlier visit left in localStorage.
+  const SHOWN = { opening: {}, purchased: {}, closing: { flour: 3 }, packKg: {} };
+  const LEFT_BEHIND = { pending: { closing: { flour: 1, sugar: 2 } }, cleared: { closing: { salt: true } } };
   function history(mod: typeof inventoryOutbox, steps: readonly Step[]): unknown[] {
     let box: inventoryOutbox.Outbox = mod.EMPTY_OUTBOX;
     const trace: unknown[] = [];
@@ -1748,16 +1819,21 @@ describe('inventory-outbox: odd inputs', () => {
       else if (step[0] === 'take') { const taken = mod.take(box); box = taken.outbox; trace.push(taken); continue; }
       else if (step[0] === 'confirm') box = mod.confirm(box);
       else if (step[0] === 'restore') box = mod.restore(box);
+      else if (step[0] === 'answer') box = mod.answered(box, step[1]);
+      else if (step[0] === 'echo') box = mod.echoed(box, SHOWN, MAPS);
+      else if (step[0] === 'revive') box = mod.revive(box, LEFT_BEHIND, MAPS);
+      else if (step[0] === 'release') box = mod.release(box);
       else { trace.push(mod.applyOver(box, { opening: { flour: 1 }, purchased: {}, closing: { flour: 1, salt: 5 }, packKg: {} }, MAPS)); continue; }
       trace.push(box, mod.hasWork(box), mod.isSending(box));
+      if (legacyOutboxHasTheFix) trace.push(mod.hasUnsaved(box), mod.hasHeld(box), mod.unsaved(box));
     }
     return trace;
   }
-  test(`histories: the same answers at every step of the ${STEPS.length ** 4 + STEPS.length ** 3 + STEPS.length ** 2 + STEPS.length} sequences of up to four steps`, () => {
+  function disagreeing(steps: readonly Step[]): string[] {
     const disagreements: string[] = [];
     let sequences: Step[][] = [[]];
     for (let length = 1; length <= 4; length += 1) {
-      sequences = sequences.flatMap(sequence => STEPS.map(step => [...sequence, step]));
+      sequences = sequences.flatMap(sequence => steps.map(step => [...sequence, step]));
       for (const sequence of sequences) {
         try {
           expect(history(m, sequence)).toStrictEqual(history(l, sequence));
@@ -1766,8 +1842,17 @@ describe('inventory-outbox: odd inputs', () => {
         }
       }
     }
-    expect(disagreements.slice(0, 10)).toStrictEqual([]);
-  }, 120_000);
+    return disagreements;
+  }
+  const sequencesOf = (steps: readonly Step[]): number => steps.length ** 4 + steps.length ** 3 + steps.length ** 2 + steps.length;
+  if (legacyOutboxHasTheFix) {
+    test(`histories: the same answers at every step of the ${sequencesOf(STEPS)} sequences of up to four steps`, () => {
+      expect(disagreeing(STEPS).slice(0, 10)).toStrictEqual([]);
+    }, 120_000);
+    test(`histories of the fix: the same answers at every step of the ${sequencesOf(FIX_STEPS)} sequences of up to four steps`, () => {
+      expect(disagreeing(FIX_STEPS).slice(0, 10)).toStrictEqual([]);
+    }, 120_000);
+  }
 });
 
 // ── inventory-purchases ──────────────────────────────────────────────────────
