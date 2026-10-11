@@ -149,14 +149,15 @@
 }
 
 .name {
-  flex: 1 1 176px;
+  /* 120 + 80 + the bin + two gaps fit on one line from a 360px phone up; at 296px they wrap. */
+  flex: 1 1 120px;
   width: auto;
   min-width: 0;
 }
 
 .qty {
   flex: none;
-  width: 96px;
+  width: 80px;
   font-variant-numeric: tabular-nums;
 }
 

@@ -273,11 +273,39 @@ function EditorForm({ day, handBackFocus }: Props) {
     leave();
   }
 
+  // ⚠️ THE BACK BUTTON ASKS FOR ITSELF, BEFORE IT NAVIGATES, instead of leaving it to the blocker.
+  // Its navigate(-1) is a POP, and the router's blocker fails SILENTLY on a POP to an entry the
+  // router did not create — a day opened by typing or pasting its address: react-router only warns
+  // «This will fail silently in production» — so the edits went without a word. Found by driving
+  // it, 11 Oct 2026. Once answered, the editor is clean, so the blocker does not ask again; it
+  // still guards every other way out.
+  async function back() {
+    if (asking.current || askingLeave.current) return;
+    if (dirtyRef.current) {
+      asking.current = true;
+      try {
+        const discard = await confirm({
+          title: t('past.discardChanges'),
+          message: t('past.unsavedFor', { day: label }),
+          okLabel: t('ui.discard'),
+          cancelLabel: t('common.cancel'),
+          danger: true,
+        });
+        if (!discard || !mounted.current) return;
+      } finally {
+        asking.current = false;
+      }
+      dirtyRef.current = false;
+      setDirty(false);
+    }
+    leave();
+  }
+
   return (
     <section className={styles.editor} aria-labelledby={titleId}>
       <FormBar
         backLabel={t('ui.back')}
-        onBack={leave}
+        onBack={() => { void back(); }}
         title={t('past.editDay', { day: label })}
         titleId={titleId}
         titleRef={title}

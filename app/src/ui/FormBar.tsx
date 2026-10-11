@@ -32,7 +32,7 @@ export function FormBar({ backLabel, onBack, title, titleId, titleRef, sub, acti
         <h2 ref={titleRef} id={titleId} tabIndex={-1} className={styles.title}>{title}</h2>
         {sub}
       </div>
-      {action}
+      {action ? <div className={styles.action}>{action}</div> : null}
     </header>
   );
 }

@@ -7,6 +7,7 @@
   top: 0;
   z-index: 2;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--s3);
   padding: var(--s3);
@@ -24,14 +25,22 @@
 }
 
 .text {
-  flex: 1;
+  flex: 1 1 96px;
   min-width: 0;
 }
 
+/* ⚠️ WORDS ARE NEVER CUT. On a 296px phone the title had about 70px beside Back and Save, and
+   «Modifica Lunedì» broke as «Modifi / ca». The title keeps at least 96px (one word of it); when that does not
+   fit, the action (Save) drops to a line of its own, at the right, instead. */
 .title {
   font-size: var(--fs-lg);
   font-weight: 650;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
+}
+
+.action {
+  flex: none;
+  margin-left: auto;
 }
 
 /* A title takes the focus from script when its screen opens; a tap does not need a ring around it. */

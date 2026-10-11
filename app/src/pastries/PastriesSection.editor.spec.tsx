@@ -594,6 +594,21 @@ describe('the editor: leaving with unsaved changes', () => {
     expect(within(ask).getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
   });
 
+  // ⚠️ The router's blocker fails SILENTLY on a POP to an entry it did not create (a day opened by
+  // typing its address), and Back is navigate(-1), a POP: so the button asks BEFORE navigating,
+  // with no navigation held by the blocker, and once answered it is not asked a second time.
+  it('the Back button asks before it navigates, and only once', async () => {
+    const { router, user } = await openFromDay();
+    await user.type(nameBoxes()[0] as HTMLElement, '!');
+    await user.click(screen.getByRole('button', { name: 'Back' }));
+    const ask = await dialog(discardTitle);
+    expect([...router.state.blockers.values()].every(b => b.state === 'unblocked')).toBe(true);
+    expect(router.state.location.pathname).toBe('/pastries/Thursday/edit');
+    await user.click(within(ask).getByRole('button', { name: 'Discard' }));
+    await waitFor(() => { expect(router.state.location.pathname).toBe('/pastries/Thursday'); });
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+  });
+
   it('stays, with the edits, on Cancel', async () => {
     const { router, user } = await openFromDay();
     await user.type(nameBoxes()[0] as HTMLElement, '!');
