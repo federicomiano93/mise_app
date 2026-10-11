@@ -795,8 +795,8 @@
       }
     },
     "dist/pastries.js": {
-      "sha": "be207f9c67262b7c",
-      "mapSha": "3cdd40a889554d4c",
+      "sha": "76570d614f089366",
+      "mapSha": "94f2924ffe2aef3f",
       "inputs": {
         "js/allergen-model.js": "50434c6cea85b7de",
         "js/app-version.js": "4ef897a205fdec91",
@@ -849,7 +849,7 @@
         "js/pastries/dom.js": "247525e429f4ec4a",
         "js/pastries/firebase-pastries.js": "44fa684618e4347b",
         "js/pastries/pastries-day.js": "26adcbaa7b7a8c2c",
-        "js/pastries/pastries-editor.js": "2ce400fc62d52f4c",
+        "js/pastries/pastries-editor.js": "46797e4a563fdca9",
         "js/pastries/pastries-lock.js": "2a6043cb6111bb9a",
         "js/pastries/pastries-log-model.js": "de0511e490f1eecc",
         "js/pastries/pastries-logs-store.js": "743bcbf4aa6e2d80",
