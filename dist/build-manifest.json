@@ -373,10 +373,10 @@
       }
     },
     "dist/i18n.js": {
-      "sha": "05b8f4a7adb3d212",
-      "mapSha": "13125fe42e6f68ed",
+      "sha": "9ab089bc5a39c5cf",
+      "mapSha": "803c1f284fbc2fdd",
       "inputs": {
-        "js/i18n.js": "8c8fd70b84671c42"
+        "js/i18n.js": "ce94f001d57b718f"
       }
     },
     "dist/index.js": {

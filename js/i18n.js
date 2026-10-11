@@ -5061,7 +5061,8 @@ const DICTIONARIES = Object.freeze({
     'past.hint.atLeastOne': 'almeno 1',
     'past.hint.tooMany': 'troppi',
     'past.onListTwice': '{name} è due volte in questa lista.',
-    'past.howMany': 'Quanti {name}?',
+    // Not «Quanti {name}?»: a pastry name can be feminine or plural («Quanti Sfogliatelle?»).
+    'past.howMany': 'Manca la quantità di {name}.',
     'past.mostItCanHold': '{n} è il massimo che può contenere.',
     'past.pastryPlaceholder': 'Pasta',
     'past.couldNotRecord': 'Non è stato possibile registrare {day} — controlla la connessione.',
@@ -5069,11 +5070,15 @@ const DICTIONARIES = Object.freeze({
     'past.removeRecordForQ': 'Togliere la registrazione di {day}, {date}? Non si può annullare.',
     'past.editDayQ': 'Modificare {day}?',
     'past.editDay': 'Modifica {day}',
-    'past.alreadyRecordedTonight': '{day} è già registrato per stanotte. Modificare queste quantità?',
+    // ⚠️ A SENTENCE WITH A WEEKDAY IN IT MUST FIT ALL SEVEN, and domenica is feminine while the
+    // other six are masculine: no adjective or participle may agree with {day}. «La lista di {day} …»
+    // (lista is feminine whatever the day) or «Salvato: {day}.» — never «{day} registrato».
+    // tests/pastries-italian-agreement.test.mjs pins it for every Italian past.* sentence.
+    'past.alreadyRecordedTonight': 'La lista di {day} è già registrata per stanotte. Modificare queste quantità?',
     'past.keepAsRecord': 'Tenere questa lista come registrazione di {day}?',
     'past.nothingToProveRecord': '{day} non ha niente da far lievitare. Registrare così?',
     'past.tonightsRecordReplaced': 'La registrazione di stanotte per {day} verrà sostituita.',
-    'past.willShowAsDone': '{day} risulterà fatto. Puoi ancora cambiarlo — te lo chiederà prima.',
+    'past.willShowAsDone': 'La lista di {day} risulterà fatta. Puoi ancora cambiarla — te lo chiederà prima.',
     'past.couldNotSaveDay': 'Non è stato possibile salvare {day} — controlla la connessione.',
     'fc.perKg': 'al kg',
     'fc.perPiece': 'al pezzo',
@@ -5198,7 +5203,7 @@ const DICTIONARIES = Object.freeze({
     'past.saveDay': 'Vuoi salvare {day}?',
     'past.saveThese': { one: 'Vuoi salvare questa pasta per {day}?', other: 'Vuoi salvare queste {n} paste per {day}?' },
     'past.saveEmpty': '{day} non avrà niente da mettere. Vuoi salvare così?',
-    'past.daySaved': '{day} salvato.',
+    'past.daySaved': 'Salvato: {day}.',
     'past.unsavedFor': 'Hai modifiche non salvate per {day}. Vuoi scartarle?',
     'past.noteFor': 'Nota per {day}',
     'past.toProveFor': 'Da mettere per {day}',
