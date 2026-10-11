@@ -118,7 +118,8 @@ describe('SessionGate: the venue\'s language comes first', () => {
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
     // ⚠️ and not once in between.
     expect(drawn).not.toContain('Orders');
-    expect(document.documentElement.lang).toBe('it');
+    // <html lang> is set by an effect, which can run a moment after the screen is on the page.
+    await waitFor(() => { expect(document.documentElement.lang).toBe('it'); });
   });
 
   it('does not wait when the venue speaks the language already on screen', () => {

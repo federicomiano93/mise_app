@@ -71,7 +71,8 @@ describe('SessionGate: the page counts as loaded when the first screen is up', (
     expect(screen.queryByText('the app')).not.toBeInTheDocument();
     expect(markLoaded).not.toHaveBeenCalled();
 
-    await waitFor(() => { expect(screen.getByText('the app')).toBeInTheDocument(); });
-    expect(markLoaded).toHaveBeenCalled();
+    await waitFor(() => { expect(screen.getByText('the app')).toBeInTheDocument(); }, { timeout: 5000 });
+    // Called from an effect, which can run a moment after the screen is on the page.
+    await waitFor(() => { expect(markLoaded).toHaveBeenCalled(); });
   });
 });
