@@ -13,6 +13,7 @@
 //   · «both new files are precached» (the current app's sw.js ASSETS list) — Mise 2's offline cache
 //     is a later step.
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
+import type { MockInstance } from 'vitest';
 import { sameSession, type DevicePayload } from '@mise/shared/device-model';
 import { KEEP_PREFIXES, keysToClear } from '@mise/shared/local-data';
 import {
@@ -370,6 +371,123 @@ describe('startDevicePing', () => {
     expect(source.listening()).toBe(0);
     await vi.advanceTimersByTimeAsync(START_DELAY_MS * 2);
     expect(d.sent).toHaveLength(0);
+  });
+
+  // ⚠️ A page left open for days (the lab tablet) opens no new session: without these the day's
+  // line would be sent once and never again until somebody reloads.
+  describe('a page that stays open', () => {
+    const TOMORROW = () => new Date(2026, 9, 10, 9, 0);
+    let visibility: MockInstance<() => DocumentVisibilityState>;
+
+    beforeEach(() => {
+      visibility = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
+    });
+
+    afterEach(() => {
+      visibility.mockRestore();
+    });
+
+    async function openOneDay(uid: string) {
+      const d = deps();
+      const source = fakeSessionSource(session(uid));
+      const stop = startDevicePing(source, d);
+      await vi.advanceTimersByTimeAsync(START_DELAY_MS + 1);
+      expect(d.sent).toHaveLength(1);
+      return { d, source, stop };
+    }
+
+    test('it is counted again the next day when the page is brought back to the front', async () => {
+      const { d } = await openOneDay('open-a');
+
+      d.now = TOMORROW;
+      document.dispatchEvent(new Event('visibilitychange'));
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(d.sent).toHaveLength(2);
+      expect(d.sent[1]?.payload.uid).toBe('open-a');
+    });
+
+    test('it is counted again the next day when the signal comes back', async () => {
+      const { d } = await openOneDay('open-b');
+
+      d.now = TOMORROW;
+      window.dispatchEvent(new Event('online'));
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(d.sent).toHaveLength(2);
+    });
+
+    test('the same day it is NOT counted again, however often the page comes back', async () => {
+      const { d } = await openOneDay('open-c');
+
+      for (let i = 0; i < 3; i += 1) {
+        document.dispatchEvent(new Event('visibilitychange'));
+        window.dispatchEvent(new Event('online'));
+      }
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(d.sent).toHaveLength(1);
+    });
+
+    test('a page going to the back is not a reason to count', async () => {
+      const { d } = await openOneDay('open-d');
+
+      d.now = TOMORROW;
+      visibility.mockReturnValue('hidden');
+      document.dispatchEvent(new Event('visibilitychange'));
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(d.sent).toHaveLength(1);
+    });
+
+    test('whoever is signed in NOW is counted, and nobody when nobody is', async () => {
+      const { d, source } = await openOneDay('open-e');
+
+      d.now = TOMORROW;
+      source.set({ status: 'signed-out' });
+      window.dispatchEvent(new Event('online'));
+      await vi.advanceTimersByTimeAsync(0);
+      expect(d.sent).toHaveLength(1);
+
+      source.set(session('open-f'));
+      await vi.advanceTimersByTimeAsync(0);
+      window.dispatchEvent(new Event('online'));
+      await vi.advanceTimersByTimeAsync(0);
+      expect(d.sent).toHaveLength(2);
+      expect(d.sent[1]?.payload.uid).toBe('open-f');
+    });
+
+    test('the stop function takes both listeners away', async () => {
+      const { d, stop } = await openOneDay('open-g');
+      stop();
+
+      d.now = TOMORROW;
+      document.dispatchEvent(new Event('visibilitychange'));
+      window.dispatchEvent(new Event('online'));
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(d.sent).toHaveLength(1);
+    });
+
+    test('a source that fails later cannot make the page throw', async () => {
+      let broken = false;
+      const flaky: SessionSource = {
+        getSnapshot: () => { if (broken) throw new Error('no snapshot'); return session('open-h'); },
+        subscribe: () => () => {},
+      };
+      const stop = startDevicePing(flaky, deps());
+      const onError = vi.fn();
+      window.addEventListener('error', onError);
+      try {
+        broken = true;
+        window.dispatchEvent(new Event('online'));
+        document.dispatchEvent(new Event('visibilitychange'));
+        expect(onError).not.toHaveBeenCalled();
+      } finally {
+        window.removeEventListener('error', onError);
+        stop();
+      }
+    });
   });
 
   test('a session source that fails cannot break the start; it says only the code', () => {

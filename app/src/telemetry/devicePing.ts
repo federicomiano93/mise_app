@@ -161,6 +161,7 @@ export function startDevicePing(
 ): () => void {
   const timers = new Set<ReturnType<typeof setTimeout>>();
   let unsubscribe = (): void => {};
+  let stopListening = (): void => {};
   try {
     const handle = (session: TelemetrySession): void => {
       if (session.status !== 'ready' || !session.locationId) return;
@@ -174,11 +175,26 @@ export function startDevicePing(
     // A store does not call back at once the way the current app's onSession() did.
     unsubscribe = source.subscribe(() => handle(source.getSnapshot()));
     handle(source.getSnapshot());
+
+    // ⚠️ A PAGE LEFT OPEN FOR DAYS (the lab tablet) opens no new session, so the day's line would
+    // never be sent again. Coming back to the page, and the signal coming back, both ask «is it
+    // due today?» — which pingIfDue answers from the stamp, so it still goes at most once a day.
+    const askAgain = (): void => {
+      try { void pingIfDue(source.getSnapshot(), deps); } catch { /* never visible: a broken source */ }
+    };
+    const onVisible = (): void => { if (document.visibilityState === 'visible') askAgain(); };
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('online', askAgain);
+    stopListening = () => {
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('online', askAgain);
+    };
   } catch (err) {
     console.warn('Device count not started:', errorCode(err));
   }
   return () => {
     unsubscribe();
+    stopListening();
     timers.forEach(timer => clearTimeout(timer));
     timers.clear();
   };
