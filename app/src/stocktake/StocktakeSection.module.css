@@ -4,8 +4,8 @@
    the right, with a line saying what to do while nothing is chosen.
 
    ⚠️ NOTHING IN THE CHAIN FROM THE SCROLL AREA DOWN TO THE LIST CLIPS (no `overflow` on .layout or
-   .list): the month's bottom actions stick to the bottom of the screen, and a clipping ancestor
-   would turn them into an ordinary row at the end of a long list. On a phone .detail does not clip
+   .list): on the split the month's bottom actions stick to the bottom of the screen, and a
+   clipping ancestor would turn them into an ordinary row at the end of a long list. On a phone .detail does not clip
    either (the form bar of a product sticks to the top of the screen); on the split it is its own
    scroll area, on purpose (below). stocktakeCss.spec.ts pins both. */
 

@@ -227,12 +227,23 @@ describe('the split of the frame', () => {
 });
 
 describe('the month\'s bottom bar', () => {
-  const bar = rule(monthActionsCss, '.bar');
+  const css = withoutComments(monthActionsCss);
+  const at = css.indexOf('@media (min-width: 1000px)');
+  const bar = rule(css.slice(0, at), '.bar');
 
-  it('sticks to the bottom of the scrolling area, above the rows that pass under it', () => {
-    expect(declaration(bar, 'position')).toBe('sticky');
-    expect(declaration(bar, 'bottom')).toBe('0');
-    expect(Number(declaration(bar, 'z-index'))).toBeGreaterThan(0);
+  // ⚠️ Stuck to the bottom of a 296×668 phone it took a fifth of the screen, and the first screen
+  // showed no product at all.
+  it('is the list\'s last block on a phone, never stuck over the rows', () => {
+    expect(at).toBeGreaterThan(0);
+    expect(declaration(bar, 'position')).toBeUndefined();
+    expect(declaration(bar, 'bottom')).toBeUndefined();
+  });
+
+  it('sticks to the bottom of the scrolling area on the split, above the rows that pass under it', () => {
+    const split = rule(css.slice(at), '.bar');
+    expect(declaration(split, 'position')).toBe('sticky');
+    expect(declaration(split, 'bottom')).toBe('0');
+    expect(Number(declaration(split, 'z-index'))).toBeGreaterThan(0);
     expect(declaration(bar, 'background')).toBe('var(--surface)');
   });
 

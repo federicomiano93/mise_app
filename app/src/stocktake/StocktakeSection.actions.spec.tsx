@@ -144,7 +144,7 @@ describe('the bottom bar', () => {
     await ready();
   });
 
-  it('sticks to the bottom of the list\'s column, after the list', async () => {
+  it('comes after the list, last in the list\'s column', async () => {
     await loaded();
     const bar = button('What it cost').parentElement as HTMLElement;
     expect(bar.contains(button('Close the month'))).toBe(true);

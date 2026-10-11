@@ -21,9 +21,9 @@ type Swap = 'to-reopen' | 'to-close';
 // «Close the month» (the primary action of the screen) while it is open, «Reopen the month» (quieter)
 // once it is closed.
 //
-// ⚠️ IT STICKS TO THE BOTTOM OF THE SCREEN, at every width: a long list must never push the month's
-// buttons off a tablet that stands on a bench. It sticks because nothing between it and the shell's
-// scrolling `main` clips (stocktakeCss.spec.ts pins the frame).
+// ⚠️ ON THE SPLIT IT STICKS TO THE BOTTOM OF THE SCREEN: a long list must never push the month's
+// buttons off a tablet that stands on a bench. On a phone it is the list's last block instead, so the
+// rows have the screen (MonthActions.module.css says why; stocktakeCss.spec.ts pins both).
 //
 // ⚠️ BOTH MONTH BUTTONS ARE ALWAYS BUILT and one is hidden, never one built only when the month is in
 // that state: the month changes live (another phone closes it), and a control built conditionally
