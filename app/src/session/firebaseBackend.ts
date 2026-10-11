@@ -18,13 +18,14 @@
 // either on in the console. initializeAuth, not getAuth: getAuth() also installs the Google
 // pop-up machinery, which phones would load on every screen for a sign-in method nobody uses.
 //
-// ⚠️ FIRESTORE IS LOADED ONLY WHEN IT IS NEEDED (step 2c, measured). It is almost half of the
-// app's code (460 KB of 1 MB), and the sign-in form needs none of it: on the lab-tablet profile
+// ⚠️ FIRESTORE IS LOADED ONLY WHEN IT IS NEEDED (step 2c, measured). It is over half of the
+// app's code (its file is 554 KB of about 1.1 MB), and the sign-in form needs none of it: on the lab-tablet profile
 // running it delayed every opening by the better part of a second. So `firestore()` imports it on
 // the first call — the first read of a signed-in session, or `preloadFirestore()` once the sign-in
 // form is on screen — and starts it exactly once, emulator included. Every part of the app gets
 // Firestore from here and NEVER from getFirestore(): its settings are fixed by its first use, and
-// a getFirestore() elsewhere would start a second, memory-only client.
+// a getFirestore() that ran first would make THE one client memory-only (the offline copy shared
+// with the current app gone) — src/firestore-access.spec.ts refuses one anywhere else.
 
 import { initializeApp, type FirebaseApp } from 'firebase/app';
 import {
@@ -33,7 +34,7 @@ import {
 } from 'firebase/auth';
 import type { Firestore } from 'firebase/firestore';
 import { configForHost, LOCAL_HOSTS } from '@mise/shared/firebase-target';
-import type { DocData, SessionBackend } from './backend';
+import type { DocData, SessionBackend, WipeResult } from './backend';
 
 // The Firestore SDK's functions, from the lazily loaded module, and the one client.
 export type FirestoreSdk = typeof import('firebase/firestore');
@@ -95,8 +96,10 @@ export function createFirebaseBackend(hostname: string): FirebaseBackend {
         ready = { fs, db };
         return ready;
       });
-      // A failed download (offline on a first visit) must be retried on the next call, not
-      // remembered for the life of the page.
+      // ⚠️ A FAILED DOWNLOAD IS NOT RETRIED BY CALLING AGAIN: the browser remembers a failed
+      // dynamic import for the life of the page (proved in Edge, code review 11 Oct 2026). The
+      // promise is still dropped so a later call does not hand out a stale rejection object, but
+      // the real retry is a reload — which the session's error screen offers.
       loading.catch(() => { loading = null; });
     }
     return loading;
@@ -143,23 +146,29 @@ export function createFirebaseBackend(hostname: string): FirebaseBackend {
     // ⚠️ terminate() stops every listener, which is why every caller reloads straight after.
     // ⚠️ It starts Firestore if this page never did: the offline database may still hold a
     // previous session's data (or the current app's, on this same origin).
-    async wipeOfflineCache() {
+    async wipeOfflineCache(): Promise<WipeResult> {
+      let kit: FirestoreKit;
       try {
-        const { fs, db } = await firestore();
-        await fs.terminate(db);
-        await fs.clearIndexedDbPersistence(db);
-        return true;
+        kit = await firestore();
       } catch (err) {
-        console.warn('Could not clear the offline copy of the data:', err);
-        return false;
+        console.warn('Could not load Firestore to clear the offline copy of the data:', err);
+        return 'unavailable';
+      }
+      try {
+        await kit.fs.terminate(kit.db);
+        await kit.fs.clearIndexedDbPersistence(kit.db);
+        return 'cleared';
+      } catch (err) {
+        console.warn('Could not clear the offline copy of the data (another tab holds it?):', err);
+        return 'busy';
       }
     },
     async changesStillWaiting(ms = 4000) {
       let timer: ReturnType<typeof setTimeout> | undefined;
       try {
-        const { fs, db } = await firestore();
+        // The time limit covers loading Firestore too, not only the answer.
         const sent = await Promise.race([
-          fs.waitForPendingWrites(db).then(() => true),
+          firestore().then(({ fs, db }) => fs.waitForPendingWrites(db)).then(() => true),
           new Promise<boolean>(resolve => { timer = setTimeout(() => resolve(false), ms); }),
         ]);
         return !sent;

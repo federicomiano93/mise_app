@@ -285,8 +285,17 @@ export function createSession(backend: SessionBackend, env: SessionEnv): Session
     if (verdict === 'claim') write(env.local, OFFLINE_CACHE_OWNER_KEY, user.uid);
     if (verdict === 'wipe' && read(env.session, WIPE_FAILED_KEY) !== user.uid) {
       clearLocalData();
-      void backend.wipeOfflineCache().then(cleared => {
-        if (cleared) write(env.local, OFFLINE_CACHE_OWNER_KEY, user.uid);
+      void backend.wipeOfflineCache().then(result => {
+        // ⚠️ FIRESTORE COULD NOT EVEN BE LOADED (no signal on its first download): nothing was
+        // wiped, and the once-per-opening guard below must NOT be spent on it — after a reload
+        // with the signal back the wipe would be skipped and the previous person's copy read
+        // (code review, 11 Oct 2026). Nothing can be read without Firestore either, so this is
+        // the «could not check your access» screen, whose «Try again» reloads and wipes first.
+        if (result === 'unavailable') {
+          setSession({ ...INITIAL_SESSION, status: 'error', user });
+          return;
+        }
+        if (result === 'cleared') write(env.local, OFFLINE_CACHE_OWNER_KEY, user.uid);
         else write(env.session, WIPE_FAILED_KEY, user.uid);
         env.reload();
       });
@@ -319,7 +328,7 @@ export function createSession(backend: SessionBackend, env: SessionEnv): Session
       clearLocalData();
       // Only a clear that worked forgets whose data this is: after a failed one the record
       // stays, so the next person's first boot catches it and tries again.
-      if (await backend.wipeOfflineCache()) write(env.local, OFFLINE_CACHE_OWNER_KEY, null);
+      if (await backend.wipeOfflineCache() === 'cleared') write(env.local, OFFLINE_CACHE_OWNER_KEY, null);
       write(env.local, ACTIVE_LOCATION_KEY, null);
       env.reload();
     },

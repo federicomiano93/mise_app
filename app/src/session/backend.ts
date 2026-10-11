@@ -18,6 +18,8 @@ export interface SessionUser {
 
 export type DocData = Record<string, unknown>;
 
+export type WipeResult = 'cleared' | 'busy' | 'unavailable';
+
 export interface DocRead {
   // null when the document does not exist.
   readonly data: DocData | null;
@@ -37,9 +39,12 @@ export interface SessionBackend {
   signIn(email: string, password: string): Promise<void>;
   sendReset(email: string): Promise<void>;
   signOut(): Promise<void>;
-  // Stops Firestore and deletes its offline database. Resolves false (never rejects) when it
-  // could not — another open tab of the app holds it.
-  wipeOfflineCache(): Promise<boolean>;
+  // Stops Firestore and deletes its offline database. Never rejects:
+  //   'cleared'     — done;
+  //   'busy'        — another open tab of the app holds the database (tried again next opening);
+  //   'unavailable' — Firestore itself could not be loaded (no signal on the first download):
+  //                   nothing could be wiped, and nothing can be READ either until a reload.
+  wipeOfflineCache(): Promise<WipeResult>;
   // Is something typed on this phone still waiting to reach the server? true after `ms` with
   // nothing confirmed (usually: no signal).
   changesStillWaiting(ms?: number): Promise<boolean>;

@@ -15,7 +15,8 @@ interface World {
   server: Map<string, DocData>;
   cache: Map<string, DocData | null>;
   failReads?: Set<string>;
-  wipeWorks?: boolean;
+  // true (default) = 'cleared', false = 'busy' (another tab), 'unavailable' = Firestore not loadable.
+  wipeWorks?: boolean | 'unavailable';
 }
 
 function memoryStorage(initial: Record<string, string> = {}): KeyValueStorage & { map: Map<string, string> } {
@@ -51,7 +52,11 @@ function setup(world: World, { local = {}, session = {}, now = 1_000_000, busy =
     signIn: vi.fn(async () => {}),
     sendReset: vi.fn(async () => {}),
     signOut: vi.fn(async () => { calls.push('signOut'); }),
-    wipeOfflineCache: vi.fn(async () => { calls.push('wipe'); return world.wipeWorks !== false; }),
+    wipeOfflineCache: vi.fn(async () => {
+      calls.push('wipe');
+      if (world.wipeWorks === 'unavailable') return 'unavailable' as const;
+      return world.wipeWorks === false ? 'busy' as const : 'cleared' as const;
+    }),
     changesStillWaiting: vi.fn(async () => false),
   };
   const localStore = memoryStorage(local);
@@ -160,6 +165,32 @@ describe('somebody else\'s offline copy', () => {
     await settle();
     expect(again.backend.wipeOfflineCache).not.toHaveBeenCalled();
     expect(again.store.getSnapshot().status).toBe('ready');
+  });
+
+  // ⚠️ Firestore could not even be downloaded (no signal on a first visit): the browser remembers
+  // that failure for the page, so the once-per-opening guard must not be spent on it — after a
+  // reload with the signal back, the wipe would be skipped and the previous copy read.
+  test('a wipe that could not load Firestore shows the error screen and does not spend the once-per-opening guard', async () => {
+    const w = world(docs);
+    w.wipeWorks = 'unavailable';
+    const s = setup(w, { local: { [OFFLINE_CACHE_OWNER_KEY]: 'bob', 'prices-cache': 'x' } });
+    s.auth(ALICE);
+    await settle();
+    expect(s.store.getSnapshot()).toMatchObject({ status: 'error', user: ALICE, locationId: null });
+    expect(s.sessionStore.getItem(WIPE_FAILED_KEY)).toBeNull();
+    expect(s.localStore.getItem(OFFLINE_CACHE_OWNER_KEY)).toBe('bob');
+    expect(s.env.reload).not.toHaveBeenCalled();
+    expect(s.calls.some(c => c.startsWith('readPreferCache'))).toBe(false);
+  });
+
+  test('a sign-out whose wipe could not load Firestore keeps the owner on record', async () => {
+    const w = world({ 'users/alice': { locations: { bakery: true } }, 'locations/bakery': {} });
+    const s = setup(w);
+    s.auth(ALICE);
+    await settle();
+    w.wipeWorks = 'unavailable';
+    await s.store.signOut();
+    expect(s.localStore.getItem(OFFLINE_CACHE_OWNER_KEY)).toBe('alice');
   });
 
   // ⚠️ THE ONE PLACE MISE 2 DIFFERS FROM js/firebase.js: one page that never reloads by itself,
