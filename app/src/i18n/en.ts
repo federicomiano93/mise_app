@@ -558,6 +558,33 @@ export const en = {
   'calc.sourceMissing': 'This recipe cannot be read from the catalogue right now, so nothing can be calculated. Check it still exists.',
   'calc.sourceEmpty': 'That catalogue recipe has no ingredients yet.',
   'calc.sourceUnweighable': 'This recipe cannot be used here yet: “{row}” has no weight. The calculator scales everything by weight, so give it one in the catalogue.',
+
+  // Confirm, Edit, Reset, Copy, Send and the full-screen view (slice B).
+  'calc.confirm': 'Confirm',
+  'calc.saveDoughFor': 'Save this dough for:',
+  'calc.today': 'Today',
+  'calc.editQuestion': 'Edit these quantities? The recipe updates only after you save it again.',
+  'calc.resetQuestion': 'Reset all fields?',
+  'calc.reset': 'Reset',
+  'calc.resetAll': 'Reset all fields',
+  'calc.copyRecipe': 'Copy recipe',
+  'calc.copied': 'Copied ✓',
+  'calc.copyFailed': 'Could not copy — select the text above instead',
+  'calc.send': 'Send',
+  'calc.fullScreen': 'Full screen',
+  'calc.exitFullScreen': 'Exit full screen',
+  'calc.textSize': 'Text size',
+  'calc.textSmaller': 'Smaller text',
+  'calc.textLarger': 'Larger text',
+  // New in Mise 2: the store said out loud what the current app only logged.
+  'calc.logNotSaved': '{dough} was not saved to the Dough history. Check the connection and confirm again.',
+  'calc.logFull': '{dough}’s log is full. Reset the fields to start a new one.',
+
+  // The sheet that asks which road a piece of text takes (shared with Orders later).
+  'send.how': 'How do you want to send it?',
+  'send.whatsapp': 'WhatsApp — I choose the chat',
+  'send.email': 'Email',
+  'send.emailOpensApp': 'It opens your mail app with the text ready — it does not send it.',
 } as const satisfies Record<string, Message>;
 
 export type MessageKey = keyof typeof en;
