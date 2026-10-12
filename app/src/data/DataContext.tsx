@@ -1,6 +1,8 @@
 import { createContext, useContext } from 'react';
 import type { ReactNode } from 'react';
 import type { FirestoreKit } from '../session/firebaseBackend';
+import { createFirestoreFoodcostSource } from '../foodcost/foodcostSource';
+import type { FoodcostSource } from '../foodcost/foodcostSource';
 import { createFirestorePastriesSource } from '../pastries/pastriesSource';
 import type { PastriesSource } from '../pastries/pastriesSource';
 import { createFirestoreStocktakeSource } from '../stocktake/stocktakeSource';
@@ -15,12 +17,14 @@ import type { StocktakeSource } from '../stocktake/stocktakeSource';
 export interface DataServices {
   pastries(locationId: string): PastriesSource;
   stocktake(locationId: string): StocktakeSource;
+  foodcost(locationId: string): FoodcostSource;
 }
 
 export function createDataServices(firestore: () => Promise<FirestoreKit>): DataServices {
   return {
     pastries: locationId => createFirestorePastriesSource(firestore, locationId),
     stocktake: locationId => createFirestoreStocktakeSource(firestore, locationId),
+    foodcost: locationId => createFirestoreFoodcostSource(firestore, locationId),
   };
 }
 
