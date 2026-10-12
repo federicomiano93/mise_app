@@ -21,7 +21,9 @@ export const EXTRA_OPENER = 'extra';
 export const DIVISOR_OPENER = 'divisor';
 export const LOG_OPENER = 'log';
 export const ADD_CLIENT_OPENER = 'add-client';
+export const ADD_RECIPE_ROW_OPENER = 'add-recipe-row';
 export const clientOpener = (id: string): string => `client:${id}`;
+export const recipeOpener = (id: string): string => `recipe:${id}`;
 export const divisorRecipeOpener = (id: string): string => `divisor:${id}`;
 
 export interface HandBack {

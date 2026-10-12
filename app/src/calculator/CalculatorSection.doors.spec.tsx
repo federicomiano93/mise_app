@@ -81,8 +81,8 @@ describe('the empty states', () => {
     expect(await screen.findByText('No recipes yet', undefined, LOAD)).toBeInTheDocument();
     expect(main().getByRole('button', { name: 'Settings' })).toBeInTheDocument();
     await view.user.click(main().getByRole('button', { name: 'Add a recipe' }));
-    // The recipe editor arrives in a later slice: until then its address goes to the hub.
-    await waitFor(() => { expect(pathOf(view)).toBe('/calculator/settings'); });
+    // A fresh recipe is made and opened at its own address.
+    await waitFor(() => { expect(pathOf(view)).toMatch(/^\/calculator\/settings\/recipes\/r-[0-9a-z]+$/); });
   });
 
   it('«No recipe is shown here» offers Settings and «Choose which to show»', async () => {
@@ -90,7 +90,7 @@ describe('the empty states', () => {
     expect(await screen.findByText('No recipe is shown here', undefined, LOAD)).toBeInTheDocument();
     expect(main().getByRole('button', { name: 'Settings' })).toBeInTheDocument();
     await view.user.click(main().getByRole('button', { name: 'Choose which to show' }));
-    await waitFor(() => { expect(pathOf(view)).toBe('/calculator/settings'); });
+    await waitFor(() => { expect(pathOf(view)).toBe('/calculator/settings/recipes'); });
   });
 
   it('a brand-new venue (no document) gets both buttons', async () => {
@@ -116,12 +116,9 @@ describe('the empty states', () => {
 
 describe('the addresses under Settings', () => {
   it.each([
-    '/calculator/settings/recipes',
-    '/calculator/settings/recipes/new',
-    '/calculator/settings/recipes/some-recipe',
     '/calculator/settings/nonsense',
     '/calculator/settings/extra/more',
-  ])('%s goes to the hub until it is drawn', async path => {
+  ])('%s goes to the hub', async path => {
     const view = open(path);
     expect(await main().findByRole('heading', { level: 2, name: 'Settings' }, LOAD)).toBeInTheDocument();
     expect(pathOf(view)).toBe('/calculator/settings');

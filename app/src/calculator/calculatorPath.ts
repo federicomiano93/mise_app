@@ -10,7 +10,9 @@
 //   /calculator/settings/clients             Clients: the address book
 //   /calculator/settings/clients/<id>        one client (an id the working copy lacks goes back to the list)
 //   /calculator/settings/clients/new         the list (a client is made by «Add client», which opens it by its id)
-//   /calculator/settings/recipes[/<id>|/new] Recipes       — parsed now, drawn by a later slice
+//   /calculator/settings/recipes             Recipes: the list, an accordion
+//   /calculator/settings/recipes/<id>        one recipe (an id the working copy lacks goes back to the list)
+//   /calculator/settings/recipes/new         makes a fresh empty recipe and replaces itself with the recipe's address
 //   any other /calculator/settings/…         unknown: back to /calculator/settings
 //   anything else                            unknown: the section goes back to /calculator
 //
@@ -41,6 +43,10 @@ export const recipeSettingsPath = (id: string): string => `${recipesPath}/${enco
 // copy, so it is never leaving.
 export const inClientsEditor = (pathname: string): boolean => pathname === clientsPath || pathname.startsWith(`${clientsPath}/`);
 
+// Whether an address belongs to the Recipes editor (the list or one recipe): moving between them keeps its working
+// copy, so it is never leaving.
+export const inRecipesEditor = (pathname: string): boolean => pathname === recipesPath || pathname.startsWith(`${recipesPath}/`);
+
 // What a list screen of Settings (Clients, Recipes) is pointed at.
 export type SettingsTarget =
   | { readonly kind: 'list' }
@@ -56,8 +62,8 @@ export type SettingsView =
   | { readonly kind: 'recipes'; readonly target: SettingsTarget }
   | { readonly kind: 'unknown' };
 
-// The screens of Settings that are drawn today.
-export type DrawnSettingsView = Exclude<SettingsView, { readonly kind: 'recipes' | 'unknown' }>;
+// The screens of Settings that are drawn.
+export type DrawnSettingsView = Exclude<SettingsView, { readonly kind: 'unknown' }>;
 
 export type CalculatorView =
   | { readonly kind: 'home' }
@@ -139,15 +145,15 @@ export type Resolved =
 // none, and sending `/calculator/<id>` to `/calculator` then would lose the tab a link pointed at before
 // anybody could say whether it exists.
 //
-// The Recipes screens are reserved addresses: a later slice draws them, and until then they go to the hub rather
-// than to a blank page; so does any other address under Settings. `clients/new` is not a screen of its own: a
-// client is made by «Add client», which opens the new client by its id, so the bare word goes to the list.
+// Any unknown address under Settings goes to the hub. `clients/new` is not a screen of its own: a client is made by
+// «Add client», which opens the new client by its id, so the bare word goes to the list. `recipes/new` IS one: it
+// makes a fresh recipe (the work view's «Add a recipe» opens it) and replaces itself with the recipe's own address.
 export function resolveCalculatorPath(rest: string | undefined, visibleIds: readonly string[]): Resolved {
   const view = parseCalculatorPath(rest);
   if (view.kind === 'unknown') return { redirect: CALCULATOR_PATH };
   if (view.kind === 'settings') {
     const { view: screen } = view;
-    if (screen.kind === 'recipes' || screen.kind === 'unknown') return { redirect: SETTINGS_PATH };
+    if (screen.kind === 'unknown') return { redirect: SETTINGS_PATH };
     if (screen.kind === 'clients' && screen.target.kind === 'new') return { redirect: clientsPath };
     return { settings: screen };
   }

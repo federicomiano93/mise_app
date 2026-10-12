@@ -8,16 +8,19 @@ import type { DrawnSettingsView } from './calculatorPath';
 import { DivisorChooser, DivisorProducts } from './DivisorSettings';
 import { ExtraSettings } from './ExtraSettings';
 import { LogSettings } from './LogSettings';
+import { RecipesEditor } from './RecipesEditor';
 import { SettingsPage } from './SettingsPage';
 import { Empty } from './SettingsParts';
 
-// The screen of Settings an address names (calculatorPath.ts; the Recipes screens are not drawn yet).
+// The screen of Settings an address names (calculatorPath.ts).
 export function SettingsScreens({ view }: { view: DrawnSettingsView }) {
   switch (view.kind) {
     case 'hub':
       return <CalculatorSettings />;
     case 'clients':
       return <SettingsGate><ClientsEditor target={view.target} /></SettingsGate>;
+    case 'recipes':
+      return <SettingsGate><RecipesEditor target={view.target} /></SettingsGate>;
     case 'extra':
       return <SettingsGate><ExtraSettings /></SettingsGate>;
     case 'log':

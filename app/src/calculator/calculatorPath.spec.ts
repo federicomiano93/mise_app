@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  CALCULATOR_PATH, SETTINGS_PATH, clientPath, clientsPath, divisorPath, divisorRecipePath, extraPath, logSettingsPath,
+  CALCULATOR_PATH, SETTINGS_PATH, clientPath, clientsPath, divisorPath, divisorRecipePath, extraPath, inRecipesEditor, logSettingsPath,
   newClientPath, newRecipePath, parseCalculatorPath, recipePath, recipeSettingsPath, recipesPath, resolveCalculatorPath,
 } from './calculatorPath';
 
@@ -132,8 +132,22 @@ describe('resolveCalculatorPath for Settings', () => {
     expect(resolveCalculatorPath(rest, [])).toEqual({ settings });
   });
 
-  it.each(['/settings/recipes', '/settings/recipes/new', '/settings/recipes/r-1'])('%s is reserved: it goes to the hub until it is drawn', rest => {
-    expect(resolveCalculatorPath(rest, visible)).toEqual({ redirect: '/calculator/settings' });
+  it.each([
+    ['/settings/recipes', { kind: 'list' }],
+    ['/settings/recipes/new', { kind: 'new' }],
+    ['/settings/recipes/r-1', { kind: 'one', id: 'r-1' }],
+  ])('%s is drawn as the Recipes editor, whatever the tabs are', (rest, target) => {
+    expect(resolveCalculatorPath(rest, visible)).toEqual({ settings: { kind: 'recipes', target } });
+    expect(resolveCalculatorPath(rest, [])).toEqual({ settings: { kind: 'recipes', target } });
+  });
+
+  it('knows which addresses belong to the Recipes editor', () => {
+    expect(inRecipesEditor(recipesPath)).toBe(true);
+    expect(inRecipesEditor(recipeSettingsPath('r-1'))).toBe(true);
+    expect(inRecipesEditor(newRecipePath)).toBe(true);
+    expect(inRecipesEditor('/calculator/settings')).toBe(false);
+    expect(inRecipesEditor('/calculator/settings/recipesx')).toBe(false);
+    expect(inRecipesEditor('/calculator/settings/clients')).toBe(false);
   });
 
   it('sends the bare word «new» under Clients to the list: a client is made by Add client', () => {
