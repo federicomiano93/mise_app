@@ -12,6 +12,11 @@ import styles from './ProductEditor.module.css';
 
 // The product's own screen: a product by its address, or a new one.
 //
+// How long a product found only in this phone's local copy waits for the server before its form
+// opens anyway (the current app's RECIPE_LINK_WAIT_MS). Offline the server never answers, and the
+// copy — by then usually replaced by the browser's own database — is all there will be.
+export const COPY_WAIT_MS = 1200;
+
 // ⚠️ THREE THINGS THIS FILE KEEPS FROM THE PLACEHOLDER IT REPLACED:
 //  - a product address WAITS for the first answer of the server (`productsFromServer`) before it
 //    says the product no longer exists — a local copy can be a stale partial one;
@@ -28,16 +33,32 @@ export function ProductEditor({ id }: { id: string | null }) {
 
   const product = id === null ? null : products.find(candidate => candidate.id === id) ?? null;
 
+  // ⚠️ AN EXISTING PRODUCT OPENS ON THE SERVER'S WORD, NOT ON THE LOCAL COPY ALONE (review finding):
+  // the form copies its product ONCE and Save writes it WHOLE, so a form opened from a copy a week
+  // old would write last week's price and lines back over another phone's changes. It waits for the
+  // server's first answer — or, with no signal (or none after COPY_WAIT_MS), opens what this phone has.
+  const [patienceOver, setPatienceOver] = useState(false);
+  useEffect(() => {
+    if (productsFromServer || patienceOver) return undefined;
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+      setPatienceOver(true);
+      return undefined;
+    }
+    const timer = window.setTimeout(() => setPatienceOver(true), COPY_WAIT_MS);
+    return () => window.clearTimeout(timer);
+  }, [productsFromServer, patienceOver]);
+  const canOpen = product !== null && (productsFromServer || patienceOver);
+
   // The id whose form has been shown. A product that leaves the list while its form is open (deleted
   // on another phone) keeps the form on screen: the form decides what to do about it, because only it
   // knows whether anything was typed.
   const [shownFor, setShownFor] = useState<string | null>(null);
-  if (product !== null && shownFor !== product.id) setShownFor(product.id);
+  if (canOpen && shownFor !== id) setShownFor(id);
 
   // Waiting for the server: neither the screen of a product nor the sentence that it is gone.
-  const hasForm = id === null || product !== null || shownFor === id;
-  const waiting = !hasForm && !productsFromServer;
-  const gone = !hasForm && productsFromServer;
+  const hasForm = id === null || canOpen || shownFor === id;
+  const gone = !hasForm && product === null && productsFromServer;
+  const waiting = !hasForm && !gone;
   const shown = !waiting;
 
   // Opened from the list, the page does not move the focus (FROM_LIST): it goes to this title. Only

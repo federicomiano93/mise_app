@@ -51,6 +51,31 @@ describe('a product by its address', () => {
     expect(await screen.findByRole('heading', { level: 2, name: 'This product no longer exists.' }, LOAD)).toBeInTheDocument();
   });
 
+  // Review finding: the form copies its product once and Save writes it whole, so a form opened from
+  // a week-old local copy would write last week's price back over another phone's change.
+  it('⚠️ a product found only in an old local copy waits for the server, then shows the server’s version', async () => {
+    window.localStorage.setItem('foodcost-products', JSON.stringify([product('Green', { name: 'Cornetto', sellingPrice: 1.2 })]));
+    const fake = sourceWith([product('Green', { name: 'Cornetto', sellingPrice: 2.4 })]);
+    fake.hold();
+    renderFoodcost('/food-cost/product/Green', { source: fake });
+    expect((await screen.findAllByText('Loading…', undefined, LOAD)).length).toBeGreaterThan(0);
+    expect(screen.queryByRole('heading', { level: 2, name: 'Cornetto' })).not.toBeInTheDocument();
+
+    act(() => { fake.release(); });
+    expect(await screen.findByRole('heading', { level: 2, name: 'Cornetto' }, LOAD)).toBeInTheDocument();
+    expect(screen.getByDisplayValue('2.4')).toBeInTheDocument();
+    expect(screen.queryByDisplayValue('1.2')).not.toBeInTheDocument();
+  });
+
+  it('with no signal, a product in the local copy opens from it — nothing better will come', async () => {
+    vi.stubGlobal('navigator', { ...navigator, onLine: false });
+    window.localStorage.setItem('foodcost-products', JSON.stringify([product('Green', { name: 'Cornetto' })]));
+    const fake = sourceWith([]);
+    fake.hold();
+    renderFoodcost('/food-cost/product/Green', { source: fake });
+    expect(await screen.findByRole('heading', { level: 2, name: 'Cornetto' }, LOAD)).toBeInTheDocument();
+  });
+
   it('says it no longer exists, with a Back, when the id is not among the products', async () => {
     const { router, user } = renderFoodcost('/food-cost/product/Nope', { source: sourceWith([product('Green')]) });
     await screen.findByRole('heading', { level: 2, name: 'This product no longer exists.' }, LOAD);
