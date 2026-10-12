@@ -643,7 +643,9 @@ export const en = {
   'calc.occasionalLabel': '{name} · occasional',
   'calc.calculatedByName': 'Calculated by {name}',
   // New in Mise 2: the right-hand side of the split with no log open.
-  'calc.logPickPrompt': 'Tap a log to see it',
+  'calc.logPickPrompt': 'Tap a dough to see it',
+  // New in Mise 2: said above the save question of Edit dough when another phone added a version meanwhile.
+  'calc.logChangedElsewhere': 'This dough was changed on another phone while you were editing. Saving puts your quantities on top.',
 
   // The Calculator's Settings (step 3c-2). Every key below is the current app's own key with the current app's
   // own text (js/i18n.js), in both languages.

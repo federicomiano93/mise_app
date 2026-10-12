@@ -13,7 +13,9 @@ import { LogQtyRows } from './LogQtyRows';
 import { buildEditedVersion, editStart, editsTrays } from './logVersions';
 import type { EditStart } from './logVersions';
 import { SettingsEditor } from './SettingsEditor';
-import { useLog } from './useLog';
+import { useKeptLog } from './useLog';
+import { versionsOf } from './logsModel';
+import { useAlert } from '../ui/useAlert';
 import styles from './LogEditor.module.css';
 
 // «Edit dough»: a new version of a log made BY HAND, from its own screen. A log the Calculator made has no edit screen
@@ -22,7 +24,8 @@ import styles from './LogEditor.module.css';
 // Nothing asks before this opens (the current app asked «Edit this dough?» first): it works on a copy, writes nothing
 // until Save, and asks before it is left with edits.
 export function LogEdit({ id }: { id: string }) {
-  const lookup = useLog(id);
+  // The form stays up while the log is briefly missing (see useKeptLog); only Save decides whether it is really gone.
+  const lookup = useKeptLog(id);
   const { configAnswered, configFailed } = useCalculator();
   // The copy is taken from the configuration as it is once the settings have answered: before that the products a
   // log may gain, and the recipe it is matched to, would be missing.
@@ -41,6 +44,9 @@ const num = (value: unknown): number => {
 const editable = (working: EditStart): string =>
   JSON.stringify([working.calculatedBy, working.trays, working.typedTotal, working.rows.map(row => num(row.qty))]);
 
+// Which version a log ends with, as one string: how many there are and the last one's content.
+const versionSignature = (log: Log): string => `${versionsOf(log).length}:${JSON.stringify(latestVersion(log))}`;
+
 function LogEditForm({ log }: { log: Log }) {
   const { t } = useT();
   const store = useCalculatorStore();
@@ -50,11 +56,18 @@ function LogEditForm({ log }: { log: Log }) {
   // LogEdit (this form is unmounted); one that changes is read again at Save, for the version it adds to.
   const [started] = useState(() => editStart(store.getSnapshot().config, log));
   const [working, setWorking] = useState<EditStart>(started);
+  const [alert, alertDialog] = useAlert();
+  // The version this copy was taken from: if the log's latest is another one at Save, another phone added a version.
+  const [startedAt] = useState(() => versionSignature(log));
+  const changedElsewhere = versionSignature(log) !== startedAt;
 
-  const commit = (): boolean => {
+  const commit = async (): Promise<boolean> => {
     const latest = store.getSnapshot();
     const current = latest.logs.find(known => known.id === log.id);
-    if (!current) return false;
+    if (!current) {
+      await alert({ message: t('calc.logNotFound'), okLabel: t('common.ok') });
+      return false;
+    }
     const version = buildEditedVersion({
       config: latest.config,
       working,
@@ -63,8 +76,13 @@ function LogEditForm({ log }: { log: Log }) {
       words: { occasionalClient: t('calc.logOccasionalClient'), extraDough: t('calc.logExtraDough') },
       nowMs: Date.now(),
     });
-    // 'full': the store has said why and the screen stays as it is. 'missing': the log is gone, LogEdit says so.
-    if (store.editLog(log.id, version) !== 'saved') return false;
+    // 'full': the store has said why and the screen stays as it is. 'missing': the log is gone, said here.
+    const result = store.editLog(log.id, version);
+    if (result === 'missing') {
+      await alert({ message: t('calc.logNotFound'), okLabel: t('common.ok') });
+      return false;
+    }
+    if (result !== 'saved') return false;
     announceAction('log-edited');
     return true;
   };
@@ -79,7 +97,7 @@ function LogEditForm({ log }: { log: Log }) {
       title={t('ui.edit')}
       fallback={logViewPath(log.id)}
       dirty={editable(working) !== editable(started)}
-      saveQuestion={t('calc.saveTheseChangesAs')}
+      saveQuestion={changedElsewhere ? `${t('calc.logChangedElsewhere')} ${t('calc.saveTheseChangesAs')}` : t('calc.saveTheseChangesAs')}
       commit={commit}
     >
       <div className={styles.form}>
@@ -115,6 +133,7 @@ function LogEditForm({ log }: { log: Log }) {
           </div>
         )}
       </div>
+      {alertDialog}
     </SettingsEditor>
   );
 }

@@ -7,7 +7,7 @@ import { useCalculator } from './CalculatorContext';
 import { ADD_LOG_OPENER, LOG_LIST_TITLE, useHandBack } from './handBack';
 import { CALCULATOR_PATH } from './calculatorPath';
 import { LogCard } from './LogCard';
-import { visibleLogs } from './logsModel';
+import { versionsOf, visibleLogs } from './logsModel';
 import { SettingsPage } from './SettingsPage';
 import { Empty } from './SettingsParts';
 import { SkipBoundary } from './SkipBoundary';
@@ -47,7 +47,7 @@ export function LogList({ openId, onOpen, onAdd }: Props) {
       {shown.length > 0 ? (
         <ul className={styles.list}>
           {shown.map(log => (
-            <SkipBoundary key={log.id}>
+            <SkipBoundary key={log.id} resetKey={`${versionsOf(log).length}:${String(log.createdAtMs)}`}>
               <LogCard log={log} open={log.id === openId} onOpen={onOpen} />
             </SkipBoundary>
           ))}

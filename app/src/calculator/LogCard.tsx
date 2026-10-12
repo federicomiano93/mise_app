@@ -23,12 +23,14 @@ type Props = {
 // log's own screen, one level down.
 //
 // ⚠️ THE BUTTON IS NAMED BY THE DOUGH ALONE and stretched over the whole card (the Stocktake's row does the same):
-// the rest of the card is its description, so a screen reader hears «Focaccia» and then who, when and what, and
+// the day badge and the rest of the card are its description, so a screen reader hears «Focaccia» and then who, when and what, and
 // two logs of the same dough are told apart.
 export function LogCard({ log, open, onOpen }: Props) {
   const { t } = useT();
   const handBack = useHandBack();
-  const detailId = `${useId()}-detail`;
+  const base = useId();
+  const detailId = `${base}-detail`;
+  const badgeId = `${base}-day`;
   const version = latestVersion(log);
   const by = version?.calculatedBy ? String(version.calculatedBy) : '';
   const register = useCallback(
@@ -43,12 +45,13 @@ export function LogCard({ log, open, onOpen }: Props) {
           ref={register}
           variant="bare"
           className={styles.open}
-          aria-describedby={detailId}
+          aria-describedby={`${badgeId} ${detailId}`}
+          aria-current={open ? 'true' : undefined}
           onPress={() => { onOpen(log); }}
         >
           {String(log.dough)}
         </Button>
-        <DayBadge log={log} />
+        <DayBadge log={log} id={badgeId} />
       </div>
       <div id={detailId} className={styles.detail}>
         <p className={styles.stamp}><CalendarDays aria-hidden="true" />{stamp(version)}</p>

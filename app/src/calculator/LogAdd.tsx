@@ -47,6 +47,11 @@ export function LogAdd() {
   const firstDay = useRef<HTMLButtonElement | null>(null);
   const recipes = getRecipes(config);
   const recipe = draft.recipeId === null ? null : getRecipeById(config, draft.recipeId);
+  // ⚠️ A RECIPE THAT GOES AWAY (deleted on another phone) TAKES THE CHOICE WITH IT: otherwise Save would stay on
+  // while nothing on screen says what is being saved. The recipe, and what depends on it, start over.
+  if (draft.recipeId !== null && recipe === null && configAnswered) {
+    setDraft(before => ({ ...before, recipeId: null, dayMissing: false, trays: 0, total: 0, rows: [] }));
+  }
 
   // Another recipe starts over: its trays, total and products are its own.
   const pick = (id: string) => {
@@ -73,7 +78,10 @@ export function LogAdd() {
     // Read now, not when the screen opened: a linked recipe may have arrived, or gone, since.
     const latest = store.getSnapshot();
     const chosen = getRecipeById(latest.config, recipeId);
-    if (!chosen) return false;
+    if (!chosen) {
+      await alert({ message: recipeProblemSentence(t, { problem: 'missing', row: '' }), okLabel: t('common.ok') });
+      return false;
+    }
     const toSave = recipeToSave(chosen, latest.linked);
     if ('problem' in toSave) {
       await alert({ message: recipeProblemSentence(t, toSave), okLabel: t('common.ok') });
@@ -142,7 +150,7 @@ export function LogAdd() {
                         isSelected={draft.forDay === day}
                         onChange={() => { pickDay(day); }}
                       >
-                        {day === 'today' ? t('calc.today') : t('day.tomorrow')}
+                        {day === 'today' ? t('day.today') : t('day.tomorrow')}
                       </ToggleButton>
                     ))}
                   </div>

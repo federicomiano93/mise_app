@@ -572,6 +572,7 @@ export const it: Messages = {
   'calc.occasionalLabel': '{name} · occasionale',
   'calc.calculatedByName': 'Calcolato da {name}',
   'calc.logPickPrompt': 'Tocca un impasto per vederlo',
+  'calc.logChangedElsewhere': 'Questo impasto è stato modificato su un altro telefono mentre lo modificavi. Salvando, le tue quantità vanno sopra.',
 
   // The Calculator's Settings (step 3c-2). Every key below is the current app's own key with the current app's
   // own text (js/i18n.js), in both languages.

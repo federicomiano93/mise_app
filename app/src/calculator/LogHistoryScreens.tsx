@@ -94,7 +94,11 @@ function VersionFound({ log, version, n }: { log: Log; version: LogVersion; n: n
       cancelLabel: t('common.cancel'),
     });
     if (!sure) return;
-    const result = store.restoreLog(log.id, n - 1, { calculatedBy: String(version.calculatedBy || ''), at: logTimestamp() });
+    // The author is read NOW, from the version at this place in the log as it is after the question: another phone
+    // may have changed the log while it was open.
+    const now = store.getSnapshot().logs.find(known => known.id === log.id);
+    const restoring = now ? versionsOf(now)[n - 1] : undefined;
+    const result = store.restoreLog(log.id, n - 1, { calculatedBy: String(restoring?.calculatedBy || ''), at: logTimestamp() });
     // «full» and «missing» stay on this screen: the store has already said why.
     if (result !== 'saved') return;
     handBack.replaceTop(LOG_HISTORY_TITLE);

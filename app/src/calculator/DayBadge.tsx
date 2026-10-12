@@ -6,10 +6,10 @@ import styles from './DayBadge.module.css';
 
 // The day a log is FOR, in words («Today», «Yesterday for today»), coloured by that day: green for today, amber for
 // tomorrow, muted once it has passed. Counted from the moment it is drawn, so it is right the next morning.
-export function DayBadge({ log }: { log: Log }) {
+export function DayBadge({ log, id }: { log: Log; id?: string }) {
   const { t } = useT();
   const parts = dayLabelParts(log, Date.now());
-  return <span className={styles.badge} data-tone={parts.tone}>{dayText(t, parts)}</span>;
+  return <span id={id} className={styles.badge} data-tone={parts.tone}>{dayText(t, parts)}</span>;
 }
 
 // The badge under a screen's title (the bar's `sub`), a little apart from it.
