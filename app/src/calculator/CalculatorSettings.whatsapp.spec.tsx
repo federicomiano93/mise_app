@@ -346,6 +346,20 @@ describe('saving one item', () => {
     await waitFor(() => { expect(pathOf(view)).toBe('/calculator/settings'); });
   });
 
+  it('opened by a typed address and two screens deep, Save still lands on the top', async () => {
+    const { user, source, ...view } = await open(LIST);
+    await user.click(await main().findByRole('button', { name: /^Cafe Roma/ }, LOAD));
+    await user.click(await main().findByRole('button', { name: '+ Add product' }, LOAD));
+    await user.click(await main().findByRole('button', { name: 'Brioche roll' }, LOAD));
+    await waitFor(() => { expect(pathOf(view)).toBe(ENTRY); });
+    await saveAndConfirm(user);
+    await waitFor(() => { expect(pathOf(view)).toBe(TOP); });
+    expect(savedLists(source)[0]?.clients).toEqual([
+      { clientId: 'roma', products: ['tray', 'roll'], extras: [{ id: 'wx-cut-loaves', name: 'Cut loaves' }] },
+    ]);
+    expect(await main().findByRole('button', { name: 'Monday market' }, LOAD)).toBeInTheDocument();
+  });
+
   it('a refused save keeps the edits and gives Save back', async () => {
     const source = fakeCalculatorSource({ config: withWhatsapp() });
     const { user, ...view } = await open(LIST, { source });

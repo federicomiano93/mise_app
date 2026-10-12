@@ -6,7 +6,7 @@ import { useT } from '../i18n/useT';
 import { KEEP_FOCUS } from '../shell/Page';
 import { Button } from '../ui/Button';
 import { useCalculator } from './CalculatorContext';
-import { depthOf, fromParentAt } from './calculatorNav';
+import { deeperState } from './calculatorNav';
 import { whatsappEntryPath, whatsappListAddPath, whatsappPath } from './calculatorPath';
 import { useHandBack, whatsappEntryOpener } from './handBack';
 import { SettingsPage } from './SettingsPage';
@@ -82,7 +82,7 @@ export function WhatsappListScreen() {
               })}
             </ul>
           )}
-          <Button className={styles.add} onPress={() => { void navigate(whatsappListAddPath(list.id), { state: fromParentAt(depthOf(state) + 1) }); }}>
+          <Button className={styles.add} onPress={() => { void navigate(whatsappListAddPath(list.id), { state: deeperState(state) }); }}>
             {t('calc.addClient')}
           </Button>
         </section>
@@ -122,7 +122,7 @@ function EntryCard({ listId, clientId, name, summary }: {
         className={styles.open}
         onPress={() => {
           handBack.expect(opener);
-          void navigate(whatsappEntryPath(listId, clientId), { state: fromParentAt(depthOf(state) + 1) });
+          void navigate(whatsappEntryPath(listId, clientId), { state: deeperState(state) });
         }}
       >
         <span className={styles.text}>

@@ -6,7 +6,7 @@ import { useT } from '../i18n/useT';
 import { KEEP_FOCUS } from '../shell/Page';
 import { Button } from '../ui/Button';
 import { useCalculator } from './CalculatorContext';
-import { depthOf, fromParentAt } from './calculatorNav';
+import { deeperState } from './calculatorNav';
 import { whatsappDirectAddPath, whatsappEntryAddPath, whatsappListPath, whatsappPath } from './calculatorPath';
 import { SettingsPage } from './SettingsPage';
 import { useWhatsappEditor } from './whatsappEditorContext';
@@ -98,7 +98,7 @@ export function WhatsappLinesScreen({ clientId }: { clientId: string | null }) {
               </Button>
             </div>
           ))}
-          <Button className={styles.add} onPress={() => { void navigate(addPath, { state: fromParentAt(depthOf(state) + 1) }); }}>
+          <Button className={styles.add} onPress={() => { void navigate(addPath, { state: deeperState(state) }); }}>
             {t('calc.addProduct')}
           </Button>
         </section>

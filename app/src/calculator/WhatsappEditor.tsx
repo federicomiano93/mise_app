@@ -9,7 +9,7 @@ import { useAlert } from '../ui/useAlert';
 import { useConfirm } from '../ui/useConfirm';
 import type { ConfirmOptions } from '../ui/useConfirm';
 import { useCalculator, useCalculatorStore } from './CalculatorContext';
-import { cameFromParent, depthOf, useLeave } from './calculatorNav';
+import { cameFromParent, depthOf, isTypedRoot, useLeave } from './calculatorNav';
 import {
   inWhatsappItem, whatsappDirectPath, whatsappListPath, whatsappPath,
 } from './calculatorPath';
@@ -201,13 +201,19 @@ function WhatsappItemEditor({ target, initial }: { target: ItemTarget; initial: 
   }, [discardQuestion, leaveToTop, handBack, group, id]);
 
   // P20: after a successful save, back to the top — from however deep the person is. Each screen the editor pushed
-  // carries its depth, so one step back of that many lands on the top without a trail of screens behind it.
-  function goTop() {
+  // carries its depth, so one step back of that many lands on the item's own screen without a trail behind it. If that
+  // screen was reached by a typed or bookmarked address (`typedRoot`) the top is not behind it: it is replaced by the top.
+  async function goTop() {
     leavingClean.current = true;
     handBack.expect(whatsappItemOpener(group, id));
     const depth = depthOf(state);
-    if (cameFromParent(state) && depth > 0) void navigate(-depth);
-    else void navigate(whatsappPath, { replace: true, state: KEEP_FOCUS });
+    const toTop = () => navigate(whatsappPath, { replace: true, state: KEEP_FOCUS });
+    if (!cameFromParent(state) || depth === 0) {
+      await toTop();
+      return;
+    }
+    await navigate(-depth);
+    if (isTypedRoot(state)) await toTop();
   }
 
   async function save() {
@@ -249,7 +255,7 @@ function WhatsappItemEditor({ target, initial }: { target: ItemTarget; initial: 
       openingRef.current = saved;
       setOpening(saved);
       setShowErrors(false);
-      goTop();
+      void goTop();
     } finally {
       busy.current = false;
       if (mounted.current) setSaving(false);
