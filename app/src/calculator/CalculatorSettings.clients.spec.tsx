@@ -22,6 +22,9 @@ const LEAVE = 'You have unsaved changes. Leave without saving? Your changes will
 async function open(path: string, { config = configOf(), lang = 'en' as 'en' | 'it', source = fakeCalculatorSource({ config }) } = {}) {
   const view = renderCalculator(path, { source, lang });
   await main().findByRole('heading', { level: 2 }, LOAD);
+  // ⚠️ The gate's waiting page has an h2 too («Settings» over «Loading…»): under a loaded full run the editor may
+  // still be waiting for the store when the first h2 appears.
+  await waitFor(() => { expect(main().queryByText(/^(Loading…|Caricamento…)$/)).toBeNull(); }, LOAD);
   return { ...view, source };
 }
 

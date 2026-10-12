@@ -31,6 +31,9 @@ async function open(path: string, { config = configOf(), recipes = [CAT_1, CAT_2
   const source = fakeCalculatorSource({ config, recipes: recipes as never });
   const view = renderCalculator(path, { source, lang });
   await main().findByRole('heading', { level: 2 }, LOAD);
+  // ⚠️ The gate's waiting page has an h2 too («Settings» over «Loading…»): under a loaded full run the editor may
+  // still be waiting for the store when the first h2 appears.
+  await waitFor(() => { expect(main().queryByText(/^(Loading…|Caricamento…)$/)).toBeNull(); }, LOAD);
   return { ...view, source };
 }
 
