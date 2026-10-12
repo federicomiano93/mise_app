@@ -257,6 +257,8 @@ export function createCalculatorStore(
         // ⚠️ A CACHED «MISSING» IS NOT AN ANSWER: offline on a phone that never read this recipe, the browser's
         // database says «no such document», and the tab would say «the recipe was deleted» when it was not.
         if (!recipe && !meta.fromServer) return;
+        // The same answer again (only the metadata changed) is no news: the snapshot keeps its objects.
+        if (id in linked && JSON.stringify(linked[id]) === JSON.stringify(recipe)) return;
         linked = { ...linked, [id]: recipe };
         changed();
       });
@@ -275,14 +277,22 @@ export function createCalculatorStore(
       changed();
       return;
     }
-    config = normalize(data);
-    writeJson(CONFIG_KEY, config);
+    // ⚠️ THE SAME CONFIGURATION KEEPS THE SAME OBJECT. The listener also fires when only the metadata changes
+    // (the connection drops or comes back, the server confirms the phone's copy), and a new object would read as
+    // «the configuration changed» to every screen — the full-screen recipe closes on exactly that.
+    const next = normalize(data);
+    const same = JSON.stringify(next) === JSON.stringify(config);
+    const news = !same || !configAnswered || configFailed;
+    if (!same) {
+      config = next;
+      writeJson(CONFIG_KEY, config);
+    }
     // A document from the browser's own database is still the venue's real data (it came from the server
     // once), unlike the empty default the guard exists for: it counts as the answer, as in the current app.
     configAnswered = true;
     configFailed = false;
-    syncLinked();
-    changed();
+    if (!same) syncLinked();
+    if (news) changed();
   }
 
   function onLogs(list: StoredDoc[], fromServer: boolean): void {
@@ -301,19 +311,23 @@ export function createCalculatorStore(
     inFlight += 1;
     mergeLogs();
     changed();
-    const settle = () => {
+    const settle = (saved: boolean) => {
       inFlight -= 1;
       // Only the latest write of this log leaves the overlay: an older one answering late must not drop a
       // newer version the stream has not shown yet.
       if (pending.get(log.id)?.seq === mySeq) {
         pending.delete(log.id);
+        // ⚠️ A SAVED LOG THE STREAM HAS NOT SHOWN STAYS IN THE LIST (as js/log-store.js keeps it in `current`):
+        // a dead stream never shows it, and without it the tab's next Confirm would make a SECOND log. The
+        // stream's next answer replaces the list as ever.
+        if (saved && !streamLogs.some(known => known.id === log.id)) streamLogs = [...streamLogs, log];
         mergeLogs();
       }
       changed();
     };
-    source.saveLog(log).then(settle, err => {
+    source.saveLog(log).then(() => settle(true), err => {
       deps.warn('[logs] confirmed dough not saved:', err);
-      settle();
+      settle(false);
       say({ kind: 'log-not-saved', dough: log.dough });
     });
   }

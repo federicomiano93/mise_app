@@ -94,6 +94,26 @@ describe('the configuration', () => {
     expect(store.getSnapshot().configAnswered).toBe(true);
   });
 
+  test('⚠️ an answer that changes only the metadata keeps the SAME config and linked objects', () => {
+    const { store, source } = setup({ config: CONFIG, recipes: [{ id: 'cat-1', name: 'Pizza dough' }] });
+    store.start();
+    const before = store.getSnapshot();
+    source.push({ fromServer: false }); // the connection dropped
+    source.push({ fromServer: true }); // and came back
+    expect(store.getSnapshot().config).toBe(before.config);
+    expect(store.getSnapshot().linked).toBe(before.linked);
+  });
+
+  test('the first answer equal to the local copy is still news: it is the answer', () => {
+    const { store, source } = setup({ config: CONFIG }, { [CONFIG_KEY]: JSON.stringify(CONFIG) });
+    source.hold();
+    store.start();
+    const before = store.getSnapshot();
+    source.release();
+    expect(store.getSnapshot().configAnswered).toBe(true);
+    expect(store.getSnapshot().config).toBe(before.config);
+  });
+
   test('a later «no document» (deleted) keeps what is on screen', () => {
     const { store, source } = setup({ config: CONFIG });
     store.start();
@@ -233,6 +253,19 @@ describe('confirming a dough', () => {
     const second = store.confirmDough(confirm({ linkedLogId: first.logId }))!;
     expect(second).toEqual({ logId: first.logId, target: 'update' });
     expect(store.getSnapshot().logs).toHaveLength(1);
+  });
+
+  test('⚠️ a dead logs stream: a SAVED log stays in the list, so the next Confirm is a version, not a second log', async () => {
+    const { store, source, storage } = setup({ config: CONFIG });
+    source.refuse.logs = true;
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    store.start();
+    const first = store.confirmDough(confirm())!;
+    await flush();
+    expect(store.getSnapshot().unsent).toBe(false);
+    expect(store.getSnapshot().logs.map(l => l.id)).toEqual([first.logId]);
+    expect(JSON.parse(storage.data.get(LOGS_KEY)!).map((l: { id: string }) => l.id)).toEqual([first.logId]);
+    expect(store.confirmDough(confirm({ linkedLogId: first.logId }))).toEqual({ logId: first.logId, target: 'update' });
   });
 
   test('the tab\'s log deleted elsewhere → a fresh log (confirmTarget)', () => {
