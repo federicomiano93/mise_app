@@ -3,13 +3,16 @@
 
 .list {
   display: flex;
+  flex-wrap: wrap;
   gap: var(--s2);
-  overflow-x: auto;
   padding: 2px;
 }
 
+/* ⚠️ THE TABS WRAP ONTO A SECOND ROW; THEY DO NOT SCROLL SIDEWAYS. At 296px the three names of a real venue need
+   289px and the strip has 264: a tab cut off at the edge is a tab nobody knows is there. The order in the
+   document (and so the keyboard's) is the order on screen, row by row. */
 .tab {
-  flex: 1 0 auto;
+  flex: 1 1 auto;
   min-height: var(--hit);
   padding: 0 var(--s4);
   border: 1px solid var(--line);
@@ -18,7 +21,7 @@
   color: var(--ink);
   font: inherit;
   font-weight: 600;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
 }

@@ -78,6 +78,22 @@ describe('the orders of an orders recipe', () => {
     expect(stored('qty-sole::tray')).toBeNull();
   });
 
+  // The same product under two clients is two boxes with the same name: the client heading is the description of
+  // each, so a screen reader tells them apart. The name stays the words drawn beside the box.
+  it('describes each box by its client, so the same product under two clients is told apart', async () => {
+    await open('/calculator/focaccia');
+    await main().findByRole('region', { name: 'Cafe Roma' }, LOAD);
+    const roma = card('Cafe Roma').getByLabelText('Focaccia tray (500g)');
+    const sole = card('Bar Sole').getByLabelText('Focaccia tray (500g)');
+    expect(roma).toHaveAccessibleName('Focaccia tray (500g)');
+    expect(sole).toHaveAccessibleName('Focaccia tray (500g)');
+    expect(roma).toHaveAccessibleDescription('Cafe Roma');
+    expect(sole).toHaveAccessibleDescription('Bar Sole');
+    // A kilo box and a dropdown too.
+    expect(card('Bar Sole').getByLabelText('Cheese by the kilo')).toHaveAccessibleDescription('Bar Sole');
+    expect(card('Cafe Roma').getByLabelText('Focaccia slab (800g)')).toHaveAccessibleDescription('Cafe Roma');
+  });
+
   it('says quietly that the tab has no products, when it has none', async () => {
     await open('/calculator/focaccia', onlyFocaccia({ clients: [] }));
     expect(await screen.findByText(/No products in this tab yet/, undefined, LOAD)).toBeInTheDocument();

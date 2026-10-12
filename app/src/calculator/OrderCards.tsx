@@ -42,7 +42,10 @@ export function OrderCards({ products, textOf, onChange, onBlank, disabled }: Pr
   return (
     <div className={styles.cards}>
       {cardsOf(products).map((card, cardIndex) => (
-        // The heading names the group, so the same product under two clients is told apart.
+        // The heading names the group, so the same product under two clients is told apart: it is also the
+        // DESCRIPTION of every box in the card (aria-describedby), so a screen reader says «Pizza ball … Shop»
+        // and «Pizza ball … Café Roma». The box's NAME stays the words drawn beside it (a name that differs
+        // from the visible label fails label-content-name-mismatch).
         <section key={card.clientId} className={styles.card} aria-labelledby={`${uid}-client-${cardIndex}`}>
           <h3 id={`${uid}-client-${cardIndex}`} className={styles.client}>{card.clientName}</h3>
           <ul className={styles.rows}>
@@ -54,7 +57,7 @@ export function OrderCards({ products, textOf, onChange, onBlank, disabled }: Pr
                 <li key={product.qtyId} className={styles.row}>
                   <label htmlFor={boxId} className={styles.label}>
                     {product.name}
-                    {kilos ? null : <span className={styles.weight}>{` (${product.weight}g)`}</span>}
+                    {kilos ? null : <>{" "}<span className={styles.weight}>{`(${product.weight}g)`}</span></>}
                   </label>
                   <div className={styles.group}>
                     {product.kind === 'dropdown' ? (
@@ -63,6 +66,7 @@ export function OrderCards({ products, textOf, onChange, onBlank, disabled }: Pr
                         className={boxes.select}
                         value={text}
                         disabled={disabled}
+                        aria-describedby={`${uid}-client-${cardIndex}`}
                         onChange={event => { onChange(product.qtyId, event.target.value); }}
                       >
                         {optionsFor(text).map(option => <option key={option} value={option}>{option}</option>)}
@@ -75,6 +79,7 @@ export function OrderCards({ products, textOf, onChange, onBlank, disabled }: Pr
                         min={0}
                         step={kilos ? 0.5 : undefined}
                         disabled={disabled}
+                        describedBy={`${uid}-client-${cardIndex}`}
                         onChange={next => { onChange(product.qtyId, next); }}
                         onBlank={() => { onBlank(product.qtyId); }}
                       />

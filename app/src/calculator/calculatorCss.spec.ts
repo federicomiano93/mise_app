@@ -57,9 +57,20 @@ describe('the boxes', () => {
 });
 
 describe('the tabs', () => {
-  it('are a thumb\'s target tall, and the strip scrolls rather than squeezing a name', () => {
+  it('are a thumb\'s target tall', () => {
     expect(declaration(rule(tabsCss, '.tab'), 'min-height')).toBe('var(--hit)');
-    expect(declaration(rule(tabsCss, '.list'), 'overflow-x')).toBe('auto');
+  });
+
+  // At 296px the three names of a real venue need 289px and the strip has 264: a tab cut off at the edge is a tab
+  // nobody knows is there. They wrap onto a second row instead, and a name too long for a row wraps itself.
+  it('wrap onto a second row on a narrow screen and never scroll sideways', () => {
+    const list = rule(tabsCss, '.list');
+    expect(declaration(list, 'display')).toBe('flex');
+    expect(declaration(list, 'flex-wrap')).toBe('wrap');
+    expect(list).not.toMatch(/overflow/);
+    expect(declaration(rule(tabsCss, '.tab'), 'flex')).toBe('1 1 auto');
+    expect(declaration(rule(tabsCss, '.tab'), 'white-space')).toBeUndefined();
+    expect(declaration(rule(tabsCss, '.tab'), 'overflow-wrap')).toBe('anywhere');
   });
 
   it('show the selected one with a frame and a tint, never a solid fill', () => {
