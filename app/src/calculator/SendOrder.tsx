@@ -30,6 +30,7 @@ type Flow =
     entries: OrderEntry[];
     prefilled: Record<string, number> | null;
     prefillWindow: OrderPrefillWindow;
+    stale: boolean;
     who: OrderSection[] | null;
   };
 
@@ -64,10 +65,14 @@ export function SendOrderDoor() {
   // offered and the form says they have not arrived.
   const openForm = (title: string, entries: OrderEntry[]) => {
     const prefillWindow = getOrderPrefillWindow(calculator.config);
-    const prefilled = calculator.logsLoaded
+    let prefilled = calculator.logsLoaded
       ? prefillFromLogs(entries, sortLogs(calculator.logs), latestVersion, { nowMs: Date.now(), window: prefillWindow })
       : null;
-    setFlow({ step: 'form', title, entries, prefilled, prefillWindow, who: null });
+    // ⚠️ Logs that are only this device's copy never pass for fresh: if they filled nothing, «nothing logged» may be
+    // false, so the form says the doughs have not arrived; if they filled something, the numbers carry a caution.
+    const stale = prefilled !== null && !calculator.logsFromServer;
+    if (stale && prefilled !== null && Object.keys(prefilled).length === 0) prefilled = null;
+    setFlow({ step: 'form', title, entries, prefilled, prefillWindow, stale: stale && prefilled !== null, who: null });
   };
 
   const openList = (list: WhatsappList) => {
@@ -135,6 +140,7 @@ export function SendOrderDoor() {
           entries={flow.entries}
           prefilled={flow.prefilled}
           prefillWindow={flow.prefillWindow}
+          stale={flow.stale}
           onCancel={() => { setFlow(null); }}
           onSend={sections => {
             // The chooser only appears when it has a real choice to offer: with a single client filled in there is
@@ -150,7 +156,7 @@ export function SendOrderDoor() {
         <WhoDialog
           sections={flow.who}
           onAll={() => { hand(flow.title, flow.who ?? [], true); }}
-          onOne={section => { hand(String(section.name), [section], false); }}
+          onOne={section => { hand(String(section.name) || flow.title, [section], false); }}
           // Back to the form with every quantity as it was: the form never closed.
           onClose={() => { setFlow({ ...flow, who: null }); }}
         />

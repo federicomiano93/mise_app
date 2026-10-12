@@ -72,8 +72,23 @@
   gap: var(--s3);
 }
 
-.note {
+.notes {
+  display: flex;
   flex: 1 1 12rem;
+  flex-direction: column;
+  gap: var(--s2);
+}
+
+/* A caution, in the warning colours the rest of the app uses for one. */
+.stale {
+  padding: var(--s2) var(--s3);
+  border-radius: var(--r-md);
+  background: var(--warn-tint);
+  color: var(--warn-ink);
+  font-size: var(--fs-sm);
+}
+
+.note {
   color: var(--ink-2);
   font-size: var(--fs-sm);
 }

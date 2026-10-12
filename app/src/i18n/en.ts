@@ -812,6 +812,7 @@ export const en = {
   'ui.lists': 'Lists',
   // New in Mise 2: said instead of «nothing logged» while the saved doughs have not arrived yet.
   'calc.prefill.notArrived': 'The saved doughs have not arrived yet — type the quantities.',
+  'calc.prefill.notFresh': 'Fresh data has not arrived yet: these numbers come from this device’s copy — check them before sending.',
   // New in Mise 2: closing an order whose quantities were typed by hand asks first (P20).
   'calc.discardOrder': 'Discard this order?',
   'calc.keepOrder': 'Keep',

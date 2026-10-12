@@ -735,6 +735,7 @@ export const it: Messages = {
   },
   'ui.lists': 'Liste',
   'calc.prefill.notArrived': 'I registri salvati non sono ancora arrivati — scrivi tu le quantità.',
+  'calc.prefill.notFresh': 'I dati aggiornati non sono ancora arrivati: questi numeri vengono dalla copia di questo dispositivo — controllali prima di mandare.',
   'calc.discardOrder': 'Vuoi buttare via questo ordine?',
   'calc.keepOrder': 'Tienilo',
   'calc.orderBoxName': '{product}, {client}',
