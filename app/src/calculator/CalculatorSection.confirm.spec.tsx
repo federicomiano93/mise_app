@@ -247,6 +247,30 @@ describe('Confirm', () => {
   });
 });
 
+describe('the words of the saved text', () => {
+  // The current app's js/log-model.js builds «Extra dough: » with t(), so an Italian venue stores «Impasto extra: ».
+  it('follow the interface language at the moment of saving', async () => {
+    const { user, source } = await open(onlyFocaccia(), 'it');
+    await main().findByRole('region', { name: 'Cafe Roma' }, LOAD);
+    await user.click(main().getByLabelText('Impasto extra'));
+    await user.keyboard('2');
+    await user.click(main().getByRole('button', { name: 'Conferma' }));
+    await user.click((await dialogNamed('Salva questo impasto per:')).getByRole('button', { name: 'Oggi' }));
+    await waitFor(() => { expect(source.saved).toHaveLength(1); });
+    expect((source.saved[0] as any).versions[0].text).toBe('Impasto extra: 2 kg');
+  });
+
+  it('are English in an English venue', async () => {
+    const { user, source } = await open();
+    await main().findByRole('region', { name: 'Cafe Roma' }, LOAD);
+    await user.click(main().getByLabelText('Extra dough'));
+    await user.keyboard('2');
+    await confirmFor(user, 'Today');
+    await waitFor(() => { expect(source.saved).toHaveLength(1); });
+    expect((source.saved[0] as any).versions[0].text).toBe('Extra dough: 2 kg');
+  });
+});
+
 describe('a tab the current app left confirmed', () => {
   function leftConfirmed() {
     window.localStorage.setItem('qty-roma::tray', '4');

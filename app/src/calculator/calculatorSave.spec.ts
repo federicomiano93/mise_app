@@ -22,6 +22,7 @@ function inputs(over: Partial<DoughInputs> = {}, extraConfig: Record<string, unk
     trays: 0,
     leaveningPct: 0.5,
     divisorN: 0,
+    words: { occasionalClient: 'Occasional client', extraDough: 'Extra dough: ' },
     nowMs: NOW,
     ...over,
   };
@@ -45,6 +46,14 @@ describe('buildDoughVersion', () => {
   it('writes the grouped text with the kilos and the extra dough', () => {
     expect(buildDoughVersion(inputs()).text).toBe(
       'Cafe Roma:\n  Focaccia tray: 4 pz\nBar Sole:\n  Cheese by the kilo: 1.5 kg\nExtra dough: 0.5 kg',
+    );
+  });
+
+  // The words follow the interface language, as the current app's js/log-model.js builds them with t().
+  it('writes the extra dough word in the language it is given', () => {
+    const italian = { occasionalClient: 'Cliente occasionale', extraDough: 'Impasto extra: ' };
+    expect(buildDoughVersion(inputs({ words: italian })).text).toBe(
+      'Cafe Roma:\n  Focaccia tray: 4 pz\nBar Sole:\n  Cheese by the kilo: 1.5 kg\nImpasto extra: 0.5 kg',
     );
   });
 

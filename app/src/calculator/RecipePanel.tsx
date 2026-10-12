@@ -147,6 +147,8 @@ export function RecipePanel({ recipe, panelProps }: Props) {
       trays: hasTrays ? traysText : 0,
       leaveningPct: result.pct,
       divisorN,
+      // Read NOW, at save time: the words are written into the document in the language of this moment.
+      words: { occasionalClient: t('calc.logOccasionalClient'), extraDough: t('calc.logExtraDough') },
       nowMs: Date.now(),
     });
     // Local-first: the log is in memory and the browser's copy at once, the write follows. null: the tab's log

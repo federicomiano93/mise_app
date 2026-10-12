@@ -578,7 +578,12 @@ export const en = {
   'calc.textLarger': 'Larger text',
   // New in Mise 2: the store said out loud what the current app only logged.
   'calc.logNotSaved': '{dough} was not saved to the Dough history. Check the connection and confirm again.',
-  'calc.logFull': '{dough}’s log is full. Reset the fields to start a new one.',
+  // The two words the saved log's text carries (the current app's `calc.extraDough` / `calc.occasionalClient`):
+  // written INTO the document, so they follow the interface language at the moment of saving, exactly as the
+  // current app does. The trailing «: » is part of the first one.
+  'calc.logExtraDough': 'Extra dough: ',
+  'calc.logOccasionalClient': 'Occasional client',
+  'calc.logFull':'{dough}’s log is full. Reset the fields to start a new one.',
 
   // The sheet that asks which road a piece of text takes (shared with Orders later).
   'send.how': 'How do you want to send it?',

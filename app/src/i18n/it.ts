@@ -513,7 +513,9 @@ export const it: Messages = {
   'calc.textSmaller': 'Testo più piccolo',
   'calc.textLarger': 'Testo più grande',
   'calc.logNotSaved': '{dough} non è stato salvato nello storico impasti. Controlla la connessione e conferma di nuovo.',
-  'calc.logFull': 'Il registro di {dough} è pieno. Azzera i campi per iniziarne uno nuovo.',
+  'calc.logExtraDough': 'Impasto extra: ',
+  'calc.logOccasionalClient': 'Cliente occasionale',
+  'calc.logFull':'Il registro di {dough} è pieno. Azzera i campi per iniziarne uno nuovo.',
 
   'send.how': 'Come vuoi mandarlo?',
   'send.whatsapp': 'WhatsApp — scelgo io la chat',

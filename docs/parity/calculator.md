@@ -678,5 +678,9 @@ on purpose: the legacy log migration (stays in the current app), the empty state
   picker and the row-id stamp come with 3c-2 (`ridOf`/`withRowIds` ported then).
 - **The legacy `log/{dough}` migration stays in the current app** (production is migrated).
 - **The log document keeps the current app's stored text** (English timestamp, same fields) so both apps
-  read each other's logs until the switch; the `bakery` stamp is the real venue id.
+  read each other's logs until the switch; the `bakery` stamp is the real venue id. The two words of the
+  text («Extra dough: », «Occasional client») follow the INTERFACE language at the moment of saving, like
+  the current app's `js/log-model.js` (an Italian venue stores «Impasto extra: »); the timestamp stays English.
+- A tablet left on the Calculator across 4 am does not sweep (never while on screen), so Edit → Confirm next
+  morning updates yesterday's log — same as the current app; left as is.
 - **Who may delete a log**: unchanged (rules not touched).
