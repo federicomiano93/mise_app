@@ -120,8 +120,11 @@ Aria does not support Preact. The numbers are below.
   for whoever runs the place), a context (`FoodcostContext.tsx`) and the screens: `FoodcostSection`
   (the frame, the split from 1000px, the scroll it owns and the hand-back of the focus),
   `FoodcostList` with `ProductRow` (worst food cost first, the light as a dot AND a word),
-  `ProductEditor` (the product's own screen; **in step 3b-2 slice C it is a deliberate placeholder
-  that the editor replaces**), `MarginHistory`, `FoodcostSettings` (the hourly labour cost, only for
+  `ProductEditor` (the product's own screen: a wrapper that follows the id in the address and waits
+  for the product, around `ProductForm`, keyed on the id, which copies the product once and works on
+  that copy — with `ProductAnswer`, `LineRow`, `WeighingPair`, `NameSuggest`, `NumberBox`, the
+  chooser `PickDialog` and the `VatGuideDialog`; the working copy's rules are in
+  `productEditorModel.ts`), `MarginHistory`, `FoodcostSettings` (the hourly labour cost, only for
   whoever runs the place; it waits for the rate before it copies it). Addresses, in
   `foodcostPath.ts` (ids split before they are decoded): `/food-cost`, `/new`, `/product/<id>`,
   `/product/<id>/history`, `/settings`; anything else goes back to the list. The usage record names

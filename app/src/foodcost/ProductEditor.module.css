@@ -1,5 +1,5 @@
-/* The product's screen: a card holding the form bar and, for now, one line. On the split it is the
-   right-hand pane; below 1000px it replaces the list.
+/* The product's screen: a card holding the form bar and the form. On the split it is the right-hand
+   pane; below 1000px it replaces the list.
 
    ⚠️ NOTHING ON THE CARD MAY CLIP (no `overflow`): the form bar sticks to the top of the shell's
    scrolling area, and a clipping ancestor would turn it into an ordinary row. */
@@ -19,16 +19,12 @@
 .body {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
   gap: var(--s4);
   padding: var(--s4);
 }
 
-.answer {
-  overflow-wrap: anywhere;
-  font-weight: 600;
-}
-
-.history {
-  align-self: flex-start;
+@media (min-width: 1000px) {
+  .body {
+    padding: var(--s6);
+  }
 }

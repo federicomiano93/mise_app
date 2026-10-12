@@ -1,10 +1,10 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, screen } from '@testing-library/react';
+import { act, screen, within } from '@testing-library/react';
 import { bareProduct, LOAD, product, renderFoodcost, sourceWith } from '../testing/renderFoodcost';
 
-// The product's screen as this slice has it: a placeholder that the editor replaces. What must hold
-// whatever it becomes: the address opens it, a product that is not there says so only once the
-// server has answered, Back steps up, and the title takes the focus.
+// The product's screen by its address: it opens, a product that is not there says so only once the
+// server has answered, Back steps up, and the title takes the focus. What the editor does is in
+// FoodcostSection.editor*.spec.tsx.
 
 beforeAll(async () => { await import('./FoodcostSection'); }, 60_000);
 
@@ -16,17 +16,17 @@ afterEach(() => {
 });
 
 describe('a product by its address', () => {
-  it('opens the product, named, with its answer in one line', async () => {
+  it('opens the product, named, with its answer at the top', async () => {
     renderFoodcost('/food-cost/product/Green', { source: sourceWith([product('Green', { name: 'Cornetto' })]) });
     expect(await screen.findByRole('heading', { level: 2, name: 'Cornetto' }, LOAD)).toBeInTheDocument();
     const region = screen.getByRole('region', { name: 'Cornetto' });
-    expect(region).toHaveTextContent('20% · On target · £0.20 cost · £0.80 margin');
+    expect(within(region).getByRole('group', { name: 'Food cost' })).toHaveTextContent(/20%.*On target/);
   });
 
   it('says what is missing when the product cannot be costed', async () => {
     renderFoodcost('/food-cost/product/Bare', { source: sourceWith([bareProduct('Bare')]) });
     const region = await screen.findByRole('region', { name: 'Bare' }, LOAD);
-    expect(region).toHaveTextContent('— · Add at least one recipe or ingredient to this product');
+    expect(within(region).getByRole('group', { name: 'Food cost' })).toHaveTextContent('Add at least one recipe or ingredient to this product');
   });
 
   it('calls a product with no name «Untitled product»', async () => {
