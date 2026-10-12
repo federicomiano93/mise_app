@@ -520,6 +520,44 @@ export const en = {
 
   // The Calculator (step 3c). The title a WhatsApp list gets when the oldest saved shape carries none.
   'calc.marketOrderTitle': 'Market order',
+
+  // The Calculator's work view (step 3c-1). The sentences are the current app's, word for word, except
+  // where a comment says otherwise.
+  // The label of the strip of recipe tabs.
+  'calc.tabsLabel': 'Recipes',
+  // The Calculator with nothing to draw: one sentence per reason, neutral in tone.
+  'calc.loading': 'Loading…',
+  'calc.fetchingTheRecipes': 'Fetching the recipes saved for this venue.',
+  'calc.noRecipesYet': 'No recipes yet',
+  'calc.empty.noRecipes.sub': 'The Calculator works out how much dough to make from what your clients have ordered. Add your first recipe — its ingredients and their amounts — and it becomes a tab up here.',
+  'calc.noRecipeIsShown': 'No recipe is shown here',
+  'calc.empty.noneShown.sub': 'You have recipes, but none of them is set to appear as a tab. Choose which ones to show, up to four.',
+  // New in Mise 2: the configuration's stream failed and there is no copy on this phone to show.
+  'calc.couldNotLoad': 'The Calculator could not be loaded. Check the connection and reopen it.',
+  // A recipe panel.
+  'calc.ordersSection': 'Orders',
+  'calc.empty.noProducts.sub': 'No products in this tab yet. Add your clients, and the products they buy, in Settings.',
+  'calc.unitPieces': 'pz',
+  'calc.leavening': 'Leavening',
+  'calc.trayCount': 'Number of trays',
+  'calc.traysEquals': '= {g} g',
+  'calc.totalDoughG': 'Total dough (g)',
+  'calc.extraDough': 'Extra dough',
+  'calc.extraDoughUnit': 'Extra dough unit',
+  'calc.fieldsCleared': 'Fields cleared — this is a new day.',
+  // The result card.
+  'calc.doughTitle': '{name} dough',
+  'calc.gramsRaw': '{g} g raw',
+  'calc.totalDough': 'Total dough',
+  'calc.numberOfCrates': 'Number of crates',
+  'calc.crateUnit': { one: 'box', other: 'box' },
+  'calc.gramsEachBox': '{g}g each box',
+  // A tab that cannot be calculated says why. «Still loading» is new in Mise 2: the current app has no
+  // sentence for it, and a recipe that has not arrived is not a recipe that is gone.
+  'calc.sourceLoading': 'This recipe is still loading from the catalogue. The numbers appear as soon as it arrives.',
+  'calc.sourceMissing': 'This recipe cannot be read from the catalogue right now, so nothing can be calculated. Check it still exists.',
+  'calc.sourceEmpty': 'That catalogue recipe has no ingredients yet.',
+  'calc.sourceUnweighable': 'This recipe cannot be used here yet: “{row}” has no weight. The calculator scales everything by weight, so give it one in the catalogue.',
 } as const satisfies Record<string, Message>;
 
 export type MessageKey = keyof typeof en;
