@@ -1,14 +1,17 @@
-// calculatorSource.ts — the Calculator's data in Firestore, and nothing else (step 3c-1: the work view).
+// calculatorSource.ts — the Calculator's data in Firestore, and nothing else.
 //
-// A port of the Calculator's half of js/firebase.js (`watchCalculatorConfig`, `watchCatalogueRecipe`,
-// `watchLogs`, `saveLogDoc`), write for write, because firestore.rules (the `config/{doc}`, `recipes` and
-// `logs` blocks) accept exactly these shapes and nothing else. Behind an interface, so the store
-// (calculatorStore.ts) is a spec with a fake source and never needs a database to be tested.
+// A port of the Calculator's half of js/firebase.js (`watchCalculatorConfig`, `saveCalculatorConfig`,
+// `watchCatalogueRecipe`, `getCatalogueRecipesOnce`, `stampRecipeRowIds`, `watchLogs`, `saveLogDoc`), write for
+// write, because firestore.rules (the `config/{doc}`, `recipes` and `logs` blocks) accept exactly these shapes
+// and nothing else. Behind an interface, so the store (calculatorStore.ts) is a spec with a fake source and
+// never needs a database to be tested.
 //
 // Under the open venue:
-//   • config/calculator — the clients, products and recipes. READ here; written whole by the Settings
-//     (step 3c-2), never by the work view.
-//   • recipes/{id} — a catalogue recipe a tab is LINKED to, read live one by one. Never written here.
+//   • config/calculator — the clients, products and recipes. Watched live; written WHOLE, in a transaction, by
+//     the Settings (step 3c-2), never by the work view.
+//   • recipes/{id} — a catalogue recipe a tab is LINKED to, read live one by one. The whole collection is read
+//     ONCE, only when the link picker opens; the one write is the row-id stamp (a merge of `ingredients`) at
+//     the moment a recipe is linked.
 //   • logs/{id} — one confirmed dough each, WHOLE, with its append-only version chain inside.
 //
 // ⚠️ NO ROLE IS READ HERE, ON PURPOSE: the section gate and firestore.rules decide (P2).
@@ -21,6 +24,8 @@
 // store can decide whether to believe that. Without includeMetadataChanges the server's answer that is
 // identical to the cached one is never reported, and a cached «nothing» would never be confirmed.
 
+import { CONFIG_MODEL, reconcileConfigWrite } from '@mise/shared/calculator-config';
+import type { CalculatorConfig } from '@mise/shared/calculator-config';
 import { buildPath } from '@mise/shared/location-id';
 import type { Query } from 'firebase/firestore';
 import type { FirestoreKit } from '../session/firebaseBackend';
@@ -55,6 +60,15 @@ export interface CalculatorSource {
   // One log document, WHOLE (create or overwrite), with the open venue stamped. Resolves when the server has
   // it (offline: never); rejects when it is refused.
   saveLog(log: Readonly<Record<string, unknown>> & { readonly id: string }): Promise<void>;
+  // config/calculator, WHOLE, inside a transaction (see the function). Resolves with the revision written when
+  // the server has it; rejects when it is refused or cannot be reached (a transaction needs the server: offline
+  // it fails, it never queues).
+  saveConfig(config: CalculatorConfig): Promise<number>;
+  // Every catalogue recipe, read ONCE (the link picker). Rejects when it cannot be read.
+  listCatalogueRecipes(): Promise<StoredDoc[]>;
+  // Writes `ingredients` back onto recipes/{id} (a merge: nothing else of the recipe is touched). Resolves when
+  // the server has it; rejects when refused.
+  stampRowIds(id: string, ingredients: readonly unknown[]): Promise<void>;
 }
 
 const CONFIG = 'config';
@@ -165,6 +179,41 @@ export function createFirestoreCalculatorSource(
     async saveLog(log) {
       const { fs, db } = await firestore();
       await fs.setDoc(fs.doc(db, logsPath, checkId(log.id)), { ...log, bakery: locationId });
+    },
+
+    // ⚠️ AN OPTIMISTIC-CONCURRENCY WRITE, IN A TRANSACTION (js/firebase.js `saveCalculatorConfig`): it always
+    // writes the caller's configuration, but when the server's document changed since this one was loaded (its
+    // configRev differs — a Catalogue import added a recipe meanwhile), every imported `cat-*` recipe the caller
+    // lacks is kept (reconcileConfigWrite). The next revision is always the server's + 1.
+    // ⚠️ configModel IS STAMPED AFTER THE SPREAD, and so is the venue: whatever the caller built, the document
+    // leaves with this build's shape number (never max(stored, own): the rules refuse a lower one, which is how
+    // an older build is stopped from dropping keys it does not know) and the folder it is written to.
+    async saveConfig(config) {
+      const { fs, db } = await firestore();
+      const ref = fs.doc(db, configPath, CONFIG_DOC);
+      return fs.runTransaction(db, async tx => {
+        const snap = await tx.get(ref);
+        const server = snap.exists() ? snap.data() : null;
+        const { recipes, configRev } = reconcileConfigWrite(config, server);
+        tx.set(ref, { ...config, recipes, configRev, configModel: CONFIG_MODEL, bakery: locationId });
+        return configRev;
+      });
+    },
+
+    // ⚠️ READ ONCE, WHEN THE PICKER OPENS — never on opening the Calculator and never as a listener: the tabs read
+    // only the two or three recipes they are linked to (P14, the v207 mistake).
+    async listCatalogueRecipes() {
+      const { fs, db } = await firestore();
+      const snap = await fs.getDocs(fs.collection(db, recipesPath));
+      return snap.docs.map(d => ({ ...d.data(), id: d.id }));
+    },
+
+    // ⚠️ A MERGE OF ONE FIELD: the Catalogue owns the recipe; the Calculator only gives every row a stable id so
+    // the leavening can be found by the row's own id, never by its name. withRowIds is idempotent, so a recipe
+    // whose rows already have ids is written back byte-identical.
+    async stampRowIds(id, ingredients) {
+      const { fs, db } = await firestore();
+      await fs.setDoc(fs.doc(db, recipesPath, checkId(id)), { ingredients: [...ingredients] }, { merge: true });
     },
   };
 }

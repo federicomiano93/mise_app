@@ -159,3 +159,85 @@ describe('the Calculator source, as firestore.rules expect it', () => {
     expect(live('locations/bakery/logs')).toHaveLength(0);
   });
 });
+
+// ── Step 3c-2: writing the configuration, the link picker's one read, the row-id stamp ──
+
+function writeKit(server: Record<string, unknown> | null) {
+  const base = fakeKit();
+  const tx = {
+    get: vi.fn(async (ref: Ref) => docSnap(ref.path.split('/').pop()!, server)),
+    set: vi.fn((_ref: Ref, _data: Record<string, unknown>) => {}),
+  };
+  const fs = Object.assign(base.fs, {
+    runTransaction: vi.fn(async (_db: unknown, body: (t: typeof tx) => Promise<unknown>) => body(tx)),
+    getDocs: vi.fn(async (ref: Ref) => ({
+      docs: [
+        { id: 'r1', data: () => ({ name: 'Sourdough', ingredients: [] }), path: ref.path },
+        { id: 'r2', data: () => ({ name: 'Focaccia', id: 'spoofed' }), path: ref.path },
+      ],
+    })),
+  });
+  return { ...base, fs, tx };
+}
+
+describe('saving the configuration and linking a recipe, as firestore.rules expect it', () => {
+  const config = { clients: [], recipes: [{ id: 'own' }], configRev: 3, configModel: 1, bakery: 'elsewhere' } as never;
+
+  test('⚠️ the configuration is written WHOLE in a transaction, with this build\'s configModel and the open venue stamped over what it carried', async () => {
+    const { kit, fs, tx } = writeKit({ configRev: 3, recipes: [{ id: 'own' }] });
+    const source = createFirestoreCalculatorSource(() => Promise.resolve(kit), 'bakery');
+    await expect(source.saveConfig(config)).resolves.toBe(4);
+    expect(fs.runTransaction).toHaveBeenCalledTimes(1);
+    expect(tx.get.mock.calls[0]![0].path).toBe('locations/bakery/config/calculator');
+    const [ref, data] = tx.set.mock.calls[0]!;
+    expect(ref.path).toBe('locations/bakery/config/calculator');
+    expect(data).toEqual({ clients: [], recipes: [{ id: 'own' }], configRev: 4, configModel: 4, bakery: 'bakery' });
+    expect(fs.setDoc).not.toHaveBeenCalled();
+  });
+
+  test('⚠️ a Catalogue import that landed meanwhile (another revision) is kept, never overwritten', async () => {
+    const { kit, tx } = writeKit({ configRev: 5, recipes: [{ id: 'own' }, { id: 'cat-new' }] });
+    const source = createFirestoreCalculatorSource(() => Promise.resolve(kit), 'bakery');
+    await source.saveConfig(config);
+    const data = tx.set.mock.calls[0]![1] as { recipes: { id: string }[]; configRev: number };
+    expect(data.recipes.map(r => r.id)).toStrictEqual(['own', 'cat-new']);
+    expect(data.configRev).toBe(6);
+  });
+
+  test('a brand-new venue (no document) writes its first configuration at revision 1', async () => {
+    const { kit, tx } = writeKit(null);
+    const source = createFirestoreCalculatorSource(() => Promise.resolve(kit), 'bakery');
+    await source.saveConfig({ ...(config as object), configRev: 0 } as never);
+    expect((tx.set.mock.calls[0]![1] as { configRev: number }).configRev).toBe(1);
+  });
+
+  test('a refused transaction rejects, so the store can take the change back', async () => {
+    const { kit, fs } = writeKit(null);
+    fs.runTransaction.mockRejectedValueOnce(Object.assign(new Error('no'), { code: 'permission-denied' }));
+    const source = createFirestoreCalculatorSource(() => Promise.resolve(kit), 'bakery');
+    await expect(source.saveConfig(config)).rejects.toMatchObject({ code: 'permission-denied' });
+  });
+
+  test('the picker reads the venue\'s catalogue recipes ONCE, with each document\'s own id winning over a field', async () => {
+    const { kit, fs } = writeKit(null);
+    const source = createFirestoreCalculatorSource(() => Promise.resolve(kit), 'bakery');
+    const list = await source.listCatalogueRecipes();
+    expect(fs.getDocs).toHaveBeenCalledTimes(1);
+    expect(fs.getDocs.mock.calls[0]![0].path).toBe('locations/bakery/recipes');
+    expect(fs.onSnapshot).not.toHaveBeenCalled();
+    expect(list.map(r => r.id)).toStrictEqual(['r1', 'r2']);
+  });
+
+  test('⚠️ the row-id stamp MERGES only `ingredients` onto the linked recipe, and a bad id never reaches Firestore', async () => {
+    const { kit, fs } = writeKit(null);
+    const source = createFirestoreCalculatorSource(() => Promise.resolve(kit), 'bakery');
+    const rows = [{ rid: 'ra', label: 'Flour', grams: 1000 }];
+    await source.stampRowIds('r1', rows);
+    const [ref, data, options] = fs.setDoc.mock.calls[0]!;
+    expect(ref.path).toBe('locations/bakery/recipes/r1');
+    expect(data).toEqual({ ingredients: rows });
+    expect(options).toEqual({ merge: true });
+    await expect(source.stampRowIds('a/b', rows)).rejects.toThrow();
+    expect(fs.setDoc).toHaveBeenCalledTimes(1);
+  });
+});

@@ -337,3 +337,145 @@ describe('genLogId', () => {
     expect(genLogId(undefined, 36 ** 3, () => 0.5)).toMatch(/^log-1000-[0-9a-z]+$/);
   });
 });
+
+// ── Step 3c-2: saving the configuration (js/calculator-config-store.js `saveConfig`) ──
+
+describe('saving the configuration', () => {
+  const EDITED = { ...CONFIG, recipes: [{ id: 'r1', name: 'Pizza bianca', ingredients: [] }] };
+  const names = (store: { getSnapshot(): { config: { recipes: { name: string }[] } } }) =>
+    store.getSnapshot().config.recipes.map(r => r.name);
+
+  test('local-first: the screen and the local copy change at once, then it reaches the database', async () => {
+    const { store, source, storage } = setup({ config: CONFIG });
+    store.start();
+    const saving = store.saveConfig(EDITED as never);
+    expect(names(store)).toEqual(['Pizza bianca']);
+    expect(JSON.parse(storage.data.get(CONFIG_KEY)!).recipes[0].name).toBe('Pizza bianca');
+    await expect(saving).resolves.toEqual({ synced: true });
+    expect(source.savedConfigs).toHaveLength(1);
+    expect((source.config as { configRev: number }).configRev).toBe(1);
+    expect(names(store)).toEqual(['Pizza bianca']);
+  });
+
+  test('⚠️ NOTHING is sent before the database has answered once: the empty default must never overwrite a venue', async () => {
+    const { store, source } = setup({ config: CONFIG });
+    source.hold();
+    store.start();
+    await expect(store.saveConfig(EDITED as never)).resolves.toEqual({ synced: false, reason: 'no-server-answer' });
+    expect(source.savedConfigs).toHaveLength(0);
+    // Kept on this device, as the current app does; the screen says so.
+    expect(names(store)).toEqual(['Pizza bianca']);
+  });
+
+  test('⚠️ the server\'s «there is no document» IS an answer: a brand-new venue saves its first client', async () => {
+    const { store, source } = setup({ config: null });
+    store.start();
+    await expect(store.saveConfig(EDITED as never)).resolves.toEqual({ synced: true });
+    expect(source.savedConfigs).toHaveLength(1);
+  });
+
+  test('⚠️ a refused write is TAKEN BACK here too, and says why (permission-denied = this app is out of date)', async () => {
+    const { store, source, storage } = setup({ config: CONFIG });
+    store.start();
+    source.refuse.configSave = true;
+    await expect(store.saveConfig(EDITED as never)).resolves.toEqual({ synced: false, reason: 'write-failed', code: 'permission-denied' });
+    expect(names(store)).toEqual(['Pizza']);
+    expect(JSON.parse(storage.data.get(CONFIG_KEY)!).recipes[0].name).toBe('Pizza');
+  });
+
+  test('a failure without a code reads as a connection failure (code null)', async () => {
+    const { store, source } = setup({ config: CONFIG });
+    store.start();
+    source.saveConfig = () => Promise.reject(new Error('offline'));
+    await expect(store.saveConfig(EDITED as never)).resolves.toEqual({ synced: false, reason: 'write-failed', code: null });
+  });
+
+  test('a failed save does not take back a NEWER save made meanwhile', async () => {
+    const { store, source } = setup({ config: CONFIG });
+    store.start();
+    let failFirst: (err: unknown) => void = () => {};
+    const real = source.saveConfig.bind(source);
+    source.saveConfig = (config) => {
+      if (source.savedConfigs.length === 0) {
+        source.savedConfigs.push({});
+        return new Promise<number>((_resolve, reject) => { failFirst = reject; });
+      }
+      return real(config);
+    };
+    const first = store.saveConfig(EDITED as never);
+    const NEWER = { ...CONFIG, recipes: [{ id: 'r1', name: 'Pizza rossa', ingredients: [] }] };
+    await store.saveConfig(NEWER as never);
+    failFirst(Object.assign(new Error('x'), { code: 'unavailable' }));
+    await first;
+    expect(names(store)).toEqual(['Pizza rossa']);
+  });
+
+  test('⚠️ while a save is in the air, the stream\'s OLD document (a connection blip) does not put the old settings back', async () => {
+    const { store, source } = setup({ config: CONFIG });
+    store.start();
+    source.holdConfigSaves();
+    const saving = store.saveConfig(EDITED as never);
+    expect(store.getSnapshot().unsent).toBe(true);
+    source.push({ fromServer: false }); // the metadata changed: the same old document again
+    expect(names(store)).toEqual(['Pizza bianca']);
+    source.settleConfigSaves();
+    await saving;
+    expect(names(store)).toEqual(['Pizza bianca']);
+    expect(store.getSnapshot().unsent).toBe(false);
+  });
+
+  test('a document older than the revision this phone wrote is held until the newer one arrives', async () => {
+    const { store, source } = setup({ config: { ...CONFIG, configRev: 4 } });
+    store.start();
+    await store.saveConfig(EDITED as never); // writes revision 5
+    source.config = { ...CONFIG, configRev: 4 }; // a late echo of the old document
+    source.push();
+    expect(names(store)).toEqual(['Pizza bianca']);
+    source.config = { ...CONFIG, recipes: [{ id: 'r1', name: 'Another phone', ingredients: [] }], configRev: 6 };
+    source.push();
+    expect(names(store)).toEqual(['Another phone']);
+  });
+
+  test('a refused save shows the server\'s newest document if one arrived meanwhile', async () => {
+    const { store, source } = setup({ config: CONFIG });
+    store.start();
+    source.holdConfigSaves();
+    source.refuse.configSave = true;
+    const saving = store.saveConfig(EDITED as never);
+    source.config = { ...CONFIG, recipes: [{ id: 'r1', name: 'Another phone', ingredients: [] }], configRev: 3 };
+    source.push();
+    expect(names(store)).toEqual(['Pizza bianca']);
+    source.settleConfigSaves();
+    await saving;
+    expect(names(store)).toEqual(['Another phone']);
+  });
+
+  test('saving a link starts watching the newly linked catalogue recipe', async () => {
+    const { store, source } = setup({ config: { clients: [], recipes: [] }, recipes: [{ id: 'cat-9', name: 'Bread', ingredients: [] }] });
+    store.start();
+    await store.saveConfig({ clients: [], recipes: [{ id: 'x', name: 'Bread', catalogueId: 'cat-9', ingredients: [] }] } as never);
+    expect(source.watchedRecipes()).toContain('cat-9');
+  });
+});
+
+describe('the link picker', () => {
+  test('reads the catalogue only when asked, and the stamp reaches the recipe', async () => {
+    const { store, source } = setup({ config: CONFIG, recipes: [{ id: 'cat-1', name: 'Pizza', ingredients: [{ label: 'Flour' }] }] });
+    store.start();
+    expect(source.catalogueReads()).toBe(0);
+    const list = await store.listCatalogueRecipes();
+    expect(list.map(r => r.id)).toEqual(['cat-1']);
+    expect(source.catalogueReads()).toBe(1);
+    await store.stampRowIds('cat-1', [{ rid: 'ra', label: 'Flour' }]);
+    expect(source.stamps).toEqual([{ id: 'cat-1', ingredients: [{ rid: 'ra', label: 'Flour' }] }]);
+  });
+
+  test('a refused read or stamp rejects (the picker says so and links nothing)', async () => {
+    const { store, source } = setup({ config: CONFIG });
+    store.start();
+    source.refuse.catalogue = true;
+    source.refuse.stamp = true;
+    await expect(store.listCatalogueRecipes()).rejects.toBeTruthy();
+    await expect(store.stampRowIds('cat-1', [])).rejects.toBeTruthy();
+  });
+});
