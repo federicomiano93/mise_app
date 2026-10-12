@@ -786,3 +786,45 @@ on purpose: the legacy log migration (stays in the current app), the empty state
 - **Free lines and products are listed as the list holds them** (products, then free lines), each with its own box starting at 0.
 - **Not done on purpose:** the usage record names no dialog (the dialogs of Mise 2 report no screen name); the WhatsApp lists
   editor and the Client ordering rows of the hub are slice C / 3c-4b.
+
+## Step 3c-4a as built, slice C (12 Oct 2026) — differences from the current app, on purpose
+
+- **Every screen has an address**, under `/calculator/settings/whatsapp`: the top; `list/<id>` (Level 1); `list/<id>/add` (the
+  client chooser, 1b); `list/<id>/client/<clientId>` (a client's products and free lines, Level 2; entries are keyed by the
+  client, which is unique inside a list); `…/client/<clientId>/add` (Level 3); `direct/<id>` and `direct/<id>/add`. `list/new` and
+  `direct/new` make a fresh empty item and replace themselves with its address (the work view's «Add a recipe» does the same).
+  An id the working copy lacks goes back to the top (or to the list, for a client); an unknown address goes to the hub. The
+  usage record names all of them `settings`. The hub's WhatsApp door is a row beside Clients (the current app: a row of its own
+  in the same list).
+- **Save writes ONLY the edited item over the LATEST configuration** (the item with the same id is replaced in its place, a new
+  one — or one deleted on another phone meanwhile, which the person has just saved on purpose — is added at the end). The current
+  app wrote back its WHOLE working copy of the configuration, taken when the top screen was drawn, and so undid another phone's
+  change to any other list, client or key. The delete from the top and the prefill window do the same: one id removed, one key
+  changed, on the latest configuration.
+- **Save is disabled until something changed** (the current app's is always pressable), and after a successful save it returns to
+  the TOP from however deep the person is, in one step (every screen the editor pushes carries its depth in the navigation state),
+  leaving no trail of list/client/picker screens in the history (P20).
+- **The discard question** is the router's blocker, so the browser's Back and the rail ask too, not only the bar's Back (the
+  current app asked on its own Back only). Back from the chooser, a client's lines or a picker steps up and asks nothing: the edits
+  stay in the working copy. A way out while a save is in the air is refused silently. The session is busy (`markBusy`) while edits
+  are unsaved.
+- **Every icon names what it removes** («Delete list Monday market», «Remove Cafe Roma from the list», «Remove product Focaccia
+  tray», «Remove extra line 2»); the current app's names were the same for every row. The keys `calc.deleteList`,
+  `calc.removeClientFromList` and `calc.removeLine` are replaced by `calc.deleteListNamed`, `calc.removeClientNamed` and
+  `calc.removeLineN`; `calc.removeProductNamed` and `calc.deleteClientNamed` already existed. The top's rows are a list of cards
+  (a button that opens and a button that deletes), not a bare box beside an icon.
+- **«{name}’s products» is translated** (`calc.clientsProducts`, «Prodotti di {name}» in Italian). The current app hardcoded the
+  English `${client.name}’s products` in this heading whatever the interface language — a bug of the current app, to be fixed there
+  when convenient.
+- **A blank name** sends the person to the screen that has the field (a refusal on a client's lines steps back to the list), says
+  the sentence, and puts the focus in the marked field once the sentence has been read.
+- **A free line's id is not recomputed as its name is typed.** A new line has no id until it is saved; the store's normaliser
+  (`normalizeConfig`, which every save goes through) then gives it `wx-<slug>`, unique inside the entry, and drops a blank one
+  (max 50). A line that already has an id keeps it when renamed. The box is named «Extra line N»; an Enter in the typing box of
+  Level 3 adds the line like the button.
+- **«Products to send» shows only products that still exist** and the empty sentence is shown when none of them does (the current
+  app counted the stored ids, so an entry whose products were all deleted showed an empty list without the sentence).
+- **The prefill window** is a labelled box on the top, described by its explanation; while its write is in the air it is disabled,
+  and a refused write puts it back (the store already takes the change back; the box follows the store).
+- **Not done on purpose:** the Client ordering row of the hub (3c-4b), the Home shortcut on the top (the current app's overlay had a
+  Home button on it; Mise 2's rail is always there).

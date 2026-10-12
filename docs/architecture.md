@@ -191,6 +191,16 @@ Aria does not support Preact. The numbers are below.
   quantities asks and holds `markBusy`; `orderModel.ts` is its pure half). The message is `shared/src/calculator-order-text.ts`, handed to the
   shared send sheet. Its usage record names no screen of its own. Its parity list is `docs/parity/calculator.md`.
 
+  Slice C adds the WhatsApp lists editor, a door «WhatsApp» in the hub (the lists the market order is sent from). Addresses, in
+  `calculatorPath.ts`: `/calculator/settings/whatsapp` (the top: `WhatsappTop` — the prefill window, the lists and the direct
+  clients, a delete icon each, no Save; both apply at once over the LATEST configuration), `/list/<id>` (`WhatsappListScreen`),
+  `/list/<id>/add` (`WhatsappClientChooser`), `/list/<id>/client/<clientId>` and `/direct/<id>` (`WhatsappLinesScreen`: products
+  and free lines), their `/add` pickers (`WhatsappPicker`), and `/list/new` and `/direct/new`, which make an empty item and replace
+  themselves with its address. `WhatsappEditor` holds ONE working copy of THE ONE ITEM being edited (a list with its entries, or a
+  direct client) above those screens, with one blocker and `markBusy` while dirty; Save writes only that item over the latest
+  configuration (`whatsappModel.ts`, the pure half) and returns to the top in one step (each pushed screen carries its depth in the
+  navigation state, `calculatorNav.ts`). A free line's id is settled by the store's normaliser at save, never while typing.
+
   Step 3c-3 adds the Dough history (slice C1), a button «Dough history» beside Settings at the top of the work view,
   one level down: `DoughHistory` (the frame: the list and the open log side by side from 1000px, one at a time on a
   phone; it OWNS THE SCROLL like the Stocktake, rule 9), `LogList` › `LogCard` (one card per log, the dough's name a
