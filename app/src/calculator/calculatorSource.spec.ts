@@ -166,11 +166,11 @@ function writeKit(server: Record<string, unknown> | null) {
   const base = fakeKit();
   const tx = {
     get: vi.fn(async (ref: Ref) => docSnap(ref.path.split('/').pop()!, server)),
-    set: vi.fn((_ref: Ref, _data: Record<string, unknown>) => {}),
+    set: vi.fn((_ref: Ref, _data: Record<string, unknown>, _options?: unknown) => {}),
   };
   const fs = Object.assign(base.fs, {
     runTransaction: vi.fn(async (_db: unknown, body: (t: typeof tx) => Promise<unknown>) => body(tx)),
-    getDocs: vi.fn(async (ref: Ref) => ({
+    getDocsFromServer: vi.fn(async (ref: Ref) => ({
       docs: [
         { id: 'r1', data: () => ({ name: 'Sourdough', ingredients: [] }), path: ref.path },
         { id: 'r2', data: () => ({ name: 'Focaccia', id: 'spoofed' }), path: ref.path },
@@ -218,26 +218,47 @@ describe('saving the configuration and linking a recipe, as firestore.rules expe
     await expect(source.saveConfig(config)).rejects.toMatchObject({ code: 'permission-denied' });
   });
 
-  test('the picker reads the venue\'s catalogue recipes ONCE, with each document\'s own id winning over a field', async () => {
+  test('⚠️ the picker reads the venue\'s catalogue recipes ONCE, FROM THE SERVER (never a cached partial list), with each document\'s own id winning over a field', async () => {
     const { kit, fs } = writeKit(null);
     const source = createFirestoreCalculatorSource(() => Promise.resolve(kit), 'bakery');
     const list = await source.listCatalogueRecipes();
-    expect(fs.getDocs).toHaveBeenCalledTimes(1);
-    expect(fs.getDocs.mock.calls[0]![0].path).toBe('locations/bakery/recipes');
+    expect(fs.getDocsFromServer).toHaveBeenCalledTimes(1);
+    expect(fs.getDocsFromServer.mock.calls[0]![0].path).toBe('locations/bakery/recipes');
     expect(fs.onSnapshot).not.toHaveBeenCalled();
     expect(list.map(r => r.id)).toStrictEqual(['r1', 'r2']);
   });
 
-  test('⚠️ the row-id stamp MERGES only `ingredients` onto the linked recipe, and a bad id never reaches Firestore', async () => {
-    const { kit, fs } = writeKit(null);
+  test('⚠️ the row-id stamp reads the recipe AS IT IS NOW, in a transaction, and MERGES only `ingredients` onto it', async () => {
+    // The server's recipe changed since any picker read it: the stamp must be built on THIS list.
+    const now = [{ rid: 'ra', label: 'Flour', grams: 1000 }, { label: 'Water', grams: 700 }];
+    const { kit, fs, tx } = writeKit({ name: 'Focaccia', ingredients: now });
     const source = createFirestoreCalculatorSource(() => Promise.resolve(kit), 'bakery');
-    const rows = [{ rid: 'ra', label: 'Flour', grams: 1000 }];
-    await source.stampRowIds('r1', rows);
-    const [ref, data, options] = fs.setDoc.mock.calls[0]!;
+    const rows = await source.stampRowIds('r1') as { rid: string; label: string }[];
+    expect(tx.get.mock.calls[0]![0].path).toBe('locations/bakery/recipes/r1');
+    expect(rows.map(r => r.label)).toStrictEqual(['Flour', 'Water']);
+    expect(rows[0]).toBe(now[0]);
+    expect(rows[1]!.rid).toMatch(/^r[a-z0-9]{8}$/);
+    const [ref, data, options] = tx.set.mock.calls[0]!;
     expect(ref.path).toBe('locations/bakery/recipes/r1');
     expect(data).toEqual({ ingredients: rows });
     expect(options).toEqual({ merge: true });
-    await expect(source.stampRowIds('a/b', rows)).rejects.toThrow();
-    expect(fs.setDoc).toHaveBeenCalledTimes(1);
+    expect(fs.setDoc).not.toHaveBeenCalled();
+  });
+
+  test('a recipe whose rows all have ids already is NOT written again', async () => {
+    const { kit, tx } = writeKit({ ingredients: [{ rid: 'ra', label: 'Flour' }, { rid: 'rb', label: 'Water' }] });
+    const source = createFirestoreCalculatorSource(() => Promise.resolve(kit), 'bakery');
+    await expect(source.stampRowIds('r1')).resolves.toHaveLength(2);
+    expect(tx.set).not.toHaveBeenCalled();
+  });
+
+  test('a recipe deleted meanwhile, a refusal or a bad id rejects — and writes nothing', async () => {
+    const gone = writeKit(null);
+    await expect(createFirestoreCalculatorSource(() => Promise.resolve(gone.kit), 'bakery').stampRowIds('r1'))
+      .rejects.toMatchObject({ code: 'not-found' });
+    expect(gone.tx.set).not.toHaveBeenCalled();
+    const bad = writeKit({ ingredients: [] });
+    await expect(createFirestoreCalculatorSource(() => Promise.resolve(bad.kit), 'bakery').stampRowIds('a/b')).rejects.toThrow();
+    expect(bad.fs.runTransaction).not.toHaveBeenCalled();
   });
 });

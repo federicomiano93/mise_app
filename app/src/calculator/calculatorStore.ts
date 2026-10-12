@@ -77,6 +77,12 @@ export interface CalculatorSnapshot {
   readonly configAnswered: boolean;
   // The configuration's stream failed: the screen says it could not be loaded instead of «Loading…».
   readonly configFailed: boolean;
+  // The SERVER has answered at least once (a document or «there is no document»), not only the browser's own
+  // database. ⚠️ AN EDITOR COPIES THE CONFIGURATION ONLY AFTER THIS, and nothing is sent before it: the browser's
+  // database answers in milliseconds with whatever this phone last saw — yesterday's clients on a tablet that
+  // reopens straight onto the Clients editor — and a Save from that copy would write it over what other phones
+  // added since. The work view may paint from it; a writer may not.
+  readonly configFromServer: boolean;
   // id → the linked catalogue recipe, or null when it is gone or cannot be read. A MISSING KEY means «not
   // answered yet» — a different sentence from «gone» (js/calculator-catalogue-link.js).
   readonly linked: Readonly<Record<string, StoredDoc | null>>;
@@ -135,11 +141,11 @@ export interface CalculatorStore {
   // sent, unless the database has never answered (see ConfigSaveResult). A refused or failed write is taken back
   // here if nothing newer replaced it. Never rejects.
   saveConfig(next: CalculatorConfig): Promise<ConfigSaveResult>;
-  // Every catalogue recipe, read once (the link picker). Rejects when it cannot be read.
+  // Every catalogue recipe, read once from the server (the link picker). Rejects when it cannot be read.
   listCatalogueRecipes(): Promise<StoredDoc[]>;
-  // Gives every row of catalogue recipe `id` a stable id (withRowIds already applied by the caller). Rejects
-  // when refused: the caller then links nothing.
-  stampRowIds(id: string, ingredients: readonly unknown[]): Promise<void>;
+  // Gives every row of catalogue recipe `id`, as the server holds it now, a stable id and resolves with those
+  // rows (calculatorSource `stampRowIds`). Rejects when refused, unreachable or gone: the caller links nothing.
+  stampRowIds(id: string): Promise<unknown[]>;
 }
 
 export function genLogId(randomUUID?: () => string, now: number = Date.now(), random: () => number = Math.random): string {
@@ -197,6 +203,7 @@ export function createCalculatorStore(
   let config: CalculatorConfig = bootConfig ? normalize(bootConfig) : cloneConfig(DEFAULT_CONFIG);
   let configAnswered = false;
   let configFailed = false;
+  let configFromServer = false;
   let linked: Readonly<Record<string, StoredDoc | null>> = {};
   // What the stream last said, and the logs written here that the stream may not show yet.
   let streamLogs: readonly Log[] = Array.isArray(bootLogs) ? bootLogs.filter(isLog) : [];
@@ -221,7 +228,10 @@ export function createCalculatorStore(
   let snapshot: CalculatorSnapshot = build();
 
   function build(): CalculatorSnapshot {
-    return { config, configAnswered, configFailed, linked, logs, logsLoaded, unsent: inFlight > 0 || configSaving > 0 };
+    return {
+      config, configAnswered, configFailed, configFromServer, linked, logs, logsLoaded,
+      unsent: inFlight > 0 || configSaving > 0,
+    };
   }
 
   // ⚠️ A LISTENER THAT THROWS NEVER STOPS THE DATA (store-notify-guarded): the data is stored before anybody
@@ -300,6 +310,14 @@ export function createCalculatorStore(
   const revOf = (data: Record<string, unknown>) => Number(data.configRev) || 0;
 
   function onConfig(data: Record<string, unknown> | null, fromServer: boolean): void {
+    // The first answer from the server is news even when nothing else changes (an editor is waiting for it).
+    const firstFromServer = fromServer && !configFromServer;
+    if (fromServer) configFromServer = true;
+    readConfig(data, fromServer);
+    if (firstFromServer) changed();
+  }
+
+  function readConfig(data: Record<string, unknown> | null, fromServer: boolean): void {
     if (!data) {
       // «No document» from the browser's own database proves nothing; from the server it is the answer a
       // brand-new venue gets, and the empty screen must hear it (js/calculator-config-store.js).
@@ -471,11 +489,13 @@ export function createCalculatorStore(
       config = mine;
       writeJson(CONFIG_KEY, config);
       syncLinked();
-      // ⚠️ NOTHING LEAVES THE DEVICE BEFORE THE DATABASE HAS ANSWERED ONCE (js/calculator-config-store.js
+      // ⚠️ NOTHING LEAVES THE DEVICE BEFORE THE SERVER HAS ANSWERED ONCE (js/calculator-config-store.js
       // `serverAnswered`): until then the configuration on screen may be the empty default or a stale copy, and
       // the first Save would write it over the venue's real clients, products and recipes. «There is no
       // document» from the server IS an answer, so a brand-new venue can save its first client.
-      if (!configAnswered) {
+      // ⚠️ STRICTER THAN THE CURRENT APP: an answer from the browser's own database does not count here (see
+      // `configFromServer`) — a whole configuration built on yesterday's copy must not be sent.
+      if (!configFromServer) {
         changed();
         deps.warn('Calculator config kept local only: the server has not answered yet.');
         return Promise.resolve({ synced: false, reason: 'no-server-answer' } as const);
@@ -486,6 +506,13 @@ export function createCalculatorStore(
         (rev): ConfigSaveResult => {
           configSaving -= 1;
           writtenRev = Math.max(writtenRev, Number(rev) || 0);
+          // ⚠️ THE COPY ON SCREEN TAKES THE REVISION IT WAS WRITTEN AS: with the old one, every next save would read
+          // as a concurrent write to reconcileConfigWrite and put back each `cat-*` recipe deleted since — for good
+          // when the stream is dead and no echo ever brings the new revision.
+          if (config === mine && Number(rev) > 0) {
+            config = { ...config, configRev: Number(rev) };
+            writeJson(CONFIG_KEY, config);
+          }
           releaseHeld();
           changed();
           return { synced: true };
@@ -513,6 +540,6 @@ export function createCalculatorStore(
 
     listCatalogueRecipes: () => source.listCatalogueRecipes(),
 
-    stampRowIds: (id, ingredients) => source.stampRowIds(id, ingredients),
+    stampRowIds: id => source.stampRowIds(id),
   };
 }

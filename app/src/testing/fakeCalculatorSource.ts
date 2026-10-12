@@ -1,4 +1,5 @@
 import { reconcileConfigWrite } from '@mise/shared/calculator-config';
+import { withRowIds } from '@mise/shared/guided-model';
 import type { AnswerMeta, CalculatorSource, StoredDoc } from '../calculator/calculatorSource';
 
 // A Calculator source for the specs, in memory: the configuration, the catalogue recipes and the logs are
@@ -23,7 +24,7 @@ export type FakeCalculatorSource = CalculatorSource & {
   saved: StoredDoc[];
   // Every configuration that reached the source, in order, as handed over.
   savedConfigs: Record<string, unknown>[];
-  // Every row-id stamp: the recipe and the rows written.
+  // Every row-id stamp that WROTE: the recipe and the rows written.
   stamps: { id: string; ingredients: unknown[] }[];
   // How many times the whole catalogue was read.
   catalogueReads(): number;
@@ -141,15 +142,19 @@ export function fakeCalculatorSource(seed: {
       return Promise.resolve([...recipes.values()].map(doc => ({ ...doc })));
     },
 
-    stampRowIds(id, ingredients) {
+    // Like the real transaction: stamps the recipe AS STORED NOW, and writes only when a row lacked an id.
+    stampRowIds(id) {
       if (refuse.stamp) return Promise.reject(refused());
-      stamps.push({ id, ingredients: [...ingredients] });
       const doc = recipes.get(id);
-      if (doc) {
-        recipes.set(id, { ...doc, ingredients: [...ingredients] });
+      if (!doc) return Promise.reject(Object.assign(new Error('not-found'), { code: 'not-found' }));
+      const rows: unknown[] = Array.isArray(doc.ingredients) ? doc.ingredients as unknown[] : [];
+      const stamped = withRowIds(rows);
+      if (stamped.some((row, i) => row !== rows[i])) {
+        stamps.push({ id, ingredients: [...stamped] });
+        recipes.set(id, { ...doc, ingredients: stamped });
         for (const listener of recipeWatchers) if (listener.id === id) tellRecipe(listener, FROM_SERVER);
       }
-      return Promise.resolve();
+      return Promise.resolve(stamped);
     },
 
     holdConfigSaves() { configSavesHeld = true; },

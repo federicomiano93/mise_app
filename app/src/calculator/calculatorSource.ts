@@ -26,6 +26,7 @@
 
 import { CONFIG_MODEL, reconcileConfigWrite } from '@mise/shared/calculator-config';
 import type { CalculatorConfig } from '@mise/shared/calculator-config';
+import { withRowIds } from '@mise/shared/guided-model';
 import { buildPath } from '@mise/shared/location-id';
 import type { Query } from 'firebase/firestore';
 import type { FirestoreKit } from '../session/firebaseBackend';
@@ -64,11 +65,13 @@ export interface CalculatorSource {
   // the server has it; rejects when it is refused or cannot be reached (a transaction needs the server: offline
   // it fails, it never queues).
   saveConfig(config: CalculatorConfig): Promise<number>;
-  // Every catalogue recipe, read ONCE (the link picker). Rejects when it cannot be read.
+  // Every catalogue recipe, read ONCE from the SERVER (the link picker). Rejects when it cannot be read —
+  // offline included: the browser's own database would answer with whatever this phone happened to see.
   listCatalogueRecipes(): Promise<StoredDoc[]>;
-  // Writes `ingredients` back onto recipes/{id} (a merge: nothing else of the recipe is touched). Resolves when
-  // the server has it; rejects when refused.
-  stampRowIds(id: string, ingredients: readonly unknown[]): Promise<void>;
+  // Gives every ingredient row of recipes/{id}, AS THE SERVER HOLDS IT NOW, a stable id, in a transaction, and
+  // resolves with those rows. Writes only when a row lacked one (a merge of `ingredients`). Rejects when refused,
+  // unreachable, or when the recipe no longer exists.
+  stampRowIds(id: string): Promise<unknown[]>;
 }
 
 const CONFIG = 'config';
@@ -202,18 +205,30 @@ export function createFirestoreCalculatorSource(
 
     // ⚠️ READ ONCE, WHEN THE PICKER OPENS — never on opening the Calculator and never as a listener: the tabs read
     // only the two or three recipes they are linked to (P14, the v207 mistake).
+    // ⚠️ FROM THE SERVER, never the browser's own database: offline that would list only the recipes this phone
+    // happened to cache (or none, read as «the Catalogue is empty»).
     async listCatalogueRecipes() {
       const { fs, db } = await firestore();
-      const snap = await fs.getDocs(fs.collection(db, recipesPath));
+      const snap = await fs.getDocsFromServer(fs.collection(db, recipesPath));
       return snap.docs.map(d => ({ ...d.data(), id: d.id }));
     },
 
-    // ⚠️ A MERGE OF ONE FIELD: the Catalogue owns the recipe; the Calculator only gives every row a stable id so
-    // the leavening can be found by the row's own id, never by its name. withRowIds is idempotent, so a recipe
-    // whose rows already have ids is written back byte-identical.
-    async stampRowIds(id, ingredients) {
+    // ⚠️ STAMPED ON THE RECIPE AS IT IS NOW, IN A TRANSACTION — never on the picker's copy. The current app wrote
+    // the list it had read when the picker opened, so a colleague's edit to that recipe in the Catalogue
+    // meanwhile (an ingredient removed — the list the allergen labels are built from) was silently undone.
+    // ⚠️ A MERGE OF ONE FIELD, and only when a row lacked an id: the Catalogue owns the recipe; the Calculator
+    // only gives every row a stable id so the leavening is found by the row's own id, never by its name.
+    async stampRowIds(id) {
       const { fs, db } = await firestore();
-      await fs.setDoc(fs.doc(db, recipesPath, checkId(id)), { ingredients: [...ingredients] }, { merge: true });
+      const ref = fs.doc(db, recipesPath, checkId(id));
+      return fs.runTransaction(db, async tx => {
+        const snap = await tx.get(ref);
+        if (!snap.exists()) throw Object.assign(new Error(`Catalogue recipe ${id} no longer exists`), { code: 'not-found' });
+        const rows: unknown[] = Array.isArray(snap.data().ingredients) ? snap.data().ingredients : [];
+        const stamped = withRowIds(rows);
+        if (stamped.some((row, i) => row !== rows[i])) tx.set(ref, { ingredients: stamped }, { merge: true });
+        return stamped;
+      });
     },
   };
 }

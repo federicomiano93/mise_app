@@ -466,8 +466,9 @@ describe('the link picker', () => {
     const list = await store.listCatalogueRecipes();
     expect(list.map(r => r.id)).toEqual(['cat-1']);
     expect(source.catalogueReads()).toBe(1);
-    await store.stampRowIds('cat-1', [{ rid: 'ra', label: 'Flour' }]);
-    expect(source.stamps).toEqual([{ id: 'cat-1', ingredients: [{ rid: 'ra', label: 'Flour' }] }]);
+    const rows = await store.stampRowIds('cat-1') as { rid: string; label: string }[];
+    expect(rows.map(r => r.label)).toEqual(['Flour']);
+    expect(source.stamps).toEqual([{ id: 'cat-1', ingredients: rows }]);
   });
 
   test('a refused read or stamp rejects (the picker says so and links nothing)', async () => {
@@ -476,6 +477,52 @@ describe('the link picker', () => {
     source.refuse.catalogue = true;
     source.refuse.stamp = true;
     await expect(store.listCatalogueRecipes()).rejects.toBeTruthy();
-    await expect(store.stampRowIds('cat-1', [])).rejects.toBeTruthy();
+    await expect(store.stampRowIds('cat-1')).rejects.toBeTruthy();
+  });
+});
+
+describe('the review fixes of 3c-2', () => {
+  test('⚠️ a document from the browser\'s own database paints the screen but is NOT enough to write: nothing is sent', async () => {
+    const { store, source } = setup({ config: CONFIG });
+    source.hold();
+    store.start();
+    // Yesterday's copy, from the browser's database (a tablet reopening on the Clients editor).
+    source.config = { ...CONFIG, configRev: 2 };
+    source.push({ fromServer: false });
+    expect(store.getSnapshot().configAnswered).toBe(true);
+    expect(store.getSnapshot().configFromServer).toBe(false);
+    await expect(store.saveConfig({ clients: [], recipes: [] } as never)).resolves.toEqual({ synced: false, reason: 'no-server-answer' });
+    expect(source.savedConfigs).toHaveLength(0);
+  });
+
+  test('the first SERVER answer is news even when it equals the cached one (an editor is waiting for it)', () => {
+    const { store, source } = setup({ config: CONFIG });
+    source.hold();
+    store.start();
+    source.push({ fromServer: false });
+    const before = store.getSnapshot();
+    source.push({ fromServer: true });
+    const after = store.getSnapshot();
+    expect(after).not.toBe(before);
+    expect(after.configFromServer).toBe(true);
+    expect(after.config).toBe(before.config);
+  });
+
+  test('the server\'s «no document» counts as a server answer too', () => {
+    const { store } = setup({ config: null });
+    store.start();
+    expect(store.getSnapshot().configFromServer).toBe(true);
+  });
+
+  test('⚠️ after a save the copy carries the revision it was written as — with a dead stream, a deleted import stays deleted', async () => {
+    const { store, source } = setup({ config: { clients: [], recipes: [{ id: 'own', name: 'Own' }, { id: 'cat-x', name: 'Imported' }], configRev: 3 } });
+    store.start();
+    // No echo of the save reaches the store (as with a dead stream): only the save's own answer.
+    source.refuse.config = true;
+    await store.saveConfig({ clients: [], recipes: [{ id: 'own', name: 'Own 2' }, { id: 'cat-x', name: 'Imported' }], configRev: 3 } as never);
+    expect(store.getSnapshot().config.configRev).toBe(4);
+    // The person deletes the imported recipe and saves again: it must not come back.
+    await store.saveConfig({ ...store.getSnapshot().config, recipes: [{ id: 'own', name: 'Own 2' }] } as never);
+    expect((source.config as { recipes: { id: string }[] }).recipes.map(r => r.id)).toEqual(['own']);
   });
 });
