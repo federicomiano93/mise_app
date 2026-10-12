@@ -35,6 +35,14 @@ import * as inventoryModel from './inventory-model';
 import * as inventoryOutbox from './inventory-outbox';
 import * as inventoryPurchases from './inventory-purchases';
 import * as inventoryValue from './inventory-value';
+import * as vatRates from './vat-rates';
+import * as ingredientKind from './ingredient-kind';
+import * as productLimits from './product-limits';
+import * as vatGuide from './vat-guide';
+import * as catalogueModel from './catalogue-model';
+import * as recipeCostModel from './recipe-cost-model';
+import * as foodcostWeighing from './foodcost-weighing';
+import * as foodcostModel from './foodcost-model';
 import * as legacyJoinCodeJs from '../../js/join-code.js';
 import * as legacyPushModelJs from '../../js/push-model.js';
 import * as legacyHomeCardsJs from '../../js/home-cards.js';
@@ -60,6 +68,14 @@ import * as legacyInventoryModelJs from '../../js/inventory/inventory-model.js';
 import * as legacyInventoryOutboxJs from '../../js/inventory/inventory-outbox.js';
 import * as legacyInventoryPurchasesJs from '../../js/inventory/inventory-purchases.js';
 import * as legacyInventoryValueJs from '../../js/inventory/inventory-value.js';
+import * as legacyVatRatesJs from '../../js/vat-rates.js';
+import * as legacyIngredientKindJs from '../../js/ingredient-kind.js';
+import * as legacyProductLimitsJs from '../../js/foodcost/product-limits.js';
+import * as legacyVatGuideJs from '../../js/foodcost/vat-guide.js';
+import * as legacyCatalogueModelJs from '../../js/catalogue/catalogue-model.js';
+import * as legacyRecipeCostModelJs from '../../js/catalogue/recipe-cost-model.js';
+import * as legacyFoodcostWeighingJs from '../../js/foodcost/foodcost-weighing.js';
+import * as legacyFoodcostModelJs from '../../js/foodcost/foodcost-model.js';
 
 const legacyJoinCode = legacyJoinCodeJs as unknown as typeof joinCode;
 const legacyPushModel = legacyPushModelJs as unknown as typeof pushModel;
@@ -90,6 +106,14 @@ const legacyInventoryOutbox = legacyInventoryOutboxJs as unknown as typeof inven
 const legacyOutboxHasTheFix = typeof (legacyInventoryOutboxJs as unknown as { answered?: unknown }).answered === 'function';
 const legacyInventoryPurchases = legacyInventoryPurchasesJs as unknown as typeof inventoryPurchases;
 const legacyInventoryValue = legacyInventoryValueJs as unknown as typeof inventoryValue;
+const legacyVatRates = legacyVatRatesJs as unknown as typeof vatRates;
+const legacyIngredientKind = legacyIngredientKindJs as unknown as typeof ingredientKind;
+const legacyProductLimits = legacyProductLimitsJs as unknown as typeof productLimits;
+const legacyVatGuide = legacyVatGuideJs as unknown as typeof vatGuide;
+const legacyCatalogueModel = legacyCatalogueModelJs as unknown as typeof catalogueModel;
+const legacyRecipeCostModel = legacyRecipeCostModelJs as unknown as typeof recipeCostModel;
+const legacyFoodcostWeighing = legacyFoodcostWeighingJs as unknown as typeof foodcostWeighing;
+const legacyFoodcostModel = legacyFoodcostModelJs as unknown as typeof foodcostModel;
 
 // ── The machinery ────────────────────────────────────────────────────────────
 
@@ -1988,5 +2012,392 @@ describe('inventory-value: odd inputs', () => {
   agree('monthCost', m.monthCost as AnyFn, l.monthCost as AnyFn, [
     ...product(COST_MONTHS, COST_LISTS, COST_USED, [undefined, true, false]).map(([month, ingredients, consumptionOf, closed]) => [{ month, ingredients, consumptionOf, closed }]),
     [undefined], [null], [{}], [5], ['abc'], [{ month: {}, ingredients: [FLOUR] }], [{ ingredients: [FLOUR], consumptionOf: () => 1 }],
+  ]);
+});
+
+// ── vat-rates, ingredient-kind, product-limits, vat-guide ────────────────────
+
+// Countries as a venue document, a typo or the prototype chain may hand them over.
+const COUNTRY_WORDS: readonly unknown[] = [...ODD, 'IT', 'GB', 'FR', 'it', 'gb', 'IT ', ' GB', 'toString', '__proto__', 'constructor', 'hasOwnProperty',
+  'valueOf', 'UK', 'DE', 5, ['IT'], new String('IT'), { toString: () => 'IT' }, Symbol('IT')];
+
+describe('vat-rates: odd inputs', () => {
+  agree('vatRatesFor', vatRates.vatRatesFor, legacyVatRates.vatRatesFor, product(COUNTRY_WORDS));
+});
+
+describe('ingredient-kind: odd inputs', () => {
+  const ITEMS: readonly unknown[] = [...ODD, 'packaging', 42, { kind: 'packaging' }, { kind: 'ingredient' }, { kind: 'Packaging' }, { kind: 'packaging ' },
+    { kind: ' packaging' }, { kind: ['packaging'] }, { kind: new String('packaging') }, { kind: null }, { kind: 1 }, { kind: undefined }, { name: 'Flour' },
+    Object.create({ kind: 'packaging' }), [], Object.assign([], { kind: 'packaging' }), () => 'packaging', new Map([['kind', 'packaging']]),
+    { get kind(): unknown { throw new Error('boom'); } }];
+  agree('isPackaging', ingredientKind.isPackaging, legacyIngredientKind.isPackaging, product(ITEMS));
+  agree('kindOf', ingredientKind.kindOf, legacyIngredientKind.kindOf, product(ITEMS));
+});
+
+describe('product-limits: odd inputs', () => {
+  const m = productLimits;
+  const l = legacyProductLimits;
+
+  const LIMIT_VALUES: readonly unknown[] = [...PRICE_VALUES, 0, 1, 100, 100.0001, 101, 1000, 1000.5, 1001, 100000, 100001, 1000000, 1000001, 10000, 10000.01,
+    Number.MIN_VALUE, -Number.MIN_VALUE, Number.MAX_VALUE, -0];
+  const LIMITS: readonly unknown[] = [...ODD, ...m.PRODUCT_NUMBER_LIMITS, { min: 0, minInclusive: true, max: null }, { min: 0, minInclusive: false },
+    { min: 5, max: 10 }, { min: '0', minInclusive: 1, max: '10' }, { key: 'x', min: -1, minInclusive: false, max: 0 }];
+  agree('numberAllowed', m.numberAllowed as AnyFn, l.numberAllowed as AnyFn, product(LIMITS, LIMIT_VALUES));
+
+  const PRODUCT_BASE = { piecesPerBatch: 100, packSize: 250, labourMinutes: 90, labourPeople: 2, sellingPrice: 1.2, vatRate: 20, foodCostTarget: 30 };
+  const PRODUCTS: readonly unknown[] = [...ODD, 'product', 42, PRODUCT_BASE, ...varying(PRODUCT_BASE, Object.fromEntries(
+    m.PRODUCT_NUMBER_LIMITS.map(limit => [limit.key, LIMIT_VALUES]))), { piecesPerBatch: 0, labourPeople: 0 }, Object.create(PRODUCT_BASE),
+  { get packSize(): unknown { throw new Error('boom'); } }];
+  agree('firstInvalidNumber', m.firstInvalidNumber, l.firstInvalidNumber, product(PRODUCTS));
+  agree('labourRateAllowed', m.labourRateAllowed, l.labourRateAllowed, product(LIMIT_VALUES));
+});
+
+describe('vat-guide: odd inputs', () => {
+  agree('vatGuideFor', vatGuide.vatGuideFor, legacyVatGuide.vatGuideFor, product(COUNTRY_WORDS));
+});
+
+// ── catalogue-model ──────────────────────────────────────────────────────────
+
+// Units a recipe row may carry, and near-misses of them.
+const ROW_UNITS: readonly unknown[] = [...ODD, 'g', 'kg', 'mg', 'ml', 'cl', 'dl', 'l', 'pcs', 'tsp', 'tbsp', 'pinch', 'to taste', 'G', ' g', 'oz', 'lb', 'toString',
+  '__proto__', 'constructor', 'hasOwnProperty', new String('kg'), ['kg'], { toString: () => 'kg' }];
+
+describe('catalogue-model: odd inputs', () => {
+  // A partial port: only what it exports is compared.
+  const m = catalogueModel;
+  const l = legacyCatalogueModel;
+
+  const ROWS: readonly unknown[] = [...ODD, 'row', 42, { label: 'Flour', grams: 800, unit: 'g' }, { grams: 1 }, { grams: 1, unit: 'kg' },
+    ...varying({ label: 'Flour', grams: 500, unit: 'g' }, { grams: PRICE_VALUES.slice(0, 30), unit: ROW_UNITS }),
+    Object.create({ grams: 5, unit: 'kg' }), { get unit(): unknown { throw new Error('boom'); } }];
+  agree('unitOf', m.unitOf, l.unitOf, product(ROWS));
+  agree('isWeighableUnit', m.isWeighableUnit, l.isWeighableUnit, product(ROW_UNITS));
+  // ⚠️ QUIRK COPIED: a null or undefined row throws a TypeError in both (see ingredientGrams in catalogue-model.ts).
+  agree('ingredientGrams', m.ingredientGrams, l.ingredientGrams, product(ROWS));
+
+  const RECIPE_BASE = { ingredients: [{ label: 'A', grams: 1, unit: 'kg' }, { label: 'B', grams: 500, unit: 'g' }, { label: 'C', grams: 0.5, unit: 'l' },
+    { label: 'D', grams: 3, unit: 'pcs' }] };
+  agree('weighableTotalGrams', m.weighableTotalGrams, l.weighableTotalGrams, product([...ODD, RECIPE_BASE, { ingredients: [] }, { ingredients: 'x' },
+    { ingredients: [null] }, { ingredients: [undefined, { grams: 2 }] }, { ingredients: [{ grams: 'x' }, { grams: 3, unit: 'kg' }] },
+    ...ROWS.slice(0, 40).map(row => ({ ingredients: [row] }))]));
+
+  const LINKS: readonly unknown[] = [...ODD, 'link', { refId: 'X' }, { refId: '' }, { refId: '   ' }, { refId: 5 }, { refId: 0 }, { refId: ' R1 ', kind: 'recipe' },
+    { refId: 'X', kind: 'nonsense' }, { refId: 'X', kind: 'ingredient' }, { refId: 'X', kind: 'Recipe' }, { refId: 'X', kind: ['recipe'] },
+    { refId: 'X', kind: 'toString' }, { refId: null, kind: 'recipe' }, { refId: undefined }, { refId: { toString: () => 'obj' }, kind: 'recipe' },
+    { refId: ['a'] }, Object.create({ refId: 'P', kind: 'recipe' }), { get refId(): unknown { throw new Error('boom'); } }];
+  agree('linkOf', m.linkOf, l.linkOf, product(LINKS));
+
+  agree('normalizeLossPct', m.normalizeLossPct, l.normalizeLossPct, product([...PRICE_VALUES, 99, 99.5, 100, 12.5, 0.01, '12.5', '99.9', '100']));
+  agree('normalizeWeight', m.normalizeWeight, l.normalizeWeight, product([...PRICE_VALUES, 10000000, 10000001, 850, '850', 1e7, 0.5]));
+  const WEIGHTS: readonly unknown[] = [...PRICE_VALUES.slice(0, 30), 1000, 800, 8380, 7374, 7373, 3000, 2555, 1, 1100, 10000000, 99, 0.001, '1000', ' 800 '];
+  agree('weightLoss', m.weightLoss, l.weightLoss, product(WEIGHTS, WEIGHTS));
+
+  agree('normalizeSearchText', m.normalizeSearchText, l.normalizeSearchText, product([...ODD, 'Però CRÈME fraîche', '  Burro  ', 'ÀÈÌÒÙ àèìòù', 'ﬁ', 'Å', 'á', 'İstanbul',
+    'x'.repeat(300), 'tab\there', 'ǅ', '̀', 5, 0, true, [1, 2], { toString: () => 'ÉCLAIR' }, new String('É'), 5n, Symbol('s')]));
+
+  const SG_INGREDIENTS: readonly unknown[] = [undefined, null, {}, 'abc', 5, [], true, new Map(),
+    { B1: { id: 'B1', name: 'Burro Occelli', weight: '1 kg', supplierId: 'S1' }, B2: { id: 'B2', name: 'Burro chiarificato', supplierId: 'S2' },
+      P1: { id: 'P1', name: 'Pasta sfoglia al burro' }, OLD: { id: 'OLD', name: 'Burro vecchio', active: false },
+      BOX: { id: 'BOX', name: 'Burro box', kind: 'packaging' }, CR: { id: 'CR', name: 'Crème fraîche', shortName: 'Crème F.' } },
+    { a: { id: 'a', name: 'Insalata' }, b: { id: 'b', name: 'Olio di semi al sale' }, c: { id: 'c', name: 'Salmone' }, d: { id: 'd', name: 'Sale fino' } },
+    { a: null, b: 5, c: 'str', d: [], e: { id: 'e', name: 'Sale' }, f: { name: 'Salvia' }, g: { id: 'g' }, h: { id: 'h', name: '  ' } },
+    { a: { id: 'z1', name: 'Zucchero 1' }, b: { id: 'z2', name: 'Zucchero 2' }, c: { id: 'z3', name: 'Zucchero 3' }, d: { id: 'z4', name: 'Zucchero 4' },
+      e: { id: 'z5', name: 'Zucchero 5' }, f: { id: 'z6', name: 'Zucchero 6' }, g: { id: 'z7', name: 'Zucchero 7' } },
+    { a: { id: 7, name: 'Burro 7' }, b: { id: 'b', name: 'Burro', shortName: 5 }, c: { id: 'c', name: 5 }, d: { id: 'd', name: 'Burro', shortName: ' Bur ' } },
+    { a: { id: 'a', name: 'Burro', active: 0 }, b: { id: 'b', name: 'Burro', active: false }, c: { id: 'c', name: 'Burro', active: null } },
+    new Map([['a', { id: 'a', name: 'Burro' }]])];
+  const SG_RECIPES: readonly unknown[] = [undefined, null, [], 'abc', 5, {}, [{ id: 'R1', name: 'Crema al burro' }, { id: 'SELF', name: 'Burro montato' }],
+    { R1: { id: 'R1', name: 'Crema al burro' }, SELF: { id: 'SELF', name: 'Burro montato' } },
+    [{ id: 'r', name: 'Miele caramellato' }], [null, 0, '', { id: 'x' }, { id: 'y', name: '  ' }, { id: 'z', name: 'Burro z' }],
+    [{ id: 'a', name: 'Burro b' }, { id: 'b', name: 'Burro a' }, { id: 'a', name: 'Burro' }], [{ id: 5, name: 'Burro 5' }, { id: 'SELF', name: 'Self' }]];
+  const SG_SUPPLIERS: readonly unknown[] = [undefined, null, {}, 'abc', 5, { S1: { name: 'Brava Fresh' }, S2: { name: 'Latteria', shortName: ' Latt. ' } },
+    { S1: null, S2: 5, S3: { name: 5 } }, new Map([['S1', { name: 'Brava' }]])];
+  const SG_QUERIES: readonly unknown[] = [...ODD, 'bu', 'burro', 'BURRO', 'creme', 'CRÈME', 'crème fr', 'sal', 'zucchero', 'miele', 'brava', 'latteria', '500 g', 'z',
+    ' ', '  b ', 'sa', 'bur', 'u', 'burro  ', 'ro', 'ì', 5, { toString: () => 'burro' }];
+  const SG_LINKED: readonly unknown[] = [undefined, null, { kind: 'ingredient', refId: 'B1' }, { kind: 'recipe', refId: 'R1' }, { kind: 'recipe', refId: 'B1' },
+    { kind: 'ingredient', refId: 'a' }, {}, 5, 'x'];
+  const SG_LIMITS: readonly unknown[] = [undefined, null, 0, 1, 3, 5, 50, 2.9, 0.5, -1, '3', 'junk', NaN, Infinity, [], {}, true];
+  const SG_EXCLUDE: readonly unknown[] = [undefined, null, 'SELF', 'R1', 'a', 5, ''];
+
+  const suggestInputs = (): unknown[][] => [
+    [], [undefined], [null], [5], ['abc'], [{}],
+    ...product(SG_INGREDIENTS, SG_RECIPES, SG_QUERIES.slice(0, 20)).map(([ingredients, recipes, query]) => [{ ingredients, recipes, query, excludeRecipeId: 'SELF' }]),
+    ...product(SG_INGREDIENTS.slice(7), SG_RECIPES, SG_SUPPLIERS, ['bu', 'burro', 'sal']).map(([ingredients, recipes, suppliers, query]) => [{ ingredients, recipes, suppliers, query }]),
+    ...product(SG_QUERIES).map(([query]) => [{ ingredients: SG_INGREDIENTS[8], recipes: SG_RECIPES[6], suppliers: SG_SUPPLIERS[5], query, excludeRecipeId: 'SELF' }]),
+    ...product(SG_LINKED, SG_LIMITS, SG_EXCLUDE).map(([linked, limit, excludeRecipeId]) => [{
+      ingredients: SG_INGREDIENTS[8], recipes: SG_RECIPES[6], suppliers: SG_SUPPLIERS[5], query: 'burro', linked, limit, excludeRecipeId }]),
+    [{ ingredients: SG_INGREDIENTS[11], recipes: [], query: 'zucchero' }], [{ ingredients: SG_INGREDIENTS[11], recipes: [], query: 'zucchero', limit: 3 }],
+  ];
+  agree('suggestLinks', m.suggestLinks as AnyFn, l.suggestLinks as AnyFn, suggestInputs());
+});
+
+// ── recipe-cost-model ────────────────────────────────────────────────────────
+
+// The ingredients and recipes the cost models are tried against: priced by weight, volume and piece, unpriced, deleted, looping.
+const RC_INGREDIENTS = {
+  FLOUR: { name: 'Flour', priceUnit: 'kg', pricePerUnit: 2 },
+  BUTTER: { name: 'Butter', priceUnit: 'kg', pricePerUnit: 8 },
+  MILK: { name: 'Milk', priceUnit: 'l', pricePerUnit: 1.2 },
+  EGG: { name: 'Egg', priceUnit: 'pcs', pricePerUnit: 0.3, unitWeightKg: 0.055 },
+  EGG2: { name: 'Egg, no weight', priceUnit: 'pcs', pricePerUnit: 0.3 },
+  SALT: { name: 'Salt' },
+  FREE: { name: 'Free', priceUnit: 'kg', pricePerUnit: 0 },
+  JUNK: 5,
+  NOTHING: null,
+};
+const rcRow = (label: unknown, grams: unknown, over: Record<string, unknown> = {}): Record<string, unknown> =>
+  ({ label, grams, unit: 'g', kind: 'ingredient', ...over });
+const RC_RECIPES: Record<string, Record<string, unknown>> = {
+  CREAM: { id: 'CREAM', name: 'Pastry cream', lossPct: 0, ingredients: [rcRow('Milk', 500, { refId: 'MILK', unit: 'ml' }), rcRow('Egg', 500, { refId: 'EGG' })] },
+  DOUGH: { id: 'DOUGH', name: 'Dough', lossPct: 0, ingredients: [rcRow('Flour', 800, { refId: 'FLOUR' }), rcRow('Butter', 200, { refId: 'BUTTER' })] },
+  BAKED: { id: 'BAKED', name: 'Baked', lossPct: 25, ingredients: [rcRow('Flour', 800, { refId: 'FLOUR' }), rcRow('Butter', 200, { refId: 'BUTTER' })] },
+  HALF: { id: 'HALF', name: 'Half', lossPct: 0, ingredients: [rcRow('Flour', 500, { refId: 'FLOUR' }), rcRow('Mystery', 500)] },
+  MYSTERY: { id: 'MYSTERY', name: 'Mystery', lossPct: 0, ingredients: [rcRow('Something', 500)] },
+  LOOP: { id: 'LOOP', name: 'Loop', lossPct: 0, ingredients: [rcRow('Itself', 100, { kind: 'recipe', refId: 'LOOP' })] },
+  A: { id: 'A', name: 'A', lossPct: 0, ingredients: [rcRow('B', 100, { kind: 'recipe', refId: 'B' })] },
+  B: { id: 'B', name: 'B', lossPct: 0, ingredients: [rcRow('A', 100, { kind: 'recipe', refId: 'A' })] },
+  CAKE: { id: 'CAKE', name: 'Cake', lossPct: 10, ingredients: [rcRow('Cream', 500, { kind: 'recipe', refId: 'CREAM' }), rcRow('Flour', 500, { refId: 'FLOUR' })] },
+  L0: { id: 'L0', name: 'L0', lossPct: 0, ingredients: [rcRow('L1', 1000, { kind: 'recipe', refId: 'L1' })] },
+  L1: { id: 'L1', name: 'L1', lossPct: 0, ingredients: [rcRow('L2', 1000, { kind: 'recipe', refId: 'L2' })] },
+  L2: { id: 'L2', name: 'L2', lossPct: 0, ingredients: [rcRow('L3', 1000, { kind: 'recipe', refId: 'L3' })] },
+  L3: { id: 'L3', name: 'L3', lossPct: 0, ingredients: [rcRow('L4', 1000, { kind: 'recipe', refId: 'L4' })] },
+  L4: { id: 'L4', name: 'L4', lossPct: 0, ingredients: [rcRow('Flour', 1000, { refId: 'FLOUR' })] },
+  NOLOSS: { id: 'NOLOSS', name: 'Old', ingredients: [rcRow('Flour', 1000, { refId: 'FLOUR' })] },
+  NOID: { name: 'No id', lossPct: 0, ingredients: [rcRow('Flour', 1000, { refId: 'FLOUR' })] },
+  EMPTY: { id: 'EMPTY', name: 'Empty', lossPct: 0, ingredients: [] },
+};
+
+const RC_TABLES: readonly unknown[] = [undefined, {}, { ingredients: RC_INGREDIENTS }, { recipes: RC_RECIPES }, { ingredients: RC_INGREDIENTS, recipes: RC_RECIPES },
+  { ingredients: new Map(Object.entries(RC_INGREDIENTS)), recipes: new Map(Object.entries(RC_RECIPES)) },
+  { ingredients: RC_INGREDIENTS, recipes: { LOOP: RC_RECIPES['LOOP'] } }, { ingredients: 5, recipes: 'abc' }, { ingredients: null, recipes: null },
+  { ingredients: [], recipes: [] }, { ingredients: { get: () => RC_INGREDIENTS.FLOUR }, recipes: {} }, { ingredients: { get: 5, FLOUR: RC_INGREDIENTS.FLOUR } },
+  { ingredients: Object.create(RC_INGREDIENTS), recipes: Object.create(RC_RECIPES) },
+  { ingredients: RC_INGREDIENTS, recipes: { CREAM: { id: 'CREAM', ingredients: [rcRow('Milk', 500, { refId: 'MILK' })] }, X: 5, Y: null } }];
+
+describe('recipe-cost-model: odd inputs', () => {
+  // A partial port: only what it exports is compared (costReasonLabel and partialCostText stay in js/).
+  const m = recipeCostModel;
+  const l = legacyRecipeCostModel;
+
+  const RC_GRAMS: readonly unknown[] = [...PRICE_VALUES.slice(0, 30), 800, 1000, 1, 165, 500];
+  const RC_LABELS: readonly unknown[] = ['Flour', '', '  ', undefined, null, 5, 'x'];
+  const RC_REFS: readonly unknown[] = ['FLOUR', 'BUTTER', 'MILK', 'EGG', 'EGG2', 'SALT', 'FREE', 'JUNK', 'NOTHING', 'NOPE', '', undefined, 5, 'toString', '__proto__', 'constructor'];
+  const RC_LOSSES: readonly unknown[] = [undefined, null, 0, 20, 99, 100, 1000, -5, '20', 'abc', NaN, {}];
+  const rcBase = { id: 'R1', name: 'Test', lossPct: 0, ingredients: [rcRow('Flour', 800, { refId: 'FLOUR' })] };
+  const RECIPES: readonly unknown[] = [...ODD, 'recipe', 42, ...Object.values(RC_RECIPES), rcBase, { ingredients: [] }, { ingredients: 'x' }, { ingredients: [null] },
+    { ingredients: [undefined, 5, 'row'] }, { ingredients: [{}] }, { ingredients: [{ label: 'x' }] },
+    ...RC_LOSSES.map(lossPct => ({ ...rcBase, lossPct })),
+    ...RC_GRAMS.map(grams => ({ ...rcBase, ingredients: [rcRow('Flour', grams, { refId: 'FLOUR' })] })),
+    ...ROW_UNITS.map(unit => ({ ...rcBase, ingredients: [rcRow('Flour', 1000, { refId: 'FLOUR', unit })] })),
+    ...RC_REFS.map(refId => ({ ...rcBase, ingredients: [rcRow('Row', 500, { refId })] })),
+    ...RC_REFS.map(refId => ({ ...rcBase, ingredients: [rcRow('Row', 500, { refId, kind: 'recipe' })] })),
+    ...RC_LABELS.map(label => ({ ...rcBase, ingredients: [rcRow(label, 500), rcRow(label, 500, { refId: 'FLOUR' })] })),
+    ...[undefined, null, '', 5, 'x', 0].map(id => ({ ...rcBase, id })),
+    { ...rcBase, ingredients: [rcRow('Flour', 1000, { refId: 'FLOUR', kind: 'nonsense' }), rcRow('X', 10, { refId: 'CREAM', kind: 'recipe' })] },
+    Object.create(rcBase), { get ingredients(): unknown { throw new Error('boom'); } }];
+  agree('costRecipe', m.costRecipe as AnyFn, l.costRecipe as AnyFn, [
+    ...product(RECIPES, RC_TABLES.slice(0, 6)),
+    ...product(RECIPES.slice(0, 40), RC_TABLES.slice(6)),
+    ...product([RC_RECIPES['CAKE'], RC_RECIPES['L0'], RC_RECIPES['LOOP'], RC_RECIPES['A']], RC_TABLES.slice(0, 6), [undefined, 1, 2, 3, 4, 5, 0, -1, NaN, '2', null],
+      [undefined, new Set(), new Set(['A']), new Set(['CREAM']), ['A'], 'ab', null, new Set(['L1'])]),
+  ]);
+});
+
+// ── foodcost-weighing ────────────────────────────────────────────────────────
+
+describe('foodcost-weighing: odd inputs', () => {
+  const m = foodcostWeighing;
+  const l = legacyFoodcostWeighing;
+
+  const foc = (extra: Record<string, unknown> = {}): Record<string, unknown> => ({
+    id: 'foc', name: 'Focaccia',
+    ingredients: [{ label: 'Flour', grams: 600, unit: 'g' }, { label: 'Water', grams: 400, unit: 'g' }, { label: 'Rosemary', grams: 0, unit: 'to taste' }],
+    ...extra,
+  });
+  const WEIGH_NUMS: readonly unknown[] = [...PRICE_VALUES.slice(0, 30), 1000, 800, 1250, 1100, 1, 0.5, 10000000, 1e7 + 1, '1000', ' 800 ', '', '   ', 1000.5];
+  const RECIPES: readonly unknown[] = [...ODD, 'recipe', 42, foc(), foc({ lossPct: 0 }), foc({ lossPct: 12 }), foc({ lossPct: 20, rawGrams: 1000, cookedGrams: 800 }),
+    foc({ lossPct: 5, rawGrams: 1000, cookedGrams: 1200 }), foc({ rawGrams: 1000 }), foc({ cookedGrams: 800 }), { id: 'x', ingredients: [] }, { id: 'y' },
+    ...WEIGH_NUMS.slice(0, 40).map(rawGrams => foc({ rawGrams, cookedGrams: 800, lossPct: 20 })),
+    ...WEIGH_NUMS.slice(0, 40).map(lossPct => foc({ lossPct })),
+    ...WEIGH_NUMS.slice(0, 40).map(cookedGrams => foc({ rawGrams: 1000, cookedGrams })),
+    Object.create(foc({ lossPct: 12 })), { get rawGrams(): unknown { throw new Error('boom'); } }];
+  agree('startWeighing', m.startWeighing, l.startWeighing, product(RECIPES));
+
+  const STATES: readonly unknown[] = [...RECIPES.slice(0, 30).map(r => l.startWeighing(r)),
+    ...[0, 1000, 800, 1250, '5', NaN, -3].flatMap(raw => [true, false].flatMap(rawTyped => [true, false].flatMap(touched => [true, false].map(weighed =>
+      ({ raw, cooked: 800, rawTyped, weighed, touched }))))),
+    { raw: 1000, cooked: 1100, rawTyped: true, weighed: true, touched: true }, { raw: 1000, cooked: 1, rawTyped: true, weighed: true, touched: true },
+    { raw: 1000, cooked: 0, rawTyped: true, weighed: true, touched: true }, { raw: 0, cooked: 800, rawTyped: false, weighed: true, touched: true },
+    {}, { touched: true }];
+  agree('typeRaw', m.typeRaw, l.typeRaw, product(STATES.slice(0, 30), WEIGH_NUMS));
+  agree('typeCooked', m.typeCooked, l.typeCooked, product(STATES.slice(0, 30), WEIGH_NUMS));
+  agree('readWeighing', m.readWeighing, l.readWeighing, [...product(RECIPES.slice(0, 60), STATES), ...product(RECIPES.slice(60), STATES.slice(0, 12)),
+    [null, undefined], [undefined, null], [foc(), 5], [foc(), 'x']]);
+
+  const PATCHES: readonly unknown[] = [...ODD, 'patch', { foc: { lossPct: 20, rawGrams: 1000, cookedGrams: 800 } }, { nope: { lossPct: 5 } },
+    { foc: null }, { foc: 5 }, { foc: 'x' }, { foc: [] }, { foc: { name: 'Renamed' }, bri: { lossPct: 1 } }, { toString: { lossPct: 5 } },
+    JSON.parse('{"__proto__":{"lossPct":5}}'), Object.create({ foc: { lossPct: 7 } })];
+  const TABLES: readonly unknown[] = [undefined, null, {}, 5, 'x', { recipes: { foc: foc({ lossPct: 12 }) }, ingredients: {} }, { recipes: {} }, { recipes: null },
+    { recipes: { foc: null } }, { recipes: { foc: 5 } }, { recipes: 'abc' }, { ingredients: {} }, { recipes: { foc: foc() }, bakery: 'main' }, []];
+  agree('withWeighings', m.withWeighings as AnyFn, l.withWeighings as AnyFn, product(TABLES, PATCHES));
+
+  const RECIPE_MAPS: readonly unknown[] = [undefined, null, {}, 5, 'abc', { foc: foc({ lossPct: 12 }) }, { foc: foc({ lossPct: 20, rawGrams: 1000, cookedGrams: 800 }) },
+    { foc: foc(), bri: { id: 'bri', ingredients: [{ label: 'Flour', grams: 500, unit: 'g' }] } }, { foc: null }, { foc: 5 }, { foc: {} },
+    Object.create({ foc: foc() }), { toString: foc() }];
+  const STATE_MAPS: readonly unknown[] = [undefined, null, {}, 5, 'abc', [],
+    { foc: l.typeCooked(l.startWeighing(foc({ lossPct: 12 })), '800') }, { foc: l.startWeighing(foc()) }, { foc: null }, { foc: undefined }, { foc: 5 },
+    { foc: l.typeCooked(l.typeRaw(l.startWeighing(foc()), '1000'), '800'), bri: l.typeCooked(l.startWeighing(foc()), '400') },
+    { gone: l.typeCooked(l.typeRaw(l.startWeighing(foc()), '1000'), '800') }, { foc: l.typeCooked(l.startWeighing(foc()), '1100') },
+    { foc: l.typeCooked(l.startWeighing(foc()), '1') }];
+  const ID_LISTS: readonly unknown[] = [undefined, null, [], ['foc'], ['foc', 'bri', 'gone', ''], 'foc', 5, {}, new Set(['foc']), [5, null], 'bri'];
+  agree('weighingPatches', m.weighingPatches, l.weighingPatches, product(RECIPE_MAPS, STATE_MAPS, ID_LISTS));
+
+  const PATCH = { lossPct: 20, rawGrams: 1000, cookedGrams: 800 };
+  const NOWS_AND_PREVS: readonly unknown[] = [undefined, null, 0, 'x', {}, foc({ lossPct: 12 }), foc({ lossPct: 5, rawGrams: 900, cookedGrams: 855 }), { ...foc({ lossPct: 12 }), ...PATCH },
+    { ...foc({ lossPct: 12 }), lossPct: 25, rawGrams: 1000, cookedGrams: 750 }, { ...foc(), ...PATCH, extra: 1 }, { ...PATCH, lossPct: '20' }, { ...PATCH, rawGrams: undefined },
+    Object.create(PATCH), { lossPct: 20, rawGrams: 1000 }, { get lossPct(): unknown { throw new Error('boom'); } }];
+  const PATCH_VALUES: readonly unknown[] = [undefined, null, 0, 'x', {}, PATCH, { lossPct: 20, rawGrams: 1000 }, { lossPct: 20 }, { ...PATCH, name: 'x' }, Object.create(PATCH),
+    { lossPct: 20, rawGrams: 1000, cookedGrams: undefined }];
+  agree('restoreAfterRefusal', m.restoreAfterRefusal, l.restoreAfterRefusal, product(NOWS_AND_PREVS, NOWS_AND_PREVS, PATCH_VALUES));
+
+  const PRODUCT_LISTS: readonly unknown[] = [undefined, null, [], 'abc', 5, {},
+    [{ id: 'p1', components: [{ recipeId: 'foc', qtyKg: 1 }] }, { id: 'p2', components: [{ recipeId: 'foc', qtyKg: 2 }, { recipeId: 'bri', qtyKg: 1 }] },
+      { id: 'p3', components: [{ recipeId: 'bri', qtyKg: 1 }] }, null],
+    [null, undefined, 0, '', { id: 'p' }, { id: 'p', components: null }, { id: 'q', components: [null, undefined, 5, { recipeId: 'foc' }] }],
+    [{ id: 'p', components: 'foc' }], [{ id: 'p', components: {} }], [{ id: 'p', components: 5 }], [{ components: [{ recipeId: 'foc' }] }],
+    [{ id: 'p', components: [{ kind: 'ingredient', ingredientId: 'foc' }] }]];
+  agree('otherProductsUsing', m.otherProductsUsing, l.otherProductsUsing, product(PRODUCT_LISTS, [...ODD, 'foc', 'bri', 'none'], [...ODD, 'p1', 'p', 'q']));
+});
+
+// ── foodcost-model ───────────────────────────────────────────────────────────
+
+describe('foodcost-model: odd inputs', () => {
+  // A partial port: only what it exports is compared (blockerText stays in js/).
+  const m = foodcostModel;
+  const l = legacyFoodcostModel;
+
+  const FC_ING: Record<string, unknown> = {
+    ...RC_INGREDIENTS,
+    ICING: { id: 'ICING', name: 'Icing sugar', priceUnit: 'kg', pricePerUnit: 1.5 },
+    BUTTON: { id: 'BUTTON', name: 'Chocolate button', priceUnit: 'pcs', pricePerUnit: 0.05, unitWeightKg: 0.002 },
+    BOX: { id: 'BOX', name: 'Cake box', priceUnit: 'pcs', pricePerUnit: 0.12 },
+    BAGS: { id: 'BAGS', name: 'Paper bags', priceUnit: 'kg', pricePerUnit: 3 },
+    TRAY: { id: 'TRAY', name: 'Tray', priceUnit: 'pcs', pricePerUnit: 0.2, kind: 'packaging' },
+    SHORT: { id: 'SHORT', name: 'Burro Président', shortName: 'Burro P.', priceUnit: 'kg', pricePerUnit: 8 },
+    CASE: { id: 'CASE', name: 'Case', priceUnit: 'kg', pricePerUnit: 2, casePrice: 20, caseCount: 4, caseItemSize: 2.5, caseItemUnit: 'kg' },
+    NOID: { name: 'Anonymous', priceUnit: 'pcs', pricePerUnit: 1 },
+  };
+  const FC_TABLES: readonly unknown[] = [undefined, {}, { ingredients: FC_ING }, { recipes: RC_RECIPES }, { ingredients: FC_ING, recipes: RC_RECIPES },
+    { ingredients: FC_ING, recipes: RC_RECIPES, labourCostPerHour: 14 }, { ingredients: FC_ING, recipes: RC_RECIPES, labourCostPerHour: '14' },
+    { ingredients: FC_ING, recipes: RC_RECIPES, labourCostPerHour: 0 }, { ingredients: FC_ING, recipes: RC_RECIPES, labourCostPerHour: null },
+    { ingredients: FC_ING, recipes: RC_RECIPES, labourCostPerHour: -3 }, { ingredients: FC_ING, recipes: RC_RECIPES, labourCostPerHour: NaN },
+    { ingredients: new Map(Object.entries(FC_ING)), recipes: new Map(Object.entries(RC_RECIPES)), labourCostPerHour: 9.5 },
+    { ingredients: 5, recipes: 'abc' }, { ingredients: null, recipes: null }, { ingredients: [], recipes: [] },
+    { ingredients: { get: () => FC_ING['FLOUR'] }, recipes: RC_RECIPES }, { ingredients: FC_ING, recipes: { LOOP: RC_RECIPES['LOOP'] } },
+    { ingredients: Object.create(FC_ING), recipes: Object.create(RC_RECIPES) }, null, 5, 'str', []];
+  const SOME_TABLES = FC_TABLES.slice(0, 9);
+  const FEW_TABLES = [FC_TABLES[1], FC_TABLES[4], FC_TABLES[5], FC_TABLES[7], FC_TABLES[11], FC_TABLES[12]];
+
+  const NUMS: readonly unknown[] = [...ODD, 0.5, 2, 5, 12, 20, 22, 30, 100, 101, 250, 1000, 1e21, -5, -0, '12', ' 3 ', '1e2', '0', '3,5', 0.1 + 0.2, 1e-7, 5n,
+    new Number(12), [12], { valueOf: () => 12 }, Symbol('n')];
+  const MODES: readonly unknown[] = [...ODD, 'piece', 'weight', 'pack', 'Piece', ' pack', 'pezzo', 'toString', '__proto__', ['piece'], new String('piece')];
+  const PACK_UNIT_WORDS: readonly unknown[] = [...ODD, 'g', 'kg', 'pcs', 'G', 'box', 'l', ' g', 'toString', ['g']];
+  const LINE_UNIT_WORDS: readonly unknown[] = [...ODD, 'g', 'kg', 'pcs', 'lb', 'G', ' kg', 'ml', 'toString'];
+  const IDS: readonly unknown[] = ['DOUGH', 'HALF', 'MYSTERY', 'BAKED', 'CAKE', 'LOOP', 'GONE', 'FLOUR', 'ICING', 'EGG', 'BOX', 'TRAY', 'BAGS', 'NOPRICE', 'NOID', 'SHORT',
+    '', '  ', ' DOUGH ', undefined, null, 5, 0, ['DOUGH'], 'toString', '__proto__', 'constructor', { toString: () => 'DOUGH' }];
+  const RECIPE_LINES: readonly unknown[] = [{ recipeId: 'DOUGH', qtyKg: 10 }, ...IDS.map(recipeId => ({ recipeId, qtyKg: 1 })),
+    ...NUMS.map(qtyKg => ({ recipeId: 'DOUGH', qtyKg })), { qtyKg: 1 }, { recipeId: 'DOUGH' }, { kind: 'recipe', recipeId: 'DOUGH', qtyKg: 2 }];
+  const INGREDIENT_LINES: readonly unknown[] = [{ kind: 'ingredient', ingredientId: 'ICING', qty: 200, unit: 'g' },
+    ...IDS.map(ingredientId => ({ kind: 'ingredient', ingredientId, qty: 100, unit: 'g' })),
+    ...NUMS.map(qty => ({ kind: 'ingredient', ingredientId: 'ICING', qty, unit: 'g' })),
+    ...LINE_UNIT_WORDS.map(unit => ({ kind: 'ingredient', ingredientId: 'ICING', qty: 200, unit })),
+    ...LINE_UNIT_WORDS.map(unit => ({ kind: 'ingredient', ingredientId: 'BUTTON', qty: 100, unit })),
+    ...LINE_UNIT_WORDS.map(unit => ({ kind: 'ingredient', ingredientId: 'EGG2', qty: 10, unit })),
+    { kind: 'ingredient', qty: 5 }, { kind: 'Ingredient', ingredientId: 'ICING', qty: 5, unit: 'g' }];
+  const ONE_LINE_LISTS: readonly unknown[] = [...RECIPE_LINES, ...INGREDIENT_LINES, ...ODD].map(line => [line]);
+  const COMPONENT_LISTS: readonly unknown[] = [...ODD, 'components', 42, [], [{ recipeId: 'DOUGH', qtyKg: 10 }], [{ recipeId: 'DOUGH', qtyKg: 10 }, { recipeId: 'MYSTERY', qtyKg: 5 }],
+    [{ recipeId: 'DOUGH', qtyKg: 10 }, { kind: 'ingredient', ingredientId: 'ICING', qty: 200, unit: 'g' }],
+    [{ recipeId: 'DOUGH', qtyKg: 10 }, { kind: 'ingredient', ingredientId: 'NOPRICE', qty: 50, unit: 'g' }, { kind: 'ingredient', ingredientId: 'GONE', qty: 50, unit: 'g' }],
+    [{ kind: 'ingredient', ingredientId: 'BUTTON', qty: 1000, unit: 'pcs' }], [{ recipeId: 'HALF', qtyKg: 1 }], [{ recipeId: 'BAKED', qtyKg: 10 }],
+    [{ recipeId: 'CAKE', qtyKg: 3 }, { recipeId: 'DOUGH', qtyKg: 1.7 }], [{ recipeId: 'LOOP', qtyKg: 1 }], [{ recipeId: 'DOUGH', qtyKg: 0 }],
+    [null, undefined, 5, 'x', {}, { recipeId: 'DOUGH', qtyKg: 'x' }], [{ recipeId: 'L0', qtyKg: 2 }], [{ recipeId: 'DOUGH', qtyKg: 10 }, { recipeId: 'DOUGH', qtyKg: 5 }],
+    ...ONE_LINE_LISTS];
+  const PACKAGING_LISTS: readonly unknown[] = [...ODD, 'packaging', 42, [], [{ ingredientId: 'BOX', qtyPcs: 1 }], [{ ingredientId: 'BOX', qtyPcs: 100 }],
+    [{ ingredientId: 'BAGS', qtyPcs: 1 }], [{ ingredientId: 'TRAY', qtyPcs: 2 }], [{ ingredientId: 'GONE', qtyPcs: 1 }], [{ ingredientId: 'BOX', qtyPcs: 37 }, { ingredientId: 'TRAY', qtyPcs: 1 }],
+    [null, 5, { qtyPcs: 1 }, { ingredientId: 'B', qtyPcs: -3 }],
+    ...IDS.map(ingredientId => [{ ingredientId, qtyPcs: 1 }]), ...NUMS.map(qtyPcs => [{ ingredientId: 'BOX', qtyPcs }])];
+
+  const BASE = {
+    id: 'P1', name: ' Test product ', components: [{ recipeId: 'DOUGH', qtyKg: 10 }], packaging: [], sellingMode: 'piece', piecesPerBatch: 100, packSize: null, packUnit: null,
+    sellingPrice: 1.2, vatRate: 20, foodCostTarget: 30, labourMinutes: 90, labourPeople: 2, model: 2,
+  };
+  const PACK = { ...BASE, sellingMode: 'pack', packSize: 250, packUnit: 'g', piecesPerBatch: null, sellingPrice: 3 };
+  const PRODUCTS: readonly unknown[] = [...ODD, 'product', 42, BASE, PACK, { id: 'P', name: 'New product' }, { ...BASE, sellingMode: 'weight', piecesPerBatch: null, sellingPrice: 12 },
+    { ...PACK, packSize: 6, packUnit: 'pcs', piecesPerBatch: 100 }, { ...PACK, packUnit: 'kg', packSize: 0.25 },
+    ...varying(BASE, {
+      id: NUMS.slice(0, 12), name: [...ODD, '  Cake  ', 5, { toString: () => 'obj' }], components: COMPONENT_LISTS, packaging: PACKAGING_LISTS, sellingMode: MODES, piecesPerBatch: NUMS,
+      packSize: NUMS, packUnit: PACK_UNIT_WORDS, sellingPrice: NUMS, vatRate: NUMS, foodCostTarget: NUMS, labourMinutes: NUMS, labourPeople: NUMS, model: [...NUMS, 2, 3, 1.5, -2],
+    }),
+    ...varying(PACK, { packSize: NUMS, packUnit: PACK_UNIT_WORDS, piecesPerBatch: NUMS }),
+    ...varying({ ...BASE, sellingMode: 'weight', piecesPerBatch: null }, { components: COMPONENT_LISTS.slice(0, 40), packaging: PACKAGING_LISTS.slice(0, 40) }),
+    Object.create(BASE), { get components(): unknown { throw new Error('boom'); } }, { ...BASE, extra: { deep: 1 } }];
+  // The one-field-at-a-time variations come after the hand-written ones; the heavy functions meet them all with
+  // a few tables, and the hand-written ones with every table.
+  const HAND_WRITTEN = PRODUCTS.slice(0, ODD.length + 8);
+
+  agree('zeroOrMore', m.zeroOrMore, l.zeroOrMore, product(NUMS));
+  agree('isSellingMode', m.isSellingMode, l.isSellingMode, product(MODES));
+  agree('vatSelection', m.vatSelection, l.vatSelection, product(NUMS, COUNTRY_WORDS));
+  agree('normalizeProduct', m.normalizeProduct, l.normalizeProduct, product(PRODUCTS));
+  agree('normalizeProducts', m.normalizeProducts, l.normalizeProducts, product([...ODD, [], [BASE], [BASE, null, 5, PACK], PRODUCTS.slice(0, 80), 'nonsense', { length: 1, 0: BASE }]));
+  agree('netPrice', m.netPrice, l.netPrice, product(PRICE_VALUES, NUMS));
+  agree('statusFor', m.statusFor, l.statusFor, product(PRICE_VALUES, PRICE_VALUES));
+  agree('suggestedGrossPrice', m.suggestedGrossPrice as AnyFn, l.suggestedGrossPrice as AnyFn, [[], [undefined], [null], [5], ['abc'], [{}],
+    ...varying({ unitCost: 0.6, vatRate: 10, targetPct: 30 }, { unitCost: NUMS, vatRate: NUMS, targetPct: NUMS }).map(input => [input]),
+    [{ unitCost: 0.72, vatRate: 0, targetPct: 30 }], [{ unitCost: 0.5, vatRate: 10, targetPct: 30 }], [{ unitCost: 1.25, vatRate: 20, targetPct: 25 }]]);
+
+  const LINES: readonly unknown[] = [...ODD, ...INGREDIENT_LINES, ...[200, 0.2, 100, 10, 5, 50, '200', -1, 1e21].flatMap(qty => ['g', 'kg', 'pcs'].map(unit => ({ qty, unit })))];
+  const ING_CARDS: readonly unknown[] = [...ODD, ...Object.values(FC_ING), ...varying({ priceUnit: 'pcs', pricePerUnit: 0.05, unitWeightKg: 0.002 }, {
+    priceUnit: PRICE_UNIT_WORDS, pricePerUnit: PRICE_VALUES.slice(0, 30), unitWeightKg: PRICE_VALUES.slice(0, 30) }),
+  ...varying({ priceUnit: 'kg', pricePerUnit: 2, casePrice: 20, caseCount: 4, caseItemSize: 2.5, caseItemUnit: 'kg' }, { priceUnit: PRICE_UNIT_WORDS, pricePerUnit: PRICE_VALUES.slice(0, 30) }),
+  Object.create(FC_ING['BUTTON'] as object)];
+  agree('ingredientLineCost', m.ingredientLineCost, l.ingredientLineCost, [...product(LINES.slice(0, 60), ING_CARDS.slice(0, 60)), ...product(LINES, ING_CARDS.filter((_, i) => i % 4 === 0))]);
+
+  agree('batchTotals', m.batchTotals as AnyFn, l.batchTotals as AnyFn, [...product(HAND_WRITTEN, FC_TABLES), ...product(PRODUCTS, FEW_TABLES), ...product(PRODUCTS.slice(0, 40), [undefined, null, 5])]);
+  agree('packagingPerUnit', m.packagingPerUnit as AnyFn, l.packagingPerUnit as AnyFn, [...product(HAND_WRITTEN, FC_TABLES), ...product(PRODUCTS, FEW_TABLES)]);
+  agree('productionCost', m.productionCost as AnyFn, l.productionCost as AnyFn, [...product(HAND_WRITTEN, FC_TABLES), ...product(PRODUCTS, FEW_TABLES)]);
+  agree('costProduct', m.costProduct as AnyFn, l.costProduct as AnyFn, [...product(HAND_WRITTEN, FC_TABLES), ...product(PRODUCTS, FEW_TABLES)]);
+  agree('labourBatchCost', m.labourBatchCost as AnyFn, l.labourBatchCost as AnyFn, [...product(HAND_WRITTEN, FC_TABLES), ...product(PRODUCTS, FEW_TABLES)]);
+
+  // unitsPerBatch is handed the product as the screen holds it: raw documents and normalised ones, with every kind of batch.
+  const BATCHES: readonly unknown[] = [...ODD, { kg: 10 }, { kg: 0 }, { kg: -1 }, { kg: '5' }, { kg: NaN }, { kg: Infinity }, { kg: 10, cost: 32 }, { cost: 32 }, { kg: null }];
+  agree('unitsPerBatch', m.unitsPerBatch, l.unitsPerBatch, [...product(PRODUCTS, BATCHES.slice(0, 24)),
+    ...product(PRODUCTS.slice(0, 60).map(p => l.normalizeProduct(p)), BATCHES)]);
+
+  const PRODUCT_LISTS: readonly unknown[] = [undefined, null, [], 'abc', 5, {}, [BASE], [BASE, PACK, null, 5, { id: 'X', name: 'Half filled in' }],
+    [{ ...BASE, id: 'A', name: 'Cheap', sellingPrice: 2.4 }, { ...BASE, id: 'B', name: 'Dear', sellingPrice: 0.6 }, { ...BASE, id: 'C', name: 'Middle', sellingPrice: 1.2 }],
+    [{ ...BASE, id: 'A', name: 'same' }, { ...BASE, id: 'B', name: 'same' }, { id: 'X', name: 'same' }, { id: 'Y', name: 'Éclair' }, { id: 'Z', name: 'eclair' }],
+    [null, undefined], [{ name: 5 }, { name: null }, { name: { toString: () => 'obj' } }, { id: 'n' }],
+    [{ ...PACK, id: 'P', name: 'Pack' }, { ...BASE, id: 'Q', name: 'Piece 0 VAT', vatRate: 0 }], new Set([BASE]), Object.freeze([BASE]),
+    [{ ...BASE, id: 'W', sellingMode: 'weight', piecesPerBatch: null, sellingPrice: 12, components: [{ recipeId: 'DOUGH', qtyKg: 0 }] }]];
+  agree('sortByMargin', m.sortByMargin as AnyFn, l.sortByMargin as AnyFn, [...product(PRODUCT_LISTS, FC_TABLES), ...product([PRODUCTS.slice(0, 120)], FEW_TABLES)]);
+
+  const RECIPE_IDS: readonly unknown[] = ['DOUGH', 'CREAM', 'NOTHING', 'GONE', '', '  ', ' DOUGH ', undefined, null, 5, 0, ['DOUGH'], { toString: () => 'DOUGH' }, 'toString'];
+  agree('productsUsingRecipe', m.productsUsingRecipe as AnyFn, l.productsUsingRecipe as AnyFn, product(
+    [undefined, null, [], 'abc', 5, {}, [BASE], [BASE, null, 7, {}, PACK], PRODUCTS.slice(0, 100), [{ id: 'A', components: [{ kind: 'ingredient', ingredientId: 'DOUGH', qty: 1, unit: 'kg' }] }],
+      [{ id: 'B', components: [{ recipeId: 'DOUGH' }, { recipeId: 'CREAM', qtyKg: 1 }] }], [{ id: 'C', components: [{ recipeId: ' DOUGH ', qtyKg: 1 }] }]],
+    RECIPE_IDS));
+  agree('draftFromRecipe', m.draftFromRecipe, l.draftFromRecipe, product([...ODD, 'recipe', 42, { id: 'DOUGH', name: '  Brioche dough ', ingredients: [] }, { name: 'no id' },
+    { id: '  ' }, { id: 5, name: 5 }, { id: 'X' }, { id: 'X', name: null }, { id: ['X'] }, { id: { toString: () => 'T' }, name: { toString: () => 'N' } }, Object.create({ id: 'P' }),
+    { get id(): unknown { throw new Error('boom'); } }]));
+
+  agree('snapshotWorthTaking', m.snapshotWorthTaking, l.snapshotWorthTaking, [...product(PRODUCTS.slice(0, 70), PRODUCTS.slice(0, 70)),
+    ...product([BASE], PRODUCTS), ...product(PRODUCTS, [BASE])]);
+
+  const RESULTS: readonly unknown[] = [{ unitCost: 0.32, foodCostPct: 32 }, { unitCost: null, foodCostPct: null }, {}, undefined, null, 5, 'str', { unitCost: 'x', foodCostPct: [1] }];
+  const STAMPS: readonly unknown[] = ['2026-08-10T09:00:00.000Z', undefined, null, 5];
+  agree('productSnapshot', m.productSnapshot as AnyFn, l.productSnapshot as AnyFn, [
+    ...product(HAND_WRITTEN, RESULTS, STAMPS, SOME_TABLES), ...product(PRODUCTS, RESULTS.slice(0, 2), STAMPS.slice(0, 1), FEW_TABLES),
+    ...product(PRODUCTS.slice(0, 30), RESULTS.slice(0, 1), STAMPS.slice(0, 1), [undefined]),
   ]);
 });
