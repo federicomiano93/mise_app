@@ -30,6 +30,11 @@ import { ResultCard } from './ResultCard';
 import boxes from './Boxes.module.css';
 import styles from './RecipePanel.module.css';
 
+// How long the focus is claimed after Confirm / Edit while a closing dialog may still hold the page: every 16 ms,
+// for about a second.
+const FOCUS_CLAIM_EVERY_MS = 16;
+const FOCUS_CLAIM_TRIES = 60;
+
 type Props = {
   recipe: Recipe;
   // `role`, `id` and `aria-labelledby` when the recipes are tabs; nothing for a lone recipe.
@@ -127,26 +132,44 @@ export function RecipePanel({ recipe, panelProps }: Props) {
   const wantFocus = useRef<'recipe' | 'confirm' | null>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
   const confirmRef = useRef<HTMLButtonElement>(null);
+  const claimTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   //
-  // ⚠️ THE DIALOG THAT WAS OPEN GIVES THE FOCUS BACK AFTER US. React Aria's modal restores the focus, in an animation
-  // frame, to the element that had it before the dialog opened — the Confirm button, by then gone — and in a real
-  // browser that lands the focus on the page, after the effect below has run. So the focus is also claimed again
-  // one frame later, queued after the dialog's own, but only if it has fallen to the page (a person's own move in
-  // between is not overridden).
+  // ⚠️ THE DIALOG THAT WAS OPEN IS STILL THERE WHEN THIS RUNS. After «Today» / «Tomorrow» the new state is drawn
+  // while React Aria's modal is still mounted: the page behind it is inert, so a focus() on the heading does
+  // nothing, and when the modal finally goes it gives the focus back to the Confirm button — gone — so it falls to
+  // the page (seen in Chromium: the heading never received the focus at all). So the focus is claimed again and
+  // again, for up to a second, until it holds: while it is on the page or still inside a dialog it is taken; the
+  // moment a person has put it somewhere else on the page, it is left alone.
+  //
+  // ⚠️ THE GOAL IS LOOKED UP AT EVERY TRY, never kept from the first: the heading can be drawn anew in the meantime
+  // (seen in Chromium — the first node was gone by the second try, and the focus stayed on the page).
   useLayoutEffect(() => {
-    let target: HTMLElement | null = null;
-    if (wantFocus.current === 'recipe' && shown) target = headingRef.current;
-    else if (wantFocus.current === 'confirm' && !locked && hasDough) target = confirmRef.current;
+    let ref: { readonly current: HTMLElement | null };
+    if (wantFocus.current === 'recipe' && shown) ref = headingRef;
+    else if (wantFocus.current === 'confirm' && !locked && hasDough) ref = confirmRef;
     else return;
     wantFocus.current = null;
-    if (!target) return;
-    const goal = target;
-    goal.focus({ preventScroll: true });
-    requestAnimationFrame(() => {
+    let frames = 0;
+    // Once the focus has been on the goal, a move into a dialog is a person's own (Edit pressed at once).
+    let held = false;
+    const claim = () => {
+      const goal = ref.current;
+      if (!goal || !goal.isConnected) return;
       const now = document.activeElement;
-      if (goal.isConnected && (now === null || now === document.body)) goal.focus({ preventScroll: true });
-    });
+      if (now === goal) held = true;
+      const elsewhere = now !== null && now !== goal && now !== document.body
+        && (held || !now.closest('[role="dialog"], [role="alertdialog"]'));
+      if (elsewhere) return;
+      if (now !== goal) goal.focus({ preventScroll: true });
+      // Not cancelled by the next render (the store answering re-renders at once): only by leaving the screen.
+      // ⚠️ A TIMER, NOT requestAnimationFrame: a page that is not being drawn (a window behind another, a tablet
+      // dimming) runs no animation frames at all, and the claim would never happen there.
+      if (++frames < FOCUS_CLAIM_TRIES) claimTimer.current = setTimeout(claim, FOCUS_CLAIM_EVERY_MS);
+    };
+    clearTimeout(claimTimer.current);
+    claim();
   });
+  useEffect(() => () => clearTimeout(claimTimer.current), []);
 
   const set = (key: string, text: string) => { state.set(key, text, rid); };
   // A box left empty goes back to its default: kept, but the tab is not «used» by it.
