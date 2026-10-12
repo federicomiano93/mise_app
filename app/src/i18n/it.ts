@@ -520,6 +520,47 @@ export const it: Messages = {
   'calc.logHistoryFull': 'Il registro di {dough} è pieno: non si possono salvare altre modifiche.',
   'calc.logNotDeleted': 'Non è stato possibile eliminare {dough}. È di nuovo nello storico impasti.',
 
+  // The Dough history (step 3c-3). The current app's own keys with the current app's text (js/i18n.js) unless a
+  // comment says otherwise.
+  'day.today': 'Oggi',
+  'day.yesterday': 'Ieri',
+  'day.today.inSentence': 'oggi',
+  'day.yesterday.inSentence': 'ieri',
+  'day.tomorrow.inSentence': 'domani',
+  'day.inNDays': { one: 'Fra {n} giorno', other: 'Fra {n} giorni' },
+  'day.nDaysAgo': { one: '{n} giorno fa', other: '{n} giorni fa' },
+  'day.inNDays.inSentence': { one: 'fra {n} giorno', other: 'fra {n} giorni' },
+  'day.nDaysAgo.inSentence': { one: '{n} giorno fa', other: '{n} giorni fa' },
+  'day.madeFor': '{made} per {target}',
+  'ui.history': 'Storico',
+  'ui.restore': 'Ripristina',
+  'calc.noLogsToShow': 'Niente da mostrare nello storico impasti adesso — controlla le sue impostazioni (visibilità e durata).',
+  'calc.noLogsYetCalculate': 'Lo storico impasti è ancora vuoto. Calcola e conferma un impasto per salvarlo qui.',
+  // The current app writes «+ Aggiungi impasto»; the plus is an icon here.
+  'calc.addLog': 'Aggiungi impasto',
+  'calc.deleteLog': 'Elimina impasto',
+  'calc.deleteDoughConfirm': 'Vuoi eliminare l’impasto “{name}”? Non si può annullare.',
+  'calc.deleteThisDough': 'Vuoi eliminare questo impasto? Non si può annullare.',
+  'calc.empty': '(vuoto)',
+  'calc.noProductsEntered': 'Nessun prodotto inserito.',
+  'calc.clientFallback': 'Cliente',
+  'calc.byName': 'calcolato da {name}',
+  'calc.logNotFound': 'Impasto non trovato.',
+  'calc.logEditHistory': '{dough} — storico modifiche',
+  'calc.versionCreated': 'Creata',
+  'calc.versionEdited': 'Modificata',
+  'calc.restoredFromVersion': 'Ripristinata dalla v{v}',
+  'calc.restoreThisVersion': 'Ripristina questa versione',
+  'calc.restoreThisVersionIt': 'Vuoi ripristinare questa versione? Viene aggiunta sopra come nuova versione attuale — lo storico resta.',
+  'calc.traysOfWeight': { one: '{trays} teglia × {g} g', other: '{trays} teglie × {g} g' },
+  'calc.traysTypedPart': '+ {g} g scritti a mano',
+  // New in Mise 2: see the English file.
+  'calc.logVersionCount': 'v{n} · modificato',
+  'calc.versionCurrent': 'attuale',
+  'calc.occasionalLabel': '{name} · occasionale',
+  'calc.calculatedByName': 'Calcolato da {name}',
+  'calc.logPickPrompt': 'Tocca un impasto per vederlo',
+
   // The Calculator's Settings (step 3c-2). Every key below is the current app's own key with the current app's
   // own text (js/i18n.js), in both languages.
   'settings.saved': 'Salvato ✓',

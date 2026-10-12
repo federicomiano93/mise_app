@@ -588,6 +588,50 @@ export const en = {
   'calc.logHistoryFull': '{dough}’s log is full: no more changes can be saved to it.',
   'calc.logNotDeleted': '{dough} could not be deleted. It is back in the Dough history.',
 
+  // The Dough history (step 3c-3). The current app's own keys with the current app's text (js/i18n.js) unless a
+  // comment says otherwise.
+  'day.today': 'Today',
+  'day.yesterday': 'Yesterday',
+  'day.today.inSentence': 'today',
+  'day.yesterday.inSentence': 'yesterday',
+  'day.tomorrow.inSentence': 'tomorrow',
+  'day.inNDays': { one: 'In {n} day', other: 'In {n} days' },
+  'day.nDaysAgo': { one: '{n} day ago', other: '{n} days ago' },
+  'day.inNDays.inSentence': { one: 'in {n} day', other: 'in {n} days' },
+  'day.nDaysAgo.inSentence': { one: '{n} day ago', other: '{n} days ago' },
+  'day.madeFor': '{made} for {target}',
+  'ui.history': 'History',
+  'ui.restore': 'Restore',
+  'calc.noLogsToShow': 'Nothing to show in the dough history right now — check its settings (visibility and duration).',
+  'calc.noLogsYetCalculate': 'The dough history is empty. Calculate and confirm a dough to save it here.',
+  // The current app writes «+ Add dough»; the plus is an icon here.
+  'calc.addLog': 'Add dough',
+  'calc.deleteLog': 'Delete dough',
+  'calc.deleteDoughConfirm': 'Delete the dough “{name}”? This cannot be undone.',
+  'calc.deleteThisDough': 'Delete this dough? This cannot be undone.',
+  'calc.empty': '(empty)',
+  'calc.noProductsEntered': 'No products entered.',
+  'calc.clientFallback': 'Client',
+  'calc.byName': 'by {name}',
+  'calc.logNotFound': 'Dough not found.',
+  'calc.logEditHistory': '{dough} — edit history',
+  'calc.versionCreated': 'Created',
+  'calc.versionEdited': 'Edited',
+  'calc.restoredFromVersion': 'Restored from v{v}',
+  'calc.restoreThisVersion': 'Restore this version',
+  'calc.restoreThisVersionIt': 'Restore this version? It is added on top as the new current version — the history is kept.',
+  'calc.traysOfWeight': { one: '{trays} tray × {g} g', other: '{trays} trays × {g} g' },
+  'calc.traysTypedPart': '+ {g} g typed by hand',
+  // New in Mise 2: the current app builds these three by joining pieces («calc.edited» is « (edited)», «calc.current»
+  // is « · current», «calc.occasional» is «  ·  occasional», «calc.calculatedBy» is «Calculated by: »); a message
+  // with its placeholders is one sentence a translator can move around.
+  'calc.logVersionCount': 'v{n} · edited',
+  'calc.versionCurrent': 'current',
+  'calc.occasionalLabel': '{name} · occasional',
+  'calc.calculatedByName': 'Calculated by {name}',
+  // New in Mise 2: the right-hand side of the split with no log open.
+  'calc.logPickPrompt': 'Tap a log to see it',
+
   // The Calculator's Settings (step 3c-2). Every key below is the current app's own key with the current app's
   // own text (js/i18n.js), in both languages.
   'settings.saved': 'Saved ✓',

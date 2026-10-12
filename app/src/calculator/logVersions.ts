@@ -89,8 +89,10 @@ export interface ManualInputs {
   readonly nowMs: number;
 }
 
-// The first version of a hand-made log: the recipe's default leavening, no extra dough, the divisor's n at 0.
-export function buildManualVersion(input: ManualInputs): Omit<LogVersion, 'kind'> {
+// The first version of a hand-made log: the recipe's default leavening, no extra dough, the divisor's n at 0. It
+// carries no `kind` (the store decides create or edit). ⚠️ Typed `LogVersion`, not `Omit<LogVersion, 'kind'>`: Omit on
+// a type with an index signature loses every named field, and `sheet` becomes an empty object type.
+export function buildManualVersion(input: ManualInputs): LogVersion {
   const { config, recipeId, recipe, rows, totalInput, trays, words, nowMs } = input;
   const items = rows.map(savedLine);
   const divisor = { includedIds: getDivisorIncluded(config, recipeId), n: 0 };
@@ -179,7 +181,7 @@ export interface EditInputs {
 }
 
 // js/log-edit.js `doSave`, the part before the write: the version an edit appends.
-export function buildEditedVersion(input: EditInputs): Omit<LogVersion, 'kind'> {
+export function buildEditedVersion(input: EditInputs): LogVersion {
   const { config, working, previous, words, nowMs } = input;
   const items = working.rows.map(savedLine);
 
