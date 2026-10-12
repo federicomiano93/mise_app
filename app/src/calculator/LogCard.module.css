@@ -1,0 +1,98 @@
+/* One log on the list. The dough's name is a button stretched over the whole card, so a tap anywhere on it opens the
+   log; the rest of the card is plain text that button describes. */
+
+.card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  padding: var(--s3) var(--s4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface);
+}
+
+/* The log whose screen is open beside the list (the tablet's split). */
+.card[data-open="true"] {
+  border-color: var(--accent);
+  background: var(--accent-tint);
+}
+
+@media (hover: hover) {
+  .card[data-open="false"]:hover {
+    background: var(--sunken);
+  }
+}
+
+.top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s2) var(--s3);
+}
+
+.open {
+  min-width: 0;
+  min-height: var(--hit);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--fs-lg);
+  font-weight: 650;
+  text-align: left;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.open::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: var(--r-md);
+}
+
+/* The ring goes around the whole card the button covers. */
+.open:focus-visible {
+  outline: none;
+}
+
+.open:focus-visible::after {
+  outline: 3px solid var(--accent);
+  outline-offset: -3px;
+}
+
+.detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+}
+
+/* The calendar icon and the date sit on one flex row, centred on each other. */
+.stamp {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.stamp svg {
+  flex: none;
+  width: 16px;
+  height: 16px;
+}
+
+.by,
+.count {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
+.detail > div {
+  margin-top: var(--s2);
+}

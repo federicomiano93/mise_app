@@ -1,4 +1,4 @@
-/* The frame of the Calculator: the door to Settings, the tabs over the chosen recipe's panel, or, with no recipe to
+/* The frame of the Calculator: the doors to the Dough history and Settings, the tabs over the chosen recipe's panel, or, with no recipe to
    show, one quiet sentence in the dashed card the other sections use for an empty list. */
 
 .view {
@@ -7,10 +7,12 @@
   gap: var(--s4);
 }
 
-/* The door to Settings, at the end of the first line. */
+/* The doors to the Dough history and to Settings, at the end of the first line (they wrap on a narrow phone). */
 .top {
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-end;
+  gap: var(--s2) var(--s3);
 }
 
 .empty {

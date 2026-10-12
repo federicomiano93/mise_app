@@ -7,15 +7,25 @@
 // odd-inputs.spec.ts feeds both the same strange values. It is NOT paired in parity.spec.ts, because of what
 // is left out.
 //
-// PORTED (everything a Confirm needs): `FOR_DAYS`, `buildSheet`, `buildLogText`, `recipeSnapshot`,
-// `createLog`, `latestVersion`, `addVersion`, `setForDay`, `confirmTarget`, `DAY_START_HOUR`,
-// `workDayIndex` and `typedTotalOf` (an edit keeps the typed total of the dough that was made, so the
-// Calculator's re-calculation reads it; ported with its spec ahead of the rest of the edit half).
+// PORTED, the Confirm half: `FOR_DAYS`, `buildSheet`, `buildLogText`, `recipeSnapshot`, `createLog`,
+// `latestVersion`, `addVersion`, `setForDay`, `confirmTarget`, `DAY_START_HOUR`, `workDayIndex` and
+// `typedTotalOf`.
+// PORTED, the list and edit half (step 3c-3, the Dough history): `traysEditState`, `traysSheetRecipe`,
+// `editRows`, `restoreVersion`, `filterVisibleLogs`, `sortLogs`, and `dayLabelParts` (below).
 //
-// LEFT OUT, for step 3c-3 (the Dough history): the list and edit half — `traysEditState`, `traysSheetRecipe`,
-// `editRows`, `restoreVersion`, `migrateOldRecord` / `migrateOldLogs` (the legacy migration
-// stays in the current app), `filterVisibleLogs`, `dayLabel` (it looks words up in the interface dictionary,
-// `t()`) and `sortLogs`.
+// `dayLabel` CANNOT be ported as it is: it looks words up in the interface dictionary, `t()`. `dayLabelParts`
+// is its pure half: it returns the TONE (which decides the badge colour) and what the text is made of, and the
+// SCREEN writes the words, exactly as js `dayName`/`dayLabel` do:
+//   • { kind: 'stored', forDay } — no usable creation time or `nowMs`: the literal stored choice, `ui.today` /
+//     `ui.tomorrow`;
+//   • { kind: 'relative', made, target } — the work-day differences from today (0 today, 1 tomorrow, -1
+//     yesterday, beyond that «in N days» / «N days ago»). When made === target the text is `dayName(made)`;
+//     otherwise `t('day.madeFor', { made: dayName(made), target: dayName(target, true) })`, where the second
+//     word is the «inSentence» form (`day.today.inSentence`, `day.inNDays.inSentence`…). The «inSentence» form
+//     is never a lower-cased first form: whether a word loses its capital is the translator's business.
+//
+// LEFT OUT ON PURPOSE: `migrateOldRecord` / `migrateOldLogs` — the legacy migration (the old one-record-per-dough
+// model) stays in the current app; production is migrated (decision in docs/parity/calculator.md).
 //
 // `buildLogText` looks two words up with `t()` in the original. They come in as its fourth argument, read by
 // the caller when drawing; the defaults are the English words, which is what the original answers when the
@@ -307,6 +317,60 @@ export function recipeSnapshot(recipe: unknown): RecipeSnapshot | null {
   };
 }
 
+// A row's identity inside a log: the client it belongs to plus the product. The same product ordered by two
+// clients is two independent rows.
+const rowKey = (clientName: unknown, id: unknown): string => String(clientName || '') + '|' + String(id || '');
+
+// A row of the log-edit screen: a saved line (verbatim) or a product that exists today (at zero).
+export interface EditRow {
+  id?: unknown;
+  name?: unknown;
+  clientName?: unknown;
+  weightG?: unknown;
+  kind?: unknown;
+  crate?: unknown;
+  qty: number;
+  [extra: string]: unknown;
+}
+
+// The rows the log-edit screen must show: everything the log SAVED, verbatim (its own name, weight, kind, crate
+// and quantity), followed by the products that exist today and were not in it, at zero.
+//
+// Rebuilding the rows from today's config instead — which is what the screen used to do — silently dropped the
+// line of a deleted product, renamed the ones that had been renamed, and recomputed the dough with a changed
+// weight. A saved log must be able to gain a row, never to lose or rewrite one.
+export function editRows(savedItems: unknown, currentRows: unknown): EditRow[] {
+  const out: EditRow[] = [];
+  const seen = new Set<string>();
+
+  for (const it of (Array.isArray(savedItems) ? savedItems : []) as (LogLine | null | undefined)[]) {
+    if (!it) continue;
+    const key = rowKey(it.clientName, it.id);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({
+      id: it.id,
+      name: it.name,
+      clientName: it.clientName,
+      weightG: num(it.weightG),
+      kind: it.kind,
+      // Logs written before crate boxes existed carry no crate at all.
+      crate: (it.crate && typeof it.crate === 'object') ? it.crate : { show: false, perBox: 20 },
+      qty: num(it.qty),
+    });
+  }
+
+  for (const row of (Array.isArray(currentRows) ? currentRows : []) as (Record<string, unknown> | null | undefined)[]) {
+    if (!row) continue;
+    const key = rowKey(row.clientName, row.id);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ ...row, qty: 0 });
+  }
+
+  return out;
+}
+
 // ── Log lifecycle (append-only) ───────────────────────────────────────────────
 
 export interface NewLog {
@@ -331,6 +395,27 @@ export function createLog({ id, dough, recipeId, forDay, version, createdAtMs, o
     createdAtMs: num(createdAtMs),
     versions: [clone(version)],
   };
+}
+
+// What the edit screen starts from for a trays dough: the trays and the weight of a tray the log was MADE with
+// (the sheet's, falling back to the frozen recipe's), and for «trays + total» the grams typed on top. The
+// recipe's CURRENT tray weight never enters: re-weighing a tray later must not rewrite an old log.
+export function traysEditState(
+  sheet: unknown, recipe: unknown,
+): { trays: number; trayWeight: number; typedTotal: number } {
+  const s = (sheet || {}) as { trayWeight_g?: unknown; trays?: unknown; total_g?: unknown };
+  const r = recipe as { trayWeight?: unknown; logic?: unknown } | null | undefined;
+  const trayWeight = normalizeTrayWeight(s.trayWeight_g || (r && r.trayWeight));
+  const trays = normalizeTrays(s.trays);
+  const typedTotal = r && r.logic === 'traysTotal' ? Math.max(0, num(s.total_g) - trays * trayWeight) : 0;
+  return { trays, trayWeight, typedTotal };
+}
+
+// The recipe to rebuild an edited sheet with: a trays recipe carries the tray weight the log was made with; any
+// other recipe is passed through as it is.
+export function traysSheetRecipe(recipe: unknown, trayWeight: unknown): unknown {
+  const r = recipe as { logic?: unknown } | null | undefined;
+  return r && usesTrays(r.logic) ? { ...r, trayWeight } : recipe;
 }
 
 // The typed total a saved version was made with, for a re-calculation (an edit changes quantities only and must
@@ -396,4 +481,100 @@ export function workDayIndex(ms: unknown): number {
   const d = new Date(num(ms));
   d.setHours(d.getHours() - DAY_START_HOUR);
   return Math.floor(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 86400000);
+}
+
+// Restore a past version: append a COPY of versions[index] on top as a new entry, tagged kind:'restore'.
+// History is never truncated — the restored content simply becomes the new latest version, with fresh
+// authorship/timestamp.
+export function restoreVersion(log: Log, index: number, { calculatedBy, at }: { calculatedBy?: unknown; at?: { date: string; time: string } }): Log {
+  const vs = log && Array.isArray(log.versions) ? log.versions : [];
+  if (index < 0 || index >= vs.length) return clone(log);
+  const src = clone(vs[index] as LogVersion);
+  src.kind = 'restore';
+  src.restoredFrom = index;
+  src.calculatedBy = calculatedBy != null ? String(calculatedBy) : (src.calculatedBy || '');
+  src.at = at || src.at;
+  return addVersion(log, src);
+}
+
+// The moment a work day ends: 4am on the morning after it. Built with the LOCAL Date constructor, so it lands on
+// the real local 4am even across a clock change.
+function workDayEndMs(index: number): number {
+  const utc = new Date((index + 1) * 86400000);
+  return new Date(utc.getUTCFullYear(), utc.getUTCMonth(), utc.getUTCDate(), DAY_START_HOUR, 0, 0, 0).getTime();
+}
+
+// Filter logs for the app's Log LIST only: keep a log when its dough type is visible AND it is still within the
+// retention window. DISPLAY-only — the database keeps every log; this never deletes anything. Pure (nowMs is
+// passed in) so it can be unit-tested. `visibility` is keyed by the lowercase recipe id / dough name; a missing
+// key counts as visible.
+//
+// ⚠️ The window is counted from the END OF THE WORK DAY THE DOUGH IS FOR, not from when the log was written. A
+// dough is often made for the NEXT day, and counting from writing made it vanish on the morning of the very day
+// it was needed: made at 09:00 for tomorrow, gone at 09:00 tomorrow, so whoever came in at 10 could not find it.
+// Counting from the target day can only ever make a log live LONGER than before.
+export function filterVisibleLogs(
+  logs: unknown,
+  { visibility = {}, retentionHours = 24, nowMs = 0 }: { visibility?: Record<string, unknown>; retentionHours?: unknown; nowMs?: unknown } = {},
+): Log[] {
+  const list = (Array.isArray(logs) ? logs : []) as Log[];
+  // retentionHours may be a single number (applies to every dough) OR a per-dough map keyed by lowercase dough
+  // name (focaccia/brioche/sourdough).
+  const hoursFor = (key: string): number => num(
+    retentionHours && typeof retentionHours === 'object' ? (retentionHours as Record<string, unknown>)[key] : retentionHours,
+  );
+  return list.filter((log) => {
+    // Key by recipe id (new logs) falling back to the dough name (migrated logs).
+    const key = String((log && (log.recipeId || log.dough)) || '').toLowerCase();
+    if (visibility[key] === false) return false;
+    const windowMs = Math.max(0, hoursFor(key)) * 3600 * 1000;
+    if (windowMs <= 0) return true;
+    const madeOn = workDayIndex(num(log && log.createdAtMs));
+    const forDay = safeForDay(log && log.forDay) === 'tomorrow' ? 1 : 0;
+    return num(nowMs) <= workDayEndMs(madeOn + forDay) + windowMs;
+  });
+}
+
+// ── Day label (relative to the day it is READ, not the day it was made) ───────
+// `forDay` records the day the dough was FOR, chosen at creation — so it is only meaningful together with the
+// day the log was created. Resolve the log's TARGET DATE (creation day, +1 when forDay is 'tomorrow') and name
+// it relative to the current day. Days are WORK days (workDayIndex), so a dough made at 23:30 and read at 00:30
+// is still «Today». The words are the screen's (see the header); the colour follows the day the dough is FOR.
+export interface DayLabelParts {
+  tone: 'today' | 'tomorrow' | 'past';
+  text:
+    | { kind: 'stored'; forDay: ForDay }
+    | { kind: 'relative'; made: number; target: number };
+}
+
+function toneFor(diff: number): 'today' | 'tomorrow' | 'past' {
+  if (diff === 0) return 'today';
+  return diff > 0 ? 'tomorrow' : 'past';
+}
+
+export function dayLabelParts(log: unknown, nowMs: unknown): DayLabelParts {
+  const l = log as { forDay?: unknown; createdAtMs?: unknown } | null | undefined;
+  const forDay = safeForDay(l && l.forDay);
+  const createdAtMs = num(l && l.createdAtMs);
+
+  // A log with no usable creation time (corrupt data) has no anchor to count from; fall back to the literal
+  // stored choice rather than inventing a wrong date.
+  if (createdAtMs <= 0 || !Number.isFinite(Number(nowMs))) {
+    return { tone: forDay === 'tomorrow' ? 'tomorrow' : 'today', text: { kind: 'stored', forDay } };
+  }
+
+  const today = workDayIndex(nowMs);
+  const made = workDayIndex(createdAtMs) - today;
+  const target = made + (forDay === 'tomorrow' ? 1 : 0);
+
+  // The colour follows the day the dough is FOR: it answers «do I need this now?», while the words tell the story.
+  return { tone: toneFor(target), text: { kind: 'relative', made, target } };
+}
+
+// Sort logs for display: newest first by creation time, with a stable id tiebreak.
+export function sortLogs(logs: unknown): Log[] {
+  return ((Array.isArray(logs) ? logs.slice() : []) as Log[]).sort((a, b) => {
+    const d = num(b.createdAtMs) - num(a.createdAtMs);
+    return d !== 0 ? d : String(b.id).localeCompare(String(a.id));
+  });
 }
