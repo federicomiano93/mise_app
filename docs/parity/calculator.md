@@ -793,6 +793,7 @@ on purpose: the legacy log migration (stays in the current app), the empty state
 - **Not done on purpose:** the usage record names no dialog (the dialogs of Mise 2 report no screen name); the WhatsApp lists
   editor and the Client ordering rows of the hub are slice C / 3c-4b.
 
+- **On a phone the three doors share one row** (Dough history, Settings, Send order), each an equal column with its icon above the word; under 340px two columns, the third door on a second row. With three doors the wrapped buttons had stacked into three rows above the tabs.
 ## Step 3c-4a as built, slice C (12 Oct 2026) — differences from the current app, on purpose
 
 - **Every screen has an address**, under `/calculator/settings/whatsapp`: the top; `list/<id>` (Level 1); `list/<id>/add` (the
