@@ -707,3 +707,28 @@ on purpose: the legacy log migration (stays in the current app), the empty state
 - **Dough history settings** name a product ordered by two clients once.
 - **Not built yet, needed before the switch:** the ordering link on a client (75) and republishing the clients'
   ordering menus on save (69) — both with 3c-4b; the WhatsApp and Client ordering rows of the hub (3c-4).
+
+## Step 3c-3 as built, slice C1 (12 Oct 2026) — differences from the current app, on purpose
+
+- **The list card has no action buttons.** History, Edit (manual logs only) and Delete live on the log's own screen, one
+  level down; the whole card is the one button that opens it (the current app's card carries three small buttons under
+  its body). Items 100 and 105 and 106 still hold, one tap further.
+- **The Dough history is a place of its own** with a button beside Settings at the top of the work view (the current app
+  reached it from the footer «Log»), and each screen has an address: `/calculator/log`, `/log/<id>`,
+  `/log/<id>/history[/<n>]`, `/log/new`, `/log/<id>/edit`. Back and a link sent to a colleague land on the same screen.
+- **On a tablet (≥1000px) the list stays on the left** and the log, its history or a version opens on the right; with
+  nothing open the right side says «Tap a log to see it». The current app opened full-screen overlays.
+- **«Add dough» sits at the top of the list** (the current app's «+ Add dough» was below it): a new item starts at the top
+  (P20). The plus is an icon.
+- **Joined strings are single messages:** «v2 · edited», «Calculated by <name>», «<name> · occasional», «current» — the current
+  app builds them from pieces (` (edited)`, `Calculated by: `, `  ·  occasional`, ` · current`).
+- **Delete (item 106) and Restore (item 105) return to the screen above by stepping back** (or by replacing the entry when
+  the screen was opened by its address), the title of the list or of the history taking the focus; they never pile a
+  duplicate entry on the history.
+- **A log that is being deleted stays on screen until the screen is left**, so «Dough not found.» never flashes over it.
+- **The sheet is drawn with the interface language's number format** (`1,200 g`, `1.200 g` in Italian), where the current
+  app wrote the raw number.
+- **The day badge's colours come from the Mise 2 tokens** (green today, amber tomorrow, muted once passed), each tint with
+  its own ink at 4.5:1 or better.
+- **Add log and Edit log are slice C2:** their addresses exist and the Edit button shows for a manual log, but the screens
+  are a placeholder. The pre-question «Edit this dough?» (current app, before the editor opens) is C2's decision.

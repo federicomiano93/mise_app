@@ -1,0 +1,35 @@
+/* The actions under a log: History (and Edit, for a log made by hand) on the left, Delete a small quiet icon at the
+   far end (P20). The delete button is a full 48px target, drawn small. */
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s3);
+}
+
+.delete {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--hit);
+  height: var(--hit);
+  margin-left: auto;
+  border: 0;
+  border-radius: var(--r-md);
+  background: none;
+  color: var(--ink-3);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.delete svg {
+  width: 20px;
+  height: 20px;
+}
+
+.delete[data-hovered],
+.delete[data-pressed] {
+  background: var(--danger-tint);
+  color: var(--danger-ink);
+}
