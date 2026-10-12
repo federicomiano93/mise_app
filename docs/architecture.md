@@ -133,6 +133,27 @@ Aria does not support Preact. The numbers are below.
   Stocktake's (a feature never imports from another feature's folder). The money comes from the
   venue's country (`session/useMoney.ts`), the percentages and dates from the interface language.
   Its parity list is `docs/parity/foodcost.md`.
+- `calculator/` — the Calculator, the fourth section, built the same way. Step 3c-1 is in slices; after
+  slice A it holds the data layer (`calculatorSource.ts`, a port of the Calculator's half of
+  `js/firebase.js`; `calculatorStore.ts`: the configuration, the linked catalogue recipes watched one by
+  one and the 30 days of logs, local-first, with the current app's `calculator-config` and `logs-cache`
+  copies; `CalculatorContext.tsx`) and the work view: `CalculatorSection` (the frame and the address),
+  `RecipeTabs` (a tab list for two to four recipes, a plain h2 for one), `RecipePanel` (a recipe's entries
+  by its logic — the leavening knob, trays, total, orders, extra dough — and its scaled recipe),
+  `OrderCards`, `NumberField` (the current app's number-box behaviour: a 0 empties on tap, an empty box
+  comes back as 0), `ResultCard` (rows, total, divisor, crates, and the sentence of a recipe that cannot
+  be calculated). Addresses, in `calculatorPath.ts` (ids split before they are decoded): `/calculator` and
+  `/calculator/<recipeId>`; an unknown or hidden recipe goes to the first visible one by replacing the
+  address, and picking a tab REPLACES the entry too. The usage record names one screen, `calculator`. From
+  1000px the entries are on the left and the recipe on the right, sticking to the top (`RecipePanel.module.css`).
+  What each tab remembers lives in the current app's own `localStorage` keys (`calculatorTabState.ts`,
+  spelled by `shared/src/calculator-tab-keys.ts`): both apps read each other's numbers, `touched-<rid>` is
+  written only where a number is typed or an option picked, and the new-work-day sweep (4 am) clears a stale
+  tab before it is first drawn and when the app comes back to the foreground — never while it is on screen
+  (`TabStateContext.tsx`). The maths is the shared ports (`calculateTab` in `calculatorResult.ts` only wires
+  them). Not yet: Confirm and Edit, Reset, the full-screen view, Copy and Send (slice B), the doors to
+  Settings and the empty states' buttons (3c-2), the Log (3c-3), orders (3c-4). Its parity list is
+  `docs/parity/calculator.md`.
 - `ui/` — the shared controls: `Button`, `Dialog` and `useConfirm` (a question that waits for an
   answer; never the browser's `confirm()`), `StatusMessage` (one short message at a time, in a
   live region that exists before it speaks), `FormBar` (Back, title, the one primary action: the

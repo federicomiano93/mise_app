@@ -576,6 +576,10 @@ argument, as the Food cost ports did.
 
 ### 3c-1 — The calculator itself (the work view)
 
+**Slice A (done):** items 35–45, 46–53 and 55 (not-confirmed placement), 57 and 58 — the tabs, the empty
+states, the entries by logic, the scaled recipe, divisor and crates, the new-work-day sweep. Slice B:
+54, 56, 59–65, 82–85 (Confirm, Edit, Reset, Copy, Send, full screen).
+
 - **Works alone**: open the Calculator, see the tabs from the existing config, type quantities / a total /
   trays, see the scaled result, divisor and crates, Confirm (day picker or straight), lock/Edit, Reset, the
   new-work-day sweep, full screen with text size, Copy and Send the recipe. Settings are read-only here
