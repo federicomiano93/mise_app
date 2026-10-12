@@ -116,9 +116,6 @@ describe('the empty states', () => {
 
 describe('the addresses under Settings', () => {
   it.each([
-    '/calculator/settings/clients',
-    '/calculator/settings/clients/new',
-    '/calculator/settings/clients/some-client',
     '/calculator/settings/recipes',
     '/calculator/settings/recipes/new',
     '/calculator/settings/recipes/some-recipe',

@@ -11,6 +11,10 @@ type Props = {
   title: string;
   // Where Back goes when nothing is behind this screen (it was opened by its address).
   fallback: string;
+  // What Back does when it is not simply a step up (the Clients editor asks about unsaved edits first).
+  onBack?: () => void;
+  // The one primary action of the bar, when the screen is a form.
+  action?: ReactNode;
   children: ReactNode;
 };
 
@@ -19,7 +23,7 @@ type Props = {
 //
 // When it appears it takes the focus onto its title if it was opened from the level above, and hands the focus
 // to the button that opened the screen the person has just come back from (handBack.ts).
-export function SettingsPage({ title, fallback, children }: Props) {
+export function SettingsPage({ title, fallback, onBack, action, children }: Props) {
   const { t } = useT();
   const { state } = useLocation();
   const navigationType = useNavigationType();
@@ -38,7 +42,16 @@ export function SettingsPage({ title, fallback, children }: Props) {
   return (
     <SettingsScreen
       labelledBy={titleId}
-      bar={<FormBar backLabel={t('ui.back')} onBack={leave} title={title} titleId={titleId} titleRef={heading} />}
+      bar={(
+        <FormBar
+          backLabel={t('ui.back')}
+          onBack={onBack ?? leave}
+          title={title}
+          titleId={titleId}
+          titleRef={heading}
+          action={action}
+        />
+      )}
     >
       {children}
     </SettingsScreen>

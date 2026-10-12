@@ -132,9 +132,12 @@ describe('resolveCalculatorPath for Settings', () => {
     expect(resolveCalculatorPath(rest, [])).toEqual({ settings });
   });
 
-  it.each(['/settings/clients', '/settings/clients/new', '/settings/clients/c-1', '/settings/recipes',
-    '/settings/recipes/new', '/settings/recipes/r-1'])('%s is reserved: it goes to the hub until it is drawn', rest => {
+  it.each(['/settings/recipes', '/settings/recipes/new', '/settings/recipes/r-1'])('%s is reserved: it goes to the hub until it is drawn', rest => {
     expect(resolveCalculatorPath(rest, visible)).toEqual({ redirect: '/calculator/settings' });
+  });
+
+  it('sends the bare word «new» under Clients to the list: a client is made by Add client', () => {
+    expect(resolveCalculatorPath('/settings/clients/new', visible)).toEqual({ redirect: '/calculator/settings/clients' });
   });
 
   it('sends any other address under Settings to the hub', () => {

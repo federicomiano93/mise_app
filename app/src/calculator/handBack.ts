@@ -20,6 +20,8 @@ export const RECIPES_OPENER = 'recipes';
 export const EXTRA_OPENER = 'extra';
 export const DIVISOR_OPENER = 'divisor';
 export const LOG_OPENER = 'log';
+export const ADD_CLIENT_OPENER = 'add-client';
+export const clientOpener = (id: string): string => `client:${id}`;
 export const divisorRecipeOpener = (id: string): string => `divisor:${id}`;
 
 export interface HandBack {

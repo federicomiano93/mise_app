@@ -1,0 +1,121 @@
+/* A product card: rows of a label and a field, a switch row or two, and the small delete icon alone at the bottom
+   right. The fields are 48px tall and 18px type (a field under 16px makes iOS zoom the page in when it is focused). */
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  padding: var(--s3) var(--s4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface);
+}
+
+/* Switched off: still there, but quieter than the products that count. */
+.paused {
+  background: var(--sunken);
+}
+
+.row {
+  display: grid;
+  grid-template-columns: minmax(80px, 30%) minmax(0, 1fr);
+  align-items: center;
+  gap: var(--s3);
+}
+
+.label {
+  font-weight: 600;
+  overflow-wrap: break-word;
+}
+
+.input {
+  width: 100%;
+  min-width: 0;
+  min-height: var(--hit);
+  padding: 0 var(--s3);
+  border: 1.5px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink);
+  font: 450 var(--fs-lg) var(--font);
+}
+
+.input::placeholder {
+  color: var(--ink-3);
+}
+
+.input:focus {
+  border-color: var(--accent);
+}
+
+.invalid,
+.invalid:focus {
+  border-color: var(--danger);
+  background: var(--danger-tint);
+}
+
+.withUnit {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+}
+
+.unit {
+  flex: none;
+  color: var(--ink-2);
+}
+
+.kg {
+  color: var(--ink-2);
+  font-weight: 600;
+}
+
+.switchRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+  min-height: var(--hit);
+}
+
+.switchName {
+  min-width: 0;
+  font-weight: 600;
+  overflow-wrap: break-word;
+}
+
+.foot {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--s3);
+}
+
+.tag {
+  padding: var(--s1) var(--s3);
+  border-radius: var(--r-pill);
+  background: var(--warn-tint);
+  color: var(--warn-ink);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+
+/* Low-key: no frame, the muted colour; the target is still a thumb's. */
+.del {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--hit);
+  min-height: var(--hit);
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-md);
+  background: none;
+  color: var(--ink-3);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.del[data-hovered] {
+  color: var(--danger-ink);
+}

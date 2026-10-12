@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { useT } from '../i18n/useT';
 import { useCalculator } from './CalculatorContext';
 import { CalculatorSettings } from './CalculatorSettings';
+import { ClientsEditor } from './ClientsEditor';
 import { SETTINGS_PATH } from './calculatorPath';
 import type { DrawnSettingsView } from './calculatorPath';
 import { DivisorChooser, DivisorProducts } from './DivisorSettings';
@@ -10,11 +11,13 @@ import { LogSettings } from './LogSettings';
 import { SettingsPage } from './SettingsPage';
 import { Empty } from './SettingsParts';
 
-// The screen of Settings an address names (calculatorPath.ts; the Clients and Recipes screens are not drawn yet).
+// The screen of Settings an address names (calculatorPath.ts; the Recipes screens are not drawn yet).
 export function SettingsScreens({ view }: { view: DrawnSettingsView }) {
   switch (view.kind) {
     case 'hub':
       return <CalculatorSettings />;
+    case 'clients':
+      return <SettingsGate><ClientsEditor target={view.target} /></SettingsGate>;
     case 'extra':
       return <SettingsGate><ExtraSettings /></SettingsGate>;
     case 'log':
