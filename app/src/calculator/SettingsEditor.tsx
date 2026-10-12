@@ -54,6 +54,8 @@ export function SettingsEditor({ title, fallback, dirty, build, saveQuestion, sh
   useLayoutEffect(() => { dirtyRef.current = dirty; }, [dirty]);
   // Set once the edits are saved or thrown away on purpose: leaving then asks nothing.
   const leavingClean = useRef(false);
+  // True only while the configuration is travelling to the server (see shouldBlock).
+  const sending = useRef(false);
 
   const [saving, setSaving] = useState(false);
   const busy = useRef(false);
@@ -86,16 +88,31 @@ export function SettingsEditor({ title, fallback, dirty, build, saveQuestion, sh
   //
   // ⚠️ EVERY WAY OUT GOES THROUGH THE ROUTER'S BLOCKER, not through the Back button: the browser's Back, the rail
   // and the tab bar all navigate. Staying on the same address is never blocked.
+  //
+  // ⚠️ WHILE THE SAVE IS IN THE AIR A WAY OUT IS REFUSED WITHOUT A QUESTION: the edits are not being lost (they are
+  // on their way), so «unsaved changes will be lost?» would be a false alarm; and leaving now would hide the
+  // outcome (a refusal is said on THIS screen). The person stays; the save settles; they leave again if they still want.
   const shouldBlock = useCallback<BlockerFunction>(
     ({ currentLocation, nextLocation }) =>
-      !leavingClean.current && dirtyRef.current && currentLocation.pathname !== nextLocation.pathname,
+      !leavingClean.current && (dirtyRef.current || sending.current) && currentLocation.pathname !== nextLocation.pathname,
     [],
   );
   const blocker = useBlocker(shouldBlock);
   const latestBlocker = useRef(blocker);
   useEffect(() => {
     latestBlocker.current = blocker;
-    if (blocker.state !== 'blocked' || askingLeave.current) return;
+    // ⚠️ THE QUESTION STAYS «BEING ASKED» UNTIL THE ROUTER HAS LEFT ITS 'blocked' STATE, not until the answer (see the
+    // Clients editor): the router publishes its state at a lower priority, so a render in between would still see the
+    // old block and ask the same question again.
+    if (blocker.state !== 'blocked') {
+      askingLeave.current = false;
+      return;
+    }
+    if (askingLeave.current) return;
+    if (sending.current) {
+      blocker.reset();
+      return;
+    }
     askingLeave.current = true;
     void (async () => {
       try {
@@ -106,8 +123,9 @@ export function SettingsEditor({ title, fallback, dirty, build, saveQuestion, sh
         if (current.state !== 'blocked') return;
         if (discard) current.proceed();
         else current.reset();
-      } finally {
+      } catch (error) {
         askingLeave.current = false;
+        throw error;
       }
     })();
   });
@@ -141,8 +159,14 @@ export function SettingsEditor({ title, fallback, dirty, build, saveQuestion, sh
       });
       if (!ok || !mounted.current) return;
       const latest = cloneConfig(store.getSnapshot().config);
-      if (!(await saveConfig(build(latest)))) return;
-      if (!mounted.current) return;
+      sending.current = true;
+      let stored: boolean;
+      try {
+        stored = await saveConfig(build(latest));
+      } finally {
+        sending.current = false;
+      }
+      if (!stored || !mounted.current) return;
       // Saved (or kept on this phone, and said so): nothing is unsaved any more, so leaving asks nothing.
       leavingClean.current = true;
       leave();

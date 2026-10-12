@@ -613,7 +613,6 @@ export const en = {
   'calc.noProducts': 'No products',
   'calc.keepLogsVisible': 'Show in the dough history',
   'calc.keepVisibleFor': 'Keep visible for',
-  'calc.logDurationForRecipe': 'Dough history duration for {name}',
   'calc.logKeepHours': { one: '{n} hour', other: '{n} hours' },
   'calc.saveTheseChanges': 'Save these changes?',
   'calc.saveTheseLogSettings': 'Save these dough history settings?',

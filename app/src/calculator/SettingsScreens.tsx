@@ -32,13 +32,14 @@ export function SettingsScreens({ view }: { view: DrawnSettingsView }) {
   }
 }
 
-// ⚠️ AN EDITOR THAT COPIES THE CONFIGURATION WHEN IT OPENS WAITS FOR THE CONFIGURATION. Opened by its address, the
-// store may still hold only the empty default (or a copy from this phone); a screen opened now would work on that,
-// and a Save after the venue's real data arrived would write the old copy's parts over it.
+// ⚠️ AN EDITOR THAT COPIES THE CONFIGURATION WHEN IT OPENS WAITS FOR THE SERVER'S ANSWER. Opened by its address, the
+// store may still hold only the empty default, or the copy this phone's own database answered in milliseconds
+// (yesterday's clients): a screen opened now would work on that, and a Save would write it over what other phones
+// added since. The store sends nothing before the server has answered either (`configFromServer`).
 function SettingsGate({ children }: { children: ReactNode }) {
   const { t } = useT();
-  const { configAnswered, configFailed } = useCalculator();
-  if (configAnswered) return children;
+  const { configFromServer, configFailed } = useCalculator();
+  if (configFromServer) return children;
   return (
     <SettingsPage title={t('ui.settings')} fallback={SETTINGS_PATH}>
       <Empty>{configFailed ? t('calc.couldNotLoad') : t('calc.loading')}</Empty>

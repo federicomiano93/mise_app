@@ -5,7 +5,6 @@ import { MAX_VISIBLE_RECIPES, cloneConfig, getIngredients, getProducts, getRecip
 import type { RecipeIngredient } from '@mise/shared/calculator-config';
 import { isLinked, resolveRecipe } from '@mise/shared/calculator-recipe-source';
 import type { ResolvedRecipe } from '@mise/shared/calculator-recipe-source';
-import { withRowIds } from '@mise/shared/guided-model';
 import { useT } from '../i18n/useT';
 import { markBusy } from '../session/busy';
 import { useAlert } from '../ui/useAlert';
@@ -104,6 +103,8 @@ export function RecipesEditor({ target }: { target: SettingsTarget }) {
   const listSeen = useRef(false);
   if (target.kind === 'list') listSeen.current = true;
   const leavingClean = useRef(false);
+  // True only while the configuration is travelling to the server (see shouldBlock).
+  const sending = useRef(false);
   const busy = useRef(false);
   const askingLeave = useRef(false);
   const mounted = useRef(true);
@@ -153,9 +154,13 @@ export function RecipesEditor({ target }: { target: SettingsTarget }) {
   // ⚠️ A ROUTER SUPPORTS ONE BLOCKER, so this one asks both questions. Out of the editor altogether with unsaved
   // changes: «leave without saving?». Between its own addresses (the browser's Back from a new, empty recipe):
   // «discard this new recipe?». A move to the editor's own other screen with anything else asks nothing.
+  //
+  // ⚠️ WHILE THE SAVE IS IN THE AIR A WAY OUT IS REFUSED WITHOUT A QUESTION: the edits are not being lost (they are
+  // on their way), so «unsaved changes will be lost?» would be a false alarm; and leaving now would hide the
+  // outcome (a refusal is said on THIS screen). The person stays; the save settles; they leave again if they still want.
   const shouldBlock = useCallback<BlockerFunction>(({ currentLocation, nextLocation }) => {
     if (leavingClean.current) return false;
-    if (!inRecipesEditor(nextLocation.pathname)) return dirtyRef.current;
+    if (!inRecipesEditor(nextLocation.pathname)) return dirtyRef.current || sending.current;
     return !quiet.current && freshEmptyRef.current && nextLocation.pathname !== currentLocation.pathname;
   }, []);
   const blocker = useBlocker(shouldBlock);
@@ -169,6 +174,10 @@ export function RecipesEditor({ target }: { target: SettingsTarget }) {
       return;
     }
     if (askingLeave.current) return;
+    if (sending.current) {
+      blocker.reset();
+      return;
+    }
     askingLeave.current = true;
     const leavingEditor = !inRecipesEditor(blocker.location.pathname);
     void (async () => {
@@ -264,8 +273,14 @@ export function RecipesEditor({ target }: { target: SettingsTarget }) {
       // The latest configuration, with only the recipes written over it: another phone's change to any other part
       // must not be undone by this save.
       const latest = cloneConfig(store.getSnapshot().config);
-      if (!(await saveConfig({ ...latest, recipes: settled }))) return;
-      if (!mounted.current) return;
+      sending.current = true;
+      let stored: boolean;
+      try {
+        stored = await saveConfig({ ...latest, recipes: settled });
+      } finally {
+        sending.current = false;
+      }
+      if (!stored || !mounted.current) return;
       // Saved (or kept on this phone, and said so). The copy is re-synced from the normalised configuration the
       // store now holds (keys made unique, numbers tidied).
       const saved = toEditable(cloneConfig(getRecipes(store.getSnapshot().config)));
@@ -304,12 +319,12 @@ export function RecipesEditor({ target }: { target: SettingsTarget }) {
   // ⚠️ LINKING STAMPS A STABLE id ON EVERY CATALOGUE ROW FIRST, and that order is the whole reason this is not a
   // one-line assignment. The recipes in the Catalogue may carry no row ids (they predate the guided-mixing work that
   // mints them on save), and the Calculator finds the leavening BY that id: without this step it would fall back to
-  // matching by NAME, which is the defect being designed out. withRowIds is idempotent, so a recipe already carrying
-  // ids is written back as it was.
+  // matching by NAME, which is the defect being designed out.
+  // ⚠️ THE ROWS USED AFTER THE LINK ARE THE ONES THE STORE HANDS BACK, not the picker's copy: the stamp reads the
+  // recipe as the server holds it now, and the picker's list may be older (the Catalogue was edited meanwhile).
   const link = useCallback(async (recipeId: string, source: StoredDoc): Promise<boolean> => {
     try {
-      const stamped = withRowIds(Array.isArray(source.ingredients) ? source.ingredients : []);
-      await store.stampRowIds(source.id, stamped);
+      const stamped = await store.stampRowIds(source.id);
       if (!mounted.current) return false;
       setChosen(known => ({ ...known, [source.id]: { ...source, ingredients: stamped } }));
       edit(known => known.map(recipe => (recipe.id === recipeId ? linkTo(recipe, source.id) : recipe)));

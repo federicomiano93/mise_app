@@ -545,7 +545,6 @@ export const it: Messages = {
   'calc.noProducts': 'Nessun prodotto',
   'calc.keepLogsVisible': 'Mostra nello storico impasti',
   'calc.keepVisibleFor': 'Tieni visibile per',
-  'calc.logDurationForRecipe': 'Durata nello storico impasti per {name}',
   'calc.logKeepHours': { one: '{n} ora', other: '{n} ore' },
   'calc.saveTheseChanges': 'Vuoi salvare queste modifiche?',
   'calc.saveTheseLogSettings': 'Vuoi salvare queste impostazioni dello storico impasti?',

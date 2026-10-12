@@ -131,9 +131,9 @@ describe('choosing a Catalogue recipe', () => {
     // At the moment of the stamp nothing is linked yet.
     const seen: boolean[] = [];
     const stamp = source.stampRowIds.bind(source);
-    source.stampRowIds = (id, ingredients) => {
+    source.stampRowIds = id => {
       seen.push(screen.queryByText(/^Linked to /) !== null);
-      return stamp(id, ingredients);
+      return stamp(id);
     };
     await link(user, 'Catalogue focaccia');
 
@@ -155,10 +155,37 @@ describe('choosing a Catalogue recipe', () => {
     expect(saveButton()).toBeEnabled();
   });
 
-  it('a recipe that already has row ids is stamped with the same ids (idempotent)', async () => {
+  it('a recipe that already has row ids is linked without a write (idempotent)', async () => {
     const { user, source } = await open(`${LIST}/focaccia`, { recipes: [STAMPED] });
     await link(user, 'Catalogue focaccia');
-    expect(source.stamps[0]?.ingredients).toEqual(STAMPED.ingredients);
+    expect(source.stamps).toEqual([]);
+    expect(main().getAllByRole('listitem').map(row => row.textContent)).toEqual(['Flour1000 g', 'Starter100 g']);
+  });
+
+  it('links the rows the Catalogue holds NOW, not the older list the picker showed', async () => {
+    const { user, source } = await open(`${LIST}/focaccia`);
+    const dialog = await openPicker(user);
+    const row = await dialog.findByRole('button', { name: 'Catalogue focaccia' }, LOAD);
+    // Somebody edits the recipe in the Catalogue after the picker listed it.
+    source.recipes.set('cat-1', { ...CAT_1, ingredients: [...CAT_1.ingredients, { label: 'Salt', grams: 20, unit: 'g' }] });
+    await user.click(row);
+    await main().findByText(/^Linked to /, undefined, LOAD);
+    expect(main().getAllByRole('listitem').map(item => item.textContent)).toEqual(['Flour1000 g', 'Starter100 g', 'Salt20 g']);
+    expect((source.stamps[0]?.ingredients as { label: string }[]).map(item => item.label)).toEqual(['Flour', 'Starter', 'Salt']);
+  });
+
+  it('shows it is working while the stamp is in the air, and a rejection ends it', async () => {
+    const { user, source } = await open(`${LIST}/focaccia`);
+    let fail: (error: Error) => void = () => undefined;
+    source.stampRowIds = () => new Promise<unknown[]>((_resolve, reject) => { fail = reject; });
+    const dialog = await openPicker(user);
+    await user.click(await dialog.findByRole('button', { name: 'Catalogue focaccia' }, LOAD));
+    expect(await dialog.findByText('Loading…', undefined, LOAD)).toBeInTheDocument();
+    expect(dialog.getByRole('button', { name: 'Another loaf' })).toBeDisabled();
+    act(() => { fail(new Error('offline')); });
+    await user.click(within(await question('Could not link that recipe — check the connection and try again.')).getByRole('button', { name: 'OK' }));
+    await waitFor(() => { expect(screen.queryByRole('dialog')).not.toBeInTheDocument(); });
+    expect(main().queryByText(/^Linked to /)).not.toBeInTheDocument();
   });
 
   it('a stamp that is refused says so, links nothing, and leaves the recipe as it was', async () => {

@@ -140,15 +140,14 @@ describe('the two switches of the whole venue', () => {
   });
 
   // Nothing leaves the phone before the database has answered once (js/calculator-config-store.js).
-  it('before the database has answered, keep the change on this phone, say so, and send nothing', async () => {
+  it('before the server has answered, the switch is disabled: a tap changes nothing and sends nothing', async () => {
     const source = fakeCalculatorSource({ config: configOf() });
     source.hold();
     const { user } = await hub(source);
+    expect(askDaySwitch()).toBeDisabled();
     await user.click(askDaySwitch());
-    const dialog = await alertNamed(/^Saved on this phone only\./);
-    expect(source.savedConfigs).toEqual([]);
-    await user.click(within(dialog).getByRole('button', { name: 'OK' }));
-    expect(askDaySwitch()).not.toBeChecked();
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    expect(askDaySwitch()).toBeChecked();
     expect(tag()).toBeEmptyDOMElement();
     expect(source.savedConfigs).toEqual([]);
   });

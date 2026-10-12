@@ -303,7 +303,7 @@ describe('Dough history settings', () => {
     expect(card('Focaccia').getByText('Focaccia tray, Focaccia slab, Cheese by the kilo')).toBeInTheDocument();
     expect(card('Sourdough').getByText('No products')).toBeInTheDocument();
     expect(card('Brioche').getByRole('switch', { name: 'Show in the dough history Brioche' })).toBeChecked();
-    expect(card('Brioche').getByRole('combobox', { name: 'Dough history duration for Brioche' })).toHaveValue('24');
+    expect(card('Brioche').getByRole('combobox', { name: 'Keep visible for Brioche' })).toHaveValue('24');
     expect(within(card('Brioche').getByRole('combobox')).getAllByRole('option').map(option => option.textContent))
       .toEqual(['24 hours', '48 hours']);
   });
@@ -344,7 +344,7 @@ describe('Dough history settings', () => {
   it('speaks Italian', async () => {
     await open('/calculator/settings/log', { lang: 'it' });
     expect(main().getByRole('heading', { level: 2, name: 'Storico impasti' })).toBeInTheDocument();
-    expect(card('Focaccia').getByRole('combobox', { name: 'Durata nello storico impasti per Focaccia' })).toBeInTheDocument();
+    expect(card('Focaccia').getByRole('combobox', { name: 'Tieni visibile per Focaccia' })).toBeInTheDocument();
     expect(within(card('Focaccia').getByRole('combobox')).getAllByRole('option').map(option => option.textContent))
       .toEqual(['24 ore', '48 ore']);
   });

@@ -23,6 +23,9 @@ export const SAVED_TAG_MS = 2000;
 // ⚠️ NOT HERE YET, on purpose: the WhatsApp and Client ordering rows (market orders and client orders arrive
 // with step 3c-4, together with the bottom bar's Orders button the first switch governs). The switch is still
 // saved: it is venue data the current app reads.
+//
+// ⚠️ THE TWO SWITCHES WAIT FOR THE SERVER'S ANSWER (`configFromServer`): a tap before it would be built on a copy the
+// browser's own database answered, and the store sends nothing before the server has spoken.
 export function CalculatorSettings() {
   const { t } = useT();
   return (
@@ -65,7 +68,7 @@ type SwitchKey = 'showClientOrdersButton' | 'askDoughDay';
 function VenueSwitches() {
   const { t } = useT();
   const store = useCalculatorStore();
-  const { config } = useCalculator();
+  const { config, configFromServer } = useCalculator();
   const [save, saveDialog] = useSaveConfig();
   const [tagged, setTagged] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -95,7 +98,7 @@ function VenueSwitches() {
       next[key] = wanted;
       const saved = await save(next);
       // Kept on this phone is not a confirmation either: the database has not been told.
-      if (saved && mounted.current && store.getSnapshot().configAnswered) flash();
+      if (saved && mounted.current && store.getSnapshot().configFromServer) flash();
     } finally {
       saving.current = false;
     }
@@ -111,12 +114,14 @@ function VenueSwitches() {
         title={t('settings.calc.ordersButton')}
         sub={t('settings.calc.ordersButton.sub')}
         selected={showsClientOrdersButton(config)}
+        isDisabled={!configFromServer}
         onChange={wanted => { void change('showClientOrdersButton', wanted); }}
       />
       <SwitchRow
         title={t('settings.calc.askDay')}
         sub={t('settings.calc.askDay.sub')}
         selected={asksDoughDay(config)}
+        isDisabled={!configFromServer}
         onChange={wanted => { void change('askDoughDay', wanted); }}
       />
       {saveDialog}
@@ -124,8 +129,8 @@ function VenueSwitches() {
   );
 }
 
-function SwitchRow({ title, sub, selected, onChange }: {
-  title: string; sub: string; selected: boolean; onChange: (selected: boolean) => void;
+function SwitchRow({ title, sub, selected, isDisabled, onChange }: {
+  title: string; sub: string; selected: boolean; isDisabled: boolean; onChange: (selected: boolean) => void;
 }) {
   const ids = useId();
   return (
@@ -134,7 +139,7 @@ function SwitchRow({ title, sub, selected, onChange }: {
         <span id={`${ids}-title`} className={styles.title}>{title}</span>
         <span id={`${ids}-sub`} className={styles.sub}>{sub}</span>
       </span>
-      <SettingSwitch selected={selected} onChange={onChange} labelledBy={`${ids}-title`} describedBy={`${ids}-sub`} />
+      <SettingSwitch selected={selected} onChange={onChange} isDisabled={isDisabled} labelledBy={`${ids}-title`} describedBy={`${ids}-sub`} />
     </div>
   );
 }

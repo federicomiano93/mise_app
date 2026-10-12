@@ -82,7 +82,7 @@ export function CataloguePicker({ onChoose, onClose }: Props) {
         onChange={event => { setQuery(event.target.value); }}
       />
       <div className={styles.list} aria-busy={reading.status === 'loading' || choosing}>
-        {reading.status === 'loading' ? <p className={styles.note}>{t('calc.loading')}</p> : null}
+        {reading.status === 'loading' || choosing ? <p className={styles.note}>{t('calc.loading')}</p> : null}
         <div role="alert">
           {reading.status === 'failed' ? <p className={styles.note}>{t('calc.catalogueListFailed')}</p> : null}
         </div>

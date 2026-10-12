@@ -72,6 +72,7 @@ function RecipeCard({ recipe, products, visible, hours, onVisible, onHours }: {
   const titleId = `${ids}-title`;
   const switchId = `${ids}-switch`;
   const selectId = `${ids}-select`;
+  const labelId = `${ids}-label`;
   return (
     <section className={styles.card} aria-labelledby={titleId}>
       <div className={styles.head}>
@@ -83,11 +84,11 @@ function RecipeCard({ recipe, products, visible, hours, onVisible, onHours }: {
         <SettingSwitch selected={visible} onChange={onVisible} labelledBy={`${switchId} ${titleId}`} />
       </div>
       <div className={styles.row}>
-        <label htmlFor={selectId} className={styles.label}>{t('calc.keepVisibleFor')}</label>
+        <label id={labelId} htmlFor={selectId} className={styles.label}>{t('calc.keepVisibleFor')}</label>
         <select
           id={selectId}
           className={styles.select}
-          aria-label={t('calc.logDurationForRecipe', { name: recipe.name })}
+          aria-labelledby={`${labelId} ${titleId}`}
           value={String(hours)}
           onChange={event => { onHours(Number(event.target.value)); }}
         >

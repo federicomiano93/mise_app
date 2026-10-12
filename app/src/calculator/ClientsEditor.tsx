@@ -32,7 +32,9 @@ import { useSaveConfig } from './useSaveConfig';
 // editor opens, so it must not be made from the empty default.
 //
 // ⚠️ NOT HERE YET, on purpose: the client's ordering link (parity 75). It arrives with step 3c-4b, together with
-// the client-ordering accounts; nothing here writes `client-accounts` or `client-menus`.
+// the client-ordering accounts; nothing here writes `client-accounts` or `client-menus`. Republishing the clients'
+// ordering menus when the address book is saved (`publishMenus` in js/calculator-config-store.js, collection
+// `client-menus`) also comes with 3c-4b, and MUST be there before the switch to Mise 2.
 //
 // ⚠️ THE DISCARD QUESTION FIRES ONLY WHEN THE EDITOR IS LEFT ALTOGETHER: every way out goes through the router's
 // blocker, which lets a move between the editor's own addresses through. A SAVE IN FLIGHT IS PENDING, NOT GONE:
@@ -78,6 +80,8 @@ export function ClientsEditor({ target }: { target: SettingsTarget }) {
     for (const id of [...dropped.current]) if (id !== shownId) dropped.current.delete(id);
   }, [shownId]);
   const leavingClean = useRef(false);
+  // True only while the configuration is travelling to the server (see shouldBlock).
+  const sending = useRef(false);
   const busy = useRef(false);
   const askingLeave = useRef(false);
   const mounted = useRef(true);
@@ -119,9 +123,13 @@ export function ClientsEditor({ target }: { target: SettingsTarget }) {
   // ⚠️ A ROUTER SUPPORTS ONE BLOCKER, so this one asks both questions. Out of the editor altogether with unsaved
   // changes: «leave without saving?». Between its own addresses (the browser's Back from a new, empty client):
   // «discard this new client?». A move to the editor's own other screen with anything else asks nothing.
+  //
+  // ⚠️ WHILE THE SAVE IS IN THE AIR A WAY OUT IS REFUSED WITHOUT A QUESTION: the edits are not being lost (they are
+  // on their way), so «unsaved changes will be lost?» would be a false alarm; and leaving now would hide the
+  // outcome (a refusal is said on THIS screen). The person stays; the save settles; they leave again if they still want.
   const shouldBlock = useCallback<BlockerFunction>(({ currentLocation, nextLocation }) => {
     if (leavingClean.current) return false;
-    if (!inClientsEditor(nextLocation.pathname)) return dirtyRef.current;
+    if (!inClientsEditor(nextLocation.pathname)) return dirtyRef.current || sending.current;
     return !quiet.current && freshEmptyRef.current && nextLocation.pathname !== currentLocation.pathname;
   }, []);
   const blocker = useBlocker(shouldBlock);
@@ -136,6 +144,10 @@ export function ClientsEditor({ target }: { target: SettingsTarget }) {
       return;
     }
     if (askingLeave.current) return;
+    if (sending.current) {
+      blocker.reset();
+      return;
+    }
     askingLeave.current = true;
     const leavingEditor = !inClientsEditor(blocker.location.pathname);
     void (async () => {
@@ -217,8 +229,14 @@ export function ClientsEditor({ target }: { target: SettingsTarget }) {
       // The latest configuration, with only the address book written over it: another phone's change to any other
       // part must not be undone by this save.
       const latest = cloneConfig(store.getSnapshot().config);
-      if (!(await saveConfig({ ...latest, clients: settled }))) return;
-      if (!mounted.current) return;
+      sending.current = true;
+      let stored: boolean;
+      try {
+        stored = await saveConfig({ ...latest, clients: settled });
+      } finally {
+        sending.current = false;
+      }
+      if (!stored || !mounted.current) return;
       // Saved (or kept on this phone, and said so). A paused product has no row, so its typed quantity would
       // become unreachable and reappear inside a real dough the day it is switched back on.
       for (const key of pausedQuantityKeys(settled)) tabState.remove(key);
