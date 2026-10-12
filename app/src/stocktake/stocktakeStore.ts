@@ -528,7 +528,9 @@ export function createStocktakeStore(source: StocktakeSource, locationId: string
   function openMonth(monthId: string): void {
     if (!isMonthId(monthId)) return;
     if (session?.id === monthId && session.current) return;
-    if (session) leave(session);
+    // A session already left (stop(), then the same month opened again, as React StrictMode does)
+    // is not left a second time: that would start a second SETTLE_MS timer over the first one.
+    if (session?.current) leave(session);
     session = openSession(monthId);
     update({ monthId, month: session.month, monthLoaded: false, monthFailed: false, unsent: false });
   }

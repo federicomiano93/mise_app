@@ -548,6 +548,22 @@ describe('several writes in the air (a storeroom with no signal)', () => {
     expect(saves).toHaveLength(1);
   });
 
+  test('stop() then the same month opened again leaves the old session once: one SETTLE_MS timer, not two', async () => {
+    const { store, deps, setMode, setEcho } = await ready();
+    const settleTimers: number[] = [];
+    const setTimer = deps.setTimer;
+    deps.setTimer = (callback, ms) => {
+      if (ms === SETTLE_MS) settleTimers.push(ms);
+      return setTimer(callback, ms);
+    };
+    setMode('never');
+    setEcho(false);
+    store.setCount('closing', 'flour', '3');
+    store.stop();
+    store.openMonth('2026-10');
+    expect(settleTimers).toHaveLength(1);
+  });
+
   test('a month left stops being listened to after SETTLE_MS even if the SDK never shows the batch back', async () => {
     const { store, storage, liveMonth, setMode, setEcho, advance } = await ready();
     setMode('never');
