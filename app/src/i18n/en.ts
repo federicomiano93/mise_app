@@ -787,6 +787,36 @@ export const en = {
   'send.whatsapp': 'WhatsApp — I choose the chat',
   'send.email': 'Email',
   'send.emailOpensApp': 'It opens your mail app with the text ready — it does not send it.',
+
+  // The market order (step 3c-4a): the «Send order» door, its picker, the order form and the «Send to» dialog. Every
+  // key but the last four is the current app's own key with the current app's own text (js/i18n.js).
+  'calc.sendOrder': 'Send order',
+  'calc.noWhatsappListsOr': 'No WhatsApp lists or clients yet. Add one in Settings → WhatsApp.',
+  'calc.thisListHasNo': 'This list has no clients yet. Add some in Settings → WhatsApp.',
+  'calc.orderFallback': 'Order',
+  'calc.untitledList': 'Untitled list',
+  'calc.noOrdersToShare': 'No orders to share',
+  'calc.sendTo': 'Send to',
+  'calc.allClientsTogether': 'All clients together',
+  'calc.orOneClient': 'Or one client',
+  'calc.setEveryQuantityIn': 'Set every quantity in this order back to 0?',
+  'calc.clearAll': 'Clear all',
+  'calc.prefill.window.both': 'yesterday or today',
+  'calc.prefill.window.today': 'today',
+  'calc.prefill.window.yesterday': 'yesterday',
+  'calc.prefill.nothingLogged': 'Nothing logged for these clients {when} — type the quantities.',
+  'calc.prefill.filled': {
+    one: 'One quantity filled in from what you logged {when} — check it before sending.',
+    other: '{n} quantities filled in from what you logged {when} — check them before sending.',
+  },
+  'ui.lists': 'Lists',
+  // New in Mise 2: said instead of «nothing logged» while the saved doughs have not arrived yet.
+  'calc.prefill.notArrived': 'The saved doughs have not arrived yet — type the quantities.',
+  // New in Mise 2: closing an order whose quantities were typed by hand asks first (P20).
+  'calc.discardOrder': 'Discard this order?',
+  'calc.keepOrder': 'Keep',
+  // New in Mise 2: names the quantity box of a product when the form has several clients: «Buns, Cafe Roma».
+  'calc.orderBoxName': '{product}, {client}',
 } as const satisfies Record<string, Message>;
 
 export type MessageKey = keyof typeof en;
