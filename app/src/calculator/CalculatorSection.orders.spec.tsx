@@ -1,5 +1,5 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { screen, waitFor, within } from '@testing-library/react';
+import { act, screen, waitFor, within } from '@testing-library/react';
 import { isBusy } from '../session/busy';
 import { fakeCalculatorSource } from '../testing/fakeCalculatorSource';
 import { NOW, logOf, versionOf } from '../testing/logFixtures';
@@ -250,6 +250,48 @@ describe('the prefill', () => {
     expect(form('Corner shop').getByText('I registri salvati non sono ancora arrivati — scrivi tu le quantità.')).toBeInTheDocument();
   });
 
+  // The logs answered, but only from this device's own copy (the server has not).
+  const fromCopyOnly = (source: ReturnType<typeof fakeCalculatorSource>) => {
+    source.watchLogs = (_since, onChange) => {
+      onChange([...source.logs.values()], { fromServer: false });
+      return () => undefined;
+    };
+  };
+
+  it('from this device’s copy only, with numbers filled: shows the note AND a second sentence saying they may be old', async () => {
+    const source = fakeCalculatorSource({ config: configOf(oneList), logs: logs() });
+    fromCopyOnly(source);
+    const { user, door } = await open({}, { source });
+    await user.click(door);
+    expect(box('Focaccia tray, Cafe Roma', form()).value).toBe('12');
+    expect(form().getByText(/quantities filled in from what you logged/)).toBeInTheDocument();
+    expect(form().getByText('Fresh data has not arrived yet: these numbers come from this device’s copy — check them before sending.')).toBeInTheDocument();
+  });
+
+  it('from this device’s copy only, with nothing to fill: says the doughs have not arrived, never «nothing logged»', async () => {
+    const source = fakeCalculatorSource({ config: configOf(oneList) });
+    fromCopyOnly(source);
+    const { user, door } = await open({}, { source });
+    await user.click(door);
+    expect(form().getByText('The saved doughs have not arrived yet — type the quantities.')).toBeInTheDocument();
+    expect(form().queryByText(/Nothing logged/)).not.toBeInTheDocument();
+    expect(form().queryByText(/Fresh data has not arrived/)).not.toBeInTheDocument();
+  });
+
+  it('from the server, carries no warning', async () => {
+    const { user, door } = await open(oneList, { logs: logs() });
+    await user.click(door);
+    expect(form().queryByText(/Fresh data has not arrived/)).not.toBeInTheDocument();
+  });
+
+  it('says the copy warning in Italian', async () => {
+    const source = fakeCalculatorSource({ config: configOf(oneList), logs: logs() });
+    fromCopyOnly(source);
+    const { user, door } = await open({}, { source, lang: 'it' });
+    await user.click(door);
+    expect(form().getByText('I dati aggiornati non sono ancora arrivati: questi numeri vengono dalla copia di questo dispositivo — controllali prima di mandare.')).toBeInTheDocument();
+  });
+
   it('is worked out once: a log arriving while the form is open changes no box', async () => {
     const source = fakeCalculatorSource({ config: configOf(oneList) });
     const { user, door } = await open({}, { source });
@@ -345,6 +387,31 @@ describe('closing', () => {
     await form().findByRole('button', { name: 'Cancel' });
     await user.keyboard('{Escape}');
     await waitFor(() => { expect(formExists()).toBe(false); });
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+  });
+
+  it('Back with typed quantities asks; Keep keeps them; Discard leaves', async () => {
+    const view = await open(oneList, { logs: logs() });
+    await view.user.click(view.door);
+    await view.user.type(box('Focaccia tray, Bar Sole', form()), '5');
+    act(() => { void view.router.navigate('/stocktake'); });
+    const question = within(await screen.findByRole('alertdialog', { name: 'Discard this order?' }));
+    await view.user.click(question.getByRole('button', { name: 'Keep' }));
+    await waitFor(() => { expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument(); });
+    expect(view.router.state.location.pathname).toBe('/calculator');
+    expect(box('Focaccia tray, Bar Sole', form()).value).toBe('5');
+    act(() => { void view.router.navigate('/stocktake'); });
+    await view.user.click(within(await screen.findByRole('alertdialog', { name: 'Discard this order?' })).getByRole('button', { name: 'Discard' }));
+    await waitFor(() => { expect(view.router.state.location.pathname).toBe('/stocktake'); });
+    expect(isBusy()).toBe(false);
+  });
+
+  it('Back on an untouched form leaves', async () => {
+    const view = await open(oneList, { logs: logs() });
+    await view.user.click(view.door);
+    await form().findByRole('button', { name: 'Cancel' });
+    act(() => { void view.router.navigate('/stocktake'); });
+    await waitFor(() => { expect(view.router.state.location.pathname).toBe('/stocktake'); });
     expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
   });
 

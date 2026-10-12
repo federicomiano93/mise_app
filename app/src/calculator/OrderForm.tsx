@@ -1,4 +1,5 @@
-import { useEffect, useId, useState } from 'react';
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
+import { useBlocker } from 'react-router';
 import { Dialog as AriaDialog, Heading, Modal, ModalOverlay } from 'react-aria-components';
 import { orderSections } from '@mise/shared/calculator-order-text';
 import type { OrderSection } from '@mise/shared/calculator-order-text';
@@ -23,6 +24,8 @@ type Props = {
   // form says so instead of «nothing logged»).
   prefilled: Readonly<Record<string, number>> | null;
   prefillWindow: OrderPrefillWindow;
+  // True when the numbers come from this device's copy of the logs, not from the server: the form says so under the note.
+  stale: boolean;
   // The form is closed without sending (after the question, if quantities were changed by hand).
   onCancel: () => void;
   // Something to send: the sections that have a quantity above zero (at least one).
@@ -35,10 +38,11 @@ type Props = {
 // ⚠️ THE PREFILL IS COMPUTED ONCE, BY THE CALLER, WHEN THE FORM OPENS, and the boxes start from it: a log arriving
 // while somebody types must never move a number under their finger. «Clear all» zeroes ONLY this form's boxes.
 //
-// ⚠️ CLOSING AN ORDER THAT WAS CHANGED BY HAND ASKS FIRST (Cancel, Escape and a press on the backdrop alike), and
+// ⚠️ CLOSING AN ORDER THAT WAS CHANGED BY HAND ASKS FIRST (Cancel, Escape, a press on the backdrop and the router's
+// Back or any other navigation alike), and
 // while it holds such quantities the session is busy, so an update does not throw the typed order away. An untouched
 // form (the prefill alone does not count) closes at once.
-export function OrderForm({ title, entries, prefilled, prefillWindow, onCancel, onSend }: Props) {
+export function OrderForm({ title, entries, prefilled, prefillWindow, stale, onCancel, onSend }: Props) {
   const { t } = useT();
   const base = useId();
   const [start] = useState(() => startingQuantities(entries, prefilled ?? {}));
@@ -53,13 +57,60 @@ export function OrderForm({ title, entries, prefilled, prefillWindow, onCancel, 
     ? t('calc.prefill.notArrived')
     : prefillNote(Object.keys(prefilled).length, prefillWindow, t);
 
+  const dirtyRef = useRef(dirty);
+  useLayoutEffect(() => { dirtyRef.current = dirty; }, [dirty]);
+  const leaving = useRef(false);
+  const asking = useRef(false);
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
+
+  const discardQuestion = useCallback(() => confirm({
+    title: t('calc.discardOrder'),
+    okLabel: t('ui.discard'),
+    cancelLabel: t('calc.keepOrder'),
+    danger: true,
+  }), [confirm, t]);
+
+  // A navigation (browser or Android Back, the rail, a link) with a hand-typed order asks the same question as Cancel:
+  // Discard lets it through and ends the errand, Keep cancels it. An untouched form lets it through.
+  const blocker = useBlocker(useCallback(() => dirtyRef.current && !leaving.current, []));
+  const latestBlocker = useRef(blocker);
+  useEffect(() => {
+    latestBlocker.current = blocker;
+    // The question stays «being asked» until the router has left its 'blocked' state, so a render in between does not
+    // ask it twice.
+    if (blocker.state !== 'blocked') {
+      asking.current = false;
+      return;
+    }
+    if (asking.current) return;
+    asking.current = true;
+    void (async () => {
+      try {
+        const discard = await discardQuestion();
+        if (!mounted.current) return;
+        const current = latestBlocker.current;
+        if (current.state !== 'blocked') return;
+        if (discard) {
+          leaving.current = true;
+          current.proceed();
+          onCancel();
+        } else {
+          current.reset();
+        }
+      } catch (error) {
+        asking.current = false;
+        throw error;
+      }
+    })();
+  });
+
   const close = async () => {
-    if (dirty && !(await confirm({
-      title: t('calc.discardOrder'),
-      okLabel: t('ui.discard'),
-      cancelLabel: t('calc.keepOrder'),
-      danger: true,
-    }))) return;
+    if (dirty && !(await discardQuestion())) return;
+    leaving.current = true;
     onCancel();
   };
 
@@ -95,7 +146,10 @@ export function OrderForm({ title, entries, prefilled, prefillWindow, onCancel, 
 
             <div className={styles.body}>
               <div className={styles.bar}>
-                <p className={styles.note}>{note}</p>
+                <div className={styles.notes}>
+                  <p className={styles.note}>{note}</p>
+                  {stale ? <p className={styles.stale}>{t('calc.prefill.notFresh')}</p> : null}
+                </div>
                 <Button variant="secondary" onPress={() => { void clearAll(); }}>{t('calc.clearAll')}</Button>
               </div>
 
