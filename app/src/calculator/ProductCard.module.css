@@ -23,6 +23,15 @@
   gap: var(--s3);
 }
 
+/* A narrow phone: beside its label a field is too short to show «Pizza ball» or «Number» whole (measured at
+   296px), so the label goes above the field. */
+@media (max-width: 399px) {
+  .row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--s1);
+  }
+}
+
 .label {
   font-weight: 600;
   overflow-wrap: break-word;
