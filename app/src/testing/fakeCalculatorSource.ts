@@ -3,7 +3,7 @@ import { withRowIds } from '@mise/shared/guided-model';
 import type { AnswerMeta, CalculatorSource, StoredDoc } from '../calculator/calculatorSource';
 
 // A Calculator source for the specs, in memory: the configuration, the catalogue recipes and the logs are
-// plain values; a log save lands at once (or is refused, with `refuse`, or held, with `holdSaves`), and every
+// plain values; a log save or delete lands at once (or is refused, with `refuse`, or held, with `holdSaves`), and every
 // live watcher is told, like Firestore would. By default every answer comes from the server (an online
 // database); `answer()` lets a spec send one from the browser's own database instead. A configuration save
 // is reconciled and stamped like the real transaction (revision + 1, configModel 4) and told to every watcher;
@@ -19,7 +19,9 @@ export type FakeCalculatorSource = CalculatorSource & {
   recipes: Map<string, StoredDoc>;
   logs: Map<string, StoredDoc>;
   // The next calls of this kind fail.
-  refuse: { save: boolean; config: boolean; logs: boolean; configSave: boolean; catalogue: boolean; stamp: boolean };
+  refuse: { save: boolean; remove: boolean; config: boolean; logs: boolean; configSave: boolean; catalogue: boolean; stamp: boolean };
+  // Every log id a delete was asked for, in order.
+  deletedIds: string[];
   // Every log that reached the source, in order.
   saved: StoredDoc[];
   // Every configuration that reached the source, in order, as handed over.
@@ -53,8 +55,9 @@ export function fakeCalculatorSource(seed: {
   const configWatchers = new Set<ConfigListener>();
   const logWatchers = new Set<LogsListener>();
   const recipeWatchers = new Set<RecipeListener>();
-  const refuse = { save: false, config: false, logs: false, configSave: false, catalogue: false, stamp: false };
+  const refuse = { save: false, remove: false, config: false, logs: false, configSave: false, catalogue: false, stamp: false };
   const saved: StoredDoc[] = [];
+  const deletedIds: string[] = [];
   const savedConfigs: Record<string, unknown>[] = [];
   const stamps: { id: string; ingredients: unknown[] }[] = [];
   let catalogueReads = 0;
@@ -81,7 +84,7 @@ export function fakeCalculatorSource(seed: {
 
   const fake: FakeCalculatorSource = {
     config: seed.config === undefined ? null : seed.config,
-    recipes, logs, refuse, saved, savedConfigs, stamps,
+    recipes, logs, refuse, saved, deletedIds, savedConfigs, stamps,
     catalogueReads: () => catalogueReads,
 
     watchConfig(onChange, onError) {
@@ -111,6 +114,21 @@ export function fakeCalculatorSource(seed: {
       if (refuse.save) return Promise.reject(refused());
       const land = () => {
         logs.set(doc.id, doc);
+        for (const listener of logWatchers) tellLogs(listener, FROM_SERVER);
+      };
+      if (savesHeld) {
+        return new Promise<void>(resolve => { heldSaves.push(() => { land(); resolve(); }); });
+      }
+      land();
+      return Promise.resolve();
+    },
+
+    // Held with the saves (offline holds both), refused with `refuse.remove`.
+    deleteLog(id) {
+      deletedIds.push(id);
+      if (refuse.remove) return Promise.reject(refused());
+      const land = () => {
+        logs.delete(id);
         for (const listener of logWatchers) tellLogs(listener, FROM_SERVER);
       };
       if (savesHeld) {

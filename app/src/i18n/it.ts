@@ -516,6 +516,9 @@ export const it: Messages = {
   'calc.logExtraDough': 'Impasto extra: ',
   'calc.logOccasionalClient': 'Cliente occasionale',
   'calc.logFull':'Il registro di {dough} è pieno. Azzera i campi per iniziarne uno nuovo.',
+  'calc.logHistoryNotSaved': '{dough} non è stato salvato nello storico impasti. Controlla la connessione e riprova.',
+  'calc.logHistoryFull': 'Il registro di {dough} è pieno: non si possono salvare altre modifiche.',
+  'calc.logNotDeleted': 'Non è stato possibile eliminare {dough}. È di nuovo nello storico impasti.',
 
   // The Calculator's Settings (step 3c-2). Every key below is the current app's own key with the current app's
   // own text (js/i18n.js), in both languages.

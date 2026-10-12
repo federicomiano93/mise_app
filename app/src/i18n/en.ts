@@ -584,6 +584,9 @@ export const en = {
   'calc.logExtraDough': 'Extra dough: ',
   'calc.logOccasionalClient': 'Occasional client',
   'calc.logFull':'{dough}’s log is full. Reset the fields to start a new one.',
+  'calc.logHistoryNotSaved': '{dough} was not saved to the Dough history. Check the connection and try again.',
+  'calc.logHistoryFull': '{dough}’s log is full: no more changes can be saved to it.',
+  'calc.logNotDeleted': '{dough} could not be deleted. It is back in the Dough history.',
 
   // The Calculator's Settings (step 3c-2). Every key below is the current app's own key with the current app's
   // own text (js/i18n.js), in both languages.

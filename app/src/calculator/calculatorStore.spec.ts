@@ -526,3 +526,152 @@ describe('the review fixes of 3c-2', () => {
     expect((source.config as { recipes: { id: string }[] }).recipes.map(r => r.id)).toEqual(['own']);
   });
 });
+
+describe('the Dough history (step 3c-3)', () => {
+  const at = { date: 'Monday 12 October', time: '12:00 PM' };
+  const version = { calculatedBy: '', at, items: [], occasional: [] };
+  const two: StoredDoc = {
+    id: 'log-two', dough: 'Pizza', recipeId: 'r1', forDay: 'today', origin: 'manual', createdAtMs: NOW - 500,
+    versions: [{ kind: 'create', calculatedBy: 'Ann', at, text: 'first' }, { kind: 'edit', calculatedBy: 'Bo', at, text: 'second' }],
+  };
+
+  test('«Add log» makes a NEW log marked manual, at once, and sends it', () => {
+    const { store, source } = setup({ config: CONFIG });
+    store.start();
+    const id = store.addLog({ dough: 'Pizza', recipeId: 'r1', forDay: 'tomorrow', version });
+    const log = store.getSnapshot().logs.find(l => l.id === id)!;
+    expect(log.origin).toBe('manual');
+    expect(log.forDay).toBe('tomorrow');
+    expect(log.createdAtMs).toBe(NOW);
+    expect(log.versions).toHaveLength(1);
+    expect(log.versions[0]!.kind).toBe('create');
+    expect(source.saved.map(doc => doc.id)).toEqual([id]);
+  });
+
+  test('an edit appends an `edit` version and keeps every earlier one', () => {
+    const { store, source } = setup({ config: CONFIG, logs: [two] });
+    store.start();
+    expect(store.editLog('log-two', { ...version, calculatedBy: 'Cy', text: 'third' })).toBe('saved');
+    const log = store.getSnapshot().logs.find(l => l.id === 'log-two')!;
+    expect(log.versions.map(v => v.text)).toEqual(['first', 'second', 'third']);
+    expect(log.versions[2]!.kind).toBe('edit');
+    expect(source.saved).toHaveLength(1);
+  });
+
+  test('a restore appends a COPY of the chosen version on top — the history is never truncated', () => {
+    const { store, source } = setup({ config: CONFIG, logs: [two] });
+    store.start();
+    expect(store.restoreLog('log-two', 0, { calculatedBy: 'Di', at })).toBe('saved');
+    const log = store.getSnapshot().logs.find(l => l.id === 'log-two')!;
+    expect(log.versions.map(v => v.text)).toEqual(['first', 'second', 'first']);
+    expect(log.versions[2]).toMatchObject({ kind: 'restore', restoredFrom: 0, calculatedBy: 'Di' });
+    expect(source.saved).toHaveLength(1);
+  });
+
+  test('a restore of a version that does not exist writes nothing', () => {
+    const { store, source } = setup({ config: CONFIG, logs: [two] });
+    store.start();
+    expect(store.restoreLog('log-two', 2, { calculatedBy: '', at })).toBe('missing');
+    expect(store.restoreLog('log-two', -1, { calculatedBy: '', at })).toBe('missing');
+    expect(store.restoreLog('log-two', 0.5, { calculatedBy: '', at })).toBe('missing');
+    expect(source.saved).toEqual([]);
+  });
+
+  test('an edit or a restore of a log not in the list writes nothing', () => {
+    const { store, source } = setup({ config: CONFIG });
+    store.start();
+    expect(store.editLog('log-nope', version)).toBe('missing');
+    expect(store.restoreLog('log-nope', 0, { calculatedBy: '', at })).toBe('missing');
+    expect(source.saved).toEqual([]);
+  });
+
+  test('⚠️ a full log takes no edit and no restore, and says so without speaking of Reset', () => {
+    const full: StoredDoc = { ...two, versions: Array.from({ length: MAX_LOG_VERSIONS }, () => ({ kind: 'edit' })) };
+    const { store, source, messages } = setup({ config: CONFIG, logs: [full] });
+    store.start();
+    expect(store.editLog('log-two', version)).toBe('full');
+    expect(store.restoreLog('log-two', 0, { calculatedBy: '', at })).toBe('full');
+    expect(source.saved).toEqual([]);
+    expect(messages).toEqual([
+      { kind: 'log-history-full', dough: 'Pizza' },
+      { kind: 'log-history-full', dough: 'Pizza' },
+    ]);
+  });
+
+  test('a delete takes the log out at once — the list and the local copy — and sends it', () => {
+    const { store, source, storage } = setup({ config: CONFIG, logs: [two, old] });
+    store.start();
+    store.deleteLog('log-two');
+    expect(store.getSnapshot().logs.map(l => l.id)).toEqual(['log-old']);
+    expect(JSON.parse(storage.data.get(LOGS_KEY)!).map((l: { id: string }) => l.id)).toEqual(['log-old']);
+    expect(source.deletedIds).toEqual(['log-two']);
+  });
+
+  test('⚠️ offline, the deleted log stays gone while the delete waits — even when the stream still holds it', async () => {
+    const { store, source } = setup({ config: CONFIG, logs: [two] });
+    source.holdSaves();
+    store.start();
+    store.deleteLog('log-two');
+    expect(store.getSnapshot().unsent).toBe(true);
+    source.push({ fromServer: false });
+    expect(store.getSnapshot().logs).toEqual([]);
+    source.settleSaves();
+    await flush();
+    expect(store.getSnapshot().logs).toEqual([]);
+    expect(store.getSnapshot().unsent).toBe(false);
+  });
+
+  test('⚠️ a delete the database REFUSES brings the log back and says so', async () => {
+    const { store, source, messages } = setup({ config: CONFIG, logs: [two] });
+    source.refuse.remove = true;
+    store.start();
+    store.deleteLog('log-two');
+    expect(store.getSnapshot().logs).toEqual([]);
+    await flush();
+    expect(store.getSnapshot().logs.map(l => l.id)).toEqual(['log-two']);
+    expect(store.getSnapshot().unsent).toBe(false);
+    expect(messages).toContainEqual({ kind: 'log-not-deleted', dough: 'Pizza' });
+  });
+
+  test('⚠️ a log deleted while its own write is in the air does not come back when that write answers', async () => {
+    const { store, source } = setup({ config: CONFIG });
+    let landWrite: () => void = () => {};
+    source.saveLog = () => new Promise<void>(resolve => { landWrite = resolve; });
+    store.start();
+    const id = store.addLog({ dough: 'Pizza', recipeId: 'r1', forDay: 'today', version });
+    store.deleteLog(id);
+    await flush();
+    landWrite();
+    await flush();
+    expect(store.getSnapshot().logs).toEqual([]);
+  });
+
+  test('a tab locked to a deleted log confirms into a NEW log', () => {
+    const { store } = setup({ config: CONFIG, logs: [old] });
+    store.start();
+    store.deleteLog('log-old');
+    expect(store.confirmDough(confirm({ linkedLogId: 'log-old' }))).toEqual({ logId: 'log-1', target: 'create' });
+  });
+
+  test('a history write the database refuses is said in the history\'s own words', async () => {
+    const { store, source, messages } = setup({ config: CONFIG, logs: [two] });
+    source.refuse.save = true;
+    store.start();
+    store.editLog('log-two', version);
+    store.addLog({ dough: 'Focaccia', recipeId: 'r1', forDay: 'today', version });
+    await flush();
+    expect(messages).toEqual([
+      { kind: 'log-history-not-saved', dough: 'Pizza' },
+      { kind: 'log-history-not-saved', dough: 'Focaccia' },
+    ]);
+  });
+
+  test('an edit of a log being deleted writes nothing', () => {
+    const { store, source } = setup({ config: CONFIG, logs: [two] });
+    source.holdSaves();
+    store.start();
+    store.deleteLog('log-two');
+    expect(store.editLog('log-two', version)).toBe('missing');
+    expect(source.saved).toEqual([]);
+  });
+});

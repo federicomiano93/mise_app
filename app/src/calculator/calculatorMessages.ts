@@ -16,6 +16,12 @@ export function messageText(t: Say, message: CalculatorMessage): string | null {
       return t('calc.logNotSaved', { dough: message.dough });
     case 'log-full':
       return t('calc.logFull', { dough: message.dough });
+    case 'log-history-not-saved':
+      return t('calc.logHistoryNotSaved', { dough: message.dough });
+    case 'log-history-full':
+      return t('calc.logHistoryFull', { dough: message.dough });
+    case 'log-not-deleted':
+      return t('calc.logNotDeleted', { dough: message.dough });
     case 'config-stream-broken':
     case 'logs-stream-broken':
       return null;

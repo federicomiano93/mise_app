@@ -25,6 +25,7 @@ function fakeKit() {
       return () => { entry.stopped = true; };
     }),
     setDoc: vi.fn(async (_ref: Ref, _data: Record<string, unknown>, _options?: unknown) => {}),
+    deleteDoc: vi.fn(async (_ref: Ref) => {}),
   };
   const kit = { fs, db: {} } as unknown as FirestoreKit;
   const live = (path: string) => listeners.filter(l => l.target.path === path && !l.stopped);
@@ -260,5 +261,26 @@ describe('saving the configuration and linking a recipe, as firestore.rules expe
     const bad = writeKit({ ingredients: [] });
     await expect(createFirestoreCalculatorSource(() => Promise.resolve(bad.kit), 'bakery').stampRowIds('a/b')).rejects.toThrow();
     expect(bad.fs.runTransaction).not.toHaveBeenCalled();
+  });
+});
+
+describe('deleting a log (step 3c-3)', () => {
+  test('deletes exactly that document under the open venue', async () => {
+    const { kit, fs } = fakeKit();
+    const source = createFirestoreCalculatorSource(() => Promise.resolve(kit), 'panificio-miano');
+    await source.deleteLog('log-1');
+    expect(fs.deleteDoc).toHaveBeenCalledTimes(1);
+    expect(fs.deleteDoc.mock.calls[0]![0].path).toBe('locations/panificio-miano/logs/log-1');
+  });
+
+  test('⚠️ an id that could name another path is refused before Firestore is even asked', async () => {
+    const { kit, fs } = fakeKit();
+    let loaded = 0;
+    const source = createFirestoreCalculatorSource(() => { loaded += 1; return Promise.resolve(kit); }, 'bakery');
+    await expect(source.deleteLog('a/b')).rejects.toThrow();
+    await expect(source.deleteLog('..')).rejects.toThrow();
+    await expect(source.deleteLog('')).rejects.toThrow();
+    expect(fs.deleteDoc).not.toHaveBeenCalled();
+    expect(loaded).toBe(0);
   });
 });

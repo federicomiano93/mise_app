@@ -24,6 +24,21 @@ describe('messageText', () => {
       .toBe('Il registro di Focaccia è pieno. Azzera i campi per iniziarne uno nuovo.');
   });
 
+  it('the Dough history speaks of its own screen, never of Confirm or Reset (step 3c-3)', () => {
+    expect(messageText(say('en'), { kind: 'log-history-not-saved', dough: 'Focaccia' }))
+      .toBe('Focaccia was not saved to the Dough history. Check the connection and try again.');
+    expect(messageText(say('it'), { kind: 'log-history-not-saved', dough: 'Focaccia' }))
+      .toBe('Focaccia non è stato salvato nello storico impasti. Controlla la connessione e riprova.');
+    expect(messageText(say('en'), { kind: 'log-history-full', dough: 'Focaccia' }))
+      .toBe('Focaccia’s log is full: no more changes can be saved to it.');
+    expect(messageText(say('it'), { kind: 'log-history-full', dough: 'Focaccia' }))
+      .toBe('Il registro di Focaccia è pieno: non si possono salvare altre modifiche.');
+    expect(messageText(say('en'), { kind: 'log-not-deleted', dough: 'Focaccia' }))
+      .toBe('Focaccia could not be deleted. It is back in the Dough history.');
+    expect(messageText(say('it'), { kind: 'log-not-deleted', dough: 'Focaccia' }))
+      .toBe('Non è stato possibile eliminare Focaccia. È di nuovo nello storico impasti.');
+  });
+
   it('says nothing out loud for a stream that died: the empty state and the offline banner speak', () => {
     expect(messageText(say('en'), { kind: 'config-stream-broken' })).toBeNull();
     expect(messageText(say('en'), { kind: 'logs-stream-broken' })).toBeNull();
