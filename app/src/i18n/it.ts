@@ -464,4 +464,6 @@ export const it: Messages = {
   'app.failed.title': 'Mise si è fermata.',
   'app.failed.body': 'Di solito ricaricando si risolve. Quello che hai salvato non va perso.',
   'app.failed.action': 'Ricarica l’app',
+
+  'calc.marketOrderTitle': 'Ordine del mercato',
 };

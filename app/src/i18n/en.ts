@@ -517,6 +517,9 @@ export const en = {
   'app.failed.title': 'Mise stopped working.',
   'app.failed.body': 'Reloading usually fixes it. Nothing you saved is lost.',
   'app.failed.action': 'Reload the app',
+
+  // The Calculator (step 3c). The title a WhatsApp list gets when the oldest saved shape carries none.
+  'calc.marketOrderTitle': 'Market order',
 } as const satisfies Record<string, Message>;
 
 export type MessageKey = keyof typeof en;
