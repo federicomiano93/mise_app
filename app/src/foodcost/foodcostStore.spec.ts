@@ -16,7 +16,7 @@ function fakeSource() {
   let products: { onChange: (list: StoredDoc[], meta: ProductsMeta) => void; onError: (err: unknown) => void } | null = null;
   let recipes: { onChange: (list: StoredDoc[]) => void; onError: (err: unknown) => void } | null = null;
   let ingredients: { onChange: (list: StoredDoc[]) => void; onError: (err: unknown) => void } | null = null;
-  let settings: ((data: Record<string, unknown> | null) => void) | null = null;
+  let settings: ((data: Record<string, unknown> | null, meta: { fromServer: boolean }) => void) | null = null;
   const stopped: string[] = [];
   const writes: { kind: string; args: unknown[]; pending: Pending }[] = [];
   let ids = 0;
@@ -44,7 +44,7 @@ function fakeSource() {
     recipes: (list: StoredDoc[]) => recipes!.onChange(list),
     recipesFail: () => recipes!.onError(new Error('refused')),
     ingredients: (list: StoredDoc[]) => ingredients!.onChange(list),
-    settings: (data: Record<string, unknown> | null) => settings!(data),
+    settings: (data: Record<string, unknown> | null, fromServer = true) => settings!(data, { fromServer }),
   };
 }
 
@@ -254,10 +254,9 @@ describe('the Food cost store', () => {
     expect(fake.writes[0]!.args[2]).toEqual({ recordedAt: 'x' });
   });
 
-  test('⚠️ a refused save of a NEW product removes it, and names it', async () => {
-    const { fake, store, messages } = setup();
+  test('⚠️ a refused save of a NEW product removes it, and names it (no live stream to revert it)', async () => {
+    const { fake, store, messages } = setup({ storage: fakeStorage({ [PRODUCTS_KEY]: [] }) });
     store.start();
-    fake.products([]);
     store.saveProduct({ product: product({ name: 'Focaccia' }), snapshot: null, lossPatches: {} });
     fake.writes[0]!.pending.reject(new Error('permission-denied'));
     await settle();
@@ -266,10 +265,9 @@ describe('the Food cost store', () => {
     expect(messages).toEqual([{ kind: 'product-not-saved', name: 'Focaccia' }]);
   });
 
-  test('a refused save of an existing product puts the old one back', async () => {
-    const { fake, store } = setup();
+  test('a refused save of an existing product puts the old one back (no live stream to revert it)', async () => {
+    const { fake, store } = setup({ storage: fakeStorage({ [PRODUCTS_KEY]: [{ id: 'p1', name: 'Loaf', sellingPrice: 2 }] }) });
     store.start();
-    fake.products([{ id: 'p1', name: 'Loaf', sellingPrice: 2 }]);
     store.saveProduct({ product: product({ id: 'p1', name: 'Loaf', sellingPrice: 3 } as Product & { name: string }), snapshot: null, lossPatches: {} });
     expect(store.getSnapshot().products[0]!.sellingPrice).toBe(3);
     fake.writes[0]!.pending.reject(new Error('refused'));
@@ -278,14 +276,50 @@ describe('the Food cost store', () => {
   });
 
   test('⚠️ a refusal never rolls back over a LATER save of the same product', async () => {
-    const { fake, store } = setup();
+    const { fake, store } = setup({ storage: fakeStorage({ [PRODUCTS_KEY]: [{ id: 'p1', name: 'Loaf', sellingPrice: 2 }] }) });
     store.start();
-    fake.products([{ id: 'p1', name: 'Loaf', sellingPrice: 2 }]);
     store.saveProduct({ product: product({ id: 'p1', name: 'Loaf', sellingPrice: 3 } as Product & { name: string }), snapshot: null, lossPatches: {} });
     store.saveProduct({ product: product({ id: 'p1', name: 'Loaf', sellingPrice: 4 } as Product & { name: string }), snapshot: null, lossPatches: {} });
     fake.writes[0]!.pending.reject(new Error('refused'));
     await settle();
     expect(store.getSnapshot().products[0]!.sellingPrice).toBe(4);
+  });
+
+  test('⚠️ with the stream alive, a refusal is left to the stream: the store puts back nothing older', async () => {
+    const { fake, store, messages } = setup();
+    store.start();
+    fake.products([{ id: 'p1', name: 'Loaf', sellingPrice: 2 }]);
+    store.saveProduct({ product: product({ id: 'p1', name: 'Loaf', sellingPrice: 3 } as Product & { name: string }), snapshot: null, lossPatches: {} });
+    // Another phone saved 5 meanwhile; the SDK shows the server's version, without the refused write.
+    fake.products([{ id: 'p1', name: 'Loaf', sellingPrice: 5 }]);
+    fake.writes[0]!.pending.reject(new Error('refused'));
+    await settle();
+    expect(store.getSnapshot().products[0]!.sellingPrice).toBe(5);
+    expect(messages).toEqual([{ kind: 'product-not-saved', name: 'Loaf' }]);
+  });
+
+  test('a dead stream hands the rollback back to the store', async () => {
+    const { fake, store } = setup();
+    store.start();
+    fake.products([]);
+    fake.productsFail();
+    store.saveProduct({ product: product({ name: 'Focaccia' }), snapshot: null, lossPatches: {} });
+    fake.writes[0]!.pending.reject(new Error('refused'));
+    await settle();
+    expect(store.getSnapshot().products).toEqual([]);
+  });
+
+  test('⚠️ offline, a «missing» settings document from the phone’s own database is not an answer', () => {
+    const { fake, store } = setup();
+    store.start();
+    fake.settings(null, false);
+    expect(store.getSnapshot().settingsLoaded).toBe(false);
+    // A cached copy that exists is an answer; so is the server saying there is none.
+    fake.settings({ labourCostPerHour: 12 }, false);
+    expect(store.getSnapshot().labourCostPerHour).toBe(12);
+    fake.settings(null, true);
+    expect(store.getSnapshot().labourCostPerHour).toBeNull();
+    expect(store.getSnapshot().settingsLoaded).toBe(true);
   });
 
   test('a landed save leaves the product and clears the unsent mark', async () => {
@@ -349,10 +383,9 @@ describe('the Food cost store', () => {
     expect(store.getSnapshot().recipes.r1!.lossPct).toBe(9);
   });
 
-  test('a delete is local-first; a refused one puts the product back and says so', async () => {
-    const { fake, store, messages } = setup();
+  test('a delete is local-first; a refused one puts the product back and says so (no live stream)', async () => {
+    const { fake, store, messages } = setup({ storage: fakeStorage({ [PRODUCTS_KEY]: [{ id: 'p1', name: 'Loaf' }] }) });
     store.start();
-    fake.products([{ id: 'p1', name: 'Loaf' }]);
     store.deleteProduct('p1');
     expect(store.getSnapshot().products).toEqual([]);
     fake.writes[0]!.pending.reject(new Error('refused'));

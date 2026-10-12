@@ -58,8 +58,10 @@ export interface FoodcostSource {
   // ingredients themselves have arrived; a refused price read emits them unpriced.
   watchIngredients(onChange: (list: StoredDoc[]) => void, onError: (err: unknown) => void): () => void;
   // foodcost-settings/main, live: its fields, or null when it does not exist OR cannot be read.
-  // ⚠️ Call it only for whoever runs the place.
-  watchSettings(onChange: (data: Record<string, unknown> | null) => void): () => void;
+  // `meta.fromServer` tells «the server says there is none» from «this phone's own database has no
+  // copy» (offline, a device that never read it): only the first is an answer. A refusal counts as
+  // the server's word. ⚠️ Call it only for whoever runs the place.
+  watchSettings(onChange: (data: Record<string, unknown> | null, meta: { readonly fromServer: boolean }) => void): () => void;
   // A product, WHOLE, and when given its margin point, in ONE batch. Resolves when the server has
   // both (offline: never); rejects when either is refused.
   saveProduct(id: string, data: Readonly<Record<string, unknown>>, snapshot: Readonly<Record<string, unknown>> | null): Promise<void>;
@@ -212,14 +214,17 @@ export function createFirestoreFoodcostSource(
     },
 
     // A refusal reads as «no rate»: the screen then simply shows no labour money.
+    // ⚠️ includeMetadataChanges, for the same reason as the products: the server's answer identical
+    // to the cached one is otherwise never reported, and a cached «missing» would never be confirmed.
     watchSettings: onChange => listen(kit => kit.fs.onSnapshot(
       kit.fs.doc(kit.db, settingsPath, SETTINGS_DOC),
-      snap => onChange(snap.exists() ? snap.data() : null),
+      { includeMetadataChanges: true },
+      snap => onChange(snap.exists() ? snap.data() : null, { fromServer: !snap.metadata.fromCache }),
       err => {
         console.warn('watchFoodcostSettings failed:', err);
-        onChange(null);
+        onChange(null, { fromServer: true });
       },
-    ), () => onChange(null)),
+    ), () => onChange(null, { fromServer: true })),
 
     // ⚠️ THE BATCH IS THE POINT: done as two writes the margin point could fail alone, leaving a
     // product whose history has no record of the change just made. Either both land or neither.

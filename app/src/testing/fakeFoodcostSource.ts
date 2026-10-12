@@ -45,7 +45,7 @@ export function fakeFoodcostSource(seed: {
   const productWatchers = new Set<ProductsListener>();
   const recipeWatchers = new Set<ListListener>();
   const ingredientWatchers = new Set<ListListener>();
-  const settingsWatchers = new Set<(data: Record<string, unknown> | null) => void>();
+  const settingsWatchers = new Set<(data: Record<string, unknown> | null, meta: { readonly fromServer: boolean }) => void>();
   const refuse = { save: false, loss: false, remove: false, rate: false, history: false, products: false };
   const saved: FakeFoodcostSource['saved'] = [];
   let held = false;
@@ -62,7 +62,7 @@ export function fakeFoodcostSource(seed: {
       if (!held) for (const w of productWatchers) w.onChange([...products.values()], FROM_SERVER);
       for (const w of recipeWatchers) w.onChange([...recipes.values()]);
       for (const w of ingredientWatchers) w.onChange(priced());
-      for (const w of settingsWatchers) w(fake.settings);
+      for (const w of settingsWatchers) w(fake.settings, { fromServer: true });
     },
     hold() { held = true; },
     release() { held = false; fake.push(); },
@@ -101,7 +101,7 @@ export function fakeFoodcostSource(seed: {
 
     watchSettings: vi.fn<FoodcostSource['watchSettings']>(onChange => {
       settingsWatchers.add(onChange);
-      queueMicrotask(() => { if (settingsWatchers.has(onChange)) onChange(fake.settings); });
+      queueMicrotask(() => { if (settingsWatchers.has(onChange)) onChange(fake.settings, { fromServer: true }); });
       return () => { settingsWatchers.delete(onChange); };
     }),
 

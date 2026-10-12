@@ -53,7 +53,7 @@ describe('the form', () => {
   // Save would clear the real rate.
   it('waits for the stored rate before it copies it into the box', async () => {
     const fake = source();
-    let answer: (data: Record<string, unknown> | null) => void = () => undefined;
+    let answer: (data: Record<string, unknown> | null, meta: { readonly fromServer: boolean }) => void = () => undefined;
     vi.mocked(fake.watchSettings).mockImplementation(onChange => {
       answer = onChange;
       return () => undefined;
@@ -65,7 +65,7 @@ describe('the form', () => {
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument();
 
-    act(() => { answer({ labourCostPerHour: 9 }); });
+    act(() => { answer({ labourCostPerHour: 9 }, { fromServer: true }); });
     expect(await box()).toHaveValue('9');
   });
 });

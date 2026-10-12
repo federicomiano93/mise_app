@@ -181,13 +181,14 @@ describe('the Food cost source, as firestore.rules expect it', () => {
     const { kit, live } = fakeKit();
     const source = createFirestoreFoodcostSource(() => Promise.resolve(kit), 'bakery');
     const seen: unknown[] = [];
-    source.watchSettings(data => seen.push(data));
+    source.watchSettings((data, meta) => seen.push([data, meta.fromServer]));
     await settle();
     const [listener] = live('locations/bakery/foodcost-settings/main');
-    listener!.next({ exists: () => true, data: () => ({ labourCostPerHour: 14 }) });
-    listener!.next({ exists: () => false, data: () => undefined });
+    expect(listener!.options).toEqual({ includeMetadataChanges: true });
+    listener!.next({ exists: () => true, data: () => ({ labourCostPerHour: 14 }), metadata: { fromCache: false } });
+    listener!.next({ exists: () => false, data: () => undefined, metadata: { fromCache: true } });
     listener!.error(new Error('permission-denied'));
-    expect(seen).toEqual([{ labourCostPerHour: 14 }, null, null]);
+    expect(seen).toEqual([[{ labourCostPerHour: 14 }, true], [null, false], [null, true]]);
   });
 
   test('a stop before Firestore has loaded means nothing is ever subscribed', async () => {

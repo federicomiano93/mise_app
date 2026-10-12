@@ -174,6 +174,7 @@ export function createFoodcostStore(
   let products: readonly Product[] = normalizeProducts(bootProducts) as Product[];
   let productsLoaded = Array.isArray(bootProducts);
   let productsFromServer = false;
+  let productsStreamFailed = false;
   let recipes: Readonly<Record<string, StoredDoc>> = indexById(bootRecipes);
   let recipesLoaded = Array.isArray(bootRecipes);
   let ingredients: Readonly<Record<string, StoredDoc>> = indexById(bootIngredients);
@@ -228,6 +229,15 @@ export function createFoodcostStore(
   // believing it would show «No products yet» over a venue that has twenty.
   function believable(list: readonly StoredDoc[], fromServer: boolean): boolean {
     return fromServer || list.length > 0 || bootSaidNone;
+  }
+
+  // ⚠️ WHEN THE PRODUCTS' STREAM IS ALIVE, A REFUSAL IS UNDONE BY IT: the SDK shows the database
+  // without the refused write (in a snapshot it sends before it rejects the promise). Putting back
+  // `prev` on top would replace that with the version this phone held before saving, which can be
+  // OLDER than what the server now has (another phone's save), or a new product's first, never-saved
+  // version after a second refusal. Only with no live stream is the rollback the store's to do.
+  function listenerWillRevert(): boolean {
+    return productsFromServer && !productsStreamFailed;
   }
 
   function upsertLocal(product: Product): void {
@@ -298,6 +308,7 @@ export function createFoodcostStore(
         },
         err => {
           deps.warn('Food cost live sync failed:', err);
+          productsStreamFailed = true;
           // A dead stream still ends the wait: the list shows what it has, and says why it may be old.
           productsLoaded = true;
           changed();
@@ -337,7 +348,11 @@ export function createFoodcostStore(
       // would be refused (noise and a wasted read), and the rate is a wage figure they are not meant
       // to see. Never written to the phone's storage either, so it never lingers on a shared phone.
       if (options.canManage) {
-        stops.push(source.watchSettings(settings => {
+        stops.push(source.watchSettings((settings, meta) => {
+          // ⚠️ A «MISSING» FROM THIS PHONE'S OWN DATABASE IS NOT AN ANSWER: offline, a device that never
+          // read the document has no copy of it, and Settings opened on that would show an empty box
+          // whose Save clears the real rate. It waits for the server (or a copy that exists).
+          if (!settings && !meta.fromServer) return;
           labourCostPerHour = positiveNumber(settings ? settings.labourCostPerHour : null);
           settingsLoaded = true;
           changed();
@@ -366,7 +381,7 @@ export function createFoodcostStore(
       upsertLocal(normalizeProduct({ id, ...data }) as Product);
       track(source.saveProduct(id, data, point), err => {
         deps.warn('Product did not sync to Firestore:', err);
-        if (saveSeq.get(id) === mine) {
+        if (saveSeq.get(id) === mine && !listenerWillRevert()) {
           if (prev) upsertLocal(prev); else removeLocal(id);
         }
         say({ kind: 'product-not-saved', name: product.name });
@@ -381,7 +396,7 @@ export function createFoodcostStore(
       removeLocal(id);
       track(source.removeProduct(id), err => {
         deps.warn('Product delete did not sync to Firestore:', err);
-        if (prev && saveSeq.get(id) === mine) upsertLocal(prev);
+        if (prev && saveSeq.get(id) === mine && !listenerWillRevert()) upsertLocal(prev);
         say({ kind: 'product-not-deleted' });
       });
     },
