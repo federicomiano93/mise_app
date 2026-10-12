@@ -206,6 +206,15 @@ describe('screenNameFor', () => {
     ['/calculator/a%2Fb%20c', 'calculator'],
     ['/calculator/brioche/more', 'calculator'],
     ['/calculator-archive', 'not-found'],
+    // Every address under Settings is the one screen the current app calls `settings`.
+    ['/calculator/settings', 'settings'],
+    ['/calculator/settings/', 'settings'],
+    ['/calculator/settings/extra', 'settings'],
+    ['/calculator/settings/divisor/brioche', 'settings'],
+    ['/calculator/settings/log', 'settings'],
+    ['/calculator/settings/clients/new', 'settings'],
+    ['/calculator/settings/nonsense', 'settings'],
+    ['/calculator/settingsX', 'calculator'],
   ])('%s → %s', (pathname, expected) => {
     expect(screenNameFor(pathname)).toBe(expected);
   });
