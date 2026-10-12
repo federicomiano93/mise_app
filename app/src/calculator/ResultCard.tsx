@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react';
+import type { Ref } from 'react';
 import { Maximize2, Send } from 'lucide-react';
 import {
   crateCount, DIVISOR_MAX, divisorTotal, formatGrams, getCratePerBox, getDivisorProducts, isCrateEnabled,
@@ -26,6 +27,8 @@ type Props = {
   // The divisor's number of crates, kept by the panel because Confirm saves it with the dough.
   divisorN: number;
   onDivisorN: (n: number) => void;
+  // The heading takes the focus after a Confirm (RecipePanel): it is the recipe's own title.
+  headingRef?: Ref<HTMLHeadingElement>;
 };
 
 // How long «Copied» (or «Copy failed») stays on the button.
@@ -36,7 +39,7 @@ const COPY_NOTE_MS = 2000;
 //
 // ⚠️ A TAB THAT CANNOT BE CALCULATED SHOWS NO NUMBER AT ALL, and says why: an answer that looks complete and is
 // not is worse than none. «Still loading» and «gone» are different sentences.
-export function ResultCard({ recipe, result, config, products, qty, divisorN, onDivisorN }: Props) {
+export function ResultCard({ recipe, result, config, products, qty, divisorN, onDivisorN, headingRef }: Props) {
   const { t, locale } = useT();
   const titleId = useId();
   const grams = (n: number) => formatGrams(n, locale);
@@ -82,7 +85,7 @@ export function ResultCard({ recipe, result, config, products, qty, divisorN, on
   return (
     <section className={styles.card} aria-labelledby={titleId}>
       <header className={styles.head}>
-        <h2 id={titleId} className={styles.title}>{t('calc.doughTitle', { name: recipe.name })}</h2>
+        <h2 id={titleId} ref={headingRef} tabIndex={-1} className={styles.title}>{t('calc.doughTitle', { name: recipe.name })}</h2>
         {ready ? (
           <>
             <span className={styles.badge}>{t('calc.gramsRaw', { g: grams(Math.round(ready.target)) })}</span>

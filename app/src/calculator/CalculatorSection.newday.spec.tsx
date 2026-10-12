@@ -201,6 +201,28 @@ describe('coming back to the app the next morning', () => {
     expect(within(roma).getByLabelText('Focaccia tray (500g)')).toHaveValue(5);
   });
 
+  // The current app's resetTabFields puts the divisor select back to 0 with the rest of the day's numbers.
+  it('puts the divisor back to 0 with the rest of the numbers, so the next Confirm does not save yesterday\'s split', async () => {
+    seedFocaccia(at(12, 9));
+    window.localStorage.setItem('lock-focaccia', JSON.stringify({ locked: false, logId: null }));
+    const config = configOf({ recipes: [FOCACCIA, BRIOCHE], divisorIncluded: { focaccia: ['tray'] } });
+    const { user, source } = await open('/calculator/focaccia', config);
+    await user.selectOptions(await main().findByLabelText('Number of crates', undefined, LOAD), '3');
+    expect(main().getByLabelText('Number of crates')).toHaveValue('3');
+
+    now = at(13, 8);
+    comeBack();
+    const roma = main().getByRole('region', { name: 'Cafe Roma' });
+    expect(main().queryByLabelText('Number of crates')).not.toBeInTheDocument();
+    await user.click(within(roma).getByLabelText('Focaccia tray (500g)'));
+    await user.keyboard('4');
+    await user.click(main().getByRole('button', { name: 'Confirm' }));
+    await user.click(within(await screen.findByRole('dialog', { name: 'Save this dough for:' })).getByRole('button', { name: 'Today' }));
+    await waitFor(() => { expect(source.saved).toHaveLength(1); });
+    expect(main().getByLabelText('Number of crates')).toHaveValue('0');
+    expect((source.saved[0] as any).versions[0].sheet.divisor).toMatchObject({ n: 0 });
+  });
+
   it('stops listening when the Calculator is left', async () => {
     seedFocaccia(at(12, 9));
     const { router } = await open();

@@ -182,3 +182,14 @@ describe('removing one key', () => {
     expect(listener).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('how often a tab was forgotten', () => {
+  it('moves on with a Reset and with the new-day sweep, for that tab only', () => {
+    const { state } = setup({ 'touched-r1': String(at(11, 15)), 'touched-r2': String(at(12, 8)) });
+    expect([state.forgotten('r1'), state.forgotten('r2')]).toEqual([0, 0]);
+    state.sweep([{ id: 'r1', qtyIds: [] }, { id: 'r2', qtyIds: [] }]);
+    expect([state.forgotten('r1'), state.forgotten('r2')]).toEqual([1, 0]);
+    state.forget('r2', []);
+    expect([state.forgotten('r1'), state.forgotten('r2')]).toEqual([1, 1]);
+  });
+});

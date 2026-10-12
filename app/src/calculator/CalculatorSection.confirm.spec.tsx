@@ -247,6 +247,57 @@ describe('Confirm', () => {
   });
 });
 
+// The button that was pressed unmounts when the tab changes state, so the focus is sent on, not left to fall to the
+// page.
+describe('where the focus goes', () => {
+  const recipeHeading = () => main().getByRole('heading', { level: 2, name: 'Focaccia dough' });
+
+  it('to the recipe\'s heading after a Confirm through the day dialog', async () => {
+    const { user } = await open();
+    await fourTrays(user);
+    await confirmFor(user, 'Today');
+    await main().findByRole('region', { name: 'Focaccia dough' }, LOAD);
+    await waitFor(() => { expect(recipeHeading()).toHaveFocus(); });
+    expect(recipeHeading()).toHaveAttribute('tabindex', '-1');
+  });
+
+  it('to the recipe\'s heading after a Confirm with no question asked', async () => {
+    const { user } = await open(onlyFocaccia({ askDoughDay: false }));
+    await fourTrays(user);
+    await user.click(main().getByRole('button', { name: 'Confirm' }));
+    await main().findByRole('region', { name: 'Focaccia dough' }, LOAD);
+    await waitFor(() => { expect(recipeHeading()).toHaveFocus(); });
+  });
+
+  it('stays where it is when the day dialog is cancelled: back on Confirm', async () => {
+    const { user } = await open();
+    await fourTrays(user);
+    await user.click(main().getByRole('button', { name: 'Confirm' }));
+    await user.click((await dialogNamed('Save this dough for:')).getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => { expect(main().getByRole('button', { name: 'Confirm' })).toHaveFocus(); });
+  });
+
+  it('to the Confirm button after Edit', async () => {
+    const { user } = await open();
+    await fourTrays(user);
+    await confirmFor(user, 'Today');
+    await main().findByRole('region', { name: 'Focaccia dough' }, LOAD);
+    await user.click(main().getByRole('button', { name: 'Edit' }));
+    await user.click((await alertNamed('Edit')).getByRole('button', { name: 'Edit' }));
+    await waitFor(() => { expect(main().getByRole('button', { name: 'Confirm' })).toHaveFocus(); });
+  });
+
+  it('nowhere when Edit is cancelled: the tab is unchanged', async () => {
+    const { user } = await open();
+    await fourTrays(user);
+    await confirmFor(user, 'Today');
+    await main().findByRole('region', { name: 'Focaccia dough' }, LOAD);
+    await user.click(main().getByRole('button', { name: 'Edit' }));
+    await user.click((await alertNamed('Edit')).getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => { expect(main().getByRole('button', { name: 'Edit' })).toHaveFocus(); });
+  });
+});
+
 describe('the words of the saved text', () => {
   // The current app's js/log-model.js builds «Extra dough: » with t(), so an Italian venue stores «Impasto extra: ».
   it('follow the interface language at the moment of saving', async () => {

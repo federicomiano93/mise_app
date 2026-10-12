@@ -64,10 +64,17 @@ export function RecipePanel({ recipe, panelProps }: Props) {
   const [confirm, confirmDialog] = useConfirm();
   const [alert, alertDialog] = useAlert();
   const [picking, setPicking] = useState(false);
-  // The divisor's crates: display only, never locked, but saved with the dough.
-  const [divisorN, setDivisorN] = useState(0);
   const uid = useId();
   const rid = recipe.id;
+  // The divisor's crates: display only, never locked, but saved with the dough.
+  //
+  // ⚠️ IT BELONGS TO THE DAY'S NUMBERS: it is remembered with the generation of the tab it was picked in, and
+  // reads as 0 once the tab has been forgotten since (Reset, or the new work day clearing it), as the current
+  // app's resetTabFields puts the select back to 0. Derived while drawing, so no frame shows yesterday's split.
+  const generation = state.forgotten(rid);
+  const [picked, setPicked] = useState({ n: 0, generation });
+  const divisorN = picked.generation === generation ? picked.n : 0;
+  const setDivisorN = (n: number) => { setPicked({ n, generation }); };
 
   const products = getTabProducts(config, rid);
   const { source } = sourceRecipe(recipe, linked);
@@ -112,6 +119,23 @@ export function RecipePanel({ recipe, panelProps }: Props) {
     }
     wasShown.current = shown;
   }, [shown, scrollArea]);
+
+  // ⚠️ THE BUTTON THAT WAS PRESSED IS GONE once the tab changes state (Confirm becomes Edit, Edit becomes Confirm)
+  // and the entries move under the recipe: the focus would fall to the page. So the screen says where it goes —
+  // the recipe's heading after a Confirm (the recipe is what somebody came for), the Confirm button after Edit —
+  // and takes it there once the new state is drawn. Nothing is asked for on a plain re-render.
+  const wantFocus = useRef<'recipe' | 'confirm' | null>(null);
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  const confirmRef = useRef<HTMLButtonElement>(null);
+  useLayoutEffect(() => {
+    if (wantFocus.current === 'recipe' && shown) {
+      headingRef.current?.focus({ preventScroll: true });
+      wantFocus.current = null;
+    } else if (wantFocus.current === 'confirm' && !locked && hasDough) {
+      confirmRef.current?.focus();
+      wantFocus.current = null;
+    }
+  });
 
   const set = (key: string, text: string) => { state.set(key, text, rid); };
   // A box left empty goes back to its default: kept, but the tab is not «used» by it.
@@ -161,6 +185,7 @@ export function RecipePanel({ recipe, panelProps }: Props) {
     // Confirming is using the tab, even if nothing else was typed after.
     state.set(lockKey(rid), serializeLock(true, done.logId), rid);
     announceAction('dough-confirmed');
+    wantFocus.current = 'recipe';
   }
 
   // Asks first, then unlocks KEEPING the link to the log (the next Confirm updates it), hides the recipe so it
@@ -173,6 +198,7 @@ export function RecipePanel({ recipe, panelProps }: Props) {
     if (!ok) return;
     state.remove(revealedKey(rid));
     state.set(lockKey(rid), serializeLock(false, lock?.logId));
+    wantFocus.current = 'confirm';
   };
 
   // Everything the tab remembers goes through the ONE forget function (numbers, knob, selects, lock, revealed,
@@ -183,7 +209,6 @@ export function RecipePanel({ recipe, panelProps }: Props) {
     });
     if (!ok) return;
     state.forget(rid, products.map(product => product.qtyId));
-    setDivisorN(0);
   };
 
   const range = knobRange(recipe.leaveningDefaultPct);
@@ -293,7 +318,7 @@ export function RecipePanel({ recipe, panelProps }: Props) {
 
       {/* Confirm when there is something to make and the tab is open; Edit when it is locked; neither otherwise. */}
       {hasDough && !locked ? (
-        <Button variant="primary" className={styles.confirm} onPress={onConfirm}>{t('calc.confirm')}</Button>
+        <Button ref={confirmRef} variant="primary" className={styles.confirm} onPress={onConfirm}>{t('calc.confirm')}</Button>
       ) : null}
       {hasDough && locked ? (
         <Button className={styles.confirm} onPress={() => { void onEdit(); }}>
@@ -308,6 +333,7 @@ export function RecipePanel({ recipe, panelProps }: Props) {
     <div key="result" className={styles.result}>
       {shown ? (
         <ResultCard
+          headingRef={headingRef}
           recipe={recipe}
           result={result}
           config={config}

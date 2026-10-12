@@ -36,6 +36,9 @@ export interface TabState {
   sweep(tabs: readonly { id: string; qtyIds: readonly string[] }[]): string[];
   // Whether the «new day» line is still due for a tab, and for how many more milliseconds.
   noteLeft(rid: string): number;
+  // How many times the tab has been forgotten (Reset, or the new-day sweep). What a screen keeps in its own
+  // state — the divisor's crates — is yesterday's once this number has moved on.
+  forgotten(rid: string): number;
   subscribe(listener: () => void): () => void;
   // Changes whenever anything a screen reads has.
   getVersion(): number;
@@ -46,6 +49,8 @@ export function createTabState(storage: KeyValueStorage | null, now: () => numbe
   // numbers for as long as the page lives. `null` is «removed».
   const memory = new Map<string, string | null>();
   const noteUntil = new Map<string, number>();
+  const generations = new Map<string, number>();
+  const forgot = (rid: string) => { generations.set(rid, (generations.get(rid) ?? 0) + 1); };
   const listeners = new Set<() => void>();
   let version = 0;
 
@@ -98,6 +103,7 @@ export function createTabState(storage: KeyValueStorage | null, now: () => numbe
 
     forget(rid, qtyIds) {
       for (const key of tabKeysToForget(rid, qtyIds)) drop(key);
+      forgot(rid);
       notify();
     },
 
@@ -107,10 +113,13 @@ export function createTabState(storage: KeyValueStorage | null, now: () => numbe
       for (const rid of stale) {
         for (const key of tabKeysToForget(rid, tabs.find(tab => tab.id === rid)?.qtyIds ?? [])) drop(key);
         noteUntil.set(rid, now() + CLEARED_NOTE_MS);
+        forgot(rid);
       }
       notify();
       return stale;
     },
+
+    forgotten: rid => generations.get(rid) ?? 0,
 
     noteLeft(rid) {
       const until = noteUntil.get(rid);

@@ -189,3 +189,9 @@
 .copy:hover {
   background: var(--sunken);
 }
+
+/* The heading takes the focus from script after a Confirm. A person who tapped does not need a ring around it; one
+   who used the keyboard still gets base.css's :focus-visible outline. */
+.title:focus:not(:focus-visible) {
+  outline: none;
+}
