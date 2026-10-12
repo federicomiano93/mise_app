@@ -249,6 +249,13 @@ describe('Confirm', () => {
 
 // The button that was pressed unmounts when the tab changes state, so the focus is sent on, not left to fall to the
 // page.
+// The frames of every other component held back with ours: a restore of React Aria's may throw on the gone button, as it can in a browser.
+function runFrames(frames: FrameRequestCallback[]) {
+  for (const frame of frames.splice(0)) {
+    try { frame(0); } catch { /* not ours */ }
+  }
+}
+
 describe('where the focus goes', () => {
   const recipeHeading = () => main().getByRole('heading', { level: 2, name: 'Focaccia dough' });
 
@@ -267,6 +274,39 @@ describe('where the focus goes', () => {
     await user.click(main().getByRole('button', { name: 'Confirm' }));
     await main().findByRole('region', { name: 'Focaccia dough' }, LOAD);
     await waitFor(() => { expect(recipeHeading()).toHaveFocus(); });
+  });
+
+  // ⚠️ IN A REAL BROWSER the day dialog gives the focus back, in an animation frame, to the Confirm button it came
+  // from — gone by then — and the focus lands on the page, after the panel took it. jsdom restores nothing, so
+  // the theft is played by hand: the frame callbacks are held, the focus is dropped to the page, then they run.
+  it('takes the focus back one frame later if the closing dialog dropped it on the page', async () => {
+    const { user } = await open();
+    await fourTrays(user);
+    await user.click(main().getByRole('button', { name: 'Confirm' }));
+    const picker = await dialogNamed('Save this dough for:');
+    const frames: FrameRequestCallback[] = [];
+    vi.spyOn(window, 'requestAnimationFrame').mockImplementation(callback => { frames.push(callback); return frames.length; });
+    await user.click(picker.getByRole('button', { name: 'Today' }));
+    await main().findByRole('region', { name: 'Focaccia dough' }, LOAD);
+    expect(recipeHeading()).toHaveFocus();
+    (document.activeElement as HTMLElement).blur();
+    expect(document.body).toHaveFocus();
+    runFrames(frames);
+    expect(recipeHeading()).toHaveFocus();
+  });
+
+  it('leaves the focus alone one frame later when it is somewhere else on purpose', async () => {
+    const { user } = await open();
+    await fourTrays(user);
+    await user.click(main().getByRole('button', { name: 'Confirm' }));
+    const picker = await dialogNamed('Save this dough for:');
+    const frames: FrameRequestCallback[] = [];
+    vi.spyOn(window, 'requestAnimationFrame').mockImplementation(callback => { frames.push(callback); return frames.length; });
+    await user.click(picker.getByRole('button', { name: 'Today' }));
+    await main().findByRole('region', { name: 'Focaccia dough' }, LOAD);
+    main().getByRole('button', { name: 'Copy recipe' }).focus();
+    runFrames(frames);
+    expect(main().getByRole('button', { name: 'Copy recipe' })).toHaveFocus();
   });
 
   it('stays where it is when the day dialog is cancelled: back on Confirm', async () => {

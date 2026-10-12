@@ -127,14 +127,25 @@ export function RecipePanel({ recipe, panelProps }: Props) {
   const wantFocus = useRef<'recipe' | 'confirm' | null>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
   const confirmRef = useRef<HTMLButtonElement>(null);
+  //
+  // ⚠️ THE DIALOG THAT WAS OPEN GIVES THE FOCUS BACK AFTER US. React Aria's modal restores the focus, in an animation
+  // frame, to the element that had it before the dialog opened — the Confirm button, by then gone — and in a real
+  // browser that lands the focus on the page, after the effect below has run. So the focus is also claimed again
+  // one frame later, queued after the dialog's own, but only if it has fallen to the page (a person's own move in
+  // between is not overridden).
   useLayoutEffect(() => {
-    if (wantFocus.current === 'recipe' && shown) {
-      headingRef.current?.focus({ preventScroll: true });
-      wantFocus.current = null;
-    } else if (wantFocus.current === 'confirm' && !locked && hasDough) {
-      confirmRef.current?.focus();
-      wantFocus.current = null;
-    }
+    let target: HTMLElement | null = null;
+    if (wantFocus.current === 'recipe' && shown) target = headingRef.current;
+    else if (wantFocus.current === 'confirm' && !locked && hasDough) target = confirmRef.current;
+    else return;
+    wantFocus.current = null;
+    if (!target) return;
+    const goal = target;
+    goal.focus({ preventScroll: true });
+    requestAnimationFrame(() => {
+      const now = document.activeElement;
+      if (goal.isConnected && (now === null || now === document.body)) goal.focus({ preventScroll: true });
+    });
   });
 
   const set = (key: string, text: string) => { state.set(key, text, rid); };
