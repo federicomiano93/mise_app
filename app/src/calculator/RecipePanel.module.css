@@ -1,0 +1,111 @@
+/* One recipe's panel. A phone, or a tablet held upright: one column, the entries and then the recipe. From
+   1000px (the lab tablet held sideways is 1024 wide): the entries on the left, the scaled recipe on the right
+   and sticking to the top while the entries scroll. */
+
+.layout {
+  display: grid;
+  gap: var(--s4);
+}
+
+.entries,
+.result {
+  min-width: 0;
+}
+
+/* Nothing to make: no card, and no gap where it would be. */
+.result:empty {
+  display: none;
+}
+
+.entries {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+}
+
+/* The settings of the dough that are one box each: a label on the left, the box on the right. The boxes of
+   every row end on the same right edge, with no unit drawn after them (the label already says «%» / «(g)»). */
+.param {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+  min-height: var(--hit);
+  padding: var(--s3) var(--s4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+}
+
+.paramLabel {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.paramStack {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* «= 5,000 g» beside the label. */
+.traysGrams {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.group {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--s2);
+}
+
+.section {
+  margin-top: var(--s2);
+  font-size: var(--fs-md);
+  font-weight: 650;
+}
+
+/* Why the tab is empty, for twelve seconds after a new work day cleared it. Quiet: it explains, it does not
+   warn. */
+.note {
+  margin-bottom: var(--s3);
+  padding: var(--s3) var(--s4);
+  border-radius: var(--r-md);
+  background: var(--sunken);
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
+@media (min-width: 1000px) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: var(--s6);
+    align-items: start;
+  }
+
+  /* The columns are fixed whichever comes first in the document (a confirmed dough puts the recipe first
+     for the keyboard and the screen reader; it must not swap sides). */
+  .entries {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  /* ⚠️ THE RECIPE STAYS ON SCREEN WHILE THE ENTRIES SCROLL (a long list of clients): stuck to the top of the
+     scroll area, never taller than the screen less the top bar, so it scrolls on its own if it must.
+     No `overflow` on anything between it and the scroll area, or it would not stick.
+     ⚠️ NO `overscroll-behavior: contain`: a scroll that reaches the end of the card goes on to the page. */
+  .result {
+    position: sticky;
+    top: var(--s4);
+    grid-column: 2;
+    grid-row: 1;
+    /* Two declarations: Chrome 107 (the lab tablet's floor) has no dvh and keeps the first. */
+    max-height: calc(100vh - var(--topbar-h) - 2 * var(--s4));
+    max-height: calc(100dvh - var(--topbar-h) - 2 * var(--s4));
+    overflow-y: auto;
+  }
+}
