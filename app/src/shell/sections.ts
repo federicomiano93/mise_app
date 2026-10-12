@@ -119,6 +119,7 @@ export function screenNameFor(pathname: string): string | null {
   if (section.id === 'pastries') return pastriesScreenName(pathname, section.path);
   if (section.id === 'stocktake') return stocktakeScreenName(pathname, section.path);
   if (section.id === 'foodcost') return foodcostScreenName(pathname, section.path);
+  if (section.id === 'calculator') return calculatorScreenName(pathname, section.path);
   return section.id;
 }
 
@@ -143,6 +144,15 @@ function foodcostScreenName(pathname: string, base: string): string {
   if (rest.length === 2 && rest[0] === 'product') return 'foodcost-product';
   if (rest.length === 3 && rest[0] === 'product' && rest[2] === 'history') return 'foodcost-history';
   return 'foodcost';
+}
+
+// The Calculator is two screens that share one section: the work view (whichever recipe's tab) and Settings
+// (the hub and every screen under it, which is how the current app's usage record has always named them).
+// Changing tab is not a new screen. ⚠️ `settings` is also the name of the Settings section's own page, so
+// the owner's statistics count the two together (the decision for the night run of 12 Oct 2026).
+function calculatorScreenName(pathname: string, base: string): string {
+  const [first] = pathname.slice(base.length).split('/').filter(part => part !== '');
+  return first === 'settings' ? 'settings' : 'calculator';
 }
 
 // What the usage record calls the sentence an employee gets in place of a month the rules refuse

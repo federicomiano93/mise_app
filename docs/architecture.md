@@ -164,8 +164,20 @@ Aria does not support Preact. The numbers are below.
   full-screen view (`RecipeFullScreen`: a native `<dialog>`, six text sizes in `mise.calcZoomStep`), Copy
   (`clipboard.ts`, raced against 2 s) and Send (`ui/SendSheet.tsx`, the shared «which road» sheet: WhatsApp
   with no recipient, or the mail app). jsdom has no modal `<dialog>`: `testing/setup.ts` gives it
-  `showModal`/`close`. Not yet: the doors to Settings and the empty states' buttons (3c-2), the Log (3c-3),
-  orders (3c-4). Its parity list is `docs/parity/calculator.md`.
+  `showModal`/`close`. Step 3c-2 slice C adds Settings, one level below the work view: a Settings button at the
+  top of the work view and of the empty states (none while «Loading…»; «Add a recipe» and «Choose which to show»
+  beside it), and the addresses `/calculator/settings` (the hub, `CalculatorSettings`, with the two switches
+  that save on the tap and show «Saved ✓»), `/extra`, `/divisor[/<recipeId>]` and `/log`; `/clients[/<id>|/new]` and
+  `/recipes[/<id>|/new]` are parsed and reserved (they go to the hub until a later slice draws them), and `settings`
+  as the first segment always means Settings. The usage record names every address under Settings `settings`
+  (`calculatorScreenName` in `shell/sections.ts`). Every editing screen is a `SettingsEditor` (a working copy, Save
+  disabled until it differs, the question, the discard question through `useBlocker`, `markBusy` while dirty, a
+  second tap ignored while a save is in the air) over the ONE save path `useSaveConfig` (a port of
+  `saveConfigOrSay`); it builds what it writes from the LATEST configuration with only the keys the person changed
+  (`settingsModel.ts`), and it opens only once the venue's configuration has answered (`SettingsScreens`). Back hands
+  the focus to the button that opened the screen (`handBack.ts`, a stack, because each level is a fresh screen).
+  Not yet: the Clients and Recipes editors (3c-2), the Log (3c-3), orders and the WhatsApp and Client ordering rows
+  of the hub (3c-4). Its parity list is `docs/parity/calculator.md`.
 - `ui/` — the shared controls: `Button`, `Dialog` and `useConfirm` (a question that waits for an
   answer; never the browser's `confirm()`), `StatusMessage` (one short message at a time, in a
   live region that exists before it speaks), `FormBar` (Back, title, the one primary action: the
