@@ -25,6 +25,10 @@
 //   • a log already at the rules' 100-version cap is not written again (every further write would be
 //     refused): `log-full` says so, and Reset starts a new log. The same for an edit or a restore
 //     (`log-history-full`: Reset does not apply there).
+//   • a NEW VERSION of an existing log (a re-Confirm, an edit, a restore) is sent ALONE and added to the server's
+//     chain (calculatorSource `appendLogVersion`); the current app writes the whole chain as the phone holds it,
+//     which drops a version another phone added meanwhile and recreates a log another phone deleted. Only a
+//     brand-new log is written whole.
 //   • a deleted log stays gone while its delete is in the air (offline: until the connection returns), and a
 //     delete the database REFUSES brings the log back and says so (`log-not-deleted`); the current app only
 //     logs it to the console and shows the log gone until the next load.
@@ -425,7 +429,12 @@ export function createCalculatorStore(
   }
 
   // `refused`: what to say when the database refuses it (a Confirm and a Dough history change say it differently).
-  function write(log: Log, refused: 'log-not-saved' | 'log-history-not-saved'): void {
+  // `send`: how it reaches the database — the whole document for a NEW log, only the added version otherwise.
+  function write(
+    log: Log,
+    refused: 'log-not-saved' | 'log-history-not-saved',
+    send: () => Promise<void> = () => source.saveLog(log),
+  ): void {
     const mySeq = ++seq;
     pending.set(log.id, { log, seq: mySeq });
     inFlight += 1;
@@ -445,7 +454,7 @@ export function createCalculatorStore(
       }
       changed();
     };
-    source.saveLog(log).then(() => settle(true), err => {
+    send().then(() => settle(true), err => {
       deps.warn('[logs] confirmed dough not saved:', err);
       settle(false);
       say({ kind: refused, dough: log.dough });
@@ -463,8 +472,18 @@ export function createCalculatorStore(
       say({ kind: 'log-history-full', dough: log.dough });
       return 'full';
     }
-    write(makeNext(log), 'log-history-not-saved');
+    const next = makeNext(log);
+    write(next, 'log-history-not-saved', appendOnly(next, null));
     return 'saved';
+  }
+
+  // How a NEW VERSION of an existing log is sent: only that version, added to the server's chain
+  // (calculatorSource `appendLogVersion`) — never the whole chain as this phone holds it. The list shows the
+  // whole `next` at once; the stream then shows the server's chain, another phone's versions included.
+  function appendOnly(next: Log, forDay: ForDay | null): () => Promise<void> {
+    const versions = next.versions ?? [];
+    const added = versions[versions.length - 1] ?? {};
+    return () => source.appendLogVersion(next.id, added as Record<string, unknown>, forDay);
   }
 
   return {
@@ -524,7 +543,7 @@ export function createCalculatorStore(
           return null;
         }
         const next = setForDay(addVersion(linkedLog, { ...input.version, kind: 'edit' }), input.forDay);
-        write(next, 'log-not-saved');
+        write(next, 'log-not-saved', appendOnly(next, input.forDay));
         return { logId: next.id, target: 'update' };
       }
       const log = createLog({

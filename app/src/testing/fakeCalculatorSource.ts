@@ -22,6 +22,8 @@ export type FakeCalculatorSource = CalculatorSource & {
   refuse: { save: boolean; remove: boolean; config: boolean; logs: boolean; configSave: boolean; catalogue: boolean; stamp: boolean };
   // Every log id a delete was asked for, in order.
   deletedIds: string[];
+  // Every version appended to an existing log, in order.
+  appended: { id: string; version: Record<string, unknown>; forDay: string | null }[];
   // Every log that reached the source, in order.
   saved: StoredDoc[];
   // Every configuration that reached the source, in order, as handed over.
@@ -58,6 +60,7 @@ export function fakeCalculatorSource(seed: {
   const refuse = { save: false, remove: false, config: false, logs: false, configSave: false, catalogue: false, stamp: false };
   const saved: StoredDoc[] = [];
   const deletedIds: string[] = [];
+  const appended: { id: string; version: Record<string, unknown>; forDay: string | null }[] = [];
   const savedConfigs: Record<string, unknown>[] = [];
   const stamps: { id: string; ingredients: unknown[] }[] = [];
   let catalogueReads = 0;
@@ -84,7 +87,7 @@ export function fakeCalculatorSource(seed: {
 
   const fake: FakeCalculatorSource = {
     config: seed.config === undefined ? null : seed.config,
-    recipes, logs, refuse, saved, deletedIds, savedConfigs, stamps,
+    recipes, logs, refuse, saved, deletedIds, appended, savedConfigs, stamps,
     catalogueReads: () => catalogueReads,
 
     watchConfig(onChange, onError) {
@@ -121,6 +124,29 @@ export function fakeCalculatorSource(seed: {
       }
       land();
       return Promise.resolve();
+    },
+
+    // Like updateDoc + arrayUnion: the version is ADDED to the chain the source holds NOW (an identical one is kept
+    // once), a log that no longer exists refuses (not-found). Recorded in `appended`, and the resulting document in
+    // `saved` too (what reached the database). Held and refused with the saves.
+    appendLogVersion(id, version, forDay) {
+      appended.push({ id, version: { ...version }, forDay });
+      if (refuse.save) return Promise.reject(refused());
+      const land = (): Promise<void> => {
+        const doc = logs.get(id);
+        if (!doc) return Promise.reject(Object.assign(new Error('not-found'), { code: 'not-found' }));
+        const chain = Array.isArray(doc.versions) ? doc.versions as unknown[] : [];
+        const known = chain.some(existing => JSON.stringify(existing) === JSON.stringify(version));
+        const next = { ...doc, versions: known ? chain : [...chain, { ...version }], ...(forDay ? { forDay } : {}) } as StoredDoc;
+        logs.set(id, next);
+        saved.push(next);
+        for (const listener of logWatchers) tellLogs(listener, FROM_SERVER);
+        return Promise.resolve();
+      };
+      if (savesHeld) {
+        return new Promise<void>((resolve, reject) => { heldSaves.push(() => { land().then(resolve, reject); }); });
+      }
+      return land();
     },
 
     // Held with the saves (offline holds both), refused with `refuse.remove`.

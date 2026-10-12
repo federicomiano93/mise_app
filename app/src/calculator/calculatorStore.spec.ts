@@ -297,12 +297,8 @@ describe('confirming a dough', () => {
   test('an older write answering late does not drop a newer version the stream has not shown yet', async () => {
     const { store, source } = setup({ config: CONFIG });
     let releaseFirst: () => void = () => {};
-    let calls = 0;
-    source.saveLog = () => {
-      calls += 1;
-      if (calls === 1) return new Promise<void>(resolve => { releaseFirst = resolve; });
-      return new Promise<void>(() => {}); // the second never answers (offline)
-    };
+    source.saveLog = () => new Promise<void>(resolve => { releaseFirst = resolve; });
+    source.appendLogVersion = () => new Promise<void>(() => {}); // the second never answers (offline)
     store.start();
     const first = store.confirmDough(confirm())!;
     store.confirmDough(confirm({ linkedLogId: first.logId }));
@@ -673,5 +669,60 @@ describe('the Dough history (step 3c-3)', () => {
     store.deleteLog('log-two');
     expect(store.editLog('log-two', version)).toBe('missing');
     expect(source.saved).toEqual([]);
+  });
+});
+
+describe('a new version is ADDED to the server\'s chain, never written over it (review of 3c-3)', () => {
+  const at = { date: 'Monday 12 October', time: '12:00 PM' };
+  const base: StoredDoc = {
+    id: 'log-x', dough: 'Pizza', recipeId: 'r1', forDay: 'today', origin: 'manual', createdAtMs: NOW - 500,
+    versions: [{ kind: 'create', at, text: 'v1' }],
+  };
+
+  test('⚠️ another phone\'s version added meanwhile survives this phone\'s edit', async () => {
+    const { store, source } = setup({ config: CONFIG, logs: [base] });
+    store.start();
+    // Another phone appends v2 on the server; this phone's stream has not shown it yet.
+    source.logs.set('log-x', { ...base, versions: [...(base.versions as unknown[]), { kind: 'edit', at, text: 'theirs' }] });
+    expect(store.editLog('log-x', { calculatedBy: '', at, text: 'mine' })).toBe('saved');
+    await flush();
+    expect((source.logs.get('log-x')!.versions as { text: string }[]).map(v => v.text)).toEqual(['v1', 'theirs', 'mine']);
+    expect(source.appended.map(a => (a.version as { text: string }).text)).toEqual(['mine']);
+    // The stream then shows the server's chain.
+    expect(store.getSnapshot().logs.find(l => l.id === 'log-x')!.versions.map(v => v.text)).toEqual(['v1', 'theirs', 'mine']);
+  });
+
+  test('⚠️ a log another phone deleted is NOT recreated by an edit or a restore: refused, and said', async () => {
+    const { store, source, messages } = setup({ config: CONFIG, logs: [base] });
+    store.start();
+    source.logs.delete('log-x'); // gone on the server; this phone still shows it
+    store.editLog('log-x', { calculatedBy: '', at, text: 'mine' });
+    store.restoreLog('log-x', 0, { calculatedBy: '', at });
+    await flush();
+    expect(source.logs.has('log-x')).toBe(false);
+    expect(source.saved).toEqual([]);
+    expect(messages.filter(m => m.kind === 'log-history-not-saved')).toHaveLength(2);
+  });
+
+  test('a re-Confirm adds its version and moves the day, without sending the chain', async () => {
+    const { store, source } = setup({ config: CONFIG, logs: [base] });
+    store.start();
+    store.confirmDough(confirm({ linkedLogId: 'log-x', forDay: 'tomorrow' }));
+    await flush();
+    expect(source.appended).toHaveLength(1);
+    expect(source.appended[0]).toMatchObject({ id: 'log-x', forDay: 'tomorrow' });
+    expect(source.logs.get('log-x')!.forDay).toBe('tomorrow');
+  });
+
+  test('offline, two edits in a row are both added, in order', async () => {
+    const { store, source } = setup({ config: CONFIG, logs: [base] });
+    source.holdSaves();
+    store.start();
+    store.editLog('log-x', { calculatedBy: '', at, text: 'a' });
+    store.editLog('log-x', { calculatedBy: '', at, text: 'b' });
+    expect(store.getSnapshot().logs.find(l => l.id === 'log-x')!.versions.map(v => v.text)).toEqual(['v1', 'a', 'b']);
+    source.settleSaves();
+    await flush();
+    expect((source.logs.get('log-x')!.versions as { text: string }[]).map(v => v.text)).toEqual(['v1', 'a', 'b']);
   });
 });
