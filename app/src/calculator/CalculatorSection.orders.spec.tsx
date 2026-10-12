@@ -377,6 +377,10 @@ describe('closing', () => {
     await user.click(form().getByRole('button', { name: 'Clear all' }));
     await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Clear all' }));
     await waitFor(() => { expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument(); });
+    // React Aria gives the focus back to «Clear all» one animation frame after the question closes; until then it is on
+    // the page, outside the form, and an Escape there reaches nobody. A person cannot press it that fast; a loaded CI
+    // runner did (twice), so wait for the focus as the person would.
+    await waitFor(() => { expect(form().getByRole('button', { name: 'Clear all' })).toHaveFocus(); });
     await user.keyboard('{Escape}');
     expect(await screen.findByRole('alertdialog', { name: 'Discard this order?' })).toBeInTheDocument();
   });
