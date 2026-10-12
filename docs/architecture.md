@@ -185,8 +185,11 @@ Aria does not support Preact. The numbers are below.
   focus to the button that opened the screen (`handBack.ts`, a stack, because each level is a fresh screen). The
   browser's Back cannot be stopped from leaving an editor when the history entry was made by typing an address
   (React Router can only block entries it created) — in-app moves always ask. Not yet: the ordering link on a
-  client and the republishing of the clients' ordering menus on save (3c-4b, both needed before the switch), orders and
-  the WhatsApp and Client ordering rows of the hub (3c-4). Its parity list is `docs/parity/calculator.md`.
+  client and the republishing of the clients' ordering menus on save (3c-4b, both needed before the switch), the Client ordering rows of the hub (3c-4b). The market order (3c-4a, slice B) is a third door, «Send order» (`SendOrder.tsx`: the door, the picker of
+  lists and direct clients and the «Send to» question, all dialogs), and `OrderForm` (a dialog with its own scrolling body: the quantities start from
+  `prefillFromLogs` worked out ONCE when it opens, or from nothing and a sentence when the logs have not arrived; closing it with hand-changed
+  quantities asks and holds `markBusy`; `orderModel.ts` is its pure half). The message is `shared/src/calculator-order-text.ts`, handed to the
+  shared send sheet. Its usage record names no screen of its own. Its parity list is `docs/parity/calculator.md`.
 
   Step 3c-3 adds the Dough history (slice C1), a button «Dough history» beside Settings at the top of the work view,
   one level down: `DoughHistory` (the frame: the list and the open log side by side from 1000px, one at a time on a

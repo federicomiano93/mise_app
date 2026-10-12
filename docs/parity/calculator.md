@@ -760,3 +760,29 @@ on purpose: the legacy log migration (stays in the current app), the empty state
 - **The empty hint of Edit says «No products in this dough.»** (the current app's «in this category» used the old word).
 - Typed numbers are clamped at 0 and never NaN; a `dropdown` product whose saved quantity is not 0…100 keeps that value in
   its select.
+
+## Step 3c-4a as built, slice B (12 Oct 2026) — differences from the current app, on purpose
+
+- **The door is a «Send order» button beside Dough history and Settings** at the top of the work view (and of the empty states
+  that show doors), with a send icon (the current app: an arrow in the header). It opens a dialog, not an address; when the
+  whole errand is over (picker, form, «Send to», road sheet, a notice) the focus goes back to it.
+- **Closing an order whose quantities were changed by hand asks first** («Discard this order?» — Discard / Keep), by Cancel,
+  Escape or the backdrop; the current app closed the order and lost it. Changed means a box says a different NUMBER than the form
+  opened with (the prefill alone is no change; tapping a 0 and leaving it is none; Clear all counts when it cleared something).
+  An untouched form closes at once. While such quantities are held the session is busy (`markBusy`), so an update does not throw
+  the order away. Sending is not discarding: no question.
+- **When the saved doughs have not arrived yet** the form says so («The saved doughs have not arrived yet — type the
+  quantities.») instead of «Nothing logged…», and offers no number. The current app read an empty list as «nothing logged».
+- **The prefill is worked out once, when the form opens**, and never again: a log arriving while somebody types changes no box.
+- **The form is a dialog** (pickers and form stay dialogs, night-run decision): wide (640px) in the middle from 1000px, a
+  full-width sheet on the bottom edge on a phone; it scrolls inside, the title and Cancel / Send stay in view. The note and
+  «Clear all» sit side by side at the top, not in the footer.
+- **«Send to» sits on top of the form**, which stays open under it: Cancel there goes back to the form with every quantity as it
+  was. Choosing a row closes the form before the road sheet opens (the current app also kept the form under the question).
+- **The box of a product is named «Product, Client»** when the form has several clients (the visible label is the product; the name
+  starts with it); with one client the label is the name.
+- **The picker's group labels are real groups** («Lists», «Clients»), each row a button with a chevron; a list is named by its title
+  (an untitled list already reads as the venue's default title after `normalizeConfig`, so «Untitled list» is only a fallback).
+- **Free lines and products are listed as the list holds them** (products, then free lines), each with its own box starting at 0.
+- **Not done on purpose:** the usage record names no dialog (the dialogs of Mise 2 report no screen name); the WhatsApp lists
+  editor and the Client ordering rows of the hub are slice C / 3c-4b.
