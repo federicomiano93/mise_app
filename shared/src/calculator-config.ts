@@ -11,10 +11,10 @@
 // the current shape, the shared-catalogue shape and the oldest per-tab + market shape), `DEFAULT_CONFIG` and
 // `CONFIG_MODEL`, the lookups (clients, products, recipes, ingredients, WhatsApp lists), the visible tabs,
 // the empty-state reason, the targets by logic (`computeTarget`, `computeRecipeTarget`), trays, extra dough,
-// the divisor, the crate boxes, the free lines, the log-display settings and the order-prefill window.
+// the divisor, the crate boxes, the free lines, the log-display settings, the order-prefill window, and the
+// save path (`reconcileConfigWrite`, `saveFailureKey` — step 3c-2).
 //
-// LEFT OUT, for step 3c-2 (writing the configuration): `reconcileConfigWrite` and `saveFailureKey` (the save
-// path), and for 3c-4 (market orders): `orderPrefillLabel` (it looks a word up in the interface dictionary,
+// LEFT OUT, for 3c-4 (market orders): `orderPrefillLabel` (it looks a word up in the interface dictionary,
 // `t()`, which in Mise 2 belongs to the app; `ORDER_PREFILL_LABELS` — the dictionary KEYS — is ported, the app
 // resolves them through its own typed i18n).
 //
@@ -1227,4 +1227,37 @@ export function normalizeConfig(raw: unknown, marketOrderTitle: string = 'Market
   }
 
   return base;
+}
+
+// ── The save path (step 3c-2) ────────────────────────────────────────────────
+
+// Reconcile a config about to be written against the freshest server copy, for the optimistic-concurrency save
+// (the source's `saveConfig`, run inside a transaction). If the server changed since `config` was loaded (its
+// configRev differs), every IMPORTED (cat-*) recipe the server has and `config` lacks is kept, so a blind
+// overwrite cannot silently drop a recipe another writer (a Catalogue import) just added. Normal edits —
+// deleting a recipe included — are untouched when nobody else wrote (the revisions match). The next revision
+// is always server + 1, so it climbs monotonically.
+export function reconcileConfigWrite(config: unknown, server: unknown): { recipes: unknown[]; configRev: number } {
+  const c = config as any;
+  const s = server as any;
+  const expectedRev = Number(c && c.configRev) || 0;
+  const serverRev = Number(s && s.configRev) || 0;
+  let recipes: unknown[] = Array.isArray(c && c.recipes) ? c.recipes : [];
+  if (s && serverRev !== expectedRev) {
+    const have = new Set(recipes.map((r: any) => r && r.id));
+    const importedMissing = (Array.isArray(s.recipes) ? s.recipes : [])
+      .filter((r: any) => r && typeof r.id === 'string' && r.id.indexOf('cat-') === 0 && !have.has(r.id));
+    if (importedMissing.length) recipes = recipes.concat(importedMissing);
+  }
+  return { recipes, configRev: serverRev + 1 };
+}
+
+// Which sentence tells a person that a config save did NOT reach the server (a key of the interface dictionary,
+// the same in both apps), or null when it did. permission-denied is the server REFUSING: since the configModel
+// guard that means this device runs an older app than the data. Anything else (offline, network, timeout) is
+// the connection. 'no-server-answer' explains itself where it happens, so it has no key here.
+export function saveFailureKey(result: unknown): 'calc.notSavedOutOfDate' | 'calc.notSavedCheckConnection' | null {
+  const r = result as any;
+  if (!r || r.reason !== 'write-failed') return null;
+  return r.code === 'permission-denied' ? 'calc.notSavedOutOfDate' : 'calc.notSavedCheckConnection';
 }
