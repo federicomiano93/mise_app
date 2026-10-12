@@ -27,6 +27,8 @@ export interface TabState {
   set(key: string, value: string, touch?: string): void;
   // Stamps the tab as used (`touched-<rid>`) without writing anything else.
   touch(rid: string): void;
+  // Forgets one key (Edit drops `revealed-<rid>`; the rest of the tab stays).
+  remove(key: string): void;
   // Forgets a tab: every key of it, its lock included. `qtyIds` are the tab's current quantity ids.
   forget(rid: string, qtyIds: readonly string[]): void;
   // Clears every tab of `tabs` last used on an EARLIER work day and says which were cleared. Each is
@@ -81,6 +83,11 @@ export function createTabState(storage: KeyValueStorage | null, now: () => numbe
     set(key, value, touch) {
       put(key, value);
       if (touch !== undefined) stamp(touch);
+      notify();
+    },
+
+    remove(key) {
+      drop(key);
       notify();
     },
 

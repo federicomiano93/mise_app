@@ -169,3 +169,16 @@ describe('the note', () => {
     expect(state.noteLeft('r1')).toBe(0);
   });
 });
+
+describe('removing one key', () => {
+  it('forgets that key only, and tells its readers', () => {
+    const { state, storage } = setup({ 'revealed-r1': '1', 'qty-a::b': '3' });
+    const listener = vi.fn();
+    state.subscribe(listener);
+    state.remove('revealed-r1');
+    expect(storage.data.has('revealed-r1')).toBe(false);
+    expect(state.read('revealed-r1')).toBeNull();
+    expect(storage.data.get('qty-a::b')).toBe('3');
+    expect(listener).toHaveBeenCalledTimes(1);
+  });
+});
