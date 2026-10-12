@@ -36,6 +36,10 @@ export const versionOpener = (n: number): string => `version:${n}`;
 // beside the log that is open.
 export const isListOpener = (name: string): boolean => name === ADD_LOG_OPENER || name === LOG_LIST_TITLE || name.startsWith('log:');
 export const clientOpener = (id: string): string => `client:${id}`;
+// The WhatsApp editor: the hub's door, a row of the top (a list or a direct client) and a client's card in a list.
+export const WHATSAPP_OPENER = 'whatsapp';
+export const whatsappItemOpener = (group: 'list' | 'direct', id: string): string => `whatsapp-${group}:${id}`;
+export const whatsappEntryOpener = (clientId: string): string => `whatsapp-entry:${clientId}`;
 export const recipeOpener = (id: string): string => `recipe:${id}`;
 export const divisorRecipeOpener = (id: string): string => `divisor:${id}`;
 

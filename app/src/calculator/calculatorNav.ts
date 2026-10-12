@@ -13,6 +13,17 @@ export function cameFromParent(state: unknown): boolean {
   return typeof state === 'object' && state !== null && 'fromParent' in state;
 }
 
+// The WhatsApp editor's screens are up to three levels below its top, and Save returns to the top from any of them:
+// each entry it pushes carries how many entries it is above the top (`depth`), so Save can step back that many at once
+// instead of leaving a trail of screens behind it. Absent (an address typed or reloaded into) means «none».
+export const fromParentAt = (depth: number) => ({ ...FROM_PARENT, depth }) as const;
+
+export function depthOf(state: unknown): number {
+  if (typeof state !== 'object' || state === null || !('depth' in state)) return 0;
+  const depth = (state as { depth: unknown }).depth;
+  return typeof depth === 'number' && Number.isInteger(depth) && depth > 0 ? depth : 0;
+}
+
 // How a screen one level down steps back up.
 //
 // ⚠️ NEVER A PILE OF DUPLICATE HISTORY ENTRIES. Opened from the level above, the entry behind it IS that level,
