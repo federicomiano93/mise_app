@@ -34,28 +34,38 @@ export function recipeOf(tables: CostTables, id: string): Doc | null {
 
 export type LineName = { text: string; missing: boolean };
 
+// What has been heard from the stores yet. A phone with no local copies has neither at first, and a
+// line must not be called «gone» before what it points at has been asked for.
+export type Loaded = { recipes: boolean; ingredients: boolean };
+
 // The name a line wears: what the recipe or the item is called now, or that it no longer exists.
-export function lineName(t: Translate, line: WorkingComponent | WorkingPackaging, tables: CostTables): LineName {
+export function lineName(
+  t: Translate, line: WorkingComponent | WorkingPackaging, tables: CostTables, loaded: Loaded,
+): LineName {
   if ('kind' in line && line.kind === 'recipe') {
     const recipe = lookup(tables.recipes, line.recipeId);
-    return recipe
-      ? { text: String(recipe.name ?? '').trim(), missing: false }
-      : { text: t('fc.thisRecipeNoLonger'), missing: true };
+    if (recipe) return { text: String(recipe.name ?? '').trim(), missing: false };
+    return loaded.recipes
+      ? { text: t('fc.thisRecipeNoLonger'), missing: true }
+      : { text: t('session.loading'), missing: false };
   }
   const item = lookup(tables.ingredients, (line as { ingredientId: string }).ingredientId);
-  return item
-    ? { text: ingredientDisplayName(item).trim(), missing: false }
-    : { text: t('fc.thisItemNoLonger'), missing: true };
+  if (item) return { text: ingredientDisplayName(item).trim(), missing: false };
+  return loaded.ingredients
+    ? { text: t('fc.thisItemNoLonger'), missing: true }
+    : { text: t('session.loading'), missing: false };
 }
 
 // ⚠️ NO MONEY UNDER A RECIPE OR AN INGREDIENT LINE (his decision, 13 Sep 2026: the price is not shown
 // in «made of»). What stays is what a person must ACT on — a recipe with no price, or only part of
 // one — because a silent gap is a cost too low. Packaging is the exception: it is counted in pieces,
 // and its price each and the line total are what says whether it was counted right.
-export function lineNote(t: Translate, money: Money, line: WorkingComponent | WorkingPackaging, tables: CostTables): string {
+export function lineNote(
+  t: Translate, money: Money, line: WorkingComponent | WorkingPackaging, tables: CostTables, loaded: Loaded,
+): string {
   if ('kind' in line && line.kind === 'recipe') {
     const recipe = lookup(tables.recipes, line.recipeId);
-    if (!recipe) return line.recipeId ? t('fc.thisRecipeNoLonger') : '';
+    if (!recipe) return line.recipeId && loaded.recipes ? t('fc.thisRecipeNoLonger') : '';
     const costed = costRecipe(recipe, tables);
     if (costed.pricePerKg === null) return t('fc.thisRecipeIsNot');
     return costed.partial ? t('fc.thisRecipePartlyPriced') : '';
@@ -63,7 +73,7 @@ export function lineNote(t: Translate, money: Money, line: WorkingComponent | Wo
 
   const ingredientId = (line as { ingredientId: string }).ingredientId;
   const ingredient = lookup(tables.ingredients, ingredientId);
-  if (!ingredient) return ingredientId ? t('fc.thisItemNoLonger') : '';
+  if (!ingredient) return ingredientId && loaded.ingredients ? t('fc.thisItemNoLonger') : '';
 
   if ('kind' in line && line.kind === 'ingredient') {
     // No money here either — only what stops the line from being costed.

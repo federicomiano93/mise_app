@@ -28,7 +28,10 @@ export function FoodcostList({ openProductId, onOpenProduct, onOpenNew, onOpenSe
   const { canManage } = useSession();
   const money = useMoney();
   const handBack = useHandBack();
-  const { products, productsLoaded, tables } = useFoodcost();
+  const { products, productsLoaded, recipesLoaded, ingredientsLoaded, tables } = useFoodcost();
+  // ⚠️ A ROW IS COSTED FROM THREE STORES: until recipes and prices have answered, a product would read
+  // «not priced yet» only because its numbers are still on their way.
+  const ready = productsLoaded && recipesLoaded && ingredientsLoaded;
 
   // The same object until a product, a recipe or a price changes: the sort costs every product.
   const ranked = useMemo(() => sortByMargin(products, tables), [products, tables]);
@@ -51,7 +54,7 @@ export function FoodcostList({ openProductId, onOpenProduct, onOpenNew, onOpenSe
         ) : null}
       </div>
 
-      {!productsLoaded ? (
+      {!ready ? (
         <p className={styles.loading} aria-busy="true">{t('session.loading')}</p>
       ) : ranked.length === 0 ? (
         <div className={styles.empty}>

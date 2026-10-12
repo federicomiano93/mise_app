@@ -36,9 +36,11 @@ export function FoodcostProvider({ children, deps }: { children: ReactNode; deps
   );
 }
 
-// ⚠️ A SAVE NOT YET HANDED OVER IS AN UNSAVED EDIT (architecture rule 2): Firestore is loaded lazily,
+// ⚠️ A SAVE NOT YET ANSWERED IS AN UNSAVED EDIT (architecture rule 2): Firestore is loaded lazily,
 // and a self-started reload in that moment would throw the product away before it reached the
-// browser's own database.
+// browser's own database. The marker is held until the write is ANSWERED by the server — offline that
+// is until the section is left — which is broader than «handed over to the browser's database», but
+// safe: the app only waits longer to reload by itself.
 function BusyWhileUnsent() {
   const { unsent } = useFoodcost();
   useEffect(() => (unsent ? markBusy() : undefined), [unsent]);

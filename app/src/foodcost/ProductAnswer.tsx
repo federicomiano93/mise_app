@@ -37,12 +37,11 @@ type Figures = {
   tables: CostTables;
 };
 
-// ⚠️ A LIVE REGION THAT EXISTS FROM THE FIRST RENDER: the boxes inside come and go as the product is
-// filled in, and text added to a region that was already on the page is announced; a region inserted
-// already filled is not, reliably.
+// NOT A LIVE REGION: it holds every figure, and a screen reader would read them all again at each
+// keystroke. Only the suggested price speaks (SuggestedPrice below), as in the current app.
 //
 // What it costs to make (no price needed) over the food cost it answers to (a price and a VAT rate
-// needed). Together they are the top of the page, live.
+// needed). Together they are the top of the page.
 export function ProductAnswer({ product, tables }: Figures) {
   const { t, locale } = useT();
   const money = useMoney();
@@ -50,7 +49,7 @@ export function ProductAnswer({ product, tables }: Figures) {
   const result = costProduct(product, tables);
 
   return (
-    <div className={styles.answers} aria-live="polite">
+    <div className={styles.answers}>
       {/* Nothing costed yet: no box at all, never «£0.00», which reads as free. */}
       {cost.batchCost === null ? null : (
         <div className={styles.cost} role="group" aria-label={t('fc.productionCost')}>

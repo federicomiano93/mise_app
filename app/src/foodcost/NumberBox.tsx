@@ -3,8 +3,9 @@ import styles from './NumberBox.module.css';
 
 type Props = {
   id: string;
-  // The name a screen reader reads (and the words «Check “…”» uses when the number is refused).
-  label: string;
+  // A name for a box with no visible <label htmlFor>; one that has a label is named by it, so the
+  // name a screen reader reads is the words on the screen.
+  label?: string;
   value: string;
   placeholder?: string;
   invalid: boolean;
@@ -27,7 +28,7 @@ export function NumberBox({ id, label, value, placeholder = '0', invalid, inputR
       autoComplete="off"
       className={styles.box}
       placeholder={placeholder}
-      aria-label={label}
+      {...(label === undefined ? {} : { 'aria-label': label })}
       aria-invalid={invalid ? true : undefined}
       data-invalid={invalid}
       value={value}

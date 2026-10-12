@@ -24,7 +24,8 @@ export interface HandBack {
   expect(name: string): void;
   // The list comes back by a move that is not a step back: nobody is owed the focus.
   forget(): void;
-  // Gives the focus to the opener that was expected (if it is on the page) and forgets it.
+  // Gives the focus to the opener that was expected — or, if that one is gone, to «New product» — and
+  // forgets it.
   deliver(): void;
 }
 
@@ -62,7 +63,9 @@ export function useHandBackState(): HandBack {
       const name = wanted.current;
       if (name === null) return;
       wanted.current = null;
-      openers.current.get(name)?.focus();
+      // ⚠️ THE OPENER MAY BE GONE (a product that was deleted has no row any more): «New product» is
+      // always there, so the focus lands somewhere instead of dropping to the page.
+      (openers.current.get(name) ?? openers.current.get(NEW_OPENER))?.focus();
     },
   }), []);
 }

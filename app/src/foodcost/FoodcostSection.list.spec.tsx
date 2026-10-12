@@ -1,5 +1,5 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { screen, within } from '@testing-library/react';
+import { act, screen, within } from '@testing-library/react';
 import { bareProduct, LOAD, product, renderFoodcost, sourceWith, split } from '../testing/renderFoodcost';
 
 // The list of products: worst food cost first, what each row says, the loading and empty states and
@@ -82,6 +82,22 @@ describe('the list of products', () => {
     expect(await screen.findByText('Loading…', undefined, LOAD)).toBeInTheDocument();
     expect(screen.queryByText('No products yet')).not.toBeInTheDocument();
     fake.release();
+    expect(await screen.findByRole('button', { name: /^Red/ }, LOAD)).toBeInTheDocument();
+    expect(screen.queryByText('Loading…')).not.toBeInTheDocument();
+  });
+
+  it('keeps saying «Loading…» until the recipes and the prices have answered too', async () => {
+    const fake = sourceWith(PRODUCTS);
+    let arrive: () => void = () => undefined;
+    vi.mocked(fake.watchRecipes).mockImplementation(onChange => {
+      arrive = () => { onChange([...fake.recipes.values()]); };
+      return () => undefined;
+    });
+    renderFoodcost('/food-cost', { source: fake });
+    await new Promise(resolve => { setTimeout(resolve, 50); });
+    expect(screen.getByText('Loading…')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Red/ })).not.toBeInTheDocument();
+    act(() => { arrive(); });
     expect(await screen.findByRole('button', { name: /^Red/ }, LOAD)).toBeInTheDocument();
     expect(screen.queryByText('Loading…')).not.toBeInTheDocument();
   });

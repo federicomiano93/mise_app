@@ -24,7 +24,8 @@ import styles from './FoodcostSection.module.css';
 // only for a person the venue shows it to (SectionRoute).
 //
 // Its data lives exactly as long as it is on screen: FoodcostProvider starts the listeners on mount
-// and stops them on unmount, handing what is unsent to Firestore (P14).
+// and stops them on unmount (P14). A write already in the air is not cut short by that: Firestore
+// finishes it, and the marker of FoodcostProvider keeps the app from reloading while it is.
 export default function FoodcostSection() {
   return (
     <FoodcostProvider>

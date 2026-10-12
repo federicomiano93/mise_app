@@ -40,7 +40,7 @@ import type { Choice, PickMode } from './PickDialog';
 import { ProductAnswer, SuggestedPrice } from './ProductAnswer';
 import {
   NUMBER_KEY, clearNumber, costable, emptyWorking, isNumberField, isShown, newLineKey, packSizeShown, piecesShown,
-  recipeIdsOn, toProduct, vatRateOf, workingFrom,
+  plainNumber, recipeIdsOn, toProduct, vatRateOf, workingFrom,
 } from './productEditorModel';
 import type { NumberField, Working, WorkingComponent } from './productEditorModel';
 import { VatGuideDialog } from './VatGuideDialog';
@@ -530,17 +530,21 @@ export function ProductForm({ id, product, titleRef }: Props) {
   const modeKey = working.sellingMode === '' ? null : working.sellingMode;
   const vatChoices = vatRatesFor(country);
   const nameInvalid = showNameError && working.name.trim() === '';
-  const labourNeedsRate = (costed.labourMinutes ?? 0) > 0 && canManage && !(Number(live.labourCostPerHour) > 0);
+  const labourNeedsRate = (costed.labourMinutes ?? 0) > 0 && canManage && snap.settingsLoaded && !(Number(live.labourCostPerHour) > 0);
   const recipeCount = recipeIds.length;
   const heading = id === null ? t('fc.newProduct') : (initial?.name ?? '') || t('fc.untitledProduct');
+
+  // A phone with no local copies has not heard the recipes or the prices yet: a line is not «gone»
+  // until what it points at has been asked for.
+  const loaded = { recipes: snap.recipesLoaded, ingredients: snap.ingredientsLoaded };
 
   const renderLine = (line: WorkingComponent | Working['packaging'][number], kind: LineKind) => (
     <LineRow
       key={line.key}
       rowKey={line.key}
       kind={kind}
-      name={lineName(t, line, live)}
-      note={lineNote(t, money, line, live)}
+      name={lineName(t, line, live, loaded)}
+      note={lineNote(t, money, line, live, loaded)}
       qty={line.qty}
       unit={'unit' in line ? line.unit : undefined}
       registerQty={registerQty}
@@ -551,10 +555,18 @@ export function ProductForm({ id, product, titleRef }: Props) {
     />
   );
 
-  const numberBox = (field: NumberField, domId: string, placeholder?: string) => (
+  // Every box has a visible <label htmlFor>, which names it; only the «another VAT rate» box has none, so
+  // only it carries a name of its own.
+  // The rate's own word; an unknown kind shows the rate alone — never another kind's word.
+  const vatOptionText = (key: string, rate: number) => {
+    const word = VAT_WORDS[key];
+    return word === undefined ? `${plainNumber(rate, locale)}%` : t(word, { rate: String(rate) });
+  };
+
+  const numberBox = (field: NumberField, domId: string, placeholder?: string, unlabelled = false) => (
     <NumberBox
       id={domId}
-      label={t(NUMBER_LABEL[field])}
+      {...(unlabelled ? { label: t(NUMBER_LABEL[field]) } : {})}
       value={working[NUMBER_KEY[field]]}
       invalid={badNumber === field}
       inputRef={boxRef(field)}
@@ -671,7 +683,6 @@ export function ProductForm({ id, product, titleRef }: Props) {
             <select
               id={`${ids}-mode`}
               className={styles.select}
-              aria-label={t('fc.howItIsSold')}
               value={working.sellingMode}
               onChange={event => { edit(current => ({ ...current, sellingMode: event.target.value as SellingMode | '' })); }}
             >
@@ -722,14 +733,13 @@ export function ProductForm({ id, product, titleRef }: Props) {
               <select
                 id={`${ids}-vat`}
                 className={styles.select}
-                aria-label={t('fc.vatRate')}
                 value={working.vatSelect}
                 onChange={event => { setVatSelect(event.target.value); }}
               >
                 <option value="">{t('fc.choose')}</option>
                 {vatChoices.map(choice => (
                   <option key={choice.rate} value={String(choice.rate)}>
-                    {t(VAT_WORDS[choice.key] ?? 'fc.vat.standard', { rate: String(choice.rate) })}
+                    {vatOptionText(choice.key, choice.rate)}
                   </option>
                 ))}
                 <option value="other">{t('fc.anotherRate')}</option>
@@ -742,7 +752,7 @@ export function ProductForm({ id, product, titleRef }: Props) {
                 <BookOpen aria-hidden="true" />
               </Button>
             </div>
-            {working.vatSelect === 'other' ? numberBox('vatRate', `${ids}-vatother`) : null}
+            {working.vatSelect === 'other' ? numberBox('vatRate', `${ids}-vatother`, undefined, true) : null}
           </div>
 
           <div className={styles.field}>

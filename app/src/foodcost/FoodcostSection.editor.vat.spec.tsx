@@ -22,8 +22,8 @@ const IT = { location: { country: 'IT' } };
 const saveBar = () => screen.getByRole('button', { name: 'Save' });
 const vatMenu = () => screen.getByRole('combobox', { name: 'VAT rate' });
 const otherRate = () => screen.queryByRole('textbox', { name: 'Another VAT rate, as a percentage' });
-const priceBox = () => screen.getByRole('textbox', { name: 'Selling price including VAT' });
-const targetBox = () => screen.getByRole('textbox', { name: 'Food cost target, as a percentage' });
+const priceBox = () => screen.getByRole('textbox', { name: 'Selling price, including VAT (£)' });
+const targetBox = () => screen.getByRole('textbox', { name: 'Food cost target (%)' });
 const suggestion = () => screen.queryByRole('group', { name: 'Suggested price' });
 const guideButton = () => screen.getByRole('button', { name: 'Which products take which VAT rate' });
 const options = (menu: HTMLElement) => within(menu).getAllByRole('option').map(option => option.textContent);
@@ -35,23 +35,23 @@ async function confirmSave(user: UserEvent) {
 async function open(fields: Record<string, unknown> | null = {}, session: Record<string, unknown> = {}) {
   const fake = editorSource(fields === null ? [] : [product('Green', fields)]);
   const view = renderFoodcost(fields === null ? '/food-cost/new' : '/food-cost/product/Green', { source: fake, session });
-  await screen.findByRole('combobox', { name: 'Product name' }, LOAD);
+  await screen.findByRole('combobox', { name: 'Name' }, LOAD);
   return { ...view, fake };
 }
 
 describe('how it is sold', () => {
   it('offers the three ways, with no default', async () => {
     await open(null);
-    const mode = screen.getByRole('combobox', { name: 'How it is sold' });
+    const mode = screen.getByRole('combobox', { name: 'Sold' });
     expect(options(mode)).toEqual(['— Choose —', 'By the piece', 'By weight (per kg)', 'By the pack']);
     expect(mode).toHaveValue('');
   });
 
   it('shows the pieces box for a piece and the pack boxes for a pack, and nothing for weight', async () => {
     const { user } = await open(null);
-    const mode = screen.getByRole('combobox', { name: 'How it is sold' });
-    const pieces = () => screen.queryByRole('textbox', { name: 'How many pieces come out of one batch' });
-    const packSize = () => screen.queryByRole('textbox', { name: 'What one pack holds' });
+    const mode = screen.getByRole('combobox', { name: 'Sold' });
+    const pieces = () => screen.queryByRole('textbox', { name: 'Pieces per batch' });
+    const packSize = () => screen.queryByRole('textbox', { name: 'One pack holds' });
 
     expect(pieces()).not.toBeInTheDocument();
     expect(packSize()).not.toBeInTheDocument();

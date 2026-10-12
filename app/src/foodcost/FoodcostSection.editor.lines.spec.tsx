@@ -20,7 +20,7 @@ const saveBar = () => screen.getByRole('button', { name: 'Save' });
 const question = () => screen.findByRole('alertdialog', undefined, LOAD);
 const suggestions = () => screen.queryByRole('listbox', { name: 'Recipes to base this product on' });
 const suggested = () => within(screen.getByRole('listbox', { name: 'Recipes to base this product on' })).getAllByRole('option');
-const nameBox = () => screen.getByRole('combobox', { name: 'Product name' });
+const nameBox = () => screen.getByRole('combobox', { name: 'Name' });
 const chooser = () => screen.findByRole('dialog', undefined, LOAD);
 const madeOf = () => screen.getByRole('region', { name: 'Made of' });
 const packaging = () => screen.getByRole('region', { name: 'Packaging' });
@@ -31,7 +31,7 @@ async function confirmSave(user: UserEvent) {
 
 async function open(path: string, fake: ReturnType<typeof editorSource>, options = {}) {
   const view = renderFoodcost(path, { source: fake, ...options });
-  await screen.findByRole('combobox', { name: 'Product name' }, LOAD);
+  await screen.findByRole('combobox', { name: 'Name' }, LOAD);
   return { ...view, fake };
 }
 

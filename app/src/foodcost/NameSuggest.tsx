@@ -68,7 +68,6 @@ export function NameSuggest({ id, value, invalid, enabled, recipes, inputRef, on
         aria-expanded={shown}
         aria-controls={listId}
         aria-activedescendant={activeEntry >= 0 ? `${ids}-${activeEntry}` : undefined}
-        aria-label={t('fc.productName')}
         aria-invalid={invalid ? true : undefined}
         placeholder={t('fc.productName')}
         value={value}

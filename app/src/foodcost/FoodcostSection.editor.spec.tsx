@@ -20,8 +20,8 @@ afterEach(() => {
 
 const saveBar = () => screen.getByRole('button', { name: 'Save' });
 const question = () => screen.findByRole('alertdialog', undefined, LOAD);
-const nameBox = () => screen.getByRole('combobox', { name: 'Product name' });
-const priceBox = () => screen.getByRole('textbox', { name: 'Selling price including VAT' });
+const nameBox = () => screen.getByRole('combobox', { name: 'Name' });
+const priceBox = () => screen.getByRole('textbox', { name: 'Selling price, including VAT (£)' });
 const productionCost = () => screen.queryByRole('group', { name: 'Production cost' });
 const answer = () => screen.getByRole('group', { name: 'Food cost' });
 
@@ -33,13 +33,13 @@ async function confirmSave(user: UserEvent) {
 
 async function openProduct(id = 'Green', fake = editorSource([product('Green')]), options = {}) {
   const view = renderFoodcost(`/food-cost/product/${id}`, { source: fake, ...options });
-  await screen.findByRole('combobox', { name: 'Product name' }, LOAD);
+  await screen.findByRole('combobox', { name: 'Name' }, LOAD);
   return { ...view, fake };
 }
 
 async function openNew(fake = editorSource([]), options = {}) {
   const view = renderFoodcost('/food-cost/new', { source: fake, ...options });
-  await screen.findByRole('combobox', { name: 'Product name' }, LOAD);
+  await screen.findByRole('combobox', { name: 'Name' }, LOAD);
   return { ...view, fake };
 }
 
@@ -182,9 +182,10 @@ describe('the food cost answer', () => {
     expect(answer()).toHaveTextContent('Part of this product is not priced yet, so the real food cost is higher than this.');
   });
 
-  it('is in a live region that is on the page from the first render', async () => {
-    await openNew();
-    expect(answer().closest('[aria-live="polite"]')).not.toBeNull();
+  it('is not a live region (it would re-read every figure at each keystroke): only the suggested price speaks', async () => {
+    await openProduct();
+    expect(answer().closest('[aria-live]')).toBeNull();
+    expect(screen.getByRole('group', { name: 'Suggested price' }).closest('[aria-live="polite"]')).not.toBeNull();
   });
 });
 
@@ -266,11 +267,11 @@ describe('a number the database would refuse', () => {
     const { user, fake } = await openProduct();
     // Pieces is shown for a product sold by the piece: type a number the rules refuse, then sell by
     // weight, which takes the box away.
-    const pieces = screen.getByRole('textbox', { name: 'How many pieces come out of one batch' });
+    const pieces = screen.getByRole('textbox', { name: 'Pieces per batch' });
     await user.clear(pieces);
     await user.type(pieces, '0');
-    await user.selectOptions(screen.getByRole('combobox', { name: 'How it is sold' }), 'weight');
-    expect(screen.queryByRole('textbox', { name: 'How many pieces come out of one batch' })).not.toBeInTheDocument();
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Sold' }), 'weight');
+    expect(screen.queryByRole('textbox', { name: 'Pieces per batch' })).not.toBeInTheDocument();
 
     await user.click(saveBar());
     await confirmSave(user);
@@ -332,7 +333,7 @@ describe('on the tablet\'s split', () => {
     split();
     const fake = editorSource([product('Green', { name: 'Green' }), product('Red', { name: 'Red', sellingPrice: 0.5, vatRate: 0 })]);
     const { router, user } = renderFoodcost('/food-cost/product/Green', { source: fake });
-    await screen.findByRole('combobox', { name: 'Product name' }, LOAD);
+    await screen.findByRole('combobox', { name: 'Name' }, LOAD);
     expect(nameBox()).toHaveValue('Green');
 
     // Untouched: no question, the editor follows the address.
@@ -369,6 +370,14 @@ describe('delete', () => {
     expect(router.state.location.pathname).toBe('/food-cost');
   });
 
+  it("hands the focus to «New product» when the deleted product's row is gone", async () => {
+    const { user } = await openProduct();
+    await user.click(screen.getByRole('button', { name: 'Delete product' }));
+    await user.click(within(await question()).getByRole('button', { name: 'Delete' }));
+    await screen.findByText('Product deleted.');
+    await vi.waitFor(() => { expect(screen.getByRole('button', { name: 'New product' })).toHaveFocus(); });
+  });
+
   it('keeps the product when the answer is no', async () => {
     const { user, fake } = await openProduct();
     await user.click(screen.getByRole('button', { name: 'Delete product' }));
@@ -401,6 +410,7 @@ describe('a product changed or deleted elsewhere', () => {
     act(() => { fake.push(); });
     expect(await screen.findByText('Product deleted.')).toBeInTheDocument();
     expect(router.state.location.pathname).toBe('/food-cost');
+    await vi.waitFor(() => { expect(screen.getByRole('button', { name: 'New product' })).toHaveFocus(); });
   });
 
   it('is kept when there is typing on it', async () => {
@@ -432,6 +442,41 @@ describe('a product changed or deleted elsewhere', () => {
   });
 });
 
+describe('a phone that has not heard the recipes or the prices yet', () => {
+  // The first answer of a stream held back: the phone has no local copy of it yet.
+  function holdFirst(stream: 'watchRecipes' | 'watchIngredients', fake: ReturnType<typeof editorSource>) {
+    let deliver: () => void = () => undefined;
+    vi.mocked(fake[stream]).mockImplementation(onChange => {
+      deliver = () => { onChange(stream === 'watchRecipes' ? [...fake.recipes.values()] : []); };
+      return () => undefined;
+    });
+    return () => { deliver(); };
+  }
+
+  it('calls a recipe «no longer exists» only once the recipes have answered', async () => {
+    const fake = editorSource([product('Late', { components: [{ recipeId: 'dough', qtyKg: 1 }] })]);
+    fake.recipes.set('dough', { id: 'dough', name: 'Dough', ingredients: [], lossPct: 0 });
+    const arrive = holdFirst('watchRecipes', fake);
+    await openProduct('Late', fake);
+    expect(screen.getByRole('button', { name: 'Change: Loading…' })).toBeInTheDocument();
+    expect(screen.queryByText('This recipe no longer exists')).not.toBeInTheDocument();
+    act(() => { arrive(); });
+    expect(await screen.findByRole('button', { name: 'Change: Dough' })).toBeInTheDocument();
+    expect(screen.queryByText('This recipe no longer exists')).not.toBeInTheDocument();
+  });
+
+  it('calls an item «no longer exists» only once the ingredients have answered', async () => {
+    const fake = editorSource([product('Late', { components: [{ kind: 'ingredient', ingredientId: 'nothing', qty: 10, unit: 'g' }] })]);
+    const arrive = holdFirst('watchIngredients', fake);
+    await openProduct('Late', fake);
+    expect(screen.getByRole('button', { name: 'Change: Loading…' })).toBeInTheDocument();
+    expect(screen.queryByText('This item no longer exists')).not.toBeInTheDocument();
+    act(() => { arrive(); });
+    expect(await screen.findByRole('button', { name: 'Change: This item no longer exists' })).toBeInTheDocument();
+    expect(screen.getByText('This item no longer exists', { selector: 'p' })).toBeInTheDocument();
+  });
+});
+
 describe('the work time', () => {
   const WORKED = product('Worked', { labourMinutes: 60, labourPeople: 1 });
 
@@ -448,6 +493,20 @@ describe('the work time', () => {
     await openProduct('Worked', editorSource([WORKED], { settings: null }));
     expect(await screen.findByText('Set the hourly labour cost in Settings to see what the work costs.')).toBeInTheDocument();
     expect(productionCost()).not.toHaveTextContent('labour');
+  });
+
+  it('does not say the rate is missing while the rate has not been heard yet', async () => {
+    const fake = editorSource([WORKED], { settings: { labourCostPerHour: 12 } });
+    let arrive: () => void = () => undefined;
+    vi.mocked(fake.watchSettings).mockImplementation(onChange => {
+      arrive = () => { onChange({ labourCostPerHour: 12 }, { fromServer: true }); };
+      return () => undefined;
+    });
+    await openProduct('Worked', fake);
+    expect(screen.queryByText('Set the hourly labour cost in Settings to see what the work costs.')).not.toBeInTheDocument();
+    act(() => { arrive(); });
+    await screen.findByRole('group', { name: 'Production cost' });
+    expect(screen.queryByText('Set the hourly labour cost in Settings to see what the work costs.')).not.toBeInTheDocument();
   });
 
   it('shows an employee the minutes and people but never any labour money, and never reads the rate', async () => {
@@ -468,16 +527,16 @@ describe('the editor in Italian', () => {
     const { user } = renderFoodcost('/food-cost/new', {
       source: fake, lang: 'it', session: { language: 'it', location: { country: 'IT' } },
     });
-    await screen.findByRole('combobox', { name: 'Nome del prodotto' }, LOAD);
+    await screen.findByRole('combobox', { name: 'Nome' }, LOAD);
     expect(screen.getByRole('heading', { level: 2, name: 'Nuovo prodotto' })).toBeInTheDocument();
-    expect(screen.getByRole('combobox', { name: 'Nome del prodotto' })).toHaveAttribute('placeholder', 'Nome del prodotto');
+    expect(screen.getByRole('combobox', { name: 'Nome' })).toHaveAttribute('placeholder', 'Nome del prodotto');
     expect(screen.getByRole('heading', { level: 3, name: 'Composto da' })).toBeInTheDocument();
     expect(screen.getByRole('option', { name: '22% — ordinaria' })).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Salva' }));
     expect(await screen.findByText('Inserisci il nome del prodotto.')).toBeInTheDocument();
 
-    await user.type(screen.getByRole('combobox', { name: 'Nome del prodotto' }), 'Cornetto');
+    await user.type(screen.getByRole('combobox', { name: 'Nome' }), 'Cornetto');
     await user.click(screen.getByRole('button', { name: 'Salva' }));
     const asked = await question();
     expect(within(asked).getByText('Vuoi salvare il prodotto?')).toBeInTheDocument();

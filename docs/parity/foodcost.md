@@ -170,7 +170,7 @@ reason.
 ## Settings
 
 45. **One number, the hourly labour cost**, in the venue's currency: empty clears it; 0 or over
-    10,000 is refused BEFORE the question («between 0 and 10,000»); «Save Food cost settings?»;
+    10,000 is refused BEFORE the question («between 0 and 10,000»); «Save the hourly labour cost?»;
     «Saved»; leaving with a changed number asks first. **spec** (`labourRateAllowed`)
 
 ## Margin history
