@@ -37,6 +37,13 @@ export function RecipeFullScreen({ name, rows, totalG, onClose }: Props) {
     return () => { if (node?.open) node.close(); };
   }, []);
 
+  // ⚠️ CLOSE THE DIALOG FIRST, THEN SAY SO: the page behind a modal dialog is inert, so whoever takes the focus
+  // back (ResultCard) must find it already closed. × and Escape take this one road.
+  const close = () => {
+    if (dialog.current?.open) dialog.current.close();
+    onClose();
+  };
+
   const change = (delta: number) => {
     if (!canStep(step, delta)) return;
     const next = stepBy(step, delta);
@@ -52,12 +59,12 @@ export function RecipeFullScreen({ name, rows, totalG, onClose }: Props) {
       aria-labelledby={titleId}
       style={{ fontSize: `calc(var(--fs-2xl) * ${scaleOf(step)})` }}
       // The browser's own Escape would close it without telling us; this way there is one road out.
-      onKeyDown={event => { if (event.key === 'Escape') { event.preventDefault(); onClose(); } }}
-      onCancel={event => { event.preventDefault(); onClose(); }}
+      onKeyDown={event => { if (event.key === 'Escape') { event.preventDefault(); close(); } }}
+      onCancel={event => { event.preventDefault(); close(); }}
     >
       <div className={styles.top}>
         <h2 id={titleId} className={styles.name}>{name}</h2>
-        <button type="button" className={styles.close} autoFocus aria-label={t('calc.exitFullScreen')} onClick={onClose}>
+        <button type="button" className={styles.close} autoFocus aria-label={t('calc.exitFullScreen')} onClick={close}>
           <X aria-hidden="true" />
         </button>
       </div>

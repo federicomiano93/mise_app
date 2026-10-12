@@ -58,11 +58,17 @@ export function ResultCard({ recipe, result, config, products, qty, divisorN, on
   useEffect(() => () => { if (timer.current !== null) clearTimeout(timer.current); }, []);
 
   const openFullScreen = () => { setFullScreen(true); };
-  const closeFullScreen = () => {
-    setFullScreen(false);
-    // The opener may have been replaced meanwhile: never focus a detached node.
-    if (opener.current?.isConnected) opener.current.focus({ preventScroll: true });
-  };
+  const closeFullScreen = () => { setFullScreen(false); };
+
+  // ⚠️ THE FOCUS GOES BACK ONLY ONCE THE DIALOG IS CLOSED. While a modal <dialog> is open everything outside it is
+  // inert and focus() on the opener does nothing; the dialog closes itself first (RecipeFullScreen), and this
+  // effect runs after it has been taken away. One road for ×, Escape and a configuration that changes under it.
+  // The opener may have been replaced meanwhile: never focus a detached node.
+  const wasOpen = useRef(false);
+  useEffect(() => {
+    if (wasOpen.current && !fullScreen && opener.current?.isConnected) opener.current.focus({ preventScroll: true });
+    wasOpen.current = fullScreen;
+  }, [fullScreen]);
 
   const doCopy = async () => {
     const ok = await copyToClipboard(text);

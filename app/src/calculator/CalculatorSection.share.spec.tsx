@@ -93,6 +93,30 @@ describe('the full-screen view', () => {
     await waitFor(() => { expect(view()).not.toBeInTheDocument(); });
   });
 
+  // ⚠️ jsdom has no inertness, so it cannot show that focus() on the opener fails while the modal dialog is
+  // still open. What it can show is the ORDER: the dialog is closed before the opener is focused, on every road
+  // out (the ×, Escape, and a configuration that changes under it).
+  it.each([
+    ['the ×', async (ctx: Awaited<ReturnType<typeof open>>) => { await ctx.user.click(screen.getByRole('button', { name: 'Exit full screen' })); }],
+    ['Escape', async (ctx: Awaited<ReturnType<typeof open>>) => { await ctx.user.keyboard('{Escape}'); }],
+    ['a configuration change', (ctx: Awaited<ReturnType<typeof open>>) => {
+      act(() => { ctx.source.config = onlyFocaccia({ logRetentionHours: 48 }); ctx.source.push(); });
+      return Promise.resolve();
+    }],
+  ])('closes the dialog BEFORE it focuses the opener: %s', async (_name, leave) => {
+    const ctx = await open();
+    await ctx.user.click(fullScreenButton());
+    const order: string[] = [];
+    vi.spyOn(HTMLDialogElement.prototype, 'close').mockImplementation(function close(this: HTMLDialogElement) {
+      order.push('close');
+      this.removeAttribute('open');
+    });
+    vi.spyOn(fullScreenButton(), 'focus').mockImplementation(() => { order.push('focus'); });
+    await leave(ctx);
+    await waitFor(() => { expect(order).toContain('focus'); });
+    expect(order).toEqual(['close', 'focus']);
+  });
+
   it('says its buttons in Italian', async () => {
     const { user } = await open(onlyFocaccia(), 'it');
     await user.click(main().getByRole('button', { name: 'Schermo intero' }));
