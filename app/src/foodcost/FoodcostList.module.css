@@ -1,0 +1,57 @@
+/* The left column: «New product» and Settings over the products. The rows are one card; the card does
+   not clip (no `overflow`), so nothing that sticks inside the section is ever cut. */
+
+.column {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s4);
+}
+
+/* «New product» takes the room, Settings stays its own width beside it; on the narrowest phone they
+   wrap onto two lines instead of squeezing a word. */
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+}
+
+.add {
+  flex: 1 1 160px;
+}
+
+.settings {
+  flex: none;
+}
+
+.loading {
+  padding: var(--s6);
+  color: var(--ink-2);
+}
+
+.rows {
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  list-style: none;
+}
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--s3);
+  padding: var(--s6);
+  border: 1px dashed var(--line-2);
+  border-radius: var(--r-lg);
+}
+
+.emptyTitle {
+  font-size: var(--fs-lg);
+  font-weight: 650;
+}
+
+.emptySub {
+  color: var(--ink-2);
+}

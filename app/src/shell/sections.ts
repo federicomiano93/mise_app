@@ -118,6 +118,7 @@ export function screenNameFor(pathname: string): string | null {
   if (!section) return 'not-found';
   if (section.id === 'pastries') return pastriesScreenName(pathname, section.path);
   if (section.id === 'stocktake') return stocktakeScreenName(pathname, section.path);
+  if (section.id === 'foodcost') return foodcostScreenName(pathname, section.path);
   return section.id;
 }
 
@@ -130,6 +131,18 @@ function stocktakeScreenName(pathname: string, base: string): string {
   if (rest.length === 3 && isMonthId(rest[0]) && rest[1] === 'product') return 'stocktake-product';
   if (rest.length === 2 && isMonthId(rest[0]) && rest[1] === 'cost') return 'stocktake-cost';
   return 'stocktake';
+}
+
+// Food cost is four screens that share one section: the list of products, a product (an existing
+// one or a new one), its margin history and Settings. A product opened beside the list is the same
+// screen as on its own.
+function foodcostScreenName(pathname: string, base: string): string {
+  const rest = pathname.slice(base.length).split('/').filter(part => part !== '');
+  if (rest.length === 1 && rest[0] === 'new') return 'foodcost-product';
+  if (rest.length === 1 && rest[0] === 'settings') return 'foodcost-settings';
+  if (rest.length === 2 && rest[0] === 'product') return 'foodcost-product';
+  if (rest.length === 3 && rest[0] === 'product' && rest[2] === 'history') return 'foodcost-history';
+  return 'foodcost';
 }
 
 // What the usage record calls the sentence an employee gets in place of a month the rules refuse

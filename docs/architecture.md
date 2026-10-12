@@ -111,6 +111,25 @@ Aria does not support Preact. The numbers are below.
   split from 1000px), `MonthBar`, `CountList` with `ProductRow` and `CountBox`, `StocktakeProduct`,
   `StocktakeCost`, `MonthActions`. The money comes from the venue's country through
   `session/useMoney.ts`. Its parity list is `docs/parity/stocktake.md`.
+- `foodcost/` — Food cost, the third section, built the same way: a source (`foodcostSource.ts`, a
+  port of `js/foodcost/firebase-foodcost.js`: products written whole with their margin point in the
+  same batch, the recipes and the ingredients with their prices read to cost a product, the hourly
+  labour cost, a product's history read once), a store (`foodcostStore.ts`: local-first and never
+  stuck, a refused write rolled back and said as a `FoodcostMessage`, an empty answer from the
+  browser's own database not believed over a copy that had products, the labour rate watched only
+  for whoever runs the place), a context (`FoodcostContext.tsx`) and the screens: `FoodcostSection`
+  (the frame, the split from 1000px, the scroll it owns and the hand-back of the focus),
+  `FoodcostList` with `ProductRow` (worst food cost first, the light as a dot AND a word),
+  `ProductEditor` (the product's own screen; **in step 3b-2 slice C it is a deliberate placeholder
+  that the editor replaces**), `MarginHistory`, `FoodcostSettings` (the hourly labour cost, only for
+  whoever runs the place; it waits for the rate before it copies it). Addresses, in
+  `foodcostPath.ts` (ids split before they are decoded): `/food-cost`, `/new`, `/product/<id>`,
+  `/product/<id>/history`, `/settings`; anything else goes back to the list. The usage record names
+  four screens: `foodcost`, `foodcost-product` (new or existing), `foodcost-history`,
+  `foodcost-settings`. `foodcostNav.ts` and `handBack.ts` are this section's copies of the
+  Stocktake's (a feature never imports from another feature's folder). The money comes from the
+  venue's country (`session/useMoney.ts`), the percentages and dates from the interface language.
+  Its parity list is `docs/parity/foodcost.md`.
 - `ui/` — the shared controls: `Button`, `Dialog` and `useConfirm` (a question that waits for an
   answer; never the browser's `confirm()`), `StatusMessage` (one short message at a time, in a
   live region that exists before it speaks), `FormBar` (Back, title, the one primary action: the
