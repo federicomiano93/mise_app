@@ -8,11 +8,12 @@
 // is left out.
 //
 // PORTED (everything a Confirm needs): `FOR_DAYS`, `buildSheet`, `buildLogText`, `recipeSnapshot`,
-// `createLog`, `latestVersion`, `addVersion`, `setForDay`, `confirmTarget`, `DAY_START_HOUR` and
-// `workDayIndex`.
+// `createLog`, `latestVersion`, `addVersion`, `setForDay`, `confirmTarget`, `DAY_START_HOUR`,
+// `workDayIndex` and `typedTotalOf` (an edit keeps the typed total of the dough that was made, so the
+// Calculator's re-calculation reads it; ported with its spec ahead of the rest of the edit half).
 //
 // LEFT OUT, for step 3c-3 (the Dough history): the list and edit half — `traysEditState`, `traysSheetRecipe`,
-// `typedTotalOf`, `editRows`, `restoreVersion`, `migrateOldRecord` / `migrateOldLogs` (the legacy migration
+// `editRows`, `restoreVersion`, `migrateOldRecord` / `migrateOldLogs` (the legacy migration
 // stays in the current app), `filterVisibleLogs`, `dayLabel` (it looks words up in the interface dictionary,
 // `t()`) and `sortLogs`.
 //
@@ -330,6 +331,25 @@ export function createLog({ id, dough, recipeId, forDay, version, createdAtMs, o
     createdAtMs: num(createdAtMs),
     versions: [clone(version)],
   };
+}
+
+// The typed total a saved version was made with, for a re-calculation (an edit changes quantities only and must
+// keep this part). New sheets carry typed_g. The derivation below exists ONLY for 'both' sheets saved before
+// typed_g: the typed part is what is left of total_g after the product lines (occasional ones included) and the
+// extra. For 'total' the sheet's total_g IS the typed amount.
+export function typedTotalOf(recipe: unknown, version: unknown): number {
+  const logic = (recipe && (recipe as { logic?: string }).logic) || 'orders';
+  const v = version as { sheet?: Record<string, unknown> | null; items?: LogLine[]; occasional?: OccasionalClient[] } | null | undefined;
+  const sheet = (v && v.sheet) || null;
+  if (!v || !sheet || (logic !== 'total' && logic !== 'both')) return 0;
+  if (logic === 'total') return Math.max(0, num(sheet.total_g));
+  if (Number.isFinite(Number(sheet.typed_g)) && sheet.typed_g !== null && sheet.typed_g !== '') return Math.max(0, num(sheet.typed_g));
+  let products = 0;
+  for (const it of (v.items || [])) products += num(it.qty) * num(it.weightG);
+  for (const o of (v.occasional || [])) {
+    for (const p of (o.products || [])) products += num(p.qty) * num(p.weightG);
+  }
+  return Math.max(0, Math.round(num(sheet.total_g) - products - num(sheet.extra_g)));
 }
 
 // The latest (current) version of a log — the last element of the append-only chain.

@@ -10,13 +10,13 @@
 // frozen-ness, the same function shapes.
 //
 // PORTED from tests/log-model.test.mjs: 11 of its 25 tests (buildSheet ×7, buildLogText, createLog,
-// addVersion, the day constants); from tests/log-typed-total.test.mjs: 1 of its 5 ('buildSheet stores typed_g…').
+// addVersion, the day constants); from tests/log-typed-total.test.mjs: its first test ('buildSheet stores typed_g…'); the other four, which call
+// `typedTotalOf`, are in log-typed-total.spec.ts.
 // Added: buildLogText with the words handed in, the stored text staying byte-identical, `bakery: 'main'`
 // staying the placeholder the data layer overwrites, latestVersion, workDayIndex (the 4 am rollover).
 //
 // NOT PORTED (they test what is left out, step 3c-3): restoreVersion ×2, migrateOldRecord, migrateOldLogs,
-// sortLogs, filterVisibleLogs, dayLabel ×9 (tests/log-model.test.mjs); the other four tests of
-// tests/log-typed-total.test.mjs, which call `typedTotalOf`.
+// sortLogs, filterVisibleLogs, dayLabel ×9 (tests/log-model.test.mjs).
 //
 // ⚠️ THE BAKERY'S DATA IS A FIXTURE, NOT THE APP'S DEFAULT (13 Aug 2026): tests/fixtures/bakery-config.mjs.
 
@@ -276,7 +276,7 @@ describe('the port against the original', () => {
   // The list and edit half (step 3c-3), the migration (it stays in the current app) and `dayLabel`
   // (it looks words up in the interface dictionary).
   const LEFT_OUT = [
-    'traysEditState', 'traysSheetRecipe', 'typedTotalOf', 'editRows', 'restoreVersion', 'migrateOldRecord',
+    'traysEditState', 'traysSheetRecipe', 'editRows', 'restoreVersion', 'migrateOldRecord',
     'migrateOldLogs', 'filterVisibleLogs', 'dayLabel', 'sortLogs',
   ];
   const original = legacyLogJs as unknown as Record<string, unknown>;

@@ -162,6 +162,15 @@ allergen-model, sections, firebase-target, local-data, same-data, error-model, d
 usage-model, membership, location-id, pastries-model, pastries-log-model, pastries-lock, pack-size,
 order-unit, ingredient-name, order-cost, inventory-model, inventory-outbox, inventory-purchases,
 vat-rates, ingredient-kind, product-limits, vat-guide, foodcost-weighing,
+calculator-dough-math, calculator-recipe-source, calculator-recipe-text (one documented difference: the line
+`Flour uniqua blue`, one venue's data, is written like every other), confirm-flow, log-time,
+calculator-config (partial: the read side; leaves out the save path `reconcileConfigWrite` / `saveFailureKey` and
+`orderPrefillLabel`; `formatGrams` and `normalizeConfig` take the language as an argument), log-model (partial: the
+write half, `workDayIndex` and `typedTotalOf`; leaves out the list and edit half, the legacy migration and `dayLabel`;
+`buildLogText` takes its two words as an argument), guided-model (partial: `ridOf` only), zoom-steps (partial: the
+arithmetic; leaves out the storage and DOM halves), calculator-tab-keys (new in Mise 2, no original: the
+`localStorage` keys of a Calculator tab and the stale-tab and lock decisions, pinned against the current app's
+source),
 market (partial: the country and the money, not the label
 vocabulary), price-model (partial: the reading half, not the writing half or the dictionary lookups),
 inventory-value (partial: everything but `formatTotal`, which reads the money from a module variable;
