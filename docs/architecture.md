@@ -126,7 +126,7 @@ Pure logic only, no DOM types. Each module is a PORT of a `js/` file, and its sp
 against BOTH files (`describe.each` over the TypeScript port and the `js/` original), so the two
 apps cannot drift apart while both are live. `parity.spec.ts` compares the full ports export by
 export (names, constants, frozen-ness, function names and arity); a partial port (`membership`,
-`location-id`, `pastries-model`, `market`, `price-model`, `inventory-value`) is not paired and its spec says why, and
+`location-id`, `pastries-model`, `market`, `price-model`, `inventory-value`, `catalogue-model`, `recipe-cost-model`, `foodcost-model`) is not paired and its spec says why, and
 compares what it does port with the `js/` file itself. `currency` is an ADAPTED port, also not paired:
 the original keeps the venue's money in a module variable (`setCurrency`), and Mise 2 never keeps a
 venue fact in a module variable, so the port is stateless (`moneyOf(symbol, layout)` returns the
@@ -139,10 +139,17 @@ copied, not tidied, and marked where it sits: fixing it is a bug fix to BOTH fil
 allergen-model, sections, firebase-target, local-data, same-data, error-model, device-model,
 usage-model, membership, location-id, pastries-model, pastries-log-model, pastries-lock, pack-size,
 order-unit, ingredient-name, order-cost, inventory-model, inventory-outbox, inventory-purchases,
+vat-rates, ingredient-kind, product-limits, vat-guide, foodcost-weighing,
 market (partial: the country and the money, not the label
 vocabulary), price-model (partial: the reading half, not the writing half or the dictionary lookups),
 inventory-value (partial: everything but `formatTotal`, which reads the money from a module variable;
-the app writes money with `formatMoney(value, money)` of `price-model`), currency (adapted, stateless).
+the app writes money with `formatMoney(value, money)` of `price-model`), currency (adapted, stateless),
+catalogue-model (partial: only what Food cost reads — the unit table, the row link, the oven loss and the link
+suggestions; it leaves out the recipe normalisers, the kg scaling, the Calculator import and `unitText` /
+`batchWarning`, which use the dictionary), recipe-cost-model (partial: `costRecipe` and its constants; it leaves
+out `costReasonLabel` and `partialCostText`, which use the dictionary — the app resolves `COST_REASON_TEXT`
+through its own typed i18n), foodcost-model (partial: everything but `blockerText`, which uses the dictionary —
+the app resolves `BLOCKER_TEXT` likewise). A partial port keeps, in its header, the list of what it leaves out.
 
 ## The session
 
