@@ -185,8 +185,21 @@ Aria does not support Preact. The numbers are below.
   focus to the button that opened the screen (`handBack.ts`, a stack, because each level is a fresh screen). The
   browser's Back cannot be stopped from leaving an editor when the history entry was made by typing an address
   (React Router can only block entries it created) — in-app moves always ask. Not yet: the ordering link on a
-  client and the republishing of the clients' ordering menus on save (3c-4b, both needed before the switch), orders and
-  the WhatsApp and Client ordering rows of the hub (3c-4). Its parity list is `docs/parity/calculator.md`.
+  client and the republishing of the clients' ordering menus on save (3c-4b, both needed before the switch), the Client ordering rows of the hub (3c-4b). The market order (3c-4a, slice B) is a third door, «Send order» (`SendOrder.tsx`: the door, the picker of
+  lists and direct clients and the «Send to» question, all dialogs), and `OrderForm` (a dialog with its own scrolling body: the quantities start from
+  `prefillFromLogs` worked out ONCE when it opens, or from nothing and a sentence when the logs have not arrived; closing it with hand-changed
+  quantities asks and holds `markBusy`; `orderModel.ts` is its pure half). The message is `shared/src/calculator-order-text.ts`, handed to the
+  shared send sheet. Its usage record names no screen of its own. Its parity list is `docs/parity/calculator.md`.
+
+  Slice C adds the WhatsApp lists editor, a door «WhatsApp» in the hub (the lists the market order is sent from). Addresses, in
+  `calculatorPath.ts`: `/calculator/settings/whatsapp` (the top: `WhatsappTop` — the prefill window, the lists and the direct
+  clients, a delete icon each, no Save; both apply at once over the LATEST configuration), `/list/<id>` (`WhatsappListScreen`),
+  `/list/<id>/add` (`WhatsappClientChooser`), `/list/<id>/client/<clientId>` and `/direct/<id>` (`WhatsappLinesScreen`: products
+  and free lines), their `/add` pickers (`WhatsappPicker`), and `/list/new` and `/direct/new`, which make an empty item and replace
+  themselves with its address. `WhatsappEditor` holds ONE working copy of THE ONE ITEM being edited (a list with its entries, or a
+  direct client) above those screens, with one blocker and `markBusy` while dirty; Save writes only that item over the latest
+  configuration (`whatsappModel.ts`, the pure half) and returns to the top in one step (each pushed screen carries its depth in the
+  navigation state, `calculatorNav.ts`). A free line's id is settled by the store's normaliser at save, never while typing.
 
   Step 3c-3 adds the Dough history (slice C1), a button «Dough history» beside Settings at the top of the work view,
   one level down: `DoughHistory` (the frame: the list and the open log side by side from 1000px, one at a time on a
@@ -241,7 +254,7 @@ allergen-model, sections, firebase-target, local-data, same-data, error-model, d
 usage-model, membership, location-id, pastries-model, pastries-log-model, pastries-lock, pack-size,
 order-unit, ingredient-name, order-cost, inventory-model, inventory-outbox, inventory-purchases,
 vat-rates, ingredient-kind, product-limits, vat-guide, foodcost-weighing,
-calculator-dough-math, calculator-recipe-source, calculator-recipe-text (one documented difference: the line
+calculator-dough-math, calculator-recipe-source, calculator-order-text, calculator-order-prefill (adapted: `prefillNote` takes the translate function as an argument, so it is not paired), calculator-recipe-text (one documented difference: the line
 `Flour uniqua blue`, one venue's data, is written like every other), confirm-flow, log-time,
 calculator-config (partial: the read side; leaves out the save path `reconcileConfigWrite` / `saveFailureKey` and
 `orderPrefillLabel`; `formatGrams` and `normalizeConfig` take the language as an argument), log-model (partial: the
