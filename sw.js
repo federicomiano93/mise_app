@@ -1,4 +1,4 @@
-const CACHE_NAME = 'theitalianclub-v666';
+const CACHE_NAME = 'theitalianclub-v672';
 // Firebase SDK modules (loaded from gstatic) are cached SEPARATELY from CACHE_NAME
 // so they survive the cache-version bump that happens on every deploy — otherwise
 // the offline SDK would be wiped each release until the next online load. The name
@@ -178,7 +178,7 @@ const ASSET_HASHES = {
   "./dist/catalogue.js": '0a8e3408ca466c86',
   "./dist/pastries.js": 'f28377a9f3adcd4e',
   "./dist/foodcost.js": '7084a84a14fb48ef',
-  "./dist/inventory.js": '5952b7ff9ac45124',
+  "./dist/inventory.js": 'bac42c8abb8c1a3d',
   "./qr.png": '761a95e5bc25e2ba',
   "./dist/tokens.css": 'a4f37273bf55b63f',
   "./dist/auth.css": '58cd14bdbf808ecc',
@@ -568,9 +568,26 @@ self.addEventListener('fetch', e => {
           .catch(() => {});
       }
       return res;
-    }).catch(() => caches.match(e.request))
+    }).catch(() => offlineCopy(url, e.request))
   );
 });
+
+// What answers a request of ours that the network could not.
+//
+// ⚠️⚠️ A PRECACHED PAGE ASKED FOR WITH A QUERY IS STILL THAT PAGE. The stocktake's month
+// arrows open inventory.html?month=…, and with no signal every month not opened online
+// before answered with the browser's own error page — the arrows dead in a storeroom
+// (found 11 Oct 2026, offline through this worker on the emulator). The query is read by
+// the page's own script, never by the server, so THIS worker's copy of the file is the
+// right answer: the one that matches this release's bundles. Online nothing changes.
+function offlineCopy(url, request) {
+  if (url.search && PRECACHED.has(url.origin + url.pathname)) {
+    return caches.open(CACHE_NAME)
+      .then(cache => cache.match(url.origin + url.pathname))
+      .then(hit => hit || caches.match(request));
+  }
+  return caches.match(request);
+}
 
 self.addEventListener('message', e => {
   if (!e.source) return;
