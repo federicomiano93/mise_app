@@ -22,7 +22,7 @@
 //   …/whatsapp/direct/<id>/add               «Add to the message» for the direct client
 //   …/whatsapp/list/new, …/direct/new        make a fresh empty item and replace themselves with its address
 //   any other /calculator/settings/…         unknown: back to /calculator/settings
-//   /calculator/log                        the Dough history: the list of logs
+//   /calculator/log                          the Dough history: the list of logs
 //   /calculator/log/new                      Add log (a log made by hand)
 //   /calculator/log/<id>                     one log, read-only
 //   /calculator/log/<id>/edit                Edit log (a log made by hand)
