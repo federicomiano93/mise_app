@@ -717,7 +717,7 @@ on purpose: the legacy log migration (stays in the current app), the empty state
   reached it from the footer «Log»), and each screen has an address: `/calculator/log`, `/log/<id>`,
   `/log/<id>/history[/<n>]`, `/log/new`, `/log/<id>/edit`. Back and a link sent to a colleague land on the same screen.
 - **On a tablet (≥1000px) the list stays on the left** and the log, its history or a version opens on the right; with
-  nothing open the right side says «Tap a log to see it». The current app opened full-screen overlays.
+  nothing open the right side says «Tap a dough to see it». The current app opened full-screen overlays.
 - **«Add dough» sits at the top of the list** (the current app's «+ Add dough» was below it): a new item starts at the top
   (P20). The plus is an icon.
 - **Joined strings are single messages:** «v2 · edited», «Calculated by <name>», «<name> · occasional», «current» — the current
@@ -730,6 +730,11 @@ on purpose: the legacy log migration (stays in the current app), the empty state
   app wrote the raw number.
 - **The day badge's colours come from the Mise 2 tokens** (green today, amber tomorrow, muted once passed), each tint with
   its own ink at 4.5:1 or better.
+- **A delete the database refuses brings the log back and says so** (the current app left it hidden until a reload).
+- **Edit and Restore refuse at 100 versions**, saying so; the current app does not check, and the rules would refuse the write later.
+- **A new version is ADDED to the server's chain** (`updateDoc` + `arrayUnion`), never written over it: another phone's version is kept, and a dough deleted elsewhere is refused («not saved»), never recreated.
+- **The Delete and Restore questions have titles** (the current app's were a bare sentence).
+- **Same as the current app:** the day badge and the retention hiding are computed when the screen is drawn (no timer), and Restore keeps the restored version's author.
 - **Add log and Edit log are slice C2** (below).
 
 ## Step 3c-3 as built, slice C2 (12 Oct 2026) — differences from the current app, on purpose
@@ -746,7 +751,12 @@ on purpose: the legacy log migration (stays in the current app), the empty state
 - **Picking the recipe already picked does nothing** (the current app reloaded it, wiping what was typed); picking another
   starts over, as before.
 - **A log the Calculator made has no Edit screen:** its edit address shows the log. A log that is deleted elsewhere while
-  it is open says «Dough not found.» instead of saving.
+  it is open keeps the screen and what was typed, and says «Dough not found.» at Save instead of saving.
+- **A refused Add, Edit or Restore is said** (the database refused it, or the log is gone). (A refused Add has already closed its screen when the refusal arrives, so it is said on the list.)
+- **The save question of Edit warns when another phone changed the dough meanwhile:** «This dough was changed on another phone while you were editing. Saving puts your quantities on top.» above the usual question; the new version goes after theirs.
+- **A recipe deleted elsewhere while Add is open** clears the choice (Save waits again); if it goes while the question is open, Save says the recipe cannot be read and writes nothing.
+- **The order's extra-dough line uses the interface number format** (`1,200 g` / `1.200 g`).
+- **Same as the current app:** a manual Add with every field at 0 saves an empty dough.
 - **The empty hint of Edit says «No products in this dough.»** (the current app's «in this category» used the old word).
 - Typed numbers are clamped at 0 and never NaN; a `dropdown` product whose saved quantity is not 0…100 keeps that value in
   its select.
