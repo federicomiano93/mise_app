@@ -1,0 +1,35 @@
+/* The month's bottom bar: «What it cost» and the month's own button, after the list.
+
+   ⚠️ ON A PHONE IT IS THE LIST'S LAST BLOCK, NOT STUCK TO THE SCREEN. Driven at 296×668 (Federico's
+   phone), stuck to the bottom it took a fifth of the screen, its two buttons one under the other, and
+   the first screen showed no product at all; at 360 it covered the second row's box. Counting is
+   what the screen is for; closing the month and its cost are once a month, at the end of the list
+   the count has just walked down.
+
+   From 1000px (the split) it sticks to the bottom of the scrolling area, so a long list never
+   pushes the month's buttons off a tablet standing on a bench, where the list column has the room.
+   It sticks because nothing between it and the scroll area clips: stocktakeCss.spec.ts pins it. */
+
+.bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s3);
+  padding: var(--s3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-1);
+}
+
+@media (min-width: 1000px) {
+  .bar {
+    position: sticky;
+    bottom: 0;
+    z-index: 1;
+  }
+}
+
+/* Two buttons side by side while they fit, one under the other on the narrowest phone. */
+.action {
+  flex: 1 1 140px;
+}

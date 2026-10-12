@@ -1,0 +1,33 @@
+/* The count box on a row: a number read down a column, so same-width digits in the mono face and
+   right-aligned. 48px tall (`--hit`) and about 96px wide. The type is 18px: a field under 16px
+   makes iOS zoom the page in when it is focused. */
+
+.box {
+  flex: none;
+  width: 96px;
+  min-height: var(--hit);
+  padding: 0 var(--s3);
+  border: 1.5px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink);
+  font: 450 var(--fs-lg) var(--mono);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+/* The weight read from the pack text, offered in an empty box. */
+.box::placeholder {
+  color: var(--ink-3);
+}
+
+.box:focus {
+  border-color: var(--accent);
+}
+
+/* A closed month, or one that has not answered yet: the figure is there to be read. */
+.box:disabled {
+  border-color: var(--line);
+  background: var(--sunken);
+  color: var(--ink-2);
+}

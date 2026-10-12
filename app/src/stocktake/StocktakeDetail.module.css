@@ -1,0 +1,13 @@
+/* The right-hand side of the Stocktake. With nothing chosen: a quiet card that says what to do. */
+
+.prompt {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 240px;
+  padding: var(--s6);
+  border: 1px dashed var(--line-2);
+  border-radius: var(--r-lg);
+  color: var(--ink-2);
+  text-align: center;
+}
