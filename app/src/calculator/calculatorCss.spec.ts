@@ -6,6 +6,7 @@ import panelCss from './RecipePanel.module.css?raw';
 import resultCss from './ResultCard.module.css?raw';
 import sectionCss from './CalculatorSection.module.css?raw';
 import tabsCss from './RecipeTabs.module.css?raw';
+import fullScreenCss from './RecipeFullScreen.module.css?raw';
 
 // What a stylesheet decides and jsdom cannot see (it applies no layout and no media query).
 const withoutComments = (css: string): string => css.replace(/\/\*[\s\S]*?\*\//g, '');
@@ -128,5 +129,34 @@ describe('the panel\'s layout', () => {
 
   it('draws no gap for a recipe card that is not there', () => {
     expect(declaration(rule(panelCss, '.result:empty'), 'display')).toBe('none');
+  });
+});
+
+describe('the full-screen view', () => {
+  it('keeps the close and size buttons a large touch target, and the pair stops at the ends without `disabled`', () => {
+    const buttons = rule(fullScreenCss, '.close');
+    expect(declaration(buttons, 'width')).toBe('var(--hit-lg)');
+    expect(declaration(buttons, 'height')).toBe('var(--hit-lg)');
+    expect(rule(fullScreenCss, '.step[aria-disabled="true"]')).toContain('var(--ink-3)');
+  });
+
+  it('fills the screen and scrolls its rows on their own without moving the page behind', () => {
+    expect(declaration(rule(fullScreenCss, '.view'), 'height')).toBe('100%');
+    expect(declaration(rule(fullScreenCss, '.scroll'), 'overflow-y')).toBe('auto');
+    expect(declaration(rule(fullScreenCss, '.scroll'), 'overscroll-behavior')).toBe('contain');
+  });
+});
+
+describe('Confirm, Edit and Reset', () => {
+  it('are the whole width and the large touch height, and Reset sits under the entries on the split', () => {
+    expect(declaration(rule(panelCss, '.confirm'), 'min-height')).toBe('var(--hit-lg)');
+    expect(declaration(rule(panelCss, '.confirm'), 'width')).toBe('100%');
+    expect(declaration(rule(panelCss, '.reset', true), 'grid-column')).toBe('1');
+    expect(declaration(rule(panelCss, '.reset', true), 'grid-row')).toBe('2');
+  });
+
+  it('give the card\'s own buttons a thumb\'s target', () => {
+    for (const selector of ['.fullScreen', '.send']) expect(declaration(rule(resultCss, selector), 'width')).toBe('var(--hit)');
+    expect(declaration(rule(resultCss, '.copy'), 'min-height')).toBe('var(--hit)');
   });
 });

@@ -80,7 +80,24 @@
   font-size: var(--fs-sm);
 }
 
+/* Confirm (or Edit) closes the entries: the whole width, the large touch height. */
+.confirm {
+  width: 100%;
+  min-height: var(--hit-lg);
+}
+
+/* «Reset all fields» comes last: after the recipe on a phone, under the entries on the split. */
+.reset {
+  display: flex;
+  justify-content: flex-start;
+}
+
 @media (min-width: 1000px) {
+  .reset {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
   .layout {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     gap: var(--s6);

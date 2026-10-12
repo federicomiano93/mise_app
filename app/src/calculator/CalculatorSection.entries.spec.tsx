@@ -15,6 +15,8 @@ const NOW = Date.UTC(2026, 9, 12, 10, 0, 0);
 
 beforeEach(() => {
   window.localStorage.clear();
+  // The recipe is shown once confirmed: these specs read what it says, so the tabs start confirmed.
+  for (const rid of ['focaccia', 'brioche', 'sourdough']) window.localStorage.setItem(`revealed-${rid}`, '1');
   vi.spyOn(Date, 'now').mockReturnValue(NOW);
 });
 

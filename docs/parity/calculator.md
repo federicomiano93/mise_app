@@ -577,8 +577,12 @@ argument, as the Food cost ports did.
 ### 3c-1 — The calculator itself (the work view)
 
 **Slice A (done):** items 35–45, 46–53 and 55 (not-confirmed placement), 57 and 58 — the tabs, the empty
-states, the entries by logic, the scaled recipe, divisor and crates, the new-work-day sweep. Slice B:
-54, 56, 59–65, 82–85 (Confirm, Edit, Reset, Copy, Send, full screen).
+states, the entries by logic, the scaled recipe, divisor and crates, the new-work-day sweep.
+
+**Slice B (done):** 54 and 55 (revealed, the lock, the recipe first once confirmed), 56 (Reset), 59–64
+(Confirm, Edit, the version saved, the refusal, local-first), 65 (`dough-confirmed`; the screen names `log`,
+`settings` and `log-history` come with their own steps), 82–85 (Copy, Send, full screen, text size). Not done
+on purpose: the legacy log migration (stays in the current app), the empty states' buttons (3c-2).
 
 - **Works alone**: open the Calculator, see the tabs from the existing config, type quantities / a total /
   trays, see the scaled result, divisor and crates, Confirm (day picker or straight), lock/Edit, Reset, the

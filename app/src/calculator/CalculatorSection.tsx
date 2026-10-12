@@ -1,4 +1,4 @@
-import { useId } from 'react';
+import { useEffect, useId } from 'react';
 import { Navigate, useLocation, useNavigate, useNavigationType } from 'react-router';
 import { calculatorEmptyReason, getVisibleRecipes } from '@mise/shared/calculator-config';
 import type { EmptyReason } from '@mise/shared/calculator-config';
@@ -6,8 +6,10 @@ import { PartBoundary } from '../errors/PartBoundary';
 import type { MessageKey } from '../i18n/en';
 import { useT } from '../i18n/useT';
 import { KEEP_FOCUS, Page } from '../shell/Page';
-import { CalculatorProvider, useCalculator } from './CalculatorContext';
+import { StatusMessageProvider, useStatusMessage } from '../ui/StatusMessage';
+import { CalculatorProvider, useCalculator, useCalculatorStore } from './CalculatorContext';
 import { CALCULATOR_PATH, recipePath, resolveCalculatorPath } from './calculatorPath';
+import { messageText } from './calculatorMessages';
 import { RecipePanel } from './RecipePanel';
 import { RecipeTabs } from './RecipeTabs';
 import { TabStateProvider } from './TabStateContext';
@@ -23,10 +25,25 @@ export default function CalculatorSection() {
   return (
     <CalculatorProvider>
       <TabStateProvider>
-        <CalculatorScreen />
+        <StatusMessageProvider>
+          <StoreMessages />
+          <CalculatorScreen />
+        </StatusMessageProvider>
       </TabStateProvider>
     </CalculatorProvider>
   );
+}
+
+// What the store reports (a dough the database refused, a log that is full) goes to the status message.
+function StoreMessages() {
+  const { t } = useT();
+  const store = useCalculatorStore();
+  const say = useStatusMessage();
+  useEffect(() => store.onMessage(message => {
+    const text = messageText(t, message);
+    if (text !== null) say(text);
+  }), [store, say, t]);
+  return null;
 }
 
 function CalculatorScreen() {

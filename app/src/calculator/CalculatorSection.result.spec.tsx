@@ -10,7 +10,12 @@ import {
 
 beforeAll(async () => { await import('./CalculatorSection'); }, 60_000);
 
-beforeEach(() => { window.localStorage.clear(); });
+// These specs are about the recipe, so every tab is already confirmed (the current app's own key): when it is
+// shown at all is in CalculatorSection.confirm.spec.tsx.
+beforeEach(() => {
+  window.localStorage.clear();
+  for (const rid of ['focaccia', 'brioche', 'sourdough', 'linked']) window.localStorage.setItem(`revealed-${rid}`, '1');
+});
 
 afterEach(() => { window.localStorage.clear(); });
 
@@ -54,14 +59,6 @@ describe('when the recipe is shown', () => {
     const { user } = await open('/calculator/brioche');
     await type(user, await main().findByLabelText('Total dough (g)', undefined, LOAD), '-50');
     expect(main().queryByRole('region', { name: 'Brioche dough' })).not.toBeInTheDocument();
-  });
-
-  it('comes AFTER the entries in the document, so the reading order is the visual order', async () => {
-    const { user } = await open('/calculator/brioche');
-    const box = await main().findByLabelText('Total dough (g)', undefined, LOAD);
-    await type(user, box, '800');
-    const card = main().getByRole('region', { name: 'Brioche dough' });
-    expect(box.compareDocumentPosition(card) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 });
 

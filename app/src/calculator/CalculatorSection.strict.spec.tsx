@@ -20,6 +20,7 @@ const at = (day: number, hour: number) => new Date(2026, 9, day, hour).getTime()
 
 beforeEach(() => {
   window.localStorage.clear();
+  window.localStorage.setItem('revealed-brioche', '1');
   vi.spyOn(Date, 'now').mockReturnValue(at(12, 10));
 });
 

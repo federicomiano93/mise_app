@@ -13,6 +13,8 @@ type Props = {
   textOf: (qtyId: string) => string;
   onChange: (qtyId: string, text: string) => void;
   onBlank: (qtyId: string) => void;
+  // The tab is confirmed: every box and select is locked.
+  disabled?: boolean;
 };
 
 type Card = { clientId: string; clientName: string; rows: TabProduct[] };
@@ -31,7 +33,7 @@ function cardsOf(products: readonly TabProduct[]): Card[] {
 // The orders of a recipe tab: what each client wants of it, typed as pieces (or kilos, for a legacy `kg`
 // product, or picked from 0…100 for a `dropdown` one). A recipe with no product says so quietly: that is
 // true whether there are no clients, no products on this recipe, or every one of them is paused.
-export function OrderCards({ products, textOf, onChange, onBlank }: Props) {
+export function OrderCards({ products, textOf, onChange, onBlank, disabled }: Props) {
   const { t } = useT();
   const uid = useId();
 
@@ -60,6 +62,7 @@ export function OrderCards({ products, textOf, onChange, onBlank }: Props) {
                         id={boxId}
                         className={boxes.select}
                         value={text}
+                        disabled={disabled}
                         onChange={event => { onChange(product.qtyId, event.target.value); }}
                       >
                         {optionsFor(text).map(option => <option key={option} value={option}>{option}</option>)}
@@ -71,6 +74,7 @@ export function OrderCards({ products, textOf, onChange, onBlank }: Props) {
                         inputMode={kilos ? 'decimal' : 'numeric'}
                         min={0}
                         step={kilos ? 0.5 : undefined}
+                        disabled={disabled}
                         onChange={next => { onChange(product.qtyId, next); }}
                         onBlank={() => { onBlank(product.qtyId); }}
                       />

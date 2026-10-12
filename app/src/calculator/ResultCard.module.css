@@ -143,3 +143,49 @@
   color: var(--ink-2);
   font-size: var(--fs-sm);
 }
+
+/* The way into the full-screen view: a 48px target at the end of the header. */
+.fullScreen,
+.send {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: var(--hit);
+  height: var(--hit);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.fullScreen {
+  margin-left: auto;
+}
+
+/* Copy takes the room, the send arrow keeps its own width beside it. */
+.share {
+  display: flex;
+  gap: var(--s2);
+  margin-top: var(--s4);
+}
+
+.copy {
+  flex: 1;
+  min-height: var(--hit);
+  padding: 0 var(--s4);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.fullScreen:hover,
+.send:hover,
+.copy:hover {
+  background: var(--sunken);
+}

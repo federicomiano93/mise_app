@@ -1,11 +1,17 @@
-import { useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
+import { Maximize2, Send } from 'lucide-react';
 import {
   crateCount, DIVISOR_MAX, divisorTotal, formatGrams, getCratePerBox, getDivisorProducts, isCrateEnabled,
   splitDough,
 } from '@mise/shared/calculator-config';
 import type { CalculatorConfig, Recipe, TabProduct } from '@mise/shared/calculator-config';
+import { buildRecipeText } from '@mise/shared/calculator-recipe-text';
 import { useT } from '../i18n/useT';
+import { useSendSheet } from '../ui/SendSheet';
+import { problemSentence } from './calculatorMessages';
 import type { TabResult } from './calculatorResult';
+import { copyToClipboard } from './clipboard';
+import { RecipeFullScreen } from './RecipeFullScreen';
 import boxes from './Boxes.module.css';
 import styles from './ResultCard.module.css';
 
@@ -17,54 +23,119 @@ type Props = {
   products: readonly TabProduct[];
   // The quantity typed for a (client, product) pair.
   qty: (qtyId: string) => number;
+  // The divisor's number of crates, kept by the panel because Confirm saves it with the dough.
+  divisorN: number;
+  onDivisorN: (n: number) => void;
 };
 
+// How long «Copied» (or «Copy failed») stays on the button.
+const COPY_NOTE_MS = 2000;
+
 // The scaled recipe of a tab: how much of each ingredient for the dough to make, the total, the split into
-// crates and the crates the orders fill.
+// crates and the crates the orders fill — and what can be done with it: full screen, copy, send.
 //
 // ⚠️ A TAB THAT CANNOT BE CALCULATED SHOWS NO NUMBER AT ALL, and says why: an answer that looks complete and is
 // not is worse than none. «Still loading» and «gone» are different sentences.
-export function ResultCard({ recipe, result, config, products, qty }: Props) {
+export function ResultCard({ recipe, result, config, products, qty, divisorN, onDivisorN }: Props) {
   const { t, locale } = useT();
   const titleId = useId();
   const grams = (n: number) => formatGrams(n, locale);
+  const [fullScreen, setFullScreen] = useState(false);
+  const [copy, setCopy] = useState<'idle' | 'copied' | 'failed'>('idle');
+  const [send, sendSheet] = useSendSheet();
+  const opener = useRef<HTMLButtonElement>(null);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const ready = result.kind === 'ready' ? result : null;
+  const problem = problemSentence(t, result);
+
+  // The name the dough has in its text and its full-screen view: the catalogue's, when it is linked.
+  const name = ready?.resolved.name || recipe.name;
+  const text = ready ? buildRecipeText(name, ready.rows, ready.totalG) : '';
+
+  // ⚠️ A CONFIGURATION THAT CHANGES UNDER THE FULL-SCREEN VIEW CLOSES IT: it is a copy of the old grams.
+  // The config object changes only when the configuration itself does.
+  useEffect(() => { setFullScreen(false); }, [config]);
+  useEffect(() => () => { if (timer.current !== null) clearTimeout(timer.current); }, []);
+
+  const openFullScreen = () => { setFullScreen(true); };
+  const closeFullScreen = () => {
+    setFullScreen(false);
+    // The opener may have been replaced meanwhile: never focus a detached node.
+    if (opener.current?.isConnected) opener.current.focus({ preventScroll: true });
+  };
+
+  const doCopy = async () => {
+    const ok = await copyToClipboard(text);
+    setCopy(ok ? 'copied' : 'failed');
+    if (timer.current !== null) clearTimeout(timer.current);
+    timer.current = setTimeout(() => { timer.current = null; setCopy('idle'); }, COPY_NOTE_MS);
+  };
+
+  const copyText = copy === 'copied' ? t('calc.copied') : copy === 'failed' ? t('calc.copyFailed') : t('calc.copyRecipe');
 
   return (
     <section className={styles.card} aria-labelledby={titleId}>
       <header className={styles.head}>
         <h2 id={titleId} className={styles.title}>{t('calc.doughTitle', { name: recipe.name })}</h2>
-        {result.kind === 'ready' ? (
-          <span className={styles.badge}>{t('calc.gramsRaw', { g: grams(Math.round(result.target)) })}</span>
+        {ready ? (
+          <>
+            <span className={styles.badge}>{t('calc.gramsRaw', { g: grams(Math.round(ready.target)) })}</span>
+            <button
+              ref={opener}
+              type="button"
+              className={styles.fullScreen}
+              aria-label={t('calc.fullScreen')}
+              title={t('calc.fullScreen')}
+              onClick={openFullScreen}
+            >
+              <Maximize2 aria-hidden="true" />
+            </button>
+          </>
         ) : null}
       </header>
 
-      {result.kind === 'loading' ? <p className={styles.problem}>{t('calc.sourceLoading')}</p> : null}
-      {result.kind === 'problem' ? (
-        <p className={styles.problem}>
-          {result.problem === 'unweighable'
-            ? t('calc.sourceUnweighable', { row: result.row })
-            : t(result.problem === 'missing' ? 'calc.sourceMissing' : 'calc.sourceEmpty')}
-        </p>
-      ) : null}
+      {problem === null ? null : <p className={styles.problem}>{problem}</p>}
 
-      {result.kind === 'ready' ? (
+      {ready ? (
         <>
-          <ul className={styles.rows}>
-            {result.rows.map((row, index) => (
+          {/* A tap on the list or on the total line opens the full-screen view too, as in the current app. The
+              button in the header is the way in for a keyboard and a screen reader; Copy and Send sit outside
+              both, so they never open it. */}
+          <ul className={styles.rows} onClick={openFullScreen}>
+            {ready.rows.map((row, index) => (
               <li key={index} className={styles.row}>
                 <span className={styles.name}>{row.name}</span>
                 <span className={styles.figure}>{`${grams(Math.round(row.grams))} g`}</span>
               </li>
             ))}
           </ul>
-          <div className={styles.total}>
+          <div className={styles.total} onClick={openFullScreen}>
             <span>{t('calc.totalDough')}</span>
-            <span className={styles.figure}>{`${grams(result.totalG)} g`}</span>
+            <span className={styles.figure}>{`${grams(ready.totalG)} g`}</span>
           </div>
-          <Divisor config={config} recipe={recipe} qty={qty} grams={grams} />
+
+          <div className={styles.share}>
+            <button type="button" className={styles.copy} onClick={() => { void doCopy(); }}>{copyText}</button>
+            <button
+              type="button"
+              className={styles.send}
+              aria-label={t('calc.send')}
+              title={t('calc.send')}
+              onClick={() => { send({ subject: name, text }); }}
+            >
+              <Send aria-hidden="true" />
+            </button>
+          </div>
+
+          <Divisor config={config} recipe={recipe} qty={qty} grams={grams} n={divisorN} onChange={onDivisorN} />
           <Crates products={products} qty={qty} />
         </>
       ) : null}
+
+      {ready && fullScreen ? (
+        <RecipeFullScreen name={name} rows={ready.rows} totalG={ready.totalG} onClose={closeFullScreen} />
+      ) : null}
+      {sendSheet}
     </section>
   );
 }
@@ -75,14 +146,15 @@ export function ResultCard({ recipe, result, config, products, qty }: Props) {
 // ⚠️ NEVER LOCKED. Confirming a dough locks the quantities so they cannot drift from the log that was saved;
 // the divisor is not a quantity, it is a split that touches neither the recipe nor the log — and it is
 // useful exactly after the dough is made.
-function Divisor({ config, recipe, qty, grams }: {
+function Divisor({ config, recipe, qty, grams, n, onChange }: {
   config: CalculatorConfig;
   recipe: Recipe;
   qty: (qtyId: string) => number;
   grams: (n: number) => string;
+  n: number;
+  onChange: (n: number) => void;
 }) {
   const { t } = useT();
-  const [crates, setCrates] = useState(0);
   const active = getDivisorProducts(config, recipe.id).filter(product => qty(product.qtyId) > 0);
   if (active.length === 0) return null;
 
@@ -97,13 +169,13 @@ function Divisor({ config, recipe, qty, grams }: {
         <select
           className={boxes.select}
           aria-label={t('calc.numberOfCrates')}
-          value={crates}
-          onChange={event => { setCrates(Number(event.target.value)); }}
+          value={n}
+          onChange={event => { onChange(Number(event.target.value)); }}
         >
-          {Array.from({ length: DIVISOR_MAX + 1 }, (_, n) => <option key={n} value={n}>{n}</option>)}
+          {Array.from({ length: DIVISOR_MAX + 1 }, (_, i) => <option key={i} value={i}>{i}</option>)}
         </select>
         <span aria-hidden="true">=</span>
-        <span className={styles.divisorResult}>{`${grams(Math.round(splitDough(total, crates)))} g`}</span>
+        <span className={styles.divisorResult}>{`${grams(Math.round(splitDough(total, n)))} g`}</span>
       </div>
     </div>
   );

@@ -15,6 +15,8 @@ type Props = {
   max?: number;
   step?: number | 'any';
   describedBy?: string;
+  // The tab is confirmed: the number is there to be read, not changed.
+  disabled?: boolean;
   // A whole-number box: the text the maths used instead of what was typed, or null when the box already says it
   // (the trays box replaces a fraction). Applied when the box is left or Enter is pressed.
   settle?: (text: string) => string | null;
@@ -27,7 +29,7 @@ type Props = {
 // ⚠️ WHAT IS KEPT IS NOT ALWAYS WHAT IS SHOWN WHILE THE BOX HAS THE FOCUS: a tapped 0 shows an empty box
 // while the tab still keeps «0», until a digit is typed. That is the draft; without the focus the box shows
 // what the tab keeps. The value is written per keystroke by the caller.
-export function NumberField({ id, value, onChange, onBlank, inputMode, min, max, step, describedBy, settle }: Props) {
+export function NumberField({ id, value, onChange, onBlank, inputMode, min, max, step, describedBy, disabled, settle }: Props) {
   const [draft, setDraft] = useState<string | null>(null);
   const shown = draft ?? value;
 
@@ -52,6 +54,7 @@ export function NumberField({ id, value, onChange, onBlank, inputMode, min, max,
       max={max}
       step={step}
       aria-describedby={describedBy}
+      disabled={disabled}
       value={shown}
       onFocus={event => {
         if (clearsOnFocus(value)) setDraft('');

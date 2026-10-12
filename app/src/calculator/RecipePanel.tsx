@@ -1,16 +1,27 @@
-import { useEffect, useId, useState } from 'react';
+import { useContext, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import type { HTMLAttributes } from 'react';
+import { Pencil } from 'lucide-react';
 import {
-  doughExtraGrams, formatGrams, getTabProducts, isExtraDoughEnabled, settledTraysText, showsLeaveningKnob, traysGrams,
-  usesOrders, usesTrays, usesTypedTotal,
+  doughExtraGrams, formatGrams, getTabProducts, isExtraDoughEnabled, settledTraysText,
+  showsLeaveningKnob, traysGrams, usesOrders, usesTrays, usesTypedTotal,
 } from '@mise/shared/calculator-config';
 import type { Recipe } from '@mise/shared/calculator-config';
+import { runConfirm } from '@mise/shared/confirm-flow';
+import type { ForDay } from '@mise/shared/log-model';
 import {
-  extraKey, extraUnitKey, paramKey, qtyKey, totalKey, traysKey,
+  extraKey, extraUnitKey, lockKey, paramKey, parseLock, qtyKey, revealedKey, serializeLock, totalKey, traysKey,
 } from '@mise/shared/calculator-tab-keys';
 import { useT } from '../i18n/useT';
-import { useCalculator } from './CalculatorContext';
+import { ScrollAreaContext } from '../shell/scrollArea';
+import { announceAction } from '../telemetry/usage';
+import { Button } from '../ui/Button';
+import { Dialog } from '../ui/Dialog';
+import { useAlert } from '../ui/useAlert';
+import { useConfirm } from '../ui/useConfirm';
+import { useCalculator, useCalculatorStore } from './CalculatorContext';
 import { numberOf, knobRange } from './calculatorInput';
+import { problemSentence } from './calculatorMessages';
+import { buildDoughVersion } from './calculatorSave';
 import { calculateTab, sourceRecipe } from './calculatorResult';
 import { useTabState, useTabVersion } from './TabStateContext';
 import { NumberField } from './NumberField';
@@ -23,28 +34,38 @@ type Props = {
   recipe: Recipe;
   // `role`, `id` and `aria-labelledby` when the recipes are tabs; nothing for a lone recipe.
   panelProps?: HTMLAttributes<HTMLDivElement>;
-  // Whether the dough was confirmed: the recipe then comes FIRST (the node is moved, never reordered with
-  // CSS, so the keyboard and the reading order are the visual order). Confirming arrives with the next
-  // slice of the work view; until then every tab is «not confirmed», and the recipe sits after the entries.
-  confirmed?: boolean;
 };
 
 // One recipe's tab, laid out by its logic:
-//   orders      → leavening knob (if shown) · Orders · Extra dough
-//   total       → Total dough (g)
-//   both        → leavening knob (if shown) · Total dough (g) · Orders · Extra dough
-//   trays       → Number of trays (and the grams they make)
-//   traysTotal  → Number of trays · Total dough (g)
-// and, beside or below them, the scaled recipe.
+//   orders      → leavening knob (if shown) · Orders · Extra dough · Confirm / Edit
+//   total       → Total dough (g) · Confirm / Edit
+//   both        → leavening knob (if shown) · Total dough (g) · Orders · Extra dough · Confirm / Edit
+//   trays       → Number of trays (and the grams they make) · Confirm / Edit
+//   traysTotal  → Number of trays · Total dough (g) · Confirm / Edit
+// then the scaled recipe, then «Reset all fields».
 //
 // Every box is kept in the current app's own localStorage keys per keystroke (calculatorTabState.ts), so the
 // numbers survive a reload and the other app shows them too. `touched-<rid>` is written wherever the current
-// app writes it: on a typed number or a picked option, never when a box merely comes back to its default.
-export function RecipePanel({ recipe, panelProps, confirmed = false }: Props) {
+// app writes it: on a typed number or a picked option and on Confirm, never when a box merely comes back to its
+// default. `revealed-<rid>` and `lock-<rid>` are the current app's too ({"locked":bool,"logId":string|null}):
+// a tab confirmed there is confirmed here.
+//
+// ⚠️ THE RECIPE IS SHOWN ONLY ONCE THE DOUGH WAS CONFIRMED (`revealed`), and then it is the FIRST thing in the
+// panel: the node is MOVED in the document, never reordered with CSS `order`, so the keyboard and the reading
+// order are the visual order. Before that it sits just before «Reset all fields». On the tablet's split the
+// stylesheet puts it on the right whichever comes first.
+export function RecipePanel({ recipe, panelProps }: Props) {
   const { t, locale } = useT();
   const { config, linked } = useCalculator();
+  const store = useCalculatorStore();
   const state = useTabState();
   useTabVersion();
+  const scrollArea = useContext(ScrollAreaContext);
+  const [confirm, confirmDialog] = useConfirm();
+  const [alert, alertDialog] = useAlert();
+  const [picking, setPicking] = useState(false);
+  // The divisor's crates: display only, never locked, but saved with the dough.
+  const [divisorN, setDivisorN] = useState(0);
   const uid = useId();
   const rid = recipe.id;
 
@@ -65,18 +86,103 @@ export function RecipePanel({ recipe, panelProps, confirmed = false }: Props) {
   const unitText = state.read(extraUnitKey(rid));
   const extraUnit = unitText === 'g' ? 'g' : 'kg';
   const extraShown = hasOrders && isExtraDoughEnabled(config, rid);
+  const lock = parseLock(state.read(lockKey(rid)));
+  const locked = !!lock?.locked;
+  const revealed = state.read(revealedKey(rid)) === '1';
 
+  const qty = (qtyId: string) => numberOf(qtyText(qtyId));
   const result = calculateTab(config, recipe, linked, {
-    qty: qtyId => numberOf(qtyText(qtyId)),
+    qty,
     extraG: extraShown ? doughExtraGrams(extraText, extraUnit) : 0,
     totalG: hasTotal ? numberOf(totalText) : 0,
     trays: hasTrays ? traysText : 0,
     knob: hasKnob ? knobText : null,
   });
+  const hasDough = result.kind !== 'none';
+  const shown = revealed && hasDough;
+
+  // The first reveal scrolls to the top: Confirm is tapped at the bottom of the entries, and the recipe, now
+  // the first thing in the panel, must come into view. The shell's `main` is the scroll area; the section does
+  // not own it (a move to another tab starts at the top by the shell's own reset).
+  const wasShown = useRef(shown);
+  useLayoutEffect(() => {
+    if (shown && !wasShown.current) {
+      const area = scrollArea.element();
+      if (area) area.scrollTop = 0;
+    }
+    wasShown.current = shown;
+  }, [shown, scrollArea]);
 
   const set = (key: string, text: string) => { state.set(key, text, rid); };
   // A box left empty goes back to its default: kept, but the tab is not «used» by it.
   const reset = (key: string, text: string) => { state.set(key, text); };
+
+  // ── Confirm ────────────────────────────────────────────────────────────────
+  // Asks «today or tomorrow?» unless the venue switched the question off (shared/src/confirm-flow.ts).
+  const onConfirm = () => {
+    runConfirm(rid, {
+      config,
+      openDayPicker: () => { setPicking(true); },
+      saveToday: () => { saveFor('today'); },
+    });
+  };
+
+  // ⚠️ THE DOUGH IS SAVED FROM WHAT THE SCREEN SHOWS, and refused when the screen refuses: a linked recipe that
+  // cannot be read says so in a dialog and saves nothing — never a dough of zeros.
+  function saveFor(day: ForDay) {
+    setPicking(false);
+    if (locked) return;
+    if (result.kind !== 'ready') {
+      const sentence = problemSentence(t, result);
+      if (sentence !== null) void alert({ message: sentence, okLabel: t('common.ok') });
+      return;
+    }
+    const version = buildDoughVersion({
+      config,
+      recipe: result.source,
+      products,
+      qty,
+      extra: { enabled: extraShown, text: extraText, unit: extraUnit },
+      totalG: hasTotal ? numberOf(totalText) : 0,
+      trays: hasTrays ? traysText : 0,
+      leaveningPct: result.pct,
+      divisorN,
+      nowMs: Date.now(),
+    });
+    // Local-first: the log is in memory and the browser's copy at once, the write follows. null: the tab's log
+    // is full, nothing was written, the store said so — the tab stays unlocked.
+    const done = store.confirmDough({
+      linkedLogId: lock?.logId ?? null, dough: result.source.name, recipeId: rid, forDay: day, version,
+    });
+    if (done === null) return;
+    state.set(revealedKey(rid), '1');
+    // Confirming is using the tab, even if nothing else was typed after.
+    state.set(lockKey(rid), serializeLock(true, done.logId), rid);
+    announceAction('dough-confirmed');
+  }
+
+  // Asks first, then unlocks KEEPING the link to the log (the next Confirm updates it), hides the recipe so it
+  // cannot change live, and drops `revealed`.
+  const onEdit = async () => {
+    if (!locked) return;
+    const ok = await confirm({
+      title: t('ui.edit'), message: t('calc.editQuestion'), okLabel: t('ui.edit'), cancelLabel: t('common.cancel'),
+    });
+    if (!ok) return;
+    state.remove(revealedKey(rid));
+    state.set(lockKey(rid), serializeLock(false, lock?.logId));
+  };
+
+  // Everything the tab remembers goes through the ONE forget function (numbers, knob, selects, lock, revealed,
+  // touched): the lock MUST go with the numbers, or the next Confirm would update the old log.
+  const onReset = async () => {
+    const ok = await confirm({
+      title: t('calc.resetQuestion'), okLabel: t('calc.reset'), cancelLabel: t('common.cancel'), danger: true,
+    });
+    if (!ok) return;
+    state.forget(rid, products.map(product => product.qtyId));
+    setDivisorN(0);
+  };
 
   const range = knobRange(recipe.leaveningDefaultPct);
   const knobName = source.ingredients.find(ingredient => ingredient.key === source.leaveningKey)?.label ?? t('calc.leavening');
@@ -94,6 +200,7 @@ export function RecipePanel({ recipe, panelProps, confirmed = false }: Props) {
             min={range.min}
             max={range.max}
             step={range.step}
+            disabled={locked}
             onChange={text => { set(paramKey(rid), text); }}
             onBlank={() => { reset(paramKey(rid), String(recipe.leaveningDefaultPct)); }}
           />
@@ -117,6 +224,7 @@ export function RecipePanel({ recipe, panelProps, confirmed = false }: Props) {
             min={0}
             step={1}
             describedBy={traysGramsId}
+            disabled={locked}
             settle={settledTraysText}
             onChange={text => { set(traysKey(rid), text); }}
             onBlank={() => { reset(traysKey(rid), '0'); }}
@@ -133,6 +241,7 @@ export function RecipePanel({ recipe, panelProps, confirmed = false }: Props) {
             inputMode="numeric"
             min={0}
             step={1}
+            disabled={locked}
             onChange={text => { set(totalKey(rid), text); }}
             onBlank={() => { reset(totalKey(rid), '0'); }}
           />
@@ -145,6 +254,7 @@ export function RecipePanel({ recipe, panelProps, confirmed = false }: Props) {
           <OrderCards
             products={products}
             textOf={qtyText}
+            disabled={locked}
             onChange={(qtyId, text) => { set(qtyKey(qtyId), text); }}
             onBlank={qtyId => { reset(qtyKey(qtyId), '0'); }}
           />
@@ -161,6 +271,7 @@ export function RecipePanel({ recipe, panelProps, confirmed = false }: Props) {
               inputMode="decimal"
               min={0}
               step={0.1}
+              disabled={locked}
               onChange={text => { set(extraKey(rid), text); }}
               onBlank={() => { reset(extraKey(rid), '0'); }}
             />
@@ -168,6 +279,7 @@ export function RecipePanel({ recipe, panelProps, confirmed = false }: Props) {
               className={boxes.select}
               aria-label={t('calc.extraDoughUnit')}
               value={extraUnit}
+              disabled={locked}
               onChange={event => { set(extraUnitKey(rid), event.target.value); }}
             >
               <option value="g">g</option>
@@ -176,42 +288,70 @@ export function RecipePanel({ recipe, panelProps, confirmed = false }: Props) {
           </div>
         </div>
       ) : null}
+
+      {/* Confirm when there is something to make and the tab is open; Edit when it is locked; neither otherwise. */}
+      {hasDough && !locked ? (
+        <Button variant="primary" className={styles.confirm} onPress={onConfirm}>{t('calc.confirm')}</Button>
+      ) : null}
+      {hasDough && locked ? (
+        <Button className={styles.confirm} onPress={() => { void onEdit(); }}>
+          <Pencil aria-hidden="true" />
+          {t('ui.edit')}
+        </Button>
+      ) : null}
     </div>
   );
 
-  // The recipe, hidden when there is nothing to make.
   const recipeCard = (
     <div key="result" className={styles.result}>
-      {result.kind === 'none' ? null : (
+      {shown ? (
         <ResultCard
           recipe={recipe}
           result={result}
           config={config}
           products={products}
-          qty={qtyId => numberOf(qtyText(qtyId))}
+          qty={qty}
+          divisorN={divisorN}
+          onDivisorN={setDivisorN}
         />
-      )}
+      ) : null}
     </div>
   );
 
-  // ⚠️ WHERE THE RECIPE SITS FOLLOWS WHETHER THE DOUGH WAS CONFIRMED: the first thing in the panel when it was,
-  // otherwise just after the entries (where «Reset all fields» will follow it). The node is MOVED in the
-  // document, never reordered with CSS `order`, so the keyboard and the reading order are the visual order;
-  // the keys keep React from rebuilding it (and losing the divisor) on the way. On the tablet's split the
-  // stylesheet puts it on the right whichever it comes first.
-  const parts = confirmed ? [recipeCard, entries] : [entries, recipeCard];
+  const resetButton = (
+    <div key="reset" className={styles.reset}>
+      <Button variant="danger" onPress={() => { void onReset(); }}>{t('calc.resetAll')}</Button>
+    </div>
+  );
+
+  const parts = shown ? [recipeCard, entries, resetButton] : [entries, recipeCard, resetButton];
 
   return (
     <div {...panelProps}>
       <ClearedNote rid={rid} />
       <div className={styles.layout}>{parts}</div>
+      <Dialog
+        isOpen={picking}
+        title={t('calc.saveDoughFor')}
+        dismissable
+        onClose={() => { setPicking(false); }}
+        actions={
+          <>
+            <Button onPress={() => { setPicking(false); }}>{t('common.cancel')}</Button>
+            <Button variant="primary" onPress={() => { saveFor('today'); }}>{t('calc.today')}</Button>
+            <Button variant="primary" onPress={() => { saveFor('tomorrow'); }}>{t('day.tomorrow')}</Button>
+          </>
+        }
+      />
+      {confirmDialog}
+      {alertDialog}
     </div>
   );
 }
 
 // The quiet line saying why a tab is empty — shown ONLY for a tab the new-day sweep actually cleared, for 12
 // seconds, and kept across redraws: the time is in the tab state, not in this component, which the
-// configuration arriving redraws.
+// configuration arriving redraws. It stays above the recipe.
 function ClearedNote({ rid }: { rid: string }) {
   const { t } = useT();
   const state = useTabState();

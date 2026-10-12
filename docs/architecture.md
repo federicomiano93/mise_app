@@ -151,9 +151,21 @@ Aria does not support Preact. The numbers are below.
   written only where a number is typed or an option picked, and the new-work-day sweep (4 am) clears a stale
   tab before it is first drawn and when the app comes back to the foreground — never while it is on screen
   (`TabStateContext.tsx`). The maths is the shared ports (`calculateTab` in `calculatorResult.ts` only wires
-  them). Not yet: Confirm and Edit, Reset, the full-screen view, Copy and Send (slice B), the doors to
-  Settings and the empty states' buttons (3c-2), the Log (3c-3), orders (3c-4). Its parity list is
-  `docs/parity/calculator.md`.
+  them). Slice B adds the rest of the work view. The recipe is shown only once the dough was confirmed
+  (`revealed-<rid>`, and `lock-<rid>` `{"locked":bool,"logId":string|null}`, both the current app's keys: a
+  tab confirmed there is confirmed here), and then it is the FIRST node of the panel (moved, never reordered
+  with CSS), otherwise it sits just before «Reset all fields». Confirm (`runConfirm` of `shared/src/confirm-flow.ts`:
+  a Today/Tomorrow dialog unless `askDoughDay` is off) builds the version in `calculatorSave.ts` from the
+  recipe the screen shows (`sheetRecipe`), hands it to the store's `confirmDough`, writes `revealed` and
+  `lock`, locks every box but the divisor and tells the usage record (`dough-confirmed`); a tab that cannot be
+  calculated is refused in a dialog with the screen's own sentence; a full log leaves the tab open. Edit asks,
+  then unlocks keeping the link; Reset asks (danger) and goes through the ONE forget function. The store's
+  messages (`calculatorMessages.ts`) reach the section's `StatusMessage`. `ResultCard` also holds the
+  full-screen view (`RecipeFullScreen`: a native `<dialog>`, six text sizes in `mise.calcZoomStep`), Copy
+  (`clipboard.ts`, raced against 2 s) and Send (`ui/SendSheet.tsx`, the shared «which road» sheet: WhatsApp
+  with no recipient, or the mail app). jsdom has no modal `<dialog>`: `testing/setup.ts` gives it
+  `showModal`/`close`. Not yet: the doors to Settings and the empty states' buttons (3c-2), the Log (3c-3),
+  orders (3c-4). Its parity list is `docs/parity/calculator.md`.
 - `ui/` — the shared controls: `Button`, `Dialog` and `useConfirm` (a question that waits for an
   answer; never the browser's `confirm()`), `StatusMessage` (one short message at a time, in a
   live region that exists before it speaks), `FormBar` (Back, title, the one primary action: the
