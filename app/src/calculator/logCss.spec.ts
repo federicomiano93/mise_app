@@ -4,6 +4,7 @@ import badgeCss from './DayBadge.module.css?raw';
 import cardCss from './LogCard.module.css?raw';
 import frameCss from './DoughHistory.module.css?raw';
 import oneCss from './LogOne.module.css?raw';
+import editorCss from './LogEditor.module.css?raw';
 
 // What a stylesheet decides and jsdom cannot see: the split must not clip the list's sticky bar, the right-hand side
 // must scroll on its own, a target must be a thumb's size, and a coloured word must be readable on its colour.
@@ -129,5 +130,19 @@ describe('the split', () => {
   it('does not clip the right-hand side on a phone, where the bar of a log sticks too', () => {
     expect(declaration(rule(frameCss, '.detail'), 'overflow-y')).toBeUndefined();
     expect(declaration(rule(frameCss, '.detail'), 'position')).toBeUndefined();
+  });
+});
+
+describe('the choice buttons of Add dough', () => {
+  it('are a thumb\'s target, and each state reads at 4.5:1 or better on its own ground', () => {
+    expect(declaration(rule(editorCss, '.choice'), 'min-height')).toBe('var(--hit)');
+    for (const selector of ['.choice', '.choice[data-selected]', '.missing .choice']) {
+      const body = rule(editorCss, selector);
+      expect(contrast(varName(declaration(body, 'color')), varName(declaration(body, 'background')))).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
+  it('say «Choose Today or Tomorrow first» in the danger ink on the card', () => {
+    expect(contrast(varName(declaration(rule(editorCss, '.alert'), 'color')), '--surface')).toBeGreaterThanOrEqual(4.5);
   });
 });

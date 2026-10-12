@@ -730,5 +730,23 @@ on purpose: the legacy log migration (stays in the current app), the empty state
   app wrote the raw number.
 - **The day badge's colours come from the Mise 2 tokens** (green today, amber tomorrow, muted once passed), each tint with
   its own ink at 4.5:1 or better.
-- **Add log and Edit log are slice C2:** their addresses exist and the Edit button shows for a manual log, but the screens
-  are a placeholder. The pre-question «Edit this dough?» (current app, before the editor opens) is C2's decision.
+- **Add log and Edit log are slice C2** (below).
+
+## Step 3c-3 as built, slice C2 (12 Oct 2026) — differences from the current app, on purpose
+
+- **Edit dough opens with NO pre-question.** The current app asks «Edit this dough?» before the editor opens; Mise 2's
+  screen works on a copy, writes nothing until Save and asks before it is left with edits, so the question protected
+  nothing (item 104).
+- **Save is disabled until something changed** on Edit (the current app's is always pressable) and, on Add, until a recipe is
+  picked (item 103). Leaving either with edits asks the discard question; Add with nothing picked leaves without one.
+- **After a saved Add the screen returns to the list** (the current app closed the overlay onto wherever it was opened from,
+  which is the same place); the Add button takes the focus back. After a saved Edit the log's own screen takes it.
+- **«Choose Today or Tomorrow first»** is an alert line above the two buttons and the buttons turn red, the focus goes to
+  the first (the current app scrolled to it); the recipe and the day are buttons, the one picked framed and tinted.
+- **Picking the recipe already picked does nothing** (the current app reloaded it, wiping what was typed); picking another
+  starts over, as before.
+- **A log the Calculator made has no Edit screen:** its edit address shows the log. A log that is deleted elsewhere while
+  it is open says «Dough not found.» instead of saving.
+- **The empty hint of Edit says «No products in this dough.»** (the current app's «in this category» used the old word).
+- Typed numbers are clamped at 0 and never NaN; a `dropdown` product whose saved quantity is not 0…100 keeps that value in
+  its select.

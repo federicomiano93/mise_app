@@ -33,11 +33,22 @@ export function messageText(t: Say, message: CalculatorMessage): string | null {
 export function problemSentence(t: Say, result: TabResult): string | null {
   switch (result.kind) {
     case 'loading':
-      return t('calc.sourceLoading');
+      return recipeProblemSentence(t, { problem: 'loading' });
     case 'problem':
-      if (result.problem === 'unweighable') return t('calc.sourceUnweighable', { row: result.row });
-      return t(result.problem === 'missing' ? 'calc.sourceMissing' : 'calc.sourceEmpty');
+      return recipeProblemSentence(t, result);
     default:
       return null;
   }
+}
+
+// Why a recipe cannot be used, whoever asks: the work view's result card and Confirm, and «Add dough» when it is
+// saved. ONE place for the four sentences.
+export type RecipeProblem =
+  | { readonly problem: 'loading' }
+  | { readonly problem: 'missing' | 'empty' | 'unweighable'; readonly row: string };
+
+export function recipeProblemSentence(t: Say, found: RecipeProblem): string {
+  if (found.problem === 'loading') return t('calc.sourceLoading');
+  if (found.problem === 'unweighable') return t('calc.sourceUnweighable', { row: found.row });
+  return t(found.problem === 'missing' ? 'calc.sourceMissing' : 'calc.sourceEmpty');
 }

@@ -13,7 +13,8 @@ import type { DrawnLogView } from './calculatorPath';
 import {
   ADD_LOG_OPENER, DOUGH_HISTORY_OPENER, HandBackProvider, isListOpener, logOpener, useHandBack,
 } from './handBack';
-import { LogDraft } from './LogDraft';
+import { LogAdd } from './LogAdd';
+import { LogEdit } from './LogEdit';
 import { LogList } from './LogList';
 import { LogOne } from './LogOne';
 import { LogHistory, LogVersionScreen } from './LogHistoryScreens';
@@ -143,7 +144,8 @@ function LogDetail({ view }: { view: DrawnLogView }) {
     case 'version':
       return <LogVersionScreen id={view.id} n={view.n} />;
     case 'new':
+      return <LogAdd />;
     case 'edit':
-      return <LogDraft view={view} />;
+      return <LogEdit id={view.id} />;
   }
 }

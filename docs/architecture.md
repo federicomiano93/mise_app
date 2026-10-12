@@ -185,8 +185,7 @@ Aria does not support Preact. The numbers are below.
   focus to the button that opened the screen (`handBack.ts`, a stack, because each level is a fresh screen). The
   browser's Back cannot be stopped from leaving an editor when the history entry was made by typing an address
   (React Router can only block entries it created) — in-app moves always ask. Not yet: the ordering link on a
-  client and the republishing of the clients' ordering menus on save (3c-4b, both needed before the switch), the
-  Add log and Edit log editors (3c-3 slice C2: their addresses and buttons exist, `LogDraft` stands in), orders and
+  client and the republishing of the clients' ordering menus on save (3c-4b, both needed before the switch), orders and
   the WhatsApp and Client ordering rows of the hub (3c-4). Its parity list is `docs/parity/calculator.md`.
 
   Step 3c-3 adds the Dough history (slice C1), a button «Dough history» beside Settings at the top of the work view,
@@ -203,6 +202,16 @@ Aria does not support Preact. The numbers are below.
   take the focus that belongs to the one that stays. A log deleted or a version restored replaces the opener on top of the
   stack with the title of the screen it lands on (`replaceTop`). A log deleted elsewhere while open shows «Dough not found.»;
   one bad card is skipped (`SkipBoundary`), never fatal.
+
+  Slice C2 adds the two editors, drawn in the same right-hand pane: `LogAdd` (`/log/new`: a recipe, Today or Tomorrow, then
+  trays / a total / quantities by the recipe's logic) and `LogEdit` (`/log/<id>/edit`, a log made by hand only; any other
+  log's address goes to the log). Both are `SettingsEditor`'s form (a working copy, Save disabled until something
+  changed, the question, the discard question on every way out) with its `commit` and `beforeSave` props instead of a
+  configuration `build`; they share `LogQtyRows` (one card per client, as `js/log-qty.js` is shared), `LogAmountFields`
+  (trays with «= N g», the typed total) and `LogEditor.module.css`. What they save is `logVersions.ts`; the sentence for a
+  recipe that cannot be saved is `recipeProblemSentence`, the work view's own. Edit takes its copy ONCE, when the log is
+  first on screen and the settings have answered, and reads the log again at Save for the version it appends to. After Add
+  the list takes the focus back on the Add button; after Edit, the log's own screen on the Edit button.
 - `ui/` — the shared controls: `Button`, `Dialog` and `useConfirm` (a question that waits for an
   answer; never the browser's `confirm()`), `StatusMessage` (one short message at a time, in a
   live region that exists before it speaks), `FormBar` (Back, title, the one primary action: the

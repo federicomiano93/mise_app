@@ -267,7 +267,7 @@ describe('one log', () => {
     expect(main().queryByRole('button', { name: 'Edit' })).not.toBeInTheDocument();
   });
 
-  it('opens Edit on its address (the editor itself is the next slice)', async () => {
+  it('opens Edit on its address', async () => {
     const view = await openList([logOf('hand', { origin: 'manual' })], 'en', '/calculator/log/hand');
     await view.user.click(await main().findByRole('button', { name: 'Edit' }, LOAD));
     expect(pathOf(view)).toBe('/calculator/log/hand/edit');

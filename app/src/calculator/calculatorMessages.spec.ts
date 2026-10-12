@@ -4,7 +4,7 @@ import { it as italian } from '../i18n/it';
 import { format } from '../i18n/i18n';
 import type { MessageKey } from '../i18n/en';
 import type { MessageParams } from '../i18n/i18n';
-import { messageText, problemSentence } from './calculatorMessages';
+import { messageText, problemSentence, recipeProblemSentence } from './calculatorMessages';
 import type { TabResult } from './calculatorResult';
 
 const say = (lang: 'en' | 'it') => (key: MessageKey, params?: MessageParams) => format(lang, (lang === 'it' ? italian : en)[key], params);
@@ -62,5 +62,14 @@ describe('problemSentence', () => {
     ];
     expect(new Set(sentences).size).toBe(4);
     expect(sentences[3]).toContain('“Pinch of salt”');
+  });
+
+  it('is the sentence «Add dough» refuses a recipe with (one source for the four)', () => {
+    const t = say('it');
+    expect(recipeProblemSentence(t, { problem: 'loading' })).toBe(problemSentence(t, { kind: 'loading', target: 1 }));
+    for (const problem of ['missing', 'empty', 'unweighable'] as const) {
+      expect(recipeProblemSentence(t, { problem, row: 'Sale' }))
+        .toBe(problemSentence(t, { kind: 'problem', target: 1, problem, row: 'Sale' }));
+    }
   });
 });
