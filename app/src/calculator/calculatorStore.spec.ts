@@ -629,7 +629,29 @@ describe('the Dough history (step 3c-3)', () => {
     expect(messages).toContainEqual({ kind: 'log-not-deleted', dough: 'Pizza' });
   });
 
-  test('⚠️ a log deleted while its own write is in the air does not come back when that write answers', async () => {
+  test('⚠️ a log whose delete is STILL WAITING stays gone when its own write lands and the stream shows it', async () => {
+    const { store, source } = setup({ config: CONFIG });
+    let landWrite: () => void = () => {};
+    source.saveLog = log => new Promise<void>(resolve => {
+      landWrite = () => {
+        source.logs.set(log.id, { ...log } as StoredDoc);
+        source.push();
+        resolve();
+      };
+    });
+    // The delete never answers (offline): the log must not be shown again meanwhile.
+    source.deleteLog = () => new Promise<void>(() => {});
+    store.start();
+    const id = store.addLog({ dough: 'Pizza', recipeId: 'r1', forDay: 'today', version });
+    store.deleteLog(id);
+    await flush();
+    landWrite();
+    await flush();
+    expect(source.logs.has(id)).toBe(true);
+    expect(store.getSnapshot().logs).toEqual([]);
+  });
+
+  test('⚠️ a log whose delete has already finished does not come back when its own write answers', async () => {
     const { store, source } = setup({ config: CONFIG });
     let landWrite: () => void = () => {};
     source.saveLog = () => new Promise<void>(resolve => { landWrite = resolve; });

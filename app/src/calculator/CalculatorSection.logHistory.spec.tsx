@@ -166,7 +166,7 @@ describe('on the tablet\'s split', () => {
   it('shows the list and says what to do on the right while nothing is open', async () => {
     await open('/calculator/log', two());
     expect(await main().findByRole('button', { name: 'Focaccia A' }, LOAD)).toBeInTheDocument();
-    expect(main().getByText('Tap a log to see it')).toBeInTheDocument();
+    expect(main().getByText('Tap a dough to see it')).toBeInTheDocument();
   });
 
   it('keeps the list on screen beside the log that is open, and drops the prompt', async () => {
@@ -176,7 +176,7 @@ describe('on the tablet\'s split', () => {
     expect(pathOf(view)).toBe('/calculator/log/a');
     expect(await main().findByRole('heading', { level: 2, name: 'Focaccia A' }, LOAD)).toBeInTheDocument();
     expect(main().getByRole('button', { name: 'Focaccia B' })).toBeInTheDocument();
-    expect(main().queryByText('Tap a log to see it')).not.toBeInTheDocument();
+    expect(main().queryByText('Tap a dough to see it')).not.toBeInTheDocument();
   });
 
   it('opens the first log by pushing and the next by replacing, so Back still goes to the list', async () => {
@@ -189,7 +189,7 @@ describe('on the tablet\'s split', () => {
     expect(view.router.state.historyAction).toBe('REPLACE');
     await view.user.click(await backButton());
     await waitFor(() => { expect(pathOf(view)).toBe('/calculator/log'); });
-    expect(await main().findByText('Tap a log to see it', undefined, LOAD)).toBeInTheDocument();
+    expect(await main().findByText('Tap a dough to see it', undefined, LOAD)).toBeInTheDocument();
   });
 
   it('picks another log from inside a history without leaving a path back through the first', async () => {
@@ -211,6 +211,8 @@ describe('on the tablet\'s split', () => {
     const card = (await main().findByRole('button', { name: 'Focaccia A' }, LOAD)).closest('li');
     expect(card).toHaveAttribute('data-open', 'true');
     expect(main().getByRole('button', { name: 'Focaccia B' }).closest('li')).toHaveAttribute('data-open', 'false');
+    expect(await main().findByRole('button', { name: 'Focaccia A', current: true })).toBeInTheDocument();
+    expect(main().getByRole('button', { name: 'Focaccia B' })).not.toHaveAttribute('aria-current');
   });
 
   it('draws the open log, its history and a version on the right, the list staying put', async () => {

@@ -249,6 +249,33 @@ describe('Add dough', () => {
     expect(source.saved).toEqual([]);
   });
 
+  it('forgets the recipe chosen when another phone deletes it, so Save waits again', async () => {
+    const view = await open('/calculator/log/new');
+    await view.user.click(choice('Brioche'));
+    await view.user.click(choice('Today'));
+    expect(save()).toBeEnabled();
+    view.source.config = config({ recipes: [FOCACCIA, SOURDOUGH, COMBO] });
+    view.source.push();
+    await waitFor(() => { expect(main().queryByRole('button', { name: 'Brioche' })).not.toBeInTheDocument(); });
+    expect(save()).toBeDisabled();
+    expect(main().getByText('Pick a recipe to enter quantities.')).toBeInTheDocument();
+    expect(isBusy()).toBe(false);
+    expect(view.source.saved).toEqual([]);
+  });
+
+  it('says the recipe is gone, and writes nothing, when it is deleted while the save question is open', async () => {
+    const view = await open('/calculator/log/new');
+    await view.user.click(choice('Brioche'));
+    await view.user.click(choice('Today'));
+    await view.user.click(save());
+    const asked = await question('Save this dough?');
+    view.source.config = config({ recipes: [FOCACCIA, SOURDOUGH, COMBO] });
+    view.source.push();
+    await view.user.click(within(asked).getByRole('button', { name: 'Save' }));
+    expect(await screen.findByRole('alertdialog', { name: /cannot be read from the catalogue right now/ }, LOAD)).toBeInTheDocument();
+    expect(view.source.saved).toEqual([]);
+  });
+
   it('Back with nothing chosen leaves without a question', async () => {
     const view = await open('/calculator/log/new');
     await view.user.click(back());
@@ -293,6 +320,17 @@ describe('Edit dough', () => {
   const OLD_LINE = { id: 'gone', name: 'Old loaf', clientName: 'Cafe Roma', qty: 2, weightG: 400, kind: 'number', crate: { show: false, perBox: 20 } };
   const TRAY_LINE = { id: 'tray', name: 'Focaccia tray', clientName: 'Cafe Roma', qty: 4, weightG: 500, kind: 'number', crate: { show: false, perBox: 20 } };
   const withLines = hand({ versions: [versionOf({ items: [TRAY_LINE, OLD_LINE], calculatedBy: 'Marco' })] });
+  // A dough made with 0.8 % yeast, though the recipe now says 0.5: the edit keeps the 0.8.
+  const FROZEN_FOCACCIA = {
+    id: 'focaccia', name: 'Focaccia', logic: 'orders', ingredients: FOCACCIA.ingredients,
+    leaveningKey: 'yeast', leaveningDefaultPct: 0.5, baselinePct: 0.5,
+  };
+  const leavened = hand({
+    versions: [versionOf({
+      items: [TRAY_LINE, OLD_LINE], calculatedBy: 'Marco', recipe: FROZEN_FOCACCIA,
+      sheet: sheetOf('Focaccia by hand', { param: { label: 'Yeast %', value: 0.8 } }),
+    })],
+  });
 
   it('has no screen for a log the calculator made: its address shows the log', async () => {
     const view = await open('/calculator/log/calc/edit', { logs: [logOf('calc')] });
@@ -343,7 +381,7 @@ describe('Edit dough', () => {
     const listen = (event: Event) => { actions.push(String((event as CustomEvent).detail)); };
     window.addEventListener(ACTION_EVENT, listen);
     try {
-      const view = await open('/calculator/log/hand', { logs: [withLines] });
+      const view = await open('/calculator/log/hand', { logs: [leavened] });
       await view.user.click(await main().findByRole('button', { name: 'Edit' }, LOAD));
       const box = within(await main().findByRole('region', { name: 'Cafe Roma' }, LOAD)).getByLabelText('Focaccia tray (500g)');
       await view.user.click(box);
@@ -360,6 +398,7 @@ describe('Edit dough', () => {
       expect(saved.versions[1]).toMatchObject({ kind: 'edit', calculatedBy: 'Anna' });
       expect(saved.versions[1]?.items.find(line => line.id === 'tray')?.qty).toBe(6);
       expect(saved.versions[1]?.items.find(line => line.id === 'gone')?.qty).toBe(2);
+      expect(saved.versions[1]?.sheet.param?.value).toBe(0.8);
       expect(actions).toContain('log-edited');
 
       await waitFor(() => { expect(pathOf(view)).toBe('/calculator/log/hand'); });
@@ -388,13 +427,57 @@ describe('Edit dough', () => {
     expect(view.source.saved).toEqual([]);
   });
 
-  it('says the log is gone, rather than saving, when it is deleted elsewhere while open', async () => {
+  it('keeps the typed edits when the log is deleted elsewhere, and says it is gone at Save instead of saving', async () => {
     const view = await open('/calculator/log/hand/edit', { logs: [withLines] });
     await view.user.type(await main().findByLabelText('Calculated by', undefined, LOAD), '!');
     view.source.logs.delete('hand');
     view.source.push();
-    expect(await main().findByText('Dough not found.', undefined, LOAD)).toBeInTheDocument();
+    expect(main().getByLabelText('Calculated by')).toHaveValue('Marco!');
+    await view.user.click(save());
+    await answer(view, 'Save these changes as a new version?', 'Save');
+    const gone = await screen.findByRole('alertdialog', { name: 'Dough not found.' }, LOAD);
+    await view.user.click(within(gone).getByRole('button', { name: 'OK' }));
     expect(view.source.saved).toEqual([]);
+    expect(view.source.appended).toEqual([]);
+    expect(main().getByLabelText('Calculated by')).toHaveValue('Marco!');
+  });
+
+  it('does not lose what is typed when one answer of the stream lacks the log for a moment', async () => {
+    const view = await open('/calculator/log/hand/edit', { logs: [withLines] });
+    await view.user.type(await main().findByLabelText('Calculated by', undefined, LOAD), '!');
+    const doc = view.source.logs.get('hand')!;
+    view.source.logs.delete('hand');
+    view.source.push();
+    expect(main().getByLabelText('Calculated by')).toHaveValue('Marco!');
+    view.source.logs.set('hand', doc);
+    view.source.push();
+    expect(main().getByLabelText('Calculated by')).toHaveValue('Marco!');
+    expect(save()).toBeEnabled();
+  });
+
+  it('warns in the save question when another phone changed the dough meanwhile, and adds its version after theirs', async () => {
+    const view = await open('/calculator/log/hand/edit', { logs: [withLines] });
+    const box = await within(await main().findByRole('region', { name: 'Cafe Roma' }, LOAD)).findByLabelText('Focaccia tray (500g)');
+    await view.user.clear(box);
+    await view.user.keyboard('7');
+    const doc = view.source.logs.get('hand')!;
+    view.source.logs.set('hand', { ...doc, versions: [...(doc.versions as unknown[]), versionOf({ kind: 'edit', calculatedBy: 'Luca', items: [{ ...TRAY_LINE, qty: 9 }] })] });
+    view.source.push();
+    await view.user.click(save());
+    await answer(view, /This dough was changed on another phone while you were editing. Saving puts your quantities on top. Save these changes as a new version?/, 'Save');
+    await waitFor(() => { expect(view.source.saved).toHaveLength(1); });
+    const saved = view.source.saved[0] as unknown as { versions: { calculatedBy: string; items: { id: string; qty: number }[] }[] };
+    expect(saved.versions).toHaveLength(3);
+    expect(saved.versions[1]?.calculatedBy).toBe('Luca');
+    expect(saved.versions[2]?.items.find(line => line.id === 'tray')?.qty).toBe(7);
+  });
+
+  it('asks the usual question alone when nothing changed elsewhere', async () => {
+    const view = await open('/calculator/log/hand/edit', { logs: [withLines] });
+    await view.user.type(await main().findByLabelText('Calculated by', undefined, LOAD), '!');
+    await view.user.click(save());
+    const asked = await question('Save these changes as a new version?');
+    expect(asked).not.toHaveTextContent(/another phone/);
   });
 
   describe('a trays dough', () => {

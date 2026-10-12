@@ -135,6 +135,8 @@ describe('the list', () => {
     const button = await main().findByRole('button', { name: 'Focaccia' }, LOAD);
     expect(button).toHaveAccessibleDescription(/Monday 12 October — 9:30 AM/);
     expect(button).toHaveAccessibleDescription(/by Marco/);
+    // The day badge is part of the description too (it is not inside the button).
+    expect(button).toHaveAccessibleDescription(/Today/);
   });
 
   it('shows the day a dough is for in words, and the one made yesterday for today', async () => {
