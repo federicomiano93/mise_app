@@ -20,6 +20,7 @@ export const RECIPES_OPENER = 'recipes';
 export const EXTRA_OPENER = 'extra';
 export const DIVISOR_OPENER = 'divisor';
 export const LOG_OPENER = 'log';
+export const ORDERING_OPENER = 'ordering';
 export const ADD_CLIENT_OPENER = 'add-client';
 export const ADD_RECIPE_ROW_OPENER = 'add-recipe-row';
 // The Dough history: the work view's door, the Add button, the History button of one log, and the titles that take

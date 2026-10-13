@@ -228,15 +228,20 @@ describe('putting an order in', () => {
   });
 
   describe('when the app cannot record it', () => {
-    it('the numbers are in, and the refusal is SAID on the work view', async () => {
+    it('the numbers are in, and the refusal is SAID in an alert that stays until it is dismissed', async () => {
       const orderSource = fakeClientOrdersSource({ orders: [orderOf()] });
       orderSource.refuse.applied = true;
       const view = await open({ orderSource });
       await press(view.user);
       await view.user.click(await within(await screen.findByRole('alertdialog')).findByRole('button', { name: 'Put it in' }));
       await waitFor(() => { expect(stored('qty-roma::tray')).toBe('5'); });
-      expect(await screen.findByText(/could not record that you used this order/)).toBeInTheDocument();
-      expect(screen.getByText(/NOT warn you if the client changes it/).closest('[role="status"]')).not.toBeNull();
+      const warning = await screen.findByRole('alertdialog');
+      expect(within(warning).getByText(/could not record that you used this order/)).toBeInTheDocument();
+      expect(within(warning).getByText(/NOT warn you if the client changes it/)).toBeInTheDocument();
+      // Not the status line that goes by itself.
+      for (const region of document.querySelectorAll('[role="status"]')) expect(region.textContent).not.toMatch(/NOT warn you/);
+      await view.user.click(within(warning).getByRole('button', { name: 'OK' }));
+      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
     });
   });
 

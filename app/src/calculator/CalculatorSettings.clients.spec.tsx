@@ -201,7 +201,9 @@ describe('adding a client', () => {
     expect(main().getByRole('heading', { level: 2, name: 'New client' })).toBeInTheDocument();
     expect(nameBox()).toHaveValue('');
     expect(nameBox()).toHaveAttribute('placeholder', 'Client name');
-    expect(main().queryByRole('group')).not.toBeInTheDocument();
+    // No product cards yet: the only group is the ordering link, which asks for a save first.
+    expect(main().getAllByRole('group')).toHaveLength(1);
+    expect(main().getByRole('group', { name: 'Ordering link' })).toHaveTextContent('Save your changes first');
   });
 
   it('an untouched new client asks to be discarded on Back, and Discard drops it', async () => {

@@ -1,0 +1,52 @@
+/* The two screens of Client ordering: the deadline editor and, on a client's screen, the ordering link. */
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+}
+
+.label {
+  font-size: var(--fs-md);
+  font-weight: 650;
+}
+
+.hint {
+  color: var(--ink-2);
+}
+
+/* 18px type on purpose: a field under 16px makes iOS zoom the page in when it is focused. */
+.input {
+  align-self: flex-start;
+  min-width: 160px;
+  min-height: var(--hit);
+  padding: 0 var(--s3);
+  border: 1.5px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink);
+  font: 450 var(--fs-lg) var(--font);
+}
+
+.input:focus {
+  border-color: var(--accent);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2);
+}
+
+/* Small and quiet: the box's own clear control is hard to reach on some phones, and this is not the main action. */
+.clear {
+  align-self: flex-start;
+}
+
+/* Low-key: no frame and the danger ink; the target is still a thumb's. */
+.turnOff {
+  align-self: flex-start;
+  min-height: var(--hit);
+  color: var(--danger-ink);
+}

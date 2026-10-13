@@ -184,8 +184,10 @@ Aria does not support Preact. The numbers are below.
   a transaction on the recipe AS THE SERVER HOLDS IT (`stampRowIds`), never on the picker's copy. Back hands the
   focus to the button that opened the screen (`handBack.ts`, a stack, because each level is a fresh screen). The
   browser's Back cannot be stopped from leaving an editor when the history entry was made by typing an address
-  (React Router can only block entries it created) — in-app moves always ask. Not yet: the ordering link on a
-  client and the republishing of the clients' ordering menus on save (3c-4b, both needed before the switch), the Client ordering rows of the hub (3c-4b). The market order (3c-4a, slice B) is a third door, «Send order» (`SendOrder.tsx`: the door, the picker of
+  (React Router can only block entries it created) — in-app moves always ask. The ordering link on a
+  client (`OrderingLink`, drawn by `ClientScreen`; step 3c-4b, slice C2), the republishing of the clients' ordering menus on save
+  (the store's `onConfigSaved`) and the hub's Client ordering door with its deadline editor (`CutoffEditor`, at
+  `/calculator/settings/ordering`) are built. The market order (3c-4a, slice B) is a third door, «Send order» (`SendOrder.tsx`: the door, the picker of
   lists and direct clients and the «Send to» question, all dialogs), and `OrderForm` (a dialog with its own scrolling body: the quantities start from
   `prefillFromLogs` worked out ONCE when it opens, or from nothing and a sentence when the logs have not arrived; closing it with hand-changed
   quantities asks and holds `markBusy`; `orderModel.ts` is its pure half). The message is `shared/src/calculator-order-text.ts`, handed to the
@@ -226,18 +228,23 @@ Aria does not support Preact. The numbers are below.
   first on screen and the settings have answered, and reads the log again at Save for the version it appends to. After Add
   the list takes the focus back on the Add button; after Edit, the log's own screen on the Edit button.
 
-  Step 3c-4b adds the clients' own orders, the bakery's side (slice C1; C2 adds the deadline editor and the ordering link). The
+  Step 3c-4b adds the clients' own orders, the bakery's side (slice C1; slice C2 added the deadline editor and the ordering link). The
   data layer is `clientOrdersSource.ts` (the Firestore half, a port of `js/client-orders-data.js`, including the second-app
   account that mints an ordering link) and `clientOrdersStore.ts` (plain TypeScript: the client orders and the deadline are
   watched while the Calculator is open, the deadline and «this order was used» are written local-first with a refusal said as a
   `ClientOrdersMessage`, the links are read and minted only when a client's screen asks, and the clients' menus are republished
   from the configuration store's `onConfigSaved`); `CalculatorContext` starts both stores and `useClientOrders()` reads them.
-  The screens: `OrdersBanner` (the link above the tabs), the door «Orders» in the work view's `Doors`, `OrdersReceived` (the
+  The screens: `OrdersBanner` (the link above the tabs), the door «Client orders» in the work view's `Doors`, `OrdersReceived` (the
   frame: title, the two-link view switch, the list of orders still coming), `ClientOrderCard` (`OrderCard` with the button,
   `PastOrderCard` without), `OrdersHistory` (read on demand, «Show older»), `useApplyOrder` (inspect, ask, write through the tab
   memory, then mark used) over `clientOrdersView.ts` (the pure half). Addresses, in `calculatorPath.ts`: `/calculator/orders` and
   `/calculator/orders/history`; `orders` as the first segment always means this screen. The usage record names both
-  `client-orders`. Its parity list is `docs/parity/calculator.md` (the section for slice C1).
+  `client-orders`. Slice C2 adds `CutoffEditor` (a `SettingsEditor` with `commit`: it copies the deadline only once
+  `cutoffFromServer` is true, saves local-first through `store.saveCutoff` and steps back) and `OrderingLink` (a labelled group on
+  `ClientScreen`: only a sentence while the Clients editor is dirty, a read of the links on mount and after a save, Copy and Send
+  for everybody, Create/Replace/Turn off only for `canManage`, no Create when the read failed); both share
+  `ClientOrdering.module.css`. `applied-not-recorded` is an alert dialog (`clientOrdersMessageDelivery`), `cutoff-not-saved` a
+  status message; the work view's door is «Client orders». Its parity list is `docs/parity/calculator.md` (the section for slice C1).
 - `ui/` — the shared controls: `Button`, `Dialog` and `useConfirm` (a question that waits for an
   answer; never the browser's `confirm()`), `StatusMessage` (one short message at a time, in a
   live region that exists before it speaks), `FormBar` (Back, title, the one primary action: the

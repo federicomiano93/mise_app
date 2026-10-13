@@ -209,6 +209,21 @@ describe('the ordering links', () => {
     expect(source.menuWrites).toEqual(['c-roma']);
   });
 
+  test('a link made while a read is in the air asks again, never stays «loading»', async () => {
+    const { source, store } = setup({ accounts: [account] });
+    const real = source.listAccounts.bind(source);
+    let answer: (() => void) | null = null;
+    source.listAccounts = () => new Promise(resolve => { answer = () => resolve([]); });
+    const first = store.loadAccounts();
+    source.listAccounts = real;
+    await store.createLink({ id: 'c-milano', name: 'Bar Milano', products: [] }, venue);
+    answer!();
+    await first;
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(store.getSnapshot().accountsState).toBe('ready');
+    expect(Object.keys(store.getSnapshot().accounts).sort()).toEqual(['c-milano', 'c-roma']);
+  });
+
   test('a refused create changes nothing and rejects', async () => {
     const { source, store } = setup({ accounts: [account] });
     await store.loadAccounts();

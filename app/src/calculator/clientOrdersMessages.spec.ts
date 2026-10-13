@@ -4,7 +4,7 @@ import { it as italian } from '../i18n/it';
 import { format } from '../i18n/i18n';
 import type { MessageKey } from '../i18n/en';
 import type { MessageParams } from '../i18n/i18n';
-import { clientOrdersMessageText } from './clientOrdersMessages';
+import { clientOrdersMessageDelivery, clientOrdersMessageText } from './clientOrdersMessages';
 
 const say = (lang: 'en' | 'it') => (key: MessageKey, params?: MessageParams) => format(lang, (lang === 'it' ? italian : en)[key], params);
 
@@ -14,6 +14,11 @@ describe('clientOrdersMessageText', () => {
       .toBe(en['calc.clientOrders.notRecorded']);
     expect(clientOrdersMessageText(say('en'), { kind: 'applied-not-recorded' })).toContain('NOT warn you');
     expect(clientOrdersMessageText(say('it'), { kind: 'applied-not-recorded' })).toContain('NON ti avviserà');
+  });
+
+  it('delivers the unrecorded order as an alert that stays, and the unsaved deadline as a status line', () => {
+    expect(clientOrdersMessageDelivery({ kind: 'applied-not-recorded' })).toBe('alert');
+    expect(clientOrdersMessageDelivery({ kind: 'cutoff-not-saved' })).toBe('status');
   });
 
   it('says a deadline that was not saved', () => {

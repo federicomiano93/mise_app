@@ -931,6 +931,44 @@ export const en = {
   'calc.clientOrders.failed': 'The orders could not be loaded. Check your connection.',
   // New in Mise 2: «nothing» before the SERVER has answered may only be this phone’s old copy.
   'calc.clientOrders.notArrived': 'The orders have not arrived yet.',
+  // New in Mise 2: the Calculator's door to the orders; «Orders» sat confusingly beside «Send order».
+  'calc.clientOrders.door': 'Client orders',
+
+  // Client ordering (step 3c-4b, slice C2): the deadline editor and a client's ordering link. Every key is the current
+  // app's own key with its own text (js/i18n.js), except the three marked.
+  'ui.clientOrdering': 'Client ordering',
+  'ui.whenOrdersSentFrom': 'When orders sent from a client’s own link close',
+  'calc.cutoff.help': 'An order for a day can be sent, and changed, until this time on the day before. Clients see this time on their own screen.',
+  'calc.ordersCloseAt': 'Orders close at',
+  'calc.cutoff.empty': 'Leave it empty for no deadline. With a deadline, clients can order for tomorrow onwards but never for the current day, because its deadline has already passed.',
+  'calc.thatIsNotA': 'That is not a time. Use the clock, or leave it empty for no deadline.',
+  'calc.co.closeOrdersAt': 'Close orders at {time} the day before? Every client sees this straight away.',
+  'calc.removeTheDeadlineClients': 'Remove the deadline? Clients will be able to order for any day, including today.',
+  // New in Mise 2: the native time box is hard to clear on some phones.
+  'calc.noDeadline': 'No deadline',
+  'calc.orderingLink': 'Ordering link',
+  'calc.saveYourChangesFirst': 'Save your changes first — the link shows this client the products as they are saved.',
+  'calc.clientCanSendOrders': '{client} can send orders straight into the app. Anyone with the link can order as this client, so send it to them and no one else.',
+  'calc.createALinkAnd': 'Create a link and send it to this client. They will see only their own products, and can order without a password.',
+  'calc.thisClientCannotOrder': 'This client cannot order through the app yet. The owner or a manager can set that up.',
+  // New in Mise 2: the links could not be read, so «Create» is not offered (it could cut off a link that works).
+  'calc.orderingLink.failed': 'The ordering links could not be read. Check your connection and open this client again.',
+  'calc.copyLink': 'Copy link',
+  'ui.send': 'Send',
+  'calc.shareText': 'Hello {client}, you can send your order to {from} here: {link}',
+  'calc.us': 'us',
+  'calc.linkCopiedFor': 'The ordering link for {client} is copied. Paste it into a message.',
+  'calc.copyThisLinkFor': 'Copy this link and send it to {client}:\n\n{link}',
+  'calc.createOrderingLink': '+ Create ordering link',
+  'calc.replaceWithANew': 'Replace with a new link',
+  'calc.replaceThisLink': 'Replace this link?',
+  'calc.replaceLinkWarning': '{client}’s current link will stop working immediately, including on a phone that is using it right now. Use “Copy link” instead if you only want to send it again.',
+  'ui.replace': 'Replace',
+  'calc.couldNotCreateThe': 'Could not create the link. Check your connection and try again.',
+  'calc.turnOffOrdering': 'Turn off ordering',
+  'calc.stopClientOrdering': 'Stop {client} sending orders through the app? Their link will stop working. Orders they have already sent are kept.',
+  'calc.turnOff': 'Turn off',
+  'calc.couldNotTurnIt': 'Could not turn it off. Check your connection and try again.',
 } as const satisfies Record<string, Message>;
 
 export type MessageKey = keyof typeof en;

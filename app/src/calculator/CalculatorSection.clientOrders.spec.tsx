@@ -8,7 +8,7 @@ import type { TestOrder } from '../testing/clientOrderFixtures';
 import { NOW } from '../testing/logFixtures';
 import { LOAD, configOf, renderCalculator } from '../testing/renderCalculator';
 
-// The clients' own orders, the bakery's side: the Orders door beside the others, the banner above the tabs, and the
+// The clients' own orders, the bakery's side: the Client orders door beside the others, the banner above the tabs, and the
 // Orders received screen with its cards. Putting an order into the Calculator is in ...clientOrdersApply.spec.tsx and the
 // history in ...clientOrdersHistory.spec.tsx.
 
@@ -50,10 +50,10 @@ function open(path: string, { orders = [], config = configOf(), orderSource, lan
 
 const banner = () => main().queryByRole('link', { name: /orders? (received|have CHANGED)|ordin[ei] (ricevut|sono CAMBIATI|è CAMBIATO)/ });
 
-describe('the Orders door', () => {
+describe('the Client orders door', () => {
   it('sits beside the other doors, and opens Orders received one level down; Back gives the focus back to it', async () => {
     const view = open('/calculator');
-    await view.user.click(await main().findByRole('button', { name: 'Orders' }, LOAD));
+    await view.user.click(await main().findByRole('button', { name: 'Client orders' }, LOAD));
     expect(pathOf(view)).toBe('/calculator/orders');
     expect(await main().findByRole('heading', { level: 2, name: 'Orders received' }, LOAD)).toBeInTheDocument();
     // One h1 for the whole screen: the section's name.
@@ -61,29 +61,29 @@ describe('the Orders door', () => {
 
     await view.user.click(main().getByRole('button', { name: 'Back' }));
     await waitFor(() => { expect(pathOf(view)).toBe('/calculator'); });
-    expect(await main().findByRole('button', { name: 'Orders' })).toHaveFocus();
+    expect(await main().findByRole('button', { name: 'Client orders' })).toHaveFocus();
   });
 
   it('is there with the tabs of any recipe, and in the empty states that show doors', async () => {
     open('/calculator/brioche');
-    expect(await main().findByRole('button', { name: 'Orders' }, LOAD)).toBeInTheDocument();
+    expect(await main().findByRole('button', { name: 'Client orders' }, LOAD)).toBeInTheDocument();
   });
 
   it('is on the «No recipes yet» state too', async () => {
     open('/calculator', { config: configOf({ recipes: [] }) });
     expect(await screen.findByText('No recipes yet', undefined, LOAD)).toBeInTheDocument();
-    expect(main().getByRole('button', { name: 'Orders' })).toBeInTheDocument();
+    expect(main().getByRole('button', { name: 'Client orders' })).toBeInTheDocument();
   });
 
   it('is hidden when the venue switched the button off, and only then', async () => {
     open('/calculator', { config: configOf({ showClientOrdersButton: false }) });
     expect(await main().findByRole('button', { name: 'Settings' }, LOAD)).toBeInTheDocument();
-    expect(main().queryByRole('button', { name: 'Orders' })).not.toBeInTheDocument();
+    expect(main().queryByRole('button', { name: 'Client orders' })).not.toBeInTheDocument();
   });
 
   it('is shown when the field is missing or anything but a literal false', async () => {
     open('/calculator', { config: configOf({ showClientOrdersButton: undefined }) });
-    expect(await main().findByRole('button', { name: 'Orders' }, LOAD)).toBeInTheDocument();
+    expect(await main().findByRole('button', { name: 'Client orders' }, LOAD)).toBeInTheDocument();
   });
 
   it('has no door while the Calculator is still «Loading…»', async () => {
@@ -91,12 +91,12 @@ describe('the Orders door', () => {
     source.hold();
     renderCalculator('/calculator', { source });
     expect(await screen.findByText('Loading…', undefined, LOAD)).toBeInTheDocument();
-    expect(main().queryByRole('button', { name: 'Orders' })).not.toBeInTheDocument();
+    expect(main().queryByRole('button', { name: 'Client orders' })).not.toBeInTheDocument();
   });
 
   it('says its name in Italian', async () => {
     open('/calculator', { lang: 'it' });
-    expect(await main().findByRole('button', { name: 'Ordini' }, LOAD)).toBeInTheDocument();
+    expect(await main().findByRole('button', { name: 'Ordini dei clienti' }, LOAD)).toBeInTheDocument();
   });
 });
 
@@ -162,7 +162,7 @@ describe('the banner above the tabs', () => {
   it('does NOT follow the switch that hides the Orders door', async () => {
     open('/calculator', { orders: [orderOf()], config: configOf({ showClientOrdersButton: false }) });
     expect(await main().findByRole('link', { name: '1 order received from your clients' }, LOAD)).toBeInTheDocument();
-    expect(main().queryByRole('button', { name: 'Orders' })).not.toBeInTheDocument();
+    expect(main().queryByRole('button', { name: 'Client orders' })).not.toBeInTheDocument();
   });
 
   it('says the counts in Italian', async () => {
@@ -196,7 +196,7 @@ describe('Orders received: the addresses and the view switch', () => {
 
   it('Back from the history steps up to the work view, and replaces when the screen was opened by its address', async () => {
     const inApp = open('/calculator');
-    await inApp.user.click(await main().findByRole('button', { name: 'Orders' }, LOAD));
+    await inApp.user.click(await main().findByRole('button', { name: 'Client orders' }, LOAD));
     await inApp.user.click(await main().findByRole('link', { name: 'History' }, LOAD));
     await inApp.user.click(main().getByRole('button', { name: 'Back' }));
     await waitFor(() => { expect(pathOf(inApp)).toBe('/calculator'); });

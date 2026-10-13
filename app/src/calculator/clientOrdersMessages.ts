@@ -17,3 +17,12 @@ export function clientOrdersMessageText(t: Say, message: ClientOrdersMessage): s
       return t('calc.notSavedCheckConnection');
   }
 }
+
+// How a message is said: a short status line that goes by itself, or an alert dialog that stays until it is dismissed.
+//
+// ⚠️ «NOT RECORDED» IS AN ALERT, NOT A STATUS LINE (the current app used an alert): it is the warning that the app will
+// no longer notice the client changing the order, and a line that vanishes after a few seconds can be missed by someone
+// whose hands are in the dough. The deadline that was not saved is a status line: the old deadline is back on screen.
+export function clientOrdersMessageDelivery(message: ClientOrdersMessage): 'status' | 'alert' {
+  return message.kind === 'applied-not-recorded' ? 'alert' : 'status';
+}

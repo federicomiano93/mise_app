@@ -8,12 +8,13 @@ import type { MessageKey } from '../i18n/en';
 import { useT } from '../i18n/useT';
 import { KEEP_FOCUS, Page } from '../shell/Page';
 import { StatusMessageProvider, useStatusMessage } from '../ui/StatusMessage';
+import { useAlert } from '../ui/useAlert';
 import { CalculatorProvider, useCalculator, useCalculatorStore, useClientOrdersStore } from './CalculatorContext';
 import {
   CALCULATOR_PATH, LOG_PATH, ORDERS_PATH, SETTINGS_PATH, newRecipePath, recipePath, recipesPath, resolveCalculatorPath,
 } from './calculatorPath';
 import { messageText } from './calculatorMessages';
-import { clientOrdersMessageText } from './clientOrdersMessages';
+import { clientOrdersMessageDelivery, clientOrdersMessageText } from './clientOrdersMessages';
 import {
   ADD_RECIPE_OPENER, CHOOSE_RECIPES_OPENER, CLIENT_ORDERS_OPENER, DOUGH_HISTORY_OPENER, HandBackProvider, SETTINGS_OPENER, useHandBack,
   useHandBackState,
@@ -59,8 +60,14 @@ function StoreMessages() {
     const text = messageText(t, message);
     if (text !== null) say(text);
   }), [store, say, t]);
-  useEffect(() => clientOrders.onMessage(message => { say(clientOrdersMessageText(t, message)); }), [clientOrders, say, t]);
-  return null;
+  // ⚠️ A message that is a warning (an order used but not recorded) stays on screen until it is dismissed.
+  const [alert, alertDialog] = useAlert();
+  useEffect(() => clientOrders.onMessage(message => {
+    const text = clientOrdersMessageText(t, message);
+    if (clientOrdersMessageDelivery(message) === 'alert') void alert({ message: text, okLabel: t('common.ok') });
+    else say(text);
+  }), [clientOrders, say, alert, t]);
+  return alertDialog;
 }
 
 function CalculatorScreen() {
@@ -202,7 +209,7 @@ function Doors({ showOrders }: { showOrders: boolean }) {
       {showOrders ? (
         <OpenButton opener={CLIENT_ORDERS_OPENER} to={ORDERS_PATH}>
           <Inbox aria-hidden="true" />
-          {t('section.orders')}
+          {t('calc.clientOrders.door')}
         </OpenButton>
       ) : null}
       <SendOrderDoor />

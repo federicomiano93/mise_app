@@ -174,6 +174,27 @@ export function createClientOrdersStore(source: ClientOrdersSource, deps: Client
     accounts = next;
   }
 
+  async function loadAccounts(): Promise<void> {
+    const read = ++accountsRead;
+    accountsState = 'loading';
+    changed();
+    try {
+      const list = await source.listAccounts();
+      if (read !== accountsRead) return;
+      const next: Record<string, OrderingAccount> = {};
+      for (const account of list) next[account.clientId] = account;
+      accounts = next;
+      accountsState = 'ready';
+    } catch (err) {
+      if (read !== accountsRead) return;
+      // ⚠️ «COULD NOT READ» IS NOT «NO LINK»: offering «Create» here would mint a second account for a client
+      // whose link works, and cut it off. The screen says it could not read them instead.
+      deps.warn('[client orders] could not read the ordering links:', err);
+      accountsState = 'failed';
+    }
+    changed();
+  }
+
   return {
     getSnapshot: () => snapshot,
     subscribe(listener) {
@@ -271,30 +292,12 @@ export function createClientOrdersStore(source: ClientOrdersSource, deps: Client
 
     hasAnyOrder: () => source.hasAnyOrder().catch(() => false),
 
-    async loadAccounts() {
-      const read = ++accountsRead;
-      accountsState = 'loading';
-      changed();
-      try {
-        const list = await source.listAccounts();
-        if (read !== accountsRead) return;
-        const next: Record<string, OrderingAccount> = {};
-        for (const account of list) next[account.clientId] = account;
-        accounts = next;
-        accountsState = 'ready';
-      } catch (err) {
-        if (read !== accountsRead) return;
-        // ⚠️ «COULD NOT READ» IS NOT «NO LINK»: offering «Create» here would mint a second account for a client
-        // whose link works, and cut it off. The screen says it could not read them instead.
-        deps.warn('[client orders] could not read the ordering links:', err);
-        accountsState = 'failed';
-      }
-      changed();
-    },
+    loadAccounts,
 
     async createLink(client, venue) {
       const replacing = accounts[client.id]?.uid ?? null;
       const created = await source.createLink(client, venue, replacing);
+      const readInAir = accountsState === 'loading';
       accountsRead += 1; // a read in the air no longer describes the links
       setAccount({
         uid: created.uid,
@@ -303,8 +306,10 @@ export function createClientOrdersStore(source: ClientOrdersSource, deps: Client
         createdAt: '',
         linkToken: created.token,
       });
-      // ⚠️ THE STATE IS NOT TOUCHED: «ready» after a failed read would make every OTHER client look linkless.
+      // ⚠️ THE STATE IS NOT TOUCHED: «ready» after a failed read would make every OTHER client look linkless. A read
+      // that was in the air (now dropped) is asked again, or the screen would say «Loading…» for ever.
       changed();
+      if (readInAir) void loadAccounts();
       return created;
     },
 
@@ -312,9 +317,11 @@ export function createClientOrdersStore(source: ClientOrdersSource, deps: Client
       const account = accounts[clientId];
       if (!account) return;
       await source.revokeLink(account.uid);
+      const readInAir = accountsState === 'loading';
       accountsRead += 1;
       accounts = Object.fromEntries(Object.entries(accounts).filter(([id]) => id !== clientId));
       changed();
+      if (readInAir) void loadAccounts();
     },
 
     async publishMenus(clients, venue) {

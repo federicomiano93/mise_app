@@ -210,6 +210,7 @@ describe('screenNameFor', () => {
     ['/calculator/settings', 'settings'],
     ['/calculator/settings/', 'settings'],
     ['/calculator/settings/extra', 'settings'],
+    ['/calculator/settings/ordering', 'settings'],
     ['/calculator/settings/divisor/brioche', 'settings'],
     ['/calculator/settings/log', 'settings'],
     ['/calculator/settings/clients/new', 'settings'],

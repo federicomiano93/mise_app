@@ -9,6 +9,7 @@
 //   /calculator/settings/log                 Dough history settings
 //   /calculator/settings/clients             Clients: the address book
 //   /calculator/settings/clients/<id>        one client (an id the working copy lacks goes back to the list)
+//   /calculator/settings/ordering            Client ordering: the deadline editor
 //   /calculator/settings/clients/new         the list (a client is made by «Add client», which opens it by its id)
 //   /calculator/settings/recipes             Recipes: the list, an accordion
 //   /calculator/settings/recipes/<id>        one recipe (an id the working copy lacks goes back to the list)
@@ -57,6 +58,7 @@ export const newClientPath = `${clientsPath}/new`;
 export const recipesPath = `${SETTINGS_PATH}/recipes`;
 export const newRecipePath = `${recipesPath}/new`;
 export const whatsappPath = `${SETTINGS_PATH}/whatsapp`;
+export const orderingPath = `${SETTINGS_PATH}/ordering`;
 export const newWhatsappListPath = `${whatsappPath}/list/new`;
 export const newWhatsappDirectPath = `${whatsappPath}/direct/new`;
 export const LOG_PATH = `${CALCULATOR_PATH}/log`;
@@ -121,6 +123,7 @@ export type SettingsTarget =
 export type SettingsView =
   | { readonly kind: 'hub' }
   | { readonly kind: 'extra' }
+  | { readonly kind: 'ordering' }
   | { readonly kind: 'log' }
   | { readonly kind: 'divisor'; readonly recipeId: string | null }
   | { readonly kind: 'clients'; readonly target: SettingsTarget }
@@ -209,6 +212,7 @@ function parseSettings(tail: readonly string[]): SettingsView {
   if (screen === undefined) return { kind: 'hub' };
   if (screen === 'extra' && more.length === 0) return { kind: 'extra' };
   if (screen === 'log' && more.length === 0) return { kind: 'log' };
+  if (screen === 'ordering' && more.length === 0) return { kind: 'ordering' };
   if (screen === 'divisor') {
     if (more.length === 0) return { kind: 'divisor', recipeId: null };
     const recipeId = more.length === 1 ? idOf(more[0]) : null;
