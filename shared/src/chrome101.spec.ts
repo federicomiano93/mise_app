@@ -4,9 +4,10 @@ import { JS_TOKENS, codeWithoutComments, findings, scannerSeesWhatItForbids } fr
 // Nothing in shared/src newer than Chrome 101 (the lab tablet's ceiling); the table is in chrome101-tokens.ts and
 // app/src/styles/chrome101.spec.ts reads the app's own source. shared has no stylesheets.
 // The table itself is not scanned: it names every token.
-const code = import.meta.glob<string>(
-  ['./**/*.ts', '!./**/*.spec.*', '!./**/*.test.*', '!./chrome101-tokens.ts'],
-  { query: '?raw', import: 'default', eager: true },
+// One string pattern, filtered here: shared's ImportMeta.glob (declared in label-separation.spec.ts) takes no array.
+const code = Object.fromEntries(
+  Object.entries(import.meta.glob<string>('./**/*.ts', { query: '?raw', import: 'default', eager: true }))
+    .filter(([file]) => !/\.(spec|test)\./.test(file) && !file.endsWith('/chrome101-tokens.ts')),
 );
 
 describe('shared/src uses nothing newer than Chrome 101', () => {
