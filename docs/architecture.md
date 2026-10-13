@@ -272,7 +272,7 @@ compared byte for byte with the current app's `buildSheet()` for the whole label
 in `label-print.css`, which is not a CSS module and sets the sheet in Manrope, the current app's face, so the fit and the paper are
 the same in both apps) and `useSheetFit` (the DOM half of the measurement over the shared `fitFont` / `fitWidthFactor`: an
 unmeasured sheet never fits, it is measured again on resize and when the typeface arrives). Printing through the system's dialog
-is a React portal into `document.body` (`#labelPrint`, removed by the `afterprint` listener); the zebra (ZPL), the shop computer's
+is a host built at print time in `document.body` with its own React root (`printHost.tsx`: `#labelPrint` + the `lab-printing` class on `<html>` that scopes the print rule — never `:has`, the lab tablet's Chrome 101 lacks it; removed only after `afterprint` AND the next pointer or key, because Android fires `afterprint` before its print screen has laid the page out); the zebra (ZPL), the shop computer's
 queue and the other roads arrive in 3d-4. The usage record names the screen `recipes-label` and the action `label-printed`. Every allergen verdict is the shared model's; `label-separation.spec.ts` (in `app/src`)
   pins that a screen that prints a food word asks the venue's country and never the interface language. `ui/RecipeFullScreen` and `ui/zoomStorage` are shared with the Calculator
   and take a storage key (`mise.calcZoomStep` / `mise.catZoomStep`).
