@@ -11,7 +11,7 @@ import { describe, expect, test } from 'vitest';
 //  - the print host is never the class that holds back a compulsory update (`preview-overlay`);
 //  - the paper's stylesheet is imported where the sheet is drawn, as a plain file.
 const sources = import.meta.glob<string>(
-  ['./LabelSheet.tsx', './LabelScreen.tsx', './LabelCard.tsx', './useSheetFit.ts'],
+  ['./LabelSheet.tsx', './LabelScreen.tsx', './LabelCard.tsx', './useSheetFit.ts', './printHost.tsx', './labelFontPreload.ts'],
   { query: '?raw', import: 'default', eager: true },
 );
 
@@ -20,10 +20,10 @@ const codeOf = (source: string): string => source
   .replace(/^\s*\/\/.*$/gm, '')
   .replace(/\{\/\*[\s\S]*?\*\/\}/g, '');
 
-const FILES = ['./LabelSheet.tsx', './LabelScreen.tsx', './LabelCard.tsx', './useSheetFit.ts'];
+const FILES = ['./LabelSheet.tsx', './LabelScreen.tsx', './LabelCard.tsx', './useSheetFit.ts', './printHost.tsx', './labelFontPreload.ts'];
 
 describe('the label\'s files and the page CSP', () => {
-  test('the scan finds all four files, and reads real text', () => {
+  test('the scan finds every one of the label files, and reads real text', () => {
     expect(Object.keys(sources).sort()).toEqual([...FILES].sort());
     for (const file of FILES) expect(sources[file]?.length, file).toBeGreaterThan(500);
   });
@@ -53,10 +53,20 @@ describe('the label\'s files and the page CSP', () => {
   });
 
   test('the print host is built in <body> with the id the print rule hides everything else around', () => {
+    const hostCode = codeOf(sources['./printHost.tsx'] ?? '');
+    expect(hostCode).toMatch(/\.id = 'labelPrint'/);
+    expect(hostCode).toMatch(/document\.body\.appendChild\(node\)/);
+    expect(hostCode).toMatch(/createRoot\(node\)/);
+    expect(hostCode).toMatch(/addEventListener\('afterprint'/);
+  });
+
+  // ⚠️ THE HOST IS THE PRINT'S, NOT THE SCREEN'S: a portal owned by the screen vanishes with it, and on Android Chrome
+  // (print() does not block) the dialog can still be open when the screen is left.
+  test('the screen does not own the print host: no portal, no id, no afterprint listener of its own', () => {
     const screenCode = codeOf(sources['./LabelScreen.tsx'] ?? '');
-    expect(screenCode).toMatch(/id="labelPrint"/);
-    expect(screenCode).toMatch(/createPortal\([\s\S]*document\.body/);
-    expect(screenCode).toMatch(/addEventListener\('afterprint'/);
+    expect(screenCode).not.toMatch(/createPortal/);
+    expect(screenCode).not.toMatch(/labelPrint/);
+    expect(screenCode).not.toMatch(/afterprint/);
   });
 
   test('the sheet is measured by the shared loops, not by a copy of them', () => {

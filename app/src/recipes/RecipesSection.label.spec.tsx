@@ -600,7 +600,7 @@ describe('the paper: measured, scaled, and the Print button that obeys it', () =
       install(fonts);
       await openLabel([CAKE], 'cake', { lang: 'it', location: IT });
       await waitFor(() => {
-        expect(main().getByText('Il carattere delle etichette non si è caricato, quindi non si può controllare la misura. Controlla la connessione e riapri l\'etichetta.')).toBeVisible();
+        expect(main().getByText('Il carattere delle etichette non si è caricato, quindi non si può controllare la misura. Controlla la connessione e riapri l’etichetta.')).toBeVisible();
       });
     });
 

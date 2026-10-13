@@ -967,7 +967,7 @@ export const it: Messages = {
   'label.preview.actualSize': 'Dimensione reale — {w} × {h} mm',
   'label.preview.scaled': '{w} × {h} mm — mostrata più piccola per stare nello schermo',
   'label.preview.paperUnknown': 'Il formato delle etichette non è ancora arrivato.',
-  'label.preview.fontMissing': "Il carattere delle etichette non si è caricato, quindi non si può controllare la misura. Controlla la connessione e riapri l'etichetta.",
+  'label.preview.fontMissing': "Il carattere delle etichette non si è caricato, quindi non si può controllare la misura. Controlla la connessione e riapri l’etichetta.",
   'language.en.inSentence': 'inglese',
   'language.it.inSentence': 'italiano',
   'cat.allergenSheet': 'Scheda allergeni',
