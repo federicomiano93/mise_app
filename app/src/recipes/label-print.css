@@ -76,6 +76,11 @@
      off the paper. The fit estimate in label-template-model.ts assumes exactly this
      behaviour, so the two have to agree. */
   overflow-wrap: anywhere;
+  /* ⚠️ THE SAME LINE BREAKS AS THE CURRENT APP, or the same label fits there and spills here. Mise 2's base.css sets
+     `text-wrap: pretty` on <body>, which re-breaks lines to avoid a short last one; the current app's catalogue page
+     does not, and the fit gate measures THIS sheet. The other text properties base.css sets (-webkit-font-smoothing)
+     are the current catalogue page's too (catalogue.css), and its heading letter-spacing never reaches the sheet. */
+  text-wrap: wrap;
 }
 
 .lab-sheet-block { margin: 0; }
@@ -147,16 +152,22 @@
    runtime — which the CSP would make awkward and which would put the paper size, of
    all things, in the one output nobody sees before it is already printed.
 
-   ⚠️ A CUSTOM SIZE FALLS THROUGH TO `size: auto` BELOW, ON PURPOSE. There the
-   printer driver's own stock decides, which is what the driver has to be set to in
-   any case — see the setup note in the plan. Better the driver's real answer than a
-   number this app guessed. */
-@page { size: auto; margin: 0; }
+   ⚠️ A CUSTOM SIZE HAS A NAMED PAGE OF ITS OWN, `labcustom`, with `size: auto` so the printer driver's own stock
+   decides — which is what the driver has to be set to in any case; see the setup note in the plan. Better the
+   driver's real answer than a number this app guessed. It is named, and not an unnamed `@page { … }`, because
+   THIS FILE IS LOADED BY THE WHOLE SINGLE-PAGE APP (the current app links it on the catalogue page alone): an
+   unnamed rule would give margin 0 to every other print the app will ever make. A page name applies only to the
+   sheet that selects it, and so does everything else in this section.
+
+   The custom rule is `:where(.lab-print) .lab-sheet`, specificity (0,1,0), so each preset rule below (0,2,0) wins
+   whatever the order. */
+@page labcustom { size: auto; margin: 0; }
 @page p76x51  { size: 76mm 51mm;  margin: 0; }
 @page p57x32  { size: 57mm 32mm;  margin: 0; }
 @page p102x76 { size: 102mm 76mm; margin: 0; }
 
 .lab-print { display: none; }
+:where(.lab-print) .lab-sheet { page: labcustom; }
 .lab-print--p76x51 .lab-sheet  { page: p76x51; }
 .lab-print--p57x32 .lab-sheet  { page: p57x32; }
 .lab-print--p102x76 .lab-sheet { page: p102x76; }
@@ -167,9 +178,11 @@
      bar, the toast, and the sign-in cover that must never be printed — is hidden by
      the same selector, and a header added next year is hidden by it too. A list of
      class names here would go stale silently, on an output nobody previews. */
-  body > *:not(#labelPrint) { display: none !important; }
+  /* ⚠️ SCOPED TO A BODY THAT HOLDS A LABEL HOST (`:has`, Chrome 105+): this file is loaded by the whole app once the
+     label has been opened, and an unscoped rule would blank every other print it ever makes. */
+  body:has(> #labelPrint) > *:not(#labelPrint) { display: none !important; }
 
-  body { margin: 0; background: #fff; }
+  body:has(> #labelPrint) { margin: 0; background: #fff; }
 
   .lab-print { display: block; }
 

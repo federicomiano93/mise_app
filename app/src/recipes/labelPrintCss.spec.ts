@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { LABEL_SIZES } from '@mise/shared/label-template-model';
 import tokensCss from '../styles/tokens.css?raw';
+import baseCss from '../styles/base.css?raw';
 import labelCss from './label-print.css?raw';
 
 // The two faces of Manrope exactly as the current app's root tokens.css declares them (Vite will not let a spec read
@@ -55,12 +56,45 @@ describe('label-print.css', () => {
       expect(css, size.id).toMatch(new RegExp(`@page\\s+${size.id}\\s*\\{\\s*size:\\s*${size.widthMm}mm\\s+${size.heightMm}mm;\\s*margin:\\s*0;\\s*\\}`));
       expect(css, size.id).toMatch(new RegExp(`\\.lab-print--${size.id}\\s+\\.lab-sheet\\s*\\{\\s*page:\\s*${size.id};\\s*\\}`));
     }
-    expect(css).toMatch(/@page\s*\{\s*size:\s*auto;\s*margin:\s*0;\s*\}/);
+    // The custom size has a page of its own, selected only on a label host.
+    expect(css).toMatch(/@page\s+labcustom\s*\{\s*size:\s*auto;\s*margin:\s*0;\s*\}/);
+    expect(css).toMatch(/:where\(\.lab-print\)\s+\.lab-sheet\s*\{\s*page:\s*labcustom;\s*\}/);
+  });
+
+  // ⚠️ THIS FILE IS LOADED BY THE WHOLE SINGLE-PAGE APP, once the label has been opened; the current app links its
+  // copy on the catalogue page alone. Anything global in it reaches every other screen and every other print.
+  it('has no UNNAMED @page rule: only a label print gets margin 0', () => {
+    expect(css).not.toMatch(/@page\s*\{/);
+    expect(css).not.toMatch(/@page\s*:/);
+    const names = [...css.matchAll(/@page\s+([\w-]+)/g)].map(match => match[1]);
+    expect(names.length).toBe(LABEL_SIZES.length + 1);
+    for (const name of names) expect(['labcustom', ...LABEL_SIZES.map(size => size.id)]).toContain(name);
+  });
+
+  it('lets a preset page win over the custom one by specificity, not by the order of the rules', () => {
+    // :where() has no specificity: `:where(.lab-print) .lab-sheet` is (0,1,0) and a preset rule is (0,2,0).
+    expect(css).not.toMatch(/(^|[}\s])\.lab-print\s+\.lab-sheet\s*\{\s*page:/);
+  });
+
+  // ⚠️ SCOPED: with no label host in the body, nothing at all is hidden when the app prints something else.
+  it('never hides or restyles the body for a print that has no label host', () => {
+    const printBlock = css.slice(css.indexOf('@media print'));
+    expect(printBlock).not.toMatch(/(^|[{};\s])body\s*>/);
+    expect(printBlock).not.toMatch(/(^|[{};\s])body\s*\{/);
+    expect(printBlock).toMatch(/body:has\(>\s*#labelPrint\)\s*\{\s*margin:\s*0;\s*background:\s*#fff;\s*\}/);
+  });
+
+  // ⚠️ Mise 2's base.css sets `text-wrap: pretty` on <body>; the current app's catalogue page has none. A different
+  // line-breaking algorithm is a different fit, and the fit gate measures this sheet.
+  it('breaks lines as the current app does, not as the body of Mise 2 does', () => {
+    expect(baseCss).toMatch(/text-wrap:\s*pretty/);
+    const sheet = /\.lab-sheet\s*\{([^}]*)\}/.exec(css)?.[1] ?? '';
+    expect(sheet).toMatch(/text-wrap:\s*wrap/);
   });
 
   // ⚠️ ONE RULE, DERIVED RATHER THAN LISTED: everything but the label host is hidden when printing.
   it('hides everything but #labelPrint when printing, with one derived rule', () => {
-    expect(css).toMatch(/@media print\s*\{[\s\S]*body\s*>\s*\*:not\(#labelPrint\)\s*\{\s*display:\s*none\s*!important;\s*\}/);
+    expect(css).toMatch(/@media print\s*\{[\s\S]*body:has\(>\s*#labelPrint\)\s*>\s*\*:not\(#labelPrint\)\s*\{\s*display:\s*none\s*!important;\s*\}/);
     expect(css).toMatch(/\.lab-print\s*\{\s*display:\s*none;\s*\}/);
     expect(css).toMatch(/@media print[\s\S]*\.lab-print\s*\{\s*display:\s*block;\s*\}/);
   });
