@@ -8,7 +8,11 @@
 
    From 1000px (the split) it sticks to the bottom of the scrolling area, so a long list never
    pushes the month's buttons off a tablet standing on a bench, where the list column has the room.
-   It sticks because nothing between it and the scroll area clips: stocktakeCss.spec.ts pins it. */
+   It sticks because nothing between it and the scroll area clips: stocktakeCss.spec.ts pins it.
+
+   ⚠️ AND ONLY WHILE THE WINDOW IS TALL. Driven on the lab tablet (Chrome 101, 14 Oct 2026): the keyboard shrinks the
+   window to about 330px, and the bar, stuck above it, covered the very box «Next» had just moved to — a count typed
+   into a box nobody could see. Below 560px of height it is the list's last block again, as on a phone. */
 
 .bar {
   display: flex;
@@ -21,7 +25,7 @@
   box-shadow: var(--shadow-1);
 }
 
-@media (min-width: 1000px) {
+@media (min-width: 1000px) and (min-height: 560px) {
   .bar {
     position: sticky;
     bottom: 0;

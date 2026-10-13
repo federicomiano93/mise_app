@@ -230,7 +230,8 @@ describe('the split of the frame', () => {
 
 describe('the month\'s bottom bar', () => {
   const css = withoutComments(monthActionsCss);
-  const at = css.indexOf('@media (min-width: 1000px)');
+  // ⚠️ AND HEIGHT: on the lab tablet the keyboard leaves ~330px, and a stuck bar covered the box being typed into.
+  const at = css.indexOf('@media (min-width: 1000px) and (min-height: 560px)');
   const bar = rule(css.slice(0, at), '.bar');
 
   // ⚠️ Stuck to the bottom of a 296×668 phone it took a fifth of the screen, and the first screen
