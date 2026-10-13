@@ -35,10 +35,10 @@ describe('installViewportHeight', () => {
     const stop = installViewportHeight(win as never);
     expect(root.style.getPropertyValue(VH_VAR)).toBe('648px');
 
-    // The address bar slides away: the window grows, and so does the value.
-    state.clientHeight = 704;
+    // The on-screen keyboard opens (measured on the tablet: 648 -> 328): the layout height shrinks, and so does the value.
+    state.clientHeight = 328;
     win.fire('resize');
-    expect(root.style.getPropertyValue(VH_VAR)).toBe('704px');
+    expect(root.style.getPropertyValue(VH_VAR)).toBe('328px');
 
     stop();
     expect(win.count()).toBe(0);
