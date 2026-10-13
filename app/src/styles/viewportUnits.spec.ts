@@ -13,7 +13,9 @@ import { describe, expect, it } from 'vitest';
 const sheets = import.meta.glob<string>('../**/*.css', { query: '?raw', import: 'default', eager: true });
 
 const withoutComments = (css: string): string => css.replace(/\/\*[\s\S]*?\*\//g, '');
-const DVH = /\d(dvh|svh|lvh)\b/;
+const DVH = /\d(?:dvh|svh|lvh|dvw|svw|lvw|dvi|svi|lvi|dvb|svb|lvb|dvmin|svmin|lvmin|dvmax|svmax|lvmax)\b/;
+// A bare vh is the same trap in the other direction: 100vh is 96px taller than the window on the tablet.
+const VH = /\d(?:vh)\b/;
 const SUPPORTS_BLOCK = /@supports\s*\(\s*height:\s*100dvh\s*\)\s*\{\s*:root\s*\{\s*--vh100:\s*100dvh;?\s*\}\s*\}/;
 
 describe('viewport units the lab tablet does not know', () => {
@@ -32,6 +34,8 @@ describe('viewport units the lab tablet does not know', () => {
         text = text.replace(SUPPORTS_BLOCK, '');
       }
       if (DVH.test(text)) offenders.push(file);
+      // Only tokens.css may write vh (`--vh100: 100vh`).
+      if (!file.endsWith('/tokens.css') && VH.test(text)) offenders.push(`${file} (vh)`);
     }
     expect(found).toBe(true);
     expect(offenders).toEqual([]);
