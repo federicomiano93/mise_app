@@ -1,6 +1,7 @@
 import { flushSync } from 'react-dom';
 import { createRoot } from 'react-dom/client';
 import type { Root } from 'react-dom/client';
+import labelPageHref from './label-page.css?url';
 import { LabelSheet } from './LabelSheet';
 import type { SheetSource } from './LabelSheet';
 
@@ -36,29 +37,29 @@ export const PRINTING_CLASS = 'lab-printing';
 // 14 Oct 2026): that Chrome does not lay the sheet on its named @page (label-print.css), so the label went onto the
 // DEFAULT page with the browser's default margins — off its corner, and spilling onto a second, blank page: a wasted
 // label on a label printer. The current app has an unnamed `@page { size: auto; margin: 0 }` and prints one page
-// there; Mise 2 cannot keep that rule in a stylesheet, because this single-page app would give margin 0 to every other
-// print it ever makes. So the rule is a constructed stylesheet adopted for exactly as long as the host lives — the
-// same lifetime as the class above. Where named pages work (a computer's Chrome) the sheet's own page still wins.
-export const LABEL_PAGE_RULE = '@page { size: auto; margin: 0; }';
-let labelPageSheet: CSSStyleSheet | null = null;
+// there; Mise 2 cannot keep that rule in a stylesheet that is always on, because this single-page app would give
+// margin 0 to every other print it ever makes. So the rule lives in its own static file, label-page.css, linked here
+// with media="not all" the moment this module loads — the browser downloads it anyway, so it is there when Print is
+// pressed — and switched to media="print" for exactly as long as the host lives, the same lifetime as the class
+// above. A static file, not CSS built at run time: labelSource.spec.ts keeps the label's files clear of that (the page
+// CSP). Where named pages work (a computer's Chrome) the sheet's own page still wins.
+export const LABEL_PAGE_OFF = 'not all';
+export const LABEL_PAGE_ON = 'print';
+export const LABEL_PAGE_ID = 'labelPage';
 
-function adoptLabelPage(): void {
-  // Constructed stylesheets: Chrome 73, Safari 16.4 — inside the build target. Feature-detected so a browser without
-  // them (and jsdom) still prints, with the browser's margins.
-  if (!('adoptedStyleSheets' in document) || typeof CSSStyleSheet !== 'function' || !('replaceSync' in CSSStyleSheet.prototype)) return;
-  if (labelPageSheet === null) {
-    labelPageSheet = new CSSStyleSheet();
-    labelPageSheet.replaceSync(LABEL_PAGE_RULE);
-  }
-  const sheet = labelPageSheet;
-  if (!document.adoptedStyleSheets.includes(sheet)) document.adoptedStyleSheets = [...document.adoptedStyleSheets, sheet];
+function labelPageLink(): HTMLLinkElement {
+  const existing = document.getElementById(LABEL_PAGE_ID);
+  if (existing instanceof HTMLLinkElement) return existing;
+  const link = document.createElement('link');
+  link.id = LABEL_PAGE_ID;
+  link.rel = 'stylesheet';
+  link.href = labelPageHref;
+  link.media = LABEL_PAGE_OFF;
+  document.head.appendChild(link);
+  return link;
 }
 
-function dropLabelPage(): void {
-  const sheet = labelPageSheet;
-  if (sheet === null || !('adoptedStyleSheets' in document)) return;
-  document.adoptedStyleSheets = document.adoptedStyleSheets.filter(s => s !== sheet);
-}
+labelPageLink();
 
 // The signs that the person is back in the page.
 const BACK_IN_PAGE = ['pointerdown', 'keydown'] as const;
@@ -74,7 +75,7 @@ export function closePrintHost(): void {
   root.unmount();
   node.remove();
   document.documentElement.classList.remove(PRINTING_CLASS);
-  dropLabelPage();
+  labelPageLink().media = LABEL_PAGE_OFF;
 }
 
 export function openPrintHost(resolved: SheetSource, fontMm: number, sizeId: string | null): void {
@@ -84,7 +85,7 @@ export function openPrintHost(resolved: SheetSource, fontMm: number, sizeId: str
   node.className = sizeId === null ? 'lab-print' : `lab-print lab-print--${sizeId}`;
   document.body.appendChild(node);
   document.documentElement.classList.add(PRINTING_CLASS);
-  adoptLabelPage();
+  labelPageLink().media = LABEL_PAGE_ON;
   const root = createRoot(node);
   const back = () => { closePrintHost(); };
   // Capture phase: the removal happens before anything the tap or key goes on to do (Ctrl+P included).
