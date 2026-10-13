@@ -135,8 +135,8 @@
       }
     },
     "dist/catalogue.js": {
-      "sha": "de22f78719542b05",
-      "mapSha": "b72b130e06af11c1",
+      "sha": "e4dc636548973975",
+      "mapSha": "928b7eeaa6a513e4",
       "inputs": {
         "js/allergen-match.js": "ee85eebef7fd7052",
         "js/allergen-model.js": "50434c6cea85b7de",
@@ -145,7 +145,7 @@
         "js/auth-gate.js": "5bc4dc671165cecd",
         "js/calculator-config.js": "9bdba7a8bc3d8761",
         "js/catalogue/allergen-sheet.js": "0a1ec5ee0d8c6a56",
-        "js/catalogue/catalogue-detail.js": "1866d4249954bd96",
+        "js/catalogue/catalogue-detail.js": "d22741ac0769dd62",
         "js/catalogue/catalogue-editor.js": "be31547594a8efd9",
         "js/catalogue/catalogue-list.js": "289d824f889b3757",
         "js/catalogue/catalogue-main.js": "28863c59f8f79a95",
@@ -163,9 +163,9 @@
         "js/catalogue/import-to-calculator.js": "29685691137f2e9a",
         "js/catalogue/ingredient-picker.js": "3f9f65eb34bc5384",
         "js/catalogue/ingredient-suggest.js": "031aa6bc27da4499",
-        "js/catalogue/label-print.js": "5c52c7ff571ea8b9",
+        "js/catalogue/label-print.js": "511e744b633e96aa",
         "js/catalogue/label-template-model.js": "46492628d8e6db54",
-        "js/catalogue/label-view.js": "e29a5a9943b7b253",
+        "js/catalogue/label-view.js": "783190df469470b2",
         "js/catalogue/label-zpl.js": "8ff0e4e8128e5e6e",
         "js/catalogue/photo-capture.js": "40e2f9338b5cc3a8",
         "js/catalogue/photo-model.js": "f7063509f3042ec8",
