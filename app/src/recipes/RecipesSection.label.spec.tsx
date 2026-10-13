@@ -16,6 +16,8 @@ beforeAll(async () => { await import('./RecipesSection'); }, 60_000);
 beforeEach(() => { window.localStorage.clear(); });
 
 afterEach(() => {
+  // A print host outlives its screen until `afterprint` (printHost.tsx): the end of a spec is that event.
+  act(() => { window.dispatchEvent(new Event('afterprint')); });
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
   vi.useRealTimers();
@@ -497,6 +499,128 @@ describe('the paper: measured, scaled, and the Print button that obeys it', () =
     }
   });
 
+  // ⚠️ NEVER MEASURED IN THE FALLBACK FACE: while Manrope is still loading the sheet is drawn in a narrower face, and a size
+  // chosen then would spill on paper. The browser's FontFaceSet is stood in for by hand (jsdom has none).
+  describe('the typeface', () => {
+    class FakeFonts extends EventTarget {
+      status: 'loading' | 'loaded' = 'loading';
+      check = (): boolean => this.status === 'loaded';
+      // Asked for at load() time, so a rejection is never left without a listener.
+      load = vi.fn((): Promise<unknown[]> => this.answer());
+      answer: () => Promise<unknown[]> = () => new Promise(() => undefined);
+    }
+    const install = (fonts: FakeFonts) => { Object.defineProperty(document, 'fonts', { value: fonts, configurable: true }); };
+    afterEach(() => { Reflect.deleteProperty(document, 'fonts'); });
+
+    it('keeps Print off while Manrope is loading, even when a measurement would say it fits — and enables it once it is ready', async () => {
+      stubLayout();
+      const fonts = new FakeFonts();
+      let arrive: (faces: unknown[]) => void = () => undefined;
+      const late = new Promise<unknown[]>(resolve => { arrive = resolve; });
+      fonts.answer = () => late;
+      install(fonts);
+      await openLabel([CAKE], 'cake');
+      expect(printButton()).toBeDisabled();
+      expect(main().queryByText(/^Actual size/)).not.toBeInTheDocument();
+      expect(fonts.load).toHaveBeenCalledWith('400 1em Manrope');
+      expect(fonts.load).toHaveBeenCalledWith('800 1em Manrope');
+      await act(async () => { fonts.status = 'loaded'; arrive([{}]); await late; });
+      expect(printButton()).toBeEnabled();
+      expect(main().getByText('Actual size — 76 × 51 mm')).toBeInTheDocument();
+    });
+
+    it('is ready at once when the face was loaded before the screen listened (no event will ever come)', async () => {
+      stubLayout();
+      const fonts = new FakeFonts();
+      fonts.status = 'loaded';
+      fonts.answer = () => Promise.resolve([{}]);
+      install(fonts);
+      await openLabel([CAKE], 'cake');
+      await waitFor(() => { expect(printButton()).toBeEnabled(); });
+    });
+
+    it('measures once the load promise resolves even if the face is not yet reported by check()', async () => {
+      stubLayout();
+      const fonts = new FakeFonts();
+      fonts.answer = () => Promise.resolve([{}]);
+      install(fonts);
+      await openLabel([CAKE], 'cake');
+      await waitFor(() => { expect(printButton()).toBeEnabled(); });
+    });
+
+    it.each([
+      ['cannot be fetched', () => Promise.reject(new Error('NetworkError'))],
+      ['is not declared', () => Promise.resolve([])],
+    ])('⚠️ keeps Print off for good, and says so, when the face %s', async (_name, answer) => {
+      stubLayout();
+      const fonts = new FakeFonts();
+      fonts.answer = answer;
+      install(fonts);
+      await openLabel([CAKE], 'cake');
+      await waitFor(() => {
+        expect(main().getByText(/^The label typeface could not be loaded, so the size cannot be checked/)).toBeVisible();
+      });
+      expect(printButton()).toBeDisabled();
+      expect(main().queryByText(/^Actual size/)).not.toBeInTheDocument();
+      expect(printButton()).toHaveAccessibleDescription(/Check the connection and open the label again\.$/);
+    });
+
+    it('says it in Italian', async () => {
+      stubLayout();
+      const fonts = new FakeFonts();
+      fonts.answer = () => Promise.reject(new Error('NetworkError'));
+      install(fonts);
+      await openLabel([CAKE], 'cake', { lang: 'it', location: IT });
+      await waitFor(() => {
+        expect(main().getByText('Il carattere delle etichette non si è caricato, quindi non si può controllare la misura. Controlla la connessione e riapri l\'etichetta.')).toBeVisible();
+      });
+    });
+
+    it('does not set state after the screen is left (the late answer of the font is dropped)', async () => {
+      stubLayout();
+      const fonts = new FakeFonts();
+      let arrive: (faces: unknown[]) => void = () => undefined;
+      const late = new Promise<unknown[]>(resolve => { arrive = resolve; });
+      fonts.answer = () => late;
+      install(fonts);
+      const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      const { router } = await openLabel([CAKE], 'cake');
+      await act(async () => { await router.navigate('/recipes'); });
+      await act(async () => { arrive([{}]); await late; });
+      expect(error).not.toHaveBeenCalled();
+    });
+  });
+
+  it('preloads the two Manrope files while the label screen is open, and takes the links away when it is left', async () => {
+    stubLayout();
+    const { router } = await openLabel([CAKE], 'cake');
+    const links = () => [...document.head.querySelectorAll<HTMLLinkElement>('link[rel="preload"][as="font"]')];
+    expect(links().map(link => link.getAttribute('href'))).toEqual([
+      expect.stringMatching(/manrope-latin\.woff2/),
+      expect.stringMatching(/manrope-latin-ext\.woff2/),
+    ]);
+    expect(links().every(link => link.crossOrigin === 'anonymous' && link.type === 'font/woff2')).toBe(true);
+    await act(async () => { await router.navigate('/recipes'); });
+    expect(links()).toHaveLength(0);
+  });
+
+  it('points Print at the reason it is off, and announces the reason through a polite live region', async () => {
+    stubLayout({ overflow: () => 40 });
+    await openLabel([CAKE], 'cake');
+    expect(printButton()).toBeDisabled();
+    expect(printButton()).toHaveAccessibleDescription(/^This label does not fit on 76 × 51 mm/);
+    const reason = main().getByText(/^This label does not fit on 76 × 51 mm/);
+    expect(reason.closest('[role="status"]')).not.toBeNull();
+  });
+
+  it('keeps the live region in the page while there is no reason, and gives Print no description when it can be pressed', async () => {
+    stubLayout();
+    await openLabel([CAKE], 'cake');
+    expect(printButton()).toBeEnabled();
+    expect(printButton()).not.toHaveAttribute('aria-describedby');
+    expect(main().getAllByRole('status').length).toBeGreaterThan(0);
+  });
+
   it('says this device cannot reach a printer when it cannot print at all', async () => {
     stubLayout();
     vi.stubGlobal('print', undefined);
@@ -639,13 +763,31 @@ describe('printing through the system\'s own dialog', () => {
     expect(document.getElementById('labelPrint')).toBeNull();
   });
 
-  it('takes the host away when the screen is left while the dialog is still open', async () => {
+  // ⚠️ ANDROID CHROME'S print() DOES NOT BLOCK: the dialog is open while the page carries on. A person who leaves the
+  // label screen with it still up must not turn the paper blank, so the host is the print's, not the screen's.
+  it('keeps the host when the screen is left while the dialog is open, and takes it away on afterprint only', async () => {
     stubLayout();
     vi.spyOn(window, 'print').mockImplementation(() => undefined);
     const { router, user } = await openLabel([CAKE], 'cake');
     await user.click(printButton());
     expect(document.getElementById('labelPrint')).not.toBeNull();
     await act(async () => { await router.navigate('/recipes'); });
+    expect(document.querySelector('.lab-preview')).toBeNull();
+    const host = document.getElementById('labelPrint');
+    expect(host).not.toBeNull();
+    expect(host?.querySelectorAll('.lab-sheet')).toHaveLength(1);
+    act(() => { window.dispatchEvent(new Event('afterprint')); });
     expect(document.getElementById('labelPrint')).toBeNull();
+  });
+
+  it('builds the host at print time with no style attribute and not as an overlay', async () => {
+    stubLayout();
+    vi.spyOn(window, 'print').mockImplementation(() => undefined);
+    const { user } = await openLabel([CAKE], 'cake');
+    expect(document.getElementById('labelPrint')).toBeNull();
+    await user.click(printButton());
+    const host = document.getElementById('labelPrint') as HTMLElement;
+    expect(host.hasAttribute('style')).toBe(false);
+    expect(host.classList.contains('preview-overlay')).toBe(false);
   });
 });

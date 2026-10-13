@@ -16,9 +16,15 @@ import { fitFont, fitWidthFactor, scaledHostHeightPx } from '@mise/shared/label-
 // off first); only then is the preview shrunk to the room there is. The sheet keeps its true millimetres: the print
 // builds its own copy and never sees the scale.
 //
-// ⚠️ AGAIN WHEN SOMETHING THAT CHANGES THE ANSWER CHANGES: the label or the paper (`signature`), the window
-// (resize, a tablet turned round), and the typeface (the sheet is set in Manrope, which may arrive after the first
-// measurement — a measurement taken in the fallback face would be about another label).
+// ⚠️ AGAIN WHEN SOMETHING THAT CHANGES THE ANSWER CHANGES: the label or the paper (`signature`) and the window
+// (resize, a tablet turned round).
+//
+// ⚠️⚠️ NEVER MEASURED IN THE FALLBACK TYPEFACE. The sheet is set in Manrope with font-display: swap, so for a moment
+// it is drawn in a narrower system face. A size chosen then would fit on screen and spill on paper, the last lines
+// («Contains») clipped. Until Manrope is ready the sheet is UNMEASURED (Print stays off); the measurement is taken when
+// `document.fonts.load()` resolves (which also resolves when the face was loaded long before this screen listened) or
+// `loadingdone` fires. If the face cannot be loaded at all the answer is `face: 'failed'` and Print stays off for good:
+// the screen says why. Where `document.fonts` does not exist (an old browser, jsdom) the sheet behaves as before.
 
 export interface SheetFit {
   // What `signature` this answer was taken for: an answer for another label or paper is not one for this.
@@ -35,16 +41,39 @@ interface Source {
   readonly minFontMm: number;
 }
 
+// The weights the sheet is drawn in (label-print.css: regular, the bold name and «Contains», the allergen at 800).
+const WEIGHTS = ['400', '700', '800'] as const;
+const faceQuery = (weight: string): string => `${weight} 1em Manrope`;
+
+export type Face = 'waiting' | 'ready' | 'failed';
+
+// Is the face already usable, right now, without waiting for anything?
+function faceIsReady(fonts: FontFaceSet | undefined): boolean {
+  if (!fonts) return true;
+  if (fonts.status === 'loading') return false;
+  if (typeof fonts.check !== 'function') return true;
+  try {
+    return WEIGHTS.every(weight => fonts.check(faceQuery(weight)));
+  } catch {
+    return false;
+  }
+}
+
+const fontSet = (): FontFaceSet | undefined => (typeof document === 'undefined' ? undefined : document.fonts);
+
 export function useSheetFit(source: Source | null, signature: string) {
   const hostRef = useRef<HTMLDivElement>(null);
   const sheetRef = useRef<HTMLDivElement>(null);
   const sourceRef = useRef(source);
   const signatureRef = useRef(signature);
   const [fit, setFit] = useState<SheetFit | null>(null);
+  const [face, setFace] = useState<Face>(() => (faceIsReady(fontSet()) ? 'ready' : 'waiting'));
+  const faceRef = useRef(face);
 
   useLayoutEffect(() => {
     sourceRef.current = source;
     signatureRef.current = signature;
+    faceRef.current = face;
   });
 
   const measure = useCallback(() => {
@@ -52,6 +81,8 @@ export function useSheetFit(source: Source | null, signature: string) {
     const sheet = sheetRef.current;
     const resolved = sourceRef.current;
     if (!host || !sheet || !resolved) return;
+    // ⚠️ NO MEASUREMENT IN THE FALLBACK FACE (see the head of this file): no answer at all, which is not «it fits».
+    if (faceRef.current !== 'ready') return;
 
     // The untouched sheet at the size the model chose, no scale on it.
     sheet.style.transform = '';
@@ -102,21 +133,43 @@ export function useSheetFit(source: Source | null, signature: string) {
     ));
   }, []);
 
-  // Once the sheet is in the document, and again whenever the label or the paper changes.
+  // Once the sheet is in the document, and again whenever the label, the paper or the typeface's state changes.
   useLayoutEffect(() => {
     measure();
-  }, [signature, measure]);
+  }, [signature, face, measure]);
 
-  // The window turned or resized; the typeface arrived.
+  // The window turned or resized.
   useEffect(() => {
     window.addEventListener('resize', measure);
-    const fonts = typeof document === 'undefined' ? undefined : document.fonts;
-    fonts?.addEventListener?.('loadingdone', measure);
+    return () => { window.removeEventListener('resize', measure); };
+  }, [measure]);
+
+  // The typeface. `load()` is asked for every weight the sheet uses: it resolves with the faces (empty when none is
+  // declared) and rejects when the file cannot be fetched. `loadingdone` covers a later change (another subset).
+  useEffect(() => {
+    const fonts = fontSet();
+    if (!fonts) return undefined;
+    let alive = true;
+    const settle = () => {
+      if (!alive) return;
+      if (faceIsReady(fonts)) setFace('ready');
+      measure();
+    };
+    fonts.addEventListener?.('loadingdone', settle);
+    if (typeof fonts.load === 'function') {
+      Promise.all(WEIGHTS.map(weight => fonts.load(faceQuery(weight)))).then(
+        loaded => {
+          if (!alive) return;
+          setFace(loaded.every(list => list.length === 0) ? 'failed' : 'ready');
+        },
+        () => { if (alive) setFace('failed'); },
+      );
+    }
     return () => {
-      window.removeEventListener('resize', measure);
-      fonts?.removeEventListener?.('loadingdone', measure);
+      alive = false;
+      fonts.removeEventListener?.('loadingdone', settle);
     };
   }, [measure]);
 
-  return { hostRef, sheetRef, fit: fit !== null && fit.signature === signature ? fit : null };
+  return { hostRef, sheetRef, face, fit: fit !== null && fit.signature === signature ? fit : null };
 }

@@ -1040,7 +1040,7 @@ export const en = {
   'label.blocked.noCountry': 'No label can be made yet: nobody has said which country this business sells in, and that decides the language the label must be printed in. The owner can set it when the business is created.',
   'label.copied': 'Copied',
   'label.copyFailed': 'Could not copy — select the text above instead',
-  // The label screen (step 3d-3): the current app's own sentences, key for key (js/i18n.js). `label.preview.paperUnknown` is new.
+  // The label screen (step 3d-3): the current app's own sentences, key for key (js/i18n.js). `label.preview.paperUnknown` and `label.preview.fontMissing` are new.
   'cat.makeALabel': 'Make a label',
   'cat.label': 'Label',
   'label.whatItShows': 'What the label shows',
@@ -1069,6 +1069,7 @@ export const en = {
   'label.preview.actualSize': 'Actual size — {w} × {h} mm',
   'label.preview.scaled': '{w} × {h} mm — shown smaller to fit this screen',
   'label.preview.paperUnknown': 'The label size has not arrived yet.',
+  'label.preview.fontMissing': 'The label typeface could not be loaded, so the size cannot be checked. Check the connection and open the label again.',
   'language.en.inSentence': 'English',
   'language.it.inSentence': 'Italian',
   // The Allergen sheet (the screen at the counter).

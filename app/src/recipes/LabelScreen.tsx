@@ -1,6 +1,5 @@
-import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useId, useMemo, useState } from 'react';
 import type { Ref } from 'react';
-import { createPortal, flushSync } from 'react-dom';
 import { Printer, Send } from 'lucide-react';
 import { normalizeShelfLifeDays } from '@mise/shared/catalogue-model';
 import type { CatalogueRecipe } from '@mise/shared/catalogue-model';
@@ -24,6 +23,8 @@ import { useAllergenTables } from './allergenTables';
 import { LabelCard } from './LabelCard';
 import { LabelSheet } from './LabelSheet';
 import type { SheetSource } from './LabelSheet';
+import { useLabelFontPreload } from './labelFontPreload';
+import { openPrintHost, closePrintHost } from './printHost';
 import { useRecipes } from './RecipesContext';
 import { useLabelShows } from './labelShows';
 import { useSheetFit } from './useSheetFit';
@@ -109,15 +110,9 @@ function LabelBody({ recipe }: { recipe: CatalogueRecipe }) {
   const [shows, setShows] = useLabelShows();
   const [send, sendSheet] = useSendSheet();
   const [note, setNote] = useState<MessageKey | null>(null);
-  const [printJob, setPrintJob] = useState<{ fontMm: number; sizeId: string | null } | null>(null);
-  const afterPrint = useRef<(() => void) | null>(null);
+  const reasonId = useId();
   const stillWaiting = useStillWaiting(!ingredientsLoaded);
-
-  // Leaving the screen with the print dialog still open takes the host with it (it is part of this screen's tree);
-  // the listener goes too, or it would outlive the screen.
-  useEffect(() => () => {
-    if (afterPrint.current !== null) window.removeEventListener('afterprint', afterPrint.current);
-  }, []);
+  useLabelFontPreload();
 
   const lang = outputLanguage(location);
   const allergens = allergensOn(location);
@@ -141,7 +136,7 @@ function LabelBody({ recipe }: { recipe: CatalogueRecipe }) {
   const sheet: Laid | null = laid !== null && laid.ok ? laid : null;
   // Everything the fit depends on, as one string: the measurement is taken again when it changes, not on every draw.
   const signature = useMemo(() => JSON.stringify(sheet), [sheet]);
-  const { hostRef, sheetRef, fit } = useSheetFit(sheet, signature);
+  const { hostRef, sheetRef, face, fit } = useSheetFit(sheet, signature);
 
   // 3d-4: the agent road (a job for the shop computer's printer) and the ZPL clipboard road plug in here, with
   // `printerReady` from the print-agents watch and `zplFits` from the ZPL port. Only the system's own dialog works
@@ -164,27 +159,19 @@ function LabelBody({ recipe }: { recipe: CatalogueRecipe }) {
 
   // Put the sheet on paper through the system's dialog.
   //
-  // ⚠️ BUILT ON DEMAND AND REMOVED AFTERWARDS, in a host that is a DIRECT CHILD OF <body> (label-print.css hides
-  // everything else with one derived rule), at the size the MEASUREMENT chose. It is NOT called `.preview-overlay`:
-  // that class holds back a compulsory update for as long as it exists in the current app, and the habit is kept.
-  // ⚠️ REMOVED BY THE LISTENER, NOT BY A LINE AFTER print(): window.print() blocks in some browsers and returns at once
-  // in others; taking the node away on the next line races the dialog and can print a blank page.
+  // ⚠️ THE HOST IS BUILT NOW AND IS NOT THIS SCREEN'S (printHost.tsx): a direct child of <body> (label-print.css hides
+  // everything else with one derived rule), at the size the MEASUREMENT chose, taken away by `afterprint` only. On
+  // Android Chrome window.print() returns at once and the dialog stays up while the page carries on; a host that went
+  // with this screen would print a blank page. It is NOT called `.preview-overlay`: that class holds back a
+  // compulsory update for as long as it exists in the current app, and the habit is kept.
   const print = () => {
     if (sheet === null || fit === null || !fit.measured || !fit.fits || roads[0]?.id !== 'os-print') return;
-    if (afterPrint.current !== null) window.removeEventListener('afterprint', afterPrint.current);
-    const done = () => {
-      window.removeEventListener('afterprint', done);
-      afterPrint.current = null;
-      setPrintJob(null);
-    };
-    afterPrint.current = done;
-    window.addEventListener('afterprint', done);
-    flushSync(() => { setPrintJob({ fontMm: fit.fontMm, sizeId: sizeIdFor(profile) }); });
+    openPrintHost(sheet as SheetSource, fit.fontMm, sizeIdFor(profile));
     try {
       window.print();
       announceAction('label-printed');
     } catch {
-      done();
+      closePrintHost();
     }
   };
 
@@ -225,7 +212,8 @@ function LabelBody({ recipe }: { recipe: CatalogueRecipe }) {
     let why: string | null = null;
     if (sheet !== null) {
       const reason = whyNoRoad(sheet, roadContext);
-      if (fit !== null && fit.measured && !fit.fits) why = tooBig;
+      if (face === 'failed') why = t('label.preview.fontMissing');
+      else if (fit !== null && fit.measured && !fit.fits) why = tooBig;
       else if (reason === 'too-big-for-printer') why = tooBig;
       else if (sheet.printerLanguage === 'zpl' && roadContext.printerReady !== true) why = t('label.print.printerOffline');
       else if (roads.length === 0) why = t('label.print.noRoad');
@@ -236,6 +224,8 @@ function LabelBody({ recipe }: { recipe: CatalogueRecipe }) {
     // never an answer from a node nothing could measure.
     const canPress = sheet !== null && fit !== null && fit.measured && fit.fits && roads.length > 0;
     // ⚠️ THE BUTTON SAYS WHAT IT WILL DO. 3d-4 adds the words of the other roads.
+    const reasonIds = [labelConfigKnown ? null : `${reasonId}-paper`, why === null ? null : `${reasonId}-why`]
+      .filter((id): id is string => id !== null).join(' ');
     const printWords: MessageKey = roads[0]?.labelKey === 'label.print.viaSystem' ? 'label.print.viaSystem' : 'label.print';
     const measured = fit !== null && fit.measured && sheet !== null ? fit : null;
 
@@ -246,13 +236,18 @@ function LabelBody({ recipe }: { recipe: CatalogueRecipe }) {
             <LabelSheet ref={sheetRef} resolved={sheet as SheetSource} fontMm={fit?.fontMm ?? sheet.fontMm} />
           </div>
         ) : null}
-        {labelConfigKnown ? null : <p className="lab-nofit">{t('label.preview.paperUnknown')}</p>}
         {sheet !== null ? (
           <p className="lab-preview-note" hidden={measured === null}>
             {measured === null ? '' : t(measured.factor < 1 ? 'label.preview.scaled' : 'label.preview.actualSize', { w: width, h: height })}
           </p>
         ) : null}
-        <p className="lab-nofit" hidden={why === null}>{why ?? ''}</p>
+        {/* ⚠️ THE WHY IS A POLITE LIVE REGION, AND THE REGION IS ALWAYS THERE: the sentence inside it comes and goes (a
+            resize, the typeface arriving), and only a region that already exists announces what is put into it — once,
+            not on every draw. The Print button points at the sentence when it is off for a reason. */}
+        <div role="status">
+          {labelConfigKnown ? null : <p className="lab-nofit" id={`${reasonId}-paper`}>{t('label.preview.paperUnknown')}</p>}
+          {why === null ? null : <p className="lab-nofit" id={`${reasonId}-why`}>{why}</p>}
+        </div>
 
         <LabelCard label={label} shows={shows} />
 
@@ -275,7 +270,13 @@ function LabelBody({ recipe }: { recipe: CatalogueRecipe }) {
           {/* A paper that could not be laid out has no Print button at all (no paper is not no screen); an unknown
               paper has one, off. */}
           {laid !== null && !laid.ok ? null : (
-            <button type="button" className={styles.button} disabled={!canPress} onClick={print}>
+            <button
+              type="button"
+              className={styles.button}
+              disabled={!canPress}
+              aria-describedby={!canPress && reasonIds !== '' ? reasonIds : undefined}
+              onClick={print}
+            >
               <Printer aria-hidden="true" />
               <span>{t(printWords)}</span>
             </button>
@@ -315,12 +316,6 @@ function LabelBody({ recipe }: { recipe: CatalogueRecipe }) {
         ))}
       </div>
       {content}
-      {printJob === null ? null : createPortal(
-        <div id="labelPrint" className={printJob.sizeId === null ? 'lab-print' : `lab-print lab-print--${printJob.sizeId}`}>
-          {sheet === null ? null : <LabelSheet resolved={sheet as SheetSource} fontMm={printJob.fontMm} />}
-        </div>,
-        document.body,
-      )}
     </div>
   );
 }
