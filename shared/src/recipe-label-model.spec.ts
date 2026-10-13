@@ -396,20 +396,69 @@ describe.each([
     expect(label['gaps']).toStrictEqual([]);
   });
 
-  // ⚠️ QUIRK (Findings C, kept until the current app is fixed): a weightless allergen row — a pinch of
-  // mustard — is MISSING from the ingredient list (a row with no weight has no place in a list ordered by
-  // weight) but PRESENT in «Contains». The label screen reads its allergens from the allergen walk, which
-  // counts every row. Ported AS IS; fixing it is a change to BOTH files at once.
-  test('QUIRK (Findings C, kept until the current app is fixed): a weightless allergen row is missing from the ingredient list but present in Contains', () => {
-    const ings = { ...ingredients(), MUSTARD: { id: 'MUSTARD', name: 'Mustard', allergens: ['mustard'], allergensCheckedAt: STAMP, nutrition: full() } };
-    const r = recipe('R1', [row('Flour', 'FLOUR', 1000),
-      { label: 'Mustard', unit: 'pinch', kind: 'ingredient', refId: 'MUSTARD' }]);
-    const label = build(r, { ingredients: ings });
+  // ── Rows with no weight (PR #354, 13 Oct 2026 — was the Findings C quirk) ─────────────────────────────
+  // A row with no weight (a pinch, «to taste», pieces, a weight nobody wrote) used to be SKIPPED from the
+  // ingredient list while its allergens still reached «Contains». The law asks for every ingredient; under 2%
+  // they may go in any order after the rest. Ported from the 8 tests #354 added to recipe-label-model.test.mjs.
+
+  const MUSTARD = { id: 'MUSTARD', name: 'Mustard', allergens: ['mustard'], allergensCheckedAt: STAMP };
+  const withMustard = (): Obj => ({ ...ingredients(), MUSTARD });
+  const pinchOf = (label: string, refId: string, kind = 'ingredient'): Obj => ({ label, grams: 1, unit: 'pinch', kind, refId });
+  const names = (items: { name: string }[]) => items.map(i => i.name);
+
+  test('⚠️⚠️ a pinch of an allergen is IN the list, after every weighed ingredient', () => {
+    const r = recipe('R1', [pinchOf('Mustard', 'MUSTARD'), row('Flour', 'FLOUR', 1000), row('Water', 'WATER', 600)]);
+    const out = flat(r, { ingredients: withMustard() });
+    expect(names(out)).toStrictEqual(['Flour', 'Water', 'Mustard']);
+    expect(out.find(i => i.name === 'Mustard')!.grams, 'it has no weight to rank by').toBe(0);
+    const label = build(r, { ingredients: withMustard() }, { shows: 'allergens' });
     expect(label['ok']).toBe(true);
-    expect(label['ingredients'].map((i: Obj) => i['name'])).toStrictEqual(['Flour']);
-    expect(label['allergens']).toStrictEqual(['gluten-wheat', 'mustard']);
-    expect(m.containsLine(label, 'en')).toBe('Contains: Wheat, Mustard');
-    expect(m.ingredientLine(label)).toBe('FLOUR');
+    expect(m.ingredientLine(label as never), 'listed AND emphasised as an allergen').toMatch(/MUSTARD/);
+    expect(m.containsLine(label as never, 'en'), 'the summary and the list now agree').toMatch(/Mustard/);
+  });
+
+  test('a row with a weighable unit and no weight written is listed too, at the end', () => {
+    const r = recipe('R1', [{ label: 'Butter', grams: '', unit: 'g', kind: 'ingredient', refId: 'BUTTER' }, row('Flour', 'FLOUR', 500)]);
+    expect(names(flat(r, { ingredients: ingredients() }))).toStrictEqual(['Flour', 'Butter']);
+  });
+
+  test('the weightless tail is ordered by name, the same on every run', () => {
+    const r = recipe('R1', [pinchOf('Salt', 'SALT'), row('Flour', 'FLOUR', 500), pinchOf('Mustard', 'MUSTARD')]);
+    expect(names(flat(r, { ingredients: withMustard() }))).toStrictEqual(['Flour', 'Mustard', 'Salt']);
+  });
+
+  test('weighed in one row and a pinch in another is ONE line, at its weighed place', () => {
+    const r = recipe('R1', [row('Flour', 'FLOUR', 500), pinchOf('Salt', 'SALT'), row('Salt', 'SALT', 600)]);
+    const out = flat(r, { ingredients: ingredients() });
+    expect(names(out)).toStrictEqual(['Salt', 'Flour']);
+    expect(out.filter(i => i.name === 'Salt')).toHaveLength(1);
+  });
+
+  test('⚠️ a sub-recipe used by the pinch still names every ingredient it holds', () => {
+    const spice = recipe('SPICE', [row('Butter', 'BUTTER', 50), pinchOf('Mustard', 'MUSTARD')]);
+    const r = recipe('R1', [row('Flour', 'FLOUR', 500), pinchOf('Spice', 'SPICE', 'recipe')]);
+    const out = flat(r, { ingredients: withMustard(), recipes: { SPICE: spice } });
+    expect(names(out)).toStrictEqual(['Flour', 'Butter', 'Mustard']);
+    expect(out.find(i => i.name === 'Spice'), 'still flattened, never named').toBeUndefined();
+  });
+
+  test('⚠️ a weighed sub-recipe with NOTHING weighable inside still names its ingredients', () => {
+    const dust = recipe('DUST', [pinchOf('Mustard', 'MUSTARD')]);
+    const r = recipe('R1', [row('Flour', 'FLOUR', 500), row('Dust', 'DUST', 10, 'recipe')]);
+    expect(names(flat(r, { ingredients: withMustard(), recipes: { DUST: dust } }))).toStrictEqual(['Flour', 'Mustard']);
+  });
+
+  test('the nutrition table is still worked out from the weighed rows alone', () => {
+    // MUSTARD has no nutrition table: had the 0 g line been asked for one, a pinch would refuse the whole declaration.
+    const pinch = recipe('BREAD', [...bread()['ingredients'], pinchOf('Mustard', 'MUSTARD')], { name: 'Test bread' });
+    expect(nutri(pinch, { ingredients: withMustard() })).toStrictEqual(nutri(bread(), { ingredients: ingredients() }));
+    expect(nutri(pinch, { ingredients: withMustard() })).not.toBeNull();
+  });
+
+  test('a recipe made ONLY of weightless rows is still «no ingredients with a weight»', () => {
+    const label = build(recipe('R1', [pinchOf('Mustard', 'MUSTARD'), pinchOf('Salt', 'SALT')]), { ingredients: withMustard() });
+    expect(label['ok']).toBe(false);
+    expect(label['reason']).toBe('no-ingredients');
   });
 
   test('an ingredient with no name is printed as «Unnamed ingredient» (the original’s English fallback, kept for parity)', () => {

@@ -409,8 +409,9 @@ millimetres and the ZPL characters (items 62–80 and «What proves byte-identit
     ingredient used twice is ONE line, summed** (keyed by ingredient id); sorted **DESCENDING by weight** (the
     law, not a preference), ties by name (`localeCompare`) so two runs give the same label; the printed name is
     `ingredient.name` (the invoice name), falling back to the English literal `Unnamed ingredient`; cycles and
-    depth 4 end the walk. ⚠️ A row that is not weighable (a pinch, «to taste») or has no weight is **left OUT of
-    this list while its allergens still reach the «Contains» line** — Findings C. **spec**
+    depth 4 end the walk. ⚠️ A row that is not weighable (a pinch, «to taste») or has no weight is **listed at
+    0 g AFTER the weighed ones, by name** (PR #354, 13 Oct 2026 — it used to be left out while its allergens
+    reached «Contains», Findings C); nutrition and the «no-ingredients» refusal still look at weighed rows only. **spec**
     (`recipe-label-model.test.mjs`)
 64. **`buildLabel(recipe, tables, { shows })`** (`:155`): `{ ok:false, reason:'not-declared', gaps }` when
     `canLabel` is false (**the one gate**, asked once at the top), `{ ok:false, reason:'no-ingredients' }` when
@@ -832,7 +833,7 @@ A. **Nutrition is never printed.** `blocksFor` has no nutrition block, so neithe
    Both» switch changes the card and the text, not the paper. Parity keeps it; say it to Federico.
 B. **`showNutrition` is never read by the Catalogue.** The label switch still offers Nutrition/Both (default
    `both`) on a venue that switched nutrition off in Orders, and the card then says the table cannot be worked out.
-C. **A weightless allergen row is missing from the printed ingredient list but present in «Contains».**
+C. **(FIXED in both apps, PR #354, 13 Oct 2026 — kept for the record.) A weightless allergen row is missing from the printed ingredient list but present in «Contains».**
    `recipeAllergens` counts every row (a pinch of mustard is mustard), `flattenIngredients` skips rows that are
    not weighable or have no weight. So a recipe with «mustard, a pinch» prints `Contains: Mustard` with mustard
    absent from `Ingredients: …`. The law asks for every ingredient. **Health-related** — recommend telling
@@ -1141,8 +1142,10 @@ must survive the cleanup at the switch**: `js/print-queue-model.js` and `js/fire
   switch); the photo reader is the last slice; shared local keys; doors to Orders/Suppliers absent until those
   steps; byte-identity proved by (a)–(f) with the global stylesheet for the paper; a spec as the label-separation
   guard; data layer in `app/src/recipes/`; delete warns as today; no copies box.
-- **Question 5 (the weightless allergen row, Findings C): ported AS IS for now and pinned by a spec that names
-  the quirk.** Fixing it changes what is printed on a label — a result Federico decides — and the night run may
+- **Question 5 (the weightless allergen row, Findings C): RESOLVED 13 Oct 2026 — fixed in the current app
+  (PR #354, `v1.125.6`) and ported the same way on the 3d-2 branch; the specs and label-golden.json now pin the
+  fixed behaviour.** The original night decision, kept for the record: ported AS IS for now and pinned by a spec that names
+  the quirk. Fixing it changes what is printed on a label — a result Federico decides — and the night run may
   not open current-app fixes. It is reported to him as a health item to fix in the CURRENT app first; Mise 2
   follows the fixed behaviour in the same slice that ports the label (3d-2/3d-3), so the two apps never print
   differently.

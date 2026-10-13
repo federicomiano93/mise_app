@@ -80,12 +80,15 @@ export function flattenIngredients(recipe: unknown, tables: RecipeLabelTables = 
   for (const row of rows) {
     const link = linkOf(row);
     if (!link) continue;
-    // A row with no weight cannot take a place in a list ORDERED by weight. It is
-    // not lost: canLabel() has already refused the whole recipe if such a row is
-    // undeclared, and a declared one with no amount is a recipe-writing problem
-    // the allergen panel already reports.
-    const grams = isWeighableUnit(unitOf(row)) ? (ingredientGrams(row) || 0) : 0;
-    if (grams <= 0) continue;
+    // ⚠️⚠️ A ROW WITH NO WEIGHT IS STILL AN INGREDIENT (PR #354, 13 Oct 2026). A pinch of
+    // mustard, «to taste», two eggs counted as pieces, a weight nobody wrote: none of them
+    // can take a place in a list ordered by weight, but the law asks for EVERY ingredient,
+    // and an allergen that reaches «Contains» while missing from the list is the defect
+    // this replaced (parity Findings C). Such a row is kept with 0 g and listed AFTER the
+    // weighed ones — Reg. 1169/2011 Annex VII lets ingredients UNDER 2% of the food go in
+    // any order after the rest. ⚠️ That holds for a pinch or «to taste»; six eggs counted
+    // as pieces, or a weight nobody typed, are not under 2% and land at the end anyway.
+    const grams = isWeighableUnit(unitOf(row)) ? Math.max(0, ingredientGrams(row) || 0) : 0;
 
     if (link.kind === 'recipe') {
       if (branch.has(link.refId) || depth >= MAX_RECIPE_DEPTH) continue;
@@ -93,10 +96,12 @@ export function flattenIngredients(recipe: unknown, tables: RecipeLabelTables = 
       if (!sub) continue;
       // How much of the sub-recipe goes in, as a fraction of what the sub-recipe
       // makes. Its own rows are scaled by that, so 200 g of a 1000 g filling
-      // contributes a fifth of each of its ingredients.
+      // contributes a fifth of each of its ingredients. A sub-recipe with no weight
+      // here, or with nothing weighable of its own, still names its ingredients:
+      // scaled by 0, they all join the weightless tail.
       const subTotal = weighableGramsOf(sub);
-      if (subTotal <= 0) continue;
-      const inner = flattenIngredients(sub, tables, scale * (grams / subTotal), depth + 1, new Set([...branch, link.refId]));
+      const subScale = (grams > 0 && subTotal > 0) ? scale * (grams / subTotal) : 0;
+      const inner = flattenIngredients(sub, tables, subScale, depth + 1, new Set([...branch, link.refId]));
       inner.forEach(item => add(item.id, item.name, item.grams));
       continue;
     }
@@ -108,7 +113,9 @@ export function flattenIngredients(recipe: unknown, tables: RecipeLabelTables = 
 
   // ⚠️ DESCENDING BY WEIGHT — the order is not a presentation choice, it is what
   // the regulation asks for. Ties break by name so two runs produce the same
-  // label rather than shuffling with Map insertion order.
+  // label rather than shuffling with Map insertion order. The weightless (0 g)
+  // sort last by the same rule, by name among themselves. An ingredient that is
+  // weighed in one row and a pinch in another is ONE line at its weighed place.
   return [...totals.values()].sort((a, b) => b.grams - a.grams || a.name.localeCompare(b.name));
 }
 
@@ -131,7 +138,10 @@ function weighableGramsOf(recipe: unknown): number {
 export type NutritionPer100g = Record<NutrientKey, number> & { yieldGrams: number; lossPct: number };
 
 export function nutritionPer100g(recipe: unknown, tables: RecipeLabelTables = {}): NutritionPer100g | null {
-  const items = flattenIngredients(recipe, tables);
+  // Only what was WEIGHED: a 0 g line adds nothing to any value, and asking it for a
+  // full table would refuse a whole declaration over a pinch of salt — the table
+  // has always been worked out from the weighed rows alone.
+  const items = flattenIngredients(recipe, tables).filter(item => item.grams > 0);
   if (!items.length) return null;
 
   const totals = {} as Record<NutrientKey, number>;
@@ -220,7 +230,9 @@ export function buildLabel(recipe: unknown, tables: RecipeLabelTables = {}, { sh
   }
 
   const items = flattenIngredients(recipe, tables);
-  if (!items.length) return { ok: false, reason: 'no-ingredients', gaps: [] };
+  // Still «no ingredients with a weight» when nothing was weighed: a list made only of
+  // pinches has no order and no net weight to stand on.
+  if (!items.some(item => item.grams > 0)) return { ok: false, reason: 'no-ingredients', gaps: [] };
 
   const ingredients: LabelIngredient[] = items.map(item => {
     const ingredient = lookup(tables.ingredients, item.id) as { allergens?: unknown } | null;

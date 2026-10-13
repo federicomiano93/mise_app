@@ -216,27 +216,28 @@ describe.each([
     expect(out('empty-recipe').rowState, 'nothing in it is not «contains none»').toBe('nothing-yet');
   });
 
-  // ⚠️ THE QUIRK THE CURRENT APP HAS TODAY, ported as it is (parity doc, Findings C, Question 5). A row with no
-  // weight — a pinch, «to taste» — has no place in an ingredient list ordered by weight, but the allergen walk
-  // counts every row, so its allergen reaches «Contains». The day the current app is fixed, this test and the
-  // golden file change TOGETHER, in both files.
-  test('QUIRK (Findings C, kept until the current app is fixed): a weightless allergen row is missing from the ingredient list but present in Contains', () => {
+  // ⚠️ FINDINGS C, FIXED IN BOTH APPS (PR #354, 13 Oct 2026). A row with no weight — a pinch, «to taste» — used
+  // to be missing from the ingredient list while its allergen reached «Contains». It is now listed at 0 g after
+  // every weighed ingredient, by name (Reg. 1169/2011 Annex VII: under 2% in any order after the rest), and the
+  // golden file was regenerated from the fixed js/ in the same commit.
+  test('a weightless allergen row is IN the ingredient list, after the weighed ones, and in Contains', () => {
     const pinch = out('pinch-of-mustard');
     expect((pinch.gate as { complete: boolean }).complete).toBe(true);
-    expect(labelOf(pinch, 'both')['ingredients'].map((item: { name: string }) => item.name)).toStrictEqual(['Wheat flour']);
+    expect(labelOf(pinch, 'both')['ingredients'].map((item: { name: string }) => item.name)).toStrictEqual(['Wheat flour', 'Mustard']);
     expect(labelOf(pinch, 'both')['allergens']).toStrictEqual(['gluten-wheat', 'mustard']);
-    expect((pinch.shows['both'] as { ingredientLine: string }).ingredientLine).toBe('WHEAT FLOUR');
+    expect((pinch.shows['both'] as { ingredientLine: string }).ingredientLine).toBe('WHEAT FLOUR, MUSTARD');
     expect(venueOf(pinch, 'both', 'GB').containsLine).toBe('Contains: Wheat, Mustard');
     expect(venueOf(pinch, 'both', 'IT').containsLine).toBe('Contiene: Grano, Senape');
-    expect(venueOf(pinch, 'both', 'GB').declaration).toMatch(/^Mustard loaf\nIngredients: WHEAT FLOUR\.\nContains: Wheat, Mustard\n/);
+    expect(venueOf(pinch, 'both', 'GB').declaration).toMatch(/^Mustard loaf\nIngredients: WHEAT FLOUR, MUSTARD\.\nContains: Wheat, Mustard\n/);
 
     const taste = out('to-taste-sesame');
-    expect(labelOf(taste, 'both')['ingredients'].map((item: { name: string }) => item.name), 'neither «to taste» row is listed').toStrictEqual(['Wheat flour']);
-    expect(labelOf(taste, 'both')['allergens'], 'but the sesame is declared').toStrictEqual(['gluten-wheat', 'sesame']);
+    expect(labelOf(taste, 'both')['ingredients'].map((item: { name: string }) => item.name), 'both «to taste» rows listed, by name').toStrictEqual(['Wheat flour', 'Salt', 'Sesame seeds']);
+    expect((taste.shows['both'] as { ingredientLine: string }).ingredientLine, 'the sesame emphasised in the list').toBe('WHEAT FLOUR, Salt, SESAME SEEDS');
+    expect(labelOf(taste, 'both')['allergens']).toStrictEqual(['gluten-wheat', 'sesame']);
 
     const spice = out('sub-with-no-weight');
     expect(labelOf(spice, 'both')['allergens']).toStrictEqual(['gluten-wheat', 'mustard']);
-    expect(labelOf(spice, 'both')['ingredients'].map((item: { name: string }) => item.name)).toStrictEqual(['Wheat flour']);
+    expect(labelOf(spice, 'both')['ingredients'].map((item: { name: string }) => item.name), 'the sub-recipe is flattened, never named').toStrictEqual(['Wheat flour', 'Mustard']);
   });
 
   test('the same ingredient used twice is one summed line, and it is ordered by the sum', () => {
