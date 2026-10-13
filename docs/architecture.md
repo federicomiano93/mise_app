@@ -375,6 +375,23 @@ and where each comes from:
    needs nothing. Specs plant the position on the `main` element (jsdom does not scroll):
    `StocktakeSection.scroll.spec.tsx`.
 
+## Browser floor: Chrome 101 (the lab tablet's ceiling)
+
+The lab tablet (SM-T550) gets nothing newer than Chrome 101 from Google Play (measured over adb, 13 Oct 2026).
+lightningcss lowers oklch, nesting and media ranges; it does not lower everything. The rules:
+
+- **Hover only inside `@media (hover: hover)`** — a `:hover` look sticks after a tap on a touch screen
+  (`styles/touchHover.spec.ts`).
+- **Viewport heights only through `var(--vh100)`.** The token is `100vh`, switched to `100dvh` in an `@supports`
+  block in `tokens.css`, and `shell/viewportHeight.ts` sets it inline on `<html>` where dvh is unknown (Chrome < 108).
+  Never write a `dvh`/`svh`/`lvh` line, and never a second declaration whose value holds `var()` as a "fallback":
+  such a value is thrown out at computed-value time and the property becomes its initial value, not the line above
+  (measured: computed `max-height: none`). `styles/viewportUnits.spec.ts` and `styles/fallbackTrap.spec.ts` pin it.
+- **A React Aria hidden input needs a positioned ancestor** (see `SettingSwitch`), or it sits at the page's origin
+  and makes the page scroll.
+- **No feature newer than Chrome 101 without a feature check.** `styles/chrome101.spec.ts` lists the CSS and JS
+  tokens with the Chrome version that introduced each, and fails on any use in source.
+
 ## Testing and CI
 
 - `app/`: `npm run typecheck`, `npm test` (Vitest, jsdom), `npm run build` (`tsc` first). Vitest
