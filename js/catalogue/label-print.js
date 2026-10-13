@@ -45,6 +45,8 @@ const STEP_MM = 0.05;
 export function buildSheet(resolved, fontMm = resolved.fontMm) {
   const sheet = el('div', {
     class: 'lab-sheet',
+    // ⚠️ NEVER MACHINE-TRANSLATED — the reason is on the label card in label-view.js.
+    translate: 'no',
     style: {
       width: `${resolved.widthMm}mm`,
       height: `${resolved.heightMm}mm`,

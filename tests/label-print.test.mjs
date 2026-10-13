@@ -140,6 +140,25 @@ test('⚠️⚠️ the host outlives `afterprint` until the person is back in th
   }
 });
 
+test('⚠️⚠️ the label and the declaration are never machine-translated (13 Oct 2026)', async () => {
+  // Found on the lab tablet: Chrome offered to translate the page (the app's
+  // language was not the tablet's), and a yes would have rewritten the allergen
+  // names on screen AND on the printed sheet. The country decides these words.
+  const page = fakePage();
+  try {
+    const { buildSheet } = await import('../js/catalogue/label-print.js');
+    const sheet = buildSheet(resolveLabel(sample(), DEFAULT_PROFILE, {}, 'it'));
+    assert.equal(sheet.attrs.translate, 'no', 'the sheet — preview and print — carries translate="no"');
+  } finally {
+    page.restore();
+  }
+  assert.match(codeOf(read('js/catalogue/label-view.js')), /el\('div', \{ class: 'lab-card', translate: 'no' \}\)/);
+  const detail = codeOf(read('js/catalogue/catalogue-detail.js'));
+  for (const cls of ['cat-decl-list', 'cat-decl-contains', 'cat-decl-traces']) {
+    assert.match(detail, new RegExp(`class: '${cls}', translate: 'no'`), `${cls} must carry translate="no"`);
+  }
+});
+
 // Just enough of a document and window for printSheet(): elements that can be
 // appended and removed, and a window whose listeners can be fired and counted.
 function fakePage() {
