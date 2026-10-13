@@ -145,9 +145,12 @@ function LabelBody({ recipe }: { recipe: CatalogueRecipe }) {
 
   // 3d-4: the agent road (a job for the shop computer's printer) and the ZPL clipboard road plug in here, with
   // `printerReady` from the print-agents watch and `zplFits` from the ZPL port. Only the system's own dialog works
-  // in this step, and only on a device that can print.
+  // in this step, and only on a device that can print. ⚠️ `zplFits` answers YES until then, on purpose: with no
+  // answer the port refuses the ZPL roads as «too big for the printer», which would send a Zebra venue to buy bigger
+  // labels; with yes, the reason given is the true one for this step — the shop computer is not answering.
   const roadContext: RoadContext = {
     printerReady: false,
+    zplFits: () => true,
     device: { canPrint: typeof window.print === 'function', hasClipboard: false },
   };
   const roads = sheet !== null ? roadsFor(sheet, roadContext) : [];

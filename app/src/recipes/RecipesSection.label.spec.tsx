@@ -506,11 +506,12 @@ describe('the paper: measured, scaled, and the Print button that obeys it', () =
     expect(main().getByText(/^This device cannot reach a printer/)).toBeVisible();
   });
 
-  it('shows the printer-offline logic of the port for a Zebra venue until step 3d-4 brings the other roads', async () => {
+  it('⚠️ a Zebra venue is told the shop computer is not answering — never «too big» — until step 3d-4 brings its roads', async () => {
     stubLayout();
     await openLabel([CAKE], 'cake', { labelConfig: { printerLanguage: 'zpl' } });
     expect(printButton()).toBeDisabled();
-    expect(document.querySelector('.lab-nofit:not([hidden])')).not.toBeNull();
+    expect(main().getByText(/^The shop computer is not answering/)).toBeVisible();
+    expect(main().queryByText(/does not fit/)).toBeNull();
   });
 
   it('⚠️ lays nothing out on a paper it does not know yet: the card, Copy and Send work, Print is off, a sentence says why', async () => {
