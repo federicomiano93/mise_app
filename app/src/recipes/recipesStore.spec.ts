@@ -1,8 +1,9 @@
 import { describe, expect, test, vi } from 'vitest';
 import { SCALED_TTL_MS } from '@mise/shared/catalogue-model';
+import { PRICE_FIELDS } from '@mise/shared/price-model';
 import type { KeyValueStorage } from '../session/backend';
 import type { RecipesMeta, RecipesSource, StoredDoc } from './recipesSource';
-import { RECIPES_KEY, SCALED_KEY, USAGE_KEY, createRecipesStore } from './recipesStore';
+import { INGREDIENTS_KEY, RECIPES_KEY, SCALED_KEY, USAGE_KEY, createRecipesStore } from './recipesStore';
 
 // The Recipe catalogue's store against a hand-driven source and an in-memory localStorage. The keys
 // are the CURRENT app's (one origin): what this store writes, js/catalogue/catalogue-store.js reads.
@@ -26,11 +27,24 @@ function handSource() {
     onError = error;
     return stop;
   });
-  const source: RecipesSource = { watchRecipes };
+  let onIngredients: ((list: StoredDoc[], meta: RecipesMeta) => void) | null = null;
+  let onIngredientsError: ((err: unknown) => void) | null = null;
+  const stopIngredients = vi.fn();
+  const watchIngredients = vi.fn<RecipesSource['watchIngredients']>((change, error) => {
+    onIngredients = change;
+    onIngredientsError = error;
+    return stopIngredients;
+  });
+  const source: RecipesSource = { watchRecipes, watchIngredients };
   return {
     source,
     watchRecipes,
+    watchIngredients,
     stop,
+    stopIngredients,
+    ingServer: (list: StoredDoc[]) => onIngredients!(list, { fromServer: true }),
+    ingCache: (list: StoredDoc[]) => onIngredients!(list, { fromServer: false }),
+    ingFail: () => onIngredientsError!(new Error('permission-denied')),
     server: (list: StoredDoc[]) => onChange!(list, { fromServer: true }),
     cache: (list: StoredDoc[]) => onChange!(list, { fromServer: false }),
     fail: () => onError!(new Error('permission-denied')),
@@ -49,6 +63,8 @@ function makeStore(seed: Record<string, string> = {}, now = () => NOW) {
 
 const FOCACCIA: StoredDoc = { id: 'r1', name: ' Focaccia ', ingredients: [{ label: 'Flour', grams: 1000, unit: 'g', kind: 'ingredient', refId: 'i1', rid: 'a1' }] };
 const BREAD: StoredDoc = { id: 'r2', name: 'Bread', ingredients: [] };
+const FLOUR: StoredDoc = { id: 'i1', name: 'Flour 00', allergens: ['gluten-wheat'], allergensCheckedAt: '2026-09-01' };
+const BUTTER: StoredDoc = { id: 'i2', name: 'Butter', allergens: ['milk'], allergensCheckedAt: '2026-09-01' };
 
 describe('the Recipe catalogue store', () => {
   test('paints the local copy at once, and waits («not loaded») when there is none', () => {
@@ -204,6 +220,92 @@ describe('the Recipe catalogue store', () => {
     expect(stop).toHaveBeenCalledTimes(1);
     store.start();
     expect(watchRecipes).toHaveBeenCalledTimes(2);
+  });
+
+  test('the ingredients are watched with the recipes, and both listeners end on stop', () => {
+    const { store, watchIngredients, stopIngredients } = makeStore();
+    store.start();
+    store.start();
+    expect(watchIngredients).toHaveBeenCalledTimes(1);
+    store.stop();
+    expect(stopIngredients).toHaveBeenCalledTimes(1);
+  });
+
+  test('the ingredients paint from the shared copy at once (by id), and wait when there is none', () => {
+    const cold = makeStore();
+    expect(cold.store.getSnapshot().ingredientsLoaded).toBe(false);
+    expect(cold.store.getSnapshot().ingredients).toEqual({});
+    const warm = makeStore({ [INGREDIENTS_KEY]: JSON.stringify([FLOUR, { name: 'no id' }, null]) });
+    expect(warm.store.getSnapshot().ingredientsLoaded).toBe(true);
+    expect(warm.store.getSnapshot().ingredients).toEqual({ i1: FLOUR });
+  });
+
+  test('a server answer replaces the ingredients and is stored as the current app’s ARRAY', () => {
+    const { store, data, ingServer } = makeStore();
+    store.start();
+    ingServer([FLOUR, BUTTER]);
+    expect(store.getSnapshot().ingredientsLoaded).toBe(true);
+    expect(Object.keys(store.getSnapshot().ingredients)).toEqual(['i1', 'i2']);
+    expect(JSON.parse(data.get(INGREDIENTS_KEY)!)).toEqual([FLOUR, BUTTER]);
+  });
+
+  test('⚠️ NO PRICE is kept or stored, from the server or from an older copy', () => {
+    const priced: Record<string, unknown> = { ...BUTTER };
+    for (const key of PRICE_FIELDS) priced[key] = 3;
+    const { store, data, ingServer } = makeStore({ [INGREDIENTS_KEY]: JSON.stringify([priced]) });
+    for (const key of PRICE_FIELDS) expect(Object.keys(store.getSnapshot().ingredients.i2!), key).not.toContain(key);
+    store.start();
+    ingServer([priced as StoredDoc]);
+    const stored = data.get(INGREDIENTS_KEY)!;
+    for (const key of PRICE_FIELDS) {
+      expect(stored, key).not.toContain(`"${key}"`);
+      expect(Object.keys(store.getSnapshot().ingredients.i2!), key).not.toContain(key);
+    }
+  });
+
+  test('⚠️ an EMPTY or SHRUNKEN cached ingredient answer is not believed before the server speaks', () => {
+    const { store, data, ingCache, ingServer } = makeStore({ [INGREDIENTS_KEY]: JSON.stringify([FLOUR, BUTTER]) });
+    store.start();
+    ingCache([]);
+    ingCache([FLOUR]);
+    expect(Object.keys(store.getSnapshot().ingredients)).toEqual(['i1', 'i2']);
+    expect(JSON.parse(data.get(INGREDIENTS_KEY)!)).toHaveLength(2);
+    ingServer([FLOUR]);
+    expect(Object.keys(store.getSnapshot().ingredients)).toEqual(['i1']);
+    // After the server's word a cached answer may shrink the list (a deletion seen offline) — not empty it.
+    ingCache([]);
+    expect(Object.keys(store.getSnapshot().ingredients)).toEqual(['i1']);
+  });
+
+  test('a cold phone believes a cached answer that holds ingredients; a copy that said «none» lets an empty one stand', () => {
+    const cold = makeStore();
+    cold.store.start();
+    cold.ingCache([]);
+    expect(cold.store.getSnapshot().ingredientsLoaded).toBe(false);
+    cold.ingCache([FLOUR]);
+    expect(cold.store.getSnapshot().ingredientsLoaded).toBe(true);
+    const none = makeStore({ [INGREDIENTS_KEY]: '[]' });
+    none.store.start();
+    none.ingCache([]);
+    expect(none.store.getSnapshot().ingredientsLoaded).toBe(true);
+  });
+
+  test('⚠️ a refused ingredients stream is QUIET: a warning, no message, and the wait ends', () => {
+    const { store, warn, ingFail } = makeStore();
+    const said = vi.fn();
+    store.onMessage(said);
+    store.start();
+    ingFail();
+    expect(store.getSnapshot().ingredientsLoaded).toBe(true);
+    expect(store.getSnapshot().ingredients).toEqual({});
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(said).not.toHaveBeenCalled();
+  });
+
+  test('a corrupt ingredient copy reads as none and waits for the answer', () => {
+    const { store } = makeStore({ [INGREDIENTS_KEY]: '{not json' });
+    expect(store.getSnapshot().ingredientsLoaded).toBe(false);
+    expect(store.getSnapshot().ingredients).toEqual({});
   });
 
   test('the snapshot is the SAME object until something changes', () => {
