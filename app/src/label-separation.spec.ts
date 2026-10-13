@@ -30,6 +30,8 @@ const LABEL_FILES: readonly string[] = [
   './recipes/AllergenCard.tsx', // what a recipe contains, on the recipe screen
   './recipes/DeclarationCard.tsx', // the ingredient declaration: Contains / May contain, and the text sent or copied
   './recipes/AllergenSheet.tsx', // the law card (the fourteen groups) and what each recipe contains
+  './recipes/LabelScreen.tsx', // the label screen: the refusals, the notes, the date, Copy and Send (the text of the whole label)
+  './recipes/LabelCard.tsx', // the label as words: the ingredients, Contains, May contain and the nutrition table
 ];
 
 // The functions that put a food word, or a word of the label, in front of somebody. All but `ingredientLine` take the

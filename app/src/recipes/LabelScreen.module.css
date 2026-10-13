@@ -1,0 +1,257 @@
+/* The label screen's own chrome: the switch, the readable card, the notes and the action row. The PAPER (the preview
+   frame, its note, the «does not fit» box and the sheet itself) is the plain global label-print.css, because its
+   class names are built at run time and named in @page rules.
+
+   ⚠️ NOTHING ON THE SCREEN MAY CLIP (no `overflow`): the form bar sticks to the top of the scrolling area, and a
+   clipping ancestor would turn it into an ordinary row. */
+
+.screen {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+}
+
+.sub {
+  display: block;
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s4);
+  padding: var(--s4);
+}
+
+@media (min-width: 1000px) {
+  .body {
+    padding: var(--s6);
+  }
+}
+
+/* The three-way switch: a segmented control, the chosen one marked by colour AND by aria-pressed. */
+.switch {
+  display: flex;
+  gap: var(--s2);
+}
+
+.switchButton {
+  flex: 1;
+  min-height: var(--hit);
+  padding: 0 var(--s3);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.switchButton:hover {
+  background: var(--sunken);
+}
+
+.switchOn,
+.switchOn:hover {
+  border-color: var(--accent);
+  background: var(--accent-tint);
+  box-shadow: inset 0 0 0 1px var(--accent);
+  color: var(--accent-ink);
+}
+
+.switchButton:focus-visible,
+.button:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* A refusal: a title and one sentence. */
+.blocked {
+  padding: var(--s4);
+  border-radius: var(--r-md);
+  background: var(--warn-tint);
+  color: var(--warn-ink);
+}
+
+.blockedTitle {
+  margin: 0;
+  font-size: var(--fs-lg);
+  font-weight: 700;
+}
+
+.blockedText {
+  margin: var(--s2) 0 0;
+  line-height: 1.45;
+}
+
+.checking {
+  margin: 0;
+  color: var(--ink-2);
+}
+
+/* The label as words. */
+.card {
+  padding: var(--s4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+}
+
+.name {
+  margin: 0 0 var(--s3);
+  font-size: var(--fs-xl);
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.ingredients {
+  margin: 0;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+/* The allergen is emphasised INSIDE the list: bold and underlined, so it does not rest on weight alone. */
+.allergen {
+  font-weight: 800;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.contains {
+  margin: var(--s3) 0 0;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.traces {
+  margin: var(--s1) 0 0;
+  color: var(--ink-2);
+  overflow-wrap: anywhere;
+}
+
+.nutrition {
+  width: 100%;
+  margin-top: var(--s4);
+  border-collapse: collapse;
+}
+
+.nutrition th,
+.nutrition td {
+  padding: var(--s2) 0;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+}
+
+.nutrition th {
+  color: var(--ink-2);
+  font-size: var(--fs-xs);
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.nutrition .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.yield {
+  margin: var(--s2) 0 0;
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
+.missing {
+  margin: var(--s3) 0 0;
+  padding: var(--s3);
+  border-radius: var(--r-md);
+  background: var(--warn-tint);
+  color: var(--warn-ink);
+  line-height: 1.45;
+}
+
+/* Why the label is in this language: right under the card, not at the end of a scroll. */
+.language {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  line-height: 1.45;
+}
+
+.languageLine {
+  margin: 0;
+}
+
+.languageLine + .languageLine {
+  margin-top: var(--s1);
+}
+
+/* The sentence that must not be dropped: a draft for a human to check. */
+.caveat {
+  padding: var(--s3) var(--s4);
+  border-radius: var(--r-md);
+  background: var(--warn-tint);
+  color: var(--warn-ink);
+  font-size: var(--fs-sm);
+  line-height: 1.45;
+}
+
+.caveatTitle {
+  margin: 0 0 var(--s1);
+  font-weight: 700;
+}
+
+.caveatText {
+  margin: 0;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s3);
+}
+
+.button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s2);
+  flex: 1 1 8rem;
+  min-height: var(--hit);
+  padding: 0 var(--s4);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.button:hover:not(:disabled) {
+  background: var(--sunken);
+}
+
+.button:disabled {
+  color: var(--ink-3);
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.button svg {
+  flex: none;
+  width: 18px;
+  height: 18px;
+}
+
+/* A live region that exists before it speaks. */
+.status {
+  flex: 1 1 100%;
+  min-height: 1.4em;
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
