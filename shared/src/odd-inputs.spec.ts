@@ -56,6 +56,9 @@ import * as guidedModel from './guided-model';
 import * as logModel from './log-model';
 import * as logTime from './log-time';
 import * as zoomSteps from './zoom-steps';
+import * as venueFeatures from './venue-features';
+import * as recipeAllergenModel from './recipe-allergen-model';
+import * as recipeLabelModel from './recipe-label-model';
 import { BAKERY_CONFIG } from '../../tests/fixtures/bakery-config.mjs';
 import * as legacyJoinCodeJs from '../../js/join-code.js';
 import * as legacyPushModelJs from '../../js/push-model.js';
@@ -104,6 +107,9 @@ import * as legacyGuidedModelJs from '../../js/catalogue/guided-model.js';
 import * as legacyLogModelJs from '../../js/log-model.js';
 import * as legacyLogTimeJs from '../../js/log-time.js';
 import * as legacyZoomStepsJs from '../../js/zoom-steps.js';
+import * as legacyVenueFeaturesJs from '../../js/venue-features.js';
+import * as legacyRecipeAllergenModelJs from '../../js/catalogue/recipe-allergen-model.js';
+import * as legacyRecipeLabelModelJs from '../../js/catalogue/recipe-label-model.js';
 
 const legacyJoinCode = legacyJoinCodeJs as unknown as typeof joinCode;
 const legacyPushModel = legacyPushModelJs as unknown as typeof pushModel;
@@ -155,6 +161,9 @@ const legacyGuidedModel = legacyGuidedModelJs as unknown as typeof guidedModel;
 const legacyLogModel = legacyLogModelJs as unknown as typeof logModel;
 const legacyLogTime = legacyLogTimeJs as unknown as typeof logTime;
 const legacyZoomSteps = legacyZoomStepsJs as unknown as typeof zoomSteps;
+const legacyVenueFeatures = legacyVenueFeaturesJs as unknown as typeof venueFeatures;
+const legacyRecipeAllergenModel = legacyRecipeAllergenModelJs as unknown as typeof recipeAllergenModel;
+const legacyRecipeLabelModel = legacyRecipeLabelModelJs as unknown as typeof recipeLabelModel;
 
 // ── The machinery ────────────────────────────────────────────────────────────
 
@@ -1350,7 +1359,6 @@ describe('ingredient-name: odd inputs', () => {
 // ── market ───────────────────────────────────────────────────────────────────
 
 describe('market: odd inputs', () => {
-  // A partial port: only what it exports is compared (the label vocabulary stays in js/ until step 3d).
   const m = market;
   const l = legacyMarket;
 
@@ -1368,6 +1376,26 @@ describe('market: odd inputs', () => {
   agree('canPrintLabel', m.canPrintLabel, l.canPrintLabel, product(LOCATIONS));
   agree('currencyOf', m.currencyOf, l.currencyOf, product(LOCATIONS));
   agree('moneyLayoutOf', m.moneyLayoutOf, l.moneyLayoutOf, product(LOCATIONS));
+
+  // ── The label vocabulary (step 3d-2) ──
+  // Languages as a caller may hold them, including names that live on every object's prototype chain.
+  const LANGS: readonly unknown[] = [undefined, null, 'en', 'it', 'zz', 'EN', 'IT', 'it ', 'de', 'constructor', '__proto__', 'toString', 'hasOwnProperty', '', 5,
+    ['it'], ['en'], {}, true, new String('it')];
+  const ALLERGEN_CODES: readonly unknown[] = [...ODD, 'gluten-wheat', 'gluten-kamut', 'nuts-hazelnut', 'milk',
+    'celery', 'soybeans', 'sulphites', 'gluten', 'nuts', 'unicorn', ' milk', 'MILK', 'toString', '__proto__', 'constructor', 'hasOwnProperty', 5, new String('milk'), ['milk']];
+  const NUTRIENT_KEYS: readonly unknown[] = [...ODD, 'kj', 'kcal', 'fat', 'saturates', 'carbs', 'sugars', 'protein', 'salt', 'zinc', 'SALT', 'toString', '__proto__', 'constructor'];
+  const GROUPS: readonly unknown[] = [...ALLERGEN_CODES, 'celery', 'crustaceans', 'eggs', 'fish', 'lupin', 'mollusc', 'molluscs', 'mustard', 'peanuts', 'sesame', 'nonsense'];
+  const WORD_KEYS: readonly unknown[] = [...ODD, 'contains', 'mayContain', 'ingredients', 'nutrition', 'typicalValues', 'per100g', 'noneOfThe14', 'netWeight', 'useBy', 'bestBefore',
+    'storage', 'orderTitle', 'orderFileWord', 'deletedIngredient', 'emailSubject', 'nonsense', 'toString', '__proto__', 'constructor', 'hasOwnProperty', 'Contains', ' contains'];
+  agree('labelWord', m.labelWord as AnyFn, l.labelWord as AnyFn, product(WORD_KEYS, LANGS));
+  agree('allergenWordIt', m.allergenWordIt, l.allergenWordIt, product(ALLERGEN_CODES));
+  agree('nutrientWordIt', m.nutrientWordIt, l.nutrientWordIt, product(NUTRIENT_KEYS));
+  agree('allergenName', m.allergenName, l.allergenName, product(ALLERGEN_CODES, LANGS));
+  agree('allergenGroupName', m.allergenGroupName, l.allergenGroupName, product(GROUPS, LANGS));
+  agree('allergenGroupCodes', m.allergenGroupCodes, l.allergenGroupCodes, product(GROUPS, LANGS));
+  const NUTRIENT_ENTRIES: readonly unknown[] = [...ODD, 'salt', 5, ...allergenModel.NUTRIENTS, { key: 'zinc', label: 'Zinc' }, { key: 'salt' }, { label: 'Only a label' },
+    { key: 'toString', label: 'L' }, { key: ['salt'], label: 'Salt' }, { key: 'salt', label: '' }, { key: 'salt', label: 5 }, { key: 'constructor', label: 'C' }];
+  agree('nutrientName', m.nutrientName as AnyFn, l.nutrientName as AnyFn, product(NUTRIENT_ENTRIES, LANGS));
 });
 
 // ── currency ─────────────────────────────────────────────────────────────────
@@ -2823,5 +2851,172 @@ describe('log-model: odd inputs', () => {
   test('the day constants agree', () => {
     expect(m.DAY_START_HOUR).toBe(l.DAY_START_HOUR);
     expect(m.FOR_DAYS).toStrictEqual(l.FOR_DAYS);
+  });
+});
+
+// ── venue-features ───────────────────────────────────────────────────────────
+
+describe('venue-features: odd inputs', () => {
+  const m = venueFeatures;
+  const l = legacyVenueFeatures;
+
+  const DOCS: readonly unknown[] = [...ODD, 'nonsense', 42, { name: 'Bakery' }, ...[true, false, 'false', 'true', 0, 1, '', null, undefined, NaN, [], {}, [false], 'no', -1].flatMap(value => [
+    { showAllergens: value }, { showNutrition: value }, { feedbackToClaude: value }, { showAllergens: value, showNutrition: value, feedbackToClaude: value }]),
+    { 'showAllergens ': false }, { showallergens: false }, Object.create({ showAllergens: false }), Object.create({ feedbackToClaude: true }),
+    { get showAllergens(): unknown { throw new Error('boom'); } }, new Proxy({}, { get: () => false }), JSON.parse('{"__proto__":{"showAllergens":false}}'),
+    Object.assign(() => 1, { showAllergens: false }), new Map([['showAllergens', false]])];
+  agree('allergensOn', m.allergensOn, l.allergensOn, product(DOCS));
+  agree('nutritionOn', m.nutritionOn, l.nutritionOn, product(DOCS));
+  agree('feedbackOn', m.feedbackOn, l.feedbackOn, product(DOCS));
+});
+
+// ── recipe-allergen-model ────────────────────────────────────────────────────
+
+const AL_STAMP = '2026-08-11T09:00:00.000Z';
+const AL_FULL = { kj: 1000, kcal: 240, fat: 2, saturates: 1, carbs: 50, sugars: 3, protein: 8, salt: 0.5 };
+const AL_ZERO = { kj: 0, kcal: 0, fat: 0, saturates: 0, carbs: 0, sugars: 0, protein: 0, salt: 0 };
+// Ingredients as Firestore holds them: declared with something, declared with nothing, never checked, mid-typing, junk.
+const AL_INGREDIENTS: Record<string, unknown> = {
+  FLOUR: { name: 'Flour', allergens: ['gluten-wheat'], allergensCheckedAt: AL_STAMP, nutrition: { ...AL_FULL, kcal: 340, carbs: 70 } },
+  BUTTER: { name: 'Butter', allergens: ['milk'], allergensCheckedAt: AL_STAMP, nutrition: { ...AL_FULL, kcal: 740, fat: 82, carbs: 0 } },
+  WATER: { name: 'Water', allergens: [], allergensCheckedAt: AL_STAMP, nutrition: AL_ZERO },
+  SALT: { name: 'Salt', allergens: [], allergensCheckedAt: AL_STAMP, nutrition: { ...AL_ZERO, salt: 100 } },
+  SUGAR: { name: 'Sugar', allergens: [], mayContain: ['nuts-hazelnut', 'milk'], allergensCheckedAt: AL_STAMP, nutrition: AL_FULL },
+  MUSTARD: { name: 'Mustard', allergens: ['mustard'], allergensCheckedAt: AL_STAMP, nutrition: AL_FULL },
+  NOSPEC: { name: 'No spec', allergens: [], allergensCheckedAt: AL_STAMP },
+  HALFSPEC: { name: 'Half spec', allergens: ['eggs'], allergensCheckedAt: AL_STAMP, nutrition: { ...AL_FULL, salt: null } },
+  MYSTERY: { name: 'Mystery mix' },
+  EMPTYLIST: { name: 'Unchecked, empty list', allergens: [] },
+  NONAME: { allergens: [], allergensCheckedAt: AL_STAMP, nutrition: AL_FULL },
+  SHORT: { name: 'Long name of an ingredient', shortName: ' Short ', allergens: ['fish'], allergensCheckedAt: AL_STAMP, nutrition: AL_FULL },
+  UNKNOWNCODE: { name: 'Odd code', allergens: ['unicorn', 'milk'], mayContain: ['unicorn'], allergensCheckedAt: AL_STAMP, nutrition: AL_FULL },
+  STAMPNUM: { name: 'Numeric stamp', allergens: ['sesame'], allergensCheckedAt: 20260811, nutrition: AL_FULL },
+  JUNK: 5,
+  NOTHING: null,
+};
+const alRow = (label: unknown, refId: unknown, grams: unknown = 100, over: Record<string, unknown> = {}): Record<string, unknown> =>
+  ({ label, grams, unit: 'g', kind: 'ingredient', refId, ...over });
+const AL_RECIPES: Record<string, Record<string, unknown>> = {
+  FLAT: { id: 'FLAT', name: 'Flat', lossPct: 0, ingredients: [alRow('Flour', 'FLOUR', 1000), alRow('Water', 'WATER', 600), alRow('Butter', 'BUTTER', 200), alRow('Salt', 'SALT', 20)] },
+  BAKED: { id: 'BAKED', name: 'Baked', lossPct: 20, ingredients: [alRow('Flour', 'FLOUR', 1000), alRow('Water', 'WATER', 600)] },
+  FILLING: { id: 'FILLING', name: 'Filling', lossPct: 0, ingredients: [alRow('Butter', 'BUTTER', 800), alRow('Salt', 'SALT', 200)] },
+  CAKE: { id: 'CAKE', name: 'Cake', lossPct: 10, ingredients: [alRow('Flour', 'FLOUR', 500), alRow('Filling', 'FILLING', 500, { kind: 'recipe' }), alRow('Butter', 'BUTTER', 300)] },
+  TWICE: { id: 'TWICE', name: 'Twice', ingredients: [alRow('A', 'FILLING', 100, { kind: 'recipe' }), alRow('B', 'FILLING', 100, { kind: 'recipe' })] },
+  BADSUB: { id: 'BADSUB', name: 'Bad sub', ingredients: [alRow('Butter', 'BUTTER', 800), alRow('Mystery', 'MYSTERY', 10)] },
+  POISONED: { id: 'POISONED', name: 'Poisoned', ingredients: [alRow('Flour', 'FLOUR', 500), alRow('Sub', 'BADSUB', 100, { kind: 'recipe' })] },
+  PINCH: { id: 'PINCH', name: 'Pinch', ingredients: [alRow('Flour', 'FLOUR', 1000), alRow('Mustard', 'MUSTARD', 1, { unit: 'pinch' })] },
+  TASTE: { id: 'TASTE', name: 'Taste', ingredients: [alRow('Flour', 'FLOUR', 1000), alRow('Salt', 'SALT', 0, { unit: 'to taste' })] },
+  UNLINKED: { id: 'UNLINKED', name: 'Unlinked', ingredients: [alRow('Flour', 'FLOUR', 1000), { label: 'Something', grams: 50, unit: 'g' }] },
+  GONE: { id: 'GONE', name: 'Gone', ingredients: [alRow('Gone', 'DELETED', 100)] },
+  EMPTY: { id: 'EMPTY', name: 'Empty', ingredients: [] },
+  BLANKROW: { id: 'BLANKROW', name: 'Blank row', ingredients: [alRow('Flour', 'FLOUR', 100), { label: '   ', grams: 0 }] },
+  LOOP: { id: 'LOOP', name: 'Loop', ingredients: [alRow('Itself', 'LOOP', 100, { kind: 'recipe' })] },
+  PING: { id: 'PING', name: 'Ping', ingredients: [alRow('Pong', 'PONG', 100, { kind: 'recipe' })] },
+  PONG: { id: 'PONG', name: 'Pong', ingredients: [alRow('Ping', 'PING', 100, { kind: 'recipe' })] },
+  L0: { id: 'L0', name: 'L0', ingredients: [alRow('L1', 'L1', 100, { kind: 'recipe' })] },
+  L1: { id: 'L1', name: 'L1', ingredients: [alRow('L2', 'L2', 100, { kind: 'recipe' })] },
+  L2: { id: 'L2', name: 'L2', ingredients: [alRow('L3', 'L3', 100, { kind: 'recipe' })] },
+  L3: { id: 'L3', name: 'L3', ingredients: [alRow('L4', 'L4', 100, { kind: 'recipe' })] },
+  L4: { id: 'L4', name: 'L4', ingredients: [alRow('L5', 'L5', 100, { kind: 'recipe' })] },
+  L5: { id: 'L5', name: 'L5', ingredients: [alRow('Flour', 'FLOUR', 100)] },
+  NOID: { name: 'No id', ingredients: [alRow('Flour', 'FLOUR', 1000)] },
+  MIXED: { id: 'MIXED', name: 'Mixed', lossPct: 5, ingredients: [alRow('Sugar', 'SUGAR', 200), alRow('Egg stuff', 'HALFSPEC', 100), alRow('Short', 'SHORT', 50), alRow('No name', 'NONAME', 10)] },
+  UNKNOWNS: { id: 'UNKNOWNS', name: 'Unknowns', ingredients: [alRow('Odd', 'UNKNOWNCODE', 100), alRow('Stamp', 'STAMPNUM', 100)] },
+  NOSPECS: { id: 'NOSPECS', name: 'No spec', ingredients: [alRow('Flour', 'FLOUR', 1000), alRow('No spec', 'NOSPEC', 100)] },
+};
+const AL_TABLES: readonly unknown[] = [undefined, {}, { ingredients: AL_INGREDIENTS }, { recipes: AL_RECIPES }, { ingredients: AL_INGREDIENTS, recipes: AL_RECIPES },
+  { ingredients: new Map(Object.entries(AL_INGREDIENTS)), recipes: new Map(Object.entries(AL_RECIPES)) }, { ingredients: 5, recipes: 'abc' },
+  { ingredients: null, recipes: null }, { ingredients: [], recipes: [] }, { ingredients: { get: () => AL_INGREDIENTS['FLOUR'] }, recipes: {} },
+  { ingredients: Object.create(AL_INGREDIENTS), recipes: Object.create(AL_RECIPES) }, { ingredients: AL_INGREDIENTS, recipes: { LOOP: AL_RECIPES['LOOP'], X: 5, Y: null } }];
+const AL_REFS: readonly unknown[] = ['FLOUR', 'MYSTERY', 'EMPTYLIST', 'NONAME', 'JUNK', 'NOTHING', 'NOPE', '', undefined, null, 5, 'toString', '__proto__', 'constructor', 'FILLING', 'LOOP'];
+const AL_LABELS: readonly unknown[] = ['Flour', '', '  ', undefined, null, 5, 'x'];
+const AL_RECIPE_LIST: readonly unknown[] = [...ODD, 'recipe', 42, ...Object.values(AL_RECIPES), { ingredients: [] }, { ingredients: 'x' }, { ingredients: [{}] },
+  { ingredients: [{ label: 'x' }] }, { id: 'R', ingredients: [{ label: 'Flour', refId: 'FLOUR', kind: 'ingredient' }] },
+  ...AL_REFS.map(refId => ({ id: 'R', ingredients: [alRow('Row', refId)] })),
+  ...AL_REFS.map(refId => ({ id: 'R', ingredients: [alRow('Row', refId, 100, { kind: 'recipe' })] })),
+  ...AL_LABELS.map(label => ({ id: 'R', ingredients: [alRow(label, 'FLOUR'), alRow(label, 'MYSTERY')] })),
+  ...ROW_UNITS.map(unit => ({ id: 'R', ingredients: [alRow('Row', 'FLOUR', 100, { unit })] })),
+  ...[undefined, null, 'abc', -5, 0, NaN, '250', Infinity, [3], {}].map(grams => ({ id: 'R', ingredients: [alRow('Row', 'FLOUR', grams)] })),
+  ...[undefined, null, '', 5, 'x', 0].map(id => ({ id, ingredients: [alRow('Flour', 'FLOUR', 100)] })),
+  Object.create(AL_RECIPES['FLAT'] as object), { get ingredients(): unknown { throw new Error('boom'); } }];
+
+describe('recipe-allergen-model: odd inputs', () => {
+  // A partial port: only what it exports is compared (incompleteText stays in js/; blockingIngredients takes the
+  // word for an unknown ingredient as a third argument, handed here the English text the original reads).
+  const m = recipeAllergenModel;
+  const l = legacyRecipeAllergenModel;
+
+  agree('recipeAllergens', m.recipeAllergens as AnyFn, l.recipeAllergens as AnyFn, [
+    ...product(AL_RECIPE_LIST, AL_TABLES.slice(0, 6)),
+    ...product(AL_RECIPE_LIST.slice(0, 50), AL_TABLES.slice(6)),
+    ...product([AL_RECIPES['CAKE'], AL_RECIPES['L0'], AL_RECIPES['LOOP'], AL_RECIPES['PING']], AL_TABLES.slice(0, 6), [undefined, 1, 2, 3, 4, 5, 0, -1, NaN, '2', null],
+      [undefined, new Set(), new Set(['PING']), new Set(['FILLING']), ['PING'], 'ab', null, new Set(['L1'])]),
+  ]);
+  const RESULTS: readonly unknown[] = [...ODD, 'result', 42, { complete: true }, { complete: false }, { complete: 'yes' }, { complete: 1 }, { complete: true, allergens: ['milk'] },
+    { complete: true, allergens: [] }, { complete: true, allergens: 'milk' }, { complete: false, gaps: [] }, { complete: false, gaps: [{}] }, { complete: false, gaps: 'x' },
+    { complete: false, allergens: ['milk'], gaps: [{ reason: 'not-declared' }] }, { complete: true, allergens: { length: 1 } },
+    ...Object.values(AL_RECIPES).map(recipe => m.recipeAllergens(recipe, { ingredients: AL_INGREDIENTS, recipes: AL_RECIPES })),
+    { get complete(): unknown { throw new Error('boom'); } }];
+  agree('canLabel', m.canLabel, l.canLabel, product(RESULTS));
+  agree('rowState', m.rowState, l.rowState, product(RESULTS));
+  agree('rowIsBlocked', m.rowIsBlocked, l.rowIsBlocked, product([...ODD, ...l.ROW_STATES, 'declared', 'Not-declared', 'toString', '__proto__']));
+  const UNKNOWN_EN = 'Unknown ingredient';
+  const RECIPE_SETS: readonly unknown[] = [...ODD, 'list', Object.values(AL_RECIPES), Object.values(AL_RECIPES).slice(0, 8), [null, 5, {}, 'x', ...Object.values(AL_RECIPES)],
+    AL_RECIPE_LIST, [AL_RECIPES['MIXED'], AL_RECIPES['MIXED']], [{ id: 'A', ingredients: [alRow('a', 'MYSTERY'), alRow('b', 'MYSTERY'), alRow('c', 'EMPTYLIST')] },
+      { id: 'B', ingredients: [alRow('a', 'MYSTERY')] }, { id: 'C', ingredients: [alRow('a', 'NONAME'), alRow('b', 'SHORT')] }]];
+  agree('blockingIngredients', (recipes: unknown, tables: unknown) => m.blockingIngredients(recipes, tables as never, UNKNOWN_EN),
+    l.blockingIngredients as AnyFn, product(RECIPE_SETS, AL_TABLES));
+  agree('blockingIngredients (default tables)', (recipes: unknown) => m.blockingIngredients(recipes, undefined, UNKNOWN_EN),
+    l.blockingIngredients as AnyFn, product(RECIPE_SETS));
+  agree('unlinkedRowNames', m.unlinkedRowNames, l.unlinkedRowNames, product(RECIPE_SETS));
+});
+
+// ── recipe-label-model ───────────────────────────────────────────────────────
+
+describe('recipe-label-model: odd inputs', () => {
+  const m = recipeLabelModel;
+  const l = legacyRecipeLabelModel;
+
+  const SCALES: readonly unknown[] = [undefined, 1, 0.5, 0, -1, NaN, Infinity, '2', null, 1e-9];
+  const DEPTHS: readonly unknown[] = [undefined, 1, 3, 4, 5, NaN, 0, -1, '2'];
+  const SEENS: readonly unknown[] = [undefined, new Set(['PING']), ['FILLING'], new Set(), 'ab', null];
+  agree('flattenIngredients', m.flattenIngredients as AnyFn, l.flattenIngredients as AnyFn, [
+    ...product(AL_RECIPE_LIST, AL_TABLES.slice(0, 6)),
+    ...product(AL_RECIPE_LIST.slice(0, 50), AL_TABLES.slice(6)),
+    ...product([AL_RECIPES['CAKE'], AL_RECIPES['L0'], AL_RECIPES['LOOP'], AL_RECIPES['PING'], AL_RECIPES['FLAT']], AL_TABLES.slice(0, 6), SCALES, DEPTHS, SEENS),
+  ]);
+  agree('nutritionPer100g', m.nutritionPer100g as AnyFn, l.nutritionPer100g as AnyFn, [
+    ...product(AL_RECIPE_LIST, AL_TABLES.slice(0, 6)),
+    ...product(AL_RECIPE_LIST.slice(0, 50), AL_TABLES.slice(6)),
+    ...product([AL_RECIPES['FLAT'], AL_RECIPES['BAKED'], AL_RECIPES['CAKE']], AL_TABLES.slice(0, 6)),
+    ...[undefined, null, 0, 20, 99, 100, 1000, -5, '20', 'abc', NaN, {}].map(lossPct => [{ ...AL_RECIPES['FLAT'], lossPct }, AL_TABLES[4]]),
+  ]);
+
+  const OPTIONS: readonly unknown[] = [undefined, {}, { shows: 'allergens' }, { shows: 'nutrition' }, { shows: 'both' }, { shows: 'junk' }, { shows: null }, { shows: undefined },
+    { shows: ['both'] }, { shows: 'ALLERGENS' }, null, 5, 'both'];
+  agree('buildLabel', m.buildLabel as AnyFn, l.buildLabel as AnyFn, [
+    ...product(AL_RECIPE_LIST, AL_TABLES.slice(0, 6), [undefined, { shows: 'allergens' }, { shows: 'junk' }]),
+    ...product(Object.values(AL_RECIPES), [AL_TABLES[4], AL_TABLES[5]], OPTIONS),
+    ...product(AL_RECIPE_LIST.slice(0, 50), AL_TABLES.slice(6), [undefined]),
+  ]);
+
+  // Labels as the screens hold them: the real ones, a refused one and a half-built one.
+  const built = (recipe: unknown, shows: string): unknown => l.buildLabel(recipe, { ingredients: AL_INGREDIENTS, recipes: AL_RECIPES }, { shows });
+  const LABELS: readonly unknown[] = [...ODD, 'label', 42, { ok: false }, { ok: true }, { ok: true, ingredients: [], allergens: [], mayContain: [], name: 'X', nutrition: null },
+    { ok: true, ingredients: [{ name: 'a', emphasise: true }, { name: 'b', emphasise: false }], allergens: ['milk', 'unicorn'], mayContain: ['sesame'], name: 5, nutrition: null },
+    { ok: true, ingredients: [{ name: 'a', emphasise: 1 }], allergens: [], mayContain: [], name: '', nutrition: { kj: 1, kcal: 2, fat: 3, saturates: 4, carbs: 5, sugars: 6, protein: 7, salt: 8 } },
+    { ok: true, ingredients: [{ name: 'a' }], allergens: [], mayContain: [], name: 'N', nutrition: {} },
+    { ok: true, ingredients: 'abc', allergens: [], mayContain: [] }, { ok: true, ingredients: [{}], allergens: [], mayContain: [] },
+    { ok: 1, ingredients: [], allergens: ['milk'], mayContain: [] },
+    ...Object.values(AL_RECIPES).flatMap(recipe => ['both', 'allergens', 'nutrition'].map(shows => built(recipe, shows)))];
+  const LANGS: readonly unknown[] = [undefined, null, 'en', 'it', 'zz', 'EN', 'IT', '', 5, ['it'], {}, 'constructor', '__proto__'];
+  agree('ingredientLine', m.ingredientLine, l.ingredientLine, product(LABELS));
+  agree('containsLine', m.containsLine as AnyFn, l.containsLine as AnyFn, product(LABELS, LANGS));
+  agree('mayContainLine', m.mayContainLine as AnyFn, l.mayContainLine as AnyFn, product(LABELS, LANGS));
+  agree('declarationText', m.declarationText as AnyFn, l.declarationText as AnyFn, product(LABELS, LANGS, [undefined, {}, { withNutrition: false }, { withNutrition: true },
+    { withNutrition: undefined }, { withNutrition: null }, { withNutrition: 0 }, null]));
+  test('LABEL_SHOWS is the original’s, frozen the same way', () => {
+    expect(m.LABEL_SHOWS).toStrictEqual(l.LABEL_SHOWS);
+    expect(Object.isFrozen(m.LABEL_SHOWS)).toBe(Object.isFrozen(l.LABEL_SHOWS));
   });
 });
