@@ -11,7 +11,7 @@
 // WHEN TO RUN IT: (1) when a step adds a field to `runLabelChain` in label-corpus.ts (the labels, the ZPL, the
 // print queue add theirs); the new field is generated here from js/, the old fields do not move. (2) NEVER to
 // make a red spec green: if a port and the golden file disagree, one of them is wrong — fix the port, or, if
-// the CURRENT app was deliberately fixed (Findings C is the open one), fix js/ and the port together and then
+// the CURRENT app was deliberately fixed (Findings C was: PR #354, regenerated 13 Oct 2026), fix js/ and the port together and then
 // regenerate, saying so in the commit.
 //
 // Deterministic: keys sorted, two-space indent, a final newline. Reads the js/ files and writes one file, the

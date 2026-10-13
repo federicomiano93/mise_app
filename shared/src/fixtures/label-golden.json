@@ -6790,7 +6790,18 @@
   "only-unweighable": {
    "blocking": [],
    "canLabel": true,
-   "flat": [],
+   "flat": [
+    {
+     "grams": 0,
+     "id": "EGG",
+     "name": "Egg"
+    },
+    {
+     "grams": 0,
+     "id": "SALT",
+     "name": "Salt"
+    }
+   ],
    "gate": {
     "allergens": [
      "eggs"
@@ -6998,6 +7009,11 @@
      "grams": 1000,
      "id": "FLOUR",
      "name": "Wheat flour"
+    },
+    {
+     "grams": 0,
+     "id": "MUSTARD",
+     "name": "Mustard"
     }
    ],
    "gate": {
@@ -7041,7 +7057,7 @@
    "rowState": "declared-listed",
    "shows": {
     "allergens": {
-     "ingredientLine": "WHEAT FLOUR",
+     "ingredientLine": "WHEAT FLOUR, MUSTARD",
      "label": {
       "allergens": [
        "gluten-wheat",
@@ -7056,6 +7072,15 @@
         "grams": 1000,
         "id": "FLOUR",
         "name": "Wheat flour"
+       },
+       {
+        "allergens": [
+         "mustard"
+        ],
+        "emphasise": true,
+        "grams": 0,
+        "id": "MUSTARD",
+        "name": "Mustard"
        }
       ],
       "mayContain": [],
@@ -7070,39 +7095,39 @@
       "FR": {
        "canPrint": false,
        "containsLine": "Contains: Wheat, Mustard",
-       "declaration": "Mustard loaf\nIngredients: WHEAT FLOUR.\nContains: Wheat, Mustard",
-       "declarationWithoutNutrition": "Mustard loaf\nIngredients: WHEAT FLOUR.\nContains: Wheat, Mustard",
+       "declaration": "Mustard loaf\nIngredients: WHEAT FLOUR, MUSTARD.\nContains: Wheat, Mustard",
+       "declarationWithoutNutrition": "Mustard loaf\nIngredients: WHEAT FLOUR, MUSTARD.\nContains: Wheat, Mustard",
        "lang": null,
        "mayContainLine": ""
       },
       "GB": {
        "canPrint": true,
        "containsLine": "Contains: Wheat, Mustard",
-       "declaration": "Mustard loaf\nIngredients: WHEAT FLOUR.\nContains: Wheat, Mustard",
-       "declarationWithoutNutrition": "Mustard loaf\nIngredients: WHEAT FLOUR.\nContains: Wheat, Mustard",
+       "declaration": "Mustard loaf\nIngredients: WHEAT FLOUR, MUSTARD.\nContains: Wheat, Mustard",
+       "declarationWithoutNutrition": "Mustard loaf\nIngredients: WHEAT FLOUR, MUSTARD.\nContains: Wheat, Mustard",
        "lang": "en",
        "mayContainLine": ""
       },
       "IT": {
        "canPrint": true,
        "containsLine": "Contiene: Grano, Senape",
-       "declaration": "Mustard loaf\nIngredienti: WHEAT FLOUR.\nContiene: Grano, Senape",
-       "declarationWithoutNutrition": "Mustard loaf\nIngredienti: WHEAT FLOUR.\nContiene: Grano, Senape",
+       "declaration": "Mustard loaf\nIngredienti: WHEAT FLOUR, MUSTARD.\nContiene: Grano, Senape",
+       "declarationWithoutNutrition": "Mustard loaf\nIngredienti: WHEAT FLOUR, MUSTARD.\nContiene: Grano, Senape",
        "lang": "it",
        "mayContainLine": ""
       },
       "none": {
        "canPrint": false,
        "containsLine": "Contains: Wheat, Mustard",
-       "declaration": "Mustard loaf\nIngredients: WHEAT FLOUR.\nContains: Wheat, Mustard",
-       "declarationWithoutNutrition": "Mustard loaf\nIngredients: WHEAT FLOUR.\nContains: Wheat, Mustard",
+       "declaration": "Mustard loaf\nIngredients: WHEAT FLOUR, MUSTARD.\nContains: Wheat, Mustard",
+       "declarationWithoutNutrition": "Mustard loaf\nIngredients: WHEAT FLOUR, MUSTARD.\nContains: Wheat, Mustard",
        "lang": null,
        "mayContainLine": ""
       }
      }
     },
     "both": {
-     "ingredientLine": "WHEAT FLOUR",
+     "ingredientLine": "WHEAT FLOUR, MUSTARD",
      "label": {
       "allergens": [
        "gluten-wheat",
@@ -7117,6 +7142,15 @@
         "grams": 1000,
         "id": "FLOUR",
         "name": "Wheat flour"
+       },
+       {
+        "allergens": [
+         "mustard"
+        ],
+        "emphasise": true,
+        "grams": 0,
+        "id": "MUSTARD",
+        "name": "Mustard"
        }
       ],
       "mayContain": [],
@@ -7142,39 +7176,39 @@
       "FR": {
        "canPrint": false,
        "containsLine": "Contains: Wheat, Mustard",
-       "declaration": "Mustard loaf\nIngredients: WHEAT FLOUR.\nContains: Wheat, Mustard\nTypical values per 100 g:\n  Energy: 1420 kJ\n  Energy: 340 kcal\n  Fat: 1.2 g\n  of which saturates: 0.2 g\n  Carbohydrate: 70 g\n  of which sugars: 1.5 g\n  Protein: 11 g\n  Salt: 0.01 g",
-       "declarationWithoutNutrition": "Mustard loaf\nIngredients: WHEAT FLOUR.\nContains: Wheat, Mustard",
+       "declaration": "Mustard loaf\nIngredients: WHEAT FLOUR, MUSTARD.\nContains: Wheat, Mustard\nTypical values per 100 g:\n  Energy: 1420 kJ\n  Energy: 340 kcal\n  Fat: 1.2 g\n  of which saturates: 0.2 g\n  Carbohydrate: 70 g\n  of which sugars: 1.5 g\n  Protein: 11 g\n  Salt: 0.01 g",
+       "declarationWithoutNutrition": "Mustard loaf\nIngredients: WHEAT FLOUR, MUSTARD.\nContains: Wheat, Mustard",
        "lang": null,
        "mayContainLine": ""
       },
       "GB": {
        "canPrint": true,
        "containsLine": "Contains: Wheat, Mustard",
-       "declaration": "Mustard loaf\nIngredients: WHEAT FLOUR.\nContains: Wheat, Mustard\nTypical values per 100 g:\n  Energy: 1420 kJ\n  Energy: 340 kcal\n  Fat: 1.2 g\n  of which saturates: 0.2 g\n  Carbohydrate: 70 g\n  of which sugars: 1.5 g\n  Protein: 11 g\n  Salt: 0.01 g",
-       "declarationWithoutNutrition": "Mustard loaf\nIngredients: WHEAT FLOUR.\nContains: Wheat, Mustard",
+       "declaration": "Mustard loaf\nIngredients: WHEAT FLOUR, MUSTARD.\nContains: Wheat, Mustard\nTypical values per 100 g:\n  Energy: 1420 kJ\n  Energy: 340 kcal\n  Fat: 1.2 g\n  of which saturates: 0.2 g\n  Carbohydrate: 70 g\n  of which sugars: 1.5 g\n  Protein: 11 g\n  Salt: 0.01 g",
+       "declarationWithoutNutrition": "Mustard loaf\nIngredients: WHEAT FLOUR, MUSTARD.\nContains: Wheat, Mustard",
        "lang": "en",
        "mayContainLine": ""
       },
       "IT": {
        "canPrint": true,
        "containsLine": "Contiene: Grano, Senape",
-       "declaration": "Mustard loaf\nIngredienti: WHEAT FLOUR.\nContiene: Grano, Senape\nValori medi per 100 g:\n  Energia: 1420 kJ\n  Energia: 340 kcal\n  Grassi: 1.2 g\n  di cui acidi grassi saturi: 0.2 g\n  Carboidrati: 70 g\n  di cui zuccheri: 1.5 g\n  Proteine: 11 g\n  Sale: 0.01 g",
-       "declarationWithoutNutrition": "Mustard loaf\nIngredienti: WHEAT FLOUR.\nContiene: Grano, Senape",
+       "declaration": "Mustard loaf\nIngredienti: WHEAT FLOUR, MUSTARD.\nContiene: Grano, Senape\nValori medi per 100 g:\n  Energia: 1420 kJ\n  Energia: 340 kcal\n  Grassi: 1.2 g\n  di cui acidi grassi saturi: 0.2 g\n  Carboidrati: 70 g\n  di cui zuccheri: 1.5 g\n  Proteine: 11 g\n  Sale: 0.01 g",
+       "declarationWithoutNutrition": "Mustard loaf\nIngredienti: WHEAT FLOUR, MUSTARD.\nContiene: Grano, Senape",
        "lang": "it",
        "mayContainLine": ""
       },
       "none": {
        "canPrint": false,
        "containsLine": "Contains: Wheat, Mustard",
-       "declaration": "Mustard loaf\nIngredients: WHEAT FLOUR.\nContains: Wheat, Mustard\nTypical values per 100 g:\n  Energy: 1420 kJ\n  Energy: 340 kcal\n  Fat: 1.2 g\n  of which saturates: 0.2 g\n  Carbohydrate: 70 g\n  of which sugars: 1.5 g\n  Protein: 11 g\n  Salt: 0.01 g",
-       "declarationWithoutNutrition": "Mustard loaf\nIngredients: WHEAT FLOUR.\nContains: Wheat, Mustard",
+       "declaration": "Mustard loaf\nIngredients: WHEAT FLOUR, MUSTARD.\nContains: Wheat, Mustard\nTypical values per 100 g:\n  Energy: 1420 kJ\n  Energy: 340 kcal\n  Fat: 1.2 g\n  of which saturates: 0.2 g\n  Carbohydrate: 70 g\n  of which sugars: 1.5 g\n  Protein: 11 g\n  Salt: 0.01 g",
+       "declarationWithoutNutrition": "Mustard loaf\nIngredients: WHEAT FLOUR, MUSTARD.\nContains: Wheat, Mustard",
        "lang": null,
        "mayContainLine": ""
       }
      }
     },
     "nonsense": {
-     "ingredientLine": "WHEAT FLOUR",
+     "ingredientLine": "WHEAT FLOUR, MUSTARD",
      "label": {
       "allergens": [
        "gluten-wheat",
@@ -7189,6 +7223,15 @@
         "grams": 1000,
         "id": "FLOUR",
         "name": "Wheat flour"
+       },
+       {
+        "allergens": [
+         "mustard"
+        ],
+        "emphasise": true,
+        "grams": 0,
+        "id": "MUSTARD",
+        "name": "Mustard"
        }
       ],
       "mayContain": [],
@@ -7214,39 +7257,39 @@
       "FR": {
        "canPrint": false,
        "containsLine": "Contains: Wheat, Mustard",
-       "declaration": "Mustard loaf\nIngredients: WHEAT FLOUR.\nContains: Wheat, Mustard\nTypical values per 100 g:\n  Energy: 1420 kJ\n  Energy: 340 kcal\n  Fat: 1.2 g\n  of which saturates: 0.2 g\n  Carbohydrate: 70 g\n  of which sugars: 1.5 g\n  Protein: 11 g\n  Salt: 0.01 g",
-       "declarationWithoutNutrition": "Mustard loaf\nIngredients: WHEAT FLOUR.\nContains: Wheat, Mustard",
+       "declaration": "Mustard loaf\nIngredients: WHEAT FLOUR, MUSTARD.\nContains: Wheat, Mustard\nTypical values per 100 g:\n  Energy: 1420 kJ\n  Energy: 340 kcal\n  Fat: 1.2 g\n  of which saturates: 0.2 g\n  Carbohydrate: 70 g\n  of which sugars: 1.5 g\n  Protein: 11 g\n  Salt: 0.01 g",
+       "declarationWithoutNutrition": "Mustard loaf\nIngredients: WHEAT FLOUR, MUSTARD.\nContains: Wheat, Mustard",
        "lang": null,
        "mayContainLine": ""
       },
       "GB": {
        "canPrint": true,
        "containsLine": "Contains: Wheat, Mustard",
-       "declaration": "Mustard loaf\nIngredients: WHEAT FLOUR.\nContains: Wheat, Mustard\nTypical values per 100 g:\n  Energy: 1420 kJ\n  Energy: 340 kcal\n  Fat: 1.2 g\n  of which saturates: 0.2 g\n  Carbohydrate: 70 g\n  of which sugars: 1.5 g\n  Protein: 11 g\n  Salt: 0.01 g",
-       "declarationWithoutNutrition": "Mustard loaf\nIngredients: WHEAT FLOUR.\nContains: Wheat, Mustard",
+       "declaration": "Mustard loaf\nIngredients: WHEAT FLOUR, MUSTARD.\nContains: Wheat, Mustard\nTypical values per 100 g:\n  Energy: 1420 kJ\n  Energy: 340 kcal\n  Fat: 1.2 g\n  of which saturates: 0.2 g\n  Carbohydrate: 70 g\n  of which sugars: 1.5 g\n  Protein: 11 g\n  Salt: 0.01 g",
+       "declarationWithoutNutrition": "Mustard loaf\nIngredients: WHEAT FLOUR, MUSTARD.\nContains: Wheat, Mustard",
        "lang": "en",
        "mayContainLine": ""
       },
       "IT": {
        "canPrint": true,
        "containsLine": "Contiene: Grano, Senape",
-       "declaration": "Mustard loaf\nIngredienti: WHEAT FLOUR.\nContiene: Grano, Senape\nValori medi per 100 g:\n  Energia: 1420 kJ\n  Energia: 340 kcal\n  Grassi: 1.2 g\n  di cui acidi grassi saturi: 0.2 g\n  Carboidrati: 70 g\n  di cui zuccheri: 1.5 g\n  Proteine: 11 g\n  Sale: 0.01 g",
-       "declarationWithoutNutrition": "Mustard loaf\nIngredienti: WHEAT FLOUR.\nContiene: Grano, Senape",
+       "declaration": "Mustard loaf\nIngredienti: WHEAT FLOUR, MUSTARD.\nContiene: Grano, Senape\nValori medi per 100 g:\n  Energia: 1420 kJ\n  Energia: 340 kcal\n  Grassi: 1.2 g\n  di cui acidi grassi saturi: 0.2 g\n  Carboidrati: 70 g\n  di cui zuccheri: 1.5 g\n  Proteine: 11 g\n  Sale: 0.01 g",
+       "declarationWithoutNutrition": "Mustard loaf\nIngredienti: WHEAT FLOUR, MUSTARD.\nContiene: Grano, Senape",
        "lang": "it",
        "mayContainLine": ""
       },
       "none": {
        "canPrint": false,
        "containsLine": "Contains: Wheat, Mustard",
-       "declaration": "Mustard loaf\nIngredients: WHEAT FLOUR.\nContains: Wheat, Mustard\nTypical values per 100 g:\n  Energy: 1420 kJ\n  Energy: 340 kcal\n  Fat: 1.2 g\n  of which saturates: 0.2 g\n  Carbohydrate: 70 g\n  of which sugars: 1.5 g\n  Protein: 11 g\n  Salt: 0.01 g",
-       "declarationWithoutNutrition": "Mustard loaf\nIngredients: WHEAT FLOUR.\nContains: Wheat, Mustard",
+       "declaration": "Mustard loaf\nIngredients: WHEAT FLOUR, MUSTARD.\nContains: Wheat, Mustard\nTypical values per 100 g:\n  Energy: 1420 kJ\n  Energy: 340 kcal\n  Fat: 1.2 g\n  of which saturates: 0.2 g\n  Carbohydrate: 70 g\n  of which sugars: 1.5 g\n  Protein: 11 g\n  Salt: 0.01 g",
+       "declarationWithoutNutrition": "Mustard loaf\nIngredients: WHEAT FLOUR, MUSTARD.\nContains: Wheat, Mustard",
        "lang": null,
        "mayContainLine": ""
       }
      }
     },
     "nutrition": {
-     "ingredientLine": "WHEAT FLOUR",
+     "ingredientLine": "WHEAT FLOUR, MUSTARD",
      "label": {
       "allergens": [
        "gluten-wheat",
@@ -7261,6 +7304,15 @@
         "grams": 1000,
         "id": "FLOUR",
         "name": "Wheat flour"
+       },
+       {
+        "allergens": [
+         "mustard"
+        ],
+        "emphasise": true,
+        "grams": 0,
+        "id": "MUSTARD",
+        "name": "Mustard"
        }
       ],
       "mayContain": [],
@@ -7286,32 +7338,32 @@
       "FR": {
        "canPrint": false,
        "containsLine": "Contains: Wheat, Mustard",
-       "declaration": "Mustard loaf\nIngredients: WHEAT FLOUR.\nContains: Wheat, Mustard\nTypical values per 100 g:\n  Energy: 1420 kJ\n  Energy: 340 kcal\n  Fat: 1.2 g\n  of which saturates: 0.2 g\n  Carbohydrate: 70 g\n  of which sugars: 1.5 g\n  Protein: 11 g\n  Salt: 0.01 g",
-       "declarationWithoutNutrition": "Mustard loaf\nIngredients: WHEAT FLOUR.\nContains: Wheat, Mustard",
+       "declaration": "Mustard loaf\nIngredients: WHEAT FLOUR, MUSTARD.\nContains: Wheat, Mustard\nTypical values per 100 g:\n  Energy: 1420 kJ\n  Energy: 340 kcal\n  Fat: 1.2 g\n  of which saturates: 0.2 g\n  Carbohydrate: 70 g\n  of which sugars: 1.5 g\n  Protein: 11 g\n  Salt: 0.01 g",
+       "declarationWithoutNutrition": "Mustard loaf\nIngredients: WHEAT FLOUR, MUSTARD.\nContains: Wheat, Mustard",
        "lang": null,
        "mayContainLine": ""
       },
       "GB": {
        "canPrint": true,
        "containsLine": "Contains: Wheat, Mustard",
-       "declaration": "Mustard loaf\nIngredients: WHEAT FLOUR.\nContains: Wheat, Mustard\nTypical values per 100 g:\n  Energy: 1420 kJ\n  Energy: 340 kcal\n  Fat: 1.2 g\n  of which saturates: 0.2 g\n  Carbohydrate: 70 g\n  of which sugars: 1.5 g\n  Protein: 11 g\n  Salt: 0.01 g",
-       "declarationWithoutNutrition": "Mustard loaf\nIngredients: WHEAT FLOUR.\nContains: Wheat, Mustard",
+       "declaration": "Mustard loaf\nIngredients: WHEAT FLOUR, MUSTARD.\nContains: Wheat, Mustard\nTypical values per 100 g:\n  Energy: 1420 kJ\n  Energy: 340 kcal\n  Fat: 1.2 g\n  of which saturates: 0.2 g\n  Carbohydrate: 70 g\n  of which sugars: 1.5 g\n  Protein: 11 g\n  Salt: 0.01 g",
+       "declarationWithoutNutrition": "Mustard loaf\nIngredients: WHEAT FLOUR, MUSTARD.\nContains: Wheat, Mustard",
        "lang": "en",
        "mayContainLine": ""
       },
       "IT": {
        "canPrint": true,
        "containsLine": "Contiene: Grano, Senape",
-       "declaration": "Mustard loaf\nIngredienti: WHEAT FLOUR.\nContiene: Grano, Senape\nValori medi per 100 g:\n  Energia: 1420 kJ\n  Energia: 340 kcal\n  Grassi: 1.2 g\n  di cui acidi grassi saturi: 0.2 g\n  Carboidrati: 70 g\n  di cui zuccheri: 1.5 g\n  Proteine: 11 g\n  Sale: 0.01 g",
-       "declarationWithoutNutrition": "Mustard loaf\nIngredienti: WHEAT FLOUR.\nContiene: Grano, Senape",
+       "declaration": "Mustard loaf\nIngredienti: WHEAT FLOUR, MUSTARD.\nContiene: Grano, Senape\nValori medi per 100 g:\n  Energia: 1420 kJ\n  Energia: 340 kcal\n  Grassi: 1.2 g\n  di cui acidi grassi saturi: 0.2 g\n  Carboidrati: 70 g\n  di cui zuccheri: 1.5 g\n  Proteine: 11 g\n  Sale: 0.01 g",
+       "declarationWithoutNutrition": "Mustard loaf\nIngredienti: WHEAT FLOUR, MUSTARD.\nContiene: Grano, Senape",
        "lang": "it",
        "mayContainLine": ""
       },
       "none": {
        "canPrint": false,
        "containsLine": "Contains: Wheat, Mustard",
-       "declaration": "Mustard loaf\nIngredients: WHEAT FLOUR.\nContains: Wheat, Mustard\nTypical values per 100 g:\n  Energy: 1420 kJ\n  Energy: 340 kcal\n  Fat: 1.2 g\n  of which saturates: 0.2 g\n  Carbohydrate: 70 g\n  of which sugars: 1.5 g\n  Protein: 11 g\n  Salt: 0.01 g",
-       "declarationWithoutNutrition": "Mustard loaf\nIngredients: WHEAT FLOUR.\nContains: Wheat, Mustard",
+       "declaration": "Mustard loaf\nIngredients: WHEAT FLOUR, MUSTARD.\nContains: Wheat, Mustard\nTypical values per 100 g:\n  Energy: 1420 kJ\n  Energy: 340 kcal\n  Fat: 1.2 g\n  of which saturates: 0.2 g\n  Carbohydrate: 70 g\n  of which sugars: 1.5 g\n  Protein: 11 g\n  Salt: 0.01 g",
+       "declarationWithoutNutrition": "Mustard loaf\nIngredients: WHEAT FLOUR, MUSTARD.\nContains: Wheat, Mustard",
        "lang": null,
        "mayContainLine": ""
       }
@@ -9111,6 +9163,11 @@
      "grams": 500,
      "id": "FLOUR",
      "name": "Wheat flour"
+    },
+    {
+     "grams": 0,
+     "id": "MUSTARD",
+     "name": "Mustard"
     }
    ],
    "gate": {
@@ -9154,7 +9211,7 @@
    "rowState": "declared-listed",
    "shows": {
     "allergens": {
-     "ingredientLine": "WHEAT FLOUR",
+     "ingredientLine": "WHEAT FLOUR, MUSTARD",
      "label": {
       "allergens": [
        "gluten-wheat",
@@ -9169,6 +9226,15 @@
         "grams": 500,
         "id": "FLOUR",
         "name": "Wheat flour"
+       },
+       {
+        "allergens": [
+         "mustard"
+        ],
+        "emphasise": true,
+        "grams": 0,
+        "id": "MUSTARD",
+        "name": "Mustard"
        }
       ],
       "mayContain": [],
@@ -9183,39 +9249,39 @@
       "FR": {
        "canPrint": false,
        "containsLine": "Contains: Wheat, Mustard",
-       "declaration": "Pinched\nIngredients: WHEAT FLOUR.\nContains: Wheat, Mustard",
-       "declarationWithoutNutrition": "Pinched\nIngredients: WHEAT FLOUR.\nContains: Wheat, Mustard",
+       "declaration": "Pinched\nIngredients: WHEAT FLOUR, MUSTARD.\nContains: Wheat, Mustard",
+       "declarationWithoutNutrition": "Pinched\nIngredients: WHEAT FLOUR, MUSTARD.\nContains: Wheat, Mustard",
        "lang": null,
        "mayContainLine": ""
       },
       "GB": {
        "canPrint": true,
        "containsLine": "Contains: Wheat, Mustard",
-       "declaration": "Pinched\nIngredients: WHEAT FLOUR.\nContains: Wheat, Mustard",
-       "declarationWithoutNutrition": "Pinched\nIngredients: WHEAT FLOUR.\nContains: Wheat, Mustard",
+       "declaration": "Pinched\nIngredients: WHEAT FLOUR, MUSTARD.\nContains: Wheat, Mustard",
+       "declarationWithoutNutrition": "Pinched\nIngredients: WHEAT FLOUR, MUSTARD.\nContains: Wheat, Mustard",
        "lang": "en",
        "mayContainLine": ""
       },
       "IT": {
        "canPrint": true,
        "containsLine": "Contiene: Grano, Senape",
-       "declaration": "Pinched\nIngredienti: WHEAT FLOUR.\nContiene: Grano, Senape",
-       "declarationWithoutNutrition": "Pinched\nIngredienti: WHEAT FLOUR.\nContiene: Grano, Senape",
+       "declaration": "Pinched\nIngredienti: WHEAT FLOUR, MUSTARD.\nContiene: Grano, Senape",
+       "declarationWithoutNutrition": "Pinched\nIngredienti: WHEAT FLOUR, MUSTARD.\nContiene: Grano, Senape",
        "lang": "it",
        "mayContainLine": ""
       },
       "none": {
        "canPrint": false,
        "containsLine": "Contains: Wheat, Mustard",
-       "declaration": "Pinched\nIngredients: WHEAT FLOUR.\nContains: Wheat, Mustard",
-       "declarationWithoutNutrition": "Pinched\nIngredients: WHEAT FLOUR.\nContains: Wheat, Mustard",
+       "declaration": "Pinched\nIngredients: WHEAT FLOUR, MUSTARD.\nContains: Wheat, Mustard",
+       "declarationWithoutNutrition": "Pinched\nIngredients: WHEAT FLOUR, MUSTARD.\nContains: Wheat, Mustard",
        "lang": null,
        "mayContainLine": ""
       }
      }
     },
     "both": {
-     "ingredientLine": "WHEAT FLOUR",
+     "ingredientLine": "WHEAT FLOUR, MUSTARD",
      "label": {
       "allergens": [
        "gluten-wheat",
@@ -9230,6 +9296,15 @@
         "grams": 500,
         "id": "FLOUR",
         "name": "Wheat flour"
+       },
+       {
+        "allergens": [
+         "mustard"
+        ],
+        "emphasise": true,
+        "grams": 0,
+        "id": "MUSTARD",
+        "name": "Mustard"
        }
       ],
       "mayContain": [],
@@ -9255,39 +9330,39 @@
       "FR": {
        "canPrint": false,
        "containsLine": "Contains: Wheat, Mustard",
-       "declaration": "Pinched\nIngredients: WHEAT FLOUR.\nContains: Wheat, Mustard\nTypical values per 100 g:\n  Energy: 1420 kJ\n  Energy: 340 kcal\n  Fat: 1.2 g\n  of which saturates: 0.2 g\n  Carbohydrate: 70 g\n  of which sugars: 1.5 g\n  Protein: 11 g\n  Salt: 0.01 g",
-       "declarationWithoutNutrition": "Pinched\nIngredients: WHEAT FLOUR.\nContains: Wheat, Mustard",
+       "declaration": "Pinched\nIngredients: WHEAT FLOUR, MUSTARD.\nContains: Wheat, Mustard\nTypical values per 100 g:\n  Energy: 1420 kJ\n  Energy: 340 kcal\n  Fat: 1.2 g\n  of which saturates: 0.2 g\n  Carbohydrate: 70 g\n  of which sugars: 1.5 g\n  Protein: 11 g\n  Salt: 0.01 g",
+       "declarationWithoutNutrition": "Pinched\nIngredients: WHEAT FLOUR, MUSTARD.\nContains: Wheat, Mustard",
        "lang": null,
        "mayContainLine": ""
       },
       "GB": {
        "canPrint": true,
        "containsLine": "Contains: Wheat, Mustard",
-       "declaration": "Pinched\nIngredients: WHEAT FLOUR.\nContains: Wheat, Mustard\nTypical values per 100 g:\n  Energy: 1420 kJ\n  Energy: 340 kcal\n  Fat: 1.2 g\n  of which saturates: 0.2 g\n  Carbohydrate: 70 g\n  of which sugars: 1.5 g\n  Protein: 11 g\n  Salt: 0.01 g",
-       "declarationWithoutNutrition": "Pinched\nIngredients: WHEAT FLOUR.\nContains: Wheat, Mustard",
+       "declaration": "Pinched\nIngredients: WHEAT FLOUR, MUSTARD.\nContains: Wheat, Mustard\nTypical values per 100 g:\n  Energy: 1420 kJ\n  Energy: 340 kcal\n  Fat: 1.2 g\n  of which saturates: 0.2 g\n  Carbohydrate: 70 g\n  of which sugars: 1.5 g\n  Protein: 11 g\n  Salt: 0.01 g",
+       "declarationWithoutNutrition": "Pinched\nIngredients: WHEAT FLOUR, MUSTARD.\nContains: Wheat, Mustard",
        "lang": "en",
        "mayContainLine": ""
       },
       "IT": {
        "canPrint": true,
        "containsLine": "Contiene: Grano, Senape",
-       "declaration": "Pinched\nIngredienti: WHEAT FLOUR.\nContiene: Grano, Senape\nValori medi per 100 g:\n  Energia: 1420 kJ\n  Energia: 340 kcal\n  Grassi: 1.2 g\n  di cui acidi grassi saturi: 0.2 g\n  Carboidrati: 70 g\n  di cui zuccheri: 1.5 g\n  Proteine: 11 g\n  Sale: 0.01 g",
-       "declarationWithoutNutrition": "Pinched\nIngredienti: WHEAT FLOUR.\nContiene: Grano, Senape",
+       "declaration": "Pinched\nIngredienti: WHEAT FLOUR, MUSTARD.\nContiene: Grano, Senape\nValori medi per 100 g:\n  Energia: 1420 kJ\n  Energia: 340 kcal\n  Grassi: 1.2 g\n  di cui acidi grassi saturi: 0.2 g\n  Carboidrati: 70 g\n  di cui zuccheri: 1.5 g\n  Proteine: 11 g\n  Sale: 0.01 g",
+       "declarationWithoutNutrition": "Pinched\nIngredienti: WHEAT FLOUR, MUSTARD.\nContiene: Grano, Senape",
        "lang": "it",
        "mayContainLine": ""
       },
       "none": {
        "canPrint": false,
        "containsLine": "Contains: Wheat, Mustard",
-       "declaration": "Pinched\nIngredients: WHEAT FLOUR.\nContains: Wheat, Mustard\nTypical values per 100 g:\n  Energy: 1420 kJ\n  Energy: 340 kcal\n  Fat: 1.2 g\n  of which saturates: 0.2 g\n  Carbohydrate: 70 g\n  of which sugars: 1.5 g\n  Protein: 11 g\n  Salt: 0.01 g",
-       "declarationWithoutNutrition": "Pinched\nIngredients: WHEAT FLOUR.\nContains: Wheat, Mustard",
+       "declaration": "Pinched\nIngredients: WHEAT FLOUR, MUSTARD.\nContains: Wheat, Mustard\nTypical values per 100 g:\n  Energy: 1420 kJ\n  Energy: 340 kcal\n  Fat: 1.2 g\n  of which saturates: 0.2 g\n  Carbohydrate: 70 g\n  of which sugars: 1.5 g\n  Protein: 11 g\n  Salt: 0.01 g",
+       "declarationWithoutNutrition": "Pinched\nIngredients: WHEAT FLOUR, MUSTARD.\nContains: Wheat, Mustard",
        "lang": null,
        "mayContainLine": ""
       }
      }
     },
     "nonsense": {
-     "ingredientLine": "WHEAT FLOUR",
+     "ingredientLine": "WHEAT FLOUR, MUSTARD",
      "label": {
       "allergens": [
        "gluten-wheat",
@@ -9302,6 +9377,15 @@
         "grams": 500,
         "id": "FLOUR",
         "name": "Wheat flour"
+       },
+       {
+        "allergens": [
+         "mustard"
+        ],
+        "emphasise": true,
+        "grams": 0,
+        "id": "MUSTARD",
+        "name": "Mustard"
        }
       ],
       "mayContain": [],
@@ -9327,39 +9411,39 @@
       "FR": {
        "canPrint": false,
        "containsLine": "Contains: Wheat, Mustard",
-       "declaration": "Pinched\nIngredients: WHEAT FLOUR.\nContains: Wheat, Mustard\nTypical values per 100 g:\n  Energy: 1420 kJ\n  Energy: 340 kcal\n  Fat: 1.2 g\n  of which saturates: 0.2 g\n  Carbohydrate: 70 g\n  of which sugars: 1.5 g\n  Protein: 11 g\n  Salt: 0.01 g",
-       "declarationWithoutNutrition": "Pinched\nIngredients: WHEAT FLOUR.\nContains: Wheat, Mustard",
+       "declaration": "Pinched\nIngredients: WHEAT FLOUR, MUSTARD.\nContains: Wheat, Mustard\nTypical values per 100 g:\n  Energy: 1420 kJ\n  Energy: 340 kcal\n  Fat: 1.2 g\n  of which saturates: 0.2 g\n  Carbohydrate: 70 g\n  of which sugars: 1.5 g\n  Protein: 11 g\n  Salt: 0.01 g",
+       "declarationWithoutNutrition": "Pinched\nIngredients: WHEAT FLOUR, MUSTARD.\nContains: Wheat, Mustard",
        "lang": null,
        "mayContainLine": ""
       },
       "GB": {
        "canPrint": true,
        "containsLine": "Contains: Wheat, Mustard",
-       "declaration": "Pinched\nIngredients: WHEAT FLOUR.\nContains: Wheat, Mustard\nTypical values per 100 g:\n  Energy: 1420 kJ\n  Energy: 340 kcal\n  Fat: 1.2 g\n  of which saturates: 0.2 g\n  Carbohydrate: 70 g\n  of which sugars: 1.5 g\n  Protein: 11 g\n  Salt: 0.01 g",
-       "declarationWithoutNutrition": "Pinched\nIngredients: WHEAT FLOUR.\nContains: Wheat, Mustard",
+       "declaration": "Pinched\nIngredients: WHEAT FLOUR, MUSTARD.\nContains: Wheat, Mustard\nTypical values per 100 g:\n  Energy: 1420 kJ\n  Energy: 340 kcal\n  Fat: 1.2 g\n  of which saturates: 0.2 g\n  Carbohydrate: 70 g\n  of which sugars: 1.5 g\n  Protein: 11 g\n  Salt: 0.01 g",
+       "declarationWithoutNutrition": "Pinched\nIngredients: WHEAT FLOUR, MUSTARD.\nContains: Wheat, Mustard",
        "lang": "en",
        "mayContainLine": ""
       },
       "IT": {
        "canPrint": true,
        "containsLine": "Contiene: Grano, Senape",
-       "declaration": "Pinched\nIngredienti: WHEAT FLOUR.\nContiene: Grano, Senape\nValori medi per 100 g:\n  Energia: 1420 kJ\n  Energia: 340 kcal\n  Grassi: 1.2 g\n  di cui acidi grassi saturi: 0.2 g\n  Carboidrati: 70 g\n  di cui zuccheri: 1.5 g\n  Proteine: 11 g\n  Sale: 0.01 g",
-       "declarationWithoutNutrition": "Pinched\nIngredienti: WHEAT FLOUR.\nContiene: Grano, Senape",
+       "declaration": "Pinched\nIngredienti: WHEAT FLOUR, MUSTARD.\nContiene: Grano, Senape\nValori medi per 100 g:\n  Energia: 1420 kJ\n  Energia: 340 kcal\n  Grassi: 1.2 g\n  di cui acidi grassi saturi: 0.2 g\n  Carboidrati: 70 g\n  di cui zuccheri: 1.5 g\n  Proteine: 11 g\n  Sale: 0.01 g",
+       "declarationWithoutNutrition": "Pinched\nIngredienti: WHEAT FLOUR, MUSTARD.\nContiene: Grano, Senape",
        "lang": "it",
        "mayContainLine": ""
       },
       "none": {
        "canPrint": false,
        "containsLine": "Contains: Wheat, Mustard",
-       "declaration": "Pinched\nIngredients: WHEAT FLOUR.\nContains: Wheat, Mustard\nTypical values per 100 g:\n  Energy: 1420 kJ\n  Energy: 340 kcal\n  Fat: 1.2 g\n  of which saturates: 0.2 g\n  Carbohydrate: 70 g\n  of which sugars: 1.5 g\n  Protein: 11 g\n  Salt: 0.01 g",
-       "declarationWithoutNutrition": "Pinched\nIngredients: WHEAT FLOUR.\nContains: Wheat, Mustard",
+       "declaration": "Pinched\nIngredients: WHEAT FLOUR, MUSTARD.\nContains: Wheat, Mustard\nTypical values per 100 g:\n  Energy: 1420 kJ\n  Energy: 340 kcal\n  Fat: 1.2 g\n  of which saturates: 0.2 g\n  Carbohydrate: 70 g\n  of which sugars: 1.5 g\n  Protein: 11 g\n  Salt: 0.01 g",
+       "declarationWithoutNutrition": "Pinched\nIngredients: WHEAT FLOUR, MUSTARD.\nContains: Wheat, Mustard",
        "lang": null,
        "mayContainLine": ""
       }
      }
     },
     "nutrition": {
-     "ingredientLine": "WHEAT FLOUR",
+     "ingredientLine": "WHEAT FLOUR, MUSTARD",
      "label": {
       "allergens": [
        "gluten-wheat",
@@ -9374,6 +9458,15 @@
         "grams": 500,
         "id": "FLOUR",
         "name": "Wheat flour"
+       },
+       {
+        "allergens": [
+         "mustard"
+        ],
+        "emphasise": true,
+        "grams": 0,
+        "id": "MUSTARD",
+        "name": "Mustard"
        }
       ],
       "mayContain": [],
@@ -9399,32 +9492,32 @@
       "FR": {
        "canPrint": false,
        "containsLine": "Contains: Wheat, Mustard",
-       "declaration": "Pinched\nIngredients: WHEAT FLOUR.\nContains: Wheat, Mustard\nTypical values per 100 g:\n  Energy: 1420 kJ\n  Energy: 340 kcal\n  Fat: 1.2 g\n  of which saturates: 0.2 g\n  Carbohydrate: 70 g\n  of which sugars: 1.5 g\n  Protein: 11 g\n  Salt: 0.01 g",
-       "declarationWithoutNutrition": "Pinched\nIngredients: WHEAT FLOUR.\nContains: Wheat, Mustard",
+       "declaration": "Pinched\nIngredients: WHEAT FLOUR, MUSTARD.\nContains: Wheat, Mustard\nTypical values per 100 g:\n  Energy: 1420 kJ\n  Energy: 340 kcal\n  Fat: 1.2 g\n  of which saturates: 0.2 g\n  Carbohydrate: 70 g\n  of which sugars: 1.5 g\n  Protein: 11 g\n  Salt: 0.01 g",
+       "declarationWithoutNutrition": "Pinched\nIngredients: WHEAT FLOUR, MUSTARD.\nContains: Wheat, Mustard",
        "lang": null,
        "mayContainLine": ""
       },
       "GB": {
        "canPrint": true,
        "containsLine": "Contains: Wheat, Mustard",
-       "declaration": "Pinched\nIngredients: WHEAT FLOUR.\nContains: Wheat, Mustard\nTypical values per 100 g:\n  Energy: 1420 kJ\n  Energy: 340 kcal\n  Fat: 1.2 g\n  of which saturates: 0.2 g\n  Carbohydrate: 70 g\n  of which sugars: 1.5 g\n  Protein: 11 g\n  Salt: 0.01 g",
-       "declarationWithoutNutrition": "Pinched\nIngredients: WHEAT FLOUR.\nContains: Wheat, Mustard",
+       "declaration": "Pinched\nIngredients: WHEAT FLOUR, MUSTARD.\nContains: Wheat, Mustard\nTypical values per 100 g:\n  Energy: 1420 kJ\n  Energy: 340 kcal\n  Fat: 1.2 g\n  of which saturates: 0.2 g\n  Carbohydrate: 70 g\n  of which sugars: 1.5 g\n  Protein: 11 g\n  Salt: 0.01 g",
+       "declarationWithoutNutrition": "Pinched\nIngredients: WHEAT FLOUR, MUSTARD.\nContains: Wheat, Mustard",
        "lang": "en",
        "mayContainLine": ""
       },
       "IT": {
        "canPrint": true,
        "containsLine": "Contiene: Grano, Senape",
-       "declaration": "Pinched\nIngredienti: WHEAT FLOUR.\nContiene: Grano, Senape\nValori medi per 100 g:\n  Energia: 1420 kJ\n  Energia: 340 kcal\n  Grassi: 1.2 g\n  di cui acidi grassi saturi: 0.2 g\n  Carboidrati: 70 g\n  di cui zuccheri: 1.5 g\n  Proteine: 11 g\n  Sale: 0.01 g",
-       "declarationWithoutNutrition": "Pinched\nIngredienti: WHEAT FLOUR.\nContiene: Grano, Senape",
+       "declaration": "Pinched\nIngredienti: WHEAT FLOUR, MUSTARD.\nContiene: Grano, Senape\nValori medi per 100 g:\n  Energia: 1420 kJ\n  Energia: 340 kcal\n  Grassi: 1.2 g\n  di cui acidi grassi saturi: 0.2 g\n  Carboidrati: 70 g\n  di cui zuccheri: 1.5 g\n  Proteine: 11 g\n  Sale: 0.01 g",
+       "declarationWithoutNutrition": "Pinched\nIngredienti: WHEAT FLOUR, MUSTARD.\nContiene: Grano, Senape",
        "lang": "it",
        "mayContainLine": ""
       },
       "none": {
        "canPrint": false,
        "containsLine": "Contains: Wheat, Mustard",
-       "declaration": "Pinched\nIngredients: WHEAT FLOUR.\nContains: Wheat, Mustard\nTypical values per 100 g:\n  Energy: 1420 kJ\n  Energy: 340 kcal\n  Fat: 1.2 g\n  of which saturates: 0.2 g\n  Carbohydrate: 70 g\n  of which sugars: 1.5 g\n  Protein: 11 g\n  Salt: 0.01 g",
-       "declarationWithoutNutrition": "Pinched\nIngredients: WHEAT FLOUR.\nContains: Wheat, Mustard",
+       "declaration": "Pinched\nIngredients: WHEAT FLOUR, MUSTARD.\nContains: Wheat, Mustard\nTypical values per 100 g:\n  Energy: 1420 kJ\n  Energy: 340 kcal\n  Fat: 1.2 g\n  of which saturates: 0.2 g\n  Carbohydrate: 70 g\n  of which sugars: 1.5 g\n  Protein: 11 g\n  Salt: 0.01 g",
+       "declarationWithoutNutrition": "Pinched\nIngredients: WHEAT FLOUR, MUSTARD.\nContains: Wheat, Mustard",
        "lang": null,
        "mayContainLine": ""
       }
@@ -9441,6 +9534,16 @@
      "grams": 1000,
      "id": "FLOUR",
      "name": "Wheat flour"
+    },
+    {
+     "grams": 0,
+     "id": "SALT",
+     "name": "Salt"
+    },
+    {
+     "grams": 0,
+     "id": "SESAME",
+     "name": "Sesame seeds"
     }
    ],
    "gate": {
@@ -9491,7 +9594,7 @@
    "rowState": "declared-listed",
    "shows": {
     "allergens": {
-     "ingredientLine": "WHEAT FLOUR",
+     "ingredientLine": "WHEAT FLOUR, Salt, SESAME SEEDS",
      "label": {
       "allergens": [
        "gluten-wheat",
@@ -9506,6 +9609,22 @@
         "grams": 1000,
         "id": "FLOUR",
         "name": "Wheat flour"
+       },
+       {
+        "allergens": [],
+        "emphasise": false,
+        "grams": 0,
+        "id": "SALT",
+        "name": "Salt"
+       },
+       {
+        "allergens": [
+         "sesame"
+        ],
+        "emphasise": true,
+        "grams": 0,
+        "id": "SESAME",
+        "name": "Sesame seeds"
        }
       ],
       "mayContain": [],
@@ -9520,39 +9639,39 @@
       "FR": {
        "canPrint": false,
        "containsLine": "Contains: Wheat, Sesame",
-       "declaration": "Seeded loaf\nIngredients: WHEAT FLOUR.\nContains: Wheat, Sesame",
-       "declarationWithoutNutrition": "Seeded loaf\nIngredients: WHEAT FLOUR.\nContains: Wheat, Sesame",
+       "declaration": "Seeded loaf\nIngredients: WHEAT FLOUR, Salt, SESAME SEEDS.\nContains: Wheat, Sesame",
+       "declarationWithoutNutrition": "Seeded loaf\nIngredients: WHEAT FLOUR, Salt, SESAME SEEDS.\nContains: Wheat, Sesame",
        "lang": null,
        "mayContainLine": ""
       },
       "GB": {
        "canPrint": true,
        "containsLine": "Contains: Wheat, Sesame",
-       "declaration": "Seeded loaf\nIngredients: WHEAT FLOUR.\nContains: Wheat, Sesame",
-       "declarationWithoutNutrition": "Seeded loaf\nIngredients: WHEAT FLOUR.\nContains: Wheat, Sesame",
+       "declaration": "Seeded loaf\nIngredients: WHEAT FLOUR, Salt, SESAME SEEDS.\nContains: Wheat, Sesame",
+       "declarationWithoutNutrition": "Seeded loaf\nIngredients: WHEAT FLOUR, Salt, SESAME SEEDS.\nContains: Wheat, Sesame",
        "lang": "en",
        "mayContainLine": ""
       },
       "IT": {
        "canPrint": true,
        "containsLine": "Contiene: Grano, Sesamo",
-       "declaration": "Seeded loaf\nIngredienti: WHEAT FLOUR.\nContiene: Grano, Sesamo",
-       "declarationWithoutNutrition": "Seeded loaf\nIngredienti: WHEAT FLOUR.\nContiene: Grano, Sesamo",
+       "declaration": "Seeded loaf\nIngredienti: WHEAT FLOUR, Salt, SESAME SEEDS.\nContiene: Grano, Sesamo",
+       "declarationWithoutNutrition": "Seeded loaf\nIngredienti: WHEAT FLOUR, Salt, SESAME SEEDS.\nContiene: Grano, Sesamo",
        "lang": "it",
        "mayContainLine": ""
       },
       "none": {
        "canPrint": false,
        "containsLine": "Contains: Wheat, Sesame",
-       "declaration": "Seeded loaf\nIngredients: WHEAT FLOUR.\nContains: Wheat, Sesame",
-       "declarationWithoutNutrition": "Seeded loaf\nIngredients: WHEAT FLOUR.\nContains: Wheat, Sesame",
+       "declaration": "Seeded loaf\nIngredients: WHEAT FLOUR, Salt, SESAME SEEDS.\nContains: Wheat, Sesame",
+       "declarationWithoutNutrition": "Seeded loaf\nIngredients: WHEAT FLOUR, Salt, SESAME SEEDS.\nContains: Wheat, Sesame",
        "lang": null,
        "mayContainLine": ""
       }
      }
     },
     "both": {
-     "ingredientLine": "WHEAT FLOUR",
+     "ingredientLine": "WHEAT FLOUR, Salt, SESAME SEEDS",
      "label": {
       "allergens": [
        "gluten-wheat",
@@ -9567,6 +9686,22 @@
         "grams": 1000,
         "id": "FLOUR",
         "name": "Wheat flour"
+       },
+       {
+        "allergens": [],
+        "emphasise": false,
+        "grams": 0,
+        "id": "SALT",
+        "name": "Salt"
+       },
+       {
+        "allergens": [
+         "sesame"
+        ],
+        "emphasise": true,
+        "grams": 0,
+        "id": "SESAME",
+        "name": "Sesame seeds"
        }
       ],
       "mayContain": [],
@@ -9592,39 +9727,39 @@
       "FR": {
        "canPrint": false,
        "containsLine": "Contains: Wheat, Sesame",
-       "declaration": "Seeded loaf\nIngredients: WHEAT FLOUR.\nContains: Wheat, Sesame\nTypical values per 100 g:\n  Energy: 1420 kJ\n  Energy: 340 kcal\n  Fat: 1.2 g\n  of which saturates: 0.2 g\n  Carbohydrate: 70 g\n  of which sugars: 1.5 g\n  Protein: 11 g\n  Salt: 0.01 g",
-       "declarationWithoutNutrition": "Seeded loaf\nIngredients: WHEAT FLOUR.\nContains: Wheat, Sesame",
+       "declaration": "Seeded loaf\nIngredients: WHEAT FLOUR, Salt, SESAME SEEDS.\nContains: Wheat, Sesame\nTypical values per 100 g:\n  Energy: 1420 kJ\n  Energy: 340 kcal\n  Fat: 1.2 g\n  of which saturates: 0.2 g\n  Carbohydrate: 70 g\n  of which sugars: 1.5 g\n  Protein: 11 g\n  Salt: 0.01 g",
+       "declarationWithoutNutrition": "Seeded loaf\nIngredients: WHEAT FLOUR, Salt, SESAME SEEDS.\nContains: Wheat, Sesame",
        "lang": null,
        "mayContainLine": ""
       },
       "GB": {
        "canPrint": true,
        "containsLine": "Contains: Wheat, Sesame",
-       "declaration": "Seeded loaf\nIngredients: WHEAT FLOUR.\nContains: Wheat, Sesame\nTypical values per 100 g:\n  Energy: 1420 kJ\n  Energy: 340 kcal\n  Fat: 1.2 g\n  of which saturates: 0.2 g\n  Carbohydrate: 70 g\n  of which sugars: 1.5 g\n  Protein: 11 g\n  Salt: 0.01 g",
-       "declarationWithoutNutrition": "Seeded loaf\nIngredients: WHEAT FLOUR.\nContains: Wheat, Sesame",
+       "declaration": "Seeded loaf\nIngredients: WHEAT FLOUR, Salt, SESAME SEEDS.\nContains: Wheat, Sesame\nTypical values per 100 g:\n  Energy: 1420 kJ\n  Energy: 340 kcal\n  Fat: 1.2 g\n  of which saturates: 0.2 g\n  Carbohydrate: 70 g\n  of which sugars: 1.5 g\n  Protein: 11 g\n  Salt: 0.01 g",
+       "declarationWithoutNutrition": "Seeded loaf\nIngredients: WHEAT FLOUR, Salt, SESAME SEEDS.\nContains: Wheat, Sesame",
        "lang": "en",
        "mayContainLine": ""
       },
       "IT": {
        "canPrint": true,
        "containsLine": "Contiene: Grano, Sesamo",
-       "declaration": "Seeded loaf\nIngredienti: WHEAT FLOUR.\nContiene: Grano, Sesamo\nValori medi per 100 g:\n  Energia: 1420 kJ\n  Energia: 340 kcal\n  Grassi: 1.2 g\n  di cui acidi grassi saturi: 0.2 g\n  Carboidrati: 70 g\n  di cui zuccheri: 1.5 g\n  Proteine: 11 g\n  Sale: 0.01 g",
-       "declarationWithoutNutrition": "Seeded loaf\nIngredienti: WHEAT FLOUR.\nContiene: Grano, Sesamo",
+       "declaration": "Seeded loaf\nIngredienti: WHEAT FLOUR, Salt, SESAME SEEDS.\nContiene: Grano, Sesamo\nValori medi per 100 g:\n  Energia: 1420 kJ\n  Energia: 340 kcal\n  Grassi: 1.2 g\n  di cui acidi grassi saturi: 0.2 g\n  Carboidrati: 70 g\n  di cui zuccheri: 1.5 g\n  Proteine: 11 g\n  Sale: 0.01 g",
+       "declarationWithoutNutrition": "Seeded loaf\nIngredienti: WHEAT FLOUR, Salt, SESAME SEEDS.\nContiene: Grano, Sesamo",
        "lang": "it",
        "mayContainLine": ""
       },
       "none": {
        "canPrint": false,
        "containsLine": "Contains: Wheat, Sesame",
-       "declaration": "Seeded loaf\nIngredients: WHEAT FLOUR.\nContains: Wheat, Sesame\nTypical values per 100 g:\n  Energy: 1420 kJ\n  Energy: 340 kcal\n  Fat: 1.2 g\n  of which saturates: 0.2 g\n  Carbohydrate: 70 g\n  of which sugars: 1.5 g\n  Protein: 11 g\n  Salt: 0.01 g",
-       "declarationWithoutNutrition": "Seeded loaf\nIngredients: WHEAT FLOUR.\nContains: Wheat, Sesame",
+       "declaration": "Seeded loaf\nIngredients: WHEAT FLOUR, Salt, SESAME SEEDS.\nContains: Wheat, Sesame\nTypical values per 100 g:\n  Energy: 1420 kJ\n  Energy: 340 kcal\n  Fat: 1.2 g\n  of which saturates: 0.2 g\n  Carbohydrate: 70 g\n  of which sugars: 1.5 g\n  Protein: 11 g\n  Salt: 0.01 g",
+       "declarationWithoutNutrition": "Seeded loaf\nIngredients: WHEAT FLOUR, Salt, SESAME SEEDS.\nContains: Wheat, Sesame",
        "lang": null,
        "mayContainLine": ""
       }
      }
     },
     "nonsense": {
-     "ingredientLine": "WHEAT FLOUR",
+     "ingredientLine": "WHEAT FLOUR, Salt, SESAME SEEDS",
      "label": {
       "allergens": [
        "gluten-wheat",
@@ -9639,6 +9774,22 @@
         "grams": 1000,
         "id": "FLOUR",
         "name": "Wheat flour"
+       },
+       {
+        "allergens": [],
+        "emphasise": false,
+        "grams": 0,
+        "id": "SALT",
+        "name": "Salt"
+       },
+       {
+        "allergens": [
+         "sesame"
+        ],
+        "emphasise": true,
+        "grams": 0,
+        "id": "SESAME",
+        "name": "Sesame seeds"
        }
       ],
       "mayContain": [],
@@ -9664,39 +9815,39 @@
       "FR": {
        "canPrint": false,
        "containsLine": "Contains: Wheat, Sesame",
-       "declaration": "Seeded loaf\nIngredients: WHEAT FLOUR.\nContains: Wheat, Sesame\nTypical values per 100 g:\n  Energy: 1420 kJ\n  Energy: 340 kcal\n  Fat: 1.2 g\n  of which saturates: 0.2 g\n  Carbohydrate: 70 g\n  of which sugars: 1.5 g\n  Protein: 11 g\n  Salt: 0.01 g",
-       "declarationWithoutNutrition": "Seeded loaf\nIngredients: WHEAT FLOUR.\nContains: Wheat, Sesame",
+       "declaration": "Seeded loaf\nIngredients: WHEAT FLOUR, Salt, SESAME SEEDS.\nContains: Wheat, Sesame\nTypical values per 100 g:\n  Energy: 1420 kJ\n  Energy: 340 kcal\n  Fat: 1.2 g\n  of which saturates: 0.2 g\n  Carbohydrate: 70 g\n  of which sugars: 1.5 g\n  Protein: 11 g\n  Salt: 0.01 g",
+       "declarationWithoutNutrition": "Seeded loaf\nIngredients: WHEAT FLOUR, Salt, SESAME SEEDS.\nContains: Wheat, Sesame",
        "lang": null,
        "mayContainLine": ""
       },
       "GB": {
        "canPrint": true,
        "containsLine": "Contains: Wheat, Sesame",
-       "declaration": "Seeded loaf\nIngredients: WHEAT FLOUR.\nContains: Wheat, Sesame\nTypical values per 100 g:\n  Energy: 1420 kJ\n  Energy: 340 kcal\n  Fat: 1.2 g\n  of which saturates: 0.2 g\n  Carbohydrate: 70 g\n  of which sugars: 1.5 g\n  Protein: 11 g\n  Salt: 0.01 g",
-       "declarationWithoutNutrition": "Seeded loaf\nIngredients: WHEAT FLOUR.\nContains: Wheat, Sesame",
+       "declaration": "Seeded loaf\nIngredients: WHEAT FLOUR, Salt, SESAME SEEDS.\nContains: Wheat, Sesame\nTypical values per 100 g:\n  Energy: 1420 kJ\n  Energy: 340 kcal\n  Fat: 1.2 g\n  of which saturates: 0.2 g\n  Carbohydrate: 70 g\n  of which sugars: 1.5 g\n  Protein: 11 g\n  Salt: 0.01 g",
+       "declarationWithoutNutrition": "Seeded loaf\nIngredients: WHEAT FLOUR, Salt, SESAME SEEDS.\nContains: Wheat, Sesame",
        "lang": "en",
        "mayContainLine": ""
       },
       "IT": {
        "canPrint": true,
        "containsLine": "Contiene: Grano, Sesamo",
-       "declaration": "Seeded loaf\nIngredienti: WHEAT FLOUR.\nContiene: Grano, Sesamo\nValori medi per 100 g:\n  Energia: 1420 kJ\n  Energia: 340 kcal\n  Grassi: 1.2 g\n  di cui acidi grassi saturi: 0.2 g\n  Carboidrati: 70 g\n  di cui zuccheri: 1.5 g\n  Proteine: 11 g\n  Sale: 0.01 g",
-       "declarationWithoutNutrition": "Seeded loaf\nIngredienti: WHEAT FLOUR.\nContiene: Grano, Sesamo",
+       "declaration": "Seeded loaf\nIngredienti: WHEAT FLOUR, Salt, SESAME SEEDS.\nContiene: Grano, Sesamo\nValori medi per 100 g:\n  Energia: 1420 kJ\n  Energia: 340 kcal\n  Grassi: 1.2 g\n  di cui acidi grassi saturi: 0.2 g\n  Carboidrati: 70 g\n  di cui zuccheri: 1.5 g\n  Proteine: 11 g\n  Sale: 0.01 g",
+       "declarationWithoutNutrition": "Seeded loaf\nIngredienti: WHEAT FLOUR, Salt, SESAME SEEDS.\nContiene: Grano, Sesamo",
        "lang": "it",
        "mayContainLine": ""
       },
       "none": {
        "canPrint": false,
        "containsLine": "Contains: Wheat, Sesame",
-       "declaration": "Seeded loaf\nIngredients: WHEAT FLOUR.\nContains: Wheat, Sesame\nTypical values per 100 g:\n  Energy: 1420 kJ\n  Energy: 340 kcal\n  Fat: 1.2 g\n  of which saturates: 0.2 g\n  Carbohydrate: 70 g\n  of which sugars: 1.5 g\n  Protein: 11 g\n  Salt: 0.01 g",
-       "declarationWithoutNutrition": "Seeded loaf\nIngredients: WHEAT FLOUR.\nContains: Wheat, Sesame",
+       "declaration": "Seeded loaf\nIngredients: WHEAT FLOUR, Salt, SESAME SEEDS.\nContains: Wheat, Sesame\nTypical values per 100 g:\n  Energy: 1420 kJ\n  Energy: 340 kcal\n  Fat: 1.2 g\n  of which saturates: 0.2 g\n  Carbohydrate: 70 g\n  of which sugars: 1.5 g\n  Protein: 11 g\n  Salt: 0.01 g",
+       "declarationWithoutNutrition": "Seeded loaf\nIngredients: WHEAT FLOUR, Salt, SESAME SEEDS.\nContains: Wheat, Sesame",
        "lang": null,
        "mayContainLine": ""
       }
      }
     },
     "nutrition": {
-     "ingredientLine": "WHEAT FLOUR",
+     "ingredientLine": "WHEAT FLOUR, Salt, SESAME SEEDS",
      "label": {
       "allergens": [
        "gluten-wheat",
@@ -9711,6 +9862,22 @@
         "grams": 1000,
         "id": "FLOUR",
         "name": "Wheat flour"
+       },
+       {
+        "allergens": [],
+        "emphasise": false,
+        "grams": 0,
+        "id": "SALT",
+        "name": "Salt"
+       },
+       {
+        "allergens": [
+         "sesame"
+        ],
+        "emphasise": true,
+        "grams": 0,
+        "id": "SESAME",
+        "name": "Sesame seeds"
        }
       ],
       "mayContain": [],
@@ -9736,32 +9903,32 @@
       "FR": {
        "canPrint": false,
        "containsLine": "Contains: Wheat, Sesame",
-       "declaration": "Seeded loaf\nIngredients: WHEAT FLOUR.\nContains: Wheat, Sesame\nTypical values per 100 g:\n  Energy: 1420 kJ\n  Energy: 340 kcal\n  Fat: 1.2 g\n  of which saturates: 0.2 g\n  Carbohydrate: 70 g\n  of which sugars: 1.5 g\n  Protein: 11 g\n  Salt: 0.01 g",
-       "declarationWithoutNutrition": "Seeded loaf\nIngredients: WHEAT FLOUR.\nContains: Wheat, Sesame",
+       "declaration": "Seeded loaf\nIngredients: WHEAT FLOUR, Salt, SESAME SEEDS.\nContains: Wheat, Sesame\nTypical values per 100 g:\n  Energy: 1420 kJ\n  Energy: 340 kcal\n  Fat: 1.2 g\n  of which saturates: 0.2 g\n  Carbohydrate: 70 g\n  of which sugars: 1.5 g\n  Protein: 11 g\n  Salt: 0.01 g",
+       "declarationWithoutNutrition": "Seeded loaf\nIngredients: WHEAT FLOUR, Salt, SESAME SEEDS.\nContains: Wheat, Sesame",
        "lang": null,
        "mayContainLine": ""
       },
       "GB": {
        "canPrint": true,
        "containsLine": "Contains: Wheat, Sesame",
-       "declaration": "Seeded loaf\nIngredients: WHEAT FLOUR.\nContains: Wheat, Sesame\nTypical values per 100 g:\n  Energy: 1420 kJ\n  Energy: 340 kcal\n  Fat: 1.2 g\n  of which saturates: 0.2 g\n  Carbohydrate: 70 g\n  of which sugars: 1.5 g\n  Protein: 11 g\n  Salt: 0.01 g",
-       "declarationWithoutNutrition": "Seeded loaf\nIngredients: WHEAT FLOUR.\nContains: Wheat, Sesame",
+       "declaration": "Seeded loaf\nIngredients: WHEAT FLOUR, Salt, SESAME SEEDS.\nContains: Wheat, Sesame\nTypical values per 100 g:\n  Energy: 1420 kJ\n  Energy: 340 kcal\n  Fat: 1.2 g\n  of which saturates: 0.2 g\n  Carbohydrate: 70 g\n  of which sugars: 1.5 g\n  Protein: 11 g\n  Salt: 0.01 g",
+       "declarationWithoutNutrition": "Seeded loaf\nIngredients: WHEAT FLOUR, Salt, SESAME SEEDS.\nContains: Wheat, Sesame",
        "lang": "en",
        "mayContainLine": ""
       },
       "IT": {
        "canPrint": true,
        "containsLine": "Contiene: Grano, Sesamo",
-       "declaration": "Seeded loaf\nIngredienti: WHEAT FLOUR.\nContiene: Grano, Sesamo\nValori medi per 100 g:\n  Energia: 1420 kJ\n  Energia: 340 kcal\n  Grassi: 1.2 g\n  di cui acidi grassi saturi: 0.2 g\n  Carboidrati: 70 g\n  di cui zuccheri: 1.5 g\n  Proteine: 11 g\n  Sale: 0.01 g",
-       "declarationWithoutNutrition": "Seeded loaf\nIngredienti: WHEAT FLOUR.\nContiene: Grano, Sesamo",
+       "declaration": "Seeded loaf\nIngredienti: WHEAT FLOUR, Salt, SESAME SEEDS.\nContiene: Grano, Sesamo\nValori medi per 100 g:\n  Energia: 1420 kJ\n  Energia: 340 kcal\n  Grassi: 1.2 g\n  di cui acidi grassi saturi: 0.2 g\n  Carboidrati: 70 g\n  di cui zuccheri: 1.5 g\n  Proteine: 11 g\n  Sale: 0.01 g",
+       "declarationWithoutNutrition": "Seeded loaf\nIngredienti: WHEAT FLOUR, Salt, SESAME SEEDS.\nContiene: Grano, Sesamo",
        "lang": "it",
        "mayContainLine": ""
       },
       "none": {
        "canPrint": false,
        "containsLine": "Contains: Wheat, Sesame",
-       "declaration": "Seeded loaf\nIngredients: WHEAT FLOUR.\nContains: Wheat, Sesame\nTypical values per 100 g:\n  Energy: 1420 kJ\n  Energy: 340 kcal\n  Fat: 1.2 g\n  of which saturates: 0.2 g\n  Carbohydrate: 70 g\n  of which sugars: 1.5 g\n  Protein: 11 g\n  Salt: 0.01 g",
-       "declarationWithoutNutrition": "Seeded loaf\nIngredients: WHEAT FLOUR.\nContains: Wheat, Sesame",
+       "declaration": "Seeded loaf\nIngredients: WHEAT FLOUR, Salt, SESAME SEEDS.\nContains: Wheat, Sesame\nTypical values per 100 g:\n  Energy: 1420 kJ\n  Energy: 340 kcal\n  Fat: 1.2 g\n  of which saturates: 0.2 g\n  Carbohydrate: 70 g\n  of which sugars: 1.5 g\n  Protein: 11 g\n  Salt: 0.01 g",
+       "declarationWithoutNutrition": "Seeded loaf\nIngredients: WHEAT FLOUR, Salt, SESAME SEEDS.\nContains: Wheat, Sesame",
        "lang": null,
        "mayContainLine": ""
       }

@@ -152,13 +152,8 @@ const PAIRS: readonly (readonly [string, object, object])[] = [
 
 const exportsOf = (module: object): Record<string, unknown> => module as Record<string, unknown>;
 
-// ⚠️ The outbox of the current app got the fix of 11 Oct 2026 (several writes in the air, counts held for
-// the server's word) in PR #343, and this branch can be older than that. Until js/inventory/inventory-outbox.js
-// in THIS checkout has it (it exports `answered`), the port has more exports and a different empty outbox BY
-// DESIGN, so that one pair is compared only on what the old file has; the day it has the fix the pair is
-// compared in full, with no edit.
-const legacyOutboxHasTheFix = typeof (legacyInventoryOutbox as unknown as { answered?: unknown }).answered === 'function';
-const COMPARED_IN_FULL = PAIRS.filter(([name]) => name !== 'inventory-outbox' || legacyOutboxHasTheFix);
+// The outbox of the current app got the fix of 11 Oct 2026 (PR #343, now on main), so that pair is compared in
+// full like every other: a js/ regression fails here instead of being skipped.
 
 // Whether a value, and everything inside it, is frozen — as a tree, so that a card frozen in one
 // file and loose in the other is a difference even when the list around it is frozen in both.
@@ -173,7 +168,7 @@ function frozenTree(value: unknown, seen: WeakSet<object> = new WeakSet()): Froz
   return { frozen: Object.isFrozen(value), children };
 }
 
-describe.each(COMPARED_IN_FULL)('parity: %s', (_name, tsModule, jsModule) => {
+describe.each(PAIRS)('parity: %s', (_name, tsModule, jsModule) => {
   const ts = exportsOf(tsModule);
   const js = exportsOf(jsModule);
   const names = Object.keys(js).sort();
@@ -213,26 +208,6 @@ describe.each(COMPARED_IN_FULL)('parity: %s', (_name, tsModule, jsModule) => {
     }
   });
 });
-
-if (!legacyOutboxHasTheFix) {
-  describe('parity: inventory-outbox (the fix of 11 Oct 2026, PR #343, is not in js/ in this checkout yet)', () => {
-    // TO DELETE, with `legacyOutboxHasTheFix`, once PR #343 is on main and merged into this branch.
-    test('the port still exports everything the current app’s file does, with the same name and arity, and its exports that are not functions are the same kind of thing', () => {
-      const ts = exportsOf(inventoryOutbox);
-      const js = exportsOf(legacyInventoryOutbox);
-      for (const name of Object.keys(js)) {
-        expect(name in ts, `${name} is exported by js/ and not by the port`).toBe(true);
-        expect(typeof ts[name], name).toBe(typeof js[name]);
-        if (typeof js[name] === 'function') {
-          const mine = ts[name] as { name: string; length: number };
-          const theirs = js[name] as { name: string; length: number };
-          expect(mine.name, name).toBe(theirs.name);
-          expect(mine.length, `${name}: arity`).toBe(theirs.length);
-        }
-      }
-    });
-  });
-}
 
 test('all thirty-five models are compared', () => {
   expect(PAIRS.map(([name]) => name)).toStrictEqual(
