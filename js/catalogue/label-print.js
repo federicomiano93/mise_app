@@ -20,6 +20,13 @@ import { emphasised } from './label-template-model.js';
 
 const HOST_ID = 'labelPrint';
 
+// The signs that the person is back in the page after printing (see printSheet()).
+const BACK_IN_PAGE = ['pointerdown', 'keydown'];
+
+// The way out for the host now on the page, so a second Print removes the first
+// host AND its listeners.
+let closeCurrent = null;
+
 // How far the browser measurement is allowed to disagree with itself before it
 // counts as an overflow. Sub-pixel layout rounds, and a label refused for a third
 // of a pixel would be refused for ever with nothing visibly wrong.
@@ -212,6 +219,7 @@ export function fitPreviewWidth(host, sheet) {
 // everything else with a single `body > *:not(#labelPrint)` rule instead of a list
 // of selectors that goes stale the next time this page gains a header.
 export function printSheet(resolved, { sizeId = null, fontMm = null } = {}) {
+  if (closeCurrent) closeCurrent();
   const old = document.getElementById(HOST_ID);
   if (old) old.remove();
 
@@ -228,15 +236,36 @@ export function printSheet(resolved, { sizeId = null, fontMm = null } = {}) {
 
   document.body.appendChild(host);
 
+  // Each host removes ITSELF and its own listeners, never «whatever has the id»:
+  // a second Print must not leave the first one's listeners armed to remove it.
   const cleanUp = () => {
-    const node = document.getElementById(HOST_ID);
-    if (node) node.remove();
-    window.removeEventListener('afterprint', cleanUp);
+    host.remove();
+    if (closeCurrent === cleanUp) closeCurrent = null;
+    window.removeEventListener('afterprint', armed);
+    for (const type of BACK_IN_PAGE) window.removeEventListener(type, cleanUp, true);
   };
   // ⚠️ THE LISTENER, NOT A LINE AFTER print(). window.print() blocks in some
   // browsers and returns immediately in others; removing the node on the next line
   // races the print dialog and can print a blank page.
-  window.addEventListener('afterprint', cleanUp);
+  //
+  // ⚠️⚠️ AND `afterprint` DOES NOT REMOVE THE HOST — IT ONLY ARMS THE REMOVAL. Driven
+  // on the lab tablet (Android 7, Chrome 101, 13 Oct 2026): Android fires
+  // `afterprint` as soon as print() hands over, BEFORE the system's print screen has
+  // laid the page out (and it lays it out again whenever the paper is changed
+  // there). Removing the host on that event left nothing to print: the tablet
+  // offered a BLANK page. So after `afterprint` the host waits for the first sign
+  // the person is back in the page — a pointer or a key — which cannot happen while
+  // the system's print screen covers it. On a computer the dialog is modal, so that
+  // sign comes after it has closed; Ctrl+P is a key, and the capture phase removes
+  // the host BEFORE the browser prints the screen the person asked for. The host is
+  // invisible on screen (`.lab-print { display: none }`), so a little longer costs
+  // nothing.
+  const armed = () => {
+    window.removeEventListener('afterprint', armed);
+    for (const type of BACK_IN_PAGE) window.addEventListener(type, cleanUp, true);
+  };
+  window.addEventListener('afterprint', armed);
+  closeCurrent = cleanUp;
   window.print();
   return { ok: true };
 }
