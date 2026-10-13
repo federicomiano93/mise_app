@@ -153,8 +153,17 @@ describe('the hint and who may do what', () => {
     const config = configOf({ clients: [{ id: 'bad_id', name: 'Odd Client', products: [] }, ...CLIENTS] });
     await open({ config, path: '/calculator/settings/clients/bad_id' });
     await ready();
-    expect(group().getByText(/^This client cannot order through the app yet/)).toBeInTheDocument();
+    // Whoever looks, the reason is the id, not the role: a manager is not told to ask a manager.
+    expect(group().getByText('This client cannot have an ordering link until it has been saved.')).toBeInTheDocument();
+    expect(group().queryByText(/owner or a manager/)).toBeNull();
     expect(group().queryByRole('button')).toBeNull();
+  });
+
+  it('the same sentence for somebody who cannot manage, in Italian too', async () => {
+    const config = configOf({ clients: [{ id: 'bad_id', name: 'Odd Client', products: [] }, ...CLIENTS] });
+    await open({ config, path: '/calculator/settings/clients/bad_id', session: MANAGER_NOT, lang: 'it' });
+    await waitFor(() => { expect(main().queryByRole('group', { name: 'Link per ordinare' })?.textContent).not.toContain('Caricamento'); }, LOAD);
+    expect(within(main().getByRole('group', { name: 'Link per ordinare' })).getByText('Questo cliente non può avere un link per ordinare finché non è stato salvato.')).toBeInTheDocument();
   });
 
   it('a grant without its secret cannot be shown: no Copy or Send, only Replace', async () => {
@@ -171,6 +180,19 @@ describe('the hint and who may do what', () => {
     expect(italian.getByRole('button', { name: 'Copia il link' })).toBeInTheDocument();
     expect(italian.getByRole('button', { name: 'Sostituisci con un nuovo link' })).toBeInTheDocument();
     expect(italian.getByRole('button', { name: 'Disattiva gli ordini' })).toBeInTheDocument();
+  });
+});
+
+describe('a failure in the link', () => {
+  it('stays inside the group: the rest of the client screen, with its edits, keeps working', async () => {
+    // A grant whose secret cannot be turned into a link makes the group throw while it draws.
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const { user } = await open({ accounts: [{ ...ROMA, linkToken: Symbol('broken') as unknown as string }] });
+    expect(await main().findByText('The rest of the screen works.', undefined, LOAD)).toBeInTheDocument();
+    const name = main().getByRole('textbox', { name: 'Client name' });
+    await user.type(name, '!');
+    expect(name).toHaveValue('Cafe Roma!');
+    expect(main().getByRole('button', { name: 'Save' })).toBeEnabled();
   });
 });
 

@@ -37,7 +37,9 @@ export function CalculatorProvider({ children, deps, clientOrdersDeps }: {
   const { t } = useT();
   // The Calculator is drawn only for a ready session (SectionRoute), so a venue is always open here.
   if (!locationId) throw new Error('The Calculator needs an open venue.');
-  // Who the clients' menus say they come from: read when a save happens, so a renamed venue republishes.
+  // Who the clients' menus say they come from: the venue's name and country are read at the save. A rename alone
+  // republishes nothing (as the current app: menusWouldChange ignores the venue) and reaches the clients with the next
+  // save that changes some menu.
   const venueRef = useRef<MenuVenue>({ name: '', country: null });
   venueRef.current = { name: session.name, country: countryOf(session.location) };
   const [clientOrders] = useState(() => createClientOrdersStore(

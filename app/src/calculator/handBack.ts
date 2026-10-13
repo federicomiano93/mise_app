@@ -34,7 +34,7 @@ export const LOG_HISTORY_TITLE = 'log-history-title';
 // Orders received: the work view's door, and the banner above the tabs (either may be the one that opened it).
 export const CLIENT_ORDERS_OPENER = 'client-orders';
 export const ORDERS_BANNER_OPENER = 'orders-banner';
-export const logOpener =(id: string): string => `log:${id}`;
+export const logOpener = (id: string): string => `log:${id}`;
 export const versionOpener = (n: number): string => `version:${n}`;
 // The openers that belong to the Dough history's LIST (its cards, its Add button, its title), which stays mounted
 // beside the log that is open.

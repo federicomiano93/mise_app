@@ -123,7 +123,8 @@ export function OrderingLink({ client, dirty }: { client: Client; dirty: boolean
         <p className={styles.hint}>
           {account
             ? t('calc.clientCanSendOrders', { client: name })
-            : mayMake ? t('calc.createALinkAnd') : t('calc.thisClientCannotOrder')}
+            : !canOrder ? t('calc.thisClientCannotHave')
+              : mayMake ? t('calc.createALinkAnd') : t('calc.thisClientCannotOrder')}
         </p>
         <div className={styles.actions}>
           {link ? (

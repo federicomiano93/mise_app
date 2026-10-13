@@ -104,7 +104,12 @@ export function useApplyOrder(): readonly [(order: ClientOrder) => Promise<void>
     // The tab's lock is read again: a question can stay open while the person does something else.
     const written: ApplyTarget[] = targets.filter(target =>
       !target.locked && !parseLock(tabs.read(lockKey(target.recipeId)))?.locked);
-    if (written.length === 0) return;
+    if (written.length === 0) {
+      // Every tab was confirmed while the question was open: saying nothing would look like a button that does not work.
+      const nowLocked = [...new Set(targets.map(target => target.recipeName))];
+      await say(t('calc.co.allLocked', { n: nowLocked.length, names: joinList(t, nowLocked) }));
+      return;
+    }
 
     // The same write a typed number makes: the boxes keep their text under the current app's own keys and the tab is
     // stamped as used, or the new-work-day sweep would clear these on the next opening as though nobody had touched

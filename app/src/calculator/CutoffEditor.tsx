@@ -31,7 +31,7 @@ export function CutoffEditor() {
 function CutoffForm() {
   const { t } = useT();
   const store = useClientOrdersStore();
-  const { cutoff } = useClientOrders();
+  const { cutoff, cutoffStored } = useClientOrders();
   const [alert, alertDialog] = useAlert();
   const inputId = useId();
   const input = useRef<HTMLInputElement>(null);
@@ -44,6 +44,7 @@ function CutoffForm() {
       title={t('ui.clientOrdering')}
       fallback={SETTINGS_PATH}
       dirty={value !== opening}
+      saveAnyway={!cutoffStored}
       // ⚠️ The deadline is handed to the browser's own database and the screen moves on (P20); a refusal that arrives
       // later is said by the Calculator itself (the store's message), with the old deadline back on screen.
       commit={() => {
@@ -58,6 +59,9 @@ function CutoffForm() {
       }}
     >
       <Help>{t('calc.cutoff.help')}</Help>
+      {/* ⚠️ The 16:00 in the box is only the default the bakery is SHOWN: with no document the clients' page reads no
+          deadline at all, so they can order for today too. Saying so, and letting Save store the 16:00 as it is. */}
+      {cutoffStored ? null : <p role="note" className={styles.notSaved}>{t('calc.cutoff.notSaved')}</p>}
       <div className={styles.field}>
         <label htmlFor={inputId} className={styles.label}>{t('calc.ordersCloseAt')}</label>
         <input

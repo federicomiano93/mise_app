@@ -96,7 +96,7 @@ describe('the Client orders door', () => {
 
   it('says its name in Italian', async () => {
     open('/calculator', { lang: 'it' });
-    expect(await main().findByRole('button', { name: 'Ordini dei clienti' }, LOAD)).toBeInTheDocument();
+    expect(await main().findByRole('button', { name: 'Ordini ricevuti' }, LOAD)).toBeInTheDocument();
   });
 });
 

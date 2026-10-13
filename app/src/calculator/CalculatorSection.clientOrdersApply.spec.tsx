@@ -194,6 +194,21 @@ describe('putting an order in', () => {
       expect(pathOf(view)).toBe('/calculator/orders');
     });
 
+    it('when every tab is confirmed WHILE the question is open, putting it in says so instead of doing nothing', async () => {
+      const view = await open();
+      await press(view.user);
+      const ask = await screen.findByRole('alertdialog', { name: 'Put Cafe Roma’s order in the calculator?' });
+      window.localStorage.setItem('lock-focaccia', LOCKED);
+      window.localStorage.setItem('lock-brioche', LOCKED);
+      await view.user.click(within(ask).getByRole('button', { name: 'Put it in' }));
+      const notice = await screen.findByRole('alertdialog');
+      expect(notice).toHaveTextContent('Focaccia and Brioche have already been confirmed, so the quantities are locked.');
+      await view.user.click(within(notice).getByRole('button', { name: 'OK' }));
+      expect(stored('qty-roma::tray')).toBeNull();
+      expect(view.clientOrders.applied).toEqual([]);
+      expect(pathOf(view)).toBe('/calculator/orders');
+    });
+
     it('a single confirmed tab is named in the singular', async () => {
       window.localStorage.setItem('lock-focaccia', LOCKED);
       const view = await open({ config: configOf({ clients: [{

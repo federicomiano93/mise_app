@@ -99,9 +99,36 @@ describe('the form', () => {
     expect(saveButton()).toBeDisabled();
   });
 
-  it('a venue that never set one reads as 16:00', async () => {
-    await openEditor({ cutoff: null });
+  it('a venue that never set one reads as 16:00, says that nothing is saved, and lets Save store it as shown', async () => {
+    const { user, clientOrders, ...view } = await openEditor({ cutoff: null });
     expect(timeBox()).toHaveValue('16:00');
+    const note = main().getByRole('note');
+    expect(note).toHaveTextContent('No deadline has been saved yet: until you save one, clients can order for any day, today included.');
+    expect(saveButton()).toBeEnabled();
+    // Pressing it asks the usual question and stores the 16:00 shown.
+    await saveAndConfirm(user, 'Close orders at 16:00 the day before? Every client sees this straight away.');
+    await waitFor(() => { expect(pathOf(view)).toBe(HUB); });
+    expect(clientOrders.savedCutoffs).toEqual(['16:00']);
+  });
+
+  it('leaving that editor untouched still asks nothing (Save being pressable is not an unsaved edit)', async () => {
+    const { user, ...view } = await openEditor({ cutoff: null });
+    expect(isBusy()).toBe(false);
+    await user.click(main().getByRole('button', { name: 'Back' }));
+    await waitFor(() => { expect(pathOf(view)).toBe(HUB); });
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+  });
+
+  it('a deadline that is stored (even «no deadline») has no such sentence and a Save that waits for a change', async () => {
+    await openEditor({ cutoff: '' });
+    expect(main().queryByRole('note')).toBeNull();
+    expect(saveButton()).toBeDisabled();
+  });
+
+  it('says that sentence in Italian', async () => {
+    const orderSource = fakeClientOrdersSource({ cutoff: null });
+    await open(EDITOR, { orderSource, lang: 'it' });
+    expect(await main().findByRole('note', undefined, LOAD)).toHaveTextContent('Non è ancora stato salvato un orario: finché non lo salvi, i clienti possono ordinare per qualsiasi giorno, anche oggi.');
   });
 
   it('a venue with NO deadline shows an empty box', async () => {
@@ -144,6 +171,19 @@ describe('saving', () => {
     await saveAndConfirm(user, 'Remove the deadline? Clients will be able to order for any day, including today.');
     await waitFor(() => { expect(pathOf(view)).toBe(HUB); });
     expect(clientOrders.savedCutoffs).toEqual(['']);
+  });
+
+  it('refuses a value that is not a time, says so, and writes nothing', async () => {
+    const { user, clientOrders, ...view } = await openEditor();
+    // jsdom's time box turns anything invalid into '', so it is made a plain text box, like an old desktop Safari's.
+    timeBox().setAttribute('type', 'text');
+    fireEvent.change(timeBox(), { target: { value: '9.30' } });
+    await user.click(saveButton());
+    const dialog = await screen.findByRole('alertdialog', undefined, LOAD);
+    expect(dialog).toHaveTextContent('That is not a time');
+    await user.click(within(dialog).getByRole('button', { name: 'OK' }));
+    expect(pathOf(view)).toBe(EDITOR);
+    expect(clientOrders.savedCutoffs).toEqual([]);
   });
 
   it('writes nothing when the question is answered with Cancel, and stays', async () => {

@@ -15,6 +15,15 @@
   color: var(--ink-2);
 }
 
+/* The deadline shown is not in force: a notice in the warning tone, like the other notices of the Calculator. */
+.notSaved {
+  margin: 0;
+  padding: var(--s3);
+  border-radius: var(--r-md);
+  background: var(--warn-tint);
+  color: var(--warn-ink);
+}
+
 /* 18px type on purpose: a field under 16px makes iOS zoom the page in when it is focused. */
 .input {
   align-self: flex-start;

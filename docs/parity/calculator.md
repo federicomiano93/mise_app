@@ -936,5 +936,12 @@ The deadline editor, the hub's Client ordering row and the ordering link on a cl
 - **`applied-not-recorded` is now an alert dialog** that stays until it is dismissed (the current app used an alert), not the
   2.6 s status message C1 shipped: it is the warning that the app will no longer notice the client changing the order.
   `cutoff-not-saved` stays a status message.
-- **The Calculator's door says «Client orders»** (Italian «Ordini dei clienti»), not «Orders», which sat confusingly beside
-  «Send order». New key `calc.clientOrders.door`. The current app's footer button said «Orders».
+- **The Calculator's door says «Client orders»** (Italian «Ordini ricevuti»), not «Orders», which sat confusingly beside
+  «Send order». New key `calc.clientOrders.door`. The current app's footer button said «Orders». In Italian the door is NOT
+  «Ordini dei clienti»: that is the hub row's name (`ui.clientOrdering`, the deadline), and the door opens the screen of the
+  orders RECEIVED, so the two never read the same.
+- **A deadline that was never saved is said, and can be saved as shown.** With no `client-settings/orders` document the bakery
+  is shown the default 16:00 while the clients' page reads NO deadline (any day, today included). The editor then says, above the
+  box, «No deadline has been saved yet: until you save one, clients can order for any day, today included.» (new key
+  `calc.cutoff.notSaved`, warning tone), and Save is enabled WITHOUT a change so the 16:00 shown can be saved as it is (the usual
+  question follows). The current app showed 16:00 as if it were in force.

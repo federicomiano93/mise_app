@@ -35,7 +35,7 @@
     text-align: center;
   }
 
-  /* FOUR doors (the venue shows «Orders» too) do not fit one row of a phone: two columns of two, all of one width.
+  /* FOUR doors (the venue shows «Client orders» too) do not fit one row of a phone: two columns of two, all of one width.
      From 700px they share the single row again. */
   .top[data-doors="4"] {
     grid-auto-flow: row;

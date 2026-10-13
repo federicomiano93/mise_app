@@ -15,7 +15,7 @@ import styles from './OrdersBanner.module.css';
 //
 // ⚠️ IT IS AN ALARM THAT GOES QUIET AT THE END OF THE JOB: lit only for an order still to come that was never put into
 // the Calculator or CHANGED since it was (and «changed» is louder, in red). A banner still lit after the work is done is
-// one people learn to ignore. The door that is always there is the «Orders» button beside Log and Settings — so this
+// one people learn to ignore. The door that is always there is the «Client orders» button beside Dough history and Settings — so this
 // banner follows no switch: the venue's «show the Orders button» setting hides the door, never the alarm.
 export function OrdersBanner() {
   const { t } = useT();

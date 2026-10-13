@@ -1,7 +1,9 @@
-import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { menuFor } from '@mise/shared/client-order-model';
 import { isBusy } from '../session/busy';
 import { fakeCalculatorSource } from '../testing/fakeCalculatorSource';
+import { fakeClientOrdersSource } from '../testing/fakeClientOrdersSource';
 import { CLIENTS, LOAD, configOf, renderCalculator } from '../testing/renderCalculator';
 
 // The Clients editor: the address book as a list, one client with its products as cards, ONE working copy for both,
@@ -657,5 +659,57 @@ describe('in Italian', () => {
     await user.click(main().getByRole('button', { name: 'Salva' }));
     await question('Vuoi salvare queste modifiche?');
     fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' });
+  });
+});
+
+describe('saving republishes the menus of the clients (parity item 69)', () => {
+  const VENUE = 'Panificio Miano';
+
+  // The menus as they stand before the save, so only what the save changes is written.
+  function publishedBefore() {
+    const clientOrders = fakeClientOrdersSource();
+    for (const client of CLIENTS) clientOrders.menus.set(client.id, { ...menuFor(client, VENUE, 'IT') });
+    return clientOrders;
+  }
+  const render = (path: string, clientOrders: ReturnType<typeof fakeClientOrdersSource>) => {
+    const source = fakeCalculatorSource({ config: configOf() });
+    const view = renderCalculator(path, {
+      source,
+      session: { name: VENUE, location: { country: 'IT' } },
+      data: { clientOrders: () => clientOrders },
+    });
+    return { ...view, source };
+  };
+  async function ready() {
+    await main().findByRole('heading', { level: 2 }, LOAD);
+    await waitFor(() => { expect(main().queryByText(/^(Loading…|Caricamento…)$/)).toBeNull(); }, LOAD);
+  }
+
+  it('a product added to a client writes the menu of that client with the name and country of the venue', async () => {
+    const clientOrders = publishedBefore();
+    const { user, source } = render('/calculator/settings/clients/sole', clientOrders);
+    await ready();
+    await user.click(main().getByRole('button', { name: '+ Add product' }));
+    await user.keyboard('Pizza');
+    await saveAndConfirm(user);
+    await waitFor(() => { expect(source.savedConfigs).toHaveLength(1); });
+    await waitFor(() => { expect(clientOrders.menuWrites).toEqual(['sole']); });
+    const menu = clientOrders.menus.get('sole') as { products: { name: string }[]; bakeryName: string; country: string };
+    expect(menu.products.map(product => product.name)).toContain('Pizza');
+    expect(menu.bakeryName).toBe(VENUE);
+    expect(menu.country).toBe('IT');
+  });
+
+  it('a save that changes nothing a client sees writes no menu', async () => {
+    const clientOrders = publishedBefore();
+    // Not even a read of the menus: the fake would skip an unchanged menu by itself, so the call is what is pinned.
+    const publish = vi.spyOn(clientOrders, 'publishMenus');
+    const { user, source } = render('/calculator/settings/extra', clientOrders);
+    await ready();
+    await user.click(main().getByRole('switch', { name: 'Brioche' }));
+    await saveAndConfirm(user);
+    await waitFor(() => { expect(source.savedConfigs).toHaveLength(1); });
+    expect(clientOrders.menuWrites).toEqual([]);
+    expect(publish).not.toHaveBeenCalled();
   });
 });
