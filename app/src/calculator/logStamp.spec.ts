@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { logTimestamp } from '@mise/shared/log-time';
 import { localDate, localTime } from './logStamp';
 
-// The stored text is English (log-time.ts); an Italian screen says it in Italian (found on the lab tablet, 14 Oct 2026).
+// The stored text is English (log-time.ts); an Italian screen says it in Italian (found on the lab tablet, 13 Oct 2026).
 describe('a dough\'s «when» in the interface language', () => {
   it('says the stored English date in Italian', () => {
     expect(localDate('Tuesday 13 October', 'it')).toBe('martedì 13 ottobre');

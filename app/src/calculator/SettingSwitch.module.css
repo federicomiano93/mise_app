@@ -4,7 +4,7 @@
 /* ⚠️ position: relative — React Aria hides the real checkbox in an absolutely positioned span. With no positioned
    ancestor it is placed against the whole page, outside the screen's own scroll area, and a switch low in a list made
    the PAGE taller than the window: 870px of a 648px tablet window, the page and its list scrolling twice (driven on
-   the lab tablet, 14 Oct 2026, Dough history settings). Positioned here, it stays inside the switch. */
+   the lab tablet, 13 Oct 2026, Dough history settings). Positioned here, it stays inside the switch. */
 .switch {
   position: relative;
   display: inline-flex;

@@ -8,7 +8,7 @@ import { LogSheet } from './LogSheet';
 import styles from './LogBody.module.css';
 
 // «Monday 09 June — 2:05 PM». The text is stored as the author's app wrote it (English: log-time.ts) and said in the
-// interface language here (logStamp.ts: an Italian venue read English dates until 14 Oct 2026).
+// interface language here (logStamp.ts: an Italian venue read English dates until 13 Oct 2026).
 export function stamp(version: LogVersion | null, lang: Language): string {
   const at = version?.at;
   return `${localDate(at?.date ?? '', lang)} — ${localTime(at?.time ?? '', lang)}`;

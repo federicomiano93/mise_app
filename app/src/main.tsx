@@ -58,7 +58,7 @@ store.start();
 const wanted = pickLanguage(navigator.language);
 
 // ⚠️ SAID AT ONCE, NOT AFTER THE MESSAGES LOAD. Chrome decides whether to offer a translation from <html lang> early,
-// and index.html says "en": on the lab tablet (14 Oct 2026) an Italian screen was offered «translate from English».
+// and index.html says "en": on the lab tablet (13 Oct 2026) an Italian screen was offered «translate from English».
 // I18nProvider keeps it up to date from here on (the venue's language, a change of language).
 document.documentElement.lang = wanted;
 

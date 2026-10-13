@@ -21,7 +21,7 @@ describe('main.tsx', () => {
   });
 
   // ⚠️ Chrome decides early whether to offer a translation, from <html lang>; index.html says "en". Set only after the
-  // messages had loaded, an Italian screen on the lab tablet was offered «translate from English» (14 Oct 2026).
+  // messages had loaded, an Italian screen on the lab tablet was offered «translate from English» (13 Oct 2026).
   test('says the page language before the messages load', () => {
     const said = main.indexOf('document.documentElement.lang = wanted;');
     const loaded = main.indexOf('loadLanguage(wanted)');
