@@ -93,6 +93,24 @@ describe('the deadline', () => {
     expect(store.getSnapshot().cutoff).toBe('14:30');
   });
 
+  test('cutoffStored: false with no document (the clients then have NO deadline), true once one exists or is written', async () => {
+    const { source, store } = setup();
+    store.start();
+    expect(store.getSnapshot().cutoff).toBe('16:00');
+    expect(store.getSnapshot().cutoffStored).toBe(false);
+    source.holdWrites();
+    store.saveCutoff('16:00');
+    expect(store.getSnapshot().cutoffStored).toBe(true);
+    source.settleWrites();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(store.getSnapshot().cutoffSaving).toBe(false);
+    expect(store.getSnapshot().cutoffStored).toBe(true);
+    source.refuse.cutoff = true;
+    source.push();
+    expect(store.getSnapshot().cutoffStored).toBe(false);
+  });
+
   test('a junk value reads as no deadline; a broken stream as none too', () => {
     const { source, store } = setup({ cutoff: '25:99' });
     store.start();
@@ -222,6 +240,24 @@ describe('the ordering links', () => {
     await new Promise(resolve => setTimeout(resolve, 0));
     expect(store.getSnapshot().accountsState).toBe('ready');
     expect(Object.keys(store.getSnapshot().accounts).sort()).toEqual(['c-milano', 'c-roma']);
+  });
+
+  test('⚠️ two grants for one client: the one with a link is shown, and turning ordering off ends BOTH', async () => {
+    const older = { uid: 'u0', clientId: 'c-roma', clientName: 'Cafe Roma', createdAt: '2026-01-01', linkToken: null };
+    const { source, store } = setup({ accounts: [older, account] });
+    await store.loadAccounts();
+    expect(store.getSnapshot().accounts['c-roma']?.uid).toBe('u1');
+    await store.revokeLink('c-roma');
+    expect(source.accounts.size).toBe(0);
+    expect(store.getSnapshot().accounts['c-roma']).toBeUndefined();
+  });
+
+  test('⚠️ replacing the link of a client with two grants ends both old ones', async () => {
+    const second = { uid: 'u2', clientId: 'c-roma', clientName: 'Cafe Roma', createdAt: '2026-02-01', linkToken: 'tok2' };
+    const { source, store } = setup({ accounts: [account, second] });
+    await store.loadAccounts();
+    const created = await store.createLink({ id: 'c-roma', name: 'Cafe Roma', products: [] }, venue);
+    expect([...source.accounts.keys()]).toEqual([created.uid]);
   });
 
   test('a refused create changes nothing and rejects', async () => {

@@ -48,6 +48,10 @@ export interface ClientOrdersSnapshot {
   readonly cutoff: string;
   // The deadline as the SERVER holds it has arrived once: the deadline editor copies it only then.
   readonly cutoffFromServer: boolean;
+  // A deadline document EXISTS (or one is being written from here). ⚠️ Without one the bakery is shown the default
+  // 16:00 while the clients' page reads «no deadline» (js/client-orders/order-main.js): the editor says so and lets
+  // the 16:00 be saved as it is.
+  readonly cutoffStored: boolean;
   // A deadline written here has not been answered yet.
   readonly cutoffSaving: boolean;
   // clientId → its ordering link's grant; meaningful once `accountsState` is 'ready'.
@@ -110,10 +114,16 @@ export function createClientOrdersStore(source: ClientOrdersSource, deps: Client
   // What the deadline's stream said: undefined = not yet; null = no document; '' = broken (see `cutoff`).
   let streamCutoff: string | null | undefined;
   let cutoffFromServer = false;
+  // The deadline's stream died: `streamCutoff` is then '' by decision, not a document saying so.
+  let streamBroken = false;
   // The deadlines written here and not answered yet, oldest first: the newest is the one on screen.
   const savingCutoffs: string[] = [];
   let applying = 0;
   let accounts: Readonly<Record<string, OrderingAccount>> = {};
+  // EVERY grant read for a client, its uids. ⚠️ Production may hold two for one client (the current app's Create
+  // after a failed read of the links minted a second): `accounts` shows one, but turning ordering off — or
+  // replacing the link — must end them all, or the other link keeps working for whoever holds it.
+  let grantsOf: Readonly<Record<string, readonly string[]>> = {};
   let accountsState: AccountsState = 'idle';
   let accountsRead = 0;
   let stops: Array<() => void> = [];
@@ -136,6 +146,7 @@ export function createClientOrdersStore(source: ClientOrdersSource, deps: Client
       ordersFailed,
       cutoff: effectiveCutoff(),
       cutoffFromServer,
+      cutoffStored: savingCutoffs.length > 0 || (typeof streamCutoff === 'string' && !streamBroken),
       cutoffSaving: savingCutoffs.length > 0,
       accounts,
       accountsState,
@@ -182,8 +193,18 @@ export function createClientOrdersStore(source: ClientOrdersSource, deps: Client
       const list = await source.listAccounts();
       if (read !== accountsRead) return;
       const next: Record<string, OrderingAccount> = {};
-      for (const account of list) next[account.clientId] = account;
+      const uids: Record<string, string[]> = {};
+      for (const account of list) {
+        // The one shown is the one with a link to copy, the newest first.
+        const known = next[account.clientId];
+        if (!known || (!known.linkToken && account.linkToken)
+          || (!!known.linkToken === !!account.linkToken && account.createdAt > known.createdAt)) {
+          next[account.clientId] = account;
+        }
+        (uids[account.clientId] ??= []).push(account.uid);
+      }
       accounts = next;
+      grantsOf = uids;
       accountsState = 'ready';
     } catch (err) {
       if (read !== accountsRead) return;
@@ -232,6 +253,7 @@ export function createClientOrdersStore(source: ClientOrdersSource, deps: Client
         source.watchCutoff(
           (cutoff, meta) => {
             streamCutoff = cutoff;
+            streamBroken = false;
             if (meta.fromServer) cutoffFromServer = true;
             changed();
           },
@@ -239,6 +261,7 @@ export function createClientOrdersStore(source: ClientOrdersSource, deps: Client
             deps.warn('[client orders] deadline stream failed:', err);
             // As the current app: no deadline known means no «late» mark rather than a wrong one.
             streamCutoff = '';
+            streamBroken = true;
             changed();
           },
         ),
@@ -297,6 +320,12 @@ export function createClientOrdersStore(source: ClientOrdersSource, deps: Client
     async createLink(client, venue) {
       const replacing = accounts[client.id]?.uid ?? null;
       const created = await source.createLink(client, venue, replacing);
+      // Any OTHER grant of this client goes too (see `grantsOf`); a refusal here is logged and the link stands.
+      for (const uid of grantsOf[client.id] ?? []) {
+        if (uid === replacing || uid === created.uid) continue;
+        await source.revokeLink(uid).catch((err: unknown) => deps.warn('[client orders] an older link was not turned off:', err));
+      }
+      grantsOf = { ...grantsOf, [client.id]: [created.uid] };
       const readInAir = accountsState === 'loading';
       accountsRead += 1; // a read in the air no longer describes the links
       setAccount({
@@ -316,7 +345,10 @@ export function createClientOrdersStore(source: ClientOrdersSource, deps: Client
     async revokeLink(clientId) {
       const account = accounts[clientId];
       if (!account) return;
-      await source.revokeLink(account.uid);
+      // Every grant naming the client, the one shown last: a refusal stops here and rejects, the screen says so.
+      const uids = [...(grantsOf[clientId] ?? []).filter(uid => uid !== account.uid), account.uid];
+      for (const uid of uids) await source.revokeLink(uid);
+      grantsOf = Object.fromEntries(Object.entries(grantsOf).filter(([id]) => id !== clientId));
       const readInAir = accountsState === 'loading';
       accountsRead += 1;
       accounts = Object.fromEntries(Object.entries(accounts).filter(([id]) => id !== clientId));
