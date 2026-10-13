@@ -12,6 +12,7 @@
 //   JS    .toSorted( / .toReversed( / .toSpliced( 110 · Object.groupBy / Map.groupBy 117 · Promise.withResolvers 119
 //         AbortSignal.timeout 103 · AbortSignal.any 116 · URL.canParse 120 · Array.fromAsync 121
 //         Set .union( / .intersection( / .symmetricDifference( / .isSubsetOf( / .isSupersetOf( / .isDisjointFrom( 122
+//         .difference( 122 · Array .with( 110 · the inert attribute 102
 //         Intl.DurationFormat 129 · roundingMode / trailingZeroDisplay (NumberFormat v3) 106
 //         formatRange( 106 (Intl.NumberFormat; DateTimeFormat's is 76) · showPopover / popover= 114
 //         startViewTransition 111 · .checkVisibility( 105 · .inert 102 · scrollend 114
@@ -29,9 +30,9 @@ export const CSS_TOKENS: Tokens = [
   ['@scope', /@scope\b/],
   [':user-invalid', /:user-invalid\b/],
   [':user-valid', /:user-valid\b/],
-  ['translate:', /^\s*translate\s*:/],
-  ['scale:', /^\s*scale\s*:/],
-  ['rotate:', /^\s*rotate\s*:/],
+  ['translate:', /(?:^|[;{])\s*translate\s*:/],
+  ['scale:', /(?:^|[;{])\s*scale\s*:/],
+  ['rotate:', /(?:^|[;{])\s*rotate\s*:/],
 ];
 
 export const JS_TOKENS: Tokens = [
@@ -60,15 +61,20 @@ export const JS_TOKENS: Tokens = [
   ['startViewTransition', /\bstartViewTransition\b/],
   ['.checkVisibility(', /\.checkVisibility\(/],
   ['.inert', /\.inert\b/],
+  ['inert attribute', /\binert[\s=>{/]/],
+  ['.difference(', /\.difference\(/],
+  ['.with(', /\.with\(/],
   ['scrollend', /\bscrollend\b/],
 ];
 
-export const cssWithoutComments = (css: string): string => css.replace(/\/\*[\s\S]*?\*\//g, '');
+// A comment is replaced by its own newlines, so a line number in a finding is the line in the real file.
+const blankKeepingNewlines = (match: string): string => match.replace(/[^\n]/g, '');
+export const cssWithoutComments = (css: string): string => css.replace(/\/\*[\s\S]*?\*\//g, blankKeepingNewlines);
 
 // Comments out of TS/TSX so an explanation naming a token is not a use. A `//` inside a string or URL is cut too —
 // at worst this hides the rest of that line.
 export const codeWithoutComments = (code: string): string =>
-  code.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:'"`])\/\/.*$/gm, '$1');
+  code.replace(/\/\*[\s\S]*?\*\//g, blankKeepingNewlines).replace(/(^|[^:'"`])\/\/.*$/gm, '$1');
 
 export function findings(files: Record<string, string>, tokens: Tokens, strip: (text: string) => string): string[] {
   const found: string[] = [];
@@ -90,5 +96,10 @@ export function scannerSeesWhatItForbids(): string[] {
     ...findings({ 'c.css': '.a { transform: translate(1px, 2px); }' }, CSS_TOKENS, cssWithoutComments),
     ...findings({ 'a.ts': 'const b = a.toSorted();' }, JS_TOKENS, codeWithoutComments),
     ...findings({ 'b.ts': '// a.toSorted() is too new' }, JS_TOKENS, codeWithoutComments),
+    ...findings({ 'd.css': '.a { translate: 1px; }' }, CSS_TOKENS, cssWithoutComments),
+    ...findings({ 'e.css': '.a {color: red;rotate: 5deg}' }, CSS_TOKENS, cssWithoutComments),
+    ...findings({ 'c.ts': 'a.difference(b); a.with(0, 1);' }, JS_TOKENS, codeWithoutComments),
+    ...findings({ 'a.tsx': 'return <div inert={open} />;' }, JS_TOKENS, codeWithoutComments),
+    ...findings({ 'f.ts': '/* one\n two */\nx.toSorted();' }, JS_TOKENS, codeWithoutComments),
   ];
 }

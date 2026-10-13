@@ -16,7 +16,7 @@ describe('app/src uses nothing newer than Chrome 101', () => {
     expect(Object.keys(css).length + Object.keys(code).length).toBeGreaterThan(50);
     expect(Object.keys(css).length).toBeGreaterThan(20);
     expect(Object.keys(code).some(file => file.includes('.spec.'))).toBe(false);
-    expect(scannerSeesWhatItForbids()).toEqual(['a.css:1 :has(', 'b.css:2 translate:', 'a.ts:1 .toSorted(']);
+    expect(scannerSeesWhatItForbids()).toEqual(['a.css:1 :has(', 'b.css:2 translate:', 'a.ts:1 .toSorted(', 'd.css:1 translate:', 'e.css:1 rotate:', 'c.ts:1 .difference(', 'c.ts:1 .with(', 'a.tsx:1 inert attribute', 'f.ts:3 .toSorted(']);
   });
 
   it('has no CSS newer than Chrome 101', () => {
