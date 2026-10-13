@@ -135,8 +135,8 @@
       }
     },
     "dist/catalogue.js": {
-      "sha": "2074a243ebfc8713",
-      "mapSha": "e3653ee79fd0dcba",
+      "sha": "37de78c038bee6ef",
+      "mapSha": "b3edd24d2915c944",
       "inputs": {
         "js/allergen-match.js": "ee85eebef7fd7052",
         "js/allergen-model.js": "50434c6cea85b7de",
@@ -145,7 +145,7 @@
         "js/auth-gate.js": "5bc4dc671165cecd",
         "js/calculator-config.js": "9bdba7a8bc3d8761",
         "js/catalogue/allergen-sheet.js": "0a1ec5ee0d8c6a56",
-        "js/catalogue/catalogue-detail.js": "6c2c9c66deba2e75",
+        "js/catalogue/catalogue-detail.js": "1866d4249954bd96",
         "js/catalogue/catalogue-editor.js": "be31547594a8efd9",
         "js/catalogue/catalogue-list.js": "289d824f889b3757",
         "js/catalogue/catalogue-main.js": "28863c59f8f79a95",
@@ -172,7 +172,7 @@
         "js/catalogue/print-transports.js": "2ffa9be4dbda2b30",
         "js/catalogue/recipe-allergen-model.js": "e00d4047f61d5d6f",
         "js/catalogue/recipe-cost-model.js": "7dd027150da03725",
-        "js/catalogue/recipe-label-model.js": "16765925009df841",
+        "js/catalogue/recipe-label-model.js": "d18b858bd007813a",
         "js/catalogue/search-box.js": "6cd5b7c92acc83fe",
         "js/catalogue/tablet.js": "89a53f5776a0f78a",
         "js/catalogue/zoom-steps.js": "027da1e4fc29f6dc",
