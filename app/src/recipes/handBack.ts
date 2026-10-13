@@ -12,6 +12,10 @@ import { createContext, useContext, useMemo, useRef } from 'react';
 // feature's folder.)
 
 export const recipeOpener = (id: string): string => `recipe:${id}`;
+// The door to the Allergen sheet, at the foot of the list: Back from the sheet returns the focus to it.
+export const ALLERGENS_OPENER = 'allergens-door';
+// A row of the Allergen sheet: Back from a recipe opened from the sheet returns the focus to its row.
+export const sheetOpener = (id: string): string => `sheet:${id}`;
 // The list's search box: where the focus goes when the row it is owed no longer exists.
 export const SEARCH_OPENER = 'search';
 

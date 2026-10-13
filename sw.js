@@ -1,4 +1,4 @@
-const CACHE_NAME = 'theitalianclub-v664';
+const CACHE_NAME = 'theitalianclub-v674';
 // Firebase SDK modules (loaded from gstatic) are cached SEPARATELY from CACHE_NAME
 // so they survive the cache-version bump that happens on every deploy — otherwise
 // the offline SDK would be wiped each release until the next online load. The name
@@ -150,10 +150,10 @@ const ASSET_HASHES = {
   "./install-guide.html": '322c79acf63896ef',
   "./reset-password.html": '298724d76511df05',
   "./dist/i18n.js": 'ea6405e58166871b',
-  "./dist/index.js": '0a16e023a70d7899',
-  "./dist/calculator.js": '5206be30cd6047c0',
-  "./dist/orders.js": '9361e46096a15f84',
-  "./dist/suppliers.js": '95932780d01b980f',
+  "./dist/index.js": '57a736a03901c5dd',
+  "./dist/calculator.js": '8069f21c1776773a',
+  "./dist/orders.js": '1f8f1d0ce2cc02d8',
+  "./dist/suppliers.js": '63831e51cfc1d9b3',
   "./dist/install-guide.js": '86df880954faeae9',
   "./js/allergen-model.js": 'a9ad7592da832a56',
   "./js/calculator-config.js": '65e76f83f8458dbb',
@@ -175,10 +175,10 @@ const ASSET_HASHES = {
   "./js/sections.js": 'abcfdecb2bd5766d',
   "./js/sw-update.js": '2ffc253aa03eff0f',
   "./js/update-gate.js": '1801738b3e6def2d',
-  "./dist/catalogue.js": '53e52b22b7fa3d1a',
-  "./dist/pastries.js": '11b100243abc9b35',
-  "./dist/foodcost.js": '582d5d94ea930e3f',
-  "./dist/inventory.js": '66563be3b74bf5b9',
+  "./dist/catalogue.js": '8f1fe6aee40caf27',
+  "./dist/pastries.js": 'f28377a9f3adcd4e',
+  "./dist/foodcost.js": '7084a84a14fb48ef',
+  "./dist/inventory.js": 'bac42c8abb8c1a3d',
   "./qr.png": '761a95e5bc25e2ba',
   "./dist/tokens.css": 'a4f37273bf55b63f',
   "./dist/auth.css": '58cd14bdbf808ecc',
@@ -568,9 +568,26 @@ self.addEventListener('fetch', e => {
           .catch(() => {});
       }
       return res;
-    }).catch(() => caches.match(e.request))
+    }).catch(() => offlineCopy(url, e.request))
   );
 });
+
+// What answers a request of ours that the network could not.
+//
+// ⚠️⚠️ A PRECACHED PAGE ASKED FOR WITH A QUERY IS STILL THAT PAGE. The stocktake's month
+// arrows open inventory.html?month=…, and with no signal every month not opened online
+// before answered with the browser's own error page — the arrows dead in a storeroom
+// (found 11 Oct 2026, offline through this worker on the emulator). The query is read by
+// the page's own script, never by the server, so THIS worker's copy of the file is the
+// right answer: the one that matches this release's bundles. Online nothing changes.
+function offlineCopy(url, request) {
+  if (url.search && PRECACHED.has(url.origin + url.pathname)) {
+    return caches.open(CACHE_NAME)
+      .then(cache => cache.match(url.origin + url.pathname))
+      .then(hit => hit || caches.match(request));
+  }
+  return caches.match(request);
+}
 
 self.addEventListener('message', e => {
   if (!e.source) return;

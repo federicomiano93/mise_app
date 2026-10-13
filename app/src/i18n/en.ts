@@ -1000,6 +1000,72 @@ export const en = {
   'cat.liveSyncInterruptedRecipes': 'Live sync interrupted — recipes may be out of date.',
   // New in Mise 2: a recipe's address whose recipe is not among the venue's recipes (the current app has no addresses).
   'recipes.notFound': 'This recipe no longer exists.',
+  // New in Mise 2 (step 3d-2): until the ingredients have arrived no verdict is drawn, because every linked row would
+  // read «not declared» only because nothing had come yet. The current app paints from its own copy.
+  'recipes.allergensChecking': 'Checking the allergens…',
+  // New in Mise 2 (3d-2 review): the wait never ends on a phone that is offline with nothing stored, so after ten seconds
+  // the screen says what it is waiting for. Still no verdict.
+  'recipes.allergensStillWaiting': 'Still waiting for the ingredient list — the allergens can’t be checked until it arrives. Are you offline?',
+  // New in Mise 2: the ingredients could never be read (refused, nothing stored), so the per-row reasons would all be untrue.
+  'cat.alg.unreadable': 'The ingredient list could not be read, so the allergens cannot be checked.',
+  // Allergens, step 3d-2 (the current app's wording, key for key). The state of a recipe's allergens is a word.
+  'cat.alg.title': 'Allergens',
+  'cat.alg.notDeclared': 'not declared',
+  'cat.alg.declared': 'fully declared',
+  'cat.alg.notDeclaredCount': {
+    one: '{n} ingredient is not declared — no label can be made',
+    other: '{n} ingredients are not declared — no label can be made',
+  },
+  'cat.alg.andMore': { one: '…and {n} more', other: '…and {n} more' },
+  'cat.alg.soFar': 'So far, from the rows that are declared: {list}. This is NOT the full list.',
+  'cat.alg.mayContain': 'May contain: {list}',
+  'cat.alg.reason.notLinked': 'not linked to an ingredient',
+  'cat.alg.reason.missingIngredient': 'linked to an ingredient that no longer exists',
+  'cat.alg.reason.notDeclared': 'the linked ingredient has no allergen information yet',
+  'cat.alg.reason.missingRecipe': 'linked to a recipe that no longer exists',
+  'cat.alg.reason.subIncomplete': 'the linked recipe is not fully declared',
+  'cat.alg.reason.cycle': 'this recipe contains itself',
+  'cat.alg.reason.tooDeep': 'nested too many recipes deep',
+  'cat.nothingInThisRecipe': 'Nothing in this recipe is declared yet',
+  'cat.unknownIngredient': 'Unknown ingredient',
+  'cat.noneOfThe14': 'None of the 14',
+  'cat.fromTheSuppliersSpecifications': 'From the suppliers’ specifications. It does not cover what your own kitchen may add — shared benches, shared equipment, flour in the air.',
+  'cat.fromTheSuppliersSpecifications2': 'From the suppliers’ specifications. It does not cover what your own kitchen may add.',
+  'cat.decl.title': 'Ingredient declaration',
+  'cat.decl.blocked': 'Not ready yet — some ingredients are still to be declared. The allergen card above says which.',
+  'cat.decl.caveat': 'A draft for you to check. The app knows what it was told: it cannot know about a last-minute substitution or a supplier who changed their recipe.',
+  'cat.decl.copy': 'Copy',
+  // The current app's own sentences for a label that cannot be made (js/i18n.js, key for key).
+  'label.blocked.noWeights': 'This recipe has no ingredients with a weight.',
+  'label.blocked.noCountry': 'No label can be made yet: nobody has said which country this business sells in, and that decides the language the label must be printed in. The owner can set it when the business is created.',
+  'label.copied': 'Copied',
+  'label.copyFailed': 'Could not copy — select the text above instead',
+  // The Allergen sheet (the screen at the counter).
+  'cat.allergenSheet': 'Allergen sheet',
+  'cat.sheet.declaredCount': '{n} of {total} recipes fully declared',
+  'cat.sheet.blockedCount': {
+    one: '{n} cannot be labelled yet.',
+    other: '{n} cannot be labelled yet.',
+  },
+  'cat.everyRecipeCanBe': 'Every recipe can be labelled.',
+  'cat.sheet.rowDeclared': 'fully declared',
+  'cat.sheet.rowNotDeclared': 'not declared',
+  'cat.sheet.theLawHere': 'What the law requires here',
+  'cat.sheet.theSpecificOnes': 'The cereals and nuts the law makes you name one by one',
+  'cat.sheet.namesFollowCountry': 'These are the words the law uses {country}. They stay in that language whatever language the app is set to.',
+  'cat.sheet.noCountry': 'Nobody has said which country this business sells in, so the app cannot say which allergens the law requires here. The owner sets it when the business is created.',
+  'country.GB.in': 'in the United Kingdom',
+  'country.IT.in': 'in Italy',
+  'cat.andMore': '…and {n} more',
+  'cat.nRows': { one: '{n} row', other: '{n} rows' },
+  'cat.nRecipes': { one: '{n} recipe', other: '{n} recipes' },
+  'cat.linkTheseRowsFirst': 'Link these rows first',
+  'cat.aRecipeRowHas': 'A recipe row has to point at an ingredient before anything can be known about it. Link them from the recipe’s own screen — the pencil, then the row.',
+  'cat.thenDeclareThese': 'Then declare these',
+  'cat.declareTheseFirst': 'Declare these first',
+  'cat.eachOneIsHolding': 'Each one is holding up this many recipes. Fill them in from Orders → Ingredients.',
+  'cat.noRecipesYet': 'No recipes yet.',
+  'cat.nothingInItYet': 'Nothing in it yet',
 } as const satisfies Record<string, Message>;
 
 export type MessageKey = keyof typeof en;
