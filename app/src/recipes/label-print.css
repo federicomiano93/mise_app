@@ -12,9 +12,9 @@
   effect, once, where the label is drawn.
 
   What differs from the current app's file, and only this: the tokens. Mise 2 has no
-  --font-round / --cat-* tokens, so the typeface, the preview frame, its note and the
-  «does not fit» box read --font, --line-2, --ink-2, --warn-tint, --warn-ink and
-  --shadow-1. The sheet itself keeps no token for its colours (next paragraph).
+  --cat-* tokens, so the preview frame, its note and the «does not fit» box read
+  --line-2, --ink-2, --warn-tint, --warn-ink and --shadow-1. The typeface is NOT a
+  token: it is Manrope, declared below (see the note there). The sheet itself keeps no token for its colours (next paragraph).
 
   ⚠️⚠️ THE SHEET IS BLACK ON WHITE, AND THAT IS NOT AN AESTHETIC CHOICE SO IT DOES
   NOT ASK tokens.css. A thermal label printer is monochrome: it burns a dot or it
@@ -28,6 +28,34 @@
   the page CSP is `style-src 'self'` and an inline style="" attribute is refused.
   This file holds only what never changes.
 */
+
+/*
+  ⚠️⚠️ THE SHEET HAS ITS OWN TYPEFACE, THE CURRENT APP'S MANROPE, AND NOT THE SCREEN'S GEIST. The fit gate
+  measures this sheet in the browser and the printer prints the same node: if Mise 2 drew the paper in a different
+  face from the current app, the same recipe on the same paper would fit in one app and spill in the other, and
+  the label would change the day the app is switched. Same two files (copied byte for byte into
+  src/assets/fonts), same unicode ranges as the root tokens.css.
+
+  font-display is 'swap', as in the current app: a block period would hide the paper for a moment and
+  a failed font would hide it for ever. The price is that a first measurement can be taken in the fallback face, so
+  the screen measures AGAIN when document.fonts reports the face loaded (LabelScreen.tsx).
+*/
+@font-face {
+  font-family: 'Manrope';
+  font-style: normal;
+  font-weight: 400 800;
+  font-display: swap;
+  src: url(../assets/fonts/manrope-latin.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Manrope';
+  font-style: normal;
+  font-weight: 400 800;
+  font-display: swap;
+  src: url(../assets/fonts/manrope-latin-ext.woff2) format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
 
 /* ── The sheet ───────────────────────────────────────────────────────────────
    Sized in millimetres by the sheet (label-sheet.ts). box-sizing: border-box so the margin the
@@ -43,7 +71,7 @@
   overflow: hidden;
   background: #fff;
   color: #000;
-  font-family: var(--font);
+  font-family: 'Manrope', system-ui, -apple-system, "Segoe UI", sans-serif;
   /* ⚠️ A long ingredient name must break inside itself rather than push the block
      off the paper. The fit estimate in label-template-model.ts assumes exactly this
      behaviour, so the two have to agree. */

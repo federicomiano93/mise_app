@@ -3,6 +3,19 @@ import { LABEL_SIZES } from '@mise/shared/label-template-model';
 import tokensCss from '../styles/tokens.css?raw';
 import labelCss from './label-print.css?raw';
 
+// The two faces of Manrope exactly as the current app's root tokens.css declares them (Vite will not let a spec read
+// a file outside this package, so the values are written down here, copied from it).
+const MANROPE_FACES = [
+  {
+    file: 'manrope-latin.woff2',
+    range: 'U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD',
+  },
+  {
+    file: 'manrope-latin-ext.woff2',
+    range: 'U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF',
+  },
+] as const;
+
 // The stylesheet of the label as a piece of paper (label-print.css), copied from the current app. It is a PLAIN
 // GLOBAL stylesheet on purpose — parity doc item 110c — and the tests below read the CSS text, because jsdom
 // applies no layout, no @page and no print media: a class renamed or hashed, a preset page forgotten or a token that does
@@ -69,6 +82,26 @@ describe('label-print.css', () => {
   it('keeps the allergen emphasis through a printer set to save ink', () => {
     expect(css).toMatch(/@media print[\s\S]*\.lab-sheet-ing--allergen\s*\{[^}]*print-color-adjust:\s*exact/);
     expect(/\.lab-sheet-ing--allergen\s*\{([^}]*)\}/.exec(css)?.[1] ?? '').toMatch(/font-weight:\s*800[\s\S]*text-decoration:\s*underline/);
+  });
+
+  // ⚠️ THE SAME TYPEFACE AS THE CURRENT APP, or the same recipe on the same paper fits in one app and spills in
+  // the other. The sheet names Manrope itself (not the screen's --font), and the two files and unicode ranges are
+  // the root tokens.css's own.
+  it('draws the sheet in Manrope, with the faces of the current app, not in the screen font', () => {
+    const sheet = /\.lab-sheet\s*\{([^}]*)\}/.exec(css)?.[1] ?? '';
+    expect(sheet).toMatch(/font-family:\s*'Manrope',/);
+    expect(sheet).not.toMatch(/var\(--font/);
+    const faces = (text: string) => [...withoutComments(text).matchAll(/@font-face\s*\{([^}]*Manrope[^}]*)\}/g)].map(m => m[1] ?? '');
+    const ours = faces(labelCss);
+    expect(ours).toHaveLength(2);
+    const field = (face: string, name: string) => new RegExp(`${name}:\\s*([^;]+);`).exec(face)?.[1]?.trim();
+    ours.forEach((face, index) => {
+      const expected = MANROPE_FACES[index];
+      expect(field(face, 'unicode-range')).toBe(expected?.range);
+      expect(field(face, 'font-weight')).toBe('400 800');
+      expect(field(face, 'font-display')).toBe('swap');
+      expect(field(face, 'src')).toBe(`url(../assets/fonts/${expected?.file}) format('woff2')`);
+    });
   });
 
   it('reads only tokens that tokens.css defines', () => {
