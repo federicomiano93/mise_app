@@ -7,7 +7,9 @@ import { useT } from '../i18n/useT';
 import { FormBar } from '../ui/FormBar';
 import { RecipeFullScreen } from '../ui/RecipeFullScreen';
 import { CATALOGUE_ZOOM_KEY } from '../ui/zoomStorage';
+import { AllergenCard } from './AllergenCard';
 import { BatchCard } from './BatchCard';
+import { DeclarationCard } from './DeclarationCard';
 import { useRecipes, useRecipesStore } from './RecipesContext';
 import { amountText, recipeAmounts } from './recipeAmounts';
 import styles from './RecipeView.module.css';
@@ -18,10 +20,13 @@ type Props = {
   onBack: () => void;
 };
 
-// One recipe: the bar with Back and its name, the ingredient list and the batch card.
+// One recipe: the bar with Back and its name, then the cards in the current app's order: the ingredient
+// list, the batch, the allergens and the declaration.
 //
-// (Step 3d-1 reads recipes. The allergen, declaration, Food cost and procedure cards, the pencil and
-// Delete arrive with their own steps.)
+// (The Food cost link, the procedure, the pencil and Delete arrive with their own steps.)
+//
+// ⚠️ THE TWO ALLERGEN CARDS FOLLOW THE LIVE DATA ON THEIR OWN (they read the store), so an ingredient
+// declared on another phone reaches this screen without it being closed and reopened.
 //
 // It is keyed on the recipe's id by the caller, so a batch typed for one recipe never carries over
 // to another; a live change of the SAME recipe redraws it in place and keeps what is typed.
@@ -47,6 +52,8 @@ export function RecipeView({ recipe, titleRef, onBack }: Props) {
         <IngredientsCard recipe={recipe} target={target} />
         {/* A recipe of pieces and «to taste» has nothing to scale by weight: the whole card goes. */}
         {hasWeight ? <BatchCard recipe={recipe} target={target} /> : null}
+        <AllergenCard recipe={recipe} />
+        <DeclarationCard recipe={recipe} />
       </div>
     </section>
   );
