@@ -12,6 +12,7 @@ import { cameFromList, cameFromRecipe, cameFromSheet, useLeave } from './recipes
 import { RECIPES_PATH, recipePath } from './recipesPath';
 import type { ShownView } from './recipesPath';
 import { ALLERGENS_OPENER, recipeOpener, sheetOpener, useHandBack } from './handBack';
+import { useRecipeReturn } from './recipeReturn';
 import styles from './RecipesDetail.module.css';
 
 // The right-hand side of the split — and, on a phone, the whole screen when a recipe is open. With
@@ -75,6 +76,7 @@ function RecipeScreen({ id, label }: { id: string; label: boolean }) {
   const { t } = useT();
   const { state } = useLocation();
   const handBack = useHandBack();
+  const recipeReturn = useRecipeReturn();
   const say = useStatusMessage();
   const { recipes, recipesFromServer, streamBroken } = useRecipes();
   const title = useRef<HTMLHeadingElement>(null);
@@ -116,6 +118,8 @@ function RecipeScreen({ id, label }: { id: string; label: boolean }) {
   const shown = recipe !== null;
   useEffect(() => {
     if (!shown) return;
+    // Back from the label: the card has put the focus on «Make a label», where the person left (recipeReturn.ts).
+    if (!label && recipeReturn.wasDelivered()) return;
     if (label ? cameFromRecipe(state) && navigationType !== 'POP' : cameFromList(state)) title.current?.focus();
   }, [shown]);
 

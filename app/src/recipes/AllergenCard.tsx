@@ -1,4 +1,4 @@
-import { useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { allergenName, outputLanguage } from '@mise/shared/market';
@@ -11,6 +11,7 @@ import { useSession } from '../session/SessionContext';
 import { useAllergenTables } from './allergenTables';
 import { incompleteSentence } from './allergenText';
 import { useRecipes } from './RecipesContext';
+import { useRecipeReturn } from './recipeReturn';
 import { FROM_RECIPE } from './recipesNav';
 import { labelPath } from './recipesPath';
 import { useStillWaiting } from './useStillWaiting';
@@ -57,10 +58,21 @@ export function AllergenCard({ recipe }: { recipe: CatalogueRecipe }) {
   const { recipes, ingredients, ingredientsLoaded, ingredientsUnreadable } = useRecipes();
   const tables = useAllergenTables(recipes, ingredients);
   const navigate = useNavigate();
-  const [open, setOpen] = useState(false);
+  const recipeReturn = useRecipeReturn();
+  // ⚠️ BACK FROM THIS RECIPE'S LABEL the fold is open again (the button is inside it) and the focus is on the button,
+  // as when the person left. Read while drawing the first time; opened afresh, the card still opens closed.
+  const [returning] = useState(() => recipeReturn.pending(recipe.id));
+  const [open, setOpen] = useState(returning);
+  const labelButton = useRef<HTMLButtonElement>(null);
   const headId = useId();
   const bodyId = useId();
   const stillWaiting = useStillWaiting(!ingredientsLoaded);
+
+  useEffect(() => {
+    if (!returning || labelButton.current === null) return;
+    labelButton.current.focus({ preventScroll: true });
+    recipeReturn.markDelivered();
+  }, []);
 
   if (!allergensOn(location)) return null;
   const lang = outputLanguage(location);
@@ -145,9 +157,13 @@ export function AllergenCard({ recipe }: { recipe: CatalogueRecipe }) {
                 no way in (the label screen refuses again by itself, for an address typed by hand). It opens one level
                 below the recipe, so Back returns here. */}
             <button
+              ref={labelButton}
               type="button"
               className={styles.labelButton}
-              onClick={() => { void navigate(labelPath(recipe.id), { state: FROM_RECIPE }); }}
+              onClick={() => {
+                recipeReturn.remember(recipe.id);
+                void navigate(labelPath(recipe.id), { state: FROM_RECIPE });
+              }}
             >
               <span>{t('cat.makeALabel')}</span>
               <ChevronRight aria-hidden="true" />

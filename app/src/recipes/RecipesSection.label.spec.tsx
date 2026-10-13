@@ -133,6 +133,34 @@ describe('the way in: «Make a label» on a complete allergen card', () => {
     expect(await screen.findByText('Wheat, Milk')).toBeInTheDocument();
   });
 
+  it('⚠️ Back returns to the recipe as it was left: the fold open, the focus on «Make a label», the scroll kept — and a recipe opened afresh is closed again', async () => {
+    const source = fakeRecipesSource({ recipes: [CAKE], ingredients: INGREDIENTS });
+    const { router, user } = renderRecipes('/recipes/cake', { source, session: { location: GB } });
+    await screen.findByText('Wheat, Milk', undefined, LOAD);
+    const area = screen.getByRole('main');
+    Object.defineProperty(area, 'scrollTop', { value: 0, writable: true });
+    await user.click(algButton());
+    area.scrollTop = 310;
+    await user.click(main().getByRole('button', { name: 'Make a label' }));
+    await screen.findByRole('group', { name: 'What the label shows' });
+    expect(area.scrollTop).toBe(0);
+
+    await user.click(main().getByRole('button', { name: 'Back' }));
+    await waitFor(() => { expect(router.state.location.pathname).toBe('/recipes/cake'); });
+    const door = await main().findByRole('button', { name: 'Make a label' });
+    expect(door).toBeVisible();
+    expect(door).toHaveFocus();
+    expect(algButton()).toHaveAttribute('aria-expanded', 'true');
+    expect(area.scrollTop).toBe(310);
+
+    // Not for ever: the next move forgets it, and the same recipe opened again starts closed, with the focus on its title.
+    await act(async () => { await router.navigate('/recipes'); });
+    await act(async () => { await router.navigate('/recipes/cake', { state: { fromList: true } }); });
+    await screen.findByText('Wheat, Milk');
+    expect(algButton()).toHaveAttribute('aria-expanded', 'false');
+    expect(main().getByRole('button', { name: 'Make a label', hidden: true })).not.toHaveFocus();
+  });
+
   it('steps up to the recipe by replacing itself when the label was opened by its address', async () => {
     const { router, user } = await openLabel([CAKE], 'cake');
     await user.click(main().getByRole('button', { name: 'Back' }));
@@ -149,7 +177,7 @@ describe('the way in: «Make a label» on a complete allergen card', () => {
     await user.click(await screen.findByRole('button', { name: 'Nutrition' }));
     await user.click(main().getByRole('button', { name: 'Back' }));
     await screen.findByText('Wheat, Milk');
-    await user.click(algButton());
+    // The fold is still open from before (Back returns the recipe as it was left).
     await user.click(main().getByRole('button', { name: 'Make a label' }));
     expect(await screen.findByRole('button', { name: 'Nutrition' })).toHaveAttribute('aria-pressed', 'true');
   });
