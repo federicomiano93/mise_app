@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-// ⚠️ A :hover LOOK STICKS AFTER A TAP ON A TOUCH SCREEN. Driven on the lab tablet (14 Oct 2026): the rail item last
+// ⚠️ A :hover LOOK STICKS AFTER A TAP ON A TOUCH SCREEN. Driven on the lab tablet (13 Oct 2026): the rail item last
 // tapped kept its hover colour after another one had been chosen, so two items looked picked. Every :hover rule
 // therefore sits inside `@media (hover: hover)`, which a touch screen does not match. This reads every stylesheet.
 const sheets = import.meta.glob<string>('../**/*.css', { query: '?raw', import: 'default', eager: true });

@@ -105,7 +105,7 @@
 
 /* ⚠️ A SHORT WINDOW GETS SHORTER ITEMS, NOT A SCROLLING RAIL. The lab tablet in landscape shows 648px under Chrome's
    bars, and the rail at 64px an item needs 700: the account at its foot was cut and the rail grew a scrollbar
-   (driven 14 Oct 2026). At 56px — what the icon, the gap and one line of label take anyway, and well above the 44px
+   (driven 13 Oct 2026). At 56px — what the icon, the gap and one line of label take anyway, and well above the 44px
    touch target — it needs 636. */
 @media (max-height: 720px) {
   .railItem {

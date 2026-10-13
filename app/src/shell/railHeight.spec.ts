@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import shellCss from './AppShell.module.css?raw';
 import tokensCss from '../styles/tokens.css?raw';
 
-// ⚠️ THE RAIL FITS THE LAB TABLET'S WINDOW. In landscape the tablet shows 648px under Chrome's bars (driven 14 Oct
+// ⚠️ THE RAIL FITS THE LAB TABLET'S WINDOW. In landscape the tablet shows 648px under Chrome's bars (driven 13 Oct
 // 2026); at 64px an item the rail needed 700 and its foot — the account — was cut. This adds the rail up the way the
 // stylesheet draws it and checks it against that window. jsdom draws nothing, so the numbers come from the CSS text.
 const withoutComments = (css: string): string => css.replace(/\/\*[\s\S]*?\*\//g, '');
