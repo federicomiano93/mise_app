@@ -381,6 +381,40 @@ describe('saving the configuration', () => {
     expect(source.savedConfigs).toHaveLength(1);
   });
 
+  test('the clients’ menus are told after a save the server stored — never after a refused or local-only one', async () => {
+    const onConfigSaved = vi.fn();
+    const source = fakeCalculatorSource({ config: CONFIG });
+    const deps: CalculatorDeps = { storage: memoryStorage({}), now: () => NOW, newLogId: () => 'log-x', warn: vi.fn() };
+    const store = createCalculatorStore(source, { marketOrderTitle: 'Market order', onConfigSaved }, deps);
+    source.hold();
+    store.start();
+    await store.saveConfig(EDITED as never);
+    expect(onConfigSaved).not.toHaveBeenCalled();
+    source.release();
+    source.refuse.configSave = true;
+    await store.saveConfig(EDITED as never);
+    expect(onConfigSaved).not.toHaveBeenCalled();
+    source.refuse.configSave = false;
+    await store.saveConfig(EDITED as never);
+    expect(onConfigSaved).toHaveBeenCalledTimes(1);
+    const [previous, saved] = onConfigSaved.mock.calls[0]!;
+    expect(saved.recipes[0].name).toBe('Pizza bianca');
+    expect(previous).toBeDefined();
+  });
+
+  test('a hook that throws never fails the save', async () => {
+    const source = fakeCalculatorSource({ config: CONFIG });
+    const warn = vi.fn();
+    const deps: CalculatorDeps = { storage: memoryStorage({}), now: () => NOW, newLogId: () => 'log-x', warn };
+    const store = createCalculatorStore(source, {
+      marketOrderTitle: 'Market order',
+      onConfigSaved: () => { throw new Error('boom'); },
+    }, deps);
+    store.start();
+    await expect(store.saveConfig(EDITED as never)).resolves.toEqual({ synced: true });
+    expect(warn).toHaveBeenCalled();
+  });
+
   test('⚠️ a refused write is TAKEN BACK here too, and says why (permission-denied = this app is out of date)', async () => {
     const { store, source, storage } = setup({ config: CONFIG });
     store.start();
