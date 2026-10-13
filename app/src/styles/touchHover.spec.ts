@@ -5,10 +5,10 @@ import { describe, expect, it } from 'vitest';
 // therefore sits inside `@media (hover: hover)`, which a touch screen does not match. This reads every stylesheet.
 const sheets = import.meta.glob<string>('../**/*.css', { query: '?raw', import: 'default', eager: true });
 
-// A :hover that looks exactly like the state it belongs to cannot stick visibly: it exists to beat another hover rule.
-const SAME_AS_STATE = new Set(['.switchOn:hover']);
+// A :hover that looks exactly like the state it belongs to cannot stick visibly: it exists to beat another hover rule. Exempt only in its own file.
+const SAME_AS_STATE = new Map([['LabelScreen.module.css', new Set(['.switchOn:hover'])]]);
 
-function unguardedHovers(css: string): string[] {
+function unguardedHovers(css: string, file = ''): string[] {
   const text = css.replace(/\/\*[\s\S]*?\*\//g, '');
   const found: string[] = [];
   const stack: string[] = [];
@@ -17,7 +17,7 @@ function unguardedHovers(css: string): string[] {
     if (ch === '{') {
       if (/:hover/.test(prelude) && !stack.some(s => /@media[^{]*\(\s*hover\s*:\s*hover\s*\)/.test(s))) {
         for (const selector of prelude.split(',').map(s => s.trim()).filter(s => s.includes(':hover'))) {
-          if (!SAME_AS_STATE.has(selector)) found.push(selector);
+          if (!SAME_AS_STATE.get(file.split('/').pop() ?? '')?.has(selector)) found.push(selector);
         }
       }
       stack.push(prelude.trim());
@@ -42,7 +42,7 @@ describe(':hover on a touch screen', () => {
   });
 
   it('keeps every :hover inside @media (hover: hover)', () => {
-    const missing = Object.entries(sheets).flatMap(([file, css]) => unguardedHovers(css).map(s => `${file} ${s}`));
+    const missing = Object.entries(sheets).flatMap(([file, css]) => unguardedHovers(css, file).map(s => `${file} ${s}`));
     expect(missing).toEqual([]);
   });
 });
