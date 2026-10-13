@@ -13,8 +13,10 @@ export type FakeRecipesSource = RecipesSource & {
   recipes: Map<string, StoredDoc>;
   // The ingredients the allergen gate reads (no prices: the real source strips them).
   ingredients: Map<string, StoredDoc>;
+  // The label profile (config/labels) as stored; null = the venue has none (the defaults).
+  labelConfig: Record<string, unknown> | null;
   // The next watch fails (the rules refused it, or the stream died).
-  refuse: { recipes: boolean; ingredients: boolean };
+  refuse: { recipes: boolean; ingredients: boolean; labelConfig: boolean };
   // Tells every watcher again (as another phone's write would).
   push(): void;
   // Kills every live RECIPES stream, as a lost permission would.
@@ -24,12 +26,19 @@ export type FakeRecipesSource = RecipesSource & {
   release(): void;
 };
 
-export function fakeRecipesSource(seed: { recipes?: StoredDoc[]; ingredients?: StoredDoc[] } = {}): FakeRecipesSource {
+export function fakeRecipesSource(
+  seed: { recipes?: StoredDoc[]; ingredients?: StoredDoc[]; labelConfig?: Record<string, unknown> | null } = {},
+): FakeRecipesSource {
   const recipes = new Map((seed.recipes ?? []).map(doc => [doc.id, doc] as const));
   const ingredients = new Map((seed.ingredients ?? []).map(doc => [doc.id, doc] as const));
   const watchers = new Set<Listener>();
   const ingredientWatchers = new Set<Listener>();
-  const refuse = { recipes: false, ingredients: false };
+  type LabelListener = {
+    onChange: (data: Record<string, unknown> | null, meta: RecipesMeta) => void;
+    onError: (err: unknown) => void;
+  };
+  const labelWatchers = new Set<LabelListener>();
+  const refuse = { recipes: false, ingredients: false, labelConfig: false };
   let held = false;
   const refused = () => Object.assign(new Error('permission-denied'), { code: 'permission-denied' });
 
@@ -53,10 +62,12 @@ export function fakeRecipesSource(seed: { recipes?: StoredDoc[]; ingredients?: S
 
   const fake: FakeRecipesSource = {
     recipes, ingredients, refuse,
+    labelConfig: seed.labelConfig ?? null,
     push() {
       if (held) return;
       for (const w of watchers) w.onChange([...recipes.values()], FROM_SERVER);
       for (const w of ingredientWatchers) w.onChange([...ingredients.values()], FROM_SERVER);
+      for (const w of labelWatchers) w.onChange(fake.labelConfig, FROM_SERVER);
     },
     breakStream() {
       for (const w of [...watchers]) {
@@ -73,6 +84,20 @@ export function fakeRecipesSource(seed: { recipes?: StoredDoc[]; ingredients?: S
     watchIngredients: vi.fn<RecipesSource['watchIngredients']>(
       watch(ingredientWatchers, () => refuse.ingredients, () => [...ingredients.values()]),
     ),
+    watchLabelConfig: vi.fn<RecipesSource['watchLabelConfig']>((onChange, onError) => {
+      const listener: LabelListener = { onChange, onError };
+      labelWatchers.add(listener);
+      queueMicrotask(() => {
+        if (!labelWatchers.has(listener)) return;
+        if (refuse.labelConfig) {
+          labelWatchers.delete(listener);
+          onError(refused());
+        } else if (!held) {
+          onChange(fake.labelConfig, FROM_SERVER);
+        }
+      });
+      return () => { labelWatchers.delete(listener); };
+    }),
   };
   return fake;
 }
