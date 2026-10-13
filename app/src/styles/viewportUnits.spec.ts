@@ -24,8 +24,10 @@ describe('viewport units the lab tablet does not know', () => {
         decls.forEach((decl, i) => {
           if (!/\d(dvh|svh|lvh)\b/.test(decl)) return;
           const property = decl.slice(0, decl.indexOf(':')).trim();
+          // ⚠️ And the fallback reads --vh100, not a bare vh: on the tablet `100vh` is 96px taller than the window
+          // (shell/viewportHeight.ts sets --vh100 to the visible height there).
           const fallback = decls.slice(0, i).some(d =>
-            d.slice(0, d.indexOf(':')).trim() === property && !/\d(dvh|svh|lvh)\b/.test(d));
+            d.slice(0, d.indexOf(':')).trim() === property && !/\d(dvh|svh|lvh)\b/.test(d) && d.includes('var(--vh100, 100vh)'));
           if (!fallback) missing.push(`${file} ${selectors.trim()} → ${decl}`);
         });
       }

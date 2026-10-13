@@ -124,7 +124,7 @@ describe('the split', () => {
     expect(declaration(detail, 'position')).toBe('sticky');
     expect(declaration(detail, 'overflow-y')).toBe('auto');
     expect(detail).toContain('100dvh');
-    expect(detail).toContain('100vh');
+    expect(detail).toContain('var(--vh100, 100vh)');
   });
 
   it('does not clip the right-hand side on a phone, where the bar of a log sticks too', () => {

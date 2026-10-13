@@ -16,6 +16,7 @@ import { createFirebaseBackend } from './session/firebaseBackend';
 import { createSession } from './session/session';
 import { SessionGate } from './session/SessionGate';
 import { SessionProvider } from './session/SessionContext';
+import { installViewportHeight } from './shell/viewportHeight';
 import { createTelemetrySinks } from './telemetry/sinks';
 import { startTelemetry } from './telemetry/startTelemetry';
 
@@ -55,6 +56,14 @@ store.start();
 // venue's own language takes over once one is opened (SessionGate). The messages are loaded
 // BEFORE the first render, so an Italian phone never flashes English.
 const wanted = pickLanguage(navigator.language);
+
+// ⚠️ SAID AT ONCE, NOT AFTER THE MESSAGES LOAD. Chrome decides whether to offer a translation from <html lang> early,
+// and index.html says "en": on the lab tablet (14 Oct 2026) an Italian screen was offered «translate from English».
+// I18nProvider keeps it up to date from here on (the venue's language, a change of language).
+document.documentElement.lang = wanted;
+
+// Where the browser has no dvh (the lab tablet's Chrome 101), the stylesheets read the visible height from here.
+installViewportHeight();
 
 void loadLanguage(wanted).then(({ lang, messages }) => {
   createRoot(container).render(

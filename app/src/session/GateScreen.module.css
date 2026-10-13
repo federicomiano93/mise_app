@@ -4,7 +4,7 @@
   display: grid;
   place-items: center;
   /* Two declarations: Chrome 101 (the lab tablet's ceiling) has no dvh and keeps the first. */
-  min-height: 100vh;
+  min-height: var(--vh100, 100vh);
   min-height: 100dvh;
   padding: var(--s4) 0;
   background: var(--bg);

@@ -20,6 +20,22 @@ describe('main.tsx', () => {
     expect(session).toBeGreaterThan(telemetry);
   });
 
+  // ⚠️ Chrome decides early whether to offer a translation, from <html lang>; index.html says "en". Set only after the
+  // messages had loaded, an Italian screen on the lab tablet was offered «translate from English» (14 Oct 2026).
+  test('says the page language before the messages load', () => {
+    const said = main.indexOf('document.documentElement.lang = wanted;');
+    const loaded = main.indexOf('loadLanguage(wanted)');
+    expect(said).toBeGreaterThan(-1);
+    expect(loaded).toBeGreaterThan(said);
+  });
+
+  // Where the browser has no dvh (the lab tablet), every screen reads the visible height from --vh100.
+  test('installs the visible-height fallback before the first render', () => {
+    const installed = main.indexOf('installViewportHeight()');
+    expect(installed).toBeGreaterThan(-1);
+    expect(main.indexOf('createRoot(container)')).toBeGreaterThan(installed);
+  });
+
   // A second backend would be a second Firebase connection and a second offline cache.
   test('creates one backend and gives it to both the session and the telemetry writes', () => {
     expect(main.match(/createFirebaseBackend\(/g)).toHaveLength(1);
