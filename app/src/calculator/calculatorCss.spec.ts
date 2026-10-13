@@ -6,7 +6,7 @@ import panelCss from './RecipePanel.module.css?raw';
 import resultCss from './ResultCard.module.css?raw';
 import sectionCss from './CalculatorSection.module.css?raw';
 import tabsCss from './RecipeTabs.module.css?raw';
-import fullScreenCss from './RecipeFullScreen.module.css?raw';
+import fullScreenCss from '../ui/RecipeFullScreen.module.css?raw';
 
 // What a stylesheet decides and jsdom cannot see (it applies no layout and no media query).
 const withoutComments = (css: string): string => css.replace(/\/\*[\s\S]*?\*\//g, '');

@@ -16,6 +16,7 @@ import type { Session } from '../session/session';
 import { fakeCalculatorSource } from './fakeCalculatorSource';
 import { fakeClientOrdersSource } from './fakeClientOrdersSource';
 import { fakeFoodcostSource } from './fakeFoodcostSource';
+import { fakeRecipesSource } from './fakeRecipesSource';
 import { fakePastriesSource } from './fakePastriesSource';
 import { fakeStocktakeSource } from './fakeStocktakeSource';
 import { fakeStore } from './fakeSession';
@@ -43,7 +44,7 @@ export function renderApp(path: string, { lang = 'en', routes = appRoutes, sessi
   const store = fakeStore(session);
   const services: DataServices = { pastries: () => fakePastriesSource(), stocktake: () => fakeStocktakeSource(),
     foodcost: () => fakeFoodcostSource(), calculator: () => fakeCalculatorSource(),
-    clientOrders: () => fakeClientOrdersSource(), ...data };
+    clientOrders: () => fakeClientOrdersSource(), recipes: () => fakeRecipesSource(), ...data };
 
   render(
     <I18nProvider initialLanguage={lang} initialMessages={messages}>
