@@ -256,10 +256,11 @@ export function printSheet(resolved, { sizeId = null, fontMm = null } = {}) {
   // offered a BLANK page. So after `afterprint` the host waits for the first sign
   // the person is back in the page — a pointer or a key — which cannot happen while
   // the system's print screen covers it. On a computer the dialog is modal, so that
-  // sign comes after it has closed; Ctrl+P is a key, and the capture phase removes
-  // the host BEFORE the browser prints the screen the person asked for. The host is
-  // invisible on screen (`.lab-print { display: none }`), so a little longer costs
-  // nothing.
+  // sign comes after it has closed. A print started from the BROWSER's own menu
+  // without touching the page first prints this last label again — harmless, and
+  // better than the blank page every other print of this page gives (label-print.css
+  // hides everything but the host). The host is invisible on screen
+  // (`.lab-print { display: none }`), so a little longer costs nothing.
   const armed = () => {
     window.removeEventListener('afterprint', armed);
     for (const type of BACK_IN_PAGE) window.addEventListener(type, cleanUp, true);

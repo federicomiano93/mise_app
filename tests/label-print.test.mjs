@@ -115,8 +115,7 @@ test('⚠️⚠️ the host outlives `afterprint` until the person is back in th
     assert.equal(page.hosts().length, 0, 'the first tap back in the page removes it');
     assert.equal(page.listenerCount(), 0, 'and every listener goes with it');
 
-    // A key works too — Ctrl+P on a computer removes the host before the browser
-    // prints the screen the person asked for.
+    // A key works too.
     printSheet(resolved);
     page.fire('afterprint');
     page.fire('keydown');
@@ -172,9 +171,11 @@ function fakePage() {
     restore() { globalThis.window = saved.window; globalThis.document = saved.document; },
   };
   globalThis.window = {
-    addEventListener(type, fn) { listeners.push({ type, fn }); },
-    removeEventListener(type, fn) {
-      const i = listeners.findIndex(x => x.type === type && x.fn === fn);
+    // The capture flag is part of a listener's identity, as in a real browser: added
+    // with `true` and removed without it, the listener would stay.
+    addEventListener(type, fn, capture = false) { listeners.push({ type, fn, capture: !!capture }); },
+    removeEventListener(type, fn, capture = false) {
+      const i = listeners.findIndex(x => x.type === type && x.fn === fn && x.capture === !!capture);
       if (i !== -1) listeners.splice(i, 1);
     },
     print() { page.prints += 1; },
