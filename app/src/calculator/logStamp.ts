@@ -4,14 +4,18 @@ import type { Language } from '../i18n/i18n';
 //
 // ⚠️ THE STORED TEXT STAYS ENGLISH («Tuesday 13 October», «11:11 PM» — shared/src/log-time.ts): the current app and
 // Mise 2 read each other's logs until the switch, so what is written must not change. Shown as written, an Italian
-// venue read English dates in Dough history (driven on the lab tablet, 14 Oct 2026, beside a header that said
-// «martedì 13 ottobre»). So the SCREEN translates: the English names are read back and said again in Italian, with
-// the 24-hour clock Italy uses. Anything that does not read as that shape is shown exactly as stored — a guess at a
-// date nobody can check is worse than the original words.
+// venue read English dates in Dough history (driven on the lab tablet, 13 Oct 2026, beside a header that said
+// «martedì 13 ottobre»). So the SCREEN translates: the English names are read back and said again by Intl in the
+// interface language, with the 24-hour clock. Anything that does not read as that shape is shown exactly as
+// stored — a guess at a date nobody can check is worse than the original words.
 const DAYS_EN = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const MONTHS_EN = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-const DAYS_IT = ['domenica', 'lunedì', 'martedì', 'mercoledì', 'giovedì', 'venerdì', 'sabato'];
-const MONTHS_IT = ['gennaio', 'febbraio', 'marzo', 'aprile', 'maggio', 'giugno', 'luglio', 'agosto', 'settembre', 'ottobre', 'novembre', 'dicembre'];
+
+// Every Date here is built in UTC and formatted in UTC, so the device's zone can never move a name by a day.
+// The stored text has no year, so the weekday comes from a reference week (1 Jan 2023 was a Sunday) and the month from
+// a reference year: only the NAMES are used, never a calendar date.
+const name = (lang: Language, date: Date, options: Intl.DateTimeFormatOptions): string =>
+  new Intl.DateTimeFormat(lang, { ...options, timeZone: 'UTC' }).format(date);
 
 export function localDate(date: string, lang: Language): string {
   if (lang !== 'it') return date;
@@ -20,7 +24,9 @@ export function localDate(date: string, lang: Language): string {
   const day = DAYS_EN.indexOf(m[1] ?? '');
   const month = MONTHS_EN.indexOf(m[3] ?? '');
   if (day < 0 || month < 0) return date;
-  return `${DAYS_IT[day]} ${Number(m[2])} ${MONTHS_IT[month]}`;
+  const weekday = name(lang, new Date(Date.UTC(2023, 0, 1 + day)), { weekday: 'long' });
+  const monthName = name(lang, new Date(Date.UTC(2026, month, 1)), { month: 'long' });
+  return `${weekday} ${Number(m[2])} ${monthName}`;
 }
 
 export function localTime(time: string, lang: Language): string {
@@ -30,5 +36,7 @@ export function localTime(time: string, lang: Language): string {
   const hour12 = Number(m[1]);
   if (hour12 < 1 || hour12 > 12) return time;
   const hour = (hour12 % 12) + (m[3] === 'PM' ? 12 : 0);
-  return `${String(hour).padStart(2, '0')}:${m[2]}`;
+  return name(lang, new Date(Date.UTC(2026, 0, 1, hour, Number(m[2]))), {
+    hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+  });
 }
