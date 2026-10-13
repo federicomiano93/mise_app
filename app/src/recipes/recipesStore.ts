@@ -43,8 +43,12 @@ export const SCALED_KEY = 'catalogue-scaled';
 // The ingredient documents as a JSON ARRAY (`{ id, … }`, every price key removed), read back into an
 // id → document map, as js/catalogue/catalogue-store.js does.
 export const INGREDIENTS_KEY = 'catalogue-ingredients';
-// The label profile document AS STORED (config/labels), or JSON null when the venue has none — the
-// current app writes exactly that. ⚠️ CACHED for the reason the current app gives: a label is printed
+// The label profile document AS STORED (config/labels), or JSON null when the venue has none.
+// ⚠️ THE CURRENT APP DOES NOT WRITE THAT null: for «no document» it REMOVES the key. So «the venue has
+// none» survives only while Mise 2 is the last app to have heard the answer; after a visit to the current
+// app it reads as «never told», and an offline Mise 2 then waits for the paper instead of using the
+// defaults — the safe direction (no Print on a paper nobody confirmed), accepted on purpose. The current
+// app reads Mise 2's "null" as null, which is the same answer. ⚠️ CACHED for the reason the current app gives: a label is printed
 // at the counter, and a phone that has lost the network must still know what size paper this venue
 // uses. Stored raw, never normalised: label-template-model's normalizer is the one place that decides
 // what a missing or corrupt field means, in both apps.
