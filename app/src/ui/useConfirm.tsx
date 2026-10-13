@@ -7,6 +7,8 @@ export type ConfirmOptions = {
   title: string;
   // One paragraph each.
   message?: string | readonly string[];
+  // More than paragraphs, drawn under the message: a list of what is about to change.
+  body?: ReactNode;
   okLabel: string;
   cancelLabel: string;
   // Throwing something away: the OK button is drawn as a danger button.
@@ -72,7 +74,9 @@ export function useConfirm(): readonly [(options: ConfirmOptions) => Promise<boo
           </Button>
         </>
       }
-    />
+    >
+      {question.options.body}
+    </Dialog>
   );
 
   return [confirm, dialog];

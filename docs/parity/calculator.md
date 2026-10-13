@@ -842,3 +842,56 @@ on purpose: the legacy log migration (stays in the current app), the empty state
   data but not said.
 - **Not done on purpose:** the Client ordering row of the hub (3c-4b), the Home shortcut on the top (the current app's overlay had a
   Home button on it; Mise 2's rail is always there).
+
+## Step 3c-4b as built, slice C1 (13 Oct 2026) — differences from the current app, on purpose
+
+The clients' own orders, the bakery's side: items 91 to 93 above. The deadline editor, the hub's Client ordering row and the
+ordering link on a client are slice C2.
+
+- **Orders received is two addresses, not an overlay**: `/calculator/orders` (still coming) and `/calculator/orders/history`.
+  `orders` as the first segment always means this screen (like `log` and `settings`: a recipe whose id is literally `orders` has
+  no tab address of its own); an unknown address under it goes to `/calculator/orders`. The usage record names both
+  `client-orders`. Back steps up to the work view, and REPLACES a typed address.
+- **The view switch is two links** («Still coming» / «History», `aria-current="page"` on the current one), each the address of its
+  view, so a reload and a shared link land on the same one. Choosing one REPLACES the entry (a lateral move, like picking a tab):
+  Back leaves Orders received in one step rather than walking back through the views. The current app's two buttons kept the
+  view in a variable. The history's window is back at 15 days whenever the screen is left (as the current app, which kept it for
+  the page's life only until the next open).
+- **The door «Orders» replaces the footer button**, at the top of the work view and of the empty states that show doors, beside
+  Log, Settings and Send order (the current app: the bottom bar, which held exactly three). It shows unless the configuration's
+  `showClientOrdersButton` is a literal false. It is a button that opens the address, like its three siblings, and Back gives it
+  the focus back. On a phone FOUR doors are two columns of two (all one width); three keep one row, and two columns under 340px;
+  from 700px all share one row.
+- **The banner is a real link** (the current app: a button), the whole banner with a chevron, and it goes quiet when nothing needs
+  attention. It follows no switch (item 91): hiding the Orders door never hides the alarm. It is drawn on the work view only, not
+  on the empty states (the current app drew it above whatever was open). Back gives the focus back to the banner.
+- **Three more states for the list of orders still coming**, because «nothing» had three meanings: «Loading…» before any answer;
+  «The orders could not be loaded. Check your connection.» when the stream died (the current app showed «nothing for today» and an
+  empty banner); «The orders have not arrived yet.» when an EMPTY answer came from this phone's own copy only, before the server
+  has spoken (the current app could not tell it from a real empty). Two new keys, `calc.clientOrders.failed` and
+  `calc.clientOrders.notArrived`. Orders dated before today (a tablet left open across midnight) are dropped by the screen itself,
+  and the date is checked every minute.
+- **Putting an order in lands on the work view, on the tab of the first recipe (in tab order) that received a number**, by
+  REPLACING the Orders received entry (the current app closed its overlay on the tab already open). The writes are the ones typing
+  makes: the text under `qty-<clientId>::<productId>` and `touched-<rid>` of each tab, through the tab memory, so each tab
+  recalculates from what it reads. Only after the numbers are in is the order marked used (local-first); a refusal that arrives
+  later is SAID as a status message (`calc.clientOrders.notRecorded`) on whatever Calculator screen is open — the current app
+  showed an alert dialog at once. A status message is shorter-lived than a dialog; if that proves too weak for a warning that the
+  app will no longer notice a change, it becomes a dialog.
+- **The question has a title and a list.** Without a clash the title is the question itself («Put Cafe Roma's order in the
+  calculator?»; the current app's dialog had no title); with clashes the title is «This will replace what is typed», the OK button
+  is a danger button, and the rows are a real list «Focaccia tray: 3 → 5» (the current app printed them in one text block). The
+  line about confirmed tabs comes under the list. `useConfirm` gained an optional `body` for it.
+- **«Every tab is confirmed» is decided on the rows**, not on the number of recipe names: the current app compared the count of
+  locked recipe names with the count of rows, so a confirmed recipe holding two of the client's products was not seen as «all
+  locked».
+- **A product with a box on a hidden recipe tab counts as having none**, as the current app's inspect did (it looked at the
+  boxes drawn, which were the visible tabs).
+- **Headings**: Orders received has its title as the level-2 heading under the section's h1, so the history's day headings are
+  level 3 and a card's client name level 3 (level 4 inside a day). The current app's overlay had no heading structure.
+- **The history's «Show older» keeps the orders on screen while the wider window is read** (the button is disabled meanwhile), so
+  the focus is not dropped; the current app redrew the whole screen as «Loading…».
+- **The client's name, the cards and the times** use the interface language: the day in its locale, «Sent 20 min ago» in its words,
+  quantities in its number format. The current app used the same locale tag for the day and plain digits for the quantities.
+- **Not done on purpose:** the Home button of the current app's overlay (Mise 2's rail is always there), the deadline editor and
+  the hub's Client ordering row, the ordering link on a client (slice C2).

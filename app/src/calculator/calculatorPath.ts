@@ -29,6 +29,9 @@
 //   /calculator/log/<id>/history             its versions, newest first
 //   /calculator/log/<id>/history/<n>         version n of it (1-based)
 //   any other /calculator/log/...            unknown: back to /calculator/log
+//   /calculator/orders                       Orders received: the clients' orders still coming
+//   /calculator/orders/history               Orders received: the past ones, read on demand
+//   any other /calculator/orders/...         unknown: back to /calculator/orders
 //   anything else                            unknown: the section goes back to /calculator
 //
 // The tab is in the address so that Back, a reload and a link sent to a colleague land on the same
@@ -41,6 +44,9 @@
 // ⚠️ `log` AS THE FIRST SEGMENT ALWAYS MEANS THE DOUGH HISTORY, the same way: a recipe whose id is literally «log»
 // has no tab address of its own. And `new` as the id of a LOG would open «Add log», not that log (generated log ids
 // are never that word).
+//
+// ⚠️ `orders` AS THE FIRST SEGMENT ALWAYS MEANS ORDERS RECEIVED, the same way: a recipe whose id is literally
+// «orders» has no tab address of its own.
 export const CALCULATOR_PATH = '/calculator';
 export const SETTINGS_PATH = `${CALCULATOR_PATH}/settings`;
 export const extraPath = `${SETTINGS_PATH}/extra`;
@@ -55,6 +61,8 @@ export const newWhatsappListPath = `${whatsappPath}/list/new`;
 export const newWhatsappDirectPath = `${whatsappPath}/direct/new`;
 export const LOG_PATH = `${CALCULATOR_PATH}/log`;
 export const newLogPath = `${LOG_PATH}/new`;
+export const ORDERS_PATH = `${CALCULATOR_PATH}/orders`;
+export const ORDERS_HISTORY_PATH = `${ORDERS_PATH}/history`;
 
 const encoded = (id: string): string => encodeURIComponent(id);
 
@@ -135,11 +143,15 @@ export type LogView =
 
 export type DrawnLogView = Exclude<LogView, { readonly kind: 'unknown' }>;
 
+// The two views of Orders received. `unknown` is any other address under it.
+export type OrdersView = 'coming' | 'history' | 'unknown';
+
 export type CalculatorView =
   | { readonly kind: 'home' }
   | { readonly kind: 'recipe'; readonly id: string }
   | { readonly kind: 'settings'; readonly view: SettingsView }
   | { readonly kind: 'log'; readonly view: LogView }
+  | { readonly kind: 'orders'; readonly view: OrdersView }
   | { readonly kind: 'unknown' };
 
 // A segment as it was typed, back to the id it stands for; null when it is not valid percent-encoding.
@@ -243,6 +255,10 @@ export function parseCalculatorPath(rest: string | undefined): CalculatorView {
   if (first === 'log') {
     return { kind: 'log', view: parseLog(tail) };
   }
+  if (first === 'orders') {
+    if (tail.length === 0) return { kind: 'orders', view: 'coming' };
+    return { kind: 'orders', view: tail.length === 1 && tail[0] === 'history' ? 'history' : 'unknown' };
+  }
   if (parts.length === 1) {
     const id = idOf(first);
     if (id !== null) return { kind: 'recipe', id };
@@ -257,6 +273,8 @@ export type Resolved =
   | { readonly settings: DrawnSettingsView }
   // A screen of the Dough history to draw.
   | { readonly log: DrawnLogView }
+  // Orders received: the view to draw.
+  | { readonly orders: 'coming' | 'history' }
   // The tab to draw; null when the venue shows no recipe at all (the empty states).
   | { readonly active: string | null };
 
@@ -283,6 +301,9 @@ export function resolveCalculatorPath(rest: string | undefined, visibleIds: read
   }
   if (view.kind === 'log') {
     return view.view.kind === 'unknown' ? { redirect: LOG_PATH } : { log: view.view };
+  }
+  if (view.kind === 'orders') {
+    return view.view === 'unknown' ? { redirect: ORDERS_PATH } : { orders: view.view };
   }
   const first = visibleIds[0] ?? null;
   if (view.kind === 'home') return { active: first };

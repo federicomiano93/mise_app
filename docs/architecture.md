@@ -225,6 +225,19 @@ Aria does not support Preact. The numbers are below.
   recipe that cannot be saved is `recipeProblemSentence`, the work view's own. Edit takes its copy ONCE, when the log is
   first on screen and the settings have answered, and reads the log again at Save for the version it appends to. After Add
   the list takes the focus back on the Add button; after Edit, the log's own screen on the Edit button.
+
+  Step 3c-4b adds the clients' own orders, the bakery's side (slice C1; C2 adds the deadline editor and the ordering link). The
+  data layer is `clientOrdersSource.ts` (the Firestore half, a port of `js/client-orders-data.js`, including the second-app
+  account that mints an ordering link) and `clientOrdersStore.ts` (plain TypeScript: the client orders and the deadline are
+  watched while the Calculator is open, the deadline and «this order was used» are written local-first with a refusal said as a
+  `ClientOrdersMessage`, the links are read and minted only when a client's screen asks, and the clients' menus are republished
+  from the configuration store's `onConfigSaved`); `CalculatorContext` starts both stores and `useClientOrders()` reads them.
+  The screens: `OrdersBanner` (the link above the tabs), the door «Orders» in the work view's `Doors`, `OrdersReceived` (the
+  frame: title, the two-link view switch, the list of orders still coming), `ClientOrderCard` (`OrderCard` with the button,
+  `PastOrderCard` without), `OrdersHistory` (read on demand, «Show older»), `useApplyOrder` (inspect, ask, write through the tab
+  memory, then mark used) over `clientOrdersView.ts` (the pure half). Addresses, in `calculatorPath.ts`: `/calculator/orders` and
+  `/calculator/orders/history`; `orders` as the first segment always means this screen. The usage record names both
+  `client-orders`. Its parity list is `docs/parity/calculator.md` (the section for slice C1).
 - `ui/` — the shared controls: `Button`, `Dialog` and `useConfirm` (a question that waits for an
   answer; never the browser's `confirm()`), `StatusMessage` (one short message at a time, in a
   live region that exists before it speaks), `FormBar` (Back, title, the one primary action: the

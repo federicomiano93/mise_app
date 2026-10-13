@@ -223,6 +223,11 @@ describe('screenNameFor', () => {
     ['/calculator/log/l-1/history', 'log-history'],
     ['/calculator/log/l-1/history/2', 'log-history'],
     ['/calculator/logX', 'calculator'],
+    // Orders received (both views): one screen, as the current app's overlay is.
+    ['/calculator/orders', 'client-orders'],
+    ['/calculator/orders/history', 'client-orders'],
+    ['/calculator/orders/nonsense', 'client-orders'],
+    ['/calculator/ordersX', 'calculator'],
   ])('%s → %s', (pathname, expected) => {
     expect(screenNameFor(pathname)).toBe(expected);
   });
@@ -233,7 +238,7 @@ describe('screenNameFor', () => {
     const names = [
       ...SECTIONS.map(section => section.id), 'pastries-records', 'pastries-editor', 'more', 'not-found',
       'stocktake-product', 'stocktake-cost', STOCKTAKE_UNAVAILABLE_SCREEN,
-      'foodcost-product', 'foodcost-history', 'foodcost-settings',
+      'foodcost-product', 'foodcost-history', 'foodcost-settings', 'client-orders',
     ];
     for (const name of names) expect(`m2:${name}`).toMatch(SCREEN_RE);
   });

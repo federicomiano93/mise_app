@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   CALCULATOR_PATH, SETTINGS_PATH, clientPath, clientsPath, divisorPath, divisorRecipePath, extraPath, inRecipesEditor, logSettingsPath,
-  LOG_PATH, inWhatsappItem, logEditPath, newWhatsappDirectPath, newWhatsappListPath, whatsappDirectAddPath, whatsappDirectPath, whatsappEntryAddPath, whatsappEntryPath, whatsappListAddPath, whatsappListPath, whatsappPath, logHistoryPath, logVersionPath, logViewPath, newClientPath, newLogPath, newRecipePath, parseCalculatorPath, recipePath, recipeSettingsPath, recipesPath, resolveCalculatorPath,
+  LOG_PATH, ORDERS_HISTORY_PATH, ORDERS_PATH, inWhatsappItem, logEditPath, newWhatsappDirectPath, newWhatsappListPath, whatsappDirectAddPath, whatsappDirectPath, whatsappEntryAddPath, whatsappEntryPath, whatsappListAddPath, whatsappListPath, whatsappPath, logHistoryPath, logVersionPath, logViewPath, newClientPath, newLogPath, newRecipePath, parseCalculatorPath, recipePath, recipeSettingsPath, recipesPath, resolveCalculatorPath,
 } from './calculatorPath';
 
 describe('parseCalculatorPath', () => {
@@ -269,5 +269,25 @@ describe('the Dough history addresses', () => {
     expect(resolveCalculatorPath('/log/new', ['focaccia'])).toEqual({ log: { kind: 'new' } });
     expect(resolveCalculatorPath('/log/l-1/history/zero', ['focaccia'])).toEqual({ redirect: '/calculator/log' });
     expect(resolveCalculatorPath('/log/a/b/c/d', [])).toEqual({ redirect: '/calculator/log' });
+  });
+});
+
+describe('Orders received', () => {
+  it('reads «orders» as the first segment as Orders received, still coming or history', () => {
+    expect(parseCalculatorPath('/orders')).toEqual({ kind: 'orders', view: 'coming' });
+    expect(parseCalculatorPath('/orders/')).toEqual({ kind: 'orders', view: 'coming' });
+    expect(parseCalculatorPath('/orders/history')).toEqual({ kind: 'orders', view: 'history' });
+    expect(parseCalculatorPath('/orders/history/')).toEqual({ kind: 'orders', view: 'history' });
+    expect([ORDERS_PATH, ORDERS_HISTORY_PATH]).toEqual(['/calculator/orders', '/calculator/orders/history']);
+  });
+
+  it.each(['/orders/nonsense', '/orders/history/x', '/orders/a/b'])('%s is unknown and goes to Orders received', rest => {
+    expect(parseCalculatorPath(rest)).toEqual({ kind: 'orders', view: 'unknown' });
+    expect(resolveCalculatorPath(rest, ['focaccia'])).toEqual({ redirect: '/calculator/orders' });
+  });
+
+  it('is drawn whatever the tabs are', () => {
+    expect(resolveCalculatorPath('/orders', [])).toEqual({ orders: 'coming' });
+    expect(resolveCalculatorPath('/orders/history', ['focaccia'])).toEqual({ orders: 'history' });
   });
 });

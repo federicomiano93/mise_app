@@ -870,6 +870,67 @@ export const en = {
   'calc.deleteListNamed': 'Delete list {name}',
   'calc.removeClientNamed': 'Remove {name} from the list',
   'calc.removeLineN': 'Remove extra line {i}',
+
+  // The clients' own orders, the bakery's side (step 3c-4b, slice C1): the banner, the Orders received screen, its
+  // history and putting an order into the Calculator. Every key but the two marked «New in Mise 2» is the current
+  // app's own key with the current app's own text (js/i18n.js).
+  'ui.ordersReceived': 'Orders received',
+  'ui.listPair': '{a} and {b}',
+  'co.deletedProduct': 'Deleted product',
+  'calc.co.ordersChanged': {
+    one: '{n} order has CHANGED since you used it',
+    other: '{n} orders have CHANGED since you used them',
+  },
+  'calc.co.ordersReceived': {
+    one: '{n} order received from your clients',
+    other: '{n} orders received from your clients',
+  },
+  'calc.co.whenToday': 'Today · {date}',
+  'calc.co.whenTomorrow': 'Tomorrow · {date}',
+  'calc.co.sent': 'Sent {when}',
+  'calc.co.sentUsed': 'Sent {when} · already in the calculator',
+  'calc.co.justNow': 'just now',
+  'calc.co.minAgo': '{n} min ago',
+  'calc.co.hoursAgo': { one: '{n} hour ago', other: '{n} hours ago' },
+  'calc.co.showOlder': 'Show older orders (before the last {n} days)',
+  'calc.co.arrivedLate': 'This arrived after {cutoff}, the deadline for that day. You can still use it — but it came in late.',
+  'calc.co.clientGone': '{client} is no longer in your address book, so there are no fields to fill in.',
+  'calc.co.thisClient': 'This client',
+  'calc.co.allLocked': {
+    one: '{names} has already been confirmed, so the quantities are locked. Tap Edit on the tab first, then put the order in.',
+    other: '{names} have already been confirmed, so the quantities are locked. Tap Edit on the tab first, then put the order in.',
+  },
+  'calc.co.someLocked': {
+    one: '{names} is confirmed and will be left alone.',
+    other: '{names} are confirmed and will be left alone.',
+  },
+  'calc.co.putOrderIn': 'Put {client}’s order in the calculator?',
+  'calc.stillComing': 'Still coming',
+  'calc.couldNotLoadThe': 'Could not load the past orders. Check your connection and try again.',
+  'calc.wentIntoTheCalculator': 'Went into the calculator',
+  'calc.neverPutIntoThe': 'Never put into the calculator',
+  'calc.theClientSentThis': 'The client sent this day empty — they asked for nothing.',
+  'calc.note': 'Note: ',
+  'calc.thisClientChangedTheir': 'This client changed their order AFTER you put it in the calculator. The numbers below are the new ones.',
+  'calc.nothingThisDayThe': 'Nothing this day — the client sent an empty order.',
+  'calc.aLineAboveIs': 'A line above is for a product this client no longer has, so it cannot go into the calculator. Add it back, or handle it yourself.',
+  'calc.putTheNewOrder': 'Put the NEW order in',
+  'calc.putInTheCalculator': 'Put in the calculator again',
+  'calc.putInTheCalculator2': 'Put in the calculator',
+  'calc.noneOfThisClient': 'None of this client’s products are on a calculator tab at the moment, so there is nothing to fill in.',
+  'calc.theseAlreadyHaveA': 'These already have a different number typed in:',
+  'calc.thisWillReplaceWhat': 'This will replace what is typed',
+  'calc.putItIn': 'Put it in',
+  'calc.nothingOrdered': 'nothing ordered',
+  'calc.linesOrdered': { one: '{n} line', other: '{n} lines' },
+  'help.noOrdersInLastDays': 'No orders in the last {n} days. Older ones are still kept — nothing is ever deleted.',
+  'help.noClientHasSent': 'No client has sent an order yet. When one does, it will be here afterwards.',
+  'calc.clientOrders.empty': 'Nothing for today or the days ahead. Orders a client has already been delivered are under History.',
+  'calc.clientOrders.notRecorded': 'The numbers are in the calculator, but the app could not record that you used this order. It will keep showing as new, and it will NOT warn you if the client changes it. Check your connection.',
+  // New in Mise 2: the stream of orders died (refused, or never started); the current app showed «nothing for today».
+  'calc.clientOrders.failed': 'The orders could not be loaded. Check your connection.',
+  // New in Mise 2: «nothing» before the SERVER has answered may only be this phone’s old copy.
+  'calc.clientOrders.notArrived': 'The orders have not arrived yet.',
 } as const satisfies Record<string, Message>;
 
 export type MessageKey = keyof typeof en;

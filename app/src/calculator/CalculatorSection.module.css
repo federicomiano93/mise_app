@@ -34,6 +34,13 @@
     line-height: 1.2;
     text-align: center;
   }
+
+  /* FOUR doors (the venue shows «Orders» too) do not fit one row of a phone: two columns of two, all of one width.
+     From 700px they share the single row again. */
+  .top[data-doors="4"] {
+    grid-auto-flow: row;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 /* The narrowest phones (296px): a third of the row is too narrow for «Impostazioni», so two columns, the third door
