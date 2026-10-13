@@ -678,6 +678,11 @@ describe('the paper: measured, scaled, and the Print button that obeys it', () =
 
 });
 
+// ⚠️ 3d-4 MUST NOT SHIP WITH THE STUBS 3d-3 LEFT IN LabelScreen.tsx: `zplFits: () => true` (so the port never says «too big for
+// the printer» about a printer it cannot ask) and `printerReady: false` (so a Zebra venue is always told the shop computer is
+// silent). Turn this into a real spec in 3d-4: it must FAIL while either stub remains (docs/parity/catalogue.md, 3d-4).
+it.todo('3d-4: LabelScreen.tsx has neither the `zplFits: () => true` stub nor the `printerReady: false` stub');
+
 describe('printing through the system\'s own dialog', () => {
   it('puts a host in <body> at the measured size, calls window.print once, and takes it away on afterprint', async () => {
     stubLayout();
