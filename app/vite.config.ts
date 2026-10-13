@@ -18,11 +18,11 @@ export default defineConfig({
     dedupe: ['react', 'react-dom'],
   },
   build: {
-    // Explicit, not Vite's moving default: the SM-T550 runs Chrome 119 and iPhones must
+    // Explicit, not Vite's moving default: the SM-T550 cannot get past Chrome 101 (measured over adb, 13 Oct 2026: the newest Google Play serves it) and iPhones must
     // work from Safari 16.4. Anything newer than these is rewritten at build time
     // (CSS nesting, for one, needs Chrome 120).
-    target: ['chrome107', 'edge107', 'firefox104', 'safari16'],
-    cssTarget: ['chrome107', 'edge107', 'firefox104', 'safari16'],
+    target: ['chrome101', 'edge101', 'firefox104', 'safari16'],
+    cssTarget: ['chrome101', 'edge101', 'firefox104', 'safari16'],
     // Firestore's lazy chunk is ~554 KB by itself and expected (session/firebaseBackend.ts): the
     // default 500 KB warning would print on every build and hide a real one.
     chunkSizeWarningLimit: 600,
