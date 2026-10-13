@@ -14,6 +14,7 @@ function fakeKit() {
   const listeners: { target: Ref; options: unknown; next: (snap: unknown) => void; error: (err: unknown) => void; stopped: boolean }[] = [];
   const fs = {
     collection: (_db: unknown, ...segments: string[]): Ref => ({ kind: 'collection', path: segments.join('/') }),
+    doc: (_db: unknown, ...segments: string[]): Ref => ({ kind: 'doc', path: segments.join('/') }),
     onSnapshot: vi.fn((target: Ref, ...rest: unknown[]) => {
       const options = typeof rest[0] === 'function' ? undefined : rest.shift();
       const [next, error] = rest as [(snap: unknown) => void, (err: unknown) => void];
@@ -135,6 +136,50 @@ describe('the Recipe catalogue source', () => {
     expect(onError).toHaveBeenCalledTimes(1);
     expect(error).not.toHaveBeenCalled();
     expect(warn).toHaveBeenCalledTimes(1);
+  });
+
+  test('watches the open venue’s label profile (config/labels) as ONE document, with metadata changes', async () => {
+    const { kit, listeners } = fakeKit();
+    const onChange = vi.fn();
+    createFirestoreRecipesSource(() => Promise.resolve(kit), 'panificio-miano').watchLabelConfig(onChange, vi.fn());
+    await settle();
+    expect(listeners).toHaveLength(1);
+    expect(listeners[0]!.target).toEqual({ kind: 'doc', path: 'locations/panificio-miano/config/labels' });
+    expect(listeners[0]!.options).toEqual({ includeMetadataChanges: true });
+    listeners[0]!.next({ exists: () => true, data: () => ({ widthMm: 57, heightMm: 32 }), metadata: { fromCache: true } });
+    expect(onChange).toHaveBeenLastCalledWith({ widthMm: 57, heightMm: 32 }, { fromServer: false });
+  });
+
+  test('⚠️ a MISSING label profile is an answer (null), not an error: the defaults are right for it', async () => {
+    const { kit, listeners } = fakeKit();
+    const onChange = vi.fn();
+    const onError = vi.fn();
+    createFirestoreRecipesSource(() => Promise.resolve(kit), 'bakery').watchLabelConfig(onChange, onError);
+    await settle();
+    listeners[0]!.next({ exists: () => false, data: () => undefined, metadata: { fromCache: false } });
+    expect(onChange).toHaveBeenCalledWith(null, { fromServer: true });
+    expect(onError).not.toHaveBeenCalled();
+  });
+
+  test('a refused label profile reaches onError QUIETLY (a warning), and nothing else is ever read beside it', async () => {
+    const { kit, listeners } = fakeKit();
+    const onError = vi.fn();
+    const source = createFirestoreRecipesSource(() => Promise.resolve(kit), 'bakery');
+    source.watchRecipes(vi.fn(), vi.fn());
+    source.watchIngredients(vi.fn(), vi.fn());
+    source.watchLabelConfig(vi.fn(), onError);
+    await settle();
+    expect(listeners.map(l => l.target.path)).toEqual([
+      'locations/bakery/recipes', 'locations/bakery/ingredients', 'locations/bakery/config/labels',
+    ]);
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    listeners[2]!.error(new Error('permission-denied'));
+    expect(onError).toHaveBeenCalledTimes(1);
+    expect(error).not.toHaveBeenCalled();
+    expect(warn).toHaveBeenCalledTimes(1);
+    error.mockRestore();
+    warn.mockRestore();
   });
 
   test('⚠️ a venue id that could name another path is refused before anything is read', () => {

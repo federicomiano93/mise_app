@@ -4,8 +4,9 @@
 // A port of the recipe half of js/catalogue/catalogue-store.js, decision for decision, as plain
 // TypeScript with no React and no Firebase in it: the source (recipesSource.ts) and the browser
 // (deps) are injected, so every trap below is a spec with fakes (recipesStore.spec.ts). Screens read
-// it through RecipesContext.tsx. Steps 3d-1 and 3d-2 only read (recipes, then the ingredients the
-// allergen gate looks rows up in); the writes (save, delete) come with 3d-6.
+// it through RecipesContext.tsx. Steps 3d-1 to 3d-3 only read (recipes, then the ingredients the
+// allergen gate looks rows up in, then the label profile the label screen lays the paper out with);
+// the writes (save, delete) come with 3d-6, the label profile's with 3d-5.
 //
 // It says nothing in words: a failure is a RecipesMessage, and the screen puts it in the person's
 // language.
@@ -42,6 +43,12 @@ export const SCALED_KEY = 'catalogue-scaled';
 // The ingredient documents as a JSON ARRAY (`{ id, … }`, every price key removed), read back into an
 // id → document map, as js/catalogue/catalogue-store.js does.
 export const INGREDIENTS_KEY = 'catalogue-ingredients';
+// The label profile document AS STORED (config/labels), or JSON null when the venue has none — the
+// current app writes exactly that. ⚠️ CACHED for the reason the current app gives: a label is printed
+// at the counter, and a phone that has lost the network must still know what size paper this venue
+// uses. Stored raw, never normalised: label-template-model's normalizer is the one place that decides
+// what a missing or corrupt field means, in both apps.
+export const LABEL_CONFIG_KEY = 'catalogue-label-config';
 
 export type RecipesMessage =
   // The recipes' live stream died: what is on screen may be old.
@@ -74,6 +81,12 @@ export interface RecipesSnapshot {
   readonly ingredientsUnreadable: boolean;
   readonly usage: Readonly<Record<string, number>>;
   readonly scaled: Readonly<Record<string, ScaledEntry>>;
+  // The label profile document as stored, or null (none). The screen normalises it.
+  readonly labelConfig: Readonly<Record<string, unknown>> | null;
+  // Whether the paper is KNOWN: the local copy existed (a document, or the word that there is none), a
+  // believable answer came, or the stream failed (then the defaults, as the current app). Until then
+  // a label cannot be laid out honestly — the defaults could be the wrong paper.
+  readonly labelConfigKnown: boolean;
 }
 
 export interface RecipesDeps {
@@ -126,6 +139,11 @@ function asIngredients(value: unknown): Record<string, StoredDoc> {
   return out;
 }
 
+// A stored label profile: a plain object, or null for anything else (none, corrupt, an array…).
+function asLabelConfig(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value) ? { ...(value as Record<string, unknown>) } : null;
+}
+
 function asScaled(value: unknown): Record<string, ScaledEntry> {
   const out: Record<string, ScaledEntry> = {};
   for (const [id, entry] of Object.entries(asMap(value))) {
@@ -143,6 +161,22 @@ export function createRecipesStore(source: RecipesSource, deps: RecipesDeps): Re
       return raw ? JSON.parse(raw) : null;
     } catch {
       return null;
+    }
+  }
+  // The stored text, or undefined when there is none (or storage refuses).
+  function readRaw(key: string): string | undefined {
+    try {
+      return deps.storage?.getItem(key) ?? undefined;
+    } catch {
+      return undefined;
+    }
+  }
+  // Parsed, or undefined when the text is not JSON (a corrupt copy is no answer).
+  function parseOr(raw: string): unknown {
+    try {
+      return JSON.parse(raw);
+    } catch {
+      return undefined;
     }
   }
   function writeJson(key: string, value: unknown): void {
@@ -167,6 +201,13 @@ export function createRecipesStore(source: RecipesSource, deps: RecipesDeps): Re
   let ingredientsLoaded = Array.isArray(bootIngredients);
   let ingredientsFromServer = false;
   let ingredientsUnreadable = false;
+  // ⚠️ «THE KEY HOLDS null» AND «THERE IS NO KEY» ARE TWO ANSWERS: the first is a copy saying the venue
+  // has no label profile (the defaults are right), the second is a phone that has never been told.
+  const bootLabelRaw = readRaw(LABEL_CONFIG_KEY);
+  const bootLabel = bootLabelRaw === undefined ? undefined : parseOr(bootLabelRaw);
+  let labelConfig: Record<string, unknown> | null = asLabelConfig(bootLabel);
+  let labelConfigKnown = bootLabel === null || labelConfig !== null;
+  let labelConfigFromServer = false;
   // The counts are kept even when a corrupt entry is dropped: they are a nicety, not data.
   let usage: Readonly<Record<string, number>> = asUsage(readJson(USAGE_KEY));
   let scaled: Readonly<Record<string, ScaledEntry>> = asScaled(readJson(SCALED_KEY));
@@ -180,7 +221,7 @@ export function createRecipesStore(source: RecipesSource, deps: RecipesDeps): Re
 
   function build(): RecipesSnapshot {
     return { recipes, recipesLoaded, recipesFromServer, streamBroken, ingredients, ingredientsLoaded, ingredientsUnreadable, usage,
-      scaled };
+      scaled, labelConfig, labelConfigKnown };
   }
 
   function changed(): void {
@@ -215,6 +256,16 @@ export function createRecipesStore(source: RecipesSource, deps: RecipesDeps): Re
     if (list.length === 0) return bootSaidNoIngredients;
     const ids = new Set(list.map(doc => doc.id));
     return Object.keys(ingredients).every(id => ids.has(id));
+  }
+
+  // ⚠️ «NO DOCUMENT» FROM THE BROWSER'S OWN DATABASE IS NOT THE TRUTH unless the local copy said so too:
+  // that database may simply never have read config/labels, and believing it would lay a label out on
+  // the DEFAULT paper (76 × 51) for a venue that prints on 57 × 32 — a label that prints wrong with
+  // nothing saying why. A cached document that EXISTS is believed (it is the venue's own, maybe old).
+  function believableLabel(data: Record<string, unknown> | null, meta: RecipesMeta): boolean {
+    if (meta.fromServer || labelConfigFromServer) return true;
+    if (data !== null) return true;
+    return labelConfigKnown && labelConfig === null;
   }
 
   // Drops the counts and the batches of recipes that no longer exist, and the batches older than
@@ -291,6 +342,25 @@ export function createRecipesStore(source: RecipesSource, deps: RecipesDeps): Re
           if (!ingredientsLoaded) {
             ingredientsLoaded = true;
             ingredientsUnreadable = true;
+            changed();
+          }
+        },
+      ));
+      stops.push(source.watchLabelConfig(
+        (remote, meta) => {
+          if (meta.fromServer) labelConfigFromServer = true;
+          if (!believableLabel(remote, meta)) return;
+          labelConfig = asLabelConfig(remote);
+          labelConfigKnown = true;
+          writeJson(LABEL_CONFIG_KEY, labelConfig);
+          changed();
+        },
+        err => {
+          deps.warn('Label settings unavailable:', err);
+          // Quiet, as the current app: what is held stays; with nothing held the defaults are used —
+          // the wait must end, or a refused read would leave Print dead for ever.
+          if (!labelConfigKnown) {
+            labelConfigKnown = true;
             changed();
           }
         },
