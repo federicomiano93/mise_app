@@ -198,11 +198,9 @@ describe('the split of the frame', () => {
     // lines, which are under the screen's edge at scroll 0.
     expect(declaration(detail, 'overscroll-behavior')).toBeUndefined();
     // Never taller than the scroll area: the screen less the top bar and the gap above and below.
-    // Two declarations, `vh` first: Chrome 101 (the lab tablet's ceiling) has no `dvh`.
     const heights = [...detail.matchAll(/max-height:\s*([^;]+);/g)].map(([, value = '']) => value.trim());
     expect(heights).toEqual([
-      'calc(var(--vh100, 100vh) - var(--topbar-h) - 2 * var(--s4))',
-      'calc(100dvh - var(--topbar-h) - 2 * var(--s4))',
+      'calc(var(--vh100) - var(--topbar-h) - 2 * var(--s4))',
     ]);
   });
 

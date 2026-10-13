@@ -5,9 +5,7 @@
 .shell {
   display: grid;
   grid-template-rows: minmax(0, 1fr) auto;
-  /* Two declarations: Chrome 101 (the lab tablet's ceiling) has no dvh and keeps the first. */
-  height: var(--vh100, 100vh);
-  height: 100dvh;
+  height: var(--vh100);
   background: var(--bg);
 }
 

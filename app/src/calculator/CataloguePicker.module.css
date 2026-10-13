@@ -25,8 +25,7 @@
   display: flex;
   flex-direction: column;
   gap: var(--s3);
-  max-height: calc(var(--vh100, 100vh) * 0.5);
-  max-height: 50dvh;
+  max-height: calc(var(--vh100) * 0.5);
   overflow-y: auto;
 }
 

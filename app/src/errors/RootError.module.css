@@ -3,8 +3,7 @@
 .screen {
   display: grid;
   place-items: center;
-  min-height: var(--vh100, 100vh);
-  min-height: 100dvh;
+  min-height: var(--vh100);
   padding: var(--s4);
   background: var(--bg);
 }
