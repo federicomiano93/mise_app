@@ -32,6 +32,34 @@ import type { SheetSource } from './LabelSheet';
 // it goes in closePrintHost(), the one way out.
 export const PRINTING_CLASS = 'lab-printing';
 
+// ⚠️⚠️ THE PAGE'S OWN MARGIN IS ZERO WHILE A LABEL PRINTS, AND ONLY THEN. Driven on the lab tablet (Chrome 101,
+// 14 Oct 2026): that Chrome does not lay the sheet on its named @page (label-print.css), so the label went onto the
+// DEFAULT page with the browser's default margins — off its corner, and spilling onto a second, blank page: a wasted
+// label on a label printer. The current app has an unnamed `@page { size: auto; margin: 0 }` and prints one page
+// there; Mise 2 cannot keep that rule in a stylesheet, because this single-page app would give margin 0 to every other
+// print it ever makes. So the rule is a constructed stylesheet adopted for exactly as long as the host lives — the
+// same lifetime as the class above. Where named pages work (a computer's Chrome) the sheet's own page still wins.
+export const LABEL_PAGE_RULE = '@page { size: auto; margin: 0; }';
+let labelPageSheet: CSSStyleSheet | null = null;
+
+function adoptLabelPage(): void {
+  // Constructed stylesheets: Chrome 73, Safari 16.4 — inside the build target. Feature-detected so a browser without
+  // them (and jsdom) still prints, with the browser's margins.
+  if (!('adoptedStyleSheets' in document) || typeof CSSStyleSheet !== 'function' || !('replaceSync' in CSSStyleSheet.prototype)) return;
+  if (labelPageSheet === null) {
+    labelPageSheet = new CSSStyleSheet();
+    labelPageSheet.replaceSync(LABEL_PAGE_RULE);
+  }
+  const sheet = labelPageSheet;
+  if (!document.adoptedStyleSheets.includes(sheet)) document.adoptedStyleSheets = [...document.adoptedStyleSheets, sheet];
+}
+
+function dropLabelPage(): void {
+  const sheet = labelPageSheet;
+  if (sheet === null || !('adoptedStyleSheets' in document)) return;
+  document.adoptedStyleSheets = document.adoptedStyleSheets.filter(s => s !== sheet);
+}
+
 // The signs that the person is back in the page.
 const BACK_IN_PAGE = ['pointerdown', 'keydown'] as const;
 
@@ -46,6 +74,7 @@ export function closePrintHost(): void {
   root.unmount();
   node.remove();
   document.documentElement.classList.remove(PRINTING_CLASS);
+  dropLabelPage();
 }
 
 export function openPrintHost(resolved: SheetSource, fontMm: number, sizeId: string | null): void {
@@ -55,6 +84,7 @@ export function openPrintHost(resolved: SheetSource, fontMm: number, sizeId: str
   node.className = sizeId === null ? 'lab-print' : `lab-print lab-print--${sizeId}`;
   document.body.appendChild(node);
   document.documentElement.classList.add(PRINTING_CLASS);
+  adoptLabelPage();
   const root = createRoot(node);
   const back = () => { closePrintHost(); };
   // Capture phase: the removal happens before anything the tap or key goes on to do (Ctrl+P included).
