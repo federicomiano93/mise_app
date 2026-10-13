@@ -57,9 +57,17 @@ test('every control that writes config/orders is either boss-only or locked', ()
     const fn = body.slice(0, body.indexOf('\n  }\n') + 4);
     assert.ok(fn.length > 50, `could not read ${name}`);
     if (/saveOrdersConfig/.test(fn)) {
-      assert.match(fn, /lockedNote:|input\.disabled = !boss/, `${name} saves config/orders for everybody`);
+      assert.match(fn, /lockedNote: boss \? null : |input\.disabled = !boss/, `${name} saves config/orders for everybody`);
     }
   }
+  // A control written straight into render(), not through a builder, would slip past the
+  // loop above — so render() itself must not save anything.
+  assert.doesNotMatch(render, /saveOrdersConfig|switchRow\(/);
+});
+
+test('a locked number box looks locked, not editable', () => {
+  const css = read('tokens.css');
+  assert.match(css, /\.set-input:disabled \{[^}]*background: var\(--surface-2\)/);
 });
 
 test('the line exists in English and Italian', () => {
