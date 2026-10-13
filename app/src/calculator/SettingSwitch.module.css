@@ -1,7 +1,12 @@
 /* An on/off switch. Selected is the accent frame's colour (the one accent of the design); the focus ring is the
    app's own. The switch is as tall as a thumb's target, the track inside it is the drawn part. */
 
+/* ⚠️ position: relative — React Aria hides the real checkbox in an absolutely positioned span. With no positioned
+   ancestor it is placed against the whole page, outside the screen's own scroll area, and a switch low in a list made
+   the PAGE taller than the window: 870px of a 648px tablet window, the page and its list scrolling twice (driven on
+   the lab tablet, 14 Oct 2026, Dough history settings). Positioned here, it stays inside the switch. */
 .switch {
+  position: relative;
   display: inline-flex;
   flex: none;
   align-items: center;
