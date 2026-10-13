@@ -1,13 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
-import { useLocation, useNavigationType } from 'react-router';
+import { useLocation, useNavigate, useNavigationType } from 'react-router';
+import { KEEP_FOCUS } from '../shell/Page';
 import { useT } from '../i18n/useT';
 import { FormBar } from '../ui/FormBar';
 import { useStatusMessage } from '../ui/StatusMessage';
 import { AllergenSheet } from './AllergenSheet';
+import { LabelScreen } from './LabelScreen';
 import { useRecipes } from './RecipesContext';
 import { RecipeView } from './RecipeView';
-import { cameFromList, cameFromSheet, useLeave } from './recipesNav';
-import { RECIPES_PATH } from './recipesPath';
+import { cameFromList, cameFromRecipe, cameFromSheet, useLeave } from './recipesNav';
+import { RECIPES_PATH, recipePath } from './recipesPath';
 import type { ShownView } from './recipesPath';
 import { ALLERGENS_OPENER, recipeOpener, sheetOpener, useHandBack } from './handBack';
 import styles from './RecipesDetail.module.css';
@@ -20,7 +22,9 @@ import styles from './RecipesDetail.module.css';
 export function RecipesDetail({ view, onOpenFromSheet }: { view: ShownView; onOpenFromSheet: (id: string) => void }) {
   if (view.kind === 'list') return <Prompt />;
   if (view.kind === 'allergens') return <SheetScreen onOpenRecipe={onOpenFromSheet} />;
-  return <RecipeScreen id={view.id} />;
+  // Keyed on the KIND, so a recipe and its label are two screens (each puts the focus on its own title when it opens)
+  // while another recipe picked beside an open one stays the same screen, as before.
+  return <RecipeScreen key={view.kind} id={view.id} label={view.kind === 'label'} />;
 }
 
 // The Allergen sheet (its gate, allergens on, is checked by the section before it gets here). Back steps up to the list
@@ -57,7 +61,7 @@ function Prompt() {
   );
 }
 
-// A recipe by its address, followed live.
+// A recipe by its address, followed live — and, one level below it, the recipe's label (`label`).
 //
 // ⚠️ A RECIPE ADDRESS WAITS FOR THE SERVER'S FIRST ANSWER (`recipesFromServer`) — or the stream
 // breaking — before it says the recipe does not exist: the local copy can be a stale partial one, and
@@ -66,7 +70,8 @@ function Prompt() {
 // ⚠️ A RECIPE DELETED ELSEWHERE WHILE IT IS OPEN leaves for the list and says so (the status
 // message); one changed elsewhere is simply redrawn by RecipeView, in place: nothing here touches the
 // scroll or the focus.
-function RecipeScreen({ id }: { id: string }) {
+function RecipeScreen({ id, label }: { id: string; label: boolean }) {
+  const navigate = useNavigate();
   const { t } = useT();
   const { state } = useLocation();
   const handBack = useHandBack();
@@ -87,22 +92,36 @@ function RecipeScreen({ id }: { id: string }) {
 
   // A recipe opened from the Allergen sheet gives the focus back to the sheet's row, not the list's.
   const leave = useLeave(RECIPES_PATH, () => { handBack.expect(cameFromSheet(state) ? sheetOpener(id) : recipeOpener(id)); });
+  // The label steps up ONE level, to its recipe (the browser's Back when the recipe is the entry behind it).
+  const leaveLabel = useLeave(recipePath(id), () => undefined, cameFromRecipe);
 
   useEffect(() => {
     if (!gone) return;
     say(t('cat.recipeDeleted'));
     // The row of a deleted recipe is gone: the hand-back then falls to the search box (handBack.ts).
-    leave();
+    if (label) {
+      // A label's Back would land on the recipe that is gone: a deleted recipe has no label either, so it goes to the list.
+      handBack.expect(recipeOpener(id));
+      void navigate(RECIPES_PATH, { replace: true, state: KEEP_FOCUS });
+    } else {
+      leave();
+    }
   }, [gone]);
 
   // Opened from the list, the page does not move the focus (FROM_LIST): it goes to this title. Only
   // when the screen first appears — picking another recipe beside it (the split) keeps the focus on
   // the row that was pressed.
+  // A label opened from its recipe the same, but not when Back from the recipe above it brings it again (a POP).
+  const navigationType = useNavigationType();
   const shown = recipe !== null;
   useEffect(() => {
-    if (shown && cameFromList(state)) title.current?.focus();
+    if (!shown) return;
+    if (label ? cameFromRecipe(state) && navigationType !== 'POP' : cameFromList(state)) title.current?.focus();
   }, [shown]);
 
+  if (recipe !== null && label) {
+    return <LabelScreen key={recipe.id} recipe={recipe} titleRef={title} onBack={leaveLabel} />;
+  }
   if (recipe !== null) {
     return <RecipeView key={recipe.id} recipe={recipe} titleRef={title} onBack={leave} />;
   }
@@ -115,7 +134,7 @@ function RecipeScreen({ id }: { id: string }) {
   }
   return (
     <section className={styles.missing} aria-label={t('recipes.notFound')}>
-      <FormBar backLabel={t('ui.back')} onBack={leave} title={t('recipes.notFound')} titleRef={title} />
+      <FormBar backLabel={t('ui.back')} onBack={label ? leaveLabel : leave} title={t('recipes.notFound')} titleRef={title} />
     </section>
   );
 }

@@ -1292,5 +1292,13 @@ allergen state with an `if` of its own. What differs from the current app, and w
   per scope from `outputLanguage(` and never assigned, destructured or taken as a parameter; and every runtime export of the
   three modules must be classified, so a new one forces a decision. Each rule has a self-test on an inline source. It was proved once by mutation (the `outputLanguage` call removed, and
   `useT().lang` handed to `allergenName`: both fail, naming the file).
-- **Left for 3d-3:** «Make a label» and the label screen; for 3d-6, the pencil that the work list's sentence about linking
+- **Built in 3d-3 (slice B):** «Make a label» (in the fold of a complete card, shown exactly when the current app shows it — the
+  country is NOT asked at the door, the label screen refuses a venue with no country by itself) and the label screen at
+  `/recipes/<id>/label`, with Print through the system's dialog. Differences from the current app, all on purpose: the ingredients
+  must have arrived before any verdict (a neutral «checking» line before it); the paper must be KNOWN (`labelConfigKnown`) before
+  anything is laid out, with one new sentence (`label.preview.paperUnknown`) and Print off until then; «actual size» is claimed only
+  after a real measurement; the sheet is measured again when the typeface arrives; the sheet is set in Manrope (copied fonts), so
+  the fit is the same in both apps; the switch is kept for the section. Not here: ZPL, the shop computer's queue and the
+  clipboard road (3d-4) — a venue whose printer is `zpl` sees the port's «too big for the printer» sentence until then.
+- **Left for 3d-6:** the pencil that the work list's sentence about linking
   rows mentions (`cat.aRecipeRowHas` is the current app's wording and points at a screen Mise 2 does not have yet).

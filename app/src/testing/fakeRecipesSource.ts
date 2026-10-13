@@ -24,6 +24,9 @@ export type FakeRecipesSource = RecipesSource & {
   // Holds back the first answers until release() (Firestore still loading).
   hold(): void;
   release(): void;
+  // Holds back ONLY the label profile's answer (the paper is not known yet) until releaseLabelConfig().
+  holdLabelConfig(): void;
+  releaseLabelConfig(): void;
 };
 
 export function fakeRecipesSource(
@@ -40,6 +43,7 @@ export function fakeRecipesSource(
   const labelWatchers = new Set<LabelListener>();
   const refuse = { recipes: false, ingredients: false, labelConfig: false };
   let held = false;
+  let labelHeld = false;
   const refused = () => Object.assign(new Error('permission-denied'), { code: 'permission-denied' });
 
   // Like onSnapshot: the first answer arrives after the call returns.
@@ -67,7 +71,7 @@ export function fakeRecipesSource(
       if (held) return;
       for (const w of watchers) w.onChange([...recipes.values()], FROM_SERVER);
       for (const w of ingredientWatchers) w.onChange([...ingredients.values()], FROM_SERVER);
-      for (const w of labelWatchers) w.onChange(fake.labelConfig, FROM_SERVER);
+      if (!labelHeld) for (const w of labelWatchers) w.onChange(fake.labelConfig, FROM_SERVER);
     },
     breakStream() {
       for (const w of [...watchers]) {
@@ -77,6 +81,11 @@ export function fakeRecipesSource(
     },
     hold() { held = true; },
     release() { held = false; fake.push(); },
+    holdLabelConfig() { labelHeld = true; },
+    releaseLabelConfig() {
+      labelHeld = false;
+      if (!held) for (const w of labelWatchers) w.onChange(fake.labelConfig, FROM_SERVER);
+    },
 
     watchRecipes: vi.fn<RecipesSource['watchRecipes']>(
       watch(watchers, () => refuse.recipes, () => [...recipes.values()]),
@@ -92,7 +101,7 @@ export function fakeRecipesSource(
         if (refuse.labelConfig) {
           labelWatchers.delete(listener);
           onError(refused());
-        } else if (!held) {
+        } else if (!held && !labelHeld) {
           onChange(fake.labelConfig, FROM_SERVER);
         }
       });

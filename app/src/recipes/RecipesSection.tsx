@@ -13,6 +13,7 @@ import { RecipesProvider, useRecipesStore } from './RecipesContext';
 import { RecipesDetail } from './RecipesDetail';
 import { RecipesList } from './RecipesList';
 import { ALLERGENS_OPENER, HandBackProvider, recipeOpener, useHandBackState } from './handBack';
+import { LabelShowsProvider } from './labelShows';
 import { messageText } from './recipesMessages';
 import { FROM_LIST, FROM_SHEET, cameFromList } from './recipesNav';
 import { ALLERGENS_PATH, RECIPES_PATH, recipePath, resolveRecipesPath } from './recipesPath';
@@ -26,14 +27,16 @@ import styles from './RecipesSection.module.css';
 // Its data lives exactly as long as it is on screen: RecipesProvider starts the listener on mount and
 // stops it on unmount (P14).
 //
-// Steps 3d-1 and 3d-2 only LOOK at recipes: the list, a recipe with its allergen cards, and the Allergen sheet. No
-// editing and no labels yet (docs/parity/catalogue.md).
+// Steps 3d-1 to 3d-3 only LOOK at recipes: the list, a recipe with its allergen cards, the Allergen sheet and a recipe's
+// label (on screen, and printed through the system's own dialog). No editing yet (docs/parity/catalogue.md).
 export default function RecipesSection() {
   return (
     <RecipesProvider>
       <StatusMessageProvider>
         <StoreMessages />
-        <RecipesScreen />
+        <LabelShowsProvider>
+          <RecipesScreen />
+        </LabelShowsProvider>
       </StatusMessageProvider>
     </RecipesProvider>
   );
@@ -168,7 +171,7 @@ function RecipesLayout({ view }: { view: ShownView }) {
           <div className={styles.list}>
             <PartBoundary>
               <RecipesList
-                openRecipeId={view.kind === 'recipe' ? view.id : null}
+                openRecipeId={view.kind === 'recipe' || view.kind === 'label' ? view.id : null}
                 split={split}
                 onOpenRecipe={openRecipe}
                 sheetOpen={view.kind === 'allergens'}

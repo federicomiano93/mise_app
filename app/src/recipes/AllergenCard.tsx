@@ -1,5 +1,6 @@
 import { useId, useState } from 'react';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, ChevronRight } from 'lucide-react';
+import { useNavigate } from 'react-router';
 import { allergenName, outputLanguage } from '@mise/shared/market';
 import { ALLERGEN_REASON_TEXT, recipeAllergens, rowState } from '@mise/shared/recipe-allergen-model';
 import type { RecipeAllergens } from '@mise/shared/recipe-allergen-model';
@@ -10,6 +11,8 @@ import { useSession } from '../session/SessionContext';
 import { useAllergenTables } from './allergenTables';
 import { incompleteSentence } from './allergenText';
 import { useRecipes } from './RecipesContext';
+import { FROM_RECIPE } from './recipesNav';
+import { labelPath } from './recipesPath';
 import { useStillWaiting } from './useStillWaiting';
 import styles from './AllergenCard.module.css';
 
@@ -53,6 +56,7 @@ export function AllergenCard({ recipe }: { recipe: CatalogueRecipe }) {
   const { location } = useSession();
   const { recipes, ingredients, ingredientsLoaded, ingredientsUnreadable } = useRecipes();
   const tables = useAllergenTables(recipes, ingredients);
+  const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const headId = useId();
   const bodyId = useId();
@@ -133,8 +137,21 @@ export function AllergenCard({ recipe }: { recipe: CatalogueRecipe }) {
               <p className={styles.traces}>{t('cat.alg.mayContain', { list: names(result.mayContain) })}</p>
             ) : null}
             {/* The sentence that must not be dropped: the app gathers what it was told and cannot know
-                what happened on the bench this morning. («Make a label» arrives with step 3d-3.) */}
+                what happened on the bench this morning. */}
             <p className={styles.caveat}>{t('cat.fromTheSuppliersSpecifications2')}</p>
+            {/* ⚠️ THE WAY TO THE LABEL EXISTS ONLY WHEN THERE IS A LABEL TO MAKE: on a recipe with gaps it would be a tap
+                through to a refusal, and the refusal is already above, naming exactly what is missing. It is here, inside
+                the card the venue's allergen switch hides, and nowhere else: a venue that has switched allergens off has
+                no way in (the label screen refuses again by itself, for an address typed by hand). It opens one level
+                below the recipe, so Back returns here. */}
+            <button
+              type="button"
+              className={styles.labelButton}
+              onClick={() => { void navigate(labelPath(recipe.id), { state: FROM_RECIPE }); }}
+            >
+              <span>{t('cat.makeALabel')}</span>
+              <ChevronRight aria-hidden="true" />
+            </button>
           </>
         )}
       </div>
