@@ -129,9 +129,9 @@
       }
     },
     "dist/catalogue.css": {
-      "sha": "7cb7c9268be86dcb",
+      "sha": "3939fe108cb6ce46",
       "inputs": {
-        "catalogue.css": "1ae93c228f90a5b3"
+        "catalogue.css": "0fb386227ffe6a25"
       }
     },
     "dist/catalogue.js": {

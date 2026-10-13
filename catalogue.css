@@ -393,6 +393,12 @@ body.cat-zoom-lock { overflow: hidden; }
   .cat-ing-editrow:focus-within { box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--cat-accent) 45%, transparent); }
   .cat-ing-editrow input.cat-invalid { background: color-mix(in srgb, var(--cat-danger) 10%, transparent); }
 }
+/* The amount box has a surface and a frame of its own (.cat-amount .cat-grm, more specific than the rule above),
+   so an empty amount stayed white on every device: the red frame and tint say «this one» here. */
+.cat-ing-editrow .cat-amount .cat-grm.cat-invalid { border-color: var(--cat-danger); background: var(--error-bg); }
+@supports (color: color-mix(in srgb, red 50%, transparent)) {
+  .cat-ing-editrow .cat-amount .cat-grm.cat-invalid { background: color-mix(in srgb, var(--cat-danger) 10%, var(--cat-surface)); }
+}
 .cat-name-input.cat-invalid { border-color: var(--cat-danger); }
 /* Total: the weight the recipe actually adds up to, live as it is typed. */
 .cat-ing-editrow.cat-edit-total {

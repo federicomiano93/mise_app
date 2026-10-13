@@ -52,6 +52,34 @@ test('outside @supports, color-mix() is only ever a box-shadow, in every stylesh
   assert.deepEqual(bad, []);
 });
 
+test('every softer colour in @supports has a plain one for the same selector and property before it', () => {
+  const missing = [];
+  for (const name of sheets) {
+    const css = strip(readFileSync(new URL(name, root), 'utf8'));
+    for (const block of css.matchAll(SUPPORTS)) {
+      const before = css.slice(0, block.index).replace(SUPPORTS, '');
+      for (const { selector, body } of rules(block[1])) {
+        for (const decl of body.split(';').filter(d => d.includes('color-mix('))) {
+          const property = decl.slice(0, decl.indexOf(':')).trim();
+          const plain = rules(before).some(r => r.selector === selector && r.body.split(';').some(d => {
+            const p = d.slice(0, d.indexOf(':')).trim();
+            return (p === property || property.startsWith(p + '-')) && !d.includes('color-mix(');
+          }));
+          if (!plain) missing.push(`${name} ${selector} → ${property}`);
+        }
+      }
+    }
+  }
+  assert.deepEqual(missing, []);
+});
+
+test('an empty amount box is tinted too: its own surface rule is more specific than the row\'s', () => {
+  const rule = rules(outside).find(r => r.selector === '.cat-ing-editrow .cat-amount .cat-grm.cat-invalid');
+  assert.ok(rule, 'the amount box has no invalid rule of its own');
+  assert.match(rule.body, /background\s*:\s*var\(--error-bg\)/);
+  assert.match(rule.body, /border-color\s*:\s*var\(--cat-danger\)/);
+});
+
 test('each guided ring has a plain border outside @supports', () => {
   for (const ring of RINGS) {
     const rule = rules(outside).find(r => r.selector === ring);
