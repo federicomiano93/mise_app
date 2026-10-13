@@ -390,7 +390,9 @@ lightningcss lowers oklch, nesting and media ranges; it does not lower everythin
 - **A React Aria hidden input needs a positioned ancestor** (see `SettingSwitch`), or it sits at the page's origin
   and makes the page scroll.
 - **No feature newer than Chrome 101 without a feature check.** `styles/chrome101.spec.ts` (with `shared/src/chrome101-tokens.ts`, which lists the CSS and JS
-  tokens with the Chrome version that introduced each) fails on any use in source.
+  tokens with the Chrome version that introduced each) fails on any of the LISTED tokens in our source, comments
+  excepted. It does not scan library code (`node_modules`, `js/vendor`), and a feature that is not on the list is not
+  caught: add it to the list when you meet it.
 
 ## Testing and CI
 
