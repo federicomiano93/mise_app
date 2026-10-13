@@ -28,7 +28,7 @@ import {
 // prints — one of the two saying «Hazelnut» and the other «Nocciole» is how somebody
 // stops trusting either. The words AROUND the list («may contain», «not declared»)
 // stay interface text: they address the reader, not the consumer.
-import { outputLanguage, allergenName } from '../market.js';
+import { outputLanguage, allergenName, canPrintLabel } from '../market.js';
 // Whether this venue tracks allergens at all. From js/ root: Orders sets the switch
 // and the Catalogue obeys it, so the judgement lives in one file for both.
 import { allergensOn } from '../venue-features.js';
@@ -154,12 +154,22 @@ function declarationPanel(recipe, app) {
   // refusal, in the same order, as label-view.js.
   if (!allergensOn(location)) { panel.hidden = true; return panel; }
 
-  const lang = outputLanguage(location);
-  const label = buildLabel(recipe, { ingredients: getIngredients(), recipes: getRecipesById() });
-
   panel.appendChild(el('div', { class: 'cat-sec-head' }, [
     el('span', { class: 'cat-sec-label', text: t('cat.decl.title') }),
   ]));
+
+  // ⚠️⚠️ NO COUNTRY, NO DECLARATION — the same refusal, in the same words, as the label
+  // screen (label-view.js) and the allergen sheet. The country decides the language a
+  // declaration must be written in; without one, outputLanguage() falls back to English,
+  // and this card used to hand that English text to Copy and Send — ready to be pasted
+  // onto Italian packaging. One line, no buttons.
+  if (!canPrintLabel(location)) {
+    panel.appendChild(el('p', { class: 'cat-decl-blocked', text: t('label.blocked.noCountry') }));
+    return panel;
+  }
+
+  const lang = outputLanguage(location);
+  const label = buildLabel(recipe, { ingredients: getIngredients(), recipes: getRecipesById() });
 
   if (!label.ok) {
     // ⚠️ ONE LINE, POINTING AT THE CARD THAT ALREADY EXPLAINS IT, and NO send buttons
