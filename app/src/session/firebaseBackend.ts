@@ -27,10 +27,11 @@
 // a getFirestore() that ran first would make THE one client memory-only (the offline copy shared
 // with the current app gone) — src/firestore-access.spec.ts refuses one anywhere else.
 
-import { initializeApp, type FirebaseApp } from 'firebase/app';
+import { deleteApp, initializeApp, type FirebaseApp } from 'firebase/app';
 import {
-  initializeAuth, indexedDBLocalPersistence, browserLocalPersistence, browserSessionPersistence,
-  onAuthStateChanged, signInWithEmailAndPassword, sendPasswordResetEmail, signOut, connectAuthEmulator, type Auth,
+  initializeAuth, indexedDBLocalPersistence, browserLocalPersistence, browserSessionPersistence, inMemoryPersistence,
+  onAuthStateChanged, signInWithEmailAndPassword, sendPasswordResetEmail, signOut, connectAuthEmulator,
+  createUserWithEmailAndPassword, type Auth,
 } from 'firebase/auth';
 import type { Firestore } from 'firebase/firestore';
 import { configForHost, LOCAL_HOSTS } from '@mise/shared/firebase-target';
@@ -56,6 +57,9 @@ export interface FirebaseBackend extends SessionBackend {
   // Auth, for the writes that must carry the signed-in account's uid (telemetry/sinks.ts).
   readonly auth: Auth;
   readonly isEmulator: boolean;
+  // Creates the account behind a client's ordering link and resolves with its uid, WITHOUT touching the
+  // signed-in person's own session (see the function). Rejects when Auth refuses or cannot be reached.
+  createLinkAccount(email: string, password: string): Promise<string>;
 }
 
 function startFirestore(fs: FirestoreSdk, app: FirebaseApp): Firestore {
@@ -118,9 +122,34 @@ export function createFirebaseBackend(hostname: string): FirebaseBackend {
   const dataOf = (snap: { exists(): boolean; data(): unknown }): DocData | null =>
     snap.exists() ? (snap.data() as DocData) : null;
 
+  // ⚠️ THE ACCOUNT IS CREATED ON A SECOND FIREBASE APP, and this is not tidiness (js/client-orders-data.js
+  // `createOrderingLink`): creating a user signs you in as that user on the app it was created with, so on the
+  // default app it would replace the OWNER'S OWN SESSION with the client's — the person minting the link would
+  // find themselves signed in as their customer. The second app is signed out at once and thrown away.
+  // ⚠️ ITS SESSION LIVES IN MEMORY ONLY (a difference from the current app, which gives it getAuth()'s default,
+  // IndexedDB): the IndexedDB is the one both apps share for who is signed in, and a client's credential has no
+  // business being written there even for a moment.
+  // ⚠️ THE EMULATOR SWITCH IS REPEATED FOR IT: the one above attaches to the default app only, and without it a
+  // link made on localhost would create a REAL account in production (found by driving the current app).
+  async function createLinkAccount(email: string, password: string): Promise<string> {
+    const secondary = initializeApp(configForHost(hostname), `client-link-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+    try {
+      const linkAuth = initializeAuth(secondary, { persistence: inMemoryPersistence });
+      if (isEmulator) connectAuthEmulator(linkAuth, 'http://localhost:9099', { disableWarnings: true });
+      const credential = await createUserWithEmailAndPassword(linkAuth, email, password);
+      await signOut(linkAuth);
+      return credential.user.uid;
+    } finally {
+      // Whatever happened, this app must not outlive the call: a leftover instance keeps an Auth observer alive
+      // on an account that is not the person's.
+      await deleteApp(secondary).catch(() => {});
+    }
+  }
+
   return {
     firestore,
     firestoreIfReady: () => ready,
+    createLinkAccount,
     preloadFirestore,
     auth,
     isEmulator,

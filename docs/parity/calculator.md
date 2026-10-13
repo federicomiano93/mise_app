@@ -842,3 +842,106 @@ on purpose: the legacy log migration (stays in the current app), the empty state
   data but not said.
 - **Not done on purpose:** the Client ordering row of the hub (3c-4b), the Home shortcut on the top (the current app's overlay had a
   Home button on it; Mise 2's rail is always there).
+
+## Step 3c-4b as built, slice C1 (13 Oct 2026) — differences from the current app, on purpose
+
+The clients' own orders, the bakery's side: items 91 to 93 above. The deadline editor, the hub's Client ordering row and the
+ordering link on a client are slice C2.
+
+- **Orders received is two addresses, not an overlay**: `/calculator/orders` (still coming) and `/calculator/orders/history`.
+  `orders` as the first segment always means this screen (like `log` and `settings`: a recipe whose id is literally `orders` has
+  no tab address of its own); an unknown address under it goes to `/calculator/orders`. The usage record names both
+  `client-orders`. Back steps up to the work view, and REPLACES a typed address.
+- **The view switch is two links** («Still coming» / «History», `aria-current="page"` on the current one), each the address of its
+  view, so a reload and a shared link land on the same one. Choosing one REPLACES the entry (a lateral move, like picking a tab):
+  Back leaves Orders received in one step rather than walking back through the views. The current app's two buttons kept the
+  view in a variable. The history's window is back at 15 days whenever the screen is left (as the current app, which kept it for
+  the page's life only until the next open).
+- **The door «Client orders» replaces the footer button** (called «Orders» when C1 was built; C2 renamed it, see its section), at the top of the work view and of the empty states that show doors, beside
+  Log, Settings and Send order (the current app: the bottom bar, which held exactly three). It shows unless the configuration's
+  `showClientOrdersButton` is a literal false. It is a button that opens the address, like its three siblings, and Back gives it
+  the focus back. On a phone FOUR doors are two columns of two (all one width); three keep one row, and two columns under 340px;
+  from 700px all share one row.
+- **The banner is a real link** (the current app: a button), the whole banner with a chevron, and it goes quiet when nothing needs
+  attention. It follows no switch (item 91): hiding the Orders door never hides the alarm. It is drawn on the work view only, not
+  on the empty states (the current app drew it above whatever was open). Back gives the focus back to the banner.
+- **Three more states for the list of orders still coming**, because «nothing» had three meanings: «Loading…» before any answer;
+  «The orders could not be loaded. Check your connection.» when the stream died (the current app showed «nothing for today» and an
+  empty banner); «The orders have not arrived yet.» when an EMPTY answer came from this phone's own copy only, before the server
+  has spoken (the current app could not tell it from a real empty). Two new keys, `calc.clientOrders.failed` and
+  `calc.clientOrders.notArrived`. Orders dated before today (a tablet left open across midnight) are dropped by the screen itself,
+  and the date is checked every minute.
+- **Putting an order in lands on the work view, on the tab of the first recipe (in tab order) that received a number**, by
+  REPLACING the Orders received entry (the current app closed its overlay on the tab already open). The writes are the ones typing
+  makes: the text under `qty-<clientId>::<productId>` and `touched-<rid>` of each tab, through the tab memory, so each tab
+  recalculates from what it reads. Only after the numbers are in is the order marked used (local-first); a refusal that arrives
+  later is SAID (`calc.clientOrders.notRecorded`) on whatever Calculator screen is open — first as a 2.6 s status message, since
+  C2 as an ALERT DIALOG like the current app (see the C2 section).
+- **The question has a title and a list.** Without a clash the title is the question itself («Put Cafe Roma's order in the
+  calculator?»; the current app's dialog had no title); with clashes the title is «This will replace what is typed», the OK button
+  is a danger button, and the rows are a real list «Focaccia tray: 3 → 5» (the current app printed them in one text block). The
+  line about confirmed tabs comes under the list. `useConfirm` gained an optional `body` for it.
+- **«Every tab is confirmed» is decided on the rows**, not on the number of recipe names: the current app compared the count of
+  locked recipe names with the count of rows, so a confirmed recipe holding two of the client's products was not seen as «all
+  locked».
+- **A product with a box on a hidden recipe tab counts as having none**, as the current app's inspect did (it looked at the
+  boxes drawn, which were the visible tabs).
+- **Headings**: Orders received has its title as the level-2 heading under the section's h1, so the history's day headings are
+  level 3 and a card's client name level 3 (level 4 inside a day). The current app's overlay had no heading structure.
+- **The history's «Show older» keeps the orders on screen while the wider window is read** (the button is disabled meanwhile), so
+  the focus is not dropped; the current app redrew the whole screen as «Loading…».
+- **The client's name, the cards and the times** use the interface language: the day in its locale, «Sent 20 min ago» in its words,
+  quantities in its number format. The current app used the same locale tag for the day and plain digits for the quantities.
+- **Not done on purpose:** the Home button of the current app's overlay (Mise 2's rail is always there). The deadline editor, the
+  hub's Client ordering row and the ordering link on a client are slice C2.
+
+## Step 3c-4b as built, slice C2 (13 Oct 2026) — differences from the current app, on purpose
+
+The deadline editor, the hub's Client ordering row and the ordering link on a client: items 71 (the hub row), 75 and 94 above.
+
+- **The hub row «Client ordering»** (sub-line «When orders sent from a client's own link close») sits beside the WhatsApp door and
+  opens `/calculator/settings/ordering`, one level down, like every other Settings screen: the usage record calls it
+  `settings`, Back gives the focus back to the row, and a typed address is REPLACED on the way out.
+- **The deadline editor is a form like the others**: a Back/Save bar, a working copy, a Save that stays disabled until the box
+  differs from what it opened with, the discard question on every way out (the router's blocker, so the rail asks too), the busy
+  marker while edits are unsaved. The current app's overlay had a Save that was always enabled and no discard question.
+- **It waits for the SERVER's answer** (`cutoffFromServer`) before it copies the deadline, and says «Loading…» until then: the
+  browser's own database answers at once with whatever this phone last saw, and saving that back would undo another phone's
+  change. The current app copied whatever it held. Offline, the editor therefore stays on «Loading…» (the config editors do too).
+- **A «No deadline» button** under the box clears it (and puts the focus back in the box), because the native time box is hard to
+  clear on some phones. The sentence about the consequence nobody guesses (with a deadline, today can never be ordered for) is
+  kept under the box.
+- **The save is local-first and returns at once** (P20): the question («Close orders at 19:30 the day before?» or, with the box
+  empty, «Remove the deadline?»), then the deadline is handed to the browser's own database and the screen steps back to the hub.
+  A refusal that arrives later is SAID as the status message «Not saved: check the connection and try again.» with the old
+  deadline back on screen. The current app waited for the answer, kept the screen open and alerted. A value that is not a time
+  (only possible in a browser without a native time box) is refused with «That is not a time…» and nothing is written.
+- **The ordering link is a labelled group «Ordering link» under the client's products.** While the Clients editor holds ANY
+  unsaved change (a client added and never saved included) it shows only «Save your changes first…», because a link publishes the
+  products AS SAVED. The links are read when the client's screen opens and again when the editor's save completes.
+- **A failed read of the links is its own state**: «The ordering links could not be read. Check your connection and open this
+  client again.» with NO Create button (new key `calc.orderingLink.failed`). The current app logged the failure and offered to
+  create a link, which would mint a second account for a client whose link works and cut it off. While the read is in the air
+  the group says «Loading…».
+- **A client whose id is not a valid order client id** (`isValidOrderClientId`) is never offered Create (the store would refuse),
+  and gets the «cannot order» sentence. A grant with no secret cannot be shown: no Copy or Send, only Replace.
+- **Who sees what is unchanged**: Copy link and Send for everybody (an errand at the counter); Create, Replace and Turn off only
+  where `canManage`. Send opens the shared «which road» sheet (WhatsApp or the mail app, no recipient) with the client's name as
+  the subject and the VENUE's name in the text («us» when the venue has none).
+- **The link points at the site root's `order.html`** even when the app is served from `/mise2/` (`orderingLinkFor` steps out of
+  the folder), because the client's page stays where it is until its own port (step 3h).
+- **«Copy this link…» spells the link out in its own paragraph** (selectable, breaking anywhere) when the clipboard does not take
+  it or the 2 s clock wins; the dialogs are the app's own, never the browser's.
+- **«Turn off ordering» is a quiet button** in the danger ink, below the other buttons, with the full 48 px target.
+- **`applied-not-recorded` is now an alert dialog** that stays until it is dismissed (the current app used an alert), not the
+  2.6 s status message C1 shipped: it is the warning that the app will no longer notice the client changing the order.
+  `cutoff-not-saved` stays a status message.
+- **The Calculator's door says «Client orders»** (Italian «Ordini ricevuti»), not «Orders», which sat confusingly beside
+  «Send order». New key `calc.clientOrders.door`. The current app's footer button said «Orders». In Italian the door is NOT
+  «Ordini dei clienti»: that is the hub row's name (`ui.clientOrdering`, the deadline), and the door opens the screen of the
+  orders RECEIVED, so the two never read the same.
+- **A deadline that was never saved is said, and can be saved as shown.** With no `client-settings/orders` document the bakery
+  is shown the default 16:00 while the clients' page reads NO deadline (any day, today included). The editor then says, above the
+  box, «No deadline has been saved yet: until you save one, clients can order for any day, today included.» (new key
+  `calc.cutoff.notSaved`, warning tone), and Save is enabled WITHOUT a change so the 16:00 shown can be saved as it is (the usual
+  question follows). The current app showed 16:00 as if it were in force.

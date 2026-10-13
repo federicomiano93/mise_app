@@ -153,6 +153,10 @@ export interface CalculatorDeps {
 export interface CalculatorOptions {
   // The default title of a WhatsApp list, in the interface language (normalizeConfig's second argument).
   readonly marketOrderTitle?: string;
+  // Told after every configuration save the SERVER has stored, with the configuration before and after: the
+  // clients' ordering menus are republished from here (js/calculator-config-store.js `saveConfig`). It must not
+  // throw; whatever it starts must never fail the save.
+  readonly onConfigSaved?: (previous: CalculatorConfig, saved: CalculatorConfig) => void;
 }
 
 export interface CalculatorStore {
@@ -646,6 +650,14 @@ export function createCalculatorStore(
           }
           releaseHeld();
           changed();
+          // ⚠️ BEST-EFFORT, AND IT NEVER FAILS THE SAVE: the address book is stored; a menu that did not
+          // republish is corrected by the next save, while a save reported as failed because of it would send
+          // the owner looking for a problem that is not there.
+          try {
+            options.onConfigSaved?.(previous, mine);
+          } catch (err) {
+            deps.warn('Client ordering menus not republished:', err);
+          }
           return { synced: true };
         },
         (err: unknown): ConfigSaveResult => {

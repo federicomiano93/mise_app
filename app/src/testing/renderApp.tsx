@@ -14,6 +14,7 @@ import { routes as appRoutes } from '../routes';
 import { SessionProvider } from '../session/SessionContext';
 import type { Session } from '../session/session';
 import { fakeCalculatorSource } from './fakeCalculatorSource';
+import { fakeClientOrdersSource } from './fakeClientOrdersSource';
 import { fakeFoodcostSource } from './fakeFoodcostSource';
 import { fakePastriesSource } from './fakePastriesSource';
 import { fakeStocktakeSource } from './fakeStocktakeSource';
@@ -41,7 +42,8 @@ export function renderApp(path: string, { lang = 'en', routes = appRoutes, sessi
   const messages = lang === 'it' ? italian : en;
   const store = fakeStore(session);
   const services: DataServices = { pastries: () => fakePastriesSource(), stocktake: () => fakeStocktakeSource(),
-    foodcost: () => fakeFoodcostSource(), calculator: () => fakeCalculatorSource(), ...data };
+    foodcost: () => fakeFoodcostSource(), calculator: () => fakeCalculatorSource(),
+    clientOrders: () => fakeClientOrdersSource(), ...data };
 
   render(
     <I18nProvider initialLanguage={lang} initialMessages={messages}>

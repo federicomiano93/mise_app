@@ -39,7 +39,7 @@ const sinks = createTelemetrySinks(backend, () => {
 startTelemetry({ store, sinks });
 
 // Every section's data, on the same backend: Firestore is loaded by the first section that reads.
-const services = createDataServices(backend.firestore);
+const services = createDataServices(backend.firestore, backend);
 
 // Nobody signed in: the sign-in form needs no Firestore (firebaseBackend.ts loads it lazily), so
 // it is fetched while the password is being typed. Signed in, the session's first read loads it.
