@@ -160,9 +160,9 @@ function LabelBody({ recipe }: { recipe: CatalogueRecipe }) {
   // Put the sheet on paper through the system's dialog.
   //
   // ⚠️ THE HOST IS BUILT NOW AND IS NOT THIS SCREEN'S (printHost.tsx): a direct child of <body> (label-print.css hides
-  // everything else with one derived rule), at the size the MEASUREMENT chose, taken away by `afterprint` only. On
-  // Android Chrome window.print() returns at once and the dialog stays up while the page carries on; a host that went
-  // with this screen would print a blank page. It is NOT called `.preview-overlay`: that class holds back a
+  // everything else with one derived rule), at the size the MEASUREMENT chose, taken away once the print is over AND
+  // the person is back in the page. On Android Chrome window.print() returns at once and the dialog stays up while
+  // the page carries on; a host that went with this screen would print a blank page. It is NOT called `.preview-overlay`: that class holds back a
   // compulsory update for as long as it exists in the current app, and the habit is kept.
   const print = () => {
     if (sheet === null || fit === null || !fit.measured || !fit.fits || roads[0]?.id !== 'os-print') return;

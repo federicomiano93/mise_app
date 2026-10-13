@@ -5,6 +5,7 @@ import { buildLabel, declarationText } from '@mise/shared/recipe-label-model';
 import { fakeRecipesSource } from '../testing/fakeRecipesSource';
 import { LOAD, renderRecipes, split } from '../testing/renderRecipes';
 import type { StoredDoc } from './recipesSource';
+import { closePrintHost } from './printHost';
 
 // The label screen (step 3d-3): what the recipe's label says, on screen, and printed through the system's own dialog.
 // ⚠️ This is a document that goes on food. Every verdict, every word of the label and the whole layout are the shared
@@ -16,8 +17,8 @@ beforeAll(async () => { await import('./RecipesSection'); }, 60_000);
 beforeEach(() => { window.localStorage.clear(); });
 
 afterEach(() => {
-  // A print host outlives its screen until `afterprint` (printHost.tsx): the end of a spec is that event.
-  act(() => { window.dispatchEvent(new Event('afterprint')); });
+  // A print host outlives its screen (printHost.tsx): the end of a spec takes it away.
+  act(() => { closePrintHost(); });
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
   vi.useRealTimers();
@@ -712,12 +713,12 @@ describe('the paper: measured, scaled, and the Print button that obeys it', () =
 it.todo('3d-4: LabelScreen.tsx has neither the `zplFits: () => true` stub nor the `printerReady: false` stub');
 
 describe('printing through the system\'s own dialog', () => {
-  it('puts a host in <body> at the measured size, calls window.print once, and takes it away on afterprint', async () => {
+  it('puts a host in <body> at the measured size, calls window.print once, and takes it away once the person is back', async () => {
     stubLayout();
     const seen: string[] = [];
     const print = vi.spyOn(window, 'print').mockImplementation(() => {
       const host = document.getElementById('labelPrint');
-      seen.push(`${host?.parentElement === document.body}|${host?.className}|${host?.querySelectorAll('.lab-sheet').length}`);
+      seen.push(`${host?.parentElement === document.body}|${host?.className}|${host?.querySelectorAll('.lab-sheet').length}|${document.documentElement.classList.contains('lab-printing')}`);
     });
     const actions: string[] = [];
     const listen = (event: Event) => { actions.push(String((event as CustomEvent).detail)); };
@@ -729,7 +730,8 @@ describe('printing through the system\'s own dialog', () => {
 
       expect(print).toHaveBeenCalledTimes(1);
       // A direct child of <body> (one derived print rule hides everything else), with the preset page and one sheet.
-      expect(seen).toEqual(['true|lab-print lab-print--p76x51|1']);
+      // …and <html> carries the class that scopes label-print.css's «hide everything else» rule to this print.
+      expect(seen).toEqual(['true|lab-print lab-print--p76x51|1|true']);
       expect(document.getElementById('labelPrint')).not.toBeNull();
       // ⚠️ NEVER the class that holds back a compulsory update.
       expect(document.querySelector('.preview-overlay')).toBeNull();
@@ -737,9 +739,14 @@ describe('printing through the system\'s own dialog', () => {
       expect(actions).toContain('label-printed');
 
       act(() => { window.dispatchEvent(new Event('afterprint')); });
+      // ⚠️ NOT YET: Android fires afterprint before its print screen has laid the page out (printHost.tsx).
+      expect(document.getElementById('labelPrint')).not.toBeNull();
+      act(() => { window.dispatchEvent(new Event('pointerdown')); });
       expect(document.getElementById('labelPrint')).toBeNull();
-      // The listener goes with it: a second afterprint does nothing.
-      act(() => { window.dispatchEvent(new Event('afterprint')); });
+      // ⚠️ The scope goes with the host: left behind, every later print of the app would come out blank.
+      expect(document.documentElement.classList.contains('lab-printing')).toBe(false);
+      // The listeners go with it: a second afterprint or tap does nothing.
+      act(() => { window.dispatchEvent(new Event('afterprint')); window.dispatchEvent(new Event('pointerdown')); });
       expect(document.getElementById('labelPrint')).toBeNull();
     } finally {
       window.removeEventListener('mise:action', listen);
@@ -771,6 +778,7 @@ describe('printing through the system\'s own dialog', () => {
     await user.click(printButton());
     expect(document.querySelectorAll('#labelPrint')).toHaveLength(1);
     act(() => { window.dispatchEvent(new Event('afterprint')); });
+    act(() => { window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); });
     expect(document.getElementById('labelPrint')).toBeNull();
     await user.click(printButton());
     expect(print).toHaveBeenCalledTimes(3);
@@ -798,7 +806,7 @@ describe('printing through the system\'s own dialog', () => {
 
   // ⚠️ ANDROID CHROME'S print() DOES NOT BLOCK: the dialog is open while the page carries on. A person who leaves the
   // label screen with it still up must not turn the paper blank, so the host is the print's, not the screen's.
-  it('keeps the host when the screen is left while the dialog is open, and takes it away on afterprint only', async () => {
+  it('keeps the host when the screen is left while the dialog is open, and takes it away only after the print', async () => {
     stubLayout();
     vi.spyOn(window, 'print').mockImplementation(() => undefined);
     const { router, user } = await openLabel([CAKE], 'cake');
@@ -809,8 +817,27 @@ describe('printing through the system\'s own dialog', () => {
     const host = document.getElementById('labelPrint');
     expect(host).not.toBeNull();
     expect(host?.querySelectorAll('.lab-sheet')).toHaveLength(1);
-    act(() => { window.dispatchEvent(new Event('afterprint')); });
+    // A tap BEFORE the print is over (a computer's dialog is modal; this is only a spec) does not take it away.
+    act(() => { window.dispatchEvent(new Event('pointerdown')); });
+    expect(document.getElementById('labelPrint')).not.toBeNull();
+    act(() => { window.dispatchEvent(new Event('afterprint')); window.dispatchEvent(new Event('pointerdown')); });
     expect(document.getElementById('labelPrint')).toBeNull();
+  });
+
+  // ⚠️⚠️ DRIVEN ON THE LAB TABLET (Android 7, Chrome 101, 13 Oct 2026): Android fires afterprint the moment print()
+  // hands over, BEFORE its print screen lays the page out. The current app removed its host on that event and the
+  // tablet offered a BLANK page. The host must still be there after an afterprint fired inside print() itself.
+  it('⚠️ survives an afterprint fired at once by print() itself, as Android does', async () => {
+    stubLayout();
+    vi.spyOn(window, 'print').mockImplementation(() => { window.dispatchEvent(new Event('afterprint')); });
+    const { user } = await openLabel([CAKE], 'cake');
+    await user.click(printButton());
+    expect(document.querySelectorAll('#labelPrint .lab-sheet')).toHaveLength(1);
+    expect(document.documentElement.classList.contains('lab-printing')).toBe(true);
+    // The person comes back from the system's print screen and taps: now it goes.
+    act(() => { window.dispatchEvent(new Event('pointerdown')); });
+    expect(document.getElementById('labelPrint')).toBeNull();
+    expect(document.documentElement.classList.contains('lab-printing')).toBe(false);
   });
 
   it('builds the host at print time with no style attribute and not as an overlay', async () => {

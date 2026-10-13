@@ -178,11 +178,16 @@
      bar, the toast, and the sign-in cover that must never be printed — is hidden by
      the same selector, and a header added next year is hidden by it too. A list of
      class names here would go stale silently, on an output nobody previews. */
-  /* ⚠️ SCOPED TO A BODY THAT HOLDS A LABEL HOST (`:has`, Chrome 105+): this file is loaded by the whole app once the
-     label has been opened, and an unscoped rule would blank every other print it ever makes. */
-  body:has(> #labelPrint) > *:not(#labelPrint) { display: none !important; }
+  /* ⚠️ SCOPED TO A LABEL PRINT: this file is loaded by the whole app once the label has been opened, and an unscoped
+     rule would blank every other print it ever makes. The scope is the `lab-printing` class printHost.tsx puts on
+     <html> for exactly as long as a label host exists.
+     ⚠️⚠️ A CLASS, NOT `body:has(> #labelPrint)`. `:has` arrived in Chrome 105, and the lab tablet was found on Chrome
+     101 (13 Oct 2026, after a reset): there the rule was dropped whole, nothing was hidden, and the print dialog
+     offered the app's screen on A4 instead of the label. A selector the browser does not know is not an error — it
+     is a rule that silently does not exist. */
+  .lab-printing body > *:not(#labelPrint) { display: none !important; }
 
-  body:has(> #labelPrint) { margin: 0; background: #fff; }
+  .lab-printing body { margin: 0; background: #fff; }
 
   .lab-print { display: block; }
 

@@ -79,9 +79,18 @@ describe('label-print.css', () => {
   // ⚠️ SCOPED: with no label host in the body, nothing at all is hidden when the app prints something else.
   it('never hides or restyles the body for a print that has no label host', () => {
     const printBlock = css.slice(css.indexOf('@media print'));
-    expect(printBlock).not.toMatch(/(^|[{};\s])body\s*>/);
-    expect(printBlock).not.toMatch(/(^|[{};\s])body\s*\{/);
-    expect(printBlock).toMatch(/body:has\(>\s*#labelPrint\)\s*\{\s*margin:\s*0;\s*background:\s*#fff;\s*\}/);
+    // Every rule that names the body is behind the class printHost.tsx sets only while a host exists.
+    const bodyRules = printBlock.match(/[^{};/]*\bbody\b[^{};]*\{/g) ?? [];
+    expect(bodyRules.length).toBeGreaterThan(0);
+    for (const rule of bodyRules) expect(rule.trim(), rule).toMatch(/^\.lab-printing\s+body\b/);
+    expect(printBlock).toMatch(/\.lab-printing\s+body\s*\{\s*margin:\s*0;\s*background:\s*#fff;\s*\}/);
+  });
+
+  // ⚠️ NO `:has` ANYWHERE: the lab tablet was found on Chrome 101 (`:has` is 105+), where a rule using it is dropped
+  // whole — the print dialog then offered the app's screen on A4 instead of the label (driven on the tablet, 13 Oct 2026).
+  it('uses no selector the lab tablet’s Chrome 101 does not know', () => {
+    const rules = css.replace(/\/\*[\s\S]*?\*\//g, '');
+    expect(rules).not.toMatch(/:has\(/);
   });
 
   // ⚠️ Mise 2's base.css sets `text-wrap: pretty` on <body>; the current app's catalogue page has none. A different
@@ -94,7 +103,7 @@ describe('label-print.css', () => {
 
   // ⚠️ ONE RULE, DERIVED RATHER THAN LISTED: everything but the label host is hidden when printing.
   it('hides everything but #labelPrint when printing, with one derived rule', () => {
-    expect(css).toMatch(/@media print\s*\{[\s\S]*body:has\(>\s*#labelPrint\)\s*>\s*\*:not\(#labelPrint\)\s*\{\s*display:\s*none\s*!important;\s*\}/);
+    expect(css).toMatch(/@media print\s*\{[\s\S]*\.lab-printing\s+body\s*>\s*\*:not\(#labelPrint\)\s*\{\s*display:\s*none\s*!important;\s*\}/);
     expect(css).toMatch(/\.lab-print\s*\{\s*display:\s*none;\s*\}/);
     expect(css).toMatch(/@media print[\s\S]*\.lab-print\s*\{\s*display:\s*block;\s*\}/);
   });
