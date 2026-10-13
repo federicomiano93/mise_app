@@ -1,7 +1,8 @@
 import { Fragment, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Send } from 'lucide-react';
-import { outputLanguage } from '@mise/shared/market';
+import { canPrintLabel, outputLanguage } from '@mise/shared/market';
 import type { CatalogueRecipe } from '@mise/shared/catalogue-model';
+import { recipeAllergens, rowState } from '@mise/shared/recipe-allergen-model';
 import { buildLabel, containsLine, declarationText, mayContainLine } from '@mise/shared/recipe-label-model';
 import { allergensOn } from '@mise/shared/venue-features';
 import { useT } from '../i18n/useT';
@@ -10,6 +11,7 @@ import { copyToClipboard } from '../ui/clipboard';
 import { useSendSheet } from '../ui/SendSheet';
 import { useAllergenTables } from './allergenTables';
 import { useRecipes } from './RecipesContext';
+import { useStillWaiting } from './useStillWaiting';
 import styles from './DeclarationCard.module.css';
 
 // How long «Copied» (or «Could not copy») stays under the buttons.
@@ -24,9 +26,19 @@ const COPY_NOTE_MS = 2500;
 // ⚠️ HIDDEN WHEN ALLERGENS ARE OFF, asked first: a venue that has switched them off must not be offered a
 // declaration about data it can no longer reach.
 //
+// ⚠️ NO COUNTRY, NO DECLARATION. The words of a declaration are the venue's COUNTRY's language and there is no
+// fallback: with no country, an unsupported one, or a venue document that did not load (`canPrintLabel` false)
+// the card says ONE line (the current app's «No label can be made yet…») and has no Copy and no Send. The
+// venue document is read once when the venue opens and is not live in Mise 2 (seen after a reload).
+//
+// ⚠️ AN EMPTY RECIPE (no rows) HIDES THE CARD, as the allergen card is hidden: there is nothing to declare. A
+// recipe whose rows are declared but none has a weight gets its own sentence, never the «still to be
+// declared» one, which would send somebody hunting for ingredients that are fine.
+//
 // ⚠️ A HALF DECLARATION MUST NEVER BE SENDABLE. When the label cannot be built the card says one line,
 // pointing at the allergen card above, and has NO Copy and NO Send. The same while the ingredients are
-// still arriving: no verdict, no buttons.
+// still arriving: no verdict, no buttons (after ten seconds of it, one more line says what it is waiting
+// for). If the ingredient list could never be read the verdict stays «not ready» and the blocked line stands.
 //
 // ⚠️ WHAT IS COPIED AND SENT IS THE LABEL'S OWN TEXT in the venue's COUNTRY's language
 // (`outputLanguage`, read while drawing), without the nutrition table: some mail clients silently drop a
@@ -41,19 +53,33 @@ export function DeclarationCard({ recipe }: { recipe: CatalogueRecipe }) {
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const headId = useId();
   const label = useMemo(() => buildLabel(recipe, tables), [recipe, tables]);
+  const stillWaiting = useStillWaiting(!ingredientsLoaded);
 
   useEffect(() => () => { if (timer.current !== null) clearTimeout(timer.current); }, []);
 
   if (!allergensOn(location)) return null;
-  const lang = outputLanguage(location);
+  // A recipe with no rows stays silent, the model's own word for it (the allergen card says the same).
+  if (rowState(recipeAllergens(recipe, tables)) === 'nothing-yet') return null;
 
   const heading = <h3 id={headId} className={styles.head}>{t('cat.decl.title')}</h3>;
+
+  // ⚠️ Before anything is composed: a declaration is never produced in a fallback language.
+  if (!canPrintLabel(location)) {
+    return (
+      <section className={styles.card} aria-labelledby={headId}>
+        {heading}
+        <p className={styles.blocked}>{t('label.blocked.noCountry')}</p>
+      </section>
+    );
+  }
+  const lang = outputLanguage(location);
 
   if (!ingredientsLoaded) {
     return (
       <section className={styles.card} aria-labelledby={headId}>
         {heading}
         <p className={styles.checking} aria-busy="true">{t('recipes.allergensChecking')}</p>
+        {stillWaiting ? <p className={styles.checking}>{t('recipes.allergensStillWaiting')}</p> : null}
       </section>
     );
   }
@@ -62,7 +88,9 @@ export function DeclarationCard({ recipe }: { recipe: CatalogueRecipe }) {
     return (
       <section className={styles.card} aria-labelledby={headId}>
         {heading}
-        <p className={styles.blocked}>{t('cat.decl.blocked')}</p>
+        <p className={styles.blocked}>
+          {label.reason === 'no-ingredients' ? t('label.blocked.noWeights') : t('cat.decl.blocked')}
+        </p>
       </section>
     );
   }

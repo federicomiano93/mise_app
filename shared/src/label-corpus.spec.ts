@@ -304,8 +304,10 @@ describe.each([
     for (const venue of ['FR', 'none']) {
       const other = venueOf(bread, 'both', venue);
       expect([other.lang, other.canPrint], venue).toStrictEqual([null, false]);
-      // Handed no language, the builders print what the app has always printed — never a blank (the screens
-      // refuse to draw before they ever get here, because canPrint is false).
+      // Handed no language, the builders print what the app has always printed — never a blank. Mise 2's
+      // declaration card and law card refuse before they get here (canPrint is false: one line, no Copy, no
+      // Send). The on-screen allergen card and the sheet's rows still show names in English with no country,
+      // as the current app does on purpose (the on-screen reading at the counter, nothing copied or sent).
       expect(other.containsLine, venue).toBe(gb.containsLine);
       expect(other.declaration, venue).toBe(gb.declaration);
     }

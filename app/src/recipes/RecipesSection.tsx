@@ -62,7 +62,8 @@ function RecipesScreen() {
     return <Navigate to={resolved.redirect} replace state={navigationType === 'POP' ? KEEP_FOCUS : state} />;
   }
   // ⚠️ THE SHEET RE-CHECKS ITS OWN GATE: a venue that has switched allergens off has no sheet, whatever address is in
-  // the bar (a bookmark, a link, Back, or the switch thrown on another phone while it is open). A gate on a door is a
+  // the bar (a bookmark, a link, Back; a switch thrown on another phone is seen after a reload, because the venue document is
+  // read once when the venue opens and is not live in Mise 2). A gate on a door is a
   // gate on everything later put behind it.
   if (resolved.view.kind === 'allergens' && !allergensOn(location)) {
     return <Navigate to={RECIPES_PATH} replace state={KEEP_FOCUS} />;

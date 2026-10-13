@@ -1003,6 +1003,11 @@ export const en = {
   // New in Mise 2 (step 3d-2): until the ingredients have arrived no verdict is drawn, because every linked row would
   // read «not declared» only because nothing had come yet. The current app paints from its own copy.
   'recipes.allergensChecking': 'Checking the allergens…',
+  // New in Mise 2 (3d-2 review): the wait never ends on a phone that is offline with nothing stored, so after ten seconds
+  // the screen says what it is waiting for. Still no verdict.
+  'recipes.allergensStillWaiting': 'Still waiting for the ingredient list — the allergens can’t be checked until it arrives. Are you offline?',
+  // New in Mise 2: the ingredients could never be read (refused, nothing stored), so the per-row reasons would all be untrue.
+  'cat.alg.unreadable': 'The ingredient list could not be read, so the allergens cannot be checked.',
   // Allergens, step 3d-2 (the current app's wording, key for key). The state of a recipe's allergens is a word.
   'cat.alg.title': 'Allergens',
   'cat.alg.notDeclared': 'not declared',
@@ -1030,6 +1035,9 @@ export const en = {
   'cat.decl.blocked': 'Not ready yet — some ingredients are still to be declared. The allergen card above says which.',
   'cat.decl.caveat': 'A draft for you to check. The app knows what it was told: it cannot know about a last-minute substitution or a supplier who changed their recipe.',
   'cat.decl.copy': 'Copy',
+  // The current app's own sentences for a label that cannot be made (js/i18n.js, key for key).
+  'label.blocked.noWeights': 'This recipe has no ingredients with a weight.',
+  'label.blocked.noCountry': 'No label can be made yet: nobody has said which country this business sells in, and that decides the language the label must be printed in. The owner can set it when the business is created.',
   'label.copied': 'Copied',
   'label.copyFailed': 'Could not copy — select the text above instead',
   // The Allergen sheet (the screen at the counter).

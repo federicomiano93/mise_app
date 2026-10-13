@@ -20,6 +20,7 @@ import { useAllergenTables } from './allergenTables';
 import { incompleteSentence } from './allergenText';
 import { useRecipes, useRecipesStore } from './RecipesContext';
 import { sheetOpener, useHandBack } from './handBack';
+import { useStillWaiting } from './useStillWaiting';
 import styles from './AllergenSheet.module.css';
 
 // Six, not twelve: a plan longer than a glance turns back into the flat list it exists to replace.
@@ -50,14 +51,23 @@ type Props = {
 // ⚠️ THE SEARCH IS ITS OWN and by recipe NAME only, never the list's query and never by allergen: with nothing declared,
 // «nuts» would find zero recipes, and an empty result on an allergen search reads as «nothing here contains nuts».
 // A snapshot repaints counts, lists and rows; the search box stays mounted with its text and its focus.
+//
+// ⚠️ AFTER TEN SECONDS OF «CHECKING» (offline, nothing stored) one more line says what the sheet is waiting for.
+// Still no verdict. IF THE INGREDIENT LIST COULD NEVER BE READ the work lists would be empty or wrong, so they are
+// hidden and one line above the rows says why; the rows keep the model's verdicts.
+//
+// ⚠️ «EVERY RECIPE CAN BE LABELLED» (and the sentence about the rest) only once the server has answered or the live
+// stream has broken: a cold phone's first, cached answer can hold only a few recipes, and those few being fine says
+// nothing about the catalogue. The counts themselves are always shown.
 export function AllergenSheet({ titleRef, onBack, onOpenRecipe }: Props) {
   const { t } = useT();
   const store = useRecipesStore();
   const handBack = useHandBack();
-  const { recipes, recipesLoaded, ingredients, ingredientsLoaded } = useRecipes();
+  const { recipes, recipesLoaded, recipesFromServer, streamBroken, ingredients, ingredientsLoaded, ingredientsUnreadable } = useRecipes();
   const tables = useAllergenTables(recipes, ingredients);
   const [query, setQuery] = useState('');
   const titleId = useId();
+  const stillWaiting = useStillWaiting(!ingredientsLoaded);
 
   const rows = useMemo(
     () => recipes.map(recipe => {
@@ -117,14 +127,17 @@ export function AllergenSheet({ titleRef, onBack, onOpenRecipe }: Props) {
               {ingredientsLoaded ? (
                 <>
                   <p className={styles.count}>{t('cat.sheet.declaredCount', { n: declaredCount, total: rows.length })}</p>
-                  {rows.length === 0 ? null : (
+                  {rows.length === 0 || !(recipesFromServer || streamBroken) ? null : (
                     <p className={styles.sub}>
                       {blockedCount > 0 ? t('cat.sheet.blockedCount', { n: blockedCount }) : t('cat.everyRecipeCanBe')}
                     </p>
                   )}
                 </>
               ) : (
-                <p className={styles.checking} aria-busy="true">{t('recipes.allergensChecking')}</p>
+                <>
+                  <p className={styles.checking} aria-busy="true">{t('recipes.allergensChecking')}</p>
+                  {stillWaiting ? <p className={styles.checking}>{t('recipes.allergensStillWaiting')}</p> : null}
+                </>
               )}
             </div>
 
@@ -143,7 +156,8 @@ export function AllergenSheet({ titleRef, onBack, onOpenRecipe }: Props) {
 
             {/* ⚠️ HIDDEN WHILE SEARCHING: these describe the whole catalogue, and left up over a filtered list of one
                 recipe they look like that recipe's job. */}
-            {ingredientsLoaded && !searching ? (
+            {ingredientsUnreadable ? <p className={styles.warn}>{t('cat.alg.unreadable')}</p> : null}
+            {ingredientsLoaded && !ingredientsUnreadable && !searching ? (
               <>
                 {unlinked.length > 0 ? (
                   <WorkBox

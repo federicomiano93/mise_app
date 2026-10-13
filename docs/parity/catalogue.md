@@ -1219,6 +1219,20 @@ allergen state with an `if` of its own. What differs from the current app, and w
   it a cold phone would flash «not declared» on every recipe, which is a wrong answer however safe. A refused ingredients
   stream ends the wait (the store's quiet failure), so linked rows then read «not declared» — the honest answer — and the
   declaration card says its one line. A recipe with no rows has no allergen card in either state.
+  *Review fixes:* (a) **the wait cannot end offline** on a phone with nothing stored, so after ten seconds
+  (`useStillWaiting`, the timer is cleared on unmount) the cards and the sheet add a line under the checking text,
+  `recipes.allergensStillWaiting` — EN «Still waiting for the ingredient list — the allergens can’t be checked until it
+  arrives. Are you offline?», IT «Sto ancora aspettando l’elenco degli ingredienti: finché non arriva non posso controllare
+  gli allergeni. Sei offline?»; still no verdict and no buttons. (b) **An ingredient list that could never be read** (the
+  store's `ingredientsUnreadable`: the stream failed and nothing was ever held) would make every per-row reason untrue
+  («linked to an ingredient that no longer exists»), so the allergen card replaces the reasons list with
+  `cat.alg.unreadable` — EN «The ingredient list could not be read, so the allergens cannot be checked.», IT «Non riesco a
+  leggere l’elenco degli ingredienti, quindi non posso controllare gli allergeni.» — the head still says «not declared»
+  (from the model), the declaration card keeps its blocked line, and the sheet shows the line above the rows and hides the
+  work lists (they would be empty or wrong).
+- **The venue document is not live in Mise 2.** `session.location` is read once when the venue opens, so allergens being
+  switched off (or a country being set) on another phone is seen after a reload, like the rest of Mise 2 — the current app
+  redraws from its own snapshot. The cards and the sheet still read it on every render.
 - **The allergen card.** Absent when allergens are off and for a recipe with no rows. Incomplete: the head reads
   «Allergens · not declared» (the state is a WORD in the button), folded body with the sentence, the first eight rows as
   `label — reason`, «and N more» and what is known so far marked NOT an answer. Complete: «fully declared» in the head and
@@ -1226,7 +1240,13 @@ allergen state with an `if` of its own. What differs from the current app, and w
   the disclosure button (`aria-expanded`, `aria-controls`); it opens CLOSED for every recipe opened, keeps its state
   through a live redraw of the same recipe, and the focus stays where it is. **No «Make a label» button yet**: the label
   screen is step 3d-3, which adds the button to the folded body of a complete card.
-- **The declaration card.** Hidden when allergens are off. One line and no Copy or Send when the label cannot be built.
+- **The declaration card.** Hidden when allergens are off, and for a recipe with no rows (as the allergen card is). **No
+  country, no declaration (review fix):** when `canPrintLabel(location)` is false — no country, an unsupported one such as FR,
+  or a venue document that did not load — the card says ONE line, the current app's `label.blocked.noCountry`
+  (copied key for key), and has no Copy and no Send: a declaration is never produced in a fallback language. A declared
+  recipe with nothing weighable (`label.reason === 'no-ingredients'`) says the current app's `label.blocked.noWeights`
+  («This recipe has no ingredients with a weight.») instead of «still to be declared», still with no buttons. One line and no
+  Copy or Send when the label cannot be built.
   Otherwise the list heaviest first with the allergen rows in a `<strong>` (bold and underlined), `Contains:`, `May contain:`,
   the caveat, Copy and one Send (`ui/SendSheet`); what is copied and sent is exactly
   `declarationText(label, lang, { withNutrition: false })`, built by the same `buildLabel(recipe, tables)` call as the
@@ -1247,7 +1267,11 @@ allergen state with an `if` of its own. What differs from the current app, and w
   the UK), where things stand (counts over the whole catalogue, never the filtered slice), a search of its own by recipe
   NAME only, the work lists (hidden while searching, capped at six with «and N more», linking before declaring, a deleted
   ingredient is not a job), every recipe blocked first then declared, each by name, and the caveat outside everything that
-  repaints. A blocked row names no allergen. The wording is the current app's key for key: the pills read «fully declared» /
+  repaints. **With no country the on-screen allergen card and the sheet's rows still show the names (in English), as the
+  current app does on purpose** — the on-screen reading at the counter; only what is copied or sent, and the law card's
+  list, refuse without a country. «Every recipe can be labelled.» and the sentence about the rest appear only once the server
+  has answered or the live stream has broken (`recipesFromServer || streamBroken`): a cold phone's first, cached answer can
+  hold only a few recipes; the counts themselves are always shown. A blocked row names no allergen. The wording is the current app's key for key: the pills read «fully declared» /
   «not declared» (the plan's «Declared» was shorthand). Tapping a row counts as an open for «most opened first».
 - **Small differences:** the sheet's search filters on every keystroke (the current app debounces 140 ms), and its text is
   forgotten when the sheet is left (the current app keeps `sheetQuery` for the session); with no recipes the count reads «0 of
@@ -1257,7 +1281,13 @@ allergen state with an `if` of its own. What differs from the current app, and w
   label-word function (`allergenName`, `allergenGroupName`, `allergenGroupCodes`, `labelWord`, `nutrientName`,
   `containsLine`, `mayContainLine`, `declarationText`, `ingredientLine`) is on an explicit list, holds
   `const lang = outputLanguage(…)`, passes that `lang` to every call, and never touches the interface language (`useT().lang`,
-  `locale`, the i18n context, the loaders). It was proved once by mutation (the `outputLanguage` call removed, and
+  `locale`, the i18n context, the loaders). *Review hardening:* the three fixed-language word functions (`allergenLabel`,
+  `allergenWordIt`, `nutrientWordIt`) are found anywhere and refused in a label file; a file that imports a VALUE from
+  `market`, `recipe-label-model` or `allergen-model` must be on the list unless every name is on a justified allowlist (codes,
+  predicates, normalizers — `ALLERGENS`, `NUTRIENTS`, `buildLabel` and the other word-carrying exports are not); `import * as`,
+  `export *`, `import()` and `as` renames of those modules are forbidden everywhere; in a label file `lang` is declared once
+  per scope from `outputLanguage(` and never assigned, destructured or taken as a parameter; and every runtime export of the
+  three modules must be classified, so a new one forces a decision. Each rule has a self-test on an inline source. It was proved once by mutation (the `outputLanguage` call removed, and
   `useT().lang` handed to `allergenName`: both fail, naming the file).
 - **Left for 3d-3:** «Make a label» and the label screen; for 3d-6, the pencil that the work list's sentence about linking
   rows mentions (`cat.aRecipeRowHas` is the current app's wording and points at a screen Mise 2 does not have yet).

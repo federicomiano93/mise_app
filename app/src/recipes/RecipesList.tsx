@@ -124,8 +124,9 @@ export function RecipesList({ openRecipeId, split, onOpenRecipe, sheetOpen, onOp
         </ul>
       )}
 
-      {/* ⚠️ THE DOOR TO THE ALLERGEN SHEET EXISTS ONLY FOR A VENUE THAT TRACKS ALLERGENS (read here on every render, so a
-          switch thrown on another phone arrives with the next snapshot). It stands at the foot of the list, where the
+      {/* ⚠️ THE DOOR TO THE ALLERGEN SHEET EXISTS ONLY FOR A VENUE THAT TRACKS ALLERGENS (read here on every render; the venue
+          document is read once when the venue opens, so a switch thrown on another phone is seen after a reload, like
+          the rest of Mise 2). It stands at the foot of the list, where the
           current app's footer button sits. */}
       {allergensOn(location) ? (
         <Button

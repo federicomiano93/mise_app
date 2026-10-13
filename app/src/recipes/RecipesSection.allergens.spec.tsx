@@ -153,9 +153,9 @@ describe('the allergen card of an incomplete recipe', () => {
     expect(await screen.findByText('Wheat, Milk')).toBeVisible();
   });
 
-  it('keeps the card silent for a recipe with no rows, and the declaration says one line', async () => {
+  it('keeps both cards silent for a recipe with no rows', async () => {
     await open([recipeDoc('empty', 'Empty', [])], [FLOUR], 'empty');
-    await screen.findByRole('heading', { level: 3, name: 'Ingredient declaration' });
+    expect(main().queryByRole('heading', { level: 3, name: 'Ingredient declaration' })).not.toBeInTheDocument();
     expect(main().queryByRole('button', { name: /^Allergens/ })).not.toBeInTheDocument();
     expect(main().queryByRole('heading', { level: 3, name: /^Allergens/ })).not.toBeInTheDocument();
   });
@@ -198,12 +198,13 @@ describe('the venue switch, and the wait for the ingredients', () => {
     expect(await screen.findAllByText('Sto controllando gli allergeni…', undefined, LOAD)).toHaveLength(2);
   });
 
-  it('⚠️ reads a refused ingredients stream as «not declared» for the linked rows, with no buttons', async () => {
+  it('⚠️ reads a refused ingredients stream with nothing stored as «not declared», with no buttons', async () => {
     const source = fakeRecipesSource({ recipes: [CAKE], ingredients: [FLOUR, MILK, SALT] });
     source.refuse.ingredients = true;
     const { user } = await open([CAKE], [], 'cake', { source });
     await user.click(await screen.findByRole('button', { name: 'Allergens not declared' }));
-    expect(screen.getByText('Flour — linked to an ingredient that no longer exists')).toBeVisible();
+    // Nothing was ever held, so the per-row reasons would all be untrue: one line says it (see the review spec).
+    expect(screen.getByText('The ingredient list could not be read, so the allergens cannot be checked.')).toBeVisible();
     expect(screen.getByText('Not ready yet — some ingredients are still to be declared. The allergen card above says which.')).toBeVisible();
     expect(main().queryByRole('button', { name: /Copy|Send/ })).not.toBeInTheDocument();
   });

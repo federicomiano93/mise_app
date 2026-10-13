@@ -1,4 +1,7 @@
 import { describe, expect, test } from 'vitest';
+import * as allergenModel from '@mise/shared/allergen-model';
+import * as labelModel from '@mise/shared/recipe-label-model';
+import * as market from '@mise/shared/market';
 
 // The interface language must never reach a word that names a FOOD — the app side of the guard (parity doc items 54,
 // 55 and 110e; shared/src/label-separation.spec.ts guards the pure modules).
@@ -14,7 +17,11 @@ import { describe, expect, test } from 'vitest';
 //     slip in unnoticed — adding one means adding it here, on purpose);
 //   - every file on the list asks the venue's COUNTRY (`const lang = outputLanguage(…)`), and every label-word call
 //     passes that `lang` as its last argument;
-//   - none of them reaches for the interface language, in any of the ways the app has of holding it.
+//   - none of them reaches for the interface language, in any of the ways the app has of holding it;
+//   - the door cannot be walked round: a file that imports a VALUE from the three label modules must be on the list or
+//     use only names that are not food words (an allowlist, each name justified); `import * as` and `as` renames are
+//     forbidden (they would hide a call from the scan); and in a listed file `lang` is declared once, from
+//     `outputLanguage(`, and never assigned, destructured or taken as a parameter.
 const sources = import.meta.glob<string>('./**/*.{ts,tsx}', { query: '?raw', import: 'default', eager: true });
 
 // Every app file that draws a food word, and why it is allowed to. Adding a screen that prints allergens, nutrients
@@ -27,12 +34,53 @@ const LABEL_FILES: readonly string[] = [
 
 // The functions that put a food word, or a word of the label, in front of somebody. All but `ingredientLine` take the
 // output language: as their last argument, except `declarationText(label, lang, options)`, where it is the second.
+//
+// `allergenLabel`, `allergenWordIt` and `nutrientWordIt` return a food word in ONE FIXED language (English, Italian,
+// Italian) and take no language: a screen calling them would print that language whatever the country says. They are
+// on the list so that any call is found, and they are never allowed to be called (NEVER_CALLED).
 const LABEL_WORDS = [
   'allergenName', 'allergenGroupName', 'allergenGroupCodes', 'labelWord', 'nutrientName',
   'containsLine', 'mayContainLine', 'declarationText', 'ingredientLine',
+  'allergenLabel', 'allergenWordIt', 'nutrientWordIt',
 ] as const;
+const NEVER_CALLED: readonly string[] = ['allergenLabel', 'allergenWordIt', 'nutrientWordIt'];
 const TAKE_NO_LANGUAGE: readonly string[] = ['ingredientLine'];
 const LANGUAGE_IS_SECOND: readonly string[] = ['declarationText'];
+
+// ── The names a file may import from the three label modules WITHOUT being on the list ──────────────────────────────
+//
+// Anything not here, and not a type, makes the importing file a label file: it must then be on LABEL_FILES, where the
+// rules above apply to it. Each name is allowed for the reason beside it; none returns a word a person reads.
+const MODULES = '@mise/shared/(?:market|recipe-label-model|allergen-model)';
+const ALLOWED_VALUES: Readonly<Record<string, string>> = {
+  countryOf: 'a country CODE (GB / IT), used for sums and links, not a word',
+  currencyOf: 'a currency symbol, not a food word',
+  moneyLayoutOf: 'where the symbol sits in a price, not a food word',
+  canPrintLabel: 'a yes / no',
+  outputLanguage: 'the language CODE a label must be printed in — this is how a file asks the country',
+  COUNTRIES: 'the supported country codes',
+  CURRENCY_COUNTRIES: 'country codes',
+  MONEY_LAYOUT_COUNTRIES: 'country codes',
+  ALLERGEN_STATES: 'the three state codes of an ingredient (unknown / none / listed)',
+  ALLERGEN_CODES: 'allergen CODES; the words come only from allergenName',
+  ALLERGEN_GROUPS: 'group CODES; the words come only from allergenGroupName',
+  NUTRIENT_KEYS: 'nutrient KEYS; the words come only from nutrientName',
+  LABEL_SHOWS: 'the codes of what a label shows (allergens / nutrition / both)',
+  isAllergenCode: 'a yes / no over a code',
+  normalizeAllergens: 'cleans stored codes, returns codes',
+  normalizeMayContain: 'cleans stored codes, returns codes',
+  normalizeNutrition: 'cleans stored numbers, returns keys and numbers',
+  allergenState: 'one of the three state codes',
+  checkedAt: 'the date an ingredient was checked, as stored',
+  isDeclared: 'a yes / no',
+  hasFullNutrition: 'a yes / no',
+  missingNutrients: 'nutrient KEYS, not words',
+};
+// Exported by the three modules and NOT allowed outside a label file, because they carry or compose words: the tables
+// hold each allergen's and nutrient's English `label`, and the builders compose ingredient names into the declaration.
+const FOOD_CARRYING: readonly string[] = [
+  'ALLERGENS', 'NUTRIENTS', 'buildAllergenFields', 'buildLabel', 'flattenIngredients', 'nutritionPer100g',
+];
 
 // The source without its comments and string literals: explaining the rule in prose is exactly where a forbidden word
 // belongs, and a sentence that mentions a function is not a call of it.
@@ -76,6 +124,68 @@ const INTERFACE_LANGUAGE: ReadonlyArray<readonly [RegExp, string]> = [
   [/\bdocument\.documentElement\.lang\b|\bnavigator\.language\b/, 'reads the device\'s language'],
 ];
 
+type ImportedName = { name: string; typeOnly: boolean; renamed: boolean };
+type ImportStatement = { module: string; star: boolean; names: ImportedName[] };
+
+// Every `import … from`, `export … from` and dynamic `import()` of the three label modules, in the code. The clause may
+// hold words, braces, commas and `*` only, so a match can never run across another statement's string.
+function labelImportsIn(code: string): { statements: ImportStatement[]; dynamic: number } {
+  const statements: ImportStatement[] = [];
+  const pattern = new RegExp(`\\b(?:import|export)\\s+(type\\s+)?([\\w\\s{},*$]*?)\\s*\\bfrom\\s*['"](${MODULES})['"]`, 'g');
+  for (const match of code.matchAll(pattern)) {
+    const wholeIsType = match[1] !== undefined;
+    const clause = (match[2] ?? '').trim();
+    const inside = /\{([^}]*)\}/.exec(clause)?.[1] ?? '';
+    const names = inside.split(',').map(part => part.trim()).filter(Boolean).map(part => {
+      const spec = part.replace(/^type\s+/, '');
+      return {
+        name: spec.split(/\s+as\s+/)[0] ?? '',
+        typeOnly: wholeIsType || /^type\s/.test(part),
+        renamed: /\bas\b/.test(spec),
+      };
+    });
+    statements.push({ module: match[3] ?? '', star: clause.includes('*'), names });
+  }
+  const dynamic = [...code.matchAll(new RegExp(`\\bimport\\s*\\(\\s*['"]${MODULES}['"]`, 'g'))].length;
+  return { statements, dynamic };
+}
+
+// What is wrong with one file's imports of the label modules. `listed`: the file is on LABEL_FILES, so any name is
+// allowed to be imported — but a star import or a rename hides calls from the scan, listed or not.
+function importProblemsIn(file: string, source: string, listed: boolean): string[] {
+  const { statements, dynamic } = labelImportsIn(codeOf(source));
+  const problems: string[] = [];
+  if (dynamic > 0) problems.push(`${file}: imports a label module with import() — the scan cannot follow it`);
+  for (const statement of statements) {
+    if (statement.star) problems.push(`${file}: «import * as» / «export *» of ${statement.module} hides which functions are called`);
+    for (const { name, typeOnly, renamed } of statement.names) {
+      if (typeOnly) continue;
+      if (renamed) problems.push(`${file}: renames «${name}» from ${statement.module} with «as» — a renamed call is invisible to the scan`);
+      if (!listed && !(name in ALLOWED_VALUES)) {
+        problems.push(`${file}: imports «${name}» from ${statement.module} but is not on LABEL_FILES — add it there, or it must not draw a food word`);
+      }
+    }
+  }
+  return problems;
+}
+
+// The language variable. In a listed file `lang` is declared from `outputLanguage(` and nothing else declares, assigns,
+// destructures or takes a parameter by that name — or the country's language could be swapped for another one.
+function languageProblemsIn(file: string, code: string): string[] {
+  const without = code.replace(/\bconst\s+lang\s*=\s*outputLanguage\s*\(/g, 'const OK = outputLanguage(');
+  const shapes: ReadonlyArray<readonly [RegExp, string]> = [
+    [/\b(?:const|let|var)\s+lang\b/, 'declares lang from something other than outputLanguage('],
+    [/(?<!\b(?:const|let|var)\s+)(?<![\w.])lang\s*=(?![=>])/, 'assigns lang'],
+    [/\{[^}]*\blang\b[^}]*\}\s*=(?!=)/, 'destructures lang'],
+    [/(?<!\?\s*)\blang\s*\??\s*:/, 'names lang as a parameter or a property'],
+    [/(?<![\w.])lang\s*\)?\s*=>/, 'takes lang as an arrow-function parameter'],
+    [/\bfunction\s*\w*\s*\([^)]*\blang\b/, 'takes lang as a function parameter'],
+  ];
+  return shapes
+    .filter(([pattern]) => pattern.test(without))
+    .map(([, why]) => `${file}: ${why} — «lang» must come from «const lang = outputLanguage(…)» alone`);
+}
+
 // What is wrong with one file that draws food words (an empty list: nothing).
 function problemsIn(file: string, source: string): string[] {
   const code = codeOf(source);
@@ -83,9 +193,15 @@ function problemsIn(file: string, source: string): string[] {
   if (!/\bconst\s+lang\s*=\s*outputLanguage\s*\(/.test(code)) {
     problems.push(`${file}: has no «const lang = outputLanguage(…)» — the food words would not follow the venue's country`);
   }
+  problems.push(...languageProblemsIn(file, code));
+  problems.push(...importProblemsIn(file, source, true));
   const calls = callsIn(code);
   if (calls.length === 0) problems.push(`${file}: is on the list but calls no label-word function — take it off the list`);
   for (const { name, args } of calls) {
+    if (NEVER_CALLED.includes(name)) {
+      problems.push(`${file}: calls ${name}(…), which returns a word in one fixed language — use the country's own function`);
+      continue;
+    }
     if (TAKE_NO_LANGUAGE.includes(name)) continue;
     const passed = LANGUAGE_IS_SECOND.includes(name) ? args[1] : args.at(-1);
     if (passed !== 'lang') {
@@ -98,6 +214,8 @@ function problemsIn(file: string, source: string): string[] {
   return problems;
 }
 
+const appFiles = () => Object.entries(sources).filter(([file]) => !/\.spec\.tsx?$/.test(file));
+
 describe('the interface language never reaches a food word', () => {
   test('the scan finds the app\'s files and the label files among them', () => {
     expect(Object.keys(sources).length).toBeGreaterThan(50);
@@ -105,8 +223,7 @@ describe('the interface language never reaches a food word', () => {
   });
 
   test('every app file that calls a label-word function is on the list, and no file on it stopped calling one', () => {
-    const calling = Object.entries(sources)
-      .filter(([file]) => !/\.spec\.tsx?$/.test(file))
+    const calling = appFiles()
       .filter(([, source]) => callsIn(codeOf(source)).length > 0)
       .map(([file]) => file)
       .sort();
@@ -118,6 +235,24 @@ describe('the interface language never reaches a food word', () => {
     expect(problems).toEqual([]);
   });
 
+  // ⚠️ THE DOOR CANNOT BE WALKED ROUND: a file that is not on the list may import from the three label modules only the
+  // names that are not food words, and nobody may rename or star-import them.
+  test('no app file imports a food-carrying value from the label modules without being on the list, or hides one', () => {
+    const problems = appFiles().flatMap(([file, source]) => importProblemsIn(file, source, LABEL_FILES.includes(file)));
+    expect(problems).toEqual([]);
+  });
+
+  // ⚠️ AN ALLOWLIST THAT DRIFTS FROM THE MODULES IS A HOLE: a new export must be decided on, on purpose.
+  test('every runtime export of the three label modules is a label word, allowed with a reason, or food-carrying', () => {
+    const exported = [...Object.keys(market), ...Object.keys(allergenModel), ...Object.keys(labelModel)];
+    const decided = new Set<string>([...LABEL_WORDS, ...Object.keys(ALLOWED_VALUES), ...FOOD_CARRYING]);
+    expect(exported.filter(name => !decided.has(name))).toEqual([]);
+    const exports = new Set(exported);
+    expect([...decided].filter(name => !exports.has(name))).toEqual([]);
+    for (const name of LABEL_WORDS) expect(ALLOWED_VALUES, `${name} is a label word`).not.toHaveProperty(name);
+    for (const name of FOOD_CARRYING) expect(ALLOWED_VALUES, `${name} carries food words`).not.toHaveProperty(name);
+  });
+
   // ⚠️ THE SCANNER MUST BE SHOWN TO FIND WHAT IT GUARDS, or a green result means nothing.
   test('and the scan itself finds each way of getting it wrong', () => {
     const good = 'const lang = outputLanguage(location);\nconst a = allergenName(code, lang);\nconst b = ingredientLine(label);';
@@ -125,13 +260,14 @@ describe('the interface language never reaches a food word', () => {
 
     expect(problemsIn('a.tsx', good.replace('outputLanguage(location)', "'en'"))).toEqual([
       expect.stringContaining('has no «const lang = outputLanguage('),
+      expect.stringContaining('declares lang from something other than outputLanguage('),
     ]);
     expect(problemsIn('b.tsx', `${good}\nconst c = allergenName(code, locale);`)).toEqual([
       expect.stringContaining('allergenName(code, locale) does not pass'),
     ]);
-    expect(problemsIn('c.tsx', `const { t, lang } = useT();\n${good}`)).toEqual([
-      expect.stringContaining('takes lang or locale from useT()'),
-    ]);
+    expect(problemsIn('c.tsx', `const { t, lang } = useT();\n${good}`)).toEqual(
+      expect.arrayContaining([expect.stringContaining('takes lang or locale from useT()')]),
+    );
     expect(problemsIn('d.tsx', `const { locale } = useT();\n${good}`)).toEqual([
       expect.stringContaining('takes lang or locale from useT()'),
     ]);
@@ -150,5 +286,76 @@ describe('the interface language never reaches a food word', () => {
     expect(problemsIn('h.tsx', `// not useT().lang, nor allergenName(code, locale)\n${good}`)).toEqual([]);
     // A call nested in another call is still found, with its arguments whole.
     expect(callsIn('x(allergenName(code, lang), 2)')).toEqual([{ name: 'allergenName', args: ['code', 'lang'] }]);
+  });
+
+  test('rule (a): an unlisted file importing a food-carrying value is found; allowed names and types are not', () => {
+    const bad = "import { allergenName } from '@mise/shared/market';";
+    expect(importProblemsIn('x.tsx', bad, false)).toEqual([expect.stringContaining('imports «allergenName»')]);
+    // On the list the same import is fine.
+    expect(importProblemsIn('x.tsx', bad, true)).toEqual([]);
+    // Across lines, among allowed names, and from the other two modules.
+    expect(importProblemsIn('x.tsx', "import {\n  countryOf,\n  labelWord,\n} from '@mise/shared/market';", false))
+      .toEqual([expect.stringContaining('imports «labelWord»')]);
+    expect(importProblemsIn('x.tsx', "import { ALLERGENS } from '@mise/shared/allergen-model';", false)).toHaveLength(1);
+    expect(importProblemsIn('x.tsx', "import { buildLabel } from '@mise/shared/recipe-label-model';", false)).toHaveLength(1);
+    expect(importProblemsIn('x.tsx', "export { allergenLabel } from '@mise/shared/allergen-model';", false)).toHaveLength(1);
+    expect(importProblemsIn('x.tsx', "const m = await import('@mise/shared/market');", false))
+      .toEqual([expect.stringContaining('import()')]);
+    // Allowed names, type-only imports and unrelated modules are not a problem.
+    expect(importProblemsIn('x.tsx', "import { countryOf, canPrintLabel } from '@mise/shared/market';", false)).toEqual([]);
+    expect(importProblemsIn('x.tsx', "import type { Country, allergenName } from '@mise/shared/market';", false)).toEqual([]);
+    expect(importProblemsIn('x.tsx', "import { type Country, currencyOf } from '@mise/shared/market';", false)).toEqual([]);
+    expect(importProblemsIn('x.tsx', "import { ALLERGEN_GROUPS } from '@mise/shared/allergen-model';\nimport { x } from './market';", false)).toEqual([]);
+    // A comment that mentions an import is not one.
+    expect(importProblemsIn('x.tsx', "// import { allergenName } from '@mise/shared/market';", false)).toEqual([]);
+  });
+
+  test('rule (b): a star import, a star re-export or an «as» rename is found, listed or not', () => {
+    for (const listed of [false, true]) {
+      expect(importProblemsIn('x.tsx', "import * as market from '@mise/shared/market';", listed))
+        .toEqual([expect.stringContaining('import * as')]);
+      expect(importProblemsIn('x.tsx', "export * from '@mise/shared/allergen-model';", listed))
+        .toEqual([expect.stringContaining('import * as')]);
+      expect(importProblemsIn('x.tsx', "import { allergenName as name } from '@mise/shared/market';", listed))
+        .toEqual(expect.arrayContaining([expect.stringContaining('renames «allergenName»')]));
+      expect(importProblemsIn('x.tsx', "import { countryOf as c } from '@mise/shared/market';", listed))
+        .toEqual([expect.stringContaining('renames «countryOf»')]);
+    }
+    // A type renamed is only a type.
+    expect(importProblemsIn('x.tsx', "import { type Country as C } from '@mise/shared/market';", true)).toEqual([]);
+  });
+
+  test('rule (c): the fixed-language word functions are found anywhere, and refused in a listed file', () => {
+    for (const name of ['allergenLabel', 'allergenWordIt', 'nutrientWordIt']) {
+      expect(callsIn(`const x = ${name}(code);`)).toEqual([{ name, args: ['code'] }]);
+      expect(problemsIn('x.tsx', `const lang = outputLanguage(location);\nconst x = ${name}(code);`))
+        .toEqual([expect.stringContaining(`calls ${name}(…)`)]);
+    }
+    // And an unlisted file that merely imports one is caught by rule (a) as well.
+    expect(importProblemsIn('x.tsx', "import { nutrientWordIt } from '@mise/shared/market';", false)).toHaveLength(1);
+  });
+
+  test('rule (d): in a listed file «lang» comes from outputLanguage( and from nothing else', () => {
+    const good = 'const lang = outputLanguage(location);\nconst a = allergenName(code, lang);';
+    expect(problemsIn('good.tsx', good)).toEqual([]);
+    // Two scopes, two honest declarations.
+    expect(problemsIn('two.tsx', `${good}\nfunction Row() { const lang = outputLanguage(location); return allergenName(c, lang); }`)).toEqual([]);
+    // The ternary and the property read are not declarations.
+    expect(problemsIn('use.tsx', `${good}\nconst w = open ? lang : null;\nconst z = label.lang;`)).toEqual([]);
+
+    const wrong = (extra: string) => problemsIn('x.tsx', `${good}\n${extra}`);
+    expect(wrong('const lang = other(location);')).toEqual([expect.stringContaining('declares lang from something')]);
+    expect(wrong('let lang = outputLanguage(location);')).toEqual([expect.stringContaining('declares lang from something')]);
+    expect(wrong("lang = 'it';")).toEqual([expect.stringContaining('assigns lang')]);
+    expect(wrong('const { lang } = props;')).toEqual([expect.stringContaining('destructures lang')]);
+    expect(wrong('const f = (lang) => allergenName(c, lang);')).toEqual(
+      expect.arrayContaining([expect.stringContaining('arrow-function parameter')]),
+    );
+    expect(wrong('const f = (c, lang: string) => c;')).toEqual([expect.stringContaining('parameter or a property')]);
+    expect(wrong('function f(c, lang) { return c; }')).toEqual([expect.stringContaining('function parameter')]);
+    // The declaration is shadowed by another that reads the interface language.
+    expect(wrong('const lang = interfaceLanguage;')).toEqual(
+      expect.arrayContaining([expect.stringContaining('declares lang from something')]),
+    );
   });
 });

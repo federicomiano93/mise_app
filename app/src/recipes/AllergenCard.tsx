@@ -10,6 +10,7 @@ import { useSession } from '../session/SessionContext';
 import { useAllergenTables } from './allergenTables';
 import { incompleteSentence } from './allergenText';
 import { useRecipes } from './RecipesContext';
+import { useStillWaiting } from './useStillWaiting';
 import styles from './AllergenCard.module.css';
 
 // How many undeclared rows the card names; the rest are «and N more».
@@ -22,12 +23,22 @@ const GAPS_SHOWN = 8;
 // comes from the shared model (`rowState` over `recipeAllergens`): nothing here decides an allergen
 // state with an `if` of its own.
 //
-// ⚠️ THE WHOLE CARD GOES WHEN THE VENUE HAS ALLERGENS SWITCHED OFF, read here on every render (a switch
-// thrown on another phone arrives with the next snapshot).
+// ⚠️ THE WHOLE CARD GOES WHEN THE VENUE HAS ALLERGENS SWITCHED OFF, read here on every render. The venue
+// document is read ONCE, when the venue opens, and is not live in Mise 2: a switch thrown on another phone
+// is seen after a reload, like the rest of Mise 2.
+//
+// ⚠️ NO COUNTRY: this card still shows the names (in English), as the current app does on purpose — it is
+// the on-screen reading at the counter. What is COPIED or SENT is the declaration card's job, and that one
+// refuses without a country.
 //
 // ⚠️ UNTIL THE INGREDIENTS HAVE ARRIVED THE CARD SAYS IT IS CHECKING AND GIVES NO VERDICT (new in Mise 2):
 // with nothing to look a linked row up in, every recipe would read «not declared» for a moment on a
-// cold phone, which is a wrong answer, however safe.
+// cold phone, which is a wrong answer, however safe. After ten seconds of it the card adds a line saying
+// what it is waiting for (offline, nothing stored), and still gives no verdict.
+//
+// ⚠️ IF THE INGREDIENT LIST COULD NEVER BE READ (`ingredientsUnreadable`) the per-row reasons would all be
+// untrue («linked to an ingredient that no longer exists»), so one line stands in their place. The head
+// still says «not declared», from the model.
 //
 // ⚠️ THE ANSWER IS NEVER BEHIND A TAP: incomplete, the head says «not declared» in a word; complete, the
 // allergens (or «None of the 14») stand outside the fold. Only the JOB folds away — the rows to fix, the
@@ -40,11 +51,12 @@ const GAPS_SHOWN = 8;
 export function AllergenCard({ recipe }: { recipe: CatalogueRecipe }) {
   const { t } = useT();
   const { location } = useSession();
-  const { recipes, ingredients, ingredientsLoaded } = useRecipes();
+  const { recipes, ingredients, ingredientsLoaded, ingredientsUnreadable } = useRecipes();
   const tables = useAllergenTables(recipes, ingredients);
   const [open, setOpen] = useState(false);
   const headId = useId();
   const bodyId = useId();
+  const stillWaiting = useStillWaiting(!ingredientsLoaded);
 
   if (!allergensOn(location)) return null;
   const lang = outputLanguage(location);
@@ -59,6 +71,7 @@ export function AllergenCard({ recipe }: { recipe: CatalogueRecipe }) {
       <section className={styles.card} aria-labelledby={headId}>
         <h3 id={headId} className={styles.staticHead}>{t('cat.alg.title')}</h3>
         <p className={styles.checking} aria-busy="true">{t('recipes.allergensChecking')}</p>
+        {stillWaiting ? <p className={styles.checking}>{t('recipes.allergensStillWaiting')}</p> : null}
       </section>
     );
   }
@@ -95,16 +108,20 @@ export function AllergenCard({ recipe }: { recipe: CatalogueRecipe }) {
             <p className={styles.warn}>{incompleteSentence(t, result.gaps.length)}</p>
             {/* ⚠️ THE ROWS ARE NAMED: «incomplete» alone leaves somebody hunting through twenty
                 ingredients. This list is the work. */}
-            <ul className={styles.gaps}>
-              {result.gaps.slice(0, GAPS_SHOWN).map((gap, index) => (
-                <li key={index}>
-                  {gap.reason === null ? gap.label : `${gap.label} — ${t(ALLERGEN_REASON_TEXT[gap.reason])}`}
-                </li>
-              ))}
-              {result.gaps.length > GAPS_SHOWN ? (
-                <li className={styles.more}>{t('cat.alg.andMore', { n: result.gaps.length - GAPS_SHOWN })}</li>
-              ) : null}
-            </ul>
+            {ingredientsUnreadable ? (
+              <p className={styles.warn}>{t('cat.alg.unreadable')}</p>
+            ) : (
+              <ul className={styles.gaps}>
+                {result.gaps.slice(0, GAPS_SHOWN).map((gap, index) => (
+                  <li key={index}>
+                    {gap.reason === null ? gap.label : `${gap.label} — ${t(ALLERGEN_REASON_TEXT[gap.reason])}`}
+                  </li>
+                ))}
+                {result.gaps.length > GAPS_SHOWN ? (
+                  <li className={styles.more}>{t('cat.alg.andMore', { n: result.gaps.length - GAPS_SHOWN })}</li>
+                ) : null}
+              </ul>
+            )}
             {/* What IS known so far, marked as explicitly NOT an answer. */}
             {result.allergens.length > 0 ? (
               <p className={styles.soFar}>{t('cat.alg.soFar', { list: names(result.allergens) })}</p>
