@@ -389,8 +389,8 @@ lightningcss lowers oklch, nesting and media ranges; it does not lower everythin
   (measured: computed `max-height: none`). `styles/viewportUnits.spec.ts` and `styles/fallbackTrap.spec.ts` pin it.
 - **A React Aria hidden input needs a positioned ancestor** (see `SettingSwitch`), or it sits at the page's origin
   and makes the page scroll.
-- **No feature newer than Chrome 101 without a feature check.** `styles/chrome101.spec.ts` lists the CSS and JS
-  tokens with the Chrome version that introduced each, and fails on any use in source.
+- **No feature newer than Chrome 101 without a feature check.** `styles/chrome101.spec.ts` (with `shared/src/chrome101-tokens.ts`, which lists the CSS and JS
+  tokens with the Chrome version that introduced each) fails on any use in source.
 
 ## Testing and CI
 
