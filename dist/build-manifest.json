@@ -129,9 +129,9 @@
       }
     },
     "dist/catalogue.css": {
-      "sha": "d4838e6f398a2760",
+      "sha": "7cb7c9268be86dcb",
       "inputs": {
-        "catalogue.css": "ba130b0100dcc32f"
+        "catalogue.css": "1ae93c228f90a5b3"
       }
     },
     "dist/catalogue.js": {
@@ -893,9 +893,9 @@
       }
     },
     "dist/style.css": {
-      "sha": "ef40ad989c746533",
+      "sha": "464ddee83c83e4db",
       "inputs": {
-        "style.css": "c00f8c357734310a"
+        "style.css": "fbc8c065483cdd39"
       }
     },
     "dist/suppliers.js": {
@@ -1029,9 +1029,9 @@
       }
     },
     "dist/tokens.css": {
-      "sha": "586eaea9bdfb0595",
+      "sha": "5f753996336ebf72",
       "inputs": {
-        "tokens.css": "8ca2371d2b3aab83"
+        "tokens.css": "7ec8cf373e852271"
       }
     }
   }
