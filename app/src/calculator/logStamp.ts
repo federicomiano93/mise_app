@@ -14,8 +14,16 @@ const MONTHS_EN = ['January', 'February', 'March', 'April', 'May', 'June', 'July
 // Every Date here is built in UTC and formatted in UTC, so the device's zone can never move a name by a day.
 // The stored text has no year, so the weekday comes from a reference week (1 Jan 2023 was a Sunday) and the month from
 // a reference year: only the NAMES are used, never a calendar date.
-const name = (lang: Language, date: Date, options: Intl.DateTimeFormatOptions): string =>
-  new Intl.DateTimeFormat(lang, { ...options, timeZone: 'UTC' }).format(date);
+const formatters = new Map<string, Intl.DateTimeFormat>();
+const name = (lang: Language, date: Date, options: Intl.DateTimeFormatOptions): string => {
+  const key = `${lang}|${JSON.stringify(options)}`;
+  let formatter = formatters.get(key);
+  if (!formatter) {
+    formatter = new Intl.DateTimeFormat(lang, { ...options, timeZone: 'UTC' });
+    formatters.set(key, formatter);
+  }
+  return formatter.format(date);
+};
 
 export function localDate(date: string, lang: Language): string {
   if (lang !== 'it') return date;
