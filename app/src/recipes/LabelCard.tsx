@@ -28,8 +28,11 @@ export function LabelCard({ label, shows }: { label: DraftLabel; shows: LabelSho
   const contains = containsLine(label, lang);
   const traces = mayContainLine(label, lang);
 
+  // ⚠️⚠️ translate="no": EVERY WORD ON THE LABEL IS IN THE COUNTRY'S LANGUAGE, which is often not the device's.
+  // Found on the lab tablet (13 Oct 2026): Chrome offered to translate the page, and a yes would have rewritten the
+  // allergen names — the printed sheet included — by machine. The law decides these words, not the reader.
   return (
-    <div className={styles.card}>
+    <div className={styles.card} translate="no">
       <p className={styles.name}>{label.name || t('label.untitled')}</p>
 
       {shows !== 'nutrition' ? (
