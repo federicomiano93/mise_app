@@ -12,6 +12,8 @@ import { createContext, useContext, useMemo, useRef } from 'react';
 // feature's folder.)
 
 export const recipeOpener = (id: string): string => `recipe:${id}`;
+// The list's search box: where the focus goes when the row it is owed no longer exists.
+export const SEARCH_OPENER = 'search';
 
 export interface HandBack {
   // A row that opens a recipe. null when it goes away.
@@ -58,8 +60,16 @@ export function useHandBackState(): HandBack {
       const name = wanted.current;
       if (name === null) return;
       wanted.current = null;
-      // A recipe that was deleted has no row any more: the focus then stays where it is.
-      openers.current.get(name)?.focus();
+      const row = openers.current.get(name);
+      if (row) {
+        row.focus();
+        return;
+      }
+      // ⚠️ A RECIPE THAT WAS DELETED HAS NO ROW ANY MORE. If the focus fell to the page with the screen
+      // that held it, it goes to the search box (a keyboard or screen-reader user would otherwise be
+      // left at the top of nowhere); if it is somewhere real, it stays there.
+      const active = document.activeElement;
+      if (!active || active === document.body || !active.isConnected) openers.current.get(SEARCH_OPENER)?.focus();
     },
   }), []);
 }

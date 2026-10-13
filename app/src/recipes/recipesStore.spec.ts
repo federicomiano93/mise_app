@@ -81,6 +81,22 @@ describe('the Recipe catalogue store', () => {
     expect(store.getSnapshot().recipes).toHaveLength(0);
   });
 
+  test('⚠️ before the server speaks, a cached answer that LACKS a held recipe is not believed (nor saved)', () => {
+    const { store, data, cache, server } = makeStore({ [RECIPES_KEY]: JSON.stringify([FOCACCIA, BREAD]) });
+    store.start();
+    cache([BREAD]);
+    expect(store.getSnapshot().recipes.map(r => r.id)).toEqual(['r1', 'r2']);
+    expect(JSON.parse(data.get(RECIPES_KEY)!)).toHaveLength(2);
+    // A cached answer that holds every recipe (and more) is believed.
+    cache([FOCACCIA, BREAD, { id: 'r3', name: 'Pizza' }]);
+    expect(store.getSnapshot().recipes).toHaveLength(3);
+    // The server's word is believed whatever it lacks; after it, the browser's own copy follows it.
+    server([BREAD]);
+    expect(store.getSnapshot().recipes.map(r => r.id)).toEqual(['r2']);
+    cache([BREAD]);
+    expect(store.getSnapshot().recipes.map(r => r.id)).toEqual(['r2']);
+  });
+
   test('an empty cached answer stands when the copy itself said «no recipes»; a cold one keeps waiting', () => {
     const none = makeStore({ [RECIPES_KEY]: '[]' });
     none.store.start();
@@ -172,6 +188,7 @@ describe('the Recipe catalogue store', () => {
     // The browser's own database holds only the recipe the Calculator once read.
     cache([BREAD]);
     expect(store.getSnapshot().usage).toEqual({ r1: 4, r2: 1, gone: 9 });
+    expect(store.getSnapshot().recipes).toHaveLength(2);
     server([FOCACCIA, BREAD]);
     expect(store.getSnapshot().usage).toEqual({ r1: 4, r2: 1 });
     expect(store.getSnapshot().scaled).toEqual({ r1: { target: 900, ts: NOW } });

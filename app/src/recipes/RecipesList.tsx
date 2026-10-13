@@ -3,7 +3,7 @@ import { ChevronRight, Search } from 'lucide-react';
 import { filterByName, sortByUsage } from '@mise/shared/catalogue-model';
 import { useT } from '../i18n/useT';
 import { useRecipes, useRecipesStore } from './RecipesContext';
-import { recipeOpener, useHandBack } from './handBack';
+import { SEARCH_OPENER, recipeOpener, useHandBack } from './handBack';
 import styles from './RecipesList.module.css';
 
 // The current app's debounce: the box tells the list what is typed on every keystroke, and the cards
@@ -33,6 +33,7 @@ export function RecipesList({ openRecipeId, split, onOpenRecipe }: Props) {
   const { t } = useT();
   const store = useRecipesStore();
   const handBack = useHandBack();
+  const searchOpener = useCallback((node: HTMLInputElement | null) => { handBack.register(SEARCH_OPENER, node); }, [handBack]);
   const { recipes, recipesLoaded, usage } = useRecipes();
 
   const [text, setText] = useState('');
@@ -76,6 +77,7 @@ export function RecipesList({ openRecipeId, split, onOpenRecipe }: Props) {
       <div className={styles.search}>
         <Search aria-hidden="true" />
         <input
+          ref={searchOpener}
           type="search"
           autoComplete="off"
           className={styles.input}

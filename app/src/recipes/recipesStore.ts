@@ -11,7 +11,8 @@
 //
 // ⚠️ TWO DIFFERENCES FROM THE ORIGINAL, ON PURPOSE (docs/parity/catalogue.md):
 //   • an EMPTY answer from the browser's own database is not believed over a local copy that had
-//     recipes (the Pastries' trap: that database can be empty because this phone never synced it);
+//     recipes (the Pastries' trap: that database can be empty because this phone never synced it),
+//     nor, before the server's first answer, one that lacks a recipe the copy holds;
 //   • the open counts and the remembered batches are pruned only on the SERVER's word: an answer from
 //     the browser's own database can hold just the few recipes the Calculator read one by one, and
 //     pruning on it would throw away the counts of every other recipe for good.
@@ -153,8 +154,17 @@ export function createRecipesStore(source: RecipesSource, deps: RecipesDeps): Re
   // ⚠️ AN EMPTY ANSWER FROM THE BROWSER'S OWN DATABASE IS NOT THE TRUTH unless the local copy agreed
   // there were none: that database can be empty because this phone never synced the recipes, and
   // believing it would show «No recipes yet» over a venue that has forty.
+  //
+  // ⚠️ NOR IS ONE THAT LACKS A RECIPE ALREADY HELD, until the server has spoken once: that database can
+  // hold only the few recipes the Calculator read one by one, and believing it would shrink the list,
+  // say «Recipe deleted.» about one that exists, and save the shrunken list over the full local copy.
+  // (This slice writes nothing, so nothing held can be a deletion made on this phone.)
   function believable(list: readonly StoredDoc[], meta: RecipesMeta): boolean {
-    return meta.fromServer || list.length > 0 || bootSaidNone;
+    if (meta.fromServer) return true;
+    if (recipesFromServer) return list.length > 0 || bootSaidNone;
+    if (list.length === 0) return bootSaidNone;
+    const ids = new Set(list.map(doc => doc.id));
+    return recipes.every(recipe => ids.has(recipe.id));
   }
 
   // Drops the counts and the batches of recipes that no longer exist, and the batches older than

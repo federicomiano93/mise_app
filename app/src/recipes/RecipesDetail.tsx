@@ -59,16 +59,18 @@ function RecipeScreen({ id }: { id: string }) {
   // The id whose recipe has been on screen: one that leaves the list afterwards was deleted.
   const [shownFor, setShownFor] = useState<string | null>(null);
   if (recipe !== null && shownFor !== id) setShownFor(id);
-  const gone = recipe === null && shownFor === id;
   const settled = recipesFromServer || streamBroken;
+  // ⚠️ «DELETED» ONLY ON THE SERVER'S WORD (or a dead stream), like «does not exist» below: before it,
+  // an answer from the browser's own database can lack a recipe that exists (it may hold only the few
+  // the Calculator read one by one), and the screen then waits on «Loading…» instead.
+  const gone = recipe === null && shownFor === id && settled;
 
   const leave = useLeave(RECIPES_PATH, () => { handBack.expect(recipeOpener(id)); });
 
   useEffect(() => {
     if (!gone) return;
     say(t('cat.recipeDeleted'));
-    // The row of a deleted recipe is gone: nobody is owed the focus.
-    handBack.forget();
+    // The row of a deleted recipe is gone: the hand-back then falls to the search box (handBack.ts).
     leave();
   }, [gone]);
 

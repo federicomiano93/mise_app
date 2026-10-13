@@ -43,6 +43,19 @@ describe('a recipe deleted on another phone', () => {
     expect(router.state.historyAction).toBe('POP');
   });
 
+  it('⚠️ hands the focus to the search box: the row it was owed no longer exists', async () => {
+    const fake = sourceWith(RECIPES);
+    const { router, user } = renderRecipes('/recipes', { source: fake });
+    await user.click(await screen.findByRole('button', { name: 'Focaccia' }, LOAD));
+    await screen.findByRole('table', undefined, LOAD);
+
+    fake.recipes.delete('f');
+    act(() => { fake.push(); });
+
+    await waitFor(() => { expect(router.state.location.pathname).toBe('/recipes'); });
+    await waitFor(() => { expect(screen.getByRole('searchbox')).toHaveFocus(); });
+  });
+
   it('replaces the address with the list when it was opened by its address', async () => {
     const fake = sourceWith(RECIPES);
     const { router } = renderRecipes('/recipes/f', { source: fake });
