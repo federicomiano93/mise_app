@@ -19,11 +19,16 @@ describe('the rail on a short window', () => {
   });
 
   it('then fits 648px: padding, brand, seven sections, settings, account', () => {
-    // The rail's own padding (top + bottom), the brand (44), 8 items of 56 with the 4px gaps between the 9 children
+    // The rail's own padding (top + bottom), the brand (44) and its margin below (read from .mark), 8 items of 56 with the 4px gaps between the 9 children
     // of the main nav, the gap to the account nav, and the account nav (56).
     const s4 = token('--s4');
     expect(s4).toBe(16);
-    const total = 2 * s4 + 44 + 8 * 56 + 9 * 4 + 4 + 56;
+    const mark = /\.mark\s*\{([^}]*)\}/.exec(withoutComments(shellCss))?.[1] ?? '';
+    const markMargin = token(/margin-bottom:\s*var\((--[\w-]+)\)/.exec(mark)?.[1] ?? '');
+    expect(markMargin).toBe(16);
+    const total = 2 * s4 + 44 + markMargin + 8 * 56 + 9 * 4 + 4 + 56;
+    // Measured on the tablet: 636 within 648.
+    expect(total).toBe(636);
     expect(total).toBeLessThanOrEqual(648);
   });
 });
