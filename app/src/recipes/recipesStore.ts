@@ -68,6 +68,10 @@ export interface RecipesSnapshot {
   // stream failed (quietly). Until then no allergen verdict may be drawn — every row would read «not
   // declared» only because nothing has arrived.
   readonly ingredientsLoaded: boolean;
+  // The ingredients' stream failed and NOTHING was ever held (no copy, no answer): every linked row
+  // then looks «linked to an ingredient that no longer exists», which is untrue — the screens say
+  // once that the list could not be read instead. Still no answer: the verdict stays «not declared».
+  readonly ingredientsUnreadable: boolean;
   readonly usage: Readonly<Record<string, number>>;
   readonly scaled: Readonly<Record<string, ScaledEntry>>;
 }
@@ -157,12 +161,13 @@ export function createRecipesStore(source: RecipesSource, deps: RecipesDeps): Re
   let recipesLoaded = Array.isArray(bootRecipes);
   let recipesFromServer = false;
   let streamBroken = false;
-  // The counts are kept even when a corrupt entry is dropped: they are a nicety, not data.
   const bootIngredients = readJson(INGREDIENTS_KEY);
   const bootSaidNoIngredients = Array.isArray(bootIngredients) && bootIngredients.length === 0;
   let ingredients: Readonly<Record<string, StoredDoc>> = asIngredients(bootIngredients);
   let ingredientsLoaded = Array.isArray(bootIngredients);
   let ingredientsFromServer = false;
+  let ingredientsUnreadable = false;
+  // The counts are kept even when a corrupt entry is dropped: they are a nicety, not data.
   let usage: Readonly<Record<string, number>> = asUsage(readJson(USAGE_KEY));
   let scaled: Readonly<Record<string, ScaledEntry>> = asScaled(readJson(SCALED_KEY));
 
@@ -174,7 +179,8 @@ export function createRecipesStore(source: RecipesSource, deps: RecipesDeps): Re
   let snapshot: RecipesSnapshot = build();
 
   function build(): RecipesSnapshot {
-    return { recipes, recipesLoaded, recipesFromServer, streamBroken, ingredients, ingredientsLoaded, usage, scaled };
+    return { recipes, recipesLoaded, recipesFromServer, streamBroken, ingredients, ingredientsLoaded, ingredientsUnreadable, usage,
+      scaled };
   }
 
   function changed(): void {
@@ -275,13 +281,16 @@ export function createRecipesStore(source: RecipesSource, deps: RecipesDeps): Re
           const clean = remote.filter(doc => doc && typeof doc.id === 'string' && doc.id).map(withoutPrice);
           ingredients = asIngredients(clean);
           ingredientsLoaded = true;
+          ingredientsUnreadable = false;
           writeJson(INGREDIENTS_KEY, clean);
           changed();
         },
         err => {
           deps.warn('Ingredients unavailable:', err);
+          // Only when nothing was ever held: a copy or an earlier answer stays on screen as the data.
           if (!ingredientsLoaded) {
             ingredientsLoaded = true;
+            ingredientsUnreadable = true;
             changed();
           }
         },

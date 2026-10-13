@@ -298,8 +298,22 @@ describe('the Recipe catalogue store', () => {
     ingFail();
     expect(store.getSnapshot().ingredientsLoaded).toBe(true);
     expect(store.getSnapshot().ingredients).toEqual({});
+    expect(store.getSnapshot().ingredientsUnreadable).toBe(true);
     expect(warn).toHaveBeenCalledTimes(1);
     expect(said).not.toHaveBeenCalled();
+  });
+
+  test('a refused stream over a held copy (or after an answer) is NOT «unreadable»: the copy is the data', () => {
+    const warm = makeStore({ [INGREDIENTS_KEY]: JSON.stringify([FLOUR]) });
+    warm.store.start();
+    warm.ingFail();
+    expect(warm.store.getSnapshot().ingredientsUnreadable).toBe(false);
+    expect(Object.keys(warm.store.getSnapshot().ingredients)).toEqual(['i1']);
+    const answered = makeStore();
+    answered.store.start();
+    answered.ingServer([FLOUR]);
+    answered.ingFail();
+    expect(answered.store.getSnapshot().ingredientsUnreadable).toBe(false);
   });
 
   test('a corrupt ingredient copy reads as none and waits for the answer', () => {
