@@ -120,7 +120,15 @@ export function screenNameFor(pathname: string): string | null {
   if (section.id === 'stocktake') return stocktakeScreenName(pathname, section.path);
   if (section.id === 'foodcost') return foodcostScreenName(pathname, section.path);
   if (section.id === 'calculator') return calculatorScreenName(pathname, section.path);
+  if (section.id === 'recipes') return recipesScreenName(pathname, section.path);
   return section.id;
+}
+
+// The Recipe catalogue is two screens so far that share one section: the list and one recipe (the
+// current app's `''` and `detail`). A recipe opened beside the list is the same screen as on its own.
+function recipesScreenName(pathname: string, base: string): string {
+  const rest = pathname.slice(base.length).split('/').filter(part => part !== '');
+  return rest.length === 1 ? 'recipes-detail' : 'recipes';
 }
 
 // The Stocktake is three screens that share one section: the month's counting list (whichever
