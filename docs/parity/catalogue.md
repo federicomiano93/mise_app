@@ -1146,3 +1146,61 @@ must survive the cleanup at the switch**: `js/print-queue-model.js` and `js/fire
   not open current-app fixes. It is reported to him as a health item to fix in the CURRENT app first; Mise 2
   follows the fixed behaviour in the same slice that ports the label (3d-2/3d-3), so the two apps never print
   differently.
+
+## Step 3d-1 as built (13 Oct 2026) — differences from the current app, on purpose
+
+The list and the recipe screen are in (`app/src/recipes/`, section `recipes`, lazy-loaded). Read-only: nothing
+is written to Firestore except the per-device memories of items 21 (`catalogue-usage`, `catalogue-scaled`,
+`mise.catZoomStep`). What differs from the current app, and why:
+
+- **Addresses.** `/recipes` is the list and `/recipes/<id>` a recipe (the id percent-encoded and split before it
+  is decoded). `catalogue.html#recipe=<id>` is replaced by the address itself, so the one-shot link and its 5 s
+  patience are gone: an address names a recipe for as long as it is in the bar, and waits for the SERVER's first
+  answer (or a dead stream) before saying `This recipe no longer exists.` (`recipes.notFound`, new in Mise 2;
+  the current app has no such sentence). A recipe found in the local copy opens at once. `new`, `allergens`,
+  `settings` and `photo` are reserved for later steps and are not read as recipe ids; any other address (for
+  example `/recipes/<id>/edit`, which does not exist yet) goes back to the list.
+- **Back goes one level up.** On a phone Back from a recipe returns to the list keeping the search text and the
+  place in the list, and hands the focus back to the row that opened it. The current app always returns to the
+  list; here an address opened with nothing behind it replaces itself with the list. On the split the recipe's
+  bar keeps its Back (as Food cost does) and it empties the right-hand side; the current app's pane had none.
+- **The split is the app's one query, `(min-width: 1000px)`.** The current app's `(min-width: 900px) and
+  (min-height: 600px), (min-width: 1000px)` is replaced, as everywhere else: a lab tablet held upright gets the
+  phone layout. The list stays mounted when another recipe is opened (only the open row is `aria-current`),
+  tapping the open recipe does nothing (no count, no new history entry), and the prompt is not drawn beside
+  `No recipes yet`.
+- **The order is frozen while a recipe is open beside the list** (item 37), including a recipe opened by its
+  address: the counts that were current when the recipe opened stay in charge of the order until the list is
+  shown alone again or the split is left. On a phone the list is hidden while a recipe is open, so it simply
+  shows the fresh counts on Back.
+- **No «+» in the header, no «Add a recipe» button, no footer buttons yet.** The empty state keeps its title and
+  its line (`No recipes yet` and `Add your first recipe: …`) but no button: creating recipes arrives in step
+  3d-6. «Allergen sheet» arrives in 3d-2 and «Settings» in 3d-5. The Edit pencil, Delete, Import, and the
+  allergen, declaration, Food cost and procedure cards are all later steps; the recipe screen has the ingredient
+  list and the batch card only.
+- **The ingredient list is a table, with a button to open it full screen.** The current app makes the whole list
+  one `role="button"` with an `aria-label`, which hides the rows from a screen reader. Here the rows are a
+  readable table (label, number, unit), a tap anywhere on it opens the full screen as before, and a real button
+  in the card's head (`View recipe full screen`) is the way in for a keyboard and a screen reader (the pattern of
+  the Calculator's result card). The look is the same: numbers right-aligned in one column, units in another,
+  whole numbers with no thousands separator whatever the language (Findings F), `to taste` with no number.
+- **Full screen is the Calculator's dialog.** `ui/RecipeFullScreen` and `ui/zoomStorage` now take a storage
+  key: the Calculator keeps `mise.calcZoomStep`, the catalogue uses `mise.catZoomStep`. A native modal
+  `<dialog>`, six sizes, `aria-disabled` steps, Escape and × close it and the focus returns to the button.
+  Unlike the Calculator's, it is NOT closed when the recipe changes elsewhere: it is redrawn from the live
+  recipe, so the numbers on it can never be stale. Its words (`Exit full screen`, `Text size`…) are the
+  Calculator's `calc.*` keys, whose wording is the same.
+- **Hold-to-zoom stays unported** (Questions 3).
+- **The batch card follows the current app to the letter**: grams only, Calculate opens a confirm that spells the
+  amount both ways (`17500 g (17.5 kg)`), over 100 kg or over 50 times the recipe gets the louder title and a
+  whole warning sentence (never a block), empty or 0 returns to the base recipe, Clear forgets the batch, 12 h
+  memory per device. The unit words in the amounts come from `unitTextKey` and the dictionary; the metric
+  symbols are shown as they are.
+- **Usage record.** Two screens: `recipes` (the list) and `recipes-detail` (a recipe, beside the list or alone),
+  in place of the current app's `''` and `detail`; the `m2:` prefix is added by the existing mechanism.
+- **Live data.** A recipe deleted elsewhere returns to the list and says `Recipe deleted.`; one changed elsewhere
+  is redrawn in place (the typed batch, the scroll and the focus stay); the dead stream says `Live sync
+  interrupted — recipes may be out of date.` in the status line, as Food cost does for its products.
+
+Still to do from the 3d-1 list: the one-shot `#recipe=` of the current app is not needed (an address does it);
+the footer buttons and the `+` are listed under their own steps above.
