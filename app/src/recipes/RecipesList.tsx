@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ChevronRight, Search } from 'lucide-react';
+import { ChevronRight, Search, Wheat } from 'lucide-react';
 import { filterByName, sortByUsage } from '@mise/shared/catalogue-model';
+import { allergensOn } from '@mise/shared/venue-features';
 import { useT } from '../i18n/useT';
+import { useSession } from '../session/SessionContext';
+import { Button } from '../ui/Button';
 import { useRecipes, useRecipesStore } from './RecipesContext';
-import { SEARCH_OPENER, recipeOpener, useHandBack } from './handBack';
+import { ALLERGENS_OPENER, SEARCH_OPENER, recipeOpener, useHandBack } from './handBack';
 import styles from './RecipesList.module.css';
 
 // The current app's debounce: the box tells the list what is typed on every keystroke, and the cards
@@ -16,6 +19,10 @@ type Props = {
   // Whether the section is the split: only then does the order hold still while a recipe is open.
   split: boolean;
   onOpenRecipe: (id: string) => void;
+  // The Allergen sheet is the screen shown (beside the list, or instead of it).
+  sheetOpen: boolean;
+  // The door to the Allergen sheet, at the foot of the list.
+  onOpenSheet: () => void;
 };
 
 // The left column: a search box over the recipes, name only, most opened first.
@@ -29,10 +36,12 @@ type Props = {
 // another is the worst moment for it. The counts that were current when the recipe opened (or when
 // the split began) stay in charge of the order until the list is shown alone again or the split is
 // left; the fresh ones apply then.
-export function RecipesList({ openRecipeId, split, onOpenRecipe }: Props) {
+export function RecipesList({ openRecipeId, split, onOpenRecipe, sheetOpen, onOpenSheet }: Props) {
   const { t } = useT();
+  const { location } = useSession();
   const store = useRecipesStore();
   const handBack = useHandBack();
+  const doorOpener = useCallback((node: HTMLButtonElement | null) => { handBack.register(ALLERGENS_OPENER, node); }, [handBack]);
   const searchOpener = useCallback((node: HTMLInputElement | null) => { handBack.register(SEARCH_OPENER, node); }, [handBack]);
   const { recipes, recipesLoaded, usage } = useRecipes();
 
@@ -114,6 +123,22 @@ export function RecipesList({ openRecipeId, split, onOpenRecipe }: Props) {
           ))}
         </ul>
       )}
+
+      {/* ⚠️ THE DOOR TO THE ALLERGEN SHEET EXISTS ONLY FOR A VENUE THAT TRACKS ALLERGENS (read here on every render, so a
+          switch thrown on another phone arrives with the next snapshot). It stands at the foot of the list, where the
+          current app's footer button sits. */}
+      {allergensOn(location) ? (
+        <Button
+          ref={doorOpener}
+          variant="secondary"
+          className={styles.door}
+          aria-current={sheetOpen ? 'true' : undefined}
+          onPress={onOpenSheet}
+        >
+          <Wheat aria-hidden="true" />
+          <span>{t('cat.allergenSheet')}</span>
+        </Button>
+      ) : null}
     </div>
   );
 }

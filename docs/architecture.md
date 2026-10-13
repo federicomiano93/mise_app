@@ -257,9 +257,14 @@ Aria does not support Preact. The numbers are below.
   until the server has answered, then not found; deleted elsewhere goes back to the list and says so),
   `RecipeView` (the bar and the ingredient list as a table, tapped for the full screen) and `BatchCard` (grams, the
   confirm that spells the amount both ways and raises its voice for an absurd batch, Clear, 12 h). Addresses, in
-  `recipesPath.ts`: `/recipes` and `/recipes/<id>`; `new`, `allergens`, `settings` and `photo` are reserved for later
-  steps. The usage record names two screens, `recipes` and `recipes-detail`. `recipesNav.ts` and `handBack.ts` are
-  this section's copies of Food cost's. `ui/RecipeFullScreen` and `ui/zoomStorage` are shared with the Calculator
+  `recipesPath.ts`: `/recipes`, `/recipes/<id>` and (3d-2) `/recipes/allergens`; `new`, `settings` and `photo` are reserved for
+  later steps. The usage record names three screens, `recipes`, `recipes-detail` and `recipes-allergens`. `recipesNav.ts` and
+  `handBack.ts` are this section's copies of Food cost's. Step 3d-2 adds the allergen screens: `AllergenCard` and
+  `DeclarationCard` on the recipe screen (a verdict only once the store's `ingredientsLoaded`, a neutral «checking» line before
+  it; Copy through `ui/clipboard` and Send through `ui/SendSheet`), `AllergenSheet` at `/recipes/allergens` (gated again by
+  `allergensOn` in `RecipesSection`, door at the foot of the list, drawn in the right-hand pane on the split) and
+  `allergenTables.ts` / `allergenText.ts`. Every allergen verdict is the shared model's; `label-separation.spec.ts` (in `app/src`)
+  pins that a screen that prints a food word asks the venue's country and never the interface language. `ui/RecipeFullScreen` and `ui/zoomStorage` are shared with the Calculator
   and take a storage key (`mise.calcZoomStep` / `mise.catZoomStep`).
 - `ui/` — the shared controls: `Button`, `Dialog` and `useConfirm` (a question that waits for an
   answer; never the browser's `confirm()`), `StatusMessage` (one short message at a time, in a

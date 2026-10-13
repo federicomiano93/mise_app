@@ -1204,3 +1204,60 @@ is written to Firestore except the per-device memories of items 21 (`catalogue-u
 
 Still to do from the 3d-1 list: the one-shot `#recipe=` of the current app is not needed (an address does it);
 the footer buttons and the `+` are listed under their own steps above.
+
+## Step 3d-2 as built (13 Oct 2026) — differences from the current app, on purpose
+
+The recipe screen has its allergen card and its declaration card, and the Allergen sheet is in
+(`app/src/recipes/AllergenCard.tsx`, `DeclarationCard.tsx`, `AllergenSheet.tsx`). Nothing is written to Firestore. Every
+verdict is the shared model's (`rowState` over `recipeAllergens`, `rowIsBlocked`, `buildLabel`): no screen decides an
+allergen state with an `if` of its own. What differs from the current app, and why:
+
+- **A «checking» state, new in Mise 2.** The current app paints the allergen verdict from its own copy of the ingredients.
+  Mise 2 draws nothing about allergens until the ingredients have arrived (`ingredientsLoaded` in the store): the allergen
+  card, the declaration card and the sheet say `Checking the allergens…` (`recipes.allergensChecking`, new key; Italian
+  `Sto controllando gli allergeni…`), with no verdict, no count, no work list, no state word and no Copy or Send. Without
+  it a cold phone would flash «not declared» on every recipe, which is a wrong answer however safe. A refused ingredients
+  stream ends the wait (the store's quiet failure), so linked rows then read «not declared» — the honest answer — and the
+  declaration card says its one line. A recipe with no rows has no allergen card in either state.
+- **The allergen card.** Absent when allergens are off and for a recipe with no rows. Incomplete: the head reads
+  «Allergens · not declared» (the state is a WORD in the button), folded body with the sentence, the first eight rows as
+  `label — reason`, «and N more» and what is known so far marked NOT an answer. Complete: «fully declared» in the head and
+  the allergens (or «None of the 14») OUTSIDE the fold; folded: the traces, the caveat. Both heads are real `h3`s holding
+  the disclosure button (`aria-expanded`, `aria-controls`); it opens CLOSED for every recipe opened, keeps its state
+  through a live redraw of the same recipe, and the focus stays where it is. **No «Make a label» button yet**: the label
+  screen is step 3d-3, which adds the button to the folded body of a complete card.
+- **The declaration card.** Hidden when allergens are off. One line and no Copy or Send when the label cannot be built.
+  Otherwise the list heaviest first with the allergen rows in a `<strong>` (bold and underlined), `Contains:`, `May contain:`,
+  the caveat, Copy and one Send (`ui/SendSheet`); what is copied and sent is exactly
+  `declarationText(label, lang, { withNutrition: false })`, built by the same `buildLabel(recipe, tables)` call as the
+  current card. «Copied» and «Could not copy…» are a live region that exists before it speaks. `copyToClipboard` moved from
+  `calculator/` to `ui/` so two features share it without importing each other.
+- **Order on the recipe screen:** ingredients · batch · allergens · declaration. The Food cost link (3d-7) and the
+  procedure (3d-8) are not there yet.
+- **The Allergen sheet is `/recipes/allergens`** and `allergens` is no longer a reserved-and-unknown word. It re-checks its
+  own gate (item 60): with allergens off the address goes to `/recipes` by replacing itself, also when the switch is thrown
+  while the sheet is open. The door is an «Allergen sheet» button at the FOOT of the list (only when allergens are on); Back
+  from the sheet is one level up (the list, the focus on the door), or a replace of the list when the sheet was opened by its
+  address. The usage record names it `recipes-allergens`. On the split it is drawn in the right-hand pane, the list staying
+  beside it (the least change to the frame); a row tapped in the sheet opens its recipe as a NEW entry on both layouts, so
+  Back returns to the sheet with the focus on that row. There is no Home button of its own: the shell puts none on a screen
+  one level down.
+- **The sheet's content** is the current app's, top to bottom: the law card (the fourteen groups in the COUNTRY's words
+  outside the fold, the cereals and nuts folded, the sentence naming the country; no country → a warning and no list, never
+  the UK), where things stand (counts over the whole catalogue, never the filtered slice), a search of its own by recipe
+  NAME only, the work lists (hidden while searching, capped at six with «and N more», linking before declaring, a deleted
+  ingredient is not a job), every recipe blocked first then declared, each by name, and the caveat outside everything that
+  repaints. A blocked row names no allergen. The wording is the current app's key for key: the pills read «fully declared» /
+  «not declared» (the plan's «Declared» was shorthand). Tapping a row counts as an open for «most opened first».
+- **Small differences:** the sheet's search filters on every keystroke (the current app debounces 140 ms), and its text is
+  forgotten when the sheet is left (the current app keeps `sheetQuery` for the session); with no recipes the count reads «0 of
+  0 recipes fully declared» and the line «Every recipe can be labelled.» is left out (it would be vacuous); Italian `cat.alg.andMore`
+  one-form reads `…e {n} altro` so both languages carry `{n}`, as the catalogue spec demands.
+- **The label-separation guard** (`app/src/label-separation.spec.ts`, parity items 54, 55 and 110e): every app file that calls a
+  label-word function (`allergenName`, `allergenGroupName`, `allergenGroupCodes`, `labelWord`, `nutrientName`,
+  `containsLine`, `mayContainLine`, `declarationText`, `ingredientLine`) is on an explicit list, holds
+  `const lang = outputLanguage(…)`, passes that `lang` to every call, and never touches the interface language (`useT().lang`,
+  `locale`, the i18n context, the loaders). It was proved once by mutation (the `outputLanguage` call removed, and
+  `useT().lang` handed to `allergenName`: both fail, naming the file).
+- **Left for 3d-3:** «Make a label» and the label screen; for 3d-6, the pencil that the work list's sentence about linking
+  rows mentions (`cat.aRecipeRowHas` is the current app's wording and points at a screen Mise 2 does not have yet).

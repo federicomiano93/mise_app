@@ -1,0 +1,358 @@
+/* The Allergen sheet: the screen at the counter. A card holding the form bar and the blocks of the sheet,
+   in the shape of a recipe's screen. On the split it is the right-hand pane.
+
+   ⚠️ NOTHING ON THE SCREEN MAY CLIP (no `overflow`): the form bar sticks to the top of the scrolling area. */
+
+.screen {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s4);
+  padding: var(--s4);
+}
+
+@media (min-width: 1000px) {
+  .body {
+    padding: var(--s6);
+  }
+}
+
+.card {
+  padding: var(--s4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+}
+
+/* ── What the law requires here ───────────────────────────────────────────── */
+
+.heading {
+  margin: 0;
+}
+
+.toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  width: 100%;
+  min-height: var(--hit);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.toggle:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.label,
+.staticHead {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.chevron {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  margin-left: auto;
+  color: var(--ink-3);
+  transition: transform 0.15s var(--ease);
+}
+
+.toggle[aria-expanded="true"] .chevron {
+  transform: rotate(180deg);
+}
+
+.lawList {
+  margin: var(--s2) 0 0;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.lawBody {
+  margin-top: var(--s3);
+}
+
+.lawSub {
+  margin: 0 0 var(--s2);
+  color: var(--ink-2);
+}
+
+.group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+  margin: 0 0 var(--s2);
+}
+
+.groupName {
+  font-weight: 650;
+}
+
+.groupCodes {
+  color: var(--ink-2);
+  overflow-wrap: anywhere;
+}
+
+.note {
+  margin: var(--s2) 0 0;
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
+.warn {
+  margin: var(--s2) 0 0;
+  padding: var(--s3);
+  border-radius: var(--r-md);
+  background: var(--warn-tint);
+  color: var(--warn-ink);
+  font-weight: 600;
+}
+
+/* ── Where things stand ───────────────────────────────────────────────────── */
+
+.summary {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+}
+
+.count {
+  margin: 0;
+  font-size: var(--fs-lg);
+  font-weight: 650;
+}
+
+.sub {
+  margin: 0;
+  color: var(--ink-2);
+}
+
+/* ── The search: the icon and the box on one line, centred ─────────────────── */
+
+.search {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  min-height: var(--hit);
+  padding: 0 var(--s3);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink-3);
+}
+
+.search:focus-within {
+  border-color: var(--accent);
+}
+
+.search svg {
+  flex: none;
+  width: 18px;
+  height: 18px;
+}
+
+.input {
+  flex: 1;
+  min-width: 0;
+  min-height: var(--hit);
+  padding: 0;
+  border: 0;
+  outline: 0;
+  background: none;
+  color: var(--ink);
+  font: var(--fs-md)/1.2 var(--font);
+}
+
+.input::placeholder {
+  color: var(--ink-3);
+}
+
+/* ── The work lists ───────────────────────────────────────────────────────── */
+
+.work {
+  padding: var(--s4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+}
+
+.workTitle {
+  margin: 0 0 var(--s1);
+  font-size: var(--fs-md);
+  font-weight: 650;
+}
+
+.workSub {
+  margin: 0 0 var(--s3);
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
+.workList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.workList li {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s3);
+  padding: var(--s2) 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.workList li:last-child {
+  border-bottom: 0;
+}
+
+.workName {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-weight: 600;
+}
+
+.workN {
+  flex: none;
+  color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.workMore {
+  color: var(--ink-2);
+}
+
+/* ── Every recipe, with its state ─────────────────────────────────────────── */
+
+.loading,
+.nothing,
+.checking {
+  margin: 0;
+  color: var(--ink-2);
+}
+
+.rows {
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  list-style: none;
+}
+
+.item {
+  border-bottom: 1px solid var(--line);
+}
+
+.item:last-child {
+  border-bottom: 0;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+  width: 100%;
+  min-height: var(--hit-lg);
+  padding: var(--s2) var(--s3);
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.row:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: -3px;
+}
+
+.row[data-blocked="true"] {
+  background: var(--danger-tint);
+}
+
+@media (hover: hover) {
+  .row[data-blocked="false"]:hover {
+    background: var(--sunken);
+  }
+}
+
+.rowMain {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--s1);
+  min-width: 0;
+}
+
+.rowTop {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2);
+}
+
+.name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: var(--fs-lg);
+  font-weight: 600;
+}
+
+/* The state is a WORD in a pill, never colour alone. */
+.pill {
+  padding: var(--s1) var(--s3);
+  border-radius: var(--r-pill);
+  font-size: var(--fs-sm);
+  font-weight: 650;
+}
+
+.pillBlocked {
+  background: var(--surface);
+  color: var(--danger-ink);
+}
+
+.pillOk {
+  background: var(--ok-tint);
+  color: var(--ok-ink);
+}
+
+.what {
+  color: var(--ink-2);
+  overflow-wrap: anywhere;
+}
+
+.rowChevron {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  color: var(--ink-3);
+}
+
+.caveat {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
