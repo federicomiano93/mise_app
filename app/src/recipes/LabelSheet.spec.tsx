@@ -4,6 +4,7 @@ import { LABEL_CORPUS, MADE_ON_PARTS, TEMPLATE_PROFILES } from '@mise/shared/fix
 import { dateText, resolveLabel, useByDate } from '@mise/shared/label-template-model';
 import { outputLanguage } from '@mise/shared/market';
 import { buildLabel } from '@mise/shared/recipe-label-model';
+import goldenText from './fixtures/label-sheet-golden.json?raw';
 import { LabelSheet } from './LabelSheet';
 import type { SheetSource } from './LabelSheet';
 
@@ -52,6 +53,33 @@ describe('LabelSheet', () => {
     }
     // A comparison that compared nothing would pass for ever.
     expect(compared).toBeGreaterThan(100);
+  });
+
+  // ⚠️ THE SAME COMPARISON AGAINST A FILE, so it still holds the day js/ is deleted. The golden is written by
+  // fixtures/make-sheet-golden.mjs from the ORIGINAL's buildSheet() (never from this port), at the starting size.
+  it('draws exactly the markup committed in the golden file, made from the original, for the same corpus × profiles × venues', () => {
+    const golden = JSON.parse(goldenText) as Record<string, string>;
+    const seen = new Set<string>();
+    for (const entry of LABEL_CORPUS) {
+      const label = buildLabel(entry.recipe, entry.tables, { shows: 'both' });
+      if (!label.ok) continue;
+      for (const [profileName, profile] of Object.entries(TEMPLATE_PROFILES)) {
+        for (const [venueName, location] of Object.entries(VENUES)) {
+          const lang = outputLanguage(location);
+          const extras = { netWeightG: 1200, dateText: dateText(useByDate(3, MADE_ON), lang) };
+          const resolved = resolveLabel(label, profile, extras, lang);
+          if (!resolved.ok) continue;
+          const key = `${entry.id}|${profileName}|${venueName}`;
+          const { container, unmount } = render(<LabelSheet resolved={resolved as SheetSource} fontMm={resolved.fontMm} />);
+          expect((container.firstElementChild as HTMLElement).outerHTML, key).toBe(golden[key]);
+          seen.add(key);
+          unmount();
+        }
+      }
+    }
+    // Every entry of the file was compared (a recipe that stopped producing a sheet is noticed), and it is not empty.
+    expect(seen.size).toBeGreaterThan(100);
+    expect([...seen].sort()).toEqual(Object.keys(golden).sort());
   });
 
   it('shows the resolved font size when none is passed', async () => {
