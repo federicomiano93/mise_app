@@ -254,7 +254,7 @@ allergen-model, sections, firebase-target, local-data, same-data, error-model, d
 usage-model, membership, location-id, pastries-model, pastries-log-model, pastries-lock, pack-size,
 order-unit, ingredient-name, order-cost, inventory-model, inventory-outbox, inventory-purchases,
 vat-rates, ingredient-kind, product-limits, vat-guide, foodcost-weighing,
-calculator-dough-math, calculator-recipe-source, calculator-order-text, calculator-order-prefill (adapted: `prefillNote` takes the translate function as an argument, so it is not paired), calculator-recipe-text (one documented difference: the line
+calculator-dough-math, calculator-recipe-source, calculator-order-text, calculator-order-prefill (adapted: `prefillNote` takes the translate function as an argument, so it is not paired), client-order-model (adapted: `orderRows` takes the deleted-product word as an argument, so it is not paired), client-order-history (adapted: `linesLabel` and `emptyWords` take the translate function as an argument, so it is not paired), calculator-recipe-text (one documented difference: the line
 `Flour uniqua blue`, one venue's data, is written like every other), confirm-flow, log-time,
 calculator-config (partial: the read side; leaves out the save path `reconcileConfigWrite` / `saveFailureKey` and
 `orderPrefillLabel`; `formatGrams` and `normalizeConfig` take the language as an argument), log-model (partial: the
