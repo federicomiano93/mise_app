@@ -28,6 +28,10 @@ export type AmountRow = {
 export type RecipeAmounts = {
   readonly rows: readonly AmountRow[];
   readonly total: { readonly num: string; readonly unit: string };
+  // What the rows were drawn FROM, for the export (it must say what the screen says): each row's amount in its own
+  // unit, unrounded (null = «to taste»), and the Total's grams, unrounded.
+  readonly values: readonly (number | null)[];
+  readonly totalGrams: number;
 };
 
 // The word a person reads for a unit: the dictionary's for pieces, spoons, a pinch and «to taste»,
@@ -51,7 +55,7 @@ export function recipeAmounts(recipe: CatalogueRecipe, target: number | null, t:
       : { label: ing.label, num: amountNumber(value, unitOf(ing), locale), unit: unitWord(t, unitOf(ing)) };
   });
   const totalGrams = goal ?? weighableTotalGrams(recipe);
-  return { rows, total: { num: wholeNumber(totalGrams), unit: 'g' } };
+  return { rows, total: { num: wholeNumber(totalGrams), unit: 'g' }, values: recipe.ingredients.map((_, index) => amounts[index] ?? null), totalGrams };
 }
 
 // «250 g», «3 pcs», «to taste»: one row's amount as a single piece of text (the full-screen view).

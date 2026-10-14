@@ -129,6 +129,31 @@
   font-weight: 700;
 }
 
+/* Export, under the table: full width, secondary. Icon and label on one centred flex row. */
+.export {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s2);
+  width: 100%;
+  min-height: var(--hit);
+  margin-top: var(--s3);
+  padding: 0 var(--s4);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .export:hover {
+    background: var(--sunken);
+  }
+}
+
 /* The batch: the box in grams and its button on one line (wrapping on the narrowest phone). */
 .batchRow {
   display: flex;

@@ -1,9 +1,10 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import type { Ref } from 'react';
-import { Maximize2 } from 'lucide-react';
+import { Download, Maximize2 } from 'lucide-react';
 import { weighableTotalGrams } from '@mise/shared/catalogue-model';
 import type { CatalogueRecipe } from '@mise/shared/catalogue-model';
 import { useT } from '../i18n/useT';
+import { useExportSheet } from '../ui/ExportSheet';
 import { FormBar } from '../ui/FormBar';
 import { RecipeFullScreen } from '../ui/RecipeFullScreen';
 import { CATALOGUE_ZOOM_KEY } from '../ui/zoomStorage';
@@ -12,6 +13,7 @@ import { BatchCard } from './BatchCard';
 import { DeclarationCard } from './DeclarationCard';
 import { useRecipes, useRecipesStore } from './RecipesContext';
 import { amountText, recipeAmounts } from './recipeAmounts';
+import { recipeExportModel } from './recipeExportModel';
 import styles from './RecipeView.module.css';
 
 type Props = {
@@ -71,7 +73,9 @@ function IngredientsCard({ recipe, target }: { recipe: CatalogueRecipe; target: 
   const headingId = useId();
   const opener = useRef<HTMLButtonElement>(null);
   const [fullScreen, setFullScreen] = useState(false);
-  const { rows, total } = recipeAmounts(recipe, target, t, locale);
+  const amounts = recipeAmounts(recipe, target, t, locale);
+  const { rows, total } = amounts;
+  const [openExport, exportSheet] = useExportSheet();
 
   // ⚠️ THE FOCUS GOES BACK ONLY ONCE THE DIALOG IS CLOSED. While a modal <dialog> is open everything
   // outside it is inert and focus() on the opener does nothing; the dialog closes itself first
@@ -117,6 +121,21 @@ function IngredientsCard({ recipe, target }: { recipe: CatalogueRecipe; target: 
           </tr>
         </tfoot>
       </table>
+
+      {/* Under the table, never inside it: the table is tapped as a whole (it opens the full-screen view) and a
+          button inside a button is not allowed. Nothing to export without ingredients. The file is made from the
+          very amounts the table drew. */}
+      {recipe.ingredients.length === 0 ? null : (
+        <button
+          type="button"
+          className={styles.export}
+          onClick={() => { openExport({ model: recipeExportModel(recipe, amounts), totalLabel: t('cat.total') }); }}
+        >
+          <Download aria-hidden="true" />
+          {t('export.button')}
+        </button>
+      )}
+      {exportSheet}
 
       {fullScreen ? (
         <RecipeFullScreen
