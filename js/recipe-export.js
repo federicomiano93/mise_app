@@ -181,9 +181,24 @@ export function xlsxSheet({ title, name, rows, totalLabel }) {
 
 // ── Building the files (the libraries load here, and only here) ───────────────────────────
 
+// A library that cannot be fetched (offline before the precache finished, a dropped network)
+// is told apart from a bug in the build: the first is solved by connecting, the second by retrying.
+const LIBRARY_ERROR = 'export/library';
+async function loadLibrary(importer) {
+  try { return await importer(); } catch (cause) {
+    const err = new Error('the export library did not load');
+    err.code = LIBRARY_ERROR;
+    err.cause = cause;
+    throw err;
+  }
+}
+
+// The dictionary key for the message a person reads when an export failed.
+export const exportErrorKey = err => (err && err.code === LIBRARY_ERROR ? 'export.needsConnection' : 'export.failed');
+
 // -> Blob (application/pdf). One A4 page: the title, then «name ........ weight» per row.
 export async function buildPdfBlob(m) {
-  const { jsPDF } = await import('./vendor/jspdf.esm.js');
+  const { jsPDF } = await loadLibrary(() => import('./vendor/jspdf.esm.js'));
   const doc = new jsPDF({ unit: 'pt', format: 'a4', compress: false });
   const title = pdfSafe(exportTitle(m));
   doc.setProperties({ title });
@@ -206,7 +221,7 @@ export async function buildPdfBlob(m) {
 
 // -> Blob (.xlsx). `totalLabel` is the venue's own «Total dough» word, passed by the caller.
 export async function buildXlsxBlob(m, totalLabel) {
-  const { default: writeXlsxFile } = await import('./vendor/write-excel-file.esm.js');
+  const { default: writeXlsxFile } = await loadLibrary(() => import('./vendor/write-excel-file.esm.js'));
   const { data, options } = xlsxSheet({ title: exportTitle(m), name: m.name, rows: m.rows, totalLabel });
   return writeXlsxFile(data, options).toBlob();
 }
