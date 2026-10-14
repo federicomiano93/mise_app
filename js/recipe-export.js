@@ -62,7 +62,7 @@ const MIN_DOTS = 3;
 const ELLIPSIS = '…';
 
 // Helvetica is drawn with WinAnsi (Windows-1252): the 0x80–0x9F block holds these.
-const CP1252_EXTRA = '€‚ƒ„…†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸ';
+const CP1252_EXTRA = '\u20ac\u201a\u0192\u201e\u2026\u2020\u2021\u02c6\u2030\u0160\u2039\u0152\u017d\u2018\u2019\u201c\u201d\u2022\u2013\u2014\u02dc\u2122\u0161\u203a\u0153\u017e\u0178';
 
 // Characters the built-in font cannot draw become «?» instead of an empty box or a wrong glyph.
 export function pdfSafe(text) {
@@ -145,7 +145,8 @@ export function pdfLayout({ title, rows }, measure) {
 
 // ── The spreadsheet ───────────────────────────────────────────────────────────────────────
 
-const GRAMS_FORMAT = '0 "g"';
+const QUOTE = String.fromCharCode(34);
+const GRAMS_FORMAT = `0 ${QUOTE}g${QUOTE}`;
 // ⚠️ A formula is written WITHOUT its leading «=»: the library puts the text into <f> as it is,
 // and the file format has no «=» there.
 
@@ -186,7 +187,7 @@ export function xlsxSheet({ title, name, rows, totalLabel }) {
 const LIBRARY_ERROR = 'export/library';
 async function loadLibrary(importer) {
   try { return await importer(); } catch (cause) {
-    const err = new Error('the export library did not load');
+    const err = new Error(LIBRARY_ERROR);
     err.code = LIBRARY_ERROR;
     err.cause = cause;
     throw err;

@@ -152,7 +152,12 @@ test('⚠️ it answers Escape and gives focus back — which the chooser it cop
 
 // ── 3. The two bans this release is allowed to state ─────────────────────────
 
-test('⚠️⚠️ no navigator.share anywhere in the app — except the order picture', () => {
+// The two places allowed to hand a FILE to the phone's share sheet: the order picture, and the recipe
+// export's PDF (14 Oct 2026, agreed plan: a PDF to print or share). Text still goes only through
+// the app's own send sheet.
+const SHARES_A_FILE = ['js/orders/order-image.js', 'js/export-sheet.js'];
+
+test('⚠️⚠️ no navigator.share anywhere in the app — except a file: the order picture, the recipe PDF', () => {
   // 7 Oct 2026: the owner reversed «one mechanism» for ONE thing, the order shown as a
   // picture (a supplier can open it and zoom). Exactly js/orders/order-image.js may call it;
   // tests/order-image.test.mjs pins that what it shares is a File, never a link or a download.
@@ -162,7 +167,7 @@ test('⚠️⚠️ no navigator.share anywhere in the app — except the order p
   // app's and chose the app's: the phone's looks different on every device, is absent
   // in some desktop browsers, and would stand beside the one Orders already uses.
   const offenders = APP_FILES.filter(([rel, src]) => rel.endsWith('.js')
-    && rel !== 'js/orders/order-image.js' && /navigator\.share/.test(codeOf(src)))
+    && !SHARES_A_FILE.includes(rel) && /navigator\.share/.test(codeOf(src)))
     .map(([rel]) => rel);
   assert.deepEqual(offenders, [], 'one mechanism, or the same errand behaves two ways on '
     + 'the same phone');
@@ -170,7 +175,7 @@ test('⚠️⚠️ no navigator.share anywhere in the app — except the order p
 
 test('⚠️ canShare and .share( are used by the order picture module and nowhere else', () => {
   const offenders = APP_FILES.filter(([rel, src]) => rel.endsWith('.js')
-    && rel !== 'js/orders/order-image.js' && /\bcanShare\b|\.share\(/.test(codeOf(src)))
+    && !SHARES_A_FILE.includes(rel) && /\bcanShare\b|\.share\(/.test(codeOf(src)))
     .map(([rel]) => rel);
   assert.deepEqual(offenders, []);
 });

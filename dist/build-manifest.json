@@ -13,15 +13,15 @@
       }
     },
     "dist/calculator.js": {
-      "sha": "acc969a051a8e965",
-      "mapSha": "a62f7dc9e7b84d28",
+      "sha": "9137a994c5117b3e",
+      "mapSha": "4b9757f5f6266107",
       "inputs": {
         "js/allergen-model.js": "50434c6cea85b7de",
         "js/app-version.js": "4ef897a205fdec91",
-        "js/app.js": "c275644ddbff8422",
+        "js/app.js": "c6e7ed2e4e361181",
         "js/auth-gate.js": "5bc4dc671165cecd",
         "js/calc-fullscreen.js": "c665122603b01cb6",
-        "js/calc.js": "81dbc03c55165730",
+        "js/calc.js": "844172d5d2c386a5",
         "js/calculator-catalogue-link.js": "21b6d2cb54f087b7",
         "js/calculator-client-orders.js": "75b6b34cf168ed73",
         "js/calculator-config-store.js": "b4ee0932871e785e",
@@ -33,7 +33,7 @@
         "js/calculator-order-text.js": "ff3a743a90bfda88",
         "js/calculator-recipe-source.js": "6a1dcd00df1d7b45",
         "js/calculator-recipe-text.js": "ee635ea31fc7eef8",
-        "js/calculator-render.js": "07a3c6bf0ee8af11",
+        "js/calculator-render.js": "0284cb74bf9575df",
         "js/calculator-settings.js": "4fdb320e42a6e3fe",
         "js/calculator-whatsapp-settings.js": "11892c6efe27a510",
         "js/catalogue/catalogue-model.js": "00a8b2982f564a82",
@@ -49,6 +49,8 @@
         "js/device-ping.js": "0ec8a73be116d608",
         "js/error-model.js": "86ed1f0945fd9a4c",
         "js/error-report.js": "dbfc2460df758407",
+        "js/export-icon.js": "d951d70223a41767",
+        "js/export-sheet.js": "745357f0dc59ebbb",
         "js/feedback-model.js": "41a324aaa741a447",
         "js/feedback.js": "1c818a81166fffec",
         "js/firebase-target.js": "974d7726c8d1dda4",
@@ -97,6 +99,7 @@
         "js/pages/run-in-order.js": "5bc8e0b92802e22c",
         "js/preview-ribbon.js": "6c0264eb5d075e5b",
         "js/price-model.js": "e6aa115d5280fb75",
+        "js/recipe-export.js": "eda391bccceab6a8",
         "js/recipes.js": "394ccd4a64e0f453",
         "js/record-data.js": "260607f13e2f4033",
         "js/records.js": "79c792c647a519cd",
@@ -373,10 +376,10 @@
       }
     },
     "dist/i18n.js": {
-      "sha": "05b8f4a7adb3d212",
-      "mapSha": "13125fe42e6f68ed",
+      "sha": "68101db98476181e",
+      "mapSha": "7ae89308f9362269",
       "inputs": {
-        "js/i18n.js": "8c8fd70b84671c42"
+        "js/i18n.js": "b8af928b5777b568"
       }
     },
     "dist/index.js": {
@@ -1029,9 +1032,9 @@
       }
     },
     "dist/tokens.css": {
-      "sha": "586eaea9bdfb0595",
+      "sha": "4f8aabeca4d7a1dd",
       "inputs": {
-        "tokens.css": "8ca2371d2b3aab83"
+        "tokens.css": "2dd1ec4675aacfd7"
       }
     }
   }

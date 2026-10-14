@@ -15,6 +15,7 @@ import { t } from './i18n.js';
 import { getTabProducts, showsLeaveningKnob, usesOrders, usesTypedTotal, usesTrays } from './calculator-config.js';
 import { icon } from './calculator-icons.js';
 import { SEND_PATHS, svgElement } from './send-icon.js';
+import { DOWNLOAD_PATHS } from './export-icon.js';
 
 // ⚠️⚠️ THE WHATSAPP BRAND MARK USED TO BE DRAWN HERE, one of three copies of the
 // same long path in the app. It is gone: this button no longer means «send on
@@ -212,6 +213,8 @@ export function buildRecipePanel(recipe) {
         el('button', { class: 'copy-btn', id: id + '-copy-btn' }, t('calc.copyRecipe')),
         el('button', { class: 'copy-send-btn', id: id + '-wa-recipe-btn', type: 'button',
           title: t('ui.send'), 'aria-label': t('ui.send') }, [svgElement(SEND_PATHS, 20)]),
+        el('button', { class: 'copy-send-btn', id: id + '-export-btn', type: 'button',
+          title: t('export.button'), 'aria-label': t('export.button') }, [svgElement(DOWNLOAD_PATHS, 20)]),
       ]),
       el('div', { class: 'divisor-box', id: id + '-divisor-box' }),
       el('div', { class: 'crate-boxes', id: id + '-crate-boxes' }),
