@@ -129,7 +129,7 @@
   font-weight: 700;
 }
 
-/* Export, under the table: full width, secondary. Icon and label on one centred flex row. */
+/* Export, the last thing on the page: full width, secondary. Icon and label on one centred flex row. */
 .export {
   display: flex;
   align-items: center;
