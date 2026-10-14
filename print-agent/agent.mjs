@@ -41,7 +41,7 @@ import {
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = join(HERE, '..');
 
-const VERSION = '1.0.0';
+const VERSION = '1.0.1';     // 1.0.1: labels sent as UTF-8 (14 Oct 2026)
 const POLL_IDLE_MS = 15000;
 const POLL_BUSY_MS = 3000;
 const BUSY_FOR_MS = 60000;      // stay quick for a minute after seeing work
@@ -328,6 +328,12 @@ async function beat(app, cfg, session, agentId, printerName) {
 // as 50 75 F2 instead of 50 75 C3 B2, so every accented word printed wrong, and €
 // or œ — outside latin1 — lost their high byte entirely. The encoding here and the
 // ^CI28 there are one decision; change neither alone.
+//
+// ⚠️ IT ALSO KEEPS THE LABEL FILTER HONEST. latin1 kept only the low byte of each
+// character, so «ž» (U+017E) left as 0x7E — a ~ — and «Ş» as 0x5E — a ^: a job that
+// isSingleLabel() passed could reach the printer carrying a control command. In
+// UTF-8 every byte of a non-ASCII character is 0x80 or above, so what the filter
+// reads is what the printer reads.
 const labelBytes = (text) => Buffer.from(String(text), 'utf8');
 
 // A printer on this computer, shared so raw bytes can be written to it.

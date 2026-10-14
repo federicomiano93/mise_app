@@ -202,7 +202,10 @@ test('⚠️⚠️ a label sent to a network printer arrives as UTF-8', async ()
   const { printToTcp } = await import('../print-agent/agent.mjs');
 
   const received = [];
-  const server = net.createServer((sock) => sock.on('data', (d) => received.push(d)));
+  const server = net.createServer((sock) => {
+    sock.on('data', (d) => received.push(d));
+    sock.on('error', () => {}); // a failed send must fail the test, not crash the run
+  });
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   try {
     const { port } = server.address();
@@ -233,4 +236,14 @@ test('⚠️⚠️ a label copied to a shared printer is written as UTF-8 too', 
   const tcp = src.slice(src.indexOf('function printToTcp'), src.indexOf('async function printJob'));
   assert.match(tcp, /socket\.end\(labelBytes\(text\)\)/);
   assert.ok(!/'binary'|'latin1'/.test(src), 'latin1 has come back into the agent');
+});
+
+test('⚠️⚠️ no letter can turn into a printer command on the wire', async () => {
+  // isSingleLabel() reads the string; the printer reads the bytes. Under latin1 «ž»
+  // became 0x7E (~, a control command) and «Ş» 0x5E (^). In UTF-8 a non-ASCII letter
+  // never produces a byte below 0x80, so the filter and the printer agree.
+  const { labelBytes } = await import('../print-agent/agent.mjs');
+  const bytes = [...labelBytes('^XA^CI28^FH^FDžJR Ş^FS^XZ')];
+  assert.equal(bytes.filter(b => b === 0x7E).length, 0, 'a ~ appeared on the wire');
+  assert.equal(bytes.filter(b => b === 0x5E).length, 6, 'only the six ^ the label really has');
 });
