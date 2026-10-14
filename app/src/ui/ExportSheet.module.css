@@ -1,0 +1,103 @@
+/* The export sheet: the two kinds as big rows (the same look as the send sheet's roads), then the ready state with
+   its three actions stacked. Icon and text sit on one flex row, centred on each other. */
+
+.kinds {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+}
+
+.kind {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  width: 100%;
+  min-height: var(--hit-lg);
+  padding: var(--s2) var(--s3);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.kind[data-hovered] {
+  background: var(--bg);
+}
+
+.kind[data-pressed] {
+  background: var(--sunken);
+}
+
+.kind[data-focus-visible] {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.text {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.name {
+  font-weight: 600;
+}
+
+.note {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
+.message {
+  color: var(--ink-2);
+  overflow-wrap: anywhere;
+}
+
+/* The file's name, as it will be saved. */
+.file {
+  color: var(--ink-2);
+  font-family: var(--mono);
+  font-size: var(--fs-sm);
+  overflow-wrap: anywhere;
+}
+
+.stack {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  gap: var(--s3);
+}
+
+.stack > * {
+  width: 100%;
+}
+
+/* The link looks like the primary button: it is the one action here, and it must be a real <a download>. */
+.download {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--hit);
+  padding: 0 var(--s6);
+  border-radius: var(--r-md);
+  background: var(--accent);
+  color: var(--on-accent);
+  font: 600 var(--fs-md)/1 var(--font);
+  text-decoration: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.download:active {
+  background: var(--accent-press);
+}
+
+@media (hover: hover) {
+  .download:hover {
+    background: var(--accent-hover);
+  }
+}
