@@ -1314,7 +1314,28 @@ allergen state with an `if` of its own. What differs from the current app, and w
   anything is laid out, with one new sentence (`label.preview.paperUnknown`) and Print off until then; «actual size» is claimed only
   after a real measurement; the sheet is NEVER measured in the fallback typeface (Print stays off until Manrope is ready, and a face that cannot load says so with `label.preview.fontMissing`); the print host is built at print time with its own React root and leaves after `afterprint` AND the person's next pointer or key (driven on the lab tablet, 13 Oct 2026: Android fires `afterprint` before its print screen lays the page out, and the CURRENT app offers a BLANK page there), never with the screen; the print CSS is scoped (`body:has(> #labelPrint)`, a named `labcustom` page) because Mise 2 loads it for the whole app; the sheet is set in Manrope (copied fonts), so
   the fit is the same in both apps; the switch is kept for the section. Not here: ZPL, the shop computer's queue and the
-  clipboard road (3d-4) — a venue whose printer is `zpl` sees «The shop computer is not answering» until then (since 94a8777; `LabelScreen.tsx` answers
-  `zplFits: () => true`, so the port never says «too big for the printer» about a printer it cannot ask).
+  clipboard road — they came in 3d-4 (below), which replaced the two stubs this step left in `LabelScreen.tsx`.
 - **Left for 3d-6:** the pencil that the work list's sentence about linking
   rows mentions (`cat.aRecipeRowHas` is the current app's wording and points at a screen Mise 2 does not have yet).
+
+## Step 3d-4 as built (14 Oct 2026) — differences from the current app, on purpose
+
+- **Built:** `print-agents` is watched while the section is open (quiet on failure, kept in memory only — never in
+  storage: a heartbeat is a statement about right now) and `print-jobs` is written with `addDoc`, awaited and NOT local-first
+  (a failure rejects and the screen says «Could not send it — try again»). The label screen now offers all three roads
+  through the shared `roadsFor`/`whyNoRoad`: the agent (queue a job while the heartbeat is fresh; the status says «sent», never
+  «printed»), the system's dialog, and the printer code on the clipboard; the button carries the first road's words, is dead while a send is in
+  flight, and a «not answering» sentence stays visible even when the clipboard fallback is the button. The job is built by the ported
+  `buildJob` with the session's uid and the open venue and has exactly the keys `firestore.rules` allows. The two stubs 3d-3 left
+  in `LabelScreen.tsx` (`zplFits` answering yes, `printerReady` fixed off) are gone and `RecipesSection.label.spec.tsx` reads the file
+  to keep them gone.
+- **On purpose, NEW in Mise 2:** the screen re-judges the heartbeat **every 30 s while it is open** (`usePresenceClock`,
+  `PRESENCE_RECHECK_MS`, only for a Zebra venue, cleared on leaving). The current app judges it only when the screen is redrawn, so a
+  shop computer switched off while a label is open keeps being offered «Print» until something redraws. Here, within 30 s the
+  button stops offering the queue and the «not answering» sentence appears with no tap; a fresh heartbeat still updates at once through
+  the watch.
+- **Not done here:** the driven check (a job written by Mise 2 on the preview emulator is claimed by `print-agent` in `--emulator`
+  mode and passes `isSingleLabel`) belongs to the main session. The unit specs pin the job's shape against `isSingleLabel` and the rules'
+  key list, but only the real agent proves they agree.
+- **Found while testing, not a difference:** `userEvent.setup()` installs a clipboard on `navigator`, so a spec for a device with no
+  clipboard has to remove it after rendering (the screen asks at draw time).
