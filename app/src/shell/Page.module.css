@@ -11,6 +11,7 @@
    at the far right, centred on the title's line, and never overlaps it. */
 .withAction {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--s3);
 }
@@ -20,8 +21,23 @@
   min-width: 0;
 }
 
+/* ⚠️ THE WRAPPER STEPS ASIDE (display: contents) so what the action draws besides its button becomes a line
+   of its own: SignOutButton also renders «That did not work…» (role=alert), and inside a `flex: none` box that
+   sentence set the box's width — on a phone it squeezed the title to nothing and scrolled the page sideways
+   (review, 15 Oct 2026). Now the button stays beside the title and the message wraps under both.
+   ⚠️ THE BUTTON KEEPS ITS 48px TOUCH HEIGHT WITHOUT GROWING THE BAR: the negative block margin lets it reach into
+   the head's own padding (var(--s3) on a phone), so Settings' title bar is as tall as every other page's. */
 .action {
+  display: contents;
+}
+
+.action > button {
   flex: none;
+  margin-block: calc(-1 * var(--s3));
+}
+
+.action > [role='alert'] {
+  flex: 1 0 100%;
 }
 
 .title {

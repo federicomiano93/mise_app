@@ -19,6 +19,13 @@
   -webkit-tap-highlight-color: transparent;
 }
 
+/* ⚠️ Sized here, not by the icon's size prop: base.css's `svg.lucide` (20px) is a CSS rule and beats the
+   width/height attributes the prop writes, which drew the icon at 20px beside 14px text. */
+.small svg {
+  width: 16px;
+  height: 16px;
+}
+
 .small[data-hovered] {
   background: var(--sunken);
   color: var(--ink);

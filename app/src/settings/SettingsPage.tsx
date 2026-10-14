@@ -30,7 +30,6 @@ export function SettingsPage() {
           </div>
           {options.length > 1 ? <SwitchVenueButton>{t('account.switchVenue')}</SwitchVenueButton> : null}
         </div>
-
       </section>
 
       <p className={styles.more}>{t('settings.more')}</p>
