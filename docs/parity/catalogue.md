@@ -1334,8 +1334,17 @@ allergen state with an `if` of its own. What differs from the current app, and w
   shop computer switched off while a label is open keeps being offered «Print» until something redraws. Here, within 30 s the
   button stops offering the queue and the «not answering» sentence appears with no tap; a fresh heartbeat still updates at once through
   the watch.
-- **Not done here:** the driven check (a job written by Mise 2 on the preview emulator is claimed by `print-agent` in `--emulator`
-  mode and passes `isSingleLabel`) belongs to the main session. The unit specs pin the job's shape against `isSingleLabel` and the rules'
-  key list, but only the real agent proves they agree.
+- **On purpose, NEW in Mise 2 (review fixes, 14 Oct 2026):**
+  - the in-flight guard applies to the **agent road only**: a send that never lands (offline phone, `addDoc` never resolves, no
+    timeout — parity) no longer kills the «Copy the printer code» fallback once the heartbeat goes stale;
+  - a send that lands after the road changed **does not put its answer back** (the last answer goes when the road changes);
+  - the heartbeat is **re-judged at tap time**: a beat that went stale with no clock tick yet (a phone woken from sleep) queues
+    nothing and the screen re-reads the clock at once, showing the true road and «not answering»; the clock also re-reads when the
+    page becomes visible again.
+- **Found by driving the screen, fixed:** Print has a row of its own, full width; and the last answer is cleared when the road changes.
+- **Driven check DONE (14 Oct 2026):** on the local emulator the real `print-agent/agent.mjs` in emulator mode claimed a job written by
+  Mise 2 and sent it to a fake TCP printer; it was one label and `isSingleLabel` accepted it.
+- **Out of this step, a known defect of the CURRENT app:** `print-agent/agent.mjs` writes the payload as `'binary'` (latin1) while the
+  label declares `^CI28` (UTF-8), so accented letters reach the printer wrong. A separate fix to the current app.
 - **Found while testing, not a difference:** `userEvent.setup()` installs a clipboard on `navigator`, so a spec for a device with no
   clipboard has to remove it after rendering (the screen asks at draw time).
