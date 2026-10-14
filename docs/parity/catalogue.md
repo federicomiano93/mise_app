@@ -1134,8 +1134,11 @@ does not: `SectionPlaceholder`).
 
 **Not ported at all (to port, with the slice that needs it):** `venue-features` (3d-2), `recipe-allergen-model`
 (3d-2), `recipe-label-model` (3d-2), `label-template-model` (3d-3), the sheet markup + `label-print.css` (3d-3),
-`label-zpl` (3d-4), `print-queue-model` + the transports' pure half (3d-4), `recipe-link` (3d-7), `photo-model`
+`recipe-link` (3d-7), `photo-model`
 (3d-9), the push client and `wake-lock` (3d-8 for the lock; the notification half is deferred — Questions 6).
+`label-zpl` and `print-queue-model` are ported (3d-4 slice 1: `shared/src/label-zpl.ts`, `print-queue-model.ts`, each
+pinned byte for byte against its `js/` original over the label corpus; `js/print-queue-model.js` STAYS — the agent
+imports it); the screen wiring is slice 2.
 
 **Out of this step, noted so they are not lost:** the allergen DECLARATION forms and `allergen-match` /
 `allergen-terms` (Orders, item 20); `supplier-label` as a shared port (a private copy sits in
