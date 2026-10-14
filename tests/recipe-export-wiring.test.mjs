@@ -137,3 +137,22 @@ test('the result card has a full-width secondary Export button under the copy ro
   assert.match(app, /openExportSheet\(\{ model, totalLabel: t\('calc\.totalDough'\), opener: exportBtn \}\)/);
   assert.match(app, /exportModelFor\(id\)/);
 });
+
+test('⚠️ the Recipe catalogue bundle holds no library code either, only the import() of each file', () => {
+  const bundle = read('dist/catalogue.js');
+  assert.ok(bundle.includes('import("../js/vendor/jspdf.esm.js")'));
+  assert.ok(bundle.includes('import("../js/vendor/write-excel-file.esm.js")'));
+  assert.ok(!bundle.includes('fast-png') && !bundle.includes('jspdf 4.'), 'jsPDF was inlined into the bundle');
+});
+
+test('the recipe screen exports the very amounts renderRows drew, labelled with the Total word', () => {
+  const src = read('js/catalogue/catalogue-detail.js');
+  const body = src.slice(src.indexOf('function renderRows()'), src.indexOf('async function onCalculate'));
+  assert.match(body, /const amounts = scaled \? scaleCatalogue\(recipe, displayTarget\) : baseAmounts\(recipe\);/);
+  assert.match(body, /lastExport = exportModelOf\(recipe, amounts, total\);/);
+  assert.match(src, /openExportSheet\(\{ model: lastExport, totalLabel: t\('cat\.total'\), opener: exportBtn \}\)/);
+  // Under the list, never inside it (the list is a button), and hidden when there is nothing to export.
+  assert.match(src, /catSection\(t\('cat\.ingredients'\), \[ingList, exportBtn\]\)/);
+  assert.match(src, /exportBtn\.hidden = recipe\.ingredients\.length === 0;/);
+  assert.match(src, /class: 'cat-import-btn cat-export-btn'/);
+});

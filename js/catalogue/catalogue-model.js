@@ -71,6 +71,26 @@ export function weighableTotalGrams(recipe) {
   return ings.reduce((s, i) => s + ingGrams(i), 0);
 }
 
+// The model js/recipe-export.js turns into a PDF or a spreadsheet. ⚠️ `amounts` is EXACTLY the
+// array the screen drew (renderRows in catalogue-detail.js), never recomputed here, so the file
+// can only say what the screen says. Each row keeps its OWN unit; `factor` is the grams in one of
+// it (0 for pieces, spoons, a pinch, to taste), and `totalGrams` is the Total row's number.
+export function exportModelOf(recipe, amounts, totalGrams) {
+  const ings = (recipe && Array.isArray(recipe.ingredients)) ? recipe.ingredients : [];
+  const total = Number(totalGrams);
+  return {
+    name: recipe ? recipe.name : '',
+    trays: 0,
+    totalG: Number.isFinite(total) && total > 0 ? Math.round(total) : 0,
+    rows: ings.map((ing, i) => ({
+      name: ing.label,
+      value: amounts[i] === null || amounts[i] === undefined ? null : amounts[i],
+      unit: unitText(unitOf(ing)),
+      factor: UNIT_TO_GRAMS[unitOf(ing)] || 0,
+    })),
+  };
+}
+
 // ── Normalisation (junk-safe: never throws, never yields NaN) ──────────────────
 
 // One ingredient row: a display label, a non-negative amount, and a unit. Non-numeric
