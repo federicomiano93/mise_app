@@ -7,6 +7,23 @@
   background: var(--surface);
 }
 
+/* A page with an action: the title takes the room that is left (and may wrap), the action sits
+   at the far right, centred on the title's line, and never overlaps it. */
+.withAction {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+}
+
+.withAction .title {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.action {
+  flex: none;
+}
+
 .title {
   font-size: var(--fs-xl);
   font-weight: 650;
