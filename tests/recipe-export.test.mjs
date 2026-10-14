@@ -7,10 +7,10 @@ import assert from 'node:assert/strict';
 import { jsPDF } from '../js/vendor/jspdf.esm.js';
 import { unzipSync, strFromU8 } from '../js/vendor/fflate.esm.js';
 import {
-  exportTitle, exportFileName, rowText, pdfLayout, pdfSafe, pdfMeasurer, sheetNameOf, xlsxSheet, buildPdfBlob, buildXlsxBlob,
+  exportTitle, exportFileName, rowText, pdfLayout, rowTextOf, exportRow, pdfSafe, pdfMeasurer, sheetNameOf, xlsxSheet, buildPdfBlob, buildXlsxBlob,
   PAGE_W, PAGE_H,
 } from '../js/recipe-export.js';
-import { SIX, TRAYS, LONG_ROW, SIXTY, AWKWARD_NAME } from './fixtures/recipe-export-fixtures.mjs';
+import { SIX, TRAYS, LONG_ROW, SIXTY, AWKWARD_NAME, MIXED, MIXED_DRIFT, ONLY_PIECES } from './fixtures/recipe-export-fixtures.mjs';
 
 const doc = new jsPDF({ unit: 'pt', format: 'a4' });
 // The width of what a Tj really draws: no kerning (see pdfMeasurer).
@@ -208,4 +208,85 @@ test('a real .xlsx: merge A1:B1, bold title, exact numbers with the «g» format
   assert.deepEqual(values, SIX.rows.map(r => r.grams));
   assert.equal(Math.round(SIX.rows.reduce((s, r) => s + r.grams, 0)), SIX.totalG);
   assert.match(strFromU8(files['xl/workbook.xml']), /<sheet [^>]*name="Impasto di prova"/);
+});
+
+// ── Rows in their own unit (the Recipe catalogue) ─────────────────────────────────────────
+
+test('exportRow: a Calculator row is grams with factor 1; a catalogue row keeps its unit', () => {
+  assert.deepEqual(exportRow({ name: 'A', grams: 12.5 }), { name: 'A', value: 12.5, unit: 'g', factor: 1 });
+  assert.deepEqual(exportRow({ name: 'B', value: null, unit: 'q.b.', factor: 0 }), { name: 'B', value: null, unit: 'q.b.', factor: 0 });
+  assert.deepEqual(exportRow({ name: 'C', value: 2, unit: 'kg', factor: 1000 }), { name: 'C', value: 2, unit: 'kg', factor: 1000 });
+});
+
+test('PDF row text: the number and its own unit, «to taste» is the unit word alone', () => {
+  assert.deepEqual(MIXED.rows.map(rowTextOf), ['500 ml', '2 kg', '3 pz', '250 g', 'q.b.']);
+  assert.equal(rowTextOf({ name: 'x', grams: 14400.4 }), '14400 g');
+});
+
+test('title and file name: a recipe with no weight is just its name', () => {
+  assert.equal(exportTitle(ONLY_PIECES), 'Decori di prova');
+  assert.equal(exportFileName(ONLY_PIECES, 'pdf'), 'Decori_di_prova.pdf');
+  assert.equal(exportFileName(ONLY_PIECES, 'xlsx'), 'Decori_di_prova.xlsx');
+  assert.equal(exportTitle(MIXED), 'Crema di prova — 2750 g');
+  assert.equal(exportFileName(MIXED, 'pdf'), 'Crema_di_prova_2750g.pdf');
+});
+
+test('xlsxSheet with units: each number keeps its unit format, «to taste» is text', () => {
+  const { data } = xlsxSheet({ title: 'T', rows: MIXED.rows, totalLabel: 'Total', totalG: MIXED.totalG });
+  assert.equal(data[2][1].format, '0 "ml"');
+  assert.equal(data[3][1].format, '0 "kg"');
+  assert.equal(data[4][1].format, '0 "pz"');
+  assert.equal(data[5][1].format, '0 "g"');
+  assert.deepEqual([data[6][1].value, data[6][1].type], ['q.b.', String]);
+  assert.equal(data[6][1].format, undefined);
+  const odd = xlsxSheet({ title: 'T', rows: [{ name: 'x', value: 1, unit: 'a"b', factor: 0 }], totalLabel: 'T' });
+  assert.equal(odd.data[2][1].format, '0 "ab"');
+});
+
+test('xlsx total: weighable rows only, converted to grams, as a formula', () => {
+  const total = xlsxSheet({ title: 'T', rows: MIXED.rows, totalLabel: 'Total', totalG: MIXED.totalG }).data.at(-1)[1];
+  assert.equal(total.value, 'B3+B4*1000+B6');
+  assert.equal(total.type, 'Formula');
+  assert.equal(total.format, '0 "g"');
+  assert.equal(total.fontWeight, 'bold');
+  const milli = [{ name: 'a', value: 500, unit: 'mg', factor: 0.001 }, { name: 'b', value: 10, unit: 'g', factor: 1 }];
+  assert.equal(xlsxSheet({ title: 'T', rows: milli, totalLabel: 'T', totalG: 11 }).data.at(-1)[1].value, 'B3*0.001+B4');
+});
+
+test('⚠️ xlsx total equals the screen total: a formula that would not round to it becomes the plain number', () => {
+  const total = xlsxSheet({ title: 'T', rows: MIXED_DRIFT.rows, totalLabel: 'Total', totalG: MIXED_DRIFT.totalG }).data.at(-1)[1];
+  assert.deepEqual([total.value, total.type, total.format, total.fontWeight], [802, Number, '0 "g"', 'bold']);
+});
+
+test('xlsx total: no weighable row is a plain 0; gram-only rows keep SUM exactly', () => {
+  const none = xlsxSheet({ title: 'T', rows: ONLY_PIECES.rows, totalLabel: 'Total', totalG: 0 }).data.at(-1)[1];
+  assert.deepEqual([none.value, none.type, none.format], [0, Number, '0 "g"']);
+  const grams = [{ name: 'a', value: 5, unit: 'g', factor: 1 }, { name: 'b', value: 7, unit: 'g', factor: 1 }];
+  assert.equal(xlsxSheet({ title: 'T', rows: grams, totalLabel: 'T', totalG: 12 }).data.at(-1)[1].value, 'SUM(B3:B4)');
+});
+
+test('a real PDF from mixed units: one page, each row with its own unit, the title without a weight', async () => {
+  const pdf = await pdfText(MIXED);
+  assert.equal((pdf.match(/\/Type \/Page(?!s)/g) || []).length, 1);
+  for (const text of ['500 ml', '2 kg', '3 pz', '250 g', 'q.b.']) assert.ok(pdf.includes(`(${text})`), text);
+  const pieces = await pdfText(ONLY_PIECES);
+  assert.ok(pieces.includes('(Decori di prova)'));
+  assert.match(pieces, /\/Title \(Decori di prova\)/);
+});
+
+test('a real .xlsx from mixed units: unit formats, q.b. as text, the converted-total formula', async () => {
+  const blob = await buildXlsxBlob(MIXED, 'Totale');
+  const files = unzipSync(new Uint8Array(await blob.arrayBuffer()));
+  const sheet = strFromU8(files['xl/worksheets/sheet1.xml']);
+  const styles = strFromU8(files['xl/styles.xml']);
+  const strings = strFromU8(files['xl/sharedStrings.xml']);
+  assert.match(sheet, /<f>B3\+B4\*1000\+B6<\/f>/);
+  for (const unit of ['ml', 'kg', 'pz', 'g']) assert.match(styles, new RegExp(`formatCode="0 &quot;${unit}&quot;"`));
+  assert.ok(strings.includes('q.b.'));
+  const values = [...sheet.matchAll(/<c r="B([3-5])"[^>]*><v>([^<]+)<\/v>/g)].map(m => Number(m[2]));
+  assert.deepEqual(values, [500, 2, 3]);
+  const drift = await buildXlsxBlob(MIXED_DRIFT, 'Totale');
+  const driftSheet = strFromU8(unzipSync(new Uint8Array(await drift.arrayBuffer()))['xl/worksheets/sheet1.xml']);
+  assert.doesNotMatch(driftSheet, /<f>/);
+  assert.match(driftSheet, /<c r="B6"[^>]*><v>802<\/v>/);
 });
