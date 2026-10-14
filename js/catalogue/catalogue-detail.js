@@ -11,6 +11,7 @@ import { currentSession } from '../firebase.js';
 import { isSectionAllowed } from '../sections.js';
 import {
   scaleCatalogue, baseAmounts, weighableTotalGrams, unitOf, unitText, batchWarning, formatWeight, formatAmount,
+  exportModelOf,
 } from './catalogue-model.js';
 import {
   getScaledTarget, setScaledTarget, clearScaledTarget, getIngredients, getRecipesById,
@@ -39,6 +40,8 @@ import { allergensOn } from '../venue-features.js';
 import { copyToClipboard } from '../share.js';
 import { chooseHowToSend } from '../send-sheet.js';
 import { SEND_PATHS, svgElement } from '../send-icon.js';
+import { DOWNLOAD_PATHS } from '../export-icon.js';
+import { openExportSheet } from '../export-sheet.js';
 import { hasProcedure, normalizeSteps, unassignedRows, progressText, formatDuration } from './guided-model.js';
 import { buildZoomControls } from './zoom-steps.js';
 
@@ -523,6 +526,9 @@ export function renderDetail({ recipe, app }) {
     class: 'cat-calc-btn', type: 'button', text: t('cat.calculate'), onclick: onCalculate,
   });
 
+  // What renderRows drew last, as the export model: the file is made from this, never recomputed.
+  let lastExport = null;
+
   function renderRows() {
     ingRows.replaceChildren();
     const scaled = displayTarget > 0;
@@ -541,6 +547,7 @@ export function renderDetail({ recipe, app }) {
       el('span', { class: 'cat-ing-name', text: t('cat.total') }),
       amountEl({ num: nf.format(total), unit: 'g' }),
     ]));
+    lastExport = exportModelOf(recipe, amounts, total);
     clearBtn.hidden = !scaled;
   }
 
@@ -586,6 +593,19 @@ export function renderDetail({ recipe, app }) {
   // No weighable ingredients (all pieces / to-taste) → nothing to scale by weight,
   // so hide the whole panel. getScaledTarget stays 0 in that case too.
   if (weighableTotalGrams(recipe) <= 0) weightPanel.hidden = true;
+
+  // Export as PDF or Excel (js/export-sheet.js). It sits UNDER the list, never inside it: the list
+  // is role=button (tap to zoom) and a button in a button is not allowed. Absent for a recipe with no
+  // ingredients; `hidden` is assigned afterwards for the reason explained at importBtn below.
+  const exportBtn = el('button', { class: 'cat-import-btn cat-export-btn', type: 'button' }, [
+    el('span', { 'aria-hidden': 'true' }),
+    el('span', {}, t('export.button')),
+  ]);
+  exportBtn.firstChild.appendChild(svgElement(DOWNLOAD_PATHS, 18));
+  exportBtn.addEventListener('click', () => {
+    openExportSheet({ model: lastExport, totalLabel: t('cat.total'), opener: exportBtn });
+  });
+  exportBtn.hidden = recipe.ingredients.length === 0;
 
   // "Import into Calculator" WRITES the Calculator's configuration. A location
   // that does not use the Calculator is refused that write by the rules, so the
@@ -673,7 +693,7 @@ export function renderDetail({ recipe, app }) {
     // rewrites. Nothing depends on the order: the host's cards are replaced in place,
     // and the guided panel reads the weight through a closure rather than off the DOM.
     el('div', { class: 'cat-detail-top' }, [
-      catSection(t('cat.ingredients'), [ingList]),
+      catSection(t('cat.ingredients'), [ingList, exportBtn]),
       // ⚠️ THE WHOLE CARD GOES WHEN THE PANEL DOES. A recipe of pieces and «to taste»
       // has nothing to scale by weight, and a headed card standing empty reads as
       // something broken rather than as something that does not apply.
