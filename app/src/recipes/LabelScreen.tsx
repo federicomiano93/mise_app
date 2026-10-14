@@ -159,6 +159,15 @@ function LabelBody({ recipe }: { recipe: CatalogueRecipe }) {
     device: { canPrint: typeof window.print === 'function', hasClipboard: typeof navigator !== 'undefined' && !!navigator.clipboard },
   };
   const roads = sheet !== null ? roadsFor(sheet, roadContext) : [];
+  // ⚠️ WHEN THE ROAD CHANGES, THE LAST ANSWER GOES. «Copied — paste it onto the printer» beside a button that now
+  // says Print, or «Sent to the shop computer» beside «the shop computer is not answering», describes a road that is
+  // no longer the one on offer (driven 14 Oct 2026). Cleared while drawing, the React way to follow a changed input.
+  const firstRoad = roads[0]?.id ?? null;
+  const [noteRoad, setNoteRoad] = useState(firstRoad);
+  if (noteRoad !== firstRoad) {
+    setNoteRoad(firstRoad);
+    if (note !== null) setNote(null);
+  }
 
   const copyText = (): string => (label.ok && lang !== null ? declarationText(label, lang) : '');
 
@@ -335,7 +344,7 @@ function LabelBody({ recipe }: { recipe: CatalogueRecipe }) {
           {laid !== null && !laid.ok ? null : (
             <button
               type="button"
-              className={styles.button}
+              className={`${styles.button} ${styles.printButton}`}
               disabled={!canPress || sending}
               aria-describedby={!canPress && reasonIds !== '' ? reasonIds : undefined}
               onClick={() => { void press(); }}

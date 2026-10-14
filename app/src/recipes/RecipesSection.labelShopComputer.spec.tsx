@@ -133,6 +133,24 @@ describe('a fresh heartbeat: the agent road', () => {
     }
   });
 
+  it('⚠️ forgets its answer when the road changes: «sent» never stands beside «not answering», nor «copied» beside Print', async () => {
+    const { source, user } = await openZebra([beat(MIN)], { clipboard: 'works' });
+    await waitFor(() => { expect(printButton()).toHaveTextContent('Print'); });
+    await user.click(printButton());
+    expect(await screen.findByText('Sent to the shop computer — it prints it')).toBeInTheDocument();
+
+    act(() => { source.setPrintAgents([]); });
+    await waitFor(() => { expect(printButton()).toHaveTextContent('Copy the printer code'); });
+    expect(offline()).toBeVisible();
+    expect(main().queryByText('Sent to the shop computer — it prints it')).toBeNull();
+
+    await user.click(printButton());
+    expect(await screen.findByText('Copied — paste it onto the printer on the shop computer')).toBeInTheDocument();
+    act(() => { source.setPrintAgents([beat(MIN)]); });
+    await waitFor(() => { expect(printButton()).toHaveTextContent('Print'); });
+    expect(main().queryByText('Copied — paste it onto the printer on the shop computer')).toBeNull();
+  });
+
   it('says it could not send when the queue refuses, records nothing, and lets the person try again', async () => {
     const { source, user } = await openZebra([beat(MIN)]);
     await waitFor(() => { expect(printButton()).toBeEnabled(); });
