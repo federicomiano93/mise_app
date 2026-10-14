@@ -132,14 +132,14 @@
       }
     },
     "dist/catalogue.css": {
-      "sha": "7a9442e7757b1162",
+      "sha": "fd9bdf1a6544456c",
       "inputs": {
-        "catalogue.css": "6995092e2ecd7f23"
+        "catalogue.css": "9df8bd002205f25d"
       }
     },
     "dist/catalogue.js": {
-      "sha": "cfe7b6a6708c661a",
-      "mapSha": "219d0924c1404e40",
+      "sha": "df6fa1141501c547",
+      "mapSha": "09d0ee9e385db974",
       "inputs": {
         "js/allergen-match.js": "ee85eebef7fd7052",
         "js/allergen-model.js": "50434c6cea85b7de",
@@ -148,7 +148,7 @@
         "js/auth-gate.js": "5bc4dc671165cecd",
         "js/calculator-config.js": "6e06118772997ae2",
         "js/catalogue/allergen-sheet.js": "0a1ec5ee0d8c6a56",
-        "js/catalogue/catalogue-detail.js": "e397fd1facfa201b",
+        "js/catalogue/catalogue-detail.js": "1c5bdbb0cf879de9",
         "js/catalogue/catalogue-editor.js": "be31547594a8efd9",
         "js/catalogue/catalogue-list.js": "289d824f889b3757",
         "js/catalogue/catalogue-main.js": "28863c59f8f79a95",
