@@ -200,6 +200,10 @@ test('a real .xlsx: merge A1:B1, bold title, exact numbers with the «g» format
   assert.ok(strings.includes('Impasto totale'));
   assert.match(styles, /formatCode="0 &quot;g&quot;"/);
   assert.match(styles, /<b\s*\/>|<b>/);
+  // Every font names its size, so the column widths (counted in characters) mean the same everywhere.
+  const fonts = [...styles.matchAll(/<font>(.*?)<\/font>/g)].map(m => m[1]);
+  assert.ok(fonts.length >= 2);
+  for (const f of fonts) assert.match(f, /<sz val="11"\/>/);
   const values = [...sheet.matchAll(/<c r="B([3-8])"[^>]*><v>([^<]+)<\/v>/g)].map(m => Number(m[2]));
   assert.deepEqual(values, SIX.rows.map(r => r.grams));
   assert.equal(Math.round(SIX.rows.reduce((s, r) => s + r.grams, 0)), SIX.totalG);

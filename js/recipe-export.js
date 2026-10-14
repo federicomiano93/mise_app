@@ -252,9 +252,16 @@ export async function buildPdfBlob(m) {
   return doc.output('blob');
 }
 
+// The file names its font. Without this the library writes a default font with no <sz> and no
+// name, and each spreadsheet app picks its own — while column widths are counted in characters
+// of that font, so the page width the two columns take would change from app to app. Calibri 11
+// is Excel's own default: 94.5 + 63 pt of columns, well inside an A4 page's 494 pt (checked in
+// Excel, 14 Oct 2026).
+export const XLSX_FONT = Object.freeze({ fontFamily: 'Calibri', fontSize: 11 });
+
 // -> Blob (.xlsx). `totalLabel` is the venue's own «Total dough» word, passed by the caller.
 export async function buildXlsxBlob(m, totalLabel, sheetFallback = 'Recipe') {
   const { default: writeXlsxFile } = await loadLibrary(() => import('./vendor/write-excel-file.esm.js'));
   const { data, options } = xlsxSheet({ title: exportTitle(m), name: m.name, rows: m.rows, totalLabel, sheetFallback });
-  return writeXlsxFile(data, options).toBlob();
+  return writeXlsxFile(data, options, XLSX_FONT).toBlob();
 }
