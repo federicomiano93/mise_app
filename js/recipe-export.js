@@ -12,7 +12,7 @@
 // ⚠️ THE TWO LIBRARIES ARE LOADED ONLY INSIDE buildPdfBlob / buildXlsxBlob, WITH import().
 // jsPDF is ~400 KB and write-excel-file ~70 KB; nobody opening the Calculator should pay
 // for them. scripts/build-bundles.mjs keeps them out of dist/ (BUILD_CONFIG.lazyVendorFiles)
-// and tests/recipe-export-lazy.test.mjs forbids a static import of either.
+// and tests/recipe-export-wiring.test.mjs forbids a static import of either.
 //
 // ⚠️ NO t() AND NO DOM HERE. Words arrive from the caller (the title is the recipe's own
 // name; the Excel total label is passed in), so this file is plain functions a test can run.
