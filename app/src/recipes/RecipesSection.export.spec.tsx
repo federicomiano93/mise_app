@@ -2,7 +2,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 import { act, screen, waitFor, within } from '@testing-library/react';
 import { LOAD, recipe, renderRecipes, sourceWith } from '../testing/renderRecipes';
 
-// The recipe screen's «Export» (PDF / Excel): under the ingredient table, hidden when there is nothing to export,
+// The recipe screen's «Export» (PDF / Excel): the last thing on the page, hidden when there is nothing to export,
 // made from the very amounts the table drew. The builders are replaced (the files: ui/recipeExport.spec.ts).
 
 const builders = vi.hoisted(() => ({ buildPdfBlob: vi.fn(), buildXlsxBlob: vi.fn() }));
@@ -49,13 +49,19 @@ type Model = {
 };
 
 describe('the Export button on the recipe screen', () => {
-  it('sits in the Ingredients card, UNDER the table and not inside it', async () => {
+  it('⚠️ is the LAST thing on the recipe page, after every card (his choice, 14 Oct 2026)', async () => {
     await open();
     const table = main().getByRole('table', { name: 'Ingredients' });
     const button = main().getByRole('button', { name: 'Export' });
     expect(table.contains(button)).toBe(false);
-    expect(table.compareDocumentPosition(button) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(button.closest('section')).toBe(table.closest('section'));
+    expect(button.closest('section')).not.toBe(table.closest('section'));
+    // Nothing on the page that a person can press or read comes after it.
+    const page = button.closest('section');
+    expect(page).not.toBeNull();
+    const after = [...page!.querySelectorAll('button, a, input, h3, table')].filter(
+      el => (button.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0,
+    );
+    expect(after).toEqual([]);
   });
 
   it('is hidden when the recipe has no ingredients', async () => {

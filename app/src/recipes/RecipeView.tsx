@@ -56,6 +56,7 @@ export function RecipeView({ recipe, titleRef, onBack }: Props) {
         {hasWeight ? <BatchCard recipe={recipe} target={target} /> : null}
         <AllergenCard recipe={recipe} />
         <DeclarationCard recipe={recipe} />
+        <ExportAction recipe={recipe} target={target} />
       </div>
     </section>
   );
@@ -68,6 +69,36 @@ export function RecipeView({ recipe, titleRef, onBack }: Props) {
 // A tap anywhere on the list opens it full screen, as in the current app; the button in the head is
 // the way in for a keyboard and a screen reader (the list itself stays readable as a table, which a
 // list made into one big button would not be).
+// «Export» as PDF or Excel: ⚠️ THE LAST THING ON THE PAGE, by Federico's choice (14 Oct 2026, «non è un'azione che si
+// fa tutti i giorni»). Under the ingredient table it pushed the batch box — what this screen is opened for — further
+// down. The file is made by recipeAmounts() from the same recipe, batch target and locale the table is drawn with, so
+// it holds the very amounts on screen. Nothing to export without ingredients.
+function ExportAction({ recipe, target }: { recipe: CatalogueRecipe; target: number | null }) {
+  const { t, locale } = useT();
+  const [openExport, exportSheet, closeExport] = useExportSheet();
+
+  // ⚠️ THE EXPORT SHEET HOLDS A COPY of the amounts drawn when Export was tapped: a recipe that changes under it
+  // (a live update) or a batch target that is applied or cleared closes it, so no stale file is downloaded.
+  useEffect(() => { closeExport(); }, [recipe, target, closeExport]);
+
+  if (recipe.ingredients.length === 0) return null;
+  return (
+    <>
+      <button
+        type="button"
+        className={styles.export}
+        onClick={() => {
+          openExport({ model: recipeExportModel(recipe, recipeAmounts(recipe, target, t, locale)), totalLabel: t('cat.total') });
+        }}
+      >
+        <Download aria-hidden="true" />
+        {t('export.button')}
+      </button>
+      {exportSheet}
+    </>
+  );
+}
+
 function IngredientsCard({ recipe, target }: { recipe: CatalogueRecipe; target: number | null }) {
   const { t, locale } = useT();
   const headingId = useId();
@@ -75,11 +106,6 @@ function IngredientsCard({ recipe, target }: { recipe: CatalogueRecipe; target: 
   const [fullScreen, setFullScreen] = useState(false);
   const amounts = recipeAmounts(recipe, target, t, locale);
   const { rows, total } = amounts;
-  const [openExport, exportSheet, closeExport] = useExportSheet();
-
-  // ⚠️ THE EXPORT SHEET HOLDS A COPY of the amounts drawn when Export was tapped: a recipe that changes under it
-  // (a live update) or a batch target that is applied or cleared closes it, so no stale file is downloaded.
-  useEffect(() => { closeExport(); }, [recipe, target, closeExport]);
 
   // ⚠️ THE FOCUS GOES BACK ONLY ONCE THE DIALOG IS CLOSED. While a modal <dialog> is open everything
   // outside it is inert and focus() on the opener does nothing; the dialog closes itself first
@@ -126,20 +152,6 @@ function IngredientsCard({ recipe, target }: { recipe: CatalogueRecipe; target: 
         </tfoot>
       </table>
 
-      {/* Under the table, never inside it: the table is tapped as a whole (it opens the full-screen view) and a
-          button inside a button is not allowed. Nothing to export without ingredients. The file is made from the
-          very amounts the table drew. */}
-      {recipe.ingredients.length === 0 ? null : (
-        <button
-          type="button"
-          className={styles.export}
-          onClick={() => { openExport({ model: recipeExportModel(recipe, amounts), totalLabel: t('cat.total') }); }}
-        >
-          <Download aria-hidden="true" />
-          {t('export.button')}
-        </button>
-      )}
-      {exportSheet}
 
       {fullScreen ? (
         <RecipeFullScreen
