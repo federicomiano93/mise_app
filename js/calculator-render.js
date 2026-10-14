@@ -213,8 +213,12 @@ export function buildRecipePanel(recipe) {
         el('button', { class: 'copy-btn', id: id + '-copy-btn' }, t('calc.copyRecipe')),
         el('button', { class: 'copy-send-btn', id: id + '-wa-recipe-btn', type: 'button',
           title: t('ui.send'), 'aria-label': t('ui.send') }, [svgElement(SEND_PATHS, 20)]),
-        el('button', { class: 'copy-send-btn', id: id + '-export-btn', type: 'button',
-          title: t('export.button'), 'aria-label': t('export.button') }, [svgElement(DOWNLOAD_PATHS, 20)]),
+      ]),
+      // Its own full-width line under the copy row: a third square there made «Copia la ricetta» wrap
+      // at 296px. The secondary look is .copy-btn's; the green is reserved for opening the send sheet.
+      el('button', { class: 'copy-btn export-btn', id: id + '-export-btn', type: 'button' }, [
+        svgElement(DOWNLOAD_PATHS, 18),
+        el('span', {}, t('export.button')),
       ]),
       el('div', { class: 'divisor-box', id: id + '-divisor-box' }),
       el('div', { class: 'crate-boxes', id: id + '-crate-boxes' }),

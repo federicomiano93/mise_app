@@ -173,7 +173,7 @@ test('⚠️⚠️ no navigator.share anywhere in the app — except a file: the
     + 'the same phone');
 });
 
-test('⚠️ canShare and .share( are used by the order picture module and nowhere else', () => {
+test('⚠️ canShare and .share( are used only by the two file-sharing modules (order picture, recipe PDF)', () => {
   const offenders = APP_FILES.filter(([rel, src]) => rel.endsWith('.js')
     && !SHARES_A_FILE.includes(rel) && /\bcanShare\b|\.share\(/.test(codeOf(src)))
     .map(([rel]) => rel);
@@ -235,4 +235,13 @@ test('⚠️ a hint that sent somebody looking for a button removed in v1.55.0',
     assert.ok(!/WhatsApp button|tasto WhatsApp/.test(dicts[lang]['orders.request.noneHint']),
       `the Orders header has carried a send ARROW since v1.55.0, not a WhatsApp button (${lang})`);
   }
+});
+
+test('⚠️ the recipe export hands the share sheet a FILE only: navigator.share gets files, never text or a url', () => {
+  const src = codeOf(APP_FILES.find(([rel]) => rel === 'js/export-sheet.js')[1]);
+  const calls = [...src.matchAll(/navigator\.share\(\{([^}]*)\}\)/g)];
+  assert.equal(calls.length, 1, 'exactly one navigator.share call, with an object literal');
+  const keys = calls[0][1].split(',').map(k => k.split(':')[0].trim()).filter(Boolean);
+  assert.ok(keys.includes('files'));
+  assert.deepEqual(keys.filter(k => ['text', 'url'].includes(k)), []);
 });

@@ -638,6 +638,10 @@ a.app-dialog-btn {
 }
 /* The file name in «File ready»: long names break instead of widening the dialog. */
 .export-file { font-weight: 600; overflow-wrap: anywhere; }
+/* «File ready» has up to three actions, which overflow a 296px dialog side by side in Italian: stack
+   them, the primary Download first and full width. Scoped to this dialog; the others keep a row. */
+.export-actions { flex-direction: column; }
+.export-actions .app-dialog-btn { flex: none; width: 100%; }
 
 /* The note form of «Write to Claude» (js/feedback.js), carried inside .app-dialog as its
    `node`. The field is 16px so iOS does not zoom the page on focus, and it keeps the

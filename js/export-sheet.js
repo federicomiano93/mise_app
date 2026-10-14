@@ -21,7 +21,7 @@
 import { t } from './i18n.js';
 import { svgElement } from './send-icon.js';
 import { DOCUMENT_PATHS, TABLE_PATHS } from './export-icon.js';
-import { exportFileName, exportErrorKey, buildPdfBlob, buildXlsxBlob } from './recipe-export.js';
+import { exportFileName, exportErrorKey, exportErrorCode, buildPdfBlob, buildXlsxBlob } from './recipe-export.js';
 
 let isOpen = false;   // one at a time
 let seq = 0;
@@ -61,7 +61,9 @@ export function openExportSheet({ model, totalLabel = '', opener = null } = {}) 
     document.removeEventListener('keydown', onKey, true);
     if (blobUrl) {
       const url = blobUrl;
-      setTimeout(() => { try { URL.revokeObjectURL(url); } catch (e) { /* nothing to free */ } }, REVOKE_DELAY_MS);
+      const timer = setTimeout(() => { try { URL.revokeObjectURL(url); } catch (e) { /* nothing to free */ } }, REVOKE_DELAY_MS);
+      // A test run (Node) must not wait 30 s for it; a browser timer is a number and has no unref.
+      if (timer && typeof timer.unref === 'function') timer.unref();
     }
     if (prevFocus && typeof prevFocus.focus === 'function') {
       try { prevFocus.focus(); } catch (e) { /* focus restore is best-effort */ }
@@ -127,8 +129,11 @@ export function openExportSheet({ model, totalLabel = '', opener = null } = {}) 
 
   const showWorking = () => {
     const [cancel] = paint('export.title', () => {
-      const status = message(t('export.preparing'));
+      // ⚠️ The live region is in the page BEFORE its text is set: a screen reader announces a change
+      // to a region it already knows, not one that arrives with its words inside.
+      const status = message('');
       status.setAttribute('role', 'status');
+      setTimeout(() => { status.textContent = t('export.preparing'); }, 0);
       const actions = make('div', 'app-dialog-actions');
       const cancel = closeButton('ui.cancel');
       actions.appendChild(cancel);
@@ -139,8 +144,9 @@ export function openExportSheet({ model, totalLabel = '', opener = null } = {}) 
   };
 
   const showError = (err) => {
+    const online = typeof navigator === 'undefined' ? true : navigator.onLine;
     const [ok] = paint('export.title', () => {
-      const msg = message(t(exportErrorKey(err)));
+      const msg = message(t(exportErrorKey(err, online)));
       msg.setAttribute('role', 'alert');
       const actions = make('div', 'app-dialog-actions');
       const ok = closeButton('export.close', 'app-dialog-btn app-dialog-btn-solid');
@@ -156,10 +162,15 @@ export function openExportSheet({ model, totalLabel = '', opener = null } = {}) 
     const file = shareableFile(kind, blob, fileName);
     const buttons = paint('export.ready', () => {
       message(fileName, 'export-file');
-      const actions = make('div', 'app-dialog-actions');
-      const closeBtn = closeButton('export.close');
-      actions.appendChild(closeBtn);
-      const out = [closeBtn];
+      // Three actions do not fit side by side at 296 px in Italian, so this state stacks them: the
+      // primary Download on top, Share (when there is one) and Close below (.export-actions).
+      const actions = make('div', 'app-dialog-actions export-actions');
+      // A real link, not a click made by script: the browser downloads it on THIS tap.
+      const link = make('a', 'app-dialog-btn app-dialog-btn-solid', t('export.download'));
+      link.href = blobUrl;
+      link.download = fileName;
+      actions.appendChild(link);
+      const out = [link];
       if (file) {
         const share = make('button', 'app-dialog-btn app-dialog-btn-ghost', t('export.share'));
         share.type = 'button';
@@ -167,24 +178,27 @@ export function openExportSheet({ model, totalLabel = '', opener = null } = {}) 
         actions.appendChild(share);
         out.push(share);
       }
-      // A real link, not a click made by script: the browser downloads it on THIS tap.
-      const link = make('a', 'app-dialog-btn app-dialog-btn-solid', t('export.download'));
-      link.href = blobUrl;
-      link.download = fileName;
-      actions.appendChild(link);
-      out.push(link);
+      const closeBtn = closeButton('export.close');
+      actions.appendChild(closeBtn);
+      out.push(closeBtn);
       box.appendChild(actions);
       return out;
     });
-    buttons[buttons.length - 1].focus();
+    buttons[0].focus();
   };
 
   function build(kind) {
     showWorking();
-    const fileName = exportFileName(model, kind.ext);
-    const made = kind.id === 'pdf' ? buildPdfBlob(model) : buildXlsxBlob(model, totalLabel);
+    // The words for a nameless recipe are read now, in the venue's language, never at module load.
+    const fileName = exportFileName(model, kind.ext, t('export.fileFallback'));
+    const made = kind.id === 'pdf' ? buildPdfBlob(model) : buildXlsxBlob(model, totalLabel, t('export.sheetFallback'));
     made.then((blob) => { if (!closed) showReady(kind, blob, fileName); })
-      .catch((err) => { if (!closed) showError(err); });
+      .catch((err) => {
+        // Reported through the app's error path (console.error → js/error-report.js): FIXED words
+        // only — which file, which stage — never the recipe, its name or the error's own message.
+        console.error('Recipe export failed:', kind.id, exportErrorCode(err));
+        if (!closed) showError(err);
+      });
   }
 
   backdrop.addEventListener('click', (e) => { if (e.target === backdrop) close(); });
