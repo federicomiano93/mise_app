@@ -33,10 +33,14 @@ type Kind = 'pdf' | 'xlsx';
 //
 // Escape, the backdrop and Cancel / Close end it; the focus is trapped inside and goes back to what opened it
 // (React Aria's modal).
-export function useExportSheet(): readonly [(request: Request) => void, ReactNode] {
+//
+// ⚠️ The model is a COPY taken when Export was tapped. A screen whose data changes under an open sheet calls the
+// third value, close(), so the person never downloads numbers the screen no longer shows.
+export function useExportSheet(): readonly [(request: Request) => void, ReactNode, () => void] {
   const [request, setRequest] = useState<Request | null>(null);
   const open = useCallback((next: Request) => { setRequest(next); }, []);
-  return [open, request === null ? null : <ExportSheet request={request} onClose={() => { setRequest(null); }} />];
+  const close = useCallback(() => { setRequest(null); }, []);
+  return [open, request === null ? null : <ExportSheet request={request} onClose={close} />, close];
 }
 
 // A download that has just been tapped may still be reading the blob: keep the address alive a while.
@@ -58,6 +62,17 @@ function ExportSheet({ request, onClose }: { request: Request; onClose: () => vo
 
   // The first control of each state takes the focus (the dialog itself takes it only when it opens).
   useEffect(() => { first.current?.focus(); }, [state.kind]);
+
+  // ⚠️ THE OWNER CAN UNMOUNT THE SHEET WITHOUT CLOSE (Back, a tab cleared, a recipe deleted elsewhere): a late
+  // build must then make no address, and a ready file's address must not live until the page reloads. The page
+  // of a dialog that is gone cannot be downloading from it, so the address is freed at once.
+  useEffect(() => () => {
+    run.current += 1;
+    if (url.current !== null) {
+      URL.revokeObjectURL(url.current);
+      url.current = null;
+    }
+  }, []);
 
   const close = () => {
     run.current += 1;

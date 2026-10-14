@@ -224,6 +224,52 @@ describe('while the file is made, and after', () => {
   });
 });
 
+describe('when the owner of the sheet goes away without Close', () => {
+  it('unmounted while building: the late file makes no address', async () => {
+    let finish: (blob: Blob) => void = () => undefined;
+    builders.buildPdfBlob.mockImplementation(() => new Promise<Blob>((resolve) => { finish = resolve; }));
+    const user = userEvent.setup();
+    const { unmount } = render(<Opener />);
+    await choose(user, 'PDF');
+    await sheet();
+    unmount();
+    finish(pdf());
+    await new Promise((resolve) => { setTimeout(resolve, 20); });
+    expect(created).toHaveLength(0);
+  });
+
+  it('unmounted when the file is ready: its address is freed', async () => {
+    allowShare(false);
+    const user = userEvent.setup();
+    const { unmount } = render(<Opener />);
+    await choose(user, 'PDF');
+    await ready();
+    expect(revoked).toEqual([]);
+    unmount();
+    expect(revoked).toEqual(['blob:test/1']);
+  });
+
+  it('close() from the owner shuts an open sheet', async () => {
+    const user = userEvent.setup();
+    function Closer() {
+      const [open, sheetNode, close] = useExportSheet();
+      return (
+        <>
+          <button type="button" onClick={() => { open({ model: MODEL, totalLabel: 'Total' }); }}>Export</button>
+          <button type="button" onClick={close}>Away</button>
+          {sheetNode}
+        </>
+      );
+    }
+    render(<Closer />);
+    await user.click(screen.getByRole('button', { name: 'Export' }));
+    await sheet();
+    // The modal makes the page inert, so the owner's close arrives from code, as a config change does.
+    screen.getByRole('button', { name: 'Away', hidden: true }).click();
+    await waitFor(() => { expect(screen.queryByRole('dialog')).not.toBeInTheDocument(); });
+  });
+});
+
 describe('when the file cannot be made', () => {
   it('offline, a library that would not load asks for a connection — and reports a fixed word only', async () => {
     const report = vi.spyOn(console, 'error').mockImplementation(() => undefined);
