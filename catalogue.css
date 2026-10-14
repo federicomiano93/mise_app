@@ -196,6 +196,8 @@ body.cat-zoom-lock { overflow: hidden; }
 .cat-del-btn > span { display: flex; align-items: center; }
 .cat-import-btn:hover { color: var(--cat-text); background: var(--cat-surface); border-color: var(--cat-accent); }
 .cat-import-btn:focus-visible { outline: 2px solid var(--cat-accent); outline-offset: 2px; }
+/* First of the actions at the end of the page; Import follows it. */
+.cat-export-btn { margin-bottom: 10px; }
 .cat-import-hint { text-align: center; font-size: .76rem; color: var(--cat-text-2); margin: 8px 2px 0; }
 
 /* Low-key delete on the detail view (P20 — never competes with Calculate/Import). */

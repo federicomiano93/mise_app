@@ -12,7 +12,8 @@
 // `CONFIG_MODEL`, the lookups (clients, products, recipes, ingredients, WhatsApp lists), the visible tabs,
 // the empty-state reason, the targets by logic (`computeTarget`, `computeRecipeTarget`), trays, extra dough,
 // the divisor, the crate boxes, the free lines, the log-display settings, the order-prefill window, and the
-// save path (`reconcileConfigWrite`, `saveFailureKey` — step 3c-2).
+// save path (`reconcileConfigWrite`, `saveFailureKey` — step 3c-2), and `exportTraysFor` (the trays an exported
+// recipe's title may name).
 //
 // LEFT OUT, for 3c-4 (market orders): `orderPrefillLabel` (it looks a word up in the interface dictionary,
 // `t()`, which in Mise 2 belongs to the app; `ORDER_PREFILL_LABELS` — the dictionary KEYS — is ported, the app
@@ -351,6 +352,14 @@ export function usesOrders(logic: unknown): boolean { return logic === 'orders' 
 export function usesTypedTotal(logic: unknown): boolean { return logic === 'total' || logic === 'both' || logic === 'traysTotal'; }
 // Logics that take a number of trays.
 export function usesTrays(logic: unknown): boolean { return logic === 'trays' || logic === 'traysTotal'; }
+// The trays an exported recipe's title may name («Pizza x 3»): only when the dough IS the trays — a
+// trays recipe, or a trays-plus-total one with nothing typed in the total — otherwise 0 and the
+// title says the grams. Shared by the Calculator now and the Recipe catalogue's export next.
+export function exportTraysFor(logic: unknown, trays: unknown, typedTotal: unknown): number {
+  const traysOnly = logic === 'trays' || (logic === 'traysTotal' && !(Number(typedTotal) > 0));
+  const n = Math.floor(Number(trays));
+  return traysOnly && n > 0 ? n : 0;
+}
 // Logics that scale pro-rata with the leavening neutralised (no orders to adjust it for).
 export function isProRata(logic: unknown): boolean { return logic === 'total' || usesTrays(logic); }
 
