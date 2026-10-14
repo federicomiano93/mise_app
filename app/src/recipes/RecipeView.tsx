@@ -62,13 +62,6 @@ export function RecipeView({ recipe, titleRef, onBack }: Props) {
   );
 }
 
-// The ingredient list: each row's label and its amount in two aligned columns (numbers right-aligned,
-// units left-aligned), whole numbers, «to taste» with no number, and a Total of the weighable rows.
-// A batch applied shows the SCALED amounts.
-//
-// A tap anywhere on the list opens it full screen, as in the current app; the button in the head is
-// the way in for a keyboard and a screen reader (the list itself stays readable as a table, which a
-// list made into one big button would not be).
 // «Export» as PDF or Excel: ⚠️ THE LAST THING ON THE PAGE, by Federico's choice (14 Oct 2026, «non è un'azione che si
 // fa tutti i giorni»). Under the ingredient table it pushed the batch box — what this screen is opened for — further
 // down. The file is made by recipeAmounts() from the same recipe, batch target and locale the table is drawn with, so
@@ -99,6 +92,13 @@ function ExportAction({ recipe, target }: { recipe: CatalogueRecipe; target: num
   );
 }
 
+// The ingredient list: each row's label and its amount in two aligned columns (numbers right-aligned,
+// units left-aligned), whole numbers, «to taste» with no number, and a Total of the weighable rows.
+// A batch applied shows the SCALED amounts.
+//
+// A tap anywhere on the list opens it full screen, as in the current app; the button in the head is
+// the way in for a keyboard and a screen reader (the list itself stays readable as a table, which a
+// list made into one big button would not be).
 function IngredientsCard({ recipe, target }: { recipe: CatalogueRecipe; target: number | null }) {
   const { t, locale } = useT();
   const headingId = useId();
@@ -151,7 +151,6 @@ function IngredientsCard({ recipe, target }: { recipe: CatalogueRecipe; target: 
           </tr>
         </tfoot>
       </table>
-
 
       {fullScreen ? (
         <RecipeFullScreen
