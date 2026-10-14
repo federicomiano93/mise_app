@@ -1005,6 +1005,21 @@ describe.each([
     expect(saveFailureKey(undefined)).toBeNull();
     expect(saveFailureKey(null)).toBeNull();
   });
+
+  // ── The trays an exported recipe's title names (tests/recipe-export-wiring.test.mjs) ──
+
+  test('the export title names trays only when the dough IS the trays', () => {
+    // [logic, trays, typed total, trays named in the title]
+    const cases: [string, unknown, unknown, number][] = [
+      ['orders', 3, 0, 0], ['total', 3, 0, 0], ['both', 3, 500, 0], ['both', 3, 0, 0],
+      ['trays', 3, 0, 3], ['trays', 3, 500, 3], ['trays', 0, 0, 0], ['trays', 2.9, 0, 2],
+      ['traysTotal', 3, 0, 3], ['traysTotal', 3, 500, 0], ['traysTotal', 0, 0, 0], ['traysTotal', '4', '', 4],
+      ['trays', NaN, 0, 0], ['trays', -2, 0, 0],
+    ];
+    for (const [logic, trays, typed, want] of cases) {
+      expect(m.exportTraysFor(logic, trays, typed), `${logic} trays=${String(trays)} typed=${String(typed)}`).toBe(want);
+    }
+  });
 });
 
 // ── What pairing would have checked ──────────────────────────────────────────
