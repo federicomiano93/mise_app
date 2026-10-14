@@ -43,11 +43,6 @@
   overflow-wrap: anywhere;
 }
 
-.actions {
-  display: flex;
-  justify-content: flex-start;
-}
-
 .more {
   max-width: 560px;
   margin-top: var(--s4);
