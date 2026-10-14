@@ -54,7 +54,7 @@ both, and the switch keeps the address) and it has consequences that every chang
 |---|---|---|
 | React | 19.3.0 | components end the stale-screen bugs of the current app |
 | TypeScript | 7.0.2 (`tsc` native) | a missing translation or a wrong field is a build error |
-| Vite | 8.3.1 | build target `chrome107, edge107, firefox104, safari16`: the lab tablet (SM-T550, Chrome 119) and iPhone Safari 16.4 |
+| Vite | 8.3.1 | build target `chrome101, edge101, firefox104, safari16`: the lab tablet (SM-T550, Chrome 101 — its ceiling on Google Play) and iPhone Safari 16.4 |
 | React Aria Components | 1.21.1 | accessible controls (focus, keyboard, screen readers) without writing them |
 | react-router | 8.4.0 | hash routing (`#/orders`), because GitHub Pages cannot rewrite deep links |
 | lucide-react | 1.48.0 | the icon set of the design |
@@ -374,6 +374,25 @@ and where each comes from:
    split, where both are on screen: leave the list alone. A section that does not own the scroll
    needs nothing. Specs plant the position on the `main` element (jsdom does not scroll):
    `StocktakeSection.scroll.spec.tsx`.
+
+## Browser floor: Chrome 101 (the lab tablet's ceiling)
+
+The lab tablet (SM-T550) gets nothing newer than Chrome 101 from Google Play (measured over adb, 13 Oct 2026).
+lightningcss lowers oklch, nesting and media ranges; it does not lower everything. The rules:
+
+- **Hover only inside `@media (hover: hover)`** — a `:hover` look sticks after a tap on a touch screen
+  (`styles/touchHover.spec.ts`).
+- **Viewport heights only through `var(--vh100)`.** The token is `100vh`, switched to `100dvh` in an `@supports`
+  block in `tokens.css`, and `shell/viewportHeight.ts` sets it inline on `<html>` where dvh is unknown (Chrome < 108).
+  Never write a `dvh`/`svh`/`lvh` line, and never a second declaration whose value holds `var()` as a "fallback":
+  such a value is thrown out at computed-value time and the property becomes its initial value, not the line above
+  (measured: computed `max-height: none`). `styles/viewportUnits.spec.ts` and `styles/fallbackTrap.spec.ts` pin it.
+- **A React Aria hidden input needs a positioned ancestor** (see `SettingSwitch`), or it sits at the page's origin
+  and makes the page scroll.
+- **No feature newer than Chrome 101 without a feature check.** `styles/chrome101.spec.ts` (with `shared/src/chrome101-tokens.ts`, which lists the CSS and JS
+  tokens with the Chrome version that introduced each) fails on any of the LISTED tokens in our source, comments
+  excepted. It does not scan library code (`node_modules`, `js/vendor`), and a feature that is not on the list is not
+  caught: add it to the list when you meet it.
 
 ## Testing and CI
 

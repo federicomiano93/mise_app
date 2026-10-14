@@ -111,7 +111,9 @@ export function DeclarationCard({ recipe }: { recipe: CatalogueRecipe }) {
       {heading}
       {/* No «Ingredients:» line on the screen: the card's own heading says what this is. The sent text
           carries it, because there the law asks for it. */}
-      <p className={styles.list}>
+      {/* translate="no" on the declaration's own words, never on the heading or caveat, which address the reader:
+          the reason is on LabelCard. */}
+      <p className={styles.list} translate="no">
         {label.ingredients.map((item, index) => (
           <Fragment key={item.id}>
             {index > 0 ? ', ' : null}
@@ -120,8 +122,8 @@ export function DeclarationCard({ recipe }: { recipe: CatalogueRecipe }) {
         ))}
         .
       </p>
-      {contains === '' ? null : <p className={styles.contains}>{contains}</p>}
-      {traces === '' ? null : <p className={styles.traces}>{traces}</p>}
+      {contains === '' ? null : <p className={styles.contains} translate="no">{contains}</p>}
+      {traces === '' ? null : <p className={styles.traces} translate="no">{traces}</p>}
       <p className={styles.caveat}>{t('cat.decl.caveat')}</p>
 
       <div className={styles.share}>

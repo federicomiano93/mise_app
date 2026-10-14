@@ -154,8 +154,10 @@
   cursor: pointer;
 }
 
-.labelButton:hover {
-  background: var(--sunken);
+@media (hover: hover) {
+  .labelButton:hover {
+    background: var(--sunken);
+  }
 }
 
 .labelButton:focus-visible {

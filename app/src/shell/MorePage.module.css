@@ -26,9 +26,11 @@
   text-decoration: none;
 }
 
-.row:hover {
-  background: var(--sunken);
-  color: var(--ink);
+@media (hover: hover) {
+  .row:hover {
+    background: var(--sunken);
+    color: var(--ink);
+  }
 }
 
 .label {

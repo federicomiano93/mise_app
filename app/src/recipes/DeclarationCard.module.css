@@ -84,9 +84,11 @@
   height: 18px;
 }
 
-.copy:hover,
-.send:hover {
-  background: var(--sunken);
+@media (hover: hover) {
+  .copy:hover,
+  .send:hover {
+    background: var(--sunken);
+  }
 }
 
 .copy:focus-visible,

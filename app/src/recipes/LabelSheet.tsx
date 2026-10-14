@@ -39,6 +39,8 @@ export function LabelSheet({ resolved, fontMm, ref }: Props) {
     <div
       ref={ref}
       className="lab-sheet"
+      // ⚠️ Never machine-translated: the reason is on LabelCard.
+      translate="no"
       style={{
         width: `${sheet.widthMm}mm`,
         height: `${sheet.heightMm}mm`,

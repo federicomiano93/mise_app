@@ -5,9 +5,7 @@
 .shell {
   display: grid;
   grid-template-rows: minmax(0, 1fr) auto;
-  /* Two declarations: Chrome 107 (the lab tablet's floor) has no dvh and keeps the first. */
-  height: 100vh;
-  height: 100dvh;
+  height: var(--vh100);
   background: var(--bg);
 }
 
@@ -105,15 +103,27 @@
   text-decoration: none;
 }
 
+/* ⚠️ A SHORT WINDOW GETS SHORTER ITEMS, NOT A SCROLLING RAIL. The lab tablet in landscape shows 648px under Chrome's
+   bars, and the rail at 64px an item needs 700: the account at its foot was cut and the rail grew a scrollbar
+   (driven 13 Oct 2026). At 56px — what the icon, the gap and one line of label take anyway, and well above the 44px
+   touch target — it needs 636. */
+@media (max-height: 720px) {
+  .railItem {
+    min-height: 56px;
+  }
+}
+
 /* Qualified by .railItem so it outranks base.css's `svg.lucide` size of 20px. */
 .railItem .railIcon {
   width: 22px;
   height: 22px;
 }
 
-.railItem:hover {
-  background: var(--rail-hover);
-  color: var(--rail-ink-strong);
+@media (hover: hover) {
+  .railItem:hover {
+    background: var(--rail-hover);
+    color: var(--rail-ink-strong);
+  }
 }
 
 /* After :hover on purpose: the current item keeps its colour under the pointer. */
@@ -157,9 +167,11 @@
   font-weight: 600;
 }
 
-.avatarLink:hover .avatar {
-  background: var(--rail-ink);
-  color: var(--rail);
+@media (hover: hover) {
+  .avatarLink:hover .avatar {
+    background: var(--rail-ink);
+    color: var(--rail);
+  }
 }
 
 /* The main column */
@@ -303,8 +315,10 @@
 }
 
 /* Cancels base.css's link hover colour, which would stick after a tap on a touch screen. */
-.tab:hover {
-  color: var(--ink-3);
+@media (hover: hover) {
+  .tab:hover {
+    color: var(--ink-3);
+  }
 }
 
 .tab .tabIcon {
