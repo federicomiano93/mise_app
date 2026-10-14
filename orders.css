@@ -39,12 +39,21 @@
    the Home bar — .recipe-footer is shared and pinned by tests/bottom-bar.test.mjs. */
 #session-logout-host .recipe-footer {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(min-content, 1fr);
+  /* ⚠️ THE MIDDLE COLUMN CARRIES SETTINGS' WIDTH, the same as every other bar's button: style.css
+     gives it flex 0 1 240px capped at half the bar less 6px, which a grid has no way to say, so it is
+     restated here in viewport units. Set on the ITEM instead, the auto column ignored it and the
+     button spilled out of its column to the right (off centre by 50px on a tablet). It may still
+     grow to its words (max-content), which keeps «Impostazioni» on one line at 296px. */
+  grid-template-columns:
+    minmax(0, 1fr)
+    minmax(max-content, min(240px, calc(50vw - max(16px, var(--app-gutter)) - 6px)))
+    minmax(min-content, 1fr);
   align-items: center;
   column-gap: 8px;
 }
 #session-logout-host .recipe-footer-btn {
   grid-column: 2;
+  width: 100%;
   max-width: none;
   white-space: nowrap;
 }

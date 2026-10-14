@@ -639,9 +639,9 @@
       }
     },
     "dist/orders.css": {
-      "sha": "5fdf832f725b6410",
+      "sha": "d5050444a1f5c3c5",
       "inputs": {
-        "orders.css": "fbc0e5a8a5f14505"
+        "orders.css": "441c066dd1076313"
       }
     },
     "dist/orders.js": {
