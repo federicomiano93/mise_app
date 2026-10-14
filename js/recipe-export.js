@@ -31,9 +31,11 @@ export function exportRow(r) {
       value: r.value === null || r.value === undefined ? null : (Number(r.value) || 0),
       unit: String(r.unit ?? ''),
       factor: Number(r.factor) > 0 ? Number(r.factor) : 0,
+      decimals: Math.max(0, Math.min(3, Math.trunc(Number(r.decimals)) || 0)),
+      text: typeof r.text === 'string' && r.text ? r.text : null,
     };
   }
-  return { name: r && r.name, value: Number(r && r.grams) || 0, unit: 'g', factor: 1 };
+  return { name: r && r.name, value: Number(r && r.grams) || 0, unit: 'g', factor: 1, decimals: 0, text: null };
 }
 
 // ── Names ─────────────────────────────────────────────────────────────────────────────────
@@ -67,7 +69,9 @@ export const rowText = grams => `${Math.round(grams)} g`;
 // A row as the PDF prints it: «14400 g», «500 ml», «3 pz», or just the unit word for «to taste».
 export function rowTextOf(row) {
   const r = exportRow(row);
-  return r.value === null ? r.unit : `${Math.round(r.value)} ${r.unit}`;
+  if (r.value === null) return r.unit;
+  // The screen's own number when the caller has it («1,846» in Italian): kg and l keep decimals.
+  return `${r.text ?? Math.round(r.value)} ${r.unit}`;
 }
 
 // ── The PDF page ──────────────────────────────────────────────────────────────────────────
@@ -177,9 +181,12 @@ export function pdfLayout({ title, rows }, measure) {
 const QUOTE = String.fromCharCode(34);
 const GRAMS_FORMAT = `0 ${QUOTE}g${QUOTE}`;
 // The number format that shows a value with its unit; a quote in the unit text would end the format.
-const unitFormat = unit => {
+// ⚠️ A UNIT WITH DECIMALS (kg, l) IS «General», NEVER «0»: «0» would print 1.846 kg as «2 kg», the
+// very rounding the screen stopped doing, and «0.###» leaves a bare dot after a whole number.
+const unitFormat = (unit, decimals = 0) => {
   const clean = String(unit).replace(/"/g, '').trim();
-  return clean ? `0 ${QUOTE}${clean}${QUOTE}` : '0';
+  const num = decimals > 0 ? 'General' : '0';
+  return clean ? `${num} ${QUOTE}${clean}${QUOTE}` : num;
 };
 // ⚠️ A formula is written WITHOUT its leading «=»: the library puts the text into <f> as it is,
 // and the file format has no «=» there.
@@ -232,7 +239,7 @@ export function xlsxSheet({ title, name, rows, totalLabel, sheetFallback = 'Reci
       { value: String(r.name ?? ''), type: String },
       r.value === null
         ? { value: r.unit, type: String }
-        : { value: r.value, type: Number, format: unitFormat(r.unit) },
+        : { value: r.value, type: Number, format: unitFormat(r.unit, r.decimals) },
     ]);
   }
   const last = list.length + 2;

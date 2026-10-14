@@ -213,9 +213,12 @@ test('a real .xlsx: merge A1:B1, bold title, exact numbers with the «g» format
 // ── Rows in their own unit (the Recipe catalogue) ─────────────────────────────────────────
 
 test('exportRow: a Calculator row is grams with factor 1; a catalogue row keeps its unit', () => {
-  assert.deepEqual(exportRow({ name: 'A', grams: 12.5 }), { name: 'A', value: 12.5, unit: 'g', factor: 1 });
-  assert.deepEqual(exportRow({ name: 'B', value: null, unit: 'q.b.', factor: 0 }), { name: 'B', value: null, unit: 'q.b.', factor: 0 });
-  assert.deepEqual(exportRow({ name: 'C', value: 2, unit: 'kg', factor: 1000 }), { name: 'C', value: 2, unit: 'kg', factor: 1000 });
+  const none = { decimals: 0, text: null };
+  assert.deepEqual(exportRow({ name: 'A', grams: 12.5 }), { name: 'A', value: 12.5, unit: 'g', factor: 1, ...none });
+  assert.deepEqual(exportRow({ name: 'B', value: null, unit: 'q.b.', factor: 0 }), { name: 'B', value: null, unit: 'q.b.', factor: 0, ...none });
+  assert.deepEqual(exportRow({ name: 'C', value: 2, unit: 'kg', factor: 1000 }), { name: 'C', value: 2, unit: 'kg', factor: 1000, ...none });
+  assert.deepEqual(exportRow({ name: 'D', value: 1.846, unit: 'kg', factor: 1000, decimals: 3, text: '1,846' }),
+    { name: 'D', value: 1.846, unit: 'kg', factor: 1000, decimals: 3, text: '1,846' });
 });
 
 test('PDF row text: the number and its own unit, «to taste» is the unit word alone', () => {

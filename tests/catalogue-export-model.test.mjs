@@ -44,3 +44,46 @@ test('the amounts are taken as drawn (scaled), the total rounded; a non-positive
   assert.equal(exportModelOf(RECIPE, amounts, NaN).totalG, 0);
   assert.equal(exportModelOf(RECIPE, amounts, -5).totalG, 0);
 });
+
+// ── kg and litres keep their decimals in the files too (fix/catalogue-kg-litre-decimals) ──────────
+
+import { setLanguage, currentLanguage } from '../js/i18n.js';
+import { rowTextOf, xlsxSheet } from '../js/recipe-export.js';
+
+const DECIMALS = {
+  id: 'r2',
+  name: 'Impasto di prova',
+  ingredients: [
+    { label: 'Farina di prova', grams: 0.4, unit: 'kg' },
+    { label: 'Latte di prova', grams: 1.25, unit: 'l' },
+    { label: 'Uova di prova', grams: 2, unit: 'pcs' },
+  ],
+};
+
+test('⚠️ a 1.846 kg row is «1,846 kg» in the PDF (as on the Italian screen), never «2 kg»', () => {
+  const before = currentLanguage();
+  try {
+    setLanguage('it');
+    const amounts = scaleCatalogue(DECIMALS, 3000);
+    const m = exportModelOf(DECIMALS, amounts, 3000);
+    assert.deepEqual(m.rows.map(r => r.decimals), [3, 3, 0]);
+    assert.deepEqual(m.rows.map(rowTextOf), ['0,727 kg', '2,273 l', '4 pz']);
+  } finally { setLanguage(before); }
+});
+
+test('⚠️ in Excel a kg / l cell holds the decimals and its format does not round them away', () => {
+  const amounts = scaleCatalogue(DECIMALS, 3000);
+  const m = exportModelOf(DECIMALS, amounts, 3000);
+  const { data } = xlsxSheet({ title: 'T', rows: m.rows, totalLabel: 'Totale', totalG: m.totalG });
+  assert.deepEqual([data[2][1].value, data[2][1].format], [0.727, 'General "kg"']);
+  assert.deepEqual([data[3][1].value, data[3][1].format], [2.273, 'General "l"']);
+  assert.equal(data[4][1].format, `0 "${m.rows[2].unit}"`);
+  // 0.727 kg + 2.273 l = 3000 g, the screen's total: the spreadsheet computes it itself.
+  assert.deepEqual([data.at(-1)[1].value, data.at(-1)[1].type], ['B3*1000+B4*1000', 'Formula']);
+});
+
+test('the Calculator rows are untouched: whole grams, «0 "g"»', () => {
+  assert.equal(rowTextOf({ name: 'a', grams: 14400.4 }), '14400 g');
+  const { data } = xlsxSheet({ title: 'T', rows: [{ name: 'a', grams: 14400.4 }], totalLabel: 'T', totalG: 14400 });
+  assert.equal(data[2][1].format, '0 "g"');
+});

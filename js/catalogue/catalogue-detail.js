@@ -10,7 +10,8 @@ import { el } from './dom.js';
 import { currentSession } from '../firebase.js';
 import { isSectionAllowed } from '../sections.js';
 import {
-  scaleCatalogue, baseAmounts, weighableTotalGrams, unitOf, unitText, batchWarning, formatWeight, exportModelOf,
+  scaleCatalogue, baseAmounts, weighableTotalGrams, unitOf, unitText, batchWarning, formatWeight, formatAmount,
+  exportModelOf,
 } from './catalogue-model.js';
 import {
   getScaledTarget, setScaledTarget, clearScaledTarget, getIngredients, getRecipesById,
@@ -56,16 +57,16 @@ const TRASH_SVG =
 const CLOSE_SVG =
   '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>';
 
-// Whole grams only: values are already rounded in the model, and maximumFractionDigits:0
-// is a belt-and-suspenders guard so nothing ever shows a decimal. useGrouping:false
-// drops the thousands separator (e.g. 1000 g, not 1,000 g) — Federico's preference.
+// Whole GRAMS only — the Total row and the batch confirm. A row's amount is written by
+// formatAmount (catalogue-model.js), because kg and l keep their decimals («1,846 kg»).
+// useGrouping:false drops the thousands separator (e.g. 1000 g, not 1,000 g) — Federico's preference.
 const nf = new Intl.NumberFormat('en-GB', { maximumFractionDigits: 0, useGrouping: false });
 // Split each amount into number + unit so they line up in two straight columns
 // (numbers right-aligned, units left-aligned) no matter how long the name is. A
 // 'to taste' row (value null) has no number and shows the phrase in the unit slot.
 const amountParts = (value, unit) => value === null
   ? { num: '', unit: unitText('to taste') }
-  : { num: nf.format(value), unit: unitText(unit) };
+  : { num: formatAmount(value, unit), unit: unitText(unit) };
 const amountEl = ({ num, unit }) => el('span', { class: 'cat-ing-amt' }, [
   el('span', { class: 'cat-ing-num', text: num }),
   el('span', { class: 'cat-ing-unit', text: unit }),
