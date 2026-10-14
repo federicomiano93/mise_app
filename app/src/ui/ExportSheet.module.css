@@ -92,12 +92,17 @@
   -webkit-tap-highlight-color: transparent;
 }
 
+/* ⚠️ THE COLOUR IS RESTATED IN EVERY STATE. base.css's `a:hover` outranks `.download:hover`'s background-only rule
+   (`a:hover` beats `.download` on specificity) and painted the label --accent-press on the blue: 1.22:1, measured
+   with axe on 14 Oct 2026. :active restates it too, so no later global rule can do the same. */
 .download:active {
   background: var(--accent-press);
+  color: var(--on-accent);
 }
 
 @media (hover: hover) {
   .download:hover {
     background: var(--accent-hover);
+    color: var(--on-accent);
   }
 }
