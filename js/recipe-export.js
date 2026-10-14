@@ -198,11 +198,10 @@ export function sheetNameOf(name, fallback = 'Recipe') {
 // ⚠️ THE TOTAL MUST EQUAL THE SCREEN'S TOTAL. With mixed units each row is rounded in its OWN unit
 // on screen, so the formula's value can differ by a gram from the total printed there. When it
 // would not round to `totalG`, the cell is the screen's number as a plain value instead.
+// ⚠️ THE CHECK COVERS THE PLAIN SUM TOO: grams and ml rows both count 1:1, but a catalogue recipe
+// that mixes them rounds each row on its own (no exact-sum step), so even a SUM can miss by a gram.
 function totalCell(list, last, totalG) {
   const cell = { fontWeight: 'bold', format: GRAMS_FORMAT };
-  if (list.every(r => r.factor === 1 && r.value !== null)) {
-    return { ...cell, value: `SUM(B3:B${last})`, type: 'Formula' };
-  }
   const terms = [];
   let computed = 0;
   list.forEach((r, i) => {
@@ -215,7 +214,8 @@ function totalCell(list, last, totalG) {
   if (Number.isFinite(Number(totalG)) && Math.round(computed) !== Number(totalG)) {
     return { ...cell, value: Number(totalG), type: Number };
   }
-  return { ...cell, value: terms.join('+'), type: 'Formula' };
+  const formula = list.every(r => r.factor === 1 && r.value !== null) ? `SUM(B3:B${last})` : terms.join('+');
+  return { ...cell, value: formula, type: 'Formula' };
 }
 
 // xlsxSheet({ title, name, rows, totalLabel, totalG }) -> { data, options } for write-excel-file.

@@ -265,6 +265,18 @@ test('xlsx total: no weighable row is a plain 0; gram-only rows keep SUM exactly
   assert.equal(xlsxSheet({ title: 'T', rows: grams, totalLabel: 'T', totalG: 12 }).data.at(-1)[1].value, 'SUM(B3:B4)');
 });
 
+test('⚠️ grams and ml rows (all 1:1) that the screen totals differently are not a SUM either', () => {
+  // On screen a g + ml recipe rounds each row on its own: 333 + 333 + 333, while the Total says 1000.
+  const rows = [
+    { name: 'a', value: 333, unit: 'g', factor: 1 },
+    { name: 'b', value: 333, unit: 'ml', factor: 1 },
+    { name: 'c', value: 333, unit: 'g', factor: 1 },
+  ];
+  const total = xlsxSheet({ title: 'T', rows, totalLabel: 'T', totalG: 1000 }).data.at(-1)[1];
+  assert.deepEqual([total.value, total.type], [1000, Number]);
+  assert.equal(xlsxSheet({ title: 'T', rows, totalLabel: 'T', totalG: 999 }).data.at(-1)[1].value, 'SUM(B3:B5)');
+});
+
 test('a real PDF from mixed units: one page, each row with its own unit, the title without a weight', async () => {
   const pdf = await pdfText(MIXED);
   assert.equal((pdf.match(/\/Type \/Page(?!s)/g) || []).length, 1);
