@@ -16,7 +16,7 @@ import {
   computeRecipeTarget, getTabProducts, doughExtraGrams, isExtraDoughEnabled,
   getDivisorProducts, divisorTotal, splitDough, DIVISOR_MAX,
   isCrateEnabled, getCratePerBox, crateCount,
-  getRecipeById, recipeSpec, showsLeaveningKnob, normalizeTrays, traysGrams, formatGrams, isProRata,
+  getRecipeById, exportTraysFor, recipeSpec, showsLeaveningKnob, normalizeTrays, traysGrams, formatGrams, isProRata,
 } from './calculator-config.js';
 // ⚠️ Where a tab's ingredients really come from. A screen reading
 // recipe.ingredients directly would see the tab's own leftover copy.
@@ -290,7 +290,7 @@ export function calc(id) {
   const scaled = scaleRecipe(spec, target, pct);
   const rows = source.ingredients.map((ing, i) => ({ name: ing.label, grams: scaled[i] || 0 }));
   renderIngredients(id + '-ingredients', rows);
-  lastRecipe[id] = { rows, totalG: Math.round(target), name: source.name || recipe.name };
+  lastRecipe[id] = { rows, totalG: Math.round(target), name: source.name || recipe.name, trays: exportTrays(recipe) };
 
   const disp = document.getElementById(id + '-param-display');
   if (disp) disp.textContent = pct;
@@ -303,6 +303,25 @@ export function calc(id) {
   renderCrateBoxes(id);
   applyTabState(id);
   if (revealed[id]) showResult(resultId); else hideResult(resultId);
+}
+
+// The trays the exported title may name: only when the dough IS the trays (a trays recipe, or a
+// trays-plus-total one with nothing typed in the total), otherwise 0 and the title says the grams.
+function exportTrays(recipe) {
+  return exportTraysFor(recipe.logic, traysFor(recipe.id), totalInputFor(recipe.id));
+}
+
+// What the PDF / Excel export is made from: the SAME rows the result card shows (never recomputed),
+// unrounded, plus the trays the title may name. null when nothing is calculated.
+export function exportModelFor(id) {
+  const model = lastRecipe[id];
+  if (!model) return null;
+  return {
+    name: model.name,
+    trays: model.trays || 0,
+    totalG: model.totalG,
+    rows: model.rows.map(r => ({ name: r.name, grams: r.grams })),
+  };
 }
 
 // What the full-screen view shows: the same rows the result card shows, from the same model.

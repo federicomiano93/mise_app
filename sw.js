@@ -1,4 +1,4 @@
-const CACHE_NAME = 'theitalianclub-v674';
+const CACHE_NAME = 'theitalianclub-v680';
 // Firebase SDK modules (loaded from gstatic) are cached SEPARATELY from CACHE_NAME
 // so they survive the cache-version bump that happens on every deploy — otherwise
 // the offline SDK would be wiped each release until the next online load. The name
@@ -15,7 +15,7 @@ const CACHE_NAME = 'theitalianclub-v674';
 // itself failed.
 // So between activate() and that first load, a phone that is OFFLINE cannot boot:
 // the code asks for the new version and nothing has it. In practice the window is very
-// small — activate() only happens after a successful 67-file precache, i.e.
+// small — activate() only happens after a successful 69-file precache, i.e.
 // online, and tapping the update banner reloads the page immediately — but it is
 // not zero, and it is the reason to bump the SDK deliberately rather than often.
 // Leaving the name unchanged would close the window and cost ~1 MB of dead
@@ -94,6 +94,11 @@ const ASSETS = [
   './js/sections.js',
   './js/sw-update.js',
   './js/update-gate.js',
+  // The recipe export's two libraries. They are not inside any bundle (BUILD_CONFIG.lazyVendorFiles):
+  // the Calculator's bundle import()s them from ../js/vendor/ when somebody taps Export. Listed here
+  // so that tap works with no signal; served from this cache by the fetch handler like any ASSET.
+  './js/vendor/jspdf.esm.js',
+  './js/vendor/write-excel-file.esm.js',
   './dist/catalogue.js',
   './dist/pastries.js',
   './dist/foodcost.js',
@@ -149,20 +154,20 @@ const ASSET_HASHES = {
   "./suppliers.html": '0f24580d8d5a1e05',
   "./install-guide.html": '322c79acf63896ef',
   "./reset-password.html": '298724d76511df05',
-  "./dist/i18n.js": 'ea6405e58166871b',
+  "./dist/i18n.js": 'f15af44f10e33d3b',
   "./dist/index.js": '57a736a03901c5dd',
-  "./dist/calculator.js": '8069f21c1776773a',
+  "./dist/calculator.js": 'bba1efb8a7a4776b',
   "./dist/orders.js": '1f8f1d0ce2cc02d8',
   "./dist/suppliers.js": '63831e51cfc1d9b3',
   "./dist/install-guide.js": '86df880954faeae9',
   "./js/allergen-model.js": 'a9ad7592da832a56',
-  "./js/calculator-config.js": '65e76f83f8458dbb',
+  "./js/calculator-config.js": 'dbac2c303371d302',
   "./js/credentials.js": 'b805f88d003ea918',
   "./js/currency.js": '241b1dbdf4cc465f',
   "./js/firebase-target.js": 'b3759997e54ddbc3',
   "./js/firebase.js": '4aeddee49dce8a21',
   "./js/i18n-dom.js": '24249af4367511e5',
-  "./js/i18n.js": 'd100e54533c7389b',
+  "./js/i18n.js": 'ad2d2afae35c1d0c',
   "./js/keyboard-done.js": 'de05a6dd1f3aac26',
   "./js/local-data.js": '91aa7f1699c897a1',
   "./js/location.js": '6aaf53615a8739d1',
@@ -175,14 +180,16 @@ const ASSET_HASHES = {
   "./js/sections.js": 'abcfdecb2bd5766d',
   "./js/sw-update.js": '2ffc253aa03eff0f',
   "./js/update-gate.js": '1801738b3e6def2d',
+  "./js/vendor/jspdf.esm.js": 'c59e9f48f24c403f',
+  "./js/vendor/write-excel-file.esm.js": '9c9b6920e629cb74',
   "./dist/catalogue.js": '8f1fe6aee40caf27',
   "./dist/pastries.js": 'f28377a9f3adcd4e',
   "./dist/foodcost.js": '7084a84a14fb48ef',
   "./dist/inventory.js": 'bac42c8abb8c1a3d',
   "./qr.png": '761a95e5bc25e2ba',
-  "./dist/tokens.css": 'a4f37273bf55b63f',
+  "./dist/tokens.css": 'd88b3a4c45b4b8a7',
   "./dist/auth.css": '58cd14bdbf808ecc',
-  "./dist/style.css": '1580de8c8c205539',
+  "./dist/style.css": '2ea7421efdb25b15',
   "./dist/orders.css": 'a51af9d47d76ff97',
   "./sounds/alarm.wav": '0d1465974f5be95b',
   "./fonts/manrope-latin.woff2": '71eb731d55804619',
@@ -238,7 +245,7 @@ const ASSET_HASHES = {
 // code against rules that deployed instantly, which is the very thing the gate exists
 // to prevent. Two things stand between that and a release: the test that every ASSETS
 // entry EXISTS (a mistyped path being the likeliest permanent cause), and this
-// project's post-deploy sweep, which already asks the live site for all 67 files.
+// project's post-deploy sweep, which already asks the live site for all 69 files.
 // ⚠️ NEITHER covers a device-specific failure — nobody has yet confirmed an update
 // landing on a real iPhone under this code.
 //
