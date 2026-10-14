@@ -37,6 +37,9 @@ test('⚠️ the bottom of the Home carries «Settings» and ONE small «Log out
 test('⚠️ the Home «Log out» asks first, then asks again if something is unsent, then signs out', () => {
   const strip = bodyOf(HOME, 'renderSessionActions');
   assert.match(strip, /className = 'home-signout'/);
+  // The kiosk toggle finds the button by this selector: renaming the class must fail here, not
+  // silently leave the Home «Log out» on a kiosk tablet.
+  assert.match(read('js/home-session.js'), /querySelector\('#session-logout-host \.home-signout'\)/);
   assert.match(strip, /title: t\('auth\.logOut\.title'\)[\s\S]*message: t\('auth\.logOut\.message'\)/);
   assert.match(strip, /okLabel: t\('auth\.logOut'\),\s*cancelLabel: t\('ui\.cancel'\),\s*danger: true,\s*\}\);\s*if \(ok && await mayLeaveWithUnsent\(confirmDialog\)\) signOutNow\(\);/);
   assert.match(HOME, /import \{ confirmDialog \} from '\.\/confirm-dialog\.js';/);
@@ -140,4 +143,10 @@ test('⚠️ the sentence under a Settings row is in the same typeface as its ti
 
 test('the Settings screen is precached', () => {
   assert.deepEqual(missingFromPrecache(['js/home-settings.js']), []);
+});
+
+test('Settings follows kiosk mode switched in another tab, and stops listening when it closes', () => {
+  const src = read('js/home-settings.js');
+  assert.match(src, /window\.addEventListener\('storage', onKioskChanged\);/);
+  assert.match(src, /window\.removeEventListener\('storage', onKioskChanged\);/);
 });

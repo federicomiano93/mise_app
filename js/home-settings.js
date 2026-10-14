@@ -453,6 +453,7 @@ export function openHomeSettings(session) {
   function close() {
     window.removeEventListener('away-changed', onAwayChanged);
     window.removeEventListener('kiosk-settings-changed', onKioskChanged);
+    window.removeEventListener('storage', onKioskChanged);
     versionCleanup();
     overlay.remove();
     globalThis.window?.dispatchEvent(new CustomEvent('mise:screen', { detail: '' }));
@@ -461,6 +462,8 @@ export function openHomeSettings(session) {
   paint();
   window.addEventListener('away-changed', onAwayChanged);
   window.addEventListener('kiosk-settings-changed', onKioskChanged);
+  // Kiosk mode switched in ANOTHER tab arrives as 'storage', as on the Home (review, 15 Oct 2026).
+  window.addEventListener('storage', onKioskChanged);
   onAwayChanged();
   document.body.appendChild(overlay);
   globalThis.window?.dispatchEvent(new CustomEvent('mise:screen', { detail: 'settings' }));

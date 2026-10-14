@@ -380,8 +380,8 @@
       }
     },
     "dist/index.js": {
-      "sha": "54b650460c6304cd",
-      "mapSha": "c4ca65e8d2644e69",
+      "sha": "28572a19d16c6e67",
+      "mapSha": "4c94c0a3622e5b90",
       "inputs": {
         "js/allergen-model.js": "50434c6cea85b7de",
         "js/app-version.js": "4ef897a205fdec91",
@@ -414,7 +414,7 @@
         "js/home-order-requests-badge.js": "cdaa22c6a06f56b6",
         "js/home-orders-badge.js": "3b7b3e81159e7609",
         "js/home-session.js": "0c819e720e31816b",
-        "js/home-settings.js": "1d59fe499faa346f",
+        "js/home-settings.js": "8dc39bf1303a4055",
         "js/i18n-dom.js": "6e9d8700a6b5db94",
         "js/ingredient-edit-model.js": "4aa9df389998ef05",
         "js/ingredient-name.js": "db8018ddb4e1b832",
