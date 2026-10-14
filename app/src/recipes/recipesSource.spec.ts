@@ -12,8 +12,10 @@ type Ref = { kind: string; path: string };
 
 function fakeKit() {
   const listeners: { target: Ref; options: unknown; next: (snap: unknown) => void; error: (err: unknown) => void; stopped: boolean }[] = [];
+  const added: { target: Ref; data: unknown }[] = [];
   const fs = {
-    collection: (_db: unknown, ...segments: string[]): Ref => ({ kind: 'collection', path: segments.join('/') }),
+    addDoc: vi.fn(async (target: Ref, data: unknown) => { added.push({ target, data }); return { id: 'new' }; }),
+    collection:(_db: unknown, ...segments: string[]): Ref => ({ kind: 'collection', path: segments.join('/') }),
     doc: (_db: unknown, ...segments: string[]): Ref => ({ kind: 'doc', path: segments.join('/') }),
     onSnapshot: vi.fn((target: Ref, ...rest: unknown[]) => {
       const options = typeof rest[0] === 'function' ? undefined : rest.shift();
@@ -24,7 +26,7 @@ function fakeKit() {
     }),
   };
   const kit = { fs, db: {} } as unknown as FirestoreKit;
-  return { kit, fs, listeners };
+  return { kit, fs, listeners, added };
 }
 
 const settle = () => new Promise(resolve => setTimeout(resolve, 0));
@@ -180,6 +182,49 @@ describe('the Recipe catalogue source', () => {
     expect(warn).toHaveBeenCalledTimes(1);
     error.mockRestore();
     warn.mockRestore();
+  });
+
+  test('watches the open venue’s print agents as a plain list, the document id winning over a stored `id`', async () => {
+    const { kit, listeners } = fakeKit();
+    const onChange = vi.fn();
+    createFirestoreRecipesSource(() => Promise.resolve(kit), 'panificio-miano').watchPrintAgents(onChange, vi.fn());
+    await settle();
+    expect(listeners).toHaveLength(1);
+    expect(listeners[0]!.target).toEqual({ kind: 'collection', path: 'locations/panificio-miano/print-agents' });
+    listeners[0]!.next({ docs: [{ id: 'pc', data: () => ({ id: 'forged', lastSeenAt: '2026-10-13T09:00:00.000Z' }) }], metadata: { fromCache: false } });
+    expect(onChange).toHaveBeenCalledWith([{ id: 'pc', lastSeenAt: '2026-10-13T09:00:00.000Z' }]);
+  });
+
+  test('a refused print agents stream reaches onError QUIETLY (a warning, never an error)', async () => {
+    const { kit, listeners } = fakeKit();
+    const onError = vi.fn();
+    createFirestoreRecipesSource(() => Promise.resolve(kit), 'bakery').watchPrintAgents(vi.fn(), onError);
+    await settle();
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    listeners[0]!.error(new Error('permission-denied'));
+    expect(onError).toHaveBeenCalledTimes(1);
+    expect(error).not.toHaveBeenCalled();
+    expect(warn).toHaveBeenCalledTimes(1);
+    error.mockRestore();
+    warn.mockRestore();
+  });
+
+  test('⚠️ a print job is ADDED to the open venue’s print-jobs, stamped with that venue, whatever the caller said', async () => {
+    const { kit, added } = fakeKit();
+    const source = createFirestoreRecipesSource(() => Promise.resolve(kit), 'panificio-miano');
+    await source.queuePrintJob({ bakery: 'someone-else', status: 'queued', payload: '^XA^XZ', copies: 1, createdAt: 'x', createdBy: 'u1' });
+    expect(added).toEqual([{
+      target: { kind: 'collection', path: 'locations/panificio-miano/print-jobs' },
+      data: { bakery: 'panificio-miano', status: 'queued', payload: '^XA^XZ', copies: 1, createdAt: 'x', createdBy: 'u1' },
+    }]);
+  });
+
+  test('⚠️ a print job is NOT local-first: a refused write and a Firestore that cannot load both reject', async () => {
+    const { kit, fs } = fakeKit();
+    fs.addDoc.mockRejectedValueOnce(new Error('permission-denied'));
+    await expect(createFirestoreRecipesSource(() => Promise.resolve(kit), 'bakery').queuePrintJob({})).rejects.toThrow('permission-denied');
+    await expect(createFirestoreRecipesSource(() => Promise.reject(new Error('chunk')), 'bakery').queuePrintJob({})).rejects.toThrow('chunk');
   });
 
   test('⚠️ a venue id that could name another path is refused before anything is read', () => {

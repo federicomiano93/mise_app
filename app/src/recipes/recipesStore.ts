@@ -91,6 +91,11 @@ export interface RecipesSnapshot {
   // believable answer came, or the stream failed (then the defaults, as the current app). Until then
   // a label cannot be laid out honestly — the defaults could be the wrong paper.
   readonly labelConfigKnown: boolean;
+  // The shop computers that report in (print-agents), as the last answer left them; [] until one comes, and
+  // after a failure. ⚠️ NEVER WRITTEN TO STORAGE, NOR READ FROM IT: a heartbeat is a statement about RIGHT NOW,
+  // and a remembered one would tell a phone that opened offline that the shop computer is listening — the one
+  // thing this value exists to answer honestly (the current app's rule, catalogue-store.js).
+  readonly printAgents: readonly StoredDoc[];
 }
 
 export interface RecipesDeps {
@@ -116,6 +121,9 @@ export interface RecipesStore {
   setScaledTarget(id: string, grams: number): void;
   // Forgets it (Clear).
   clearScaledTarget(id: string): void;
+  // Puts a label job in the shop computer's queue. ⚠️ NOT LOCAL-FIRST: it rejects when the write cannot be made,
+  // and the caller says so (the source explains why). Nothing is remembered here.
+  queuePrintJob(job: Readonly<Record<string, unknown>>): Promise<void>;
 }
 
 // A map read back from storage: a plain object, or nothing (corrupt, an array, a number…).
@@ -212,6 +220,7 @@ export function createRecipesStore(source: RecipesSource, deps: RecipesDeps): Re
   let labelConfig: Record<string, unknown> | null = asLabelConfig(bootLabel);
   let labelConfigKnown = bootLabel === null || labelConfig !== null;
   let labelConfigFromServer = false;
+  let printAgents: readonly StoredDoc[] = [];
   // The counts are kept even when a corrupt entry is dropped: they are a nicety, not data.
   let usage: Readonly<Record<string, number>> = asUsage(readJson(USAGE_KEY));
   let scaled: Readonly<Record<string, ScaledEntry>> = asScaled(readJson(SCALED_KEY));
@@ -225,7 +234,7 @@ export function createRecipesStore(source: RecipesSource, deps: RecipesDeps): Re
 
   function build(): RecipesSnapshot {
     return { recipes, recipesLoaded, recipesFromServer, streamBroken, ingredients, ingredientsLoaded, ingredientsUnreadable, usage,
-      scaled, labelConfig, labelConfigKnown };
+      scaled, labelConfig, labelConfigKnown, printAgents };
   }
 
   function changed(): void {
@@ -369,6 +378,19 @@ export function createRecipesStore(source: RecipesSource, deps: RecipesDeps): Re
           }
         },
       ));
+      stops.push(source.watchPrintAgents(
+        remote => {
+          printAgents = Array.isArray(remote) ? remote : [];
+          changed();
+        },
+        err => {
+          // Quiet, as the current app: «nothing is listening» is the honest answer for a venue that runs no
+          // agent, or whose read was refused.
+          deps.warn('Print agents unavailable:', err);
+          printAgents = [];
+          changed();
+        },
+      ));
     },
 
     stop() {
@@ -406,6 +428,8 @@ export function createRecipesStore(source: RecipesSource, deps: RecipesDeps): Re
       writeJson(SCALED_KEY, scaled);
       changed();
     },
+
+    queuePrintJob: job => source.queuePrintJob(job),
   };
 }
 
