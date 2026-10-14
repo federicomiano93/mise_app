@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 // ⚠️ HOW OFTEN THE LABEL SCREEN ASKS AGAIN WHETHER THE SHOP COMPUTER IS STILL ANSWERING. A heartbeat is only ever
 // «fresh» against a clock, and the answer changes when the clock moves, not when a document does: a shop computer
@@ -13,14 +13,24 @@ export const PRESENCE_RECHECK_MS = 30_000;
 // The time to judge a heartbeat against: now, and again every PRESENCE_RECHECK_MS while `active`. Only a Zebra
 // venue needs it (any other printer has no shop computer to judge), so an os venue sets no timer at all. The timer
 // is cleared when the screen is left or the printer stops being a Zebra.
-export function usePresenceClock(active: boolean): number {
+//
+// It also returns `refresh`, which reads the clock at once. Two things need it: a phone woken from sleep has an
+// interval that has not fired yet (so the screen is also refreshed when the page becomes visible again), and a tap
+// that finds the beat gone stale must make the screen show the truth now, not at the next tick.
+export function usePresenceClock(active: boolean): { now: number; refresh: () => void } {
   const [now, setNow] = useState(() => Date.now());
+  const refresh = useCallback(() => { setNow(Date.now()); }, []);
   useEffect(() => {
     if (!active) return undefined;
     // The clock may be old by the time the printer turns out to be a Zebra (the paper arrives late).
     setNow(Date.now());
     const timer = setInterval(() => { setNow(Date.now()); }, PRESENCE_RECHECK_MS);
-    return () => { clearInterval(timer); };
+    const onVisible = () => { if (document.visibilityState === 'visible') setNow(Date.now()); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
   }, [active]);
-  return now;
+  return { now, refresh };
 }

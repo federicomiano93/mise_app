@@ -1,5 +1,5 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { HEARTBEAT_MS, STALE_AFTER_MS, isSingleLabel } from '@mise/shared/print-queue-model';
 import { fakeRecipesSource } from '../testing/fakeRecipesSource';
 import { LOAD, renderRecipes } from '../testing/renderRecipes';
@@ -184,6 +184,18 @@ describe('a fresh heartbeat: the agent road', () => {
     expect(printButton()).toBeEnabled();
   });
 
+  it('⚠️ two taps inside ONE frame queue exactly one job: the ref guards, not the disabled button', async () => {
+    const { source } = await openZebra([beat(MIN)]);
+    await waitFor(() => { expect(printButton()).toBeEnabled(); });
+    const release = source.holdQueue();
+    const button = printButton();
+    // React has not re-rendered between the two clicks, so the button is still enabled for the second one.
+    await act(async () => { fireEvent.click(button); fireEvent.click(button); });
+    await act(async () => { release(); await Promise.resolve(); });
+    await waitFor(() => { expect(source.jobs).toHaveLength(1); });
+    expect(source.queuePrintJob).toHaveBeenCalledTimes(1);
+  });
+
   it('does nothing on a label nobody could measure', async () => {
     const source = fakeRecipesSource({ recipes: [CAKE], ingredients: INGREDIENTS, labelConfig: ZEBRA, printAgents: [beat(MIN)] });
     renderRecipes('/recipes/cake/label', { source, session: { location: GB } });
@@ -340,13 +352,72 @@ describe('the clock that keeps the offer honest', () => {
     expect(printButton()).toHaveTextContent('Print');
   });
 
-  it('keeps asking every 30 s: nothing flips before the beat is really stale', async () => {
+  it('keeps asking every 30 s: nothing flips before the beat is really stale, and it flips on the tick that crosses the limit', async () => {
     fakeClock();
-    await openZebra([beat(MIN)]);
-    await waitFor(() => { expect(printButton()).toBeEnabled(); });
+    // 45 s of freshness left: the 30 s tick still finds it fresh, the 60 s tick does not.
+    await openZebra([beat(STALE_AFTER_MS - 45_000)], { clipboard: 'works' });
+    await waitFor(() => { expect(printButton()).toHaveTextContent('Print'); });
     act(() => { vi.advanceTimersByTime(PRESENCE_RECHECK_MS); });
     expect(offline()).toBeNull();
+    expect(printButton()).toHaveTextContent('Print');
+    act(() => { vi.advanceTimersByTime(PRESENCE_RECHECK_MS); });
+    expect(offline()).toBeVisible();
+    expect(printButton()).toHaveTextContent('Copy the printer code');
+  });
+
+  it('⚠️ re-judges the heartbeat at tap time: a beat that went stale with no tick yet queues nothing and the screen says «not answering»', async () => {
+    fakeClock();
+    const { source } = await openZebra([beat(STALE_AFTER_MS - 20_000)], { clipboard: 'works' });
+    await waitFor(() => { expect(printButton()).toHaveTextContent('Print'); });
+    expect(offline()).toBeNull();
+
+    // The phone wakes from sleep: the clock has moved on, the interval has not fired yet.
+    vi.setSystemTime(Date.now() + 60_000);
+    await act(async () => { fireEvent.click(printButton()); });
+    expect(source.queuePrintJob).not.toHaveBeenCalled();
+    expect(source.jobs).toHaveLength(0);
+    expect(offline()).toBeVisible();
+    expect(printButton()).toHaveTextContent('Copy the printer code');
+  });
+
+  it('⚠️ a page that becomes visible again re-reads the clock at once', async () => {
+    fakeClock();
+    await openZebra([beat(STALE_AFTER_MS - 20_000)], { clipboard: 'works' });
+    await waitFor(() => { expect(printButton()).toHaveTextContent('Print'); });
+    vi.setSystemTime(Date.now() + 60_000);
+    act(() => { document.dispatchEvent(new Event('visibilitychange')); });
+    expect(offline()).toBeVisible();
+    expect(printButton()).toHaveTextContent('Copy the printer code');
+  });
+
+  it('⚠️ a send that never lands does not take the clipboard fallback with it', async () => {
+    fakeClock();
+    const { source } = await openZebra([beat(STALE_AFTER_MS - 20_000)], { clipboard: 'works' });
+    await waitFor(() => { expect(printButton()).toHaveTextContent('Print'); });
+    source.holdQueue();
+    await act(async () => { fireEvent.click(printButton()); });
+    expect(printButton()).toBeDisabled();
+
+    act(() => { vi.advanceTimersByTime(PRESENCE_RECHECK_MS); });
+    expect(printButton()).toHaveTextContent('Copy the printer code');
     expect(printButton()).toBeEnabled();
+    await act(async () => { fireEvent.click(printButton()); });
+    expect(await screen.findByText('Copied — paste it onto the printer on the shop computer')).toBeInTheDocument();
+    expect(source.jobs).toHaveLength(0);
+  });
+
+  it('⚠️ a send that lands after the road changed does not put «sent» back beside «not answering»', async () => {
+    const { source, user } = await openZebra([beat(MIN)], { clipboard: 'works' });
+    await waitFor(() => { expect(printButton()).toBeEnabled(); });
+    const release = source.holdQueue();
+    await user.click(printButton());
+    act(() => { source.setPrintAgents([]); });
+    await waitFor(() => { expect(printButton()).toHaveTextContent('Copy the printer code'); });
+
+    await act(async () => { release(); await Promise.resolve(); });
+    await waitFor(() => { expect(source.jobs).toHaveLength(1); });
+    expect(main().queryByText('Sent to the shop computer — it prints it')).toBeNull();
+    expect(offline()).toBeVisible();
   });
 
   it('is started once for a Zebra and cleared when the screen is left', async () => {

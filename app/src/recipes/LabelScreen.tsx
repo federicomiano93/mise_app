@@ -148,11 +148,13 @@ function LabelBody({ recipe }: { recipe: CatalogueRecipe }) {
 
   // ⚠️ THREE ROADS, DECIDED BY THE SHARED PORT (print-roads.ts) from what is true RIGHT NOW. `printerReady` is the
   // shop computer's heartbeat judged against a clock that moves while this screen is open (usePresenceClock); it
-  // is never remembered, so a phone that opened offline cannot believe the computer is listening. `zplFits` is the
+  // is never stored by the app. Firestore's own offline cache can replay the last print-agents document to a phone
+  // that opened offline, and the 12-minute stale limit in printerPresence bounds how long that is believed.
+  // `zplFits` is the
   // ZPL writer's own estimate (no browser can measure the printer's paper). What the DEVICE can do is asked at
   // draw time, never cached: a road offered that is not there is a button that fails on tap.
   const isZebra = sheet !== null && sheet.printerLanguage === 'zpl';
-  const now = usePresenceClock(isZebra);
+  const { now, refresh: refreshClock } = usePresenceClock(isZebra);
   const roadContext: RoadContext = {
     printerReady: printerPresence(printAgents, now).ready,
     zplFits: resolved => zplFits(resolved as ResolvedLabel),
@@ -163,6 +165,9 @@ function LabelBody({ recipe }: { recipe: CatalogueRecipe }) {
   // says Print, or «Sent to the shop computer» beside «the shop computer is not answering», describes a road that is
   // no longer the one on offer (driven 14 Oct 2026). Cleared while drawing, the React way to follow a changed input.
   const firstRoad = roads[0]?.id ?? null;
+  // The first road as of the latest draw, for an answer that arrives after an await (see press()).
+  const firstRoadRef = useRef(firstRoad);
+  firstRoadRef.current = firstRoad;
   const [noteRoad, setNoteRoad] = useState(firstRoad);
   if (noteRoad !== firstRoad) {
     setNoteRoad(firstRoad);
@@ -223,25 +228,42 @@ function LabelBody({ recipe }: { recipe: CatalogueRecipe }) {
   // The Print button, by the road it is showing. Still needs a measured fit that fits, as the system's dialog does.
   const press = async () => {
     const road = roads[0];
-    if (sheet === null || fit === null || !fit.measured || !fit.fits || road === undefined || sendingRef.current) return;
+    if (sheet === null || fit === null || !fit.measured || !fit.fits || road === undefined) return;
     if (road.id === 'os-print') {
       print();
       return;
     }
-    // ⚠️ THE BUTTON GOES DEAD WHILE THE JOB IS IN FLIGHT: queueing is a network round trip, two taps are two
-    // labels, and the second one is the one nobody wanted. The old sentence goes first, so an answer is never
-    // mistaken for the one before it.
-    sendingRef.current = true;
-    setSending(true);
+    // ⚠️ ONLY A SECOND AGENT SEND IS REFUSED while one is in flight: queueing is a network round trip, two taps are
+    // two labels, and the second one is the one nobody wanted. The guard is on the agent road ALONE because a send
+    // that never lands (an offline phone: addDoc never resolves, no timeout, by decision) must not also kill the
+    // clipboard fallback the screen offers once the heartbeat has gone stale.
+    if (road.id === 'agent' && sendingRef.current) return;
+    if (road.id === 'agent') {
+      // ⚠️ RE-JUDGED AT TAP TIME: the 30 s clock may be behind (a phone woken from sleep whose interval has not
+      // fired yet). A job queued for a computer that stopped answering is a tap that looks like it worked. Queue
+      // nothing, and re-read the clock so the screen redraws with the true road and the «not answering» sentence.
+      if (!printerPresence(printAgents, Date.now()).ready) {
+        refreshClock();
+        return;
+      }
+      sendingRef.current = true;
+      setSending(true);
+    }
+    // The old sentence goes first, so an answer is never mistaken for the one before it.
     setNote(null);
     let ok = false;
     try {
       ok = road.id === 'agent' ? await sendToShopComputer(sheet) : await copyPrinterCode(sheet);
     } finally {
-      sendingRef.current = false;
-      setSending(false);
+      if (road.id === 'agent') {
+        sendingRef.current = false;
+        setSending(false);
+      }
     }
     if (ok) announceAction('label-printed');
+    // ⚠️ AN ANSWER FOR A ROAD THAT IS NO LONGER ON OFFER IS NOT SHOWN: the note is cleared when the road changes
+    // (above), and a send that lands afterwards would put «Sent to the shop computer» back beside «not answering».
+    if (firstRoadRef.current !== road.id) return;
     if (road.id === 'agent') setNote(ok ? 'label.print.queued' : 'label.print.queueFailed');
     else setNote(ok ? 'label.print.zplCopied' : 'label.copyFailed');
   };
@@ -345,7 +367,7 @@ function LabelBody({ recipe }: { recipe: CatalogueRecipe }) {
             <button
               type="button"
               className={`${styles.button} ${styles.printButton}`}
-              disabled={!canPress || sending}
+              disabled={!canPress || (sending && roads[0]?.id === 'agent')}
               aria-describedby={!canPress && reasonIds !== '' ? reasonIds : undefined}
               onClick={() => { void press(); }}
             >

@@ -92,9 +92,10 @@ export interface RecipesSnapshot {
   // a label cannot be laid out honestly — the defaults could be the wrong paper.
   readonly labelConfigKnown: boolean;
   // The shop computers that report in (print-agents), as the last answer left them; [] until one comes, and
-  // after a failure. ⚠️ NEVER WRITTEN TO STORAGE, NOR READ FROM IT: a heartbeat is a statement about RIGHT NOW,
-  // and a remembered one would tell a phone that opened offline that the shop computer is listening — the one
-  // thing this value exists to answer honestly (the current app's rule, catalogue-store.js).
+  // after a failure. ⚠️ NEVER WRITTEN TO STORAGE BY THE APP, NOR READ FROM IT: a heartbeat is a statement about
+  // RIGHT NOW. Firestore's own offline cache can still replay the last print-agents document to a phone that
+  // opens offline; what bounds that is the 12-minute stale limit in printerPresence (the current app's rule,
+  // catalogue-store.js), so an old beat is never believed for long.
   readonly printAgents: readonly StoredDoc[];
 }
 
