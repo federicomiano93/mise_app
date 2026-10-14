@@ -591,9 +591,12 @@ export function renderDetail({ recipe, app }) {
   // so hide the whole panel. getScaledTarget stays 0 in that case too.
   if (weighableTotalGrams(recipe) <= 0) weightPanel.hidden = true;
 
-  // Export as PDF or Excel (js/export-sheet.js). It sits UNDER the list, never inside it: the list
-  // is role=button (tap to zoom) and a button in a button is not allowed. Absent for a recipe with no
-  // ingredients; `hidden` is assigned afterwards for the reason explained at importBtn below.
+  // Export as PDF or Excel (js/export-sheet.js). ⚠️ AT THE END OF THE PAGE, with the other secondary
+  // actions, by Federico's choice (14 Oct 2026): «non è un'azione che si fa tutti i giorni». Under the
+  // list it pushed the weight box — the thing this screen is opened for — 50px further down. The file
+  // is still made from what renderRows() drew last, so where the button stands changes nothing in it.
+  // Absent for a recipe with no ingredients; `hidden` is assigned afterwards for the reason explained
+  // at importBtn below.
   const exportBtn = el('button', { class: 'cat-import-btn cat-export-btn', type: 'button' }, [
     el('span', { 'aria-hidden': 'true' }),
     el('span', {}, t('export.button')),
@@ -690,7 +693,7 @@ export function renderDetail({ recipe, app }) {
     // rewrites. Nothing depends on the order: the host's cards are replaced in place,
     // and the guided panel reads the weight through a closure rather than off the DOM.
     el('div', { class: 'cat-detail-top' }, [
-      catSection(t('cat.ingredients'), [ingList, exportBtn]),
+      catSection(t('cat.ingredients'), [ingList]),
       // ⚠️ THE WHOLE CARD GOES WHEN THE PANEL DOES. A recipe of pieces and «to taste»
       // has nothing to scale by weight, and a headed card standing empty reads as
       // something broken rather than as something that does not apply.
@@ -699,6 +702,7 @@ export function renderDetail({ recipe, app }) {
       guidedCard,
     ]),
     el('div', { class: 'cat-detail-bottom' }, [
+      exportBtn,
       importBtn,
       el('p', {
         class: 'cat-import-hint',
