@@ -498,9 +498,23 @@ const rowsOf = (recipe: unknown): readonly unknown[] => {
   return (r && Array.isArray(r.ingredients)) ? r.ingredients : [];
 };
 
+// ⚠️ THE BIG UNITS KEEP THEIR DECIMALS, DOWN TO ONE GRAM OR ONE MILLILITRE. Every amount used to be rounded
+// to a whole number in its own unit, so 1.84 kg of flour read «2 kg» and 0.4 kg read «0 kg» (Federico,
+// 14 Oct 2026: «correggi i decimali di kg e litri»; the current app's fix is PR #361). A unit not listed is whole.
+const UNIT_DECIMALS: Readonly<Record<string, number>> = { kg: 3, l: 3, dl: 2, cl: 1 };
+export function unitDecimals(unit: string): number {
+  return UNIT_DECIMALS[unit] ?? 0;
+}
+
+// An amount rounded to what its unit can show: 1.8375 kg -> 1.838, 2.4 g -> 2.
+export function roundInUnit(value: unknown, unit: string): number {
+  const f = 10 ** unitDecimals(unit);
+  return Math.round((Number(value) || 0) * f) / f;
+}
+
 // Scale a recipe to a target TOTAL weight in grams: every ingredient in proportion to the weighable total.
-// Returns an array aligned with recipe.ingredients — a whole number in EACH ingredient's own unit, or null for
-// a 'to taste' row (no quantity). Empty recipe / non-positive target / no weighable mass → zeros (no NaN).
+// Returns an array aligned with recipe.ingredients — a number in EACH ingredient's own unit, rounded by
+// roundInUnit (whole, but kg / l to the gram or millilitre), or null for a 'to taste' row (no quantity). Empty recipe / non-positive target / no weighable mass → zeros (no NaN).
 export function scaleCatalogue(recipe: unknown, targetGrams: unknown): (number | null)[] {
   const ings = rowsOf(recipe);
   const target = Number(targetGrams);
@@ -513,19 +527,19 @@ export function scaleCatalogue(recipe: unknown, targetGrams: unknown): (number |
   if (ings.every(i => unitOf(i) === 'g')) {
     return fixRounding(ings.map(i => gramsOfRow(i) * factor), target);
   }
-  // Mixed units: proportional, each rounded in its own unit; to-taste has no number.
-  return ings.map(i => unitOf(i) === 'to taste' ? null : Math.round(gramsOfRow(i) * factor));
+  // Mixed units: proportional, each rounded in its own unit (roundInUnit); to-taste has no number.
+  return ings.map(i => unitOf(i) === 'to taste' ? null : roundInUnit(gramsOfRow(i) * factor, unitOf(i)));
 }
 
-// The base (unscaled) amounts, aligned with recipe.ingredients — whole numbers in each ingredient's own unit
-// (null for 'to taste'). For an all-grams recipe the integer rows sum exactly to the rounded total.
+// The base (unscaled) amounts, aligned with recipe.ingredients — rounded in each ingredient's own unit by
+// roundInUnit (null for 'to taste'). For an all-grams recipe the integer rows sum exactly to the rounded total.
 export function baseAmounts(recipe: unknown): (number | null)[] {
   const ings = rowsOf(recipe);
   if (ings.every(i => unitOf(i) === 'g')) {
     const raw = ings.map(gramsOfRow);
     return fixRounding(raw, raw.reduce((a, b) => a + b, 0));
   }
-  return ings.map(i => unitOf(i) === 'to taste' ? null : Math.round(gramsOfRow(i)));
+  return ings.map(i => unitOf(i) === 'to taste' ? null : roundInUnit(gramsOfRow(i), unitOf(i)));
 }
 
 // ── Batch size: a readable weight, and a guard against a mistyped total ──────

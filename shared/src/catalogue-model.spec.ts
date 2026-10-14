@@ -693,13 +693,50 @@ describe('QUIRK COPIED: ingredientGrams of nothing', () => {
     });
 });
 
+// ── kg and litres keep their decimals (14 Oct 2026, the current app's PR #361) ──
+
+describe('kg and litre decimals', () => {
+  // Made up: 0.4 kg flour + 1.25 l milk + 2 eggs + salt to taste = 1650 g weighable.
+  const MIXED = { ingredients: [
+    { label: 'Farina di prova', grams: 0.4, unit: 'kg' },
+    { label: 'Latte di prova', grams: 1.25, unit: 'l' },
+    { label: 'Uova di prova', grams: 2, unit: 'pcs' },
+    { label: 'Sale di prova', grams: 0, unit: 'to taste' },
+  ] };
+
+  test('only kg, l, dl and cl have decimals, down to one gram or millilitre', () => {
+    expect(['kg', 'l', 'dl', 'cl', 'g', 'mg', 'ml', 'pcs', 'tsp', 'to taste'].map(ported.unitDecimals))
+      .toStrictEqual([3, 3, 2, 1, 0, 0, 0, 0, 0, 0]);
+    expect(ported.roundInUnit(1.8375, 'kg')).toBe(1.838);
+    expect(ported.roundInUnit(2.345, 'dl')).toBe(2.35);
+    expect(ported.roundInUnit(2.4, 'g')).toBe(2);
+    expect(ported.roundInUnit('junk', 'kg'), 'never NaN').toBe(0);
+  });
+
+  test('⚠️ the base recipe keeps 0.4 kg and 1.25 l (they read «0 kg» and «1 l»)', () => {
+    expect(ported.baseAmounts(MIXED)).toStrictEqual([0.4, 1.25, 2, null]);
+  });
+
+  test('⚠️ scaled, kg and l keep their decimals (3000 g: 0.727 kg, 2.273 l)', () => {
+    expect(ported.scaleCatalogue(MIXED, 3000)).toStrictEqual([0.727, 2.273, 4, null]);
+  });
+
+  test('the same numbers as the current app', () => {
+    for (const target of [0, 1000, 3000, 7777]) {
+      expect(ported.scaleCatalogue(MIXED, target), String(target)).toStrictEqual(legacy.scaleCatalogue(MIXED, target));
+    }
+    expect(ported.baseAmounts(MIXED)).toStrictEqual(legacy.baseAmounts(MIXED));
+  });
+});
+
 // ── What pairing would have checked ──────────────────────────────────────────
 
 describe('the port against the original', () => {
   // The rest of the original: the editor's link functions, the validation and the Calculator import (steps 3d-6,
-  // 3d-7), and `unitText`, which the port replaces by `unitTextKey`.
+  // 3d-7), `unitText`, which the port replaces by `unitTextKey`, and `formatAmount`, which needs the interface
+  // language and so lives in the app (app/src/recipes/recipeAmounts.ts `amountNumber`).
   const LEFT_OUT = [
-    'unitText', 'linkOptions', 'linkedItemName', 'isSameLink', 'applyLink', 'moveRow', 'findInvalidRecipe',
+    'unitText', 'formatAmount', 'linkOptions', 'linkedItemName', 'isSameLink', 'applyLink', 'moveRow', 'findInvalidRecipe',
     'toCalculatorRecipe', 'nonWeighableLabels', 'mergeImportedRecipe', 'importFailureKey', 'findCalculatorImport',
   ];
   const ADDED = ['unitTextKey'];

@@ -73,11 +73,12 @@ describe('the ingredient list', () => {
     expect(rowsOf()).toEqual([
       ['Flour', '250', 'g'],
       ['Eggs', '3', 'pcs'],
-      ['Milk', '1', 'l'],
+      // ⚠️ 0.5 l, not «1 l»: kg and litres keep their decimals (14 Oct 2026; it used to round to whole numbers).
+      ['Milk', '0.5', 'l'],
       ['Sugar', '2', 'tbsp'],
       ['Pepper', '1', 'pinch'],
       ['Salt', '', 'to taste'],
-      // 250 g of flour and 0.5 l (500 g) of milk. (The row shows 1 because it rounds to whole numbers.)
+      // 250 g of flour and 0.5 l (500 g) of milk.
       ['Total', '750', 'g'],
     ]);
   });
@@ -86,6 +87,7 @@ describe('the ingredient list', () => {
     await open([MIXED], 'm', { lang: 'it', session: { language: 'it' } });
     const rows = rowsOf();
     expect(rows[1]).toEqual(['Eggs', '3', 'pz']);
+    expect(rows[2], 'the Italian decimal mark').toEqual(['Milk', '0,5', 'l']);
     expect(rows[4]).toEqual(['Pepper', '1', 'pizz.']);
     expect(rows[5]).toEqual(['Salt', '', 'q.b.']);
     expect(rows[0]).toEqual(['Flour', '250', 'g']);
