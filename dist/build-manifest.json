@@ -13,8 +13,8 @@
       }
     },
     "dist/calculator.js": {
-      "sha": "73999132f477b976",
-      "mapSha": "aa55a662bdf92c52",
+      "sha": "1a89b4a42e30d23d",
+      "mapSha": "f546d641e5805eeb",
       "inputs": {
         "js/allergen-model.js": "50434c6cea85b7de",
         "js/app-version.js": "4ef897a205fdec91",
@@ -36,7 +36,7 @@
         "js/calculator-render.js": "dcb6a450ec6c80ce",
         "js/calculator-settings.js": "4fdb320e42a6e3fe",
         "js/calculator-whatsapp-settings.js": "11892c6efe27a510",
-        "js/catalogue/catalogue-model.js": "00a8b2982f564a82",
+        "js/catalogue/catalogue-model.js": "d37d010e81bac8e6",
         "js/catalogue/guided-model.js": "6a7e0f736c63b6e6",
         "js/client-order-history.js": "600f560261dab2bf",
         "js/client-order-model.js": "19f28b2f7799d8ab",
@@ -50,7 +50,7 @@
         "js/error-model.js": "86ed1f0945fd9a4c",
         "js/error-report.js": "dbfc2460df758407",
         "js/export-icon.js": "d951d70223a41767",
-        "js/export-sheet.js": "7d009fb00fd68cf6",
+        "js/export-sheet.js": "5a59aa291e5ca65d",
         "js/feedback-model.js": "41a324aaa741a447",
         "js/feedback.js": "1c818a81166fffec",
         "js/firebase-target.js": "974d7726c8d1dda4",
@@ -99,7 +99,7 @@
         "js/pages/run-in-order.js": "5bc8e0b92802e22c",
         "js/preview-ribbon.js": "6c0264eb5d075e5b",
         "js/price-model.js": "e6aa115d5280fb75",
-        "js/recipe-export.js": "4cda1223cf2be866",
+        "js/recipe-export.js": "31ce4cc52c322417",
         "js/recipes.js": "394ccd4a64e0f453",
         "js/record-data.js": "260607f13e2f4033",
         "js/records.js": "79c792c647a519cd",
@@ -132,14 +132,14 @@
       }
     },
     "dist/catalogue.css": {
-      "sha": "428fe057a7f948f6",
+      "sha": "fd9bdf1a6544456c",
       "inputs": {
-        "catalogue.css": "99d74cb44f6d470c"
+        "catalogue.css": "9df8bd002205f25d"
       }
     },
     "dist/catalogue.js": {
-      "sha": "37de78c038bee6ef",
-      "mapSha": "4478461fc6c6d78d",
+      "sha": "dadfc8c3bea71c03",
+      "mapSha": "542fd908227a0628",
       "inputs": {
         "js/allergen-match.js": "ee85eebef7fd7052",
         "js/allergen-model.js": "50434c6cea85b7de",
@@ -148,11 +148,11 @@
         "js/auth-gate.js": "5bc4dc671165cecd",
         "js/calculator-config.js": "6e06118772997ae2",
         "js/catalogue/allergen-sheet.js": "0a1ec5ee0d8c6a56",
-        "js/catalogue/catalogue-detail.js": "1866d4249954bd96",
+        "js/catalogue/catalogue-detail.js": "a16a64bc6307df96",
         "js/catalogue/catalogue-editor.js": "be31547594a8efd9",
         "js/catalogue/catalogue-list.js": "289d824f889b3757",
         "js/catalogue/catalogue-main.js": "28863c59f8f79a95",
-        "js/catalogue/catalogue-model.js": "00a8b2982f564a82",
+        "js/catalogue/catalogue-model.js": "d37d010e81bac8e6",
         "js/catalogue/catalogue-settings.js": "1ab632d02e1f2ed5",
         "js/catalogue/catalogue-store.js": "0bd16dee60e0e825",
         "js/catalogue/confirm-dialog.js": "83f2ab3c9c69025d",
@@ -160,9 +160,9 @@
         "js/catalogue/firebase-catalogue.js": "30bd1c2f26d01f76",
         "js/catalogue/firebase-photo.js": "38b16af4b97630a5",
         "js/catalogue/guided-alarm.js": "5abbc05b8da5804c",
-        "js/catalogue/guided-editor.js": "aae4d3ed73cf8e93",
+        "js/catalogue/guided-editor.js": "0928247b72507fcd",
         "js/catalogue/guided-model.js": "6a7e0f736c63b6e6",
-        "js/catalogue/guided-run.js": "96feec068b30a355",
+        "js/catalogue/guided-run.js": "dd2e1c6444e85c67",
         "js/catalogue/import-to-calculator.js": "29685691137f2e9a",
         "js/catalogue/ingredient-picker.js": "3f9f65eb34bc5384",
         "js/catalogue/ingredient-suggest.js": "031aa6bc27da4499",
@@ -187,6 +187,8 @@
         "js/dom.js": "0fe18894c47fe088",
         "js/error-model.js": "86ed1f0945fd9a4c",
         "js/error-report.js": "dbfc2460df758407",
+        "js/export-icon.js": "d951d70223a41767",
+        "js/export-sheet.js": "5a59aa291e5ca65d",
         "js/feedback-model.js": "41a324aaa741a447",
         "js/feedback.js": "1c818a81166fffec",
         "js/firebase-target.js": "974d7726c8d1dda4",
@@ -237,6 +239,7 @@
         "js/print-queue-model.js": "220daf72bada9780",
         "js/push-model.js": "13310d4d79159651",
         "js/push.js": "36bf6a273773a9a1",
+        "js/recipe-export.js": "31ce4cc52c322417",
         "js/recipe-link.js": "f61d20d37533c310",
         "js/record-choices.js": "80f538ee4cdcb4f6",
         "js/record-data.js": "260607f13e2f4033",
@@ -276,14 +279,14 @@
       }
     },
     "dist/foodcost.js": {
-      "sha": "19c8fc8cc2142d70",
-      "mapSha": "5a88b86d164513b8",
+      "sha": "cbbb3bb129919151",
+      "mapSha": "5c21c18f47aded10",
       "inputs": {
         "js/allergen-model.js": "50434c6cea85b7de",
         "js/app-version.js": "4ef897a205fdec91",
         "js/auth-gate.js": "5bc4dc671165cecd",
         "js/calculator-config.js": "6e06118772997ae2",
-        "js/catalogue/catalogue-model.js": "00a8b2982f564a82",
+        "js/catalogue/catalogue-model.js": "d37d010e81bac8e6",
         "js/catalogue/recipe-cost-model.js": "7dd027150da03725",
         "js/confirm-dialog.js": "83f2ab3c9c69025d",
         "js/credentials.js": "d09988397825b537",

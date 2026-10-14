@@ -1,4 +1,5 @@
-// export-sheet.js — «Export as PDF or Excel» for a scaled recipe. One dialog that changes its
+// export-sheet.js — «Export as PDF or Excel» for a recipe as the screen shows it (the
+// Calculator's scaled dough, or a Recipe catalogue recipe at base or scaled). One dialog that changes its
 // content: the choice, then «Preparing the file…», then «File ready» with a Download link.
 //
 // It is the same shell as js/send-sheet.js (the `app-dialog` box, the `send-routes` rows from
@@ -34,7 +35,7 @@ const KINDS = [
 ];
 
 // openExportSheet({ model, totalLabel, opener }) — `model` is { name, trays, totalG, rows } from the
-// Calculator; `totalLabel` is the word for the Excel total row, already translated by the caller.
+// Calculator (js/calc.js exportModelFor) or the Recipe catalogue (exportModelOf); `totalLabel` is the word for the Excel total row, already translated by the caller.
 export function openExportSheet({ model, totalLabel = '', opener = null } = {}) {
   if (isOpen || !model) return;
   isOpen = true;
