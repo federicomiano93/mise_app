@@ -1,4 +1,4 @@
-const CACHE_NAME = 'theitalianclub-v674';
+const CACHE_NAME = 'theitalianclub-v675';
 // Firebase SDK modules (loaded from gstatic) are cached SEPARATELY from CACHE_NAME
 // so they survive the cache-version bump that happens on every deploy — otherwise
 // the offline SDK would be wiped each release until the next online load. The name
@@ -150,7 +150,7 @@ const ASSET_HASHES = {
   "./install-guide.html": '322c79acf63896ef',
   "./reset-password.html": '298724d76511df05',
   "./dist/i18n.js": 'ea6405e58166871b',
-  "./dist/index.js": '57a736a03901c5dd',
+  "./dist/index.js": '46f49109f8a6e1af',
   "./dist/calculator.js": '8069f21c1776773a',
   "./dist/orders.js": '1f8f1d0ce2cc02d8',
   "./dist/suppliers.js": '63831e51cfc1d9b3',
@@ -183,7 +183,7 @@ const ASSET_HASHES = {
   "./dist/tokens.css": 'a4f37273bf55b63f',
   "./dist/auth.css": '58cd14bdbf808ecc',
   "./dist/style.css": '1580de8c8c205539',
-  "./dist/orders.css": 'a51af9d47d76ff97',
+  "./dist/orders.css": 'b68abe9ffa8f0146',
   "./sounds/alarm.wav": '0d1465974f5be95b',
   "./fonts/manrope-latin.woff2": '71eb731d55804619',
   "./fonts/manrope-latin-ext.woff2": 'bd24140af06f1b58',

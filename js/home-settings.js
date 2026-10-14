@@ -11,13 +11,15 @@
 // which asks the server the same question. Hiding a row is courtesy, never security (P2).
 //
 // ⚠️ LOG OUT STAYS LOW-KEY AND LAST (P20): a quiet underlined line under the rows,
-// never a row dressed like the others, and it still asks first.
+// never a row dressed like the others, and it still asks first. Since 15 Oct 2026 it lives
+// on the Home (js/home-session.js) and is drawn HERE only on a kiosk device, where the Home
+// already has a red «Exit» that closes the app and two «Exit» buttons would be a trap.
 
 import { t } from './i18n.js';
 import { confirmDialog, alertDialog } from './confirm-dialog.js';
 import {
   KIOSK_STORAGE_KEY, REST_MINUTES_CHOICES, NIGHT_HOURS_CHOICES,
-  readKioskSettings, serializeKioskSettings,
+  kioskBandVisible, readKioskSettings, serializeKioskSettings,
 } from './kiosk-model.js';
 import { signOutNow, switchLocation, forgetLocation } from './firebase.js';
 import { mayLeaveWithUnsent } from './unsent-guard.js';
@@ -98,6 +100,12 @@ export function openHomeSettings(session) {
   const overlay = node('div', 'people-overlay');
   overlay.append(header, scroll);
 
+  let logoutBtn = null;
+  function kioskOn() {
+    try { return kioskBandVisible(localStorage.getItem(KIOSK_STORAGE_KEY)); } catch { return false; }
+  }
+  const onKioskChanged = () => { if (logoutBtn) logoutBtn.hidden = !kioskOn(); };
+
   function paint() {
     scroll.textContent = '';
 
@@ -145,9 +153,12 @@ export function openHomeSettings(session) {
       section(t('settings.home.device'), [versionRow(), ...kioskRows()], kioskSaved),
     ].filter(Boolean));
 
-    // Log out: the quiet destructive action at the foot, never a row (P20).
+    // Log out: the quiet destructive action at the foot, never a row (P20). Only on a
+    // kiosk device (see the header); the kiosk switch below shows and hides it in place.
     const logout = node('button', 'set-danger', t('auth.logOut'));
     logout.type = 'button';
+    logout.hidden = !kioskOn();
+    logoutBtn = logout;
     logout.addEventListener('click', async () => {
       const ok = await confirmDialog({
         title: t('auth.logOut.title'),
@@ -441,6 +452,7 @@ export function openHomeSettings(session) {
 
   function close() {
     window.removeEventListener('away-changed', onAwayChanged);
+    window.removeEventListener('kiosk-settings-changed', onKioskChanged);
     versionCleanup();
     overlay.remove();
     globalThis.window?.dispatchEvent(new CustomEvent('mise:screen', { detail: '' }));
@@ -448,6 +460,7 @@ export function openHomeSettings(session) {
 
   paint();
   window.addEventListener('away-changed', onAwayChanged);
+  window.addEventListener('kiosk-settings-changed', onKioskChanged);
   onAwayChanged();
   document.body.appendChild(overlay);
   globalThis.window?.dispatchEvent(new CustomEvent('mise:screen', { detail: 'settings' }));
