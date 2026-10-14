@@ -628,6 +628,10 @@ export function renderDetail({ recipe, app }) {
     t('cat.importIntoCalculator'),
   ]);
   importBtn.hidden = !isSectionAllowed(currentSession().location, 'calculator');
+  // ⚠️ Its explanation goes with it. Left alone under a hidden Import, the line «makes a copy you can
+  // edit for the Calculator» sat right under Export and read as Export's caption (review, 15 Oct 2026).
+  const importHint = el('p', { class: 'cat-import-hint', text: t('cat.makesACopyYou') });
+  importHint.hidden = importBtn.hidden;
 
   // Low-key delete (P20 — de-emphasised destructive action): routed through the
   // shared guard, which warns if the recipe was imported into the Calculator and
@@ -707,10 +711,7 @@ export function renderDetail({ recipe, app }) {
     el('div', { class: 'cat-detail-bottom' }, [
       exportBtn,
       importBtn,
-      el('p', {
-        class: 'cat-import-hint',
-        text: t('cat.makesACopyYou'),
-      }),
+      importHint,
       deleteBtn,
     ]),
   ]);
