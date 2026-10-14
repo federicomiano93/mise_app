@@ -2,8 +2,8 @@
 //
 // The recipe never leaves the device: both files are built here from the same model the
 // screen draws, and handed to the person as a download (js/export-sheet.js is the dialog).
-// It lives in js/ ROOT because two features use it — the Calculator's result card now, the
-// Recipe catalogue next — and a calculation shared by features is not copied (CLAUDE.md).
+// It lives in js/ ROOT because two features use it — the Calculator's result card and the
+// Recipe catalogue's recipe screen — and a calculation shared by features is not copied (CLAUDE.md).
 //
 // The model: { name, trays, totalG, rows }. A row is EITHER the Calculator's { name, grams } (the
 // UNROUNDED grams it holds: the PDF shows them as the card does, Math.round + « g», the spreadsheet

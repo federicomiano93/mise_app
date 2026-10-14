@@ -49,15 +49,15 @@ export const MIXED = {
   ],
 };
 
-// Each row rounds in its own unit on screen, so the formula (0.4 kg + 0.4 kg + 1 g = 801 g would
-// be right, but the screen total below is 802) would not round to the screen total.
+// Each row rounds in its own unit on screen: 920 g of oil and of water each read «1 kg», while the
+// Total says 1841 g. The formula over the rows (1 kg + 1 kg + 1 g = 2001 g) would not round to it.
 export const MIXED_DRIFT = {
   name: 'Salsa di prova',
   trays: 0,
-  totalG: 802,
+  totalG: 1841,
   rows: [
-    { name: 'Olio di prova', value: 0.4, unit: 'kg', factor: 1000 },
-    { name: 'Acqua di prova', value: 0.4, unit: 'kg', factor: 1000 },
+    { name: 'Olio di prova', value: 1, unit: 'kg', factor: 1000 },
+    { name: 'Acqua di prova', value: 1, unit: 'kg', factor: 1000 },
     { name: 'Pepe di prova', value: 1, unit: 'g', factor: 1 },
   ],
 };

@@ -255,7 +255,7 @@ test('xlsx total: weighable rows only, converted to grams, as a formula', () => 
 
 test('⚠️ xlsx total equals the screen total: a formula that would not round to it becomes the plain number', () => {
   const total = xlsxSheet({ title: 'T', rows: MIXED_DRIFT.rows, totalLabel: 'Total', totalG: MIXED_DRIFT.totalG }).data.at(-1)[1];
-  assert.deepEqual([total.value, total.type, total.format, total.fontWeight], [802, Number, '0 "g"', 'bold']);
+  assert.deepEqual([total.value, total.type, total.format, total.fontWeight], [1841, Number, '0 "g"', 'bold']);
 });
 
 test('xlsx total: no weighable row is a plain 0; gram-only rows keep SUM exactly', () => {
@@ -300,5 +300,5 @@ test('a real .xlsx from mixed units: unit formats, q.b. as text, the converted-t
   const drift = await buildXlsxBlob(MIXED_DRIFT, 'Totale');
   const driftSheet = strFromU8(unzipSync(new Uint8Array(await drift.arrayBuffer()))['xl/worksheets/sheet1.xml']);
   assert.doesNotMatch(driftSheet, /<f>/);
-  assert.match(driftSheet, /<c r="B6"[^>]*><v>802<\/v>/);
+  assert.match(driftSheet, /<c r="B6"[^>]*><v>1841<\/v>/);
 });
