@@ -150,9 +150,8 @@ function LabelBody({ recipe }: { recipe: CatalogueRecipe }) {
   // shop computer's heartbeat judged against a clock that moves while this screen is open (usePresenceClock); it
   // is never stored by the app. Firestore's own offline cache can replay the last print-agents document to a phone
   // that opened offline, and the 12-minute stale limit in printerPresence bounds how long that is believed.
-  // `zplFits` is the
-  // ZPL writer's own estimate (no browser can measure the printer's paper). What the DEVICE can do is asked at
-  // draw time, never cached: a road offered that is not there is a button that fails on tap.
+  // `zplFits` is the ZPL writer's own estimate (no browser can measure the printer's paper). What the DEVICE can do
+  // is asked at draw time, never cached: a road offered that is not there is a button that fails on tap.
   const isZebra = sheet !== null && sheet.printerLanguage === 'zpl';
   const { now, refresh: refreshClock } = usePresenceClock(isZebra);
   const roadContext: RoadContext = {
