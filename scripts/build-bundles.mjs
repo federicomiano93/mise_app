@@ -54,6 +54,13 @@ const plugins = [{
       const abs = resolve(args.resolveDir, args.path);
       return rel(abs) === I18N_SOURCE ? { path: C.i18nExternalPath, external: true } : null;
     });
+    // The export libraries stay outside every bundle: an import landing on one becomes the
+    // path from dist/ to the file, so the browser fetches it only when somebody taps Export.
+    build.onResolve({ filter: /\/vendor\/[^/]+\.js$/ }, args => {
+      if (args.kind === 'entry-point') return null;
+      const abs = resolve(args.resolveDir, args.path);
+      return C.lazyVendorFiles.includes(rel(abs)) ? { path: `../${rel(abs)}`, external: true } : null;
+    });
     // Every source is read with LF endings, whatever this checkout has.
     build.onLoad({ filter: /\.js$/, namespace: 'file' }, args => ({
       contents: readLF(args.path), loader: 'js',

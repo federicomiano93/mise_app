@@ -1,9 +1,9 @@
 {
   "esbuild": "0.25.10",
-  "config": "11637fabc7a8b43e",
+  "config": "09ea0d0aff55d303",
   "buildScripts": {
-    "scripts/build-bundles.mjs": "664791e4a217f4bf",
-    "scripts/bundle-lib.mjs": "8fddda14e7458e6a"
+    "scripts/build-bundles.mjs": "25f896dfe85271ec",
+    "scripts/bundle-lib.mjs": "f0f8f74ae4e7d53d"
   },
   "outputs": {
     "dist/auth.css": {
