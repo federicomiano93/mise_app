@@ -59,7 +59,10 @@ both, and the switch keeps the address) and it has consequences that every chang
 | react-router | 8.4.0 | hash routing (`#/orders`), because GitHub Pages cannot rewrite deep links |
 | lucide-react | 1.48.0 | the icon set of the design |
 | Firebase | 12.19.0 | the same SDK as the current app (see above) |
+| jspdf | 4.2.1 | the recipe export's PDF; loaded only when someone taps Export |
+| write-excel-file | 4.1.1 | the recipe export's Excel file; loaded only when someone taps Export |
 | Vitest + Testing Library + jsdom | — | specs |
+| fflate | 0.8.3 (dev only) | unzips the .xlsx inside a spec to read what was written; never in the bundle |
 | Geist / Geist Mono | @fontsource-variable | bundled, so the app starts offline and no third party sees who opens it |
 
 Preact was evaluated in step 2c and NOT adopted: React is about a fifth of the bundle, and React
@@ -289,7 +292,9 @@ queue and the other roads arrive in 3d-4. The usage record names the screen `rec
   `write-excel-file` are npm dependencies loaded ONLY by `import()` inside the two builders, so each is a chunk of
   its own that no page preloads; `recipeExport.spec.ts` fails on a static import anywhere in `app/src`. ⚠️ There is
   no service worker yet (step 5), so the FIRST export needs a connection (offline it says so); the service worker
-  will have to precache those two chunks. ⚠️ Excel is always a download: Chrome's Web Share has no Office types, so
+  will have to precache those two chunks. ⚠️ jsPDF's optional dependencies (html2canvas, canvg, dompurify) are
+  installed and Vite emits them as chunks (~380 KB) that are never loaded: step 5's service worker must precache
+  the jsPDF and write-excel-file chunks BY NAME, never by a glob that would make every phone download those three. ⚠️ Excel is always a download: Chrome's Web Share has no Office types, so
   Share is offered for the PDF only, and only when `navigator.canShare` accepts the real file. A failure is
   reported with fixed words only (`Recipe export failed:`, the file kind, `library` or `build`), never the recipe.
 - `settings/` — the Settings page (today: the Account card).
