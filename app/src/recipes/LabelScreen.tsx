@@ -1,12 +1,14 @@
-import { useId, useMemo, useState } from 'react';
+import { useId, useMemo, useRef, useState } from 'react';
 import type { Ref } from 'react';
 import { Printer, Send } from 'lucide-react';
 import { normalizeShelfLifeDays } from '@mise/shared/catalogue-model';
 import type { CatalogueRecipe } from '@mise/shared/catalogue-model';
 import { dateText, normalizeLabelProfile, resolveLabel, sizeIdFor, useByDate } from '@mise/shared/label-template-model';
 import type { ResolvedLabel } from '@mise/shared/label-template-model';
+import { toZpl, zplFits } from '@mise/shared/label-zpl';
 import { canPrintLabel, countryOf, outputLanguage } from '@mise/shared/market';
 import type { Country, OutputLanguage } from '@mise/shared/market';
+import { buildJob, printerPresence } from '@mise/shared/print-queue-model';
 import { roadsFor, whyNoRoad } from '@mise/shared/print-roads';
 import type { RoadContext } from '@mise/shared/print-roads';
 import { buildLabel, declarationText, LABEL_SHOWS } from '@mise/shared/recipe-label-model';
@@ -25,8 +27,9 @@ import { LabelSheet } from './LabelSheet';
 import type { SheetSource } from './LabelSheet';
 import { useLabelFontPreload } from './labelFontPreload';
 import { openPrintHost, closePrintHost } from './printHost';
-import { useRecipes } from './RecipesContext';
+import { useRecipes, useRecipesStore } from './RecipesContext';
 import { useLabelShows } from './labelShows';
+import { usePresenceClock } from './usePresenceClock';
 import { useSheetFit } from './useSheetFit';
 import { useStillWaiting } from './useStillWaiting';
 import styles from './LabelScreen.module.css';
@@ -104,12 +107,17 @@ const fmtMm = (n: number): string => String(Math.round(n * 10) / 10);
 // could be the wrong paper, and nothing says so on the paper that comes out.
 function LabelBody({ recipe }: { recipe: CatalogueRecipe }) {
   const { t } = useT();
-  const { location } = useSession();
-  const { recipes, ingredients, ingredientsLoaded, labelConfig, labelConfigKnown } = useRecipes();
+  const { location, locationId, user } = useSession();
+  const store = useRecipesStore();
+  const { recipes, ingredients, ingredientsLoaded, labelConfig, labelConfigKnown, printAgents } = useRecipes();
   const tables = useAllergenTables(recipes, ingredients);
   const [shows, setShows] = useLabelShows();
   const [send, sendSheet] = useSendSheet();
   const [note, setNote] = useState<MessageKey | null>(null);
+  // A job is on its way to the shop computer: Print is dead until it has landed or failed. The ref is the real
+  // guard (two taps in one frame both see the state as it was); the state only draws the button off.
+  const [sending, setSending] = useState(false);
+  const sendingRef = useRef(false);
   const reasonId = useId();
   const stillWaiting = useStillWaiting(!ingredientsLoaded);
   useLabelFontPreload();
@@ -138,15 +146,17 @@ function LabelBody({ recipe }: { recipe: CatalogueRecipe }) {
   const signature = useMemo(() => JSON.stringify(sheet), [sheet]);
   const { hostRef, sheetRef, face, fit } = useSheetFit(sheet, signature);
 
-  // 3d-4: the agent road (a job for the shop computer's printer) and the ZPL clipboard road plug in here, with
-  // `printerReady` from the print-agents watch and `zplFits` from the ZPL port. Only the system's own dialog works
-  // in this step, and only on a device that can print. ⚠️ `zplFits` answers YES until then, on purpose: with no
-  // answer the port refuses the ZPL roads as «too big for the printer», which would send a Zebra venue to buy bigger
-  // labels; with yes, the reason given is the true one for this step — the shop computer is not answering.
+  // ⚠️ THREE ROADS, DECIDED BY THE SHARED PORT (print-roads.ts) from what is true RIGHT NOW. `printerReady` is the
+  // shop computer's heartbeat judged against a clock that moves while this screen is open (usePresenceClock); it
+  // is never remembered, so a phone that opened offline cannot believe the computer is listening. `zplFits` is the
+  // ZPL writer's own estimate (no browser can measure the printer's paper). What the DEVICE can do is asked at
+  // draw time, never cached: a road offered that is not there is a button that fails on tap.
+  const isZebra = sheet !== null && sheet.printerLanguage === 'zpl';
+  const now = usePresenceClock(isZebra);
   const roadContext: RoadContext = {
-    printerReady: false,
-    zplFits: () => true,
-    device: { canPrint: typeof window.print === 'function', hasClipboard: false },
+    printerReady: printerPresence(printAgents, now).ready,
+    zplFits: resolved => zplFits(resolved as ResolvedLabel),
+    device: { canPrint: typeof window.print === 'function', hasClipboard: typeof navigator !== 'undefined' && !!navigator.clipboard },
   };
   const roads = sheet !== null ? roadsFor(sheet, roadContext) : [];
 
@@ -173,6 +183,58 @@ function LabelBody({ recipe }: { recipe: CatalogueRecipe }) {
     } catch {
       closePrintHost();
     }
+  };
+
+  // The agent road: the label's ZPL goes into the queue the shop computer reads.
+  //
+  // ⚠️ IT CAN ONLY EVER SAY «SENT», NEVER «PRINTED»: raw bytes to a printer come back with nothing, so the app cannot
+  // know the paper came out and must not imply it. And it is NOT local-first (the source awaits the write): a tap
+  // that reported success without the job having reached the database would leave somebody standing at a printer
+  // that never moves. `createdBy` is the signed-in account and `bakery` the open venue, both read at tap time —
+  // the rules check them against the account and against the folder the job lands in.
+  const sendToShopComputer = async (resolved: Laid): Promise<boolean> => {
+    const payload = toZpl(resolved, { copies: 1 });
+    const job = payload === '' ? null : buildJob({ payload, copies: 1, createdBy: user?.uid, bakery: locationId, now: Date.now() });
+    if (job === null) return false;
+    try {
+      await store.queuePrintJob(job as unknown as Record<string, unknown>);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  // The ZPL road: the printer's own language to the clipboard, to be dropped onto the printer on the shop computer.
+  // ⚠️ copyToClipboard, never navigator.clipboard.writeText: the write can hang when the page loses focus.
+  const copyPrinterCode = async (resolved: Laid): Promise<boolean> => {
+    const payload = toZpl(resolved, { copies: 1 });
+    return payload !== '' && await copyToClipboard(payload);
+  };
+
+  // The Print button, by the road it is showing. Still needs a measured fit that fits, as the system's dialog does.
+  const press = async () => {
+    const road = roads[0];
+    if (sheet === null || fit === null || !fit.measured || !fit.fits || road === undefined || sendingRef.current) return;
+    if (road.id === 'os-print') {
+      print();
+      return;
+    }
+    // ⚠️ THE BUTTON GOES DEAD WHILE THE JOB IS IN FLIGHT: queueing is a network round trip, two taps are two
+    // labels, and the second one is the one nobody wanted. The old sentence goes first, so an answer is never
+    // mistaken for the one before it.
+    sendingRef.current = true;
+    setSending(true);
+    setNote(null);
+    let ok = false;
+    try {
+      ok = road.id === 'agent' ? await sendToShopComputer(sheet) : await copyPrinterCode(sheet);
+    } finally {
+      sendingRef.current = false;
+      setSending(false);
+    }
+    if (ok) announceAction('label-printed');
+    if (road.id === 'agent') setNote(ok ? 'label.print.queued' : 'label.print.queueFailed');
+    else setNote(ok ? 'label.print.zplCopied' : 'label.copyFailed');
   };
 
   const blocked = (sentence: string) => (
@@ -223,10 +285,11 @@ function LabelBody({ recipe }: { recipe: CatalogueRecipe }) {
     // sentence explaining it is an answer. And it is the MEASUREMENT that enables it — never the estimate, and
     // never an answer from a node nothing could measure.
     const canPress = sheet !== null && fit !== null && fit.measured && fit.fits && roads.length > 0;
-    // ⚠️ THE BUTTON SAYS WHAT IT WILL DO. 3d-4 adds the words of the other roads.
+    // ⚠️ THE BUTTON SAYS WHAT IT WILL DO: on a Zebra it queues or copies instead of opening a dialog, and a button
+    // called «Print» that silently copies is a button nobody trusts twice. The road carries its own words (a KEY).
     const reasonIds = [labelConfigKnown ? null : `${reasonId}-paper`, why === null ? null : `${reasonId}-why`]
       .filter((id): id is string => id !== null).join(' ');
-    const printWords: MessageKey = roads[0]?.labelKey === 'label.print.viaSystem' ? 'label.print.viaSystem' : 'label.print';
+    const printWords: MessageKey = roads[0] === undefined ? 'label.print' : roads[0].labelKey as MessageKey;
     const measured = fit !== null && fit.measured && sheet !== null ? fit : null;
 
     content = (
@@ -273,9 +336,9 @@ function LabelBody({ recipe }: { recipe: CatalogueRecipe }) {
             <button
               type="button"
               className={styles.button}
-              disabled={!canPress}
+              disabled={!canPress || sending}
               aria-describedby={!canPress && reasonIds !== '' ? reasonIds : undefined}
-              onClick={print}
+              onClick={() => { void press(); }}
             >
               <Printer aria-hidden="true" />
               <span>{t(printWords)}</span>
