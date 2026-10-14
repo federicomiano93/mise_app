@@ -1,5 +1,5 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { screen, within } from '@testing-library/react';
+import { act, screen, waitFor, within } from '@testing-library/react';
 import { LOAD, recipe, renderRecipes, sourceWith } from '../testing/renderRecipes';
 
 // The recipe screen's «Export» (PDF / Excel): under the ingredient table, hidden when there is nothing to export,
@@ -104,5 +104,14 @@ describe('the Export button on the recipe screen', () => {
       ['kg', 3, '0,727', 1000], ['l', 3, '2,273', 1000], ['pz', 0, '4', 0], ['q.b.', 0, null, 0],
     ]);
     expect(model.rows[3]?.value).toBeNull();
+  });
+
+  it('⚠️ closes the open sheet when the recipe changes under it (a live update from another phone)', async () => {
+    const { user, source } = await open();
+    await user.click(main().getByRole('button', { name: 'Export' }));
+    await screen.findByRole('dialog', { name: 'Export as' });
+    source.recipes.set('f', recipe('f', { name: 'Focaccia di prova', ingredients: [{ label: 'Flour', grams: 900, unit: 'g' }] }));
+    act(() => { source.push(); });
+    await waitFor(() => { expect(screen.queryByRole('dialog', { name: 'Export as' })).not.toBeInTheDocument(); });
   });
 });

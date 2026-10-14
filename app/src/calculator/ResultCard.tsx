@@ -50,7 +50,7 @@ export function ResultCard({ recipe, result, config, products, qty, divisorN, on
   const [fullScreen, setFullScreen] = useState(false);
   const [copy, setCopy] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [send, sendSheet] = useSendSheet();
-  const [openExport, exportSheet] = useExportSheet();
+  const [openExport, exportSheet, closeExport] = useExportSheet();
   const opener = useRef<HTMLButtonElement>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const ready = result.kind === 'ready' ? result : null;
@@ -62,7 +62,9 @@ export function ResultCard({ recipe, result, config, products, qty, divisorN, on
 
   // ⚠️ A CONFIGURATION THAT CHANGES UNDER THE FULL-SCREEN VIEW CLOSES IT: it is a copy of the old grams.
   // The config object changes only when the configuration itself does.
-  useEffect(() => { setFullScreen(false); }, [config]);
+  // ⚠️ The export sheet is the same kind of copy (the model captured when Export was tapped): it closes the same way.
+  // React Aria hands the focus back only to an opener that is still attached.
+  useEffect(() => { setFullScreen(false); closeExport(); }, [config, closeExport]);
   useEffect(() => () => { if (timer.current !== null) clearTimeout(timer.current); }, []);
 
   const openFullScreen = () => { setFullScreen(true); };

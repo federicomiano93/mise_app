@@ -75,7 +75,11 @@ function IngredientsCard({ recipe, target }: { recipe: CatalogueRecipe; target: 
   const [fullScreen, setFullScreen] = useState(false);
   const amounts = recipeAmounts(recipe, target, t, locale);
   const { rows, total } = amounts;
-  const [openExport, exportSheet] = useExportSheet();
+  const [openExport, exportSheet, closeExport] = useExportSheet();
+
+  // ⚠️ THE EXPORT SHEET HOLDS A COPY of the amounts drawn when Export was tapped: a recipe that changes under it
+  // (a live update) or a batch target that is applied or cleared closes it, so no stale file is downloaded.
+  useEffect(() => { closeExport(); }, [recipe, target, closeExport]);
 
   // ⚠️ THE FOCUS GOES BACK ONLY ONCE THE DIALOG IS CLOSED. While a modal <dialog> is open everything
   // outside it is inert and focus() on the opener does nothing; the dialog closes itself first

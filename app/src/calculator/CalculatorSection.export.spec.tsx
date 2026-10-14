@@ -1,5 +1,5 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { screen, within } from '@testing-library/react';
+import { act, screen, waitFor, within } from '@testing-library/react';
 import { fakeCalculatorSource } from '../testing/fakeCalculatorSource';
 import { LOAD, SOURDOUGH, configOf, onlyFocaccia, renderCalculator } from '../testing/renderCalculator';
 
@@ -122,5 +122,15 @@ describe('the Export button', () => {
     await user.click(within(await screen.findByRole('dialog', { name: 'Esporta come' })).getByRole('button', { name: /^Excel/ }));
     await screen.findByRole('dialog', { name: 'File pronto' });
     expect(builders.buildXlsxBlob.mock.calls[0]?.slice(1)).toEqual(['Impasto totale', 'Ricetta']);
+  });
+
+  it('⚠️ closes the open sheet when the configuration changes under it: the copy would be of the old grams', async () => {
+    focaccia();
+    const { user, source } = await open();
+    await user.click(main().getByRole('button', { name: 'Export' }));
+    await screen.findByRole('dialog', { name: 'Export as' });
+    source.config = onlyFocaccia({ clients: [] });
+    act(() => { source.push(); });
+    await waitFor(() => { expect(screen.queryByRole('dialog')).not.toBeInTheDocument(); });
   });
 });
