@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, screen, waitFor, within } from '@testing-library/react';
 import { labelWord } from '@mise/shared/market';
@@ -659,9 +662,16 @@ describe('the paper: measured, scaled, and the Print button that obeys it', () =
     expect(main().getByText(/^This device cannot reach a printer/)).toBeVisible();
   });
 
-  it('⚠️ a Zebra venue is told the shop computer is not answering — never «too big» — until step 3d-4 brings its roads', async () => {
+  it('⚠️ a Zebra venue whose shop computer has never reported in is told it is not answering — never «too big»', async () => {
     stubLayout();
-    await openLabel([CAKE], 'cake', { labelConfig: { printerLanguage: 'zpl' } });
+    // A paper the ZPL estimate says fits, so the only thing wrong is the silence. userEvent installs a clipboard of its
+    // own when the app is drawn; this device has none, or the copy road would take the button.
+    const source = fakeRecipesSource({
+      recipes: [CAKE], ingredients: INGREDIENTS, labelConfig: { printerLanguage: 'zpl', widthMm: 102, heightMm: 152 },
+    });
+    renderRecipes('/recipes/cake/label', { source, session: { location: GB } });
+    Reflect.deleteProperty(navigator, 'clipboard');
+    await screen.findByRole('group', { name: 'What the label shows' }, LOAD);
     expect(printButton()).toBeDisabled();
     expect(main().getByText(/^The shop computer is not answering/)).toBeVisible();
     expect(main().queryByText(/does not fit/)).toBeNull();
@@ -707,10 +717,30 @@ describe('the paper: measured, scaled, and the Print button that obeys it', () =
 
 });
 
-// ⚠️ 3d-4 MUST NOT SHIP WITH THE STUBS 3d-3 LEFT IN LabelScreen.tsx: `zplFits: () => true` (so the port never says «too big for
-// the printer» about a printer it cannot ask) and `printerReady: false` (so a Zebra venue is always told the shop computer is
-// silent). Turn this into a real spec in 3d-4: it must FAIL while either stub remains (docs/parity/catalogue.md, 3d-4).
-it.todo('3d-4: LabelScreen.tsx has neither the `zplFits: () => true` stub nor the `printerReady: false` stub');
+// ⚠️ THE STUBS 3d-3 LEFT IN LabelScreen.tsx ARE GONE, AND THIS KEEPS THEM GONE: `zplFits: () => true` (the port would never
+// say «too big for the printer» about a printer it cannot ask) and `printerReady: false` (a Zebra venue would always be told
+// the shop computer is silent). The first half reads the file as text; the second proves, on a drawn screen, that a fresh
+// heartbeat really does open the agent road — the text alone could be satisfied by dead code.
+describe('3d-4: the label screen asks the real questions', () => {
+  it('LabelScreen.tsx has neither the `zplFits: () => true` stub nor the `printerReady: false` stub', () => {
+    const text = readFileSync(join(dirname(fileURLToPath(import.meta.url)), 'LabelScreen.tsx'), 'utf8');
+    expect(text).toContain('roadsFor(');
+    expect(text).not.toMatch(/zplFits\s*:\s*\(\s*\)\s*=>\s*true/);
+    expect(text).not.toMatch(/printerReady\s*:\s*false/);
+  });
+
+  it('a drawn Zebra screen with a fresh heartbeat shows an enabled «Print» that queues a job', async () => {
+    stubLayout();
+    const source = fakeRecipesSource({
+      recipes: [CAKE], ingredients: INGREDIENTS, labelConfig: { printerLanguage: 'zpl' },
+      printAgents: [{ id: 'pc', lastSeenAt: new Date().toISOString() }],
+    });
+    const { user } = await openLabel([CAKE], 'cake', { source });
+    await waitFor(() => { expect(printButton()).toBeEnabled(); });
+    await user.click(printButton());
+    await waitFor(() => { expect(source.jobs).toHaveLength(1); });
+  });
+});
 
 describe('printing through the system\'s own dialog', () => {
   it('puts a host in <body> at the measured size, calls window.print once, and takes it away once the person is back', async () => {
