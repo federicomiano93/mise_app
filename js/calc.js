@@ -16,7 +16,7 @@ import {
   computeRecipeTarget, getTabProducts, doughExtraGrams, isExtraDoughEnabled,
   getDivisorProducts, divisorTotal, splitDough, DIVISOR_MAX,
   isCrateEnabled, getCratePerBox, crateCount,
-  getRecipeById, recipeSpec, showsLeaveningKnob, normalizeTrays, traysGrams, formatGrams, isProRata,
+  getRecipeById, exportTraysFor, recipeSpec, showsLeaveningKnob, normalizeTrays, traysGrams, formatGrams, isProRata,
 } from './calculator-config.js';
 // ⚠️ Where a tab's ingredients really come from. A screen reading
 // recipe.ingredients directly would see the tab's own leftover copy.
@@ -308,9 +308,7 @@ export function calc(id) {
 // The trays the exported title may name: only when the dough IS the trays (a trays recipe, or a
 // trays-plus-total one with nothing typed in the total), otherwise 0 and the title says the grams.
 function exportTrays(recipe) {
-  const trays = traysFor(recipe.id);
-  const traysOnly = recipe.logic === 'trays' || (recipe.logic === 'traysTotal' && totalInputFor(recipe.id) === 0);
-  return traysOnly && trays > 0 ? trays : 0;
+  return exportTraysFor(recipe.logic, traysFor(recipe.id), totalInputFor(recipe.id));
 }
 
 // What the PDF / Excel export is made from: the SAME rows the result card shows (never recomputed),

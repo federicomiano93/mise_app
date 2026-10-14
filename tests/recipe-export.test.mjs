@@ -7,16 +7,19 @@ import assert from 'node:assert/strict';
 import { jsPDF } from '../js/vendor/jspdf.esm.js';
 import { unzipSync, strFromU8 } from '../js/vendor/fflate.esm.js';
 import {
-  exportTitle, exportFileName, rowText, pdfLayout, pdfSafe, xlsxSheet, buildPdfBlob, buildXlsxBlob,
+  exportTitle, exportFileName, rowText, pdfLayout, pdfSafe, pdfMeasurer, sheetNameOf, xlsxSheet, buildPdfBlob, buildXlsxBlob,
   PAGE_W, PAGE_H,
 } from '../js/recipe-export.js';
 import { SIX, TRAYS, LONG_ROW, SIXTY, AWKWARD_NAME } from './fixtures/recipe-export-fixtures.mjs';
 
 const doc = new jsPDF({ unit: 'pt', format: 'a4' });
-const measure = (text, size, bold) => {
+// The width of what a Tj really draws: no kerning (see pdfMeasurer).
+const measure = pdfMeasurer(doc);
+// Written out here too, so the test does not trust the code it checks.
+const drawnWidth = (text, size, bold) => {
   doc.setFont('helvetica', bold ? 'bold' : 'normal');
   doc.setFontSize(size);
-  return doc.getTextWidth(text);
+  return [...text].reduce((w, ch) => w + doc.getTextWidth(ch), 0);
 };
 const layoutOf = m => pdfLayout({ title: exportTitle(m), rows: m.rows.map(r => ({ name: r.name, text: rowText(r.grams) })) }, measure);
 const EPS = 1e-6;
@@ -93,6 +96,38 @@ test('a name too long even at 9 pt is cut with «…», never pushed into the we
   const lay = checkGeometry(huge);
   assert.equal(lay.fontSize, 9);
   assert.equal(lay.items.filter(i => i.text.endsWith('…')).length, 1);
+});
+
+test('names that kern badly are measured as drawn, so the gap before the dots survives (also truncated at 9 pt)', () => {
+  const names = ['Torta Tyrolese di prova', 'Yogurt AVVolto', 'Torta Tyrolese di prova '.repeat(6), 'Yogurt AVVolto To Ty '.repeat(6)];
+  // The two measures really differ for these names, or the test would prove nothing.
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(19);
+  assert.ok(doc.getTextWidth('Yogurt AVVolto') !== drawnWidth('Yogurt AVVolto', 19, false), 'kerning is present in getTextWidth');
+  const kerned = { ...SIX, rows: names.map((name, i) => ({ name, grams: 1000 + i })) };
+  const lay = layoutOf(kerned);
+  assert.equal(lay.fontSize, 9);
+  const rows = lay.items.slice(1);
+  for (let i = 0; i < names.length; i++) {
+    const y = rows[0].y + i * lay.leading;
+    const row = rows.filter(it => Math.abs(it.y - y) < EPS);
+    const name = row.find(it => it.x === 147);
+    const dots = row.find(it => /^\.+$/.test(it.text));
+    const gap = drawnWidth(' ', 9, false);
+    assert.ok(name.x + drawnWidth(name.text, 9, false) + gap <= dots.x + EPS, `row ${i}: drawn name + gap reaches the dots`);
+    assert.ok(dots.text.length >= 3);
+  }
+});
+
+test('file and sheet names: the fallback words come from the caller; unusable sheet names fall back', () => {
+  assert.equal(exportFileName({ name: '///', trays: 0, totalG: 5 }, 'pdf', 'ricetta'), 'ricetta_5g.pdf');
+  assert.equal(sheetNameOf('', 'Ricetta'), 'Ricetta');
+  assert.equal(sheetNameOf("'Torta'", 'R'), 'Torta');
+  assert.equal(sheetNameOf('’Torta’', 'R'), 'Torta');
+  assert.equal(sheetNameOf("'", 'R'), 'R');
+  assert.equal(sheetNameOf('History', 'R'), 'R');
+  assert.equal(sheetNameOf(' hIsToRy ', 'R'), 'R');
+  assert.equal(sheetNameOf('History of bread', 'R'), 'History of bread');
+  assert.equal(sheetNameOf("Torta di mele e cannella della nonna'", 'R'), 'Torta di mele e cannella della');
 });
 
 test('layout of 60 rows fits one page with the bottom margin, one size for all rows', () => {

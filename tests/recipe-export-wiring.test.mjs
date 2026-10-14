@@ -8,7 +8,8 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { translate, _dictionaries } from '../js/i18n.js';
-import { exportErrorKey } from '../js/recipe-export.js';
+import { exportErrorKey, exportErrorCode } from '../js/recipe-export.js';
+import { exportTraysFor } from '../js/calculator-config.js';
 import { BUILD_CONFIG } from '../scripts/bundle-lib.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -55,7 +56,7 @@ test('both libraries are precached, so Export works offline', () => {
 
 test('every export word exists in English and Italian, and an Italian one differs where it should', () => {
   const keys = ['button', 'title', 'pdf', 'pdfNote', 'excel', 'excelNote', 'preparing', 'ready', 'download', 'share', 'close',
-    'needsConnection', 'failed'].map(k => `export.${k}`);
+    'needsConnection', 'failed', 'fileFallback', 'sheetFallback'].map(k => `export.${k}`);
   const d = _dictionaries();
   for (const key of keys) {
     for (const lang of ['en', 'it']) {
@@ -69,10 +70,32 @@ test('every export word exists in English and Italian, and an Italian one differ
   assert.equal(translate(d, 'en', 'export.needsConnection'), 'Export needs a connection the first time. Connect and try again.');
 });
 
-test('a library that would not load asks for a connection; any other failure says to retry', () => {
-  assert.equal(exportErrorKey({ code: 'export/library' }), 'export.needsConnection');
-  assert.equal(exportErrorKey(new Error('boom')), 'export.failed');
-  assert.equal(exportErrorKey(null), 'export.failed');
+test('only a library that would not load WHILE OFFLINE asks for a connection', () => {
+  const lib = { code: 'export/library' };
+  assert.equal(exportErrorKey(lib, false), 'export.needsConnection');
+  assert.equal(exportErrorKey(lib, true), 'export.failed');
+  assert.equal(exportErrorKey(lib), 'export.failed');
+  assert.equal(exportErrorKey(new Error('boom'), false), 'export.failed');
+  assert.equal(exportErrorKey(null, false), 'export.failed');
+});
+
+test('the code that goes into the error report is one of two fixed words', () => {
+  assert.equal(exportErrorCode({ code: 'export/library' }), 'library');
+  assert.equal(exportErrorCode(new Error('Torta di prova secret')), 'build');
+  assert.equal(exportErrorCode(undefined), 'build');
+});
+
+test('the title names trays only when the dough IS the trays', () => {
+  // [logic, trays, typed total, trays named in the title]
+  const cases = [
+    ['orders', 3, 0, 0], ['total', 3, 0, 0], ['both', 3, 500, 0], ['both', 3, 0, 0],
+    ['trays', 3, 0, 3], ['trays', 3, 500, 3], ['trays', 0, 0, 0], ['trays', 2.9, 0, 2],
+    ['traysTotal', 3, 0, 3], ['traysTotal', 3, 500, 0], ['traysTotal', 0, 0, 0], ['traysTotal', '4', '', 4],
+    ['trays', NaN, 0, 0], ['trays', -2, 0, 0],
+  ];
+  for (const [logic, trays, typed, want] of cases) {
+    assert.equal(exportTraysFor(logic, trays, typed), want, `${logic} trays=${trays} typed=${typed}`);
+  }
 });
 
 test('the dialog: Download is a real link, Share is for the PDF only and asks canShare with the file', () => {
@@ -94,18 +117,22 @@ test('the Calculator exports the model the card renders, with the trays only whe
   const calc = read('js/calc.js');
   assert.match(calc, /export function exportModelFor\(id\) \{\s*const model = lastRecipe\[id\];\s*if \(!model\) return null;/);
   assert.match(calc, /trays: exportTrays\(recipe\) \}/);
-  assert.match(calc, /recipe\.logic === 'trays' \|\| \(recipe\.logic === 'traysTotal' && totalInputFor\(recipe\.id\) === 0\)/);
+  assert.match(calc, /exportTraysFor\(recipe\.logic, traysFor\(recipe\.id\), totalInputFor\(recipe\.id\)\)/);
   // Unrounded grams are copied from lastRecipe, never recomputed.
   const body = calc.slice(calc.indexOf('export function exportModelFor'), calc.indexOf('export function recipeModelFor'));
   assert.match(body, /grams: r\.grams/);
   assert.doesNotMatch(body, /Math\.round|scaleRecipe|computeRecipeTarget/);
 });
 
-test('the result card has the Export button beside Send, wired to the sheet with the translated total label', () => {
+test('the result card has a full-width secondary Export button under the copy row, wired to the sheet', () => {
   const render = read('js/calculator-render.js');
-  assert.match(render, /id: id \+ '-export-btn'/);
-  assert.match(render, /title: t\('export\.button'\), 'aria-label': t\('export\.button'\)/);
-  assert.ok(render.indexOf("'-wa-recipe-btn'") < render.indexOf("'-export-btn'"));
+  assert.match(render, /class: 'copy-btn export-btn', id: id \+ '-export-btn'/);
+  assert.match(render, /el\('span', \{\}, t\('export\.button'\)\)/);
+  const start = render.indexOf("el('div', { class: 'copy-row' }");
+  const rowEnd = render.indexOf('// Its own full-width line');
+  const rowOnly = render.slice(start, rowEnd);
+  assert.ok(start > 0 && rowEnd > start && render.indexOf("'-export-btn'") > rowEnd, 'the button sits after the copy row closes');
+  assert.doesNotMatch(rowOnly, /export/, 'the copy row is as it was on main');
   const app = read('js/app.js');
   assert.match(app, /openExportSheet\(\{ model, totalLabel: t\('calc\.totalDough'\), opener: exportBtn \}\)/);
   assert.match(app, /exportModelFor\(id\)/);

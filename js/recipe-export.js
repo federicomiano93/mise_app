@@ -27,13 +27,14 @@ export function exportTitle(m) {
 }
 
 // «Pizza_x3.pdf», «Focaccia_24000g.xlsx»: safe on Windows, Android and iOS file systems.
-export function exportFileName(m, ext) {
+// `fallback` is the word for a recipe with no usable name; the caller reads it from t() when it asks.
+export function exportFileName(m, ext, fallback = 'recipe') {
   const base = String(m.name ?? '')
     .replace(/[\\/:*?"<>|\u0000-\u001f\u007f]/g, '')
     .trim()
     .replace(/\s+/g, '_')
     .replace(/^\.+/, '')
-    .slice(0, 80) || 'recipe';
+    .slice(0, 80) || fallback;
   const trays = Number(m.trays) || 0;
   return `${base}${trays > 0 ? `_x${trays}` : `_${m.totalG}g`}.${ext}`;
 }
@@ -150,9 +151,17 @@ const GRAMS_FORMAT = `0 ${QUOTE}g${QUOTE}`;
 // ⚠️ A formula is written WITHOUT its leading «=»: the library puts the text into <f> as it is,
 // and the file format has no «=» there.
 
+// A worksheet's name: no `[]:*?/\`, 31 characters at most, never starting or ending with an
+// apostrophe and never «History» (Excel keeps both for itself); otherwise the caller's fallback.
+export function sheetNameOf(name, fallback = 'Recipe') {
+  const clean = String(name ?? '').replace(/[\[\]:*?/\\]/g, '').trim().slice(0, 31)
+    .replace(/^['’\s]+|['’\s]+$/g, '');
+  return !clean || clean.toLowerCase() === 'history' ? fallback : clean;
+}
+
 // xlsxSheet({ title, name, rows: [{ name, grams }], totalLabel }) -> { data, options } for write-excel-file.
 // The sheet's tab is called after the recipe (`name`, else the title). Weights are real numbers (exact), the total is a formula the spreadsheet computes itself.
-export function xlsxSheet({ title, name, rows, totalLabel }) {
+export function xlsxSheet({ title, name, rows, totalLabel, sheetFallback = 'Recipe' }) {
   const data = [
     [{ value: title, fontWeight: 'bold', columnSpan: 2 }, null],
     [],
@@ -169,7 +178,7 @@ export function xlsxSheet({ title, name, rows, totalLabel }) {
     { value: `SUM(B3:B${last})`, type: 'Formula', fontWeight: 'bold', format: GRAMS_FORMAT },
   ]);
   const longest = rows.reduce((w, r) => Math.max(w, String(r.name ?? '').length), String(totalLabel ?? '').length);
-  const sheet = String(name ?? title ?? '').replace(/[\[\]:*?/\\]/g, '').trim().slice(0, 31).trim() || 'Recipe';
+  const sheet = sheetNameOf(name ?? title, sheetFallback);
   return {
     data,
     options: {
@@ -194,8 +203,35 @@ async function loadLibrary(importer) {
   }
 }
 
-// The dictionary key for the message a person reads when an export failed.
-export const exportErrorKey = err => (err && err.code === LIBRARY_ERROR ? 'export.needsConnection' : 'export.failed');
+// A library that did not load while the phone is ONLINE is not a connection problem, so only an
+// offline phone is told to connect. `online` is navigator.onLine.
+export const exportErrorKey = (err, online = true) => (
+  err && err.code === LIBRARY_ERROR && online === false ? 'export.needsConnection' : 'export.failed');
+
+// The fixed code that goes into the error report: what failed, never the recipe or its words.
+export const exportErrorCode = err => (err && err.code === LIBRARY_ERROR ? 'library' : 'build');
+
+// ⚠️ WIDTHS WITHOUT KERNING. jsPDF's getTextWidth(string) applies kerning pairs, but a Tj draws the
+// string without them, so a name like «Yogurt AVVolto» is drawn up to ~4.6 pt wider than measured
+// and the gap before the dots shrinks. Summing the width of each character measures what is drawn.
+export function pdfMeasurer(doc) {
+  const cache = new Map();
+  return (text, size, bold) => {
+    let width = 0;
+    for (const ch of String(text)) {
+      const key = `${bold ? 1 : 0}|${size}|${ch}`;
+      let w = cache.get(key);
+      if (w === undefined) {
+        doc.setFont('helvetica', bold ? 'bold' : 'normal');
+        doc.setFontSize(size);
+        w = doc.getTextWidth(ch);
+        cache.set(key, w);
+      }
+      width += w;
+    }
+    return width;
+  };
+}
 
 // -> Blob (application/pdf). One A4 page: the title, then «name ........ weight» per row.
 export async function buildPdfBlob(m) {
@@ -203,11 +239,7 @@ export async function buildPdfBlob(m) {
   const doc = new jsPDF({ unit: 'pt', format: 'a4', compress: false });
   const title = pdfSafe(exportTitle(m));
   doc.setProperties({ title });
-  const measure = (text, size, bold) => {
-    doc.setFont('helvetica', bold ? 'bold' : 'normal');
-    doc.setFontSize(size);
-    return doc.getTextWidth(text);
-  };
+  const measure = pdfMeasurer(doc);
   const { items } = pdfLayout({
     title,
     rows: m.rows.map(r => ({ name: pdfSafe(r.name), text: rowText(r.grams) })),
@@ -221,8 +253,8 @@ export async function buildPdfBlob(m) {
 }
 
 // -> Blob (.xlsx). `totalLabel` is the venue's own «Total dough» word, passed by the caller.
-export async function buildXlsxBlob(m, totalLabel) {
+export async function buildXlsxBlob(m, totalLabel, sheetFallback = 'Recipe') {
   const { default: writeXlsxFile } = await loadLibrary(() => import('./vendor/write-excel-file.esm.js'));
-  const { data, options } = xlsxSheet({ title: exportTitle(m), name: m.name, rows: m.rows, totalLabel });
+  const { data, options } = xlsxSheet({ title: exportTitle(m), name: m.name, rows: m.rows, totalLabel, sheetFallback });
   return writeXlsxFile(data, options).toBlob();
 }

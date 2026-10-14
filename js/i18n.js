@@ -2341,6 +2341,8 @@ const DICTIONARIES = Object.freeze({
     'export.close': 'Close',
     'export.needsConnection': 'Export needs a connection the first time. Connect and try again.',
     'export.failed': 'The file could not be made. Try again.',
+    'export.fileFallback': 'recipe',
+    'export.sheetFallback': 'Recipe',
     // ⚠️ THE JOINER IS A WORD TOO. `names.join(' and ')` and listNames() both wrote
     // English grammar into the code, in three places.
     'ui.listPair': '{a} and {b}',
@@ -5241,6 +5243,8 @@ const DICTIONARIES = Object.freeze({
     'export.close': 'Chiudi',
     'export.needsConnection': 'La prima volta per esportare serve la connessione. Collegati e riprova.',
     'export.failed': 'Non sono riuscito a creare il file. Riprova.',
+    'export.fileFallback': 'ricetta',
+    'export.sheetFallback': 'Ricetta',
     'ui.listPair': '{a} e {b}',
     'aria.recipe': 'Ricetta',
     'ui.cancel': 'Annulla',
