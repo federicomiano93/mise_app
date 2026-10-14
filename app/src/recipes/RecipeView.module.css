@@ -137,7 +137,6 @@
   gap: var(--s2);
   width: 100%;
   min-height: var(--hit);
-  margin-top: var(--s3);
   padding: 0 var(--s4);
   border: 1px solid var(--line-2);
   border-radius: var(--r-md);
