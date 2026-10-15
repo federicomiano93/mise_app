@@ -157,6 +157,13 @@ export function ReorderRows({ rows, labelledBy, hintId, onDrop, onStep, focusGri
             const amount = amountOf(item);
             return (
               <GridListItem id={item.key} textValue={name} className={styles.row}>
+                <span className={styles.name}>{name}</span>
+                <span className={styles.amount}>
+                  <span className={styles.number}>{amount.number}</span>
+                  <span className={styles.unit}>{amount.unit}</span>
+                </span>
+                {/* ⚠️ THE GRIP STANDS WHERE THE BIN STOOD, at the END: at the start it took 48px from the name, which broke
+                    «Acqua» into «Acqu / a» on a 296px phone. Here the name keeps the width it has while editing. */}
                 <Button
                   slot="drag"
                   ref={gripRef(item.key)}
@@ -165,12 +172,6 @@ export function ReorderRows({ rows, labelledBy, hintId, onDrop, onStep, focusGri
                 >
                   <GripVertical aria-hidden="true" />
                 </Button>
-                <span className={styles.name}>{name}</span>
-                <span className={styles.amount}>
-                  <span className={styles.number}>{amount.number}</span>
-                  <span className={styles.unit}>{amount.unit}</span>
-                </span>
-                <span className={styles.spacer} aria-hidden="true" />
               </GridListItem>
             );
           }}

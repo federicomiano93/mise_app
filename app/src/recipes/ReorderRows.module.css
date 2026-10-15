@@ -1,4 +1,4 @@
-/* The rows of a recipe in reorder mode: grip, name, amount — one line each, at least a thumb's height, down to a 296px
+/* The rows of a recipe in reorder mode: name, amount, grip — one line each, at least a thumb's height, down to a 296px
    phone (the name wraps; the amount keeps its width). It sits in the editor's frame, which draws the borders. The drag
    state comes from React Aria's data attributes. */
 
@@ -30,7 +30,7 @@
   opacity: 0.6;
 }
 
-/* The grip is a target of its own, as big as the bin it replaces. */
+/* The grip is a target of its own, as big as the bin it replaces and in the bin's place (the Total's spacer). */
 .grip {
   display: flex;
   flex: none;
@@ -66,8 +66,8 @@
 }
 
 /* The right side is built from the SAME geometry as the Total row (RecipeEditor.module.css .totalCell / .totalSpacer): a cell
-   as wide as the editor's amount box, the number right-aligned in the same 52px, the unit word after it, then a spacer as
-   wide as the bin. So every number ends on the Total's right edge at any width. A long unit word is cut short, as in the editor. */
+   as wide as the editor's amount box, the number right-aligned in the same 52px, the unit word after it, then the grip, as
+   wide as the bin and the Total's spacer. So every number ends on the Total's right edge at any width. A long unit word is cut short, as in the editor. */
 .amount {
   display: flex;
   flex: none;
@@ -92,11 +92,6 @@
   overflow: hidden;
   color: var(--ink-2);
   white-space: nowrap;
-}
-
-.spacer {
-  flex: none;
-  width: var(--hit);
 }
 
 /* Where the dragged row would land. */

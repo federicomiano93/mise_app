@@ -147,7 +147,9 @@ describe('reordering the rows', () => {
     expect(declaration(rule(reorderCss, '.number'), 'padding')).toBe(declaration(rule(editorCss, '.totalNum'), 'padding'));
     expect(declaration(rule(reorderCss, '.number'), 'text-align')).toBe('right');
     expect(declaration(rule(reorderCss, '.unit'), 'padding-left')).toBe(declaration(rule(editorCss, '.totalUnit'), 'padding-left'));
-    expect(declaration(rule(reorderCss, '.spacer'), 'width')).toBe(declaration(rule(editorCss, '.totalSpacer'), 'width'));
+    // The grip stands where the bin and the Total's spacer stand (the end), so the name keeps its editing width.
+    expect(declaration(rule(reorderCss, '.grip'), 'width')).toBe(declaration(rule(editorCss, '.totalSpacer'), 'width'));
+    expect(reorderCss).not.toContain('.spacer');
     expect(declaration(rule(reorderCss, '.row'), 'gap')).toBe(declaration(rule(editorCss, '.total'), 'gap'));
     // The unit word has a fixed slot and is cut short, never pushing the number.
     expect(declaration(rule(reorderCss, '.unit'), 'min-width')).toBe('0');
