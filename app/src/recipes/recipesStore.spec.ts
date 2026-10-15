@@ -568,6 +568,49 @@ describe('the Recipe catalogue store', () => {
       expect(JSON.parse(data.get(LABEL_CONFIG_KEY)!)).toEqual({ widthMm: 76, heightMm: 99, dpi: 203 });
     });
 
+    test.each([
+      ['the first refused first', true],
+      ['the second refused first', false],
+    ])('⚠️ two refused patches on one key never leave the first one’s refused value behind (%s)', async (_order, firstFirst) => {
+      const { store, data, saveLabelConfig, labelServer } = makeStore({ [LABEL_CONFIG_KEY]: JSON.stringify(HELD) });
+      store.start();
+      labelServer(HELD);
+      const one = deferred();
+      const two = deferred();
+      saveLabelConfig.mockReturnValueOnce(one.promise).mockReturnValueOnce(two.promise);
+      const a = store.saveLabelProfile({ widthMm: 10 });
+      const b = store.saveLabelProfile({ widthMm: 5 });
+      expect(store.getSnapshot().labelConfig).toEqual({ ...HELD, widthMm: 5 });
+      const refuse = (d: ReturnType<typeof deferred>, p: Promise<void>) => { d.reject(new Error('no')); return expect(p).rejects.toThrow('no'); };
+      if (firstFirst) {
+        await refuse(one, a);
+        // The second is still in the air and owns the key.
+        expect(store.getSnapshot().labelConfig).toEqual({ ...HELD, widthMm: 5 });
+        await refuse(two, b);
+      } else {
+        await refuse(two, b);
+        // The first is still in the air: its value is what the key holds meanwhile.
+        expect(store.getSnapshot().labelConfig).toEqual({ ...HELD, widthMm: 10 });
+        await refuse(one, a);
+      }
+      expect(store.getSnapshot().labelConfig).toEqual(HELD);
+      expect(JSON.parse(data.get(LABEL_CONFIG_KEY)!)).toEqual(HELD);
+    });
+
+    test('a refused patch gives the key back to an earlier accepted one, not to the confirmed value before it', async () => {
+      const { store, saveLabelConfig, labelServer } = makeStore({ [LABEL_CONFIG_KEY]: JSON.stringify(HELD) });
+      store.start();
+      labelServer(HELD);
+      const two = deferred();
+      saveLabelConfig.mockReturnValueOnce(Promise.resolve()).mockReturnValueOnce(two.promise);
+      const a = store.saveLabelProfile({ dpi: 300 });
+      const b = store.saveLabelProfile({ dpi: 600 });
+      await a;
+      two.reject(new Error('no'));
+      await expect(b).rejects.toThrow('no');
+      expect(store.getSnapshot().labelConfig).toEqual({ ...HELD, dpi: 300 });
+    });
+
     test('a rejected save on a venue that had no document goes back to having none', async () => {
       const { store, data, saveLabelConfig, labelServer } = makeStore();
       store.start();

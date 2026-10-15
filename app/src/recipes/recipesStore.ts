@@ -228,7 +228,12 @@ export function createRecipesStore(source: RecipesSource, deps: RecipesDeps): Re
   let labelConfigFromServer = false;
   // The label profile's local writes (saveLabelProfile): a running number per patch, and which patch last set each key.
   let labelPatchNumber = 0;
-  const labelKeyOwner = new Map<string, number>();
+  // Per key, while some patch on it is still in the air: the value it held before the first of them (`base`, the
+  // confirmed one) and every patch's value with how it ended.
+  type KeyEntry = { n: number; value: unknown; state: 'pending' | 'ok' | 'refused' };
+  const labelKeyLog = new Map<string, { base: { had: boolean; value: unknown }; entries: KeyEntry[] }>();
+  // Whether the venue had no label document when the first patch in the air was made.
+  let labelNoneBeforeLog = false;
   let printAgents: readonly StoredDoc[] = [];
   // The counts are kept even when a corrupt entry is dropped: they are a nicety, not data.
   let usage: Readonly<Record<string, number>> = asUsage(readJson(USAGE_KEY));
@@ -447,18 +452,36 @@ export function createRecipesStore(source: RecipesSource, deps: RecipesDeps): Re
     // after the screen had shown them as saved. (The defect the chain was made for, a height landing before a width,
     // came from two writes with no ordering; one client's writes have one.)
     //
-    // ⚠️ ON A REFUSAL ONLY THE KEYS OF THE REFUSED PATCH ARE PUT BACK, to the value each had just before it — and a key
-    // a LATER patch has set since keeps that later value: taking the whole document back would also undo a change the
-    // person made after, and that one may well have been accepted.
+    // ⚠️ ON A REFUSAL ONLY THE KEYS OF THE REFUSED PATCH ARE PUT BACK — and a key a LATER patch (still in the air, or
+    // accepted) has set since keeps that later value: taking the whole document back would also undo a change the person
+    // made after. A key is put back to the value of the most recent EARLIER patch on it that was not itself refused,
+    // else to the value it held before the first patch in the air (the confirmed one): two refused patches on one key,
+    // in whichever order they are refused, never leave the first one's refused value behind.
     saveLabelProfile(patch) {
       const keys = Object.keys(patch);
-      const wasNone = labelConfig === null;
+      if (labelKeyLog.size === 0) labelNoneBeforeLog = labelConfig === null;
       const current: Record<string, unknown> = labelConfig ?? {};
-      // What each key held (or that it held nothing) just before this patch.
-      const before = new Map<string, { had: boolean; value: unknown }>();
-      for (const key of keys) before.set(key, { had: key in current, value: current[key] });
       const mine = ++labelPatchNumber;
-      for (const key of keys) labelKeyOwner.set(key, mine);
+      for (const key of keys) {
+        let log = labelKeyLog.get(key);
+        if (!log) {
+          log = { base: { had: key in current, value: current[key] }, entries: [] };
+          labelKeyLog.set(key, log);
+        }
+        log.entries.push({ n: mine, value: patch[key], state: 'pending' });
+      }
+      // Forgets a key's history once nothing on it is in the air.
+      const tidy = () => {
+        for (const [key, log] of [...labelKeyLog]) {
+          if (!log.entries.some(entry => entry.state === 'pending')) labelKeyLog.delete(key);
+        }
+      };
+      const settle = (state: 'ok' | 'refused') => {
+        for (const key of keys) {
+          const entry = labelKeyLog.get(key)?.entries.find(candidate => candidate.n === mine);
+          if (entry) entry.state = state;
+        }
+      };
 
       labelConfig = { ...current, ...patch };
       writeJson(LABEL_CONFIG_KEY, labelConfig);
@@ -470,17 +493,26 @@ export function createRecipesStore(source: RecipesSource, deps: RecipesDeps): Re
       } catch (err) {
         written = Promise.reject(err);
       }
-      return written.catch((err: unknown) => {
+      return written.then(() => {
+        settle('ok');
+        tidy();
+      }, (err: unknown) => {
+        settle('refused');
         const next: Record<string, unknown> = { ...(labelConfig ?? {}) };
         for (const key of keys) {
-          if (labelKeyOwner.get(key) !== mine) continue;
-          const was = before.get(key);
-          if (was?.had) next[key] = was.value;
+          const log = labelKeyLog.get(key);
+          if (!log) continue;
+          const mineAt = log.entries.findIndex(entry => entry.n === mine);
+          // A later patch that was not refused owns the key now.
+          if (log.entries.slice(mineAt + 1).some(entry => entry.state !== 'refused')) continue;
+          const earlier = log.entries.slice(0, mineAt).filter(entry => entry.state !== 'refused').at(-1);
+          if (earlier) next[key] = earlier.value;
+          else if (log.base.had) next[key] = log.base.value;
           else delete next[key];
-          labelKeyOwner.delete(key);
         }
+        tidy();
         // A venue that had no document goes back to having none, not to an empty one.
-        labelConfig = Object.keys(next).length === 0 && wasNone ? null : next;
+        labelConfig = Object.keys(next).length === 0 && labelNoneBeforeLog ? null : next;
         writeJson(LABEL_CONFIG_KEY, labelConfig);
         changed();
         throw err;
