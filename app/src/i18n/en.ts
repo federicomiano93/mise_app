@@ -42,6 +42,7 @@ export const en = {
   'common.ok': 'OK',
   // The three button words below keep the current app's key names and texts (js/i18n.js).
   'ui.edit': 'Edit',
+  'ui.import': 'Import',
   'ui.note': 'Note',
   'ui.back': 'Back',
   'ui.save': 'Save',
@@ -1066,6 +1067,26 @@ export const en = {
   'cat.deleteRecipeQ': 'Delete “{name}”? This cannot be undone.',
   'cat.thisRecipe': 'this recipe',
   'cat.itWasImportedInto': ' It was imported into the Calculator — that copy will stay; remove it separately in the Calculator if you want it gone.',
+  // Step 3d-7: the links to the Calculator and Food cost (the current app’s words).
+  'cat.fc.title': 'Food cost',
+  'cat.fc.note': 'What this recipe costs is worked out in Food cost, with the oven loss and everything else that goes into the product.',
+  'cat.fc.open': 'Open in Food cost',
+  'cat.importIntoCalculator': 'Import into Calculator',
+  'cat.makesACopyYou': 'Makes a copy you can tweak just for the Calculator — the catalogue recipe stays untouched.',
+  'cat.importIntoCalculator2': 'Import into Calculator?',
+  'cat.copyIntoCalculator': 'Copy “{name}” into the Calculator? You can then tweak it there without changing the catalogue.',
+  'cat.nonScalableNote': {
+    one: 'Note: {list} uses a unit the Calculator can’t scale (it works in grams only) and won’t be imported.',
+    other: 'Note: {list} use a unit the Calculator can’t scale (it works in grams only) and won’t be imported.',
+  },
+  'cat.nothingToImport': 'This recipe has no weight-based ingredients, so there’s nothing to import.',
+  'cat.importFailedCheckYour': 'Import failed — check your connection and try again.',
+  'cat.addedToCalculator': '“{name}” added to the Calculator.',
+  'cat.updatedInCalculator': '“{name}” updated in the Calculator.',
+  // Step 3d-7, for Food cost’s side of the recipe link (slice B).
+  'fc.productsWithRecipe': 'Products with “{name}”',
+  'fc.productsWithThisRecipe': 'Products with this recipe',
+  'fc.showAll': 'Show all',
   // New in Mise 2: a recipe's address whose recipe is not among the venue's recipes (the current app has no addresses).
   'recipes.notFound': 'This recipe no longer exists.',
   // New in Mise 2 (step 3d-2): until the ingredients have arrived no verdict is drawn, because every linked row would
