@@ -6,7 +6,7 @@ import type { BlockerFunction } from 'react-router';
 import {
   PACK_UNITS, costProduct, productSnapshot, productsUsingRecipe, snapshotWorthTaking, vatRatesFor, vatSelection,
 } from '@mise/shared/foodcost-model';
-import type { LineUnit, PackUnit, Product, SellingMode } from '@mise/shared/foodcost-model';
+import type { LineUnit, PackUnit, Product, ProductDraft, SellingMode } from '@mise/shared/foodcost-model';
 import {
   startWeighing, typeCooked, typeRaw, weighingPatches, withWeighings, otherProductsUsing,
 } from '@mise/shared/foodcost-weighing';
@@ -27,8 +27,9 @@ import { useStatusMessage } from '../ui/StatusMessage';
 import { useConfirm } from '../ui/useConfirm';
 import { useMediaQuery } from '../ui/useMediaQuery';
 import { useFoodcost, useFoodcostStore } from './FoodcostContext';
-import { FOODCOST_PATH, historyPath } from './foodcostPath';
-import { FROM_PRODUCT, useLeave } from './foodcostNav';
+import { FOODCOST_PATH, entryPath, historyPath, usingPath } from './foodcostPath';
+import type { Origin } from './foodcostPath';
+import { FROM_PRODUCT, entryState, useBackToRecipe, useLeave } from './foodcostNav';
 import { NEW_OPENER, productOpener, useHandBack } from './handBack';
 import { LineRow } from './LineRow';
 import type { LineKind } from './LineRow';
@@ -40,7 +41,7 @@ import type { Choice, PickMode } from './PickDialog';
 import { ProductAnswer, SuggestedPrice } from './ProductAnswer';
 import {
   NUMBER_KEY, clearNumber, costable, emptyWorking, isNumberField, isShown, newLineKey, packSizeShown, piecesShown,
-  plainNumber, recipeIdsOn, toProduct, vatRateOf, workingFrom,
+  plainNumber, recipeIdsOn, toProduct, vatRateOf, workingFrom, workingFromDraft,
 } from './productEditorModel';
 import type { NumberField, Working, WorkingComponent } from './productEditorModel';
 import { VatGuideDialog } from './VatGuideDialog';
@@ -54,6 +55,11 @@ type Props = {
   // The product as the list holds it now: null when it is not there (a new one, or one deleted on
   // another phone while this screen stayed open).
   product: Product | null;
+  // A new product started from a recipe (draftFromRecipe), or null.
+  draft: ProductDraft | null;
+  // Where the person came from, when it was a recipe: the product's Back (and the draft's) returns to
+  // the recipe, or to the narrowed list for «using».
+  origin: Origin;
   titleRef: Ref<HTMLHeadingElement>;
 };
 
@@ -100,7 +106,7 @@ const noExtra: { raw?: string; cooked?: string } = {};
 // ⚠️ THE COPY IS MADE ONCE, WHEN THIS FORM MOUNTS — and ProductEditor mounts it only once the product
 // is in the list (the Pastries' editor-copies-too-early trap). A product changed elsewhere afterwards
 // NEVER replaces the copy; the lines and every answer pick up new recipes and prices as they arrive.
-export function ProductForm({ id, product, titleRef }: Props) {
+export function ProductForm({ id, product, draft, origin, titleRef }: Props) {
   const { t, locale } = useT();
   const store = useFoodcostStore();
   const snap = useFoodcost();
@@ -124,7 +130,10 @@ export function ProductForm({ id, product, titleRef }: Props) {
 
   // What the product was when this form opened: what a margin point is compared with.
   const [initial] = useState(product);
-  const [working, setWorking] = useState<Working>(() => (initial ? workingFrom(initial, country) : emptyWorking()));
+  const [working, setWorking] = useState<Working>(() => {
+    if (initial) return workingFrom(initial, country);
+    return draft ? workingFromDraft(draft) : emptyWorking();
+  });
   const productId = id ?? '';
 
   // ⚠️ DIRTY IS «SOMETHING WAS TYPED SINCE THE LAST SAVE», also kept in a ref: the router's blocker
@@ -159,7 +168,11 @@ export function ProductForm({ id, product, titleRef }: Props) {
   const onLeaving = useCallback(() => {
     handBack.expect(id === null ? NEW_OPENER : productOpener(id));
   }, [handBack, id]);
-  const leave = useLeave(FOODCOST_PATH, onLeaving);
+  // Save and Delete leave for the list — the narrowed one when that is where the product was opened from.
+  const leave = useLeave(origin.using === null ? FOODCOST_PATH : usingPath(origin.using), onLeaving);
+  // Back, though, returns to the recipe when the recipe opened this screen.
+  const backToRecipe = useBackToRecipe(origin.recipe);
+  const goBack = origin.recipe === null ? leave : backToRecipe;
 
   // ── What is typed, and what it costs ───────────────────────────────────────────────────────────
   const [showNameError, setShowNameError] = useState(false);
@@ -207,6 +220,18 @@ export function ProductForm({ id, product, titleRef }: Props) {
     say(t('fc.productDeleted'));
     leave();
   }, [id, product, say, t, leave]);
+
+  // ⚠️ THE DRAFT GIVES WAY (the current app's reconsiderDraft). A product made with the recipe that was not
+  // known when this draft opened (a slow first load, another phone) must win: saving the draft would be a
+  // DUPLICATE with a margin history of its own. So, while NOTHING has been typed and no save is under way,
+  // the entry decides again — it finds the real product, or the narrowed list.
+  const draftRecipe = draft === null ? null : origin.recipe;
+  const madeWithIt = draftRecipe !== null && productsUsingRecipe(snap.products, draftRecipe).length > 0;
+  useEffect(() => {
+    if (draftRecipe === null || !madeWithIt) return;
+    if (touched.current || leaving.current || asking.current || askingLeave.current) return;
+    void navigate(entryPath(draftRecipe), { replace: true, state: entryState(state) });
+  }, [draftRecipe, madeWithIt]);
 
   // ── Leaving with unsaved changes ───────────────────────────────────────────────────────────────
   const discardQuestion = () => confirm({
@@ -266,7 +291,7 @@ export function ProductForm({ id, product, titleRef }: Props) {
       }
       setDirtyBoth(false);
     }
-    leave();
+    goBack();
   }
 
   // ── Focus ──────────────────────────────────────────────────────────────────────────────────────
@@ -783,7 +808,7 @@ export function ProductForm({ id, product, titleRef }: Props) {
               onPress={() => {
                 // On the split the history takes the product's place (so the list's rows still mean
                 // «replace what is open»); on a phone it is one level down and Back is the browser's.
-                void navigate(historyPath(id), split ? { replace: true, state } : { state: FROM_PRODUCT });
+                void navigate(historyPath(id, origin), split ? { replace: true, state } : { state: FROM_PRODUCT });
               }}
             >
               <History aria-hidden="true" />

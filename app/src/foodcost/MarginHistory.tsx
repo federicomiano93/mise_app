@@ -9,6 +9,7 @@ import { SPLIT_QUERY } from '../ui/split';
 import { useMediaQuery } from '../ui/useMediaQuery';
 import { useFoodcost, useFoodcostStore } from './FoodcostContext';
 import { productPath } from './foodcostPath';
+import type { Origin } from './foodcostPath';
 import { cameFromList, cameFromProduct } from './foodcostNav';
 import { percentText } from './productRowModel';
 import type { StoredDoc } from './foodcostSource';
@@ -24,7 +25,7 @@ type Loaded =
 // ⚠️ READ ONCE, ON DEMAND, NEVER WATCHED (parity 17): a point is added by a save, and a save returns
 // to the list. A read still in the air when the screen goes away, or when another product's history
 // is asked for, is dropped — its answer must not land on the wrong product.
-export function MarginHistory({ id }: { id: string }) {
+export function MarginHistory({ id, origin }: { id: string; origin: Origin }) {
   const { t, locale } = useT();
   const money = useMoney();
   const navigate = useNavigate();
@@ -58,7 +59,7 @@ export function MarginHistory({ id }: { id: string }) {
   // product takes its place.
   const leave = () => {
     if (!split && cameFromProduct(state)) void navigate(-1);
-    else void navigate(productPath(id), { replace: true, state: split ? state : KEEP_FOCUS });
+    else void navigate(productPath(id, origin), { replace: true, state: split ? state : KEEP_FOCUS });
   };
 
   const product = products.find(candidate => candidate.id === id);

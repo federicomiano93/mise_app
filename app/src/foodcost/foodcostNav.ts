@@ -1,5 +1,6 @@
 import { useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router';
+import { FROM_RECIPE_LINK, recipeAddress } from '@mise/shared/recipe-link';
 import { KEEP_FOCUS } from '../shell/Page';
 
 // What the list puts in the navigation `state` when it opens a screen one level down (a product, a
@@ -40,4 +41,44 @@ export function useLeave(fallback: string, onLeaving: () => void): () => void {
     if (fromList) void navigate(-1);
     else void navigate(fallback, { replace: true, state: KEEP_FOCUS });
   }, [navigate, fromList, fallback, onLeaving]);
+}
+
+// ── Opened from a recipe ──────────────────────────────────────────────────────────────────────────
+
+// «The recipe is the history entry behind this one»: the recipe's «Open in Food cost» button pushes with
+// it (FROM_RECIPE_LINK), and the entry's replaces carry it on.
+export function cameFromRecipe(state: unknown): boolean {
+  return typeof state === 'object' && state !== null && 'fromRecipeLink' in state;
+}
+
+// «Put the focus on your own title when you appear»: the entry's replace says it (the page itself keeps
+// the focus, KEEP_FOCUS), and so does a move from the list (FROM_LIST).
+export function wantsTitleFocus(state: unknown): boolean {
+  return cameFromList(state) || (typeof state === 'object' && state !== null && 'focusTitle' in state);
+}
+
+// The state of the entry's replace and of the draft giving way: the app arranging itself (the page keeps
+// the focus), the recipe link carried on, the target's title asked to take the focus.
+export function entryState(incoming: unknown): Record<string, unknown> {
+  return { ...KEEP_FOCUS, focusTitle: true, ...(cameFromRecipe(incoming) ? FROM_RECIPE_LINK : {}) };
+}
+
+// How a screen opened from a recipe steps back to it.
+//
+// ⚠️ NEVER A SECOND ENTRY FOR THE RECIPE (the current app showed two pages per trip). When the state says
+// the recipe is the entry behind, Back is the browser's Back; otherwise (an address typed, a reload that lost
+// the state) the screen REPLACES itself with the recipe. Nothing happens for a null id.
+export function useBackToRecipe(recipeId: string | null): () => void {
+  const navigate = useNavigate();
+  const { state } = useLocation();
+  const behind = cameFromRecipe(state);
+  return useCallback(() => {
+    if (recipeId === null) return;
+    if (behind) {
+      void navigate(-1);
+      return;
+    }
+    const to = recipeAddress(recipeId);
+    if (to !== null) void navigate(to, { replace: true });
+  }, [navigate, behind, recipeId]);
 }
