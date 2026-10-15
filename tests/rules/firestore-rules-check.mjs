@@ -2798,6 +2798,12 @@ async function roles() {
     clearWrite(`${L}/recipes/R_NEW_M2`, {
       ...stamp, name: 'Pane', ingredients: [{ label: 'Flour', grams: 500, unit: 'g', rid: 'rxyz00001' }],
     }, ['netWeightG', 'shelfLifeDays'], asAccount(SAM)));
+  // The editor's box stops at 199 (maxLength counts UTF-16 units; an accented letter is one of them, and one
+  // character for the rules too), so the longest name it lets through must still land.
+  await expectAllowed('Mise 2: a name of 199 characters is accepted, the most the editor allows', () =>
+    mergeWrite(`${L}/recipes/R3`, { ...stamp, name: bigString(199), ingredients: [] }, asAccount(SAM)));
+  await expectAllowed('…and so is one of 199 accented letters', () =>
+    mergeWrite(`${L}/recipes/R3`, { ...stamp, name: 'à'.repeat(199), ingredients: [] }, asAccount(SAM)));
   await expectDenied('Mise 2: a name of 200 characters is refused (the editor caps the box at 199)', () =>
     mergeWrite(`${L}/recipes/R3`, { ...stamp, name: bigString(200), ingredients: [] }, asAccount(SAM)));
   await expectDenied('…and staff still cannot delete it', () => deleteWrite(`${L}/recipes/R3`, asAccount(SAM)));
