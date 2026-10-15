@@ -1,0 +1,233 @@
+/* The recipe editor: a card holding the form bar and the form, in the look of the recipe screen. On the split it is the
+   right-hand pane; below 1000px it replaces the list.
+
+   ⚠️ NOTHING ON THE SCREEN MAY CLIP (no `overflow`): the form bar sticks to the top of the scrolling area, and a clipping
+   ancestor would turn it into an ordinary row.
+
+   ⚠️ THE ROWS FIGHT FOR WIDTH (IngredientRow.module.css): the body is padded less on a phone than on a tablet, so that at
+   296px a row still holds its name, its amount, its unit and its bin on ONE line, with the name keeping the most. */
+
+.screen {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s4);
+  padding: var(--s3) var(--s2) var(--s4);
+}
+
+@media (min-width: 1000px) {
+  .body {
+    padding: var(--s6);
+  }
+}
+
+.field,
+.cell {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+}
+
+.label {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  font-weight: 650;
+}
+
+/* 16px type on purpose: under 16px iOS zooms the page in when a field is focused. */
+.nameBox,
+.numberBox {
+  min-height: var(--hit);
+  padding: 0 var(--s3);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink);
+  font: var(--fs-md)/1.2 var(--font);
+}
+
+.nameBox {
+  width: 100%;
+}
+
+.nameBox:focus-visible,
+.numberBox:focus-visible,
+.delete:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.nameBox[aria-invalid="true"] {
+  border-color: var(--danger);
+  background: var(--danger-tint);
+}
+
+.ingredients {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+}
+
+.headLabel {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.count {
+  padding: 0 var(--s2);
+  border-radius: var(--r-pill);
+  background: var(--sunken);
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The rows and the Total close one list, the same shape as the read-only recipe. It has no frame of its own: every
+   box is framed, and the width is worth more to the names than a border would be. */
+.frame {
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* The Total's line has the rows' columns: the label where the names are, the number and its unit where the amounts and
+   the units are (the cell is as wide as the amount cell, 116px, with its frame's 1px), and a spacer as wide as the bin. */
+.total {
+  display: flex;
+  align-items: center;
+  gap: var(--s1);
+  min-height: var(--hit);
+  border-top: 2px solid var(--line-2);
+}
+
+.totalLabel {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 0 var(--s2);
+  font-weight: 700;
+}
+
+.totalCell {
+  display: flex;
+  flex: none;
+  align-items: center;
+  width: 116px;
+  padding-left: 1px;
+}
+
+.totalNum {
+  width: 52px;
+  padding: 0 var(--s1);
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  text-align: right;
+}
+
+.totalUnit {
+  padding-left: var(--s2);
+  color: var(--ink-2);
+}
+
+.totalSpacer {
+  flex: none;
+  width: var(--hit);
+}
+
+.note {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  overflow-wrap: break-word;
+}
+
+.add {
+  align-self: flex-start;
+}
+
+.labelFields {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+}
+
+.pair {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s4);
+}
+
+.cell {
+  flex: 1 1 140px;
+}
+
+.inputRow {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+}
+
+.numberBox {
+  flex: 1;
+  min-width: 0;
+}
+
+.unitWord {
+  flex: none;
+  color: var(--ink-2);
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-start;
+  padding-top: var(--s2);
+}
+
+/* Delete: small and low-key, icon and words on one centred flex row. */
+.delete {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  min-height: var(--hit);
+  padding: 0 var(--s3);
+  border: 0;
+  border-radius: var(--r-md);
+  background: none;
+  color: var(--danger-ink);
+  font: inherit;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.delete svg {
+  flex: none;
+  width: 16px;
+  height: 16px;
+}
+
+@media (hover: hover) {
+  .delete:hover {
+    background: var(--danger-tint);
+  }
+}

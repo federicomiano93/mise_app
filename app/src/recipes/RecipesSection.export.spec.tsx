@@ -49,7 +49,7 @@ type Model = {
 };
 
 describe('the Export button on the recipe screen', () => {
-  it('⚠️ is the LAST thing on the recipe page, after every card (his choice, 14 Oct 2026)', async () => {
+  it('⚠️ is the LAST thing on the recipe page, after every card, except the owner’s small delete icon (his choice, 14 Oct 2026)', async () => {
     await open();
     const table = main().getByRole('table', { name: 'Ingredients' });
     const button = main().getByRole('button', { name: 'Export' });
@@ -58,6 +58,18 @@ describe('the Export button on the recipe screen', () => {
     // Nothing on the page that a person can press or read comes after it.
     const page = button.closest('section');
     expect(page).not.toBeNull();
+    const after = [...page!.querySelectorAll('button, a, input, h3, table')].filter(
+      el => (button.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0,
+    );
+    // The default session is the owner's: the delete icon, and nothing else, follows Export.
+    expect(after.map(el => el.getAttribute('aria-label'))).toEqual(['Delete recipe']);
+  });
+
+  it('⚠️ is the very last thing for an employee, who has no delete icon', async () => {
+    renderRecipes('/recipes/f', { source: sourceWith([PLAIN]), session: { role: 'staff', canManage: false, isOwner: false } });
+    await screen.findByRole('heading', { level: 3, name: 'Ingredients' }, LOAD);
+    const button = main().getByRole('button', { name: 'Export' });
+    const page = button.closest('section');
     const after = [...page!.querySelectorAll('button, a, input, h3, table')].filter(
       el => (button.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0,
     );

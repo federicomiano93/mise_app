@@ -1,0 +1,397 @@
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import type { Ref } from 'react';
+import { Check, Trash2 } from 'lucide-react';
+import { useBlocker, useNavigate } from 'react-router';
+import type { BlockerFunction } from 'react-router';
+import { findInvalidRecipe } from '@mise/shared/catalogue-model';
+import type { CatalogueRecipe, InvalidRecipeProblem } from '@mise/shared/catalogue-model';
+import { normalizeLabelProfile } from '@mise/shared/label-template-model';
+import { useT } from '../i18n/useT';
+import { markBusy } from '../session/busy';
+import { useSession } from '../session/SessionContext';
+import { announceAction } from '../telemetry/usage';
+import { Button } from '../ui/Button';
+import { FormBar } from '../ui/FormBar';
+import { useStatusMessage } from '../ui/StatusMessage';
+import { useConfirm } from '../ui/useConfirm';
+import { KEEP_FOCUS } from '../shell/Page';
+import { useRecipes, useRecipesStore } from './RecipesContext';
+import {
+  addRow, cleanWorking, netWeightText, notWeighedCount, removeRow, setName, setRowFields, shelfLifeText, totalText, workingFrom,
+} from './editorModel';
+import type { Row, Working } from './editorModel';
+import { IngredientRow } from './IngredientRow';
+import { NEW_OPENER, recipeOpener, useHandBack } from './handBack';
+import { cameFromList, cameFromRecipe, useLeave } from './recipesNav';
+import { RECIPES_PATH, recipePath } from './recipesPath';
+import { useDeleteRecipe } from './useDeleteRecipe';
+import styles from './RecipeEditor.module.css';
+
+type Props = {
+  // The recipe being edited, or null for a new one.
+  id: string | null;
+  // The recipe as the list holds it now (null for a new one, or one deleted on another phone while this screen stayed open).
+  recipe: CatalogueRecipe | null;
+  titleRef: Ref<HTMLHeadingElement>;
+};
+
+// The most a recipe's name may hold: the rules refuse a name of 200 characters or more (firestore.rules, `recipes`), and a
+// save that is refused AFTER the screen has left (the save is local-first) would throw the typing away.
+// ⚠️ NEW IN MISE 2: the current app has no such cap, and a name that long fails there at the database.
+export const NAME_MAX_LENGTH = 199;
+
+// A recipe's own screen for writing: a new one, or an existing one's editor. A port of js/catalogue/catalogue-editor.js,
+// decision for decision, except what docs/parity/catalogue.md («Step 3d-6 as built») lists.
+//
+// The editing pattern is the app's own (P20): work on a COPY, nothing touches the stored recipe until Save, Save is
+// confirmed, the required fields are checked before saving (the first wrong one is shown and takes the focus), Delete is
+// small and low-key, and leaving with unsaved edits asks.
+//
+// ⚠️ THE COPY IS MADE ONCE, WHEN THIS FORM MOUNTS — and RecipeEditorScreen mounts it only once the recipe is in the list
+// (the Pastries' editor-copies-too-early trap), keyed on the id. A recipe changed on another phone afterwards NEVER
+// replaces the copy.
+export function RecipeEditor({ id, recipe, titleRef }: Props) {
+  const { t } = useT();
+  const store = useRecipesStore();
+  const { labelConfig } = useRecipes();
+  const { canManage } = useSession();
+  const say = useStatusMessage();
+  const handBack = useHandBack();
+  const navigate = useNavigate();
+  const [confirm, confirmDialog] = useConfirm();
+  const [runDelete, deleteDialog] = useDeleteRecipe();
+  const ids = useId();
+  const titleId = `${ids}-title`;
+  const nameId = `${ids}-name`;
+  const headingId = `${ids}-ingredients`;
+  const netId = `${ids}-net`;
+  const shelfId = `${ids}-shelf`;
+
+  const [working, setWorking] = useState<Working>(() => workingFrom(recipe));
+  // The name the recipe had when this screen opened: what the delete question calls it.
+  const [storedName] = useState(recipe?.name ?? '');
+
+  // ⚠️ DIRTY IS «SOMETHING WAS TYPED», also kept in a ref: the router's blocker reads it at the moment of a navigation, and a
+  // state value read there could be one render behind.
+  const [dirty, setDirty] = useState(false);
+  const dirtyRef = useRef(false);
+  const edit = (change: (current: Working) => Working) => {
+    dirtyRef.current = true;
+    setDirty(true);
+    setWorking(change);
+  };
+  // Unsaved edits: a reload the app starts by itself waits (session/busy.ts).
+  useEffect(() => (dirty ? markBusy() : undefined), [dirty]);
+
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
+  // Set once the edits are saved or the recipe deleted, so leaving asks nothing.
+  const leavingClean = useRef(false);
+  // A second tap on Save (or Delete) while a question is open or a save is under way is ignored.
+  const busy = useRef(false);
+  const askingLeave = useRef(false);
+
+  // ── Where Back goes ──────────────────────────────────────────────────────────────────────────────────────────
+  // A new recipe steps up to the list and hands the focus to the button that opened it (or, once saved, to the row of the
+  // recipe just made). An existing recipe's editor is one level below the recipe: Back is the browser's Back when the
+  // recipe is the entry behind it, and replaces itself with the recipe when it was opened by its address.
+  const landOn = useRef<string>(NEW_OPENER);
+  const onLeaving = useCallback(() => {
+    if (id === null) handBack.expect(landOn.current);
+  }, [handBack, id]);
+  const leave = useLeave(id === null ? RECIPES_PATH : recipePath(id), onLeaving, id === null ? cameFromList : cameFromRecipe);
+
+  // ── Leaving with unsaved changes ─────────────────────────────────────────────────────────────────────────────
+  const discardQuestion = () => confirm({
+    title: t('cat.discardChanges'),
+    message: t('cat.youHaveUnsavedChanges'),
+    okLabel: t('ui.discard'),
+    cancelLabel: t('common.cancel'),
+    danger: true,
+  });
+
+  // ⚠️ EVERY WAY OUT GOES THROUGH THE ROUTER'S BLOCKER, not through the Back button: the browser's Back, a recipe picked in
+  // the split's list, the rail and the tab bar all navigate. Staying on the same address is never blocked.
+  const shouldBlock = useCallback<BlockerFunction>(
+    ({ currentLocation, nextLocation }) => !leavingClean.current && dirtyRef.current && currentLocation.pathname !== nextLocation.pathname,
+    [],
+  );
+  const blocker = useBlocker(shouldBlock);
+  const latestBlocker = useRef(blocker);
+  useEffect(() => {
+    latestBlocker.current = blocker;
+    if (blocker.state !== 'blocked') {
+      askingLeave.current = false;
+      return;
+    }
+    if (askingLeave.current) return;
+    askingLeave.current = true;
+    void (async () => {
+      try {
+        const discard = await discardQuestion();
+        // The form went away while the question was open: the router has dropped its blocker.
+        if (!mounted.current) return;
+        const current = latestBlocker.current;
+        if (current.state !== 'blocked') return;
+        if (discard) current.proceed();
+        else current.reset();
+      } catch (error) {
+        askingLeave.current = false;
+        throw error;
+      }
+    })();
+  });
+
+  // ⚠️ THE BACK BUTTON ASKS FOR ITSELF, BEFORE IT NAVIGATES: its navigate(-1) is a POP, and the router's blocker fails
+  // silently on a POP to an entry it did not create (a page opened by its address).
+  async function back() {
+    if (busy.current || askingLeave.current) return;
+    if (dirtyRef.current) {
+      busy.current = true;
+      try {
+        const discard = await discardQuestion();
+        if (!discard || !mounted.current) return;
+      } finally {
+        busy.current = false;
+      }
+    }
+    leavingClean.current = true;
+    leave();
+  }
+
+  // ── What is wrong, and where ─────────────────────────────────────────────────────────────────────────────────
+  const [showErrors, setShowErrors] = useState(false);
+  const nameBox = useRef<HTMLInputElement>(null);
+  const boxes = useRef(new Map<number, { name: HTMLInputElement | null; amount: HTMLInputElement | null }>());
+  const register = useCallback((key: number, box: 'name' | 'amount', node: HTMLInputElement | null) => {
+    const held = boxes.current.get(key) ?? { name: null, amount: null };
+    held[box] = node;
+    boxes.current.set(key, held);
+  }, []);
+
+  const reveal = (node: HTMLElement | null | undefined) => {
+    if (!node) return;
+    node.focus();
+    if (typeof node.scrollIntoView === 'function') node.scrollIntoView({ block: 'center' });
+  };
+
+  // The first field that is wrong for `problem`, with the cursor in it (P20): Save is at the top of the screen, so the row
+  // can be far below the fold.
+  const revealProblem = (problem: InvalidRecipeProblem) => {
+    if (problem === 'name') {
+      reveal(nameBox.current);
+      return;
+    }
+    if (problem === 'ingredients') {
+      const first = working.rows[0];
+      if (first) reveal(boxes.current.get(first.key)?.name);
+      return;
+    }
+    // 'weight': the first NAMED row whose amount box is drawn (a «to taste» row has none).
+    const named = working.rows.filter(({ row }) => String(row.label ?? '').trim() !== '');
+    const target = named.find(({ key }) => boxes.current.get(key)?.amount) ?? named[0];
+    if (target) reveal(boxes.current.get(target.key)?.amount ?? boxes.current.get(target.key)?.name);
+  };
+
+  // ── Save and delete ──────────────────────────────────────────────────────────────────────────────────────────
+  const clean = cleanWorking(working);
+  const problem = findInvalidRecipe(clean);
+
+  async function save() {
+    if (busy.current || askingLeave.current || leavingClean.current) return;
+    if (problem !== null) {
+      setShowErrors(true);
+      revealProblem(problem);
+      say(t(problem === 'name' ? 'cat.pleaseEnterARecipe' : problem === 'weight' ? 'cat.enterAnAmountFor' : 'cat.addAtLeastOne'));
+      return;
+    }
+    busy.current = true;
+    let ok = false;
+    try {
+      ok = await confirm({
+        title: t('cat.saveRecipe'),
+        message: t('cat.saveTheseChanges'),
+        okLabel: t('ui.save'),
+        cancelLabel: t('common.cancel'),
+      });
+    } finally {
+      busy.current = false;
+    }
+    if (!ok || !mounted.current) return;
+    // Saved: nothing is unsaved any more, so leaving asks nothing. Local-first: the list changes at once and the database
+    // follows; a refused write is taken back and said by the store.
+    leavingClean.current = true;
+    const savedId = store.saveRecipe(clean);
+    announceAction('recipe-saved');
+    say(t(id === null ? 'cat.recipeAdded' : 'cat.recipeSaved'));
+    if (id === null) {
+      landOn.current = recipeOpener(savedId);
+      leave();
+    } else {
+      // Back to the LIST (not to the recipe), the row of the saved recipe owed the focus.
+      handBack.expect(recipeOpener(savedId));
+      void navigate(RECIPES_PATH, { replace: true, state: KEEP_FOCUS });
+    }
+  }
+
+  async function remove() {
+    if (id === null || busy.current || askingLeave.current || leavingClean.current) return;
+    busy.current = true;
+    try {
+      await runDelete({ id, name: storedName }, () => {
+        leavingClean.current = true;
+        handBack.expect(recipeOpener(id));
+        void navigate(RECIPES_PATH, { replace: true, state: KEEP_FOCUS });
+      });
+    } finally {
+      busy.current = false;
+    }
+  }
+
+  // ── What is drawn ────────────────────────────────────────────────────────────────────────────────────────────
+  const profile = normalizeLabelProfile(labelConfig);
+  // ⚠️ SHOWN ONLY WHEN THE VENUE PRINTS THEM: two boxes nobody can explain on a screen everybody uses are clutter, and a
+  // control that changes nothing is one somebody sets wrongly and then trusts.
+  const wantsWeight = profile.showWeight === true;
+  const wantsShelfLife = profile.showDate === true;
+  const nameInvalid = showErrors && working.name.trim() === '';
+  const noAmount = showErrors && problem === 'weight';
+  const skipped = notWeighedCount(clean);
+
+  return (
+    <section className={styles.screen} aria-labelledby={titleId}>
+      <FormBar
+        backLabel={t('ui.back')}
+        onBack={() => { void back(); }}
+        title={t(id === null ? 'cat.newRecipe' : 'cat.editRecipe')}
+        titleId={titleId}
+        titleRef={titleRef}
+        action={
+          <Button variant="primary" onPress={() => { void save(); }}>
+            <Check aria-hidden="true" />
+            {t('ui.save')}
+          </Button>
+        }
+      />
+
+      <div className={styles.body}>
+        <div className={styles.field}>
+          <label htmlFor={nameId} className={styles.label}>{t('cat.recipeName')}</label>
+          <input
+            ref={nameBox}
+            id={nameId}
+            type="text"
+            autoComplete="off"
+            className={styles.nameBox}
+            placeholder={t('cat.recipeName')}
+            maxLength={NAME_MAX_LENGTH}
+            aria-invalid={nameInvalid ? true : undefined}
+            value={working.name}
+            onChange={event => { edit(current => setName(current, event.target.value)); }}
+          />
+        </div>
+
+        <section className={styles.ingredients} aria-labelledby={headingId}>
+          <div className={styles.head}>
+            <h3 id={headingId} className={styles.headLabel}>{t('cat.ingredients')}</h3>
+            <span className={styles.count}>{working.rows.length}</span>
+          </div>
+
+          <div className={styles.frame}>
+            <ul className={styles.rows}>
+              {working.rows.map(item => (
+                <IngredientRow
+                  key={item.key}
+                  item={item}
+                  nameInvalid={showErrors && String(item.row.label ?? '').trim() === ''}
+                  amountInvalid={noAmount && String(item.row.label ?? '').trim() !== ''}
+                  register={register}
+                  onChange={(key: number, fields: Row) => { edit(current => setRowFields(current, key, fields)); }}
+                  onRemove={key => { edit(current => removeRow(current, key)); }}
+                />
+              ))}
+            </ul>
+            {/* ⚠️ THE TOTAL SITS IN THE SAME CELL SHAPE AS THE AMOUNTS ABOVE IT: «Total 8380 g» stops lining up with the column of
+                numbers it is the sum of, which is the one thing it exists to do. */}
+            <div className={styles.total}>
+              <span className={styles.totalLabel}>{t('cat.total')}</span>
+              <span className={styles.totalCell}>
+                <span className={styles.totalNum}>{totalText(clean)}</span>
+                <span className={styles.totalUnit}>g</span>
+              </span>
+              <span className={styles.totalSpacer} aria-hidden="true" />
+            </div>
+          </div>
+
+          {skipped > 0 ? <p className={styles.note}>{t('cat.notWeighed', { n: skipped })}</p> : null}
+
+          <Button variant="secondary" className={styles.add} onPress={() => { edit(addRow); }}>
+            {t('cat.addIngredient')}
+          </Button>
+        </section>
+
+        {wantsWeight || wantsShelfLife ? (
+          <div className={styles.labelFields}>
+            <div className={styles.pair}>
+              {wantsWeight ? (
+                <div className={styles.cell}>
+                  <label htmlFor={netId} className={styles.label}>{t('cat.netWeight')}</label>
+                  <span className={styles.inputRow}>
+                    <input
+                      id={netId}
+                      type="number"
+                      min="0"
+                      step="any"
+                      inputMode="decimal"
+                      className={styles.numberBox}
+                      placeholder="—"
+                      value={netWeightText(working)}
+                      onChange={event => { edit(current => ({ ...current, netWeight: event.target.value })); }}
+                    />
+                    <span className={styles.unitWord}>g</span>
+                  </span>
+                </div>
+              ) : null}
+              {wantsShelfLife ? (
+                <div className={styles.cell}>
+                  <label htmlFor={shelfId} className={styles.label}>{t('cat.shelfLife')}</label>
+                  <span className={styles.inputRow}>
+                    <input
+                      id={shelfId}
+                      type="number"
+                      min="0"
+                      step="1"
+                      inputMode="numeric"
+                      className={styles.numberBox}
+                      placeholder="—"
+                      value={shelfLifeText(working)}
+                      onChange={event => { edit(current => ({ ...current, shelfLife: event.target.value })); }}
+                    />
+                    <span className={styles.unitWord}>{t('cat.days')}</span>
+                  </span>
+                </div>
+              ) : null}
+            </div>
+            <p className={styles.note}>{t('cat.labelFieldsNote')}</p>
+          </div>
+        ) : null}
+
+        {/* ⚠️ DELETE: whoever runs the place only (the same as the recipe page), absent — not disabled — for everybody else and
+            for a new recipe. Small and low-key, at the bottom. */}
+        {id !== null && canManage ? (
+          <div className={styles.actions}>
+            <button type="button" className={styles.delete} onClick={() => { void remove(); }}>
+              <Trash2 aria-hidden="true" />
+              <span>{t('cat.deleteRecipe')}</span>
+            </button>
+          </div>
+        ) : null}
+      </div>
+      {confirmDialog}
+      {deleteDialog}
+    </section>
+  );
+}
