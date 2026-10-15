@@ -1070,6 +1070,28 @@ SAME PR.
   `mayOpenOrders`, `foodCostHref`-equivalents as route builders, `recipeIdFromHash` kept for old addresses).
 - **Size S.**
 
+#### Slice A built (15 Oct 2026): the recipe side and the shared ports
+
+- **Built:** `toCalculatorRecipe`, `nonWeighableLabels`, `mergeImportedRecipe` and `importFailureKey` in `shared/catalogue-model.ts`
+  (every case against the port and the `js/` original; the re-import keeps order, visibility, logic and `trayWeight`);
+  `shared/recipe-link.ts` (partial: `mayOpenFoodCost`, `mayOpenOrders`, `recipeIdFromHash`; new: `foodCostForRecipePath`,
+  `recipeAddress`, `recipeIdParam`, `FROM_RECIPE_LINK`). `RecipesSource.importIntoCalculator` is ONE transaction on
+  `config/calculator` (merge into the document as the server holds it NOW, `configRev` + 1, `configModel` and the venue
+  stamped after the spread; not local-first: offline it rejects and the screen says so); the store counts the recipe as used
+  on success only. The recipe screen draws, in this order: ingredients · batch · **Food cost card** (only for whoever
+  `mayOpenFoodCost` lets in) · allergens · declaration · Export · **Import into Calculator** with its hint (only where the
+  venue uses the Calculator: a write, judged by the section alone) · the owner's small Delete icon.
+- **On purpose, different:** the confirm's two sentences are two paragraphs (the current app joins them with a blank line); a
+  venue with no document yet gets no Food cost card (the door says no) while the section gate shows everything — the one
+  documented difference, pinned in `recipes/foodcostDoor.spec.ts`, which proves the door agrees with `visibleSectionIds` over a
+  grid of venues.
+- **Specs:** `catalogue-model.spec.ts`, `recipe-link.spec.ts`, `odd-inputs.spec.ts` (shared); `recipesSource.spec.ts` (the
+  transaction: stamps, revision, a concurrent change kept, a retry written from the second document, a re-import in place),
+  `recipesStore.spec.ts`, `foodcostDoor.spec.ts`, `RecipesSection.links.spec.tsx` (the card, the order of the page, the
+  question, both failure sentences, a second tap ignored, usage on success only).
+- **Left for slice B:** Food cost's side (`/food-cost?recipe=<id>` and its Back to `/recipes/<id>`); the words `fc.productsWithRecipe`,
+  `fc.productsWithThisRecipe` and `fc.showAll` are already in the dictionaries.
+
 ### 3d-8 — Mixing procedures: write steps, run a mix, resume, alarm
 
 - **Works alone**: the Procedure card («Write the mixing steps» / «Guided mixing», «Resume — step N of M»,
@@ -1270,8 +1292,8 @@ allergen state with an `if` of its own. What differs from the current app, and w
   `declarationText(label, lang, { withNutrition: false })`, built by the same `buildLabel(recipe, tables)` call as the
   current card. «Copied» and «Could not copy…» are a live region that exists before it speaks. `copyToClipboard` moved from
   `calculator/` to `ui/` so two features share it without importing each other.
-- **Order on the recipe screen:** ingredients · batch · allergens · declaration. The Food cost link (3d-7) and the
-  procedure (3d-8) are not there yet.
+- **Order on the recipe screen:** ingredients · batch · allergens · declaration (since 3d-7 slice A the Food cost card sits
+  before the allergens, and Import into Calculator after Export). The procedure (3d-8) is not there yet.
 - **The Allergen sheet is `/recipes/allergens`** and `allergens` is no longer a reserved-and-unknown word. It re-checks its
   own gate (item 60): with allergens off the address goes to `/recipes` by replacing itself, also when the switch is thrown
   while the sheet is open. The door is an «Allergen sheet» button at the FOOT of the list (only when allergens are on); Back

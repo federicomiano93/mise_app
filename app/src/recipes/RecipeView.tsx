@@ -1,15 +1,20 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import type { Ref } from 'react';
 import { useLocation, useNavigate } from 'react-router';
-import { Download, Maximize2, Pencil, Trash2 } from 'lucide-react';
-import { weighableTotalGrams } from '@mise/shared/catalogue-model';
+import { ChartPie, Download, Import, Maximize2, Pencil, Trash2 } from 'lucide-react';
+import { importFailureKey, nonWeighableLabels, weighableTotalGrams } from '@mise/shared/catalogue-model';
 import type { CatalogueRecipe } from '@mise/shared/catalogue-model';
+import { FROM_RECIPE_LINK, foodCostForRecipePath, mayOpenFoodCost } from '@mise/shared/recipe-link';
+import { isSectionAllowed } from '@mise/shared/sections';
 import { useT } from '../i18n/useT';
+import { markBusy } from '../session/busy';
 import { useSession } from '../session/SessionContext';
 import { Button } from '../ui/Button';
 import { useExportSheet } from '../ui/ExportSheet';
 import { FormBar } from '../ui/FormBar';
 import { RecipeFullScreen } from '../ui/RecipeFullScreen';
+import { useStatusMessage } from '../ui/StatusMessage';
+import { useConfirm } from '../ui/useConfirm';
 import { CATALOGUE_ZOOM_KEY } from '../ui/zoomStorage';
 import { AllergenCard } from './AllergenCard';
 import { BatchCard } from './BatchCard';
@@ -29,12 +34,13 @@ type Props = {
   onBack: () => void;
 };
 
-// One recipe: the bar with Back and its name, then the cards in the current app's order: the ingredient
-// list, the batch, the allergens and the declaration.
+// One recipe: the bar with Back and its name, then the cards in this order (his decisions, 14-15 Oct 2026): the
+// ingredient list, the batch, «Food cost» (a door, only for whoever may open Food cost), the allergens and the
+// declaration, then Export, then «Import into Calculator» with its hint (a write, only where the venue uses the
+// Calculator), and last the small Delete icon.
 //
 // «Edit» is the bar's one action, for everybody who sees the section (employees write recipes too). Delete is a small
-// icon at the very end of the page, for whoever runs the place only. (The Food cost link and the procedure arrive with
-// their own steps.)
+// icon at the very end of the page, for whoever runs the place only. (The procedure arrives with its own step.)
 //
 // ⚠️ THE TWO ALLERGEN CARDS FOLLOW THE LIVE DATA ON THEIR OWN (they read the store), so an ingredient
 // declared on another phone reaches this screen without it being closed and reopened.
@@ -49,7 +55,7 @@ export function RecipeView({ recipe, titleRef, onBack }: Props) {
   const titleId = useId();
   const target = store.scaledTarget(recipe.id);
   const hasWeight = weighableTotalGrams(recipe) > 0;
-  const { canManage } = useSession();
+  const { canManage, location } = useSession();
   const navigate = useNavigate();
   const { state } = useLocation();
   const recipeReturn = useRecipeReturn();
@@ -90,10 +96,15 @@ export function RecipeView({ recipe, titleRef, onBack }: Props) {
         <IngredientsCard recipe={recipe} target={target} />
         {/* A recipe of pieces and «to taste» has nothing to scale by weight: the whole card goes. */}
         {hasWeight ? <BatchCard recipe={recipe} target={target} /> : null}
+        {/* ⚠️ A DOOR: drawn only for whoever Food cost lets in — the very question its own gate asks (shared recipe-link), asked on
+            every draw, so a session that arrives late or changes venue redraws it. Absent, not disabled, for anyone else. */}
+        {mayOpenFoodCost(location, canManage) ? <FoodCostCard recipe={recipe} /> : null}
         <AllergenCard recipe={recipe} />
         <DeclarationCard recipe={recipe} />
         <ExportAction recipe={recipe} target={target} />
-        {/* ⚠️ THE VERY END OF THE PAGE, after Export: small, low-key, icon only. Absent — not disabled — for an employee. */}
+        {/* A WRITE, NOT A DOOR: judged by the venue's section only (the Calculator card being hidden from staff does not matter). */}
+        {isSectionAllowed(location, 'calculator') ? <ImportAction recipe={recipe} /> : null}
+        {/* ⚠️ THE VERY END OF THE PAGE, after Export and Import: small, low-key, icon only. Absent — not disabled — for an employee. */}
         {canManage ? (
           <button
             type="button"
@@ -138,6 +149,89 @@ function ExportAction({ recipe, target }: { recipe: CatalogueRecipe; target: num
       </button>
       {exportSheet}
     </>
+  );
+}
+
+// «Open in Food cost»: a card like the others, with the one button. It hands Food cost the recipe in the address and
+// says in the navigation state that this recipe screen is the history entry behind it (Food cost's Back then steps
+// to it instead of piling a second copy on).
+function FoodCostCard({ recipe }: { recipe: CatalogueRecipe }) {
+  const { t } = useT();
+  const navigate = useNavigate();
+  const headingId = useId();
+  const path = foodCostForRecipePath(recipe.id);
+  if (path === null) return null;
+  return (
+    <section className={styles.card} aria-labelledby={headingId}>
+      <h3 id={headingId} className={styles.cardHead}>{t('cat.fc.title')}</h3>
+      <p className={styles.note}>{t('cat.fc.note')}</p>
+      <Button variant="secondary" onPress={() => { void navigate(path, { state: FROM_RECIPE_LINK }); }}>
+        <ChartPie aria-hidden="true" />
+        {t('cat.fc.open')}
+      </Button>
+    </section>
+  );
+}
+
+// «Import into Calculator» (a port of importRecipe of js/catalogue/catalogue-main.js): nothing to do for a recipe with
+// no weighable row, otherwise one question that names the rows the grams-only Calculator cannot take, then the
+// transaction of the store. The answer is said in the section's status message.
+//
+// ⚠️ A SECOND TAP DURING THE QUESTION OR THE WRITE IS IGNORED, and markBusy is held while the write is in the air, so a
+// reload the app starts by itself cannot cut it off.
+function ImportAction({ recipe }: { recipe: CatalogueRecipe }) {
+  const { t } = useT();
+  const store = useRecipesStore();
+  const say = useStatusMessage();
+  const [confirm, confirmDialog] = useConfirm();
+  const running = useRef(false);
+  const [writing, setWriting] = useState(false);
+
+  useEffect(() => (writing ? markBusy() : undefined), [writing]);
+
+  async function run() {
+    if (running.current) return;
+    if (weighableTotalGrams(recipe) <= 0) {
+      say(t('cat.nothingToImport'));
+      return;
+    }
+    running.current = true;
+    try {
+      const skipped = nonWeighableLabels(recipe);
+      const ok = await confirm({
+        title: t('cat.importIntoCalculator2'),
+        message: [
+          t('cat.copyIntoCalculator', { name: recipe.name }),
+          ...(skipped.length > 0 ? [t('cat.nonScalableNote', { n: skipped.length, list: skipped.join(', ') })] : []),
+        ],
+        okLabel: t('ui.import'),
+        cancelLabel: t('common.cancel'),
+      });
+      if (!ok) return;
+      setWriting(true);
+      try {
+        const action = await store.importIntoCalculator(recipe, t('calc.marketOrderTitle'));
+        say(t(action === 'updated' ? 'cat.updatedInCalculator' : 'cat.addedToCalculator', { name: recipe.name }));
+      } catch (err) {
+        console.error('Import into Calculator failed:', err);
+        say(t(importFailureKey(err)));
+      } finally {
+        setWriting(false);
+      }
+    } finally {
+      running.current = false;
+    }
+  }
+
+  return (
+    <div className={styles.importBlock}>
+      <button type="button" className={styles.importAction} onClick={() => { void run(); }}>
+        <Import aria-hidden="true" />
+        {t('cat.importIntoCalculator')}
+      </button>
+      <p className={styles.note}>{t('cat.makesACopyYou')}</p>
+      {confirmDialog}
+    </div>
   );
 }
 
