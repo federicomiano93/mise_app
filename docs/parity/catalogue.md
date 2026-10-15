@@ -1416,3 +1416,16 @@ the chooser: slice A2) and reordering the rows (slice B). The row component has 
 ### Slice A2 (item 91), as built
 
 - **Built:** the suggestion list under a name, the link line and the chooser, ported as the current app has them (no price, pick renames only when the link changes, three answers, focus to the row's amount); the list is a hook in the page's flow (swallows pointerdown, never picks by itself) and the name box is a `combobox`. **On purpose, different:** no «+ Create … as an ingredient» row, in the list or the chooser (Orders is not built); the suggestion and chooser meta join with a real space for screen readers; `cat.searchAnIngredient` has no ellipsis (the current dictionary defines it twice, the later wins); `supplierLabel` is now exported from `shared/catalogue-model`.
+
+### Review fixes and the drive (15 Oct 2026)
+
+- **Leaving after Save or Delete:** from an editor reached list → recipe → Modifica, Save and Delete step back TWO entries, so the
+  phone's Back afterwards leaves the catalogue instead of reopening the recipe (or a «no longer exists» page); an editor opened by its
+  address replaces itself with the list as before. The «no longer exists» screen's Back goes to the list.
+- **An editor opened from the phone's copy** (after 1.2 s, or offline) is copied AGAIN when the server's first answer differs and
+  nothing has been typed; with typing it is kept, as the current app keeps it.
+- **296 px:** the editor's side padding is 4px on a phone and, under 340px, the unit menu (and the Total's cell) is 8px narrower, so the
+  ingredient name keeps about 90px («Farina 0», «Sale fino» fit). A long unit word («pizzico») is cut short, as it was already.
+- **Driven on the emulator** (IT, owner, 1024/360/296, and the English employee): new recipe with a link picked from the suggestions,
+  edit of a recipe Food cost has weighed (the loss stays 12), the leave question, delete from the page's icon: every check passed, axe
+  clean, no console error. `tests/rules/firestore-rules-check.mjs`: 1059 checks passed, including the Mise 2 save shape.
