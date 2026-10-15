@@ -6,7 +6,8 @@
 // (deps) are injected, so every trap below is a spec with fakes (recipesStore.spec.ts). Screens read
 // it through RecipesContext.tsx. Steps 3d-1 to 3d-3 only read (recipes, then the ingredients the
 // allergen gate looks rows up in, then the label profile the label screen lays the paper out with);
-// the writes (save, delete) come with 3d-6, the label profile's with 3d-5.
+// the label profile's writes came with 3d-5, and 3d-6 writes recipes (save, delete — local-first, rolled
+// back when refused) and watches the suppliers the link chooser names.
 //
 // It says nothing in words: a failure is a RecipesMessage, and the screen puts it in the person's
 // language.
@@ -26,10 +27,13 @@
 // read them; every linked row then reads «not declared», the honest answer. No message, only a warning
 // in the console — and the wait ends, so a screen never waits for them for ever.
 
-import { isScaledEntryFresh, normalizeCatalogueRecipes } from '@mise/shared/catalogue-model';
+import {
+  findCalculatorImport, isScaledEntryFresh, labelFieldsOf, normalizeCatalogueRecipe, normalizeCatalogueRecipes,
+} from '@mise/shared/catalogue-model';
 import type { CatalogueRecipe } from '@mise/shared/catalogue-model';
+import { withRowIds } from '@mise/shared/guided-model';
 import type { KeyValueStorage } from '../session/backend';
-import { withoutPrice } from './recipesSource';
+import { newRecipeId, withoutPrice } from './recipesSource';
 import type { RecipesMeta, RecipesSource, StoredDoc } from './recipesSource';
 
 // ⚠️ THE CURRENT APP'S KEYS, WITH THEIR MEANING (both apps share one origin): either app paints from
@@ -53,10 +57,39 @@ export const INGREDIENTS_KEY = 'catalogue-ingredients';
 // uses. Stored raw, never normalised: label-template-model's normalizer is the one place that decides
 // what a missing or corrupt field means, in both apps.
 export const LABEL_CONFIG_KEY = 'catalogue-label-config';
+// The supplier documents as a JSON ARRAY, read back into an id → document map, as the current app does: only the
+// names matter (the link chooser tells two similar articles apart by them).
+export const SUPPLIERS_KEY = 'catalogue-suppliers';
+
+// How long a delete waits to learn whether the recipe was imported into the Calculator (parity item 83): a slow or
+// offline read never blocks a delete, it simply does not warn.
+export const IMPORT_CHECK_MS = 2500;
+
+// What a save is handed: the editor's cleaned working copy. `id` is null (or absent) for a new recipe. Every row is
+// written as it comes (its link and its row id included); the store mints the row ids that are missing.
+export interface RecipeToSave {
+  readonly id?: string | null;
+  readonly name: string;
+  readonly ingredients: readonly Readonly<Record<string, unknown>>[];
+  readonly netWeightG?: unknown;
+  readonly shelfLifeDays?: unknown;
+}
+
+// The fields a save never sends, and that the local copy keeps from the version before it until the next snapshot:
+//   • the oven loss and its two weighings — Food cost weighs them on a product's recipe line (13 Sep 2026), and a copy
+//     read before the weighing and saved after would silently undo it (the current app's rule);
+//   • the mixing procedure and its closing message — NEW IN MISE 2: their editor is step 3d-8, so this one never
+//     changes them, and a merge that does not send them leaves them exactly as stored (the current app rewrites them
+//     on every save from the copy it read).
+const KEPT_FIELDS = ['lossPct', 'rawGrams', 'cookedGrams', 'steps', 'endNote'] as const;
 
 export type RecipesMessage =
   // The recipes' live stream died: what is on screen may be old.
-  | { readonly kind: 'recipes-stream-broken' };
+  | { readonly kind: 'recipes-stream-broken' }
+  // A save the database refused: the change has been taken back. `name` is what was typed (may be empty).
+  | { readonly kind: 'recipe-not-saved'; readonly name: string }
+  // A delete the database refused: the recipe is back.
+  | { readonly kind: 'recipe-not-deleted' };
 
 export interface ScaledEntry {
   readonly target: number;
@@ -97,6 +130,8 @@ export interface RecipesSnapshot {
   // opens offline; what bounds that is the 12-minute stale limit in printerPresence (the current app's rule,
   // catalogue-store.js), so an old beat is never believed for long.
   readonly printAgents: readonly StoredDoc[];
+  // The suppliers by id (only the names matter), for the link chooser. {} until they arrive, and after a quiet failure.
+  readonly suppliers: Readonly<Record<string, StoredDoc>>;
 }
 
 export interface RecipesDeps {
@@ -130,6 +165,23 @@ export interface RecipesStore {
   // the change. On a refusal the keys of THIS patch are put back to what they were just before it (except a key a
   // later patch has set since) and the promise rejects, so the screen can say so.
   saveLabelProfile(patch: Readonly<Record<string, unknown>>): Promise<void>;
+  // Saves a recipe, LOCAL-FIRST: the list changes at once (and the phone's copy), then the database is asked. Returns
+  // the recipe's id at once (a new one is made on the phone). Never waits for the network. A REFUSED write takes the
+  // change back (the version before it, or no recipe at all for a new one) and says so with a RecipesMessage.
+  saveRecipe(recipe: RecipeToSave): string;
+  // Deletes a recipe, LOCAL-FIRST, with its open count and its remembered batch. A refused delete puts it back and
+  // says so.
+  deleteRecipe(id: string): void;
+  // Whether the recipe was imported into the Calculator (a copy there that stays): config/calculator read once,
+  // raced against IMPORT_CHECK_MS. Never rejects: a slow, offline or refused read answers false.
+  calculatorImportOf(id: string): Promise<boolean>;
+}
+
+// A row as Firestore will take it: a key holding `undefined` makes the whole write throw, so it is left out.
+function withoutUndefined(row: Readonly<Record<string, unknown>>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(row ?? {})) if (value !== undefined) out[key] = value;
+  return out;
 }
 
 // A map read back from storage: a plain object, or nothing (corrupt, an array, a number…).
@@ -235,6 +287,7 @@ export function createRecipesStore(source: RecipesSource, deps: RecipesDeps): Re
   // Whether the venue had no label document when the first patch in the air was made.
   let labelNoneBeforeLog = false;
   let printAgents: readonly StoredDoc[] = [];
+  let suppliers: Readonly<Record<string, StoredDoc>> = asIngredients(readJson(SUPPLIERS_KEY));
   // The counts are kept even when a corrupt entry is dropped: they are a nicety, not data.
   let usage: Readonly<Record<string, number>> = asUsage(readJson(USAGE_KEY));
   let scaled: Readonly<Record<string, ScaledEntry>> = asScaled(readJson(SCALED_KEY));
@@ -248,7 +301,7 @@ export function createRecipesStore(source: RecipesSource, deps: RecipesDeps): Re
 
   function build(): RecipesSnapshot {
     return { recipes, recipesLoaded, recipesFromServer, streamBroken, ingredients, ingredientsLoaded, ingredientsUnreadable, usage,
-      scaled, labelConfig, labelConfigKnown, printAgents };
+      scaled, labelConfig, labelConfigKnown, printAgents, suppliers };
   }
 
   function changed(): void {
@@ -267,7 +320,8 @@ export function createRecipesStore(source: RecipesSource, deps: RecipesDeps): Re
   // ⚠️ NOR IS ONE THAT LACKS A RECIPE ALREADY HELD, until the server has spoken once: that database can
   // hold only the few recipes the Calculator read one by one, and believing it would shrink the list,
   // say «Recipe deleted.» about one that exists, and save the shrunken list over the full local copy.
-  // (This slice writes nothing, so nothing held can be a deletion made on this phone.)
+  // (A save or a delete made on this phone cannot be mistaken here: Firestore's local view, which every answer comes
+  // from, already holds the pending write, so it agrees with the list the store changed at once.)
   function believable(list: readonly StoredDoc[], meta: RecipesMeta): boolean {
     if (meta.fromServer) return true;
     if (recipesFromServer) return list.length > 0 || bootSaidNone;
@@ -293,6 +347,25 @@ export function createRecipesStore(source: RecipesSource, deps: RecipesDeps): Re
     if (meta.fromServer || labelConfigFromServer) return true;
     if (data !== null) return true;
     return labelConfigKnown && labelConfig === null;
+  }
+
+  // Puts a recipe into the list (replacing the one with its id), normalised as the current app stores it, and into the
+  // phone's copy. Announced.
+  function upsertLocal(raw: Record<string, unknown>): void {
+    const norm = normalizeCatalogueRecipe(raw);
+    if (!norm) return;
+    const at = recipes.findIndex(recipe => recipe.id === norm.id);
+    const next = recipes.slice();
+    if (at >= 0) next[at] = norm; else next.push(norm);
+    recipes = next;
+    writeJson(RECIPES_KEY, recipes);
+    changed();
+  }
+
+  function removeLocal(id: string): void {
+    recipes = recipes.filter(recipe => recipe.id !== id);
+    writeJson(RECIPES_KEY, recipes);
+    changed();
   }
 
   // Drops the counts and the batches of recipes that no longer exist, and the batches older than
@@ -403,6 +476,21 @@ export function createRecipesStore(source: RecipesSource, deps: RecipesDeps): Re
           deps.warn('Print agents unavailable:', err);
           printAgents = [];
           changed();
+        },
+      ));
+      stops.push(source.watchSuppliers(
+        (remote, meta) => {
+          // An empty answer from the browser's own database over suppliers already held is not believed (it may never
+          // have read them). Only names, so nothing worse than a missing supplier beside an article is at stake.
+          if (!meta.fromServer && remote.length === 0 && Object.keys(suppliers).length > 0) return;
+          const clean = remote.filter(doc => doc && typeof doc.id === 'string' && doc.id);
+          suppliers = asIngredients(clean);
+          writeJson(SUPPLIERS_KEY, clean);
+          changed();
+        },
+        err => {
+          // Quiet, as the current app: a venue without Orders has no suppliers.
+          deps.warn('Suppliers unavailable:', err);
         },
       ));
     },
@@ -517,6 +605,81 @@ export function createRecipesStore(source: RecipesSource, deps: RecipesDeps): Re
         changed();
         throw err;
       });
+    },
+
+    // ⚠️ THE FIELDS ARE LISTED BY HAND, as in the current app: this object becomes the Firestore document and the rules
+    // whitelist its keys by name, so spreading the recipe would send `id` (and anything else it carries) and every save
+    // would be refused. What is NOT sent is in KEPT_FIELDS, with why.
+    // ⚠️ SAVE IS THE ONE PLACE ROW IDS ARE MINTED (withRowIds): a mixing step or a Calculator tab that points at a row by
+    // its `rid` still finds it after a rename or a row inserted above it. A row that has one keeps it.
+    saveRecipe(recipe) {
+      const rows = withRowIds(recipe.ingredients.map(withoutUndefined));
+      const data: Record<string, unknown> = {
+        name: recipe.name,
+        ingredients: rows,
+        // A number, or null for an emptied box, which the source sends as a removal.
+        ...labelFieldsOf(recipe),
+      };
+      const id = recipe.id || newRecipeId();
+      const prev = recipes.find(candidate => candidate.id === id) ?? null;
+      const kept: Record<string, unknown> = {};
+      if (prev) {
+        const held = prev as unknown as Record<string, unknown>;
+        for (const key of KEPT_FIELDS) if (held[key] !== undefined) kept[key] = held[key];
+      }
+      upsertLocal({ ...kept, id, ...data });
+      let written: Promise<void>;
+      try {
+        written = source.saveRecipeDoc(id, data);
+      } catch (err) {
+        written = Promise.reject(err);
+      }
+      written.catch((err: unknown) => {
+        deps.warn('Recipe did not sync to Firestore:', err);
+        if (prev) upsertLocal(prev as unknown as Record<string, unknown>); else removeLocal(id);
+        say({ kind: 'recipe-not-saved', name: recipe.name });
+      });
+      return id;
+    },
+
+    deleteRecipe(id) {
+      const prev = recipes.find(candidate => candidate.id === id) ?? null;
+      if (usage[id] != null) {
+        const next = { ...usage };
+        delete next[id];
+        usage = next;
+        writeJson(USAGE_KEY, usage);
+      }
+      if (scaled[id] != null) {
+        const next = { ...scaled };
+        delete next[id];
+        scaled = next;
+        writeJson(SCALED_KEY, scaled);
+      }
+      removeLocal(id);
+      let removed: Promise<void>;
+      try {
+        removed = source.removeRecipeDoc(id);
+      } catch (err) {
+        removed = Promise.reject(err);
+      }
+      removed.catch((err: unknown) => {
+        deps.warn('Recipe delete did not sync to Firestore:', err);
+        if (prev) upsertLocal(prev as unknown as Record<string, unknown>);
+        say({ kind: 'recipe-not-deleted' });
+      });
+    },
+
+    calculatorImportOf(id) {
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const late = new Promise<boolean>(resolve => { timer = setTimeout(() => resolve(false), IMPORT_CHECK_MS); });
+      let read: Promise<boolean>;
+      try {
+        read = source.getCalculatorConfig().then(config => findCalculatorImport(config, id) !== null, () => false);
+      } catch {
+        read = Promise.resolve(false);
+      }
+      return Promise.race([read, late]).finally(() => clearTimeout(timer));
     },
   };
 }

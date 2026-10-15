@@ -1014,6 +1014,9 @@ export const en = {
   'cat.unitText.pinch': 'pinch',
   'cat.unitText.toTaste': 'to taste',
   'cat.recipeDeleted': 'Recipe deleted.',
+  'cat.recipeWord': 'recipe',
+  'cat.couldNotSaveRecipe': 'Couldn’t save “{name}” — check your connection.',
+  'cat.couldnTDeleteThe': 'Couldn’t delete the recipe — check your connection.',
   'cat.liveSyncInterruptedRecipes': 'Live sync interrupted — recipes may be out of date.',
   // New in Mise 2: a recipe's address whose recipe is not among the venue's recipes (the current app has no addresses).
   'recipes.notFound': 'This recipe no longer exists.',
