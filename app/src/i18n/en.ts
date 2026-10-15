@@ -1152,6 +1152,7 @@ export const en = {
   'label.settings.showDateNote': 'Adds a line at the bottom of the label. The date itself is typed when you print, because it belongs to the batch and not to the recipe.',
   'label.settings.setup': 'Before the first print, set the label size in the printer’s own driver, and in the print window set margins to none and scale to 100% — not “fit to page”. It only has to be done once, and until it is done the first label will come out the wrong size.',
   'label.settings.saveFailed': 'Could not save — the change has been put back',
+  'label.settings.sizeRange': 'Width and height must be between 20 and 300 mm — the saved size is back.',
 } as const satisfies Record<string, Message>;
 
 export type MessageKey = keyof typeof en;

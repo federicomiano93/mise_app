@@ -1046,4 +1046,5 @@ export const it: Messages = {
   'label.settings.showDateNote': 'Aggiunge una riga in fondo all’etichetta. La data si scrive al momento della stampa, perché appartiene alla produzione di oggi e non alla ricetta.',
   'label.settings.setup': 'Prima della prima stampa, imposta la misura dell’etichetta nel driver della stampante, e nella finestra di stampa metti i margini a nessuno e la scala al 100% — non «adatta alla pagina». Si fa una volta sola, e finché non è fatto la prima etichetta esce di misura sbagliata.',
   'label.settings.saveFailed': 'Salvataggio non riuscito — la modifica è stata rimessa com’era',
+  'label.settings.sizeRange': 'Larghezza e altezza devono essere tra 20 e 300 mm: è tornata la misura salvata.',
 };

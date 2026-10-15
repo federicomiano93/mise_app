@@ -226,3 +226,20 @@
   color: var(--danger-ink);
   font-weight: 600;
 }
+
+.failed {
+  margin-top: var(--s3);
+}
+
+/* Inside a block of the flex column the empty region would still take one gap: it takes it back. */
+.quietInBlock {
+  margin: calc(-1 * var(--s2)) 0 0;
+}
+
+.rangeError {
+  padding: var(--s3);
+  border-radius: var(--r-md);
+  background: var(--danger-tint);
+  color: var(--danger-ink);
+  font-weight: 600;
+}

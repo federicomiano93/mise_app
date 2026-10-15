@@ -1362,8 +1362,13 @@ allergen state with an `if` of its own. What differs from the current app, and w
   a key a later save has set since.
 - **On purpose, NEW in Mise 2:** the size group is a true single choice, so «Custom size» is the chosen one while its two boxes are
   open (the current app kept the preset pressed beside it); a preset tapped while a custom size waits its 350 ms cancels that write;
-  an empty box or one with no number writes nothing and shows the saved size again (the current app read an empty box as 0 and
-  sent it to the rules).
+  a size is written as ONE write only after focus has left BOTH boxes (moving from Width to Height arms nothing, and focus or typing
+  in either stops the 350 ms timer), and the boxes stay open while somebody is in them; an empty box, text that is no number or a
+  value outside 20–300 mm writes nothing, puts both boxes back to the saved size and says so (`label.settings.sizeRange`, new in
+  Mise 2) until the next valid size (the current app read an empty box as 0 and sent it to the rules); a size still waiting is
+  written at once when the page is hidden (`visibilitychange`, `pagehide`).
+- **On purpose, NEW in Mise 2:** a refusal puts a key back to the most recent earlier patch on it that was not itself refused,
+  else to the confirmed value before the first patch in the air, so two refused saves on one key never bring back a refused value.
 - **On purpose, NEW in Mise 2:** a box still holding typing, or a custom size still waiting, is written when the screen goes
   (the store's write outlives the screen) and the app is held busy (`markBusy`) meanwhile. A refusal after the screen has gone is
   said through the section's status message.

@@ -84,7 +84,9 @@ function Controls() {
   const presetId = LABEL_SIZES.find(s => s.widthMm === profile.widthMm && s.heightMm === profile.heightMm)?.id ?? null;
   // ⚠️ A SIZE THAT MATCHES NO PRESET IS A CUSTOM SIZE, so the boxes open by themselves: otherwise nothing would be
   // chosen and nothing would say why.
-  const isCustom = presetId === null || customOpen;
+  // ⚠️ AND THEY STAY OPEN WHILE SOMEBODY IS IN THEM, holds typing in them or a size waiting: a half-typed size that
+  // happens to equal a preset must not close the boxes under the finger.
+  const isCustom = presetId === null || customOpen || size.holding;
   const sizeChoices = [
     ...LABEL_SIZES.map(s => ({ value: s.id, text: `${s.widthMm} × ${s.heightMm}` })),
     { value: 'custom', text: t('label.settings.custom') },
@@ -119,10 +121,20 @@ function Controls() {
           onSelect={chooseSize}
         >
           {isCustom ? (
-            <div className={styles.customRow}>
-              <SizeBox label={t('label.settings.width')} value={size.width} onChange={size.setWidth} onLeave={size.leave} />
-              <SizeBox label={t('label.settings.height')} value={size.height} onChange={size.setHeight} onLeave={size.leave} />
-            </div>
+            <>
+              <div
+                className={styles.customRow}
+                onFocus={size.enter}
+                onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget)) size.leave(); }}
+              >
+                <SizeBox label={t('label.settings.width')} value={size.width} onChange={size.setWidth} />
+                <SizeBox label={t('label.settings.height')} value={size.height} onChange={size.setHeight} />
+              </div>
+              {/* Empty until a size is refused for its range; it is there before it speaks. */}
+              <p role="status" className={size.rangeError ? styles.rangeError : styles.quietInBlock}>
+                {size.rangeError ? t('label.settings.sizeRange') : ''}
+              </p>
+            </>
           ) : null}
         </SegmentedChoice>
 
@@ -213,8 +225,11 @@ function Controls() {
         ) : null}
       </Card>
 
-      <p className={styles.setup}>{t('label.settings.setup')}</p>
-      <p role="status" className={failed ? styles.failed : styles.quiet}>{failed ? t('label.settings.saveFailed') : ''}</p>
+      {/* The live region sits in the same block as the note, outside the column's gap: empty, it takes no room. */}
+      <div>
+        <p className={styles.setup}>{t('label.settings.setup')}</p>
+        <p role="status" className={failed ? styles.failed : styles.quiet}>{failed ? t('label.settings.saveFailed') : ''}</p>
+      </div>
     </div>
   );
 }
@@ -301,8 +316,8 @@ function TextSetting({ label, placeholder, saved, onSave }: {
   );
 }
 
-function SizeBox({ label, value, onChange, onLeave }: {
-  label: string; value: string; onChange: (text: string) => void; onLeave: () => void;
+function SizeBox({ label, value, onChange }: {
+  label: string; value: string; onChange: (text: string) => void;
 }) {
   return (
     <label className={styles.field}>
@@ -317,7 +332,6 @@ function SizeBox({ label, value, onChange, onLeave }: {
           className={styles.input}
           value={value}
           onChange={event => { onChange(event.target.value); }}
-          onBlur={onLeave}
         />
         <span className={styles.unit} aria-hidden="true">mm</span>
       </span>
@@ -330,21 +344,34 @@ function millimetres(text: string): number {
   return text.trim() === '' ? Number.NaN : Number(text);
 }
 
+// The least and the most a label may measure, in millimetres: the rules' own bounds (config/labels), repeated here so
+// a size outside them is never sent.
+export const MIN_MM = 20;
+export const MAX_MM = 300;
+const inRange = (mm: number): boolean => Number.isFinite(mm) && mm >= MIN_MM && mm <= MAX_MM;
+
 // The two boxes of a custom size.
 //
-// ⚠️ ON LEAVING A BOX, NEVER PER KEYSTROKE: typing «102» would otherwise save 1, then 10, then 102 — three writes, and
-// the first two are label sizes this venue never chose.
+// ⚠️ ON LEAVING THE BOXES, NEVER PER KEYSTROKE: typing «102» would otherwise save 1, then 10, then 102 — three writes,
+// and the first two are label sizes this venue never chose.
 //
-// ⚠️⚠️ AND THE TWO BOXES ARE ONE DECISION, SO THEY ARE ONE WRITE `{ widthMm, heightMm }`, written 350 ms after the
-// last box was left: a width and a height written one after the other leave a moment where the store holds a size
-// nobody asked for. A box that is empty or holds no number writes nothing (the box shows the saved size again).
+// ⚠️⚠️ AND THE TWO BOXES ARE ONE DECISION, SO THEY ARE ONE WRITE `{ widthMm, heightMm }`, written 350 ms after focus
+// left BOTH boxes. Moving from the width to the height arms nothing, and focus or typing in either box stops a timer that
+// is running: written mid-typing, `{ new width, old height }` could be a preset, the boxes would close under the finger,
+// and a half-typed height would be lost. While a box has the focus or holds typing, the boxes stay open (`holding`).
 //
-// The state lives here, above the boxes, because the boxes come and go: a PRESET tapped while a size waits to be
-// written cancels it (`cancel`), and the boxes closing must not write it after the preset.
+// ⚠️ A SIZE THE RULES WOULD REFUSE IS NEVER SENT: an empty box, text that is no number, or a value outside 20–300 writes
+// nothing, puts both boxes back to the saved size and says why (`rangeError`) until the next valid size. Sent, the
+// profile would lay every label out on the default paper meanwhile, and offline the refused write would wait in the queue.
+//
+// The state lives here, above the boxes, because the boxes come and go: a PRESET tapped while a size waits to be written
+// cancels it (`cancel`), and the boxes closing must not write it after the preset.
 function useCustomSize(saved: { w: number; h: number }, save: (patch: Patch) => void) {
   const [wDraft, setWDraft] = useState<string | null>(null);
   const [hDraft, setHDraft] = useState<string | null>(null);
   const [pending, setPendingState] = useState<{ w: number; h: number } | null>(null);
+  const [inside, setInside] = useState(false);
+  const [rangeError, setRangeError] = useState(false);
   const pendingRef = useRef<{ w: number; h: number } | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const latest = useRef({ saved, wDraft, hDraft, save });
@@ -363,6 +390,22 @@ function useCustomSize(saved: { w: number; h: number }, save: (patch: Patch) => 
   const width = wDraft ?? String(pending?.w ?? saved.w);
   const height = hDraft ?? String(pending?.h ?? saved.h);
 
+  // Writes what the boxes hold NOW, if it is a valid size that differs from the saved one (the screen going, the page
+  // being hidden). The newest word wins: typing over a size that waits.
+  function commitNow(): void {
+    stopTimer();
+    const { saved: held, wDraft: wTyped, hDraft: hTyped, save: write } = latest.current;
+    const waiting = pendingRef.current;
+    const w = wTyped !== null ? millimetres(wTyped) : waiting?.w ?? held.w;
+    const h = hTyped !== null ? millimetres(hTyped) : waiting?.h ?? held.h;
+    setPending(null);
+    setWDraft(null);
+    setHDraft(null);
+    if (inRange(w) && inRange(h) && (w !== held.w || h !== held.h)) write({ widthMm: w, heightMm: h });
+  }
+  const commitRef = useRef(commitNow);
+  commitRef.current = commitNow;
+
   function flush(): void {
     stopTimer();
     const next = pendingRef.current;
@@ -372,12 +415,26 @@ function useCustomSize(saved: { w: number; h: number }, save: (patch: Patch) => 
     if (next.w !== held.w || next.h !== held.h) write({ widthMm: next.w, heightMm: next.h });
   }
 
+  // Focus came into the boxes (or moved from one to the other): nothing may be written while somebody is in them.
+  function enter(): void {
+    stopTimer();
+    setInside(true);
+  }
+
+  // Focus left BOTH boxes.
   function leave(): void {
+    setInside(false);
     const w = millimetres(width);
     const h = millimetres(height);
     setWDraft(null);
     setHDraft(null);
-    if (!Number.isFinite(w) || !Number.isFinite(h)) return;
+    if (!inRange(w) || !inRange(h)) {
+      stopTimer();
+      setPending(null);
+      setRangeError(true);
+      return;
+    }
+    setRangeError(false);
     if (pendingRef.current === null && w === saved.w && h === saved.h) return;
     stopTimer();
     setPending({ w, h });
@@ -389,6 +446,8 @@ function useCustomSize(saved: { w: number; h: number }, save: (patch: Patch) => 
     setPending(null);
     setWDraft(null);
     setHDraft(null);
+    setInside(false);
+    setRangeError(false);
   }
 
   // Typing that is not the saved size, or a size not yet written: a reload the app starts by itself waits.
@@ -397,15 +456,26 @@ function useCustomSize(saved: { w: number; h: number }, save: (patch: Patch) => 
     || (hDraft !== null && millimetres(hDraft) !== saved.h);
   useEffect(() => (differs ? markBusy() : undefined), [differs]);
 
-  // ⚠️ LEAVING THE SCREEN: a size waiting its 350 ms is written at once, and so is one still being typed.
-  useEffect(() => () => {
-    stopTimer();
-    const { saved: held, wDraft: wTyped, hDraft: hTyped, save: write } = latest.current;
-    const waiting = pendingRef.current;
-    const w = waiting?.w ?? (wTyped === null ? held.w : millimetres(wTyped));
-    const h = waiting?.h ?? (hTyped === null ? held.h : millimetres(hTyped));
-    if (Number.isFinite(w) && Number.isFinite(h) && (w !== held.w || h !== held.h)) write({ widthMm: w, heightMm: h });
+  // ⚠️ A PAGE HIDDEN OR KILLED (the tablet put to sleep, the browser closed) would lose a size still waiting its 350 ms:
+  // it is written at once.
+  useEffect(() => {
+    const hidden = () => { if (document.visibilityState === 'hidden') commitRef.current(); };
+    const gone = () => { commitRef.current(); };
+    document.addEventListener('visibilitychange', hidden);
+    window.addEventListener('pagehide', gone);
+    return () => {
+      document.removeEventListener('visibilitychange', hidden);
+      window.removeEventListener('pagehide', gone);
+    };
   }, []);
 
-  return { width, height, setWidth: setWDraft, setHeight: setHDraft, leave, cancel };
+  // ⚠️ LEAVING THE SCREEN: a size waiting its 350 ms is written at once, and so is one still being typed.
+  useEffect(() => () => { commitRef.current(); }, []);
+
+  return {
+    width, height, setWidth: (text: string) => { stopTimer(); setWDraft(text); }, setHeight: (text: string) => { stopTimer(); setHDraft(text); },
+    enter, leave, cancel, rangeError,
+    // The boxes stay open while somebody is in them, holds typing or a size waiting, or the range sentence is up.
+    holding: inside || wDraft !== null || hDraft !== null || pending !== null || rangeError,
+  };
 }

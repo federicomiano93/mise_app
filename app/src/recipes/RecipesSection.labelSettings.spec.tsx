@@ -167,15 +167,117 @@ describe('Label printing', () => {
     expect(source.labelSaves).toHaveLength(1);
   });
 
-  it('writes nothing for an empty box, which shows the saved size again', async () => {
+  const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+  it.each(['10', '301', ''])('⚠️ never sends %j mm: nothing is written, the saved size is back and the sentence says why', async typed => {
     const { source, user } = await openSettings();
     await user.click(choice('Label size', 'Custom size'));
     const width = settings().getByRole('spinbutton', { name: /Width/ });
     await user.clear(width);
+    if (typed !== '') await user.type(width, typed);
     await user.tab();
-    await new Promise(resolve => setTimeout(resolve, SIZE_SETTLE_MS + 100));
+    await user.tab();
+    await wait(SIZE_SETTLE_MS + 100);
     expect(source.labelSaves).toEqual([]);
-    expect(width).toHaveValue(76);
+    expect(settings().getByRole('spinbutton', { name: /Width/ })).toHaveValue(76);
+    expect(settings().getByText('Width and height must be between 20 and 300 mm — the saved size is back.')).toBeInTheDocument();
+    // The boxes stay open while the sentence is up, even though 76 × 51 is a preset.
+    expect(settings().getByRole('spinbutton', { name: /Height/ })).toHaveValue(51);
+  });
+
+  it('accepts the bounds, 20 and 300, and clears the sentence on the next valid size', async () => {
+    const { source, user } = await openSettings();
+    await user.click(choice('Label size', 'Custom size'));
+    let width = settings().getByRole('spinbutton', { name: /Width/ });
+    await user.clear(width);
+    await user.type(width, '5');
+    await user.tab();
+    await user.tab();
+    expect(settings().getByText(/must be between 20 and 300 mm/)).toBeInTheDocument();
+
+    width = settings().getByRole('spinbutton', { name: /Width/ });
+    await user.clear(width);
+    await user.type(width, '20');
+    await user.tab();
+    const height = settings().getByRole('spinbutton', { name: /Height/ });
+    await user.clear(height);
+    await user.type(height, '300');
+    await user.tab();
+    await waitFor(() => { expect(source.labelSaves).toEqual([{ widthMm: 20, heightMm: 300 }]); }, FIRST);
+    expect(settings().queryByText(/must be between 20 and 300 mm/)).not.toBeInTheDocument();
+  });
+
+  it('⚠️ writes nothing while the second box is being typed in; one write once focus has left BOTH', async () => {
+    const { source, user } = await openSettings();
+    await user.click(choice('Label size', 'Custom size'));
+    const width = settings().getByRole('spinbutton', { name: /Width/ });
+    await user.clear(width);
+    await user.type(width, '90');
+    await user.tab();
+    const height = settings().getByRole('spinbutton', { name: /Height/ });
+    expect(height).toHaveFocus();
+    await user.clear(height);
+    await user.type(height, '4');
+    // Longer than the settle time, still in the height box.
+    await wait(SIZE_SETTLE_MS + 150);
+    expect(source.labelSaves).toEqual([]);
+    await user.type(height, '0');
+    await user.tab();
+    await waitFor(() => { expect(source.labelSaves).toEqual([{ widthMm: 90, heightMm: 40 }]); }, FIRST);
+    await wait(SIZE_SETTLE_MS + 100);
+    expect(source.labelSaves).toHaveLength(1);
+  });
+
+  it('⚠️ keeps the boxes open when what is half-typed equals a preset, until focus leaves them', async () => {
+    const { source, user } = await openSettings({ labelConfig: { widthMm: 57, heightMm: 51 } });
+    expect(choice('Label size', 'Custom size')).toBeChecked();
+    const width = settings().getByRole('spinbutton', { name: /Width/ });
+    await user.clear(width);
+    await user.type(width, '76');
+    await user.tab();
+    await wait(SIZE_SETTLE_MS + 150);
+    // 76 × 51 is a preset, but nothing was written and the boxes are still under the finger.
+    expect(source.labelSaves).toEqual([]);
+    const height = settings().getByRole('spinbutton', { name: /Height/ });
+    expect(height).toHaveFocus();
+    await user.clear(height);
+    await user.type(height, '6');
+    await user.type(height, '0');
+    await user.tab();
+    await waitFor(() => { expect(source.labelSaves).toEqual([{ widthMm: 76, heightMm: 60 }]); }, FIRST);
+  });
+
+  it('⚠️ writes a size that waits its 350 ms at once when the page is hidden or put away, and takes the listeners off on leaving', async () => {
+    const { source, user, router } = await openSettings();
+    const setVisibility = (value: string) => Object.defineProperty(document, 'visibilityState', { configurable: true, value });
+    try {
+      await user.click(choice('Label size', 'Custom size'));
+      const width = settings().getByRole('spinbutton', { name: /Width/ });
+      await user.clear(width);
+      await user.type(width, '90');
+      await user.tab();
+      await user.tab();
+      expect(source.labelSaves).toEqual([]);
+      setVisibility('hidden');
+      act(() => { document.dispatchEvent(new Event('visibilitychange')); });
+      expect(source.labelSaves).toEqual([{ widthMm: 90, heightMm: 51 }]);
+
+      // The same through pagehide.
+      const again = settings().getByRole('spinbutton', { name: /Width/ });
+      await user.clear(again);
+      await user.type(again, '100');
+      await user.tab();
+      await user.tab();
+      act(() => { window.dispatchEvent(new Event('pagehide')); });
+      expect(source.labelSaves).toEqual([{ widthMm: 90, heightMm: 51 }, { widthMm: 100, heightMm: 51 }]);
+
+      await act(async () => { await router.navigate('/recipes'); });
+      const before = source.labelSaves.length;
+      act(() => { document.dispatchEvent(new Event('visibilitychange')); window.dispatchEvent(new Event('pagehide')); });
+      expect(source.labelSaves).toHaveLength(before);
+    } finally {
+      setVisibility('visible');
+    }
   });
 
   it('⚠️ a preset tapped while a custom size waits cancels it', async () => {
@@ -392,6 +494,9 @@ describe('leaving with typing in a box', () => {
     const width = settings().getByRole('spinbutton', { name: /Width/ });
     await user.clear(width);
     await user.type(width, '90');
+    expect(isBusy()).toBe(true);
+    await user.tab();
+    // Still in the second box, holding typing: busy.
     expect(isBusy()).toBe(true);
     await user.tab();
     expect(isBusy()).toBe(true);
