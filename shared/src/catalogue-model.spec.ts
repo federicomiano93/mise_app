@@ -982,8 +982,9 @@ describe('the port against the original', () => {
     'unitText', 'formatAmount', 'toCalculatorRecipe', 'nonWeighableLabels', 'mergeImportedRecipe', 'importFailureKey',
     'exportModelOf',
   ];
+  // `supplierLabel` is js/supplier-label.js's, copied into the model and exported (step 3d-6 A2) for the link line.
   // `nameTaken` is not an export of catalogue-model.js: its original is in ingredient-suggest.js (tested above).
-  const ADDED = ['unitTextKey', 'nameTaken'];
+  const ADDED = ['unitTextKey', 'nameTaken', 'supplierLabel'];
   // Same name, same results, but the translator is one more parameter.
   const ARITY_DIFFERS = ['batchWarning'];
   const original = legacyJs as unknown as Record<string, unknown>;

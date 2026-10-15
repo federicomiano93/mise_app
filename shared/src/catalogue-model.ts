@@ -185,7 +185,7 @@ export function normalizeSearchText(value: unknown): string {
 }
 
 // js/supplier-label.js supplierLabel, copied (pure): the short name when there is one, else the name.
-function supplierLabel(s: unknown): string {
+export function supplierLabel(s: unknown): string {
   const supplier = s as { shortName?: unknown; name?: unknown } | null | undefined;
   const short = typeof supplier?.shortName === 'string' ? supplier.shortName.trim() : '';
   if (short) return short;

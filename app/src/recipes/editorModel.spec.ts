@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { normalizeCatalogueRecipe } from '@mise/shared/catalogue-model';
 import type { CatalogueRecipe } from '@mise/shared/catalogue-model';
 import {
-  addRow, cleanWorking, netWeightText, notWeighedCount, removeRow, setRowFields, shelfLifeText, totalText, workingFrom,
+  addRow, cleanWorking, linkRowTo, netWeightText, notWeighedCount, removeRow, setRowFields, shelfLifeText, totalText, workingFrom,
 } from './editorModel';
 
 // The editor's working copy and the rules that turn it into what is saved (the pure half of catalogue-editor.js).
@@ -134,5 +134,43 @@ describe('the total', () => {
     working = setRowFields(working, working.rows[0]!.key, { grams: '500', unit: 'pcs' });
     expect(totalText(cleanWorking(working))).toBe('0');
     expect(notWeighedCount(cleanWorking(working))).toBe(0);
+  });
+});
+
+describe('linking a row', () => {
+  const INGREDIENTS = { 'ing-1': { id: 'ing-1', name: 'Farina 00 Caputo', shortName: 'Caputo' } };
+  const RECIPES = [{ id: 'sub', name: 'Pizza base' }];
+
+  const typed = () => {
+    const working = workingFrom(null);
+    const key = working.rows[0]!.key;
+    return { working: setRowFields(working, key, { label: 'flour', grams: '100', rid: 'row-1' }), key };
+  };
+
+  it('⚠️ writes the link and sets the name to the item’s display name, on a COPY of the row', () => {
+    const { working, key } = typed();
+    const before = working.rows[0]!.row;
+    const next = linkRowTo(working, key, { kind: 'ingredient', refId: 'ing-1', name: 'Farina 00 Caputo' }, INGREDIENTS, RECIPES);
+    expect(next.rows[0]!.row).toMatchObject({ label: 'Caputo', kind: 'ingredient', refId: 'ing-1', grams: '100', rid: 'row-1' });
+    expect(before).toEqual({ label: 'flour', grams: '100', unit: 'g', rid: 'row-1' });
+    expect(next.rows[0]!.key).toBe(key);
+  });
+
+  it('keeps a name typed since when the very same link is chosen again', () => {
+    const { working, key } = typed();
+    const chosen = { kind: 'ingredient' as const, refId: 'ing-1', name: 'Farina 00 Caputo' };
+    const linked = linkRowTo(working, key, chosen, INGREDIENTS, RECIPES);
+    const renamed = setRowFields(linked, key, { label: 'my own words' });
+    expect(linkRowTo(renamed, key, chosen, INGREDIENTS, RECIPES).rows[0]!.row.label).toBe('my own words');
+  });
+
+  it('removes the link and keeps the name', () => {
+    const { working, key } = typed();
+    const linked = linkRowTo(working, key, { kind: 'recipe', refId: 'sub', name: 'Pizza base' }, INGREDIENTS, RECIPES);
+    expect(linked.rows[0]!.row).toMatchObject({ label: 'Pizza base', kind: 'recipe', refId: 'sub' });
+    const removed = linkRowTo(linked, key, null, INGREDIENTS, RECIPES).rows[0]!.row;
+    expect(removed).not.toHaveProperty('refId');
+    expect(removed).not.toHaveProperty('kind');
+    expect(removed.label).toBe('Pizza base');
   });
 });

@@ -7,7 +7,8 @@
 // editor owns (label, grams, unit) are rewritten.
 
 import {
-  isWeighableUnit, normalizeShelfLifeDays, normalizeWeight, unitOf, weighableTotalGrams,
+  applyLink, isSameLink, isWeighableUnit, linkOf, linkedItemName, normalizeShelfLifeDays, normalizeWeight, unitOf,
+  weighableTotalGrams,
 } from '@mise/shared/catalogue-model';
 import type { CatalogueRecipe } from '@mise/shared/catalogue-model';
 import type { RecipeToSave } from './recipesStore';
@@ -72,6 +73,37 @@ export const setRowFields = (working: Working, key: number, fields: Row): Workin
   ...working,
   rows: working.rows.map(item => (item.key === key ? { key, row: { ...item.row, ...fields } } : item)),
 });
+
+// What a pick hands back: the item's kind and id, and its invoice name (the fallback for a row's name).
+export interface Chosen {
+  readonly kind: 'ingredient' | 'recipe';
+  readonly refId: string;
+  readonly name: string;
+}
+
+// ⚠️ THE ONE PLACE A ROW'S LINK IS WRITTEN, through applyLink (the suggestion list and the chooser both come here). `null`
+// removes the link and keeps the name.
+// ⚠️ THE NAME FOLLOWS THE PICK (his decision, 9 Oct 2026): a pick that CHANGES the link sets the row's name to the linked
+// item's display name; choosing what is already there never undoes a name typed since.
+// ⚠️ applyLink MUTATES, and the working copy is React state: it is given a COPY of the row, never the row itself.
+export function linkRowTo(
+  working: Working,
+  key: number,
+  chosen: Chosen | null,
+  ingredients: unknown,
+  recipes: unknown,
+): Working {
+  return {
+    ...working,
+    rows: working.rows.map(item => {
+      if (item.key !== key) return item;
+      const copy: Record<string, unknown> = { ...item.row };
+      const same = isSameLink(linkOf(copy), chosen);
+      applyLink(copy, chosen, same ? {} : { label: linkedItemName(chosen, ingredients, recipes) });
+      return { key, row: copy };
+    }),
+  };
+}
 
 export const addRow = (working: Working): Working => ({ ...working, rows: [...working.rows, newRow()] });
 
