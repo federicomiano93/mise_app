@@ -1,6 +1,6 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import type { Ref } from 'react';
-import { useNavigate } from 'react-router';
+import { useLocation, useNavigate } from 'react-router';
 import { Download, Maximize2, Pencil, Trash2 } from 'lucide-react';
 import { weighableTotalGrams } from '@mise/shared/catalogue-model';
 import type { CatalogueRecipe } from '@mise/shared/catalogue-model';
@@ -18,7 +18,7 @@ import { useRecipes, useRecipesStore } from './RecipesContext';
 import { amountText, recipeAmounts } from './recipeAmounts';
 import { recipeExportModel } from './recipeExportModel';
 import { useRecipeReturn } from './recipeReturn';
-import { FROM_RECIPE } from './recipesNav';
+import { FROM_RECIPE, cameFromList, cameFromSheet } from './recipesNav';
 import { editPath } from './recipesPath';
 import { useDeleteRecipe } from './useDeleteRecipe';
 import styles from './RecipeView.module.css';
@@ -51,6 +51,7 @@ export function RecipeView({ recipe, titleRef, onBack }: Props) {
   const hasWeight = weighableTotalGrams(recipe) > 0;
   const { canManage } = useSession();
   const navigate = useNavigate();
+  const { state } = useLocation();
   const recipeReturn = useRecipeReturn();
   const [runDelete, deleteDialog] = useDeleteRecipe();
   const editButton = useRef<HTMLButtonElement>(null);
@@ -77,7 +78,7 @@ export function RecipeView({ recipe, titleRef, onBack }: Props) {
             variant="secondary"
             onPress={() => {
               recipeReturn.remember(recipe.id, 'edit');
-              void navigate(editPath(recipe.id), { state: FROM_RECIPE });
+              void navigate(editPath(recipe.id), { state: { ...FROM_RECIPE, recipeFromList: cameFromList(state) && !cameFromSheet(state) } });
             }}
           >
             <Pencil aria-hidden="true" />

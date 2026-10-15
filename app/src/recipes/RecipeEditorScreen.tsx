@@ -1,12 +1,13 @@
 import { useEffect, useId, useRef, useState } from 'react';
-import { useLocation, useNavigationType } from 'react-router';
+import { useLocation, useNavigate, useNavigationType } from 'react-router';
 import { useT } from '../i18n/useT';
+import { KEEP_FOCUS } from '../shell/Page';
 import { FormBar } from '../ui/FormBar';
 import { RecipeEditor } from './RecipeEditor';
 import { useRecipes } from './RecipesContext';
-import { NEW_OPENER, recipeOpener, useHandBack } from './handBack';
-import { cameFromList, cameFromRecipe, useLeave } from './recipesNav';
-import { RECIPES_PATH, recipePath } from './recipesPath';
+import { recipeOpener, useHandBack } from './handBack';
+import { cameFromList, cameFromRecipe } from './recipesNav';
+import { RECIPES_PATH } from './recipesPath';
 import styles from './RecipesDetail.module.css';
 
 // How long a recipe found only in this phone's local copy waits for the server before its editor opens anyway (the
@@ -50,6 +51,21 @@ export function RecipeEditorScreen({ id }: { id: string | null }) {
   // The id whose editor has been shown: a recipe that leaves the list afterwards is not «gone» for this screen.
   const [shownFor, setShownFor] = useState<string | null>(null);
   if (canOpen && shownFor !== id) setShownFor(id);
+  // ⚠️ A FORM OPENED FROM THE PHONE'S COPY (after COPY_WAIT_MS, or offline) MUST STILL LEARN WHAT THE SERVER SAYS: when its
+  // first answer arrives and the recipe differs from the copy the form was made from, a form with NOTHING typed is made
+  // again from the newer one. Typing is never replaced (the current app does not warn either). Only this first answer is
+  // watched: later changes on other phones never replace an open form (RecipeEditor).
+  const [base, setBase] = useState<{ id: string; json: string; early: boolean } | null>(null);
+  if (canOpen && recipe !== null && base?.id !== id) setBase({ id: id as string, json: JSON.stringify(recipe), early: !recipesFromServer });
+  const typed = useRef(false);
+  const [version, setVersion] = useState(0);
+  useEffect(() => { typed.current = false; }, [id]);
+  useEffect(() => {
+    if (base === null || !base.early || !recipesFromServer || base.id !== id) return;
+    const json = recipe === null ? base.json : JSON.stringify(recipe);
+    if (!typed.current && json !== base.json) setVersion(current => current + 1);
+    setBase({ ...base, early: false, json });
+  }, [recipesFromServer]);
   const hasForm = id === null || canOpen || shownFor === id;
   const gone = !hasForm && recipe === null && settled;
   const waiting = !hasForm && !gone;
@@ -61,12 +77,7 @@ export function RecipeEditorScreen({ id }: { id: string | null }) {
     if ((cameFromList(state) || cameFromRecipe(state)) && navigationType !== 'POP') title.current?.focus();
   }, [waiting, gone]);
 
-  const leave = useLeave(
-    id === null ? RECIPES_PATH : recipePath(id),
-    () => { handBack.expect(id === null ? NEW_OPENER : recipeOpener(id)); },
-    id === null ? cameFromList : cameFromRecipe,
-  );
-
+  const navigate = useNavigate();
   if (waiting) {
     return (
       <section className={styles.waiting} aria-busy="true">
@@ -77,9 +88,14 @@ export function RecipeEditorScreen({ id }: { id: string | null }) {
   if (gone) {
     return (
       <section className={styles.missing} aria-labelledby={titleId}>
-        <FormBar backLabel={t('ui.back')} onBack={leave} title={t('recipes.notFound')} titleId={titleId} titleRef={title} />
+        <FormBar backLabel={t('ui.back')} onBack={() => {
+          // ⚠️ THE RECIPE IS GONE, so is its page: Back goes to the list, not to an address that says the same again.
+          handBack.expect(recipeOpener(id as string));
+          void navigate(RECIPES_PATH, { replace: true, state: KEEP_FOCUS });
+        }}
+        title={t('recipes.notFound')} titleId={titleId} titleRef={title} />
       </section>
     );
   }
-  return <RecipeEditor key={id ?? 'new'} id={id} recipe={recipe} titleRef={title} />;
+  return <RecipeEditor key={`${id ?? 'new'}:${version}`} id={id} recipe={recipe} titleRef={title} onTyped={() => { typed.current = true; }} />;
 }

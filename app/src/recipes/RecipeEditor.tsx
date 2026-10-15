@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import type { Ref } from 'react';
 import { Check, Trash2 } from 'lucide-react';
-import { useBlocker, useNavigate } from 'react-router';
+import { useBlocker, useLocation, useNavigate } from 'react-router';
 import type { BlockerFunction } from 'react-router';
 import { findInvalidRecipe, linkOf } from '@mise/shared/catalogue-model';
 import type { CatalogueRecipe, InvalidRecipeProblem } from '@mise/shared/catalogue-model';
@@ -24,7 +24,7 @@ import type { Chosen, Row, Working } from './editorModel';
 import { IngredientRow } from './IngredientRow';
 import { LinkDialog } from './LinkDialog';
 import { NEW_OPENER, recipeOpener, useHandBack } from './handBack';
-import { cameFromList, cameFromRecipe, useLeave } from './recipesNav';
+import { cameFromList, cameFromRecipe, recipeCameFromList, useLeave } from './recipesNav';
 import { RECIPES_PATH, recipePath } from './recipesPath';
 import { useDeleteRecipe } from './useDeleteRecipe';
 import styles from './RecipeEditor.module.css';
@@ -35,6 +35,8 @@ type Props = {
   // The recipe as the list holds it now (null for a new one, or one deleted on another phone while this screen stayed open).
   recipe: CatalogueRecipe | null;
   titleRef: Ref<HTMLHeadingElement>;
+  // Told when something is typed, so the screen knows a newer copy from the server must not replace the form.
+  onTyped?: () => void;
 };
 
 // The most a recipe's name may hold: the rules refuse a name of 200 characters or more (firestore.rules, `recipes`), and a
@@ -52,7 +54,7 @@ export const NAME_MAX_LENGTH = 199;
 // ⚠️ THE COPY IS MADE ONCE, WHEN THIS FORM MOUNTS — and RecipeEditorScreen mounts it only once the recipe is in the list
 // (the Pastries' editor-copies-too-early trap), keyed on the id. A recipe changed on another phone afterwards NEVER
 // replaces the copy.
-export function RecipeEditor({ id, recipe, titleRef }: Props) {
+export function RecipeEditor({ id, recipe, titleRef, onTyped }: Props) {
   const { t } = useT();
   const store = useRecipesStore();
   const { labelConfig, ingredients, recipes, suppliers } = useRecipes();
@@ -60,6 +62,7 @@ export function RecipeEditor({ id, recipe, titleRef }: Props) {
   const say = useStatusMessage();
   const handBack = useHandBack();
   const navigate = useNavigate();
+  const { state } = useLocation();
   const [confirm, confirmDialog] = useConfirm();
   const [runDelete, deleteDialog] = useDeleteRecipe();
   const ids = useId();
@@ -79,6 +82,7 @@ export function RecipeEditor({ id, recipe, titleRef }: Props) {
   const dirtyRef = useRef(false);
   const edit = (change: (current: Working) => Working) => {
     dirtyRef.current = true;
+    onTyped?.();
     setDirty(true);
     setWorking(change);
   };
@@ -255,9 +259,17 @@ export function RecipeEditor({ id, recipe, titleRef }: Props) {
     } else {
       // Back to the LIST (not to the recipe), the row of the saved recipe owed the focus.
       handBack.expect(recipeOpener(savedId));
-      void navigate(RECIPES_PATH, { replace: true, state: KEEP_FOCUS });
+      leaveForList();
     }
   }
+
+  // ⚠️ AFTER A SAVE OR A DELETE the list is shown, and Back from it must leave the catalogue, not reopen the recipe (or a
+  // recipe that is gone). Opened [list, recipe, editor] from the list, that is a jump of two steps; any other way in (an
+  // address, the Allergen sheet) replaces the editor with the list, as before.
+  const leaveForList = () => {
+    if (cameFromRecipe(state) && recipeCameFromList(state)) void navigate(-2);
+    else void navigate(RECIPES_PATH, { replace: true, state: KEEP_FOCUS });
+  };
 
   async function remove() {
     if (id === null || busy.current || askingLeave.current || leavingClean.current) return;
@@ -266,7 +278,7 @@ export function RecipeEditor({ id, recipe, titleRef }: Props) {
       await runDelete({ id, name: storedName }, () => {
         leavingClean.current = true;
         handBack.expect(recipeOpener(id));
-        void navigate(RECIPES_PATH, { replace: true, state: KEEP_FOCUS });
+        leaveForList();
       });
     } finally {
       busy.current = false;
