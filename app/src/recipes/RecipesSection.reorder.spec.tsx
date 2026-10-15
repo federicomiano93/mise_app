@@ -1,5 +1,5 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { screen, waitFor, within } from '@testing-library/react';
+import { act, screen, waitFor, within } from '@testing-library/react';
 import { isBusy } from '../session/busy';
 import { LOAD, recipe, renderRecipes, sourceWith } from '../testing/renderRecipes';
 
@@ -44,6 +44,8 @@ async function enter(region: HTMLElement, user: User) {
   await user.click(reorderButton(region));
   await waitFor(() => { expect(grips(region)).not.toHaveLength(0); });
 }
+
+const later = (ms = 150) => act(async () => { await new Promise(resolve => setTimeout(resolve, ms)); });
 
 async function answerSave(user: User) {
   const dialog = await screen.findByRole('alertdialog', { name: 'Save recipe?' });
@@ -97,12 +99,14 @@ describe('the rows in the mode', () => {
     expect(within(region).getByText('Total')).toBeInTheDocument();
   });
 
-  it('tells how to move a row, and every grip is described by it', async () => {
+  it('tells how to move a row: the LIST is described by it, the grips keep React Aria’s own description', async () => {
     const { region, user } = await openEditor();
     expect(within(region).queryByText(/Hold an ingredient/)).not.toBeInTheDocument();
     await enter(region, user);
     const hint = within(region).getByText('Hold an ingredient and drag it to its place. With a keyboard, use the up and down arrows.');
-    for (const grip of grips(region)) expect(grip).toHaveAttribute('aria-describedby', hint.id);
+    expect(within(region).getByRole('grid')).toHaveAttribute('aria-describedby', hint.id);
+    // ⚠️ A grip described by the hint alone would hide «Press Enter to start dragging» from a screen reader.
+    for (const grip of grips(region)) expect(grip.getAttribute('aria-describedby') ?? '').not.toBe(hint.id);
     await user.click(reorderButton(region, 'Done'));
     expect(within(region).queryByText(/Hold an ingredient/)).not.toBeInTheDocument();
     expect(ingredientBoxes(region)).toHaveLength(3);
@@ -158,6 +162,9 @@ describe('the arrow keys on a grip', () => {
     await user.keyboard('{ArrowDown}');
     await waitFor(() => { expect(names(region)).toEqual(['Water', 'Flour', 'Salt']); });
     await waitFor(() => { expect(gripOf(region, 'Flour')).toHaveFocus(); });
+    await later();
+    expect(names(region)).toEqual(['Water', 'Flour', 'Salt']);
+    expect(gripOf(region, 'Flour')).toHaveFocus();
     await user.keyboard('{ArrowDown}');
     await waitFor(() => { expect(names(region)).toEqual(['Water', 'Salt', 'Flour']); });
     await waitFor(() => { expect(gripOf(region, 'Flour')).toHaveFocus(); });
@@ -190,10 +197,85 @@ describe('the arrow keys on a grip', () => {
 
     await user.keyboard('{Enter}');
     expect((await screen.findAllByRole('button', { name: /^Insert (before|after) /, hidden: true }, LOAD)).length).toBeGreaterThan(0);
+    // From [Water, Flour, Salt] the two arrows walk the drop places to the one before Water: Flour is first again, once.
     await user.keyboard('{ArrowDown}{ArrowDown}{Enter}');
-    await waitFor(() => { expect(names(region)).not.toEqual(['Water', 'Flour', 'Salt']); });
-    expect(names(region)).toHaveLength(3);
+    await waitFor(() => { expect(names(region)).toEqual(['Flour', 'Water', 'Salt']); });
     await waitFor(() => { expect(gripOf(region, 'Flour')).toHaveFocus(); });
+    await later();
+    expect(names(region)).toEqual(['Flour', 'Water', 'Salt']);
+    expect(gripOf(region, 'Flour')).toHaveFocus();
+  });
+});
+
+describe('keys that must NOT move a row', () => {
+  it('ArrowDown and ArrowUp on a ROW (not its grip) move nothing and are no edit', async () => {
+    const { region, user } = await openEditor();
+    await enter(region, user);
+    // The row hands its focus to its grip, so the key is sent to the row itself.
+    const row = within(region).getAllByRole('row')[1]!;
+    row.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }));
+    row.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true, cancelable: true }));
+    await later();
+    expect(names(region)).toEqual(['Flour', 'Water', 'Salt']);
+    expect(isBusy()).toBe(false);
+  });
+
+  it.each([['Shift'], ['Alt'], ['Control']])('%s+Arrow on a grip moves nothing and is no edit', async modifier => {
+    const { region, user } = await openEditor();
+    await enter(region, user);
+    gripOf(region, 'Water').focus();
+    await user.keyboard(`{${modifier}>}{ArrowDown}{ArrowUp}{/${modifier}}`);
+    await later();
+    expect(names(region)).toEqual(['Flour', 'Water', 'Salt']);
+    expect(isBusy()).toBe(false);
+  });
+});
+
+describe('every grip is a Tab stop', () => {
+  it('⚠️ reaches the third grip with keys only (Tab, Tab) and moves it up with ArrowUp', async () => {
+    const { region, user } = await openEditor();
+    await user.click(reorderButton(region));
+    await waitFor(() => { expect(gripOf(region, 'Flour')).toHaveFocus(); });
+    await user.tab();
+    expect(gripOf(region, 'Water')).toHaveFocus();
+    await user.tab();
+    expect(gripOf(region, 'Salt')).toHaveFocus();
+    await user.keyboard('{ArrowUp}');
+    await waitFor(() => { expect(names(region)).toEqual(['Flour', 'Salt', 'Water']); });
+    await waitFor(() => { expect(gripOf(region, 'Salt')).toHaveFocus(); });
+    await later();
+    expect(gripOf(region, 'Salt')).toHaveFocus();
+  });
+
+  it('goes back with Shift+Tab, and leaves the list from the first grip', async () => {
+    const { region, user } = await openEditor();
+    await enter(region, user);
+    gripOf(region, 'Salt').focus();
+    await user.tab({ shift: true });
+    expect(gripOf(region, 'Water')).toHaveFocus();
+    await user.tab({ shift: true });
+    expect(gripOf(region, 'Flour')).toHaveFocus();
+    await user.tab({ shift: true });
+    expect(document.activeElement?.closest('[role="grid"]')).toBeNull();
+    expect(document.activeElement).toBe(reorderButton(region, 'Done'));
+  });
+
+  it('leaves the list from the last grip, the focus going to the next control after it', async () => {
+    const { region, user } = await openEditor();
+    await enter(region, user);
+    gripOf(region, 'Salt').focus();
+    await user.tab();
+    expect(document.activeElement?.closest('[role="grid"]')).toBeNull();
+    expect(grips(region)).not.toContain(document.activeElement);
+    expect(region.contains(document.activeElement)).toBe(true);
+  });
+
+  it('hands a focus put on a row to its grip', async () => {
+    const { region, user } = await openEditor();
+    await enter(region, user);
+    const row = within(region).getAllByRole('row')[2]!;
+    act(() => { row.focus(); });
+    await waitFor(() => { expect(gripOf(region, 'Salt')).toHaveFocus(); });
   });
 });
 
@@ -205,11 +287,14 @@ describe('a keyboard drag', () => {
     gripOf(region, 'Flour').focus();
     await user.keyboard('{Enter}');
     await screen.findAllByRole('button', { name: /^Insert (before|after) /, hidden: true }, LOAD);
+    // Two arrows from the first row walk the drop places to the end of the list: Flour goes last, once.
     await user.keyboard('{ArrowDown}{ArrowDown}{Enter}');
-    await waitFor(() => { expect(names(region)[0]).not.toBe('Flour'); });
-    expect(names(region).slice().sort()).toEqual(['Flour', 'Salt', 'Water']);
+    await waitFor(() => { expect(names(region)).toEqual(['Water', 'Salt', 'Flour']); });
     expect(isBusy()).toBe(true);
     await waitFor(() => { expect(gripOf(region, 'Flour')).toHaveFocus(); });
+    await later();
+    expect(names(region)).toEqual(['Water', 'Salt', 'Flour']);
+    expect(gripOf(region, 'Flour')).toHaveFocus();
   });
 });
 

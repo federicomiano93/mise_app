@@ -140,6 +140,22 @@ describe('reordering the rows', () => {
     expect(declaration(rule(reorderCss, '.number'), 'text-align')).toBe('right');
   });
 
+  it('⚠️ builds its right side from the Total row’s geometry, so every number ends on the Total’s right edge', () => {
+    expect(declaration(rule(reorderCss, '.amount'), 'width')).toBe(declaration(rule(editorCss, '.totalCell'), 'width'));
+    expect(declaration(rule(reorderCss, '.amount'), 'padding-left')).toBe(declaration(rule(editorCss, '.totalCell'), 'padding-left'));
+    expect(declaration(rule(reorderCss, '.number'), 'width')).toBe(declaration(rule(editorCss, '.totalNum'), 'width'));
+    expect(declaration(rule(reorderCss, '.number'), 'padding')).toBe(declaration(rule(editorCss, '.totalNum'), 'padding'));
+    expect(declaration(rule(reorderCss, '.number'), 'text-align')).toBe('right');
+    expect(declaration(rule(reorderCss, '.unit'), 'padding-left')).toBe(declaration(rule(editorCss, '.totalUnit'), 'padding-left'));
+    expect(declaration(rule(reorderCss, '.spacer'), 'width')).toBe(declaration(rule(editorCss, '.totalSpacer'), 'width'));
+    expect(declaration(rule(reorderCss, '.row'), 'gap')).toBe(declaration(rule(editorCss, '.total'), 'gap'));
+    // The unit word has a fixed slot and is cut short, never pushing the number.
+    expect(declaration(rule(reorderCss, '.unit'), 'min-width')).toBe('0');
+    expect(declaration(rule(reorderCss, '.unit'), 'overflow')).toBe('hidden');
+    const narrow = (css: string) => withoutComments(css).slice(withoutComments(css).indexOf('@media (max-width: 339px)'));
+    expect(declaration(rule(narrow(reorderCss), '.amount'), 'width')).toBe(declaration(rule(narrow(editorCss), '.totalCell'), 'width'));
+  });
+
   it('dims the dragged row and draws the drop place as a 3px accent line', () => {
     expect(declaration(rule(reorderCss, '.row[data-dragging]'), 'opacity')).toBe('0.6');
     expect(declaration(rule(reorderCss, '.indicator[data-drop-target]'), 'border-top')).toBe('3px solid var(--accent)');
