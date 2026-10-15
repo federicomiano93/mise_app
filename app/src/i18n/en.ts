@@ -1028,6 +1028,11 @@ export const en = {
   'cat.unit': 'Unit',
   'cat.removeIngredient': 'Remove ingredient',
   'cat.addIngredient': '+ Add ingredient',
+  'cat.reorder': 'Reorder',
+  'cat.reorderDone': 'Done',
+  'cat.reorderHint': 'Hold an ingredient and drag it to its place. With a keyboard, use the up and down arrows.',
+  'cat.moveRow': 'Move «{name}»',
+  'cat.unnamedRow': '(no name)',
   'cat.notWeighed': {
     one: '{n} ingredient is not weighed (pieces / to taste) — not in the total',
     other: '{n} ingredients are not weighed (pieces / to taste) — not in the total',
