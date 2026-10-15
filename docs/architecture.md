@@ -260,8 +260,8 @@ Aria does not support Preact. The numbers are below.
   until the server has answered, then not found; deleted elsewhere goes back to the list and says so),
   `RecipeView` (the bar and the ingredient list as a table, tapped for the full screen) and `BatchCard` (grams, the
   confirm that spells the amount both ways and raises its voice for an absurd batch, Clear, 12 h). Addresses, in
-  `recipesPath.ts`: `/recipes`, `/recipes/<id>` and (3d-2) `/recipes/allergens` and (3d-3) `/recipes/<id>/label`; `new`, `settings` and `photo` are reserved for
-  later steps. The usage record names four screens, `recipes`, `recipes-detail`, `recipes-allergens` and `recipes-label`. `recipesNav.ts` and
+  `recipesPath.ts`: `/recipes`, `/recipes/<id>` and (3d-2) `/recipes/allergens` and (3d-3) `/recipes/<id>/label` and (3d-5) `/recipes/settings`; `new` and `photo` are reserved for
+  later steps. The usage record names five screens, `recipes`, `recipes-detail`, `recipes-allergens`, `recipes-settings` and `recipes-label`. `recipesNav.ts` and
   `handBack.ts` are this section's copies of Food cost's. Step 3d-2 adds the allergen screens: `AllergenCard` and
   `DeclarationCard` on the recipe screen (a verdict only once the store's `ingredientsLoaded`, a neutral «checking» line before
   it; Copy through `ui/clipboard` and Send through `ui/SendSheet`), `AllergenSheet` at `/recipes/allergens` (gated again by
@@ -279,10 +279,11 @@ is a host built at print time in `document.body` with its own React root (`print
 queue and the other roads arrive in 3d-4. The usage record names the screen `recipes-label` and the action `label-printed`. Every allergen verdict is the shared model's; `label-separation.spec.ts` (in `app/src`)
   pins that a screen that prints a food word asks the venue's country and never the interface language. `ui/RecipeFullScreen` and `ui/zoomStorage` are shared with the Calculator
   and take a storage key (`mise.calcZoomStep` / `mise.catZoomStep`).
+  Step 3d-5 adds the label Settings (`LabelSettings`, `SegmentedChoice`, `/recipes/settings`, drawn like the Allergen sheet: the right-hand pane on the split, its own screen on a phone, one level below the list, Back hands the focus to its door `SETTINGS_OPENER`). The door «Settings» (Lucide `Settings`) stands at the foot of the list after the Allergen sheet's, ONLY for `canManage`; an employee who types the address is sent to the list by `RecipesSection`. Two cards (the paper and printer; what else goes on the label) save ON THE TAP, no Save button, through the store's `saveLabelProfile` and the source's `saveLabelConfig` (a merge write of `config/labels`, stamped with the venue). ⚠️ The store changes first (its copy and the current app's `catalogue-label-config` copy, announced at once) and then asks the source; the writes are NOT chained behind each other, though the current app chains them: Firestore commits one client's writes in the order they were made and keeps unsent ones in its own persistent queue across an offline reload, while a chain would hold the later changes in memory where such a reload loses them. A refused write puts back only the keys of its own patch (the values just before it), never a key a later patch set since, and rejects so the screen can say «Could not save — the change has been put back». The screen draws from `normalizeLabelProfile(labelConfig)`, so it and the label screen always agree; a text box and the two millimetre boxes keep their own typing while focused, save when left (trimmed, only if different; the size as ONE write 350 ms after the last box was left), hold `markBusy` while they differ, and are written at once if the screen goes first (the store outlives it). `ui/SettingSwitch` moved here from the Calculator for it.
 - `ui/` — the shared controls: `Button`, `Dialog` and `useConfirm` (a question that waits for an
   answer; never the browser's `confirm()`), `StatusMessage` (one short message at a time, in a
   live region that exists before it speaks), `FormBar` (Back, title, the one primary action: the
-  top of an editor), `useMediaQuery` (only for attributes that must agree with a stylesheet's
+  top of an editor), `SettingSwitch` (an on/off switch, shared by the Calculator's and the Recipe catalogue's Settings), `useMediaQuery` (only for attributes that must agree with a stylesheet's
   media query; layout is always CSS).
   The recipe export (PDF / Excel) is two files here: `recipeExport.ts` (`buildPdfBlob`, `buildXlsxBlob`, the
   impure half of `js/recipe-export.js`; the pure half is `@mise/shared/recipe-export`) and `ExportSheet.tsx`

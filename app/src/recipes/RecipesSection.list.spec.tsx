@@ -45,14 +45,15 @@ describe('the list of recipes', () => {
     expect(rowOf('Pane')).toBeInTheDocument();
   });
 
-  it('is one h1, «Recipes», with the Allergen sheet at its foot and no Add or Settings yet (they arrive in later steps)', async () => {
+  it('is one h1, «Recipes», with the Allergen sheet and then Settings at its foot and no Add yet (it arrives in a later step)', async () => {
     await loaded();
     expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
     expect(screen.getByRole('heading', { level: 1, name: 'Recipes' })).toBeInTheDocument();
     const door = main().getByRole('button', { name: 'Allergen sheet' });
+    expect(door.compareDocumentPosition(main().getByRole('button', { name: 'Settings' })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     const lastRow = main().getAllByRole('listitem').at(-1) as HTMLElement;
     expect(lastRow.compareDocumentPosition(door) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    for (const name of [/add/i, /settings/i, /new/i]) {
+    for (const name of [/add/i, /new/i]) {
       expect(main().queryByRole('button', { name })).not.toBeInTheDocument();
     }
   });
@@ -72,8 +73,8 @@ describe('the list of recipes', () => {
     renderRecipes('/recipes', { source: sourceWith([]) });
     expect(await screen.findByText('No recipes yet', undefined, LOAD)).toBeInTheDocument();
     expect(screen.getByText('Add your first recipe: its ingredients and their amounts.')).toBeInTheDocument();
-    // The only button is the door to the Allergen sheet.
-    expect(main().getAllByRole('button').map(button => button.textContent)).toEqual(['Allergen sheet']);
+    // The only buttons are the two doors: the Allergen sheet, then Settings (the default session runs the place).
+    expect(main().getAllByRole('button').map(button => button.textContent)).toEqual(['Allergen sheet', 'Settings']);
   });
 
   it('says it in Italian', async () => {
