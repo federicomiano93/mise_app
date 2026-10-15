@@ -98,6 +98,13 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* «Reorder» / «Done» at the end of the head. Two classes, so it outweighs the button's own padding whichever stylesheet
+   loads last; the target stays the full 48px tall. */
+.head .reorder {
+  margin-left: auto;
+  padding: 0 var(--s4);
+}
+
 /* The rows and the Total close one list, the same shape as the read-only recipe. It has no frame of its own: every
    box is framed, and the width is worth more to the names than a border would be. */
 .frame {
