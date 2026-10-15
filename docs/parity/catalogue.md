@@ -1411,11 +1411,18 @@ the chooser: slice A2) and reordering the rows (slice B). The row component has 
   an emptied shelf life leaves the key out; the Calculator warning is raced against 2.5 s; a recipe deleted on another phone while being
   edited is created again by Save.
 - **Not built, by design, until its step:** «+ Create … as an ingredient» (Orders is not built), the photo reader's «Fill from a photo»
-  (3d-9), the mixing procedure (3d-8), reordering (slice B).
+  (3d-9), the mixing procedure (3d-8).
 
 ### Slice A2 (item 91), as built
 
 - **Built:** the suggestion list under a name, the link line and the chooser, ported as the current app has them (no price, pick renames only when the link changes, three answers, focus to the row's amount); the list is a hook in the page's flow (swallows pointerdown, never picks by itself) and the name box is a `combobox`. **On purpose, different:** no «+ Create … as an ingredient» row, in the list or the chooser (Orders is not built); the suggestion and chooser meta join with a real space for screen readers; `cat.searchAnIngredient` has no ellipsis (the current dictionary defines it twice, the later wins); `supplierLabel` is now exported from `shared/catalogue-model`.
+
+### Slice B (item 92), as built
+
+- **Built:** reordering is a MODE, as in the current app. A button «Reorder» / «Done» (`aria-pressed`) at the end of the ingredients head, present only with two or more rows. In the mode the rows are drawn by `ReorderRows.tsx` (a React Aria `GridList`, the Calculator's client list pattern): a grip, the name («(no name)» when empty) and the amount (the number and the unit word, the word alone for «to taste» or an empty amount); no boxes, no bin, no link line, no «Add ingredient»; the hint sits under the head and describes every grip. The Total, the not-weighed note, the label fields and the delete stay. A move goes through the editor's `edit()` (dirty, `markBusy`, the leave guard), toggling the mode does not. The moves are `editorModel.moveWorkingRow` / `stepWorkingRow` / `dropWorkingRow` over the shared `moveRow`: the SAME `EditRow` objects move, so a row keeps its link and its `rid` (a guided mixing step points at a row by `rid`). Nothing new is saved, only the order of `ingredients`.
+- **Both keyboards work:** React Aria's own (focus the grip, Enter, the arrows, Enter) and ArrowUp / ArrowDown on a grip, which move the row one place (nothing happens at the ends). ⚠️ The direct arrows are caught by a capture handler on a wrapper ABOVE the list, not on the grip: a grid row takes ArrowUp and ArrowDown in its own capture handler and re-sends them to the list, so a handler on the grip never hears them.
+- **On purpose, different:** leaving the mode with «Done» keeps the focus on that button (the current app focuses the first name box, which pops the phone's keyboard). Entering the mode focuses the first grip; after every move or drop the focus is on the moved grip, set after the render.
+- **Save while reordering with a problem:** the mode is left first, the bad box is marked and takes the cursor AFTER the ordinary rows have been drawn (their boxes do not exist in the mode), and the sentence is said as before. Save with no problem saves from the mode and writes the new order.
 
 ### Review fixes and the drive (15 Oct 2026)
 
