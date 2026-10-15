@@ -1,10 +1,27 @@
-import type { ReactNode } from 'react';
 import { ChevronDown, Trash2 } from 'lucide-react';
-import { CATALOGUE_UNITS, unitOf, unitTextKey } from '@mise/shared/catalogue-model';
-import type { CatalogueUnit } from '@mise/shared/catalogue-model';
+import { CATALOGUE_UNITS, linkOf, unitOf, unitTextKey } from '@mise/shared/catalogue-model';
+import type { CatalogueRecipe, CatalogueUnit } from '@mise/shared/catalogue-model';
 import { useT } from '../i18n/useT';
-import type { EditRow, Row } from './editorModel';
+import type { Chosen, EditRow, Row } from './editorModel';
+import { useLinkSuggest } from './LinkSuggest';
+import { linkText } from './linkModel';
+import type { StoredDoc } from './recipesSource';
 import styles from './IngredientRow.module.css';
+
+// What the row needs to be linked: the data the suggestions and the link line read, and what a tap does.
+export type Linking = {
+  ingredients: Readonly<Record<string, StoredDoc>>;
+  recipes: readonly CatalogueRecipe[];
+  suppliers: Readonly<Record<string, StoredDoc>>;
+  // This recipe's own id (null for a new one).
+  excludeRecipeId: string | null;
+  // A suggestion was tapped.
+  onPick: (key: number, chosen: Chosen) => void;
+  // «See all» under the suggestions: the chooser, already searching what was typed.
+  onSeeAll: (key: number, typed: string) => void;
+  // The link line was tapped: the chooser.
+  onOpen: (key: number) => void;
+};
 
 type Props = {
   item: EditRow;
@@ -14,8 +31,7 @@ type Props = {
   register: (key: number, box: 'name' | 'amount', node: HTMLInputElement | null) => void;
   onChange: (key: number, fields: Row) => void;
   onRemove: (key: number) => void;
-  // Under the row's line, at the row's full width: the place for the suggestion list and the link line (the next slice).
-  below?: ReactNode;
+  linking: Linking;
 };
 
 // One ingredient: name · amount · unit · remove, all on ONE line down to a 296px phone.
@@ -26,11 +42,22 @@ type Props = {
 // ⚠️ «TO TASTE» IS THE ONE UNIT THAT CARRIES NO NUMBER, so its amount box is not drawn — but the number stays in the
 // editor's copy: switching back to a weight gives it back, and nothing counts it meanwhile (a non-weighable unit is 0
 // grams to every total, cost and label).
-export function IngredientRow({ item, nameInvalid, amountInvalid, register, onChange, onRemove, below }: Props) {
+export function IngredientRow({ item, nameInvalid, amountInvalid, register, onChange, onRemove, linking }: Props) {
   const { t } = useT();
   const { key, row } = item;
   const unit = unitOf(row);
   const noQty = unit === 'to taste';
+  const link = linkOf(row);
+  const suggest = useLinkSuggest({
+    value: String(row.label ?? ''),
+    ingredients: linking.ingredients,
+    recipes: linking.recipes,
+    suppliers: linking.suppliers,
+    excludeRecipeId: linking.excludeRecipeId,
+    linked: link,
+    onPick: chosen => { linking.onPick(key, chosen); },
+    onSeeAll: typed => { linking.onSeeAll(key, typed); },
+  });
   const grams = row.grams === '' || row.grams === undefined || row.grams === null ? '' : String(row.grams);
 
   return (
@@ -39,13 +66,16 @@ export function IngredientRow({ item, nameInvalid, amountInvalid, register, onCh
         <input
           ref={node => { register(key, 'name', node); }}
           type="text"
-          autoComplete="off"
+          {...suggest.inputProps}
           className={styles.name}
           placeholder={t('cat.ingredient')}
           aria-label={t('cat.ingredientName')}
           aria-invalid={nameInvalid ? true : undefined}
           value={String(row.label ?? '')}
-          onChange={event => { onChange(key, { label: event.target.value }); }}
+          onChange={event => {
+            suggest.typed();
+            onChange(key, { label: event.target.value });
+          }}
         />
         <div className={styles.amount} data-invalid={amountInvalid}>
           {noQty ? null : (
@@ -81,7 +111,16 @@ export function IngredientRow({ item, nameInvalid, amountInvalid, register, onCh
           <Trash2 aria-hidden="true" />
         </button>
       </div>
-      {below}
+      {suggest.list}
+      {/* What this row points at, and the button that changes it. A row with no link is not an error: it stays perfectly usable. */}
+      <button
+        type="button"
+        className={styles.link}
+        data-linked={link !== null}
+        onClick={() => { linking.onOpen(key); }}
+      >
+        {linkText(row, linking.ingredients, linking.recipes, linking.suppliers, t)}
+      </button>
     </li>
   );
 }

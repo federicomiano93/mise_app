@@ -3,6 +3,8 @@ import editorCss from './RecipeEditor.module.css?raw';
 import listCss from './RecipesList.module.css?raw';
 import rowCss from './IngredientRow.module.css?raw';
 import viewCss from './RecipeView.module.css?raw';
+import linkCss from './LinkSuggest.module.css?raw';
+import dialogCss from './LinkDialog.module.css?raw';
 
 // What a stylesheet decides and jsdom cannot see (see recipesCss.spec.ts): the editor's row on a 296px phone, the targets,
 // and where the «New recipe» button stands.
@@ -83,5 +85,37 @@ describe('the «New recipe» button above the list', () => {
     const split = css.slice(css.indexOf('@media (min-width: 1000px)'));
     expect(declaration(rule(split, '.top'), 'flex-direction')).toBe('row');
     expect(declaration(rule(split, '.top .search'), 'flex')).toBe('1');
+  });
+});
+
+describe('linking a row', () => {
+  it('makes the link line a full-width 48px target that wraps instead of pushing the page sideways', () => {
+    const line = rule(rowCss, '.link');
+    expect(declaration(line, 'width')).toBe('100%');
+    expect(declaration(line, 'min-height')).toBe('var(--hit)');
+    expect(declaration(line, 'overflow-wrap')).toBe('anywhere');
+    expect(declaration(rule(rowCss, '.link:focus-visible'), 'outline')).toContain('var(--accent)');
+  });
+
+  it('lets a suggestion’s name and meta wrap, as 48px rows, with the tick and its word on one centred line', () => {
+    expect(declaration(rule(linkCss, '.row'), 'min-height')).toBe('var(--hit)');
+    expect(declaration(rule(linkCss, '.row'), 'flex-wrap')).toBe('wrap');
+    expect(declaration(rule(linkCss, '.name'), 'overflow-wrap')).toBe('anywhere');
+    expect(declaration(rule(linkCss, '.meta'), 'overflow-wrap')).toBe('anywhere');
+    expect(declaration(rule(linkCss, '.linked'), 'display')).toBe('flex');
+    expect(declaration(rule(linkCss, '.linked'), 'align-items')).toBe('center');
+  });
+
+  it('keeps the chooser’s rows 48px and its names and meta wrapping', () => {
+    expect(declaration(rule(dialogCss, '.row'), 'min-height')).toBe('var(--hit)');
+    expect(declaration(rule(dialogCss, '.name'), 'overflow-wrap')).toBe('anywhere');
+    expect(declaration(rule(dialogCss, '.meta'), 'overflow-wrap')).toBe('anywhere');
+  });
+
+  it('puts every hover inside (hover: hover)', () => {
+    for (const css of [rowCss, linkCss, dialogCss]) {
+      const bare = withoutComments(css).replace(/@media \(hover: hover\)\s*\{[\s\S]*?\}/g, '');
+      expect(bare).not.toContain(':hover');
+    }
   });
 });

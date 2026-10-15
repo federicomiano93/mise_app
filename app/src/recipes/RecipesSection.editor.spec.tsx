@@ -21,7 +21,7 @@ const EMPLOYEE = { role: 'staff' as const, canManage: false, isOwner: false };
 const FOCACCIA = recipe('r1', { name: 'Focaccia' });
 
 const nameBox = (region: HTMLElement) => within(region).getByRole('textbox', { name: 'Recipe name' }) as HTMLInputElement;
-const ingredientBoxes = (region: HTMLElement) => within(region).getAllByRole('textbox', { name: 'Ingredient name' }) as HTMLInputElement[];
+const ingredientBoxes = (region: HTMLElement) => within(region).getAllByRole('combobox', { name: 'Ingredient name' }) as HTMLInputElement[];
 const amountBoxes = (region: HTMLElement) => within(region).queryAllByRole('spinbutton', { name: 'Amount' }) as HTMLInputElement[];
 const units = (region: HTMLElement) => within(region).getAllByRole('combobox', { name: 'Unit' }) as HTMLSelectElement[];
 const saveButton = (region: HTMLElement) => within(region).getByRole('button', { name: 'Save' });

@@ -1411,4 +1411,8 @@ the chooser: slice A2) and reordering the rows (slice B). The row component has 
   an emptied shelf life leaves the key out; the Calculator warning is raced against 2.5 s; a recipe deleted on another phone while being
   edited is created again by Save.
 - **Not built, by design, until its step:** «+ Create … as an ingredient» (Orders is not built), the photo reader's «Fill from a photo»
-  (3d-9), the mixing procedure (3d-8), reordering (slice B), the link suggestions and the chooser (slice A2).
+  (3d-9), the mixing procedure (3d-8), reordering (slice B).
+
+### Slice A2 (item 91), as built
+
+- **Built:** the suggestion list under a name, the link line and the chooser, ported as the current app has them (no price, pick renames only when the link changes, three answers, focus to the row's amount); the list is a hook in the page's flow (swallows pointerdown, never picks by itself) and the name box is a `combobox`. **On purpose, different:** no «+ Create … as an ingredient» row, in the list or the chooser (Orders is not built); the suggestion and chooser meta join with a real space for screen readers; `cat.searchAnIngredient` has no ellipsis (the current dictionary defines it twice, the later wins); `supplierLabel` is now exported from `shared/catalogue-model`.

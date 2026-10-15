@@ -3,7 +3,7 @@ import type { Ref } from 'react';
 import { Check, Trash2 } from 'lucide-react';
 import { useBlocker, useNavigate } from 'react-router';
 import type { BlockerFunction } from 'react-router';
-import { findInvalidRecipe } from '@mise/shared/catalogue-model';
+import { findInvalidRecipe, linkOf } from '@mise/shared/catalogue-model';
 import type { CatalogueRecipe, InvalidRecipeProblem } from '@mise/shared/catalogue-model';
 import { normalizeLabelProfile } from '@mise/shared/label-template-model';
 import { useT } from '../i18n/useT';
@@ -17,10 +17,12 @@ import { useConfirm } from '../ui/useConfirm';
 import { KEEP_FOCUS } from '../shell/Page';
 import { useRecipes, useRecipesStore } from './RecipesContext';
 import {
-  addRow, cleanWorking, netWeightText, notWeighedCount, removeRow, setName, setRowFields, shelfLifeText, totalText, workingFrom,
+  addRow, cleanWorking, linkRowTo, netWeightText, notWeighedCount, removeRow, setName, setRowFields, shelfLifeText, totalText,
+  workingFrom,
 } from './editorModel';
-import type { Row, Working } from './editorModel';
+import type { Chosen, Row, Working } from './editorModel';
 import { IngredientRow } from './IngredientRow';
+import { LinkDialog } from './LinkDialog';
 import { NEW_OPENER, recipeOpener, useHandBack } from './handBack';
 import { cameFromList, cameFromRecipe, useLeave } from './recipesNav';
 import { RECIPES_PATH, recipePath } from './recipesPath';
@@ -53,7 +55,7 @@ export const NAME_MAX_LENGTH = 199;
 export function RecipeEditor({ id, recipe, titleRef }: Props) {
   const { t } = useT();
   const store = useRecipesStore();
-  const { labelConfig } = useRecipes();
+  const { labelConfig, ingredients, recipes, suppliers } = useRecipes();
   const { canManage } = useSession();
   const say = useStatusMessage();
   const handBack = useHandBack();
@@ -171,6 +173,26 @@ export function RecipeEditor({ id, recipe, titleRef }: Props) {
     held[box] = node;
     boxes.current.set(key, held);
   }, []);
+
+  // ── Linking a row ────────────────────────────────────────────────────────────────────────────────────────────
+  // The row whose chooser is open, and what it opened searching.
+  const [chooser, setChooser] = useState<{ key: number; query: string } | null>(null);
+  // After a pick the amount is the next thing a person fills in. Looked up AFTER the render (and, from the chooser, after the
+  // dialog has given the focus back to its opener): the boxes are the same nodes, a «to taste» row has no amount to go to.
+  // An object, so picking twice for the same row asks twice.
+  const [amountFor, setAmountFor] = useState<{ key: number } | null>(null);
+  useEffect(() => {
+    if (amountFor === null) return undefined;
+    const frame = requestAnimationFrame(() => { boxes.current.get(amountFor.key)?.amount?.focus(); });
+    return () => { cancelAnimationFrame(frame); };
+  }, [amountFor]);
+
+  // ⚠️ THE ONE PLACE A ROW'S LINK IS WRITTEN (editorModel.linkRowTo → applyLink): the suggestion list and the chooser both
+  // come here. `null` removes the link. Re-validation needs no call: what is wrong is derived from the copy at every render.
+  const linkTo = (key: number, chosen: Chosen | null) => {
+    edit(current => linkRowTo(current, key, chosen, ingredients, recipes));
+    if (chosen !== null) setAmountFor({ key });
+  };
 
   const reveal = (node: HTMLElement | null | undefined) => {
     if (!node) return;
@@ -311,6 +333,15 @@ export function RecipeEditor({ id, recipe, titleRef }: Props) {
                   register={register}
                   onChange={(key: number, fields: Row) => { edit(current => setRowFields(current, key, fields)); }}
                   onRemove={key => { edit(current => removeRow(current, key)); }}
+                  linking={{
+                    ingredients,
+                    recipes,
+                    suppliers,
+                    excludeRecipeId: id,
+                    onPick: linkTo,
+                    onSeeAll: (key, typed) => { setChooser({ key, query: typed }); },
+                    onOpen: key => { setChooser({ key, query: '' }); },
+                  }}
                 />
               ))}
             </ul>
@@ -390,6 +421,21 @@ export function RecipeEditor({ id, recipe, titleRef }: Props) {
           </div>
         ) : null}
       </div>
+      {chooser === null ? null : (
+        <LinkDialog
+          ingredients={ingredients}
+          recipes={recipes}
+          suppliers={suppliers}
+          excludeRecipeId={id}
+          hasLink={linkOf(working.rows.find(item => item.key === chooser.key)?.row) !== null}
+          initialQuery={chooser.query}
+          onChoose={chosen => {
+            setChooser(null);
+            linkTo(chooser.key, chosen);
+          }}
+          onClose={() => { setChooser(null); }}
+        />
+      )}
       {confirmDialog}
       {deleteDialog}
     </section>
