@@ -18,7 +18,8 @@
   display: flex;
   flex-direction: column;
   gap: var(--s4);
-  padding: var(--s3) var(--s2) var(--s4);
+  /* A narrow side padding on a phone: the shell's gutter is the margin, and the width goes to the ingredient name (296px). */
+  padding: var(--s3) var(--s1) var(--s4);
 }
 
 @media (min-width: 1000px) {
@@ -229,5 +230,13 @@
 @media (hover: hover) {
   .delete:hover {
     background: var(--danger-tint);
+  }
+}
+
+/* Under 340px the unit menu gives 8px to the ingredient name (the Total's cell follows, so the numbers stay on one edge);
+   a long unit word was cut short at any phone width anyway. */
+@media (max-width: 339px) {
+  .totalCell {
+    width: 108px;
   }
 }

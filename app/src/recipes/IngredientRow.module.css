@@ -167,3 +167,10 @@
     color: var(--danger-ink);
   }
 }
+
+/* Under 340px the unit menu gives 8px to the name (RecipeEditor.module.css narrows the Total's cell to match). */
+@media (max-width: 339px) {
+  .amount {
+    width: 108px;
+  }
+}
