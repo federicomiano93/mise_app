@@ -1,0 +1,97 @@
+/* The rows of a recipe in reorder mode: grip, name, amount — one line each, at least a thumb's height, down to a 296px
+   phone (the name wraps; the amount keeps its width). It sits in the editor's frame, which draws the borders. The drag
+   state comes from React Aria's data attributes. */
+
+.list {
+  display: flex;
+  flex-direction: column;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--s1);
+  min-height: var(--hit);
+  padding: var(--s1) 0;
+  border-top: 1px solid var(--line);
+  color: var(--ink);
+}
+
+.row:first-child {
+  border-top: 0;
+}
+
+.row[data-focus-visible] {
+  outline: 3px solid var(--accent);
+  outline-offset: -3px;
+}
+
+.row[data-dragging] {
+  opacity: 0.6;
+}
+
+/* The grip is a target of its own, as big as the bin it replaces. */
+.grip {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: var(--hit);
+  height: var(--hit);
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-md);
+  background: none;
+  color: var(--ink-3);
+  cursor: grab;
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.grip:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 1px;
+}
+
+@media (hover: hover) {
+  .grip:hover {
+    background: var(--sunken);
+  }
+}
+
+.name {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* The number and its unit: the number is right-aligned in the width of the editor's amount box, so a column of them ends
+   on one edge. */
+.amount {
+  display: flex;
+  flex: none;
+  align-items: baseline;
+  padding-right: var(--s2);
+}
+
+.number {
+  width: 52px;
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.unit {
+  min-width: 36px;
+  padding-left: var(--s2);
+  color: var(--ink-2);
+}
+
+/* Where the dragged row would land. */
+.indicator {
+  height: 0;
+}
+
+.indicator[data-drop-target] {
+  border-top: 3px solid var(--accent);
+}

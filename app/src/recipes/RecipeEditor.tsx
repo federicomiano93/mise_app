@@ -17,12 +17,13 @@ import { useConfirm } from '../ui/useConfirm';
 import { KEEP_FOCUS } from '../shell/Page';
 import { useRecipes, useRecipesStore } from './RecipesContext';
 import {
-  addRow, cleanWorking, linkRowTo, netWeightText, notWeighedCount, removeRow, setName, setRowFields, shelfLifeText, totalText,
-  workingFrom,
+  addRow, cleanWorking, dropWorkingRow, linkRowTo, netWeightText, notWeighedCount, removeRow, setName, setRowFields, shelfLifeText,
+  stepWorkingRow, totalText, workingFrom,
 } from './editorModel';
-import type { Chosen, Row, Working } from './editorModel';
+import type { Chosen, DropPosition, Row, Working } from './editorModel';
 import { IngredientRow } from './IngredientRow';
 import { LinkDialog } from './LinkDialog';
+import { ReorderRows } from './ReorderRows';
 import { NEW_OPENER, recipeOpener, useHandBack } from './handBack';
 import { cameFromList, cameFromRecipe, recipeCameFromList, useLeave } from './recipesNav';
 import { RECIPES_PATH, recipePath } from './recipesPath';
@@ -71,6 +72,7 @@ export function RecipeEditor({ id, recipe, titleRef, onTyped }: Props) {
   const headingId = `${ids}-ingredients`;
   const netId = `${ids}-net`;
   const shelfId = `${ids}-shelf`;
+  const hintId = `${ids}-reorder-hint`;
 
   const [working, setWorking] = useState<Working>(() => workingFrom(recipe));
   // The name the recipe had when this screen opened: what the delete question calls it.
@@ -191,6 +193,33 @@ export function RecipeEditor({ id, recipe, titleRef, onTyped }: Props) {
     return () => { cancelAnimationFrame(frame); };
   }, [amountFor]);
 
+  // ── Reordering ───────────────────────────────────────────────────────────────────────────────────────────────
+  // A MODE (the current app's, item 92): the rows are grips, names and amounts with nothing to type in. Turning it on or off
+  // is not an edit; a move is (it goes through edit(), so dirty, markBusy and the leave guard follow).
+  const [reordering, setReordering] = useState(false);
+  // The grip owed the focus after a move, or on entering the mode.
+  const [focusGrip, setFocusGrip] = useState<{ key: number } | null>(null);
+  const toggleReorder = () => {
+    if (reordering) {
+      setReordering(false);
+      setFocusGrip(null);
+      return;
+    }
+    setReordering(true);
+    const first = working.rows[0];
+    if (first) setFocusGrip({ key: first.key });
+  };
+  const stepRow = (key: number, delta: -1 | 1) => {
+    if (stepWorkingRow(working, key, delta) === working) return;
+    edit(current => stepWorkingRow(current, key, delta));
+    setFocusGrip({ key });
+  };
+  const dropRow = (movedKey: number, targetKey: number, position: DropPosition) => {
+    if (dropWorkingRow(working, movedKey, targetKey, position) === working) return;
+    edit(current => dropWorkingRow(current, movedKey, targetKey, position));
+    setFocusGrip({ key: movedKey });
+  };
+
   // ⚠️ THE ONE PLACE A ROW'S LINK IS WRITTEN (editorModel.linkRowTo → applyLink): the suggestion list and the chooser both
   // come here. `null` removes the link. Re-validation needs no call: what is wrong is derived from the copy at every render.
   const linkTo = (key: number, chosen: Chosen | null) => {
@@ -222,6 +251,15 @@ export function RecipeEditor({ id, recipe, titleRef, onTyped }: Props) {
     if (target) reveal(boxes.current.get(target.key)?.amount ?? boxes.current.get(target.key)?.name);
   };
 
+  // A problem found while reordering is shown once the mode has gone and the ordinary rows (and their boxes) are drawn.
+  const pendingProblem = useRef<InvalidRecipeProblem | null>(null);
+  useEffect(() => {
+    if (reordering || pendingProblem.current === null) return;
+    const found = pendingProblem.current;
+    pendingProblem.current = null;
+    revealProblem(found);
+  });
+
   // ── Save and delete ──────────────────────────────────────────────────────────────────────────────────────────
   const clean = cleanWorking(working);
   const problem = findInvalidRecipe(clean);
@@ -230,7 +268,13 @@ export function RecipeEditor({ id, recipe, titleRef, onTyped }: Props) {
     if (busy.current || askingLeave.current || leavingClean.current) return;
     if (problem !== null) {
       setShowErrors(true);
-      revealProblem(problem);
+      if (reordering) {
+        pendingProblem.current = problem;
+        setReordering(false);
+        setFocusGrip(null);
+      } else {
+        revealProblem(problem);
+      }
       say(t(problem === 'name' ? 'cat.pleaseEnterARecipe' : problem === 'weight' ? 'cat.enterAnAmountFor' : 'cat.addAtLeastOne'));
       return;
     }
@@ -332,31 +376,49 @@ export function RecipeEditor({ id, recipe, titleRef, onTyped }: Props) {
           <div className={styles.head}>
             <h3 id={headingId} className={styles.headLabel}>{t('cat.ingredients')}</h3>
             <span className={styles.count}>{working.rows.length}</span>
+            {/* ABSENT, not disabled, with fewer than two rows: there is nothing to put in another order. */}
+            {working.rows.length > 1 ? (
+              <Button variant="secondary" className={styles.reorder} aria-pressed={reordering} onPress={toggleReorder}>
+                {t(reordering ? 'cat.reorderDone' : 'cat.reorder')}
+              </Button>
+            ) : null}
           </div>
+          {reordering ? <p id={hintId} className={styles.note}>{t('cat.reorderHint')}</p> : null}
 
           <div className={styles.frame}>
-            <ul className={styles.rows}>
-              {working.rows.map(item => (
-                <IngredientRow
-                  key={item.key}
-                  item={item}
-                  nameInvalid={showErrors && String(item.row.label ?? '').trim() === ''}
-                  amountInvalid={noAmount && String(item.row.label ?? '').trim() !== ''}
-                  register={register}
-                  onChange={(key: number, fields: Row) => { edit(current => setRowFields(current, key, fields)); }}
-                  onRemove={key => { edit(current => removeRow(current, key)); }}
-                  linking={{
-                    ingredients,
-                    recipes,
-                    suppliers,
-                    excludeRecipeId: id,
-                    onPick: linkTo,
-                    onSeeAll: (key, typed) => { setChooser({ key, query: typed }); },
-                    onOpen: key => { setChooser({ key, query: '' }); },
-                  }}
-                />
-              ))}
-            </ul>
+            {reordering ? (
+              <ReorderRows
+                rows={working.rows}
+                labelledBy={headingId}
+                hintId={hintId}
+                onDrop={dropRow}
+                onStep={stepRow}
+                focusGrip={focusGrip}
+              />
+            ) : (
+              <ul className={styles.rows}>
+                {working.rows.map(item => (
+                  <IngredientRow
+                    key={item.key}
+                    item={item}
+                    nameInvalid={showErrors && String(item.row.label ?? '').trim() === ''}
+                    amountInvalid={noAmount && String(item.row.label ?? '').trim() !== ''}
+                    register={register}
+                    onChange={(key: number, fields: Row) => { edit(current => setRowFields(current, key, fields)); }}
+                    onRemove={key => { edit(current => removeRow(current, key)); }}
+                    linking={{
+                      ingredients,
+                      recipes,
+                      suppliers,
+                      excludeRecipeId: id,
+                      onPick: linkTo,
+                      onSeeAll: (key, typed) => { setChooser({ key, query: typed }); },
+                      onOpen: key => { setChooser({ key, query: '' }); },
+                    }}
+                  />
+                ))}
+              </ul>
+            )}
             {/* ⚠️ THE TOTAL SITS IN THE SAME CELL SHAPE AS THE AMOUNTS ABOVE IT: «Total 8380 g» stops lining up with the column of
                 numbers it is the sum of, which is the one thing it exists to do. */}
             <div className={styles.total}>
@@ -371,9 +433,11 @@ export function RecipeEditor({ id, recipe, titleRef, onTyped }: Props) {
 
           {skipped > 0 ? <p className={styles.note}>{t('cat.notWeighed', { n: skipped })}</p> : null}
 
-          <Button variant="secondary" className={styles.add} onPress={() => { edit(addRow); }}>
-            {t('cat.addIngredient')}
-          </Button>
+          {reordering ? null : (
+            <Button variant="secondary" className={styles.add} onPress={() => { edit(addRow); }}>
+              {t('cat.addIngredient')}
+            </Button>
+          )}
         </section>
 
         {wantsWeight || wantsShelfLife ? (
