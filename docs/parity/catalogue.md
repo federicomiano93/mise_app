@@ -1372,3 +1372,60 @@ allergen state with an `if` of its own. What differs from the current app, and w
 - **On purpose, NEW in Mise 2:** a box still holding typing, or a custom size still waiting, is written when the screen goes
   (the store's write outlives the screen) and the app is held busy (`markBusy`) meanwhile. A refusal after the screen has gone is
   said through the section's status message.
+
+## Step 3d-6 as built (15 Oct 2026), slice A1 — differences from the current app, on purpose
+
+Slice A1 is everything of the editor except linking a row to an ingredient (the suggestion list under a name, the link line and
+the chooser: slice A2) and reordering the rows (slice B). The row component has a slot under its line for the first.
+
+- **Built:** the editor at `/recipes/new` and `/recipes/<id>/edit` (usage screen `recipes-editor` for both), a working copy
+  with every row spread, the rows (name, amount, unit menu of the 12 units, bin), the live Total and the not-weighed note, the
+  two label boxes (only when the label profile prints them), the three checks, Save with its question, the leave guard, and the
+  delete in two places.
+- **On purpose, different addresses:** the current app has no addresses; here a new recipe is `/recipes/new` and an editor is
+  `/recipes/<id>/edit`, one level below the list and the recipe. Back from a new recipe returns to the list with the focus on the
+  button that opened it; Back from an editor returns to the recipe with the focus on «Edit» and the scroll where it was; an editor
+  opened by its address replaces itself with the recipe.
+- **On purpose, different places:** «New recipe» is a button at the TOP of the list (the current app has a «+» in its header) —
+  beside the search box from 1000px, under it on a phone, for everybody who sees the section, also over «No recipes yet». «Edit» is
+  the one action on the recipe's bar (Lucide pencil and the word), for everybody who sees the section. The delete is, for
+  `canManage` only (absent for everybody else and for a new recipe): a low-key «Delete recipe» button at the bottom of the editor,
+  and a small icon-only button at the very END of the recipe page, after Export.
+- **On purpose, NEW in Mise 2:** the name box takes at most 199 characters (the rules refuse 200 and more; the current app finds out at the
+  database, after the screen has left, because the save is local-first).
+- **On purpose, NEW in Mise 2:** a save does NOT send `steps` or `endNote` (their editor is step 3d-8), so a merge leaves them exactly
+  as stored. The current app rewrites them on every save from the copy it read. The oven loss and the two weighings stay unsent as
+  before (Food cost owns them).
+- **On purpose, NEW in Mise 2:** the editor of an existing recipe opens on the server's word, or after 1.2 s (at once when the phone is
+  offline) with what the phone holds, like the Food cost editor — it copies the recipe once and Save writes it whole, so a copy a week
+  old must not be saved over another phone's changes when the server can still answer. The current app opens at once.
+- **On purpose, NEW in Mise 2:** the Total is the sum of the rows that will be SAVED (a row with no name is dropped on save, so it is
+  not counted); the current app also counted an amount typed before its name.
+- **On purpose, NEW in Mise 2:** a net weight or a shelf life the person has not touched goes through as stored (a net weight of 12.5 g
+  is not rounded to 13 by saving a recipe whose box is hidden or untouched).
+- **On purpose, NEW in Mise 2:** the delete goes back to the list with «Recipe deleted.» said exactly once. The recipe screen already
+  says it when an open recipe disappears (deleted on another phone); a delete made on this phone marks its recipe first
+  (`recipeDeletions.ts`), so that one stays quiet and does not step back a second time. From the page it steps back as the page's Back
+  does (one entry); from the editor it replaces the editor with the list, the focus on the search box.
+- **Same as the current app, kept:** Save returns to the LIST, not to the recipe; «to taste» hides the amount but keeps the number;
+  an emptied shelf life leaves the key out; the Calculator warning is raced against 2.5 s; a recipe deleted on another phone while being
+  edited is created again by Save.
+- **Not built, by design, until its step:** «+ Create … as an ingredient» (Orders is not built), the photo reader's «Fill from a photo»
+  (3d-9), the mixing procedure (3d-8), reordering (slice B).
+
+### Slice A2 (item 91), as built
+
+- **Built:** the suggestion list under a name, the link line and the chooser, ported as the current app has them (no price, pick renames only when the link changes, three answers, focus to the row's amount); the list is a hook in the page's flow (swallows pointerdown, never picks by itself) and the name box is a `combobox`. **On purpose, different:** no «+ Create … as an ingredient» row, in the list or the chooser (Orders is not built); the suggestion and chooser meta join with a real space for screen readers; `cat.searchAnIngredient` has no ellipsis (the current dictionary defines it twice, the later wins); `supplierLabel` is now exported from `shared/catalogue-model`.
+
+### Review fixes and the drive (15 Oct 2026)
+
+- **Leaving after Save or Delete:** from an editor reached list → recipe → Modifica, Save and Delete step back TWO entries, so the
+  phone's Back afterwards leaves the catalogue instead of reopening the recipe (or a «no longer exists» page); an editor opened by its
+  address replaces itself with the list as before. The «no longer exists» screen's Back goes to the list.
+- **An editor opened from the phone's copy** (after 1.2 s, or offline) is copied AGAIN when the server's first answer differs and
+  nothing has been typed; with typing it is kept, as the current app keeps it.
+- **296 px:** the editor's side padding is 4px on a phone and, under 340px, the unit menu (and the Total's cell) is 8px narrower, so the
+  ingredient name keeps about 90px («Farina 0», «Sale fino» fit). A long unit word («pizzico») is cut short, as it was already.
+- **Driven on the emulator** (IT, owner, 1024/360/296, and the English employee): new recipe with a link picked from the suggestions,
+  edit of a recipe Food cost has weighed (the loss stays 12), the leave question, delete from the page's icon: every check passed, axe
+  clean, no console error. `tests/rules/firestore-rules-check.mjs`: 1059 checks passed, including the Mise 2 save shape.

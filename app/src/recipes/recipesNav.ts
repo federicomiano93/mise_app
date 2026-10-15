@@ -22,6 +22,12 @@ export function cameFromRecipe(state: unknown): boolean {
   return typeof state === 'object' && state !== null && 'fromRecipe' in state;
 }
 
+// Set on the recipe's «Edit» navigation: the recipe entry itself was opened from the LIST (not the Allergen sheet, not an
+// address), so [list, recipe, editor] are all behind a Save or a Delete and one jump of two steps lands before the list.
+export function recipeCameFromList(state: unknown): boolean {
+  return typeof state === 'object' && state !== null && 'recipeFromList' in state && state.recipeFromList === true;
+}
+
 export function cameFromSheet(state: unknown): boolean {
   return typeof state === 'object' && state !== null && 'fromSheet' in state;
 }

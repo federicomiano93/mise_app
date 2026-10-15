@@ -13,7 +13,14 @@
 // (`normalizeCatalogueRecipe(s)`, `labelFieldsOf`, `normalizeShelfLifeDays`, `MAX_SHELF_LIFE_DAYS`, with the
 // types `CatalogueRecipe` and `CatalogueRow`), the list helpers (`sortByUsage`, `filterByName`), the kg
 // scaling (`scaleCatalogue`, `baseAmounts`, `MAX_SANE_BATCH_G`, `MAX_SANE_MULTIPLE`, `formatWeight`) and the
-// persisted-batch freshness (`SCALED_TTL_MS`, `isScaledEntryFresh`).
+// persisted-batch freshness (`SCALED_TTL_MS`, `isScaledEntryFresh`) and, since step 3d-6, what the recipe
+// editor needs: the chooser (`linkOptions`, with the types `LinkOption` and `LinkOptionsInput`), writing a row's
+// link (`linkedItemName`, `isSameLink`, `applyLink`), `moveRow`, the Save validation (`findInvalidRecipe`, with
+// the type `InvalidRecipeProblem`) and `findCalculatorImport` (the delete warning).
+//
+// ADDED, from another file: `nameTaken` is the one export that is NOT in catalogue-model.js — its original is
+// at the bottom of js/catalogue/ingredient-suggest.js (the rest of that file draws a screen). It answers over
+// the same set `linkOptions` offers, so it sits beside it.
 //
 // ADAPTED (the two functions that look a word up in the interface dictionary, which in Mise 2 belongs to
 // the app; same results given the same words):
@@ -25,14 +32,12 @@
 //     original hands back untouched — so the app writes `key ? t(key) : unit`.
 //
 // PRIVATE, ported only because something above calls them and not exported: `normalizeIngredient(s)` (the
-// row normaliser), `fixRounding`, `linkOptions` (whole, as the original, though `suggestLinks` only ever
-// calls it with an empty query), `matchRank`, `bestRank`, and a copy of `supplierLabel` of
+// row normaliser), `fixRounding`, `matchRank`, `bestRank`, and a copy of `supplierLabel` of
 // js/supplier-label.js (pure, three lines; there is no shared port of that file yet).
 // `ingredientDisplayName` is imported from ingredient-name.ts, never copied.
 //
-// LEFT OUT: `linkOptions` as an export, `linkedItemName`, `isSameLink`, `applyLink`, `moveRow`,
-// `findInvalidRecipe` (step 3d-6) and the Calculator import (`toCalculatorRecipe`, `nonWeighableLabels`,
-// `mergeImportedRecipe`, `importFailureKey`, `findCalculatorImport`; step 3d-7).
+// LEFT OUT: the rest of the Calculator import (`toCalculatorRecipe`, `nonWeighableLabels`,
+// `mergeImportedRecipe`, `importFailureKey`; step 3d-7).
 //
 // Weight and volume are "weighable": they convert to grams (volume at 1 ml = 1 g, the standard bakery
 // approximation). Pieces / spoons / pinch / to-taste are NOT weighable, so they stay out of the weight
@@ -180,7 +185,7 @@ export function normalizeSearchText(value: unknown): string {
 }
 
 // js/supplier-label.js supplierLabel, copied (pure): the short name when there is one, else the name.
-function supplierLabel(s: unknown): string {
+export function supplierLabel(s: unknown): string {
   const supplier = s as { shortName?: unknown; name?: unknown } | null | undefined;
   const short = typeof supplier?.shortName === 'string' ? supplier.shortName.trim() : '';
   if (short) return short;
@@ -188,7 +193,7 @@ function supplierLabel(s: unknown): string {
 }
 
 // An ingredient the chooser may offer, or a recipe (which has only an id and a name).
-interface LinkOption {
+export interface LinkOption {
   id: unknown;
   name: string;
   displayName?: string;
@@ -198,7 +203,7 @@ interface LinkOption {
   ingredient?: unknown;
 }
 
-interface LinkOptionsInput {
+export interface LinkOptionsInput {
   ingredients?: unknown;
   recipes?: unknown;
   suppliers?: unknown;
@@ -212,7 +217,7 @@ interface LinkOptionsInput {
 //
 // `excludeRecipeId` keeps a recipe out of its own picker. The cost model catches a cycle anyway, but
 // offering the choice and then refusing it is a worse screen than never offering it.
-function linkOptions({ ingredients, recipes, suppliers, query, excludeRecipeId }: LinkOptionsInput = {}): { ingredients: LinkOption[]; recipes: LinkOption[] } {
+export function linkOptions({ ingredients, recipes, suppliers, query, excludeRecipeId }: LinkOptionsInput = {}): { ingredients: LinkOption[]; recipes: LinkOption[] } {
   const q = normalizeSearchText(query);
   const matches = (...fields: unknown[]): boolean => !q || fields.some(f => normalizeSearchText(f).includes(q));
   const supplierName = (id: unknown): string => supplierLabel(suppliers && (suppliers as Record<string, unknown>)[id as string]);
@@ -328,6 +333,120 @@ export function suggestLinks({
 
   const every = [...ranked(all.ingredients, 'ingredient'), ...ranked(all.recipes, 'recipe')];
   return { items: every.slice(0, max), total: every.length };
+}
+
+// ── Writing a row's link (the editor's chooser) ──────────────────────────────
+
+// The name a link line shows for a link — and the name a row takes when it is picked (9 Oct 2026): an
+// ingredient's display name (short name, else name), a recipe's name; the chosen name when the item is not
+// loaded (just created); '' when there is nothing to show. `ingredients` is the id -> ingredient map,
+// `recipes` the list.
+export function linkedItemName(link: unknown, ingredients: unknown, recipes: unknown): string {
+  if (!link || typeof link !== 'object') return '';
+  const l = link as { refId?: unknown; name?: unknown; kind?: unknown };
+  const refId = l.refId != null ? String(l.refId) : '';
+  const fallback = String(l.name ?? '').trim();
+  if (l.kind === 'recipe') {
+    const sub = (Array.isArray(recipes) ? recipes as ({ id?: unknown; name?: unknown } | null)[] : []).find(r => r && r.id === refId);
+    return String((sub && sub.name) || '').trim() || fallback;
+  }
+  if (l.kind !== 'ingredient') return '';
+  const ing = ingredients && (ingredients as Record<string, unknown>)[refId];
+  return (ing ? ingredientDisplayName(ing).trim() : '') || fallback;
+}
+
+// Is `chosen` the very link the row already has (same kind, same id)? Choosing it again changes nothing — and
+// so must not rename the row.
+export function isSameLink(current: unknown, chosen: unknown): boolean {
+  if (!current || !chosen) return false;
+  const a = current as { kind?: unknown; refId?: unknown };
+  const b = chosen as { kind?: unknown; refId?: unknown };
+  return a.kind === b.kind && String(a.refId) === String(b.refId);
+}
+
+// Point a recipe row at what was chosen — `null` removes the link. The ONE place a row's link is written: the
+// suggestion list and the full chooser both come through here, so the two cannot treat a row differently.
+// MUTATES the row in place and hands it back, as the original does (the editor works on a copy of the recipe).
+//
+// ⚠️⚠️ THE NAME FOLLOWS A PERSON'S PICK (9 Oct 2026). A caller that passes `{ label }` (the name the link line
+// under the row shows) gets the row's name SET to it, whatever was typed. Without `label` the old rule holds:
+// the chosen name fills the row only when it has no name at all. Removing a link (null) never touches the name.
+export function applyLink<R>(row: R, chosen: unknown, { label }: { label?: unknown } = {}): R {
+  if (!row || typeof row !== 'object') return row;
+  const r = row as Record<string, unknown>;
+  if (chosen === null) {
+    delete r.kind;
+    delete r.refId;
+    return row;
+  }
+  const c = chosen as { kind?: unknown; refId?: unknown; name?: unknown } | undefined;
+  const refId = c && c.refId != null ? String(c.refId).trim() : '';
+  if (!c || !(ROW_KINDS as readonly unknown[]).includes(c.kind) || !refId) return row;
+  r.kind = c.kind;
+  r.refId = refId;
+  const setTo = String(label ?? '').trim();
+  if (setTo) r.label = setTo;
+  else if (!String(r.label ?? '').trim() && c.name) r.label = String(c.name);
+  return row;
+}
+
+// The rows in a new order: the one at `from` moved to `to`. Returns a NEW list holding the SAME row objects — a
+// row keeps its link and, above all, its `rid`, which is what a guided mixing step points at. An index outside
+// the list, or a move to where it already is, gives the list back as it was (still a new array).
+export function moveRow<T>(list: readonly T[] | null | undefined, from: unknown, to: unknown): T[] {
+  const rows = Array.isArray(list) ? list.slice() : [];
+  const a = Math.trunc(Number(from));
+  const b = Math.trunc(Number(to));
+  if (!Number.isInteger(a) || !Number.isInteger(b) || a === b
+    || a < 0 || b < 0 || a >= rows.length || b >= rows.length) return rows;
+  const [row] = rows.splice(a, 1);
+  rows.splice(b, 0, row as T);
+  return rows;
+}
+
+// Is there already an ingredient called exactly this (ignoring case and spaces at the ends) among the ones a
+// recipe row can be LINKED to — active, and food rather than packaging?
+//
+// NOT AN EXPORT OF catalogue-model.js: its original is `nameTaken` at the bottom of
+// js/catalogue/ingredient-suggest.js (that file draws the screen, so it is not ported). It lives here because it
+// must stay in step with `linkOptions`.
+// ⚠️ THE SAME SET linkOptions() offers. Counting a switched-off ingredient or a box here withheld the «create»
+// row while the list above offered nothing: a dead end with no reason given. `ingredients` is the store's map
+// by id, or a list.
+export function nameTaken(ingredients: unknown, name: unknown): boolean {
+  const wanted = String(name ?? '').trim().toLowerCase();
+  return (Object.values(ingredients || {}) as ({ name?: unknown; shortName?: unknown; active?: unknown; kind?: unknown } | null)[])
+    .some(ing => ing && ing.active !== false && ing.kind !== 'packaging'
+      && [ing.name, ing.shortName].some(v => String(v ?? '').trim().toLowerCase() === wanted));
+}
+
+// ── The editor's validation ──────────────────────────────────────────────────
+
+export type InvalidRecipeProblem = 'name' | 'ingredients' | 'weight';
+
+// The first problem with a recipe, or null if it is valid: 'name' (blank name), 'ingredients' (no ingredient
+// with a non-empty label), or 'weight' (every named ingredient is 0, so the recipe can never be scaled). Used
+// to block Save.
+export function findInvalidRecipe(recipe: unknown): InvalidRecipeProblem | null {
+  const r = recipe as { name?: unknown; ingredients?: unknown } | null | undefined;
+  if (!r || !String(r.name || '').trim()) return 'name';
+  const ings = Array.isArray(r.ingredients) ? r.ingredients as ({ label?: unknown; grams?: unknown } | null)[] : [];
+  const named = ings.filter((i): i is { label?: unknown; grams?: unknown } => !!i && !!String(i.label || '').trim());
+  if (!named.length) return 'ingredients';
+  // At least one named ingredient must carry a positive amount (in any unit), so the recipe is more than a list
+  // of names. ('weight' is kept as the problem key.)
+  if (!named.some(i => (Number(i.grams) || 0) > 0)) return 'weight';
+  return null;
+}
+
+// Find the Calculator copy of a catalogue recipe (imported as 'cat-<id>'), or null. Pure — used to WARN before
+// deleting a catalogue recipe that was imported into the Calculator (the two are independent copies; deleting
+// here never touches the Calculator).
+export function findCalculatorImport(config: unknown, catalogueId: unknown): Record<string, unknown> | null {
+  const c = config as { recipes?: unknown } | null | undefined;
+  const recipes = (c && Array.isArray(c.recipes)) ? c.recipes as (Record<string, unknown> | null)[] : [];
+  const importId = 'cat-' + (catalogueId as string);
+  return recipes.find(r => r && r.id === importId) || null;
 }
 
 // ── The recipe, normalised ───────────────────────────────────────────────────

@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ChevronRight, Search, Settings, Wheat } from 'lucide-react';
+import { ChevronRight, Plus, Search, Settings, Wheat } from 'lucide-react';
 import { filterByName, sortByUsage } from '@mise/shared/catalogue-model';
 import { allergensOn } from '@mise/shared/venue-features';
 import { useT } from '../i18n/useT';
 import { useSession } from '../session/SessionContext';
 import { Button } from '../ui/Button';
 import { useRecipes, useRecipesStore } from './RecipesContext';
-import { ALLERGENS_OPENER, SEARCH_OPENER, SETTINGS_OPENER, recipeOpener, useHandBack } from './handBack';
+import { ALLERGENS_OPENER, NEW_OPENER, SEARCH_OPENER, SETTINGS_OPENER, recipeOpener, useHandBack } from './handBack';
 import styles from './RecipesList.module.css';
 
 // The current app's debounce: the box tells the list what is typed on every keystroke, and the cards
@@ -26,6 +26,9 @@ type Props = {
   // The label Settings are the screen shown, and the door to them at the foot of the list.
   settingsOpen: boolean;
   onOpenSettings: () => void;
+  // A new recipe's editor is the screen shown, and the button above the list that opens it (step 3d-6).
+  newOpen: boolean;
+  onNew: () => void;
 };
 
 // The left column: a search box over the recipes, name only, most opened first.
@@ -39,13 +42,14 @@ type Props = {
 // another is the worst moment for it. The counts that were current when the recipe opened (or when
 // the split began) stay in charge of the order until the list is shown alone again or the split is
 // left; the fresh ones apply then.
-export function RecipesList({ openRecipeId, split, onOpenRecipe, sheetOpen, onOpenSheet, settingsOpen, onOpenSettings }: Props) {
+export function RecipesList({ openRecipeId, split, onOpenRecipe, sheetOpen, onOpenSheet, settingsOpen, onOpenSettings, newOpen, onNew }: Props) {
   const { t } = useT();
   const { location, canManage } = useSession();
   const store = useRecipesStore();
   const handBack = useHandBack();
   const doorOpener = useCallback((node: HTMLButtonElement | null) => { handBack.register(ALLERGENS_OPENER, node); }, [handBack]);
   const settingsDoor = useCallback((node: HTMLButtonElement | null) => { handBack.register(SETTINGS_OPENER, node); }, [handBack]);
+  const newDoor = useCallback((node: HTMLButtonElement | null) => { handBack.register(NEW_OPENER, node); }, [handBack]);
   const searchOpener = useCallback((node: HTMLInputElement | null) => { handBack.register(SEARCH_OPENER, node); }, [handBack]);
   const { recipes, recipesLoaded, usage } = useRecipes();
 
@@ -87,25 +91,39 @@ export function RecipesList({ openRecipeId, split, onOpenRecipe, sheetOpen, onOp
 
   return (
     <div className={styles.column}>
-      <div className={styles.search}>
-        <Search aria-hidden="true" />
-        <input
-          ref={searchOpener}
-          type="search"
-          autoComplete="off"
-          className={styles.input}
-          aria-label={t('cat.searchARecipeBy')}
-          placeholder={t('cat.searchARecipe')}
-          value={text}
-          onChange={event => { setText(event.target.value); }}
-        />
+      {/* The search box and the button that makes a recipe: side by side on the tablet's split, one under the other on a phone
+          (RecipesList.module.css). The button is for everybody who sees the section — employees write recipes too — and it
+          stands also over «No recipes yet». */}
+      <div className={styles.top}>
+        <div className={styles.search}>
+          <Search aria-hidden="true" />
+          <input
+            ref={searchOpener}
+            type="search"
+            autoComplete="off"
+            className={styles.input}
+            aria-label={t('cat.searchARecipeBy')}
+            placeholder={t('cat.searchARecipe')}
+            value={text}
+            onChange={event => { setText(event.target.value); }}
+          />
+        </div>
+        <Button
+          ref={newDoor}
+          variant="primary"
+          className={styles.newRecipe}
+          aria-current={newOpen ? 'true' : undefined}
+          onPress={onNew}
+        >
+          <Plus aria-hidden="true" />
+          <span>{t('cat.newRecipe')}</span>
+        </Button>
       </div>
 
       {!recipesLoaded ? (
         <p className={styles.loading} aria-busy="true">{t('session.loading')}</p>
       ) : recipes.length === 0 ? (
-        // No recipes at all: the empty state. (Its «Add a recipe» button arrives with writing recipes,
-        // step 3d-6.)
+        // No recipes at all: the empty state. The «New recipe» button above it is the way to the first one.
         <div className={styles.empty}>
           <p className={styles.emptyTitle}>{t('calc.noRecipesYet')}</p>
           <p className={styles.emptySub}>{t('cat.empty.sub')}</p>
