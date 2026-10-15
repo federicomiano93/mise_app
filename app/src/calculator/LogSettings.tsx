@@ -6,7 +6,7 @@ import { useCalculator } from './CalculatorContext';
 import { SETTINGS_PATH } from './calculatorPath';
 import { applyLog, logChanged, logOpening } from './settingsModel';
 import type { LogSettings as LogValues } from './settingsModel';
-import { SettingSwitch } from './SettingSwitch';
+import { SettingSwitch } from '../ui/SettingSwitch';
 import { SettingsEditor } from './SettingsEditor';
 import { Help } from './SettingsParts';
 import styles from './LogSettings.module.css';

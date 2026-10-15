@@ -12,13 +12,13 @@ import { useMediaQuery } from '../ui/useMediaQuery';
 import { RecipesProvider, useRecipesStore } from './RecipesContext';
 import { RecipesDetail } from './RecipesDetail';
 import { RecipesList } from './RecipesList';
-import { ALLERGENS_OPENER, HandBackProvider, recipeOpener, useHandBackState } from './handBack';
+import { ALLERGENS_OPENER, HandBackProvider, SETTINGS_OPENER, recipeOpener, useHandBackState } from './handBack';
 import { LabelShowsProvider } from './labelShows';
 import { messageText } from './recipesMessages';
 import { RecipeReturnProvider } from './recipeReturn';
 import type { Place, RecipeReturn } from './recipeReturn';
 import { FROM_LIST, FROM_SHEET, cameFromList } from './recipesNav';
-import { ALLERGENS_PATH, RECIPES_PATH, recipePath, resolveRecipesPath } from './recipesPath';
+import { ALLERGENS_PATH, RECIPES_PATH, SETTINGS_PATH, recipePath, resolveRecipesPath } from './recipesPath';
 import type { ShownView } from './recipesPath';
 import styles from './RecipesSection.module.css';
 
@@ -56,7 +56,7 @@ function StoreMessages() {
 function RecipesScreen() {
   const { pathname, state } = useLocation();
   const navigationType = useNavigationType();
-  const { location } = useSession();
+  const { location, canManage } = useSession();
   // The address as it is written, not React Router's «*»: a recipe id is split before it is decoded
   // (recipesPath.ts).
   const resolved = resolveRecipesPath(pathname.slice(RECIPES_PATH.length));
@@ -71,6 +71,11 @@ function RecipesScreen() {
   // read once when the venue opens and is not live in Mise 2). A gate on a door is a
   // gate on everything later put behind it.
   if (resolved.view.kind === 'allergens' && !allergensOn(location)) {
+    return <Navigate to={RECIPES_PATH} replace state={KEEP_FOCUS} />;
+  }
+  // ⚠️ SETTINGS ARE FOR WHOEVER RUNS THE PLACE: an employee who types the address is sent to the list, and nothing of the
+  // screen is drawn. The rules are the real guard (config/labels is written by canManage only); this is courtesy.
+  if (resolved.view.kind === 'settings' && !canManage) {
     return <Navigate to={RECIPES_PATH} replace state={KEEP_FOCUS} />;
   }
   return <RecipesLayout view={resolved.view} />;
@@ -130,6 +135,18 @@ function RecipesLayout({ view }: { view: ShownView }) {
     } else {
       if (!split && view.kind === 'list') listTop.current = scrollArea()?.scrollTop ?? null;
       void navigate(ALLERGENS_PATH, { state: FROM_LIST });
+    }
+  };
+
+  // The label Settings open the same way as the sheet: one level down, in the right-hand pane on the split.
+  const openSettings = () => {
+    if (view.kind === 'settings') return;
+    handBack.expect(SETTINGS_OPENER);
+    if (split && view.kind !== 'list') {
+      void navigate(SETTINGS_PATH, { replace: true, state: cameFromList(state) ? FROM_LIST : KEEP_FOCUS });
+    } else {
+      if (!split && view.kind === 'list') listTop.current = scrollArea()?.scrollTop ?? null;
+      void navigate(SETTINGS_PATH, { state: FROM_LIST });
     }
   };
 
@@ -202,6 +219,8 @@ function RecipesLayout({ view }: { view: ShownView }) {
                 onOpenRecipe={openRecipe}
                 sheetOpen={view.kind === 'allergens'}
                 onOpenSheet={openSheet}
+                settingsOpen={view.kind === 'settings'}
+                onOpenSettings={openSettings}
               />
             </PartBoundary>
           </div>

@@ -1,6 +1,6 @@
 import { useId } from 'react';
 import type { ReactNode } from 'react';
-import { SettingSwitch } from './SettingSwitch';
+import { SettingSwitch } from '../ui/SettingSwitch';
 import styles from './SettingsParts.module.css';
 
 // The small pieces the editing screens of Settings (Extra dough, Divisor, Dough history) are made of.

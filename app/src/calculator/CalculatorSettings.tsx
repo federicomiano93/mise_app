@@ -9,7 +9,7 @@ import {
   CALCULATOR_PATH, clientsPath, divisorPath, extraPath, logSettingsPath, orderingPath, recipesPath, whatsappPath,
 } from './calculatorPath';
 import { CLIENTS_OPENER, DIVISOR_OPENER, EXTRA_OPENER, LOG_OPENER, ORDERING_OPENER, RECIPES_OPENER, WHATSAPP_OPENER } from './handBack';
-import { SettingSwitch } from './SettingSwitch';
+import { SettingSwitch } from '../ui/SettingSwitch';
 import { SettingsPage } from './SettingsPage';
 import { useSaveConfig } from './useSaveConfig';
 import styles from './CalculatorSettings.module.css';
