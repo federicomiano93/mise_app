@@ -94,6 +94,8 @@ describe('the rows in the mode', () => {
     expect(within(region).queryByRole('button', { name: '+ Add ingredient' })).not.toBeInTheDocument();
     const rows = within(region).getAllByRole('row');
     expect(rows[0]).toHaveTextContent('Flour1000g');
+    // ⚠️ The grip is the LAST thing in a row, in the bin's place: at the start it squeezed the name on a 296px phone.
+    for (const row of rows) expect(within(row).getByRole('gridcell').lastElementChild).toBe(within(row).getByRole('button', { name: /^Move «/ }));
     expect(rows[2]).toHaveTextContent('Salt20g');
     // The total stays.
     expect(within(region).getByText('Total')).toBeInTheDocument();
@@ -151,6 +153,14 @@ describe('the rows in the mode', () => {
     await user.keyboard('{Enter}');
     expect(reorderButton(region)).toHaveFocus();
     expect(reorderButton(region)).toHaveAttribute('aria-pressed', 'false');
+  });
+  it('⚠️ puts the focus on the button on leaving even when the press did not move it (a tap on Safari)', async () => {
+    const { region, user } = await openEditor();
+    await enter(region, user);
+    gripOf(region, 'Water').focus();
+    act(() => { reorderButton(region, 'Done').click(); });
+    await waitFor(() => { expect(ingredientBoxes(region)).toHaveLength(3); });
+    expect(reorderButton(region)).toHaveFocus();
   });
 });
 

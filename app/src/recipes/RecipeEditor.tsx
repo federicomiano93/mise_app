@@ -199,10 +199,14 @@ export function RecipeEditor({ id, recipe, titleRef, onTyped }: Props) {
   const [reordering, setReordering] = useState(false);
   // The grip owed the focus after a move, or on entering the mode.
   const [focusGrip, setFocusGrip] = useState<{ key: number } | null>(null);
+  const reorderButton = useRef<HTMLButtonElement>(null);
   const toggleReorder = () => {
     if (reordering) {
       setReordering(false);
       setFocusGrip(null);
+      // ⚠️ THE FOCUS IS PUT ON THE BUTTON, not left where it was: a tap does not focus a button everywhere (Safari), so the
+      // focus can still be on a grip that is about to go, and it would fall to the page's body.
+      reorderButton.current?.focus();
       return;
     }
     setReordering(true);
@@ -378,7 +382,7 @@ export function RecipeEditor({ id, recipe, titleRef, onTyped }: Props) {
             <span className={styles.count}>{working.rows.length}</span>
             {/* ABSENT, not disabled, with fewer than two rows: there is nothing to put in another order. */}
             {working.rows.length > 1 ? (
-              <Button variant="secondary" className={styles.reorder} aria-pressed={reordering} onPress={toggleReorder}>
+              <Button ref={reorderButton} variant="secondary" className={styles.reorder} aria-pressed={reordering} onPress={toggleReorder}>
                 {t(reordering ? 'cat.reorderDone' : 'cat.reorder')}
               </Button>
             ) : null}
