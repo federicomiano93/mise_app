@@ -373,10 +373,10 @@
       }
     },
     "dist/i18n.js": {
-      "sha": "05b8f4a7adb3d212",
-      "mapSha": "13125fe42e6f68ed",
+      "sha": "acaf90e7750ef1e3",
+      "mapSha": "4d0f027b950f79a5",
       "inputs": {
-        "js/i18n.js": "8c8fd70b84671c42"
+        "js/i18n.js": "80708567719152cf"
       }
     },
     "dist/index.js": {
@@ -645,8 +645,8 @@
       }
     },
     "dist/orders.js": {
-      "sha": "d1a15a5ce31c721f",
-      "mapSha": "e11d13853167448b",
+      "sha": "dff6ed2ee148e6d3",
+      "mapSha": "4f01df021084063e",
       "inputs": {
         "js/allergen-match.js": "ee85eebef7fd7052",
         "js/allergen-model.js": "50434c6cea85b7de",
@@ -712,7 +712,7 @@
         "js/orders/ingredients.js": "1826dc9aab2dd7c6",
         "js/orders/kiosk-lines.js": "e568172d891e9118",
         "js/orders/line-supplier.js": "28982215feb5a04c",
-        "js/orders/management.js": "49e8509661dda08e",
+        "js/orders/management.js": "cb3b52c2b456d005",
         "js/orders/memo.js": "e03a7d234a1fc1ab",
         "js/orders/mgmt-ui.js": "4782e0bc32370518",
         "js/orders/no-supplier.js": "5f4e999f066a8ffb",
@@ -1029,9 +1029,9 @@
       }
     },
     "dist/tokens.css": {
-      "sha": "586eaea9bdfb0595",
+      "sha": "a70ba8cec430a5de",
       "inputs": {
-        "tokens.css": "8ca2371d2b3aab83"
+        "tokens.css": "b9f6af6a85e37f69"
       }
     }
   }

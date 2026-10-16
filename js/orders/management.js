@@ -52,6 +52,7 @@ export function buildManagement(data, actions) {
   // drawn for each title, and markSaved() lights that one.
   let lastSaved = { title: null, until: 0 };
   const chips = new Map();
+  let lockedIds = 0;   // ids for the «who can change this» lines a locked switch points at
   function savedChip(title) {
     const chip = el('span', { class: 'set-saved', text: t('settings.saved'), hidden: true });
     chips.set(title, chip);
@@ -102,7 +103,7 @@ export function buildManagement(data, actions) {
       section('orders.lists.title', 'orders.lists.note', [buildOrderListsSwitch(config)]);
     }
     section('orders.section.orderScreen', null, [
-      buildStockSwitch(config),
+      buildStockSwitch(config, boss),
       // The order of the supplier list is the venue's, so only whoever runs the place
       // sets it (config/orders is write-gated on canManage, the door is courtesy).
       boss && actions.openSupplierOrder
@@ -125,7 +126,7 @@ export function buildManagement(data, actions) {
     // the phone's green bar beside the bell and the order lists.
     section('orders.section.more', null, [
       actions.openHistory ? door('orders.settings.openHistory', null, () => actions.openHistory()) : null,
-      actions.openHistory ? buildHistoryDaysField(config) : null,
+      actions.openHistory ? buildHistoryDaysField(config, boss) : null,
       door('orders.settings.help', 'orders.settings.helpSub', () => showHelp('orders')),
     ]);
   }
@@ -157,9 +158,12 @@ export function buildManagement(data, actions) {
   // A switch that saves on the tap: optimistic, «Saved ✓» for two seconds, and put
   // back — with the reason said — if the write is refused.
   // `sub` may be a function of the current value, for a line that says what ON means.
-  function switchRow({ title, sub, checked, save, failLabel, before }) {
+  // `lockedNote`: the switch is shown but cannot be flipped, and this line says who can.
+  function switchRow({ title, sub, checked, save, failLabel, before, lockedNote }) {
     const input = el('input', { type: 'checkbox', role: 'switch', 'aria-label': title });
     input.checked = checked;
+    const locked = Boolean(lockedNote);
+    input.disabled = locked;
     const subEl = el('span', { class: 'set-sub' });
     const paintSub = () => {
       const text = typeof sub === 'function' ? sub(input.checked) : sub;
@@ -182,12 +186,14 @@ export function buildManagement(data, actions) {
         paintSub();
         await reportFailure('save', failLabel || title, err);
       } finally {
-        input.disabled = false;
+        input.disabled = locked;
       }
     });
 
+    const lockedEl = locked ? el('span', { class: 'set-sub', id: `lock-${++lockedIds}`, text: lockedNote }) : null;
+    if (lockedEl) input.setAttribute('aria-describedby', lockedEl.id);
     return el('div', { class: 'set-row' }, [
-      el('span', { class: 'set-text' }, [el('span', { class: 'set-title', text: title }), subEl]),
+      el('span', { class: 'set-text' }, [el('span', { class: 'set-title', text: title }), subEl, lockedEl]),
       saved,
       el('label', { class: 'set-switch' }, [input, el('span', { class: 'set-switch-track', 'aria-hidden': 'true' })]),
     ]);
@@ -214,13 +220,21 @@ export function buildManagement(data, actions) {
 
   // Show or hide the Stock box on every order row, for EVERY phone (Firestore, not
   // this device). There is nothing to lose by getting it wrong: one more tap undoes it.
-  function buildStockSwitch(config) {
+  //
+  // ⚠️ SHOWN TO EVERYBODY, FLIPPED ONLY BY THE OWNER OR A MANAGER (13 Oct 2026). The
+  // rules gate config/orders on canManage(), but the switch was live for employees too:
+  // the shared lab tablet (an employee account) tapped it, the write was refused, the
+  // switch sprang back and the staff wrote «non riesco a mostrare la giacenza». It stays
+  // visible, locked, with the line saying who can change it — hidden, nobody would know
+  // where the setting went.
+  function buildStockSwitch(config, boss) {
     return switchRow({
       title: t('orders.showTheStockBox'),
       sub: t('orders.turnThisOffIf'),
       checked: config.showStock,
       save: on => actions.saveOrdersConfig({ showStock: on }),
       failLabel: t('orders.showStock'),
+      lockedNote: boss ? null : t('orders.onlyOwnerOrManager'),
     });
   }
 
@@ -325,12 +339,17 @@ export function buildManagement(data, actions) {
   // How far back History reaches. It HIDES and never deletes, and the line under it
   // says so. Saved on `change` (blur or Enter), not per keystroke: typing "20" passes
   // through "2", and saving that would push a 2-day window onto every phone.
-  function buildHistoryDaysField(config) {
+  // ⚠️ It is config/orders too, so — like the stock switch — only the owner or a manager
+  // can change it; everybody else sees it locked, with the line saying who can.
+  function buildHistoryDaysField(config, boss) {
     const input = el('input', {
       type: 'number', min: '1', max: '365', inputmode: 'numeric',
       class: 'set-input', id: 'history-days-input',
     });
     input.value = String(config.historyDays);
+    input.disabled = !boss;
+    const lockedLine = boss ? null : el('p', { class: 'set-sub', id: 'history-days-locked', text: t('orders.onlyOwnerOrManager') });
+    if (lockedLine) input.setAttribute('aria-describedby', 'history-days-locked');
     const saved = savedChip(t('orders.daysOfPastOrders'));
 
     input.addEventListener('change', async () => {
@@ -352,7 +371,7 @@ export function buildManagement(data, actions) {
         input.value = String(stored);   // back to what is actually stored
         await reportFailure('save', t('orders.daysOfHistory'), err);
       } finally {
-        input.disabled = false;
+        input.disabled = !boss;
       }
     });
 
@@ -360,6 +379,7 @@ export function buildManagement(data, actions) {
       el('label', { class: 'set-label', for: 'history-days-input', text: t('orders.daysOfPastOrders') }),
       el('div', { class: 'mgmt-days-row' }, [input, el('span', { text: t('orders.days') }), saved]),
       el('p', { class: 'set-sub', text: t('orders.olderOrdersAreNever', { n: HISTORY_LIVE_MONTHS }) }),
+      lockedLine,
     ]);
   }
 
