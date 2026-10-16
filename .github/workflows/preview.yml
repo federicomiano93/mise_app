@@ -21,6 +21,8 @@ name: Preview
 # that fails — and takes the channel down — if anything internal answers.
 #
 # This job is NOT a required check: a broken preview must never block a fix from shipping.
+#
+# Every `uses:` is pinned to a commit, never a tag (why: the top of test.yml).
 
 on:
   pull_request:
@@ -38,17 +40,24 @@ jobs:
   # mint a credential for the preview project (`id-token: write`), and any code running there
   # could ask for one too. Here nothing can: this job may only read the repository, and what it
   # hands on is the built files, nothing else. Never merge the two jobs to save a minute.
+  #
+  # The monthly ACTIONS pull request (.github/dependabot.yml, branch `dependabot/github_actions/…`)
+  # gets no preview: it moves only the actions this file and test.yml run, so there is nothing to
+  # see on a phone, and it would take over the fixed `anteprima` link below on the first of every
+  # month. Its `test`, `rules` and `mise2` checks still run. Dependabot's npm SECURITY pull
+  # requests keep their preview — for ci/firebase-tools/ it is the run that proves the deploy
+  # commands before production's.
   build-mise2:
-    if: github.event.pull_request.head.repo.full_name == github.repository
+    if: github.event.pull_request.head.repo.full_name == github.repository && !startsWith(github.head_ref, 'dependabot/github_actions/')
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           persist-credentials: false
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version: '22'
       # The lockfiles decide; no package may run code while it installs.
@@ -59,7 +68,7 @@ jobs:
       # Served at /mise2/ on the preview, beside the current app at the root.
       - run: npm run build -- --base=/mise2/
         working-directory: app
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: mise2-site
           path: app/dist
@@ -76,7 +85,8 @@ jobs:
     # Mise 2 build (or an npm registry blip) would take away the preview link of every fix to
     # the app staff use today — and that link is how he checks a fix on his phone before it
     # goes live. A failed build only leaves /mise2/ out; `cancelled` still stops everything.
-    if: ${{ !cancelled() && github.event.pull_request.head.repo.full_name == github.repository }}
+    # The monthly actions pull request is left out here too (why: above build-mise2).
+    if: ${{ !cancelled() && github.event.pull_request.head.repo.full_name == github.repository && !startsWith(github.head_ref, 'dependabot/github_actions/') }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -86,16 +96,16 @@ jobs:
       url: ${{ steps.deploy.outputs.url }}
       fixed_url: ${{ steps.deploy.outputs.fixed_url }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           persist-credentials: false
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version: '22'
 
       # Mise 2's built files from the job above — outside the workspace until staged below.
       - if: needs.build-mise2.result == 'success'
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: mise2-site
           path: ${{ runner.temp }}/mise2-site
@@ -119,16 +129,33 @@ jobs:
           fi
           find _site -maxdepth 1 | sort
 
-      # ⚠️ firebase-tools RUNS NO CODE WHILE IT INSTALLS, AND IS INSTALLED IN ITS OWN STEP BEFORE THE
-      # SIGN-IN — the same rule, and the same measurement, as production's deploy job (test.yml,
-      # deploy-functions). The sign-in below writes a credential into the workspace; this install
-      # has no lockfile and install scripts run by default, so until October 2026, when it
-      # ran inside the deploy step, any install script among its ~670 packages could have read
-      # that credential. `--ignore-scripts` is the protection, the order only helps; both are
-      # pinned by tests/ci-install-before-sign-in.test.mjs. Not covered: firebase-tools' own code
-      # still runs with the credential during the deploy — it is the deploy tool.
-      - name: Install firebase-tools (before the sign-in, no install scripts)
-        run: npm install --global --ignore-scripts firebase-tools@15.26.0
+      # ⚠️ THE SAME VULNERABILITY GATE AS test.yml's `test` job, HERE BEFORE THE INSTALL: this
+      # workflow does not wait for `test`, so without it a PR whose lockfile carries a package
+      # newly reported as malicious would run it below with the preview credential before the
+      # gate's verdict. It reads the lockfile and asks the registry; it installs nothing and runs no
+      # package code. Why it is a script and not `npm audit --audit-level=…`: the script's header.
+      - name: Vulnerability check of CI's firebase-tools (P11)
+        run: node scripts/audit-ci-firebase-tools.mjs
+
+      # ⚠️ firebase-tools RUNS NO CODE WHILE IT INSTALLS, IS INSTALLED IN ITS OWN STEP BEFORE THE
+      # SIGN-IN, AND EVERY VERSION UNDER IT COMES FROM ITS LOCKFILE (ci/firebase-tools/) — the
+      # same rule, and the same measurement, as production's deploy job (test.yml,
+      # deploy-functions). The sign-in below writes a credential into the workspace and install
+      # scripts run by default, so until October 2026, when it ran inside the deploy step, any
+      # install script among its ~670 packages could have read that credential; and until the
+      # lockfile, those packages were resolved afresh on every run. `--ignore-scripts` is the
+      # protection, the order only helps; both are pinned by tests/ci-install-before-sign-in.test.mjs.
+      # Not covered: firebase-tools' own code still runs with the credential during the deploy —
+      # it is the deploy tool. Only the `firebase` command goes on PATH, never the whole
+      # node_modules/.bin (why: test.yml, deploy-functions). `ci/` is never staged into _site (the
+      # allowlist above does not name it), and the leak check below proves it.
+      - name: Install firebase-tools from its lockfile (before the sign-in, no install scripts)
+        run: |
+          npm ci --ignore-scripts
+          mkdir "$RUNNER_TEMP/firebase-cli"
+          ln -s "$PWD/node_modules/.bin/firebase" "$RUNNER_TEMP/firebase-cli/firebase"
+          echo "$RUNNER_TEMP/firebase-cli" >> "$GITHUB_PATH"
+        working-directory: ci/firebase-tools
 
       # ⚠️ The trust is pinned to this repository on Google's side, in TWO places, exactly like
       # production's (see test.yml): the provider's attribute condition
@@ -136,7 +163,7 @@ jobs:
       # and the service account's IAM policy (…/attribute.repository/federicomiano93/mise_app).
       # Renaming the repository breaks this job until BOTH are repointed.
       - name: Sign in to Google (no key) — the PREVIEW project only
-        uses: google-github-actions/auth@v2
+        uses: google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed # v2.1.13
         with:
           project_id: mise-app-preview
           workload_identity_provider: projects/863348756512/locations/global/workloadIdentityPools/github-pool/providers/github-oidc
@@ -185,7 +212,7 @@ jobs:
                         firebase.json firestore.rules package.json functions/index.js \
                         scripts/seed-preview.mjs tests/firebase-target.test.mjs README.md \
                         app/package.json app/src/main.tsx shared/package.json \
-                        mise2/package.json mise2/src/main.tsx; do
+                        mise2/package.json mise2/src/main.tsx ci/firebase-tools/package.json; do
               [ "$(code "$path")" = 404 ] || leaked="$leaked $path"
             done
             for creds in gha-creds-*.json; do
