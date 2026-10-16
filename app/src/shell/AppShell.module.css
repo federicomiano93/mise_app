@@ -1,0 +1,264 @@
+/* The frame of the app (values from the approved design, `mise2.css`). Phone first: the tab
+   bar at the bottom, no rail, no top bar. From 700px — tablets, portrait included — the rail
+   takes the left edge and the top bar appears; a media query chooses, no script measures. */
+
+.shell {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  /* Two declarations: Chrome 107 (the lab tablet's floor) has no dvh and keeps the first. */
+  height: 100vh;
+  height: 100dvh;
+  background: var(--bg);
+}
+
+/* The skip link: out of sight until the keyboard reaches it, then on top of everything. */
+.skip {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.skip:focus {
+  position: fixed;
+  top: var(--s2);
+  left: var(--s2);
+  z-index: 100;
+  width: auto;
+  height: auto;
+  margin: 0;
+  padding: var(--s3) var(--s4);
+  overflow: visible;
+  clip: auto;
+  clip-path: none;
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: var(--shadow-2);
+}
+
+/* The rail (tablet) */
+
+/* ⚠️ index.html says viewport-fit=cover, so the page reaches under the notch: an iPhone held in
+   landscape (or a tablet with a camera cut-out) would cover the left of the rail. The shell
+   gives the rail's column the inset on top of its width (see the 700px query) and the rail
+   pads its items by the same amount, so the items keep their 76px and clear the notch. */
+.rail {
+  display: none;
+  flex-direction: column;
+  gap: var(--s1);
+  padding: var(--s4) var(--s2) var(--s4) calc(var(--s2) + env(safe-area-inset-left));
+  /* A landscape phone is 700px wide yet only about 390px tall. */
+  overflow-y: auto;
+  background: var(--rail);
+  color: var(--rail-ink);
+}
+
+.mark {
+  display: grid;
+  place-items: center;
+  flex: none;
+  align-self: center;
+  width: 44px;
+  height: 44px;
+  margin-bottom: var(--s4);
+  border-radius: var(--r-md);
+  background: var(--rail-ink-strong);
+  color: var(--rail);
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.spacer {
+  flex: 1;
+}
+
+/* Icon above label, centred. Hover is qualified so it outranks base.css's link hover colour. */
+.railItem {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 64px;
+  padding: var(--s2) 2px;
+  border-radius: var(--r-md);
+  color: var(--rail-ink);
+  font-size: 11.5px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  line-height: 1.15;
+  text-align: center;
+  text-decoration: none;
+}
+
+/* Qualified by .railItem so it outranks base.css's `svg.lucide` size of 20px. */
+.railItem .railIcon {
+  width: 22px;
+  height: 22px;
+}
+
+.railItem:hover {
+  background: var(--rail-hover);
+  color: var(--rail-ink-strong);
+}
+
+/* After :hover on purpose: the current item keeps its colour under the pointer. */
+.railItem[aria-current="page"] {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+/* base.css's ring is the accent colour: about 2.8:1 against the dark rail, under the 3:1 a focus
+   indicator needs, and it would not show at all around the current item, which is accent
+   itself. The ring sits 2px outside the item, on the rail, so the light ink clears both. */
+.railItem:focus-visible {
+  outline-color: var(--rail-ink-strong);
+}
+
+/* The main column */
+
+.main {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr);
+  min-width: 0;
+  min-height: 0;
+}
+
+/* The one scroll area. A container the skip link focuses is not a control: no ring around
+   the whole screen. */
+.content {
+  min-height: 0;
+  overflow: auto;
+}
+
+.content:focus-visible {
+  outline: none;
+}
+
+/* The top bar (tablet) */
+
+.topbar {
+  display: none;
+  align-items: center;
+  gap: var(--s4);
+  height: 60px;
+  /* The right inset keeps the connection status clear of a notch on that side. */
+  padding: 0 calc(var(--s6) + env(safe-area-inset-right)) 0 var(--s6);
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.date {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
+.grow {
+  flex: 1;
+}
+
+.sync {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
+.dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: var(--r-pill);
+  background: var(--ok);
+}
+
+.dot[data-online="false"] {
+  background: var(--ink-3);
+}
+
+/* The tab bar (phone) */
+
+.tabbar {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  padding: 6px 6px calc(6px + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.tab {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  min-width: 0;
+  min-height: 52px;
+  border-radius: var(--r-md);
+  color: var(--ink-3);
+  font-size: 11px;
+  font-weight: 550;
+  line-height: 1.15;
+  text-align: center;
+  text-decoration: none;
+}
+
+/* Cancels base.css's link hover colour, which would stick after a tap on a touch screen. */
+.tab:hover {
+  color: var(--ink-3);
+}
+
+.tab .tabIcon {
+  width: 22px;
+  height: 22px;
+}
+
+.tab[aria-current="page"] {
+  color: var(--accent-ink);
+}
+
+.tab[aria-current="page"] .tabIcon {
+  stroke-width: 2.3;
+}
+
+/* «Calcolatore» in Italian is the longest label, and five columns at 296px are 57px wide each:
+   below 340px the label is a little smaller rather than cut off with an ellipsis. */
+@media (max-width: 339.98px) {
+  .tab {
+    font-size: 10px;
+    letter-spacing: -0.01em;
+  }
+}
+
+/* Tablets and wider: rail and top bar in, tab bar out. Every phone-side `display: none`
+   above has its `display` here — a rule written for one side only leaves the other blank. */
+@media (min-width: 700px) {
+  .shell {
+    grid-template-columns: calc(var(--rail-w) + env(safe-area-inset-left)) minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+  }
+
+  .rail {
+    display: flex;
+  }
+
+  .main {
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .topbar {
+    display: flex;
+  }
+
+  .tabbar {
+    display: none;
+  }
+}
