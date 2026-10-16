@@ -15,17 +15,26 @@ import * as pushModel from './push-model';
 import * as homeCards from './home-cards';
 import * as awayModel from './away-model';
 import * as allergenModel from './allergen-model';
+import * as sections from './sections';
+import * as firebaseTarget from './firebase-target';
+import * as localData from './local-data';
 import * as legacyJoinCodeJs from '../../js/join-code.js';
 import * as legacyPushModelJs from '../../js/push-model.js';
 import * as legacyHomeCardsJs from '../../js/home-cards.js';
 import * as legacyAwayModelJs from '../../js/away-model.js';
 import * as legacyAllergenModelJs from '../../js/allergen-model.js';
+import * as legacySectionsJs from '../../js/sections.js';
+import * as legacyFirebaseTargetJs from '../../js/firebase-target.js';
+import * as legacyLocalDataJs from '../../js/local-data.js';
 
 const legacyJoinCode = legacyJoinCodeJs as unknown as typeof joinCode;
 const legacyPushModel = legacyPushModelJs as unknown as typeof pushModel;
 const legacyHomeCards = legacyHomeCardsJs as unknown as typeof homeCards;
 const legacyAwayModel = legacyAwayModelJs as unknown as typeof awayModel;
 const legacyAllergenModel = legacyAllergenModelJs as unknown as typeof allergenModel;
+const legacySections = legacySectionsJs as unknown as typeof sections;
+const legacyFirebaseTarget = legacyFirebaseTargetJs as unknown as typeof firebaseTarget;
+const legacyLocalData = legacyLocalDataJs as unknown as typeof localData;
 
 // ── The machinery ────────────────────────────────────────────────────────────
 
@@ -337,4 +346,173 @@ describe('allergen-model: odd inputs', () => {
     ...NUTRITIONS.map(nutrition => [{ ...BASE, nutrition }]),
     ...PACKS.map(packIngredients => [{ ...BASE, packIngredients }]),
   ]);
+});
+
+// ── sections ─────────────────────────────────────────────────────────────────
+
+describe('sections: odd inputs', () => {
+  const m = sections;
+  const l = legacySections;
+
+  // `sections` fields and section names nobody planned for: stray spaces (invisible in the console),
+  // the exact name beside a spaced one, names from the prototype chain, a value that is not a boolean.
+  const SECTION_MAPS = [...ODD, 'corrupt', 42, { orders: false }, { orders: true }, { orders: 'no' }, { orders: 0 },
+    { orders: null }, { 'orders ': false }, { ' orders': false }, { orders: true, 'orders ': false },
+    { 'orders ': false, orders: true }, { calculator: false, catalogue: false, pastries: false, foodcost: false },
+    { foodcost: false }, { 'foodcost ': false }, { invoices: false }, { toString: false },
+    JSON.parse('{"__proto__":{"orders":false}}'), Object.create({ orders: false }),
+    Object.fromEntries(m.SECTIONS.map(name => [name, false])), Object.fromEntries(m.SECTIONS.map(name => [name, true]))];
+  const LOCATION_DOCS = [...ODD, 'corrupt', 42, { name: 'Bakery' },
+    ...SECTION_MAPS.map(map => ({ sections: map })),
+    ...SECTION_MAPS.map(map => ({ 'sections ': map })),
+    { sections: { calculator: false }, 'sections ': { calculator: true } },
+    { 'sections ': { calculator: true }, sections: { calculator: false } },
+    Object.create({ sections: { orders: false } })];
+  const SMALL_DOCS = [null, undefined, {}, { sections: null }, { sections: { foodcost: false } },
+    { 'sections ': { 'foodcost ': false } },
+    { sections: { orders: true, calculator: false, catalogue: false, pastries: false, foodcost: false } },
+    { sections: 'yes' }, [], 'corrupt'];
+
+  const NAMES = [...ODD, ...m.SECTIONS, 'invoices', 'toString', '__proto__', 'constructor', 'Orders', ' orders', 'orders '];
+  const ROLES = [...ODD, 'owner', 'manager', 'staff', 'Owner', 'MANAGER', 'admin', 'head-chef', 'toString', '__proto__',
+    ' manager', 'owner '];
+
+  agree('allowedSections', m.allowedSections, l.allowedSections, product(LOCATION_DOCS));
+  agree('isSectionAllowed', m.isSectionAllowed, l.isSectionAllowed, product(LOCATION_DOCS, NAMES));
+  agree('sectionsFor', m.sectionsFor, l.sectionsFor, product(LOCATION_DOCS, ROLES));
+  agree('isSectionAllowedFor', m.isSectionAllowedFor, l.isSectionAllowedFor, product(SMALL_DOCS, ROLES, NAMES));
+
+  // `locations.<id>` values and ids nobody planned for: near-misses of the three accepted values, a
+  // stray space or a slash in the id, an id one character past the limit, ids that sort oddly.
+  const ACCESS_ODD = [true, false, 'manager', 'owner', 'Owner', 'owner ', ' manager', 'staff', 'admin', 'head-chef', 'true',
+    0, 1, null, undefined, {}, [], ['owner'], NaN];
+  const LOCATIONS_FIELDS = [...ODD, 'owner', 42, { bakery: 'owner' },
+    ...ACCESS_ODD.map(value => ({ bakery: value })),
+    { 'bakery ': 'owner' }, { ' bakery': true }, { 'bak ery': true }, { 'bakery/x': 'owner' }, { '': true },
+    { '../x': 'manager' }, { 'bakery\n': true }, { ['a'.repeat(64)]: true }, { ['a'.repeat(65)]: true },
+    { zeta: true, alfa: 'manager', main: 'owner' }, { '0': true, '-x': true, _x: true, Z: true, a: true },
+    { bakery: true, restaurant: 'manager', 'loc-e015733e55e7': 'owner', 'bad id': true },
+    JSON.parse('{"__proto__":{"bakery":"owner"}}'), Object.create({ bakery: 'owner' })];
+  const USER_DOCS = [...ODD, 'corrupt', 42, { email: 'a@b.c' },
+    ...LOCATIONS_FIELDS.map(locations => ({ locations })),
+    { 'locations ': { bakery: true } }, Object.create({ locations: { bakery: true } })];
+  const IDS = ['bakery', 'bakery ', ' bakery', '', undefined, null, 5, 'toString', '__proto__', 'constructor',
+    'restaurant', 'main', 'Bakery', 'alfa', 'zeta'];
+
+  agree('accessValue', m.accessValue, l.accessValue, product(USER_DOCS, IDS));
+  agree('locationsOf', m.locationsOf, l.locationsOf, product(USER_DOCS));
+
+  const REMEMBERED = [undefined, null, '', 'bakery', 'main', 'alfa', 'zeta', 'trattoria-x', 'nope', ' bakery', 5, {}, [], true];
+  agree('pickLocation', m.pickLocation, l.pickLocation, product(USER_DOCS, REMEMBERED));
+
+  // The three flags in every odd combination, with and without a remembered venue.
+  const TWO = { locations: { main: 'owner', 'trattoria-x': 'owner' } };
+  const START_DOCS = [null, undefined, {}, { locations: {} }, { locations: { main: true } }, TWO,
+    { locations: { bakery: 'manager', restaurant: true } }, { locations: { 'bakery ': true } }, 'corrupt',
+    { locations: 'owner' }, { locations: [] }, { locations: { main: 'Owner', 'trattoria-x': true } }];
+  const FLAGS = [true, false, undefined, 'true', 1, 0, null, {}];
+  const OPTIONS = [undefined, null, {}, 'text', 5,
+    ...product(FLAGS, FLAGS, FLAGS).map(([isAppAdmin, hubPassed, pickVenue]) =>
+      ({ isAppAdmin, hubPassed, pickVenue, remembered: 'main' })),
+    ...REMEMBERED.map(remembered => ({ remembered })),
+    ...REMEMBERED.map(remembered => ({ isAppAdmin: true, remembered })),
+    ...REMEMBERED.map(remembered => ({ pickVenue: true, remembered })),
+    ...REMEMBERED.map(remembered => ({ isAppAdmin: true, hubPassed: true, remembered }))];
+  agree('pickStart', m.pickStart, l.pickStart, product(START_DOCS, OPTIONS));
+
+  const OPTION_LISTS = [undefined, null, [], ['a'], ['a', 'b'], 'main', 42, {}, { length: 2 }, new Set(['a', 'b'])];
+  agree('hasLevelAbove', m.hasLevelAbove, l.hasLevelAbove, [
+    [], [undefined], [null], [{}], ['text'], [5],
+    ...product(FLAGS, OPTION_LISTS).map(([isAppAdmin, options]) => [{ isAppAdmin, options }]),
+  ]);
+});
+
+// ── firebase-target ──────────────────────────────────────────────────────────
+
+describe('firebase-target: odd inputs', () => {
+  const m = firebaseTarget;
+  const l = legacyFirebaseTarget;
+
+  // Hostnames nobody planned for: case, a trailing dot, ports, schemes, neighbours, an object or
+  // an array that PRINTS as a production name. Any difference here would send real orders to the
+  // wrong database from one of the two apps on the same origin.
+  const HOSTS = [...ODD, 'federicomiano93.github.io', 'federicomiano93.github.io.', 'FEDERICOMIANO93.GITHUB.IO',
+    'federicomiano93.github.io..', 'federicomiano93.github.io:443', 'https://federicomiano93.github.io',
+    'www.federicomiano93.github.io', 'federicomiano93.github.io.evil.example', 'github.io',
+    'localhost', 'localhost.', 'LOCALHOST', 'LOCALHOST.', ' localhost', 'localhost ', 'localhost:3000',
+    '127.0.0.1', '127.0.0.1.', '127.0.0.2', '::1', '::1.', '[::1]', '[::1].', '0.0.0.0', '192.168.1.5',
+    'mise-app-preview.web.app', 'mise-app-preview--pr-1-abc.web.app', 'MISE-APP-PREVIEW--PR7-ABC.WEB.APP.',
+    'mise-app-preview--pr-244-vd70c50d.firebaseapp.com', 'bakery-app-ebf90.web.app', 'abc.ngrok.app', 'example.com',
+    'İ.example', 'ｌｏｃａｌｈｏｓｔ', 'local\u0000host',
+    { toString: () => 'localhost' }, { toString: () => 'federicomiano93.github.io' }, ['localhost'], ['a', 'b'],
+    new String('localhost'), Symbol('x'), 5n, 0n, { toString() { throw new Error('boom'); } }];
+  agree('isPreviewHost', m.isPreviewHost, l.isPreviewHost, product(HOSTS));
+  agree('configForHost', m.configForHost, l.configForHost, product(HOSTS));
+});
+
+// ── local-data ───────────────────────────────────────────────────────────────
+
+describe('local-data: odd inputs', () => {
+  const m = localData;
+  const l = legacyLocalData;
+
+  const ACCOUNTS = [...ODD, 'u1', 'u2', 'U1', 'u1 ', ' u1', 5, '5', 'x'.repeat(200)];
+  agree('offlineCacheVerdict', m.offlineCacheVerdict, l.offlineCacheVerdict, product(ACCOUNTS, ACCOUNTS));
+
+  const PLACES = [...ODD, 'bakery', 'restaurant', 'Bakery', 'bakery ', ' bakery', 'loc-e015733e55e7', 'bakery/x', 5, '5'];
+  agree('shouldClearLocalData', m.shouldClearLocalData, l.shouldClearLocalData, product(PLACES, PLACES));
+
+  const KEY_LISTS = [...ODD, 'firebase:authUser',
+    ['firebase:authUser:x', 'calculator-config', 'qty-ING1', 'kiosk-mode', 'usage-2026-10-11'],
+    [...m.KEEP_PREFIXES], m.KEEP_PREFIXES.map(prefix => `${prefix}x`), m.KEEP_PREFIXES.map(prefix => `x${prefix}`),
+    ['unknown'], [5, null, undefined, {}, ['firebase:'], 'a'], ['x-firebase:', 'Firebase:', 'ACTIVE-LOCATION', 'device'],
+    [''], [' firebase:'], ['firebase:', 'firebase:'], Object.assign(['a', 'firebase:x'], { extra: 1 }), new Set(['a'])];
+  const KEEP_LISTS = [undefined, [], ['a'], ['a-', 'b-'], [...m.KEEP_PREFIXES], [''], null, 'abc', 5, {}, [5], [null], ['A-']];
+  agree('keysToClear', m.keysToClear, l.keysToClear, product(KEY_LISTS, KEEP_LISTS));
+
+  // clearLocalData changes the storage it is given, so each implementation gets its own fresh
+  // copy of the same stand-in; both the number returned and what is left must match.
+  const removable = { removeItem(this: Record<string, unknown>, key: string) { delete this[key]; } };
+  const unremovable = { removeItem() { throw new Error('blocked'); } };
+  const DATA = () => ({
+    'calculator-config': '{}', 'qty-ING1': '3', 'firebase:authUser:X:[DEFAULT]': 'token', 'device-id': 'abc', 'unknown-key': '1',
+  });
+  const STORES: readonly (readonly [string, () => unknown])[] = [
+    ['null', () => null],
+    ['zero', () => 0],
+    ['an empty string', () => ''],
+    ['false', () => false],
+    ['an empty object', () => ({})],
+    ['plain data with no removeItem', DATA],
+    ['a storage like the real one', () => Object.assign(Object.create(removable), DATA())],
+    ['a storage whose removeItem throws', () => Object.assign(Object.create(unremovable), DATA())],
+    ['a storage that cannot be listed', () => new Proxy({}, { ownKeys() { throw new Error('blocked'); } })],
+    ['a string', () => 'abc'],
+    ['a number', () => 5],
+    ['an array', () => ['calculator-config', 'x']],
+    ['a storage with only kept keys', () => Object.assign(Object.create(removable), { 'firebase:authUser:X': 't', 'kiosk-mode': '1' })],
+  ];
+  const remaining = (store: unknown): unknown => {
+    try {
+      return typeof store === 'object' && store !== null ? Object.keys(store).sort() : null;
+    } catch {
+      return 'unreadable';
+    }
+  };
+
+  test(`clearLocalData: the same count and the same keys left for ${STORES.length} odd storages`, () => {
+    const disagreements: string[] = [];
+    for (const [label, make] of STORES) {
+      const mine = make();
+      const theirs = make();
+      const a = { result: outcome(() => m.clearLocalData(mine as never)), left: remaining(mine) };
+      const b = { result: outcome(() => l.clearLocalData(theirs as never)), left: remaining(theirs) };
+      try {
+        expect(a).toStrictEqual(b);
+      } catch {
+        disagreements.push(`${label}: ported ${show(a)} / current ${show(b)}`);
+      }
+    }
+    expect(disagreements).toStrictEqual([]);
+  });
 });
