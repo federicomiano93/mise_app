@@ -1176,7 +1176,23 @@ SAME PR.
   «This recipe no longer exists.» and keeps the typing. `cat.notInAnyStep` is the CARD's «Not in any step: {list}» (the current
   dictionary defines the key twice and the run-end text wins there, so the card never shows its list); slice B's finish card
   needs its own key. Slice B: Resume / Guided mixing / Start again on the card (the place is marked in `ProcedureCard.tsx`),
-  the run, the alarm.
+  the run, the alarm (built, below).
+- **Slice B built** (the guided mix: the run, resume, the alarm, the wake lock): `/recipes/<id>/mix` (usage screen `recipes-run`), full
+  width at every width, one level below the recipe (Back returns to it with no second entry, the focus on the card's first mix
+  button, the scroll where it was). Items 94, 96, 97 and 98 are done; item 99 (the phone notification) is NOT: the line under the
+  controls says «Keep this screen open» (with or without a wake lock), and no push code exists. Differences from the current app, all on
+  purpose: (1) **a mix starts reload-safe**: the card's button writes the saved session (snapshot of the recipe as shown, with the batch the
+  recipe page is scaled to) and THEN opens the run, and the run always goes on from the stored session, so a reload mid-mix resumes at the
+  stored step and never restarts (the current app keeps the live run in memory and loses a fresh one on reload); a typed address with
+  no session for the recipe replaces itself with the recipe, a stale one is cleared with «That mix is no longer available — start it
+  again.»; (2) **no notification** (above); (3) the step heading takes the focus at every new step and the finish card at the end; a speed
+  change and «Time is up» are said once by always-mounted quiet live regions, never the countdown; (4) the finish card's warning has its
+  own key, `cat.notInAnyStepCheck` (the current dictionary's duplicated `cat.notInAnyStep`); (5) `cat.stepDone` is «Done» / «Fatto» as in the current dictionary (not «Step done»); (6) «Carry on» from the list pushes the recipe and then the run, so Back is the
+  recipe and then the list; (7) the countdown repaints while the timer is up too, so «Time was up N minutes ago» stays true; (8) the
+  recipe is looked for in the phone's copy first and the mix only called stale once the server has answered (or after the copy wait
+  with no signal). Shared with the current app: the session key and shape, `alarm.wav` (copied to `app/src/recipes/`), every word
+  (copied key for key). Specs: `guidedSession`, `guidedRunModel`, `guidedAlarm`, `wakeLock`, `guidedRunCss`, `RecipesSection.run` (51 cases
+  with a faked clock, Audio, vibrate and wake lock) and `RecipesSection.run.strict`.
 
 ### 3d-9 — Reading a recipe from a photograph (and its switch)
 
