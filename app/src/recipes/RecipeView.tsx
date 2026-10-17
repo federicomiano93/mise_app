@@ -103,7 +103,7 @@ export function RecipeView({ recipe, titleRef, onBack }: Props) {
         <AllergenCard recipe={recipe} />
         <DeclarationCard recipe={recipe} />
         {/* The mixing procedure (step 3d-8): after the declaration and before Export, the current app's order. */}
-        <ProcedureCard recipe={recipe} />
+        <ProcedureCard recipe={recipe} target={target} />
         <ExportAction recipe={recipe} target={target} />
         {/* A WRITE, NOT A DOOR: judged by the venue's section only (the Calculator card being hidden from staff does not matter). */}
         {isSectionAllowed(location, 'calculator') ? <ImportAction recipe={recipe} /> : null}

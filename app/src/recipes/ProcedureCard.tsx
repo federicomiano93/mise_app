@@ -1,13 +1,16 @@
-import { useId, useLayoutEffect, useRef } from 'react';
+import { useId, useLayoutEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { ListOrdered, Pencil } from 'lucide-react';
+import { ListOrdered, Pencil, Play, RotateCcw } from 'lucide-react';
 import type { CatalogueRecipe } from '@mise/shared/catalogue-model';
-import { formatDuration, normalizeSteps, unassignedRows } from '@mise/shared/guided-model';
+import { formatDuration, normalizeSteps, progressText, unassignedRows } from '@mise/shared/guided-model';
 import { useT } from '../i18n/useT';
 import { Button } from '../ui/Button';
+import { useStatusMessage } from '../ui/StatusMessage';
+import { useRecipes } from './RecipesContext';
+import { clearSession, freshSession, resumableSession, writeSession } from './guidedSession';
 import { useRecipeReturn } from './recipeReturn';
 import { FROM_RECIPE } from './recipesNav';
-import { stepsPath } from './recipesPath';
+import { mixPath, stepsPath } from './recipesPath';
 import styles from './ProcedureCard.module.css';
 
 // The recipe's mixing procedure, on the recipe screen (a port of guidedPanel in js/catalogue/catalogue-detail.js): a quiet
@@ -20,17 +23,33 @@ import styles from './ProcedureCard.module.css';
 //
 // ⚠️ BACK FROM THE EDITOR the focus is on the button that opened it, where the person left (recipeReturn.ts) — whichever of
 // the two the card draws now (saving the first steps turns «Write the mixing steps» into «Edit the steps»).
-export function ProcedureCard({ recipe }: { recipe: CatalogueRecipe }) {
+//
+// THE GUIDED MIX (step 3d-8, slice B). With steps, the card's first button is « Guided mixing » — or, when a mix of THIS recipe
+// was left unfinished on this phone, « Resume — step N of M » with « Start again from the beginning » under it. ⚠️ BOTH BUTTONS
+// GO THROUGH THE SAVED SESSION, so a reload in the middle of a mix lands on the run's address and picks it up: starting writes a
+// fresh session (a snapshot of the recipe as shown now, with the batch the page is scaled to) before it navigates, and resuming
+// checks the saved one at the tap. A mix that aged out says so and is cleared, here, on the recipe — never a silent fresh start.
+// Back from the run puts the focus on the card's FIRST mix button (the one every state has), where the person left.
+export function ProcedureCard({ recipe, target = null }: { recipe: CatalogueRecipe; target?: number | null }) {
   const { t } = useT();
   const navigate = useNavigate();
+  const say = useStatusMessage();
+  const { recipes } = useRecipes();
   const recipeReturn = useRecipeReturn();
   const headingId = useId();
   const opener = useRef<HTMLButtonElement>(null);
+  const mixOpener = useRef<HTMLButtonElement>(null);
+  // Redraws the card after a saved mix was found stale and cleared.
+  const [, redraw] = useState(0);
 
   useLayoutEffect(() => {
-    if (!recipeReturn.pendingSteps(recipe.id) || opener.current === null) return;
-    opener.current.focus({ preventScroll: true });
-    recipeReturn.markDelivered();
+    if (recipeReturn.pendingSteps(recipe.id) && opener.current !== null) {
+      opener.current.focus({ preventScroll: true });
+      recipeReturn.markDelivered();
+    } else if (recipeReturn.pendingMix(recipe.id) && mixOpener.current !== null) {
+      mixOpener.current.focus({ preventScroll: true });
+      recipeReturn.markDelivered();
+    }
   }, []);
 
   const steps = normalizeSteps(recipe.steps);
@@ -54,11 +73,45 @@ export function ProcedureCard({ recipe }: { recipe: CatalogueRecipe }) {
 
   const timed = steps.reduce((sum, step) => sum + step.seconds, 0);
   const missed = unassignedRows<CatalogueRecipe['ingredients'][number]>(recipe);
+
+  const saved = resumableSession(recipes);
+  const mine = saved !== null && saved.recipeId === recipe.id ? saved : null;
+  const openRun = () => {
+    recipeReturn.remember(recipe.id, 'mix');
+    void navigate(mixPath(recipe.id), { state: FROM_RECIPE });
+  };
+  const startMix = () => {
+    writeSession(freshSession(recipe, target));
+    openRun();
+  };
+  const resumeMix = () => {
+    const still = resumableSession(recipes);
+    if (still !== null && still.recipeId === recipe.id) {
+      openRun();
+      return;
+    }
+    // ⚠️ NOT SILENTLY SWAPPED FOR A FRESH RUN: the button said «resume», and starting at step 1 instead would look identical and
+    // be a different dough. (Another recipe's mix that is still good is left alone.)
+    if (still === null) clearSession();
+    say(t('cat.thatMixIsNo'));
+    redraw(count => count + 1);
+  };
+
   return (
     <section className={styles.card} aria-labelledby={headingId}>
       <h3 id={headingId} className={styles.head}>{t('cat.section.procedure')}</h3>
-      {/* Slice B of step 3d-8 puts here, at the top of this state: «Resume — step N of M» when a mix was left unfinished, and the
-          «Guided mixing» / «Start again from the beginning» buttons. */}
+      <Button ref={mixOpener} variant="primary" className={styles.action} onPress={mine === null ? startMix : resumeMix}>
+        <Play aria-hidden="true" />
+        {mine === null
+          ? t('cat.guidedMixing')
+          : t('cat.resumeGuidedMix', { progress: progressText(mine.stepIndex, normalizeSteps(mine.snapshot.steps).length, { inline: true }, t) })}
+      </Button>
+      {mine === null ? null : (
+        <Button variant="secondary" className={styles.action} onPress={startMix}>
+          <RotateCcw aria-hidden="true" />
+          {t('cat.startAgainFromThe')}
+        </Button>
+      )}
       <p className={styles.summary}>
         {t('cat.nSteps', { n: steps.length })}
         {timed > 0 ? ` · ${t('cat.ofTimers', { time: formatDuration(timed) })}` : ''}

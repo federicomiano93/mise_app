@@ -12,6 +12,7 @@ import { useMediaQuery } from '../ui/useMediaQuery';
 import { RecipesProvider, useRecipesStore } from './RecipesContext';
 import { RecipesDetail } from './RecipesDetail';
 import { RecipesList } from './RecipesList';
+import { ResumeOffer } from './ResumeOffer';
 import { ALLERGENS_OPENER, HandBackProvider, NEW_OPENER, SETTINGS_OPENER, recipeOpener, useHandBackState } from './handBack';
 import { LabelShowsProvider } from './labelShows';
 import { createRecipeDeletions, RecipeDeletionsProvider } from './recipeDeletions';
@@ -121,6 +122,7 @@ function RecipesLayout({ view }: { view: ShownView }) {
     pending: recipeId => place.current !== null && place.current.id === recipeId && place.current.origin === 'label',
     pendingEdit: recipeId => place.current !== null && place.current.id === recipeId && place.current.origin === 'edit',
     pendingSteps: recipeId => place.current !== null && place.current.id === recipeId && place.current.origin === 'steps',
+    pendingMix: recipeId => place.current !== null && place.current.id === recipeId && place.current.origin === 'mix',
     markDelivered() { if (place.current !== null) place.current.delivered = true; },
     wasDelivered: () => place.current?.delivered === true,
   }), [scrollArea]);
@@ -201,9 +203,9 @@ function RecipesLayout({ view }: { view: ShownView }) {
     // Back from a label (or an editor) to its recipe keeps the place written down when it opened. Any other move forgets it
     // (the opening move itself, recipe → label or recipe → editor, is the one that must not).
     const written = place.current;
-    const returning = (before.kind === 'label' || before.kind === 'edit' || before.kind === 'steps') && view.kind === 'recipe' && written !== null && written.id === view.id;
+    const returning = (before.kind === 'label' || before.kind === 'edit' || before.kind === 'steps' || before.kind === 'mix') && view.kind === 'recipe' && written !== null && written.id === view.id;
     if (returning) backFromLabel.current = written;
-    else if (view.kind !== 'label' && view.kind !== 'edit' && view.kind !== 'steps') place.current = null;
+    else if (view.kind !== 'label' && view.kind !== 'edit' && view.kind !== 'steps' && view.kind !== 'mix') place.current = null;
     if (area === null) return;
     if (split) {
       listTop.current = null;
@@ -240,11 +242,13 @@ function RecipesLayout({ view }: { view: ShownView }) {
       <RecipeReturnProvider value={recipeReturn}>
       <RecipeDeletionsProvider value={deletions}>
       <Page title={t('section.recipes')}>
-        <div className={styles.layout} data-view={view.kind === 'list' ? 'list' : 'detail'}>
+        {/* A mix left unfinished is offered back once per opening, when the list is what is on screen. */}
+        {view.kind === 'list' ? <ResumeOffer /> : null}
+        <div className={styles.layout} data-view={view.kind === 'list' ? 'list' : view.kind === 'mix' ? 'run' : 'detail'}>
           <div className={styles.list}>
             <PartBoundary>
               <RecipesList
-                openRecipeId={view.kind === 'recipe' || view.kind === 'label' || view.kind === 'edit' || view.kind === 'steps' ? view.id : null}
+                openRecipeId={view.kind === 'recipe' || view.kind === 'label' || view.kind === 'edit' || view.kind === 'steps' || view.kind === 'mix' ? view.id : null}
                 split={split}
                 onOpenRecipe={openRecipe}
                 sheetOpen={view.kind === 'allergens'}
