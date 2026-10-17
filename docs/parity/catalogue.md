@@ -1166,6 +1166,17 @@ SAME PR.
   `unassignedRows`, `missingRefs`, `timerState`, `remainingMs`, `formatDuration`, `formatRemaining`,
   `overdueText`/`progressText` with the translator as an argument, `isResumable`, limits); `zoom-steps.ts` is done.
 - **Size M.**
+- **Slice A as built** (the Procedure card and the steps editor): the card sits after the declaration and before Export; the
+  editor is `/recipes/<id>/steps` (usage screen `recipes-steps`, one level below the recipe, the right-hand pane on the split;
+  Back and Save return to the recipe with no second entry for it, the focus on the card's button). Anyone who sees the section
+  may write steps. Differences from the current app, all on purpose: the ids are stored only when a row had none (the store's
+  `saveProcedure`, not a rewrite of every row); the editor's accessible names are translated (`cat.stepInstruction`,
+  `cat.stepMinutes`, `cat.stepSeconds`, `cat.stepSpeed`, `cat.removeStepN`) and so are «min», «sec» and the speed's example; the
+  focus follows a moved step's arrow, a removed step lands on the next remove button; a Save for a recipe deleted meanwhile says
+  «This recipe no longer exists.» and keeps the typing. `cat.notInAnyStep` is the CARD's «Not in any step: {list}» (the current
+  dictionary defines the key twice and the run-end text wins there, so the card never shows its list); slice B's finish card
+  needs its own key. Slice B: Resume / Guided mixing / Start again on the card (the place is marked in `ProcedureCard.tsx`),
+  the run, the alarm.
 
 ### 3d-9 — Reading a recipe from a photograph (and its switch)
 
@@ -1348,7 +1359,7 @@ allergen state with an `if` of its own. What differs from the current app, and w
   current card. «Copied» and «Could not copy…» are a live region that exists before it speaks. `copyToClipboard` moved from
   `calculator/` to `ui/` so two features share it without importing each other.
 - **Order on the recipe screen:** ingredients · batch · allergens · declaration (since 3d-7 slice A the Food cost card sits
-  before the allergens, and Import into Calculator after Export). The procedure (3d-8) is not there yet.
+  before the allergens, and Import into Calculator after Export). Since 3d-8 slice A the Procedure card follows the declaration, before Export.
 - **The Allergen sheet is `/recipes/allergens`** and `allergens` is no longer a reserved-and-unknown word. It re-checks its
   own gate (item 60): with allergens off the address goes to `/recipes` by replacing itself, also when the switch is thrown
   while the sheet is open. The door is an «Allergen sheet» button at the FOOT of the list (only when allergens are on); Back
