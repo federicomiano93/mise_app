@@ -36,7 +36,7 @@ export type RecipeAmounts = {
 
 // The word a person reads for a unit: the dictionary's for pieces, spoons, a pinch and «to taste»,
 // the metric symbol as it is for the rest.
-function unitWord(t: Translate, unit: string): string {
+export function unitWord(t: Translate, unit: string): string {
   const key = unitTextKey(unit);
   return key === null ? unit : t(key);
 }
