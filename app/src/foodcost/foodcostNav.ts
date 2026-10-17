@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router';
-import { FROM_RECIPE_LINK, recipeAddress } from '@mise/shared/recipe-link';
+import { recipeAddress } from '@mise/shared/recipe-link';
 import { KEEP_FOCUS } from '../shell/Page';
 
 // What the list puts in the navigation `state` when it opens a screen one level down (a product, a
@@ -45,10 +45,32 @@ export function useLeave(fallback: string, onLeaving: () => void): () => void {
 
 // ── Opened from a recipe ──────────────────────────────────────────────────────────────────────────
 
-// «The recipe is the history entry behind this one»: the recipe's «Open in Food cost» button pushes with
-// it (FROM_RECIPE_LINK), and the entry's replaces carry it on.
+// «The recipe is DEPTH entries behind this one»: the recipe's «Open in Food cost» button pushes with
+// FROM_RECIPE_LINK (depth 1), every push inside Food cost adds one (recipeDepth), every replace carries
+// the same number on. A positive integer, or null when the state does not say.
+export function recipeDepth(state: unknown): number | null {
+  if (typeof state !== 'object' || state === null) return null;
+  if ('recipeDepth' in state) {
+    const depth = (state as { recipeDepth: unknown }).recipeDepth;
+    return typeof depth === 'number' && Number.isInteger(depth) && depth >= 1 && depth <= 1000 ? depth : null;
+  }
+  return 'fromRecipeLink' in state ? 1 : null;
+}
+
 export function cameFromRecipe(state: unknown): boolean {
-  return typeof state === 'object' && state !== null && 'fromRecipeLink' in state;
+  return recipeDepth(state) !== null;
+}
+
+// The depth to write into the state of a PUSH made from `state` (one entry deeper), or nothing.
+export function pushDepth(state: unknown): { recipeDepth?: number } {
+  const depth = recipeDepth(state);
+  return depth === null ? {} : { recipeDepth: depth + 1 };
+}
+
+// The depth to write into the state of a REPLACE made from `state` (same distance), or nothing.
+export function keepDepth(state: unknown): { recipeDepth?: number } {
+  const depth = recipeDepth(state);
+  return depth === null ? {} : { recipeDepth: depth };
 }
 
 // «Put the focus on your own title when you appear»: the entry's replace says it (the page itself keeps
@@ -60,25 +82,28 @@ export function wantsTitleFocus(state: unknown): boolean {
 // The state of the entry's replace and of the draft giving way: the app arranging itself (the page keeps
 // the focus), the recipe link carried on, the target's title asked to take the focus.
 export function entryState(incoming: unknown): Record<string, unknown> {
-  return { ...KEEP_FOCUS, focusTitle: true, ...(cameFromRecipe(incoming) ? FROM_RECIPE_LINK : {}) };
+  return { ...KEEP_FOCUS, focusTitle: true, ...keepDepth(incoming), ...(cameFromRecipe(incoming) ? { fromRecipeLink: true } : {}) };
 }
 
 // How a screen opened from a recipe steps back to it.
 //
-// ⚠️ NEVER A SECOND ENTRY FOR THE RECIPE (the current app showed two pages per trip). When the state says
-// the recipe is the entry behind, Back is the browser's Back; otherwise (an address typed, a reload that lost
-// the state) the screen REPLACES itself with the recipe. Nothing happens for a null id.
+// ⚠️ NEVER A SECOND ENTRY FOR THE RECIPE (the current app showed two pages per trip). The state counts how
+// many history entries sit between this one and the recipe (recipeDepth: 1 right after the recipe's button,
+// +1 for each push inside Food cost, unchanged by a replace), so Back is the browser's Back by exactly that
+// many entries — from the narrowed list, but also from the product or history beside it on the split, where
+// a plain «-1» is not enough. With no depth (an address typed, a reload that lost the state) the screen
+// REPLACES itself with the recipe. Nothing happens for a null id.
 export function useBackToRecipe(recipeId: string | null): () => void {
   const navigate = useNavigate();
   const { state } = useLocation();
-  const behind = cameFromRecipe(state);
+  const depth = recipeDepth(state);
   return useCallback(() => {
     if (recipeId === null) return;
-    if (behind) {
-      void navigate(-1);
+    if (depth !== null) {
+      void navigate(-depth);
       return;
     }
     const to = recipeAddress(recipeId);
     if (to !== null) void navigate(to, { replace: true });
-  }, [navigate, behind, recipeId]);
+  }, [navigate, depth, recipeId]);
 }

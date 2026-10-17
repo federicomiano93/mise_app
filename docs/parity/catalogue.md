@@ -1093,6 +1093,7 @@ SAME PR.
 
 #### Slice B built (17 Oct 2026): Food cost's side
 
+- **Back counts the depth (fix):** the state key `recipeDepth` says how many entries sit between this one and the recipe (the recipe's push = 1, every push inside Food cost +1, a replace keeps it), and the list's Back is `navigate(-depth)`, so on the split a product, its history or a lateral move beside the narrowed list never leaves a second recipe entry. No depth (typed address, reload) still replaces with the recipe.
 - **Built:** the addresses (`foodcostPath.ts`): `/food-cost?recipe=<id>` is the ENTRY, `/food-cost?using=<id>` the list narrowed to
   the products made with the recipe, `/food-cost/product/<id>?recipe=<id>` and `?using=<id>`, `/food-cost/new?recipe=<id>`; a
   product's history keeps whichever query its product had. `RecipeEntry` draws only «Loading…» and REPLACES itself, once, with: the

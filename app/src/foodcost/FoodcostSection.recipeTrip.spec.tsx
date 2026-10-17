@@ -4,7 +4,7 @@ import { editorSource, recipe } from '../testing/foodcostEditorFixtures';
 import { fakeRecipesSource } from '../testing/fakeRecipesSource';
 import { renderApp } from '../testing/renderApp';
 import { entriesBehind, madeWith } from '../testing/recipeLinkHelpers';
-import { LOAD, product } from '../testing/renderFoodcost';
+import { LOAD, product, split } from '../testing/renderFoodcost';
 import { recipe as catalogueRecipe } from '../testing/renderRecipes';
 
 // Step 3d-7, slice B: the whole trip — the recipe's «Open in Food cost» button, Food cost, Back — through the real
@@ -87,5 +87,42 @@ describe('⚠️ the trip from the recipe and back', () => {
     expect(where(router)).toBe('/food-cost/product/Loaf?recipe=dough');
     expect(await entriesBehind(router)).toBe(1);
     expect(where(router)).toBe('/recipes/dough');
+  });
+});
+
+describe('⚠️ the same trip on the split: Back counts the entries between the list and the recipe', () => {
+  // The recipe, the narrowed list, and a product beside it: the list's Back must reach the recipe, not push a second one.
+  async function narrowedWithProduct(name: string) {
+    split();
+    const trip = await openTheRecipe([LOAF, ROLL, TART]);
+    await screen.findByRole('heading', { level: 2, name: 'Products with “Dough”' }, LOAD);
+    await trip.user.click(screen.getByRole('button', { name: new RegExp(`^${name}`) }));
+    await screen.findByRole('region', { name }, LOAD);
+    return trip;
+  }
+
+  it('a product opened beside the narrowed list: the list’s Back is the recipe, with no second entry', async () => {
+    const { router, user } = await narrowedWithProduct('Loaf');
+    await user.click(within(screen.getByRole('main')).getAllByRole('button', { name: 'Back' })[0]!);
+    await waitFor(() => { expect(where(router)).toBe('/recipes/dough'); });
+    expect(await entriesBehind(router)).toBe(0);
+  });
+
+  it('its margin history beside the list: the list’s Back is the recipe, with no second entry', async () => {
+    const { router, user } = await narrowedWithProduct('Loaf');
+    await user.click(within(screen.getByRole('region', { name: 'Loaf' })).getByRole('button', { name: 'Margin history' }));
+    await screen.findByRole('region', { name: 'Margin history' }, LOAD);
+    await user.click(within(screen.getByRole('main')).getAllByRole('button', { name: 'Back' })[0]!);
+    await waitFor(() => { expect(where(router)).toBe('/recipes/dough'); });
+    expect(await entriesBehind(router)).toBe(0);
+  });
+
+  it('a lateral move to another product: the list’s Back is the recipe, with no second entry', async () => {
+    const { router, user } = await narrowedWithProduct('Loaf');
+    await user.click(screen.getByRole('button', { name: /^Roll/ }));
+    await screen.findByRole('region', { name: 'Roll' }, LOAD);
+    await user.click(within(screen.getByRole('main')).getAllByRole('button', { name: 'Back' })[0]!);
+    await waitFor(() => { expect(where(router)).toBe('/recipes/dough'); });
+    expect(await entriesBehind(router)).toBe(0);
   });
 });

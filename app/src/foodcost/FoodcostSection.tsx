@@ -11,7 +11,7 @@ import { FoodcostProvider, useFoodcostStore } from './FoodcostContext';
 import { FoodcostDetail } from './FoodcostDetail';
 import { FoodcostList } from './FoodcostList';
 import { messageText } from './foodcostMessages';
-import { FROM_LIST, cameFromList, useBackToRecipe } from './foodcostNav';
+import { FROM_LIST, cameFromList, keepDepth, pushDepth, useBackToRecipe } from './foodcostNav';
 import {
   FOODCOST_PATH, historyPath, newPath, productPath, resolveFoodcostPath, settingsPath,
 } from './foodcostPath';
@@ -90,12 +90,12 @@ function FoodcostLayout({ view, origin }: { view: ShownView; origin: Origin }) {
   // — and keeps whatever the entry it replaces knew about where Back goes.
   const openScreen = (to: string) => {
     if (split && view.kind !== 'list') {
-      void navigate(to, { replace: true, state: cameFromList(state) ? FROM_LIST : KEEP_FOCUS });
+      void navigate(to, { replace: true, state: { ...(cameFromList(state) ? FROM_LIST : KEEP_FOCUS), ...keepDepth(state) } });
     } else {
       // On a phone the list is hidden behind what opens, and the page shrinks to it: the place in
       // the list is written down now, while the list is what is on screen.
       if (!split && view.kind === 'list') listTop.current = scrollArea()?.scrollTop ?? null;
-      void navigate(to, { state: FROM_LIST });
+      void navigate(to, { state: { ...FROM_LIST, ...pushDepth(state) } });
     }
   };
   const openProduct = (id: string) => {

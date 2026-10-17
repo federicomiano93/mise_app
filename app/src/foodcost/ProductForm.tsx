@@ -29,7 +29,7 @@ import { useMediaQuery } from '../ui/useMediaQuery';
 import { useFoodcost, useFoodcostStore } from './FoodcostContext';
 import { FOODCOST_PATH, entryPath, historyPath, usingPath } from './foodcostPath';
 import type { Origin } from './foodcostPath';
-import { FROM_PRODUCT, entryState, useBackToRecipe, useLeave } from './foodcostNav';
+import { FROM_PRODUCT, entryState, pushDepth, useBackToRecipe, useLeave } from './foodcostNav';
 import { NEW_OPENER, productOpener, useHandBack } from './handBack';
 import { LineRow } from './LineRow';
 import type { LineKind } from './LineRow';
@@ -808,7 +808,7 @@ export function ProductForm({ id, product, draft, origin, titleRef }: Props) {
               onPress={() => {
                 // On the split the history takes the product's place (so the list's rows still mean
                 // «replace what is open»); on a phone it is one level down and Back is the browser's.
-                void navigate(historyPath(id, origin), split ? { replace: true, state } : { state: FROM_PRODUCT });
+                void navigate(historyPath(id, origin), split ? { replace: true, state } : { state: { ...FROM_PRODUCT, ...pushDepth(state) } });
               }}
             >
               <History aria-hidden="true" />

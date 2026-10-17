@@ -10,7 +10,7 @@ import { useMediaQuery } from '../ui/useMediaQuery';
 import { useFoodcost, useFoodcostStore } from './FoodcostContext';
 import { productPath } from './foodcostPath';
 import type { Origin } from './foodcostPath';
-import { cameFromList, cameFromProduct } from './foodcostNav';
+import { cameFromList, cameFromProduct, keepDepth } from './foodcostNav';
 import { percentText } from './productRowModel';
 import type { StoredDoc } from './foodcostSource';
 import styles from './MarginHistory.module.css';
@@ -59,7 +59,7 @@ export function MarginHistory({ id, origin }: { id: string; origin: Origin }) {
   // product takes its place.
   const leave = () => {
     if (!split && cameFromProduct(state)) void navigate(-1);
-    else void navigate(productPath(id, origin), { replace: true, state: split ? state : KEEP_FOCUS });
+    else void navigate(productPath(id, origin), { replace: true, state: split ? state : { ...KEEP_FOCUS, ...keepDepth(state) } });
   };
 
   const product = products.find(candidate => candidate.id === id);
