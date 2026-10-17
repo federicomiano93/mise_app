@@ -448,7 +448,7 @@ function StepCard({ step, n, first, last, ticks, amounts, register, onMove, onRe
               <label key={row.rid} className={styles.pick}>
                 <input
                   type="checkbox"
-                  className={styles.check}
+                  className={styles.tick}
                   checked={step.rows.includes(row.rid)}
                   onChange={event => { onRow(key, row.rid, event.target.checked); }}
                 />

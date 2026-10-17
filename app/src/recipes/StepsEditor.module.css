@@ -148,7 +148,7 @@
 
 .icon:focus-visible,
 .box:focus-visible,
-.check:focus-visible,
+.tick:focus-visible,
 .textarea:focus-visible {
   outline: 3px solid var(--accent);
   outline-offset: 1px;
@@ -218,7 +218,7 @@
   }
 }
 
-.check {
+.tick {
   flex: none;
   width: 22px;
   height: 22px;
@@ -247,15 +247,21 @@
   gap: var(--s2);
 }
 
+/* ⚠️ 64 px, not more: at 296 px the row is 220 px wide, and the two boxes with «min» and «sec» must stay on ONE line
+   (measured: at 72 px «sec» wrapped alone under the boxes). Three digits (720 minutes) still fit. */
 .time .num {
   flex: none;
-  width: 72px;
+  width: 64px;
 }
 
 .unit {
   flex: none;
   margin-right: var(--s2);
   color: var(--ink-2);
+}
+
+.unit:last-child {
+  margin-right: 0;
 }
 
 .add {

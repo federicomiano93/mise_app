@@ -37,7 +37,7 @@ describe('the steps editor’s targets', () => {
   it('draws a visible focus ring on every control', () => {
     expect(declaration(rule(editorCss, '.icon:focus-visible'), 'outline')).toContain('var(--accent)');
     expect(declaration(rule(editorCss, '.box:focus-visible'), 'outline')).toContain('var(--accent)');
-    expect(declaration(rule(editorCss, '.check:focus-visible'), 'outline')).toContain('var(--accent)');
+    expect(declaration(rule(editorCss, '.tick:focus-visible'), 'outline')).toContain('var(--accent)');
     expect(declaration(rule(editorCss, '.textarea:focus-visible'), 'outline')).toContain('var(--accent)');
   });
 
