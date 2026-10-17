@@ -666,30 +666,47 @@ export function createRecipesStore(source: RecipesSource, deps: RecipesDeps): Re
 
     // ⚠️ ONLY `steps` AND `endNote` TRAVEL (a merge), written even when EMPTY: a merge never deletes a field it is not
     // sent, so an omitted empty procedure would leave the old steps in the document (the current app's reason).
-    // ⚠️ THE ROWS TRAVEL ONLY WHEN THE RECIPE HELD A ROW WITH NO ID. The current app rewrites every row from the copy
-    // the steps editor opened with, which takes back a row added on another phone meanwhile; here a recipe whose rows all
-    // have ids (every recipe saved by either app's editor since row ids exist) keeps its rows untouched. When ids must be
-    // stored, they are put on the rows AS THIS PHONE HOLDS THEM NOW: a row with no id takes the id the editor minted for
-    // the row at the same place with the same name (the one the steps were ticked against), anything else a fresh one —
-    // so a step whose row cannot be matched says «no longer in the recipe» instead of naming the wrong ingredient.
+    // ⚠️ THE ROWS TRAVEL ONLY WHEN THE RECIPE HOLDS A ROW WITH NO ID (or one sharing an earlier row's). The current app
+    // rewrites every row from the copy the steps editor opened with, which takes back a row added on another phone
+    // meanwhile; here a recipe whose rows all have ids (every recipe saved by either app's editor since row ids exist) keeps
+    // its rows untouched. When ids must be stored, they are put on the rows AS THIS PHONE HOLDS THEM NOW, matched to the
+    // editor's copy by place and name; a step whose row cannot be matched says «no longer in the recipe» instead of naming
+    // the wrong ingredient. Left as the current app: saved OFFLINE on a copy that still lacks the ids, the rows go from that
+    // copy and win over another phone's row edits when the save reaches the server (a transaction would need the network).
     saveProcedure(procedure) {
       const prev = recipes.find(candidate => candidate.id === procedure.id) ?? null;
       if (!prev) return false;
+      const held = prev.ingredients as unknown as readonly Readonly<Record<string, unknown>>[];
+      // A held row's id counts only when it is there and not shared with an earlier row (withRowIds' own test): a row
+      // with none, or with a duplicate, needs one stored.
+      const unique = new Set<string>();
+      const usable = held.map(row => {
+        const rid = ridOf(row);
+        if (!rid || unique.has(rid)) return '';
+        unique.add(rid);
+        return rid;
+      });
+      // The editor ticked its rows by the ids of ITS copy. A row of that copy whose id the recipe does not hold is matched
+      // to the held row at the same place with the same name: when that row has an id of its own (another phone stored
+      // one since the editor opened), the steps are pointed at it; when it has none, it takes the editor's.
+      const remap = new Map<string, string>();
+      const given = new Map<number, string>();
+      procedure.rows.forEach((twin, i) => {
+        const rid = ridOf(twin);
+        const row = held[i];
+        if (!rid || unique.has(rid) || !row) return;
+        if (String(twin.label ?? '').trim() !== String(row.label ?? '').trim()) return;
+        if (usable[i]) remap.set(rid, usable[i]!);
+        else if (![...given.values()].includes(rid)) given.set(i, rid);
+      });
+      const steps = normalizeSteps(procedure.steps).map(step => ({ ...step, rows: step.rows.map(rid => remap.get(rid) ?? rid) }));
       const data: Record<string, unknown> = {
-        steps: normalizeSteps(procedure.steps),
+        // normalizeSteps again: two ids remapped onto one row must not name it twice.
+        steps: normalizeSteps(steps),
         endNote: normalizeEndNote(procedure.endNote),
       };
-      const held = prev.ingredients as unknown as readonly Readonly<Record<string, unknown>>[];
-      if (held.some(row => !ridOf(row))) {
-        const used = new Set(held.map(ridOf).filter(Boolean));
-        const matched = held.map((row, i) => {
-          if (ridOf(row)) return row;
-          const twin = procedure.rows[i];
-          const rid = twin ? ridOf(twin) : '';
-          if (!rid || used.has(rid) || String(twin?.label ?? '').trim() !== String(row.label ?? '').trim()) return row;
-          used.add(rid);
-          return { ...row, rid };
-        });
+      if (usable.some(rid => !rid)) {
+        const matched = held.map((row, i) => (usable[i] ? row : given.has(i) ? { ...row, rid: given.get(i)! } : row));
         data.ingredients = withRowIds(matched.map(withoutUndefined));
       }
       upsertLocal({ ...(prev as unknown as Record<string, unknown>), ...data });

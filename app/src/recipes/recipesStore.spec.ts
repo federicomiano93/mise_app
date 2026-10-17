@@ -858,6 +858,51 @@ describe('the Recipe catalogue store', () => {
       expect(rows[2]!.rid).not.toBe('rnew00003');
     });
 
+    test('⚠️ rows that GAINED ids since the editor opened (another phone): the steps are pointed at those ids, no rows sent', () => {
+      const { store, server, saveRecipeDoc } = makeStore();
+      store.start();
+      server([{
+        id: 'R3', name: 'Pane', ingredients: [
+          { label: 'Flour', grams: 1000, unit: 'g', rid: 'rserver01' },
+          { label: 'Water', grams: 600, unit: 'g', rid: 'rserver02' },
+        ],
+      }]);
+      store.saveProcedure({
+        id: 'R3', name: 'Pane', endNote: '',
+        steps: [{ text: 'Mix', rows: ['rlocal001', 'rlocal002', 'rserver01'] }],
+        rows: [
+          { label: 'Flour', grams: 1000, unit: 'g', rid: 'rlocal001' },
+          { label: 'Water', grams: 600, unit: 'g', rid: 'rlocal002' },
+        ],
+      });
+      const doc = saveRecipeDoc.mock.calls[0]![1];
+      expect('ingredients' in doc).toBe(false);
+      // Flour named twice after the remap is named once.
+      expect((doc.steps as Array<{ rows: string[] }>)[0]!.rows).toEqual(['rserver01', 'rserver02']);
+    });
+
+    test('⚠️ a row sharing an earlier row id counts as a row with no id: it takes the editor id and the rows are sent', () => {
+      const { store, server, saveRecipeDoc } = makeStore();
+      store.start();
+      server([{
+        id: 'R4', name: 'Pane', ingredients: [
+          { label: 'Flour', grams: 1000, unit: 'g', rid: 'rsame0001' },
+          { label: 'Water', grams: 600, unit: 'g', rid: 'rsame0001' },
+        ],
+      }]);
+      store.saveProcedure({
+        id: 'R4', name: 'Pane', endNote: '',
+        steps: [{ text: 'Mix', rows: ['rsame0001', 'rfresh001'] }],
+        rows: [
+          { label: 'Flour', grams: 1000, unit: 'g', rid: 'rsame0001' },
+          { label: 'Water', grams: 600, unit: 'g', rid: 'rfresh001' },
+        ],
+      });
+      const doc = saveRecipeDoc.mock.calls[0]![1];
+      expect((doc.ingredients as Array<Record<string, unknown>>).map(row => row.rid)).toEqual(['rsame0001', 'rfresh001']);
+      expect((doc.steps as Array<{ rows: string[] }>)[0]!.rows).toEqual(['rsame0001', 'rfresh001']);
+    });
+
     test('⚠️ a refused procedure puts the version before it back and says so; a recipe not held writes nothing', async () => {
       const { store, server, saveRecipeDoc } = makeStore();
       const said = vi.fn();
