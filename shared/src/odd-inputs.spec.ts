@@ -2821,8 +2821,9 @@ describe('zoom-steps: odd inputs', () => {
 });
 
 describe('guided-model: odd inputs', () => {
-  // A partial port: only the row-id functions are compared (`makeRowId` with a fixed random source; `withRowIds`
-  // with a fixed generator, so the minted ids are the same in both).
+  // `makeRowId` with a fixed random source; `withRowIds` with a fixed generator, so the minted ids are the same in
+  // both. The three adapted functions (`stepRows`, `overdueText`, `progressText`) read the dictionary in the original
+  // and are covered in guided-model.spec.ts instead.
   agree('makeRowId', () => guidedModel.makeRowId(() => 0.5), () => legacyGuidedModel.makeRowId(() => 0.5), [[]]);
   {
     const fixed = () => { let n = 0; return () => 'r' + (++n); };
@@ -2831,6 +2832,30 @@ describe('guided-model: odd inputs', () => {
   }
   agree('ridOf', guidedModel.ridOf, legacyGuidedModel.ridOf, product([...ODD, { rid: 'a' }, { rid: ' a ' }, { rid: 5 }, { rid: null }, { rid: '' }, { rid: [] }, { rid: { toString: () => 'o' } },
     Object.create({ rid: 'p' }), { get rid(): unknown { throw new Error('boom'); } }]));
+  const pick = (module: object, name: string): AnyFn => (module as Record<string, AnyFn>)[name] as AnyFn;
+  const STEPS_ODD: readonly unknown[] = [...ODD, { text: ' Mix ', rows: ['a', 'a', ' b ', '', null], seconds: '90', speed: 'x'.repeat(40) }, { seconds: 999999 }, { text: 'x'.repeat(400) },
+    { rows: 'nope' }, { text: '', rows: [], seconds: 0, speed: '' }, [null, 7, 'x', { seconds: 60 }], Array.from({ length: 120 }, (_, i) => ({ text: 'step ' + i })), { text: { toString: () => 'obj' } }];
+  const RECIPES: readonly unknown[] = [...ODD, { steps: [{ rows: ['ra'] }, { rows: ['rb', 'rx'] }], ingredients: [{ rid: 'ra', label: 'Flour', grams: 1000, unit: 'g' }, { rid: 'rb', label: '  ', grams: 5 }, { label: 'Salt', grams: 2 }] },
+    { steps: [{ text: 'a' }], ingredients: 'nope' }, { steps: 'nope', ingredients: [{ rid: 'ra', label: 'Flour', grams: 1000 }] }, { ingredients: [{ rid: 'ra', label: 'To taste', grams: 0, unit: 'to taste' }, { rid: 'rb', label: 'Water', grams: 500, unit: 'g' }], steps: [{ rows: ['ra', 'rb'] }] }];
+  const CLOCK: readonly unknown[] = [...ODD, 1_000_000, 1_000_000 + 400, 1_000_000 - 5000, 999_999_999_999, 'x', { valueOf: () => 7 }];
+  agree('normalizeSeconds', pick(guidedModel, 'normalizeSeconds'), pick(legacyGuidedModel, 'normalizeSeconds'), product([...ODD, '90', 12.7, 999999, 43200, 43201, -30, '1e3', ' 5 ', { valueOf: () => 9 }]));
+  agree('normalizeEndNote', pick(guidedModel, 'normalizeEndNote'), pick(legacyGuidedModel, 'normalizeEndNote'), product([...ODD, '  hi  ', 'x'.repeat(1000), { toString: () => ' obj ' }]));
+  agree('normalizeStep', pick(guidedModel, 'normalizeStep'), pick(legacyGuidedModel, 'normalizeStep'), product(STEPS_ODD));
+  agree('normalizeSteps', pick(guidedModel, 'normalizeSteps'), pick(legacyGuidedModel, 'normalizeSteps'), product(STEPS_ODD));
+  agree('isEmptyStep', pick(guidedModel, 'isEmptyStep'), pick(legacyGuidedModel, 'isEmptyStep'), product([...STEPS_ODD, { text: '', rows: [], seconds: 0, speed: '' }, { text: 'a', rows: [], seconds: 0, speed: '' }, { rows: ['a'] }]));
+  agree('hasProcedure', pick(guidedModel, 'hasProcedure'), pick(legacyGuidedModel, 'hasProcedure'), product(RECIPES));
+  agree('unassignedRows', pick(guidedModel, 'unassignedRows'), pick(legacyGuidedModel, 'unassignedRows'), product(RECIPES));
+  agree('missingRefs', pick(guidedModel, 'missingRefs'), pick(legacyGuidedModel, 'missingRefs'), product(RECIPES));
+  agree('amountsFor', pick(guidedModel, 'amountsFor'), pick(legacyGuidedModel, 'amountsFor'), product(RECIPES, [...ODD, 4040, 100000, -5, '2000']));
+  agree('remainingMs', pick(guidedModel, 'remainingMs'), pick(legacyGuidedModel, 'remainingMs'), product(CLOCK, CLOCK));
+  agree('timerState', pick(guidedModel, 'timerState'), pick(legacyGuidedModel, 'timerState'), product(CLOCK, CLOCK));
+  agree('formatDuration', pick(guidedModel, 'formatDuration'), pick(legacyGuidedModel, 'formatDuration'), product([...ODD, 59, 240, 3600, 3905, -30, 0.2, 86400, '90', 1e12]));
+  agree('formatRemaining', pick(guidedModel, 'formatRemaining'), pick(legacyGuidedModel, 'formatRemaining'), product(CLOCK, CLOCK));
+  agree('isResumable', pick(guidedModel, 'isResumable'), pick(legacyGuidedModel, 'isResumable'), product(
+    [...ODD, 'nope', { recipeId: 'R', snapshot: { steps: [{ text: 'a' }, { text: 'b' }] }, stepIndex: 1, startedAt: 1_000_000_000 },
+      { recipeId: 'R', snapshot: { steps: [{ text: 'a' }] }, stepIndex: 1.5, startedAt: 1_000_000_000 }, { recipeId: '', snapshot: {}, stepIndex: 0, startedAt: 1 },
+      { recipeId: 'R', snapshot: { steps: [{ text: 'a' }] }, stepIndex: '0', startedAt: '1000000000' }, { recipeId: 'R', snapshot: { steps: [] }, stepIndex: 0, startedAt: 1 }],
+    [...ODD, 1_000_000_000, 1_000_000_000 + 86_400_000, 1_000_000_000 + 86_399_999, 1_000_000_000 - 1]));
 });
 
 describe('recipe-link: odd inputs', () => {

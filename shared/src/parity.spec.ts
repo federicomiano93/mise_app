@@ -22,7 +22,7 @@
 //
 // The Calculator's partial ports are not paired either, for the same reason: calculator-config.ts (it leaves
 // out the save path and `orderPrefillLabel`), log-model.ts (the legacy migration and `dayLabel`, which has
-// the pure `dayLabelParts` instead), guided-model.ts (everything but `ridOf`) and zoom-steps.ts (the storage and DOM halves); their
+// the pure `dayLabelParts` instead), guided-model.ts (whole, but `stepRows`, `overdueText` and `progressText` take their words / the translator as an argument) and zoom-steps.ts (the storage and DOM halves); their
 // specs (calculator-config.spec.ts, log-model.spec.ts, guided-model via calculator-recipe-source.spec.ts,
 // zoom-steps.spec.ts) compare what they do port. calculator-tab-keys.ts is new in Mise 2 and has no original.
 // recipe-link.ts is a partial port too (step 3d-7): it leaves out the page addresses of the current app (`recipeHash`,
