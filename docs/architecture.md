@@ -335,7 +335,7 @@ calculator-dough-math, calculator-recipe-source, calculator-order-text, calculat
 calculator-config (partial: the read side; leaves out the save path `reconcileConfigWrite` / `saveFailureKey` and
 `orderPrefillLabel`; `formatGrams` and `normalizeConfig` take the language as an argument), log-model (partial: the
 write half, `workDayIndex` and `typedTotalOf`; leaves out the list and edit half, the legacy migration and `dayLabel`;
-`buildLogText` takes its two words as an argument), guided-model (partial: `ridOf` only), zoom-steps (partial: the
+`buildLogText` takes its two words as an argument), guided-model (the whole model; `stepRows`, `overdueText` and `progressText` take their word / the translator as an argument), zoom-steps (partial: the
 arithmetic; leaves out the storage and DOM halves), calculator-tab-keys (new in Mise 2, no original: the
 `localStorage` keys of a Calculator tab and the stale-tab and lock decisions, pinned against the current app's
 source),
