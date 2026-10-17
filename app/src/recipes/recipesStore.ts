@@ -31,7 +31,7 @@ import {
   findCalculatorImport, isScaledEntryFresh, labelFieldsOf, normalizeCatalogueRecipe, normalizeCatalogueRecipes,
 } from '@mise/shared/catalogue-model';
 import type { CatalogueRecipe, ImportAction } from '@mise/shared/catalogue-model';
-import { withRowIds } from '@mise/shared/guided-model';
+import { normalizeEndNote, normalizeSteps, ridOf, withRowIds } from '@mise/shared/guided-model';
 import type { KeyValueStorage } from '../session/backend';
 import { newRecipeId, withoutPrice } from './recipesSource';
 import type { RecipesMeta, RecipesSource, StoredDoc } from './recipesSource';
@@ -73,6 +73,17 @@ export interface RecipeToSave {
   readonly ingredients: readonly Readonly<Record<string, unknown>>[];
   readonly netWeightG?: unknown;
   readonly shelfLifeDays?: unknown;
+}
+
+// What the steps editor saves (step 3d-8): the procedure and its closing message, as typed (the store normalises
+// them), the recipe's name for a refusal's sentence, and `rows` — the recipe's rows as the editor copied them, with
+// the row ids it minted for rows that had none (a step can only name a row by its id).
+export interface ProcedureToSave {
+  readonly id: string;
+  readonly name: string;
+  readonly steps: readonly unknown[];
+  readonly endNote: string;
+  readonly rows: readonly Readonly<Record<string, unknown>>[];
 }
 
 // The fields a save never sends, and that the local copy keeps from the version before it until the next snapshot:
@@ -172,6 +183,11 @@ export interface RecipesStore {
   // Deletes a recipe, LOCAL-FIRST, with its open count and its remembered batch. A refused delete puts it back and
   // says so.
   deleteRecipe(id: string): void;
+  // Saves a recipe's mixing procedure (steps + closing message), LOCAL-FIRST like saveRecipe, as a MERGE of those two
+  // fields only — plus the ingredient rows when some row had no id yet (see the method). An empty procedure is saved
+  // as empty, which deletes it. A refusal puts the version before it back and says `recipe-not-saved`. Returns false,
+  // and writes nothing, when the recipe is not held (deleted meanwhile).
+  saveProcedure(procedure: ProcedureToSave): boolean;
   // Whether the recipe was imported into the Calculator (a copy there that stays): config/calculator read once,
   // raced against IMPORT_CHECK_MS. Never rejects: a slow, offline or refused read answers false.
   calculatorImportOf(id: string): Promise<boolean>;
@@ -646,6 +662,49 @@ export function createRecipesStore(source: RecipesSource, deps: RecipesDeps): Re
         say({ kind: 'recipe-not-saved', name: recipe.name });
       });
       return id;
+    },
+
+    // ⚠️ ONLY `steps` AND `endNote` TRAVEL (a merge), written even when EMPTY: a merge never deletes a field it is not
+    // sent, so an omitted empty procedure would leave the old steps in the document (the current app's reason).
+    // ⚠️ THE ROWS TRAVEL ONLY WHEN THE RECIPE HELD A ROW WITH NO ID. The current app rewrites every row from the copy
+    // the steps editor opened with, which takes back a row added on another phone meanwhile; here a recipe whose rows all
+    // have ids (every recipe saved by either app's editor since row ids exist) keeps its rows untouched. When ids must be
+    // stored, they are put on the rows AS THIS PHONE HOLDS THEM NOW: a row with no id takes the id the editor minted for
+    // the row at the same place with the same name (the one the steps were ticked against), anything else a fresh one —
+    // so a step whose row cannot be matched says «no longer in the recipe» instead of naming the wrong ingredient.
+    saveProcedure(procedure) {
+      const prev = recipes.find(candidate => candidate.id === procedure.id) ?? null;
+      if (!prev) return false;
+      const data: Record<string, unknown> = {
+        steps: normalizeSteps(procedure.steps),
+        endNote: normalizeEndNote(procedure.endNote),
+      };
+      const held = prev.ingredients as unknown as readonly Readonly<Record<string, unknown>>[];
+      if (held.some(row => !ridOf(row))) {
+        const used = new Set(held.map(ridOf).filter(Boolean));
+        const matched = held.map((row, i) => {
+          if (ridOf(row)) return row;
+          const twin = procedure.rows[i];
+          const rid = twin ? ridOf(twin) : '';
+          if (!rid || used.has(rid) || String(twin?.label ?? '').trim() !== String(row.label ?? '').trim()) return row;
+          used.add(rid);
+          return { ...row, rid };
+        });
+        data.ingredients = withRowIds(matched.map(withoutUndefined));
+      }
+      upsertLocal({ ...(prev as unknown as Record<string, unknown>), ...data });
+      let written: Promise<void>;
+      try {
+        written = source.saveRecipeDoc(procedure.id, data);
+      } catch (err) {
+        written = Promise.reject(err);
+      }
+      written.catch((err: unknown) => {
+        deps.warn('Procedure did not sync to Firestore:', err);
+        upsertLocal(prev as unknown as Record<string, unknown>);
+        say({ kind: 'recipe-not-saved', name: procedure.name });
+      });
+      return true;
     },
 
     deleteRecipe(id) {

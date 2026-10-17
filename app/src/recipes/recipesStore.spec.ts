@@ -792,6 +792,89 @@ describe('the Recipe catalogue store', () => {
       expect(said).toHaveBeenCalledWith({ kind: 'recipe-not-deleted' });
     });
 
+    // ── The mixing procedure (step 3d-8) ──
+
+    const STEPS = [{ text: 'Mix', rows: ['rflour001'], seconds: 240, speed: '1' }];
+
+    test('⚠️ a procedure travels as steps + closing message ONLY when every row has an id, normalised, local-first', () => {
+      const { store, server, saveRecipeDoc } = makeStore();
+      store.start();
+      server([FOCACCIA]);
+      const ok = store.saveProcedure({
+        id: 'R1', name: 'Focaccia', endNote: '  24 °C  ',
+        steps: [{ text: ' Mix ', rows: ['rflour001', 'rflour001'], seconds: '240', speed: '1' }, { text: '', rows: [] }],
+        rows: FOCACCIA.ingredients as Array<Record<string, unknown>>,
+      });
+      expect(ok).toBe(true);
+      const [id, doc] = saveRecipeDoc.mock.calls[0]!;
+      expect(id).toBe('R1');
+      expect(Object.keys(doc).sort()).toEqual(['endNote', 'steps']);
+      expect(doc.steps).toEqual(STEPS);
+      expect(doc.endNote).toBe('24 °C');
+      const held = store.getSnapshot().recipes[0] as unknown as Record<string, unknown>;
+      expect(held.steps).toEqual(STEPS);
+      expect(held.endNote).toBe('24 °C');
+      // The rest of the recipe is untouched on the phone.
+      expect(held.lossPct).toBe(12);
+      expect(held.name).toBe('Focaccia');
+    });
+
+    test('⚠️ an EMPTY procedure is written as empty (a merge would otherwise keep the old steps)', () => {
+      const { store, server, saveRecipeDoc } = makeStore();
+      store.start();
+      server([FOCACCIA]);
+      store.saveProcedure({ id: 'R1', name: 'Focaccia', steps: [], endNote: '', rows: [] });
+      expect(saveRecipeDoc.mock.calls[0]![1]).toEqual({ steps: [], endNote: '' });
+      const held = store.getSnapshot().recipes[0] as unknown as Record<string, unknown>;
+      expect('steps' in held).toBe(false);
+      expect('endNote' in held).toBe(false);
+    });
+
+    test('⚠️ a row with no id takes the id the editor minted for it (same place, same name); a mismatch gets a fresh one', () => {
+      const { store, server, saveRecipeDoc } = makeStore();
+      store.start();
+      server([{
+        id: 'R2', name: 'Pane', ingredients: [
+          { label: 'Flour', grams: 1000, unit: 'g' },
+          { label: 'Water', grams: 600, unit: 'g', rid: 'rwater001' },
+          { label: 'Salt', grams: 20, unit: 'g' },
+        ],
+      }]);
+      store.saveProcedure({
+        id: 'R2', name: 'Pane', endNote: '',
+        steps: [{ text: 'Mix', rows: ['rnew00001', 'rnew00003'] }],
+        rows: [
+          { label: 'Flour', grams: 1000, unit: 'g', rid: 'rnew00001' },
+          { label: 'Water', grams: 600, unit: 'g', rid: 'rwater001' },
+          // Renamed on another phone since the editor opened: not matched.
+          { label: 'Sea salt', grams: 20, unit: 'g', rid: 'rnew00003' },
+        ],
+      });
+      const rows = saveRecipeDoc.mock.calls[0]![1].ingredients as Array<Record<string, unknown>>;
+      expect(rows.map(row => row.label)).toEqual(['Flour', 'Water', 'Salt']);
+      expect(rows[0]!.rid).toBe('rnew00001');
+      expect(rows[1]!.rid).toBe('rwater001');
+      expect(rows[2]!.rid).toMatch(/^r[a-z0-9]{8}$/);
+      expect(rows[2]!.rid).not.toBe('rnew00003');
+    });
+
+    test('⚠️ a refused procedure puts the version before it back and says so; a recipe not held writes nothing', async () => {
+      const { store, server, saveRecipeDoc } = makeStore();
+      const said = vi.fn();
+      store.onMessage(said);
+      store.start();
+      server([FOCACCIA]);
+      expect(store.saveProcedure({ id: 'GONE', name: 'X', steps: STEPS, endNote: '', rows: [] })).toBe(false);
+      expect(saveRecipeDoc).not.toHaveBeenCalled();
+      saveRecipeDoc.mockRejectedValueOnce(new Error('permission-denied'));
+      store.saveProcedure({ id: 'R1', name: 'Focaccia', steps: [], endNote: '', rows: [] });
+      await settle();
+      const held = store.getSnapshot().recipes[0] as unknown as Record<string, unknown>;
+      expect(held.steps).toEqual(FOCACCIA.steps);
+      expect(held.endNote).toBe('Done');
+      expect(said).toHaveBeenCalledWith({ kind: 'recipe-not-saved', name: 'Focaccia' });
+    });
+
     test('the Calculator check: imported as cat-<id> → true; no copy, no document or a refused read → false', async () => {
       const { store, getCalculatorConfig } = makeStore();
       getCalculatorConfig.mockResolvedValueOnce({ recipes: [{ id: 'cat-R1', name: 'Focaccia' }] });
