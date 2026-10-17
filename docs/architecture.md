@@ -329,7 +329,8 @@ copied, not tidied, and marked where it sits: fixing it is a bug fix to BOTH fil
 allergen-model, sections, firebase-target, local-data, same-data, error-model, device-model,
 usage-model, venue-features, market, recipe-label-model, membership, location-id, pastries-model, pastries-log-model, pastries-lock, pack-size,
 order-unit, ingredient-name, order-cost, inventory-model, inventory-outbox, inventory-purchases,
-vat-rates, ingredient-kind, product-limits, vat-guide, foodcost-weighing,
+vat-rates, ingredient-kind, product-limits, vat-guide, foodcost-weighing, photo-model (full, paired: the sizes of a photograph and `errorKey` / `answerKey`, which return message KEYS from a table the feature hands in),
+catalogue-photo-model (the Catalogue's table of those keys and its two lookups `photoErrorKey` / `noRecipeKey`; not paired, it also exports the table),
 calculator-dough-math, calculator-recipe-source, calculator-order-text, calculator-order-prefill (adapted: `prefillNote` takes the translate function as an argument, so it is not paired), client-order-model (adapted: `orderRows` takes the deleted-product word as an argument, so it is not paired), client-order-history (adapted: `linesLabel` and `emptyWords` take the translate function as an argument, so it is not paired), calculator-recipe-text (one documented difference: the line
 `Flour uniqua blue`, one venue's data, is written like every other), confirm-flow, log-time,
 calculator-config (partial: the read side; leaves out the save path `reconcileConfigWrite` / `saveFailureKey` and
