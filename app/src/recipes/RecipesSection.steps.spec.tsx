@@ -57,6 +57,9 @@ async function openEditor(path = '/recipes/r1/steps', options: Parameters<typeof
 async function answer(user: { click: (el: Element) => Promise<void> }, dialogName: string, button: string) {
   const dialog = await screen.findByRole('alertdialog', { name: dialogName }, LOAD);
   await user.click(within(dialog).getByRole('button', { name: button }));
+  // ⚠️ THE ROUTER TAKES A MOMENT TO LEARN THE ANSWER (a reset or a proceed), and the editor asks again only once it has: a
+  // person is never that quick, a script is. Without this the next click of a busy machine's run finds nobody asking.
+  await act(async () => { await new Promise<void>(resolve => { setTimeout(resolve, 60); }); });
 }
 
 describe('the working copy', () => {
