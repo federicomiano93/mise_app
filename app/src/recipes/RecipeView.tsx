@@ -19,6 +19,7 @@ import { CATALOGUE_ZOOM_KEY } from '../ui/zoomStorage';
 import { AllergenCard } from './AllergenCard';
 import { BatchCard } from './BatchCard';
 import { DeclarationCard } from './DeclarationCard';
+import { ProcedureCard } from './ProcedureCard';
 import { useRecipes, useRecipesStore } from './RecipesContext';
 import { amountText, recipeAmounts } from './recipeAmounts';
 import { recipeExportModel } from './recipeExportModel';
@@ -36,11 +37,11 @@ type Props = {
 
 // One recipe: the bar with Back and its name, then the cards in this order (his decisions, 14-15 Oct 2026): the
 // ingredient list, the batch, «Food cost» (a door, only for whoever may open Food cost), the allergens and the
-// declaration, then Export, then «Import into Calculator» with its hint (a write, only where the venue uses the
-// Calculator), and last the small Delete icon.
+// declaration, the mixing procedure (3d-8), then Export, then «Import into Calculator» with its hint (a write, only where
+// the venue uses the Calculator), and last the small Delete icon.
 //
 // «Edit» is the bar's one action, for everybody who sees the section (employees write recipes too). Delete is a small
-// icon at the very end of the page, for whoever runs the place only. (The procedure arrives with its own step.)
+// icon at the very end of the page, for whoever runs the place only.
 //
 // ⚠️ THE TWO ALLERGEN CARDS FOLLOW THE LIVE DATA ON THEIR OWN (they read the store), so an ingredient
 // declared on another phone reaches this screen without it being closed and reopened.
@@ -101,6 +102,8 @@ export function RecipeView({ recipe, titleRef, onBack }: Props) {
         {mayOpenFoodCost(location, canManage) ? <FoodCostCard recipe={recipe} /> : null}
         <AllergenCard recipe={recipe} />
         <DeclarationCard recipe={recipe} />
+        {/* The mixing procedure (step 3d-8): after the declaration and before Export, the current app's order. */}
+        <ProcedureCard recipe={recipe} />
         <ExportAction recipe={recipe} target={target} />
         {/* A WRITE, NOT A DOOR: judged by the venue's section only (the Calculator card being hidden from staff does not matter). */}
         {isSectionAllowed(location, 'calculator') ? <ImportAction recipe={recipe} /> : null}

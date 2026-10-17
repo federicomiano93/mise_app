@@ -22,6 +22,8 @@ export interface RecipeReturn {
   pending(recipeId: string): boolean;
   // Is this recipe being returned to from its editor? Read while drawing; it changes nothing.
   pendingEdit(recipeId: string): boolean;
+  // Is this recipe being returned to from its mixing steps editor (step 3d-8)? Read while drawing; it changes nothing.
+  pendingSteps(recipeId: string): boolean;
   // Is this recipe being returned to from Food cost? Read while drawing; it changes nothing.
   pendingCost(recipeId: string): boolean;
   // Put the scroll area (and the split's right-hand side) back where `remember` found them. The recipe screen asks once its
@@ -33,12 +35,13 @@ export interface RecipeReturn {
 }
 
 // What the person pressed to leave the recipe.
-export type Origin = 'label' | 'edit' | 'cost';
+export type Origin = 'label' | 'edit' | 'steps' | 'cost';
 
 const NOTHING: RecipeReturn = {
   remember() { /* no section around: nothing to come back to */ },
   pending: () => false,
   pendingEdit: () => false,
+  pendingSteps: () => false,
   pendingCost: () => false,
   restoreScroll() { /* ditto */ },
   markDelivered() { /* ditto */ },

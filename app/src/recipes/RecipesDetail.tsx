@@ -8,6 +8,7 @@ import { AllergenSheet } from './AllergenSheet';
 import { LabelSettings } from './LabelSettings';
 import { LabelScreen } from './LabelScreen';
 import { RecipeEditorScreen } from './RecipeEditorScreen';
+import { StepsEditorScreen } from './StepsEditorScreen';
 import { useRecipes } from './RecipesContext';
 import { RecipeView } from './RecipeView';
 import { cameFromList, cameFromRecipe, cameFromSheet, useLeave } from './recipesNav';
@@ -30,6 +31,8 @@ export function RecipesDetail({ view, onOpenFromSheet }: { view: ShownView; onOp
   // The editor (step 3d-6): a new recipe, or one recipe's, one level below the list / the recipe.
   if (view.kind === 'new') return <RecipeEditorScreen key="new" id={null} />;
   if (view.kind === 'edit') return <RecipeEditorScreen key="edit" id={view.id} />;
+  // The mixing steps editor (step 3d-8), one level below the recipe, drawn like the recipe's editor.
+  if (view.kind === 'steps') return <StepsEditorScreen key="steps" id={view.id} />;
   // Keyed on the KIND, so a recipe and its label are two screens (each puts the focus on its own title when it opens)
   // while another recipe picked beside an open one stays the same screen, as before.
   return <RecipeScreen key={view.kind} id={view.id} label={view.kind === 'label'} />;

@@ -138,10 +138,11 @@ export const tickableRows = (working: StepsWorking): readonly { readonly index: 
   });
 
 // What Save hands the store: the steps as the normaliser reads them (an empty step is dropped) and the closing message.
-export function procedureOf(working: StepsWorking): { steps: GuidedStep[]; endNote: string; rows: readonly CatalogueRow[] } {
+export function procedureOf(working: StepsWorking): { steps: GuidedStep[]; endNote: string; rows: readonly Readonly<Record<string, unknown>>[] } {
   return {
     steps: normalizeSteps(working.steps.map(({ key: _key, ...step }) => step)),
     endNote: normalizeEndNote(working.endNote),
-    rows: working.rows,
+    // The very rows of the copy, handed to the store as the plain records it reads (a row is an interface here).
+    rows: working.rows as unknown as readonly Readonly<Record<string, unknown>>[],
   };
 }
