@@ -31,16 +31,24 @@ export function cameFromProduct(state: unknown): boolean {
 //
 // `onLeaving` runs first: the screen says which button opened it, so the focus can be handed back
 // to that button once the list is on screen (handBack.ts).
-export function useLeave(fallback: string, onLeaving: () => void): () => void {
+//
+// ⚠️ `narrowed` says the fallback is the list narrowed to a recipe (`?using=`). With a recipe depth known, that list is
+// ALWAYS the entry at depth 1 (the recipe's entry replaced itself with it), so Back to it is `-(depth - 1)` entries,
+// whatever the state says about where this screen came from: a phone turned into the split replaces a history with its
+// product, and the replaced entry no longer says «from the list» although the list is still the entry behind.
+export function useLeave(fallback: string, onLeaving: () => void, narrowed = false): () => void {
   const navigate = useNavigate();
   const { state } = useLocation();
   const fromList = cameFromList(state);
+  const depth = recipeDepth(state);
+  const toNarrowed = narrowed && depth !== null && depth >= 2 ? depth - 1 : null;
 
   return useCallback(() => {
     onLeaving();
-    if (fromList) void navigate(-1);
+    if (toNarrowed !== null) void navigate(-toNarrowed);
+    else if (fromList) void navigate(-1);
     else void navigate(fallback, { replace: true, state: KEEP_FOCUS });
-  }, [navigate, fromList, fallback, onLeaving]);
+  }, [navigate, fromList, toNarrowed, fallback, onLeaving]);
 }
 
 // ── Opened from a recipe ──────────────────────────────────────────────────────────────────────────
@@ -77,6 +85,14 @@ export function keepDepth(state: unknown): { recipeDepth?: number } {
 // the focus, KEEP_FOCUS), and so does a move from the list (FROM_LIST).
 export function wantsTitleFocus(state: unknown): boolean {
   return cameFromList(state) || (typeof state === 'object' && state !== null && 'focusTitle' in state);
+}
+
+// The state a move should carry on, but without «keep the focus where it is»: the page then puts the focus on its own
+// heading after the move (Page.tsx). For a replace that removes the button the person pressed (the narrowed bar's «Show all»).
+export function withoutKeepFocus(state: unknown): Record<string, unknown> {
+  if (typeof state !== 'object' || state === null) return {};
+  const { keepFocus: _kept, ...rest } = state as Record<string, unknown>;
+  return rest;
 }
 
 // The state of the entry's replace and of the draft giving way: the app arranging itself (the page keeps

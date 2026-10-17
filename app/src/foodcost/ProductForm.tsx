@@ -169,7 +169,7 @@ export function ProductForm({ id, product, draft, origin, titleRef }: Props) {
     handBack.expect(id === null ? NEW_OPENER : productOpener(id));
   }, [handBack, id]);
   // Save and Delete leave for the list — the narrowed one when that is where the product was opened from.
-  const leave = useLeave(origin.using === null ? FOODCOST_PATH : usingPath(origin.using), onLeaving);
+  const leave = useLeave(origin.using === null ? FOODCOST_PATH : usingPath(origin.using), onLeaving, origin.using !== null);
   // Back, though, returns to the recipe when the recipe opened this screen.
   const backToRecipe = useBackToRecipe(origin.recipe);
   const goBack = origin.recipe === null ? leave : backToRecipe;

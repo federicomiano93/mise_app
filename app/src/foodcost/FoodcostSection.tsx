@@ -11,7 +11,7 @@ import { FoodcostProvider, useFoodcostStore } from './FoodcostContext';
 import { FoodcostDetail } from './FoodcostDetail';
 import { FoodcostList } from './FoodcostList';
 import { messageText } from './foodcostMessages';
-import { FROM_LIST, cameFromList, keepDepth, pushDepth, useBackToRecipe } from './foodcostNav';
+import { FROM_LIST, cameFromList, keepDepth, pushDepth, useBackToRecipe, withoutKeepFocus } from './foodcostNav';
 import {
   FOODCOST_PATH, historyPath, newPath, productPath, resolveFoodcostPath, settingsPath,
 } from './foodcostPath';
@@ -113,11 +113,13 @@ function FoodcostLayout({ view, origin }: { view: ShownView; origin: Origin }) {
   };
 
   // «Show all»: the page stops being the recipe's. A product open beside stays open.
+  // ⚠️ THE BUTTON PRESSED GOES WITH THE NARROWED BAR, so the focus would drop to <body>: the state carries no KEEP_FOCUS and
+  // the page puts the focus on its heading (Page.tsx), alone or with a product beside.
   const showAll = () => {
     const to = view.kind === 'product' ? productPath(view.id)
       : view.kind === 'history' ? historyPath(view.id)
         : FOODCOST_PATH;
-    void navigate(to, { replace: true, state: view.kind === 'list' ? KEEP_FOCUS : state });
+    void navigate(to, { replace: true, state: withoutKeepFocus(view.kind === 'list' ? null : state) });
   };
 
   // Where the scroll area goes at every move inside the section. Before the hand-back below, so

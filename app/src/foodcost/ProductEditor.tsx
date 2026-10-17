@@ -99,7 +99,7 @@ function Gone({ titleId, titleRef, id, origin }: { titleId: string; titleRef: Re
   const handBack = useHandBack();
   const leave = useLeave(origin.using === null ? FOODCOST_PATH : usingPath(origin.using), () => {
     handBack.expect(id === null ? NEW_OPENER : productOpener(id));
-  });
+  }, origin.using !== null);
   const backToRecipe = useBackToRecipe(origin.recipe);
   return (
     <section className={styles.editor} aria-labelledby={titleId}>
