@@ -1089,8 +1089,36 @@ SAME PR.
   transaction: stamps, revision, a concurrent change kept, a retry written from the second document, a re-import in place),
   `recipesStore.spec.ts`, `foodcostDoor.spec.ts`, `RecipesSection.links.spec.tsx` (the card, the order of the page, the
   question, both failure sentences, a second tap ignored, usage on success only).
-- **Left for slice B:** Food cost's side (`/food-cost?recipe=<id>` and its Back to `/recipes/<id>`); the words `fc.productsWithRecipe`,
-  `fc.productsWithThisRecipe` and `fc.showAll` are already in the dictionaries.
+- **Slice B** (Food cost's side) is below.
+
+#### Slice B built (17 Oct 2026): Food cost's side
+
+- **Built:** the addresses (`foodcostPath.ts`): `/food-cost?recipe=<id>` is the ENTRY, `/food-cost?using=<id>` the list narrowed to
+  the products made with the recipe, `/food-cost/product/<id>?recipe=<id>` and `?using=<id>`, `/food-cost/new?recipe=<id>`; a
+  product's history keeps whichever query its product had. `RecipeEntry` draws only «Loading…» and REPLACES itself, once, with: the
+  only product made with the recipe; or the narrowed list (several); or a new product drafted from the recipe (none: its name and
+  the recipe on the first line, no number invented); or the plain list (no such recipe). It decides on the SERVER's word (the
+  products answered from the server and the recipe known, or the recipes answered too), or after `COPY_WAIT_MS` (1.2 s), or at once
+  with no signal. The narrowed list has its own bar: Back, the title «Products with “<name>”» (or «Products with this recipe» for a
+  recipe with no name) and «Show all», which replaces the address with the plain list (a product open beside it stays open). A
+  product picked from the narrowed list keeps `?using=`; on the split the column stays narrowed beside it, on a phone its Back is
+  the narrowed list. A draft opened too early gives way: while nothing has been typed it hands over to the entry when a product made
+  with the recipe turns up (saving it would be a duplicate with a margin history of its own); once the person has typed, it stays.
+  Back to the recipe is ONE step of the history when the state says the recipe is the entry behind (`FROM_RECIPE_LINK`, carried
+  through the entry's replace); otherwise (an address typed, a reload that lost the state) the screen REPLACES itself with the
+  recipe. A product or a draft with typing on it asks the discard question first.
+- **On purpose, different:** the current app showed TWO pages for the recipe per trip; here the history after the trip is exactly
+  what it was before it (the entry is replaced, Back is `-1`, the recipe is never pushed). The narrowed list is an address
+  (`?using=`), so the browser's Back and a reload keep it.
+- **Specs:** `FoodcostSection.recipe.spec.tsx` (the entry: one product, several, none, an unknown recipe; the waiting — only the
+  phone's copy, the server's answer, `COPY_WAIT_MS` with fake timers, no signal, recipes late; the Italian title, an empty name,
+  the focus), `FoodcostSection.recipeBack.spec.tsx` (Back to the recipe from the product, the narrowed list and a draft, with and
+  without typing; Back with no state; a product picked from the narrowed list on a phone and on the split; «Show all» beside a
+  product; the margin history keeping the query; the draft giving way and not giving way), `FoodcostSection.recipeTrip.spec.tsx`
+  (the whole trip through both sections: the recipe's button, Food cost, Back, the history as it was),
+  `FoodcostSection.recipe.strict.spec.tsx` (StrictMode: one move), and `testing/recipeLinkHelpers.ts` (`entriesBehind` walks a
+  memory history back to count its entries, so ask it last). The `decided` guard in `RecipeEntry` is not pinned by behaviour: the
+  effect runs only when the wait is over, so StrictMode never doubles it; the spec counts the moves instead.
 
 ### 3d-8 — Mixing procedures: write steps, run a mix, resume, alarm
 
