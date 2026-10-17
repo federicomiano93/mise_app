@@ -158,14 +158,39 @@ function ExportAction({ recipe, target }: { recipe: CatalogueRecipe; target: num
 function FoodCostCard({ recipe }: { recipe: CatalogueRecipe }) {
   const { t } = useT();
   const navigate = useNavigate();
+  const recipeReturn = useRecipeReturn();
   const headingId = useId();
+  const button = useRef<HTMLButtonElement>(null);
   const path = foodCostForRecipePath(recipe.id);
+
+  // ⚠️ BACK FROM FOOD COST the recipe comes back as it was left: the focus on this button and the scroll where it was
+  // (recipeReturn.ts); the recipe screen then has nothing left to focus.
+  useLayoutEffect(() => {
+    if (!recipeReturn.pendingCost(recipe.id) || button.current === null) return;
+    recipeReturn.restoreScroll(recipe.id);
+    button.current.focus({ preventScroll: true });
+    recipeReturn.markDelivered();
+  }, []);
+  // ⚠️ AGAIN AFTER THE SHELL'S OWN RESET: the shell puts its scroll area back at the top when the section changes, in an
+  // effect that runs after this card's. With the recipe already in the store (no wait for the data) that reset would win,
+  // so the place is put back once every effect of this commit is done.
+  useEffect(() => {
+    if (recipeReturn.pendingCost(recipe.id)) queueMicrotask(() => { recipeReturn.restoreScroll(recipe.id); });
+  }, []);
+
   if (path === null) return null;
   return (
     <section className={styles.card} aria-labelledby={headingId}>
       <h3 id={headingId} className={styles.cardHead}>{t('cat.fc.title')}</h3>
       <p className={styles.note}>{t('cat.fc.note')}</p>
-      <Button variant="secondary" onPress={() => { void navigate(path, { state: FROM_RECIPE_LINK }); }}>
+      <Button
+        ref={button}
+        variant="secondary"
+        onPress={() => {
+          recipeReturn.remember(recipe.id, 'cost');
+          void navigate(path, { state: FROM_RECIPE_LINK });
+        }}
+      >
         <ChartPie aria-hidden="true" />
         {t('cat.fc.open')}
       </Button>
@@ -177,8 +202,10 @@ function FoodCostCard({ recipe }: { recipe: CatalogueRecipe }) {
 // no weighable row, otherwise one question that names the rows the grams-only Calculator cannot take, then the
 // transaction of the store. The answer is said in the section's status message.
 //
-// ⚠️ A SECOND TAP DURING THE QUESTION OR THE WRITE IS IGNORED, and markBusy is held while the write is in the air, so a
-// reload the app starts by itself cannot cut it off.
+// ⚠️ A SECOND TAP DURING THE QUESTION OR THE WRITE IS IGNORED, and markBusy is held until the store's promise has settled
+// — NOT until this component goes away: the person can leave the recipe while the transaction is in the air, and a reload
+// the app starts by itself must still wait for it. The button says it is busy meanwhile (aria-busy, and aria-disabled
+// rather than the disabled attribute, so a keyboard user's focus stays on it).
 function ImportAction({ recipe }: { recipe: CatalogueRecipe }) {
   const { t } = useT();
   const store = useRecipesStore();
@@ -186,8 +213,6 @@ function ImportAction({ recipe }: { recipe: CatalogueRecipe }) {
   const [confirm, confirmDialog] = useConfirm();
   const running = useRef(false);
   const [writing, setWriting] = useState(false);
-
-  useEffect(() => (writing ? markBusy() : undefined), [writing]);
 
   async function run() {
     if (running.current) return;
@@ -209,6 +234,7 @@ function ImportAction({ recipe }: { recipe: CatalogueRecipe }) {
       });
       if (!ok) return;
       setWriting(true);
+      const release = markBusy();
       try {
         const action = await store.importIntoCalculator(recipe, t('calc.marketOrderTitle'));
         say(t(action === 'updated' ? 'cat.updatedInCalculator' : 'cat.addedToCalculator', { name: recipe.name }));
@@ -216,6 +242,7 @@ function ImportAction({ recipe }: { recipe: CatalogueRecipe }) {
         console.error('Import into Calculator failed:', err);
         say(t(importFailureKey(err)));
       } finally {
+        release();
         setWriting(false);
       }
     } finally {
@@ -225,7 +252,13 @@ function ImportAction({ recipe }: { recipe: CatalogueRecipe }) {
 
   return (
     <div className={styles.importBlock}>
-      <button type="button" className={styles.importAction} onClick={() => { void run(); }}>
+      <button
+        type="button"
+        className={styles.importAction}
+        aria-busy={writing || undefined}
+        aria-disabled={writing || undefined}
+        onClick={() => { void run(); }}
+      >
         <Import aria-hidden="true" />
         {t('cat.importIntoCalculator')}
       </button>

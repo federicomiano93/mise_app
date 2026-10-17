@@ -16,7 +16,7 @@ import { ALLERGENS_OPENER, HandBackProvider, NEW_OPENER, SETTINGS_OPENER, recipe
 import { LabelShowsProvider } from './labelShows';
 import { createRecipeDeletions, RecipeDeletionsProvider } from './recipeDeletions';
 import { messageText } from './recipesMessages';
-import { RecipeReturnProvider } from './recipeReturn';
+import { RecipeReturnProvider, carriedPlace, carryPlace, forgetCarriedPlace } from './recipeReturn';
 import type { Place, RecipeReturn } from './recipeReturn';
 import { FROM_LIST, FROM_SHEET, cameFromList } from './recipesNav';
 import { ALLERGENS_PATH, NEW_PATH, RECIPES_PATH, SETTINGS_PATH, recipePath, resolveRecipesPath } from './recipesPath';
@@ -102,10 +102,21 @@ function RecipesLayout({ view }: { view: ShownView }) {
   const detail = useRef<HTMLDivElement>(null);
 
   // Where a recipe was when its label opened, until the move after Back (recipeReturn.ts).
-  const place = useRef<Place | null>(null);
+  // Back (a POP) from Food cost brings the place written before the trip, which the section that wrote it took away with it.
+  const place = useRef<Place | null>(useNavigationType() === 'POP' ? carriedPlace() : null);
+  useEffect(() => { forgetCarriedPlace(); }, []);
   const recipeReturn = useMemo<RecipeReturn>(() => ({
     remember(recipeId, origin = 'label') {
       place.current = { id: recipeId, origin, area: scrollArea()?.scrollTop ?? null, detail: detail.current?.scrollTop ?? null, delivered: false };
+      if (origin === 'cost') carryPlace(place.current);
+    },
+    pendingCost: recipeId => place.current !== null && place.current.id === recipeId && place.current.origin === 'cost',
+    restoreScroll(recipeId) {
+      const written = place.current;
+      if (written === null || written.id !== recipeId) return;
+      const area = scrollArea();
+      if (area !== null && written.area !== null) area.scrollTop = written.area;
+      if (detail.current !== null && written.detail !== null) detail.current.scrollTop = written.detail;
     },
     pending: recipeId => place.current !== null && place.current.id === recipeId && place.current.origin === 'label',
     pendingEdit: recipeId => place.current !== null && place.current.id === recipeId && place.current.origin === 'edit',

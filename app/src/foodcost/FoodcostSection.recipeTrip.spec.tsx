@@ -126,3 +126,23 @@ describe('⚠️ the same trip on the split: Back counts the entries between the
     expect(await entriesBehind(router)).toBe(0);
   });
 });
+
+describe('⚠️ Back brings the recipe back as it was left', () => {
+  it('the focus is on «Open in Food cost» and the scroll is where it was', async () => {
+    const recipes = fakeRecipesSource({ recipes: [catalogueRecipe('dough', { name: 'Dough' })] });
+    const foodcost = editorSource([LOAF, TART], { recipes: [recipe('dough', { name: 'Dough' })] });
+    const { router, user } = renderApp('/recipes/dough', { data: { recipes: () => recipes, foodcost: () => foodcost } });
+    await screen.findByRole('heading', { level: 3, name: 'Ingredients' }, LOAD);
+    const area = screen.getByRole('main');
+    Object.defineProperty(area, 'scrollTop', { value: 0, writable: true });
+    area.scrollTop = 240;
+    await user.click(within(area).getByRole('button', { name: 'Open in Food cost' }));
+    await screen.findByRole('heading', { level: 2, name: 'Loaf' }, LOAD);
+
+    await user.click(within(screen.getByRole('region', { name: 'Loaf' })).getByRole('button', { name: 'Back' }));
+    await waitFor(() => { expect(where(router)).toBe('/recipes/dough'); });
+    const door = await within(area).findByRole('button', { name: 'Open in Food cost' }, LOAD);
+    await waitFor(() => { expect(door).toHaveFocus(); });
+    expect(area.scrollTop).toBe(240);
+  });
+});

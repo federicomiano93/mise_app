@@ -1,5 +1,5 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { screen, waitFor, within } from '@testing-library/react';
+import { act, screen, waitFor, within } from '@testing-library/react';
 import { isBusy } from '../session/busy';
 import { LOAD, recipe, renderRecipes, sourceWith } from '../testing/renderRecipes';
 import { USAGE_KEY } from './recipesStore';
@@ -224,6 +224,38 @@ describe('importing', () => {
     await says('“Focaccia” added to the Calculator.');
     expect(source.imports).toHaveLength(1);
     await waitFor(() => { expect(isBusy()).toBe(false); });
+  });
+
+  it('⚠️ the button says it is busy while the write is in the air, and is calm again afterwards', async () => {
+    const source = sourceWith([FOCACCIA]);
+    const release = source.holdImport();
+    const { user } = await open('r1', { source });
+    expect(importButton()).not.toHaveAttribute('aria-busy');
+    await user.click(importButton());
+    await user.click(within(await screen.findByRole('alertdialog', { name: 'Import into Calculator?' })).getByRole('button', { name: 'Import' }));
+    await waitFor(() => { expect(importButton()).toHaveAttribute('aria-busy', 'true'); });
+    expect(importButton()).toHaveAttribute('aria-disabled', 'true');
+    release();
+    await says('“Focaccia” added to the Calculator.');
+    expect(importButton()).not.toHaveAttribute('aria-busy');
+    expect(importButton()).not.toHaveAttribute('aria-disabled');
+  });
+
+  it('⚠️ leaving the recipe mid-write keeps the app busy until the write has settled, and saying so afterwards does not throw', async () => {
+    const source = sourceWith([FOCACCIA]);
+    const release = source.holdImport();
+    const { router, user } = await open('r1', { source });
+    await user.click(importButton());
+    await user.click(within(await screen.findByRole('alertdialog', { name: 'Import into Calculator?' })).getByRole('button', { name: 'Import' }));
+    await waitFor(() => { expect(isBusy()).toBe(true); });
+
+    await act(async () => { await router.navigate('/recipes'); });
+    await waitFor(() => { expect(screen.queryByRole('heading', { level: 3, name: 'Ingredients' })).not.toBeInTheDocument(); });
+    expect(isBusy()).toBe(true);
+
+    await act(async () => { release(); await flush(); });
+    expect(source.imports).toHaveLength(1);
+    expect(isBusy()).toBe(false);
   });
 
   it('counts the recipe as used when the import worked, and not when it failed', async () => {
