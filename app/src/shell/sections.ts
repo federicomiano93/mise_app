@@ -126,7 +126,7 @@ export function screenNameFor(pathname: string): string | null {
 }
 
 // The Recipe catalogue is five screens so far that share one section: the list, one recipe (the current
-// app's `''` and `detail`), the Allergen sheet (`recipes-allergens`), the label Settings (`recipes-settings`), a recipe's label (`recipes-label`, the current app's `label`) and the editor, new or existing (`recipes-editor`). A recipe opened beside the list is
+// app's `''` and `detail`), the Allergen sheet (`recipes-allergens`), the label Settings (`recipes-settings`), a recipe's label (`recipes-label`, the current app's `label`) and the editor, new or existing (`recipes-editor`), the mixing steps (`recipes-steps`) and the guided mix (`recipes-run`). A recipe opened beside the list is
 // the same screen as on its own.
 // ⚠️ ONLY AN ADDRESS THE SECTION DRAWS AS A RECIPE counts as one: a reserved word or junk is sent back to
 // the list, and logging it as a recipe screen would put a screen nobody saw in the owner's statistics.
@@ -139,6 +139,8 @@ function recipesScreenName(pathname: string, base: string): string {
   if (kind === 'new' || kind === 'edit') return 'recipes-editor';
   // The mixing steps editor (step 3d-8) is its own screen in the statistics.
   if (kind === 'steps') return 'recipes-steps';
+  // The guided mix, the run (step 3d-8, slice B).
+  if (kind === 'mix') return 'recipes-run';
   return kind === 'label' ? 'recipes-label' : 'recipes';
 }
 

@@ -48,6 +48,7 @@ export const en = {
   'ui.save': 'Save',
   'ui.remove': 'Remove',
   'ui.discard': 'Discard',
+  'ui.leave': 'Leave',
   'day.tomorrow': 'Tomorrow',
   // A date spelled out, as «Wed 5 Aug» — built by hand from these words so it reads the same on
   // every device (Records). getDay() and getMonth() are the index: Sunday is 0.
@@ -1279,6 +1280,45 @@ export const en = {
   'cat.minWord': 'min',
   'cat.secWord': 'sec',
   'cat.speedExample': 'e.g. 1',
+  // Step 3d-8, slice B, the guided mix: the run, resume, the alarm. The current app's own keys and texts (js/i18n.js), key
+  // for key (`cat.stepDone` is «Done» there, and so it is here), EXCEPT `cat.notInAnyStepCheck`: the run's end-of-mix
+  // «Not in any step — check these went in:», which the current dictionary keeps under the card's key `cat.notInAnyStep`.
+  'cat.guidedMixing': 'Guided mixing',
+  'cat.resumeGuidedMix': 'Resume the guided mix — {progress}',
+  'cat.startAgainFromThe': 'Start again from the beginning',
+  'cat.startTheTimer': 'Start the timer',
+  'cat.skipTheTimer': 'Skip the timer',
+  'cat.running': 'Running…',
+  'cat.1Min': '+1 min',
+  'cat.doneEarly': 'Done early',
+  'cat.stepDone': 'Done',
+  'cat.doneFinish': 'Done — finish',
+  'cat.doughFinished': 'Dough finished',
+  'cat.notInAnyStepCheck': 'Not in any step — check these went in:',
+  'cat.backToTheRecipe': 'Back to the recipe',
+  'cat.timeIsUp': 'Time is up.',
+  'cat.timeIsUpJust': 'Time is up — just now.',
+  'cat.timeWasUpMinutes': {
+    one: 'Time was up 1 minute ago.',
+    other: 'Time was up {n} minutes ago.',
+  },
+  'cat.timeWasUpHours': {
+    one: 'Time was up over an hour ago.',
+    other: 'Time was up over {n} hours ago.',
+  },
+  'cat.progress': 'Step {i} of {n}',
+  'cat.progress.inline': 'step {i} of {n}',
+  'cat.noLongerInThe': 'No longer in the recipe',
+  'cat.guided.speedN': 'Speed {n}',
+  'cat.leaveTheGuidedMix': 'Leave the guided mix?',
+  'cat.youAreOn': 'You are on {progress}. It will be waiting where you left it.',
+  'cat.carryOnMixing': 'Carry on mixing?',
+  'cat.partWayThrough': 'You were part-way through “{name}” — {progress}.',
+  'cat.carryOn': 'Carry on',
+  'cat.notNow': 'Not now',
+  'cat.thatMixIsNo': 'That mix is no longer available — start it again.',
+  'cat.keepThisScreenOpen': 'Keep this screen open — the alarm cannot ring if you leave the app.',
+  'cat.keepThisScreenOpen2': 'Keep this screen open and awake — the alarm cannot ring if you leave the app.',
 } as const satisfies Record<string, Message>;
 
 export type MessageKey = keyof typeof en;

@@ -9,6 +9,7 @@
 //   /recipes/new        a new recipe (step 3d-6), the editor on an empty copy
 //   /recipes/<id>/edit  one recipe's editor (step 3d-6), one level below the recipe
 //   /recipes/<id>/steps one recipe's mixing steps editor (step 3d-8), one level below the recipe
+//   /recipes/<id>/mix   one recipe's guided mix, the run (step 3d-8, slice B), one level below the recipe, full width
 //   anything else     unknown: the section goes back to /recipes
 //
 // ⚠️ THE WORDS A LATER STEP WILL TAKE AS ITS OWN ARE NEVER A RECIPE'S ID (`new`, `allergens`,
@@ -31,12 +32,14 @@ export type RecipesView =
   | { readonly kind: 'new' }
   | { readonly kind: 'edit'; readonly id: string }
   | { readonly kind: 'steps'; readonly id: string }
+  | { readonly kind: 'mix'; readonly id: string }
   | { readonly kind: 'unknown' };
 
 export const recipePath = (id: string): string => `${RECIPES_PATH}/${encodeURIComponent(id)}`;
 export const labelPath = (id: string): string => `${recipePath(id)}/label`;
 export const editPath = (id: string): string => `${recipePath(id)}/edit`;
 export const stepsPath = (id: string): string => `${recipePath(id)}/steps`;
+export const mixPath = (id: string): string => `${recipePath(id)}/mix`;
 
 // Whether an id (already decoded) can be a recipe's: not empty, and not a word a step has taken for its own.
 const isRecipeId = (id: string | null): id is string => id !== null && id !== '' && !(RESERVED as readonly string[]).includes(id);
@@ -72,7 +75,7 @@ export function parseRecipesPath(rest: string | undefined): RecipesView {
   // `<id>/label`: the label of that recipe. The id is read by the same rule as a recipe's own, so a reserved word
   // before «label», «edit» or «steps» (`/allergens/label`, `/new/edit`, `/settings/steps`) is no recipe's label, editor or steps.
   const second = parts[1];
-  if (parts.length === 2 && first !== undefined && (second === 'label' || second === 'edit' || second === 'steps')) {
+  if (parts.length === 2 && first !== undefined && (second === 'label' || second === 'edit' || second === 'steps' || second === 'mix')) {
     const id = decoded(first);
     if (isRecipeId(id)) return { kind: second, id };
   }

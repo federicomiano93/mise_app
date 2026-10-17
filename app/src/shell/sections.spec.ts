@@ -155,6 +155,8 @@ describe('screenNameFor', () => {
     ['/recipes/abc/edit', 'recipes-editor'],
     ['/recipes/new/edit', 'recipes'],
     ['/recipes/abc/steps', 'recipes-steps'],
+    ['/recipes/abc/mix', 'recipes-run'],
+    ['/recipes/new/mix', 'recipes'],
     ['/recipes/settings/steps', 'recipes'],
     ['/recipes/photo', 'recipes'],
   ])('%s → %s', (pathname, expected) => {
