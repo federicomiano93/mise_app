@@ -1225,6 +1225,60 @@ export const en = {
   'label.settings.setup': 'Before the first print, set the label size in the printer’s own driver, and in the print window set margins to none and scale to 100% — not “fit to page”. It only has to be done once, and until it is done the first label will come out the wrong size.',
   'label.settings.saveFailed': 'Could not save — the change has been put back',
   'label.settings.sizeRange': 'Width and height must be between 20 and 300 mm — the saved size is back.',
+  // Step 3d-8, the mixing procedure: the Procedure card and the steps editor. The current app's own keys and texts
+  // (js/i18n.js), key for key, EXCEPT `cat.notInAnyStep`: the current dictionary defines it twice (the card's «Not in any
+  // step: {list}» and, further down, the end of a run's «Not in any step — check these went in:»), and the second silently
+  // wins there, so the card never shows its list. Here the card's own wording is the key; the run's gets another key.
+  'cat.section.procedure': 'Procedure',
+  'cat.writeTheMixingSteps': 'Write the mixing steps',
+  'cat.aStepAtA': 'A step at a time, with the amounts from this recipe, a timer and the mixer speed.',
+  'cat.editTheSteps': 'Edit the steps',
+  'cat.nSteps': { one: '{n} step', other: '{n} steps' },
+  'cat.ofTimers': '{time} of timers',
+  'cat.notInAnyStep': 'Not in any step: {list}',
+  'cat.notInAnyStepYet': 'Not in any step yet: {list}',
+  'cat.stepN': 'Step {n}',
+  'cat.timer': 'Timer',
+  'cat.moveStepUp': 'Move step {n} up',
+  'cat.moveStepDown': 'Move step {n} down',
+  'cat.addTheFirstStep': 'Add the first step. Each one can carry ingredients, a timer, and a mixer speed.',
+  'cat.everyIngredientIsIn': 'Every ingredient is in a step.',
+  'cat.whoeverFollowsThisWill': 'Whoever follows this will not be told to add them. It is fine if that is on purpose.',
+  'cat.whatToDoE': 'What to do — e.g. Add the flour and the water',
+  'cat.ingredientsToAdd': 'Ingredients to add',
+  'cat.mixerSpeed': 'Mixer speed',
+  'cat.removeThisStep': 'Remove this step?',
+  'cat.noStepsYet': 'No steps yet',
+  'cat.eGFinalDough': 'e.g. Final dough temperature 24-26 degrees',
+  'cat.closingMessageShownWhen': 'Closing message, shown when the dough is finished',
+  'cat.whenTheDoughIs': 'When the dough is finished',
+  'cat.shownOnItsOwn': 'Shown on its own at the end of the mix. Leave it empty for no message.',
+  'cat.saveTheProcedure': 'Save the procedure?',
+  'cat.procedureSaved': 'Procedure saved.',
+  'cat.theStepsYouHave': 'The steps you have written have not been saved.',
+  'cat.addStep': '+ Add step',
+  'cat.mixingSteps': 'Mixing steps',
+  'cat.stepWillBeRemoved': 'Step {n} will be removed from the procedure.',
+  'cat.procedureCanHold': 'A procedure can hold {n} steps.',
+  'cat.stepsAndTimers': {
+    one: '{n} step · {duration} of timers',
+    other: '{n} steps · {duration} of timers',
+  },
+  'cat.saveStepsFor': {
+    one: 'Save {n} step for “{name}”?',
+    other: 'Save {n} steps for “{name}”?',
+  },
+  'cat.noProcedureFor': '“{name}” will have no guided procedure.',
+  // New in Mise 2: the steps editor's accessible names (the current app writes them in English only), the unit words beside
+  // the two timer boxes, and the speed box's example.
+  'cat.removeStepN': 'Remove step {n}',
+  'cat.stepInstruction': 'Step {n} instruction',
+  'cat.stepMinutes': 'Step {n} minutes',
+  'cat.stepSeconds': 'Step {n} seconds',
+  'cat.stepSpeed': 'Step {n} speed',
+  'cat.minWord': 'min',
+  'cat.secWord': 'sec',
+  'cat.speedExample': 'e.g. 1',
 } as const satisfies Record<string, Message>;
 
 export type MessageKey = keyof typeof en;

@@ -137,6 +137,8 @@ function recipesScreenName(pathname: string, base: string): string {
   if (kind === 'settings') return 'recipes-settings';
   // A new recipe and an existing one's editor are one screen in the statistics (step 3d-6).
   if (kind === 'new' || kind === 'edit') return 'recipes-editor';
+  // The mixing steps editor (step 3d-8) is its own screen in the statistics.
+  if (kind === 'steps') return 'recipes-steps';
   return kind === 'label' ? 'recipes-label' : 'recipes';
 }
 
