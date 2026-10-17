@@ -1,5 +1,6 @@
 import { useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router';
+import { recipeAddress } from '@mise/shared/recipe-link';
 import { KEEP_FOCUS } from '../shell/Page';
 
 // What the list puts in the navigation `state` when it opens a screen one level down (a product, a
@@ -30,14 +31,95 @@ export function cameFromProduct(state: unknown): boolean {
 //
 // `onLeaving` runs first: the screen says which button opened it, so the focus can be handed back
 // to that button once the list is on screen (handBack.ts).
-export function useLeave(fallback: string, onLeaving: () => void): () => void {
+//
+// ⚠️ `narrowed` says the fallback is the list narrowed to a recipe (`?using=`). With a recipe depth known, that list is
+// ALWAYS the entry at depth 1 (the recipe's entry replaced itself with it), so Back to it is `-(depth - 1)` entries,
+// whatever the state says about where this screen came from: a phone turned into the split replaces a history with its
+// product, and the replaced entry no longer says «from the list» although the list is still the entry behind.
+export function useLeave(fallback: string, onLeaving: () => void, narrowed = false): () => void {
   const navigate = useNavigate();
   const { state } = useLocation();
   const fromList = cameFromList(state);
+  const depth = recipeDepth(state);
+  const toNarrowed = narrowed && depth !== null && depth >= 2 ? depth - 1 : null;
 
   return useCallback(() => {
     onLeaving();
-    if (fromList) void navigate(-1);
+    if (toNarrowed !== null) void navigate(-toNarrowed);
+    else if (fromList) void navigate(-1);
     else void navigate(fallback, { replace: true, state: KEEP_FOCUS });
-  }, [navigate, fromList, fallback, onLeaving]);
+  }, [navigate, fromList, toNarrowed, fallback, onLeaving]);
+}
+
+// ── Opened from a recipe ──────────────────────────────────────────────────────────────────────────
+
+// «The recipe is DEPTH entries behind this one»: the recipe's «Open in Food cost» button pushes with
+// FROM_RECIPE_LINK (depth 1), every push inside Food cost adds one (recipeDepth), every replace carries
+// the same number on. A positive integer, or null when the state does not say.
+export function recipeDepth(state: unknown): number | null {
+  if (typeof state !== 'object' || state === null) return null;
+  if ('recipeDepth' in state) {
+    const depth = (state as { recipeDepth: unknown }).recipeDepth;
+    return typeof depth === 'number' && Number.isInteger(depth) && depth >= 1 && depth <= 1000 ? depth : null;
+  }
+  return 'fromRecipeLink' in state ? 1 : null;
+}
+
+export function cameFromRecipe(state: unknown): boolean {
+  return recipeDepth(state) !== null;
+}
+
+// The depth to write into the state of a PUSH made from `state` (one entry deeper), or nothing.
+export function pushDepth(state: unknown): { recipeDepth?: number } {
+  const depth = recipeDepth(state);
+  return depth === null ? {} : { recipeDepth: depth + 1 };
+}
+
+// The depth to write into the state of a REPLACE made from `state` (same distance), or nothing.
+export function keepDepth(state: unknown): { recipeDepth?: number } {
+  const depth = recipeDepth(state);
+  return depth === null ? {} : { recipeDepth: depth };
+}
+
+// «Put the focus on your own title when you appear»: the entry's replace says it (the page itself keeps
+// the focus, KEEP_FOCUS), and so does a move from the list (FROM_LIST).
+export function wantsTitleFocus(state: unknown): boolean {
+  return cameFromList(state) || (typeof state === 'object' && state !== null && 'focusTitle' in state);
+}
+
+// The state a move should carry on, but without «keep the focus where it is»: the page then puts the focus on its own
+// heading after the move (Page.tsx). For a replace that removes the button the person pressed (the narrowed bar's «Show all»).
+export function withoutKeepFocus(state: unknown): Record<string, unknown> {
+  if (typeof state !== 'object' || state === null) return {};
+  const { keepFocus: _kept, ...rest } = state as Record<string, unknown>;
+  return rest;
+}
+
+// The state of the entry's replace and of the draft giving way: the app arranging itself (the page keeps
+// the focus), the recipe link carried on, the target's title asked to take the focus.
+export function entryState(incoming: unknown): Record<string, unknown> {
+  return { ...KEEP_FOCUS, focusTitle: true, ...keepDepth(incoming), ...(cameFromRecipe(incoming) ? { fromRecipeLink: true } : {}) };
+}
+
+// How a screen opened from a recipe steps back to it.
+//
+// ⚠️ NEVER A SECOND ENTRY FOR THE RECIPE (the current app showed two pages per trip). The state counts how
+// many history entries sit between this one and the recipe (recipeDepth: 1 right after the recipe's button,
+// +1 for each push inside Food cost, unchanged by a replace), so Back is the browser's Back by exactly that
+// many entries — from the narrowed list, but also from the product or history beside it on the split, where
+// a plain «-1» is not enough. With no depth (an address typed, a reload that lost the state) the screen
+// REPLACES itself with the recipe. Nothing happens for a null id.
+export function useBackToRecipe(recipeId: string | null): () => void {
+  const navigate = useNavigate();
+  const { state } = useLocation();
+  const depth = recipeDepth(state);
+  return useCallback(() => {
+    if (recipeId === null) return;
+    if (depth !== null) {
+      void navigate(-depth);
+      return;
+    }
+    const to = recipeAddress(recipeId);
+    if (to !== null) void navigate(to, { replace: true });
+  }, [navigate, depth, recipeId]);
 }

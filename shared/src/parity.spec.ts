@@ -25,6 +25,9 @@
 // the pure `dayLabelParts` instead), guided-model.ts (everything but `ridOf`) and zoom-steps.ts (the storage and DOM halves); their
 // specs (calculator-config.spec.ts, log-model.spec.ts, guided-model via calculator-recipe-source.spec.ts,
 // zoom-steps.spec.ts) compare what they do port. calculator-tab-keys.ts is new in Mise 2 and has no original.
+// recipe-link.ts is a partial port too (step 3d-7): it leaves out the page addresses of the current app (`recipeHash`,
+// `foodCostHref`, `recipeHref`, `ordersHref`, `catalogueOriginFromHash`) and adds four things with no original; its spec
+// compares names and shapes itself.
 // recipe-export.ts is a partial port too (new in step "export"): it leaves out `buildPdfBlob` and `buildXlsxBlob`,
 // which `import()` the vendored PDF and spreadsheet libraries that belong to the app, and adds `LIBRARY_ERROR` and
 // `libraryError` (private to the original's loader); its spec compares names, constants, frozen-ness and shapes itself.

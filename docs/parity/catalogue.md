@@ -514,7 +514,7 @@ millimetres and the ZPL characters (items 62–80 and «What proves byte-identit
     (`''`). **spec** (`label-zpl.test.mjs`, 20 tests)
 77. **The roads to a printer** (`print-transports.js`), in OFFER ORDER: **`agent`** (queue the ZPL for the shop
     computer; needs a fresh heartbeat), **`os-print`** (`window.print()` of an off-screen `#labelPrint` host, a
-    direct child of `<body>`, removed on `afterprint`, never called `.preview-overlay`), **`zpl-clipboard`** (copy
+    direct child of `<body>>`, removed on `afterprint`, never called `.preview-overlay`), **`zpl-clipboard`** (copy
     the ZPL — clipboard only, never the share sheet, never a file download). `roadsFor(resolved, { printerReady })`
     keeps a road only if the venue's printer can read its renderer (`html` roads only when `printerLanguage !==
     'zpl'`; `zpl` roads only when it IS `zpl` AND `zplFits`) and the agent road only while the computer answers.
@@ -1070,6 +1070,83 @@ SAME PR.
   `mayOpenOrders`, `foodCostHref`-equivalents as route builders, `recipeIdFromHash` kept for old addresses).
 - **Size S.**
 
+#### Slice A built (15 Oct 2026): the recipe side and the shared ports
+
+- **Built:** `toCalculatorRecipe`, `nonWeighableLabels`, `mergeImportedRecipe` and `importFailureKey` in `shared/catalogue-model.ts`
+  (every case against the port and the `js/` original; the re-import keeps order, visibility, logic and `trayWeight`);
+  `shared/recipe-link.ts` (partial: `mayOpenFoodCost`, `mayOpenOrders`, `recipeIdFromHash`; new: `foodCostForRecipePath`,
+  `recipeAddress`, `recipeIdParam`, `FROM_RECIPE_LINK`). `RecipesSource.importIntoCalculator` is ONE transaction on
+  `config/calculator` (merge into the document as the server holds it NOW, `configRev` + 1, `configModel` and the venue
+  stamped after the spread; not local-first: offline it rejects and the screen says so); the store counts the recipe as used
+  on success only. The recipe screen draws, in this order: ingredients · batch · **Food cost card** (only for whoever
+  `mayOpenFoodCost` lets in) · allergens · declaration · Export · **Import into Calculator** with its hint (only where the
+  venue uses the Calculator: a write, judged by the section alone) · the owner's small Delete icon.
+- **On purpose, different:** the confirm's two sentences are two paragraphs (the current app joins them with a blank line); a
+  venue with no document yet gets no Food cost card (the door says no) while the section gate shows everything — the one
+  documented difference, pinned in `recipes/foodcostDoor.spec.ts`, which proves the door agrees with `visibleSectionIds` over a
+  grid of venues.
+- **Specs:** `catalogue-model.spec.ts`, `recipe-link.spec.ts`, `odd-inputs.spec.ts` (shared); `recipesSource.spec.ts` (the
+  transaction: stamps, revision, a concurrent change kept, a retry written from the second document, a re-import in place),
+  `recipesStore.spec.ts`, `foodcostDoor.spec.ts`, `RecipesSection.links.spec.tsx` (the card, the order of the page, the
+  question, both failure sentences, a second tap ignored, usage on success only).
+- **Slice B** (Food cost's side) is below.
+
+#### Slice B built (17 Oct 2026): Food cost's side
+
+- **Back counts the depth (fix):** the state key `recipeDepth` says how many entries sit between this one and the recipe (the recipe's push = 1, every push inside Food cost +1, a replace keeps it), and the list's Back is `navigate(-depth)`, so on the split a product, its history or a lateral move beside the narrowed list never leaves a second recipe entry. No depth (a typed address or a new tab; a reload keeps it) still replaces with the recipe.
+- **Built:** the addresses (`foodcostPath.ts`): `/food-cost?recipe=<id>` is the ENTRY, `/food-cost?using=<id>` the list narrowed to
+  the products made with the recipe, `/food-cost/product/<id>?recipe=<id>` and `?using=<id>`, `/food-cost/new?recipe=<id>`; a
+  product's history keeps whichever query its product had. `RecipeEntry` draws only «Loading…» and REPLACES itself, once, with: the
+  only product made with the recipe; or the narrowed list (several); or a new product drafted from the recipe (none: its name and
+  the recipe on the first line, no number invented); or the plain list (no such recipe). It decides on the SERVER's word (the
+  products answered from the server and the recipe known, or the recipes answered too), or after `COPY_WAIT_MS` (1.2 s), or at once
+  with no signal. The narrowed list has its own bar: Back, the title «Products with “<name>”» (or «Products with this recipe» for a
+  recipe with no name) and «Show all», which replaces the address with the plain list (a product open beside it stays open). A
+  product picked from the narrowed list keeps `?using=`; on the split the column stays narrowed beside it, on a phone its Back is
+  the narrowed list. A draft opened too early gives way: while nothing has been typed it hands over to the entry when a product made
+  with the recipe turns up (saving it would be a duplicate with a margin history of its own); once the person has typed, it stays.
+  Back to the recipe steps back by the recipe depth (see the first bullet: `-depth` entries, the state carried through the
+  entry's replace); with no depth in the state (an address typed, or a new tab: the browser keeps `history.state` across a
+  reload, so a reload alone does not lose it) the screen REPLACES itself with the recipe. A product or a draft with typing on it
+  asks the discard question first.
+- **On purpose, different:** the current app showed TWO pages for the recipe per trip; here the history after the trip is exactly
+  what it was before it (the entry is replaced, Back is `-depth`, the recipe is never pushed). The narrowed list is an address
+  (`?using=`), so the browser's Back and a reload keep it.
+- **Specs:** `FoodcostSection.recipe.spec.tsx` (the entry: one product, several, none, an unknown recipe; the waiting — only the
+  phone's copy, the server's answer, `COPY_WAIT_MS` with fake timers, no signal, recipes late; the Italian title, an empty name,
+  the focus), `FoodcostSection.recipeBack.spec.tsx` (Back to the recipe from the product, the narrowed list and a draft, with and
+  without typing; Back with no state; a product picked from the narrowed list on a phone and on the split; «Show all» beside a
+  product; the margin history keeping the query; the draft giving way and not giving way), `FoodcostSection.recipeTrip.spec.tsx`
+  (the whole trip through both sections: the recipe's button, Food cost, Back, the history as it was),
+  `FoodcostSection.recipe.strict.spec.tsx` (StrictMode: one move), and `testing/recipeLinkHelpers.ts` (`entriesBehind` walks a
+  memory history back to count its entries, so ask it last). The `decided` guard in `RecipeEntry` is not pinned by behaviour: the
+  effect runs only when the wait is over, so StrictMode never doubles it; the spec counts the moves instead.
+
+#### Slice B, after review (17 Oct 2026): the fixes
+
+- **«Show all» keeps the focus:** its replace carries no `keepFocus` (`withoutKeepFocus` in `foodcostNav.ts`), so the page puts the
+  focus on its heading «Food cost» (alone, or with a product open beside), instead of letting it drop to `<body>>` with the button.
+- **Back from Food cost brings the recipe back as it was left:** the «Open in Food cost» button writes the place down through
+  `useRecipeReturn` (`remember(id, 'cost')`) like the label and the editor do, and the focus returns to that button and the scroll to
+  where it was. Food cost is another section, so the recipes section is unmounted meanwhile: for this origin only, the place is also
+  kept in `recipeReturn.ts` (`carryPlace`) and picked up by the next recipes screen that appears by a Back (a POP). The scroll is put
+  back when the card draws and again after the shell's own reset (a microtask in an effect), because the shell resets its scroll
+  area when the section changes.
+- **A rotation phone → split keeps the way back:** with a recipe depth known and `?using=` set, the narrowed list is ALWAYS the entry
+  at depth 1, so a screen's Back to it is `-(depth - 1)` when the depth is 2 or more (`useLeave`'s `narrowed` argument), whatever the
+  replaced entry's state says about where it came from. Before, the product's Back after a history had been replaced on the split
+  replaced the narrowed list with itself, and the list's Back then pushed a second recipe entry.
+- **Import's busy marker outlives the screen:** `markBusy` is taken before the write and released in its `finally`, not when the
+  component goes away, so leaving the recipe mid-write does not let the app reload itself under the transaction. While it runs the
+  button is `aria-busy` and `aria-disabled` (not `disabled`: the keyboard's focus stays on it) and looks asleep.
+- **Pinned:** a dirty product beside the narrowed list, on the split: the list's Back asks the discard question, Cancel keeps the product
+  and the typing, Discard lands on the recipe with no second entry (`FoodcostSection.recipeFixes.spec.tsx`).
+
+#### Left as the current app
+
+- Importing into a Calculator that already holds 200 recipes is refused by the rules, and `importFailureKey` reads that refusal as
+  «this app is out of date» (the same in the current app). Not fixed here.
+
 ### 3d-8 — Mixing procedures: write steps, run a mix, resume, alarm
 
 - **Works alone**: the Procedure card («Write the mixing steps» / «Guided mixing», «Resume — step N of M»,
@@ -1270,8 +1347,8 @@ allergen state with an `if` of its own. What differs from the current app, and w
   `declarationText(label, lang, { withNutrition: false })`, built by the same `buildLabel(recipe, tables)` call as the
   current card. «Copied» and «Could not copy…» are a live region that exists before it speaks. `copyToClipboard` moved from
   `calculator/` to `ui/` so two features share it without importing each other.
-- **Order on the recipe screen:** ingredients · batch · allergens · declaration. The Food cost link (3d-7) and the
-  procedure (3d-8) are not there yet.
+- **Order on the recipe screen:** ingredients · batch · allergens · declaration (since 3d-7 slice A the Food cost card sits
+  before the allergens, and Import into Calculator after Export). The procedure (3d-8) is not there yet.
 - **The Allergen sheet is `/recipes/allergens`** and `allergens` is no longer a reserved-and-unknown word. It re-checks its
   own gate (item 60): with allergens off the address goes to `/recipes` by replacing itself, also when the switch is thrown
   while the sheet is open. The door is an «Allergen sheet» button at the FOOT of the list (only when allergens are on); Back

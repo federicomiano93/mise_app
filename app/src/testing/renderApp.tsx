@@ -1,5 +1,5 @@
 import { createMemoryRouter } from 'react-router';
-import type { RouteObject } from 'react-router';
+import type { InitialEntry, RouteObject } from 'react-router';
 import { RouterProvider } from 'react-router/dom';
 import { render } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -29,6 +29,9 @@ type Options = {
   session?: Partial<Session>;
   // The sections' data. By default every section gets an empty in-memory source.
   data?: Partial<DataServices>;
+  // The history the router starts with, the last entry being the current one (an entry can carry a state):
+  // for a spec that goes Back to the screen it came from. `path` is ignored when this is given.
+  entries?: InitialEntry[];
 };
 
 // Draws the real app at a path, in a language, inside a memory router (no address bar, no
@@ -37,8 +40,10 @@ type Options = {
 //
 // ⚠️ jsdom applies no media query, so BOTH navigations are in the page: always scope a query
 // with within(screen.getByRole('navigation', { name: … })).
-export function renderApp(path: string, { lang = 'en', routes = appRoutes, session, data }: Options = {}) {
-  const router = createMemoryRouter(routes, { initialEntries: [path] });
+export function renderApp(path: string, { lang = 'en', routes = appRoutes, session, data, entries }: Options = {}) {
+  const router = createMemoryRouter(routes, entries
+    ? { initialEntries: entries, initialIndex: entries.length - 1 }
+    : { initialEntries: [path] });
   const user = userEvent.setup();
   const messages = lang === 'it' ? italian : en;
   const store = fakeStore(session);
