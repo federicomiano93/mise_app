@@ -4,7 +4,7 @@ import { en } from '../i18n/en';
 import { isBusy } from '../session/busy';
 import { fakeRecipesSource } from '../testing/fakeRecipesSource';
 import { LOAD, recipe, renderRecipes, split } from '../testing/renderRecipes';
-import { forgetHandover, peekHandover } from './photoCarry';
+import { forgetHandover, hasHandover } from './photoCarry';
 import { FROM_LIST } from './recipesNav';
 
 // Step 3d-9: reading a recipe from photographs — the button in the new-recipe editor, the photo screen, and the draft that
@@ -358,7 +358,7 @@ describe('the photo screen: reading', () => {
     await act(async () => { opened.photo.calls[0]?.resolve({ ok: true, recipe: DRAFT, notes: {} }); });
     await waitFor(() => { expect(isBusy()).toBe(false); });
     expect(opened.router.state.location.pathname).toBe('/recipes');
-    expect(peekHandover()).toBeNull();
+    expect(hasHandover()).toBe(false);
     expect(errors).not.toHaveBeenCalled();
   });
 
@@ -418,7 +418,7 @@ describe('the photo screen: reading', () => {
     await act(async () => { opened.photo.calls[0]?.resolve({ ok: false, reason }); });
     await waitFor(() => { expect(says(opened.region)).toHaveTextContent(en[key]); });
     expect(opened.router.state.location.pathname).toBe('/recipes/photo');
-    expect(peekHandover()).toBeNull();
+    expect(hasHandover()).toBe(false);
   });
 });
 
@@ -451,7 +451,7 @@ describe('the photo screen: a successful read', () => {
     expect((editor.getAllByRole('spinbutton', { name: 'Amount' }) as HTMLInputElement[]).map(box => box.value)).toEqual(['1000', '700']);
     expect(opened.router.state.location.pathname).toBe('/recipes/new');
     expect(opened.source.recipeWrites).toEqual([]);
-    expect(peekHandover()).toBeNull();
+    expect(hasHandover()).toBe(false);
   });
 
   it('⚠️ the editor STARTS DIRTY: the app is busy, and leaving asks', async () => {

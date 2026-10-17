@@ -16,7 +16,7 @@ import { useStatusMessage } from '../ui/StatusMessage';
 import { workingFromDraft } from './editorModel';
 import { NEW_OPENER, useHandBack } from './handBack';
 import { PhotoImageError, shrinkPhoto } from './photoImage';
-import { cameFromEditor, handOver } from './photoCarry';
+import { cameFromEditor, carryOwner, handOver } from './photoCarry';
 import { NEW_PATH, RECIPES_PATH } from './recipesPath';
 import { useLeave } from './recipesNav';
 import styles from './PhotoScreen.module.css';
@@ -45,7 +45,7 @@ let nextPhotoId = 0;
 
 export function PhotoScreen() {
   const { t } = useT();
-  const { locationId } = useSession();
+  const { locationId, user } = useSession();
   const services = useDataServices();
   const say = useStatusMessage();
   const handBack = useHandBack();
@@ -157,7 +157,7 @@ export function PhotoScreen() {
     }
 
     // Nothing is saved: the draft is the working copy of a NEW recipe, handed to the editor that opens next.
-    handOver(workingFromDraft(result.recipe));
+    handOver(workingFromDraft(result.recipe), carryOwner(user?.uid, locationId));
     if (result.notes?.rowsCapped === true) say(t('cat.photo.capped'));
     if (fromEditor) {
       // The editor's own entry is the one behind this screen: stepping back onto it leaves ONE editor entry in the history,

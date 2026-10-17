@@ -2,7 +2,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { act, configure, screen, waitFor, within } from '@testing-library/react';
 import { fakeRecipesSource } from '../testing/fakeRecipesSource';
 import { LOAD, recipe, renderRecipes } from '../testing/renderRecipes';
-import { forgetHandover, peekHandover } from './photoCarry';
+import { forgetHandover, hasHandover } from './photoCarry';
 import { FROM_LIST } from './recipesNav';
 
 // Under StrictMode every effect runs twice. The editor reads what the photo screen carried while it draws and takes it off in
@@ -67,6 +67,6 @@ describe('under StrictMode: the photo trip', () => {
     const opened = within(await screen.findByRole('region', { name: 'New recipe' }));
     expect(opened.getByRole('textbox', { name: 'Recipe name' })).toHaveValue('Pane');
     expect((opened.getAllByRole('combobox', { name: 'Ingredient name' }) as HTMLInputElement[]).map(box => box.value)).toEqual(['Flour']);
-    expect(peekHandover()).toBeNull();
+    expect(hasHandover()).toBe(false);
   });
 });

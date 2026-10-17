@@ -25,7 +25,7 @@ import { IngredientRow } from './IngredientRow';
 import { LinkDialog } from './LinkDialog';
 import { ReorderRows } from './ReorderRows';
 import { NEW_OPENER, recipeOpener, useHandBack } from './handBack';
-import { FROM_EDITOR, forgetHandover, hasTypedCopy, peekHandover, typedCopyOf, withTypedCopy, withoutTypedCopy } from './photoCarry';
+import { FROM_EDITOR, carryOwner, forgetHandover, hasTypedCopy, peekHandover, typedCopyOf, withTypedCopy, withoutTypedCopy } from './photoCarry';
 import { recipePhotoOn } from './photoGate';
 import { cameFromList, cameFromRecipe, recipeCameFromList, useLeave } from './recipesNav';
 import { PHOTO_PATH, RECIPES_PATH, recipePath } from './recipesPath';
@@ -61,7 +61,9 @@ export function RecipeEditor({ id, recipe, titleRef, onTyped }: Props) {
   const { t } = useT();
   const store = useRecipesStore();
   const { labelConfig, ingredients, recipes, suppliers } = useRecipes();
-  const { canManage, location: venue } = useSession();
+  const { canManage, location: venue, user, locationId } = useSession();
+  // Who typed what this editor may carry, and where (photoCarry.ts).
+  const owner = carryOwner(user?.uid, locationId);
   const say = useStatusMessage();
   const handBack = useHandBack();
   const navigate = useNavigate();
@@ -81,9 +83,9 @@ export function RecipeEditor({ id, recipe, titleRef, onTyped }: Props) {
   // while drawing (nothing is taken yet, so a render run twice is harmless); taken off in the effect below.
   const [carried] = useState<{ working: Working; by: 'photo' | 'typed' } | null>(() => {
     if (id !== null) return null;
-    const read = peekHandover();
+    const read = peekHandover(owner);
     if (read !== null) return { working: read, by: 'photo' };
-    const typedCopy = typedCopyOf(state);
+    const typedCopy = typedCopyOf(state, owner);
     return typedCopy === null ? null : { working: typedCopy, by: 'typed' };
   });
   const [working, setWorking] = useState<Working>(() => carried?.working ?? workingFrom(recipe));
@@ -382,7 +384,7 @@ export function RecipeEditor({ id, recipe, titleRef, onTyped }: Props) {
     }
     leavingClean.current = true;
     // One move after the other: a second navigation started before the first has landed would cancel it.
-    if (dirtyRef.current) await navigate(pathname, { replace: true, state: withTypedCopy(state, working) });
+    if (dirtyRef.current) await navigate(pathname, { replace: true, state: withTypedCopy(state, working, owner) });
     await navigate(PHOTO_PATH, { state: FROM_EDITOR });
   }
 
