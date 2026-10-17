@@ -6,12 +6,15 @@
 // ⚠️ THE VENUE IS THE ONE THIS SOURCE WAS MADE FOR, never one a screen passes in: the source is made per open venue
 // (DataServices), as every other section's.
 
-// ⚠️ THE CLIENT WAITS 120 s AND THAT MUST STAY >= THE FUNCTION'S OWN `timeoutSeconds` (functions/recipe-photo.js): a
-// phone that gives up first abandons a read that is still running and has already been paid for.
-// photoSource.spec.ts reads both numbers and pins the pair (the current app's tests/photo-timeouts.test.mjs).
-export const PHOTO_CLIENT_TIMEOUT_MS = 120_000;
-// The switch is one small write on the server; a cold start is the slow part.
-export const SWITCH_TIMEOUT_MS = 30_000;
+// ⚠️ THE CLIENT WAITS LONGER THAN THE FUNCTION'S OWN `timeoutSeconds` (functions/recipe-photo.js, 120 s), WITH A MARGIN: a
+// phone that gives up first abandons a read that is still running and has already been paid for, and the phone's clock
+// starts before the upload (up to 6 MB) and the cold start, the server's only when the request arrives. 150 s, NEW in Mise 2
+// (the current app waits exactly 120 s). photoSource.spec.ts reads both numbers and pins server + 20 s.
+export const PHOTO_CLIENT_TIMEOUT_MS = 150_000;
+// ⚠️ setRecipePhoto has no timeoutSeconds of its own (functions/onboarding.js), so the platform's 60 s applies: the phone
+// waits 70 s (the SDK's default, as the current app) — never less than the server, or the switch is changed by a call the
+// phone has already called failed.
+export const SWITCH_TIMEOUT_MS = 70_000;
 
 export interface PhotoImage {
   readonly mediaType: string;

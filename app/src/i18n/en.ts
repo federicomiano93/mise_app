@@ -1334,6 +1334,9 @@ export const en = {
   'cat.photo.turnOff': 'Switch off',
   'cat.photo.nowOn': 'Reading from a photo is on.',
   'cat.photo.nowOff': 'Reading from a photo is off.',
+  // New in Mise 2 (the current app showed the server's English words): the switch could not be changed.
+  'cat.photo.switchFailed': 'The setting could not be changed — the switch shows what is saved now. Try again.',
+  'cat.photo.switchNotAllowed': 'Only an owner or a manager can change this.',
   'cat.photo.err.photoOff': 'Reading from a photo is switched off for this venue.',
   'cat.photo.title': 'Recipe from a photo',
   'cat.photo.lead': 'Photograph the recipe and the app will fill it in for you. You check it and save it yourself — nothing is saved until you do.',

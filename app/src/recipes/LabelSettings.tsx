@@ -307,9 +307,14 @@ function PhotoCard() {
         if (mounted.current) setHeld(next);
         say(t(next ? 'cat.photo.nowOn' : 'cat.photo.nowOff'));
       } catch (error) {
-        // ⚠️ The server's own words when it has any: it is the half that knows why. «internal» is the SDK's, not a reason.
-        const message = (error as { message?: unknown } | null)?.message;
-        say(typeof message === 'string' && message !== '' && !/^internal$/i.test(message) ? message : t('cat.photo.err.failed'));
+        // ⚠️ A FAILED CALL MAY STILL HAVE CHANGED THE SWITCH: a phone that stopped waiting (a timeout, the signal lost on the
+        // way back) does not stop the server. So the venue is read again from the server in every case, and the switch shows
+        // what the server holds — never «off» while staff can already spend money on reads.
+        // ⚠️ IN THE PERSON'S LANGUAGE, NOT THE SERVER'S: the function's sentences are English and the SDK's are codes
+        // («deadline-exceeded»); the current app showed them as they came.
+        await sessionStore.refreshLocation();
+        const code = String((error as { code?: unknown } | null)?.code ?? '');
+        say(t(/permission-denied$/.test(code) ? 'cat.photo.switchNotAllowed' : 'cat.photo.switchFailed'));
       } finally {
         release();
         if (mounted.current) setBusy(false);

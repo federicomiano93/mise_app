@@ -145,25 +145,36 @@ describe('turning it off', () => {
 });
 
 describe('when the server says no', () => {
-  it('says the server’s own words and the switch stays as it was', async () => {
+  it('a refusal is said in the person’s language, never the server’s English, and the venue is read again', async () => {
     const { user, photo, photoSwitch, store } = await openSettings();
     await user.click(photoSwitch());
     await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Switch on' }));
     await waitFor(() => { expect(photo.setRecipePhoto).toHaveBeenCalled(); });
-    await act(async () => { photo.calls[0]?.reject(Object.assign(new Error('Only an owner or a manager can change this.'), { code: 'functions/permission-denied' })); });
+    await act(async () => { photo.calls[0]?.reject(Object.assign(new Error('Only an owner or a manager can change that.'), { code: 'functions/permission-denied' })); });
     await says('Only an owner or a manager can change this.');
     expect(photoSwitch()).not.toBeChecked();
-    expect(store.refreshLocation).not.toHaveBeenCalled();
+    expect(store.refreshLocation).toHaveBeenCalled();
   });
 
-  it.each([['internal'], ['INTERNAL'], ['']])('«%s» is not a reason: the general sentence is said instead', async message => {
+  it.each([['internal'], ['INTERNAL'], [''], ['deadline-exceeded']])('«%s»: the switch’s own failure sentence, the switch as saved', async message => {
     const { user, photo, photoSwitch } = await openSettings({ ...GB, recipePhoto: true });
     await user.click(photoSwitch());
     await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Switch off' }));
     await waitFor(() => { expect(photo.setRecipePhoto).toHaveBeenCalled(); });
-    await act(async () => { photo.calls[0]?.reject(Object.assign(new Error(message), { code: 'functions/internal' })); });
-    await says('The photo could not be read. Try again.');
+    await act(async () => { photo.calls[0]?.reject(Object.assign(new Error(message), { code: `functions/${message || 'internal'}` })); });
+    await says('The setting could not be changed — the switch shows what is saved now. Try again.');
     expect(photoSwitch()).toBeChecked();
+  });
+
+  it('⚠️ a call the phone gave up on that the server still carried out: the switch shows the server’s answer, never «off» while it is on', async () => {
+    const { user, photo, photoSwitch, store } = await openSettings();
+    store.refreshLocation.mockImplementation(async () => { store.set({ location: { ...GB, recipePhoto: true } }); });
+    await user.click(photoSwitch());
+    await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Switch on' }));
+    await waitFor(() => { expect(photo.setRecipePhoto).toHaveBeenCalled(); });
+    await act(async () => { photo.calls[0]?.reject(Object.assign(new Error('deadline-exceeded'), { code: 'functions/deadline-exceeded' })); });
+    await says('The setting could not be changed — the switch shows what is saved now. Try again.');
+    await waitFor(() => { expect(photoSwitch()).toBeChecked(); });
   });
 });
 

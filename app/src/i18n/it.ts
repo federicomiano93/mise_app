@@ -1219,6 +1219,8 @@ export const it: Messages = {
   'cat.photo.turnOff': 'Spegni',
   'cat.photo.nowOn': 'Lettura da foto attiva.',
   'cat.photo.nowOff': 'Lettura da foto spenta.',
+  'cat.photo.switchFailed': 'Non sono riuscito a cambiare l’impostazione — l’interruttore mostra quella salvata adesso. Riprova.',
+  'cat.photo.switchNotAllowed': 'Può cambiarla solo un titolare o un responsabile.',
   'cat.photo.err.photoOff': 'In questo locale la lettura da foto è spenta.',
   'cat.photo.title': 'Ricetta da una foto',
   'cat.photo.lead': 'Fotografa la ricetta e l’app la compila per te. La controlli e la salvi tu — finché non lo fai, non viene salvato niente.',

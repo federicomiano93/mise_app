@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, test, vi } from 'vitest';
-import { createPhotoSource, PHOTO_CLIENT_TIMEOUT_MS } from './photoSource';
+import { createPhotoSource, PHOTO_CLIENT_TIMEOUT_MS, SWITCH_TIMEOUT_MS } from './photoSource';
 
 describe('photoSource', () => {
   test('a read sends the venue the source was made for and the images, to readRecipeFromPhotos, with the long timeout', async () => {
@@ -28,7 +28,15 @@ describe('photoSource', () => {
     const server = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'functions', 'recipe-photo.js'), 'utf8');
     const match = server.match(/timeoutSeconds:\s*(\d+)/);
     expect(match, 'functions/recipe-photo.js no longer states timeoutSeconds').not.toBeNull();
-    expect(PHOTO_CLIENT_TIMEOUT_MS).toBeGreaterThanOrEqual(Number(match![1]) * 1000);
+    expect(PHOTO_CLIENT_TIMEOUT_MS).toBeGreaterThanOrEqual(Number(match![1]) * 1000 + 20_000);
+  });
+
+  test('⚠️ the switch waits longer than its function may run (no timeoutSeconds there: the platform default, 60 s)', () => {
+    const server = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'functions', 'onboarding.js'), 'utf8');
+    const start = server.indexOf('export const setRecipePhoto');
+    expect(start, 'functions/onboarding.js no longer exports setRecipePhoto').toBeGreaterThan(-1);
+    const own = server.slice(start, server.indexOf('export ', start + 1)).match(/timeoutSeconds:\s*(\d+)/);
+    expect(SWITCH_TIMEOUT_MS).toBeGreaterThan((own ? Number(own[1]) : 60) * 1000);
   });
 });
 
