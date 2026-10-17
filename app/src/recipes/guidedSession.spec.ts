@@ -82,6 +82,12 @@ describe('the saved session', () => {
     expect(() => { writeSession(sessionAt(NOW), null); clearSession(null); }).not.toThrow();
   });
 
+  it('says whether the session was written (the card then carries a fresh mix with the move)', () => {
+    expect(writeSession(sessionAt(NOW), fakeStorage())).toBe(true);
+    expect(writeSession(sessionAt(NOW), THROWING)).toBe(false);
+    expect(writeSession(sessionAt(NOW), null)).toBe(false);
+  });
+
   it('clears', () => {
     const storage = fakeStorage();
     writeSession(sessionAt(NOW), storage);

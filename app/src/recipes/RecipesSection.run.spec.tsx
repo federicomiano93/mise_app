@@ -304,6 +304,22 @@ describe('the mixer speed', () => {
     expect(inRun().getByText('Speed 2', { selector: 'p:not([role])' })).toBeInTheDocument();
   });
 
+  it('⚠️ a step that DROPS the speed says nothing (never «Speed » with no number), and a rise is still said', async () => {
+    const steps = [
+      { text: 'Slow', rows: [], seconds: 0, speed: '1' },
+      { text: 'Fast', rows: [], seconds: 0, speed: '2' },
+      { text: 'Rest', rows: [], seconds: 0, speed: '' },
+    ];
+    leaveSession({ snapshot: { name: 'Focaccia', ingredients: ROWS, steps, endNote: '', targetGrams: 0 } });
+    const { user } = await openRun();
+    await user.click(press('Done'));
+    expect(live()[0]).toBe('Speed 2');
+    await user.click(press('Done'));
+    expect(inRun().getByRole('heading', { level: 3, name: 'Rest' })).toBeInTheDocument();
+    expect(live()[0]).toBe('');
+    expect(inRun().queryByText(/^Speed/)).not.toBeInTheDocument();
+  });
+
   it('⚠️ says nothing about the speed of a mix picked up part-way', async () => {
     leaveSession({ stepIndex: 1 });
     await openRun();
@@ -334,6 +350,26 @@ describe('the alarm', () => {
     // More ticks, still the one ring.
     await new Promise(resolve => setTimeout(resolve, 700));
     expect(rings()).toBe(1);
+  });
+
+  it('⚠️ «+1 min» tapped in the instant the timer ran out stops that alarm, and the countdown runs again', async () => {
+    leaveSession({ stepIndex: 2 });
+    const { user } = await openRun();
+    await user.click(press('Start the timer'));
+    const plusOne = press('+1 min');
+    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'visible' });
+    // One breath: the clock passes the end, the tick rings, and the person taps the button the screen has not yet redrawn.
+    act(() => {
+      vi.setSystemTime(T0 + 600_000 + 500);
+      document.dispatchEvent(new Event('visibilitychange'));
+      expect(isRinging()).toBe(true);
+      plusOne.click();
+    });
+    expect(isRinging()).toBe(false);
+    expect(stored()?.endsAt).toBe(T0 + 660_000);
+    await jumpTo(T0 + 600_000 + 1000, '00:59');
+    expect(press('Running…')).toBeDisabled();
+    expect(inRun().queryByText(/Time is up|Time was up/)).not.toBeInTheDocument();
   });
 
   it('stops when the step is done', async () => {
@@ -432,6 +468,24 @@ describe('the card', () => {
     await screen.findByRole('region', { name: 'Focaccia' });
     expect(inRun().getByText('Step 1 of 3')).toBeInTheDocument();
     expect(stored()).toMatchObject({ stepIndex: 0, endsAt: 0, startedAt: T0 });
+  });
+
+  it('⚠️ with a storage that refuses the write, «Guided mixing» still opens the run on step 1', async () => {
+    const { user } = await openRecipe();
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new DOMException('full', 'QuotaExceededError'); });
+    await user.click(within(card()).getByRole('button', { name: 'Guided mixing' }));
+    await screen.findByRole('region', { name: 'Focaccia' });
+    expect(inRun().getByText('Step 1 of 3')).toBeInTheDocument();
+    expect(stored()).toBeNull();
+  });
+
+  it('⚠️ with a storage that refuses the write, «Start again» does not fall back on the OLDER mix at step 2', async () => {
+    leaveSession({ stepIndex: 1 });
+    const { user } = await openRecipe();
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new DOMException('full', 'QuotaExceededError'); });
+    await user.click(within(card()).getByRole('button', { name: 'Start again from the beginning' }));
+    await screen.findByRole('region', { name: 'Focaccia' });
+    expect(inRun().getByText('Step 1 of 3')).toBeInTheDocument();
   });
 
   it('Resume continues at the stored step', async () => {

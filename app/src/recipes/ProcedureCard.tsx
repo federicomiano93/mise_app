@@ -8,6 +8,7 @@ import { Button } from '../ui/Button';
 import { useStatusMessage } from '../ui/StatusMessage';
 import { useRecipes } from './RecipesContext';
 import { clearSession, freshSession, resumableSession, writeSession } from './guidedSession';
+import type { GuidedSession } from './guidedSession';
 import { useRecipeReturn } from './recipeReturn';
 import { FROM_RECIPE } from './recipesNav';
 import { mixPath, stepsPath } from './recipesPath';
@@ -76,13 +77,15 @@ export function ProcedureCard({ recipe, target = null }: { recipe: CatalogueReci
 
   const saved = resumableSession(recipes);
   const mine = saved !== null && saved.recipeId === recipe.id ? saved : null;
-  const openRun = () => {
+  const openRun = (fresh?: GuidedSession) => {
     recipeReturn.remember(recipe.id, 'mix');
-    void navigate(mixPath(recipe.id), { state: FROM_RECIPE });
+    void navigate(mixPath(recipe.id), { state: fresh === undefined ? FROM_RECIPE : { ...FROM_RECIPE, freshMix: fresh } });
   };
+  // ⚠️ A STORAGE THAT REFUSES THE WRITE (full, blocked) must not leave the run to read nothing — or an OLDER mix of this
+  // recipe, which «Start again» would then resume at its old step. The fresh mix travels with the move instead.
   const startMix = () => {
-    writeSession(freshSession(recipe, target));
-    openRun();
+    const fresh = freshSession(recipe, target);
+    openRun(writeSession(fresh) ? undefined : fresh);
   };
   const resumeMix = () => {
     const still = resumableSession(recipes);

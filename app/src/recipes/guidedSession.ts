@@ -65,11 +65,16 @@ export function readSession(storage: SessionStorage | null = phoneStorage()): Gu
   }
 }
 
-export function writeSession(session: GuidedSession, storage: SessionStorage | null = phoneStorage()): void {
-  if (storage === null) return;
+// Whether the session was written: false when the browser gives no storage or refuses the write (full, blocked). The mix still
+// runs then; it just cannot be picked up again after a reload.
+export function writeSession(session: GuidedSession, storage: SessionStorage | null = phoneStorage()): boolean {
+  if (storage === null) return false;
   try {
     storage.setItem(SESSION_KEY, JSON.stringify(session));
-  } catch { /* full or blocked storage: the mix still runs, it just cannot be picked up again */ }
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export function clearSession(storage: SessionStorage | null = phoneStorage()): void {

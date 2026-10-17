@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useLocation } from 'react-router';
 import { isResumable } from '@mise/shared/guided-model';
 import { useT } from '../i18n/useT';
 import { useStatusMessage } from '../ui/StatusMessage';
@@ -34,8 +35,15 @@ export function GuidedRunScreen({ id }: { id: string }) {
   const { recipes, recipesFromServer, streamBroken } = useRecipes();
   const leave = useLeave(recipePath(id), NOTHING, cameFromRecipe);
 
-  // What was saved when this screen opened, and when: read once.
-  const [opened] = useState(() => ({ saved: readSession(), at: Date.now() }));
+  // What was saved when this screen opened, and when: read once. A mix just started on a phone whose storage refused it comes
+  // with the move (ProcedureCard) and wins over what storage holds, unless storage holds that very mix (same start).
+  const location = useLocation();
+  const [opened] = useState(() => {
+    const stored = readSession();
+    const fresh = freshMixOf(location.state);
+    const saved = fresh !== null && (stored === null || stored.startedAt !== fresh.startedAt) ? fresh : stored;
+    return { saved, at: Date.now() };
+  });
   const saved = opened.saved !== null && opened.saved.recipeId === id ? opened.saved : null;
   const whole = saved !== null && isResumable(saved, opened.at);
   const held = recipes.some(candidate => candidate.id === id);
@@ -85,4 +93,10 @@ export function GuidedRunScreen({ id }: { id: string }) {
     );
   }
   return <GuidedRun id={id} session={session} />;
+}
+
+// The fresh mix carried by the move from the card, when storage would not keep it.
+function freshMixOf(state: unknown): GuidedSession | null {
+  const fresh = (state as { freshMix?: unknown } | null)?.freshMix;
+  return fresh !== null && typeof fresh === 'object' ? (fresh as GuidedSession) : null;
 }

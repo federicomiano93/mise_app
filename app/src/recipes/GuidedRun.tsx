@@ -103,8 +103,10 @@ export function GuidedRun({ id, session }: Props) {
     return () => {
       window.clearInterval(timer);
       document.removeEventListener('visibilitychange', onVisible);
-      // Leaving stops the sound and the buzz.
+      // Leaving stops the sound and the buzz. The step's alarm counts as not yet rung: under StrictMode this cleanup runs
+      // between two mounts, and a mix resumed on a timer that already ran out must ring on the second one too.
       stopAlarm();
+      runNow.current = { ...runNow.current, alarmedFor: 0 };
     };
   }, []);
 
@@ -207,7 +209,10 @@ export function GuidedRun({ id, session }: Props) {
     commit(advance(runNow.current, steps), at);
   }
 
+  // «+1 min» tapped in the very moment the timer ran out (React draws a moment after the clock) gives the timer more time:
+  // the alarm that has just started must stop with it.
   function extend() {
+    stopAlarm();
     const at = Date.now();
     commit(addMinute(runNow.current), at);
   }
@@ -287,7 +292,7 @@ export function GuidedRun({ id, session }: Props) {
             already there is announced, one inserted already filled in often is not. The speed change is said once, as the step
             opens; «Time is up» once, as the timer runs out. The countdown itself is never a live region (it would read out
             every second). */}
-        <p role="status" className="visually-hidden">{!run.finished && run.speedChanged && step !== undefined ? t('cat.guided.speedN', { n: step.speed }) : ''}</p>
+        <p role="status" className="visually-hidden">{!run.finished && run.speedChanged && step !== undefined && step.speed !== '' ? t('cat.guided.speedN', { n: step.speed }) : ''}</p>
         <p role="status" className="visually-hidden">{!run.finished && timer === 'finished' ? t('cat.timeIsUp') : ''}</p>
       </div>
       {confirmDialog}
