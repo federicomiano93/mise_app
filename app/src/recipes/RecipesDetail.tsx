@@ -7,6 +7,7 @@ import { useStatusMessage } from '../ui/StatusMessage';
 import { AllergenSheet } from './AllergenSheet';
 import { LabelSettings } from './LabelSettings';
 import { LabelScreen } from './LabelScreen';
+import { PhotoScreen } from './PhotoScreen';
 import { RecipeEditorScreen } from './RecipeEditorScreen';
 import { GuidedRunScreen } from './GuidedRunScreen';
 import { StepsEditorScreen } from './StepsEditorScreen';
@@ -32,6 +33,8 @@ export function RecipesDetail({ view, onOpenFromSheet }: { view: ShownView; onOp
   // The editor (step 3d-6): a new recipe, or one recipe's, one level below the list / the recipe.
   if (view.kind === 'new') return <RecipeEditorScreen key="new" id={null} />;
   if (view.kind === 'edit') return <RecipeEditorScreen key="edit" id={view.id} />;
+  // Reading a recipe from photographs (step 3d-9), reached from the new-recipe editor; its gate is checked by the section.
+  if (view.kind === 'photo') return <PhotoScreen key="photo" />;
   // The mixing steps editor (step 3d-8), one level below the recipe, drawn like the recipe's editor.
   if (view.kind === 'steps') return <StepsEditorScreen key="steps" id={view.id} />;
   // The guided mix (step 3d-8, slice B), one level below the recipe and full width: the section draws no list beside it.

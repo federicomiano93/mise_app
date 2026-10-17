@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import type { Ref } from 'react';
-import { Check, Trash2 } from 'lucide-react';
+import { Camera, Check, Trash2 } from 'lucide-react';
 import { useBlocker, useLocation, useNavigate } from 'react-router';
 import type { BlockerFunction } from 'react-router';
 import { findInvalidRecipe, linkOf } from '@mise/shared/catalogue-model';
@@ -25,8 +25,10 @@ import { IngredientRow } from './IngredientRow';
 import { LinkDialog } from './LinkDialog';
 import { ReorderRows } from './ReorderRows';
 import { NEW_OPENER, recipeOpener, useHandBack } from './handBack';
+import { FROM_EDITOR, forgetHandover, hasTypedCopy, peekHandover, typedCopyOf, withTypedCopy, withoutTypedCopy } from './photoCarry';
+import { recipePhotoOn } from './photoGate';
 import { cameFromList, cameFromRecipe, recipeCameFromList, useLeave } from './recipesNav';
-import { RECIPES_PATH, recipePath } from './recipesPath';
+import { PHOTO_PATH, RECIPES_PATH, recipePath } from './recipesPath';
 import { useDeleteRecipe } from './useDeleteRecipe';
 import styles from './RecipeEditor.module.css';
 
@@ -59,11 +61,11 @@ export function RecipeEditor({ id, recipe, titleRef, onTyped }: Props) {
   const { t } = useT();
   const store = useRecipesStore();
   const { labelConfig, ingredients, recipes, suppliers } = useRecipes();
-  const { canManage } = useSession();
+  const { canManage, location: venue } = useSession();
   const say = useStatusMessage();
   const handBack = useHandBack();
   const navigate = useNavigate();
-  const { state } = useLocation();
+  const { state, pathname } = useLocation();
   const [confirm, confirmDialog] = useConfirm();
   const [runDelete, deleteDialog] = useDeleteRecipe();
   const ids = useId();
@@ -74,14 +76,24 @@ export function RecipeEditor({ id, recipe, titleRef, onTyped }: Props) {
   const shelfId = `${ids}-shelf`;
   const hintId = `${ids}-reorder-hint`;
 
-  const [working, setWorking] = useState<Working>(() => workingFrom(recipe));
+  // ⚠️ A NEW RECIPE MAY START FROM SOMETHING CARRIED (photoCarry.ts), and then it starts DIRTY — it is unsaved work, typed or
+  // already paid for: the recipe just read from a photograph, else the copy kept while the photo screen was open. Looked at
+  // while drawing (nothing is taken yet, so a render run twice is harmless); taken off in the effect below.
+  const [carried] = useState<{ working: Working; by: 'photo' | 'typed' } | null>(() => {
+    if (id !== null) return null;
+    const read = peekHandover();
+    if (read !== null) return { working: read, by: 'photo' };
+    const typedCopy = typedCopyOf(state);
+    return typedCopy === null ? null : { working: typedCopy, by: 'typed' };
+  });
+  const [working, setWorking] = useState<Working>(() => carried?.working ?? workingFrom(recipe));
   // The name the recipe had when this screen opened: what the delete question calls it.
   const [storedName] = useState(recipe?.name ?? '');
 
   // ⚠️ DIRTY IS «SOMETHING WAS TYPED», also kept in a ref: the router's blocker reads it at the moment of a navigation, and a
   // state value read there could be one render behind.
-  const [dirty, setDirty] = useState(false);
-  const dirtyRef = useRef(false);
+  const [dirty, setDirty] = useState(carried !== null);
+  const dirtyRef = useRef(carried !== null);
   const edit = (change: (current: Working) => Working) => {
     dirtyRef.current = true;
     onTyped?.();
@@ -95,6 +107,18 @@ export function RecipeEditor({ id, recipe, titleRef, onTyped }: Props) {
   useEffect(() => {
     mounted.current = true;
     return () => { mounted.current = false; };
+  }, []);
+  // «Fill from a photo» (a new recipe, a venue with the reader on), and the focus it is owed when this form comes back.
+  const fillButton = useRef<HTMLButtonElement>(null);
+  // ⚠️ WHAT WAS CARRIED IS TAKEN OFF ONCE IT HAS BEEN READ: the read draft is forgotten, and the typed copy leaves the history
+  // entry (same address, replaced), so going Back to this entry again later does not bring it a second time. The focus goes
+  // where the person left: the photo button after Back from the photo screen, this title after a read.
+  useEffect(() => {
+    if (id !== null) return;
+    forgetHandover();
+    if (hasTypedCopy(state)) void navigate(pathname, { replace: true, state: withoutTypedCopy(state) });
+    if (carried?.by === 'typed') fillButton.current?.focus();
+    else if (carried !== null && typeof titleRef === 'object' && titleRef !== null) titleRef.current?.focus();
   }, []);
   // Set once the edits are saved or the recipe deleted, so leaving asks nothing.
   const leavingClean = useRef(false);
@@ -333,6 +357,35 @@ export function RecipeEditor({ id, recipe, titleRef, onTyped }: Props) {
     }
   }
 
+  // ── Filling a NEW recipe from a photograph ───────────────────────────────────────────────────────────────────
+  // ⚠️ IF ANYTHING HAS BEEN TYPED, IT ASKS FIRST. Leaving for the photo screen abandons this form; the typed copy is written
+  // into this history entry (the entry is replaced, same address) so that Back from the photo screen — the button or the
+  // phone's gesture — lands on it and brings the form back as it was left, once. The leave guard is dropped because this IS
+  // the answer to it: nothing is thrown away.
+  async function fillFromPhoto() {
+    if (id !== null || busy.current || askingLeave.current || leavingClean.current) return;
+    if (dirtyRef.current) {
+      busy.current = true;
+      let ok = false;
+      try {
+        ok = await confirm({
+          title: t('cat.photo.replaceTitle'),
+          message: t('cat.photo.replaceBody'),
+          okLabel: t('cat.photo.replaceOk'),
+          cancelLabel: t('common.cancel'),
+          danger: true,
+        });
+      } finally {
+        busy.current = false;
+      }
+      if (!ok || !mounted.current) return;
+    }
+    leavingClean.current = true;
+    // One move after the other: a second navigation started before the first has landed would cancel it.
+    if (dirtyRef.current) await navigate(pathname, { replace: true, state: withTypedCopy(state, working) });
+    await navigate(PHOTO_PATH, { state: FROM_EDITOR });
+  }
+
   // ── What is drawn ────────────────────────────────────────────────────────────────────────────────────────────
   const profile = normalizeLabelProfile(labelConfig);
   // ⚠️ SHOWN ONLY WHEN THE VENUE PRINTS THEM: two boxes nobody can explain on a screen everybody uses are clutter, and a
@@ -498,6 +551,17 @@ export function RecipeEditor({ id, recipe, titleRef, onTyped }: Props) {
               <Trash2 aria-hidden="true" />
               <span>{t('cat.deleteRecipe')}</span>
             </button>
+          </div>
+        ) : null}
+
+        {/* ⚠️ ONLY ON A NEW RECIPE, AND ONLY WHEN THE VENUE HAS THE READER ON, and LAST: it is an alternative to the form above
+            it, not a step in the way of it (his note of 13 Sep 2026 in the current app). */}
+        {id === null && recipePhotoOn(venue) ? (
+          <div className={styles.actions}>
+            <Button ref={fillButton} variant="secondary" onPress={() => { void fillFromPhoto(); }}>
+              <Camera aria-hidden="true" />
+              {t('cat.photo.fill')}
+            </Button>
           </div>
         ) : null}
       </div>
