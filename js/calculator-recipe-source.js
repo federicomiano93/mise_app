@@ -174,6 +174,43 @@ export function canCalculate(resolved) {
   return !!resolved && !resolved.problem && resolved.ingredients.length > 0;
 }
 
+// Settings → Recipes: the leavening dropdown's answer, written on the tab being
+// edited (a working copy). `value` is the option's value — '' for «nothing rises»,
+// a row key, or '#<index>' for an own row that has no key yet. `linkedRows` is the
+// resolved Catalogue list when the tab is linked, null when it carries its own.
+// Returns true when the choice was understood.
+//
+// ⚠️ A LINKED CHOICE IS LOOKED UP IN THE CATALOGUE ROWS IT WAS OFFERED FROM. It
+// used to be looked up in the tab's own leftover list, where a Catalogue row id is
+// never found — so the pick was silently dropped and leaveningRid never saved.
+export function chooseLeavening(recipe, value, linkedRows) {
+  if (!recipe) return false;
+  const picked = String(value || '');
+  if (!picked) {
+    if (linkedRows) recipe.leaveningRid = null; else recipe.leaveningKey = null;
+    return true;
+  }
+
+  if (linkedRows) {
+    if (!linkedRows.some(row => row && row.key === picked)) return false;
+    recipe.leaveningRid = picked;
+  } else {
+    const own = Array.isArray(recipe.ingredients) ? recipe.ingredients : [];
+    const index = picked.startsWith('#') ? Number(picked.slice(1)) : -1;
+    const ing = index >= 0 ? own[index] : own.find(i => i && i.key === picked);
+    if (!ing) return false;
+    // An ingredient with no key cannot be pointed at yet; it gets one the moment
+    // it is chosen, exactly as the old tick did.
+    if (!ing.key) {
+      ing.key = (ing.label || 'ing').toLowerCase().replace(/[^a-z0-9]+/g, '-') + '-' + own.indexOf(ing);
+    }
+    recipe.leaveningKey = ing.key;
+  }
+  if (!recipe.leaveningDefaultPct) recipe.leaveningDefaultPct = 1;
+  if (recipe.baselinePct == null) recipe.baselinePct = recipe.leaveningDefaultPct;
+  return true;
+}
+
 // ⚠️ AND A LINKED RECIPE WHOSE LEAVENING IS GONE SAYS SO. The dough still
 // calculates — every other ingredient is there — but the knob must not silently
 // scale nothing while the screen goes on showing it.

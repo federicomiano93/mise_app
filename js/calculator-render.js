@@ -118,7 +118,9 @@ export function buildTabBar(bar, recipes, onPick) {
 //   traysTotal → "Number of trays" + "Total dough (g)" + Confirm/Edit + result
 // CSP-safe (DOM API, no innerHTML/inline styles). No event listeners here — app.js
 // wires them after inserting the panel, exactly like the old static markup.
-export function buildRecipePanel(recipe) {
+// `resolved` is the tab's effective recipe (effectiveRecipe): the knob is named after
+// the row it scales — on a linked tab the Catalogue's, not the tab's leftover copy.
+export function buildRecipePanel(recipe, resolved) {
   const id = recipe.id;
   const hasOrders = usesOrders(recipe.logic);
   const hasTotalInput = usesTypedTotal(recipe.logic);
@@ -126,7 +128,8 @@ export function buildRecipePanel(recipe) {
   const content = el('div', { class: 'content', id: 'tab-' + id });
 
   if (showsLeaveningKnob(recipe)) {
-    const lev = (recipe.ingredients || []).find(i => i.key === recipe.leaveningKey);
+    const src = resolved || recipe;
+    const lev = (src.ingredients || []).find(i => i.key === src.leaveningKey);
     const label = (lev ? lev.label : t('calc.leavening'));
     const def = recipe.leaveningDefaultPct;
     const r = knobRange(def);
