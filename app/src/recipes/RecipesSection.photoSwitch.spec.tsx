@@ -34,6 +34,9 @@ async function openSettings(location: Record<string, unknown> = GB, options: { s
   });
   await screen.findByRole('region', { name: 'Settings' }, LOAD);
   const region = within(screen.getByRole('region', { name: 'Settings' }));
+  // The Settings region is there while it still says «Loading…» (aria-busy): wait for its first card, or a loaded machine
+  // reads an empty screen (it failed once in a full run, 18 Oct 2026).
+  await region.findByRole('region', { name: 'Photos' }, LOAD);
   const photoSwitch = () => region.getByRole('switch', { name: 'Read recipes from a photo' });
   return { ...view, photo, region, photoSwitch };
 }
