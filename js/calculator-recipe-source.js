@@ -15,6 +15,10 @@
 // numbers it decides are how much dough gets made.
 
 import { ridOf } from './catalogue/guided-model.js';
+// The Catalogue's own unit table, never a copy of it: a second table is a second
+// place for kg to drift. No new coupling either — guided-model.js above already
+// imports catalogue-model.js, so this file depended on it before this import.
+import { ingredientGrams } from './catalogue/catalogue-model.js';
 
 // ── What can go wrong, named ─────────────────────────────────────────────────
 //
@@ -29,6 +33,23 @@ export const PROBLEMS = Object.freeze({
 });
 
 const num = v => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
+const unitKey = row => String(row?.unit || '').trim().toLowerCase();
+
+// A weighable row's amount IN GRAMS.
+//
+// ⚠️⚠️ THE CATALOGUE STORES THE NUMBER AS TYPED, IN ITS OWN UNIT. «Flour 1 kg» is
+// saved as { grams: 1, unit: 'kg' } — the field is called `grams` for history,
+// not because it holds grams. Copying it raw made a linked tab read 1 kg of flour
+// as 1 g, and a 1720 g dough of Flour 1 kg / Water 700 g / Salt 20 g came out as
+// 2 g of flour and almost all water, with no warning, frozen into the saved
+// dough. The unit is read loosely (trimmed, any case, «gr») because the linked
+// recipe arrives raw from Firestore, not through the Catalogue's normaliser.
+// Rounded to the milligram so 1.005 kg reads 1005 g, not 1004.9999999999999 g.
+function rowGrams(row) {
+  const unit = unitKey(row);
+  const g = ingredientGrams({ grams: num(row?.grams), unit: unit === 'gr' || !unit ? 'g' : unit });
+  return Math.round(g * 1000) / 1000;
+}
 
 // Is this row something the Calculator can scale? The Calculator works in grams
 // and multiplies everything by one factor; a row measured in pieces or "to taste"
@@ -38,7 +59,7 @@ const num = v => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
 // it would produce a dough that is quietly light by exactly that ingredient —
 // the one direction a recipe must not be wrong in.
 export function isWeighable(row) {
-  const unit = String(row?.unit || '').trim().toLowerCase();
+  const unit = unitKey(row);
   if (unit && unit !== 'g' && unit !== 'gr' && unit !== 'kg') return false;
   return num(row?.grams) > 0;
 }
@@ -116,7 +137,7 @@ export function resolveRecipe(recipe, catalogueById) {
   const ingredients = usable.map(r => ({
     key: ridOf(r) || String(r.label || '').trim(),
     label: String(r.label || '').trim(),
-    grams: num(r.grams),
+    grams: rowGrams(r),
   }));
 
   const wanted = String(recipe.leaveningRid || '').trim();
