@@ -182,7 +182,10 @@ function declarationPanel(recipe, app) {
   // ⚠️ THE ALLERGEN IS EMPHASISED INSIDE THE LIST, which is what the regulation asks
   // for — not only summarised underneath. Same bold-and-underline as .lab-ing--allergen
   // on the label screen: the same fact must not look like two different things.
-  const list = el('p', { class: 'cat-decl-list' });
+  // ⚠️ translate="no" on the declaration's own words (list, «Contains», traces), never on
+  // the heading or caveat, which address the reader: the reason is on the label card in
+  // label-view.js.
+  const list = el('p', { class: 'cat-decl-list', translate: 'no' });
   label.ingredients.forEach((item, i) => {
     if (i) list.appendChild(document.createTextNode(', '));
     list.appendChild(el('span', {
@@ -199,9 +202,9 @@ function declarationPanel(recipe, app) {
   panel.appendChild(list);
 
   const contains = containsLine(label, lang);
-  if (contains) panel.appendChild(el('p', { class: 'cat-decl-contains', text: contains }));
+  if (contains) panel.appendChild(el('p', { class: 'cat-decl-contains', translate: 'no', text: contains }));
   const traces = mayContainLine(label, lang);
-  if (traces) panel.appendChild(el('p', { class: 'cat-decl-traces', text: traces }));
+  if (traces) panel.appendChild(el('p', { class: 'cat-decl-traces', translate: 'no', text: traces }));
 
   // ⚠️ THE CAVEAT TRAVELS WITH THE TEXT, and it is interface language: it addresses the
   // person holding the phone, not the consumer reading a packet.

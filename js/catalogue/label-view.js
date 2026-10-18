@@ -166,7 +166,11 @@ export function renderLabel({
       return;
     }
 
-    const card = el('div', { class: 'lab-card' });
+    // ⚠️⚠️ translate="no": EVERY WORD ON THE LABEL IS IN THE COUNTRY'S LANGUAGE, which
+    // is often not the phone's. Found on the lab tablet (13 Oct 2026): Chrome offered
+    // to translate the page, and a yes would have rewritten the allergen names — the
+    // printed sheet included — by machine. The law decides these words, not the reader.
+    const card = el('div', { class: 'lab-card', translate: 'no' });
     card.appendChild(el('p', { class: 'lab-name', text: label.name || t('label.untitled') }));
 
     if (shows !== 'nutrition') {
