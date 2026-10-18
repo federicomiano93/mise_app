@@ -28,9 +28,9 @@
 // in the console — and the wait ends, so a screen never waits for them for ever.
 
 import {
-  findCalculatorImport, isScaledEntryFresh, labelFieldsOf, normalizeCatalogueRecipe, normalizeCatalogueRecipes,
+  calculatorImportKind, isScaledEntryFresh, labelFieldsOf, normalizeCatalogueRecipe, normalizeCatalogueRecipes,
 } from '@mise/shared/catalogue-model';
-import type { CatalogueRecipe, ImportAction } from '@mise/shared/catalogue-model';
+import type { CalculatorImportKind, CatalogueRecipe, ImportAction } from '@mise/shared/catalogue-model';
 import { normalizeEndNote, normalizeSteps, ridOf, withRowIds } from '@mise/shared/guided-model';
 import type { KeyValueStorage } from '../session/backend';
 import { newRecipeId, withoutPrice } from './recipesSource';
@@ -188,10 +188,11 @@ export interface RecipesStore {
   // as empty, which deletes it. A refusal puts the version before it back and says `recipe-not-saved`. Returns false,
   // and writes nothing, when the recipe is not held (deleted meanwhile).
   saveProcedure(procedure: ProcedureToSave): boolean;
-  // Whether the recipe was imported into the Calculator (a copy there that stays): config/calculator read once,
-  // raced against IMPORT_CHECK_MS. Never rejects: a slow, offline or refused read answers false.
-  calculatorImportOf(id: string): Promise<boolean>;
-  // Copies a recipe into the Calculator (a transaction on the server: NOT local-first). Resolves with what was done and
+  // How the Calculator stands to the recipe: 'linked' (a tab follows it live), 'copy' (an old import that stays on its
+  // own) or null (neither): config/calculator read once, raced against IMPORT_CHECK_MS. Never rejects: a slow, offline
+  // or refused read answers null.
+  calculatorImportOf(id: string): Promise<CalculatorImportKind | null>;
+  // Links a recipe to the Calculator (a transaction on the server: NOT local-first). Resolves with what was done and
   // counts the recipe as used (the current app does: opening a recipe and importing it are both use); REJECTS when the
   // write cannot be made, and counts nothing.
   importIntoCalculator(recipe: CatalogueRecipe, marketOrderTitle: string): Promise<ImportAction>;
@@ -754,12 +755,12 @@ export function createRecipesStore(source: RecipesSource, deps: RecipesDeps): Re
 
     calculatorImportOf(id) {
       let timer: ReturnType<typeof setTimeout> | undefined;
-      const late = new Promise<boolean>(resolve => { timer = setTimeout(() => resolve(false), IMPORT_CHECK_MS); });
-      let read: Promise<boolean>;
+      const late = new Promise<CalculatorImportKind | null>(resolve => { timer = setTimeout(() => resolve(null), IMPORT_CHECK_MS); });
+      let read: Promise<CalculatorImportKind | null>;
       try {
-        read = source.getCalculatorConfig().then(config => findCalculatorImport(config, id) !== null, () => false);
+        read = source.getCalculatorConfig().then(config => calculatorImportKind(config, id), () => null);
       } catch {
-        read = Promise.resolve(false);
+        read = Promise.resolve(null);
       }
       return Promise.race([read, late]).finally(() => clearTimeout(timer));
     },

@@ -2,8 +2,9 @@ import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import type { Ref } from 'react';
 import { useLocation, useNavigate } from 'react-router';
 import { ChartPie, Download, Import, Maximize2, Pencil, Trash2 } from 'lucide-react';
-import { importFailureKey, nonWeighableLabels, weighableTotalGrams } from '@mise/shared/catalogue-model';
+import { firstRowNotInGrams, importFailureKey, weighableTotalGrams } from '@mise/shared/catalogue-model';
 import type { CatalogueRecipe } from '@mise/shared/catalogue-model';
+import { resolveRecipe } from '@mise/shared/calculator-recipe-source';
 import { FROM_RECIPE_LINK, foodCostForRecipePath, mayOpenFoodCost } from '@mise/shared/recipe-link';
 import { isSectionAllowed } from '@mise/shared/sections';
 import { useT } from '../i18n/useT';
@@ -201,9 +202,15 @@ function FoodCostCard({ recipe }: { recipe: CatalogueRecipe }) {
   );
 }
 
-// «Import into Calculator» (a port of importRecipe of js/catalogue/catalogue-main.js): nothing to do for a recipe with
-// no weighable row, otherwise one question that names the rows the grams-only Calculator cannot take, then the
-// transaction of the store. The answer is said in the section's status message.
+// «Import into Calculator» (from importRecipe of js/catalogue/catalogue-main.js, which COPIES; owner's decision, 18 Oct 2026:
+// here it LINKS, so the Calculator follows the recipe): nothing to do for a recipe with no rows, a refusal that names the
+// row for one the grams-only Calculator cannot follow, otherwise one question, then the transaction of the store. The
+// answer is said in the section's status message.
+//
+// ⚠️ THE REFUSAL ASKS THE VERY FUNCTION THE CALCULATOR WILL ASK (`resolveRecipe` on a tab linked to this recipe): a linked
+// tab with ANY row that is not in grams (pieces, spoons, «to taste», or 0 g) calculates nothing — decided 1 Aug 2026,
+// because a dough quietly light by one ingredient is the one direction a recipe must not be wrong in. So the link is not
+// made at all, rather than made into a tab that only says «cannot calculate».
 //
 // ⚠️ A SECOND TAP DURING THE QUESTION OR THE WRITE IS IGNORED, and markBusy is held until the store's promise has settled
 // — NOT until this component goes away: the person can leave the recipe while the transaction is in the air, and a reload
@@ -219,19 +226,22 @@ function ImportAction({ recipe }: { recipe: CatalogueRecipe }) {
 
   async function run() {
     if (running.current) return;
-    if (weighableTotalGrams(recipe) <= 0) {
+    const resolved = resolveRecipe({ catalogueId: recipe.id }, { [recipe.id]: recipe });
+    if (resolved.problem === 'empty') {
       say(t('cat.nothingToImport'));
+      return;
+    }
+    // ⚠️ AND A ROW IN KILOS OR LITRES: the Calculator would read «1 kg» as 1 g (firstRowNotInGrams says why).
+    const notInGrams = resolved.problem === 'unweighable' ? resolved.problemRow : firstRowNotInGrams(recipe);
+    if (notInGrams !== null) {
+      say(t('cat.rowNotInGrams', { row: notInGrams }));
       return;
     }
     running.current = true;
     try {
-      const skipped = nonWeighableLabels(recipe);
       const ok = await confirm({
         title: t('cat.importIntoCalculator2'),
-        message: [
-          t('cat.copyIntoCalculator', { name: recipe.name }),
-          ...(skipped.length > 0 ? [t('cat.nonScalableNote', { n: skipped.length, list: skipped.join(', ') })] : []),
-        ],
+        message: t('cat.linkIntoCalculator', { name: recipe.name }),
         okLabel: t('ui.import'),
         cancelLabel: t('common.cancel'),
       });
@@ -240,7 +250,7 @@ function ImportAction({ recipe }: { recipe: CatalogueRecipe }) {
       const release = markBusy();
       try {
         const action = await store.importIntoCalculator(recipe, t('calc.marketOrderTitle'));
-        say(t(action === 'updated' ? 'cat.updatedInCalculator' : 'cat.addedToCalculator', { name: recipe.name }));
+        say(t(action === 'updated' ? 'cat.nowFollowedByCalculator' : 'cat.linkedToCalculator', { name: recipe.name }));
       } catch (err) {
         console.error('Import into Calculator failed:', err);
         say(t(importFailureKey(err)));
@@ -265,7 +275,7 @@ function ImportAction({ recipe }: { recipe: CatalogueRecipe }) {
         <Import aria-hidden="true" />
         {t('cat.importIntoCalculator')}
       </button>
-      <p className={styles.note}>{t('cat.makesACopyYou')}</p>
+      <p className={styles.note}>{t('cat.linksToCalculator')}</p>
       {confirmDialog}
     </div>
   );

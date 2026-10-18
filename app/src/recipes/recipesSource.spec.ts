@@ -369,11 +369,11 @@ describe('importing a recipe into the Calculator (a transaction)', () => {
     expect(sets[0]!.data.bakery, 'the folder it lands in, never what the stored document claimed').toBe('panificio-miano');
   });
 
-  test('the recipe arrives hidden, pro-rata, in grams, without the rows the Calculator cannot take', async () => {
+  test('the recipe arrives LINKED to the catalogue, hidden, pro-rata, with its weighable rows as the leftover copy', async () => {
     const { kit, sets } = txKit([{ clients: [CLIENT], recipes: [] }]);
     await sourceOn(kit).importIntoCalculator(FOCACCIA, TITLE);
     const [added] = recipesOf(sets[0]!.data);
-    expect(added).toMatchObject({ id: 'cat-foc', name: 'Focaccia', logic: 'total', visible: false });
+    expect(added).toMatchObject({ id: 'cat-foc', name: 'Focaccia', logic: 'total', visible: false, catalogueId: 'foc' });
     expect((added!.ingredients as { label: string; grams: number }[]).map(i => [i.label, i.grams])).toStrictEqual([['Flour', 1000], ['Water', 600]]);
   });
 
@@ -418,6 +418,18 @@ describe('importing a recipe into the Calculator (a transaction)', () => {
     expect(sets[0]!.data.configRev).toBe(9);
   });
 
+  test('⚠️ a tab the owner linked by hand is reused (no twin) and keeps its leavening, through the normaliser that writes the document', async () => {
+    const { kit, sets } = txKit([{
+      clients: [CLIENT],
+      recipes: [{ id: 'my-tab', name: 'Mine', logic: 'total', visible: true, order: 0, catalogueId: 'foc', leaveningRid: 'r7', ingredients: [] }],
+      configRev: 2,
+    }]);
+    await expect(sourceOn(kit).importIntoCalculator(FOCACCIA, TITLE)).resolves.toBe('updated');
+    const list = recipesOf(sets[0]!.data);
+    expect(list).toHaveLength(1);
+    expect(list[0]).toMatchObject({ id: 'my-tab', catalogueId: 'foc', leaveningRid: 'r7', visible: true });
+  });
+
   test('a re-import updates in place, keeping the tab order, its visibility and how it calculates', async () => {
     const { kit, sets } = txKit([{
       clients: [CLIENT],
@@ -430,7 +442,7 @@ describe('importing a recipe into the Calculator (a transaction)', () => {
     await expect(sourceOn(kit).importIntoCalculator(FOCACCIA, TITLE)).resolves.toBe('updated');
     const list = recipesOf(sets[0]!.data);
     expect(list.map(r => r.id)).toStrictEqual(['a', 'cat-foc']);
-    expect(list[1]).toMatchObject({ name: 'Focaccia', logic: 'traysTotal', trayWeight: 1200, visible: true, order: 1 });
+    expect(list[1]).toMatchObject({ name: 'Focaccia', logic: 'traysTotal', trayWeight: 1200, visible: true, order: 1, catalogueId: 'foc' });
     expect((list[1]!.ingredients as { label: string }[]).map(i => i.label)).toStrictEqual(['Flour', 'Water']);
   });
 

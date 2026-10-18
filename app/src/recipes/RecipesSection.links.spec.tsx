@@ -1,5 +1,6 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { isBusy } from '../session/busy';
 import { LOAD, recipe, renderRecipes, sourceWith } from '../testing/renderRecipes';
 import { USAGE_KEY } from './recipesStore';
@@ -104,7 +105,7 @@ describe('the order of the page', () => {
     expect(food.compareDocumentPosition(allergens) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
 
     const exportButton = main().getByRole('button', { name: 'Export' });
-    const hint = main().getByText(/Makes a copy you can tweak/);
+    const hint = main().getByText(/The Calculator follows this recipe/);
     const trash = main().getByRole('button', { name: 'Delete recipe' });
     const followed = (a: Element, b: Element) => (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
     expect(followed(allergens, exportButton)).toBe(true);
@@ -120,24 +121,61 @@ describe('who has Import into Calculator', () => {
   it('⚠️ is there, with its hint, for anyone whose venue uses the Calculator — the Calculator card being hidden from staff does not matter', async () => {
     await open('r1', { session: { ...EMPLOYEE, location: { staffHiddenCards: { calculator: true } } } });
     expect(importButton()).toBeInTheDocument();
-    expect(main().getByText(/Makes a copy you can tweak/)).toBeInTheDocument();
+    expect(main().getByText(/The Calculator follows this recipe/)).toBeInTheDocument();
   });
 
   it('⚠️ is absent, button and hint together, where the venue does not use the Calculator', async () => {
     await open('r1', { session: { location: { sections: { calculator: false } } } });
     expect(main().queryByRole('button', { name: 'Import into Calculator' })).not.toBeInTheDocument();
-    expect(main().queryByText(/Makes a copy you can tweak/)).not.toBeInTheDocument();
+    expect(main().queryByText(/The Calculator follows this recipe/)).not.toBeInTheDocument();
   });
 });
 
 describe('importing', () => {
-  it('says there is nothing to import for a recipe with no weight, asks nothing and writes nothing', async () => {
-    const source = sourceWith([ONE_PIECE]);
-    const { user } = await open('one', { source });
+  it('says there is nothing to import for a recipe with no rows, asks nothing and writes nothing', async () => {
+    const empty = recipe('empty', { name: 'Vuota', ingredients: [] });
+    const source = sourceWith([empty]);
+    const { user } = await open('empty', { source });
     await user.click(importButton());
     await says('This recipe has no weight-based ingredients, so there’s nothing to import.');
     expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
     expect(source.importIntoCalculator).not.toHaveBeenCalled();
+  });
+
+  it('⚠️ refuses a recipe with a row that is not in grams, naming the first one: no question, no write', async () => {
+    const source = sourceWith([ONE_PIECE]);
+    const { user } = await open('one', { source });
+    await user.click(importButton());
+    await says('“Eggs” is not in grams, so the Calculator cannot follow this recipe. Put it in grams and try again.');
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    expect(source.importIntoCalculator).not.toHaveBeenCalled();
+  });
+
+  it('⚠️ refuses a row of 0 g just the same', async () => {
+    const zero = recipe('zero', { name: 'Zero', ingredients: [{ label: 'Flour', grams: 100, unit: 'g' }, { label: 'Salt', grams: 0, unit: 'g' }] });
+    const source = sourceWith([zero]);
+    const { user } = await open('zero', { source });
+    await user.click(importButton());
+    await says('“Salt” is not in grams, so the Calculator cannot follow this recipe. Put it in grams and try again.');
+    expect(source.importIntoCalculator).not.toHaveBeenCalled();
+  });
+
+  it('⚠️ refuses a row in kilos too: the Calculator would read «1 kg» as 1 g', async () => {
+    const kilos = recipe('kilos', { name: 'Chili', ingredients: [{ label: 'Flour', grams: 1, unit: 'kg' }] });
+    const source = sourceWith([kilos]);
+    const { user } = await open('kilos', { source });
+    await user.click(importButton());
+    await says('“Flour” is not in grams, so the Calculator cannot follow this recipe. Put it in grams and try again.');
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    expect(source.importIntoCalculator).not.toHaveBeenCalled();
+  });
+
+  it('says the refusal in Italian with the row named', async () => {
+    const source = sourceWith([ONE_PIECE]);
+    renderRecipes('/recipes/one', { source, lang: 'it', session: { language: 'it' } });
+    await screen.findByRole('heading', { level: 3, name: 'Ingredienti' }, LOAD);
+    await userEvent.setup().click(main().getByRole('button', { name: 'Importa nel Calcolatore' }));
+    await says('“Eggs” non è in grammi: il Calcolatore non può seguire questa ricetta. Mettila in grammi e riprova.');
   });
 
   it('asks first, by name, and writes nothing when the answer is no', async () => {
@@ -145,29 +183,11 @@ describe('importing', () => {
     const { user } = await open('r1', { source });
     await user.click(importButton());
     const dialog = await screen.findByRole('alertdialog', { name: 'Import into Calculator?' });
-    expect(within(dialog).getByText(/Copy “Focaccia” into the Calculator\?/)).toBeInTheDocument();
-    expect(within(dialog).queryByText(/Note:/)).not.toBeInTheDocument();
+    expect(within(dialog).getByText(/Link “Focaccia” to the Calculator\? The Calculator will always use this recipe/)).toBeInTheDocument();
     await user.click(within(dialog).getByRole('button', { name: 'Cancel' }));
     await flush();
     expect(source.importIntoCalculator).not.toHaveBeenCalled();
     expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
-  });
-
-  it('⚠️ names the rows that cannot come (a plural note for several, a singular for one) in the question', async () => {
-    const { user } = await open('mix');
-    await user.click(importButton());
-    const dialog = await screen.findByRole('alertdialog', { name: 'Import into Calculator?' });
-    expect(within(dialog).getByText(/Note: Eggs, Salt use a unit the Calculator can’t scale/)).toBeInTheDocument();
-    await user.click(within(dialog).getByRole('button', { name: 'Cancel' }));
-  });
-
-  it('uses the singular form for one row left out', async () => {
-    const half = recipe('half', { name: 'Metà', ingredients: [{ label: 'Flour', grams: 100, unit: 'g' }, { label: 'Eggs', grams: 3, unit: 'pcs' }] });
-    const { user } = await open('half', { source: sourceWith([half]) });
-    await user.click(importButton());
-    const dialog = await screen.findByRole('alertdialog', { name: 'Import into Calculator?' });
-    expect(within(dialog).getByText(/Note: Eggs uses a unit the Calculator can’t scale/)).toBeInTheDocument();
-    await user.click(within(dialog).getByRole('button', { name: 'Cancel' }));
   });
 
   it('adds the recipe, hands the source the recipe and the translated market-order word, and says so', async () => {
@@ -175,7 +195,7 @@ describe('importing', () => {
     const { user } = await open('r1', { source });
     await user.click(importButton());
     await user.click(within(await screen.findByRole('alertdialog', { name: 'Import into Calculator?' })).getByRole('button', { name: 'Import' }));
-    await says('“Focaccia” added to the Calculator.');
+    await says('“Focaccia” linked to the Calculator.');
     expect(source.imports).toHaveLength(1);
     expect(source.imports[0]!.recipe.id).toBe('r1');
     expect(source.imports[0]!.recipe.name).toBe('Focaccia');
@@ -188,7 +208,7 @@ describe('importing', () => {
     const { user } = await open('r1', { source });
     await user.click(importButton());
     await user.click(within(await screen.findByRole('alertdialog', { name: 'Import into Calculator?' })).getByRole('button', { name: 'Import' }));
-    await says('“Focaccia” updated in the Calculator.');
+    await says('“Focaccia” was already in the Calculator: it now follows this recipe.');
   });
 
   it('⚠️ a refused import says «out of date», any other failure says «check your connection» — and logs', async () => {
@@ -221,7 +241,7 @@ describe('importing', () => {
     await flush();
     expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
     release();
-    await says('“Focaccia” added to the Calculator.');
+    await says('“Focaccia” linked to the Calculator.');
     expect(source.imports).toHaveLength(1);
     await waitFor(() => { expect(isBusy()).toBe(false); });
   });
@@ -236,7 +256,7 @@ describe('importing', () => {
     await waitFor(() => { expect(importButton()).toHaveAttribute('aria-busy', 'true'); });
     expect(importButton()).toHaveAttribute('aria-disabled', 'true');
     release();
-    await says('“Focaccia” added to the Calculator.');
+    await says('“Focaccia” linked to the Calculator.');
     expect(importButton()).not.toHaveAttribute('aria-busy');
     expect(importButton()).not.toHaveAttribute('aria-disabled');
   });
@@ -274,7 +294,7 @@ describe('importing', () => {
     source.refuseImport = null;
     await user.click(importButton());
     await user.click(within(await screen.findByRole('alertdialog', { name: 'Import into Calculator?' })).getByRole('button', { name: 'Import' }));
-    await says('“Focaccia” added to the Calculator.');
+    await says('“Focaccia” linked to the Calculator.');
     expect(usage()).toBe(before + 1);
   });
 });

@@ -920,18 +920,22 @@ describe('the Recipe catalogue store', () => {
       expect(said).toHaveBeenCalledWith({ kind: 'recipe-not-saved', name: 'Focaccia' });
     });
 
-    test('the Calculator check: imported as cat-<id> → true; no copy, no document or a refused read → false', async () => {
+    test('the Calculator check: a linked tab → linked; an old cat-<id> copy → copy; nothing, no document or a refused read → null', async () => {
       const { store, getCalculatorConfig } = makeStore();
       getCalculatorConfig.mockResolvedValueOnce({ recipes: [{ id: 'cat-R1', name: 'Focaccia' }] });
-      await expect(store.calculatorImportOf('R1')).resolves.toBe(true);
-      getCalculatorConfig.mockResolvedValueOnce({ recipes: [{ id: 'cat-R2' }] });
-      await expect(store.calculatorImportOf('R1')).resolves.toBe(false);
+      await expect(store.calculatorImportOf('R1')).resolves.toBe('copy');
+      getCalculatorConfig.mockResolvedValueOnce({ recipes: [{ id: 'cat-R1', catalogueId: 'R1' }] });
+      await expect(store.calculatorImportOf('R1')).resolves.toBe('linked');
+      getCalculatorConfig.mockResolvedValueOnce({ recipes: [{ id: 'my-tab', catalogueId: 'R1' }] });
+      await expect(store.calculatorImportOf('R1')).resolves.toBe('linked');
+      getCalculatorConfig.mockResolvedValueOnce({ recipes: [{ id: 'cat-R2' }, { id: 'other', catalogueId: 'R2' }] });
+      await expect(store.calculatorImportOf('R1')).resolves.toBeNull();
       getCalculatorConfig.mockResolvedValueOnce(null);
-      await expect(store.calculatorImportOf('R1')).resolves.toBe(false);
+      await expect(store.calculatorImportOf('R1')).resolves.toBeNull();
       getCalculatorConfig.mockRejectedValueOnce(new Error('permission-denied'));
-      await expect(store.calculatorImportOf('R1')).resolves.toBe(false);
+      await expect(store.calculatorImportOf('R1')).resolves.toBeNull();
       getCalculatorConfig.mockImplementationOnce(() => { throw new Error('sync'); });
-      await expect(store.calculatorImportOf('R1')).resolves.toBe(false);
+      await expect(store.calculatorImportOf('R1')).resolves.toBeNull();
     });
 
     test('importing into the Calculator asks the source, hands back its answer, and counts the recipe as used', async () => {
@@ -964,7 +968,7 @@ describe('the Recipe catalogue store', () => {
         await vi.advanceTimersByTimeAsync(0);
         expect(settled).toBe(false);
         await vi.advanceTimersByTimeAsync(1);
-        await expect(answer).resolves.toBe(false);
+        await expect(answer).resolves.toBeNull();
       } finally {
         vi.useRealTimers();
       }

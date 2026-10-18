@@ -80,10 +80,11 @@ export interface RecipesSource {
   // Deletes a recipe document. Same promise contract.
   removeRecipeDoc(id: string): Promise<void>;
   // The Calculator's configuration (config/calculator) as stored, read ONCE, or null when there is none. Read only
-  // to warn before a delete that the recipe was imported into the Calculator.
+  // to warn before a delete that the Calculator uses the recipe.
   getCalculatorConfig(): Promise<Record<string, unknown> | null>;
-  // Copies a recipe into the Calculator's configuration (config/calculator) in ONE transaction on the document as the
-  // server holds it: added at the end, or replaced in place when a copy 'cat-<id>' is already there. NOT local-first —
+  // LINKS a recipe to the Calculator (config/calculator) in ONE transaction on the document as the server holds it: a tab
+  // linked to it is added at the end, or the tab that already stands for it (an old copy 'cat-<id>', or one linked by hand)
+  // is refreshed in place and linked (owner's decision, 18 Oct 2026; the current app copies). NOT local-first —
   // a transaction needs the server; offline it REJECTS and the screen says so. `marketOrderTitle` is the translated
   // word the Calculator's normaliser gives a legacy market order (the same one the Calculator passes).
   importIntoCalculator(recipe: CatalogueRecipe, marketOrderTitle: string): Promise<ImportAction>;
