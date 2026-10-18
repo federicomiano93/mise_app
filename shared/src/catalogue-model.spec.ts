@@ -912,6 +912,82 @@ describe.each([
   });
 });
 
+// ── The LINKED import (owner's decision, 18 Oct 2026): the port only, the current app still copies ──────────────────
+//
+// The tests above that run against both files stay true for both. These are what Mise 2 adds: the Calculator tab an
+// import makes is linked to the catalogue recipe (`catalogueId`), the tab already standing for the recipe is found by its
+// id OR its link, and the leavening a person chose survives only on a tab already linked to this recipe.
+
+describe('the Calculator import links the tab (Mise 2 only)', () => {
+  const REC = { id: 'foc', name: 'Focaccia', ingredients: [{ label: 'Flour', grams: 1, unit: 'kg' }, { label: 'Salt', grams: 20 }] };
+  const recipesOf = (config: unknown) => (config as { recipes: Record<string, unknown>[] }).recipes;
+
+  test('toCalculatorRecipe carries the link and still writes the weighable rows as the leftover copy', () => {
+    const cr = ported.toCalculatorRecipe(REC);
+    expect(cr.catalogueId).toBe('foc');
+    expect(cr.id).toBe('cat-foc');
+    expect(cr.ingredients).toStrictEqual([{ label: 'Flour', grams: 1000 }, { label: 'Salt', grams: 20 }]);
+  });
+
+  test('a new tab is appended, linked', () => {
+    const { config, action } = ported.mergeImportedRecipe({ recipes: [{ id: 'x' }] }, ported.toCalculatorRecipe(REC));
+    expect(action).toBe('added');
+    expect(recipesOf(config)[1]).toMatchObject({ id: 'cat-foc', catalogueId: 'foc', visible: false, logic: 'total' });
+  });
+
+  test('an old unlinked copy becomes linked, keeping its place, visibility, logic and tray weight', () => {
+    const old = { id: 'cat-foc', name: 'Old', order: 2, visible: true, logic: 'traysTotal', trayWeight: 1200, ingredients: [] };
+    const { config, action } = ported.mergeImportedRecipe({ recipes: [{ id: 'a' }, old] }, ported.toCalculatorRecipe(REC));
+    const tab = recipesOf(config)[1]!;
+    expect(action).toBe('updated');
+    expect(recipesOf(config)).toHaveLength(2);
+    expect(tab).toMatchObject({ id: 'cat-foc', catalogueId: 'foc', name: 'Focaccia', order: 2, visible: true, logic: 'traysTotal', trayWeight: 1200 });
+    expect('leaveningRid' in tab, 'a copy had no linked leavening to keep').toBe(false);
+  });
+
+  test('a tab the owner already linked by hand is reused (no twin), keeping its own id', () => {
+    const byHand = { id: 'my-tab', name: 'Mine', order: 1, visible: true, catalogueId: 'foc', leaveningRid: 'r9', ingredients: [] };
+    const { config, action } = ported.mergeImportedRecipe({ recipes: [byHand] }, ported.toCalculatorRecipe(REC));
+    expect(action).toBe('updated');
+    expect(recipesOf(config)).toHaveLength(1);
+    expect(recipesOf(config)[0]).toMatchObject({ id: 'my-tab', catalogueId: 'foc', order: 1, visible: true });
+  });
+
+  test('the leavening is kept when the tab was already linked to this recipe, and dropped when it was linked to another', () => {
+    const same = ported.mergeImportedRecipe(
+      { recipes: [{ id: 'cat-foc', catalogueId: 'foc', leaveningRid: 'r1', order: 0, visible: true }] }, ported.toCalculatorRecipe(REC),
+    );
+    expect(recipesOf(same.config)[0]!.leaveningRid).toBe('r1');
+    const other = ported.mergeImportedRecipe(
+      { recipes: [{ id: 'cat-foc', catalogueId: 'elsewhere', leaveningRid: 'r1', order: 0, visible: true }] }, ported.toCalculatorRecipe(REC),
+    );
+    expect(recipesOf(other.config)[0]).toMatchObject({ catalogueId: 'foc' });
+    expect('leaveningRid' in recipesOf(other.config)[0]!).toBe(false);
+  });
+
+  test('findCalculatorImport finds a hand-linked tab, and the first of several', () => {
+    const cfg = { recipes: [{ id: 'a' }, { id: 'mine', catalogueId: 'foc' }, { id: 'cat-foc' }] };
+    expect(ported.findCalculatorImport(cfg, 'foc')).toBe(cfg.recipes[1]);
+    expect(ported.findCalculatorImport({ recipes: [{ id: 'mine', catalogueId: 'other' }] }, 'foc')).toBe(null);
+    expect(ported.findCalculatorImport({ recipes: [{ id: 'x', catalogueId: '' }] }, '')).toBe(null);
+  });
+
+  test('⚠️ firstRowNotInGrams names the first named row in kilos, litres, pieces… and nothing for a recipe in grams', () => {
+    expect(ported.firstRowNotInGrams({ ingredients: [{ label: 'Flour', grams: 1, unit: 'kg' }, { label: 'Eggs', grams: 3, unit: 'pcs' }] })).toBe('Flour');
+    expect(ported.firstRowNotInGrams({ ingredients: [{ label: 'A', grams: 5 }, { label: ' Milk ', grams: 1, unit: 'l' }] }), 'a row with no unit is grams').toBe('Milk');
+    expect(ported.firstRowNotInGrams({ ingredients: [{ label: '', grams: 1, unit: 'kg' }, { label: 'A', grams: 5, unit: 'g' }] }), 'a blank row is ignored').toBe(null);
+    for (const odd of [null, undefined, {}, { ingredients: 'x' }, 5]) expect(ported.firstRowNotInGrams(odd), String(odd)).toBe(null);
+  });
+
+  test('calculatorImportKind tells a linked tab from an old copy', () => {
+    expect(ported.calculatorImportKind({ recipes: [{ id: 'mine', catalogueId: 'foc' }] }, 'foc')).toBe('linked');
+    expect(ported.calculatorImportKind({ recipes: [{ id: 'cat-foc', catalogueId: 'foc' }] }, 'foc')).toBe('linked');
+    expect(ported.calculatorImportKind({ recipes: [{ id: 'cat-foc' }] }, 'foc')).toBe('copy');
+    expect(ported.calculatorImportKind({ recipes: [{ id: 'cat-x' }] }, 'foc')).toBe(null);
+    expect(ported.calculatorImportKind(null, 'foc')).toBe(null);
+  });
+});
+
 // ── nameTaken: the port against js/catalogue/ingredient-suggest.js ───────────
 
 describe.each([
@@ -1087,7 +1163,8 @@ describe('the port against the original', () => {
   ];
   // `supplierLabel` is js/supplier-label.js's, copied into the model and exported (step 3d-6 A2) for the link line.
   // `nameTaken` is not an export of catalogue-model.js: its original is in ingredient-suggest.js (tested above).
-  const ADDED = ['unitTextKey', 'nameTaken', 'supplierLabel'];
+  // `calculatorImportKind` is new in Mise 2 with the linked import (18 Oct 2026).
+  const ADDED = ['unitTextKey', 'nameTaken', 'supplierLabel', 'calculatorImportKind', 'firstRowNotInGrams'];
   // Same name, same results, but the translator is one more parameter.
   const ARITY_DIFFERS = ['batchWarning'];
   const original = legacyJs as unknown as Record<string, unknown>;

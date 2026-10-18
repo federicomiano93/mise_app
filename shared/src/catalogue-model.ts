@@ -441,14 +441,29 @@ export function findInvalidRecipe(recipe: unknown): InvalidRecipeProblem | null 
   return null;
 }
 
-// Find the Calculator copy of a catalogue recipe (imported as 'cat-<id>'), or null. Pure — used to WARN before
-// deleting a catalogue recipe that was imported into the Calculator (the two are independent copies; deleting
-// here never touches the Calculator).
+// The Calculator tab that stands for a catalogue recipe, or null: the first tab that is LINKED to it (`catalogueId`,
+// however it got linked — by this import or by hand in the Calculator's settings) or is an old copy imported as
+// 'cat-<id>'. Pure — used to find the tab an import should refresh, and to WARN before deleting a catalogue recipe the
+// Calculator uses.
+//
+// ⚠️ NEW IN MISE 2 (owner's decision, 18 Oct 2026): an import LINKS the tab to the recipe instead of copying it, so
+// this no longer agrees with js/catalogue/catalogue-model.js, which only knows the 'cat-<id>' copies.
 export function findCalculatorImport(config: unknown, catalogueId: unknown): Record<string, unknown> | null {
   const c = config as { recipes?: unknown } | null | undefined;
   const recipes = (c && Array.isArray(c.recipes)) ? c.recipes as (Record<string, unknown> | null)[] : [];
+  const wanted = String(catalogueId ?? '').trim();
   const importId = 'cat-' + (catalogueId as string);
-  return recipes.find(r => r && r.id === importId) || null;
+  return recipes.find(r => r && (r.id === importId || (wanted !== '' && String(r.catalogueId ?? '').trim() === wanted))) || null;
+}
+
+// Which kind of Calculator tab stands for a catalogue recipe: 'linked' (the tab reads the recipe live), 'copy' (an old
+// import that carries its own rows), or null (none).
+export type CalculatorImportKind = 'linked' | 'copy';
+
+export function calculatorImportKind(config: unknown, catalogueId: unknown): CalculatorImportKind | null {
+  const tab = findCalculatorImport(config, catalogueId);
+  if (tab === null) return null;
+  return String(tab.catalogueId ?? '').trim() === String(catalogueId ?? '').trim() ? 'linked' : 'copy';
 }
 
 // ── Import into the Calculator (the single coupling; still pure here) ────────
@@ -458,6 +473,8 @@ export interface CalculatorImportRecipe {
   id: string;
   name: unknown;
   logic: 'total';
+  // The link: the tab reads the catalogue recipe live (calculator-recipe-source.ts). NEW IN MISE 2.
+  catalogueId: string;
   ingredients: { label: unknown; grams: number }[];
   visible: false;
 }
@@ -467,16 +484,22 @@ export type ImportAction = 'added' | 'updated';
 type ImportableRecipe = { id: unknown; name: unknown; ingredients?: unknown };
 
 // Map a catalogue recipe to the raw Calculator-recipe shape the Calculator's normalizeRecipe accepts.
-// 'cat-' + the opaque Firestore id is a stable, unique provenance id; logic 'total' = plain pro-rata;
+// 'cat-' + the opaque Firestore id is a stable, unique id; logic 'total' = plain pro-rata;
 // visible:false keeps it out of the max-4 tab bar until the owner opts it in from Calculator Settings.
-// The Calculator is grams-only: weighable rows become grams, non-weighable ones (pieces / spoons / pinch /
-// to-taste) are left out; the UI warns first when anything is left out — see nonWeighableLabels.
+//
+// ⚠️ NEW IN MISE 2 (owner's decision, 18 Oct 2026): THE TAB IS LINKED, NOT COPIED — `catalogueId` makes the Calculator
+// read the recipe live (rows read-only), so a change made in the catalogue changes the doughs. The weighable rows are
+// still written as `ingredients`: that is the leftover copy the tab shows if someone later picks «own» in the
+// Calculator's source box (unlinking leaves the rows as they were). The Calculator is grams-only: weighable rows become
+// grams, the others are left out of that leftover; a LINKED tab with any other row calculates nothing, which is why the
+// screen refuses before it writes (resolveRecipe, problem `unweighable`).
 export function toCalculatorRecipe(recipe: ImportableRecipe): CalculatorImportRecipe {
   const rows = (recipe.ingredients || []) as ({ label?: unknown } | null)[];
   return {
     id: 'cat-' + (recipe.id as string),
     name: recipe.name,
     logic: 'total',
+    catalogueId: recipe.id as string,
     ingredients: rows
       .filter(i => isWeighableUnit(unitOf(i)))
       .map(i => ({ label: (i as { label?: unknown }).label, grams: Math.round(ingGrams(i)) })),
@@ -494,22 +517,43 @@ export function nonWeighableLabels(recipe: unknown): unknown[] {
     .map(i => i.label);
 }
 
-// Add or update an imported recipe inside a config's recipes[]. A recipe with the same id is replaced in place,
-// keeping its tab order and visibility and how it calculates (logic, trayWeight): a re-import never duplicates and
-// never hijacks the tab bar; otherwise it is appended. Pure: returns a new config plus the action taken.
+// The first named row whose unit is not plain grams, or null. NEW IN MISE 2 with the linked import.
+//
+// ⚠️ WHY IT EXISTS: a linked tab reads the catalogue's `grams` field as it is (calculator-recipe-source.ts, `resolveRecipe`),
+// without the unit's factor, and accepts the unit 'kg' as weighable — so «1 kg» of flour would be calculated as 1 g, a dough
+// a thousand times too light, with no warning. The import therefore refuses a recipe with ANY row that is not in grams
+// (the sentence says «put it in grams») instead of linking one that would calculate wrongly.
+export function firstRowNotInGrams(recipe: unknown): string | null {
+  const r = recipe as { ingredients?: unknown } | null | undefined;
+  const ings = (r && Array.isArray(r.ingredients)) ? r.ingredients as ({ label?: unknown } & Record<string, unknown>)[] : [];
+  const off = ings.find(i => i && String(i.label || '').trim() && unitOf(i) !== 'g');
+  return off ? String(off.label).trim() : null;
+}
+
+// Add or update an imported recipe inside a config's recipes[]. The tab that already stands for the recipe — one with the
+// same id (an old 'cat-<id>' copy), or one already LINKED to it by hand (`catalogueId`) — is replaced in place, keeping
+// its own id, its tab order and visibility and how it calculates (logic, trayWeight): a re-import never duplicates and
+// never hijacks the tab bar; otherwise the recipe is appended. Pure: returns a new config plus the action taken.
+//
+// ⚠️ NEW IN MISE 2 (owner's decision, 18 Oct 2026): the result is LINKED (`catalogueId`, from toCalculatorRecipe). The
+// leavening a person chose (`leaveningRid`, the linked row's id) is kept only when the tab was ALREADY linked to this same
+// recipe: on an old copy there is none to keep, and on a tab linked to another recipe it would name a row that is not here.
 export function mergeImportedRecipe<C extends object>(config: C, recipe: object & { id: unknown }): { config: C; action: ImportAction } {
   const current = (config as { recipes?: unknown }).recipes;
   const recipes = Array.isArray(current) ? current.slice() as (Record<string, unknown> | null)[] : [];
-  const idx = recipes.findIndex(r => r && r.id === recipe.id);
+  const catalogueId = String((recipe as { catalogueId?: unknown }).catalogueId ?? '').trim();
+  const idx = recipes.findIndex(r => r && (r.id === recipe.id || (catalogueId !== '' && String(r.catalogueId ?? '').trim() === catalogueId)));
   let action: ImportAction;
   if (idx >= 0) {
     const prev = recipes[idx] as Record<string, unknown>;
-    // The owner chose how this tab calculates (logic, tray weight); an import refreshes the ingredients, never
+    const sameLink = catalogueId !== '' && String(prev.catalogueId ?? '').trim() === catalogueId;
+    // The owner chose how this tab calculates (logic, tray weight); an import refreshes the rest, never
     // that (a fresh import always says logic: 'total').
     recipes[idx] = {
-      ...recipe, order: prev.order, visible: prev.visible,
+      ...recipe, id: prev.id, order: prev.order, visible: prev.visible,
       ...(prev.logic !== undefined ? { logic: prev.logic } : {}),
       ...(prev.trayWeight !== undefined ? { trayWeight: prev.trayWeight } : {}),
+      ...(sameLink && prev.leaveningRid ? { leaveningRid: prev.leaveningRid } : {}),
     };
     action = 'updated';
   } else {
