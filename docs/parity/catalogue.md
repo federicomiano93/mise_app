@@ -1574,3 +1574,44 @@ the chooser: slice A2) and reordering the rows (slice B). The row component has 
 - **Driven on the emulator** (IT, owner, 1024/360/296, and the English employee): new recipe with a link picked from the suggestions,
   edit of a recipe Food cost has weighed (the loss stays 12), the leave question, delete from the page's icon: every check passed, axe
   clean, no console error. `tests/rules/firestore-rules-check.mjs`: 1059 checks passed, including the Mise 2 save shape.
+
+## Tablet notes 16 Oct 2026 — Duplicate, linked Import (owner's decision, 18 Oct 2026) — differences from the current app, on purpose
+
+Two changes to the recipe page, both asked for after the owner tried the tablet. The current app has neither.
+
+- **«Duplicate» (Lucide `Copy`).** A new action at the END of the recipe page, in this order: Export, Import (where the venue uses the
+  Calculator), **Duplicate with its hint**, then the small Delete icon, which stays the very last. Shown with the gate of «New recipe»
+  in the list (`canManage`): absent, not disabled, for an employee. It opens the ordinary NEW-recipe editor (`/recipes/new`) filled in
+  from the recipe and **dirty**, using the hand-over the photo reader uses (`photoCarry.handOver`, now with an origin, `'photo'` or
+  `'duplicate'`); the focus goes to the editor's title. Nothing is saved until Save; Back asks before discarding. Back or a Save
+  leaves for the LIST, like any new recipe (the recipe page is not the history entry the editor steps back to).
+  - **What the copy takes:** the name «{name} (copy)» / «{name} (copia)» (the original's end is cut when the whole would pass the
+    name box's 199), every ingredient row as it is (`rid` and link included, so the procedure's steps still point at their rows), the
+    pack weight, the shelf life, the procedure (steps and closing message).
+  - **What it must never take:** the original's `id` (⚠️ `workingFrom` puts it in `rest`, and a copy that kept it would overwrite the
+    original: `editorModel.duplicateWorking` builds `rest` from a whitelist, and a spec proves no `id` survives `cleanWorking`), the
+    venue stamp, the oven loss and the two weighings (Food cost's, measured on the original's products).
+  - **Saving** a new recipe now sends `steps` and `endNote` in the same create, shaped as the steps editor shapes them, with each step's
+    rows cut down to the rows that exist in what is saved. An existing recipe's save still never sends them (`KEPT_FIELDS`). The rules
+    already accept both on a create (a rules check was added).
+- **«Import into Calculator» now LINKS instead of copying.** The Calculator tab it makes (or refreshes) carries `catalogueId`, so the
+  Calculator reads the recipe live and every change in the Catalogue changes its doughs. The weighable rows are still written as the
+  tab's own `ingredients`: the leftover copy the tab shows if someone later picks «own» in the Calculator's source box.
+  - **The tab that already stands for the recipe is reused**: the first one with id `cat-<id>` (an old copy, which becomes linked) OR
+    linked to the recipe by hand (`catalogueId`), so there is no twin. It keeps its own id, order, visibility, logic and tray weight; the
+    leavening a person chose (`leaveningRid`) is kept only on a tab that was already linked to this same recipe.
+  - **⚠️ The unweighable-row rule.** A linked tab with ANY row that is not weighable (pieces, spoons, «to taste», or 0 g) calculates
+    nothing (`resolveRecipe`, problem `unweighable`, decided 1 Aug 2026). So BEFORE the question the page asks that very function: a
+    recipe with no rows says «nothing to import» (as before); one with a row the Calculator cannot follow says, in the section's status
+    line, «“{row}” is not in grams, so the Calculator cannot follow this recipe. Put it in grams and try again.» — no question, no
+    write. This replaces the current app's «these rows will be left out» note, which would now leave a recipe that cannot calculate.
+  - **⚠️ Also refused: a row in kilos, litres, millilitres… (any unit but grams), with the same sentence.** `resolveRecipe` accepts `kg`
+    as weighable but reads the `grams` field without the unit's factor, so «1 kg» of flour would be calculated as 1 g: a dough a
+    thousand times too light, with no warning. The check is `catalogue-model.firstRowNotInGrams`. The Calculator side (a tab someone
+    links BY HAND to such a recipe in Calculator → Settings → Recipes) has the same problem today; it is not changed here.
+  - **The delete warning tells the two cases apart** (`store.calculatorImportOf` now answers `'linked' | 'copy' | null`): a linked tab
+    says «The Calculator uses it: afterwards that tab cannot calculate until you pick another recipe for it.»; an old unlinked copy
+    keeps the current sentence («that copy will stay»).
+  - New wording (EN / IT) for the question, the hint under the button and the two done messages (linked / was already there and now
+    follows); the old «copy» keys are gone. `shared/catalogue-model`'s import functions now differ from `js/catalogue/catalogue-model.js`
+    on purpose, so their new tests run against the port only (the tests that still hold for both stay in the paired block).

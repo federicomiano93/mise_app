@@ -1063,6 +1063,10 @@ export const en = {
   'cat.recipeAdded': 'Recipe added.',
   'cat.discardChanges': 'Discard changes?',
   'cat.youHaveUnsavedChanges': 'You have unsaved changes. Discard them?',
+  // New in Mise 2 (owner's decision, 18 Oct 2026): «Duplicate» on the recipe page opens a new recipe filled in from this one.
+  'cat.duplicate': 'Duplicate',
+  'cat.duplicateHint': 'Opens a new recipe filled in from this one; nothing is saved until you tap Save.',
+  'cat.copyOf': '{name} (copy)',
   'cat.deleteRecipe': 'Delete recipe',
   'cat.deleteRecipe2': 'Delete recipe?',
   'cat.deleteRecipeQ': 'Delete “{name}”? This cannot be undone.',

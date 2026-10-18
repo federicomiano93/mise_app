@@ -1,7 +1,7 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import type { Ref } from 'react';
 import { useLocation, useNavigate } from 'react-router';
-import { ChartPie, Download, Import, Maximize2, Pencil, Trash2 } from 'lucide-react';
+import { ChartPie, Copy, Download, Import, Maximize2, Pencil, Trash2 } from 'lucide-react';
 import { firstRowNotInGrams, importFailureKey, weighableTotalGrams } from '@mise/shared/catalogue-model';
 import type { CatalogueRecipe } from '@mise/shared/catalogue-model';
 import { resolveRecipe } from '@mise/shared/calculator-recipe-source';
@@ -25,8 +25,10 @@ import { useRecipes, useRecipesStore } from './RecipesContext';
 import { amountText, recipeAmounts } from './recipeAmounts';
 import { recipeExportModel } from './recipeExportModel';
 import { useRecipeReturn } from './recipeReturn';
+import { duplicateWorking } from './editorModel';
+import { carryOwner, handOver } from './photoCarry';
 import { FROM_RECIPE, cameFromList, cameFromSheet } from './recipesNav';
-import { editPath } from './recipesPath';
+import { NEW_PATH, editPath } from './recipesPath';
 import { useDeleteRecipe } from './useDeleteRecipe';
 import styles from './RecipeView.module.css';
 
@@ -39,7 +41,7 @@ type Props = {
 // One recipe: the bar with Back and its name, then the cards in this order (his decisions, 14-15 Oct 2026): the
 // ingredient list, the batch, «Food cost» (a door, only for whoever may open Food cost), the allergens and the
 // declaration, the mixing procedure (3d-8), then Export, then «Import into Calculator» with its hint (a write, only where
-// the venue uses the Calculator), and last the small Delete icon.
+// the venue uses the Calculator), then «Duplicate» with its hint (whoever may start a recipe), and last the small Delete icon.
 //
 // «Edit» is the bar's one action, for everybody who sees the section (employees write recipes too). Delete is a small
 // icon at the very end of the page, for whoever runs the place only.
@@ -108,7 +110,11 @@ export function RecipeView({ recipe, titleRef, onBack }: Props) {
         <ExportAction recipe={recipe} target={target} />
         {/* A WRITE, NOT A DOOR: judged by the venue's section only (the Calculator card being hidden from staff does not matter). */}
         {isSectionAllowed(location, 'calculator') ? <ImportAction recipe={recipe} /> : null}
-        {/* ⚠️ THE VERY END OF THE PAGE, after Export and Import: small, low-key, icon only. Absent — not disabled — for an employee. */}
+        {/* «Duplicate» opens the new-recipe editor filled in from this one. Absent — not disabled — for whoever may not start a
+            recipe (the gate of «New recipe» in the list: canManage). */}
+        {canManage ? <DuplicateAction recipe={recipe} /> : null}
+        {/* ⚠️ THE VERY END OF THE PAGE, after Export, Import and Duplicate: small, low-key, icon only. Absent — not disabled —
+            for an employee. */}
         {canManage ? (
           <button
             type="button"
@@ -126,9 +132,9 @@ export function RecipeView({ recipe, titleRef, onBack }: Props) {
   );
 }
 
-// «Export» as PDF or Excel: ⚠️ THE LAST THING ON THE PAGE, by Federico's choice (14 Oct 2026, «non è un'azione che si
-// fa tutti i giorni»). Under the ingredient table it pushed the batch box — what this screen is opened for — further
-// down. The file is made by recipeAmounts() from the same recipe, batch target and locale the table is drawn with, so
+// «Export» as PDF or Excel: ⚠️ AT THE END OF THE PAGE (then Import, Duplicate and the Delete icon, which is the very last),
+// by Federico's choice (14 Oct 2026, «non è un'azione che si fa tutti i giorni»). Under the ingredient table it pushed the
+// batch box — what this screen is opened for — further down. The file is made by recipeAmounts() from the same recipe, batch target and locale the table is drawn with, so
 // it holds the very amounts on screen. Nothing to export without ingredients.
 function ExportAction({ recipe, target }: { recipe: CatalogueRecipe; target: number | null }) {
   const { t, locale } = useT();
@@ -277,6 +283,33 @@ function ImportAction({ recipe }: { recipe: CatalogueRecipe }) {
       </button>
       <p className={styles.note}>{t('cat.linksToCalculator')}</p>
       {confirmDialog}
+    </div>
+  );
+}
+
+// «Duplicate»: a copy of this recipe becomes the working copy of the NEW-recipe editor, which opens at once, DIRTY. Nothing is
+// saved here — the person names it, changes what they want and saves, as for any new recipe. The copy travels in the hand-over
+// the photo reader uses (photoCarry.ts), stamped for this person and venue and marked as a duplicate. ⚠️ What a copy takes
+// and what it must never take (the original's id above all) is duplicateWorking's whitelist in editorModel.ts.
+function DuplicateAction({ recipe }: { recipe: CatalogueRecipe }) {
+  const { t } = useT();
+  const navigate = useNavigate();
+  const { user, locationId } = useSession();
+
+  return (
+    <div className={styles.importBlock}>
+      <button
+        type="button"
+        className={styles.importAction}
+        onClick={() => {
+          handOver(duplicateWorking(recipe, name => t('cat.copyOf', { name })), carryOwner(user?.uid, locationId), undefined, 'duplicate');
+          void navigate(NEW_PATH, { state: FROM_RECIPE });
+        }}
+      >
+        <Copy aria-hidden="true" />
+        {t('cat.duplicate')}
+      </button>
+      <p className={styles.note}>{t('cat.duplicateHint')}</p>
     </div>
   );
 }
