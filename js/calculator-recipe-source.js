@@ -207,7 +207,12 @@ export function chooseLeavening(recipe, value, linkedRows) {
     recipe.leaveningKey = ing.key;
   }
   if (!recipe.leaveningDefaultPct) recipe.leaveningDefaultPct = 1;
-  if (recipe.baselinePct == null) recipe.baselinePct = recipe.leaveningDefaultPct;
+  // ⚠️ A LINKED PICK RESTARTS THE BASELINE AT THE STARTING %. The baseline is the %
+  // at which the rows' grams are written; one left on the tab from before it was
+  // linked describes its OLD own recipe, and would silently change the Catalogue's
+  // yeast at the very % every phone starts from (0.65 kept, 0.8 start → ×1.23).
+  // From here the Catalogue's grams are exactly what the starting % gives.
+  if (linkedRows || recipe.baselinePct == null) recipe.baselinePct = recipe.leaveningDefaultPct;
   return true;
 }
 

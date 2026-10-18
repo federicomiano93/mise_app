@@ -28,7 +28,7 @@ import {
 } from './calculator-config.js';
 import { el } from './calculator-render.js';
 import { icon } from './calculator-icons.js';
-import { isLinked, chooseLeavening } from './calculator-recipe-source.js';
+import { isLinked, chooseLeavening, leaveningLost } from './calculator-recipe-source.js';
 import { effectiveRecipe } from './calculator-catalogue-link.js';
 import { withRowIds } from './catalogue/guided-model.js';
 import { getCatalogueRecipesOnce, stampRecipeRowIds } from './firebase.js';
@@ -539,7 +539,10 @@ function leaveningBox(recipe) {
     const option = el('option', { value }, ing.label || t('calc.unnamedIngredient'));
     select.appendChild(option);
   });
-  select.value = (linkedRows ? recipe.leaveningRid : recipe.leaveningKey) || '';
+  // A Catalogue row that is gone (deleted, or re-added with a new id) reads as
+  // «nothing rises» — which is what the Calculator then does: no knob, pro-rata.
+  const lost = leaveningLost(recipe, src);
+  select.value = lost ? '' : (tabLeaveningId(recipe) || '');
 
   select.addEventListener('change', () => {
     chooseLeavening(recipe, select.value, linkedRows);
@@ -555,7 +558,7 @@ function leaveningBox(recipe) {
 
   // The rest of the box only means anything once something IS the leavening —
   // on a linked tab, a Catalogue row (leaveningRid), never its leftover own key.
-  if (tabLeaveningId(recipe)) {
+  if (tabLeaveningId(recipe) && !lost) {
     const pct = el('input', {
       class: 'cp-prod-weight', type: 'number', min: '0', max: '100', step: '0.05',
       value: String(recipe.leaveningDefaultPct || 0), inputmode: 'decimal',

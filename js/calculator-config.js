@@ -370,9 +370,6 @@ export function calculatorEmptyReason(config, serverAnswered) {
   return getRecipes(config).length > 0 ? 'hidden-recipes' : 'no-recipes';
 }
 
-// Whether a recipe's calculator tab shows a leavening knob: only logics that order
-// or sum ('orders'/'both'), and only when the recipe designates a leavening with the
-// "show the knob" flag on. A 'total' or trays recipe never shows it (pure pro-rata).
 // Which row a tab names as its leavening, on the side its rows come from: the
 // Catalogue row id (`leaveningRid`) when linked, its own `leaveningKey` when not.
 //
@@ -388,8 +385,14 @@ export function tabLeaveningId(recipe) {
   return String((linked ? recipe.leaveningRid : recipe.leaveningKey) || '').trim() || null;
 }
 
+// Whether a recipe's calculator tab shows a leavening knob: only logics that order
+// or sum ('orders'/'both'), and only when the recipe designates a leavening with the
+// "show the knob" flag on. A 'total' or trays recipe never shows it (pure pro-rata).
+//
 // ⚠️ A LINKED TAB ASKS FOR ITS CATALOGUE ROW (leaveningRid), never its leftover own
-// leaveningKey — a knob shown for that one moved the % and scaled nothing.
+// leaveningKey — a knob shown for that one moved the % and scaled nothing. Whether
+// that row still EXISTS in the Catalogue is the screen's question (leaveningLost):
+// only the screen has the resolved recipe.
 export function showsLeaveningKnob(recipe) {
   if (!recipe || !usesOrders(recipe.logic)) return false;
   return !!(tabLeaveningId(recipe) && recipe.showLeavening);

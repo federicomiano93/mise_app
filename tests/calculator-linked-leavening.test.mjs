@@ -12,7 +12,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { chooseLeavening, resolveRecipe, sheetRecipe } from '../js/calculator-recipe-source.js';
+import { chooseLeavening, leaveningLost, resolveRecipe, sheetRecipe } from '../js/calculator-recipe-source.js';
 import { tabLeaveningId, showsLeaveningKnob, normalizeConfig, recipeSpec } from '../js/calculator-config.js';
 import { scaleRecipe } from '../js/calculator-dough-math.js';
 
@@ -63,11 +63,22 @@ test('chooseLeavening on a fresh linked tab starts the % and the baseline at 1',
   assert.equal(tab.baselinePct, 1);
 });
 
-test('chooseLeavening keeps a % and a baseline that are already there', () => {
-  const tab = { ...legacy(), leaveningDefaultPct: 2.5, baselinePct: 3 };
+test('chooseLeavening on a linked tab keeps its starting % and restarts the baseline there', () => {
+  // The old baseline described the tab's OWN recipe; kept, the Catalogue's yeast would
+  // change at the very % every phone starts from (0.65 kept, 0.8 start → ×1.23).
+  const tab = { ...legacy(), leaveningDefaultPct: 0.8, baselinePct: 0.65 };
   chooseLeavening(tab, 'r-yeast', rowsOf(tab));
-  assert.equal(tab.leaveningDefaultPct, 2.5);
-  assert.equal(tab.baselinePct, 3);
+  assert.equal(tab.leaveningDefaultPct, 0.8);
+  assert.equal(tab.baselinePct, 0.8);
+  const atStart = scaleRecipe(recipeSpec(sheetRecipe(tab, resolveRecipe(tab, CATALOGUE))), 1710, 0.8);
+  assert.deepEqual(atStart, [1000, 700, 10], 'at the starting % the Catalogue grams come out as written');
+});
+
+test('chooseLeavening on an own tab keeps a % and a baseline that are already there', () => {
+  const own = { leaveningDefaultPct: 2.5, baselinePct: 3, ingredients: [{ key: 'yeast', label: 'Yeast', grams: 10 }] };
+  chooseLeavening(own, 'yeast', null);
+  assert.equal(own.leaveningDefaultPct, 2.5);
+  assert.equal(own.baselinePct, 3);
 });
 
 test('chooseLeavening on a linked tab refuses a row the Catalogue does not have', () => {
@@ -123,10 +134,25 @@ test('a fresh linked tab, after the pick, scales the yeast with the knob', () =>
   assert.equal(Math.round(grams(2).reduce((a, b) => a + b, 0)), 1710);
 });
 
+test('a linked leavening row deleted from the Catalogue is «lost»: the knob would scale nothing', () => {
+  const tab = { ...fresh(), leaveningRid: 'r-yeast', leaveningDefaultPct: 1, baselinePct: 1 };
+  const gone = { 'cat-1': { ...CATALOGUE['cat-1'], ingredients: CATALOGUE['cat-1'].ingredients.slice(0, 2) } };
+  const resolved = resolveRecipe(tab, gone);
+  assert.equal(showsLeaveningKnob(tab), true, 'the tab alone cannot tell — only the resolved recipe can');
+  assert.equal(leaveningLost(tab, resolved), true);
+  const grams = pct => scaleRecipe(recipeSpec(sheetRecipe(tab, resolved)), 1700, pct);
+  assert.deepEqual(grams(2), grams(1), 'pro-rata: the % changes no gram, so no knob may be drawn');
+  assert.equal(leaveningLost(tab, resolveRecipe(tab, CATALOGUE)), false);
+  assert.equal(leaveningLost(tab, resolveRecipe(tab, {})), false, 'still loading is not lost (the tab refuses instead)');
+});
+
 test('the screens go through the shared helpers', () => {
   const recipes = readFileSync(new URL('../js/recipes.js', import.meta.url), 'utf8');
   assert.match(recipes, /chooseLeavening\(recipe, select\.value, linkedRows\)/);
-  assert.match(recipes, /if \(tabLeaveningId\(recipe\)\)/);
+  assert.match(recipes, /if \(tabLeaveningId\(recipe\) && !lost\)/);
+  assert.match(recipes, /const lost = leaveningLost\(recipe, src\)/);
   const app = readFileSync(new URL('../js/app.js', import.meta.url), 'utf8');
   assert.match(app, /buildRecipePanel\(r, effectiveRecipe\(r\)\)/, 'the knob is named after the row it scales');
+  const render = readFileSync(new URL('../js/calculator-render.js', import.meta.url), 'utf8');
+  assert.match(render, /showsLeaveningKnob\(recipe\) && !leaveningLost\(recipe, resolved\)/, 'no knob for a row that is gone');
 });

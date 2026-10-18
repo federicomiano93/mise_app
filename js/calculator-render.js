@@ -14,6 +14,7 @@
 import { t } from './i18n.js';
 import { getTabProducts, showsLeaveningKnob, usesOrders, usesTypedTotal, usesTrays } from './calculator-config.js';
 import { icon } from './calculator-icons.js';
+import { leaveningLost } from './calculator-recipe-source.js';
 import { SEND_PATHS, svgElement } from './send-icon.js';
 
 // ⚠️⚠️ THE WHATSAPP BRAND MARK USED TO BE DRAWN HERE, one of three copies of the
@@ -127,7 +128,9 @@ export function buildRecipePanel(recipe, resolved) {
   const hasTrays = usesTrays(recipe.logic);
   const content = el('div', { class: 'content', id: 'tab-' + id });
 
-  if (showsLeaveningKnob(recipe)) {
+  // ⚠️ NO KNOB FOR A CATALOGUE ROW THAT IS GONE (deleted, or re-added with a new id):
+  // the spec scales pro-rata then, and a knob would move the % and change no gram.
+  if (showsLeaveningKnob(recipe) && !leaveningLost(recipe, resolved)) {
     const src = resolved || recipe;
     const lev = (src.ingredients || []).find(i => i.key === src.leaveningKey);
     const label = (lev ? lev.label : t('calc.leavening'));
