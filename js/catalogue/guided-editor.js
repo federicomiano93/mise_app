@@ -13,7 +13,7 @@
 
 import { t } from '../i18n.js';
 import { el } from './dom.js';
-import { unitOf, unitText } from './catalogue-model.js';
+import { unitOf, unitText, formatAmount } from './catalogue-model.js';
 import {
   withRowIds, ridOf, normalizeSteps, normalizeSeconds, normalizeEndNote, unassignedRows,
   MAX_STEPS, MAX_STEP_TEXT, MAX_SPEED_TEXT, MAX_END_NOTE, formatDuration,
@@ -25,8 +25,6 @@ const UP_SVG =
   '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>';
 const DOWN_SVG =
   '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M19 12l-7 7-7-7"/></svg>';
-
-const nf = new Intl.NumberFormat('en-GB', { maximumFractionDigits: 0, useGrouping: false });
 
 const clampInt = (value, max) => {
   const n = Math.floor(Number(value));
@@ -104,7 +102,7 @@ export function renderGuidedEditor({ recipe, app }) {
       picks.appendChild(el('label', { class: 'guided-edit-pick' }, [
         box,
         el('span', { class: 'guided-edit-pick-name', text: label }),
-        el('span', { class: 'guided-edit-pick-amt', text: `${nf.format(Number(row.grams) || 0)} ${unitText(unitOf(row))}` }),
+        el('span', { class: 'guided-edit-pick-amt', text: `${formatAmount(row.grams, unitOf(row))} ${unitText(unitOf(row))}` }),
       ]));
     }
 
