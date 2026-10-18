@@ -147,7 +147,7 @@ export function openBusinesses({ host } = {}) {
       // inside anything tappable — a button cannot live inside a button.
       const bin = el('button', {
         type: 'button', class: 'bz-del-icon', icon: BIN_ICON,
-        'aria-label': `Delete ${row.name}`,
+        'aria-label': t('bz.deleteName', { name: row.name }),
         onClick: () => remove(row, bin),
       });
       card.appendChild(el('div', { class: 'people-row-actions' }, [again, bin]));
