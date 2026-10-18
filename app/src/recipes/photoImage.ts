@@ -24,6 +24,21 @@ export class PhotoImageError extends Error {
 //
 // It also takes the File directly, so no blob: URL is ever made — the app's Content-Security-Policy allows
 // `img-src 'self' data:` and nothing else — and it holds one downscaled copy rather than the original as well.
+//
+// ⚠️ Chrome 101 (the lab tablet's) does not know the word 'from-image': it REJECTS the options with a TypeError before
+// looking at the photo, and every camera photo on the tablet was reported as an unreadable format (found on the real
+// tablet, 18 Oct 2026). Its own default already honours the EXIF flag (measured there: a 40×30 JPEG flagged «rotate 90°»
+// decodes 30×40) — the spec later renamed that behaviour 'from-image'. So ONLY a TypeError (the options refused) retries
+// without them; a photo that truly cannot be decoded fails with a DOMException and stays «undecodable».
+async function decodeUpright(file: Blob): Promise<ImageBitmap> {
+  try {
+    return await createImageBitmap(file, { imageOrientation: 'from-image' });
+  } catch (error) {
+    if (!(error instanceof TypeError)) throw error;
+    return createImageBitmap(file);
+  }
+}
+
 export async function shrinkPhoto(file: Blob): Promise<string> {
   // A browser without it (Chrome 101, the lab tablet's, has it) cannot prepare a photo: said as «could not be prepared»,
   // not as a format problem, because no format is to blame.
@@ -31,7 +46,7 @@ export async function shrinkPhoto(file: Blob): Promise<string> {
 
   let bitmap: ImageBitmap;
   try {
-    bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
+    bitmap = await decodeUpright(file);
   } catch {
     // ⚠️ ALMOST ALWAYS HEIC, off an iPhone, picked from the library rather than taken with the camera. Android cannot
     // decode it at all. There is no fallback path on purpose: a second decoder that works on one platform is a defect that

@@ -74,6 +74,27 @@ describe('shrinkPhoto', () => {
     expect(device.dataUrls).toHaveLength(1);
   });
 
+  it('⚠️ Chrome 101 refuses the word «from-image» (TypeError): decoded again with its own default, which honours EXIF', async () => {
+    const device = stubDevice({ width: 3024, height: 4032 });
+    const create = vi.fn(async (file: Blob, options?: ImageBitmapOptions) => {
+      if (options?.imageOrientation === 'from-image') throw new TypeError("The provided value 'from-image' is not a valid enum value of type ImageOrientation.");
+      return device.create(file, options);
+    });
+    vi.stubGlobal('createImageBitmap', create);
+    const url = await shrinkPhoto(FILE);
+    expect(create.mock.calls).toEqual([[FILE, { imageOrientation: 'from-image' }], [FILE]]);
+    expect(device.draws).toEqual([[1176, 1568]]);
+    expect(url.startsWith('data:image/jpeg;base64,')).toBe(true);
+  });
+
+  it('a photo that truly cannot be decoded (DOMException) is NOT tried again', async () => {
+    const create = vi.fn(async () => { throw new DOMException('The source image could not be decoded.', 'InvalidStateError'); });
+    stubDevice();
+    vi.stubGlobal('createImageBitmap', create);
+    await expect(shrinkPhoto(FILE)).rejects.toMatchObject({ code: 'undecodable' });
+    expect(create).toHaveBeenCalledTimes(1);
+  });
+
   it('a file the browser cannot decode (HEIC from the library) is «undecodable»', async () => {
     stubDevice({ bitmapFails: true });
     await expect(shrinkPhoto(FILE)).rejects.toMatchObject({ code: 'undecodable' });
