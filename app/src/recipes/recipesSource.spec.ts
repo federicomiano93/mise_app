@@ -418,32 +418,31 @@ describe('importing a recipe into the Calculator (a transaction)', () => {
     expect(sets[0]!.data.configRev).toBe(9);
   });
 
-  test('⚠️ a tab the owner linked by hand is reused (no twin) and keeps its leavening, through the normaliser that writes the document', async () => {
+  test('⚠️ a tab already linked to this recipe (by hand, with its own id and leavening) is "already": NOTHING is written, no revision bump', async () => {
     const { kit, sets } = txKit([{
       clients: [CLIENT],
       recipes: [{ id: 'my-tab', name: 'Mine', logic: 'total', visible: true, order: 0, catalogueId: 'foc', leaveningRid: 'r7', ingredients: [] }],
       configRev: 2,
     }]);
-    await expect(sourceOn(kit).importIntoCalculator(FOCACCIA, TITLE)).resolves.toBe('updated');
-    const list = recipesOf(sets[0]!.data);
-    expect(list).toHaveLength(1);
-    expect(list[0]).toMatchObject({ id: 'my-tab', catalogueId: 'foc', leaveningRid: 'r7', visible: true });
+    await expect(sourceOn(kit).importIntoCalculator(FOCACCIA, TITLE)).resolves.toBe('already');
+    expect(sets).toHaveLength(0);
   });
 
-  test('a re-import updates in place, keeping the tab order, its visibility and how it calculates', async () => {
+  test('⚠️ an old unlinked copy becomes linked and keeps everything else: its name, order, visibility, logic and tray weight', async () => {
     const { kit, sets } = txKit([{
       clients: [CLIENT],
       recipes: [
         { id: 'a', name: 'A', logic: 'total', visible: true, order: 0, ingredients: [{ label: 'F', grams: 1 }] },
-        { id: 'cat-foc', name: 'Old name', logic: 'traysTotal', trayWeight: 1200, visible: true, order: 1, ingredients: [{ label: 'Old', grams: 5 }] },
+        { id: 'cat-foc', name: 'My Focaccia', logic: 'traysTotal', trayWeight: 1200, visible: true, order: 1, ingredients: [{ label: 'Old', grams: 5 }] },
       ],
       configRev: 2,
     }]);
     await expect(sourceOn(kit).importIntoCalculator(FOCACCIA, TITLE)).resolves.toBe('updated');
     const list = recipesOf(sets[0]!.data);
     expect(list.map(r => r.id)).toStrictEqual(['a', 'cat-foc']);
-    expect(list[1]).toMatchObject({ name: 'Focaccia', logic: 'traysTotal', trayWeight: 1200, visible: true, order: 1, catalogueId: 'foc' });
+    expect(list[1]).toMatchObject({ name: 'My Focaccia', logic: 'traysTotal', trayWeight: 1200, visible: true, order: 1, catalogueId: 'foc' });
     expect((list[1]!.ingredients as { label: string }[]).map(i => i.label)).toStrictEqual(['Flour', 'Water']);
+    expect(sets[0]!.data.configRev).toBe(3);
   });
 
   test('a refused or failed transaction rejects, so the screen can say so; nothing is written', async () => {

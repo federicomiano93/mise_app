@@ -19,6 +19,15 @@ const TYPED = 'typedCopy';
 // onto the editor's entry.
 export const FROM_EDITOR = { ...KEEP_FOCUS, fromEditor: true } as const;
 
+// The state of the new-recipe editor «Duplicate» opens: Back and Discard step back ONE entry, to the recipe it was copied
+// from (a Save still goes to the list, like any new recipe). It carries KEEP_FOCUS and `fromRecipe` like the other trips
+// out of a recipe page.
+export const FROM_DUPLICATE = { ...KEEP_FOCUS, fromRecipe: true, fromDuplicate: true } as const;
+
+export function cameFromDuplicate(state: unknown): boolean {
+  return typeof state === 'object' && state !== null && 'fromDuplicate' in state;
+}
+
 export function cameFromEditor(state: unknown): boolean {
   return typeof state === 'object' && state !== null && 'fromEditor' in state;
 }

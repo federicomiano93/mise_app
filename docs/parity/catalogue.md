@@ -1583,8 +1583,10 @@ Two changes to the recipe page, both asked for after the owner tried the tablet.
   Calculator), **Duplicate with its hint**, then the small Delete icon, which stays the very last. Shown with the gate of «New recipe»
   in the list (`canManage`): absent, not disabled, for an employee. It opens the ordinary NEW-recipe editor (`/recipes/new`) filled in
   from the recipe and **dirty**, using the hand-over the photo reader uses (`photoCarry.handOver`, now with an origin, `'photo'` or
-  `'duplicate'`); the focus goes to the editor's title. Nothing is saved until Save; Back asks before discarding. Back or a Save
-  leaves for the LIST, like any new recipe (the recipe page is not the history entry the editor steps back to).
+  `'duplicate'`); the focus goes to the editor's title. Nothing is saved until Save; Back asks before discarding, and Back and
+  Discard step back ONE level, to the ORIGINAL recipe (history back), the focus on its Duplicate button (`recipeReturn`, origin
+  `duplicate`); a Save goes to the list with the new row focused, like any new recipe (P20). A second tap before the editor has
+  opened pushes no second entry. The hint is tied to the button (`aria-describedby`), as Import's is.
   - **What the copy takes:** the name «{name} (copy)» / «{name} (copia)» (the original's end is cut when the whole would pass the
     name box's 199), every ingredient row as it is (`rid` and link included, so the procedure's steps still point at their rows), the
     pack weight, the shelf life, the procedure (steps and closing message).
@@ -1597,18 +1599,21 @@ Two changes to the recipe page, both asked for after the owner tried the tablet.
 - **«Import into Calculator» now LINKS instead of copying.** The Calculator tab it makes (or refreshes) carries `catalogueId`, so the
   Calculator reads the recipe live and every change in the Catalogue changes its doughs. The weighable rows are still written as the
   tab's own `ingredients`: the leftover copy the tab shows if someone later picks «own» in the Calculator's source box.
-  - **The tab that already stands for the recipe is reused**: the first one with id `cat-<id>` (an old copy, which becomes linked) OR
-    linked to the recipe by hand (`catalogueId`), so there is no twin. It keeps its own id, order, visibility, logic and tray weight; the
-    leavening a person chose (`leaveningRid`) is kept only on a tab that was already linked to this same recipe.
+  - **The tab that already stands for the recipe is reused WHOLE**: the first tab linked to it (`catalogueId`, however it got linked),
+    else the old copy `cat-<id>` if it is still unlinked. Only `catalogueId` and the leftover `ingredients` change; its id, name,
+    order, visibility, logic, tray weight, leavening and percentages stay. A tab already linked to this recipe is not touched at all:
+    nothing is written, no revision bump, and the page says «already linked». A tab linked to ANOTHER recipe is never hijacked, even
+    under the id `cat-<id>`: the new tab then takes `cat-<id>-2`, `-3`… (never a duplicate id).
   - **⚠️ The unweighable-row rule.** A linked tab with ANY row that is not weighable (pieces, spoons, «to taste», or 0 g) calculates
     nothing (`resolveRecipe`, problem `unweighable`, decided 1 Aug 2026). So BEFORE the question the page asks that very function: a
     recipe with no rows says «nothing to import» (as before); one with a row the Calculator cannot follow says, in the section's status
-    line, «“{row}” is not in grams, so the Calculator cannot follow this recipe. Put it in grams and try again.» — no question, no
-    write. This replaces the current app's «these rows will be left out» note, which would now leave a recipe that cannot calculate.
-  - **⚠️ Also refused: a row in kilos, litres, millilitres… (any unit but grams), with the same sentence.** `resolveRecipe` accepts `kg`
-    as weighable but reads the `grams` field without the unit's factor, so «1 kg» of flour would be calculated as 1 g: a dough a
-    thousand times too light, with no warning. The check is `catalogue-model.firstRowNotInGrams`. The Calculator side (a tab someone
-    links BY HAND to such a recipe in Calculator → Settings → Recipes) has the same problem today; it is not changed here.
+    line, one of the two sentences below naming the row — no question, no write. This replaces the current app's «these rows will be left out» note, which would now leave a recipe that cannot calculate.
+  - **⚠️ Kilos.** `resolveRecipe` accepted `kg` as weighable but read the `grams` field without the unit's factor, so «1 kg» of flour
+    was calculated as 1 g: a dough a thousand times too light, with no warning. FIXED IN MISE 2 ONLY: `shared/calculator-recipe-source`
+    now reads a `kg` row as grams × 1000 (the one intended difference from `js/calculator-recipe-source.js`, whose fix for the live
+    app is a separate change), so a recipe with kilos is accepted by the import. What the import refuses is exactly what
+    `resolveRecipe` refuses (`catalogue-model.calculatorRefusal` asks it): pieces, spoons, «to taste», millilitres, litres… («The row
+    “X” is not by weight… write it in grams or kilos») and a row with no amount, 0 g («The row “X” has no amount… write how many grams»).
   - **The delete warning tells the two cases apart** (`store.calculatorImportOf` now answers `'linked' | 'copy' | null`): a linked tab
     says «The Calculator uses it: afterwards that tab cannot calculate until you pick another recipe for it.»; an old unlinked copy
     keeps the current sentence («that copy will stay»).

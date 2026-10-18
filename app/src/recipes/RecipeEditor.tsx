@@ -25,7 +25,7 @@ import { IngredientRow } from './IngredientRow';
 import { LinkDialog } from './LinkDialog';
 import { ReorderRows } from './ReorderRows';
 import { NEW_OPENER, recipeOpener, useHandBack } from './handBack';
-import { FROM_EDITOR, carryOwner, forgetHandover, hasTypedCopy, peekHandedOver, typedCopyOf, withTypedCopy, withoutTypedCopy } from './photoCarry';
+import { FROM_EDITOR, cameFromDuplicate, carryOwner, forgetHandover, hasTypedCopy, peekHandedOver, typedCopyOf, withTypedCopy, withoutTypedCopy } from './photoCarry';
 import { recipePhotoOn } from './photoGate';
 import { cameFromList, cameFromRecipe, recipeCameFromList, useLeave } from './recipesNav';
 import { PHOTO_PATH, RECIPES_PATH, recipePath } from './recipesPath';
@@ -190,8 +190,14 @@ export function RecipeEditor({ id, recipe, titleRef, onTyped }: Props) {
       }
     }
     leavingClean.current = true;
-    leave();
+    leaveBack();
   }
+
+  // ⚠️ A COPY OPENED BY «DUPLICATE» STEPS BACK ONE LEVEL, to the recipe it was copied from (Back, and Discard in the question
+  // the blocker asks); the recipe page gives the focus back to its Duplicate button (recipeReturn). A Save still goes to the
+  // list, like any new recipe (P20). An editor opened any other way leaves as before.
+  const fromDuplicate = id === null && cameFromDuplicate(state);
+  const leaveBack = () => { if (fromDuplicate) void navigate(-1); else leave(); };
 
   // ── What is wrong, and where ─────────────────────────────────────────────────────────────────────────────────
   const [showErrors, setShowErrors] = useState(false);

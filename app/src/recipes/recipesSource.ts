@@ -279,6 +279,9 @@ export function createFirestoreRecipesSource(
         const snap = await tx.get(ref);
         const raw = snap.exists() ? (snap.data() as Record<string, unknown>) : null;
         const merged = mergeImportedRecipe(normalizeConfig(raw, marketOrderTitle), toCalculatorRecipe(recipe));
+        // A tab already linked to this recipe: nothing to write, and the revision is not bumped (a Calculator save in the air
+        // would otherwise be told to reload for no reason).
+        if (merged.action === 'already') return merged.action;
         const configRev = (Number(raw?.configRev) || 0) + 1;
         tx.set(ref, { ...normalizeConfig(merged.config, marketOrderTitle), configRev, configModel: CONFIG_MODEL, bakery: locationId });
         return merged.action;

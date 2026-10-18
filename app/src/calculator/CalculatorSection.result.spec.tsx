@@ -208,7 +208,8 @@ describe('a recipe taken from the catalogue', () => {
   });
   const GOOD = [
     { rid: 'r-flour', label: 'Flour', grams: 1000, unit: 'g' },
-    { rid: 'r-sugar', label: 'Sugar', grams: 250, unit: 'kg' },
+    // (Sugar was written in kilos here once, and the Calculator read 250 kg as 250 g: kilos are worth ×1000 now, see calculator-recipe-source.spec.ts.)
+    { rid: 'r-sugar', label: 'Sugar', grams: 250, unit: 'g' },
   ];
 
   async function openLinked(rows: unknown[] | null, hold = false) {

@@ -2,9 +2,8 @@ import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import type { Ref } from 'react';
 import { useLocation, useNavigate } from 'react-router';
 import { ChartPie, Copy, Download, Import, Maximize2, Pencil, Trash2 } from 'lucide-react';
-import { firstRowNotInGrams, importFailureKey, weighableTotalGrams } from '@mise/shared/catalogue-model';
+import { calculatorRefusal, importFailureKey, weighableTotalGrams } from '@mise/shared/catalogue-model';
 import type { CatalogueRecipe } from '@mise/shared/catalogue-model';
-import { resolveRecipe } from '@mise/shared/calculator-recipe-source';
 import { FROM_RECIPE_LINK, foodCostForRecipePath, mayOpenFoodCost } from '@mise/shared/recipe-link';
 import { isSectionAllowed } from '@mise/shared/sections';
 import { useT } from '../i18n/useT';
@@ -26,7 +25,7 @@ import { amountText, recipeAmounts } from './recipeAmounts';
 import { recipeExportModel } from './recipeExportModel';
 import { useRecipeReturn } from './recipeReturn';
 import { duplicateWorking } from './editorModel';
-import { carryOwner, handOver } from './photoCarry';
+import { FROM_DUPLICATE, carryOwner, handOver } from './photoCarry';
 import { FROM_RECIPE, cameFromList, cameFromSheet } from './recipesNav';
 import { NEW_PATH, editPath } from './recipesPath';
 import { useDeleteRecipe } from './useDeleteRecipe';
@@ -229,18 +228,13 @@ function ImportAction({ recipe }: { recipe: CatalogueRecipe }) {
   const [confirm, confirmDialog] = useConfirm();
   const running = useRef(false);
   const [writing, setWriting] = useState(false);
+  const hintId = useId();
 
   async function run() {
     if (running.current) return;
-    const resolved = resolveRecipe({ catalogueId: recipe.id }, { [recipe.id]: recipe });
-    if (resolved.problem === 'empty') {
-      say(t('cat.nothingToImport'));
-      return;
-    }
-    // ⚠️ AND A ROW IN KILOS OR LITRES: the Calculator would read «1 kg» as 1 g (firstRowNotInGrams says why).
-    const notInGrams = resolved.problem === 'unweighable' ? resolved.problemRow : firstRowNotInGrams(recipe);
-    if (notInGrams !== null) {
-      say(t('cat.rowNotInGrams', { row: notInGrams }));
+    const refusal = calculatorRefusal(recipe);
+    if (refusal !== null) {
+      say(refusal.kind === 'empty' ? t('cat.nothingToImport') : t(refusal.kind === 'noAmount' ? 'cat.rowNoAmount' : 'cat.rowNotByWeight', { row: refusal.row }));
       return;
     }
     running.current = true;
@@ -256,7 +250,7 @@ function ImportAction({ recipe }: { recipe: CatalogueRecipe }) {
       const release = markBusy();
       try {
         const action = await store.importIntoCalculator(recipe, t('calc.marketOrderTitle'));
-        say(t(action === 'updated' ? 'cat.nowFollowedByCalculator' : 'cat.linkedToCalculator', { name: recipe.name }));
+        say(t(action === 'already' ? 'cat.alreadyLinkedToCalculator' : action === 'updated' ? 'cat.nowFollowedByCalculator' : 'cat.linkedToCalculator', { name: recipe.name }));
       } catch (err) {
         console.error('Import into Calculator failed:', err);
         say(t(importFailureKey(err)));
@@ -274,6 +268,7 @@ function ImportAction({ recipe }: { recipe: CatalogueRecipe }) {
       <button
         type="button"
         className={styles.importAction}
+        aria-describedby={hintId}
         aria-busy={writing || undefined}
         aria-disabled={writing || undefined}
         onClick={() => { void run(); }}
@@ -281,7 +276,7 @@ function ImportAction({ recipe }: { recipe: CatalogueRecipe }) {
         <Import aria-hidden="true" />
         {t('cat.importIntoCalculator')}
       </button>
-      <p className={styles.note}>{t('cat.linksToCalculator')}</p>
+      <p id={hintId} className={styles.note}>{t('cat.linksToCalculator')}</p>
       {confirmDialog}
     </div>
   );
@@ -295,21 +290,38 @@ function DuplicateAction({ recipe }: { recipe: CatalogueRecipe }) {
   const { t } = useT();
   const navigate = useNavigate();
   const { user, locationId } = useSession();
+  const recipeReturn = useRecipeReturn();
+  const hintId = useId();
+  const button = useRef<HTMLButtonElement>(null);
+  // A second tap before the editor has opened must not push a second /recipes/new entry.
+  const opening = useRef(false);
+
+  // ⚠️ BACK FROM THE COPY'S EDITOR the focus is on this button, where the person left (recipeReturn.ts).
+  useLayoutEffect(() => {
+    if (!recipeReturn.pendingDuplicate(recipe.id) || button.current === null) return;
+    button.current.focus({ preventScroll: true });
+    recipeReturn.markDelivered();
+  }, []);
 
   return (
     <div className={styles.importBlock}>
       <button
+        ref={button}
         type="button"
         className={styles.importAction}
+        aria-describedby={hintId}
         onClick={() => {
+          if (opening.current) return;
+          opening.current = true;
+          recipeReturn.remember(recipe.id, 'duplicate');
           handOver(duplicateWorking(recipe, name => t('cat.copyOf', { name })), carryOwner(user?.uid, locationId), undefined, 'duplicate');
-          void navigate(NEW_PATH, { state: FROM_RECIPE });
+          void navigate(NEW_PATH, { state: FROM_DUPLICATE });
         }}
       >
         <Copy aria-hidden="true" />
         {t('cat.duplicate')}
       </button>
-      <p className={styles.note}>{t('cat.duplicateHint')}</p>
+      <p id={hintId} className={styles.note}>{t('cat.duplicateHint')}</p>
     </div>
   );
 }

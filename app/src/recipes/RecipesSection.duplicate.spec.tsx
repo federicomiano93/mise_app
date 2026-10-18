@@ -1,5 +1,5 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { screen, waitFor, within } from '@testing-library/react';
+import { act, screen, waitFor, within } from '@testing-library/react';
 import { isBusy } from '../session/busy';
 import { LOAD, recipe, renderRecipes, sourceWith } from '../testing/renderRecipes';
 import { forgetHandover, hasHandover } from './photoCarry';
@@ -125,14 +125,40 @@ describe('tapping it', () => {
     expect(editor.getByRole('textbox', { name: 'Recipe name' })).toHaveValue('Focaccia (copy)');
   });
 
-  it('⚠️ discarding it leaves the original and the database as they were', async () => {
+  it('⚠️ Back asks, and Discard steps back ONE level: to the ORIGINAL recipe, the focus on its Duplicate button, nothing written', async () => {
     const { user, router, source } = await open();
     await user.click(duplicateButton());
     const editor = await editorRegion();
     await user.click(editor.getByRole('button', { name: 'Back' }));
     await user.click(within(await screen.findByRole('alertdialog', { name: 'Discard changes?' })).getByRole('button', { name: 'Discard' }));
-    await waitFor(() => { expect(router.state.location.pathname).not.toBe('/recipes/new'); });
+    await waitFor(() => { expect(router.state.location.pathname).toBe('/recipes/orig'); });
+    await waitFor(() => { expect(duplicateButton()).toHaveFocus(); });
     expect(source.recipeWrites).toEqual([]);
+  });
+
+  it('the phone’s own Back (the router’s) asks too, and lands on the original with the focus on Duplicate', async () => {
+    const { user, router } = await open();
+    await user.click(duplicateButton());
+    await editorRegion();
+    void router.navigate(-1);
+    await user.click(within(await screen.findByRole('alertdialog', { name: 'Discard changes?' })).getByRole('button', { name: 'Discard' }));
+    await waitFor(() => { expect(router.state.location.pathname).toBe('/recipes/orig'); });
+    await waitFor(() => { expect(duplicateButton()).toHaveFocus(); });
+  });
+
+  it('⚠️ a second tap before the editor has opened pushes no second entry', async () => {
+    const { router } = await open();
+    const button = duplicateButton();
+    button.click();
+    button.click();
+    await editorRegion();
+    await act(async () => { await router.navigate(-1); });
+    await waitFor(() => { expect(router.state.location.pathname).toBe('/recipes/orig'); });
+  });
+
+  it('⚠️ the hint is tied to its button (aria-describedby)', async () => {
+    await open();
+    expect(duplicateButton()).toHaveAccessibleDescription('Opens a new recipe filled in from this one; nothing is saved until you tap Save.');
   });
 
   it('⚠️ the name fits the name box when the original’s is at its longest', async () => {
@@ -197,7 +223,9 @@ describe('saving the copy', () => {
 
   it('after the save the editor does what it does for any new recipe: it leaves for the list, and the copy is in it', async () => {
     const { router, source } = await saveCopy();
-    await waitFor(() => { expect(router.state.location.pathname).not.toBe('/recipes/new'); });
+    // A save goes to the list (P20), the new row owed the focus — not back to the recipe it was copied from.
+    await waitFor(() => { expect(router.state.location.pathname).toBe('/recipes'); });
     expect(source.recipeWrites.map(w => w.id)).not.toContain('orig');
+    await waitFor(() => { expect(screen.getByRole('button', { name: /Focaccia \(copy\)/ })).toHaveFocus(); });
   });
 });
