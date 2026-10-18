@@ -30,8 +30,8 @@ const BIN_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" str
 //
 // ⚠️ createImageBitmap, NOT FileReader, AND `imageOrientation` IS THE LINE THAT
 // MUST NOT BE LOST. A phone held upright writes an EXIF rotation flag into the
-// file instead of rotating the pixels; the historical default here is to ignore
-// it. Ignored, the reader is handed a photograph lying on its side and answers
+// file instead of rotating the pixels; some browsers' default ignores it
+// (Chrome 101's honours it — see decodeUpright). Ignored, the reader is handed a photograph lying on its side and answers
 // with confident nonsense — and NOTHING reports an error, because nothing has
 // gone wrong as far as any code can tell. The option is passed by decodeUpright
 // (js/photo-model.js), which also copes with Chrome 101 refusing it.

@@ -5,7 +5,7 @@
 // photo taken with the tablet's camera was reported as «an unreadable format». Only a
 // TypeError — the OPTIONS refused — may retry without them (Chrome 101's default already
 // honours the EXIF rotation, measured there). A photo that cannot be decoded at all
-// fails with a DOMException and must still fail: a retry there would only hide HEIC.
+// fails with a DOMException and must still fail at once, as «undecodable».
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -57,6 +57,21 @@ test('a retry that also fails rejects, and is not tried a third time', async () 
   const { create, calls } = fakeCreate(new TypeError('bad enum'), new DOMException('no', 'InvalidStateError'));
   await assert.rejects(decodeUpright(FILE, create), DOMException);
   assert.equal(calls.length, 2);
+});
+
+test('⚠️ with no stand-in it calls the real global createImageBitmap', async () => {
+  // Every other test passes `create`; a typo in the default would make every photo on
+  // every device «unreadable» with the whole suite green.
+  const saved = globalThis.createImageBitmap;
+  const { create, calls } = fakeCreate(BITMAP);
+  globalThis.createImageBitmap = create;
+  try {
+    assert.equal(await decodeUpright(FILE), BITMAP);
+    assert.equal(calls.length, 1);
+  } finally {
+    if (saved === undefined) delete globalThis.createImageBitmap;
+    else globalThis.createImageBitmap = saved;
+  }
 });
 
 test('the Catalogue reaches the same function through its own model', () => {
