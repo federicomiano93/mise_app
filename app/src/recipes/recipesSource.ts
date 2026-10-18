@@ -278,7 +278,7 @@ export function createFirestoreRecipesSource(
       return kit.fs.runTransaction(kit.db, async tx => {
         const snap = await tx.get(ref);
         const raw = snap.exists() ? (snap.data() as Record<string, unknown>) : null;
-        const merged = mergeImportedRecipe(normalizeConfig(raw, marketOrderTitle), toCalculatorRecipe(recipe));
+        const merged = mergeImportedRecipe(normalizeConfig(raw, marketOrderTitle), toCalculatorRecipe(recipe), recipe.ingredients);
         // A tab already linked to this recipe: nothing to write, and the revision is not bumped (a Calculator save in the air
         // would otherwise be told to reload for no reason).
         if (merged.action === 'already') return merged.action;

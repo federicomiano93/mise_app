@@ -2656,6 +2656,8 @@ describe('calculator-recipe-source: odd inputs', () => {
   agree('isWeighable', m.isWeighable as AnyFn, l.isWeighable as AnyFn, product(ROWS));
   agree('linkedRecipeIds', m.linkedRecipeIds as AnyFn, l.linkedRecipeIds as AnyFn, product([...ODD, RECIPES, RECIPES.slice(-4), [null, RECIPES[22]]]));
   agree('isLinked', m.isLinked as AnyFn, l.isLinked as AnyFn, product(RECIPES));
+  // ⚠️ No catalogue here has a row in kilos ON PURPOSE: there the port reads × 1000 and the original does not (the one
+  // intended difference, see resolveRecipe). Add one and this comparison turns red for that reason alone.
   agree('resolveRecipe', m.resolveRecipe as AnyFn, l.resolveRecipe as AnyFn, product(RECIPES, CATALOGUES));
   const RESOLVED = RECIPES.flatMap(recipe => CATALOGUES.map(c => outcome(() => (l.resolveRecipe as AnyFn)(recipe, c)))).flatMap(o => ('returned' in o ? [o.returned] : []));
   agree('sheetRecipe', m.sheetRecipe as AnyFn, l.sheetRecipe as AnyFn, [...product(RECIPES, [...ODD, ...RESOLVED.slice(0, 30)]), ...product(RECIPES.slice(-3), RESOLVED)]);

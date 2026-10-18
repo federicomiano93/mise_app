@@ -1,7 +1,10 @@
 // catalogue-model.ts — the part of the recipe catalogue's model that Food cost reads.
 //
 // TypeScript PARTIAL port of js/catalogue/catalogue-model.js for Mise 2. Behaviour is identical, input
-// for input, for everything ported: catalogue-model.spec.ts runs every test against BOTH files and
+// for input, for everything ported EXCEPT the Calculator import, which LINKS the tab instead of copying it
+// (owner's decision, 18 Oct 2026: `toCalculatorRecipe`, `mergeImportedRecipe`, `findCalculatorImport` and
+// the Mise-2-only `calculatorImportKind` / `calculatorRefusal`, each marked where it differs).
+// catalogue-model.spec.ts runs every test against BOTH files and
 // compares each ported export with the js/ file itself; odd-inputs.spec.ts feeds both the same strange
 // values. It is NOT paired in parity.spec.ts, because the original holds much more than Food cost needs.
 //
@@ -46,6 +49,7 @@
 // total. Legacy rows with no unit are treated as grams.
 
 import { isWeighable as isWeighableRow, resolveRecipe } from './calculator-recipe-source';
+import { ridOf } from './guided-model';
 import { ingredientDisplayName } from './ingredient-name';
 
 export type CatalogueUnit = 'g' | 'kg' | 'mg' | 'ml' | 'cl' | 'dl' | 'l' | 'pcs' | 'tsp' | 'tbsp' | 'pinch' | 'to taste';
@@ -544,7 +548,13 @@ export function calculatorRefusal(recipe: unknown): CalculatorRefusal | null {
 // percentage) and only `catalogueId` and the leftover `ingredients` change. A tab already linked to this recipe is not
 // touched at all ('already'), so no write follows. A tab linked to ANOTHER recipe is never hijacked, even under the id
 // 'cat-<id>': the new tab then takes the next free id ('cat-<id>-2', '-3'…), never a duplicate one.
-export function mergeImportedRecipe<C extends object>(config: C, recipe: object & { id: unknown }): { config: C; action: ImportAction } {
+//
+// ⚠️ THE YEAST KNOB SURVIVES THE LINK. An unlinked copy names its leavening by its OWN row key (`leaveningKey`), but a linked
+// tab reads it only from `leaveningRid`, the catalogue row's id (calculator-recipe-source). Kept as it was, the old key would
+// sit in the document doing nothing: the % control gone, the yeast scaling at the recipe's own ratio, nobody told. So the
+// copy's leavening row is found again in the recipe BY LABEL (the copy was made from these rows) and its rid is written as
+// `leaveningRid`; the copy's percentages then still apply. `sourceRows` = the catalogue recipe's rows; no match = no rid.
+export function mergeImportedRecipe<C extends object>(config: C, recipe: object & { id: unknown }, sourceRows?: unknown): { config: C; action: ImportAction } {
   const current = (config as { recipes?: unknown }).recipes;
   const recipes = Array.isArray(current) ? current.slice() as (Record<string, unknown> | null)[] : [];
   const incoming = (recipe ?? {}) as { id?: unknown; catalogueId?: unknown; ingredients?: unknown };
@@ -555,9 +565,12 @@ export function mergeImportedRecipe<C extends object>(config: C, recipe: object 
   if (idx >= 0) {
     const prev = recipes[idx] as Record<string, unknown>;
     if (catalogueId !== '' && linkOf(prev) === catalogueId) return { config, action: 'already' };
+    const leaveningRid = catalogueId !== '' && linkOf(prev) === '' && !String(prev.leaveningRid ?? '').trim()
+      ? leaveningRidFor(prev, sourceRows) : '';
     recipes[idx] = {
       ...prev,
       ...(catalogueId !== '' ? { catalogueId } : {}),
+      ...(leaveningRid !== '' ? { leaveningRid } : {}),
       ...(incoming.ingredients !== undefined ? { ingredients: incoming.ingredients } : {}),
     };
     return { config: { ...config, recipes }, action: 'updated' };
@@ -569,7 +582,21 @@ export function mergeImportedRecipe<C extends object>(config: C, recipe: object 
   return { config: { ...config, recipes }, action: 'added' };
 }
 
-export type ImportFailureKey = 'calc.notSavedOutOfDate' | 'cat.importFailedCheckYour';
+// The catalogue row an unlinked copy's leavening came from, as the key a linked tab reads (`ridOf(row) || label`, the same
+// key resolveRecipe builds), or '' when the copy has no leavening or its label is no longer in the recipe.
+function leaveningRidFor(tab: Record<string, unknown>, sourceRows: unknown): string {
+  const key = String(tab.leaveningKey ?? '').trim();
+  if (key === '' || !Array.isArray(sourceRows)) return '';
+  const own = Array.isArray(tab.ingredients) ? tab.ingredients as ({ key?: unknown; label?: unknown } | null)[] : [];
+  const norm = (v: unknown) => String(v ?? '').trim().toLowerCase();
+  const row = own.find(r => r && String(r.key ?? '').trim() === key);
+  const label = norm(row ? row.label : key);
+  if (label === '') return '';
+  const source = (sourceRows as ({ label?: unknown } | null)[]).find(r => r && norm(r.label) === label && isWeighableRow(r));
+  return source ? (ridOf(source) || String(source.label ?? '').trim()) : '';
+}
+
+export type ImportFailureKey ='calc.notSavedOutOfDate' | 'cat.importFailedCheckYour';
 
 // Which sentence explains a refused import. permission-denied = the server REFUSED: this app is older than the
 // data (configModel), which a connection check would never fix, so it says «out of date» (the Calculator's own key,

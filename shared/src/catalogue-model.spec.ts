@@ -41,6 +41,7 @@
 
 import { describe, expect, test } from 'vitest';
 import * as ported from './catalogue-model';
+import { resolveRecipe } from './calculator-recipe-source';
 import * as legacyJs from '../../js/catalogue/catalogue-model.js';
 import { nameTaken as legacyNameTaken } from '../../js/catalogue/ingredient-suggest.js';
 import { DATA_WORDS, DEFAULT_LANGUAGE, _dictionaries, setLanguage, t } from '../../js/i18n.js';
@@ -951,6 +952,32 @@ describe('the Calculator import links the tab (Mise 2 only)', () => {
     });
   });
 
+  test('⚠️ the copy\'s yeast knob survives the link: its leavening row is found again in the recipe and becomes leaveningRid', () => {
+    const rec = { id: 'foc', name: 'Focaccia', ingredients: [
+      { label: 'Flour', grams: 1, unit: 'kg', rid: 'r-flour' }, { label: ' yeast ', grams: 7, rid: 'r-yeast' }, { label: 'Salt', grams: 20 },
+    ] };
+    const old = { id: 'cat-foc', name: 'Focaccia', leaveningKey: 'yeast', leaveningDefaultPct: 0.7, baselinePct: 0.5, showLeavening: true,
+      ingredients: [{ key: 'flour', label: 'Flour', grams: 1000 }, { key: 'yeast', label: 'Yeast', grams: 7 }] };
+    const linked = recipesOf(ported.mergeImportedRecipe({ recipes: [old] }, ported.toCalculatorRecipe(rec), rec.ingredients).config)[0]!;
+    expect(linked).toMatchObject({ catalogueId: 'foc', leaveningRid: 'r-yeast', leaveningDefaultPct: 0.7, baselinePct: 0.5, showLeavening: true });
+    // And the Calculator, reading the linked tab, really has the knob on that row.
+    expect(resolveRecipe(linked, { foc: rec }).leaveningKey).toBe('r-yeast');
+    // A row with no rid is keyed by its label, the same key resolveRecipe builds.
+    const noRid = { ...rec, ingredients: [{ label: 'Flour', grams: 1000 }, { label: 'Yeast', grams: 7 }] };
+    const byLabel = recipesOf(ported.mergeImportedRecipe({ recipes: [old] }, ported.toCalculatorRecipe(noRid), noRid.ingredients).config)[0]!;
+    expect(byLabel.leaveningRid).toBe('Yeast');
+    expect(resolveRecipe(byLabel, { foc: noRid }).leaveningKey).toBe('Yeast');
+  });
+
+  test('no leavening row left in the recipe, no rows given, or a rid already chosen: leaveningRid is not invented or replaced', () => {
+    const old = { id: 'cat-foc', leaveningKey: 'yeast', ingredients: [{ key: 'yeast', label: 'Yeast', grams: 7 }] };
+    expect(recipesOf(ported.mergeImportedRecipe({ recipes: [old] }, ported.toCalculatorRecipe(REC), REC.ingredients).config)[0]).not.toHaveProperty('leaveningRid');
+    expect(recipesOf(merge([old]).config)[0]).not.toHaveProperty('leaveningRid');
+    const chosen = { ...old, leaveningRid: 'mine' };
+    const rows = [{ label: 'Yeast', grams: 7, rid: 'r-yeast' }];
+    expect(recipesOf(ported.mergeImportedRecipe({ recipes: [chosen] }, ported.toCalculatorRecipe({ ...REC, ingredients: rows }), rows).config)[0]!.leaveningRid).toBe('mine');
+  });
+
   test('a tab the owner linked by hand under its own id is "already" linked: nothing changes, nothing to write', () => {
     const byHand = { id: 'my-tab', name: 'Mine', order: 1, visible: true, catalogueId: 'foc', leaveningRid: 'r9', leaveningDefaultPct: 1, ingredients: [] };
     const cfg = { recipes: [byHand] };
@@ -1184,8 +1211,9 @@ describe('the port against the original', () => {
   // `nameTaken` is not an export of catalogue-model.js: its original is in ingredient-suggest.js (tested above).
   // `calculatorImportKind` is new in Mise 2 with the linked import (18 Oct 2026).
   const ADDED = ['unitTextKey', 'nameTaken', 'supplierLabel', 'calculatorImportKind', 'calculatorRefusal'];
-  // Same name, same results, but the translator is one more parameter.
-  const ARITY_DIFFERS = ['batchWarning'];
+  // One more parameter each: batchWarning's translator; mergeImportedRecipe's catalogue rows, so a linked copy keeps its
+  // yeast knob (Mise 2 only, 18 Oct 2026).
+  const ARITY_DIFFERS = ['batchWarning', 'mergeImportedRecipe'];
   const original = legacyJs as unknown as Record<string, unknown>;
   const port = ported as unknown as Record<string, unknown>;
   const shared = Object.keys(original).filter(name => !LEFT_OUT.includes(name)).sort();

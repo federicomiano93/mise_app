@@ -1,8 +1,9 @@
 // calculator-recipe-source.ts — where a Calculator tab's ingredients come from. PURE: no DOM, no Firestore.
 //
 // TypeScript FULL port of js/calculator-recipe-source.js for Mise 2. Behaviour is identical, input for
-// input: calculator-recipe-source.spec.ts runs every test against BOTH files, parity.spec.ts compares their
-// exports and odd-inputs.spec.ts feeds both the same strange values.
+// input, with ONE intended difference: `resolveRecipe` reads a linked row in kilos as grams × 1000 (18 Oct
+// 2026, see there). calculator-recipe-source.spec.ts runs every test against BOTH files, parity.spec.ts
+// compares their exports and odd-inputs.spec.ts feeds both the same strange values (none with a kg row).
 //
 // NOT PART OF THIS FILE (it was never in the original either): `effectiveRecipe`, `isStillLoading`,
 // `recipeToSave` and `problemMessage` live in js/calculator-catalogue-link.js, which holds the map of the
