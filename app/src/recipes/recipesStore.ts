@@ -73,6 +73,11 @@ export interface RecipeToSave {
   readonly ingredients: readonly Readonly<Record<string, unknown>>[];
   readonly netWeightG?: unknown;
   readonly shelfLifeDays?: unknown;
+  // The mixing procedure and its closing message, as the working copy carries them. ⚠️ SENT ONLY WHEN THE RECIPE IS NEW
+  // (no copy of it is held): a DUPLICATE starts with its original's procedure. For an existing recipe they are ignored here
+  // and stay as stored (KEPT_FIELDS), whatever the working copy holds: their editor is the steps editor.
+  readonly steps?: unknown;
+  readonly endNote?: unknown;
 }
 
 // What the steps editor saves (step 3d-8): the procedure and its closing message, as typed (the store normalises
@@ -645,6 +650,14 @@ export function createRecipesStore(source: RecipesSource, deps: RecipesDeps): Re
       };
       const id = recipe.id || newRecipeId();
       const prev = recipes.find(candidate => candidate.id === id) ?? null;
+      // ⚠️ A NEW RECIPE MAY ARRIVE WITH A PROCEDURE (a duplicate): shaped exactly as saveProcedure shapes it, and a step
+      // names only rows that exist in what is saved (the rows were just given their ids, a row the person deleted from the
+      // copy takes its mention out of the steps). Never for an existing recipe: the merge would overwrite its procedure.
+      if (!prev && (recipe.steps !== undefined || recipe.endNote !== undefined)) {
+        const saved = new Set(rows.map(ridOf));
+        data.steps = normalizeSteps(normalizeSteps(recipe.steps).map(step => ({ ...step, rows: step.rows.filter(rid => saved.has(rid)) })));
+        data.endNote = normalizeEndNote(recipe.endNote);
+      }
       const kept: Record<string, unknown> = {};
       if (prev) {
         const held = prev as unknown as Record<string, unknown>;

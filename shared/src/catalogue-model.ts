@@ -541,7 +541,7 @@ export function firstRowNotInGrams(recipe: unknown): string | null {
 export function mergeImportedRecipe<C extends object>(config: C, recipe: object & { id: unknown }): { config: C; action: ImportAction } {
   const current = (config as { recipes?: unknown }).recipes;
   const recipes = Array.isArray(current) ? current.slice() as (Record<string, unknown> | null)[] : [];
-  const catalogueId = String((recipe as { catalogueId?: unknown }).catalogueId ?? '').trim();
+  const catalogueId = String((recipe as { catalogueId?: unknown } | null | undefined)?.catalogueId ?? '').trim();
   const idx = recipes.findIndex(r => r && (r.id === recipe.id || (catalogueId !== '' && String(r.catalogueId ?? '').trim() === catalogueId)));
   let action: ImportAction;
   if (idx >= 0) {
@@ -550,7 +550,7 @@ export function mergeImportedRecipe<C extends object>(config: C, recipe: object 
     // The owner chose how this tab calculates (logic, tray weight); an import refreshes the rest, never
     // that (a fresh import always says logic: 'total').
     recipes[idx] = {
-      ...recipe, id: prev.id, order: prev.order, visible: prev.visible,
+      ...recipe, ...(prev.id !== undefined ? { id: prev.id } : {}), order: prev.order, visible: prev.visible,
       ...(prev.logic !== undefined ? { logic: prev.logic } : {}),
       ...(prev.trayWeight !== undefined ? { trayWeight: prev.trayWeight } : {}),
       ...(sameLink && prev.leaveningRid ? { leaveningRid: prev.leaveningRid } : {}),
