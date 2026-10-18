@@ -2238,9 +2238,8 @@ describe('catalogue-model: odd inputs', () => {
   };
   agree('toCalculatorRecipe', withoutLink, l.toCalculatorRecipe as AnyFn, product(IMPORT_RECIPES));
   agree('nonWeighableLabels', m.nonWeighableLabels, l.nonWeighableLabels, product(IMPORT_RECIPES));
-  agree('mergeImportedRecipe', m.mergeImportedRecipe as AnyFn, l.mergeImportedRecipe as AnyFn, product([...IMPORT_CONFIGS, { recipes: [{ id: 'cat-foc', order: 2, visible: true, logic: 'trays', trayWeight: 900 }] },
-    { recipes: [{ id: 'cat-foc' }] }, { recipes: [{ id: 'cat-foc', order: 0, visible: false, logic: 'traysTotal' }, null] }, { other: 1 }],
-  [...ODD, { id: 'cat-foc', name: 'N' }, { id: 'cat-foc', name: 'N', logic: 'total', visible: false, ingredients: [] }, { id: 'cat-new' }, { name: 'no id' }, { id: undefined }]));
+  // mergeImportedRecipe is NOT compared with the original any more (18 Oct 2026): the port keeps a reused tab whole and links it,
+  // the original rebuilds it from the import. Its own specs (catalogue-model.spec.ts, «the Calculator import links the tab») cover it.
   agree('importFailureKey', m.importFailureKey, l.importFailureKey, product([...ODD, { code: 'permission-denied' }, { code: 'unavailable' }, { code: ['permission-denied'] },
     new Error('x'), Object.assign(new Error('p'), { code: 'permission-denied' }), { get code(): unknown { throw new Error('boom'); } }]));
   // nameTaken: its original is in ingredient-suggest.js, not catalogue-model.js.

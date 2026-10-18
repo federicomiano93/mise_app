@@ -139,10 +139,15 @@ export function resolveRecipe(recipe: unknown, catalogueById?: unknown): Resolve
   // "Fresh yeast" silently switches the leavening knob off — and that is not hypothetical: the real
   // Sourdough calls its leavening "Starter" in the Calculator and "Sourdough starter" in the Catalogue
   // TODAY. By position, inserting one row at the top makes the yeast step ask for the flour.
+  //
+  // ⚠️ A ROW IN KILOS IS READ AS GRAMS × 1000 (NEW IN MISE 2, 18 Oct 2026). isWeighable accepts `kg`, but the original
+  // read the amount as it stands, so «1 kg» of flour became 1 g: a dough a thousand times too light, with no warning.
+  // This is the one intended difference from js/calculator-recipe-source.js, whose fix for the live app is a separate
+  // change; until it lands the two files disagree on a `kg` row (and only there).
   const ingredients = usable.map(r => ({
     key: ridOf(r) || String((r as NonNullable<Row>).label || '').trim(),
     label: String((r as NonNullable<Row>).label || '').trim(),
-    grams: num((r as NonNullable<Row>).grams),
+    grams: num((r as NonNullable<Row>).grams) * (String((r as NonNullable<Row>).unit || '').trim().toLowerCase() === 'kg' ? 1000 : 1),
   }));
 
   const wanted = String(tab.leaveningRid || '').trim();

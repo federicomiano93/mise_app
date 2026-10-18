@@ -45,6 +45,7 @@
 // approximation). Pieces / spoons / pinch / to-taste are NOT weighable, so they stay out of the weight
 // total. Legacy rows with no unit are treated as grams.
 
+import { isWeighable as isWeighableRow, resolveRecipe } from './calculator-recipe-source';
 import { ingredientDisplayName } from './ingredient-name';
 
 export type CatalogueUnit = 'g' | 'kg' | 'mg' | 'ml' | 'cl' | 'dl' | 'l' | 'pcs' | 'tsp' | 'tbsp' | 'pinch' | 'to taste';
@@ -441,10 +442,10 @@ export function findInvalidRecipe(recipe: unknown): InvalidRecipeProblem | null 
   return null;
 }
 
-// The Calculator tab that stands for a catalogue recipe, or null: the first tab that is LINKED to it (`catalogueId`,
-// however it got linked — by this import or by hand in the Calculator's settings) or is an old copy imported as
-// 'cat-<id>'. Pure — used to find the tab an import should refresh, and to WARN before deleting a catalogue recipe the
-// Calculator uses.
+// The Calculator tab that stands for a catalogue recipe, or null: the first tab LINKED to it (`catalogueId`, however it got
+// linked — by this import or by hand in the Calculator's settings), else the old copy imported as 'cat-<id>' — but only if
+// that copy is still UNLINKED (a tab with that id linked to ANOTHER recipe is somebody else's). Pure — used to find the tab
+// an import should refresh, and to WARN before deleting a catalogue recipe the Calculator uses.
 //
 // ⚠️ NEW IN MISE 2 (owner's decision, 18 Oct 2026): an import LINKS the tab to the recipe instead of copying it, so
 // this no longer agrees with js/catalogue/catalogue-model.js, which only knows the 'cat-<id>' copies.
@@ -453,17 +454,18 @@ export function findCalculatorImport(config: unknown, catalogueId: unknown): Rec
   const recipes = (c && Array.isArray(c.recipes)) ? c.recipes as (Record<string, unknown> | null)[] : [];
   const wanted = String(catalogueId ?? '').trim();
   const importId = 'cat-' + (catalogueId as string);
-  return recipes.find(r => r && (r.id === importId || (wanted !== '' && String(r.catalogueId ?? '').trim() === wanted))) || null;
+  const linked = wanted === '' ? undefined : recipes.find(r => r && String(r.catalogueId ?? '').trim() === wanted);
+  return linked || recipes.find(r => r && r.id === importId && String(r.catalogueId ?? '').trim() === '') || null;
 }
 
-// Which kind of Calculator tab stands for a catalogue recipe: 'linked' (the tab reads the recipe live), 'copy' (an old
-// import that carries its own rows), or null (none).
+// Which kind of Calculator tab stands for a catalogue recipe: 'linked' (a tab reads the recipe live — ANY tab, wherever it
+// is in the list), 'copy' (an old unlinked import 'cat-<id>' that carries its own rows), or null (none).
 export type CalculatorImportKind = 'linked' | 'copy';
 
 export function calculatorImportKind(config: unknown, catalogueId: unknown): CalculatorImportKind | null {
   const tab = findCalculatorImport(config, catalogueId);
   if (tab === null) return null;
-  return String(tab.catalogueId ?? '').trim() === String(catalogueId ?? '').trim() ? 'linked' : 'copy';
+  return String(tab.catalogueId ?? '').trim() === '' ? 'copy' : 'linked';
 }
 
 // ── Import into the Calculator (the single coupling; still pure here) ────────
@@ -479,7 +481,8 @@ export interface CalculatorImportRecipe {
   visible: false;
 }
 
-export type ImportAction = 'added' | 'updated';
+// 'already': the tab was linked to this recipe before, so nothing is written.
+export type ImportAction = 'added' | 'updated' | 'already';
 
 type ImportableRecipe = { id: unknown; name: unknown; ingredients?: unknown };
 
@@ -517,50 +520,53 @@ export function nonWeighableLabels(recipe: unknown): unknown[] {
     .map(i => i.label);
 }
 
-// The first named row whose unit is not plain grams, or null. NEW IN MISE 2 with the linked import.
-//
-// ⚠️ WHY IT EXISTS: a linked tab reads the catalogue's `grams` field as it is (calculator-recipe-source.ts, `resolveRecipe`),
-// without the unit's factor, and accepts the unit 'kg' as weighable — so «1 kg» of flour would be calculated as 1 g, a dough
-// a thousand times too light, with no warning. The import therefore refuses a recipe with ANY row that is not in grams
-// (the sentence says «put it in grams») instead of linking one that would calculate wrongly.
-export function firstRowNotInGrams(recipe: unknown): string | null {
-  const r = recipe as { ingredients?: unknown } | null | undefined;
-  const ings = (r && Array.isArray(r.ingredients)) ? r.ingredients as ({ label?: unknown } & Record<string, unknown>)[] : [];
-  const off = ings.find(i => i && String(i.label || '').trim() && unitOf(i) !== 'g');
-  return off ? String(off.label).trim() : null;
+// Why the Calculator could not follow a recipe, asked of the Calculator's OWN check (`resolveRecipe` on a tab linked to the
+// recipe) so the two can never disagree: null (it can), 'empty' (no rows), or the first row it cannot follow — 'notByWeight'
+// (pieces, spoons, «to taste», millilitres, litres…) or 'noAmount' (a row in grams or kilos with nothing in it). NEW IN MISE 2.
+export type CalculatorRefusal = { kind: 'empty' } | { kind: 'notByWeight' | 'noAmount'; row: string };
+
+export function calculatorRefusal(recipe: unknown): CalculatorRefusal | null {
+  const resolved = resolveRecipe({ catalogueId: 'x' }, { x: recipe });
+  if (resolved.problem === null) return null;
+  if (resolved.problem !== 'unweighable') return { kind: 'empty' };
+  const rows = ((recipe as { ingredients?: unknown } | null)?.ingredients ?? []) as ({ label?: unknown; unit?: unknown } | null)[];
+  const blocker = rows.find(r => r && String(r.label || '').trim() && !isWeighableRow(r));
+  const unit = String(blocker?.unit || '').trim().toLowerCase();
+  return { kind: unit === '' || unit === 'g' || unit === 'gr' || unit === 'kg' ? 'noAmount' : 'notByWeight', row: resolved.problemRow };
 }
 
-// Add or update an imported recipe inside a config's recipes[]. The tab that already stands for the recipe — one with the
-// same id (an old 'cat-<id>' copy), or one already LINKED to it by hand (`catalogueId`) — is replaced in place, keeping
-// its own id, its tab order and visibility and how it calculates (logic, trayWeight): a re-import never duplicates and
-// never hijacks the tab bar; otherwise the recipe is appended. Pure: returns a new config plus the action taken.
+// Add or update an imported recipe inside a config's recipes[]. The tab that already stands for the recipe is, in order: the
+// first one LINKED to it (`catalogueId`, however it got linked), else the old copy 'cat-<id>' if it is still UNLINKED; else
+// the recipe is appended. Pure: returns a new config plus the action taken.
 //
-// ⚠️ NEW IN MISE 2 (owner's decision, 18 Oct 2026): the result is LINKED (`catalogueId`, from toCalculatorRecipe). The
-// leavening a person chose (`leaveningRid`, the linked row's id) is kept only when the tab was ALREADY linked to this same
-// recipe: on an old copy there is none to keep, and on a tab linked to another recipe it would name a row that is not here.
+// ⚠️ NEW IN MISE 2 (owner's decision, 18 Oct 2026): the result is LINKED (`catalogueId`, from toCalculatorRecipe), and a tab
+// that is reused LOSES NOTHING: it is kept whole (its id, name, order, visibility, logic, tray weight, leavening and every
+// percentage) and only `catalogueId` and the leftover `ingredients` change. A tab already linked to this recipe is not
+// touched at all ('already'), so no write follows. A tab linked to ANOTHER recipe is never hijacked, even under the id
+// 'cat-<id>': the new tab then takes the next free id ('cat-<id>-2', '-3'…), never a duplicate one.
 export function mergeImportedRecipe<C extends object>(config: C, recipe: object & { id: unknown }): { config: C; action: ImportAction } {
   const current = (config as { recipes?: unknown }).recipes;
   const recipes = Array.isArray(current) ? current.slice() as (Record<string, unknown> | null)[] : [];
-  const catalogueId = String((recipe as { catalogueId?: unknown } | null | undefined)?.catalogueId ?? '').trim();
-  const idx = recipes.findIndex(r => r && (r.id === recipe.id || (catalogueId !== '' && String(r.catalogueId ?? '').trim() === catalogueId)));
-  let action: ImportAction;
+  const incoming = (recipe ?? {}) as { id?: unknown; catalogueId?: unknown; ingredients?: unknown };
+  const catalogueId = String(incoming.catalogueId ?? '').trim();
+  const linkOf = (r: Record<string, unknown> | null): string => String(r?.catalogueId ?? '').trim();
+  let idx = catalogueId === '' ? -1 : recipes.findIndex(r => r && linkOf(r) === catalogueId);
+  if (idx < 0) idx = recipes.findIndex(r => r && r.id === incoming.id && linkOf(r) === '');
   if (idx >= 0) {
     const prev = recipes[idx] as Record<string, unknown>;
-    const sameLink = catalogueId !== '' && String(prev.catalogueId ?? '').trim() === catalogueId;
-    // The owner chose how this tab calculates (logic, tray weight); an import refreshes the rest, never
-    // that (a fresh import always says logic: 'total').
+    if (catalogueId !== '' && linkOf(prev) === catalogueId) return { config, action: 'already' };
     recipes[idx] = {
-      ...recipe, ...(prev.id !== undefined ? { id: prev.id } : {}), order: prev.order, visible: prev.visible,
-      ...(prev.logic !== undefined ? { logic: prev.logic } : {}),
-      ...(prev.trayWeight !== undefined ? { trayWeight: prev.trayWeight } : {}),
-      ...(sameLink && prev.leaveningRid ? { leaveningRid: prev.leaveningRid } : {}),
+      ...prev,
+      ...(catalogueId !== '' ? { catalogueId } : {}),
+      ...(incoming.ingredients !== undefined ? { ingredients: incoming.ingredients } : {}),
     };
-    action = 'updated';
-  } else {
-    recipes.push(recipe);
-    action = 'added';
+    return { config: { ...config, recipes }, action: 'updated' };
   }
-  return { config: { ...config, recipes }, action };
+  let id = incoming.id;
+  const taken = new Set(recipes.map(r => r?.id));
+  for (let n = 2; taken.has(id); n++) id = `${String(incoming.id)}-${n}`;
+  recipes.push({ ...recipe, id });
+  return { config: { ...config, recipes }, action: 'added' };
 }
 
 export type ImportFailureKey = 'calc.notSavedOutOfDate' | 'cat.importFailedCheckYour';
