@@ -135,8 +135,8 @@
       }
     },
     "dist/catalogue.js": {
-      "sha": "37de78c038bee6ef",
-      "mapSha": "b3edd24d2915c944",
+      "sha": "3f4621a53a858ca0",
+      "mapSha": "af72a781dd5da60f",
       "inputs": {
         "js/allergen-match.js": "ee85eebef7fd7052",
         "js/allergen-model.js": "50434c6cea85b7de",
@@ -167,8 +167,8 @@
         "js/catalogue/label-template-model.js": "46492628d8e6db54",
         "js/catalogue/label-view.js": "e29a5a9943b7b253",
         "js/catalogue/label-zpl.js": "8ff0e4e8128e5e6e",
-        "js/catalogue/photo-capture.js": "40e2f9338b5cc3a8",
-        "js/catalogue/photo-model.js": "f7063509f3042ec8",
+        "js/catalogue/photo-capture.js": "82ce408204242d86",
+        "js/catalogue/photo-model.js": "89876cfae4a91de4",
         "js/catalogue/print-transports.js": "2ffa9be4dbda2b30",
         "js/catalogue/recipe-allergen-model.js": "e00d4047f61d5d6f",
         "js/catalogue/recipe-cost-model.js": "7dd027150da03725",
@@ -226,7 +226,7 @@
         "js/pack-size.js": "d9a48baaa91226df",
         "js/pages/catalogue.js": "e386abe4f2692a04",
         "js/pages/run-in-order.js": "5bc8e0b92802e22c",
-        "js/photo-model.js": "ed76cf947941ec0a",
+        "js/photo-model.js": "ce3cd2404907c8d4",
         "js/pick-screen.js": "8248cd40ef3e2e29",
         "js/pick-suggest.js": "11a4974ce3429a4b",
         "js/preview-ribbon.js": "6c0264eb5d075e5b",
@@ -899,8 +899,8 @@
       }
     },
     "dist/suppliers.js": {
-      "sha": "f626ef921a6798c0",
-      "mapSha": "3f2ad27c2cb34056",
+      "sha": "60dd7ff458454f94",
+      "mapSha": "aa00afa567dbaba7",
       "inputs": {
         "js/allergen-match.js": "ee85eebef7fd7052",
         "js/allergen-model.js": "50434c6cea85b7de",
@@ -979,7 +979,7 @@
         "js/orders/order-day.js": "87018ca9ed89cbeb",
         "js/orders/order-request-model.js": "2a7270ef0af8b16f",
         "js/orders/order-text.js": "40ad3ba8ddb014c3",
-        "js/orders/photo-capture.js": "e631c50b4ca06cf0",
+        "js/orders/photo-capture.js": "63a19a04fefe7cd0",
         "js/orders/price-changes-model.js": "1c9910d29dbc8459",
         "js/orders/price-changes-screen.js": "9dc81f214b196440",
         "js/orders/registry-main.js": "c2f5f09a6ab2906c",
@@ -995,7 +995,7 @@
         "js/pack-size.js": "d9a48baaa91226df",
         "js/pages/run-in-order.js": "5bc8e0b92802e22c",
         "js/pages/suppliers.js": "8d84065bf4150d76",
-        "js/photo-model.js": "ed76cf947941ec0a",
+        "js/photo-model.js": "ce3cd2404907c8d4",
         "js/preview-ribbon.js": "6c0264eb5d075e5b",
         "js/price-model.js": "e6aa115d5280fb75",
         "js/record-choices.js": "80f538ee4cdcb4f6",

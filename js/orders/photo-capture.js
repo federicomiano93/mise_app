@@ -20,7 +20,7 @@ import { t, onLanguageChange } from '../i18n.js';
 import { el } from './dom.js';
 import {
   MAX_EDGE, JPEG_QUALITY, FALLBACK_QUALITY, MAX_PHOTOS, MAX_IMAGE_BYTES,
-  fitWithin, base64Of, mediaTypeOf, approxBytes, payloadProblem,
+  fitWithin, base64Of, mediaTypeOf, approxBytes, payloadProblem, decodeUpright,
   errorKey, answerKey,
 } from '../photo-model.js';
 import { readPackFromPhotos } from './firebase-photo.js';
@@ -60,13 +60,14 @@ const BY_KEY = {
 
 // ⚠️ createImageBitmap, NOT FileReader, AND `imageOrientation` IS THE LINE THAT MUST NOT
 // BE LOST: a photograph taken in portrait carries its rotation in EXIF, and a canvas
-// that ignores it reads a sideways label. It also takes the File directly, so no `blob:`
+// that ignores it reads a sideways label (decodeUpright, js/photo-model.js, passes the
+// option and copes with Chrome 101 refusing it). It also takes the File directly, so no `blob:`
 // URL is ever made — which matters, because the app's Content-Security-Policy allows
 // `img-src 'self' data:` and nothing else.
 async function shrink(file) {
   let bitmap;
   try {
-    bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
+    bitmap = await decodeUpright(file);
   } catch {
     // ⚠️ ALMOST ALWAYS HEIC, off an iPhone, picked from the library rather than taken
     // with the camera. Android cannot decode it at all. There is no fallback path on
