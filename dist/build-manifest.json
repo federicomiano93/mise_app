@@ -13,8 +13,8 @@
       }
     },
     "dist/calculator.js": {
-      "sha": "acc969a051a8e965",
-      "mapSha": "a62f7dc9e7b84d28",
+      "sha": "ff2a4d624d1f8526",
+      "mapSha": "83dcc200a16f3ae8",
       "inputs": {
         "js/allergen-model.js": "50434c6cea85b7de",
         "js/app-version.js": "4ef897a205fdec91",
@@ -31,7 +31,7 @@
         "js/calculator-icons.js": "77b9acabd880525f",
         "js/calculator-order-prefill.js": "c1403faca4eb8ca3",
         "js/calculator-order-text.js": "ff3a743a90bfda88",
-        "js/calculator-recipe-source.js": "6a1dcd00df1d7b45",
+        "js/calculator-recipe-source.js": "d94d7420a3d8ba37",
         "js/calculator-recipe-text.js": "ee635ea31fc7eef8",
         "js/calculator-render.js": "07a3c6bf0ee8af11",
         "js/calculator-settings.js": "4fdb320e42a6e3fe",
