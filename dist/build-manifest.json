@@ -135,8 +135,8 @@
       }
     },
     "dist/catalogue.js": {
-      "sha": "3f4621a53a858ca0",
-      "mapSha": "af72a781dd5da60f",
+      "sha": "80b3a68b9c376870",
+      "mapSha": "9be63401c5c3d86b",
       "inputs": {
         "js/allergen-match.js": "ee85eebef7fd7052",
         "js/allergen-model.js": "50434c6cea85b7de",
@@ -159,7 +159,7 @@
         "js/catalogue/guided-alarm.js": "5abbc05b8da5804c",
         "js/catalogue/guided-editor.js": "aae4d3ed73cf8e93",
         "js/catalogue/guided-model.js": "6a7e0f736c63b6e6",
-        "js/catalogue/guided-run.js": "96feec068b30a355",
+        "js/catalogue/guided-run.js": "da84e1a84a62e425",
         "js/catalogue/import-to-calculator.js": "29685691137f2e9a",
         "js/catalogue/ingredient-picker.js": "3f9f65eb34bc5384",
         "js/catalogue/ingredient-suggest.js": "031aa6bc27da4499",
@@ -373,10 +373,10 @@
       }
     },
     "dist/i18n.js": {
-      "sha": "05b8f4a7adb3d212",
-      "mapSha": "13125fe42e6f68ed",
+      "sha": "f3734503795bbe6d",
+      "mapSha": "868602fd8819a095",
       "inputs": {
-        "js/i18n.js": "8c8fd70b84671c42"
+        "js/i18n.js": "d0360930d61e330f"
       }
     },
     "dist/index.js": {

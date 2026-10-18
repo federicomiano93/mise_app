@@ -275,7 +275,7 @@ export function renderRun({ recipe, targetGrams, app, resume = null }) {
 
     if (missed.length) {
       const warn = el('div', { class: 'guided-missed' }, [
-        el('p', { class: 'guided-missed-title', text: t('cat.notInAnyStep') }),
+        el('p', { class: 'guided-missed-title', text: t('cat.notInAnyStepCheck') }),
       ]);
       for (const row of missed) {
         const i = snapshot.ingredients.indexOf(row);
