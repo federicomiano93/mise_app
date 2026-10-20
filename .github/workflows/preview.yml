@@ -290,7 +290,7 @@ jobs:
           TOKEN: ${{ steps.auth.outputs.access_token }}
         run: |
           code=$(curl -sS --max-time 30 --retry 3 -X DELETE -o "$RUNNER_TEMP/delete.json" -w "%{http_code}" \
-            -H "Authorization: Bearer $TOKEN" -H "x-goog-user-project: mise-app-preview" \
+            -H "Authorization: Bearer $TOKEN" \
             "https://firebasehosting.googleapis.com/v1beta1/sites/mise-app-preview/channels/$CHANNEL")
           case "$code" in
             200) echo "$CHANNEL deleted" ;;

@@ -153,7 +153,9 @@ test('the workflow signs in to, and deploys to, the preview project only', () =>
     assert.equal(values.length, 2, key);
     assert.equal(new Set(values.map((v) => v.trim())).size, 1, key);
   }
-  // Every call made straight to a Google API names the preview project's site, and bills it.
+  // Every call made straight to a Google API names the preview project's site. No quota-project
+  // header: the account's own project is billed already, and the header would need one more
+  // permission (serviceusage) the account may not hold. Another project there is never allowed.
   const apiCalls = workflow.match(/https:\/\/[a-z]+\.googleapis\.com\/[^\s"]+/g) || [];
   assert.ok(apiCalls.length > 0);
   for (const url of apiCalls) assert.match(url, /\/sites\/mise-app-preview\//, url);
