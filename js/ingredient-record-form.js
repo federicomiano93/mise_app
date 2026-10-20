@@ -33,7 +33,7 @@ import { field, formActions, reportFailure, shortDate } from './record-ui.js';
 import {
   PRICE_UNITS, priceUnitLabel, PRICE_FORMS, priceFormOf, formatPriceInput, storedPriceInput, singleFromCaseInput, priceBoxStart, ownPieceWeight,
   weightNeededForPrice, positiveNumber, packBaseOf, storedCaseOf,
-  pricePatch, priceChanged, priceRecord, pricePerKg,
+  pricePatch, priceChanged, priceRecord, keepPriceDate, pricePerKg,
   formatPricePerUnit, formatRate, costReasonText, formatMoney,
   basisOptions, basisOf, basisToStore, rateBaseOf, storedPriceToBasis, convertBasisPrice, shownPrice,
 } from './price-model.js';
@@ -2126,7 +2126,8 @@ export function buildIngredientForm({
 
     // Every price field is in the patch, as a number or as null, because this is a MERGE write: a field
     // left out keeps whatever it had, so emptying the boxes could never actually remove a price.
-    const patch = mayPrice ? pricePatch(price.read(), new Date().toISOString(), weight.read()) : {};
+    // keepPriceDate: a save that did not move the money keeps the price's date (the invoice import reads it).
+    const patch = mayPrice ? keepPriceDate(item, pricePatch(price.read(), new Date().toISOString(), weight.read())) : {};
     const packUnit = pack.read().slice(0, PACK_WORD_MAX);
     const payload = {
       name: name.value.trim(),
@@ -2207,7 +2208,8 @@ export function buildIngredientForm({
     // fail the whole save of an ordinary rename.
     // `priceBasis` (price.read() carries it into pricePatch) is the memory of what the number was typed against;
     // it is saved by itself when only the segment moved (priceChanged compares money: no history entry).
-    const patch = mayPrice ? pricePatch(price.read(), new Date().toISOString(), weight.read()) : {};
+    // keepPriceDate: a save that did not move the money keeps the price's date (the invoice import reads it).
+    const patch = mayPrice ? keepPriceDate(item, pricePatch(price.read(), new Date().toISOString(), weight.read())) : {};
     // ⚠️ THE FORMAT ADDS KEYS ONLY WHEN IT WAS TOUCHED (pack-format.js formatPatch → {} otherwise):
     // the write is a merge, so an untouched save leaves `unit`, `packUnit` and `packCount` exactly as
     // they are stored. The one thing a NEW item gets besides: an empty `unit`, or — a loose item priced
