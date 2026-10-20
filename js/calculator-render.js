@@ -14,6 +14,7 @@
 import { t } from './i18n.js';
 import { getTabProducts, showsLeaveningKnob, usesOrders, usesTypedTotal, usesTrays } from './calculator-config.js';
 import { icon } from './calculator-icons.js';
+import { leaveningLost } from './calculator-recipe-source.js';
 import { SEND_PATHS, svgElement } from './send-icon.js';
 
 // ⚠️⚠️ THE WHATSAPP BRAND MARK USED TO BE DRAWN HERE, one of three copies of the
@@ -118,15 +119,20 @@ export function buildTabBar(bar, recipes, onPick) {
 //   traysTotal → "Number of trays" + "Total dough (g)" + Confirm/Edit + result
 // CSP-safe (DOM API, no innerHTML/inline styles). No event listeners here — app.js
 // wires them after inserting the panel, exactly like the old static markup.
-export function buildRecipePanel(recipe) {
+// `resolved` is the tab's effective recipe (effectiveRecipe): the knob is named after
+// the row it scales — on a linked tab the Catalogue's, not the tab's leftover copy.
+export function buildRecipePanel(recipe, resolved) {
   const id = recipe.id;
   const hasOrders = usesOrders(recipe.logic);
   const hasTotalInput = usesTypedTotal(recipe.logic);
   const hasTrays = usesTrays(recipe.logic);
   const content = el('div', { class: 'content', id: 'tab-' + id });
 
-  if (showsLeaveningKnob(recipe)) {
-    const lev = (recipe.ingredients || []).find(i => i.key === recipe.leaveningKey);
+  // ⚠️ NO KNOB FOR A CATALOGUE ROW THAT IS GONE (deleted, or re-added with a new id):
+  // the spec scales pro-rata then, and a knob would move the % and change no gram.
+  if (showsLeaveningKnob(recipe) && !leaveningLost(recipe, resolved)) {
+    const src = resolved || recipe;
+    const lev = (src.ingredients || []).find(i => i.key === src.leaveningKey);
     const label = (lev ? lev.label : t('calc.leavening'));
     const def = recipe.leaveningDefaultPct;
     const r = knobRange(def);

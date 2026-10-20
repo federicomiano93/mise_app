@@ -116,3 +116,24 @@ export function errorKey(err, keys) {
 export function answerKey(reason, keys) {
   return keys[reason] || keys['nothing-readable'];
 }
+
+// Decode a chosen photo the right way up.
+//
+// ⚠️ Chrome 101 (the lab tablet's, the newest the SM-T550 can get) does not know the
+// word 'from-image': it REJECTS the options with a TypeError before looking at the
+// photo, so every camera photo on the tablet was reported as an unreadable format
+// (found on the real tablet in Mise 2, 18 Oct 2026). Its own default already honours
+// the EXIF rotation (measured there: a 40×30 JPEG flagged «rotate 90°» decodes 30×40)
+// — the spec later renamed that behaviour 'from-image'. So ONLY a TypeError (the
+// options refused) retries without them; a photo that truly cannot be decoded fails
+// with a DOMException and stays «undecodable» for the caller.
+//
+// `create` is createImageBitmap, passed in so a test can stand in for the browser.
+export async function decodeUpright(file, create = globalThis.createImageBitmap) {
+  try {
+    return await create(file, { imageOrientation: 'from-image' });
+  } catch (error) {
+    if (!(error instanceof TypeError)) throw error;
+    return create(file);
+  }
+}
