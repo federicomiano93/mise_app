@@ -38,6 +38,9 @@ export interface SuppliersSnapshot {
   readonly suppliers: readonly StoredDoc[];
   // Whether the suppliers can be shown (header): the server answered, the copy held some, or the stream failed.
   readonly suppliersLoaded: boolean;
+  // Whether the SERVER has answered once: only then is «this supplier no longer exists» the truth (a copy in the
+  // browser's own database can be older than a supplier somebody added on another phone).
+  readonly suppliersFromServer: boolean;
   // The live stream died (no resubscribe): the page says it could not load them (parity S71).
   readonly suppliersBroken: boolean;
   // Every ingredient and packaging item with its price laid on (withPrices) for whoever may read prices; unpriced for
@@ -104,6 +107,7 @@ export function browserSuppliersDeps(): SuppliersDeps {
 export function createSuppliersStore(source: SuppliersSource, deps: SuppliersDeps = browserSuppliersDeps()): SuppliersStore {
   let suppliers: readonly StoredDoc[] = [];
   let suppliersLoaded = false;
+  let suppliersFromServer = false;
   let suppliersBroken = false;
   let rawIngredients: readonly StoredDoc[] = [];
   let ingredients: readonly StoredDoc[] = [];
@@ -124,7 +128,7 @@ export function createSuppliersStore(source: SuppliersSource, deps: SuppliersDep
 
   function build(): SuppliersSnapshot {
     return {
-      suppliers, suppliersLoaded, suppliersBroken, ingredients, ingredientsLoaded, ingredientsBroken, pricesReadable,
+      suppliers, suppliersLoaded, suppliersFromServer, suppliersBroken, ingredients, ingredientsLoaded, ingredientsBroken, pricesReadable,
       storedCategories, favourites, configLoaded,
     };
   }
@@ -189,6 +193,7 @@ export function createSuppliersStore(source: SuppliersSource, deps: SuppliersDep
         source.watchSuppliers((list, meta) => {
           suppliers = list;
           if (believable(list, meta)) suppliersLoaded = true;
+          if (meta.fromServer) suppliersFromServer = true;
           suppliersBroken = false;
           changed();
         }, () => {

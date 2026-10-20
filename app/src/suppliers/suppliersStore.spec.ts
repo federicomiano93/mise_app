@@ -57,6 +57,11 @@ describe('the suppliers store: what is believed', () => {
     await tick();
     expect(store.getSnapshot().suppliersLoaded).toBe(true);
     expect(store.getSnapshot().ingredientsLoaded).toBe(true);
+    // Shown, but not the server's word: a supplier missing from it is not yet «deleted».
+    expect(store.getSnapshot().suppliersFromServer).toBe(false);
+    source.fromCache = false;
+    source.push();
+    expect(store.getSnapshot().suppliersFromServer).toBe(true);
   });
 
   test('a stream that fails ends the wait and says it broke', async () => {
