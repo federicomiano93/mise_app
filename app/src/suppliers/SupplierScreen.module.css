@@ -1,0 +1,68 @@
+/* A supplier's own screen: the bar (Back, its name, the star) and, under it, everything it sells. The card does not clip
+   (no `overflow`), so the bar sticks to the top of the scroll area. */
+
+.screen,
+.waiting {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+}
+
+/* The supplier's details under its name, in the bar. */
+.meta {
+  margin-top: 2px;
+  overflow-wrap: anywhere;
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
+/* The star: square, like Back, and filled when the supplier is a favourite. */
+.star {
+  width: var(--hit);
+  padding: 0;
+}
+
+.star svg {
+  flex: none;
+  width: 22px;
+  height: 22px;
+}
+
+.star[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: var(--accent-tint);
+  color: var(--accent-ink);
+}
+
+.sells {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+  padding: var(--s4) var(--s3);
+}
+
+.sellsTitle {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  font-weight: 650;
+}
+
+.loading,
+.nothing {
+  padding: var(--s3);
+  color: var(--ink-2);
+}
+
+.waiting .loading {
+  padding: var(--s6);
+}
+
+.failed {
+  margin: var(--s3);
+  padding: var(--s3);
+  border: 1px solid var(--danger);
+  border-radius: var(--r-md);
+  background: var(--danger-tint);
+  color: var(--danger-ink);
+}

@@ -1369,6 +1369,47 @@ export const en = {
   'cat.photo.err.tooLong': 'That list is too long to read in one go. Photograph it in two parts.',
   'cat.photo.err.tooSlow': 'Reading took too long and was stopped. Try again with fewer photos.',
   'cat.photo.err.failed': 'The photo could not be read. Try again.',
+
+  // Ingredients & suppliers (step 3e-1, slice A): the frame, the three lists and a supplier's own screen. The words are the
+  // current app's (orders.* keys), copied; the ones marked NEW did not exist there.
+  'sup.title': 'Ingredients & suppliers',
+  'sup.tab.ingredients': 'Ingredients',
+  'sup.tab.suppliers': 'Suppliers',
+  'sup.tab.packaging': 'Packaging',
+  'sup.whichList': 'Which list to show',
+  'sup.search.ingredients': 'Search an ingredient…',
+  'sup.search.suppliers': 'Search a supplier…',
+  'sup.search.packaging': 'Search packaging',
+  'sup.empty.suppliers.title': 'No suppliers yet',
+  'sup.empty.suppliers.sub': 'Add the suppliers you order from, then the ingredients each one sells.',
+  'sup.empty.ingredients.title': 'No ingredients yet',
+  'sup.empty.ingredients.sub': 'Add what you buy, so orders, recipes and labels can use it.',
+  'sup.empty.packaging.title': 'No packaging yet',
+  'sup.empty.packaging.sub': 'Add the boxes, bags and labels you buy, so Food cost can count them.',
+  'sup.noMatch.suppliers': 'No supplier matches your search.',
+  'sup.noMatch.ingredients': 'No ingredient matches your search.',
+  'sup.noMatch.packaging': 'No packaging matches your search.',
+  'sup.productsCount': { one: '{n} product', other: '{n} products' },
+  'sup.favourites.title': 'Favourites',
+  'sup.favourites.others': 'Other suppliers',
+  'sup.noSupplier': 'No supplier',
+  'sup.notDeclared': 'not declared',
+  'sup.packagingTag': 'Packaging',
+  // NEW: the word beside a switched-off supplier or ingredient, so it is never told apart by being dimmed alone.
+  'sup.switchedOff': 'Switched off',
+  'sup.loadFailed': 'Could not load the suppliers. Check your connection and try again.',
+  'sup.pane.suppliers.title': 'Choose a supplier',
+  'sup.pane.suppliers.text': 'Tap a supplier on the left: its details and everything it sells open here.',
+  'sup.whatTheySell': 'What they sell',
+  // The current app says «add them from the Ingredients tab with +»; there is no + in this slice.
+  'sup.noIngredientsYet': 'No ingredients yet.',
+  'sup.deliveryShort': 'delivery',
+  'sup.orderShort': 'order',
+  'sup.favourite': 'Favourite',
+  'sup.favouriteNotSaved': 'Could not save the favourite. Check the connection and try again.',
+  'sup.perEach': '{rate} / each',
+  // NEW: said once when the supplier on screen was deleted on another phone (or the address names none).
+  'sup.supplierGone': 'This supplier no longer exists.',
 } as const satisfies Record<string, Message>;
 
 export type MessageKey = keyof typeof en;

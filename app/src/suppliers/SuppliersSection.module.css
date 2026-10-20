@@ -1,0 +1,51 @@
+/* The frame of «Ingredients & suppliers». A phone, or a tablet held upright: the list is the screen, and a supplier
+   replaces it. From 1000px (the lab tablet held sideways is 1024 wide): the list on the left (`--list-w`) and the chosen
+   supplier on the right, with a prompt while nothing is chosen.
+
+   ⚠️ NOTHING IN THE CHAIN FROM THE SCROLL AREA DOWN TO THE LIST CLIPS (no `overflow` on .layout or .list): the tabs and
+   the search box stick to the top of the scroll area, and one clipping ancestor would make them an ordinary row. On a
+   phone .detail does not clip either (the form bar sticks to the top of the screen); on the split it is its own scroll
+   area, on purpose (below). */
+
+.layout {
+  display: grid;
+  gap: var(--s4);
+}
+
+.list,
+.detail {
+  min-width: 0;
+}
+
+/* One pane at a time on a phone: with the list on screen the right-hand side (only a prompt) is not drawn, and with a
+   supplier open the list is not drawn behind it. The list stays mounted, so the place in it, and what is typed in its
+   search box, are still there when Back returns to it. */
+@media (max-width: 999.98px) {
+  .layout[data-view="list"] .detail {
+    display: none;
+  }
+
+  .layout[data-view="detail"] .list {
+    display: none;
+  }
+}
+
+@media (min-width: 1000px) {
+  .layout {
+    grid-template-columns: var(--list-w) minmax(0, 1fr);
+    gap: var(--s6);
+    align-items: start;
+  }
+
+  /* ⚠️ THE RIGHT-HAND SIDE STAYS ON SCREEN WHILE THE LIST SCROLLS: stuck to the top of the scroll area, it is always in
+     view. It is never taller than the scroll area (the screen less the top bar), so it scrolls on its own, and the form
+     bar of the supplier sticks to ITS top.
+
+     ⚠️ NO `overscroll-behavior: contain`: a scroll that reaches the pane's end goes on to the page. */
+  .detail {
+    position: sticky;
+    top: var(--s4);
+    max-height: calc(var(--vh100) - var(--topbar-h) - 2 * var(--s4));
+    overflow-y: auto;
+  }
+}
