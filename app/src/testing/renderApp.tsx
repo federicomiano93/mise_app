@@ -19,6 +19,7 @@ import { fakeFoodcostSource } from './fakeFoodcostSource';
 import { fakeRecipesSource } from './fakeRecipesSource';
 import { fakePastriesSource } from './fakePastriesSource';
 import { fakeStocktakeSource } from './fakeStocktakeSource';
+import { fakeSuppliersSource } from './fakeSuppliersSource';
 import { fakeStore } from './fakeSession';
 
 type Options = {
@@ -50,7 +51,8 @@ export function renderApp(path: string, { lang = 'en', routes = appRoutes, sessi
   const services: DataServices = { pastries: () => fakePastriesSource(), stocktake: () => fakeStocktakeSource(),
     foodcost: () => fakeFoodcostSource(), calculator: () => fakeCalculatorSource(),
     clientOrders: () => fakeClientOrdersSource(), recipes: () => fakeRecipesSource(),
-    photo: () => ({ readRecipe: () => Promise.reject(new Error('no photo reader in this spec')), setRecipePhoto: () => Promise.reject(new Error('no photo switch in this spec')) }), ...data };
+    photo: () => ({ readRecipe: () => Promise.reject(new Error('no photo reader in this spec')), setRecipePhoto: () => Promise.reject(new Error('no photo switch in this spec')) }),
+    suppliers: () => fakeSuppliersSource(), ...data };
 
   render(
     <I18nProvider initialLanguage={lang} initialMessages={messages}>
