@@ -231,7 +231,7 @@
   -webkit-tap-highlight-color: transparent;
 }
 
-.deleteIcon:disabled {
+.deleteIcon[aria-disabled='true'] {
   color: var(--ink-3);
   cursor: default;
 }
@@ -247,7 +247,7 @@
 }
 
 @media (hover: hover) {
-  .deleteIcon:hover:not(:disabled) {
+  .deleteIcon:hover:not([aria-disabled='true']) {
     background: var(--danger-tint);
   }
 }

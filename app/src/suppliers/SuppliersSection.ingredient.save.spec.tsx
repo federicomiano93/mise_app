@@ -260,7 +260,8 @@ describe('the question and the payload', () => {
     const view = await open('/suppliers/ingredient/new?kind=packaging&supplier=s-zed');
     expect(view.region.getByRole('combobox', { name: 'Supplier' })).toHaveValue('s-zed');
     await view.user.type(nameBox(view.region), 'Box 30x40');
-    await saveAndConfirm(view);
+    await view.user.click(view.region.getByRole('button', { name: 'Save' }));
+    await view.user.click(within(await dialogOf('Save packaging?')).getByRole('button', { name: 'Save' }));
     await waitFor(() => { expect(view.source.writes).toHaveLength(1); });
     expect(view.source.writes[0]).toMatchObject({ data: { name: 'Box 30x40', supplierId: 's-zed', unit: '', active: true, kind: 'packaging' } });
   });
@@ -268,7 +269,8 @@ describe('the question and the payload', () => {
   it('an existing packaging item stays packaging', async () => {
     const view = await open('/suppliers/ingredient/i-box');
     await view.user.type(view.region.getByRole('textbox', { name: 'Brand' }), 'X');
-    await saveAndConfirm(view);
+    await view.user.click(view.region.getByRole('button', { name: 'Save' }));
+    await view.user.click(within(await dialogOf('Save packaging?')).getByRole('button', { name: 'Save' }));
     await waitFor(() => { expect(view.source.writes).toHaveLength(1); });
     expect(view.source.writes[0]).toMatchObject({ data: { kind: 'packaging', brand: 'X' } });
   });

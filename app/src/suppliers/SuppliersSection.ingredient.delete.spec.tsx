@@ -100,11 +100,11 @@ describe('the question carries what the item is used in', () => {
 });
 
 describe('the busy bin', () => {
-  it('is disabled and busy while the count runs, and a second tap does nothing', async () => {
+  it('is aria-disabled and busy while the count runs, and a second tap does nothing', async () => {
     const { region, user, source } = await open();
     const release = source.holdUsage();
     await user.click(bin(region));
-    await waitFor(() => { expect(bin(region)).toBeDisabled(); });
+    await waitFor(() => { expect(bin(region)).toHaveAttribute('aria-disabled', 'true'); });
     expect(bin(region)).toHaveAttribute('aria-busy', 'true');
     await act(async () => { bin(region).click(); });
     expect(source.usageCalls).toEqual(['i-flour']);
@@ -112,7 +112,7 @@ describe('the busy bin', () => {
     release();
     const dialog = await dialogOf('Delete “Flour”?');
     await user.click(within(dialog).getByRole('button', { name: 'Cancel' }));
-    await waitFor(() => { expect(bin(region)).not.toBeDisabled(); });
+    await waitFor(() => { expect(bin(region)).not.toHaveAttribute('aria-disabled'); });
   });
 });
 

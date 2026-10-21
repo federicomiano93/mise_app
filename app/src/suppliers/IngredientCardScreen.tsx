@@ -1,12 +1,12 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useNavigationType } from 'react-router';
 import { ingredientDisplayName } from '@mise/shared/ingredient-name';
-import { isPackaging } from '@mise/shared/ingredient-kind';
 import { outputLanguage } from '@mise/shared/market';
 import { packChoices } from '@mise/shared/record-choices';
 import { useT } from '../i18n/useT';
 import { IngredientCard } from '../records/IngredientCard';
 import { kindFor } from '../records/ingredientCardModel';
+import type { CardKind } from '../records/ingredientCardModel';
 import { useSession } from '../session/SessionContext';
 import { KEEP_FOCUS } from '../shell/Page';
 import { announceAction } from '../telemetry/usage';
@@ -63,11 +63,19 @@ export function IngredientCardScreen({ id, packaging, preset }: Props) {
   const waited = useCopyWait(id === null
     ? snapshot.suppliersLoaded
     : (snapshot.ingredientsFromServer && snapshot.suppliersFromServer) || snapshot.ingredientsBroken || snapshot.suppliersBroken);
-  const canOpen = id === null ? waited : item !== null && waited;
+  // ⚠️ AN EXISTING ITEM'S CARD OPENS ONLY ONCE THE SUPPLIERS HAVE ARRIVED (the server's answer, or a copy that holds some): with
+  // none, the supplier it is filed under is unknown and an untouched Save would re-file it under «No supplier». A broken
+  // suppliers stream shows the «could not load» panel instead.
+  const canOpen = id === null ? waited : item !== null && waited && snapshot.suppliersLoaded && !snapshot.suppliersBroken;
 
   // The id whose card has been shown: an item that leaves the list afterwards is not «gone» for this screen.
   const [shownFor, setShownFor] = useState<string | null>(null);
   if (canOpen && id !== null && shownFor !== id) setShownFor(id);
+  // ⚠️ THE KIND IS TAKEN ONCE, WHEN THE CARD OPENS: a packaging item deleted on another phone while its card is open must not
+  // turn into an ingredient (and be saved as one).
+  const [kindShown, setKindShown] = useState<{ readonly id: string; readonly kind: CardKind } | null>(null);
+  if (canOpen && id !== null && kindShown?.id !== id) setKindShown({ id, kind: kindFor(item, packaging) });
+  const kind: CardKind = id !== null && kindShown?.id === id ? kindShown.kind : kindFor(item, packaging);
   const hasForm = canOpen || (id !== null && shownFor === id);
   const broken = !hasForm && (snapshot.suppliersBroken || (id !== null && snapshot.ingredientsBroken));
   const gone = !hasForm && !broken && id !== null && item === null && snapshot.ingredientsLoaded && waited && !deletions.has(id);
@@ -78,7 +86,7 @@ export function IngredientCardScreen({ id, packaging, preset }: Props) {
   // it was opened from (the row there, or «Add ingredient»). Opened by its address, there is nothing behind it: it replaces
   // itself with the tab it belongs to.
   const supplierOrigin = supplierScreenOf(state);
-  const kindTab = (item ? isPackaging(item) : packaging) ? 'packaging' : 'ingredients';
+  const kindTab = kind === 'packaging' ? 'packaging' : 'ingredients';
   const fallback = tabPath(tabOfState(state) ?? kindTab);
   const owed = (afterDelete: boolean) => {
     if (supplierOrigin !== null) {
@@ -129,7 +137,7 @@ export function IngredientCardScreen({ id, packaging, preset }: Props) {
       <IngredientCard
         key={id ?? 'new'}
         item={item}
-        kind={kindFor(item, packaging)}
+        kind={kind}
         preset={preset}
         suppliers={snapshot.suppliers}
         categories={store.categories(language)}
@@ -139,16 +147,17 @@ export function IngredientCardScreen({ id, packaging, preset }: Props) {
         onSave={(payload, options) => {
           store.saveIngredient(id, payload, options);
           announceAction('ingredient-saved');
-          say(t('sup.ingredientSaved'));
+          say(t(kind === 'packaging' ? 'sup.packagingSaved' : 'sup.ingredientSaved'));
         }}
         onLeave={leave}
         deleting={counting}
         onDelete={canManage && item !== null && id !== null
-          ? markClean => {
-            void runDelete({ id, name: ingredientDisplayName(item) }, () => { markClean(); leaveAfterDelete(); });
-          }
+          ? markClean => runDelete({ id, name: ingredientDisplayName(item) }, () => { markClean(); leaveAfterDelete(); })
           : undefined}
         renderNewSupplier={host => <SupplierCard id={null} supplier={null} titleRef={noTitle} host={host} />}
+        watchRefusedSupplier={listener => store.onMessage(message => {
+          if (message.kind === 'supplier-not-saved') listener(message.name);
+        })}
       />
       {deleteDialog}
     </>

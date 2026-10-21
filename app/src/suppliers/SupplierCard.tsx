@@ -47,6 +47,8 @@ type Props = {
 export interface SupplierCardHost {
   onSaved(made: { id: string; name: string }): void;
   onCancel(): void;
+  // Typing happened in the form: the host asks before the page is left.
+  onDirty(dirty: boolean): void;
 }
 
 // A supplier's card: a new one, or an existing one's. A port of js/supplier-record-form.js, decision for decision, except
@@ -88,6 +90,7 @@ export function SupplierCard({ id, supplier, titleRef, host }: Props) {
   const edit = (change: (current: Working) => Working) => {
     dirtyRef.current = true;
     setDirty(true);
+    host?.onDirty(true);
     setWorking(change);
   };
   // Unsaved edits: a reload the app starts by itself waits (session/busy.ts).
@@ -126,35 +129,12 @@ export function SupplierCard({ id, supplier, titleRef, host }: Props) {
 
   // ⚠️ EVERY WAY OUT GOES THROUGH THE ROUTER'S BLOCKER, not through the Back button: the browser's Back, a supplier picked in
   // the split's list, the rail and the tab bar all navigate. Staying on the same address is never blocked.
+  // ⚠️ IN A DIALOG THERE IS NO BLOCKER AT ALL: the router asks only the LAST one registered, so a blocker here (even one that
+  // never blocks) would silence the ingredient card underneath. That card counts this form's typing (host.onDirty) and asks.
   const shouldBlock = useCallback<BlockerFunction>(
-    ({ currentLocation, nextLocation }) => host === undefined && !leavingClean.current && dirtyRef.current && currentLocation.pathname !== nextLocation.pathname,
-    [host],
+    ({ currentLocation, nextLocation }) => !leavingClean.current && dirtyRef.current && currentLocation.pathname !== nextLocation.pathname,
+    [],
   );
-  const blocker = useBlocker(shouldBlock);
-  const latestBlocker = useRef(blocker);
-  useEffect(() => {
-    latestBlocker.current = blocker;
-    if (blocker.state !== 'blocked') {
-      askingLeave.current = false;
-      return;
-    }
-    if (askingLeave.current) return;
-    askingLeave.current = true;
-    void (async () => {
-      try {
-        const discard = await discardQuestion();
-        // The form went away while the question was open: the router has dropped its blocker.
-        if (!mounted.current) return;
-        const current = latestBlocker.current;
-        if (current.state !== 'blocked') return;
-        if (discard) current.proceed();
-        else current.reset();
-      } catch (error) {
-        askingLeave.current = false;
-        throw error;
-      }
-    })();
-  });
 
   // ⚠️ THE BACK BUTTON ASKS FOR ITSELF, BEFORE IT NAVIGATES: its navigate(-1) is a POP, and the router's blocker fails
   // silently on a POP to an entry it did not create (a page opened by its address).
@@ -330,8 +310,49 @@ export function SupplierCard({ id, supplier, titleRef, host }: Props) {
         </div>
       </div>
       {confirmDialog}
+      {host ? null : <LeaveBlocker shouldBlock={shouldBlock} ask={discardQuestion} asking={askingLeave} />}
     </section>
   );
+}
+
+// The router's blocker for a card drawn as a page (see the note on shouldBlock): asks «Discard changes?» when a navigation is
+// blocked, and lets it go on or puts it back. A component of its own so that a card in a dialog can leave it out.
+function LeaveBlocker({ shouldBlock, ask, asking }: {
+  shouldBlock: BlockerFunction;
+  ask: () => Promise<boolean>;
+  asking: { current: boolean };
+}) {
+  const blocker = useBlocker(shouldBlock);
+  const latestBlocker = useRef(blocker);
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
+  useEffect(() => {
+    latestBlocker.current = blocker;
+    if (blocker.state !== 'blocked') {
+      asking.current = false;
+      return;
+    }
+    if (asking.current) return;
+    asking.current = true;
+    void (async () => {
+      try {
+        const discard = await ask();
+        // The form went away while the question was open: the router has dropped its blocker.
+        if (!mounted.current) return;
+        const current = latestBlocker.current;
+        if (current.state !== 'blocked') return;
+        if (discard) current.proceed();
+        else current.reset();
+      } catch (error) {
+        asking.current = false;
+        throw error;
+      }
+    })();
+  });
+  return null;
 }
 
 // Seven ticks, Monday first. The LABEL is the screen's word and the VALUE stays the English key (supplierModel.ts).

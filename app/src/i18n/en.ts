@@ -1532,6 +1532,10 @@ export const en = {
   'sup.ingredientGone': 'This ingredient no longer exists.',
   'sup.ingredientDeleted': 'Ingredient deleted.',
   'sup.ing.delete': 'Delete ingredient',
+  // NEW: a packaging item's card says «packaging», not «ingredient», in its question, its confirmation and its bin.
+  'sup.pack.save.title': 'Save packaging?',
+  'sup.packagingSaved': 'Packaging saved.',
+  'sup.pack.delete': 'Delete packaging',
   'sup.ing.delete.title': 'Delete “{name}”?',
   // The current app's sentence: said when the recipes and products could not be counted.
   'sup.ing.delete.unknown': 'This cannot be undone. Past orders still show it; in recipes and food cost it will appear as a missing ingredient, and the labels of those recipes stay blocked until you replace it.',

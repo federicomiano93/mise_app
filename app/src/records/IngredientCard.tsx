@@ -27,6 +27,8 @@ import styles from './IngredientCard.module.css';
 export interface NewSupplierHost {
   onSaved(made: { id: string; name: string }): void;
   onCancel(): void;
+  // The supplier form has (or no longer has) typing in it: the card then asks before the page is left, for both.
+  onDirty(dirty: boolean): void;
 }
 
 type Props = {
@@ -50,11 +52,14 @@ type Props = {
   onLeave(): void;
   // Delete, for whoever may: the bin is drawn only when this is given, and only for an existing item. The screen asks, deletes
   // and leaves; it calls `markClean` just before leaving, so the card then asks nothing about unsaved edits.
-  onDelete?: (markClean: () => void) => void;
+  // It may answer (later) whether the item was deleted: on «no» the focus goes back to the bin.
+  onDelete?: (markClean: () => void) => void | Promise<boolean>;
   // The delete is counting what uses the item: the bin is disabled and says it is busy.
   deleting?: boolean;
   // The supplier card, to draw in a dialog above this one. Without it «+ New supplier…» is not offered (parity C40).
   renderNewSupplier?: (host: NewSupplierHost) => ReactNode;
+  // Hears the store's refusal of a supplier save (the name it was saved under); returns the way to stop listening. See host.
+  watchRefusedSupplier?: (listener: (name: string) => void) => () => void;
 };
 
 // An ingredient's or packaging item's card, product data (parity C36–C57, C80–C81, C84–C97). Driven only by its props, so the
@@ -68,7 +73,7 @@ type Props = {
 //
 // ⚠️ THE FOOD WORDS (the categories, the package words, the carton word) COME FROM THE VENUE'S COUNTRY, never from `t()`.
 export function IngredientCard({
-  item, kind, preset, suppliers, categories, packs, language, titleRef, onSave, onLeave, onDelete, deleting = false, renderNewSupplier,
+  item, kind, preset, suppliers, categories, packs, language, titleRef, onSave, onLeave, onDelete, deleting = false, renderNewSupplier, watchRefusedSupplier,
 }: Props) {
   const { t, locale } = useT();
   const [confirm, confirmDialog] = useConfirm();
@@ -85,6 +90,10 @@ export function IngredientCard({
   // navigation, and a state value read there could be one render behind.
   const dirty = isDirty(working, baseline);
   const dirtyRef = useRef(false);
+  // ⚠️ THE SUPPLIER FORM OPEN ABOVE HAS TYPING: the router asks only its LAST blocker, so this card's is the only one (the
+  // supplier form registers none in a dialog) and it counts that typing too — one question, for both.
+  const dialogDirtyRef = useRef(false);
+  const unsaved = () => dirtyRef.current || dialogDirtyRef.current;
   const [refused, setRefused] = useState<RefusedField | null>(null);
   const update = (next: Working, clears?: RefusedField) => {
     workingRef.current = next;
@@ -116,7 +125,7 @@ export function IngredientCard({
   // ⚠️ EVERY WAY OUT GOES THROUGH THE ROUTER'S BLOCKER, not through the Back button: the browser's Back, another row picked in
   // the split's list, the rail and the tab bar all navigate. Staying on the same address is never blocked.
   const shouldBlock = useCallback<BlockerFunction>(
-    ({ currentLocation, nextLocation }) => !leavingClean.current && dirtyRef.current && currentLocation.pathname !== nextLocation.pathname,
+    ({ currentLocation, nextLocation }) => !leavingClean.current && unsaved() && currentLocation.pathname !== nextLocation.pathname,
     [],
   );
   const blocker = useBlocker(shouldBlock);
@@ -148,7 +157,7 @@ export function IngredientCard({
   // silently on a POP to an entry it did not create (a page opened by its address).
   async function back() {
     if (busy.current || askingLeave.current) return;
-    if (dirtyRef.current) {
+    if (unsaved()) {
       busy.current = true;
       try {
         const discard = await discardQuestion();
@@ -178,7 +187,7 @@ export function IngredientCard({
   }
 
   async function save() {
-    if (busy.current || askingLeave.current || leavingClean.current) return;
+    if (deleting || busy.current || askingLeave.current || leavingClean.current) return;
     const current = workingRef.current;
     const wrong = firstRefusal(current, opened);
     if (wrong) {
@@ -190,7 +199,7 @@ export function IngredientCard({
     let ok = false;
     try {
       ok = await confirm({
-        title: t('sup.ing.save.title'),
+        title: t(kind === 'packaging' ? 'sup.pack.save.title' : 'sup.ing.save.title'),
         message: t('sup.save.question', { name: labelOf(built.payload) }),
         okLabel: t('ui.save'),
         cancelLabel: t('common.cancel'),
@@ -206,33 +215,74 @@ export function IngredientCard({
     onLeave();
   }
 
+  // The bin is aria-disabled, never disabled, while the count runs: Chrome blurs a disabled button that has the focus, and the
+  // question's Cancel would then give the focus back to the page body.
+  const bin = useRef<HTMLButtonElement>(null);
   function remove() {
     if (!onDelete || deleting || busy.current || askingLeave.current) return;
     // The screen leaves by itself once the item is gone; `markClean` first, so that leaving asks nothing.
-    onDelete(() => { leavingClean.current = true; });
+    const done = onDelete(() => { leavingClean.current = true; });
+    if (done instanceof Promise) {
+      void done.then(deleted => {
+        if (!deleted && mounted.current) bin.current?.focus();
+      });
+    }
   }
 
   // ── The new supplier ─────────────────────────────────────────────────────────────────────────────────────────
   const [creatingSupplier, setCreatingSupplier] = useState(false);
   const [made, setMade] = useState<ReadonlyArray<{ id: string; name: string }>>([]);
   const supplierMenu = useRef<HTMLSelectElement>(null);
+  // What the menu showed before each supplier made here was selected, to put back if the database refuses that supplier.
+  const madeFrom = useRef(new Map<string, string>());
+  // ⚠️ THE LABELS AS COPIED AT OPEN: a supplier deleted on another phone while the card is open leaves the list, and the menu
+  // keeps an option for the value it holds, so what it shows is what Save writes.
+  const [openLabels] = useState(() => new Map(suppliers.map(supplier => [String(supplier.id), supplierLabel(supplier)] as const)));
+  const heldSupplier = working.supplierId;
   const supplierOptions = useMemo(() => {
     const listed = suppliers.map(supplier => ({ id: String(supplier.id), name: supplierLabel(supplier) }));
     // A supplier made from this card is in the menu at once, even before the list has heard of it.
     const extra = made.filter(one => !listed.some(known => known.id === one.id));
-    return [...listed, ...extra].sort((a, b) => a.name.localeCompare(b.name));
-  }, [suppliers, made]);
+    const all = [...listed, ...extra];
+    if (heldSupplier !== NO_SUPPLIER_ID && !all.some(known => known.id === heldSupplier)) {
+      all.push({ id: heldSupplier, name: openLabels.get(heldSupplier) ?? heldSupplier });
+    }
+    return all.sort((a, b) => a.name.localeCompare(b.name));
+  }, [suppliers, made, heldSupplier, openLabels]);
 
   const host: NewSupplierHost = {
     onSaved(one) {
       setCreatingSupplier(false);
+      dialogDirtyRef.current = false;
+      madeFrom.current.set(one.id, workingRef.current.supplierId);
       setMade(previous => [...previous, one]);
       update({ ...workingRef.current, supplierId: one.id });
     },
     onCancel() {
       setCreatingSupplier(false);
+      dialogDirtyRef.current = false;
+    },
+    onDirty(dirty) {
+      dialogDirtyRef.current = dirty;
     },
   };
+
+  // ⚠️ A SUPPLIER MADE HERE IS SAVED LOCAL-FIRST AND SELECTED AT ONCE; if the database refuses it, it leaves the menu and, if the
+  // menu still holds it, the menu goes back to what it showed before. The store says why. (If this card was already saved
+  // meanwhile, nothing more is done: the ingredient then names a supplier that does not exist, which the lists read as «No
+  // supplier». Accepted — the store's sentence is the cue.)
+  useEffect(() => {
+    if (!watchRefusedSupplier) return undefined;
+    return watchRefusedSupplier(name => {
+      const refusedOnes = made.filter(one => one.name === name && madeFrom.current.has(one.id));
+      if (refusedOnes.length === 0) return;
+      setMade(previous => previous.filter(one => !refusedOnes.includes(one)));
+      for (const one of refusedOnes) {
+        if (workingRef.current.supplierId === one.id) update({ ...workingRef.current, supplierId: madeFrom.current.get(one.id) ?? NO_SUPPLIER_ID });
+        madeFrom.current.delete(one.id);
+      }
+    });
+  });
 
   // ── What is drawn ────────────────────────────────────────────────────────────────────────────────────────────
   const invoiceName = typeof opened?.invoiceName === 'string' ? opened.invoiceName.trim() : '';
@@ -456,7 +506,11 @@ export function IngredientCard({
                   type="button"
                   className={styles.segment}
                   aria-pressed={working.format === format}
-                  onClick={() => { update(withFormat(working, format, language)); }}
+                  onClick={() => {
+                    update(withFormat(working, format, language));
+                    // A sentence about the case's count or word means nothing once the case is gone, and must not come back.
+                    if (format === 'single' && (refused === 'count' || refused === 'inner' || refused === 'innerEmpty')) setRefused(null);
+                  }}
                 >
                   {t(format === 'single' ? 'sup.ing.formatSingle' : 'sup.ing.formatCarton')}
                 </button>
@@ -533,9 +587,10 @@ export function IngredientCard({
           <button
             type="button"
             className={styles.deleteIcon}
-            aria-label={t('sup.ing.delete')}
-            title={t('sup.ing.delete')}
-            disabled={deleting}
+            ref={bin}
+            aria-label={t(kind === 'packaging' ? 'sup.pack.delete' : 'sup.ing.delete')}
+            title={t(kind === 'packaging' ? 'sup.pack.delete' : 'sup.ing.delete')}
+            aria-disabled={deleting ? 'true' : undefined}
             aria-busy={deleting}
             onClick={remove}
           >
