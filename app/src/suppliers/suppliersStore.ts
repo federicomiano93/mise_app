@@ -355,13 +355,19 @@ export function createSuppliersStore(source: SuppliersSource, deps: SuppliersDep
       return ingredientId;
     },
 
-    // ⚠️ THE NAME IS READ BEFORE THE WRITE (as for a supplier). ⚠️ The draft line goes too, NOT AWAITED and only logged on
-    // failure (parity C33): a quantity left for a product that no longer exists would sit in the draft, never ordered.
+    // ⚠️ THE NAME IS READ BEFORE THE WRITE (as for a supplier). ⚠️ The draft line goes too, only logged on failure (parity
+    // C33): a quantity left for a product that no longer exists would sit in the draft, never ordered. ⚠️ BUT ONLY ONCE THE
+    // DELETE HAS LANDED (js/orders/registry-main.js awaits it first): a refused delete puts the ingredient back, and its
+    // quantity in the order being prepared must still be there.
     deleteIngredient(id, withPrice) {
       const refused: SuppliersMessage = { kind: 'ingredient-not-deleted', name: ingredientNameOf(id) };
-      track(attempt(() => source.deleteIngredient(id, withPrice)), refused);
-      attempt(() => source.clearDraftEntry(id))
-        .catch((err: unknown) => console.error('The draft still holds a deleted ingredient:', err));
+      const removed = attempt(() => source.deleteIngredient(id, withPrice));
+      track(removed, refused);
+      removed.then(
+        () => attempt(() => source.clearDraftEntry(id))
+          .catch((err: unknown) => console.error('The draft still holds a deleted ingredient:', err)),
+        () => undefined,
+      );
     },
 
     ingredientUsage: id => attempt(() => source.readUsage(id)).catch((err: unknown) => {

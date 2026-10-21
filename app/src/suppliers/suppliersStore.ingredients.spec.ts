@@ -158,6 +158,21 @@ describe('the suppliers store: deleting an ingredient', () => {
     expect(source.ingredients.has('i1')).toBe(true);
     errors.mockRestore();
   });
+
+  test('⚠️ a REFUSED delete leaves the order line where it was (the clear waits for the delete to land)', async () => {
+    const quiet = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const source = fakeSuppliersSource({ ingredients: [{ id: 'i1', name: 'Flour' }] });
+    source.draft = { i1: { qty: 2 } };
+    const { store } = started(source);
+    await tick();
+    source.refuseWrites.ingredientDelete = true;
+    store.deleteIngredient('i1', false);
+    await tick();
+    await tick();
+    expect(source.writes.map(w => w.op)).toEqual(['ingredient-delete']);
+    expect(source.draft).toEqual({ i1: { qty: 2 } });
+    quiet.mockRestore();
+  });
 });
 
 describe('the suppliers store: what uses an ingredient (F5)', () => {
