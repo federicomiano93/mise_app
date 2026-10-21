@@ -21,6 +21,11 @@ describe('the ingredient card keeps its bar in reach', () => {
     expect(declaration(rule(cardCss, '.screen'), 'position')).toBeUndefined();
   });
 
+  it('⚠️ the body is the positioned ancestor of the empty sentences, or the whole page scrolls on a phone', () => {
+    expect(declaration(rule(cardCss, '.quiet:empty'), 'position')).toBe('absolute');
+    expect(declaration(rule(cardCss, '.body'), 'position')).toBe('relative');
+  });
+
   it('is dimmed by ink, never by opacity', () => {
     expect(withoutComments(cardCss)).not.toMatch(/opacity:/);
   });

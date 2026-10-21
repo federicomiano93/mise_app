@@ -11,7 +11,11 @@
   background: var(--surface);
 }
 
+/* ⚠️ POSITIONED, for the empty sentences under the boxes (`.quiet:empty`, `.error:empty`, absolute): with no positioned
+   ancestor they belong to the page itself, and on a phone the whole page scrolled past the tab bar (measured at 296px:
+   the document 936px tall in a 668px window). The form bar is outside `.body`, so its sticking is not affected. */
 .body {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: var(--s4);
