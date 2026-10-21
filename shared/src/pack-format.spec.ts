@@ -7,40 +7,40 @@
 // `setLanguage(...)`, and for the port with the original's own `t` and `localeTag()` handed in — and both must give
 // the same text. (The pure functions are also compared input by input in odd-inputs.spec.ts.)
 //
-// NOT PORTED — they need the WRITING half of price-model (pricePatch, storedPriceInput, priceChanged, PRICE_FIELDS),
-// which is not ported yet and comes with step 3e-3 (the ingredient card's price section). Their reading lines
-// (formatOf / usesLegacyCard on the same data) ARE ported, in the «reading half» tests at the end:
-//   - 'table row: unit kg / pz / sacco / busta / custom, no packCount → a single, price verbatim'
-//   - 'table row: unit cartone + packUnit busta + a pack case → Cartone, count from the case, price verbatim'
-//   - 'a pack case writes back its OWN stored size even when the weight has since been re-weighed'
-//   - 'table row: a legacy explicit-size case (4 × 2.5 kg, 4 × 500 g) → Cartone, price verbatim, storedCaseOf stays valid'
-//   - 'table row: a case of pieces (50 pz) → Cartone 50 × pezzo, price verbatim, the piece weight kept'
-//   - 'an untouched save never touches an item with no price at all'
-// Everything else of the original is ported below, under its own name.
+// The six tests of the «existing data» table that replay the card's untouched save as
+// pricePatch(storedPriceInput(item)) need the WRITING half of price-model: each implementation is run with its
+// OWN price-model (the port's with the port's pack-format, js/ with js/) — `pm` below.
+// Everything of the original is ported, under its own name.
 
 import { describe, expect, test } from 'vitest';
 import * as ported from './pack-format';
+import * as priceModel from './price-model';
 import * as legacyJs from '../../js/pack-format.js';
+import * as legacyPriceModelJs from '../../js/price-model.js';
 import { localeTag, setLanguage, t } from '../../js/i18n.js';
 import type { PackFormat } from './pack-format';
 
 const legacy = legacyJs as unknown as typeof ported;
+const legacyPriceModel = legacyPriceModelJs as unknown as typeof priceModel;
 
 // The two adapted functions, behind one signature: the original reads the dictionary itself, the port is handed it.
 type Fmt = Partial<PackFormat> | null;
 interface Impl {
   readonly m: typeof ported;
+  readonly pm: typeof priceModel;
   summary(fmt: Fmt, weight: unknown, lang: unknown): string;
   changed(price: unknown, fmt: PackFormat, weight: unknown): ported.FormatChange | null;
 }
 const IMPLS: ReadonlyArray<readonly [string, Impl]> = [
   ['shared/ (TypeScript)', {
     m: ported,
+    pm: priceModel,
     summary: (fmt, weight, lang) => ported.formatSummary(fmt, weight, lang, t, localeTag()),
     changed: (price, fmt, weight) => ported.formatChanged(price, fmt, weight, localeTag()),
   }],
   ['js/ (current app)', {
     m: legacy,
+    pm: legacyPriceModel,
     summary: (fmt, weight, lang) => (legacyJs.formatSummary as (...a: unknown[]) => string)(fmt, weight, lang),
     changed: (price, fmt, weight) => (legacyJs.formatChanged as (...a: unknown[]) => ported.FormatChange | null)(price, fmt, weight),
   }],
@@ -69,8 +69,26 @@ const TYPED_SACK = { unit: 'sacco', weight: '25kg', priceUnit: 'kg', pricePerUni
 const TYPED_PIECE = { unit: 'pz', weight: '', priceUnit: 'pcs', pricePerUnit: 0.3, unitWeightKg: 0.05, vatRate: 22 };
 const CUSTOM_UNIT = { unit: 'vassoio', weight: '', priceUnit: 'pcs', pricePerUnit: 2.5 };
 
+const AT = '2026-10-01T10:00:00.000Z';
+const STORED_KEYS = ['priceUnit', 'pricePerUnit', 'casePrice', 'caseCount', 'caseItemSize', 'caseItemUnit', 'unitWeightKg'];
+type Stored = Record<string, unknown> & { weight?: string; vatRate?: unknown };
+const at = (object: unknown, key: string): unknown => (object as Record<string, unknown>)[key];
+
 describe.each(IMPLS)('%s', (_name, impl) => {
   const m = impl.m;
+  const pm = impl.pm;
+
+  // What the card's untouched read() hands pricePatch, replayed.
+  const untouchedPatch = (item: Stored, weight: unknown = item.weight): priceModel.PricePatch =>
+    pm.pricePatch(pm.storedPriceInput(item, item.vatRate ?? ''), AT, weight);
+  function assertVerbatim(item: Stored, weightNow: unknown = item.weight): void {
+    const patch = untouchedPatch(item, weightNow);
+    for (const key of STORED_KEYS) {
+      expect(at(patch, key) ?? null, `${key} must come back as stored`).toBe(at(item, key) ?? null);
+    }
+    expect(patch.vatRate, 'vat').toBe(item.vatRate ?? null);
+    expect(pm.priceChanged(item, patch), 'no history entry for an untouched save').toBe(false);
+  }
 
   // ── formatOf: the four rules ───────────────────────────────────────────────
 
@@ -203,17 +221,46 @@ describe.each(IMPLS)('%s', (_name, impl) => {
     expect(m.looseUnit({ ...base, weightReadable: true, priceUnit: 'kg', lang: 'it' })).toBe('');
   });
 
-  // ── The existing-data table, reading half (the writing half is not ported — see the header) ──
+  // ── The existing-data table: an untouched save leaves the price exactly as stored ──
 
-  test('table row: unit kg / pz / sacco / busta / custom, no packCount → a single (reading half)', () => {
-    for (const item of [TYPED_KG, TYPED_SACK, TYPED_PIECE, CUSTOM_UNIT]) expect(m.formatOf(item, item).kind).toBe('single');
+  test('table row: unit kg / pz / sacco / busta / custom, no packCount → a single, price verbatim', () => {
+    for (const item of [TYPED_KG, TYPED_SACK, TYPED_PIECE, CUSTOM_UNIT]) assertVerbatim(item);
     expect(m.formatOf({ unit: 'busta', weight: '2.5kg' }, null).kind).toBe('single');
   });
 
-  test('table rows: a pack case, a legacy explicit-size case and a case of pieces read as a Cartone (reading half)', () => {
+  test('table row: unit cartone + packUnit busta + a pack case → Cartone, count from the case, price verbatim', () => {
     expect(m.formatOf(PACK_CASE, PACK_CASE).count).toBe(4);
-    for (const item of [LEGACY_KG_CASE, LEGACY_G_CASE]) expect(m.formatOf(item, item).count).toBe(4);
+    assertVerbatim(PACK_CASE);
+  });
+
+  test('a pack case writes back its OWN stored size even when the weight has since been re-weighed', () => {
+    // an employee changed 2.5kg to 3kg; the manager opens the card and fixes a typo: the price must not move
+    assertVerbatim(PACK_CASE, '3kg');
+    const patch = untouchedPatch(PACK_CASE, '3kg');
+    expect(patch.caseItemSize).toBe(2.5);
+    expect(patch.pricePerUnit).toBe(2);
+    // and only a person re-pricing it (no packBasis) copies the new weight
+    const retyped = pm.pricePatch({ priceUnit: 'case', casePrice: 20, caseCount: 4, caseItemUnit: 'pack' }, AT, '3kg');
+    expect(retyped.caseItemSize).toBe(3);
+    expect(retyped.pricePerUnit).toBe(1.666667);
+  });
+
+  test('table row: a legacy explicit-size case (4 × 2.5 kg, 4 × 500 g) → Cartone, price verbatim, storedCaseOf stays valid', () => {
+    for (const item of [LEGACY_KG_CASE, LEGACY_G_CASE]) {
+      expect(m.formatOf(item, item).count).toBe(4);
+      assertVerbatim(item);
+      const patch = untouchedPatch(item);
+      expect(pm.storedCaseOf(patch), 'the written case is the stored case').toStrictEqual(pm.storedCaseOf(item));
+    }
+    // the legacy case keeps its explicit unit — it is never rewritten as a 'pack' case
+    expect(untouchedPatch(LEGACY_G_CASE).caseItemUnit).toBe('g');
+    expect(untouchedPatch(LEGACY_G_CASE).caseItemSize).toBe(500);
+  });
+
+  test('table row: a case of pieces (50 pz) → Cartone 50 × pezzo, price verbatim, the piece weight kept', () => {
     expect(m.formatOf(PIECES_CASE, PIECES_CASE)).toStrictEqual({ kind: 'carton', count: 50, inner: 'pezzo' });
+    assertVerbatim(PIECES_CASE);
+    expect(untouchedPatch(PIECES_CASE).unitWeightKg).toBe(0.06);
   });
 
   test('table row: unit cartone with no package word, seen by an employee → a single, unit kept, no format keys', () => {
@@ -221,6 +268,17 @@ describe.each(IMPLS)('%s', (_name, impl) => {
     const before = beforeOf(stored, null);
     expect(before.kind).toBe('single');
     expect(m.formatPatch(before, formOf(before))).toStrictEqual({});
+  });
+
+  test('an untouched save never touches an item with no price at all', () => {
+    const none = { unit: 'sacco', weight: '25kg' };
+    const patch = untouchedPatch(none);
+    expect(patch.pricePerUnit).toBe(null);
+    expect(patch.priceUnit).toBe(null);
+    // (priceBasis is the ingredient card's own: absent unless the card names it, so no other writer resets it)
+    for (const key of pm.PRICE_FIELDS.filter(k => k !== 'priceBasis')) {
+      expect(key in patch, `${key} is written as null so a merge cannot keep an old value`).toBe(true);
+    }
   });
 
   // ── The summary line ───────────────────────────────────────────────────────
