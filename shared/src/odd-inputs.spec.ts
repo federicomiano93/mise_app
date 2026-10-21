@@ -68,6 +68,7 @@ import * as vatNumber from './vat-number';
 import * as favouriteSuppliers from './favourite-suppliers';
 import * as recordChoices from './record-choices';
 import * as categoryBatches from './category-batches';
+import * as ingredientEditModel from './ingredient-edit-model';
 import * as ingredientSearch from './ingredient-search';
 import * as packFormat from './pack-format';
 import { BAKERY_CONFIG } from '../../tests/fixtures/bakery-config.mjs';
@@ -114,6 +115,7 @@ import * as legacyVatNumberJs from '../../js/vat-number.js';
 import * as legacyFavouriteSuppliersJs from '../../js/orders/favourite-suppliers.js';
 import * as legacyRecordChoicesJs from '../../js/record-choices.js';
 import * as legacyCategoryBatchesJs from '../../js/orders/category-batches.js';
+import * as legacyIngredientEditModelJs from '../../js/ingredient-edit-model.js';
 import * as legacyIngredientSearchJs from '../../js/orders/ingredient-search.js';
 import * as legacyPackFormatJs from '../../js/pack-format.js';
 import { localeTag, setLanguage, t } from '../../js/i18n.js';
@@ -191,6 +193,7 @@ const legacyVatNumber = legacyVatNumberJs as unknown as typeof vatNumber;
 const legacyFavouriteSuppliers = legacyFavouriteSuppliersJs as unknown as typeof favouriteSuppliers;
 const legacyRecordChoices = legacyRecordChoicesJs as unknown as typeof recordChoices;
 const legacyCategoryBatches = legacyCategoryBatchesJs as unknown as typeof categoryBatches;
+const legacyIngredientEditModel = legacyIngredientEditModelJs as unknown as typeof ingredientEditModel;
 const legacyIngredientSearch = legacyIngredientSearchJs as unknown as typeof ingredientSearch;
 const legacyPackFormat = legacyPackFormatJs as unknown as typeof packFormat;
 
@@ -3444,4 +3447,60 @@ describe('pack-format: odd inputs', () => {
       } finally { setLanguage('en'); }
     }, 60_000);
   }
+});
+
+describe('ingredient-edit-model: odd inputs', () => {
+  const m = ingredientEditModel;
+  const l = legacyIngredientEditModel;
+
+  const INGREDIENTS: readonly unknown[] = [...ODD, 'flour', { id: 'flour', name: 'Flour', pricePerUnit: 9, vatRate: 4, priceUnit: 'l' }, { id: 7 }, { name: 'no id' },
+    { id: 'a', casePrice: 5, caseCount: 2, caseItemUnit: 'pack', priceBasis: 'case' }, { get id(): string { throw new Error('boom'); } }];
+  const PRICE_DOCS: readonly unknown[] = [...ODD, { priceUnit: 'kg', pricePerUnit: 0.72, vatRate: 4 }, { pricePerUnit: null }, { bakery: 'main', priceUnit: 'l' }];
+  agree('itemWithPrice', m.itemWithPrice as AnyFn, l.itemWithPrice as AnyFn, [...product(INGREDIENTS, PRICE_DOCS), ...product(INGREDIENTS)]);
+  agree('needsPriceRead', m.needsPriceRead as AnyFn, l.needsPriceRead as AnyFn, [
+    ...product([true, false, 1, 'true', ...ODD], [true, false, 0, 'yes', ...ODD]).map(([mayPrice, pricesLoaded]) => [{ mayPrice, pricesLoaded }]),
+    [{}], [undefined], [null], [5],
+  ]);
+  agree('deletePlan', m.deletePlan as AnyFn, l.deletePlan as AnyFn, [
+    ...product(['flour', '', ...ODD], [true, false, 1, 'true', ...ODD]).map(([id, mayPrice]) => [{ id, mayPrice }]),
+    [{}], [undefined], [null], [5],
+  ]);
+  agree('draftEntryPath', m.draftEntryPath, l.draftEntryPath, product([...ODD, 'flour', 'a.b', 7, Symbol.iterator]));
+
+  // confirmAndDelete is async, so it is run by hand: the same result, the same calls in the same order.
+  test('confirmAndDelete: the same result and the same calls for every odd input', async () => {
+    type Script = { item: unknown; answer: unknown; fails: unknown; hooks: boolean };
+    const run = async (fn: AnyFn, { item, answer, fails, hooks }: Script): Promise<unknown> => {
+      const log: string[] = [];
+      const result = await (fn({
+        item,
+        ask: async () => { log.push('ask'); return answer; },
+        remove: async (id: unknown) => { log.push(`remove:${String(id)}`); if (fails) throw new Error('refused'); },
+        ...(hooks ? { onStart: () => log.push('start'), onDone: () => log.push('done'), onFail: (e: unknown) => log.push(`fail:${(e as Error).message}`) } : {}),
+      }) as Promise<unknown>).then((value: unknown) => ({ returned: value }), (e: unknown) => ({ threw: e instanceof Error ? e.name : typeof e }));
+      return { result, log };
+    };
+    const items: readonly unknown[] = [...ODD, { id: 'flour' }, { id: '' }, { id: 7 }, { id: 'x', name: 'X' }];
+    const disagreements: string[] = [];
+    for (const item of items) {
+      for (const answer of [true, false, 1, 0, 'yes', '', null, undefined]) {
+        for (const fails of [true, false]) {
+          for (const hooks of [true, false]) {
+            const script = { item, answer, fails, hooks };
+            const a = await run(m.confirmAndDelete as AnyFn, script);
+            const b = await run(l.confirmAndDelete as AnyFn, script);
+            try { expect(a).toStrictEqual(b); } catch { disagreements.push(`${show(script)}: ported ${show(a)} / current ${show(b)}`); }
+          }
+        }
+      }
+    }
+    expect(disagreements.slice(0, 10)).toStrictEqual([]);
+  });
+  test('confirmAndDelete: a call with nothing to destructure throws the same kind of error in both', async () => {
+    for (const arg of [undefined, null]) {
+      const a = await ((m.confirmAndDelete as AnyFn)(arg) as Promise<unknown>).then(() => 'returned', (e: unknown) => (e as Error).name);
+      const b = await ((l.confirmAndDelete as AnyFn)(arg) as Promise<unknown>).then(() => 'returned', (e: unknown) => (e as Error).name);
+      expect(a, show(arg)).toBe(b);
+    }
+  });
 });
