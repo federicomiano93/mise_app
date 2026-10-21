@@ -13,6 +13,15 @@ export function cameFromList(state: unknown): boolean {
   return typeof state === 'object' && state !== null && 'fromList' in state;
 }
 
+// The same, from a supplier's own screen to its card (its «Edit»): Back from the card is the browser's Back, which lands on
+// the supplier. Deliberately NOT `fromList`: the card is two levels below the list, and the supplier it comes back to knows
+// by its own entry how it was opened.
+export const FROM_SUPPLIER = { ...KEEP_FOCUS, fromSupplier: true } as const;
+
+export function cameFromSupplier(state: unknown): boolean {
+  return typeof state === 'object' && state !== null && 'fromSupplier' in state;
+}
+
 // How a supplier steps back up to the list.
 //
 // ⚠️ NEVER A PILE OF DUPLICATE HISTORY ENTRIES. Opened from the list, the entry behind it IS the
@@ -22,10 +31,10 @@ export function cameFromList(state: unknown): boolean {
 //
 // `onLeaving` runs first: the screen says which row opened it, so the focus can be handed back to
 // that row once the list is on screen (handBack.ts).
-export function useLeave(fallback: string, onLeaving: () => void): () => void {
+export function useLeave(fallback: string, onLeaving: () => void, cameFrom: (state: unknown) => boolean = cameFromList): () => void {
   const navigate = useNavigate();
   const { state } = useLocation();
-  const fromList = cameFromList(state);
+  const fromList = cameFrom(state);
 
   return useCallback(() => {
     onLeaving();

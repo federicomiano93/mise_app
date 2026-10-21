@@ -14,6 +14,10 @@ import { createContext, useContext, useMemo, useRef } from 'react';
 export const supplierOpener = (id: string): string => `supplier:${id}`;
 // The list's search box: where the focus goes when the row it is owed no longer exists.
 export const SEARCH_OPENER = 'search';
+// The «New supplier» button at the top of the list: Back from a new supplier's card returns the focus to it.
+export const NEW_OPENER = 'new-door';
+// The door to Settings, at the foot of the list: Back from Settings returns the focus to it.
+export const SETTINGS_OPENER = 'settings-door';
 
 export interface HandBack {
   // A row that opens a supplier. null when it goes away.
@@ -24,6 +28,10 @@ export interface HandBack {
   forget(): void;
   // Gives the focus to the opener that was expected, if its row is still there, and forgets it.
   deliver(): void;
+  // A supplier's card is closing: its screen is owed the focus on «Edit» when it is drawn again. Taken once, for that
+  // supplier only.
+  wantEdit(id: string): void;
+  takeEdit(id: string): boolean;
 }
 
 const NOTHING: HandBack = {
@@ -31,6 +39,8 @@ const NOTHING: HandBack = {
   expect() { /* ditto */ },
   forget() { /* ditto */ },
   deliver() { /* ditto */ },
+  wantEdit() { /* ditto */ },
+  takeEdit: () => false,
 };
 
 const HandBackContext = createContext<HandBack>(NOTHING);
@@ -45,6 +55,7 @@ export function useHandBack(): HandBack {
 export function useHandBackState(): HandBack {
   const openers = useRef(new Map<string, HTMLElement>());
   const wanted = useRef<string | null>(null);
+  const editOf = useRef<string | null>(null);
   return useMemo<HandBack>(() => ({
     register(name, node) {
       if (node) openers.current.set(name, node);
@@ -55,6 +66,14 @@ export function useHandBackState(): HandBack {
     },
     forget() {
       wanted.current = null;
+    },
+    wantEdit(id) {
+      editOf.current = id;
+    },
+    takeEdit(id) {
+      if (editOf.current !== id) return false;
+      editOf.current = null;
+      return true;
     },
     deliver() {
       const name = wanted.current;
