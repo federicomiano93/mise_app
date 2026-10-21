@@ -69,6 +69,7 @@ import * as favouriteSuppliers from './favourite-suppliers';
 import * as recordChoices from './record-choices';
 import * as categoryBatches from './category-batches';
 import * as ingredientSearch from './ingredient-search';
+import * as packFormat from './pack-format';
 import { BAKERY_CONFIG } from '../../tests/fixtures/bakery-config.mjs';
 import * as legacyJoinCodeJs from '../../js/join-code.js';
 import * as legacyPushModelJs from '../../js/push-model.js';
@@ -114,6 +115,8 @@ import * as legacyFavouriteSuppliersJs from '../../js/orders/favourite-suppliers
 import * as legacyRecordChoicesJs from '../../js/record-choices.js';
 import * as legacyCategoryBatchesJs from '../../js/orders/category-batches.js';
 import * as legacyIngredientSearchJs from '../../js/orders/ingredient-search.js';
+import * as legacyPackFormatJs from '../../js/pack-format.js';
+import { localeTag, setLanguage, t } from '../../js/i18n.js';
 import * as legacyCalculatorConfigJs from '../../js/calculator-config.js';
 import * as legacyCalculatorDoughMathJs from '../../js/calculator-dough-math.js';
 import * as legacyCalculatorRecipeSourceJs from '../../js/calculator-recipe-source.js';
@@ -189,6 +192,7 @@ const legacyFavouriteSuppliers = legacyFavouriteSuppliersJs as unknown as typeof
 const legacyRecordChoices = legacyRecordChoicesJs as unknown as typeof recordChoices;
 const legacyCategoryBatches = legacyCategoryBatchesJs as unknown as typeof categoryBatches;
 const legacyIngredientSearch = legacyIngredientSearchJs as unknown as typeof ingredientSearch;
+const legacyPackFormat = legacyPackFormatJs as unknown as typeof packFormat;
 
 // ── The machinery ────────────────────────────────────────────────────────────
 
@@ -3362,4 +3366,82 @@ describe('ingredient-search (partial): odd inputs', () => {
     [{ name: 5, shortName: 6, category: 7 }], [{ get name(): string { throw new Error('boom'); } }]];
   const QUERIES: readonly unknown[] = [...SEARCHES, 'org', 'deli', 'no supp', 'pero', 'però', 'zzz', '   ', 'legacy', 'dry'];
   agree('filterSuppliers', m.filterSuppliers as AnyFn, l.filterSuppliers as AnyFn, product(LISTS, QUERIES));
+});
+
+describe('pack-format: odd inputs', () => {
+  const m = packFormat;
+  const l = legacyPackFormat;
+
+  const ITEMS: readonly unknown[] = [...ODD, 'cartone', 7,
+    { unit: 'cartone', packUnit: 'busta' }, { unit: 'cartone' }, { unit: 'Cassa.', packUnit: 'busta', packCount: 4 }, { packCount: 4 },
+    { packCount: '4' }, { packCount: 0 }, { packCount: 10001 }, { packCount: 2.5 }, { packCount: 10000, unit: 5, packUnit: {} },
+    { unit: 'busta', packUnit: ' Busta ' }, { unit: ' BUSTA ', packUnit: 'busta', weight: '2.5kg' },
+    { unit: 'kg', weight: '', priceUnit: 'kg', pricePerUnit: 7.2 }, { unit: 'sacco', weight: '25kg', priceUnit: 'kg', pricePerUnit: 0.8 },
+    { unit: 'cartone', packUnit: 'busta', weight: '2.5kg', priceUnit: 'kg', pricePerUnit: 2, casePrice: 20, caseCount: 4, caseItemSize: 2.5, caseItemUnit: 'pack' },
+    { unit: 'busta', packUnit: 'busta', weight: '2.5kg', priceUnit: 'kg', pricePerUnit: 2, casePrice: 20, caseCount: 4, caseItemSize: 2.5, caseItemUnit: 'pack' },
+    { unit: 'kg', weight: '2.5kg', priceUnit: 'kg', pricePerUnit: 2, casePrice: 20, caseCount: 4, caseItemSize: 2.5, caseItemUnit: 'pack' },
+    { unit: 'cartone', weight: '2.5kg', priceUnit: 'kg', pricePerUnit: 2, casePrice: 20, caseCount: 4, caseItemSize: 2.5, caseItemUnit: 'kg' },
+    { unit: 'kg', weight: '500g', priceUnit: 'kg', pricePerUnit: 10, casePrice: 20, caseCount: 4, caseItemSize: 500, caseItemUnit: 'g' },
+    { unit: 'cartone', packUnit: 'pezzo', weight: '', priceUnit: 'pcs', pricePerUnit: 0.4, casePrice: 20, caseCount: 50, caseItemUnit: 'pcs', unitWeightKg: 0.06 },
+    { unit: 'pezzo', packUnit: 'pezzo', weight: '60g', priceUnit: 'pcs', pricePerUnit: 0.4, casePrice: 20, caseCount: 50, caseItemUnit: 'pcs', unitWeightKg: 0.06 },
+    { unit: 'pezzo', packUnit: 'pezzo', weight: '360g', priceUnit: 'pcs', pricePerUnit: 0.4, casePrice: 20, caseCount: 50, caseItemUnit: 'pcs', unitWeightKg: 0.06 },
+    { unit: 'cartone', packUnit: 'busta', weight: '2.5kg', priceUnit: 'kg', pricePerUnit: 3, casePrice: 20, caseCount: 4, caseItemSize: 2.5, caseItemUnit: 'pack' },
+    { weight: '6x1kg', priceUnit: 'kg', pricePerUnit: 2 }, { weight: 'sacco', priceUnit: 'pcs', pricePerUnit: 2 }, { weight: 5, pricePerUnit: '2' },
+    { get unit(): string { throw new Error('boom'); } }];
+
+  agree('usesLegacyCard', m.usesLegacyCard, l.usesLegacyCard, product(ITEMS));
+  agree('formatOf', m.formatOf as AnyFn, l.formatOf as AnyFn, [...product(ITEMS), ...product(ITEMS, ITEMS)]);
+  agree('isCartonWord', m.isCartonWord, l.isCartonWord, product([...ODD, 'cartone', 'Cartoni', ' cassa ', 'case.', 'crate', 'CARTONS', 'scatola', 'box', 'case..', 'collo']));
+  agree('parseCount', m.parseCount, l.parseCount, product([...ODD, ' 12 ', '10000', '10001', '2.5', '-1', '1e3', '007', 7, 10000, 10001, 1.5, '１２']));
+
+  const FORMATS: readonly unknown[] = [...ODD, { kind: 'single', count: null, inner: '' }, { kind: 'carton', count: 4, inner: 'busta' },
+    { kind: 'carton', count: null, inner: 'busta' }, { kind: 'carton', count: 4, inner: ' busta ' }, { kind: 'carton', count: '4', inner: 'busta' },
+    { kind: 'carton', count: NaN, inner: 'busta' }, { kind: 'carton', count: undefined, inner: undefined }, { kind: 'carton', count: 6, inner: 'sacco', cartonWord: 'case' },
+    { kind: 'single', count: 3, inner: 'bag', cartonWord: 'cartone' }, { kind: 'carton', count: 12, inner: '', cartonWord: 'cartone' },
+    { kind: 'carton', count: 10001, inner: 'x' }, { kind: 'carton', count: 4.5, inner: 'bag' }, { kind: 'carton', count: 4, inner: 'sleeve' }];
+  const BEFORES: readonly unknown[] = [...ODD, { kind: 'single', count: null, inner: '', unit: '', packUnit: '' },
+    { kind: 'single', count: null, inner: '', unit: 'cassa', packUnit: '' }, { kind: 'single', count: null, inner: '', unit: 'sacco', packUnit: '' },
+    { kind: 'single', count: null, inner: 'busta', unit: '', packUnit: 'busta' }, { kind: 'carton', count: 4, inner: 'busta', unit: 'cartone', packUnit: 'busta' },
+    { kind: 'carton', count: 4, inner: 'busta', unit: '', packUnit: 'busta' }, { kind: 'carton', count: null, inner: 'busta', unit: 'Cartone.', packUnit: 'busta' },
+    { kind: 'carton', count: 4, inner: '', unit: 'kg', packUnit: '' }, { kind: 'single', count: null, inner: '', unit: 'sacco', packUnit: 'busta' },
+    { kind: 'carton', count: 4, inner: 'busta' }, { kind: 'single', unit: 5, packUnit: {} }];
+  agree('formatTouched', m.formatTouched as AnyFn, l.formatTouched as AnyFn, product(BEFORES, FORMATS));
+  agree('formatPatch', m.formatPatch as AnyFn, l.formatPatch as AnyFn, [
+    ...product(BEFORES, FORMATS),
+    ...product(BEFORES, FORMATS, [{ force: true }, { force: false }, {}, undefined, null, { force: 1 }]),
+  ]);
+
+  const LOOSE: readonly unknown[] = [...ODD, { kind: 'single', weightReadable: false, priceUnit: 'kg', lang: 'it' }, { kind: 'single', priceUnit: 'pcs', lang: 'en' },
+    { kind: 'single', weightReadable: false, priceUnit: 'l', lang: 'it' }, { kind: 'single', weightReadable: true, priceUnit: 'kg', lang: 'it' },
+    { kind: 'carton', priceUnit: 'kg', lang: 'it' }, { kind: 'single', priceUnit: 'constructor', lang: 'it' }, { kind: 'single', priceUnit: 'pcs' },
+    { kind: 'single', weightReadable: 0, priceUnit: 'kg', lang: 'IT' }];
+  agree('looseUnit', m.looseUnit as AnyFn, l.looseUnit as AnyFn, product(LOOSE));
+
+  // The two adapted functions: the original reads the dictionary and the language of the page, the port is handed
+  // them. The original's own `t` and `localeTag()` stand in, so the same text is demanded of both, in both languages.
+  const WEIGHTS: readonly unknown[] = [...ODD, '2.5kg', '2,5 kg', '750 ml', '500g', '250g', '1l', '6x1kg', 'sacco', '60g', '0.06 kg', '3kg', '2.5 l', '1000g', 1500, '1.2345 kg'];
+  const LANGS: readonly unknown[] = [...ODD.slice(0, 6), 'it', 'en', 'IT'];
+  const CASES: readonly unknown[] = [...ITEMS.slice(0, 8), ...ITEMS.slice(15, 30),
+    { priceUnit: 'l', pricePerUnit: 4, casePrice: 12, caseCount: 6, caseItemSize: 0.5, caseItemUnit: 'pack' },
+    { priceUnit: 'l', pricePerUnit: 4, casePrice: 12, caseCount: 6, caseItemSize: 500, caseItemUnit: 'ml' }];
+  for (const language of ['en', 'it'] as const) {
+    test(`formatSummary and formatChanged: the same text as the original in ${language}`, () => {
+      setLanguage(language);
+      try {
+        const disagreements: string[] = [];
+        const compare = (name: string, args: unknown[], mine: () => unknown, theirs: () => unknown): void => {
+          const a = outcome(mine);
+          const b = outcome(theirs);
+          try { expect(a).toStrictEqual(b); } catch { disagreements.push(`${name}(${args.map(show).join(', ')}): ported ${show(a)} / current ${show(b)}`); }
+        };
+        for (const args of product(FORMATS, WEIGHTS, LANGS)) {
+          compare('formatSummary', args, () => (m.formatSummary as AnyFn)(args[0], args[1], args[2], t, localeTag()), () => (l.formatSummary as AnyFn)(...args));
+        }
+        for (const args of product(CASES, FORMATS, WEIGHTS)) {
+          compare('formatChanged', args, () => (m.formatChanged as AnyFn)(args[0], args[1], args[2], localeTag()), () => (l.formatChanged as AnyFn)(...args));
+        }
+        expect(disagreements.slice(0, 10)).toStrictEqual([]);
+      } finally { setLanguage('en'); }
+    }, 60_000);
+  }
 });
