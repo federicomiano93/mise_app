@@ -113,3 +113,14 @@
     background: var(--danger-tint);
   }
 }
+
+/* «Add ingredient», under the heading: the icon and the word on one line, as the other buttons with an icon. */
+.add {
+  align-self: flex-start;
+}
+
+.add svg {
+  flex: none;
+  width: 18px;
+  height: 18px;
+}

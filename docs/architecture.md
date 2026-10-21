@@ -291,7 +291,7 @@ queue and the other roads arrive in 3d-4. The usage record names the screen `rec
 - `ui/` — the shared controls: `Button`, `Dialog` and `useConfirm` (a question that waits for an
   answer; never the browser's `confirm()`), `StatusMessage` (one short message at a time, in a
   live region that exists before it speaks), `FormBar` (Back, title, the one primary action: the
-  top of an editor), `SettingSwitch` (an on/off switch, shared by the Calculator's and the Recipe catalogue's Settings), `useMediaQuery` (only for attributes that must agree with a stylesheet's
+  top of an editor), `SettingSwitch` (an on/off switch, shared by the Calculator's and the Recipe catalogue's Settings), `FormDialog` (a whole form in a modal above the screen that opened it; no Escape, the form asks `Discard changes?` itself), `useMediaQuery` (only for attributes that must agree with a stylesheet's
   media query; layout is always CSS).
   The recipe export (PDF / Excel) is two files here: `recipeExport.ts` (`buildPdfBlob`, `buildXlsxBlob`, the
   impure half of `js/recipe-export.js`; the pure half is `@mise/shared/recipe-export`) and `ExportSheet.tsx`
@@ -329,6 +329,24 @@ queue and the other roads arrive in 3d-4. The usage record names the screen `rec
   `sessionStore.refreshLocation()`, and the new value is held until the session shows it) and the categories card (every bin disabled
   until `configLoaded`). `copyWait.ts`, `handBack.ts`, `suppliersNav.ts` and `supplierDeletions.ts` are copies of the recipes'/Food cost's
   files: a feature never imports from another feature's folder.
+  Step 3e-2 adds the ingredient card's PRODUCT DATA (no price, allergen or nutrition yet: those keys are never sent, so a merge
+  leaves them as stored). Addresses, in `suppliersPath.ts`: `/suppliers/ingredient/<id>`, `/suppliers/ingredient/new`,
+  `?kind=packaging` for a new packaging item and `?supplier=<id>` to start a NEW item on a supplier (never an existing one);
+  `new` is never an id; the usage record names both `suppliers-ingredient`. Every ingredient and packaging row is a button
+  (`ItemRow`), «New ingredient» / «New packaging» / «New supplier» stand under the search box by tab, and a supplier's screen has
+  «Add ingredient» and rows that open the card. The list shown beside a card is the tab it was opened from (`fromListTab` in the
+  navigation state), the Suppliers tab when opened from a supplier's screen (`fromSupplierScreen`), else the tab of its kind; Back
+  is one level up and `handBack.ts` owes the focus to the row, to «New …», or (`wantOn`/`takeOn`) to the row or «Add ingredient» on
+  the supplier's screen. `IngredientCardScreen` is the wrapper: it copies the item ONCE after the ingredients AND suppliers came from
+  the server (or `COPY_WAIT_MS`, or offline), says «This ingredient no longer exists.» unless this phone deleted it
+  (`ingredientDeletions.ts`), saves local-first with `unitChangedFrom`, and `useDeleteIngredient` counts what uses the item (the
+  store's `ingredientUsage`), asks with the three sentences of decision F5 and deletes with the price document only for
+  `canManage` AND the Food cost section on. «+ New supplier…» draws the supplier card (`SupplierCard` with a `host`) in a
+  `ui/FormDialog` above the ingredient card.
+- `records/` — cards shared by the sections that open the same record (step 3e-2 starts it with the ingredient card; the Recipe
+  catalogue opens it later). `IngredientCard.tsx` is driven only by props and imports NOTHING from `suppliers/` (the supplier card in
+  its dialog comes in as `renderNewSupplier`); `ingredientCardModel.ts` is its pure half (the working copy, the dirty rule, the
+  refusal order, the exact payload and `unitChangedFrom`), pinned by its spec.
 - `settings/` — the Settings page (today: the Account card).
 - `styles/` — `tokens.css` (every colour, size, radius, shadow) and `base.css`.
 - `testing/` — `renderApp`, the fake session store and other spec helpers.

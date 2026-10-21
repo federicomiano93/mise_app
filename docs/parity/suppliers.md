@@ -523,6 +523,14 @@ What the code does, and where it differs from the current app (each difference w
 - **Search box and «New supplier»** stay one under the other at every width (side by side they clipped the placeholder in the split's list).
 - **Usage names** (T1): `suppliers-supplier-edit` for the card and a new supplier, `suppliers-settings` for Settings; actions `supplier-saved`.
 
+## Step 3e-2 as built — the ingredient card, product data
+
+- **Doors**: every ingredient and packaging row is a button; «New ingredient» / «New packaging» stand under the search box on their tab (like «New supplier»); a supplier's screen has «Add ingredient» (a NEW item started on that supplier) and its rows open their card. The list beside a card is the tab it came from.
+- **The card** (C36–C57, C80–C81): the current app's fields, labels, hints and order; the name is capped at 200 (T12). A blank name is marked, said (NEW: «Enter the ingredient’s name.») and focused. Save asks «Save “name”?» first (decision B; the current app saves with one tap), leaves one level up without asking and says «Ingredient saved.» (NEW). The payload is C87 exactly: no price, allergen or nutrition key, never `invoiceName` or the supplier codes. The format opens from `formatOf(item, null)` (no price is read in this step), so a stored case of pieces does not show «piece» as its word until 3e-3.
+- **+ New supplier…** opens the supplier card in a dialog above the ingredient card (the current app: a level above); Escape does not close it, its own Back asks.
+- **Delete** (C94, F5): a small bin, `canManage` only, disabled and busy while the recipes and Food cost products that use the item are counted; three sentences (unknown, none, used in N recipes and M products). The price document goes too only with the Food cost section on.
+- **Not in this step**: the price (C58–C79), the legacy price card (C82–C83), allergens and nutrition (C98–C116), the pack photo, merge.
+
 ## Findings — things found while reading, not decided
 
 ### Findings — The page, the lists, suppliers

@@ -45,7 +45,7 @@ describe('the «New supplier» button', () => {
     expect(newButton()).toBeInTheDocument();
   });
 
-  it.each(['/suppliers', '/suppliers/packaging'])('⚠️ is NOT on the other tabs (%s)', async path => {
+  it.each(['/suppliers', '/suppliers/packaging'])('is not on the other tabs (%s): each has its own «New …» button', async path => {
     renderSuppliers(path, { source: seeded() });
     await screen.findByRole('searchbox', undefined, LOAD);
     expect(screen.queryByRole('button', { name: 'New supplier' })).not.toBeInTheDocument();
