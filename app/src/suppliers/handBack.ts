@@ -1,4 +1,5 @@
 import { createContext, useContext, useMemo, useRef } from 'react';
+import type { SupplierDeletions } from './supplierDeletions';
 
 // Back from a supplier hands the focus back to the row that opened it, so a keyboard or screen-reader
 // user lands where they left instead of at the top of the page.
@@ -11,7 +12,8 @@ import { createContext, useContext, useMemo, useRef } from 'react';
 // (A copy of recipes/handBack.ts with this section's opener: a feature never imports from another
 // feature's folder.)
 
-export const supplierOpener = (id: string): string => `supplier:${id}`;
+const OPENER_PREFIX = 'supplier:';
+export const supplierOpener = (id: string): string => `${OPENER_PREFIX}${id}`;
 // The list's search box: where the focus goes when the row it is owed no longer exists.
 export const SEARCH_OPENER = 'search';
 // The «New supplier» button at the top of the list: Back from a new supplier's card returns the focus to it.
@@ -52,7 +54,10 @@ export function useHandBack(): HandBack {
 
 // The state behind the provider: one object for the life of the section, so it never re-renders
 // whoever reads it.
-export function useHandBackState(): HandBack {
+//
+// `deletions` are the suppliers this phone has just deleted: their row may still be in the list while the delete travels, and
+// the focus must not go to a row that is about to disappear.
+export function useHandBackState(deletions: SupplierDeletions): HandBack {
   const openers = useRef(new Map<string, HTMLElement>());
   const wanted = useRef<string | null>(null);
   const editOf = useRef<string | null>(null);
@@ -79,7 +84,8 @@ export function useHandBackState(): HandBack {
       const name = wanted.current;
       if (name === null) return;
       wanted.current = null;
-      const row = openers.current.get(name);
+      const deleted = name.startsWith(OPENER_PREFIX) && deletions.has(name.slice(OPENER_PREFIX.length));
+      const row = deleted ? undefined : openers.current.get(name);
       if (row) {
         row.focus();
         return;
@@ -90,5 +96,5 @@ export function useHandBackState(): HandBack {
       const active = document.activeElement;
       if (!active || active === document.body || !active.isConnected) openers.current.get(SEARCH_OPENER)?.focus();
     },
-  }), []);
+  }), [deletions]);
 }

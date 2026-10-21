@@ -248,6 +248,8 @@ export function createFirestoreSuppliersSource(
     // ⚠️ EVERY BATCH IS COMMITTED AT ONCE, NOT ONE AFTER THE OTHER (the current app awaits each): Firestore keeps one
     // client's writes in order and holds the unsent ones in its own queue, so offline the change is on screen at once and
     // reaches the server later, instead of the second batch waiting in memory for the first one's answer.
+    // ⚠️ ACCEPTED: if the first batch is refused the later ones may still land; the partial state is accepted, and a second
+    // delete of the same category finishes the job.
     async deleteCategory(shortenedList, ids) {
       const { fs, db } = await firestore();
       const commits: Promise<void>[] = [];

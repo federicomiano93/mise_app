@@ -77,9 +77,9 @@ function SuppliersLayout({ view }: { view: ShownView }) {
   const navigate = useNavigate();
   const { pathname, state } = useLocation();
   const split = useMediaQuery(SPLIT_QUERY);
-  const handBack = useHandBackState();
   // The suppliers this phone's own screens are deleting (supplierDeletions.ts); a mark goes when its supplier is back.
   const deletions = useMemo(createSupplierDeletions, []);
+  const handBack = useHandBackState(deletions);
   const { suppliers } = useSuppliers();
   useEffect(() => { deletions.prune(suppliers.map(supplier => supplier.id)); }, [deletions, suppliers]);
 

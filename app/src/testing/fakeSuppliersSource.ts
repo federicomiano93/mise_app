@@ -38,6 +38,10 @@ export type FakeSuppliersSource = SuppliersSource & {
   panelCalls: Array<{ key: PanelKey; on: boolean }>;
   refusePanel: unknown;
   holdPanel(): () => void;
+  // With this on, a delete drops the supplier from the maps only when settleDeletes() is called — as with real Firestore, where
+  // the row can still be in the list while the screen is already navigating away. Off by default.
+  deferDeletes: boolean;
+  settleDeletes(): void;
   // Holds back the first answers until release() (Firestore still loading).
   hold(): void;
   release(): void;
@@ -67,6 +71,7 @@ export function fakeSuppliersSource(
   let held = false;
   let writeHold: Promise<void> | null = null;
   let panelHold: Promise<void> | null = null;
+  const deferred: string[] = [];
   const refused = () => Object.assign(new Error('permission-denied'), { code: 'permission-denied' });
 
   const meta = (): SuppliersMeta => ({ fromServer: !fake.fromCache });
@@ -130,6 +135,11 @@ export function fakeSuppliersSource(
     panelCalls: [],
     refusePanel: null,
     fromCache: false,
+    deferDeletes: false,
+    settleDeletes() {
+      for (const id of deferred.splice(0)) suppliers.delete(id);
+      tellAll();
+    },
 
     newSupplierId: () => `new-supplier-${++idCounter}`,
 
@@ -180,7 +190,8 @@ export function fakeSuppliersSource(
     deleteSupplier(id) {
       return write({ op: 'delete', id }, fake.refuseWrites.delete, () => {
         const undo = snapshotOf(suppliers);
-        suppliers.delete(id);
+        if (fake.deferDeletes) deferred.push(id);
+        else suppliers.delete(id);
         return undo;
       });
     },

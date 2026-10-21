@@ -18,6 +18,7 @@
 import { categoryChoices, countInCategory } from '@mise/shared/record-choices';
 import { normalizeFavourites } from '@mise/shared/favourite-suppliers';
 import { withPrices } from '@mise/shared/price-model';
+import { supplierLabel } from '@mise/shared/supplier-label';
 import { markBusy as markBusyOfSession } from '../session/busy';
 import type { PanelKey, StoredDoc, SuppliersMeta, SuppliersSource } from './suppliersSource';
 
@@ -47,6 +48,9 @@ export interface SuppliersSnapshot {
   // everybody else (the same as an ingredient nobody has priced — parity S60).
   readonly ingredients: readonly StoredDoc[];
   readonly ingredientsLoaded: boolean;
+  // Whether the SERVER has answered the ingredients once: only then is the list of what a category holds (and so what a
+  // category delete rewrites) the whole truth; a copy in the browser's own database can miss ingredients.
+  readonly ingredientsFromServer: boolean;
   readonly ingredientsBroken: boolean;
   // Whether the prices REALLY answered (parity S24). False for a person the rules refuse.
   readonly pricesReadable: boolean;
@@ -112,6 +116,7 @@ export function createSuppliersStore(source: SuppliersSource, deps: SuppliersDep
   let rawIngredients: readonly StoredDoc[] = [];
   let ingredients: readonly StoredDoc[] = [];
   let ingredientsLoaded = false;
+  let ingredientsFromServer = false;
   let ingredientsBroken = false;
   let prices: Record<string, Record<string, unknown>> = {};
   let pricesReadable = false;
@@ -128,7 +133,7 @@ export function createSuppliersStore(source: SuppliersSource, deps: SuppliersDep
 
   function build(): SuppliersSnapshot {
     return {
-      suppliers, suppliersLoaded, suppliersFromServer, suppliersBroken, ingredients, ingredientsLoaded, ingredientsBroken, pricesReadable,
+      suppliers, suppliersLoaded, suppliersFromServer, suppliersBroken, ingredients, ingredientsLoaded, ingredientsFromServer, ingredientsBroken, pricesReadable,
       storedCategories, favourites, configLoaded,
     };
   }
@@ -172,7 +177,7 @@ export function createSuppliersStore(source: SuppliersSource, deps: SuppliersDep
 
   function nameOf(id: string): string {
     const found = suppliers.find(s => s.id === id);
-    return typeof found?.name === 'string' ? found.name : '';
+    return found ? supplierLabel(found) : '';
   }
 
   return {
@@ -206,6 +211,7 @@ export function createSuppliersStore(source: SuppliersSource, deps: SuppliersDep
           rawIngredients = list;
           relayIngredients();
           if (believable(list, meta)) ingredientsLoaded = true;
+          if (meta.fromServer) ingredientsFromServer = true;
           ingredientsBroken = false;
           changed();
         }, () => {
@@ -241,7 +247,7 @@ export function createSuppliersStore(source: SuppliersSource, deps: SuppliersDep
 
     saveSupplier(id, payload) {
       const supplierId = id ?? source.newSupplierId();
-      track(attempt(() => source.saveSupplier(supplierId, payload)), { kind: 'supplier-not-saved', name: payload.name });
+      track(attempt(() => source.saveSupplier(supplierId, payload)), { kind: 'supplier-not-saved', name: supplierLabel(payload) });
       return supplierId;
     },
 

@@ -47,10 +47,11 @@ export const hasName = (working: Working): boolean => working.name.trim() !== ''
 
 // What Save sends, EXACTLY (parity S82).
 //  - `shortName` is '' when blank, never left out: the write is a merge, and only an empty string can clear one.
-//  - `active` is what the supplier already has (an edit never switches one back on); a new supplier is on.
+//  - `active` is sent ONLY for a new supplier (on). An existing supplier's is left out: the write is a merge, so the stored
+//    value stays, and a supplier switched off on another phone since the card opened is not switched back on.
 //  - `vatNumber` is the canonical form the invoice import matches on; '' clears it.
 export function payloadOf(working: Working, supplier: StoredDoc | null): SupplierPayload {
-  return {
+  const payload: SupplierPayload = {
     name: working.name.trim(),
     shortName: working.shortName.trim(),
     category: working.category.trim(),
@@ -58,9 +59,9 @@ export function payloadOf(working: Working, supplier: StoredDoc | null): Supplie
     email: working.email.trim(),
     deliveryDays: inWeekOrder(working.deliveryDays),
     orderDays: inWeekOrder(working.orderDays),
-    active: supplier === null ? true : supplier.active !== false,
     vatNumber: normalizeVat(working.vatNumber),
   };
+  return supplier === null ? { ...payload, active: true } : payload;
 }
 
 const inWeekOrder = (days: readonly Weekday[]): Weekday[] => WEEKDAYS.filter(day => days.includes(day));

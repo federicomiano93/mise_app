@@ -1445,7 +1445,7 @@ export const en = {
   'sup.delete.question': 'Permanently delete “{name}”? This cannot be undone.',
   // NEW (his decision F2): what happens to the products filed under a supplier that is deleted.
   'sup.delete.products': {
-    one: 'Its 1 product stays in the list, with no supplier.',
+    one: 'Its one product stays in the list, with no supplier.',
     other: 'Its {n} products stay in the list, with no supplier.',
   },
   'sup.supplierDeleted': 'Supplier deleted.',

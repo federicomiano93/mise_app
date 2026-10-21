@@ -93,6 +93,11 @@
   -webkit-tap-highlight-color: transparent;
 }
 
+.deleteIcon:disabled {
+  color: var(--ink-3);
+  cursor: default;
+}
+
 .deleteIcon:focus-visible {
   outline: 3px solid var(--accent);
   outline-offset: 2px;
@@ -104,7 +109,7 @@
 }
 
 @media (hover: hover) {
-  .deleteIcon:hover {
+  .deleteIcon:hover:not(:disabled) {
     background: var(--danger-tint);
   }
 }

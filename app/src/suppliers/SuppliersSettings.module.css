@@ -90,7 +90,13 @@
 }
 
 .quiet:empty {
-  display: none;
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  clip-path: inset(50%);
 }
 
 /* The category's bin: small and low-key, and still a 48px target. */

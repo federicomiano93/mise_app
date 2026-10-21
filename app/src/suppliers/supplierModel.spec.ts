@@ -53,12 +53,12 @@ describe('payloadOf', () => {
     });
   });
 
-  it('⚠️ an edit never switches a supplier back on: active is what it had', () => {
+  it('⚠️ an edit leaves active OUT: the save merges, so the stored value stays (a supplier switched off elsewhere is not switched back on)', () => {
     const working = { ...EMPTY, name: 'Old Baker' };
-    expect(payloadOf(working, { id: 's', active: false }).active).toBe(false);
-    expect(payloadOf(working, { id: 's', active: true }).active).toBe(true);
-    // «absent» means on, everywhere.
-    expect(payloadOf(working, { id: 's' }).active).toBe(true);
+    for (const stored of [{ id: 's', active: false }, { id: 's', active: true }, { id: 's' }]) {
+      expect('active' in payloadOf(working, stored)).toBe(false);
+    }
+    expect(payloadOf(working, null).active).toBe(true);
   });
 
   it('clears the VAT number with an empty string, and keeps a foreign one as typed in capitals', () => {

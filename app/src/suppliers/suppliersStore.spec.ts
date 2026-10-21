@@ -203,6 +203,39 @@ describe('the suppliers store: writes', () => {
     ]);
   });
 
+  test('⚠️ the refusals name the supplier as the screens do: the short name when there is one (supplierLabel)', async () => {
+    const { store, source, messages } = started(fakeSuppliersSource({ suppliers: [{ id: 's1', name: 'Alba Fine Foods Ltd', shortName: 'Alba' }] }));
+    await tick();
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    source.refuseWrites.active = true;
+    source.refuseWrites.delete = true;
+    source.refuseWrites.save = true;
+    store.setSupplierActive('s1', false);
+    store.deleteSupplier('s1');
+    store.saveSupplier('s1', { name: 'Alba Fine Foods Ltd', shortName: 'Alba' });
+    store.saveSupplier('s1', { name: 'Alba Fine Foods Ltd', shortName: '  ' });
+    await tick();
+    await tick();
+    expect(messages).toEqual([
+      { kind: 'supplier-active-not-saved', name: 'Alba' },
+      { kind: 'supplier-not-deleted', name: 'Alba' },
+      { kind: 'supplier-not-saved', name: 'Alba' },
+      { kind: 'supplier-not-saved', name: 'Alba Fine Foods Ltd' },
+    ]);
+  });
+
+  test('ingredientsFromServer turns true only on the server’s answer, as suppliersFromServer does', async () => {
+    const source = fakeSuppliersSource({ ingredients: [{ id: 'i1', name: 'Flour' }] });
+    source.fromCache = true;
+    const { store } = started(source);
+    await tick();
+    expect(store.getSnapshot().ingredientsLoaded).toBe(true);
+    expect(store.getSnapshot().ingredientsFromServer).toBe(false);
+    source.fromCache = false;
+    source.push();
+    expect(store.getSnapshot().ingredientsFromServer).toBe(true);
+  });
+
   test('a star moves at once', async () => {
     const { store } = started(fakeSuppliersSource({ suppliers: [{ id: 's1', name: 'Alba' }] }));
     await tick();

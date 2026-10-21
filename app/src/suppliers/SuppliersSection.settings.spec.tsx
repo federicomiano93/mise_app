@@ -229,11 +229,23 @@ describe('the categories', () => {
     for (const bin of bins) expect(bin).toBeDisabled();
   });
 
+  it('⚠️ the bins stay disabled while the ingredients come only from the browser’s copy, even with config/orders believed', async () => {
+    const source = sourceWith();
+    source.fromCache = true;
+    const { region } = await openSettings(source);
+    // The copy held the document, so config/orders is believed already — but the ingredients it rewrites are not the server's.
+    await screen.findByText('Dairy', undefined, LOAD);
+    for (const bin of card(region).getAllByRole('button')) expect(bin).toBeDisabled();
+  });
+
   it('enables them once the server has spoken', async () => {
     const source = sourceWith();
     source.fromCache = true;
     const { region } = await openSettings(source);
-    // The copy held the document, so it is believed already.
+    await screen.findByText('Dairy', undefined, LOAD);
+    expect(trash(region, 'Eggs')).toBeDisabled();
+    source.fromCache = false;
+    act(() => { source.push(); });
     await waitFor(() => { expect(trash(region, 'Eggs')).toBeEnabled(); });
   });
 

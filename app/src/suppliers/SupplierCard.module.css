@@ -84,10 +84,16 @@
   overflow-wrap: break-word;
 }
 
-/* The sentence under the name is a live region that is on the page, empty, before it speaks; empty it takes no room. */
+/* The sentence under the name is a live region that is on the page, empty, before it speaks; empty it takes no room (never display: none, which can take it out of the accessibility tree). */
 .quiet:empty,
 .error:empty {
-  display: none;
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  clip-path: inset(50%);
 }
 
 .error {

@@ -105,10 +105,16 @@
   gap: var(--s4);
 }
 
-/* The live region is always there; it takes no room while it is empty. */
+/* The live region is always there; it takes no room while it is empty (never display: none: that can take it out of the accessibility tree). */
 .quiet:empty,
 .failed:empty {
-  display: none;
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  clip-path: inset(50%);
 }
 
 .failed {
@@ -261,23 +267,12 @@
   color: var(--ink-3);
 }
 
-/* The search box and the «New supplier» button: one under the other on a phone, side by side from 1000px (the split). */
+/* The search box and the «New supplier» button: one under the other at every width. Side by side from 1000px they clipped the
+   search box's placeholder in the split's narrow list. */
 .top {
   display: flex;
   flex-direction: column;
   gap: var(--s3);
-}
-
-@media (min-width: 1000px) {
-  .top {
-    flex-direction: row;
-    align-items: center;
-  }
-
-  .top .search {
-    flex: 1;
-    min-width: 0;
-  }
 }
 
 .newSupplier {

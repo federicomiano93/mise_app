@@ -179,13 +179,16 @@ function PanelRow({ panel, asksBeforeOff = false }: { panel: PanelKey; asksBefor
 // The categories an ingredient can be filed under, one row each with a low-key trash. There is NO add or rename here:
 // categories are added by typing in an ingredient's menu (step 3e-2) and deleted here (parity S106).
 //
-// ⚠️ EVERY TRASH IS DISABLED UNTIL config/orders HAS REALLY ARRIVED: before that the list is only the defaults, and a delete
-// would write them over the venue's own list (parity S107). Deleting never moves the ingredients that used a category: they
+// ⚠️ EVERY TRASH IS DISABLED UNTIL config/orders AND THE INGREDIENTS HAVE REALLY ARRIVED: before that the list is only the
+// defaults, and a delete would write them over the venue's own list (parity S107) or leave out the ingredients not yet seen. Deleting never moves the ingredients that used a category: they
 // are left without one, and the question says how many.
 function CategoriesCard() {
   const { t } = useT();
   const store = useSuppliersStore();
-  const { configLoaded } = useSuppliers();
+  const { configLoaded, ingredientsFromServer } = useSuppliers();
+  // ⚠️ A category delete rewrites the list AND the ingredients that hold it: before the server has said which ingredients
+  // there are, the ones missing from the browser's copy would keep the category and it would come back.
+  const canDelete = configLoaded && ingredientsFromServer;
   const { location } = useSession();
   const [confirm, confirmDialog] = useConfirm();
   const headId = useId();
@@ -256,7 +259,7 @@ function CategoriesCard() {
                 }}
                 type="button"
                 className={styles.trash}
-                disabled={!configLoaded}
+                disabled={!canDelete}
                 aria-label={t('sup.settings.deleteCategory', { name })}
                 title={t('sup.settings.deleteCategory', { name })}
                 onClick={() => { void remove(name); }}

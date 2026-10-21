@@ -11,7 +11,7 @@ import { useStatusMessage } from '../ui/StatusMessage';
 import { useConfirm } from '../ui/useConfirm';
 import { useCopyWait } from './copyWait';
 import { ItemRow, ItemRows } from './ItemRow';
-import { supplierOpener, useHandBack } from './handBack';
+import { SEARCH_OPENER, supplierOpener, useHandBack } from './handBack';
 import { DAY_KEY, isWeekday } from './supplierDays';
 import { useSupplierDeletions } from './supplierDeletions';
 import { SUPPLIERS_TAB_PATH, supplierEditPath } from './suppliersPath';
@@ -49,6 +49,9 @@ export function SupplierScreen({ id }: { id: string }) {
   const supplier = snapshot.suppliers.find(candidate => candidate.id === id) ?? null;
   // Back is the browser's Back when the list is the entry behind; an address typed in replaces itself.
   const leave = useLeave(SUPPLIERS_TAB_PATH, () => { handBack.expect(supplierOpener(id)); });
+  // ⚠️ AFTER A DELETE THE FOCUS GOES TO THE SEARCH BOX, never to this supplier's own row: with the real database the row is
+  // still in the list while the screen leaves, so it would take the focus and then vanish under it.
+  const leaveAfterDelete = useLeave(SUPPLIERS_TAB_PATH, () => { handBack.expect(SEARCH_OPENER); });
   const waited = useCopyWait(snapshot.suppliersFromServer || snapshot.suppliersBroken);
   const gone = supplier === null && snapshot.suppliersLoaded && !snapshot.suppliersBroken && waited && !deletions.has(id);
 
@@ -140,7 +143,7 @@ export function SupplierScreen({ id }: { id: string }) {
     if (asking.current) return;
     asking.current = true;
     try {
-      await runDelete({ id, name: label }, leave);
+      await runDelete({ id, name: label }, leaveAfterDelete);
     } finally {
       asking.current = false;
     }
@@ -200,6 +203,8 @@ export function SupplierScreen({ id }: { id: string }) {
           </ItemRows>
         )}
 
+        {/* ⚠️ DISABLED UNTIL THE INGREDIENTS HAVE ANSWERED: the question says how many products stay without a supplier, and before
+            they arrive that count would be a false 0. */}
         {/* ⚠️ THE VERY END OF THE PAGE: small, low-key, icon only, for whoever runs the place. Absent — not disabled — for an
             employee, who still has Switch off, the reversible half (parity S6, S8). */}
         {canManage ? (
@@ -208,6 +213,7 @@ export function SupplierScreen({ id }: { id: string }) {
             className={styles.deleteIcon}
             aria-label={t('sup.delete', { name: label })}
             title={t('sup.delete', { name: label })}
+            disabled={!snapshot.ingredientsLoaded}
             onClick={() => { void remove(); }}
           >
             <Trash2 aria-hidden="true" />

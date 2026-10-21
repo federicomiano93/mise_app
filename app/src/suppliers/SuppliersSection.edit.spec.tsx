@@ -212,7 +212,6 @@ describe('saving the card', () => {
         email: 'orders@alpine.test',
         deliveryDays: ['Monday', 'Tuesday'],
         orderDays: ['Sunday'],
-        active: true,
         vatNumber: 'IT01234567890',
       },
     });
@@ -223,13 +222,34 @@ describe('saving the card', () => {
     expect(await screen.findByText('Supplier saved.')).toBeInTheDocument();
   });
 
+  it('⚠️ the Save question names the supplier as everywhere else: the short name when there is one', async () => {
+    const { region, user } = await walkToCard();
+    await user.type(nameBox(region), 's');
+    await user.click(region.getByRole('button', { name: 'Save' }));
+    const dialog = await dialogOf('Save supplier?');
+    expect(within(dialog).getByText('Save “Alpine”?')).toBeInTheDocument();
+  });
+
+  it('⚠️ the boxes stop at the numbers firestore.rules allow (name 200, name in lists 60, category 200, phone 40, email 320, VAT 30)', async () => {
+    const { region } = await walkToCard();
+    expect(nameBox(region)).toHaveAttribute('maxlength', '200');
+    expect(region.getByRole('textbox', { name: 'Name in lists' })).toHaveAttribute('maxlength', '60');
+    expect(region.getByRole('textbox', { name: 'Category' })).toHaveAttribute('maxlength', '200');
+    expect(region.getByLabelText('Phone (WhatsApp, digits only)')).toHaveAttribute('maxlength', '40');
+    expect(region.getByLabelText('Email')).toHaveAttribute('maxlength', '320');
+    expect(region.getByLabelText('VAT number')).toHaveAttribute('maxlength', '30');
+  });
+
   it('⚠️ keeps a switched-off supplier switched off', async () => {
     const { region, user, source } = await walkToCard(/^Old Baker/);
     await user.type(nameBox(region), 's');
     await user.click(region.getByRole('button', { name: 'Save' }));
     await user.click(within(await dialogOf('Save supplier?')).getByRole('button', { name: 'Save' }));
     await waitFor(() => { expect(source.writes).toHaveLength(1); });
-    expect(source.writes[0]).toMatchObject({ data: { name: 'Old Bakers', active: false } });
+    // Not sent at all: the merge leaves the stored false where it is.
+    expect(source.writes[0]).toMatchObject({ data: { name: 'Old Bakers' } });
+    expect((source.writes[0] as { data: Record<string, unknown> }).data).not.toHaveProperty('active');
+    expect(source.suppliers.get('s-off')?.active).toBe(false);
   });
 
   it('empties nothing it was not asked to: a field left alone is sent as it was', async () => {

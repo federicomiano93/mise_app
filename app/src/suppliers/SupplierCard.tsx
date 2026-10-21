@@ -2,6 +2,7 @@ import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import type { Ref } from 'react';
 import { Check } from 'lucide-react';
 import { useBlocker } from 'react-router';
+import { supplierLabel } from '@mise/shared/supplier-label';
 import type { BlockerFunction } from 'react-router';
 import { useT } from '../i18n/useT';
 import { markBusy } from '../session/busy';
@@ -24,6 +25,12 @@ import styles from './SupplierCard.module.css';
 // The longest «name to show» (the current app's maxlength) and VAT number.
 export const SHORT_NAME_MAX = 60;
 export const VAT_MAX = 30;
+// The other boxes: the limits firestore.rules put on the suppliers whitelist (pinned by supplierLimits.spec.ts). Without
+// them a longer entry closes the card local-first, the server refuses it, and everything typed is lost.
+export const NAME_MAX = 200;
+export const CATEGORY_MAX = 200;
+export const PHONE_MAX = 40;
+export const EMAIL_MAX = 320;
 
 type Props = {
   // The supplier being edited, or null for a new one.
@@ -177,7 +184,7 @@ export function SupplierCard({ id, supplier, titleRef }: Props) {
     try {
       ok = await confirm({
         title: t('sup.save.title'),
-        message: t('sup.save.question', { name: payload.name }),
+        message: t('sup.save.question', { name: supplierLabel(payload) }),
         okLabel: t('ui.save'),
         cancelLabel: t('common.cancel'),
       });
@@ -223,6 +230,7 @@ export function SupplierCard({ id, supplier, titleRef }: Props) {
             type="text"
             autoComplete="off"
             className={styles.box}
+            maxLength={NAME_MAX}
             aria-required="true"
             aria-invalid={nameInvalid ? true : undefined}
             aria-describedby={nameInvalid ? nameErrorId : undefined}
@@ -257,6 +265,7 @@ export function SupplierCard({ id, supplier, titleRef }: Props) {
             id={categoryId}
             type="text"
             autoComplete="off"
+            maxLength={CATEGORY_MAX}
             className={styles.box}
             value={working.category}
             onChange={event => { edit(current => ({ ...current, category: event.target.value })); }}
@@ -272,6 +281,7 @@ export function SupplierCard({ id, supplier, titleRef }: Props) {
             id={phoneId}
             type="tel"
             autoComplete="off"
+            maxLength={PHONE_MAX}
             className={styles.box}
             placeholder={t('sup.eg.phone')}
             value={working.phone}
@@ -285,6 +295,7 @@ export function SupplierCard({ id, supplier, titleRef }: Props) {
             id={emailId}
             type="email"
             autoComplete="off"
+            maxLength={EMAIL_MAX}
             className={styles.box}
             value={working.email}
             onChange={event => { edit(current => ({ ...current, email: event.target.value })); }}

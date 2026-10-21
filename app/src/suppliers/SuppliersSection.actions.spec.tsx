@@ -136,7 +136,7 @@ describe('deleting a supplier', () => {
 
   it.each([
     [0, null],
-    [1, 'Its 1 product stays in the list, with no supplier.'],
+    [1, 'Its one product stays in the list, with no supplier.'],
     [3, 'Its 3 products stay in the list, with no supplier.'],
   ])('⚠️ his decision F2: with %i products the question says what becomes of them', async (count, sentence) => {
     const source = fakeSuppliersSource({ suppliers: SUPPLIERS, ingredients: productsOf('s-alp', count) });
@@ -194,6 +194,49 @@ describe('deleting a supplier', () => {
     await new Promise<void>(resolve => { setTimeout(resolve, 80); });
     expect(screen.queryByText('This supplier no longer exists.')).not.toBeInTheDocument();
     expect(screen.getByText('Choose a supplier')).toBeInTheDocument();
+  });
+
+  // ⚠️ WITH THE REAL DATABASE THE ROW IS STILL IN THE LIST while the screen leaves (the fake drops it only on settleDeletes):
+  // the focus must go to the search box and stay there, never to the deleted supplier's own row, which then disappears.
+  it('⚠️ the focus lands on the search box after a delete, even while the deleted row is still listed (phone)', async () => {
+    const source = seeded();
+    source.deferDeletes = true;
+    const { region, user, router } = await open('Zed', source);
+    await user.click(trash(region, 'Zed Dairy'));
+    await user.click(within(await dialogOf('Delete this supplier?')).getByRole('button', { name: 'Delete' }));
+    await waitFor(() => { expect(router.state.location.pathname).toBe('/suppliers/suppliers'); });
+    await waitFor(() => { expect(screen.getByRole('searchbox')).toHaveFocus(); });
+    expect(main().getByRole('button', { name: /^Zed/ })).not.toHaveFocus();
+    act(() => { source.settleDeletes(); });
+    await waitFor(() => { expect(main().queryByRole('button', { name: /^Zed/ })).not.toBeInTheDocument(); });
+    expect(screen.getByRole('searchbox')).toHaveFocus();
+  });
+
+  it('⚠️ the same on the split', async () => {
+    split();
+    const source = seeded();
+    source.deferDeletes = true;
+    const { region, user, router } = await open('Zed', source);
+    await user.click(trash(region, 'Zed Dairy'));
+    await user.click(within(await dialogOf('Delete this supplier?')).getByRole('button', { name: 'Delete' }));
+    await waitFor(() => { expect(router.state.location.pathname).toBe('/suppliers/suppliers'); });
+    await waitFor(() => { expect(screen.getByRole('searchbox')).toHaveFocus(); });
+    expect(main().getByRole('button', { name: /^Zed/ })).not.toHaveFocus();
+    act(() => { source.settleDeletes(); });
+    await waitFor(() => { expect(main().queryByRole('button', { name: /^Zed/ })).not.toBeInTheDocument(); });
+    expect(screen.getByRole('searchbox')).toHaveFocus();
+  });
+
+  it('⚠️ the trash waits for the ingredients: before they answer the count of products would be a false 0', async () => {
+    const source = fakeSuppliersSource({ suppliers: SUPPLIERS });
+    source.fromCache = true;
+    renderSuppliers('/suppliers/supplier/s-zed', { source });
+    const region = within(await screen.findByRole('region', { name: 'Zed Dairy' }, LOAD));
+    expect(region.getByRole('button', { name: 'Delete “Zed Dairy”' })).toBeDisabled();
+    source.ingredients.set('i-z', item('i-z', { supplierId: 's-zed' }));
+    source.fromCache = false;
+    act(() => { source.push(); });
+    await waitFor(() => { expect(region.getByRole('button', { name: 'Delete “Zed Dairy”' })).toBeEnabled(); });
   });
 
   it('a supplier opened by its address is replaced by the list', async () => {

@@ -97,3 +97,24 @@ describe('every target is a thumb-sized one', () => {
     expect(declaration(rule(css, selector), property)).toBe('var(--hit)');
   });
 });
+
+describe('the search box and «New supplier» stay in a column at every width', () => {
+  it('has no wider-screen rule that turns .top into a row', () => {
+    expect(declaration(rule(listCss, '.top'), 'flex-direction')).toBe('column');
+    expect(withoutComments(listCss)).not.toMatch(/\.top\s*\{[^}]*flex-direction:\s*row/);
+  });
+});
+
+describe('an empty status line is collapsed, never display: none (a screen reader may not announce a region that left the tree)', () => {
+  it.each([
+    ['SupplierCard', cardCss, '.quiet:empty'],
+    ['SuppliersList', listCss, '.quiet:empty'],
+    ['SuppliersSettings', settingsCss, '.quiet:empty'],
+  ] as const)('%s %s', (_name, css, selector) => {
+    const body = rule(css, selector);
+    expect(declaration(body, 'display')).toBeUndefined();
+    expect(declaration(body, 'position')).toBe('absolute');
+    expect(declaration(body, 'padding')).toBe('0');
+    expect(declaration(body, 'clip-path')).toBe('inset(50%)');
+  });
+});
