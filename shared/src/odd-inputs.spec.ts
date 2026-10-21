@@ -71,6 +71,8 @@ import * as categoryBatches from './category-batches';
 import * as ingredientEditModel from './ingredient-edit-model';
 import * as ingredientSearch from './ingredient-search';
 import * as packFormat from './pack-format';
+import * as orderRequestModel from './order-request-model';
+import * as ingredientMerge from './ingredient-merge';
 import { BAKERY_CONFIG } from '../../tests/fixtures/bakery-config.mjs';
 import * as legacyJoinCodeJs from '../../js/join-code.js';
 import * as legacyPushModelJs from '../../js/push-model.js';
@@ -118,6 +120,8 @@ import * as legacyCategoryBatchesJs from '../../js/orders/category-batches.js';
 import * as legacyIngredientEditModelJs from '../../js/ingredient-edit-model.js';
 import * as legacyIngredientSearchJs from '../../js/orders/ingredient-search.js';
 import * as legacyPackFormatJs from '../../js/pack-format.js';
+import * as legacyOrderRequestModelJs from '../../js/orders/order-request-model.js';
+import * as legacyIngredientMergeJs from '../../js/orders/ingredient-merge.js';
 import { localeTag, setLanguage, t } from '../../js/i18n.js';
 import * as legacyCalculatorConfigJs from '../../js/calculator-config.js';
 import * as legacyCalculatorDoughMathJs from '../../js/calculator-dough-math.js';
@@ -196,6 +200,8 @@ const legacyCategoryBatches = legacyCategoryBatchesJs as unknown as typeof categ
 const legacyIngredientEditModel = legacyIngredientEditModelJs as unknown as typeof ingredientEditModel;
 const legacyIngredientSearch = legacyIngredientSearchJs as unknown as typeof ingredientSearch;
 const legacyPackFormat = legacyPackFormatJs as unknown as typeof packFormat;
+const legacyOrderRequestModel = legacyOrderRequestModelJs as unknown as typeof orderRequestModel;
+const legacyIngredientMerge = legacyIngredientMergeJs as unknown as typeof ingredientMerge;
 
 // ── The machinery ────────────────────────────────────────────────────────────
 
@@ -3503,4 +3509,55 @@ describe('ingredient-edit-model: odd inputs', () => {
       expect(a, show(arg)).toBe(b);
     }
   });
+});
+
+describe('order-request-model: odd inputs', () => {
+  const m = orderRequestModel;
+  const l = legacyOrderRequestModel;
+
+  const REQUESTS: readonly unknown[] = [...ODD, 'abc', 7, { quantities: { a: 1, b: 2, c: 3 }, done: { b: true } }, { quantities: { a: 1 }, done: { a: true } },
+    { quantities: { a: 1 } }, { quantities: { a: 1, b: 1, c: 1 }, done: { a: 1, b: 'true', c: true } }, { quantities: null, done: { a: true } },
+    { quantities: 'xy', done: {} }, { quantities: ['p', 'q'], done: { 0: true } }, { quantities: { a: 1 }, done: 'a' }, { quantities: { a: 1 }, done: [true] },
+    { quantities: {}, done: {} }, { quantities: { a: 1 }, done: null }, { get quantities(): object { throw new Error('boom'); } }];
+  agree('remainingIds', m.remainingIds, l.remainingIds, product(REQUESTS));
+});
+
+describe('ingredient-merge: odd inputs', () => {
+  const m = ingredientMerge;
+  const l = legacyIngredientMerge;
+
+  const IDS: readonly unknown[] = [...ODD, 'b', 'a.b', 'constructor', '__proto__', 7];
+  const inv = (month: unknown, data: unknown) => ({ month, data });
+  const OPEN = { closedAt: '', opening: { b: 3 } };
+  const SOURCES: readonly unknown[] = [...ODD, 'text', 7,
+    { products: [], recipes: [], inventory: null, month: '2026-10', draft: null },
+    { products: [{ name: 'Pane', components: [{ ingredientId: 'b' }], packaging: [] }, { name: ' Torta ', components: [{ recipeId: 'r' }], packaging: [{ ingredientId: 'b' }] }, null, { name: 5 }] },
+    { products: [{ components: 'b', packaging: { ingredientId: 'b' } }, { name: 'X', components: [null, 7, { ingredientId: 'b' }] }] },
+    { products: 'b', recipes: 'b' },
+    { recipes: [{ name: 'Impasto', ingredients: [{ refId: 'b', kind: 'ingredient' }] }, { name: 'Base', ingredients: [{ refId: 'b', kind: 'recipe' }] },
+      { name: 'Libera', ingredients: [{ label: 'Sale' }] }, null, { ingredients: 'b' }, { name: 'NoKind', ingredients: [{ refId: 'b' }] }] },
+    { month: '2026-10', inventory: OPEN }, { month: '2026-10', inventory: { closedAt: '2026-10-31', opening: { b: 3 } } },
+    { month: '2026-10', inventory: { closedAt: '', purchased: { b: 0 } } }, { month: '2026-10', inventory: { closedAt: '   ', closing: { b: 2 } } },
+    { month: '2026-10', inventory: { closedAt: '', opening: { b: null } } }, { month: '2026-10', inventory: { closedAt: '', opening: { b: undefined } } },
+    { month: '2026-10', inventory: { closedAt: '', opening: [3], purchased: 'b', closing: { x: 1 } } }, { month: '2026-10', inventory: { closedAt: 5, opening: { b: 1 } } },
+    { month: 7, inventory: OPEN }, { inventory: OPEN }, { inventory: [OPEN] },
+    { inventories: [inv('2026-10', null), inv('2026-09', OPEN)] }, { inventories: [inv('2026-10', OPEN), inv('2026-09', OPEN)] },
+    { inventories: [inv('2026-09', { opening: { b: 3 } })] }, { inventories: [inv(undefined, OPEN), null, 5, { data: OPEN }, { month: 'm' }] },
+    { inventories: [inv('2026-09', { closedAt: '2026-09-30', opening: { b: 3 } })] }, { inventories: 'x', inventory: OPEN, month: 'm' }, { inventories: [] },
+    { requests: [{ quantities: { b: 2, c: 1 }, done: {} }] }, { requests: [{ quantities: { b: 2, c: 1 }, done: { b: true } }] },
+    { requests: [{ quantities: { b: 2 }, done: { b: true } }] }, { requests: [{ quantities: { c: 1 }, done: {} }] },
+    { requests: [null, {}, { quantities: null }, [], { quantities: [] }, { quantities: ['b'] }, { quantities: 'b' }] }, { requests: 'b' },
+    { draft: { entries: { b: { qty: 2, stock: 0 } } } }, { draft: { entries: { b: { qty: 0, stock: 5 } } } }, { draft: { entries: { b: { qty: '3' } } } },
+    { draft: { entries: { b: { qty: -1 } } } }, { draft: { entries: { b: 5 } } }, { draft: { entries: { b: null } } }, { draft: { entries: [] } },
+    { draft: { entries: { b: { qty: NaN } } } }, { draft: { entries: {} } }, { draft: 'b' }, { draft: null },
+    { products: [{ name: 'P', components: [{ ingredientId: 'b' }] }], recipes: [{ name: 'R', ingredients: [{ refId: 'b', kind: 'ingredient' }] }],
+      inventory: OPEN, month: '2026-10', draft: { entries: { b: { qty: 1 } } }, requests: [{ quantities: { b: 1 }, done: {} }] },
+    { get products(): object { throw new Error('boom'); } }];
+  agree('findUsage', m.findUsage as AnyFn, l.findUsage as AnyFn, [...product(IDS, SOURCES), ...product(IDS)]);
+
+  const MOMENTS: readonly unknown[] = [undefined, NaN, 0, -1, 1e15, 8.64e15, 8.65e15, 'x', '2026-10-05', null, true, {}, [],
+    new Date(2026, 9, 5, 12).getTime(), new Date(2026, 0, 31, 12).getTime(), new Date(2026, 0, 1, 0, 0, 0).getTime(), new Date(2026, 11, 31, 23, 59, 59).getTime(),
+    new Date(2026, 2, 31, 12).getTime(), new Date(2026, 9, 25, 3).getTime(), new Date(2026, 9, 31, 23).getTime(), new Date(2024, 1, 29, 12).getTime()];
+  agree('monthKeyOf', m.monthKeyOf as AnyFn, l.monthKeyOf as AnyFn, product(MOMENTS));
+  agree('previousMonthKeyOf', m.previousMonthKeyOf as AnyFn, l.previousMonthKeyOf as AnyFn, product(MOMENTS));
 });
