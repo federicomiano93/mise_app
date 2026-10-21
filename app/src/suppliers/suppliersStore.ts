@@ -16,11 +16,13 @@
 // venue that has twenty. Until the server has spoken, or the copy holds something, the list says «Loading…».
 
 import { categoryChoices, countInCategory } from '@mise/shared/record-choices';
+import { ingredientDisplayName } from '@mise/shared/ingredient-name';
+import { cleanUnit, storedUnitFor } from '@mise/shared/order-unit';
 import { normalizeFavourites } from '@mise/shared/favourite-suppliers';
-import { withPrices } from '@mise/shared/price-model';
+import { INGREDIENT_DRAINED_FIELDS, PRICE_FIELDS, withPrices } from '@mise/shared/price-model';
 import { supplierLabel } from '@mise/shared/supplier-label';
 import { markBusy as markBusyOfSession } from '../session/busy';
-import type { PanelKey, StoredDoc, SuppliersMeta, SuppliersSource } from './suppliersSource';
+import type { IngredientUsage, PanelKey, StoredDoc, SuppliersMeta, SuppliersSource } from './suppliersSource';
 
 export type SuppliersMessage =
   // A supplier save the database refused: Firestore has taken it back. `name` is what was typed.
@@ -32,7 +34,11 @@ export type SuppliersMessage =
   // A star the database refused: it is back as it was.
   | { readonly kind: 'favourite-not-saved' }
   // A category delete the database refused (or an ingredient was deleted meanwhile): `name` is the category.
-  | { readonly kind: 'category-not-deleted'; readonly name: string };
+  | { readonly kind: 'category-not-deleted'; readonly name: string }
+  // An ingredient save the database refused: Firestore has taken it back. `name` is the name to show, as typed.
+  | { readonly kind: 'ingredient-not-saved'; readonly name: string }
+  // An ingredient delete the database refused: it is back.
+  | { readonly kind: 'ingredient-not-deleted'; readonly name: string };
 
 export interface SuppliersSnapshot {
   // Every supplier, as stored, in the order the database gave them (the list sorts them itself).
@@ -72,6 +78,28 @@ export interface SuppliersDeps {
 // What the supplier card saves (parity S82), as the card builds it.
 export type SupplierPayload = Readonly<Record<string, unknown>> & { readonly name: string };
 
+// What the ingredient card saves (parity C87), as the card builds it — product data only in step 3e-2.
+export type IngredientPayload = Readonly<Record<string, unknown>> & { readonly name: string };
+
+export interface IngredientSaveOptions {
+  // The order unit the card has just replaced (Cartone / Singola rewrote `unit`): the open line of the order in progress
+  // is frozen in it, so a quantity keeps its meaning (parity C35). '' or absent = nothing to freeze.
+  readonly unitChangedFrom?: string;
+}
+
+// The ingredient DOCUMENT of a card's payload (js/price-model.js splitPriceFields, its ingredient half): every price key
+// cut off — they live in ingredient-prices — and the six old price keys sent as null, for every role (parity C16): that is
+// what drains a stale rate written by a phone of before off the ingredient, which everybody may read. ⚠️ vatRate, the case
+// keys and priceBasis are never on the ingredient: its key list is closed, and ONE refused key fails every save.
+export function ingredientDocOf(payload: Readonly<Record<string, unknown>>): Record<string, unknown> {
+  const doc: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(payload)) {
+    if (!(PRICE_FIELDS as readonly string[]).includes(key)) doc[key] = value;
+  }
+  for (const key of INGREDIENT_DRAINED_FIELDS) doc[key] = null;
+  return doc;
+}
+
 export interface SuppliersStore {
   getSnapshot(): SuppliersSnapshot;
   subscribe(listener: () => void): () => void;
@@ -99,6 +127,15 @@ export interface SuppliersStore {
   // Deletes a category: the shortened list, and «no category» on every ingredient that used it. Local-first; returns
   // false and writes nothing when config/orders has not really arrived (parity S107). A refusal says so.
   deleteCategory(category: string, language: string): boolean;
+  // Saves an ingredient, LOCAL-FIRST (decision T3): returns its id at once (a new one is made on the phone) and never
+  // waits for the network. Product data only (step 3e-2): no price document is written, so a rename can never touch the
+  // money. A refusal says `ingredient-not-saved`. `id` null = a new ingredient.
+  saveIngredient(id: string | null, payload: IngredientPayload, options?: IngredientSaveOptions): string;
+  // Deletes an ingredient, local-first — with its price document when `withPrice` (a person who may write prices) — and
+  // takes its line out of the order in progress (parity C32, C33). A refusal says `ingredient-not-deleted`.
+  deleteIngredient(id: string, withPrice: boolean): void;
+  // How many recipes and Food cost products use an ingredient, read from the server once (his decision F5). Never rejects.
+  ingredientUsage(id: string): Promise<IngredientUsage>;
   // Throws one of the venue's panel switches through the server. NOT local-first (a Cloud Function): resolves when the
   // server has written it, REJECTS when refused or unreachable. The busy marker is held meanwhile.
   setIngredientPanel(key: PanelKey, on: boolean): Promise<void>;
@@ -159,7 +196,7 @@ export function createSuppliersStore(source: SuppliersSource, deps: SuppliersDep
   }
 
   // Starts a write that may throw before it even returns a promise (an id that is not one): the throw is a refusal too.
-  function attempt(run: () => Promise<void>): Promise<void> {
+  function attempt<T>(run: () => Promise<T>): Promise<T> {
     try {
       return run();
     } catch (err) {
@@ -173,6 +210,24 @@ export function createSuppliersStore(source: SuppliersSource, deps: SuppliersDep
 
   function relayIngredients(): void {
     ingredients = withPrices(rawIngredients, prices) as StoredDoc[];
+  }
+
+  function ingredientNameOf(id: string): string {
+    const found = rawIngredients.find(item => item.id === id);
+    return found ? ingredientDisplayName(found) : '';
+  }
+
+  // ⚠️ THE FREEZE IS NOT PART OF THE SAVE (js/orders/registry-main.js): the ingredient is already saved, and a failure is
+  // only logged. Rules of js/orders/draft.js freezeUnitInDraft: only a line with a quantity and NO unit of its own (it
+  // meant «the card's unit, whatever it is now»), frozen in the replaced unit unless that is the new unit anyway.
+  // Firestore keeps one client's writes in order, so the freeze lands after the save it follows.
+  function freezeDraftLine(id: string, from: string, saved: Readonly<Record<string, unknown>>): void {
+    const frozen = storedUnitFor(from, saved);
+    if (!frozen) return;
+    attempt(() => source.readDraftEntry(id).then(entry => {
+      if (!(Number(entry?.qty) > 0) || cleanUnit(entry?.unit)) return;
+      return source.setDraftEntryUnit(id, frozen);
+    })).catch((err: unknown) => console.error('The draft line kept an old unit:', err));
   }
 
   function nameOf(id: string): string {
@@ -289,6 +344,30 @@ export function createSuppliersStore(source: SuppliersSource, deps: SuppliersDep
       track(attempt(() => source.deleteCategory(shortened, ids)), { kind: 'category-not-deleted', name: category });
       return true;
     },
+
+    saveIngredient(id, payload, options = {}) {
+      const ingredientId = id ?? source.newIngredientId();
+      const doc = ingredientDocOf(payload);
+      track(attempt(() => source.saveIngredient(ingredientId, doc)), {
+        kind: 'ingredient-not-saved', name: ingredientDisplayName(payload),
+      });
+      if (options.unitChangedFrom) freezeDraftLine(ingredientId, options.unitChangedFrom, payload);
+      return ingredientId;
+    },
+
+    // ⚠️ THE NAME IS READ BEFORE THE WRITE (as for a supplier). ⚠️ The draft line goes too, NOT AWAITED and only logged on
+    // failure (parity C33): a quantity left for a product that no longer exists would sit in the draft, never ordered.
+    deleteIngredient(id, withPrice) {
+      const refused: SuppliersMessage = { kind: 'ingredient-not-deleted', name: ingredientNameOf(id) };
+      track(attempt(() => source.deleteIngredient(id, withPrice)), refused);
+      attempt(() => source.clearDraftEntry(id))
+        .catch((err: unknown) => console.error('The draft still holds a deleted ingredient:', err));
+    },
+
+    ingredientUsage: id => attempt(() => source.readUsage(id)).catch((err: unknown) => {
+      console.warn('Counting what uses an ingredient failed:', err);
+      return { recipes: null, products: null };
+    }),
 
     async setIngredientPanel(key, on) {
       const release = deps.markBusy();
