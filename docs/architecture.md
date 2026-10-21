@@ -54,7 +54,7 @@ both, and the switch keeps the address) and it has consequences that every chang
 |---|---|---|
 | React | 19.3.0 | components end the stale-screen bugs of the current app |
 | TypeScript | 7.0.2 (`tsc` native) | a missing translation or a wrong field is a build error |
-| Vite | 8.3.1 | build target `chrome101, edge101, firefox104, safari16`: the lab tablet (SM-T550, Chrome 101 — its ceiling on Google Play) and iPhone Safari 16.4 |
+| Vite | 8.3.4 | build target `chrome101, edge101, firefox104, safari16`: the lab tablet (SM-T550, Chrome 101 — its ceiling on Google Play) and iPhone Safari 16.4 |
 | React Aria Components | 1.21.1 | accessible controls (focus, keyboard, screen readers) without writing them |
 | react-router | 8.4.0 | hash routing (`#/orders`), because GitHub Pages cannot rewrite deep links |
 | lucide-react | 1.48.0 | the icon set of the design |
