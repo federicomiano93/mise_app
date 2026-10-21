@@ -1410,6 +1410,68 @@ export const en = {
   'sup.perEach': '{rate} / each',
   // NEW: said once when the supplier on screen was deleted on another phone (or the address names none).
   'sup.supplierGone': 'This supplier no longer exists.',
+
+  // Ingredients & suppliers (step 3e-1, slice B): the supplier card, switching a supplier off, deleting it, and Settings.
+  // The words are the current app's (orders.* keys) where it had them; the ones marked NEW did not exist there.
+  'sup.newSupplier': 'New supplier',
+  'sup.editSupplier': 'Edit supplier',
+  'sup.field.name': 'Name on invoices',
+  'sup.field.shortName': 'Name in lists',
+  'sup.field.shortNameHint': 'Optional — shorter, for the app’s lists and the order heading. Empty: the name on invoices.',
+  'sup.field.category': 'Category',
+  'sup.field.deliveryDays': 'Delivery days — when they deliver',
+  'sup.field.orderDays': 'Order days — when you place the order',
+  'sup.field.phone': 'Phone (WhatsApp, digits only)',
+  'sup.field.email': 'Email',
+  'sup.field.vat': 'VAT number',
+  'sup.eg.phone': 'e.g. 447700900123',
+  'sup.eg.vat': 'IT01234567890',
+  // NEW: the sentence under the Name box when Save is pressed with it empty (the current app only moved the cursor there).
+  'sup.nameRequired': 'Enter the supplier’s name.',
+  // NEW: the Save question, in the shape every Mise 2 editor asks it.
+  'sup.save.title': 'Save supplier?',
+  'sup.save.question': 'Save “{name}”?',
+  // NEW: said when the card is saved.
+  'sup.supplierSaved': 'Supplier saved.',
+  'sup.discard.title': 'Discard changes?',
+  'sup.discard.message': 'What you typed on this card is not saved. Opening something else will throw it away.',
+  // NEW wording of «Deactivate / Activate», to match «Switched off».
+  'sup.switchOff': 'Switch off',
+  'sup.switchOn': 'Switch on',
+  'sup.switchOff.title': 'Switch this supplier off?',
+  'sup.switchOff.question': 'Switch off “{name}”? It will be hidden from the order screen. You can switch it on again later.',
+  'sup.delete': 'Delete “{name}”',
+  'sup.delete.title': 'Delete this supplier?',
+  'sup.delete.question': 'Permanently delete “{name}”? This cannot be undone.',
+  // NEW (his decision F2): what happens to the products filed under a supplier that is deleted.
+  'sup.delete.products': {
+    one: 'Its 1 product stays in the list, with no supplier.',
+    other: 'Its {n} products stay in the list, with no supplier.',
+  },
+  'sup.supplierDeleted': 'Supplier deleted.',
+  'sup.notSaved': 'Could not save “{name}”. Check your network and try again.',
+  'sup.notSwitched': 'Could not switch “{name}” off or on. Check your network and try again.',
+  'sup.notDeleted': 'Could not delete “{name}”. Check your network and try again.',
+  'sup.categoryNotDeleted': 'Could not delete the category “{name}”. Check your network and try again.',
+  'sup.settings.ingredientCard': 'The ingredient card',
+  'sup.settings.cardNote': 'What every product’s record asks for. It applies to the whole venue, not just this phone, and takes effect on the next screen you open.',
+  'sup.settings.showAllergens': 'Track allergens',
+  'sup.settings.showAllergensNote': 'Off: no allergen boxes on a product, no allergen card on a recipe, no allergen sheet — and no labels, because a food label without its allergen line is worse than none. Nothing already declared is deleted.',
+  'sup.settings.showNutrition': 'Track nutrition',
+  'sup.settings.showNutritionNote': 'The per-100 g figures on a product, and the nutrition half of a label. Nothing already typed is deleted.',
+  'sup.settings.offTitle': 'Turn allergens off?',
+  'sup.settings.offBody': 'The allergen boxes, the allergen card on every recipe, the allergen sheet and the labels all disappear for everybody in this venue. Nothing is deleted — switching it back on brings every declaration back exactly as it is.',
+  'sup.settings.turnOff': 'Turn off',
+  'sup.settings.categories': 'Categories',
+  'sup.settings.categoriesNote': 'The categories an ingredient can be filed under. Deleting one leaves its ingredients without a category.',
+  'sup.settings.categoriesEmpty': 'No categories yet. Add one from an ingredient’s card.',
+  'sup.settings.deleteCategory': 'Delete category “{name}”',
+  'sup.settings.deleteCategoryTitle': 'Delete this category?',
+  'sup.settings.deleteCategoryNone': 'Delete “{name}”?',
+  'sup.settings.deleteCategoryUsed': {
+    one: 'Delete “{name}”? {n} ingredient will be left without a category.',
+    other: 'Delete “{name}”? {n} ingredients will be left without a category.',
+  },
 } as const satisfies Record<string, Message>;
 
 export type MessageKey = keyof typeof en;

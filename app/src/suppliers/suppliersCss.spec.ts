@@ -6,6 +6,8 @@ import itemRowCss from './ItemRow.module.css?raw';
 import listCss from './SuppliersList.module.css?raw';
 import screenCss from './SupplierScreen.module.css?raw';
 import sectionCss from './SuppliersSection.module.css?raw';
+import cardCss from './SupplierCard.module.css?raw';
+import settingsCss from './SuppliersSettings.module.css?raw';
 
 // What a stylesheet decides and jsdom cannot see: jsdom applies no layout, so a head that stops sticking is invisible to
 // every other spec. These read the CSS text.
@@ -62,7 +64,36 @@ describe('the supplier screen keeps its bar in reach', () => {
 });
 
 describe('a switched-off row is dimmed by its ink, never by opacity', () => {
-  it.each([['SuppliersList', listCss], ['ItemRow', itemRowCss], ['SupplierScreen', screenCss]] as const)('%s', (_name, css) => {
+  it.each([['SuppliersList', listCss], ['ItemRow', itemRowCss], ['SupplierScreen', screenCss], ['SupplierCard', cardCss], ['SuppliersSettings', settingsCss]] as const)('%s', (_name, css) => {
     expect(withoutComments(css)).not.toMatch(/opacity:/);
+  });
+});
+
+describe('the supplier card and Settings keep their bar in reach', () => {
+  it.each([['SupplierCard', cardCss, '.screen'], ['SuppliersSettings', settingsCss, '.screen']] as const)('%s does not clip', (_name, css, selector) => {
+    expect(declaration(rule(css, selector), 'position')).toBeUndefined();
+    expect(withoutComments(css)).not.toMatch(/overflow(-[xy])?:\s*(hidden|auto|scroll|clip)/);
+  });
+});
+
+describe('Settings are full width at every width', () => {
+  it('hides the list and leaves the right-hand side an ordinary block, on the split too', () => {
+    expect(declaration(rule(sectionCss, '.layout[data-view="wide"] .list'), 'display')).toBe('none');
+    const detail = rule(sectionCss, '.layout[data-view="wide"] .detail');
+    expect(declaration(detail, 'position')).toBe('static');
+    expect(declaration(detail, 'max-height')).toBe('none');
+    expect(declaration(rule(sectionCss, '.layout[data-view="wide"]'), 'grid-template-columns')).toBe('minmax(0, 1fr)');
+  });
+});
+
+describe('every target is a thumb-sized one', () => {
+  it.each([
+    ['SupplierCard .box', cardCss, '.box', 'min-height'],
+    ['SupplierCard .tick', cardCss, '.tick', 'min-height'],
+    ['SupplierScreen .deleteIcon', screenCss, '.deleteIcon', 'height'],
+    ['SuppliersSettings .trash', settingsCss, '.trash', 'height'],
+    ['SuppliersSettings .row', settingsCss, '.row', 'min-height'],
+  ] as const)('%s is at least 48px (--hit)', (_name, css, selector, property) => {
+    expect(declaration(rule(css, selector), property)).toBe('var(--hit)');
   });
 });

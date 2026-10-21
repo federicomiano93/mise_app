@@ -132,8 +132,8 @@ describe('the frame and the tabs', () => {
     expect(search()).toHaveAccessibleName('Cerca un ingrediente…');
   });
 
-  it('goes to the list from an address it does not draw (unknown, and the screens of the next slice)', async () => {
-    for (const path of ['/suppliers/nope', '/suppliers/supplier/new', '/suppliers/supplier/s-alp/edit', '/suppliers/settings', '/suppliers/ingredient/i-box']) {
+  it('goes to the list from an address it does not draw (unknown, and the ingredient screens of the next step)', async () => {
+    for (const path of ['/suppliers/nope', '/suppliers/supplier', '/suppliers/ingredient/i-box']) {
       const { router } = renderSuppliers(path, { source: seeded() });
       await waitFor(() => { expect(router.state.location.pathname).toBe('/suppliers'); });
       await screen.findAllByRole('listitem', undefined, LOAD);
@@ -439,8 +439,9 @@ describe('loading, a dead stream and the empty states', () => {
     renderSuppliers(path, { source: fakeSuppliersSource() });
     expect(await screen.findByText(title, undefined, LOAD)).toBeInTheDocument();
     expect(screen.getByText(sub)).toBeInTheDocument();
-    // No button in this slice: the cards that add things come later.
-    expect(main().queryByRole('button')).not.toBeInTheDocument();
+    // The only buttons are the ways to make the first one: «New supplier» (on the Suppliers tab only) and the owner's Settings.
+    const buttons = main().queryAllByRole('button').map(button => button.textContent);
+    expect(buttons).toEqual(path === '/suppliers/suppliers' ? ['New supplier', 'Settings'] : ['Settings']);
   });
 
   it('says there is no packaging when there are ingredients but no packaging', async () => {

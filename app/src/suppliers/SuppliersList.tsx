@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
-import { ChevronRight, Search } from 'lucide-react';
+import { ChevronRight, Plus, Search, Settings } from 'lucide-react';
 import { favouriteGroups } from '@mise/shared/favourite-suppliers';
 import { ingredientDisplayName, ingredientNameMatches } from '@mise/shared/ingredient-name';
 import { isPackaging } from '@mise/shared/ingredient-kind';
@@ -8,8 +8,10 @@ import { normalizeText } from '@mise/shared/ingredient-search';
 import { supplierLabel, supplierMatches } from '@mise/shared/supplier-label';
 import type { MessageKey } from '../i18n/en';
 import { useT } from '../i18n/useT';
+import { useSession } from '../session/SessionContext';
+import { Button } from '../ui/Button';
 import { ItemRow, ItemRows } from './ItemRow';
-import { SEARCH_OPENER, supplierOpener, useHandBack } from './handBack';
+import { NEW_OPENER, SEARCH_OPENER, SETTINGS_OPENER, supplierOpener, useHandBack } from './handBack';
 import type { SuppliersTab } from './suppliersPath';
 import { useSuppliers } from './SuppliersContext';
 import type { StoredDoc } from './suppliersSource';
@@ -62,6 +64,12 @@ type Props = {
   openSupplierId: string | null;
   onTab: (tab: SuppliersTab) => void;
   onOpenSupplier: (id: string) => void;
+  // «New supplier» is the screen shown, and the button that opens it.
+  newOpen: boolean;
+  onNew: () => void;
+  // Settings are the screen shown, and the door to them at the foot of the list.
+  settingsOpen: boolean;
+  onOpenSettings: () => void;
 };
 
 // Where an arrow, Home or End key sends the selection.
@@ -89,9 +97,12 @@ function targetOf(key: string, index: number, last: number): number | null {
 // the person left them. The three tabs share it, so it is not even remounted by a tab (parity S48).
 //
 // ⚠️ A TAB CLEARS THE SEARCH (parity S49), however the tab came to change — one list's query must never filter the other.
-export function SuppliersList({ tab, openSupplierId, onTab, onOpenSupplier }: Props) {
+export function SuppliersList({ tab, openSupplierId, onTab, onOpenSupplier, newOpen, onNew, settingsOpen, onOpenSettings }: Props) {
   const { t } = useT();
+  const { canManage } = useSession();
   const handBack = useHandBack();
+  const newDoor = useCallback((node: HTMLButtonElement | null) => { handBack.register(NEW_OPENER, node); }, [handBack]);
+  const settingsDoor = useCallback((node: HTMLButtonElement | null) => { handBack.register(SETTINGS_OPENER, node); }, [handBack]);
   const snapshot = useSuppliers();
   const searchOpener = useCallback((node: HTMLInputElement | null) => { handBack.register(SEARCH_OPENER, node); }, [handBack]);
   const tabs = useRef(new Map<SuppliersTab, HTMLButtonElement>());
@@ -151,18 +162,35 @@ export function SuppliersList({ tab, openSupplierId, onTab, onOpenSupplier }: Pr
             );
           })}
         </div>
-        <div className={styles.search}>
-          <Search aria-hidden="true" />
-          <input
-            ref={searchOpener}
-            type="search"
-            autoComplete="off"
-            className={styles.input}
-            aria-label={t(SEARCH_KEY[tab])}
-            placeholder={t(SEARCH_KEY[tab])}
-            value={text}
-            onChange={event => { setText(event.target.value); }}
-          />
+        {/* The search box and, on the Suppliers tab ONLY, the button that makes a supplier: side by side on the tablet's split,
+            one under the other on a phone (SuppliersList.module.css). ⚠️ NEVER HIDDEN ON A ROLE (parity S5): employees add
+            suppliers too, and it stands also over «No suppliers yet», the way to the first one. */}
+        <div className={styles.top}>
+          <div className={styles.search}>
+            <Search aria-hidden="true" />
+            <input
+              ref={searchOpener}
+              type="search"
+              autoComplete="off"
+              className={styles.input}
+              aria-label={t(SEARCH_KEY[tab])}
+              placeholder={t(SEARCH_KEY[tab])}
+              value={text}
+              onChange={event => { setText(event.target.value); }}
+            />
+          </div>
+          {suppliersTab ? (
+            <Button
+              ref={newDoor}
+              variant="primary"
+              className={styles.newSupplier}
+              aria-current={newOpen ? 'true' : undefined}
+              onPress={onNew}
+            >
+              <Plus aria-hidden="true" />
+              <span>{t('sup.newSupplier')}</span>
+            </Button>
+          ) : null}
         </div>
       </div>
 
@@ -188,13 +216,30 @@ export function SuppliersList({ tab, openSupplierId, onTab, onOpenSupplier }: Pr
           <ItemList tab={tab} items={snapshot.ingredients} suppliers={snapshot.suppliers} query={query} broken={broken} />
         )}
       </div>
+
+      {/* ⚠️ THE DOOR TO SETTINGS EXISTS ONLY FOR WHOEVER RUNS THE PLACE (owner or manager): a screen of switches that an
+          employee could not save would be worse than no screen. The address is checked again by the section, and the rules
+          are the real guard (parity S9). */}
+      {canManage ? (
+        <Button
+          ref={settingsDoor}
+          variant="secondary"
+          className={styles.door}
+          aria-current={settingsOpen ? 'true' : undefined}
+          onPress={onOpenSettings}
+        >
+          <Settings aria-hidden="true" />
+          <span>{t('ui.settings')}</span>
+        </Button>
+      ) : null}
     </div>
   );
 }
 
 function EmptyState({ tab }: { tab: SuppliersTab }) {
   const { t } = useT();
-  // Nothing exists yet. (The buttons that make the first one come with the supplier card and the ingredient card.)
+  // Nothing exists yet. (The button that makes the first supplier is «New supplier» above; the ingredient card's comes with
+  // step 3e-2.)
   return (
     <div className={styles.empty}>
       <p className={styles.emptyTitle}>{t(EMPTY_TITLE_KEY[tab])}</p>

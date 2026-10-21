@@ -260,3 +260,38 @@
   height: 18px;
   color: var(--ink-3);
 }
+
+/* The search box and the «New supplier» button: one under the other on a phone, side by side from 1000px (the split). */
+.top {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+}
+
+@media (min-width: 1000px) {
+  .top {
+    flex-direction: row;
+    align-items: center;
+  }
+
+  .top .search {
+    flex: 1;
+    min-width: 0;
+  }
+}
+
+.newSupplier {
+  flex: none;
+}
+
+.newSupplier svg,
+.door svg {
+  flex: none;
+  width: 18px;
+  height: 18px;
+}
+
+/* The door to Settings, at the foot of the list. */
+.door {
+  width: 100%;
+}

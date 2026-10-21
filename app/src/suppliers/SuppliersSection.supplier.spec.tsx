@@ -165,7 +165,7 @@ describe('the star', () => {
   });
 
   it('is not drawn for an employee', async () => {
-    await loaded('/suppliers/supplier/s-alp', seeded(), { session: { canManage: false, role: 'employee', isOwner: false } });
+    await loaded('/suppliers/supplier/s-alp', seeded(), { session: { canManage: false, role: 'staff', isOwner: false } });
     const region = await screenOf('Alpine');
     expect(within(region).queryByRole('button', { name: 'Favourite' })).not.toBeInTheDocument();
   });

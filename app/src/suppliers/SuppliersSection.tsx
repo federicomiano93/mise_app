@@ -1,20 +1,22 @@
-import { useEffect, useLayoutEffect, useRef } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { Navigate, useLocation, useNavigate, useNavigationType } from 'react-router';
 import { PartBoundary } from '../errors/PartBoundary';
 import { useT } from '../i18n/useT';
+import { useSession } from '../session/SessionContext';
 import { KEEP_FOCUS, Page } from '../shell/Page';
 import { useOwnScrollArea } from '../shell/scrollArea';
 import { SPLIT_QUERY } from '../ui/split';
 import { StatusMessageProvider, useStatusMessage } from '../ui/StatusMessage';
 import { useMediaQuery } from '../ui/useMediaQuery';
-import { HandBackProvider, supplierOpener, useHandBackState } from './handBack';
-import { SuppliersProvider, useSuppliersStore } from './SuppliersContext';
+import { HandBackProvider, NEW_OPENER, SETTINGS_OPENER, supplierOpener, useHandBackState } from './handBack';
+import { createSupplierDeletions, SupplierDeletionsProvider } from './supplierDeletions';
+import { SuppliersProvider, useSuppliers, useSuppliersStore } from './SuppliersContext';
 import { SuppliersDetail } from './SuppliersDetail';
 import type { ShownView } from './SuppliersDetail';
 import { SuppliersList } from './SuppliersList';
 import { FROM_LIST, cameFromList } from './suppliersNav';
 import { messageText } from './suppliersMessages';
-import { SUPPLIERS_PATH, parseSuppliersPath, supplierPath, tabOf, tabPath } from './suppliersPath';
+import { NEW_SUPPLIER_PATH, SUPPLIERS_PATH, SUPPLIERS_SETTINGS_PATH, parseSuppliersPath, supplierPath, tabOf, tabPath } from './suppliersPath';
 import type { SuppliersTab } from './suppliersPath';
 import styles from './SuppliersSection.module.css';
 
@@ -38,14 +40,13 @@ export default function SuppliersSection() {
   );
 }
 
-// What the store reports (a refused star) goes to the status message.
+// What the store reports (a refused star, a refused write) goes to the status message.
 function StoreMessages() {
   const { t } = useT();
   const store = useSuppliersStore();
   const say = useStatusMessage();
   useEffect(() => store.onMessage(message => {
-    const text = messageText(t, message);
-    if (text !== null) say(text);
+    say(messageText(t, message));
   }), [store, say, t]);
   return null;
 }
@@ -53,16 +54,20 @@ function StoreMessages() {
 function SuppliersScreen() {
   const { pathname, state } = useLocation();
   const navigationType = useNavigationType();
+  const { canManage } = useSession();
   // The address as it is written, not React Router's «*»: a supplier id is split before it is decoded (suppliersPath.ts).
   const view = parseSuppliersPath(pathname.slice(SUPPLIERS_PATH.length));
 
   // ⚠️ THE REDIRECT MUST KEEP THE MEANING OF THE MOVE THAT CAUSED IT: on a POP the app is arranging itself, so KEEP_FOCUS;
   // on any other move the state of the address being replaced is passed on.
-  //
-  // Slice A: the supplier card, a new supplier and Settings are not built yet, so their addresses go to the list too;
-  // slice B replaces this with the screens.
-  if (view.kind === 'unknown' || view.kind === 'supplier-edit' || view.kind === 'supplier-new' || view.kind === 'settings') {
+  if (view.kind === 'unknown') {
     return <Navigate to={SUPPLIERS_PATH} replace state={navigationType === 'POP' ? KEEP_FOCUS : state} />;
+  }
+  // ⚠️ SETTINGS ARE FOR WHOEVER RUNS THE PLACE: an employee who types the address is sent to the list, and nothing of the
+  // screen is drawn. The rules are the real guard (the panel switches go through a function that refuses anybody else);
+  // this is courtesy.
+  if (view.kind === 'settings' && !canManage) {
+    return <Navigate to={SUPPLIERS_PATH} replace state={KEEP_FOCUS} />;
   }
   return <SuppliersLayout view={view} />;
 }
@@ -73,6 +78,10 @@ function SuppliersLayout({ view }: { view: ShownView }) {
   const { pathname, state } = useLocation();
   const split = useMediaQuery(SPLIT_QUERY);
   const handBack = useHandBackState();
+  // The suppliers this phone's own screens are deleting (supplierDeletions.ts); a mark goes when its supplier is back.
+  const deletions = useMemo(createSupplierDeletions, []);
+  const { suppliers } = useSuppliers();
+  useEffect(() => { deletions.prune(suppliers.map(supplier => supplier.id)); }, [deletions, suppliers]);
 
   // ⚠️ THIS SECTION OWNS THE SCROLL for the moves inside itself (shell/scrollArea.tsx), because its list and its suppliers
   // are separate addresses: the shell's reset to the top at every address would send the list back to the top at each
@@ -97,6 +106,31 @@ function SuppliersLayout({ view }: { view: ShownView }) {
     }
   };
 
+  // «New supplier» and Settings open the way a supplier does: one level down, in the right-hand pane on the split for the
+  // card (with a supplier already open there, picking it is lateral and replaces it), and Settings full width at every size.
+  const openNew = () => {
+    if (view.kind === 'supplier-new') return;
+    handBack.expect(NEW_OPENER);
+    if (split && view.kind !== 'list') {
+      void navigate(NEW_SUPPLIER_PATH, { replace: true, state: cameFromList(state) ? FROM_LIST : KEEP_FOCUS });
+    } else {
+      if (!split && view.kind === 'list') listTop.current = scrollArea()?.scrollTop ?? null;
+      void navigate(NEW_SUPPLIER_PATH, { state: FROM_LIST });
+    }
+  };
+
+  const openSettings = () => {
+    if (view.kind === 'settings') return;
+    handBack.expect(SETTINGS_OPENER);
+    // The list is hidden behind Settings at every width, so its place is written down whatever the width.
+    listTop.current = scrollArea()?.scrollTop ?? null;
+    if (split && view.kind !== 'list') {
+      void navigate(SUPPLIERS_SETTINGS_PATH, { replace: true, state: cameFromList(state) ? FROM_LIST : KEEP_FOCUS });
+    } else {
+      void navigate(SUPPLIERS_SETTINGS_PATH, { state: FROM_LIST });
+    }
+  };
+
   // A tab REPLACES the entry: three lists are three windows onto the same records, not three steps (parity S45). The focus
   // stays on the tab that was pressed, so the next arrow key has something to move from.
   const openTab = (tab: SuppliersTab) => {
@@ -107,7 +141,8 @@ function SuppliersLayout({ view }: { view: ShownView }) {
   // Where the scroll area goes at every move inside the section. Before the hand-back below, so the place is back when the
   // row takes the focus: focusing a row that is in view scrolls nothing.
   //  - A tab is a new list: the top, whatever the width.
-  //  - On the split the list otherwise keeps its place (the right-hand side starts at its own top, below).
+  //  - On the split the list otherwise keeps its place (the right-hand side starts at its own top, below). Settings are the
+  //    exception: they take the whole row, so to and from them the split behaves as a phone does.
   //  - On a phone, Back to the list restores the place written down when a supplier opened; any other move is a new screen
   //    and starts at the top.
   //  - The first render does nothing: the shell reset the area when the section was entered.
@@ -121,7 +156,7 @@ function SuppliersLayout({ view }: { view: ShownView }) {
     if (before.kind === 'list' && view.kind === 'list') {
       listTop.current = null;
       area.scrollTop = 0;
-    } else if (split) {
+    } else if (split && before.kind !== 'settings' && view.kind !== 'settings') {
       listTop.current = null;
     } else if (view.kind === 'list' && listTop.current !== null) {
       area.scrollTop = listTop.current;
@@ -146,15 +181,20 @@ function SuppliersLayout({ view }: { view: ShownView }) {
 
   return (
     <HandBackProvider value={handBack}>
+      <SupplierDeletionsProvider value={deletions}>
       <Page title={t('sup.title')}>
-        <div className={styles.layout} data-view={view.kind === 'list' ? 'list' : 'detail'}>
+        <div className={styles.layout} data-view={view.kind === 'list' ? 'list' : view.kind === 'settings' ? 'wide' : 'detail'}>
           <div className={styles.list}>
             <PartBoundary>
               <SuppliersList
                 tab={tabOf(view)}
-                openSupplierId={view.kind === 'supplier' ? view.id : null}
+                openSupplierId={view.kind === 'supplier' || view.kind === 'supplier-edit' ? view.id : null}
                 onTab={openTab}
                 onOpenSupplier={openSupplier}
+                newOpen={view.kind === 'supplier-new'}
+                onNew={openNew}
+                settingsOpen={view.kind === 'settings'}
+                onOpenSettings={openSettings}
               />
             </PartBoundary>
           </div>
@@ -165,6 +205,7 @@ function SuppliersLayout({ view }: { view: ShownView }) {
           </div>
         </div>
       </Page>
+      </SupplierDeletionsProvider>
     </HandBackProvider>
   );
 }

@@ -306,6 +306,29 @@ queue and the other roads arrive in 3d-4. The usage record names the screen `rec
   the jsPDF and write-excel-file chunks BY NAME, never by a glob that would make every phone download those three. ⚠️ Excel is always a download: Chrome's Web Share has no Office types, so
   Share is offered for the PDF only, and only when `navigator.canShare` accepts the real file. A failure is
   reported with fixed words only (`Recipe export failed:`, the file kind, `library` or `build`), never the recipe.
+- `suppliers/` — Ingredients & suppliers (section id `suppliers`, step 3e, built in slices; its parity list is
+  `docs/parity/suppliers.md`). Slice A looks (the three lists and a supplier's own screen), slice B writes suppliers and adds
+  Settings; 3e-2 onwards is the ingredient card, the pack photo, the invoice import. The data layer: `suppliersSource.ts` (the
+  Firestore half: suppliers, ingredients, prices, `config/orders`, and the one Cloud Function `setIngredientPanels`), `suppliersStore.ts`
+  (plain TypeScript, local-first writes, `SuppliersMessage` kinds that `suppliersMessages.ts` words), `SuppliersContext.tsx`
+  (started on mount, stopped on unmount, P14). Addresses, in `suppliersPath.ts`: `/suppliers` (Ingredients tab), `/suppliers/suppliers`,
+  `/suppliers/packaging`, `/suppliers/supplier/<id>`, `/suppliers/supplier/<id>/edit`, `/suppliers/supplier/new` (`new` is never an id) and
+  `/suppliers/settings`; the usage record names `suppliers`, `suppliers-supplier`, `suppliers-supplier-edit` and `suppliers-settings`.
+  The frame (`SuppliersSection.tsx`) is the recipes' shape: the list on the left, one level down on the right from 1000px, the
+  section owns the scroll, `handBack.ts` gives the focus back to the button or row that opened a screen (`NEW_OPENER`,
+  `SETTINGS_OPENER`, a supplier's row, and `wantEdit`/`takeEdit` for «Edit» after the card). ⚠️ SETTINGS ARE FULL WIDTH AT EVERY
+  WIDTH: the layout is marked `data-view="wide"` and the stylesheet hides the list; an employee who types the address is replaced by the
+  list. `SupplierCardScreen` waits for the server (or `COPY_WAIT_MS`, `copyWait.ts`) and keys `SupplierCard` on the id, which copies the
+  supplier ONCE (`supplierModel.ts`: the working copy and the exact payload of parity S82 — `shortName` as `''` when blank, weekdays as
+  English keys in week order, `active` kept, `vatNumber` through `normalizeVat`), checks the one rule (a name), asks before Save, saves
+  local-first through `store.saveSupplier` and leaves one level up without asking: a new supplier to the list, an existing one to the
+  supplier's screen. One `useBlocker`, `markBusy` while dirty. `SupplierScreen` has «Edit», «Switch off» / «Switch on» (everybody; off
+  asks) and, for `canManage`, the Delete icon through `useDeleteSupplier`, which asks (with the products sentence of decision F2),
+  marks the id in `supplierDeletions.ts` so the screen's own «no longer exists» stays quiet, and says «Supplier deleted.» once.
+  `SuppliersSettings` has the two panel switches (allergens asks before OFF; the Cloud Function is called through the store, then
+  `sessionStore.refreshLocation()`, and the new value is held until the session shows it) and the categories card (every bin disabled
+  until `configLoaded`). `copyWait.ts`, `handBack.ts`, `suppliersNav.ts` and `supplierDeletions.ts` are copies of the recipes'/Food cost's
+  files: a feature never imports from another feature's folder.
 - `settings/` — the Settings page (today: the Account card).
 - `styles/` — `tokens.css` (every colour, size, radius, shadow) and `base.css`.
 - `testing/` — `renderApp`, the fake session store and other spec helpers.

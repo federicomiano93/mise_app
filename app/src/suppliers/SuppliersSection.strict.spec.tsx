@@ -56,4 +56,47 @@ describe('under StrictMode: Ingredients & suppliers', () => {
     await user.click(star);
     expect(fake.writes).toEqual([{ op: 'favourite', id: 'a', on: true }]);
   });
+
+  it('writes a new supplier once, and puts the focus on «New supplier»', async () => {
+    const fake = source();
+    const { router, user } = renderSuppliers('/suppliers/suppliers', { source: fake });
+    await user.click(await screen.findByRole('button', { name: 'New supplier' }, LOAD));
+    const card = within(await screen.findByRole('region', { name: 'New supplier' }, LOAD));
+    await user.type(card.getByRole('textbox', { name: 'Name on invoices' }), 'Rossi');
+    await user.click(card.getByRole('button', { name: 'Save' }));
+    await user.click(within(await screen.findByRole('alertdialog', { name: 'Save supplier?' })).getByRole('button', { name: 'Save' }));
+    await waitFor(() => { expect(router.state.location.pathname).toBe('/suppliers/suppliers'); });
+    expect(fake.writes).toHaveLength(1);
+    await waitFor(() => { expect(screen.getByRole('button', { name: 'New supplier' })).toHaveFocus(); });
+  });
+
+  it('opens the card from «Edit», and brings the focus back to «Edit» from Back', async () => {
+    const { router, user } = renderSuppliers('/suppliers/suppliers', { source: source() });
+    await user.click(await screen.findByRole('button', { name: /^Aaa/ }, LOAD));
+    await user.click(await screen.findByRole('button', { name: 'Edit' }, LOAD));
+    const card = within(await screen.findByRole('region', { name: 'Edit supplier' }, LOAD));
+    await user.click(card.getByRole('button', { name: 'Back' }));
+    await waitFor(() => { expect(router.state.location.pathname).toBe('/suppliers/supplier/a'); });
+    await waitFor(() => { expect(screen.getByRole('button', { name: 'Edit' })).toHaveFocus(); });
+  });
+
+  it('deletes once, says it once and steps back once', async () => {
+    const fake = source();
+    const { router, user } = renderSuppliers('/suppliers/suppliers', { source: fake });
+    await user.click(await screen.findByRole('button', { name: /^Bbb/ }, LOAD));
+    await user.click(await screen.findByRole('button', { name: 'Delete “Bbb”' }, LOAD));
+    await user.click(within(await screen.findByRole('alertdialog', { name: 'Delete this supplier?' })).getByRole('button', { name: 'Delete' }));
+    await waitFor(() => { expect(router.state.location.pathname).toBe('/suppliers/suppliers'); });
+    expect(fake.writes).toEqual([{ op: 'delete', id: 'b' }]);
+    expect(screen.getAllByText('Supplier deleted.')).toHaveLength(1);
+    expect(screen.queryByText('This supplier no longer exists.')).not.toBeInTheDocument();
+  });
+
+  it('calls a panel switch once', async () => {
+    const fake = source();
+    const { user } = renderSuppliers('/suppliers/settings', { source: fake });
+    const region = within(await screen.findByRole('region', { name: 'Settings' }, LOAD));
+    await user.click(region.getByRole('switch', { name: 'Track nutrition' }));
+    await waitFor(() => { expect(fake.panelCalls).toEqual([{ key: 'showNutrition', on: false }]); });
+  });
 });

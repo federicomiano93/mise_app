@@ -1,0 +1,131 @@
+/* Settings of «Ingredients & suppliers»: a card holding the form bar and two cards of rows, in the look of the recipe
+   catalogue's Settings. Full width at every size (the section draws no list beside it).
+
+   ⚠️ NOTHING ON THE OUTER CARD MAY CLIP (no `overflow`): the form bar sticks to the top of the shell's scrolling area, and a
+   clipping ancestor would turn it into an ordinary row. */
+
+.screen {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s4);
+  padding: var(--s4);
+}
+
+@media (min-width: 1000px) {
+  .body {
+    padding: var(--s6);
+  }
+}
+
+.card {
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface);
+}
+
+.head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+  padding: var(--s3) var(--s4);
+}
+
+.headTitle {
+  font-size: var(--fs-md);
+  font-weight: 650;
+}
+
+.headTitle:focus:not(:focus-visible) {
+  outline: none;
+}
+
+.note,
+.sub {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  overflow-wrap: break-word;
+}
+
+/* A row: the words on the left, what acts on the right, as tall as a thumb's target. */
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  min-height: var(--hit);
+  padding: var(--s3) var(--s4);
+  border-top: 1px solid var(--line);
+}
+
+.rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.text {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--s1);
+  min-width: 0;
+}
+
+.title {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+/* «Saved ✓»: a quiet tag, there (empty) before it speaks so a screen reader announces it. */
+.saved {
+  color: var(--ok-ink);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+
+.quiet:empty {
+  display: none;
+}
+
+/* The category's bin: small and low-key, and still a 48px target. */
+.trash {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: var(--hit);
+  height: var(--hit);
+  border: 0;
+  border-radius: var(--r-md);
+  background: none;
+  color: var(--danger-ink);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.trash:disabled {
+  color: var(--ink-3);
+  cursor: default;
+}
+
+.trash:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.trash svg {
+  width: 18px;
+  height: 18px;
+}
+
+@media (hover: hover) {
+  .trash:hover:not(:disabled) {
+    background: var(--danger-tint);
+  }
+}

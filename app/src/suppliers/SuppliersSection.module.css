@@ -49,3 +49,23 @@
     overflow-y: auto;
   }
 }
+
+/* ⚠️ SETTINGS ARE FULL WIDTH AT EVERY WIDTH: a screen of switches and a list of categories, nothing beside it. The list is
+   not drawn (it stays mounted, so the place in it, and what is typed in its search box, are still there when Back returns
+   to it), and the right-hand side is an ordinary block of the page instead of the split's sticky scroll area. Two classes,
+   so the order of the rules above does not decide it. */
+.layout[data-view="wide"] .list {
+  display: none;
+}
+
+@media (min-width: 1000px) {
+  .layout[data-view="wide"] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .layout[data-view="wide"] .detail {
+    position: static;
+    max-height: none;
+    overflow-y: visible;
+  }
+}
