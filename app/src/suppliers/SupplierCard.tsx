@@ -38,7 +38,16 @@ type Props = {
   // The supplier as the list held it when the card opened (null for a new one). Only read once, by the first render.
   supplier: StoredDoc | null;
   titleRef: Ref<HTMLHeadingElement>;
+  // Set when the card is drawn in a dialog ABOVE another screen (the ingredient card's «+ New supplier…»): it then changes no
+  // address and has no router blocker; Back asks as usual and then calls onCancel, and a save hands back the new supplier
+  // (its id and the label the app will show) instead of leaving.
+  host?: SupplierCardHost;
 };
+
+export interface SupplierCardHost {
+  onSaved(made: { id: string; name: string }): void;
+  onCancel(): void;
+}
 
 // A supplier's card: a new one, or an existing one's. A port of js/supplier-record-form.js, decision for decision, except
 // what docs/parity/suppliers.md («Step 3e-1 slice B as built») lists.
@@ -50,7 +59,7 @@ type Props = {
 // ⚠️ THE COPY IS MADE ONCE, WHEN THIS FORM MOUNTS — and SupplierCardScreen mounts it only once the supplier is in the list
 // (the server's word, or after COPY_WAIT_MS), keyed on the id. A supplier changed on another phone afterwards NEVER
 // replaces the copy.
-export function SupplierCard({ id, supplier, titleRef }: Props) {
+export function SupplierCard({ id, supplier, titleRef, host }: Props) {
   const { t } = useT();
   const store = useSuppliersStore();
   const say = useStatusMessage();
@@ -103,7 +112,8 @@ export function SupplierCard({ id, supplier, titleRef }: Props) {
     if (id === null) handBack.expect(NEW_OPENER);
     else handBack.wantEdit(id);
   }, [handBack, id]);
-  const leave = useLeave(id === null ? SUPPLIERS_TAB_PATH : supplierPath(id), onLeaving, id === null ? cameFromList : cameFromSupplier);
+  const leaveByAddress = useLeave(id === null ? SUPPLIERS_TAB_PATH : supplierPath(id), onLeaving, id === null ? cameFromList : cameFromSupplier);
+  const leave = host ? host.onCancel : leaveByAddress;
 
   // ── Leaving with unsaved changes ─────────────────────────────────────────────────────────────────────────────
   const discardQuestion = () => confirm({
@@ -117,8 +127,8 @@ export function SupplierCard({ id, supplier, titleRef }: Props) {
   // ⚠️ EVERY WAY OUT GOES THROUGH THE ROUTER'S BLOCKER, not through the Back button: the browser's Back, a supplier picked in
   // the split's list, the rail and the tab bar all navigate. Staying on the same address is never blocked.
   const shouldBlock = useCallback<BlockerFunction>(
-    ({ currentLocation, nextLocation }) => !leavingClean.current && dirtyRef.current && currentLocation.pathname !== nextLocation.pathname,
-    [],
+    ({ currentLocation, nextLocation }) => host === undefined && !leavingClean.current && dirtyRef.current && currentLocation.pathname !== nextLocation.pathname,
+    [host],
   );
   const blocker = useBlocker(shouldBlock);
   const latestBlocker = useRef(blocker);
@@ -166,6 +176,8 @@ export function SupplierCard({ id, supplier, titleRef }: Props) {
   // ── Save ─────────────────────────────────────────────────────────────────────────────────────────────────────
   const [showError, setShowError] = useState(false);
   const nameBox = useRef<HTMLInputElement>(null);
+  // In a dialog the cursor starts in the name, the one thing a new supplier needs.
+  useEffect(() => { if (host) nameBox.current?.focus(); }, []);
   const nameInvalid = showError && !hasName(working);
 
   async function save() {
@@ -195,10 +207,11 @@ export function SupplierCard({ id, supplier, titleRef }: Props) {
     // Saved: nothing is unsaved any more, so leaving asks nothing. Local-first: the list changes at once and the database
     // follows; a refused write is taken back and said by the store.
     leavingClean.current = true;
-    store.saveSupplier(id, payload);
+    const savedId = store.saveSupplier(id, payload);
     announceAction('supplier-saved');
     say(t('sup.supplierSaved'));
-    leave();
+    if (host) host.onSaved({ id: savedId, name: supplierLabel(payload) });
+    else leave();
   }
 
   const tick = (field: 'deliveryDays' | 'orderDays', day: Weekday, on: boolean) => {

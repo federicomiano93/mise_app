@@ -1,0 +1,249 @@
+/* The ingredient card: a card holding the form bar and the form, in the look of the supplier card. On the split it is the
+   right-hand pane; below 1000px it replaces the list.
+
+   ⚠️ NOTHING ON THE SCREEN MAY CLIP (no `overflow`): the form bar sticks to the top of the scrolling area, and a clipping
+   ancestor would turn it into an ordinary row. */
+
+.screen {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s4);
+  padding: var(--s4) var(--s3);
+}
+
+@media (min-width: 1000px) {
+  .body {
+    padding: var(--s6);
+  }
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.label {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  font-weight: 650;
+}
+
+/* 16px type on purpose: under 16px iOS zooms the page in when a field is focused. */
+.box {
+  width: 100%;
+  min-width: 0;
+  min-height: var(--hit);
+  padding: 0 var(--s3);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink);
+  font: var(--fs-md)/1.2 var(--font);
+}
+
+.box::placeholder {
+  color: var(--ink-3);
+}
+
+.box:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.box[aria-invalid="true"] {
+  border-color: var(--danger);
+  background: var(--danger-tint);
+}
+
+.hint {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  overflow-wrap: break-word;
+}
+
+/* The name on the invoice is shown, never edited. */
+.readonly {
+  padding: var(--s2) var(--s3);
+  border-radius: var(--r-md);
+  background: var(--sunken);
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+/* A sentence under a box is a live region that is on the page, empty, before it speaks; empty it takes no room (never
+   display: none, which can take it out of the accessibility tree). */
+.quiet:empty,
+.error:empty {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  clip-path: inset(50%);
+}
+
+.error {
+  color: var(--danger-ink);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+
+/* ⚠️ TWO SHORT FIELDS TO A ROW (the current app's pairs), name and supplier whole. Below 360px they stack: half a cell
+   truncates «— none —» there. */
+.pair {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--s3);
+  align-items: start;
+}
+
+@media (max-width: 359.98px) {
+  .pair {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* The number and its unit on one line, the unit as narrow as its longest word. */
+.weightRow {
+  display: flex;
+  gap: var(--s2);
+}
+
+.amount {
+  flex: 1 1 0;
+}
+
+.unit {
+  flex: none;
+  width: auto;
+  min-width: 4.5em;
+  padding-right: var(--s1);
+}
+
+/* A weight the boxes cannot show, kept until a number is typed or it is removed. */
+.legacy {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2);
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  overflow-wrap: anywhere;
+}
+
+/* Single | Case: two toggle buttons of a segmented control, each a 48px target. */
+.segments {
+  display: flex;
+  gap: var(--s1);
+}
+
+.segment {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: var(--hit);
+  padding: 0 var(--s2);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.segment[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: var(--accent-tint);
+  color: var(--accent-ink);
+}
+
+.segment:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 1px;
+}
+
+@media (hover: hover) {
+  .segment[aria-pressed="false"]:hover {
+    background: var(--sunken);
+  }
+}
+
+/* «Contains [4] × [bag ▾]»: the count is narrow, the word takes the rest. */
+.caseRow {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s2);
+}
+
+.count {
+  flex: none;
+  width: 6em;
+}
+
+.times {
+  display: flex;
+  align-items: center;
+  min-height: var(--hit);
+  color: var(--ink-2);
+}
+
+.inner {
+  display: flex;
+  flex: 1 1 0;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--s2);
+}
+
+/* Delete, the very end of the card: a small icon on the right, as low-key as it can be and still a 48px target. */
+.deleteIcon {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  align-self: flex-end;
+  width: var(--hit);
+  height: var(--hit);
+  border: 0;
+  border-radius: var(--r-md);
+  background: none;
+  color: var(--danger-ink);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.deleteIcon:disabled {
+  color: var(--ink-3);
+  cursor: default;
+}
+
+.deleteIcon:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.deleteIcon svg {
+  width: 18px;
+  height: 18px;
+}
+
+@media (hover: hover) {
+  .deleteIcon:hover:not(:disabled) {
+    background: var(--danger-tint);
+  }
+}
