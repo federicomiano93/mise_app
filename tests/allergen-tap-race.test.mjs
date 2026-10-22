@@ -22,7 +22,7 @@ import { registerHooks } from 'node:module';
 
 import { installDom, walk, type, click, shown } from './helpers/form-dom.mjs';
 import { keepsAppTick, RECENT_APP_TICK_MS, tickKey } from '../js/allergen-match.js';
-import { nutritionRefusal, allergenState } from '../js/allergen-model.js';
+import { allergenState } from '../js/allergen-model.js';
 import { usesLegacyCard } from '../js/pack-format.js';
 
 const STUB = new URL('./helpers/session-stub.mjs', import.meta.url).href;
@@ -50,7 +50,7 @@ const win = {
 };
 globalThis.window = win;
 
-const { buildIngredientForm } = await import('../js/ingredient-record-form.js');
+const { buildIngredientForm, nutritionRefusal } = await import('../js/ingredient-record-form.js');
 const { setCurrency } = await import('../js/currency.js');
 const { allergenName } = await import('../js/market.js');
 

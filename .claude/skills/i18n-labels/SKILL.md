@@ -80,7 +80,7 @@ goes through `supplierLabel()`.
   zero (`unreadablePrice`, never saved as «no price»). **The nutrition boxes** of the ingredient
   card follow the same rule (since 23 Oct 2026 — a `type="number"` box read «1.550 kJ» as 1.55):
   text boxes, `localNumber`/`typedDecimal`, and Save refuses on the box a kJ/kcal figure with a
-  thousands separator or text that is not a number (`nutritionRefusal`, `js/allergen-model.js`). The weight box is NOT localised: the
+  thousands separator or text that is not a number (`nutritionRefusal`, `js/ingredient-record-form.js`). The weight box is NOT localised: the
   weight is stored as TEXT, so showing «2,5» would rewrite every stored weight on save.
 - The allergen dictionary: a phrase that overrides a stem AND names an allergen needs its
   own tier (`burro di arachidi` must still say peanuts; `farina` alone is not wheat). The specific cereal/nut is named
