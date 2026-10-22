@@ -1,0 +1,283 @@
+/* The ingredient card's three folding sections: the pack's own ingredient list, the allergens, the nutrition. The look of the
+   recipe screen's allergen card (copied, not imported: a feature never imports another's folder). The state is a WORD in the head,
+   never a colour alone; the answer (the status line) stays outside the fold and only the job folds away.
+
+   ⚠️ NOTHING HERE MAY CLIP (no `overflow`): the card's form bar sticks to the top of the scrolling area. */
+
+.sections {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s4);
+  min-width: 0;
+}
+
+.fold {
+  min-width: 0;
+  padding: var(--s4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+}
+
+/* The head is an h3 holding the one button that folds the job away: the whole head is the target. */
+.heading {
+  margin: 0;
+}
+
+.toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  width: 100%;
+  min-height: var(--hit);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.toggle:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.title {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.state {
+  padding: var(--s1) var(--s3);
+  border-radius: var(--r-pill);
+  font-size: var(--fs-sm);
+  font-weight: 650;
+}
+
+.neutral {
+  background: var(--sunken);
+  color: var(--ink-2);
+}
+
+.warn {
+  background: var(--warn-tint);
+  color: var(--warn-ink);
+}
+
+.ok {
+  background: var(--ok-tint);
+  color: var(--ok-ink);
+}
+
+.chevron {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  margin-left: auto;
+  color: var(--ink-3);
+  transition: transform 0.15s var(--ease);
+}
+
+.toggle[aria-expanded="true"] .chevron {
+  transform: rotate(180deg);
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+  margin-top: var(--s3);
+}
+
+/* The status line and the note about what the app ticked: always on the screen, never behind a tap. */
+.status {
+  margin: var(--s2) 0 0;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.statusUnknown {
+  color: var(--warn-ink);
+}
+
+.statusKnown {
+  color: var(--ok-ink);
+}
+
+.note {
+  margin: var(--s2) 0 0;
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  overflow-wrap: anywhere;
+}
+
+/* A sentence that is a live region is on the page, empty, before it speaks; empty it takes no room (never display: none, which
+   can take it out of the accessibility tree). The card's body is its positioned ancestor. */
+.quiet:empty,
+.error:empty {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  clip-path: inset(50%);
+}
+
+.error {
+  margin: 0;
+  color: var(--danger-ink);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+
+.hint {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  overflow-wrap: break-word;
+}
+
+/* 16px type on purpose: under 16px iOS zooms the page in when a field is focused. */
+.box {
+  width: 100%;
+  min-width: 0;
+  min-height: var(--hit);
+  padding: 0 var(--s3);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink);
+  font: var(--fs-md)/1.2 var(--font);
+}
+
+.box::placeholder {
+  color: var(--ink-3);
+}
+
+.box:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.box[aria-invalid="true"] {
+  border-color: var(--danger);
+  background: var(--danger-tint);
+}
+
+.packText {
+  padding: var(--s3);
+  resize: vertical;
+}
+
+/* What the app made of THIS text: a finding, so it is on the card and not behind a «?». */
+.findings {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+}
+
+.finding {
+  margin: 0;
+  color: var(--ink);
+  font-size: var(--fs-sm);
+  overflow-wrap: anywhere;
+}
+
+.group {
+  margin: var(--s2) 0 0;
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  font-weight: 650;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 var(--s3);
+  padding: 0 0 0 var(--s1);
+  border-bottom: 1px solid var(--line);
+}
+
+.name {
+  flex: 1 1 8em;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.tick {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--s2);
+  min-height: var(--hit);
+  padding: 0 var(--s2);
+  cursor: pointer;
+}
+
+.tick input {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.checked {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  min-height: var(--hit);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.checked input {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.per100 {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  font-weight: 650;
+}
+
+/* Eight boxes, two to a row; below 360px they stack, as half a cell truncates the label there. */
+.nutGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--s3);
+  align-items: start;
+}
+
+@media (max-width: 359.98px) {
+  .nutGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.nutField {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+  min-width: 0;
+}
+
+.nutLabel {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
