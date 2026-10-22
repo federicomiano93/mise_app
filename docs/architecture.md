@@ -347,6 +347,17 @@ queue and the other roads arrive in 3d-4. The usage record names the screen `rec
   catalogue opens it later). `IngredientCard.tsx` is driven only by props and imports NOTHING from `suppliers/` (the supplier card in
   its dialog comes in as `renderNewSupplier`); `ingredientCardModel.ts` is its pure half (the working copy, the dirty rule, the
   refusal order, the exact payload and `unitChangedFrom`), pinned by its spec.
+  Step 3e-4 adds the card's three folding sections — the pack's own ingredient list, the allergens, the nutrition (parity C98–C116) —
+  as `AllergenSections.tsx`, drawn only for an ingredient, never for packaging. It is a LABEL FILE (on `LABEL_FILES` in
+  `label-separation.spec.ts`): it reads the venue from the session itself, `const lang = outputLanguage(location)` once, so the allergen
+  names, the group headings and the nutrient names follow the venue's COUNTRY while «has», «traces» and «I have checked…» follow `t()`.
+  The two panels are read LIVE from the session (`allergensOn` / `nutritionOn`); a hidden panel is not drawn and its part of the working
+  copy never changes, so nothing of it is written. All the rules are in `allergenCardModel.ts` (read its header): the working copy is
+  made once at open, and a save writes the declaration (`allergens` + `mayContain` + `allergensCheckedAt`, always together), the pack
+  text and the nutrition ONLY when that group differs from the item as opened — never all five keys on every save as the current app
+  does — and a new ingredient writes all five. The pack text proposes after a 450 ms pause or at once on leaving the box, never on the
+  first draw. The folds open closed on every open. Mise 2 has no «?» sheet yet, so ONE safety sentence («This only ticks boxes…») is
+  drawn inline under the pack box; the other help text waits for the shared «?».
 - `settings/` — the Settings page (today: the Account card).
 - `styles/` — `tokens.css` (every colour, size, radius, shadow) and `base.css`.
 - `testing/` — `renderApp`, the fake session store and other spec helpers.
