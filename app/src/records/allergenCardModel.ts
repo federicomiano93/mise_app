@@ -25,8 +25,8 @@ import type { CardKind, ItemLike } from './ingredientCardModel';
 //   - `nutrition`.
 // Otherwise a card left open on a tablet and saved for a rename would write the declaration it opened on over a newer one made
 // on another phone meanwhile — an old «contains none», stamped, over a new «contains milk». A NEW ingredient writes all five
-// (parity C99), and packaging none (C80). A panel the venue hides is never drawn, so it never changes, so it is never written:
-// hiding stays a display switch, never a data switch (C12, C115).
+// (parity C99), and packaging none (C80). A panel the venue hides writes nothing for an existing item, even typing made before
+// it was hidden (`allergenPayload`): hiding stays a display switch, never a data switch (C12, C115).
 
 export type Column = 'contains' | 'may';
 
@@ -43,6 +43,10 @@ export interface AllergenWorking {
   // The tickKey()s the APP put there and may take back. ⚠️ STARTS EMPTY even on a declared item: everything stored belongs to
   // whoever stored it, so opening a saved product and typing can never lose a declaration (C108).
   readonly appOwned: readonly string[];
+  // WHEN (a Date.now() value) the app added each of its own ticks, by tickKey: what `tickByHand` needs to tell «a person undoing
+  // the app» from «a tap that landed as the app ticked the same box». Cleared for a key the app removes. Never compared by
+  // `allergenDirty`, never saved.
+  readonly appTickedAt: Readonly<Record<string, number>>;
   // The tickKey()s a PERSON moved, either way: never proposed or withdrawn again.
   readonly humanTouched: readonly string[];
   // The app moved a box on a verified record: the old date no longer belongs to this list (C109).
@@ -71,6 +75,7 @@ export function allergenWorkingFrom(item: ItemLike | null, money: Money): Allerg
     packText: text(item?.packIngredients),
     nutrition,
     appOwned: [],
+    appTickedAt: {},
     humanTouched: [],
     stampVoided: false,
     openedStamp: checkedAt(item),
@@ -79,16 +84,31 @@ export function allergenWorkingFrom(item: ItemLike | null, money: Money): Allerg
 
 // A person ticked or unticked a box: it becomes theirs, and the app never touches it again (C108). Dropping it from `appOwned`
 // at the same time stops the app later «taking back» a box that is no longer its to take.
-export function tickByHand(working: AllergenWorking, code: AllergenCode, column: Column, on: boolean): AllergenWorking {
+//
+// ⚠️⚠️ DIFFERENCE FROM THE CURRENT APP, ON PURPOSE (the safe direction only): a person's change that would UNTICK a box the app
+// ticked LESS THAN `RECENT_APP_TICK_MS` ago leaves the box TICKED — and it becomes the person's, so the app never takes it back
+// and a later tap unticks it. Why: someone types «latte» and reaches for Milk «has»; the pause ends just before the finger lands,
+// the app ticks Milk, and the tap, which meant «tick it», flips it OFF — and an unticked box a person touched is theirs for good,
+// so Milk would be missing. Any other change (a tick on; an untick of a box the app ticked longer ago, or never ticked) is
+// exactly what the person asked for.
+export const RECENT_APP_TICK_MS = 800;
+
+export function tickByHand(
+  working: AllergenWorking, code: AllergenCode, column: Column, on: boolean, now: number,
+): AllergenWorking {
   const key = tickKey(code, column);
+  const tickedAt = working.appTickedAt[key];
+  const justTickedByApp = !on && working.appOwned.includes(key) && tickedAt !== undefined && now - tickedAt < RECENT_APP_TICK_MS;
   const list = new Set<AllergenCode>(working[column]);
-  if (on) list.add(code);
+  if (on || justTickedByApp) list.add(code);
   else list.delete(code);
+  const { [key]: _gone, ...stillApp } = working.appTickedAt;
   return {
     ...working,
     [column]: normalizeAllergens([...list]),
     humanTouched: working.humanTouched.includes(key) ? working.humanTouched : [...working.humanTouched, key],
     appOwned: working.appOwned.filter(owned => owned !== key),
+    appTickedAt: stillApp,
   };
 }
 
@@ -105,7 +125,7 @@ export function withNutrient(working: AllergenWorking, key: NutrientKey, typed: 
 // What the pack text proposes, moved onto the boxes by reconcileTicks (the rules live there, C108). An empty text withdraws the
 // app's own ticks and nothing else. ⚠️⚠️ IF THE APP MOVED ANY BOX (either way) ON A VERIFIED RECORD, «I have checked» is
 // un-ticked and the old date is dropped (C109): a box nobody looked at must never be saved under somebody's verification.
-export function proposeFromPack(working: AllergenWorking): AllergenWorking {
+export function proposeFromPack(working: AllergenWorking, now: number): AllergenWorking {
   const read = readPackIngredients(working.packText);
   const proposal = read.hasText ? read : { allergens: [], mayContain: [] };
   const next = reconcileTicks({
@@ -118,11 +138,16 @@ export function proposeFromPack(working: AllergenWorking): AllergenWorking {
   // A record that opened verified loses its date when the app moves a box, whether or not the person has un-ticked «I have checked»
   // meanwhile: ticking it again must stamp NOW.
   const voids = moved && (working.checked || working.openedStamp !== '');
+  // When the app ADDED each tick: kept for a tick it already owned, stamped `now` for a new one, gone for one it no longer owns.
+  const before = new Set(working.appOwned);
+  const appTickedAt: Record<string, number> = {};
+  for (const key of next.appOwned) appTickedAt[key] = before.has(key) ? (working.appTickedAt[key] ?? now) : now;
   return {
     ...working,
     contains: normalizeAllergens(next.contains),
     may: normalizeAllergens(next.may),
     appOwned: [...next.appOwned],
+    appTickedAt,
     checked: voids ? false : working.checked,
     stampVoided: working.stampVoided || voids,
   };
@@ -229,10 +254,10 @@ const same = (a: unknown, b: unknown): boolean => JSON.stringify(a) === JSON.str
 // for an existing ingredient only the groups whose values differ from what is stored. Both sides go through
 // buildAllergenFields, so a stored list in another order or with an unknown code is not «a change».
 //
-// ⚠️ A HIDDEN PANEL IS NEVER WRITTEN FOR AN EXISTING ITEM, even if its copy differs from the stored one: another phone may have
-// hidden the panel while this card was open, and what the card holds of a panel nobody can see is not something a person chose
-// (a refused «abc» in the nutrition boxes would otherwise be saved as null). `shown` is read by the card at the moment of the
-// save. A NEW ingredient still writes all five (C99).
+// ⚠️ A PANEL THE VENUE HIDES WRITES NOTHING FOR AN EXISTING ITEM, even typing made before it was hidden (another phone may have
+// hidden it while this card was open; the leave-without-saving question still protects that typing). `shown` is REQUIRED — a
+// caller that forgot it would write a panel nobody can see — and the card reads it at the moment of the save. A NEW ingredient
+// still writes all five (C99).
 export interface PanelsShown {
   readonly allergens: boolean;
   readonly nutrition: boolean;
@@ -240,7 +265,7 @@ export interface PanelsShown {
 
 export function allergenPayload(
   working: AllergenWorking, item: ItemLike | null, kind: CardKind, now: string,
-  shown: PanelsShown = { allergens: true, nutrition: true },
+  shown: PanelsShown,
 ): Partial<AllergenFields> {
   if (kind === 'packaging') return {};
   const draft = allergenDraft(working, item, now);

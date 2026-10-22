@@ -3,7 +3,7 @@ import { moneyOf } from '@mise/shared/currency';
 import { moneyLayoutOf } from '@mise/shared/market';
 import {
   allergenDirty, allergenPayload, allergenStatus, allergenWorkingFrom, nutritionMissing, nutritionRefusal, proposeFromPack,
-  proposedNote, tickByHand, withChecked, withNutrient, withPackText,
+  proposedNote, RECENT_APP_TICK_MS, tickByHand, withChecked, withNutrient, withPackText,
 } from './allergenCardModel';
 import type { AllergenWorking } from './allergenCardModel';
 
@@ -15,6 +15,7 @@ const MONEY = moneyOf('€', null);
 const ITALY = moneyOf('€', moneyLayoutOf({ country: 'IT' }));
 const NOW = '2026-10-22T09:00:00.000Z';
 const OLD = '2026-08-20T10:00:00.000Z';
+const BOTH = { allergens: true, nutrition: true };
 
 const EMPTY_NUTRITION = { kj: null, kcal: null, fat: null, saturates: null, carbs: null, sugars: null, protein: null, salt: null };
 
@@ -25,7 +26,7 @@ const declared = (more: Record<string, unknown> = {}) => ({
 const unknownItem = (more: Record<string, unknown> = {}) => ({ id: 'cream', name: 'Cream', ...more });
 
 // What the screen does after a pause in typing.
-const type = (w: AllergenWorking, text: string) => proposeFromPack(withPackText(w, text));
+const type = (w: AllergenWorking, text: string) => proposeFromPack(withPackText(w, text), 0);
 
 describe('opening the card', () => {
   test('a declared item opens with «I have checked» ticked, its boxes, its pack text and its nutrition', () => {
@@ -66,18 +67,18 @@ describe('opening the card', () => {
 describe('⚠️⚠️ only a person stamps a verification (C102)', () => {
   test('opening an undeclared item and saving it writes NO declaration at all', () => {
     const item = unknownItem({ allergens: ['milk'] });
-    expect(allergenPayload(allergenWorkingFrom(item, MONEY), item, 'ingredient', NOW)).toStrictEqual({});
+    expect(allergenPayload(allergenWorkingFrom(item, MONEY), item, 'ingredient', NOW, BOTH)).toStrictEqual({});
   });
 
   test('opening a declared item and saving it writes nothing: the old date never moves', () => {
     const item = declared();
-    expect(allergenPayload(allergenWorkingFrom(item, MONEY), item, 'ingredient', NOW)).toStrictEqual({});
+    expect(allergenPayload(allergenWorkingFrom(item, MONEY), item, 'ingredient', NOW, BOTH)).toStrictEqual({});
   });
 
   test('ticking «I have checked» stamps NOW, with the boxes as shown', () => {
     const item = unknownItem({ allergens: ['milk'] });
     const w = withChecked(allergenWorkingFrom(item, MONEY), true);
-    expect(allergenPayload(w, item, 'ingredient', NOW)).toStrictEqual({ allergens: ['milk'], mayContain: [], allergensCheckedAt: NOW });
+    expect(allergenPayload(w, item, 'ingredient', NOW, BOTH)).toStrictEqual({ allergens: ['milk'], mayContain: [], allergensCheckedAt: NOW });
     expect(allergenStatus(w, item, NOW)).toStrictEqual({ state: 'listed', date: '2026-10-22', codes: ['milk'] });
   });
 
@@ -85,13 +86,13 @@ describe('⚠️⚠️ only a person stamps a verification (C102)', () => {
     const item = unknownItem();
     const w = withChecked(allergenWorkingFrom(item, MONEY), true);
     expect(allergenStatus(w, item, NOW).state).toBe('none');
-    expect(allergenPayload(w, item, 'ingredient', NOW).allergensCheckedAt).toBe(NOW);
+    expect(allergenPayload(w, item, 'ingredient', NOW, BOTH).allergensCheckedAt).toBe(NOW);
   });
 
   test('a person changing a box on a verified item keeps the old date (they are the one checking)', () => {
     const item = declared();
-    const w = tickByHand(allergenWorkingFrom(item, MONEY), 'milk', 'contains', true);
-    expect(allergenPayload(w, item, 'ingredient', NOW)).toStrictEqual({
+    const w = tickByHand(allergenWorkingFrom(item, MONEY), 'milk', 'contains', true, 0);
+    expect(allergenPayload(w, item, 'ingredient', NOW, BOTH)).toStrictEqual({
       allergens: ['gluten-wheat', 'milk'], mayContain: ['soybeans'], allergensCheckedAt: OLD,
     });
   });
@@ -99,7 +100,7 @@ describe('⚠️⚠️ only a person stamps a verification (C102)', () => {
   test('un-ticking «I have checked» writes an empty stamp: the item goes back to «not checked yet»', () => {
     const item = declared();
     const w = withChecked(allergenWorkingFrom(item, MONEY), false);
-    expect(allergenPayload(w, item, 'ingredient', NOW)).toStrictEqual({
+    expect(allergenPayload(w, item, 'ingredient', NOW, BOTH)).toStrictEqual({
       allergens: ['gluten-wheat'], mayContain: ['soybeans'], allergensCheckedAt: '',
     });
     expect(allergenStatus(w, item, NOW).state).toBe('unknown');
@@ -112,7 +113,7 @@ describe('⚠️⚠️ the pack list proposes, never declares (C105–C109)', ()
     const w = type(allergenWorkingFrom(item, MONEY), 'latte');
     expect(w.contains).toContain('milk');
     expect(w.checked).toBe(false);
-    expect(allergenPayload(w, item, 'ingredient', NOW).allergensCheckedAt).toBe('');
+    expect(allergenPayload(w, item, 'ingredient', NOW, BOTH).allergensCheckedAt).toBe('');
     expect(proposedNote(w)).toStrictEqual({ kind: 'proposed', n: 1 });
   });
 
@@ -124,9 +125,9 @@ describe('⚠️⚠️ the pack list proposes, never declares (C105–C109)', ()
     expect(proposed.stampVoided).toBe(true);
     expect(proposedNote(proposed)).toStrictEqual({ kind: 'proposedAfterCheck', n: 1 });
     // Saved like that, nothing is declared any more.
-    expect(allergenPayload(proposed, item, 'ingredient', NOW).allergensCheckedAt).toBe('');
+    expect(allergenPayload(proposed, item, 'ingredient', NOW, BOTH).allergensCheckedAt).toBe('');
     // Confirmed again: today's date, never the date of a list that no longer exists.
-    expect(allergenPayload(withChecked(proposed, true), item, 'ingredient', NOW).allergensCheckedAt).toBe(NOW);
+    expect(allergenPayload(withChecked(proposed, true), item, 'ingredient', NOW, BOTH).allergensCheckedAt).toBe(NOW);
   });
 
   test('⚠️ un-tick «I have checked», let the app move a box, tick it again: the save stamps NOW, not the old date', () => {
@@ -136,7 +137,7 @@ describe('⚠️⚠️ the pack list proposes, never declares (C105–C109)', ()
     const unticked = withChecked(opened, false);
     const moved = type(unticked, 'Farina di grano tenero, latte');
     expect(moved.stampVoided).toBe(true);
-    expect(allergenPayload(withChecked(moved, true), item, 'ingredient', NOW).allergensCheckedAt).toBe(NOW);
+    expect(allergenPayload(withChecked(moved, true), item, 'ingredient', NOW, BOTH).allergensCheckedAt).toBe(NOW);
     // Without the app moving anything, un-ticking and re-ticking keeps the date (the person alone is checking).
     expect(allergenStatus(withChecked(unticked, true), item, NOW).date).toBe(OLD.slice(0, 10));
     // A new or never-stamped item has no date to void.
@@ -173,9 +174,54 @@ describe('⚠️⚠️ the pack list proposes, never declares (C105–C109)', ()
   test('a box a person unticked is never ticked again by the text', () => {
     const item = unknownItem();
     const proposed = type(allergenWorkingFrom(item, MONEY), 'latte');
-    const corrected = tickByHand(proposed, 'milk', 'contains', false);
+    const corrected = tickByHand(proposed, 'milk', 'contains', false, RECENT_APP_TICK_MS);
     const retyped = type(corrected, 'latte intero');
     expect(retyped.contains).not.toContain('milk');
+  });
+
+  describe('a tap that lands just as the app ticks the same box (R1, the safe direction only)', () => {
+    const T = 1000;
+    const proposedAt = (text: string) => proposeFromPack(withPackText(allergenWorkingFrom(unknownItem(), MONEY), text), T);
+
+    test('an untick 799 ms after the app ticked keeps the box ticked and makes it the person\'s', () => {
+      const w = tickByHand(proposedAt('latte'), 'milk', 'contains', false, T + RECENT_APP_TICK_MS - 1);
+      expect(w.contains).toContain('milk');
+      expect(w.appOwned).not.toContain('contains:milk');
+      expect(w.humanTouched).toHaveLength(1);
+      expect(proposedNote(w).kind).toBe('none');
+      // Theirs now: a later tap unticks it at once, and the text never ticks it back.
+      const later = tickByHand(w, 'milk', 'contains', false, T + 5000);
+      expect(later.contains).not.toContain('milk');
+      expect(proposeFromPack(withPackText(later, 'latte e latte'), T + 6000).contains).not.toContain('milk');
+    });
+
+    test('an untick 800 ms after the app ticked unticks it', () => {
+      const w = tickByHand(proposedAt('latte'), 'milk', 'contains', false, T + RECENT_APP_TICK_MS);
+      expect(w.contains).not.toContain('milk');
+      expect(w.humanTouched).toHaveLength(1);
+    });
+
+    test('a tick ON is unaffected, whenever it lands', () => {
+      const w = tickByHand(proposedAt('latte'), 'eggs', 'contains', true, T + 1);
+      expect(w.contains).toStrictEqual(['eggs', 'milk']);
+    });
+
+    test('a box the person ticked themselves unticks at once', () => {
+      const ticked = tickByHand(allergenWorkingFrom(unknownItem(), MONEY), 'milk', 'contains', true, T);
+      expect(tickByHand(ticked, 'milk', 'contains', false, T + 1).contains).not.toContain('milk');
+    });
+
+    test('the traces column follows the same rule', () => {
+      const w = proposedAt('può contenere tracce di latte');
+      expect(w.may).toContain('milk');
+      expect(tickByHand(w, 'milk', 'may', false, T + 799).may).toContain('milk');
+      expect(tickByHand(w, 'milk', 'may', false, T + 800).may).not.toContain('milk');
+    });
+
+    test('the time the app ticked is not a change: allergenDirty ignores it', () => {
+      const base = allergenWorkingFrom(unknownItem(), MONEY);
+      expect(allergenDirty({ ...base, appTickedAt: { 'contains:milk': 5 } }, base)).toBe(false);
+    });
   });
 
   test('the text\'s change alone never touches the boxes: only proposeFromPack does (C107)', () => {
@@ -186,8 +232,8 @@ describe('⚠️⚠️ the pack list proposes, never declares (C105–C109)', ()
 
   test('a code in «contains» is never also saved as a trace', () => {
     const item = unknownItem();
-    const w = tickByHand(tickByHand(allergenWorkingFrom(item, MONEY), 'milk', 'may', true), 'milk', 'contains', true);
-    const payload = allergenPayload(withChecked(w, true), item, 'ingredient', NOW);
+    const w = tickByHand(tickByHand(allergenWorkingFrom(item, MONEY), 'milk', 'may', true, 0), 'milk', 'contains', true, 0);
+    const payload = allergenPayload(withChecked(w, true), item, 'ingredient', NOW, BOTH);
     expect(payload.allergens).toStrictEqual(['milk']);
     expect(payload.mayContain).toStrictEqual([]);
   });
@@ -195,35 +241,35 @@ describe('⚠️⚠️ the pack list proposes, never declares (C105–C109)', ()
 
 describe('⚠️ what a save writes (Mise 2: only the groups that changed)', () => {
   test('a NEW ingredient writes all five keys, «not checked yet» (C99)', () => {
-    expect(allergenPayload(allergenWorkingFrom(null, MONEY), null, 'ingredient', NOW)).toStrictEqual({
+    expect(allergenPayload(allergenWorkingFrom(null, MONEY), null, 'ingredient', NOW, BOTH)).toStrictEqual({
       allergens: [], mayContain: [], allergensCheckedAt: '', nutrition: EMPTY_NUTRITION, packIngredients: '',
     });
   });
 
   test('packaging never writes an allergen key, new or old (C80)', () => {
-    const w = withChecked(tickByHand(allergenWorkingFrom(null, MONEY), 'milk', 'contains', true), true);
-    expect(allergenPayload(w, null, 'packaging', NOW)).toStrictEqual({});
-    expect(allergenPayload(w, declared(), 'packaging', NOW)).toStrictEqual({});
+    const w = withChecked(tickByHand(allergenWorkingFrom(null, MONEY), 'milk', 'contains', true, 0), true);
+    expect(allergenPayload(w, null, 'packaging', NOW, BOTH)).toStrictEqual({});
+    expect(allergenPayload(w, declared(), 'packaging', NOW, BOTH)).toStrictEqual({});
   });
 
   test('only the pack text changed: only the pack text is written, never the declaration it sits beside', () => {
     const item = declared();
     const w = withPackText(allergenWorkingFrom(item, MONEY), 'Farina di grano tenero tipo 00');
-    expect(allergenPayload(w, item, 'ingredient', NOW)).toStrictEqual({ packIngredients: 'Farina di grano tenero tipo 00' });
+    expect(allergenPayload(w, item, 'ingredient', NOW, BOTH)).toStrictEqual({ packIngredients: 'Farina di grano tenero tipo 00' });
   });
 
   test('only a nutrient changed: only the nutrition is written', () => {
     const item = declared();
     const w = withNutrient(allergenWorkingFrom(item, MONEY), 'salt', '0,02');
-    expect(allergenPayload(w, item, 'ingredient', NOW)).toStrictEqual({
+    expect(allergenPayload(w, item, 'ingredient', NOW, BOTH)).toStrictEqual({
       nutrition: { ...EMPTY_NUTRITION, kcal: 340, salt: 0.02 },
     });
   });
 
   test('a box ticked and then unticked again is no change', () => {
     const item = declared();
-    const w = tickByHand(tickByHand(allergenWorkingFrom(item, MONEY), 'eggs', 'contains', true), 'eggs', 'contains', false);
-    expect(allergenPayload(w, item, 'ingredient', NOW)).toStrictEqual({});
+    const w = tickByHand(tickByHand(allergenWorkingFrom(item, MONEY), 'eggs', 'contains', true, 0), 'eggs', 'contains', false, 0);
+    expect(allergenPayload(w, item, 'ingredient', NOW, BOTH)).toStrictEqual({});
     expect(allergenDirty(w, allergenWorkingFrom(item, MONEY))).toBe(false);
   });
 
@@ -231,9 +277,8 @@ describe('⚠️ what a save writes (Mise 2: only the groups that changed)', () 
     const item = declared();
     let w = allergenWorkingFrom(item, MONEY);
     w = withNutrient(w, 'salt', '0,02');
-    w = withPackText(tickByHand(w, 'eggs', 'contains', true), 'Farina e uova');
-    const both = { allergens: true, nutrition: true };
-    expect(Object.keys(allergenPayload(w, item, 'ingredient', NOW, both)).sort())
+    w = withPackText(tickByHand(w, 'eggs', 'contains', true, 0), 'Farina e uova');
+        expect(Object.keys(allergenPayload(w, item, 'ingredient', NOW, BOTH)).sort())
       .toStrictEqual(['allergens', 'allergensCheckedAt', 'mayContain', 'nutrition', 'packIngredients']);
     expect(Object.keys(allergenPayload(w, item, 'ingredient', NOW, { allergens: false, nutrition: true })).sort())
       .toStrictEqual(['nutrition']);
@@ -249,12 +294,12 @@ describe('⚠️ what a save writes (Mise 2: only the groups that changed)', () 
 
   test('a stored list in another order, with an unknown code, is not a change', () => {
     const item = declared({ allergens: ['milk', 'gluten', 'gluten-wheat'], mayContain: ['soybeans', 'milk'] });
-    expect(allergenPayload(allergenWorkingFrom(item, MONEY), item, 'ingredient', NOW)).toStrictEqual({});
+    expect(allergenPayload(allergenWorkingFrom(item, MONEY), item, 'ingredient', NOW, BOTH)).toStrictEqual({});
   });
 
   test('a stored figure above the cap is not «changed» by opening the card', () => {
     const item = declared({ nutrition: { ...EMPTY_NUTRITION, kj: 5000 } });
-    expect(allergenPayload(allergenWorkingFrom(item, MONEY), item, 'ingredient', NOW)).toStrictEqual({});
+    expect(allergenPayload(allergenWorkingFrom(item, MONEY), item, 'ingredient', NOW, BOTH)).toStrictEqual({});
   });
 });
 
@@ -264,13 +309,13 @@ describe('nutrition (C112–C114, T11)', () => {
     let w = allergenWorkingFrom(item, MONEY);
     w = withNutrient(w, 'salt', '1,5');
     w = withNutrient(w, 'kcal', '0');
-    const payload = allergenPayload(w, item, 'ingredient', NOW);
+    const payload = allergenPayload(w, item, 'ingredient', NOW, BOTH);
     expect(payload.nutrition).toStrictEqual({ ...EMPTY_NUTRITION, salt: 1.5, kcal: 0 });
   });
 
   test('the clamps stay: a figure above the cap is saved as the cap', () => {
     const w = withNutrient(allergenWorkingFrom(item, MONEY), 'kj', '5000');
-    expect(allergenPayload(w, item, 'ingredient', NOW).nutrition?.kj).toBe(4000);
+    expect(allergenPayload(w, item, 'ingredient', NOW, BOTH).nutrition?.kj).toBe(4000);
   });
 
   test('text that is not a number, or a negative figure, is refused — never dropped in silence', () => {

@@ -514,6 +514,79 @@ describe('⚠️ a tap on a tick box straight from the pack box never undoes its
     act(() => { vi.advanceTimersByTime(1); });
     expect(contains(region, 'Milk')).toBeChecked();
   });
+
+  // A finger's whole order, by hand (user-event's own delays would wait on the fake clock): pointerdown, pointerup, mousedown,
+  // mouseup, click.
+  const finger = (box: HTMLElement) => {
+    fireEvent.pointerDown(box, { pointerType: 'touch' });
+    fireEvent.pointerUp(box, { pointerType: 'touch' });
+    fireEvent.mouseDown(box);
+    fireEvent.mouseUp(box);
+    fireEvent.click(box);
+  };
+
+  it('⚠️ R1: a touch tap on Milk «has» 100 ms after the app ticked it keeps it ticked and is not counted as the app\'s; a later tap unticks it', async () => {
+    const { region, user } = await open('/suppliers/ingredient/i-plain');
+    await user.click(packHead(region));
+    await user.click(allergenHead(region));
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    fireEvent.change(packBox(region), { target: { value: 'latte' } });
+    act(() => { vi.advanceTimersByTime(450); });
+    expect(contains(region, 'Milk')).toBeChecked();
+    expect(region.getByText('The app has ticked 1 box from the ingredient list. Open Allergens and check it.')).toBeInTheDocument();
+    act(() => { vi.advanceTimersByTime(100); });
+    finger(contains(region, 'Milk'));
+    act(() => { vi.advanceTimersByTime(1000); });
+    expect(contains(region, 'Milk')).toBeChecked();
+    expect(region.queryByText(/The app has ticked/)).not.toBeInTheDocument();
+    // It is the person's now: a tap long after unticks it, and the text does not tick it back.
+    finger(contains(region, 'Milk'));
+    act(() => { vi.advanceTimersByTime(2000); });
+    expect(contains(region, 'Milk')).not.toBeChecked();
+  });
+
+  it('⚠️ R2: Space on a focused box holds the proposal like a press: the pause passes, the key-up and click land, then it runs', async () => {
+    const { region, user } = await open('/suppliers/ingredient/i-plain');
+    await user.click(packHead(region));
+    await user.click(allergenHead(region));
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    fireEvent.change(packBox(region), { target: { value: 'latte' } });
+    const wheat = contains(region, 'Wheat');
+    act(() => { wheat.focus(); });
+    fireEvent.keyDown(wheat, { key: ' ' });
+    act(() => { vi.advanceTimersByTime(450); });
+    expect(contains(region, 'Milk')).not.toBeChecked();
+    fireEvent.keyUp(wheat, { key: ' ' });
+    fireEvent.click(wheat);
+    expect(wheat).toBeChecked();
+    expect(contains(region, 'Milk')).not.toBeChecked();
+    act(() => { vi.advanceTimersByTime(1); });
+    expect(contains(region, 'Milk')).toBeChecked();
+    expect(wheat).toBeChecked();
+  });
+
+  it('⚠️ R4: a press whose pause ends INSIDE it (finger lifted, no click yet) holds the proposal until the click, then the person\'s tick stands', async () => {
+    const { region, user } = await open('/suppliers/ingredient/i-plain');
+    await user.click(packHead(region));
+    await user.click(allergenHead(region));
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    fireEvent.change(packBox(region), { target: { value: 'uova' } });
+    const milk = contains(region, 'Milk');
+    const eggs = contains(region, 'Eggs');
+    fireEvent.pointerDown(milk, { pointerType: 'touch' });
+    fireEvent.pointerUp(milk, { pointerType: 'touch' });
+    act(() => { vi.advanceTimersByTime(600); });
+    expect(eggs).not.toBeChecked();
+    fireEvent.mouseDown(milk);
+    fireEvent.mouseUp(milk);
+    fireEvent.click(milk);
+    expect(milk).toBeChecked();
+    expect(eggs).not.toBeChecked();
+    act(() => { vi.advanceTimersByTime(1); });
+    expect(milk).toBeChecked();
+    expect(eggs).toBeChecked();
+    expect(region.getByText('The app has ticked 1 box from the ingredient list. Open Allergens and check it.')).toBeInTheDocument();
+  });
 });
 
 describe('Save reads what the screen shows', () => {
@@ -566,6 +639,19 @@ describe('the nutrition check only looks at what was changed, and only when it i
 
   it('with the nutrition switched off, a save writes no nutrition key', async () => {
     const view = await open('/suppliers/ingredient/i-bad', withBad(), { session: { location: { showNutrition: false } } });
+    await view.user.type(view.region.getByRole('textbox', { name: 'Name in lists' }), 'x');
+    await saveAndConfirm(view);
+    expect(saved(view.source)).not.toHaveProperty('nutrition');
+  });
+
+  it('⚠️ R3: nutrition typed, then hidden by the venue before Save, writes no nutrition key', async () => {
+    const view = await open('/suppliers/ingredient/i-declared');
+    await view.user.click(nutritionHead(view.region));
+    const fat = view.region.getByRole('textbox', { name: 'Fat (g)' });
+    await view.user.clear(fat);
+    await view.user.type(fat, '3');
+    act(() => { view.store.set({ location: { showNutrition: false } }); });
+    await waitFor(() => { expect(view.region.queryByRole('button', { name: /^Nutrition/ })).not.toBeInTheDocument(); });
     await view.user.type(view.region.getByRole('textbox', { name: 'Name in lists' }), 'x');
     await saveAndConfirm(view);
     expect(saved(view.source)).not.toHaveProperty('nutrition');

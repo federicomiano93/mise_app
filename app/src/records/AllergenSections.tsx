@@ -68,6 +68,10 @@ type Props = {
   controls: Ref<AllergenControls>;
 };
 
+// Space on a focused checkbox toggles it on the key-up, like a tap: R2.
+const isSpace = (event: { key: string }) => event.key === ' ' || event.key === 'Spacebar';
+const isCheckbox = (target: EventTarget) => target instanceof HTMLInputElement && target.type === 'checkbox';
+
 type Tone = 'neutral' | 'warn' | 'ok';
 
 // The groups the law names individually (more than one member) get their own heading; the rest go under «The rest».
@@ -145,7 +149,9 @@ export function AllergenSections({ working, opened, now, onChange, refusedNutrie
   // proposal until its CLICK: the pause timer only marks it `deferred`. The press ends at whichever comes first, all listened
   // for on the window in CAPTURE, once per press: the click (a capture listener on the window runs BEFORE the checkbox's own
   // handlers, so the run waits a zero-delay timeout for its change to land first), a pointercancel, or — when the finger lifted
-  // and no click followed (a scroll, a release off the box) — a 700 ms fallback after the pointerup.
+  // and no click followed (a scroll, a release off the box) — a 700 ms fallback after the pointerup. A SPACE on a focused box is a
+  // press too: it starts at the keydown and ends at the click after the key-up (same fallback, from the key-up).
+  // ⚠️ A tap that still lands just as the app ticked the same box keeps it ticked (tickByHand, RECENT_APP_TICK_MS).
   const pressed = useRef(false);
   const deferred = useRef(false);
   const afterPress = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -187,13 +193,17 @@ export function AllergenSections({ working, opened, now, onChange, refusedNutrie
         runDeferred();
       }, RELEASE_FALLBACK_MS);
     };
+    // A Space on a focused box is a press too: its click follows the key-up, with the same fallback if none comes.
+    const liftedKey = (event: KeyboardEvent) => { if (isSpace(event)) lifted(); };
     window.addEventListener('click', pressEnded, true);
     window.addEventListener('pointercancel', pressEnded, true);
     window.addEventListener('pointerup', lifted, true);
+    window.addEventListener('keyup', liftedKey, true);
     stopListening.current = () => {
       window.removeEventListener('click', pressEnded, true);
       window.removeEventListener('pointercancel', pressEnded, true);
       window.removeEventListener('pointerup', lifted, true);
+      window.removeEventListener('keyup', liftedKey, true);
       stopListening.current = null;
     };
   }
@@ -210,7 +220,7 @@ export function AllergenSections({ working, opened, now, onChange, refusedNutrie
     const text = latest.current.packText;
     lastRead.current = text;
     setReading({ text, read: readPackIngredients(text) });
-    emit(proposeFromPack(latest.current));
+    emit(proposeFromPack(latest.current, Date.now()));
   }
 
   useImperativeHandle(controls, () => ({
@@ -251,7 +261,7 @@ export function AllergenSections({ working, opened, now, onChange, refusedNutrie
                 type="checkbox"
                 aria-labelledby={`${nameId} ${wordId}`}
                 checked={(column === 'contains' ? working.contains : working.may).includes(code)}
-                onChange={event => { emit(tickByHand(latest.current, code, column, event.target.checked)); }}
+                onChange={event => { emit(tickByHand(latest.current, code, column, event.target.checked, Date.now())); }}
               />
               <span id={wordId}>{word}</span>
             </label>
@@ -293,7 +303,8 @@ export function AllergenSections({ working, opened, now, onChange, refusedNutrie
   if (!allergens && !nutrition) return null;
 
   return (
-    <div className={styles.sections} onPointerDownCapture={pressStarted}>
+    <div className={styles.sections} onPointerDownCapture={pressStarted}
+      onKeyDownCapture={event => { if (isSpace(event) && isCheckbox(event.target)) pressStarted(); }}>
       {allergens ? (
         <>
           <Fold
