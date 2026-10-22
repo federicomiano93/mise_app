@@ -13,9 +13,15 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 
-// --no-index: a tracked file of the same name must not hide a broken pattern.
-const ignored = path =>
-  spawnSync('git', ['check-ignore', '-q', '--no-index', path], { cwd: ROOT }).status === 0;
+// --no-index: a tracked file of the same name must not hide a broken pattern. An empty
+// core.excludesFile: a developer's own global ignore list must not hide one either.
+// Anything but 0 (ignored) or 1 (not ignored) is git failing, which must not read as an answer.
+const ignored = path => {
+  const { status } = spawnSync('git',
+    ['-c', 'core.excludesFile=', 'check-ignore', '-q', '--no-index', path], { cwd: ROOT });
+  assert.ok(status === 0 || status === 1, `git check-ignore failed (status ${status})`);
+  return status === 0;
+};
 
 test('every kind of credential file is ignored, at the root and in a subfolder', () => {
   for (const path of [
