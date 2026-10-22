@@ -43,7 +43,7 @@ export interface AllergenWorking {
   // The tickKey()s the APP put there and may take back. ⚠️ STARTS EMPTY even on a declared item: everything stored belongs to
   // whoever stored it, so opening a saved product and typing can never lose a declaration (C108).
   readonly appOwned: readonly string[];
-  // WHEN (a Date.now() value) the app added each of its own ticks, by tickKey: what `tickByHand` needs to tell «a person undoing
+  // WHEN (a performance.now() value — a steady clock: setting the device clock back cannot make an old tick look recent) the app added each of its own ticks, by tickKey: what `tickByHand` needs to tell «a person undoing
   // the app» from «a tap that landed as the app ticked the same box». Cleared for a key the app removes. Never compared by
   // `allergenDirty`, never saved.
   readonly appTickedAt: Readonly<Record<string, number>>;

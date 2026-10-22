@@ -220,7 +220,7 @@ export function AllergenSections({ working, opened, now, onChange, refusedNutrie
     const text = latest.current.packText;
     lastRead.current = text;
     setReading({ text, read: readPackIngredients(text) });
-    emit(proposeFromPack(latest.current, Date.now()));
+    emit(proposeFromPack(latest.current, performance.now()));
   }
 
   useImperativeHandle(controls, () => ({
@@ -261,7 +261,7 @@ export function AllergenSections({ working, opened, now, onChange, refusedNutrie
                 type="checkbox"
                 aria-labelledby={`${nameId} ${wordId}`}
                 checked={(column === 'contains' ? working.contains : working.may).includes(code)}
-                onChange={event => { emit(tickByHand(latest.current, code, column, event.target.checked, Date.now())); }}
+                onChange={event => { emit(tickByHand(latest.current, code, column, event.target.checked, performance.now())); }}
               />
               <span id={wordId}>{word}</span>
             </label>

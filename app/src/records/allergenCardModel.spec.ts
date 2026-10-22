@@ -195,6 +195,19 @@ describe('⚠️⚠️ the pack list proposes, never declares (C105–C109)', ()
       expect(proposeFromPack(withPackText(later, 'latte e latte'), T + 6000).contains).not.toContain('milk');
     });
 
+    test('a tick the app already owned keeps its first time when the text is read again; a withdrawn one starts afresh', () => {
+      const first = proposedAt('latte');
+      // Read again 5 s later (more typing): milk is still the app's, still stamped at T — so an untick now is the person's at once.
+      const again = proposeFromPack(withPackText(first, 'latte e uova'), T + 5000);
+      expect(again.appTickedAt['contains:milk']).toBe(T);
+      expect(again.appTickedAt['contains:eggs']).toBe(T + 5000);
+      expect(tickByHand(again, 'milk', 'contains', false, T + 5100).contains).not.toContain('milk');
+      // Withdrawn (text emptied) then proposed again: a fresh stamp.
+      const gone = proposeFromPack(withPackText(again, ''), T + 6000);
+      expect(gone.appTickedAt['contains:milk']).toBeUndefined();
+      expect(proposeFromPack(withPackText(gone, 'latte'), T + 7000).appTickedAt['contains:milk']).toBe(T + 7000);
+    });
+
     test('an untick 800 ms after the app ticked unticks it', () => {
       const w = tickByHand(proposedAt('latte'), 'milk', 'contains', false, T + RECENT_APP_TICK_MS);
       expect(w.contains).not.toContain('milk');
@@ -278,7 +291,7 @@ describe('⚠️ what a save writes (Mise 2: only the groups that changed)', () 
     let w = allergenWorkingFrom(item, MONEY);
     w = withNutrient(w, 'salt', '0,02');
     w = withPackText(tickByHand(w, 'eggs', 'contains', true, 0), 'Farina e uova');
-        expect(Object.keys(allergenPayload(w, item, 'ingredient', NOW, BOTH)).sort())
+    expect(Object.keys(allergenPayload(w, item, 'ingredient', NOW, BOTH)).sort())
       .toStrictEqual(['allergens', 'allergensCheckedAt', 'mayContain', 'nutrition', 'packIngredients']);
     expect(Object.keys(allergenPayload(w, item, 'ingredient', NOW, { allergens: false, nutrition: true })).sort())
       .toStrictEqual(['nutrition']);
