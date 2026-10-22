@@ -1608,6 +1608,10 @@ export const en = {
   'sup.price.history.fromInvoice': 'invoice',
   // orders.addIngredientFailed
   'sup.price.openFailed': 'The ingredient card could not be opened. Please try again.',
+  // orders.failed.load: the alert when the price history could not be read.
+  'sup.price.history.failed': 'Could not load the price history for “{name}”. Check your network and try again.',
+  // NEW (decision T4): an old price shape is shown, never edited.
+  'sup.price.legacy.note': 'This price was saved in an older format. It is shown here only: saving this card keeps it exactly as it is.',
 } as const satisfies Record<string, Message>;
 
 export type MessageKey = keyof typeof en;

@@ -3,8 +3,12 @@ import type { ReactNode, Ref } from 'react';
 import { Check, Trash2 } from 'lucide-react';
 import { useBlocker } from 'react-router';
 import type { BlockerFunction } from 'react-router';
-import { formatSummary } from '@mise/shared/pack-format';
+import { FALLBACK_MONEY } from '@mise/shared/currency';
+import type { Money } from '@mise/shared/currency';
+import { formatSummary, usesLegacyCard } from '@mise/shared/pack-format';
 import type { PackTranslate } from '@mise/shared/pack-format';
+import { formatPricePerUnit, pricePatch as pricePatchOf } from '@mise/shared/price-model';
+import type { PriceBasis, PricePatch } from '@mise/shared/price-model';
 import { WEIGHT_UNIT_CHOICES } from '@mise/shared/pack-size';
 import type { WeightUnit } from '@mise/shared/pack-size';
 import { NEW_SUPPLIER_CHOICE } from '@mise/shared/record-choices';
@@ -15,12 +19,21 @@ import { markBusy } from '../session/busy';
 import { Button } from '../ui/Button';
 import { FormBar } from '../ui/FormBar';
 import { FormDialog } from '../ui/FormDialog';
+import { useAlert } from '../ui/useAlert';
 import { useConfirm } from '../ui/useConfirm';
 import {
   BRAND_MAX, CATEGORY_MAX, NAME_MAX, NEW_CHOICE, NO_SUPPLIER_ID, PACK_WORD_MAX, SHORT_NAME_MAX,
   buildSave, firstRefusal, formState, isDirty, labelOf, weightText, withFormat, withInner, workingFrom,
 } from './ingredientCardModel';
 import type { CardKind, ChoiceState, ItemLike, RefusedField, Working } from './ingredientCardModel';
+import { PriceHistory } from './PriceHistory';
+import { PriceSection } from './PriceSection';
+import type { PriceBox } from './PriceSection';
+import {
+  chooseVat, followFormat, isPriceDirty, isPriceEdited, priceCtxOf, priceRefusal, priceStateFrom, priceView, readPrice,
+  recompute, sharedTranslate, tapBasis, typeBox, typePieceKg, typeRate, typeUnit, weightHintOf,
+} from './priceCardModel';
+import type { PriceFacts, PriceState } from './priceCardModel';
 import styles from './IngredientCard.module.css';
 
 // What the card hands a «+ New supplier…» form: the supplier it made (its id and the label the app will show), or nothing.
@@ -47,7 +60,10 @@ type Props = {
   titleRef: Ref<HTMLHeadingElement>;
   // Save, after the question was answered yes: the screen writes (local-first) and tells the usage record. The card leaves by
   // `onLeave` right after, without asking.
-  onSave(payload: Readonly<Record<string, unknown>> & { readonly name: string }, options: { unitChangedFrom: string }): void;
+  onSave(
+    payload: Readonly<Record<string, unknown>> & { readonly name: string },
+    options: { unitChangedFrom: string; price?: { before: ItemLike | null; patch: PricePatch } },
+  ): void;
   // One level up (to the list, or to the supplier's screen the card was opened from).
   onLeave(): void;
   // Delete, for whoever may: the bin is drawn only when this is given, and only for an existing item. The screen asks, deletes
@@ -60,7 +76,18 @@ type Props = {
   renderNewSupplier?: (host: NewSupplierHost) => ReactNode;
   // Hears the store's refusal of a supplier save (the name it was saved under); returns the way to stop listening. See host.
   watchRefusedSupplier?: (listener: (name: string) => void) => () => void;
+  // Somebody who may write prices (the role AND the venue's Food cost section, parity C4): the price section is drawn for them
+  // and for nobody else — absent, never disabled. `item` must then carry its price (the screen lays it on).
+  mayPrice?: boolean;
+  // The venue's country (the VAT menu) and money (every figure on the price).
+  country?: unknown;
+  money?: Money;
+  // The last price-history entries of an ingredient, from the server; rejects on failure.
+  readHistory?: (id: string) => Promise<readonly Readonly<Record<string, unknown>>[]>;
 };
+
+// A Save refused on a price box, or on the weight box with the price's own sentence.
+type Refused = RefusedField | PriceBox | 'priceWeight';
 
 // An ingredient's or packaging item's card, product data (parity C36–C57, C80–C81, C84–C97). Driven only by its props, so the
 // Recipe catalogue can open the same card later.
@@ -74,33 +101,76 @@ type Props = {
 // ⚠️ THE FOOD WORDS (the categories, the package words, the carton word) COME FROM THE VENUE'S COUNTRY, never from `t()`.
 export function IngredientCard({
   item, kind, preset, suppliers, categories, packs, language, titleRef, onSave, onLeave, onDelete, deleting = false, renderNewSupplier, watchRefusedSupplier,
+  mayPrice = false, country, money = FALLBACK_MONEY, readHistory,
 }: Props) {
   const { t, locale } = useT();
   const [confirm, confirmDialog] = useConfirm();
+  const [alert, alertDialog] = useAlert();
   const ids = useId();
   const id = (name: string) => `${ids}-${name}`;
 
   const [opened] = useState(item);
   const supplierIds = suppliers.map(supplier => String(supplier.id));
-  const [baseline] = useState<Working>(() => workingFrom(opened, { supplierIds, preset }));
+  // ⚠️ AN OLD PRICE SHAPE (decision T4) IS SHOWN, NEVER EDITED: the price section is then read-only, the format opens as for an
+  // employee, and Save sends no price at all (the product data still saves).
+  const legacyPrice = mayPrice && usesLegacyCard(opened);
+  const priceActive = mayPrice && !legacyPrice;
+  const [baseline] = useState<Working>(() => {
+    const first = workingFrom(opened, { supplierIds, preset, mayPrice: priceActive, lang: language });
+    // C46: a case priced by an explicit size opens with the weight box empty, its unit menu on that unit (the size itself is
+    // only a placeholder: an untouched Save writes nothing new).
+    const hint = priceActive ? weightHintOf(opened, weightText(first)) : null;
+    return hint && first.weight.amount === '' && (WEIGHT_UNIT_CHOICES as readonly string[]).includes(hint.unit)
+      ? { ...first, weight: { ...first.weight, unit: hint.unit as WeightUnit } }
+      : first;
+  });
   const [working, setWorking] = useState<Working>(baseline);
   const workingRef = useRef(working);
 
+  // ── The price's working copy (step 3e-3) ──
+  const [openedFacts] = useState(() => ({ openedKind: baseline.format, initialWeight: weightText(baseline) }));
+  const facts: PriceFacts = { item: opened, lang: language, money, locale, country, ...openedFacts };
+  const ctxOf = (current: Working, state: PriceState | null) => priceCtxOf(current, facts, state ? isPriceDirty(state, opened) : !opened);
+  const [price, setPrice] = useState<PriceState | null>(() => (priceActive
+    ? priceStateFrom(opened, kind === 'packaging' && !opened ? 'pcs' : null, ctxOf(baseline, null))
+    : null));
+  const priceRef = useRef(price);
+  const dirtyOf = (current: Working, state: PriceState | null) =>
+    isDirty(current, baseline, state ? isPriceEdited(state, ctxOf(current, state)) : false);
+
   // ⚠️ DIRTY IS «DIFFERENT FROM THE COPY TAKEN AT OPEN», also kept in a ref: the router's blocker reads it at the moment of a
   // navigation, and a state value read there could be one render behind.
-  const dirty = isDirty(working, baseline);
+  const dirty = dirtyOf(working, price);
   const dirtyRef = useRef(false);
   // ⚠️ THE SUPPLIER FORM OPEN ABOVE HAS TYPING: the router asks only its LAST blocker, so this card's is the only one (the
   // supplier form registers none in a dialog) and it counts that typing too — one question, for both.
   const dialogDirtyRef = useRef(false);
   const unsaved = () => dirtyRef.current || dialogDirtyRef.current;
-  const [refused, setRefused] = useState<RefusedField | null>(null);
-  const update = (next: Working, clears?: RefusedField) => {
+  const [refused, setRefused] = useState<Refused | null>(null);
+  const update = (next: Working, clears?: Refused) => {
+    // ⚠️ A figure a tap wrote follows the weight and the count: the price hears every change of the format.
+    let state = priceRef.current;
+    if (state) {
+      state = followFormat(state, ctxOf(next, state));
+      priceRef.current = state;
+      setPrice(state);
+    }
     workingRef.current = next;
-    dirtyRef.current = isDirty(next, baseline);
+    dirtyRef.current = dirtyOf(next, state);
     setWorking(next);
-    if (clears && refused === clears) setRefused(null);
+    if (clears && (refused === clears || (clears === 'weight' && refused === 'priceWeight'))) setRefused(null);
   };
+  function priceEvent(run: (state: PriceState, ctx: ReturnType<typeof ctxOf>) => PriceState, clears?: PriceBox) {
+    const state = priceRef.current;
+    if (!state) return;
+    const current = workingRef.current;
+    const next = run(state, ctxOf(current, state));
+    if (next === state) return;
+    priceRef.current = next;
+    setPrice(next);
+    dirtyRef.current = dirtyOf(current, next);
+    if (clears && refused === clears) setRefused(null);
+  }
   // Unsaved edits: a reload the app starts by itself waits (session/busy.ts).
   useEffect(() => (dirty ? markBusy() : undefined), [dirty]);
 
@@ -177,10 +247,16 @@ export function IngredientCard({
   const innerBox = useRef<HTMLInputElement>(null);
   const countBox = useRef<HTMLInputElement>(null);
   const innerMenu = useRef<HTMLSelectElement>(null);
+  const rateBox = useRef<HTMLInputElement>(null);
+  const priceBox = useRef<HTMLInputElement>(null);
+  const pieceBox = useRef<HTMLInputElement>(null);
 
-  function show(field: RefusedField) {
+  function show(field: Refused) {
     setRefused(field);
-    const target = { name: nameBox, weight: weightBox, category: categoryBox, inner: innerBox, count: countBox, innerEmpty: innerMenu }[field].current;
+    const target = {
+      name: nameBox, weight: weightBox, priceWeight: weightBox, category: categoryBox, inner: innerBox, count: countBox,
+      innerEmpty: innerMenu, rate: rateBox, box: priceBox, pieceKg: pieceBox,
+    }[field].current;
     // Save is at the top, so the box can be far above the fold on a phone.
     target?.focus();
     if (typeof target?.scrollIntoView === 'function') target.scrollIntoView({ block: 'center' });
@@ -189,12 +265,25 @@ export function IngredientCard({
   async function save() {
     if (deleting || busy.current || askingLeave.current || leavingClean.current) return;
     const current = workingRef.current;
-    const wrong = firstRefusal(current, opened);
+    const state = priceRef.current;
+    const priceDirty = state ? isPriceDirty(state, opened) : false;
+    // C84: the card's own refusals first, then the price's (the weight a price by weight needs, then an unreadable price box).
+    const wrong = firstRefusal(current, opened, { mayPrice: priceActive, lang: language, priceDirty });
     if (wrong) {
       show(wrong);
       return;
     }
-    const built = buildSave({ working: current, item: opened, kind, lang: language, startSupplierId: baseline.supplierId });
+    const ctx = state ? ctxOf(current, state) : null;
+    const wrongPrice = state && ctx ? priceRefusal(state, ctx) : null;
+    if (wrongPrice) {
+      show(wrongPrice === 'weight' ? 'priceWeight' : wrongPrice);
+      return;
+    }
+    const patch = state && ctx ? pricePatchOf(readPrice(state, ctx), new Date().toISOString(), weightText(current)) : null;
+    const built = buildSave({
+      working: current, item: opened, kind, lang: language, startSupplierId: baseline.supplierId,
+      mayPrice: priceActive, priceDirty, pricePatch: patch,
+    });
     busy.current = true;
     let ok = false;
     try {
@@ -211,7 +300,7 @@ export function IngredientCard({
     // Saved: nothing is unsaved any more, so leaving asks nothing. Local-first: the list changes at once and the database
     // follows; a refused write is taken back and said by the store.
     leavingClean.current = true;
-    onSave(built.payload, { unitChangedFrom: built.unitChangedFrom });
+    onSave(built.payload, { unitChangedFrom: built.unitChangedFrom, ...(patch ? { price: { before: opened, patch } } : {}) });
     onLeave();
   }
 
@@ -290,6 +379,9 @@ export function IngredientCard({
     ? (opened ? 'sup.editPackaging' : 'sup.newPackaging')
     : (opened ? 'sup.editIngredient' : 'sup.newIngredient');
   const carton = working.format === 'carton';
+  const weightRefused = refused === 'weight' || refused === 'priceWeight';
+  const weightHint = priceActive ? weightHintOf(opened, weightText(working)) : null;
+  const view = price ? priceView(price, ctxOf(working, price), t) : null;
 
   const translate: PackTranslate = (key, params) => (key === 'orders.format.summary'
     ? t('sup.ing.summary', params)
@@ -312,7 +404,7 @@ export function IngredientCard({
   const categoryWords = lists(working.category, categories);
   const packWords = lists(working.inner, packs);
 
-  const aria = (field: RefusedField, errorId: string, ...more: string[]) => ({
+  const aria = (field: Refused, errorId: string, ...more: string[]) => ({
     'aria-invalid': refused === field ? true : undefined,
     'aria-describedby': [...more, refused === field ? errorId : ''].filter(Boolean).join(' ') || undefined,
   });
@@ -462,8 +554,9 @@ export function IngredientCard({
                 autoComplete="off"
                 className={`${styles.box} ${styles.amount}`}
                 aria-label={t('sup.ing.weightAmount')}
-                placeholder={t('sup.ing.weightEg')}
-                {...aria('weight', id('weight-error'))}
+                placeholder={weightHint ? weightHint.size.toLocaleString(locale) : t('sup.ing.weightEg')}
+                aria-invalid={weightRefused ? true : undefined}
+                aria-describedby={weightRefused ? id('weight-error') : undefined}
                 value={working.weight.amount}
                 onChange={event => { update({ ...working, weight: { ...working.weight, amount: event.target.value } }, 'weight'); }}
               />
@@ -476,8 +569,8 @@ export function IngredientCard({
                 {WEIGHT_UNIT_CHOICES.map(unit => <option key={unit} value={unit}>{unit}</option>)}
               </select>
             </div>
-            <p id={id('weight-error')} role="status" className={refused === 'weight' ? styles.error : styles.quiet}>
-              {refused === 'weight' ? t('sup.ing.weightInvalid') : ''}
+            <p id={id('weight-error')} role="status" className={weightRefused ? styles.error : styles.quiet}>
+              {refused === 'weight' ? t('sup.ing.weightInvalid') : (refused === 'priceWeight' ? t('sup.price.weightNeeded') : '')}
             </p>
             {working.weight.legacy === '' ? null : (
               <div className={styles.legacy}>
@@ -581,6 +674,43 @@ export function IngredientCard({
           </div>
         ) : null}
 
+        {view && price ? (
+          <PriceSection
+            view={view}
+            refused={refused === 'rate' || refused === 'box' || refused === 'pieceKg' ? refused : null}
+            rateRef={rateBox}
+            boxRef={priceBox}
+            pieceRef={pieceBox}
+            onUnit={unit => { priceEvent((state, ctx) => typeUnit(state, ctx, unit)); }}
+            onRate={text => { priceEvent((state, ctx) => typeRate(state, ctx, text), 'rate'); }}
+            onBox={text => { priceEvent((state, ctx) => typeBox(state, ctx, text), 'box'); }}
+            onPieceKg={text => { priceEvent((state, ctx) => typePieceKg(state, ctx, text), 'pieceKg'); }}
+            onVat={vat => { priceEvent((state, ctx) => chooseVat(state, ctx, vat)); }}
+            onBasis={(basis: PriceBasis) => { priceEvent((state, ctx) => tapBasis(state, ctx, basis)); }}
+            onRecompute={() => {
+              priceEvent(recompute);
+              (rateBox.current ?? priceBox.current)?.focus();
+            }}
+            history={opened && readHistory ? (
+              <PriceHistory
+                id={String(opened.id)}
+                money={money}
+                read={readHistory}
+                onFailed={() => {
+                  void alert({ message: t('sup.price.history.failed', { name: labelOf(opened) }), okLabel: t('common.ok') });
+                }}
+              />
+            ) : null}
+          />
+        ) : null}
+        {legacyPrice && opened ? (
+          <div className={styles.priceBlock}>
+            <p className={styles.readonly}>{formatPricePerUnit(opened, money, sharedTranslate(t))}</p>
+            {opened.vatRate == null ? null : <p className={styles.readonly}>{`${t('sup.price.vat.label')}: ${String(opened.vatRate)}%`}</p>}
+            <p className={styles.hint}>{t('sup.price.legacy.note')}</p>
+          </div>
+        ) : null}
+
         {/* ⚠️ THE BIN: only for an existing item and only when the screen hands the delete in (it does so to whoever runs the
             place). Small, low-key, icon only, the very end of the card; it counts what uses the item first and says it is busy. */}
         {opened && onDelete ? (
@@ -599,6 +729,7 @@ export function IngredientCard({
         ) : null}
       </div>
       {confirmDialog}
+      {alertDialog}
       {creatingSupplier && renderNewSupplier ? (
         <FormDialog label={t('sup.newSupplier')}>{renderNewSupplier(host)}</FormDialog>
       ) : null}
