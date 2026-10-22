@@ -43,7 +43,7 @@ const packHead = (region: Region) => region.getByRole('button', { name: /^Ingred
 const allergenHead = (region: Region) => region.getByRole('button', { name: /^Allergens/ });
 const nutritionHead = (region: Region) => region.getByRole('button', { name: /^Nutrition/ });
 const packBox = (region: Region, hidden = false) => region.getByRole('textbox', { name: PACK_LABEL, hidden });
-const contains = (region: Region, name: string, hidden = false) => region.getByRole('checkbox', { name: `Contains ${name}`, hidden });
+const contains = (region: Region, name: string, hidden = false) => region.getByRole('checkbox', { name: `${name} has`, hidden });
 const checkedBox = (region: Region) => region.getByRole('checkbox', { name: 'I have checked the supplier’s specification' });
 
 async function saveAndConfirm(view: View) {
@@ -137,7 +137,7 @@ describe('the food words follow the venue\'s country, the words to tap follow th
     await user.click(allergenHead(region));
     expect(region.getByText('Cereali contenenti glutine')).toBeInTheDocument();
     expect(region.getByText('Frutta a guscio')).toBeInTheDocument();
-    expect(region.getByRole('checkbox', { name: 'Contains Grano' })).toBeInTheDocument();
+    expect(region.getByRole('checkbox', { name: 'Grano has' })).toBeInTheDocument();
     expect(region.getAllByText('has').length).toBeGreaterThan(0);
     await user.click(nutritionHead(region));
     expect(region.getByRole('textbox', { name: 'Energia (kcal)' })).toBeInTheDocument();
@@ -148,8 +148,8 @@ describe('the food words follow the venue\'s country, the words to tap follow th
     expect(region.getByText('Verificato il 2026-01-01 — Milk.')).toBeInTheDocument();
     await user.click(region.getByRole('button', { name: /^Allergeni/ }));
     expect(region.getByText('Cereals containing gluten')).toBeInTheDocument();
-    expect(region.getByRole('checkbox', { name: 'Contiene Wheat' })).toBeInTheDocument();
-    expect(region.getByRole('checkbox', { name: 'Può contenere tracce di Wheat' })).toBeInTheDocument();
+    expect(region.getByRole('checkbox', { name: 'Wheat ha' })).toBeInTheDocument();
+    expect(region.getByRole('checkbox', { name: 'Wheat tracce' })).toBeInTheDocument();
     expect(region.getByText('Il resto')).toBeInTheDocument();
     await user.click(region.getByRole('button', { name: /^Valori nutrizionali/ }));
     expect(region.getByRole('textbox', { name: 'Energy (kJ)' })).toBeInTheDocument();
@@ -286,7 +286,7 @@ describe('the verification stamp and what a save writes', () => {
   it('a tick in «traces» is its own column, never merged into «has»', async () => {
     const view = await open('/suppliers/ingredient/i-plain');
     await view.user.click(allergenHead(view.region));
-    await view.user.click(view.region.getByRole('checkbox', { name: 'May contain traces of Eggs' }));
+    await view.user.click(view.region.getByRole('checkbox', { name: 'Eggs traces' }));
     await saveAndConfirm(view);
     expect(saved(view.source)).toMatchObject({ allergens: [], mayContain: ['eggs'], allergensCheckedAt: '' });
   });
@@ -432,5 +432,118 @@ describe('leaving with an allergen change', () => {
     await user.type(packBox(region), 'sugar');
     await user.click(region.getByRole('button', { name: 'Back' }));
     expect(await dialogOf('Discard changes?')).toBeInTheDocument();
+  });
+});
+
+describe('⚠️ a tap on a tick box straight from the pack box never undoes itself', () => {
+  it('typing «farina di grano tenero» and tapping Wheat «has» before the pause leaves Wheat ticked, and as the person\'s', async () => {
+    const { region, user } = await open('/suppliers/ingredient/i-plain');
+    await user.click(packHead(region));
+    await user.click(allergenHead(region));
+    await user.type(packBox(region), 'farina di grano tenero');
+    // The full pointer sequence: the press blurs the text box, the release and the click come after.
+    await user.click(contains(region, 'Wheat'));
+    await waitFor(() => { expect(contains(region, 'Wheat')).toBeChecked(); });
+    // Let the deferred proposal run, then look again: it must have found the box already the person's.
+    await new Promise(resolve => { setTimeout(resolve, 600); });
+    expect(contains(region, 'Wheat')).toBeChecked();
+    expect(region.queryByText(/The app has ticked/)).not.toBeInTheDocument();
+  });
+
+  it('a press held down on a tick box lets the pause go by without a proposal; the release runs it', async () => {
+    const { region, user } = await open('/suppliers/ingredient/i-plain');
+    await user.click(packHead(region));
+    await user.click(allergenHead(region));
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    fireEvent.change(packBox(region), { target: { value: 'latte' } });
+    const eggs = region.getByRole('checkbox', { name: 'Eggs has' });
+    fireEvent.pointerDown(eggs);
+    act(() => { vi.advanceTimersByTime(1000); });
+    expect(contains(region, 'Milk')).not.toBeChecked();
+    fireEvent.pointerUp(eggs);
+    act(() => { vi.advanceTimersByTime(1); });
+    expect(contains(region, 'Milk')).toBeChecked();
+  });
+});
+
+describe('Save reads what the screen shows', () => {
+  it('⚠️ a Save pressed before the pause ends writes the proposed ticks', async () => {
+    const view = await open('/suppliers/ingredient/i-plain');
+    const { region, user } = view;
+    await user.click(packHead(region));
+    fireEvent.change(packBox(region), { target: { value: 'latte' } });
+    // A click with no press before it: the text box keeps its focus, so only the flush can have run the proposal.
+    fireEvent.click(region.getByRole('button', { name: 'Save' }));
+    await user.click(within(await dialogOf('Save ingredient?')).getByRole('button', { name: 'Save' }));
+    await waitFor(() => { expect(view.source.writes.some(write => write.op === 'ingredient-save')).toBe(true); });
+    expect(saved(view.source)).toMatchObject({ allergens: ['milk'], packIngredients: 'latte' });
+  });
+
+  it('⚠️ on a verified item the same early Save writes the lapsed check, not the old date', async () => {
+    const view = await open('/suppliers/ingredient/i-verified');
+    const { region, user } = view;
+    await user.click(packHead(region));
+    fireEvent.change(packBox(region), { target: { value: 'latte' } });
+    fireEvent.click(region.getByRole('button', { name: 'Save' }));
+    await user.click(within(await dialogOf('Save ingredient?')).getByRole('button', { name: 'Save' }));
+    await waitFor(() => { expect(view.source.writes.some(write => write.op === 'ingredient-save')).toBe(true); });
+    expect(saved(view.source)).toMatchObject({ allergens: ['milk'], allergensCheckedAt: '' });
+  });
+});
+
+describe('the allergen boxes are named by what they show', () => {
+  it('⚠️ the accessible name contains the visible words: «Milk has», «Milk traces» (WCAG 2.5.3); the long sentence is the tip', async () => {
+    const { region, user } = await open('/suppliers/ingredient/i-plain');
+    await user.click(allergenHead(region));
+    const has = contains(region, 'Milk');
+    const traces = region.getByRole('checkbox', { name: 'Milk traces' });
+    expect(has).not.toHaveAttribute('aria-label');
+    expect(has.closest('label')).toHaveAttribute('title', 'Contains Milk');
+    expect(traces.closest('label')).toHaveAttribute('title', 'May contain traces of Milk');
+  });
+});
+
+describe('the nutrition check only looks at what was changed, and only when it is shown', () => {
+  const BAD = item('i-bad', { name: 'Odd', ...base, nutrition: { fat: -3 } });
+  const withBad = () => fakeSuppliersSource({ suppliers: SUPPLIERS, ingredients: [BAD] });
+
+  it('⚠️ a stored figure that would be refused today does not block a save of something else', async () => {
+    const view = await open('/suppliers/ingredient/i-bad', withBad());
+    await view.user.type(view.region.getByRole('textbox', { name: 'Name in lists' }), 'x');
+    await saveAndConfirm(view);
+    expect(saved(view.source)).not.toHaveProperty('nutrition');
+  });
+
+  it('with the nutrition switched off, a save writes no nutrition key', async () => {
+    const view = await open('/suppliers/ingredient/i-bad', withBad(), { session: { location: { showNutrition: false } } });
+    await view.user.type(view.region.getByRole('textbox', { name: 'Name in lists' }), 'x');
+    await saveAndConfirm(view);
+    expect(saved(view.source)).not.toHaveProperty('nutrition');
+  });
+
+  it('⚠️ «1,550» in the energy box is refused with the thousands sentence, in English', async () => {
+    const { region, user, source } = await open('/suppliers/ingredient/i-plain');
+    await user.click(nutritionHead(region));
+    await user.type(region.getByRole('textbox', { name: 'Energy (kcal)' }), '1,550');
+    await user.click(region.getByRole('button', { name: 'Save' }));
+    expect(region.getByText('Write it without the thousands separator — e.g. 1550.')).toBeInTheDocument();
+    expect(region.getByRole('textbox', { name: 'Energy (kcal)' })).toHaveAttribute('aria-invalid', 'true');
+    expect(source.writes).toEqual([]);
+  });
+
+  it('says the thousands sentence in Italian', async () => {
+    const { region, user } = await open('/suppliers/ingredient/i-plain', seeded(), { lang: 'it', session: { language: 'it', location: { country: 'IT' } } });
+    await user.click(region.getByRole('button', { name: /^Valori nutrizionali/ }));
+    await user.type(region.getByRole('textbox', { name: 'Energia (kJ)' }), '1.550');
+    await user.click(region.getByRole('button', { name: 'Salva' }));
+    expect(region.getByText('Scrivilo senza il separatore delle migliaia — per es. 1550.')).toBeInTheDocument();
+  });
+
+  it('«0x10» is refused as not a number', async () => {
+    const { region, user } = await open('/suppliers/ingredient/i-plain');
+    await user.click(nutritionHead(region));
+    await user.type(region.getByRole('textbox', { name: 'Fat (g)' }), '0x10');
+    await user.click(region.getByRole('button', { name: 'Save' }));
+    expect(region.getByText('Write a number, 0 or more — e.g. 12.5.')).toBeInTheDocument();
   });
 });

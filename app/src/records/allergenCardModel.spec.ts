@@ -129,6 +129,21 @@ describe('⚠️⚠️ the pack list proposes, never declares (C105–C109)', ()
     expect(allergenPayload(withChecked(proposed, true), item, 'ingredient', NOW).allergensCheckedAt).toBe(NOW);
   });
 
+  test('⚠️ un-tick «I have checked», let the app move a box, tick it again: the save stamps NOW, not the old date', () => {
+    const item = declared();
+    const opened = allergenWorkingFrom(item, MONEY);
+    expect(opened.openedStamp).toBe(OLD);
+    const unticked = withChecked(opened, false);
+    const moved = type(unticked, 'Farina di grano tenero, latte');
+    expect(moved.stampVoided).toBe(true);
+    expect(allergenPayload(withChecked(moved, true), item, 'ingredient', NOW).allergensCheckedAt).toBe(NOW);
+    // Without the app moving anything, un-ticking and re-ticking keeps the date (the person alone is checking).
+    expect(allergenStatus(withChecked(unticked, true), item, NOW).date).toBe(OLD.slice(0, 10));
+    // A new or never-stamped item has no date to void.
+    expect(allergenWorkingFrom(null, MONEY).openedStamp).toBe('');
+    expect(type(allergenWorkingFrom(unknownItem(), MONEY), 'latte').stampVoided).toBe(false);
+  });
+
   test('the lapse keeps being said after the app takes its own tick back', () => {
     const item = declared();
     const proposed = type(allergenWorkingFrom(item, MONEY), 'Farina di grano tenero, latte');
@@ -240,13 +255,45 @@ describe('nutrition (C112–C114, T11)', () => {
 
   test('text that is not a number, or a negative figure, is refused — never dropped in silence', () => {
     const w = allergenWorkingFrom(item, MONEY);
-    expect(nutritionRefusal(w)).toBeNull();
-    expect(nutritionRefusal(withNutrient(w, 'fat', 'abc'))).toBe('fat');
-    expect(nutritionRefusal(withNutrient(w, 'sugars', '-1'))).toBe('sugars');
-    expect(nutritionRefusal(withNutrient(w, 'salt', '1.234,5'))).toBe('salt');
+    const refusal = (next: AllergenWorking) => nutritionRefusal(next, w);
+    expect(refusal(w)).toBeNull();
+    expect(refusal(withNutrient(w, 'fat', 'abc'))).toStrictEqual({ key: 'fat', reason: 'invalid' });
+    expect(refusal(withNutrient(w, 'sugars', '-1'))).toStrictEqual({ key: 'sugars', reason: 'invalid' });
+    expect(refusal(withNutrient(w, 'salt', '1.234,5'))).toStrictEqual({ key: 'salt', reason: 'invalid' });
     // The FIRST in the card's order.
-    expect(nutritionRefusal(withNutrient(withNutrient(w, 'salt', 'x'), 'kj', 'y'))).toBe('kj');
-    expect(nutritionRefusal(withNutrient(w, 'protein', ' 12 '))).toBeNull();
+    expect(refusal(withNutrient(withNutrient(w, 'salt', 'x'), 'kj', 'y'))).toStrictEqual({ key: 'kj', reason: 'invalid' });
+    expect(refusal(withNutrient(w, 'protein', ' 12 '))).toBeNull();
+  });
+
+  test('⚠️ Number() would read «0x10», «1e3» and «Infinity» as figures: only digits with one decimal mark are', () => {
+    const w = allergenWorkingFrom(item, MONEY);
+    for (const bad of ['0x10', '1e3', 'Infinity', '12abc', '1.2.3', '+5']) {
+      expect(nutritionRefusal(withNutrient(w, 'fat', bad), w), bad).toStrictEqual({ key: 'fat', reason: 'invalid' });
+    }
+    for (const good of ['0', '0,0', '12,5', ' 12.5 ', '.5', '7']) {
+      expect(nutritionRefusal(withNutrient(w, 'fat', good), w), good).toBeNull();
+    }
+  });
+
+  test('⚠️ a thousands separator in kJ or kcal is refused with its own reason; other readings pass', () => {
+    const w = allergenWorkingFrom(item, MONEY);
+    for (const key of ['kj', 'kcal'] as const) {
+      expect(nutritionRefusal(withNutrient(w, key, '1,550'), w)).toStrictEqual({ key, reason: 'thousands' });
+      expect(nutritionRefusal(withNutrient(w, key, ' 1.550 '), w)).toStrictEqual({ key, reason: 'thousands' });
+      for (const fine of ['1550', '1,5', '12,25', '340']) expect(nutritionRefusal(withNutrient(w, key, fine), w), fine).toBeNull();
+    }
+    // The other six boxes have no such rule: «1,550 g of fat» is 1.55.
+    expect(nutritionRefusal(withNutrient(w, 'fat', '1,550'), w)).toBeNull();
+  });
+
+  test('⚠️ only the boxes somebody changed are checked: a stored value the card opened with never blocks Save', () => {
+    const stored = unknownItem({ nutrition: { fat: -3 } });
+    const opened = allergenWorkingFrom(stored, MONEY);
+    expect(opened.nutrition.fat).toBe('-3');
+    expect(nutritionRefusal(opened, opened)).toBeNull();
+    expect(nutritionRefusal(withNutrient(opened, 'salt', '1'), opened)).toBeNull();
+    // Touching that very box brings the check back.
+    expect(nutritionRefusal(withNutrient(opened, 'fat', '-4'), opened)).toStrictEqual({ key: 'fat', reason: 'invalid' });
   });
 
   test('the head counts the boxes still empty', () => {

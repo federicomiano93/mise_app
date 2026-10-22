@@ -28,7 +28,8 @@ import styles from './AllergenSections.module.css';
 // is untouched by that, so nothing of it is written (the display switch is never a data switch, C12, C115).
 //
 // ⚠️⚠️ THE PACK TEXT PROPOSES, IT NEVER DECLARES (C105). It runs by itself, with no button: after a 450 ms pause in typing, and
-// at once when the box is left with a text it has not read yet. NEVER on the first draw (C107): a saved item can hold pack text
+// at once when the box is left with a text it has not read yet (but never between the press and the release of a tap on the
+// sections, see `requestPropose`: it waits for the tap to finish). NEVER on the first draw (C107): a saved item can hold pack text
 // that says «latte» and a milk box somebody deliberately unticked. Leaving the box untouched proposes nothing for the same
 // reason. The state word of the pack fold is NEVER green: green means «somebody verified this».
 //
@@ -44,6 +45,8 @@ export const PAUSE_MS = 450;
 // What the card may ask of these sections from outside: open the nutrition fold so a refused box can take the focus.
 export interface AllergenControls {
   openNutrition(): void;
+  // Run a proposal that is still waiting (the pause has not ended, or a press is still down) NOW, so a save reads what the screen shows.
+  flushProposal(): void;
 }
 
 export type NutrientBoxes = MutableRefObject<Partial<Record<NutrientKey, HTMLInputElement | null>>>;
@@ -56,7 +59,7 @@ type Props = {
   now: string;
   onChange(next: AllergenWorking): void;
   // The nutrition box Save refused, and where the card finds each box to focus it.
-  refusedNutrient: NutrientKey | null;
+  refusedNutrient: { key: NutrientKey; reason: 'invalid' | 'thousands' } | null;
   nutrientBoxes: NutrientBoxes;
   controls: Ref<AllergenControls>;
 };
@@ -110,7 +113,9 @@ export function AllergenSections({ working, opened, now, onChange, refusedNutrie
   const [packOpen, setPackOpen] = useState(false);
   const [algOpen, setAlgOpen] = useState(false);
   const [nutOpen, setNutOpen] = useState(false);
-  useImperativeHandle(controls, () => ({ openNutrition: () => { setNutOpen(true); } }), []);
+  // The venue's switch as of the latest draw: a proposal still waiting when the venue hides allergens must do nothing.
+  const allergensRef = useRef(allergens);
+  allergensRef.current = allergens;
 
   // The latest copy, kept here as well as in the card: a tap right after typing must start from the typing.
   const latest = useRef(working);
@@ -129,15 +134,71 @@ export function AllergenSections({ working, opened, now, onChange, refusedNutrie
     if (timer.current !== null) clearTimeout(timer.current);
     timer.current = null;
   };
-  useEffect(() => stopTimer, []);
+
+  // ⚠️ A PROPOSAL NEVER LANDS BETWEEN THE PRESS AND THE RELEASE OF A TAP ON THE SECTIONS. Pressing a tick box straight from the
+  // pack box blurs the text, and a proposal run by that blur would re-draw the box ticked before the click arrives, so the click
+  // would flip it OFF — and a box a person flipped is theirs for good. While a press is down a proposal only WAITS; it runs
+  // after the release, once the click of the same tap has been delivered (so the person's tick lands first and protects itself).
+  const pointerDown = useRef(false);
+  const deferred = useRef(false);
+  const afterRelease = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const stopListening = useRef<(() => void) | null>(null);
+  function requestPropose() {
+    stopTimer();
+    if (pointerDown.current) {
+      deferred.current = true;
+      return;
+    }
+    propose();
+  }
+  function pressed() {
+    pointerDown.current = true;
+    if (stopListening.current) return;
+    const released = () => {
+      stopListening.current?.();
+      pointerDown.current = false;
+      if (!deferred.current) return;
+      afterRelease.current = setTimeout(() => {
+        afterRelease.current = null;
+        if (deferred.current) {
+          deferred.current = false;
+          propose();
+        }
+      }, 0);
+    };
+    window.addEventListener('pointerup', released, true);
+    window.addEventListener('pointercancel', released, true);
+    stopListening.current = () => {
+      window.removeEventListener('pointerup', released, true);
+      window.removeEventListener('pointercancel', released, true);
+      stopListening.current = null;
+    };
+  }
+  useEffect(() => () => {
+    stopTimer();
+    stopListening.current?.();
+    if (afterRelease.current !== null) clearTimeout(afterRelease.current);
+  }, []);
 
   function propose() {
     stopTimer();
+    deferred.current = false;
+    if (!allergensRef.current) return;
     const text = latest.current.packText;
     lastRead.current = text;
     setReading({ text, read: readPackIngredients(text) });
     emit(proposeFromPack(latest.current));
   }
+
+  useImperativeHandle(controls, () => ({
+    openNutrition: () => { setNutOpen(true); },
+    // Save asks for this first: whatever is waiting is run now, whether the pause or a press is what it waits for.
+    flushProposal: () => {
+      stopTimer();
+      deferred.current = false;
+      if (latest.current.packText !== lastRead.current) propose();
+    },
+  }));
 
   const status = allergenStatus(working, opened, now);
   const note = proposedNote(working);
@@ -146,24 +207,30 @@ export function AllergenSections({ working, opened, now, onChange, refusedNutrie
 
   function tickRow(code: AllergenCode) {
     const name = allergenName(code, lang);
+    const nameId = id(`alg-${code}`);
     const columns: ReadonlyArray<{ column: Column; word: string; tip: string }> = [
       { column: 'contains', word: t('sup.alg.has'), tip: t('sup.alg.containsTip', { name }) },
       { column: 'may', word: t('sup.alg.traces'), tip: t('sup.alg.tracesTip', { name }) },
     ];
     return (
       <div key={code} className={styles.row}>
-        <span className={styles.name}>{name}</span>
-        {columns.map(({ column, word, tip }) => (
-          <label key={column} className={styles.tick} title={tip}>
-            <input
-              type="checkbox"
-              aria-label={tip}
-              checked={(column === 'contains' ? working.contains : working.may).includes(code)}
-              onChange={event => { emit(tickByHand(latest.current, code, column, event.target.checked)); }}
-            />
-            <span aria-hidden="true">{word}</span>
-          </label>
-        ))}
+        <span id={nameId} className={styles.name}>{name}</span>
+        {columns.map(({ column, word, tip }) => {
+          const wordId = id(`alg-${code}-${column}`);
+          return (
+            <label key={column} className={styles.tick} title={tip}>
+              {/* ⚠️ THE ACCESSIBLE NAME IS THE VISIBLE WORDS («Milk has»), name first: a name that does not contain the visible
+                  word fails WCAG 2.5.3 for people who speak to the screen. The longer sentence stays as the tip. */}
+              <input
+                type="checkbox"
+                aria-labelledby={`${nameId} ${wordId}`}
+                checked={(column === 'contains' ? working.contains : working.may).includes(code)}
+                onChange={event => { emit(tickByHand(latest.current, code, column, event.target.checked)); }}
+              />
+              <span id={wordId}>{word}</span>
+            </label>
+          );
+        })}
       </div>
     );
   }
@@ -200,7 +267,7 @@ export function AllergenSections({ working, opened, now, onChange, refusedNutrie
   if (!allergens && !nutrition) return null;
 
   return (
-    <div className={styles.sections}>
+    <div className={styles.sections} onPointerDownCapture={pressed}>
       {allergens ? (
         <>
           <Fold
@@ -221,10 +288,10 @@ export function AllergenSections({ working, opened, now, onChange, refusedNutrie
               onChange={event => {
                 emit(withPackText(latest.current, event.target.value));
                 stopTimer();
-                timer.current = setTimeout(propose, PAUSE_MS);
+                timer.current = setTimeout(requestPropose, PAUSE_MS);
               }}
               onBlur={() => {
-                if (latest.current.packText !== lastRead.current) propose();
+                if (latest.current.packText !== lastRead.current) requestPropose();
               }}
             />
             {/* ⚠️ THE FINDINGS ARE ABOUT THIS PACK, so they are on the card and not behind a «?». A live region, there before it
@@ -285,7 +352,7 @@ export function AllergenSections({ working, opened, now, onChange, refusedNutrie
           <p className={styles.per100}>{t('sup.nut.per100g')}</p>
           <div className={styles.nutGrid}>
             {NUTRIENTS.map(nutrient => {
-              const refused = refusedNutrient === nutrient.key;
+              const refused = refusedNutrient?.key === nutrient.key;
               return (
                 <div key={nutrient.key} className={styles.nutField}>
                   <label htmlFor={id(`nut-${nutrient.key}`)} className={styles.nutLabel}>
@@ -305,7 +372,7 @@ export function AllergenSections({ working, opened, now, onChange, refusedNutrie
                   />
                   {/* ⚠️ THE LIVE REGION IS THERE, EMPTY, BEFORE IT SPEAKS. */}
                   <p id={id(`nut-${nutrient.key}-error`)} role="status" className={refused ? styles.error : styles.quiet}>
-                    {refused ? t('sup.nut.invalid') : ''}
+                    {refused ? t(refusedNutrient?.reason === 'thousands' ? 'sup.nut.noThousands' : 'sup.nut.invalid') : ''}
                   </p>
                 </div>
               );

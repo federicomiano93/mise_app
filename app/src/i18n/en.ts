@@ -1685,6 +1685,8 @@ export const en = {
   'sup.nut.per100g': 'Per 100 g',
   // NEW: the current app's number boxes drop text that is not a number; these text boxes refuse it instead (T11).
   'sup.nut.invalid': 'Write a number, 0 or more — e.g. 12.5.',
+  // NEW: «1,550» in an energy box would be read as 1.55; it is refused instead of guessed at.
+  'sup.nut.noThousands': 'Write it without the thousands separator — e.g. 1550.',
 } as const satisfies Record<string, Message>;
 
 export type MessageKey = keyof typeof en;

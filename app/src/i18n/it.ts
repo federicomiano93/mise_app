@@ -1493,4 +1493,5 @@ export const it: Messages = {
   'sup.nut.complete': 'Completi',
   'sup.nut.per100g': 'Per 100 g',
   'sup.nut.invalid': 'Scrivi un numero, 0 o più — per esempio 12,5.',
+  'sup.nut.noThousands': 'Scrivilo senza il separatore delle migliaia — per es. 1550.',
 };

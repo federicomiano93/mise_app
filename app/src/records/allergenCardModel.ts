@@ -13,7 +13,10 @@ import type { CardKind, ItemLike } from './ingredientCardModel';
 //
 // ⚠️⚠️ THE ONLY THING THAT WRITES THE VERIFICATION STAMP IS A PERSON TICKING «I HAVE CHECKED» (C102). Opening the card and
 // pressing Save never stamps an ingredient; reading the pack never stamps one (C105); and when the APP moves a box on a record
-// somebody had verified, the verification lapses and the next confirmation is stamped TODAY (C109, `stampVoided`).
+// somebody had verified, the verification lapses and the next confirmation is stamped TODAY (C109, `stampVoided`). ⚠️ DIFFERENCE
+// FROM THE CURRENT APP, ON PURPOSE: on a record that OPENED verified, once the app has moved a box the old date is gone for good
+// — even if the person un-ticks «I have checked» and ticks it again afterwards, the save stamps NOW, never the old date
+// (`openedStamp`). The current app keeps the old date in that sequence.
 //
 // ⚠️⚠️ DIFFERENCE FROM THE CURRENT APP, ON PURPOSE: the current app writes all five allergen keys on every save of an
 // ingredient. Mise 2 writes them in three groups, each only when something in it changed from the copy the card opened on:
@@ -44,6 +47,8 @@ export interface AllergenWorking {
   readonly humanTouched: readonly string[];
   // The app moved a box on a verified record: the old date no longer belongs to this list (C109).
   readonly stampVoided: boolean;
+  // The verification stamp the item opened with ('' for none, and for a new item). Never changes after the card opens.
+  readonly openedStamp: string;
 }
 
 const text = (value: unknown): string => (typeof value === 'string' ? value : '');
@@ -68,6 +73,7 @@ export function allergenWorkingFrom(item: ItemLike | null, money: Money): Allerg
     appOwned: [],
     humanTouched: [],
     stampVoided: false,
+    openedStamp: checkedAt(item),
   };
 }
 
@@ -109,7 +115,9 @@ export function proposeFromPack(working: AllergenWorking): AllergenWorking {
     humanTouched: new Set(working.humanTouched),
   });
   const moved = next.added > 0 || next.removed > 0;
-  const voids = moved && working.checked;
+  // A record that opened verified loses its date when the app moves a box, whether or not the person has un-ticked «I have checked»
+  // meanwhile: ticking it again must stamp NOW.
+  const voids = moved && (working.checked || working.openedStamp !== '');
   return {
     ...working,
     contains: normalizeAllergens(next.contains),
@@ -166,15 +174,28 @@ export function allergenDraft(working: AllergenWorking, item: ItemLike | null, n
   });
 }
 
-// The first nutrition box Save must refuse: text that is not a number, or a negative one. ⚠️ A NEW RULE OF MISE 2 (the current
-// app's number boxes drop such text in silence and save the nutrient as empty): a figure typed and then lost is a declaration
-// changed without anybody being told.
-export function nutritionRefusal(working: AllergenWorking): NutrientKey | null {
+// The first nutrition box Save must refuse, and why: 'invalid' = text that is not a plain number, or a negative one; 'thousands' =
+// a kJ or kcal figure written with a thousands separator («1,550», «1.550»), which would be read as 1.55 — a wrong energy value
+// on a label. ⚠️ A NEW RULE OF MISE 2 (the current app's number boxes drop such text in silence and save the nutrient as empty):
+// a figure typed and then lost is a declaration changed without anybody being told. ⚠️ ONLY THE BOXES SOMEBODY CHANGED are
+// checked (the text differs from `baseline`): a stored value the card opened with never blocks a save of something else.
+export interface NutritionRefusal {
+  readonly key: NutrientKey;
+  readonly reason: 'invalid' | 'thousands';
+}
+
+const PLAIN_NUMBER = /^(\d+(\.\d*)?|\.\d+)$/;
+const THOUSANDS = /^\d{1,3}[.,]\d{3}$/;
+
+export function nutritionRefusal(working: AllergenWorking, baseline: AllergenWorking): NutritionRefusal | null {
   for (const key of NUTRIENT_KEYS) {
+    if (working.nutrition[key] === baseline.nutrition[key]) continue;
+    const raw = working.nutrition[key].trim();
+    if ((key === 'kj' || key === 'kcal') && THOUSANDS.test(raw)) return { key, reason: 'thousands' };
     const typed = typedDecimal(working.nutrition[key]);
     if (typed === '') continue;
-    const value = Number(typed);
-    if (!Number.isFinite(value) || value < 0) return key;
+    // Number() would accept «0x10», «1e3» and «Infinity»: only digits with one decimal mark are a figure. A «-3» fails here too.
+    if (!PLAIN_NUMBER.test(typed)) return { key, reason: 'invalid' };
   }
   return null;
 }
